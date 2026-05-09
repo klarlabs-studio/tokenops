@@ -1,0 +1,183 @@
+// TokenOps event schema, version 1.
+//
+// This .proto is the canonical source for cross-language consumers. Go types
+// in pkg/eventschema mirror these messages and are kept hand-written so the
+// public Go API can evolve independently of the Protobuf compilation step.
+// Generators (.pb.go, OTel exporters, gRPC services) live under tooling that
+// will be added in subsequent tasks; this file is the contract.
+
+syntax = "proto3";
+
+package tokenops.eventschema.v1;
+
+option go_package = "github.com/felixgeelhaar/tokenops/pkg/eventschema/proto/v1;eventschemav1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+// EventType identifies the kind of event carried by an Envelope.
+enum EventType {
+  EVENT_TYPE_UNSPECIFIED = 0;
+  EVENT_TYPE_PROMPT = 1;
+  EVENT_TYPE_WORKFLOW = 2;
+  EVENT_TYPE_OPTIMIZATION = 3;
+  EVENT_TYPE_COACHING = 4;
+}
+
+// Provider identifies the upstream LLM provider.
+enum Provider {
+  PROVIDER_UNSPECIFIED = 0;
+  PROVIDER_OPENAI = 1;
+  PROVIDER_ANTHROPIC = 2;
+  PROVIDER_GEMINI = 3;
+}
+
+// WorkflowState describes the lifecycle phase of a WorkflowEvent.
+enum WorkflowState {
+  WORKFLOW_STATE_UNSPECIFIED = 0;
+  WORKFLOW_STATE_STARTED = 1;
+  WORKFLOW_STATE_PROGRESS = 2;
+  WORKFLOW_STATE_COMPLETED = 3;
+  WORKFLOW_STATE_FAILED = 4;
+}
+
+// OptimizationType identifies the optimizer that produced an event.
+enum OptimizationType {
+  OPTIMIZATION_TYPE_UNSPECIFIED = 0;
+  OPTIMIZATION_TYPE_PROMPT_COMPRESS = 1;
+  OPTIMIZATION_TYPE_DEDUPE = 2;
+  OPTIMIZATION_TYPE_RETRIEVAL_PRUNE = 3;
+  OPTIMIZATION_TYPE_CONTEXT_TRIM = 4;
+  OPTIMIZATION_TYPE_SYSTEM_DEDUPE = 5;
+  OPTIMIZATION_TYPE_ROUTER = 6;
+  OPTIMIZATION_TYPE_CACHE_REUSE = 7;
+}
+
+enum OptimizationMode {
+  OPTIMIZATION_MODE_UNSPECIFIED = 0;
+  OPTIMIZATION_MODE_PASSIVE = 1;
+  OPTIMIZATION_MODE_INTERACTIVE = 2;
+  OPTIMIZATION_MODE_REPLAY = 3;
+}
+
+enum OptimizationDecision {
+  OPTIMIZATION_DECISION_UNSPECIFIED = 0;
+  OPTIMIZATION_DECISION_APPLIED = 1;
+  OPTIMIZATION_DECISION_ACCEPTED = 2;
+  OPTIMIZATION_DECISION_REJECTED = 3;
+  OPTIMIZATION_DECISION_SKIPPED = 4;
+}
+
+enum CoachingRecommendationKind {
+  COACHING_KIND_UNSPECIFIED = 0;
+  COACHING_KIND_REDUCE_PROMPT_SIZE = 1;
+  COACHING_KIND_TRIM_CONTEXT = 2;
+  COACHING_KIND_SHRINK_RETRIEVAL = 3;
+  COACHING_KIND_REUSE_CACHE = 4;
+  COACHING_KIND_SWITCH_MODEL = 5;
+  COACHING_KIND_BATCH_REQUESTS = 6;
+  COACHING_KIND_BREAK_RECURSION = 7;
+}
+
+// Envelope is the common header carried by every TokenOps event.
+message Envelope {
+  string id = 1;
+  string schema_version = 2;
+  EventType type = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  string trace_id = 5;
+  string span_id = 6;
+  string source = 7;
+  map<string, string> attributes = 8;
+
+  oneof payload {
+    PromptEvent prompt = 100;
+    WorkflowEvent workflow = 101;
+    OptimizationEvent optimization = 102;
+    CoachingEvent coaching = 103;
+  }
+}
+
+message PromptEvent {
+  string prompt_hash = 1;
+  Provider provider = 2;
+  string request_model = 3;
+  string response_model = 4;
+
+  int64 input_tokens = 10;
+  int64 output_tokens = 11;
+  int64 total_tokens = 12;
+  int64 cached_input_tokens = 13;
+
+  int64 context_size = 20;
+  int64 max_output_tokens = 21;
+
+  google.protobuf.Duration latency = 30;
+  google.protobuf.Duration time_to_first_token = 31;
+
+  bool streaming = 40;
+  int32 status = 41;
+  string finish_reason = 42;
+  string error_code = 43;
+  bool cache_hit = 44;
+
+  double cost_usd = 50;
+
+  string workflow_id = 60;
+  string agent_id = 61;
+  string session_id = 62;
+  string user_id = 63;
+}
+
+message WorkflowEvent {
+  string workflow_id = 1;
+  string agent_id = 2;
+  string parent_workflow_id = 3;
+  WorkflowState state = 4;
+
+  int64 step_count = 10;
+  int64 cumulative_input_tokens = 11;
+  int64 cumulative_output_tokens = 12;
+  int64 cumulative_total_tokens = 13;
+  double cumulative_cost_usd = 14;
+
+  google.protobuf.Duration duration = 20;
+  string error_code = 30;
+}
+
+message OptimizationEvent {
+  string prompt_hash = 1;
+  OptimizationType type = 2;
+  OptimizationMode mode = 3;
+
+  int64 estimated_savings_tokens = 10;
+  double estimated_savings_usd = 11;
+  double quality_score = 12;
+
+  OptimizationDecision decision = 20;
+  string reason = 21;
+
+  int64 latency_impact_ns = 30;
+
+  string workflow_id = 40;
+  string agent_id = 41;
+}
+
+message CoachingEvent {
+  string session_id = 1;
+  string workflow_id = 2;
+  string agent_id = 3;
+
+  CoachingRecommendationKind kind = 4;
+  string summary = 5;
+  string details = 6;
+
+  int64 estimated_savings_tokens = 10;
+  double estimated_savings_usd = 11;
+
+  double efficiency_score = 20;
+  double efficiency_delta = 21;
+
+  map<string, string> replay_metadata = 30;
+  OptimizationDecision decision = 31;
+}
