@@ -1,0 +1,43 @@
+# Binaries
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+*.prof
+
+# Go
+/vendor/
+.go-build/
+
+# Node / Vue
+node_modules/
+/web/dist/
+/web/.vite/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local config
+.env
+.env.local
+*.local.yaml
+/data/
+/.tokenops/
+.claude/settings.local.json
+
+# Coverage
+coverage.out
+coverage.txt
+*.cover
+
+# Generated
+*.pb.go.bak
