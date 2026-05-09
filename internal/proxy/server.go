@@ -21,6 +21,7 @@ type Server struct {
 	addr            string
 	shutdownTimeout time.Duration
 	logger          *slog.Logger
+	routes          []ProviderRoute
 
 	mu       sync.Mutex
 	httpSrv  *http.Server
@@ -39,6 +40,12 @@ func WithLogger(l *slog.Logger) Option {
 // WithShutdownTimeout overrides the default 15s graceful-shutdown timeout.
 func WithShutdownTimeout(d time.Duration) Option {
 	return func(s *Server) { s.shutdownTimeout = d }
+}
+
+// WithProviderRoutes installs the upstream LLM provider routes the proxy
+// should mount. When omitted, the daemon serves only its control endpoints.
+func WithProviderRoutes(routes []ProviderRoute) Option {
+	return func(s *Server) { s.routes = routes }
 }
 
 // New constructs a Server bound to addr (host:port). The Server does not
@@ -91,6 +98,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	mux := http.NewServeMux()
 	s.registerRoutes(mux)
+	s.registerProviderRoutes(mux)
 
 	s.httpSrv = &http.Server{
 		Handler:           mux,

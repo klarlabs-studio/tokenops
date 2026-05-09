@@ -17,9 +17,10 @@ import (
 
 // Config is the root daemon configuration.
 type Config struct {
-	Listen   string         `yaml:"listen"`
-	Log      LogConfig      `yaml:"log"`
-	Shutdown ShutdownConfig `yaml:"shutdown"`
+	Listen    string            `yaml:"listen"`
+	Log       LogConfig         `yaml:"log"`
+	Shutdown  ShutdownConfig    `yaml:"shutdown"`
+	Providers map[string]string `yaml:"providers"`
 }
 
 // LogConfig configures the structured logger.
@@ -109,6 +110,15 @@ func applyEnvOverrides(cfg *Config) {
 			cfg.Shutdown.Timeout = d
 		} else if secs, err := strconv.Atoi(v); err == nil {
 			cfg.Shutdown.Timeout = time.Duration(secs) * time.Second
+		}
+	}
+	for _, key := range []string{"openai", "anthropic", "gemini"} {
+		envKey := "TOKENOPS_PROVIDER_" + strings.ToUpper(key) + "_URL"
+		if v := os.Getenv(envKey); v != "" {
+			if cfg.Providers == nil {
+				cfg.Providers = make(map[string]string, 3)
+			}
+			cfg.Providers[key] = v
 		}
 	}
 }

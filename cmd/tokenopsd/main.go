@@ -71,9 +71,15 @@ func runStart(args []string) error {
 		syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	routes, err := proxy.BuildProviderRoutes(cfg.Providers)
+	if err != nil {
+		return fmt.Errorf("provider routes: %w", err)
+	}
+
 	srv := proxy.New(cfg.Listen,
 		proxy.WithLogger(logger),
 		proxy.WithShutdownTimeout(cfg.Shutdown.Timeout),
+		proxy.WithProviderRoutes(routes),
 	)
 	if err := srv.Start(ctx); err != nil {
 		return fmt.Errorf("start proxy: %w", err)
