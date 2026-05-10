@@ -47,4 +47,5 @@ type WorkflowEvent struct {
 	ErrorCode string `json:"error_code,omitempty"`
 }
 
-func (*WorkflowEvent) eventType() EventType { return EventTypeWorkflow }
+// Type identifies this payload as a WorkflowEvent.
+func (*WorkflowEvent) Type() EventType { return EventTypeWorkflow }

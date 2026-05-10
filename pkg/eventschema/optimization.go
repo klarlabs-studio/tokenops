@@ -44,7 +44,8 @@ type OptimizationEvent struct {
 	// PromptHash links the optimization to the originating PromptEvent.
 	PromptHash string `json:"prompt_hash"`
 
-	Type OptimizationType `json:"type"`
+	// Kind identifies which optimizer pass produced this event.
+	Kind OptimizationType `json:"kind"`
 	Mode OptimizationMode `json:"mode"`
 
 	// EstimatedSavingsTokens and EstimatedSavingsUSD are the optimizer's
@@ -73,4 +74,5 @@ type OptimizationEvent struct {
 	AgentID    string `json:"agent_id,omitempty"`
 }
 
-func (*OptimizationEvent) eventType() EventType { return EventTypeOptimization }
+// Type identifies this payload as an OptimizationEvent.
+func (*OptimizationEvent) Type() EventType { return EventTypeOptimization }

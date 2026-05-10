@@ -14,6 +14,11 @@
 node_modules/
 /web/dist/
 /web/.vite/
+/web/dashboard/dist/
+/web/docs/.vitepress/dist/
+/web/docs/.vitepress/cache/
+/integrations/vscode/out/
+/integrations/vscode/*.vsix
 *.log
 
 # OS

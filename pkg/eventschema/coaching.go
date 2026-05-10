@@ -52,4 +52,5 @@ type CoachingEvent struct {
 	Decision OptimizationDecision `json:"decision,omitempty"`
 }
 
-func (*CoachingEvent) eventType() EventType { return EventTypeCoaching }
+// Type identifies this payload as a CoachingEvent.
+func (*CoachingEvent) Type() EventType { return EventTypeCoaching }

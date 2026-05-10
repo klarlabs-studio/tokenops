@@ -25,7 +25,7 @@ func TestPayloadEventTypes(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.payload.eventType(); got != tc.want {
+			if got := tc.payload.Type(); got != tc.want {
 				t.Errorf("eventType() = %q, want %q", got, tc.want)
 			}
 		})

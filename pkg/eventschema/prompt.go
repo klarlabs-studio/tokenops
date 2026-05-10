@@ -70,4 +70,5 @@ type PromptEvent struct {
 	UserID string `json:"user_id,omitempty"`
 }
 
-func (*PromptEvent) eventType() EventType { return EventTypePrompt }
+// Type identifies this payload as a PromptEvent.
+func (*PromptEvent) Type() EventType { return EventTypePrompt }

@@ -50,7 +50,9 @@ type Envelope struct {
 	Payload Payload `json:"payload"`
 }
 
-// Payload is the marker interface satisfied by all typed event payloads.
+// Payload is the interface satisfied by all typed event payloads. The Type
+// method returns the EventType discriminator that identifies the concrete
+// payload — callers (e.g. the storage layer) use it to dispatch decoders.
 type Payload interface {
-	eventType() EventType
+	Type() EventType
 }
