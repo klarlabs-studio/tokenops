@@ -38,11 +38,19 @@ scan:
     - internal/spend/engine_test.go
     - internal/storage/sqlite/store_test.go
     - internal/tokenizer/tokenizer_test.go
+    - internal/optimizer/retrievalprune/prune_test.go
+    - internal/optimizer/router/router_test.go
     # SEC-569 pattern matching treats several OpenTelemetry semantic
     # convention keys (`gen_ai.*`) and optimizer enum strings as Gemini
     # keys. These files contain only constant names and types.
     - pkg/eventschema/otel.go
+    - pkg/eventschema/proto/v1/events.proto
     - internal/optimizer/contexttrim/trim.go
+    # Workflow YAML files contain pinned SHA digests that look like
+    # API keys to generic detectors (SEC-659/697).
+    - .github/workflows/*.yml
+    # Redaction regex sources intentionally contain secret-family names.
+    - internal/redaction/rules.go
 
 plugins:
   # Listed plugins auto-install on `nox scan` unless --no-auto-install
