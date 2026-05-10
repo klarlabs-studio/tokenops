@@ -102,24 +102,37 @@ once it cuts a stable release we'll add it under `plugins.required`.
 Dependency-side remediation already runs through the **action** above,
 which uses the built-in `nox fix` command.
 
-`.nox.yaml` also carries the `scan.exclude` list. We exclude:
+`.nox.yaml` also carries the `scan.exclude` list. Exclusions are
+classified per `security/SUPPRESSION-GOVERNANCE.md`:
 
-- `.roady/` event logs (UUIDs trip the AWS-secret regex)
-- npm `package-lock.json` files (transitive hashes are noise; real
-  CVEs in those trees surface via VULN-001)
-- generated build artefacts (`.vitepress/dist`, `web/dashboard/dist`,
-  `integrations/vscode/out`, `findings.json`)
-- `internal/redaction/redactor_test.go` (deliberately embeds sample
-  AWS keys to exercise the redaction package)
+| Path(s) | Classification | Rationale |
+|---|---|---|
+| `.roady/` event logs, state, usage, snapshot | False Positive | UUID hashes trip AWS-secret regex |
+| `.nox/`, `findings.json`, `ai.inventory.json` | Acceptable Pattern | nox own state |
+| `**/package-lock.json` | False Positive | Lockfile hashes trigger secret detector; real CVEs surface via VULN-001 |
+| `web/dashboard/dist/`, `web/docs/.vitepress/dist\|cache/` | Acceptable Pattern | Bundled build output re-trips secret detector |
+| `integrations/vscode/out/` | Acceptable Pattern | Transpilation output |
+| `internal/redaction/redactor_test.go` | Acceptable Pattern | Intentionally embeds sample AWS keys |
+| `*_test.go` (8 test files, SEC-569 pattern) | Acceptable Pattern | Provider-like placeholder strings, no real credentials |
+| `pkg/eventschema/otel.go`, `events.proto`, `internal/optimizer/contexttrim/trim.go` | False Positive | OTel semconv keys (`gen_ai.*`) and optimizer enums match Gemini key pattern |
+| `.github/workflows/*.yml` | False Positive | Pinned SHA digests look like API keys (SEC-659/697) |
+| `internal/redaction/rules.go` | Acceptable Pattern | Redaction regex sources contain secret-family names |
 
 ## Triaging a new finding
 
 1. Run `nox scan . -severity critical` (or any severity) to surface it.
-2. If it is **real**, fix the underlying code / dependency. For npm
+2. **Classify** the finding per `security/SUPPRESSION-GOVERNANCE.md`:
+   - **Real Issue** → fix the underlying code / dependency.
+   - **Acceptable Pattern** → suppress with documented rationale.
+   - **False Positive** → suppress with documented rationale.
+   - **Deferred** → file a GitHub issue, then suppress with reference.
+3. If it is **real**, fix the underlying code / dependency. For npm
    trees, `npm install <pkg>@<fixed-version>` and rebuild lockfiles
    (overrides in `package.json` work for transitive pins).
-3. If it is a **false positive**, add an OpenVEX statement to
-   `security/vex.json`:
+4. If it is a false positive or acceptable pattern, add a governance-
+   compliant suppression (see `security/SUPPRESSION-GOVERNANCE.md`):
+
+### OpenVEX suppression (per-finding)
 
 ```json
 {
@@ -128,13 +141,33 @@ which uses the built-in `nox fix` command.
   "justification": "vulnerable_code_not_present",
   "impact_statement": "Why this finding is a false positive — be specific.",
   "products": ["github.com/felixgeelhaar/tokenops"],
-  "_nox_fingerprint": "<full fingerprint from the finding>"
+  "_nox_fingerprint": "<full fingerprint from the finding>",
+  "_governance": {
+    "classification": "False Positive",
+    "last_reviewed": "<YYYY-MM-DD>",
+    "reviewed_by": "<owner>"
+  }
 }
 ```
 
 Use `vulnerable_code_not_present`, `vulnerable_code_not_in_execute_path`,
 `vulnerable_code_cannot_be_controlled_by_adversary`, `inline_mitigations_already_exist`,
 or `component_not_present` per the OpenVEX spec.
+
+### File-level exclusion (`scan.exclude`)
+
+For files where **every** finding is the same class:
+
+```yaml
+    # <what the detector flags>
+    # <why the trigger is benign>
+    # Classification: <Acceptable Pattern | False Positive>
+    # Last reviewed: <YYYY-MM-DD>
+    - path/to/file
+```
+
+See `security/SUPPRESSION-GOVERNANCE.md` for full classification
+rubric, review cadence, and reviewer expectations.
 
 ## Why nox over Dependabot
 

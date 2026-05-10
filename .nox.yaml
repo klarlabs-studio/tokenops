@@ -6,32 +6,46 @@ scan:
   exclude:
     # Roady's append-only event logs contain UUID-like hashes that the
     # generic AWS-secret regex flags as keys; these are not credentials.
+    # Classification: False Positive
+    # Last reviewed: 2026-05-10
     - .roady/events.jsonl
     - .roady/state.json
     - .roady/usage.json
     - .roady/snapshot.json
     # Generated nox state — do not scan its own findings cache.
+    # Classification: Acceptable Pattern
+    # Last reviewed: 2026-05-10
     - .nox/
     - findings.json
     - nox-findings.json
     - ai.inventory.json
     # npm lockfiles include hash strings the secret detector flags;
     # vulnerabilities in those trees are surfaced via VULN-001 directly.
+    # Classification: False Positive
+    # Last reviewed: 2026-05-10
     - "**/package-lock.json"
     # Dashboard + docs sources are first-party; their build outputs
     # are bundled JS that re-trips the secret detector with no signal.
+    # Classification: Acceptable Pattern
+    # Last reviewed: 2026-05-10
     - web/dashboard/dist/
     - web/docs/.vitepress/dist/
     - web/docs/.vitepress/cache/
     # VS Code extension transpilation output.
+    # Classification: Acceptable Pattern
+    # Last reviewed: 2026-05-10
     - integrations/vscode/out/
     # Test fixtures intentionally embed sample AWS keys to exercise
     # the redaction package's secret-detection logic.
+    # Classification: Acceptable Pattern
+    # Last reviewed: 2026-05-10
     - internal/redaction/redactor_test.go
     # Additional test fixtures use provider-ish placeholder strings that
     # trigger SEC-569 (Gemini API key pattern) despite containing no
     # credentials. Keep source scans on production code paths, but skip
     # these high-noise test files.
+    # Classification: Acceptable Pattern
+    # Last reviewed: 2026-05-10
     - internal/optimizer/dedupe/dedupe_test.go
     - internal/providers/providers_test.go
     - internal/proxy/router_test.go
@@ -43,13 +57,19 @@ scan:
     # SEC-569 pattern matching treats several OpenTelemetry semantic
     # convention keys (`gen_ai.*`) and optimizer enum strings as Gemini
     # keys. These files contain only constant names and types.
+    # Classification: False Positive
+    # Last reviewed: 2026-05-10
     - pkg/eventschema/otel.go
     - pkg/eventschema/proto/v1/events.proto
     - internal/optimizer/contexttrim/trim.go
     # Workflow YAML files contain pinned SHA digests that look like
     # API keys to generic detectors (SEC-659/697).
+    # Classification: False Positive
+    # Last reviewed: 2026-05-10
     - .github/workflows/*.yml
     # Redaction regex sources intentionally contain secret-family names.
+    # Classification: Acceptable Pattern
+    # Last reviewed: 2026-05-10
     - internal/redaction/rules.go
 
 plugins:
