@@ -58,7 +58,13 @@ jobs:
         with:
           go-version: "1.25"
           cache: true
-      - run: go test -race -count=1 -coverprofile=coverage.out ./...
+      - name: Test
+        # PowerShell on Windows splits unquoted "./..." in a way that
+        # makes Go think the package list is empty and a literal ".out"
+        # arg leaks through. Forcing bash on every OS keeps argument
+        # handling identical across the matrix.
+        shell: bash
+        run: go test -race -count=1 -coverprofile=coverage.out ./...
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: matrix.os == 'ubuntu-latest'
         with:

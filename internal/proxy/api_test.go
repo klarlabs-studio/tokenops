@@ -32,11 +32,11 @@ func seedAnalyticsStore(t *testing.T) (*sqlite.Store, func()) {
 	}
 	now := time.Now().UTC()
 	rows := []struct {
-		offset    time.Duration
-		workflow  string
-		model     string
-		in, out   int64
-		cost      float64
+		offset   time.Duration
+		workflow string
+		model    string
+		in, out  int64
+		cost     float64
 	}{
 		{1 * time.Hour, "wf-a", "gpt-4o-mini", 1000, 200, 0.40},
 		{2 * time.Hour, "wf-a", "gpt-4o-mini", 800, 150, 0.32},

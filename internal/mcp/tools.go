@@ -246,9 +246,9 @@ func burnRateHandler(d Deps) ToolHandler {
 			total += r.CostUSD
 		}
 		return jsonString(map[string]any{
-			"hours":   hours,
-			"cost":   total,
-			"hourly": rows,
+			"hours":    hours,
+			"cost":     total,
+			"hourly":   rows,
 			"currency": d.Spend.Currency(),
 		}), nil
 	}
