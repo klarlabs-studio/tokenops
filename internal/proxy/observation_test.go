@@ -141,7 +141,10 @@ func TestObserverEmitsPromptEvent(t *testing.T) {
 	if pe.Status != 200 {
 		t.Errorf("status = %d", pe.Status)
 	}
-	if pe.Latency <= 0 {
+	// Windows' default monotonic clock has ~15ms resolution; an observed
+	// localhost round-trip can land in the same tick and report 0. Only
+	// fail on an impossible negative duration.
+	if pe.Latency < 0 {
 		t.Errorf("latency = %s", pe.Latency)
 	}
 	if pe.WorkflowID != "wf-1" || pe.AgentID != "agent-a" || pe.SessionID != "sess-1" {
