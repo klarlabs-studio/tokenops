@@ -60,10 +60,10 @@ nox install-hook
 ## Remediation
 
 `nox-remediate.yml` runs nightly at 04:00 UTC (and on
-`workflow_dispatch`). It scans, runs `nox fix` against
-`findings.json`, runs `go mod tidy` + `npm install --package-lock-only`
-for the touched manifests, and opens (or refreshes) a PR titled
-`chore(deps): nox remediate` on the `nox/remediate` branch.
+`workflow_dispatch`). It wraps the official
+[`nox-hq/nox-remediate-action`](https://github.com/Nox-HQ/nox-remediate-action):
+scan → `nox fix` upgrade plan → apply → run `go test ./...` to verify
+→ open / refresh `chore(deps): nox remediate` on `nox/remediate`.
 
 Trigger it manually:
 
@@ -82,6 +82,35 @@ go mod tidy
 (cd web/dashboard && npm install --package-lock-only)
 (cd web/docs      && npm install --package-lock-only)
 ```
+
+## Plugins
+
+`.nox.yaml` declares the nox plugins this project requires. CI installs
+them automatically via `plugins.required` when nox first scans; locally
+run `nox install` to pull them.
+
+Currently enabled:
+
+- **`nox/triage-agent`** — LLM-powered finding prioritisation. Downranks
+  likely false positives so the high-noise rules (high-entropy hex,
+  AI-semconv key collisions) don't drown the actionable signal.
+
+The remediation plugin (`nox/remediate`, code-level fixes for security
+headers and log redaction) ships from
+[`Nox-HQ/nox-plugin-remediate`](https://github.com/Nox-HQ/nox-plugin-remediate);
+once it cuts a stable release we'll add it under `plugins.required`.
+Dependency-side remediation already runs through the **action** above,
+which uses the built-in `nox fix` command.
+
+`.nox.yaml` also carries the `scan.exclude` list. We exclude:
+
+- `.roady/` event logs (UUIDs trip the AWS-secret regex)
+- npm `package-lock.json` files (transitive hashes are noise; real
+  CVEs in those trees surface via VULN-001)
+- generated build artefacts (`.vitepress/dist`, `web/dashboard/dist`,
+  `integrations/vscode/out`, `findings.json`)
+- `internal/redaction/redactor_test.go` (deliberately embeds sample
+  AWS keys to exercise the redaction package)
 
 ## Triaging a new finding
 

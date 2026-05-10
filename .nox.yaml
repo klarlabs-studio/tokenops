@@ -1,0 +1,43 @@
+# nox configuration. Replaces Dependabot as the security/vuln gate.
+#
+# Schema reference: https://github.com/nox-hq/nox
+
+scan:
+  exclude:
+    # Roady's append-only event logs contain UUID-like hashes that the
+    # generic AWS-secret regex flags as keys; these are not credentials.
+    - .roady/events.jsonl
+    - .roady/state.json
+    - .roady/usage.json
+    - .roady/snapshot.json
+    # Generated nox state — do not scan its own findings cache.
+    - .nox/
+    - findings.json
+    - nox-findings.json
+    - ai.inventory.json
+    # npm lockfiles include hash strings the secret detector flags;
+    # vulnerabilities in those trees are surfaced via VULN-001 directly.
+    - "**/package-lock.json"
+    # Dashboard + docs sources are first-party; their build outputs
+    # are bundled JS that re-trips the secret detector with no signal.
+    - web/dashboard/dist/
+    - web/docs/.vitepress/dist/
+    - web/docs/.vitepress/cache/
+    # VS Code extension transpilation output.
+    - integrations/vscode/out/
+    # Test fixtures intentionally embed sample AWS keys to exercise
+    # the redaction package's secret-detection logic.
+    - internal/redaction/redactor_test.go
+
+plugins:
+  # Listed plugins auto-install on `nox scan` unless --no-auto-install
+  # is set. CI installs them too — see .github/workflows/security.yml.
+  required:
+    # LLM-powered finding triage: prioritises and downranks likely
+    # false positives. Local-first when an Ollama backend is up; falls
+    # back gracefully when not.
+    - nox/triage-agent@^0.2.0
+    # Code-fixer remediation plugin (companion to nox-remediate-action,
+    # which handles dependency upgrades). Re-enable once a release is
+    # published — early-2026 dev builds are unstable.
+    # - nox/remediate@^0.1.0
