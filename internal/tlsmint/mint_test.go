@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -29,6 +30,13 @@ func TestEnsureBundleMintsAndPersists(t *testing.T) {
 			t.Fatalf("missing %s: %v", name, err)
 		}
 		if name == CAKeyFile || name == LeafKeyFile {
+			// Windows does not honour POSIX permission bits — os.Chmod
+			// maps to ACLs and reports back differently — so we only
+			// enforce 0600 on Unix where the bit actually controls
+			// access.
+			if runtime.GOOS == "windows" {
+				continue
+			}
 			if fi.Mode().Perm() != 0o600 {
 				t.Errorf("%s perm = %o, want 0600", name, fi.Mode().Perm())
 			}
