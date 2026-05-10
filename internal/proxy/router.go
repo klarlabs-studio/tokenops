@@ -70,13 +70,33 @@ func (s *Server) mountReverseProxy(mux *http.ServeMux, route ProviderRoute) {
 			pr.Out.URL.Path = singleJoin(upstream.Path, rest)
 			pr.Out.URL.RawPath = ""
 		},
+		// FlushInterval = -1 forces an immediate flush after every Write,
+		// which is what SSE clients expect. Go's ReverseProxy auto-detects
+		// "text/event-stream" since 1.17, but pinning the value makes the
+		// behaviour explicit and survives content-type re-detection bugs.
+		FlushInterval: -1,
+		ModifyResponse: func(resp *http.Response) error {
+			meter := s.streamMeter.NewMeter(resp)
+			if isStreamingResponse(resp) {
+				resp.Header.Set("X-Accel-Buffering", "no")
+			}
+			resp.Body = newMeteredBody(resp.Body, meter)
+			return nil
+		},
 		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
 			s.logger.Error("upstream error", "provider", route.Provider.ID, "err", err)
 			http.Error(w, "upstream error", http.StatusBadGateway)
 		},
 	}
 
-	mux.Handle(prefix, rp)
+	var handler http.Handler = rp
+	if s.observerActive {
+		handler = s.observerMiddleware(route.Provider, rp)
+	}
+	if s.cache != nil {
+		handler = s.cacheMiddleware(route.Provider, handler)
+	}
+	mux.Handle(prefix, handler)
 }
 
 // singleJoin merges base and tail with exactly one separating "/" while

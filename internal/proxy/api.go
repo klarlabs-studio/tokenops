@@ -1,0 +1,333 @@
+package proxy
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/felixgeelhaar/tokenops/internal/analytics"
+	"github.com/felixgeelhaar/tokenops/internal/forecast"
+	"github.com/felixgeelhaar/tokenops/internal/spend"
+	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
+	"github.com/felixgeelhaar/tokenops/internal/waste"
+	"github.com/felixgeelhaar/tokenops/internal/workflow"
+	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+)
+
+// AnalyticsHandlers wires the daemon's read-only analytics surface
+// (/api/...) onto a mux. The dashboard skeleton consumes these
+// endpoints; the same handlers feed the CLI's --json outputs and the
+// MCP server. Mount via Server.WithAnalytics so the proxy package can
+// register them alongside the provider routes.
+type AnalyticsHandlers struct {
+	store      *sqlite.Store
+	aggregator *analytics.Aggregator
+	spend      *spend.Engine
+}
+
+// NewAnalyticsHandlers builds the handlers. All deps are required.
+func NewAnalyticsHandlers(store *sqlite.Store, agg *analytics.Aggregator, spendEng *spend.Engine) (*AnalyticsHandlers, error) {
+	if store == nil || agg == nil || spendEng == nil {
+		return nil, errors.New("proxy: AnalyticsHandlers requires store + aggregator + spend engine")
+	}
+	return &AnalyticsHandlers{store: store, aggregator: agg, spend: spendEng}, nil
+}
+
+// Register installs every endpoint on mux. Endpoints are read-only;
+// callers should wrap them in dashauth.Middleware when authentication
+// is required.
+func (a *AnalyticsHandlers) Register(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/spend/summary", a.spendSummary)
+	mux.HandleFunc("GET /api/spend/series", a.spendSeries)
+	mux.HandleFunc("GET /api/spend/forecast", a.spendForecast)
+	mux.HandleFunc("GET /api/workflows", a.listWorkflows)
+	mux.HandleFunc("GET /api/workflows/{id}", a.workflowDetail)
+	mux.HandleFunc("GET /api/optimizations", a.listOptimizations)
+}
+
+// WithAnalytics installs analytics handlers on the proxy. Mounted
+// under the same listener as the provider routes; the daemon decides
+// whether to gate them behind dashauth.
+func WithAnalytics(h *AnalyticsHandlers) Option {
+	return func(s *Server) { s.analytics = h }
+}
+
+// --- helpers ------------------------------------------------------------
+
+func parseTimeOrDuration(s string) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, nil
+	}
+	if strings.HasSuffix(s, "d") {
+		var days int
+		if _, err := fmt.Sscanf(s, "%dd", &days); err == nil && days > 0 {
+			return time.Now().Add(-time.Duration(days) * 24 * time.Hour), nil
+		}
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Now().Add(-d), nil
+}
+
+func filterFromQuery(r *http.Request, defaultSince time.Duration) (analytics.Filter, error) {
+	q := r.URL.Query()
+	f := analytics.Filter{
+		Provider:   q.Get("provider"),
+		Model:      q.Get("model"),
+		WorkflowID: q.Get("workflow_id"),
+		AgentID:    q.Get("agent_id"),
+	}
+	if s := q.Get("since"); s != "" {
+		t, err := parseTimeOrDuration(s)
+		if err != nil {
+			return f, fmt.Errorf("since: %w", err)
+		}
+		f.Since = t
+	} else if defaultSince > 0 {
+		f.Since = time.Now().Add(-defaultSince)
+	}
+	if s := q.Get("until"); s != "" {
+		t, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			return f, fmt.Errorf("until: %w", err)
+		}
+		f.Until = t
+	}
+	return f, nil
+}
+
+func parseBucket(s string) analytics.Bucket {
+	switch strings.ToLower(s) {
+	case "day":
+		return analytics.BucketDay
+	default:
+		return analytics.BucketHour
+	}
+}
+
+func parseGroup(s string) analytics.Group {
+	switch strings.ToLower(s) {
+	case "provider":
+		return analytics.GroupProvider
+	case "workflow":
+		return analytics.GroupWorkflow
+	case "agent":
+		return analytics.GroupAgent
+	case "model":
+		return analytics.GroupModel
+	default:
+		return analytics.GroupNone
+	}
+}
+
+func writeAPIJSON(w http.ResponseWriter, status int, body any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(body)
+}
+
+func writeAPIError(w http.ResponseWriter, status int, err error) {
+	writeAPIJSON(w, status, map[string]string{"error": err.Error()})
+}
+
+// --- handlers -----------------------------------------------------------
+
+func (a *AnalyticsHandlers) spendSummary(w http.ResponseWriter, r *http.Request) {
+	filter, err := filterFromQuery(r, 7*24*time.Hour)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, err)
+		return
+	}
+	summary, err := a.aggregator.Summarize(r.Context(), filter)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeAPIJSON(w, http.StatusOK, map[string]any{
+		"window":   filter,
+		"summary":  summary,
+		"currency": a.spend.Currency(),
+	})
+}
+
+func (a *AnalyticsHandlers) spendSeries(w http.ResponseWriter, r *http.Request) {
+	filter, err := filterFromQuery(r, 24*time.Hour)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, err)
+		return
+	}
+	bucket := parseBucket(r.URL.Query().Get("bucket"))
+	group := parseGroup(r.URL.Query().Get("group"))
+	rows, err := a.aggregator.AggregateBy(r.Context(), filter, bucket, group)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeAPIJSON(w, http.StatusOK, map[string]any{
+		"bucket":   bucket,
+		"group":    group,
+		"rows":     rows,
+		"currency": a.spend.Currency(),
+	})
+}
+
+func (a *AnalyticsHandlers) spendForecast(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	horizon := 7
+	if v := q.Get("horizon_days"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 30 {
+			horizon = n
+		}
+	}
+	filter := analytics.Filter{Since: time.Now().Add(-30 * 24 * time.Hour)}
+	rows, err := a.aggregator.AggregateBy(r.Context(), filter, analytics.BucketDay, analytics.GroupNone)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	history := forecast.SeriesFromRows(rows, forecast.CostUSD)
+	var preds []forecast.Prediction
+	switch {
+	case len(history) >= 4:
+		preds, _ = forecast.NewHolt(0.6, 0.3).Forecast(history, horizon, 24*time.Hour)
+	case len(history) >= 2:
+		preds, _ = forecast.NewLinear().Forecast(history, horizon, 24*time.Hour)
+	}
+	writeAPIJSON(w, http.StatusOK, map[string]any{
+		"horizon_days":   horizon,
+		"history_points": len(history),
+		"history":        rows,
+		"forecast":       preds,
+		"currency":       a.spend.Currency(),
+	})
+}
+
+// listWorkflows returns one row per workflow_id with rolled-up metrics
+// over the configured window. Used by the dashboard to populate the
+// workflow drill-down table.
+func (a *AnalyticsHandlers) listWorkflows(w http.ResponseWriter, r *http.Request) {
+	filter, err := filterFromQuery(r, 7*24*time.Hour)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, err)
+		return
+	}
+	rows, err := a.aggregator.AggregateBy(r.Context(), filter, analytics.BucketDay, analytics.GroupWorkflow)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	type entry struct {
+		WorkflowID string  `json:"workflow_id"`
+		Requests   int64   `json:"requests"`
+		Tokens     int64   `json:"tokens"`
+		CostUSD    float64 `json:"cost_usd"`
+	}
+	totals := map[string]*entry{}
+	for _, row := range rows {
+		key := row.GroupKey
+		if key == "" {
+			continue
+		}
+		cur, ok := totals[key]
+		if !ok {
+			cur = &entry{WorkflowID: key}
+			totals[key] = cur
+		}
+		cur.Requests += row.Requests
+		cur.Tokens += row.TotalTokens
+		cur.CostUSD += row.CostUSD
+	}
+	out := make([]entry, 0, len(totals))
+	for _, e := range totals {
+		out = append(out, *e)
+	}
+	writeAPIJSON(w, http.StatusOK, map[string]any{
+		"workflows": out,
+		"currency":  a.spend.Currency(),
+	})
+}
+
+func (a *AnalyticsHandlers) workflowDetail(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeAPIError(w, http.StatusBadRequest, errors.New("workflow id required"))
+		return
+	}
+	trace, err := workflow.Reconstruct(r.Context(), a.store, a.spend, id)
+	if err != nil {
+		if errors.Is(err, workflow.ErrNoTrace) {
+			writeAPIError(w, http.StatusNotFound, err)
+			return
+		}
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	findings := waste.New(waste.Config{}).Detect(trace)
+	writeAPIJSON(w, http.StatusOK, map[string]any{
+		"trace":    trace,
+		"findings": findings,
+		"currency": a.spend.Currency(),
+	})
+}
+
+func (a *AnalyticsHandlers) listOptimizations(w http.ResponseWriter, r *http.Request) {
+	filter, err := filterFromQuery(r, 7*24*time.Hour)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, err)
+		return
+	}
+	envs, err := a.store.Query(r.Context(), sqlite.Filter{
+		Type:       eventschema.EventTypeOptimization,
+		WorkflowID: filter.WorkflowID,
+		AgentID:    filter.AgentID,
+		Since:      filter.Since,
+		Until:      filter.Until,
+		Limit:      500,
+	})
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	type entry struct {
+		Timestamp              time.Time `json:"timestamp"`
+		Kind                   string    `json:"kind"`
+		Mode                   string    `json:"mode"`
+		Decision               string    `json:"decision"`
+		EstimatedSavingsTokens int64     `json:"estimated_savings_tokens"`
+		EstimatedSavingsUSD    float64   `json:"estimated_savings_usd"`
+		QualityScore           float64   `json:"quality_score"`
+		Reason                 string    `json:"reason"`
+		WorkflowID             string    `json:"workflow_id,omitempty"`
+		AgentID                string    `json:"agent_id,omitempty"`
+	}
+	out := make([]entry, 0, len(envs))
+	for _, env := range envs {
+		oe, ok := env.Payload.(*eventschema.OptimizationEvent)
+		if !ok {
+			continue
+		}
+		out = append(out, entry{
+			Timestamp:              env.Timestamp,
+			Kind:                   string(oe.Kind),
+			Mode:                   string(oe.Mode),
+			Decision:               string(oe.Decision),
+			EstimatedSavingsTokens: oe.EstimatedSavingsTokens,
+			EstimatedSavingsUSD:    oe.EstimatedSavingsUSD,
+			QualityScore:           oe.QualityScore,
+			Reason:                 oe.Reason,
+			WorkflowID:             oe.WorkflowID,
+			AgentID:                oe.AgentID,
+		})
+	}
+	writeAPIJSON(w, http.StatusOK, map[string]any{
+		"optimizations": out,
+		"currency":      a.spend.Currency(),
+	})
+}
