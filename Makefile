@@ -16,7 +16,7 @@ LDFLAGS := -s -w \
   -X github.com/felixgeelhaar/tokenops/internal/version.Commit=$(COMMIT) \
   -X github.com/felixgeelhaar/tokenops/internal/version.Date=$(DATE)
 
-.PHONY: all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-remediate policy-guard install-hooks
+.PHONY: all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-remediate policy-guard install-hooks eval eval-gate
 
 all: build
 
@@ -40,6 +40,19 @@ bench:
 bench-gate:
 	$(GO) test -run TestProxyP99OverheadGate -count=1 ./internal/proxy/
 
+# eval runs the full optimizer quality eval suite against offline
+# fixtures. Reports per-optimizer quality scores, compression ratios,
+# and success rates. Use this locally to iterate on optimizer changes.
+eval:
+	$(GO) test -count=1 -run TestEvalSuitesPass -v ./internal/eval/
+
+# eval-gate is the CI regression gate for optimizer quality. It asserts
+# that the aggregate success rate across all eval fixtures stays above
+# the minimum threshold defined in the test. Add new eval fixtures to
+# internal/eval/testdata/ to expand coverage.
+eval-gate:
+	$(GO) test -count=1 -run TestEvalSuitesPass ./internal/eval/
+
 fmt:
 	$(GO) fmt $(PKG)
 
@@ -52,7 +65,7 @@ lint:
 tidy:
 	$(GO) mod tidy
 
-verify: fmt vet lint test bench-gate sec-gate
+verify: fmt vet lint test bench-gate eval-gate sec-gate
 
 # policy-guard enforces local contribution policy checks.
 policy-guard:

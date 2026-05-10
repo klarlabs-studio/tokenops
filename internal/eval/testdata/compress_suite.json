@@ -1,0 +1,43 @@
+{
+  "name": "prompt-compress-eval",
+  "description": "Eval cases for prompt compression optimizer",
+  "cases": [
+    {
+      "id": "compress-001",
+      "description": "long system prompt with verbose whitespace, HTML comments, and trailing spaces",
+      "provider": "openai",
+      "model": "gpt-4o",
+      "body": {"messages":[{"role":"system","content":"You are a helpful assistant that specializes in data analysis.   \n   \n<!-- This is an HTML comment that should be stripped -->\n\n\n\nYour capabilities include:\n  - Analyzing datasets\n  - Creating visualizations  \n  - Statistical modeling  \n\n\n\n\nKey principles you follow:\n  1. Accuracy first   \n  2. Clarity in communication   \n  3. Reproducible results   \n  4. Data privacy   \n\n\n\n\n\n\n\n\n\nWhen responding, always:\n  1. Cite your sources   \n  2. Explain your methodology   \n  3. Provide code when relevant   \n\n\n\n\n\n<!-- Another comment that should be removed -->\nRemember to be concise yet thorough in all responses.   \n   \n"},{"role":"user","content":"What is the capital of France?"}]},
+      "optimizers": ["prompt_compress"],
+      "expect": {
+        "quality_score_min": 0.5,
+        "compression_ratio_min": 0.05,
+        "must_recommend": true
+      }
+    },
+    {
+      "id": "compress-002",
+      "description": "conversation with trailing whitespace and smart quotes",
+      "provider": "openai",
+      "model": "gpt-4o",
+      "body": {"messages":[{"role":"system","content":"You are a helpful AI assistant."},{"role":"user","content":"Hello!   \nCan you help me with something?   \n\n\n"},{"role":"assistant","content":"Of course! I\u2019d be happy to help you.   \n\n\nWhat can I assist you with today?"},{"role":"user","content":"Tell me about the solar system.   \n\n  "}]},
+      "optimizers": ["prompt_compress"],
+      "expect": {
+        "quality_score_min": 0.5,
+        "must_recommend": false
+      }
+    },
+    {
+      "id": "compress-003",
+      "description": "single short message - no compression opportunity",
+      "provider": "openai",
+      "model": "gpt-4o",
+      "body": {"messages":[{"role":"user","content":"Hi"}]},
+      "optimizers": ["prompt_compress"],
+      "expect": {
+        "quality_score_min": 0.0,
+        "must_recommend": false
+      }
+    }
+  ]
+}

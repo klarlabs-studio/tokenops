@@ -1,0 +1,30 @@
+{
+  "name": "semantic-dedupe-eval",
+  "description": "Eval cases for semantic deduplication optimizer",
+  "cases": [
+    {
+      "id": "dedupe-001",
+      "description": "conversation with duplicate long user messages",
+      "provider": "openai",
+      "model": "gpt-4o",
+      "body": {"messages":[{"role":"system","content":"You are a helpful assistant that helps with data analysis tasks. You provide detailed explanations of statistical methods and help users understand their data better."},{"role":"user","content":"I have a dataset with 10,000 rows and 50 columns. The columns include demographic information like age, income, education level, occupation, and geographic region. There are also behavioral columns like purchase history, browsing time, and customer satisfaction scores. I need to understand the relationships between the demographic variables and the behavioral outcomes. Can you recommend some statistical approaches for this type of analysis? Please include both traditional statistical methods and modern machine learning approaches."},{"role":"assistant","content":"Based on your dataset description, I recommend a multi-step approach:\n\n1. Exploratory Data Analysis (EDA): Start with correlation matrices and visualization to understand basic relationships.\n2. Dimensionality Reduction: PCA or t-SNE to handle the 50 columns.\n3. Regression Modeling: Linear regression for continuous outcomes, logistic regression for binary ones.\n4. Tree-based Methods: Random Forest or Gradient Boosting for non-linear relationships.\n5. Clustering: K-means or hierarchical clustering to segment your customer base."},{"role":"user","content":"I have a dataset with 10,000 rows and 50 columns. The columns include demographic information like age, income, education level, occupation, and geographic region. There are also behavioral columns like purchase history, browsing time, and customer satisfaction scores. I need to understand the relationships between the demographic variables and the behavioral outcomes. Can you recommend some statistical approaches for this type of analysis? Please include both traditional statistical methods and modern machine learning approaches."}]},
+      "optimizers": ["semantic_dedupe"],
+      "expect": {
+        "quality_score_min": 0.5,
+        "must_recommend": true
+      }
+    },
+    {
+      "id": "dedupe-002",
+      "description": "unique messages - no deduplication needed",
+      "provider": "openai",
+      "model": "gpt-4o",
+      "body": {"messages":[{"role":"system","content":"You are a helpful assistant that helps with data analysis tasks."},{"role":"user","content":"What is the capital of France? I am planning a trip there and need to know which city to fly into. Also, what are some must-see attractions in that city?"},{"role":"assistant","content":"The capital of France is Paris. Must-see attractions include the Eiffel Tower, the Louvre Museum, Notre-Dame Cathedral, and the Sacre-Coeur Basilica."},{"role":"user","content":"What about Italy? I am also considering visiting Rome, Milan, or Florence. Which city would you recommend for a first-time visitor to Italy?"}]},
+      "optimizers": ["semantic_dedupe"],
+      "expect": {
+        "quality_score_min": 0.0,
+        "must_recommend": false
+      }
+    }
+  ]
+}

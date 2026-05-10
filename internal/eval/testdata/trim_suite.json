@@ -1,0 +1,30 @@
+{
+  "name": "context-trim-eval",
+  "description": "Eval cases for context trimming optimizer",
+  "cases": [
+    {
+      "id": "trim-001",
+      "description": "conversation with many assistant turns",
+      "provider": "openai",
+      "model": "gpt-4o",
+      "body": {"messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"What is 2+2?"},{"role":"assistant","content":"4"},{"role":"user","content":"What is 3+3?"},{"role":"assistant","content":"6"},{"role":"user","content":"What is 4+4?"},{"role":"assistant","content":"8"},{"role":"user","content":"What is 5+5?"},{"role":"assistant","content":"10"},{"role":"user","content":"What is 6+6?"},{"role":"assistant","content":"12"},{"role":"user","content":"What is 7+7?"}]},
+      "optimizers": ["context_trim"],
+      "expect": {
+        "quality_score_min": 0.5,
+        "must_recommend": true
+      }
+    },
+    {
+      "id": "trim-002",
+      "description": "short conversation - no trimming needed",
+      "provider": "openai",
+      "model": "gpt-4o",
+      "body": {"messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"Hi!"},{"role":"assistant","content":"Hello!"}]},
+      "optimizers": ["context_trim"],
+      "expect": {
+        "quality_score_min": 0.0,
+        "must_recommend": false
+      }
+    }
+  ]
+}
