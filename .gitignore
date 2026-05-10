@@ -46,3 +46,9 @@ coverage.txt
 
 # Generated
 *.pb.go.bak
+
+# nox security scanner
+/.nox/
+findings.json
+nox-findings.json
+ai.inventory.json

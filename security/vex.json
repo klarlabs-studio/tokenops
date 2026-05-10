@@ -1,0 +1,75 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/felixgeelhaar/tokenops/security/vex.json",
+  "author": "TokenOps maintainers",
+  "role": "vendor",
+  "timestamp": "2026-05-10T00:00:00Z",
+  "version": 1,
+  "tooling": "nox 0.8.x",
+  "statements": [
+    {
+      "vulnerability": "VULN-002",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "False positive. 'vue' is the official Vue.js framework, not a typosquat of 'vite'. Both are first-party packages from the Vue/Vite organisations and ship together by design.",
+      "products": ["github.com/felixgeelhaar/tokenops"],
+      "_nox_fingerprint": "1f4dff23501a9568fbc5c744257f8e03c7e0ec819cc9583c2d5bc764539594d3"
+    },
+    {
+      "vulnerability": "VULN-002",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "False positive. Second 'vue' vs 'vite' typosquat alert from web/docs lockfile. Same reasoning as the dashboard waiver.",
+      "products": ["github.com/felixgeelhaar/tokenops"],
+      "_nox_fingerprint": "c7da543646b43899976e418bfd3af0e82f6506e7d91639fec6c904fcc81b9348"
+    },
+    {
+      "vulnerability": "VULN-002",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "False positive. 'he' is the canonical HTML entity encoder/decoder by Mathias Bynens; not a typosquat of 'd3'. Pulled in transitively by vitepress.",
+      "products": ["github.com/felixgeelhaar/tokenops"],
+      "_nox_fingerprint": "fc588c1abc7de97b4e973fcc2f327abbacf0462f282d3bf2a461e91601e13c18"
+    },
+    {
+      "vulnerability": "VULN-002",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "False positive. 'preact' is the official Preact framework, distinct from React. Pulled in transitively by vitepress / @vue/devtools-api.",
+      "products": ["github.com/felixgeelhaar/tokenops"],
+      "_nox_fingerprint": "f6283128e83a17f4de5c6bc05fe73f8f15db276936f2402b2a11e944c7256be4"
+    },
+    {
+      "vulnerability": "VULN-002",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "False positive. 'mitt' is the canonical 200-byte event emitter by developit; not a typosquat of 'vite'. Transitive via @vue/devtools-api.",
+      "products": ["github.com/felixgeelhaar/tokenops"],
+      "_nox_fingerprint": "5a5a35ef7e481ae23e044ac41e814ed84832330e90b8ce7f27ebb647f61e7555"
+    },
+    {
+      "vulnerability": "VULN-002",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "False positive. 'vfile' is the official unified.js virtual-file format; not a typosquat of 'vite'. Pulled in transitively by vitepress.",
+      "products": ["github.com/felixgeelhaar/tokenops"],
+      "_nox_fingerprint": "ce070ec9fd57c9fabcb1d456f5eb1f67f1dbaee806ed6eb2e051941f4e91ebfc"
+    },
+    {
+      "vulnerability": "VULN-002",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "False positive. 'regex' is the canonical regex utility on npm; not a typosquat of 'redux'. Transitive via vitepress.",
+      "products": ["github.com/felixgeelhaar/tokenops"],
+      "_nox_fingerprint": "a4b109c9d59e959cdcfb789fe55e4173d826ef2659c9b3bbca8c98a1d9e7633a"
+    },
+    {
+      "vulnerability": "VULN-002",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "False positive. 'birpc' is the antfu/birpc message-passing helper used by the vite/vitepress devtools; not a typosquat of 'grpc'.",
+      "products": ["github.com/felixgeelhaar/tokenops"],
+      "_nox_fingerprint": "3d07078616467ab07f2ada97d7af62a3b1da493d1e28d225cc64a6c10fdc9b46"
+    }
+  ]
+}

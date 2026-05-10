@@ -1,0 +1,81 @@
+name: Security
+
+# Replaces Dependabot. nox runs on every push + PR + nightly so
+# vulnerability discovery happens on a tight loop. The job fails the
+# build only on critical findings; everything below critical is
+# uploaded as an artifact for triage in the Security tab.
+#
+# Waivers for false positives live in security/vex.json (OpenVEX).
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Daily at 06:00 UTC so newly disclosed CVEs surface within ~24h.
+    - cron: "0 6 * * *"
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nox-scan:
+    name: nox scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.2.2
+
+      - name: Install nox
+        run: |
+          curl -sSfL https://github.com/felixgeelhaar/nox/releases/latest/download/nox_Linux_x86_64.tar.gz \
+            | tar -xz -C /usr/local/bin nox
+          nox version
+
+      - name: Scan critical (gate)
+        # Fails the build on any critical finding not waived in
+        # security/vex.json. Critical = known-exploited CVEs +
+        # high-confidence supply-chain attacks.
+        run: |
+          nox scan . \
+            -severity-threshold critical \
+            -vex security/vex.json \
+            -fail-on-unwaived
+
+      - name: Scan full (informational)
+        # No threshold; emits findings.json for the artifact upload
+        # below. Always succeeds — use the artifact + Security tab to
+        # triage.
+        if: always()
+        run: nox scan . || true
+
+      - name: Upload findings
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: nox-findings
+          path: findings.json
+          retention-days: 30
+
+      - name: Summarise
+        if: always()
+        run: |
+          if [ -f findings.json ]; then
+            python3 <<'PY'
+          import json
+          from collections import Counter
+          d = json.load(open("findings.json"))
+          findings = d.get("findings", []) if isinstance(d, dict) else d
+          by_sev = Counter(f["Severity"] for f in findings)
+          by_rule = Counter(f["RuleID"] for f in findings)
+          print(f"Total: {len(findings)}")
+          print("By severity:", dict(by_sev))
+          print("Top rules:")
+          for rule, n in by_rule.most_common(10):
+              print(f"  {rule}: {n}")
+          PY
+          fi
