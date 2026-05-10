@@ -13,8 +13,6 @@ const eps = 1e-6
 
 // All test fixtures use 1h intervals; mkSeries is parameterised on
 // interval for readability rather than for variation.
-//
-//nolint:unparam
 func mkSeries(start time.Time, interval time.Duration, values ...float64) []Point {
 	out := make([]Point, len(values))
 	for i, v := range values {

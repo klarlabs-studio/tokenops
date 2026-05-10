@@ -101,7 +101,9 @@ func TestHTTPMiddlewareGates(t *testing.T) {
 func TestPermissionsReturnsCopy(t *testing.T) {
 	perms := Permissions(RoleViewer)
 	original := len(perms)
-	perms = append(perms, "fake")
+	// Mutate the returned slice (dead-store on purpose — we're checking
+	// the original storage isn't aliased).
+	_ = append(perms, "fake")
 	got := Permissions(RoleViewer)
 	if len(got) != original {
 		t.Errorf("Permissions returned shared slice; mutating leaked: original=%d after=%d", original, len(got))

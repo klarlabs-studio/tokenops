@@ -64,7 +64,7 @@ spend within the selected window. It surfaces:
 			if err != nil {
 				return fmt.Errorf("open event store: %w", err)
 			}
-			defer store.Close()
+			defer func() { _ = store.Close() }()
 
 			group, err := parseGroup(groupBy)
 			if err != nil {
@@ -302,7 +302,9 @@ func writeSpendText(w io.Writer, v spendView) error {
 				fmtMoney(r.CostUSD, v.Currency),
 			)
 		}
-		_ = tw.Flush()
+		if err := tw.Flush(); err != nil {
+			return err
+		}
 	}
 
 	if len(v.Forecast) > 0 {
@@ -317,7 +319,9 @@ func writeSpendText(w io.Writer, v spendView) error {
 				fmtMoney(p.Upper, v.Currency),
 			)
 		}
-		_ = tw.Flush()
+		if err := tw.Flush(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

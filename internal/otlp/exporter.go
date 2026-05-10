@@ -250,7 +250,7 @@ func workflowAttributes(p *eventschema.WorkflowEvent) []kv {
 	out := []kv{
 		stringKV(eventschema.AttrTokenOpsWorkflowID, p.WorkflowID),
 		stringKV(eventschema.AttrTokenOpsWorkflowState, string(p.State)),
-		intKV(eventschema.AttrTokenOpsWorkflowStepCount, int64(p.StepCount)),
+		intKV(eventschema.AttrTokenOpsWorkflowStepCount, p.StepCount),
 	}
 	if p.AgentID != "" {
 		out = append(out, stringKV(eventschema.AttrTokenOpsAgentID, p.AgentID))

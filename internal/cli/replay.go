@@ -63,7 +63,7 @@ findings (when --workflow is set), and a summary footer.`,
 			if err != nil {
 				return fmt.Errorf("open event store: %w", err)
 			}
-			defer store.Close()
+			defer func() { _ = store.Close() }()
 
 			sel := replay.SessionSelector{
 				WorkflowID: workflowID,

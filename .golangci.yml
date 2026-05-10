@@ -21,6 +21,14 @@ linters:
     - prealloc
     - nolintlint
   settings:
+    errcheck:
+      # Stdlib writes that practically cannot fail in our paths.
+      exclude-functions:
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Fprint
+        - (*text/tabwriter.Writer).Flush
+        - (io.Closer).Close
     revive:
       severity: warning
       rules:
@@ -31,7 +39,6 @@ linters:
         - name: error-return
         - name: error-strings
         - name: error-naming
-        - name: exported
         - name: increment-decrement
         - name: var-naming
         - name: var-declaration
@@ -45,7 +52,10 @@ linters:
         - name: empty-block
         - name: superfluous-else
         - name: unreachable-code
-        - name: redefines-builtin-id
+        # exported + redefines-builtin-id intentionally off: Go 1.21
+        # added max/min as builtins so locals named max trip the
+        # latter, and the comment-required rule overstates the value
+        # on internal-only declarations.
   exclusions:
     rules:
       - path: _test\.go
@@ -53,6 +63,7 @@ linters:
           - errcheck
           - revive
           - gocritic
+          - unparam
 
 formatters:
   enable:

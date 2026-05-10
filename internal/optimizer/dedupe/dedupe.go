@@ -207,11 +207,6 @@ func jaccard(a, b map[string]struct{}) float64 {
 
 // --- Body manipulation ---------------------------------------------------
 
-type messageProbe struct {
-	role    string
-	content json.RawMessage
-}
-
 // dedupeBody walks an OpenAI/Anthropic chat body's messages, identifies
 // duplicate clusters with role-aware Jaccard matching, and rewrites the
 // body so every cluster keeps only its first occurrence. Returns:
@@ -377,7 +372,3 @@ func extractText(raw json.RawMessage) string {
 
 // Compile-time interface check.
 var _ optimizer.Optimizer = (*Deduper)(nil)
-
-// Avoid unused-import flake when optimizer's Recommendation is unreferenced
-// after a refactor.
-var _ = messageProbe{}

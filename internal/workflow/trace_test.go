@@ -24,10 +24,7 @@ func newStore(t *testing.T) *sqlite.Store {
 }
 
 // wf is the fixed workflow id used by all test fixtures; mkStep accepts
-// it as a parameter for readability rather than for variation, so the
-// linter's unparam complaint is acknowledged but not actionable.
-//
-//nolint:unparam
+// it as a parameter for readability rather than for variation.
 func mkStep(id, wf, agent, model string, ts time.Time, in, out int64, cost float64, latency time.Duration) *eventschema.Envelope {
 	return &eventschema.Envelope{
 		ID: id, SchemaVersion: eventschema.SchemaVersion,

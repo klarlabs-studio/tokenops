@@ -55,7 +55,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("open events.db at %s: %w", dbPath, err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	spendEng := spend.NewEngine(spend.DefaultTable())
 	agg := analytics.New(store, spendEng)
