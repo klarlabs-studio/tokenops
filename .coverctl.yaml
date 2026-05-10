@@ -1,0 +1,108 @@
+version: 1
+language: go
+policy:
+  default:
+    min: 80
+  domains:
+    - name: cmd
+      match: [./cmd/...]
+      min: 35
+    - name: daemon
+      match: [./internal/daemon/...]
+      min: 15
+    - name: mcp
+      match: [./internal/mcp/...]
+      min: 40
+    - name: storage
+      match: [./internal/storage/...]
+      min: 80
+    - name: otlp
+      match: [./internal/otlp/...]
+      min: 65
+    - name: cli
+      match: [./internal/cli/...]
+      min: 75
+    - name: config
+      match: [./internal/config/...]
+      min: 80
+    - name: tlsmint
+      match: [./internal/tlsmint/...]
+      min: 70
+    - name: llm
+      match: [./internal/llm/...]
+      min: 75
+    - name: eval
+      match: [./internal/eval/...]
+      min: 75
+    - name: analytics
+      match: [./internal/analytics/...]
+      min: 80
+    - name: anomaly
+      match: [./internal/anomaly/...]
+      min: 80
+    - name: audit
+      match: [./internal/audit/...]
+      min: 85
+    - name: budget
+      match: [./internal/budget/...]
+      min: 85
+    - name: coaching
+      match: [./internal/coaching/...]
+      min: 85
+    - name: dashauth
+      match: [./internal/dashauth/...]
+      min: 85
+    - name: efficiency
+      match: [./internal/efficiency/...]
+      min: 80
+    - name: events
+      match: [./internal/events/...]
+      min: 85
+    - name: forecast
+      match: [./internal/forecast/...]
+      min: 85
+    - name: observ
+      match: [./internal/observ/...]
+      min: 80
+    - name: optimizer
+      match: [./internal/optimizer/...]
+      min: 80
+    - name: providers
+      match: [./internal/providers/...]
+      min: 80
+    - name: proxy
+      match: [./internal/proxy/...]
+      min: 80
+    - name: rbac
+      match: [./internal/rbac/...]
+      min: 90
+    - name: redaction
+      match: [./internal/redaction/...]
+      min: 90
+    - name: replay
+      match: [./internal/replay/...]
+      min: 80
+    - name: retention
+      match: [./internal/retention/...]
+      min: 80
+    - name: scorecard
+      match: [./internal/scorecard/...]
+      min: 90
+    - name: spend
+      match: [./internal/spend/...]
+      min: 85
+    - name: tokenizer
+      match: [./internal/tokenizer/...]
+      min: 80
+    - name: version
+      match: [./internal/version/...]
+      min: 90
+    - name: waste
+      match: [./internal/waste/...]
+      min: 85
+    - name: workflow
+      match: [./internal/workflow/...]
+      min: 85
+    - name: pkg
+      match: [./pkg/...]
+      min: 90

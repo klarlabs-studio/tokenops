@@ -16,7 +16,7 @@ LDFLAGS := -s -w \
   -X github.com/felixgeelhaar/tokenops/internal/version.Commit=$(COMMIT) \
   -X github.com/felixgeelhaar/tokenops/internal/version.Date=$(DATE)
 
-.PHONY: all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-remediate policy-guard install-hooks eval eval-gate
+.PHONY: all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-remediate policy-guard install-hooks eval eval-gate cover-debt cover-debt-gate
 
 all: build
 
@@ -64,6 +64,15 @@ lint:
 
 tidy:
 	$(GO) mod tidy
+
+# cover-debt prints the per-domain coverage report using coverctl.
+# Non-zero exit when a domain drops below its threshold.
+# Install coverctl: go install github.com/coverctl/coverctl@latest
+COVERCTL ?= coverctl
+COVERCTL_CONFIG ?= .coverctl.yaml
+
+cover-debt:
+	-$(COVERCTL) check -config $(COVERCTL_CONFIG)
 
 verify: fmt vet lint test bench-gate eval-gate sec-gate
 
