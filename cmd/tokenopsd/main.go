@@ -1,24 +1,17 @@
-// Command tokenopsd is the TokenOps daemon.
-//
-// The daemon hosts the local proxy and supporting subsystems. The skeleton
-// implemented here boots the HTTP listener, structured logger, health
-// endpoints, and graceful shutdown. Provider routing, optimization,
-// observability, and storage layers are wired in by their dedicated tasks.
+// Command tokenopsd is the TokenOps daemon. It is intentionally a thin
+// wrapper around internal/daemon: lifecycle, proxy, and shutdown all live
+// there so the tokenops CLI start subcommand and tokenopsd share one boot
+// sequence.
 package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/felixgeelhaar/tokenops/internal/config"
-	"github.com/felixgeelhaar/tokenops/internal/observ"
-	"github.com/felixgeelhaar/tokenops/internal/proxy"
+	"github.com/felixgeelhaar/tokenops/internal/daemon"
 	"github.com/felixgeelhaar/tokenops/internal/version"
 )
 
@@ -60,42 +53,9 @@ func runStart(args []string) error {
 		return fmt.Errorf("config: %w", err)
 	}
 
-	logger := observ.NewLogger(os.Stderr, cfg.Log.Level, cfg.Log.Format)
-	logger.Info("tokenopsd starting",
-		"version", version.Version,
-		"commit", version.Commit,
-		"listen", cfg.Listen,
-	)
-
-	ctx, stop := signal.NotifyContext(context.Background(),
-		syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := daemon.SignalContext(context.Background())
 	defer stop()
-
-	routes, err := proxy.BuildProviderRoutes(cfg.Providers)
-	if err != nil {
-		return fmt.Errorf("provider routes: %w", err)
-	}
-
-	srv := proxy.New(cfg.Listen,
-		proxy.WithLogger(logger),
-		proxy.WithShutdownTimeout(cfg.Shutdown.Timeout),
-		proxy.WithProviderRoutes(routes),
-	)
-	if err := srv.Start(ctx); err != nil {
-		return fmt.Errorf("start proxy: %w", err)
-	}
-	proxy.MarkReady(true)
-
-	<-ctx.Done()
-	logger.Info("shutdown signal received")
-
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Shutdown.Timeout+time.Second)
-	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
-		return fmt.Errorf("shutdown: %w", err)
-	}
-	logger.Info("tokenopsd stopped")
-	return nil
+	return daemon.Run(ctx, cfg, os.Stderr)
 }
 
 func printUsage(w *os.File) {

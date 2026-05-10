@@ -1,20 +1,18 @@
-// Command tokenops is the TokenOps command-line interface.
-//
-// CLI subcommands are implemented in the dedicated cli-skeleton task; this
-// entry point currently emits build metadata and exits, providing a buildable
-// binary for the bootstrap milestone.
+// Command tokenops is the TokenOps command-line interface. The cobra
+// command tree lives in internal/cli; this entry point exists so the
+// binary can be built and so errors surface as clean process exits.
 package main
 
 import (
 	"fmt"
 	"os"
 
-	"github.com/felixgeelhaar/tokenops/internal/version"
+	"github.com/felixgeelhaar/tokenops/internal/cli"
 )
 
 func main() {
-	if _, err := fmt.Fprintf(os.Stdout, "tokenops %s\n", version.String()); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	if err := cli.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }

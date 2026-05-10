@@ -21,6 +21,53 @@ type Config struct {
 	Log       LogConfig         `yaml:"log"`
 	Shutdown  ShutdownConfig    `yaml:"shutdown"`
 	Providers map[string]string `yaml:"providers"`
+	TLS       TLSConfig         `yaml:"tls"`
+	Storage   StorageConfig     `yaml:"storage"`
+	OTel      OTelConfig        `yaml:"otel"`
+}
+
+// OTelConfig configures the optional OTLP/HTTP/JSON telemetry exporter.
+// When Enabled, every envelope emitted to the bus is also forwarded to
+// Endpoint. Headers (e.g. tenant tokens) are sent on every request.
+type OTelConfig struct {
+	Enabled        bool              `yaml:"enabled"`
+	Endpoint       string            `yaml:"endpoint"`
+	Headers        map[string]string `yaml:"headers"`
+	ServiceName    string            `yaml:"service_name"`
+	ServiceVersion string            `yaml:"service_version"`
+	// Redact, when true, runs the redaction pipeline before exporting.
+	// Default true; explicit false disables redaction (use with care).
+	Redact *bool `yaml:"redact"`
+}
+
+// RedactEnabled reports whether redaction should be applied to OTLP
+// exports. Defaults to true when unset.
+func (o OTelConfig) RedactEnabled() bool {
+	if o.Redact == nil {
+		return true
+	}
+	return *o.Redact
+}
+
+// StorageConfig configures the local event store. When Enabled, the
+// daemon opens a sqlite database at Path and emits PromptEvents into it
+// via an async bus.
+type StorageConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Path    string `yaml:"path"`
+}
+
+// TLSConfig configures TLS termination on the local proxy.
+type TLSConfig struct {
+	// Enabled toggles HTTPS. When false, the proxy serves plain HTTP.
+	Enabled bool `yaml:"enabled"`
+	// CertDir is the directory the auto-minted CA + leaf bundle lives in.
+	// On first run TokenOps creates the bundle here; on subsequent runs
+	// the same files are reused. Default ~/.tokenops/certs.
+	CertDir string `yaml:"cert_dir"`
+	// Hostnames are extra DNS SANs added to the leaf cert. Loopback names
+	// (localhost, 127.0.0.1, ::1) are always included.
+	Hostnames []string `yaml:"hostnames"`
 }
 
 // LogConfig configures the structured logger.
@@ -92,6 +139,9 @@ func (c Config) Validate() error {
 	if c.Shutdown.Timeout <= 0 {
 		return fmt.Errorf("shutdown.timeout must be positive, got %s", c.Shutdown.Timeout)
 	}
+	if c.OTel.Enabled && c.OTel.Endpoint == "" {
+		return errors.New("otel.endpoint must be set when otel.enabled is true")
+	}
 	return nil
 }
 
@@ -111,6 +161,42 @@ func applyEnvOverrides(cfg *Config) {
 		} else if secs, err := strconv.Atoi(v); err == nil {
 			cfg.Shutdown.Timeout = time.Duration(secs) * time.Second
 		}
+	}
+	if v := os.Getenv("TOKENOPS_TLS_ENABLED"); v != "" {
+		switch strings.ToLower(v) {
+		case "1", "true", "yes", "on":
+			cfg.TLS.Enabled = true
+		case "0", "false", "no", "off":
+			cfg.TLS.Enabled = false
+		}
+	}
+	if v := os.Getenv("TOKENOPS_TLS_CERT_DIR"); v != "" {
+		cfg.TLS.CertDir = v
+	}
+	if v := os.Getenv("TOKENOPS_STORAGE_ENABLED"); v != "" {
+		switch strings.ToLower(v) {
+		case "1", "true", "yes", "on":
+			cfg.Storage.Enabled = true
+		case "0", "false", "no", "off":
+			cfg.Storage.Enabled = false
+		}
+	}
+	if v := os.Getenv("TOKENOPS_STORAGE_PATH"); v != "" {
+		cfg.Storage.Path = v
+	}
+	if v := os.Getenv("TOKENOPS_OTEL_ENABLED"); v != "" {
+		switch strings.ToLower(v) {
+		case "1", "true", "yes", "on":
+			cfg.OTel.Enabled = true
+		case "0", "false", "no", "off":
+			cfg.OTel.Enabled = false
+		}
+	}
+	if v := os.Getenv("TOKENOPS_OTEL_ENDPOINT"); v != "" {
+		cfg.OTel.Endpoint = v
+	}
+	if v := os.Getenv("TOKENOPS_OTEL_SERVICE_NAME"); v != "" {
+		cfg.OTel.ServiceName = v
 	}
 	for _, key := range []string{"openai", "anthropic", "gemini"} {
 		envKey := "TOKENOPS_PROVIDER_" + strings.ToUpper(key) + "_URL"
