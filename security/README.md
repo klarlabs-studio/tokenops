@@ -1,17 +1,18 @@
 # Security
 
-This project uses [nox](https://github.com/felixgeelhaar/nox) for
+This project uses [nox](https://github.com/nox-hq/nox) for
 vulnerability scanning, secret detection, supply-chain checks, and
 infrastructure-as-code review. Dependabot is intentionally **disabled**
 at the repository level — nox is the single source of security signal.
 
 ## Files
 
-| Path                          | Purpose                                                |
-|-------------------------------|--------------------------------------------------------|
-| `security/vex.json`           | OpenVEX waivers for known false positives              |
-| `.github/workflows/security.yml` | Push / PR / nightly nox scan job                    |
-| `findings.json` (artifact)    | Latest scan output, uploaded by every CI run          |
+| Path                                  | Purpose                                                  |
+|---------------------------------------|----------------------------------------------------------|
+| `security/vex.json`                   | OpenVEX waivers for known false positives                |
+| `.github/workflows/security.yml`      | Push / PR / nightly nox scan job (the build gate)        |
+| `.github/workflows/nox-remediate.yml` | Nightly + manual `nox fix` → opens a remediation PR      |
+| `findings.json` (artifact)            | Latest scan output, uploaded by every CI run            |
 
 ## Gate
 
@@ -33,9 +34,9 @@ uploaded as a CI artifact and inspected via the Security tab.
 Install nox once:
 
 ```bash
-brew install felixgeelhaar/nox/nox
+brew install nox-hq/nox/nox
 # or download a release from
-# https://github.com/felixgeelhaar/nox/releases
+# https://github.com/nox-hq/nox/releases
 ```
 
 Scan:
@@ -54,6 +55,32 @@ Pre-commit hook (optional, blocks `git commit` on critical findings):
 
 ```bash
 nox install-hook
+```
+
+## Remediation
+
+`nox-remediate.yml` runs nightly at 04:00 UTC (and on
+`workflow_dispatch`). It scans, runs `nox fix` against
+`findings.json`, runs `go mod tidy` + `npm install --package-lock-only`
+for the touched manifests, and opens (or refreshes) a PR titled
+`chore(deps): nox remediate` on the `nox/remediate` branch.
+
+Trigger it manually:
+
+```bash
+gh workflow run nox-remediate.yml \
+  -f include_major=false   # set true to allow major-version bumps
+```
+
+Apply the same upgrades locally:
+
+```bash
+nox scan .
+nox fix -dry-run         # preview
+nox fix                  # apply
+go mod tidy
+(cd web/dashboard && npm install --package-lock-only)
+(cd web/docs      && npm install --package-lock-only)
 ```
 
 ## Triaging a new finding

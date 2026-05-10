@@ -42,22 +42,17 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/nox" version
 
-      - name: Scan critical (gate)
-        # Fails the build on any critical finding not waived in
-        # security/vex.json. Critical = known-exploited CVEs +
-        # high-confidence supply-chain attacks.
-        run: |
-          nox scan . \
-            -severity-threshold critical \
-            -vex security/vex.json \
-            -fail-on-unwaived
-
-      - name: Scan full (informational)
-        # No threshold; emits findings.json for the artifact upload
-        # below. Always succeeds — use the artifact + Security tab to
-        # triage.
-        if: always()
+      - name: Scan
+        # nox exits non-zero whenever findings exist; we always treat
+        # the scan itself as informational and let the gate step decide
+        # whether to fail the build.
         run: nox scan . || true
+
+      - name: Critical gate
+        # scripts/sec-gate.py reads findings.json + security/vex.json
+        # and exits non-zero only when at least one critical finding
+        # is not waived in OpenVEX.
+        run: python3 scripts/sec-gate.py
 
       - name: Upload findings
         if: always()

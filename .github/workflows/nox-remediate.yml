@@ -1,0 +1,136 @@
+name: Nox remediate
+
+# Replaces Dependabot's "open a PR with the version bump" loop. Runs
+# nightly + on demand, scans for fixable vulnerabilities (VULN-001
+# findings carrying a fixed_in version), applies the upgrades via
+# `nox fix`, and opens a PR if anything changed.
+on:
+  schedule:
+    # 04:00 UTC daily — earlier than the security scan (06:00) so any
+    # remediation PR is already open by the time the gate runs.
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+    inputs:
+      include_major:
+        description: "Apply major-version bumps too (off by default; review manually)."
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: nox-remediate
+  cancel-in-progress: true
+
+jobs:
+  remediate:
+    name: Apply OSV upgrades
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.2.2
+        with:
+          # Need full history for the diff inspection + signed-off-by.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.4.0
+        with:
+          go-version: "1.23"
+          cache: true
+
+      - name: Install nox
+        env:
+          NOX_VERSION: "0.9.5"
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL "https://github.com/nox-hq/nox/releases/download/v${NOX_VERSION}/nox_${NOX_VERSION}_linux_amd64.tar.gz" \
+            | tar -xz -C "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Scan
+        run: nox scan .
+
+      - name: Plan upgrades (dry run)
+        id: plan
+        env:
+          INCLUDE_MAJOR: ${{ inputs.include_major }}
+        run: |
+          flag=""
+          if [ "$INCLUDE_MAJOR" = "true" ]; then
+            flag="-include-major"
+          fi
+          # Dry run first so the PR body can quote the planned actions.
+          nox fix $flag -dry-run -input findings.json | tee plan.txt
+          if grep -q "no actions" plan.txt; then
+            echo "has_actions=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_actions=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Apply upgrades
+        if: steps.plan.outputs.has_actions == 'true'
+        env:
+          INCLUDE_MAJOR: ${{ inputs.include_major }}
+        run: |
+          flag=""
+          if [ "$INCLUDE_MAJOR" = "true" ]; then
+            flag="-include-major"
+          fi
+          nox fix $flag -input findings.json
+
+      - name: Tidy go.mod / lockfiles
+        if: steps.plan.outputs.has_actions == 'true'
+        run: |
+          # Make sure the upgrades produce clean, reproducible state.
+          go mod tidy
+          if [ -f web/dashboard/package.json ]; then
+            (cd web/dashboard && npm install --package-lock-only --silent)
+          fi
+          if [ -f web/docs/package.json ]; then
+            (cd web/docs && npm install --package-lock-only --silent)
+          fi
+
+      - name: Detect diff
+        id: diff
+        if: steps.plan.outputs.has_actions == 'true'
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open / update PR
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@67ccf781d68cd99b580ae25a5c18a1cc84ffff1f # v7.0.6
+        with:
+          commit-message: "chore(deps): nox remediate — apply OSV fixed_in upgrades"
+          title: "chore(deps): nox remediate"
+          branch: nox/remediate
+          delete-branch: true
+          base: main
+          body: |
+            Automated dependency upgrade run.
+
+            `nox fix` applied the upgrades planned below. The changes
+            cover only versions whose advisory carries a `fixed_in`,
+            so each bump resolves at least one CVE.
+
+            <details><summary>Plan</summary>
+
+            ```
+            ${{ steps.plan.outputs.plan_text || 'see workflow logs' }}
+            ```
+            </details>
+
+            ### Reviewer checklist
+            - [ ] Skim the lockfile diff for unexpected transitive
+                  changes.
+            - [ ] Confirm the existing test suite stays green
+                  (`make verify`).
+            - [ ] If a major version was crossed, review the upstream
+                  release notes for breaking changes.
+          labels: |
+            dependencies
+            security

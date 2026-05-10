@@ -16,7 +16,7 @@ LDFLAGS := -s -w \
   -X github.com/felixgeelhaar/tokenops/internal/version.Commit=$(COMMIT) \
   -X github.com/felixgeelhaar/tokenops/internal/version.Date=$(DATE)
 
-.PHONY: all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate
+.PHONY: all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-remediate
 
 all: build
 
@@ -52,7 +52,38 @@ lint:
 tidy:
 	$(GO) mod tidy
 
-verify: fmt vet lint test bench-gate
+verify: fmt vet lint test bench-gate sec-gate
+
+# sec runs the full nox scan and writes findings.json to the working
+# tree. Use this for triaging; the result file is gitignored.
+sec:
+	nox scan .
+
+# sec-gate runs the same critical-only gate the security workflow runs
+# in CI. Fails on any unwaived critical finding. nox scan exits non-zero
+# whenever findings exist; we ignore that and use scripts/sec-gate.py to
+# enforce the critical+VEX policy explicitly.
+sec-gate:
+	-nox scan . > /dev/null
+	@python3 scripts/sec-gate.py
+
+# sec-remediate applies nox's OSV-driven dep upgrades, then refreshes
+# the language manifests so the change is consistent end-to-end. Set
+# INCLUDE_MAJOR=1 to allow major-version bumps.
+sec-remediate:
+	nox scan .
+	@if [ "$(INCLUDE_MAJOR)" = "1" ]; then \
+		nox fix -include-major -input findings.json; \
+	else \
+		nox fix -input findings.json; \
+	fi
+	$(GO) mod tidy
+	@if [ -f web/dashboard/package.json ]; then \
+		(cd web/dashboard && npm install --package-lock-only --silent); \
+	fi
+	@if [ -f web/docs/package.json ]; then \
+		(cd web/docs && npm install --package-lock-only --silent); \
+	fi
 
 ci: verify build
 

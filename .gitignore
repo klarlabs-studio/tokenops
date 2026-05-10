@@ -38,6 +38,7 @@ Thumbs.db
 /data/
 /.tokenops/
 .claude/settings.local.json
+.claude/
 
 # Coverage
 coverage.out
