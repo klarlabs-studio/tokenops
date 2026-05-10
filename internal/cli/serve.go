@@ -80,7 +80,7 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 		return fmt.Errorf("register tools: %w", err)
 	}
 
-	logger.Info("tokenops-mcp ready",
+	logger.Info("tokenops serve ready",
 		"db", dbPath,
 		"version", version.Version)
 	return srv.Serve(ctx, cmd.InOrStdin(), cmd.OutOrStdout())

@@ -1,10 +1,10 @@
 # MCP server
 
-`tokenops-mcp` is a Model Context Protocol server that exposes
+`tokenops serve` starts a Model Context Protocol server that exposes
 TokenOps queries as tools. Register it in any MCP client (Claude
-Desktop, Cursor, your own agent) to let an LLM ask "how much did we
-spend last week?" or "show me the top wasteful workflows" — answered
-from the local event store.
+Desktop, Cursor, opencode, your own agent) to let an LLM ask "how much
+did we spend last week?" or "show me the top wasteful workflows" —
+answered from the local event store.
 
 ## Tools
 
@@ -24,7 +24,8 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 {
   "mcpServers": {
     "tokenops": {
-      "command": "tokenops-mcp",
+      "command": "tokenops",
+      "args": ["serve"],
       "env": {
         "TOKENOPS_STORAGE_PATH": "/Users/<you>/.tokenops/events.db"
       }
@@ -37,10 +38,10 @@ Restart Claude Desktop. The TokenOps tools surface in the tools list.
 
 ## Cursor / other clients
 
-Any client speaking MCP over stdio works. Run `tokenops-mcp` as the
+Any client speaking MCP over stdio works. Run `tokenops serve` as the
 command; pass `TOKENOPS_STORAGE_PATH` to point at the events DB.
 
 ## Logs
 
 Diagnostic output goes to stderr (stdout is reserved for the JSON-RPC
-channel). Tail it via `tokenops-mcp 2>/tmp/tokenops-mcp.log`.
+channel). Tail it via `tokenops serve 2>/tmp/tokenops-serve.log`.

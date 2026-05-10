@@ -1,0 +1,75 @@
+version: 2
+project_name: tokenops
+
+before:
+  hooks:
+    - go mod tidy
+    - go vet ./...
+
+builds:
+  - id: tokenops
+    binary: tokenops
+    main: ./cmd/tokenops
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/felixgeelhaar/tokenops/internal/version.Version={{ .Version }}
+      - -X github.com/felixgeelhaar/tokenops/internal/version.Commit={{ .Commit }}
+      - -X github.com/felixgeelhaar/tokenops/internal/version.Date={{ .Date }}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: tokenopsd
+    binary: tokenopsd
+    main: ./cmd/tokenopsd
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/felixgeelhaar/tokenops/internal/version.Version={{ .Version }}
+      - -X github.com/felixgeelhaar/tokenops/internal/version.Commit={{ .Commit }}
+      - -X github.com/felixgeelhaar/tokenops/internal/version.Date={{ .Date }}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: default
+    formats: ["tar.gz"]
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  name_template: "{{ .Tag }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - merge
+
+release:
+  github:
+    owner: felixgeelhaar
+    name: tokenops
+  draft: true

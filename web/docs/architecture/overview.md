@@ -9,7 +9,7 @@ hosts:
   observed on the proxy;
 - a sqlite event store (opt-in) that persists envelopes locally;
 - an optimizer pipeline run in passive / interactive / replay mode;
-- a CLI (`tokenops`) and an MCP server (`tokenops-mcp`) that surface
+- a CLI (`tokenops`) with an MCP server (`tokenops serve`) that surface
   the same data to humans and to agents.
 
 ```
