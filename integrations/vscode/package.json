@@ -1,0 +1,62 @@
+{
+  "name": "tokenops-vscode",
+  "displayName": "TokenOps",
+  "description": "Spend, burn graph, and optimization suggestions for your local TokenOps daemon — surfaced inside VS Code.",
+  "version": "0.1.0",
+  "publisher": "tokenops",
+  "private": true,
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/felixgeelhaar/tokenops.git",
+    "directory": "integrations/vscode"
+  },
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "keywords": ["tokenops", "llm", "observability", "spend"],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "TokenOps",
+      "properties": {
+        "tokenops.daemonUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:7878",
+          "description": "Base URL of the TokenOps daemon."
+        },
+        "tokenops.bearerToken": {
+          "type": "string",
+          "default": "",
+          "description": "Optional bearer token forwarded as Authorization: Bearer <token>."
+        }
+      }
+    },
+    "commands": [
+      { "command": "tokenops.showBurnGraph", "title": "TokenOps: Show burn graph" },
+      { "command": "tokenops.showOptimizations", "title": "TokenOps: Show optimization suggestions" },
+      { "command": "tokenops.openReplay", "title": "TokenOps: Open replay for workflow…" }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        { "id": "tokenops", "title": "TokenOps", "icon": "resources/icon.svg" }
+      ]
+    },
+    "views": {
+      "tokenops": [
+        { "id": "tokenops.summary", "name": "Summary" }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "build": "tsc -p ./",
+    "lint": "tsc -p ./ --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.6.0"
+  }
+}
