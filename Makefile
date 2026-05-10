@@ -16,7 +16,7 @@ LDFLAGS := -s -w \
   -X github.com/felixgeelhaar/tokenops/internal/version.Commit=$(COMMIT) \
   -X github.com/felixgeelhaar/tokenops/internal/version.Date=$(DATE)
 
-.PHONY: all build test fmt vet lint verify clean tools tidy ci run-daemon
+.PHONY: all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate
 
 all: build
 
@@ -28,6 +28,17 @@ $(BIN_DIR)/%:
 
 test:
 	$(GO) test -race -count=1 -coverprofile=coverage.out $(PKG)
+
+# bench runs the proxy overhead microbenchmarks. Useful locally; numbers
+# vary with hardware so this is informational, not a CI gate.
+bench:
+	$(GO) test -run=^$$ -bench='BenchmarkProxy' -benchtime=2s -benchmem ./internal/proxy/
+
+# bench-gate runs the proxy p99-overhead gate (TestProxyP99OverheadGate).
+# This is the CI regression gate for proxy-bench: it asserts proxy p99
+# overhead stays below 50ms (override via TOKENOPS_BENCH_P99_MS).
+bench-gate:
+	$(GO) test -run TestProxyP99OverheadGate -count=1 ./internal/proxy/
 
 fmt:
 	$(GO) fmt $(PKG)
@@ -41,7 +52,7 @@ lint:
 tidy:
 	$(GO) mod tidy
 
-verify: fmt vet lint test
+verify: fmt vet lint test bench-gate
 
 ci: verify build
 

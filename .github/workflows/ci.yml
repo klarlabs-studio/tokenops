@@ -65,6 +65,22 @@ jobs:
           name: coverage
           path: coverage.out
 
+  bench-gate:
+    name: Bench gate
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+      # Shared GitHub runners are noisy; loosen the threshold for CI.
+      - name: Proxy p99 overhead gate
+        env:
+          TOKENOPS_BENCH_P99_MS: "200"
+        run: go test -run TestProxyP99OverheadGate -count=1 -timeout 120s ./internal/proxy/
+
   build:
     name: Build
     needs: [lint, test]
