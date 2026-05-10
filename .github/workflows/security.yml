@@ -31,10 +31,16 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.2.2
 
       - name: Install nox
+        env:
+          # Pinned. Bump deliberately after reviewing the release notes
+          # at https://github.com/nox-hq/nox/releases.
+          NOX_VERSION: "0.9.5"
         run: |
-          curl -sSfL https://github.com/felixgeelhaar/nox/releases/latest/download/nox_Linux_x86_64.tar.gz \
-            | tar -xz -C /usr/local/bin nox
-          nox version
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL "https://github.com/nox-hq/nox/releases/download/v${NOX_VERSION}/nox_${NOX_VERSION}_linux_amd64.tar.gz" \
+            | tar -xz -C "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/nox" version
 
       - name: Scan critical (gate)
         # Fails the build on any critical finding not waived in
