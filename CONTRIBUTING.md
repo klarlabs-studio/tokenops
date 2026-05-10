@@ -26,6 +26,26 @@ make test      # run Go test suite
 6. Open a pull request describing the change and linking the relevant Roady
    task ID.
 
+## Branch protection policy
+
+- `main` is a protected branch and should be updated **only via pull request**.
+- Do not push directly to `main`/`master` during normal development.
+- Use short-lived feature branches (`feat/...`, `fix/...`, `chore/...`) and
+  merge through GitHub PR checks.
+
+Install local guardrails once per clone:
+
+```bash
+make install-hooks
+```
+
+The installed pre-push hook blocks direct pushes from protected branches.
+Emergency override exists for explicit incident workflows:
+
+```bash
+ALLOW_PROTECTED_PUSH=1 git push origin main
+```
+
 ## Code standards
 
 - **Go**: `gofmt`, `goimports`, `golangci-lint run` must be clean. Public APIs

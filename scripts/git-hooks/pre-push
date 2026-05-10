@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+bash "$(git rev-parse --show-toplevel)/scripts/require-pr-branch.sh"

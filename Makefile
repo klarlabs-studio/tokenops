@@ -16,7 +16,7 @@ LDFLAGS := -s -w \
   -X github.com/felixgeelhaar/tokenops/internal/version.Commit=$(COMMIT) \
   -X github.com/felixgeelhaar/tokenops/internal/version.Date=$(DATE)
 
-.PHONY: all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-remediate
+.PHONY: all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-remediate policy-guard install-hooks
 
 all: build
 
@@ -53,6 +53,10 @@ tidy:
 	$(GO) mod tidy
 
 verify: fmt vet lint test bench-gate sec-gate
+
+# policy-guard enforces local contribution policy checks.
+policy-guard:
+	@bash scripts/require-pr-branch.sh
 
 # sec runs the full nox scan and writes findings.json to the working
 # tree. Use this for triaging; the result file is gitignored.
@@ -95,3 +99,11 @@ tools:
 
 run-daemon: $(BIN_DIR)/tokenopsd
 	./$(BIN_DIR)/tokenopsd start
+
+# install-hooks installs repository-managed git hooks for local policy
+# checks (pre-push currently).
+install-hooks:
+	@mkdir -p .git/hooks
+	@cp scripts/git-hooks/pre-push .git/hooks/pre-push
+	@chmod +x .git/hooks/pre-push
+	@echo "Installed .git/hooks/pre-push"
