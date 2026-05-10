@@ -72,4 +72,4 @@ release:
   github:
     owner: felixgeelhaar
     name: tokenops
-  draft: true
+  draft: false
