@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tokenops-langchain"
+version = "0.1.0"
+description = "LangChain callback handler that emits TokenOps attribution headers and surfaces TokenOps events alongside LangChain runs."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [{ name = "TokenOps contributors" }]
+keywords = ["langchain", "tokenops", "observability", "llm"]
+dependencies = [
+  "langchain-core>=0.3,<1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/felixgeelhaar/tokenops"
+Documentation = "https://github.com/felixgeelhaar/tokenops/tree/main/integrations/python/tokenops_langchain"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tokenops_langchain"]

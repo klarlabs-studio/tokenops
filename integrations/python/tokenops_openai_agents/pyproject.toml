@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tokenops-openai-agents"
+version = "0.1.0"
+description = "Middleware that wires the OpenAI Agents SDK to TokenOps: SDK base-URL override + attribution headers per agent run."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "TokenOps contributors" }]
+keywords = ["openai", "agents", "tokenops", "observability"]
+dependencies = [
+  "openai-agents>=0.0.6",
+  "openai>=1.50",
+]
+
+[project.urls]
+Homepage = "https://github.com/felixgeelhaar/tokenops"
+Documentation = "https://github.com/felixgeelhaar/tokenops/tree/main/integrations/python/tokenops_openai_agents"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tokenops_openai_agents"]
