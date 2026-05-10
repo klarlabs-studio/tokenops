@@ -94,3 +94,90 @@ func TestLoadMissingFileErrors(t *testing.T) {
 		t.Fatal("expected error for missing file")
 	}
 }
+
+func TestEnvBoolOverrides(t *testing.T) {
+	t.Run("TLS enabled", func(t *testing.T) {
+		t.Setenv("TOKENOPS_TLS_ENABLED", "1")
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !cfg.TLS.Enabled {
+			t.Error("TLS.Enabled should be true")
+		}
+	})
+	t.Run("TLS disabled", func(t *testing.T) {
+		t.Setenv("TOKENOPS_TLS_ENABLED", "0")
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.TLS.Enabled {
+			t.Error("TLS.Enabled should be false")
+		}
+	})
+	t.Run("storage enabled true", func(t *testing.T) {
+		t.Setenv("TOKENOPS_STORAGE_ENABLED", "true")
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !cfg.Storage.Enabled {
+			t.Error("Storage.Enabled should be true")
+		}
+	})
+	t.Run("storage enabled false", func(t *testing.T) {
+		t.Setenv("TOKENOPS_STORAGE_ENABLED", "false")
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.Storage.Enabled {
+			t.Error("Storage.Enabled should be false")
+		}
+	})
+	t.Run("otel enabled on", func(t *testing.T) {
+		t.Setenv("TOKENOPS_OTEL_ENABLED", "on")
+		t.Setenv("TOKENOPS_OTEL_ENDPOINT", "http://localhost:4318")
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !cfg.OTel.Enabled {
+			t.Error("OTel.Enabled should be true")
+		}
+	})
+	t.Run("otel enabled off", func(t *testing.T) {
+		t.Setenv("TOKENOPS_OTEL_ENABLED", "off")
+		cfg, err := Load("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.OTel.Enabled {
+			t.Error("OTel.Enabled should be false")
+		}
+	})
+}
+
+func TestRedactEnabledDefaultsTrue(t *testing.T) {
+	var o OTelConfig
+	if !o.RedactEnabled() {
+		t.Error("RedactEnabled should default to true")
+	}
+}
+
+func TestRedactEnabledExplicitFalse(t *testing.T) {
+	v := false
+	o := OTelConfig{Redact: &v}
+	if o.RedactEnabled() {
+		t.Error("RedactEnabled should be false when Redact = &false")
+	}
+}
+
+func TestRedactEnabledExplicitTrue(t *testing.T) {
+	v := true
+	o := OTelConfig{Redact: &v}
+	if !o.RedactEnabled() {
+		t.Error("RedactEnabled should be true when Redact = &true")
+	}
+}

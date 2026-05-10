@@ -75,19 +75,19 @@ func TestSchemaVersionConstant(t *testing.T) {
 
 func TestOTLPAttributeKeysPrefixed(t *testing.T) {
 	known := map[string]string{
-		"gen_ai.system":                     "gen_ai",
-		"gen_ai.request.model":              "gen_ai",
-		"gen_ai.usage.input_tokens":         "gen_ai",
-		"tokenops.schema_version":           "tokenops",
-		"tokenops.event.type":               "tokenops",
-		"tokenops.prompt.hash":              "tokenops",
-		"tokenops.optimization.type":        "tokenops",
+		"gen_ai.system":                       "gen_ai",
+		"gen_ai.request.model":                "gen_ai",
+		"gen_ai.usage.input_tokens":           "gen_ai",
+		"tokenops.schema_version":             "tokenops",
+		"tokenops.event.type":                 "tokenops",
+		"tokenops.prompt.hash":                "tokenops",
+		"tokenops.optimization.type":          "tokenops",
 		"tokenops.optimization.quality_score": "tokenops",
-		"tokenops.workflow.id":              "tokenops",
-		"tokenops.agent.id":                 "tokenops",
-		"tokenops.session.id":               "tokenops",
-		"tokenops.coaching.kind":            "tokenops",
-		"tokenops.cache.hit":                "tokenops",
+		"tokenops.workflow.id":                "tokenops",
+		"tokenops.agent.id":                   "tokenops",
+		"tokenops.session.id":                 "tokenops",
+		"tokenops.coaching.kind":              "tokenops",
+		"tokenops.cache.hit":                  "tokenops",
 	}
 	for attr, prefix := range known {
 		t.Run(attr, func(t *testing.T) {
@@ -128,7 +128,7 @@ func TestEnumMembers(t *testing.T) {
 			eventschema.OptimizationTypeRetrievalPrune,
 			eventschema.OptimizationTypeContextTrim,
 			eventschema.OptimizationTypeSystemDedupe,
-			eventschema.OptimizationTypeModelRouter,
+			eventschema.OptimizationTypeRouter,
 			eventschema.OptimizationTypeCacheReuse,
 		}
 		if len(expected) < 5 {
