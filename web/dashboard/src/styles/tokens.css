@@ -1,0 +1,85 @@
+/* Design tokens — single source of truth for color, typography, spacing.
+   Sub-tasks (burn-graph, heatmap, timeline) consume these via CSS custom
+   properties so visual changes happen in one place. */
+
+:root {
+  /* Color: greys for chrome, accent for primary actions, semantic for
+     status. Tuned for a dark-leaning dashboard. */
+  --tk-color-bg:        #0e1116;
+  --tk-color-surface:   #161b22;
+  --tk-color-surface-2: #1f2630;
+  --tk-color-border:    #2a313c;
+  --tk-color-text:      #e6edf3;
+  --tk-color-text-mute: #8d96a0;
+  --tk-color-accent:    #6b8aff;
+  --tk-color-accent-2:  #4159d6;
+
+  --tk-color-success:   #3fb950;
+  --tk-color-warning:   #d29922;
+  --tk-color-danger:    #f85149;
+  --tk-color-info:      #58a6ff;
+
+  /* Provider chips. */
+  --tk-color-openai:    #10a37f;
+  --tk-color-anthropic: #d97757;
+  --tk-color-gemini:    #4285f4;
+
+  /* Typography. */
+  --tk-font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --tk-font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --tk-text-xs:  11px;
+  --tk-text-sm:  13px;
+  --tk-text-md:  15px;
+  --tk-text-lg:  18px;
+  --tk-text-xl:  22px;
+  --tk-text-2xl: 30px;
+  --tk-leading:  1.45;
+
+  /* Spacing — 4px base. */
+  --tk-space-1: 4px;
+  --tk-space-2: 8px;
+  --tk-space-3: 12px;
+  --tk-space-4: 16px;
+  --tk-space-5: 24px;
+  --tk-space-6: 32px;
+
+  /* Radii + shadows. */
+  --tk-radius-sm: 4px;
+  --tk-radius-md: 8px;
+  --tk-radius-lg: 12px;
+  --tk-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --tk-color-bg:        #fafbfc;
+    --tk-color-surface:   #ffffff;
+    --tk-color-surface-2: #f3f5f7;
+    --tk-color-border:    #d8dde3;
+    --tk-color-text:      #1f2328;
+    --tk-color-text-mute: #5f6b76;
+    --tk-color-accent:    #4159d6;
+    --tk-color-accent-2:  #2c44b8;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body, #app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--tk-font-sans);
+  font-size: var(--tk-text-md);
+  line-height: var(--tk-leading);
+  color: var(--tk-color-text);
+  background: var(--tk-color-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a { color: var(--tk-color-accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { font-family: var(--tk-font-mono); font-size: 0.92em; }
