@@ -16,6 +16,10 @@ Per-SDK setup, attribution headers, and smoke tests:
 - [Anthropic](./anthropic.md) — `ANTHROPIC_BASE_URL` env / `base_url` option
 - [Gemini](./gemini.md) — `http_options.base_url` (Python) / `httpOptions.baseUrl` (Node)
 
+For a quick value-proof workflow (install -> first proxied request -> spend
+visibility -> replay optimization), follow the operator golden path in
+`README.md`.
+
 ## Auth passthrough
 
 The proxy strips hop-by-hop headers (per RFC 7230) and forwards everything

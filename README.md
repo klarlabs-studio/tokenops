@@ -105,6 +105,60 @@ export GEMINI_BASE_URL=http://localhost:7878
 ./bin/tokenops spend
 ```
 
+## 5-minute operator golden path
+
+This path is optimized for one goal: prove TokenOps can produce measurable
+value in minutes, not days.
+
+### Step 1: Start the daemon
+
+```bash
+./bin/tokenopsd start
+```
+
+Expected: the process stays running and prints a startup log with a listen
+address (default `127.0.0.1:7878`).
+
+### Step 2: Point one SDK request at the proxy
+
+```bash
+export OPENAI_BASE_URL=http://127.0.0.1:7878/v1
+```
+
+Run one existing request from your app/CLI against the same model you already
+use in production.
+
+Expected: request succeeds with no code changes other than base URL override.
+
+### Step 3: Validate attribution and spend visibility
+
+```bash
+./bin/tokenops spend
+```
+
+Expected: output includes non-zero usage and spend for the recent request.
+
+### Step 4: Replay and inspect optimization headroom
+
+```bash
+./bin/tokenops replay <session-id>
+```
+
+Expected: side-by-side analysis shows optimization opportunities and projected
+token/spend deltas for that session.
+
+### Step 5: Capture your wedge KPI baseline
+
+Track one primary KPI before broad rollout:
+
+- `Token efficiency uplift (%) = (baseline_tokens - optimized_tokens) / baseline_tokens * 100`
+
+Suggested target for initial rollout: 10-20% token reduction on high-volume
+workflows while preserving quality gates.
+
+Why this KPI: it directly ties optimization behavior to cost control and gives
+an objective pass/fail metric for expansion decisions.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
