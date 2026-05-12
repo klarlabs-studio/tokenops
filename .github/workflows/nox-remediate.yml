@@ -46,9 +46,9 @@ jobs:
       - name: Run nox-remediate
         # The composite action installs nox, runs the scan, builds
         # the upgrade plan, applies it, runs the verify command,
-        # and opens / refreshes a PR. Pinned to v1.0.0's commit SHA;
+        # and opens / refreshes a PR. Pinned to v1.0.1's commit SHA;
         # bump deliberately after reviewing the release notes.
-        uses: nox-hq/nox-remediate-action@f7d6cc12bf27c9c871b9f0b87cec38e45c886a37 # v1.0.0
+        uses: nox-hq/nox-remediate-action@ab6f5e2d3db7350544fd43a9676db6b7bcaecff3 # v1.0.1
         with:
           path: .
           version: "0.9.5"
