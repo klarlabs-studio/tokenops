@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"strconv"
 
 	"github.com/felixgeelhaar/tokenops/internal/config"
@@ -10,8 +13,24 @@ import (
 // loadConfig resolves the effective configuration: file (if specified) +
 // environment variables + flag overrides applied last. Validation runs
 // after every override so flag values cannot smuggle in invalid state.
+//
+// When --config is not passed, falls back to the file `tokenops init`
+// writes ($XDG_CONFIG_HOME/tokenops/config.yaml or
+// ~/.config/tokenops/config.yaml). This means `tokenops plan list`,
+// `tokenops scorecard`, and friends pick up the same plans the user
+// just bound via `tokenops plan set` without an explicit flag.
 func loadConfig(rf *rootFlags) (config.Config, error) {
-	cfg, err := config.Load(rf.configPath)
+	configPath := rf.configPath
+	if configPath == "" {
+		if defaultPath, err := defaultConfigPath(); err == nil {
+			if _, statErr := os.Stat(defaultPath); statErr == nil {
+				configPath = defaultPath
+			} else if !errors.Is(statErr, fs.ErrNotExist) {
+				return config.Config{}, fmt.Errorf("stat %s: %w", defaultPath, statErr)
+			}
+		}
+	}
+	cfg, err := config.Load(configPath)
 	if err != nil {
 		return config.Config{}, err
 	}

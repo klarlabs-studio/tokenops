@@ -142,7 +142,7 @@ func newPlanListCmd(rf *rootFlags) *cobra.Command {
 				return err
 			}
 			if len(cfg.Plans) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "no plans configured; set `plans:` in config or TOKENOPS_PLAN_<PROVIDER> env vars")
+				fmt.Fprintln(cmd.OutOrStdout(), "no plans configured; run `tokenops plan set <provider> <plan>` (e.g. `tokenops plan set anthropic claude-max-20x`)")
 				return nil
 			}
 			for provider, planName := range cfg.Plans {
