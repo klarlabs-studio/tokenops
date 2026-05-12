@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.2.0 - 2026-05-12
+
+The Rule Intelligence wedge lands plus a full DDD refactor: rule
+artifacts (`CLAUDE.md`, `AGENTS.md`, Cursor rules, MCP policies) become
+first-class operational telemetry, repository layout reorganises around
+bounded contexts, and the MCP / HTTP / CLI surfaces all share the same
+domain services. Adopts felixgeelhaar/{bolt, fortify v1.5.0, mcp-go}.
+
 ### Added
 
 - **Rule Intelligence** (issue #12): full subsystem treating
@@ -44,6 +52,22 @@
   aware).
 - **`tokenops_domain_events`** MCP tool surfaces in-process event
   counts + audit drop counter.
+- **fortify v1.5.0 adoption**: provider proxy routes can opt into
+  `CircuitBreakerStream` via a new `resilience.*` config block. Each
+  upstream gets its own circuit breaker plus FirstByte / Idle / Total
+  watchdogs; stalled SSE streams surface as `504 Gateway Timeout`
+  instead of hanging the client, and a flaky vendor trips without
+  taking siblings offline. Off by default (no behaviour change for
+  existing deployments). OTLP exporter wraps the upstream call in a
+  fortify circuit breaker for finite-response fault tolerance.
+- **bolt logger adoption**: `observ.NewLogger` now produces zero-alloc
+  JSON via `github.com/felixgeelhaar/bolt` when `log.format=json`;
+  text format retains stdlib slog.
+- **mcp-go adoption**: `internal/mcp` is now a thin adapter over
+  `github.com/felixgeelhaar/mcp-go`. JSON-RPC framing, schema
+  generation, and stdio transport move upstream; every tool gets a
+  typed input struct with auto-generated JSON schema. CLI `tokenops
+  serve` calls `mcp.ServeStdio` instead of the prior handwritten loop.
 
 ### Changed
 
