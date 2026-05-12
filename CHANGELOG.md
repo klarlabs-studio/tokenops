@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+### Added
+
+- **MCP-first wedge**: TokenOps now observes operator activity inside
+  the MCP session rather than relying on proxy traffic, which the
+  three-skill review confirmed is the wrong consumption surface for
+  flat-rate Claude Code / Cursor users.
+  - `internal/contexts/spend/session` package: `Tracker.Record` emits
+    a plan_included synthetic `PromptEvent` for every observed MCP
+    tool invocation, so `ConsumptionInWindow` / `headroom` see real
+    activity without a proxy.
+  - `tokenops_session_budget` MCP tool: predicts whether the current
+    session will hit the rate-limit cap; returns
+    `recommended_action ∈ {continue, slow_down, switch_model,
+    wait_for_reset}` with a confidence band.
+  - `plans.ComputeSessionBudget` pure function with 7 unit tests
+    covering the recommendation matrix.
+- **Config-as-code primitive**:
+  - `tokenops plan set <provider> <plan>` / `tokenops plan unset`
+    replace the previous JSON-edit-the-MCP-host-config flow.
+  - `tokenops provider set|unset|list` mirrors the same verb shape.
+  - Shared `config_mutate.go` helpers (`readMutableConfig`,
+    `writeMutableConfig`) reusable for future `tokenops <subsystem>
+    set` commands.
+- **Hint sweep**: every structured `{error, hint}` payload now
+  contains the exact corrective command (`tokenops plan set …`,
+  `tokenops provider set …`) instead of an environment-variable name.
+- **Customer discovery scaffolding**: `docs/customer-discovery.md`
+  with a 9-question Torres-style interview script, recruitment
+  targets, synthesis rubric, and reject criteria for the 5-user
+  wedge validation sprint.
+
+### Changed
+
+- README quickstart replaces the env-var / JSON-edit instructions
+  with `tokenops plan set anthropic claude-max-20x` (etc.).
+- `docs/plan-cost-model.md` notes the proxy is no longer the primary
+  observation surface; MCP-side activity is the new default.
+
 ## 0.6.0 - 2026-05-12
 
 ### Added

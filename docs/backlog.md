@@ -118,3 +118,9 @@ Support flat-rate subscription plans (Claude Max, Claude Code Pro, ChatGPT Plus/
 Most LLM subscriptions (Claude Max 5x/20x, Claude Pro, ChatGPT Plus/Team) publish rolling-window rate limits, not monthly token caps. Extend the plan model to track messages/requests per window (5h for Claude, 3h for ChatGPT, etc.) and emit a window-based headroom report alongside the existing monthly view. Split catalog: claude-max-5x + claude-max-20x replace generic claude-max; ChatGPT Plus + Team get message-per-window caps. HeadroomReport gains window_consumed, window_cap, window_pct, window_resets_at fields. CLI + MCP surface both metrics so operators see "67% of 5h window, resets in 1h42m" instead of "no monthly cap published". Sources: Anthropic Max plan docs, OpenAI Plus/Team rate-limit FAQ, dated 2026-05 snapshot URLs.
 
 ---
+
+## MCP-First Wedge: Session Budget + Config-as-Code
+
+Three-skill review converged: TokenOps targets wrong consumption surface (proxy traffic, but plan-based users go through Claude Code / Cursor MCP) and forces JSON-editing for config (Plans, Providers, Rules, OTel). The wedge bet is MCP-resident session observability + a config-as-code CLI primitive that replaces every text-edit-then-restart ritual. Ships: tokenops <subsystem> set verb pattern, MCP-side session traffic observer that counts Claude Code / Cursor MCP calls against plan windows, tokenops_session_budget MCP tool predicting next-2h headroom, structured error hints carrying exact next commands, customer-research scaffolding (interview script + tracker doc). Skips proxy work, optimizer expansion, dashboard polish until the wedge validates with 5 real users.
+
+---

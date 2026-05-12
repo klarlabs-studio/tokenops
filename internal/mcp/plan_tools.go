@@ -9,15 +9,20 @@ import (
 
 	"github.com/felixgeelhaar/tokenops/internal/config"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/plans"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/session"
 	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
 	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
 )
 
 // PlanDeps wires the plan-headroom MCP tool. Config supplies the
-// configured plans map; Store backs consumption queries.
+// configured plans map; Store backs consumption queries; Tracker
+// records the MCP-side activity ping so headroom math reflects
+// real usage even without a proxy.
 type PlanDeps struct {
-	Config *config.Config
-	Store  *sqlite.Store
+	Config   *config.Config
+	Store    *sqlite.Store
+	Tracker  *session.Tracker
+	Provider eventschema.Provider
 }
 
 // planStoreReader adapts *sqlite.Store to plans.EventReader without
@@ -36,19 +41,84 @@ func RegisterPlanTools(s *Server, d PlanDeps) error {
 	if s == nil {
 		return errors.New("mcp: server must not be nil")
 	}
+	s.Tool("tokenops_session_budget").
+		Description("Predict the operator's rate-limit headroom for the current MCP session. Returns plan_name, window_consumed, window_pct, recent_rate_per_hour, will_hit_cap_within, headroom_until_cap, confidence (low|medium|high), and recommended_action (continue|slow_down|switch_model|wait_for_reset). Designed for Claude Code / Cursor agents to call before starting a long task.").
+		Handler(func(ctx context.Context, _ emptyInput) (string, error) {
+			if d.Tracker != nil {
+				d.Tracker.Record(ctx, session.Options{
+					Provider:    d.Provider,
+					SourceLabel: "mcp-session",
+				}, "tokenops_session_budget")
+			}
+			return sessionBudget(ctx, d)
+		})
+
 	s.Tool("tokenops_plan_headroom").
 		Description("Return month-to-date consumption + overage risk for every configured subscription plan (Claude Max, ChatGPT Plus, Copilot, Cursor, etc.). Returns a structured `{error, hint}` payload when plans or storage are not configured.").
 		Handler(func(ctx context.Context, _ emptyInput) (string, error) {
+			if d.Tracker != nil {
+				d.Tracker.Record(ctx, session.Options{
+					Provider:    d.Provider,
+					SourceLabel: "mcp-session",
+				}, "tokenops_plan_headroom")
+			}
 			return planHeadroom(ctx, d)
 		})
 	return nil
+}
+
+func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
+	if d.Config == nil || len(d.Config.Plans) == 0 {
+		return jsonString(map[string]string{
+			"error": "plans_unconfigured",
+			"hint":  "run `tokenops plan set <provider> <plan>` (e.g. `tokenops plan set anthropic claude-max-20x`), then reload your MCP server",
+		}), nil
+	}
+	if d.Store == nil {
+		return jsonString(map[string]string{
+			"error": "storage_disabled",
+			"hint":  "run `tokenops init` then restart the daemon",
+		}), nil
+	}
+	reader := planStoreReader{store: d.Store}
+	now := time.Now().UTC()
+	budgets := make([]plans.SessionBudget, 0, len(d.Config.Plans))
+	for provider, planName := range d.Config.Plans {
+		p, ok := plans.Lookup(planName)
+		if !ok || p.RateLimitWindow <= 0 {
+			continue
+		}
+		windowCons, err := plans.ConsumptionInWindow(ctx, reader, provider, now, p.RateLimitWindow)
+		if err != nil {
+			return "", fmt.Errorf("window[%s]: %w", provider, err)
+		}
+		recentCons, err := plans.ConsumptionInWindow(ctx, reader, provider, now, 30*time.Minute)
+		if err != nil {
+			return "", fmt.Errorf("recent[%s]: %w", provider, err)
+		}
+		budget, err := plans.ComputeSessionBudget(planName, plans.SessionBudgetInputs{
+			WindowMessages: windowCons.MessagesInWindow,
+			RecentMessages: recentCons.MessagesInWindow,
+			RecentWindow:   30 * time.Minute,
+			Now:            now,
+		})
+		if err != nil {
+			return "", fmt.Errorf("budget[%s]: %w", provider, err)
+		}
+		budgets = append(budgets, budget)
+	}
+	out, err := json.MarshalIndent(map[string]any{"budgets": budgets}, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
 }
 
 func planHeadroom(ctx context.Context, d PlanDeps) (string, error) {
 	if d.Config == nil || len(d.Config.Plans) == 0 {
 		return jsonString(map[string]string{
 			"error": "plans_unconfigured",
-			"hint":  "set `plans:` in config or TOKENOPS_PLAN_<PROVIDER>=<plan-name>",
+			"hint":  "run `tokenops plan set <provider> <plan>` (e.g. `tokenops plan set anthropic claude-max-20x`), then reload your MCP server",
 		}), nil
 	}
 	if d.Store == nil {

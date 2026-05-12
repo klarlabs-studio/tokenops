@@ -12,9 +12,26 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/felixgeelhaar/tokenops/internal/bootstrap"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/session"
+	"github.com/felixgeelhaar/tokenops/internal/events"
 	"github.com/felixgeelhaar/tokenops/internal/mcp"
 	"github.com/felixgeelhaar/tokenops/internal/version"
+	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
 )
+
+// inferSessionProvider returns the single configured provider for
+// stamping session-ping events. When zero or multiple providers are
+// configured, returns ProviderUnknown so consumption math can still
+// roll up but operators see a clear unattributed bucket.
+func inferSessionProvider(plans map[string]string) eventschema.Provider {
+	if len(plans) != 1 {
+		return eventschema.ProviderUnknown
+	}
+	for provider := range plans {
+		return eventschema.Provider(provider)
+	}
+	return eventschema.ProviderUnknown
+}
 
 func newServeCmd() *cobra.Command {
 	return &cobra.Command{
@@ -98,7 +115,22 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if err := mcp.RegisterControlTools(srv, deps); err != nil {
 		return fmt.Errorf("register control tools: %w", err)
 	}
-	planDeps := mcp.PlanDeps{Store: components.Store}
+	// Session observer: each call to tokenops_plan_headroom (or
+	// related tools) lands as a plan_included PromptEvent so headroom
+	// math reflects MCP-resident activity even when no traffic flows
+	// through the proxy. Provider is inferred from Plans when a
+	// single binding is configured; ambiguous deployments tag the
+	// envelope as ProviderUnknown.
+	var sessionBus events.Bus
+	if components.Store != nil {
+		ab := events.NewAsync(events.NewMultiSink(components.Store), events.Options{Logger: logger})
+		sessionBus = ab
+		defer func() { _ = ab.Close(0) }()
+	}
+	sessionProvider := inferSessionProvider(cfg.Plans)
+	tracker := session.New(sessionBus, session.Options{Provider: sessionProvider})
+
+	planDeps := mcp.PlanDeps{Store: components.Store, Tracker: tracker, Provider: sessionProvider}
 	if cfgErr == nil {
 		planDeps.Config = &cfg
 	}

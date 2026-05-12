@@ -58,6 +58,7 @@ func NewRoot() *cobra.Command {
 		newScorecardCmd(),
 		newSpendCmd(rf),
 		newPlanCmd(rf),
+		newProviderCmd(),
 	)
 	return cmd
 }

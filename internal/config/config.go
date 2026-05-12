@@ -232,7 +232,7 @@ func NextActionsFor(blockers []string) []string {
 		case "storage_disabled", "rules_disabled":
 			add("run `tokenops init` then restart the daemon")
 		case "providers_unconfigured":
-			add("configure at least one provider URL (e.g. TOKENOPS_PROVIDER_ANTHROPIC_URL)")
+			add("run `tokenops provider set <name> <url>` (e.g. `tokenops provider set anthropic https://api.anthropic.com`)")
 		}
 	}
 	return out

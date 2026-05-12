@@ -29,8 +29,106 @@ store. Subcommands:
   tokenops plan headroom   — compute current consumption + risk
   tokenops plan catalog    — list every plan TokenOps knows about`,
 	}
-	cmd.AddCommand(newPlanListCmd(rf), newPlanHeadroomCmd(rf), newPlanCatalogCmd())
+	cmd.AddCommand(
+		newPlanListCmd(rf),
+		newPlanHeadroomCmd(rf),
+		newPlanCatalogCmd(),
+		newPlanSetCmd(),
+		newPlanUnsetCmd(),
+	)
 	return cmd
+}
+
+func newPlanSetCmd() *cobra.Command {
+	var configPathFlag string
+	cmd := &cobra.Command{
+		Use:   "set <provider> <plan>",
+		Short: "Bind a provider to a subscription plan in config.yaml",
+		Long: `set writes plans.<provider> = <plan> to the active config file so the
+daemon and MCP server pick up the binding on next start. Replaces the
+previous workflow of editing the MCP host's JSON env block.
+
+Example:
+  tokenops plan set anthropic claude-max-20x
+  tokenops plan set openai gpt-plus`,
+		Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			provider, planName := args[0], args[1]
+			if err := plans.Validate(planName); err != nil {
+				return err
+			}
+			path, err := resolveMutableConfigPath(configPathFlag)
+			if err != nil {
+				return err
+			}
+			cfg, err := readMutableConfig(path)
+			if err != nil {
+				return err
+			}
+			if cfg.Plans == nil {
+				cfg.Plans = map[string]string{}
+			}
+			previous, existed := cfg.Plans[provider]
+			cfg.Plans[provider] = planName
+			if err := writeMutableConfig(path, cfg); err != nil {
+				return err
+			}
+			if existed && previous != planName {
+				fmt.Fprintf(cmd.OutOrStdout(), "updated plans.%s: %s -> %s\n", provider, previous, planName)
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "set plans.%s = %s\n", provider, planName)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(),
+				"wrote %s\nnext: reload your MCP server (or restart the daemon) to pick up the change\n",
+				path,
+			)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
+	return cmd
+}
+
+func newPlanUnsetCmd() *cobra.Command {
+	var configPathFlag string
+	cmd := &cobra.Command{
+		Use:   "unset <provider>",
+		Short: "Remove a provider's plan binding from config.yaml",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			provider := args[0]
+			path, err := resolveMutableConfigPath(configPathFlag)
+			if err != nil {
+				return err
+			}
+			cfg, err := readMutableConfig(path)
+			if err != nil {
+				return err
+			}
+			if _, ok := cfg.Plans[provider]; !ok {
+				fmt.Fprintf(cmd.OutOrStdout(), "plans.%s not set; nothing to do\n", provider)
+				return nil
+			}
+			delete(cfg.Plans, provider)
+			if err := writeMutableConfig(path, cfg); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(),
+				"removed plans.%s\nwrote %s\nnext: reload your MCP server\n",
+				provider, path,
+			)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
+	return cmd
+}
+
+func resolveMutableConfigPath(override string) (string, error) {
+	if override != "" {
+		return override, nil
+	}
+	return defaultConfigPath()
 }
 
 func newPlanListCmd(rf *rootFlags) *cobra.Command {

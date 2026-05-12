@@ -172,13 +172,24 @@ Flat-rate subscriptions don't bill per token. Configure them so
 TokenOps records zero `cost_usd` and tracks plan quota headroom
 instead:
 
-```yaml
-plans:
-  anthropic: claude-max-20x   # or claude-max-5x, claude-pro
-  openai: gpt-plus            # or gpt-team, gpt-pro
+```bash
+# Bind a provider to a plan (writes to config.yaml; idempotent)
+tokenops plan set anthropic claude-max-20x   # or claude-max-5x, claude-pro
+tokenops plan set openai gpt-plus            # or gpt-team, gpt-pro
+
+# Inspect bindings
+tokenops plan list
+tokenops plan headroom                       # live consumption + risk
 ```
 
-Or via env: `TOKENOPS_PLAN_ANTHROPIC=claude-max-20x`. Then
+YAML and `TOKENOPS_PLAN_<PROVIDER>` env overrides still work for
+declarative deployments, but `tokenops plan set` is the recommended
+path on a dev machine.
+
+After setting a plan, reload your MCP server (Claude Code: `/mcp` then
+reconnect). The MCP-side session observer counts your activity against
+the plan's rate-limit window. Agents can call `tokenops_session_budget`
+mid-conversation to find out whether they're about to hit the cap. Then
 `tokenops plan headroom` (and the `tokenops_plan_headroom` MCP tool)
 return month-to-date consumption and overage risk. See
 [docs/plan-cost-model.md](docs/plan-cost-model.md) for the supported
