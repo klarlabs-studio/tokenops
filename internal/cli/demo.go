@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
+	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/plans"
 	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
 	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
 )
@@ -22,6 +23,7 @@ type demoFlags struct {
 	reset       bool
 	dryRun      bool
 	seed        uint64
+	plan        string
 }
 
 func newDemoCmd() *cobra.Command {
@@ -46,6 +48,7 @@ Run after tokenops init. Re-run with --reset to clear and reseed.`,
 	cmd.Flags().BoolVar(&f.reset, "reset", false, "delete existing events before seeding")
 	cmd.Flags().BoolVar(&f.dryRun, "dry-run", false, "report how many events would be seeded without writing")
 	cmd.Flags().Uint64Var(&f.seed, "seed", 1, "deterministic RNG seed so re-runs produce identical fixtures")
+	cmd.Flags().StringVar(&f.plan, "plan", "", "tag PromptEvents with cost_source=plan_included for this plan (e.g. claude-max, gpt-plus); see `tokenops plan catalog`")
 	return cmd
 }
 
@@ -57,12 +60,36 @@ func runDemo(ctx context.Context, cmd *cobra.Command, f *demoFlags) error {
 		return fmt.Errorf("--per-day must be positive, got %d", f.perDay)
 	}
 
+	var planFilter string
+	if f.plan != "" {
+		p, ok := plans.Lookup(f.plan)
+		if !ok {
+			return fmt.Errorf("unknown plan %q; valid plans: %v", f.plan, plans.Names())
+		}
+		planFilter = p.Provider
+	}
+
 	path, err := resolveDemoStoragePath(f.storagePath)
 	if err != nil {
 		return err
 	}
 
 	envs := generateDemoEnvelopes(f.days, f.perDay, f.seed)
+	if planFilter != "" {
+		// Stamp every prompt for the matching provider as plan-included
+		// so spend.Engine returns zero cost and plans.ConsumptionFor
+		// rolls them into the headroom report.
+		for _, env := range envs {
+			pe, ok := env.Payload.(*eventschema.PromptEvent)
+			if !ok {
+				continue
+			}
+			if string(pe.Provider) == planFilter {
+				pe.CostSource = eventschema.CostSourcePlanIncluded
+				pe.CostUSD = 0
+			}
+		}
+	}
 	prompts, optimizations := countDemoPayloads(envs)
 	if f.dryRun {
 		fmt.Fprintf(cmd.OutOrStdout(),

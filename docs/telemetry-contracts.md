@@ -143,7 +143,7 @@ Consumers:
 | Field | Type | Required | SQLite Column | OTLP Key | Constraints |
 |---|---|---|---|---|---|
 | `ID` | string | yes | `id` (PK) | `tokenops.event.id` | UUIDv7 format; max 64 chars |
-| `SchemaVersion` | string | yes | `schema_version` | `tokenops.schema_version` | Semver; current `"1.1.0"` |
+| `SchemaVersion` | string | yes | `schema_version` | `tokenops.schema_version` | Semver; current `"1.2.0"` |
 | `Type` | EventType | yes | `type` | `tokenops.event.type` | One of: prompt, workflow, optimization, coaching, rule_source, rule_analysis |
 | `Timestamp` | time.Time | yes | `timestamp_ns` | (timeUnixNano) | UTC; nanosecond precision |
 | `TraceID` | *string | no | `trace_id` | `trace_id` | 32-char hex W3C format |

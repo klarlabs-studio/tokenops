@@ -98,6 +98,13 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if err := mcp.RegisterControlTools(srv, deps); err != nil {
 		return fmt.Errorf("register control tools: %w", err)
 	}
+	planDeps := mcp.PlanDeps{Store: components.Store}
+	if cfgErr == nil {
+		planDeps.Config = &cfg
+	}
+	if err := mcp.RegisterPlanTools(srv, planDeps); err != nil {
+		return fmt.Errorf("register plan tools: %w", err)
+	}
 
 	logger.Info("tokenops serve ready", "version", version.Version)
 	return mcp.ServeStdio(ctx, srv)

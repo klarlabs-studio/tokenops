@@ -102,7 +102,7 @@ func TestGoldenPromptEnvelope(t *testing.T) {
 	got := canon(t, env)
 	want := `{
   "id": "01HABCDEF0123456789KLMNOPQRS",
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "type": "prompt",
   "timestamp": "2026-05-11T12:00:00Z",
   "source": "proxy",
@@ -118,6 +118,53 @@ func TestGoldenPromptEnvelope(t *testing.T) {
     "streaming": true,
     "status": 200,
     "finish_reason": "stop"
+  }
+}`
+	assertEqualGolden(t, got, want)
+}
+
+func TestGoldenPromptEnvelopePlanIncluded(t *testing.T) {
+	// Plan-based subscriptions (Claude Max, ChatGPT Plus, etc.) record
+	// zero metered cost; the cost_source field signals that the request
+	// counts against a flat-rate plan quota instead.
+	env := Envelope{
+		ID:            fixedID,
+		SchemaVersion: SchemaVersion,
+		Type:          EventTypePrompt,
+		Timestamp:     fixedTime,
+		Source:        "proxy",
+		Payload: &PromptEvent{
+			PromptHash:   "sha256:plan",
+			Provider:     ProviderAnthropic,
+			RequestModel: "claude-opus-4-7",
+			InputTokens:  1000,
+			OutputTokens: 250,
+			TotalTokens:  1250,
+			ContextSize:  900,
+			Latency:      400 * time.Millisecond,
+			Status:       200,
+			CostSource:   CostSourcePlanIncluded,
+		},
+	}
+	got := canon(t, env)
+	want := `{
+  "id": "01HABCDEF0123456789KLMNOPQRS",
+  "schema_version": "1.2.0",
+  "type": "prompt",
+  "timestamp": "2026-05-11T12:00:00Z",
+  "source": "proxy",
+  "payload": {
+    "prompt_hash": "sha256:plan",
+    "provider": "anthropic",
+    "request_model": "claude-opus-4-7",
+    "input_tokens": 1000,
+    "output_tokens": 250,
+    "total_tokens": 1250,
+    "context_size": 900,
+    "latency_ns": 400000000,
+    "streaming": false,
+    "status": 200,
+    "cost_source": "plan_included"
   }
 }`
 	assertEqualGolden(t, got, want)
@@ -150,7 +197,7 @@ func TestGoldenRuleSourceEnvelope(t *testing.T) {
 	got := canon(t, env)
 	want := `{
   "id": "01HABCDEF0123456789KLMNOPQRS",
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "type": "rule_source",
   "timestamp": "2026-05-11T12:00:00Z",
   "source": "rule-engine",
@@ -206,7 +253,7 @@ func TestGoldenRuleAnalysisEnvelope(t *testing.T) {
 	got := canon(t, env)
 	want := `{
   "id": "01HABCDEF0123456789KLMNOPQRS",
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "type": "rule_analysis",
   "timestamp": "2026-05-11T12:00:00Z",
   "source": "rule-engine",
@@ -249,7 +296,7 @@ func TestGoldenWorkflowEnvelope(t *testing.T) {
 	}
 	want := `{
   "id": "01HABCDEF0123456789KLMNOPQRS",
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "type": "workflow",
   "timestamp": "2026-05-11T12:00:00Z",
   "source": "agent",
@@ -286,7 +333,7 @@ func TestGoldenOptimizationEnvelope(t *testing.T) {
 	}
 	want := `{
   "id": "01HABCDEF0123456789KLMNOPQRS",
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "type": "optimization",
   "timestamp": "2026-05-11T12:00:00Z",
   "source": "optimizer",
@@ -321,7 +368,7 @@ func TestGoldenCoachingEnvelope(t *testing.T) {
 	}
 	want := `{
   "id": "01HABCDEF0123456789KLMNOPQRS",
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "type": "coaching",
   "timestamp": "2026-05-11T12:00:00Z",
   "source": "coach",
@@ -338,7 +385,7 @@ func TestGoldenCoachingEnvelope(t *testing.T) {
 }
 
 func TestGoldenSchemaVersionMatchesPolicy(t *testing.T) {
-	if SchemaVersion != "1.1.0" {
+	if SchemaVersion != "1.2.0" {
 		t.Errorf("SchemaVersion = %q; bumping requires updating docs/telemetry-contracts.md and golden tests", SchemaVersion)
 	}
 }

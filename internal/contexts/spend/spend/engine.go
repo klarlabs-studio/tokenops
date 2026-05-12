@@ -34,9 +34,19 @@ func (e *Engine) Table() Table { return e.table }
 // the regular input rate. Returns ErrUnknownModel when the event's
 // (provider, model) is not in the table — callers commonly fall back to
 // zero cost and emit a structured warning.
+//
+// Plan-included and trial events short-circuit to zero cost: the
+// request is covered by a flat-rate subscription or vendor-issued
+// credit, so per-token billing does not apply. The token counts still
+// flow through the analytics pipeline so plan quota / headroom math
+// (internal/contexts/spend/plans) sees them.
 func (e *Engine) Compute(p *eventschema.PromptEvent) (float64, error) {
 	if p == nil {
 		return 0, ErrUnknownModel
+	}
+	switch p.CostSource {
+	case eventschema.CostSourcePlanIncluded, eventschema.CostSourceTrial:
+		return 0, nil
 	}
 	model := p.RequestModel
 	if p.ResponseModel != "" {

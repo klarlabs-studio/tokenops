@@ -13,14 +13,22 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/plans"
 )
 
 // Config is the root daemon configuration.
 type Config struct {
-	Listen     string            `yaml:"listen"`
-	Log        LogConfig         `yaml:"log"`
-	Shutdown   ShutdownConfig    `yaml:"shutdown"`
-	Providers  map[string]string `yaml:"providers"`
+	Listen    string            `yaml:"listen"`
+	Log       LogConfig         `yaml:"log"`
+	Shutdown  ShutdownConfig    `yaml:"shutdown"`
+	Providers map[string]string `yaml:"providers"`
+	// Plans maps provider name → plan catalog identifier (e.g.
+	// "anthropic" → "claude-max"). Requests routed to a provider with
+	// a configured plan are billed as plan_included (CostUSD=0) and
+	// roll up to the plan's monthly quota instead. See
+	// internal/contexts/spend/plans for the catalog.
+	Plans      map[string]string `yaml:"plans"`
 	TLS        TLSConfig         `yaml:"tls"`
 	Storage    StorageConfig     `yaml:"storage"`
 	OTel       OTelConfig        `yaml:"otel"`
@@ -177,6 +185,11 @@ func (c Config) Validate() error {
 			return errors.New("resilience.enabled requires at least one positive timeout (first_byte_timeout, idle_timeout, total_timeout)")
 		}
 	}
+	for provider, planName := range c.Plans {
+		if err := plans.Validate(planName); err != nil {
+			return fmt.Errorf("plans[%s]: %w", provider, err)
+		}
+	}
 	return nil
 }
 
@@ -285,6 +298,13 @@ func applyEnvOverrides(cfg *Config) {
 				cfg.Providers = make(map[string]string, 3)
 			}
 			cfg.Providers[key] = v
+		}
+		planEnvKey := "TOKENOPS_PLAN_" + strings.ToUpper(key)
+		if v := os.Getenv(planEnvKey); v != "" {
+			if cfg.Plans == nil {
+				cfg.Plans = make(map[string]string, 3)
+			}
+			cfg.Plans[key] = v
 		}
 	}
 }

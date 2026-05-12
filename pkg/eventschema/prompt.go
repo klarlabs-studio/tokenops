@@ -2,6 +2,22 @@ package eventschema
 
 import "time"
 
+// CostSource identifies how the request's spend should be accounted.
+// Metered is the default — per-token billing through the upstream
+// provider's API. Plan-based subscriptions (Claude Max, ChatGPT Plus,
+// Copilot, Cursor) are flat-rate, so their CostUSD is zero and the
+// PromptEvent counts toward a plan quota instead. Trial covers
+// provider-issued free credits with no quota tracking.
+type CostSource string
+
+// Known cost sources. Empty string deserialises as CostSourceMetered
+// so prior envelopes round-trip without modification.
+const (
+	CostSourceMetered      CostSource = "metered"
+	CostSourcePlanIncluded CostSource = "plan_included"
+	CostSourceTrial        CostSource = "trial"
+)
+
 // PromptEvent captures a single LLM request/response cycle observed by the
 // TokenOps proxy. Token counts are filled by the per-provider tokenizer.
 type PromptEvent struct {
@@ -59,6 +75,12 @@ type PromptEvent struct {
 	// table at event time (informational — authoritative recompute lives in
 	// the analytics pipeline).
 	CostUSD float64 `json:"cost_usd,omitempty"`
+
+	// CostSource identifies how this request was billed. Empty (default)
+	// means metered per-token billing. Plan-included requests roll up to
+	// a subscription quota rather than CostUSD; see internal/contexts/
+	// spend/plans for catalog + headroom semantics.
+	CostSource CostSource `json:"cost_source,omitempty"`
 
 	// WorkflowID, AgentID, and SessionID provide attribution. They are
 	// populated by clients via headers or by the proxy from contextual

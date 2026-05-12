@@ -258,6 +258,71 @@ func TestCachedExceedingInputClamps(t *testing.T) {
 	}
 }
 
+func TestComputePlanIncludedReturnsZero(t *testing.T) {
+	e := NewEngine(DefaultTable())
+	p := &eventschema.PromptEvent{
+		Provider:     eventschema.ProviderAnthropic,
+		RequestModel: "claude-opus-4-7", // would otherwise be expensive
+		InputTokens:  1_000_000,
+		OutputTokens: 500_000,
+		CostSource:   eventschema.CostSourcePlanIncluded,
+	}
+	cost, err := e.Compute(p)
+	if err != nil {
+		t.Fatalf("compute: %v", err)
+	}
+	if cost != 0 {
+		t.Errorf("plan-included cost = %.6f, want 0 (flat-rate subscription)", cost)
+	}
+}
+
+func TestComputeTrialReturnsZero(t *testing.T) {
+	e := NewEngine(DefaultTable())
+	p := &eventschema.PromptEvent{
+		Provider:     eventschema.ProviderOpenAI,
+		RequestModel: "gpt-4o",
+		InputTokens:  10_000,
+		OutputTokens: 5_000,
+		CostSource:   eventschema.CostSourceTrial,
+	}
+	cost, err := e.Compute(p)
+	if err != nil {
+		t.Fatalf("compute: %v", err)
+	}
+	if cost != 0 {
+		t.Errorf("trial cost = %.6f, want 0 (vendor credit)", cost)
+	}
+}
+
+func TestComputeMeteredStillBills(t *testing.T) {
+	// Explicit metered tag must produce the same answer as default
+	// (empty) tag — backward compat guard.
+	e := NewEngine(DefaultTable())
+	base := &eventschema.PromptEvent{
+		Provider:     eventschema.ProviderOpenAI,
+		RequestModel: "gpt-4o-mini",
+		InputTokens:  500_000,
+		OutputTokens: 100_000,
+	}
+	tagged := *base
+	tagged.CostSource = eventschema.CostSourceMetered
+
+	baseCost, err := e.Compute(base)
+	if err != nil {
+		t.Fatalf("compute base: %v", err)
+	}
+	taggedCost, err := e.Compute(&tagged)
+	if err != nil {
+		t.Fatalf("compute tagged: %v", err)
+	}
+	if baseCost != taggedCost {
+		t.Errorf("metered tag changed cost: base=%.6f tagged=%.6f", baseCost, taggedCost)
+	}
+	if baseCost == 0 {
+		t.Errorf("expected non-zero metered cost, got %.6f", baseCost)
+	}
+}
+
 func TestDefaultTableHasExpectedProviders(t *testing.T) {
 	tab := DefaultTable()
 	for _, p := range []eventschema.Provider{

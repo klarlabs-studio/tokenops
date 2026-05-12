@@ -9,4 +9,4 @@ package eventschema
 //
 // Consumers should treat unknown fields as forward-compatible and unknown
 // enum values as the package-defined Unknown sentinel.
-const SchemaVersion = "1.1.0"
+const SchemaVersion = "1.2.0"

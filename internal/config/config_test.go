@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -224,5 +225,39 @@ func TestNextActionsEmptyWhenNoBlockers(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Errorf("expected empty, got %v", got)
+	}
+}
+
+func TestValidateAcceptsKnownPlan(t *testing.T) {
+	cfg := Default()
+	cfg.Plans = map[string]string{"anthropic": "claude-max"}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("Validate rejected known plan: %v", err)
+	}
+}
+
+func TestValidateRejectsUnknownPlan(t *testing.T) {
+	cfg := Default()
+	cfg.Plans = map[string]string{"anthropic": "claude-maxx"}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected error for unknown plan")
+	}
+	if !strings.Contains(err.Error(), "plans[anthropic]") {
+		t.Errorf("error should name the offending provider key: %v", err)
+	}
+	if !strings.Contains(err.Error(), "claude-max") {
+		t.Errorf("error should suggest valid plans: %v", err)
+	}
+}
+
+func TestEnvOverrideSetsPlan(t *testing.T) {
+	t.Setenv("TOKENOPS_PLAN_ANTHROPIC", "claude-pro")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Plans["anthropic"] != "claude-pro" {
+		t.Errorf("plans[anthropic]=%q want claude-pro", cfg.Plans["anthropic"])
 	}
 }

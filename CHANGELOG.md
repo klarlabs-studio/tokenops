@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Added
+
+- **Plan-Based Cost Model**: subscription-aware spend tracking for
+  Claude Max / Pro, Claude Code Max / Pro, ChatGPT Plus / Pro / Team,
+  GitHub Copilot Individual / Business, Cursor Pro / Business.
+  - `PromptEvent.CostSource` enum (`metered` default,
+    `plan_included`, `trial`); schema bumped to 1.2.0.
+  - `internal/contexts/spend/plans` package: catalog with dated
+    `SourceURL` per plan, `ComputeHeadroom` returning
+    `consumed_pct` / `headroom_days` / `overage_risk` (low / medium
+    / high / unknown), and `ConsumptionFor` reader.
+  - `tokenops plan list|headroom|catalog` CLI subcommands and
+    `tokenops_plan_headroom` MCP tool.
+  - `Config.Plans` map (`plans:` YAML block or
+    `TOKENOPS_PLAN_<PROVIDER>` env) validated against the catalog.
+  - `tokenops demo --plan <name>` stamps PromptEvents with
+    `cost_source=plan_included` so the headroom surface populates on
+    a fresh install.
+  - `docs/plan-cost-model.md` documents the catalog and add-a-plan
+    workflow.
+- Spend engine short-circuits `Compute` to zero for `plan_included`
+  and `trial` events so flat-rate traffic doesn't inflate metered
+  `cost_usd`.
+
 ## 0.4.0 - 2026-05-12
 
 ### Added

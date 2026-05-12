@@ -148,6 +148,7 @@ or `--reset` to clear before reseeding. Run `tokenops spend --since 7d` or
 | `tokenops coverage-debt` | risk-weighted coverage debt |
 | `tokenops audit` | query audit log |
 | `tokenops events` | per-kind domain-event counts |
+| `tokenops plan list\|headroom\|catalog` | flat-rate subscription headroom (Claude Max, ChatGPT Plus, Copilot, Cursor) |
 
 ### First-run troubleshooting
 
@@ -164,6 +165,24 @@ command to run. Common cases:
 When a subsystem is off, the corresponding daemon routes (`/api/spend/*`,
 `/api/rules/*`, `/api/audit`) return `503` with a structured `{error, hint}`
 body rather than a 404.
+
+### Subscription plans (Claude Max, ChatGPT Plus, etc.)
+
+Flat-rate subscriptions don't bill per token. Configure them so
+TokenOps records zero `cost_usd` and tracks plan quota headroom
+instead:
+
+```yaml
+plans:
+  anthropic: claude-max
+  openai: gpt-plus
+```
+
+Or via env: `TOKENOPS_PLAN_ANTHROPIC=claude-max`. Then
+`tokenops plan headroom` (and the `tokenops_plan_headroom` MCP tool)
+return month-to-date consumption and overage risk. See
+[docs/plan-cost-model.md](docs/plan-cost-model.md) for the supported
+plan catalog and how to add custom plans.
 
 Every CLI command has a matching MCP tool (`tokenops_<name>`).
 
