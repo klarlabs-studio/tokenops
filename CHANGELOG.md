@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.7.1 - 2026-05-13
+
+### Fixed
+
+- `tokenops plan list` (and other read-side subcommands routed via
+  `loadConfig`) returned "no plans configured" right after `tokenops
+  plan set` because the loader honoured only `--config` and env vars
+  while the mutation verbs defaulted to the XDG path. `loadConfig`
+  now auto-discovers `$XDG_CONFIG_HOME/tokenops/config.yaml` (or
+  `~/.config/tokenops/config.yaml`) when `--config` is unset.
+- Empty-state hint on `plan list` now points at `tokenops plan set …`
+  instead of the legacy env-var instructions.
+
 ## 0.7.0 - 2026-05-12
 
 ### Added
