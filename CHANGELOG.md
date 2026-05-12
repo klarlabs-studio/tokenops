@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.7.0 - 2026-05-12
+
 ### Added
 
 - **MCP-first wedge**: TokenOps now observes operator activity inside
