@@ -3,6 +3,7 @@ package proxy
 import (
 	"encoding/json"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -16,8 +17,44 @@ var startedAt = time.Now()
 // complete.
 var ready atomic.Bool
 
+// readyState carries the optional blockers + next_actions slices the
+// daemon publishes alongside the boolean readiness signal. Protected by
+// readyMu because slice values aren't safe under naked atomic store.
+var (
+	readyMu          sync.RWMutex
+	readyBlockers    []string
+	readyNextActions []string
+)
+
 // MarkReady signals to /readyz that the daemon's dependencies are healthy.
 func MarkReady(b bool) { ready.Store(b) }
+
+// SetReadyState records subsystem blockers and remediation hints so
+// /readyz can surface them alongside the readiness flag. The slices are
+// copied to insulate readers from later daemon mutation. Pass nil/empty
+// slices once everything is healthy.
+func SetReadyState(blockers, nextActions []string) {
+	readyMu.Lock()
+	readyBlockers = append([]string(nil), blockers...)
+	readyNextActions = append([]string(nil), nextActions...)
+	readyMu.Unlock()
+}
+
+func snapshotReadyState() (blockers, nextActions []string) {
+	readyMu.RLock()
+	defer readyMu.RUnlock()
+	if readyBlockers == nil {
+		blockers = []string{}
+	} else {
+		blockers = append([]string(nil), readyBlockers...)
+	}
+	if readyNextActions == nil {
+		nextActions = []string{}
+	} else {
+		nextActions = append([]string(nil), readyNextActions...)
+	}
+	return blockers, nextActions
+}
 
 // IsReady returns the current readiness state. Used by the MCP
 // tokenops_status tool to surface the same signal /readyz reports over
@@ -39,11 +76,20 @@ func healthzHandler(w http.ResponseWriter, _ *http.Request) {
 }
 
 func readyzHandler(w http.ResponseWriter, _ *http.Request) {
+	blockers, nextActions := snapshotReadyState()
+	status := "not_ready"
+	code := http.StatusServiceUnavailable
 	if ready.Load() {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
-		return
+		status = "ready"
+		code = http.StatusOK
+	} else if len(blockers) > 0 {
+		status = "not_configured"
 	}
-	writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "not_ready"})
+	writeJSON(w, code, map[string]any{
+		"status":       status,
+		"blockers":     blockers,
+		"next_actions": nextActions,
+	})
 }
 
 func versionHandler(w http.ResponseWriter, _ *http.Request) {

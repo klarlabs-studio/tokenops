@@ -13,7 +13,6 @@ import (
 
 	"github.com/felixgeelhaar/tokenops/internal/bootstrap"
 	"github.com/felixgeelhaar/tokenops/internal/mcp"
-	"github.com/felixgeelhaar/tokenops/internal/proxy"
 	"github.com/felixgeelhaar/tokenops/internal/version"
 )
 
@@ -85,10 +84,18 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 			configJSON = data
 		}
 	}
-	if err := mcp.RegisterControlTools(srv, mcp.ControlDeps{
+	// In `serve` mode the proxy never starts, so proxy.IsReady would
+	// remain false forever. Treat readiness as "store opened + tools
+	// registered" — that's what serve is actually for. blockers[]
+	// still surfaces disabled subsystems for the caller.
+	deps := mcp.ControlDeps{
 		ConfigJSON: configJSON,
-		ReadyCheck: proxy.IsReady,
-	}); err != nil {
+		ReadyCheck: func() bool { return components.Store != nil },
+	}
+	if cfgErr == nil {
+		deps.Config = &cfg
+	}
+	if err := mcp.RegisterControlTools(srv, deps); err != nil {
 		return fmt.Errorf("register control tools: %w", err)
 	}
 

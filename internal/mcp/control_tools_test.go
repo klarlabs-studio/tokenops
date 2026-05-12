@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/felixgeelhaar/tokenops/internal/config"
 )
 
 func newControlServer(t *testing.T, d ControlDeps) *Server {
@@ -69,5 +71,46 @@ func TestConfigToolReportsMissing(t *testing.T) {
 	out := execTool(t, srv, "tokenops_config", nil)
 	if !strings.Contains(out, "snapshot not available") {
 		t.Errorf("expected missing-snapshot marker: %s", out)
+	}
+}
+
+func TestStatusToolReportsBlockersAndNextActions(t *testing.T) {
+	// Fresh-install scenario: storage/rules off, no providers. Caller
+	// should see three blockers plus the actionable init hint.
+	cfg := config.Default()
+	srv := newControlServer(t, ControlDeps{
+		Config:     &cfg,
+		ReadyCheck: func() bool { return false },
+	})
+	out := execTool(t, srv, "tokenops_status", nil)
+
+	for _, want := range []string{
+		`"storage_disabled"`,
+		`"rules_disabled"`,
+		`"providers_unconfigured"`,
+		"run `tokenops init`",
+		`"state": "not_configured"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in output: %s", want, out)
+		}
+	}
+}
+
+func TestStatusToolReportsReadyWhenAllConfigured(t *testing.T) {
+	cfg := config.Default()
+	cfg.Storage.Enabled = true
+	cfg.Rules.Enabled = true
+	cfg.Providers = map[string]string{"anthropic": "https://api.anthropic.com"}
+	srv := newControlServer(t, ControlDeps{
+		Config:     &cfg,
+		ReadyCheck: func() bool { return true },
+	})
+	out := execTool(t, srv, "tokenops_status", nil)
+	if !strings.Contains(out, `"state": "ready"`) {
+		t.Errorf("expected state=ready: %s", out)
+	}
+	if !strings.Contains(out, `"blockers": []`) {
+		t.Errorf("expected empty blockers array: %s", out)
 	}
 }

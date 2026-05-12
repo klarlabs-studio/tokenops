@@ -14,7 +14,9 @@ at the repository level — nox is the single source of security signal.
 | `.github/workflows/nox-remediate.yml` | Nightly + manual `nox fix` → opens a remediation PR      |
 | `findings.json` (artifact)            | Latest scan output, uploaded by every CI run            |
 
-## Gate
+## Gates
+
+### Severity gate
 
 The CI gate fails the build on **any critical finding** not waived in
 `security/vex.json`:
@@ -28,6 +30,14 @@ nox scan . \
 
 Below `critical` is informational — the full `findings.json` is
 uploaded as a CI artifact and inspected via the Security tab.
+
+### Governance gate
+
+`internal/secgov` runs in `go test ./...` and rejects any VEX waiver or
+`scan.exclude` entry that lacks the required governance metadata
+(classification, `last_reviewed`, reviewer, review age within 120
+days). This enforces `security/SUPPRESSION-GOVERNANCE.md`
+programmatically rather than relying on code review alone.
 
 ## Run locally
 

@@ -101,35 +101,43 @@ language.
 
 ## Getting started
 
-> The code base is in bootstrap state. The commands below describe the target
-> developer experience and are being implemented incrementally.
+Three commands take a fresh install to a populated scorecard:
 
 ```bash
-# Build everything
+# 1. Build (or `brew install felixgeelhaar/tap/tokenops`)
 make build
 
-# Run the daemon locally (proxy + analytics)
-./bin/tokenopsd start
+# 2. Scaffold an opinionated config (sqlite + rules enabled, idempotent)
+./bin/tokenops init
 
-# Point a client SDK at the local proxy
+# 3. Seed 7 days of synthetic events so spend/burn/forecast/scorecard return data
+./bin/tokenops demo
+
+# 4. (optional) Start the proxy and route real traffic
+./bin/tokenopsd start
 export OPENAI_BASE_URL=http://localhost:7878/v1
 export ANTHROPIC_BASE_URL=http://localhost:7878
 export GEMINI_BASE_URL=http://localhost:7878
-
-# Replay an expensive session
-./bin/tokenops replay <session-id>
-
-# Inspect spend, forecast, burn rate
-./bin/tokenops spend
 ```
+
+`tokenops init` writes `$XDG_CONFIG_HOME/tokenops/config.yaml` (or
+`~/.config/tokenops/config.yaml`) with storage at `$XDG_DATA_HOME/tokenops/events.db`
+(or `~/.tokenops/events.db`) and rules rooted at `$PWD`. Re-running is a no-op
+unless you pass `--force`.
+
+`tokenops demo` is deterministic — pass `--seed`, `--days`, `--per-day` to tune,
+or `--reset` to clear before reseeding. Run `tokenops spend --since 7d` or
+`tokenops scorecard` next to see populated output.
 
 ### CLI surface
 
 | Command | Purpose |
 |---|---|
+| `tokenops init` | scaffold the config (sqlite + rules on, idempotent) |
+| `tokenops demo` | seed synthetic events for activation |
 | `tokenops start` | run the daemon (proxy + analytics + bus) |
 | `tokenops serve` | MCP server over stdio |
-| `tokenops status` | daemon health |
+| `tokenops status` | daemon health + `blockers[]` / `next_actions[]` |
 | `tokenops version` | build info |
 | `tokenops config show` | active configuration (redacted) |
 | `tokenops spend` | spend / burn / forecast |
@@ -140,6 +148,22 @@ export GEMINI_BASE_URL=http://localhost:7878
 | `tokenops coverage-debt` | risk-weighted coverage debt |
 | `tokenops audit` | query audit log |
 | `tokenops events` | per-kind domain-event counts |
+
+### First-run troubleshooting
+
+`tokenops status` (and the MCP `tokenops_status` tool, and `GET /readyz`) return
+`blockers[]` with stable identifiers and `next_actions[]` with the exact
+command to run. Common cases:
+
+| Blocker | Fix |
+|---|---|
+| `storage_disabled` | run `tokenops init`, then restart the daemon |
+| `rules_disabled` | run `tokenops init`, then restart the daemon |
+| `providers_unconfigured` | set at least one `TOKENOPS_PROVIDER_*_URL` or add `providers:` to the config |
+
+When a subsystem is off, the corresponding daemon routes (`/api/spend/*`,
+`/api/rules/*`, `/api/audit`) return `503` with a structured `{error, hint}`
+body rather than a 404.
 
 Every CLI command has a matching MCP tool (`tokenops_<name>`).
 

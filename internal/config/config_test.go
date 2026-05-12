@@ -181,3 +181,48 @@ func TestRedactEnabledExplicitTrue(t *testing.T) {
 		t.Error("RedactEnabled should be true when Redact = &true")
 	}
 }
+
+func TestBlockersOnFreshInstall(t *testing.T) {
+	cfg := Default()
+	got := cfg.Blockers()
+	want := []string{"storage_disabled", "rules_disabled", "providers_unconfigured"}
+	if len(got) != len(want) {
+		t.Fatalf("blockers=%v want %v", got, want)
+	}
+	for i, w := range want {
+		if got[i] != w {
+			t.Errorf("blockers[%d]=%q want %q", i, got[i], w)
+		}
+	}
+}
+
+func TestBlockersOnFullyConfigured(t *testing.T) {
+	cfg := Default()
+	cfg.Storage.Enabled = true
+	cfg.Rules.Enabled = true
+	cfg.Providers = map[string]string{"anthropic": "https://api.anthropic.com"}
+	got := cfg.Blockers()
+	if len(got) != 0 {
+		t.Errorf("expected no blockers, got %v", got)
+	}
+}
+
+func TestNextActionsDeduplicatesInitHint(t *testing.T) {
+	got := NextActionsFor([]string{"storage_disabled", "rules_disabled"})
+	if len(got) != 1 {
+		t.Fatalf("expected 1 dedup'd action, got %v", got)
+	}
+	if got[0] != "run `tokenops init` then restart the daemon" {
+		t.Errorf("unexpected action: %q", got[0])
+	}
+}
+
+func TestNextActionsEmptyWhenNoBlockers(t *testing.T) {
+	got := NextActionsFor(nil)
+	if got == nil {
+		t.Error("expected non-nil empty slice so JSON serialises as []")
+	}
+	if len(got) != 0 {
+		t.Errorf("expected empty, got %v", got)
+	}
+}

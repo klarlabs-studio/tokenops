@@ -184,9 +184,21 @@ func (s *Server) Start(ctx context.Context) error {
 	s.registerRoutes(mux)
 	if s.analytics != nil {
 		s.analytics.Register(mux)
+	} else {
+		stub := subsystemDisabledHandler("storage_disabled",
+			"run `tokenops init` to enable the sqlite event store, then restart the daemon")
+		for _, p := range storageDisabledPaths {
+			mux.HandleFunc(p, stub)
+		}
 	}
 	if s.rulesAPI != nil {
 		s.rulesAPI.Register(mux)
+	} else {
+		stub := subsystemDisabledHandler("rules_disabled",
+			"run `tokenops init` to enable rule intelligence, then restart the daemon")
+		for _, p := range rulesDisabledPaths {
+			mux.HandleFunc(p, stub)
+		}
 	}
 	if s.auditAPI != nil {
 		s.auditAPI.Register(mux)

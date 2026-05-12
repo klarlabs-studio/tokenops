@@ -42,6 +42,8 @@ func NewRoot() *cobra.Command {
 	cmd.PersistentFlags().StringVar(&rf.certDir, "cert-dir", "", "override TLS cert directory")
 
 	cmd.AddCommand(
+		newInitCmd(),
+		newDemoCmd(),
 		newStartCmd(rf),
 		newServeCmd(),
 		newStatusCmd(rf),

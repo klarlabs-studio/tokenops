@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/felixgeelhaar/tokenops/internal/config"
 	"github.com/felixgeelhaar/tokenops/internal/version"
 	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
 )
@@ -17,6 +18,10 @@ type ControlDeps struct {
 	// ConfigJSON is the marshalled active configuration. Built once at
 	// daemon start so the tool can return it without re-reading disk.
 	ConfigJSON json.RawMessage
+	// Config is the parsed configuration. When non-nil, statusInfo
+	// derives blockers + next_actions from it so first-run callers can
+	// see which subsystems gate populated data.
+	Config *config.Config
 	// ReadyCheck reports daemon readiness. Returns true once the proxy
 	// has finished its boot sequence.
 	ReadyCheck func() bool
@@ -78,17 +83,28 @@ func statusInfo(d ControlDeps) string {
 	if d.ReadyCheck != nil {
 		ready = d.ReadyCheck()
 	}
-	state := "not_ready"
-	if ready {
-		state = "ready"
+	blockers := []string{}
+	if d.Config != nil {
+		blockers = d.Config.Blockers()
 	}
-	return jsonString(map[string]any{
+	nextActions := config.NextActionsFor(blockers)
+	state := "not_ready"
+	switch {
+	case ready && len(blockers) == 0:
+		state = "ready"
+	case !ready && len(blockers) > 0:
+		state = "not_configured"
+	}
+	payload := map[string]any{
 		"status":         "ok",
 		"ready":          ready,
 		"state":          state,
 		"version":        version.String(),
 		"schema_version": eventschema.SchemaVersion,
-	})
+		"blockers":       blockers,
+		"next_actions":   nextActions,
+	}
+	return jsonString(payload)
 }
 
 func configInfo(d ControlDeps) string {

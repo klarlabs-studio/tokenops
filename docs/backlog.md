@@ -46,3 +46,63 @@ Introduce repository-level quality debt dashboard for low-coverage/high-risk pac
 Treat operational rule artifacts (CLAUDE.md, AGENTS.md, repo instructions, MCP policies, Cursor rules, coding conventions) as first-class telemetry. Provide a Rule Engine that ingests rule sources, analyzes ROI (tokens saved, retries avoided, context reduction, latency impact, quality drift), detects conflicts and redundancy, compresses rule corpora into distilled behavioral representations, and dynamically injects only the relevant subset per request/workflow. Includes benchmarking harness for coding/workflow rule systems. Surfaces via CLI (tokenops rules analyze|conflicts|compress|inject|bench), proxy hooks, MCP server, and dashboard. Local-first, respects redaction, OTLP-emittable. Issue #12.
 
 ---
+
+## Fix rulesfs walker: tolerate permission-denied + skip unreadable subtrees
+
+## Problem
+
+`internal/infra/rulesfs/source.go` `Discover()` walks the filesystem under the supplied root and bails on the first error any `filepath.WalkDir` callback returns. When the root is anywhere with read-restricted siblings (notably anywhere under `$HOME` on macOS — `~/Library/Saved Application State/...`, `~/Library/Containers/...`, etc.), the walk aborts before the loader ever sees the rule artifacts.
+
+Observed cases:
+
+- `tokenops rules analyze --root ~/.claude` → returns 0 documents even though `~/.claude/CLAUDE.md` exists. The walker enters one of the hidden sibling subtrees, hits an error, and halts.
+- `tokenops rules analyze --root ~` → exits non-zero with `permission denied: open ~/Library/Saved Application State/com.shure.motivmix.savedState`.
+
+## Repro
+
+```bash
+echo "# rules" > ~/.claude/CLAUDE.md
+tokenops rules analyze --root ~/.claude --repo-id home
+# expected: 1 document discovered
+# actual:   no rule artifacts found
+```
+
+## Root cause
+
+`Discover()` propagates every error from `filepath.WalkDir`'s callback. A single `EACCES` or `EPERM` from `os.Open` on a sibling subtree kills the whole walk. The existing hidden-dir skip (`base != ".cursor"` line in source.go) doesn't cover Library/Containers-style dirs without a leading dot.
+
+## Fix
+
+In the `filepath.WalkDir` callback (and the `fs.WalkDir` branch above it):
+
+1. When the WalkDir-supplied `err` is non-nil and `errors.Is(err, fs.ErrPermission)`, log + skip:
+   - If `d != nil && d.IsDir()` → return `fs.SkipDir` to skip the whole subtree.
+   - Otherwise → return `nil` to skip the single file and continue.
+2. For non-permission errors, keep current behaviour (propagate) so genuine I/O failures still surface.
+3. Optionally: add a `Patterns`-aware short-circuit so a walker that's only looking for `CLAUDE.md` / `AGENTS.md` / `.cursor/...` doesn't bother descending into `Library/`, `node_modules/`, `vendor/` etc. — already half-implemented for the latter two; extend the skip list.
+
+## Acceptance
+
+- `tokenops rules analyze --root ~/.claude` discovers `CLAUDE.md` and produces a non-empty document set.
+- `tokenops rules analyze --root ~` completes without exiting non-zero on permission errors; logs the skipped paths at debug level.
+- New unit test in `internal/infra/rulesfs/source_test.go` injects a synthetic `fs.FS` that returns `fs.ErrPermission` on a sibling dir; assert that the legitimate `CLAUDE.md` is still discovered.
+
+## Surfaces affected
+
+- `tokenops rules analyze|conflicts|compress|inject|bench` CLI subcommands.
+- `tokenops_rules_*` MCP tools (same loader path).
+- `/api/rules/*` HTTP endpoints.
+
+## References
+
+- Discovered while testing tokenops MCP integration in Claude Code / Desktop after `brew install felixgeelhaar/tap/tokenops` (v0.2.0).
+- Related: `internal/infra/rulesfs/source.go` lines ~57-104 (`Discover()`).
+
+
+---
+
+## First-Run Activation Flow
+
+Activate new operators in under 5 minutes. Ship `tokenops init` wizard (idempotent: enables sqlite storage at $XDG_DATA_HOME or ~/.tokenops/db, default RBAC, audit on, rules root=$PWD, writes config), `tokenops demo` (seeds 7 days synthetic events so spend/burn/forecast/scorecard/top return populated data), structured `blockers[]` + `next_actions[]` fields in /healthz, /readyz, /version, and MCP status, and a disabled-subsystem error contract (`{error,hint}` instead of empty success when Storage/Rules/Providers disabled). Closes the time-to-value gap surfaced in v0.2.0 first-run review.
+
+---

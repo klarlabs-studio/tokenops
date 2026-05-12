@@ -232,6 +232,15 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	if err := srv.Start(ctx); err != nil {
 		return fmt.Errorf("start proxy: %w", err)
 	}
+	// Publish blockers + remediation hints so /readyz exposes the same
+	// signal the MCP tokenops_status tool surfaces. Operators on a fresh
+	// install (storage/rules/providers off) see exactly what to fix
+	// without grepping config.
+	blockers := cfg.Blockers()
+	proxy.SetReadyState(blockers, config.NextActionsFor(blockers))
+	if len(blockers) > 0 {
+		logger.Info("daemon started with blockers", "blockers", blockers)
+	}
 	proxy.MarkReady(true)
 
 	<-ctx.Done()

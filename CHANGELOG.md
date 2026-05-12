@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-05-12
+
+First-run activation and security-suppression governance.
+
+### Added
+
+- **`tokenops init`** scaffolds an opinionated config (sqlite storage
+  + rules subsystem enabled at `$PWD`) at `$XDG_CONFIG_HOME/tokenops/
+  config.yaml`. Idempotent; `--force` overwrites, `--print-only`
+  emits YAML to stdout without touching disk.
+- **`tokenops demo`** seeds deterministic synthetic events
+  (5 providers/models, 4 workflows, 3 agents, jittered tokens + cost)
+  so `tokenops spend`, `tokenops scorecard`, `tokenops forecast`, and
+  the MCP analytics tools return populated data on a fresh install.
+  Flags: `--days`, `--per-day`, `--reset`, `--dry-run`, `--seed`.
+- **Status blockers / next-actions**: `tokenops_status` MCP tool and
+  the daemon's `/readyz` endpoint now expose `blockers[]`
+  (`storage_disabled`, `rules_disabled`, `providers_unconfigured`) and
+  `next_actions[]` so first-run callers see exactly what to fix
+  without grepping config. `config.Blockers()` + `NextActionsFor()`
+  are the canonical helpers.
+- **Disabled-subsystem error contract**: daemon analytics + rules
+  routes (`/api/spend/*`, `/api/optimizations`, `/api/audit`,
+  `/api/rules/*`) now return `503 {error, hint}` when their
+  subsystem is off, instead of an opaque `404`.
+- **Suppression governance gate** (`internal/secgov`): `go test`
+  now enforces that every entry in `security/vex.json` carries
+  `_governance.{classification, last_reviewed, reviewed_by}` and
+  every `.nox.yaml` `scan.exclude` entry is preceded by the same
+  metadata in comments. Review age capped at 120 days.
+
+### Changed
+
+- `security/vex.json` waivers gain `_governance` metadata on all
+  eight existing statements; bumped doc version to 2.
+- README `Getting started` is now a 3-command quickstart
+  (`init` → `demo` → `start`) plus a first-run troubleshooting
+  table indexed by blocker identifier.
+
 ## 0.2.0 - 2026-05-12
 
 The Rule Intelligence wedge lands plus a full DDD refactor: rule

@@ -180,6 +180,51 @@ func (c Config) Validate() error {
 	return nil
 }
 
+// Blockers returns the stable, machine-readable list of subsystem gates
+// that prevent the daemon from returning populated data. Order is fixed
+// so callers can diff successive snapshots. Returns a non-nil empty
+// slice when nothing is gated so JSON serialises as [] not null.
+func (c Config) Blockers() []string {
+	blockers := []string{}
+	if !c.Storage.Enabled {
+		blockers = append(blockers, "storage_disabled")
+	}
+	if !c.Rules.Enabled {
+		blockers = append(blockers, "rules_disabled")
+	}
+	if len(c.Providers) == 0 {
+		blockers = append(blockers, "providers_unconfigured")
+	}
+	return blockers
+}
+
+// NextActionsFor maps blockers to operator-facing remediation steps and
+// deduplicates so a single `tokenops init` call surfaces once even when
+// it resolves multiple blockers. Returns a non-nil empty slice when
+// blockers is empty.
+func NextActionsFor(blockers []string) []string {
+	out := []string{}
+	if len(blockers) == 0 {
+		return out
+	}
+	seen := map[string]bool{}
+	add := func(s string) {
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	for _, b := range blockers {
+		switch b {
+		case "storage_disabled", "rules_disabled":
+			add("run `tokenops init` then restart the daemon")
+		case "providers_unconfigured":
+			add("configure at least one provider URL (e.g. TOKENOPS_PROVIDER_ANTHROPIC_URL)")
+		}
+	}
+	return out
+}
+
 func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("TOKENOPS_LISTEN"); v != "" {
 		cfg.Listen = v
