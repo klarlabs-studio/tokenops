@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.0 - 2026-05-12
+
 ### Added
 
 - `tokenops demo` now seeds `OptimizationEvent`s alongside prompts
