@@ -22,10 +22,19 @@ const (
 )
 
 type KPIResult struct {
-	Value     float64    `json:"value"`
-	Unit      string     `json:"unit"`
-	Grade     Grade      `json:"grade"`
-	Threshold Thresholds `json:"thresholds"`
+	// Name is the full, human-readable label (e.g. "First Value Time").
+	// Surfaced so dashboards and CLI output can render the expansion
+	// next to the abbreviation; callers that already know the shape can
+	// ignore it.
+	Name string `json:"name"`
+	// Description is a one-line definition of what the KPI measures
+	// and which direction is healthy. Kept short on purpose so it can
+	// sit inline in a table row.
+	Description string     `json:"description"`
+	Value       float64    `json:"value"`
+	Unit        string     `json:"unit"`
+	Grade       Grade      `json:"grade"`
+	Threshold   Thresholds `json:"thresholds"`
 }
 
 type Thresholds struct {
@@ -110,22 +119,28 @@ func gradeSAC(pct float64) Grade {
 
 func New(fvtSeconds, teuPct, sacPct float64, baselineRef string) *Scorecard {
 	fvt := KPIResult{
-		Value:     math.Round(fvtSeconds*10) / 10,
-		Unit:      "seconds",
-		Grade:     gradeFVT(fvtSeconds),
-		Threshold: DefaultThresholds.FirstValueTime,
+		Name:        "First Value Time (FVT)",
+		Description: "Seconds from install to first measurable insight. Lower is better.",
+		Value:       math.Round(fvtSeconds*10) / 10,
+		Unit:        "seconds",
+		Grade:       gradeFVT(fvtSeconds),
+		Threshold:   DefaultThresholds.FirstValueTime,
 	}
 	teu := KPIResult{
-		Value:     math.Round(teuPct*10) / 10,
-		Unit:      "%",
-		Grade:     gradeTEU(teuPct),
-		Threshold: DefaultThresholds.TokenEfficiency,
+		Name:        "Token Efficiency Uplift (TEU)",
+		Description: "Percent of input tokens saved by the optimizer (saved / input). Higher is better.",
+		Value:       math.Round(teuPct*10) / 10,
+		Unit:        "%",
+		Grade:       gradeTEU(teuPct),
+		Threshold:   DefaultThresholds.TokenEfficiency,
 	}
 	sac := KPIResult{
-		Value:     math.Round(sacPct*10) / 10,
-		Unit:      "%",
-		Grade:     gradeSAC(sacPct),
-		Threshold: DefaultThresholds.SpendAttribution,
+		Name:        "Spend Attribution Completeness (SAC)",
+		Description: "Percent of spend with workflow or agent attribution. Higher is better.",
+		Value:       math.Round(sacPct*10) / 10,
+		Unit:        "%",
+		Grade:       gradeSAC(sacPct),
+		Threshold:   DefaultThresholds.SpendAttribution,
 	}
 	return &Scorecard{
 		GeneratedAt:      time.Now().UTC(),
@@ -146,12 +161,17 @@ func (s *Scorecard) String() string {
 	return fmt.Sprintf(`Operator Wedge KPI Scorecard
 Generated: %s
 
-First-Value Time (seconds):          %.1f [%s]
-Token Efficiency Uplift (%%):        %.1f [%s]
-Spend Attribution Completeness (%%): %.1f [%s]
+FVT — First-Value Time (seconds):           %.1f [%s]
+TEU — Token Efficiency Uplift (%%):          %.1f [%s]
+SAC — Spend Attribution Completeness (%%):   %.1f [%s]
 
 Overall Grade: %s
 Baseline: %s
+
+Definitions:
+  FVT — %s
+  TEU — %s
+  SAC — %s
 
 Thresholds (green / yellow / red):
   FVT:  ≤%.0f / ≤%.0f / ≤%.0f seconds
@@ -164,6 +184,9 @@ Thresholds (green / yellow / red):
 		s.SpendAttribution.Value, s.SpendAttribution.Grade,
 		s.OverallGrade,
 		baselineOrMissing(s.BaselineRef),
+		s.FirstValueTime.Description,
+		s.TokenEfficiency.Description,
+		s.SpendAttribution.Description,
 		s.FirstValueTime.Threshold.Green,
 		s.FirstValueTime.Threshold.Yellow,
 		s.FirstValueTime.Threshold.Red,

@@ -63,8 +63,12 @@ func runDemo(ctx context.Context, cmd *cobra.Command, f *demoFlags) error {
 	}
 
 	envs := generateDemoEnvelopes(f.days, f.perDay, f.seed)
+	prompts, optimizations := countDemoPayloads(envs)
 	if f.dryRun {
-		fmt.Fprintf(cmd.OutOrStdout(), "dry-run: would seed %d events to %s\n", len(envs), path)
+		fmt.Fprintf(cmd.OutOrStdout(),
+			"dry-run: would seed %d events (%d prompts + %d optimizations) to %s\n",
+			len(envs), prompts, optimizations, path,
+		)
 		return nil
 	}
 
@@ -88,10 +92,25 @@ func runDemo(ctx context.Context, cmd *cobra.Command, f *demoFlags) error {
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(),
-		"seeded %d events to %s spanning %d days\nnext: query via `tokenops spend summary --since %dd` or the MCP tools\n",
-		len(envs), path, f.days, f.days,
+		"seeded %d events (%d prompts + %d optimizations) to %s spanning %d days\nnext: query via `tokenops spend summary --since %dd` or the MCP tools\n",
+		len(envs), prompts, optimizations, path, f.days, f.days,
 	)
 	return nil
+}
+
+// countDemoPayloads splits a generated envelope batch by type so the
+// command output can report prompts vs. optimizations distinctly.
+// Cheaper than re-querying the store after write.
+func countDemoPayloads(envs []*eventschema.Envelope) (prompts, optimizations int) {
+	for _, e := range envs {
+		switch e.Type {
+		case eventschema.EventTypePrompt:
+			prompts++
+		case eventschema.EventTypeOptimization:
+			optimizations++
+		}
+	}
+	return prompts, optimizations
 }
 
 func resolveDemoStoragePath(override string) (string, error) {
@@ -131,14 +150,27 @@ var demoFixtures = []demoFixture{
 var demoWorkflows = []string{"code-review", "summarize-pr", "draft-email", "research-loop"}
 var demoAgents = []string{"claude-code", "cursor-agent", "internal-rag"}
 
+// optimizationKinds is the rotation of OptimizationType values the
+// seeder cycles through so the demo scorecard reflects a realistic
+// mix of optimizer passes rather than a single technique.
+var optimizationKinds = []eventschema.OptimizationType{
+	eventschema.OptimizationTypePromptCompress,
+	eventschema.OptimizationTypeDedupe,
+	eventschema.OptimizationTypeContextTrim,
+	eventschema.OptimizationTypeRetrievalPrune,
+	eventschema.OptimizationTypeCacheReuse,
+}
+
 // generateDemoEnvelopes builds a deterministic event stream sized for
 // the analytics surfaces. Seed makes re-runs identical so tests can
 // assert on the resulting summaries without flakes. The schema mirrors
-// what proxy/observation.go produces in real traffic.
+// what proxy/observation.go produces in real traffic. ~25% of prompts
+// also emit a paired OptimizationEvent so TEU lifts off zero on first
+// scorecard render.
 func generateDemoEnvelopes(days, perDay int, seed uint64) []*eventschema.Envelope {
 	rng := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15))
 	now := time.Now().UTC()
-	envs := make([]*eventschema.Envelope, 0, days*perDay)
+	envs := make([]*eventschema.Envelope, 0, days*perDay+days*perDay/4)
 	for d := 0; d < days; d++ {
 		dayStart := now.AddDate(0, 0, -(days - 1 - d))
 		for i := 0; i < perDay; i++ {
@@ -155,6 +187,9 @@ func generateDemoEnvelopes(days, perDay int, seed uint64) []*eventschema.Envelop
 			}
 			cost := (float64(inTok)/1000)*fx.InputCostPerKTok + (float64(outTok)/1000)*fx.OutputCostPerKTok
 			ts := dayStart.Add(time.Duration(rng.IntN(24*60*60)) * time.Second)
+			promptHash := uuid.NewString()
+			workflowID := demoWorkflows[rng.IntN(len(demoWorkflows))]
+			agentID := demoAgents[rng.IntN(len(demoAgents))]
 			envs = append(envs, &eventschema.Envelope{
 				ID:            uuid.NewString(),
 				SchemaVersion: eventschema.SchemaVersion,
@@ -162,6 +197,7 @@ func generateDemoEnvelopes(days, perDay int, seed uint64) []*eventschema.Envelop
 				Timestamp:     ts,
 				Source:        "demo",
 				Payload: &eventschema.PromptEvent{
+					PromptHash:   promptHash,
 					Provider:     fx.Provider,
 					RequestModel: fx.Model,
 					InputTokens:  inTok,
@@ -171,10 +207,40 @@ func generateDemoEnvelopes(days, perDay int, seed uint64) []*eventschema.Envelop
 					Latency:      time.Duration(800+rng.IntN(2400)) * time.Millisecond,
 					Status:       200,
 					CostUSD:      cost,
-					WorkflowID:   demoWorkflows[rng.IntN(len(demoWorkflows))],
-					AgentID:      demoAgents[rng.IntN(len(demoAgents))],
+					WorkflowID:   workflowID,
+					AgentID:      agentID,
 				},
 			})
+
+			// Pair ~40% of prompts with an applied OptimizationEvent
+			// saving 20–40% of input tokens. Targets a population TEU
+			// around 12% — comfortably above the yellow threshold (10%)
+			// without faking an unrealistic A grade.
+			if rng.IntN(5) < 2 {
+				savedPct := 0.20 + rng.Float64()*0.20
+				savedTokens := int64(float64(inTok) * savedPct)
+				kind := optimizationKinds[rng.IntN(len(optimizationKinds))]
+				costPerInputTok := fx.InputCostPerKTok / 1000
+				envs = append(envs, &eventschema.Envelope{
+					ID:            uuid.NewString(),
+					SchemaVersion: eventschema.SchemaVersion,
+					Type:          eventschema.EventTypeOptimization,
+					Timestamp:     ts.Add(50 * time.Millisecond),
+					Source:        "demo",
+					Payload: &eventschema.OptimizationEvent{
+						PromptHash:             promptHash,
+						Kind:                   kind,
+						Mode:                   eventschema.OptimizationModePassive,
+						EstimatedSavingsTokens: savedTokens,
+						EstimatedSavingsUSD:    float64(savedTokens) * costPerInputTok,
+						QualityScore:           0.85 + rng.Float64()*0.13,
+						Decision:               eventschema.OptimizationDecisionApplied,
+						LatencyImpactNS:        int64(rng.IntN(50) * int(time.Millisecond)),
+						WorkflowID:             workflowID,
+						AgentID:                agentID,
+					},
+				})
+			}
 		}
 	}
 	return envs

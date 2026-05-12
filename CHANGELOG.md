@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Added
+
+- `tokenops demo` now seeds `OptimizationEvent`s alongside prompts
+  (~40% rate, 20–40% savings) so the first-run scorecard reflects a
+  realistic optimizer mix and TEU lifts off zero. Demo output reports
+  prompts vs. optimizations separately.
+- Scorecard `KPIResult` gained `name` + `description` fields so
+  operators can decode the FVT / TEU / SAC abbreviations inline.
+  `tokenops scorecard` text output adds a Definitions block.
+- Roady backlog: new `Plan-Based Cost Model` feature spec covering
+  Claude Max / ChatGPT Plus / Copilot / Cursor flat-rate plans
+  (cost_source on PromptEvent, plan quota tracking, headroom metrics).
+  Implementation deferred to its own cycle.
+
 ## 0.3.1 - 2026-05-12
 
 ### Fixed

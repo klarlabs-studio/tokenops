@@ -106,3 +106,9 @@ In the `filepath.WalkDir` callback (and the `fs.WalkDir` branch above it):
 Activate new operators in under 5 minutes. Ship `tokenops init` wizard (idempotent: enables sqlite storage at $XDG_DATA_HOME or ~/.tokenops/db, default RBAC, audit on, rules root=$PWD, writes config), `tokenops demo` (seeds 7 days synthetic events so spend/burn/forecast/scorecard/top return populated data), structured `blockers[]` + `next_actions[]` fields in /healthz, /readyz, /version, and MCP status, and a disabled-subsystem error contract (`{error,hint}` instead of empty success when Storage/Rules/Providers disabled). Closes the time-to-value gap surfaced in v0.2.0 first-run review.
 
 ---
+
+## Plan-Based Cost Model
+
+Support flat-rate subscription plans (Claude Max, Claude Code Pro, ChatGPT Plus/Pro, Cursor, GitHub Copilot, Cody) where per-token cost is zero but quota matters. Design: PromptEvent gains `CostSource` enum (metered|plan_included|trial), config gets `plans: {provider: plan_name}` map. Spend engine: when CostSource=plan_included, CostUSD=0 and event counts toward quota tracker instead. New metrics: plan_quota_consumed_pct, plan_headroom_days, plan_overage_risk. Dashboard + CLI surface plan headroom alongside metered cost. Backward compat: events without CostSource default to "metered". Requires per-plan quota config (input/output tokens/month, rate-limit windows). Initial plan catalog: claude-max, claude-pro, claude-code-max, gpt-plus, gpt-pro, gpt-team, copilot-individual, copilot-business, cursor-pro, cursor-business.
+
+---
