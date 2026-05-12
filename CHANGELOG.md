@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.3.1 - 2026-05-12
+
+### Fixed
+
+- `tokenops_status` returned `state: "not_ready"` when MCP serve mode
+  was actually ready but the on-disk config still listed disabled
+  subsystems. New `degraded` state distinguishes "ready with reduced
+  surface area" from "broken".
+
 ## 0.3.0 - 2026-05-12
 
 First-run activation and security-suppression governance.

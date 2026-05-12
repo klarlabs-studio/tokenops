@@ -92,6 +92,12 @@ func statusInfo(d ControlDeps) string {
 	switch {
 	case ready && len(blockers) == 0:
 		state = "ready"
+	case ready && len(blockers) > 0:
+		// MCP serve opens its own store and is functionally healthy
+		// even when daemon-side subsystems are off. Surface that as
+		// `degraded` so callers can distinguish "broken" from
+		// "running with reduced surface area".
+		state = "degraded"
 	case !ready && len(blockers) > 0:
 		state = "not_configured"
 	}

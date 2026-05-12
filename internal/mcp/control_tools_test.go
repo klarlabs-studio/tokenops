@@ -97,6 +97,25 @@ func TestStatusToolReportsBlockersAndNextActions(t *testing.T) {
 	}
 }
 
+func TestStatusToolReportsDegradedWhenReadyButBlockersExist(t *testing.T) {
+	// MCP `serve` opens its own sqlite store and is therefore ready,
+	// even if the on-disk config still has storage/rules disabled.
+	// `degraded` keeps the distinction between "broken" and "running
+	// with reduced surface area" legible to callers.
+	cfg := config.Default()
+	srv := newControlServer(t, ControlDeps{
+		Config:     &cfg,
+		ReadyCheck: func() bool { return true },
+	})
+	out := execTool(t, srv, "tokenops_status", nil)
+	if !strings.Contains(out, `"state": "degraded"`) {
+		t.Errorf("expected state=degraded when ready with blockers: %s", out)
+	}
+	if !strings.Contains(out, `"ready": true`) {
+		t.Errorf("expected ready=true: %s", out)
+	}
+}
+
 func TestStatusToolReportsReadyWhenAllConfigured(t *testing.T) {
 	cfg := config.Default()
 	cfg.Storage.Enabled = true
