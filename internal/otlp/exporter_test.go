@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/felixgeelhaar/tokenops/internal/redaction"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/security/redaction"
 	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
 )
 
@@ -113,6 +113,76 @@ func TestExporterEmitsPromptEnvelope(t *testing.T) {
 	} {
 		if !strings.Contains(logStr, want) {
 			t.Errorf("missing %q in payload:\n%s", want, logStr)
+		}
+	}
+}
+
+func TestExporterEmitsRuleEnvelopes(t *testing.T) {
+	collector := newCaptureCollector(t)
+	exp, err := New(Options{Endpoint: collector.srv.URL})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	src := &eventschema.Envelope{
+		ID:            uuid.NewString(),
+		SchemaVersion: eventschema.SchemaVersion,
+		Type:          eventschema.EventTypeRuleSource,
+		Timestamp:     time.Now().UTC(),
+		Source:        "rule-engine",
+		Payload: &eventschema.RuleSourceEvent{
+			SourceID:    "repo:CLAUDE.md",
+			Source:      eventschema.RuleSourceClaudeMD,
+			Scope:       eventschema.RuleScopeRepo,
+			Path:        "CLAUDE.md",
+			RepoID:      "repo",
+			Tokenizer:   "openai/cl100k_base",
+			Provider:    eventschema.ProviderOpenAI,
+			TotalTokens: 1200,
+			TotalChars:  4800,
+			Hash:        "sha256:deadbeef",
+			Sections: []eventschema.RuleSection{
+				{ID: "repo:CLAUDE.md#Testing", Anchor: "Testing", TokenCount: 200},
+			},
+		},
+	}
+	ana := &eventschema.Envelope{
+		ID:            uuid.NewString(),
+		SchemaVersion: eventschema.SchemaVersion,
+		Type:          eventschema.EventTypeRuleAnalysis,
+		Timestamp:     time.Now().UTC(),
+		Source:        "rule-engine",
+		Payload: &eventschema.RuleAnalysisEvent{
+			SourceID:      "repo:CLAUDE.md",
+			SectionID:     "repo:CLAUDE.md#Testing",
+			WindowStart:   time.Now().UTC().Add(-time.Hour),
+			WindowEnd:     time.Now().UTC(),
+			Exposures:     50,
+			ContextTokens: 10000,
+			TokensSaved:   1500,
+			ROIScore:      0.42,
+		},
+	}
+	if err := exp.AppendBatch(context.Background(), []*eventschema.Envelope{src, ana}); err != nil {
+		t.Fatalf("AppendBatch: %v", err)
+	}
+	bodyPtr := collector.bodies.Load()
+	if bodyPtr == nil {
+		t.Fatal("collector saw no body")
+	}
+	got := string(*bodyPtr)
+	for _, want := range []string{
+		`"tokenops.rule.source_id"`,
+		`"repo:CLAUDE.md"`,
+		`"tokenops.rule.source"`,
+		`"claude_md"`,
+		`"tokenops.rule.total_tokens"`,
+		`"tokenops.rule.section_count"`,
+		`"tokenops.rule.exposures"`,
+		`"tokenops.rule.context_tokens"`,
+		`"tokenops.rule.roi_score"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in payload:\n%s", want, got)
 		}
 	}
 }

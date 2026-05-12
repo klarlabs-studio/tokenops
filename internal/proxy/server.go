@@ -8,15 +8,16 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/tokenizer"
 	"github.com/felixgeelhaar/tokenops/internal/events"
 	"github.com/felixgeelhaar/tokenops/internal/proxy/cache"
-	"github.com/felixgeelhaar/tokenops/internal/tokenizer"
 	"github.com/felixgeelhaar/tokenops/internal/version"
 )
 
@@ -34,6 +35,11 @@ type Server struct {
 	observerActive  bool
 	cache           *cache.Cache
 	analytics       *AnalyticsHandlers
+	rulesAPI        *RulesHandlers
+	auditAPI        *AuditHandlers
+	eventCounts     func() map[string]int64
+	auditDrops      func() int64
+	resilience      *ResilienceConfig
 
 	mu       sync.Mutex
 	httpSrv  *http.Server
@@ -179,7 +185,18 @@ func (s *Server) Start(ctx context.Context) error {
 	if s.analytics != nil {
 		s.analytics.Register(mux)
 	}
-	s.registerProviderRoutes(mux)
+	if s.rulesAPI != nil {
+		s.rulesAPI.Register(mux)
+	}
+	if s.auditAPI != nil {
+		s.auditAPI.Register(mux)
+	}
+	s.registerEventCountsRoute(mux)
+	if err := s.registerProviderRoutes(mux); err != nil {
+		s.mu.Unlock()
+		_ = ln.Close()
+		return fmt.Errorf("provider routes: %w", err)
+	}
 
 	s.httpSrv = &http.Server{
 		Handler:           mux,

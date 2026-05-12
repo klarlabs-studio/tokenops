@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/tlsmint"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/security/tlsmint"
 )
 
 func TestServerTLSHandshake(t *testing.T) {

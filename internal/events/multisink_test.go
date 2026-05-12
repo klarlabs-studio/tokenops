@@ -50,6 +50,56 @@ func TestMultiSinkAggregatesErrors(t *testing.T) {
 	}
 }
 
+// mutatingSink mimics a Sink that rewrites payload fields (e.g. the
+// OTLP exporter's redactor). After a mutate-and-share era, a sibling
+// sink would see the mutation. With clone fan-out it must not.
+type mutatingSink struct{}
+
+func (mutatingSink) AppendBatch(_ context.Context, envs []*eventschema.Envelope) error {
+	for _, env := range envs {
+		if pe, ok := env.Payload.(*eventschema.PromptEvent); ok {
+			pe.PromptHash = "MUTATED"
+		}
+	}
+	return nil
+}
+
+type readingSink struct{ saw string }
+
+func (r *readingSink) AppendBatch(_ context.Context, envs []*eventschema.Envelope) error {
+	for _, env := range envs {
+		if pe, ok := env.Payload.(*eventschema.PromptEvent); ok {
+			r.saw = pe.PromptHash
+		}
+	}
+	return nil
+}
+
+func TestMultiSinkIsolatesMutatingSinks(t *testing.T) {
+	mutator := mutatingSink{}
+	reader := &readingSink{}
+	multi := NewMultiSink(mutator, reader)
+	env := &eventschema.Envelope{
+		ID:            "1",
+		SchemaVersion: eventschema.SchemaVersion,
+		Type:          eventschema.EventTypePrompt,
+		Payload:       &eventschema.PromptEvent{PromptHash: "sha256:abc"},
+	}
+	if err := multi.AppendBatch(context.Background(), []*eventschema.Envelope{env}); err != nil {
+		t.Fatal(err)
+	}
+	if reader.saw == "MUTATED" {
+		t.Errorf("reader sink saw mutation from sibling sink")
+	}
+	if reader.saw != "sha256:abc" {
+		t.Errorf("reader sink saw %q, want sha256:abc", reader.saw)
+	}
+	// Original envelope untouched.
+	if env.Payload.(*eventschema.PromptEvent).PromptHash != "sha256:abc" {
+		t.Errorf("original envelope mutated")
+	}
+}
+
 func TestMultiSinkEmpty(t *testing.T) {
 	ms := NewMultiSink()
 	if err := ms.AppendBatch(context.Background(), []*eventschema.Envelope{{}}); err != nil {

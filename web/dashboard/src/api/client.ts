@@ -136,6 +136,81 @@ export interface OptimizationListResponse {
   currency: string;
 }
 
+export interface RuleSectionSummary {
+  SourceID: string;
+  SectionID: string;
+  Anchor: string;
+  TokenCount: number;
+  CharCount: number;
+  TokensPerKChar: number;
+  Hash: string;
+  Provider: string;
+}
+
+export interface RuleDocumentSummary {
+  SourceID: string;
+  Source: string;
+  Scope: string;
+  Path: string;
+  RepoID: string;
+  Provider: string;
+  TotalTokens: number;
+  TotalChars: number;
+  Sections: number;
+  Hash: string;
+  TopSections: RuleSectionSummary[];
+}
+
+export interface RulesAnalyzeResponse {
+  documents: RuleDocumentSummary[];
+  duplicate_groups?: Record<string, string[]>;
+}
+
+export interface RuleFinding {
+  Kind: "redundant" | "drift" | "anti_pattern";
+  Members: string[];
+  Anchor?: string;
+  Detail: string;
+  Triggers?: string[];
+}
+
+export interface RulesConflictsResponse {
+  findings: RuleFinding[];
+}
+
+export interface RuleCompressResult {
+  source_id: string;
+  path: string;
+  original_tokens: number;
+  compressed_tokens: number;
+  quality_score: number;
+  accepted: boolean;
+  dropped_sections: number;
+}
+
+export interface RulesCompressResponse {
+  results: RuleCompressResult[];
+}
+
+export interface RuleSelection {
+  SourceID: string;
+  SectionID: string;
+  Anchor: string;
+  TokenCount: number;
+  Score: number;
+  Reasons: string[];
+}
+
+export interface RulesInjectResponse {
+  Selections: RuleSelection[];
+  SkippedCount: number;
+  TotalTokens: number;
+  Truncated: boolean;
+  BudgetHit: boolean;
+  ElapsedNS: number;
+  Considered: number;
+}
+
 export class ApiError extends Error {
   status: number;
   url: string;
@@ -196,4 +271,48 @@ export const api = {
 
   optimizations: (params: { since?: string; workflow_id?: string } = {}) =>
     request<OptimizationListResponse>("/api/optimizations" + qs(params)),
+
+  rulesAnalyze: (params: { provider?: string; root?: string; repo_id?: string } = {}) =>
+    request<RulesAnalyzeResponse>("/api/rules/analyze" + qs(params)),
+  rulesConflicts: (params: { root?: string; repo_id?: string } = {}) =>
+    request<RulesConflictsResponse>("/api/rules/conflicts" + qs(params)),
+  rulesCompress: (params: {
+    root?: string;
+    repo_id?: string;
+    similarity?: number;
+    quality_floor?: number;
+  } = {}) => request<RulesCompressResponse>("/api/rules/compress" + qs(params)),
+  rulesInject: (params: {
+    keywords?: string;
+    files?: string;
+    tools?: string;
+    workflow_id?: string;
+    agent_id?: string;
+    token_budget?: number;
+    min_score?: number;
+    include_global?: string;
+  } = {}) => request<RulesInjectResponse>("/api/rules/inject" + qs(params)),
+
+  domainEvents: () => request<DomainEventsResponse>("/api/domain-events"),
+  audit: (params: { action?: string; actor?: string; since?: string; until?: string; limit?: number } = {}) =>
+    request<AuditResponse>("/api/audit" + qs(params)),
 };
+
+export interface DomainEventsResponse {
+  counts: Record<string, number>;
+  total: number;
+  audit_dropped?: number;
+}
+
+export interface AuditEntry {
+  ID: string;
+  Timestamp: string;
+  Action: string;
+  Actor: string;
+  Target?: string;
+  Details?: Record<string, unknown>;
+}
+
+export interface AuditResponse {
+  entries: AuditEntry[];
+}

@@ -22,6 +22,8 @@ func TestPayloadEventTypes(t *testing.T) {
 		{"workflow", &WorkflowEvent{}, EventTypeWorkflow},
 		{"optimization", &OptimizationEvent{}, EventTypeOptimization},
 		{"coaching", &CoachingEvent{}, EventTypeCoaching},
+		{"rule_source", &RuleSourceEvent{}, EventTypeRuleSource},
+		{"rule_analysis", &RuleAnalysisEvent{}, EventTypeRuleAnalysis},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -60,6 +62,65 @@ func TestEnvelopeRoundTrip(t *testing.T) {
 	}
 	if len(b) == 0 {
 		t.Fatal("expected non-empty json")
+	}
+}
+
+func TestRuleEnvelopesRoundTrip(t *testing.T) {
+	now := time.Date(2026, 5, 11, 12, 0, 0, 0, time.UTC)
+	src := Envelope{
+		ID:            "01HRULE-SRC",
+		SchemaVersion: SchemaVersion,
+		Type:          EventTypeRuleSource,
+		Timestamp:     now,
+		Source:        "rule-engine",
+		Payload: &RuleSourceEvent{
+			SourceID:    "repo/CLAUDE.md",
+			Source:      RuleSourceClaudeMD,
+			Scope:       RuleScopeRepo,
+			Path:        "CLAUDE.md",
+			Tokenizer:   "openai/cl100k_base",
+			Provider:    ProviderOpenAI,
+			TotalTokens: 1200,
+			TotalChars:  4800,
+			Hash:        "sha256:deadbeef",
+			Sections: []RuleSection{
+				{ID: "CLAUDE.md#testing", Anchor: "Testing", TokenCount: 200, CharCount: 800},
+				{ID: "CLAUDE.md#style", Anchor: "Style", TokenCount: 150, CharCount: 600},
+			},
+			IngestedAt: now,
+		},
+	}
+	b, err := json.Marshal(src)
+	if err != nil {
+		t.Fatalf("marshal rule source: %v", err)
+	}
+	if len(b) == 0 {
+		t.Fatal("rule source envelope encoded empty")
+	}
+
+	ana := Envelope{
+		ID:            "01HRULE-ANA",
+		SchemaVersion: SchemaVersion,
+		Type:          EventTypeRuleAnalysis,
+		Timestamp:     now,
+		Source:        "rule-engine",
+		Payload: &RuleAnalysisEvent{
+			SourceID:         "repo/CLAUDE.md",
+			SectionID:        "CLAUDE.md#testing",
+			WindowStart:      now.Add(-24 * time.Hour),
+			WindowEnd:        now,
+			Exposures:        87,
+			ContextTokens:    17400,
+			TokensSaved:      3100,
+			RetriesAvoided:   12,
+			ContextReduction: 0.19,
+			QualityDelta:     0.03,
+			ROIScore:         0.42,
+			CompressedTokens: 90,
+		},
+	}
+	if _, err := json.Marshal(ana); err != nil {
+		t.Fatalf("marshal rule analysis: %v", err)
 	}
 }
 

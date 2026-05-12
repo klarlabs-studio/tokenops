@@ -5,12 +5,17 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/scorecard"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/governance/scorecard"
 )
 
 func newScorecardCmd() *cobra.Command {
 	var jsonOut bool
 	var baselineRef string
+	var dbPath string
+	var sinceDays int
+	var fvtOverride float64
+	var teuOverride float64
+	var sacOverride float64
 
 	cmd := &cobra.Command{
 		Use:   "scorecard",
@@ -36,14 +41,14 @@ Use --capture-baseline (not yet implemented) to persist the current
 values and --compare to diff against a stored baseline.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			// TODO(feature): wire into analytics / spend / replay engines
-			// to compute live values from the event store. The current
-			// implementation returns the scorecard constructor with
-			// placeholder values — replace with real data queries once
-			// the data-pipeline plumbing is in place.
-			_ = baselineRef
-
-			s := scorecard.New(45, 15, 80, baselineRef)
+			s := scorecard.Build(cmd.Context(), scorecard.BuildParams{
+				DBPath:             dbPath,
+				SinceDays:          sinceDays,
+				FVTSecondsOverride: fvtOverride,
+				TEUPctOverride:     teuOverride,
+				SACPctOverride:     sacOverride,
+				BaselineRef:        baselineRef,
+			})
 
 			if jsonOut {
 				data, err := s.MarshalJSON()
@@ -60,5 +65,10 @@ values and --compare to diff against a stored baseline.`,
 
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON instead of text")
 	cmd.Flags().StringVar(&baselineRef, "baseline-ref", "", "reference identifier for the baseline (version, date, or label)")
+	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db (defaults to ~/.tokenops/events.db)")
+	cmd.Flags().IntVar(&sinceDays, "since-days", 7, "scorecard time window in days")
+	cmd.Flags().Float64Var(&fvtOverride, "fvt-seconds", 0, "override First-Value Time in seconds")
+	cmd.Flags().Float64Var(&teuOverride, "teu-pct", 0, "override Token Efficiency Uplift in percent")
+	cmd.Flags().Float64Var(&sacOverride, "sac-pct", 0, "override Spend Attribution Completeness in percent")
 	return cmd
 }

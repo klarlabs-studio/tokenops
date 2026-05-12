@@ -162,6 +162,18 @@ func decodePayload(t eventschema.EventType, raw []byte) (eventschema.Payload, er
 			return nil, err
 		}
 		return &p, nil
+	case eventschema.EventTypeRuleSource:
+		var p eventschema.RuleSourceEvent
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return nil, err
+		}
+		return &p, nil
+	case eventschema.EventTypeRuleAnalysis:
+		var p eventschema.RuleAnalysisEvent
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return nil, err
+		}
+		return &p, nil
 	default:
 		return nil, fmt.Errorf("unknown event type %q", t)
 	}

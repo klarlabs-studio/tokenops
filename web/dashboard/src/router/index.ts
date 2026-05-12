@@ -26,6 +26,24 @@ const routes: RouteRecordRaw[] = [
     meta: { title: "Optimizations" },
   },
   {
+    path: "/rules",
+    name: "rules",
+    component: () => import("@/views/RulesView.vue"),
+    meta: { title: "Rules" },
+  },
+  {
+    path: "/events",
+    name: "events",
+    component: () => import("@/views/EventsView.vue"),
+    meta: { title: "Events" },
+  },
+  {
+    path: "/audit",
+    name: "audit",
+    component: () => import("@/views/AuditView.vue"),
+    meta: { title: "Audit" },
+  },
+  {
     path: "/:pathMatch(.*)*",
     name: "not-found",
     component: () => import("@/views/NotFoundView.vue"),

@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/providers"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/providers"
 )
 
 // recordingMeter captures Observe and Done calls for assertions.

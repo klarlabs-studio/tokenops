@@ -12,9 +12,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/analytics"
-	"github.com/felixgeelhaar/tokenops/internal/forecast"
-	"github.com/felixgeelhaar/tokenops/internal/spend"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/observability/analytics"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/forecast"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
 	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
 )
 
@@ -117,11 +117,7 @@ spend within the selected window. It surfaces:
 					horizon = 7
 				}
 				history := forecast.SeriesFromRows(rows, forecast.CostUSD)
-				if len(history) >= 4 {
-					predictions, _ = forecast.NewHolt(0.6, 0.3).Forecast(history, horizon, 24*time.Hour)
-				} else if len(history) >= 2 {
-					predictions, _ = forecast.NewLinear().Forecast(history, horizon, 24*time.Hour)
-				}
+				predictions = forecast.AutoForecast(history, horizon, 24*time.Hour)
 			}
 
 			view := spendView{

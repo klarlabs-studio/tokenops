@@ -55,31 +55,49 @@ Clients / SDKs / CLIs / Extensions
 
 ## Repository layout
 
+DDD-organised. Contexts live under `internal/contexts/<ctx>/<pkg>`;
+adapters (`cli`, `mcp`, `proxy`) stay flat. Layering rules enforced by
+`internal/archlint` (`go test ./internal/archlint/...`).
+
 ```
 tokenops/
   cmd/
-    tokenops/         # CLI binary (cobra)
-    tokenopsd/        # daemon binary (proxy + analytics)
+    tokenops/                          # CLI binary (cobra)
+    tokenopsd/                         # daemon binary
   internal/
-    proxy/            # reverse proxy + provider routing
-    optimizer/        # optimization engine
-    observability/    # analytics, spend, workflow trace
-    coaching/         # replay, waste detection, recommendations
-    forecasting/      # forecasting & budget alerts
-    storage/          # SQLite + ClickHouse adapters
-    events/           # event bus
-    redaction/        # secret detection + redaction
-    cli/              # CLI command implementations
-    config/           # configuration loading
-    version/          # build metadata
+    contexts/
+      rules/                           # Rule Intelligence aggregate
+      optimization/{optimizer,eval,replay}
+      governance/{scorecard,coverdebt,budget}
+      workflows/workflow
+      coaching/{coaching,efficiency,waste}
+      spend/{spend,forecast}
+      observability/{analytics,anomaly,observ}
+      security/{redaction,audit,dashauth,rbac,tlsmint}
+      prompts/{tokenizer,providers,llm}
+      telemetry/retention
+    infra/
+      rulesfs/                         # FS-touching rule corpus loader
+    archlint/                          # DDD layering enforcement
+    bootstrap/                         # composition root
+    config/                            # config loader + Snapshot
+    daemon/                            # boot sequence
+    domainevents/                      # in-process pub/sub + JSONL log
+    events/                            # telemetry envelope bus
+    cli/                               # CLI subcommand wiring
+    mcp/                               # MCP tool surface
+    otlp/                              # OTLP exporter
+    proxy/                             # HTTP server + handlers
+    storage/sqlite/                    # event store
+    version/
   pkg/
-    eventschema/      # public event schemas
-  web/                # Vue 3 dashboard
-  docs/               # docs site sources
-  deployments/        # docker-compose, helm, etc.
-  scripts/            # dev scripts
-  .github/workflows/  # CI
+    eventschema/                       # public envelope + payload types
+  web/dashboard/                       # Vue 3 dashboard
+  docs/                                # docs site + architecture-ddd.md
 ```
+
+See `docs/architecture-ddd.md` for context boundaries and ubiquitous
+language.
 
 ## Getting started
 
@@ -104,6 +122,35 @@ export GEMINI_BASE_URL=http://localhost:7878
 # Inspect spend, forecast, burn rate
 ./bin/tokenops spend
 ```
+
+### CLI surface
+
+| Command | Purpose |
+|---|---|
+| `tokenops start` | run the daemon (proxy + analytics + bus) |
+| `tokenops serve` | MCP server over stdio |
+| `tokenops status` | daemon health |
+| `tokenops version` | build info |
+| `tokenops config show` | active configuration (redacted) |
+| `tokenops spend` | spend / burn / forecast |
+| `tokenops replay <id>` | replay a session through optimizer |
+| `tokenops rules analyze\|conflicts\|compress\|inject\|bench` | rule intelligence |
+| `tokenops eval` | optimizer eval harness + gate |
+| `tokenops scorecard` | wedge KPI scorecard |
+| `tokenops coverage-debt` | risk-weighted coverage debt |
+| `tokenops audit` | query audit log |
+| `tokenops events` | per-kind domain-event counts |
+
+Every CLI command has a matching MCP tool (`tokenops_<name>`).
+
+### Domain event bus
+
+`internal/domainevents.Bus` carries typed cross-context events
+(workflow.started/observed/completed, optimization.applied,
+rule_corpus.reloaded, budget.exceeded). Daemon runs the bus in async
+mode with bounded queue; subscribers include audit recorder, in-memory
+counter, debug logger, JSONL persistence. Late subscribers can replay
+history via `domainevents.ReplayInto`.
 
 ## 5-minute operator golden path
 
@@ -158,6 +205,10 @@ workflows while preserving quality gates.
 
 Why this KPI: it directly ties optimization behavior to cost control and gives
 an objective pass/fail metric for expansion decisions.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the per-release changes.
 
 ## Contributing
 

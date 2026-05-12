@@ -3,18 +3,17 @@ package proxy
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/analytics"
-	"github.com/felixgeelhaar/tokenops/internal/forecast"
-	"github.com/felixgeelhaar/tokenops/internal/spend"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/waste"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/observability/analytics"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/forecast"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/workflows/workflow"
 	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
-	"github.com/felixgeelhaar/tokenops/internal/waste"
-	"github.com/felixgeelhaar/tokenops/internal/workflow"
 	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
 )
 
@@ -58,48 +57,17 @@ func WithAnalytics(h *AnalyticsHandlers) Option {
 
 // --- helpers ------------------------------------------------------------
 
-func parseTimeOrDuration(s string) (time.Time, error) {
-	if t, err := time.Parse(time.RFC3339, s); err == nil {
-		return t, nil
-	}
-	if strings.HasSuffix(s, "d") {
-		var days int
-		if _, err := fmt.Sscanf(s, "%dd", &days); err == nil && days > 0 {
-			return time.Now().Add(-time.Duration(days) * 24 * time.Hour), nil
-		}
-	}
-	d, err := time.ParseDuration(s)
-	if err != nil {
-		return time.Time{}, err
-	}
-	return time.Now().Add(-d), nil
-}
-
 func filterFromQuery(r *http.Request, defaultSince time.Duration) (analytics.Filter, error) {
 	q := r.URL.Query()
-	f := analytics.Filter{
-		Provider:   q.Get("provider"),
-		Model:      q.Get("model"),
-		WorkflowID: q.Get("workflow_id"),
-		AgentID:    q.Get("agent_id"),
-	}
-	if s := q.Get("since"); s != "" {
-		t, err := parseTimeOrDuration(s)
-		if err != nil {
-			return f, fmt.Errorf("since: %w", err)
-		}
-		f.Since = t
-	} else if defaultSince > 0 {
-		f.Since = time.Now().Add(-defaultSince)
-	}
-	if s := q.Get("until"); s != "" {
-		t, err := time.Parse(time.RFC3339, s)
-		if err != nil {
-			return f, fmt.Errorf("until: %w", err)
-		}
-		f.Until = t
-	}
-	return f, nil
+	return analytics.QueryParams{
+		Since:        q.Get("since"),
+		Until:        q.Get("until"),
+		Provider:     q.Get("provider"),
+		Model:        q.Get("model"),
+		WorkflowID:   q.Get("workflow_id"),
+		AgentID:      q.Get("agent_id"),
+		DefaultSince: defaultSince,
+	}.ToFilter()
 }
 
 func parseBucket(s string) analytics.Bucket {
@@ -193,13 +161,7 @@ func (a *AnalyticsHandlers) spendForecast(w http.ResponseWriter, r *http.Request
 		return
 	}
 	history := forecast.SeriesFromRows(rows, forecast.CostUSD)
-	var preds []forecast.Prediction
-	switch {
-	case len(history) >= 4:
-		preds, _ = forecast.NewHolt(0.6, 0.3).Forecast(history, horizon, 24*time.Hour)
-	case len(history) >= 2:
-		preds, _ = forecast.NewLinear().Forecast(history, horizon, 24*time.Hour)
-	}
+	preds := forecast.AutoForecast(history, horizon, 24*time.Hour)
 	writeAPIJSON(w, http.StatusOK, map[string]any{
 		"horizon_days":   horizon,
 		"history_points": len(history),

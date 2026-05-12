@@ -25,6 +25,9 @@ const navItems = [
   { to: "/spend", label: "Spend" },
   { to: "/workflows", label: "Workflows" },
   { to: "/optimizations", label: "Optimizations" },
+  { to: "/rules", label: "Rules" },
+  { to: "/events", label: "Events" },
+  { to: "/audit", label: "Audit" },
 ];
 </script>
 

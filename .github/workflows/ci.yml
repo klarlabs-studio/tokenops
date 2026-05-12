@@ -44,6 +44,8 @@ jobs:
         with:
           version: v2.11.4
           args: --timeout=5m
+      - name: proto-verify (skip if protoc missing)
+        run: make proto-verify
 
   test:
     name: Test

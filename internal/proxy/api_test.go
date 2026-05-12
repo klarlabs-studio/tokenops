@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/felixgeelhaar/tokenops/internal/analytics"
-	"github.com/felixgeelhaar/tokenops/internal/spend"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/observability/analytics"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
 	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
 	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
 )

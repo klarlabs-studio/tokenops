@@ -34,6 +34,8 @@ pass `make verify`.
 | Workflow Event (`WorkflowEvent`) | @tokenops/sdk | Any schema change |
 | Optimization Event (`OptimizationEvent`) | @tokenops/optimizer | Any schema change |
 | Coaching Event (`CoachingEvent`) | @tokenops/optimizer | Any schema change |
+| Rule Source Event (`RuleSourceEvent`) | @tokenops/rules | Any schema change |
+| Rule Analysis Event (`RuleAnalysisEvent`) | @tokenops/rules | Any schema change |
 | SQLite schema | @tokenops/storage | Migration version bump |
 | OTLP attribute mapping | @tokenops/observability | Attribute key change |
 | Protobuf definitions | @tokenops/core | Any field/add/remove/rename |
@@ -68,6 +70,39 @@ Client Request
            (redacted via redaction.RedactEnvelope)
 ```
 
+### Rule Intelligence Flow
+
+```
+Rule corpus on disk (CLAUDE.md, AGENTS.md, .cursor/rules/**, *.mcp.{yaml,yml,json})
+  │
+  ├─ rules/ingest.go: Discover (glob) → LoadPath (read + size cap)
+  │   └─ ParseMarkdown: ATX heading split, code-fence aware,
+  │       anchors as slash-joined heading path
+  │
+  ├─ rules/analyzer.go: per-provider tokenize → DocumentSummary
+  │   ├─ ToSourceEvent: RuleSourceEvent envelope
+  │   └─ DuplicateGroups: tokenizer-independent hash buckets
+  │
+  ├─ rules/conflicts.go: DetectConflicts → Finding{redundant|drift|anti_pattern}
+  │   └─ Finding.AsAnalysisEvent: RuleAnalysisEvent (ConflictsWith/RedundantWith)
+  │
+  ├─ rules/compress.go: Compressor.Compress → CompressionResult
+  │   └─ AsAnalysisEvent: RuleAnalysisEvent (CompressedTokens)
+  │
+  ├─ rules/roi.go: ROIEngine.Analyze(Exposure) → RuleAnalysisEvent
+  │   (ROIScore, TokensSaved, RetriesAvoided, ContextReduction)
+  │
+  └─ rules/router.go: Router.Select(SelectionSignals) → SelectionResult
+       └─ AsAnalysisEvents: RuleAnalysisEvent per selected section
+
+Consumers:
+  - CLI (tokenops rules analyze|conflicts|compress|inject|bench)
+  - HTTP API (/api/rules/{analyze,conflicts,compress,inject}) → Vue dashboard
+  - MCP tools (tokenops_rules_{analyze,conflicts,compress,inject})
+  - OTLP exporter (redaction-aware, tokenops.rule.* attributes)
+  - SQLite store (rule_source, rule_analysis payload kinds)
+```
+
 ### Field-Level Lineage
 
 | Field | Origin | Transforms | Consumers |
@@ -87,6 +122,13 @@ Client Request
 | `OptimizationEvent.Kind` | Optimizer `Kind()` method | Enum value | Storage, OTLP, Dashboard |
 | `OptimizationEvent.Decision` | Pipeline `decide()` | Enum value | Storage, OTLP, Dashboard |
 | `CoachingEvent.EfficiencyScore` | Efficiency engine | Computed 0.0–1.0 | Storage, Dashboard |
+| `RuleSourceEvent.SourceID` | `rules.MakeSourceID(repoID, path)` | Stable across snapshots | Storage, OTLP (`tokenops.rule.source_id`), Dashboard |
+| `RuleSourceEvent.Source` | `rules.ClassifySource(path)` | Enum value | Storage, OTLP, Dashboard |
+| `RuleSourceEvent.TotalTokens` | `tokenizer.CountText(body)` | Tokenized | Storage, OTLP, Dashboard leaderboard |
+| `RuleSourceEvent.Sections[i].Hash` | `sha256(body)` | SHA-256 hex | Storage, Compressor, Conflict detector |
+| `RuleAnalysisEvent.ROIScore` | `rules.ROIEngine.score(Exposure)` | Normalized economic ratio | Storage, OTLP (`tokenops.rule.roi_score`), Dashboard |
+| `RuleAnalysisEvent.ConflictsWith` | `rules.DetectConflicts` Finding | List of SectionIDs | Storage, OTLP (`tokenops.rule.conflicts_with`) |
+| `RuleAnalysisEvent.CompressedTokens` | `rules.Compressor.Compress` | Post-distillation token count | Storage, OTLP, Dashboard |
 | `Envelope.Payload` | Event-specific type | JSON serialized | Storage (payload column) |
 
 ---
@@ -101,8 +143,8 @@ Client Request
 | Field | Type | Required | SQLite Column | OTLP Key | Constraints |
 |---|---|---|---|---|---|
 | `ID` | string | yes | `id` (PK) | `tokenops.event.id` | UUIDv7 format; max 64 chars |
-| `SchemaVersion` | string | yes | `schema_version` | `tokenops.schema_version` | Semver; default `"1.0.0"` |
-| `Type` | EventType | yes | `type` | `tokenops.event.type` | One of: prompt, workflow, optimization, coaching |
+| `SchemaVersion` | string | yes | `schema_version` | `tokenops.schema_version` | Semver; current `"1.1.0"` |
+| `Type` | EventType | yes | `type` | `tokenops.event.type` | One of: prompt, workflow, optimization, coaching, rule_source, rule_analysis |
 | `Timestamp` | time.Time | yes | `timestamp_ns` | (timeUnixNano) | UTC; nanosecond precision |
 | `TraceID` | *string | no | `trace_id` | `trace_id` | 32-char hex W3C format |
 | `SpanID` | *string | no | `span_id` | `span_id` | 16-char hex W3C format |
@@ -205,6 +247,73 @@ Client Request
   nil before the first baseline evaluation.
 - `Decision` defaults to `skipped` until the user acts on the coaching
   recommendation.
+
+---
+
+## 6. RuleSourceEvent Contract
+
+**File:** `pkg/eventschema/rule.go`
+**SQLite columns:** (payload only; not indexed)
+**OTLP:** `tokenops.rule.*` keys in `pkg/eventschema/otel.go`
+
+| Field | Type | Required | SQLite | OTLP | Constraints |
+|---|---|---|---|---|---|
+| `SourceID` | string | yes | (payload) | `tokenops.rule.source_id` | `MakeSourceID(repoID, path)` |
+| `Source` | RuleSource | yes | (payload) | `tokenops.rule.source` | One of: claude_md, agents_md, cursor_rules, mcp_policy, repo_convention, custom |
+| `Scope` | RuleScope | no | (payload) | `tokenops.rule.scope` | One of: global, repo, workflow, tool, file_glob, conditional |
+| `Path` | *string | no | (payload) | `tokenops.rule.path` | Forward-slash repo-relative; redacted by `redaction.RedactEnvelope` |
+| `RepoID` | *string | no | (payload) | `tokenops.rule.repo_id` | Opaque identifier; allows cross-repo aggregation |
+| `Tokenizer` | *string | no | (payload) | `tokenops.rule.tokenizer` | Label e.g. `openai/cl100k_base` |
+| `Provider` | Provider | no | (payload) | `gen_ai.system` | Tokenizer's provider |
+| `TotalTokens` | int64 | yes | (payload) | `tokenops.rule.total_tokens` | ≥0; sum of section tokens |
+| `TotalChars` | *int64 | no | (payload) | — | ≥0 |
+| `Hash` | *string | no | (payload) | — | SHA-256 hex prefixed `sha256:` |
+| `Sections[].ID` | string | yes | (payload) | `tokenops.rule.section_id` | `SourceID#Anchor` |
+| `Sections[].Anchor` | *string | no | (payload) | — | Heading path, slash-joined |
+| `Sections[].TokenCount` | int64 | yes | (payload) | — | ≥0; measured under Tokenizer |
+| `Sections[].Hash` | *string | no | (payload) | — | SHA-256 hex |
+| `IngestedAt` | time.Time | no | (payload) | — | UTC; defaults to envelope timestamp |
+
+### Invariants
+- `SourceID` is stable across snapshots of the same artifact.
+- `Sections[].ID` follows the format `SourceID + "#" + Anchor` (Anchor `_preamble` for content before any heading).
+- `Hash` of the document equals SHA-256 of the raw body; same body across providers yields the same hash.
+- Raw body text never appears in the event — only metrics, anchors, and hashes — so redaction is inherent.
+
+---
+
+## 7. RuleAnalysisEvent Contract
+
+**File:** `pkg/eventschema/rule.go`
+**SQLite columns:** (payload only; not indexed)
+**OTLP:** `tokenops.rule.*` keys in `pkg/eventschema/otel.go`
+
+| Field | Type | Required | SQLite | OTLP | Constraints |
+|---|---|---|---|---|---|
+| `SourceID` | string | yes | (payload) | `tokenops.rule.source_id` | Must match a previously observed `RuleSourceEvent.SourceID` |
+| `SectionID` | *string | no | (payload) | `tokenops.rule.section_id` | Empty = document-level rollup |
+| `WorkflowID` | *string | no | (payload) | `tokenops.workflow.id` | Attribution |
+| `AgentID` | *string | no | (payload) | `tokenops.agent.id` | Attribution |
+| `WindowStart` | time.Time | yes | (payload) | — | Closed-interval start |
+| `WindowEnd` | time.Time | yes | (payload) | — | Closed-interval end; ≥ WindowStart |
+| `Exposures` | int64 | yes | (payload) | `tokenops.rule.exposures` | ≥0 |
+| `ContextTokens` | int64 | yes | (payload) | `tokenops.rule.context_tokens` | ≥0; cumulative across window |
+| `TokensSaved` | *int64 | no | (payload) | `tokenops.rule.tokens_saved` | ≥0 (clamped) |
+| `RetriesAvoided` | *int64 | no | (payload) | `tokenops.rule.retries_avoided` | ≥0 (clamped) |
+| `ContextReduction` | *float64 | no | (payload) | `tokenops.rule.context_reduction` | Range [-1.0, 1.0]; negative = growth |
+| `LatencyImpactNS` | *int64 | no | (payload) | `tokenops.latency_ns` | Sign carries direction |
+| `QualityDelta` | *float64 | no | (payload) | `tokenops.rule.quality_delta` | Range [-1.0, 1.0] |
+| `ROIScore` | *float64 | no | (payload) | `tokenops.rule.roi_score` | `(TokensSaved - ContextTokens) / ContextTokens`; 0 when ContextTokens==0 |
+| `ConflictsWith` | []string | no | (payload) | — | SectionIDs flagged by conflict detector |
+| `RedundantWith` | []string | no | (payload) | — | SectionIDs flagged by dedupe analyzer |
+| `CompressedTokens` | *int64 | no | (payload) | `tokenops.rule.compressed_tokens` | ≥0; 0 means no compression run |
+
+### Invariants
+- `SourceID` MUST match a known `RuleSourceEvent.SourceID`.
+- `WindowEnd >= WindowStart`.
+- `TokensSaved` and `RetriesAvoided` are floor-clamped to 0 by `ROIEngine`.
+- `ROIScore` is normalised by `ContextTokens`; comparable across rules of different sizes.
+- `ConflictsWith` / `RedundantWith` carry stable SectionIDs, never raw body text.
 
 ---
 

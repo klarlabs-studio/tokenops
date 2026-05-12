@@ -14,17 +14,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/optimizer"
-	"github.com/felixgeelhaar/tokenops/internal/optimizer/contexttrim"
-	"github.com/felixgeelhaar/tokenops/internal/optimizer/dedupe"
-	"github.com/felixgeelhaar/tokenops/internal/optimizer/promptcompress"
-	"github.com/felixgeelhaar/tokenops/internal/optimizer/retrievalprune"
-	"github.com/felixgeelhaar/tokenops/internal/replay"
-	"github.com/felixgeelhaar/tokenops/internal/spend"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/waste"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/replay"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/workflows/workflow"
 	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
-	"github.com/felixgeelhaar/tokenops/internal/tokenizer"
-	"github.com/felixgeelhaar/tokenops/internal/waste"
-	"github.com/felixgeelhaar/tokenops/internal/workflow"
 	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
 )
 
@@ -127,17 +122,10 @@ findings (when --workflow is set), and a summary footer.`,
 	return cmd
 }
 
-// buildReplayPipeline constructs the standard optimizer pipeline used by
-// `tokenops replay`. All optimizers run in passive/replay mode (the pipeline
-// drives the decision based on req.Mode), so they only emit recommendations.
+// buildReplayPipeline delegates to replay.DefaultPipeline so CLI and MCP
+// drive replays through identical optimizer configuration.
 func buildReplayPipeline(_ *spend.Engine) *optimizer.Pipeline {
-	tk := tokenizer.NewRegistry()
-	return optimizer.NewPipeline(
-		promptcompress.New(promptcompress.Config{}, tk),
-		dedupe.New(dedupe.Config{}, tk),
-		retrievalprune.New(retrievalprune.Config{}, tk),
-		contexttrim.New(contexttrim.Config{}, tk),
-	)
+	return replay.DefaultPipeline(nil)
 }
 
 // resolveStorageReadPath picks the sqlite path for the replay command.

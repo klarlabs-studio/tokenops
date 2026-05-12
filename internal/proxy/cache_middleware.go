@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/felixgeelhaar/tokenops/internal/providers"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/providers"
 	"github.com/felixgeelhaar/tokenops/internal/proxy/cache"
 	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
 )

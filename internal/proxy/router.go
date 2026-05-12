@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/felixgeelhaar/tokenops/internal/providers"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/providers"
 )
 
 // ProviderRoute pairs a Provider with its configured upstream URL.
@@ -48,13 +48,16 @@ func BuildProviderRoutes(overrides map[string]string) ([]ProviderRoute, error) {
 // Header passthrough: httputil.ReverseProxy strips hop-by-hop headers and
 // forwards everything else, so provider-specific auth (Authorization,
 // x-api-key, x-goog-api-key) is propagated unchanged.
-func (s *Server) registerProviderRoutes(mux *http.ServeMux) {
+func (s *Server) registerProviderRoutes(mux *http.ServeMux) error {
 	for _, route := range s.routes {
-		s.mountReverseProxy(mux, route)
+		if err := s.mountReverseProxy(mux, route); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func (s *Server) mountReverseProxy(mux *http.ServeMux, route ProviderRoute) {
+func (s *Server) mountReverseProxy(mux *http.ServeMux, route ProviderRoute) error {
 	upstream := route.Upstream
 	prefix := route.Provider.Prefix
 
@@ -96,7 +99,19 @@ func (s *Server) mountReverseProxy(mux *http.ServeMux, route ProviderRoute) {
 	if s.cache != nil {
 		handler = s.cacheMiddleware(route.Provider, handler)
 	}
+	// Resilience wraps last so the breaker / streamtimeout observe the
+	// full request including cache + observer overhead, and any
+	// breaker-synthesised 503/504 isn't itself recorded as a successful
+	// upstream call by the observer.
+	if s.resilience != nil {
+		mw, err := s.resilienceMiddleware(route)
+		if err != nil {
+			return err
+		}
+		handler = mw(handler)
+	}
 	mux.Handle(prefix, handler)
+	return nil
 }
 
 // singleJoin merges base and tail with exactly one separating "/" while

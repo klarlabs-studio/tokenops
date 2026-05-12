@@ -22,8 +22,9 @@ func TestResolveCertDirFallsBackToDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasSuffix(got, ".tokenops/certs") {
-		t.Errorf("resolveCertDir('') = %q, want suffix .tokenops/certs", got)
+	wantSuffix := filepath.Join(".tokenops", "certs")
+	if !strings.HasSuffix(got, wantSuffix) {
+		t.Errorf("resolveCertDir('') = %q, want suffix %q", got, wantSuffix)
 	}
 }
 
@@ -48,8 +49,9 @@ func TestResolveStoragePathFallsBackToDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasSuffix(got, ".tokenops/events.db") {
-		t.Errorf("resolveStoragePath('') = %q, want suffix .tokenops/events.db", got)
+	wantSuffix := filepath.Join(".tokenops", "events.db")
+	if !strings.HasSuffix(got, wantSuffix) {
+		t.Errorf("resolveStoragePath('') = %q, want suffix %q", got, wantSuffix)
 	}
 }
 

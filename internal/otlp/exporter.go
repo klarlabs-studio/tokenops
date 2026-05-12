@@ -25,7 +25,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/redaction"
+	"github.com/felixgeelhaar/fortify/circuitbreaker"
+
+	"github.com/felixgeelhaar/tokenops/internal/contexts/security/redaction"
 	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
 )
 
@@ -61,6 +63,7 @@ type Exporter struct {
 	client   *http.Client
 	redactor *redaction.Redactor
 	logger   *slog.Logger
+	breaker  circuitbreaker.CircuitBreaker[*http.Response]
 
 	exported atomic.Int64
 	failed   atomic.Int64
@@ -88,6 +91,14 @@ func New(opts Options) (*Exporter, error) {
 	if opts.ServiceVersion != "" {
 		res.Attributes = append(res.Attributes, stringKV("service.version", opts.ServiceVersion))
 	}
+	cb := circuitbreaker.New[*http.Response](circuitbreaker.Config{ //nolint:bodyclose // generic constructor, not an HTTP call
+		MaxRequests: 5,
+		Interval:    10 * time.Second,
+		Timeout:     30 * time.Second,
+		ReadyToTrip: func(c circuitbreaker.Counts) bool {
+			return c.ConsecutiveFailures > 5
+		},
+	})
 	return &Exporter{
 		endpoint: strings.TrimRight(opts.Endpoint, "/") + "/v1/logs",
 		headers:  opts.Headers,
@@ -96,6 +107,7 @@ func New(opts Options) (*Exporter, error) {
 		client:   opts.Client,
 		redactor: opts.Redactor,
 		logger:   opts.Logger,
+		breaker:  cb,
 	}, nil
 }
 
@@ -137,7 +149,9 @@ func (e *Exporter) AppendBatch(ctx context.Context, envs []*eventschema.Envelope
 	for k, v := range e.headers {
 		req.Header.Set(k, v)
 	}
-	resp, err := e.client.Do(req)
+	resp, err := e.breaker.Execute(ctx, func(ctx context.Context) (*http.Response, error) {
+		return e.client.Do(req)
+	})
 	if err != nil {
 		e.failed.Add(int64(len(logRecords)))
 		e.logger.Warn("otlp: export failed", "err", err)
@@ -193,8 +207,76 @@ func (e *Exporter) envelopeToLogRecord(env *eventschema.Envelope) logRecord {
 		rec.Attributes = append(rec.Attributes, optimizationAttributes(p)...)
 	case *eventschema.CoachingEvent:
 		rec.Attributes = append(rec.Attributes, coachingAttributes(p)...)
+	case *eventschema.RuleSourceEvent:
+		rec.Attributes = append(rec.Attributes, ruleSourceAttributes(p)...)
+	case *eventschema.RuleAnalysisEvent:
+		rec.Attributes = append(rec.Attributes, ruleAnalysisAttributes(p)...)
 	}
 	return rec
+}
+
+func ruleSourceAttributes(p *eventschema.RuleSourceEvent) []kv {
+	out := []kv{
+		stringKV(eventschema.AttrTokenOpsRuleSourceID, p.SourceID),
+		stringKV(eventschema.AttrTokenOpsRuleSource, string(p.Source)),
+		intKV(eventschema.AttrTokenOpsRuleTotalTokens, p.TotalTokens),
+		intKV(eventschema.AttrTokenOpsRuleSectionCount, int64(len(p.Sections))),
+	}
+	if p.Scope != "" {
+		out = append(out, stringKV(eventschema.AttrTokenOpsRuleScope, string(p.Scope)))
+	}
+	if p.Path != "" {
+		out = append(out, stringKV(eventschema.AttrTokenOpsRulePath, p.Path))
+	}
+	if p.RepoID != "" {
+		out = append(out, stringKV(eventschema.AttrTokenOpsRuleRepoID, p.RepoID))
+	}
+	if p.Tokenizer != "" {
+		out = append(out, stringKV(eventschema.AttrTokenOpsRuleTokenizer, p.Tokenizer))
+	}
+	if p.Provider != "" {
+		out = append(out, stringKV(eventschema.AttrGenAISystem, eventschema.GenAISystem(p.Provider)))
+	}
+	return out
+}
+
+func ruleAnalysisAttributes(p *eventschema.RuleAnalysisEvent) []kv {
+	out := []kv{
+		stringKV(eventschema.AttrTokenOpsRuleSourceID, p.SourceID),
+		intKV(eventschema.AttrTokenOpsRuleExposures, p.Exposures),
+		intKV(eventschema.AttrTokenOpsRuleContextTokens, p.ContextTokens),
+	}
+	if p.SectionID != "" {
+		out = append(out, stringKV(eventschema.AttrTokenOpsRuleSectionID, p.SectionID))
+	}
+	if p.WorkflowID != "" {
+		out = append(out, stringKV(eventschema.AttrTokenOpsWorkflowID, p.WorkflowID))
+	}
+	if p.AgentID != "" {
+		out = append(out, stringKV(eventschema.AttrTokenOpsAgentID, p.AgentID))
+	}
+	if p.TokensSaved != 0 {
+		out = append(out, intKV(eventschema.AttrTokenOpsRuleTokensSaved, p.TokensSaved))
+	}
+	if p.RetriesAvoided != 0 {
+		out = append(out, intKV(eventschema.AttrTokenOpsRuleRetriesAvoided, p.RetriesAvoided))
+	}
+	if p.ContextReduction != 0 {
+		out = append(out, doubleKV(eventschema.AttrTokenOpsRuleContextReduction, p.ContextReduction))
+	}
+	if p.LatencyImpactNS != 0 {
+		out = append(out, intKV(eventschema.AttrTokenOpsLatencyNS, p.LatencyImpactNS))
+	}
+	if p.QualityDelta != 0 {
+		out = append(out, doubleKV(eventschema.AttrTokenOpsRuleQualityDelta, p.QualityDelta))
+	}
+	if p.ROIScore != 0 {
+		out = append(out, doubleKV(eventschema.AttrTokenOpsRuleROIScore, p.ROIScore))
+	}
+	if p.CompressedTokens != 0 {
+		out = append(out, intKV(eventschema.AttrTokenOpsRuleCompressedTokens, p.CompressedTokens))
+	}
+	return out
 }
 
 func promptAttributes(p *eventschema.PromptEvent) []kv {
@@ -305,6 +387,10 @@ func severityForType(t eventschema.EventType) int {
 		return 9
 	case eventschema.EventTypeCoaching:
 		return 11 // INFO2
+	case eventschema.EventTypeRuleSource:
+		return 9
+	case eventschema.EventTypeRuleAnalysis:
+		return 11
 	default:
 		return 9
 	}

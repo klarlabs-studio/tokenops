@@ -40,3 +40,9 @@ Add explicit data-contract and lineage docs for key event fields used across pro
 Introduce repository-level quality debt dashboard for low-coverage/high-risk packages (e.g., daemon entrypoints and integration surfaces). Add targeted tests and risk-ranked coverage goals rather than blanket percentage targets.
 
 ---
+
+## Rule Intelligence
+
+Treat operational rule artifacts (CLAUDE.md, AGENTS.md, repo instructions, MCP policies, Cursor rules, coding conventions) as first-class telemetry. Provide a Rule Engine that ingests rule sources, analyzes ROI (tokens saved, retries avoided, context reduction, latency impact, quality drift), detects conflicts and redundancy, compresses rule corpora into distilled behavioral representations, and dynamically injects only the relevant subset per request/workflow. Includes benchmarking harness for coding/workflow rule systems. Surfaces via CLI (tokenops rules analyze|conflicts|compress|inject|bench), proxy hooks, MCP server, and dashboard. Local-first, respects redaction, OTLP-emittable. Issue #12.
+
+---

@@ -42,6 +42,25 @@ const (
 	AttrTokenOpsQualityScore         = "tokenops.optimization.quality_score"
 	AttrTokenOpsCoachingKind         = "tokenops.coaching.kind"
 	AttrTokenOpsEfficiencyScore      = "tokenops.coaching.efficiency_score"
+
+	// Rule Intelligence attributes (issue #12).
+	AttrTokenOpsRuleSourceID         = "tokenops.rule.source_id"
+	AttrTokenOpsRuleSource           = "tokenops.rule.source"
+	AttrTokenOpsRuleScope            = "tokenops.rule.scope"
+	AttrTokenOpsRulePath             = "tokenops.rule.path"
+	AttrTokenOpsRuleRepoID           = "tokenops.rule.repo_id"
+	AttrTokenOpsRuleTokenizer        = "tokenops.rule.tokenizer"
+	AttrTokenOpsRuleTotalTokens      = "tokenops.rule.total_tokens"
+	AttrTokenOpsRuleSectionID        = "tokenops.rule.section_id"
+	AttrTokenOpsRuleSectionCount     = "tokenops.rule.section_count"
+	AttrTokenOpsRuleExposures        = "tokenops.rule.exposures"
+	AttrTokenOpsRuleContextTokens    = "tokenops.rule.context_tokens"
+	AttrTokenOpsRuleTokensSaved      = "tokenops.rule.tokens_saved"
+	AttrTokenOpsRuleRetriesAvoided   = "tokenops.rule.retries_avoided"
+	AttrTokenOpsRuleContextReduction = "tokenops.rule.context_reduction"
+	AttrTokenOpsRuleQualityDelta     = "tokenops.rule.quality_delta"
+	AttrTokenOpsRuleROIScore         = "tokenops.rule.roi_score"
+	AttrTokenOpsRuleCompressedTokens = "tokenops.rule.compressed_tokens"
 )
 
 // providerToGenAISystem maps TokenOps Provider values to the canonical GenAI

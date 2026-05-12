@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/providers"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/tokenizer"
 	"github.com/felixgeelhaar/tokenops/internal/events"
-	"github.com/felixgeelhaar/tokenops/internal/providers"
-	"github.com/felixgeelhaar/tokenops/internal/tokenizer"
 	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
 )
 

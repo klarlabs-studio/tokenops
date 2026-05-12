@@ -74,7 +74,17 @@ COVERCTL_CONFIG ?= .coverctl.yaml
 cover-debt:
 	-$(COVERCTL) check -config $(COVERCTL_CONFIG)
 
-verify: fmt vet lint test bench-gate eval-gate sec-gate
+verify: fmt vet lint test bench-gate eval-gate sec-gate proto-verify
+
+# proto-verify runs proto-check only when protoc is on PATH; CI without
+# protoc skips the gate (the targets exist for local devs who modify
+# .proto files).
+proto-verify:
+	@if command -v protoc >/dev/null; then \
+		$(MAKE) proto-check; \
+	else \
+		echo "proto-verify: protoc not installed; skipping"; \
+	fi
 
 # policy-guard enforces local contribution policy checks.
 policy-guard:
@@ -118,6 +128,25 @@ clean:
 
 tools:
 	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	$(GO) install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+
+# proto regenerates Go bindings from pkg/eventschema/proto/v1/*.proto.
+# Requires protoc + protoc-gen-go (run `make tools`).
+proto:
+	@command -v protoc >/dev/null || { echo "protoc not installed; install from https://grpc.io/docs/protoc-installation/"; exit 1; }
+	protoc \
+		--go_out=. \
+		--go_opt=module=github.com/felixgeelhaar/tokenops \
+		pkg/eventschema/proto/v1/*.proto
+
+# proto-check fails CI when generated bindings drift from the .proto
+# source. Add to make verify when bindings land in the repo.
+proto-check: proto
+	@if ! git diff --quiet -- pkg/eventschema/proto/; then \
+		echo "::error::proto bindings out of sync; run 'make proto'"; \
+		git --no-pager diff -- pkg/eventschema/proto/; \
+		exit 1; \
+	fi
 
 run-daemon: $(BIN_DIR)/tokenopsd
 	./$(BIN_DIR)/tokenopsd start

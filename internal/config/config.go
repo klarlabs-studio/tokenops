@@ -17,13 +17,43 @@ import (
 
 // Config is the root daemon configuration.
 type Config struct {
-	Listen    string            `yaml:"listen"`
-	Log       LogConfig         `yaml:"log"`
-	Shutdown  ShutdownConfig    `yaml:"shutdown"`
-	Providers map[string]string `yaml:"providers"`
-	TLS       TLSConfig         `yaml:"tls"`
-	Storage   StorageConfig     `yaml:"storage"`
-	OTel      OTelConfig        `yaml:"otel"`
+	Listen     string            `yaml:"listen"`
+	Log        LogConfig         `yaml:"log"`
+	Shutdown   ShutdownConfig    `yaml:"shutdown"`
+	Providers  map[string]string `yaml:"providers"`
+	TLS        TLSConfig         `yaml:"tls"`
+	Storage    StorageConfig     `yaml:"storage"`
+	OTel       OTelConfig        `yaml:"otel"`
+	Rules      RulesConfig       `yaml:"rules"`
+	Resilience ResilienceConfig  `yaml:"resilience"`
+}
+
+// ResilienceConfig wraps each provider proxy route with
+// fortify's CircuitBreakerStream. Off by default; opt in to gain
+// per-stream FirstByte / Idle / Total deadlines and per-provider
+// circuit breakers across SSE streams. Zero-valued deadlines disable
+// the corresponding watchdog (at least one must be positive when
+// enabled).
+type ResilienceConfig struct {
+	Enabled          bool          `yaml:"enabled"`
+	FirstByteTimeout time.Duration `yaml:"first_byte_timeout"`
+	IdleTimeout      time.Duration `yaml:"idle_timeout"`
+	TotalTimeout     time.Duration `yaml:"total_timeout"`
+	// FailureThreshold is the consecutive-failure count that trips
+	// the breaker for a given route. Defaults to 5 when zero.
+	FailureThreshold uint32 `yaml:"failure_threshold"`
+}
+
+// RulesConfig wires the Rule Intelligence subsystem (issue #12).
+// Enabled gates the /api/rules/* dashboard endpoints. Root is the
+// repository the daemon scans on each request — defaults to the daemon's
+// working directory when unset. RepoID is an opaque identifier prepended
+// to rule SourceIDs (allows cross-repo aggregation without leaking repo
+// names through telemetry).
+type RulesConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Root    string `yaml:"root"`
+	RepoID  string `yaml:"repo_id"`
 }
 
 // OTelConfig configures the optional OTLP/HTTP/JSON telemetry exporter.
@@ -141,6 +171,11 @@ func (c Config) Validate() error {
 	}
 	if c.OTel.Enabled && c.OTel.Endpoint == "" {
 		return errors.New("otel.endpoint must be set when otel.enabled is true")
+	}
+	if c.Resilience.Enabled {
+		if c.Resilience.FirstByteTimeout <= 0 && c.Resilience.IdleTimeout <= 0 && c.Resilience.TotalTimeout <= 0 {
+			return errors.New("resilience.enabled requires at least one positive timeout (first_byte_timeout, idle_timeout, total_timeout)")
+		}
 	}
 	return nil
 }

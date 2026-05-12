@@ -2,19 +2,18 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/analytics"
+	"github.com/felixgeelhaar/tokenops/internal/bootstrap"
 	"github.com/felixgeelhaar/tokenops/internal/mcp"
-	"github.com/felixgeelhaar/tokenops/internal/spend"
-	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
+	"github.com/felixgeelhaar/tokenops/internal/proxy"
 	"github.com/felixgeelhaar/tokenops/internal/version"
 )
 
@@ -51,37 +50,48 @@ Wire into any MCP client (Claude Desktop, Cursor, opencode, etc.):
 }
 
 func serveMCP(ctx context.Context, cmd *cobra.Command) error {
-	dbPath := os.Getenv("TOKENOPS_STORAGE_PATH")
-	if dbPath == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("resolve home: %w", err)
-		}
-		dbPath = filepath.Join(home, ".tokenops", "events.db")
-	}
-
-	store, err := sqlite.Open(ctx, dbPath, sqlite.Options{})
-	if err != nil {
-		return fmt.Errorf("open events.db at %s: %w", dbPath, err)
-	}
-	defer func() { _ = store.Close() }()
-
-	spendEng := spend.NewEngine(spend.DefaultTable())
-	agg := analytics.New(store, spendEng)
-
 	logger := slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: slog.LevelInfo}))
+	components, err := bootstrap.New(ctx, bootstrap.Options{
+		DBPath:    os.Getenv("TOKENOPS_STORAGE_PATH"),
+		Logger:    logger,
+		OpenStore: true,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = components.Close() }()
 
 	srv := mcp.NewServer("tokenops", version.Version, logger)
 	if err := mcp.RegisterTools(srv, mcp.Deps{
-		Store:      store,
-		Aggregator: agg,
-		Spend:      spendEng,
+		Store:      components.Store,
+		Aggregator: components.Aggregator,
+		Spend:      components.Spend,
 	}); err != nil {
 		return fmt.Errorf("register tools: %w", err)
 	}
+	if err := mcp.RegisterRulesTools(srv); err != nil {
+		return fmt.Errorf("register rules tools: %w", err)
+	}
+	if err := mcp.RegisterParityTools(srv, mcp.ParityDeps{Store: components.Store, Spend: components.Spend}); err != nil {
+		return fmt.Errorf("register parity tools: %w", err)
+	}
+	cfg, cfgErr := loadConfig(&rootFlags{})
+	if cfgErr != nil {
+		logger.Warn("serve: could not load config snapshot", "err", cfgErr)
+	}
+	var configJSON json.RawMessage
+	if cfgErr == nil {
+		if data, sErr := cfg.Snapshot(); sErr == nil {
+			configJSON = data
+		}
+	}
+	if err := mcp.RegisterControlTools(srv, mcp.ControlDeps{
+		ConfigJSON: configJSON,
+		ReadyCheck: proxy.IsReady,
+	}); err != nil {
+		return fmt.Errorf("register control tools: %w", err)
+	}
 
-	logger.Info("tokenops serve ready",
-		"db", dbPath,
-		"version", version.Version)
-	return srv.Serve(ctx, cmd.InOrStdin(), cmd.OutOrStdout())
+	logger.Info("tokenops serve ready", "version", version.Version)
+	return mcp.ServeStdio(ctx, srv)
 }

@@ -19,6 +19,11 @@ var ready atomic.Bool
 // MarkReady signals to /readyz that the daemon's dependencies are healthy.
 func MarkReady(b bool) { ready.Store(b) }
 
+// IsReady returns the current readiness state. Used by the MCP
+// tokenops_status tool to surface the same signal /readyz reports over
+// HTTP, without requiring the daemon to call itself.
+func IsReady() bool { return ready.Load() }
+
 func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /healthz", healthzHandler)
 	mux.HandleFunc("GET /readyz", readyzHandler)

@@ -12,6 +12,8 @@ const (
 	EventTypeWorkflow     EventType = "workflow"
 	EventTypeOptimization EventType = "optimization"
 	EventTypeCoaching     EventType = "coaching"
+	EventTypeRuleSource   EventType = "rule_source"
+	EventTypeRuleAnalysis EventType = "rule_analysis"
 )
 
 // Provider identifies the upstream LLM provider observed for an event.
