@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Added
+
+- **Rate-limit window headroom** for subscription plans that publish
+  rolling windows instead of monthly token caps.
+  - `Plan` gains `MessagesPerWindow` + `WindowUnit` fields; catalog
+    splits generic `claude-max` into `claude-max-5x` (50 msgs / 5h)
+    and `claude-max-20x` (200 msgs / 5h). Adds documented caps for
+    `claude-pro`, `gpt-plus`, `gpt-team`.
+  - `HeadroomReport` gains `window_cap`, `window_consumed`,
+    `window_pct`, `window_resets_in`, `window_unit` fields.
+    `overage_risk` headline takes the worst of monthly and window
+    signals.
+  - `tokenops plan headroom` text output prints both monthly and
+    window lines; `tokenops_plan_headroom` MCP tool exposes the same
+    fields.
+  - `internal/contexts/spend/plans.ConsumptionInWindow` reader counts
+    plan-included PromptEvents over a trailing window.
+
+### Changed
+
+- Generic `claude-max` removed from the plan catalog. Users on the
+  Anthropic Max plan should pick `claude-max-5x` or `claude-max-20x`
+  depending on their tier.
+
 ## 0.5.0 - 2026-05-12
 
 ### Added

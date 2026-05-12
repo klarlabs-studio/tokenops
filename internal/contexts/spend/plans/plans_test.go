@@ -23,6 +23,17 @@ func TestCatalogEntriesHaveProviderAndSource(t *testing.T) {
 		if !strings.Contains(p.SourceURL, "(2026-") {
 			t.Errorf("%s: SourceURL missing dated snapshot marker: %q", name, p.SourceURL)
 		}
+		// Window/cap/unit must be coherent: either all three set or
+		// MessagesPerWindow zero (meaning "vendor publishes no number,
+		// rate-limit window only").
+		if p.MessagesPerWindow > 0 {
+			if p.RateLimitWindow <= 0 {
+				t.Errorf("%s: MessagesPerWindow=%d but RateLimitWindow is zero", name, p.MessagesPerWindow)
+			}
+			if p.WindowUnit == "" {
+				t.Errorf("%s: MessagesPerWindow set but WindowUnit empty", name)
+			}
+		}
 	}
 }
 
@@ -32,7 +43,8 @@ func TestCatalogCoversPublishedPlans(t *testing.T) {
 	// touching this test and the README in the same PR so users don't
 	// silently lose support.
 	want := []string{
-		"claude-max", "claude-pro", "claude-code-max", "claude-code-pro",
+		"claude-max-5x", "claude-max-20x", "claude-pro",
+		"claude-code-max", "claude-code-pro",
 		"gpt-plus", "gpt-pro", "gpt-team",
 		"copilot-individual", "copilot-business",
 		"cursor-pro", "cursor-business",
@@ -49,13 +61,13 @@ func TestValidateRejectsUnknownWithSuggestions(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for typo")
 	}
-	if !strings.Contains(err.Error(), "claude-max") {
+	if !strings.Contains(err.Error(), "claude-max-5x") {
 		t.Errorf("error should list valid plans, got: %v", err)
 	}
 }
 
 func TestValidateAcceptsKnown(t *testing.T) {
-	if err := Validate("claude-max"); err != nil {
-		t.Errorf("Validate(claude-max) returned %v", err)
+	if err := Validate("claude-max-20x"); err != nil {
+		t.Errorf("Validate(claude-max-20x) returned %v", err)
 	}
 }

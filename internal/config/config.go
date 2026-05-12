@@ -24,7 +24,7 @@ type Config struct {
 	Shutdown  ShutdownConfig    `yaml:"shutdown"`
 	Providers map[string]string `yaml:"providers"`
 	// Plans maps provider name → plan catalog identifier (e.g.
-	// "anthropic" → "claude-max"). Requests routed to a provider with
+	// "anthropic" → "claude-max-20x"). Requests routed to a provider with
 	// a configured plan are billed as plan_included (CostUSD=0) and
 	// roll up to the plan's monthly quota instead. See
 	// internal/contexts/spend/plans for the catalog.

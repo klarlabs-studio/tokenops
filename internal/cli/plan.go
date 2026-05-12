@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -94,11 +95,19 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("consumption[%s]: %w", provider, err)
 				}
-				report, err := plans.ComputeHeadroom(planName, plans.HeadroomInputs{
+				inputs := plans.HeadroomInputs{
 					ConsumedTokens: cons.ConsumedTokens,
 					Last7DayTokens: cons.Last7DayTokens,
 					Now:            now,
-				})
+				}
+				if p, ok := plans.Lookup(planName); ok && p.RateLimitWindow > 0 {
+					win, err := plans.ConsumptionInWindow(ctx, reader, provider, now, p.RateLimitWindow)
+					if err != nil {
+						return fmt.Errorf("window[%s]: %w", provider, err)
+					}
+					inputs.WindowMessages = win.MessagesInWindow
+				}
+				report, err := plans.ComputeHeadroom(planName, inputs)
 				if err != nil {
 					return fmt.Errorf("headroom[%s]: %w", provider, err)
 				}
@@ -109,9 +118,30 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 			}
 			for _, r := range reports {
 				fmt.Fprintf(cmd.OutOrStdout(),
-					"%s (%s): consumed %d tokens (%.1f%%) — risk %s\n",
-					r.Display, r.PlanName, r.ConsumedTokens, r.ConsumedPct, r.OverageRisk,
+					"%s (%s) — risk %s\n",
+					r.Display, r.PlanName, r.OverageRisk,
 				)
+				if r.QuotaTokens > 0 {
+					fmt.Fprintf(cmd.OutOrStdout(),
+						"  monthly: %d / %d tokens (%.1f%%)",
+						r.ConsumedTokens, r.QuotaTokens, r.ConsumedPct,
+					)
+					if !math.IsNaN(r.HeadroomDays) && r.HeadroomDays > 0 {
+						fmt.Fprintf(cmd.OutOrStdout(), " — %.1f days headroom", r.HeadroomDays)
+					}
+					fmt.Fprintln(cmd.OutOrStdout())
+				} else {
+					fmt.Fprintf(cmd.OutOrStdout(),
+						"  tokens this month: %d (no monthly cap)\n", r.ConsumedTokens,
+					)
+				}
+				if r.WindowCap > 0 {
+					fmt.Fprintf(cmd.OutOrStdout(),
+						"  window:  %d / %d %s per %s (%.1f%%) — resets in %s\n",
+						r.WindowConsumed, r.WindowCap, r.WindowUnit,
+						r.WindowDuration, r.WindowPct, r.WindowResetsIn,
+					)
+				}
 				if r.Note != "" {
 					fmt.Fprintf(cmd.OutOrStdout(), "  note: %s\n", r.Note)
 				}

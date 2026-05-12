@@ -105,6 +105,72 @@ func TestHeadroomNoPublishedQuota(t *testing.T) {
 	}
 }
 
+// windowPlan mirrors a Claude Max 20x shape: rate-limit window + cap,
+// no monthly token quota.
+func windowPlan(cap int64, window time.Duration) Plan {
+	return Plan{
+		Name:              "test-window-plan",
+		Provider:          "test",
+		Display:           "Test Window Plan",
+		RateLimitWindow:   window,
+		MessagesPerWindow: cap,
+		WindowUnit:        "messages",
+	}
+}
+
+func TestHeadroomWindowOnlyLowUsage(t *testing.T) {
+	p := windowPlan(200, 5*time.Hour)
+	r := computeHeadroomFor(p, HeadroomInputs{
+		WindowMessages: 20, // 10% of cap
+		Now:            midMonth(),
+	})
+	if r.WindowCap != 200 {
+		t.Errorf("WindowCap=%d want 200", r.WindowCap)
+	}
+	if r.WindowConsumed != 20 {
+		t.Errorf("WindowConsumed=%d want 20", r.WindowConsumed)
+	}
+	if r.WindowPct < 9.9 || r.WindowPct > 10.1 {
+		t.Errorf("WindowPct=%f want ~10", r.WindowPct)
+	}
+	if r.OverageRisk != RiskLow {
+		t.Errorf("risk=%q want %q at 10%% window usage", r.OverageRisk, RiskLow)
+	}
+}
+
+func TestHeadroomWindowHighRisk(t *testing.T) {
+	p := windowPlan(200, 5*time.Hour)
+	r := computeHeadroomFor(p, HeadroomInputs{
+		WindowMessages: 170, // 85% of cap
+		Now:            midMonth(),
+	})
+	if r.OverageRisk != RiskHigh {
+		t.Errorf("risk=%q want %q at 85%% window usage", r.OverageRisk, RiskHigh)
+	}
+	if r.WindowResetsIn != "5h0m0s" {
+		t.Errorf("WindowResetsIn=%q want 5h0m0s", r.WindowResetsIn)
+	}
+}
+
+func TestHeadroomMonthlyAndWindowTakesWorse(t *testing.T) {
+	// Monthly: 30% — low. Window: 85% — high. Report should surface
+	// the high signal so the headline is honest.
+	p := testPlan(8_000_000, 2_000_000)
+	p.RateLimitWindow = 5 * time.Hour
+	p.MessagesPerWindow = 200
+	p.WindowUnit = "messages"
+
+	r := computeHeadroomFor(p, HeadroomInputs{
+		ConsumedTokens: 3_000_000,
+		Last7DayTokens: 700_000,
+		WindowMessages: 170,
+		Now:            midMonth(),
+	})
+	if r.OverageRisk != RiskHigh {
+		t.Errorf("risk=%q want %q (window dominates)", r.OverageRisk, RiskHigh)
+	}
+}
+
 func TestComputeHeadroomRejectsUnknownPlan(t *testing.T) {
 	_, err := ComputeHeadroom("nonexistent", HeadroomInputs{Now: midMonth()})
 	if err == nil {
@@ -116,7 +182,7 @@ func TestComputeHeadroomUsesCatalog(t *testing.T) {
 	// Smoke test that the catalog path is wired — most plans have no
 	// monthly cap, so we just confirm the lookup succeeds and emits a
 	// note rather than crashing.
-	r, err := ComputeHeadroom("claude-max", HeadroomInputs{
+	r, err := ComputeHeadroom("claude-max-20x", HeadroomInputs{
 		ConsumedTokens: 0,
 		Last7DayTokens: 0,
 		Now:            midMonth(),

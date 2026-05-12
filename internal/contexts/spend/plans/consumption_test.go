@@ -66,3 +66,43 @@ func TestConsumptionEmptyOnNoMatches(t *testing.T) {
 		t.Errorf("expected zero consumption, got %+v", got)
 	}
 }
+
+func TestConsumptionInWindowCountsRecentMessagesOnly(t *testing.T) {
+	now := time.Date(2026, time.May, 15, 12, 0, 0, 0, time.UTC)
+	r := fakeReader{envs: []*eventschema.Envelope{
+		// 6h ago — outside 5h window
+		envAt(now.Add(-6*time.Hour), "anthropic", 1000, eventschema.CostSourcePlanIncluded),
+		// 2h ago, in window
+		envAt(now.Add(-2*time.Hour), "anthropic", 500, eventschema.CostSourcePlanIncluded),
+		// 1h ago, metered — excluded
+		envAt(now.Add(-time.Hour), "anthropic", 700, eventschema.CostSourceMetered),
+		// 30m ago, wrong provider — excluded
+		envAt(now.Add(-30*time.Minute), "openai", 300, eventschema.CostSourcePlanIncluded),
+		// 10m ago, in window
+		envAt(now.Add(-10*time.Minute), "anthropic", 200, eventschema.CostSourcePlanIncluded),
+	}}
+	got, err := ConsumptionInWindow(context.Background(), r, "anthropic", now, 5*time.Hour)
+	if err != nil {
+		t.Fatalf("ConsumptionInWindow: %v", err)
+	}
+	if got.MessagesInWindow != 2 {
+		t.Errorf("MessagesInWindow=%d want 2", got.MessagesInWindow)
+	}
+	if got.TokensInWindow != 700 {
+		t.Errorf("TokensInWindow=%d want 700", got.TokensInWindow)
+	}
+}
+
+func TestConsumptionInWindowZeroDurationReturnsEmpty(t *testing.T) {
+	now := time.Date(2026, time.May, 15, 12, 0, 0, 0, time.UTC)
+	r := fakeReader{envs: []*eventschema.Envelope{
+		envAt(now.Add(-time.Hour), "anthropic", 100, eventschema.CostSourcePlanIncluded),
+	}}
+	got, err := ConsumptionInWindow(context.Background(), r, "anthropic", now, 0)
+	if err != nil {
+		t.Fatalf("ConsumptionInWindow: %v", err)
+	}
+	if got.MessagesInWindow != 0 || got.TokensInWindow != 0 {
+		t.Errorf("expected zero (no window), got %+v", got)
+	}
+}

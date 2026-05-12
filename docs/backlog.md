@@ -112,3 +112,9 @@ Activate new operators in under 5 minutes. Ship `tokenops init` wizard (idempote
 Support flat-rate subscription plans (Claude Max, Claude Code Pro, ChatGPT Plus/Pro, Cursor, GitHub Copilot, Cody) where per-token cost is zero but quota matters. Design: PromptEvent gains `CostSource` enum (metered|plan_included|trial), config gets `plans: {provider: plan_name}` map. Spend engine: when CostSource=plan_included, CostUSD=0 and event counts toward quota tracker instead. New metrics: plan_quota_consumed_pct, plan_headroom_days, plan_overage_risk. Dashboard + CLI surface plan headroom alongside metered cost. Backward compat: events without CostSource default to "metered". Requires per-plan quota config (input/output tokens/month, rate-limit windows). Initial plan catalog: claude-max, claude-pro, claude-code-max, gpt-plus, gpt-pro, gpt-team, copilot-individual, copilot-business, cursor-pro, cursor-business.
 
 ---
+
+## Rate-Limit Window Headroom
+
+Most LLM subscriptions (Claude Max 5x/20x, Claude Pro, ChatGPT Plus/Team) publish rolling-window rate limits, not monthly token caps. Extend the plan model to track messages/requests per window (5h for Claude, 3h for ChatGPT, etc.) and emit a window-based headroom report alongside the existing monthly view. Split catalog: claude-max-5x + claude-max-20x replace generic claude-max; ChatGPT Plus + Team get message-per-window caps. HeadroomReport gains window_consumed, window_cap, window_pct, window_resets_at fields. CLI + MCP surface both metrics so operators see "67% of 5h window, resets in 1h42m" instead of "no monthly cap published". Sources: Anthropic Max plan docs, OpenAI Plus/Team rate-limit FAQ, dated 2026-05 snapshot URLs.
+
+---

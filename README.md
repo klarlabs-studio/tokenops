@@ -174,11 +174,11 @@ instead:
 
 ```yaml
 plans:
-  anthropic: claude-max
-  openai: gpt-plus
+  anthropic: claude-max-20x   # or claude-max-5x, claude-pro
+  openai: gpt-plus            # or gpt-team, gpt-pro
 ```
 
-Or via env: `TOKENOPS_PLAN_ANTHROPIC=claude-max`. Then
+Or via env: `TOKENOPS_PLAN_ANTHROPIC=claude-max-20x`. Then
 `tokenops plan headroom` (and the `tokenops_plan_headroom` MCP tool)
 return month-to-date consumption and overage risk. See
 [docs/plan-cost-model.md](docs/plan-cost-model.md) for the supported

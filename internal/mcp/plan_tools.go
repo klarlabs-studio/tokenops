@@ -65,11 +65,19 @@ func planHeadroom(ctx context.Context, d PlanDeps) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("consumption[%s]: %w", provider, err)
 		}
-		report, err := plans.ComputeHeadroom(planName, plans.HeadroomInputs{
+		inputs := plans.HeadroomInputs{
 			ConsumedTokens: cons.ConsumedTokens,
 			Last7DayTokens: cons.Last7DayTokens,
 			Now:            now,
-		})
+		}
+		if p, ok := plans.Lookup(planName); ok && p.RateLimitWindow > 0 {
+			win, err := plans.ConsumptionInWindow(ctx, reader, provider, now, p.RateLimitWindow)
+			if err != nil {
+				return "", fmt.Errorf("window[%s]: %w", provider, err)
+			}
+			inputs.WindowMessages = win.MessagesInWindow
+		}
+		report, err := plans.ComputeHeadroom(planName, inputs)
 		if err != nil {
 			return "", fmt.Errorf("headroom[%s]: %w", provider, err)
 		}
