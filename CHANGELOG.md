@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.0 - 2026-05-12
+
 ### Added
 
 - **Plan-Based Cost Model**: subscription-aware spend tracking for
