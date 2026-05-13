@@ -78,10 +78,12 @@ func Compute(ctx context.Context, reader EventReader, since time.Time) (*LiveKPI
 }
 
 // defaultExcludedSources mirrors analytics.DefaultExcludedSources +
-// plans.DefaultExcludedSources to keep the wedge surfaces aligned.
-// Duplicated rather than imported to avoid a domain->infrastructure
-// dependency (scorecard is a context package).
-var defaultExcludedSources = []string{"demo"}
+// plans.DefaultExcludedSources, plus mcp-session pings. Scorecard
+// KPIs (FVT, TEU, SAC) measure real LLM traffic; MCP-session pings
+// are an activity proxy — counting them in the denominators produces
+// misleading grades. Keep the list duplicated here to avoid a
+// domain->infrastructure dependency (scorecard is a context package).
+var defaultExcludedSources = []string{"demo", "mcp-session"}
 
 func filterExcludedSources(envs []*eventschema.Envelope) []*eventschema.Envelope {
 	if len(envs) == 0 {
