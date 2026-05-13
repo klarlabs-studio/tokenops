@@ -41,8 +41,13 @@ func NewServer(name, ver string, _ *slog.Logger) *Server {
 
 // ServeStdio runs srv over the JSON-RPC/stdio transport from mcp-go.
 // It blocks until ctx is cancelled or the input stream closes.
-func ServeStdio(ctx context.Context, srv *Server) error {
-	return mcpgo.ServeStdio(ctx, srv)
+// Optional middleware (e.g. SessionMiddleware) chains in front of the
+// per-tool handlers.
+func ServeStdio(ctx context.Context, srv *Server, mws ...mcpgo.Middleware) error {
+	if len(mws) == 0 {
+		return mcpgo.ServeStdio(ctx, srv)
+	}
+	return mcpgo.ServeStdio(ctx, srv, mcpgo.WithMiddleware(mws...))
 }
 
 // jsonString marshals v indented, returning a string suitable for the

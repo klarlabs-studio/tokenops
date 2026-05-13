@@ -3,6 +3,7 @@ package rulesfs
 import (
 	"github.com/felixgeelhaar/tokenops/internal/contexts/rules"
 
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -12,6 +13,20 @@ import (
 	"strings"
 	"time"
 )
+
+// skipDirName lists directory basenames the walker descends into never.
+// macOS scatters permission-restricted state stores under $HOME (Library/,
+// Containers/, Saved Application State/, .Trash/); Linux & dev trees add
+// the usual heavy directories. Skipping by name keeps the walker fast and
+// dodges most of the EACCES we'd otherwise have to tolerate.
+var skipDirName = map[string]bool{
+	"node_modules":            true,
+	"vendor":                  true,
+	"Library":                 true,
+	"Containers":              true,
+	"Saved Application State": true,
+	".Trash":                  true,
+}
 
 // DefaultDiscoveryPatterns lists the glob patterns the Ingestor walks by
 // default when no explicit override is supplied. Patterns are matched
@@ -69,7 +84,7 @@ func (in *Ingestor) Discover() ([]string, error) {
 			if strings.HasPrefix(base, ".") && base != ".cursor" {
 				return fs.SkipDir
 			}
-			if base == "node_modules" || base == "vendor" {
+			if skipDirName[base] {
 				return fs.SkipDir
 			}
 			return nil
@@ -86,6 +101,9 @@ func (in *Ingestor) Discover() ([]string, error) {
 	if in.FS != nil {
 		if err := fs.WalkDir(in.FS, ".", func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
+				if isSkippableWalkErr(err) {
+					return skipForEntry(d)
+				}
 				return err
 			}
 			return visit(filepath.ToSlash(path), d.IsDir())
@@ -99,6 +117,9 @@ func (in *Ingestor) Discover() ([]string, error) {
 		}
 		if err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
+				if isSkippableWalkErr(err) {
+					return skipForEntry(d)
+				}
 				return err
 			}
 			rel, rerr := filepath.Rel(root, path)
@@ -202,6 +223,28 @@ func (in *Ingestor) LoadPath(path string) (*rules.RuleDocument, error) {
 	}
 	doc.ModTime = modTime
 	return doc, nil
+}
+
+// isSkippableWalkErr reports whether a WalkDir error is the kind we
+// can swallow without losing real signal: permission-denied (common on
+// macOS $HOME), and "not exist" races where a sibling vanishes between
+// stat and read. Anything else propagates so genuine I/O failures
+// surface in CI.
+func isSkippableWalkErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	return errors.Is(err, fs.ErrPermission) || errors.Is(err, fs.ErrNotExist)
+}
+
+// skipForEntry returns the right WalkDir sentinel for a swallowed
+// error: SkipDir when the entry is a directory (so we skip the whole
+// subtree), nil for files (skip just that one).
+func skipForEntry(d fs.DirEntry) error {
+	if d != nil && d.IsDir() {
+		return fs.SkipDir
+	}
+	return nil
 }
 
 // matchPattern matches a path against a glob that supports "*" and "**".

@@ -53,6 +53,9 @@ func ConsumptionFor(ctx context.Context, r EventReader, provider string, now tim
 	weekCutoff := now.Add(-7 * 24 * time.Hour)
 	var out Consumption
 	for _, env := range envs {
+		if isExcludedSource(env.Source) {
+			continue
+		}
 		p, ok := env.Payload.(*eventschema.PromptEvent)
 		if !ok {
 			continue
@@ -77,6 +80,21 @@ func ConsumptionFor(ctx context.Context, r EventReader, provider string, now tim
 	return out, nil
 }
 
+// DefaultExcludedSources matches analytics.DefaultExcludedSources so
+// plan-based consumption surfaces stay in lockstep with the broader
+// rollup story. Kept duplicated here to avoid pulling analytics into
+// the plans package (layering rule).
+var DefaultExcludedSources = []string{"demo"}
+
+func isExcludedSource(s string) bool {
+	for _, ex := range DefaultExcludedSources {
+		if s == ex {
+			return true
+		}
+	}
+	return false
+}
+
 // ConsumptionInWindow tallies plan-included PromptEvents for the given
 // provider over the trailing `window`. Window <= 0 returns a zero
 // report — callers should branch on Plan.RateLimitWindow > 0 before
@@ -93,6 +111,9 @@ func ConsumptionInWindow(ctx context.Context, r EventReader, provider string, no
 		return out, err
 	}
 	for _, env := range envs {
+		if isExcludedSource(env.Source) {
+			continue
+		}
 		p, ok := env.Payload.(*eventschema.PromptEvent)
 		if !ok {
 			continue

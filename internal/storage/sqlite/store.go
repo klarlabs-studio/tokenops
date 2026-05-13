@@ -315,6 +315,50 @@ SELECT
 FROM events
 `
 
+// CountBySource returns event counts grouped by the source column,
+// optionally constrained to a since/until window. NULL sources are
+// returned under the "(none)" bucket so dashboards can distinguish
+// "real proxy traffic missing its label" from "MCP-session ping".
+// Used by tokenops_data_sources and `tokenops_status.data_sources`
+// so operators can see real-vs-synthetic ratios at a glance.
+func (s *Store) CountBySource(ctx context.Context, since, until time.Time) (map[string]int64, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("sqlite: store not initialised")
+	}
+	var (
+		conds []string
+		args  []any
+	)
+	if !since.IsZero() {
+		conds = append(conds, "timestamp_ns >= ?")
+		args = append(args, since.UTC().UnixNano())
+	}
+	if !until.IsZero() {
+		conds = append(conds, "timestamp_ns < ?")
+		args = append(args, until.UTC().UnixNano())
+	}
+	q := "SELECT COALESCE(NULLIF(source, ''), '(none)') AS src, COUNT(*) FROM events"
+	if len(conds) > 0 {
+		q += " WHERE " + strings.Join(conds, " AND ")
+	}
+	q += " GROUP BY src ORDER BY 2 DESC"
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: count-by-source: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]int64{}
+	for rows.Next() {
+		var src string
+		var n int64
+		if err := rows.Scan(&src, &n); err != nil {
+			return nil, err
+		}
+		out[src] = n
+	}
+	return out, rows.Err()
+}
+
 // buildDSN assembles a modernc.org/sqlite DSN with sane defaults: WAL
 // journaling, NORMAL synchronous, 5-second busy timeout, foreign keys on.
 // The ":memory:" sentinel is special-cased (no path resolution).

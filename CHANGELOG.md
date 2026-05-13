@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### Added
+
+- **Demo data isolation**: synthetic events seeded by `tokenops demo`
+  are now excluded from every default analytics surface (`spend
+  summary`, `top consumers`, `burn rate`, `forecast`, plan headroom +
+  session budget). Opt back in with `include_demo: true` on the MCP
+  tool input. `analytics.DefaultExcludedSources` is the single source
+  of truth; pass `ExcludeSources: []string{}` to bypass.
+- **`tokenops_data_sources` MCP tool**: groups events by source
+  column (`proxy`, `mcp-session`, `demo`, `otlp`, …) so operators see
+  at a glance whether headroom + spend math run on real or seeded
+  data.
+- **MCP session middleware**: every `tools/call` request increments
+  `session.Tracker` regardless of which handler runs. Replaces the
+  per-tool Record sites in `plan_headroom` / `session_budget` so the
+  window-count signal is uniform across the surface.
+- **`tokenops_help` MCP tool**: 6-category curated index (setup,
+  session, cost, workflows, rules, debug) so agents and operators
+  can navigate the 20+ tool surface without enumerating
+  `tools/list`.
+
+### Fixed
+
+- **Rules walker**: `filepath.WalkDir` callback now tolerates
+  `fs.ErrPermission` (skips the offending subtree / file) and
+  `fs.ErrNotExist` (race between dir-listing and stat).
+  `tokenops rules analyze --root ~/.claude` no longer aborts with
+  `permission denied` from `~/Library/Saved Application State` and
+  friends. Skip list extended to Library/Containers/.Trash.
+
 ## 0.7.1 - 2026-05-13
 
 ### Fixed

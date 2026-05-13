@@ -137,7 +137,13 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if err := mcp.RegisterPlanTools(srv, planDeps); err != nil {
 		return fmt.Errorf("register plan tools: %w", err)
 	}
+	if err := mcp.RegisterHelpTool(srv); err != nil {
+		return fmt.Errorf("register help tool: %w", err)
+	}
+	if err := mcp.RegisterDataSourcesTool(srv, mcp.DataSourcesDeps{Store: components.Store}); err != nil {
+		return fmt.Errorf("register data sources tool: %w", err)
+	}
 
 	logger.Info("tokenops serve ready", "version", version.Version)
-	return mcp.ServeStdio(ctx, srv)
+	return mcp.ServeStdio(ctx, srv, mcp.SessionMiddleware(tracker, sessionProvider))
 }

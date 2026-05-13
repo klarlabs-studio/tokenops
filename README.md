@@ -189,7 +189,17 @@ path on a dev machine.
 After setting a plan, reload your MCP server (Claude Code: `/mcp` then
 reconnect). The MCP-side session observer counts your activity against
 the plan's rate-limit window. Agents can call `tokenops_session_budget`
-mid-conversation to find out whether they're about to hit the cap. Then
+mid-conversation to find out whether they're about to hit the cap.
+
+### Demo data isolation
+
+`tokenops demo` writes synthetic `PromptEvent`s tagged with
+`source=demo`. Every default analytics rollup (`spend`, `burn rate`,
+`top consumers`, `forecast`, plan headroom, session budget) filters
+them out so first-run exploration never contaminates production
+numbers. Pass `include_demo: true` on the MCP tool input — or call
+`tokenops_data_sources` — to see the synthetic breakdown alongside
+real traffic. Then
 `tokenops plan headroom` (and the `tokenops_plan_headroom` MCP tool)
 return month-to-date consumption and overage risk. See
 [docs/plan-cost-model.md](docs/plan-cost-model.md) for the supported

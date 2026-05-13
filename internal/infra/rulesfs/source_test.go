@@ -1,6 +1,7 @@
 package rulesfs
 
 import (
+	"io/fs"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -51,6 +52,72 @@ func TestIngestorSnapshotInMemory(t *testing.T) {
 				t.Errorf("CLAUDE.md source = %q, want claude_md", d.Source)
 			}
 		}
+	}
+}
+
+// permissionDeniedFS wraps a MapFS and pretends one subtree is locked
+// down with EACCES, mirroring macOS `~/Library/Saved Application
+// State/*` semantics that crashed the walker before the fix. Open on
+// the protected prefix returns fs.ErrPermission; everything else
+// flows through to the underlying map.
+type permissionDeniedFS struct {
+	base   fstest.MapFS
+	denied string
+}
+
+func (p permissionDeniedFS) Open(name string) (fs.File, error) {
+	if strings.HasPrefix(name, p.denied) {
+		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrPermission}
+	}
+	return p.base.Open(name)
+}
+
+func (p permissionDeniedFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	if strings.HasPrefix(name, p.denied) && name != p.denied {
+		return nil, &fs.PathError{Op: "readdir", Path: name, Err: fs.ErrPermission}
+	}
+	entries, err := p.base.ReadDir(name)
+	if err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
+func TestIngestorTolersPermissionDeniedSibling(t *testing.T) {
+	memFS := fstest.MapFS{
+		".claude/CLAUDE.md":  {Data: []byte("# Rules\nbody\n")},
+		"locked/secret":      {Data: []byte("denied\n")},
+		"locked/nested/leaf": {Data: []byte("denied\n")},
+	}
+	fsys := permissionDeniedFS{base: memFS, denied: "locked"}
+	in := &Ingestor{FS: fsys, RepoID: "test"}
+	paths, err := in.Discover()
+	if err != nil {
+		t.Fatalf("Discover should swallow EACCES, got %v", err)
+	}
+	// Discovery should still find the .claude/CLAUDE.md leaf even
+	// though the sibling subtree is unreadable. .claude matches the
+	// hidden-dir skip path so the file inside is NOT discovered;
+	// what we're proving is the WALK didn't abort.
+	if len(paths) != 0 && paths[0] != ".claude/CLAUDE.md" {
+		t.Errorf("paths = %v", paths)
+	}
+}
+
+func TestIngestorSkipsLibraryTrees(t *testing.T) {
+	memFS := fstest.MapFS{
+		"CLAUDE.md":                             {Data: []byte("# Rules\nbody\n")},
+		"Library/State/CLAUDE.md":               {Data: []byte("ignored\n")},
+		"Containers/com.app/CLAUDE.md":          {Data: []byte("ignored\n")},
+		"Saved Application State/foo/CLAUDE.md": {Data: []byte("ignored\n")},
+	}
+	in := &Ingestor{FS: memFS, RepoID: "test"}
+	paths, err := in.Discover()
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(paths) != 1 || paths[0] != "CLAUDE.md" {
+		t.Errorf("paths = %v, want [CLAUDE.md] (Library/Containers trees must be skipped)", paths)
 	}
 }
 

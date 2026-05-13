@@ -124,3 +124,9 @@ Most LLM subscriptions (Claude Max 5x/20x, Claude Pro, ChatGPT Plus/Team) publis
 Three-skill review converged: TokenOps targets wrong consumption surface (proxy traffic, but plan-based users go through Claude Code / Cursor MCP) and forces JSON-editing for config (Plans, Providers, Rules, OTel). The wedge bet is MCP-resident session observability + a config-as-code CLI primitive that replaces every text-edit-then-restart ritual. Ships: tokenops <subsystem> set verb pattern, MCP-side session traffic observer that counts Claude Code / Cursor MCP calls against plan windows, tokenops_session_budget MCP tool predicting next-2h headroom, structured error hints carrying exact next commands, customer-research scaffolding (interview script + tracker doc). Skips proxy work, optimizer expansion, dashboard polish until the wedge validates with 5 real users.
 
 ---
+
+## Data Isolation + Surface Polish
+
+Five gaps surfaced from the full v0.7.1 demo. (1) Rules walker bails on permission-denied siblings under $HOME so analyze/conflicts/inject return null even when CLAUDE.md exists — pre-existing in-progress task. (2) Synthetic demo events mix with real proxy/MCP-session events in every analytics query; need source-tagging filter + a `--include-demo` opt-in. (3) Only plan_headroom + session_budget self-record session pings; the other 20 MCP tools don't, biasing the window count. Auto-wrap at registration so every tool call records. (4) 22 MCP tools surface flat with no curation; add tokenops_help that returns a "start here" subset. (5) Status/scorecard should expose real_vs_seeded counts so operators see signal vs synthetic ratio. Skips vendor /usage ingestion (waits for customer-discovery interview data).
+
+---

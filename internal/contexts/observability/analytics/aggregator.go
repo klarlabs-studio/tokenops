@@ -68,14 +68,37 @@ func (g Group) column() string {
 
 // Filter narrows the events the aggregator considers. Empty fields are
 // not constrained.
+//
+// ExcludeSources gates the synthetic / demo / replay surfaces. nil
+// means "apply DefaultExcludedSources" (drops `demo` so seeded data
+// stays out of operator-facing rollups). An empty non-nil slice means
+// "include every source"; callers pass that when they explicitly want
+// to see synthetic data alongside real traffic.
 type Filter struct {
-	EventType  eventschema.EventType
-	Provider   string
-	Model      string
-	WorkflowID string
-	AgentID    string
-	Since      time.Time
-	Until      time.Time
+	EventType      eventschema.EventType
+	Provider       string
+	Model          string
+	WorkflowID     string
+	AgentID        string
+	Since          time.Time
+	Until          time.Time
+	ExcludeSources []string
+}
+
+// DefaultExcludedSources is applied by every analytics + plan query
+// unless the caller passes a non-nil ExcludeSources slice. Demo events
+// land here so `tokenops demo` no longer contaminates production-facing
+// numbers; opt back in via `--include-demo` / `include_demo: true`.
+var DefaultExcludedSources = []string{"demo"}
+
+// resolveExcludeSources returns the operative exclude list for a
+// Filter: caller-supplied slice when set (including empty for "show
+// everything"), the package default otherwise.
+func resolveExcludeSources(f Filter) []string {
+	if f.ExcludeSources == nil {
+		return DefaultExcludedSources
+	}
+	return f.ExcludeSources
 }
 
 // Row is one (bucket, group-key) cell of an aggregate.
@@ -327,6 +350,14 @@ func buildConditions(f Filter) ([]string, []any) {
 	if !f.Until.IsZero() {
 		conds = append(conds, "timestamp_ns < ?")
 		args = append(args, f.Until.UTC().UnixNano())
+	}
+	if excludes := resolveExcludeSources(f); len(excludes) > 0 {
+		placeholders := make([]string, len(excludes))
+		for i, s := range excludes {
+			placeholders[i] = "?"
+			args = append(args, s)
+		}
+		conds = append(conds, "(source IS NULL OR source NOT IN ("+strings.Join(placeholders, ", ")+"))")
 	}
 	return conds, args
 }

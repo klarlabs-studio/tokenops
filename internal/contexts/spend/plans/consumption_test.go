@@ -93,6 +93,33 @@ func TestConsumptionInWindowCountsRecentMessagesOnly(t *testing.T) {
 	}
 }
 
+func TestConsumptionDropsDemoSource(t *testing.T) {
+	now := time.Date(2026, time.May, 15, 12, 0, 0, 0, time.UTC)
+	// Two plan-included events for the same provider; one is tagged
+	// Source="demo" (from `tokenops demo`) and must NOT count.
+	demo := envAt(now.Add(-1*time.Hour), "anthropic", 1000, eventschema.CostSourcePlanIncluded)
+	demo.Source = "demo"
+	real := envAt(now.Add(-1*time.Hour), "anthropic", 500, eventschema.CostSourcePlanIncluded)
+	real.Source = "mcp-session"
+	r := fakeReader{envs: []*eventschema.Envelope{demo, real}}
+
+	got, err := ConsumptionFor(context.Background(), r, "anthropic", now)
+	if err != nil {
+		t.Fatalf("ConsumptionFor: %v", err)
+	}
+	if got.ConsumedTokens != 500 {
+		t.Errorf("ConsumedTokens=%d want 500 (demo dropped)", got.ConsumedTokens)
+	}
+
+	win, err := ConsumptionInWindow(context.Background(), r, "anthropic", now, 5*time.Hour)
+	if err != nil {
+		t.Fatalf("ConsumptionInWindow: %v", err)
+	}
+	if win.MessagesInWindow != 1 {
+		t.Errorf("MessagesInWindow=%d want 1 (demo dropped)", win.MessagesInWindow)
+	}
+}
+
 func TestConsumptionInWindowZeroDurationReturnsEmpty(t *testing.T) {
 	now := time.Date(2026, time.May, 15, 12, 0, 0, 0, time.UTC)
 	r := fakeReader{envs: []*eventschema.Envelope{
