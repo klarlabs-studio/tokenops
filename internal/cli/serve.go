@@ -95,6 +95,11 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if cfgErr != nil {
 		logger.Warn("serve: could not load config snapshot", "err", cfgErr)
 	}
+	configPath, _ := defaultConfigPath()
+	var watcher *configWatcher
+	if cfgErr == nil {
+		watcher = newConfigWatcher(ctx, configPath, cfg, logger)
+	}
 	var configJSON json.RawMessage
 	if cfgErr == nil {
 		if data, sErr := cfg.Snapshot(); sErr == nil {
@@ -133,6 +138,9 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	planDeps := mcp.PlanDeps{Store: components.Store, Tracker: tracker, Provider: sessionProvider}
 	if cfgErr == nil {
 		planDeps.Config = &cfg
+		if watcher != nil {
+			planDeps.ConfigGetter = watcher.Get
+		}
 	}
 	if err := mcp.RegisterPlanTools(srv, planDeps); err != nil {
 		return fmt.Errorf("register plan tools: %w", err)

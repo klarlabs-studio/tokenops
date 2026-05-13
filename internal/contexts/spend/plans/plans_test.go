@@ -71,3 +71,37 @@ func TestValidateAcceptsKnown(t *testing.T) {
 		t.Errorf("Validate(claude-max-20x) returned %v", err)
 	}
 }
+
+func TestResolveAliasMapsClaudeMax(t *testing.T) {
+	modern, aliased := ResolveAlias("claude-max")
+	if !aliased {
+		t.Fatal("claude-max should resolve to a modern name")
+	}
+	if modern != "claude-max-20x" {
+		t.Errorf("modern=%q want claude-max-20x", modern)
+	}
+}
+
+func TestLookupFollowsAlias(t *testing.T) {
+	p, ok := Lookup("claude-max")
+	if !ok {
+		t.Fatal("Lookup must accept deprecated alias")
+	}
+	if p.Name != "claude-max-20x" {
+		t.Errorf("aliased lookup returned %q want claude-max-20x", p.Name)
+	}
+}
+
+func TestValidateAcceptsAlias(t *testing.T) {
+	if err := Validate("claude-max"); err != nil {
+		t.Errorf("Validate should accept deprecated alias: %v", err)
+	}
+}
+
+func TestEveryAliasResolvesToCatalogEntry(t *testing.T) {
+	for alias, modern := range deprecatedAliases {
+		if _, ok := catalog[modern]; !ok {
+			t.Errorf("alias %q maps to missing catalog entry %q", alias, modern)
+		}
+	}
+}

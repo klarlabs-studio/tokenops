@@ -30,6 +30,12 @@ type HeadroomReport struct {
 	WindowResetsAt time.Time `json:"window_resets_at,omitempty"`
 	WindowResetsIn string    `json:"window_resets_in,omitempty"`
 
+	// SignalQuality types the trust the operator can place in this
+	// report. When the report is built from MCP-ping activity only,
+	// Level is "low" and the Caveat tells the consumer to treat it as
+	// an activity proxy, not a quota meter. See ClassifySignal.
+	SignalQuality SignalQuality `json:"signal_quality"`
+
 	// Note explains the report when the math falls through to a
 	// special case — quota not published, insufficient burn history,
 	// already past the cap. Empty when the headline numbers are
@@ -61,6 +67,10 @@ type HeadroomInputs struct {
 	// within Plan.RateLimitWindow. Drives the window-based headroom
 	// metrics; zero is a valid "no traffic yet" reading.
 	WindowMessages int64
+	// Signal is the observation triple ClassifySignal needs to assign
+	// a trust level. Zero value is valid: defaults to the most
+	// pessimistic reading (MCP-pings only, low quality).
+	Signal SignalInputs
 	// Now is the clock reference. Tests inject a fixed time; production
 	// passes time.Now().UTC().
 	Now time.Time
@@ -89,6 +99,7 @@ func computeHeadroomFor(p Plan, in HeadroomInputs) HeadroomReport {
 		QuotaTokens:    p.InputTokensPerMonth + p.OutputTokensPerMonth,
 		ConsumedTokens: in.ConsumedTokens,
 		OverageRisk:    RiskUnknown,
+		SignalQuality:  ClassifySignal(in.Signal),
 	}
 
 	// Rolling-window headroom (Claude Max 5h, ChatGPT Plus 3h). This

@@ -24,7 +24,11 @@ type SessionBudget struct {
 	HeadroomUntilCap  int64   `json:"headroom_until_cap"`
 	Confidence        string  `json:"confidence"`
 	RecommendedAction string  `json:"recommended_action"`
-	Note              string  `json:"note,omitempty"`
+	// SignalQuality types the trust the operator can place in this
+	// prediction. Level=low means the math runs on MCP-ping activity
+	// only; the Caveat explains. ClassifySignal computes it.
+	SignalQuality SignalQuality `json:"signal_quality"`
+	Note          string        `json:"note,omitempty"`
 
 	windowResetsInDur   time.Duration
 	willHitCapWithinDur time.Duration
@@ -54,7 +58,11 @@ type SessionBudgetInputs struct {
 	WindowMessages int64
 	RecentMessages int64
 	RecentWindow   time.Duration
-	Now            time.Time
+	// Signal is the observation triple ClassifySignal needs to assign
+	// a trust level. Zero value defaults to the most pessimistic
+	// reading (MCP-pings only, low quality).
+	Signal SignalInputs
+	Now    time.Time
 }
 
 // ComputeSessionBudget returns a SessionBudget for the named plan from
@@ -75,6 +83,7 @@ func ComputeSessionBudget(planName string, in SessionBudgetInputs) (SessionBudge
 		windowResetsInDur: p.RateLimitWindow,
 		Confidence:        ConfidenceLow,
 		RecommendedAction: ActionUnknown,
+		SignalQuality:     ClassifySignal(in.Signal),
 	}
 	if p.RateLimitWindow <= 0 || p.MessagesPerWindow <= 0 {
 		out.Note = "plan publishes no concrete rate-limit cap; budget signal unavailable"

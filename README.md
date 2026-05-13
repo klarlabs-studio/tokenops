@@ -186,10 +186,21 @@ YAML and `TOKENOPS_PLAN_<PROVIDER>` env overrides still work for
 declarative deployments, but `tokenops plan set` is the recommended
 path on a dev machine.
 
-After setting a plan, reload your MCP server (Claude Code: `/mcp` then
-reconnect). The MCP-side session observer counts your activity against
-the plan's rate-limit window. Agents can call `tokenops_session_budget`
-mid-conversation to find out whether they're about to hit the cap.
+After setting a plan, your MCP server hot-reloads the config within a
+few seconds — no reconnect needed. The MCP-side session observer counts
+your activity against the plan's rate-limit window. Agents can call
+`tokenops_session_budget` mid-conversation to find out whether they're
+about to hit the cap.
+
+The response always carries a `signal_quality` field:
+
+- `level: low, source: mcp_tool_pings` — heuristic only. TokenOps sees
+  MCP traffic, not your raw Claude conversation turns. Wire the proxy
+  for full coverage.
+- `level: medium, source: proxy_traffic` — partial proxy coverage.
+- `level: high, source: proxy_traffic` — every request observed.
+
+Treat low-quality responses as an activity proxy, not a quota meter.
 
 ### Demo data isolation
 

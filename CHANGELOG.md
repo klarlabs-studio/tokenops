@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+### Added
+
+- **`signal_quality` on every session_budget and plan_headroom**:
+  closed-set `level` (low|medium|high), `source`
+  (mcp_tool_pings|proxy_traffic|vendor_usage_api), one-sentence
+  `caveat`, and `upgrade_paths` so callers see exactly how trustworthy
+  the underlying number is. Default response leads with
+  `level: low, source: mcp_tool_pings` and a disclaimer.
+- **Empty-state scorecard**: when no KPI has real-data backing, the
+  scorecard returns `OverallGrade: warming_up` plus a 3-step
+  activation checklist instead of a misleading `F`. CLI text
+  renderer special-cases the warming-up state.
+- **Data-warning banner on cost/headroom responses**: when synthetic
+  events make up more than 10% of the queried window,
+  `tokenops_spend_summary` / `tokenops_plan_headroom` /
+  `tokenops_session_budget` attach a `data_warning` object with the
+  ratio, real/demo counts, and the exact reset command.
+- **Hot-reload on `tokenops plan set`**: `tokenops serve` polls the
+  resolved config path every 2 seconds and swaps the snapshot
+  atomically on mtime change. `PlanDeps.ConfigGetter` plumbs the
+  live snapshot to every plan tool — operators no longer need to
+  reconnect their MCP host after `tokenops plan set`.
+- **Catalog-alias migration shim**: `plans.ResolveAlias` maps
+  retired catalog names to modern entries. `tokenops plan set
+  claude-max` prints `renamed claude-max -> claude-max-20x` and
+  writes the modern name. Stale docs / blog posts keep working.
+- **Launch plan + tracker docs**:
+  `docs/launch-plan.md` (Loom script, Show HN post, Discord posts,
+  founder-DM template, success criteria) and
+  `docs/launch-tracker.md` (10-row tracker, per-call notes,
+  synthesis rubric, negative-signal log) so the maintainer can run
+  the GTM cycle from a single doc.
+
 ## 0.8.1 - 2026-05-13
 
 ### Fixed

@@ -67,6 +67,7 @@ func Build(ctx context.Context, params BuildParams) *Scorecard {
 		params.ClockNow = time.Now
 	}
 	fvt, teu, sac := DefaultFVTSeconds, DefaultTEUPct, DefaultSACPct
+	var anyComputed bool
 
 	dbPath := params.DBPath
 	if dbPath == "" {
@@ -84,12 +85,15 @@ func Build(ctx context.Context, params BuildParams) *Scorecard {
 				if kpis, err := Compute(storeCtx, sqliteReader{store: store}, since); err == nil {
 					if kpis.FVTComputed {
 						fvt = kpis.FVTSeconds
+						anyComputed = true
 					}
 					if kpis.TEUComputed {
 						teu = kpis.TokenEfficiency
+						anyComputed = true
 					}
 					if kpis.SACComputed {
 						sac = kpis.SpendAttribution
+						anyComputed = true
 					}
 				}
 			}
@@ -97,12 +101,18 @@ func Build(ctx context.Context, params BuildParams) *Scorecard {
 	}
 	if params.FVTSecondsOverride > 0 {
 		fvt = params.FVTSecondsOverride
+		anyComputed = true
 	}
 	if params.TEUPctOverride > 0 {
 		teu = params.TEUPctOverride
+		anyComputed = true
 	}
 	if params.SACPctOverride > 0 {
 		sac = params.SACPctOverride
+		anyComputed = true
+	}
+	if !anyComputed {
+		return NewWarmingUp(params.BaselineRef)
 	}
 	return New(fvt, teu, sac, params.BaselineRef)
 }
@@ -119,28 +129,38 @@ func BuildFromStore(ctx context.Context, store *sqlite.Store, params BuildParams
 		params.ClockNow = time.Now
 	}
 	fvt, teu, sac := DefaultFVTSeconds, DefaultTEUPct, DefaultSACPct
+	var anyComputed bool
 	if store != nil {
 		since := params.ClockNow().Add(-time.Duration(params.SinceDays) * 24 * time.Hour)
 		if kpis, err := Compute(ctx, sqliteReader{store: store}, since); err == nil {
 			if kpis.FVTComputed {
 				fvt = kpis.FVTSeconds
+				anyComputed = true
 			}
 			if kpis.TEUComputed {
 				teu = kpis.TokenEfficiency
+				anyComputed = true
 			}
 			if kpis.SACComputed {
 				sac = kpis.SpendAttribution
+				anyComputed = true
 			}
 		}
 	}
 	if params.FVTSecondsOverride > 0 {
 		fvt = params.FVTSecondsOverride
+		anyComputed = true
 	}
 	if params.TEUPctOverride > 0 {
 		teu = params.TEUPctOverride
+		anyComputed = true
 	}
 	if params.SACPctOverride > 0 {
 		sac = params.SACPctOverride
+		anyComputed = true
+	}
+	if !anyComputed {
+		return NewWarmingUp(params.BaselineRef)
 	}
 	return New(fvt, teu, sac, params.BaselineRef)
 }

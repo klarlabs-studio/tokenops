@@ -17,17 +17,48 @@ import (
 // PlanDeps wires the plan-headroom MCP tool. Config supplies the
 // configured plans map; Store backs consumption queries; Tracker
 // records the MCP-side activity ping so headroom math reflects
-// real usage even without a proxy.
+// real usage even without a proxy. ConfigGetter, when set, takes
+// precedence over Config so callers can hot-reload the snapshot
+// without re-registering tools.
 type PlanDeps struct {
-	Config   *config.Config
-	Store    *sqlite.Store
-	Tracker  *session.Tracker
-	Provider eventschema.Provider
+	Config       *config.Config
+	ConfigGetter func() *config.Config
+	Store        *sqlite.Store
+	Tracker      *session.Tracker
+	Provider     eventschema.Provider
+}
+
+// activeConfig returns the live Config snapshot: prefers ConfigGetter
+// (hot-reload aware) and falls back to the static Config pointer for
+// callers that don't wire a watcher.
+func (d PlanDeps) activeConfig() *config.Config {
+	if d.ConfigGetter != nil {
+		return d.ConfigGetter()
+	}
+	return d.Config
 }
 
 // planStoreReader adapts *sqlite.Store to plans.EventReader without
 // dragging the sqlite dependency into the domain package.
 type planStoreReader struct{ store *sqlite.Store }
+
+// classifySignalFromStore reads CountBySource over the headroom window
+// and feeds proxy + mcp-session counts into the domain classifier so
+// every response carries an honest trust level. Vendor /usage isn't
+// wired yet so VendorAPIWired stays false.
+func classifySignalFromStore(ctx context.Context, store *sqlite.Store, since, until time.Time) (plans.SignalInputs, error) {
+	if store == nil {
+		return plans.SignalInputs{}, nil
+	}
+	counts, err := store.CountBySource(ctx, since, until)
+	if err != nil {
+		return plans.SignalInputs{}, err
+	}
+	return plans.SignalInputs{
+		ProxyEventsInWindow: counts["proxy"],
+		MCPPingsInWindow:    counts["mcp-session"],
+	}, nil
+}
 
 func (r planStoreReader) ReadEvents(ctx context.Context, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
 	return r.store.Query(ctx, sqlite.Filter{Type: t, Since: since, Limit: 100_000})
@@ -59,7 +90,8 @@ func RegisterPlanTools(s *Server, d PlanDeps) error {
 }
 
 func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
-	if d.Config == nil || len(d.Config.Plans) == 0 {
+	cfg := d.activeConfig()
+	if cfg == nil || len(cfg.Plans) == 0 {
 		return jsonString(map[string]string{
 			"error": "plans_unconfigured",
 			"hint":  "run `tokenops plan set <provider> <plan>` (e.g. `tokenops plan set anthropic claude-max-20x`), then reload your MCP server",
@@ -73,8 +105,8 @@ func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
 	}
 	reader := planStoreReader{store: d.Store}
 	now := time.Now().UTC()
-	budgets := make([]plans.SessionBudget, 0, len(d.Config.Plans))
-	for provider, planName := range d.Config.Plans {
+	budgets := make([]plans.SessionBudget, 0, len(cfg.Plans))
+	for provider, planName := range cfg.Plans {
 		p, ok := plans.Lookup(planName)
 		if !ok || p.RateLimitWindow <= 0 {
 			continue
@@ -87,10 +119,15 @@ func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("recent[%s]: %w", provider, err)
 		}
+		signal, err := classifySignalFromStore(ctx, d.Store, now.Add(-p.RateLimitWindow), now)
+		if err != nil {
+			return "", fmt.Errorf("signal[%s]: %w", provider, err)
+		}
 		budget, err := plans.ComputeSessionBudget(planName, plans.SessionBudgetInputs{
 			WindowMessages: windowCons.MessagesInWindow,
 			RecentMessages: recentCons.MessagesInWindow,
 			RecentWindow:   30 * time.Minute,
+			Signal:         signal,
 			Now:            now,
 		})
 		if err != nil {
@@ -98,7 +135,11 @@ func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
 		}
 		budgets = append(budgets, budget)
 	}
-	out, err := json.MarshalIndent(map[string]any{"budgets": budgets}, "", "  ")
+	payload := map[string]any{"budgets": budgets}
+	if warn, err := maybeDataWarning(ctx, d.Store, time.Time{}, now); err == nil && warn != nil {
+		payload["data_warning"] = warn
+	}
+	out, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
 		return "", err
 	}
@@ -106,7 +147,8 @@ func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
 }
 
 func planHeadroom(ctx context.Context, d PlanDeps) (string, error) {
-	if d.Config == nil || len(d.Config.Plans) == 0 {
+	cfg := d.activeConfig()
+	if cfg == nil || len(cfg.Plans) == 0 {
 		return jsonString(map[string]string{
 			"error": "plans_unconfigured",
 			"hint":  "run `tokenops plan set <provider> <plan>` (e.g. `tokenops plan set anthropic claude-max-20x`), then reload your MCP server",
@@ -120,8 +162,8 @@ func planHeadroom(ctx context.Context, d PlanDeps) (string, error) {
 	}
 	reader := planStoreReader{store: d.Store}
 	now := time.Now().UTC()
-	reports := make([]plans.HeadroomReport, 0, len(d.Config.Plans))
-	for provider, planName := range d.Config.Plans {
+	reports := make([]plans.HeadroomReport, 0, len(cfg.Plans))
+	for provider, planName := range cfg.Plans {
 		cons, err := plans.ConsumptionFor(ctx, reader, provider, now)
 		if err != nil {
 			return "", fmt.Errorf("consumption[%s]: %w", provider, err)
@@ -137,6 +179,11 @@ func planHeadroom(ctx context.Context, d PlanDeps) (string, error) {
 				return "", fmt.Errorf("window[%s]: %w", provider, err)
 			}
 			inputs.WindowMessages = win.MessagesInWindow
+			signal, err := classifySignalFromStore(ctx, d.Store, now.Add(-p.RateLimitWindow), now)
+			if err != nil {
+				return "", fmt.Errorf("signal[%s]: %w", provider, err)
+			}
+			inputs.Signal = signal
 		}
 		report, err := plans.ComputeHeadroom(planName, inputs)
 		if err != nil {
@@ -144,7 +191,11 @@ func planHeadroom(ctx context.Context, d PlanDeps) (string, error) {
 		}
 		reports = append(reports, report)
 	}
-	out, err := json.MarshalIndent(map[string]any{"reports": reports}, "", "  ")
+	payload := map[string]any{"reports": reports}
+	if warn, err := maybeDataWarning(ctx, d.Store, time.Time{}, now); err == nil && warn != nil {
+		payload["data_warning"] = warn
+	}
+	out, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
 		return "", err
 	}

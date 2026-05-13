@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 )
 
@@ -50,6 +51,41 @@ type Scorecard struct {
 	SpendAttribution KPIResult `json:"spend_attribution_completeness"`
 	OverallGrade     Grade     `json:"overall_grade"`
 	BaselineRef      string    `json:"baseline_ref,omitempty"`
+	// Checklist is populated only when no KPI was computed from real
+	// data. Renderers should show the checklist instead of an F grade
+	// — defaulted KPIs are not a verdict on the operator.
+	Checklist []ChecklistItem `json:"checklist,omitempty"`
+}
+
+// ChecklistItem is one step in the first-week activation path the
+// scorecard renders when no real telemetry exists yet. Order is
+// significant: render in slice order.
+type ChecklistItem struct {
+	Description string `json:"description"`
+	NextAction  string `json:"next_action"`
+	Completed   bool   `json:"completed"`
+}
+
+// GradeWarmingUp is the synthetic grade used when no KPI has real
+// data backing it. Renderers special-case this to skip the F.
+const GradeWarmingUp Grade = "warming_up"
+
+// FirstWeekChecklist is the canonical activation ladder shown when
+// LiveKPIs has nothing computed. Operators reading the scorecard with
+// an empty store see "what to do next", not a verdict.
+var FirstWeekChecklist = []ChecklistItem{
+	{
+		Description: "Configure at least one provider URL so requests flow through the local proxy",
+		NextAction:  "tokenops provider set anthropic https://api.anthropic.com",
+	},
+	{
+		Description: "Bind your subscription plan so headroom math sees real activity",
+		NextAction:  "tokenops plan set anthropic claude-max-20x",
+	},
+	{
+		Description: "Accumulate 7 days of attributed events for spend forecasting",
+		NextAction:  "use the agent normally; metrics warm up automatically",
+	},
 }
 
 var DefaultThresholds = struct {
@@ -117,6 +153,22 @@ func gradeSAC(pct float64) Grade {
 	return gradeValue(pct, DefaultThresholds.SpendAttribution, true)
 }
 
+// NewWarmingUp returns a Scorecard variant for the empty-data case:
+// every KPI is omitted, OverallGrade is GradeWarmingUp, and the
+// Checklist points the operator at the next-action commands. Used by
+// Build/BuildFromStore when no KPI was computed from real telemetry
+// — defaulted KPIs are not a verdict.
+func NewWarmingUp(baselineRef string) *Scorecard {
+	cl := make([]ChecklistItem, len(FirstWeekChecklist))
+	copy(cl, FirstWeekChecklist)
+	return &Scorecard{
+		GeneratedAt:  time.Now().UTC(),
+		OverallGrade: GradeWarmingUp,
+		BaselineRef:  baselineRef,
+		Checklist:    cl,
+	}
+}
+
 func New(fvtSeconds, teuPct, sacPct float64, baselineRef string) *Scorecard {
 	fvt := KPIResult{
 		Name:        "First Value Time (FVT)",
@@ -158,6 +210,20 @@ func (s *Scorecard) MarshalJSON() ([]byte, error) {
 }
 
 func (s *Scorecard) String() string {
+	if s.OverallGrade == GradeWarmingUp {
+		var b strings.Builder
+		fmt.Fprintf(&b, "Operator Wedge KPI Scorecard\nGenerated: %s\n\nScorecard: warming up (no real events observed yet)\n\nFirst-week checklist:\n",
+			s.GeneratedAt.Format(time.RFC3339))
+		for i, item := range s.Checklist {
+			marker := "[ ]"
+			if item.Completed {
+				marker = "[x]"
+			}
+			fmt.Fprintf(&b, "  %s %d. %s\n     run: %s\n", marker, i+1, item.Description, item.NextAction)
+		}
+		fmt.Fprintf(&b, "\nBaseline: %s\n", baselineOrMissing(s.BaselineRef))
+		return b.String()
+	}
 	return fmt.Sprintf(`Operator Wedge KPI Scorecard
 Generated: %s
 

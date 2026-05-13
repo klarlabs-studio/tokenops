@@ -57,6 +57,13 @@ Example:
 			if err := plans.Validate(planName); err != nil {
 				return err
 			}
+			if modern, aliased := plans.ResolveAlias(planName); aliased {
+				fmt.Fprintf(cmd.OutOrStdout(),
+					"renamed %s -> %s (catalog migrated in v0.6.0; using the modern name)\n",
+					planName, modern,
+				)
+				planName = modern
+			}
 			path, err := resolveMutableConfigPath(configPathFlag)
 			if err != nil {
 				return err

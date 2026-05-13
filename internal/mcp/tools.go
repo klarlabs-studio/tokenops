@@ -152,7 +152,7 @@ func spendSummary(ctx context.Context, d Deps, in spendSummaryInput) (string, er
 	if err != nil {
 		return "", err
 	}
-	return jsonString(map[string]any{
+	payload := map[string]any{
 		"window":        in,
 		"requests":      summary.Requests,
 		"input_tokens":  summary.InputTokens,
@@ -160,7 +160,14 @@ func spendSummary(ctx context.Context, d Deps, in spendSummaryInput) (string, er
 		"total_tokens":  summary.TotalTokens,
 		"cost_usd":      summary.CostUSD,
 		"currency":      d.Spend.Currency(),
-	}), nil
+	}
+	if !in.IncludeDemo {
+		warn, werr := maybeDataWarning(ctx, d.Store, filter.Since, filter.Until)
+		if werr == nil && warn != nil {
+			payload["data_warning"] = warn
+		}
+	}
+	return jsonString(payload), nil
 }
 
 func topConsumers(ctx context.Context, d Deps, in topConsumersInput) (string, error) {

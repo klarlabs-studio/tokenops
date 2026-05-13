@@ -157,10 +157,34 @@ var catalog = map[string]Plan{
 	},
 }
 
+// deprecatedAliases maps retired catalog names to the modern entry
+// they should resolve to. Lookup follows the alias and ResolveAlias
+// surfaces the rename so CLI verbs print a deprecation notice instead
+// of an error. Stale docs / blog posts from before the v0.6.0 catalog
+// split keep working.
+var deprecatedAliases = map[string]string{
+	"claude-max": "claude-max-20x",
+}
+
+// ResolveAlias returns the modern catalog name when `name` is a known
+// deprecation, the input string unchanged otherwise. The second return
+// is true only when an alias was applied; callers use it to render a
+// "renamed X -> Y" notice.
+func ResolveAlias(name string) (string, bool) {
+	if modern, ok := deprecatedAliases[name]; ok {
+		return modern, true
+	}
+	return name, false
+}
+
 // Lookup returns the catalog entry for name. ok is false when no such
 // plan is registered — callers should surface the list of valid names
-// (via Names()) so configuration errors are actionable.
+// (via Names()) so configuration errors are actionable. Deprecated
+// aliases are transparently resolved.
 func Lookup(name string) (Plan, bool) {
+	if modern, aliased := ResolveAlias(name); aliased {
+		name = modern
+	}
 	p, ok := catalog[name]
 	return p, ok
 }
@@ -180,9 +204,13 @@ func Names() []string {
 // Validate returns nil when name is registered and a descriptive error
 // listing valid alternatives otherwise. Config validation calls this so
 // a typo in plans.yaml fails Validate() instead of silently falling
-// through to metered cost.
+// through to metered cost. Deprecated aliases pass validation; callers
+// who want the rename hint should call ResolveAlias directly.
 func Validate(name string) error {
 	if _, ok := catalog[name]; ok {
+		return nil
+	}
+	if _, aliased := ResolveAlias(name); aliased {
 		return nil
 	}
 	return fmt.Errorf("unknown plan %q; valid plans: %v", name, Names())
