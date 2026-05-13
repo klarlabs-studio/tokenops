@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.9.3 - 2026-05-13
+
+### Fixed
+
+- Warming-up scorecard JSON drops the empty KPI blocks. Response now
+  contains only `generated_at`, `overall_grade: warming_up`, optional
+  `baseline_ref`, and `checklist`. Dashboards/agents see exactly what
+  they need to render the empty state.
+
 ## 0.9.2 - 2026-05-13
 
 ### Fixed
