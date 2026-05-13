@@ -21,6 +21,7 @@ type demoFlags struct {
 	days        int
 	perDay      int
 	reset       bool
+	resetOnly   bool
 	dryRun      bool
 	seed        uint64
 	plan        string
@@ -45,7 +46,8 @@ Run after tokenops init. Re-run with --reset to clear and reseed.`,
 	cmd.Flags().StringVar(&f.storagePath, "storage-path", "", "override events.db path (defaults to TOKENOPS_STORAGE_PATH or ~/.tokenops/events.db)")
 	cmd.Flags().IntVar(&f.days, "days", 7, "number of days to seed (most recent N)")
 	cmd.Flags().IntVar(&f.perDay, "per-day", 40, "approximate events per day")
-	cmd.Flags().BoolVar(&f.reset, "reset", false, "delete existing events before seeding")
+	cmd.Flags().BoolVar(&f.reset, "reset", false, "delete existing demo events before seeding")
+	cmd.Flags().BoolVar(&f.resetOnly, "reset-only", false, "delete existing demo events and exit without seeding new ones")
 	cmd.Flags().BoolVar(&f.dryRun, "dry-run", false, "report how many events would be seeded without writing")
 	cmd.Flags().Uint64Var(&f.seed, "seed", 1, "deterministic RNG seed so re-runs produce identical fixtures")
 	cmd.Flags().StringVar(&f.plan, "plan", "", "tag PromptEvents with cost_source=plan_included for this plan (e.g. claude-max, gpt-plus); see `tokenops plan catalog`")
@@ -53,6 +55,9 @@ Run after tokenops init. Re-run with --reset to clear and reseed.`,
 }
 
 func runDemo(ctx context.Context, cmd *cobra.Command, f *demoFlags) error {
+	if f.resetOnly {
+		return runDemoResetOnly(ctx, cmd, f)
+	}
 	if f.days <= 0 {
 		return fmt.Errorf("--days must be positive, got %d", f.days)
 	}
@@ -121,6 +126,38 @@ func runDemo(ctx context.Context, cmd *cobra.Command, f *demoFlags) error {
 	fmt.Fprintf(cmd.OutOrStdout(),
 		"seeded %d events (%d prompts + %d optimizations) to %s spanning %d days\nnext: query via `tokenops spend summary --since %dd` or the MCP tools\n",
 		len(envs), prompts, optimizations, path, f.days, f.days,
+	)
+	return nil
+}
+
+// runDemoResetOnly drops every Source=demo row from the event store
+// and exits. Used to clear leftover seeded data without immediately
+// re-seeding — the closest thing to a pure purge without exposing raw
+// SQL to operators. Idempotent: running on a store with no demo rows
+// prints "no demo events to remove" and returns nil.
+func runDemoResetOnly(ctx context.Context, cmd *cobra.Command, f *demoFlags) error {
+	path, err := resolveDemoStoragePath(f.storagePath)
+	if err != nil {
+		return err
+	}
+	store, err := sqlite.Open(ctx, path, sqlite.Options{})
+	if err != nil {
+		return fmt.Errorf("open store: %w", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	res, err := store.DB().ExecContext(ctx, "DELETE FROM events WHERE source = ?", "demo")
+	if err != nil {
+		return fmt.Errorf("delete demo events: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "no demo events to remove")
+		return nil
+	}
+	fmt.Fprintf(cmd.OutOrStdout(),
+		"removed %d demo events from %s\nreal MCP-session and proxy traffic untouched\n",
+		rows, path,
 	)
 	return nil
 }
