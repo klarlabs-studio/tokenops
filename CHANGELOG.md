@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.9.0 - 2026-05-13
+
 ### Added
 
 - **`signal_quality` on every session_budget and plan_headroom**:
