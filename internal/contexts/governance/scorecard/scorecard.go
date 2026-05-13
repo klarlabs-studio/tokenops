@@ -204,7 +204,26 @@ func New(fvtSeconds, teuPct, sacPct float64, baselineRef string) *Scorecard {
 	}
 }
 
+// MarshalJSON renders Scorecard with empty KPI blocks dropped when
+// the overall grade is `warming_up` — consumers see the checklist
+// and nothing else. KPIResult is a value type so omitempty alone
+// can't suppress it; this MarshalJSON hand-builds the wire shape
+// to keep the empty-state JSON tidy.
 func (s *Scorecard) MarshalJSON() ([]byte, error) {
+	if s.OverallGrade == GradeWarmingUp {
+		warm := struct {
+			GeneratedAt  time.Time       `json:"generated_at"`
+			OverallGrade Grade           `json:"overall_grade"`
+			BaselineRef  string          `json:"baseline_ref,omitempty"`
+			Checklist    []ChecklistItem `json:"checklist"`
+		}{
+			GeneratedAt:  s.GeneratedAt,
+			OverallGrade: s.OverallGrade,
+			BaselineRef:  s.BaselineRef,
+			Checklist:    s.Checklist,
+		}
+		return json.MarshalIndent(warm, "", "  ")
+	}
 	type alias Scorecard
 	return json.MarshalIndent((*alias)(s), "", "  ")
 }
