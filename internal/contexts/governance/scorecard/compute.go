@@ -65,10 +65,45 @@ func Compute(ctx context.Context, reader EventReader, since time.Time) (*LiveKPI
 	if err != nil {
 		return nil, err
 	}
+	// Strip synthetic-demo envelopes so KPIs reflect real operator
+	// activity, matching the analytics + plans layers shipped in
+	// v0.8.0. Without this filter, `tokenops demo` would inflate TEU
+	// and SAC every time it's run.
+	prompts = filterExcludedSources(prompts)
+	opts = filterExcludedSources(opts)
 	computeFVT(out, prompts)
 	computeTEU(out, prompts, opts)
 	computeSAC(out, prompts)
 	return out, nil
+}
+
+// defaultExcludedSources mirrors analytics.DefaultExcludedSources +
+// plans.DefaultExcludedSources to keep the wedge surfaces aligned.
+// Duplicated rather than imported to avoid a domain->infrastructure
+// dependency (scorecard is a context package).
+var defaultExcludedSources = []string{"demo"}
+
+func filterExcludedSources(envs []*eventschema.Envelope) []*eventschema.Envelope {
+	if len(envs) == 0 {
+		return envs
+	}
+	out := envs[:0]
+	for _, env := range envs {
+		if env == nil || isExcludedSource(env.Source) {
+			continue
+		}
+		out = append(out, env)
+	}
+	return out
+}
+
+func isExcludedSource(s string) bool {
+	for _, ex := range defaultExcludedSources {
+		if s == ex {
+			return true
+		}
+	}
+	return false
 }
 
 func computeFVT(out *LiveKPIs, prompts []*eventschema.Envelope) {
