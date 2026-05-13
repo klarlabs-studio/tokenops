@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.9.1 - 2026-05-13
+
+### Added
+
+- `tokenops demo --reset-only`: purges `source=demo` events without
+  reseeding. Closes the gap that forced operators into raw SQL when
+  they wanted to clean leftover seeded data. Idempotent.
+
 ## 0.9.0 - 2026-05-13
 
 ### Added
