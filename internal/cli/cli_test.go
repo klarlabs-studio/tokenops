@@ -180,17 +180,20 @@ func TestStatusTextFormat(t *testing.T) {
 	}
 }
 
-func TestStatusErrorsWhenAllFail(t *testing.T) {
+func TestStatusFallsBackWhenDaemonUnreachable(t *testing.T) {
 	prev := statusClient
 	t.Cleanup(func() { SetStatusClient(prev) })
 	SetStatusClient(&fakeDoer{netErr: errors.New("connection refused")})
 
-	_, err := executeRoot(t, "status", "--addr", "127.0.0.1:1")
-	if err == nil {
-		t.Fatal("expected error when daemon unreachable")
+	out, err := executeRoot(t, "status", "--addr", "127.0.0.1:1")
+	if err != nil {
+		t.Fatalf("offline fallback should succeed, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "unreachable") {
-		t.Errorf("error = %q, want mention of 'unreachable'", err)
+	if !strings.Contains(out, "not running") {
+		t.Errorf("output should explain daemon is offline: %s", out)
+	}
+	if !strings.Contains(out, "tokenops start") {
+		t.Errorf("output should suggest `tokenops start`: %s", out)
 	}
 }
 

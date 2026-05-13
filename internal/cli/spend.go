@@ -38,6 +38,7 @@ func newSpendCmd(rf *rootFlags) *cobra.Command {
 		forecastDays  int
 		jsonOut       bool
 		hideSparkline bool
+		includeDemo   bool
 	)
 	cmd := &cobra.Command{
 		Use:   "spend",
@@ -88,6 +89,12 @@ spend within the selected window. It surfaces:
 					return fmt.Errorf("--until: %w", err)
 				}
 				f.Until = until
+			}
+			if includeDemo {
+				// Empty (non-nil) slice opts out of the default exclude
+				// list, surfacing demo + replay sources alongside real
+				// traffic — matches the include_demo MCP tool input.
+				f.ExcludeSources = []string{}
 			}
 
 			spendEng := spend.NewEngine(spend.DefaultTable())
@@ -146,6 +153,7 @@ spend within the selected window. It surfaces:
 	cmd.Flags().IntVar(&forecastDays, "forecast-days", 7, "forecast horizon in days")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON instead of text")
 	cmd.Flags().BoolVar(&hideSparkline, "no-sparkline", false, "suppress the burn sparkline")
+	cmd.Flags().BoolVar(&includeDemo, "include-demo", false, "include synthetic events seeded via tokenops demo (excluded by default)")
 	return cmd
 }
 

@@ -10,6 +10,9 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/felixgeelhaar/tokenops/internal/config"
+	"github.com/felixgeelhaar/tokenops/internal/version"
 )
 
 // httpDoer is the small subset of *http.Client status uses; tests inject a
@@ -39,10 +42,10 @@ func newStatusCmd(rf *rootFlags) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			target := addr
+			cfg, cfgErr := loadConfig(rf)
 			if target == "" {
-				cfg, err := loadConfig(rf)
-				if err != nil {
-					return err
+				if cfgErr != nil {
+					return cfgErr
 				}
 				target = cfg.Listen
 			}
@@ -54,7 +57,11 @@ func newStatusCmd(rf *rootFlags) *cobra.Command {
 
 			res, err := fetchStatus(cmd.Context(), base)
 			if err != nil {
-				return err
+				// Daemon unreachable. Fall back to the same self-report
+				// the MCP tokenops_status tool emits — config + blockers
+				// + next_actions — so operators see something actionable
+				// instead of an opaque "connection refused".
+				return writeOfflineStatus(cmd.OutOrStdout(), base, cfg, cfgErr, jsonOut)
 			}
 			if jsonOut {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(res)
@@ -124,6 +131,48 @@ func fetchEndpoint(ctx context.Context, url string) endpointResult {
 	}
 	out.Body = parsed
 	return out
+}
+
+// writeOfflineStatus renders the same shape the MCP tokenops_status
+// tool emits when no daemon is reachable. Operators get blockers +
+// next_actions and an explanation that the daemon is not running —
+// not a connection-refused string they have to interpret.
+func writeOfflineStatus(w io.Writer, base string, cfg config.Config, cfgErr error, jsonOut bool) error {
+	payload := map[string]any{
+		"status":         "daemon_unreachable",
+		"daemon":         base,
+		"ready":          false,
+		"state":          "not_running",
+		"hint":           "daemon not running; run `tokenops start` to launch it. MCP-only deployments can ignore this and call `tokenops_status` via the MCP host instead.",
+		"version":        version.String(),
+	}
+	if cfgErr == nil {
+		blockers := cfg.Blockers()
+		payload["blockers"] = blockers
+		payload["next_actions"] = config.NextActionsFor(blockers)
+	} else {
+		payload["config_error"] = cfgErr.Error()
+	}
+	if jsonOut {
+		return json.NewEncoder(w).Encode(payload)
+	}
+	fmt.Fprintf(w, "daemon: %s (not running)\n", base)
+	if cfgErr == nil {
+		blockers := cfg.Blockers()
+		if len(blockers) == 0 {
+			fmt.Fprintln(w, "  blockers: none — start the daemon with `tokenops start`")
+		} else {
+			fmt.Fprintf(w, "  blockers: %s\n", strings.Join(blockers, ", "))
+			for _, action := range config.NextActionsFor(blockers) {
+				fmt.Fprintf(w, "  next: %s\n", action)
+			}
+		}
+	} else {
+		fmt.Fprintf(w, "  config error: %v\n", cfgErr)
+	}
+	fmt.Fprintf(w, "  version: %s\n", version.String())
+	fmt.Fprintln(w, "  hint: run `tokenops start` to launch the daemon, or query `tokenops_status` via your MCP host for the serve-side view.")
+	return nil
 }
 
 func writeStatusText(w io.Writer, base string, r statusResult) error {
