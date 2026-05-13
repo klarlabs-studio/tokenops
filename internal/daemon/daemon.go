@@ -232,6 +232,21 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	if err := srv.Start(ctx); err != nil {
 		return fmt.Errorf("start proxy: %w", err)
 	}
+	// Publish the listen URL so the MCP `serve` process can return a
+	// clickable dashboard link via tokenops_dashboard. Removed on
+	// shutdown so a stale URL never survives the daemon. Failure here
+	// is non-fatal: the daemon stays up; the MCP tool just falls
+	// back to "run tokenops up" guidance.
+	if hintPath, err := writeURLHint(srv.Addr(), srv.TLSEnabled()); err != nil {
+		logger.Warn("could not publish daemon URL hint", "err", err)
+	} else {
+		logger.Info("daemon URL hint published", "path", hintPath)
+		defer func() {
+			if err := removeURLHint(); err != nil {
+				logger.Warn("could not remove daemon URL hint", "err", err)
+			}
+		}()
+	}
 	// Publish blockers + remediation hints so /readyz exposes the same
 	// signal the MCP tokenops_status tool surfaces. Operators on a fresh
 	// install (storage/rules/providers off) see exactly what to fix

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TokenOps — Dashboard</title>
+<script src="https://unpkg.com/vue@3.5.13/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/d3@7.9.0/dist/d3.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --fg: #e6edf3;
+    --muted: #7d8590;
+    --accent: #4159d6;
+    --green: #3aa55d;
+    --amber: #d09a40;
+    --red: #d04040;
+    --code: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #ffffff; --panel: #f6f8fa; --border: #d0d7de; --fg: #1f2328; --muted: #59636e; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background: var(--bg); color: var(--fg); }
+  h1 { font-size: 20px; margin: 0 0 4px; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .panel h2 { margin: 0 0 12px; font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .kpi { display: flex; gap: 24px; flex-wrap: wrap; margin: 0 0 20px; }
+  .kpi > div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; flex: 1; min-width: 140px; }
+  .kpi label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px; }
+  .kpi value { font-family: var(--code); font-size: 22px; font-weight: 500; }
+  .controls { display: flex; gap: 12px; align-items: center; margin: 0 0 16px; flex-wrap: wrap; }
+  .controls button { background: var(--panel); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer; font-family: inherit; }
+  .controls button:hover { border-color: var(--accent); }
+  .controls button.active { background: var(--accent); border-color: var(--accent); color: white; }
+  .err { background: rgba(208, 64, 64, 0.1); border: 1px solid var(--red); color: var(--red); padding: 12px; border-radius: 6px; font-family: var(--code); font-size: 13px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  svg { display: block; max-width: 100%; }
+  .axis text { fill: var(--muted); font-size: 11px; font-family: var(--code); }
+  .axis line, .axis path { stroke: var(--border); }
+  .tooltip { position: absolute; background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 6px 10px; font-family: var(--code); font-size: 12px; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+  footer { margin-top: 32px; color: var(--muted); font-size: 12px; font-family: var(--code); }
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>TokenOps</h1>
+  <p class="sub">Local-first observability for LLM workloads. Auto-refresh {{ refreshSec }}s.</p>
+
+  <div class="controls">
+    <span class="muted">Window:</span>
+    <button v-for="opt in windowOpts" :key="opt.label"
+            :class="{active: opt.hours === windowHours}"
+            @click="setWindow(opt.hours)">{{ opt.label }}</button>
+    <span class="muted" style="margin-left:auto">Last refresh: {{ lastRefresh || '—' }}</span>
+  </div>
+
+  <div v-if="loadError" class="err">{{ loadError }}</div>
+
+  <div class="kpi">
+    <div><label>Total cost</label><value>{{ fmtCost(summary.CostUSD) }}</value></div>
+    <div><label>Requests</label><value>{{ fmtNum(summary.Requests) }}</value></div>
+    <div><label>Input tokens</label><value>{{ fmtNum(summary.InputTokens) }}</value></div>
+    <div><label>Output tokens</label><value>{{ fmtNum(summary.OutputTokens) }}</value></div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Cost over time</h2>
+      <svg ref="costChart" width="100%" height="220"></svg>
+    </div>
+    <div class="panel">
+      <h2>Tokens per bucket</h2>
+      <svg ref="tokenChart" width="100%" height="220"></svg>
+    </div>
+  </div>
+
+  <footer>
+    Source: <code>/api/spend/summary</code> + <code>/api/spend/series</code>. Charts: D3 v7. Built into the TokenOps daemon.
+  </footer>
+</div>
+
+<script>
+const { createApp, ref, reactive, onMounted, onUnmounted, nextTick } = Vue;
+
+createApp({
+  setup() {
+    const refreshSec = 15;
+    const windowOpts = [
+      { label: "1h", hours: 1 }, { label: "6h", hours: 6 },
+      { label: "24h", hours: 24 }, { label: "7d", hours: 168 },
+    ];
+    const windowHours = ref(24);
+    const summary = reactive({ CostUSD: 0, Requests: 0, InputTokens: 0, OutputTokens: 0, TotalTokens: 0 });
+    const series = ref([]);
+    const currency = ref("USD");
+    const loadError = ref("");
+    const lastRefresh = ref("");
+    const costChart = ref(null);
+    const tokenChart = ref(null);
+
+    const fmtCost = (n) => (n || 0).toLocaleString(undefined, { style: "currency", currency: currency.value });
+    const fmtNum = (n) => (n || 0).toLocaleString();
+
+    const sinceISO = () => new Date(Date.now() - windowHours.value * 3600 * 1000).toISOString();
+
+    const fetchAll = async () => {
+      try {
+        const since = encodeURIComponent(sinceISO());
+        const [sumRes, serRes] = await Promise.all([
+          fetch(`/api/spend/summary?since=${since}`),
+          fetch(`/api/spend/series?since=${since}&bucket=hour`),
+        ]);
+        if (!sumRes.ok) throw new Error(`summary HTTP ${sumRes.status}`);
+        if (!serRes.ok) throw new Error(`series HTTP ${serRes.status}`);
+        const s = await sumRes.json();
+        const r = await serRes.json();
+        Object.assign(summary, s.summary || {});
+        currency.value = s.currency || "USD";
+        series.value = (r.rows || []).map(row => ({
+          t: new Date(row.BucketStart),
+          cost: row.CostUSD || 0,
+          input: row.InputTokens || 0,
+          output: row.OutputTokens || 0,
+        }));
+        loadError.value = "";
+        lastRefresh.value = new Date().toLocaleTimeString();
+        await nextTick();
+        drawCostChart();
+        drawTokenChart();
+      } catch (err) {
+        loadError.value = `Could not load data: ${err.message}. Is the daemon running? Try \`tokenops up\`.`;
+      }
+    };
+
+    const setWindow = (h) => { windowHours.value = h; fetchAll(); };
+
+    const drawCostChart = () => {
+      const svg = d3.select(costChart.value);
+      svg.selectAll("*").remove();
+      const node = costChart.value;
+      const W = node.clientWidth || 480, H = 220;
+      const margin = { top: 8, right: 12, bottom: 24, left: 50 };
+      const w = W - margin.left - margin.right, h = H - margin.top - margin.bottom;
+      const g = svg.attr("viewBox", `0 0 ${W} ${H}`).append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+      if (!series.value.length) {
+        g.append("text").attr("x", w / 2).attr("y", h / 2).attr("text-anchor", "middle")
+          .attr("fill", "var(--muted)").text("No data in window");
+        return;
+      }
+      const x = d3.scaleTime().domain(d3.extent(series.value, d => d.t)).range([0, w]);
+      const yMax = d3.max(series.value, d => d.cost) || 0.0001;
+      const y = d3.scaleLinear().domain([0, yMax]).nice().range([h, 0]);
+      g.append("g").attr("class", "axis").attr("transform", `translate(0,${h})`).call(d3.axisBottom(x).ticks(5));
+      g.append("g").attr("class", "axis").call(d3.axisLeft(y).ticks(4).tickFormat(d => "$" + d.toFixed(4)));
+      const area = d3.area().x(d => x(d.t)).y0(h).y1(d => y(d.cost)).curve(d3.curveMonotoneX);
+      g.append("path").datum(series.value).attr("fill", "rgba(65,89,214,0.18)").attr("d", area);
+      const line = d3.line().x(d => x(d.t)).y(d => y(d.cost)).curve(d3.curveMonotoneX);
+      g.append("path").datum(series.value).attr("fill", "none").attr("stroke", "var(--accent)").attr("stroke-width", 1.5).attr("d", line);
+    };
+
+    const drawTokenChart = () => {
+      const svg = d3.select(tokenChart.value);
+      svg.selectAll("*").remove();
+      const node = tokenChart.value;
+      const W = node.clientWidth || 480, H = 220;
+      const margin = { top: 8, right: 12, bottom: 24, left: 50 };
+      const w = W - margin.left - margin.right, h = H - margin.top - margin.bottom;
+      const g = svg.attr("viewBox", `0 0 ${W} ${H}`).append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+      if (!series.value.length) {
+        g.append("text").attr("x", w / 2).attr("y", h / 2).attr("text-anchor", "middle")
+          .attr("fill", "var(--muted)").text("No data in window");
+        return;
+      }
+      const stacks = ["input", "output"];
+      const stacked = d3.stack().keys(stacks)(series.value);
+      const x = d3.scaleBand().domain(series.value.map(d => d.t)).range([0, w]).padding(0.15);
+      const yMax = d3.max(series.value, d => d.input + d.output) || 1;
+      const y = d3.scaleLinear().domain([0, yMax]).nice().range([h, 0]);
+      const color = d3.scaleOrdinal().domain(stacks).range(["#4159d6", "#d09a40"]);
+      g.append("g").attr("class", "axis").attr("transform", `translate(0,${h})`)
+        .call(d3.axisBottom(x).tickFormat(d3.timeFormat("%H:%M")).tickValues(x.domain().filter((_, i, a) => i % Math.ceil(a.length / 6) === 0)));
+      g.append("g").attr("class", "axis").call(d3.axisLeft(y).ticks(4));
+      g.append("g").selectAll("g").data(stacked).join("g").attr("fill", d => color(d.key))
+        .selectAll("rect").data(d => d).join("rect")
+        .attr("x", d => x(d.data.t)).attr("y", d => y(d[1]))
+        .attr("width", x.bandwidth()).attr("height", d => Math.max(0, y(d[0]) - y(d[1])));
+    };
+
+    let timer;
+    onMounted(() => { fetchAll(); timer = setInterval(fetchAll, refreshSec * 1000); window.addEventListener("resize", drawCharts); });
+    onUnmounted(() => { clearInterval(timer); window.removeEventListener("resize", drawCharts); });
+    const drawCharts = () => { drawCostChart(); drawTokenChart(); };
+
+    return { refreshSec, windowOpts, windowHours, summary, loadError, lastRefresh, costChart, tokenChart, fmtCost, fmtNum, setWindow };
+  }
+}).mount("#app");
+</script>
+</body>
+</html>

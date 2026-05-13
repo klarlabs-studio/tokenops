@@ -184,6 +184,10 @@ func (s *Server) Start(ctx context.Context) error {
 	s.registerRoutes(mux)
 	if s.analytics != nil {
 		s.analytics.Register(mux)
+		// Dashboard only renders meaningful data when analytics is
+		// wired (it queries /api/spend/*), so mount it inside the
+		// same branch instead of leaving an empty page exposed.
+		registerDashboard(mux)
 	} else {
 		stub := subsystemDisabledHandler("storage_disabled",
 			"run `tokenops init` to enable the sqlite event store, then restart the daemon")
