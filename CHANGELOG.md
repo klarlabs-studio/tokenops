@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.8.0 - 2026-05-13
+
 ### Added
 
 - **Demo data isolation**: synthetic events seeded by `tokenops demo`
