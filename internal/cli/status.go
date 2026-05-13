@@ -139,12 +139,12 @@ func fetchEndpoint(ctx context.Context, url string) endpointResult {
 // not a connection-refused string they have to interpret.
 func writeOfflineStatus(w io.Writer, base string, cfg config.Config, cfgErr error, jsonOut bool) error {
 	payload := map[string]any{
-		"status":         "daemon_unreachable",
-		"daemon":         base,
-		"ready":          false,
-		"state":          "not_running",
-		"hint":           "daemon not running; run `tokenops start` to launch it. MCP-only deployments can ignore this and call `tokenops_status` via the MCP host instead.",
-		"version":        version.String(),
+		"status":  "daemon_unreachable",
+		"daemon":  base,
+		"ready":   false,
+		"state":   "not_running",
+		"hint":    "daemon not running; run `tokenops start` to launch it. MCP-only deployments can ignore this and call `tokenops_status` via the MCP host instead.",
+		"version": version.String(),
 	}
 	if cfgErr == nil {
 		blockers := cfg.Blockers()
