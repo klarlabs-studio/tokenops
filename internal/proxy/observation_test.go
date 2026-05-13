@@ -159,6 +159,12 @@ func TestObserverFlagsStreamingResponse(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		flusher := w.(http.Flusher)
+		// Windows time.Now() resolution is ~15ms; without this delay
+		// the proxy observer captures the request start and first
+		// chunk inside the same tick and TTFT reads 0. The sleep
+		// guarantees the clock advances so the assertion below means
+		// something on every platform.
+		time.Sleep(25 * time.Millisecond)
 		_, _ = io.WriteString(w, "data: {\"delta\":\"hi\"}\n\n")
 		flusher.Flush()
 		_, _ = io.WriteString(w, "data: [DONE]\n\n")

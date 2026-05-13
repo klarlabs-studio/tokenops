@@ -2,6 +2,7 @@ package detect
 
 import (
 	"io/fs"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -39,9 +40,10 @@ func (e fakeEnv) Stat(path string) (fs.FileInfo, error) {
 }
 
 func TestDetectClaudeCodeDirReturnsAnthropicMedium(t *testing.T) {
+	home := filepath.FromSlash("/Users/test")
 	env := fakeEnv{
-		home: "/Users/test",
-		dirs: map[string]bool{"/Users/test/.claude": true},
+		home: home,
+		dirs: map[string]bool{filepath.Join(home, ".claude"): true},
 	}
 	out := Detect(env)
 	if len(out) == 0 {
@@ -57,9 +59,10 @@ func TestDetectClaudeCodeDirReturnsAnthropicMedium(t *testing.T) {
 }
 
 func TestDetectCursorReturnsCursorMedium(t *testing.T) {
+	home := filepath.FromSlash("/Users/test")
 	env := fakeEnv{
-		home: "/Users/test",
-		dirs: map[string]bool{"/Users/test/.cursor": true},
+		home: home,
+		dirs: map[string]bool{filepath.Join(home, ".cursor"): true},
 	}
 	out := Detect(env)
 	found := false
@@ -75,7 +78,7 @@ func TestDetectCursorReturnsCursorMedium(t *testing.T) {
 
 func TestDetectAPIKeysReturnLow(t *testing.T) {
 	env := fakeEnv{
-		home: "/Users/test",
+		home: filepath.FromSlash("/Users/test"),
 		envs: map[string]string{"OPENAI_API_KEY": "sk-abc"},
 	}
 	out := Detect(env)
@@ -89,18 +92,19 @@ func TestDetectAPIKeysReturnLow(t *testing.T) {
 }
 
 func TestDetectNoSignalsReturnsEmpty(t *testing.T) {
-	env := fakeEnv{home: "/Users/test"}
+	env := fakeEnv{home: filepath.FromSlash("/Users/test")}
 	if out := Detect(env); len(out) != 0 {
 		t.Errorf("expected empty, got %v", out)
 	}
 }
 
 func TestDetectMultipleSortedByConfidence(t *testing.T) {
+	home := filepath.FromSlash("/Users/test")
 	env := fakeEnv{
-		home: "/Users/test",
+		home: home,
 		dirs: map[string]bool{
-			"/Users/test/.claude": true,
-			"/Users/test/.cursor": true,
+			filepath.Join(home, ".claude"): true,
+			filepath.Join(home, ".cursor"): true,
 		},
 		envs: map[string]string{"ANTHROPIC_API_KEY": "sk-x"},
 	}

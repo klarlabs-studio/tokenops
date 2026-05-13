@@ -253,15 +253,18 @@ func burnRate(ctx context.Context, d Deps, in burnRateInput) (string, error) {
 		return "", err
 	}
 	var total float64
+	series := make([]float64, 0, len(rows))
 	for _, r := range rows {
 		total += r.CostUSD
+		series = append(series, r.CostUSD)
 	}
-	return jsonString(map[string]any{
+	payload := map[string]any{
 		"hours":    hours,
 		"cost":     total,
 		"hourly":   rows,
 		"currency": d.Spend.Currency(),
-	}), nil
+	}
+	return markdownPayload(renderBurnSummary(hours, total, d.Spend.Currency(), series), payload), nil
 }
 
 func forecastSpend(ctx context.Context, d Deps, in forecastInput) (string, error) {
