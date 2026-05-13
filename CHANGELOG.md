@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.9.4 - 2026-05-13
+
+### Added
+
+- `tokenops spend --include-demo` mirrors the MCP tool flag so CLI
+  users can opt back into seeded data without editing the filter
+  struct. Default (no flag) keeps demo events excluded.
+
+### Fixed
+
+- `tokenops status` falls back to the same self-report the MCP
+  tokenops_status tool emits when the daemon is unreachable.
+  Operators see `blockers[]`, `next_actions[]`, version, and a
+  `run tokenops start` hint instead of a raw connection-refused
+  error. MCP-only deployments no longer hit a confusing CLI dead
+  end.
+
 ## 0.9.3 - 2026-05-13
 
 ### Fixed
