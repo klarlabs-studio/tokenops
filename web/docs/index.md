@@ -18,13 +18,22 @@ features:
     details: 'OpenAI, Anthropic, Google Gemini all flow through the same proxy and event schema. Spend, optimizer, scorecard, MCP tools — every surface treats them as peers, not special cases.'
   - title: Honest signal quality
     details: Every prediction carries `signal_quality.level` (low / medium / high) plus a one-line caveat. Heuristic mode is labelled; proxied mode is labelled; the product never pretends a guess is a guarantee.
-  - title: MCP-first
-    details: '22 MCP tools agents can call directly. `tokenops_session_budget` returns `recommended_action ∈ continue|slow_down|switch_model|wait_for_reset`. Works with Claude Code, Cursor, aider, Codex, and every other MCP host.'
-  - title: Three commands, ninety seconds
-    details: '`brew install felixgeelhaar/tap/tokenops` → `tokenops init` → `tokenops plan set <provider> <plan>` → ask your agent for `tokenops_session_budget`.'
+  - title: MCP-first with inline charts
+    details: '25 MCP tools agents can call directly. `tokenops_session_budget` returns `recommended_action ∈ continue|slow_down|switch_model|wait_for_reset` with an inline SVG headroom gauge; `tokenops_burn_rate` ships a 24h sparkline. Works with Claude Code, Cursor, aider, Codex, and every other MCP host.'
+  - title: Auto-detect on first run
+    details: '`tokenops init --detect` sniffs Claude Code, Claude Desktop, Cursor, ChatGPT Desktop, and the standard API-key env vars, then prints the exact `tokenops plan set …` commands for what it found. No config archaeology.'
+  - title: Interactive Vue + D3 dashboard
+    details: 'The daemon serves a local dashboard at `/dashboard` — cost-over-time line, tokens-per-bucket stacked bar, live KPIs, 15s auto-refresh. The `tokenops_dashboard` MCP tool hands your agent a clickable URL to the running instance.'
   - title: Local-first, open source
     details: SQLite database. No cloud account. No telemetry. Apache 2.0. Demo-data isolation by default so synthetic seeds never contaminate the real signal.
 ---
+
+## What's new in v0.10.0
+
+- **Auto-detect on init** — `tokenops init --detect` reads your installed AI clients (Claude Code/Desktop, Cursor, ChatGPT Desktop, env-var API keys) and prints the exact plan-set commands. Run it once, paste what fits.
+- **Interactive dashboard** — A Vue + D3 dashboard ships with the daemon at `/dashboard`. Hourly cost line, tokens-per-bucket stacked bar, KPI tiles, 15s auto-refresh. Driven by the same `/api/spend/*` endpoints the CLI uses.
+- **Inline charts in MCP responses** — `tokenops_session_budget` now leads with a coloured headroom gauge (green / amber / red by overage band); `tokenops_burn_rate` ships a sparkline. Rendered inline in markdown so every MCP client shows them today.
+- **Dynamic-cheapest coaching router** — The coaching pipeline now picks the lowest blended-rate model per provider from the pricing table at runtime. No hardcoded model names; pricing updates flow through automatically.
 
 ## Why TokenOps exists
 
