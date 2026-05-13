@@ -136,3 +136,21 @@ Five gaps surfaced from the full v0.7.1 demo. (1) Rules walker bails on permissi
 Four-skill consensus from the v0.8.1 review. UX, Product, AI, GTM converged on a single verdict: ship trust signals + activation honesty, then run customer interviews. Concretely: (1) every session_budget / plan_headroom response carries signal_quality {level, source, caveat, upgrade_paths} so operators see it is an MCP-ping heuristic, not real Claude turn data; (2) empty-state scorecard replaces F grade with a first-week activation checklist when no KPI is computed; (3) synthetic-data banner attaches to cost/headroom responses when source=demo dominates the window; (4) MCP serve file-watches config.yaml and hot-reloads on plan/provider changes, eliminating the only remaining "leave the product to apply" step; (5) deprecated claude-max alias migration shim so users pasting old docs see a renamed-to warning instead of an error; (6) outreach plan doc: 90-second Loom + Show HN + Discord cross-post + 25 founder DMs landing 10 real users by end-of-week. Customer interviews remain operator work (Roady tracks the task).
 
 ---
+
+## Plan Auto-Detection
+
+Instead of asking users to memorise catalog names (`tokenops plan set anthropic claude-max-20x`), detect their subscriptions automatically. Sniff Claude Code config (~/.claude*, claude_desktop_config.json), Cursor config, GitHub Copilot CLI status, common AI env vars (ANTHROPIC_API_KEY → likely API user; CLAUDE_CODE_OAUTH presence → likely Max plan; CURSOR_API_KEY → Cursor Pro/Business). Run during `tokenops init` as an interactive wizard: "I see Claude Code installed. Are you on Max 5x, Max 20x, or Pro?" Default-detect known signatures (e.g. Claude Code's $CLAUDE_CODE_ENTITLEMENT or session JWT scope) and bind without prompting when high-confidence. Fall through to a single-question prompt when uncertain. Bonus: rerun on `tokenops doctor` to catch new subscriptions added later. Acceptance: `tokenops init` correctly auto-binds at least Claude Max + Cursor Pro for a user who has both installed.
+
+---
+
+## Coaching LLM Auto-Routing
+
+Wire `llm.Backend` into `coaching.Pipeline` AND auto-pick the cheapest in-plan model for each configured plan. Decision table: Claude Max/Pro user → route coaching through their Anthropic session with `claude-haiku-4.5` (cheapest + included in plan, no extra cost); ChatGPT Plus/Pro/Team → route via gpt-5-mini equivalent through their account; GitHub Copilot user → use Copilot's bundled cheap model; Cursor user → use Cursor's bundled tier; no plan configured → fall back to local Ollama (llama3.2:3b default) if reachable; else disable coaching summaries with a one-line note ("coaching is heuristic-only — bind a plan or run Ollama for natural-language summaries"). Add `config.Coaching.LLM` section with explicit override (`auto` | `local:<model>` | `cloud:<provider>:<model>`). CLI: `tokenops coach set-model auto|local:llama3.2|cloud:anthropic:claude-haiku-4.5`. Hot-reload picks up changes. Acceptance: user with `plans.anthropic=claude-max-20x` gets coaching summaries generated through their Claude session with haiku as the cheapest model, with no separate API key configured.
+
+---
+
+## Interactive MCP UI Rendering
+
+Today MCP tool responses are plain-text JSON. Three rendering tiers, ship in order: (1) Markdown summary + JSON appendix for every cost/headroom response so Desktop/Code/Cursor render styled tables and code blocks instead of brace soup; (2) Inline SVG sparklines for burn-rate and window-headroom charts returned as ResourceContent with MimeType=image/svg+xml — most MCP clients embed SVG inline today; (3) Interactive Vue+D3 dashboard returned as text/html ResourceContent — experimental, depends on client iframe support (Claude Desktop's evolving UI app spec, Cursor's panel). Build the Vue app under web/dashboard/ (already exists), bundle as a single-file HTML blob, serve via tokenops_dashboard MCP tool. Charts to ship first: window-burn sparkline, plan-quota gauge, real-vs-synthetic ratio donut. Acceptance: tokenops_session_budget renders as a styled markdown table in Claude Desktop; tokenops_dashboard returns an interactive D3 chart in clients that support html resources.
+
+---
