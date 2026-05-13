@@ -69,6 +69,46 @@ type Key struct {
 // charge zero, log a warning, or refuse to record cost.
 var ErrUnknownModel = errors.New("spend: no rate for provider/model")
 
+// ErrNoModelsForProvider is returned by Cheapest when the table has no
+// rows for the requested provider. Callers (coaching router etc.) use
+// this to fall back to a local backend or disable LLM features.
+var ErrNoModelsForProvider = errors.New("spend: no models registered for provider")
+
+// Cheapest returns the lowest-cost model identifier for provider, using
+// blended input+output rate as the cost metric. Prefix rows ("gpt-4o-*")
+// are returned with the literal "*" suffix because callers usually want
+// a concrete model name; the caller is expected to resolve "*" to a real
+// snapshot they support (or trim it for downstream APIs that accept the
+// family name verbatim — Anthropic does).
+//
+// Rationale for blended (input + output) cost: real coaching workloads
+// generate small output relative to input, so a model with a cheap input
+// rate but expensive output rate often still wins. This metric tracks
+// that. Future enhancements (token-weighted choice, latency-aware) can
+// extend without breaking the signature.
+func (t Table) Cheapest(provider eventschema.Provider) (string, Rate, error) {
+	var (
+		bestModel string
+		bestRate  Rate
+		bestCost  = -1.0
+	)
+	for k, r := range t.Rates {
+		if k.Provider != provider {
+			continue
+		}
+		cost := r.InputPerMillion + r.OutputPerMillion
+		if bestCost < 0 || cost < bestCost {
+			bestCost = cost
+			bestModel = k.Model
+			bestRate = r
+		}
+	}
+	if bestCost < 0 {
+		return "", Rate{}, fmt.Errorf("%w: provider=%s", ErrNoModelsForProvider, provider)
+	}
+	return bestModel, bestRate, nil
+}
+
 // DefaultTable returns a fresh Table seeded with public list prices for
 // the most common models served by OpenAI, Anthropic, and Google Gemini.
 // Prices are USD per million tokens. The values are intentionally

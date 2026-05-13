@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	"github.com/felixgeelhaar/tokenops/internal/cli/detect"
 	"github.com/felixgeelhaar/tokenops/internal/config"
 )
 
@@ -23,6 +24,7 @@ type initFlags struct {
 	repoID      string
 	force       bool
 	printOnly   bool
+	withDetect  bool
 }
 
 func newInitCmd() *cobra.Command {
@@ -51,6 +53,7 @@ passed; --print-only emits the YAML without touching disk.`,
 	cmd.Flags().StringVar(&f.repoID, "repo-id", "", "rule corpus identifier prepended to source IDs (defaults to basename of rules root)")
 	cmd.Flags().BoolVar(&f.force, "force", false, "overwrite an existing config file")
 	cmd.Flags().BoolVar(&f.printOnly, "print-only", false, "render the resulting YAML to stdout without writing")
+	cmd.Flags().BoolVar(&f.withDetect, "detect", false, "sniff installed AI clients and report likely plan bindings")
 	return cmd
 }
 
@@ -81,8 +84,13 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 	}
 
 	if f.printOnly {
-		_, err := cmd.OutOrStdout().Write(data)
-		return err
+		if _, err := cmd.OutOrStdout().Write(data); err != nil {
+			return err
+		}
+		if f.withDetect {
+			renderDetection(cmd.OutOrStdout(), detect.Detect(nil))
+		}
+		return nil
 	}
 
 	if existing, err := os.Stat(configPath); err == nil && !existing.IsDir() {
@@ -111,7 +119,44 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 		"wrote %s\nstorage: %s\nrules root: %s (repo_id=%s)\nnext: configure providers and run `tokenops demo` or `tokenops start`\n",
 		configPath, storagePath, rulesRoot, repoID,
 	)
+
+	if f.withDetect {
+		renderDetection(cmd.OutOrStdout(), detect.Detect(nil))
+	}
 	return nil
+}
+
+// renderDetection prints the detector findings + ready-to-paste
+// `tokenops plan set` lines so the operator can act on each
+// detection without retyping the catalog. Output is best-effort —
+// ambiguous tiers are flagged with a "pick:" hint instead of a
+// concrete plan name.
+func renderDetection(w fmtWriter, ds []detect.Detection) {
+	if len(ds) == 0 {
+		fmt.Fprintln(w, "\ndetect: no installed AI clients sniffed")
+		return
+	}
+	fmt.Fprintln(w, "\ndetect: likely plan bindings (review + paste any that apply):")
+	for _, d := range ds {
+		fmt.Fprintf(w, "  [%s] %s — %s\n", d.Confidence, d.Provider, d.Hint)
+		fmt.Fprintf(w, "    evidence: %s\n", d.Evidence)
+		switch d.Provider {
+		case "anthropic":
+			fmt.Fprintln(w, "    run: tokenops plan set anthropic claude-max-20x  # or claude-max-5x | claude-pro")
+		case "openai":
+			fmt.Fprintln(w, "    run: tokenops plan set openai gpt-plus  # or gpt-team | gpt-pro")
+		case "cursor":
+			fmt.Fprintln(w, "    run: tokenops plan set cursor cursor-pro  # or cursor-business")
+		case "gemini":
+			fmt.Fprintln(w, "    run: (no plan-based gemini catalog entry today; use the proxy)")
+		}
+	}
+}
+
+// fmtWriter is the tiny subset renderDetection uses — io.Writer
+// minus the package import noise. Keeps init.go free of net/io etc.
+type fmtWriter interface {
+	Write(p []byte) (int, error)
 }
 
 func resolveInitConfigPath(override string) (string, error) {

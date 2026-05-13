@@ -50,6 +50,14 @@ type FuncSink func(env *eventschema.Envelope)
 // Publish delegates to the wrapped function.
 func (f FuncSink) Publish(env *eventschema.Envelope) { f(env) }
 
+// SummaryEnricher upgrades a heuristic-generated CoachingEvent with a
+// natural-language Summary. Pipeline calls it for every emitted event
+// when set; nil leaves the heuristic Summary in place. Errors are
+// logged + swallowed — the original event still ships.
+type SummaryEnricher interface {
+	Enrich(ctx context.Context, ev *eventschema.CoachingEvent) error
+}
+
 // Config tunes the pipeline.
 type Config struct {
 	// Concurrency is the worker-pool size. Default 2.
@@ -64,6 +72,11 @@ type Config struct {
 	Source string
 	// Logger receives lifecycle + error logs.
 	Logger *slog.Logger
+	// Enricher, when set, runs after the detector emits a
+	// CoachingEvent and is allowed to upgrade Summary / Details with
+	// LLM-generated text. Wired by the daemon from the configured
+	// coaching LLM backend; tests inject fakes.
+	Enricher SummaryEnricher
 }
 
 func (c *Config) defaults() {
@@ -238,6 +251,13 @@ func (p *Pipeline) process(ctx context.Context, job Job) {
 	}
 	trace := tracePlaceholder(job.WorkflowID, res)
 	for _, ev := range p.detector.Detect(trace) {
+		if p.cfg.Enricher != nil {
+			if err := p.cfg.Enricher.Enrich(ctx, ev); err != nil {
+				p.cfg.Logger.Warn("coaching enrichment failed",
+					"workflow_id", job.WorkflowID, "err", err)
+				// keep heuristic Summary; the event still ships
+			}
+		}
 		env := &eventschema.Envelope{
 			ID:            uuid.NewString(),
 			SchemaVersion: eventschema.SchemaVersion,

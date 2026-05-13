@@ -139,11 +139,33 @@ func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
 	if warn, err := maybeDataWarning(ctx, d.Store, time.Time{}, now); err == nil && warn != nil {
 		payload["data_warning"] = warn
 	}
-	out, err := json.MarshalIndent(payload, "", "  ")
-	if err != nil {
-		return "", err
+	// Render the first budget as a markdown table for clients that
+	// surface text content visually (Desktop, Code, Cursor). The
+	// JSON appendix stays intact for agents.
+	if len(budgets) == 0 {
+		out, err := json.MarshalIndent(payload, "", "  ")
+		if err != nil {
+			return "", err
+		}
+		return string(out), nil
 	}
-	return string(out), nil
+	b := budgets[0]
+	row := budgetSummaryRow{
+		Display:           b.Display,
+		WindowConsumed:    b.WindowConsumed,
+		WindowCap:         b.WindowCap,
+		WindowUnit:        "messages",
+		WindowPct:         b.WindowPct,
+		WindowResetsIn:    b.WindowResetsIn,
+		WillHitCapWithin:  b.WillHitCapWithin,
+		RecentRatePerHour: b.RecentRatePerHour,
+		Confidence:        b.Confidence,
+		RecommendedAction: b.RecommendedAction,
+		SignalLevel:       b.SignalQuality.Level,
+		SignalCaveat:      b.SignalQuality.Caveat,
+		Note:              b.Note,
+	}
+	return markdownPayload(renderBudgetSummary(row), payload), nil
 }
 
 func planHeadroom(ctx context.Context, d PlanDeps) (string, error) {

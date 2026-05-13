@@ -323,6 +323,41 @@ func TestComputeMeteredStillBills(t *testing.T) {
 	}
 }
 
+func TestCheapestPicksLowestBlendedRate(t *testing.T) {
+	tab := DefaultTable()
+	for _, c := range []struct {
+		provider  eventschema.Provider
+		wantModel string
+	}{
+		{eventschema.ProviderOpenAI, "gpt-4o-mini*"},
+		// claude-3-5-haiku is intentionally cheaper than 4-5 haiku in
+		// the seeded table; the test exists to prove Cheapest picks
+		// on price, not on version recency.
+		{eventschema.ProviderAnthropic, "claude-3-5-haiku*"},
+		{eventschema.ProviderGemini, "gemini-1.5-flash*"},
+	} {
+		got, rate, err := tab.Cheapest(c.provider)
+		if err != nil {
+			t.Errorf("Cheapest(%s) err: %v", c.provider, err)
+			continue
+		}
+		if got != c.wantModel {
+			t.Errorf("Cheapest(%s) = %q, want %q", c.provider, got, c.wantModel)
+		}
+		if rate.InputPerMillion <= 0 {
+			t.Errorf("Cheapest(%s) returned zero input rate", c.provider)
+		}
+	}
+}
+
+func TestCheapestErrorsForUnknownProvider(t *testing.T) {
+	tab := DefaultTable()
+	_, _, err := tab.Cheapest(eventschema.Provider("nonexistent"))
+	if err == nil {
+		t.Fatal("expected error for unknown provider")
+	}
+}
+
 func TestDefaultTableHasExpectedProviders(t *testing.T) {
 	tab := DefaultTable()
 	for _, p := range []eventschema.Provider{
