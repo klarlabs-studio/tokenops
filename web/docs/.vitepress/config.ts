@@ -2,7 +2,7 @@ import { defineConfig } from "vitepress";
 
 export default defineConfig({
   title: "TokenOps",
-  description: "Predict Claude Max rate-limit cutoffs from inside Claude Code. Local MCP server + CLI for plan-based AI subscription headroom.",
+  description: "Predict rate-limit cutoffs inside your AI agent. Local MCP server + CLI that tracks Claude Max, ChatGPT Plus/Pro/Team, GitHub Copilot, and Cursor plan windows.",
   // GitHub Pages serves at https://felixgeelhaar.github.io/tokenops/.
   // Base must match the repo name so asset URLs resolve under the
   // subpath. CI sets DOCS_BASE=/tokenops/ explicitly; local dev keeps
