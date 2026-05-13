@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.8.1 - 2026-05-13
+
+### Fixed
+
+- Scorecard compute path now filters Source=demo envelopes before
+  computing FVT/TEU/SAC. v0.8.0 added the isolation everywhere
+  except this query path so `tokenops demo` data continued to
+  inflate the wedge KPIs.
+
 ## 0.8.0 - 2026-05-13
 
 ### Added
