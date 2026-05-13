@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.9.2 - 2026-05-13
+
+### Fixed
+
+- Scorecard now excludes `source=mcp-session` events from FVT/TEU/SAC
+  compute, matching the demo-data isolation done in 0.8.1. Installs
+  whose only real data is MCP-ping activity now see the warming_up
+  checklist instead of a misleading `F` grade.
+
 ## 0.9.1 - 2026-05-13
 
 ### Added
