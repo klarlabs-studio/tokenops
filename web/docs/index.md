@@ -12,10 +12,10 @@ hero:
       text: Star on GitHub
       link: https://github.com/felixgeelhaar/tokenops
 features:
-  - title: Eleven plans in the catalog
-    details: 'Claude Max 5x / 20x, Claude Pro, Claude Code (Max + Pro), ChatGPT Plus / Pro / Team, GitHub Copilot Individual / Business, Cursor Pro / Business. Each with a dated vendor source URL pinned in code.'
+  - title: Thirteen plans in the catalog
+    details: 'Claude Max 5x / 20x, Claude Pro, Claude Code (Max + Pro), ChatGPT Plus / Pro / Team, GitHub Copilot Individual / Business, Cursor Pro / Business, Mistral Le Chat Pro, Codex Plus. Each with a dated vendor source URL pinned in code.'
   - title: Provider-agnostic by design
-    details: 'OpenAI, Anthropic, Google Gemini all flow through the same proxy and event schema. Spend, optimizer, scorecard, MCP tools — every surface treats them as peers, not special cases.'
+    details: 'OpenAI, Anthropic, Google Gemini, Mistral all flow through the same proxy and event schema. Spend, optimizer, scorecard, MCP tools — every surface treats them as peers, not special cases.'
   - title: Honest signal quality
     details: Every prediction carries `signal_quality.level` (low / medium / high) plus a one-line caveat. Heuristic mode is labelled; proxied mode is labelled; the product never pretends a guess is a guarantee.
   - title: MCP-first with inline charts
@@ -23,12 +23,20 @@ features:
   - title: Auto-detect on first run
     details: '`tokenops init --detect` sniffs Claude Code, Claude Desktop, Cursor, ChatGPT Desktop, and the standard API-key env vars, then prints the exact `tokenops plan set …` commands for what it found. No config archaeology.'
   - title: Interactive Vue + D3 dashboard
-    details: 'The daemon serves a local dashboard at `/dashboard` — cost-over-time line, tokens-per-bucket stacked bar, live KPIs, 15s auto-refresh. The `tokenops_dashboard` MCP tool hands your agent a clickable URL to the running instance.'
+    details: 'The daemon serves a local dashboard at `/dashboard` — per-model stacked area cost chart, tokens-per-bucket stacked bar, live KPIs, provider + model filters that persist across refresh, 15s auto-refresh. The `tokenops_dashboard` MCP tool hands your agent a clickable URL with a one-shot auth token pre-attached.'
   - title: Local-first, open source
     details: SQLite database. No cloud account. No telemetry. Apache 2.0. Demo-data isolation by default so synthetic seeds never contaminate the real signal.
 ---
 
-## What's new in v0.10.x
+## What's new in v0.11.0
+
+- **Per-model stacked area on the cost panel.** When no model filter is active, the dashboard cost chart stacks one area layer per model so operators see the spend mix at a glance. Top-5 legend + "+N more" chip; colour scale stable across refresh.
+- **`tokenops vendor-usage backfill --hours N`.** One-shot pull of historical Anthropic Admin API usage. Deterministic envelope IDs, so re-running or running alongside the live poller never double-counts. `--dry-run` previews without writing.
+- **`tokenops dashboard rotate-token`.** Mint a fresh 32-byte URL-safe secret and revoke the old one. Useful after sharing a dashboard URL with a colleague.
+- **Mistral Le Chat Pro + Codex Plus** added to the plan catalog. `eventschema.ProviderMistral` plus mistral-large/medium/small + codestral list prices ship in the default spend table.
+- **Dashboard filter persistence + favicon.** Window / provider / model picks survive page refresh via localStorage. Inline SVG favicon for the browser tab.
+
+## Earlier highlights (v0.10.x)
 
 - **`tokenops.local` via mDNS (v0.10.1)** — The daemon advertises itself over zeroconf on Start, so the dashboard URL becomes `http://tokenops.local:7878/dashboard` instead of a bare loopback address. The `tokenops_dashboard` MCP tool prefers it; falls back to `127.0.0.1` when `.local` resolution isn't available.
 - **Vendor /usage ingestion (v0.10.2)** — Two new signal sources upgrade Anthropic confidence beyond the heuristic default. The **Claude Code stats cache reader** parses `~/.claude/stats-cache.json` and emits per-(date, model) deltas (signal_quality → medium). The **Anthropic Admin API poller** calls `/v1/organizations/usage_report/messages` every 5min with an admin key (signal_quality → high). Both wired through `config.vendor_usage.*`; both honest about the Claude Max 5h-window blind spot.

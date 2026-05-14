@@ -135,8 +135,13 @@ X-Tokenops-Agent-Id: planner
 tokenops spend --forecast           # spend + 24h burn + 7d forecast
 tokenops scorecard                  # operator wedge KPIs
 tokenops plan list                  # configured plans + headroom
+tokenops vendor-usage status        # show poller state + event counts
+tokenops vendor-usage backfill --hours 168   # one-shot Anthropic Admin pull
+tokenops dashboard rotate-token     # mint + persist a fresh dashboard secret
 tokenops demo                       # seed 7d synthetic events
 ```
+
+See the [CLI reference](/guide/cli) for the full surface.
 
 ## Next steps
 
