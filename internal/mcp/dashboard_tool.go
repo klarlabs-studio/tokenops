@@ -17,10 +17,23 @@ import (
 // depends on mcp tooling for the in-process MCP listener.
 type urlHintPayload struct {
 	URL       string    `json:"url"`
+	LocalURL  string    `json:"local_url,omitempty"`
 	Addr      string    `json:"addr"`
 	TLS       bool      `json:"tls"`
 	PID       int       `json:"pid"`
 	StartedAt time.Time `json:"started_at"`
+}
+
+// preferredURL returns the URL the dashboard tool should hand to the
+// agent: mDNS hostname when the daemon successfully advertised, the
+// loopback URL otherwise. Keeping the choice in one place means a
+// future addition (Tailscale MagicDNS, dynamic DNS) plugs in here
+// without touching the tool handler.
+func (p urlHintPayload) preferredURL() string {
+	if p.LocalURL != "" {
+		return p.LocalURL
+	}
+	return p.URL
 }
 
 // urlHintPath resolves the location the daemon writes its URL hint
@@ -84,11 +97,17 @@ func RegisterDashboardTool(s *Server) error {
 					"hint":  "could not read daemon URL hint: " + err.Error(),
 				}), nil
 			}
-			summary := "## Dashboard\n\n[Open " + payload.URL + "/dashboard](" + payload.URL + "/dashboard)\n\n" +
-				"_Daemon PID " + strconv.Itoa(payload.PID) + ", started " + payload.StartedAt.Format(time.RFC3339) + "._\n"
+			base := payload.preferredURL()
+			summary := "## Dashboard\n\n[Open " + base + "/dashboard](" + base + "/dashboard)\n\n"
+			if payload.LocalURL != "" && payload.LocalURL != payload.URL {
+				summary += "_mDNS: " + payload.LocalURL + " — falls back to " + payload.URL + " if `.local` resolution is off._\n\n"
+			}
+			summary += "_Daemon PID " + strconv.Itoa(payload.PID) + ", started " + payload.StartedAt.Format(time.RFC3339) + "._\n"
 			return markdownPayload(summary, map[string]any{
-				"url":        payload.URL + "/dashboard",
-				"daemon_url": payload.URL,
+				"url":        base + "/dashboard",
+				"daemon_url": base,
+				"loopback":   payload.URL,
+				"local_url":  payload.LocalURL,
 				"tls":        payload.TLS,
 				"pid":        payload.PID,
 				"started_at": payload.StartedAt,

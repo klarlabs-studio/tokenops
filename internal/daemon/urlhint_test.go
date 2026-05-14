@@ -26,7 +26,7 @@ func TestWriteURLHintNormalizesBindAddress(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			path, err := writeURLHint(c.addr, c.tls)
+			path, err := writeURLHint(c.addr, c.tls, "")
 			if err != nil {
 				t.Fatalf("writeURLHint: %v", err)
 			}
@@ -62,7 +62,7 @@ func TestRemoveURLHintIdempotent(t *testing.T) {
 		t.Fatalf("remove on empty dir: %v", err)
 	}
 	// Write a hint, then remove twice.
-	if _, err := writeURLHint("127.0.0.1:8080", false); err != nil {
+	if _, err := writeURLHint("127.0.0.1:8080", false, ""); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	if err := removeURLHint(); err != nil {

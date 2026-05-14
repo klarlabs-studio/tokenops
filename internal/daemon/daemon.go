@@ -232,15 +232,37 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	if err := srv.Start(ctx); err != nil {
 		return fmt.Errorf("start proxy: %w", err)
 	}
+	// Try to advertise the daemon as tokenops.local over mDNS so the
+	// dashboard URL stays memorable. Best-effort: container hosts,
+	// firewalled networks, and CI runners frequently lack a usable
+	// multicast interface — we log + fall back to the loopback URL
+	// instead of failing the boot.
+	var (
+		mdnsClose      = func() {}
+		mdnsPublicURL  string
+		mdnsAdvertised bool
+	)
+	if closer, publicURL, err := startMDNSAdvertise(srv.Addr(), srv.TLSEnabled()); err != nil {
+		logger.Info("mdns advertise unavailable; using loopback URL", "err", err)
+	} else {
+		mdnsClose = closer
+		mdnsPublicURL = publicURL
+		mdnsAdvertised = true
+		logger.Info("mdns advertise live", "url", publicURL)
+	}
+	defer mdnsClose()
 	// Publish the listen URL so the MCP `serve` process can return a
 	// clickable dashboard link via tokenops_dashboard. Removed on
 	// shutdown so a stale URL never survives the daemon. Failure here
 	// is non-fatal: the daemon stays up; the MCP tool just falls
 	// back to "run tokenops up" guidance.
-	if hintPath, err := writeURLHint(srv.Addr(), srv.TLSEnabled()); err != nil {
+	if hintPath, err := writeURLHint(srv.Addr(), srv.TLSEnabled(), mdnsPublicURL); err != nil {
 		logger.Warn("could not publish daemon URL hint", "err", err)
 	} else {
-		logger.Info("daemon URL hint published", "path", hintPath)
+		logger.Info("daemon URL hint published",
+			"path", hintPath,
+			"mdns_advertised", mdnsAdvertised,
+		)
 		defer func() {
 			if err := removeURLHint(); err != nil {
 				logger.Warn("could not remove daemon URL hint", "err", err)

@@ -20,6 +20,7 @@ import (
 // the daemon is still alive before trusting the URL.
 type urlHintPayload struct {
 	URL       string    `json:"url"`
+	LocalURL  string    `json:"local_url,omitempty"`
 	Addr      string    `json:"addr"`
 	TLS       bool      `json:"tls"`
 	PID       int       `json:"pid"`
@@ -45,8 +46,11 @@ func urlHintPath() (string, error) {
 // server can return a clickable link. addr is the actual bound address
 // (post :0 resolution); tls flips the scheme. localhost normalisation
 // turns 0.0.0.0/:: into 127.0.0.1 so the URL is actually clickable
-// from the operator's machine.
-func writeURLHint(addr string, tls bool) (string, error) {
+// from the operator's machine. localURL is the optional mDNS URL
+// (e.g. http://tokenops.local:7878) — written when zeroconf advertise
+// succeeded so the MCP dashboard tool can prefer it over the bare
+// loopback address.
+func writeURLHint(addr string, tls bool, localURL string) (string, error) {
 	scheme := "http"
 	if tls {
 		scheme = "https"
@@ -58,6 +62,7 @@ func writeURLHint(addr string, tls bool) (string, error) {
 	url := scheme + "://" + addr
 	payload := urlHintPayload{
 		URL:       url,
+		LocalURL:  localURL,
 		Addr:      addr,
 		TLS:       tls,
 		PID:       os.Getpid(),
