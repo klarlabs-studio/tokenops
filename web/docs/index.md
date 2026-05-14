@@ -2,31 +2,61 @@
 layout: home
 hero:
   name: TokenOps
-  text: Predict rate-limit cutoffs inside your AI agent
-  tagline: Local MCP server + CLI that watches your flat-rate AI subscription window — Claude Max, ChatGPT Plus / Pro / Team, GitHub Copilot, Cursor — and tells the agent, before you hit the cap, to continue, slow down, switch model, or wait for reset.
+  text: Never lose a 4-hour session to a mid-task rate-limit cutoff
+  tagline: Local MCP server + CLI for flat-rate AI subscriptions (Claude Max, ChatGPT Plus / Pro / Team, GitHub Copilot, Cursor, Mistral Le Chat Pro, Codex Plus). Your agent asks `tokenops_session_budget` mid-task and gets back a headroom gauge plus one of four recommended actions — instead of you tab-flipping to a vendor `/status` page.
   actions:
     - theme: brand
       text: 90-second quickstart
       link: /guide/quickstart
-    - theme: alt
-      text: Star on GitHub
-      link: https://github.com/felixgeelhaar/tokenops
 features:
-  - title: Thirteen plans in the catalog
-    details: 'Claude Max 5x / 20x, Claude Pro, Claude Code (Max + Pro), ChatGPT Plus / Pro / Team, GitHub Copilot Individual / Business, Cursor Pro / Business, Mistral Le Chat Pro, Codex Plus. Each with a dated vendor source URL pinned in code.'
-  - title: Provider-agnostic by design
-    details: 'OpenAI, Anthropic, Google Gemini, Mistral all flow through the same proxy and event schema. Spend, optimizer, scorecard, MCP tools — every surface treats them as peers, not special cases.'
-  - title: Honest signal quality
-    details: Every prediction carries `signal_quality.level` (low / medium / high) plus a one-line caveat. Heuristic mode is labelled; proxied mode is labelled; the product never pretends a guess is a guarantee.
-  - title: MCP-first with inline charts
-    details: '25 MCP tools agents can call directly. `tokenops_session_budget` returns `recommended_action ∈ continue|slow_down|switch_model|wait_for_reset` with an inline SVG headroom gauge; `tokenops_burn_rate` ships a 24h sparkline. Works with Claude Code, Cursor, aider, Codex, and every other MCP host.'
-  - title: Auto-detect on first run
-    details: '`tokenops init --detect` sniffs Claude Code, Claude Desktop, Cursor, ChatGPT Desktop, and the standard API-key env vars, then prints the exact `tokenops plan set …` commands for what it found. No config archaeology.'
-  - title: Interactive Vue + D3 dashboard
-    details: 'The daemon serves a local dashboard at `/dashboard` — per-model stacked area cost chart, tokens-per-bucket stacked bar, live KPIs, provider + model filters that persist across refresh, 15s auto-refresh. The `tokenops_dashboard` MCP tool hands your agent a clickable URL with a one-shot auth token pre-attached.'
-  - title: Local-first, open source
-    details: SQLite database. No cloud account. No telemetry. Apache 2.0. Demo-data isolation by default so synthetic seeds never contaminate the real signal.
+  - title: Predict
+    details: '`tokenops_session_budget` returns a coloured headroom gauge and a closed-enum `recommended_action ∈ continue | slow_down | switch_model | wait_for_reset`. 13-plan catalog with dated vendor source URLs pinned in code (Claude Max 5x / 20x / Pro, Claude Code, ChatGPT Plus / Pro / Team, Copilot, Cursor, Mistral, Codex).'
+  - title: Integrate
+    details: '25 MCP tools agents call directly. `tokenops init --detect` sniffs your installed clients (Claude Code/Desktop, Cursor, ChatGPT, env-var API keys) and prints the exact `tokenops plan set …` commands. Works with Claude Code, Cursor, aider, Codex.'
+  - title: Visualize
+    details: 'Vue + D3 dashboard at `http://tokenops.local:7878/dashboard` — per-model stacked area cost chart, tokens-per-bucket stacked bar, provider + model filters that persist across refresh, 15s auto-refresh. Inline SVG sparkline + headroom gauge also render directly in MCP tool responses.'
+  - title: Trust
+    details: 'Every prediction carries `signal_quality.level` (low / medium / high) plus a one-line caveat and upgrade paths. Heuristic mode is labelled; proxied mode is labelled. Default install reports low confidence — earn high in 5 minutes with an Anthropic Admin API key.'
+  - title: Self-host
+    details: 'Local SQLite, no cloud account, no telemetry. Daemon advertises `tokenops.local` over mDNS so the dashboard URL is memorable. Shared-secret auth on `/dashboard` + `/api/*` (mint-and-rotate via `tokenops dashboard rotate-token`). Apache 2.0.'
 ---
+
+<script setup>
+import { withBase } from 'vitepress'
+</script>
+
+<video autoplay loop muted playsinline preload="metadata" :poster="withBase('/media/dashboard-poster.jpg')" style="width:100%;max-width:960px;display:block;margin:24px auto;border-radius:8px;border:1px solid var(--vp-c-divider);">
+  <source :src="withBase('/media/dashboard.webm')" type="video/webm">
+  <em>Local TokenOps dashboard: cost-over-time, per-model stacked area, filter dropdowns. Captured live via the Scout MCP browser-recorder against the v0.11.0 daemon.</em>
+</video>
+
+## Instead of `/status` and a billing tab
+
+Today, when your agent is mid-refactor and Claude returns "limit reached, resets in 4h," your options are: open the Anthropic console in another tab, paste `/status` into your terminal, refresh the billing page, or just eat the wait. None of those tell the *agent* anything.
+
+TokenOps puts the headroom check inside the agent's loop. The agent calls one MCP tool, sees `62% headroom, 1h41m to reset, recommended_action: continue` (or `slow_down`, `switch_model`, `wait_for_reset`), and proceeds without you alt-tabbing.
+
+## For agents
+
+The MCP surface is a deterministic guardrail, not vibes-in-the-loop. Closed action enum, calibrated confidence:
+
+```json
+{
+  "tool": "tokenops_session_budget",
+  "response": {
+    "headroom_pct": 62,
+    "window_resets_in": "1h41m",
+    "recommended_action": "continue",
+    "signal_quality": {
+      "level": "high",
+      "source": "vendor_usage_api",
+      "caveat": null
+    }
+  }
+}
+```
+
+`recommended_action` is a closed enum (`continue | slow_down | switch_model | wait_for_reset`) so the agent picks the right branch without parsing prose. `signal_quality.level` lets the agent decide how much to trust the call: stay aggressive on `high`, defer to the human on `low`.
 
 ## What's new in v0.11.0
 
