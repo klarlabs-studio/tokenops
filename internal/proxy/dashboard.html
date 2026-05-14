@@ -188,13 +188,28 @@ createApp({
       } catch { /* dropdowns stay empty; main fetch surfaces real errors */ }
     };
 
+    // seriesByModel carries the per-(bucket, model) cost grid used to
+    // render the stacked area chart when no model filter is active.
+    // Shape: Array<{ t: Date, byModel: { [model]: cost } }> with one
+    // row per bucket and one key per model active in the window.
+    const seriesByModel = ref([]);
+    const modelNamesInChart = ref([]);
+
     const fetchAll = async () => {
       try {
         const q = filterQuery();
-        const [sumRes, serRes] = await Promise.all([
+        // Always fetch the unfiltered cost series for the KPI tiles +
+        // the token chart. When no model filter is set, also fetch a
+        // group=model series so the cost chart can stack per-model.
+        const fetches = [
           fetch(`/api/spend/summary?${q}`),
           fetch(`/api/spend/series?${q}&bucket=hour`),
-        ]);
+        ];
+        if (!model.value) {
+          fetches.push(fetch(`/api/spend/series?${q}&bucket=hour&group=model`));
+        }
+        const responses = await Promise.all(fetches);
+        const [sumRes, serRes, byModelRes] = responses;
         if (!sumRes.ok) throw new Error(`summary HTTP ${sumRes.status}`);
         if (!serRes.ok) throw new Error(`series HTTP ${serRes.status}`);
         const s = await sumRes.json();
@@ -207,6 +222,25 @@ createApp({
           input: row.InputTokens || 0,
           output: row.OutputTokens || 0,
         }));
+        if (byModelRes && byModelRes.ok) {
+          const m = await byModelRes.json();
+          // Pivot the long-form rows ({t, model, cost}) into the
+          // wide grid the stacked area renderer needs.
+          const buckets = new Map();
+          const modelSet = new Set();
+          for (const row of (m.rows || [])) {
+            const key = row.BucketStart;
+            const mod  = row.GroupKey || "(unknown)";
+            if (!buckets.has(key)) buckets.set(key, { t: new Date(row.BucketStart), byModel: {} });
+            buckets.get(key).byModel[mod] = row.CostUSD || 0;
+            modelSet.add(mod);
+          }
+          seriesByModel.value = [...buckets.values()].sort((a, b) => a.t - b.t);
+          modelNamesInChart.value = [...modelSet].sort();
+        } else {
+          seriesByModel.value = [];
+          modelNamesInChart.value = [];
+        }
         loadError.value = "";
         lastRefresh.value = new Date().toLocaleTimeString();
         await nextTick();
@@ -220,6 +254,12 @@ createApp({
     const setWindow = (h) => { windowHours.value = h; persistFilters(); refreshFacets(); fetchAll(); };
     const onFilterChange = () => { persistFilters(); fetchAll(); };
 
+    // d3.schemeTableau10 is stable across refreshes per model name as
+    // long as modelNamesInChart's sort order doesn't change. Keeping
+    // the colour scale alphabetical means a model gets the same hue
+    // whether or not other models happen to be in the window.
+    const colorForModel = d3.scaleOrdinal(d3.schemeTableau10);
+
     const drawCostChart = () => {
       const svg = d3.select(costChart.value);
       svg.selectAll("*").remove();
@@ -228,6 +268,39 @@ createApp({
       const margin = { top: 8, right: 12, bottom: 24, left: 50 };
       const w = W - margin.left - margin.right, h = H - margin.top - margin.bottom;
       const g = svg.attr("viewBox", `0 0 ${W} ${H}`).append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+      // Stacked area branch: render when we have per-model data and
+      // no model filter is active. Otherwise fall through to the
+      // single-line chart for the filtered slice.
+      const useStacked = !model.value && seriesByModel.value.length > 0 && modelNamesInChart.value.length > 0;
+      if (useStacked) {
+        const models = modelNamesInChart.value;
+        colorForModel.domain(models);
+        const stack = d3.stack().keys(models).value((d, key) => d.byModel[key] || 0);
+        const stacked = stack(seriesByModel.value);
+        const x = d3.scaleTime().domain(d3.extent(seriesByModel.value, d => d.t)).range([0, w]);
+        const yMax = d3.max(stacked[stacked.length - 1], d => d[1]) || 0.0001;
+        const y = d3.scaleLinear().domain([0, yMax]).nice().range([h, 0]);
+        g.append("g").attr("class", "axis").attr("transform", `translate(0,${h})`).call(d3.axisBottom(x).ticks(5));
+        g.append("g").attr("class", "axis").call(d3.axisLeft(y).ticks(4).tickFormat(d => "$" + d.toFixed(4)));
+        const area = d3.area().x(d => x(d.data.t)).y0(d => y(d[0])).y1(d => y(d[1])).curve(d3.curveMonotoneX);
+        g.selectAll("path.layer").data(stacked).enter().append("path")
+          .attr("class", "layer").attr("fill", d => colorForModel(d.key)).attr("opacity", 0.85).attr("d", area);
+        // Legend at top: top-5 models (rest folded into a "+N more"
+        // chip) so a busy install doesn't drown the chart.
+        const top = models.slice(0, 5);
+        const legend = g.append("g").attr("transform", "translate(0,-2)");
+        let xCur = 0;
+        top.forEach(m => {
+          const item = legend.append("g").attr("transform", `translate(${xCur},0)`);
+          item.append("rect").attr("width", 8).attr("height", 8).attr("y", -7).attr("fill", colorForModel(m));
+          const t = item.append("text").attr("x", 12).attr("y", 0).attr("fill", "var(--muted)").attr("font-size", "11px").text(m);
+          xCur += 22 + (t.node().getComputedTextLength() || 60);
+        });
+        if (models.length > top.length) {
+          legend.append("text").attr("x", xCur).attr("fill", "var(--muted)").attr("font-size", "11px").text(`+${models.length - top.length} more`);
+        }
+        return;
+      }
       if (!series.value.length) {
         g.append("text").attr("x", w / 2).attr("y", h / 2).attr("text-anchor", "middle")
           .attr("fill", "var(--muted)").text("No data in window");
