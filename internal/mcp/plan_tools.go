@@ -55,8 +55,9 @@ func classifySignalFromStore(ctx context.Context, store *sqlite.Store, since, un
 		return plans.SignalInputs{}, err
 	}
 	return plans.SignalInputs{
-		ProxyEventsInWindow: counts["proxy"],
-		MCPPingsInWindow:    counts["mcp-session"],
+		ProxyEventsInWindow:     counts["proxy"],
+		MCPPingsInWindow:        counts["mcp-session"],
+		ClaudeCodeCacheInWindow: counts["claude-code-stats-cache"],
 	}, nil
 }
 

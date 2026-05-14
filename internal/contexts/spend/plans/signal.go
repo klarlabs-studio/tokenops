@@ -36,27 +36,30 @@ const (
 	SignalLevelMedium = "medium"
 	SignalLevelHigh   = "high"
 
-	SignalSourceMCPPings  = "mcp_tool_pings"
-	SignalSourceProxy     = "proxy_traffic"
-	SignalSourceVendorAPI = "vendor_usage_api"
+	SignalSourceMCPPings        = "mcp_tool_pings"
+	SignalSourceProxy           = "proxy_traffic"
+	SignalSourceVendorAPI       = "vendor_usage_api"
+	SignalSourceClaudeCodeCache = "claude_code_stats_cache"
 )
 
 // SignalInputs is the set of observations the quality classifier needs.
 // Zero values are valid: the function defaults to the most pessimistic
 // reading. The pure-function signature keeps tests trivial.
 type SignalInputs struct {
-	ProxyEventsInWindow int64
-	MCPPingsInWindow    int64
-	VendorAPIWired      bool
+	ProxyEventsInWindow     int64
+	MCPPingsInWindow        int64
+	ClaudeCodeCacheInWindow int64
+	VendorAPIWired          bool
 }
 
 // ClassifySignal returns the SignalQuality for a window of observations.
-// Decision rules:
+// Decision rules (first match wins):
 //
 //	vendor /usage wired                                  -> high
 //	proxy events >= mcp pings AND proxy events > 0       -> high
 //	proxy events between 1 and < mcp pings               -> medium
-//	mcp pings > 0, no proxy events                       -> low
+//	claude-code stats cache observed > 0                 -> medium
+//	mcp pings > 0, no proxy/cache events                 -> low
 //	no observations at all                               -> low
 //
 // The thresholds are intentionally coarse: this is a trust signal, not
@@ -84,6 +87,16 @@ func ClassifySignal(in SignalInputs) SignalQuality {
 				"route every client request through the proxy for full coverage",
 			},
 		}
+	case in.ClaudeCodeCacheInWindow > 0:
+		return SignalQuality{
+			Level:  SignalLevelMedium,
+			Source: SignalSourceClaudeCodeCache,
+			Caveat: "Reads ~/.claude/stats-cache.json — an undocumented Claude Code internal cache. Daily granularity only; cannot resolve the 5-hour rolling window.",
+			UpgradePaths: []string{
+				"route every Claude request through the local proxy for live per-request signal",
+				"connect the Anthropic Admin API for metered-API attribution (queued)",
+			},
+		}
 	default:
 		return SignalQuality{
 			Level:  SignalLevelLow,
@@ -91,6 +104,7 @@ func ClassifySignal(in SignalInputs) SignalQuality {
 			Caveat: "TokenOps observes MCP tool invocations only, not your real Claude conversation turns. Treat this as an activity proxy, not a quota meter.",
 			UpgradePaths: []string{
 				"wire your client base URL to the local proxy (`tokenops provider set ...`)",
+				"enable Claude Code stats cache reader (`vendor_usage.claude_code.enabled: true`)",
 				"connect a vendor /usage API key (queued)",
 			},
 		}

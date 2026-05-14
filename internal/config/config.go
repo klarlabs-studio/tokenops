@@ -28,12 +28,33 @@ type Config struct {
 	// a configured plan are billed as plan_included (CostUSD=0) and
 	// roll up to the plan's monthly quota instead. See
 	// internal/contexts/spend/plans for the catalog.
-	Plans      map[string]string `yaml:"plans"`
-	TLS        TLSConfig         `yaml:"tls"`
-	Storage    StorageConfig     `yaml:"storage"`
-	OTel       OTelConfig        `yaml:"otel"`
-	Rules      RulesConfig       `yaml:"rules"`
-	Resilience ResilienceConfig  `yaml:"resilience"`
+	Plans       map[string]string `yaml:"plans"`
+	TLS         TLSConfig         `yaml:"tls"`
+	Storage     StorageConfig     `yaml:"storage"`
+	OTel        OTelConfig        `yaml:"otel"`
+	Rules       RulesConfig       `yaml:"rules"`
+	Resilience  ResilienceConfig  `yaml:"resilience"`
+	VendorUsage VendorUsageConfig `yaml:"vendor_usage"`
+}
+
+// VendorUsageConfig wires the vendor-side usage pollers. Each provider
+// has its own block because authentication, polling cadence, and the
+// signal quality story differ. ClaudeCode reads the local Claude Code
+// stats cache; future blocks (anthropic admin API, openai usage)
+// add here as separate sub-structs.
+type VendorUsageConfig struct {
+	ClaudeCode ClaudeCodeUsageConfig `yaml:"claude_code"`
+}
+
+// ClaudeCodeUsageConfig enables reading ~/.claude/stats-cache.json and
+// emitting envelopes for the per-model daily token totals Claude Code
+// records there. Empty Path defaults to the conventional location.
+// Interval below 15s is clamped at the poller level to avoid
+// hammering the file on caches that rotate frequently.
+type ClaudeCodeUsageConfig struct {
+	Enabled  bool          `yaml:"enabled"`
+	Path     string        `yaml:"path"`
+	Interval time.Duration `yaml:"interval"`
 }
 
 // ResilienceConfig wraps each provider proxy route with

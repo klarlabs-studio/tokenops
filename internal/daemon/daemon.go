@@ -22,6 +22,7 @@ import (
 	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/security/audit"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/security/tlsmint"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/claudecode"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/workflows/workflow"
 	"github.com/felixgeelhaar/tokenops/internal/domainevents"
 	"github.com/felixgeelhaar/tokenops/internal/events"
@@ -201,6 +202,27 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			proxy.WithEventBus(bus),
 			proxy.WithTokenizer(components.Tokenizers),
 		)
+
+		// Optional vendor-usage pollers. Each one publishes envelopes
+		// through the same bus the proxy uses, so vendor and proxy
+		// signals end up in the same store with distinct Source tags
+		// (signal_quality reads those tags to upgrade confidence).
+		if cfg.VendorUsage.ClaudeCode.Enabled {
+			p := claudecode.NewPoller(bus, claudecode.PollerOptions{
+				Path:     cfg.VendorUsage.ClaudeCode.Path,
+				Interval: cfg.VendorUsage.ClaudeCode.Interval,
+				Logger:   logger,
+			})
+			go func() {
+				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					logger.Warn("claude-code stats poller exited", "err", err)
+				}
+			}()
+			logger.Info("claude-code stats cache poller live",
+				"interval", cfg.VendorUsage.ClaudeCode.Interval,
+				"path", cfg.VendorUsage.ClaudeCode.Path,
+			)
+		}
 
 		analyticsH, err := proxy.NewAnalyticsHandlers(components.Store, components.Aggregator, components.Spend)
 		if err != nil {

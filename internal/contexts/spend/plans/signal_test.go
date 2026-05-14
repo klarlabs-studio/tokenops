@@ -42,6 +42,34 @@ func TestClassifySignalProxyPartial(t *testing.T) {
 	}
 }
 
+// Claude Code stats cache observed but no proxy traffic → medium.
+// Mentions the cache caveat so consumers know the granularity limit.
+func TestClassifySignalClaudeCodeCacheOnly(t *testing.T) {
+	q := ClassifySignal(SignalInputs{ClaudeCodeCacheInWindow: 5, MCPPingsInWindow: 100})
+	if q.Level != SignalLevelMedium {
+		t.Errorf("claude-code-cache-only must be medium, got %q", q.Level)
+	}
+	if q.Source != SignalSourceClaudeCodeCache {
+		t.Errorf("source=%q want claude_code_stats_cache", q.Source)
+	}
+	if q.Caveat == "" {
+		t.Error("cache-driven signal must carry a caveat about daily granularity")
+	}
+}
+
+// Proxy traffic still wins over the cache reader — proxy is per-request
+// observation; cache is daily roll-ups.
+func TestClassifySignalProxyBeatsClaudeCodeCache(t *testing.T) {
+	q := ClassifySignal(SignalInputs{
+		ProxyEventsInWindow:     50,
+		MCPPingsInWindow:        10,
+		ClaudeCodeCacheInWindow: 5,
+	})
+	if q.Source != SignalSourceProxy {
+		t.Errorf("proxy must trump cache; got source=%q", q.Source)
+	}
+}
+
 func TestClassifySignalVendorWiredTrumpsAll(t *testing.T) {
 	q := ClassifySignal(SignalInputs{
 		ProxyEventsInWindow: 1000, MCPPingsInWindow: 0, VendorAPIWired: true,
