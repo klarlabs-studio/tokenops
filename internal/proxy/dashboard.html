@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TokenOps — Dashboard</title>
+<!-- Inline SVG favicon: a single rounded rect + a sparkline-shape T.
+     Inline so no extra request, scales crisply, and survives the
+     dashboard.html being copied around for offline use. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%234159d6'/%3E%3Cpath d='M14 38 L24 26 L34 32 L44 18 L50 22' stroke='white' stroke-width='4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='50' cy='22' r='3.5' fill='white'/%3E%3C/svg%3E">
 <script src="https://unpkg.com/vue@3.5.13/dist/vue.global.prod.js"></script>
 <script src="https://unpkg.com/d3@7.9.0/dist/d3.min.js"></script>
 <style>
