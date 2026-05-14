@@ -60,6 +60,7 @@ func NewRoot() *cobra.Command {
 		newPlanCmd(rf),
 		newProviderCmd(),
 		newVendorUsageCmd(),
+		newDashboardCmd(),
 	)
 	return cmd
 }
