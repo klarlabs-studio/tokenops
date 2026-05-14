@@ -26,6 +26,7 @@ import { withBase } from 'vitepress'
 </script>
 
 <video autoplay loop muted playsinline preload="metadata" :poster="withBase('/media/dashboard-poster.jpg')" style="width:100%;max-width:960px;display:block;margin:24px auto;border-radius:8px;border:1px solid var(--vp-c-divider);">
+  <source :src="withBase('/media/dashboard.mp4')" type="video/mp4">
   <source :src="withBase('/media/dashboard.webm')" type="video/webm">
   <em>Local TokenOps dashboard: cost-over-time, per-model stacked area, filter dropdowns. Captured live via the Scout MCP browser-recorder against the v0.11.0 daemon.</em>
 </video>
