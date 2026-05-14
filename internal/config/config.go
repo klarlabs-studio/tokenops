@@ -44,6 +44,18 @@ type Config struct {
 // add here as separate sub-structs.
 type VendorUsageConfig struct {
 	ClaudeCode ClaudeCodeUsageConfig `yaml:"claude_code"`
+	Anthropic  AnthropicUsageConfig  `yaml:"anthropic"`
+}
+
+// AnthropicUsageConfig wires the Anthropic Admin API poller. AdminKey
+// must be a sk-ant-admin-* key minted in the Claude Console; without
+// one the poller stays idle but the daemon still starts. Interval
+// defaults to 5 minutes (the API freshness lag).
+type AnthropicUsageConfig struct {
+	Enabled     bool          `yaml:"enabled"`
+	AdminKey    string        `yaml:"admin_key"`
+	Interval    time.Duration `yaml:"interval"`
+	BucketWidth string        `yaml:"bucket_width"`
 }
 
 // ClaudeCodeUsageConfig enables reading ~/.claude/stats-cache.json and

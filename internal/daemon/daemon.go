@@ -22,6 +22,7 @@ import (
 	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/security/audit"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/security/tlsmint"
+	anthropicusage "github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/anthropic"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/claudecode"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/workflows/workflow"
 	"github.com/felixgeelhaar/tokenops/internal/domainevents"
@@ -221,6 +222,24 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			logger.Info("claude-code stats cache poller live",
 				"interval", cfg.VendorUsage.ClaudeCode.Interval,
 				"path", cfg.VendorUsage.ClaudeCode.Path,
+			)
+		}
+		if cfg.VendorUsage.Anthropic.Enabled {
+			client := anthropicusage.NewAdminClient(cfg.VendorUsage.Anthropic.AdminKey)
+			p := anthropicusage.NewPoller(client, bus, anthropicusage.PollerOptions{
+				AdminKey:    cfg.VendorUsage.Anthropic.AdminKey,
+				Interval:    cfg.VendorUsage.Anthropic.Interval,
+				BucketWidth: anthropicusage.BucketWidth(cfg.VendorUsage.Anthropic.BucketWidth),
+				Logger:      logger,
+			})
+			go func() {
+				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					logger.Warn("anthropic admin usage poller exited", "err", err)
+				}
+			}()
+			logger.Info("anthropic admin usage poller live",
+				"interval", cfg.VendorUsage.Anthropic.Interval,
+				"bucket_width", cfg.VendorUsage.Anthropic.BucketWidth,
 			)
 		}
 
