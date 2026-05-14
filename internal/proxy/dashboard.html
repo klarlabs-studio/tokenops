@@ -37,6 +37,9 @@
   .controls button { background: var(--panel); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer; font-family: inherit; }
   .controls button:hover { border-color: var(--accent); }
   .controls button.active { background: var(--accent); border-color: var(--accent); color: white; }
+  .controls select { background: var(--panel); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 13px; font-family: inherit; min-width: 130px; }
+  .controls select:focus { outline: none; border-color: var(--accent); }
+  .controls .group { display: flex; gap: 6px; align-items: center; }
   .err { background: rgba(208, 64, 64, 0.1); border: 1px solid var(--red); color: var(--red); padding: 12px; border-radius: 6px; font-family: var(--code); font-size: 13px; }
   .muted { color: var(--muted); font-size: 13px; }
   svg { display: block; max-width: 100%; }
@@ -52,10 +55,26 @@
   <p class="sub">Local-first observability for LLM workloads. Auto-refresh {{ refreshSec }}s.</p>
 
   <div class="controls">
-    <span class="muted">Window:</span>
-    <button v-for="opt in windowOpts" :key="opt.label"
-            :class="{active: opt.hours === windowHours}"
-            @click="setWindow(opt.hours)">{{ opt.label }}</button>
+    <div class="group">
+      <span class="muted">Window</span>
+      <button v-for="opt in windowOpts" :key="opt.label"
+              :class="{active: opt.hours === windowHours}"
+              @click="setWindow(opt.hours)">{{ opt.label }}</button>
+    </div>
+    <div class="group">
+      <span class="muted">Provider</span>
+      <select v-model="provider" @change="fetchAll">
+        <option value="">All</option>
+        <option v-for="p in providers" :key="p" :value="p">{{ p }}</option>
+      </select>
+    </div>
+    <div class="group">
+      <span class="muted">Model</span>
+      <select v-model="model" @change="fetchAll">
+        <option value="">All</option>
+        <option v-for="m in models" :key="m" :value="m">{{ m }}</option>
+      </select>
+    </div>
     <span class="muted" style="margin-left:auto">Last refresh: {{ lastRefresh || '—' }}</span>
   </div>
 
@@ -95,6 +114,10 @@ createApp({
       { label: "24h", hours: 24 }, { label: "7d", hours: 168 },
     ];
     const windowHours = ref(24);
+    const provider = ref("");
+    const model = ref("");
+    const providers = ref([]);
+    const models = ref([]);
     const summary = reactive({ CostUSD: 0, Requests: 0, InputTokens: 0, OutputTokens: 0, TotalTokens: 0 });
     const series = ref([]);
     const currency = ref("USD");
@@ -108,12 +131,44 @@ createApp({
 
     const sinceISO = () => new Date(Date.now() - windowHours.value * 3600 * 1000).toISOString();
 
+    // filterQuery builds the shared ?since=…&provider=…&model=…
+    // suffix every endpoint hit honours. Provider/model are omitted
+    // when set to the "All" sentinel (empty string).
+    const filterQuery = () => {
+      const parts = [`since=${encodeURIComponent(sinceISO())}`];
+      if (provider.value) parts.push(`provider=${encodeURIComponent(provider.value)}`);
+      if (model.value)    parts.push(`model=${encodeURIComponent(model.value)}`);
+      return parts.join("&");
+    };
+
+    // refreshFacets rebuilds the provider + model dropdowns from a
+    // group=provider / group=model series query so the dropdowns
+    // always reflect what the store actually contains in the window.
+    // Cheap: runs once per window change, not per filter pick.
+    const refreshFacets = async () => {
+      const since = encodeURIComponent(sinceISO());
+      try {
+        const [pRes, mRes] = await Promise.all([
+          fetch(`/api/spend/series?since=${since}&bucket=day&group=provider`),
+          fetch(`/api/spend/series?since=${since}&bucket=day&group=model`),
+        ]);
+        if (pRes.ok) {
+          const p = await pRes.json();
+          providers.value = [...new Set((p.rows || []).map(r => r.GroupKey).filter(Boolean))].sort();
+        }
+        if (mRes.ok) {
+          const m = await mRes.json();
+          models.value = [...new Set((m.rows || []).map(r => r.GroupKey).filter(Boolean))].sort();
+        }
+      } catch { /* dropdowns stay empty; main fetch surfaces real errors */ }
+    };
+
     const fetchAll = async () => {
       try {
-        const since = encodeURIComponent(sinceISO());
+        const q = filterQuery();
         const [sumRes, serRes] = await Promise.all([
-          fetch(`/api/spend/summary?since=${since}`),
-          fetch(`/api/spend/series?since=${since}&bucket=hour`),
+          fetch(`/api/spend/summary?${q}`),
+          fetch(`/api/spend/series?${q}&bucket=hour`),
         ]);
         if (!sumRes.ok) throw new Error(`summary HTTP ${sumRes.status}`);
         if (!serRes.ok) throw new Error(`series HTTP ${serRes.status}`);
@@ -137,7 +192,7 @@ createApp({
       }
     };
 
-    const setWindow = (h) => { windowHours.value = h; fetchAll(); };
+    const setWindow = (h) => { windowHours.value = h; refreshFacets(); fetchAll(); };
 
     const drawCostChart = () => {
       const svg = d3.select(costChart.value);
@@ -192,11 +247,11 @@ createApp({
     };
 
     let timer;
-    onMounted(() => { fetchAll(); timer = setInterval(fetchAll, refreshSec * 1000); window.addEventListener("resize", drawCharts); });
+    onMounted(() => { refreshFacets(); fetchAll(); timer = setInterval(fetchAll, refreshSec * 1000); window.addEventListener("resize", drawCharts); });
     onUnmounted(() => { clearInterval(timer); window.removeEventListener("resize", drawCharts); });
     const drawCharts = () => { drawCostChart(); drawTokenChart(); };
 
-    return { refreshSec, windowOpts, windowHours, summary, loadError, lastRefresh, costChart, tokenChart, fmtCost, fmtNum, setWindow };
+    return { refreshSec, windowOpts, windowHours, provider, model, providers, models, summary, loadError, lastRefresh, costChart, tokenChart, fmtCost, fmtNum, setWindow, fetchAll };
   }
 }).mount("#app");
 </script>
