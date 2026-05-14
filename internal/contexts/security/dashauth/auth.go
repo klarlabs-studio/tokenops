@@ -74,22 +74,71 @@ func New(cfg Config) (*Authenticator, error) {
 }
 
 // Middleware wraps next so unauthenticated requests are rejected with
-// 401. Authentication accepts either a valid session cookie or a
-// matching bearer token; both are checked in constant time.
+// 401. Authentication accepts a bearer token header, a ?token=…
+// query param, or a session cookie (all in constant time). When a
+// query-param token authenticates a browser-style request (Accept
+// header contains text/html), the middleware mints a session cookie
+// and 303s back to the same URL without the token — so the dashboard
+// reloads from cache without the secret in history.
 func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if a.authorize(r) {
-			next.ServeHTTP(w, r)
+		if !a.authorize(r) {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="tokenops"`)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		w.Header().Set("WWW-Authenticate", `Bearer realm="tokenops"`)
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		// Browser-style bootstrap: query-param auth succeeded AND the
+		// client looks like a browser. Mint a session cookie + redirect
+		// so the URL bar drops the token.
+		if q := r.URL.Query().Get("token"); q != "" && strings.Contains(r.Header.Get("Accept"), "text/html") {
+			sid := a.mintSession()
+			http.SetCookie(w, &http.Cookie{
+				Name:     a.cfg.CookieName,
+				Value:    sid,
+				Path:     "/",
+				HttpOnly: true,
+				Secure:   a.cfg.CookieSecure,
+				SameSite: http.SameSiteLaxMode,
+				Expires:  time.Now().Add(a.cfg.SessionTTL),
+			})
+			clean := *r.URL
+			values := clean.Query()
+			values.Del("token")
+			clean.RawQuery = values.Encode()
+			http.Redirect(w, r, clean.RequestURI(), http.StatusSeeOther)
+			return
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 
-// authorize reports whether r presents a valid credential.
+// mintSession allocates a random session ID and records it with the
+// configured TTL. Exported separately from the password login flow so
+// the query-param bootstrap reuses the same session map.
+func (a *Authenticator) mintSession() string {
+	buf := make([]byte, 32)
+	_, _ = rand.Read(buf)
+	sid := base64.RawURLEncoding.EncodeToString(buf)
+	a.mu.Lock()
+	a.sessions[sid] = time.Now().Add(a.cfg.SessionTTL)
+	a.mu.Unlock()
+	return sid
+}
+
+// authorize reports whether r presents a valid credential. Three
+// credential channels are accepted, in order:
+//
+//   - Authorization: Bearer <token> — scripted / CLI clients.
+//   - ?token=… query param — bootstrap path for the dashboard, where
+//     the MCP tokenops_dashboard tool returns a clickable URL with
+//     the token embedded. On a successful match we mint a short-lived
+//     session cookie so the page reloads without leaking the token
+//     in the address bar.
+//   - Session cookie — established by the login handler or by the
+//     query-param bootstrap above.
+//
+// All token comparisons use constant-time equality.
 func (a *Authenticator) authorize(r *http.Request) bool {
-	// Bearer token first (cheap, no map lookup).
 	if a.cfg.AdminToken != "" {
 		auth := r.Header.Get("Authorization")
 		if strings.HasPrefix(auth, "Bearer ") {
@@ -98,8 +147,12 @@ func (a *Authenticator) authorize(r *http.Request) bool {
 				return true
 			}
 		}
+		if q := r.URL.Query().Get("token"); q != "" {
+			if subtle.ConstantTimeCompare([]byte(q), []byte(a.cfg.AdminToken)) == 1 {
+				return true
+			}
+		}
 	}
-	// Session cookie.
 	cookie, err := r.Cookie(a.cfg.CookieName)
 	if err != nil || cookie.Value == "" {
 		return false

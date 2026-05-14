@@ -35,6 +35,16 @@ type Config struct {
 	Rules       RulesConfig       `yaml:"rules"`
 	Resilience  ResilienceConfig  `yaml:"resilience"`
 	VendorUsage VendorUsageConfig `yaml:"vendor_usage"`
+	Dashboard   DashboardConfig   `yaml:"dashboard"`
+}
+
+// DashboardConfig gates /dashboard + /api/* behind a shared-secret
+// token. AdminToken empty → daemon mints + persists one to
+// ~/.tokenops/dashboard.token on first start. Setting it explicitly
+// (env-substituted via the loader) lets ops roll the secret without
+// touching disk state.
+type DashboardConfig struct {
+	AdminToken string `yaml:"admin_token"`
 }
 
 // VendorUsageConfig wires the vendor-side usage pollers. Each provider

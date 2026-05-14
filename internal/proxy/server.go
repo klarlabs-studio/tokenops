@@ -40,6 +40,7 @@ type Server struct {
 	eventCounts     func() map[string]int64
 	auditDrops      func() int64
 	resilience      *ResilienceConfig
+	dashAuth        DashAuth
 
 	mu       sync.Mutex
 	httpSrv  *http.Server
@@ -49,6 +50,23 @@ type Server struct {
 
 // Option mutates a Server during construction.
 type Option func(*Server)
+
+// DashAuth is the contract the proxy needs from a dashboard
+// authenticator. Defined as an interface (rather than importing
+// internal/contexts/security/dashauth directly) so the proxy package
+// stays free of security-context imports — keeps the layer boundary
+// the archlint enforces.
+type DashAuth interface {
+	Middleware(next http.Handler) http.Handler
+}
+
+// WithDashAuth gates /dashboard + /api/* behind the given
+// authenticator. When nil, those routes are mounted bare (legacy
+// localhost-trust default). Pass a real authenticator whenever the
+// daemon binds anything beyond loopback.
+func WithDashAuth(a DashAuth) Option {
+	return func(s *Server) { s.dashAuth = a }
+}
 
 // WithLogger attaches a structured logger.
 func WithLogger(l *slog.Logger) Option {
@@ -183,11 +201,24 @@ func (s *Server) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 	s.registerRoutes(mux)
 	if s.analytics != nil {
-		s.analytics.Register(mux)
+		// Mount analytics + dashboard onto a private sub-mux so the
+		// auth middleware (when configured) wraps every protected
+		// route in one place. /healthz, /readyz, and /version stay on
+		// the outer mux unauthenticated — health probes must not
+		// require credentials.
+		protected := http.NewServeMux()
+		s.analytics.Register(protected)
 		// Dashboard only renders meaningful data when analytics is
 		// wired (it queries /api/spend/*), so mount it inside the
 		// same branch instead of leaving an empty page exposed.
-		registerDashboard(mux)
+		registerDashboard(protected)
+		var protectedHandler http.Handler = protected
+		if s.dashAuth != nil {
+			protectedHandler = s.dashAuth.Middleware(protected)
+		}
+		mux.Handle("/dashboard", protectedHandler)
+		mux.Handle("/dashboard/", protectedHandler)
+		mux.Handle("/api/", protectedHandler)
 	} else {
 		stub := subsystemDisabledHandler("storage_disabled",
 			"run `tokenops init` to enable the sqlite event store, then restart the daemon")

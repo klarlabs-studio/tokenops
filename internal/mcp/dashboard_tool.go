@@ -16,12 +16,13 @@ import (
 // boundary clean and avoids import cycles when the daemon eventually
 // depends on mcp tooling for the in-process MCP listener.
 type urlHintPayload struct {
-	URL       string    `json:"url"`
-	LocalURL  string    `json:"local_url,omitempty"`
-	Addr      string    `json:"addr"`
-	TLS       bool      `json:"tls"`
-	PID       int       `json:"pid"`
-	StartedAt time.Time `json:"started_at"`
+	URL            string    `json:"url"`
+	LocalURL       string    `json:"local_url,omitempty"`
+	Addr           string    `json:"addr"`
+	TLS            bool      `json:"tls"`
+	PID            int       `json:"pid"`
+	StartedAt      time.Time `json:"started_at"`
+	DashboardToken string    `json:"dashboard_token,omitempty"`
 }
 
 // preferredURL returns the URL the dashboard tool should hand to the
@@ -98,19 +99,28 @@ func RegisterDashboardTool(s *Server) error {
 				}), nil
 			}
 			base := payload.preferredURL()
-			summary := "## Dashboard\n\n[Open " + base + "/dashboard](" + base + "/dashboard)\n\n"
+			dashURL := base + "/dashboard"
+			if payload.DashboardToken != "" {
+				dashURL += "?token=" + payload.DashboardToken
+			}
+			summary := "## Dashboard\n\n[Open " + dashURL + "](" + dashURL + ")\n\n"
 			if payload.LocalURL != "" && payload.LocalURL != payload.URL {
 				summary += "_mDNS: " + payload.LocalURL + " — falls back to " + payload.URL + " if `.local` resolution is off._\n\n"
 			}
+			if payload.DashboardToken != "" {
+				summary += "_The URL carries a one-shot auth token; first click sets a session cookie and the address bar drops the token._\n\n"
+			}
 			summary += "_Daemon PID " + strconv.Itoa(payload.PID) + ", started " + payload.StartedAt.Format(time.RFC3339) + "._\n"
 			return markdownPayload(summary, map[string]any{
-				"url":        base + "/dashboard",
-				"daemon_url": base,
-				"loopback":   payload.URL,
-				"local_url":  payload.LocalURL,
-				"tls":        payload.TLS,
-				"pid":        payload.PID,
-				"started_at": payload.StartedAt,
+				"url":             dashURL,
+				"daemon_url":      base,
+				"loopback":        payload.URL,
+				"local_url":       payload.LocalURL,
+				"tls":             payload.TLS,
+				"pid":             payload.PID,
+				"started_at":      payload.StartedAt,
+				"auth_token":      payload.DashboardToken,
+				"auth_token_hint": "send as ?token=… query, Authorization: Bearer header, or session cookie",
 			}), nil
 		})
 	return nil

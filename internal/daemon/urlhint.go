@@ -25,6 +25,11 @@ type urlHintPayload struct {
 	TLS       bool      `json:"tls"`
 	PID       int       `json:"pid"`
 	StartedAt time.Time `json:"started_at"`
+	// DashboardToken authenticates clicks on the dashboard URL. MCP
+	// surfaces it so the operator gets a one-click experience without
+	// the daemon being world-readable. Empty when dashboard auth
+	// isn't wired (legacy localhost-only mode).
+	DashboardToken string `json:"dashboard_token,omitempty"`
 }
 
 // urlHintPath resolves the path under which the daemon writes its
@@ -50,7 +55,7 @@ func urlHintPath() (string, error) {
 // (e.g. http://tokenops.local:7878) — written when zeroconf advertise
 // succeeded so the MCP dashboard tool can prefer it over the bare
 // loopback address.
-func writeURLHint(addr string, tls bool, localURL string) (string, error) {
+func writeURLHint(addr string, tls bool, localURL, dashboardToken string) (string, error) {
 	scheme := "http"
 	if tls {
 		scheme = "https"
@@ -61,12 +66,13 @@ func writeURLHint(addr string, tls bool, localURL string) (string, error) {
 	}
 	url := scheme + "://" + addr
 	payload := urlHintPayload{
-		URL:       url,
-		LocalURL:  localURL,
-		Addr:      addr,
-		TLS:       tls,
-		PID:       os.Getpid(),
-		StartedAt: time.Now().UTC(),
+		URL:            url,
+		LocalURL:       localURL,
+		Addr:           addr,
+		TLS:            tls,
+		PID:            os.Getpid(),
+		StartedAt:      time.Now().UTC(),
+		DashboardToken: dashboardToken,
 	}
 	p, err := urlHintPath()
 	if err != nil {

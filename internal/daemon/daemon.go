@@ -21,6 +21,7 @@ import (
 	"github.com/felixgeelhaar/tokenops/internal/contexts/observability/observ"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/security/audit"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/security/dashauth"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/security/tlsmint"
 	anthropicusage "github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/anthropic"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/claudecode"
@@ -149,8 +150,9 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	}
 
 	var (
-		store *sqlite.Store
-		bus   *events.AsyncBus
+		store   *sqlite.Store
+		bus     *events.AsyncBus
+		dashTok string
 	)
 	components := earlyComponents
 	if cfg.Storage.Enabled {
@@ -249,6 +251,26 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		}
 		opts = append(opts, proxy.WithAnalytics(analyticsH))
 		opts = append(opts, proxy.WithAudit(proxy.NewAuditHandlers(components.Store)))
+
+		// Dashboard + /api/* are protected by a shared-secret token.
+		// Either the operator sets cfg.Dashboard.AdminToken via env /
+		// config, or the daemon mints and persists one on first start.
+		// MCP tokenops_dashboard surfaces the token so the agent hands
+		// the operator a clickable URL that auto-authenticates.
+		tok, errTok := loadOrMintDashToken(cfg.Dashboard.AdminToken)
+		if errTok != nil {
+			return fmt.Errorf("dashboard token: %w", errTok)
+		}
+		dashTok = tok
+		auth, err := dashauth.New(dashauth.Config{
+			AdminToken:   dashTok,
+			SessionTTL:   24 * time.Hour,
+			CookieSecure: cfg.TLS.Enabled,
+		})
+		if err != nil {
+			return fmt.Errorf("dashboard auth: %w", err)
+		}
+		opts = append(opts, proxy.WithDashAuth(auth))
 	}
 
 	if cfg.Rules.Enabled {
@@ -297,7 +319,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	// shutdown so a stale URL never survives the daemon. Failure here
 	// is non-fatal: the daemon stays up; the MCP tool just falls
 	// back to "run tokenops up" guidance.
-	if hintPath, err := writeURLHint(srv.Addr(), srv.TLSEnabled(), mdnsPublicURL); err != nil {
+	if hintPath, err := writeURLHint(srv.Addr(), srv.TLSEnabled(), mdnsPublicURL, dashTok); err != nil {
 		logger.Warn("could not publish daemon URL hint", "err", err)
 	} else {
 		logger.Info("daemon URL hint published",
