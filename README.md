@@ -1,296 +1,192 @@
 # TokenOps
 
-**The operational intelligence layer for AI systems.**
+[![CI](https://github.com/felixgeelhaar/tokenops/actions/workflows/ci.yml/badge.svg)](https://github.com/felixgeelhaar/tokenops/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/felixgeelhaar/tokenops?sort=semver)](https://github.com/felixgeelhaar/tokenops/releases)
+[![License](https://img.shields.io/github/license/felixgeelhaar/tokenops)](LICENSE)
+[![Go Report](https://goreportcard.com/badge/github.com/felixgeelhaar/tokenops)](https://goreportcard.com/report/github.com/felixgeelhaar/tokenops)
 
-Observe. Optimize. Govern. Improve.
+> **Predict rate-limit cutoffs inside your AI agent.** Local MCP server + CLI
+> that watches your flat-rate AI subscription window — Claude Max, ChatGPT
+> Plus / Pro / Team, GitHub Copilot, Cursor, Mistral Le Chat Pro, Codex Plus
+> — and tells the agent, before you hit the cap, to `continue`,
+> `slow_down`, `switch_model`, or `wait_for_reset`.
 
-TokenOps is an open-source platform that sits between your clients, agents, and
-workflows and frontier LLM providers (OpenAI, Anthropic, Google Gemini). It
-turns opaque AI consumption into measurable, optimizable operational
-infrastructure: real-time token optimization, inference observability, agent
-usage analytics, prompt intelligence, forecasting, governance, and AI
-efficiency coaching.
+Docs: <https://felixgeelhaar.github.io/tokenops/> · Releases: <https://github.com/felixgeelhaar/tokenops/releases>
 
-> Status: early development. The architecture is being assembled in public.
-
-## Why TokenOps
-
-Token usage is becoming the dominant operational cost of modern software, yet
-today's tooling solves only isolated pieces of the problem:
-
-| Existing tools             | What they miss                              |
-|----------------------------|---------------------------------------------|
-| Prompt optimizers          | No observability, no governance             |
-| Provider billing dashboards| No real-time optimization or attribution    |
-| Tracing/observability      | No optimization, no coaching                |
-| Agent frameworks           | No operational analytics or governance      |
-
-TokenOps combines optimization, observability, forecasting, coaching, and
-governance into one integrated operational platform — the **TokenOps**
-discipline (think DevOps, FinOps, MLOps, AIOps for inference).
-
-## Architecture (high level)
-
-```
-Clients / SDKs / CLIs / Extensions
-            |
-            v
-   Local TokenOps Proxy
-            |
-            v
-   Optimization Engine
-            |
-            v
-  Routing & Analysis Layer
-            |
-            v
-       LLM Providers
-            |
-            v
-   Telemetry Pipeline
-            |
-            v
- Observability + Coaching
-```
-
-## Repository layout
-
-DDD-organised. Contexts live under `internal/contexts/<ctx>/<pkg>`;
-adapters (`cli`, `mcp`, `proxy`) stay flat. Layering rules enforced by
-`internal/archlint` (`go test ./internal/archlint/...`).
-
-```
-tokenops/
-  cmd/
-    tokenops/                          # CLI binary (cobra)
-    tokenopsd/                         # daemon binary
-  internal/
-    contexts/
-      rules/                           # Rule Intelligence aggregate
-      optimization/{optimizer,eval,replay}
-      governance/{scorecard,coverdebt,budget}
-      workflows/workflow
-      coaching/{coaching,efficiency,waste}
-      spend/{spend,forecast}
-      observability/{analytics,anomaly,observ}
-      security/{redaction,audit,dashauth,rbac,tlsmint}
-      prompts/{tokenizer,providers,llm}
-      telemetry/retention
-    infra/
-      rulesfs/                         # FS-touching rule corpus loader
-    archlint/                          # DDD layering enforcement
-    bootstrap/                         # composition root
-    config/                            # config loader + Snapshot
-    daemon/                            # boot sequence
-    domainevents/                      # in-process pub/sub + JSONL log
-    events/                            # telemetry envelope bus
-    cli/                               # CLI subcommand wiring
-    mcp/                               # MCP tool surface
-    otlp/                              # OTLP exporter
-    proxy/                             # HTTP server + handlers
-    storage/sqlite/                    # event store
-    version/
-  pkg/
-    eventschema/                       # public envelope + payload types
-  web/dashboard/                       # Vue 3 dashboard
-  docs/                                # docs site + architecture-ddd.md
-```
-
-See `docs/architecture-ddd.md` for context boundaries and ubiquitous
-language.
-
-## Getting started
-
-Three commands take a fresh install to a populated scorecard:
+## Install
 
 ```bash
-# 1. Build (or `brew install felixgeelhaar/tap/tokenops`)
-make build
-
-# 2. Scaffold an opinionated config (sqlite + rules enabled, idempotent)
-./bin/tokenops init
-
-# 3. Seed 7 days of synthetic events so spend/burn/forecast/scorecard return data
-./bin/tokenops demo
-
-# 4. (optional) Start the proxy and route real traffic
-./bin/tokenopsd start
-export OPENAI_BASE_URL=http://localhost:7878/v1
-export ANTHROPIC_BASE_URL=http://localhost:7878
-export GEMINI_BASE_URL=http://localhost:7878
+brew install felixgeelhaar/tap/tokenops
 ```
 
-`tokenops init` writes `$XDG_CONFIG_HOME/tokenops/config.yaml` (or
-`~/.config/tokenops/config.yaml`) with storage at `$XDG_DATA_HOME/tokenops/events.db`
-(or `~/.tokenops/events.db`) and rules rooted at `$PWD`. Re-running is a no-op
-unless you pass `--force`.
+Or via Go:
 
-`tokenops demo` is deterministic — pass `--seed`, `--days`, `--per-day` to tune,
-or `--reset` to clear before reseeding. Run `tokenops spend --since 7d` or
-`tokenops scorecard` next to see populated output.
+```bash
+go install github.com/felixgeelhaar/tokenops/cmd/tokenops@latest
+```
 
-### CLI surface
+Or grab a prebuilt binary from the [releases page](https://github.com/felixgeelhaar/tokenops/releases) (darwin amd64/arm64, linux amd64/arm64, windows amd64).
 
-| Command | Purpose |
+## 90-second quickstart
+
+```bash
+tokenops init --detect                         # sniff installed AI clients, print plan-set commands
+tokenops plan set anthropic claude-max-20x     # bind whatever fits (paste from --detect output)
+tokenops start                                 # daemon, listens 127.0.0.1:7878 + tokenops.local
+```
+
+Wire MCP into your agent:
+
+```json
+{
+  "mcpServers": {
+    "tokenops": { "command": "tokenops", "args": ["serve"] }
+  }
+}
+```
+
+Ask the agent for any of: `tokenops_session_budget`, `tokenops_burn_rate`,
+`tokenops_dashboard`, `tokenops_plan_headroom`. Or open the browser dashboard
+the agent links you to (`http://tokenops.local:7878/dashboard?token=…`).
+
+## Features
+
+| | |
 |---|---|
-| `tokenops init` | scaffold the config (sqlite + rules on, idempotent) |
-| `tokenops demo` | seed synthetic events for activation |
-| `tokenops start` | run the daemon (proxy + analytics + bus) |
-| `tokenops serve` | MCP server over stdio |
-| `tokenops status` | daemon health + `blockers[]` / `next_actions[]` |
-| `tokenops version` | build info |
-| `tokenops config show` | active configuration (redacted) |
-| `tokenops spend` | spend / burn / forecast |
-| `tokenops replay <id>` | replay a session through optimizer |
-| `tokenops rules analyze\|conflicts\|compress\|inject\|bench` | rule intelligence |
-| `tokenops eval` | optimizer eval harness + gate |
-| `tokenops scorecard` | wedge KPI scorecard |
-| `tokenops coverage-debt` | risk-weighted coverage debt |
-| `tokenops audit` | query audit log |
-| `tokenops events` | per-kind domain-event counts |
-| `tokenops plan list\|headroom\|catalog` | flat-rate subscription headroom (Claude Max, ChatGPT Plus, Copilot, Cursor) |
+| 🧮 **13 plan catalog** | Claude Max 5x/20x, Claude Pro, Claude Code (Max + Pro), ChatGPT Plus / Pro / Team, GitHub Copilot Individual / Business, Cursor Pro / Business, Mistral Le Chat Pro, Codex Plus — each with a dated vendor source URL pinned in code |
+| 🔌 **Provider-agnostic** | OpenAI, Anthropic, Google Gemini, Mistral through the same proxy and event schema |
+| 📊 **Interactive dashboard** | Vue 3 + D3 dashboard at `/dashboard` — cost line, per-model stacked area, tokens-per-bucket, KPI tiles, 15s auto-refresh, provider + model filters that persist across refresh |
+| 📍 **mDNS-discoverable** | Daemon advertises `tokenops.local` over zeroconf so the dashboard URL is memorable on every host |
+| 🔐 **Dashboard auth** | Shared-secret token, auto-minted on first start, accepted via header / query / cookie. `tokenops dashboard rotate-token` revokes |
+| 📡 **Vendor /usage ingestion** | Optional pollers for `~/.claude/stats-cache.json` (Claude Code, medium signal) and Anthropic Admin API `/v1/organizations/usage_report/messages` (org / API users, high signal) |
+| 🎯 **Honest signal quality** | Every prediction carries `signal_quality.level` (low / medium / high) plus a one-line caveat. Heuristic mode is labelled; proxied mode is labelled |
+| 🤖 **MCP-first** | 25 MCP tools agents call directly. Inline SVG sparkline + headroom gauge rendered in markdown so every MCP client shows them today |
+| 🧠 **Dynamic-cheapest coaching** | Coaching pipeline picks the lowest blended-rate model per provider at runtime from the pricing table — no hardcoded model names |
+| 💾 **Local-first, open source** | SQLite database, no cloud account, no telemetry. Apache 2.0. Demo-data isolation by default so synthetic seeds never contaminate the real signal |
 
-### First-run troubleshooting
+See [docs/architecture-ddd.md](docs/architecture-ddd.md) for the bounded
+contexts and layer rules; [docs/plan-cost-model.md](docs/plan-cost-model.md)
+for the plan catalog model.
 
-`tokenops status` (and the MCP `tokenops_status` tool, and `GET /readyz`) return
-`blockers[]` with stable identifiers and `next_actions[]` with the exact
-command to run. Common cases:
+## CLI surface
+
+```
+init                              Scaffold config (sqlite + rules on); --detect sniffs installed clients
+start                             Run the daemon (proxy + analytics + bus + dashboard)
+serve                             MCP server over stdio
+demo                              Seed 7d of synthetic events
+status                            Daemon health + blockers[] / next_actions[]
+spend [--forecast]                Spend / burn / 7d forecast
+plan {list|set|headroom|catalog}  Subscription plan headroom
+provider {list|set|unset}         Upstream LLM provider URLs
+vendor-usage {status|backfill}    Inspect / backfill vendor-side pollers
+dashboard rotate-token            Mint + persist a fresh dashboard auth token
+config show                       Active configuration (redacted)
+audit                             Query audit log
+events                            Per-kind domain-event counts
+rules {analyze|conflicts|...}     Rule intelligence
+scorecard                         Wedge KPI scorecard
+coverage-debt                     Risk-weighted coverage debt
+eval                              Optimizer eval harness + gate
+replay <id>                       Replay a session through the optimizer
+```
+
+Every CLI verb has a matching MCP tool (`tokenops_<name>`).
+
+## Upgrading signal quality
+
+Default install reports **low** confidence (MCP pings only). Two zero-network
+upgrades:
+
+```yaml
+# ~/.config/tokenops/config.yaml
+vendor_usage:
+  claude_code:
+    enabled: true              # reads ~/.claude/stats-cache.json
+    interval: 60s
+  anthropic:
+    enabled: true              # calls Anthropic Admin API
+    admin_key: sk-ant-admin-…  # mint in claude.com console
+    interval: 5m
+```
+
+`tokenops vendor-usage status` shows whether the pollers are emitting; use
+`tokenops vendor-usage backfill --hours 168` to pull a week of history from
+Anthropic Admin in one shot after configuring the key.
+
+The Anthropic Admin API only covers metered API usage. Claude Max plan window
+state has no documented endpoint and stays heuristic — the cache reader is the
+only locally-available Max signal and reports daily granularity with an
+explicit caveat.
+
+## Architecture
+
+```
+Clients / SDKs / CLIs / MCP hosts
+            |
+            v
+   Local TokenOps daemon (Go)
+      /     |       \
+ Proxy    MCP      Dashboard
+   |     server     /api/*
+   v        |        |
+ Provider routes     Vue+D3
+ (OpenAI/Anth/Gem/Mistral)
+            |
+            v
+    SQLite event store
+            |
+            v
+ Spend / forecast / coaching
+```
+
+DDD-organised: contexts under `internal/contexts/<ctx>/<pkg>`, adapters
+(`cli`, `mcp`, `proxy`) stay flat. Layering enforced by `internal/archlint`
+(`go test ./internal/archlint/...`).
+
+```
+cmd/{tokenops,tokenopsd}/         # binaries
+internal/
+  contexts/                       # bounded contexts (rules, spend, security, ...)
+  cli/                            # cobra subcommands
+  mcp/                            # MCP tool surface
+  proxy/                          # HTTP server + dashboard
+  daemon/                         # boot sequence
+  storage/sqlite/                 # event store
+pkg/eventschema/                  # public envelope + payload types
+web/docs/                         # VitePress docs site
+.roady/                           # spec-driven planning
+```
+
+## Disabled-subsystem contract
+
+When a subsystem is off, the matching routes return `503` with a structured
+`{error, hint}` body instead of `404`. `tokenops status` (and the MCP
+`tokenops_status` tool, and `GET /readyz`) surface stable identifiers in
+`blockers[]` plus the exact command in `next_actions[]`:
 
 | Blocker | Fix |
 |---|---|
-| `storage_disabled` | run `tokenops init`, then restart the daemon |
-| `rules_disabled` | run `tokenops init`, then restart the daemon |
-| `providers_unconfigured` | set at least one `TOKENOPS_PROVIDER_*_URL` or add `providers:` to the config |
+| `storage_disabled` | `tokenops init` then restart |
+| `rules_disabled` | `tokenops init` then restart |
+| `providers_unconfigured` | `tokenops provider set …` |
 
-When a subsystem is off, the corresponding daemon routes (`/api/spend/*`,
-`/api/rules/*`, `/api/audit`) return `503` with a structured `{error, hint}`
-body rather than a 404.
+## Demo data isolation
 
-### Subscription plans (Claude Max, ChatGPT Plus, etc.)
-
-Flat-rate subscriptions don't bill per token. Configure them so
-TokenOps records zero `cost_usd` and tracks plan quota headroom
-instead:
-
-```bash
-# Bind a provider to a plan (writes to config.yaml; idempotent)
-tokenops plan set anthropic claude-max-20x   # or claude-max-5x, claude-pro
-tokenops plan set openai gpt-plus            # or gpt-team, gpt-pro
-
-# Inspect bindings
-tokenops plan list
-tokenops plan headroom                       # live consumption + risk
-```
-
-YAML and `TOKENOPS_PLAN_<PROVIDER>` env overrides still work for
-declarative deployments, but `tokenops plan set` is the recommended
-path on a dev machine.
-
-After setting a plan, your MCP server hot-reloads the config within a
-few seconds — no reconnect needed. The MCP-side session observer counts
-your activity against the plan's rate-limit window. Agents can call
-`tokenops_session_budget` mid-conversation to find out whether they're
-about to hit the cap.
-
-The response always carries a `signal_quality` field:
-
-- `level: low, source: mcp_tool_pings` — heuristic only. TokenOps sees
-  MCP traffic, not your raw Claude conversation turns. Wire the proxy
-  for full coverage.
-- `level: medium, source: proxy_traffic` — partial proxy coverage.
-- `level: high, source: proxy_traffic` — every request observed.
-
-Treat low-quality responses as an activity proxy, not a quota meter.
-
-### Demo data isolation
-
-`tokenops demo` writes synthetic `PromptEvent`s tagged with
-`source=demo`. Every default analytics rollup (`spend`, `burn rate`,
-`top consumers`, `forecast`, plan headroom, session budget) filters
-them out so first-run exploration never contaminates production
-numbers. Pass `include_demo: true` on the MCP tool input — or call
-`tokenops_data_sources` — to see the synthetic breakdown alongside
-real traffic. Then
-`tokenops plan headroom` (and the `tokenops_plan_headroom` MCP tool)
-return month-to-date consumption and overage risk. See
-[docs/plan-cost-model.md](docs/plan-cost-model.md) for the supported
-plan catalog and how to add custom plans.
-
-Every CLI command has a matching MCP tool (`tokenops_<name>`).
-
-### Domain event bus
-
-`internal/domainevents.Bus` carries typed cross-context events
-(workflow.started/observed/completed, optimization.applied,
-rule_corpus.reloaded, budget.exceeded). Daemon runs the bus in async
-mode with bounded queue; subscribers include audit recorder, in-memory
-counter, debug logger, JSONL persistence. Late subscribers can replay
-history via `domainevents.ReplayInto`.
-
-## 5-minute operator golden path
-
-This path is optimized for one goal: prove TokenOps can produce measurable
-value in minutes, not days.
-
-### Step 1: Start the daemon
-
-```bash
-./bin/tokenopsd start
-```
-
-Expected: the process stays running and prints a startup log with a listen
-address (default `127.0.0.1:7878`).
-
-### Step 2: Point one SDK request at the proxy
-
-```bash
-export OPENAI_BASE_URL=http://127.0.0.1:7878/v1
-```
-
-Run one existing request from your app/CLI against the same model you already
-use in production.
-
-Expected: request succeeds with no code changes other than base URL override.
-
-### Step 3: Validate attribution and spend visibility
-
-```bash
-./bin/tokenops spend
-```
-
-Expected: output includes non-zero usage and spend for the recent request.
-
-### Step 4: Replay and inspect optimization headroom
-
-```bash
-./bin/tokenops replay <session-id>
-```
-
-Expected: side-by-side analysis shows optimization opportunities and projected
-token/spend deltas for that session.
-
-### Step 5: Capture your wedge KPI baseline
-
-Track one primary KPI before broad rollout:
-
-- `Token efficiency uplift (%) = (baseline_tokens - optimized_tokens) / baseline_tokens * 100`
-
-Suggested target for initial rollout: 10-20% token reduction on high-volume
-workflows while preserving quality gates.
-
-Why this KPI: it directly ties optimization behavior to cost control and gives
-an objective pass/fail metric for expansion decisions.
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for the per-release changes.
+`tokenops demo` writes synthetic `PromptEvent`s tagged `source=demo`. Every
+default rollup filters them out so first-run exploration never contaminates
+production numbers. Pass `--include-demo` (CLI) or `include_demo: true` (MCP
+tool input) to see the synthetic breakdown alongside real traffic.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md),
+and [SECURITY.md](SECURITY.md). Plans and tasks live in `.roady/` (see
+[roady](https://roady.dev)).
 
-Plans and tasks are tracked in `.roady/` (see the [roady](https://roady.dev)
-spec-driven planning tool).
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) — latest is [v0.11.0](https://github.com/felixgeelhaar/tokenops/releases/tag/v0.11.0).
 
 ## License
 

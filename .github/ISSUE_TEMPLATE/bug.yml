@@ -1,0 +1,82 @@
+name: Bug report
+description: Report a defect in TokenOps
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Before submitting, please:
+        - run `tokenops version` and paste it below
+        - run `tokenops status` and `tokenops vendor-usage status` if relevant
+        - **do not** include sk-ant-admin-* keys or the contents of `~/.tokenops/dashboard.token`
+
+  - type: input
+    id: version
+    attributes:
+      label: TokenOps version
+      description: Output of `tokenops version`
+      placeholder: "tokenops v0.11.0 (abc123, 2026-05-14)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install path
+      options:
+        - brew (felixgeelhaar/tap)
+        - go install
+        - prebuilt binary
+        - built from source
+        - other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Linux (amd64)
+        - Linux (arm64)
+        - Windows (amd64)
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear, factual description. Quote the actual output, not a paraphrase.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Numbered steps from a clean install. The more deterministic, the faster the fix.
+      placeholder: |
+        1. `tokenops init`
+        2. `tokenops plan set anthropic claude-max-20x`
+        3. `tokenops start`
+        4. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Daemon stderr, CLI output, MCP tool responses. Redact tokens.
+      render: shell

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/felixgeelhaar/tokenops/security/policy
+    about: Please report security issues privately (see SECURITY.md), not as a public issue.
+  - name: Documentation
+    url: https://felixgeelhaar.github.io/tokenops/
+    about: Quickstart, integration guides, and architecture docs.
+  - name: Discussion / question
+    url: https://github.com/felixgeelhaar/tokenops/discussions
+    about: Open-ended questions, design discussion, "how do I…?"

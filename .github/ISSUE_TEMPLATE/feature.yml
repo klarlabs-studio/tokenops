@@ -1,0 +1,48 @@
+name: Feature request
+description: Propose a new capability or improvement
+labels: [enhancement, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a feature. Strong proposals lead with the **problem** you hit, not the solution.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the actual operator workflow or signal gap you're hitting.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Sketch what the API / CLI / dashboard would look like. Concrete > abstract.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What did you try first? Existing CLI verbs, MCP tools, config knobs?
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider scope (if applicable)
+      multiple: true
+      options:
+        - Anthropic / Claude
+        - OpenAI / ChatGPT
+        - Google Gemini
+        - Mistral
+        - GitHub Copilot
+        - Cursor
+        - Provider-agnostic
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, links to vendor docs, prior art in other tools.

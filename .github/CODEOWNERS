@@ -1,0 +1,9 @@
+# Default owner for everything in the repo. Per-area overrides land
+# here as the project grows; for now one human signs off on every PR.
+*       @felixgeelhaar
+
+# Release + security automation paths require explicit attention so a
+# leaked / accidental change to the build pipeline never slips through
+# review unnoticed.
+/.github/workflows/  @felixgeelhaar
+/SECURITY.md         @felixgeelhaar

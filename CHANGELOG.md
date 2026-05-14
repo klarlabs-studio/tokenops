@@ -2,6 +2,126 @@
 
 ## Unreleased
 
+## 0.11.0 - 2026-05-14
+
+### Added
+
+- Per-model stacked area chart on the dashboard cost panel. Top-5
+  legend with a "+N more" chip; colour scale is `d3.schemeTableau10`
+  ordered by sorted model name so hues stay stable across refresh.
+  Single-model filter falls back to the line view.
+- `tokenops vendor-usage backfill --hours N` one-shot pull of
+  historical Anthropic Admin API usage into the local store.
+  Deterministic envelope IDs so re-running or running alongside the
+  live poller never double-counts. `--dry-run` prints would-insert
+  count without writing.
+- `tokenops dashboard rotate-token` CLI command that mints a fresh
+  32-byte URL-safe secret, atomic-writes to
+  `~/.tokenops/dashboard.token`, and reminds the operator to restart
+  the daemon. Fails when `config.dashboard.admin_token` is set
+  explicitly (config value wins).
+- Mistral Le Chat Pro + Codex Plus plan catalog entries.
+  `eventschema.ProviderMistral` plus `mistral-large/medium/small +
+  codestral` rows in the default spend pricing table.
+- Dashboard filter selections persist in localStorage so window /
+  provider / model picks survive page refresh. Quiet failure on
+  storage exceptions (Safari private mode etc).
+- Inline SVG favicon for the dashboard browser tab.
+
+## 0.10.5 - 2026-05-13
+
+### Added
+
+- Dashboard gains provider + model filter dropdowns. Options
+  auto-populate from `group=provider` / `group=model` series queries
+  so the list always reflects what the store actually contains in
+  the current window.
+
+## 0.10.4 - 2026-05-13
+
+### Added
+
+- `tokenops vendor-usage status` CLI command. Reads config + counts
+  source-tagged envelopes per source over a configurable window;
+  prints a hint per source pointing at the missing config knob when
+  a source is dark. Offline (no daemon HTTP call).
+
+## 0.10.3 - 2026-05-13
+
+### Added
+
+- Dashboard auth: `/dashboard` + `/api/*` require a shared-secret
+  token (`/healthz`, `/readyz`, `/version` stay public). Three
+  credential channels accepted in constant time: `Authorization:
+  Bearer`, `?token=…` query param, session cookie. Browser-style
+  query-param auth mints a session cookie and 303s to a clean URL.
+- Token auto-managed: 32-byte random value persisted at
+  `~/.tokenops/dashboard.token` on first start. Override via
+  `cfg.Dashboard.AdminToken`.
+- `tokenops_dashboard` MCP tool returns a URL with the token
+  pre-attached so the operator gets a one-click authenticated visit.
+
+## 0.10.2 - 2026-05-13
+
+### Added
+
+- Vendor /usage ingestion lands. Two new signal sources:
+  - **Claude Code stats cache reader.** Reads
+    `~/.claude/stats-cache.json` on a tick, emits one `PromptEvent`
+    per (date, model) delta with `Source="claude-code-stats-cache"`.
+    Promotes `signal_quality` to medium with an explicit caveat
+    that the schema is undocumented and granularity is daily-only.
+  - **Anthropic Admin API poller.** Calls
+    `/v1/organizations/usage_report/messages` every 5min, emits one
+    `PromptEvent` per (bucket, model) cell with
+    `Source="vendor-usage-anthropic"`. Promotes `signal_quality` to
+    high. Requires `sk-ant-admin-*` key.
+- `config.vendor_usage.{claude_code,anthropic}` blocks wire the
+  pollers. Both are off by default.
+
+### Notes
+
+- Per Anthropic's documented API surface, the Admin API covers
+  metered API usage only. Claude Max plan window state has no
+  documented endpoint and remains heuristic.
+
+## 0.10.1 - 2026-05-13
+
+### Added
+
+- Daemon advertises itself as `tokenops.local` over zeroconf on
+  Start. Dashboard URL becomes `http://tokenops.local:7878/dashboard`
+  instead of a bare loopback address. The MCP `tokenops_dashboard`
+  tool prefers the mDNS URL; falls back to `127.0.0.1` when `.local`
+  resolution isn't available.
+- URL hint file (`~/.tokenops/daemon.url`) gains a `local_url`
+  field. Advertised IPs match the bind address: loopback-only
+  listener publishes `127.0.0.1` so the `.local` hostname resolves
+  on-host; wildcard / LAN listener publishes every non-loopback
+  interface.
+
+## 0.10.0 - 2026-05-13
+
+### Added
+
+- **Interactive Vue + D3 dashboard** served by the daemon at
+  `/dashboard`. Cost-over-time line, tokens-per-bucket stacked bar,
+  KPI tiles, 15s auto-refresh.
+- **Inline SVG charts in MCP responses.** `tokenops_session_budget`
+  leads with a coloured headroom gauge (green / amber / red);
+  `tokenops_burn_rate` ships a sparkline. Rendered inline in
+  markdown so every MCP client shows them today.
+- **Auto-detect on init.** `tokenops init --detect` sniffs Claude
+  Code, Claude Desktop, Cursor, ChatGPT Desktop, and standard
+  API-key env vars, then prints the exact `tokenops plan set …`
+  commands for what it found.
+- **Dynamic-cheapest coaching router.** Coaching pipeline picks the
+  lowest blended-rate model per provider from the pricing table at
+  runtime. No hardcoded model names.
+- **`tokenops_dashboard` MCP tool** returns a clickable URL to the
+  local dashboard, or a structured `{error, hint}` payload when the
+  daemon is not running.
+
 ## 0.9.4 - 2026-05-13
 
 ### Added
