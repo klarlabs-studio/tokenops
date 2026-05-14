@@ -197,6 +197,14 @@ func (p *Poller) recordSuccess() {
 // uncached + cache-read into InputTokens (both are "input the model
 // processed") and surface the cache-creation split via Attributes
 // for future, more precise cost recompute.
+// NewEnvelope is the exported form of newEnvelope so backfill paths
+// (CLI command) can mint envelopes from arbitrary UsageResult tuples
+// without going through the running poller. The deterministic ID
+// keeps backfill output dedupable against poller output.
+func NewEnvelope(startsAt, endsAt time.Time, r UsageResult) (*eventschema.Envelope, bool) {
+	return newEnvelope(startsAt, endsAt, r)
+}
+
 func newEnvelope(startsAt, endsAt time.Time, r UsageResult) (*eventschema.Envelope, bool) {
 	if r.Model == "" {
 		return nil, false

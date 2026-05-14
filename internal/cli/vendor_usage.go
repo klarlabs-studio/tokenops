@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/felixgeelhaar/tokenops/internal/config"
+	anthropicusage "github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/anthropic"
 	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
 )
 
@@ -21,7 +22,120 @@ func newVendorUsageCmd() *cobra.Command {
 		Short: "Inspect vendor-side usage pollers (Claude Code stats cache, Anthropic Admin API)",
 	}
 	cmd.AddCommand(newVendorUsageStatusCmd())
+	cmd.AddCommand(newVendorUsageBackfillCmd())
 	return cmd
+}
+
+// newVendorUsageBackfillCmd one-shot pulls historical Anthropic
+// Admin API usage into the local store. Useful right after
+// `tokenops vendor-usage anthropic.admin_key: …` lands in config —
+// the operator sees previous days immediately instead of waiting
+// for the 5-min poll loop to drip in only forward-looking buckets.
+//
+// Dedup is automatic: NewEnvelope hashes a deterministic ID per
+// (bucket_start, model, api_key_id, workspace_id); store.Append
+// silently no-ops on duplicates so backfill is idempotent and safe
+// to run alongside a live poller.
+func newVendorUsageBackfillCmd() *cobra.Command {
+	var (
+		hours   int
+		dbPath  string
+		jsonOut bool
+		dryRun  bool
+	)
+	cmd := &cobra.Command{
+		Use:   "backfill",
+		Short: "Pull historical Anthropic Admin usage into the local store (one-shot)",
+		Long: `backfill calls /v1/organizations/usage_report/messages for the
+window [now-hours, now] and inserts every (bucket, model) result as
+a PromptEvent envelope tagged source=vendor-usage-anthropic.
+
+Dedup is automatic — re-running the command (or running it while
+the live poller is active) won't double-count, because envelope IDs
+are deterministic.
+
+Requires vendor_usage.anthropic.admin_key in config. The dry-run
+flag prints what would be inserted without writing to the store.`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := loadConfig(&rootFlags{})
+			if err != nil {
+				return fmt.Errorf("load config: %w", err)
+			}
+			key := cfg.VendorUsage.Anthropic.AdminKey
+			if key == "" {
+				return fmt.Errorf("vendor_usage.anthropic.admin_key is unset; mint an sk-ant-admin-* key in the Claude Console")
+			}
+			db, err := resolveAuditDB(&rootFlags{}, dbPath)
+			if err != nil {
+				return err
+			}
+			ctx := cmd.Context()
+			store, err := sqlite.Open(ctx, db, sqlite.Options{})
+			if err != nil {
+				return fmt.Errorf("open store: %w", err)
+			}
+			defer func() { _ = store.Close() }()
+			client := anthropicusage.NewAdminClient(key)
+			now := time.Now().UTC()
+			req := anthropicusage.MessagesUsageRequest{
+				StartingAt:  now.Add(-time.Duration(hours) * time.Hour),
+				EndingAt:    now,
+				BucketWidth: anthropicusage.BucketWidthHour,
+				GroupBy:     []string{"model"},
+			}
+			resp, err := client.MessagesUsage(ctx, req)
+			if err != nil {
+				return fmt.Errorf("fetch usage: %w", err)
+			}
+			var inserted, skipped int
+			for _, bucket := range resp.Data {
+				for _, r := range bucket.Results {
+					env, ok := anthropicusage.NewEnvelope(bucket.StartingAt, bucket.EndingAt, r)
+					if !ok {
+						skipped++
+						continue
+					}
+					if dryRun {
+						inserted++
+						continue
+					}
+					if err := store.Append(ctx, env); err != nil {
+						return fmt.Errorf("append envelope %s: %w", env.ID, err)
+					}
+					inserted++
+				}
+			}
+			report := map[string]any{
+				"hours":    hours,
+				"buckets":  len(resp.Data),
+				"inserted": inserted,
+				"skipped":  skipped,
+				"dry_run":  dryRun,
+				"db":       db,
+			}
+			if jsonOut {
+				enc := json.NewEncoder(cmd.OutOrStdout())
+				enc.SetIndent("", "  ")
+				return enc.Encode(report)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Backfilled last %dh: %d envelopes %s, %d zero-token rows skipped\n",
+				hours, inserted, dryRunLabel(dryRun), skipped)
+			fmt.Fprintf(cmd.OutOrStdout(), "Store: %s\n", db)
+			return nil
+		},
+	}
+	cmd.Flags().IntVar(&hours, "hours", 168, "lookback window in hours (max 168 for hourly buckets per Admin API cap)")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would be inserted without writing to the store")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON instead of text")
+	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db (defaults to config.storage.path)")
+	return cmd
+}
+
+func dryRunLabel(dry bool) string {
+	if dry {
+		return "would-insert (dry run)"
+	}
+	return "inserted"
 }
 
 // newVendorUsageStatusCmd surfaces what each vendor-usage source has
