@@ -28,12 +28,15 @@ features:
     details: SQLite database. No cloud account. No telemetry. Apache 2.0. Demo-data isolation by default so synthetic seeds never contaminate the real signal.
 ---
 
-## What's new in v0.10.0
+## What's new in v0.10.x
 
-- **Auto-detect on init** — `tokenops init --detect` reads your installed AI clients (Claude Code/Desktop, Cursor, ChatGPT Desktop, env-var API keys) and prints the exact plan-set commands. Run it once, paste what fits.
-- **Interactive dashboard** — A Vue + D3 dashboard ships with the daemon at `/dashboard`. Hourly cost line, tokens-per-bucket stacked bar, KPI tiles, 15s auto-refresh. Driven by the same `/api/spend/*` endpoints the CLI uses.
-- **Inline charts in MCP responses** — `tokenops_session_budget` now leads with a coloured headroom gauge (green / amber / red by overage band); `tokenops_burn_rate` ships a sparkline. Rendered inline in markdown so every MCP client shows them today.
-- **Dynamic-cheapest coaching router** — The coaching pipeline now picks the lowest blended-rate model per provider from the pricing table at runtime. No hardcoded model names; pricing updates flow through automatically.
+- **`tokenops.local` via mDNS (v0.10.1)** — The daemon advertises itself over zeroconf on Start, so the dashboard URL becomes `http://tokenops.local:7878/dashboard` instead of a bare loopback address. The `tokenops_dashboard` MCP tool prefers it; falls back to `127.0.0.1` when `.local` resolution isn't available.
+- **Vendor /usage ingestion (v0.10.2)** — Two new signal sources upgrade Anthropic confidence beyond the heuristic default. The **Claude Code stats cache reader** parses `~/.claude/stats-cache.json` and emits per-(date, model) deltas (signal_quality → medium). The **Anthropic Admin API poller** calls `/v1/organizations/usage_report/messages` every 5min with an admin key (signal_quality → high). Both wired through `config.vendor_usage.*`; both honest about the Claude Max 5h-window blind spot.
+- **Dashboard auth (v0.10.3)** — `/dashboard` + `/api/*` now require a shared-secret token (`/healthz`, `/readyz`, `/version` stay public). Daemon mints + persists the token automatically at `~/.tokenops/dashboard.token`; the MCP tool returns a clickable URL with the token pre-attached so the operator gets a one-click authenticated visit. Browser-style auth mints a session cookie and 303s to a clean URL so the token never lingers in history.
+- **Auto-detect on init (v0.10.0)** — `tokenops init --detect` reads your installed AI clients (Claude Code/Desktop, Cursor, ChatGPT Desktop, env-var API keys) and prints the exact plan-set commands. Run it once, paste what fits.
+- **Interactive dashboard (v0.10.0)** — A Vue + D3 dashboard ships with the daemon at `/dashboard`. Hourly cost line, tokens-per-bucket stacked bar, KPI tiles, 15s auto-refresh. Driven by the same `/api/spend/*` endpoints the CLI uses.
+- **Inline charts in MCP responses (v0.10.0)** — `tokenops_session_budget` leads with a coloured headroom gauge (green / amber / red by overage band); `tokenops_burn_rate` ships a sparkline. Rendered inline in markdown so every MCP client shows them today.
+- **Dynamic-cheapest coaching router (v0.10.0)** — The coaching pipeline picks the lowest blended-rate model per provider from the pricing table at runtime. No hardcoded model names; pricing updates flow through automatically.
 
 ## Why TokenOps exists
 
@@ -52,7 +55,12 @@ Every plan you bind contributes to a unified headroom view your agent can query 
 
 ## Honest about what it sees today
 
-The default install observes **MCP tool invocations** as an activity proxy — every response says so. Wire the local proxy and TokenOps sees every request flowing through it (`OPENAI_BASE_URL`, `ANTHROPIC_BASE_URL`, `GEMINI_BASE_URL`). Vendor `/usage` API ingestion is on the roadmap — it lands the highest-quality signal with zero proxy config.
+TokenOps reports its own signal quality on every prediction. Four sources, ranked by faithfulness:
+
+- **`mcp_tool_pings` (low)** — Default. Counts MCP invocations as an activity proxy. Useful as a "is the agent talking to me?" signal, not a quota meter.
+- **`claude_code_stats_cache` (medium)** — Daemon reads `~/.claude/stats-cache.json` on a tick (config: `vendor_usage.claude_code.enabled: true`). Per-model daily totals; can't resolve the 5h rolling window but gives real attribution. Schema is undocumented — every response carries a caveat.
+- **`proxy_traffic` (high)** — Wire your SDK's base URL through the local proxy (`OPENAI_BASE_URL`, `ANTHROPIC_BASE_URL`, `GEMINI_BASE_URL`). Captures every request per-event.
+- **`vendor_usage_api` (high)** — Anthropic Admin API poller (config: `vendor_usage.anthropic.{enabled, admin_key}`) reads `/v1/organizations/usage_report/messages` directly from Anthropic. Covers metered API usage only; Claude Max plan window state has no documented endpoint and stays heuristic.
 
 ## Who this is for
 
