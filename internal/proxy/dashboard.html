@@ -67,14 +67,14 @@
     </div>
     <div class="group">
       <span class="muted">Provider</span>
-      <select v-model="provider" @change="fetchAll">
+      <select v-model="provider" @change="onFilterChange">
         <option value="">All</option>
         <option v-for="p in providers" :key="p" :value="p">{{ p }}</option>
       </select>
     </div>
     <div class="group">
       <span class="muted">Model</span>
-      <select v-model="model" @change="fetchAll">
+      <select v-model="model" @change="onFilterChange">
         <option value="">All</option>
         <option v-for="m in models" :key="m" :value="m">{{ m }}</option>
       </select>
@@ -117,9 +117,30 @@ createApp({
       { label: "1h", hours: 1 }, { label: "6h", hours: 6 },
       { label: "24h", hours: 24 }, { label: "7d", hours: 168 },
     ];
-    const windowHours = ref(24);
-    const provider = ref("");
-    const model = ref("");
+    // Persisted filter state. localStorage keeps the operator's last
+    // pick across browser refreshes so the dashboard always opens to
+    // whatever they were looking at, not the defaults. Quiet failure
+    // on storage exceptions (Safari private mode, etc) — the rest of
+    // the page still works, the operator just loses persistence.
+    const STORAGE_KEY = "tokenops.dashboard.filters.v1";
+    const loadFilters = () => {
+      try {
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        if (!raw) return {};
+        return JSON.parse(raw) || {};
+      } catch { return {}; }
+    };
+    const persistFilters = () => {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          windowHours: windowHours.value, provider: provider.value, model: model.value,
+        }));
+      } catch { /* private-mode / storage-full → silently skip */ }
+    };
+    const initial = loadFilters();
+    const windowHours = ref(initial.windowHours || 24);
+    const provider = ref(initial.provider || "");
+    const model = ref(initial.model || "");
     const providers = ref([]);
     const models = ref([]);
     const summary = reactive({ CostUSD: 0, Requests: 0, InputTokens: 0, OutputTokens: 0, TotalTokens: 0 });
@@ -196,7 +217,8 @@ createApp({
       }
     };
 
-    const setWindow = (h) => { windowHours.value = h; refreshFacets(); fetchAll(); };
+    const setWindow = (h) => { windowHours.value = h; persistFilters(); refreshFacets(); fetchAll(); };
+    const onFilterChange = () => { persistFilters(); fetchAll(); };
 
     const drawCostChart = () => {
       const svg = d3.select(costChart.value);
@@ -255,7 +277,7 @@ createApp({
     onUnmounted(() => { clearInterval(timer); window.removeEventListener("resize", drawCharts); });
     const drawCharts = () => { drawCostChart(); drawTokenChart(); };
 
-    return { refreshSec, windowOpts, windowHours, provider, model, providers, models, summary, loadError, lastRefresh, costChart, tokenChart, fmtCost, fmtNum, setWindow, fetchAll };
+    return { refreshSec, windowOpts, windowHours, provider, model, providers, models, summary, loadError, lastRefresh, costChart, tokenChart, fmtCost, fmtNum, setWindow, fetchAll, onFilterChange };
   }
 }).mount("#app");
 </script>
