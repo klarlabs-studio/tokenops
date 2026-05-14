@@ -155,6 +155,31 @@ var catalog = map[string]Plan{
 		RateLimitWindow:  0,
 		SourceURL:        "https://docs.cursor.com/account/plans-and-usage (2026-05)",
 	},
+	// Mistral Le Chat Pro — fixed monthly subscription, daily message
+	// cap published in 2025-Q4. Window unit is "messages per day";
+	// modeled as a 24h rolling window for headroom math parity with
+	// the other consumer plans.
+	"mistral-le-chat-pro": {
+		Name:              "mistral-le-chat-pro",
+		Provider:          "mistral",
+		Display:           "Mistral Le Chat Pro",
+		RateLimitWindow:   24 * time.Hour,
+		MessagesPerWindow: 200,
+		WindowUnit:        "messages",
+		SourceURL:         "https://mistral.ai/pricing (2026-05)",
+	},
+	// Codex Plus — OpenAI's subscription tier for the codex.com /
+	// Codex CLI. Window matches GPT Plus (3h rolling) per OpenAI's
+	// shared rate-limit policy across consumer products.
+	"codex-plus": {
+		Name:              "codex-plus",
+		Provider:          "openai",
+		Display:           "Codex Plus",
+		RateLimitWindow:   3 * time.Hour,
+		MessagesPerWindow: 80,
+		WindowUnit:        "messages",
+		SourceURL:         "https://platform.openai.com/docs/guides/codex (2026-05)",
+	},
 }
 
 // deprecatedAliases maps retired catalog names to the modern entry

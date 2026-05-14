@@ -25,6 +25,7 @@ const (
 	ProviderOpenAI    Provider = "openai"
 	ProviderAnthropic Provider = "anthropic"
 	ProviderGemini    Provider = "gemini"
+	ProviderMistral   Provider = "mistral"
 )
 
 // Envelope is the common header carried by every TokenOps event regardless of

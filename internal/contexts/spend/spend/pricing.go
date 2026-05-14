@@ -153,6 +153,24 @@ func DefaultTable() Table {
 				InputPerMillion: 0.80, OutputPerMillion: 4.00, CachedInputPerMillion: 0.08,
 			},
 
+			// Mistral — published list prices for the large + medium
+			// families. Le Chat Pro routes through these on the
+			// consumer subscription; cost recompute attaches per-token
+			// price when the plan window is exceeded and metered
+			// billing kicks in.
+			{eventschema.ProviderMistral, "mistral-large*"}: {
+				InputPerMillion: 2.00, OutputPerMillion: 6.00,
+			},
+			{eventschema.ProviderMistral, "mistral-medium*"}: {
+				InputPerMillion: 0.40, OutputPerMillion: 2.00,
+			},
+			{eventschema.ProviderMistral, "mistral-small*"}: {
+				InputPerMillion: 0.20, OutputPerMillion: 0.60,
+			},
+			{eventschema.ProviderMistral, "codestral*"}: {
+				InputPerMillion: 0.30, OutputPerMillion: 0.90,
+			},
+
 			// Google Gemini — published list prices.
 			{eventschema.ProviderGemini, "gemini-2.5-pro*"}: {
 				InputPerMillion: 1.25, OutputPerMillion: 10.00, CachedInputPerMillion: 0.31,
