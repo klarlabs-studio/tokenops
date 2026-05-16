@@ -247,7 +247,9 @@ func (a *Aggregator) recomputeMissingCosts(ctx context.Context, f Filter, rows [
 			cost  float64
 			fixed int64
 		)
-		q := "SELECT provider, model, input_tokens, output_tokens FROM events"
+		q := `SELECT provider, model, input_tokens, output_tokens,
+				CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER)
+			FROM events`
 		if len(conds) > 0 {
 			q += " WHERE " + strings.Join(conds, " AND ")
 		}
@@ -259,17 +261,18 @@ func (a *Aggregator) recomputeMissingCosts(ctx context.Context, f Filter, rows [
 			defer func() { _ = eventRows.Close() }()
 			for eventRows.Next() {
 				var (
-					provider, model sql.NullString
-					inTok, outTok   sql.NullInt64
+					provider, model        sql.NullString
+					inTok, outTok, cacheIn sql.NullInt64
 				)
-				if err := eventRows.Scan(&provider, &model, &inTok, &outTok); err != nil {
+				if err := eventRows.Scan(&provider, &model, &inTok, &outTok, &cacheIn); err != nil {
 					return err
 				}
 				p := &eventschema.PromptEvent{
-					Provider:     eventschema.Provider(provider.String),
-					RequestModel: model.String,
-					InputTokens:  inTok.Int64,
-					OutputTokens: outTok.Int64,
+					Provider:          eventschema.Provider(provider.String),
+					RequestModel:      model.String,
+					InputTokens:       inTok.Int64,
+					CachedInputTokens: cacheIn.Int64,
+					OutputTokens:      outTok.Int64,
 				}
 				if c, err := a.spend.Compute(p); err == nil {
 					cost += c
@@ -324,11 +327,17 @@ func (a *Aggregator) Summarize(ctx context.Context, f Filter) (Summary, error) {
 // stored cost_usd is zero — the case for vendor-usage-jsonl sources that
 // ship token counts but not prices. Groups by (provider, model) so one
 // engine.Compute call covers the entire bucket per model, which is
-// linear-in-tokens and matches the per-event sum exactly.
+// linear-in-tokens and matches the per-event sum exactly. Cached input
+// tokens are summed from payload JSON (the schema column carries only
+// the bundled input_tokens) so cache-heavy workloads get the lower
+// cache rate instead of being billed at the new-input rate.
 func (a *Aggregator) summarizeMissingCost(ctx context.Context, f Filter) (float64, error) {
 	conds, args := buildConditions(f)
 	conds = append(conds, "(cost_usd IS NULL OR cost_usd = 0)")
-	q := `SELECT provider, model, COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0)
+	q := `SELECT provider, model,
+			COALESCE(SUM(input_tokens), 0),
+			COALESCE(SUM(output_tokens), 0),
+			COALESCE(SUM(CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER)), 0)
 		FROM events WHERE ` + strings.Join(conds, " AND ") +
 		` GROUP BY provider, model`
 	rows, err := a.store.DB().QueryContext(ctx, q, args...)
@@ -339,17 +348,18 @@ func (a *Aggregator) summarizeMissingCost(ctx context.Context, f Filter) (float6
 	var total float64
 	for rows.Next() {
 		var (
-			provider, model sql.NullString
-			inTok, outTok   sql.NullInt64
+			provider, model        sql.NullString
+			inTok, outTok, cacheIn sql.NullInt64
 		)
-		if err := rows.Scan(&provider, &model, &inTok, &outTok); err != nil {
+		if err := rows.Scan(&provider, &model, &inTok, &outTok, &cacheIn); err != nil {
 			return 0, fmt.Errorf("analytics: summarize recompute scan: %w", err)
 		}
 		p := &eventschema.PromptEvent{
-			Provider:     eventschema.Provider(provider.String),
-			RequestModel: model.String,
-			InputTokens:  inTok.Int64,
-			OutputTokens: outTok.Int64,
+			Provider:          eventschema.Provider(provider.String),
+			RequestModel:      model.String,
+			InputTokens:       inTok.Int64,
+			CachedInputTokens: cacheIn.Int64,
+			OutputTokens:      outTok.Int64,
 		}
 		if c, err := a.spend.Compute(p); err == nil {
 			total += c

@@ -160,12 +160,13 @@ func newEnvelope(t Turn) *eventschema.Envelope {
 			"cache_creation_input": fmt.Sprintf("%d", t.CacheCreationInputTokens),
 		},
 		Payload: &eventschema.PromptEvent{
-			Provider:     eventschema.ProviderAnthropic,
-			RequestModel: t.Model,
-			InputTokens:  inputTokens,
-			OutputTokens: t.OutputTokens,
-			TotalTokens:  totalTokens,
-			Status:       200,
+			Provider:          eventschema.ProviderAnthropic,
+			RequestModel:      t.Model,
+			InputTokens:       inputTokens,
+			CachedInputTokens: t.CacheReadInputTokens,
+			OutputTokens:      t.OutputTokens,
+			TotalTokens:       totalTokens,
+			Status:            200,
 		},
 	}
 }

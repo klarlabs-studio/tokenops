@@ -150,6 +150,46 @@ func TestSummarizeRecomputesMissingCost(t *testing.T) {
 	}
 }
 
+// Cache-heavy workloads (Claude Code JSONL) bundle cache_read into
+// input_tokens but carry CachedInputTokens in payload. Recompute must
+// pull the cached split out of the JSON payload so cache reads bill at
+// the cheaper rate, not at the new-input rate.
+func TestSummarizeUsesCachedInputFromPayload(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	base := time.Date(2026, 5, 9, 10, 0, 0, 0, time.UTC)
+	env := &eventschema.Envelope{
+		ID: "cache-heavy", SchemaVersion: eventschema.SchemaVersion,
+		Type: eventschema.EventTypePrompt, Timestamp: base, Source: "claude-code-jsonl",
+		Payload: &eventschema.PromptEvent{
+			Provider: eventschema.ProviderAnthropic, RequestModel: "claude-opus-4-7",
+			InputTokens: 1_000_000, CachedInputTokens: 990_000, OutputTokens: 10_000,
+			TotalTokens: 1_010_000,
+		},
+	}
+	_ = store.Append(ctx, env)
+
+	eng := spend.NewEngine(spend.DefaultTable())
+	agg := New(store, eng)
+	s, err := agg.Summarize(ctx, Filter{})
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	// claude-opus-4-7: $15/M input, $1.50/M cache, $75/M output
+	//   uncached 10K   * 15/M    = 0.15
+	//   cached 990K    * 1.50/M  = 1.485
+	//   output 10K     * 75/M    = 0.75
+	//   total ≈ 2.385
+	if s.CostUSD < 2.30 || s.CostUSD > 2.45 {
+		t.Errorf("cache-aware cost = %.4f; want ~2.385", s.CostUSD)
+	}
+	// Flat-rate (no cache awareness) would be: 1M * 15/M + 10K * 75/M = 15.75
+	// Anything above ~5 means cache split is being ignored.
+	if s.CostUSD > 5 {
+		t.Errorf("cost %.4f looks like new-input rate is billing cache reads", s.CostUSD)
+	}
+}
+
 // Mixed: some rows have stored cost, some don't. Summarize should add
 // recomputed-from-tokens cost to the SUM(cost_usd) without double-
 // counting events that already have a price.
