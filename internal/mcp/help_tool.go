@@ -96,6 +96,17 @@ var helpCatalog = []helpCategory{
 		},
 	},
 	{
+		Name:        "coaching",
+		Description: "Prompt-quality + workflow-pattern feedback. Privacy-respecting: prompt text is read from the JSONL files at scan time and never persisted to the event store.",
+		Tools: []helpTool{
+			{
+				Name:    "tokenops_coach_prompts",
+				Summary: "Heuristic scoring of your Claude Code prompting: length distribution, vague/ack/repeat counts, recommendations.",
+				Example: `{"since":"7d"}`,
+			},
+		},
+	},
+	{
 		Name:        "rules",
 		Description: "Operational rule artifacts (CLAUDE.md / AGENTS.md / Cursor / MCP policies) as telemetry.",
 		Tools: []helpTool{

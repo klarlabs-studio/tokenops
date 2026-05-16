@@ -61,6 +61,7 @@ func NewRoot() *cobra.Command {
 		newProviderCmd(),
 		newVendorUsageCmd(),
 		newDashboardCmd(),
+		newCoachCmd(),
 	)
 	return cmd
 }

@@ -154,6 +154,11 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if err := mcp.RegisterDashboardTool(srv); err != nil {
 		return fmt.Errorf("register dashboard tool: %w", err)
 	}
+	if err := mcp.RegisterCoachTools(srv, mcp.CoachDeps{
+		JSONLRoot: cfg.VendorUsage.ClaudeCodeJSONL.Root,
+	}); err != nil {
+		return fmt.Errorf("register coach tools: %w", err)
+	}
 
 	logger.Info("tokenops serve ready", "version", version.Version)
 	return mcp.ServeStdio(ctx, srv, mcp.SessionMiddleware(tracker, sessionProvider))
