@@ -310,7 +310,55 @@ func (a *Aggregator) Summarize(ctx context.Context, f Filter) (Summary, error) {
 	); err != nil {
 		return Summary{}, fmt.Errorf("analytics: summarize: %w", err)
 	}
+	if a.spend != nil {
+		recomputed, err := a.summarizeMissingCost(ctx, f)
+		if err != nil {
+			return Summary{}, err
+		}
+		s.CostUSD += recomputed
+	}
 	return s, nil
+}
+
+// summarizeMissingCost computes the spend.Engine cost for events whose
+// stored cost_usd is zero — the case for vendor-usage-jsonl sources that
+// ship token counts but not prices. Groups by (provider, model) so one
+// engine.Compute call covers the entire bucket per model, which is
+// linear-in-tokens and matches the per-event sum exactly.
+func (a *Aggregator) summarizeMissingCost(ctx context.Context, f Filter) (float64, error) {
+	conds, args := buildConditions(f)
+	conds = append(conds, "(cost_usd IS NULL OR cost_usd = 0)")
+	q := `SELECT provider, model, COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0)
+		FROM events WHERE ` + strings.Join(conds, " AND ") +
+		` GROUP BY provider, model`
+	rows, err := a.store.DB().QueryContext(ctx, q, args...)
+	if err != nil {
+		return 0, fmt.Errorf("analytics: summarize recompute query: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var total float64
+	for rows.Next() {
+		var (
+			provider, model sql.NullString
+			inTok, outTok   sql.NullInt64
+		)
+		if err := rows.Scan(&provider, &model, &inTok, &outTok); err != nil {
+			return 0, fmt.Errorf("analytics: summarize recompute scan: %w", err)
+		}
+		p := &eventschema.PromptEvent{
+			Provider:     eventschema.Provider(provider.String),
+			RequestModel: model.String,
+			InputTokens:  inTok.Int64,
+			OutputTokens: outTok.Int64,
+		}
+		if c, err := a.spend.Compute(p); err == nil {
+			total += c
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("analytics: summarize recompute iterate: %w", err)
+	}
+	return total, nil
 }
 
 func buildConditions(f Filter) ([]string, []any) {

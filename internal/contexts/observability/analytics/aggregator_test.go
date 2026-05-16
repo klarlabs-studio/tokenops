@@ -124,6 +124,56 @@ func TestAggregateRecomputesMissingCost(t *testing.T) {
 	}
 }
 
+// vendor-usage-jsonl events ship token counts without cost (the JSONL
+// has no rates). Summarize must recompute via spend.Engine so the
+// dashboard's "TOTAL COST" tile isn't stuck at $0.00 the moment a user
+// enables the live readers.
+func TestSummarizeRecomputesMissingCost(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	base := time.Date(2026, 5, 9, 10, 0, 0, 0, time.UTC)
+	_ = store.Append(ctx, mkPrompt("a", base, "gpt-4o-mini", 1_000_000, 1_000_000, 0))
+	_ = store.Append(ctx, mkPrompt("b", base.Add(time.Minute), "gpt-4o-mini", 500_000, 500_000, 0))
+
+	eng := spend.NewEngine(spend.DefaultTable())
+	agg := New(store, eng)
+	s, err := agg.Summarize(ctx, Filter{})
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	// gpt-4o-mini @ 1.5M input + 1.5M output ≈ $0.225 + $0.90 = $1.125
+	if s.CostUSD < 1.10 || s.CostUSD > 1.15 {
+		t.Errorf("summary cost = %.4f; want ~1.125", s.CostUSD)
+	}
+	if s.Requests != 2 {
+		t.Errorf("requests = %d", s.Requests)
+	}
+}
+
+// Mixed: some rows have stored cost, some don't. Summarize should add
+// recomputed-from-tokens cost to the SUM(cost_usd) without double-
+// counting events that already have a price.
+func TestSummarizeMixedStoredAndRecomputedCost(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	base := time.Date(2026, 5, 9, 10, 0, 0, 0, time.UTC)
+	// One event already priced (proxy-source style) — must be left alone.
+	_ = store.Append(ctx, mkPrompt("priced", base, "gpt-4o-mini", 100, 50, 0.5))
+	// One event missing cost (jsonl-source style) — recompute fills in.
+	_ = store.Append(ctx, mkPrompt("free", base.Add(time.Minute), "gpt-4o-mini", 1_000_000, 1_000_000, 0))
+
+	eng := spend.NewEngine(spend.DefaultTable())
+	agg := New(store, eng)
+	s, err := agg.Summarize(ctx, Filter{})
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	// 0.5 stored + ~0.75 recomputed
+	if s.CostUSD < 1.20 || s.CostUSD > 1.30 {
+		t.Errorf("mixed summary cost = %.4f; want ~1.25", s.CostUSD)
+	}
+}
+
 func TestSummarizeAggregatesAcrossWindow(t *testing.T) {
 	store := newStore(t)
 	ctx := context.Background()
