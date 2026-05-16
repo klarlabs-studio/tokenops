@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.14.0 - 2026-05-16
+
+### Added
+
+- `tokenops vendor-usage enable <source>` subcommand. Writes a
+  vendor-usage source's config block to the active config file so
+  operators don't hand-edit YAML to flip the v0.13.0 pollers on.
+  Sources: `anthropic-cookie`, `cursor`, `github-copilot`,
+  `codex-jsonl`, `claude-code-jsonl`, `anthropic-admin`. Secrets
+  accept env-var fallback (`TOKENOPS_ANTHROPIC_COOKIE_SESSION_KEY`,
+  `TOKENOPS_CURSOR_COOKIE`, `TOKENOPS_COPILOT_OAUTH_TOKEN`,
+  `TOKENOPS_ANTHROPIC_ADMIN_KEY`) so they don't leak through shell
+  history. `--disable` flips `Enabled=false` without clearing
+  persisted secrets — toggling on/off is one flag, not a re-paste.
+
 ## 0.13.0 - 2026-05-16
 
 ### Added
