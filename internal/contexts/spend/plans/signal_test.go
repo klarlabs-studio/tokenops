@@ -97,6 +97,18 @@ func TestClassifySignalCopilotIsHigh(t *testing.T) {
 	}
 }
 
+// Cursor observation is HIGH confidence — cookie scrape of an
+// undocumented but stable endpoint.
+func TestClassifySignalCursorIsHigh(t *testing.T) {
+	q := ClassifySignal(SignalInputs{CursorInWindow: 5})
+	if q.Level != SignalLevelHigh {
+		t.Errorf("cursor must be high; got %q", q.Level)
+	}
+	if q.Source != SignalSourceCursor {
+		t.Errorf("source = %q; want cursor_web", q.Source)
+	}
+}
+
 // Vendor API still wins over jsonl when both are available — vendor
 // data is server-authoritative.
 func TestClassifySignalVendorAPIBeatsJSONL(t *testing.T) {

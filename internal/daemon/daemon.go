@@ -28,6 +28,7 @@ import (
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
 	copilotusage "github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/copilot"
+	cursorusage "github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/cursor"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/workflows/workflow"
 	"github.com/felixgeelhaar/tokenops/internal/domainevents"
 	"github.com/felixgeelhaar/tokenops/internal/events"
@@ -259,6 +260,23 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			logger.Info("codex jsonl poller live",
 				"interval", cfg.VendorUsage.CodexJSONL.Interval,
 				"root", cfg.VendorUsage.CodexJSONL.Root,
+			)
+		}
+		if cfg.VendorUsage.Cursor.Enabled {
+			p := cursorusage.NewPoller(bus, cursorusage.PollerOptions{
+				Cookie:   cfg.VendorUsage.Cursor.Cookie,
+				UserID:   cfg.VendorUsage.Cursor.UserID,
+				Interval: cfg.VendorUsage.Cursor.Interval,
+				Logger:   logger,
+			})
+			go func() {
+				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					logger.Warn("cursor poller exited", "err", err)
+				}
+			}()
+			logger.Info("cursor usage poller live",
+				"interval", cfg.VendorUsage.Cursor.Interval,
+				"user_id", cfg.VendorUsage.Cursor.UserID,
 			)
 		}
 		if cfg.VendorUsage.Anthropic.Enabled {

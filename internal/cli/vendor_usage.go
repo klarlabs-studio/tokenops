@@ -219,6 +219,13 @@ machine-readable output.`,
 						EventsInWin: counts["github-copilot"],
 						ConfigHint:  configHintCopilot(cfg.VendorUsage.GitHubCopilot),
 					},
+					{
+						Name:        "cursor_web",
+						SourceTag:   "cursor-web",
+						Enabled:     cfg.VendorUsage.Cursor.Enabled,
+						EventsInWin: counts["cursor-web"],
+						ConfigHint:  configHintCursor(cfg.VendorUsage.Cursor),
+					},
 				},
 			}
 			if jsonOut {
@@ -273,6 +280,16 @@ func configHintCodexJSONL(enabled bool) string {
 func configHintCopilot(cfg config.GitHubCopilotUsageConfig) string {
 	if !cfg.Enabled {
 		return "set vendor_usage.github_copilot.enabled: true (auto-discovers OAuth token from ~/.config/github-copilot)"
+	}
+	return ""
+}
+
+func configHintCursor(cfg config.CursorUsageConfig) string {
+	if !cfg.Enabled {
+		return "set vendor_usage.cursor.{enabled, cookie, user_id} — extract cookie from the Cursor IDE devtools (WorkosCursorSessionToken)"
+	}
+	if cfg.Cookie == "" || cfg.UserID == "" {
+		return "vendor_usage.cursor enabled but cookie or user_id missing — paste WorkosCursorSessionToken + your user_id from cursor.com devtools"
 	}
 	return ""
 }

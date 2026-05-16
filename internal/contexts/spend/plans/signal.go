@@ -43,6 +43,7 @@ const (
 	SignalSourceClaudeCodeJSONL = "claude_code_jsonl"
 	SignalSourceCodexJSONL      = "codex_jsonl"
 	SignalSourceCopilot         = "github_copilot"
+	SignalSourceCursor          = "cursor_web"
 )
 
 // SignalInputs is the set of observations the quality classifier needs.
@@ -55,6 +56,7 @@ type SignalInputs struct {
 	ClaudeCodeJSONLInWindow int64
 	CodexJSONLInWindow      int64
 	CopilotInWindow         int64
+	CursorInWindow          int64
 	VendorAPIWired          bool
 }
 
@@ -95,6 +97,12 @@ func ClassifySignal(in SignalInputs) SignalQuality {
 			Level:  SignalLevelHigh,
 			Source: SignalSourceCopilot,
 			Caveat: "Calls api.github.com/copilot_internal/user with the OAuth token Copilot IDE plugins use. Returns live quota_snapshots (percent_remaining + entitlement + reset date). Undocumented endpoint but stable since 2022 and shared with every Copilot IDE integration.",
+		}
+	case in.CursorInWindow > 0:
+		return SignalQuality{
+			Level:  SignalLevelHigh,
+			Source: SignalSourceCursor,
+			Caveat: "Calls cursor.com/api/usage with the WorkosCursorSessionToken cookie the IDE uses. Same data the IDE's status-bar reads; undocumented endpoint, contract may shift without notice.",
 		}
 	case in.ProxyEventsInWindow > 0 && in.ProxyEventsInWindow >= in.MCPPingsInWindow:
 		return SignalQuality{

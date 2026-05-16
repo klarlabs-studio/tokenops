@@ -58,6 +58,7 @@ type VendorUsageConfig struct {
 	CodexJSONL      CodexJSONLUsageConfig      `yaml:"codex_jsonl"`
 	Anthropic       AnthropicUsageConfig       `yaml:"anthropic"`
 	GitHubCopilot   GitHubCopilotUsageConfig   `yaml:"github_copilot"`
+	Cursor          CursorUsageConfig          `yaml:"cursor"`
 }
 
 // GitHubCopilotUsageConfig wires the api.github.com/copilot_internal/user
@@ -68,6 +69,17 @@ type GitHubCopilotUsageConfig struct {
 	Enabled    bool          `yaml:"enabled"`
 	OAuthToken string        `yaml:"oauth_token"`
 	Interval   time.Duration `yaml:"interval"`
+}
+
+// CursorUsageConfig wires the cursor.com/api/usage poller. Cookie +
+// UserID must be set (extract from the Cursor IDE devtools, or via a
+// future state.vscdb auto-discovery). Empty means the poller stays
+// idle. Interval defaults to 2 minutes.
+type CursorUsageConfig struct {
+	Enabled  bool          `yaml:"enabled"`
+	Cookie   string        `yaml:"cookie"`
+	UserID   string        `yaml:"user_id"`
+	Interval time.Duration `yaml:"interval"`
 }
 
 // CodexJSONLUsageConfig enables the Codex CLI session-log reader.
