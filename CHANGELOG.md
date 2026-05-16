@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.14.1 - 2026-05-16
+
+### Fixed
+
+- Dashboard `TOTAL COST` tile rendered as `$0.00` whenever data
+  came from vendor-usage-jsonl sources (Claude Code JSONL, Codex
+  JSONL). Those readers ship token counts but no prices, so
+  `cost_usd` lands as NULL in the events table. `AggregateBy`
+  already recomputed via `spend.Engine` (the per-bucket chart was
+  correct); `Summarize` bypassed that path. Fix: after the SUM,
+  group unpriced events by `(provider, model)`, sum tokens, call
+  `spend.Engine.Compute` once per group. Linear pricing → one
+  call per group matches the per-event sum exactly. SQL filter
+  uses `cost_usd IS NULL OR cost_usd = 0` because the serializer
+  stores 0 floats as NULL under STRICT mode.
+
 ## 0.14.0 - 2026-05-16
 
 ### Added
