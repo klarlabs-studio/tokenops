@@ -24,6 +24,7 @@ import (
 	"github.com/felixgeelhaar/tokenops/internal/contexts/security/dashauth"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/security/tlsmint"
 	anthropicusage "github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/anthropic"
+	anthropiccookie "github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/anthropiccookie"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/claudecode"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
@@ -277,6 +278,22 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			logger.Info("cursor usage poller live",
 				"interval", cfg.VendorUsage.Cursor.Interval,
 				"user_id", cfg.VendorUsage.Cursor.UserID,
+			)
+		}
+		if cfg.VendorUsage.AnthropicCookie.Enabled {
+			p := anthropiccookie.NewPoller(bus, anthropiccookie.PollerOptions{
+				SessionKey: cfg.VendorUsage.AnthropicCookie.SessionKey,
+				OrgID:      cfg.VendorUsage.AnthropicCookie.OrgID,
+				Interval:   cfg.VendorUsage.AnthropicCookie.Interval,
+				Logger:     logger,
+			})
+			go func() {
+				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					logger.Warn("anthropic-cookie poller exited", "err", err)
+				}
+			}()
+			logger.Info("anthropic-cookie usage poller live",
+				"interval", cfg.VendorUsage.AnthropicCookie.Interval,
 			)
 		}
 		if cfg.VendorUsage.Anthropic.Enabled {

@@ -59,6 +59,7 @@ type VendorUsageConfig struct {
 	Anthropic       AnthropicUsageConfig       `yaml:"anthropic"`
 	GitHubCopilot   GitHubCopilotUsageConfig   `yaml:"github_copilot"`
 	Cursor          CursorUsageConfig          `yaml:"cursor"`
+	AnthropicCookie AnthropicCookieUsageConfig `yaml:"anthropic_cookie"`
 }
 
 // GitHubCopilotUsageConfig wires the api.github.com/copilot_internal/user
@@ -80,6 +81,19 @@ type CursorUsageConfig struct {
 	Cookie   string        `yaml:"cookie"`
 	UserID   string        `yaml:"user_id"`
 	Interval time.Duration `yaml:"interval"`
+}
+
+// AnthropicCookieUsageConfig wires the claude.ai cookie-scraping
+// poller. SessionKey extracted from the operator's browser (devtools
+// → Application → Cookies → sessionKey). OrgID empty → poller
+// resolves it via /api/organizations on first scan. Interval defaults
+// to 5 minutes; Anthropic's cookie tier rate-limits aggressive
+// polling and the data shifts on a 5-hour bucket cadence anyway.
+type AnthropicCookieUsageConfig struct {
+	Enabled    bool          `yaml:"enabled"`
+	SessionKey string        `yaml:"session_key"`
+	OrgID      string        `yaml:"org_id"`
+	Interval   time.Duration `yaml:"interval"`
 }
 
 // CodexJSONLUsageConfig enables the Codex CLI session-log reader.

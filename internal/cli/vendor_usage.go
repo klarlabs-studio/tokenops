@@ -226,6 +226,13 @@ machine-readable output.`,
 						EventsInWin: counts["cursor-web"],
 						ConfigHint:  configHintCursor(cfg.VendorUsage.Cursor),
 					},
+					{
+						Name:        "anthropic_cookie",
+						SourceTag:   "anthropic-cookie",
+						Enabled:     cfg.VendorUsage.AnthropicCookie.Enabled,
+						EventsInWin: counts["anthropic-cookie"],
+						ConfigHint:  configHintAnthropicCookie(cfg.VendorUsage.AnthropicCookie),
+					},
 				},
 			}
 			if jsonOut {
@@ -290,6 +297,16 @@ func configHintCursor(cfg config.CursorUsageConfig) string {
 	}
 	if cfg.Cookie == "" || cfg.UserID == "" {
 		return "vendor_usage.cursor enabled but cookie or user_id missing — paste WorkosCursorSessionToken + your user_id from cursor.com devtools"
+	}
+	return ""
+}
+
+func configHintAnthropicCookie(cfg config.AnthropicCookieUsageConfig) string {
+	if !cfg.Enabled {
+		return "set vendor_usage.anthropic_cookie.{enabled, session_key} — paste sessionKey from claude.ai devtools (Application → Cookies). RECOMMENDED for Claude Max users — only source of the official 7-day utilization %"
+	}
+	if cfg.SessionKey == "" {
+		return "vendor_usage.anthropic_cookie enabled but session_key missing — paste from claude.ai devtools"
 	}
 	return ""
 }

@@ -44,6 +44,7 @@ const (
 	SignalSourceCodexJSONL      = "codex_jsonl"
 	SignalSourceCopilot         = "github_copilot"
 	SignalSourceCursor          = "cursor_web"
+	SignalSourceAnthropicCookie = "anthropic_cookie"
 )
 
 // SignalInputs is the set of observations the quality classifier needs.
@@ -57,6 +58,7 @@ type SignalInputs struct {
 	CodexJSONLInWindow      int64
 	CopilotInWindow         int64
 	CursorInWindow          int64
+	AnthropicCookieInWindow int64
 	VendorAPIWired          bool
 }
 
@@ -79,6 +81,12 @@ func ClassifySignal(in SignalInputs) SignalQuality {
 		return SignalQuality{
 			Level:  SignalLevelHigh,
 			Source: SignalSourceVendorAPI,
+		}
+	case in.AnthropicCookieInWindow > 0:
+		return SignalQuality{
+			Level:  SignalLevelHigh,
+			Source: SignalSourceAnthropicCookie,
+			Caveat: "Polls claude.ai/api/organizations/{org_id}/usage with your browser sessionKey — same data Anthropic's own UI shows (5-hour, 7-day, 7-day-opus utilization). Undocumented endpoint; cookie expires every few weeks, daemon WARNs when re-paste is needed.",
 		}
 	case in.ClaudeCodeJSONLInWindow > 0:
 		return SignalQuality{

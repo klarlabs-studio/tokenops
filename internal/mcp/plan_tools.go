@@ -62,6 +62,7 @@ func classifySignalFromStore(ctx context.Context, store *sqlite.Store, since, un
 		CodexJSONLInWindow:      counts["codex-jsonl"],
 		CopilotInWindow:         counts["github-copilot"],
 		CursorInWindow:          counts["cursor-web"],
+		AnthropicCookieInWindow: counts["anthropic-cookie"],
 		VendorAPIWired:          counts["vendor-usage-anthropic"] > 0,
 	}, nil
 }
