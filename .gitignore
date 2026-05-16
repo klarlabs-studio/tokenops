@@ -48,6 +48,9 @@ coverage.txt
 # Generated
 *.pb.go.bak
 
+# Go fuzz corpora (local seeds only; CI-generated)
+**/testdata/fuzz/
+
 # nox security scanner
 /.nox/
 findings.json
