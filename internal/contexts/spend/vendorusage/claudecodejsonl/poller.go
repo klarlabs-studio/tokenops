@@ -166,7 +166,13 @@ func newEnvelope(t Turn) *eventschema.Envelope {
 			CachedInputTokens: t.CacheReadInputTokens,
 			OutputTokens:      t.OutputTokens,
 			TotalTokens:       totalTokens,
-			Status:            200,
+			SessionID:         t.SessionID,
+			// WorkflowID = "claude-code:<session>" so the workflow
+			// reconstructor + waste detector treat each Claude Code
+			// session as its own workflow. Surfaces context-growth
+			// and oversized-context findings per session.
+			WorkflowID: "claude-code:" + t.SessionID,
+			Status:     200,
 		},
 	}
 }

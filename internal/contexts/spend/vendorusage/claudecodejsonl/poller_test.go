@@ -116,3 +116,30 @@ func TestNewEnvelopeShape(t *testing.T) {
 		t.Errorf("envelope IDs must be deterministic per message: %s vs %s", env.ID, env2.ID)
 	}
 }
+
+// SessionID + WorkflowID must land on the PromptEvent so `tokenops
+// replay` and the waste detector can resolve a Claude Code session.
+// Cache reads must also surface as CachedInputTokens for the
+// cost-pricing path to discount them ($1.50/M vs $15/M).
+func TestNewEnvelopeAttribution(t *testing.T) {
+	turn := Turn{
+		Timestamp:            time.Date(2026, 5, 16, 12, 0, 0, 0, time.UTC),
+		SessionID:            "abc-123",
+		MessageID:            "msg_attribution",
+		Model:                "claude-opus-4-7",
+		InputTokens:          5_000,
+		OutputTokens:         500,
+		CacheReadInputTokens: 95_000,
+	}
+	env := newEnvelope(turn)
+	pe := env.Payload.(*eventschema.PromptEvent)
+	if pe.SessionID != "abc-123" {
+		t.Errorf("SessionID = %q; want abc-123", pe.SessionID)
+	}
+	if pe.WorkflowID != "claude-code:abc-123" {
+		t.Errorf("WorkflowID = %q; want claude-code:abc-123", pe.WorkflowID)
+	}
+	if pe.CachedInputTokens != 95_000 {
+		t.Errorf("CachedInputTokens = %d; want 95000", pe.CachedInputTokens)
+	}
+}
