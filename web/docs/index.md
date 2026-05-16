@@ -59,15 +59,29 @@ The MCP surface is a deterministic guardrail, not vibes-in-the-loop. Closed acti
 
 `recommended_action` is a closed enum (`continue | slow_down | switch_model | wait_for_reset`) so the agent picks the right branch without parsing prose. `signal_quality.level` lets the agent decide how much to trust the call: stay aggressive on `high`, defer to the human on `low`.
 
-## What's new in v0.11.0
+## What's new in v0.16.0
 
-- **Per-model stacked area on the cost panel.** When no model filter is active, the dashboard cost chart stacks one area layer per model so operators see the spend mix at a glance. Top-5 legend + "+N more" chip; colour scale stable across refresh.
-- **`tokenops vendor-usage backfill --hours N`.** One-shot pull of historical Anthropic Admin API usage. Deterministic envelope IDs, so re-running or running alongside the live poller never double-counts. `--dry-run` previews without writing.
-- **`tokenops dashboard rotate-token`.** Mint a fresh 32-byte URL-safe secret and revoke the old one. Useful after sharing a dashboard URL with a colleague.
-- **Mistral Le Chat Pro + Codex Plus** added to the plan catalog. `eventschema.ProviderMistral` plus mistral-large/medium/small + codestral list prices ship in the default spend table.
-- **Dashboard filter persistence + favicon.** Window / provider / model picks survive page refresh via localStorage. Inline SVG favicon for the browser tab.
+- **Per-project rollups for Claude Code.** Poller stamps `agent_id = "claude-code:<project>"` and `workflow_id = "claude-code:<project>:<session>"` on every event, derived from the JSONL parent directory. `group=agent` series queries answer "which project burns the most".
+- **Cache hit-rate tile + `/api/spend/cache_stats` endpoint.** The dashboard now shows `Cache hit: XX.X%` alongside the four KPI tiles. For agent workflows the ratio routinely sits >95% — the single number that separates the naive billing-math estimate from real spend (~10x correction).
+- **Waste-detector profiles.** `claude-code:` workflows now flag at 900k peak / 2M growth; `codex:` workflows at 250k / 500k. Stops the short-workflow defaults (32k/16k) from firing on every code-agent session.
+- **Codex parity for v0.14.x JSONL improvements.** `codexjsonl` poller now sets `SessionID`, `AgentID="codex"`, `WorkflowID="codex:<session>"`, and `CachedInputTokens` (was dropped — same ~10x over-estimate Claude Code had before v0.14.2).
+- **`tokenops coach prompts` auto-discovers Codex.** A single invocation now scans both `~/.claude/projects` AND `~/.codex/sessions`. Each dialect parsed per source; filename-derived timestamp fallback for Codex.
 
-## Earlier highlights (v0.10.x)
+## Earlier highlights (v0.14.x – v0.15.0)
+
+- **`tokenops coach prompts` (v0.15.0).** Heuristic prompt-quality feedback for Claude Code users. Walks `~/.claude/projects/**/*.jsonl`, extracts human-typed turns, reports length distribution, vague/ack/repeat counts, and concrete recommendations. Prompt text is read at scan time and is **never persisted** to the event store. MCP tool `tokenops_coach_prompts` exposes the same surface to agent hosts.
+- **Coach wiring for Claude Code (v0.14.3).** JSONL events now carry `session_id` + `workflow_id` on the indexed columns (not just attributes), so `tokenops replay` + the waste detector resolve Claude Code sessions. Coach surface was dark for JSONL data; now it surfaces oversized-context + runaway-growth findings per session.
+- **Cache-aware pricing (v0.14.2).** Dashboard cost over-estimated by ~9x because cache reads billed at the new-input rate ($15/M for claude-opus-4-7) instead of the cache rate ($1.50/M). Poller now writes the cache split; aggregator reads it back via `json_extract`. On real 7-day data: **$94k → $10k**.
+- **`Summarize` cost recompute (v0.14.1).** Dashboard TOTAL COST showed `$0.00` for any data from vendor-usage-jsonl sources (those readers ship token counts but no prices). Fixed by recomputing via `spend.Engine` in the same path `AggregateBy` already used.
+- **`tokenops vendor-usage enable <source>` (v0.14.0).** Writes a vendor-usage source's config block so operators don't hand-edit YAML to flip the v0.13.0 pollers on. Six sources: `anthropic-cookie`, `cursor`, `github-copilot`, `codex-jsonl`, `claude-code-jsonl`, `anthropic-admin`. Secrets accept env-var fallback (`TOKENOPS_ANTHROPIC_COOKIE_SESSION_KEY`, etc.).
+- **Four new vendor-usage sources (v0.13.0).**
+  - **Codex CLI JSONL reader** — parses `~/.codex/sessions/<yyyy>/<mm>/<dd>/rollout-*.jsonl`, surfaces OpenAI's authoritative `rate_limits` block (5h primary + weekly secondary used_percent + resets_at).
+  - **GitHub Copilot quota poller** — calls `api.github.com/copilot_internal/user` with the OAuth token Copilot IDE plugins already manage. Auto-discovers from `~/.config/github-copilot`.
+  - **Cursor `/api/usage` poller** — cookie-based scrape of cursor.com.
+  - **Anthropic cookie scraper** — polls `claude.ai/api/organizations/{org_id}/usage` with the operator's browser `sessionKey`. **The only source that surfaces the official Claude Max weekly utilization %.**
+- **Claude Code JSONL reader (v0.12.0).** Parses `~/.claude/projects/<project>/<session>.jsonl` — Claude Code's live per-turn conversation record — and emits one PromptEvent per assistant turn with the full `message.usage` block. The v0.10.2 stats-cache reader was lagging by days; deprecated in favour of this.
+
+## Earlier highlights (v0.10.x – v0.11.0)
 
 - **`tokenops.local` via mDNS (v0.10.1)** — The daemon advertises itself over zeroconf on Start, so the dashboard URL becomes `http://tokenops.local:7878/dashboard` instead of a bare loopback address. The `tokenops_dashboard` MCP tool prefers it; falls back to `127.0.0.1` when `.local` resolution isn't available.
 - **Vendor /usage ingestion (v0.10.2)** — Two new signal sources upgrade Anthropic confidence beyond the heuristic default. The **Claude Code stats cache reader** parses `~/.claude/stats-cache.json` and emits per-(date, model) deltas (signal_quality → medium). The **Anthropic Admin API poller** calls `/v1/organizations/usage_report/messages` every 5min with an admin key (signal_quality → high). Both wired through `config.vendor_usage.*`; both honest about the Claude Max 5h-window blind spot.

@@ -94,6 +94,55 @@ tokenops vendor-usage backfill --hours 168   # full week (Admin API cap)
 tokenops vendor-usage backfill --hours 24 --dry-run
 ```
 
+### `tokenops vendor-usage enable <source>`
+
+Writes a vendor-usage source's config block to the active config
+file so operators don't hand-edit YAML. Six sources covered:
+`anthropic-cookie`, `cursor`, `github-copilot`, `codex-jsonl`,
+`claude-code-jsonl`, `anthropic-admin`. Secrets accept env-var
+fallback so they don't leak through shell history.
+
+```bash
+# Auto-discovers OAuth token from ~/.config/github-copilot
+tokenops vendor-usage enable github-copilot
+
+# Reader, no secret
+tokenops vendor-usage enable claude-code-jsonl
+tokenops vendor-usage enable codex-jsonl
+
+# Secret via env to keep it out of shell history
+TOKENOPS_ANTHROPIC_COOKIE_SESSION_KEY=sk-… \
+  tokenops vendor-usage enable anthropic-cookie
+
+# Flip a source off without clearing the persisted secret
+tokenops vendor-usage enable anthropic-cookie --disable
+```
+
+Available env vars:
+`TOKENOPS_ANTHROPIC_COOKIE_SESSION_KEY`,
+`TOKENOPS_CURSOR_COOKIE`,
+`TOKENOPS_COPILOT_OAUTH_TOKEN`,
+`TOKENOPS_ANTHROPIC_ADMIN_KEY`.
+
+## Coach
+
+### `tokenops coach prompts`
+
+Heuristic prompt-quality feedback. Walks
+`~/.claude/projects/**/*.jsonl` AND `~/.codex/sessions/**/*.jsonl`,
+extracts human-typed turns, reports length distribution
+(under-5-word, 5-15, 15-50, 50-200, >200), vague-short count
+(<15 chars / ≤3 words), pure acknowledgements (yes/no/ok/continue),
+short questions, repeated prompts (verbatim 3+ times), and
+concrete recommendations tuned to your pattern. **Prompt text is
+read at scan time and is never persisted to the event store.**
+
+```bash
+tokenops coach prompts --since 7d            # both Claude Code + Codex
+tokenops coach prompts --since 30d --json    # JSON for agent hosts
+tokenops coach prompts --session <id>        # restrict to one session
+```
+
 ## Dashboard
 
 ### `tokenops dashboard rotate-token`

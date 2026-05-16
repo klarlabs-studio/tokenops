@@ -58,7 +58,10 @@ the agent links you to (`http://tokenops.local:7878/dashboard?token=…`).
 | 📊 **Interactive dashboard** | Vue 3 + D3 dashboard at `/dashboard` — cost line, per-model stacked area, tokens-per-bucket, KPI tiles, 15s auto-refresh, provider + model filters that persist across refresh |
 | 📍 **mDNS-discoverable** | Daemon advertises `tokenops.local` over zeroconf so the dashboard URL is memorable on every host |
 | 🔐 **Dashboard auth** | Shared-secret token, auto-minted on first start, accepted via header / query / cookie. `tokenops dashboard rotate-token` revokes |
-| 📡 **Vendor /usage ingestion** | Optional pollers for `~/.claude/stats-cache.json` (Claude Code, medium signal) and Anthropic Admin API `/v1/organizations/usage_report/messages` (org / API users, high signal) |
+| 📡 **Vendor /usage ingestion** | Live per-turn JSONL readers for Claude Code (`~/.claude/projects/`) and Codex CLI (`~/.codex/sessions/`), plus GitHub Copilot OAuth quota, Cursor cookie scrape, Anthropic cookie scraper (only source of the official Claude Max weekly %). Each source has a `tokenops vendor-usage enable <source>` wizard with env-var fallback for secrets |
+| 💰 **Cache-aware pricing** | Claude + Codex cache reads bill at ~10% of the new-input rate. For agent-heavy workloads cache reads are >95% of input — the dashboard `Cache hit: XX.X%` tile + cost-aware aggregator make the difference between a naive $94k estimate and the real $10k. Per-provider rate cards ship in code |
+| 🧪 **Per-project / per-session attribution** | JSONL pollers stamp `agent_id = "claude-code:<project>"` and `workflow_id = "claude-code:<project>:<session>"` (analogous for Codex). `group=agent` answers "which project burns the most"; coach finds per-session waste |
+| 🧠 **Prompt coach** | `tokenops coach prompts` heuristic feedback on your real prompting patterns — length distribution, vague/ack/repeat detection, concrete recommendations. Auto-discovers Claude Code + Codex JSONLs. Prompt text never persisted |
 | 🎯 **Honest signal quality** | Every prediction carries `signal_quality.level` (low / medium / high) plus a one-line caveat. Heuristic mode is labelled; proxied mode is labelled |
 | 🤖 **MCP-first** | 25 MCP tools agents call directly. Inline SVG sparkline + headroom gauge rendered in markdown so every MCP client shows them today |
 | 🧠 **Dynamic-cheapest coaching** | Coaching pipeline picks the lowest blended-rate model per provider at runtime from the pricing table — no hardcoded model names |
@@ -186,7 +189,7 @@ and [SECURITY.md](SECURITY.md). Plans and tasks live in `.roady/` (see
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) — latest is [v0.11.0](https://github.com/felixgeelhaar/tokenops/releases/tag/v0.11.0).
+See [CHANGELOG.md](CHANGELOG.md) — latest is [v0.16.0](https://github.com/felixgeelhaar/tokenops/releases/tag/v0.16.0).
 
 ## License
 
