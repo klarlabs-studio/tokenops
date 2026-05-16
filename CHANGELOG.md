@@ -2,6 +2,74 @@
 
 ## Unreleased
 
+## 0.13.0 - 2026-05-16
+
+### Added
+
+- Codex CLI JSONL reader (`vendor_usage.codex_jsonl.enabled: true`).
+  Parses `~/.codex/sessions/<yyyy>/<mm>/<dd>/rollout-*.jsonl`,
+  emits one PromptEvent per `event_msg` carrying OpenAI's
+  authoritative `rate_limits` block (5h primary + weekly secondary
+  used_percent + resets_at). 30s scan, dedup by (sessionID,
+  sequence). `signal_quality` promotes to HIGH on any observation.
+  Source tag `codex-jsonl`; envelope IDs `cdx-<sha8>`.
+- GitHub Copilot quota poller (`vendor_usage.github_copilot.enabled:
+  true`). Calls `api.github.com/copilot_internal/user` with the
+  OAuth token discovered from `~/.config/github-copilot/apps.json`
+  (or `hosts.json`) — same file the IDE plugins use. Returns live
+  `quota_snapshots` (`chat`, `premium_interactions`) with
+  `percent_remaining`, `entitlement`, `overage_count`, `unlimited`.
+  Two-minute scan, dedup by `timestamp_utc`. Source tag
+  `github-copilot`; envelope IDs `ghc-<sha8>`. `ProviderGitHub`
+  added to eventschema.
+- Cursor `/api/usage` poller (`vendor_usage.cursor.{enabled, cookie,
+  user_id}`). Calls `cursor.com/api/usage?user=<id>` with the
+  `WorkosCursorSessionToken` cookie the IDE uses; flat-map response
+  yields one envelope per model row. Two-minute scan. Source tag
+  `cursor-web`; envelope IDs `cur-<sha8>`. `ProviderCursor` added
+  to eventschema.
+- Anthropic cookie scraper (`vendor_usage.anthropic_cookie.{enabled,
+  session_key}`). Polls `claude.ai/api/organizations` then
+  `/api/organizations/{org_id}/usage` with the operator's browser
+  `sessionKey` — same data Anthropic's own UI shows (5-hour, 7-day,
+  7-day-opus utilization + extra_usage). Org ID auto-resolves on
+  first scan; Chrome UA to bypass Cloudflare. Five-minute scan,
+  dedup by `five_hour.reset_at`. **First and only source of the
+  official Claude Max weekly utilization %.** Source tag
+  `anthropic-cookie`; envelope IDs `ack-<sha8>`.
+- `SignalSourceCodexJSONL`, `SignalSourceCopilot`,
+  `SignalSourceCursor`, `SignalSourceAnthropicCookie` added to the
+  `signal_quality` enum. `ClassifySignal` precedence:
+  `VendorAPIWired > AnthropicCookie > ClaudeCodeJSONL >
+  CodexJSONL > Copilot > Cursor > Proxy(high/medium) >
+  ClaudeCodeCache(medium, deprecated) > MCPPings(low)`.
+- `tokenops vendor-usage status` surfaces all four new source rows
+  with config-hint copy that names the exact YAML key to set.
+
+## 0.12.0 - 2026-05-16
+
+### Added
+
+- Claude Code JSONL reader (`vendor_usage.claude_code_jsonl.enabled:
+  true`). Parses `~/.claude/projects/<project>/<session>.jsonl` —
+  Claude Code's live per-turn conversation record — and emits one
+  PromptEvent per assistant turn with the full `message.usage`
+  block (`input_tokens`, `output_tokens`, `cache_read_input_tokens`,
+  `cache_creation_input_tokens`, `service_tier`). Tolerates 15MB+
+  files (4MB scanner buffer), skips user/tool turns and zero-token
+  rows. 30s scan, dedup by Anthropic message_id. `signal_quality`
+  promotes to HIGH on any observation. Source tag
+  `claude-code-jsonl`; envelope IDs `ccj-<sha8>`.
+- `SignalSourceClaudeCodeJSONL` added to the signal enum;
+  `claude-code-stats-cache` reader deprecated (still functional;
+  emits at `medium` confidence with an upgrade-path hint).
+
+### Changed
+
+- The v0.10.2 `claude-code-stats-cache` reader is deprecated. On
+  active Claude Code users `~/.claude/stats-cache.json` lags by
+  days; the JSONL reader is the supported source going forward.
+
 ## 0.11.0 - 2026-05-14
 
 ### Added
