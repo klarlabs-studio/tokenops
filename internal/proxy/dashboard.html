@@ -89,6 +89,7 @@
     <div><label>Requests</label><value>{{ fmtNum(summary.Requests) }}</value></div>
     <div><label>Input tokens</label><value>{{ fmtNum(summary.InputTokens) }}</value></div>
     <div><label>Output tokens</label><value>{{ fmtNum(summary.OutputTokens) }}</value></div>
+    <div><label>Cache hit</label><value>{{ fmtPct(cacheStats.cache_ratio) }}</value></div>
   </div>
 
   <div class="grid">
@@ -144,6 +145,7 @@ createApp({
     const providers = ref([]);
     const models = ref([]);
     const summary = reactive({ CostUSD: 0, Requests: 0, InputTokens: 0, OutputTokens: 0, TotalTokens: 0 });
+    const cacheStats = reactive({ cache_ratio: 0, cached_input_tokens: 0, uncached_input_tokens: 0 });
     const series = ref([]);
     const currency = ref("USD");
     const loadError = ref("");
@@ -153,6 +155,7 @@ createApp({
 
     const fmtCost = (n) => (n || 0).toLocaleString(undefined, { style: "currency", currency: currency.value });
     const fmtNum = (n) => (n || 0).toLocaleString();
+    const fmtPct = (n) => `${((n || 0) * 100).toFixed(1)}%`;
 
     const sinceISO = () => new Date(Date.now() - windowHours.value * 3600 * 1000).toISOString();
 
@@ -204,18 +207,23 @@ createApp({
         const fetches = [
           fetch(`/api/spend/summary?${q}`),
           fetch(`/api/spend/series?${q}&bucket=hour`),
+          fetch(`/api/spend/cache_stats?${q}`),
         ];
         if (!model.value) {
           fetches.push(fetch(`/api/spend/series?${q}&bucket=hour&group=model`));
         }
         const responses = await Promise.all(fetches);
-        const [sumRes, serRes, byModelRes] = responses;
+        const [sumRes, serRes, cacheRes, byModelRes] = responses;
         if (!sumRes.ok) throw new Error(`summary HTTP ${sumRes.status}`);
         if (!serRes.ok) throw new Error(`series HTTP ${serRes.status}`);
         const s = await sumRes.json();
         const r = await serRes.json();
         Object.assign(summary, s.summary || {});
         currency.value = s.currency || "USD";
+        if (cacheRes && cacheRes.ok) {
+          const cs = await cacheRes.json();
+          Object.assign(cacheStats, cs.stats || {});
+        }
         series.value = (r.rows || []).map(row => ({
           t: new Date(row.BucketStart),
           cost: row.CostUSD || 0,
@@ -350,7 +358,7 @@ createApp({
     onUnmounted(() => { clearInterval(timer); window.removeEventListener("resize", drawCharts); });
     const drawCharts = () => { drawCostChart(); drawTokenChart(); };
 
-    return { refreshSec, windowOpts, windowHours, provider, model, providers, models, summary, loadError, lastRefresh, costChart, tokenChart, fmtCost, fmtNum, setWindow, fetchAll, onFilterChange };
+    return { refreshSec, windowOpts, windowHours, provider, model, providers, models, summary, cacheStats, loadError, lastRefresh, costChart, tokenChart, fmtCost, fmtNum, fmtPct, setWindow, fetchAll, onFilterChange };
   }
 }).mount("#app");
 </script>

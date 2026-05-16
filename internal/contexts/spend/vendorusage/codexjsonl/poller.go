@@ -149,12 +149,20 @@ func newEnvelope(t Turn) *eventschema.Envelope {
 		Source:        SourceTag,
 		Attributes:    attrs,
 		Payload: &eventschema.PromptEvent{
-			Provider:     eventschema.ProviderOpenAI,
-			RequestModel: t.Model,
-			InputTokens:  inputTokens,
-			OutputTokens: t.OutputTokens + t.ReasoningTok,
-			TotalTokens:  totalTokens,
-			Status:       200,
+			Provider:          eventschema.ProviderOpenAI,
+			RequestModel:      t.Model,
+			InputTokens:       inputTokens,
+			CachedInputTokens: t.CachedTokens,
+			OutputTokens:      t.OutputTokens + t.ReasoningTok,
+			TotalTokens:       totalTokens,
+			SessionID:         t.SessionID,
+			// AgentID + WorkflowID mirror the Claude Code attribution
+			// so the waste detector + replay engine can resolve Codex
+			// sessions the same way (group=agent rollups, profile
+			// selection on prefix).
+			AgentID:    "codex",
+			WorkflowID: "codex:" + t.SessionID,
+			Status:     200,
 		},
 	}
 }

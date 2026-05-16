@@ -45,10 +45,14 @@ import (
 
 // Turn is one parsed assistant turn from a JSONL file. SessionID +
 // MessageID together uniquely identify the turn; callers dedupe on
-// MessageID alone (Anthropic guarantees uniqueness).
+// MessageID alone (Anthropic guarantees uniqueness). Project is the
+// filesystem-encoded project directory name from
+// ~/.claude/projects/<project>/<session>.jsonl — surfaces per-project
+// rollups via agent_id/workflow_id attribution downstream.
 type Turn struct {
 	Timestamp                time.Time
 	SessionID                string
+	Project                  string
 	Model                    string
 	MessageID                string
 	InputTokens              int64
@@ -111,10 +115,20 @@ func ReadFile(path string, visit func(Turn) error) error {
 		return err
 	}
 	defer func() { _ = f.Close() }()
-	return readReader(f, visit)
+	project := projectFromPath(path)
+	return readReader(f, project, visit)
 }
 
-func readReader(r io.Reader, visit func(Turn) error) error {
+// projectFromPath returns the project directory name for a JSONL
+// path. Claude Code lays out files as
+// ~/.claude/projects/<project>/<session>.jsonl where <project> is
+// the filesystem-encoded project root (slashes → dashes). The name
+// is returned verbatim — operators recognise their own encoding.
+func projectFromPath(path string) string {
+	return filepath.Base(filepath.Dir(path))
+}
+
+func readReader(r io.Reader, project string, visit func(Turn) error) error {
 	scanner := bufio.NewScanner(r)
 	// JSONL lines can be large (full conversation history; observed
 	// 15 MB+ files). Bump buffer to 4 MB per line.
@@ -149,6 +163,7 @@ func readReader(r io.Reader, visit func(Turn) error) error {
 		if err := visit(Turn{
 			Timestamp:                ts.UTC(),
 			SessionID:                raw.SessionID,
+			Project:                  project,
 			Model:                    raw.Message.Model,
 			MessageID:                raw.Message.ID,
 			InputTokens:              u.InputTokens,

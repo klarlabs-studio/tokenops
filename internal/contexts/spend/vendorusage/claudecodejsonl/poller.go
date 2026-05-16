@@ -153,6 +153,7 @@ func newEnvelope(t Turn) *eventschema.Envelope {
 		Source:        SourceTag,
 		Attributes: map[string]string{
 			"session_id":           t.SessionID,
+			"project":              t.Project,
 			"message_id":           t.MessageID,
 			"service_tier":         t.ServiceTier,
 			"input_uncached":       fmt.Sprintf("%d", t.InputTokens),
@@ -167,12 +168,37 @@ func newEnvelope(t Turn) *eventschema.Envelope {
 			OutputTokens:      t.OutputTokens,
 			TotalTokens:       totalTokens,
 			SessionID:         t.SessionID,
-			// WorkflowID = "claude-code:<session>" so the workflow
-			// reconstructor + waste detector treat each Claude Code
-			// session as its own workflow. Surfaces context-growth
-			// and oversized-context findings per session.
-			WorkflowID: "claude-code:" + t.SessionID,
+			// AgentID = "claude-code:<project>" enables per-project
+			// rollups via group=agent in the dashboard / analytics.
+			// WorkflowID = "claude-code:<project>:<session>" so the
+			// waste detector + replay treat each session as its own
+			// workflow, and projects are still distinguishable when
+			// agents collide on session prefix.
+			AgentID:    claudeCodeAgentID(t.Project),
+			WorkflowID: claudeCodeWorkflowID(t.Project, t.SessionID),
 			Status:     200,
 		},
 	}
+}
+
+// claudeCodeAgentID is the canonical agent_id stamp used across
+// poller writes + downstream readers (waste detector profile
+// selection, dashboard group-by). Project may be empty for legacy
+// JSONLs missing a parent dir — fall back to a bare prefix so the
+// agent surface stays non-NULL.
+func claudeCodeAgentID(project string) string {
+	if project == "" {
+		return "claude-code"
+	}
+	return "claude-code:" + project
+}
+
+// claudeCodeWorkflowID encodes (project, session) so the waste
+// detector sees distinct workflows per project. The project segment
+// degrades gracefully when missing.
+func claudeCodeWorkflowID(project, session string) string {
+	if project == "" {
+		return "claude-code:" + session
+	}
+	return "claude-code:" + project + ":" + session
 }

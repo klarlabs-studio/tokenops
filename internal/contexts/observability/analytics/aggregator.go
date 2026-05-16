@@ -323,6 +323,51 @@ func (a *Aggregator) Summarize(ctx context.Context, f Filter) (Summary, error) {
 	return s, nil
 }
 
+// CacheStatsResult is the per-window cache split. Token counts are
+// summed across the filter range; CacheRatio is the share of input
+// tokens that came from cache reads (0..1).
+type CacheStatsResult struct {
+	TotalInputTokens    int64   `json:"total_input_tokens"`
+	CachedInputTokens   int64   `json:"cached_input_tokens"`
+	UncachedInputTokens int64   `json:"uncached_input_tokens"`
+	OutputTokens        int64   `json:"output_tokens"`
+	CacheRatio          float64 `json:"cache_ratio"`
+}
+
+// CacheStats sums cached vs uncached input over the filter window.
+// JSONL events carry the cache split in payload.cached_input_tokens
+// (post-v0.14.2 poller) or attributes.cache_read_input (legacy).
+// COALESCE-over-both so old events still pay the cache discount
+// without a re-ingest.
+func (a *Aggregator) CacheStats(ctx context.Context, f Filter) (CacheStatsResult, error) {
+	if a == nil || a.store == nil {
+		return CacheStatsResult{}, errors.New("analytics: aggregator not initialised")
+	}
+	conds, args := buildConditions(f)
+	q := `SELECT
+		COALESCE(SUM(input_tokens), 0),
+		COALESCE(SUM(CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER)), 0),
+		COALESCE(SUM(output_tokens), 0)
+		FROM events`
+	if len(conds) > 0 {
+		q += " WHERE " + strings.Join(conds, " AND ")
+	}
+	var s CacheStatsResult
+	if err := a.store.DB().QueryRowContext(ctx, q, args...).Scan(
+		&s.TotalInputTokens, &s.CachedInputTokens, &s.OutputTokens,
+	); err != nil {
+		return CacheStatsResult{}, fmt.Errorf("analytics: cache_stats: %w", err)
+	}
+	s.UncachedInputTokens = s.TotalInputTokens - s.CachedInputTokens
+	if s.UncachedInputTokens < 0 {
+		s.UncachedInputTokens = 0
+	}
+	if s.TotalInputTokens > 0 {
+		s.CacheRatio = float64(s.CachedInputTokens) / float64(s.TotalInputTokens)
+	}
+	return s, nil
+}
+
 // summarizeMissingCost computes the spend.Engine cost for events whose
 // stored cost_usd is zero — the case for vendor-usage-jsonl sources that
 // ship token counts but not prices. Groups by (provider, model) so one

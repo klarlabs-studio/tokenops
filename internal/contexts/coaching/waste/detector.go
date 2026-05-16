@@ -11,6 +11,7 @@ package waste
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/felixgeelhaar/tokenops/internal/contexts/workflows/workflow"
 	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
@@ -66,23 +67,78 @@ func New(cfg Config) *Detector {
 // Detect runs all patterns over the trace and returns a slice of
 // coaching event envelopes. The envelope IDs are not assigned here —
 // the caller (replay engine, async pipeline) is responsible for ID
-// minting + storage.
+// minting + storage. Thresholds adapt to the workflow profile when
+// the operator's Config is the zero default — code-agent sessions
+// (workflow_id prefix "claude-code:") run 1M context caps and would
+// trip the short-workflow thresholds on every session.
 func (d *Detector) Detect(trace *workflow.Trace) []*eventschema.CoachingEvent {
 	if trace == nil || len(trace.Steps) == 0 {
 		return nil
 	}
+	cfg := d.cfg
+	if profile := ProfileFor(trace.WorkflowID); profile != nil {
+		cfg = mergeConfig(cfg, *profile)
+	}
+	scoped := &Detector{cfg: cfg}
 	var out []*eventschema.CoachingEvent
-	if ev := d.checkOversizedContext(trace); ev != nil {
+	if ev := scoped.checkOversizedContext(trace); ev != nil {
 		out = append(out, ev)
 	}
-	if ev := d.checkContextGrowth(trace); ev != nil {
+	if ev := scoped.checkContextGrowth(trace); ev != nil {
 		out = append(out, ev)
 	}
-	if ev := d.checkAgentLoops(trace); ev != nil {
+	if ev := scoped.checkAgentLoops(trace); ev != nil {
 		out = append(out, ev)
 	}
-	if ev := d.checkRecursion(trace); ev != nil {
+	if ev := scoped.checkRecursion(trace); ev != nil {
 		out = append(out, ev)
+	}
+	return out
+}
+
+// ProfileFor returns a Config tuned to a workflow's expected shape,
+// or nil when the default short-workflow thresholds apply. Two
+// code-agent profiles ship today:
+//
+//   - "claude-code:" — Anthropic's claude-opus-4-7 caps at 1M
+//     context; flag only at ~90% of the ceiling.
+//   - "codex:" — OpenAI Codex CLI runs ~256k context windows on
+//     gpt-5 family models; flag only near 250k peak.
+//
+// Both profiles also raise the cumulative growth limit so legitimate
+// long-running agent sessions don't trip on every run.
+func ProfileFor(workflowID string) *Config {
+	switch {
+	case strings.HasPrefix(workflowID, "claude-code:"):
+		return &Config{
+			MaxContextTokens:         900_000,
+			ContextGrowthLimitTokens: 2_000_000,
+		}
+	case strings.HasPrefix(workflowID, "codex:"):
+		return &Config{
+			MaxContextTokens:         250_000,
+			ContextGrowthLimitTokens: 500_000,
+		}
+	}
+	return nil
+}
+
+// mergeConfig overlays profile onto base, preferring non-zero
+// profile values. Zero fields in profile fall back to base, which
+// preserves any operator-supplied tuning.
+func mergeConfig(base, profile Config) Config {
+	out := base
+	if profile.MaxContextTokens > 0 {
+		out.MaxContextTokens = profile.MaxContextTokens
+	}
+	if profile.ContextGrowthLimitTokens > 0 {
+		out.ContextGrowthLimitTokens = profile.ContextGrowthLimitTokens
+	}
+	if profile.MaxConsecutiveAgentLoops > 0 {
+		out.MaxConsecutiveAgentLoops = profile.MaxConsecutiveAgentLoops
+	}
+	if profile.SystemRedundancyMin > 0 {
+		out.SystemRedundancyMin = profile.SystemRedundancyMin
 	}
 	return out
 }

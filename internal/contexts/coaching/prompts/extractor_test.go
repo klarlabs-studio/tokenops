@@ -112,6 +112,71 @@ func TestExtractLimit(t *testing.T) {
 	}
 }
 
+// Codex JSONLs use a different schema: flat role=user, content
+// array with type=input_text. Extractor must parse both formats
+// without conflating the role discriminators.
+func TestExtractCodexShape(t *testing.T) {
+	dir := t.TempDir()
+	// Codex rollouts: filename carries the session timestamp.
+	_ = writeJSONL(t, dir, "rollout-2026-05-16T10-00-00-abc-123.jsonl",
+		`{"role":"user","content":[{"type":"input_text","text":"analyse the folder"}]}`,
+		`{"role":"assistant","content":[{"type":"text","text":"ok"}]}`,
+		`{"role":"user","content":[{"type":"input_text","text":"now refactor it"}]}`,
+	)
+	got, err := Extract(ExtractOptions{Root: dir, Source: SourceCodex})
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d codex prompts; want 2", len(got))
+	}
+	if got[0].Text != "analyse the folder" {
+		t.Errorf("first = %q", got[0].Text)
+	}
+	if got[1].Text != "now refactor it" {
+		t.Errorf("second = %q", got[1].Text)
+	}
+	// Timestamp falls back to filename when records lack their own.
+	if got[0].Timestamp.IsZero() {
+		t.Errorf("timestamp not derived from filename")
+	}
+}
+
+// Source explicit on a Codex root works even when Root is auto-set.
+func TestExtractCodexSourceFromRoot(t *testing.T) {
+	dir := t.TempDir()
+	_ = writeJSONL(t, dir, "rollout-2026-05-16T10-00-00-x.jsonl",
+		`{"role":"user","content":[{"type":"input_text","text":"hello"}]}`,
+	)
+	got, err := Extract(ExtractOptions{Root: dir, Source: SourceCodex})
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d", len(got))
+	}
+}
+
+// Source sniffing: when Source=Auto and Root contains ".codex", the
+// extractor picks the codex parser. Tests the fallback inference.
+func TestExtractAutoSniffsCodexFromPath(t *testing.T) {
+	dir := t.TempDir()
+	codexRoot := filepath.Join(dir, ".codex", "sessions")
+	if err := os.MkdirAll(codexRoot, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	_ = writeJSONL(t, codexRoot, "rollout-2026-05-16T10-00-00-x.jsonl",
+		`{"role":"user","content":[{"type":"input_text","text":"hi"}]}`,
+	)
+	got, err := Extract(ExtractOptions{Root: codexRoot})
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if len(got) != 1 || got[0].Text != "hi" {
+		t.Errorf("auto-sniff failed: %+v", got)
+	}
+}
+
 // Malformed lines are skipped, not fatal.
 func TestExtractToleratesMalformedLines(t *testing.T) {
 	dir := t.TempDir()

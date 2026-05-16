@@ -43,6 +43,7 @@ func (a *AnalyticsHandlers) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/spend/summary", a.spendSummary)
 	mux.HandleFunc("GET /api/spend/series", a.spendSeries)
 	mux.HandleFunc("GET /api/spend/forecast", a.spendForecast)
+	mux.HandleFunc("GET /api/spend/cache_stats", a.spendCacheStats)
 	mux.HandleFunc("GET /api/workflows", a.listWorkflows)
 	mux.HandleFunc("GET /api/workflows/{id}", a.workflowDetail)
 	mux.HandleFunc("GET /api/optimizations", a.listOptimizations)
@@ -168,6 +169,29 @@ func (a *AnalyticsHandlers) spendForecast(w http.ResponseWriter, r *http.Request
 		"history":        rows,
 		"forecast":       preds,
 		"currency":       a.spend.Currency(),
+	})
+}
+
+// spendCacheStats reports the cache hit ratio across the events
+// table. Cache reads bill at ~10% of new-input rate for Claude
+// models — for agent-heavy workloads the ratio is the key efficiency
+// number, often >95%. JSONL events carry the split in attributes
+// (legacy) or payload.cached_input_tokens (post-v0.14.2); we
+// COALESCE so both shapes work without a backfill.
+func (a *AnalyticsHandlers) spendCacheStats(w http.ResponseWriter, r *http.Request) {
+	filter, err := filterFromQuery(r, 24*time.Hour)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, err)
+		return
+	}
+	stats, err := a.aggregator.CacheStats(r.Context(), filter)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeAPIJSON(w, http.StatusOK, map[string]any{
+		"window": filter,
+		"stats":  stats,
 	})
 }
 
