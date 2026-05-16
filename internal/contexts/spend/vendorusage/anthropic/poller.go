@@ -259,8 +259,30 @@ func newEnvelope(startsAt, endsAt time.Time, r UsageResult) (*eventschema.Envelo
 			OutputTokens: r.OutputTokens,
 			TotalTokens:  totalTokens,
 			Status:       200,
+			// Attribution: vendor admin-API rows are not per-prompt
+			// attributable to a workflow, but they ARE attributable to the
+			// vendor poller as origin. Stamping AgentID + a synthetic
+			// WorkflowID lets SAC see these rows as attributed instead of
+			// treating them as a black hole. Distinct API key / workspace
+			// pairs get distinct workflow buckets.
+			AgentID:    SourceTag,
+			WorkflowID: anthropicAdminWorkflowID(safeStr(r.APIKeyID), safeStr(r.WorkspaceID)),
 		},
 	}, true
+}
+
+// anthropicAdminWorkflowID encodes (api_key, workspace) so rolled-up
+// admin events from different keys/workspaces don't collapse into one
+// bucket. Empty key/workspace fall back to the source tag alone.
+func anthropicAdminWorkflowID(apiKey, workspace string) string {
+	w := SourceTag
+	if apiKey != "" {
+		w += ":k=" + apiKey
+	}
+	if workspace != "" {
+		w += ":w=" + workspace
+	}
+	return w
 }
 
 func safeStr(s *string) string {

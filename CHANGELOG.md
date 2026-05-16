@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Added
+
+- **`tokenops coach replies`** — output-side sibling of `coach prompts`.
+  Walks the same Claude Code / Codex JSONLs but extracts assistant
+  replies and scores per session:
+  - article density (`a/an/the` per word)
+  - filler density (`just / really / basically / sure / ...`)
+  - average word length
+  - code-block ratio
+  - **caveman-likely verdict** + rough estimated token savings
+  Use to detect when an output-compression skill (e.g. caveman) is
+  engaged and how many tokens it suppressed.
+
+### Changed
+
+- **Anthropic admin-API poller** now stamps `agent_id = "anthropic-admin"`
+  and a synthetic `workflow_id = "anthropic-admin[:k=<api_key>][:w=<workspace>]"`
+  on emitted prompt events. Previously these vendor-rolled rows had
+  no attribution at all, which dragged scorecard SAC down to ~1%.
+  Distinct API keys / workspaces still get distinct workflow buckets
+  so the analyzer can group them.
+
 ## 0.16.0 - 2026-05-16
 
 ### Added

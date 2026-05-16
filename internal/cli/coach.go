@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/prompts"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/replies"
 )
 
 // newCoachCmd is the tree for prompt + workflow coaching. For now
@@ -21,7 +22,113 @@ func newCoachCmd() *cobra.Command {
 		Short: "Analyze your prompting and workflow patterns for waste + anti-patterns",
 	}
 	cmd.AddCommand(newCoachPromptsCmd())
+	cmd.AddCommand(newCoachRepliesCmd())
 	return cmd
+}
+
+// newCoachRepliesCmd is the output-side sibling of newCoachPromptsCmd.
+// It scans the same Claude Code / Codex JSONLs but extracts assistant
+// replies instead of user prompts, then surfaces compression patterns
+// — most notably whether a session ran with the caveman skill (or any
+// equivalent output-compression skill) engaged.
+func newCoachRepliesCmd() *cobra.Command {
+	var (
+		sinceFlag string
+		root      string
+		session   string
+		limit     int
+		jsonOut   bool
+	)
+	cmd := &cobra.Command{
+		Use:   "replies",
+		Short: "Detect output-compression patterns (e.g. caveman skill) in assistant replies",
+		Long: `replies walks ~/.claude/projects/**/*.jsonl, extracts every
+assistant-emitted turn, and reports compression-style heuristics per
+session:
+
+  - article density   (a/an/the per word)
+  - filler density    (just/really/basically/actually/sure/...)
+  - avg word length   (caveman favours short synonyms)
+  - code-block ratio  (preserved verbatim under caveman)
+  - "caveman likely"  verdict per session
+  - estimated token   savings vs. a verbose baseline (rough TEU input)
+
+Reply text is read from the JSONLs at scan time — never persisted to
+the TokenOps event store.`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			opts := replies.ExtractOptions{
+				Root:      root,
+				SessionID: session,
+				Limit:     limit,
+			}
+			if sinceFlag != "" {
+				since, err := parseSince(sinceFlag)
+				if err != nil {
+					return fmt.Errorf("--since: %w", err)
+				}
+				opts.Since = since
+			}
+			extracted, err := replies.Extract(opts)
+			if err != nil {
+				return fmt.Errorf("extract: %w", err)
+			}
+			findings := replies.Analyze(extracted)
+			if jsonOut {
+				enc := json.NewEncoder(cmd.OutOrStdout())
+				enc.SetIndent("", "  ")
+				return enc.Encode(findings)
+			}
+			renderCoachReplies(cmd, findings, opts.Since)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&sinceFlag, "since", "7d", "lower bound: RFC3339 timestamp or duration like 24h or 7d")
+	cmd.Flags().StringVar(&root, "root", "", "JSONL scan root (defaults to ~/.claude/projects)")
+	cmd.Flags().StringVar(&session, "session", "", "restrict to a single session id (filename stem)")
+	cmd.Flags().IntVar(&limit, "limit", 0, "max replies to extract (0 = unbounded)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON instead of text")
+	return cmd
+}
+
+func renderCoachReplies(cmd *cobra.Command, f replies.Findings, since time.Time) {
+	out := cmd.OutOrStdout()
+	header := "Reply coach"
+	if !since.IsZero() {
+		header = fmt.Sprintf("Reply coach — since %s", since.Format(time.RFC3339))
+	}
+	fmt.Fprintln(out, header)
+	fmt.Fprintf(out, "  total replies: %d\n", f.TotalReplies)
+	if f.TotalReplies == 0 {
+		fmt.Fprintln(out, "  (no assistant replies in the scan window)")
+		return
+	}
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "BASELINE (across all sessions)")
+	fmt.Fprintf(out, "  avg words/reply:  %.1f\n", f.Baseline.AvgWords)
+	fmt.Fprintf(out, "  avg word length:  %.2f\n", f.Baseline.AvgWordLen)
+	fmt.Fprintf(out, "  article density:  %.2f%%   (typical English ~7%%)\n", f.Baseline.ArticleRatio*100)
+	fmt.Fprintf(out, "  filler density:   %.2f%%   (typical ~1%%)\n", f.Baseline.FillerRatio*100)
+	fmt.Fprintf(out, "  code-block ratio: %.1f%% of replies\n", f.Baseline.CodeBlockRatio*100)
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "CAVEMAN-LIKELY SESSIONS: %d / %d  ·  est. saved tokens: %d\n",
+		f.CavemanLikelySessions, len(f.BySession), f.EstimatedTokenSavings)
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "PER SESSION")
+	fmt.Fprintf(out, "  %-44s %5s %6s %7s %7s %6s\n", "session", "reply", "art%", "filler%", "wlen", "verdict")
+	for _, s := range f.BySession {
+		verdict := "—"
+		if s.CavemanLikely {
+			verdict = "caveman"
+		}
+		sid := s.SessionID
+		if len(sid) > 44 {
+			sid = sid[:42] + "…"
+		}
+		fmt.Fprintf(out, "  %-44s %5d %5.2f%% %6.2f%% %7.2f %6s\n",
+			sid, s.Stats.Replies,
+			s.Stats.ArticleRatio*100, s.Stats.FillerRatio*100,
+			s.Stats.AvgWordLen, verdict)
+	}
 }
 
 // newCoachPromptsCmd reads Claude Code session JSONLs (the same
