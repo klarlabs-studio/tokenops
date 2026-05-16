@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## 0.17.1 - 2026-05-16
+
+### Fixed
+
+- Dashboard KPI tiles overflowed on real-data viewports because
+  raw token counts (`6,039,345,464`) didn't fit the 140px tile
+  font budget — values ellipsized mid-digit. Tokens / requests
+  now render compact (`6.04B`, `14.1k`, `6.95M`); total cost
+  drops cents on the tile. Full grouped values surface via the
+  `title=` hover attribute. Chart Y-axes use the same compact
+  formatter so cost reads `$1.0k / $800 / …` and tokens
+  `600.00M / 400.00M` instead of clipped `0.0000 / 00,000`.
+- Hero video on the docs site didn't autoplay on Chrome. The
+  `<source>` fallback was a webm with `duration=N/A` (matroska
+  doesn't write per-stream duration by default), which raced
+  with the mp4 fetch and stalled playback. Dropped the webm
+  source from the hero markup; mp4 is the only player spec
+  advertised. New mp4 uses `yuv420p` + `color_range=tv` + Main
+  level 4.0 + faststart for Safari/iOS autoplay too.
+
 ## 0.17.0 - 2026-05-16
 
 ### Added
