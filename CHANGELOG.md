@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.14.2 - 2026-05-16
+
+### Fixed
+
+- Dashboard cost over-estimated by ~9x against real Claude Code
+  data because cache reads were billed at the new-input rate
+  ($15/M for claude-opus-4-7) instead of the cache rate
+  ($1.50/M). For agent workflows that reuse context heavily,
+  >99% of input tokens are cache reads — order-of-magnitude
+  difference. claudecodejsonl poller now writes the cache_read
+  split into `PromptEvent.CachedInputTokens`; aggregator
+  recompute reads it back from the payload JSON, with a fallback
+  to `attributes.cache_read_input` so existing events re-cost
+  correctly without a re-ingest. Verified end-to-end on a
+  6.27B-input-token / 7.55M-output 7-day window: $94,253 →
+  $10,457.
+
 ## 0.14.1 - 2026-05-16
 
 ### Fixed
