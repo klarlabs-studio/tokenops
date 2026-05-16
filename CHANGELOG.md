@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.15.0 - 2026-05-16
+
+### Added
+
+- `tokenops coach prompts` subcommand + `tokenops_coach_prompts`
+  MCP tool. Heuristic prompt-quality feedback for Claude Code
+  users: walks `~/.claude/projects/**/*.jsonl`, extracts
+  human-typed turns, and reports length distribution
+  (under-5-word, 5-15, 15-50, 50-200, >200), vague-short
+  count (<15 chars / ≤3 words), pure acknowledgements
+  (yes/no/ok/continue), short questions, single-sentence
+  no-context, and repeated prompts (verbatim 3+ times) — with
+  concrete recommendations tuned to the operator's pattern.
+  Privacy: prompt text is read at scan time and is never
+  persisted to the event store.
+
 ## 0.14.3 - 2026-05-16
 
 ### Added
