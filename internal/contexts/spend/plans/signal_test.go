@@ -70,6 +70,30 @@ func TestClassifySignalProxyBeatsClaudeCodeCache(t *testing.T) {
 	}
 }
 
+// JSONL observation is HIGH confidence — real per-turn data from
+// Claude Code's own conversation record. Should beat proxy + mcp.
+func TestClassifySignalClaudeCodeJSONLIsHigh(t *testing.T) {
+	q := ClassifySignal(SignalInputs{ClaudeCodeJSONLInWindow: 5, MCPPingsInWindow: 100, ProxyEventsInWindow: 2})
+	if q.Level != SignalLevelHigh {
+		t.Errorf("jsonl observed must be high; got %q", q.Level)
+	}
+	if q.Source != SignalSourceClaudeCodeJSONL {
+		t.Errorf("source = %q; want claude_code_jsonl", q.Source)
+	}
+	if q.Caveat == "" {
+		t.Error("high-jsonl signal still carries a caveat for transparency")
+	}
+}
+
+// Vendor API still wins over jsonl when both are available — vendor
+// data is server-authoritative.
+func TestClassifySignalVendorAPIBeatsJSONL(t *testing.T) {
+	q := ClassifySignal(SignalInputs{VendorAPIWired: true, ClaudeCodeJSONLInWindow: 100})
+	if q.Source != SignalSourceVendorAPI {
+		t.Errorf("vendor-api must trump jsonl; got %q", q.Source)
+	}
+}
+
 func TestClassifySignalVendorWiredTrumpsAll(t *testing.T) {
 	q := ClassifySignal(SignalInputs{
 		ProxyEventsInWindow: 1000, MCPPingsInWindow: 0, VendorAPIWired: true,

@@ -40,6 +40,7 @@ const (
 	SignalSourceProxy           = "proxy_traffic"
 	SignalSourceVendorAPI       = "vendor_usage_api"
 	SignalSourceClaudeCodeCache = "claude_code_stats_cache"
+	SignalSourceClaudeCodeJSONL = "claude_code_jsonl"
 )
 
 // SignalInputs is the set of observations the quality classifier needs.
@@ -49,6 +50,7 @@ type SignalInputs struct {
 	ProxyEventsInWindow     int64
 	MCPPingsInWindow        int64
 	ClaudeCodeCacheInWindow int64
+	ClaudeCodeJSONLInWindow int64
 	VendorAPIWired          bool
 }
 
@@ -56,21 +58,27 @@ type SignalInputs struct {
 // Decision rules (first match wins):
 //
 //	vendor /usage wired                                  -> high
+//	claude-code jsonl observed > 0                       -> high (real per-turn)
 //	proxy events >= mcp pings AND proxy events > 0       -> high
 //	proxy events between 1 and < mcp pings               -> medium
-//	claude-code stats cache observed > 0                 -> medium
-//	mcp pings > 0, no proxy/cache events                 -> low
+//	claude-code stats cache observed > 0                 -> medium (stale, deprecated)
+//	mcp pings > 0, no proxy/jsonl/cache events           -> low
 //	no observations at all                               -> low
 //
 // The thresholds are intentionally coarse: this is a trust signal, not
-// a confidence interval. Refine only after the customer interviews show
-// operators want more granularity.
+// a confidence interval.
 func ClassifySignal(in SignalInputs) SignalQuality {
 	switch {
 	case in.VendorAPIWired:
 		return SignalQuality{
 			Level:  SignalLevelHigh,
 			Source: SignalSourceVendorAPI,
+		}
+	case in.ClaudeCodeJSONLInWindow > 0:
+		return SignalQuality{
+			Level:  SignalLevelHigh,
+			Source: SignalSourceClaudeCodeJSONL,
+			Caveat: "Reads ~/.claude/projects/**/*.jsonl — Claude Code's live per-turn conversation record. Real input/output/cache token counts; lags the running turn by seconds at most.",
 		}
 	case in.ProxyEventsInWindow > 0 && in.ProxyEventsInWindow >= in.MCPPingsInWindow:
 		return SignalQuality{
@@ -85,16 +93,16 @@ func ClassifySignal(in SignalInputs) SignalQuality {
 			Caveat: "Partial proxy coverage: some Claude turns flow through TokenOps, the rest are inferred from MCP-ping activity.",
 			UpgradePaths: []string{
 				"route every client request through the proxy for full coverage",
+				"enable the Claude Code JSONL reader (`vendor_usage.claude_code_jsonl.enabled: true`)",
 			},
 		}
 	case in.ClaudeCodeCacheInWindow > 0:
 		return SignalQuality{
 			Level:  SignalLevelMedium,
 			Source: SignalSourceClaudeCodeCache,
-			Caveat: "Reads ~/.claude/stats-cache.json — an undocumented Claude Code internal cache. Daily granularity only; cannot resolve the 5-hour rolling window.",
+			Caveat: "Reads ~/.claude/stats-cache.json — DEPRECATED, lags by days on active users. Switch to vendor_usage.claude_code_jsonl for live data.",
 			UpgradePaths: []string{
-				"route every Claude request through the local proxy for live per-request signal",
-				"connect the Anthropic Admin API for metered-API attribution (queued)",
+				"enable the Claude Code JSONL reader (`vendor_usage.claude_code_jsonl.enabled: true`)",
 			},
 		}
 	default:
@@ -103,8 +111,8 @@ func ClassifySignal(in SignalInputs) SignalQuality {
 			Source: SignalSourceMCPPings,
 			Caveat: "TokenOps observes MCP tool invocations only, not your real Claude conversation turns. Treat this as an activity proxy, not a quota meter.",
 			UpgradePaths: []string{
+				"enable the Claude Code JSONL reader (`vendor_usage.claude_code_jsonl.enabled: true`) — recommended, free, no extra credentials",
 				"wire your client base URL to the local proxy (`tokenops provider set ...`)",
-				"enable Claude Code stats cache reader (`vendor_usage.claude_code.enabled: true`)",
 				"connect a vendor /usage API key (queued)",
 			},
 		}

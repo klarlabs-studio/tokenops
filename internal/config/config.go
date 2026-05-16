@@ -53,8 +53,19 @@ type DashboardConfig struct {
 // stats cache; future blocks (anthropic admin API, openai usage)
 // add here as separate sub-structs.
 type VendorUsageConfig struct {
-	ClaudeCode ClaudeCodeUsageConfig `yaml:"claude_code"`
-	Anthropic  AnthropicUsageConfig  `yaml:"anthropic"`
+	ClaudeCode      ClaudeCodeUsageConfig      `yaml:"claude_code"`
+	ClaudeCodeJSONL ClaudeCodeJSONLUsageConfig `yaml:"claude_code_jsonl"`
+	Anthropic       AnthropicUsageConfig       `yaml:"anthropic"`
+}
+
+// ClaudeCodeJSONLUsageConfig enables the per-turn JSONL reader that
+// parses ~/.claude/projects/**/*.jsonl. This is the high-confidence
+// successor to the v0.10.2 stats-cache reader (which lags by days on
+// active users). Empty Root defaults to ~/.claude/projects.
+type ClaudeCodeJSONLUsageConfig struct {
+	Enabled  bool          `yaml:"enabled"`
+	Root     string        `yaml:"root"`
+	Interval time.Duration `yaml:"interval"`
 }
 
 // AnthropicUsageConfig wires the Anthropic Admin API poller. AdminKey

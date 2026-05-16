@@ -25,6 +25,7 @@ import (
 	"github.com/felixgeelhaar/tokenops/internal/contexts/security/tlsmint"
 	anthropicusage "github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/anthropic"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/claudecode"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/workflows/workflow"
 	"github.com/felixgeelhaar/tokenops/internal/domainevents"
 	"github.com/felixgeelhaar/tokenops/internal/events"
@@ -221,9 +222,25 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 					logger.Warn("claude-code stats poller exited", "err", err)
 				}
 			}()
-			logger.Info("claude-code stats cache poller live",
+			logger.Warn("claude-code stats cache poller is DEPRECATED — switch to vendor_usage.claude_code_jsonl for live per-turn data",
 				"interval", cfg.VendorUsage.ClaudeCode.Interval,
 				"path", cfg.VendorUsage.ClaudeCode.Path,
+			)
+		}
+		if cfg.VendorUsage.ClaudeCodeJSONL.Enabled {
+			p := claudecodejsonl.NewPoller(bus, claudecodejsonl.PollerOptions{
+				Root:     cfg.VendorUsage.ClaudeCodeJSONL.Root,
+				Interval: cfg.VendorUsage.ClaudeCodeJSONL.Interval,
+				Logger:   logger,
+			})
+			go func() {
+				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					logger.Warn("claude-code jsonl poller exited", "err", err)
+				}
+			}()
+			logger.Info("claude-code jsonl poller live",
+				"interval", cfg.VendorUsage.ClaudeCodeJSONL.Interval,
+				"root", cfg.VendorUsage.ClaudeCodeJSONL.Root,
 			)
 		}
 		if cfg.VendorUsage.Anthropic.Enabled {

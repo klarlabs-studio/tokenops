@@ -185,7 +185,14 @@ machine-readable output.`,
 				Window: window.String(),
 				Sources: []vendorUsageSource{
 					{
-						Name:        "claude_code_stats_cache",
+						Name:        "claude_code_jsonl",
+						SourceTag:   "claude-code-jsonl",
+						Enabled:     cfg.VendorUsage.ClaudeCodeJSONL.Enabled,
+						EventsInWin: counts["claude-code-jsonl"],
+						ConfigHint:  configHintClaudeCodeJSONL(cfg.VendorUsage.ClaudeCodeJSONL.Enabled),
+					},
+					{
+						Name:        "claude_code_stats_cache (deprecated)",
 						SourceTag:   "claude-code-stats-cache",
 						Enabled:     cfg.VendorUsage.ClaudeCode.Enabled,
 						EventsInWin: counts["claude-code-stats-cache"],
@@ -230,9 +237,16 @@ type vendorUsageSource struct {
 
 func configHintClaudeCode(enabled bool) string {
 	if enabled {
+		return "DEPRECATED — switch to vendor_usage.claude_code_jsonl"
+	}
+	return "deprecated; use vendor_usage.claude_code_jsonl instead"
+}
+
+func configHintClaudeCodeJSONL(enabled bool) string {
+	if enabled {
 		return ""
 	}
-	return "set vendor_usage.claude_code.enabled: true in config.yaml"
+	return "set vendor_usage.claude_code_jsonl.enabled: true (RECOMMENDED — live per-turn signal)"
 }
 
 func configHintAnthropic(cfg config.AnthropicUsageConfig) string {
@@ -256,6 +270,7 @@ func renderVendorUsageText(cmd *cobra.Command, r vendorUsageReport) {
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Signal_quality classifier consumes these counts:")
 	fmt.Fprintln(out, "  events_in_window > 0 for vendor-usage-anthropic     -> high")
-	fmt.Fprintln(out, "  events_in_window > 0 for claude-code-stats-cache    -> medium")
+	fmt.Fprintln(out, "  events_in_window > 0 for claude-code-jsonl          -> high (real per-turn)")
+	fmt.Fprintln(out, "  events_in_window > 0 for claude-code-stats-cache    -> medium (deprecated)")
 	fmt.Fprintln(out, "  otherwise                                           -> low (mcp pings only)")
 }
