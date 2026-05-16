@@ -25,49 +25,10 @@ features:
 import { withBase } from 'vitepress'
 </script>
 
-<div class="hero-cycle" role="img" aria-label="Local TokenOps dashboard cycling through 1h, 6h, 24h, 7d filters. 5 KPI tiles incl. CACHE HIT, daily cost-over-time, hourly tokens-per-bucket. Captured live against v0.17.">
-  <img :src="withBase('/media/frames/1h.jpg')" class="f1" alt="1-hour window" />
-  <img :src="withBase('/media/frames/6h.jpg')" class="f2" alt="6-hour window" />
-  <img :src="withBase('/media/frames/24h.jpg')" class="f3" alt="24-hour window" />
-  <img :src="withBase('/media/frames/7d.jpg')" class="f4" alt="7-day window" />
-</div>
-
-<style>
-.hero-cycle {
-  position: relative;
-  width: 100%;
-  max-width: 960px;
-  aspect-ratio: 741 / 973;
-  margin: 24px auto;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid var(--vp-c-divider);
-}
-.hero-cycle img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0;
-  animation: hero-cycle 12s linear infinite;
-}
-.hero-cycle .f1 { animation-delay: 0s; }
-.hero-cycle .f2 { animation-delay: 3s; }
-.hero-cycle .f3 { animation-delay: 6s; }
-.hero-cycle .f4 { animation-delay: 9s; }
-@keyframes hero-cycle {
-  0%   { opacity: 0; }
-  3%   { opacity: 1; }
-  22%  { opacity: 1; }
-  25%  { opacity: 0; }
-  100% { opacity: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .hero-cycle img { animation: none; opacity: 0; }
-  .hero-cycle .f4 { opacity: 1; }
-}
-</style>
+<video controls autoplay loop muted playsinline preload="auto" :poster="withBase('/media/dashboard-poster.jpg')" style="width:100%;max-width:960px;display:block;margin:24px auto;border-radius:8px;border:1px solid var(--vp-c-divider);">
+  <source :src="withBase('/media/dashboard.mp4')" type="video/mp4">
+  <em>Local TokenOps dashboard: 5 KPI tiles incl. CACHE HIT, daily cost over time, hourly tokens-per-bucket. Captured live against v0.17 cycling through 1h → 6h → 24h → 7d filters. Tap to play.</em>
+</video>
 
 ## Instead of `/status` and a billing tab
 
