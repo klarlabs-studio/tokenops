@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.17.0 - 2026-05-16
+
 ### Added
 
 - **`tokenops coach replies`** — output-side sibling of `coach prompts`.
