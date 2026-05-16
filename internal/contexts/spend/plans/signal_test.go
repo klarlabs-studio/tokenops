@@ -85,6 +85,18 @@ func TestClassifySignalClaudeCodeJSONLIsHigh(t *testing.T) {
 	}
 }
 
+// Copilot observation is HIGH confidence — calls Copilot's internal
+// user endpoint with the OAuth token Copilot IDE plugins use.
+func TestClassifySignalCopilotIsHigh(t *testing.T) {
+	q := ClassifySignal(SignalInputs{CopilotInWindow: 5, MCPPingsInWindow: 100})
+	if q.Level != SignalLevelHigh {
+		t.Errorf("copilot must be high; got %q", q.Level)
+	}
+	if q.Source != SignalSourceCopilot {
+		t.Errorf("source = %q; want github_copilot", q.Source)
+	}
+}
+
 // Vendor API still wins over jsonl when both are available — vendor
 // data is server-authoritative.
 func TestClassifySignalVendorAPIBeatsJSONL(t *testing.T) {

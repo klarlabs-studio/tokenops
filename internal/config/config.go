@@ -57,6 +57,17 @@ type VendorUsageConfig struct {
 	ClaudeCodeJSONL ClaudeCodeJSONLUsageConfig `yaml:"claude_code_jsonl"`
 	CodexJSONL      CodexJSONLUsageConfig      `yaml:"codex_jsonl"`
 	Anthropic       AnthropicUsageConfig       `yaml:"anthropic"`
+	GitHubCopilot   GitHubCopilotUsageConfig   `yaml:"github_copilot"`
+}
+
+// GitHubCopilotUsageConfig wires the api.github.com/copilot_internal/user
+// poller. OAuthToken empty → poller reads it from
+// ~/.config/github-copilot/apps.json (or hosts.json) — same file the
+// IDE plugins use. Interval defaults to 2 minutes.
+type GitHubCopilotUsageConfig struct {
+	Enabled    bool          `yaml:"enabled"`
+	OAuthToken string        `yaml:"oauth_token"`
+	Interval   time.Duration `yaml:"interval"`
 }
 
 // CodexJSONLUsageConfig enables the Codex CLI session-log reader.

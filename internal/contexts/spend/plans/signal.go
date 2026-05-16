@@ -42,6 +42,7 @@ const (
 	SignalSourceClaudeCodeCache = "claude_code_stats_cache"
 	SignalSourceClaudeCodeJSONL = "claude_code_jsonl"
 	SignalSourceCodexJSONL      = "codex_jsonl"
+	SignalSourceCopilot         = "github_copilot"
 )
 
 // SignalInputs is the set of observations the quality classifier needs.
@@ -53,6 +54,7 @@ type SignalInputs struct {
 	ClaudeCodeCacheInWindow int64
 	ClaudeCodeJSONLInWindow int64
 	CodexJSONLInWindow      int64
+	CopilotInWindow         int64
 	VendorAPIWired          bool
 }
 
@@ -87,6 +89,12 @@ func ClassifySignal(in SignalInputs) SignalQuality {
 			Level:  SignalLevelHigh,
 			Source: SignalSourceCodexJSONL,
 			Caveat: "Reads ~/.codex/sessions/**/*.jsonl — Codex CLI's per-turn token_count records. Carries OpenAI's authoritative rate_limits block (5h primary + weekly secondary used_percent + resets_at).",
+		}
+	case in.CopilotInWindow > 0:
+		return SignalQuality{
+			Level:  SignalLevelHigh,
+			Source: SignalSourceCopilot,
+			Caveat: "Calls api.github.com/copilot_internal/user with the OAuth token Copilot IDE plugins use. Returns live quota_snapshots (percent_remaining + entitlement + reset date). Undocumented endpoint but stable since 2022 and shared with every Copilot IDE integration.",
 		}
 	case in.ProxyEventsInWindow > 0 && in.ProxyEventsInWindow >= in.MCPPingsInWindow:
 		return SignalQuality{

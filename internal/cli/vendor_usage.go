@@ -212,6 +212,13 @@ machine-readable output.`,
 						EventsInWin: counts["vendor-usage-anthropic"],
 						ConfigHint:  configHintAnthropic(cfg.VendorUsage.Anthropic),
 					},
+					{
+						Name:        "github_copilot",
+						SourceTag:   "github-copilot",
+						Enabled:     cfg.VendorUsage.GitHubCopilot.Enabled,
+						EventsInWin: counts["github-copilot"],
+						ConfigHint:  configHintCopilot(cfg.VendorUsage.GitHubCopilot),
+					},
 				},
 			}
 			if jsonOut {
@@ -261,6 +268,13 @@ func configHintCodexJSONL(enabled bool) string {
 		return ""
 	}
 	return "set vendor_usage.codex_jsonl.enabled: true (RECOMMENDED for Codex Plus/Pro users — surfaces OpenAI's official rate_limits 5h + weekly %)"
+}
+
+func configHintCopilot(cfg config.GitHubCopilotUsageConfig) string {
+	if !cfg.Enabled {
+		return "set vendor_usage.github_copilot.enabled: true (auto-discovers OAuth token from ~/.config/github-copilot)"
+	}
+	return ""
 }
 
 func configHintAnthropic(cfg config.AnthropicUsageConfig) string {

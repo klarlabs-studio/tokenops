@@ -27,6 +27,7 @@ import (
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/claudecode"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
+	copilotusage "github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/copilot"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/workflows/workflow"
 	"github.com/felixgeelhaar/tokenops/internal/domainevents"
 	"github.com/felixgeelhaar/tokenops/internal/events"
@@ -276,6 +277,21 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			logger.Info("anthropic admin usage poller live",
 				"interval", cfg.VendorUsage.Anthropic.Interval,
 				"bucket_width", cfg.VendorUsage.Anthropic.BucketWidth,
+			)
+		}
+		if cfg.VendorUsage.GitHubCopilot.Enabled {
+			p := copilotusage.NewPoller(bus, copilotusage.PollerOptions{
+				OAuthToken: cfg.VendorUsage.GitHubCopilot.OAuthToken,
+				Interval:   cfg.VendorUsage.GitHubCopilot.Interval,
+				Logger:     logger,
+			})
+			go func() {
+				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					logger.Warn("github copilot poller exited", "err", err)
+				}
+			}()
+			logger.Info("github copilot usage poller live",
+				"interval", cfg.VendorUsage.GitHubCopilot.Interval,
 			)
 		}
 
