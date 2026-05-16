@@ -55,7 +55,17 @@ type DashboardConfig struct {
 type VendorUsageConfig struct {
 	ClaudeCode      ClaudeCodeUsageConfig      `yaml:"claude_code"`
 	ClaudeCodeJSONL ClaudeCodeJSONLUsageConfig `yaml:"claude_code_jsonl"`
+	CodexJSONL      CodexJSONLUsageConfig      `yaml:"codex_jsonl"`
 	Anthropic       AnthropicUsageConfig       `yaml:"anthropic"`
+}
+
+// CodexJSONLUsageConfig enables the Codex CLI session-log reader.
+// Parses ~/.codex/sessions/<yyyy>/<mm>/<dd>/rollout-*.jsonl. Empty
+// Root defaults to ~/.codex/sessions.
+type CodexJSONLUsageConfig struct {
+	Enabled  bool          `yaml:"enabled"`
+	Root     string        `yaml:"root"`
+	Interval time.Duration `yaml:"interval"`
 }
 
 // ClaudeCodeJSONLUsageConfig enables the per-turn JSONL reader that

@@ -94,6 +94,18 @@ func TestClassifySignalVendorAPIBeatsJSONL(t *testing.T) {
 	}
 }
 
+// Codex JSONL is HIGH confidence and stays separate from Claude Code
+// — different provider, different source tag, different caveat.
+func TestClassifySignalCodexJSONLIsHigh(t *testing.T) {
+	q := ClassifySignal(SignalInputs{CodexJSONLInWindow: 5})
+	if q.Level != SignalLevelHigh {
+		t.Errorf("codex jsonl must be high; got %q", q.Level)
+	}
+	if q.Source != SignalSourceCodexJSONL {
+		t.Errorf("source = %q; want codex_jsonl", q.Source)
+	}
+}
+
 func TestClassifySignalVendorWiredTrumpsAll(t *testing.T) {
 	q := ClassifySignal(SignalInputs{
 		ProxyEventsInWindow: 1000, MCPPingsInWindow: 0, VendorAPIWired: true,

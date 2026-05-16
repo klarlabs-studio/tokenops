@@ -59,6 +59,7 @@ func classifySignalFromStore(ctx context.Context, store *sqlite.Store, since, un
 		MCPPingsInWindow:        counts["mcp-session"],
 		ClaudeCodeCacheInWindow: counts["claude-code-stats-cache"],
 		ClaudeCodeJSONLInWindow: counts["claude-code-jsonl"],
+		CodexJSONLInWindow:      counts["codex-jsonl"],
 		VendorAPIWired:          counts["vendor-usage-anthropic"] > 0,
 	}, nil
 }

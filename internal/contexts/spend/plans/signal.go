@@ -41,6 +41,7 @@ const (
 	SignalSourceVendorAPI       = "vendor_usage_api"
 	SignalSourceClaudeCodeCache = "claude_code_stats_cache"
 	SignalSourceClaudeCodeJSONL = "claude_code_jsonl"
+	SignalSourceCodexJSONL      = "codex_jsonl"
 )
 
 // SignalInputs is the set of observations the quality classifier needs.
@@ -51,6 +52,7 @@ type SignalInputs struct {
 	MCPPingsInWindow        int64
 	ClaudeCodeCacheInWindow int64
 	ClaudeCodeJSONLInWindow int64
+	CodexJSONLInWindow      int64
 	VendorAPIWired          bool
 }
 
@@ -79,6 +81,12 @@ func ClassifySignal(in SignalInputs) SignalQuality {
 			Level:  SignalLevelHigh,
 			Source: SignalSourceClaudeCodeJSONL,
 			Caveat: "Reads ~/.claude/projects/**/*.jsonl — Claude Code's live per-turn conversation record. Real input/output/cache token counts; lags the running turn by seconds at most.",
+		}
+	case in.CodexJSONLInWindow > 0:
+		return SignalQuality{
+			Level:  SignalLevelHigh,
+			Source: SignalSourceCodexJSONL,
+			Caveat: "Reads ~/.codex/sessions/**/*.jsonl — Codex CLI's per-turn token_count records. Carries OpenAI's authoritative rate_limits block (5h primary + weekly secondary used_percent + resets_at).",
 		}
 	case in.ProxyEventsInWindow > 0 && in.ProxyEventsInWindow >= in.MCPPingsInWindow:
 		return SignalQuality{

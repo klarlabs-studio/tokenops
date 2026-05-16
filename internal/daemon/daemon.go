@@ -26,6 +26,7 @@ import (
 	anthropicusage "github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/anthropic"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/claudecode"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/workflows/workflow"
 	"github.com/felixgeelhaar/tokenops/internal/domainevents"
 	"github.com/felixgeelhaar/tokenops/internal/events"
@@ -241,6 +242,22 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			logger.Info("claude-code jsonl poller live",
 				"interval", cfg.VendorUsage.ClaudeCodeJSONL.Interval,
 				"root", cfg.VendorUsage.ClaudeCodeJSONL.Root,
+			)
+		}
+		if cfg.VendorUsage.CodexJSONL.Enabled {
+			p := codexjsonl.NewPoller(bus, codexjsonl.PollerOptions{
+				Root:     cfg.VendorUsage.CodexJSONL.Root,
+				Interval: cfg.VendorUsage.CodexJSONL.Interval,
+				Logger:   logger,
+			})
+			go func() {
+				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					logger.Warn("codex jsonl poller exited", "err", err)
+				}
+			}()
+			logger.Info("codex jsonl poller live",
+				"interval", cfg.VendorUsage.CodexJSONL.Interval,
+				"root", cfg.VendorUsage.CodexJSONL.Root,
 			)
 		}
 		if cfg.VendorUsage.Anthropic.Enabled {

@@ -192,6 +192,13 @@ machine-readable output.`,
 						ConfigHint:  configHintClaudeCodeJSONL(cfg.VendorUsage.ClaudeCodeJSONL.Enabled),
 					},
 					{
+						Name:        "codex_jsonl",
+						SourceTag:   "codex-jsonl",
+						Enabled:     cfg.VendorUsage.CodexJSONL.Enabled,
+						EventsInWin: counts["codex-jsonl"],
+						ConfigHint:  configHintCodexJSONL(cfg.VendorUsage.CodexJSONL.Enabled),
+					},
+					{
 						Name:        "claude_code_stats_cache (deprecated)",
 						SourceTag:   "claude-code-stats-cache",
 						Enabled:     cfg.VendorUsage.ClaudeCode.Enabled,
@@ -247,6 +254,13 @@ func configHintClaudeCodeJSONL(enabled bool) string {
 		return ""
 	}
 	return "set vendor_usage.claude_code_jsonl.enabled: true (RECOMMENDED — live per-turn signal)"
+}
+
+func configHintCodexJSONL(enabled bool) string {
+	if enabled {
+		return ""
+	}
+	return "set vendor_usage.codex_jsonl.enabled: true (RECOMMENDED for Codex Plus/Pro users — surfaces OpenAI's official rate_limits 5h + weekly %)"
 }
 
 func configHintAnthropic(cfg config.AnthropicUsageConfig) string {
