@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+## 0.16.0 - 2026-05-16
+
+### Added
+
+- **Per-project breakdown** for Claude Code JSONL: poller stamps
+  `agent_id = "claude-code:<project>"` and
+  `workflow_id = "claude-code:<project>:<session>"` on each event,
+  derived from the JSONL parent directory name. Enables
+  `group=agent` rollups to answer "which project burns the most".
+- **Cache hit-rate API + dashboard tile**: `GET /api/spend/cache_stats`
+  returns `total_input_tokens`, `cached_input_tokens`,
+  `uncached_input_tokens`, `output_tokens`, `cache_ratio`. New
+  "Cache hit: XX.X%" tile alongside the existing KPI tiles.
+  COALESCEs payload + legacy attributes so old events surface the
+  split without a re-ingest.
+- **Waste-detector profiles**: `ProfileFor("claude-code:...")` →
+  900k peak / 2M growth; `ProfileFor("codex:...")` → 250k peak /
+  500k growth. Stops every Code/Codex session tripping the
+  short-workflow defaults (32k/16k). Operator-supplied Config
+  values still win.
+- **Codex parity** for the v0.14.x JSONL improvements:
+  `codexjsonl` poller now sets `SessionID`, `AgentID="codex"`,
+  `WorkflowID="codex:<session>"`, and `CachedInputTokens` on
+  every PromptEvent. The cached split was being dropped, so
+  Codex Plus/Pro users had the same ~10x cost over-estimate
+  Claude Code users had before v0.14.2.
+- **Prompt-coach cross-provider**: `tokenops coach prompts` auto-
+  discovers both `~/.claude/projects` and `~/.codex/sessions`.
+  Parses each dialect (flat `role=user` for Codex vs nested
+  `type=user`+`message.content` for Claude Code). Filename
+  timestamp fallback when Codex records omit their own.
+
 ## 0.15.0 - 2026-05-16
 
 ### Added
