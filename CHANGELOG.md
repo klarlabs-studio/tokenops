@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+## 0.14.3 - 2026-05-16
+
+### Added
+
+- Claude Code JSONL events now carry `session_id` and a
+  synthesized `workflow_id = "claude-code:<session>"` on the
+  indexed columns (not just in attributes). `tokenops replay`,
+  the workflow reconstructor, and the waste detector can now
+  resolve a Claude Code session by ID — coach surface was dark
+  for JSONL data because session_id only landed in the
+  attributes map. Existing events can be backfilled with one
+  UPDATE statement (see migration note below).
+
+### Migration
+
+Operators with pre-existing JSONL events should backfill via:
+
+```sql
+UPDATE events
+SET session_id  = json_extract(attributes, '$.session_id'),
+    workflow_id = 'claude-code:' || json_extract(attributes, '$.session_id')
+WHERE source = 'claude-code-jsonl' AND session_id IS NULL;
+```
+
+After the backfill, `tokenops replay --workflow 'claude-code:<session>'`
+surfaces coach findings (oversized context, runaway growth).
+
 ## 0.14.2 - 2026-05-16
 
 ### Fixed
