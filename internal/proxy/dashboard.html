@@ -33,10 +33,11 @@
   .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
   .panel h2 { margin: 0 0 12px; font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-  .kpi { display: flex; gap: 24px; flex-wrap: wrap; margin: 0 0 20px; }
-  .kpi > div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; flex: 1; min-width: 140px; }
-  .kpi label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px; }
-  .kpi value { font-family: var(--code); font-size: 22px; font-weight: 500; }
+  .kpi { display: flex; gap: 12px; flex-wrap: wrap; margin: 0 0 20px; }
+  .kpi > div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; flex: 1 1 130px; min-width: 130px; max-width: 100%; box-sizing: border-box; overflow: hidden; }
+  .kpi label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 4px; }
+  .kpi value { font-family: var(--code); font-size: 19px; font-weight: 500; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .kpi value[title] { cursor: help; }
   .controls { display: flex; gap: 12px; align-items: center; margin: 0 0 16px; flex-wrap: wrap; }
   .controls button { background: var(--panel); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer; font-family: inherit; }
   .controls button:hover { border-color: var(--accent); }
@@ -85,10 +86,10 @@
   <div v-if="loadError" class="err">{{ loadError }}</div>
 
   <div class="kpi">
-    <div><label>Total cost</label><value>{{ fmtCost(summary.CostUSD) }}</value></div>
-    <div><label>Requests</label><value>{{ fmtNum(summary.Requests) }}</value></div>
-    <div><label>Input tokens</label><value>{{ fmtNum(summary.InputTokens) }}</value></div>
-    <div><label>Output tokens</label><value>{{ fmtNum(summary.OutputTokens) }}</value></div>
+    <div><label>Total cost</label><value :title="fmtCost(summary.CostUSD)">{{ fmtCostShort(summary.CostUSD) }}</value></div>
+    <div><label>Requests</label><value :title="fmtNumFull(summary.Requests)">{{ fmtNum(summary.Requests) }}</value></div>
+    <div><label>Input tokens</label><value :title="fmtNumFull(summary.InputTokens)">{{ fmtNum(summary.InputTokens) }}</value></div>
+    <div><label>Output tokens</label><value :title="fmtNumFull(summary.OutputTokens)">{{ fmtNum(summary.OutputTokens) }}</value></div>
     <div><label>Cache hit</label><value>{{ fmtPct(cacheStats.cache_ratio) }}</value></div>
   </div>
 
@@ -153,8 +154,22 @@ createApp({
     const costChart = ref(null);
     const tokenChart = ref(null);
 
+    // Full cost with cents for tooltip + chart axes; compact (no
+    // cents) for tiles so 5-figure values don't overflow.
     const fmtCost = (n) => (n || 0).toLocaleString(undefined, { style: "currency", currency: currency.value });
-    const fmtNum = (n) => (n || 0).toLocaleString();
+    const fmtCostShort = (n) => (n || 0).toLocaleString(undefined, { style: "currency", currency: currency.value, maximumFractionDigits: 0 });
+    // Compact + full forms. The KPI tiles render the compact form so a
+    // 6-billion-token count doesn't break the layout; the full,
+    // grouped number is exposed via the `title` attribute so an
+    // operator can hover to see the exact value.
+    const fmtNum = (n) => {
+      const v = n || 0;
+      if (v >= 1e9) return (v / 1e9).toFixed(2) + "B";
+      if (v >= 1e6) return (v / 1e6).toFixed(2) + "M";
+      if (v >= 1e3) return (v / 1e3).toFixed(1) + "k";
+      return v.toLocaleString();
+    };
+    const fmtNumFull = (n) => (n || 0).toLocaleString();
     const fmtPct = (n) => `${((n || 0) * 100).toFixed(1)}%`;
 
     const sinceISO = () => new Date(Date.now() - windowHours.value * 3600 * 1000).toISOString();
@@ -273,7 +288,7 @@ createApp({
       svg.selectAll("*").remove();
       const node = costChart.value;
       const W = node.clientWidth || 480, H = 220;
-      const margin = { top: 8, right: 12, bottom: 24, left: 50 };
+      const margin = { top: 8, right: 12, bottom: 24, left: 64 };
       const w = W - margin.left - margin.right, h = H - margin.top - margin.bottom;
       const g = svg.attr("viewBox", `0 0 ${W} ${H}`).append("g").attr("transform", `translate(${margin.left},${margin.top})`);
       // Stacked area branch: render when we have per-model data and
@@ -289,7 +304,7 @@ createApp({
         const yMax = d3.max(stacked[stacked.length - 1], d => d[1]) || 0.0001;
         const y = d3.scaleLinear().domain([0, yMax]).nice().range([h, 0]);
         g.append("g").attr("class", "axis").attr("transform", `translate(0,${h})`).call(d3.axisBottom(x).ticks(5));
-        g.append("g").attr("class", "axis").call(d3.axisLeft(y).ticks(4).tickFormat(d => "$" + d.toFixed(4)));
+        g.append("g").attr("class", "axis").call(d3.axisLeft(y).ticks(4).tickFormat(d => "$" + (d >= 1000 ? (d/1000).toFixed(1) + "k" : d.toFixed(d < 1 ? 2 : 0))));
         const area = d3.area().x(d => x(d.data.t)).y0(d => y(d[0])).y1(d => y(d[1])).curve(d3.curveMonotoneX);
         g.selectAll("path.layer").data(stacked).enter().append("path")
           .attr("class", "layer").attr("fill", d => colorForModel(d.key)).attr("opacity", 0.85).attr("d", area);
@@ -318,7 +333,7 @@ createApp({
       const yMax = d3.max(series.value, d => d.cost) || 0.0001;
       const y = d3.scaleLinear().domain([0, yMax]).nice().range([h, 0]);
       g.append("g").attr("class", "axis").attr("transform", `translate(0,${h})`).call(d3.axisBottom(x).ticks(5));
-      g.append("g").attr("class", "axis").call(d3.axisLeft(y).ticks(4).tickFormat(d => "$" + d.toFixed(4)));
+      g.append("g").attr("class", "axis").call(d3.axisLeft(y).ticks(4).tickFormat(d => "$" + (d >= 1000 ? (d/1000).toFixed(1) + "k" : d.toFixed(d < 1 ? 2 : 0))));
       const area = d3.area().x(d => x(d.t)).y0(h).y1(d => y(d.cost)).curve(d3.curveMonotoneX);
       g.append("path").datum(series.value).attr("fill", "rgba(65,89,214,0.18)").attr("d", area);
       const line = d3.line().x(d => x(d.t)).y(d => y(d.cost)).curve(d3.curveMonotoneX);
@@ -330,7 +345,7 @@ createApp({
       svg.selectAll("*").remove();
       const node = tokenChart.value;
       const W = node.clientWidth || 480, H = 220;
-      const margin = { top: 8, right: 12, bottom: 24, left: 50 };
+      const margin = { top: 8, right: 12, bottom: 24, left: 64 };
       const w = W - margin.left - margin.right, h = H - margin.top - margin.bottom;
       const g = svg.attr("viewBox", `0 0 ${W} ${H}`).append("g").attr("transform", `translate(${margin.left},${margin.top})`);
       if (!series.value.length) {
@@ -346,7 +361,7 @@ createApp({
       const color = d3.scaleOrdinal().domain(stacks).range(["#4159d6", "#d09a40"]);
       g.append("g").attr("class", "axis").attr("transform", `translate(0,${h})`)
         .call(d3.axisBottom(x).tickFormat(d3.timeFormat("%H:%M")).tickValues(x.domain().filter((_, i, a) => i % Math.ceil(a.length / 6) === 0)));
-      g.append("g").attr("class", "axis").call(d3.axisLeft(y).ticks(4));
+      g.append("g").attr("class", "axis").call(d3.axisLeft(y).ticks(4).tickFormat(fmtNum));
       g.append("g").selectAll("g").data(stacked).join("g").attr("fill", d => color(d.key))
         .selectAll("rect").data(d => d).join("rect")
         .attr("x", d => x(d.data.t)).attr("y", d => y(d[1]))
@@ -358,7 +373,7 @@ createApp({
     onUnmounted(() => { clearInterval(timer); window.removeEventListener("resize", drawCharts); });
     const drawCharts = () => { drawCostChart(); drawTokenChart(); };
 
-    return { refreshSec, windowOpts, windowHours, provider, model, providers, models, summary, cacheStats, loadError, lastRefresh, costChart, tokenChart, fmtCost, fmtNum, fmtPct, setWindow, fetchAll, onFilterChange };
+    return { refreshSec, windowOpts, windowHours, provider, model, providers, models, summary, cacheStats, loadError, lastRefresh, costChart, tokenChart, fmtCost, fmtCostShort, fmtNum, fmtNumFull, fmtPct, setWindow, fetchAll, onFilterChange };
   }
 }).mount("#app");
 </script>
