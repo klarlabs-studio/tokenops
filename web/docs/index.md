@@ -28,7 +28,7 @@ import { withBase } from 'vitepress'
 <video autoplay loop muted playsinline preload="metadata" :poster="withBase('/media/dashboard-poster.jpg')" style="width:100%;max-width:960px;display:block;margin:24px auto;border-radius:8px;border:1px solid var(--vp-c-divider);">
   <source :src="withBase('/media/dashboard.mp4')" type="video/mp4">
   <source :src="withBase('/media/dashboard.webm')" type="video/webm">
-  <em>Local TokenOps dashboard: cost-over-time, per-model stacked area, filter dropdowns. Captured live via the Scout MCP browser-recorder against the v0.11.0 daemon.</em>
+  <em>Local TokenOps dashboard: 5 KPI tiles incl. CACHE HIT, daily cost over time, hourly tokens-per-bucket. Captured live against v0.16.0 cycling through 1h → 6h → 24h → 7d filters.</em>
 </video>
 
 ## Instead of `/status` and a billing tab
