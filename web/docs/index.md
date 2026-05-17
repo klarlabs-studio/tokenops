@@ -99,13 +99,26 @@ The MCP surface is a deterministic guardrail, not vibes-in-the-loop. Closed acti
 
 `recommended_action` is a closed enum (`continue | slow_down | switch_model | wait_for_reset`) so the agent picks the right branch without parsing prose. `signal_quality.level` lets the agent decide how much to trust the call: stay aggressive on `high`, defer to the human on `low`.
 
-## What's new in v0.16.0
+## What's new in v0.21.1
 
-- **Per-project rollups for Claude Code.** Poller stamps `agent_id = "claude-code:<project>"` and `workflow_id = "claude-code:<project>:<session>"` on every event, derived from the JSONL parent directory. `group=agent` series queries answer "which project burns the most".
-- **Cache hit-rate tile + `/api/spend/cache_stats` endpoint.** The dashboard now shows `Cache hit: XX.X%` alongside the four KPI tiles. For agent workflows the ratio routinely sits >95% — the single number that separates the naive billing-math estimate from real spend (~10x correction).
-- **Waste-detector profiles.** `claude-code:` workflows now flag at 900k peak / 2M growth; `codex:` workflows at 250k / 500k. Stops the short-workflow defaults (32k/16k) from firing on every code-agent session.
-- **Codex parity for v0.14.x JSONL improvements.** `codexjsonl` poller now sets `SessionID`, `AgentID="codex"`, `WorkflowID="codex:<session>"`, and `CachedInputTokens` (was dropped — same ~10x over-estimate Claude Code had before v0.14.2).
-- **`tokenops coach prompts` auto-discovers Codex.** A single invocation now scans both `~/.claude/projects` AND `~/.codex/sessions`. Each dialect parsed per source; filename-derived timestamp fallback for Codex.
+- **8-KPI agent scorecard.** The wedge trio (FVT / TEU / SAC) gained five agent-workflow KPIs in v0.19–v0.21, all graded A–F against tuneable thresholds:
+  - **CHR** — Cache Hit Ratio (≥90/70/50)
+  - **CGR** — Confirmation Gate Rate (≤10/20/30)
+  - **RGR** — Regenerate Rate (≤5/10/20)
+  - **TCS** — Tool Success Rate (≥95/85/70)
+  - **DAR** — Destructive Action Rate (≤0.5/2/5)
+- **Honest grading (v0.21.1).** TEU stays N/A (default 15%) when the optimiser never ran — no F for being on JSONL-only mode. SAC syncs payload attribution from indexed columns so column-side backfills propagate. CGR strips autonomous-loop sentinels (`continue` ×100+ from `/loop` mode isn't a human ack). Overall grade F → B on real 30d data.
+- **`tokenops task start|done|list`** (v0.20–v0.21). Operator-marked task boundaries persist to `~/.tokenops/tasks.jsonl`. `task list --metrics` enriches every task with the events-store rollup: turns, input/output tokens, cache-aware cost, TTFUO, cost-per-turn.
+- **`tokenops coach prompts`** ranked recommendations (v0.18) project tangible savings (tokens / dollars / hours) per win, grounded in the operator's own turn averages. JSON output ships `{ findings, turn_stats }` for MCP-host UIs.
+- **Coach replies + Anthropic admin-API attribution (v0.17).** `tokenops coach replies` detects output-compression patterns (caveman-skill verdict, article density, filler density). Anthropic admin-API events now stamp synthetic `agent_id` / `workflow_id` so they don't drag SAC down.
+
+## Earlier highlights (v0.16)
+
+- **Per-project rollups.** `claudecodejsonl` poller stamps `agent_id = "claude-code:<project>"` and `workflow_id = "claude-code:<project>:<session>"`. `group=agent` answers "which project burns the most".
+- **Cache hit-rate tile + `/api/spend/cache_stats`.** The dashboard `Cache hit: XX.X%` tile; for agent workloads the ratio routinely sits >95%.
+- **Waste-detector profiles** for `claude-code:` and `codex:` workflows (900k / 250k peak respectively) — stops short-workflow defaults firing on every session.
+- **Codex parity** for the v0.14.x JSONL improvements: `SessionID`, `AgentID="codex"`, `WorkflowID="codex:<session>"`, and `CachedInputTokens` on every PromptEvent.
+- **`tokenops coach prompts` auto-discovers Codex.** Scans both `~/.claude/projects` AND `~/.codex/sessions`.
 
 ## Earlier highlights (v0.14.x – v0.15.0)
 

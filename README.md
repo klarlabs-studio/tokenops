@@ -61,7 +61,10 @@ the agent links you to (`http://tokenops.local:7878/dashboard?token=…`).
 | 📡 **Vendor /usage ingestion** | Live per-turn JSONL readers for Claude Code (`~/.claude/projects/`) and Codex CLI (`~/.codex/sessions/`), plus GitHub Copilot OAuth quota, Cursor cookie scrape, Anthropic cookie scraper (only source of the official Claude Max weekly %). Each source has a `tokenops vendor-usage enable <source>` wizard with env-var fallback for secrets |
 | 💰 **Cache-aware pricing** | Claude + Codex cache reads bill at ~10% of the new-input rate. For agent-heavy workloads cache reads are >95% of input — the dashboard `Cache hit: XX.X%` tile + cost-aware aggregator make the difference between a naive $94k estimate and the real $10k. Per-provider rate cards ship in code |
 | 🧪 **Per-project / per-session attribution** | JSONL pollers stamp `agent_id = "claude-code:<project>"` and `workflow_id = "claude-code:<project>:<session>"` (analogous for Codex). `group=agent` answers "which project burns the most"; coach finds per-session waste |
-| 🧠 **Prompt coach** | `tokenops coach prompts` heuristic feedback on your real prompting patterns — length distribution, vague/ack/repeat detection, concrete recommendations. Auto-discovers Claude Code + Codex JSONLs. Prompt text never persisted |
+| 🧠 **Prompt coach** | `tokenops coach prompts` heuristic feedback on your real prompting patterns — length distribution, vague/ack/repeat detection, concrete recommendations. Auto-discovers Claude Code + Codex JSONLs. Prompt text never persisted. Ranked recommendations (v0.18) project tangible savings: turns × tokens × dollars × hours per win |
+| 📋 **Reply coach** | `tokenops coach replies` detects output-compression patterns (caveman skill, article density, filler density) per session |
+| ⏱️ **Task boundaries** | `tokenops task start "fix X"` / `done` / `list --metrics` — operator-marked task units persisted to `~/.tokenops/tasks.jsonl`. List view rolls up turns / cost / TTFUO / cost-per-turn from the events store within each task window |
+| 📐 **8-KPI agent scorecard** | FVT / TEU / SAC (wedge) plus CHR / CGR / RGR / TCS / DAR (agent-workflow), all graded A–F against tuneable thresholds. v0.21.1 honest grading: TEU N/A when optimiser isn't wired; autonomous-loop sentinels filtered from CGR; column→payload attribution sync so SAC reflects reality |
 | 🎯 **Honest signal quality** | Every prediction carries `signal_quality.level` (low / medium / high) plus a one-line caveat. Heuristic mode is labelled; proxied mode is labelled |
 | 🤖 **MCP-first** | 25 MCP tools agents call directly. Inline SVG sparkline + headroom gauge rendered in markdown so every MCP client shows them today |
 | 🧠 **Dynamic-cheapest coaching** | Coaching pipeline picks the lowest blended-rate model per provider at runtime from the pricing table — no hardcoded model names |
@@ -189,7 +192,7 @@ and [SECURITY.md](SECURITY.md). Plans and tasks live in `.roady/` (see
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) — latest is [v0.16.0](https://github.com/felixgeelhaar/tokenops/releases/tag/v0.16.0).
+See [CHANGELOG.md](CHANGELOG.md) — latest is [v0.21.1](https://github.com/felixgeelhaar/tokenops/releases/tag/v0.21.1).
 
 ## License
 

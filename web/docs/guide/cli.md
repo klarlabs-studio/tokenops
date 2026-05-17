@@ -67,8 +67,39 @@ tokenops spend --json
 
 ### `tokenops scorecard`
 
-Operator wedge KPI scorecard (FVT, TEU, SAC). Returns `warming_up`
+Operator wedge KPI scorecard. Three classic KPIs (FVT, TEU, SAC)
+plus five agent-workflow KPIs added in v0.19–v0.21:
+
+  - **CHR** — Cache Hit Ratio (≥90/70/50)
+  - **CGR** — Confirmation Gate Rate (≤10/20/30)
+  - **RGR** — Regenerate Rate (≤5/10/20)
+  - **TCS** — Tool Success Rate (≥95/85/70)
+  - **DAR** — Destructive Action Rate (≤0.5/2/5)
+
+All grade A–F against tuneable thresholds. CHR is computed from
+events.db; CGR + RGR from JSONL prompt extracts; TCS + DAR from
+JSONL `tool_use` + `tool_result` blocks. Returns `warming_up`
 with a 3-step activation checklist when no real data backs the KPIs.
+
+```bash
+tokenops scorecard --since-days 30        # text table
+tokenops scorecard --since-days 30 --json # structured output
+```
+
+### `tokenops task {start|done|list}`
+
+Operator-marked task boundaries persisted to `~/.tokenops/tasks.jsonl`.
+`task list --metrics` enriches every task with the events-store
+rollup over its `[StartedAt, CompletedAt]` window: turns,
+input/output tokens, cache-aware cost, TTFUO, cost-per-turn.
+
+```bash
+tokenops task start "fix auth middleware"
+# ...do the work...
+tokenops task done
+tokenops task list --since 7d --metrics
+tokenops task list --since 30d --json   # MCP-host friendly
+```
 
 ## Vendor-side usage
 
@@ -141,6 +172,25 @@ read at scan time and is never persisted to the event store.**
 tokenops coach prompts --since 7d            # both Claude Code + Codex
 tokenops coach prompts --since 30d --json    # JSON for agent hosts
 tokenops coach prompts --session <id>        # restrict to one session
+```
+
+Output leads with a **BIGGEST WIN** panel — the highest-impact
+recommendation with evidence quotes pulled from your data, plus
+projected savings (turns / tokens / dollars / hours) computed
+from your per-turn averages.
+
+### `tokenops coach replies`
+
+Output-side sibling of `coach prompts`. Walks the same JSONLs but
+extracts assistant replies and scores per session: article density,
+filler density, average word length, code-block ratio, and a
+"caveman-likely" verdict + rough estimated token savings. Useful to
+detect when an output-compression skill is engaged and how many
+tokens it suppressed.
+
+```bash
+tokenops coach replies --since 7d
+tokenops coach replies --json
 ```
 
 ## Dashboard
