@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/prompts"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/tools"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/governance/scorecard"
 )
 
@@ -99,10 +100,20 @@ func computeAgentKPIs(sinceDays int) scorecard.AgentKPIInputs {
 	}
 	cgr := 100.0 * float64(f.Acknowledgements) / float64(f.TotalPrompts)
 	rgr := 100.0 * float64(f.Regenerates) / float64(f.TotalPrompts)
-	return scorecard.AgentKPIInputs{
+	out := scorecard.AgentKPIInputs{
 		ConfirmationGateRatePct:  cgr,
 		ConfirmationGateComputed: true,
 		RegenerateRatePct:        rgr,
 		RegenerateComputed:       true,
 	}
+	if toolEvs, err := tools.Extract(tools.ExtractOptions{Since: since}); err == nil && len(toolEvs) > 0 {
+		ts := tools.Analyze(toolEvs)
+		if ts.TotalToolCalls > 0 {
+			out.ToolSuccessRatePct = ts.SuccessRate
+			out.ToolSuccessComputed = true
+			out.DestructiveRatePct = ts.DestructiveRate
+			out.DestructiveComputed = true
+		}
+	}
+	return out
 }

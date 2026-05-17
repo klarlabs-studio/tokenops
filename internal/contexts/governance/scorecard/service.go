@@ -123,7 +123,8 @@ func Build(ctx context.Context, params BuildParams) *Scorecard {
 		sac = params.SACPctOverride
 		anyComputed = true
 	}
-	if agent.CacheHitRatioComputed || agent.ConfirmationGateComputed || agent.RegenerateComputed {
+	if agent.CacheHitRatioComputed || agent.ConfirmationGateComputed || agent.RegenerateComputed ||
+		agent.ToolSuccessComputed || agent.DestructiveComputed {
 		anyComputed = true
 	}
 	if !anyComputed {
@@ -180,7 +181,8 @@ func BuildFromStore(ctx context.Context, store *sqlite.Store, params BuildParams
 		sac = params.SACPctOverride
 		anyComputed = true
 	}
-	if agent.CacheHitRatioComputed || agent.ConfirmationGateComputed || agent.RegenerateComputed {
+	if agent.CacheHitRatioComputed || agent.ConfirmationGateComputed || agent.RegenerateComputed ||
+		agent.ToolSuccessComputed || agent.DestructiveComputed {
 		anyComputed = true
 	}
 	if !anyComputed {

@@ -55,6 +55,8 @@ type Scorecard struct {
 	CacheHitRatio        KPIResult `json:"cache_hit_ratio,omitempty"`
 	ConfirmationGateRate KPIResult `json:"confirmation_gate_rate,omitempty"`
 	RegenerateRate       KPIResult `json:"regenerate_rate,omitempty"`
+	ToolSuccessRate      KPIResult `json:"tool_success_rate,omitempty"`
+	DestructiveRate      KPIResult `json:"destructive_rate,omitempty"`
 	OverallGrade         Grade     `json:"overall_grade"`
 	BaselineRef          string    `json:"baseline_ref,omitempty"`
 	// Checklist is populated only when no KPI was computed from real
@@ -101,6 +103,8 @@ var DefaultThresholds = struct {
 	CacheHitRatio        Thresholds
 	ConfirmationGateRate Thresholds
 	RegenerateRate       Thresholds
+	ToolSuccessRate      Thresholds
+	DestructiveRate      Thresholds
 }{
 	FirstValueTime:   Thresholds{Green: 60, Yellow: 300, Red: 900},
 	TokenEfficiency:  Thresholds{Green: 20, Yellow: 10, Red: 5},
@@ -116,6 +120,13 @@ var DefaultThresholds = struct {
 	// (try again, redo, do it differently). Lower is better. >10%
 	// means the agent is shipping work the operator rejects.
 	RegenerateRate: Thresholds{Green: 5, Yellow: 10, Red: 20},
+	// TCS: % of tool calls that returned without is_error. Higher
+	// is better. <90% means the agent is burning turns on tool
+	// retries (typos, wrong paths, permission denied).
+	ToolSuccessRate: Thresholds{Green: 95, Yellow: 85, Red: 70},
+	// DAR: % of bash invocations matching the destructive allow-list
+	// (rm -rf, force-push, drop table). Lower is better. Healthy is 0.
+	DestructiveRate: Thresholds{Green: 0.5, Yellow: 2, Red: 5},
 }
 
 func gradeValue(value float64, t Thresholds, higherIsBetter bool) Grade {
@@ -185,6 +196,14 @@ func gradeRGR(pct float64) Grade {
 	return gradeValue(pct, DefaultThresholds.RegenerateRate, false)
 }
 
+func gradeTCS(pct float64) Grade {
+	return gradeValue(pct, DefaultThresholds.ToolSuccessRate, true)
+}
+
+func gradeDAR(pct float64) Grade {
+	return gradeValue(pct, DefaultThresholds.DestructiveRate, false)
+}
+
 // NewWarmingUp returns a Scorecard variant for the empty-data case:
 // every KPI is omitted, OverallGrade is GradeWarmingUp, and the
 // Checklist points the operator at the next-action commands. Used by
@@ -212,6 +231,10 @@ type AgentKPIInputs struct {
 	ConfirmationGateComputed bool
 	RegenerateRatePct        float64
 	RegenerateComputed       bool
+	ToolSuccessRatePct       float64
+	ToolSuccessComputed      bool
+	DestructiveRatePct       float64
+	DestructiveComputed      bool
 }
 
 func New(fvtSeconds, teuPct, sacPct float64, baselineRef string) *Scorecard {
@@ -291,6 +314,30 @@ func NewWithAgentKPIs(fvtSeconds, teuPct, sacPct float64, agent AgentKPIInputs, 
 		sc.RegenerateRate = k
 		grades = append(grades, k.Grade)
 	}
+	if agent.ToolSuccessComputed {
+		k := KPIResult{
+			Name:        "Tool Success Rate (TCS)",
+			Description: "Percent of tool calls returning without is_error=true. Higher is better.",
+			Value:       math.Round(agent.ToolSuccessRatePct*10) / 10,
+			Unit:        "%",
+			Grade:       gradeTCS(agent.ToolSuccessRatePct),
+			Threshold:   DefaultThresholds.ToolSuccessRate,
+		}
+		sc.ToolSuccessRate = k
+		grades = append(grades, k.Grade)
+	}
+	if agent.DestructiveComputed {
+		k := KPIResult{
+			Name:        "Destructive Action Rate (DAR)",
+			Description: "Percent of bash invocations matching destructive patterns (rm -rf, force-push, drop table). Lower is better; healthy = 0.",
+			Value:       math.Round(agent.DestructiveRatePct*100) / 100,
+			Unit:        "%",
+			Grade:       gradeDAR(agent.DestructiveRatePct),
+			Threshold:   DefaultThresholds.DestructiveRate,
+		}
+		sc.DestructiveRate = k
+		grades = append(grades, k.Grade)
+	}
 	sc.OverallGrade = overallGrade(grades)
 	return sc
 }
@@ -326,6 +373,8 @@ func (s *Scorecard) MarshalJSON() ([]byte, error) {
 		CacheHitRatio        *KPIResult `json:"cache_hit_ratio,omitempty"`
 		ConfirmationGateRate *KPIResult `json:"confirmation_gate_rate,omitempty"`
 		RegenerateRate       *KPIResult `json:"regenerate_rate,omitempty"`
+		ToolSuccessRate      *KPIResult `json:"tool_success_rate,omitempty"`
+		DestructiveRate      *KPIResult `json:"destructive_rate,omitempty"`
 		OverallGrade         Grade      `json:"overall_grade"`
 		BaselineRef          string     `json:"baseline_ref,omitempty"`
 	}{
@@ -347,6 +396,14 @@ func (s *Scorecard) MarshalJSON() ([]byte, error) {
 	if s.RegenerateRate.Grade != "" {
 		k := s.RegenerateRate
 		out.RegenerateRate = &k
+	}
+	if s.ToolSuccessRate.Grade != "" {
+		k := s.ToolSuccessRate
+		out.ToolSuccessRate = &k
+	}
+	if s.DestructiveRate.Grade != "" {
+		k := s.DestructiveRate
+		out.DestructiveRate = &k
 	}
 	return json.MarshalIndent(out, "", "  ")
 }
@@ -387,6 +444,14 @@ func (s *Scorecard) String() string {
 		fmt.Fprintf(&b, "RGR — Regenerate Rate (%%):                  %.1f [%s]\n",
 			s.RegenerateRate.Value, s.RegenerateRate.Grade)
 	}
+	if s.ToolSuccessRate.Grade != "" {
+		fmt.Fprintf(&b, "TCS — Tool Success Rate (%%):                %.1f [%s]\n",
+			s.ToolSuccessRate.Value, s.ToolSuccessRate.Grade)
+	}
+	if s.DestructiveRate.Grade != "" {
+		fmt.Fprintf(&b, "DAR — Destructive Action Rate (%%):          %.2f [%s]\n",
+			s.DestructiveRate.Value, s.DestructiveRate.Grade)
+	}
 	fmt.Fprintf(&b, "\nOverall Grade: %s\nBaseline: %s\n", s.OverallGrade, baselineOrMissing(s.BaselineRef))
 	fmt.Fprintf(&b, "\nThresholds (green / yellow / red):\n")
 	fmt.Fprintf(&b, "  FVT:  ≤%.0f / ≤%.0f / ≤%.0f seconds\n",
@@ -406,6 +471,14 @@ func (s *Scorecard) String() string {
 	if s.RegenerateRate.Grade != "" {
 		fmt.Fprintf(&b, "  RGR:  ≤%.0f%% / ≤%.0f%% / ≤%.0f%%\n",
 			s.RegenerateRate.Threshold.Green, s.RegenerateRate.Threshold.Yellow, s.RegenerateRate.Threshold.Red)
+	}
+	if s.ToolSuccessRate.Grade != "" {
+		fmt.Fprintf(&b, "  TCS:  ≥%.0f%% / ≥%.0f%% / ≥%.0f%%\n",
+			s.ToolSuccessRate.Threshold.Green, s.ToolSuccessRate.Threshold.Yellow, s.ToolSuccessRate.Threshold.Red)
+	}
+	if s.DestructiveRate.Grade != "" {
+		fmt.Fprintf(&b, "  DAR:  ≤%.2f%% / ≤%.2f%% / ≤%.2f%%\n",
+			s.DestructiveRate.Threshold.Green, s.DestructiveRate.Threshold.Yellow, s.DestructiveRate.Threshold.Red)
 	}
 	return b.String()
 }
