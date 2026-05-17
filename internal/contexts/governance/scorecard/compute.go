@@ -31,6 +31,11 @@ type LiveKPIs struct {
 	TEUComputed      bool
 	SpendAttribution float64
 	SACComputed      bool
+	// CHR (cache hit ratio) is computed from prompts directly via
+	// json_extract over the payload — same source the analytics
+	// CacheStats endpoint uses. Computed when input_tokens > 0.
+	CacheHitRatio float64
+	CHRComputed   bool
 }
 
 // Compute walks the local event store over [since, now] and derives the
@@ -74,8 +79,60 @@ func Compute(ctx context.Context, reader EventReader, since time.Time) (*LiveKPI
 	computeFVT(out, prompts)
 	computeTEU(out, prompts, opts)
 	computeSAC(out, prompts)
+	computeCHR(out, prompts)
 	return out, nil
 }
+
+// computeCHR sums input vs cached_input across the prompt window
+// and reports the ratio. Falls back to attributes.cache_read_input
+// for envelopes ingested before v0.14.2 (when the poller wrote the
+// split into Attributes only). Same fallback the analytics
+// CacheStats endpoint uses so dashboard + scorecard agree.
+func computeCHR(out *LiveKPIs, prompts []*eventschema.Envelope) {
+	var totalIn, totalCached int64
+	for _, env := range prompts {
+		pe, ok := env.Payload.(*eventschema.PromptEvent)
+		if !ok {
+			continue
+		}
+		totalIn += pe.InputTokens
+		cached := pe.CachedInputTokens
+		if cached == 0 && env.Attributes != nil {
+			// Legacy events stamped the split as a string in attributes
+			// (pre-v0.14.2). Best-effort parse — ignore unparseable.
+			if v, ok := env.Attributes["cache_read_input"]; ok {
+				if n, err := parseInt64(v); err == nil {
+					cached = n
+				}
+			}
+		}
+		totalCached += cached
+	}
+	if totalIn <= 0 {
+		return
+	}
+	out.CacheHitRatio = float64(totalCached) / float64(totalIn) * 100
+	out.CHRComputed = true
+}
+
+// parseInt64 is a defensive wrapper that returns the parsed value
+// and an error. Inline use only.
+func parseInt64(s string) (int64, error) {
+	var n int64
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return 0, errBadDigit
+		}
+		n = n*10 + int64(s[i]-'0')
+	}
+	return n, nil
+}
+
+var errBadDigit = parseError("bad digit")
+
+type parseError string
+
+func (e parseError) Error() string { return string(e) }
 
 // defaultExcludedSources mirrors analytics.DefaultExcludedSources +
 // plans.DefaultExcludedSources, plus mcp-session pings. Scorecard

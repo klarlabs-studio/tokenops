@@ -42,6 +42,12 @@ type BuildParams struct {
 	FVTSecondsOverride float64
 	TEUPctOverride     float64
 	SACPctOverride     float64
+	// AgentKPIs supplies the v0.19 agent-workflow metrics that the
+	// scorecard package can't derive from events.db alone. CGR + RGR
+	// are computed by the CLI from JSONLs (the events.db source has
+	// no prompt-text shape); CHR can be passed here OR derived from
+	// the live store via computeCHR — operator preference wins.
+	AgentKPIs AgentKPIInputs
 	// BaselineRef is the operator-supplied baseline identifier carried
 	// through to Scorecard.BaselineRef.
 	BaselineRef string
@@ -67,6 +73,7 @@ func Build(ctx context.Context, params BuildParams) *Scorecard {
 		params.ClockNow = time.Now
 	}
 	fvt, teu, sac := DefaultFVTSeconds, DefaultTEUPct, DefaultSACPct
+	agent := params.AgentKPIs
 	var anyComputed bool
 
 	dbPath := params.DBPath
@@ -95,6 +102,11 @@ func Build(ctx context.Context, params BuildParams) *Scorecard {
 						sac = kpis.SpendAttribution
 						anyComputed = true
 					}
+					if kpis.CHRComputed && !agent.CacheHitRatioComputed {
+						agent.CacheHitRatioPct = kpis.CacheHitRatio
+						agent.CacheHitRatioComputed = true
+						anyComputed = true
+					}
 				}
 			}
 		}
@@ -111,10 +123,13 @@ func Build(ctx context.Context, params BuildParams) *Scorecard {
 		sac = params.SACPctOverride
 		anyComputed = true
 	}
+	if agent.CacheHitRatioComputed || agent.ConfirmationGateComputed || agent.RegenerateComputed {
+		anyComputed = true
+	}
 	if !anyComputed {
 		return NewWarmingUp(params.BaselineRef)
 	}
-	return New(fvt, teu, sac, params.BaselineRef)
+	return NewWithAgentKPIs(fvt, teu, sac, agent, params.BaselineRef)
 }
 
 // BuildFromStore is the variant adapters use when they already hold an
@@ -129,6 +144,7 @@ func BuildFromStore(ctx context.Context, store *sqlite.Store, params BuildParams
 		params.ClockNow = time.Now
 	}
 	fvt, teu, sac := DefaultFVTSeconds, DefaultTEUPct, DefaultSACPct
+	agent := params.AgentKPIs
 	var anyComputed bool
 	if store != nil {
 		since := params.ClockNow().Add(-time.Duration(params.SinceDays) * 24 * time.Hour)
@@ -145,6 +161,11 @@ func BuildFromStore(ctx context.Context, store *sqlite.Store, params BuildParams
 				sac = kpis.SpendAttribution
 				anyComputed = true
 			}
+			if kpis.CHRComputed && !agent.CacheHitRatioComputed {
+				agent.CacheHitRatioPct = kpis.CacheHitRatio
+				agent.CacheHitRatioComputed = true
+				anyComputed = true
+			}
 		}
 	}
 	if params.FVTSecondsOverride > 0 {
@@ -159,8 +180,11 @@ func BuildFromStore(ctx context.Context, store *sqlite.Store, params BuildParams
 		sac = params.SACPctOverride
 		anyComputed = true
 	}
+	if agent.CacheHitRatioComputed || agent.ConfirmationGateComputed || agent.RegenerateComputed {
+		anyComputed = true
+	}
 	if !anyComputed {
 		return NewWarmingUp(params.BaselineRef)
 	}
-	return New(fvt, teu, sac, params.BaselineRef)
+	return NewWithAgentKPIs(fvt, teu, sac, agent, params.BaselineRef)
 }

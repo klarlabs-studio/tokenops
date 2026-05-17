@@ -2,9 +2,11 @@ package cli
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/prompts"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/governance/scorecard"
 )
 
@@ -41,12 +43,14 @@ Use --capture-baseline (not yet implemented) to persist the current
 values and --compare to diff against a stored baseline.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			agent := computeAgentKPIs(sinceDays)
 			s := scorecard.Build(cmd.Context(), scorecard.BuildParams{
 				DBPath:             dbPath,
 				SinceDays:          sinceDays,
 				FVTSecondsOverride: fvtOverride,
 				TEUPctOverride:     teuOverride,
 				SACPctOverride:     sacOverride,
+				AgentKPIs:          agent,
 				BaselineRef:        baselineRef,
 			})
 
@@ -71,4 +75,34 @@ values and --compare to diff against a stored baseline.`,
 	cmd.Flags().Float64Var(&teuOverride, "teu-pct", 0, "override Token Efficiency Uplift in percent")
 	cmd.Flags().Float64Var(&sacOverride, "sac-pct", 0, "override Spend Attribution Completeness in percent")
 	return cmd
+}
+
+// computeAgentKPIs derives the v0.19 agent KPIs that the scorecard
+// package can't compute from events.db alone (CGR + RGR need prompt
+// text). Walks both Claude Code + Codex JSONL roots via the prompts
+// extractor, runs Analyze, and packs the ratios into AgentKPIInputs.
+// Returns a zero-valued struct (no *Computed flags set) when the
+// extractor can't find any prompts — Build then falls through to
+// the in-store CHR computation only.
+func computeAgentKPIs(sinceDays int) scorecard.AgentKPIInputs {
+	if sinceDays <= 0 {
+		sinceDays = 7
+	}
+	since := time.Now().Add(-time.Duration(sinceDays) * 24 * time.Hour)
+	extracted, err := prompts.Extract(prompts.ExtractOptions{Since: since})
+	if err != nil || len(extracted) == 0 {
+		return scorecard.AgentKPIInputs{}
+	}
+	f := prompts.Analyze(extracted)
+	if f.TotalPrompts == 0 {
+		return scorecard.AgentKPIInputs{}
+	}
+	cgr := 100.0 * float64(f.Acknowledgements) / float64(f.TotalPrompts)
+	rgr := 100.0 * float64(f.Regenerates) / float64(f.TotalPrompts)
+	return scorecard.AgentKPIInputs{
+		ConfirmationGateRatePct:  cgr,
+		ConfirmationGateComputed: true,
+		RegenerateRatePct:        rgr,
+		RegenerateComputed:       true,
+	}
 }

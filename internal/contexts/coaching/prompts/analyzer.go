@@ -1,9 +1,17 @@
 package prompts
 
 import (
+	"regexp"
 	"sort"
 	"strings"
 )
+
+// mustCompileRegen is a panic-at-init helper for the regenerate
+// pattern. The regex is a constant in package source so a compile
+// failure is a build bug, not a runtime concern.
+func mustCompileRegen(pat string) *regexp.Regexp {
+	return regexp.MustCompile(pat)
+}
 
 // Findings is the analyzer's report: aggregate stats + ranked
 // recommendations. Designed for JSON rendering (CLI --json, MCP tool
@@ -21,9 +29,17 @@ type Findings struct {
 	Acknowledgements   int              `json:"acknowledgement_count"`
 	ShortQuestions     int              `json:"short_question_count"`
 	NoContextSingles   int              `json:"no_context_singles_count"`
+	Regenerates        int              `json:"regenerate_count"`
+	RegenerateSamples  []string         `json:"regenerate_samples,omitempty"`
 	RepeatedPrompts    []RepeatedItem   `json:"repeated_prompts,omitempty"`
 	Recommendations    []Recommendation `json:"recommendations"`
 }
+
+// regenerateRE matches prompts that signal the operator is rejecting
+// the prior agent output. Case-insensitive substring match — the set
+// is intentionally narrow to avoid false positives (e.g. "redo" only
+// matches as a standalone word, not inside "rendezvous").
+var regenerateRE = mustCompileRegen(`(?i)\b(try again|do it again|do it differently|redo|nope|that('| i)s wrong|wrong|incorrect|not (what i wanted|right))\b`)
 
 // Recommendation is one actionable suggestion grounded in the
 // operator's own data. Sorted by ImpactScore descending so the CLI
@@ -151,6 +167,12 @@ func Analyze(prompts []UserPrompt) Findings {
 		}
 		if nc < 60 && strings.Contains(txt, "?") {
 			shortQs++
+		}
+		if regenerateRE.MatchString(txt) {
+			f.Regenerates++
+			if len(f.RegenerateSamples) < 3 {
+				f.RegenerateSamples = append(f.RegenerateSamples, txt)
+			}
 		}
 		if nc > 5 && nc < 30 && !strings.ContainsAny(txt, ".,:;()") {
 			noCtx++
