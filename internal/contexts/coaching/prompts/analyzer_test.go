@@ -30,12 +30,13 @@ func TestAnalyzeAckHeavy(t *testing.T) {
 	if f.Acknowledgements != 20 {
 		t.Errorf("acks = %d; want 20", f.Acknowledgements)
 	}
-	if !hasRec(f.Recommendations, "confirmation loops") {
+	if !hasRecID(f.Recommendations, "reduce_confirmation_loops") {
 		t.Errorf("missing confirmation-loop rec: %v", f.Recommendations)
 	}
 }
 
-// Short-prompt-heavy input fires the front-load-context rec.
+// Short-prompt-heavy input with vague directives fires the
+// scope-vague-directives rec (higher priority than front-load).
 func TestAnalyzeShortHeavy(t *testing.T) {
 	prompts := []UserPrompt{}
 	for i := 0; i < 30; i++ {
@@ -46,8 +47,12 @@ func TestAnalyzeShortHeavy(t *testing.T) {
 	if f.LengthDistribution["<5w"] < 25 {
 		t.Errorf("<5w bucket = %d; want >=25", f.LengthDistribution["<5w"])
 	}
-	if !hasRec(f.Recommendations, "Front-load") {
-		t.Errorf("missing front-load rec: %v", f.Recommendations)
+	if !hasRecID(f.Recommendations, "scope_vague_directives") {
+		t.Errorf("missing scope-vague-directives rec: %v", f.Recommendations)
+	}
+	// First rec should be the highest-impact one.
+	if f.Recommendations[0].ID != "scope_vague_directives" {
+		t.Errorf("top rec = %s; want scope_vague_directives", f.Recommendations[0].ID)
 	}
 }
 
@@ -65,8 +70,8 @@ func TestAnalyzeRepeats(t *testing.T) {
 	if f.RepeatedPrompts[0].Count != 5 {
 		t.Errorf("top repeat count = %d", f.RepeatedPrompts[0].Count)
 	}
-	if !hasRec(f.Recommendations, "repeat the same prompt") {
-		t.Errorf("missing repeat rec: %v", f.Recommendations)
+	if !hasRecID(f.Recommendations, "stop_repeating") {
+		t.Errorf("missing stop_repeating rec: %v", f.Recommendations)
 	}
 }
 
@@ -115,9 +120,18 @@ func TestUserPromptTimestamp(t *testing.T) {
 	}
 }
 
-func hasRec(recs []string, fragment string) bool {
+func hasRec(recs []Recommendation, fragment string) bool {
 	for _, r := range recs {
-		if strings.Contains(r, fragment) {
+		if strings.Contains(r.Title, fragment) || strings.Contains(r.Why, fragment) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasRecID(recs []Recommendation, id string) bool {
+	for _, r := range recs {
+		if r.ID == id {
 			return true
 		}
 	}

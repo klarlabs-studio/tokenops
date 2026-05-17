@@ -246,10 +246,61 @@ func renderCoachPrompts(cmd *cobra.Command, f prompts.Findings, since time.Time)
 		}
 	}
 	fmt.Fprintln(out)
-	fmt.Fprintln(out, "RECOMMENDATIONS")
-	for i, r := range f.Recommendations {
-		fmt.Fprintf(out, "  %d. %s\n", i+1, r)
+	renderRecommendations(out, f.Recommendations)
+}
+
+// renderRecommendations leads with a BIGGEST WIN panel for the top
+// rec (sorted by ImpactScore in the analyzer) and renders the rest
+// as a numbered list with evidence + before/after templates.
+func renderRecommendations(out fmtWriter, recs []prompts.Recommendation) {
+	if len(recs) == 0 {
+		return
 	}
+	first := recs[0]
+	if first.ID == "no_data" || first.ID == "healthy" {
+		fmt.Fprintln(out, "RECOMMENDATIONS")
+		fmt.Fprintf(out, "  • %s\n", first.Title)
+		return
+	}
+	fmt.Fprintln(out, "BIGGEST WIN")
+	fmt.Fprintf(out, "  %s\n", first.Title)
+	if first.Why != "" {
+		fmt.Fprintf(out, "  %s\n", first.Why)
+	}
+	if first.Frequency > 0 {
+		fmt.Fprintf(out, "  Seen %dx; estimated %d turns/month saved if fixed.\n",
+			first.Frequency, first.EstimatedMonthlyTurnsSaved)
+	}
+	if first.Before != "" && first.After != "" {
+		fmt.Fprintf(out, "  Before: %q\n", first.Before)
+		fmt.Fprintf(out, "  After:  %q\n", first.After)
+	}
+	if len(first.Evidence) > 0 {
+		fmt.Fprintln(out, "  Examples from your data:")
+		for _, e := range first.Evidence {
+			fmt.Fprintf(out, "      • %q\n", truncateForRec(e, 60))
+		}
+	}
+	if len(recs) > 1 {
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "ALSO WORTH FIXING")
+		for i, r := range recs[1:] {
+			fmt.Fprintf(out, "  %d. %s\n", i+1, r.Title)
+			if r.Frequency > 0 {
+				fmt.Fprintf(out, "     %dx, ~%d turns/month\n", r.Frequency, r.EstimatedMonthlyTurnsSaved)
+			}
+			if r.Before != "" && r.After != "" {
+				fmt.Fprintf(out, "     %q  →  %q\n", r.Before, r.After)
+			}
+		}
+	}
+}
+
+func truncateForRec(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
 }
 
 func pctOf(n, total int) float64 {
