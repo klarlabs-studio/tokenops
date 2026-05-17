@@ -49,8 +49,14 @@ type Scorecard struct {
 	FirstValueTime   KPIResult `json:"first_value_time"`
 	TokenEfficiency  KPIResult `json:"token_efficiency_uplift"`
 	SpendAttribution KPIResult `json:"spend_attribution_completeness"`
-	OverallGrade     Grade     `json:"overall_grade"`
-	BaselineRef      string    `json:"baseline_ref,omitempty"`
+	// Agent-workflow KPIs (added v0.19). Grade is "" when the live
+	// computation didn't supply the metric; renderers skip empty
+	// KPIs so the operator doesn't see a phantom F.
+	CacheHitRatio        KPIResult `json:"cache_hit_ratio,omitempty"`
+	ConfirmationGateRate KPIResult `json:"confirmation_gate_rate,omitempty"`
+	RegenerateRate       KPIResult `json:"regenerate_rate,omitempty"`
+	OverallGrade         Grade     `json:"overall_grade"`
+	BaselineRef          string    `json:"baseline_ref,omitempty"`
 	// Checklist is populated only when no KPI was computed from real
 	// data. Renderers should show the checklist instead of an F grade
 	// — defaulted KPIs are not a verdict on the operator.
@@ -89,13 +95,27 @@ var FirstWeekChecklist = []ChecklistItem{
 }
 
 var DefaultThresholds = struct {
-	FirstValueTime   Thresholds
-	TokenEfficiency  Thresholds
-	SpendAttribution Thresholds
+	FirstValueTime       Thresholds
+	TokenEfficiency      Thresholds
+	SpendAttribution     Thresholds
+	CacheHitRatio        Thresholds
+	ConfirmationGateRate Thresholds
+	RegenerateRate       Thresholds
 }{
 	FirstValueTime:   Thresholds{Green: 60, Yellow: 300, Red: 900},
 	TokenEfficiency:  Thresholds{Green: 20, Yellow: 10, Red: 5},
 	SpendAttribution: Thresholds{Green: 90, Yellow: 70, Red: 50},
+	// CHR: % of input tokens that came from cache reads. Higher is
+	// better. For agent workloads >90% indicates strong context reuse.
+	CacheHitRatio: Thresholds{Green: 90, Yellow: 70, Red: 50},
+	// CGR: % of user prompts that are pure acks (yes/no/continue).
+	// Lower is better. >30% means the agent is asking too many
+	// confirmation gates the operator could pre-empt.
+	ConfirmationGateRate: Thresholds{Green: 10, Yellow: 20, Red: 30},
+	// RGR: % of user prompts that reject the prior agent output
+	// (try again, redo, do it differently). Lower is better. >10%
+	// means the agent is shipping work the operator rejects.
+	RegenerateRate: Thresholds{Green: 5, Yellow: 10, Red: 20},
 }
 
 func gradeValue(value float64, t Thresholds, higherIsBetter bool) Grade {
@@ -153,6 +173,18 @@ func gradeSAC(pct float64) Grade {
 	return gradeValue(pct, DefaultThresholds.SpendAttribution, true)
 }
 
+func gradeCHR(pct float64) Grade {
+	return gradeValue(pct, DefaultThresholds.CacheHitRatio, true)
+}
+
+func gradeCGR(pct float64) Grade {
+	return gradeValue(pct, DefaultThresholds.ConfirmationGateRate, false)
+}
+
+func gradeRGR(pct float64) Grade {
+	return gradeValue(pct, DefaultThresholds.RegenerateRate, false)
+}
+
 // NewWarmingUp returns a Scorecard variant for the empty-data case:
 // every KPI is omitted, OverallGrade is GradeWarmingUp, and the
 // Checklist points the operator at the next-action commands. Used by
@@ -169,7 +201,28 @@ func NewWarmingUp(baselineRef string) *Scorecard {
 	}
 }
 
+// AgentKPIInputs carries the v0.19 agent-workflow KPIs. Each field
+// is optional; pass NaN (or use the zero value with the *Computed
+// flag) to skip a metric. New(...) only populates Scorecard fields
+// for metrics with a real value.
+type AgentKPIInputs struct {
+	CacheHitRatioPct         float64
+	CacheHitRatioComputed    bool
+	ConfirmationGateRatePct  float64
+	ConfirmationGateComputed bool
+	RegenerateRatePct        float64
+	RegenerateComputed       bool
+}
+
 func New(fvtSeconds, teuPct, sacPct float64, baselineRef string) *Scorecard {
+	return NewWithAgentKPIs(fvtSeconds, teuPct, sacPct, AgentKPIInputs{}, baselineRef)
+}
+
+// NewWithAgentKPIs is the v0.19 entry point that accepts the
+// agent-workflow metrics alongside the original FVT/TEU/SAC trio.
+// Callers that don't have the new metrics use New(...), which is a
+// thin wrapper around this with a zero AgentKPIInputs.
+func NewWithAgentKPIs(fvtSeconds, teuPct, sacPct float64, agent AgentKPIInputs, baselineRef string) *Scorecard {
 	fvt := KPIResult{
 		Name:        "First Value Time (FVT)",
 		Description: "Seconds from install to first measurable insight. Lower is better.",
@@ -194,14 +247,52 @@ func New(fvtSeconds, teuPct, sacPct float64, baselineRef string) *Scorecard {
 		Grade:       gradeSAC(sacPct),
 		Threshold:   DefaultThresholds.SpendAttribution,
 	}
-	return &Scorecard{
+	grades := []Grade{fvt.Grade, teu.Grade, sac.Grade}
+	sc := &Scorecard{
 		GeneratedAt:      time.Now().UTC(),
 		FirstValueTime:   fvt,
 		TokenEfficiency:  teu,
 		SpendAttribution: sac,
-		OverallGrade:     overallGrade([]Grade{fvt.Grade, teu.Grade, sac.Grade}),
 		BaselineRef:      baselineRef,
 	}
+	if agent.CacheHitRatioComputed {
+		k := KPIResult{
+			Name:        "Cache Hit Ratio (CHR)",
+			Description: "Percent of input tokens served from cache reads. Higher is better.",
+			Value:       math.Round(agent.CacheHitRatioPct*10) / 10,
+			Unit:        "%",
+			Grade:       gradeCHR(agent.CacheHitRatioPct),
+			Threshold:   DefaultThresholds.CacheHitRatio,
+		}
+		sc.CacheHitRatio = k
+		grades = append(grades, k.Grade)
+	}
+	if agent.ConfirmationGateComputed {
+		k := KPIResult{
+			Name:        "Confirmation Gate Rate (CGR)",
+			Description: "Percent of user prompts that are pure acks (yes/no/continue). Lower is better.",
+			Value:       math.Round(agent.ConfirmationGateRatePct*10) / 10,
+			Unit:        "%",
+			Grade:       gradeCGR(agent.ConfirmationGateRatePct),
+			Threshold:   DefaultThresholds.ConfirmationGateRate,
+		}
+		sc.ConfirmationGateRate = k
+		grades = append(grades, k.Grade)
+	}
+	if agent.RegenerateComputed {
+		k := KPIResult{
+			Name:        "Regenerate Rate (RGR)",
+			Description: "Percent of user prompts that reject the prior agent output. Lower is better.",
+			Value:       math.Round(agent.RegenerateRatePct*10) / 10,
+			Unit:        "%",
+			Grade:       gradeRGR(agent.RegenerateRatePct),
+			Threshold:   DefaultThresholds.RegenerateRate,
+		}
+		sc.RegenerateRate = k
+		grades = append(grades, k.Grade)
+	}
+	sc.OverallGrade = overallGrade(grades)
+	return sc
 }
 
 // MarshalJSON renders Scorecard with empty KPI blocks dropped when
@@ -224,8 +315,40 @@ func (s *Scorecard) MarshalJSON() ([]byte, error) {
 		}
 		return json.MarshalIndent(warm, "", "  ")
 	}
-	type alias Scorecard
-	return json.MarshalIndent((*alias)(s), "", "  ")
+	// Optional agent KPIs: only marshal blocks whose Grade is set
+	// (i.e. the computation actually ran). Hand-build the wire shape
+	// rather than introduce *KPIResult pointers across the API.
+	out := struct {
+		GeneratedAt          time.Time  `json:"generated_at"`
+		FirstValueTime       KPIResult  `json:"first_value_time"`
+		TokenEfficiency      KPIResult  `json:"token_efficiency_uplift"`
+		SpendAttribution     KPIResult  `json:"spend_attribution_completeness"`
+		CacheHitRatio        *KPIResult `json:"cache_hit_ratio,omitempty"`
+		ConfirmationGateRate *KPIResult `json:"confirmation_gate_rate,omitempty"`
+		RegenerateRate       *KPIResult `json:"regenerate_rate,omitempty"`
+		OverallGrade         Grade      `json:"overall_grade"`
+		BaselineRef          string     `json:"baseline_ref,omitempty"`
+	}{
+		GeneratedAt:      s.GeneratedAt,
+		FirstValueTime:   s.FirstValueTime,
+		TokenEfficiency:  s.TokenEfficiency,
+		SpendAttribution: s.SpendAttribution,
+		OverallGrade:     s.OverallGrade,
+		BaselineRef:      s.BaselineRef,
+	}
+	if s.CacheHitRatio.Grade != "" {
+		k := s.CacheHitRatio
+		out.CacheHitRatio = &k
+	}
+	if s.ConfirmationGateRate.Grade != "" {
+		k := s.ConfirmationGateRate
+		out.ConfirmationGateRate = &k
+	}
+	if s.RegenerateRate.Grade != "" {
+		k := s.RegenerateRate
+		out.RegenerateRate = &k
+	}
+	return json.MarshalIndent(out, "", "  ")
 }
 
 func (s *Scorecard) String() string {
@@ -243,45 +366,48 @@ func (s *Scorecard) String() string {
 		fmt.Fprintf(&b, "\nBaseline: %s\n", baselineOrMissing(s.BaselineRef))
 		return b.String()
 	}
-	return fmt.Sprintf(`Operator Wedge KPI Scorecard
-Generated: %s
-
-FVT — First-Value Time (seconds):           %.1f [%s]
-TEU — Token Efficiency Uplift (%%):          %.1f [%s]
-SAC — Spend Attribution Completeness (%%):   %.1f [%s]
-
-Overall Grade: %s
-Baseline: %s
-
-Definitions:
-  FVT — %s
-  TEU — %s
-  SAC — %s
-
-Thresholds (green / yellow / red):
-  FVT:  ≤%.0f / ≤%.0f / ≤%.0f seconds
-  TEU:  ≥%.0f%% / ≥%.0f%% / ≥%.0f%%
-  SAC:  ≥%.0f%% / ≥%.0f%% / ≥%.0f%%
-`,
-		s.GeneratedAt.Format(time.RFC3339),
-		s.FirstValueTime.Value, s.FirstValueTime.Grade,
-		s.TokenEfficiency.Value, s.TokenEfficiency.Grade,
-		s.SpendAttribution.Value, s.SpendAttribution.Grade,
-		s.OverallGrade,
-		baselineOrMissing(s.BaselineRef),
-		s.FirstValueTime.Description,
-		s.TokenEfficiency.Description,
-		s.SpendAttribution.Description,
-		s.FirstValueTime.Threshold.Green,
-		s.FirstValueTime.Threshold.Yellow,
-		s.FirstValueTime.Threshold.Red,
-		s.TokenEfficiency.Threshold.Green,
-		s.TokenEfficiency.Threshold.Yellow,
-		s.TokenEfficiency.Threshold.Red,
-		s.SpendAttribution.Threshold.Green,
-		s.SpendAttribution.Threshold.Yellow,
-		s.SpendAttribution.Threshold.Red,
-	)
+	var b strings.Builder
+	fmt.Fprintf(&b, "Operator Wedge KPI Scorecard\nGenerated: %s\n\n",
+		s.GeneratedAt.Format(time.RFC3339))
+	fmt.Fprintf(&b, "FVT — First-Value Time (seconds):           %.1f [%s]\n",
+		s.FirstValueTime.Value, s.FirstValueTime.Grade)
+	fmt.Fprintf(&b, "TEU — Token Efficiency Uplift (%%):          %.1f [%s]\n",
+		s.TokenEfficiency.Value, s.TokenEfficiency.Grade)
+	fmt.Fprintf(&b, "SAC — Spend Attribution Completeness (%%):   %.1f [%s]\n",
+		s.SpendAttribution.Value, s.SpendAttribution.Grade)
+	if s.CacheHitRatio.Grade != "" {
+		fmt.Fprintf(&b, "CHR — Cache Hit Ratio (%%):                  %.1f [%s]\n",
+			s.CacheHitRatio.Value, s.CacheHitRatio.Grade)
+	}
+	if s.ConfirmationGateRate.Grade != "" {
+		fmt.Fprintf(&b, "CGR — Confirmation Gate Rate (%%):           %.1f [%s]\n",
+			s.ConfirmationGateRate.Value, s.ConfirmationGateRate.Grade)
+	}
+	if s.RegenerateRate.Grade != "" {
+		fmt.Fprintf(&b, "RGR — Regenerate Rate (%%):                  %.1f [%s]\n",
+			s.RegenerateRate.Value, s.RegenerateRate.Grade)
+	}
+	fmt.Fprintf(&b, "\nOverall Grade: %s\nBaseline: %s\n", s.OverallGrade, baselineOrMissing(s.BaselineRef))
+	fmt.Fprintf(&b, "\nThresholds (green / yellow / red):\n")
+	fmt.Fprintf(&b, "  FVT:  ≤%.0f / ≤%.0f / ≤%.0f seconds\n",
+		s.FirstValueTime.Threshold.Green, s.FirstValueTime.Threshold.Yellow, s.FirstValueTime.Threshold.Red)
+	fmt.Fprintf(&b, "  TEU:  ≥%.0f%% / ≥%.0f%% / ≥%.0f%%\n",
+		s.TokenEfficiency.Threshold.Green, s.TokenEfficiency.Threshold.Yellow, s.TokenEfficiency.Threshold.Red)
+	fmt.Fprintf(&b, "  SAC:  ≥%.0f%% / ≥%.0f%% / ≥%.0f%%\n",
+		s.SpendAttribution.Threshold.Green, s.SpendAttribution.Threshold.Yellow, s.SpendAttribution.Threshold.Red)
+	if s.CacheHitRatio.Grade != "" {
+		fmt.Fprintf(&b, "  CHR:  ≥%.0f%% / ≥%.0f%% / ≥%.0f%%\n",
+			s.CacheHitRatio.Threshold.Green, s.CacheHitRatio.Threshold.Yellow, s.CacheHitRatio.Threshold.Red)
+	}
+	if s.ConfirmationGateRate.Grade != "" {
+		fmt.Fprintf(&b, "  CGR:  ≤%.0f%% / ≤%.0f%% / ≤%.0f%%\n",
+			s.ConfirmationGateRate.Threshold.Green, s.ConfirmationGateRate.Threshold.Yellow, s.ConfirmationGateRate.Threshold.Red)
+	}
+	if s.RegenerateRate.Grade != "" {
+		fmt.Fprintf(&b, "  RGR:  ≤%.0f%% / ≤%.0f%% / ≤%.0f%%\n",
+			s.RegenerateRate.Threshold.Green, s.RegenerateRate.Threshold.Yellow, s.RegenerateRate.Threshold.Red)
+	}
+	return b.String()
 }
 
 func baselineOrMissing(ref string) string {

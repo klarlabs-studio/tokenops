@@ -95,6 +95,99 @@ func TestOverallGrade(t *testing.T) {
 	}
 }
 
+// CHR is higher-is-better: 90+ = A, 70+ = B, 50+ = C, below = F.
+func TestGradeCHR(t *testing.T) {
+	for _, c := range []struct {
+		pct  float64
+		want Grade
+	}{
+		{99.4, GradeA},
+		{75, GradeB},
+		{50, GradeC},
+		{40, GradeF},
+	} {
+		if got := gradeCHR(c.pct); got != c.want {
+			t.Errorf("gradeCHR(%v) = %v; want %v", c.pct, got, c.want)
+		}
+	}
+}
+
+// CGR + RGR are lower-is-better: thresholds applied in reverse.
+func TestGradeCGRandRGR(t *testing.T) {
+	if got := gradeCGR(8); got != GradeA {
+		t.Errorf("CGR 8%% = %v; want A", got)
+	}
+	if got := gradeCGR(15); got != GradeB {
+		t.Errorf("CGR 15%% = %v; want B", got)
+	}
+	if got := gradeCGR(45); got != GradeF {
+		t.Errorf("CGR 45%% = %v; want F", got)
+	}
+	if got := gradeRGR(3); got != GradeA {
+		t.Errorf("RGR 3%% = %v; want A", got)
+	}
+	if got := gradeRGR(25); got != GradeF {
+		t.Errorf("RGR 25%% = %v; want F", got)
+	}
+}
+
+// Agent KPIs are optional: New(...) (backwards-compat) omits them.
+func TestNewBackwardsCompatOmitsAgentKPIs(t *testing.T) {
+	s := New(45, 18, 85, "")
+	if s.CacheHitRatio.Grade != "" {
+		t.Errorf("CHR grade should be empty for legacy New(); got %v", s.CacheHitRatio.Grade)
+	}
+	if s.ConfirmationGateRate.Grade != "" {
+		t.Errorf("CGR grade should be empty for legacy New(); got %v", s.ConfirmationGateRate.Grade)
+	}
+}
+
+// NewWithAgentKPIs populates the new KPIs when *Computed flags are
+// set; overall grade includes them in the worst-case rollup.
+func TestNewWithAgentKPIs(t *testing.T) {
+	s := NewWithAgentKPIs(30, 25, 95, AgentKPIInputs{
+		CacheHitRatioPct:         99.4,
+		CacheHitRatioComputed:    true,
+		ConfirmationGateRatePct:  35,
+		ConfirmationGateComputed: true,
+		RegenerateRatePct:        4,
+		RegenerateComputed:       true,
+	}, "v0.19")
+	if s.CacheHitRatio.Grade != GradeA {
+		t.Errorf("CHR grade = %v; want A", s.CacheHitRatio.Grade)
+	}
+	if s.ConfirmationGateRate.Grade != GradeF {
+		t.Errorf("CGR grade = %v; want F (35%% > 30%% red threshold)", s.ConfirmationGateRate.Grade)
+	}
+	if s.RegenerateRate.Grade != GradeA {
+		t.Errorf("RGR grade = %v; want A", s.RegenerateRate.Grade)
+	}
+	// Overall rolls up to the worst grade — F because CGR.
+	if s.OverallGrade != GradeF {
+		t.Errorf("Overall = %v; want F (CGR drags it)", s.OverallGrade)
+	}
+}
+
+// String() renders the new KPI rows only when Grade is non-empty.
+func TestStringRendersAgentKPIsWhenSet(t *testing.T) {
+	legacy := New(30, 25, 95, "")
+	out := legacy.String()
+	if strings.Contains(out, "CHR") || strings.Contains(out, "CGR") || strings.Contains(out, "RGR") {
+		t.Errorf("legacy New() shouldn't render agent KPI lines:\n%s", out)
+	}
+	full := NewWithAgentKPIs(30, 25, 95, AgentKPIInputs{
+		CacheHitRatioPct: 99, CacheHitRatioComputed: true,
+		ConfirmationGateRatePct: 5, ConfirmationGateComputed: true,
+		RegenerateRatePct: 2, RegenerateComputed: true,
+	}, "")
+	out = full.String()
+	for _, marker := range []string{"CHR — Cache Hit Ratio", "CGR — Confirmation Gate Rate", "RGR — Regenerate Rate"} {
+		if !strings.Contains(out, marker) {
+			t.Errorf("missing %q in:\n%s", marker, out)
+		}
+	}
+}
+
 func TestNewScorecard(t *testing.T) {
 	s := New(45, 18, 85, "")
 	if s.FirstValueTime.Grade != GradeA {
