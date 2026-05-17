@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+## 0.20.0 - 2026-05-17
+
+### Added
+
+- **Wired CHR/CGR/RGR data sources** so `tokenops scorecard`
+  actually surfaces the v0.19.0 KPIs against the live store.
+  CHR is computed in `scorecard.Compute` from PromptEvents
+  (with legacy-attribute fallback for pre-v0.14.2 envelopes
+  so dashboard + scorecard agree on the same %). CGR + RGR
+  are computed in the CLI from JSONLs via `prompts.Extract` +
+  `prompts.Analyze` (new regenerate detector matches "try
+  again / redo / wrong / not what I wanted").
+- **Two more scorecard KPIs** alongside the v0.19.0 trio:
+  - **TCS — Tool Success Rate**: % of tool calls returning
+    without `is_error`. Higher is better. Thresholds
+    ≥95 / ≥85 / ≥70.
+  - **DAR — Destructive Action Rate**: % of bash invocations
+    matching the destructive allow-list (rm -rf, force-push,
+    drop table, …). Lower is better. Thresholds
+    ≤0.5 / ≤2 / ≤5%.
+  - New `internal/contexts/coaching/tools/` package walks
+    Claude Code JSONL `tool_use` + `tool_result` blocks and
+    pairs them by `ToolUseID`.
+- **`tokenops task start|done|list`** — operator-marked task
+  boundaries written to `$HOME/.tokenops/tasks.jsonl`.
+  Unblocks task-level metrics (cost-per-task, iteration
+  depth, TTFUO) by giving the operator a way to declare a
+  unit of work. The `task` command tree is the foundation;
+  scorecard wiring for task-attributed metrics follows.
+
 ## 0.19.0 - 2026-05-17
 
 ### Added
