@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -85,6 +86,12 @@ values and --compare to diff against a stored baseline.`,
 // Returns a zero-valued struct (no *Computed flags set) when the
 // extractor can't find any prompts — Build then falls through to
 // the in-store CHR computation only.
+//
+// CGR autonomous-loop filter: `continue`, `proceed`, `keep going`
+// appearing >5x in the same session are autonomous-loop sentinels
+// (the /loop dynamic-mode pacing) rather than real human acks.
+// Counting them in CGR penalizes the operator's autonomous
+// workflows. Strip them before computing the rate.
 func computeAgentKPIs(sinceDays int) scorecard.AgentKPIInputs {
 	if sinceDays <= 0 {
 		sinceDays = 7
@@ -94,7 +101,8 @@ func computeAgentKPIs(sinceDays int) scorecard.AgentKPIInputs {
 	if err != nil || len(extracted) == 0 {
 		return scorecard.AgentKPIInputs{}
 	}
-	f := prompts.Analyze(extracted)
+	filtered := filterAutonomousLoopSentinels(extracted)
+	f := prompts.Analyze(filtered)
 	if f.TotalPrompts == 0 {
 		return scorecard.AgentKPIInputs{}
 	}
@@ -116,4 +124,42 @@ func computeAgentKPIs(sinceDays int) scorecard.AgentKPIInputs {
 		}
 	}
 	return out
+}
+
+// filterAutonomousLoopSentinels drops `continue` / `proceed` /
+// `keep going` prompts that repeat >5x in a single session. Those
+// are /loop dynamic-mode pacing sentinels (the harness wakes the
+// agent), not real human acks. Counting them in CGR penalizes the
+// operator's autonomous workflows. The 5-times threshold is the
+// gap between "I clicked continue twice" (real human steering) and
+// "the autonomous loop fired 50+ times" (synthetic).
+func filterAutonomousLoopSentinels(in []prompts.UserPrompt) []prompts.UserPrompt {
+	type key struct {
+		session, text string
+	}
+	counts := map[key]int{}
+	sentinel := map[string]bool{
+		"continue": true, "proceed": true, "keep going": true,
+	}
+	for _, p := range in {
+		lc := normalizeLoopSentinel(p.Text)
+		if sentinel[lc] {
+			counts[key{p.SessionID, lc}]++
+		}
+	}
+	out := in[:0]
+	for _, p := range in {
+		lc := normalizeLoopSentinel(p.Text)
+		if sentinel[lc] && counts[key{p.SessionID, lc}] > 5 {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+func normalizeLoopSentinel(s string) string {
+	s = strings.ToLower(s)
+	s = strings.TrimSpace(s)
+	return s
 }

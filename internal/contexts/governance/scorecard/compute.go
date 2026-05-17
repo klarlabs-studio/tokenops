@@ -135,12 +135,22 @@ type parseError string
 func (e parseError) Error() string { return string(e) }
 
 // defaultExcludedSources mirrors analytics.DefaultExcludedSources +
-// plans.DefaultExcludedSources, plus mcp-session pings. Scorecard
-// KPIs (FVT, TEU, SAC) measure real LLM traffic; MCP-session pings
-// are an activity proxy — counting them in the denominators produces
-// misleading grades. Keep the list duplicated here to avoid a
-// domain->infrastructure dependency (scorecard is a context package).
-var defaultExcludedSources = []string{"demo", "mcp-session"}
+// plans.DefaultExcludedSources, plus sources that don't carry
+// per-session attribution by design (admin-API rollups, deprecated
+// cache reader). Scorecard KPIs (FVT, TEU, SAC) measure real
+// per-session LLM traffic; counting attribution-less aggregate
+// rollups in the denominator produces misleading grades. Keep the
+// list duplicated here to avoid a domain->infrastructure dependency
+// (scorecard is a context package).
+var defaultExcludedSources = []string{
+	"demo",
+	"mcp-session",
+	// Anthropic Admin API returns per-(bucket, model, api_key)
+	// rollups; no session_id by design. Excluding from SAC denominator.
+	"vendor-usage-anthropic",
+	// Stats cache deprecated; the live JSONL reader supersedes.
+	"claude-code-stats-cache",
+}
 
 func filterExcludedSources(envs []*eventschema.Envelope) []*eventschema.Envelope {
 	if len(envs) == 0 {
@@ -203,6 +213,13 @@ func computeFVT(out *LiveKPIs, prompts []*eventschema.Envelope) {
 }
 
 func computeTEU(out *LiveKPIs, prompts []*eventschema.Envelope, opts []*eventschema.Envelope) {
+	// TEU only computes when the optimizer actually ran. Without
+	// optimizer events the metric is N/A (not zero); leaving
+	// TEUComputed=false makes service.Build fall through to the
+	// default 15% rather than reporting a misleading 0% F.
+	if len(opts) == 0 {
+		return
+	}
 	var input, saved int64
 	for _, env := range prompts {
 		if pe, ok := env.Payload.(*eventschema.PromptEvent); ok {

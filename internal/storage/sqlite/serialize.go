@@ -118,6 +118,23 @@ func rowToEnvelope(r row) (*eventschema.Envelope, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode payload: %w", err)
 	}
+	// Column-side attribution (workflow_id / agent_id / session_id)
+	// is authoritative for queries, but legacy payload JSON may have
+	// been written before backfill. Sync the payload from the column
+	// when the column is populated and the payload field is empty —
+	// keeps in-process consumers (scorecard, coach) agreeing with
+	// SQL-side analytics on the same attribution coverage.
+	if pe, ok := payload.(*eventschema.PromptEvent); ok {
+		if pe.SessionID == "" && r.SessionID.Valid {
+			pe.SessionID = r.SessionID.String
+		}
+		if pe.WorkflowID == "" && r.WorkflowID.Valid {
+			pe.WorkflowID = r.WorkflowID.String
+		}
+		if pe.AgentID == "" && r.AgentID.Valid {
+			pe.AgentID = r.AgentID.String
+		}
+	}
 	env := &eventschema.Envelope{
 		ID:            r.ID,
 		SchemaVersion: r.SchemaVersion,
