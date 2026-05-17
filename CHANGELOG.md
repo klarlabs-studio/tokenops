@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## 0.21.1 - 2026-05-17
+
+### Fixed
+
+- Three F-grade scorecard artifacts that didn't reflect operator
+  behaviour:
+  - **TEU**: zero optimisation events now means "N/A" (default
+    15% applied), not 0% F. The optimiser only runs on
+    proxy-routed traffic; JSONL-only mode shouldn't trip an F.
+  - **SAC**: `rowToEnvelope` now syncs `PromptEvent.SessionID`/
+    `WorkflowID`/`AgentID` from the indexed columns when the
+    payload JSON field is empty, so column-side backfills
+    (e.g. `claude-code-jsonl` v0.14.3) propagate to the
+    scorecard reader. `defaultExcludedSources` also excludes
+    `vendor-usage-anthropic` and `claude-code-stats-cache`
+    from the denominator — those sources don't carry per-session
+    attribution by design.
+  - **CGR**: `filterAutonomousLoopSentinels` drops `continue` /
+    `proceed` / `keep going` prompts when they repeat >5x in the
+    same session (`/loop` dynamic-mode pacing, not human acks).
+- Overall grade improves from F → B on real 30-day data.
+
 ## 0.21.0 - 2026-05-17
 
 ### Added
