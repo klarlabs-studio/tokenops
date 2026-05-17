@@ -179,12 +179,20 @@ agents to consume.`,
 				return fmt.Errorf("extract: %w", err)
 			}
 			findings := prompts.Analyze(extracted)
+			stats, statsErr := prompts.ComputeTurnStats(opts)
+			if statsErr != nil {
+				// Stats are a render enrichment — log + continue.
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: turn-stats unavailable: %v\n", statsErr)
+			}
 			if jsonOut {
 				enc := json.NewEncoder(cmd.OutOrStdout())
 				enc.SetIndent("", "  ")
-				return enc.Encode(findings)
+				return enc.Encode(map[string]any{
+					"findings":   findings,
+					"turn_stats": stats,
+				})
 			}
-			renderCoachPrompts(cmd, findings, opts.Since)
+			renderCoachPrompts(cmd, findings, stats, opts.Since)
 			return nil
 		},
 	}
@@ -196,7 +204,7 @@ agents to consume.`,
 	return cmd
 }
 
-func renderCoachPrompts(cmd *cobra.Command, f prompts.Findings, since time.Time) {
+func renderCoachPrompts(cmd *cobra.Command, f prompts.Findings, stats prompts.TurnStats, since time.Time) {
 	out := cmd.OutOrStdout()
 	header := "Prompting coach"
 	if !since.IsZero() {
@@ -205,6 +213,11 @@ func renderCoachPrompts(cmd *cobra.Command, f prompts.Findings, since time.Time)
 	fmt.Fprintln(out, header)
 	fmt.Fprintf(out, "  total prompts: %d  |  avg %.0f chars / %.0f words  |  min %d, max %d chars\n",
 		f.TotalPrompts, f.AvgChars, f.AvgWords, f.MinChars, f.MaxChars)
+	if stats.TotalTurns > 0 {
+		fmt.Fprintf(out, "  avg assistant turn: %.0f input tokens (%.0f cached) + %.0f output  |  $%.4f  |  %.0fs of your attention\n",
+			stats.AvgInputTokens, stats.AvgCachedTokens, stats.AvgOutputTokens,
+			stats.AvgCostUSD, stats.AvgSeconds)
+	}
 	if f.TotalPrompts == 0 {
 		fmt.Fprintln(out, "  (no human prompts in the scan window)")
 		return
@@ -246,13 +259,15 @@ func renderCoachPrompts(cmd *cobra.Command, f prompts.Findings, since time.Time)
 		}
 	}
 	fmt.Fprintln(out)
-	renderRecommendations(out, f.Recommendations)
+	renderRecommendations(out, f.Recommendations, stats)
 }
 
 // renderRecommendations leads with a BIGGEST WIN panel for the top
 // rec (sorted by ImpactScore in the analyzer) and renders the rest
-// as a numbered list with evidence + before/after templates.
-func renderRecommendations(out fmtWriter, recs []prompts.Recommendation) {
+// as a numbered list with evidence + before/after templates +
+// tangible savings (tokens / dollars / hours) derived from the
+// operator's own turn averages.
+func renderRecommendations(out fmtWriter, recs []prompts.Recommendation, stats prompts.TurnStats) {
 	if len(recs) == 0 {
 		return
 	}
@@ -268,8 +283,8 @@ func renderRecommendations(out fmtWriter, recs []prompts.Recommendation) {
 		fmt.Fprintf(out, "  %s\n", first.Why)
 	}
 	if first.Frequency > 0 {
-		fmt.Fprintf(out, "  Seen %dx; estimated %d turns/month saved if fixed.\n",
-			first.Frequency, first.EstimatedMonthlyTurnsSaved)
+		fmt.Fprintf(out, "  Seen %dx; estimated %d turns/month saved if fixed%s\n",
+			first.Frequency, first.EstimatedMonthlyTurnsSaved, savingsSuffix(first, stats))
 	}
 	if first.Before != "" && first.After != "" {
 		fmt.Fprintf(out, "  Before: %q\n", first.Before)
@@ -287,13 +302,40 @@ func renderRecommendations(out fmtWriter, recs []prompts.Recommendation) {
 		for i, r := range recs[1:] {
 			fmt.Fprintf(out, "  %d. %s\n", i+1, r.Title)
 			if r.Frequency > 0 {
-				fmt.Fprintf(out, "     %dx, ~%d turns/month\n", r.Frequency, r.EstimatedMonthlyTurnsSaved)
+				fmt.Fprintf(out, "     %dx, ~%d turns/month%s\n",
+					r.Frequency, r.EstimatedMonthlyTurnsSaved, savingsSuffix(r, stats))
 			}
 			if r.Before != "" && r.After != "" {
 				fmt.Fprintf(out, "     %q  →  %q\n", r.Before, r.After)
 			}
 		}
 	}
+}
+
+// savingsSuffix projects per-month turn savings into tangible
+// units (tokens / dollars / hours) using the operator's own
+// per-turn averages from TurnStats. Returns the empty string when
+// stats are unavailable so the renderer doesn't append " (0 tokens
+// / $0 / 0h)" garbage.
+func savingsSuffix(r prompts.Recommendation, stats prompts.TurnStats) string {
+	if stats.TotalTurns == 0 || r.EstimatedMonthlyTurnsSaved == 0 {
+		return "."
+	}
+	s := prompts.ProjectSavings(r, stats)
+	return fmt.Sprintf(" — ≈ %s tokens, $%.2f, %.1fh of your time.",
+		compactInt(s.Tokens), s.CostUSD, s.HoursSaved)
+}
+
+func compactInt(n int64) string {
+	switch {
+	case n >= 1_000_000_000:
+		return fmt.Sprintf("%.2fB", float64(n)/1e9)
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.2fM", float64(n)/1e6)
+	case n >= 1_000:
+		return fmt.Sprintf("%.1fk", float64(n)/1e3)
+	}
+	return fmt.Sprintf("%d", n)
 }
 
 func truncateForRec(s string, n int) string {
