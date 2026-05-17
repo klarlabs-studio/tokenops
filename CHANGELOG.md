@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+## 0.19.0 - 2026-05-17
+
+### Added
+
+- **Tangible turn-savings on the coach** (`tokenops coach prompts`):
+  new `prompts.TurnStats` and `prompts.ComputeTurnStats` walk the
+  same JSONL tree the extractor uses, sum assistant-turn input/
+  output/cache tokens, and price them at cache-aware rates. The
+  CLI renderer projects each `Recommendation`'s monthly turn
+  savings into tokens / dollars / hours of attention. Header line
+  shows the operator's per-turn rollup so they can verify the
+  assumption.
+- **Three new scorecard KPIs** alongside FVT/TEU/SAC:
+  - **CHR — Cache Hit Ratio**: % of input tokens that are cache
+    reads. Higher is better. Thresholds ≥90 / ≥70 / ≥50.
+  - **CGR — Confirmation Gate Rate**: % of user prompts that are
+    pure acks. Lower is better. Thresholds ≤10 / ≤20 / ≤30.
+  - **RGR — Regenerate Rate**: % of user prompts rejecting prior
+    agent output. Lower is better. Thresholds ≤5 / ≤10 / ≤20.
+  - New `AgentKPIInputs` struct + `NewWithAgentKPIs` constructor;
+    legacy `New(...)` stays backward-compat. `MarshalJSON` omits
+    agent KPI blocks whose Grade is empty so consumers don't see
+    a phantom F for a metric that was never computed.
+
+### Changed
+
+- `Findings.Recommendations` (v0.18) gains tangible savings via
+  the renderer; the structured Recommendation shape is unchanged.
+- Scorecard JSON output gains optional `cache_hit_ratio`,
+  `confirmation_gate_rate`, `regenerate_rate` fields. Agent KPI
+  blocks render in `String()` only when their Grade is set.
+
 ## 0.18.0 - 2026-05-17
 
 ### Added
