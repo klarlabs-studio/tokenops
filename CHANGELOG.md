@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 0.21.0 - 2026-05-17
+
+### Added
+
+- **`tokenops task list --metrics`** enriches every task with
+  the events-store rollup over its `[StartedAt, CompletedAt]`
+  window:
+  - Turns (count of prompt events)
+  - InputTokens / OutputTokens
+  - CostUSD (cache-aware)
+  - TTFUOSeconds (time from task start to first assistant turn)
+  - Duration (wall-clock span)
+  - CostPerTurn
+  JSON output ships `{"tasks": [...], "metrics": {id → Metrics}}`
+  for MCP-host UIs. The task boundary primitive from v0.20.0
+  now produces task-attributed metrics agents and operators
+  can act on (cost-per-task, iteration depth, TTFUO).
+
 ## 0.20.0 - 2026-05-17
 
 ### Added
