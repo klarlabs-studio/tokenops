@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+## 0.18.0 - 2026-05-17
+
+### Added
+
+- `tokenops coach prompts` now emits ranked structured
+  `Recommendation`s grounded in the operator's own data.
+  Each rec includes: `id`, `title`, `why` (data-grounded
+  explanation), `evidence` (2-3 sample prompts pulled from
+  the operator's JSONLs), `frequency`, `impact_score`,
+  `estimated_monthly_turns_saved`, and `before`/`after`
+  rewrite templates. Five rules ship: `scope_vague_directives`
+  ("fix all" / "do it" / "merge it"),
+  `reduce_confirmation_loops` (acks > 15%),
+  `stop_repeating` (prompt issued 3+ times),
+  `cite_file_paths` (≥30% short prompts without a file
+  reference, min 20 prompts), `front_load_context`
+  (fallback when nothing else fires).
+- CLI now leads with a `BIGGEST WIN` panel — the
+  highest-impact recommendation with evidence quotes and a
+  before/after example — followed by an `ALSO WORTH FIXING`
+  numbered list. JSON output (`--json`, MCP tool result)
+  ships the structured slice for agent hosts to render
+  their own UI.
+
+### Changed
+
+- `Findings.Recommendations` schema changed from `[]string`
+  to `[]Recommendation`. The MCP tool result reflects the new
+  shape — agent hosts parsing the JSON should expect the new
+  fields.
+
 ## 0.17.1 - 2026-05-16
 
 ### Fixed
