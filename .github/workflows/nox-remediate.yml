@@ -10,9 +10,9 @@ name: Nox remediate
 # workflow_dispatch input when you want to pull them in too.
 on:
   schedule:
-    # 04:00 UTC daily — earlier than the security scan (06:00) so any
-    # remediation PR is already open by the time the gate runs.
-    - cron: "0 4 * * *"
+    # Weekly Mon 04:00 UTC — earlier than the security scan (06:00).
+    # Daily cron retired; workflow_dispatch available for ad-hoc runs.
+    - cron: "0 4 * * 1"
   workflow_dispatch:
     inputs:
       include_major:

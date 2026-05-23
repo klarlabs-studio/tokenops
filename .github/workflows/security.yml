@@ -12,8 +12,8 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    # Daily at 06:00 UTC so newly disclosed CVEs surface within ~24h.
-    - cron: "0 6 * * *"
+    # Weekly Mon 06:00 UTC. Daily cron retired — burns Actions minutes; PRs+pushes already trigger scans.
+    - cron: "0 6 * * 1"
 
 permissions:
   contents: read
@@ -60,7 +60,7 @@ jobs:
         with:
           name: nox-findings
           path: findings.json
-          retention-days: 30
+          retention-days: 7
 
       - name: Summarise
         if: always()
