@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	mcpgo "github.com/felixgeelhaar/mcp-go"
-	"github.com/felixgeelhaar/mcp-go/protocol"
+	mcpgo "go.klarlabs.de/mcp"
+	"go.klarlabs.de/mcp/protocol"
 
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/session"
 	"github.com/felixgeelhaar/tokenops/pkg/eventschema"

@@ -10,7 +10,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/felixgeelhaar/bolt"
+	"go.klarlabs.de/bolt"
 )
 
 // NewLogger returns a slog.Logger configured for the given level and format.

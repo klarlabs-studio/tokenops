@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/felixgeelhaar/fortify/circuitbreaker"
-	fortifyhttp "github.com/felixgeelhaar/fortify/http"
-	"github.com/felixgeelhaar/fortify/streamtimeout"
+	"go.klarlabs.de/fortify/circuitbreaker"
+	fortifyhttp "go.klarlabs.de/fortify/http"
+	"go.klarlabs.de/fortify/streamtimeout"
 )
 
 // ResilienceConfig wraps each provider proxy route with a fortify

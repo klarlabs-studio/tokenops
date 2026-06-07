@@ -1,6 +1,6 @@
 // Package mcp hosts the TokenOps Model Context Protocol surface. It
 // registers the TokenOps tool set (spend, forecast, rules, parity,
-// control) on top of github.com/felixgeelhaar/mcp-go, which owns the
+// control) on top of go.klarlabs.de/mcp, which owns the
 // JSON-RPC framing, schema generation, stdio/HTTP transports and
 // middleware. This package is a thin adapter — tool input structs and
 // handler bodies are defined here, the protocol layer is upstream.
@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	mcpgo "github.com/felixgeelhaar/mcp-go"
+	mcpgo "go.klarlabs.de/mcp"
 
 	"github.com/felixgeelhaar/tokenops/internal/version"
 )

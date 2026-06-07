@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/felixgeelhaar/mcp-go/protocol"
+	"go.klarlabs.de/mcp/protocol"
 
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/session"
 	"github.com/felixgeelhaar/tokenops/pkg/eventschema"

@@ -25,7 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/felixgeelhaar/fortify/circuitbreaker"
+	"go.klarlabs.de/fortify/circuitbreaker"
 
 	"github.com/felixgeelhaar/tokenops/internal/contexts/security/redaction"
 	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
