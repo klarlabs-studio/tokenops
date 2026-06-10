@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/felixgeelhaar/tokenops/internal/bootstrap"
+	"github.com/felixgeelhaar/tokenops/internal/config"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/session"
 	"github.com/felixgeelhaar/tokenops/internal/events"
 	"github.com/felixgeelhaar/tokenops/internal/mcp"
@@ -67,10 +68,28 @@ Wire into any MCP client (Claude Desktop, Cursor, opencode, etc.):
 
 func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	logger := slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: slog.LevelInfo}))
+	cfg, cfgErr := loadConfig(&rootFlags{})
+	if cfgErr != nil {
+		logger.Warn("serve: could not load config snapshot", "err", cfgErr)
+		cfg = config.Default()
+	}
+	// Env vars stay authoritative for serve (documented contract);
+	// config file fills the gaps. loadConfig already applies
+	// TOKENOPS_STORAGE_PATH / TOKENOPS_PRICING_PATH on top of the file,
+	// so the fallbacks below only matter when the config failed to load.
+	dbPath := cfg.Storage.Path
+	if dbPath == "" {
+		dbPath = os.Getenv("TOKENOPS_STORAGE_PATH")
+	}
+	pricingPath := cfg.Pricing.Path
+	if pricingPath == "" {
+		pricingPath = os.Getenv("TOKENOPS_PRICING_PATH")
+	}
 	components, err := bootstrap.New(ctx, bootstrap.Options{
-		DBPath:    os.Getenv("TOKENOPS_STORAGE_PATH"),
-		Logger:    logger,
-		OpenStore: true,
+		DBPath:      dbPath,
+		Logger:      logger,
+		OpenStore:   true,
+		PricingPath: pricingPath,
 	})
 	if err != nil {
 		return err
@@ -82,18 +101,19 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 		Store:      components.Store,
 		Aggregator: components.Aggregator,
 		Spend:      components.Spend,
+		Waste:      cfg.Coaching.WasteConfig(),
 	}); err != nil {
 		return fmt.Errorf("register tools: %w", err)
 	}
 	if err := mcp.RegisterRulesTools(srv); err != nil {
 		return fmt.Errorf("register rules tools: %w", err)
 	}
-	if err := mcp.RegisterParityTools(srv, mcp.ParityDeps{Store: components.Store, Spend: components.Spend}); err != nil {
+	if err := mcp.RegisterParityTools(srv, mcp.ParityDeps{
+		Store:    components.Store,
+		Spend:    components.Spend,
+		Pipeline: buildReplayPipeline(cfg, components.Spend),
+	}); err != nil {
 		return fmt.Errorf("register parity tools: %w", err)
-	}
-	cfg, cfgErr := loadConfig(&rootFlags{})
-	if cfgErr != nil {
-		logger.Warn("serve: could not load config snapshot", "err", cfgErr)
 	}
 	configPath, _ := defaultConfigPath()
 	var watcher *configWatcher

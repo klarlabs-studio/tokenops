@@ -97,7 +97,11 @@ spend within the selected window. It surfaces:
 				f.ExcludeSources = []string{}
 			}
 
-			spendEng := spend.NewEngine(spend.DefaultTable())
+			table, err := spend.TableWithOverrides(cfg.Pricing.Path)
+			if err != nil {
+				return err
+			}
+			spendEng := spend.NewEngine(table)
 			agg := analytics.New(store, spendEng)
 			summary, err := agg.Summarize(ctx, f)
 			if err != nil {
@@ -291,6 +295,14 @@ func writeSpendText(w io.Writer, v spendView) error {
 		}
 	}
 	fmt.Fprintln(w)
+
+	if len(v.Summary.Unpriced) > 0 {
+		fmt.Fprintf(w, "\n⚠ no pricing for %d model(s) — total spend is underestimated:\n", len(v.Summary.Unpriced))
+		for _, u := range v.Summary.Unpriced {
+			fmt.Fprintf(w, "    %s/%s (%d requests)\n", u.Provider, u.Model, u.Requests)
+		}
+		fmt.Fprintln(w, "  update tokenops or add a rate for these models to the pricing table")
+	}
 
 	if len(v.GroupRows) > 0 {
 		fmt.Fprintf(w, "\nTop consumers by %s:\n", v.GroupBy)

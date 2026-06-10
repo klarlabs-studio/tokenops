@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
+	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
 )
 
 // TurnStats are aggregate per-turn averages computed from assistant
@@ -18,10 +21,10 @@ import (
 // not just an abstract "turns saved" count.
 //
 // Pricing assumptions are intentionally conservative defaults
-// (claude-opus-4-7 list rates: $15/M input, $1.50/M cache, $75/M
-// output) — the analyzer is provider-agnostic, so the CLI passes
-// rates per invocation if it wants finer accuracy. For
-// operator-level estimates the defaults are close enough.
+// (claude-opus-4-7 list rates from the shared spend catalog) — the
+// analyzer is provider-agnostic, so the CLI passes rates per
+// invocation if it wants finer accuracy. For operator-level
+// estimates the defaults are close enough.
 type TurnStats struct {
 	TotalTurns        int     `json:"total_turns"`
 	AvgInputTokens    float64 `json:"avg_input_tokens"`
@@ -32,27 +35,61 @@ type TurnStats struct {
 	WindowDescription string  `json:"window_description,omitempty"`
 }
 
-// claudeOpusInputPerMillion, etc., are the public-list-price
-// constants for the model TokenOps most often sees in JSONLs
-// (claude-opus-4-7). Operators with a different mix can pass
-// custom rates via TurnStatsOptions in the future; the constants
-// are exported through Default() so tests can pin behavior.
-const (
-	claudeOpusInputPerMillion  = 15.00
-	claudeOpusCachedPerMillion = 1.50
-	claudeOpusOutputPerMillion = 75.00
-	// AssumedSecondsPerTurn is the human-attention cost we assign
-	// to each wasted turn. 45s is a compromise between fast acks
-	// (~5s) and re-issued directives that involve context re-load
-	// (~120s).
-	AssumedSecondsPerTurn = 45.0
-)
+// AssumedSecondsPerTurn is the human-attention cost we assign
+// to each wasted turn. 45s is a compromise between fast acks
+// (~5s) and re-issued directives that involve context re-load
+// (~120s).
+const AssumedSecondsPerTurn = 45.0
+
+// pricingTable is the shared spend catalog turn costs are priced from.
+var pricingTable = spend.DefaultTable()
+
+// defaultTurnRate prices turns whose JSONL lines carry no model field
+// (older Claude Code formats, Codex variants). claude-opus-4-7 is the
+// model TokenOps most often sees in such files; resolved from the
+// shared catalog so price updates land here automatically instead of
+// drifting in duplicated constants.
+var defaultTurnRate = func() spend.Rate {
+	r, err := pricingTable.Lookup(eventschema.ProviderAnthropic, "claude-opus-4-7")
+	if err != nil {
+		// The catalog ships with the binary; a missing row is a build
+		// defect surfaced by the spend package's catalog tests.
+		panic(err)
+	}
+	return r
+}()
+
+// turnRateProviders is the lookup order for rateForModel. Model IDs are
+// distinct across vendors, so first match wins.
+var turnRateProviders = []eventschema.Provider{
+	eventschema.ProviderAnthropic,
+	eventschema.ProviderOpenAI,
+	eventschema.ProviderGemini,
+	eventschema.ProviderMistral,
+}
+
+// rateForModel resolves the catalog rate for the model observed on a
+// JSONL turn. Unknown or missing models fall back to defaultTurnRate so
+// savings projections stay populated rather than silently zeroing.
+func rateForModel(model string) spend.Rate {
+	if model == "" {
+		return defaultTurnRate
+	}
+	for _, p := range turnRateProviders {
+		if r, err := pricingTable.Lookup(p, model); err == nil {
+			return r
+		}
+	}
+	return defaultTurnRate
+}
 
 // turnLine is the minimum JSONL shape ComputeTurnStats reads. Only
-// assistant turns with a non-zero usage block contribute.
+// assistant turns with a non-zero usage block contribute. Model, when
+// present, prices the turn at that model's catalog rate.
 type turnLine struct {
 	Type    string `json:"type"`
 	Message struct {
+		Model string `json:"model"`
 		Usage struct {
 			InputTokens              int64 `json:"input_tokens"`
 			OutputTokens             int64 `json:"output_tokens"`
@@ -113,6 +150,13 @@ func computeTurnStatsAuto(opts ExtractOptions) (TurnStats, error) {
 func computeTurnStatsRoot(root string, opts ExtractOptions) (TurnStats, error) {
 	var s TurnStats
 	var totalIn, totalCached, totalOut int64
+	// Per-model accumulators so each turn is priced at the rate of the
+	// model that actually served it (mixed Opus/Sonnet/GPT sessions were
+	// previously all priced as claude-opus-4-7).
+	type modelTotals struct {
+		in, cached, out int64
+	}
+	perModel := map[string]*modelTotals{}
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			if errors.Is(err, fs.ErrPermission) || errors.Is(err, fs.ErrNotExist) {
@@ -159,6 +203,14 @@ func computeTurnStatsRoot(root string, opts ExtractOptions) (TurnStats, error) {
 			totalIn += u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens
 			totalCached += u.CacheReadInputTokens
 			totalOut += u.OutputTokens
+			mt, ok := perModel[t.Message.Model]
+			if !ok {
+				mt = &modelTotals{}
+				perModel[t.Message.Model] = mt
+			}
+			mt.in += u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens
+			mt.cached += u.CacheReadInputTokens
+			mt.out += u.OutputTokens
 		}
 		return nil
 	})
@@ -171,13 +223,19 @@ func computeTurnStatsRoot(root string, opts ExtractOptions) (TurnStats, error) {
 	s.AvgInputTokens = float64(totalIn) / float64(s.TotalTurns)
 	s.AvgCachedTokens = float64(totalCached) / float64(s.TotalTurns)
 	s.AvgOutputTokens = float64(totalOut) / float64(s.TotalTurns)
-	uncached := s.AvgInputTokens - s.AvgCachedTokens
-	if uncached < 0 {
-		uncached = 0
+	var totalCost float64
+	for model, mt := range perModel {
+		rate := rateForModel(model)
+		uncached := max(mt.in-mt.cached, 0)
+		cachedRate := rate.CachedInputPerMillion
+		if cachedRate == 0 {
+			cachedRate = rate.InputPerMillion
+		}
+		totalCost += float64(uncached)*rate.InputPerMillion/1e6 +
+			float64(mt.cached)*cachedRate/1e6 +
+			float64(mt.out)*rate.OutputPerMillion/1e6
 	}
-	s.AvgCostUSD = uncached*claudeOpusInputPerMillion/1e6 +
-		s.AvgCachedTokens*claudeOpusCachedPerMillion/1e6 +
-		s.AvgOutputTokens*claudeOpusOutputPerMillion/1e6
+	s.AvgCostUSD = totalCost / float64(s.TotalTurns)
 	s.AvgSeconds = AssumedSecondsPerTurn
 	return finalizeStats(s, opts), nil
 }

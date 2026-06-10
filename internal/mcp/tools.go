@@ -23,6 +23,9 @@ type Deps struct {
 	Store      *sqlite.Store
 	Aggregator *analytics.Aggregator
 	Spend      *spend.Engine
+	// Waste configures the workflow waste detector (operator context
+	// limits from coaching.context_limits). Zero value uses defaults.
+	Waste waste.Config
 }
 
 // --- input structs --------------------------------------------------------
@@ -160,6 +163,20 @@ func spendSummary(ctx context.Context, d Deps, in spendSummaryInput) (string, er
 		"total_tokens":  summary.TotalTokens,
 		"cost_usd":      summary.CostUSD,
 		"currency":      d.Spend.Currency(),
+	}
+	if len(summary.Unpriced) > 0 {
+		models := make([]map[string]any, 0, len(summary.Unpriced))
+		for _, u := range summary.Unpriced {
+			models = append(models, map[string]any{
+				"provider": u.Provider,
+				"model":    u.Model,
+				"requests": u.Requests,
+			})
+		}
+		payload["pricing_warning"] = map[string]any{
+			"message":         "no rate in the pricing table for these models; cost_usd is underestimated",
+			"unpriced_models": models,
+		}
 	}
 	if !in.IncludeDemo {
 		warn, werr := maybeDataWarning(ctx, d.Store, filter.Since, filter.Until)
@@ -305,7 +322,7 @@ func workflowTrace(ctx context.Context, d Deps, in workflowTraceInput) (string, 
 	if err != nil {
 		return "", err
 	}
-	coachings := waste.New(waste.Config{}).Detect(trace)
+	coachings := waste.New(d.Waste).Detect(trace)
 	return jsonString(map[string]any{
 		"trace":    trace,
 		"findings": coachings,

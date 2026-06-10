@@ -125,6 +125,18 @@ type Summary struct {
 	OutputTokens int64
 	TotalTokens  int64
 	CostUSD      float64
+	// Unpriced lists (provider, model) pairs in the window whose events
+	// carry no stored cost and have no rate in the pricing table, so
+	// their cost is silently absent from CostUSD. Surfaces (e.g. a newly
+	// released model) should render this as a warning.
+	Unpriced []UnpricedModel `json:",omitempty"`
+}
+
+// UnpricedModel identifies a model whose usage could not be costed.
+type UnpricedModel struct {
+	Provider string
+	Model    string
+	Requests int64
 }
 
 // Aggregator answers rollup queries against a sqlite.Store. spend.Engine
@@ -314,11 +326,12 @@ func (a *Aggregator) Summarize(ctx context.Context, f Filter) (Summary, error) {
 		return Summary{}, fmt.Errorf("analytics: summarize: %w", err)
 	}
 	if a.spend != nil {
-		recomputed, err := a.summarizeMissingCost(ctx, f)
+		recomputed, unpriced, err := a.summarizeMissingCost(ctx, f)
 		if err != nil {
 			return Summary{}, err
 		}
 		s.CostUSD += recomputed
+		s.Unpriced = unpriced
 	}
 	return s, nil
 }
@@ -376,28 +389,35 @@ func (a *Aggregator) CacheStats(ctx context.Context, f Filter) (CacheStatsResult
 // tokens are summed from payload JSON (the schema column carries only
 // the bundled input_tokens) so cache-heavy workloads get the lower
 // cache rate instead of being billed at the new-input rate.
-func (a *Aggregator) summarizeMissingCost(ctx context.Context, f Filter) (float64, error) {
+//
+// Models the pricing table doesn't know are returned as UnpricedModel
+// entries instead of being silently dropped — their cost stays absent
+// from the total, and callers surface that gap as a warning.
+func (a *Aggregator) summarizeMissingCost(ctx context.Context, f Filter) (float64, []UnpricedModel, error) {
 	conds, args := buildConditions(f)
 	conds = append(conds, "(cost_usd IS NULL OR cost_usd = 0)")
-	q := `SELECT provider, model,
+	q := `SELECT provider, model, COUNT(*),
 			COALESCE(SUM(input_tokens), 0),
 			COALESCE(SUM(output_tokens), 0),
 			COALESCE(SUM(CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER)), 0)
 		FROM events WHERE ` + strings.Join(conds, " AND ") +
-		` GROUP BY provider, model`
+		` GROUP BY provider, model ORDER BY provider, model`
 	rows, err := a.store.DB().QueryContext(ctx, q, args...)
 	if err != nil {
-		return 0, fmt.Errorf("analytics: summarize recompute query: %w", err)
+		return 0, nil, fmt.Errorf("analytics: summarize recompute query: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	var total float64
+	var (
+		total    float64
+		unpriced []UnpricedModel
+	)
 	for rows.Next() {
 		var (
-			provider, model        sql.NullString
-			inTok, outTok, cacheIn sql.NullInt64
+			provider, model                  sql.NullString
+			requests, inTok, outTok, cacheIn sql.NullInt64
 		)
-		if err := rows.Scan(&provider, &model, &inTok, &outTok, &cacheIn); err != nil {
-			return 0, fmt.Errorf("analytics: summarize recompute scan: %w", err)
+		if err := rows.Scan(&provider, &model, &requests, &inTok, &outTok, &cacheIn); err != nil {
+			return 0, nil, fmt.Errorf("analytics: summarize recompute scan: %w", err)
 		}
 		p := &eventschema.PromptEvent{
 			Provider:          eventschema.Provider(provider.String),
@@ -406,14 +426,22 @@ func (a *Aggregator) summarizeMissingCost(ctx context.Context, f Filter) (float6
 			CachedInputTokens: cacheIn.Int64,
 			OutputTokens:      outTok.Int64,
 		}
-		if c, err := a.spend.Compute(p); err == nil {
+		c, err := a.spend.Compute(p)
+		switch {
+		case err == nil:
 			total += c
+		case errors.Is(err, spend.ErrUnknownModel):
+			unpriced = append(unpriced, UnpricedModel{
+				Provider: provider.String,
+				Model:    model.String,
+				Requests: requests.Int64,
+			})
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return 0, fmt.Errorf("analytics: summarize recompute iterate: %w", err)
+		return 0, nil, fmt.Errorf("analytics: summarize recompute iterate: %w", err)
 	}
-	return total, nil
+	return total, unpriced, nil
 }
 
 func buildConditions(f Filter) ([]string, []any) {

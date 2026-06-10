@@ -26,14 +26,17 @@ type AnalyticsHandlers struct {
 	store      *sqlite.Store
 	aggregator *analytics.Aggregator
 	spend      *spend.Engine
+	waste      waste.Config
 }
 
-// NewAnalyticsHandlers builds the handlers. All deps are required.
-func NewAnalyticsHandlers(store *sqlite.Store, agg *analytics.Aggregator, spendEng *spend.Engine) (*AnalyticsHandlers, error) {
+// NewAnalyticsHandlers builds the handlers. Store, aggregator, and
+// spend engine are required; wasteCfg's zero value uses the detector
+// defaults.
+func NewAnalyticsHandlers(store *sqlite.Store, agg *analytics.Aggregator, spendEng *spend.Engine, wasteCfg waste.Config) (*AnalyticsHandlers, error) {
 	if store == nil || agg == nil || spendEng == nil {
 		return nil, errors.New("proxy: AnalyticsHandlers requires store + aggregator + spend engine")
 	}
-	return &AnalyticsHandlers{store: store, aggregator: agg, spend: spendEng}, nil
+	return &AnalyticsHandlers{store: store, aggregator: agg, spend: spendEng, waste: wasteCfg}, nil
 }
 
 // Register installs every endpoint on mux. Endpoints are read-only;
@@ -255,7 +258,7 @@ func (a *AnalyticsHandlers) workflowDetail(w http.ResponseWriter, r *http.Reques
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
-	findings := waste.New(waste.Config{}).Detect(trace)
+	findings := waste.New(a.waste).Detect(trace)
 	writeAPIJSON(w, http.StatusOK, map[string]any{
 		"trace":    trace,
 		"findings": findings,

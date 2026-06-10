@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/waste"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/observability/analytics"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
 	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
@@ -71,7 +72,7 @@ func startAnalyticsProxy(t *testing.T, store *sqlite.Store) string {
 	t.Helper()
 	spendEng := spend.NewEngine(spend.DefaultTable())
 	agg := analytics.New(store, spendEng)
-	handlers, err := NewAnalyticsHandlers(store, agg, spendEng)
+	handlers, err := NewAnalyticsHandlers(store, agg, spendEng, waste.Config{})
 	if err != nil {
 		t.Fatalf("NewAnalyticsHandlers: %v", err)
 	}

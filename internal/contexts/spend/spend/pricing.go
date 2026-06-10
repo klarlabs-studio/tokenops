@@ -12,6 +12,7 @@ package spend
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
@@ -109,85 +110,6 @@ func (t Table) Cheapest(provider eventschema.Provider) (string, Rate, error) {
 	return bestModel, bestRate, nil
 }
 
-// DefaultTable returns a fresh Table seeded with public list prices for
-// the most common models served by OpenAI, Anthropic, and Google Gemini.
-// Prices are USD per million tokens. The values are intentionally
-// conservative: callers running on negotiated rates should override via
-// MergeOverrides. Update by appending or replacing entries; callers must
-// not mutate the returned map directly because it owns process state.
-func DefaultTable() Table {
-	return Table{
-		Currency: "USD",
-		Rates: map[Key]Rate{
-			// OpenAI — published list prices.
-			{eventschema.ProviderOpenAI, "gpt-4o-mini*"}: {
-				InputPerMillion: 0.15, OutputPerMillion: 0.60, CachedInputPerMillion: 0.075,
-			},
-			{eventschema.ProviderOpenAI, "gpt-4o*"}: {
-				InputPerMillion: 2.50, OutputPerMillion: 10.00, CachedInputPerMillion: 1.25,
-			},
-			{eventschema.ProviderOpenAI, "gpt-4-turbo*"}: {
-				InputPerMillion: 10.00, OutputPerMillion: 30.00,
-			},
-			{eventschema.ProviderOpenAI, "gpt-3.5-turbo*"}: {
-				InputPerMillion: 0.50, OutputPerMillion: 1.50,
-			},
-			{eventschema.ProviderOpenAI, "o1*"}: {
-				InputPerMillion: 15.00, OutputPerMillion: 60.00,
-			},
-
-			// Anthropic — published list prices.
-			{eventschema.ProviderAnthropic, "claude-opus-4-7*"}: {
-				InputPerMillion: 15.00, OutputPerMillion: 75.00, CachedInputPerMillion: 1.50,
-			},
-			{eventschema.ProviderAnthropic, "claude-sonnet-4-6*"}: {
-				InputPerMillion: 3.00, OutputPerMillion: 15.00, CachedInputPerMillion: 0.30,
-			},
-			{eventschema.ProviderAnthropic, "claude-haiku-4-5*"}: {
-				InputPerMillion: 1.00, OutputPerMillion: 5.00, CachedInputPerMillion: 0.10,
-			},
-			{eventschema.ProviderAnthropic, "claude-3-5-sonnet*"}: {
-				InputPerMillion: 3.00, OutputPerMillion: 15.00, CachedInputPerMillion: 0.30,
-			},
-			{eventschema.ProviderAnthropic, "claude-3-5-haiku*"}: {
-				InputPerMillion: 0.80, OutputPerMillion: 4.00, CachedInputPerMillion: 0.08,
-			},
-
-			// Mistral — published list prices for the large + medium
-			// families. Le Chat Pro routes through these on the
-			// consumer subscription; cost recompute attaches per-token
-			// price when the plan window is exceeded and metered
-			// billing kicks in.
-			{eventschema.ProviderMistral, "mistral-large*"}: {
-				InputPerMillion: 2.00, OutputPerMillion: 6.00,
-			},
-			{eventschema.ProviderMistral, "mistral-medium*"}: {
-				InputPerMillion: 0.40, OutputPerMillion: 2.00,
-			},
-			{eventschema.ProviderMistral, "mistral-small*"}: {
-				InputPerMillion: 0.20, OutputPerMillion: 0.60,
-			},
-			{eventschema.ProviderMistral, "codestral*"}: {
-				InputPerMillion: 0.30, OutputPerMillion: 0.90,
-			},
-
-			// Google Gemini — published list prices.
-			{eventschema.ProviderGemini, "gemini-2.5-pro*"}: {
-				InputPerMillion: 1.25, OutputPerMillion: 10.00, CachedInputPerMillion: 0.31,
-			},
-			{eventschema.ProviderGemini, "gemini-2.5-flash*"}: {
-				InputPerMillion: 0.30, OutputPerMillion: 2.50, CachedInputPerMillion: 0.075,
-			},
-			{eventschema.ProviderGemini, "gemini-1.5-pro*"}: {
-				InputPerMillion: 1.25, OutputPerMillion: 5.00,
-			},
-			{eventschema.ProviderGemini, "gemini-1.5-flash*"}: {
-				InputPerMillion: 0.075, OutputPerMillion: 0.30,
-			},
-		},
-	}
-}
-
 // MergeOverrides returns a new Table that layers overrides on top of t.
 // An override Rate that leaves a field zero inherits from the matching
 // base row (per Rate.Effective), so partial YAML overrides are safe.
@@ -199,9 +121,7 @@ func (t Table) MergeOverrides(overrides Table) Table {
 	if overrides.Currency != "" {
 		merged.Currency = overrides.Currency
 	}
-	for k, v := range t.Rates {
-		merged.Rates[k] = v
-	}
+	maps.Copy(merged.Rates, t.Rates)
 	for k, v := range overrides.Rates {
 		if base, ok := merged.Rates[k]; ok {
 			merged.Rates[k] = v.Effective(base)

@@ -10,6 +10,7 @@ import (
 	"github.com/felixgeelhaar/tokenops/internal/contexts/governance/coverdebt"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/governance/scorecard"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/eval"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/replay"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/rules"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/security/audit"
@@ -26,6 +27,11 @@ import (
 type ParityDeps struct {
 	Store *sqlite.Store
 	Spend *spend.Engine
+	// Pipeline overrides the optimizer pipeline used by tokenops_replay.
+	// nil falls back to replay.DefaultPipeline. The serve adapter passes
+	// a pipeline built from config (optimizer.routing_rules etc.) so MCP
+	// replays match `tokenops replay`.
+	Pipeline *optimizer.Pipeline
 }
 
 // --- input structs --------------------------------------------------------
@@ -216,7 +222,11 @@ func runReplay(ctx context.Context, d ParityDeps, in replayInput) (string, error
 		}
 		sel.Until = t
 	}
-	eng := replay.New(d.Store, replay.DefaultPipeline(nil), d.Spend)
+	pipeline := d.Pipeline
+	if pipeline == nil {
+		pipeline = replay.DefaultPipeline(nil)
+	}
+	eng := replay.New(d.Store, pipeline, d.Spend)
 	res, err := eng.Replay(ctx, sel)
 	if err != nil {
 		return "", err

@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/plans"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
 	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
 	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
 )
@@ -203,12 +204,36 @@ type demoFixture struct {
 	AvgOutputTokens   int64
 }
 
-var demoFixtures = []demoFixture{
-	{"anthropic", "claude-opus-4-7", 15.0 / 1000, 75.0 / 1000, 2400, 800},
-	{"anthropic", "claude-sonnet-4-6", 3.0 / 1000, 15.0 / 1000, 1800, 600},
-	{"openai", "gpt-4o", 2.5 / 1000, 10.0 / 1000, 2000, 500},
-	{"openai", "gpt-4o-mini", 0.15 / 1000, 0.6 / 1000, 1500, 400},
-	{"gemini", "gemini-2.5-pro", 1.25 / 1000, 5.0 / 1000, 2200, 700},
+// demoFixtures price each model from the shared spend catalog so the
+// seeded data always matches what the cost engine would compute —
+// hardcoded rates here drifted from the table in the past.
+var demoFixtures = buildDemoFixtures()
+
+func buildDemoFixtures() []demoFixture {
+	table := spend.DefaultTable()
+	mk := func(provider eventschema.Provider, model string, avgIn, avgOut int64) demoFixture {
+		rate, err := table.Lookup(provider, model)
+		if err != nil {
+			// Demo models come from the embedded catalog; a miss is a
+			// build defect caught by TestDemoFixturesPricedFromCatalog.
+			panic(err)
+		}
+		return demoFixture{
+			Provider:          provider,
+			Model:             model,
+			InputCostPerKTok:  rate.InputPerMillion / 1000,
+			OutputCostPerKTok: rate.OutputPerMillion / 1000,
+			AvgInputTokens:    avgIn,
+			AvgOutputTokens:   avgOut,
+		}
+	}
+	return []demoFixture{
+		mk(eventschema.ProviderAnthropic, "claude-fable-5", 2400, 800),
+		mk(eventschema.ProviderAnthropic, "claude-sonnet-4-6", 1800, 600),
+		mk(eventschema.ProviderOpenAI, "gpt-4o", 2000, 500),
+		mk(eventschema.ProviderOpenAI, "gpt-4o-mini", 1500, 400),
+		mk(eventschema.ProviderGemini, "gemini-2.5-pro", 2200, 700),
+	}
 }
 
 var demoWorkflows = []string{"code-review", "summarize-pr", "draft-email", "research-loop"}

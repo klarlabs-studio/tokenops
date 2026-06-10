@@ -14,11 +14,28 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/waste"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/governance/budget"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/router"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/plans"
+	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+)
+
+// Mode values. Passive collects + analyzes on demand (default); Active
+// additionally intervenes: the proxy applies routing rules to live
+// traffic and the daemon runs the background spend watcher.
+const (
+	ModePassive = "passive"
+	ModeActive  = "active"
 )
 
 // Config is the root daemon configuration.
 type Config struct {
+	// Mode selects how TokenOps helps: "passive" (analytics only —
+	// observe, store, answer queries) or "active" (passive + live
+	// interventions: routing rules applied to proxied traffic, budget /
+	// unpriced-model watcher emitting alerts). Default passive.
+	Mode      string            `yaml:"mode"`
 	Listen    string            `yaml:"listen"`
 	Log       LogConfig         `yaml:"log"`
 	Shutdown  ShutdownConfig    `yaml:"shutdown"`
@@ -36,6 +53,163 @@ type Config struct {
 	Resilience  ResilienceConfig  `yaml:"resilience"`
 	VendorUsage VendorUsageConfig `yaml:"vendor_usage"`
 	Dashboard   DashboardConfig   `yaml:"dashboard"`
+	Pricing     PricingConfig     `yaml:"pricing"`
+	Optimizer   OptimizerConfig   `yaml:"optimizer"`
+	Coaching    CoachingConfig    `yaml:"coaching"`
+	Budgets     []BudgetConfig    `yaml:"budgets"`
+	Watch       WatchConfig       `yaml:"watch"`
+}
+
+// ActiveMode reports whether interventions (live routing, spend
+// watcher) are enabled. Empty Mode means passive.
+func (c Config) ActiveMode() bool { return strings.EqualFold(c.Mode, ModeActive) }
+
+// BudgetConfig is one spend limit the watcher (active mode) and
+// on-demand evaluations check. Window is a calendar window in UTC.
+type BudgetConfig struct {
+	Name     string  `yaml:"name"`
+	Window   string  `yaml:"window"` // daily | weekly | monthly
+	LimitUSD float64 `yaml:"limit_usd"`
+	// WarnAt / CritAt are fractional thresholds of LimitUSD; zero falls
+	// back to the budget engine defaults (0.75 / 0.95).
+	WarnAt float64 `yaml:"warn_at"`
+	CritAt float64 `yaml:"crit_at"`
+	// WorkflowID / AgentID optionally scope the limit to one workflow
+	// or agent; empty applies to all spend.
+	WorkflowID string `yaml:"workflow_id"`
+	AgentID    string `yaml:"agent_id"`
+}
+
+// BudgetLimits maps the configured budgets into the budget engine's
+// domain type.
+func (c Config) BudgetLimits() []budget.Limit {
+	if len(c.Budgets) == 0 {
+		return nil
+	}
+	out := make([]budget.Limit, 0, len(c.Budgets))
+	for _, b := range c.Budgets {
+		out = append(out, budget.Limit{
+			Name:       b.Name,
+			Window:     budget.Window(strings.ToLower(b.Window)),
+			LimitUSD:   b.LimitUSD,
+			WarnAt:     b.WarnAt,
+			CritAt:     b.CritAt,
+			WorkflowID: b.WorkflowID,
+			AgentID:    b.AgentID,
+		})
+	}
+	return out
+}
+
+// WatchConfig tunes the active-mode background watcher.
+type WatchConfig struct {
+	// Interval between watcher evaluations. Default 15m, minimum 1m.
+	Interval time.Duration `yaml:"interval"`
+}
+
+// EffectiveInterval returns the watcher cadence with defaults applied.
+func (w WatchConfig) EffectiveInterval() time.Duration {
+	if w.Interval <= 0 {
+		return 15 * time.Minute
+	}
+	if w.Interval < time.Minute {
+		return time.Minute
+	}
+	return w.Interval
+}
+
+// CoachingConfig tunes the waste detector behind `tokenops replay
+// --workflow`, the tokenops_workflow_trace MCP tool, and the dashboard
+// workflow view.
+type CoachingConfig struct {
+	// ContextLimits override the waste detector's context thresholds per
+	// workflow-ID prefix. A matching entry replaces the built-in
+	// profiles ("claude-code:", "codex:"); zero fields inherit the
+	// detector defaults.
+	ContextLimits []ContextLimitConfig `yaml:"context_limits"`
+}
+
+// ContextLimitConfig is one per-prefix threshold override.
+type ContextLimitConfig struct {
+	WorkflowPrefix           string `yaml:"workflow_prefix"`
+	MaxContextTokens         int64  `yaml:"max_context_tokens"`
+	ContextGrowthLimitTokens int64  `yaml:"context_growth_limit_tokens"`
+	MaxConsecutiveAgentLoops int    `yaml:"max_consecutive_agent_loops"`
+	SystemRedundancyMin      int    `yaml:"system_redundancy_min"`
+}
+
+// WasteConfig maps coaching.context_limits into the waste detector's
+// domain config. Shared by every adapter (CLI replay, MCP, dashboard)
+// so all surfaces apply identical thresholds.
+func (c CoachingConfig) WasteConfig() waste.Config {
+	if len(c.ContextLimits) == 0 {
+		return waste.Config{}
+	}
+	profiles := make([]waste.Profile, 0, len(c.ContextLimits))
+	for _, l := range c.ContextLimits {
+		profiles = append(profiles, waste.Profile{
+			WorkflowPrefix:           l.WorkflowPrefix,
+			MaxContextTokens:         l.MaxContextTokens,
+			ContextGrowthLimitTokens: l.ContextGrowthLimitTokens,
+			MaxConsecutiveAgentLoops: l.MaxConsecutiveAgentLoops,
+			SystemRedundancyMin:      l.SystemRedundancyMin,
+		})
+	}
+	return waste.Config{Profiles: profiles}
+}
+
+// OptimizerConfig tunes the optimizer pipeline shared by `tokenops
+// replay` and the `tokenops_replay` MCP tool.
+type OptimizerConfig struct {
+	// RoutingRules feed the model-routing optimizer: requests for
+	// from_model are evaluated as if routed to to_model, and the replay
+	// surfaces the projected $ savings. Empty leaves the router out of
+	// the pipeline.
+	RoutingRules []RoutingRuleConfig `yaml:"routing_rules"`
+	// RoutingMinQuality is the quality floor below which a routing rule
+	// is skipped silently. Zero falls back to the router default (0.7).
+	RoutingMinQuality float64 `yaml:"routing_min_quality"`
+}
+
+// RoutingRuleConfig is one "route X to Y" entry. FromModel supports a
+// trailing "*" prefix match (e.g. "claude-fable-5*").
+type RoutingRuleConfig struct {
+	Provider  string `yaml:"provider"`
+	FromModel string `yaml:"from_model"`
+	ToModel   string `yaml:"to_model"`
+	// Quality is the operator's confidence (0.0–1.0] that ToModel
+	// preserves task quality for this traffic.
+	Quality   float64  `yaml:"quality"`
+	Fallbacks []string `yaml:"fallbacks"`
+}
+
+// RouterConfig maps optimizer.routing_rules into the router's domain
+// config. Returns nil when no rules are configured. Shared by the CLI
+// replay, MCP serve, and the daemon's active-mode proxy so all
+// surfaces route identically.
+func (o OptimizerConfig) RouterConfig() *router.Config {
+	if len(o.RoutingRules) == 0 {
+		return nil
+	}
+	rules := make([]router.Rule, 0, len(o.RoutingRules))
+	for _, r := range o.RoutingRules {
+		rules = append(rules, router.Rule{
+			Provider:  eventschema.Provider(r.Provider),
+			FromModel: r.FromModel,
+			ToModel:   r.ToModel,
+			Quality:   r.Quality,
+			Fallbacks: r.Fallbacks,
+		})
+	}
+	return &router.Config{Rules: rules, MinQuality: o.RoutingMinQuality}
+}
+
+// PricingConfig points at an optional YAML rate file that is layered on
+// top of the built-in list-price catalog (spend.TableWithOverrides).
+// Use it to price newly released models before a tokenops upgrade, or
+// to apply negotiated rates. Same schema as the embedded pricing.yaml.
+type PricingConfig struct {
+	Path string `yaml:"path"`
 }
 
 // DashboardConfig gates /dashboard + /api/* behind a shared-secret
@@ -291,6 +465,50 @@ func (c Config) Validate() error {
 			return fmt.Errorf("plans[%s]: %w", provider, err)
 		}
 	}
+	if q := c.Optimizer.RoutingMinQuality; q < 0 || q > 1 {
+		return fmt.Errorf("optimizer.routing_min_quality must be in [0,1], got %g", q)
+	}
+	for i, r := range c.Optimizer.RoutingRules {
+		if r.Provider == "" || r.FromModel == "" || r.ToModel == "" {
+			return fmt.Errorf("optimizer.routing_rules[%d]: provider, from_model, and to_model are required", i)
+		}
+		if r.Quality <= 0 || r.Quality > 1 {
+			return fmt.Errorf("optimizer.routing_rules[%d]: quality must be in (0,1], got %g", i, r.Quality)
+		}
+	}
+	for i, l := range c.Coaching.ContextLimits {
+		if l.WorkflowPrefix == "" {
+			return fmt.Errorf("coaching.context_limits[%d]: workflow_prefix is required", i)
+		}
+		if l.MaxContextTokens < 0 || l.ContextGrowthLimitTokens < 0 ||
+			l.MaxConsecutiveAgentLoops < 0 || l.SystemRedundancyMin < 0 {
+			return fmt.Errorf("coaching.context_limits[%d]: thresholds must be non-negative", i)
+		}
+	}
+	switch strings.ToLower(c.Mode) {
+	case "", ModePassive, ModeActive:
+	default:
+		return fmt.Errorf("mode must be %q or %q, got %q", ModePassive, ModeActive, c.Mode)
+	}
+	for i, b := range c.Budgets {
+		if b.Name == "" {
+			return fmt.Errorf("budgets[%d]: name is required", i)
+		}
+		switch strings.ToLower(b.Window) {
+		case string(budget.WindowDaily), string(budget.WindowWeekly), string(budget.WindowMonthly):
+		default:
+			return fmt.Errorf("budgets[%d]: window must be daily, weekly, or monthly, got %q", i, b.Window)
+		}
+		if b.LimitUSD <= 0 {
+			return fmt.Errorf("budgets[%d]: limit_usd must be positive, got %g", i, b.LimitUSD)
+		}
+		if b.WarnAt < 0 || b.WarnAt > 1 || b.CritAt < 0 || b.CritAt > 1 {
+			return fmt.Errorf("budgets[%d]: warn_at and crit_at must be in [0,1]", i)
+		}
+	}
+	if c.Watch.Interval < 0 {
+		return fmt.Errorf("watch.interval must be non-negative, got %s", c.Watch.Interval)
+	}
 	return nil
 }
 
@@ -391,6 +609,9 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("TOKENOPS_OTEL_SERVICE_NAME"); v != "" {
 		cfg.OTel.ServiceName = v
+	}
+	if v := os.Getenv("TOKENOPS_PRICING_PATH"); v != "" {
+		cfg.Pricing.Path = v
 	}
 	for _, key := range []string{"openai", "anthropic", "gemini"} {
 		envKey := "TOKENOPS_PROVIDER_" + strings.ToUpper(key) + "_URL"

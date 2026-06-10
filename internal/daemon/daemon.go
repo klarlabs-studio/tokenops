@@ -67,8 +67,9 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	// allocates a fresh bus or counter — it consumes what bootstrap
 	// hands back. Store opens later only when storage is enabled.
 	earlyComponents, err := bootstrap.New(ctx, bootstrap.Options{
-		Logger:    logger,
-		OpenStore: false,
+		Logger:      logger,
+		OpenStore:   false,
+		PricingPath: cfg.Pricing.Path,
 	})
 	if err != nil {
 		return err
@@ -330,7 +331,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			)
 		}
 
-		analyticsH, err := proxy.NewAnalyticsHandlers(components.Store, components.Aggregator, components.Spend)
+		analyticsH, err := proxy.NewAnalyticsHandlers(components.Store, components.Aggregator, components.Spend, cfg.Coaching.WasteConfig())
 		if err != nil {
 			return fmt.Errorf("analytics handlers: %w", err)
 		}
@@ -376,9 +377,25 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		logger.Info("rule intelligence enabled", "root", root, "repo_id", cfg.Rules.RepoID)
 	}
 
+	if cfg.ActiveMode() {
+		if rc := cfg.Optimizer.RouterConfig(); rc != nil {
+			opts = append(opts, proxy.WithActiveRouting(*rc, components.Spend))
+			logger.Info("active mode: live model routing enabled", "rules", len(rc.Rules))
+		} else {
+			logger.Info("active mode enabled but no optimizer.routing_rules configured; proxy stays observe-only")
+		}
+	}
+
 	srv := proxy.New(cfg.Listen, opts...)
 	if err := srv.Start(ctx); err != nil {
 		return fmt.Errorf("start proxy: %w", err)
+	}
+
+	// Active-mode spend watcher: periodic budget + unpriced-model
+	// evaluation against the local store. Requires storage (no events,
+	// nothing to watch).
+	if cfg.ActiveMode() && components.Aggregator != nil {
+		go runSpendWatcher(ctx, cfg, components.Aggregator, components.Spend, logger)
 	}
 	// Try to advertise the daemon as tokenops.local over mDNS so the
 	// dashboard URL stays memorable. Best-effort: container hosts,

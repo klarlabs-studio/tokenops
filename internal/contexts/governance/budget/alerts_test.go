@@ -151,3 +151,39 @@ func TestMessageContainsContext(t *testing.T) {
 		}
 	}
 }
+
+func TestWindowStart(t *testing.T) {
+	// Wed 2026-06-10 15:30 UTC
+	now := time.Date(2026, 6, 10, 15, 30, 0, 0, time.UTC)
+	cases := []struct {
+		w    Window
+		want time.Time
+	}{
+		{WindowDaily, time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC)},
+		{WindowWeekly, time.Date(2026, 6, 8, 0, 0, 0, 0, time.UTC)}, // Monday
+		{WindowMonthly, time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)},
+	}
+	for _, c := range cases {
+		if got := WindowStart(c.w, now); !got.Equal(c.want) {
+			t.Errorf("WindowStart(%s) = %s; want %s", c.w, got, c.want)
+		}
+	}
+	// Monday itself stays Monday.
+	mon := time.Date(2026, 6, 8, 3, 0, 0, 0, time.UTC)
+	if got := WindowStart(WindowWeekly, mon); !got.Equal(time.Date(2026, 6, 8, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("weekly start on Monday = %s", got)
+	}
+}
+
+func TestWindowEnd(t *testing.T) {
+	start := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	if got := WindowEnd(WindowDaily, start); !got.Equal(start.AddDate(0, 0, 1)) {
+		t.Errorf("daily end = %s", got)
+	}
+	if got := WindowEnd(WindowWeekly, start); !got.Equal(start.AddDate(0, 0, 7)) {
+		t.Errorf("weekly end = %s", got)
+	}
+	if got := WindowEnd(WindowMonthly, start); !got.Equal(time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("monthly end = %s", got)
+	}
+}

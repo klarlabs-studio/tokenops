@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
 	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
 	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
 )
@@ -165,5 +166,22 @@ func TestDemoDryRunDoesNotWrite(t *testing.T) {
 	}
 	if _, err := os.Stat(storagePath); err == nil {
 		t.Errorf("dry-run created the store at %s", storagePath)
+	}
+}
+
+// Every demo fixture must resolve against the embedded pricing catalog
+// (buildDemoFixtures panics on a miss); rates must mirror the catalog
+// so seeded costs match what spend.Engine would compute.
+func TestDemoFixturesPricedFromCatalog(t *testing.T) {
+	table := spend.DefaultTable()
+	for _, fx := range demoFixtures {
+		rate, err := table.Lookup(fx.Provider, fx.Model)
+		if err != nil {
+			t.Errorf("fixture %s/%s not in catalog: %v", fx.Provider, fx.Model, err)
+			continue
+		}
+		if fx.InputCostPerKTok != rate.InputPerMillion/1000 || fx.OutputCostPerKTok != rate.OutputPerMillion/1000 {
+			t.Errorf("fixture %s/%s rates drifted from catalog", fx.Provider, fx.Model)
+		}
 	}
 }

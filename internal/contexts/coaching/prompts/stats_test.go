@@ -41,10 +41,11 @@ func TestComputeTurnStatsClaudeCode(t *testing.T) {
 	if stats.AvgOutputTokens != 50 {
 		t.Errorf("AvgOutput = %.0f; want 50", stats.AvgOutputTokens)
 	}
-	// uncached 100 × $15/M + cached 1000 × $1.50/M + output 50 × $75/M
-	// = 0.0015 + 0.0015 + 0.00375 ≈ 0.00675
-	if stats.AvgCostUSD < 0.006 || stats.AvgCostUSD > 0.008 {
-		t.Errorf("AvgCost = %.6f; want ~0.00675", stats.AvgCostUSD)
+	// claude-opus-4-7 list rates ($5/M input, $0.50/M cache, $25/M output):
+	// uncached 100 × $5/M + cached 1000 × $0.50/M + output 50 × $25/M
+	// = 0.0005 + 0.0005 + 0.00125 ≈ 0.00225
+	if stats.AvgCostUSD < 0.002 || stats.AvgCostUSD > 0.0025 {
+		t.Errorf("AvgCost = %.6f; want ~0.00225", stats.AvgCostUSD)
 	}
 }
 
@@ -108,4 +109,44 @@ func TestProjectSavingsEmpty(t *testing.T) {
 
 func joinNL(lines []string) string {
 	return strings.Join(lines, "\n")
+}
+
+// Turns carrying a model field must be priced at that model's catalog
+// rate, not the opus-4-7 fallback — mixed-model sessions previously
+// over- or under-stated savings.
+func TestComputeTurnStatsPricesPerObservedModel(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sess.jsonl")
+	// One haiku turn, one fable turn, both 1000 uncached input + 100 output.
+	lines := []string{
+		`{"type":"assistant","sessionId":"s","message":{"id":"m1","model":"claude-haiku-4-5","usage":{"input_tokens":1000,"output_tokens":100}}}`,
+		`{"type":"assistant","sessionId":"s","message":{"id":"m2","model":"claude-fable-5","usage":{"input_tokens":1000,"output_tokens":100}}}`,
+	}
+	if err := os.WriteFile(path, []byte(joinNL(lines)), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	stats, err := ComputeTurnStats(ExtractOptions{Root: dir, Source: SourceClaudeCode})
+	if err != nil {
+		t.Fatalf("ComputeTurnStats: %v", err)
+	}
+	// haiku ($1/$5):  1000×1/M + 100×5/M   = 0.0015
+	// fable ($10/$50): 1000×10/M + 100×50/M = 0.0150
+	// avg = (0.0015 + 0.0150) / 2 = 0.00825
+	if stats.AvgCostUSD < 0.0080 || stats.AvgCostUSD > 0.0085 {
+		t.Errorf("AvgCost = %.6f; want ~0.00825", stats.AvgCostUSD)
+	}
+}
+
+// Unknown model strings fall back to the opus-4-7 default rate instead
+// of dropping the turn's cost to zero.
+func TestRateForModelFallsBackOnUnknown(t *testing.T) {
+	if got := rateForModel("totally-unknown-model"); got != defaultTurnRate {
+		t.Errorf("unknown model rate = %+v; want defaultTurnRate", got)
+	}
+	if got := rateForModel(""); got != defaultTurnRate {
+		t.Errorf("empty model rate = %+v; want defaultTurnRate", got)
+	}
+	if got := rateForModel("gpt-4o-mini-2024-07-18"); got.InputPerMillion != 0.15 {
+		t.Errorf("gpt-4o-mini rate = %+v; want catalog row", got)
+	}
 }

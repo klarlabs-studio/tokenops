@@ -261,3 +261,133 @@ func TestEnvOverrideSetsPlan(t *testing.T) {
 		t.Errorf("plans[anthropic]=%q want claude-pro", cfg.Plans["anthropic"])
 	}
 }
+
+func TestValidateRoutingRules(t *testing.T) {
+	cfg := Default()
+	cfg.Optimizer.RoutingRules = []RoutingRuleConfig{{
+		Provider: "anthropic", FromModel: "claude-fable-5*", ToModel: "claude-opus-4-8", Quality: 0.9,
+	}}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("valid routing rule rejected: %v", err)
+	}
+
+	cfg.Optimizer.RoutingRules[0].ToModel = ""
+	if err := cfg.Validate(); err == nil {
+		t.Error("missing to_model accepted")
+	}
+
+	cfg.Optimizer.RoutingRules[0].ToModel = "claude-opus-4-8"
+	cfg.Optimizer.RoutingRules[0].Quality = 1.5
+	if err := cfg.Validate(); err == nil {
+		t.Error("quality > 1 accepted")
+	}
+
+	cfg.Optimizer.RoutingRules = nil
+	cfg.Optimizer.RoutingMinQuality = -0.1
+	if err := cfg.Validate(); err == nil {
+		t.Error("negative routing_min_quality accepted")
+	}
+}
+
+func TestValidateContextLimits(t *testing.T) {
+	cfg := Default()
+	cfg.Coaching.ContextLimits = []ContextLimitConfig{{
+		WorkflowPrefix: "claude-code:", MaxContextTokens: 500_000,
+	}}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("valid context limit rejected: %v", err)
+	}
+	cfg.Coaching.ContextLimits[0].WorkflowPrefix = ""
+	if err := cfg.Validate(); err == nil {
+		t.Error("missing workflow_prefix accepted")
+	}
+	cfg.Coaching.ContextLimits[0].WorkflowPrefix = "x:"
+	cfg.Coaching.ContextLimits[0].MaxContextTokens = -1
+	if err := cfg.Validate(); err == nil {
+		t.Error("negative threshold accepted")
+	}
+}
+
+func TestWasteConfigMapsContextLimits(t *testing.T) {
+	c := CoachingConfig{ContextLimits: []ContextLimitConfig{{
+		WorkflowPrefix: "claude-code:", MaxContextTokens: 500_000, ContextGrowthLimitTokens: 1_000_000,
+	}}}
+	wc := c.WasteConfig()
+	if len(wc.Profiles) != 1 {
+		t.Fatalf("profiles = %d; want 1", len(wc.Profiles))
+	}
+	p := wc.Profiles[0]
+	if p.WorkflowPrefix != "claude-code:" || p.MaxContextTokens != 500_000 || p.ContextGrowthLimitTokens != 1_000_000 {
+		t.Errorf("profile = %+v", p)
+	}
+}
+
+func TestValidateMode(t *testing.T) {
+	cfg := Default()
+	for _, m := range []string{"", "passive", "active", "Active"} {
+		cfg.Mode = m
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("mode %q rejected: %v", m, err)
+		}
+	}
+	cfg.Mode = "aggressive"
+	if err := cfg.Validate(); err == nil {
+		t.Error("invalid mode accepted")
+	}
+	cfg.Mode = "active"
+	if !cfg.ActiveMode() {
+		t.Error("ActiveMode() false for active")
+	}
+	cfg.Mode = ""
+	if cfg.ActiveMode() {
+		t.Error("ActiveMode() true for empty mode")
+	}
+}
+
+func TestValidateBudgets(t *testing.T) {
+	cfg := Default()
+	cfg.Budgets = []BudgetConfig{{Name: "weekly-all", Window: "weekly", LimitUSD: 50}}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("valid budget rejected: %v", err)
+	}
+	cfg.Budgets[0].Window = "fortnightly"
+	if err := cfg.Validate(); err == nil {
+		t.Error("invalid window accepted")
+	}
+	cfg.Budgets[0].Window = "weekly"
+	cfg.Budgets[0].LimitUSD = 0
+	if err := cfg.Validate(); err == nil {
+		t.Error("zero limit accepted")
+	}
+	cfg.Budgets[0].LimitUSD = 50
+	cfg.Budgets[0].Name = ""
+	if err := cfg.Validate(); err == nil {
+		t.Error("missing name accepted")
+	}
+}
+
+func TestWatchEffectiveInterval(t *testing.T) {
+	if got := (WatchConfig{}).EffectiveInterval(); got != 15*time.Minute {
+		t.Errorf("default interval = %s", got)
+	}
+	if got := (WatchConfig{Interval: time.Second}).EffectiveInterval(); got != time.Minute {
+		t.Errorf("sub-minute interval not clamped: %s", got)
+	}
+	if got := (WatchConfig{Interval: time.Hour}).EffectiveInterval(); got != time.Hour {
+		t.Errorf("explicit interval altered: %s", got)
+	}
+}
+
+func TestBudgetLimitsMapping(t *testing.T) {
+	cfg := Config{Budgets: []BudgetConfig{{
+		Name: "eng", Window: "Monthly", LimitUSD: 200, WarnAt: 0.5, WorkflowID: "wf-1",
+	}}}
+	limits := cfg.BudgetLimits()
+	if len(limits) != 1 {
+		t.Fatalf("limits = %d", len(limits))
+	}
+	l := limits[0]
+	if l.Name != "eng" || l.Window != "monthly" || l.LimitUSD != 200 || l.WarnAt != 0.5 || l.WorkflowID != "wf-1" {
+		t.Errorf("limit = %+v", l)
+	}
+}

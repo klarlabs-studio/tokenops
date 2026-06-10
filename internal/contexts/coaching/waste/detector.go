@@ -36,6 +36,20 @@ type Config struct {
 	// only when the operator could obviously hoist it via the
 	// system-dedupe optimizer.
 	SystemRedundancyMin int
+	// Profiles are operator-supplied per-workflow-prefix overrides
+	// (config: coaching.context_limits). The first matching profile wins
+	// and replaces the built-in ProfileFor selection for that workflow.
+	Profiles []Profile
+}
+
+// Profile overrides thresholds for workflows whose ID starts with
+// WorkflowPrefix. Zero fields inherit from the detector's base Config.
+type Profile struct {
+	WorkflowPrefix           string
+	MaxContextTokens         int64
+	ContextGrowthLimitTokens int64
+	MaxConsecutiveAgentLoops int
+	SystemRedundancyMin      int
 }
 
 func (c *Config) defaults() {
@@ -76,7 +90,16 @@ func (d *Detector) Detect(trace *workflow.Trace) []*eventschema.CoachingEvent {
 		return nil
 	}
 	cfg := d.cfg
-	if profile := ProfileFor(trace.WorkflowID); profile != nil {
+	if p, ok := d.operatorProfile(trace.WorkflowID); ok {
+		// Operator-configured limits replace the built-in profile
+		// selection entirely — they exist precisely to override it.
+		cfg = mergeConfig(cfg, Config{
+			MaxContextTokens:         p.MaxContextTokens,
+			ContextGrowthLimitTokens: p.ContextGrowthLimitTokens,
+			MaxConsecutiveAgentLoops: p.MaxConsecutiveAgentLoops,
+			SystemRedundancyMin:      p.SystemRedundancyMin,
+		})
+	} else if profile := ProfileFor(trace.WorkflowID); profile != nil {
 		cfg = mergeConfig(cfg, *profile)
 	}
 	scoped := &Detector{cfg: cfg}
@@ -94,6 +117,17 @@ func (d *Detector) Detect(trace *workflow.Trace) []*eventschema.CoachingEvent {
 		out = append(out, ev)
 	}
 	return out
+}
+
+// operatorProfile returns the first configured profile whose prefix
+// matches workflowID.
+func (d *Detector) operatorProfile(workflowID string) (Profile, bool) {
+	for _, p := range d.cfg.Profiles {
+		if p.WorkflowPrefix != "" && strings.HasPrefix(workflowID, p.WorkflowPrefix) {
+			return p, true
+		}
+	}
+	return Profile{}, false
 }
 
 // ProfileFor returns a Config tuned to a workflow's expected shape,

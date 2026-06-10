@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/felixgeelhaar/tokenops/internal/config"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/waste"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/replay"
@@ -86,8 +87,12 @@ findings (when --workflow is set), and a summary footer.`,
 				return errors.New("provide a SESSION_ID positional or --workflow/--agent flag")
 			}
 
-			spendEng := spend.NewEngine(spend.DefaultTable())
-			pipeline := buildReplayPipeline(spendEng)
+			table, err := spend.TableWithOverrides(cfg.Pricing.Path)
+			if err != nil {
+				return err
+			}
+			spendEng := spend.NewEngine(table)
+			pipeline := buildReplayPipeline(cfg, spendEng)
 			eng := replay.New(store, pipeline, spendEng)
 
 			res, err := eng.Replay(ctx, sel)
@@ -102,7 +107,7 @@ findings (when --workflow is set), and a summary footer.`,
 			if sel.WorkflowID != "" {
 				trace, err := workflow.Reconstruct(ctx, store, spendEng, sel.WorkflowID)
 				if err == nil && trace != nil {
-					coachings = waste.New(waste.Config{}).Detect(trace)
+					coachings = waste.New(cfg.Coaching.WasteConfig()).Detect(trace)
 				}
 			}
 
@@ -122,10 +127,14 @@ findings (when --workflow is set), and a summary footer.`,
 	return cmd
 }
 
-// buildReplayPipeline delegates to replay.DefaultPipeline so CLI and MCP
-// drive replays through identical optimizer configuration.
-func buildReplayPipeline(_ *spend.Engine) *optimizer.Pipeline {
-	return replay.DefaultPipeline(nil)
+// buildReplayPipeline composes the canonical replay pipeline plus the
+// model router when routing rules are configured. CLI and MCP both go
+// through this so replays stay identical across surfaces.
+func buildReplayPipeline(cfg config.Config, spendEng *spend.Engine) *optimizer.Pipeline {
+	return replay.BuildPipeline(nil, replay.PipelineConfig{
+		Routing: cfg.Optimizer.RouterConfig(),
+		Spend:   spendEng,
+	})
 }
 
 // resolveStorageReadPath picks the sqlite path for the replay command.
@@ -207,6 +216,8 @@ func writeReplayText(
 		return err
 	}
 
+	writeRoutingSection(w, res, spendEng)
+
 	if len(coachings) > 0 {
 		fmt.Fprintf(w, "\nWaste analysis (workflow %s):\n", sel.WorkflowID)
 		for _, c := range coachings {
@@ -220,6 +231,45 @@ func writeReplayText(
 		}
 	}
 	return nil
+}
+
+// writeRoutingSection aggregates model_router recommendations across
+// steps and prints the per-route "would save $X" rollup — the headline
+// number for operators evaluating a routing rule before enabling it on
+// live traffic.
+func writeRoutingSection(w io.Writer, res *replay.Result, spendEng *spend.Engine) {
+	type routeAgg struct {
+		requests int
+		tokens   int64
+		usd      float64
+	}
+	aggs := map[string]*routeAgg{}
+	var order []string
+	for _, step := range res.Steps {
+		for _, ev := range step.OptimizationEvents {
+			if ev.Kind != eventschema.OptimizationTypeRouter {
+				continue
+			}
+			a, ok := aggs[ev.Reason]
+			if !ok {
+				a = &routeAgg{}
+				aggs[ev.Reason] = a
+				order = append(order, ev.Reason)
+			}
+			a.requests++
+			a.tokens += ev.EstimatedSavingsTokens
+			a.usd += ev.EstimatedSavingsUSD
+		}
+	}
+	if len(order) == 0 {
+		return
+	}
+	fmt.Fprintln(w, "\nModel routing opportunities:")
+	for _, reason := range order {
+		a := aggs[reason]
+		fmt.Fprintf(w, "  - %s: %d requests, would save %s\n",
+			reason, a.requests, fmtMoney(a.usd, spendEng.Currency()))
+	}
 }
 
 // promptModel returns the model the step was billed against, falling back

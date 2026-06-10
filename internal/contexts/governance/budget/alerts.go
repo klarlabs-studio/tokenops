@@ -47,6 +47,36 @@ type Limit struct {
 	AgentID    string
 }
 
+// WindowStart returns the UTC start of the calendar window containing
+// now: midnight for daily, Monday midnight for weekly, first of the
+// month for monthly. Unknown windows fall back to daily.
+func WindowStart(w Window, now time.Time) time.Time {
+	now = now.UTC()
+	switch w {
+	case WindowWeekly:
+		day := now.Truncate(24 * time.Hour)
+		offset := (int(day.Weekday()) + 6) % 7 // Monday = 0
+		return day.AddDate(0, 0, -offset)
+	case WindowMonthly:
+		return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	default:
+		return now.Truncate(24 * time.Hour)
+	}
+}
+
+// WindowEnd returns the exclusive end of the calendar window starting
+// at start.
+func WindowEnd(w Window, start time.Time) time.Time {
+	switch w {
+	case WindowWeekly:
+		return start.AddDate(0, 0, 7)
+	case WindowMonthly:
+		return start.AddDate(0, 1, 0)
+	default:
+		return start.AddDate(0, 0, 1)
+	}
+}
+
 // Severity ranks Alerts. Higher = louder.
 type Severity int
 

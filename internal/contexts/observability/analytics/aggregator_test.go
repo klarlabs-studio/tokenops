@@ -175,17 +175,17 @@ func TestSummarizeUsesCachedInputFromPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("summarize: %v", err)
 	}
-	// claude-opus-4-7: $15/M input, $1.50/M cache, $75/M output
-	//   uncached 10K   * 15/M    = 0.15
-	//   cached 990K    * 1.50/M  = 1.485
-	//   output 10K     * 75/M    = 0.75
-	//   total ≈ 2.385
-	if s.CostUSD < 2.30 || s.CostUSD > 2.45 {
-		t.Errorf("cache-aware cost = %.4f; want ~2.385", s.CostUSD)
+	// claude-opus-4-7: $5/M input, $0.50/M cache, $25/M output
+	//   uncached 10K   * 5/M     = 0.05
+	//   cached 990K    * 0.50/M  = 0.495
+	//   output 10K     * 25/M    = 0.25
+	//   total ≈ 0.795
+	if s.CostUSD < 0.75 || s.CostUSD > 0.85 {
+		t.Errorf("cache-aware cost = %.4f; want ~0.795", s.CostUSD)
 	}
-	// Flat-rate (no cache awareness) would be: 1M * 15/M + 10K * 75/M = 15.75
-	// Anything above ~5 means cache split is being ignored.
-	if s.CostUSD > 5 {
+	// Flat-rate (no cache awareness) would be: 1M * 5/M + 10K * 25/M = 5.25
+	// Anything above ~2 means cache split is being ignored.
+	if s.CostUSD > 2 {
 		t.Errorf("cost %.4f looks like new-input rate is billing cache reads", s.CostUSD)
 	}
 }
@@ -332,5 +332,89 @@ func TestFilterTimeWindow(t *testing.T) {
 	}
 	if s.Requests != 1 || s.InputTokens != 20 {
 		t.Errorf("window summary: %+v", s)
+	}
+}
+
+// A model the pricing table doesn't know must surface in
+// Summary.Unpriced instead of silently contributing zero cost — this is
+// the operator's signal that a newly released model needs a rate.
+func TestSummarizeReportsUnpricedModels(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	base := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
+	envs := []*eventschema.Envelope{
+		{
+			ID: "known", SchemaVersion: eventschema.SchemaVersion,
+			Type: eventschema.EventTypePrompt, Timestamp: base, Source: "claude-code-jsonl",
+			Payload: &eventschema.PromptEvent{
+				Provider: eventschema.ProviderAnthropic, RequestModel: "claude-sonnet-4-6",
+				InputTokens: 1000, OutputTokens: 100, TotalTokens: 1100,
+			},
+		},
+		{
+			ID: "mystery-1", SchemaVersion: eventschema.SchemaVersion,
+			Type: eventschema.EventTypePrompt, Timestamp: base.Add(time.Minute), Source: "claude-code-jsonl",
+			Payload: &eventschema.PromptEvent{
+				Provider: eventschema.ProviderAnthropic, RequestModel: "claude-unreleased-9",
+				InputTokens: 1000, OutputTokens: 100, TotalTokens: 1100,
+			},
+		},
+		{
+			ID: "mystery-2", SchemaVersion: eventschema.SchemaVersion,
+			Type: eventschema.EventTypePrompt, Timestamp: base.Add(2 * time.Minute), Source: "claude-code-jsonl",
+			Payload: &eventschema.PromptEvent{
+				Provider: eventschema.ProviderAnthropic, RequestModel: "claude-unreleased-9",
+				InputTokens: 500, OutputTokens: 50, TotalTokens: 550,
+			},
+		},
+	}
+	if err := store.AppendBatch(ctx, envs); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	agg := New(store, spend.NewEngine(spend.DefaultTable()))
+	s, err := agg.Summarize(ctx, Filter{})
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	if s.CostUSD <= 0 {
+		t.Errorf("known model should still be costed; CostUSD = %.4f", s.CostUSD)
+	}
+	if len(s.Unpriced) != 1 {
+		t.Fatalf("Unpriced = %+v; want exactly one entry", s.Unpriced)
+	}
+	u := s.Unpriced[0]
+	if u.Provider != "anthropic" || u.Model != "claude-unreleased-9" || u.Requests != 2 {
+		t.Errorf("Unpriced[0] = %+v; want anthropic/claude-unreleased-9 with 2 requests", u)
+	}
+}
+
+// Priced models must never appear in Unpriced, even when their cost is
+// recomputed from tokens.
+func TestSummarizeNoUnpricedWhenAllModelsKnown(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	base := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
+	env := &eventschema.Envelope{
+		ID: "known", SchemaVersion: eventschema.SchemaVersion,
+		Type: eventschema.EventTypePrompt, Timestamp: base, Source: "claude-code-jsonl",
+		Payload: &eventschema.PromptEvent{
+			Provider: eventschema.ProviderAnthropic, RequestModel: "claude-fable-5[1m]",
+			InputTokens: 1000, OutputTokens: 100, TotalTokens: 1100,
+		},
+	}
+	if err := store.Append(ctx, env); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	agg := New(store, spend.NewEngine(spend.DefaultTable()))
+	s, err := agg.Summarize(ctx, Filter{})
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	if len(s.Unpriced) != 0 {
+		t.Errorf("Unpriced = %+v; want empty", s.Unpriced)
+	}
+	if s.CostUSD <= 0 {
+		t.Errorf("fable usage should be costed; CostUSD = %.4f", s.CostUSD)
 	}
 }

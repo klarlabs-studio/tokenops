@@ -94,7 +94,14 @@ func (s *Server) mountReverseProxy(mux *http.ServeMux, route ProviderRoute) erro
 
 	var handler http.Handler = rp
 	if s.observerActive {
-		handler = s.observerMiddleware(route.Provider, rp)
+		// Routing rewrites run inside the observer so the observation
+		// keeps the original requested model and the routing middleware
+		// can read the canonicalised request from context.
+		inner := handler
+		if s.router != nil {
+			inner = s.routingMiddleware(route.Provider, inner)
+		}
+		handler = s.observerMiddleware(route.Provider, inner)
 	}
 	if s.cache != nil {
 		handler = s.cacheMiddleware(route.Provider, handler)

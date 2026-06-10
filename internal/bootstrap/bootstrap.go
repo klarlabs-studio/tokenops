@@ -45,6 +45,10 @@ type Options struct {
 	// DBPath overrides the events.db location. Empty defaults to
 	// $HOME/.tokenops/events.db.
 	DBPath string
+	// PricingPath points at a YAML rate-override file layered on top of
+	// the built-in pricing catalog (config: pricing.path). Empty uses
+	// the embedded list prices only.
+	PricingPath string
 	// Logger is the structured logger threaded through every component.
 	// nil falls back to slog.Default().
 	Logger *slog.Logger
@@ -111,12 +115,16 @@ func New(ctx context.Context, opts Options) (*Components, error) {
 	if opts.Logger == nil {
 		opts.Logger = slog.Default()
 	}
+	table, err := spend.TableWithOverrides(opts.PricingPath)
+	if err != nil {
+		return nil, fmt.Errorf("bootstrap: %w", err)
+	}
 	dbus := &domainevents.Bus{}
 	counter := observ.NewEventCounter()
 	counter.Subscribe(dbus)
 	c := &Components{
 		Logger:       opts.Logger,
-		Spend:        spend.NewEngine(spend.DefaultTable()),
+		Spend:        spend.NewEngine(table),
 		Tokenizers:   tokenizer.NewRegistry(),
 		Redactor:     redaction.New(redaction.Config{}),
 		DomainBus:    dbus,

@@ -158,3 +158,57 @@ func TestDefaultsApplied(t *testing.T) {
 		t.Errorf("default loops = %d", d.cfg.MaxConsecutiveAgentLoops)
 	}
 }
+
+// Operator-configured context limits (coaching.context_limits) must win
+// over the built-in workflow profiles — they exist to override them.
+func TestOperatorProfileOverridesBuiltIn(t *testing.T) {
+	d := New(Config{Profiles: []Profile{{
+		WorkflowPrefix:   "claude-code:",
+		MaxContextTokens: 100_000,
+	}}})
+	steps := []workflow.Step{
+		mkStep(0, "agent-1", "h1", 50_000, 0),
+		mkStep(1, "agent-1", "h2", 200_000, 0),
+	}
+	trace := mkTrace(steps)
+	trace.WorkflowID = "claude-code:sess-1"
+	// 200k peak: under the built-in 900k cap, over the operator's 100k.
+	var found bool
+	for _, ev := range d.Detect(trace) {
+		if ev.Summary == "Oversized context window" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("operator 100k limit ignored; built-in 900k profile still applied")
+	}
+}
+
+// Without an operator profile, the built-in claude-code profile still
+// applies (no regression).
+func TestBuiltInProfileStillAppliesWithoutOperatorOverride(t *testing.T) {
+	d := New(Config{})
+	steps := []workflow.Step{mkStep(0, "agent-1", "h1", 200_000, 0)}
+	trace := mkTrace(steps)
+	trace.WorkflowID = "claude-code:sess-1"
+	for _, ev := range d.Detect(trace) {
+		if ev.Summary == "Oversized context window" {
+			t.Errorf("200k context flagged despite built-in 900k claude-code cap: %+v", ev)
+		}
+	}
+}
+
+// Profiles with a non-matching prefix must not affect other workflows.
+func TestOperatorProfileScopedToPrefix(t *testing.T) {
+	d := New(Config{Profiles: []Profile{{
+		WorkflowPrefix:   "codex:",
+		MaxContextTokens: 1,
+	}}})
+	steps := []workflow.Step{mkStep(0, "agent-1", "h1", 1000, 0)}
+	trace := mkTrace(steps) // WorkflowID "wf-A"
+	for _, ev := range d.Detect(trace) {
+		if ev.Summary == "Oversized context window" {
+			t.Errorf("codex: profile leaked onto wf-A: %+v", ev)
+		}
+	}
+}

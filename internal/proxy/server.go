@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/router"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/tokenizer"
 	"github.com/felixgeelhaar/tokenops/internal/events"
 	"github.com/felixgeelhaar/tokenops/internal/proxy/cache"
@@ -41,6 +42,9 @@ type Server struct {
 	auditDrops      func() int64
 	resilience      *ResilienceConfig
 	dashAuth        DashAuth
+	// router applies live model routing when active mode is enabled
+	// (WithActiveRouting). nil = observe-only.
+	router *router.Router
 
 	mu       sync.Mutex
 	httpSrv  *http.Server

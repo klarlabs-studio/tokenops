@@ -6,7 +6,9 @@ import (
 	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/dedupe"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/promptcompress"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/retrievalprune"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/router"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/tokenizer"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
 )
 
 // PipelineConfig customises the optimizer mix without forcing callers
@@ -17,6 +19,13 @@ type PipelineConfig struct {
 	// default pipeline (e.g. ["semantic_dedupe"] for a compress-only
 	// replay).
 	Disable []string
+	// Routing, when non-nil with at least one rule, appends the
+	// model-routing optimizer (operator-configured "route X to Y"
+	// table) to the pipeline. Sourced from config optimizer.routing_rules.
+	Routing *router.Config
+	// Spend prices router savings in USD. nil leaves routing
+	// recommendations token-only.
+	Spend *spend.Engine
 }
 
 // DefaultPipeline returns the canonical optimizer pipeline used by every
@@ -50,6 +59,12 @@ func BuildPipeline(reg *tokenizer.Registry, cfg PipelineConfig) *optimizer.Pipel
 		{"semantic_dedupe", dedupe.New(dedupe.Config{}, reg)},
 		{"retrieval_prune", retrievalprune.New(retrievalprune.Config{}, reg)},
 		{"context_trim", contexttrim.New(contexttrim.Config{}, reg)},
+	}
+	if cfg.Routing != nil && len(cfg.Routing.Rules) > 0 {
+		all = append(all, struct {
+			kind string
+			opt  optimizer.Optimizer
+		}{"model_router", router.New(*cfg.Routing, cfg.Spend)})
 	}
 	opts := make([]optimizer.Optimizer, 0, len(all))
 	for _, a := range all {
