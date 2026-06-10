@@ -165,6 +165,9 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if err := mcp.RegisterPlanTools(srv, planDeps); err != nil {
 		return fmt.Errorf("register plan tools: %w", err)
 	}
+	if err := mcp.RegisterModeTools(srv, mcp.ModeDeps{}); err != nil {
+		return fmt.Errorf("register mode tools: %w", err)
+	}
 	if err := mcp.RegisterHelpTool(srv); err != nil {
 		return fmt.Errorf("register help tool: %w", err)
 	}

@@ -16,6 +16,12 @@ Recommended path: run passive, use `tokenops replay` to validate what a
 routing rule would have saved on real history, then flip `mode: active`
 to enforce it.
 
+Mode, budgets, and routing rules are also editable through the MCP
+server — `tokenops_mode`, `tokenops_budget_set`, and
+`tokenops_routing_rule_set` write the same `config.yaml` the CLI verbs
+manage (validated before every write). The daemon picks the changes up
+on its next restart.
+
 ## Reference
 
 ```yaml

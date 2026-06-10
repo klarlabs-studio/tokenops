@@ -129,6 +129,27 @@ var helpCatalog = []helpCategory{
 		},
 	},
 	{
+		Name:        "control",
+		Description: "Mutate the daemon configuration: operating mode, budgets, routing rules. Changes persist to config.yaml; the daemon applies them on restart.",
+		Tools: []helpTool{
+			{
+				Name:    "tokenops_mode",
+				Summary: "Get or set passive|active. Active = live routing interventions + background spend watcher.",
+				Example: `{"set":"active"}`,
+			},
+			{
+				Name:    "tokenops_budget_set",
+				Summary: "Upsert/delete a calendar-window spend limit the active-mode watcher evaluates.",
+				Example: `{"name":"weekly-all","window":"weekly","limit_usd":50}`,
+			},
+			{
+				Name:    "tokenops_routing_rule_set",
+				Summary: "Upsert/delete a route-X-to-Y rule. Validate via tokenops_replay, enforce via mode=active.",
+				Example: `{"provider":"anthropic","from_model":"claude-fable-5*","to_model":"claude-opus-4-8","quality":0.9}`,
+			},
+		},
+	},
+	{
 		Name:        "debug",
 		Description: "Diagnostics for daemon + event flow.",
 		Tools: []helpTool{
