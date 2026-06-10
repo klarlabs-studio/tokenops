@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+## 0.22.0 - 2026-06-10
+
+### Added
+
+- **Claude Fable 5 pricing** (`claude-fable-5*`, $10/$50 per MTok) plus
+  `claude-opus-4-8` / `claude-opus-4-6` rows in the price catalog.
+- **Data-driven pricing catalog**: rates moved from Go constants to an
+  embedded `pricing.yaml`; `pricing.path` (or `TOKENOPS_PRICING_PATH`)
+  layers operator overrides — price newly released models or negotiated
+  rates without upgrading.
+- **Unpriced-model warnings**: `tokenops spend` and the
+  `tokenops_spend_summary` MCP tool flag models the catalog cannot
+  cost instead of silently under-reporting totals.
+- **Model routing rules** (`optimizer.routing_rules`): replay reports
+  per-rule "would save $X" rollups so a route can be validated on real
+  history offline.
+- **Operating modes** (`mode: passive | active`): active mode applies
+  routing rules to live proxied traffic (recorded as applied
+  optimization events; original requested model preserved in the
+  observation) and runs a background spend watcher that evaluates
+  `budgets` (calendar windows + Holt forecast) every `watch.interval`
+  and flags unpriced models.
+- **MCP config tools**: `tokenops_mode`, `tokenops_budget_set`,
+  `tokenops_routing_rule_set` mutate the same config.yaml the CLI
+  manages, validated before every write.
+- **Configurable waste thresholds** (`coaching.context_limits`):
+  per-workflow-prefix overrides for the waste detector; operator
+  config now wins over the built-in claude-code/codex profiles.
+- Prompt-coach savings priced at each turn's observed model instead of
+  a flat claude-opus-4-7 assumption.
+
+### Fixed
+
+- `claude-opus-4-7` list price corrected from $15/$75 to $5/$25 per
+  MTok (Opus 4.1-era rate had been carried over). Recomputed
+  historical opus-4-7 costs drop ~3x; coaching savings projections
+  shrink accordingly.
+- Demo fixture rates now derive from the catalog (the seeded
+  gemini-2.5-pro output rate had drifted).
+
 ## 0.21.1 - 2026-05-17
 
 ### Fixed
