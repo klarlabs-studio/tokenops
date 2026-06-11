@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.25.0 - 2026-06-11
+
+### Added
+
+- **Mistral proxy support**: `/mistral/` route to api.mistral.ai with
+  request normalization for chat-completions and FIM (codestral), plus
+  a heuristic tokenizer — Mistral traffic is now observable and
+  costable through the proxy like OpenAI/Anthropic/Gemini.
+- **Gemini plan**: `gemini-ai-premium` (Google One AI Premium) catalog
+  entry; windowless (Google publishes no caps).
+
+### Fixed
+
+- Copilot, Cursor, and Anthropic admin-API poller events are marked as
+  quota/aggregate snapshots and no longer count as user messages in
+  plan window math.
+
 ## 0.24.0 - 2026-06-11
 
 ### Added
