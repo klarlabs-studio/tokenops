@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+## 0.24.0 - 2026-06-11
+
+### Added
+
+- **API-equivalent spend metric**: `tokenops spend` shows
+  `api equivalent` and `tokenops_spend_summary` returns
+  `api_equivalent_usd` — what the window would have billed at API list
+  prices, including plan-covered traffic. On flat plans this is the
+  shadow value the subscription absorbed.
+- **Budget basis** (`budgets[].basis: spend | equivalent`): flat-plan
+  deployments can watch list-price value instead of real spend (which
+  is ~$0 forever on a subscription). `tokenops_budget_set` accepts
+  `basis`. Equivalent budgets get threshold alerts (no forecast).
+- **Central plan stamping**: events are stamped `plan_included` at the
+  storage sink for any provider with a plan bound — covers every
+  poller (cursor, copilot, anthropic-cookie, admin API), the proxy
+  observer, and future emitters without per-emitter wiring.
+
+### Fixed
+
+- CI/release workflows forced to Node 24 ahead of GitHub removing
+  Node 20 from runners (2026-09-16).
+
 ## 0.23.1 - 2026-06-11
 
 ### Fixed
