@@ -206,7 +206,10 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			)
 		}
 
-		bus = events.NewAsync(events.NewMultiSink(sinks...), events.Options{Logger: logger})
+		// Plan stamping wraps the sink so every emitter (pollers, proxy
+		// observer, future sources) inherits the plan_included contract
+		// without per-emitter wiring.
+		bus = events.NewAsync(newPlanStampSink(events.NewMultiSink(sinks...), cfg), events.Options{Logger: logger})
 		logger.Info("event store ready", "path", path)
 		opts = append(opts,
 			proxy.WithEventBus(bus),

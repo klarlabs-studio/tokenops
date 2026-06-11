@@ -78,6 +78,11 @@ type BudgetConfig struct {
 	// or agent; empty applies to all spend.
 	WorkflowID string `yaml:"workflow_id"`
 	AgentID    string `yaml:"agent_id"`
+	// Basis selects what the limit watches: "spend" (default — real
+	// billed cost) or "equivalent" (API list-price value, including
+	// plan-covered usage). Flat-plan deployments use "equivalent" since
+	// their real spend is always ~0.
+	Basis string `yaml:"basis"`
 }
 
 // BudgetLimits maps the configured budgets into the budget engine's
@@ -96,6 +101,7 @@ func (c Config) BudgetLimits() []budget.Limit {
 			CritAt:     b.CritAt,
 			WorkflowID: b.WorkflowID,
 			AgentID:    b.AgentID,
+			Basis:      strings.ToLower(b.Basis),
 		})
 	}
 	return out
@@ -504,6 +510,11 @@ func (c Config) Validate() error {
 		}
 		if b.WarnAt < 0 || b.WarnAt > 1 || b.CritAt < 0 || b.CritAt > 1 {
 			return fmt.Errorf("budgets[%d]: warn_at and crit_at must be in [0,1]", i)
+		}
+		switch strings.ToLower(b.Basis) {
+		case "", budget.BasisSpend, budget.BasisEquivalent:
+		default:
+			return fmt.Errorf("budgets[%d]: basis must be %q or %q, got %q", i, budget.BasisSpend, budget.BasisEquivalent, b.Basis)
 		}
 	}
 	if c.Watch.Interval < 0 {

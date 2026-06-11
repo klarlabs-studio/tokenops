@@ -10,6 +10,12 @@ permissions:
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
+    env:
+      # checkout@v4 / setup-go@v5 / goreleaser-action@v6 still default
+      # to Node 20, which GitHub removes from runners 2026-09-16. Force
+      # Node 24 now (default from 2026-06-16 anyway) so the workflow
+      # doesn't break when the runner drops Node 20.
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     steps:
       - uses: actions/checkout@v4 # v4.2.2
         with:

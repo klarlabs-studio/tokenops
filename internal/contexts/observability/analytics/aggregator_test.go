@@ -461,3 +461,47 @@ func TestSummarizeSkipsPlanIncludedEvents(t *testing.T) {
 		t.Errorf("plan-included pseudo-model flagged unpriced: %+v", s.Unpriced)
 	}
 }
+
+// APIEquivalentUSD = real cost + list-price value of plan-covered
+// traffic. Flat-plan deployments read their shadow value here while
+// CostUSD stays honest at ~0.
+func TestSummarizeAPIEquivalent(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	base := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
+	envs := []*eventschema.Envelope{
+		{
+			ID: "plan", SchemaVersion: eventschema.SchemaVersion,
+			Type: eventschema.EventTypePrompt, Timestamp: base, Source: "claude-code-jsonl",
+			Payload: &eventschema.PromptEvent{
+				Provider: eventschema.ProviderAnthropic, RequestModel: "claude-fable-5",
+				InputTokens: 1_000_000, OutputTokens: 100_000, TotalTokens: 1_100_000,
+				CostSource: eventschema.CostSourcePlanIncluded,
+			},
+		},
+		{
+			ID: "metered", SchemaVersion: eventschema.SchemaVersion,
+			Type: eventschema.EventTypePrompt, Timestamp: base.Add(time.Minute), Source: "proxy",
+			Payload: &eventschema.PromptEvent{
+				Provider: eventschema.ProviderAnthropic, RequestModel: "claude-haiku-4-5",
+				InputTokens: 1_000_000, OutputTokens: 100_000, TotalTokens: 1_100_000,
+			},
+		},
+	}
+	if err := store.AppendBatch(ctx, envs); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	agg := New(store, spend.NewEngine(spend.DefaultTable()))
+	s, err := agg.Summarize(ctx, Filter{})
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	// Real cost: haiku only — 1M×$1 + 100K×$5/M = 1.50
+	if s.CostUSD < 1.45 || s.CostUSD > 1.55 {
+		t.Errorf("CostUSD = %.4f; want ~1.50 (metered only)", s.CostUSD)
+	}
+	// Equivalent adds fable at list: 1M×$10 + 100K×$50/M = 15.00 → 16.50
+	if s.APIEquivalentUSD < 16.40 || s.APIEquivalentUSD > 16.60 {
+		t.Errorf("APIEquivalentUSD = %.4f; want ~16.50", s.APIEquivalentUSD)
+	}
+}

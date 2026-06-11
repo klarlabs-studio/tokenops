@@ -391,3 +391,15 @@ func TestBudgetLimitsMapping(t *testing.T) {
 		t.Errorf("limit = %+v", l)
 	}
 }
+
+func TestValidateBudgetBasis(t *testing.T) {
+	cfg := Default()
+	cfg.Budgets = []BudgetConfig{{Name: "w", Window: "weekly", LimitUSD: 10, Basis: "equivalent"}}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("equivalent basis rejected: %v", err)
+	}
+	cfg.Budgets[0].Basis = "shadow"
+	if err := cfg.Validate(); err == nil {
+		t.Error("invalid basis accepted")
+	}
+}

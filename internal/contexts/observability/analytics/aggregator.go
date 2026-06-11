@@ -125,6 +125,12 @@ type Summary struct {
 	OutputTokens int64
 	TotalTokens  int64
 	CostUSD      float64
+	// APIEquivalentUSD is what the window would have billed at API list
+	// prices: CostUSD plus a list-price recompute of plan-included and
+	// trial traffic (which is $0 real). For metered-only deployments it
+	// equals CostUSD; for flat-plan deployments it is the shadow value
+	// the subscription absorbed.
+	APIEquivalentUSD float64
 	// Unpriced lists (provider, model) pairs in the window whose events
 	// carry no stored cost and have no rate in the pricing table, so
 	// their cost is silently absent from CostUSD. Surfaces (e.g. a newly
@@ -333,8 +339,63 @@ func (a *Aggregator) Summarize(ctx context.Context, f Filter) (Summary, error) {
 		}
 		s.CostUSD += recomputed
 		s.Unpriced = unpriced
+		planValue, err := a.summarizePlanCoveredValue(ctx, f)
+		if err != nil {
+			return Summary{}, err
+		}
+		s.APIEquivalentUSD = s.CostUSD + planValue
+	} else {
+		s.APIEquivalentUSD = s.CostUSD
 	}
 	return s, nil
+}
+
+// summarizePlanCoveredValue recomputes plan-included / trial traffic at
+// list prices — the shadow value a flat-rate subscription absorbed.
+// Mirrors summarizeMissingCost with the cost-source filter inverted;
+// unknown models are skipped silently here (they already surface via
+// Unpriced when metered, and pseudo-models like mcp-session would only
+// add noise).
+func (a *Aggregator) summarizePlanCoveredValue(ctx context.Context, f Filter) (float64, error) {
+	conds, args := buildConditions(f)
+	conds = append(conds,
+		`COALESCE(json_extract(payload, '$.cost_source'), '') IN ('plan_included', 'trial')`,
+	)
+	q := `SELECT provider, model,
+			COALESCE(SUM(input_tokens), 0),
+			COALESCE(SUM(output_tokens), 0),
+			COALESCE(SUM(CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER)), 0)
+		FROM events WHERE ` + strings.Join(conds, " AND ") +
+		` GROUP BY provider, model`
+	rows, err := a.store.DB().QueryContext(ctx, q, args...)
+	if err != nil {
+		return 0, fmt.Errorf("analytics: plan-covered value query: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var total float64
+	for rows.Next() {
+		var (
+			provider, model        sql.NullString
+			inTok, outTok, cacheIn sql.NullInt64
+		)
+		if err := rows.Scan(&provider, &model, &inTok, &outTok, &cacheIn); err != nil {
+			return 0, fmt.Errorf("analytics: plan-covered value scan: %w", err)
+		}
+		p := &eventschema.PromptEvent{
+			Provider:          eventschema.Provider(provider.String),
+			RequestModel:      model.String,
+			InputTokens:       inTok.Int64,
+			CachedInputTokens: cacheIn.Int64,
+			OutputTokens:      outTok.Int64,
+		}
+		if c, err := a.spend.Compute(p); err == nil {
+			total += c
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("analytics: plan-covered value iterate: %w", err)
+	}
+	return total, nil
 }
 
 // CacheStatsResult is the per-window cache split. Token counts are

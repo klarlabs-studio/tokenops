@@ -88,6 +88,9 @@ budgets:                      # evaluated by the active-mode watcher
     limit_usd: 50
     warn_at: 0.75             # optional; fraction of limit_usd
     crit_at: 0.95             # optional
+    basis: spend              # spend (real billed cost, default) |
+                              # equivalent (API list-price value incl.
+                              # plan-covered usage — use on flat plans)
     # workflow_id / agent_id optionally scope the limit
 
 watch:
@@ -129,6 +132,19 @@ window) and publishing `budget.exceeded` domain events. The watcher
 also flags models missing from the pricing table. In passive mode
 budgets are inert — define them ahead of time and flip the mode when
 you want enforcement-grade visibility.
+
+On flat-rate plans (Claude Max, ChatGPT Plus) real spend is ~$0 — a
+`basis: spend` budget guards nothing. Use `basis: equivalent` to watch
+the **API-equivalent value** instead: what the window's usage would
+have billed at list prices, including plan-covered traffic. The same
+figure appears as `api equivalent` in `tokenops spend` and
+`api_equivalent_usd` in the `tokenops_spend_summary` MCP tool.
+Equivalent-basis budgets get threshold alerts only (no forecast).
+
+Plan-covered traffic is identified centrally: every event written to
+the store for a provider with a plan bound in `plans:` is stamped
+`plan_included` at the storage sink, regardless of which poller or
+proxy produced it.
 
 ## Waste-detector context limits
 

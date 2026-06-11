@@ -45,7 +45,17 @@ type Limit struct {
 	CritAt     float64
 	WorkflowID string
 	AgentID    string
+	// Basis selects the metric the limit watches. The evaluator is
+	// metric-agnostic — callers resolve the actual figure; this field
+	// rides along so they know which one to fetch.
+	Basis string
 }
+
+// Basis values for Limit.Basis.
+const (
+	BasisSpend      = "spend"
+	BasisEquivalent = "equivalent"
+)
 
 // WindowStart returns the UTC start of the calendar window containing
 // now: midnight for daily, Monday midnight for weekly, first of the

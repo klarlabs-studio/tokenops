@@ -288,6 +288,10 @@ func writeSpendText(w io.Writer, v spendView) error {
 	fmt.Fprintf(w, "  output tokens:   %d\n", v.Summary.OutputTokens)
 	fmt.Fprintf(w, "  total tokens:    %d\n", v.Summary.TotalTokens)
 	fmt.Fprintf(w, "  total spend:     %s\n", fmtMoney(v.Summary.CostUSD, v.Currency))
+	if v.Summary.APIEquivalentUSD > v.Summary.CostUSD {
+		fmt.Fprintf(w, "  api equivalent:  %s (plan-covered usage at list price)\n",
+			fmtMoney(v.Summary.APIEquivalentUSD, v.Currency))
+	}
 	fmt.Fprintf(w, "  burn rate (24h): %s", fmtMoney(v.BurnRate24h, v.Currency))
 	if !v.HideSparkline {
 		if line := sparklineFromRows(v.BurnSeries); line != "" {

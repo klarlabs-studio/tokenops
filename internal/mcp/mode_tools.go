@@ -42,6 +42,7 @@ type budgetSetInput struct {
 	CritAt     float64 `json:"crit_at,omitempty" jsonschema:"description=Fraction of limit_usd for critical alerts (default 0.95)"`
 	WorkflowID string  `json:"workflow_id,omitempty"`
 	AgentID    string  `json:"agent_id,omitempty"`
+	Basis      string  `json:"basis,omitempty" jsonschema:"enum=spend,enum=equivalent,description=What the limit watches: spend (real billed cost, default) or equivalent (API list-price value incl. plan-covered usage — use on flat plans where real spend is ~0)"`
 	Delete     bool    `json:"delete,omitempty" jsonschema:"description=Remove the budget with this name"`
 }
 
@@ -132,6 +133,7 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 					Name: in.Name, Window: strings.ToLower(in.Window), LimitUSD: in.LimitUSD,
 					WarnAt: in.WarnAt, CritAt: in.CritAt,
 					WorkflowID: in.WorkflowID, AgentID: in.AgentID,
+					Basis: strings.ToLower(in.Basis),
 				}
 				if idx >= 0 {
 					cfg.Budgets[idx] = b

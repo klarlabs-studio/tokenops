@@ -17,6 +17,12 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+# Pinned actions still default to Node 20, which GitHub removes from
+# runners 2026-09-16. Force Node 24 (the default from 2026-06-16) so
+# workflows keep running when Node 20 disappears.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build:
     runs-on: ubuntu-latest

@@ -61,9 +61,18 @@ func watchTick(ctx context.Context, agg *analytics.Aggregator, spendEng *spend.E
 				logger.Warn("spend watcher: summarize failed", "budget", l.Name, "err", err)
 				return 0
 			}
+			if l.Basis == budget.BasisEquivalent {
+				return s.APIEquivalentUSD
+			}
 			return s.CostUSD
 		},
 		func(l budget.Limit) []forecast.Prediction {
+			if l.Basis == budget.BasisEquivalent {
+				// Daily cost rows carry real spend only; an equivalent-
+				// basis forecast would need a parallel recomputed series.
+				// Threshold alerts still fire — forecast is skipped.
+				return nil
+			}
 			start := budget.WindowStart(l.Window, now)
 			end := budget.WindowEnd(l.Window, start)
 			daysLeft := int(end.Sub(now).Hours()/24) + 1

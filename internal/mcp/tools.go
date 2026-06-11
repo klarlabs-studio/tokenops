@@ -156,13 +156,14 @@ func spendSummary(ctx context.Context, d Deps, in spendSummaryInput) (string, er
 		return "", err
 	}
 	payload := map[string]any{
-		"window":        in,
-		"requests":      summary.Requests,
-		"input_tokens":  summary.InputTokens,
-		"output_tokens": summary.OutputTokens,
-		"total_tokens":  summary.TotalTokens,
-		"cost_usd":      summary.CostUSD,
-		"currency":      d.Spend.Currency(),
+		"window":             in,
+		"requests":           summary.Requests,
+		"input_tokens":       summary.InputTokens,
+		"output_tokens":      summary.OutputTokens,
+		"total_tokens":       summary.TotalTokens,
+		"cost_usd":           summary.CostUSD,
+		"api_equivalent_usd": summary.APIEquivalentUSD,
+		"currency":           d.Spend.Currency(),
 	}
 	if len(summary.Unpriced) > 0 {
 		models := make([]map[string]any, 0, len(summary.Unpriced))
