@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 0.23.0 - 2026-06-11
+
+### Added
+
+- **`tokenops_mode` ensures a daemon**: setting `active` via MCP probes
+  the daemon's advertised URL and, when nothing answers, starts
+  `tokenops start` detached with the freshly written config (logs to
+  `daemon.log` next to `events.db`). A running daemon is left alone
+  with a restart reminder. Active mode can no longer be a silent no-op.
+
+### Fixed
+
+- Plan-included and trial events are excluded from cost recompute and
+  unpriced-model detection: recompute could invent list-price spend
+  for flat-rate traffic (aggregation drops the cost source), and the
+  `mcp-session` pseudo-model tripped the unpriced-model warning on the
+  watcher's first tick.
+
 ## 0.22.0 - 2026-06-10
 
 ### Added
