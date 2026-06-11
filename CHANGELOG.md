@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.23.1 - 2026-06-11
+
+### Fixed
+
+- Vendor-usage pollers (claude-code JSONL, codex JSONL, legacy stats
+  cache) stamp events `plan_included` when a flat-rate plan is bound to
+  their provider — subscription-covered usage is no longer repriced at
+  API list rates by spend summaries, and budget alerts stop firing on
+  spend that never billed. Only newly ingested events are stamped.
+- Plan window math no longer counts assistant-turn events against the
+  vendor's messages meter (one prompt fans out into many tool-use
+  turns; the meter was reading ~10-50x over). Their tokens still count.
+- Spend forecasts clamp at zero instead of predicting negative spend
+  on declining trends.
+
 ## 0.23.0 - 2026-06-11
 
 ### Added
