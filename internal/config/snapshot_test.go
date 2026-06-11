@@ -56,3 +56,35 @@ func TestSnapshotEmptyHeadersStable(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Every secret field must be masked by Redacted — the CLI, MCP, and
+// dashboard all serialize this copy. A new secret field that isn't
+// masked here leaks via `tokenops config show`.
+func TestRedactedMasksAllSecrets(t *testing.T) {
+	cfg := Default()
+	cfg.Dashboard.AdminToken = "tok"
+	cfg.VendorUsage.Anthropic.AdminKey = "sk-ant-admin-x"
+	cfg.VendorUsage.AnthropicCookie.SessionKey = "sk-ant-sid02-x"
+	cfg.VendorUsage.Cursor.Cookie = "cookie"
+	cfg.VendorUsage.GitHubCopilot.OAuthToken = "gho_x"
+
+	r := cfg.Redacted()
+	for name, got := range map[string]string{
+		"dashboard.admin_token":        r.Dashboard.AdminToken,
+		"anthropic.admin_key":          r.VendorUsage.Anthropic.AdminKey,
+		"anthropic_cookie.session_key": r.VendorUsage.AnthropicCookie.SessionKey,
+		"cursor.cookie":                r.VendorUsage.Cursor.Cookie,
+		"github_copilot.oauth_token":   r.VendorUsage.GitHubCopilot.OAuthToken,
+	} {
+		if got != SensitiveHeaderPlaceholder {
+			t.Errorf("%s not redacted: %q", name, got)
+		}
+	}
+	// Original untouched; empty secrets stay empty (no placeholder noise).
+	if cfg.VendorUsage.AnthropicCookie.SessionKey != "sk-ant-sid02-x" {
+		t.Error("Redacted mutated the original")
+	}
+	if Default().Redacted().Dashboard.AdminToken != "" {
+		t.Error("empty secret gained a placeholder")
+	}
+}

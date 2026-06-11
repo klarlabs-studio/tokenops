@@ -29,12 +29,15 @@ func newConfigShowCmd(rf *rootFlags) *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
+			// Never print the raw config — secrets (session keys, admin
+			// tokens, cookies) must go through the central redaction.
+			redacted := cfg.Redacted()
 			if asJSON {
 				enc := json.NewEncoder(out)
 				enc.SetIndent("", "  ")
-				return enc.Encode(cfg)
+				return enc.Encode(redacted)
 			}
-			data, err := yaml.Marshal(cfg)
+			data, err := yaml.Marshal(redacted)
 			if err != nil {
 				return fmt.Errorf("marshal yaml: %w", err)
 			}
