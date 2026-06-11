@@ -80,7 +80,7 @@ func TestNewEnvelopeCarriesRateLimitsInAttributes(t *testing.T) {
 		},
 		RecordSequence: 1,
 	}
-	env := newEnvelope(turn)
+	env := newEnvelope(turn, "")
 	if env.Source != SourceTag {
 		t.Errorf("source = %q", env.Source)
 	}

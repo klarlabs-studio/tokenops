@@ -153,3 +153,30 @@ func TestLinearFlatSeriesDegenerate(t *testing.T) {
 		}
 	}
 }
+
+// Spend/token forecasts are non-negative quantities; a declining trend
+// must clamp at zero instead of predicting negative spend (observed on
+// real bursty agent data).
+func TestForecastsClampAtZero(t *testing.T) {
+	base := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	declining := []Point{
+		{At: base, Value: 10},
+		{At: base.Add(24 * time.Hour), Value: 6},
+		{At: base.Add(48 * time.Hour), Value: 2},
+		{At: base.Add(72 * time.Hour), Value: 0.5},
+	}
+	for name, f := range map[string]Forecaster{
+		"holt":   NewHolt(0.6, 0.3),
+		"linear": NewLinear(),
+	} {
+		preds, err := f.Forecast(declining, 7, 24*time.Hour)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		for _, p := range preds {
+			if p.Value < 0 || p.Lower < 0 || p.Upper < 0 {
+				t.Errorf("%s: negative prediction %+v", name, p)
+			}
+		}
+	}
+}

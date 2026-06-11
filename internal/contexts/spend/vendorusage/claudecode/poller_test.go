@@ -83,7 +83,7 @@ func TestPollerEmitsOnlyDeltaForGrowingModel(t *testing.T) {
 // Source tag is the upgrade contract — signal_quality looks for it
 // when promoting Anthropic confidence above "low". Lock it down.
 func TestEnvelopeSourceTag(t *testing.T) {
-	env, ok := newEnvelope("2026-05-01", "claude-opus-4-7", 1000, Model{InputTokens: 100, OutputTokens: 900})
+	env, ok := newEnvelope("2026-05-01", "claude-opus-4-7", 1000, Model{InputTokens: 100, OutputTokens: 900}, "")
 	if !ok {
 		t.Fatal("newEnvelope returned !ok")
 	}

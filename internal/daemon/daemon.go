@@ -38,6 +38,7 @@ import (
 	"github.com/felixgeelhaar/tokenops/internal/proxy"
 	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
 	"github.com/felixgeelhaar/tokenops/internal/version"
+	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
 )
 
 // Run boots the daemon with cfg and blocks until ctx is cancelled (e.g. by
@@ -218,9 +219,10 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		// (signal_quality reads those tags to upgrade confidence).
 		if cfg.VendorUsage.ClaudeCode.Enabled {
 			p := claudecode.NewPoller(bus, claudecode.PollerOptions{
-				Path:     cfg.VendorUsage.ClaudeCode.Path,
-				Interval: cfg.VendorUsage.ClaudeCode.Interval,
-				Logger:   logger,
+				Path:       cfg.VendorUsage.ClaudeCode.Path,
+				Interval:   cfg.VendorUsage.ClaudeCode.Interval,
+				Logger:     logger,
+				CostSource: planCostSource(cfg, eventschema.ProviderAnthropic),
 			})
 			go func() {
 				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
@@ -234,9 +236,10 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		}
 		if cfg.VendorUsage.ClaudeCodeJSONL.Enabled {
 			p := claudecodejsonl.NewPoller(bus, claudecodejsonl.PollerOptions{
-				Root:     cfg.VendorUsage.ClaudeCodeJSONL.Root,
-				Interval: cfg.VendorUsage.ClaudeCodeJSONL.Interval,
-				Logger:   logger,
+				Root:       cfg.VendorUsage.ClaudeCodeJSONL.Root,
+				Interval:   cfg.VendorUsage.ClaudeCodeJSONL.Interval,
+				Logger:     logger,
+				CostSource: planCostSource(cfg, eventschema.ProviderAnthropic),
 			})
 			go func() {
 				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
@@ -250,9 +253,10 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		}
 		if cfg.VendorUsage.CodexJSONL.Enabled {
 			p := codexjsonl.NewPoller(bus, codexjsonl.PollerOptions{
-				Root:     cfg.VendorUsage.CodexJSONL.Root,
-				Interval: cfg.VendorUsage.CodexJSONL.Interval,
-				Logger:   logger,
+				Root:       cfg.VendorUsage.CodexJSONL.Root,
+				Interval:   cfg.VendorUsage.CodexJSONL.Interval,
+				Logger:     logger,
+				CostSource: planCostSource(cfg, eventschema.ProviderOpenAI),
 			})
 			go func() {
 				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
@@ -516,4 +520,17 @@ func resolveStoragePath(configured string) (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+// planCostSource returns the CostSource vendor-usage pollers stamp on
+// emitted events: plan_included when the operator bound a flat-rate
+// plan to the provider (config plans:), metered (empty) otherwise.
+// Without the stamp, the analytics recompute would price
+// subscription-covered usage at API list rates and budget alerts would
+// fire on spend that never billed.
+func planCostSource(cfg config.Config, provider eventschema.Provider) eventschema.CostSource {
+	if cfg.Plans[string(provider)] != "" {
+		return eventschema.CostSourcePlanIncluded
+	}
+	return ""
 }

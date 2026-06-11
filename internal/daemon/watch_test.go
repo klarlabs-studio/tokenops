@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/felixgeelhaar/tokenops/internal/config"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/governance/budget"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/observability/analytics"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
@@ -78,5 +79,15 @@ func TestWatchTickAlertsAndDedupes(t *testing.T) {
 	watchTick(ctx, agg, spendEng, limits, seen, logger)
 	if got := buf.String(); strings.Contains(got, "budget alert") || strings.Contains(got, "unpriced model") {
 		t.Errorf("alerts re-logged on unchanged state:\n%s", got)
+	}
+}
+
+func TestPlanCostSource(t *testing.T) {
+	cfg := config.Config{Plans: map[string]string{"anthropic": "claude-max-20x"}}
+	if got := planCostSource(cfg, eventschema.ProviderAnthropic); got != eventschema.CostSourcePlanIncluded {
+		t.Errorf("anthropic = %q; want plan_included", got)
+	}
+	if got := planCostSource(cfg, eventschema.ProviderOpenAI); got != "" {
+		t.Errorf("openai (no plan) = %q; want empty", got)
 	}
 }

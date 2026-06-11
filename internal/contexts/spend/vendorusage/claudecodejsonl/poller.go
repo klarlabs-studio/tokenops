@@ -32,6 +32,12 @@ type PollerOptions struct {
 	// Logger required for non-fatal errors (parse failures, missing
 	// files).
 	Logger *slog.Logger
+	// CostSource stamps every emitted PromptEvent. The daemon sets
+	// CostSourcePlanIncluded when a flat-rate plan is bound to the
+	// anthropic provider (config plans:) so subscription-covered usage
+	// is never repriced at API list rates by the analytics recompute.
+	// Empty means metered.
+	CostSource eventschema.CostSource
 }
 
 // Poller diffs successive scans of the JSONL tree and publishes one
@@ -115,7 +121,7 @@ func (p *Poller) scan(ctx context.Context, root string) {
 			p.seen[turn.MessageID] = struct{}{}
 			p.mu.Unlock()
 			if p.bus != nil {
-				env := newEnvelope(turn)
+				env := newEnvelope(turn, p.opts.CostSource)
 				p.bus.Publish(env)
 				p.mu.Lock()
 				p.publishes++
@@ -138,7 +144,7 @@ func (p *Poller) scan(ctx context.Context, root string) {
 // on Anthropic's blended cache pricing (rough — cache-read is priced
 // lower than uncached input; future refinement can split the buckets
 // via the Attributes map).
-func newEnvelope(t Turn) *eventschema.Envelope {
+func newEnvelope(t Turn, costSource eventschema.CostSource) *eventschema.Envelope {
 	inputTokens := t.InputTokens + t.CacheReadInputTokens + t.CacheCreationInputTokens
 	totalTokens := inputTokens + t.OutputTokens
 	// Deterministic envelope ID per message — re-scanning the same
@@ -152,6 +158,11 @@ func newEnvelope(t Turn) *eventschema.Envelope {
 		Timestamp:     t.Timestamp,
 		Source:        SourceTag,
 		Attributes: map[string]string{
+			// One event per ASSISTANT TURN — finer than the vendor's
+			// "messages" meter (user prompts). Plan window math reads
+			// this to count tokens without counting the event as a
+			// message (see plans.ConsumptionInWindow).
+			"granularity":          "assistant_turn",
 			"session_id":           t.SessionID,
 			"project":              t.Project,
 			"message_id":           t.MessageID,
@@ -177,6 +188,7 @@ func newEnvelope(t Turn) *eventschema.Envelope {
 			AgentID:    claudeCodeAgentID(t.Project),
 			WorkflowID: claudeCodeWorkflowID(t.Project, t.SessionID),
 			Status:     200,
+			CostSource: costSource,
 		},
 	}
 }

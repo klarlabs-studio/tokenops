@@ -127,7 +127,9 @@ func ConsumptionInWindow(ctx context.Context, r EventReader, provider string, no
 		if env.Timestamp.Before(cutoff) {
 			continue
 		}
-		out.MessagesInWindow++
+		if countsAsMessage(env) {
+			out.MessagesInWindow++
+		}
 		tokens := p.TotalTokens
 		if tokens == 0 {
 			tokens = p.InputTokens + p.OutputTokens
@@ -135,4 +137,21 @@ func ConsumptionInWindow(ctx context.Context, r EventReader, provider string, no
 		out.TokensInWindow += tokens
 	}
 	return out, nil
+}
+
+// countsAsMessage reports whether an event approximates one entry on
+// the vendor's "messages" meter (a user prompt). Sources that emit
+// finer- or coarser-grained events declare it via the granularity
+// attribute: the claude-code / codex JSONL readers emit one event per
+// ASSISTANT TURN (a single prompt fans out into many tool-use turns)
+// and the legacy stats-cache poller emits one event per (day, model).
+// Counting those against a 200-messages-per-window cap would inflate
+// the meter by an order of magnitude; their tokens still count.
+func countsAsMessage(env *eventschema.Envelope) bool {
+	switch env.Attributes["granularity"] {
+	case "assistant_turn", "daily":
+		return false
+	default:
+		return true
+	}
 }

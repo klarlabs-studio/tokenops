@@ -30,6 +30,10 @@ type PollerOptions struct {
 	// Logger is used for non-fatal failures (missing cache, parse
 	// errors). Required.
 	Logger *slog.Logger
+	// CostSource stamps every emitted PromptEvent. The daemon sets
+	// CostSourcePlanIncluded when a flat-rate plan is bound to the
+	// anthropic provider (config plans:). Empty means metered.
+	CostSource eventschema.CostSource
 }
 
 // Poller diffs successive cache reads and publishes one PromptEvent
@@ -143,7 +147,7 @@ func (p *Poller) scan(ctx context.Context, path string) {
 			delta := total - prev
 			seen[model] = total
 			if p.bus != nil {
-				env, ok := newEnvelope(row.Date, model, delta, c.ModelUsage[model])
+				env, ok := newEnvelope(row.Date, model, delta, c.ModelUsage[model], p.opts.CostSource)
 				if !ok {
 					continue
 				}
@@ -167,7 +171,7 @@ func (p *Poller) scan(ctx context.Context, path string) {
 // input/output buckets so spend.Engine can attach a price; without
 // the split, downstream cost calc would charge everything as input.
 // Returns ok=false when model is empty or delta is zero.
-func newEnvelope(date, model string, delta int64, summary Model) (*eventschema.Envelope, bool) {
+func newEnvelope(date, model string, delta int64, summary Model, costSource eventschema.CostSource) (*eventschema.Envelope, bool) {
 	if model == "" || delta <= 0 {
 		return nil, false
 	}
@@ -204,6 +208,7 @@ func newEnvelope(date, model string, delta int64, summary Model) (*eventschema.E
 			OutputTokens: output,
 			TotalTokens:  delta,
 			Status:       200,
+			CostSource:   costSource,
 		},
 	}, true
 }

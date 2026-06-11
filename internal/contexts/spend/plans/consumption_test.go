@@ -133,3 +133,41 @@ func TestConsumptionInWindowZeroDurationReturnsEmpty(t *testing.T) {
 		t.Errorf("expected zero (no window), got %+v", got)
 	}
 }
+
+// Assistant-turn and daily-rollup events carry real tokens but are not
+// "messages" on the vendor meter — a single user prompt fans out into
+// many assistant turns, so counting them against a 200-messages window
+// inflates the meter ~10-50x (observed live after plan stamping).
+func TestWindowConsumptionSkipsNonMessageGranularity(t *testing.T) {
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	mk := func(id, granularity string) *eventschema.Envelope {
+		env := &eventschema.Envelope{
+			ID: id, SchemaVersion: eventschema.SchemaVersion,
+			Type: eventschema.EventTypePrompt, Timestamp: now.Add(-time.Hour), Source: "test",
+			Payload: &eventschema.PromptEvent{
+				Provider: eventschema.ProviderAnthropic, RequestModel: "claude-fable-5",
+				TotalTokens: 100, CostSource: eventschema.CostSourcePlanIncluded,
+			},
+		}
+		if granularity != "" {
+			env.Attributes = map[string]string{"granularity": granularity}
+		}
+		return env
+	}
+	r := fakeReader{envs: []*eventschema.Envelope{
+		mk("prompt-1", ""),             // mcp-session / proxy style → message
+		mk("turn-1", "assistant_turn"), // JSONL reader → tokens only
+		mk("turn-2", "assistant_turn"), // JSONL reader → tokens only
+		mk("day-1", "daily"),           // legacy stats cache → tokens only
+	}}
+	got, err := ConsumptionInWindow(context.Background(), r, "anthropic", now, 5*time.Hour)
+	if err != nil {
+		t.Fatalf("ConsumptionInWindow: %v", err)
+	}
+	if got.MessagesInWindow != 1 {
+		t.Errorf("MessagesInWindow = %d; want 1 (turns + daily rollups are not messages)", got.MessagesInWindow)
+	}
+	if got.TokensInWindow != 400 {
+		t.Errorf("TokensInWindow = %d; want 400 (all events' tokens count)", got.TokensInWindow)
+	}
+}

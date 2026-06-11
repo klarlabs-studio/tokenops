@@ -95,7 +95,7 @@ func TestNewEnvelopeShape(t *testing.T) {
 		CacheReadInputTokens:     1000,
 		CacheCreationInputTokens: 50,
 	}
-	env := newEnvelope(turn)
+	env := newEnvelope(turn, "")
 	if env.Source != SourceTag {
 		t.Errorf("Source = %q; want %q", env.Source, SourceTag)
 	}
@@ -111,7 +111,7 @@ func TestNewEnvelopeShape(t *testing.T) {
 		t.Errorf("total = %d; want 1080", pe.TotalTokens)
 	}
 	// Re-mint with identical inputs → identical ID (dedup-safe).
-	env2 := newEnvelope(turn)
+	env2 := newEnvelope(turn, "")
 	if env.ID != env2.ID {
 		t.Errorf("envelope IDs must be deterministic per message: %s vs %s", env.ID, env2.ID)
 	}
@@ -131,7 +131,7 @@ func TestNewEnvelopeAttribution(t *testing.T) {
 		OutputTokens:         500,
 		CacheReadInputTokens: 95_000,
 	}
-	env := newEnvelope(turn)
+	env := newEnvelope(turn, "")
 	pe := env.Payload.(*eventschema.PromptEvent)
 	if pe.SessionID != "abc-123" {
 		t.Errorf("SessionID = %q; want abc-123", pe.SessionID)
@@ -141,5 +141,23 @@ func TestNewEnvelopeAttribution(t *testing.T) {
 	}
 	if pe.CachedInputTokens != 95_000 {
 		t.Errorf("CachedInputTokens = %d; want 95000", pe.CachedInputTokens)
+	}
+}
+
+// Plan-bound deployments stamp every JSONL event plan_included so the
+// analytics recompute never reprices subscription-covered usage.
+func TestNewEnvelopeStampsCostSource(t *testing.T) {
+	turn := Turn{
+		Timestamp: time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC),
+		SessionID: "s1", MessageID: "m1", Model: "claude-fable-5",
+		InputTokens: 10, OutputTokens: 5,
+	}
+	env := newEnvelope(turn, eventschema.CostSourcePlanIncluded)
+	pe := env.Payload.(*eventschema.PromptEvent)
+	if pe.CostSource != eventschema.CostSourcePlanIncluded {
+		t.Errorf("CostSource = %q; want plan_included", pe.CostSource)
+	}
+	if pe := newEnvelope(turn, "").Payload.(*eventschema.PromptEvent); pe.CostSource != "" {
+		t.Errorf("metered CostSource = %q; want empty", pe.CostSource)
 	}
 }

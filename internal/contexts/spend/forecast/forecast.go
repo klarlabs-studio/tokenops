@@ -73,6 +73,19 @@ const ConfidenceZ95 = 1.96
 // too few points for the chosen method.
 var ErrInsufficientHistory = errors.New("forecast: insufficient history")
 
+// clampNonNegative floors every prediction at zero. Both quantities
+// this package forecasts (tokens, spend) cannot go below zero, but a
+// declining trend extrapolates straight through it — bursty agent
+// usage produced negative "spend" predictions on real data.
+func clampNonNegative(preds []Prediction) []Prediction {
+	for i := range preds {
+		preds[i].Value = math.Max(0, preds[i].Value)
+		preds[i].Lower = math.Max(0, preds[i].Lower)
+		preds[i].Upper = math.Max(0, preds[i].Upper)
+	}
+	return preds
+}
+
 // --- Linear regression ----------------------------------------------------
 
 // LinearForecaster fits y = a + b*t via OLS over the supplied history.
@@ -98,7 +111,7 @@ func (LinearForecaster) Forecast(history []Point, horizon int, interval time.Dur
 	last := history[len(history)-1].At
 
 	out := make([]Prediction, horizon)
-	for i := 0; i < horizon; i++ {
+	for i := range horizon {
 		x := float64(len(history) + i)
 		y := a + b*x
 		ci := ConfidenceZ95 * sigma
@@ -109,7 +122,7 @@ func (LinearForecaster) Forecast(history []Point, horizon int, interval time.Dur
 			Upper: y + ci,
 		}
 	}
-	return out, nil
+	return clampNonNegative(out), nil
 }
 
 func linearFit(history []Point) (a, b, residualStdErr float64) {
@@ -197,7 +210,7 @@ func (h HoltForecaster) Forecast(history []Point, horizon int, interval time.Dur
 
 	last := history[len(history)-1].At
 	out := make([]Prediction, horizon)
-	for i := 0; i < horizon; i++ {
+	for i := range horizon {
 		y := level + trend*float64(i+1)
 		// CI widens with the square root of the horizon — a small
 		// approximation but standard for exponential-smoothing methods.
@@ -209,5 +222,5 @@ func (h HoltForecaster) Forecast(history []Point, horizon int, interval time.Dur
 			Upper: y + ci,
 		}
 	}
-	return out, nil
+	return clampNonNegative(out), nil
 }

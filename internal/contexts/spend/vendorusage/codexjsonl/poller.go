@@ -27,6 +27,11 @@ type PollerOptions struct {
 	Interval time.Duration
 	// Logger required for non-fatal errors.
 	Logger *slog.Logger
+	// CostSource stamps every emitted PromptEvent. The daemon sets
+	// CostSourcePlanIncluded when a flat-rate plan is bound to the
+	// openai provider (config plans:) so subscription-covered usage is
+	// never repriced at API list rates. Empty means metered.
+	CostSource eventschema.CostSource
 }
 
 // Poller scans Codex session JSONLs, dedupes turns by (sessionID, sequence)
@@ -99,7 +104,7 @@ func (p *Poller) scan(ctx context.Context, root string) {
 			p.seen[key] = struct{}{}
 			p.mu.Unlock()
 			if p.bus != nil {
-				env := newEnvelope(turn)
+				env := newEnvelope(turn, p.opts.CostSource)
 				p.bus.Publish(env)
 				p.mu.Lock()
 				p.publishes++
@@ -123,11 +128,15 @@ func (p *Poller) scan(ctx context.Context, root string) {
 // block is serialized into Attributes so the signal_quality classifier
 // (and a future Codex-aware session_budget tool) can read it without
 // re-parsing the source file.
-func newEnvelope(t Turn) *eventschema.Envelope {
+func newEnvelope(t Turn, costSource eventschema.CostSource) *eventschema.Envelope {
 	inputTokens := t.InputTokens
 	totalTokens := inputTokens + t.OutputTokens + t.ReasoningTok
 	h := sha256.Sum256([]byte("codex-jsonl|" + t.SessionID + "|" + strconv.Itoa(t.RecordSequence)))
 	attrs := map[string]string{
+		// One event per token_count record (assistant turn), not per
+		// user message — plan window math must not count these as
+		// messages (see plans.ConsumptionInWindow).
+		"granularity":          "assistant_turn",
 		"session_id":           t.SessionID,
 		"sequence":             strconv.Itoa(t.RecordSequence),
 		"cached_input":         fmt.Sprintf("%d", t.CachedTokens),
@@ -163,6 +172,7 @@ func newEnvelope(t Turn) *eventschema.Envelope {
 			AgentID:    "codex",
 			WorkflowID: "codex:" + t.SessionID,
 			Status:     200,
+			CostSource: costSource,
 		},
 	}
 }
