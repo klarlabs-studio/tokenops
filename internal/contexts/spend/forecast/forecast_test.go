@@ -180,3 +180,28 @@ func TestForecastsClampAtZero(t *testing.T) {
 		}
 	}
 }
+
+// Clamping must preserve interval ordering and keep a positive upper
+// bound when one exists — only fully-negative intervals collapse to a
+// point mass at zero (truncated-distribution semantics).
+func TestClampPreservesIntervalOrdering(t *testing.T) {
+	preds := clampNonNegative([]Prediction{
+		{Value: -2, Lower: -5, Upper: 1},  // upper tail positive → band survives
+		{Value: -2, Lower: -5, Upper: -1}, // fully negative → point mass at 0
+		{Value: 3, Lower: 1, Upper: 5},    // untouched
+	})
+	for i, p := range preds {
+		if !(p.Lower <= p.Value && p.Value <= p.Upper) {
+			t.Errorf("pred %d: ordering violated %+v", i, p)
+		}
+	}
+	if preds[0].Upper != 1 {
+		t.Errorf("positive upper bound clamped away: %+v", preds[0])
+	}
+	if preds[1].Upper != 0 || preds[1].Lower != 0 || preds[1].Value != 0 {
+		t.Errorf("fully-negative interval should collapse to zero: %+v", preds[1])
+	}
+	if preds[2] != (Prediction{Value: 3, Lower: 1, Upper: 5}) {
+		t.Errorf("non-negative prediction altered: %+v", preds[2])
+	}
+}

@@ -77,6 +77,13 @@ var ErrInsufficientHistory = errors.New("forecast: insufficient history")
 // this package forecasts (tokens, spend) cannot go below zero, but a
 // declining trend extrapolates straight through it — bursty agent
 // usage produced negative "spend" predictions on real data.
+//
+// CI semantics under clamping follow the truncated-distribution view:
+// each bound is floored independently, preserving Lower ≤ Value ≤
+// Upper. When only the lower tail is negative the band narrows; when
+// the entire interval is negative it collapses to a point mass at
+// zero — "the model predicts no spend", which is the honest statement
+// for a non-negative quantity whose untruncated CI sits below zero.
 func clampNonNegative(preds []Prediction) []Prediction {
 	for i := range preds {
 		preds[i].Value = math.Max(0, preds[i].Value)
