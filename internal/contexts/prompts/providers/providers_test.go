@@ -155,3 +155,34 @@ func TestNormalizeReturnsErrUnknownPath(t *testing.T) {
 		t.Errorf("gemini unknown path err = %v", err)
 	}
 }
+
+func TestMistralNormalizeChat(t *testing.T) {
+	p, ok := Lookup(eventschema.ProviderMistral)
+	if !ok {
+		t.Fatal("mistral provider not registered")
+	}
+	body := []byte(`{"model":"mistral-large-2511","stream":true,"max_tokens":512,
+		"messages":[{"role":"system","content":"x"},{"role":"user","content":"y"}]}`)
+	c, err := p.Normalize("/v1/chat/completions", body)
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if c.Model != "mistral-large-2511" || !c.Stream || c.MaxOutputTokens != 512 ||
+		c.MessageCount != 2 || !c.SystemPresent {
+		t.Errorf("canonical = %+v", c)
+	}
+}
+
+func TestMistralNormalizeFIM(t *testing.T) {
+	p, _ := Lookup(eventschema.ProviderMistral)
+	c, err := p.Normalize("/v1/fim/completions", []byte(`{"model":"codestral-2508","max_tokens":64}`))
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if c.Model != "codestral-2508" || c.Operation != "fim.completions" {
+		t.Errorf("canonical = %+v", c)
+	}
+	if _, err := p.Normalize("/v1/models", []byte(`{}`)); err == nil {
+		t.Error("non-inference path should return ErrUnknownPath")
+	}
+}

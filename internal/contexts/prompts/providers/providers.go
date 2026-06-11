@@ -41,6 +41,7 @@ func All() []Provider {
 		openAIProvider,
 		anthropicProvider,
 		geminiProvider,
+		mistralProvider,
 	}
 }
 

@@ -200,6 +200,9 @@ func newEnvelope(ts time.Time, resp *UserResponse, snapshotKey string, snap Quot
 		Timestamp:     ts,
 		Source:        SourceTag,
 		Attributes: map[string]string{
+			// Quota-state snapshot, not a user message — plan window
+			// math must not count it (plans.ConsumptionInWindow).
+			"granularity":       "quota_snapshot",
 			"login":             resp.Login,
 			"snapshot":          snapshotKey,
 			"percent_remaining": fmt.Sprintf("%.2f", snap.PercentRemaining),

@@ -171,3 +171,35 @@ func TestWindowConsumptionSkipsNonMessageGranularity(t *testing.T) {
 		t.Errorf("TokensInWindow = %d; want 400 (all events' tokens count)", got.TokensInWindow)
 	}
 }
+
+// Quota/aggregate snapshots (copilot, cursor, anthropic admin buckets)
+// are state reports, not user messages.
+func TestWindowConsumptionSkipsSnapshotGranularities(t *testing.T) {
+	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
+	mk := func(id, granularity string) *eventschema.Envelope {
+		return &eventschema.Envelope{
+			ID: id, SchemaVersion: eventschema.SchemaVersion,
+			Type: eventschema.EventTypePrompt, Timestamp: now.Add(-time.Hour), Source: "test",
+			Attributes: map[string]string{"granularity": granularity},
+			Payload: &eventschema.PromptEvent{
+				Provider: eventschema.ProviderAnthropic, TotalTokens: 10,
+				CostSource: eventschema.CostSourcePlanIncluded,
+			},
+		}
+	}
+	r := fakeReader{envs: []*eventschema.Envelope{
+		mk("a", "quota_snapshot"),
+		mk("b", "monthly_snapshot"),
+		mk("c", "bucket"),
+	}}
+	got, err := ConsumptionInWindow(context.Background(), r, "anthropic", now, 5*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.MessagesInWindow != 0 {
+		t.Errorf("MessagesInWindow = %d; want 0", got.MessagesInWindow)
+	}
+	if got.TokensInWindow != 30 {
+		t.Errorf("TokensInWindow = %d; want 30", got.TokensInWindow)
+	}
+}

@@ -197,6 +197,9 @@ func newEnvelope(ts time.Time, userID, startOfMonth, model string, m ModelUsage)
 		Timestamp:     ts,
 		Source:        SourceTag,
 		Attributes: map[string]string{
+			// Monthly per-model usage snapshot, not a user message —
+			// plan window math must not count it.
+			"granularity":       "monthly_snapshot",
 			"user_id":           userID,
 			"start_of_month":    startOfMonth,
 			"num_requests":      fmt.Sprintf("%d", m.NumRequests),

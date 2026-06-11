@@ -17,8 +17,8 @@ func TestBuildProviderRoutesDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildProviderRoutes: %v", err)
 	}
-	if len(routes) != 3 {
-		t.Fatalf("want 3 routes, got %d", len(routes))
+	if len(routes) != 4 {
+		t.Fatalf("want 4 routes (openai, anthropic, gemini, mistral), got %d", len(routes))
 	}
 }
 

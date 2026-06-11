@@ -155,6 +155,16 @@ var catalog = map[string]Plan{
 		RateLimitWindow:  0,
 		SourceURL:        "https://docs.cursor.com/account/plans-and-usage (2026-05)",
 	},
+	// Google One AI Premium (Gemini Advanced) — fixed monthly
+	// subscription with no published message or token caps; Google
+	// throttles dynamically. Modeled without a window so headroom math
+	// reports consumption trends instead of a cap (mirrors gpt-pro).
+	"gemini-ai-premium": {
+		Name:      "gemini-ai-premium",
+		Provider:  "gemini",
+		Display:   "Google One AI Premium",
+		SourceURL: "https://one.google.com/about/ai-premium (2026-05)",
+	},
 	// Mistral Le Chat Pro — fixed monthly subscription, daily message
 	// cap published in 2025-Q4. Window unit is "messages per day";
 	// modeled as a 24h rolling window for headroom math parity with

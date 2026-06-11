@@ -94,3 +94,17 @@ func NewGeminiTokenizer() Tokenizer {
 		wrapperOverhead:    2,
 	}
 }
+
+// NewMistralTokenizer returns a heuristic Mistral tokenizer. Mistral's
+// tekken tokenizer is a tiktoken-style BPE; English prose lands close
+// to the OpenAI ~4 chars-per-token ratio, with ChatML-like per-message
+// overhead on the chat-completions surface.
+func NewMistralTokenizer() Tokenizer {
+	return heuristic{
+		provider:           eventschema.ProviderMistral,
+		asciiCharsPerToken: 4.0,
+		otherCharsPerToken: 1.5,
+		perMessageOverhead: 4,
+		wrapperOverhead:    3,
+	}
+}

@@ -61,6 +61,7 @@ func NewRegistry() *Registry {
 	r.Set(NewOpenAITokenizer())
 	r.Set(NewAnthropicTokenizer())
 	r.Set(NewGeminiTokenizer())
+	r.Set(NewMistralTokenizer())
 	return r
 }
 

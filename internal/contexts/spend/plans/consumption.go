@@ -149,7 +149,7 @@ func ConsumptionInWindow(ctx context.Context, r EventReader, provider string, no
 // the meter by an order of magnitude; their tokens still count.
 func countsAsMessage(env *eventschema.Envelope) bool {
 	switch env.Attributes["granularity"] {
-	case "assistant_turn", "daily":
+	case "assistant_turn", "daily", "bucket", "quota_snapshot", "monthly_snapshot":
 		return false
 	default:
 		return true
