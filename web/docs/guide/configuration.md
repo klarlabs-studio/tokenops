@@ -22,6 +22,14 @@ server — `tokenops_mode`, `tokenops_budget_set`, and
 manage (validated before every write). The daemon picks the changes up
 on its next restart.
 
+Setting `mode: active` via `tokenops_mode` also **ensures a daemon is
+running** — active mode's interventions (live routing, spend watcher)
+live in the daemon, so activating without one would be a silent no-op.
+If no daemon answers on its advertised URL, one is started detached
+with the active config (logs land next to `events.db` in
+`daemon.log`); if one is already running, the response reminds you to
+restart it so it picks up the new mode.
+
 ## Reference
 
 ```yaml

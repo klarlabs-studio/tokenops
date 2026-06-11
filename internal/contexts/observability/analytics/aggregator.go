@@ -248,6 +248,7 @@ func (a *Aggregator) recomputeMissingCosts(ctx context.Context, f Filter, rows [
 		conds = append(conds,
 			"timestamp_ns >= ?",
 			"timestamp_ns < ?",
+			costSourceMetered,
 		)
 		args = append(args,
 			rows[i].BucketStart.UnixNano(),
@@ -395,7 +396,7 @@ func (a *Aggregator) CacheStats(ctx context.Context, f Filter) (CacheStatsResult
 // from the total, and callers surface that gap as a warning.
 func (a *Aggregator) summarizeMissingCost(ctx context.Context, f Filter) (float64, []UnpricedModel, error) {
 	conds, args := buildConditions(f)
-	conds = append(conds, "(cost_usd IS NULL OR cost_usd = 0)")
+	conds = append(conds, "(cost_usd IS NULL OR cost_usd = 0)", costSourceMetered)
 	q := `SELECT provider, model, COUNT(*),
 			COALESCE(SUM(input_tokens), 0),
 			COALESCE(SUM(output_tokens), 0),
@@ -443,6 +444,15 @@ func (a *Aggregator) summarizeMissingCost(ctx context.Context, f Filter) (float6
 	}
 	return total, unpriced, nil
 }
+
+// costSourceMetered keeps cost recompute and unpriced-model detection
+// away from flat-rate traffic: plan-included and trial events are
+// zero-cost BY DESIGN (the request is covered by a subscription or
+// vendor credit), so repricing them at list rates would invent spend,
+// and their pseudo-models (e.g. "mcp-session") must not trip the
+// unpriced-model warning. The schema column carries only the bundled
+// counters, so the source is read from payload JSON.
+const costSourceMetered = `COALESCE(json_extract(payload, '$.cost_source'), '') NOT IN ('plan_included', 'trial')`
 
 func buildConditions(f Filter) ([]string, []any) {
 	var (

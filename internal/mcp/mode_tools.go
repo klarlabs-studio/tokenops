@@ -12,6 +12,10 @@ import (
 // to the default init-managed location.
 type ModeDeps struct {
 	ConfigPath string
+	// StartDaemon launches the daemon when activating active mode and
+	// none is running. nil uses the default detached spawn of the
+	// current executable; tests inject a fake.
+	StartDaemon func(configPath string) (pid int, logPath string, err error)
 }
 
 func (d ModeDeps) path() (string, error) {
@@ -85,11 +89,18 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 			if err := config.WriteMutable(path, cfg); err != nil {
 				return "", err
 			}
-			return jsonString(map[string]any{
+			resp := map[string]any{
 				"mode":   cfg.Mode,
 				"config": path,
-				"note":   restartHint,
-			}), nil
+			}
+			// Active mode without a daemon is a no-op — the proxy
+			// (routing) and the watcher live there. Ensure one runs.
+			if cfg.ActiveMode() {
+				resp["daemon"] = d.ensureDaemon(path)
+			} else {
+				resp["note"] = restartHint
+			}
+			return jsonString(resp), nil
 		})
 
 	s.Tool("tokenops_budget_set").

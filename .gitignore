@@ -56,3 +56,4 @@ coverage.txt
 findings.json
 nox-findings.json
 ai.inventory.json
+.relicta/

@@ -418,3 +418,46 @@ func TestSummarizeNoUnpricedWhenAllModelsKnown(t *testing.T) {
 		t.Errorf("fable usage should be costed; CostUSD = %.4f", s.CostUSD)
 	}
 }
+
+// Plan-included / trial events are zero-cost by design: recompute must
+// not invent list-price spend for them, and their pseudo-models must
+// not surface as unpriced.
+func TestSummarizeSkipsPlanIncludedEvents(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	base := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
+	envs := []*eventschema.Envelope{
+		{
+			ID: "plan-known", SchemaVersion: eventschema.SchemaVersion,
+			Type: eventschema.EventTypePrompt, Timestamp: base, Source: "claude-code-jsonl",
+			Payload: &eventschema.PromptEvent{
+				Provider: eventschema.ProviderAnthropic, RequestModel: "claude-fable-5",
+				InputTokens: 1_000_000, OutputTokens: 100_000, TotalTokens: 1_100_000,
+				CostSource: eventschema.CostSourcePlanIncluded,
+			},
+		},
+		{
+			ID: "plan-pseudo", SchemaVersion: eventschema.SchemaVersion,
+			Type: eventschema.EventTypePrompt, Timestamp: base.Add(time.Minute), Source: "mcp-session",
+			Payload: &eventschema.PromptEvent{
+				Provider: eventschema.ProviderAnthropic, RequestModel: "mcp-session",
+				InputTokens: 100, TotalTokens: 100,
+				CostSource: eventschema.CostSourcePlanIncluded,
+			},
+		},
+	}
+	if err := store.AppendBatch(ctx, envs); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	agg := New(store, spend.NewEngine(spend.DefaultTable()))
+	s, err := agg.Summarize(ctx, Filter{})
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	if s.CostUSD != 0 {
+		t.Errorf("plan-included usage repriced at list rates: CostUSD = %.4f", s.CostUSD)
+	}
+	if len(s.Unpriced) != 0 {
+		t.Errorf("plan-included pseudo-model flagged unpriced: %+v", s.Unpriced)
+	}
+}
