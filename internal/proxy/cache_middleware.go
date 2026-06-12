@@ -107,6 +107,12 @@ func (s *Server) cacheMiddleware(provider providers.Provider, next http.Handler)
 			ContentType: rec.Header().Get("Content-Type"),
 			StoredAt:    time.Now().UTC(),
 		}
+		// Population happens AFTER the response has streamed to the
+		// client (the recorder passes writes through), so an immediate
+		// identical request can race the Put and miss. That is
+		// intentional: pass-through keeps SSE/latency behavior, and the
+		// worst case is one extra upstream call, never a wrong reply.
+		// Tests asserting a hit must wait for Metrics().Entries to tick.
 		s.cache.Put(key, entry)
 		// Surface the store outcome so observability tooling can spot
 		// whether a miss actually populated the cache.

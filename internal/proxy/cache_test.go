@@ -79,6 +79,11 @@ func TestProxyCacheServesHitWithoutUpstream(t *testing.T) {
 		t.Fatalf("first call should reach upstream, got %d", calls.Load())
 	}
 
+	// Cache population completes after the response flushes (see
+	// cacheMiddleware) — wait for the entry before asserting a hit, or
+	// the second request races the Put on slow runners.
+	waitForCacheEntries(t, c, 1)
+
 	// Second identical call should be served from cache.
 	resp2 := mustPost(t, url, body, nil)
 	if resp2.StatusCode != 200 {
@@ -205,4 +210,19 @@ func mustPost(t *testing.T, url, body string, hdrs map[string]string) *http.Resp
 		t.Fatalf("Do: %v", err)
 	}
 	return resp
+}
+
+// waitForCacheEntries polls until the cache holds want entries —
+// population is asynchronous relative to the HTTP response (the
+// middleware stores after the body flushes to the client).
+func waitForCacheEntries(t *testing.T, c *cache.Cache, want int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if c.Metrics().Entries >= int64(want) {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("cache never reached %d entries: %+v", want, c.Metrics())
 }
