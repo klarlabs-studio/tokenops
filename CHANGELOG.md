@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.25.1 - 2026-06-12
+
+### Security
+
+- `tokenops config show` (and the MCP/dashboard config surfaces) no
+  longer print secrets: the CLI bypassed the redaction snapshot
+  entirely, and redaction only covered OTel headers. All secret fields
+  (dashboard admin token, Anthropic admin key, claude.ai session key,
+  Cursor cookie, Copilot OAuth token) are now masked through a single
+  Config.Redacted() path.
+
 ## 0.25.0 - 2026-06-11
 
 ### Added
