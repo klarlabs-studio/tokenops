@@ -1,0 +1,8 @@
+Checking 120 files...
+src/index.ts:12:5 lint/style/useConst  FIXABLE  ━━━━━━━━━━
+  ✖ This let declares a variable that is never reassigned.
+    12 │   let count = 0;
+       │       ^^^^^
+src/api.ts:44:1 lint/suspicious/noExplicitAny  ━━━━━━━━━━
+  ✖ Unexpected any. Specify a different type.
+Checked 120 files in 210ms. Found 2 errors.

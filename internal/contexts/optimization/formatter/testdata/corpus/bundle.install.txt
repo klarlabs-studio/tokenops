@@ -1,0 +1,10 @@
+Fetching gem metadata from https://rubygems.org/........
+Resolving dependencies...
+Using rake 13.2.1
+Using concurrent-ruby 1.3.4
+Using i18n 1.14.6
+Fetching nokogiri 1.16.7
+Installing nokogiri 1.16.7 with native extensions
+Using rails 7.1.4
+Using puma 6.4.3
+Bundle complete! 84 Gemfile dependencies, 210 gems now installed.

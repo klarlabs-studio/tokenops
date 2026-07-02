@@ -1,0 +1,9 @@
+[info] welcome to sbt 1.10.1
+[info] loading project definition from /home/user/proj/project
+[info] compiling 24 Scala sources to /home/user/proj/target/scala-2.13/classes ...
+[warn] /home/user/proj/src/main/scala/Main.scala:10:7: unused import
+[error] /home/user/proj/src/main/scala/Service.scala:22:15: type mismatch;
+[error]  found   : String
+[error]  required: Int
+[error] one error found
+[error] (Compile / compileIncremental) Compilation failed

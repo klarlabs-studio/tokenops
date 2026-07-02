@@ -1,0 +1,14 @@
+==> myapp
+Compiling 24 files (.ex)
+Generated myapp app
+...
+
+  1) test creates a user (MyApp.AccountsTest)
+     test/myapp/accounts_test.exs:15
+     Assertion with == failed
+     code:  assert user.name == "Jane"
+     left:  "Jane Doe"
+     right: "Jane"
+
+Finished in 0.3 seconds
+5 tests, 1 failure

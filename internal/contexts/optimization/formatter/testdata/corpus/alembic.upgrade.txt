@@ -1,0 +1,4 @@
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade abc123 -> def456, add users table
+INFO  [alembic.runtime.migration] Running upgrade def456 -> ghi789, add index on email

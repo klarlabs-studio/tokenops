@@ -1,0 +1,11 @@
+Resolved 84 packages in 122ms
+Downloaded 12 packages in 340ms
+Prepared 12 packages in 89ms
+Installed 12 packages in 45ms
+ + certifi==2024.8.30
+ + charset-normalizer==3.4.0
+ + fastapi==0.115.0
+ + idna==3.10
+ + pydantic==2.9.2
+ + starlette==0.38.6
+ + uvicorn==0.31.0

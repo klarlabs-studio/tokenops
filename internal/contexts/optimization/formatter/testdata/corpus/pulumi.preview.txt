@@ -1,0 +1,15 @@
+Previewing update (dev):
+
+     Type                      Name              Plan
+ +   pulumi:pulumi:Stack       myapp-dev
+ +   ├─ aws:s3:Bucket          assets            create
+ ~   ├─ aws:ec2:Instance       web               update
+        ~ instanceType: "t2.micro" => "t2.small"
+          ami        : "ami-0abc123"
+          tags       : { Name: "web" }
+ -   └─ aws:iam:Role           old-role          delete
+
+Resources:
+    + 1 to create
+    ~ 1 to update
+    - 1 to delete

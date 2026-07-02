@@ -1,0 +1,13 @@
+Inspecting 42 files
+.........C........W......C.................
+
+Offenses:
+
+app/models/user.rb:10:5: C: Style/StringLiterals: Prefer single-quoted strings.
+    name = "Jane"
+           ^^^^^^
+app/controllers/users_controller.rb:22:3: W: Lint/UnusedMethodArgument: Unused method argument - opts.
+  def show(opts)
+           ^^^^
+
+42 files inspected, 2 offenses detected

@@ -1,0 +1,8 @@
+[1/45] Compiling src/main.cpp
+[2/45] Compiling src/parser.cpp
+[3/45] Compiling src/lexer.cpp
+[4/45] Compiling src/eval.cpp
+FAILED: obj/eval.o
+/home/user/proj/src/eval.cpp:88:12: error: use of undeclared identifier 'ctx'
+[5/45] Compiling src/token.cpp
+ninja: build stopped: subcommand failed.

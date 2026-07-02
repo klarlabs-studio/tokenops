@@ -1,0 +1,8 @@
+Loading composer repositories with package information
+Updating dependencies
+Lock file operations: 42 installs, 0 updates, 0 removals
+  - Installing symfony/console (v6.4.0): Extracting archive
+  - Installing symfony/http-foundation (v6.4.0): Extracting archive
+  - Installing doctrine/orm (2.19.0): Extracting archive
+Generating autoload files
+18 packages you are using are looking for funding

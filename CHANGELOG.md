@@ -4,18 +4,22 @@
 
 ### Added
 
-- **`tokenops fmt` catalog expanded to 26 commands / 30 tokens.** Nine new
-  deterministic formatters:
-  - Parity with RTK: `gh` (run/pr/issue tables), `jest`, `vitest`,
-    `golangci-lint`, `ruff`.
+- **`tokenops fmt` catalog expanded to 46 commands / 51 tokens.** 29 new
+  deterministic formatters across every category an agent shells out to:
+  - RTK parity: `gh`, `jest`, `vitest`, `golangci-lint`, `ruff`, `rubocop`,
+    `prettier`, `biome`, `rspec`, `playwright`, `uv`, `bundle`, `pulumi`.
   - Differentiators RTK does not support: `bazel`, `ansible`
-    (+`ansible-playbook`), `helm`, `dotnet` — the noisiest build /
-    config-management / JVM-adjacent tooling, none of which RTK covers.
-  Each ships golden critical-line survival + monotonic-reduction tests and
-  is enrolled across every plane (CLI, hook, proxy, bench). Benchmark over
-  the checked-in corpus (38 KB): balanced 61%, aggressive 73% aggregate;
-  standouts helm 84/92%, go test 86/92%, npm 84%, pip 82%, mvn 76%,
-  bazel 72%.
+    (+`ansible-playbook`), `helm`, `dotnet`, `aws`, `gcloud`, `az`
+    (multi-cloud — RTK is AWS-only), `sbt`, `mix`, `composer`,
+    `dnf` (+`yum`), `brew`, `flyway`, `alembic`, `cmake`, `ninja` — the
+    noisiest build / config-mgmt / cloud / migration tooling RTK ignores.
+  Cloud CLIs (`aws`/`gcloud`/`az`) pass JSON through untouched (the generic
+  dedup is unsafe on structured output) and only compress table/text.
+  Every formatter ships golden critical-line survival + monotonic-reduction
+  tests and is enrolled across every plane (CLI, hook, proxy, bench).
+  Benchmark over the checked-in corpus (47 KB, 46 commands): balanced 57%,
+  aggressive 68% aggregate; standouts helm 84/92%, go test 86/92%, npm 84%,
+  pip 82%, uv 78%, mvn 76%, bazel 72%.
 
 ## 0.26.0 - 2026-07-02
 

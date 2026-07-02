@@ -1,0 +1,8 @@
+==> Fetching dependencies for node: icu4c
+==> Downloading https://ghcr.io/v2/homebrew/core/icu4c/manifests/74.2
+==> Fetching icu4c
+==> Downloading https://ghcr.io/v2/homebrew/core/icu4c/blobs/sha256:abc
+==> Installing dependencies for node: icu4c
+==> Pouring icu4c--74.2.arm64_sonoma.bottle.tar.gz
+==> Pouring node--22.7.0.arm64_sonoma.bottle.tar.gz
+🍺  /opt/homebrew/Cellar/node/22.7.0: 2,571 files, 78.5MB

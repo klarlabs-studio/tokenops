@@ -1,0 +1,6 @@
+Flyway Community Edition 10.17.0 by Redgate
+Database: jdbc:postgresql://localhost:5432/app (PostgreSQL 16.4)
+Successfully validated 12 migrations (execution time 00:00.042s)
+Current version of schema "public": 11
+Migrating schema "public" to version "12 - add users table"
+Successfully applied 1 migration to schema "public" (execution time 00:00.128s)

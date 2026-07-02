@@ -1,0 +1,23 @@
+Last metadata expiration check: 0:15:32 ago on Thu 03 Jul 2026.
+Dependencies resolved.
+================================================================================
+ Package              Arch     Version           Repository            Size
+================================================================================
+Installing:
+ postgresql           x86_64   16.4-1.fc40       fedora               1.6 M
+Installing dependencies:
+ libpq                x86_64   16.4-1.fc40       fedora               250 k
+
+Transaction Summary
+================================================================================
+Install  2 Packages
+
+Downloading Packages:
+(1/2): libpq-16.4-1.fc40.x86_64.rpm            1.2 MB/s | 250 kB     00:00
+(2/2): postgresql-16.4-1.fc40.x86_64.rpm       3.4 MB/s | 1.6 MB     00:00
+Running transaction check
+Running transaction
+Installed:
+  libpq.x86_64 16.4-1.fc40    postgresql.x86_64 16.4-1.fc40
+
+Complete!

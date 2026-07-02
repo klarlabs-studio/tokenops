@@ -1,0 +1,5 @@
+NAME                 ZONE           MACHINE_TYPE   INTERNAL_IP  EXTERNAL_IP    STATUS
+web-1                us-central1-a  e2-medium      10.0.0.2     34.1.2.3       RUNNING
+web-2                us-central1-b  e2-medium      10.0.0.3     34.1.2.4       RUNNING
+worker-1             us-central1-a  e2-standard-4  10.0.0.4     34.1.2.5       TERMINATED
+ERROR: (gcloud.compute.instances.list) Some requests did not succeed: PERMISSION_DENIED

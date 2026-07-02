@@ -1,0 +1,6 @@
+Name        ResourceGroup    Location    Status
+----------  ---------------  ----------  ---------
+vm-web-1    prod-rg          eastus      running
+vm-web-2    prod-rg          eastus      running
+vm-db-1     prod-rg          eastus      deallocated
+ERROR: The client does not have authorization to perform action 'Microsoft.Compute/virtualMachines/read'

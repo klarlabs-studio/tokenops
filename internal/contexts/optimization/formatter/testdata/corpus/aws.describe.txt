@@ -1,0 +1,10 @@
+----------------------------------------------------------------------
+|                        DescribeInstances                           |
++---------------------+------------------+-------------+-------------+
+|  InstanceId         |  Type            |  State      |  AZ         |
++---------------------+------------------+-------------+-------------+
+|  i-0a1b2c3d4e5f6    |  t3.medium       |  running    |  us-east-1a |
+|  i-1b2c3d4e5f6a7    |  t3.large        |  running    |  us-east-1b |
+|  i-2c3d4e5f6a7b8    |  m5.xlarge       |  stopped    |  us-east-1a |
++---------------------+------------------+-------------+-------------+
+An error occurred (UnauthorizedOperation) when calling DescribeInstances: You are not authorized
