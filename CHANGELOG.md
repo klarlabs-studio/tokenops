@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.26.0 - 2026-07-02
+
 ### Added
 
 - **Deterministic command-output compression** (`tokenops fmt`): wraps a
