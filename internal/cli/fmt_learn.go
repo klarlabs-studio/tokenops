@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,72 +10,18 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/fmtlearn"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/formatter"
+	"github.com/felixgeelhaar/tokenops/internal/infra/fmtindex"
 )
 
-// recoveryIndexPath returns the learn-index file inside the recovery dir.
-// The index is an append-only JSONL of compress + access records that the
-// offline learning loop (`tokenops fmt learn`) mines.
-func recoveryIndexPath(recoverDir string) (string, error) {
-	if recoverDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		recoverDir = filepath.Join(home, ".tokenops", "recovery")
-	}
-	return filepath.Join(recoverDir, "index.jsonl"), nil
-}
-
-// appendLearnRecord appends one record to the learn index. Best-effort: the
-// caller ignores errors so telemetry never breaks a wrapped command.
+// appendLearnRecord and readLearnRecords delegate to the shared fmtindex
+// adapter so the CLI and the MCP tool surface read/write one index.
 func appendLearnRecord(recoverDir string, rec fmtlearn.Record) error {
-	path, err := recoveryIndexPath(recoverDir)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = f.Close() }()
-	enc := json.NewEncoder(f)
-	return enc.Encode(rec)
+	return fmtindex.Append(recoverDir, rec)
 }
 
-// readLearnRecords reads every record from the learn index. A missing index
-// is not an error — it yields an empty slice.
 func readLearnRecords(recoverDir string) ([]fmtlearn.Record, error) {
-	path, err := recoveryIndexPath(recoverDir)
-	if err != nil {
-		return nil, err
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	defer func() { _ = f.Close() }()
-
-	var recs []fmtlearn.Record
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	for sc.Scan() {
-		line := sc.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-		var r fmtlearn.Record
-		if err := json.Unmarshal(line, &r); err != nil {
-			continue // skip malformed rows rather than abort
-		}
-		recs = append(recs, r)
-	}
-	return recs, sc.Err()
+	return fmtindex.Read(recoverDir)
 }
 
 // recordCompressRun appends a compress record for a completed fmt run. Called
@@ -165,14 +110,20 @@ func newFmtLearnCmd() *cobra.Command {
 	var (
 		recoverDir string
 		jsonOut    bool
+		apply      bool
+		configPath string
 	)
 	cmd := &cobra.Command{
 		Use:   "learn",
 		Short: "Mine fmt telemetry for next-formatter priorities and over-compression",
 		Long: `learn analyses the append-only recovery index (compression +
 re-access records) and proposes where the formatter catalog should improve.
-It never changes runtime behaviour — the formatters stay deterministic; the
-output is advisory, to be turned into corpus-gated code changes.`,
+
+Without --apply it is advisory: the formatters stay deterministic and the
+output is a report. With --apply it writes the SAFE tuning locally to your
+config (optimizer.command_fmt.overrides) — loss-level changes only, which
+never touch critical-line rules. New-formatter candidates are printed as a
+config stub to paste, never auto-written (they need human-authored regexes).`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			recs, err := readLearnRecords(recoverDir)
@@ -186,12 +137,86 @@ output is advisory, to be turned into corpus-gated code changes.`,
 				return enc.Encode(rep)
 			}
 			renderLearnReport(cmd, rep)
+			if apply {
+				return applyLearnHints(cmd, rep, configPath)
+			}
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&recoverDir, "recover-dir", "", "recovery store dir (defaults to ~/.tokenops/recovery)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit the report as JSON")
+	cmd.Flags().BoolVar(&apply, "apply", false, "write safe loss-level tuning to config (overrides only)")
+	cmd.Flags().StringVar(&configPath, "config", "", "config path to write with --apply (defaults to the standard config path)")
 	return cmd
+}
+
+// applyLearnHints writes the safe part of the report — per-command loss-level
+// overrides — into the user's config. Level tuning cannot drop a critical
+// line (the critical rules are unchanged), so it is safe to auto-apply
+// locally. New-formatter candidates are printed as a paste-ready stub.
+func applyLearnHints(cmd *cobra.Command, rep fmtlearn.Report, configPath string) error {
+	out := cmd.OutOrStdout()
+	if configPath == "" {
+		p, err := defaultConfigPath()
+		if err != nil {
+			return err
+		}
+		configPath = p
+	}
+	cfg, err := readMutableConfig(configPath)
+	if err != nil {
+		return fmt.Errorf("learn --apply: read config: %w", err)
+	}
+
+	// Current effective policy so we can step levels relative to it.
+	policy, _ := buildLossPolicy(cfg.Optimizer.CommandFmt, "")
+	if cfg.Optimizer.CommandFmt.Overrides == nil {
+		cfg.Optimizer.CommandFmt.Overrides = map[string]string{}
+	}
+
+	changed := 0
+	for _, h := range rep.LevelHints {
+		cur := policy.LevelFor(h.Command)
+		next := cur
+		switch h.Suggestion {
+		case "lower":
+			if cur > formatter.LossConservative {
+				next = cur - 1
+			}
+		case "raise":
+			if cur < formatter.LossAggressive {
+				next = cur + 1
+			}
+		}
+		if next == cur {
+			continue
+		}
+		cfg.Optimizer.CommandFmt.Overrides[h.Command] = next.String()
+		fmt.Fprintf(out, "  set command_fmt.overrides[%s] = %s (was %s: %s)\n",
+			h.Command, next.String(), cur.String(), h.Suggestion)
+		changed++
+	}
+
+	if changed == 0 {
+		fmt.Fprintln(out, "\nNo safe level changes to apply.")
+	} else {
+		if err := writeMutableConfig(configPath, cfg); err != nil {
+			return fmt.Errorf("learn --apply: write config: %w", err)
+		}
+		fmt.Fprintf(out, "\nApplied %d level override(s) to %s\n", changed, configPath)
+	}
+
+	// Print (never auto-write) a config stub for unknown commands.
+	if len(rep.NextFormatters) > 0 {
+		fmt.Fprintln(out, "\nCandidate config formatters to write (paste under optimizer.command_fmt.formatters):")
+		for _, c := range rep.NextFormatters {
+			fmt.Fprintf(out, "  - command: %s\n", c.Command)
+			fmt.Fprintf(out, "      critical: [\"(?i)error\", \"(?i)fail\"]   # edit: lines to always keep\n")
+			fmt.Fprintf(out, "      drop:\n")
+			fmt.Fprintf(out, "        balanced: [\"^DEBUG \", \"^INFO \"]      # edit: noise to drop\n")
+		}
+	}
+	return nil
 }
 
 func renderLearnReport(cmd *cobra.Command, rep fmtlearn.Report) {

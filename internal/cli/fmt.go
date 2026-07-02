@@ -72,7 +72,13 @@ Examples:
 			if warn != "" && !quiet {
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", warn)
 			}
-			reg := formatter.NewRegistry(policy, defaultFormatters()...)
+			formatters, fwarns := allFormatters(cfg.Optimizer.CommandFmt)
+			if !quiet {
+				for _, w := range fwarns {
+					fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", w)
+				}
+			}
+			reg := formatter.NewRegistry(policy, formatters...)
 
 			res, err := runFmt(cmd.Context(), reg, args, fmtOptions{
 				RecoverDir: recoverDir,
@@ -119,11 +125,22 @@ Examples:
 	cmd.Flags().BoolVar(&statsJSON, "stats-json", false, "emit the stats line as JSON on stderr")
 	cmd.Flags().BoolVar(&emitFlag, "emit", false, "append an OptimizationEvent to the events store (also set via config command_fmt.emit_events)")
 	cmd.Flags().StringVar(&dbFlag, "db", "", "events.db path for --emit (defaults to ~/.tokenops/events.db)")
-	cmd.AddCommand(newFmtBenchCmd())
-	cmd.AddCommand(newFmtHookCmd())
+	cmd.AddCommand(newFmtBenchCmd(rf))
+	cmd.AddCommand(newFmtHookCmd(rf))
 	cmd.AddCommand(newFmtRecoverCmd())
 	cmd.AddCommand(newFmtLearnCmd())
 	return cmd
+}
+
+// registryFormatters resolves the built-in + config formatter set for the
+// given root flags, ignoring config-load errors (defaults still apply).
+func registryFormatters(rf *rootFlags) []formatter.Formatter {
+	cfg, err := loadConfig(rf)
+	if err != nil {
+		return formatter.DefaultFormatters()
+	}
+	formatters, _ := allFormatters(cfg.Optimizer.CommandFmt)
+	return formatters
 }
 
 // emitFmtEvent appends an OptimizationEvent (kind=command_fmt) to the local
@@ -185,11 +202,32 @@ func firstArgvToken(argv []string) string {
 	return t
 }
 
-// defaultFormatters returns the built-in formatter set (shared source of
-// truth in the formatter package so the CLI, proxy optimizer, hook, and
-// benchmark all use the same catalog).
-func defaultFormatters() []formatter.Formatter {
-	return formatter.DefaultFormatters()
+// allFormatters returns the built-in catalog plus any user-defined config
+// formatters. Config formatters appear AFTER built-ins so a user command
+// that collides with a built-in overrides it (later registration wins in
+// the registry map). Invalid user specs are skipped with a warning rather
+// than failing the whole run.
+func allFormatters(cfg config.CommandFmtConfig) ([]formatter.Formatter, []string) {
+	out := formatter.DefaultFormatters()
+	var warns []string
+	for _, fc := range cfg.Formatters {
+		spec := formatter.ConfigSpec{
+			Command:  fc.Command,
+			Aliases:  fc.Aliases,
+			Critical: fc.Critical,
+			Drop: map[formatter.LossLevel][]string{
+				formatter.LossBalanced:   fc.Drop.Balanced,
+				formatter.LossAggressive: fc.Drop.Aggressive,
+			},
+		}
+		f, err := formatter.NewConfigFormatter(spec)
+		if err != nil {
+			warns = append(warns, err.Error())
+			continue
+		}
+		out = append(out, f)
+	}
+	return out, warns
 }
 
 // buildLossPolicy maps the config strings into the domain LossPolicy and

@@ -195,6 +195,33 @@ type CommandFmtConfig struct {
 	// each compressed run so the dashboard and scorecard count the
 	// savings. Best-effort: a store error never fails the wrapped command.
 	EmitEvents bool `yaml:"emit_events"`
+	// Formatters holds user-defined command formatters. They extend or
+	// override the built-in catalog without recompiling: name a command,
+	// list the regexes that mark critical lines (always preserved), and the
+	// noise regexes to drop per loss level. User rules run through the same
+	// critical-line survival guard as built-ins.
+	Formatters []CommandFmtFormatter `yaml:"formatters"`
+}
+
+// CommandFmtFormatter is one user-defined formatter declaration.
+type CommandFmtFormatter struct {
+	// Command is the token this formatter handles (e.g. "mytool"). A
+	// command matching a built-in overrides it.
+	Command string `yaml:"command"`
+	// Aliases are extra command tokens routed to this formatter.
+	Aliases []string `yaml:"aliases"`
+	// Critical lists regexes; a line matching any is preserved at every
+	// loss level.
+	Critical []string `yaml:"critical"`
+	// Drop lists noise regexes removed at balanced and/or aggressive.
+	Drop CommandFmtDrop `yaml:"drop"`
+}
+
+// CommandFmtDrop lists per-level noise regexes. Balanced rules apply at
+// balanced AND aggressive; Aggressive rules apply only at aggressive.
+type CommandFmtDrop struct {
+	Balanced   []string `yaml:"balanced"`
+	Aggressive []string `yaml:"aggressive"`
 }
 
 // RoutingRuleConfig is one "route X to Y" entry. FromModel supports a

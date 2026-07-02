@@ -177,6 +177,9 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if err := mcp.RegisterDashboardTool(srv); err != nil {
 		return fmt.Errorf("register dashboard tool: %w", err)
 	}
+	if err := mcp.RegisterFmtTools(srv); err != nil {
+		return fmt.Errorf("register fmt tools: %w", err)
+	}
 	if err := mcp.RegisterCoachTools(srv, mcp.CoachDeps{
 		JSONLRoot: cfg.VendorUsage.ClaudeCodeJSONL.Root,
 	}); err != nil {

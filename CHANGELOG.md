@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Added
+
+- **User-extensible `fmt` catalog + local self-tuning** — the learning loop
+  now closes on the user's own machine, no maintainer or recompile needed:
+  - **Config-defined formatters** (`optimizer.command_fmt.formatters`): add
+    or override a formatter for any command by declaring `critical` regexes
+    (always preserved) and per-level `drop` regexes — no rebuild. User rules
+    run through the same `enforceCritical` guard as built-ins, so a mistaken
+    drop rule can never remove a critical line.
+  - **`tokenops fmt learn --apply`**: writes the safe part of the learning
+    report (per-command loss-level `overrides`) into the user's config
+    locally. Level tuning never touches critical rules, so it is safe to
+    auto-apply. New-formatter candidates are printed as a paste-ready config
+    stub, never auto-written.
+  - **MCP `tokenops_fmt_learn`**: exposes the advisory learning report to
+    agents so they can drive catalog improvements programmatically.
+  - Shared `fmtindex` adapter backs the CLI and MCP so both read one index.
+
 ## 0.27.0 - 2026-07-03
 
 ### Added

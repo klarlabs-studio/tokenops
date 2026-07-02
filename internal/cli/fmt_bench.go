@@ -19,7 +19,7 @@ import (
 // aggregate byte / estimated-token savings at every loss level, so operators
 // (and this project's own benchmarks) can quote real numbers rather than
 // claims.
-func newFmtBenchCmd() *cobra.Command {
+func newFmtBenchCmd(rf *rootFlags) *cobra.Command {
 	var corpusDir string
 	cmd := &cobra.Command{
 		Use:   "bench",
@@ -70,14 +70,12 @@ leading token selects the formatter (git.status.txt -> git formatter).
 				command := strings.SplitN(name, ".", 2)[0]
 				totalRaw += len(raw)
 
+				formatters := registryFormatters(rf)
 				cols := make([]string, 0, len(levels))
 				for _, lvl := range levels {
-					reg := formatter.NewRegistry(formatter.LossPolicy{Default: lvl}, defaultFormatters()...)
+					reg := formatter.NewRegistry(formatter.LossPolicy{Default: lvl}, formatters...)
 					res, _ := reg.Format([]string{command}, raw)
-					saved := len(raw) - res.BytesAfter
-					if saved < 0 {
-						saved = 0
-					}
+					saved := max(len(raw)-res.BytesAfter, 0)
 					totals[lvl] += saved
 					pct := 0.0
 					if len(raw) > 0 {

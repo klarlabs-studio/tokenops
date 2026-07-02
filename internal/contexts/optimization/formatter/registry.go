@@ -109,6 +109,12 @@ func (r *Registry) FormatSniff(raw []byte, level LossLevel) (Result, string) {
 	best, _ := generic.Format(raw, level)
 	bestCmd := ""
 	for cmd, f := range r.formatters {
+		// User config formatters carry no reliable content signature; they
+		// only run when dispatched by their explicit command token, never
+		// by content sniffing.
+		if ex, ok := f.(interface{ sniffExclude() bool }); ok && ex.sniffExclude() {
+			continue
+		}
 		res, ok := f.Format(raw, level)
 		if !ok || !res.CriticalKept {
 			continue

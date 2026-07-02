@@ -23,7 +23,7 @@ import (
 // The wrappers call `command <cmd>` (bypassing the function) via tokenops
 // fmt, which execs the real binary by PATH lookup — shell functions are not
 // on PATH, so there is no recursion.
-func newFmtHookCmd() *cobra.Command {
+func newFmtHookCmd(rf *rootFlags) *cobra.Command {
 	var (
 		shell    string
 		commands []string
@@ -48,7 +48,7 @@ Scope to specific commands with --commands, and set a default level with
 				return fmt.Errorf("hook: --shell must be bash or zsh (got %q)", shell)
 			}
 			if len(commands) == 0 {
-				commands = formatterCommands()
+				commands = formatterCommands(rf)
 			}
 			sort.Strings(commands)
 
@@ -77,10 +77,11 @@ Scope to specific commands with --commands, and set a default level with
 	return cmd
 }
 
-// formatterCommands returns the command tokens with a dedicated formatter,
-// derived from the registered set so the hook stays in sync with the catalog.
-func formatterCommands() []string {
-	reg := formatter.NewRegistry(formatter.LossPolicy{}, defaultFormatters()...)
+// formatterCommands returns the command tokens with a dedicated formatter
+// (built-in + user config), derived from the registered set so the hook
+// stays in sync with the catalog.
+func formatterCommands(rf *rootFlags) []string {
+	reg := formatter.NewRegistry(formatter.LossPolicy{}, registryFormatters(rf)...)
 	cmds := reg.Commands()
 	// Drop the generic sentinel (empty token) if present.
 	out := cmds[:0]
