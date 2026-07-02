@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.27.0 - 2026-07-03
+
 ### Added
 
 - **`tokenops fmt` catalog expanded to 46 commands / 51 tokens.** 29 new
