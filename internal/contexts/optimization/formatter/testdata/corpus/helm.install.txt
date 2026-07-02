@@ -1,0 +1,16 @@
+NAME: my-app
+LAST DEPLOYED: Thu Jul  2 21:00:00 2026
+NAMESPACE: production
+STATUS: deployed
+REVISION: 3
+TEST SUITE: None
+NOTES:
+1. Get the application URL by running these commands:
+     export POD_NAME=$(kubectl get pods --namespace production -l "app.kubernetes.io/name=my-app" -o jsonpath="{.items[0].metadata.name}")
+     export CONTAINER_PORT=$(kubectl get pod --namespace production $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
+     echo "Visit http://127.0.0.1:8080 to use your application"
+     kubectl --namespace production port-forward $POD_NAME 8080:$CONTAINER_PORT
+
+2. The application is exposed via an ingress at https://my-app.example.com
+
+3. To upgrade, run: helm upgrade my-app ./chart

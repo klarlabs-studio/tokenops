@@ -1,0 +1,7 @@
+app/main.py:12:1: F401 [*] `os` imported but unused
+app/main.py:45:5: E722 Do not use bare `except`
+app/models/user.py:8:80: E501 Line too long (92 > 88)
+app/models/user.py:23:5: F841 Local variable `result` is assigned to but never used
+app/api/routes.py:56:1: E302 Expected 2 blank lines, found 1
+Found 5 errors.
+[*] 1 fixable with the `--fix` option.

@@ -1,0 +1,16 @@
+ ✓ src/utils/math.test.ts (12 tests) 8ms
+ ✓ src/api/http.test.ts (7 tests) 21ms
+ ✓ src/components/Card.test.ts (5 tests) 14ms
+ ❯ src/models/order.test.ts (4 tests | 1 failed) 32ms
+   × Order › computes total with tax 5ms
+     → expected 108 to be 110
+ ✓ src/store/cart.test.ts (9 tests) 11ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+FAIL src/models/order.test.ts > Order > computes total with tax
+AssertionError: expected 108 to be 110
+ ❯ src/models/order.test.ts:18:24
+
+ Test Files  1 failed | 4 passed (5)
+      Tests  1 failed | 36 passed (37)
+   Duration  1.42s

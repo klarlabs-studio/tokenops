@@ -1,0 +1,25 @@
+PLAY [Deploy web servers] ******************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [web1]
+ok: [web2]
+
+TASK [Install nginx] ***********************************************************
+changed: [web1]
+changed: [web2]
+
+TASK [Copy config] *************************************************************
+ok: [web1]
+changed: [web2]
+
+TASK [Start service] ***********************************************************
+ok: [web1]
+failed: [web2] => {"changed": false, "msg": "Could not start nginx: port 80 in use"}
+
+TASK [Verify health] ***********************************************************
+ok: [web1]
+fatal: [web2]: FAILED! => {"changed": false, "msg": "health check timed out"}
+
+PLAY RECAP *********************************************************************
+web1                       : ok=6    changed=1    unreachable=0    failed=0    skipped=0
+web2                       : ok=3    changed=2    unreachable=0    failed=2    skipped=0

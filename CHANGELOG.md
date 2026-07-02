@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Added
+
+- **`tokenops fmt` catalog expanded to 26 commands / 30 tokens.** Nine new
+  deterministic formatters:
+  - Parity with RTK: `gh` (run/pr/issue tables), `jest`, `vitest`,
+    `golangci-lint`, `ruff`.
+  - Differentiators RTK does not support: `bazel`, `ansible`
+    (+`ansible-playbook`), `helm`, `dotnet` — the noisiest build /
+    config-management / JVM-adjacent tooling, none of which RTK covers.
+  Each ships golden critical-line survival + monotonic-reduction tests and
+  is enrolled across every plane (CLI, hook, proxy, bench). Benchmark over
+  the checked-in corpus (38 KB): balanced 61%, aggressive 73% aggregate;
+  standouts helm 84/92%, go test 86/92%, npm 84%, pip 82%, mvn 76%,
+  bazel 72%.
+
 ## 0.26.0 - 2026-07-02
 
 ### Added

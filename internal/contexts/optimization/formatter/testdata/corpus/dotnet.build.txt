@@ -1,0 +1,11 @@
+  Determining projects to restore...
+  Restored /src/MyApp/MyApp.csproj (in 1.2s).
+  Restored /src/MyApp.Tests/MyApp.Tests.csproj (in 0.8s).
+  MyApp -> /src/MyApp/bin/Debug/net8.0/MyApp.dll
+/src/MyApp/Services/UserService.cs(24,13): warning CS0168: The variable 'ex' is declared but never used
+/src/MyApp/Services/OrderService.cs(51,9): error CS1002: ; expected
+/src/MyApp/Services/OrderService.cs(52,17): error CS0103: The name 'total' does not exist in the current context
+Build FAILED.
+    1 Warning(s)
+    2 Error(s)
+Time Elapsed 00:00:03.42

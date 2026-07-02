@@ -1,0 +1,21 @@
+Starting local Bazel server and connecting to it...
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 12 targets (34 packages loaded, 892 targets configured)
+[0 / 8] [Prepa] BazelWorkspaceStatusAction stable-status.txt
+[12 / 34] Compiling src/main.cc; 4s remote-cache
+INFO: Analyzed 12 targets (34 packages loaded, 1204 targets configured).
+INFO: Found 3 targets and 9 test targets...
+//pkg/util:string_test                    PASSED in 0.3s
+//pkg/util:math_test                      PASSED in 0.2s
+//pkg/api:client_test                     PASSED in 1.1s
+//pkg/api:server_test                     PASSED in 0.9s
+//pkg/store:cache_test                    PASSED in 0.4s
+//pkg/store:db_test                       PASSED in 2.1s
+//pkg/model:user_test                     PASSED in 0.5s
+//pkg/model:order_test                    PASSED in 0.6s
+//pkg/parser:lexer_test                   FAILED in 1.2s
+  /home/user/.cache/bazel/execroot/pkg/parser/lexer_test.log
+ERROR: //pkg/parser:lexer_test failed to build
+Executed 9 out of 9 tests: 8 tests pass and 1 fails.
+FAILED: Build did NOT complete successfully

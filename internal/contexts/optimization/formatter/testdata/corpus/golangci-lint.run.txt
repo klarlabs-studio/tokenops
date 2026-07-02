@@ -1,0 +1,17 @@
+internal/cli/fmt.go:42:6: `emitFmtEvent` - result 0 (error) is always nil (unparam)
+	func emitFmtEvent(ctx context.Context) error {
+	     ^
+internal/proxy/server.go:118:2: S1005: should use `for range x` instead of `for _ = range x` (gosimple)
+	for _ = range items {
+	^
+internal/storage/sqlite/store.go:204:15: Error return value is not checked (errcheck)
+		tx.Rollback()
+		          ^
+internal/config/config.go:88:1: exported function `Load` should have comment (revive)
+func Load(path string) (Config, error) {
+^
+4 issues:
+* unparam: 1
+* gosimple: 1
+* errcheck: 1
+* revive: 1

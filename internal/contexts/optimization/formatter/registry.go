@@ -166,6 +166,15 @@ func DefaultFormatters() []Formatter {
 		NewGradle(),
 		NewApt(),
 		NewCurl(),
+		NewGH(),
+		NewJest(),
+		NewVitest(),
+		NewGolangciLint(),
+		NewRuff(),
+		NewBazel(),
+		NewAnsible(),
+		NewHelm(),
+		NewDotnet(),
 	}
 }
 

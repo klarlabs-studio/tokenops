@@ -1,0 +1,15 @@
+Showing 12 of 143 workflow runs in felixgeelhaar/tokenops
+
+STATUS  TITLE                                     WORKFLOW  BRANCH  EVENT        ID          ELAPSED  AGE
+✓       feat: add formatter catalog               CI        main    push         28622765016  3m2s     5m
+✓       docs(changelog): v0.26.0                   CI        main    push         28622485546  2m50s    12m
+X       fix(proxy): retry flake                    CI        pr-110  pull_request 28621004512  1m14s    1h
+✓       test(proxy): cache-hit flake fix           CI        main    push         28620551230  3m10s    2h
+✓       chore(deps): bump golang.org/x/net         CI        main    push         28619998001  2m44s    3h
+X       feat: broken build                         CI        pr-108  pull_request 28619112774  0m48s    4h
+✓       docs(forecast): CI truncation semantics    CI        main    push         28618223391  2m58s    5h
+✓       feat: mistral proxy                        CI        main    push         28617334512  3m5s     6h
+✓       chore: tidy go.mod                         CI        main    push         28616445123  2m40s    7h
+✓       fix(config): redact secrets                CI        main    push         28615556734  2m52s    8h
+✓       feat: snapshot granularity                 CI        main    push         28614667345  3m1s     9h
+✓       docs: architecture ddd                     CI        main    push         28613778956  2m47s    10h

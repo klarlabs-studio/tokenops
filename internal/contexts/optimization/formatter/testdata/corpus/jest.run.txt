@@ -1,0 +1,25 @@
+PASS src/utils/format.test.js
+PASS src/api/client.test.js
+PASS src/components/Button.test.js
+FAIL src/models/user.test.js
+  ● User › validates email format
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      42 |     const result = validateEmail("bad@");
+    > 43 |     expect(result).toBe(true);
+         |                    ^
+      44 |   });
+
+      at Object.<anonymous> (src/models/user.test.js:43:20)
+
+PASS src/hooks/useAuth.test.js
+PASS src/store/reducer.test.js
+
+Test Suites: 1 failed, 5 passed, 6 total
+Tests:       1 failed, 47 passed, 48 total
+Snapshots:   0 total
+Time:        4.221 s
