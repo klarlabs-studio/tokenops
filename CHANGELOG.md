@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.28.0 - 2026-07-03
+
 ### Added
 
 - **User-extensible `fmt` catalog + local self-tuning** — the learning loop
