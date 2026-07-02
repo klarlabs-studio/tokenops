@@ -175,6 +175,26 @@ type OptimizerConfig struct {
 	// RoutingMinQuality is the quality floor below which a routing rule
 	// is skipped silently. Zero falls back to the router default (0.7).
 	RoutingMinQuality float64 `yaml:"routing_min_quality"`
+	// CommandFmt configures deterministic command-output compression
+	// (the `tokenops fmt` wrapper and the proxy tool-output optimizer).
+	CommandFmt CommandFmtConfig `yaml:"command_fmt"`
+}
+
+// CommandFmtConfig tunes deterministic command-output compression. Loss is
+// configured per command: Default applies to any command without an entry,
+// Overrides maps a command token (e.g. "git", "docker") to its own level.
+// Valid levels: "conservative", "balanced", "aggressive".
+type CommandFmtConfig struct {
+	// Default is the loss level for commands without an override. Empty
+	// means "conservative" (noise-only, nothing semantic dropped).
+	Default string `yaml:"default"`
+	// Overrides maps a command token to its loss level.
+	Overrides map[string]string `yaml:"overrides"`
+	// EmitEvents, when true, makes `tokenops fmt` append an
+	// OptimizationEvent (kind=command_fmt) to the local events store on
+	// each compressed run so the dashboard and scorecard count the
+	// savings. Best-effort: a store error never fails the wrapped command.
+	EmitEvents bool `yaml:"emit_events"`
 }
 
 // RoutingRuleConfig is one "route X to Y" entry. FromModel supports a

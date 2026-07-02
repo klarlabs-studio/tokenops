@@ -1,0 +1,23 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ------------------------< com.example:my-app >------------------------
+[INFO] Building my-app 1.0.0-SNAPSHOT
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] Downloading from central: https://repo.maven.apache.org/maven2/org/foo/1.0/foo-1.0.pom
+[INFO] Downloaded from central: https://repo.maven.apache.org/maven2/org/foo/1.0/foo-1.0.pom (3.2 kB at 12 kB/s)
+[INFO] --- maven-resources-plugin:3.3.1:resources (default-resources) @ my-app ---
+[INFO] Copying 4 resources
+[INFO] --- maven-compiler-plugin:3.13.0:compile (default-compile) @ my-app ---
+[INFO] Compiling 42 source files to /home/user/my-app/target/classes
+[WARNING] /src/main/java/com/example/Legacy.java: uses unchecked or unsafe operations.
+[INFO] --- maven-surefire-plugin:3.2.5:test (default-test) @ my-app ---
+[INFO] Tests run: 128, Failures: 2, Errors: 0, Skipped: 3
+[ERROR] /home/user/my-app/src/main/java/com/example/Main.java:[47,23] cannot find symbol
+[ERROR]   symbol:   method compute()
+[ERROR]   location: class com.example.Widget
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  8.442 s
+[INFO] Finished at: 2026-07-02T12:00:00Z
+[INFO] ------------------------------------------------------------------------

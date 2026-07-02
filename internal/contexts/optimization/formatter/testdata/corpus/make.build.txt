@@ -1,0 +1,13 @@
+make[1]: Entering directory '/home/user/project/build'
+gcc -c -Wall -Wextra -O2 -std=c11 -I../include src/main.c -o obj/main.o
+gcc -c -Wall -Wextra -O2 -std=c11 -I../include src/parser.c -o obj/parser.o
+gcc -c -Wall -Wextra -O2 -std=c11 -I../include src/lexer.c -o obj/lexer.o
+src/lexer.c: In function 'scan_token':
+src/lexer.c:88:12: warning: unused variable 'tmp' [-Wunused-variable]
+gcc -c -Wall -Wextra -O2 -std=c11 -I../include src/eval.c -o obj/eval.o
+src/eval.c: In function 'eval_expr':
+src/eval.c:142:9: error: 'result' undeclared (first use in this function)
+src/eval.c:142:9: note: each undeclared identifier is reported only once
+make[1]: *** [Makefile:34: obj/eval.o] Error 1
+make[1]: Leaving directory '/home/user/project/build'
+make: *** [Makefile:12: all] Error 2

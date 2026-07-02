@@ -1,0 +1,13 @@
+NAME                                READY   STATUS             RESTARTS      AGE
+api-gateway-7d9f8c6b5-2xk4p         1/1     Running            0             5d
+api-gateway-7d9f8c6b5-8ml3q         1/1     Running            0             5d
+auth-service-6c4b9d7f8-jk2np        1/1     Running            0             3d
+auth-service-6c4b9d7f8-lm5rt        0/1     CrashLoopBackOff   14 (2m ago)   47m
+billing-worker-5f7c8d9e6-pq3wx      1/1     Running            0             12d
+billing-worker-5f7c8d9e6-rs8yz      1/1     Running            0             12d
+cache-redis-0                       1/1     Running            0             30d
+frontend-9b8c7d6e5-tv4ab            0/1     ImagePullBackOff   0             8m
+frontend-9b8c7d6e5-uw5cd            1/1     Running            0             6d
+notifications-8a7b6c5d4-xy6ef       1/1     Running            2 (4d ago)    18d
+scheduler-4e5f6a7b8-za7gh           1/1     Running            0             9d
+worker-pool-3d4e5f6a7-bc8ij         1/1     Running            0             2d

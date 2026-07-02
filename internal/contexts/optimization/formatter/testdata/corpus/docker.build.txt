@@ -1,0 +1,40 @@
+Sending build context to Docker daemon  4.096kB
+Step 1/9 : FROM node:18-alpine
+18-alpine: Pulling from library/node
+7264a8db6415: Pulling fs layer
+1e63f8ff8cb5: Pulling fs layer
+e6c9ef4d9e14: Pulling fs layer
+7264a8db6415: Download complete
+1e63f8ff8cb5: Download complete
+7264a8db6415: Extracting [==================================================>]  3.35MB/3.35MB
+7264a8db6415: Pull complete
+1e63f8ff8cb5: Extracting [==================================================>]  42.5MB/42.5MB
+1e63f8ff8cb5: Pull complete
+e6c9ef4d9e14: Pull complete
+Digest: sha256:5b3b2f1c1d9e0a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b
+Status: Downloaded newer image for node:18-alpine
+ ---> a1b2c3d4e5f6
+Step 2/9 : WORKDIR /app
+ ---> Running in 0f1e2d3c4b5a
+ ---> 6a5b4c3d2e1f
+Step 3/9 : COPY package*.json ./
+ ---> 7b8c9d0e1f2a
+Step 4/9 : RUN npm ci --production
+ ---> Running in 1a2b3c4d5e6f
+added 210 packages in 12s
+ ---> 8c9d0e1f2a3b
+Step 5/9 : COPY . .
+ ---> 9d0e1f2a3b4c
+Step 6/9 : RUN npm run build
+ ---> Running in 2b3c4d5e6f7a
+ ---> 0e1f2a3b4c5d
+Step 7/9 : EXPOSE 3000
+ ---> Running in 3c4d5e6f7a8b
+ ---> 1f2a3b4c5d6e
+Step 8/9 : USER node
+ ---> 2a3b4c5d6e7f
+Step 9/9 : CMD ["node", "server.js"]
+ ---> Running in 4d5e6f7a8b9c
+ ---> 3b4c5d6e7f80
+Successfully built 3b4c5d6e7f80
+Successfully tagged myapp:latest

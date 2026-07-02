@@ -1,12 +1,14 @@
 package replay
 
 import (
+	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/formatter"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/contexttrim"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/dedupe"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/promptcompress"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/retrievalprune"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/router"
+	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/toolfmt"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/tokenizer"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
 )
@@ -56,6 +58,7 @@ func BuildPipeline(reg *tokenizer.Registry, cfg PipelineConfig) *optimizer.Pipel
 		opt  optimizer.Optimizer
 	}{
 		{"prompt_compress", promptcompress.New(promptcompress.Config{}, reg)},
+		{"command_fmt", toolfmt.New(toolfmt.Config{Level: formatter.LossBalanced}, formatter.DefaultRegistry(formatter.LossPolicy{Default: formatter.LossBalanced}), reg)},
 		{"semantic_dedupe", dedupe.New(dedupe.Config{}, reg)},
 		{"retrieval_prune", retrievalprune.New(retrievalprune.Config{}, reg)},
 		{"context_trim", contexttrim.New(contexttrim.Config{}, reg)},

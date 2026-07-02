@@ -14,6 +14,11 @@ const (
 	OptimizationTypeSystemDedupe   OptimizationType = "system_dedupe"
 	OptimizationTypeRouter         OptimizationType = "model_router"
 	OptimizationTypeCacheReuse     OptimizationType = "cache_reuse"
+	// OptimizationTypeCommandFmt is deterministic command-output
+	// compression: shell command stdout/stderr rewritten to a compact form
+	// before it enters the agent context. Unlike the prompt-plane
+	// optimizers this runs at the CLI/tool-output boundary.
+	OptimizationTypeCommandFmt OptimizationType = "command_fmt"
 )
 
 // OptimizationMode describes how the optimization was offered or applied.

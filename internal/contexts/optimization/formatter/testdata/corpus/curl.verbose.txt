@@ -1,0 +1,26 @@
+*   Trying 93.184.216.34:443...
+* Connected to api.example.com (93.184.216.34) port 443
+* ALPN: curl offers h2,http/1.1
+* TLSv1.3 (OUT), TLS handshake, Client hello (1):
+* TLSv1.3 (IN), TLS handshake, Server hello (2):
+* TLSv1.3 (IN), TLS handshake, Certificate (11):
+* TLSv1.3 (IN), TLS handshake, CERT verify (15):
+* TLSv1.3 (IN), TLS handshake, Finished (20):
+* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384
+* Server certificate:
+*  subject: CN=api.example.com
+*  start date: Jan  1 00:00:00 2026 GMT
+*  expire date: Apr  1 00:00:00 2026 GMT
+* using HTTP/2
+> GET /v1/users?limit=2 HTTP/2
+> Host: api.example.com
+> User-Agent: curl/8.4.0
+> Accept: */*
+>
+< HTTP/2 200
+< content-type: application/json
+< content-length: 78
+< date: Thu, 02 Jul 2026 12:00:00 GMT
+< server: nginx
+<
+{"users":[{"id":1,"name":"alice"},{"id":2,"name":"bob"}],"total":2}

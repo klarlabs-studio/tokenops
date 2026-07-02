@@ -95,6 +95,11 @@ scorecard                         Wedge KPI scorecard
 coverage-debt                     Risk-weighted coverage debt
 eval                              Optimizer eval harness + gate
 replay <id>                       Replay a session through the optimizer
+fmt -- <cmd>                      Run <cmd>, compress its output deterministically before it reaches the agent (full output kept in ~/.tokenops/recovery/)
+fmt bench --corpus <dir>          Measure formatter savings over captured command outputs
+fmt hook [--shell zsh|bash]       Emit env-gated shell wrappers (activate with TOKENOPS_FMT=1)
+fmt recover <id>                   Print the full stored output for a run (records the re-access)
+fmt learn                         Mine fmt telemetry for next-formatter priorities + over-compression
 ```
 
 Every CLI verb has a matching MCP tool (`tokenops_<name>`).

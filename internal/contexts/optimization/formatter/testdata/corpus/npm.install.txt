@@ -1,0 +1,28 @@
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it.
+npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+npm warn deprecated npmlog@6.0.2: This package is no longer supported.
+npm warn deprecated gauge@4.0.4: This package is no longer supported.
+npm warn deprecated are-we-there-yet@3.0.1: This package is no longer supported.
+npm warn deprecated @npmcli/move-file@2.0.1: This functionality has been moved to @npmcli/fs
+npm warn deprecated eslint@8.57.1: This version is no longer supported.
+npm http fetch GET 200 https://registry.npmjs.org/react 142ms (cache miss)
+npm http fetch GET 200 https://registry.npmjs.org/react-dom 88ms (cache miss)
+npm http fetch GET 200 https://registry.npmjs.org/webpack 210ms (cache miss)
+npm http fetch GET 200 https://registry.npmjs.org/typescript 175ms (cache miss)
+npm timing reify:loadTrees Completed in 842ms
+npm timing reify:unpack Completed in 1203ms
+npm timing reify:audit Completed in 402ms
+npm notice
+npm notice New major version of npm available! 9.8.1 -> 10.9.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v10.9.2
+npm notice Run npm install -g npm@10.9.2 to update!
+npm notice
+
+added 1042 packages, and audited 1043 packages in 34s
+
+218 packages are looking for funding
+  run `npm fund` for details
+
+found 3 vulnerabilities (1 moderate, 2 high)
+  run `npm audit fix` to address all issues

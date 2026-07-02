@@ -1,0 +1,301 @@
+=== RUN   TestGateAcceptsStableRun
+--- PASS: TestGateAcceptsStableRun (0.00s)
+=== RUN   TestGateRejectsSuccessRateDrop
+--- PASS: TestGateRejectsSuccessRateDrop (0.00s)
+=== RUN   TestGateRejectsQualityRegression
+--- PASS: TestGateRejectsQualityRegression (0.00s)
+=== RUN   TestGateRejectsMissingOptimizer
+--- PASS: TestGateRejectsMissingOptimizer (0.00s)
+=== RUN   TestGateUnderCovered
+--- PASS: TestGateUnderCovered (0.00s)
+=== RUN   TestGatePassesFirstRunWithoutBaseline
+--- PASS: TestGatePassesFirstRunWithoutBaseline (0.00s)
+=== RUN   TestEvalSuitesPass
+=== RUN   TestEvalSuitesPass/prompt-compress-eval
+    eval_test.go:37: Suite: prompt-compress-eval (Eval cases for prompt compression optimizer)
+    eval_test.go:38:   Cases:   3 total, 3 passed, 0 failed
+    eval_test.go:40:   Success: 100.0%
+    eval_test.go:43:   [prompt_compress] 1/1 passed, avg quality 0.87, apply rate 0%
+    eval_test.go:43:   [unknown] 2/2 passed, avg quality 0.00, apply rate 0%
+=== RUN   TestEvalSuitesPass/semantic-dedupe-eval
+    eval_test.go:37: Suite: semantic-dedupe-eval (Eval cases for semantic deduplication optimizer)
+    eval_test.go:38:   Cases:   2 total, 2 passed, 0 failed
+    eval_test.go:40:   Success: 100.0%
+    eval_test.go:43:   [unknown] 1/1 passed, avg quality 0.00, apply rate 0%
+    eval_test.go:43:   [semantic_dedupe] 1/1 passed, avg quality 0.95, apply rate 0%
+=== RUN   TestEvalSuitesPass/context-trim-eval
+    eval_test.go:37: Suite: context-trim-eval (Eval cases for context trimming optimizer)
+    eval_test.go:38:   Cases:   2 total, 2 passed, 0 failed
+    eval_test.go:40:   Success: 100.0%
+    eval_test.go:43:   [context_trim] 1/1 passed, avg quality 0.87, apply rate 0%
+    eval_test.go:43:   [unknown] 1/1 passed, avg quality 0.00, apply rate 0%
+=== NAME  TestEvalSuitesPass
+    eval_test.go:69: Overall: 7/7 cases passed (100.0%)
+--- PASS: TestEvalSuitesPass (0.00s)
+    --- PASS: TestEvalSuitesPass/prompt-compress-eval (0.00s)
+    --- PASS: TestEvalSuitesPass/semantic-dedupe-eval (0.00s)
+    --- PASS: TestEvalSuitesPass/context-trim-eval (0.00s)
+PASS
+ok  	github.com/felixgeelhaar/tokenops/internal/contexts/optimization/eval	0.273s
+=== RUN   TestCargo_ErrorSurvivesEveryLevel
+--- PASS: TestCargo_ErrorSurvivesEveryLevel (0.00s)
+=== RUN   TestCargo_BalancedDropsCompiling
+--- PASS: TestCargo_BalancedDropsCompiling (0.00s)
+=== RUN   TestCargo_AggressiveDropsWarnings
+--- PASS: TestCargo_AggressiveDropsWarnings (0.00s)
+=== RUN   TestCargo_MonotonicReduction
+--- PASS: TestCargo_MonotonicReduction (0.00s)
+=== RUN   TestCargo_NonCargoFallsBackToGeneric
+--- PASS: TestCargo_NonCargoFallsBackToGeneric (0.00s)
+=== RUN   TestCargo_PassingBuildCompresses
+--- PASS: TestCargo_PassingBuildCompresses (0.00s)
+=== RUN   TestDocker_CriticalSurvivesEveryLevel
+--- PASS: TestDocker_CriticalSurvivesEveryLevel (0.00s)
+=== RUN   TestDocker_BalancedDropsLayerNoise
+--- PASS: TestDocker_BalancedDropsLayerNoise (0.00s)
+=== RUN   TestDocker_AggressiveCollapsesSteps
+--- PASS: TestDocker_AggressiveCollapsesSteps (0.00s)
+=== RUN   TestDocker_MonotonicReduction
+--- PASS: TestDocker_MonotonicReduction (0.00s)
+=== RUN   TestDocker_NonDockerFallsBackToGeneric
+--- PASS: TestDocker_NonDockerFallsBackToGeneric (0.00s)
+=== RUN   TestDocker_CriticalLineClassification
+--- PASS: TestDocker_CriticalLineClassification (0.00s)
+=== RUN   TestGit_CriticalLinesSurviveEveryLevel
+--- PASS: TestGit_CriticalLinesSurviveEveryLevel (0.00s)
+=== RUN   TestGit_LevelsReduceMonotonically
+--- PASS: TestGit_LevelsReduceMonotonically (0.00s)
+=== RUN   TestGit_AggressiveCollapsesUntracked
+--- PASS: TestGit_AggressiveCollapsesUntracked (0.00s)
+=== RUN   TestFormat_Deterministic
+--- PASS: TestFormat_Deterministic (0.00s)
+=== RUN   TestGit_NonStatusFallsBackToGeneric
+--- PASS: TestGit_NonStatusFallsBackToGeneric (0.00s)
+=== RUN   TestGeneric_DropsDuplicatesAndBlanks
+--- PASS: TestGeneric_DropsDuplicatesAndBlanks (0.00s)
+=== RUN   TestGeneric_StripsANSI
+--- PASS: TestGeneric_StripsANSI (0.00s)
+=== RUN   TestRegistry_DispatchAndFallback
+--- PASS: TestRegistry_DispatchAndFallback (0.00s)
+=== RUN   TestLossPolicy_LevelFor
+--- PASS: TestLossPolicy_LevelFor (0.00s)
+=== RUN   TestParseLossLevel
+--- PASS: TestParseLossLevel (0.00s)
+=== RUN   TestGoTest_FailureSurvivesEveryLevel
+--- PASS: TestGoTest_FailureSurvivesEveryLevel (0.00s)
+=== RUN   TestGoTest_BalancedDropsScaffolding
+--- PASS: TestGoTest_BalancedDropsScaffolding (0.00s)
+=== RUN   TestGoTest_AggressiveCollapsesPassingPackages
+--- PASS: TestGoTest_AggressiveCollapsesPassingPackages (0.00s)
+=== RUN   TestGoTest_MonotonicReduction
+--- PASS: TestGoTest_MonotonicReduction (0.00s)
+=== RUN   TestGoTest_NonTestFallsBackToGeneric
+--- PASS: TestGoTest_NonTestFallsBackToGeneric (0.00s)
+=== RUN   TestGoTest_CompileErrorIsCritical
+--- PASS: TestGoTest_CompileErrorIsCritical (0.00s)
+=== RUN   TestNPM_CriticalSurvivesEveryLevel
+--- PASS: TestNPM_CriticalSurvivesEveryLevel (0.00s)
+=== RUN   TestNPM_BalancedDropsNoise
+--- PASS: TestNPM_BalancedDropsNoise (0.00s)
+=== RUN   TestNPM_AggressiveCollapsesDeprecations
+--- PASS: TestNPM_AggressiveCollapsesDeprecations (0.00s)
+=== RUN   TestNPM_MonotonicReduction
+--- PASS: TestNPM_MonotonicReduction (0.00s)
+=== RUN   TestNPM_NonNpmFallsBackToGeneric
+--- PASS: TestNPM_NonNpmFallsBackToGeneric (0.00s)
+=== RUN   TestNPM_ErrorLineIsCritical
+--- PASS: TestNPM_ErrorLineIsCritical (0.00s)
+=== RUN   TestPytest_FailureSurvivesEveryLevel
+--- PASS: TestPytest_FailureSurvivesEveryLevel (0.00s)
+=== RUN   TestPytest_BalancedDropsHeader
+--- PASS: TestPytest_BalancedDropsHeader (0.00s)
+=== RUN   TestPytest_MonotonicReduction
+--- PASS: TestPytest_MonotonicReduction (0.00s)
+=== RUN   TestPytest_AggressiveCollapsesPassingFiles
+--- PASS: TestPytest_AggressiveCollapsesPassingFiles (0.00s)
+=== RUN   TestPytest_NonPytestFallsBackToGeneric
+--- PASS: TestPytest_NonPytestFallsBackToGeneric (0.00s)
+PASS
+ok  	github.com/felixgeelhaar/tokenops/internal/contexts/optimization/formatter	0.388s
+=== RUN   TestPassiveModeEmitsSkippedAndKeepsBody
+--- PASS: TestPassiveModeEmitsSkippedAndKeepsBody (0.00s)
+=== RUN   TestInteractiveModeAppliesAcceptedBody
+--- PASS: TestInteractiveModeAppliesAcceptedBody (0.00s)
+=== RUN   TestInteractiveModeRejectionLeavesBodyAndMarks
+--- PASS: TestInteractiveModeRejectionLeavesBodyAndMarks (0.00s)
+=== RUN   TestInteractiveWithoutDeciderRejects
+--- PASS: TestInteractiveWithoutDeciderRejects (0.00s)
+=== RUN   TestReplayModeRecordsButDoesNotApply
+--- PASS: TestReplayModeRecordsButDoesNotApply (0.00s)
+=== RUN   TestErrorIsRecordedAsSkipped
+--- PASS: TestErrorIsRecordedAsSkipped (0.00s)
+=== RUN   TestOrderingPreserved
+--- PASS: TestOrderingPreserved (0.00s)
+=== RUN   TestLatencyBudgetSkipsLater
+--- PASS: TestLatencyBudgetSkipsLater (0.00s)
+=== RUN   TestNilRequestReturnsError
+--- PASS: TestNilRequestReturnsError (0.00s)
+=== RUN   TestEmptyPipelineReturnsBodyUnchanged
+--- PASS: TestEmptyPipelineReturnsBodyUnchanged (0.00s)
+=== RUN   TestRecommendationKindFallsBackToOptimizerKind
+--- PASS: TestRecommendationKindFallsBackToOptimizerKind (0.00s)
+=== RUN   TestDeciderAcceptedWithoutBodyMarksAccepted
+--- PASS: TestDeciderAcceptedWithoutBodyMarksAccepted (0.00s)
+PASS
+ok  	github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer	0.872s
+=== RUN   TestTrimsLongOpenAIConversation
+--- PASS: TestTrimsLongOpenAIConversation (0.00s)
+=== RUN   TestShortConversationNotTrimmed
+--- PASS: TestShortConversationNotTrimmed (0.00s)
+=== RUN   TestSystemNotRetainedWhenKeepSystemFalse
+--- PASS: TestSystemNotRetainedWhenKeepSystemFalse (0.00s)
+=== RUN   TestPreservesTopLevelFields
+--- PASS: TestPreservesTopLevelFields (0.00s)
+=== RUN   TestUnknownProviderNoOp
+--- PASS: TestUnknownProviderNoOp (0.00s)
+=== RUN   TestMalformedBodyNoOp
+--- PASS: TestMalformedBodyNoOp (0.00s)
+=== RUN   TestAnthropicTrim
+--- PASS: TestAnthropicTrim (0.00s)
+=== RUN   TestQualityScoreBounded
+--- PASS: TestQualityScoreBounded (0.00s)
+=== RUN   TestSavingsScalesWithTokenizer
+--- PASS: TestSavingsScalesWithTokenizer (0.00s)
+PASS
+ok  	github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/contexttrim	1.114s
+=== RUN   TestDeduperFindsExactDuplicate
+--- PASS: TestDeduperFindsExactDuplicate (0.00s)
+=== RUN   TestDeduperFindsNearDuplicate
+--- PASS: TestDeduperFindsNearDuplicate (0.00s)
+=== RUN   TestDeduperIgnoresSystemRoleByDefault
+--- PASS: TestDeduperIgnoresSystemRoleByDefault (0.00s)
+=== RUN   TestDeduperDropSystemRoleWhenEnabled
+--- PASS: TestDeduperDropSystemRoleWhenEnabled (0.00s)
+=== RUN   TestDeduperRespectsMinMessageBytes
+--- PASS: TestDeduperRespectsMinMessageBytes (0.00s)
+=== RUN   TestDeduperRespectsMinSavingsTokens
+--- PASS: TestDeduperRespectsMinSavingsTokens (0.00s)
+=== RUN   TestDeduperPreservesNonDuplicates
+--- PASS: TestDeduperPreservesNonDuplicates (0.00s)
+=== RUN   TestDeduperUnsupportedProvider
+--- PASS: TestDeduperUnsupportedProvider (0.00s)
+=== RUN   TestDeduperHandlesArrayOfParts
+--- PASS: TestDeduperHandlesArrayOfParts (0.00s)
+=== RUN   TestPipelineIntegratesDedupe
+--- PASS: TestPipelineIntegratesDedupe (0.00s)
+=== RUN   TestDeduperShinglesSimilarityScoring
+--- PASS: TestDeduperShinglesSimilarityScoring (0.00s)
+PASS
+ok  	github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/dedupe	1.363s
+=== RUN   TestCollapsesWhitespace
+--- PASS: TestCollapsesWhitespace (0.00s)
+=== RUN   TestStripsHTMLComments
+--- PASS: TestStripsHTMLComments (0.00s)
+=== RUN   TestNormalisesSmartQuotes
+--- PASS: TestNormalisesSmartQuotes (0.00s)
+=== RUN   TestDedupesConsecutiveLines
+--- PASS: TestDedupesConsecutiveLines (0.00s)
+=== RUN   TestRunRecommendsOnLargeRedundancy
+--- PASS: TestRunRecommendsOnLargeRedundancy (0.00s)
+=== RUN   TestRunSilentBelowThreshold
+--- PASS: TestRunSilentBelowThreshold (0.00s)
+=== RUN   TestRunUnknownProviderNoOp
+--- PASS: TestRunUnknownProviderNoOp (0.00s)
+=== RUN   TestRunMalformedBodyNoOp
+--- PASS: TestRunMalformedBodyNoOp (0.00s)
+=== RUN   TestPreservesArrayContent
+--- PASS: TestPreservesArrayContent (0.00s)
+=== RUN   TestQualityScoreBounds
+--- PASS: TestQualityScoreBounds (0.00s)
+PASS
+ok  	github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/promptcompress	0.633s
+=== RUN   TestDeciderAcceptsHighQuality
+--- PASS: TestDeciderAcceptsHighQuality (0.00s)
+=== RUN   TestDeciderRejectsLowQuality
+--- PASS: TestDeciderRejectsLowQuality (0.00s)
+=== RUN   TestDeciderDelegatesToInner
+--- PASS: TestDeciderDelegatesToInner (0.00s)
+=== RUN   TestDeciderDoesNotInvokeInnerBelowThreshold
+--- PASS: TestDeciderDoesNotInvokeInnerBelowThreshold (0.00s)
+=== RUN   TestDeciderDefaultThreshold
+--- PASS: TestDeciderDefaultThreshold (0.00s)
+=== RUN   TestWrapClearsApplyBodyOnLowQuality
+--- PASS: TestWrapClearsApplyBodyOnLowQuality (0.00s)
+=== RUN   TestWrapPropagatesError
+--- PASS: TestWrapPropagatesError (0.00s)
+=== RUN   TestWrapKindMatchesInner
+--- PASS: TestWrapKindMatchesInner (0.00s)
+=== RUN   TestAnnotateReasonEmpty
+--- PASS: TestAnnotateReasonEmpty (0.00s)
+PASS
+ok  	github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/qualitygate	1.965s
+=== RUN   TestSplitChunksDashSeparated
+--- PASS: TestSplitChunksDashSeparated (0.00s)
+=== RUN   TestSplitChunksNumberedFallback
+--- PASS: TestSplitChunksNumberedFallback (0.00s)
+=== RUN   TestSplitChunksNoneReturnsNil
+--- PASS: TestSplitChunksNoneReturnsNil (0.00s)
+=== RUN   TestRunPrunesOversizedRetrieval
+--- PASS: TestRunPrunesOversizedRetrieval (0.00s)
+=== RUN   TestRunBelowMaxChunksNoOp
+--- PASS: TestRunBelowMaxChunksNoOp (0.00s)
+=== RUN   TestRunUnknownProviderNoOp
+--- PASS: TestRunUnknownProviderNoOp (0.00s)
+=== RUN   TestRunMalformedBodyNoOp
+--- PASS: TestRunMalformedBodyNoOp (0.00s)
+=== RUN   TestRunBelowSavingsThresholdNoOp
+--- PASS: TestRunBelowSavingsThresholdNoOp (0.00s)
+=== RUN   TestKeepTopNCappedBelowMaxChunks
+--- PASS: TestKeepTopNCappedBelowMaxChunks (0.00s)
+=== RUN   TestPreservesTopLevelFields
+--- PASS: TestPreservesTopLevelFields (0.00s)
+PASS
+ok  	github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/retrievalprune	1.608s
+=== RUN   TestRouteFromExpensiveToCheapEmitsSavings
+--- PASS: TestRouteFromExpensiveToCheapEmitsSavings (0.00s)
+=== RUN   TestPrefixRuleMatches
+--- PASS: TestPrefixRuleMatches (0.00s)
+=== RUN   TestNoMatchEmitsNothing
+--- PASS: TestNoMatchEmitsNothing (0.00s)
+=== RUN   TestQualityBelowMinSilenced
+--- PASS: TestQualityBelowMinSilenced (0.00s)
+=== RUN   TestFallbackChain
+--- PASS: TestFallbackChain (0.00s)
+=== RUN   TestAllTargetsUnavailable
+--- PASS: TestAllTargetsUnavailable (0.00s)
+=== RUN   TestRouteToMoreExpensiveReportsZeroSavings
+--- PASS: TestRouteToMoreExpensiveReportsZeroSavings (0.00s)
+=== RUN   TestPreservesTopLevelFields
+--- PASS: TestPreservesTopLevelFields (0.00s)
+=== RUN   TestNilRequestNoOp
+--- PASS: TestNilRequestNoOp (0.00s)
+=== RUN   TestKindIsRouter
+--- PASS: TestKindIsRouter (0.00s)
+PASS
+ok  	github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/router	2.185s
+=== RUN   TestDefaultPipelineHasFourOptimizers
+--- PASS: TestDefaultPipelineHasFourOptimizers (0.00s)
+=== RUN   TestBuildPipelineRespectsDisable
+--- PASS: TestBuildPipelineRespectsDisable (0.00s)
+=== RUN   TestBuildPipelineIncludesRouterWhenRulesConfigured
+--- PASS: TestBuildPipelineIncludesRouterWhenRulesConfigured (0.00s)
+=== RUN   TestBuildPipelineSkipsRouterWithoutRules
+--- PASS: TestBuildPipelineSkipsRouterWithoutRules (0.00s)
+=== RUN   TestRouterRecommendationCarriesUSDSavings
+--- PASS: TestRouterRecommendationCarriesUSDSavings (0.00s)
+=== RUN   TestReplayLoadsSessionAndComputesSavings
+--- PASS: TestReplayLoadsSessionAndComputesSavings (0.01s)
+=== RUN   TestReplayRecomputesOriginalCostWhenZero
+--- PASS: TestReplayRecomputesOriginalCostWhenZero (0.00s)
+=== RUN   TestReplayTokenSavingsToUSDViaSpendEngine
+--- PASS: TestReplayTokenSavingsToUSDViaSpendEngine (0.00s)
+=== RUN   TestReplayEmptySession
+--- PASS: TestReplayEmptySession (0.00s)
+=== RUN   TestSavingsRatio
+--- PASS: TestSavingsRatio (0.00s)
+=== RUN   TestReplayRunsInReplayMode
+--- PASS: TestReplayRunsInReplayMode (0.00s)
+=== RUN   TestReplayBySessionAndAgent
+--- PASS: TestReplayBySessionAndAgent (0.00s)
+PASS
+ok  	github.com/felixgeelhaar/tokenops/internal/contexts/optimization/replay	2.326s
