@@ -128,7 +128,8 @@ Examples:
 	cmd.AddCommand(newFmtBenchCmd(rf))
 	cmd.AddCommand(newFmtHookCmd(rf))
 	cmd.AddCommand(newFmtRecoverCmd())
-	cmd.AddCommand(newFmtLearnCmd())
+	cmd.AddCommand(newFmtLearnCmd(rf))
+	cmd.AddCommand(newFmtAnalyzeCmd(rf))
 	return cmd
 }
 

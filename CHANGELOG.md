@@ -2,7 +2,30 @@
 
 ## Unreleased
 
-## 0.29.0 - 2026-07-03
+### Added
+
+- **Self-wiring fmt learning** — the fmt loop now derives its signal from the
+  Claude Code logs (`~/.claude/projects`) that already exist, with no daemon,
+  no wrapped commands, and no setup:
+  - **`tokenops fmt analyze`**: reads your logs, reports context composition
+    (Read vs Bash vs prose) and dry-runs every Bash command's output through
+    the formatter engine to estimate what fmt would save on your real
+    traffic. Nothing is persisted — only sizes.
+  - **`tokenops fmt learn`** now folds in that log-derived signal by default
+    (`--no-jsonl` to opt out), so it reflects real usage out of the box.
+  - **MCP `tokenops_fmt_analyze`** (+ `tokenops_fmt_learn` folds in log
+    signal) expose the same to agents.
+
+### Fixed
+
+- **Log discovery walked only one directory level** — the vendor-usage
+  file-finder globbed `<root>/*/*.jsonl`, silently missing sessions nested
+  deeper (worktrees, sub-checkouts). The fmt analyzer now walks recursively,
+  seeing all sessions instead of a small fraction.
+- **Compound-command attribution** — `cd /path && go test` attributed the
+  command output to `cd` (no-output prefix) instead of `go`, hiding
+  compressible output from the right formatter. The analyzer now splits the
+  chain and skips `cd`/`export`/`source` prefixes.
 
 ### Added
 

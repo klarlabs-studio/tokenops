@@ -106,29 +106,40 @@ func lookupRecoveryCommand(recoverDir, id string) string {
 // newFmtLearnCmd mines the learn index and prints the advisory report:
 // which commands to write a formatter for next, and which formatters look
 // too aggressive (frequently re-accessed).
-func newFmtLearnCmd() *cobra.Command {
+func newFmtLearnCmd(rf *rootFlags) *cobra.Command {
 	var (
 		recoverDir string
 		jsonOut    bool
 		apply      bool
 		configPath string
+		noJSONL    bool
+		jsonlMax   int
 	)
 	cmd := &cobra.Command{
 		Use:   "learn",
 		Short: "Mine fmt telemetry for next-formatter priorities and over-compression",
-		Long: `learn analyses the append-only recovery index (compression +
-re-access records) and proposes where the formatter catalog should improve.
+		Long: `learn analyses the recovery index (from wrapped 'tokenops fmt'
+runs) AND your Claude Code logs (~/.claude/projects) — so it reflects your
+real usage out of the box, with no commands wrapped and no daemon. It
+proposes where the formatter catalog should improve.
 
 Without --apply it is advisory: the formatters stay deterministic and the
 output is a report. With --apply it writes the SAFE tuning locally to your
 config (optimizer.command_fmt.overrides) — loss-level changes only, which
 never touch critical-line rules. New-formatter candidates are printed as a
-config stub to paste, never auto-written (they need human-authored regexes).`,
+config stub to paste, never auto-written (they need human-authored regexes).
+
+Use --no-jsonl to restrict to the wrapped-run index only.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			recs, err := readLearnRecords(recoverDir)
 			if err != nil {
 				return err
+			}
+			// Self-wiring: fold in signal derived from the Claude Code logs
+			// so learn works without any wrapped runs. Best-effort + capped.
+			if !noJSONL {
+				recs = append(recs, jsonlLearnRecords(rf, jsonlMax)...)
 			}
 			rep := fmtlearn.Analyze(recs, fmtlearn.Thresholds{})
 			if jsonOut {
@@ -147,6 +158,8 @@ config stub to paste, never auto-written (they need human-authored regexes).`,
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit the report as JSON")
 	cmd.Flags().BoolVar(&apply, "apply", false, "write safe loss-level tuning to config (overrides only)")
 	cmd.Flags().StringVar(&configPath, "config", "", "config path to write with --apply (defaults to the standard config path)")
+	cmd.Flags().BoolVar(&noJSONL, "no-jsonl", false, "do not fold in signal from Claude Code logs (wrapped-run index only)")
+	cmd.Flags().IntVar(&jsonlMax, "jsonl-max", 150, "cap Claude Code sessions scanned for learn (newest first); 0 = all")
 	return cmd
 }
 
