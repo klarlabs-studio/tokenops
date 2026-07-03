@@ -100,6 +100,25 @@ rates:
       input_per_million: 0.075
       output_per_million: 0.30
 
+  # Cohere — https://cohere.com/pricing (2026-07). Longest-prefix match means
+  # command-r-plus / command-r7b resolve before the broader command-r / command.
+  cohere:
+    "command-a*":
+      input_per_million: 2.50
+      output_per_million: 10.00
+    "command-r-plus*":
+      input_per_million: 2.50
+      output_per_million: 10.00
+    "command-r7b*":
+      input_per_million: 0.0375
+      output_per_million: 0.15
+    "command-r*":
+      input_per_million: 0.15
+      output_per_million: 0.60
+    "command*":
+      input_per_million: 1.00
+      output_per_million: 2.00
+
   # OpenAI-compatible upstreams. Public list prices in USD / million tokens
   # (captured 2026-07; verify against the vendor's pricing page — these drift,
   # and negotiated rates should be layered via config pricing.path).

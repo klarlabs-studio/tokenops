@@ -51,6 +51,39 @@ func TestOpenAICompatibleFleetStampsOwnID(t *testing.T) {
 	}
 }
 
+// TestCohereNormalize covers Cohere's two distinct chat shapes: v2 (OpenAI-
+// style messages array) and v1 (message + chat_history + preamble).
+func TestCohereNormalize(t *testing.T) {
+	p, ok := Lookup(eventschema.ProviderCohere)
+	if !ok {
+		t.Fatal("cohere should be routable")
+	}
+
+	v2 := []byte(`{"model":"command-r-plus","stream":true,"max_tokens":128,"messages":[{"role":"system","content":"x"},{"role":"user","content":"hi"}]}`)
+	got, err := p.Normalize("/v2/chat", v2)
+	if err != nil {
+		t.Fatalf("v2 normalize: %v", err)
+	}
+	if got.Provider != eventschema.ProviderCohere || got.Model != "command-r-plus" ||
+		!got.Stream || got.MaxOutputTokens != 128 || got.MessageCount != 2 || !got.SystemPresent {
+		t.Errorf("v2 canonical wrong: %+v", got)
+	}
+
+	v1 := []byte(`{"model":"command-r","preamble":"be terse","max_tokens":64,"message":"hi","chat_history":[{"role":"USER"},{"role":"CHATBOT"}]}`)
+	got, err = p.Normalize("/v1/chat", v1)
+	if err != nil {
+		t.Fatalf("v1 normalize: %v", err)
+	}
+	// 2 history turns + the current message = 3; preamble ⇒ system present.
+	if got.Model != "command-r" || got.MaxOutputTokens != 64 || got.MessageCount != 3 || !got.SystemPresent {
+		t.Errorf("v1 canonical wrong: %+v", got)
+	}
+
+	if _, err := p.Normalize("/v1/embed", nil); err != ErrUnknownPath {
+		t.Errorf("non-chat path should be ErrUnknownPath, got %v", err)
+	}
+}
+
 func TestLookup(t *testing.T) {
 	if _, ok := Lookup(eventschema.ProviderOpenAI); !ok {
 		t.Error("OpenAI should be registered")

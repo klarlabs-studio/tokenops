@@ -40,6 +40,11 @@ const (
 	ProviderCerebras   Provider = "cerebras"
 	ProviderTogether   Provider = "together"
 	ProviderOpenRouter Provider = "openrouter"
+
+	// Cohere — its own chat wire format (v2 /v2/chat messages array, v1
+	// /v1/chat message + chat_history), so it has a dedicated normalizer
+	// rather than the shared OpenAI one.
+	ProviderCohere Provider = "cohere"
 )
 
 // Envelope is the common header carried by every TokenOps event regardless of

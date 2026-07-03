@@ -50,6 +50,7 @@ func All() []Provider {
 		cerebrasProvider,
 		togetherProvider,
 		openRouterProvider,
+		cohereProvider,
 	}
 }
 

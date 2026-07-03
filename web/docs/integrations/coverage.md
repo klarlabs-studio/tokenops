@@ -45,13 +45,18 @@ Every provider below is routable through the proxy. Bind one with
 | cerebras | `https://api.cerebras.ai` |
 | together | `https://api.together.xyz` |
 | openrouter | `https://openrouter.ai/api` |
+| cohere | `https://api.cohere.com` |
 
 **OpenRouter is the universal fallback for ground truth.** Any client with no
 local reader but a base-URL override can route through OpenRouter-via-TokenOps
 and every turn becomes visible.
 
+Cohere is not OpenAI-wire-format — it has a dedicated normalizer for its v2
+(`/v2/chat`) and v1 (`/v1/chat`) shapes — but auth is a `Bearer` header so the
+passthrough proxy handles it.
+
 Pricing ships for the single-model-family providers
-(groq/deepseek/xai/perplexity/cerebras). Fireworks, Together, and OpenRouter
+(groq/deepseek/xai/perplexity/cerebras/cohere). Fireworks, Together, and OpenRouter
 multiplex arbitrary third-party models under namespaced names, so a static
 rate card can't price them accurately — token counts are still metered; attach
 `$` cost by layering a `pricing.path` override keyed to the exact models you use.

@@ -28,6 +28,7 @@ func TestBuildProviderRoutesDefault(t *testing.T) {
 		"openai": false, "anthropic": false, "gemini": false, "mistral": false,
 		"groq": false, "deepseek": false, "xai": false, "perplexity": false,
 		"fireworks": false, "cerebras": false, "together": false, "openrouter": false,
+		"cohere": false,
 	}
 	for _, r := range routes {
 		if _, ok := want[string(r.Provider.ID)]; ok {

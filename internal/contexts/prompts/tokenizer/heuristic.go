@@ -85,6 +85,19 @@ func NewOpenAICompatibleTokenizer(p eventschema.Provider) Tokenizer {
 	}
 }
 
+// NewCohereTokenizer returns a heuristic Cohere tokenizer. Cohere's tokenizer
+// is a byte-pair encoding whose English density is close to OpenAI's ~4
+// chars/token; the chat surface adds per-message role overhead.
+func NewCohereTokenizer() Tokenizer {
+	return heuristic{
+		provider:           eventschema.ProviderCohere,
+		asciiCharsPerToken: 4.0,
+		otherCharsPerToken: 1.5,
+		perMessageOverhead: 4,
+		wrapperOverhead:    3,
+	}
+}
+
 // NewAnthropicTokenizer returns a heuristic Anthropic tokenizer. Anthropic
 // does not publish their tokenizer; the ratios match the published
 // "approximately 3.5 chars per token" guidance for Claude 3+.
