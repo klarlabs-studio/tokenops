@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.28.1 - 2026-07-03
+
+### Documentation
+
+- Document the `tokenops fmt` command-output compression subsystem across
+  the docs site and README: CLI reference (`fmt` / `bench` / `hook` /
+  `recover` / `learn`), the `optimizer.command_fmt` configuration section
+  (loss levels, user-defined formatters, learn loop), the new formatter and
+  fmtlearn packages in the architecture doc, and the MCP tool count (26).
+
 ## 0.28.0 - 2026-07-03
 
 ### Added
