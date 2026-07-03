@@ -89,13 +89,13 @@ func ReadMessages(dbPath string, visit func(Turn) error) error {
 	if err != nil {
 		return fmt.Errorf("open opencode db: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	rows, err := db.Query(`SELECT id, session_id, data FROM message`)
 	if err != nil {
 		return fmt.Errorf("query opencode messages: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var id, sessionID, data string

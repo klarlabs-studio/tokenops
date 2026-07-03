@@ -19,7 +19,7 @@ func newTestDB(t *testing.T, rows map[string]string) string {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.Exec(`CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, time_created INTEGER, time_updated INTEGER, data TEXT NOT NULL)`); err != nil {
 		t.Fatalf("create: %v", err)
 	}
