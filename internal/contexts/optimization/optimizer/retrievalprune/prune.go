@@ -80,28 +80,27 @@ func (p *Pruner) Run(_ context.Context, req *optimizer.Request) ([]optimizer.Rec
 	if !ok || droppedBytes == 0 {
 		return nil, nil
 	}
-	tokensSaved := p.estimateTokensSaved(req.Provider, droppedBytes)
+	tokensSaved := optimizer.EstimateTokenSavings(p.tokenizer, req.Provider, req.Body, rebuilt, droppedBytes)
 	if tokensSaved < p.cfg.MinSavingsTokens {
 		return nil, nil
 	}
 	return []optimizer.Recommendation{{
 		Kind:                   eventschema.OptimizationTypeRetrievalPrune,
 		EstimatedSavingsTokens: tokensSaved,
-		QualityScore:           0.85,
-		Reason:                 fmt.Sprintf("pruned retrieval chunks (~%d bytes dropped)", droppedBytes),
+		QualityScore:           positionalPruneQuality,
+		Reason:                 fmt.Sprintf("pruned retrieval chunks (~%d bytes dropped, positional keep-top-%d)", droppedBytes, p.cfg.KeepTopN),
 		ApplyBody:              rebuilt,
 	}}, nil
 }
 
-func (p *Pruner) estimateTokensSaved(provider eventschema.Provider, byteDelta int) int64 {
-	if p.tokenizer != nil {
-		canary := strings.Repeat("a ", byteDelta/2)
-		if n, err := p.tokenizer.CountText(provider, canary); err == nil {
-			return int64(n)
-		}
-	}
-	return int64(byteDelta / 4)
-}
+// positionalPruneQuality is deliberately below the quality gate's default
+// threshold (0.85). This optimizer has NO relevance signal — it assumes the
+// retriever concatenated chunks in descending relevance order and keeps the
+// first N. When that assumption is wrong it can drop the single most-relevant
+// chunk, so the recommendation is scored as a low-confidence suggestion that
+// the aggressive gate will withhold unless an operator opts in. Raise it only
+// once real retriever relevance scores are consumed.
+const positionalPruneQuality = 0.6
 
 // --- chunk detection ------------------------------------------------------
 

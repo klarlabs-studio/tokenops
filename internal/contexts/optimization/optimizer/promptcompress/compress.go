@@ -80,7 +80,7 @@ func (c *Compressor) Run(_ context.Context, req *optimizer.Request) ([]optimizer
 		return nil, nil
 	}
 
-	tokensSaved := c.estimateTokensSaved(req.Provider, delta)
+	tokensSaved := optimizer.EstimateTokenSavings(c.tokenizer, req.Provider, req.Body, rebuilt, delta)
 	if tokensSaved < c.cfg.MinSavingsTokens {
 		return nil, nil
 	}
@@ -94,20 +94,6 @@ func (c *Compressor) Run(_ context.Context, req *optimizer.Request) ([]optimizer
 			before, after, delta),
 		ApplyBody: rebuilt,
 	}}, nil
-}
-
-func (c *Compressor) estimateTokensSaved(provider eventschema.Provider, byteDelta int) int64 {
-	if c.tokenizer != nil {
-		// Approximate: feed a slice of zeros of the saved length to the
-		// tokenizer is not meaningful; instead use the tokenizer's
-		// inverse char/token ratio via a best-effort canary string of
-		// ASCII spaces/letters of the same length.
-		canary := strings.Repeat("a ", byteDelta/2)
-		if n, err := c.tokenizer.CountText(provider, canary); err == nil {
-			return int64(n)
-		}
-	}
-	return int64(byteDelta / 4)
 }
 
 func qualityScore(before, after int) float64 {

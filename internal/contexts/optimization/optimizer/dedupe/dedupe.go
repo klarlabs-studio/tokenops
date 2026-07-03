@@ -5,15 +5,16 @@
 // Dedupe finds those repeats, collapses them to a short pointer, and
 // reports the projected token savings.
 //
-// The implementation is local-first: rather than calling out to an
-// embedding model, we approximate semantic similarity with a Jaccard
-// score over word-trigram shingles. That tracks closely with cosine
-// similarity over sentence embeddings on long-form repeated text (the
-// dominant pattern in agent traces) while staying within microsecond
-// latencies and zero external dependencies. When the project ships an
-// embedding backend (see local-model-integ), this package can swap the
-// scorer behind the SimilarityFunc seam without touching the optimizer
-// pipeline.
+// The implementation is deliberately LEXICAL, not embedding-based: it scores
+// pairs by Jaccard overlap of their word-trigram shingles. This reliably
+// catches verbatim and near-verbatim repeats — the dominant waste pattern in
+// agent traces (re-pasted tool output, echoed documents, restated reminders)
+// — at microsecond latency with zero external dependencies. It does NOT
+// detect paraphrase or semantic equivalence; two passages that say the same
+// thing in different words will not be collapsed. Adding a real embedding
+// scorer is possible future work but is not wired today (there is no
+// SimilarityFunc seam yet); until then, treat the "semantic" in the optimizer
+// name as aspirational and the behaviour as near-duplicate collapse.
 package dedupe
 
 import (
@@ -97,7 +98,7 @@ func (d *Deduper) Run(_ context.Context, req *optimizer.Request) ([]optimizer.Re
 		return nil, nil
 	}
 
-	tokensSaved := d.estimateTokensSaved(req.Provider, droppedBytes)
+	tokensSaved := optimizer.EstimateTokenSavings(d.tokenizer, req.Provider, req.Body, rebuilt, droppedBytes)
 	if tokensSaved < d.cfg.MinSavingsTokens {
 		return nil, nil
 	}
@@ -113,20 +114,10 @@ func (d *Deduper) Run(_ context.Context, req *optimizer.Request) ([]optimizer.Re
 	}}, nil
 }
 
-func (d *Deduper) estimateTokensSaved(provider eventschema.Provider, byteDelta int) int64 {
-	if d.tokenizer != nil && byteDelta > 0 {
-		canary := strings.Repeat("a ", byteDelta/2)
-		if n, err := d.tokenizer.CountText(provider, canary); err == nil {
-			return int64(n)
-		}
-	}
-	return int64(byteDelta / 4)
-}
-
 // qualityScore is a coarse confidence that the rewrite preserves meaning.
-// Single-cluster collapses are very safe (0.95); larger collapses still
-// score above the default 0.7 quality gate but flag the higher-impact
-// case for review.
+// Single-cluster collapses are very safe (0.95); larger collapses (4+
+// clusters) sit exactly at the default quality gate (0.85), so they pass
+// by a hair — worth revisiting if the gate threshold ever rises.
 func qualityScore(clusters int) float64 {
 	switch {
 	case clusters <= 1:

@@ -23,6 +23,49 @@ func (f *fakeOpt) Run(_ context.Context, _ *optimizer.Request) ([]optimizer.Reco
 	return out, f.err
 }
 
+// TestDefaultThresholdInteractionWithOptimizerScores pins the contract
+// between the gate's default floor (0.85) and the scores the real
+// optimizers emit: a blind positional retrieval-prune (0.6) is withheld,
+// while a near-verbatim dedupe / high-confidence rec (>=0.85) passes.
+// This is the interaction the review flagged as silently disarming the
+// aggressive optimizations — locked down here so a future score change
+// can't drift past the gate unnoticed.
+func TestDefaultThresholdInteractionWithOptimizerScores(t *testing.T) {
+	const positionalPrune = 0.6 // retrievalprune.positionalPruneQuality
+	const nearVerbatim = 0.85   // dedupe large-collapse / compress conservative
+
+	dec := NewDecider(0, nil) // 0 -> DefaultThreshold (0.85)
+	if ok, _ := dec(context.Background(), optimizer.Recommendation{QualityScore: positionalPrune}); ok {
+		t.Errorf("positional prune (%.2f) must be withheld by the default gate", positionalPrune)
+	}
+	if ok, _ := dec(context.Background(), optimizer.Recommendation{QualityScore: nearVerbatim}); !ok {
+		t.Errorf("near-verbatim rec (%.2f) must pass the default gate", nearVerbatim)
+	}
+
+	// Wrap: the withheld rec loses its ApplyBody + gets annotated; the
+	// passing rec keeps its ApplyBody.
+	inner := &fakeOpt{
+		kind: eventschema.OptimizationTypeRetrievalPrune,
+		recs: []optimizer.Recommendation{
+			{QualityScore: positionalPrune, ApplyBody: []byte("pruned"), Reason: "positional keep-top-4"},
+			{QualityScore: nearVerbatim, ApplyBody: []byte("deduped"), Reason: "verbatim collapse"},
+		},
+	}
+	out, err := Wrap(inner, 0).Run(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("wrap run: %v", err)
+	}
+	if out[0].ApplyBody != nil {
+		t.Error("withheld rec must have ApplyBody stripped")
+	}
+	if !strings.Contains(out[0].Reason, reasonPrefix) {
+		t.Errorf("withheld rec must be annotated, got %q", out[0].Reason)
+	}
+	if out[1].ApplyBody == nil {
+		t.Error("passing rec must keep ApplyBody")
+	}
+}
+
 func TestDeciderAcceptsHighQuality(t *testing.T) {
 	dec := NewDecider(0.8, nil)
 	ok, err := dec(context.Background(), optimizer.Recommendation{QualityScore: 0.9})
