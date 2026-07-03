@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.29.0 - 2026-07-03
+
 ### Added
 
 - **`fmt` catalog fast-follow → 51 formatters / 57 command tokens.** New
