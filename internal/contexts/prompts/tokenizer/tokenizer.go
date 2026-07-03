@@ -1,14 +1,15 @@
 // Package tokenizer estimates token counts for LLM requests and responses
-// behind a provider-agnostic interface. The current implementations use
-// character-based heuristics tuned per provider; they are intentionally
-// approximate (within ~10–15% of the true count for English prose) and
-// exist to give the proxy a pre-flight estimate before the upstream
-// returns authoritative usage figures.
+// behind a provider-agnostic interface. OpenAI uses an EXACT tiktoken BPE
+// tokenizer (o200k_base, offline — see tiktoken.go); the other providers
+// use character-based heuristics tuned per family (~10–15% of the true
+// count for English prose, worse on code/JSON) until an exact tokenizer is
+// wired for them. All give the proxy a pre-flight estimate before the
+// upstream returns authoritative usage figures.
 //
 // The Tokenizer interface is the seam where provider-accurate
-// implementations (tiktoken for OpenAI, the published Anthropic
-// count_tokens API, SentencePiece for Gemini) plug in via Registry.Set
-// without rewriting callers.
+// implementations (the published Anthropic count_tokens API, SentencePiece
+// for Gemini) plug in via Registry.Set without rewriting callers, exactly
+// as the OpenAI tiktoken codec already does.
 package tokenizer
 
 import (
@@ -80,6 +81,12 @@ func NewRegistry() *Registry {
 		eventschema.ProviderVercel,
 	} {
 		r.Set(NewOpenAICompatibleTokenizer(p))
+	}
+	// Override the OpenAI heuristic with the exact tiktoken BPE tokenizer
+	// when its offline vocabulary loads; keep the heuristic as the fallback
+	// so a load failure degrades gracefully rather than fatally.
+	if tk, err := NewOpenAITiktoken(); err == nil {
+		r.Set(tk)
 	}
 	return r
 }

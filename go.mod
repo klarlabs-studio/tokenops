@@ -6,6 +6,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/grandcat/zeroconf v1.0.0
 	github.com/spf13/cobra v1.10.2
+	github.com/tiktoken-go/tokenizer v0.7.0
 	go.klarlabs.de/bolt v1.5.2
 	go.klarlabs.de/fortify v1.6.0
 	go.klarlabs.de/mcp v1.15.0
@@ -16,6 +17,7 @@ require (
 require (
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

@@ -50,10 +50,14 @@ func TestDedupesConsecutiveLines(t *testing.T) {
 }
 
 func TestRunRecommendsOnLargeRedundancy(t *testing.T) {
+	// Consecutive identical lines are genuine token redundancy the
+	// compressor collapses (dedupeConsecutiveLines). Trailing-whitespace-only
+	// "redundancy" is NOT: BPE tokenizes "   \n" cheaply, so the exact
+	// tokenizer correctly reports <16 tokens saved for it.
 	body, _ := json.Marshal(map[string]any{
 		"model": "gpt-4o-mini",
 		"messages": []map[string]any{
-			{"role": "user", "content": strings.Repeat("hello world    \n\n\n", 200)},
+			{"role": "user", "content": strings.Repeat("the quick brown fox jumps over the lazy dog\n", 200)},
 		},
 	})
 	c := New(Config{}, tokenizer.NewRegistry())
