@@ -118,12 +118,26 @@ func writeAnalyzeSVGs(dir string, rep *jsonlfmt.Report) ([]string, error) {
 		Caption: fmt.Sprintf("tokenops fmt analyze · %s ranged", pctOf(int64(rr.RangedReads), int64(rr.Reads))),
 	})
 
-	out := []string{filepath.Join(dir, "composition.svg"), filepath.Join(dir, "reads.svg")}
-	if err := os.WriteFile(out[0], []byte(composition), 0o644); err != nil {
-		return nil, err
+	// fmt ROI on real command output: what the formatters actually save on
+	// this user's Bash volume (as opposed to a benchmark corpus).
+	roiBars := []svgchart.Bar{
+		{Label: "Balanced", Display: pctOf(rep.SavedBalanced, rep.TotalBashBytes), Frac: fracOf(rep.SavedBalanced, rep.TotalBashBytes), Note: "conservative loss level"},
+		{Label: "Aggressive", Display: pctOf(rep.SavedAggressive, rep.TotalBashBytes), Frac: fracOf(rep.SavedAggressive, rep.TotalBashBytes), Note: "maximum loss level", Highlight: true},
 	}
-	if err := os.WriteFile(out[1], []byte(reads), 0o644); err != nil {
-		return nil, err
+	roi := svgchart.HBars("What the formatters save on our command output", roiBars, svgchart.Options{
+		Caption: "tokenops fmt analyze · vs 57–68% on the benchmark corpus",
+	})
+
+	out := []string{
+		filepath.Join(dir, "composition.svg"),
+		filepath.Join(dir, "reads.svg"),
+		filepath.Join(dir, "fmt-roi.svg"),
+	}
+	svgs := []string{composition, reads, roi}
+	for i, p := range out {
+		if err := os.WriteFile(p, []byte(svgs[i]), 0o644); err != nil {
+			return nil, err
+		}
 	}
 	return out, nil
 }

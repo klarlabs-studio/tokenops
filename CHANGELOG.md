@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **`tokenops spend --svg`** emits an input-vs-output ratio chart, and **`fmt analyze --svg`** now also emits `fmt-roi.svg` (formatter savings on your real command output). Four reproducible charts for docs/blogs.
+
 ## 0.31.0 - 2026-07-03
 
 ### Added

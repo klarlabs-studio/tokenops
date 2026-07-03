@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -15,8 +16,32 @@ import (
 	"github.com/felixgeelhaar/tokenops/internal/contexts/observability/analytics"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/forecast"
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
+	"github.com/felixgeelhaar/tokenops/internal/infra/svgchart"
 	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
 )
+
+// writeRatioSVG renders the input-vs-output token proportion — the ratio that
+// makes the case that output-side compression is a rounding error. Output is
+// drawn to scale (a sliver), which is the point.
+func writeRatioSVG(path string, input, output int64) error {
+	total := input + output
+	if total == 0 {
+		return fmt.Errorf("spend --svg: no tokens in window")
+	}
+	ratio := "—"
+	if output > 0 {
+		ratio = fmt.Sprintf("%d:1", input/output)
+	}
+	pct := func(v int64) string { return fmt.Sprintf("%.2f%%", 100*float64(v)/float64(total)) }
+	bars := []svgchart.Bar{
+		{Label: "Input (context re-sent every turn)", Display: pct(input), Frac: float64(input) / float64(total), Highlight: true},
+		{Label: "Output (the model’s reply)", Display: pct(output), Frac: float64(output) / float64(total), Note: "drawn to scale — a hairline"},
+	}
+	svg := svgchart.HBars("Input vs. output tokens, on real usage — "+ratio, bars, svgchart.Options{
+		Caption: "tokenops spend",
+	})
+	return os.WriteFile(path, []byte(svg), 0o644)
+}
 
 // newSpendCmd builds the `tokenops spend` subcommand. It surfaces three
 // related views the operator typically wants alongside each other:
@@ -39,6 +64,7 @@ func newSpendCmd(rf *rootFlags) *cobra.Command {
 		jsonOut       bool
 		hideSparkline bool
 		includeDemo   bool
+		svgFile       string
 	)
 	cmd := &cobra.Command{
 		Use:   "spend",
@@ -142,12 +168,19 @@ spend within the selected window. It surfaces:
 				Forecast:      predictions,
 				HideSparkline: hideSparkline,
 			}
+			if svgFile != "" {
+				if err := writeRatioSVG(svgFile, summary.InputTokens, summary.OutputTokens); err != nil {
+					return err
+				}
+				fmt.Fprintf(cmd.ErrOrStderr(), "wrote %s\n", svgFile)
+			}
 			if jsonOut {
 				return writeSpendJSON(cmd.OutOrStdout(), view)
 			}
 			return writeSpendText(cmd.OutOrStdout(), view)
 		},
 	}
+	cmd.Flags().StringVar(&svgFile, "svg", "", "also write an input-vs-output ratio chart (ratio.svg) to this file")
 	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db (defaults to config.storage.path)")
 	cmd.Flags().StringVar(&groupBy, "by", "model", "group top consumers by: model | provider | workflow | agent")
 	cmd.Flags().IntVar(&topN, "top", 5, "number of top consumers to print")
