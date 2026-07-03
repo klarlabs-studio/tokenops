@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.30.0 - 2026-07-03
+
 ### Added
 
 - **`tokenops read-guard` — reclaim the Read re-read waste, no proxy needed.**
