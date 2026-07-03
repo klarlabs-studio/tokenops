@@ -1,0 +1,58 @@
+# Example pricing override — layer YOUR real rates over the built-in catalog.
+#
+# Point config at this file (or your own copy):
+#   pricing:
+#     path: ~/.config/tokenops/pricing-override.yaml
+# or set TOKENOPS_PRICING_PATH. Values here are MERGED over the embedded
+# defaults (spend.TableWithOverrides): a matching provider+model row replaces
+# the default rate; a new row adds one. Same schema as the built-in
+# pricing.yaml — USD per million tokens, keys ending in "*" are prefix matches,
+# longest-prefix wins.
+#
+# Two reasons to use this file:
+#   1. Negotiated / enterprise rates that differ from public list prices.
+#   2. The multiplexers — Fireworks, Together, OpenRouter — which serve many
+#      third-party models under namespaced names. The built-in catalog can't
+#      price them (the true rate is the underlying model's), so token counts
+#      are metered but $ cost stays 0 until you add the exact models you use
+#      below. Copy the model string TokenOps records (RequestModel) verbatim.
+
+currency: USD
+rates:
+  # OpenRouter — models are namespaced "<vendor>/<model>". Use the rate the
+  # underlying vendor charges (OpenRouter passes it through, plus its margin).
+  openrouter:
+    "anthropic/claude-opus-4*":
+      input_per_million: 5.00
+      output_per_million: 25.00
+      cached_input_per_million: 0.50
+    "openai/gpt-4o*":
+      input_per_million: 2.50
+      output_per_million: 10.00
+    "meta-llama/llama-3.3-70b*":
+      input_per_million: 0.59
+      output_per_million: 0.79
+
+  # Together — OpenAI-style names with a vendor prefix and a "-Turbo" suffix.
+  together:
+    "meta-llama/Llama-3.3-70B-Instruct-Turbo*":
+      input_per_million: 0.88
+      output_per_million: 0.88
+    "mistralai/Mixtral-8x7B*":
+      input_per_million: 0.60
+      output_per_million: 0.60
+
+  # Fireworks — models are "accounts/fireworks/models/<name>".
+  fireworks:
+    "accounts/fireworks/models/llama-v3p1-70b*":
+      input_per_million: 0.90
+      output_per_million: 0.90
+    "accounts/fireworks/models/llama-v3p1-8b*":
+      input_per_million: 0.20
+      output_per_million: 0.20
+
+  # Example negotiated override: replace a default list price with your rate.
+  # openai:
+  #   "gpt-4o*":
+  #     input_per_million: 2.00
+  #     output_per_million: 8.00

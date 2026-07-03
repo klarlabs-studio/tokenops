@@ -59,7 +59,27 @@ Pricing ships for the single-model-family providers
 (groq/deepseek/xai/perplexity/cerebras/cohere). Fireworks, Together, and OpenRouter
 multiplex arbitrary third-party models under namespaced names, so a static
 rate card can't price them accurately — token counts are still metered; attach
-`$` cost by layering a `pricing.path` override keyed to the exact models you use.
+`$` cost via a pricing override (below).
+
+### Pricing overrides & drift
+
+The built-in rate card is **public list prices captured at a point in time** —
+they drift, and negotiated/enterprise rates differ. Layer your own rates over
+the defaults without touching the binary:
+
+```yaml
+# ~/.config/tokenops/config.yaml
+pricing:
+  path: ~/.config/tokenops/pricing-override.yaml   # or env TOKENOPS_PRICING_PATH
+```
+
+The override file uses the **same schema** as the built-in catalog (USD per
+million tokens; `*` = prefix match, longest wins) and is *merged* over the
+defaults — a matching provider+model row replaces that rate, a new row adds one.
+This is also how you price the multiplexers: copy the model string TokenOps
+records (`RequestModel`) verbatim and give it the underlying model's rate. A
+ready-to-copy example lives at
+[`docs/examples/pricing-override.yaml`](https://github.com/klarlabs-studio/tokenops/blob/main/docs/examples/pricing-override.yaml).
 
 ## How an agent bootstraps setup
 
