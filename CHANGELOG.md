@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Added
+
+- **`fmt` catalog fast-follow → 51 formatters / 57 command tokens.** New
+  formatters: `nomad`, `packer`, `gem`, `swift`, `nix`, plus `oc`
+  (OpenShift) routed to the `kubectl` formatter as an alias. Each ships
+  golden critical-line survival + monotonic tests and is enrolled across
+  every plane. `vault` intentionally deferred (its output carries secret
+  values; compressing secrets is poor optics for little gain).
+- **Proxy-plane regression test**: `command_fmt` is now covered by an
+  end-to-end test that runs a realistic Anthropic `tool_result` through the
+  default pipeline and asserts a `command_fmt` event with real savings.
+
 ## 0.28.1 - 2026-07-03
 
 ### Documentation

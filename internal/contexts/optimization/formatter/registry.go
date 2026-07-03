@@ -201,6 +201,11 @@ func DefaultFormatters() []Formatter {
 		NewAlembic(),
 		NewCMake(),
 		NewNinja(),
+		NewNomad(),
+		NewPacker(),
+		NewGem(),
+		NewSwift(),
+		NewNix(),
 	}
 }
 

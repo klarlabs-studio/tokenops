@@ -1,0 +1,9 @@
+Building for debugging...
+[1/8] Compiling MyLib model.swift
+[2/8] Compiling MyLib network.swift
+[3/8] Compiling MyApp main.swift
+/Sources/MyApp/main.swift:24:13: error: cannot find 'confg' in scope
+    let x = confg.load()
+            ^~~~~
+/Sources/MyApp/network.swift:40:9: warning: variable 'resp' was never used
+error: fatalError

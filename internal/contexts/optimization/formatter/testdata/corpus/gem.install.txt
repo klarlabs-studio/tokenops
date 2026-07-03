@@ -1,0 +1,12 @@
+Fetching rails-7.1.4.gem
+Fetching activesupport-7.1.4.gem
+Fetching nokogiri-1.16.7-arm64-darwin.gem
+Building native extensions. This could take a while...
+Successfully installed activesupport-7.1.4
+Successfully installed nokogiri-1.16.7-arm64-darwin
+Successfully installed rails-7.1.4
+Parsing documentation for activesupport-7.1.4
+Installing ri documentation for activesupport-7.1.4
+Parsing documentation for rails-7.1.4
+Done installing documentation for activesupport, nokogiri, rails after 3 seconds
+3 gems installed

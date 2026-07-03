@@ -29,6 +29,10 @@ func NewKubectl() *Kubectl { return &Kubectl{} }
 // Command reports the kubectl command token.
 func (k *Kubectl) Command() string { return "kubectl" }
 
+// Aliases routes the OpenShift CLI (oc) here — its get-table and describe
+// output mirror kubectl's.
+func (k *Kubectl) Aliases() []string { return []string{"oc"} }
+
 // kubectlBadStatus are the substrings that mark a row or event as
 // non-healthy. Presence of any of these in a line makes it critical — this
 // covers both get-table STATUS columns and describe Error/Failed/Back-off

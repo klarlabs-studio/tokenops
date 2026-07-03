@@ -1,0 +1,5 @@
+NAME                          READY   STATUS             RESTARTS   AGE
+router-1-abc                  1/1     Running            0          10d
+registry-2-def                1/1     Running            0          10d
+build-app-3-ghi               0/1     CrashLoopBackOff   8          22m
+console-4-jkl                 1/1     Running            0          5d

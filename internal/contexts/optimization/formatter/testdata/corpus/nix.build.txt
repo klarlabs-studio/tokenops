@@ -1,0 +1,14 @@
+these 8 derivations will be built:
+  /nix/store/aaa-hello-2.12.1.drv
+  /nix/store/bbb-libfoo-1.0.drv
+  /nix/store/ccc-myapp-0.1.drv
+these 3 paths will be fetched (12.4 MiB download, 48.2 MiB unpacked):
+  /nix/store/ddd-glibc-2.39
+copying path '/nix/store/ddd-glibc-2.39' from 'https://cache.nixos.org'...
+building '/nix/store/bbb-libfoo-1.0.drv'...
+libfoo> configuring
+libfoo> building
+building '/nix/store/ccc-myapp-0.1.drv'...
+myapp> compiling main.c
+myapp> main.c:12:5: error: 'ctx' undeclared
+error: builder for '/nix/store/ccc-myapp-0.1.drv' failed with exit code 1

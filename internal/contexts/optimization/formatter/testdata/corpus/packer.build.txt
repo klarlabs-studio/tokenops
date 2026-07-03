@@ -1,0 +1,19 @@
+amazon-ebs: output will be in this color.
+
+==> amazon-ebs: Prevalidating any provided VPC information
+==> amazon-ebs: Creating temporary keypair: packer_abc123
+==> amazon-ebs: Creating temporary security group
+==> amazon-ebs: Launching a source AWS instance...
+    amazon-ebs: Instance ID: i-0123456789
+==> amazon-ebs: Waiting for instance to become ready...
+==> amazon-ebs: Provisioning with shell script: /tmp/script.sh
+    amazon-ebs: + apt-get update
+    amazon-ebs: Reading package lists...
+    amazon-ebs: + apt-get install -y nginx
+==> amazon-ebs: Stopping the source instance...
+==> amazon-ebs: Creating AMI ami-0987654321 from instance
+==> amazon-ebs: Terminating the source AWS instance...
+Build 'amazon-ebs' finished after 5 minutes 12 seconds.
+
+==> Builds finished. The artifacts of successful builds are:
+--> amazon-ebs: AMIs were created: us-east-1: ami-0987654321
