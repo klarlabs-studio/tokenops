@@ -12,3 +12,8 @@ Rust CLI proxy that compresses shell command output before it hits an LLM contex
 
 ## Plan catalog (rate-limit prediction)
 13 plans w/ dated vendor source URLs pinned in code: Claude Max 5x/20x/Pro, Claude Code, ChatGPT Plus/Pro/Team, Copilot Individual/Business, Cursor Pro/Business, Mistral Le Chat Pro, Codex Plus. Proxy providers: OpenAI, Anthropic, Gemini, Mistral.
+
+## Claude Code hooks (integration facts)
+- PreToolUse hook stdin: {session_id, tool_name, tool_input:{file_path,offset,limit}, cwd, ...}. Deny via stdout {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"..."}}; exit 0 + no stdout = allow/no-op. PreToolUse can only allow/deny — it CANNOT modify tool_input.
+- settings.json hook changes are picked up MID-SESSION via a file watcher — no restart needed (I wrongly assumed a startup snapshot; corrected 2026-07-03). `/hooks` is a view-only browser (confirms loaded hooks; can't toggle).
+- Wire a hook: settings.json hooks.PreToolUse[].{matcher:"Read", hooks:[{type:"command", command:"<abs path>", args:[...], timeout:10}]}. args:[] execs directly (no shell).
