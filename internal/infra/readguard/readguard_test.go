@@ -112,6 +112,40 @@ func TestReadStats_Aggregates(t *testing.T) {
 	}
 }
 
+func TestReadStats_RepeatBreakdown(t *testing.T) {
+	dir := t.TempDir()
+	f := tmpFile(t, "package main\n")
+	now := time.Unix(0, 0)
+
+	Evaluate(dir, "s1", f, false, ModeObserve, now) // 1st: new
+	// post-edit re-read: change the file, then read full again -> allowed, changed.
+	if err := os.WriteFile(f, []byte("package main // edited\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	Evaluate(dir, "s1", f, false, ModeObserve, now) // repeat, changed
+	// ranged re-read -> allowed, ranged.
+	Evaluate(dir, "s1", f, true, ModeObserve, now) // repeat, ranged
+	// unchanged full re-read -> would_block (reclaimable).
+	Evaluate(dir, "s1", f, false, ModeObserve, now) // repeat, reclaimable
+
+	s, err := ReadStats(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.RepeatReads != 3 {
+		t.Errorf("repeat reads = %d, want 3", s.RepeatReads)
+	}
+	if s.RepeatPostEdit != 1 {
+		t.Errorf("post-edit = %d, want 1", s.RepeatPostEdit)
+	}
+	if s.RepeatRanged != 1 {
+		t.Errorf("ranged = %d, want 1", s.RepeatRanged)
+	}
+	if s.WouldBlock != 1 {
+		t.Errorf("reclaimable would-block = %d, want 1", s.WouldBlock)
+	}
+}
+
 func TestParseMode(t *testing.T) {
 	if ParseMode("active") != ModeActive || ParseMode("ACTIVE") != ModeActive {
 		t.Error("active not parsed")

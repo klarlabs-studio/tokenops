@@ -69,7 +69,9 @@ type sessionState struct {
 	Paths map[string]pathState `json:"paths"`
 }
 
-// ledgerEvent is one appended reclamation record.
+// ledgerEvent is one appended reclamation record. Repeat/Ranged/Changed
+// explain why a re-read was NOT blocked, so observe mode can show the gap
+// between raw re-read rate and genuinely-reclaimable re-reads.
 type ledgerEvent struct {
 	TS        time.Time `json:"ts"`
 	Mode      Mode      `json:"mode"`
@@ -77,6 +79,9 @@ type ledgerEvent struct {
 	Path      string    `json:"path"`
 	Action    Action    `json:"action"`
 	EstTokens int64     `json:"est_tokens"`
+	Repeat    bool      `json:"repeat,omitempty"`  // this path was read earlier in the session
+	Ranged    bool      `json:"ranged,omitempty"`  // used offset/limit
+	Changed   bool      `json:"changed,omitempty"` // file changed since the last read
 }
 
 // Evaluate is the pure-ish decision + side effects for one Read. dir is the
@@ -95,6 +100,7 @@ func Evaluate(dir, sessionID, filePath string, ranged bool, mode Mode, now time.
 	prev, seen := st.Paths[filePath]
 	fp, ok := statFingerprint(filePath)
 
+	changed := seen && ok && prev.FP != fp
 	redundant := !ranged && seen && ok && prev.FP == fp
 
 	dec := Decision{Action: ActionAllow, EstTokens: estTokens}
@@ -122,11 +128,15 @@ func Evaluate(dir, sessionID, filePath string, ranged bool, mode Mode, now time.
 	appendLedger(dir, ledgerEvent{
 		TS: now.UTC(), Mode: mode, Session: sessionID, Path: filePath,
 		Action: dec.Action, EstTokens: estTokens,
+		Repeat: seen, Ranged: ranged, Changed: changed,
 	})
 	return dec
 }
 
-// Stats summarises the ledger.
+// Stats summarises the ledger. The repeat breakdown explains why re-reads
+// were or weren't reclaimable: reclaimable = unchanged full re-reads;
+// post-edit = the file changed since last read (not waste); ranged = an
+// intentional partial re-read.
 type Stats struct {
 	Events           int   `json:"events"`
 	WouldBlock       int   `json:"would_block"`
@@ -134,6 +144,9 @@ type Stats struct {
 	ReclaimableTok   int64 `json:"reclaimable_tokens"` // observe would-block sum
 	ReclaimedTok     int64 `json:"reclaimed_tokens"`   // active blocked sum
 	DistinctSessions int   `json:"distinct_sessions"`
+	RepeatReads      int   `json:"repeat_reads"`     // path read again in a session
+	RepeatPostEdit   int   `json:"repeat_post_edit"` // allowed: file changed
+	RepeatRanged     int   `json:"repeat_ranged"`    // allowed: ranged re-read
 }
 
 // ReadStats reads the ledger and aggregates it.
@@ -158,6 +171,15 @@ func ReadStats(dir string) (Stats, error) {
 		}
 		s.Events++
 		sessions[e.Session] = struct{}{}
+		if e.Repeat {
+			s.RepeatReads++
+			switch {
+			case e.Ranged:
+				s.RepeatRanged++
+			case e.Changed:
+				s.RepeatPostEdit++
+			}
+		}
 		switch e.Action {
 		case ActionWouldBlock:
 			s.WouldBlock++

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.30.1 - 2026-07-03
+
+### Changed
+
+- **`read-guard stats` now explains the re-read breakdown.** Instead of a
+  bare "0 reclaimable", it splits repeat reads into reclaimable (unchanged
+  full re-read — real waste), post-edit (file changed since last read — not
+  waste), and ranged (intentional partial re-read). Observe mode is now
+  informative about *why* a re-read was or wasn't blockable, so the decision
+  to switch to active mode is grounded.
+
 ## 0.30.0 - 2026-07-03
 
 ### Added
