@@ -16,13 +16,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/observability/analytics"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/observability/observ"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/tokenizer"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/security/redaction"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
-	"github.com/felixgeelhaar/tokenops/internal/domainevents"
-	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
+	"go.klarlabs.de/tokenops/internal/contexts/observability/observ"
+	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer"
+	"go.klarlabs.de/tokenops/internal/contexts/security/redaction"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 // Components holds every long-lived collaborator the daemon needs. The

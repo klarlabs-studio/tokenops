@@ -3,7 +3,7 @@ package providers
 import (
 	"testing"
 
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 func TestAllProvidersAreUnique(t *testing.T) {

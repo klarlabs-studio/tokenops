@@ -11,7 +11,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Provider describes a single upstream LLM provider TokenOps proxies for.

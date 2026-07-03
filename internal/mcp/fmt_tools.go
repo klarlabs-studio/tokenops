@@ -5,10 +5,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/fmtlearn"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/formatter"
-	"github.com/felixgeelhaar/tokenops/internal/infra/fmtindex"
-	"github.com/felixgeelhaar/tokenops/internal/infra/jsonlfmt"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/fmtlearn"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter"
+	"go.klarlabs.de/tokenops/internal/infra/fmtindex"
+	"go.klarlabs.de/tokenops/internal/infra/jsonlfmt"
 )
 
 // mcpJSONLMaxFiles caps how many Claude Code sessions the MCP fmt tools scan,

@@ -10,9 +10,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/rules"
-	"github.com/felixgeelhaar/tokenops/internal/infra/rulesfs"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/contexts/rules"
+	"go.klarlabs.de/tokenops/internal/infra/rulesfs"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 func newRulesCmd() *cobra.Command {

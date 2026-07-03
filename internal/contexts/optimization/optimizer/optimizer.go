@@ -26,8 +26,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/domainevents"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Mode is the optimization execution mode (mirrors eventschema.OptimizationMode

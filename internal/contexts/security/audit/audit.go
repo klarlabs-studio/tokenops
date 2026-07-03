@@ -21,7 +21,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 // Action enumerates the audit-able event types. New values append.

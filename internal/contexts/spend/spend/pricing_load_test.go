@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Guards the panic path in DefaultTable: the embedded pricing.yaml must

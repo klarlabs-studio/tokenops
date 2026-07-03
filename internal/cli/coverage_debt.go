@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/governance/coverdebt"
+	"go.klarlabs.de/tokenops/internal/contexts/governance/coverdebt"
 )
 
 func newCoverageDebtCmd() *cobra.Command {

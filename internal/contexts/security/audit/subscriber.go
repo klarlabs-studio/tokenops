@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/internal/domainevents"
 )
 
 func atomicAdd(p *int64)        { atomic.AddInt64(p, 1) }

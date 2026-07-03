@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Policy maps an event type to its retention window. A zero or

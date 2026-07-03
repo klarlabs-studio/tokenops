@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/config"
 )
 
 // configWatcher polls the on-disk config file for changes and swaps a

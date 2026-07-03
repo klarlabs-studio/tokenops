@@ -9,11 +9,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/router"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/providers"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
+	"go.klarlabs.de/tokenops/internal/contexts/prompts/providers"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // WithActiveRouting enables live model routing (active mode): requests

@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/felixgeelhaar/tokenops/internal/config"
-	"github.com/felixgeelhaar/tokenops/internal/version"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/version"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // ControlDeps wires the in-process state the control tools surface. The

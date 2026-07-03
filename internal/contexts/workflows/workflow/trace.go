@@ -11,10 +11,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
-	"github.com/felixgeelhaar/tokenops/internal/domainevents"
-	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Step is one prompt within a workflow trace. ContextDelta is the

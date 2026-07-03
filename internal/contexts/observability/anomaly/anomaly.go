@@ -18,7 +18,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/forecast"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast"
 )
 
 // Severity ranks anomalies for downstream alert routing.

@@ -19,7 +19,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/observability/analytics"
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 )
 
 // Point is one (timestamp, value) sample. Forecasters consume series of

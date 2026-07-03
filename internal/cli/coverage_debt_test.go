@@ -9,8 +9,8 @@ import (
 )
 
 const goldProfile = `mode: set
-github.com/felixgeelhaar/tokenops/internal/daemon/daemon.go:1.1,1.2 100 0
-github.com/felixgeelhaar/tokenops/internal/contexts/rules/router.go:1.1,1.2 100 1
+go.klarlabs.de/tokenops/internal/daemon/daemon.go:1.1,1.2 100 0
+go.klarlabs.de/tokenops/internal/contexts/rules/router.go:1.1,1.2 100 1
 `
 
 func TestCoverageDebtCLIJSON(t *testing.T) {

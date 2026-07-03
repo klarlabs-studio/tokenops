@@ -11,11 +11,11 @@ brew install felixgeelhaar/tap/tokenops
 Or via Go:
 
 ```bash
-go install github.com/felixgeelhaar/tokenops/cmd/tokenops@latest
+go install github.com/klarlabs-studio/tokenops/cmd/tokenops@latest
 ```
 
 Or grab a prebuilt binary from
-[GitHub Releases](https://github.com/felixgeelhaar/tokenops/releases).
+[GitHub Releases](https://github.com/klarlabs-studio/tokenops/releases).
 
 ## 2. Initialise with auto-detection
 

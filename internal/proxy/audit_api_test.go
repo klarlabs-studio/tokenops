@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/security/audit"
-	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 func TestAuditAPIReturnsEntries(t *testing.T) {

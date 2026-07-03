@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 func longText(seed string, repeats int) string {

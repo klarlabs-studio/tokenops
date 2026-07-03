@@ -1,7 +1,7 @@
 package rulesfs
 
 import (
-	"github.com/felixgeelhaar/tokenops/internal/contexts/rules"
+	"go.klarlabs.de/tokenops/internal/contexts/rules"
 
 	"crypto/sha256"
 	"encoding/hex"
@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/internal/domainevents"
 )
 
 // DomainBusPublisher is the narrow port LoadCorpus uses to publish

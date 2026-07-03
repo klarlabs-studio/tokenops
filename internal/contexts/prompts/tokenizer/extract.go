@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // ExtractMessages parses a request body and returns the chat messages in

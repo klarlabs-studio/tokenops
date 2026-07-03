@@ -11,13 +11,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/bootstrap"
-	"github.com/felixgeelhaar/tokenops/internal/config"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/session"
-	"github.com/felixgeelhaar/tokenops/internal/events"
-	"github.com/felixgeelhaar/tokenops/internal/mcp"
-	"github.com/felixgeelhaar/tokenops/internal/version"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/bootstrap"
+	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/session"
+	"go.klarlabs.de/tokenops/internal/events"
+	"go.klarlabs.de/tokenops/internal/mcp"
+	"go.klarlabs.de/tokenops/internal/version"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // inferSessionProvider returns the single configured provider for

@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/router"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // End-to-end proxy-plane validation: a realistic Anthropic request whose

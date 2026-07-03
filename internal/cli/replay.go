@@ -14,14 +14,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/config"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/waste"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/replay"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/workflows/workflow"
-	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/replay"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // newReplayCmd builds the `tokenops replay` subcommand.

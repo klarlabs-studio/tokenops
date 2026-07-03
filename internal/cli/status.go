@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/config"
-	"github.com/felixgeelhaar/tokenops/internal/version"
+	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/version"
 )
 
 // httpDoer is the small subset of *http.Client status uses; tests inject a

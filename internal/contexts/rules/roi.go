@@ -3,7 +3,7 @@ package rules
 import (
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Exposure aggregates how a single rule (or section) was exercised across

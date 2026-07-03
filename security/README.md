@@ -150,7 +150,7 @@ classified per `security/SUPPRESSION-GOVERNANCE.md`:
   "status": "not_affected",
   "justification": "vulnerable_code_not_present",
   "impact_statement": "Why this finding is a false positive — be specific.",
-  "products": ["github.com/felixgeelhaar/tokenops"],
+  "products": ["github.com/klarlabs-studio/tokenops"],
   "_nox_fingerprint": "<full fingerprint from the finding>",
   "_governance": {
     "classification": "False Positive",

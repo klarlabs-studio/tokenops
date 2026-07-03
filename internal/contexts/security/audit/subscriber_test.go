@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/domainevents"
-	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 func openStore(t *testing.T) *sqlite.Store {

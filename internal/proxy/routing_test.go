@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/router"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/providers"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/tokenizer"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
+	"go.klarlabs.de/tokenops/internal/contexts/prompts/providers"
+	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 func startProxyForRouting(t *testing.T, upstream *httptest.Server, cfg router.Config) (string, *captureBus) {

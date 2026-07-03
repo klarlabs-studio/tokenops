@@ -14,11 +14,11 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/waste"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/governance/budget"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/router"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/plans"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
+	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Mode values. Passive collects + analyzes on demand (default); Active

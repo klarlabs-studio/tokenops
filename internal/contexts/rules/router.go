@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // SelectionSignals describes the request the router is selecting rules for.

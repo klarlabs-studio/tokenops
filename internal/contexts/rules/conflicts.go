@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // FindingKind classifies a conflict finding.

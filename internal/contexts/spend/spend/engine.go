@@ -1,7 +1,7 @@
 package spend
 
 import (
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Engine computes monetary cost from observed PromptEvents using a Table.

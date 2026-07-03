@@ -15,11 +15,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/router"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/tokenizer"
-	"github.com/felixgeelhaar/tokenops/internal/events"
-	"github.com/felixgeelhaar/tokenops/internal/proxy/cache"
-	"github.com/felixgeelhaar/tokenops/internal/version"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
+	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer"
+	"go.klarlabs.de/tokenops/internal/events"
+	"go.klarlabs.de/tokenops/internal/proxy/cache"
+	"go.klarlabs.de/tokenops/internal/version"
 )
 
 // Server is the TokenOps proxy daemon.

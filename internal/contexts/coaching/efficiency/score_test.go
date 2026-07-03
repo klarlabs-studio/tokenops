@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/workflows/workflow"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 func mkStep(agent, model string, in, out int64) workflow.Step {

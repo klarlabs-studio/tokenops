@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 func docFromBody(sourceID, path string, src eventschema.RuleSource, body string) *RuleDocument {

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/tokenizer"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
+	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 func mkBodyWithChunks(numChunks, charsPerChunk int) []byte {

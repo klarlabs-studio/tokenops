@@ -7,7 +7,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/felixgeelhaar/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/config"
 )
 
 // loadConfig resolves the effective configuration: file (if specified) +

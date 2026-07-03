@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
-	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 func newParityServer(t *testing.T, deps ParityDeps) *Server {
@@ -98,7 +98,7 @@ func TestParityCoverageDebtHandler(t *testing.T) {
 	dir := t.TempDir()
 	profile := filepath.Join(dir, "coverage.out")
 	if err := os.WriteFile(profile, []byte(
-		"mode: set\ngithub.com/felixgeelhaar/tokenops/internal/daemon/daemon.go:1.1,1.2 100 0\n",
+		"mode: set\ngo.klarlabs.de/tokenops/internal/daemon/daemon.go:1.1,1.2 100 0\n",
 	), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}

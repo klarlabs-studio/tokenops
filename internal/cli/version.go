@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/version"
+	"go.klarlabs.de/tokenops/internal/version"
 )
 
 func newVersionCmd() *cobra.Command {

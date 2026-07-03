@@ -20,7 +20,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/forecast"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast"
 )
 
 // Window identifies the budget cadence.

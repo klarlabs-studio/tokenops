@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/felixgeelhaar/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/config"
 )
 
 // ModeDeps wires the config-mutation tools. ConfigPath empty falls back

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // captureBus records every envelope so the test asserts on the

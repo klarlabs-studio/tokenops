@@ -72,7 +72,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/felixgeelhaar/tokenops
+        - go.klarlabs.de/tokenops
 
 issues:
   max-issues-per-linter: 0

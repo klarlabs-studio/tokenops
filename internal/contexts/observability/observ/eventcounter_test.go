@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/internal/domainevents"
 )
 
 func TestEventCounterCountsByKind(t *testing.T) {

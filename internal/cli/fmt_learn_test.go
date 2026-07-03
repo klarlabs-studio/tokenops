@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/fmtlearn"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/fmtlearn"
 )
 
 func TestLearnIndex_RoundTrip(t *testing.T) {

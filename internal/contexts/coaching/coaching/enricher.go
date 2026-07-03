@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/llm"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/contexts/prompts/llm"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // llmEnricher upgrades a CoachingEvent's Summary with a 1-2 sentence

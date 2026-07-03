@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/prompts"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/replies"
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts"
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/replies"
 )
 
 // newCoachCmd is the tree for prompt + workflow coaching. For now

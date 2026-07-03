@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/formatter"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter"
 )
 
 // writeSession writes a synthetic Claude Code JSONL session under a project

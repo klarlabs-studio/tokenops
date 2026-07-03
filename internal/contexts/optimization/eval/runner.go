@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/contexttrim"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/dedupe"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/promptcompress"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/retrievalprune"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/tokenizer"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/contexttrim"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/dedupe"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/promptcompress"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/retrievalprune"
+	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 type PipelineBuilder struct {

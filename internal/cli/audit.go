@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/security/audit"
-	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 func newAuditCmd(rf *rootFlags) *cobra.Command {

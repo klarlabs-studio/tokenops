@@ -19,8 +19,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/felixgeelhaar/tokenops/internal/events"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/events"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Tracker records MCP tool invocations as plan_included events on the

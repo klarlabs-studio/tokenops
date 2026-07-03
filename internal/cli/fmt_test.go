@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/felixgeelhaar/tokenops/internal/config"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/formatter"
+	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter"
 )
 
 func skipOnWindows(t *testing.T) {

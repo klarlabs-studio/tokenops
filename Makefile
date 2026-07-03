@@ -12,9 +12,9 @@ COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 
 LDFLAGS := -s -w \
-  -X github.com/felixgeelhaar/tokenops/internal/version.Version=$(VERSION) \
-  -X github.com/felixgeelhaar/tokenops/internal/version.Commit=$(COMMIT) \
-  -X github.com/felixgeelhaar/tokenops/internal/version.Date=$(DATE)
+  -X go.klarlabs.de/tokenops/internal/version.Version=$(VERSION) \
+  -X go.klarlabs.de/tokenops/internal/version.Commit=$(COMMIT) \
+  -X go.klarlabs.de/tokenops/internal/version.Date=$(DATE)
 
 .PHONY: all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-remediate policy-guard install-hooks eval eval-gate cover-debt cover-debt-gate
 
@@ -136,7 +136,7 @@ proto:
 	@command -v protoc >/dev/null || { echo "protoc not installed; install from https://grpc.io/docs/protoc-installation/"; exit 1; }
 	protoc \
 		--go_out=. \
-		--go_opt=module=github.com/felixgeelhaar/tokenops \
+		--go_opt=module=go.klarlabs.de/tokenops \
 		pkg/eventschema/proto/v1/*.proto
 
 # proto-check fails CI when generated bindings drift from the .proto

@@ -63,7 +63,7 @@ Example:
   "status": "not_affected",
   "justification": "vulnerable_code_not_present",
   "impact_statement": "False positive. 'vue' is the official Vue.js framework, not a typosquat of 'vite'. Both are first-party packages from the Vue/Vite organisations.",
-  "products": ["github.com/felixgeelhaar/tokenops"],
+  "products": ["github.com/klarlabs-studio/tokenops"],
   "_nox_fingerprint": "1f4dff23501a9568fbc5c744257f8e03c7e0ec819cc9583c2d5bc764539594d3",
   "_governance": {
     "classification": "False Positive",

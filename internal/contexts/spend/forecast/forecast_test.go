@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/observability/analytics"
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 )
 
 const eps = 1e-6

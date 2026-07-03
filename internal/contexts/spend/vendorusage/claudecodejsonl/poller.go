@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/events"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/events"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // SourceTag identifies envelopes emitted by this poller. Consumers

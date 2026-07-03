@@ -10,7 +10,7 @@ syntax = "proto3";
 
 package tokenops.eventschema.v1;
 
-option go_package = "github.com/felixgeelhaar/tokenops/pkg/eventschema/proto/v1;eventschemav1";
+option go_package = "go.klarlabs.de/tokenops/pkg/eventschema/proto/v1;eventschemav1";
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";

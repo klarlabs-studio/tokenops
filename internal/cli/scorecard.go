@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/prompts"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/tools"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/governance/scorecard"
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts"
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/tools"
+	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard"
 )
 
 func newScorecardCmd() *cobra.Command {

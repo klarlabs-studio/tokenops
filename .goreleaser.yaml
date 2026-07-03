@@ -14,9 +14,9 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
-      - -X github.com/felixgeelhaar/tokenops/internal/version.Version={{ .Version }}
-      - -X github.com/felixgeelhaar/tokenops/internal/version.Commit={{ .Commit }}
-      - -X github.com/felixgeelhaar/tokenops/internal/version.Date={{ .Date }}
+      - -X go.klarlabs.de/tokenops/internal/version.Version={{ .Version }}
+      - -X go.klarlabs.de/tokenops/internal/version.Commit={{ .Commit }}
+      - -X go.klarlabs.de/tokenops/internal/version.Date={{ .Date }}
     env:
       - CGO_ENABLED=0
     goos:
@@ -33,9 +33,9 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
-      - -X github.com/felixgeelhaar/tokenops/internal/version.Version={{ .Version }}
-      - -X github.com/felixgeelhaar/tokenops/internal/version.Commit={{ .Commit }}
-      - -X github.com/felixgeelhaar/tokenops/internal/version.Date={{ .Date }}
+      - -X go.klarlabs.de/tokenops/internal/version.Version={{ .Version }}
+      - -X go.klarlabs.de/tokenops/internal/version.Commit={{ .Commit }}
+      - -X go.klarlabs.de/tokenops/internal/version.Date={{ .Date }}
     env:
       - CGO_ENABLED=0
     goos:
@@ -88,7 +88,7 @@ brews:
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Formula
-    homepage: "https://github.com/felixgeelhaar/tokenops"
+    homepage: "https://github.com/klarlabs-studio/tokenops"
     description: "Open-source operational intelligence layer for AI systems"
     license: "Apache-2.0"
     commit_author:

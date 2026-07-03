@@ -1,4 +1,4 @@
-Showing 12 of 143 workflow runs in felixgeelhaar/tokenops
+Showing 12 of 143 workflow runs in klarlabs-studio/tokenops
 
 STATUS  TITLE                                     WORKFLOW  BRANCH  EVENT        ID          ELAPSED  AGE
 ✓       feat: add formatter catalog               CI        main    push         28622765016  3m2s     5m

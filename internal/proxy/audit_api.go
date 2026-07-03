@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/observability/analytics"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/security/audit"
-	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
+	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 // AuditHandlers exposes a read-only audit query surface. Daemons wire

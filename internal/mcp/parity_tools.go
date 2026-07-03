@@ -7,16 +7,16 @@ import (
 	"os"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/governance/coverdebt"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/governance/scorecard"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/eval"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/replay"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/rules"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/security/audit"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
-	"github.com/felixgeelhaar/tokenops/internal/infra/rulesfs"
-	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/internal/contexts/governance/coverdebt"
+	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/eval"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/replay"
+	"go.klarlabs.de/tokenops/internal/contexts/rules"
+	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/infra/rulesfs"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 // ParityDeps wires the engines the parity tools depend on. Store is reused

@@ -1,9 +1,9 @@
 # TokenOps
 
-[![CI](https://github.com/felixgeelhaar/tokenops/actions/workflows/ci.yml/badge.svg)](https://github.com/felixgeelhaar/tokenops/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/felixgeelhaar/tokenops?sort=semver)](https://github.com/felixgeelhaar/tokenops/releases)
-[![License](https://img.shields.io/github/license/felixgeelhaar/tokenops)](LICENSE)
-[![Go Report](https://goreportcard.com/badge/github.com/felixgeelhaar/tokenops)](https://goreportcard.com/report/github.com/felixgeelhaar/tokenops)
+[![CI](https://github.com/klarlabs-studio/tokenops/actions/workflows/ci.yml/badge.svg)](https://github.com/klarlabs-studio/tokenops/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/klarlabs-studio/tokenops?sort=semver)](https://github.com/klarlabs-studio/tokenops/releases)
+[![License](https://img.shields.io/github/license/klarlabs-studio/tokenops)](LICENSE)
+[![Go Report](https://goreportcard.com/badge/go.klarlabs.de/tokenops)](https://goreportcard.com/report/go.klarlabs.de/tokenops)
 
 > **Predict rate-limit cutoffs inside your AI agent.** Local MCP server + CLI
 > that watches your flat-rate AI subscription window — Claude Max, ChatGPT
@@ -11,7 +11,7 @@
 > — and tells the agent, before you hit the cap, to `continue`,
 > `slow_down`, `switch_model`, or `wait_for_reset`.
 
-Docs: <https://felixgeelhaar.github.io/tokenops/> · Releases: <https://github.com/felixgeelhaar/tokenops/releases>
+Docs: <https://klarlabs-studio.github.io/tokenops/> · Releases: <https://github.com/klarlabs-studio/tokenops/releases>
 
 ## Install
 
@@ -22,10 +22,10 @@ brew install felixgeelhaar/tap/tokenops
 Or via Go:
 
 ```bash
-go install github.com/felixgeelhaar/tokenops/cmd/tokenops@latest
+go install go.klarlabs.de/tokenops/cmd/tokenops@latest
 ```
 
-Or grab a prebuilt binary from the [releases page](https://github.com/felixgeelhaar/tokenops/releases) (darwin amd64/arm64, linux amd64/arm64, windows amd64).
+Or grab a prebuilt binary from the [releases page](https://github.com/klarlabs-studio/tokenops/releases) (darwin amd64/arm64, linux amd64/arm64, windows amd64).
 
 ## 90-second quickstart
 
@@ -200,7 +200,7 @@ and [SECURITY.md](SECURITY.md). Plans and tasks live in `.roady/` (see
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) — latest is [v0.21.1](https://github.com/felixgeelhaar/tokenops/releases/tag/v0.21.1).
+See [CHANGELOG.md](CHANGELOG.md) — latest is [v0.21.1](https://github.com/klarlabs-studio/tokenops/releases/tag/v0.21.1).
 
 ## License
 

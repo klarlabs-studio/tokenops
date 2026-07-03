@@ -14,7 +14,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/fmtlearn"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/fmtlearn"
 )
 
 // Path returns the index file for recoverDir, defaulting to

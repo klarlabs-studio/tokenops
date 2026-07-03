@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/version"
+	"go.klarlabs.de/tokenops/internal/version"
 )
 
 var startedAt = time.Now()

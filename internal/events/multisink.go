@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // MultiSink fans a single AppendBatch call out to N underlying sinks.

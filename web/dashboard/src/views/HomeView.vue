@@ -54,7 +54,7 @@ function formatUptime(ns: number): string {
     <article class="card">
       <header>Quick links</header>
       <ul class="links">
-        <li><a href="https://github.com/felixgeelhaar/tokenops">github.com/felixgeelhaar/tokenops</a></li>
+        <li><a href="https://github.com/klarlabs-studio/tokenops">github.com/klarlabs-studio/tokenops</a></li>
         <li>SDK shims: <code>docs/sdk/</code></li>
         <li>CLI replay: <code>tokenops replay &lt;session&gt;</code></li>
       </ul>

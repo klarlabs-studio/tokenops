@@ -1,4 +1,4 @@
-module github.com/felixgeelhaar/tokenops
+module go.klarlabs.de/tokenops
 
 go 1.25.0
 

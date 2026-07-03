@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/felixgeelhaar/tokenops/internal/cli"
+	"go.klarlabs.de/tokenops/internal/cli"
 )
 
 func main() {

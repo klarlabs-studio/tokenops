@@ -5,7 +5,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/felixgeelhaar/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/internal/domainevents"
 )
 
 // EventCounter is a thread-safe per-kind counter that subscribes to a

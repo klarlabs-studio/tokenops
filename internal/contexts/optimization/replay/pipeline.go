@@ -1,16 +1,16 @@
 package replay
 
 import (
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/formatter"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/contexttrim"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/dedupe"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/promptcompress"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/retrievalprune"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/router"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/toolfmt"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/tokenizer"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/contexttrim"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/dedupe"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/promptcompress"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/retrievalprune"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/toolfmt"
+	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 )
 
 // PipelineConfig customises the optimizer mix without forcing callers

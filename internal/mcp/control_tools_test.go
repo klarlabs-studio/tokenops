@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/felixgeelhaar/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/config"
 )
 
 func newControlServer(t *testing.T, d ControlDeps) *Server {

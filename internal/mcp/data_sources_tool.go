@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 // DataSourcesDeps wires the data-sources tool to the event store.

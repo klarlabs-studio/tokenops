@@ -9,9 +9,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/fmtlearn"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/formatter"
-	"github.com/felixgeelhaar/tokenops/internal/infra/fmtindex"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/fmtlearn"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter"
+	"go.klarlabs.de/tokenops/internal/infra/fmtindex"
 )
 
 // appendLearnRecord and readLearnRecords delegate to the shared fmtindex

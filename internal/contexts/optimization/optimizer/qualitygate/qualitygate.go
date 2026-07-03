@@ -23,8 +23,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // DefaultThreshold is the quality floor used when none is supplied.

@@ -12,7 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/internal/domainevents"
 )
 
 // resolveDomainLogPath returns the JSONL location, honoring

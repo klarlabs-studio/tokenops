@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // TurnStats are aggregate per-turn averages computed from assistant

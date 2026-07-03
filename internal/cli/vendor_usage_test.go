@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/config"
 )
 
 // configHintAnthropic reports the missing-piece message operators

@@ -6,11 +6,11 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/config"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/governance/budget"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/observability/analytics"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/forecast"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 )
 
 // runSpendWatcher is the active-mode background loop: every

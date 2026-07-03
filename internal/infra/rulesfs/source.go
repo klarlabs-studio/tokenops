@@ -1,7 +1,7 @@
 package rulesfs
 
 import (
-	"github.com/felixgeelhaar/tokenops/internal/contexts/rules"
+	"go.klarlabs.de/tokenops/internal/contexts/rules"
 
 	"errors"
 	"fmt"

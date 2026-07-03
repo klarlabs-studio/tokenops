@@ -10,9 +10,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/fmtlearn"
-	"github.com/felixgeelhaar/tokenops/internal/infra/jsonlfmt"
-	"github.com/felixgeelhaar/tokenops/internal/infra/svgchart"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/fmtlearn"
+	"go.klarlabs.de/tokenops/internal/infra/jsonlfmt"
+	"go.klarlabs.de/tokenops/internal/infra/svgchart"
 )
 
 // newFmtAnalyzeCmd mines the Claude Code JSONL logs directly — no daemon, no

@@ -3,7 +3,7 @@ package budget
 import (
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/internal/domainevents"
 )
 
 // DomainBusPublisher is the narrow port budget evaluation uses to

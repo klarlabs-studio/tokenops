@@ -14,7 +14,7 @@ import (
 
 	mcpgo "go.klarlabs.de/mcp"
 
-	"github.com/felixgeelhaar/tokenops/internal/version"
+	"go.klarlabs.de/tokenops/internal/version"
 )
 
 // Server is an alias for the upstream mcp-go server type so callers can

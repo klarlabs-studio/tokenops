@@ -1,7 +1,7 @@
 package tokenizer
 
 import (
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // PreflightCount returns the estimated input token count for a request

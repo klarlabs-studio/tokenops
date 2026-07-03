@@ -1,7 +1,7 @@
 package redaction
 
 import (
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // RedactEnvelope walks the typed payload and Attributes of env, replacing

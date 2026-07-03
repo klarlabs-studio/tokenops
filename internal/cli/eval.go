@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/eval"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/eval"
 )
 
 func newEvalCmd() *cobra.Command {

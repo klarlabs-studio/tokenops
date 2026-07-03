@@ -7,8 +7,8 @@ import (
 	mcpgo "go.klarlabs.de/mcp"
 	"go.klarlabs.de/mcp/protocol"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/session"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/session"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // SessionMiddleware records one session.Tracker ping for every

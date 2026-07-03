@@ -8,9 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/config"
-	anthropicusage "github.com/felixgeelhaar/tokenops/internal/contexts/spend/vendorusage/anthropic"
-	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/internal/config"
+	anthropicusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 // newVendorUsageCmd assembles the `tokenops vendor-usage` command tree.

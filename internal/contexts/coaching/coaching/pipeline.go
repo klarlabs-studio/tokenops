@@ -21,10 +21,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/waste"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/replay"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/workflows/workflow"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/replay"
+	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Job describes one unit of coaching work: replay a session, detect

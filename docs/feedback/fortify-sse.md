@@ -1,7 +1,7 @@
 # fortify feedback: first-class SSE support in `fortify/http`
 
 **Source repo:** felixgeelhaar/fortify v1.4.0
-**Reporter:** TokenOps integration (felixgeelhaar/tokenops)
+**Reporter:** TokenOps integration (klarlabs-studio/tokenops)
 **Date:** 2026-05-12
 
 ## Summary

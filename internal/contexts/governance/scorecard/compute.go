@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // EventReader is the read-side port the scorecard depends on. Concrete

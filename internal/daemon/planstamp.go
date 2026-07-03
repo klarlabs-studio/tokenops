@@ -3,9 +3,9 @@ package daemon
 import (
 	"context"
 
-	"github.com/felixgeelhaar/tokenops/internal/config"
-	"github.com/felixgeelhaar/tokenops/internal/events"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/events"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // planStampSink is the single choke point that implements the config

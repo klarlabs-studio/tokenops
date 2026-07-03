@@ -7,12 +7,12 @@ import (
 )
 
 const sampleProfile = `mode: set
-github.com/felixgeelhaar/tokenops/internal/daemon/daemon.go:1.1,1.2 5 0
-github.com/felixgeelhaar/tokenops/internal/daemon/daemon.go:2.1,2.2 5 1
-github.com/felixgeelhaar/tokenops/internal/contexts/rules/router.go:1.1,1.2 10 1
-github.com/felixgeelhaar/tokenops/internal/contexts/rules/router.go:2.1,2.2 10 1
-github.com/felixgeelhaar/tokenops/internal/contexts/rules/router.go:3.1,3.2 10 0
-github.com/felixgeelhaar/tokenops/internal/config/config.go:1.1,1.2 4 1
+go.klarlabs.de/tokenops/internal/daemon/daemon.go:1.1,1.2 5 0
+go.klarlabs.de/tokenops/internal/daemon/daemon.go:2.1,2.2 5 1
+go.klarlabs.de/tokenops/internal/contexts/rules/router.go:1.1,1.2 10 1
+go.klarlabs.de/tokenops/internal/contexts/rules/router.go:2.1,2.2 10 1
+go.klarlabs.de/tokenops/internal/contexts/rules/router.go:3.1,3.2 10 0
+go.klarlabs.de/tokenops/internal/config/config.go:1.1,1.2 4 1
 `
 
 func TestParseCoverProfile(t *testing.T) {
@@ -26,9 +26,9 @@ func TestParseCoverProfile(t *testing.T) {
 	want := map[string]struct {
 		stmts, covered int64
 	}{
-		"github.com/felixgeelhaar/tokenops/internal/daemon":         {10, 5},
-		"github.com/felixgeelhaar/tokenops/internal/contexts/rules": {30, 20},
-		"github.com/felixgeelhaar/tokenops/internal/config":         {4, 4},
+		"go.klarlabs.de/tokenops/internal/daemon":         {10, 5},
+		"go.klarlabs.de/tokenops/internal/contexts/rules": {30, 20},
+		"go.klarlabs.de/tokenops/internal/config":         {4, 4},
 	}
 	for _, r := range rows {
 		w, ok := want[r.Package]
@@ -59,17 +59,17 @@ func TestAnalyzeFlagsHighRiskGoalMisses(t *testing.T) {
 		t.Errorf("expected no failures with stub coverage, got %v", report.Failed)
 	}
 	// Sorted by RiskScore desc — daemon (critical, half-uncovered) leads.
-	if report.Rows[0].Package != "github.com/felixgeelhaar/tokenops/internal/daemon" {
+	if report.Rows[0].Package != "go.klarlabs.de/tokenops/internal/daemon" {
 		t.Errorf("top row = %s, want daemon", report.Rows[0].Package)
 	}
 }
 
 func TestAnalyzeRecordsFailures(t *testing.T) {
 	cov := []Coverage{
-		{Package: "github.com/felixgeelhaar/tokenops/internal/daemon", Statements: 100, CoveredStatements: 10},
+		{Package: "go.klarlabs.de/tokenops/internal/daemon", Statements: 100, CoveredStatements: 10},
 	}
 	report := Analyze(cov, DefaultPolicies)
-	if !slices.Contains(report.Failed, "github.com/felixgeelhaar/tokenops/internal/daemon") {
+	if !slices.Contains(report.Failed, "go.klarlabs.de/tokenops/internal/daemon") {
 		t.Errorf("expected daemon in failed list, got %v", report.Failed)
 	}
 	if report.Rows[0].GoalMet {
@@ -82,8 +82,8 @@ func TestAnalyzeRecordsFailures(t *testing.T) {
 
 func TestAnalyzeOverallScoreIsRiskWeighted(t *testing.T) {
 	cov := []Coverage{
-		{Package: "github.com/felixgeelhaar/tokenops/internal/daemon", Statements: 100, CoveredStatements: 0},
-		{Package: "github.com/felixgeelhaar/tokenops/cmd/tokenops", Statements: 100, CoveredStatements: 100},
+		{Package: "go.klarlabs.de/tokenops/internal/daemon", Statements: 100, CoveredStatements: 0},
+		{Package: "go.klarlabs.de/tokenops/cmd/tokenops", Statements: 100, CoveredStatements: 100},
 	}
 	report := Analyze(cov, DefaultPolicies)
 	// daemon=Risk10 cov=0, cmd/tokenops=Risk1 cov=100 → overall = (0*10 + 100*1)/(10+1) ≈ 9.09
@@ -94,7 +94,7 @@ func TestAnalyzeOverallScoreIsRiskWeighted(t *testing.T) {
 
 func TestUnknownPackageDefaultsMedium(t *testing.T) {
 	cov := []Coverage{
-		{Package: "github.com/felixgeelhaar/tokenops/internal/unknownnew", Statements: 100, CoveredStatements: 50},
+		{Package: "go.klarlabs.de/tokenops/internal/unknownnew", Statements: 100, CoveredStatements: 50},
 	}
 	report := Analyze(cov, DefaultPolicies)
 	if report.Rows[0].Risk != RiskMedium {

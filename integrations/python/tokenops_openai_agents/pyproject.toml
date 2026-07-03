@@ -17,8 +17,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/felixgeelhaar/tokenops"
-Documentation = "https://github.com/felixgeelhaar/tokenops/tree/main/integrations/python/tokenops_openai_agents"
+Homepage = "https://github.com/klarlabs-studio/tokenops"
+Documentation = "https://github.com/klarlabs-studio/tokenops/tree/main/integrations/python/tokenops_openai_agents"
 
 [tool.hatch.build.targets.wheel]
 packages = ["tokenops_openai_agents"]

@@ -3,7 +3,7 @@ import { defineConfig } from "vitepress";
 export default defineConfig({
   title: "TokenOps",
   description: "Predict rate-limit cutoffs inside your AI agent. Local MCP server + CLI that tracks Claude Max, ChatGPT Plus/Pro/Team, GitHub Copilot, and Cursor plan windows.",
-  // GitHub Pages serves at https://felixgeelhaar.github.io/tokenops/.
+  // GitHub Pages serves at https://klarlabs-studio.github.io/tokenops/.
   // Base must match the repo name so asset URLs resolve under the
   // subpath. CI sets DOCS_BASE=/tokenops/ explicitly; local dev keeps
   // the root base so `npm run dev` still works at /.
@@ -19,7 +19,7 @@ export default defineConfig({
       { text: "Integrations", link: "/integrations/sdk-overview" },
       { text: "Architecture", link: "/architecture/overview" },
       { text: "Runbook", link: "/runbook/" },
-      { text: "GitHub", link: "https://github.com/felixgeelhaar/tokenops" },
+      { text: "GitHub", link: "https://github.com/klarlabs-studio/tokenops" },
     ],
     sidebar: {
       "/guide/": [
@@ -82,7 +82,7 @@ export default defineConfig({
       ],
     },
     socialLinks: [
-      { icon: "github", link: "https://github.com/felixgeelhaar/tokenops" },
+      { icon: "github", link: "https://github.com/klarlabs-studio/tokenops" },
     ],
     footer: {
       message: "Apache 2.0 licensed.",

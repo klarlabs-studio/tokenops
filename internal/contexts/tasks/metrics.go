@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 // Metrics is the per-task rollup over the events the operator's

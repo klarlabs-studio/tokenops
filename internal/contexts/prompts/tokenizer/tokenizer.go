@@ -15,7 +15,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // ErrUnknownProvider is returned by Registry.Lookup when no tokenizer is

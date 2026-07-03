@@ -6,7 +6,7 @@ planning, atomic commits, and TDD where practical.
 ## Quick start
 
 ```bash
-git clone https://github.com/felixgeelhaar/tokenops.git
+git clone https://github.com/klarlabs-studio/tokenops.git
 cd tokenops
 make tools     # install dev tooling (golangci-lint, etc.)
 make build     # build all Go binaries

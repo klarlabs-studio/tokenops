@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/felixgeelhaar/tokenops/internal/config"
-	"github.com/felixgeelhaar/tokenops/internal/daemon"
-	"github.com/felixgeelhaar/tokenops/internal/version"
+	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/daemon"
+	"go.klarlabs.de/tokenops/internal/version"
 )
 
 func main() {

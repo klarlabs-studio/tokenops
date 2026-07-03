@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/prompts"
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts"
 )
 
 // CoachDeps wires the coach prompt tool. Reads JSONL directly so it

@@ -15,7 +15,7 @@ import (
 	"maps"
 	"strings"
 
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Rate captures the per-million-token price of a single model. Values are

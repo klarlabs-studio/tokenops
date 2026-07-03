@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/tasks"
-	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/internal/contexts/tasks"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 // newTaskCmd assembles the `tokenops task` family. Three verbs

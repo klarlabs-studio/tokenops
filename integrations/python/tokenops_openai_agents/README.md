@@ -66,4 +66,4 @@ tokenops spend --by agent --top 5
 
 ## Source
 
-[github.com/felixgeelhaar/tokenops](https://github.com/felixgeelhaar/tokenops)
+[github.com/klarlabs-studio/tokenops](https://github.com/klarlabs-studio/tokenops)

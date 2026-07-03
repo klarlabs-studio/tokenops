@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/providers"
+	"go.klarlabs.de/tokenops/internal/contexts/prompts/providers"
 )
 
 // ProviderRoute pairs a Provider with its configured upstream URL.

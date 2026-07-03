@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/formatter"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter"
 )
 
 // newFmtBenchCmd measures the deterministic compression the formatter set

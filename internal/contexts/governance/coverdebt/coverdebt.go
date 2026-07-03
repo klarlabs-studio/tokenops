@@ -67,26 +67,26 @@ type PackagePolicy struct {
 // docs/coverage-debt.md reflects it.
 var DefaultPolicies = []PackagePolicy{
 	// Critical
-	{Package: "github.com/felixgeelhaar/tokenops/internal/daemon", Risk: RiskCritical, Goal: 50},
-	{Package: "github.com/felixgeelhaar/tokenops/cmd/tokenopsd", Risk: RiskCritical, Goal: 50},
-	{Package: "github.com/felixgeelhaar/tokenops/internal/storage/sqlite", Risk: RiskCritical, Goal: 70},
+	{Package: "go.klarlabs.de/tokenops/internal/daemon", Risk: RiskCritical, Goal: 50},
+	{Package: "go.klarlabs.de/tokenops/cmd/tokenopsd", Risk: RiskCritical, Goal: 50},
+	{Package: "go.klarlabs.de/tokenops/internal/storage/sqlite", Risk: RiskCritical, Goal: 70},
 	// High
-	{Package: "github.com/felixgeelhaar/tokenops/internal/proxy", Risk: RiskHigh, Goal: 65},
-	{Package: "github.com/felixgeelhaar/tokenops/internal/mcp", Risk: RiskHigh, Goal: 60},
-	{Package: "github.com/felixgeelhaar/tokenops/internal/otlp", Risk: RiskHigh, Goal: 70},
-	{Package: "github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer", Risk: RiskHigh, Goal: 65},
-	{Package: "github.com/felixgeelhaar/tokenops/internal/contexts/rules", Risk: RiskHigh, Goal: 65},
-	{Package: "github.com/felixgeelhaar/tokenops/internal/contexts/security/redaction", Risk: RiskHigh, Goal: 70},
-	{Package: "github.com/felixgeelhaar/tokenops/internal/contexts/observability/analytics", Risk: RiskHigh, Goal: 65},
-	{Package: "github.com/felixgeelhaar/tokenops/internal/events", Risk: RiskHigh, Goal: 70},
+	{Package: "go.klarlabs.de/tokenops/internal/proxy", Risk: RiskHigh, Goal: 65},
+	{Package: "go.klarlabs.de/tokenops/internal/mcp", Risk: RiskHigh, Goal: 60},
+	{Package: "go.klarlabs.de/tokenops/internal/otlp", Risk: RiskHigh, Goal: 70},
+	{Package: "go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer", Risk: RiskHigh, Goal: 65},
+	{Package: "go.klarlabs.de/tokenops/internal/contexts/rules", Risk: RiskHigh, Goal: 65},
+	{Package: "go.klarlabs.de/tokenops/internal/contexts/security/redaction", Risk: RiskHigh, Goal: 70},
+	{Package: "go.klarlabs.de/tokenops/internal/contexts/observability/analytics", Risk: RiskHigh, Goal: 65},
+	{Package: "go.klarlabs.de/tokenops/internal/events", Risk: RiskHigh, Goal: 70},
 	// Medium
-	{Package: "github.com/felixgeelhaar/tokenops/internal/cli", Risk: RiskMedium, Goal: 60},
-	{Package: "github.com/felixgeelhaar/tokenops/internal/config", Risk: RiskMedium, Goal: 85},
-	{Package: "github.com/felixgeelhaar/tokenops/internal/contexts/governance/scorecard", Risk: RiskMedium, Goal: 70},
-	{Package: "github.com/felixgeelhaar/tokenops/internal/contexts/optimization/eval", Risk: RiskMedium, Goal: 60},
-	{Package: "github.com/felixgeelhaar/tokenops/internal/contexts/prompts/tokenizer", Risk: RiskMedium, Goal: 70},
+	{Package: "go.klarlabs.de/tokenops/internal/cli", Risk: RiskMedium, Goal: 60},
+	{Package: "go.klarlabs.de/tokenops/internal/config", Risk: RiskMedium, Goal: 85},
+	{Package: "go.klarlabs.de/tokenops/internal/contexts/governance/scorecard", Risk: RiskMedium, Goal: 70},
+	{Package: "go.klarlabs.de/tokenops/internal/contexts/optimization/eval", Risk: RiskMedium, Goal: 60},
+	{Package: "go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer", Risk: RiskMedium, Goal: 70},
 	// Low
-	{Package: "github.com/felixgeelhaar/tokenops/cmd/tokenops", Risk: RiskLow, Goal: 30},
+	{Package: "go.klarlabs.de/tokenops/cmd/tokenops", Risk: RiskLow, Goal: 30},
 }
 
 // Coverage holds the parsed per-package coverage in percent (0–100).

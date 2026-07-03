@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/rules"
-	"github.com/felixgeelhaar/tokenops/internal/domainevents"
-	"github.com/felixgeelhaar/tokenops/internal/infra/rulesfs"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/contexts/rules"
+	"go.klarlabs.de/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/internal/infra/rulesfs"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // RulesHandlers serves the Rule Intelligence read-only API (issue #12).

@@ -3,7 +3,7 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/daemon"
+	"go.klarlabs.de/tokenops/internal/daemon"
 )
 
 func newStartCmd(rf *rootFlags) *cobra.Command {

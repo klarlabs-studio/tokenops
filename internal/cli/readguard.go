@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/infra/readguard"
+	"go.klarlabs.de/tokenops/internal/infra/readguard"
 )
 
 // preToolUseInput is the JSON Claude Code sends a PreToolUse hook on stdin.

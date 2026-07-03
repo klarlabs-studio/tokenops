@@ -10,8 +10,8 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/felixgeelhaar/tokenops/internal/cli/detect"
-	"github.com/felixgeelhaar/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/cli/detect"
+	"go.klarlabs.de/tokenops/internal/config"
 )
 
 // initFlags holds wizard inputs. Defaults are resolved per-OS via XDG

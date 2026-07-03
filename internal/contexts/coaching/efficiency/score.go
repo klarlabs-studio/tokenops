@@ -12,7 +12,7 @@ package efficiency
 import (
 	"math"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/workflows/workflow"
+	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
 )
 
 // Weights tunes the component contributions. Defaults sum to 1.0; pass

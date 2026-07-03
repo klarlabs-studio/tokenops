@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 var geminiProvider = Provider{

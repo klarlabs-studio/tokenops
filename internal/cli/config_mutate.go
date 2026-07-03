@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/felixgeelhaar/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/config"
 )
 
 // Thin wrappers over the config package's shared mutation helpers so

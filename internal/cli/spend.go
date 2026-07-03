@@ -13,11 +13,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/observability/analytics"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/forecast"
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
-	"github.com/felixgeelhaar/tokenops/internal/infra/svgchart"
-	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/infra/svgchart"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 // writeRatioSVG renders the input-vs-output token proportion — the ratio that

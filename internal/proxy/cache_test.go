@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/proxy/cache"
+	"go.klarlabs.de/tokenops/internal/proxy/cache"
 )
 
 // counterUpstream returns an httptest server that increments a shared

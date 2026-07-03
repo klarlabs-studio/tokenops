@@ -4,7 +4,7 @@ import (
 	"math"
 	"unicode/utf8"
 
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // heuristic is the shared core of the per-provider tokenizers. It uses a

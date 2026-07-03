@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 // DataWarning attaches to cost/headroom MCP responses when synthetic

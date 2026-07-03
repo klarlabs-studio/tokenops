@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // RuleBlock is the in-memory representation of one addressable section

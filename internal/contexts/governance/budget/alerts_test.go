@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/forecast"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast"
 )
 
 func TestThresholdWarnAndCrit(t *testing.T) {

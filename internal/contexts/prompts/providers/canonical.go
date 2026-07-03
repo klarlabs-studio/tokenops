@@ -1,6 +1,6 @@
 package providers
 
-import "github.com/felixgeelhaar/tokenops/pkg/eventschema"
+import "go.klarlabs.de/tokenops/pkg/eventschema"
 
 // CanonicalRequest is the provider-agnostic shape extracted from an inference
 // request. It carries the minimum fields required by the event pipeline,

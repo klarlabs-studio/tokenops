@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/eval"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/eval"
 )
 
 const testSuitesGlob = "testdata/*_suite.json"

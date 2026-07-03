@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/felixgeelhaar/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/config"
 )
 
 func newModeServer(t *testing.T) (*Server, string) {

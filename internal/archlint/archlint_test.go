@@ -16,9 +16,9 @@ import (
 // forbiddenAdapters lists adapter packages no domain package may
 // depend on directly or transitively.
 var forbiddenAdapters = []string{
-	"github.com/felixgeelhaar/tokenops/internal/proxy",
-	"github.com/felixgeelhaar/tokenops/internal/cli",
-	"github.com/felixgeelhaar/tokenops/internal/mcp",
+	"go.klarlabs.de/tokenops/internal/proxy",
+	"go.klarlabs.de/tokenops/internal/cli",
+	"go.klarlabs.de/tokenops/internal/mcp",
 }
 
 // forbiddenInfra lists infrastructure packages domain packages must
@@ -26,68 +26,68 @@ var forbiddenAdapters = []string{
 // abstraction so packages that depend on analytics.Row (forecast,
 // spend) are still allowed; they must NOT import sqlite themselves.
 var forbiddenInfra = []string{
-	"github.com/felixgeelhaar/tokenops/internal/storage/sqlite",
+	"go.klarlabs.de/tokenops/internal/storage/sqlite",
 }
 
 // storageExempt domains legitimately import sqlite via an isolated
 // adapter file. The exemption is documented in
 // docs/architecture-ddd.md.
 var storageExempt = map[string]bool{
-	"github.com/felixgeelhaar/tokenops/internal/contexts/governance/scorecard":    true,
-	"github.com/felixgeelhaar/tokenops/internal/contexts/governance/budget":       true,
-	"github.com/felixgeelhaar/tokenops/internal/contexts/observability/analytics": true,
-	"github.com/felixgeelhaar/tokenops/internal/contexts/security/audit":          true,
-	"github.com/felixgeelhaar/tokenops/internal/contexts/workflows/workflow":      true,
-	"github.com/felixgeelhaar/tokenops/internal/contexts/observability/anomaly":   true,
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/replay":     true,
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/forecast":          true,
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend":             true,
-	"github.com/felixgeelhaar/tokenops/internal/contexts/telemetry/retention":     true,
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/eval":       true,
-	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/coaching":       true,
-	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/waste":          true,
-	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/efficiency":     true,
-	"github.com/felixgeelhaar/tokenops/internal/contexts/security/dashauth":       true,
-	"github.com/felixgeelhaar/tokenops/internal/contexts/security/rbac":           true,
-	"github.com/felixgeelhaar/tokenops/internal/domainevents":                     false,
+	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard":    true,
+	"go.klarlabs.de/tokenops/internal/contexts/governance/budget":       true,
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics": true,
+	"go.klarlabs.de/tokenops/internal/contexts/security/audit":          true,
+	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow":      true,
+	"go.klarlabs.de/tokenops/internal/contexts/observability/anomaly":   true,
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/replay":     true,
+	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast":          true,
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend":             true,
+	"go.klarlabs.de/tokenops/internal/contexts/telemetry/retention":     true,
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/eval":       true,
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/coaching":       true,
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste":          true,
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/efficiency":     true,
+	"go.klarlabs.de/tokenops/internal/contexts/security/dashauth":       true,
+	"go.klarlabs.de/tokenops/internal/contexts/security/rbac":           true,
+	"go.klarlabs.de/tokenops/internal/domainevents":                     false,
 }
 
 // domainPackages lists every domain package the arch test enforces.
 // Every package under internal/contexts/* belongs here so new contexts
 // are gated automatically.
 var domainPackages = []string{
-	"github.com/felixgeelhaar/tokenops/internal/contexts/rules",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/eval",
+	"go.klarlabs.de/tokenops/internal/contexts/rules",
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/eval",
 	// Note: internal/infra/rulesfs is an infrastructure adapter; it
 	// legitimately uses io/fs + os, so it is excluded from the domain
 	// arch-lint sweep below.
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/formatter",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/fmtlearn",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer/toolfmt",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/replay",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/governance/scorecard",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/governance/coverdebt",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/governance/budget",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/workflows/workflow",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/coaching",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/efficiency",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/coaching/waste",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/forecast",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/observability/analytics",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/observability/anomaly",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/observability/observ",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/security/redaction",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/security/audit",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/security/dashauth",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/security/rbac",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/security/tlsmint",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/tokenizer",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/providers",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/llm",
-	"github.com/felixgeelhaar/tokenops/internal/contexts/telemetry/retention",
-	"github.com/felixgeelhaar/tokenops/internal/domainevents",
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer",
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter",
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/fmtlearn",
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/toolfmt",
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/replay",
+	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard",
+	"go.klarlabs.de/tokenops/internal/contexts/governance/coverdebt",
+	"go.klarlabs.de/tokenops/internal/contexts/governance/budget",
+	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow",
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/coaching",
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/efficiency",
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste",
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend",
+	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast",
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics",
+	"go.klarlabs.de/tokenops/internal/contexts/observability/anomaly",
+	"go.klarlabs.de/tokenops/internal/contexts/observability/observ",
+	"go.klarlabs.de/tokenops/internal/contexts/security/redaction",
+	"go.klarlabs.de/tokenops/internal/contexts/security/audit",
+	"go.klarlabs.de/tokenops/internal/contexts/security/dashauth",
+	"go.klarlabs.de/tokenops/internal/contexts/security/rbac",
+	"go.klarlabs.de/tokenops/internal/contexts/security/tlsmint",
+	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer",
+	"go.klarlabs.de/tokenops/internal/contexts/prompts/providers",
+	"go.klarlabs.de/tokenops/internal/contexts/prompts/llm",
+	"go.klarlabs.de/tokenops/internal/contexts/telemetry/retention",
+	"go.klarlabs.de/tokenops/internal/domainevents",
 }
 
 // depsMap memoises per-package transitive deps so the two arch tests

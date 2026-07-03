@@ -27,8 +27,8 @@ import (
 
 	"go.klarlabs.de/fortify/circuitbreaker"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/security/redaction"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/contexts/security/redaction"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Options configures the Exporter.

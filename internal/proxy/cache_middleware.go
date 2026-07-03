@@ -13,9 +13,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/felixgeelhaar/tokenops/internal/contexts/prompts/providers"
-	"github.com/felixgeelhaar/tokenops/internal/proxy/cache"
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/contexts/prompts/providers"
+	"go.klarlabs.de/tokenops/internal/proxy/cache"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Cache directives advertised on the request side. Values are matched

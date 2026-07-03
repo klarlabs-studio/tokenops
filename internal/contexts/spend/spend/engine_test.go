@@ -5,7 +5,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 const epsilon = 1e-9

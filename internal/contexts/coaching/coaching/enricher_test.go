@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // fakeBackend implements llm.Backend without touching the network.

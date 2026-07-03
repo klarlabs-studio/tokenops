@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/felixgeelhaar/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/config"
 )
 
 // TestE2EDaemonBootHealthShutdown drives the daemon end-to-end:
