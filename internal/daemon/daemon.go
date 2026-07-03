@@ -30,6 +30,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
 	copilotusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilot"
 	cursorusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursor"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
 	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
 	"go.klarlabs.de/tokenops/internal/domainevents"
 	"go.klarlabs.de/tokenops/internal/events"
@@ -269,6 +270,24 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			logger.Info("codex jsonl poller live",
 				"interval", cfg.VendorUsage.CodexJSONL.Interval,
 				"root", cfg.VendorUsage.CodexJSONL.Root,
+			)
+		}
+		if cfg.VendorUsage.OpenCode.Enabled {
+			// opencode is multi-provider; leave CostSource metered since no
+			// single flat-rate plan covers its traffic.
+			p := opencode.NewPoller(bus, opencode.PollerOptions{
+				Root:     cfg.VendorUsage.OpenCode.Root,
+				Interval: cfg.VendorUsage.OpenCode.Interval,
+				Logger:   logger,
+			})
+			go func() {
+				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					logger.Warn("opencode poller exited", "err", err)
+				}
+			}()
+			logger.Info("opencode poller live",
+				"interval", cfg.VendorUsage.OpenCode.Interval,
+				"root", cfg.VendorUsage.OpenCode.Root,
 			)
 		}
 		if cfg.VendorUsage.Cursor.Enabled {

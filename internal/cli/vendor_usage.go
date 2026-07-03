@@ -54,6 +54,7 @@ var vendorUsageSources = []string{
 	"github-copilot",
 	"codex-jsonl",
 	"claude-code-jsonl",
+	"opencode",
 	"anthropic-admin",
 }
 
@@ -94,6 +95,9 @@ Sources:
                       --root overrides the default scan root.
   claude-code-jsonl   ~/.claude/projects/**/*.jsonl reader. No secrets;
                       --root overrides the default scan root.
+  opencode            ~/.local/share/opencode/opencode.db reader (SQLite,
+                      opened read-only). No secrets; --root overrides the
+                      default database path.
   anthropic-admin     Anthropic Admin API usage report poller. Required:
                       --admin-key (or env TOKENOPS_ANTHROPIC_ADMIN_KEY).
 
@@ -190,6 +194,14 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 		}
 		if f.interval > 0 {
 			cfg.VendorUsage.ClaudeCodeJSONL.Interval = f.interval
+		}
+	case "opencode":
+		cfg.VendorUsage.OpenCode.Enabled = enabled
+		if f.root != "" {
+			cfg.VendorUsage.OpenCode.Root = f.root
+		}
+		if f.interval > 0 {
+			cfg.VendorUsage.OpenCode.Interval = f.interval
 		}
 	case "anthropic-admin":
 		key := envSecret(f.adminKey, "TOKENOPS_ANTHROPIC_ADMIN_KEY")
@@ -418,6 +430,13 @@ machine-readable output.`,
 						ConfigHint:  configHintCodexJSONL(cfg.VendorUsage.CodexJSONL.Enabled),
 					},
 					{
+						Name:        "opencode",
+						SourceTag:   "opencode",
+						Enabled:     cfg.VendorUsage.OpenCode.Enabled,
+						EventsInWin: counts["opencode"],
+						ConfigHint:  configHintOpenCode(cfg.VendorUsage.OpenCode.Enabled),
+					},
+					{
 						Name:        "claude_code_stats_cache (deprecated)",
 						SourceTag:   "claude-code-stats-cache",
 						Enabled:     cfg.VendorUsage.ClaudeCode.Enabled,
@@ -501,6 +520,13 @@ func configHintCodexJSONL(enabled bool) string {
 		return ""
 	}
 	return "set vendor_usage.codex_jsonl.enabled: true (RECOMMENDED for Codex Plus/Pro users — surfaces OpenAI's official rate_limits 5h + weekly %)"
+}
+
+func configHintOpenCode(enabled bool) string {
+	if enabled {
+		return ""
+	}
+	return "set vendor_usage.opencode.enabled: true (reads opencode's SQLite store read-only — per-project, multi-provider token attribution)"
 }
 
 func configHintCopilot(cfg config.GitHubCopilotUsageConfig) string {

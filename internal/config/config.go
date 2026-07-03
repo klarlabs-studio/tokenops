@@ -283,6 +283,7 @@ type VendorUsageConfig struct {
 	ClaudeCode      ClaudeCodeUsageConfig      `yaml:"claude_code"`
 	ClaudeCodeJSONL ClaudeCodeJSONLUsageConfig `yaml:"claude_code_jsonl"`
 	CodexJSONL      CodexJSONLUsageConfig      `yaml:"codex_jsonl"`
+	OpenCode        OpenCodeUsageConfig        `yaml:"opencode"`
 	Anthropic       AnthropicUsageConfig       `yaml:"anthropic"`
 	GitHubCopilot   GitHubCopilotUsageConfig   `yaml:"github_copilot"`
 	Cursor          CursorUsageConfig          `yaml:"cursor"`
@@ -327,6 +328,16 @@ type AnthropicCookieUsageConfig struct {
 // Parses ~/.codex/sessions/<yyyy>/<mm>/<dd>/rollout-*.jsonl. Empty
 // Root defaults to ~/.codex/sessions.
 type CodexJSONLUsageConfig struct {
+	Enabled  bool          `yaml:"enabled"`
+	Root     string        `yaml:"root"`
+	Interval time.Duration `yaml:"interval"`
+}
+
+// OpenCodeUsageConfig enables the opencode session reader, which opens
+// opencode's SQLite store read-only and surfaces per-assistant-turn token
+// usage. Empty Root defaults to ~/.local/share/opencode/opencode.db
+// (honouring XDG_DATA_HOME).
+type OpenCodeUsageConfig struct {
 	Enabled  bool          `yaml:"enabled"`
 	Root     string        `yaml:"root"`
 	Interval time.Duration `yaml:"interval"`
