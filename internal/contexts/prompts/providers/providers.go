@@ -42,6 +42,14 @@ func All() []Provider {
 		anthropicProvider,
 		geminiProvider,
 		mistralProvider,
+		groqProvider,
+		deepSeekProvider,
+		xaiProvider,
+		perplexityProvider,
+		fireworksProvider,
+		cerebrasProvider,
+		togetherProvider,
+		openRouterProvider,
 	}
 }
 

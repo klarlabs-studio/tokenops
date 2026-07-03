@@ -28,6 +28,18 @@ const (
 	ProviderMistral   Provider = "mistral"
 	ProviderGitHub    Provider = "github"
 	ProviderCursor    Provider = "cursor"
+
+	// OpenAI-compatible upstreams — they accept the OpenAI
+	// /chat/completions request shape, so the proxy meters them with the
+	// shared OpenAI normalizer and tokenizer.
+	ProviderGroq       Provider = "groq"
+	ProviderDeepSeek   Provider = "deepseek"
+	ProviderXAI        Provider = "xai"
+	ProviderPerplexity Provider = "perplexity"
+	ProviderFireworks  Provider = "fireworks"
+	ProviderCerebras   Provider = "cerebras"
+	ProviderTogether   Provider = "together"
+	ProviderOpenRouter Provider = "openrouter"
 )
 
 // Envelope is the common header carried by every TokenOps event regardless of

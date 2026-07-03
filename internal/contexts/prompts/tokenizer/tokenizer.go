@@ -62,6 +62,20 @@ func NewRegistry() *Registry {
 	r.Set(NewAnthropicTokenizer())
 	r.Set(NewGeminiTokenizer())
 	r.Set(NewMistralTokenizer())
+	// OpenAI-compatible upstreams reuse the OpenAI ratios (bound to their
+	// own provider ID) so proxy metering never falls back to zero counts.
+	for _, p := range []eventschema.Provider{
+		eventschema.ProviderGroq,
+		eventschema.ProviderDeepSeek,
+		eventschema.ProviderXAI,
+		eventschema.ProviderPerplexity,
+		eventschema.ProviderFireworks,
+		eventschema.ProviderCerebras,
+		eventschema.ProviderTogether,
+		eventschema.ProviderOpenRouter,
+	} {
+		r.Set(NewOpenAICompatibleTokenizer(p))
+	}
 	return r
 }
 

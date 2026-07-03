@@ -99,3 +99,75 @@ rates:
     "gemini-1.5-flash*":
       input_per_million: 0.075
       output_per_million: 0.30
+
+  # OpenAI-compatible upstreams. Public list prices in USD / million tokens
+  # (captured 2026-07; verify against the vendor's pricing page — these drift,
+  # and negotiated rates should be layered via config pricing.path).
+
+  # Groq — https://groq.com/pricing (2026-07)
+  groq:
+    "llama-3.3-70b*":
+      input_per_million: 0.59
+      output_per_million: 0.79
+    "llama-3.1-8b*":
+      input_per_million: 0.05
+      output_per_million: 0.08
+    "llama-3*":
+      input_per_million: 0.59
+      output_per_million: 0.79
+    "gemma2*":
+      input_per_million: 0.20
+      output_per_million: 0.20
+
+  # DeepSeek — https://api-docs.deepseek.com/quick_start/pricing (2026-07).
+  # cached_input_per_million is DeepSeek's cache-hit rate.
+  deepseek:
+    "deepseek-chat*":
+      input_per_million: 0.27
+      output_per_million: 1.10
+      cached_input_per_million: 0.07
+    "deepseek-reasoner*":
+      input_per_million: 0.55
+      output_per_million: 2.19
+      cached_input_per_million: 0.14
+
+  # xAI — https://docs.x.ai/docs/models (2026-07)
+  xai:
+    "grok-2*":
+      input_per_million: 2.00
+      output_per_million: 10.00
+    "grok-3*":
+      input_per_million: 3.00
+      output_per_million: 15.00
+    "grok-beta*":
+      input_per_million: 5.00
+      output_per_million: 15.00
+
+  # Perplexity — https://docs.perplexity.ai/guides/pricing (2026-07). Token
+  # rates only; Sonar also bills a per-request search fee not modelled here.
+  perplexity:
+    "sonar-pro*":
+      input_per_million: 3.00
+      output_per_million: 15.00
+    "sonar-reasoning*":
+      input_per_million: 1.00
+      output_per_million: 5.00
+    "sonar*":
+      input_per_million: 1.00
+      output_per_million: 1.00
+
+  # Cerebras — https://cerebras.ai/pricing (2026-07)
+  cerebras:
+    "llama-3.3-70b*":
+      input_per_million: 0.85
+      output_per_million: 1.20
+    "llama-3.1-8b*":
+      input_per_million: 0.10
+      output_per_million: 0.10
+
+  # Fireworks, Together, and OpenRouter multiplex many third-party models
+  # under namespaced names (e.g. "accounts/fireworks/models/…",
+  # "meta-llama/Llama-3.3-70B-Instruct-Turbo", "anthropic/claude-…"), so a
+  # static rate card cannot price them accurately — the true rate is the
+  # underlying model's. Token counts are still metered; attach $ cost by
+  # layering a pricing.path override keyed to the exact model names you use.

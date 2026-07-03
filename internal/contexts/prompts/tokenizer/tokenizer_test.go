@@ -74,6 +74,27 @@ func TestRegistryLookupAndDefaults(t *testing.T) {
 	}
 }
 
+// TestRegistryCoversOpenAICompatibleFleet ensures every OpenAI-compatible
+// provider has a registered tokenizer returning non-zero counts, so proxy
+// metering never silently falls back to zero for them.
+func TestRegistryCoversOpenAICompatibleFleet(t *testing.T) {
+	r := NewRegistry()
+	for _, p := range []eventschema.Provider{
+		eventschema.ProviderGroq, eventschema.ProviderDeepSeek, eventschema.ProviderXAI,
+		eventschema.ProviderPerplexity, eventschema.ProviderFireworks, eventschema.ProviderCerebras,
+		eventschema.ProviderTogether, eventschema.ProviderOpenRouter,
+	} {
+		n, err := r.CountText(p, "hello world, this is a token count probe")
+		if err != nil {
+			t.Errorf("%s: %v", p, err)
+			continue
+		}
+		if n <= 0 {
+			t.Errorf("%s: got zero tokens", p)
+		}
+	}
+}
+
 func TestRegistryUnknown(t *testing.T) {
 	r := NewRegistry()
 	_, err := r.Lookup("nonsense")

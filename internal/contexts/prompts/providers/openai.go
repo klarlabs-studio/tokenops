@@ -11,7 +11,7 @@ var openAIProvider = Provider{
 	ID:             eventschema.ProviderOpenAI,
 	Prefix:         "/openai/",
 	DefaultBaseURL: "https://api.openai.com",
-	Normalize:      normalizeOpenAI,
+	Normalize:      normalizeOpenAICompatible(eventschema.ProviderOpenAI),
 }
 
 // openAIMessage models a single message entry in an OpenAI chat-completions
@@ -35,43 +35,50 @@ type openAIResponsesRequest struct {
 	Input     any    `json:"input"`
 }
 
-func normalizeOpenAI(path string, body []byte) (CanonicalRequest, error) {
-	switch {
-	case strings.Contains(path, "/chat/completions"):
-		var req openAIChatRequest
-		if err := json.Unmarshal(body, &req); err != nil {
-			return CanonicalRequest{}, err
-		}
-		c := CanonicalRequest{
-			Provider:        eventschema.ProviderOpenAI,
-			Operation:       "chat.completions",
-			Model:           req.Model,
-			Stream:          req.Stream,
-			MaxOutputTokens: pickFirstNonZero(req.MaxOutput, req.MaxTokens),
-			MessageCount:    len(req.Messages),
-		}
-		for _, m := range req.Messages {
-			if m.Role == "system" {
-				c.SystemPresent = true
-				break
+// normalizeOpenAICompatible returns a NormalizeFunc for any upstream that
+// speaks the OpenAI /chat/completions (and /responses) wire format. The
+// returned CanonicalRequest is stamped with id so metering attributes the
+// traffic to the actual provider (openai, groq, deepseek, …) rather than a
+// single hardcoded value.
+func normalizeOpenAICompatible(id eventschema.Provider) NormalizeFunc {
+	return func(path string, body []byte) (CanonicalRequest, error) {
+		switch {
+		case strings.Contains(path, "/chat/completions"):
+			var req openAIChatRequest
+			if err := json.Unmarshal(body, &req); err != nil {
+				return CanonicalRequest{}, err
 			}
-		}
-		return c, nil
+			c := CanonicalRequest{
+				Provider:        id,
+				Operation:       "chat.completions",
+				Model:           req.Model,
+				Stream:          req.Stream,
+				MaxOutputTokens: pickFirstNonZero(req.MaxOutput, req.MaxTokens),
+				MessageCount:    len(req.Messages),
+			}
+			for _, m := range req.Messages {
+				if m.Role == "system" {
+					c.SystemPresent = true
+					break
+				}
+			}
+			return c, nil
 
-	case strings.Contains(path, "/responses"):
-		var req openAIResponsesRequest
-		if err := json.Unmarshal(body, &req); err != nil {
-			return CanonicalRequest{}, err
+		case strings.Contains(path, "/responses"):
+			var req openAIResponsesRequest
+			if err := json.Unmarshal(body, &req); err != nil {
+				return CanonicalRequest{}, err
+			}
+			return CanonicalRequest{
+				Provider:        id,
+				Operation:       "responses",
+				Model:           req.Model,
+				Stream:          req.Stream,
+				MaxOutputTokens: req.MaxOutput,
+			}, nil
 		}
-		return CanonicalRequest{
-			Provider:        eventschema.ProviderOpenAI,
-			Operation:       "responses",
-			Model:           req.Model,
-			Stream:          req.Stream,
-			MaxOutputTokens: req.MaxOutput,
-		}, nil
+		return CanonicalRequest{}, ErrUnknownPath
 	}
-	return CanonicalRequest{}, ErrUnknownPath
 }
 
 func pickFirstNonZero(values ...int64) int64 {

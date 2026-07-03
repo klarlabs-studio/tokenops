@@ -24,6 +24,33 @@ func TestAllProvidersAreUnique(t *testing.T) {
 	}
 }
 
+// TestOpenAICompatibleFleetStampsOwnID guards the shared normalizer: each
+// OpenAI-compatible provider must be routable AND normalize a chat request
+// stamped with its OWN id (not a shared "openai"), or metering would
+// misattribute every groq/deepseek/… request to OpenAI.
+func TestOpenAICompatibleFleetStampsOwnID(t *testing.T) {
+	body := []byte(`{"model":"m","messages":[{"role":"user","content":"hi"}]}`)
+	for _, id := range []eventschema.Provider{
+		eventschema.ProviderGroq, eventschema.ProviderDeepSeek, eventschema.ProviderXAI,
+		eventschema.ProviderPerplexity, eventschema.ProviderFireworks, eventschema.ProviderCerebras,
+		eventschema.ProviderTogether, eventschema.ProviderOpenRouter,
+	} {
+		p, ok := Lookup(id)
+		if !ok {
+			t.Errorf("provider %q is not routable", id)
+			continue
+		}
+		got, err := p.Normalize("/v1/chat/completions", body)
+		if err != nil {
+			t.Errorf("%s normalize: %v", id, err)
+			continue
+		}
+		if got.Provider != id {
+			t.Errorf("%s normalized to provider %q; want %q", id, got.Provider, id)
+		}
+	}
+}
+
 func TestLookup(t *testing.T) {
 	if _, ok := Lookup(eventschema.ProviderOpenAI); !ok {
 		t.Error("OpenAI should be registered")
@@ -91,7 +118,7 @@ func TestNormalizeOpenAIChat(t *testing.T) {
 			{"role":"user","content":"hi"}
 		]
 	}`)
-	got, err := normalizeOpenAI("/v1/chat/completions", body)
+	got, err := normalizeOpenAICompatible(eventschema.ProviderOpenAI)("/v1/chat/completions", body)
 	if err != nil {
 		t.Fatalf("normalize: %v", err)
 	}
@@ -145,7 +172,7 @@ func TestNormalizeGeminiGenerateContent(t *testing.T) {
 }
 
 func TestNormalizeReturnsErrUnknownPath(t *testing.T) {
-	if _, err := normalizeOpenAI("/v1/models", nil); err != ErrUnknownPath {
+	if _, err := normalizeOpenAICompatible(eventschema.ProviderOpenAI)("/v1/models", nil); err != ErrUnknownPath {
 		t.Errorf("openai unknown path err = %v", err)
 	}
 	if _, err := normalizeAnthropic("/v1/foo", nil); err != ErrUnknownPath {

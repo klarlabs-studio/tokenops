@@ -69,6 +69,22 @@ func NewOpenAITokenizer() Tokenizer {
 	}
 }
 
+// NewOpenAICompatibleTokenizer returns a heuristic tokenizer bound to p but
+// using OpenAI's ratios. Providers that adopt the OpenAI /chat/completions
+// wire format (Groq, DeepSeek, xAI, Perplexity, Fireworks, Cerebras,
+// Together, OpenRouter) run tiktoken-family BPE tokenizers whose English
+// density lands close to OpenAI's, so the same ratios apply until a
+// provider-exact tokenizer is swapped in via Registry.Set.
+func NewOpenAICompatibleTokenizer(p eventschema.Provider) Tokenizer {
+	return heuristic{
+		provider:           p,
+		asciiCharsPerToken: 4.0,
+		otherCharsPerToken: 1.5,
+		perMessageOverhead: 4,
+		wrapperOverhead:    3,
+	}
+}
+
 // NewAnthropicTokenizer returns a heuristic Anthropic tokenizer. Anthropic
 // does not publish their tokenizer; the ratios match the published
 // "approximately 3.5 chars per token" guidance for Claude 3+.

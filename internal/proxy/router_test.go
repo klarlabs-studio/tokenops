@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/prompts/providers"
 )
 
 func TestBuildProviderRoutesDefault(t *testing.T) {
@@ -17,8 +19,25 @@ func TestBuildProviderRoutesDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildProviderRoutes: %v", err)
 	}
-	if len(routes) != 4 {
-		t.Fatalf("want 4 routes (openai, anthropic, gemini, mistral), got %d", len(routes))
+	if len(routes) != len(providers.All()) {
+		t.Fatalf("want a route per known provider (%d), got %d", len(providers.All()), len(routes))
+	}
+	// Every known provider must be routable, including the OpenAI-compatible
+	// fleet added alongside the four originals.
+	want := map[string]bool{
+		"openai": false, "anthropic": false, "gemini": false, "mistral": false,
+		"groq": false, "deepseek": false, "xai": false, "perplexity": false,
+		"fireworks": false, "cerebras": false, "together": false, "openrouter": false,
+	}
+	for _, r := range routes {
+		if _, ok := want[string(r.Provider.ID)]; ok {
+			want[string(r.Provider.ID)] = true
+		}
+	}
+	for id, seen := range want {
+		if !seen {
+			t.Errorf("provider %q has no route", id)
+		}
 	}
 }
 
