@@ -54,7 +54,7 @@ the agent links you to (`http://tokenops.local:7878/dashboard?token=…`).
 | | |
 |---|---|
 | 🧮 **13 plan catalog** | Claude Max 5x/20x, Claude Pro, Claude Code (Max + Pro), ChatGPT Plus / Pro / Team, GitHub Copilot Individual / Business, Cursor Pro / Business, Mistral Le Chat Pro, Codex Plus — each with a dated vendor source URL pinned in code |
-| 🔌 **Provider-agnostic** | OpenAI, Anthropic, Google Gemini, Mistral through the same proxy and event schema |
+| 🔌 **Provider-agnostic** | 12 proxy-metered providers — OpenAI, Anthropic, Gemini, Mistral, plus the OpenAI-compatible fleet (Groq, DeepSeek, xAI, Perplexity, Fireworks, Cerebras, Together, OpenRouter). Bind any with `tokenops provider set <name>` |
 | 📊 **Interactive dashboard** | Vue 3 + D3 dashboard at `/dashboard` — cost line, per-model stacked area, tokens-per-bucket, KPI tiles, 15s auto-refresh, provider + model filters that persist across refresh |
 | 📍 **mDNS-discoverable** | Daemon advertises `tokenops.local` over zeroconf so the dashboard URL is memorable on every host |
 | 🔐 **Dashboard auth** | Shared-secret token, auto-minted on first start, accepted via header / query / cookie. `tokenops dashboard rotate-token` revokes |
@@ -171,6 +171,32 @@ pkg/eventschema/                  # public envelope + payload types
 web/docs/                         # VitePress docs site
 .roady/                           # spec-driven planning
 ```
+
+## Integrations
+
+TokenOps instruments AI usage on three planes; which ones a client supports is
+the whole integration story. Full matrix + provider list:
+[docs/integrations/coverage](https://klarlabs-studio.github.io/tokenops/integrations/coverage).
+
+| Client | Passive read | MCP | Proxy |
+|---|:--:|:--:|:--:|
+| Claude Code | ✅ `~/.claude/projects` | ✅ | ✅ `ANTHROPIC_BASE_URL` |
+| Codex CLI | ✅ `~/.codex/sessions` | ✅ | ✅ `OPENAI_BASE_URL` |
+| opencode | ✅ SQLite store | ✅ | ✅ per-provider baseURL |
+| Gemini CLI | ❌ *(no token log)* | ✅ | ✅ base-URL override |
+| Desktop apps | ❌ | ✅ *(if MCP host)* | ❌ |
+
+- **Passive read** — reads logs the client already writes; per-turn attribution
+  (turn → session → project), zero wiring.
+- **MCP** (`tokenops serve`) — the agent calls TokenOps; `tokenops_status`
+  reports what's live and the exact command to upgrade signal quality.
+- **Proxy** — point the client's base URL at TokenOps for ground-truth token/cost
+  accounting. **OpenRouter** (`tokenops provider set openrouter`) is the universal
+  fallback for any client with no local reader.
+
+Honest boundaries: Gemini CLI has no local token log (proxy only); AWS Bedrock
+needs SigV4 the passthrough proxy can't do; fully-hosted agents (Jules) are out
+of reach — TokenOps is local-first with no telemetry.
 
 ## Disabled-subsystem contract
 

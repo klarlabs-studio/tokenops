@@ -34,6 +34,12 @@ export default defineConfig({
       ],
       "/integrations/": [
         {
+          text: "Start here",
+          items: [
+            { text: "Coverage", link: "/integrations/coverage" },
+          ],
+        },
+        {
           text: "SDK shims",
           items: [
             { text: "Overview", link: "/integrations/sdk-overview" },
@@ -47,6 +53,7 @@ export default defineConfig({
           items: [
             { text: "Claude Code", link: "/integrations/claude-code" },
             { text: "Codex", link: "/integrations/codex-cli" },
+            { text: "opencode", link: "/integrations/opencode" },
             { text: "Gemini CLI", link: "/integrations/gemini-cli" },
           ],
         },
