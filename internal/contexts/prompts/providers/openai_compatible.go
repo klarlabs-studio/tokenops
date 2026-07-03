@@ -35,4 +35,12 @@ var (
 	cerebrasProvider   = NewOpenAICompatible(eventschema.ProviderCerebras, "/cerebras/", "https://api.cerebras.ai")
 	togetherProvider   = NewOpenAICompatible(eventschema.ProviderTogether, "/together/", "https://api.together.xyz")
 	openRouterProvider = NewOpenAICompatible(eventschema.ProviderOpenRouter, "/openrouter/", "https://openrouter.ai/api")
+
+	// Local runtimes + self-hosted gateways. Presets are each tool's
+	// documented default endpoint; users override via `provider set` for a
+	// non-default host/port. Local runtimes need no key (passthrough auth).
+	ollamaProvider   = NewOpenAICompatible(eventschema.ProviderOllama, "/ollama/", "http://localhost:11434")
+	lmStudioProvider = NewOpenAICompatible(eventschema.ProviderLMStudio, "/lmstudio/", "http://localhost:1234")
+	liteLLMProvider  = NewOpenAICompatible(eventschema.ProviderLiteLLM, "/litellm/", "http://localhost:4000")
+	vercelProvider   = NewOpenAICompatible(eventschema.ProviderVercel, "/vercel/", "https://ai-gateway.vercel.sh")
 )

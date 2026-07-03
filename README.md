@@ -54,7 +54,7 @@ the agent links you to (`http://tokenops.local:7878/dashboard?token=…`).
 | | |
 |---|---|
 | 🧮 **13 plan catalog** | Claude Max 5x/20x, Claude Pro, Claude Code (Max + Pro), ChatGPT Plus / Pro / Team, GitHub Copilot Individual / Business, Cursor Pro / Business, Mistral Le Chat Pro, Codex Plus — each with a dated vendor source URL pinned in code |
-| 🔌 **Provider-agnostic** | 13 proxy-metered providers — OpenAI, Anthropic, Gemini, Mistral, Cohere, plus the OpenAI-compatible fleet (Groq, DeepSeek, xAI, Perplexity, Fireworks, Cerebras, Together, OpenRouter). Bind any with `tokenops provider set <name>` |
+| 🔌 **Provider-agnostic** | 17 proxy-metered providers — OpenAI, Anthropic, Gemini, Mistral, Cohere, the OpenAI-compatible fleet (Groq, DeepSeek, xAI, Perplexity, Fireworks, Cerebras, Together, OpenRouter), plus local/self-hosted (Ollama, LM Studio, LiteLLM, Vercel AI Gateway). Bind any with `tokenops provider set <name>` |
 | 📊 **Interactive dashboard** | Vue 3 + D3 dashboard at `/dashboard` — cost line, per-model stacked area, tokens-per-bucket, KPI tiles, 15s auto-refresh, provider + model filters that persist across refresh |
 | 📍 **mDNS-discoverable** | Daemon advertises `tokenops.local` over zeroconf so the dashboard URL is memorable on every host |
 | 🔐 **Dashboard auth** | Shared-secret token, auto-minted on first start, accepted via header / query / cookie. `tokenops dashboard rotate-token` revokes |

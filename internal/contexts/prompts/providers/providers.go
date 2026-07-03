@@ -51,6 +51,10 @@ func All() []Provider {
 		togetherProvider,
 		openRouterProvider,
 		cohereProvider,
+		ollamaProvider,
+		lmStudioProvider,
+		liteLLMProvider,
+		vercelProvider,
 	}
 }
 

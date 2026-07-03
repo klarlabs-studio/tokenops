@@ -74,6 +74,10 @@ func NewRegistry() *Registry {
 		eventschema.ProviderCerebras,
 		eventschema.ProviderTogether,
 		eventschema.ProviderOpenRouter,
+		eventschema.ProviderOllama,
+		eventschema.ProviderLMStudio,
+		eventschema.ProviderLiteLLM,
+		eventschema.ProviderVercel,
 	} {
 		r.Set(NewOpenAICompatibleTokenizer(p))
 	}

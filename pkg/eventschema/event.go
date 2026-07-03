@@ -45,6 +45,14 @@ const (
 	// /v1/chat message + chat_history), so it has a dedicated normalizer
 	// rather than the shared OpenAI one.
 	ProviderCohere Provider = "cohere"
+
+	// Local runtimes and self-hosted gateways — all expose an
+	// OpenAI-compatible /v1/chat/completions surface. Their presets point
+	// at each tool's documented default host/port; override per install.
+	ProviderOllama   Provider = "ollama"
+	ProviderLMStudio Provider = "lmstudio"
+	ProviderLiteLLM  Provider = "litellm"
+	ProviderVercel   Provider = "vercel"
 )
 
 // Envelope is the common header carried by every TokenOps event regardless of

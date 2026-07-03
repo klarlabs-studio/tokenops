@@ -46,6 +46,10 @@ Every provider below is routable through the proxy. Bind one with
 | together | `https://api.together.xyz` |
 | openrouter | `https://openrouter.ai/api` |
 | cohere | `https://api.cohere.com` |
+| ollama | `http://localhost:11434` *(local, no key)* |
+| lmstudio | `http://localhost:1234` *(local, no key)* |
+| litellm | `http://localhost:4000` *(self-hosted gateway)* |
+| vercel | `https://ai-gateway.vercel.sh` |
 
 **OpenRouter is the universal fallback for ground truth.** Any client with no
 local reader but a base-URL override can route through OpenRouter-via-TokenOps
