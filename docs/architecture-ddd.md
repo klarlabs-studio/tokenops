@@ -85,7 +85,7 @@ documented exceptions today (kept under review):
 |------------------|--------------------------------------------|--------------------|-----------------------------------------------|
 | Prompts          | `pkg/eventschema`, `internal/contexts/prompts/tokenizer`    | `PromptEvent`      | provider, model, prompt, tokens, hash         |
 | Workflows        | `internal/contexts/workflows/workflow`                        | `WorkflowEvent`    | workflow, step, agent, cumulative tokens      |
-| Optimization     | `internal/contexts/optimization/optimizer/*`, `internal/contexts/optimization/eval`    | `OptimizationEvent`| optimizer kind, decision, quality score       |
+| Optimization     | `internal/contexts/optimization/optimizer/*`, `internal/contexts/optimization/eval`, `internal/contexts/optimization/formatter`, `internal/contexts/optimization/fmtlearn`    | `OptimizationEvent`| optimizer kind, decision, quality score, formatter, loss level, critical line |
 | Coaching         | `internal/contexts/coaching/coaching`, `internal/contexts/coaching/efficiency` | `CoachingEvent`    | recommendation kind, efficiency score         |
 | Rule Intelligence| `internal/contexts/rules`                           | `RuleDocument`     | rule source, section, scope, ROI score        |
 | Spend            | `internal/contexts/spend/spend`, `internal/contexts/spend/forecast`      | `Engine` (svc)     | cost, pricing table, currency, burn rate      |
@@ -111,7 +111,10 @@ documented exceptions today (kept under review):
 | TEU               | Token Efficiency Uplift. `sum(EstimatedSavings) / sum(InputTokens)`.                                  |
 | SAC               | Spend Attribution Completeness. % of PromptEvents carrying any attribution signal.                   |
 | gate              | A regression check that compares a current report against a baseline and emits violations.            |
-| optimizer pipeline| The ordered set of optimizers (prompt_compress, dedupe, retrieval_prune, context_trim) applied to a request. |
+| optimizer pipeline| The ordered set of optimizers (prompt_compress, command_fmt, dedupe, retrieval_prune, context_trim) applied to a request. |
+| formatter         | A deterministic command-output compressor for one command (built-in or user config), guaranteeing critical-line survival at every loss level. |
+| loss level        | How aggressively a formatter strips noise: conservative, balanced, or aggressive. Critical lines survive at all levels. |
+| critical line     | An output line a formatter must never drop (error, failure, changed state); enforced by the engine, not the individual formatter. |
 
 ## Aggregate Factories
 

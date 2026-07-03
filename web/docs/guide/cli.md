@@ -244,6 +244,63 @@ against a baseline.
 
 Risk-weighted coverage debt report.
 
+## Command-output compression (`fmt`)
+
+Deterministic per-command output compression — shrink a command's stdout
+before it enters an agent's context, keeping every critical line (errors,
+failures, changed state) and dropping noise. 46 commands ship built in;
+loss level and extra formatters are configured under
+[`optimizer.command_fmt`](./configuration.md#command-output-compression-command_fmt).
+
+### `tokenops fmt -- <command> [args...]`
+
+Runs the wrapped command, compresses its stdout, passes stderr through,
+and **propagates the exit code** so agents still see failures. The full
+raw output is written to `~/.tokenops/recovery/` so nothing is lost.
+
+```bash
+tokenops fmt -- git status
+tokenops fmt --level aggressive -- npm install
+tokenops fmt --quiet -- go test ./...
+```
+
+Flags: `--level` (override loss level for this run), `--raw-on-error`
+(forward raw stdout on non-zero exit, default on), `--emit` (record an
+OptimizationEvent), `--no-recover`, `--quiet`.
+
+### `tokenops fmt bench --corpus <dir>`
+
+Measures per-file and aggregate byte / estimated-token savings at each
+loss level over a directory of captured command outputs
+(`<command>.<label>.txt`). Use it to quote real numbers for your own
+command mix.
+
+### `tokenops fmt hook [--shell zsh|bash]`
+
+Emits shell wrapper functions for the formatter-backed commands, gated on
+`TOKENOPS_FMT=1` so compression only activates where you want it (e.g. an
+agent session) and interactive use is untouched.
+
+```bash
+eval "$(tokenops fmt hook)"      # add to ~/.zshrc
+export TOKENOPS_FMT=1            # the agent sets this to activate
+```
+
+### `tokenops fmt recover <id>`
+
+Prints the full stored output for a prior run and records the re-access —
+the signal `fmt learn` uses to detect over-compression.
+
+### `tokenops fmt learn [--apply]`
+
+Mines the recovery index (compression + re-access records) and reports
+which commands need a formatter (falling back to the generic scrub) and
+which are over-compressing. `--apply` writes the safe loss-level tuning
+back to config locally; new-formatter candidates are printed as a
+paste-ready stub. The `tokenops_fmt_learn` MCP tool returns the same
+report to agents. The formatters stay deterministic — learning proposes,
+it never mutates runtime behaviour.
+
 ## Inspection
 
 ### `tokenops config show`

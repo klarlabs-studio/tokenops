@@ -12,7 +12,7 @@ features:
   - title: Predict
     details: '`tokenops_session_budget` returns a coloured headroom gauge and a closed-enum `recommended_action ∈ continue | slow_down | switch_model | wait_for_reset`. 13-plan catalog with dated vendor source URLs pinned in code (Claude Max 5x / 20x / Pro, Claude Code, ChatGPT Plus / Pro / Team, Copilot, Cursor, Mistral, Codex).'
   - title: Integrate
-    details: '25 MCP tools agents call directly. `tokenops init --detect` sniffs your installed clients (Claude Code/Desktop, Cursor, ChatGPT, env-var API keys) and prints the exact `tokenops plan set …` commands. Works with Claude Code, Cursor, aider, Codex.'
+    details: '26 MCP tools agents call directly. `tokenops init --detect` sniffs your installed clients (Claude Code/Desktop, Cursor, ChatGPT, env-var API keys) and prints the exact `tokenops plan set …` commands. Works with Claude Code, Cursor, aider, Codex.'
   - title: Visualize
     details: 'Vue + D3 dashboard at `http://tokenops.local:7878/dashboard` — per-model stacked area cost chart, tokens-per-bucket stacked bar, provider + model filters that persist across refresh, 15s auto-refresh. Inline SVG sparkline + headroom gauge also render directly in MCP tool responses.'
   - title: Trust

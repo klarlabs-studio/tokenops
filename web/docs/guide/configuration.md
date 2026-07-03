@@ -75,6 +75,17 @@ optimizer:
       to_model: claude-opus-4-8
       quality: 0.9
       fallbacks: [claude-sonnet-4-6]
+  command_fmt:                # deterministic command-output compression (see below)
+    default: balanced         # conservative | balanced | aggressive
+    overrides:                # per-command loss level
+      kubectl: aggressive
+    emit_events: false        # append command_fmt OptimizationEvents to the store
+    formatters:               # user-defined formatters (no recompile)
+      - command: mytool
+        critical: ["(?i)error", "FAILED"]
+        drop:
+          balanced: ["^DEBUG ", "^TRACE "]
+          aggressive: ["^INFO "]
 
 coaching:
   context_limits:             # waste-detector threshold overrides
@@ -121,6 +132,62 @@ logs the intervention, and records an applied optimization event
 the originally requested model, so you can always audit what clients
 asked for versus what was served. Routing never breaks a request — any
 parse failure forwards the original body untouched.
+
+## Command-output compression (`command_fmt`)
+
+`optimizer.command_fmt` configures `tokenops fmt` — the deterministic
+compressor that shrinks a shell command's stdout **before** it enters an
+agent's context, keeping every line the formatter classifies as critical
+(errors, failures, changed state) and dropping noise. 46 commands ship
+built in (git, go/pytest/jest/vitest/rspec/playwright, npm/pip/uv/…,
+mvn/gradle/bazel/dotnet/cmake/…, docker/kubectl/helm, terraform/pulumi/
+ansible, aws/gcloud/az, and more).
+
+- `default` — loss level for any command without an override:
+  - `conservative` — strip only unambiguous noise (ANSI, blank runs,
+    duplicate lines). Nothing semantic dropped.
+  - `balanced` (recommended) — also drop command-specific noise
+    (progress, banners, up-to-date chatter).
+  - `aggressive` — additionally collapse repetitive state (e.g.
+    "+142 unchanged files") into a summary.
+- `overrides` — per-command loss level (a noisy command can be dialed
+  up without loosening the global default).
+- `emit_events` — append a `command_fmt` OptimizationEvent per compressed
+  run so the dashboard and scorecard count the savings.
+
+Two invariants hold at **every** level, for built-in and user formatters
+alike: **determinism** (pure function of input + level) and
+**critical-line survival** (a formatter that would drop a critical line
+falls back to the raw output instead). The full output is always kept in
+`~/.tokenops/recovery/` for retrieval.
+
+### User-defined formatters
+
+`command_fmt.formatters` extends or overrides the catalog for any command
+**without recompiling**. Declare the regexes that mark critical lines
+(always preserved) and the noise regexes to drop per loss level:
+
+```yaml
+optimizer:
+  command_fmt:
+    formatters:
+      - command: mytool
+        aliases: [mt]
+        critical: ["(?i)error", "FAILED", "^\\s*modified:"]
+        drop:
+          balanced:   ["^DEBUG ", "^\\s*at "]   # dropped at balanced + aggressive
+          aggressive: ["^INFO "]                 # dropped at aggressive only
+```
+
+User rules run through the same critical-line guard as built-ins, so an
+overly broad drop rule can never remove a line you marked critical — it is
+preserved and the formatter falls back safely.
+
+`tokenops fmt learn` mines usage telemetry to suggest which commands need a
+formatter and which are over-compressing; `tokenops fmt learn --apply`
+writes the safe loss-level tuning back to this config locally. The
+`tokenops_fmt_learn` MCP tool exposes the same report to agents. See the
+[CLI reference](./cli.md#command-output-compression-fmt).
 
 ## Budgets and the spend watcher
 

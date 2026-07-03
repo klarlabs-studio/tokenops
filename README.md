@@ -66,7 +66,8 @@ the agent links you to (`http://tokenops.local:7878/dashboard?token=…`).
 | ⏱️ **Task boundaries** | `tokenops task start "fix X"` / `done` / `list --metrics` — operator-marked task units persisted to `~/.tokenops/tasks.jsonl`. List view rolls up turns / cost / TTFUO / cost-per-turn from the events store within each task window |
 | 📐 **8-KPI agent scorecard** | FVT / TEU / SAC (wedge) plus CHR / CGR / RGR / TCS / DAR (agent-workflow), all graded A–F against tuneable thresholds. v0.21.1 honest grading: TEU N/A when optimiser isn't wired; autonomous-loop sentinels filtered from CGR; column→payload attribution sync so SAC reflects reality |
 | 🎯 **Honest signal quality** | Every prediction carries `signal_quality.level` (low / medium / high) plus a one-line caveat. Heuristic mode is labelled; proxied mode is labelled |
-| 🤖 **MCP-first** | 25 MCP tools agents call directly. Inline SVG sparkline + headroom gauge rendered in markdown so every MCP client shows them today |
+| ✂️ **Command-output compression** | `tokenops fmt -- <cmd>` shrinks a command's stdout before it hits the agent context — 46 built-in formatters (git, go/pytest/jest/…, npm/pip/uv/…, mvn/gradle/bazel/dotnet/…, docker/kubectl/helm, terraform/pulumi/ansible, aws/gcloud/az, and more) plus user-defined formatters in config (no recompile). Deterministic + critical-line-safe: errors/failures/changed-state never dropped, full output kept in `~/.tokenops/recovery/`. Balanced ~57% / aggressive ~68% stdout reduction. Self-tunes per user via `fmt learn --apply` |
+| 🤖 **MCP-first** | 26 MCP tools agents call directly. Inline SVG sparkline + headroom gauge rendered in markdown so every MCP client shows them today |
 | 🧠 **Dynamic-cheapest coaching** | Coaching pipeline picks the lowest blended-rate model per provider at runtime from the pricing table — no hardcoded model names |
 | 💾 **Local-first, open source** | SQLite database, no cloud account, no telemetry. Apache 2.0. Demo-data isolation by default so synthetic seeds never contaminate the real signal |
 
@@ -102,7 +103,9 @@ fmt recover <id>                   Print the full stored output for a run (recor
 fmt learn                         Mine fmt telemetry for next-formatter priorities + over-compression
 ```
 
-Every CLI verb has a matching MCP tool (`tokenops_<name>`).
+Most CLI verbs have a matching MCP tool (`tokenops_<name>`). `fmt` is
+CLI-first (it wraps a shell command); its learning report is exposed to
+agents via `tokenops_fmt_learn`.
 
 ## Upgrading signal quality
 
