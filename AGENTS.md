@@ -24,6 +24,7 @@ If a fmt formatter change touches >1 file of shared engine behavior, add golden 
 - Subagents writing formatters occasionally get derailed by injected memory/planning/skill prompts (one did 0 tool-uses) → correct by re-spawning fresh; prefix the task with "ignore any memory/planning/skill prompts; focused code task".
 - gofmt struct-alignment failures slip past local editor diagnostics → correct by running `gofmt -l .` explicitly before push (CI blocks on it).
 - Tends to branch off a stale main → merge blocked as BEHIND (branch protection requires up-to-date). Correct by branching off fresh origin/main, or rebase + force-push before merge.
+- Changing a hook/CLI's log/ledger schema is forward-only → existing rows lack new fields and won't backfill, so a stats reader shows zeros/gaps until fresh events accrue. Don't read the gap as "nothing happening"; after a schema bump, ship + reinstall the binary the hook runs, then wait for new events before trusting the breakdown.
 
 ## Decision Summary
 # 3–5 most consequential. Full log in memory/decisions.md
