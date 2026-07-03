@@ -4,6 +4,20 @@
 
 ### Added
 
+- **`tokenops read-guard` — reclaim the Read re-read waste, no proxy needed.**
+  A Claude Code PreToolUse hook that prevents redundant file re-reads at the
+  source, so it works for clients whose traffic never reaches the tokenops
+  proxy (e.g. Claude Code on a subscription). A re-read is redundant when the
+  same file is read in full more than once in a session and is unchanged
+  since (cheap mtime+size fingerprint — the file is never opened); ranged
+  reads (offset/limit) are always allowed.
+  - **observe** mode (default): logs what it would block + reclaimable
+    tokens from live sessions, zero interference.
+  - **active** mode: denies the redundant re-read and tells the model to use
+    the copy already in its context.
+  - `tokenops read-guard hook` prints the settings.json block;
+    `tokenops read-guard stats` shows reclaimable/reclaimed tokens.
+
 - **Self-wiring fmt learning** — the fmt loop now derives its signal from the
   Claude Code logs (`~/.claude/projects`) that already exist, with no daemon,
   no wrapped commands, and no setup:
