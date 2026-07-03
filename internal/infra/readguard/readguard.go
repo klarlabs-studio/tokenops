@@ -76,6 +76,7 @@ type ledgerEvent struct {
 	TS        time.Time `json:"ts"`
 	Mode      Mode      `json:"mode"`
 	Session   string    `json:"session"`
+	Agent     string    `json:"agent,omitempty"` // subagent id; empty = main agent
 	Path      string    `json:"path"`
 	Action    Action    `json:"action"`
 	EstTokens int64     `json:"est_tokens"`
@@ -85,18 +86,27 @@ type ledgerEvent struct {
 }
 
 // Evaluate is the pure-ish decision + side effects for one Read. dir is the
-// state/ledger root (defaults to ~/.tokenops/read-guard when empty). It
-// stats the file for the fingerprint, updates per-session state, appends a
-// ledger event, and returns the decision. now is injected for tests.
-func Evaluate(dir, sessionID, filePath string, ranged bool, mode Mode, now time.Time) Decision {
+// state/ledger root (defaults to ~/.tokenops/read-guard when empty). agentID
+// is Claude Code's per-subagent identifier (empty for the main agent); it
+// scopes the fingerprint ledger so a subagent's read — which lands in the
+// subagent's own context window, not the main agent's — never suppresses the
+// main agent's later read of the same file. It stats the file for the
+// fingerprint, updates per-agent state, appends a ledger event, and returns
+// the decision. now is injected for tests.
+func Evaluate(dir, sessionID, agentID, filePath string, ranged bool, mode Mode, now time.Time) Decision {
 	dir = resolveDir(dir)
 	_ = os.MkdirAll(dir, 0o755)
 
 	estTokens := estTokensForFile(filePath)
 
+	// The fingerprint ledger is scoped per agent-context, not per session:
+	// each subagent has its own context window, so its reads must be tracked
+	// separately from the main agent's.
+	scope := scopeKey(sessionID, agentID)
+
 	// Ranged reads are intentional partial reads — never dedup them, but
 	// still record so a later full read can be compared.
-	st := loadSession(dir, sessionID)
+	st := loadSession(dir, scope)
 	prev, seen := st.Paths[filePath]
 	fp, ok := statFingerprint(filePath)
 
@@ -123,14 +133,24 @@ func Evaluate(dir, sessionID, filePath string, ranged bool, mode Mode, now time.
 		st.Paths = map[string]pathState{}
 	}
 	st.Paths[filePath] = ps
-	saveSession(dir, sessionID, st)
+	saveSession(dir, scope, st)
 
 	appendLedger(dir, ledgerEvent{
-		TS: now.UTC(), Mode: mode, Session: sessionID, Path: filePath,
+		TS: now.UTC(), Mode: mode, Session: sessionID, Agent: agentID, Path: filePath,
 		Action: dec.Action, EstTokens: estTokens,
 		Repeat: seen, Ranged: ranged, Changed: changed,
 	})
 	return dec
+}
+
+// scopeKey isolates the fingerprint ledger by agent context. The main agent
+// (empty agentID) keeps the bare session key so its ledger is unchanged;
+// each subagent gets a distinct "<session>@<agent>" key.
+func scopeKey(sessionID, agentID string) string {
+	if agentID == "" {
+		return sessionID
+	}
+	return sessionID + "@" + agentID
 }
 
 // Stats summarises the ledger. The repeat breakdown explains why re-reads
