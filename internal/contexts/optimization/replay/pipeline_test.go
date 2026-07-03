@@ -2,6 +2,8 @@ package replay
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/felixgeelhaar/tokenops/internal/contexts/optimization/optimizer"
@@ -9,6 +11,54 @@ import (
 	"github.com/felixgeelhaar/tokenops/internal/contexts/spend/spend"
 	"github.com/felixgeelhaar/tokenops/pkg/eventschema"
 )
+
+// End-to-end proxy-plane validation: a realistic Anthropic request whose
+// tool_result carries verbose go-test output must, when run through the
+// DEFAULT pipeline (not a hand-built one), surface a command_fmt
+// OptimizationEvent with real token savings — proving the toolfmt optimizer
+// is wired into the pipeline every proxy/replay path uses.
+func TestDefaultPipeline_CommandFmtCompressesToolOutput(t *testing.T) {
+	toolOutput := "=== RUN   TestA\n--- PASS: TestA (0.00s)\n=== RUN   TestB\n" +
+		"--- PASS: TestB (0.00s)\n=== RUN   TestC\n--- FAIL: TestC (0.01s)\n" +
+		"    c_test.go:9: boom\nPASS\nFAIL\tgithub.com/x/y\t0.1s\nok  \tgithub.com/x/z\t0.2s\n"
+	body := map[string]any{
+		"model": "claude-sonnet-5",
+		"messages": []any{
+			map[string]any{"role": "user", "content": "run the tests"},
+			map[string]any{"role": "user", "content": []any{
+				map[string]any{"type": "tool_result", "tool_use_id": "t1", "content": toolOutput},
+			}},
+		},
+	}
+	raw, _ := json.Marshal(body)
+
+	out, err := DefaultPipeline(nil).Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic,
+		Model:    "claude-sonnet-5",
+		Body:     raw,
+		Mode:     optimizer.ModePassive,
+	}, nil)
+	if err != nil {
+		t.Fatalf("pipeline: %v", err)
+	}
+
+	var fmtEvent *eventschema.OptimizationEvent
+	for _, ev := range out.Events {
+		if ev.Kind == eventschema.OptimizationTypeCommandFmt {
+			fmtEvent = ev
+		}
+	}
+	if fmtEvent == nil {
+		t.Fatalf("no command_fmt event in %d pipeline events", len(out.Events))
+	}
+	if fmtEvent.EstimatedSavingsTokens <= 0 {
+		t.Errorf("command_fmt reported no savings: %+v", fmtEvent)
+	}
+	// The reason should reflect a real byte reduction on the tool output.
+	if !strings.Contains(fmtEvent.Reason, "tool output") {
+		t.Errorf("unexpected reason: %q", fmtEvent.Reason)
+	}
+}
 
 func TestDefaultPipelineHasFiveOptimizers(t *testing.T) {
 	// prompt_compress, command_fmt, semantic_dedupe, retrieval_prune, context_trim.
