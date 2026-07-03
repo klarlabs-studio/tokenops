@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## 0.33.0 - 2026-07-03
+
+### Added
+
+- **9 new proxy-metered providers (4 → 13).** The OpenAI-compatible fleet —
+  Groq, DeepSeek, xAI, Perplexity, Fireworks, Cerebras, Together, OpenRouter —
+  plus **Cohere** (its own v2 `/v2/chat` + v1 `/v1/chat` normalizer). Each meters
+  with its own provider id, has a registered tokenizer, and ships list-price
+  rate cards where a static card is accurate. Add any OpenAI-wire-format provider
+  in one line via `NewOpenAICompatible`.
+- **`tokenops provider set <name>`** now validates the name against known
+  providers (an unknown name used to hard-crash the daemon at boot) and accepts
+  an omitted URL to bind the built-in preset (`tokenops provider set groq`).
+  `provider list` shows all presets for discovery.
+- **Passive token attribution for opencode.** The first SQLite-backed vendor
+  reader — opens `~/.local/share/opencode/opencode.db` read-only, attributes
+  every assistant turn per project/session, multi-provider. Enable with
+  `tokenops vendor-usage enable opencode`.
+- **Integration coverage docs** — the three-plane model (passive/MCP/proxy), the
+  full provider list, and the honest boundaries (Gemini CLI has no local token
+  log; Bedrock needs SigV4; hosted agents are out of reach).
+
 ## 0.32.0 - 2026-07-03
 
 ### Changed
