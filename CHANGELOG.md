@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.32.0 - 2026-07-03
+
 ### Changed
 
 - **Module path moved to `go.klarlabs.de/tokenops`** (vanity import) and the repository to `github.com/klarlabs-studio/tokenops`. GitHub redirects keep old URLs and `go get` working. Homebrew tap unchanged (`brew install felixgeelhaar/tap/tokenops`).
