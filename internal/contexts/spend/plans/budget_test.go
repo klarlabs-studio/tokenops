@@ -31,6 +31,59 @@ func TestSessionBudgetPlanWithoutWindowCap(t *testing.T) {
 	}
 }
 
+func TestSessionBudgetAuthoritativeOverridesMessageCount(t *testing.T) {
+	// The message-count path would say "continue" (0 messages), but the
+	// vendor's own meter reads 87% — the authoritative value must win and
+	// drive a slow_down at high confidence.
+	out, err := ComputeSessionBudget("claude-max-20x", SessionBudgetInputs{
+		WindowMessages: 0, // heuristic would see an empty window
+		Authoritative: &AuthoritativeWindow{
+			UsedPct: 87, ResetsIn: 42 * time.Minute, Source: "anthropic_cookie:seven_day",
+		},
+		Now: time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("compute: %v", err)
+	}
+	if out.WindowPct != 87 {
+		t.Errorf("window_pct=%v want 87 (vendor meter, not message count)", out.WindowPct)
+	}
+	if out.RecommendedAction != ActionSlowDown {
+		t.Errorf("recommendation=%q want slow_down at 87%%", out.RecommendedAction)
+	}
+	if out.Confidence != ConfidenceHigh {
+		t.Errorf("confidence=%q want high (authoritative)", out.Confidence)
+	}
+	if out.WindowResetsIn != "42m0s" {
+		t.Errorf("resets_in=%q want 42m0s (vendor reset)", out.WindowResetsIn)
+	}
+	// 20x cap is 200 msgs; 13% headroom ≈ 26.
+	if out.HeadroomUntilCap != 26 {
+		t.Errorf("headroom=%d want ~26 (13%% of 200)", out.HeadroomUntilCap)
+	}
+	if out.Note == "" {
+		t.Error("expected a note explaining the vendor-meter source")
+	}
+}
+
+func TestSessionBudgetAuthoritativeScoresCaplessPlan(t *testing.T) {
+	// claude-code-max has a window but no message cap — the message-count
+	// path returns "unknown", but a vendor % must still produce advice.
+	out, err := ComputeSessionBudget("claude-code-max", SessionBudgetInputs{
+		Authoritative: &AuthoritativeWindow{UsedPct: 96, Source: "codex:primary"},
+		Now:           time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("compute: %v", err)
+	}
+	if out.RecommendedAction != ActionWaitReset {
+		t.Errorf("recommendation=%q want wait_for_reset at 96%%", out.RecommendedAction)
+	}
+	if out.WindowPct != 96 {
+		t.Errorf("window_pct=%v want 96", out.WindowPct)
+	}
+}
+
 func TestSessionBudgetContinueWhenLowUsage(t *testing.T) {
 	// Claude Max 20x: 200 msgs / 5h. 20 consumed, 8 in last 30 min.
 	out, err := ComputeSessionBudget("claude-max-20x", SessionBudgetInputs{

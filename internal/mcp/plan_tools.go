@@ -136,6 +136,10 @@ func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
 			RecentWindow:   30 * time.Minute,
 			Signal:         signal,
 			Now:            now,
+			// Prefer the vendor's own reported quota when a snapshot
+			// source (Anthropic cookie / Codex rate_limits / Copilot) has
+			// emitted one; falls back to the message-count heuristic.
+			Authoritative: latestAuthoritativeWindow(ctx, reader, eventschema.Provider(provider), p, now),
 		})
 		if err != nil {
 			return "", fmt.Errorf("budget[%s]: %w", provider, err)

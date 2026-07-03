@@ -63,6 +63,24 @@ type SessionBudgetInputs struct {
 	// reading (MCP-pings only, low quality).
 	Signal SignalInputs
 	Now    time.Time
+	// Authoritative carries the vendor's OWN reported quota for the
+	// window when a snapshot source is available (Anthropic cookie
+	// five_hour/seven_day %, Codex rate_limits primary/secondary %,
+	// Copilot quota). When present it overrides the message-count
+	// heuristic — WindowPct comes straight from the vendor's meter and,
+	// when the vendor reports it, ResetsIn is exact. This is the
+	// difference between guessing from event counts and reading the
+	// actual limit.
+	Authoritative *AuthoritativeWindow
+}
+
+// AuthoritativeWindow is a vendor-reported rate-limit snapshot: the
+// share of the window already consumed and (when known) the time until
+// it resets. Source labels which meter it came from, for the caveat.
+type AuthoritativeWindow struct {
+	UsedPct  float64
+	ResetsIn time.Duration
+	Source   string
 }
 
 // ComputeSessionBudget returns a SessionBudget for the named plan from
@@ -73,6 +91,14 @@ func ComputeSessionBudget(planName string, in SessionBudgetInputs) (SessionBudge
 	if !ok {
 		return SessionBudget{}, errUnknownPlan(planName)
 	}
+	// Authoritative vendor meter wins outright: no reason to extrapolate
+	// from event counts when the vendor tells us the exact % used. This
+	// also serves plans that publish a window but no message cap (e.g.
+	// Claude Code Max/Pro), which the message-count path cannot score.
+	if in.Authoritative != nil {
+		return computeFromAuthoritative(planName, p, in), nil
+	}
+
 	out := SessionBudget{
 		PlanName:          planName,
 		Display:           p.Display,
@@ -124,6 +150,65 @@ func ComputeSessionBudget(planName string, in SessionBudgetInputs) (SessionBudge
 		}
 	}
 	return out, nil
+}
+
+// computeFromAuthoritative builds a SessionBudget straight from the
+// vendor's reported window %, bypassing the message-count extrapolation.
+// Confidence is high because the number is the vendor's own meter, not an
+// inference. Works even when the plan has no message cap (the % and reset
+// are all that is needed to advise the agent).
+func computeFromAuthoritative(planName string, p Plan, in SessionBudgetInputs) SessionBudget {
+	a := in.Authoritative
+	pct := a.UsedPct
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 100 {
+		pct = 100
+	}
+	out := SessionBudget{
+		PlanName:          planName,
+		Display:           p.Display,
+		Provider:          p.Provider,
+		WindowCap:         p.MessagesPerWindow,
+		WindowPct:         math.Round(pct*100) / 100,
+		Confidence:        ConfidenceHigh,
+		RecommendedAction: recommendActionByPct(pct),
+		SignalQuality:     ClassifySignal(in.Signal),
+		Note:              "window % is the vendor's reported quota meter (" + a.Source + "), not a message-count estimate",
+	}
+	if a.ResetsIn > 0 {
+		out.windowResetsInDur = a.ResetsIn
+		out.WindowResetsIn = a.ResetsIn.Round(time.Minute).String()
+	} else {
+		out.windowResetsInDur = p.RateLimitWindow
+		out.WindowResetsIn = p.RateLimitWindow.String()
+	}
+	// Message headroom is only meaningful when the plan publishes a cap;
+	// otherwise the % + reset carry the whole signal.
+	if p.MessagesPerWindow > 0 {
+		out.HeadroomUntilCap = int64(math.Round(float64(p.MessagesPerWindow) * (100 - pct) / 100))
+		if out.HeadroomUntilCap < 0 {
+			out.HeadroomUntilCap = 0
+		}
+		out.WindowConsumed = p.MessagesPerWindow - out.HeadroomUntilCap
+	}
+	return out
+}
+
+// recommendActionByPct maps a vendor-reported window % to the action set
+// without a burn-rate estimate (the authoritative path may not carry one).
+func recommendActionByPct(pct float64) string {
+	switch {
+	case pct >= 95:
+		return ActionWaitReset
+	case pct >= 80:
+		return ActionSlowDown
+	case pct >= 60:
+		return ActionSwitchModel
+	default:
+		return ActionContinue
+	}
 }
 
 // recommendAction maps the (consumed, headroom, burn rate) triple to
