@@ -217,6 +217,7 @@ func planHeadroom(ctx context.Context, d PlanDeps) (string, error) {
 				return "", fmt.Errorf("signal[%s]: %w", provider, err)
 			}
 			inputs.Signal = signal
+			inputs.Authoritative = latestAuthoritativeWindow(ctx, reader, eventschema.Provider(provider), p, now)
 		}
 		report, err := plans.ComputeHeadroom(planName, inputs)
 		if err != nil {

@@ -49,6 +49,24 @@ func TestDedupesConsecutiveLines(t *testing.T) {
 	}
 }
 
+// TestDedupeConsecutiveLinesSemantics pins the intended, conservative
+// behaviour: only truly-adjacent identical lines collapse; a blank line
+// between two equal lines is meaningful separation and both are kept. This
+// is by-design (meaning-safe), not a bug — the test guards against a future
+// "fix" that would over-collapse blank-separated duplicates.
+func TestDedupeConsecutiveLinesSemantics(t *testing.T) {
+	if got := dedupeConsecutiveLines("A\nA\nA"); got != "A" {
+		t.Errorf("adjacent dups should collapse to %q, got %q", "A", got)
+	}
+	if got := dedupeConsecutiveLines("A\n\nA"); got != "A\n\nA" {
+		t.Errorf("blank-separated dups must be preserved, got %q", got)
+	}
+	// Longer aliasing stress: many adjacent dups interleaved with uniques.
+	if got := dedupeConsecutiveLines("x\nx\ny\ny\ny\nz"); got != "x\ny\nz" {
+		t.Errorf("mixed run collapse wrong: got %q", got)
+	}
+}
+
 func TestRunRecommendsOnLargeRedundancy(t *testing.T) {
 	// Consecutive identical lines are genuine token redundancy the
 	// compressor collapses (dedupeConsecutiveLines). Trailing-whitespace-only

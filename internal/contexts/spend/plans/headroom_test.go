@@ -152,6 +152,45 @@ func TestHeadroomWindowHighRisk(t *testing.T) {
 	}
 }
 
+func TestHeadroomAuthoritativeWindowOverridesMessageCount(t *testing.T) {
+	// Message count is 0 (would read low), but the vendor meter says 88%.
+	p := windowPlan(200, 5*time.Hour)
+	r := computeHeadroomFor(p, HeadroomInputs{
+		WindowMessages: 0,
+		Authoritative:  &AuthoritativeWindow{UsedPct: 88, ResetsIn: 30 * time.Minute, Source: "codex:primary"},
+		Now:            midMonth(),
+	})
+	if r.WindowPct != 88 {
+		t.Errorf("window_pct=%v want 88 (vendor meter)", r.WindowPct)
+	}
+	if r.OverageRisk != RiskHigh {
+		t.Errorf("risk=%q want high at 88%% window", r.OverageRisk)
+	}
+	if r.WindowResetsIn != "30m0s" {
+		t.Errorf("resets_in=%q want 30m0s (vendor reset)", r.WindowResetsIn)
+	}
+	// 12% headroom of 200 cap => consumed ~176.
+	if r.WindowConsumed != 176 {
+		t.Errorf("window_consumed=%d want ~176", r.WindowConsumed)
+	}
+}
+
+func TestHeadroomAuthoritativeWindowScoresCaplessPlan(t *testing.T) {
+	// A plan with a window but no message cap: message-count path yields
+	// no window signal, but a vendor % must still drive overage risk.
+	p := windowPlan(0, 5*time.Hour) // cap 0
+	r := computeHeadroomFor(p, HeadroomInputs{
+		Authoritative: &AuthoritativeWindow{UsedPct: 92, Source: "anthropic_cookie:five_hour"},
+		Now:           midMonth(),
+	})
+	if r.OverageRisk != RiskHigh {
+		t.Errorf("risk=%q want high (authoritative, capless)", r.OverageRisk)
+	}
+	if r.WindowPct != 92 {
+		t.Errorf("window_pct=%v want 92", r.WindowPct)
+	}
+}
+
 func TestHeadroomMonthlyAndWindowTakesWorse(t *testing.T) {
 	// Monthly: 30% — low. Window: 85% — high. Report should surface
 	// the high signal so the headline is honest.

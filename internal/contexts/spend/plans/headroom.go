@@ -71,6 +71,12 @@ type HeadroomInputs struct {
 	// a trust level. Zero value is valid: defaults to the most
 	// pessimistic reading (MCP-pings only, low quality).
 	Signal SignalInputs
+	// Authoritative, when set, is the vendor's own reported rate-limit
+	// window % (see AuthoritativeWindow). It drives the Window* block
+	// directly instead of the WindowMessages count — the same upgrade
+	// ComputeSessionBudget makes — so the window dimension reflects the
+	// vendor meter rather than an event count.
+	Authoritative *AuthoritativeWindow
 	// Now is the clock reference. Tests inject a fixed time; production
 	// passes time.Now().UTC().
 	Now time.Time
@@ -108,7 +114,12 @@ func computeHeadroomFor(p Plan, in HeadroomInputs) HeadroomReport {
 	// useful report instead of "no monthly cap published".
 	var monthlyRisk string
 	windowRisk := RiskUnknown
-	if p.RateLimitWindow > 0 && p.MessagesPerWindow > 0 {
+	switch {
+	case in.Authoritative != nil && p.RateLimitWindow > 0:
+		// Vendor meter wins — same upgrade as ComputeSessionBudget. Works
+		// even for plans with no message cap (the % + reset carry it).
+		windowRisk = applyAuthoritativeWindow(&report, p, in)
+	case p.RateLimitWindow > 0 && p.MessagesPerWindow > 0:
 		report.WindowDuration = p.RateLimitWindow.String()
 		report.WindowCap = p.MessagesPerWindow
 		report.WindowUnit = p.WindowUnit
@@ -152,6 +163,31 @@ func computeHeadroomFor(p Plan, in HeadroomInputs) HeadroomReport {
 	monthlyRisk = classifyRisk(report.ConsumedPct, report.HeadroomDays, daysLeftInMonth)
 	report.OverageRisk = worstRisk(monthlyRisk, windowRisk)
 	return report
+}
+
+// applyAuthoritativeWindow fills report's Window* fields from the vendor's
+// reported quota % + reset (see AuthoritativeWindow) and returns the window
+// risk. Unlike the message-count path it works for plans with no message cap
+// — the % and reset are the whole signal — so capless plans (Claude Code
+// Max/Pro) finally get an authoritative window reading.
+func applyAuthoritativeWindow(report *HeadroomReport, p Plan, in HeadroomInputs) string {
+	a := in.Authoritative
+	pct := clampPct(a.UsedPct)
+	report.WindowDuration = p.RateLimitWindow.String()
+	report.WindowCap = p.MessagesPerWindow
+	report.WindowUnit = p.WindowUnit
+	report.WindowPct = math.Round(pct*100) / 100
+	if p.MessagesPerWindow > 0 {
+		report.WindowConsumed = int64(math.Round(float64(p.MessagesPerWindow) * pct / 100))
+	}
+	if a.ResetsIn > 0 {
+		report.WindowResetsAt = in.Now.Add(a.ResetsIn).UTC()
+		report.WindowResetsIn = a.ResetsIn.Round(time.Minute).String()
+	} else {
+		report.WindowResetsAt = in.Now.Add(p.RateLimitWindow).UTC()
+		report.WindowResetsIn = p.RateLimitWindow.String()
+	}
+	return classifyWindowRisk(report.WindowPct)
 }
 
 // classifyWindowRisk maps a rate-limit-window utilisation percentage to

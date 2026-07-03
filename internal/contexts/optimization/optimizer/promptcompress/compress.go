@@ -151,7 +151,12 @@ func dedupeConsecutiveLines(s string) string {
 	if len(lines) <= 1 {
 		return s
 	}
-	out := lines[:1]
+	// A fresh slice, not lines[:1]: appending into a reslice of the input
+	// would alias its backing array. Only truly-adjacent identical lines
+	// collapse — a blank line between two equal lines is meaningful
+	// separation and is preserved (the conservative, meaning-safe choice).
+	out := make([]string, 0, len(lines))
+	out = append(out, lines[0])
 	for i := 1; i < len(lines); i++ {
 		if strings.TrimSpace(lines[i]) == "" {
 			out = append(out, lines[i])

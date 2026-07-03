@@ -159,13 +159,7 @@ func ComputeSessionBudget(planName string, in SessionBudgetInputs) (SessionBudge
 // are all that is needed to advise the agent).
 func computeFromAuthoritative(planName string, p Plan, in SessionBudgetInputs) SessionBudget {
 	a := in.Authoritative
-	pct := a.UsedPct
-	if pct < 0 {
-		pct = 0
-	}
-	if pct > 100 {
-		pct = 100
-	}
+	pct := clampPct(a.UsedPct)
 	out := SessionBudget{
 		PlanName:          planName,
 		Display:           p.Display,
@@ -194,6 +188,17 @@ func computeFromAuthoritative(planName string, p Plan, in SessionBudgetInputs) S
 		out.WindowConsumed = p.MessagesPerWindow - out.HeadroomUntilCap
 	}
 	return out
+}
+
+// clampPct constrains a reported utilisation percentage to [0, 100].
+func clampPct(pct float64) float64 {
+	if pct < 0 {
+		return 0
+	}
+	if pct > 100 {
+		return 100
+	}
+	return pct
 }
 
 // recommendActionByPct maps a vendor-reported window % to the action set
