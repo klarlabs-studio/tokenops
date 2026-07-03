@@ -25,6 +25,8 @@ If a fmt formatter change touches >1 file of shared engine behavior, add golden 
 - gofmt struct-alignment failures slip past local editor diagnostics → correct by running `gofmt -l .` explicitly before push (CI blocks on it).
 - Tends to branch off a stale main → merge blocked as BEHIND (branch protection requires up-to-date). Correct by branching off fresh origin/main, or rebase + force-push before merge.
 - Changing a hook/CLI's log/ledger schema is forward-only → existing rows lack new fields and won't backfill, so a stats reader shows zeros/gaps until fresh events accrue. Don't read the gap as "nothing happening"; after a schema bump, ship + reinstall the binary the hook runs, then wait for new events before trusting the breakdown.
+- After a GitHub repo transfer, a stale explicit `release.github.owner/name` in `.goreleaser.yaml` → goreleaser creates the release via redirect but POSTs asset uploads to the OLD repo URL, which returns 307 (unfollowed) → release "succeeds" with 0 assets. Correct by pinning `release.github.owner/name` to the NEW repo before the first post-transfer tag; delete the failed tag + partial release, re-tag.
+- read-guard ACTIVE mode blocks the parent's own file re-reads when a subagent already read that file under the shared session_id (the parent lacks the content in its context). Correct by using ranged reads (offset/limit bypass the guard) to fetch what you need; a real fix would carve out cross-agent reads in read-guard.
 
 ## Decision Summary
 # 3–5 most consequential. Full log in memory/decisions.md
