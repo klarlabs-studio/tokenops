@@ -15,6 +15,12 @@
     (`--no-jsonl` to opt out), so it reflects real usage out of the box.
   - **MCP `tokenops_fmt_analyze`** (+ `tokenops_fmt_learn` folds in log
     signal) expose the same to agents.
+  - **Read-side diagnostic**: `fmt analyze` now also measures the biggest
+    context slice — Read (file content) — surfacing re-read waste (same file
+    re-read in a session), byte-identical duplicate content, ranged-read
+    hygiene, and the most-re-read files. Re-reads/dupes are a
+    context-management issue (addressable by the proxy dedupe/context-trim
+    optimizers), not a formatter one; the diagnostic makes the size visible.
 
 ### Fixed
 

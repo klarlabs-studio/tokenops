@@ -122,6 +122,48 @@ func TestSplitChain_And_BashToken(t *testing.T) {
 	}
 }
 
+func TestScan_ReadReReadAndDup(t *testing.T) {
+	body := "package main\n\nfunc main() {}\n"
+	root := writeSession(t, []map[string]any{
+		// same file read 3 times in the session -> 2 re-reads wasted.
+		msg("assistant", toolUse("r1", "Read", map[string]any{"file_path": "/repo/main.go"})),
+		msg("user", toolResult("r1", body)),
+		msg("assistant", toolUse("r2", "Read", map[string]any{"file_path": "/repo/main.go"})),
+		msg("user", toolResult("r2", body)),
+		msg("assistant", toolUse("r3", "Read", map[string]any{"file_path": "/repo/main.go", "offset": 1, "limit": 2})),
+		msg("user", toolResult("r3", body)),
+		// a different file, read once, ranged.
+		msg("assistant", toolUse("r4", "Read", map[string]any{"file_path": "/repo/util.go", "limit": 50})),
+		msg("user", toolResult("r4", "package util\n")),
+	})
+	rep, _, err := Scan(formatter.DefaultFormatters(), Options{Root: root}, time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := rep.Reads
+	if rr.Reads != 4 {
+		t.Fatalf("reads = %d, want 4", rr.Reads)
+	}
+	if rr.RangedReads != 2 { // r3 + r4
+		t.Errorf("ranged = %d, want 2", rr.RangedReads)
+	}
+	// main.go read 3x -> 2 re-reads wasted (2 * len(body)).
+	wantWaste := int64(2 * len(body))
+	if rr.RepeatReadBytes != wantWaste {
+		t.Errorf("repeat read bytes = %d, want %d", rr.RepeatReadBytes, wantWaste)
+	}
+	// byte-identical body seen 3x -> 2 duplicate copies.
+	if rr.DupContentBytes != int64(2*len(body)) {
+		t.Errorf("dup content bytes = %d, want %d", rr.DupContentBytes, 2*len(body))
+	}
+	if len(rr.TopReReads) != 1 || rr.TopReReads[0].Path != "/repo/main.go" || rr.TopReReads[0].Reads != 3 {
+		t.Errorf("top re-read wrong: %+v", rr.TopReReads)
+	}
+	if rr.ByExt[".go"] == 0 {
+		t.Error("by-ext missing .go")
+	}
+}
+
 func TestScan_NoLogsIsEmpty(t *testing.T) {
 	rep, _, err := Scan(formatter.DefaultFormatters(), Options{Root: t.TempDir()}, time.Unix(0, 0))
 	if err != nil {

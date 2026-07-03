@@ -117,8 +117,35 @@ func renderAnalyze(cmd *cobra.Command, rep *jsonlfmt.Report, top int) {
 			pct(c.SavedBalanced, c.RawBytes), pct(c.SavedAggressive, c.RawBytes), cover)
 		shown++
 	}
-	fmt.Fprintln(out, "\nRun `tokenops fmt hook` + `export TOKENOPS_FMT=1` to capture these savings live.")
+	// Read side — usually the biggest lever, and one fmt does NOT address.
+	rr := rep.Reads
+	if rr.Reads > 0 {
+		fmt.Fprintf(out, "\nRead (file content — %s tokens, %d reads, the biggest context slice):\n",
+			humanTokens(jsonlfmt.EstTokens(rr.RawBytes)), rr.Reads)
+		fmt.Fprintf(out, "  already ranged (offset/limit): %.0f%% of reads\n", pct(int64(rr.RangedReads), int64(rr.Reads)))
+		fmt.Fprintf(out, "  re-reads (same file re-read in a session): ~%s tokens (%.0f%% of Read) — avoidable\n",
+			humanTokens(jsonlfmt.EstTokens(rr.RepeatReadBytes)), pct(rr.RepeatReadBytes, rr.RawBytes))
+		fmt.Fprintf(out, "  duplicate content (byte-identical re-sent):  ~%s tokens (%.0f%% of Read)\n",
+			humanTokens(jsonlfmt.EstTokens(rr.DupContentBytes)), pct(rr.DupContentBytes, rr.RawBytes))
+		if len(rr.TopReReads) > 0 {
+			fmt.Fprintln(out, "  most re-read files (wasted tokens):")
+			for i, f := range rr.TopReReads {
+				if i >= 6 {
+					break
+				}
+				fmt.Fprintf(out, "    %-52s %sx  ~%s\n",
+					truncName(f.Path, 52), fmtInt(f.Reads), humanTokens(jsonlfmt.EstTokens(f.WastedBytes)))
+			}
+		}
+		fmt.Fprintln(out, "  note: re-reads/dupes are a context-management issue, not a formatter one —")
+		fmt.Fprintln(out, "  addressable by the proxy dedupe/context-trim optimizers or by re-reading less.")
+	}
+
+	fmt.Fprintln(out, "\nRun `tokenops fmt hook` + `export TOKENOPS_FMT=1` to capture the Bash savings live.")
 }
+
+// fmtInt renders an int without thousands separators (small counts).
+func fmtInt(n int) string { return fmt.Sprintf("%d", n) }
 
 // jsonlLearnRecords returns fmtlearn records synthesised from the JSONL so
 // `fmt learn` reflects real usage without any wrapped runs. Best-effort:

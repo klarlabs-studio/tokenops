@@ -57,6 +57,28 @@ type Composition struct {
 	UserProse      int64            `json:"user_prose"`
 }
 
+// FileReRead aggregates how often one file path was re-read and the wasted
+// bytes (everything past its first read in each session).
+type FileReRead struct {
+	Path        string `json:"path"`
+	Reads       int    `json:"reads"`
+	WastedBytes int64  `json:"wasted_bytes"`
+}
+
+// ReadReport quantifies the trimming opportunity in Read tool output — the
+// biggest single slice of agent context. Re-reads and duplicate content are
+// a context-management problem (the agent re-reading files it already has),
+// not something a formatter fixes; this surfaces the size so it is visible.
+type ReadReport struct {
+	Reads           int              `json:"reads"`
+	RawBytes        int64            `json:"raw_bytes"`
+	RangedReads     int              `json:"ranged_reads"`      // used offset/limit (already trimmed)
+	RepeatReadBytes int64            `json:"repeat_read_bytes"` // re-reads of the same path in a session
+	DupContentBytes int64            `json:"dup_content_bytes"` // byte-identical content seen again
+	ByExt           map[string]int64 `json:"by_ext"`
+	TopReReads      []FileReRead     `json:"top_rereads"`
+}
+
 // Report is the full self-wiring analysis.
 type Report struct {
 	Root            string       `json:"root"`
@@ -67,6 +89,7 @@ type Report struct {
 	TotalBashBytes  int64        `json:"total_bash_bytes"`
 	SavedBalanced   int64        `json:"saved_balanced_bytes"`
 	SavedAggressive int64        `json:"saved_aggressive_bytes"`
+	Reads           ReadReport   `json:"reads"`
 	GeneratedAtUnix int64        `json:"generated_at_unix"`
 }
 
@@ -98,12 +121,14 @@ type rawBlock struct {
 // scanState carries the two fixed-level registries + accumulators through a
 // scan so the registries are built once, not per tool_result.
 type scanState struct {
-	regBal  *formatter.Registry
-	regAgg  *formatter.Registry
-	rep     *Report
-	roi     map[string]*CommandROI
-	records []fmtlearn.Record
-	now     time.Time
+	regBal   *formatter.Registry
+	regAgg   *formatter.Registry
+	rep      *Report
+	roi      map[string]*CommandROI
+	records  []fmtlearn.Record
+	now      time.Time
+	readSeen map[uint64]struct{}    // content hashes seen (dup detection)
+	reRead   map[string]*FileReRead // path -> re-read aggregate
 }
 
 // Scan walks the JSONL logs and returns the composition + per-command
@@ -137,14 +162,30 @@ func Scan(formatters []formatter.Formatter, opts Options, now time.Time) (*Repor
 			Composition:     Composition{ByTool: map[string]int64{}},
 			GeneratedAtUnix: now.Unix(),
 		},
-		roi: map[string]*CommandROI{},
-		now: now,
+		roi:      map[string]*CommandROI{},
+		now:      now,
+		readSeen: map[uint64]struct{}{},
+		reRead:   map[string]*FileReRead{},
 	}
+	st.rep.Reads.ByExt = map[string]int64{}
 
 	for _, fp := range files {
 		if scanFile(fp, st) {
 			st.rep.SessionsScanned++
 		}
+	}
+
+	// Rank the most-re-read files by wasted bytes.
+	for _, fr := range st.reRead {
+		if fr.WastedBytes > 0 {
+			st.rep.Reads.TopReReads = append(st.rep.Reads.TopReReads, *fr)
+		}
+	}
+	sort.Slice(st.rep.Reads.TopReReads, func(i, j int) bool {
+		return st.rep.Reads.TopReReads[i].WastedBytes > st.rep.Reads.TopReReads[j].WastedBytes
+	})
+	if len(st.rep.Reads.TopReReads) > 20 {
+		st.rep.Reads.TopReReads = st.rep.Reads.TopReReads[:20]
 	}
 
 	for _, r := range st.roi {
@@ -170,8 +211,11 @@ func scanFile(path string, st *scanState) bool {
 	}
 	defer func() { _ = f.Close() }()
 
-	idCommand := map[string]string{} // tool_use_id -> Bash command token
-	idName := map[string]string{}    // tool_use_id -> tool name
+	idCommand := map[string]string{}         // tool_use_id -> Bash command token
+	idName := map[string]string{}            // tool_use_id -> tool name
+	idReadPath := map[string]string{}        // tool_use_id -> Read file_path
+	idReadRanged := map[string]bool{}        // tool_use_id -> Read used offset/limit
+	sessionReadBytes := map[string][]int64{} // path -> read sizes this session
 	// bufio.Reader (not Scanner) so a single huge JSONL line — common when a
 	// large tool result is inlined — never truncates the file. Scanner's
 	// token cap would silently skip exactly the big outputs fmt cares about.
@@ -205,8 +249,13 @@ func scanFile(path string, st *scanState) bool {
 			switch b.Type {
 			case "tool_use":
 				idName[b.ID] = b.Name
-				if b.Name == "Bash" {
+				switch b.Name {
+				case "Bash":
 					idCommand[b.ID] = bashCommandToken(b.Input)
+				case "Read":
+					path, ranged := readInput(b.Input)
+					idReadPath[b.ID] = path
+					idReadRanged[b.ID] = ranged
 				}
 			case "tool_result":
 				name := idName[b.ToolUseID]
@@ -219,6 +268,9 @@ func scanFile(path string, st *scanState) bool {
 				if name == "Bash" {
 					accumulateBashROI(st, idCommand[b.ToolUseID], out)
 				}
+				if name == "Read" {
+					accumulateRead(st, idReadPath[b.ToolUseID], idReadRanged[b.ToolUseID], out, sessionReadBytes)
+				}
 			case "text":
 				if rl.Message.Role == "assistant" {
 					st.rep.Composition.AssistantProse += int64(len(b.Text))
@@ -228,7 +280,93 @@ func scanFile(path string, st *scanState) bool {
 			}
 		}
 	}
+
+	// Fold this session's per-path read sizes into the re-read waste: every
+	// read past the first of a given path in the session is repeat volume.
+	for path, sizes := range sessionReadBytes {
+		if len(sizes) <= 1 {
+			continue
+		}
+		var wasted int64
+		for _, s := range sizes[1:] {
+			wasted += s
+		}
+		st.rep.Reads.RepeatReadBytes += wasted
+		fr := st.reRead[path]
+		if fr == nil {
+			fr = &FileReRead{Path: path}
+			st.reRead[path] = fr
+		}
+		fr.Reads += len(sizes)
+		fr.WastedBytes += wasted
+	}
 	return parsed
+}
+
+// readInput extracts a Read tool_use's file_path and whether it used
+// offset/limit (a ranged, already-trimmed read).
+func readInput(input json.RawMessage) (string, bool) {
+	if len(input) == 0 {
+		return "", false
+	}
+	var probe struct {
+		FilePath string          `json:"file_path"`
+		Offset   json.RawMessage `json:"offset"`
+		Limit    json.RawMessage `json:"limit"`
+	}
+	if err := json.Unmarshal(input, &probe); err != nil {
+		return "", false
+	}
+	return probe.FilePath, len(probe.Offset) > 0 || len(probe.Limit) > 0
+}
+
+// accumulateRead folds one Read result into the read metrics: totals, ranged
+// count, per-extension volume, per-session re-read tracking, and byte-
+// identical duplicate detection. Content is hashed, never retained.
+func accumulateRead(st *scanState, path string, ranged bool, out []byte, sessionReadBytes map[string][]int64) {
+	if len(out) == 0 {
+		return
+	}
+	n := int64(len(out))
+	st.rep.Reads.Reads++
+	st.rep.Reads.RawBytes += n
+	if ranged {
+		st.rep.Reads.RangedReads++
+	}
+	if path != "" {
+		ext := strings.ToLower(fileExt(path))
+		st.rep.Reads.ByExt[ext] += n
+		sessionReadBytes[path] = append(sessionReadBytes[path], n)
+	}
+	h := fnvHash(out)
+	if _, ok := st.readSeen[h]; ok {
+		st.rep.Reads.DupContentBytes += n
+	} else {
+		st.readSeen[h] = struct{}{}
+	}
+}
+
+// fileExt returns the lowercased extension including the dot, or "(none)".
+func fileExt(path string) string {
+	e := filepath.Ext(path)
+	if e == "" {
+		return "(none)"
+	}
+	return e
+}
+
+// fnvHash is a fast non-cryptographic hash for duplicate-content detection.
+func fnvHash(b []byte) uint64 {
+	const (
+		offset64 = 1469598103934665603
+		prime64  = 1099511628211
+	)
+	h := uint64(offset64)
+	for _, c := range b {
+		h ^= uint64(c)
+		h *= prime64
+	}
+	return h
 }
 
 // accumulateBashROI runs one Bash output through the balanced + aggressive
