@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added
+
+- **`tokenops fmt analyze --svg <dir>`** renders the analysis as
+  self-contained SVG charts (composition + reads). Text uses `currentColor`
+  so an inlined chart themes with its page; output is deterministic and
+  reproducible from the CLI.
+
 ## 0.30.1 - 2026-07-03
 
 ### Changed
