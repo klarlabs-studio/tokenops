@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.31.0 - 2026-07-03
+
 ### Added
 
 - **`tokenops fmt analyze --svg <dir>`** renders the analysis as
