@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+## 0.34.0 - 2026-07-04
+
+### Added
+
+- **Predictions now read the vendor's own rate-limit meter.** `session_budget`
+  and `plan_headroom` previously computed window % from a message count that
+  excluded the high-signal sources — so they could report `continue` at
+  high confidence while the vendor's own meter read 87%. They now read the
+  authoritative snapshot the pollers already store (Anthropic cookie
+  five_hour/seven_day %, Codex rate_limits primary/secondary %, Copilot/Cursor
+  monthly quota) with its exact reset time, falling back to the heuristic only
+  when no snapshot exists. Also scores plans that publish a window but no
+  message cap (Claude Code Max/Pro), and gives Copilot/Cursor a real monthly
+  overage risk where they previously got "no cap published".
+- **Exact tiktoken tokenizer for OpenAI** (o200k_base — GPT-4o / o-series /
+  GPT-4.1 / GPT-5). Offline, embedded vocabulary (no runtime download). Replaces
+  the char-per-token heuristic — whose ~10-15% error is worst on code and JSON —
+  so every downstream $ / savings / headroom figure is exact for the
+  highest-volume provider. Other providers stay heuristic.
+- **4 more proxy providers (13 → 17):** local runtimes and self-hosted gateways
+  — Ollama, LM Studio, LiteLLM, Vercel AI Gateway — each a one-line
+  OpenAI-compatible add with its documented default endpoint as the preset.
+
+### Changed
+
+- **`read-guard` ledger is scoped per agent-context, not per session.** A
+  subagent reading a file no longer blocks the main agent's later read of it
+  (each agent has its own context window). Uses Claude Code's `agent_id`;
+  strictly more permissive.
+- **Optimizer savings estimates now tokenize the real before/after content**
+  instead of a placeholder "canary" string (which returned ~bytes/4 and
+  undercounted dense payloads). `retrieval_prune` is scored below the quality
+  gate (it's a positional guess with no relevance signal); the dedupe docs no
+  longer claim a semantic-embedding seam it doesn't have.
+
 ## 0.33.0 - 2026-07-03
 
 ### Added
