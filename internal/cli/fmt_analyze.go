@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -22,11 +23,12 @@ import (
 // answers "where are my tokens going and what would fmt do about it".
 func newFmtAnalyzeCmd(rf *rootFlags) *cobra.Command {
 	var (
-		root     string
-		jsonOut  bool
-		top      int
-		maxFiles int
-		svgDir   string
+		root      string
+		jsonOut   bool
+		top       int
+		maxFiles  int
+		svgDir    string
+		svgCharts string
 	)
 	cmd := &cobra.Command{
 		Use:   "analyze",
@@ -45,7 +47,7 @@ sizes are reported. Requires no daemon and no wrapped commands.`,
 				return err
 			}
 			if svgDir != "" {
-				paths, err := writeAnalyzeSVGs(svgDir, rep)
+				paths, err := writeAnalyzeSVGs(svgDir, rep, svgCharts)
 				if err != nil {
 					return err
 				}
@@ -66,142 +68,223 @@ sizes are reported. Requires no daemon and no wrapped commands.`,
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit the report as JSON")
 	cmd.Flags().IntVar(&top, "top", 15, "show the top N Bash commands by output volume")
 	cmd.Flags().IntVar(&maxFiles, "max-files", 0, "cap sessions scanned (newest first); 0 = all")
-	cmd.Flags().StringVar(&svgDir, "svg", "", "also write SVG charts (composition, reads, fmt-roi, and 3 over-time) to this directory")
+	cmd.Flags().StringVar(&svgDir, "svg", "", "write SVG charts to this directory (see --charts for which)")
+	cmd.Flags().StringVar(&svgCharts, "charts", "all", `which charts --svg writes: "all", a group ("bars" | "timeline"), or a comma-separated list of ids (composition, reads, fmt-roi, tokens-over-time, volume-over-time, composition-over-time)`)
 	return cmd
 }
 
-// writeAnalyzeSVGs renders the composition + read charts from the report as
-// self-contained SVG files and returns their paths. Text uses currentColor so
-// an inlined chart themes with the embedding page.
-func writeAnalyzeSVGs(dir string, rep *jsonlfmt.Report) ([]string, error) {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, err
-	}
+// chartDef binds one output filename (its id) to the chart it renders. group
+// lets --charts select whole families ("bars" / "timeline") at once; build
+// returns ok=false when a chart has no data to draw (e.g. no timeline weeks
+// yet), in which case it is silently skipped. This slice is the single source
+// of truth for both what --svg writes and what --charts accepts.
+type chartDef struct {
+	id    string
+	group string
+	build func() (svg string, ok bool)
+}
+
+// analyzeChartDefs returns the ordered charts fmt analyze can render, each
+// bound to its svgchart primitive. Order is stable so output is deterministic.
+func analyzeChartDefs(rep *jsonlfmt.Report) []chartDef {
 	comp := rep.Composition
 	grand := comp.AssistantProse + comp.UserProse
 	for _, v := range comp.ByTool {
 		grand += v
 	}
-	if grand == 0 {
-		return nil, fmt.Errorf("analyze --svg: no content to chart")
-	}
-	read := comp.ByTool["Read"]
-	bash := comp.ByTool["Bash"]
-	rest := grand - read - bash - comp.AssistantProse - comp.UserProse
-	frac := func(v int64) float64 { return float64(v) / float64(grand) }
 	pctOf := func(v, whole int64) string {
 		if whole == 0 {
 			return "0%"
 		}
 		return fmt.Sprintf("%.1f%%", 100*float64(v)/float64(whole))
 	}
-
-	compositionBars := []svgchart.Bar{
-		{Label: "File reads", Display: pctOf(read, grand), Frac: frac(read), Note: "source files the agent reads", Highlight: true},
-		{Label: "Command output", Display: pctOf(bash, grand), Frac: frac(bash), Note: "git, tests, builds, greps"},
-		{Label: "Model prose", Display: pctOf(comp.AssistantProse, grand), Frac: frac(comp.AssistantProse), Note: `what "terse-speak" compresses`},
-		{Label: "Everything else", Display: pctOf(rest, grand), Frac: frac(rest), Note: "edits, subagents, screenshots, web"},
-		{Label: "Our prompts", Display: pctOf(comp.UserProse, grand), Frac: frac(comp.UserProse)},
+	frac := func(v int64) float64 {
+		if grand == 0 {
+			return 0
+		}
+		return float64(v) / float64(grand)
 	}
-	composition := svgchart.HBars("Where the context tokens actually go", compositionBars, svgchart.Options{
-		Caption: fmt.Sprintf("tokenops fmt analyze · %d sessions", rep.SessionsScanned),
-	})
+	tl := buildTimelineSeries(rep)
 
-	// Read chart: first reads vs re-reads, as a share of Read volume.
-	rr := rep.Reads
-	first := max(rr.RawBytes-rr.RepeatReadBytes, 0)
-	readBars := []svgchart.Bar{
-		{Label: "First reads", Display: pctOf(first, rr.RawBytes), Frac: fracOf(first, rr.RawBytes), Note: "content the agent had not seen"},
-		{Label: "Re-reads (same file again)", Display: pctOf(rr.RepeatReadBytes, rr.RawBytes), Frac: fracOf(rr.RepeatReadBytes, rr.RawBytes), Note: "mostly ranged / intentional — little is reclaimable", Highlight: true},
+	return []chartDef{
+		{"composition", "bars", func() (string, bool) {
+			if grand == 0 {
+				return "", false
+			}
+			read := comp.ByTool["Read"]
+			bash := comp.ByTool["Bash"]
+			rest := grand - read - bash - comp.AssistantProse - comp.UserProse
+			return svgchart.HBars("Where the context tokens actually go", []svgchart.Bar{
+				{Label: "File reads", Display: pctOf(read, grand), Frac: frac(read), Note: "source files the agent reads", Highlight: true},
+				{Label: "Command output", Display: pctOf(bash, grand), Frac: frac(bash), Note: "git, tests, builds, greps"},
+				{Label: "Model prose", Display: pctOf(comp.AssistantProse, grand), Frac: frac(comp.AssistantProse), Note: `what "terse-speak" compresses`},
+				{Label: "Everything else", Display: pctOf(rest, grand), Frac: frac(rest), Note: "edits, subagents, screenshots, web"},
+				{Label: "Our prompts", Display: pctOf(comp.UserProse, grand), Frac: frac(comp.UserProse)},
+			}, svgchart.Options{Caption: fmt.Sprintf("tokenops fmt analyze · %d sessions", rep.SessionsScanned)}), true
+		}},
+		{"reads", "bars", func() (string, bool) {
+			rr := rep.Reads
+			if rr.RawBytes == 0 {
+				return "", false
+			}
+			first := max(rr.RawBytes-rr.RepeatReadBytes, 0)
+			return svgchart.HBars("File reads: how much is a repeat", []svgchart.Bar{
+				{Label: "First reads", Display: pctOf(first, rr.RawBytes), Frac: fracOf(first, rr.RawBytes), Note: "content the agent had not seen"},
+				{Label: "Re-reads (same file again)", Display: pctOf(rr.RepeatReadBytes, rr.RawBytes), Frac: fracOf(rr.RepeatReadBytes, rr.RawBytes), Note: "mostly ranged / intentional — little is reclaimable", Highlight: true},
+			}, svgchart.Options{Caption: fmt.Sprintf("tokenops fmt analyze · %s ranged", pctOf(int64(rr.RangedReads), int64(rr.Reads)))}), true
+		}},
+		{"fmt-roi", "bars", func() (string, bool) {
+			if rep.TotalBashBytes == 0 {
+				return "", false
+			}
+			return svgchart.HBars("What the formatters save on our command output", []svgchart.Bar{
+				{Label: "Balanced", Display: pctOf(rep.SavedBalanced, rep.TotalBashBytes), Frac: fracOf(rep.SavedBalanced, rep.TotalBashBytes), Note: "conservative loss level"},
+				{Label: "Aggressive", Display: pctOf(rep.SavedAggressive, rep.TotalBashBytes), Frac: fracOf(rep.SavedAggressive, rep.TotalBashBytes), Note: "maximum loss level", Highlight: true},
+			}, svgchart.Options{Caption: "tokenops fmt analyze · vs 57–68% on the benchmark corpus"}), true
+		}},
+		{"tokens-over-time", "timeline", func() (string, bool) {
+			if !tl.ok {
+				return "", false
+			}
+			return svgchart.Lines("Input vs output tokens, every week", tl.weeks, []svgchart.Series{
+				{Name: "input", Values: tl.input},
+				{Name: "output", Values: tl.output, Highlight: true},
+			}, svgchart.Options{Caption: "tokenops fmt analyze · output hugs the baseline against input, week after week"}), true
+		}},
+		{"volume-over-time", "timeline", func() (string, bool) {
+			if !tl.ok {
+				return "", false
+			}
+			return svgchart.Lines("Total tokens per week", tl.weeks, []svgchart.Series{
+				{Name: "tokens", Values: tl.total, Highlight: true},
+			}, svgchart.Options{Caption: "tokenops fmt analyze"}), true
+		}},
+		{"composition-over-time", "timeline", func() (string, bool) {
+			if !tl.ok {
+				return "", false
+			}
+			return svgchart.StackedArea("Context composition over time", tl.weeks, []svgchart.Series{
+				{Name: "Read", Values: tl.read, Highlight: true},
+				{Name: "Bash", Values: tl.bash},
+				{Name: "Model prose", Values: tl.prose},
+				{Name: "Other", Values: tl.other},
+			}, svgchart.Options{Caption: "tokenops fmt analyze · share of context bytes by source"}), true
+		}},
 	}
-	reads := svgchart.HBars("File reads: how much is a repeat", readBars, svgchart.Options{
-		Caption: fmt.Sprintf("tokenops fmt analyze · %s ranged", pctOf(int64(rr.RangedReads), int64(rr.Reads))),
-	})
+}
 
-	// fmt ROI on real command output: what the formatters actually save on
-	// this user's Bash volume (as opposed to a benchmark corpus).
-	roiBars := []svgchart.Bar{
-		{Label: "Balanced", Display: pctOf(rep.SavedBalanced, rep.TotalBashBytes), Frac: fracOf(rep.SavedBalanced, rep.TotalBashBytes), Note: "conservative loss level"},
-		{Label: "Aggressive", Display: pctOf(rep.SavedAggressive, rep.TotalBashBytes), Frac: fracOf(rep.SavedAggressive, rep.TotalBashBytes), Note: "maximum loss level", Highlight: true},
+// timelineSeries holds the per-week arrays the over-time charts share,
+// computed once. ok is false when there are fewer than two weeks of
+// timestamped data (a single-point line is not a trend).
+type timelineSeries struct {
+	ok                                             bool
+	weeks                                          []string
+	input, output, total, read, bash, prose, other []float64
+}
+
+func buildTimelineSeries(rep *jsonlfmt.Report) timelineSeries {
+	n := len(rep.Timeline)
+	if n < 2 {
+		return timelineSeries{}
 	}
-	roi := svgchart.HBars("What the formatters save on our command output", roiBars, svgchart.Options{
-		Caption: "tokenops fmt analyze · vs 57–68% on the benchmark corpus",
-	})
-
-	out := []string{
-		filepath.Join(dir, "composition.svg"),
-		filepath.Join(dir, "reads.svg"),
-		filepath.Join(dir, "fmt-roi.svg"),
+	ts := timelineSeries{
+		ok: true, weeks: make([]string, n),
+		input: make([]float64, n), output: make([]float64, n), total: make([]float64, n),
+		read: make([]float64, n), bash: make([]float64, n), prose: make([]float64, n), other: make([]float64, n),
 	}
-	svgs := []string{composition, reads, roi}
-
-	// Over-time charts — best-effort: only when the logs carried parseable
-	// timestamps spanning at least two weeks.
-	if tp, ts := timelineSVGs(dir, rep); len(tp) > 0 {
-		out = append(out, tp...)
-		svgs = append(svgs, ts...)
+	for i, mb := range rep.Timeline {
+		ts.weeks[i] = periodLabel(mb.Period)
+		ts.input[i] = float64(mb.InputTokens)
+		ts.output[i] = float64(mb.OutputTokens)
+		ts.total[i] = float64(mb.InputTokens + mb.OutputTokens)
+		ts.read[i] = float64(mb.ReadBytes)
+		ts.bash[i] = float64(mb.BashBytes)
+		ts.prose[i] = float64(mb.ProseBytes)
+		ts.other[i] = float64(mb.OtherBytes)
 	}
+	return ts
+}
 
-	for i, p := range out {
-		if err := os.WriteFile(p, []byte(svgs[i]), 0o644); err != nil {
+// writeAnalyzeSVGs renders the selected charts to dir and returns their paths.
+// selection is the --charts value: "all" (default), a group ("bars" /
+// "timeline"), and/or specific chart ids, comma-separated. Text uses
+// currentColor so an inlined chart themes with the embedding page.
+func writeAnalyzeSVGs(dir string, rep *jsonlfmt.Report, selection string) ([]string, error) {
+	defs := analyzeChartDefs(rep)
+	want, err := resolveChartSelection(selection, defs)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	var written []string
+	for _, d := range defs {
+		if !want[d.id] {
+			continue
+		}
+		svg, ok := d.build()
+		if !ok {
+			continue // no data for this chart (e.g. no timeline weeks yet)
+		}
+		p := filepath.Join(dir, d.id+".svg")
+		if err := os.WriteFile(p, []byte(svg), 0o644); err != nil {
 			return nil, err
 		}
+		written = append(written, p)
 	}
-	return out, nil
+	if len(written) == 0 {
+		return nil, fmt.Errorf("analyze --svg: nothing to render for --charts %q (no matching chart had data)", selection)
+	}
+	return written, nil
 }
 
-// timelineSVGs renders the three over-time charts from rep.Timeline. Returns
-// empty slices when there are fewer than two weeks of timestamped data.
-func timelineSVGs(dir string, rep *jsonlfmt.Report) (paths, svgs []string) {
-	if len(rep.Timeline) < 2 {
-		return nil, nil
+// resolveChartSelection expands the --charts value into the set of chart ids
+// to render. Accepts "all", the group aliases "bars"/"timeline", and specific
+// ids, comma-separated. An unknown token is an error listing the valid names.
+func resolveChartSelection(selection string, defs []chartDef) (map[string]bool, error) {
+	if strings.TrimSpace(selection) == "" {
+		selection = "all"
 	}
-	months := make([]string, len(rep.Timeline))
-	input := make([]float64, len(rep.Timeline))
-	output := make([]float64, len(rep.Timeline))
-	total := make([]float64, len(rep.Timeline))
-	read := make([]float64, len(rep.Timeline))
-	bash := make([]float64, len(rep.Timeline))
-	prose := make([]float64, len(rep.Timeline))
-	other := make([]float64, len(rep.Timeline))
-	for i, mb := range rep.Timeline {
-		months[i] = periodLabel(mb.Period)
-		input[i] = float64(mb.InputTokens)
-		output[i] = float64(mb.OutputTokens)
-		total[i] = float64(mb.InputTokens + mb.OutputTokens)
-		read[i] = float64(mb.ReadBytes)
-		bash[i] = float64(mb.BashBytes)
-		prose[i] = float64(mb.ProseBytes)
-		other[i] = float64(mb.OtherBytes)
+	valid := map[string]bool{}
+	byGroup := map[string][]string{}
+	ids := make([]string, 0, len(defs))
+	for _, d := range defs {
+		valid[d.id] = true
+		byGroup[d.group] = append(byGroup[d.group], d.id)
+		ids = append(ids, d.id)
 	}
-
-	tokens := svgchart.Lines("Input vs output tokens, every week", months, []svgchart.Series{
-		{Name: "input", Values: input},
-		{Name: "output", Values: output, Highlight: true},
-	}, svgchart.Options{Caption: "tokenops fmt analyze · output hugs the baseline against input, week after week"})
-
-	volume := svgchart.Lines("Total tokens per week", months, []svgchart.Series{
-		{Name: "tokens", Values: total, Highlight: true},
-	}, svgchart.Options{Caption: "tokenops fmt analyze"})
-
-	comp := svgchart.StackedArea("Context composition over time", months, []svgchart.Series{
-		{Name: "Read", Values: read, Highlight: true},
-		{Name: "Bash", Values: bash},
-		{Name: "Model prose", Values: prose},
-		{Name: "Other", Values: other},
-	}, svgchart.Options{Caption: "tokenops fmt analyze · share of context bytes by source"})
-
-	return []string{
-		filepath.Join(dir, "tokens-over-time.svg"),
-		filepath.Join(dir, "volume-over-time.svg"),
-		filepath.Join(dir, "composition-over-time.svg"),
-	}, []string{tokens, volume, comp}
+	want := map[string]bool{}
+	for _, tok := range strings.Split(selection, ",") {
+		tok = strings.TrimSpace(tok)
+		switch {
+		case tok == "":
+			continue
+		case tok == "all":
+			for id := range valid {
+				want[id] = true
+			}
+		case len(byGroup[tok]) > 0:
+			for _, id := range byGroup[tok] {
+				want[id] = true
+			}
+		case valid[tok]:
+			want[tok] = true
+		default:
+			return nil, fmt.Errorf("unknown chart %q; valid: all, bars, timeline, or one of: %s", tok, strings.Join(ids, ", "))
+		}
+	}
+	if len(want) == 0 {
+		return nil, fmt.Errorf("--charts %q selected nothing", selection)
+	}
+	return want, nil
 }
 
-// periodLabel turns a "2006-01" key into a compact axis label like "Jan 26".
+// periodLabel turns a week-start "2006-01-02" key into a compact axis label
+// like "Jun 01".
 func periodLabel(key string) string {
-	if t, err := time.Parse("2006-01", key); err == nil {
-		return t.Format("Jan 06")
+	if t, err := time.Parse("2006-01-02", key); err == nil {
+		return t.Format("Jan 02")
 	}
 	return key
 }
