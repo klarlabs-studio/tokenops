@@ -191,6 +191,48 @@ func TestHeadroomAuthoritativeWindowScoresCaplessPlan(t *testing.T) {
 	}
 }
 
+func TestHeadroomMonthlyAuthoritativeForRequestQuotaPlan(t *testing.T) {
+	// A request-quota plan with NO token cap and NO window (Copilot): the
+	// old path returned "no monthly token cap published" with no risk. The
+	// vendor's monthly meter (91% used, ~5 days to reset) must now drive a
+	// real overage risk.
+	p := Plan{Name: "test-copilot", Provider: "github", Display: "Copilot"}
+	r := computeHeadroomFor(p, HeadroomInputs{
+		MonthlyAuthoritative: &AuthoritativeWindow{UsedPct: 91, ResetsIn: 120 * time.Hour, Source: "copilot:monthly"},
+		Now:                  midMonth(),
+	})
+	if r.ConsumedPct != 91 {
+		t.Errorf("consumed_pct=%v want 91 (vendor meter)", r.ConsumedPct)
+	}
+	if r.OverageRisk != RiskHigh {
+		t.Errorf("risk=%q want high at 91%% monthly", r.OverageRisk)
+	}
+	if r.HeadroomDays != 5 {
+		t.Errorf("headroom_days=%v want 5 (until reset)", r.HeadroomDays)
+	}
+	if r.Note == "" {
+		t.Error("expected a note naming the vendor meter")
+	}
+}
+
+func TestHeadroomMonthlyAuthoritativeOverridesTokenMath(t *testing.T) {
+	// Token math would read ~30% (3M of 10M), but the vendor says 75% —
+	// the meter wins.
+	p := testPlan(8_000_000, 2_000_000)
+	r := computeHeadroomFor(p, HeadroomInputs{
+		ConsumedTokens:       3_000_000,
+		Last7DayTokens:       700_000,
+		MonthlyAuthoritative: &AuthoritativeWindow{UsedPct: 75, Source: "cursor:monthly"},
+		Now:                  midMonth(),
+	})
+	if r.ConsumedPct != 75 {
+		t.Errorf("consumed_pct=%v want 75 (vendor meter over token math)", r.ConsumedPct)
+	}
+	if r.OverageRisk != RiskMedium {
+		t.Errorf("risk=%q want medium at 75%%", r.OverageRisk)
+	}
+}
+
 func TestHeadroomMonthlyAndWindowTakesWorse(t *testing.T) {
 	// Monthly: 30% — low. Window: 85% — high. Report should surface
 	// the high signal so the headline is honest.

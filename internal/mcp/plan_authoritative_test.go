@@ -48,19 +48,46 @@ func TestLatestAuthoritativeWindow_CodexPrimary(t *testing.T) {
 	}
 }
 
-func TestLatestAuthoritativeWindow_CopilotRemainingInverts(t *testing.T) {
+func TestLatestAuthoritativeMonthly_CopilotRemainingInverts(t *testing.T) {
 	now := time.Unix(2_000_000, 0).UTC()
 	reader := fakeReader{events: []*eventschema.Envelope{
-		env(now.Add(-time.Minute), map[string]string{"percent_remaining": "12.00"}),
+		env(now.Add(-time.Minute), map[string]string{
+			"percent_remaining": "12.00", "quota_reset_date": "2026-08-01",
+		}),
 	}}
-	p, _ := plans.Lookup("copilot-individual") // github
-	a := latestAuthoritativeWindow(context.Background(), reader, eventschema.ProviderGitHub, p, now)
+	// Copilot has no rolling window — it's a MONTHLY meter.
+	a := latestAuthoritativeMonthly(context.Background(), reader, eventschema.ProviderGitHub, now)
 	if a == nil {
-		t.Fatal("expected an authoritative window from copilot quota")
+		t.Fatal("expected a monthly authoritative reading from copilot quota")
 	}
 	// remaining 12% => used 88%.
 	if a.UsedPct != 88 {
 		t.Errorf("used_pct=%v want 88 (100-remaining)", a.UsedPct)
+	}
+	if a.Source != "copilot:monthly" {
+		t.Errorf("source=%q want copilot:monthly", a.Source)
+	}
+}
+
+func TestLatestAuthoritativeMonthly_CursorUsedPct(t *testing.T) {
+	now := time.Unix(2_000_000, 0).UTC()
+	reader := fakeReader{events: []*eventschema.Envelope{
+		env(now.Add(-time.Minute), map[string]string{"used_pct": "63.00"}),
+	}}
+	a := latestAuthoritativeMonthly(context.Background(), reader, eventschema.ProviderCursor, now)
+	if a == nil || a.UsedPct != 63 {
+		t.Fatalf("cursor monthly used_pct: got %+v want 63", a)
+	}
+}
+
+// A provider with no monthly meter (e.g. anthropic) yields nil.
+func TestLatestAuthoritativeMonthly_NoneForWindowProviders(t *testing.T) {
+	now := time.Unix(3_000_000, 0).UTC()
+	reader := fakeReader{events: []*eventschema.Envelope{
+		env(now, map[string]string{"five_hour_used_pct": "50.00"}),
+	}}
+	if a := latestAuthoritativeMonthly(context.Background(), reader, eventschema.ProviderAnthropic, now); a != nil {
+		t.Errorf("anthropic has no monthly meter; want nil, got %+v", a)
 	}
 }
 

@@ -77,6 +77,11 @@ type HeadroomInputs struct {
 	// ComputeSessionBudget makes — so the window dimension reflects the
 	// vendor meter rather than an event count.
 	Authoritative *AuthoritativeWindow
+	// MonthlyAuthoritative, when set, is the vendor's own reported MONTHLY
+	// quota % (Copilot percent_remaining, Cursor used_pct). It drives the
+	// monthly ConsumedPct + overage risk directly, which is the only useful
+	// monthly signal for request-quota plans that publish no token cap.
+	MonthlyAuthoritative *AuthoritativeWindow
 	// Now is the clock reference. Tests inject a fixed time; production
 	// passes time.Now().UTC().
 	Now time.Time
@@ -130,6 +135,13 @@ func computeHeadroomFor(p Plan, in HeadroomInputs) HeadroomReport {
 		windowRisk = classifyWindowRisk(report.WindowPct)
 	}
 
+	// Vendor monthly meter wins the monthly dimension when present — the
+	// only useful monthly signal for request-quota plans (Copilot, Cursor)
+	// that publish no token cap.
+	if in.MonthlyAuthoritative != nil {
+		return finishAuthoritativeMonthly(report, in, windowRisk)
+	}
+
 	if report.QuotaTokens <= 0 {
 		// No monthly token cap — defer entirely to the window signal.
 		if windowRisk != RiskUnknown {
@@ -162,6 +174,29 @@ func computeHeadroomFor(p Plan, in HeadroomInputs) HeadroomReport {
 	report.HeadroomDays = math.Round(float64(remaining)/dailyBurn*10) / 10
 	monthlyRisk = classifyRisk(report.ConsumedPct, report.HeadroomDays, daysLeftInMonth)
 	report.OverageRisk = worstRisk(monthlyRisk, windowRisk)
+	return report
+}
+
+// finishAuthoritativeMonthly builds the monthly dimension from the vendor's
+// reported quota % instead of token counts. ConsumedPct comes straight from
+// the meter; HeadroomDays reflects the time until the quota resets (when the
+// vendor reports it). Works with no token cap — the % + reset carry it.
+func finishAuthoritativeMonthly(report HeadroomReport, in HeadroomInputs, windowRisk string) HeadroomReport {
+	a := in.MonthlyAuthoritative
+	pct := clampPct(a.UsedPct)
+	report.ConsumedPct = math.Round(pct*100) / 100
+	if a.ResetsIn > 0 {
+		report.HeadroomDays = math.Round(a.ResetsIn.Hours()/24*10) / 10
+	} else {
+		report.HeadroomDays = math.NaN()
+	}
+	monthlyRisk := classifyWindowRisk(pct)
+	if monthlyRisk == RiskUnknown {
+		// A real 0%-used reading is genuinely low risk, not unknown.
+		monthlyRisk = RiskLow
+	}
+	report.OverageRisk = worstRisk(monthlyRisk, windowRisk)
+	report.Note = "monthly % is the vendor's reported quota meter (" + a.Source + ")"
 	return report
 }
 

@@ -205,6 +205,8 @@ func planHeadroom(ctx context.Context, d PlanDeps) (string, error) {
 			ConsumedTokens: cons.ConsumedTokens,
 			Last7DayTokens: cons.Last7DayTokens,
 			Now:            now,
+			// Copilot / Cursor have no rolling window; their meter is monthly.
+			MonthlyAuthoritative: latestAuthoritativeMonthly(ctx, reader, eventschema.Provider(provider), now),
 		}
 		if p, ok := plans.Lookup(planName); ok && p.RateLimitWindow > 0 {
 			win, err := plans.ConsumptionInWindow(ctx, reader, provider, now, p.RateLimitWindow)
