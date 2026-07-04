@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+## 0.35.0 - 2026-07-04
+
+### Added
+
+- **Over-time charts in `tokenops fmt analyze --svg`.** Alongside the existing
+  bar charts, the analyzer now buckets your Claude Code logs by ISO week and
+  renders three time-series SVGs: input vs output tokens per week (a shared
+  linear axis, so output correctly reads as a persistent hairline), total
+  tokens per week, and context composition (Read/Bash/prose) per week. Built on
+  two new dependency-free chart primitives (`Lines`, `StackedArea`); emitted
+  only when at least two weeks of timestamped data exist.
+- **`--charts` flag** to select which SVGs `--svg` writes: `all` (default), a
+  group (`bars` | `timeline`), or a comma-separated list of specific chart ids.
+  An unknown name errors with the valid list.
+
+### Fixed
+
+- Over-time chart x-axis labels showed the raw week key (`2026-06-01`) instead
+  of a compact `Jun 01`, from a stale date layout left after the weekly-bucket
+  refactor.
+
 ## 0.34.0 - 2026-07-04
 
 ### Added
