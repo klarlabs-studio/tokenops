@@ -66,7 +66,7 @@ sizes are reported. Requires no daemon and no wrapped commands.`,
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit the report as JSON")
 	cmd.Flags().IntVar(&top, "top", 15, "show the top N Bash commands by output volume")
 	cmd.Flags().IntVar(&maxFiles, "max-files", 0, "cap sessions scanned (newest first); 0 = all")
-	cmd.Flags().StringVar(&svgDir, "svg", "", "also write composition.svg + reads.svg charts to this directory")
+	cmd.Flags().StringVar(&svgDir, "svg", "", "also write SVG charts (composition, reads, fmt-roi, and 3 over-time) to this directory")
 	return cmd
 }
 
@@ -134,12 +134,76 @@ func writeAnalyzeSVGs(dir string, rep *jsonlfmt.Report) ([]string, error) {
 		filepath.Join(dir, "fmt-roi.svg"),
 	}
 	svgs := []string{composition, reads, roi}
+
+	// Over-time charts — best-effort: only when the logs carried parseable
+	// timestamps spanning at least two weeks.
+	if tp, ts := timelineSVGs(dir, rep); len(tp) > 0 {
+		out = append(out, tp...)
+		svgs = append(svgs, ts...)
+	}
+
 	for i, p := range out {
 		if err := os.WriteFile(p, []byte(svgs[i]), 0o644); err != nil {
 			return nil, err
 		}
 	}
 	return out, nil
+}
+
+// timelineSVGs renders the three over-time charts from rep.Timeline. Returns
+// empty slices when there are fewer than two weeks of timestamped data.
+func timelineSVGs(dir string, rep *jsonlfmt.Report) (paths, svgs []string) {
+	if len(rep.Timeline) < 2 {
+		return nil, nil
+	}
+	months := make([]string, len(rep.Timeline))
+	input := make([]float64, len(rep.Timeline))
+	output := make([]float64, len(rep.Timeline))
+	total := make([]float64, len(rep.Timeline))
+	read := make([]float64, len(rep.Timeline))
+	bash := make([]float64, len(rep.Timeline))
+	prose := make([]float64, len(rep.Timeline))
+	other := make([]float64, len(rep.Timeline))
+	for i, mb := range rep.Timeline {
+		months[i] = periodLabel(mb.Period)
+		input[i] = float64(mb.InputTokens)
+		output[i] = float64(mb.OutputTokens)
+		total[i] = float64(mb.InputTokens + mb.OutputTokens)
+		read[i] = float64(mb.ReadBytes)
+		bash[i] = float64(mb.BashBytes)
+		prose[i] = float64(mb.ProseBytes)
+		other[i] = float64(mb.OtherBytes)
+	}
+
+	tokens := svgchart.Lines("Input vs output tokens, every week", months, []svgchart.Series{
+		{Name: "input", Values: input},
+		{Name: "output", Values: output, Highlight: true},
+	}, svgchart.Options{Caption: "tokenops fmt analyze · output hugs the baseline against input, week after week"})
+
+	volume := svgchart.Lines("Total tokens per week", months, []svgchart.Series{
+		{Name: "tokens", Values: total, Highlight: true},
+	}, svgchart.Options{Caption: "tokenops fmt analyze"})
+
+	comp := svgchart.StackedArea("Context composition over time", months, []svgchart.Series{
+		{Name: "Read", Values: read, Highlight: true},
+		{Name: "Bash", Values: bash},
+		{Name: "Model prose", Values: prose},
+		{Name: "Other", Values: other},
+	}, svgchart.Options{Caption: "tokenops fmt analyze · share of context bytes by source"})
+
+	return []string{
+		filepath.Join(dir, "tokens-over-time.svg"),
+		filepath.Join(dir, "volume-over-time.svg"),
+		filepath.Join(dir, "composition-over-time.svg"),
+	}, []string{tokens, volume, comp}
+}
+
+// periodLabel turns a "2006-01" key into a compact axis label like "Jan 26".
+func periodLabel(key string) string {
+	if t, err := time.Parse("2006-01", key); err == nil {
+		return t.Format("Jan 06")
+	}
+	return key
 }
 
 func fracOf(v, whole int64) float64 {

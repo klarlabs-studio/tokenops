@@ -164,6 +164,74 @@ func TestScan_ReadReReadAndDup(t *testing.T) {
 	}
 }
 
+func TestWeekKey(t *testing.T) {
+	cases := map[string]string{
+		"2026-06-02T10:00:00Z":   "2026-06-01", // Tue → Mon 06-01
+		"2026-06-01T00:00:00Z":   "2026-06-01", // Mon → itself
+		"2026-06-07T23:59:59Z":   "2026-06-01", // Sun → same week's Mon
+		"2026-06-08T10:00:00.5Z": "2026-06-08", // next Mon, fractional secs
+		"":                       "",
+		"not-a-timestamp":        "",
+	}
+	for ts, want := range cases {
+		if got := weekKey(ts); got != want {
+			t.Errorf("weekKey(%q) = %q, want %q", ts, got, want)
+		}
+	}
+}
+
+func TestScan_TimelineWeeklyBuckets(t *testing.T) {
+	aUse := map[string]any{
+		"timestamp": "2026-06-02T10:00:00Z", // week of Mon 2026-06-01
+		"message": map[string]any{
+			"role":    "assistant",
+			"usage":   map[string]any{"input_tokens": 1000, "output_tokens": 10, "cache_read_input_tokens": 200},
+			"content": []any{toolUse("t1", "Read", map[string]any{"file_path": "/x.go"})},
+		},
+	}
+	aResult := map[string]any{
+		"timestamp": "2026-06-02T10:00:01Z",
+		"message": map[string]any{
+			"role":    "user",
+			"content": []any{toolResult("t1", "package main // a read body")},
+		},
+	}
+	bUse := map[string]any{
+		"timestamp": "2026-06-09T10:00:00Z", // week of Mon 2026-06-08
+		"message": map[string]any{
+			"role":    "assistant",
+			"usage":   map[string]any{"input_tokens": 500, "output_tokens": 5},
+			"content": []any{text("hi")},
+		},
+	}
+	root := writeSession(t, []map[string]any{aUse, aResult, bUse})
+	rep, _, err := Scan(formatter.DefaultFormatters(), Options{Root: root}, time.Unix(0, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Timeline) != 2 {
+		t.Fatalf("want 2 weekly buckets, got %d: %+v", len(rep.Timeline), rep.Timeline)
+	}
+	w1 := rep.Timeline[0]
+	if w1.Period != "2026-06-01" {
+		t.Errorf("week1 period=%q want 2026-06-01", w1.Period)
+	}
+	// input rolls cache: 1000 + 200 = 1200; output = 10.
+	if w1.InputTokens != 1200 || w1.OutputTokens != 10 {
+		t.Errorf("week1 tokens in=%d out=%d want 1200/10", w1.InputTokens, w1.OutputTokens)
+	}
+	if w1.ReadBytes == 0 {
+		t.Error("week1 should have Read tool_result bytes bucketed")
+	}
+	w2 := rep.Timeline[1]
+	if w2.Period != "2026-06-08" || w2.InputTokens != 500 || w2.OutputTokens != 5 {
+		t.Errorf("week2 period=%q in=%d out=%d want 2026-06-08/500/5", w2.Period, w2.InputTokens, w2.OutputTokens)
+	}
+	if w2.ProseBytes == 0 {
+		t.Error("week2 should have assistant prose bucketed")
+	}
+}
+
 func TestScan_NoLogsIsEmpty(t *testing.T) {
 	rep, _, err := Scan(formatter.DefaultFormatters(), Options{Root: t.TempDir()}, time.Unix(0, 0))
 	if err != nil {

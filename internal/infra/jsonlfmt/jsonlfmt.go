@@ -81,16 +81,32 @@ type ReadReport struct {
 
 // Report is the full self-wiring analysis.
 type Report struct {
-	Root            string       `json:"root"`
-	SessionsScanned int          `json:"sessions_scanned"`
-	ToolResults     int          `json:"tool_results"`
-	Composition     Composition  `json:"composition"`
-	Commands        []CommandROI `json:"commands"` // Bash commands, by raw bytes desc
-	TotalBashBytes  int64        `json:"total_bash_bytes"`
-	SavedBalanced   int64        `json:"saved_balanced_bytes"`
-	SavedAggressive int64        `json:"saved_aggressive_bytes"`
-	Reads           ReadReport   `json:"reads"`
-	GeneratedAtUnix int64        `json:"generated_at_unix"`
+	Root            string         `json:"root"`
+	SessionsScanned int            `json:"sessions_scanned"`
+	ToolResults     int            `json:"tool_results"`
+	Composition     Composition    `json:"composition"`
+	Commands        []CommandROI   `json:"commands"` // Bash commands, by raw bytes desc
+	TotalBashBytes  int64          `json:"total_bash_bytes"`
+	SavedBalanced   int64          `json:"saved_balanced_bytes"`
+	SavedAggressive int64          `json:"saved_aggressive_bytes"`
+	Reads           ReadReport     `json:"reads"`
+	Timeline        []PeriodBucket `json:"timeline"` // per-week usage + composition, oldest first
+	GeneratedAtUnix int64          `json:"generated_at_unix"`
+}
+
+// PeriodBucket is one ISO week of the logs (keyed by that week's Monday): the
+// vendor usage tokens (input incl. cache, and output) and the byte
+// composition of context by source. Drives the over-time charts. Turns with
+// no parseable timestamp are dropped, so callers treat Timeline as
+// best-effort.
+type PeriodBucket struct {
+	Period       string `json:"period"` // week-start date, "2006-01-02"
+	InputTokens  int64  `json:"input_tokens"`
+	OutputTokens int64  `json:"output_tokens"`
+	ReadBytes    int64  `json:"read_bytes"`
+	BashBytes    int64  `json:"bash_bytes"`
+	ProseBytes   int64  `json:"prose_bytes"` // assistant text
+	OtherBytes   int64  `json:"other_bytes"`
 }
 
 // EstTokens is the byte→token approximation used across fmt.
@@ -102,10 +118,22 @@ func EstTokens(b int64) int64 {
 }
 
 type rawLine struct {
-	Message struct {
+	Timestamp string `json:"timestamp"`
+	Message   struct {
 		Role    string          `json:"role"`
 		Content json.RawMessage `json:"content"`
+		Usage   *rawUsage       `json:"usage"`
 	} `json:"message"`
+}
+
+// rawUsage mirrors the per-turn token usage Claude Code records on assistant
+// messages. Input tokens roll cache-read + cache-creation so the total
+// matches the billed input surface.
+type rawUsage struct {
+	InputTokens         int64 `json:"input_tokens"`
+	OutputTokens        int64 `json:"output_tokens"`
+	CacheReadTokens     int64 `json:"cache_read_input_tokens"`
+	CacheCreationTokens int64 `json:"cache_creation_input_tokens"`
 }
 
 type rawBlock struct {
@@ -121,14 +149,31 @@ type rawBlock struct {
 // scanState carries the two fixed-level registries + accumulators through a
 // scan so the registries are built once, not per tool_result.
 type scanState struct {
-	regBal   *formatter.Registry
-	regAgg   *formatter.Registry
-	rep      *Report
-	roi      map[string]*CommandROI
-	records  []fmtlearn.Record
-	now      time.Time
-	readSeen map[uint64]struct{}    // content hashes seen (dup detection)
-	reRead   map[string]*FileReRead // path -> re-read aggregate
+	regBal    *formatter.Registry
+	regAgg    *formatter.Registry
+	rep       *Report
+	roi       map[string]*CommandROI
+	records   []fmtlearn.Record
+	now       time.Time
+	readSeen  map[uint64]struct{}      // content hashes seen (dup detection)
+	reRead    map[string]*FileReRead   // path -> re-read aggregate
+	timeline  map[string]*PeriodBucket // week key -> bucket
+	curPeriod string                   // week of the line being processed
+}
+
+// bucket returns the PeriodBucket for the line currently being scanned,
+// creating it on first use. Returns nil when the line had no parseable
+// timestamp, so callers guard with `if b := st.bucket(); b != nil`.
+func (st *scanState) bucket() *PeriodBucket {
+	if st.curPeriod == "" {
+		return nil
+	}
+	b := st.timeline[st.curPeriod]
+	if b == nil {
+		b = &PeriodBucket{Period: st.curPeriod}
+		st.timeline[st.curPeriod] = b
+	}
+	return b
 }
 
 // Scan walks the JSONL logs and returns the composition + per-command
@@ -166,6 +211,7 @@ func Scan(formatters []formatter.Formatter, opts Options, now time.Time) (*Repor
 		now:      now,
 		readSeen: map[uint64]struct{}{},
 		reRead:   map[string]*FileReRead{},
+		timeline: map[string]*PeriodBucket{},
 	}
 	st.rep.Reads.ByExt = map[string]int64{}
 
@@ -200,7 +246,43 @@ func Scan(formatters []formatter.Formatter, opts Options, now time.Time) (*Repor
 		}
 		return st.rep.Commands[i].Command < st.rep.Commands[j].Command
 	})
+	st.rep.Timeline = finalizeTimeline(st.timeline)
 	return st.rep, st.records, nil
+}
+
+// finalizeTimeline flattens the week map into a slice ordered oldest-first
+// so charts read left-to-right chronologically.
+func finalizeTimeline(m map[string]*PeriodBucket) []PeriodBucket {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]PeriodBucket, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, *m[k])
+	}
+	return out
+}
+
+// weekKey parses a Claude Code RFC3339 timestamp to that ISO week's Monday
+// as a "2006-01-02" key, returning "" when absent or unparseable (that line
+// is left out of the timeline but still counts in the totals). Weekly (not
+// monthly) granularity keeps the over-time charts legible when the logs span
+// only a couple of months.
+func weekKey(ts string) string {
+	if ts == "" {
+		return ""
+	}
+	for _, layout := range []string{time.RFC3339, time.RFC3339Nano} {
+		if t, err := time.Parse(layout, ts); err == nil {
+			t = t.UTC()
+			daysSinceMonday := (int(t.Weekday()) + 6) % 7 // Sunday=0 → 6, Monday=1 → 0
+			monday := t.AddDate(0, 0, -daysSinceMonday)
+			return monday.Format("2006-01-02")
+		}
+	}
+	return ""
 }
 
 // scanFile streams one JSONL file. Returns true if the file parsed at all.
@@ -237,6 +319,15 @@ func scanFile(path string, st *scanState) bool {
 		if err := json.Unmarshal(line, &rl); err != nil {
 			continue
 		}
+		// Bucket per-turn usage tokens before the content-shape gate, so a
+		// turn's tokens count even when its content isn't a block array.
+		st.curPeriod = weekKey(rl.Timestamp)
+		if u := rl.Message.Usage; u != nil {
+			if b := st.bucket(); b != nil {
+				b.InputTokens += u.InputTokens + u.CacheReadTokens + u.CacheCreationTokens
+				b.OutputTokens += u.OutputTokens
+			}
+		}
 		if len(rl.Message.Content) == 0 || rl.Message.Content[0] != '[' {
 			continue
 		}
@@ -265,6 +356,16 @@ func scanFile(path string, st *scanState) bool {
 				out := blockContent(b.Content)
 				st.rep.ToolResults++
 				st.rep.Composition.ByTool[name] += int64(len(out))
+				if bucket := st.bucket(); bucket != nil {
+					switch name {
+					case "Read":
+						bucket.ReadBytes += int64(len(out))
+					case "Bash":
+						bucket.BashBytes += int64(len(out))
+					default:
+						bucket.OtherBytes += int64(len(out))
+					}
+				}
 				if name == "Bash" {
 					accumulateBashROI(st, idCommand[b.ToolUseID], out)
 				}
@@ -274,6 +375,9 @@ func scanFile(path string, st *scanState) bool {
 			case "text":
 				if rl.Message.Role == "assistant" {
 					st.rep.Composition.AssistantProse += int64(len(b.Text))
+					if bucket := st.bucket(); bucket != nil {
+						bucket.ProseBytes += int64(len(b.Text))
+					}
 				} else {
 					st.rep.Composition.UserProse += int64(len(b.Text))
 				}
