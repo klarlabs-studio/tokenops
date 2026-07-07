@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Added
+
+- **Usage-coaching hooks (Phase 1 of ADR 0001): Stop-hook cache-read nudge +
+  `tokenops hooks install`.** A new `coach-hook` Claude Code **Stop** hook reads
+  the tail of the session transcript after each turn, measures how many
+  cache-read tokens the session is carrying per turn — the dominant recurring
+  cost in a long session, re-billed every turn until you `/compact` — and, when
+  that crosses a threshold (default 1M tokens/turn, 20-turn cooldown), surfaces a
+  **non-blocking** `systemMessage` nudge to compact or start a fresh session. It
+  works for clients that never hit the tokenops proxy (e.g. Claude Code on a
+  subscription) and **fails open** on every error path, so it can never disrupt a
+  session. Cost is priced via the existing `spend` catalog (Opus-family models;
+  others show tokens only). `tokenops coach-hook stats` reports the load your
+  sessions have been carrying.
+- **`tokenops hooks install / uninstall / status`** — a scaffolder that
+  idempotently merges the tokenops hooks (`--coach`, `--read-guard`) into
+  `~/.claude/settings.json` without clobbering unrelated hooks, backs the prior
+  file up to `settings.json.bak`, writes atomically, and reports the binary path
+  + version being wired in. `--dry-run` previews without writing.
+
 ## 0.35.0 - 2026-07-04
 
 ### Added
