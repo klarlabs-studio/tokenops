@@ -175,17 +175,17 @@ func TestSummarizeUsesCachedInputFromPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("summarize: %v", err)
 	}
-	// claude-opus-4-7: $5/M input, $0.50/M cache, $25/M output
-	//   uncached 10K   * 5/M     = 0.05
-	//   cached 990K    * 0.50/M  = 0.495
-	//   output 10K     * 25/M    = 0.25
-	//   total ≈ 0.795
-	if s.CostUSD < 0.75 || s.CostUSD > 0.85 {
-		t.Errorf("cache-aware cost = %.4f; want ~0.795", s.CostUSD)
+	// claude-opus-4-7: $15/M input, $1.50/M cache, $75/M output
+	//   uncached 10K   * 15/M    = 0.15
+	//   cached 990K    * 1.50/M  = 1.485
+	//   output 10K     * 75/M    = 0.75
+	//   total ≈ 2.385
+	if s.CostUSD < 2.3 || s.CostUSD > 2.45 {
+		t.Errorf("cache-aware cost = %.4f; want ~2.385", s.CostUSD)
 	}
-	// Flat-rate (no cache awareness) would be: 1M * 5/M + 10K * 25/M = 5.25
-	// Anything above ~2 means cache split is being ignored.
-	if s.CostUSD > 2 {
+	// Flat-rate (no cache awareness) would be: 1M * 15/M + 10K * 75/M = 15.75
+	// Anything above ~5 means cache split is being ignored.
+	if s.CostUSD > 5 {
 		t.Errorf("cost %.4f looks like new-input rate is billing cache reads", s.CostUSD)
 	}
 }

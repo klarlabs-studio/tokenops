@@ -101,13 +101,13 @@ func TestRouterRecommendationCarriesUSDSavings(t *testing.T) {
 	eng := spend.NewEngine(spend.DefaultTable())
 	p := BuildPipeline(nil, PipelineConfig{
 		Routing: &router.Config{Rules: []router.Rule{{
-			Provider: eventschema.ProviderAnthropic, FromModel: "claude-fable-5*",
-			ToModel: "claude-opus-4-8", Quality: 0.9,
+			Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8*",
+			ToModel: "claude-sonnet-4-6", Quality: 0.9,
 		}}},
 		Spend: eng,
 	})
 	req := &optimizer.Request{
-		Provider: eventschema.ProviderAnthropic, Model: "claude-fable-5",
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
 		InputTokens: 1_000_000, OutputTokens: 100_000,
 		Mode: optimizer.ModeReplay,
 	}
@@ -124,12 +124,12 @@ func TestRouterRecommendationCarriesUSDSavings(t *testing.T) {
 	if routed == nil {
 		t.Fatalf("no model_router event in %d events", len(out.Events))
 	}
-	// fable: 1M×$10 + 100K×$50/M = 15.00; opus-4-8: 1M×$5 + 100K×$25/M = 7.50
-	want := 7.50
+	// opus-4-8: 1M×$15 + 100K×$75/M = 22.50; sonnet-4-6: 1M×$3 + 100K×$15/M = 4.50
+	want := 18.00
 	if routed.EstimatedSavingsUSD < want-0.01 || routed.EstimatedSavingsUSD > want+0.01 {
 		t.Errorf("savings = %.4f; want ~%.2f", routed.EstimatedSavingsUSD, want)
 	}
-	if routed.Reason != "route claude-fable-5 -> claude-opus-4-8" {
+	if routed.Reason != "route claude-opus-4-8 -> claude-sonnet-4-6" {
 		t.Errorf("reason = %q", routed.Reason)
 	}
 }

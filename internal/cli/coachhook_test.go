@@ -61,8 +61,8 @@ func runCoach(t *testing.T, stateDir, transcript, sessionID string, extraArgs ..
 
 func TestCoachHook_NudgeEmitsSystemMessage(t *testing.T) {
 	dir := t.TempDir()
-	// 60M cache-read on opus (0.50/M) == $30 == 60% of the default $50 budget.
-	tp := writeCoachTranscript(t, dir, 60_000_000, "claude-opus-4-8")
+	// 20M cache-read on opus ($1.50/M) == $30 == 60% of the default $50 budget.
+	tp := writeCoachTranscript(t, dir, 20_000_000, "claude-opus-4-8")
 	out := runCoach(t, dir, tp, "s1")
 
 	var got struct {
