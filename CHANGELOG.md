@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.40.0 - 2026-07-07
+
+### Added
+
+- **`claude-sonnet-5` in the baseline catalog (`$2/$10/$0.20`).** It was missing —
+  the baseline had `claude-sonnet-4-6` ($3/$15/$0.30) but not Sonnet 5, so on the
+  offline baseline a Sonnet-5 event wouldn't price. Rate confirmed against **both
+  LiteLLM and OpenRouter** ($2 input / $10 output / $0.20 cache-read — Anthropic cut
+  Sonnet pricing at 5, like Opus at 4.5). (Events already priced correctly via an
+  adopted LiteLLM snapshot; this completes the offline/historical baseline.)
+
 ## 0.39.0 - 2026-07-07
 
 ### Fixed
