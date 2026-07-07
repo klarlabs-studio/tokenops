@@ -1,17 +1,20 @@
 // Package coachhook is the coaching half of the usage-hooks family: a Claude
-// Code Stop hook that watches how much *cache-read* context a session is
-// carrying and, when that load crosses a threshold, nudges the operator to
-// reclaim it (/compact or a fresh session). Cache-read is the dominant, most
-// reclaimable cost in a long Claude Code session — every turn re-bills the
-// entire accumulated context at the cache-read rate, so a session dragging a
-// large prefix pays that toll on every single turn until it is compacted.
+// Code Stop hook that tracks a session's *cumulative* API-equivalent cost and,
+// as that spend crosses fractions of a per-session budget, fires graduated,
+// latched nudges to reclaim context (/compact or a fresh session). Cache-read
+// is the dominant, most reclaimable cost in a long Claude Code session — every
+// turn re-bills the entire accumulated context at the cache-read rate — but the
+// damage is done by *accumulation*, not by any single extreme turn: a session
+// running thousands of flat turns at a few hundred thousand cache-read tokens
+// each quietly compounds into thousands of dollars while no single turn ever
+// looks alarming. Phase 1's flat per-turn threshold missed exactly that shape.
 //
-// The hook reads only the *tail* of the local transcript jsonl (never the
-// whole multi-MB file, never anything off-machine), extracts the most recent
-// turn's token usage, and keeps a tiny per-session counter in
-// ~/.tokenops/coach-hook/ so it can apply a cooldown between nudges. It is a
-// pure coach: it never blocks, never forces the agent to keep going, and
-// fails open on every error — a coach must never disrupt the session.
+// The hook reads only the *tail* of the local transcript jsonl (never the whole
+// multi-MB file, never anything off-machine), sums the full API-equivalent cost
+// of the new turns since it last looked, keeps a tiny per-session counter in
+// ~/.tokenops/coach-hook/, and latches each budget-fraction alert so it fires
+// once. It is a pure coach: it never blocks, never forces the agent to keep
+// going, and fails open on every error — a coach must never disrupt the session.
 package coachhook
 
 import (
@@ -19,6 +22,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,53 +32,54 @@ import (
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
-// Default thresholds. A session carrying ~1M cache-read tokens per turn is
-// already paying a meaningful per-turn toll; the cooldown keeps the nudge
-// from firing on every subsequent Stop once the operator has been told.
-const (
-	// DefaultCacheReadThreshold is the per-turn cache-read token load at or
-	// above which the coach nudges.
-	DefaultCacheReadThreshold int64 = 1_000_000
-	// DefaultCooldownTurns is how many turns must pass after a nudge before
-	// the coach will nudge the same session again.
-	DefaultCooldownTurns = 20
-)
+// DefaultBudgetUSD is the shipping per-session budget. Real sessions that ran
+// 7,000–9,300 turns at ~600k cache-read tokens/turn accrued ~$2,400 in
+// API-equivalent spend without any single turn being extreme; a $50 budget
+// surfaces that drift long before it compounds that far.
+const DefaultBudgetUSD = 50.0
+
+// fracEpsilon absorbs float rounding when comparing budget fractions to tier
+// boundaries, so a fraction that lands exactly on a boundary still counts as
+// having reached it.
+const fracEpsilon = 1e-9
 
 // tailBytes is how much of the transcript tail we read. Claude Code jsonl
 // lines are large (a full turn's messages), but the last few are enough to
-// find the most recent usage record — 256 KiB comfortably spans several
-// turns without ever reading the whole file.
+// find the new usage records since the previous Stop — 256 KiB comfortably
+// spans several turns without ever reading the whole file.
 const tailBytes int64 = 256 << 10
 
-// opusCacheReadUSDPerMillionFallback is the cache-read price used only when
-// the spend pricing engine can't resolve the model (e.g. an unrecognised
-// snapshot). It mirrors the Opus 4.x cache-read rate in the embedded
-// pricing.yaml catalog (cached_input_per_million); the live figure is looked
-// up from that catalog first via spend.DefaultTable so a rate edit is a data
-// change, not a code change.
-const opusCacheReadUSDPerMillionFallback = 0.50
+// DefaultTiers are the budget fractions at which the coach nudges before the
+// budget is exhausted: half, three-quarters, and the full budget.
+func DefaultTiers() []float64 { return []float64{0.50, 0.75, 1.00} }
 
-// Config tunes the coach. Enabled=false makes Evaluate a no-op (never nudges)
-// while still recording the ledger event, so an operator can observe load
-// without being nudged.
+// Config tunes the coach. Enabled=false makes Evaluate observe-only (it still
+// accumulates spend and records the ledger, but never nudges and never latches
+// a tier), so an operator can watch a session's cost without being nudged.
 type Config struct {
-	// CacheReadThreshold is the per-turn cache-read token load at/above which
-	// the coach nudges.
-	CacheReadThreshold int64
-	// CooldownTurns is the minimum number of turns between two nudges for the
-	// same session (hysteresis, so we don't nag every turn).
-	CooldownTurns int
-	// Enabled gates nudging. When false the coach observes (ledger only).
+	// BudgetUSD is the per-session API-equivalent budget the fractions are
+	// measured against.
+	BudgetUSD float64
+	// Tiers are the budget fractions (e.g. 0.50, 0.75, 1.00) at which to
+	// nudge. Each fires at most once per session (latched).
+	Tiers []float64
+	// OverBudgetStep re-alerts every additional step once the budget is
+	// exceeded: with 1.00 the coach also fires at 200%, 300%, … of budget.
+	// Zero disables over-budget escalation.
+	OverBudgetStep float64
+	// Enabled gates nudging. When false the coach observes (accumulate +
+	// ledger only) and never latches a tier.
 	Enabled bool
 }
 
-// DefaultConfig returns the shipping defaults: enabled, 1M-token threshold,
-// 20-turn cooldown.
+// DefaultConfig returns the shipping defaults: enabled, $50 budget, 50/75/100%
+// tiers, and over-budget escalation every additional full budget.
 func DefaultConfig() Config {
 	return Config{
-		CacheReadThreshold: DefaultCacheReadThreshold,
-		CooldownTurns:      DefaultCooldownTurns,
-		Enabled:            true,
+		BudgetUSD:      DefaultBudgetUSD,
+		Tiers:          DefaultTiers(),
+		OverBudgetStep: 1.00,
+		Enabled:        true,
 	}
 }
 
@@ -84,11 +89,13 @@ type Decision struct {
 	Nudge bool
 	// Message names the lever (compact / fresh session) and the numbers.
 	Message string
-	// CacheReadTokens is the most recent turn's cache-read token count.
-	CacheReadTokens int64
-	// EstCostUSDPerTurn is the API-equivalent per-turn cost of that cache-read
-	// load, for models we can price (Opus family). Zero when unpriced.
-	EstCostUSDPerTurn float64
+	// CumulativeUSD is the session's total API-equivalent spend so far.
+	CumulativeUSD float64
+	// BudgetUSD is the budget the fraction is measured against.
+	BudgetUSD float64
+	// FiredFraction is the budget fraction whose boundary this Stop fired
+	// (e.g. 0.50, 1.00, 2.00). Zero when no nudge fired.
+	FiredFraction float64
 }
 
 // usage is the token-usage block Claude Code records on each turn's message.
@@ -99,130 +106,224 @@ type usage struct {
 	CacheReadInputTokens     int64 `json:"cache_read_input_tokens"`
 }
 
-// transcriptLine is the subset of a transcript jsonl record we care about:
-// the assistant message's usage and model.
+// transcriptLine is the subset of a transcript jsonl record we care about: the
+// top-level ISO8601 timestamp plus the assistant message's usage and model.
 type transcriptLine struct {
-	Message struct {
+	Timestamp string `json:"timestamp"`
+	Message   struct {
 		Model string `json:"model"`
 		Usage *usage `json:"usage"`
 	} `json:"message"`
 }
 
-// sessionState is the tiny per-session counter kept beside the ledger. Turn
-// increments once per Stop; LastNudgeTurn records the turn a nudge last fired
-// (0 = never nudged) so Evaluate can enforce the cooldown.
+// sessionState is the tiny per-session counter kept beside the ledger.
+// CumulativeUSD is the running API-equivalent spend; MaxFiredFraction latches
+// the highest budget fraction already alerted (so each tier fires once);
+// LastCountedTS is the ISO timestamp of the most recent turn already summed,
+// the dedup marker that keeps repeated Stops from double-counting turns still
+// present in the tail window.
 type sessionState struct {
-	Turn          int `json:"turn"`
-	LastNudgeTurn int `json:"last_nudge_turn"`
+	CumulativeUSD    float64 `json:"cumulative_usd"`
+	MaxFiredFraction float64 `json:"max_fired_fraction"`
+	LastCountedTS    string  `json:"last_counted_ts"`
 }
 
 // ledgerEvent is one appended coaching record.
 type ledgerEvent struct {
-	TS        time.Time `json:"ts"`
-	Session   string    `json:"session"`
-	Turn      int       `json:"turn"`
-	CacheRead int64     `json:"cache_read"`
-	Nudged    bool      `json:"nudged"`
-	Model     string    `json:"model"`
+	TS            time.Time `json:"ts"`
+	Session       string    `json:"session"`
+	CumulativeUSD float64   `json:"cumulative_usd"`
+	BudgetUSD     float64   `json:"budget_usd"`
+	Fraction      float64   `json:"fraction"`
+	TierFired     float64   `json:"tier_fired"` // 0 when no tier fired this Stop
+	Model         string    `json:"model"`
 }
 
 // Evaluate is the coach's decision + side effects for one Stop event. dir is
 // the state/ledger root (defaults to ~/.tokenops/coach-hook when empty). It
-// reads the tail of transcriptPath, extracts the most recent turn's cache-read
-// load, advances the per-session turn counter, decides whether to nudge (with
-// cooldown), appends a ledger event, and returns the Decision. now is injected
-// for tests. It never returns an error: on any failure it returns a no-nudge
-// Decision so the caller can fail open.
+// loads session state, reads the tail of transcriptPath, sums the full
+// API-equivalent cost of every turn newer than the dedup marker into the
+// session's cumulative spend, and — if that spend has crossed a budget-fraction
+// boundary not yet alerted — nudges at the single highest such boundary
+// (latching it). now is injected for tests. It never returns an error: on any
+// failure it returns a no-nudge Decision so the caller can fail open.
 func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) Decision {
 	dir = resolveDir(dir)
 	_ = os.MkdirAll(dir, 0o755)
 
-	// Advance the turn counter first — a Stop event is one completed turn,
-	// regardless of whether we can read usage this time.
 	st := loadSession(dir, sessionID)
-	st.Turn++
 
-	line, ok := latestUsageLine(transcriptPath)
-	cacheRead := int64(0)
-	model := ""
-	if ok && line.Message.Usage != nil {
-		cacheRead = line.Message.Usage.CacheReadInputTokens
-		model = line.Message.Model
+	model := accumulate(transcriptPath, &st)
+
+	budget := cfg.BudgetUSD
+	if budget <= 0 {
+		budget = DefaultBudgetUSD
 	}
+	frac := st.CumulativeUSD / budget
 
-	cost := costUSD(cacheRead, model)
-
-	neverNudged := st.LastNudgeTurn == 0
-	turnsSince := st.Turn - st.LastNudgeTurn
-	overThreshold := cacheRead >= cfg.CacheReadThreshold
-	nudge := cfg.Enabled && overThreshold && (neverNudged || turnsSince >= cfg.CooldownTurns)
-
-	dec := Decision{CacheReadTokens: cacheRead, EstCostUSDPerTurn: cost}
-	if nudge {
+	dec := Decision{CumulativeUSD: st.CumulativeUSD, BudgetUSD: budget}
+	fired := highestBoundary(frac, st.MaxFiredFraction, cfg)
+	if cfg.Enabled && fired > 0 {
 		dec.Nudge = true
-		dec.Message = nudgeMessage(cacheRead, cost)
-		st.LastNudgeTurn = st.Turn
+		dec.FiredFraction = fired
+		dec.Message = nudgeMessage(fired, st.CumulativeUSD, budget)
+		st.MaxFiredFraction = fired
 	}
 
 	saveSession(dir, sessionID, st)
 	appendLedger(dir, ledgerEvent{
-		TS: now.UTC(), Session: sessionID, Turn: st.Turn,
-		CacheRead: cacheRead, Nudged: nudge, Model: model,
+		TS: now.UTC(), Session: sessionID,
+		CumulativeUSD: st.CumulativeUSD, BudgetUSD: budget,
+		Fraction: frac, TierFired: dec.FiredFraction, Model: model,
 	})
 	return dec
 }
 
-// nudgeMessage builds the operator-facing nudge. It always names the lever
-// (/compact or a fresh session); it appends the $ figure only when we could
-// price the model (Opus family), otherwise it shows tokens alone.
-func nudgeMessage(cacheRead int64, cost float64) string {
-	if cost > 0 {
-		return "tokenops: this session is carrying ~" + human(cacheRead) +
-			" cache-read tokens/turn (~" + humanUSD(cost) +
-			"/turn API-equiv) — /compact or a fresh session would cut most of it."
+// accumulate sums the full API-equivalent cost of every turn in the transcript
+// tail whose timestamp is strictly greater than the session's dedup marker,
+// adds it to st.CumulativeUSD, and advances the marker to the newest timestamp
+// counted. It returns the model of the newest counted turn (for the ledger).
+// Turns whose model can't be priced still
+// advance the marker (counted at zero cost) so they are not re-summed later.
+// Turns without a timestamp are skipped entirely — without one they cannot be
+// deduplicated against future Stops, and real Claude Code turns always carry a
+// timestamp. Equal timestamps are treated as already-counted (marker uses
+// strict >), an acceptable simplification: between consecutive Stops there is
+// normally ~1 new turn and its timestamp is distinct.
+func accumulate(path string, st *sessionState) string {
+	lines := usageLines(path)
+	newMarker := st.LastCountedTS
+	model := ""
+	for _, tl := range lines {
+		if tl.Timestamp == "" || tl.Timestamp <= st.LastCountedTS {
+			continue
+		}
+		st.CumulativeUSD += turnCostUSD(tl.Message.Usage, tl.Message.Model)
+		model = tl.Message.Model
+		if tl.Timestamp > newMarker {
+			newMarker = tl.Timestamp
+		}
 	}
-	return "tokenops: this session is carrying ~" + human(cacheRead) +
-		" cache-read tokens/turn — /compact or a fresh session would cut most of it."
+	st.LastCountedTS = newMarker
+	return model
 }
 
-// costUSD returns the API-equivalent per-turn cost of a cache-read load for a
-// model we can price. Only Opus-family models are priced (they dominate long
-// Claude Code sessions and their cache-read rate is well defined); everything
-// else returns 0 so the message shows tokens without a misleading $ figure.
-// The rate comes from the spend pricing engine (embedded catalog), falling
-// back to a const only when the model can't be resolved.
-func costUSD(cacheRead int64, model string) float64 {
-	if cacheRead <= 0 || !isOpusFamily(model) {
+// turnCostUSD prices a single turn's full API-equivalent cost: input, output,
+// cache-write (cache_creation) and cache-read tokens each at the model's
+// per-million rate from the spend catalog. Cache-read uses the cached-input
+// rate (falling back to the input rate when the catalog leaves it zero);
+// cache-write has no distinct catalog rate, so it is priced at the input rate.
+// An unpriceable model yields 0 — the turn still counts (marker advances) but
+// adds nothing, so the $ figure never over-states what we can defend.
+func turnCostUSD(u *usage, model string) float64 {
+	if u == nil {
 		return 0
 	}
-	perMillion := opusCacheReadUSDPerMillionFallback
-	if r, err := spend.DefaultTable().Lookup(eventschema.ProviderAnthropic, model); err == nil && r.CachedInputPerMillion > 0 {
-		perMillion = r.CachedInputPerMillion
+	r, err := spend.DefaultTable().Lookup(eventschema.ProviderAnthropic, model)
+	if err != nil {
+		return 0
 	}
-	return float64(cacheRead) / 1_000_000 * perMillion
+	cacheReadRate := r.CachedInputPerMillion
+	if cacheReadRate == 0 {
+		cacheReadRate = r.InputPerMillion
+	}
+	return perMillion(u.InputTokens, r.InputPerMillion) +
+		perMillion(u.OutputTokens, r.OutputPerMillion) +
+		perMillion(u.CacheCreationInputTokens, r.InputPerMillion) +
+		perMillion(u.CacheReadInputTokens, cacheReadRate)
 }
 
-func isOpusFamily(model string) bool {
-	return strings.Contains(strings.ToLower(model), "opus")
+func perMillion(tokens int64, ratePerMillion float64) float64 {
+	if tokens <= 0 || ratePerMillion <= 0 {
+		return 0
+	}
+	return float64(tokens) * ratePerMillion / 1_000_000.0
 }
 
-// latestUsageLine reads the tail of the transcript and returns the most recent
-// record carrying a message.usage block. Reading only the tail keeps the hook
-// cheap on multi-MB transcripts. Returns ok=false on any read/parse failure
-// (fail open) or when no usage record is found in the tail window.
-func latestUsageLine(path string) (transcriptLine, bool) {
+// highestBoundary returns the single highest budget-fraction boundary the
+// session has now reached (frac) that has not yet been alerted
+// (> maxFired). Boundaries are the configured Tiers plus, when
+// OverBudgetStep>0, 1+k*step for k=1,2,… up to frac. Returning only the
+// highest means a Stop that jumps 40%→120% fires the 100% tier alone, never a
+// burst of every crossed tier. Zero means nothing new to fire.
+func highestBoundary(frac, maxFired float64, cfg Config) float64 {
+	best := 0.0
+	consider := func(b float64) {
+		if b <= frac+fracEpsilon && b > maxFired+fracEpsilon && b > best {
+			best = b
+		}
+	}
+	for _, t := range cfg.Tiers {
+		if t > 0 {
+			consider(t)
+		}
+	}
+	if cfg.OverBudgetStep > 0 {
+		for k := 1; k <= 100_000; k++ {
+			b := 1.0 + float64(k)*cfg.OverBudgetStep
+			if b > frac+fracEpsilon {
+				break
+			}
+			consider(b)
+		}
+	}
+	return best
+}
+
+// nudgeMessage builds the operator-facing, escalating nudge for a fired budget
+// fraction. It names the lever (/compact or a fresh session) and formats the
+// real $ and % from the session's cumulative spend and budget.
+func nudgeMessage(frac, cumulative, budget float64) string {
+	pct := int(math.Round(frac * 100))
+	budgetStr := formatUSD(budget)
+	cumStr := fmt.Sprintf("$%.2f", cumulative)
+	boundaryStr := formatUSD(budget * frac)
+	switch {
+	case frac > 1.0+fracEpsilon:
+		return fmt.Sprintf("tokenops: this session is at %d%% of your %s budget (%s+). "+
+			"Long sessions compound cache-read cost fast — /compact or split the task.",
+			pct, budgetStr, boundaryStr)
+	case frac >= 1.0-fracEpsilon:
+		return fmt.Sprintf("tokenops: over your %s session budget (%s+). "+
+			"/compact or start fresh — you're re-reading a large cached context each turn.",
+			budgetStr, boundaryStr)
+	case frac >= 0.75-fracEpsilon:
+		return fmt.Sprintf("tokenops: %d%% of your %s session budget (%s) — consider /compact "+
+			"or a fresh session soon; cache-read grows every turn you carry this context.",
+			pct, budgetStr, cumStr)
+	default:
+		return fmt.Sprintf("tokenops: this session is at %s of a %s budget (%d%%) in "+
+			"API-equivalent spend — mostly cache-read. A /compact resets the cached context.",
+			cumStr, budgetStr, pct)
+	}
+}
+
+// formatUSD renders a whole-dollar budget without a trailing ".00" ("$50") and
+// keeps cents only when present ("$50.50").
+func formatUSD(v float64) string {
+	if v == math.Trunc(v) {
+		return fmt.Sprintf("$%d", int64(v))
+	}
+	return fmt.Sprintf("$%.2f", v)
+}
+
+// usageLines reads the tail of the transcript and returns every record carrying
+// a message.usage block, in file order. Reading only the tail keeps the hook
+// cheap on multi-MB transcripts. Returns nil on any read failure (fail open) or
+// when no usage record is found in the tail window.
+func usageLines(path string) []transcriptLine {
 	if path == "" {
-		return transcriptLine{}, false
+		return nil
 	}
 	f, err := os.Open(path) //nolint:gosec // path comes from the trusted Claude Code hook payload
 	if err != nil {
-		return transcriptLine{}, false
+		return nil
 	}
 	defer func() { _ = f.Close() }()
 
 	info, err := f.Stat()
 	if err != nil {
-		return transcriptLine{}, false
+		return nil
 	}
 	size := info.Size()
 	start := int64(0)
@@ -230,11 +331,11 @@ func latestUsageLine(path string) (transcriptLine, bool) {
 		start = size - tailBytes
 	}
 	if _, err := f.Seek(start, 0); err != nil {
-		return transcriptLine{}, false
+		return nil
 	}
 	buf := make([]byte, size-start)
 	if _, err := readFull(f, buf); err != nil {
-		return transcriptLine{}, false
+		return nil
 	}
 	// If we seeked into the middle of a line, drop the leading partial line so
 	// we only parse whole JSON records.
@@ -244,15 +345,9 @@ func latestUsageLine(path string) (transcriptLine, bool) {
 		}
 	}
 
-	// Scan lines, keeping the last one that has a usage block. Scanning
-	// forward (rather than reverse-parsing) is simple and the tail window is
-	// small; we allow a large line buffer for big turn records.
 	sc := bufio.NewScanner(bytes.NewReader(buf))
 	sc.Buffer(make([]byte, 0, 64<<10), int(tailBytes)+1)
-	var (
-		last  transcriptLine
-		found bool
-	)
+	var out []transcriptLine
 	for sc.Scan() {
 		b := bytes.TrimSpace(sc.Bytes())
 		if len(b) == 0 || b[0] != '{' {
@@ -263,11 +358,10 @@ func latestUsageLine(path string) (transcriptLine, bool) {
 			continue
 		}
 		if tl.Message.Usage != nil {
-			last = tl
-			found = true
+			out = append(out, tl)
 		}
 	}
-	return last, found
+	return out
 }
 
 // readFull fills buf from r, tolerating short reads. It mirrors io.ReadFull
@@ -289,29 +383,30 @@ func readFull(r *os.File, buf []byte) (int, error) {
 
 // Stats summarises the coaching ledger for a `stats` view.
 type Stats struct {
-	Events              int     `json:"events"`
-	DistinctSessions    int     `json:"distinct_sessions"`
-	Nudges              int     `json:"nudges"`
-	MaxCacheReadPerTurn int64   `json:"max_cache_read_per_turn"`
-	AvgCacheReadPerTurn int64   `json:"avg_cache_read_per_turn"`
-	EstReclaimableUSD   float64 `json:"est_reclaimable_usd"` // summed cost of nudged turns
+	Events           int            `json:"events"`
+	DistinctSessions int            `json:"distinct_sessions"`
+	Alerts           int            `json:"alerts"`         // total tier firings
+	AlertsByTier     map[string]int `json:"alerts_by_tier"` // "50%" -> count, "200%" -> count …
+	MaxCumulativeUSD float64        `json:"max_cumulative_usd"`
+	TotalEstSpendUSD float64        `json:"total_est_spend_usd"` // sum of each session's peak cumulative
 }
 
-// ReadStats reads the ledger and aggregates it.
+// ReadStats reads the ledger and aggregates it. Cumulative spend is a
+// per-event snapshot, so per-session peak (the last/highest cumulative) is the
+// session's spend; total est spend sums those peaks across sessions.
 func ReadStats(dir string) (Stats, error) {
 	dir = resolveDir(dir)
 	f, err := os.Open(filepath.Join(dir, "events.jsonl"))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return Stats{}, nil
+			return Stats{AlertsByTier: map[string]int{}}, nil
 		}
 		return Stats{}, err
 	}
 	defer func() { _ = f.Close() }()
 
-	var s Stats
-	sessions := map[string]struct{}{}
-	var sumCacheRead int64
+	s := Stats{AlertsByTier: map[string]int{}}
+	peak := map[string]float64{}
 	dec := json.NewDecoder(f)
 	for {
 		var e ledgerEvent
@@ -319,21 +414,28 @@ func ReadStats(dir string) (Stats, error) {
 			break
 		}
 		s.Events++
-		sessions[e.Session] = struct{}{}
-		sumCacheRead += e.CacheRead
-		if e.CacheRead > s.MaxCacheReadPerTurn {
-			s.MaxCacheReadPerTurn = e.CacheRead
+		if e.CumulativeUSD > peak[e.Session] {
+			peak[e.Session] = e.CumulativeUSD
 		}
-		if e.Nudged {
-			s.Nudges++
-			s.EstReclaimableUSD += costUSD(e.CacheRead, e.Model)
+		if e.TierFired > 0 {
+			s.Alerts++
+			s.AlertsByTier[tierLabel(e.TierFired)]++
 		}
 	}
-	s.DistinctSessions = len(sessions)
-	if s.Events > 0 {
-		s.AvgCacheReadPerTurn = sumCacheRead / int64(s.Events)
+	s.DistinctSessions = len(peak)
+	for _, p := range peak {
+		s.TotalEstSpendUSD += p
+		if p > s.MaxCumulativeUSD {
+			s.MaxCumulativeUSD = p
+		}
 	}
 	return s, nil
+}
+
+// tierLabel renders a fired fraction as a percentage label ("50%", "100%",
+// "200%") for the stats breakdown.
+func tierLabel(frac float64) string {
+	return fmt.Sprintf("%d%%", int(math.Round(frac*100)))
 }
 
 // --- helpers ---------------------------------------------------------------
@@ -393,25 +495,8 @@ func appendLedger(dir string, e ledgerEvent) {
 	_ = json.NewEncoder(f).Encode(e)
 }
 
-// human renders a token count compactly: millions as one decimal (1_400_000
-// → "1.4M"), thousands as "k", else the raw integer.
-func human(t int64) string {
-	switch {
-	case t >= 1_000_000:
-		whole := t / 1_000_000
-		tenths := (t % 1_000_000) / 100_000
-		return itoa(whole) + "." + itoa(tenths) + "M"
-	case t >= 1000:
-		return itoa(t/1000) + "k"
-	default:
-		return itoa(t)
-	}
-}
-
-func humanUSD(f float64) string {
-	return fmt.Sprintf("$%.2f", f)
-}
-
+// itoa renders an int64 without importing strconv. Retained for the package's
+// test helpers, which build transcript fixtures from token counts.
 func itoa(n int64) string {
 	if n == 0 {
 		return "0"

@@ -1,6 +1,6 @@
 # ADR 0001 — Opt-in usage-coaching hooks
 
-- **Status:** Accepted (Phase 1 implemented — Stop-hook nudge + `tokenops hooks install`)
+- **Status:** Accepted (Phase 1.1 implemented — cumulative-budget Stop-hook + `tokenops hooks install`)
 - **Date:** 2026-07-07
 - **Deciders:** TokenOps maintainers
 - **Related:** `tokenops coach`, `tokenops scorecard`, `tokenops read-guard`, `tokenops fmt`, `session_budget`/`budget_set` MCP tools
@@ -55,27 +55,49 @@ the agent host's hook configuration and off by default.
 | Event | Coaching role | Default | Source |
 |---|---|---|---|
 | **SessionStart** | One-line brief: "yesterday $X · today $Y · pace $Z/wk" | off | `tokenops spend` |
-| **Stop** (per turn) | ⭐ Carried-context / cache-read nudge past a threshold | off | jsonl tail |
+| **Stop** (per turn) | ⭐ Cumulative session-budget nudge (graduated cache-read alerts) | off | jsonl tail |
 | **UserPromptSubmit** | Session budget guardrail — warn (or block) past a $ ceiling | off | `budget_set` |
 | **PreCompact / SessionEnd** | Wrap-up: "session ≈ $X · N turns · M% cache-read" | off | jsonl |
 | Weekly (throttled via SessionStart, or cron) | `scorecard` / `coach` digest | off | `coach` |
 
-### The star: the Stop-hook cache-read nudge
+### The star: the Stop-hook cumulative-budget nudge
 
 The highest-value control, and the reference implementation for the layer:
 
-- **Trigger:** on `Stop`, read the tail of the active session jsonl, compute the
-  most recent turn's `cache_read_input_tokens` (and/or a rolling avg of
-  carried-context tokens/turn).
-- **Threshold:** when carried context exceeds a bound (default suggestion:
-  cache-read > ~1M tokens/turn *sustained over K turns*), emit **one** line, then
-  suppress for the next N turns (hysteresis).
-- **Message:** e.g. *"This session is carrying ~1.4M tokens/turn in cache reads
-  (~$2/turn API-equiv). `/compact` or a fresh session would cut most of it."*
-- **Config:** `vendor_usage`/`coach`-style block — enabled, threshold, cooldown,
-  message verbosity.
+- **Trigger:** on `Stop`, read the tail of the active session jsonl and sum the
+  **full API-equivalent cost** of the new turns since the last Stop (input +
+  output + cache-write + cache-read, each at the model's per-million rate),
+  accumulating into a **per-session cumulative $**.
+- **Alerts:** graduated, GitHub-Actions-style and **latched**. As the session's
+  cumulative spend crosses fractions of a per-session budget (default **$50**),
+  fire once at each of **50% / 75% / 100%**, then re-alert every additional
+  budget over (**200% / 300% / …**). A Stop that jumps across several fractions
+  fires only the single highest boundary reached; each boundary fires once.
+- **Message:** escalating tone that always names the lever, e.g. *"tokenops:
+  75% of your $50 session budget ($37.60) — consider `/compact` or a fresh
+  session soon; cache-read grows every turn you carry this context."*
+- **Config:** `budget` (USD), the alert `tiers`, and an `over-budget step`.
 
 This directly targets the 79%/$40k lever and is O(tail) cheap.
+
+#### Phase 1.1 — why cumulative budget replaced the flat per-turn threshold
+
+Phase 1 shipped a flat bound: nudge when a **single** turn's
+`cache_read_input_tokens` crossed ~1M, with a turn cooldown. That model is blind
+to the dominant real-world failure mode. Observed sessions ran **7,000–9,300
+turns at ~600k cache-read tokens/turn** and accrued **~$2,400** in
+API-equivalent spend — yet *no single turn* was extreme, so a per-turn threshold
+never fired even as the session quietly compounded into thousands of dollars.
+The damage is done by **accumulation across a long, flat session**, not by any
+one spike.
+
+Phase 1.1 therefore tracks **cumulative per-session cost** against a budget and
+prices the **whole** turn (not just cache-read), so the signal reflects real
+spend and catches the long-flat shape the threshold missed. Latched
+budget-fraction alerts replace the turn cooldown: hysteresis comes from each
+tier firing once rather than from a fixed quiet window. The metric is
+**$-normalized**, so it is model-agnostic — a cheaper model accrues more slowly
+per token but still trips the same budget fractions.
 
 ### Distribution: `tokenops hooks install`
 
@@ -130,6 +152,10 @@ enables anything the operator didn't ask for and prints exactly what it changed.
 
 - **Phase 1** — `tokenops hooks install` + the **Stop-hook cache-read nudge** (the
   reference control). Ship behind a docs page + conservative defaults.
+  - **Phase 1.1** — replace the flat per-turn threshold with a **cumulative
+    per-session budget + graduated latched alerts** (50/75/100% + over-budget
+    escalation), pricing the full turn. Rationale above: the per-turn threshold
+    missed long-flat sessions (~$2,400 over ~9k turns, no single spike).
 - **Phase 2** — SessionStart spend brief.
 - **Phase 3** — UserPromptSubmit budget guardrail (`budget_set`).
 - **Phase 4** — PreCompact/SessionEnd wrap-up + weekly `scorecard`/`coach` digest.

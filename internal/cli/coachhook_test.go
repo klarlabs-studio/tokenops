@@ -10,11 +10,11 @@ import (
 )
 
 // writeCoachTranscript writes a transcript jsonl carrying the given cache-read
-// load and returns its path.
+// load (timestamped, cache-read-only) and returns its path.
 func writeCoachTranscript(t *testing.T, dir string, cacheRead int64, model string) string {
 	t.Helper()
-	line := `{"type":"assistant","message":{"model":"` + model +
-		`","usage":{"input_tokens":1,"output_tokens":2,"cache_creation_input_tokens":3,"cache_read_input_tokens":` +
+	line := `{"type":"assistant","timestamp":"2026-07-07T12:00:01Z","message":{"model":"` + model +
+		`","usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":` +
 		itoa(cacheRead) + `}}}` + "\n"
 	p := filepath.Join(dir, "t.jsonl")
 	if err := os.WriteFile(p, []byte(line), 0o644); err != nil {
@@ -38,7 +38,7 @@ func itoa(n int64) string {
 	return string(b[i:])
 }
 
-func runCoach(t *testing.T, stateDir, transcript, sessionID string) string {
+func runCoach(t *testing.T, stateDir, transcript, sessionID string, extraArgs ...string) string {
 	t.Helper()
 	in := map[string]any{
 		"session_id":       sessionID,
@@ -49,7 +49,7 @@ func runCoach(t *testing.T, stateDir, transcript, sessionID string) string {
 	body, _ := json.Marshal(in)
 	var out bytes.Buffer
 	root := NewRoot()
-	root.SetArgs([]string{"coach-hook", "--dir", stateDir})
+	root.SetArgs(append([]string{"coach-hook", "--dir", stateDir}, extraArgs...))
 	root.SetIn(bytes.NewReader(body))
 	root.SetOut(&out)
 	root.SetErr(&out)
@@ -61,7 +61,8 @@ func runCoach(t *testing.T, stateDir, transcript, sessionID string) string {
 
 func TestCoachHook_NudgeEmitsSystemMessage(t *testing.T) {
 	dir := t.TempDir()
-	tp := writeCoachTranscript(t, dir, 1_400_000, "claude-opus-4-8")
+	// 60M cache-read on opus (0.50/M) == $30 == 60% of the default $50 budget.
+	tp := writeCoachTranscript(t, dir, 60_000_000, "claude-opus-4-8")
 	out := runCoach(t, dir, tp, "s1")
 
 	var got struct {
@@ -79,12 +80,37 @@ func TestCoachHook_NudgeEmitsSystemMessage(t *testing.T) {
 	}
 }
 
-func TestCoachHook_BelowThresholdNoOutput(t *testing.T) {
+func TestCoachHook_BelowBudgetNoOutput(t *testing.T) {
 	dir := t.TempDir()
+	// $0.05 of a $50 budget — nowhere near the 50% tier.
 	tp := writeCoachTranscript(t, dir, 100_000, "claude-opus-4-8")
 	out := runCoach(t, dir, tp, "s2")
 	if strings.TrimSpace(out) != "" {
-		t.Fatalf("below threshold must produce no stdout, got %q", out)
+		t.Fatalf("below budget fraction must produce no stdout, got %q", out)
+	}
+}
+
+// TestCoachHook_BudgetFlagFlows: a low --budget makes a modest load trip a tier
+// that would stay quiet under the default $50.
+func TestCoachHook_BudgetFlagFlows(t *testing.T) {
+	dir := t.TempDir()
+	// 4M cache-read on opus == $2.00. Quiet under $50, but 200% of a $1 budget.
+	tp := writeCoachTranscript(t, dir, 4_000_000, "claude-opus-4-8")
+
+	if out := runCoach(t, dir, tp, "quiet"); strings.TrimSpace(out) != "" {
+		t.Fatalf("$2 of $50 default must be quiet, got %q", out)
+	}
+
+	out := runCoach(t, dir, tp, "loud", "--budget", "1")
+	var got struct {
+		SystemMessage  string `json:"systemMessage"`
+		SuppressOutput bool   `json:"suppressOutput"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &got); err != nil {
+		t.Fatalf("--budget 1 should trip an alert, got %q (%v)", out, err)
+	}
+	if !strings.Contains(got.SystemMessage, "$1 budget") {
+		t.Fatalf("message should reflect the $1 budget, got %q", got.SystemMessage)
 	}
 }
 

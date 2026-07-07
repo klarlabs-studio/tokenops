@@ -33,44 +33,44 @@ type stopHookOutput struct {
 }
 
 // newCoachHookCmd is the Claude Code Stop-hook coaching nudge. Its bare form is
-// the hook handler (reads the Stop JSON on stdin, evaluates cache-read load,
-// emits a systemMessage nudge when a session is carrying too much reclaimable
-// context); the `hook` and `stats` subcommands install and inspect it.
+// the hook handler (reads the Stop JSON on stdin, accumulates the session's
+// API-equivalent spend, and emits a graduated systemMessage nudge as that spend
+// crosses fractions of a per-session budget); the `hook` and `stats`
+// subcommands install and inspect it.
 func newCoachHookCmd() *cobra.Command {
 	var (
-		threshold int64
-		cooldown  int
-		dir       string
+		budget float64
+		dir    string
 	)
 	cmd := &cobra.Command{
 		Use:   "coach-hook",
-		Short: "Claude Code Stop hook that nudges when a session carries too much cache-read context",
+		Short: "Claude Code Stop hook that nudges as a session's cumulative cost crosses budget fractions",
 		Long: `coach-hook is a Claude Code Stop hook. Wired onto Stop, it reads the
-tail of the session transcript after each turn, measures how many cache-read
-tokens the session is carrying per turn — the dominant, most reclaimable cost
-in a long session, re-billed every turn until you compact — and, when that
-crosses a threshold, surfaces a non-blocking nudge to /compact or start a fresh
-session. It works for clients that never route through the tokenops proxy (e.g.
-Claude Code on a subscription), because it acts inside the client.
+tail of the session transcript after each turn, sums the full API-equivalent
+cost of the new turns — cache-read is the dominant, most reclaimable part, and
+it compounds every turn you carry a large context — and, as the session's
+cumulative spend crosses fractions of a per-session budget (default $50),
+surfaces graduated, non-blocking nudges to /compact or start a fresh session. It
+works for clients that never route through the tokenops proxy (e.g. Claude Code
+on a subscription), because it acts inside the client.
 
-The coach never blocks and never forces the agent to keep going: it emits a
-systemMessage the operator sees and otherwise stays silent. A per-session
-cooldown keeps it from nagging every turn.
+Unlike a flat per-turn threshold, a cumulative budget catches the long, flat
+sessions where no single turn looks extreme but thousands of turns compound into
+real money. Each budget-fraction alert (50%, 75%, 100%, then every additional
+budget over) fires once, so the coach never nags every turn.
 
 Bare invocation is the hook handler (reads Stop JSON on stdin). Use
 'tokenops coach-hook hook' to print the settings.json block (or prefer
 'tokenops hooks install --coach'), and 'tokenops coach-hook stats' to see how
-much cache-read load your sessions have been carrying.`,
+much your sessions have spent and which budget alerts fired.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg := coachhook.DefaultConfig()
-			cfg.CacheReadThreshold = threshold
-			cfg.CooldownTurns = cooldown
+			cfg.BudgetUSD = budget
 			return runCoachHook(cmd, dir, cfg)
 		},
 	}
-	cmd.Flags().Int64Var(&threshold, "threshold", coachhook.DefaultCacheReadThreshold, "cache-read tokens/turn at/above which to nudge")
-	cmd.Flags().IntVar(&cooldown, "cooldown", coachhook.DefaultCooldownTurns, "turns to wait between nudges for a session")
+	cmd.Flags().Float64Var(&budget, "budget", coachhook.DefaultBudgetUSD, "per-session API-equivalent USD budget the alert fractions measure against")
 	cmd.Flags().StringVar(&dir, "dir", "", "state/ledger dir (defaults to ~/.tokenops/coach-hook)")
 	cmd.AddCommand(newCoachHookHookCmd())
 	cmd.AddCommand(newCoachHookStatsCmd())
@@ -99,10 +99,7 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config) error {
 }
 
 func newCoachHookHookCmd() *cobra.Command {
-	var (
-		threshold int64
-		cooldown  int
-	)
+	var budget float64
 	cmd := &cobra.Command{
 		Use:   "hook",
 		Short: "Print the settings.json block to wire coach-hook into Claude Code",
@@ -120,7 +117,7 @@ func newCoachHookHookCmd() *cobra.Command {
 								map[string]any{
 									"type":    "command",
 									"command": exe,
-									"args":    []string{"coach-hook", "--threshold", strconv.FormatInt(threshold, 10), "--cooldown", strconv.Itoa(cooldown)},
+									"args":    []string{"coach-hook", "--budget", formatBudget(budget)},
 									"timeout": 10,
 								},
 							},
@@ -134,8 +131,7 @@ func newCoachHookHookCmd() *cobra.Command {
 			return enc.Encode(block)
 		},
 	}
-	cmd.Flags().Int64Var(&threshold, "threshold", coachhook.DefaultCacheReadThreshold, "cache-read tokens/turn at/above which to nudge")
-	cmd.Flags().IntVar(&cooldown, "cooldown", coachhook.DefaultCooldownTurns, "turns to wait between nudges for a session")
+	cmd.Flags().Float64Var(&budget, "budget", coachhook.DefaultBudgetUSD, "per-session API-equivalent USD budget")
 	return cmd
 }
 
@@ -146,7 +142,7 @@ func newCoachHookStatsCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "stats",
-		Short: "Show coach-hook cache-read load (nudges, max/avg tokens/turn, reclaimable $)",
+		Short: "Show coach-hook session spend (budget alerts fired, max/total est $)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			s, err := coachhook.ReadStats(dir)
@@ -163,14 +159,16 @@ func newCoachHookStatsCmd() *cobra.Command {
 				fmt.Fprintln(out, "No coach-hook activity yet. Install the hook (`tokenops hooks install --coach`) and use Claude Code.")
 				return nil
 			}
-			fmt.Fprintf(out, "coach-hook — %d turns seen across %d sessions\n", s.Events, s.DistinctSessions)
-			fmt.Fprintf(out, "  cache-read carried per turn: max ~%s · avg ~%s tokens\n", humanTokens(s.MaxCacheReadPerTurn), humanTokens(s.AvgCacheReadPerTurn))
-			fmt.Fprintf(out, "  nudges surfaced: %d\n", s.Nudges)
-			if s.EstReclaimableUSD > 0 {
-				fmt.Fprintf(out, "  est. API-equiv reclaimable on nudged turns: ~$%.2f\n", s.EstReclaimableUSD)
+			fmt.Fprintf(out, "coach-hook — %d Stop events across %d sessions\n", s.Events, s.DistinctSessions)
+			fmt.Fprintf(out, "  est. API-equiv spend: max session ~$%.2f · total ~$%.2f\n", s.MaxCumulativeUSD, s.TotalEstSpendUSD)
+			fmt.Fprintf(out, "  budget alerts fired: %d\n", s.Alerts)
+			for _, tier := range []string{"50%", "75%", "100%", "200%", "300%"} {
+				if n := s.AlertsByTier[tier]; n > 0 {
+					fmt.Fprintf(out, "    %-5s %d\n", tier, n)
+				}
 			}
-			if s.Nudges == 0 {
-				fmt.Fprintln(out, "\nNo session has crossed the nudge threshold yet — your context stays lean. Keep observing.")
+			if s.Alerts == 0 {
+				fmt.Fprintln(out, "\nNo session has crossed a budget fraction yet — your spend stays lean. Keep observing.")
 			}
 			return nil
 		},
@@ -178,4 +176,10 @@ func newCoachHookStatsCmd() *cobra.Command {
 	cmd.Flags().StringVar(&dir, "dir", "", "state/ledger dir (defaults to ~/.tokenops/coach-hook)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
+}
+
+// formatBudget renders a budget for the hook args: whole dollars without a
+// trailing ".0" ("50"), otherwise the decimal form ("49.5").
+func formatBudget(v float64) string {
+	return strconv.FormatFloat(v, 'f', -1, 64)
 }

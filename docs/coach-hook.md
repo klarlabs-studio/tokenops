@@ -1,19 +1,35 @@
-# coach-hook — Stop-hook cache-read coaching nudge
+# coach-hook — Stop-hook session-budget coaching nudge
 
-`coach-hook` is a Claude Code **Stop** hook. After each turn it looks at how
-much *cache-read* context your session is carrying and, when that load crosses a
-threshold, surfaces a short, non-blocking nudge to reclaim it:
+`coach-hook` is a Claude Code **Stop** hook. After each turn it sums the full
+API-equivalent cost of the new turns into a running **per-session total** and,
+as that total crosses fractions of a per-session budget, surfaces a short,
+non-blocking, escalating nudge to reclaim context:
 
-> tokenops: this session is carrying ~1.4M cache-read tokens/turn (~$0.70/turn
-> API-equiv) — /compact or a fresh session would cut most of it.
+> tokenops: 75% of your $50 session budget ($37.60) — consider /compact or a
+> fresh session soon; cache-read grows every turn you carry this context.
 
 Cache-read is the dominant recurring cost in a long Claude Code session: every
 turn re-bills the whole accumulated context prefix at the cache-read rate, and
 that toll repeats on *every* turn until you `/compact` or start fresh. The coach
-gives you the signal to pull that lever at the right time.
+gives you the signal to pull that lever before the session compounds into real
+money.
 
 It works even when your traffic never reaches the tokenops proxy (e.g. Claude
 Code on a subscription), because it runs **inside** the client.
+
+## Why a cumulative budget (not a per-turn threshold)
+
+The first version nudged when a **single** turn's cache-read crossed a flat
+token threshold. That misses the most expensive real-world shape: long, *flat*
+sessions. Observed sessions ran **7,000–9,300 turns at ~600k cache-read
+tokens/turn** and quietly accrued **~$2,400** in API-equivalent spend — yet no
+single turn was extreme, so a per-turn threshold never fired. The cost is made
+by **accumulation**, not by spikes.
+
+So the coach now tracks **cumulative per-session spend** against a budget
+(default **$50**) and alerts at budget fractions. Because the metric is dollars,
+it is **model-agnostic**: a cheaper model accrues more slowly per token but
+still trips the same fractions.
 
 ## Install
 
@@ -58,49 +74,53 @@ tokenops hooks uninstall --coach
 If you prefer to wire it by hand, `tokenops coach-hook hook` prints the raw
 settings.json block.
 
-## Thresholds and modes
+## Budget and alert tiers
 
 Flags on `hooks install` (and on the bare `coach-hook` command):
 
-| Flag          | Default     | Meaning                                                        |
-| ------------- | ----------- | -------------------------------------------------------------- |
-| `--threshold` | `1000000`   | Cache-read tokens/turn at or above which the coach nudges.     |
-| `--cooldown`  | `20`        | Turns to wait after a nudge before nudging the same session.   |
+| Flag       | Default | Meaning                                                          |
+| ---------- | ------- | ---------------------------------------------------------------- |
+| `--budget` | `50`    | Per-session API-equivalent USD budget the alert fractions measure against. |
 
-The cooldown provides hysteresis: once you have been told, the coach stays quiet
-for `--cooldown` turns before it will nudge that session again.
+The coach fires **once** at each of **50%**, **75%**, and **100%** of the
+budget, then re-alerts every additional budget over — **200%**, **300%**, and so
+on. Each boundary is **latched**: once an alert fires it never repeats, so the
+coach never nags every turn. A Stop that jumps across several fractions at once
+(e.g. 40% → 120%) fires only the **single highest** boundary reached (here,
+100%), not a burst of every crossed tier.
 
-Set `--threshold` lower if you want to be nudged earlier, higher if your normal
-sessions legitimately run large.
+Set `--budget` lower to be nudged earlier, higher if your normal sessions
+legitimately run large.
 
 ## Stats
 
-See how much cache-read load your sessions have been carrying:
+See how much your sessions have spent and which alerts fired:
 
 ```sh
 tokenops coach-hook stats
 tokenops coach-hook stats --json
 ```
 
-It reports turns observed, distinct sessions, nudges surfaced, max/avg
-cache-read tokens per turn, and the estimated API-equivalent cost of the nudged
-turns (for models it can price).
+It reports Stop events observed, distinct sessions, the budget alerts fired
+broken down by tier (50% / 75% / 100% / 200% …), the largest single-session
+API-equivalent spend, and the total estimated spend across sessions.
 
 ## Cost estimate
 
-Cost is an **API-equivalent** figure: what that per-turn cache-read load would
-cost at public list prices. The rate comes from tokenops' own pricing catalog
-(`spend` engine); only Opus-family models are priced (they dominate long
-sessions and their cache-read rate is well defined). Other models show the token
-count without a dollar figure rather than a misleading one. On a subscription
-the money is not billed per turn — the figure is there to make the size of the
-drag legible.
+Cost is an **API-equivalent** figure: what each turn's tokens would cost at
+public list prices. The rate comes from tokenops' own pricing catalog (`spend`
+engine); each turn is priced across **all** token types — input, output,
+cache-write, and cache-read. A model the catalog can't price contributes $0 (the
+turn still counts toward dedup, it just adds nothing), so the total never
+over-states what we can defend. On a subscription the money is not billed per
+turn — the figure is there to make the size of the drag legible.
 
 ## Privacy
 
 The hook reads only the **tail** (~256 KiB) of your local transcript jsonl to
-find the most recent turn's token usage. It never reads the whole file and never
-sends anything off your machine. State is a tiny per-session counter and an
+find the turns added since the last Stop. It never reads the whole file and
+never sends anything off your machine. State is a tiny per-session counter
+(cumulative $, the highest alert fired, and a dedup timestamp) plus an
 append-only ledger under `~/.tokenops/coach-hook/`.
 
 ## Fail-open guarantee

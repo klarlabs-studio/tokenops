@@ -51,6 +51,50 @@ func TestHooksInstall_CreatesAndIsIdempotent(t *testing.T) {
 	if got := countMarker(hooks, "coach-hook"); got != 1 {
 		t.Fatalf("idempotency: want 1 coach-hook entry after 2 installs, got %d", got)
 	}
+
+	// The wired entry must carry the --budget flag (default 50), not the old
+	// --threshold/--cooldown flags.
+	args := coachHookArgs(t, hooks)
+	if !contains(args, "--budget") || !contains(args, "50") {
+		t.Fatalf("coach-hook args should be [coach-hook --budget 50], got %v", args)
+	}
+	if contains(args, "--threshold") || contains(args, "--cooldown") {
+		t.Fatalf("coach-hook args must not carry the old flags, got %v", args)
+	}
+}
+
+// coachHookArgs extracts the args slice of the wired coach-hook command entry.
+func coachHookArgs(t *testing.T, hooks map[string]any) []string {
+	t.Helper()
+	groups, _ := hooks["Stop"].([]any)
+	for _, g := range groups {
+		gm, _ := g.(map[string]any)
+		hlist, _ := gm["hooks"].([]any)
+		for _, h := range hlist {
+			hm, _ := h.(map[string]any)
+			if !isMarkerEntry(hm, "coach-hook") {
+				continue
+			}
+			raw, _ := hm["args"].([]any)
+			out := make([]string, 0, len(raw))
+			for _, a := range raw {
+				s, _ := a.(string)
+				out = append(out, s)
+			}
+			return out
+		}
+	}
+	t.Fatalf("no coach-hook entry found")
+	return nil
+}
+
+func contains(ss []string, want string) bool {
+	for _, s := range ss {
+		if s == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestHooksInstall_PreservesUnrelatedHooksAndKeys(t *testing.T) {

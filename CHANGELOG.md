@@ -2,20 +2,33 @@
 
 ## Unreleased
 
+### Changed
+
+- **Coach-hook Phase 1.1 (ADR 0001): cumulative session-budget alerts replace
+  the flat per-turn threshold.** The `coach-hook` Stop hook now sums each turn's
+  **full** API-equivalent cost (input + output + cache-write + cache-read) into a
+  running **per-session total** and fires graduated, **latched** alerts as that
+  total crosses fractions of a per-session budget — once at **50% / 75% / 100%**,
+  then every additional budget over (**200% / 300% / …**). This catches the
+  expensive real-world shape the per-turn threshold missed: long, *flat* sessions
+  (observed at 7,000–9,300 turns and ~$2,400 API-equivalent) where no single turn
+  is extreme but the accumulation compounds. Because the metric is dollars, it is
+  **model-agnostic**. The `--threshold`/`--cooldown` flags are replaced by
+  `--budget` (default `$50`) on both `coach-hook` and `hooks install`. Still
+  **non-blocking** and **fail-open**. `tokenops coach-hook stats` now reports
+  spend and alerts-by-tier.
+
 ### Added
 
-- **Usage-coaching hooks (Phase 1 of ADR 0001): Stop-hook cache-read nudge +
+- **Usage-coaching hooks (Phase 1 of ADR 0001): Stop-hook nudge +
   `tokenops hooks install`.** A new `coach-hook` Claude Code **Stop** hook reads
-  the tail of the session transcript after each turn, measures how many
-  cache-read tokens the session is carrying per turn — the dominant recurring
-  cost in a long session, re-billed every turn until you `/compact` — and, when
-  that crosses a threshold (default 1M tokens/turn, 20-turn cooldown), surfaces a
-  **non-blocking** `systemMessage` nudge to compact or start a fresh session. It
-  works for clients that never hit the tokenops proxy (e.g. Claude Code on a
-  subscription) and **fails open** on every error path, so it can never disrupt a
-  session. Cost is priced via the existing `spend` catalog (Opus-family models;
-  others show tokens only). `tokenops coach-hook stats` reports the load your
-  sessions have been carrying.
+  the tail of the session transcript after each turn and surfaces a
+  **non-blocking** `systemMessage` nudge to compact or start a fresh session when
+  a session carries too much reclaimable cache-read context (alerting model
+  refined in Phase 1.1, above). It works for clients that never hit the tokenops
+  proxy (e.g. Claude Code on a subscription) and **fails open** on every error
+  path, so it can never disrupt a session. Cost is priced via the existing
+  `spend` catalog.
 - **`tokenops hooks install / uninstall / status`** — a scaffolder that
   idempotently merges the tokenops hooks (`--coach`, `--read-guard`) into
   `~/.claude/settings.json` without clobbering unrelated hooks, backs the prior

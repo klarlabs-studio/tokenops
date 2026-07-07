@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -54,8 +53,8 @@ backs up the prior settings to settings.json.bak, and writes atomically.
 
 // specsFor returns the hook specs selected by the --coach/--read-guard flags.
 // When neither is set, both are selected (install everything is the common
-// case). threshold/cooldown parametrise the coach entry's args.
-func specsFor(coach, readGuard bool, threshold int64, cooldown int) []hookSpec {
+// case). budget parametrises the coach entry's args.
+func specsFor(coach, readGuard bool, budget float64) []hookSpec {
 	if !coach && !readGuard {
 		coach, readGuard = true, true
 	}
@@ -65,7 +64,7 @@ func specsFor(coach, readGuard bool, threshold int64, cooldown int) []hookSpec {
 			name:   "coach-hook (Stop nudge)",
 			event:  "Stop",
 			marker: "coach-hook",
-			args:   []string{"coach-hook", "--threshold", strconv.FormatInt(threshold, 10), "--cooldown", strconv.Itoa(cooldown)},
+			args:   []string{"coach-hook", "--budget", formatBudget(budget)},
 		})
 	}
 	if readGuard {
@@ -85,8 +84,7 @@ func newHooksInstallCmd() *cobra.Command {
 		coach, readGuard bool
 		settingsPath     string
 		dryRun           bool
-		threshold        int64
-		cooldown         int
+		budget           float64
 	)
 	cmd := &cobra.Command{
 		Use:   "install",
@@ -105,7 +103,7 @@ func newHooksInstallCmd() *cobra.Command {
 			}
 			hooks := hooksMap(settings)
 
-			specs := specsFor(coach, readGuard, threshold, cooldown)
+			specs := specsFor(coach, readGuard, budget)
 			var changes []string
 			for _, sp := range specs {
 				entry := commandEntry(exe, sp.args)
@@ -144,8 +142,7 @@ func newHooksInstallCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&readGuard, "read-guard", false, "install the Read dedup guard")
 	cmd.Flags().StringVar(&settingsPath, "settings", "", "settings.json path (defaults to ~/.claude/settings.json)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the result without writing")
-	cmd.Flags().Int64Var(&threshold, "threshold", coachhook.DefaultCacheReadThreshold, "coach: cache-read tokens/turn to nudge at")
-	cmd.Flags().IntVar(&cooldown, "cooldown", coachhook.DefaultCooldownTurns, "coach: turns between nudges")
+	cmd.Flags().Float64Var(&budget, "budget", coachhook.DefaultBudgetUSD, "coach: per-session API-equivalent USD budget")
 	return cmd
 }
 
@@ -173,7 +170,7 @@ func newHooksUninstallCmd() *cobra.Command {
 			}
 			hooks := hooksMap(settings)
 
-			specs := specsFor(coach, readGuard, coachhook.DefaultCacheReadThreshold, coachhook.DefaultCooldownTurns)
+			specs := specsFor(coach, readGuard, coachhook.DefaultBudgetUSD)
 			var removed []string
 			for _, sp := range specs {
 				if removeHook(hooks, sp.event, sp.marker) {
