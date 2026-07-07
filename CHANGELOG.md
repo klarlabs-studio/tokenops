@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Pricing research (ADR 0002) broadened from Anthropic-only to all providers.**
+  Phase 1 hard-scoped snapshots to Anthropic; the hand-maintained non-Anthropic
+  baseline had since drifted (Mistral rows stale, DeepSeek off) while nothing
+  sourced it. Snapshots now cover **every provider the catalog prices** (OpenAI,
+  Anthropic, Mistral, Gemini, Cohere, Groq, DeepSeek, xAI, Perplexity, Cerebras).
+  - **Snapshot re-keying.** `Snapshot.Rates` is now keyed `"<provider>/<model>"`
+    (e.g. `anthropic/claude-opus-4-8`, `openai/gpt-4o`) instead of bare model,
+    matching the multi-provider engine table (`spend.Key{Provider, Model}`). The
+    embedded baseline and `Snapshot.Table()` span all providers; a fetched rate
+    overrides the correct vendor's baseline row via `MergeOverrides`.
+  - **All-provider LiteLLM adapter.** The source maps every `litellm_provider`
+    to a tokenops provider (e.g. `vertex_ai`/`gemini`→`gemini`,
+    `text-completion-openai`→`openai`), skipping providers the catalog can't
+    price (fireworks/together/openrouter multiplexers) so the key-space stays
+    aligned with the baseline and the diff stays meaningful.
+  - **Guard scoped to Anthropic family.** The ratio heuristics (cache-read ≈10%
+    of input, output ≈5× input) run **only on `anthropic/*` rows** — other
+    providers price on different curves and would false-flag. All rows still get
+    a conservative generic sanity check (cache-read must not exceed input).
+  - `refresh`'s diff now surfaces real non-Anthropic drift; `show`/`diff` group
+    by provider (keys sort `"<provider>/<model>"`). No catalog rates were
+    hand-edited — this is about *sourcing*, not editing the baseline.
+
 ## 0.40.0 - 2026-07-07
 
 ### Added

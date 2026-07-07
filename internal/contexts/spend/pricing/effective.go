@@ -16,14 +16,14 @@ func AllSnapshots(dir string) []Snapshot {
 }
 
 // SnapshotsToDatedTables converts each snapshot into a spend.DatedTable
-// effective from its FetchedAt. Because a snapshot is Anthropic-scoped (only
-// the SnapshotProvider family is researched), each dated table is built by
-// layering the snapshot's Anthropic rates onto a full spend.DefaultTable:
-// the result is a COMPLETE rate card for that instant, so non-Anthropic
-// providers (OpenAI, Gemini, …) keep pricing and the per-instant table stays
-// authoritative (no fall-through). The baseline snapshot's rates equal the
-// catalog's Anthropic rows, so its dated table is exactly DefaultTable() —
-// hence a baseline-only engine reproduces current behavior identically.
+// effective from its FetchedAt. A snapshot now spans every provider the catalog
+// prices, but it may still be incomplete (a source can omit models), so each
+// dated table layers the snapshot's rates onto a full spend.DefaultTable via
+// MergeOverrides: the result is a COMPLETE rate card for that instant, and a
+// snapshot rate overrides the matching Key{Provider, Model} row — so a fetched
+// Mistral rate overrides the Mistral baseline, not just Anthropic. The baseline
+// snapshot's rates equal the whole catalog, so its dated table is exactly
+// DefaultTable() — a baseline-only engine reproduces current behavior.
 func SnapshotsToDatedTables(snaps []Snapshot) []spend.DatedTable {
 	out := make([]spend.DatedTable, 0, len(snaps))
 	for _, s := range snaps {

@@ -45,6 +45,43 @@ func TestDiff_AddedRemovedModified(t *testing.T) {
 	}
 }
 
+func TestDiff_CrossProviderKeys(t *testing.T) {
+	// Keys are "<provider>/<model>", so drift surfaces per provider and rows
+	// sort grouped by provider.
+	old := diffSnap(map[string]Rate{
+		"mistral/mistral-large": {InputPerMillion: 2, OutputPerMillion: 6},
+		"openai/gpt-4o":         {InputPerMillion: 2.5, OutputPerMillion: 10},
+	})
+	newer := diffSnap(map[string]Rate{
+		"mistral/mistral-large":     {InputPerMillion: 3, OutputPerMillion: 9},  // drift
+		"anthropic/claude-opus-4-8": {InputPerMillion: 5, OutputPerMillion: 25}, // added
+		// openai/gpt-4o removed
+	})
+	changes := Diff(old, newer)
+	byModel := map[string]Change{}
+	for _, c := range changes {
+		byModel[c.Model] = c
+	}
+	if byModel["anthropic/claude-opus-4-8"].Kind != ChangeAdded {
+		t.Errorf("opus should be added, got %v", byModel["anthropic/claude-opus-4-8"].Kind)
+	}
+	if byModel["openai/gpt-4o"].Kind != ChangeRemoved {
+		t.Errorf("gpt-4o should be removed, got %v", byModel["openai/gpt-4o"].Kind)
+	}
+	m := byModel["mistral/mistral-large"]
+	if m.Kind != ChangeModified {
+		t.Fatalf("mistral should be modified, got %+v", m)
+	}
+	line := FormatChange(m)
+	if !strings.HasPrefix(line, "~ mistral/mistral-large ") {
+		t.Errorf("modified line = %q, want provider-qualified ~ prefix", line)
+	}
+	// Sorted output groups by provider: anthropic < mistral < openai.
+	if changes[0].Model != "anthropic/claude-opus-4-8" {
+		t.Errorf("changes not sorted/grouped by provider: %v", changes[0].Model)
+	}
+}
+
 func TestFormatChange_OpusStyleLine(t *testing.T) {
 	c := Change{
 		Model: "claude-opus-4-8", Kind: ChangeModified,

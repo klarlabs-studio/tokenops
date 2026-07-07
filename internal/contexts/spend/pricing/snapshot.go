@@ -12,9 +12,11 @@
 //
 // Everything here is nil-safe and fail-soft: an absent snapshot dir, an
 // unreachable source, or a malformed file degrades to the embedded baseline
-// rather than erroring the caller. Snapshots are Anthropic-scoped because the
-// consistency heuristics (cache-read ≈ 10% of input, output ≈ 5× input) are a
-// per-family invariant and the drift the ADR targets was an Anthropic row.
+// rather than erroring the caller. Snapshots cover every provider the catalog
+// prices; each rate is keyed "<provider>/<model>" so the key-space matches the
+// multi-provider engine table. The consistency guard's ratio heuristics
+// (cache-read ≈ 10% of input, output ≈ 5× input) remain an Anthropic-family
+// invariant and run only on anthropic/* rows (see guard.go).
 package pricing
 
 import (
@@ -26,10 +28,26 @@ import (
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
-// SnapshotProvider is the vendor family a Snapshot prices. Phase 1 scopes
-// snapshots to Anthropic: the consistency guard's ratios are a per-family
-// invariant and the ADR's motivating drift (Opus at ⅓) was Anthropic.
-const SnapshotProvider = eventschema.ProviderAnthropic
+// snapKeySep separates the provider from the model in a Snapshot rate key.
+const snapKeySep = "/"
+
+// snapKey builds the "<provider>/<model>" key a Snapshot rate is stored under,
+// e.g. snapKey("anthropic", "claude-opus-4-8") == "anthropic/claude-opus-4-8".
+// Keeping the provider in the string key preserves the clean JSON on-disk
+// format while letting the snapshot span every provider the catalog prices.
+func snapKey(provider, model string) string {
+	return provider + snapKeySep + model
+}
+
+// splitSnapKey splits a Snapshot rate key back into its provider and model.
+// A key with no separator is treated as a bare model with an empty provider
+// (fail-soft: legacy or hand-written keys degrade rather than panic).
+func splitSnapKey(key string) (provider, model string) {
+	if p, m, ok := strings.Cut(key, snapKeySep); ok {
+		return p, m
+	}
+	return "", key
+}
 
 // baselineFetchedAt is the fixed, committed timestamp of the embedded
 // baseline snapshot. It is dated at the ADR's acceptance so the baseline
@@ -66,8 +84,9 @@ func (r Rate) ToSpendRate() spend.Rate {
 }
 
 // Snapshot is a point-in-time rate card with provenance. Rates is keyed by
-// tokenops model key (e.g. "claude-opus-4-8"), the same keys the embedded
-// catalog uses with the trailing "*" stripped.
+// "<provider>/<model>" (e.g. "anthropic/claude-opus-4-8", "openai/gpt-4o"),
+// where model is the tokenops catalog key with the trailing "*" prefix marker
+// stripped. Use snapKey / splitSnapKey to build and parse keys.
 type Snapshot struct {
 	Source    string          `json:"source"`
 	SourceURL string          `json:"source_url,omitempty"`
@@ -80,17 +99,14 @@ const SourceEmbeddedBaseline = "embedded-baseline"
 
 // BaselineSnapshot wraps the embedded pricing.yaml catalog as the always-
 // present fallback snapshot. It carries a fixed FetchedAt so it is
-// deterministic and sorts before any refresh. Only the SnapshotProvider
-// family is included, and the trailing "*" prefix marker is stripped from
-// keys so they line up with a fetched snapshot for diffing.
+// deterministic and sorts before any refresh. Every provider/model the catalog
+// prices is included, keyed "<provider>/<model>" with the trailing "*" prefix
+// marker stripped so keys line up with a fetched snapshot for diffing.
 func BaselineSnapshot() Snapshot {
 	table := spend.DefaultTable()
 	rates := make(map[string]Rate, len(table.Rates))
 	for k, r := range table.Rates {
-		if k.Provider != SnapshotProvider {
-			continue
-		}
-		rates[normalizeKey(k.Model)] = FromSpendRate(r)
+		rates[snapKey(string(k.Provider), normalizeKey(k.Model))] = FromSpendRate(r)
 	}
 	return Snapshot{
 		Source:    SourceEmbeddedBaseline,
@@ -105,25 +121,24 @@ func normalizeKey(model string) string {
 	return strings.TrimSpace(strings.TrimSuffix(model, "*"))
 }
 
-// Table builds a spend.Table from the snapshot's rates, scoped to the
-// SnapshotProvider family. Snapshot keys are normalized (the catalog's
-// trailing "*" prefix marker is stripped), so Table re-adds it: every row
-// becomes a prefix match, exactly as the embedded catalog stores Anthropic
-// models. That keeps version-suffixed request models (e.g.
-// "claude-opus-4-8[1m]") resolving to their family rate. The table is
-// Anthropic-scoped only — callers that need a complete rate card layer it
-// onto spend.DefaultTable (see SnapshotsToDatedTables).
+// Table builds a spend.Table from the snapshot's rates across every provider.
+// Each "<provider>/<model>" key becomes a spend.Key{Provider, Model+"*"}: the
+// trailing "*" re-adds the catalog's prefix-match marker, so version-suffixed
+// request models (e.g. "claude-opus-4-8[1m]") resolve to their family rate.
+// The table is multi-provider but may not be complete; callers that need a
+// full rate card layer it onto spend.DefaultTable (see SnapshotsToDatedTables).
 func (s Snapshot) Table() spend.Table {
 	rates := make(map[spend.Key]spend.Rate, len(s.Rates))
-	for model, r := range s.Rates {
-		key := spend.Key{Provider: SnapshotProvider, Model: normalizeKey(model) + "*"}
-		rates[key] = r.ToSpendRate()
+	for key, r := range s.Rates {
+		provider, model := splitSnapKey(key)
+		k := spend.Key{Provider: eventschema.Provider(provider), Model: normalizeKey(model) + "*"}
+		rates[k] = r.ToSpendRate()
 	}
 	return spend.Table{Currency: "USD", Rates: rates}
 }
 
-// Models returns the snapshot's model keys sorted lexically, for stable
-// display and iteration.
+// Models returns the snapshot's "<provider>/<model>" keys sorted lexically,
+// which groups rows by provider, for stable display and iteration.
 func (s Snapshot) Models() []string {
 	out := make([]string, 0, len(s.Rates))
 	for k := range s.Rates {

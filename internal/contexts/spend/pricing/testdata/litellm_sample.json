@@ -47,7 +47,22 @@
     "max_tokens": 16384,
     "input_cost_per_token": 0.0000025,
     "output_cost_per_token": 0.00001,
+    "cache_read_input_token_cost": 0.00000125,
     "litellm_provider": "openai",
+    "mode": "chat"
+  },
+  "mistral/mistral-large-latest": {
+    "max_tokens": 128000,
+    "input_cost_per_token": 0.000002,
+    "output_cost_per_token": 0.000006,
+    "litellm_provider": "mistral",
+    "mode": "chat"
+  },
+  "fireworks_ai/accounts/fireworks/models/llama-v3p3-70b": {
+    "max_tokens": 16384,
+    "input_cost_per_token": 0.0000009,
+    "output_cost_per_token": 0.0000009,
+    "litellm_provider": "fireworks_ai",
     "mode": "chat"
   }
 }

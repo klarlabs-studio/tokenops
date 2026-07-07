@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func TestBaselineSnapshot_AnthropicScopedAndPopulated(t *testing.T) {
+func TestBaselineSnapshot_AllProvidersPopulated(t *testing.T) {
 	base := BaselineSnapshot()
 	if base.Source != SourceEmbeddedBaseline {
 		t.Fatalf("source = %q, want %q", base.Source, SourceEmbeddedBaseline)
@@ -13,17 +13,31 @@ func TestBaselineSnapshot_AnthropicScopedAndPopulated(t *testing.T) {
 	if base.FetchedAt.IsZero() {
 		t.Error("baseline must carry a fixed FetchedAt")
 	}
-	// Keys must be normalized (no trailing "*") and include the Opus family.
-	if _, ok := base.Rates["claude-opus-4-8"]; !ok {
-		t.Fatalf("baseline missing claude-opus-4-8; keys=%v", base.Models())
-	}
-	for k := range base.Rates {
-		if k == "" || k[len(k)-1] == '*' {
-			t.Errorf("baseline key %q not normalized", k)
+	// Keys are "<provider>/<model>", normalized (no trailing "*"), and span
+	// multiple providers — not just Anthropic.
+	for _, want := range []string{
+		"anthropic/claude-opus-4-8",
+		"openai/gpt-4o",
+		"mistral/mistral-large",
+		"gemini/gemini-2.5-pro",
+	} {
+		if _, ok := base.Rates[want]; !ok {
+			t.Errorf("baseline missing %q; keys=%v", want, base.Models())
 		}
 	}
+	providers := map[string]bool{}
+	for k := range base.Rates {
+		provider, model := splitSnapKey(k)
+		if provider == "" || model == "" || model[len(model)-1] == '*' {
+			t.Errorf("baseline key %q not a normalized provider/model", k)
+		}
+		providers[provider] = true
+	}
+	if len(providers) < 3 {
+		t.Errorf("baseline should span many providers, got %d: %v", len(providers), providers)
+	}
 	// Opus baseline must be the corrected rate, and internally consistent.
-	opus := base.Rates["claude-opus-4-8"]
+	opus := base.Rates["anthropic/claude-opus-4-8"]
 	if opus.InputPerMillion != 5 || opus.OutputPerMillion != 25 || opus.CachedInputPerMillion != 0.5 {
 		t.Errorf("opus baseline = %+v, want 5/25/0.5", opus)
 	}

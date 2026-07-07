@@ -63,10 +63,45 @@ func perMillionCost(perToken float64) float64 {
 	return math.Round(perToken*perMillion*1e6) / 1e6
 }
 
+// litellmProviderMap maps a LiteLLM "litellm_provider" value to the tokenops
+// provider string used in the catalog. Only providers the embedded catalog can
+// price are listed; an entry whose litellm_provider is absent here is skipped,
+// so the fetched snapshot's key-space stays aligned with the baseline and the
+// diff remains meaningful. Multiplexers (fireworks, together, openrouter) are
+// intentionally excluded — a static card cannot price their namespaced models.
+var litellmProviderMap = map[string]string{
+	"anthropic":                 "anthropic",
+	"openai":                    "openai",
+	"text-completion-openai":    "openai",
+	"mistral":                   "mistral",
+	"gemini":                    "gemini",
+	"vertex_ai":                 "gemini",
+	"vertex_ai-language-models": "gemini",
+	"google":                    "gemini",
+	"cohere":                    "cohere",
+	"cohere_chat":               "cohere",
+	"groq":                      "groq",
+	"deepseek":                  "deepseek",
+	"xai":                       "xai",
+	"perplexity":                "perplexity",
+	"cerebras":                  "cerebras",
+}
+
+// vendorPrefixes are the leading "<vendor>/" namespaces LiteLLM prepends to
+// some model ids (e.g. "mistral/mistral-large-latest", "vertex_ai/gemini-…").
+// Only these known tokens are stripped, so multi-segment ids from unmapped
+// multiplexers are never mangled.
+var vendorPrefixes = map[string]bool{
+	"anthropic": true, "openai": true, "mistral": true, "gemini": true,
+	"vertex_ai": true, "google": true, "cohere": true, "groq": true,
+	"deepseek": true, "xai": true, "perplexity": true, "cerebras": true,
+}
+
 // Fetch implements Source: GET the URL under ctx, parse the LiteLLM map, and
-// map the SnapshotProvider (Anthropic) entries into a Snapshot. Any transport,
-// status, or parse failure is wrapped in ErrFetch so the caller falls back to
-// the baseline without writing a snapshot.
+// map every entry whose litellm_provider resolves to a catalog provider into a
+// Snapshot keyed "<provider>/<model>". Any transport, status, or parse failure
+// is wrapped in ErrFetch so the caller falls back to the baseline without
+// writing a snapshot.
 func (s *LiteLLMSource) Fetch(ctx context.Context) (Snapshot, error) {
 	url := s.URL
 	if url == "" {
@@ -126,13 +161,18 @@ func (s *LiteLLMSource) Fetch(ctx context.Context) (Snapshot, error) {
 		if json.Unmarshal(raw[id], &e) != nil {
 			continue // non-model or unexpected shape → skip, don't fail
 		}
-		if !strings.EqualFold(e.Provider, string(SnapshotProvider)) {
-			continue
+		provider, ok := litellmProviderMap[strings.ToLower(e.Provider)]
+		if !ok {
+			continue // provider not in the catalog → skip so key-space matches
+		}
+		providerKeys, priced := catalogKeys[provider]
+		if !priced {
+			continue // catalog carries no rows for this provider
 		}
 		if e.InputCostPerToken == 0 && e.OutputCost == 0 {
 			continue // no usable price
 		}
-		key := mapModelKey(id, catalogKeys)
+		key := snapKey(provider, mapModelKey(id, providerKeys))
 		if _, exists := snap.Rates[key]; exists {
 			continue // keep first (lexically smallest id) on collision
 		}
@@ -145,41 +185,58 @@ func (s *LiteLLMSource) Fetch(ctx context.Context) (Snapshot, error) {
 	return snap, nil
 }
 
-// catalogModelKeys returns the tokenops Anthropic model keys (from the
-// embedded baseline), longest first, so mapModelKey can longest-prefix match.
-func catalogModelKeys() []string {
+// catalogModelKeys returns the tokenops catalog model keys (from the embedded
+// baseline) grouped by provider, each group sorted longest-first so mapModelKey
+// can longest-prefix match within the right provider.
+func catalogModelKeys() map[string][]string {
 	base := BaselineSnapshot()
-	keys := make([]string, 0, len(base.Rates))
-	for k := range base.Rates {
-		keys = append(keys, k)
+	out := make(map[string][]string)
+	for key := range base.Rates {
+		provider, model := splitSnapKey(key)
+		out[provider] = append(out[provider], model)
 	}
-	sort.Slice(keys, func(i, j int) bool { return len(keys[i]) > len(keys[j]) })
-	return keys
+	for _, keys := range out {
+		sort.Slice(keys, func(i, j int) bool { return len(keys[i]) > len(keys[j]) })
+	}
+	return out
 }
 
 // dateSuffix matches a trailing "-YYYYMMDD" or "-YYMMDD" date variant that
 // LiteLLM appends to dated model snapshots (e.g. "-20241022").
 var dateSuffix = regexp.MustCompile(`-\d{6,8}$`)
 
-// mapModelKey maps a LiteLLM model id to a tokenops model key. It first takes
-// the longest catalog key that is a prefix of the id (so
-// "claude-3-5-sonnet-20241022" → "claude-3-5-sonnet"); when nothing matches it
-// falls back to a normalized form of the id (date/`-latest` suffix stripped)
-// so genuinely new models still surface in the diff under a readable key.
+// mapModelKey maps a LiteLLM model id to a tokenops model key within its
+// provider. It strips any leading "<vendor>/" namespace, then takes the longest
+// catalog key that is a prefix of the result (so "mistral/mistral-large-latest"
+// → "mistral-large" and "claude-3-5-sonnet-20241022" → "claude-3-5-sonnet");
+// when nothing matches it falls back to a normalized form of the id (vendor
+// prefix + date/`-latest` marker stripped) so genuinely new models still
+// surface in the diff under a readable key.
 func mapModelKey(id string, catalogKeys []string) string {
+	stem := stripVendorPrefix(id)
 	for _, k := range catalogKeys {
-		if k != "" && strings.HasPrefix(id, k) {
+		if k != "" && strings.HasPrefix(stem, k) {
 			return k
 		}
 	}
 	return normalizeModelID(id)
 }
 
-// normalizeModelID strips a leading "anthropic/" namespace and a trailing
-// dated or "-latest" version marker, yielding a stable key for models absent
-// from the catalog.
+// stripVendorPrefix removes a single leading "<vendor>/" namespace when the
+// vendor is a known token, leaving multi-segment ids from unmapped
+// multiplexers untouched.
+func stripVendorPrefix(id string) string {
+	if i := strings.Index(id, "/"); i > 0 && vendorPrefixes[strings.ToLower(id[:i])] {
+		return id[i+1:]
+	}
+	return id
+}
+
+// normalizeModelID strips a leading "<vendor>/" namespace and a trailing dated
+// or "-latest" version marker, yielding a stable key for models absent from
+// the catalog.
 func normalizeModelID(id string) string {
-	id = strings.TrimPrefix(id, "anthropic/")
+	id = stripVendorPrefix(id)
 	id = strings.TrimSuffix(id, "-latest")
 	id = dateSuffix.ReplaceAllString(id, "")
 	return strings.TrimSpace(id)

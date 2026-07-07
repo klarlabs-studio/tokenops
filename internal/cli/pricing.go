@@ -60,13 +60,14 @@ Instead of one hand-maintained rate table that drifts silently, pricing
 fetches rates from a pluggable source (default: LiteLLM), stores each fetch as
 a timestamped snapshot with provenance under ~/.tokenops/pricing/snapshots/,
 and DIFFS every refresh against the previous snapshot so a change like
-"claude-opus-4-8 cache_read 0.50 → 1.50 (+200%)" shouts instead of hiding. A
-consistency guard lints each snapshot for family-ratio anomalies (cache-read
-≈10% of input, output ≈5× input) — the exact check that caught Opus.
+"anthropic/claude-opus-4-8 cache_read 0.50 → 1.50 (+200%)" shouts instead of
+hiding. Snapshots cover every provider the catalog prices (rates are keyed
+"<provider>/<model>"). A consistency guard lints each snapshot; its family-ratio
+check (cache-read ≈10% of input, output ≈5× input) is an Anthropic-family
+invariant and runs only on anthropic/* rows — the exact check that caught Opus.
 
-The embedded pricing.yaml is always available as the offline baseline. Phase 1
-does not change how costs are computed; the cost engine still uses the built-in
-table. See docs/pricing-research.md.`,
+The embedded pricing.yaml is always available as the offline baseline. See
+docs/pricing-research.md.`,
 	}
 	cmd.AddCommand(
 		newPricingRefreshCmd(),
@@ -191,10 +192,12 @@ func newPricingShowCmd() *cobra.Command {
 			}
 			fmt.Fprintf(out, "\nfetched_at: %s\n", snap.FetchedAt.Format(time.RFC3339))
 			fmt.Fprintf(out, "models: %d\n\n", len(snap.Rates))
-			fmt.Fprintf(out, "%-28s %12s %12s %12s\n", "MODEL", "INPUT", "OUTPUT", "CACHE_READ")
+			fmt.Fprintf(out, "%-34s %12s %12s %12s\n", "PROVIDER/MODEL", "INPUT", "OUTPUT", "CACHE_READ")
+			// Models() returns "<provider>/<model>" keys sorted lexically, so
+			// rows already group by provider.
 			for _, m := range snap.Models() {
 				r := snap.Rates[m]
-				fmt.Fprintf(out, "%-28s %12.4g %12.4g %12.4g\n", m, r.InputPerMillion, r.OutputPerMillion, r.CachedInputPerMillion)
+				fmt.Fprintf(out, "%-34s %12.4g %12.4g %12.4g\n", m, r.InputPerMillion, r.OutputPerMillion, r.CachedInputPerMillion)
 			}
 			return nil
 		},
@@ -254,9 +257,11 @@ func newPricingLintCmd() *cobra.Command {
 		Use:   "lint",
 		Short: "Run the consistency guard on a snapshot (exit non-zero on anomalies)",
 		Long: `lint runs the consistency guard over a snapshot and reports any
-family-ratio anomalies (cache-read ≈10% of input, output ≈5× input). It exits
-non-zero when anomalies are found, so it can gate CI. Default snapshot: latest,
-falling back to the baseline.`,
+anomalies. The family-ratio check (cache-read ≈10% of input, output ≈5× input)
+is Anthropic-family-specific and runs only on anthropic/* rows; all rows also
+get a conservative generic sanity check (e.g. cache-read must not exceed input).
+It exits non-zero when anomalies are found, so it can gate CI. Default snapshot:
+latest, falling back to the baseline.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			snap, err := pricing.FindSnapshot(dir, snapshot)

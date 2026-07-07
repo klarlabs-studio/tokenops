@@ -12,15 +12,20 @@ a researched, sourced, timestamped, drift-visible pricing framework.
 **Phase 1** made rates *sourced and diffable* so drift is loud instead of
 silent. **Phase 2** (this section's *Effective dating*) wires those snapshots
 into the cost path: each event is priced at the rate card that was in effect at
-the event's own timestamp.
+the event's own timestamp. **Phase 3** broadened snapshots from Anthropic-only
+to **every provider the catalog prices** (OpenAI, Anthropic, Mistral, Gemini,
+Cohere, Groq, DeepSeek, xAI, Perplexity, Cerebras), so `refresh` now surfaces
+drift in *any* vendor's rows — not just Anthropic's.
 
 ## The model
 
 - **Snapshot** — a point-in-time rate card with provenance: `source`,
-  `source_url`, `fetched_at`, and `rates` keyed by tokenops model key
-  (`claude-opus-4-8`, `claude-3-5-sonnet`, …). Snapshots are Anthropic-scoped in
-  Phase 1: the consistency heuristics are a per-family invariant and the drift
-  the ADR targets was an Anthropic row.
+  `source_url`, `fetched_at`, and `rates` keyed by `"<provider>/<model>"`
+  (`anthropic/claude-opus-4-8`, `openai/gpt-4o`, `mistral/mistral-large`, …).
+  The provider prefix is what makes a snapshot span every provider while
+  keeping clean string keys in JSON, and it matches the multi-provider engine
+  table (`spend.Key{Provider, Model}`) so a fetched rate overrides the correct
+  vendor's baseline row. The ratio guard (below) stays Anthropic-family-scoped.
 - **Source** — a pluggable fetcher (`Source` interface). The default is
   **LiteLLM** (`BerriAI/litellm/model_prices_and_context_window.json`): vendor
   *list* prices, a stable raw URL, no API key. OpenRouter, a vendor-page
@@ -57,17 +62,21 @@ baseline), print the changes, and write the new snapshot.
 ```
 $ tokenops pricing refresh
 Fetching rates from litellm…
-Fetched 7 model rates (as of 2026-07-08T09:00:00Z).
+Fetched 42 model rates (as of 2026-07-08T09:00:00Z).
 
 Changes vs baseline (embedded-baseline):
-  ~ claude-opus-4-8 cache_read 0.5 → 1.5 (+200%)
-  + claude-3-opus (added)
+  ~ anthropic/claude-opus-4-8 cache_read 0.5 → 1.5 (+200%)
+  ~ mistral/mistral-large input 2 → 3 (+50%), output 6 → 9 (+50%)
+  + anthropic/claude-3-opus (added)
 
 Snapshot written: ~/.tokenops/pricing/snapshots/2026-07-08T09-00-00Z.json
 ```
 
 That first line is the entire point: the Opus error would have **shouted**
-`claude-opus-4-8 cache_read 0.5 → 1.5 (+200%)` instead of hiding.
+`anthropic/claude-opus-4-8 cache_read 0.5 → 1.5 (+200%)` instead of hiding.
+Because snapshots now cover every provider, the same refresh also surfaces
+drift in a Mistral or DeepSeek row that a hand-maintained baseline had let go
+stale — keys sort `"<provider>/<model>"`, so `show` and `diff` group by vendor.
 
 Flags: `--source litellm` (source), `--url` (override the endpoint), `--dir`
 (state dir), `--dry-run` (fetch, lint, and diff but do not write).
@@ -90,10 +99,22 @@ non-zero when any are found**, so it can gate CI.
 
 ## The consistency guard
 
-The guard encodes the Anthropic family invariant that would have caught Opus:
+The guard's headline check encodes the **Anthropic family invariant** that
+would have caught Opus:
 
 - cache-read ≈ **10%** of input (±50% tolerance), and
 - output ≈ **5×** input (±40% tolerance).
+
+**This ratio check is Anthropic-family-specific and runs only on `anthropic/*`
+rows.** Other providers price on different curves — Gemini Flash output is ~8×
+input, cache discounts vary — so applying the Anthropic ratios to them would
+false-flag legitimate rates. Now that snapshots span every provider, that
+scoping matters: the guard must not cry wolf on a correct OpenAI or Mistral row.
+
+Every row — regardless of provider — additionally gets a **conservative generic
+sanity check** that flags only genuine impossibilities (today: a cache-read
+priced *above* fresh input, which is never a discount). It is deliberately
+narrow so it produces no false positives across the multi-provider catalog.
 
 Rows with a zero input rate, or a zero value in the field being checked, are
 skipped — a missing number is not a wrong number. The guard defends against the
@@ -123,12 +144,14 @@ at the table that was **in effect at the event's own timestamp**.
 - **Baseline is the floor.** The embedded baseline snapshot carries a fixed,
   committed `fetched_at` and always sorts first. Anything before the first real
   refresh prices on the baseline, i.e. on the committed list prices.
-- **Each dated table is complete and authoritative.** Snapshots are
-  Anthropic-scoped, so each dated table layers the snapshot's Anthropic rates
-  onto the full embedded catalog: OpenAI/Gemini/Mistral/… keep pricing, and the
-  table selected for an instant is authoritative — a model missing from it is a
-  miss (the usual `ErrUnknownModel`), *not* a fall-through to a differently-dated
-  table.
+- **Each dated table is complete and authoritative.** A snapshot now spans
+  every provider the catalog prices, but a source can still omit models, so each
+  dated table layers the snapshot's rates onto the full embedded catalog via
+  `MergeOverrides` — keyed by `Key{Provider, Model}`, so a fetched Mistral rate
+  overrides the Mistral baseline (not just Anthropic) and any provider absent
+  from the snapshot keeps its catalog rate. The table selected for an instant is
+  authoritative — a model missing from it is a miss (the usual
+  `ErrUnknownModel`), *not* a fall-through to a differently-dated table.
 - **Overrides still apply.** A negotiated-rate override file (`pricing.path`) is
   layered onto *every* dated table, so your rates hold across all periods.
 

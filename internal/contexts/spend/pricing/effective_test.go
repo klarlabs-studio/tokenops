@@ -31,7 +31,7 @@ func opusEvent() *eventschema.PromptEvent {
 
 func TestSnapshotTablePrefixMatchesVersionSuffix(t *testing.T) {
 	s := Snapshot{FetchedAt: time.Now(), Rates: map[string]Rate{
-		opusModel: {InputPerMillion: 12, OutputPerMillion: 60},
+		snapKey("anthropic", opusModel): {InputPerMillion: 12, OutputPerMillion: 60},
 	}}
 	tbl := s.Table()
 	// A version-suffixed request model must resolve via the re-added "*".
@@ -41,6 +41,40 @@ func TestSnapshotTablePrefixMatchesVersionSuffix(t *testing.T) {
 	}
 	if r.InputPerMillion != 12 {
 		t.Errorf("prefix match lost rate: %+v", r)
+	}
+}
+
+func TestSnapshotTableIsMultiProvider(t *testing.T) {
+	// A snapshot spanning several providers must build a Key{Provider, Model}
+	// row for each, and each must resolve under its own provider only.
+	s := Snapshot{FetchedAt: time.Now(), Rates: map[string]Rate{
+		snapKey("anthropic", opusModel):     {InputPerMillion: 5, OutputPerMillion: 25},
+		snapKey("openai", "gpt-4o"):         {InputPerMillion: 2.5, OutputPerMillion: 10},
+		snapKey("mistral", "mistral-large"): {InputPerMillion: 2, OutputPerMillion: 6},
+	}}
+	tbl := s.Table()
+	cases := []struct {
+		provider eventschema.Provider
+		model    string
+		want     float64
+	}{
+		{eventschema.ProviderAnthropic, "claude-opus-4-8", 5},
+		{eventschema.ProviderOpenAI, "gpt-4o-2024-08-06", 2.5},
+		{eventschema.ProviderMistral, "mistral-large-latest", 2},
+	}
+	for _, c := range cases {
+		r, err := tbl.Lookup(c.provider, c.model)
+		if err != nil {
+			t.Errorf("lookup %s/%s: %v", c.provider, c.model, err)
+			continue
+		}
+		if r.InputPerMillion != c.want {
+			t.Errorf("%s/%s input = %v, want %v", c.provider, c.model, r.InputPerMillion, c.want)
+		}
+	}
+	// A model must NOT resolve under the wrong provider.
+	if _, err := tbl.Lookup(eventschema.ProviderOpenAI, "claude-opus-4-8"); err == nil {
+		t.Error("opus resolved under openai; provider scoping lost")
 	}
 }
 
@@ -95,7 +129,7 @@ func TestEffectiveEngineAppliesSnapshotAfterFetchDate(t *testing.T) {
 	if _, err := SaveSnapshot(dir, Snapshot{
 		Source:    "litellm",
 		FetchedAt: fetchedAt,
-		Rates:     map[string]Rate{opusModel: {InputPerMillion: newInput, OutputPerMillion: 99}},
+		Rates:     map[string]Rate{snapKey("anthropic", opusModel): {InputPerMillion: newInput, OutputPerMillion: 99}},
 	}); err != nil {
 		t.Fatalf("save snapshot: %v", err)
 	}
@@ -124,6 +158,43 @@ func TestEffectiveEngineAppliesSnapshotAfterFetchDate(t *testing.T) {
 	}
 	if after != wantAfter {
 		t.Errorf("after fetch: %.6f, want fetched %.6f", after, wantAfter)
+	}
+}
+
+func TestEffectiveEngineSnapshotOverridesRightProvider(t *testing.T) {
+	dir := t.TempDir()
+	// A fetched snapshot changing ONLY a Mistral rate must override the Mistral
+	// baseline row (not Anthropic) once effective, while Anthropic keeps pricing
+	// on the baseline — proving the layering is by Key{Provider, Model}.
+	fetchedAt := baselineFetchedAt.Add(90 * 24 * time.Hour)
+	if _, err := SaveSnapshot(dir, Snapshot{
+		Source:    "litellm",
+		FetchedAt: fetchedAt,
+		Rates:     map[string]Rate{snapKey("mistral", "mistral-large"): {InputPerMillion: 9, OutputPerMillion: 27}},
+	}); err != nil {
+		t.Fatalf("save snapshot: %v", err)
+	}
+	eng, err := EffectiveEngine(dir)
+	if err != nil {
+		t.Fatalf("EffectiveEngine: %v", err)
+	}
+
+	mistral := &eventschema.PromptEvent{
+		Provider: eventschema.ProviderMistral, RequestModel: "mistral-large-latest", InputTokens: 1_000_000,
+	}
+	before, _ := eng.ComputeAt(mistral, fetchedAt.Add(-time.Hour))
+	after, _ := eng.ComputeAt(mistral, fetchedAt.Add(time.Hour))
+	if before != perM(2) { // baseline mistral-large input = 2
+		t.Errorf("mistral before override: %.6f, want baseline %.6f", before, perM(2))
+	}
+	if after != perM(9) {
+		t.Errorf("mistral after override: %.6f, want %.6f", after, perM(9))
+	}
+
+	// Anthropic must be untouched by a Mistral-only snapshot.
+	opusAfter, _ := eng.ComputeAt(opusEvent(), fetchedAt.Add(time.Hour))
+	if opusAfter != perM(baselineOpusInput(t)) {
+		t.Errorf("anthropic drifted from a mistral-only snapshot: %.6f", opusAfter)
 	}
 }
 

@@ -26,7 +26,7 @@ func fixtureServer(t *testing.T) *httptest.Server {
 	return srv
 }
 
-func TestLiteLLMSource_FetchMapsAnthropicOnly(t *testing.T) {
+func TestLiteLLMSource_MapsEveryCatalogProvider(t *testing.T) {
 	srv := fixtureServer(t)
 	src := &LiteLLMSource{URL: srv.URL, Client: srv.Client()}
 
@@ -37,12 +37,26 @@ func TestLiteLLMSource_FetchMapsAnthropicOnly(t *testing.T) {
 	if snap.Source != "litellm" || snap.SourceURL != srv.URL {
 		t.Errorf("provenance = %q/%q", snap.Source, snap.SourceURL)
 	}
-	// openai gpt-4o and the sample_spec row must be filtered out.
-	if _, ok := snap.Rates["gpt-4o"]; ok {
-		t.Error("non-anthropic model leaked into snapshot")
+	// Anthropic, OpenAI, and Mistral entries all map to their tokenops
+	// provider under a "<provider>/<model>" key.
+	for _, want := range []string{
+		"anthropic/claude-opus-4-8",
+		"openai/gpt-4o",
+		"mistral/mistral-large",
+	} {
+		if _, ok := snap.Rates[want]; !ok {
+			t.Errorf("missing %q; keys=%v", want, snap.Models())
+		}
 	}
+	// The sample_spec doc row and an unmapped provider (fireworks_ai) are
+	// filtered out so the key-space matches the baseline.
 	if _, ok := snap.Rates["sample_spec"]; ok {
 		t.Error("sample_spec doc row leaked into snapshot")
+	}
+	for k := range snap.Rates {
+		if provider, _ := splitSnapKey(k); provider == "fireworks_ai" || provider == "" {
+			t.Errorf("unmapped/unqualified provider leaked: %q", k)
+		}
 	}
 }
 
@@ -53,13 +67,29 @@ func TestLiteLLMSource_PerTokenToPerMillion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	opus, ok := snap.Rates["claude-opus-4-8"]
+	opus, ok := snap.Rates["anthropic/claude-opus-4-8"]
 	if !ok {
 		t.Fatalf("opus not mapped; keys=%v", snap.Models())
 	}
 	// 0.000005 per token → 5 per million.
 	if opus.InputPerMillion != 5 || opus.OutputPerMillion != 25 || opus.CachedInputPerMillion != 0.5 {
 		t.Errorf("opus per-million = %+v, want 5/25/0.5", opus)
+	}
+	// OpenAI: 0.0000025 → 2.5 per million.
+	gpt, ok := snap.Rates["openai/gpt-4o"]
+	if !ok {
+		t.Fatalf("gpt-4o not mapped; keys=%v", snap.Models())
+	}
+	if gpt.InputPerMillion != 2.5 || gpt.OutputPerMillion != 10 || gpt.CachedInputPerMillion != 1.25 {
+		t.Errorf("gpt-4o per-million = %+v, want 2.5/10/1.25", gpt)
+	}
+	// Mistral: 0.000002 → 2 per million, no cache.
+	mistral, ok := snap.Rates["mistral/mistral-large"]
+	if !ok {
+		t.Fatalf("mistral-large not mapped; keys=%v", snap.Models())
+	}
+	if mistral.InputPerMillion != 2 || mistral.OutputPerMillion != 6 {
+		t.Errorf("mistral-large per-million = %+v, want 2/6", mistral)
 	}
 }
 
@@ -70,15 +100,19 @@ func TestLiteLLMSource_KeyMapping(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Dated ids collapse to the catalog prefix key.
-	if _, ok := snap.Rates["claude-3-5-sonnet"]; !ok {
+	// Dated ids collapse to the catalog prefix key (provider-qualified).
+	if _, ok := snap.Rates["anthropic/claude-3-5-sonnet"]; !ok {
 		t.Errorf("dated sonnet not mapped to catalog key; keys=%v", snap.Models())
 	}
-	if _, ok := snap.Rates["claude-3-5-haiku"]; !ok {
+	if _, ok := snap.Rates["anthropic/claude-3-5-haiku"]; !ok {
 		t.Errorf("dated haiku not mapped to catalog key; keys=%v", snap.Models())
 	}
+	// A "<vendor>/<model>-latest" id strips both prefix and suffix.
+	if _, ok := snap.Rates["mistral/mistral-large"]; !ok {
+		t.Errorf("mistral-large-latest not normalized; keys=%v", snap.Models())
+	}
 	// A model with no catalog key surfaces under its normalized id (date stripped).
-	if _, ok := snap.Rates["claude-3-opus"]; !ok {
+	if _, ok := snap.Rates["anthropic/claude-3-opus"]; !ok {
 		t.Errorf("new model should surface under normalized key; keys=%v", snap.Models())
 	}
 }
