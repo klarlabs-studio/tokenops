@@ -1,6 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.38.0 - 2026-07-07
+
+### Fixed
+
+- **Corrected Opus 4.x rates in the pricing catalog (were ⅓ too low).**
+  `pricing.yaml` priced claude-opus-4-{8,7,6} at `$5/$25/$0.50` per M — exactly ⅓
+  of standard Opus 4.x pricing (`$15/$75/$1.50`). Cache-read `$0.50` was
+  internally consistent with the wrong `$5` input, so nothing flagged it, and
+  every Opus API-equivalent cost (spend summaries, the coach-hook budget) was
+  understated **3×**. Fixed to `$15/$75/$1.50`; verified the rest of the Anthropic
+  block is internally consistent (cache = 10% of input, output = 5×) — Opus was
+  the only miscalibration. This is exactly the silent drift ADR 0002 (below) is
+  built to prevent.
 
 ### Added
 
