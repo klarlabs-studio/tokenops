@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`tokenops pricing` — researched, sourced, timestamped pricing snapshots
+  (Phase 1 of [ADR 0002](docs/adr/0002-pricing-research-snapshots.md)).** Model
+  rates stop being a single hand-maintained table and become a series of
+  provenance-carrying snapshots fetched from a **pluggable source** (default:
+  **LiteLLM** `model_prices_and_context_window.json` — vendor list prices, no
+  key). New subcommands:
+  - `pricing refresh [--source litellm] [--url] [--dir] [--dry-run]` — fetch →
+    run the **consistency guard** (warn) → **diff** against the latest snapshot
+    (or baseline) → write a timestamped snapshot. Drift is now **loud**: the
+    historical Opus ⅓ error would have shouted
+    `claude-opus-4-8 cache_read 0.5 → 1.5 (+200%)` instead of hiding. On a fetch
+    error, refresh prints a clear message and exits non-zero **without writing**.
+  - `pricing show [--snapshot latest|baseline|<ts>] [--json]` — list a
+    snapshot's rates.
+  - `pricing diff [--from] [--to]` — diff two snapshots (default
+    `baseline → latest`).
+  - `pricing lint [--snapshot]` — run the consistency guard (cache-read ≈10% of
+    input, output ≈5× input, per family — the exact check that caught Opus) and
+    exit non-zero on anomalies, for CI.
+
+  Snapshots are append-only atomic JSON under
+  `~/.tokenops/pricing/snapshots/<RFC3339>.json`; the embedded `pricing.yaml`
+  remains the always-present offline **baseline**. Fetching uses an injectable
+  HTTP client (tests run against `httptest`, never the live network). **No
+  hot-path change:** the cost engine still uses the built-in table — snapshots
+  are written and inspectable but not yet consulted. Effective-dating is Phase 2.
+  See [docs/pricing-research.md](docs/pricing-research.md).
+
 ## 0.37.0 - 2026-07-07
 
 ### Added

@@ -1,0 +1,53 @@
+{
+  "sample_spec": {
+    "max_tokens": "set to max_output_tokens if provider specifies it",
+    "input_cost_per_token": 0.0000,
+    "output_cost_per_token": 0.0000,
+    "litellm_provider": "one of openai, anthropic, ...",
+    "mode": "one of chat, embedding, ..."
+  },
+  "claude-opus-4-8": {
+    "max_tokens": 32000,
+    "max_input_tokens": 200000,
+    "input_cost_per_token": 0.000015,
+    "output_cost_per_token": 0.000075,
+    "cache_read_input_token_cost": 0.0000015,
+    "cache_creation_input_token_cost": 0.00001875,
+    "litellm_provider": "anthropic",
+    "mode": "chat"
+  },
+  "claude-3-5-sonnet-20241022": {
+    "max_tokens": 8192,
+    "max_input_tokens": 200000,
+    "input_cost_per_token": 0.000003,
+    "output_cost_per_token": 0.000015,
+    "cache_read_input_token_cost": 0.0000003,
+    "cache_creation_input_token_cost": 0.00000375,
+    "litellm_provider": "anthropic",
+    "mode": "chat"
+  },
+  "claude-3-5-haiku-20241022": {
+    "max_tokens": 8192,
+    "max_input_tokens": 200000,
+    "input_cost_per_token": 0.0000008,
+    "output_cost_per_token": 0.000004,
+    "cache_read_input_token_cost": 0.00000008,
+    "litellm_provider": "anthropic",
+    "mode": "chat"
+  },
+  "claude-3-opus-20240229": {
+    "max_tokens": 4096,
+    "max_input_tokens": 200000,
+    "input_cost_per_token": 0.000015,
+    "output_cost_per_token": 0.000075,
+    "litellm_provider": "anthropic",
+    "mode": "chat"
+  },
+  "gpt-4o": {
+    "max_tokens": 16384,
+    "input_cost_per_token": 0.0000025,
+    "output_cost_per_token": 0.00001,
+    "litellm_provider": "openai",
+    "mode": "chat"
+  }
+}
