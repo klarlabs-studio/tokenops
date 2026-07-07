@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -136,6 +137,24 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	}
 	if cfgErr == nil {
 		deps.Config = &cfg
+		// Stale-ingestion health check: report enabled vendor-usage
+		// sources that have ingested nothing recently so `tokenops
+		// status` (and tokenops_status) surface a silently-dead poller
+		// instead of quietly serving $0/stale data. Guarded on a
+		// non-nil store; a nil store yields no warnings. Best-effort —
+		// a store error degrades to "no warnings", never a status
+		// failure.
+		if components.Store != nil {
+			store := components.Store
+			staleCfg := cfg
+			deps.StaleSources = func() []config.StaleSource {
+				stale, err := staleCfg.CheckStaleIngestion(ctx, store, config.StaleIngestionWindow, time.Now())
+				if err != nil {
+					return nil
+				}
+				return stale
+			}
+		}
 	}
 	if err := mcp.RegisterControlTools(srv, deps); err != nil {
 		return fmt.Errorf("register control tools: %w", err)

@@ -133,3 +133,80 @@ func TestStatusToolReportsReadyWhenAllConfigured(t *testing.T) {
 		t.Errorf("expected empty blockers array: %s", out)
 	}
 }
+
+// A stale enabled vendor-usage source must surface as a soft `warnings`
+// entry with a matching next_action, and downgrade an otherwise-ready
+// state to `degraded` while keeping ready:true — never a blocker.
+func TestStatusToolSurfacesStaleIngestionWarnings(t *testing.T) {
+	cfg := config.Default()
+	cfg.Storage.Enabled = true
+	cfg.Rules.Enabled = true
+	cfg.Providers = map[string]string{"anthropic": "https://api.anthropic.com"}
+	srv := newControlServer(t, ControlDeps{
+		Config:     &cfg,
+		ReadyCheck: func() bool { return true },
+		StaleSources: func() []config.StaleSource {
+			return []config.StaleSource{
+				{Name: "claude_code_jsonl", SourceTag: "claude-code-jsonl", WindowHours: 48},
+			}
+		},
+	})
+	out := execTool(t, srv, "tokenops_status", nil)
+
+	for _, want := range []string{
+		`"warnings"`,
+		"ingestion stale: claude-code-jsonl has 0 events in the last 48h",
+		config.StaleIngestionNextAction,
+		`"ready": true`,
+		`"state": "degraded"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in output: %s", want, out)
+		}
+	}
+	// Stale sources are a soft signal, not a config blocker.
+	if !strings.Contains(out, `"blockers": []`) {
+		t.Errorf("stale ingestion must not appear as a blocker: %s", out)
+	}
+}
+
+// No stale sources → payload is unchanged: no `warnings` key, state
+// stays ready.
+func TestStatusToolNoWarningsWhenIngestionFresh(t *testing.T) {
+	cfg := config.Default()
+	cfg.Storage.Enabled = true
+	cfg.Rules.Enabled = true
+	cfg.Providers = map[string]string{"anthropic": "https://api.anthropic.com"}
+	srv := newControlServer(t, ControlDeps{
+		Config:       &cfg,
+		ReadyCheck:   func() bool { return true },
+		StaleSources: func() []config.StaleSource { return nil },
+	})
+	out := execTool(t, srv, "tokenops_status", nil)
+	if strings.Contains(out, `"warnings"`) {
+		t.Errorf("did not expect warnings key when ingestion is fresh: %s", out)
+	}
+	if !strings.Contains(out, `"state": "ready"`) {
+		t.Errorf("expected state=ready with no warnings: %s", out)
+	}
+}
+
+// A nil StaleSources hook (no store wired) must not panic and must not
+// add a warnings key.
+func TestStatusToolNilStaleSourcesHook(t *testing.T) {
+	cfg := config.Default()
+	cfg.Storage.Enabled = true
+	cfg.Rules.Enabled = true
+	cfg.Providers = map[string]string{"anthropic": "https://api.anthropic.com"}
+	srv := newControlServer(t, ControlDeps{
+		Config:     &cfg,
+		ReadyCheck: func() bool { return true },
+	})
+	out := execTool(t, srv, "tokenops_status", nil)
+	if strings.Contains(out, `"warnings"`) {
+		t.Errorf("nil hook should not add warnings: %s", out)
+	}
+	if !strings.Contains(out, `"state": "ready"`) {
+		t.Errorf("expected state=ready: %s", out)
+	}
+}

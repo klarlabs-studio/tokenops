@@ -10,6 +10,25 @@ import (
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
+// staleWarnings renders one operator-facing warning per stale vendor-
+// usage source. Nil-safe: a nil StaleSources hook (no store wired) or an
+// empty result yields no warnings, so status never panics or blocks on a
+// missing store.
+func staleWarnings(d ControlDeps) []string {
+	if d.StaleSources == nil {
+		return nil
+	}
+	stale := d.StaleSources()
+	if len(stale) == 0 {
+		return nil
+	}
+	warnings := make([]string, 0, len(stale))
+	for _, s := range stale {
+		warnings = append(warnings, s.Warning())
+	}
+	return warnings
+}
+
 // ControlDeps wires the in-process state the control tools surface. The
 // daemon constructs this once at startup and passes it through alongside
 // the analytics deps; CLI talks to the same data via the HTTP control
@@ -31,6 +50,11 @@ type ControlDeps struct {
 	// AuditDrops, when set, returns the number of audit-subscriber
 	// events shed under backpressure.
 	AuditDrops func() int64
+	// StaleSources, when set, returns the enabled vendor-usage sources
+	// that have ingested no events recently. Nil-safe: nil means the
+	// check is unavailable (e.g. no store wired) and status omits
+	// warnings entirely. Surfaced as soft `warnings`, never blockers.
+	StaleSources func() []config.StaleSource
 }
 
 type emptyInput struct{}
@@ -101,6 +125,20 @@ func statusInfo(d ControlDeps) string {
 	case !ready && len(blockers) > 0:
 		state = "not_configured"
 	}
+
+	// Runtime ingestion staleness is a softer signal than config
+	// blockers: an enabled vendor-usage poller that has ingested nothing
+	// recently means status is quietly serving stale/$0 data. Surface it
+	// as `warnings` (never blockers), add a remediation next_action, and
+	// downgrade a `ready` state to `degraded` while keeping ready:true.
+	warnings := staleWarnings(d)
+	if len(warnings) > 0 {
+		nextActions = append(nextActions, config.StaleIngestionNextAction)
+		if state == "ready" {
+			state = "degraded"
+		}
+	}
+
 	payload := map[string]any{
 		"status":         "ok",
 		"ready":          ready,
@@ -109,6 +147,9 @@ func statusInfo(d ControlDeps) string {
 		"schema_version": eventschema.SchemaVersion,
 		"blockers":       blockers,
 		"next_actions":   nextActions,
+	}
+	if len(warnings) > 0 {
+		payload["warnings"] = warnings
 	}
 	return jsonString(payload)
 }

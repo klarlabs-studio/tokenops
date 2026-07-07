@@ -412,66 +412,19 @@ machine-readable output.`,
 			if err != nil {
 				return fmt.Errorf("count events: %w", err)
 			}
-			report := vendorUsageReport{
-				Window: window.String(),
-				Sources: []vendorUsageSource{
-					{
-						Name:        "claude_code_jsonl",
-						SourceTag:   "claude-code-jsonl",
-						Enabled:     cfg.VendorUsage.ClaudeCodeJSONL.Enabled,
-						EventsInWin: counts["claude-code-jsonl"],
-						ConfigHint:  configHintClaudeCodeJSONL(cfg.VendorUsage.ClaudeCodeJSONL.Enabled),
-					},
-					{
-						Name:        "codex_jsonl",
-						SourceTag:   "codex-jsonl",
-						Enabled:     cfg.VendorUsage.CodexJSONL.Enabled,
-						EventsInWin: counts["codex-jsonl"],
-						ConfigHint:  configHintCodexJSONL(cfg.VendorUsage.CodexJSONL.Enabled),
-					},
-					{
-						Name:        "opencode",
-						SourceTag:   "opencode",
-						Enabled:     cfg.VendorUsage.OpenCode.Enabled,
-						EventsInWin: counts["opencode"],
-						ConfigHint:  configHintOpenCode(cfg.VendorUsage.OpenCode.Enabled),
-					},
-					{
-						Name:        "claude_code_stats_cache (deprecated)",
-						SourceTag:   "claude-code-stats-cache",
-						Enabled:     cfg.VendorUsage.ClaudeCode.Enabled,
-						EventsInWin: counts["claude-code-stats-cache"],
-						ConfigHint:  configHintClaudeCode(cfg.VendorUsage.ClaudeCode.Enabled),
-					},
-					{
-						Name:        "vendor_usage_anthropic",
-						SourceTag:   "vendor-usage-anthropic",
-						Enabled:     cfg.VendorUsage.Anthropic.Enabled,
-						EventsInWin: counts["vendor-usage-anthropic"],
-						ConfigHint:  configHintAnthropic(cfg.VendorUsage.Anthropic),
-					},
-					{
-						Name:        "github_copilot",
-						SourceTag:   "github-copilot",
-						Enabled:     cfg.VendorUsage.GitHubCopilot.Enabled,
-						EventsInWin: counts["github-copilot"],
-						ConfigHint:  configHintCopilot(cfg.VendorUsage.GitHubCopilot),
-					},
-					{
-						Name:        "cursor_web",
-						SourceTag:   "cursor-web",
-						Enabled:     cfg.VendorUsage.Cursor.Enabled,
-						EventsInWin: counts["cursor-web"],
-						ConfigHint:  configHintCursor(cfg.VendorUsage.Cursor),
-					},
-					{
-						Name:        "anthropic_cookie",
-						SourceTag:   "anthropic-cookie",
-						Enabled:     cfg.VendorUsage.AnthropicCookie.Enabled,
-						EventsInWin: counts["anthropic-cookie"],
-						ConfigHint:  configHintAnthropicCookie(cfg.VendorUsage.AnthropicCookie),
-					},
-				},
+			// Source list + tags come from the shared config helper so
+			// this command and the stale-ingestion health check agree on
+			// the enabled-source↔tag mapping. Per-source ConfigHint and
+			// event counts are layered on here.
+			report := vendorUsageReport{Window: window.String()}
+			for _, src := range cfg.VendorUsageSources() {
+				report.Sources = append(report.Sources, vendorUsageSource{
+					Name:        src.Name,
+					SourceTag:   src.SourceTag,
+					Enabled:     src.Enabled,
+					EventsInWin: counts[src.SourceTag],
+					ConfigHint:  vendorUsageConfigHint(cfg, src.SourceTag),
+				})
 			}
 			if jsonOut {
 				enc := json.NewEncoder(os.Stdout)
@@ -499,6 +452,33 @@ type vendorUsageSource struct {
 	Enabled     bool   `json:"enabled"`
 	EventsInWin int64  `json:"events_in_window"`
 	ConfigHint  string `json:"config_hint,omitempty"`
+}
+
+// vendorUsageConfigHint routes a SourceTag to its per-source config
+// hint. Kept beside the report loop so adding a source is a two-line
+// change (helper entry + hint case) rather than an edit to a giant
+// literal.
+func vendorUsageConfigHint(cfg config.Config, sourceTag string) string {
+	switch sourceTag {
+	case "claude-code-jsonl":
+		return configHintClaudeCodeJSONL(cfg.VendorUsage.ClaudeCodeJSONL.Enabled)
+	case "codex-jsonl":
+		return configHintCodexJSONL(cfg.VendorUsage.CodexJSONL.Enabled)
+	case "opencode":
+		return configHintOpenCode(cfg.VendorUsage.OpenCode.Enabled)
+	case "claude-code-stats-cache":
+		return configHintClaudeCode(cfg.VendorUsage.ClaudeCode.Enabled)
+	case "vendor-usage-anthropic":
+		return configHintAnthropic(cfg.VendorUsage.Anthropic)
+	case "github-copilot":
+		return configHintCopilot(cfg.VendorUsage.GitHubCopilot)
+	case "cursor-web":
+		return configHintCursor(cfg.VendorUsage.Cursor)
+	case "anthropic-cookie":
+		return configHintAnthropicCookie(cfg.VendorUsage.AnthropicCookie)
+	default:
+		return ""
+	}
 }
 
 func configHintClaudeCode(enabled bool) string {

@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
 )
 
@@ -60,8 +61,16 @@ func newStatusCmd(rf *rootFlags) *cobra.Command {
 				// Daemon unreachable. Fall back to the same self-report
 				// the MCP tokenops_status tool emits — config + blockers
 				// + next_actions — so operators see something actionable
-				// instead of an opaque "connection refused".
+				// instead of an opaque "connection refused". The offline
+				// path can't open the store, so it omits warnings.
 				return writeOfflineStatus(cmd.OutOrStdout(), base, cfg, cfgErr, jsonOut)
+			}
+			// Runtime ingestion staleness mirrors the MCP tokenops_status
+			// warning. Best-effort: reads the local event store directly
+			// (like `vendor-usage status`); any failure degrades to "no
+			// warnings" rather than failing the status command.
+			if cfgErr == nil {
+				res.Warnings = statusStaleWarnings(cmd.Context(), rf, cfg)
 			}
 			if jsonOut {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(res)
@@ -77,9 +86,10 @@ func newStatusCmd(rf *rootFlags) *cobra.Command {
 
 // statusResult is the structured status payload returned by `--json`.
 type statusResult struct {
-	Health  endpointResult `json:"health"`
-	Ready   endpointResult `json:"ready"`
-	Version endpointResult `json:"version"`
+	Health   endpointResult `json:"health"`
+	Ready    endpointResult `json:"ready"`
+	Version  endpointResult `json:"version"`
+	Warnings []string       `json:"warnings,omitempty"`
 }
 
 type endpointResult struct {
@@ -175,12 +185,45 @@ func writeOfflineStatus(w io.Writer, base string, cfg config.Config, cfgErr erro
 	return nil
 }
 
+// statusStaleWarnings computes ingestion-staleness warnings by reading
+// the local event store directly, mirroring the MCP tokenops_status
+// tool. Best-effort by design: an unresolvable DB path, an unopenable
+// store, or a count error all degrade to "no warnings" so the status
+// command never fails on the health check. Returns nil when nothing is
+// stale.
+func statusStaleWarnings(ctx context.Context, rf *rootFlags, cfg config.Config) []string {
+	dbPath, err := resolveAuditDB(rf, "")
+	if err != nil {
+		return nil
+	}
+	store, err := sqlite.Open(ctx, dbPath, sqlite.Options{})
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = store.Close() }()
+	stale, err := cfg.CheckStaleIngestion(ctx, store, config.StaleIngestionWindow, time.Now())
+	if err != nil || len(stale) == 0 {
+		return nil
+	}
+	warnings := make([]string, 0, len(stale))
+	for _, s := range stale {
+		warnings = append(warnings, s.Warning())
+	}
+	return warnings
+}
+
 func writeStatusText(w io.Writer, base string, r statusResult) error {
 	lines := []string{
 		fmt.Sprintf("daemon: %s", base),
 		formatLine("health ", r.Health),
 		formatLine("ready  ", r.Ready),
 		formatLine("version", r.Version),
+	}
+	if len(r.Warnings) > 0 {
+		lines = append(lines, "warnings:")
+		for _, warn := range r.Warnings {
+			lines = append(lines, "  ! "+warn)
+		}
 	}
 	_, err := fmt.Fprintln(w, strings.Join(lines, "\n"))
 	return err

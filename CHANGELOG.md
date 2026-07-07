@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Stale-ingestion health warning in `tokenops status` (CLI + `tokenops_status`
+  MCP tool).** `status` now flags **runtime** ingestion staleness, not just
+  config blockers: when an **enabled** vendor-usage source has emitted **0**
+  events in the last **48h**, status emits a soft `warnings` entry
+  (`"ingestion stale: <source> has 0 events in the last 48h — if you've been
+  using it, reconnect/restart the poller …"`), appends a remediation
+  `next_action`, and downgrades a `ready` state to `degraded` (still
+  `ready:true`). Stale sources are **never** added to `blockers` — those stay
+  config-level hard gates. This closes a real incident where tokenops silently
+  served `$0`/stale spend because a `claude_code_jsonl` poller had ingested
+  nothing for ~a week while `status` reported healthy. The check is
+  store-interface-based and nil-safe (a missing store yields no warnings, never
+  a panic), and a `0` count can also legitimately mean the vendor simply hasn't
+  been used recently. The enabled-source↔SourceTag mapping is now shared
+  (`config.VendorUsageSources`) so `tokenops vendor-usage status` and the health
+  check can't drift.
+
 ## 0.36.0 - 2026-07-07
 
 ### Changed
