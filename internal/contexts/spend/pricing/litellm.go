@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -145,20 +146,23 @@ func (s *LiteLLMSource) Fetch(ctx context.Context) (Snapshot, error) {
 	}
 	catalogKeys := catalogModelKeys()
 
-	// Sort ids for deterministic collision handling: when several dated
-	// variants collapse to one tokenops key, the lexically-first wins.
-	ids := make([]string, 0, len(raw))
-	for id := range raw {
-		ids = append(ids, id)
+	// Group candidate LiteLLM ids by the catalog key they map to. A broad
+	// catalog key (e.g. "mistral-large") collapses every dated SKU LiteLLM
+	// carries — mistral-large-2402, -2411, -latest, … — onto one key. Picking
+	// the lexically-first id would adopt the *oldest* archived snapshot (usually
+	// the priciest), manufacturing false "drift". Instead pick the id that best
+	// represents the vendor's live price via preferID (see versionRank).
+	type candidate struct {
+		id   string
+		rate Rate
 	}
-	sort.Strings(ids)
-
-	for _, id := range ids {
+	groups := make(map[string][]candidate)
+	for id, msg := range raw {
 		if id == "sample_spec" { // LiteLLM's schema doc row, not a model
 			continue
 		}
 		var e litellmEntry
-		if json.Unmarshal(raw[id], &e) != nil {
+		if json.Unmarshal(msg, &e) != nil {
 			continue // non-model or unexpected shape → skip, don't fail
 		}
 		provider, ok := litellmProviderMap[strings.ToLower(e.Provider)]
@@ -173,16 +177,68 @@ func (s *LiteLLMSource) Fetch(ctx context.Context) (Snapshot, error) {
 			continue // no usable price
 		}
 		key := snapKey(provider, mapModelKey(id, providerKeys))
-		if _, exists := snap.Rates[key]; exists {
-			continue // keep first (lexically smallest id) on collision
+		groups[key] = append(groups[key], candidate{
+			id: id,
+			rate: Rate{
+				InputPerMillion:       perMillionCost(e.InputCostPerToken),
+				OutputPerMillion:      perMillionCost(e.OutputCost),
+				CachedInputPerMillion: perMillionCost(e.CacheReadCost),
+			},
+		})
+	}
+	for key, cands := range groups {
+		best := cands[0]
+		for _, c := range cands[1:] {
+			if preferID(c.id, best.id) {
+				best = c
+			}
 		}
-		snap.Rates[key] = Rate{
-			InputPerMillion:       perMillionCost(e.InputCostPerToken),
-			OutputPerMillion:      perMillionCost(e.OutputCost),
-			CachedInputPerMillion: perMillionCost(e.CacheReadCost),
-		}
+		snap.Rates[key] = best.rate
 	}
 	return snap, nil
+}
+
+// versionDate matches a trailing numeric version/date suffix LiteLLM appends to
+// dated model snapshots: 8-digit YYYYMMDD (Anthropic "claude-…-20241022"),
+// 6-digit YYMMDD, or 4-digit YYMM (Mistral "mistral-large-2411"). Higher digits
+// mean a newer release, so the captured number orders variants within a family.
+var versionDate = regexp.MustCompile(`-(\d{4,8})$`)
+
+// versionRank scores how well a LiteLLM model id represents the *current* price
+// of its family. Higher wins: a precise dated snapshot outranks everything and
+// the newest date among them wins; a "-latest" alias is the fallback used only
+// when no dated SKU is listed; an undated/bare id ranks lowest. Dated snapshots
+// are preferred over "-latest" because LiteLLM's "-latest" aliases are sometimes
+// stale — e.g. "codestral-latest" still carries the old $1/$3 rate while the
+// current "codestral-2508" is $0.30/$0.90 — so trusting the alias would
+// manufacture false drift against a catalog that tracks the newest SKU.
+func versionRank(id string) (tier, date int) {
+	stem := stripVendorPrefix(id)
+	switch {
+	case versionDate.MatchString(stem):
+		n, _ := strconv.Atoi(versionDate.FindStringSubmatch(stem)[1])
+		return 3, n // a precise dated snapshot — newest wins
+	case strings.HasSuffix(stem, "-latest"):
+		return 2, 0 // vendor's moving pointer; used when no dated SKU is listed
+	default:
+		return 1, 0 // undated / bare id
+	}
+}
+
+// preferID reports whether LiteLLM id a is a better current-price representative
+// than b for a colliding catalog key (see versionRank). Ties break to the
+// lexically-smaller id so a refresh is deterministic across runs.
+func preferID(a, b string) bool {
+	at, ad := versionRank(a)
+	bt, bd := versionRank(b)
+	switch {
+	case at != bt:
+		return at > bt
+	case ad != bd:
+		return ad > bd
+	default:
+		return a < b
+	}
 }
 
 // catalogModelKeys returns the tokenops catalog model keys (from the embedded

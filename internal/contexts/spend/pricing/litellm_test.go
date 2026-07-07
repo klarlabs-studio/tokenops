@@ -117,6 +117,49 @@ func TestLiteLLMSource_KeyMapping(t *testing.T) {
 	}
 }
 
+func TestPreferID_CurrentPriceWins(t *testing.T) {
+	cases := []struct {
+		name, a, b string
+	}{
+		{"newer date beats older", "mistral-large-2411", "mistral-large-2402"},
+		{"dated beats latest (stale alias)", "codestral-2508", "codestral-latest"},
+		{"dated beats bare", "mistral-medium-2505", "mistral-medium"},
+		{"latest beats bare", "mistral-medium-latest", "mistral-medium"},
+		{"8-digit newer beats older", "claude-3-5-sonnet-20241022", "claude-3-5-sonnet-20240620"},
+		{"vendor prefix ignored", "mistral/mistral-large-2411", "mistral/mistral-large-2402"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if !preferID(c.a, c.b) {
+				t.Errorf("preferID(%q, %q) = false, want true", c.a, c.b)
+			}
+			if preferID(c.b, c.a) {
+				t.Errorf("preferID is not antisymmetric for %q vs %q", c.a, c.b)
+			}
+		})
+	}
+}
+
+// When several dated SKUs collapse onto one catalog key, the fetched rate must
+// be the newest dated snapshot, not the oldest archived one nor a stale
+// "-latest" alias. The fixture's mistral-large-2402 ($4/$12) and -latest ($3/$9)
+// must lose to the newest dated -2411 ($2/$6).
+func TestLiteLLMSource_CollisionAdoptsCurrentRate(t *testing.T) {
+	srv := fixtureServer(t)
+	src := &LiteLLMSource{URL: srv.URL, Client: srv.Client()}
+	snap, err := src.Fetch(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	large, ok := snap.Rates["mistral/mistral-large"]
+	if !ok {
+		t.Fatalf("mistral-large not mapped; keys=%v", snap.Models())
+	}
+	if large.InputPerMillion != 2 || large.OutputPerMillion != 6 {
+		t.Errorf("mistral-large = %+v, want the -latest rate 2/6 (not an archived SKU)", large)
+	}
+}
+
 func TestLiteLLMSource_FetchedSnapshotPassesGuard(t *testing.T) {
 	srv := fixtureServer(t)
 	src := &LiteLLMSource{URL: srv.URL, Client: srv.Client()}
