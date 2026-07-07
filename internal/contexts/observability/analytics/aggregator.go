@@ -293,7 +293,11 @@ func (a *Aggregator) recomputeMissingCosts(ctx context.Context, f Filter, rows [
 					CachedInputTokens: cacheIn.Int64,
 					OutputTokens:      outTok.Int64,
 				}
-				if c, err := a.spend.Compute(p); err == nil {
+				// Price at the rate card in effect for this bucket (ADR 0002
+				// Phase 2). Rate changes are dated to a day, so the bucket
+				// start is the correct effective instant; for a baseline-only
+				// engine this is identical to Compute.
+				if c, err := a.spend.ComputeAt(p, rows[i].BucketStart); err == nil {
 					cost += c
 					fixed++
 				}

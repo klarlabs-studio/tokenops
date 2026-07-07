@@ -4,6 +4,27 @@
 
 ### Added
 
+- **Effective-dated cost computation (Phase 2 of
+  [ADR 0002](docs/adr/0002-pricing-research-snapshots.md)).** The cost engine is
+  now time-aware: each event is priced at the rate card that was **in effect at
+  the event's own timestamp**, instead of one flat table. The engine holds a
+  series of effective-dated tables (one per pricing snapshot, keyed by
+  `fetched_at`) and selects the table with the greatest `EffectiveFrom ≤` the
+  event time; events predating every snapshot — or before the first refresh —
+  price on the embedded **baseline**, so costing never fails for lack of a dated
+  table. Each dated table layers a snapshot's Anthropic rates onto the full
+  catalog, so it stays a complete, authoritative rate card (non-Anthropic
+  providers keep pricing; a missing model is a miss, not a fall-through).
+  Negotiated-rate overrides (`pricing.path`) apply across every period. The
+  effective-dated engine is constructed at the composition root (`internal/
+  bootstrap`) and in the CLI `spend` / `replay` paths, and takes effect on the
+  live proxy ingest path (priced from `Envelope.Timestamp`) and the analytics
+  historical recompute of zero-cost events. Construction is fail-soft — any load
+  error degrades to the flat baseline engine, so costing never breaks. With no
+  refreshes yet, behavior is byte-for-byte identical to before. New API:
+  `spend.NewDatedEngine` / `Engine.ComputeAt`, `pricing.EffectiveEngine` /
+  `SnapshotsToDatedTables`. See
+  [docs/pricing-research.md](docs/pricing-research.md).
 - **`tokenops pricing` — researched, sourced, timestamped pricing snapshots
   (Phase 1 of [ADR 0002](docs/adr/0002-pricing-research-snapshots.md)).** Model
   rates stop being a single hand-maintained table and become a series of

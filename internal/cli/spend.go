@@ -15,7 +15,6 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/infra/svgchart"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
@@ -123,11 +122,10 @@ spend within the selected window. It surfaces:
 				f.ExcludeSources = []string{}
 			}
 
-			table, err := spend.TableWithOverrides(cfg.Pricing.Path)
+			spendEng, err := buildSpendEngine(cfg)
 			if err != nil {
 				return err
 			}
-			spendEng := spend.NewEngine(table)
 			agg := analytics.New(store, spendEng)
 			summary, err := agg.Summarize(ctx, f)
 			if err != nil {

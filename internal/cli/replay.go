@@ -87,11 +87,10 @@ findings (when --workflow is set), and a summary footer.`,
 				return errors.New("provide a SESSION_ID positional or --workflow/--agent flag")
 			}
 
-			table, err := spend.TableWithOverrides(cfg.Pricing.Path)
+			spendEng, err := buildSpendEngine(cfg)
 			if err != nil {
 				return err
 			}
-			spendEng := spend.NewEngine(table)
 			pipeline := buildReplayPipeline(cfg, spendEng)
 			eng := replay.New(store, pipeline, spendEng)
 

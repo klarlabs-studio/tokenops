@@ -20,6 +20,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/observability/observ"
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer"
 	"go.klarlabs.de/tokenops/internal/contexts/security/redaction"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/domainevents"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
@@ -115,7 +116,7 @@ func New(ctx context.Context, opts Options) (*Components, error) {
 	if opts.Logger == nil {
 		opts.Logger = slog.Default()
 	}
-	table, err := spend.TableWithOverrides(opts.PricingPath)
+	spendEng, err := buildSpendEngine(opts.PricingPath, opts.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: %w", err)
 	}
@@ -124,7 +125,7 @@ func New(ctx context.Context, opts Options) (*Components, error) {
 	counter.Subscribe(dbus)
 	c := &Components{
 		Logger:       opts.Logger,
-		Spend:        spend.NewEngine(table),
+		Spend:        spendEng,
 		Tokenizers:   tokenizer.NewRegistry(),
 		Redactor:     redaction.New(redaction.Config{}),
 		DomainBus:    dbus,
@@ -151,6 +152,48 @@ func New(ctx context.Context, opts Options) (*Components, error) {
 	c.Store = store
 	c.Aggregator = analytics.New(store, c.Spend)
 	return c, nil
+}
+
+// buildSpendEngine constructs the effective-dated cost engine (ADR 0002
+// Phase 2): events are priced at the rate card that was in effect at their
+// timestamp, using the embedded baseline plus any persisted pricing
+// snapshots under ~/.tokenops/pricing, with the negotiated-rate override
+// file (pricingPath) layered across every period.
+//
+// It fails soft: any error building the effective-dated engine (or parsing
+// the override file for it) falls back to the flat baseline+override engine
+// so costing never breaks. A malformed override file is still a hard error —
+// that is operator misconfiguration, surfaced exactly as before.
+func buildSpendEngine(pricingPath string, logger *slog.Logger) (*spend.Engine, error) {
+	// Flat engine over baseline + overrides — the guaranteed fallback and
+	// the source of truth for override-file validity.
+	flatTable, err := spend.TableWithOverrides(pricingPath)
+	if err != nil {
+		return nil, err
+	}
+	fallback := spend.NewEngine(flatTable)
+
+	// Isolate just the override rows so they can be layered onto every dated
+	// table. TableWithOverrides already validated the file above, so this
+	// load cannot fail; guard anyway and degrade to the fallback.
+	overrides := spend.Table{}
+	if pricingPath != "" {
+		ov, oerr := spend.LoadTableFile(pricingPath)
+		if oerr != nil {
+			return fallback, nil
+		}
+		overrides = ov
+	}
+
+	// Default pricing snapshot dir (~/.tokenops/pricing) via ResolveDir("").
+	eng, eerr := pricing.EffectiveEngineWithOverrides("", overrides)
+	if eerr != nil || eng == nil {
+		if logger != nil {
+			logger.Warn("effective-dated pricing unavailable; using flat baseline", "err", eerr)
+		}
+		return fallback, nil
+	}
+	return eng, nil
 }
 
 // ErrStoreUnavailable is returned by adapters that require an open store

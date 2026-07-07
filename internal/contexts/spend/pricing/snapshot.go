@@ -105,6 +105,23 @@ func normalizeKey(model string) string {
 	return strings.TrimSpace(strings.TrimSuffix(model, "*"))
 }
 
+// Table builds a spend.Table from the snapshot's rates, scoped to the
+// SnapshotProvider family. Snapshot keys are normalized (the catalog's
+// trailing "*" prefix marker is stripped), so Table re-adds it: every row
+// becomes a prefix match, exactly as the embedded catalog stores Anthropic
+// models. That keeps version-suffixed request models (e.g.
+// "claude-opus-4-8[1m]") resolving to their family rate. The table is
+// Anthropic-scoped only — callers that need a complete rate card layer it
+// onto spend.DefaultTable (see SnapshotsToDatedTables).
+func (s Snapshot) Table() spend.Table {
+	rates := make(map[spend.Key]spend.Rate, len(s.Rates))
+	for model, r := range s.Rates {
+		key := spend.Key{Provider: SnapshotProvider, Model: normalizeKey(model) + "*"}
+		rates[key] = r.ToSpendRate()
+	}
+	return spend.Table{Currency: "USD", Rates: rates}
+}
+
 // Models returns the snapshot's model keys sorted lexically, for stable
 // display and iteration.
 func (s Snapshot) Models() []string {

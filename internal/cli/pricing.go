@@ -8,15 +8,48 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 )
+
+// buildSpendEngine constructs the effective-dated cost engine for CLI
+// commands that price events outside the daemon bootstrap (spend, replay):
+// events are priced at the rate card in effect at their timestamp, from the
+// embedded baseline plus persisted snapshots under ~/.tokenops/pricing, with
+// the negotiated-rate override (cfg.Pricing.Path) layered across every
+// period. Fail-soft: any error building the effective-dated engine degrades
+// to the flat baseline+override engine so costing never breaks. A malformed
+// override file is a hard error, surfaced to the caller as before.
+func buildSpendEngine(cfg config.Config) (*spend.Engine, error) {
+	flatTable, err := spend.TableWithOverrides(cfg.Pricing.Path)
+	if err != nil {
+		return nil, err
+	}
+	fallback := spend.NewEngine(flatTable)
+
+	overrides := spend.Table{}
+	if cfg.Pricing.Path != "" {
+		ov, oerr := spend.LoadTableFile(cfg.Pricing.Path)
+		if oerr != nil {
+			return fallback, nil
+		}
+		overrides = ov
+	}
+
+	eng, eerr := pricing.EffectiveEngineWithOverrides("", overrides)
+	if eerr != nil || eng == nil {
+		return fallback, nil
+	}
+	return eng, nil
+}
 
 // newPricingCmd builds the `tokenops pricing` command tree: the ADR 0002
 // pricing-research framework. It fetches sourced, timestamped rate snapshots,
 // diffs them so drift is loud, and lints them for the family-ratio anomalies
-// that hid the Opus ⅓ error. Phase 1 does NOT alter cost computation — the
-// engine still uses spend.DefaultTable(); snapshots are written and
-// inspectable but not yet consulted on the hot path.
+// that hid the Opus ⅓ error. As of Phase 2 the cost engine consults these
+// snapshots: events are priced at the rate card in effect at their timestamp
+// (see buildSpendEngine / pricing.EffectiveEngine).
 func newPricingCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pricing",

@@ -7,12 +7,12 @@ no source and no time dimension — which is how the Opus 4.x rows silently sat 
 `$15/$75/$1.50`). Because the wrong input was *internally consistent* with the
 cache-read line, nothing flagged it. **Consistency is not correctness.**
 
-The `tokenops pricing` command implements **Phase 1** of
-[ADR 0002](adr/0002-pricing-research-snapshots.md): a researched, sourced,
-timestamped, drift-visible pricing framework. It does **not** yet change how
-costs are computed — the cost engine still uses the embedded catalog. Phase 1
-makes rates *sourced and diffable* so drift is loud instead of silent; Phase 2
-wires effective-dated snapshots into the cost path.
+The `tokenops pricing` command implements [ADR 0002](adr/0002-pricing-research-snapshots.md):
+a researched, sourced, timestamped, drift-visible pricing framework.
+**Phase 1** made rates *sourced and diffable* so drift is loud instead of
+silent. **Phase 2** (this section's *Effective dating*) wires those snapshots
+into the cost path: each event is priced at the rate card that was in effect at
+the event's own timestamp.
 
 ## The model
 
@@ -109,9 +109,50 @@ actual fetch** — `refresh` is built and tested here against fixtures
 (`httptest`), never the live feed. Run it where the source is reachable; commit
 or ship the resulting snapshot as needed.
 
-## Scope (Phase 1)
+## Effective dating (Phase 2)
 
-Phase 1 is the framework only. The cost engine still uses
-`spend.DefaultTable()`; snapshots are written and inspectable but **not yet
-consulted** on the hot path. Effective-dated snapshot selection (pricing a June
-event at June's rate) is Phase 2.
+Phase 2 makes the cost engine *time-aware*. Instead of pricing every event
+against one flat table, the engine holds a series of **effective-dated tables**
+— one per snapshot, keyed by the snapshot's `fetched_at` — and prices each event
+at the table that was **in effect at the event's own timestamp**.
+
+- **Selection rule.** For an event at time `T`, the engine uses the table with
+  the greatest `EffectiveFrom ≤ T`. An event that predates every snapshot (or
+  carries no timestamp) prices at the **baseline** — the earliest table — so
+  costing never fails for lack of a dated table.
+- **Baseline is the floor.** The embedded baseline snapshot carries a fixed,
+  committed `fetched_at` and always sorts first. Anything before the first real
+  refresh prices on the baseline, i.e. on the committed list prices.
+- **Each dated table is complete and authoritative.** Snapshots are
+  Anthropic-scoped, so each dated table layers the snapshot's Anthropic rates
+  onto the full embedded catalog: OpenAI/Gemini/Mistral/… keep pricing, and the
+  table selected for an instant is authoritative — a model missing from it is a
+  miss (the usual `ErrUnknownModel`), *not* a fall-through to a differently-dated
+  table.
+- **Overrides still apply.** A negotiated-rate override file (`pricing.path`) is
+  layered onto *every* dated table, so your rates hold across all periods.
+
+Concretely: refresh on 2026-08-15 and Anthropic's Opus input rate changes. An
+event from 2026-07-20 is priced at the pre-refresh (baseline) rate; an event
+from 2026-09-01 is priced at the 08-15 snapshot's rate — from the same engine,
+in the same query.
+
+Where it takes effect:
+
+- **Ingest (live proxy).** Costs are stamped at ingest from `Envelope.Timestamp`
+  (`Engine.ApplyToEnvelope`), so a request is priced at the rate in effect when
+  it happened.
+- **Historical recompute.** The analytics aggregator reprices zero-cost events
+  (e.g. vendor-usage JSONL that ships tokens but no price) at the effective rate
+  for their time bucket.
+
+A baseline-only engine — no refreshes yet — is byte-for-byte identical to the
+pre-Phase-2 flat engine (`spend.NewEngine(spend.DefaultTable())`).
+
+### Where it's wired
+
+The effective-dated engine is constructed in the composition root
+(`internal/bootstrap`) and in the standalone CLI `spend` / `replay` paths via
+`pricing.EffectiveEngine` / `EffectiveEngineWithOverrides`. Construction is
+fail-soft: any error building the dated engine degrades to the flat
+baseline+override engine, so a bad snapshot dir never breaks costing.
