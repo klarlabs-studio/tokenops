@@ -57,9 +57,9 @@ func TestLiteLLMSource_PerTokenToPerMillion(t *testing.T) {
 	if !ok {
 		t.Fatalf("opus not mapped; keys=%v", snap.Models())
 	}
-	// 0.000015 per token → 15 per million.
-	if opus.InputPerMillion != 15 || opus.OutputPerMillion != 75 || opus.CachedInputPerMillion != 1.5 {
-		t.Errorf("opus per-million = %+v, want 15/75/1.5", opus)
+	// 0.000005 per token → 5 per million.
+	if opus.InputPerMillion != 5 || opus.OutputPerMillion != 25 || opus.CachedInputPerMillion != 0.5 {
+		t.Errorf("opus per-million = %+v, want 5/25/0.5", opus)
 	}
 }
 

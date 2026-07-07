@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Reverted the incorrect Opus "correction" from v0.38.0.** v0.38.0 changed Opus
+  4.x rates to `$15/$75/$1.50` on the mistaken assumption they follow old-Opus
+  pricing. They don't: Anthropic **cut Opus pricing at 4.5** — Opus 4 / 4.1 are
+  `$15/$75/$1.50`, but **Opus 4.5–4.8 are `$5/$25/$0.50`** (the value the catalog
+  originally had). Confirmed against the LiteLLM feed via `tokenops pricing
+  refresh`. Reverted claude-opus-4-{6,7,8} to `$5/$25/$0.50` and restored the
+  original tests. The consistency guard couldn't catch this (both `$5` and `$15`
+  are internally consistent — cache = 10% of input, output = 5×); only the sourced
+  feed could — which is exactly the case ADR 0002's researched pricing is built
+  for. It caught a confidently-wrong human edit.
+
 ## 0.38.0 - 2026-07-07
 
 ### Fixed

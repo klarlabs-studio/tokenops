@@ -39,9 +39,9 @@ func TestDefaultTableCoversCurrentAnthropicModels(t *testing.T) {
 	for model, want := range map[string]Rate{
 		"claude-fable-5":     {InputPerMillion: 10.00, OutputPerMillion: 50.00, CachedInputPerMillion: 1.00},
 		"claude-fable-5[1m]": {InputPerMillion: 10.00, OutputPerMillion: 50.00, CachedInputPerMillion: 1.00},
-		"claude-opus-4-8":    {InputPerMillion: 15.00, OutputPerMillion: 75.00, CachedInputPerMillion: 1.50},
-		"claude-opus-4-7":    {InputPerMillion: 15.00, OutputPerMillion: 75.00, CachedInputPerMillion: 1.50},
-		"claude-opus-4-6":    {InputPerMillion: 15.00, OutputPerMillion: 75.00, CachedInputPerMillion: 1.50},
+		"claude-opus-4-8":    {InputPerMillion: 5.00, OutputPerMillion: 25.00, CachedInputPerMillion: 0.50},
+		"claude-opus-4-7":    {InputPerMillion: 5.00, OutputPerMillion: 25.00, CachedInputPerMillion: 0.50},
+		"claude-opus-4-6":    {InputPerMillion: 5.00, OutputPerMillion: 25.00, CachedInputPerMillion: 0.50},
 		"claude-sonnet-4-6":  {InputPerMillion: 3.00, OutputPerMillion: 15.00, CachedInputPerMillion: 0.30},
 		"claude-haiku-4-5":   {InputPerMillion: 1.00, OutputPerMillion: 5.00, CachedInputPerMillion: 0.10},
 	} {

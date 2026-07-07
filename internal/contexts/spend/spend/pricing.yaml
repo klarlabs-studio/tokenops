@@ -39,17 +39,17 @@ rates:
       output_per_million: 50.00
       cached_input_per_million: 1.00
     "claude-opus-4-8*":
-      input_per_million: 15.00
-      output_per_million: 75.00
-      cached_input_per_million: 1.50
+      input_per_million: 5.00
+      output_per_million: 25.00
+      cached_input_per_million: 0.50
     "claude-opus-4-7*":
-      input_per_million: 15.00
-      output_per_million: 75.00
-      cached_input_per_million: 1.50
+      input_per_million: 5.00
+      output_per_million: 25.00
+      cached_input_per_million: 0.50
     "claude-opus-4-6*":
-      input_per_million: 15.00
-      output_per_million: 75.00
-      cached_input_per_million: 1.50
+      input_per_million: 5.00
+      output_per_million: 25.00
+      cached_input_per_million: 0.50
     "claude-sonnet-4-6*":
       input_per_million: 3.00
       output_per_million: 15.00

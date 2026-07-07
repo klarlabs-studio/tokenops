@@ -8,10 +8,8 @@ import (
 	"time"
 )
 
-// A cache-read-only turn priced at opus's cached rate ($1.50/M) makes the math
-// legible: cost == cacheRead * 1.50 / 1e6. So 20M cache-read tokens == $30.
-// The opus tests scale BudgetUSD to $150 (3x the $50 default) so the token
-// fixtures stay round while the budget fractions/tiers under test are unchanged.
+// A cache-read-only turn priced at opus's cached rate ($0.50/M) makes the math
+// legible: cost == cacheRead * 0.50 / 1e6. So 20M cache-read tokens == $10.
 const (
 	opus  = "claude-opus-4-8"
 	haiku = "claude-haiku-4-5"
@@ -56,30 +54,29 @@ func ts(n int) string {
 // never double-count (the LastCountedTS marker).
 func TestEvaluate_CumulativeAccumulationDedups(t *testing.T) {
 	dir := t.TempDir()
-	cfg := DefaultConfig()
-	cfg.BudgetUSD = 150 // 3x default so token fixtures stay round at $1.50/M
+	cfg := DefaultConfig() // $50 budget
 
-	// Stop 1: one 20M cache-read turn -> $30.
+	// Stop 1: one 20M cache-read turn -> $10.
 	tp := writeTranscript(t, dir, turnLine(ts(1), 20_000_000, opus))
 	d := Evaluate(dir, "s", tp, cfg, fixedNow)
-	if !approx(d.CumulativeUSD, 30) {
-		t.Fatalf("after turn 1 want $30, got %.4f", d.CumulativeUSD)
+	if !approx(d.CumulativeUSD, 10) {
+		t.Fatalf("after turn 1 want $10, got %.4f", d.CumulativeUSD)
 	}
 	if d.Nudge {
-		t.Fatalf("$30 of $150 (20%%) must not nudge")
+		t.Fatalf("$10 of $50 (20%%) must not nudge")
 	}
 
 	// Stop 2: same transcript, no new turn -> cumulative unchanged (dedup).
 	d = Evaluate(dir, "s", tp, cfg, fixedNow)
-	if !approx(d.CumulativeUSD, 30) {
-		t.Fatalf("dedup failed: want $30 unchanged, got %.4f", d.CumulativeUSD)
+	if !approx(d.CumulativeUSD, 10) {
+		t.Fatalf("dedup failed: want $10 unchanged, got %.4f", d.CumulativeUSD)
 	}
 
-	// Stop 3: append a 40M turn -> +$60 = $90 (60%%), crosses the 50%% tier.
+	// Stop 3: append a 40M turn -> +$20 = $30 (60%%), crosses the 50%% tier.
 	rewrite(t, tp, turnLine(ts(1), 20_000_000, opus), turnLine(ts(2), 40_000_000, opus))
 	d = Evaluate(dir, "s", tp, cfg, fixedNow)
-	if !approx(d.CumulativeUSD, 90) {
-		t.Fatalf("after turn 2 want $90, got %.4f", d.CumulativeUSD)
+	if !approx(d.CumulativeUSD, 30) {
+		t.Fatalf("after turn 2 want $30, got %.4f", d.CumulativeUSD)
 	}
 	if !d.Nudge || !approx(d.FiredFraction, 0.50) {
 		t.Fatalf("expected 50%% tier fired, got nudge=%v frac=%.3f", d.Nudge, d.FiredFraction)
@@ -91,9 +88,8 @@ func TestEvaluate_CumulativeAccumulationDedups(t *testing.T) {
 func TestEvaluate_TierLatching(t *testing.T) {
 	dir := t.TempDir()
 	cfg := DefaultConfig()
-	cfg.BudgetUSD = 150 // 3x default so token fixtures stay round at $1.50/M
 
-	// Turn 1: 52M -> $78 (52%) -> fire 50%.
+	// Turn 1: 52M -> $26 (52%) -> fire 50%.
 	tp := writeTranscript(t, dir, turnLine(ts(1), 52_000_000, opus))
 	if d := Evaluate(dir, "s", tp, cfg, fixedNow); !d.Nudge || !approx(d.FiredFraction, 0.50) {
 		t.Fatalf("turn 1 should fire 50%%, got nudge=%v frac=%.3f", d.Nudge, d.FiredFraction)
@@ -102,12 +98,12 @@ func TestEvaluate_TierLatching(t *testing.T) {
 	if d := Evaluate(dir, "s", tp, cfg, fixedNow); d.Nudge {
 		t.Fatalf("still at 52%% must not re-fire the 50%% tier")
 	}
-	// Append -> $117 (78%) -> fire 75%.
+	// Append -> $39 (78%) -> fire 75%.
 	rewrite(t, tp, turnLine(ts(1), 52_000_000, opus), turnLine(ts(2), 26_000_000, opus))
 	if d := Evaluate(dir, "s", tp, cfg, fixedNow); !d.Nudge || !approx(d.FiredFraction, 0.75) {
 		t.Fatalf("expected 75%% tier, got nudge=%v frac=%.3f", d.Nudge, d.FiredFraction)
 	}
-	// Append -> $156 (104%) -> fire 100%.
+	// Append -> $52 (104%) -> fire 100%.
 	rewrite(t, tp,
 		turnLine(ts(1), 52_000_000, opus),
 		turnLine(ts(2), 26_000_000, opus),
@@ -116,7 +112,7 @@ func TestEvaluate_TierLatching(t *testing.T) {
 	if !d.Nudge || !approx(d.FiredFraction, 1.00) {
 		t.Fatalf("expected 100%% tier, got nudge=%v frac=%.3f", d.Nudge, d.FiredFraction)
 	}
-	if !strings.Contains(d.Message, "over your $150 session budget") {
+	if !strings.Contains(d.Message, "over your $50 session budget") {
 		t.Fatalf("100%% message unexpected: %q", d.Message)
 	}
 }
@@ -126,14 +122,13 @@ func TestEvaluate_TierLatching(t *testing.T) {
 func TestEvaluate_BurstFiresHighestTierOnly(t *testing.T) {
 	dir := t.TempDir()
 	cfg := DefaultConfig()
-	cfg.BudgetUSD = 150 // 3x default so token fixtures stay round at $1.50/M
 
-	// Turn 1: 40M -> $60 (40%) -> no tier.
+	// Turn 1: 40M -> $20 (40%) -> no tier.
 	tp := writeTranscript(t, dir, turnLine(ts(1), 40_000_000, opus))
 	if d := Evaluate(dir, "s", tp, cfg, fixedNow); d.Nudge {
 		t.Fatalf("40%% must not nudge")
 	}
-	// Append 80M -> +$120 = $180 (120%) in one Stop -> only 100% fires.
+	// Append 80M -> +$40 = $60 (120%) in one Stop -> only 100% fires.
 	rewrite(t, tp, turnLine(ts(1), 40_000_000, opus), turnLine(ts(2), 80_000_000, opus))
 	d := Evaluate(dir, "s", tp, cfg, fixedNow)
 	if !d.Nudge || !approx(d.FiredFraction, 1.00) {
@@ -149,21 +144,20 @@ func TestEvaluate_BurstFiresHighestTierOnly(t *testing.T) {
 func TestEvaluate_OverBudgetEscalation(t *testing.T) {
 	dir := t.TempDir()
 	cfg := DefaultConfig() // OverBudgetStep 1.0
-	cfg.BudgetUSD = 150    // 3x default so token fixtures stay round at $1.50/M
 
-	// Turn 1: 100M -> $150 (100%) -> fire 100%.
+	// Turn 1: 100M -> $50 (100%) -> fire 100%.
 	tp := writeTranscript(t, dir, turnLine(ts(1), 100_000_000, opus))
 	if d := Evaluate(dir, "s", tp, cfg, fixedNow); !d.Nudge || !approx(d.FiredFraction, 1.00) {
 		t.Fatalf("expected 100%%, got nudge=%v frac=%.3f", d.Nudge, d.FiredFraction)
 	}
-	// Append 100M -> $300 (200%) -> fire the 200% over tier.
+	// Append 100M -> $100 (200%) -> fire the 200% over tier.
 	rewrite(t, tp, turnLine(ts(1), 100_000_000, opus), turnLine(ts(2), 100_000_000, opus))
 	d := Evaluate(dir, "s", tp, cfg, fixedNow)
 	if !d.Nudge || !approx(d.FiredFraction, 2.00) {
 		t.Fatalf("expected 200%% over tier, got nudge=%v frac=%.3f", d.Nudge, d.FiredFraction)
 	}
-	if !strings.Contains(d.Message, "200%") || !strings.Contains(d.Message, "$300+") {
-		t.Fatalf("200%% message should carry 200%% and $300+, got %q", d.Message)
+	if !strings.Contains(d.Message, "200%") || !strings.Contains(d.Message, "$100+") {
+		t.Fatalf("200%% message should carry 200%% and $100+, got %q", d.Message)
 	}
 }
 
@@ -173,14 +167,13 @@ func TestEvaluate_DisabledObservesOnly(t *testing.T) {
 	dir := t.TempDir()
 	cfg := DefaultConfig()
 	cfg.Enabled = false
-	cfg.BudgetUSD = 150                                               // 3x default so token fixtures stay round at $1.50/M
-	tp := writeTranscript(t, dir, turnLine(ts(1), 200_000_000, opus)) // $300, way over
+	tp := writeTranscript(t, dir, turnLine(ts(1), 200_000_000, opus)) // $100, way over
 	d := Evaluate(dir, "s", tp, cfg, fixedNow)
 	if d.Nudge {
 		t.Fatalf("disabled coach must not nudge")
 	}
-	if !approx(d.CumulativeUSD, 300) {
-		t.Fatalf("disabled coach still accumulates, want $300 got %.2f", d.CumulativeUSD)
+	if !approx(d.CumulativeUSD, 100) {
+		t.Fatalf("disabled coach still accumulates, want $100 got %.2f", d.CumulativeUSD)
 	}
 	s, err := ReadStats(dir)
 	if err != nil {
@@ -211,7 +204,7 @@ func TestEvaluate_ModelAgnostic(t *testing.T) {
 		t.Fatalf("cheaper model should still trip a tier, got nudge=%v frac=%.3f", d.Nudge, d.FiredFraction)
 	}
 
-	// Same tokens on opus (1.50/M) cost 15x -> reaches the tier far sooner.
+	// Same tokens on opus (0.50/M) cost 5x -> reaches the tier far sooner.
 	tp2 := writeTranscript(t, t.TempDir(), turnLine(ts(1), 60_000_000, opus))
 	if o := Evaluate(dir, "opus", tp2, cfg, fixedNow); o.CumulativeUSD <= d.CumulativeUSD {
 		t.Fatalf("opus should accrue more than haiku for equal tokens: opus=%.2f haiku=%.2f", o.CumulativeUSD, d.CumulativeUSD)
@@ -224,7 +217,6 @@ func TestEvaluate_ModelAgnostic(t *testing.T) {
 func TestEvaluate_UnpriceableModelAdvancesMarkerWithoutCost(t *testing.T) {
 	dir := t.TempDir()
 	cfg := DefaultConfig()
-	cfg.BudgetUSD = 150 // 3x default so token fixtures stay round at $1.50/M
 
 	tp := writeTranscript(t, dir, turnLine(ts(1), 500_000_000, "totally-unknown-model"))
 	d := Evaluate(dir, "s", tp, cfg, fixedNow)
@@ -239,8 +231,8 @@ func TestEvaluate_UnpriceableModelAdvancesMarkerWithoutCost(t *testing.T) {
 		turnLine(ts(1), 500_000_000, "totally-unknown-model"),
 		turnLine(ts(2), 20_000_000, opus))
 	d = Evaluate(dir, "s", tp, cfg, fixedNow)
-	if !approx(d.CumulativeUSD, 30) {
-		t.Fatalf("want only the $30 opus turn counted, got %.4f", d.CumulativeUSD)
+	if !approx(d.CumulativeUSD, 10) {
+		t.Fatalf("want only the $10 opus turn counted, got %.4f", d.CumulativeUSD)
 	}
 }
 
@@ -271,13 +263,11 @@ func TestEvaluate_FailOpen(t *testing.T) {
 // exceed the tail window must still parse the final usage record.
 func TestEvaluate_TailIgnoresLeadingPartialLine(t *testing.T) {
 	dir := t.TempDir()
-	cfg := DefaultConfig()
-	cfg.BudgetUSD = 150 // 3x default so token fixtures stay round at $1.50/M
 	pad := `{"type":"filler","message":{"content":"` + strings.Repeat("x", 300_000) + `"}}`
-	tp := writeTranscript(t, dir, pad, turnLine(ts(1), 120_000_000, opus)) // $180 -> 120%
-	d := Evaluate(dir, "s", tp, cfg, fixedNow)
-	if !approx(d.CumulativeUSD, 180) {
-		t.Fatalf("want $180 from tail, got %.4f", d.CumulativeUSD)
+	tp := writeTranscript(t, dir, pad, turnLine(ts(1), 120_000_000, opus)) // $60 -> 120%
+	d := Evaluate(dir, "s", tp, DefaultConfig(), fixedNow)
+	if !approx(d.CumulativeUSD, 60) {
+		t.Fatalf("want $60 from tail, got %.4f", d.CumulativeUSD)
 	}
 	if !d.Nudge || !approx(d.FiredFraction, 1.00) {
 		t.Fatalf("expected 100%% tier from tail, got nudge=%v frac=%.3f", d.Nudge, d.FiredFraction)
@@ -289,7 +279,6 @@ func TestEvaluate_TailIgnoresLeadingPartialLine(t *testing.T) {
 func TestReadStats_Aggregates(t *testing.T) {
 	dir := t.TempDir()
 	cfg := DefaultConfig()
-	cfg.BudgetUSD = 150 // 3x default so token fixtures stay round at $1.50/M
 
 	// Session A: climb to 100% over three Stops (fires 50, 75, 100).
 	pa := writeTranscript(t, t.TempDir(), turnLine(ts(1), 52_000_000, opus))
@@ -297,10 +286,10 @@ func TestReadStats_Aggregates(t *testing.T) {
 	rewrite(t, pa, turnLine(ts(1), 52_000_000, opus), turnLine(ts(2), 26_000_000, opus))
 	Evaluate(dir, "A", pa, cfg, fixedNow) // 75%
 	rewrite(t, pa, turnLine(ts(1), 52_000_000, opus), turnLine(ts(2), 26_000_000, opus), turnLine(ts(3), 26_000_000, opus))
-	Evaluate(dir, "A", pa, cfg, fixedNow) // 100%, cumulative $156
+	Evaluate(dir, "A", pa, cfg, fixedNow) // 100%, cumulative $52
 
 	// Session B: a single small turn, no alert.
-	pb := writeTranscript(t, t.TempDir(), turnLine(ts(1), 10_000_000, opus)) // $15
+	pb := writeTranscript(t, t.TempDir(), turnLine(ts(1), 10_000_000, opus)) // $5
 	Evaluate(dir, "B", pb, cfg, fixedNow)
 
 	s, err := ReadStats(dir)
@@ -318,11 +307,11 @@ func TestReadStats_Aggregates(t *testing.T) {
 			t.Fatalf("want one %s alert, got %d", tier, s.AlertsByTier[tier])
 		}
 	}
-	if !approx(s.MaxCumulativeUSD, 156) {
-		t.Fatalf("want max cumulative $156, got %.2f", s.MaxCumulativeUSD)
+	if !approx(s.MaxCumulativeUSD, 52) {
+		t.Fatalf("want max cumulative $52, got %.2f", s.MaxCumulativeUSD)
 	}
-	if !approx(s.TotalEstSpendUSD, 171) { // 156 (A) + 15 (B)
-		t.Fatalf("want total est spend $171, got %.2f", s.TotalEstSpendUSD)
+	if !approx(s.TotalEstSpendUSD, 57) { // 52 (A) + 5 (B)
+		t.Fatalf("want total est spend $57, got %.2f", s.TotalEstSpendUSD)
 	}
 }
 

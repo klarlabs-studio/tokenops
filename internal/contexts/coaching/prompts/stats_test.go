@@ -41,11 +41,11 @@ func TestComputeTurnStatsClaudeCode(t *testing.T) {
 	if stats.AvgOutputTokens != 50 {
 		t.Errorf("AvgOutput = %.0f; want 50", stats.AvgOutputTokens)
 	}
-	// claude-opus-4-7 list rates ($15/M input, $1.50/M cache, $75/M output):
-	// uncached 100 × $15/M + cached 1000 × $1.50/M + output 50 × $75/M
-	// = 0.0015 + 0.0015 + 0.00375 ≈ 0.00675
-	if stats.AvgCostUSD < 0.0065 || stats.AvgCostUSD > 0.007 {
-		t.Errorf("AvgCost = %.6f; want ~0.00675", stats.AvgCostUSD)
+	// claude-opus-4-7 list rates ($5/M input, $0.50/M cache, $25/M output):
+	// uncached 100 × $5/M + cached 1000 × $0.50/M + output 50 × $25/M
+	// = 0.0005 + 0.0005 + 0.00125 ≈ 0.00225
+	if stats.AvgCostUSD < 0.002 || stats.AvgCostUSD > 0.0025 {
+		t.Errorf("AvgCost = %.6f; want ~0.00225", stats.AvgCostUSD)
 	}
 }
 

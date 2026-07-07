@@ -24,8 +24,8 @@ func TestBaselineSnapshot_AnthropicScopedAndPopulated(t *testing.T) {
 	}
 	// Opus baseline must be the corrected rate, and internally consistent.
 	opus := base.Rates["claude-opus-4-8"]
-	if opus.InputPerMillion != 15 || opus.OutputPerMillion != 75 || opus.CachedInputPerMillion != 1.5 {
-		t.Errorf("opus baseline = %+v, want 15/75/1.5", opus)
+	if opus.InputPerMillion != 5 || opus.OutputPerMillion != 25 || opus.CachedInputPerMillion != 0.5 {
+		t.Errorf("opus baseline = %+v, want 5/25/0.5", opus)
 	}
 }
 

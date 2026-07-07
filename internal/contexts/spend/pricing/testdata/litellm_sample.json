@@ -9,10 +9,10 @@
   "claude-opus-4-8": {
     "max_tokens": 32000,
     "max_input_tokens": 200000,
-    "input_cost_per_token": 0.000015,
-    "output_cost_per_token": 0.000075,
-    "cache_read_input_token_cost": 0.0000015,
-    "cache_creation_input_token_cost": 0.00001875,
+    "input_cost_per_token": 0.000005,
+    "output_cost_per_token": 0.000025,
+    "cache_read_input_token_cost": 0.0000005,
+    "cache_creation_input_token_cost": 0.00000625,
     "litellm_provider": "anthropic",
     "mode": "chat"
   },
