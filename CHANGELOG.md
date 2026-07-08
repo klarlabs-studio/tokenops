@@ -1,6 +1,24 @@
 # Changelog
 
-## Unreleased
+## 0.41.0 - 2026-07-08
+
+### Added
+
+- **Verified catalog-row pinning (`verified: true`).** The runtime prices events
+  with the effective-dated engine, where a fetched snapshot overrides the baseline
+  for current events — so an upstream source that goes stale on a model silently
+  regresses a rate you verified (LiteLLM still priced the deprecated `deepseek-chat`
+  alias at `$0.28` after the catalog was corrected to `$0.14`). A row marked
+  `verified: true` is now authoritative: its snapshot value is stripped before
+  layering (`spend.DefaultPinnedKeys` / `pricing.SnapshotsToDatedTables`), so the
+  cost engine keeps the baseline. Unpinned rows still auto-adopt and new models
+  still surface. The non-Anthropic vendor-verified rows are pinned — the exact rows
+  the Anthropic-family consistency guard cannot cover.
+- **`pricing diff` / `pricing show` flag pinned rows.** Both render the raw snapshot
+  for provenance, so a pinned row shows the source value and `diff` lists it as
+  drift; they now mark those rows `[pinned]` with a legend clarifying the cost
+  engine prices at the baseline — so a stale source is never "corrected" into the
+  catalog.
 
 ### Changed
 
@@ -24,8 +42,30 @@
     providers price on different curves and would false-flag. All rows still get
     a conservative generic sanity check (cache-read must not exceed input).
   - `refresh`'s diff now surfaces real non-Anthropic drift; `show`/`diff` group
-    by provider (keys sort `"<provider>/<model>"`). No catalog rates were
-    hand-edited — this is about *sourcing*, not editing the baseline.
+    by provider (keys sort `"<provider>/<model>"`).
+- **Corrected Mistral, DeepSeek, o1, and grok-3 catalog rates.** With the source
+  now surfacing non-Anthropic drift, each drifted row was cross-checked against the
+  vendor's pricing page (never single-sourced). Mistral tracks the current
+  `-latest` generation — Large 3 `$0.50/$1.50`, Medium 3.5 `$1.50/$7.50`, Small 4
+  `$0.15/$0.60`; `deepseek-chat`/`deepseek-reasoner` → `deepseek-v4-flash`
+  `$0.14/$0.28` (cache `$0.0028`), the models those deprecated aliases now resolve
+  to (retired 2026-07-24); `o1` gains cache-read `$7.50` and `grok-3` cache-read
+  `$0.75`. `codestral`, `gpt-3.5-turbo`, and `gemini-1.5-flash` were confirmed as
+  false drift and left unchanged.
+
+### Fixed
+
+- **Current-SKU collision in the LiteLLM adapter.** When several dated SKUs
+  collapsed onto one catalog key (e.g. `mistral-large*`), the adapter kept the
+  lexically-first id — the *oldest* archived snapshot (`mistral-large-2402`
+  `$4/$12`) — manufacturing false drift. It now picks the newest dated SKU, with
+  `-latest` as a fallback (LiteLLM's `-latest` aliases are sometimes stale, e.g.
+  `codestral-latest`).
+- **OpenAI `MMDD` misorder and distinct-SKU bleed.** `gpt-3.5-turbo-1106` (Nov)
+  out-ranked `-0125` (Jan) because 4-digit suffixes were compared numerically; a
+  4-digit suffix is now treated as a date only when it is a plausible `YYMM`. And a
+  broad catalog key no longer absorbs a distinct SKU tier — `grok-3` stopped
+  swallowing `grok-3-fast` (`$5/$25`) and `grok-3-mini`.
 
 ## 0.40.0 - 2026-07-07
 
