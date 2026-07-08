@@ -184,8 +184,8 @@ func TestEffectiveEngineSnapshotOverridesRightProvider(t *testing.T) {
 	}
 	before, _ := eng.ComputeAt(mistral, fetchedAt.Add(-time.Hour))
 	after, _ := eng.ComputeAt(mistral, fetchedAt.Add(time.Hour))
-	if before != perM(2) { // baseline mistral-large input = 2
-		t.Errorf("mistral before override: %.6f, want baseline %.6f", before, perM(2))
+	if before != perM(0.5) { // baseline mistral-large input = 0.5 (Large 3)
+		t.Errorf("mistral before override: %.6f, want baseline %.6f", before, perM(0.5))
 	}
 	if after != perM(9) {
 		t.Errorf("mistral after override: %.6f, want %.6f", after, perM(9))

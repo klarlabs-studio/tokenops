@@ -32,6 +32,7 @@ rates:
     "o1*":
       input_per_million: 15.00
       output_per_million: 60.00
+      cached_input_per_million: 7.50
 
   anthropic:
     "claude-fable-5*":
@@ -74,15 +75,17 @@ rates:
   # Mistral — large + medium families. Le Chat Pro routes through these
   # on the consumer subscription; cost recompute attaches per-token
   # price when the plan window is exceeded and metered billing kicks in.
+  # Rates track the current "-latest" alias per https://mistral.ai/pricing/api
+  # (2026-07): large=Large 3, medium=Medium 3.5, small=Small 4.
   mistral:
     "mistral-large*":
-      input_per_million: 2.00
-      output_per_million: 6.00
+      input_per_million: 0.50
+      output_per_million: 1.50
     "mistral-medium*":
-      input_per_million: 0.40
-      output_per_million: 2.00
+      input_per_million: 1.50
+      output_per_million: 7.50
     "mistral-small*":
-      input_per_million: 0.20
+      input_per_million: 0.15
       output_per_million: 0.60
     "codestral*":
       input_per_million: 0.30
@@ -143,16 +146,19 @@ rates:
       output_per_million: 0.20
 
   # DeepSeek — https://api-docs.deepseek.com/quick_start/pricing (2026-07).
-  # cached_input_per_million is DeepSeek's cache-hit rate.
+  # cached_input_per_million is DeepSeek's cache-hit rate. deepseek-chat and
+  # deepseek-reasoner are now deprecated aliases (retired 2026-07-24) for
+  # deepseek-v4-flash's non-thinking / thinking modes; both bill at the same
+  # v4-flash rate.
   deepseek:
     "deepseek-chat*":
-      input_per_million: 0.27
-      output_per_million: 1.10
-      cached_input_per_million: 0.07
+      input_per_million: 0.14
+      output_per_million: 0.28
+      cached_input_per_million: 0.0028
     "deepseek-reasoner*":
-      input_per_million: 0.55
-      output_per_million: 2.19
-      cached_input_per_million: 0.14
+      input_per_million: 0.14
+      output_per_million: 0.28
+      cached_input_per_million: 0.0028
 
   # xAI — https://docs.x.ai/docs/models (2026-07)
   xai:
@@ -162,6 +168,7 @@ rates:
     "grok-3*":
       input_per_million: 3.00
       output_per_million: 15.00
+      cached_input_per_million: 0.75
     "grok-beta*":
       input_per_million: 5.00
       output_per_million: 15.00

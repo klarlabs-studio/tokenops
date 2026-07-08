@@ -67,8 +67,8 @@
   },
   "mistral/mistral-large-2411": {
     "max_tokens": 128000,
-    "input_cost_per_token": 0.000002,
-    "output_cost_per_token": 0.000006,
+    "input_cost_per_token": 0.0000005,
+    "output_cost_per_token": 0.0000015,
     "litellm_provider": "mistral",
     "mode": "chat"
   },

@@ -83,13 +83,13 @@ func TestLiteLLMSource_PerTokenToPerMillion(t *testing.T) {
 	if gpt.InputPerMillion != 2.5 || gpt.OutputPerMillion != 10 || gpt.CachedInputPerMillion != 1.25 {
 		t.Errorf("gpt-4o per-million = %+v, want 2.5/10/1.25", gpt)
 	}
-	// Mistral: 0.000002 → 2 per million, no cache.
+	// Mistral: 0.0000005 → 0.5 per million, no cache.
 	mistral, ok := snap.Rates["mistral/mistral-large"]
 	if !ok {
 		t.Fatalf("mistral-large not mapped; keys=%v", snap.Models())
 	}
-	if mistral.InputPerMillion != 2 || mistral.OutputPerMillion != 6 {
-		t.Errorf("mistral-large per-million = %+v, want 2/6", mistral)
+	if mistral.InputPerMillion != 0.5 || mistral.OutputPerMillion != 1.5 {
+		t.Errorf("mistral-large per-million = %+v, want 0.5/1.5", mistral)
 	}
 }
 
@@ -143,7 +143,7 @@ func TestPreferID_CurrentPriceWins(t *testing.T) {
 // When several dated SKUs collapse onto one catalog key, the fetched rate must
 // be the newest dated snapshot, not the oldest archived one nor a stale
 // "-latest" alias. The fixture's mistral-large-2402 ($4/$12) and -latest ($3/$9)
-// must lose to the newest dated -2411 ($2/$6).
+// must lose to the newest dated -2411 ($0.50/$1.50, the current Large 3 rate).
 func TestLiteLLMSource_CollisionAdoptsCurrentRate(t *testing.T) {
 	srv := fixtureServer(t)
 	src := &LiteLLMSource{URL: srv.URL, Client: srv.Client()}
@@ -155,8 +155,8 @@ func TestLiteLLMSource_CollisionAdoptsCurrentRate(t *testing.T) {
 	if !ok {
 		t.Fatalf("mistral-large not mapped; keys=%v", snap.Models())
 	}
-	if large.InputPerMillion != 2 || large.OutputPerMillion != 6 {
-		t.Errorf("mistral-large = %+v, want the -latest rate 2/6 (not an archived SKU)", large)
+	if large.InputPerMillion != 0.5 || large.OutputPerMillion != 1.5 {
+		t.Errorf("mistral-large = %+v, want the newest-dated rate 0.5/1.5 (not an archived SKU)", large)
 	}
 }
 
