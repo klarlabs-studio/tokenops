@@ -1,6 +1,7 @@
 package pricing
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -218,6 +219,26 @@ func TestEffectiveEngineWithOverridesHonoredAcrossPeriods(t *testing.T) {
 	got, _ := eng.ComputeAt(p, time.Now())
 	if got != perM(3) {
 		t.Errorf("override input rate not applied: got %.6f, want %.6f", got, perM(3))
+	}
+}
+
+// PinnedSnapshotKeys must translate catalog pin keys (Key{provider,"model*"})
+// into the normalized snapshot key space ("provider/model", no star) so the
+// diff/show renderers can flag pinned rows.
+func TestPinnedSnapshotKeys(t *testing.T) {
+	pins := PinnedSnapshotKeys()
+	for _, want := range []string{"deepseek/deepseek-chat", "mistral/mistral-small", "openai/o1"} {
+		if !pins[want] {
+			t.Errorf("expected %q pinned; got keys %v", want, pins)
+		}
+	}
+	if pins["anthropic/claude-opus-4-8"] {
+		t.Error("opus should not be pinned")
+	}
+	for k := range pins {
+		if strings.HasSuffix(k, "*") {
+			t.Errorf("pinned snapshot key %q must not carry the catalog star", k)
+		}
 	}
 }
 

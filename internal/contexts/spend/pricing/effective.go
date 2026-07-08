@@ -1,8 +1,26 @@
 package pricing
 
 import (
+	"strings"
+
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 )
+
+// PinnedSnapshotKeys returns the set of snapshot rate keys ("<provider>/<model>")
+// whose catalog row is pinned (verified: true). The runtime cost engine ignores
+// a fetched snapshot's value for these keys — it always prices them at the
+// baseline (see SnapshotsToDatedTables) — so a diff/show line for a pinned key
+// is informational only: the displayed source value is not what costing uses.
+// Keys are returned without the catalog's trailing "*" so they match the
+// normalized Snapshot.Rates / Diff key space.
+func PinnedSnapshotKeys() map[string]bool {
+	pins := spend.DefaultPinnedKeys()
+	out := make(map[string]bool, len(pins))
+	for k := range pins {
+		out[snapKey(string(k.Provider), strings.TrimSuffix(k.Model, "*"))] = true
+	}
+	return out
+}
 
 // AllSnapshots returns the embedded baseline followed by every persisted
 // snapshot under dir. The baseline sorts first (its FetchedAt is fixed at

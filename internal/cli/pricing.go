@@ -195,9 +195,19 @@ func newPricingShowCmd() *cobra.Command {
 			fmt.Fprintf(out, "%-34s %12s %12s %12s\n", "PROVIDER/MODEL", "INPUT", "OUTPUT", "CACHE_READ")
 			// Models() returns "<provider>/<model>" keys sorted lexically, so
 			// rows already group by provider.
+			pinned := pricing.PinnedSnapshotKeys()
+			anyPinned := false
 			for _, m := range snap.Models() {
 				r := snap.Rates[m]
-				fmt.Fprintf(out, "%-34s %12.4g %12.4g %12.4g\n", m, r.InputPerMillion, r.OutputPerMillion, r.CachedInputPerMillion)
+				mark := ""
+				if pinned[m] {
+					mark = "  [pinned]"
+					anyPinned = true
+				}
+				fmt.Fprintf(out, "%-34s %12.4g %12.4g %12.4g%s\n", m, r.InputPerMillion, r.OutputPerMillion, r.CachedInputPerMillion, mark)
+			}
+			if anyPinned {
+				fmt.Fprintln(out, "\n[pinned] = verified catalog row; the cost engine prices it at the baseline, so the value above is source provenance only and may differ from what costing uses.")
 			}
 			return nil
 		},
@@ -236,8 +246,18 @@ func newPricingDiffCmd() *cobra.Command {
 				fmt.Fprintln(out, "no changes.")
 				return nil
 			}
+			pinned := pricing.PinnedSnapshotKeys()
+			anyPinned := false
 			for _, c := range changes {
-				fmt.Fprintf(out, "  %s\n", pricing.FormatChange(c))
+				line := pricing.FormatChange(c)
+				if pinned[c.Model] {
+					line += "  [pinned: runtime keeps baseline]"
+					anyPinned = true
+				}
+				fmt.Fprintf(out, "  %s\n", line)
+			}
+			if anyPinned {
+				fmt.Fprintln(out, "\n[pinned] = verified catalog row; the cost engine ignores the source here and prices at the baseline. Do not \"correct\" the baseline toward this drift without re-checking the vendor.")
 			}
 			return nil
 		},
