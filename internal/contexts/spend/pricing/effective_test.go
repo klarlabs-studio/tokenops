@@ -163,14 +163,21 @@ func TestEffectiveEngineAppliesSnapshotAfterFetchDate(t *testing.T) {
 
 func TestEffectiveEngineSnapshotOverridesRightProvider(t *testing.T) {
 	dir := t.TempDir()
-	// A fetched snapshot changing ONLY a Mistral rate must override the Mistral
+	// A fetched snapshot changing ONLY a Gemini rate must override the Gemini
 	// baseline row (not Anthropic) once effective, while Anthropic keeps pricing
-	// on the baseline — proving the layering is by Key{Provider, Model}.
+	// on the baseline — proving the layering is by Key{Provider, Model}. Gemini
+	// is an UNpinned row, so the snapshot is free to override it (pinned rows are
+	// covered by TestEffectiveEngine_VerifiedRowResistsStaleSnapshot).
+	const geminiModel = "gemini-2.5-flash"
+	baseGemini, err := spend.DefaultTable().Lookup(eventschema.ProviderGemini, geminiModel)
+	if err != nil {
+		t.Fatalf("baseline gemini lookup: %v", err)
+	}
 	fetchedAt := baselineFetchedAt.Add(90 * 24 * time.Hour)
 	if _, err := SaveSnapshot(dir, Snapshot{
 		Source:    "litellm",
 		FetchedAt: fetchedAt,
-		Rates:     map[string]Rate{snapKey("mistral", "mistral-large"): {InputPerMillion: 9, OutputPerMillion: 27}},
+		Rates:     map[string]Rate{snapKey("gemini", geminiModel): {InputPerMillion: 9, OutputPerMillion: 27}},
 	}); err != nil {
 		t.Fatalf("save snapshot: %v", err)
 	}
@@ -179,22 +186,22 @@ func TestEffectiveEngineSnapshotOverridesRightProvider(t *testing.T) {
 		t.Fatalf("EffectiveEngine: %v", err)
 	}
 
-	mistral := &eventschema.PromptEvent{
-		Provider: eventschema.ProviderMistral, RequestModel: "mistral-large-latest", InputTokens: 1_000_000,
+	gemini := &eventschema.PromptEvent{
+		Provider: eventschema.ProviderGemini, RequestModel: geminiModel, InputTokens: 1_000_000,
 	}
-	before, _ := eng.ComputeAt(mistral, fetchedAt.Add(-time.Hour))
-	after, _ := eng.ComputeAt(mistral, fetchedAt.Add(time.Hour))
-	if before != perM(0.5) { // baseline mistral-large input = 0.5 (Large 3)
-		t.Errorf("mistral before override: %.6f, want baseline %.6f", before, perM(0.5))
+	before, _ := eng.ComputeAt(gemini, fetchedAt.Add(-time.Hour))
+	after, _ := eng.ComputeAt(gemini, fetchedAt.Add(time.Hour))
+	if before != perM(baseGemini.InputPerMillion) {
+		t.Errorf("gemini before override: %.6f, want baseline %.6f", before, perM(baseGemini.InputPerMillion))
 	}
 	if after != perM(9) {
-		t.Errorf("mistral after override: %.6f, want %.6f", after, perM(9))
+		t.Errorf("gemini after override: %.6f, want %.6f", after, perM(9))
 	}
 
-	// Anthropic must be untouched by a Mistral-only snapshot.
+	// Anthropic must be untouched by a Gemini-only snapshot.
 	opusAfter, _ := eng.ComputeAt(opusEvent(), fetchedAt.Add(time.Hour))
 	if opusAfter != perM(baselineOpusInput(t)) {
-		t.Errorf("anthropic drifted from a mistral-only snapshot: %.6f", opusAfter)
+		t.Errorf("anthropic drifted from a gemini-only snapshot: %.6f", opusAfter)
 	}
 }
 
@@ -217,4 +224,46 @@ func TestEffectiveEngineWithOverridesHonoredAcrossPeriods(t *testing.T) {
 // perM converts a $/M input rate into the cost of a 1M-input-token event.
 func perM(inputPerMillion float64) float64 {
 	return float64(1_000_000) * inputPerMillion / 1_000_000.0
+}
+
+// A row marked verified: true in the catalog is authoritative: a fetched
+// snapshot that has gone stale on it must NOT override the baseline, even for
+// current events — while an UNpinned row still adopts the snapshot. This is the
+// guard against LiteLLM silently regressing the hand-verified deepseek rate.
+func TestEffectiveEngine_VerifiedRowResistsStaleSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	fetchedAt := baselineFetchedAt.Add(90 * 24 * time.Hour)
+	if _, err := SaveSnapshot(dir, Snapshot{
+		Source:    "litellm",
+		FetchedAt: fetchedAt,
+		Rates: map[string]Rate{
+			// deepseek-chat is pinned in the catalog; this stale value must lose.
+			snapKey("deepseek", "deepseek-chat"): {InputPerMillion: 0.28, OutputPerMillion: 0.42},
+			// gpt-4o is NOT pinned; this value must win.
+			snapKey("openai", "gpt-4o"): {InputPerMillion: 9, OutputPerMillion: 27},
+		},
+	}); err != nil {
+		t.Fatalf("save snapshot: %v", err)
+	}
+	eng, err := EffectiveEngine(dir)
+	if err != nil {
+		t.Fatalf("EffectiveEngine: %v", err)
+	}
+	at := fetchedAt.Add(time.Hour) // a "current" event, after the snapshot
+
+	// Pinned deepseek-chat holds the baseline rate despite the stale snapshot.
+	wantDS, err := spend.DefaultTable().Lookup(eventschema.ProviderDeepSeek, "deepseek-chat")
+	if err != nil {
+		t.Fatalf("baseline deepseek lookup: %v", err)
+	}
+	ds := &eventschema.PromptEvent{Provider: eventschema.ProviderDeepSeek, RequestModel: "deepseek-chat", InputTokens: 1_000_000}
+	if got, _ := eng.ComputeAt(ds, at); got != perM(wantDS.InputPerMillion) {
+		t.Errorf("pinned deepseek-chat = %.4f, want baseline %.4f (stale snapshot must not win)", got, perM(wantDS.InputPerMillion))
+	}
+
+	// Unpinned gpt-4o adopts the snapshot's moved rate.
+	gpt := &eventschema.PromptEvent{Provider: eventschema.ProviderOpenAI, RequestModel: "gpt-4o", InputTokens: 1_000_000}
+	if got, _ := eng.ComputeAt(gpt, at); got != perM(9) {
+		t.Errorf("unpinned gpt-4o = %.4f, want snapshot 9 (unpinned rows still adopt)", got)
+	}
 }

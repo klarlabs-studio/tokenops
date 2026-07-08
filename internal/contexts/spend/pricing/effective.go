@@ -24,12 +24,20 @@ func AllSnapshots(dir string) []Snapshot {
 // Mistral rate overrides the Mistral baseline, not just Anthropic. The baseline
 // snapshot's rates equal the whole catalog, so its dated table is exactly
 // DefaultTable() — a baseline-only engine reproduces current behavior.
+//
+// Rows marked `verified: true` in the catalog (spend.DefaultPinnedKeys) are
+// authoritative: their snapshot rows are stripped before the merge, so a
+// fetched source that has gone stale on a hand-verified model — e.g. LiteLLM
+// still pricing the deprecated deepseek-chat alias at $0.28 when the vendor
+// (and our catalog) say $0.14 — cannot silently regress it at runtime.
 func SnapshotsToDatedTables(snaps []Snapshot) []spend.DatedTable {
+	pinned := spend.DefaultPinnedKeys()
+	base := spend.DefaultTable()
 	out := make([]spend.DatedTable, 0, len(snaps))
 	for _, s := range snaps {
 		out = append(out, spend.DatedTable{
 			EffectiveFrom: s.FetchedAt,
-			Table:         spend.DefaultTable().MergeOverrides(s.Table()),
+			Table:         base.MergeOverrides(s.Table().Without(pinned)),
 		})
 	}
 	return out

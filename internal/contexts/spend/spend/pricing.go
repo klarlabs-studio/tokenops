@@ -132,6 +132,24 @@ func (t Table) MergeOverrides(overrides Table) Table {
 	return merged
 }
 
+// Without returns a copy of t with the given keys removed. It is used to keep
+// hand-verified ("pinned") baseline rows from being overridden by a fetched
+// pricing snapshot: the snapshot's rows for those keys are dropped before it
+// is merged, so the baseline value survives. An empty/nil key set is a copy.
+func (t Table) Without(keys map[Key]bool) Table {
+	out := Table{
+		Currency: t.Currency,
+		Rates:    make(map[Key]Rate, len(t.Rates)),
+	}
+	for k, v := range t.Rates {
+		if keys[k] {
+			continue
+		}
+		out.Rates[k] = v
+	}
+	return out
+}
+
 // Lookup resolves the rate for (provider, model). It first tries an exact
 // match, then falls back to the longest-prefix entry whose key ends with
 // "*" — e.g. "gpt-4o-2024-08-06" matches "gpt-4o*". Returns ErrUnknownModel
