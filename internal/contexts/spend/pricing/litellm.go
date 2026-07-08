@@ -204,6 +204,29 @@ func (s *LiteLLMSource) Fetch(ctx context.Context) (Snapshot, error) {
 // mean a newer release, so the captured number orders variants within a family.
 var versionDate = regexp.MustCompile(`-(\d{4,8})$`)
 
+// datedScore extracts a comparable release number from a trailing numeric
+// suffix, and reports whether the suffix is a genuine date. 8-digit YYYYMMDD
+// (Anthropic "claude-…-20241022") and 6-digit YYMMDD are always dates. A
+// 4-digit suffix is a date ONLY when it is a plausible YYMM — year 20–29,
+// month 01–12 (Mistral "mistral-large-2411") — so OpenAI's MMDD snapshots are
+// NOT misread: "gpt-3.5-turbo-1106" (Nov) and "-0125" (Jan) would otherwise
+// order as 1106 > 0125 and pick the OLDER November SKU. Rejecting them drops
+// both to the bare tier, where the undated "gpt-3.5-turbo" alias (the current
+// price) wins.
+func datedScore(stem string) (int, bool) {
+	m := versionDate.FindStringSubmatch(stem)
+	if m == nil {
+		return 0, false
+	}
+	n, _ := strconv.Atoi(m[1])
+	if len(m[1]) == 4 {
+		if yy, mm := n/100, n%100; yy < 20 || yy > 29 || mm < 1 || mm > 12 {
+			return 0, false
+		}
+	}
+	return n, true
+}
+
 // versionRank scores how well a LiteLLM model id represents the *current* price
 // of its family. Higher wins: a precise dated snapshot outranks everything and
 // the newest date among them wins; a "-latest" alias is the fallback used only
@@ -214,15 +237,13 @@ var versionDate = regexp.MustCompile(`-(\d{4,8})$`)
 // manufacture false drift against a catalog that tracks the newest SKU.
 func versionRank(id string) (tier, date int) {
 	stem := stripVendorPrefix(id)
-	switch {
-	case versionDate.MatchString(stem):
-		n, _ := strconv.Atoi(versionDate.FindStringSubmatch(stem)[1])
+	if n, ok := datedScore(stem); ok {
 		return 3, n // a precise dated snapshot — newest wins
-	case strings.HasSuffix(stem, "-latest"):
-		return 2, 0 // vendor's moving pointer; used when no dated SKU is listed
-	default:
-		return 1, 0 // undated / bare id
 	}
+	if strings.HasSuffix(stem, "-latest") {
+		return 2, 0 // vendor's moving pointer; used when no dated SKU is listed
+	}
+	return 1, 0 // undated / bare id
 }
 
 // preferID reports whether LiteLLM id a is a better current-price representative
@@ -261,19 +282,51 @@ func catalogModelKeys() map[string][]string {
 // LiteLLM appends to dated model snapshots (e.g. "-20241022").
 var dateSuffix = regexp.MustCompile(`-\d{6,8}$`)
 
+// skuQualifiers are tokens that mark a DISTINCT, separately-priced product
+// tier rather than a dated/aliased version of the base model. A broad catalog
+// key must not swallow an id whose remainder begins with one — e.g. "grok-3"
+// must not absorb "grok-3-fast" ($5/$25) or "grok-3-mini" ($0.30/$0.50), and
+// "gemini-2.5-flash" must not absorb "gemini-2.5-flash-lite" — or the fetched
+// rate for the base model would be a different SKU's price. Such ids fall
+// through to a shorter catalog key or surface under their own normalized key.
+var skuQualifiers = map[string]bool{
+	"fast": true, "mini": true, "nano": true, "lite": true, "pro": true,
+	"turbo": true, "vision": true, "thinking": true, "reasoning": true,
+	"audio": true, "embed": true, "embedding": true, "tts": true,
+	"image": true, "coder": true, "ocr": true, "guard": true,
+	"search": true, "rerank": true, "moderation": true,
+}
+
 // mapModelKey maps a LiteLLM model id to a tokenops model key within its
 // provider. It strips any leading "<vendor>/" namespace, then takes the longest
 // catalog key that is a prefix of the result (so "mistral/mistral-large-latest"
-// → "mistral-large" and "claude-3-5-sonnet-20241022" → "claude-3-5-sonnet");
-// when nothing matches it falls back to a normalized form of the id (vendor
-// prefix + date/`-latest` marker stripped) so genuinely new models still
-// surface in the diff under a readable key.
+// → "mistral-large" and "claude-3-5-sonnet-20241022" → "claude-3-5-sonnet").
+// A prefix match is only accepted at a token boundary whose next token is not a
+// distinct SKU tier (see skuQualifiers), so "grok-3-fast" is not folded into
+// "grok-3". When nothing matches it falls back to a normalized form of the id
+// (vendor prefix + date/`-latest` marker stripped) so genuinely new models
+// still surface in the diff under a readable key.
 func mapModelKey(id string, catalogKeys []string) string {
 	stem := stripVendorPrefix(id)
 	for _, k := range catalogKeys {
-		if k != "" && strings.HasPrefix(stem, k) {
-			return k
+		if k == "" || !strings.HasPrefix(stem, k) {
+			continue
 		}
+		rest := stem[len(k):]
+		if rest == "" {
+			return k // exact match
+		}
+		if rest[0] != '-' {
+			continue // not a token boundary (e.g. "grok-30" vs key "grok-3")
+		}
+		tok := rest[1:]
+		if i := strings.IndexByte(tok, '-'); i >= 0 {
+			tok = tok[:i]
+		}
+		if skuQualifiers[tok] {
+			continue // distinct SKU tier — do not fold into the base key
+		}
+		return k
 	}
 	return normalizeModelID(id)
 }

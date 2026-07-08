@@ -127,6 +127,10 @@ func TestPreferID_CurrentPriceWins(t *testing.T) {
 		{"latest beats bare", "mistral-medium-latest", "mistral-medium"},
 		{"8-digit newer beats older", "claude-3-5-sonnet-20241022", "claude-3-5-sonnet-20240620"},
 		{"vendor prefix ignored", "mistral/mistral-large-2411", "mistral/mistral-large-2402"},
+		// OpenAI MMDD (month-first, year implied) must NOT be read as a date:
+		// else -1106 (tier 3, score 1106) would beat the bare alias. Rejecting
+		// it drops -1106 to the bare tier, where the shorter alias wins lexically.
+		{"MMDD not a date; bare alias wins", "gpt-3.5-turbo", "gpt-3.5-turbo-1106"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -157,6 +161,50 @@ func TestLiteLLMSource_CollisionAdoptsCurrentRate(t *testing.T) {
 	}
 	if large.InputPerMillion != 0.5 || large.OutputPerMillion != 1.5 {
 		t.Errorf("mistral-large = %+v, want the newest-dated rate 0.5/1.5 (not an archived SKU)", large)
+	}
+}
+
+// OpenAI's MMDD snapshots (gpt-3.5-turbo-1106 = Nov, -0125 = Jan) must not be
+// treated as YYMM dates — 1106 > 0125 numerically would pick the older, pricier
+// November SKU. The bare "gpt-3.5-turbo" alias ($0.50/$1.50) must win instead.
+func TestLiteLLMSource_MMDDNotMisorderedAsDate(t *testing.T) {
+	srv := fixtureServer(t)
+	src := &LiteLLMSource{URL: srv.URL, Client: srv.Client()}
+	snap, err := src.Fetch(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	gpt, ok := snap.Rates["openai/gpt-3.5-turbo"]
+	if !ok {
+		t.Fatalf("gpt-3.5-turbo not mapped; keys=%v", snap.Models())
+	}
+	if gpt.InputPerMillion != 0.5 || gpt.OutputPerMillion != 1.5 {
+		t.Errorf("gpt-3.5-turbo = %+v, want the bare-alias rate 0.5/1.5 (not the -1106 MMDD SKU)", gpt)
+	}
+}
+
+// A broad catalog key must not absorb a distinct SKU tier: grok-3-fast ($5/$25)
+// and grok-3-mini ($0.30/$0.50) must not fold into grok-3 ($3/$15), or the base
+// model's fetched rate would be a different product's price.
+func TestLiteLLMSource_DistinctSKUTierNotFolded(t *testing.T) {
+	srv := fixtureServer(t)
+	src := &LiteLLMSource{URL: srv.URL, Client: srv.Client()}
+	snap, err := src.Fetch(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, ok := snap.Rates["xai/grok-3"]
+	if !ok {
+		t.Fatalf("grok-3 not mapped; keys=%v", snap.Models())
+	}
+	if base.InputPerMillion != 3 || base.OutputPerMillion != 15 {
+		t.Errorf("grok-3 = %+v, want its own 3/15 rate (not grok-3-fast's 5/25)", base)
+	}
+	// The distinct tiers surface under their own keys, not folded into grok-3.
+	for _, want := range []string{"xai/grok-3-fast", "xai/grok-3-mini"} {
+		if _, ok := snap.Rates[want]; !ok {
+			t.Errorf("expected distinct SKU %q to surface separately; keys=%v", want, snap.Models())
+		}
 	}
 }
 
