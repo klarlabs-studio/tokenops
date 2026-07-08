@@ -107,6 +107,14 @@ jobs:
 
   build:
     name: Build
+    # Cross-compile smoke test. Runs only on push to main (post-merge) and not
+    # on PRs to save Actions minutes — it is ~55% of a run (5 jobs) and the least
+    # valuable per-PR: `go test`/`go vet` already compile-check on linux for
+    # every PR, and goreleaser does the authoritative cross-compile at release.
+    # A platform-specific build break surfaces on the main push (and release),
+    # not silently. Build is not a required status check, so skipping it on PRs
+    # does not block them.
+    if: ${{ github.event_name == 'push' }}
     needs: [lint, test]
     runs-on: ubuntu-latest
     strategy:
