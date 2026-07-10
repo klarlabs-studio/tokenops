@@ -9,7 +9,7 @@ require (
 	github.com/tiktoken-go/tokenizer v0.7.0
 	go.klarlabs.de/bolt v1.5.2
 	go.klarlabs.de/fortify v1.8.1
-	go.klarlabs.de/mcp v1.21.0
+	go.klarlabs.de/mcp v1.22.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.50.0
 )
