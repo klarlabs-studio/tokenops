@@ -32,7 +32,8 @@ func RegisterCoachTools(s *Server, d CoachDeps) error {
 	}
 	s.Tool("tokenops_coach_prompts").
 		Description("Score your Claude Code prompting against rule-based heuristics. Walks ~/.claude/projects/**/*.jsonl, extracts human-typed turns, returns length distribution, vague/ack/repeat counts, and concrete recommendations. Prompt text is read at scan time and is NOT persisted to the event store.").
-		Handler(func(ctx context.Context, in coachPromptsInput) (string, error) {
+		OutputSchema(prompts.Findings{}).
+		Handler(func(ctx context.Context, in coachPromptsInput) (prompts.Findings, error) {
 			opts := prompts.ExtractOptions{
 				Root:      d.JSONLRoot,
 				SessionID: in.SessionID,
@@ -41,7 +42,7 @@ func RegisterCoachTools(s *Server, d CoachDeps) error {
 			if in.Since != "" {
 				since, err := parseCoachWindow(in.Since)
 				if err != nil {
-					return "", err
+					return prompts.Findings{}, err
 				}
 				opts.Since = since
 			} else {
@@ -50,16 +51,16 @@ func RegisterCoachTools(s *Server, d CoachDeps) error {
 			if in.Until != "" {
 				until, err := parseCoachWindow(in.Until)
 				if err != nil {
-					return "", err
+					return prompts.Findings{}, err
 				}
 				opts.Until = until
 			}
 			extracted, err := prompts.Extract(opts)
 			if err != nil {
-				return "", err
+				return prompts.Findings{}, err
 			}
 			findings := prompts.Analyze(extracted)
-			return jsonString(findings), nil
+			return findings, nil
 		})
 	return nil
 }

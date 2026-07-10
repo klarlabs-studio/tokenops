@@ -59,6 +59,35 @@ type ControlDeps struct {
 
 type emptyInput struct{}
 
+// versionResult is the typed payload for tokenops_version. Advertised as
+// the tool's outputSchema so clients receive typed structuredContent.
+type versionResult struct {
+	Version       string `json:"version"`
+	Commit        string `json:"commit"`
+	Date          string `json:"date"`
+	Display       string `json:"display"`
+	SchemaVersion string `json:"schema_version"`
+}
+
+// statusResult is the typed payload for tokenops_status.
+type statusResult struct {
+	Status        string   `json:"status"`
+	Ready         bool     `json:"ready"`
+	State         string   `json:"state"`
+	Version       string   `json:"version"`
+	SchemaVersion string   `json:"schema_version"`
+	Blockers      []string `json:"blockers"`
+	NextActions   []string `json:"next_actions"`
+	Warnings      []string `json:"warnings,omitempty"`
+}
+
+// domainEventsResult is the typed payload for tokenops_domain_events.
+type domainEventsResult struct {
+	Counts       map[string]int64 `json:"counts"`
+	Total        int64            `json:"total"`
+	AuditDropped *int64           `json:"audit_dropped,omitempty"`
+}
+
 // RegisterControlTools adds version / status / config / domain_events
 // tools that mirror the equivalent CLI commands and HTTP control
 // endpoints.
@@ -68,13 +97,15 @@ func RegisterControlTools(s *Server, d ControlDeps) error {
 	}
 	s.Tool("tokenops_version").
 		Description("Return TokenOps daemon build metadata. Mirrors `tokenops version` and the daemon's /version endpoint.").
-		Handler(func(_ context.Context, _ emptyInput) (string, error) {
+		OutputSchema(versionResult{}).
+		Handler(func(_ context.Context, _ emptyInput) (versionResult, error) {
 			return versionInfo(), nil
 		})
 
 	s.Tool("tokenops_status").
 		Description("Return daemon readiness + version. Mirrors `tokenops status` (which queries /healthz, /readyz, /version over HTTP).").
-		Handler(func(_ context.Context, _ emptyInput) (string, error) {
+		OutputSchema(statusResult{}).
+		Handler(func(_ context.Context, _ emptyInput) (statusResult, error) {
 			return statusInfo(d), nil
 		})
 
@@ -86,23 +117,24 @@ func RegisterControlTools(s *Server, d ControlDeps) error {
 
 	s.Tool("tokenops_domain_events").
 		Description("Return per-kind counts of in-process domain events (workflow.started, optimization.applied, rule_corpus.reloaded, budget.exceeded, ...). Mirrors the audit/observ wiring; safe to poll.").
-		Handler(func(_ context.Context, _ emptyInput) (string, error) {
+		OutputSchema(domainEventsResult{}).
+		Handler(func(_ context.Context, _ emptyInput) (domainEventsResult, error) {
 			return domainEventsInfo(d), nil
 		})
 	return nil
 }
 
-func versionInfo() string {
-	return jsonString(map[string]any{
-		"version":        version.Version,
-		"commit":         version.Commit,
-		"date":           version.Date,
-		"display":        version.String(),
-		"schema_version": eventschema.SchemaVersion,
-	})
+func versionInfo() versionResult {
+	return versionResult{
+		Version:       version.Version,
+		Commit:        version.Commit,
+		Date:          version.Date,
+		Display:       version.String(),
+		SchemaVersion: eventschema.SchemaVersion,
+	}
 }
 
-func statusInfo(d ControlDeps) string {
+func statusInfo(d ControlDeps) statusResult {
 	ready := false
 	if d.ReadyCheck != nil {
 		ready = d.ReadyCheck()
@@ -139,19 +171,16 @@ func statusInfo(d ControlDeps) string {
 		}
 	}
 
-	payload := map[string]any{
-		"status":         "ok",
-		"ready":          ready,
-		"state":          state,
-		"version":        version.String(),
-		"schema_version": eventschema.SchemaVersion,
-		"blockers":       blockers,
-		"next_actions":   nextActions,
+	return statusResult{
+		Status:        "ok",
+		Ready:         ready,
+		State:         state,
+		Version:       version.String(),
+		SchemaVersion: eventschema.SchemaVersion,
+		Blockers:      blockers,
+		NextActions:   nextActions,
+		Warnings:      warnings,
 	}
-	if len(warnings) > 0 {
-		payload["warnings"] = warnings
-	}
-	return jsonString(payload)
 }
 
 func configInfo(d ControlDeps) string {
@@ -161,7 +190,7 @@ func configInfo(d ControlDeps) string {
 	return string(d.ConfigJSON)
 }
 
-func domainEventsInfo(d ControlDeps) string {
+func domainEventsInfo(d ControlDeps) domainEventsResult {
 	counts := map[string]int64{}
 	if d.EventCounts != nil {
 		counts = d.EventCounts()
@@ -170,12 +199,10 @@ func domainEventsInfo(d ControlDeps) string {
 	for _, v := range counts {
 		total += v
 	}
-	payload := map[string]any{
-		"counts": counts,
-		"total":  total,
-	}
+	res := domainEventsResult{Counts: counts, Total: total}
 	if d.AuditDrops != nil {
-		payload["audit_dropped"] = d.AuditDrops()
+		dropped := d.AuditDrops()
+		res.AuditDropped = &dropped
 	}
-	return jsonString(payload)
+	return res
 }

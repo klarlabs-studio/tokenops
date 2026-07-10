@@ -68,6 +68,88 @@ type optimizationsInput struct {
 	Limit      int    `json:"limit,omitempty"`
 }
 
+// --- output structs -------------------------------------------------------
+
+// unpricedModel names a (provider, model) pair whose events carry no
+// stored cost and have no rate in the pricing table.
+type unpricedModel struct {
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+	Requests int64  `json:"requests"`
+}
+
+// pricingWarning flags that cost_usd underestimates spend because some
+// models in the window are unpriced.
+type pricingWarning struct {
+	Message        string          `json:"message"`
+	UnpricedModels []unpricedModel `json:"unpriced_models"`
+}
+
+// spendSummaryResult is the typed payload for tokenops_spend_summary.
+type spendSummaryResult struct {
+	Window           spendSummaryInput `json:"window"`
+	Requests         int64             `json:"requests"`
+	InputTokens      int64             `json:"input_tokens"`
+	OutputTokens     int64             `json:"output_tokens"`
+	TotalTokens      int64             `json:"total_tokens"`
+	CostUSD          float64           `json:"cost_usd"`
+	APIEquivalentUSD float64           `json:"api_equivalent_usd"`
+	Currency         string            `json:"currency"`
+	PricingWarning   *pricingWarning   `json:"pricing_warning,omitempty"`
+	DataWarning      *DataWarning      `json:"data_warning,omitempty"`
+}
+
+// consumerEntry is one grouped spender row in tokenops_top_consumers.
+type consumerEntry struct {
+	Key      string  `json:"key"`
+	Requests int64   `json:"requests"`
+	Tokens   int64   `json:"tokens"`
+	CostUSD  float64 `json:"cost_usd"`
+}
+
+// topConsumersResult is the typed payload for tokenops_top_consumers.
+type topConsumersResult struct {
+	By       string          `json:"by"`
+	Top      []consumerEntry `json:"top"`
+	Currency string          `json:"currency"`
+}
+
+// forecastResult is the typed payload for tokenops_forecast. Note is set
+// only when history is too short to project.
+type forecastResult struct {
+	HorizonDays   int                   `json:"horizon_days,omitempty"`
+	HistoryPoints int                   `json:"history_points"`
+	Forecast      []forecast.Prediction `json:"forecast"`
+	Currency      string                `json:"currency,omitempty"`
+	Note          string                `json:"note,omitempty"`
+}
+
+// workflowTraceResult is the typed payload for tokenops_workflow_trace.
+type workflowTraceResult struct {
+	Trace    *workflow.Trace              `json:"trace"`
+	Findings []*eventschema.CoachingEvent `json:"findings"`
+}
+
+// optimizationEntry is one recommendation row in tokenops_optimizations.
+type optimizationEntry struct {
+	Timestamp              time.Time `json:"timestamp"`
+	Kind                   string    `json:"kind"`
+	Mode                   string    `json:"mode"`
+	Decision               string    `json:"decision"`
+	EstimatedSavingsTokens int64     `json:"estimated_savings_tokens"`
+	EstimatedSavingsUSD    float64   `json:"estimated_savings_usd"`
+	QualityScore           float64   `json:"quality_score"`
+	Reason                 string    `json:"reason"`
+	WorkflowID             string    `json:"workflow_id,omitempty"`
+	AgentID                string    `json:"agent_id,omitempty"`
+}
+
+// optimizationsResult is the typed payload for tokenops_optimizations.
+type optimizationsResult struct {
+	Optimizations []optimizationEntry `json:"optimizations"`
+	Currency      string              `json:"currency"`
+}
+
 // RegisterTools attaches the canonical TokenOps MCP tool surface (spend
 // summary, top consumers, burn rate, forecast, workflow trace,
 // optimizations) to s.
@@ -81,13 +163,15 @@ func RegisterTools(s *Server, d Deps) error {
 
 	s.Tool("tokenops_spend_summary").
 		Description("Return total requests, tokens, and cost over an optional time window. Use to answer 'how much did we spend last week?'").
-		Handler(func(ctx context.Context, in spendSummaryInput) (string, error) {
+		OutputSchema(spendSummaryResult{}).
+		Handler(func(ctx context.Context, in spendSummaryInput) (*spendSummaryResult, error) {
 			return spendSummary(ctx, d, in)
 		})
 
 	s.Tool("tokenops_top_consumers").
 		Description("List top N spenders grouped by model, provider, workflow, or agent. Default group=model, top=5.").
-		Handler(func(ctx context.Context, in topConsumersInput) (string, error) {
+		OutputSchema(topConsumersResult{}).
+		Handler(func(ctx context.Context, in topConsumersInput) (*topConsumersResult, error) {
 			return topConsumers(ctx, d, in)
 		})
 
@@ -99,19 +183,22 @@ func RegisterTools(s *Server, d Deps) error {
 
 	s.Tool("tokenops_forecast").
 		Description("Forecast daily spend horizon_days into the future using Holt's exponential smoothing.").
-		Handler(func(ctx context.Context, in forecastInput) (string, error) {
+		OutputSchema(forecastResult{}).
+		Handler(func(ctx context.Context, in forecastInput) (*forecastResult, error) {
 			return forecastSpend(ctx, d, in)
 		})
 
 	s.Tool("tokenops_workflow_trace").
 		Description("Reconstruct a workflow trace and run the waste detector. Returns step-level deltas plus coaching findings.").
-		Handler(func(ctx context.Context, in workflowTraceInput) (string, error) {
+		OutputSchema(workflowTraceResult{}).
+		Handler(func(ctx context.Context, in workflowTraceInput) (*workflowTraceResult, error) {
 			return workflowTrace(ctx, d, in)
 		})
 
 	s.Tool("tokenops_optimizations").
 		Description("List optimization recommendations recorded in the local event store. Mirrors `GET /api/optimizations`. Filter by workflow_id / agent_id / time window.").
-		Handler(func(ctx context.Context, in optimizationsInput) (string, error) {
+		OutputSchema(optimizationsResult{}).
+		Handler(func(ctx context.Context, in optimizationsInput) (*optimizationsResult, error) {
 			return optimizations(ctx, d, in)
 		})
 	return nil
@@ -146,49 +233,49 @@ func (in spendSummaryInput) toFilter() (analytics.Filter, error) {
 	return f, nil
 }
 
-func spendSummary(ctx context.Context, d Deps, in spendSummaryInput) (string, error) {
+func spendSummary(ctx context.Context, d Deps, in spendSummaryInput) (*spendSummaryResult, error) {
 	filter, err := in.toFilter()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	summary, err := d.Aggregator.Summarize(ctx, filter)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	payload := map[string]any{
-		"window":             in,
-		"requests":           summary.Requests,
-		"input_tokens":       summary.InputTokens,
-		"output_tokens":      summary.OutputTokens,
-		"total_tokens":       summary.TotalTokens,
-		"cost_usd":           summary.CostUSD,
-		"api_equivalent_usd": summary.APIEquivalentUSD,
-		"currency":           d.Spend.Currency(),
+	res := &spendSummaryResult{
+		Window:           in,
+		Requests:         summary.Requests,
+		InputTokens:      summary.InputTokens,
+		OutputTokens:     summary.OutputTokens,
+		TotalTokens:      summary.TotalTokens,
+		CostUSD:          summary.CostUSD,
+		APIEquivalentUSD: summary.APIEquivalentUSD,
+		Currency:         d.Spend.Currency(),
 	}
 	if len(summary.Unpriced) > 0 {
-		models := make([]map[string]any, 0, len(summary.Unpriced))
+		models := make([]unpricedModel, 0, len(summary.Unpriced))
 		for _, u := range summary.Unpriced {
-			models = append(models, map[string]any{
-				"provider": u.Provider,
-				"model":    u.Model,
-				"requests": u.Requests,
+			models = append(models, unpricedModel{
+				Provider: u.Provider,
+				Model:    u.Model,
+				Requests: u.Requests,
 			})
 		}
-		payload["pricing_warning"] = map[string]any{
-			"message":         "no rate in the pricing table for these models; cost_usd is underestimated",
-			"unpriced_models": models,
+		res.PricingWarning = &pricingWarning{
+			Message:        "no rate in the pricing table for these models; cost_usd is underestimated",
+			UnpricedModels: models,
 		}
 	}
 	if !in.IncludeDemo {
 		warn, werr := maybeDataWarning(ctx, d.Store, filter.Since, filter.Until)
 		if werr == nil && warn != nil {
-			payload["data_warning"] = warn
+			res.DataWarning = warn
 		}
 	}
-	return jsonString(payload), nil
+	return res, nil
 }
 
-func topConsumers(ctx context.Context, d Deps, in topConsumersInput) (string, error) {
+func topConsumers(ctx context.Context, d Deps, in topConsumersInput) (*topConsumersResult, error) {
 	group := analytics.GroupModel
 	switch strings.ToLower(in.By) {
 	case "provider":
@@ -202,7 +289,7 @@ func topConsumers(ctx context.Context, d Deps, in topConsumersInput) (string, er
 	if in.Since != "" {
 		t, err := parseTimeOrDuration(in.Since)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		f.Since = t
 	} else {
@@ -211,7 +298,7 @@ func topConsumers(ctx context.Context, d Deps, in topConsumersInput) (string, er
 	if in.Until != "" {
 		t, err := time.Parse(time.RFC3339, in.Until)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		f.Until = t
 	}
@@ -220,7 +307,7 @@ func topConsumers(ctx context.Context, d Deps, in topConsumersInput) (string, er
 	}
 	rows, err := d.Aggregator.AggregateBy(ctx, f, analytics.BucketDay, group)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	totals := map[string]float64{}
 	tokens := map[string]int64{}
@@ -230,15 +317,9 @@ func topConsumers(ctx context.Context, d Deps, in topConsumersInput) (string, er
 		tokens[r.GroupKey] += r.TotalTokens
 		reqs[r.GroupKey] += r.Requests
 	}
-	type entry struct {
-		Key      string  `json:"key"`
-		Requests int64   `json:"requests"`
-		Tokens   int64   `json:"tokens"`
-		CostUSD  float64 `json:"cost_usd"`
-	}
-	out := make([]entry, 0, len(totals))
+	out := make([]consumerEntry, 0, len(totals))
 	for k, v := range totals {
-		out = append(out, entry{Key: k, Requests: reqs[k], Tokens: tokens[k], CostUSD: v})
+		out = append(out, consumerEntry{Key: k, Requests: reqs[k], Tokens: tokens[k], CostUSD: v})
 	}
 	for i := 0; i < len(out); i++ {
 		for j := i + 1; j < len(out); j++ {
@@ -254,7 +335,7 @@ func topConsumers(ctx context.Context, d Deps, in topConsumersInput) (string, er
 	if top < len(out) {
 		out = out[:top]
 	}
-	return jsonString(map[string]any{"by": in.By, "top": out, "currency": d.Spend.Currency()}), nil
+	return &topConsumersResult{By: in.By, Top: out, Currency: d.Spend.Currency()}, nil
 }
 
 func burnRate(ctx context.Context, d Deps, in burnRateInput) (string, error) {
@@ -285,7 +366,7 @@ func burnRate(ctx context.Context, d Deps, in burnRateInput) (string, error) {
 	return markdownPayload(renderBurnSummary(hours, total, d.Spend.Currency(), series), payload), nil
 }
 
-func forecastSpend(ctx context.Context, d Deps, in forecastInput) (string, error) {
+func forecastSpend(ctx context.Context, d Deps, in forecastInput) (*forecastResult, error) {
 	horizon := in.HorizonDays
 	if horizon <= 0 {
 		horizon = 7
@@ -296,41 +377,41 @@ func forecastSpend(ctx context.Context, d Deps, in forecastInput) (string, error
 	}
 	rows, err := d.Aggregator.AggregateBy(ctx, f, analytics.BucketDay, analytics.GroupNone)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	history := forecast.SeriesFromRows(rows, forecast.CostUSD)
 	if len(history) < 2 {
-		return jsonString(map[string]any{
-			"history_points": len(history),
-			"forecast":       []forecast.Prediction{},
-			"note":           "insufficient history (need ≥2 daily buckets)",
-		}), nil
+		return &forecastResult{
+			HistoryPoints: len(history),
+			Forecast:      []forecast.Prediction{},
+			Note:          "insufficient history (need ≥2 daily buckets)",
+		}, nil
 	}
 	preds := forecast.AutoForecast(history, horizon, 24*time.Hour)
-	return jsonString(map[string]any{
-		"horizon_days":   horizon,
-		"history_points": len(history),
-		"forecast":       preds,
-		"currency":       d.Spend.Currency(),
-	}), nil
+	return &forecastResult{
+		HorizonDays:   horizon,
+		HistoryPoints: len(history),
+		Forecast:      preds,
+		Currency:      d.Spend.Currency(),
+	}, nil
 }
 
-func workflowTrace(ctx context.Context, d Deps, in workflowTraceInput) (string, error) {
+func workflowTrace(ctx context.Context, d Deps, in workflowTraceInput) (*workflowTraceResult, error) {
 	if in.WorkflowID == "" {
-		return "", errors.New("workflow_id is required")
+		return nil, errors.New("workflow_id is required")
 	}
 	trace, err := workflow.Reconstruct(ctx, d.Store, d.Spend, in.WorkflowID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	coachings := waste.New(d.Waste).Detect(trace)
-	return jsonString(map[string]any{
-		"trace":    trace,
-		"findings": coachings,
-	}), nil
+	return &workflowTraceResult{
+		Trace:    trace,
+		Findings: coachings,
+	}, nil
 }
 
-func optimizations(ctx context.Context, d Deps, in optimizationsInput) (string, error) {
+func optimizations(ctx context.Context, d Deps, in optimizationsInput) (*optimizationsResult, error) {
 	f := sqlite.Filter{
 		Type:       eventschema.EventTypeOptimization,
 		WorkflowID: in.WorkflowID,
@@ -340,7 +421,7 @@ func optimizations(ctx context.Context, d Deps, in optimizationsInput) (string, 
 	if in.Since != "" {
 		t, err := parseTimeOrDuration(in.Since)
 		if err != nil {
-			return "", fmt.Errorf("since: %w", err)
+			return nil, fmt.Errorf("since: %w", err)
 		}
 		f.Since = t
 	} else {
@@ -349,33 +430,21 @@ func optimizations(ctx context.Context, d Deps, in optimizationsInput) (string, 
 	if in.Until != "" {
 		t, err := time.Parse(time.RFC3339, in.Until)
 		if err != nil {
-			return "", fmt.Errorf("until: %w", err)
+			return nil, fmt.Errorf("until: %w", err)
 		}
 		f.Until = t
 	}
 	envs, err := d.Store.Query(ctx, f)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	type entry struct {
-		Timestamp              time.Time `json:"timestamp"`
-		Kind                   string    `json:"kind"`
-		Mode                   string    `json:"mode"`
-		Decision               string    `json:"decision"`
-		EstimatedSavingsTokens int64     `json:"estimated_savings_tokens"`
-		EstimatedSavingsUSD    float64   `json:"estimated_savings_usd"`
-		QualityScore           float64   `json:"quality_score"`
-		Reason                 string    `json:"reason"`
-		WorkflowID             string    `json:"workflow_id,omitempty"`
-		AgentID                string    `json:"agent_id,omitempty"`
-	}
-	out := make([]entry, 0, len(envs))
+	out := make([]optimizationEntry, 0, len(envs))
 	for _, env := range envs {
 		oe, ok := env.Payload.(*eventschema.OptimizationEvent)
 		if !ok {
 			continue
 		}
-		out = append(out, entry{
+		out = append(out, optimizationEntry{
 			Timestamp:              env.Timestamp,
 			Kind:                   string(oe.Kind),
 			Mode:                   string(oe.Mode),
@@ -388,10 +457,10 @@ func optimizations(ctx context.Context, d Deps, in optimizationsInput) (string, 
 			AgentID:                oe.AgentID,
 		})
 	}
-	return jsonString(map[string]any{
-		"optimizations": out,
-		"currency":      d.Spend.Currency(),
-	}), nil
+	return &optimizationsResult{
+		Optimizations: out,
+		Currency:      d.Spend.Currency(),
+	}, nil
 }
 
 // --- helpers --------------------------------------------------------------

@@ -20,6 +20,22 @@ type dataSourcesInput struct {
 	Until string `json:"until,omitempty"`
 }
 
+// dataSourcesWindow is the resolved time window echoed back to the caller.
+type dataSourcesWindow struct {
+	Since string `json:"since"`
+	Until string `json:"until"`
+}
+
+// dataSourcesResult is the typed payload for tokenops_data_sources. On the
+// happy path Counts + Window are populated; the disabled-storage path sets
+// Error + Hint instead (Counts/Window omitted).
+type dataSourcesResult struct {
+	Counts map[string]int64   `json:"counts,omitempty"`
+	Window *dataSourcesWindow `json:"window,omitempty"`
+	Error  string             `json:"error,omitempty"`
+	Hint   string             `json:"hint,omitempty"`
+}
+
 // RegisterDataSourcesTool mounts tokenops_data_sources on s. The tool
 // returns event counts grouped by the source column so operators can
 // see real vs synthetic ratios at a glance.
@@ -29,28 +45,29 @@ func RegisterDataSourcesTool(s *Server, d DataSourcesDeps) error {
 	}
 	s.Tool("tokenops_data_sources").
 		Description("Return event counts grouped by source (proxy, mcp-session, demo, otlp, ...). Operators inspect this to confirm headroom and spend math are running on real data instead of leftover `tokenops demo` seeds.").
-		Handler(func(ctx context.Context, in dataSourcesInput) (string, error) {
+		OutputSchema(dataSourcesResult{}).
+		Handler(func(ctx context.Context, in dataSourcesInput) (*dataSourcesResult, error) {
 			if d.Store == nil {
-				return jsonString(map[string]string{
-					"error": "storage_disabled",
-					"hint":  "run `tokenops init` then restart the daemon",
-				}), nil
+				return &dataSourcesResult{
+					Error: "storage_disabled",
+					Hint:  "run `tokenops init` then restart the daemon",
+				}, nil
 			}
 			since, until, err := parseDataSourceWindow(in)
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 			counts, err := d.Store.CountBySource(ctx, since, until)
 			if err != nil {
-				return "", err
+				return nil, err
 			}
-			return jsonString(map[string]any{
-				"counts": counts,
-				"window": map[string]string{
-					"since": fmtTimeOrEmpty(since),
-					"until": fmtTimeOrEmpty(until),
+			return &dataSourcesResult{
+				Counts: counts,
+				Window: &dataSourcesWindow{
+					Since: fmtTimeOrEmpty(since),
+					Until: fmtTimeOrEmpty(until),
 				},
-			}), nil
+			}, nil
 		})
 	return nil
 }

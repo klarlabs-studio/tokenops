@@ -71,6 +71,16 @@ func (r planStoreReader) ReadEvents(ctx context.Context, t eventschema.EventType
 	return r.store.Query(ctx, sqlite.Filter{Type: t, Since: since, Limit: 100_000})
 }
 
+// planHeadroomResult is the typed payload for tokenops_plan_headroom. On
+// the happy path Reports (+ optional DataWarning) is populated; the
+// unconfigured / storage-disabled paths set Error + Hint instead.
+type planHeadroomResult struct {
+	Reports     []plans.HeadroomReport `json:"reports,omitempty"`
+	DataWarning *DataWarning           `json:"data_warning,omitempty"`
+	Error       string                 `json:"error,omitempty"`
+	Hint        string                 `json:"hint,omitempty"`
+}
+
 // RegisterPlanTools mounts tokenops_plan_headroom on s. Returns an
 // error when deps are incomplete so callers can surface the
 // misconfiguration via the structured-error contract instead of a
@@ -90,7 +100,8 @@ func RegisterPlanTools(s *Server, d PlanDeps) error {
 
 	s.Tool("tokenops_plan_headroom").
 		Description("Return month-to-date consumption + overage risk for every configured subscription plan (Claude Max, ChatGPT Plus, Copilot, Cursor, etc.). Returns a structured `{error, hint}` payload when plans or storage are not configured.").
-		Handler(func(ctx context.Context, _ emptyInput) (string, error) {
+		OutputSchema(planHeadroomResult{}).
+		Handler(func(ctx context.Context, _ emptyInput) (*planHeadroomResult, error) {
 			return planHeadroom(ctx, d)
 		})
 	return nil
@@ -179,19 +190,19 @@ func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
 	return markdownPayload(renderBudgetSummary(row), payload), nil
 }
 
-func planHeadroom(ctx context.Context, d PlanDeps) (string, error) {
+func planHeadroom(ctx context.Context, d PlanDeps) (*planHeadroomResult, error) {
 	cfg := d.activeConfig()
 	if cfg == nil || len(cfg.Plans) == 0 {
-		return jsonString(map[string]string{
-			"error": "plans_unconfigured",
-			"hint":  "run `tokenops plan set <provider> <plan>` (e.g. `tokenops plan set anthropic claude-max-20x`), then reload your MCP server",
-		}), nil
+		return &planHeadroomResult{
+			Error: "plans_unconfigured",
+			Hint:  "run `tokenops plan set <provider> <plan>` (e.g. `tokenops plan set anthropic claude-max-20x`), then reload your MCP server",
+		}, nil
 	}
 	if d.Store == nil {
-		return jsonString(map[string]string{
-			"error": "storage_disabled",
-			"hint":  "run `tokenops init` then restart the daemon",
-		}), nil
+		return &planHeadroomResult{
+			Error: "storage_disabled",
+			Hint:  "run `tokenops init` then restart the daemon",
+		}, nil
 	}
 	reader := planStoreReader{store: d.Store}
 	now := time.Now().UTC()
@@ -199,7 +210,7 @@ func planHeadroom(ctx context.Context, d PlanDeps) (string, error) {
 	for provider, planName := range cfg.Plans {
 		cons, err := plans.ConsumptionFor(ctx, reader, provider, now)
 		if err != nil {
-			return "", fmt.Errorf("consumption[%s]: %w", provider, err)
+			return nil, fmt.Errorf("consumption[%s]: %w", provider, err)
 		}
 		inputs := plans.HeadroomInputs{
 			ConsumedTokens: cons.ConsumedTokens,
@@ -211,29 +222,25 @@ func planHeadroom(ctx context.Context, d PlanDeps) (string, error) {
 		if p, ok := plans.Lookup(planName); ok && p.RateLimitWindow > 0 {
 			win, err := plans.ConsumptionInWindow(ctx, reader, provider, now, p.RateLimitWindow)
 			if err != nil {
-				return "", fmt.Errorf("window[%s]: %w", provider, err)
+				return nil, fmt.Errorf("window[%s]: %w", provider, err)
 			}
 			inputs.WindowMessages = win.MessagesInWindow
 			signal, err := classifySignalFromStore(ctx, d.Store, now.Add(-p.RateLimitWindow), now)
 			if err != nil {
-				return "", fmt.Errorf("signal[%s]: %w", provider, err)
+				return nil, fmt.Errorf("signal[%s]: %w", provider, err)
 			}
 			inputs.Signal = signal
 			inputs.Authoritative = latestAuthoritativeWindow(ctx, reader, eventschema.Provider(provider), p, now)
 		}
 		report, err := plans.ComputeHeadroom(planName, inputs)
 		if err != nil {
-			return "", fmt.Errorf("headroom[%s]: %w", provider, err)
+			return nil, fmt.Errorf("headroom[%s]: %w", provider, err)
 		}
 		reports = append(reports, report)
 	}
-	payload := map[string]any{"reports": reports}
+	res := &planHeadroomResult{Reports: reports}
 	if warn, err := maybeDataWarning(ctx, d.Store, time.Time{}, now); err == nil && warn != nil {
-		payload["data_warning"] = warn
+		res.DataWarning = warn
 	}
-	out, err := json.MarshalIndent(payload, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(out), nil
+	return res, nil
 }

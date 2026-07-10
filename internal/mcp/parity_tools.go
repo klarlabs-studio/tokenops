@@ -79,6 +79,19 @@ type auditInput struct {
 	Limit  int    `json:"limit,omitempty"`
 }
 
+// --- output structs --------------------------------------------------------
+
+// evalResult is the typed payload for tokenops_eval.
+type evalResult struct {
+	Report *eval.Report     `json:"report"`
+	Gate   *eval.GateResult `json:"gate"`
+}
+
+// auditResult is the typed payload for tokenops_audit.
+type auditResult struct {
+	Entries []audit.Entry `json:"entries"`
+}
+
 // RegisterParityTools attaches MCP tools that mirror the CLI surface
 // (rules bench, eval, coverage-debt, scorecard, replay, audit). Read-only.
 func RegisterParityTools(s *Server, d ParityDeps) error {
@@ -87,37 +100,43 @@ func RegisterParityTools(s *Server, d ParityDeps) error {
 	}
 	s.Tool("tokenops_rules_bench").
 		Description("Benchmark rule profiles against scenarios. Mirrors `tokenops rules bench --spec`. Accepts the same YAML/JSON spec inline via 'spec_json' or a path via 'spec_path'.").
-		Handler(func(_ context.Context, in rulesBenchInput) (string, error) {
+		OutputSchema(rules.BenchmarkResult{}).
+		Handler(func(_ context.Context, in rulesBenchInput) (*rules.BenchmarkResult, error) {
 			return rulesBench(in)
 		})
 
 	s.Tool("tokenops_eval").
 		Description("Run the optimizer eval harness. Mirrors `tokenops eval`. Returns the merged report and gate result.").
+		OutputSchema(evalResult{}).
 		Handler(runEval)
 
 	s.Tool("tokenops_coverage_debt").
 		Description("Risk-ranked coverage debt report from a Go cover profile. Mirrors `tokenops coverage-debt`.").
-		Handler(func(_ context.Context, in coverageDebtInput) (string, error) {
+		OutputSchema(coverdebt.Report{}).
+		Handler(func(_ context.Context, in coverageDebtInput) (*coverdebt.Report, error) {
 			return runCoverageDebt(in)
 		})
 
 	s.Tool("tokenops_scorecard").
 		Description("Operator wedge KPI scorecard (FVT, TEU, SAC) computed from the local event store. Mirrors `tokenops scorecard`.").
-		Handler(func(ctx context.Context, in scorecardInput) (string, error) {
+		OutputSchema(scorecard.Scorecard{}).
+		Handler(func(ctx context.Context, in scorecardInput) (*scorecard.Scorecard, error) {
 			return runScorecard(ctx, d, in)
 		})
 
 	if d.Store != nil && d.Spend != nil {
 		s.Tool("tokenops_replay").
 			Description("Replay a session/workflow through the optimizer pipeline. Mirrors `tokenops replay`. One of session_id / workflow_id / agent_id is required.").
-			Handler(func(ctx context.Context, in replayInput) (string, error) {
+			OutputSchema(replay.Result{}).
+			Handler(func(ctx context.Context, in replayInput) (*replay.Result, error) {
 				return runReplay(ctx, d, in)
 			})
 	}
 	if d.Store != nil {
 		s.Tool("tokenops_audit").
 			Description("Query the audit log. Filter by action, actor, since (RFC3339 or Nd|24h), until (RFC3339), limit. Returns entries newest-first.").
-			Handler(func(ctx context.Context, in auditInput) (string, error) {
+			OutputSchema(auditResult{}).
+			Handler(func(ctx context.Context, in auditInput) (*auditResult, error) {
 				return runAudit(ctx, d, in)
 			})
 	}
@@ -126,7 +145,7 @@ func RegisterParityTools(s *Server, d ParityDeps) error {
 
 // --- handlers -------------------------------------------------------------
 
-func rulesBench(in rulesBenchInput) (string, error) {
+func rulesBench(in rulesBenchInput) (*rules.BenchmarkResult, error) {
 	var data []byte
 	switch {
 	case in.SpecJSON != "":
@@ -134,24 +153,24 @@ func rulesBench(in rulesBenchInput) (string, error) {
 	case in.SpecPath != "":
 		b, err := os.ReadFile(in.SpecPath)
 		if err != nil {
-			return "", fmt.Errorf("read spec: %w", err)
+			return nil, fmt.Errorf("read spec: %w", err)
 		}
 		data = b
 	default:
-		return "", errors.New("provide spec_json or spec_path")
+		return nil, errors.New("provide spec_json or spec_path")
 	}
 	spec, err := rules.ParseBenchSpec(data)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	res, err := rules.RunBenchSpec(spec, rulesfs.LoadCorpus)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return jsonString(res), nil
+	return res, nil
 }
 
-func runEval(ctx context.Context, in evalInput) (string, error) {
+func runEval(ctx context.Context, in evalInput) (evalResult, error) {
 	typed := make([]eval.OptimizationType, 0, len(in.Optimizers))
 	for _, o := range in.Optimizers {
 		typed = append(typed, eval.OptimizationType(o))
@@ -167,27 +186,24 @@ func runEval(ctx context.Context, in evalInput) (string, error) {
 		},
 	})
 	if err != nil {
-		return "", err
+		return evalResult{}, err
 	}
-	return jsonString(struct {
-		Report *eval.Report     `json:"report"`
-		Gate   *eval.GateResult `json:"gate"`
-	}{Report: result.Report, Gate: result.Gate}), nil
+	return evalResult{Report: result.Report, Gate: result.Gate}, nil
 }
 
-func runCoverageDebt(in coverageDebtInput) (string, error) {
+func runCoverageDebt(in coverageDebtInput) (*coverdebt.Report, error) {
 	profile := in.Profile
 	if profile == "" {
 		profile = "coverage.out"
 	}
 	cov, err := coverdebt.ReadProfile(profile)
 	if err != nil {
-		return "", fmt.Errorf("read profile: %w", err)
+		return nil, fmt.Errorf("read profile: %w", err)
 	}
-	return jsonString(coverdebt.Analyze(cov, coverdebt.DefaultPolicies)), nil
+	return coverdebt.Analyze(cov, coverdebt.DefaultPolicies), nil
 }
 
-func runScorecard(ctx context.Context, d ParityDeps, in scorecardInput) (string, error) {
+func runScorecard(ctx context.Context, d ParityDeps, in scorecardInput) (*scorecard.Scorecard, error) {
 	s := scorecard.BuildFromStore(ctx, d.Store, scorecard.BuildParams{
 		SinceDays:          in.SinceDays,
 		FVTSecondsOverride: in.FVTSeconds,
@@ -195,12 +211,12 @@ func runScorecard(ctx context.Context, d ParityDeps, in scorecardInput) (string,
 		SACPctOverride:     in.SACPct,
 		BaselineRef:        in.BaselineRef,
 	})
-	return jsonString(s), nil
+	return s, nil
 }
 
-func runReplay(ctx context.Context, d ParityDeps, in replayInput) (string, error) {
+func runReplay(ctx context.Context, d ParityDeps, in replayInput) (*replay.Result, error) {
 	if in.SessionID == "" && in.WorkflowID == "" && in.AgentID == "" {
-		return "", errors.New("provide session_id, workflow_id, or agent_id")
+		return nil, errors.New("provide session_id, workflow_id, or agent_id")
 	}
 	sel := replay.SessionSelector{
 		SessionID:  in.SessionID,
@@ -211,14 +227,14 @@ func runReplay(ctx context.Context, d ParityDeps, in replayInput) (string, error
 	if in.Since != "" {
 		t, err := parseTimeOrDuration(in.Since)
 		if err != nil {
-			return "", fmt.Errorf("since: %w", err)
+			return nil, fmt.Errorf("since: %w", err)
 		}
 		sel.Since = t
 	}
 	if in.Until != "" {
 		t, err := time.Parse(time.RFC3339, in.Until)
 		if err != nil {
-			return "", fmt.Errorf("until: %w", err)
+			return nil, fmt.Errorf("until: %w", err)
 		}
 		sel.Until = t
 	}
@@ -229,12 +245,12 @@ func runReplay(ctx context.Context, d ParityDeps, in replayInput) (string, error
 	eng := replay.New(d.Store, pipeline, d.Spend)
 	res, err := eng.Replay(ctx, sel)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return jsonString(res), nil
+	return res, nil
 }
 
-func runAudit(ctx context.Context, d ParityDeps, in auditInput) (string, error) {
+func runAudit(ctx context.Context, d ParityDeps, in auditInput) (*auditResult, error) {
 	rec := audit.NewRecorder(d.Store)
 	f := audit.Filter{
 		Action: audit.Action(in.Action),
@@ -244,22 +260,20 @@ func runAudit(ctx context.Context, d ParityDeps, in auditInput) (string, error) 
 	if in.Since != "" {
 		t, err := parseTimeOrDuration(in.Since)
 		if err != nil {
-			return "", fmt.Errorf("since: %w", err)
+			return nil, fmt.Errorf("since: %w", err)
 		}
 		f.Since = t
 	}
 	if in.Until != "" {
 		t, err := time.Parse(time.RFC3339, in.Until)
 		if err != nil {
-			return "", fmt.Errorf("until: %w", err)
+			return nil, fmt.Errorf("until: %w", err)
 		}
 		f.Until = t
 	}
 	entries, err := rec.Query(ctx, f)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return jsonString(struct {
-		Entries []audit.Entry `json:"entries"`
-	}{Entries: entries}), nil
+	return &auditResult{Entries: entries}, nil
 }
