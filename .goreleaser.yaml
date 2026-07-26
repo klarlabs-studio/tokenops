@@ -79,12 +79,15 @@ release:
 # .github/workflows/release.yml that silently no-op'd when the formula
 # schema drifted from the placeholder patterns it expected.
 #
-# Requires HOMEBREW_TAP_TOKEN — a PAT with `contents:write` on
-# felixgeelhaar/homebrew-tap — exposed to the goreleaser step.
+# Requires HOMEBREW_TAP_TOKEN — the klarlabs-studio org secret — exposed to
+# the goreleaser step. It needs `contents:write` on the tap, and the tap is the
+# one owned by the org that owns this repo: an org secret does not reach a
+# personal repo, which answers 403 (briefkasten's v0.31.0 published every
+# artifact and then failed exactly there).
 brews:
   - name: tokenops
     repository:
-      owner: felixgeelhaar
+      owner: klarlabs-studio
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Formula
