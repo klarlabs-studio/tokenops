@@ -16,8 +16,13 @@ Docs: <https://klarlabs-studio.github.io/tokenops/> · Releases: <https://github
 ## Install
 
 ```bash
-brew install felixgeelhaar/tap/tokenops
+brew trust klarlabs-studio/tap        # first time only
+brew install --cask klarlabs-studio/tap/tokenops
 ```
+
+Homebrew refuses to load a cask from a third-party tap it has not been told
+to trust, so the first install of anything from this tap needs
+`brew trust klarlabs-studio/tap` once — per machine, not per tool.
 
 Or via Go:
 
