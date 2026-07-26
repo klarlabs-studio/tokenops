@@ -84,13 +84,16 @@ release:
 # one owned by the org that owns this repo: an org secret does not reach a
 # personal repo, which answers 403 (briefkasten's v0.31.0 published every
 # artifact and then failed exactly there).
-brews:
+# homebrew_casks replaces brews (deprecated in GoReleaser v2.16). Homebrew's
+# own guidance is that a cask, not a formula, is the right vehicle for a
+# pre-compiled binary -- the formula path generated something that only
+# pretended to build from source.
+homebrew_casks:
   - name: tokenops
     repository:
       owner: klarlabs-studio
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    directory: Formula
     homepage: "https://github.com/klarlabs-studio/tokenops"
     description: "Open-source operational intelligence layer for AI systems"
     license: "Apache-2.0"
@@ -98,9 +101,15 @@ brews:
       name: github-actions
       email: github-actions@github.com
     commit_msg_template: "tokenops {{ .Tag }}"
-    install: |
-      bin.install "tokenops"
-      bin.install "tokenopsd"
-    test: |
-      system "#{bin}/tokenops", "version"
-      system "#{bin}/tokenopsd", "version"
+    binaries:
+      - tokenops
+      - tokenopsd
+    hooks:
+      post:
+        # The release archives are not notarized, so Gatekeeper quarantines both
+        # binaries on first run. A formula was never subject to this; a cask is,
+        # so without this neither tokenops nor tokenopsd will start.
+        install: |
+          if OS.mac?
+            system_command "xattr", args: ["-dr", "com.apple.quarantine", staged_path]
+          end
