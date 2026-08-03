@@ -1,5 +1,66 @@
 # Changelog
 
+## 0.43.0 - 2026-08-03
+
+Making a dead ingestion pipeline visible. Every change here comes from a
+post-mortem of a 27-day outage in which TokenOps ingested nothing while every
+surface answered successfully.
+
+### Fixed
+
+- **The staleness warning states how long a source has actually been silent.**
+  It could only ask "were there events in the last 48h?", so the text read
+  identically on the second day of an outage and the twenty-seventh.
+  `StaleSource.SilentFor` now comes from a new `Store.LastEventBySource`, and
+  `Severity()` escalates — warning, degraded at 7 days, critical at 14.
+
+  ```
+  before  ingestion stale: claude-code-jsonl has 0 events in the last 48h
+  after   ingestion stale [critical]: anthropic-cookie has produced no events
+          for 52 days (checked a 48h window)
+  ```
+
+- **The remedy named the wrong program.** It said to "reconnect the MCP server
+  or restart the daemon", conflating two things: `tokenops serve` is the MCP
+  server and ingests nothing, `tokenops start` runs the pollers. During the
+  outage eleven `serve` processes were running and `start` was not, so the
+  advice pointed at the healthy half. Both the warning and
+  `StaleIngestionNextAction` now say `tokenops start` explicitly.
+
+### Added
+
+- **Spend answers say when they cannot be trusted.** `tokenops_spend_summary`
+  and `tokenops_burn_rate` carry a `measurement` block when an enabled source
+  has stopped ingesting: `trusted: false`, the severity of the worst gap, and a
+  note that the figure is a lower bound rather than a measurement of zero. A
+  total of zero has two causes — nothing spent, or nothing measured — and they
+  were formatted identically. Healthy ingestion adds no field.
+
+- **`tokenops_status` reports when no ingestion daemon is reachable.** `serve`
+  and `start` share nothing but `events.db`, so with the daemon absent serve
+  answered every query against a store that had stopped being written. This
+  fires immediately rather than after the stale window, and is unambiguous in a
+  way a quiet source is not. A warning, not a blocker: serve genuinely answers
+  queries, so it degrades `ready` the same way stale ingestion does.
+
+- **`deploy/launchd/de.klarlabs.tokenops.plist`** supervises the ingestion
+  daemon with `KeepAlive` and `RunAtLoad`. Nothing supervised `start`, so a
+  reboot silently ended observability while the client kept respawning `serve`.
+
+### Note
+
+`measurement` is additive, but the staleness warning and next-action strings
+changed. They are asserted verbatim in the MCP and CLI status tests and may be
+parsed downstream — hence a minor rather than a patch.
+
+## 0.42.x - 2026-07-08 → 2026-07-26
+
+Not previously recorded here. Release plumbing and MCP schema work: publish a
+Homebrew cask instead of a formula (#158, #159, #160), advertise output schemas
+for the data tools (#157), bump `go.klarlabs.de/mcp` to v1.22.0 (#156), and CI
+budget/reliability fixes (#154, #155).
+
+
 ## 0.41.0 - 2026-07-08
 
 ### Added
