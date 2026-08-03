@@ -155,7 +155,7 @@ func TestStatusToolSurfacesStaleIngestionWarnings(t *testing.T) {
 
 	for _, want := range []string{
 		`"warnings"`,
-		"ingestion stale: claude-code-jsonl has 0 events in the last 48h",
+		"ingestion stale [warning]: claude-code-jsonl is enabled but no events have ever been ingested",
 		config.StaleIngestionNextAction,
 		`"ready": true`,
 		`"state": "degraded"`,

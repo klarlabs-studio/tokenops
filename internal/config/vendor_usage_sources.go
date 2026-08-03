@@ -68,25 +68,87 @@ type SourceCounter interface {
 	CountBySource(ctx context.Context, since, until time.Time) (map[string]int64, error)
 }
 
+// SourceLastSeen reports the most recent event per source. It is optional: a
+// counter that does not implement it still yields warnings, just without the
+// size of the gap. *sqlite.Store implements both.
+type SourceLastSeen interface {
+	LastEventBySource(ctx context.Context) (map[string]time.Time, error)
+}
+
 // StaleSource names an enabled vendor-usage source that produced no
 // events in the check window.
 type StaleSource struct {
 	Name        string `json:"name"`
 	SourceTag   string `json:"source_tag"`
 	WindowHours int    `json:"window_hours"`
+
+	// SilentFor is how long it has actually been since this source produced an
+	// event. Zero means nothing was ever ingested from it, which is a
+	// different fact from having stopped.
+	//
+	// Without this the warning could only say "0 events in the last 48h",
+	// which reads the same on day two of an outage and on day twenty-seven. A
+	// real incident ran 27 days while the text never changed, and the fixed
+	// window made a month-long blackout look like a slow afternoon.
+	SilentFor time.Duration `json:"silent_for,omitempty"`
+}
+
+// Staleness severity tiers. A warning that never escalates gets tuned out,
+// which is how 27 days of no telemetry went unnoticed.
+const (
+	staleDegradedAfter = 7 * 24 * time.Hour
+	staleCriticalAfter = 14 * 24 * time.Hour
+)
+
+// Severity grades the gap so a caller can escalate rather than repeat itself.
+func (s StaleSource) Severity() string {
+	switch {
+	case s.SilentFor >= staleCriticalAfter:
+		return "critical"
+	case s.SilentFor >= staleDegradedAfter:
+		return "degraded"
+	default:
+		return "warning"
+	}
+}
+
+// silence renders how long the source has been quiet, in the units an operator
+// would use.
+func (s StaleSource) silence() string {
+	if s.SilentFor <= 0 {
+		return ""
+	}
+	if days := int(s.SilentFor.Hours() / 24); days >= 1 {
+		if days == 1 {
+			return "1 day"
+		}
+		return fmt.Sprintf("%d days", days)
+	}
+	return fmt.Sprintf("%dh", int(s.SilentFor.Hours()))
 }
 
 // StaleIngestionNextAction is the remediation appended to next_actions
 // whenever any vendor-usage source is stale.
-const StaleIngestionNextAction = "check tokenops vendor-usage status; reconnect the MCP server or restart the daemon to resume ingestion"
+// The old text said to "reconnect the MCP server or restart the daemon",
+// which conflates two different programs. During a 27-day outage eleven
+// `tokenops serve` processes were running and the ingestion daemon was not;
+// the advice pointed at the healthy half.
+const StaleIngestionNextAction = "run 'tokenops vendor-usage status'; if a source is silent, start the ingestion daemon with 'tokenops start' ('tokenops serve' is the MCP server and does not ingest)"
 
 // Warning renders the operator-facing warning line for a stale source.
 // Kept here so the MCP status tool and the CLI status command emit
 // byte-identical strings.
 func (s StaleSource) Warning() string {
+	const remedy = "if you've been using it, start the ingestion daemon ('tokenops start') — note that 'tokenops serve' is the MCP server and does not ingest"
+
+	if s.SilentFor <= 0 {
+		return fmt.Sprintf(
+			"ingestion stale [%s]: %s is enabled but no events have ever been ingested from it — %s",
+			s.Severity(), s.SourceTag, remedy)
+	}
 	return fmt.Sprintf(
-		"ingestion stale: %s has 0 events in the last %dh — if you've been using it, reconnect/restart the poller (the MCP serve process may be a stale long-lived instance)",
-		s.SourceTag, s.WindowHours)
+		"ingestion stale [%s]: %s has produced no events for %s (checked a %dh window) — %s",
+		s.Severity(), s.SourceTag, s.silence(), s.WindowHours, remedy)
 }
 
 // CheckStaleIngestion returns the enabled vendor-usage sources that
@@ -110,16 +172,31 @@ func (c Config) CheckStaleIngestion(ctx context.Context, counter SourceCounter, 
 	if err != nil {
 		return nil, err
 	}
+	// How long each source has actually been quiet, when the store can say.
+	// Best-effort: a counter without this still produces warnings, only
+	// without the gap — which is the pre-existing behaviour, not a regression.
+	var lastSeen map[string]time.Time
+	if seer, ok := counter.(SourceLastSeen); ok {
+		if seen, lErr := seer.LastEventBySource(ctx); lErr == nil {
+			lastSeen = seen
+		}
+	}
+
 	windowHours := int(window / time.Hour)
 	var stale []StaleSource
 	for _, s := range enabled {
-		if counts[s.SourceTag] == 0 {
-			stale = append(stale, StaleSource{
-				Name:        s.Name,
-				SourceTag:   s.SourceTag,
-				WindowHours: windowHours,
-			})
+		if counts[s.SourceTag] != 0 {
+			continue
 		}
+		entry := StaleSource{
+			Name:        s.Name,
+			SourceTag:   s.SourceTag,
+			WindowHours: windowHours,
+		}
+		if last, ok := lastSeen[s.SourceTag]; ok && !last.IsZero() && now.After(last) {
+			entry.SilentFor = now.Sub(last)
+		}
+		stale = append(stale, entry)
 	}
 	return stale, nil
 }
