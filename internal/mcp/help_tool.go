@@ -165,6 +165,12 @@ var helpCatalog = []helpCategory{
 	},
 }
 
+// helpResult is the typed payload for tokenops_help.
+type helpResult struct {
+	Categories []helpCategory `json:"categories"`
+	Hint       string         `json:"hint"`
+}
+
 // RegisterHelpTool mounts tokenops_help on s. The tool returns the
 // helpCatalog above so MCP clients can render a categorised picker.
 func RegisterHelpTool(s *Server) error {
@@ -173,11 +179,12 @@ func RegisterHelpTool(s *Server) error {
 	}
 	s.Tool("tokenops_help").
 		Description("Return a curated, category-grouped index of TokenOps MCP tools so agents and operators can find the right tool without enumerating the 20+ flat list.").
-		Handler(func(_ context.Context, _ emptyInput) (string, error) {
-			return jsonString(map[string]any{
-				"categories": helpCatalog,
-				"hint":       "tools/list returns the raw schema; this tool curates by first-use order.",
-			}), nil
+		OutputSchema(helpResult{}).
+		Handler(func(_ context.Context, _ emptyInput) (helpResult, error) {
+			return helpResult{
+				Categories: helpCatalog,
+				Hint:       "tools/list returns the raw schema; this tool curates by first-use order.",
+			}, nil
 		})
 	return nil
 }

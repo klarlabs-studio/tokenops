@@ -44,6 +44,35 @@ type rulesInjectInput struct {
 	IncludeGlobal bool     `json:"include_global,omitempty"`
 }
 
+// --- output structs --------------------------------------------------------
+
+// rulesAnalyzeResult is the typed payload for tokenops_rules_analyze.
+type rulesAnalyzeResult struct {
+	Documents       []rules.DocumentSummary `json:"documents"`
+	DuplicateGroups map[string][]string     `json:"duplicate_groups,omitempty"`
+}
+
+// rulesConflictsResult is the typed payload for tokenops_rules_conflicts.
+type rulesConflictsResult struct {
+	Findings []rules.Finding `json:"findings"`
+}
+
+// rulesCompressView is one per-document compression summary.
+type rulesCompressView struct {
+	SourceID         string  `json:"source_id"`
+	Path             string  `json:"path"`
+	OriginalTokens   int64   `json:"original_tokens"`
+	CompressedTokens int64   `json:"compressed_tokens"`
+	QualityScore     float64 `json:"quality_score"`
+	Accepted         bool    `json:"accepted"`
+	DroppedSections  int     `json:"dropped_sections"`
+}
+
+// rulesCompressResult is the typed payload for tokenops_rules_compress.
+type rulesCompressResult struct {
+	Results []rulesCompressView `json:"results"`
+}
+
 // RegisterRulesTools attaches the Rule Intelligence MCP tool surface
 // (analyze, conflicts, compress, inject) to s. Read-only.
 //
@@ -57,28 +86,32 @@ func RegisterRulesTools(s *Server) error {
 	}
 	s.Tool("tokenops_rules_analyze").
 		Description("Measure token cost of operational rule artifacts (CLAUDE.md, AGENTS.md, Cursor rules, MCP policies). Returns per-document totals and per-section breakdowns plus tokenizer-independent duplicate groups.").
-		Handler(func(_ context.Context, in rulesAnalyzeInput) (string, error) {
+		OutputSchema(rulesAnalyzeResult{}).
+		Handler(func(_ context.Context, in rulesAnalyzeInput) (*rulesAnalyzeResult, error) {
 			return rulesAnalyze(in)
 		})
 	s.Tool("tokenops_rules_conflicts").
 		Description("Detect redundancy, drift, and anti-pattern conflicts across rule artifacts. Returns Finding records without raw body text.").
-		Handler(func(_ context.Context, in rulesConflictsInput) (string, error) {
+		OutputSchema(rulesConflictsResult{}).
+		Handler(func(_ context.Context, in rulesConflictsInput) (*rulesConflictsResult, error) {
 			return rulesConflicts(in)
 		})
 	s.Tool("tokenops_rules_compress").
 		Description("Distill the rule corpus by dropping redundant and near-duplicate sections. Returns per-document token totals before/after, quality score, and whether the result is accepted under the quality floor.").
-		Handler(func(_ context.Context, in rulesCompressInput) (string, error) {
+		OutputSchema(rulesCompressResult{}).
+		Handler(func(_ context.Context, in rulesCompressInput) (*rulesCompressResult, error) {
 			return rulesCompress(in)
 		})
 	s.Tool("tokenops_rules_inject").
 		Description("Preview the dynamic rule subset the router selects for a request context (workflow, agent, files, tools, keywords). Returns selections with rationale and budget metrics.").
-		Handler(func(_ context.Context, in rulesInjectInput) (string, error) {
+		OutputSchema(rules.SelectionResult{}).
+		Handler(func(_ context.Context, in rulesInjectInput) (*rules.SelectionResult, error) {
 			return rulesInject(in)
 		})
 	return nil
 }
 
-func rulesAnalyze(in rulesAnalyzeInput) (string, error) {
+func rulesAnalyze(in rulesAnalyzeInput) (*rulesAnalyzeResult, error) {
 	prov := eventschema.ProviderOpenAI
 	switch in.Provider {
 	case "", "openai":
@@ -87,54 +120,40 @@ func rulesAnalyze(in rulesAnalyzeInput) (string, error) {
 	case "gemini":
 		prov = eventschema.ProviderGemini
 	default:
-		return "", fmt.Errorf("unknown provider %q", in.Provider)
+		return nil, fmt.Errorf("unknown provider %q", in.Provider)
 	}
 	docs, err := rulesfs.LoadCorpus(in.Root, in.RepoID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	res, err := rules.AnalyzeDocs(docs, rules.AnalysisOptions{
 		Providers: []eventschema.Provider{prov},
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return jsonString(struct {
-		Documents       []rules.DocumentSummary `json:"documents"`
-		DuplicateGroups map[string][]string     `json:"duplicate_groups,omitempty"`
-	}{Documents: res.Documents, DuplicateGroups: res.DuplicateGroups}), nil
+	return &rulesAnalyzeResult{Documents: res.Documents, DuplicateGroups: res.DuplicateGroups}, nil
 }
 
-func rulesConflicts(in rulesConflictsInput) (string, error) {
+func rulesConflicts(in rulesConflictsInput) (*rulesConflictsResult, error) {
 	docs, err := rulesfs.LoadCorpus(in.Root, in.RepoID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	findings := rules.DetectConflicts(docs, rules.ConflictOptions{})
-	return jsonString(struct {
-		Findings []rules.Finding `json:"findings"`
-	}{Findings: findings}), nil
+	return &rulesConflictsResult{Findings: findings}, nil
 }
 
-func rulesCompress(in rulesCompressInput) (string, error) {
+func rulesCompress(in rulesCompressInput) (*rulesCompressResult, error) {
 	docs, err := rulesfs.LoadCorpus(in.Root, in.RepoID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	c := rules.NewCompressor(rules.CompressConfig{
 		SimilarityThreshold: in.SimilarityThreshold,
 		QualityFloor:        in.QualityFloor,
 	}, nil)
-	type view struct {
-		SourceID         string  `json:"source_id"`
-		Path             string  `json:"path"`
-		OriginalTokens   int64   `json:"original_tokens"`
-		CompressedTokens int64   `json:"compressed_tokens"`
-		QualityScore     float64 `json:"quality_score"`
-		Accepted         bool    `json:"accepted"`
-		DroppedSections  int     `json:"dropped_sections"`
-	}
-	views := make([]view, 0, len(docs))
+	views := make([]rulesCompressView, 0, len(docs))
 	for _, d := range docs {
 		r := c.Compress(d)
 		dropped := 0
@@ -143,7 +162,7 @@ func rulesCompress(in rulesCompressInput) (string, error) {
 				dropped++
 			}
 		}
-		views = append(views, view{
+		views = append(views, rulesCompressView{
 			SourceID:         r.SourceID,
 			Path:             d.Path,
 			OriginalTokens:   r.OriginalTokens,
@@ -153,15 +172,13 @@ func rulesCompress(in rulesCompressInput) (string, error) {
 			DroppedSections:  dropped,
 		})
 	}
-	return jsonString(struct {
-		Results []view `json:"results"`
-	}{Results: views}), nil
+	return &rulesCompressResult{Results: views}, nil
 }
 
-func rulesInject(in rulesInjectInput) (string, error) {
+func rulesInject(in rulesInjectInput) (*rules.SelectionResult, error) {
 	docs, err := rulesfs.LoadCorpus(in.Root, in.RepoID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	r := rules.NewRouter(rules.RouterConfig{
 		TokenBudget:        in.TokenBudget,
@@ -177,5 +194,5 @@ func rulesInject(in rulesInjectInput) (string, error) {
 		Tools:      in.Tools,
 		Keywords:   in.Keywords,
 	})
-	return jsonString(res), nil
+	return res, nil
 }

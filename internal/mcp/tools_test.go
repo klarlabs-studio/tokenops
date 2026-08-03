@@ -36,11 +36,18 @@ func execTool(t *testing.T, srv *Server, name string, args any) string {
 	if err != nil {
 		t.Fatalf("%s: %v", name, err)
 	}
-	s, ok := out.(string)
-	if !ok {
-		t.Fatalf("%s: result is %T, expected string", name, out)
+	// Tools that adopt structured output return a typed struct rather than a
+	// pre-marshalled string; mcp-go serializes it to the text content block.
+	// Mirror that here (indented, matching the legacy jsonString format) so
+	// existing text assertions keep working across both handler shapes.
+	if s, ok := out.(string); ok {
+		return s
 	}
-	return s
+	b, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		t.Fatalf("%s: marshal result %T: %v", name, out, err)
+	}
+	return string(b)
 }
 
 func TestParseTimeOrDurationRFC3339(t *testing.T) {
