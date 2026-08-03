@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast"
@@ -26,6 +27,12 @@ type Deps struct {
 	// Waste configures the workflow waste detector (operator context
 	// limits from coaching.context_limits). Zero value uses defaults.
 	Waste waste.Config
+
+	// StaleSources reports vendor-usage sources that have stopped
+	// ingesting. Optional: nil means the caveat is omitted, which is the
+	// behaviour before spend answers carried one. Supplied by the daemon,
+	// the same hook ControlDeps uses.
+	StaleSources func() []config.StaleSource
 }
 
 // --- input structs --------------------------------------------------------
@@ -165,6 +172,9 @@ func spendSummary(ctx context.Context, d Deps, in spendSummaryInput) (string, er
 		"api_equivalent_usd": summary.APIEquivalentUSD,
 		"currency":           d.Spend.Currency(),
 	}
+	if q := measurementQuality(d); q != nil {
+		payload["measurement"] = q
+	}
 	if len(summary.Unpriced) > 0 {
 		models := make([]map[string]any, 0, len(summary.Unpriced))
 		for _, u := range summary.Unpriced {
@@ -281,6 +291,9 @@ func burnRate(ctx context.Context, d Deps, in burnRateInput) (string, error) {
 		"cost":     total,
 		"hourly":   rows,
 		"currency": d.Spend.Currency(),
+	}
+	if q := measurementQuality(d); q != nil {
+		payload["measurement"] = q
 	}
 	return markdownPayload(renderBurnSummary(hours, total, d.Spend.Currency(), series), payload), nil
 }

@@ -98,11 +98,31 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	defer func() { _ = components.Close() }()
 
 	srv := mcp.NewServer("tokenops", version.Version, logger)
+
+	// Built before the tools are registered so the analytics tools and the
+	// status tool share one hook. A spend figure produced while ingestion is
+	// dead is a lower bound, not a measurement, and the tools that return
+	// numbers should say so rather than leaving it to whoever thinks to call
+	// status first.
+	var staleSources func() []config.StaleSource
+	if cfgErr == nil && components.Store != nil {
+		store := components.Store
+		staleCfg := cfg
+		staleSources = func() []config.StaleSource {
+			stale, err := staleCfg.CheckStaleIngestion(ctx, store, config.StaleIngestionWindow, time.Now())
+			if err != nil {
+				return nil
+			}
+			return stale
+		}
+	}
+
 	if err := mcp.RegisterTools(srv, mcp.Deps{
-		Store:      components.Store,
-		Aggregator: components.Aggregator,
-		Spend:      components.Spend,
-		Waste:      cfg.Coaching.WasteConfig(),
+		Store:        components.Store,
+		Aggregator:   components.Aggregator,
+		Spend:        components.Spend,
+		Waste:        cfg.Coaching.WasteConfig(),
+		StaleSources: staleSources,
 	}); err != nil {
 		return fmt.Errorf("register tools: %w", err)
 	}
@@ -144,17 +164,7 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 		// non-nil store; a nil store yields no warnings. Best-effort —
 		// a store error degrades to "no warnings", never a status
 		// failure.
-		if components.Store != nil {
-			store := components.Store
-			staleCfg := cfg
-			deps.StaleSources = func() []config.StaleSource {
-				stale, err := staleCfg.CheckStaleIngestion(ctx, store, config.StaleIngestionWindow, time.Now())
-				if err != nil {
-					return nil
-				}
-				return stale
-			}
-		}
+		deps.StaleSources = staleSources
 	}
 	if err := mcp.RegisterControlTools(srv, deps); err != nil {
 		return fmt.Errorf("register control tools: %w", err)
