@@ -380,3 +380,46 @@ func buildDSN(path string, busy time.Duration) (string, error) {
 	v.Add("_pragma", fmt.Sprintf("busy_timeout(%d)", busy.Milliseconds()))
 	return "file:" + raw + "?" + v.Encode(), nil
 }
+
+// LastEventBySource returns the most recent event timestamp per source.
+//
+// CountBySource answers "were there events in a window", which is enough to
+// notice ingestion has stopped but not to say for how long. A warning built on
+// it alone reads identically on the second day of an outage and the
+// twenty-seventh, so nothing conveys that a gap is growing. This supplies the
+// missing half: the age of the newest event a source produced.
+//
+// A source with no events at all is absent from the result rather than present
+// with a zero time, so callers can distinguish "never ingested" from "ingested
+// at the epoch".
+func (s *Store) LastEventBySource(ctx context.Context) (map[string]time.Time, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("sqlite: store not initialised")
+	}
+	const q = `SELECT COALESCE(NULLIF(source, ''), '(none)') AS src, MAX(timestamp_ns)
+	           FROM events GROUP BY src`
+	rows, err := s.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: last-event-by-source: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := map[string]time.Time{}
+	for rows.Next() {
+		var (
+			src string
+			ns  sql.NullInt64
+		)
+		if err := rows.Scan(&src, &ns); err != nil {
+			return nil, fmt.Errorf("sqlite: last-event-by-source scan: %w", err)
+		}
+		if !ns.Valid {
+			continue
+		}
+		out[src] = time.Unix(0, ns.Int64).UTC()
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite: last-event-by-source rows: %w", err)
+	}
+	return out, nil
+}

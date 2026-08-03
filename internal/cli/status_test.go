@@ -10,7 +10,7 @@ import (
 // writeStatusText renders a warnings section only when warnings are
 // present; the daemon lines are unchanged either way.
 func TestWriteStatusTextRendersWarnings(t *testing.T) {
-	warn := "ingestion stale: claude-code-jsonl has 0 events in the last 48h — reconnect the poller"
+	warn := "ingestion stale [critical]: claude-code-jsonl has produced no events for 27 days"
 	res := statusResult{
 		Health:   endpointResult{Status: 200},
 		Ready:    endpointResult{Status: 200},
@@ -48,14 +48,14 @@ func TestWriteStatusTextOmitsWarningsWhenEmpty(t *testing.T) {
 // The --json shape carries warnings when present and omits the key when
 // empty (omitempty), so machine callers can branch on presence.
 func TestStatusJSONWarnings(t *testing.T) {
-	withWarn, err := json.Marshal(statusResult{Warnings: []string{"ingestion stale: opencode has 0 events in the last 48h"}})
+	withWarn, err := json.Marshal(statusResult{Warnings: []string{"ingestion stale [warning]: opencode has produced no events for 3 days"}})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
 	if !strings.Contains(string(withWarn), `"warnings"`) {
 		t.Errorf("expected warnings key in JSON: %s", withWarn)
 	}
-	if !strings.Contains(string(withWarn), "opencode has 0 events") {
+	if !strings.Contains(string(withWarn), "opencode has produced no events") {
 		t.Errorf("expected warning string in JSON: %s", withWarn)
 	}
 
