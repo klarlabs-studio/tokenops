@@ -55,6 +55,10 @@ type ControlDeps struct {
 	// check is unavailable (e.g. no store wired) and status omits
 	// warnings entirely. Surfaced as soft `warnings`, never blockers.
 	StaleSources func() []config.StaleSource
+	// DaemonAlive, when set, probes whether an ingestion daemon is
+	// reachable. Nil means the check is unavailable and status stays
+	// silent — an unknown is not evidence of absence.
+	DaemonAlive func() (string, bool)
 }
 
 type emptyInput struct{}
@@ -164,6 +168,23 @@ func statusInfo(d ControlDeps) statusResult {
 	// as `warnings` (never blockers), add a remediation next_action, and
 	// downgrade a `ready` state to `degraded` while keeping ready:true.
 	warnings := staleWarnings(d)
+
+	// A missing ingestion daemon is the cause; stale sources are the
+	// symptom. It is reported first because it is unambiguous — a quiet
+	// source can mean "not used lately", an absent daemon cannot — and
+	// because it fires immediately rather than after the stale window.
+	//
+	// Not a blocker: serve genuinely answers queries against the store it
+	// has. It degrades `ready` the same way stale ingestion does, so the
+	// distinction stays "running with reduced surface area", not "broken".
+	if w := daemonPresenceWarning(d.DaemonAlive); w != "" {
+		warnings = append([]string{w}, warnings...)
+		nextActions = append(nextActions, DaemonPresenceNextAction)
+		if state == "ready" {
+			state = "degraded"
+		}
+	}
+
 	if len(warnings) > 0 {
 		nextActions = append(nextActions, config.StaleIngestionNextAction)
 		if state == "ready" {
