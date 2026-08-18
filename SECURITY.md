@@ -7,8 +7,8 @@ minor; older minors receive only critical patches at maintainer discretion.
 
 | Version | Supported |
 |---------|-----------|
-| 0.43.x  | ✅        |
-| < 0.43  | ❌        |
+| 0.44.x  | ✅        |
+| < 0.44  | ❌        |
 
 ## Reporting a vulnerability
 

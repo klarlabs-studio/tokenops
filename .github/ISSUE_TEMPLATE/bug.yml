@@ -15,7 +15,7 @@ body:
     attributes:
       label: TokenOps version
       description: Output of `tokenops version`
-      placeholder: "tokenops v0.43.0 (abc123, 2026-08-03)"
+      placeholder: "tokenops v0.44.0 (abc123, 2026-08-18)"
     validations:
       required: true
 

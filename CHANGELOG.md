@@ -1,10 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.44.0 - 2026-08-18
 
 Closing the 27-day outage class that v0.43.0 made *visible*: supervise
 ingestion so it survives reboot, stop leaking the dashboard token, and
 stop telling agents to run a command that does not exist.
+
+Minor rather than patch: `tokenops_dashboard` hint and
+`DaemonPresenceNextAction` strings changed (asserted verbatim in tests
+and may be parsed downstream), and Gemini cache-read rates changed.
 
 ### Added
 
