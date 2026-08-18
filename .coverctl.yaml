@@ -83,7 +83,7 @@ policy:
       match: [./internal/replay/...]
       min: 80
     - name: retention
-      match: [./internal/retention/...]
+      match: [./internal/contexts/telemetry/retention/...]
       min: 80
     - name: scorecard
       match: [./internal/scorecard/...]

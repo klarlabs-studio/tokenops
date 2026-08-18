@@ -2,7 +2,7 @@ package mcp
 
 // DaemonPresenceNextAction is the remediation appended to next_actions when
 // no ingestion daemon is reachable.
-const DaemonPresenceNextAction = "start the ingestion daemon with 'tokenops start' (supervise it — see deploy/launchd)"
+const DaemonPresenceNextAction = "start the ingestion daemon with 'tokenops start' (or 'tokenops daemon install' to supervise it)"
 
 // DaemonAlive probes whether an ingestion daemon is reachable, for callers
 // outside this package wiring ControlDeps.DaemonAlive. It is the same check

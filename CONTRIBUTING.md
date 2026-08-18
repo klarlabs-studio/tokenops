@@ -65,7 +65,7 @@ TokenOps version, and your platform.
 
 ## Security disclosures
 
-Email `security@tokenops.dev` (placeholder). Do not file public issues for
+Email `felix.geelhaar@gmail.com`. Do not file public issues for
 security-sensitive reports.
 
 ## License

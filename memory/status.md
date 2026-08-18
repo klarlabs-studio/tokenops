@@ -1,35 +1,19 @@
 ---
-updated: 2026-07-08
+updated: 2026-08-18
 ---
 ## Current State
-tokenops is a local-first MCP server + CLI for flat-rate AI subscriptions (rate-limit prediction, spend analytics). Repo `github.com/klarlabs-studio/tokenops`, module `go.klarlabs.de/tokenops` (vanity); brew tap `felixgeelhaar/tap/tokenops`. Latest release **v0.41.0** (2026-07-08); `main` is clean. **Pricing is now researched + effective-dated (ADR 0002)** — pluggable LiteLLM source, timestamped/sourced snapshots (`tokenops pricing refresh/show/diff/lint` + a consistency guard), and a time-aware cost engine (`spend.NewDatedEngine`/`ComputeAt`) pricing each event at the rate in effect *then* (embedded `pricing.yaml` = baseline); **Opus 4.x = $5/$25/$0.50** (Anthropic cut Opus at 4.5; a v0.38.0 'correction' to $15 was WRONG and reverted in v0.39.0 — LiteLLM confirmed the original $5 value). A live LiteLLM snapshot is adopted. **`tokenops status` now flags stale ingestion** — an enabled vendor-usage source with 0 events in 48h → soft `warnings` + remediation, `state` ready→degraded (v0.37.0, #131). **Opt-in usage-coaching hooks (ADR 0001)** shipped: a `coach-hook` Claude Code **Stop** hook that tracks cumulative per-session **$-budget** and fires graduated latched alerts (50/75/100% + over-budget escalation, default $50) nudging `/compact`; wired via `tokenops hooks install`. Joins `read-guard` (PreToolUse dedup) as the second Claude Code hook. Three planes: **proxy** (**17 providers**), **passive read** (Claude Code/Codex JSONL, opencode SQLite, quota scrapers), **MCP**. OpenAI uses an **exact tiktoken tokenizer**. Core prediction reads the **vendor's own rate-limit meter** across session_budget + plan_headroom. read-guard ACTIVE + agent-scoped. `fmt analyze --svg` emits bar + **weekly over-time charts**, selectable via **`--charts`**. Two klarlabs blog posts live: "800 to 1" and "The tool was guessing" (both from real tokenops output/commits).
+tokenops is a local-first MCP server + CLI for flat-rate AI subscriptions (rate-limit prediction, spend analytics, `tokenops fmt`). Repo `github.com/klarlabs-studio/tokenops`, module `go.klarlabs.de/tokenops`; brew cask `klarlabs-studio/tap/tokenops` (`brew trust` first). Latest **release v0.43.0** (2026-08-03). **Unreleased on this branch:** `tokenops daemon install` (launchd/systemd — the 27-day outage class), `daemon.url` 0600, `tokenops up` copy killed, archlint complete, Gemini 2.5 vendor-verified+pinned, opt-in retention wired.
+
+Pricing is researched + effective-dated (ADR 0002) with verified-row pinning. **Opus 4.x = $5/$25/$0.50**. **Gemini 2.5 Pro/Flash/Flash-Lite cache-read = 10% of input** (Google pricing page 2026-08-18; old catalog $0.31/$0.075 was the retired explicit-cache figure). Gemini 1.5 no longer on the vendor page — unpinned, historical only.
+
+v0.43.0 made a dead ingestion pipeline **visible** (SilentFor + measurement.trusted=false + missing-daemon warning). This branch makes it **supervisable**. `tokenops serve` still does not ingest.
 
 ## Last Session Summary
-2026-07-08: shipped the full pricing arc as **v0.41.0** (#147–#152: all-provider source, collision fix, vendor-verified catalog corrections, adapter false-drift fixes, verified-row pinning, pin-aware diff/show) and then **hardened CI** — #154 made PRs always report required checks + fixed a stale `Test (ubuntu-latest)` required-check name (the real reason every merge needed `--admin`); #155 gated the 5-way build matrix to push-only, saving ~5 min/PR (account was over its 3k Actions-minute budget). Normal (non-admin) self-merges work now. Below is the earlier detail. **RELEASED v0.41.0** (#153, goreleaser + brew tap live) — the pricing arc #147–#152. Fixed **snapshot-vs-baseline precedence** — the runtime effective engine was letting adopted LiteLLM snapshots override the vendor-verified baseline (deepseek-chat $0.14→$0.28, mistral-small $0.15→$0.06 at runtime). Added **verified-row pinning** (#151): `verified: true` catalog rows are stripped from snapshot overrides so the baseline wins; unpinned rows still auto-adopt. Pinned the non-Anthropic vendor-verified rows (the gap the Anthropic-only guard leaves). _Session 1, 2026-07-08: worked through the drift the all-provider refresh surfaced and **corrected the catalog against vendor pages** (#149, cross-checked every row — never single-sourced): Mistral keys → current -latest gen (Large 3 $0.50/$1.50, Medium 3.5 $1.50/$7.50, Small 4 $0.15/$0.60), deepseek-chat/reasoner → v4-flash $0.14/$0.28 cache $0.0028, o1 +cache $7.50, grok-3 +cache $0.75; codestral/gpt-3.5-turbo/gemini-1.5-flash confirmed FALSE drift, left alone. Then fixed **two adapter false-drift bugs** (#150) the refresh exposed — OpenAI MMDD misorder (gated 4-digit dates to YYMM) + distinct-SKU bleed (grok-3-fast/-mini no longer fold into grok-3). Both admin-merged (unreleased). Residual diff is now pure LiteLLM staleness (deepseek alias, mistral-small Small 3.2), not catalog error; `pricing lint` clean over **300 models**. Prior (2026-07-07): all-provider source (#147) + collision fix (#148); v0.40.0 (sonnet-5). See sessions/2026-07-08.md + 2026-07-07.md.
-
-_Earlier today:_ 2026-07-07: "look at our usage" → shipped a feature. Parsed real transcripts:
-~$50.6k API-equiv/7d, **79% cache-read from long sessions** (biggest: 7–9k turns /
-~$2,400 each). tokenops's own data was stale ($0 cost — provider unset;
-claude_code_jsonl poller idle since ~June 30) + a 0.25.1/0.30.1/0.35.0 version
-skew (stale long-lived MCP `serve` process) — both fixed. Wrote ADR 0001 (opt-in
-coaching hooks), built the `coach-hook` Stop nudge + `hooks install` (#127), then
-replaced the flat per-turn threshold with a **cumulative $-budget + graduated
-alerts** (#128, the GitHub-Actions-budget idea — per-turn missed long-flat
-sessions). Released **v0.36.0** (#129), brew-upgraded, both hooks unified on the
-homebrew binary (no mismatch). Then (Session 2) closed the "tokenops undercounts
-its own usage" thread with a **stale-ingestion health warning** in `tokenops
-status` (#131), released **v0.37.0** (#132), brew-upgraded + verified live (flags
-`anthropic-cookie`, correctly not `claude_code_jsonl`). See sessions/2026-07-07.md.
+2026-08-18: evaluation of v0.43.0/main, then fixed the findings (daemon install, 0600 hint, stale `tokenops up`, archlint, Gemini pin, retention opt-in, docs/Pages/SECURITY). Prior: 2026-08-03 shipped v0.43.0 (#162/#165/#166) after a 27-day silent ingestion outage. 2026-07-08: pricing arc v0.41.0 + CI hardening (#154/#155). Detail in `memory/sessions/`.
 
 ## Next Session Should
-Clean stopping point — the whole pricing + CI arc is shipped (v0.41.0) and `main` is
-clean. No pressing task. Optional pickups: gemini-2.5 cache-read verified pass (only
-unverified catalog rows left); deeper Actions-minute cuts if the 3k budget stays tight
-(PR canary build, scope `security.yml`/nox to fewer triggers, split `Test -race` to
-main-only); older backlog — ADR 0001 Phase 2+ (SessionStart brief, UserPromptSubmit
-guardrail, scorecard digest, Codex/Cursor Stop parity), user live-verifies an
-OpenAI-compat provider (flips 9 providers unit→live), plan-catalog tiers / Bedrock SigV4.
+Ship this branch (tests + PR). After merge: brew-upgrade, `tokenops daemon install` on the operator Mac so the next reboot does not freeze the store. Optional: extra pricing sources (ADR 0002 Phase 3), coach-hook Phase 2, fmt learn once more telemetry exists.
 
 ## Blocked / Waiting
-- BLOCKED: fmt learn threshold tuning — needs real usage telemetry before empirical tuning.
-- WAITING: user to live-verify an OpenAI-compat provider (hand-off script provided); would flip 9 providers from unit- to live-verified.
+- BLOCKED: fmt learn threshold tuning — needs more real usage telemetry.
+- WAITING: user to live-verify an OpenAI-compat provider (would flip 9 providers unit→live).

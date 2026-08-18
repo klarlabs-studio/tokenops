@@ -26,9 +26,9 @@ type urlHintPayload struct {
 	PID       int       `json:"pid"`
 	StartedAt time.Time `json:"started_at"`
 	// DashboardToken authenticates clicks on the dashboard URL. MCP
-	// surfaces it so the operator gets a one-click experience without
-	// the daemon being world-readable. Empty when dashboard auth
-	// isn't wired (legacy localhost-only mode).
+	// surfaces it so the operator gets a one-click experience. The
+	// hint file is 0600 because this field is a secret. Empty when
+	// dashboard auth isn't wired (legacy localhost-only mode).
 	DashboardToken string `json:"dashboard_token,omitempty"`
 }
 
@@ -86,12 +86,21 @@ func writeURLHint(addr string, tls bool, localURL, dashboardToken string) (strin
 		return "", err
 	}
 	// Atomic-ish write: write to tmp + rename so a half-written file
-	// is never observable by readers.
+	// is never observable by readers. Mode 0600: the payload carries
+	// dashboard_token, so a world-readable hint is a local auth bypass.
 	tmp := p + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return "", err
+	}
+	if err := os.Chmod(tmp, 0o600); err != nil {
+		_ = os.Remove(tmp)
 		return "", err
 	}
 	if err := os.Rename(tmp, p); err != nil {
+		_ = os.Remove(tmp)
+		return "", err
+	}
+	if err := os.Chmod(p, 0o600); err != nil {
 		return "", err
 	}
 	return p, nil

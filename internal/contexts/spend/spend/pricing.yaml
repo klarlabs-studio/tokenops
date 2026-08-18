@@ -105,14 +105,28 @@ rates:
       verified: true
 
   gemini:
+    # Standard paid tier, prompts <= 200k. Verified 2026-08-18 against
+    # https://ai.google.dev/gemini-api/docs/pricing and Vertex AI
+    # generative-ai pricing (cache-read is 10% of input, not the older
+    # $0.31 / $0.075 explicit-cache figures LiteLLM still carries).
     "gemini-2.5-pro*":
       input_per_million: 1.25
       output_per_million: 10.00
-      cached_input_per_million: 0.31
+      cached_input_per_million: 0.125
+      verified: true
+    "gemini-2.5-flash-lite*":
+      input_per_million: 0.10
+      output_per_million: 0.40
+      cached_input_per_million: 0.01
+      verified: true
     "gemini-2.5-flash*":
       input_per_million: 0.30
       output_per_million: 2.50
-      cached_input_per_million: 0.075
+      cached_input_per_million: 0.03
+      verified: true
+    # Gemini 1.5 is no longer on the Gemini API pricing page (retired).
+    # Historical public rates kept for back-pricing old events; unpinned
+    # so a snapshot can update them if Google republishes.
     "gemini-1.5-pro*":
       input_per_million: 1.25
       output_per_million: 5.00

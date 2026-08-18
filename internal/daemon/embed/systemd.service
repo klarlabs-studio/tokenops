@@ -1,0 +1,17 @@
+[Unit]
+Description=TokenOps ingestion daemon
+Documentation=https://github.com/klarlabs-studio/tokenops
+After=network-online.target
+
+# `tokenops serve` is the MCP server and ingests nothing. This unit runs
+# `tokenops start`, which owns the vendor-usage pollers that write events.db.
+
+[Service]
+Type=simple
+ExecStart=__TOKENOPS_BIN__ start
+Restart=on-failure
+RestartSec=5
+Environment=HOME=__HOME__
+
+[Install]
+WantedBy=default.target

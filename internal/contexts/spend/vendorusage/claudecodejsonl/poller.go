@@ -72,7 +72,7 @@ func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
 
 // Run blocks until ctx is cancelled, scanning the JSONL tree on each
 // tick. One immediate scan up-front so the first MCP query after
-// `tokenops up` sees current activity.
+// `tokenops start` sees current activity.
 func (p *Poller) Run(ctx context.Context) error {
 	root, err := p.resolveRoot()
 	if err != nil {

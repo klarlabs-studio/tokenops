@@ -46,6 +46,12 @@ storage:
   enabled: true               # open the local sqlite store
   path: ~/.tokenops/events.db
 
+retention:                    # opt-in; empty keep deletes nothing
+  interval: 1h
+  keep:
+    prompt: 30d
+    workflow: 90d
+
 tls:
   enabled: false              # serve HTTPS with auto-minted cert
   cert_dir: ~/.tokenops/certs

@@ -31,6 +31,7 @@ import (
 	copilotusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilot"
 	cursorusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursor"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
+	"go.klarlabs.de/tokenops/internal/contexts/telemetry/retention"
 	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
 	"go.klarlabs.de/tokenops/internal/domainevents"
 	"go.klarlabs.de/tokenops/internal/events"
@@ -357,6 +358,22 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			)
 		}
 
+		if cfg.Retention.Enabled() {
+			policies, err := retentionPolicies(cfg.Retention)
+			if err != nil {
+				return fmt.Errorf("retention: %w", err)
+			}
+			if len(policies) > 0 {
+				pruner := retention.New(components.Store, retention.Config{
+					Policies: policies,
+					Interval: cfg.Retention.Interval,
+					Logger:   logger,
+				})
+				retention.NewScheduler(pruner).Start(ctx)
+				logger.Info("retention scheduler live", "policies", len(policies))
+			}
+		}
+
 		analyticsH, err := proxy.NewAnalyticsHandlers(components.Store, components.Aggregator, components.Spend, cfg.Coaching.WasteConfig())
 		if err != nil {
 			return fmt.Errorf("analytics handlers: %w", err)
@@ -446,7 +463,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	// clickable dashboard link via tokenops_dashboard. Removed on
 	// shutdown so a stale URL never survives the daemon. Failure here
 	// is non-fatal: the daemon stays up; the MCP tool just falls
-	// back to "run tokenops up" guidance.
+	// back to "run tokenops start" guidance.
 	if hintPath, err := writeURLHint(srv.Addr(), srv.TLSEnabled(), mdnsPublicURL, dashTok); err != nil {
 		logger.Warn("could not publish daemon URL hint", "err", err)
 	} else {

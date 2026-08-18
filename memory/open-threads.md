@@ -1,37 +1,25 @@
 ---
-updated: 2026-07-07
+updated: 2026-08-18
 ---
 ## [OPEN]
-- gemini-2.5 cache-read + gemini-1.5-flash($0) catalog rows remain UNVERIFIED (left unpinned/unchanged this session — LiteLLM values looked off/artifact-y). A future verified pass against Google's pricing page could confirm + pin them. Only catalog rows not yet vendor-checked.
-- Actions-minute budget (over 3k): build matrix now push-only (#155, ~5 min/PR saved). Further cuts if still needed: 1-job linux/amd64 canary build on PRs for pre-merge signal (~1 min); trim security.yml/nox (runs push+PR+weekly); consider reducing Test -race scope. Revisit if usage stays high.
-- ADR 0002 Phase 3: the LiteLLM source now covers ALL 10 catalog providers (#147) + a current-SKU collision fix (#148). Still open: additional SOURCES (OpenRouter /models, vendor-page scrape, curated) via the `Source` interface + an optional auto-refresh poller. Phases 1+2 shipped v0.38.0; multi-provider adapter merged to main (unreleased).
-- coach-hook Phase 2+ (ADR 0001): SessionStart spend brief, UserPromptSubmit budget guardrail (warn/block), PreCompact/SessionEnd wrap-up, weekly scorecard digest, Codex/Cursor parity for the Stop signal. Each independently opt-in + shippable. Phase 1 (Stop nudge + hooks install) + Phase 1.1 (cumulative $-budget graduated alerts, default $50) shipped in v0.36.0 and installed live in ~/.claude/settings.json (both hooks on the homebrew binary, no mismatch; fires from turn 1 of NEXT sessions).
-- fmt learn threshold tuning — telemetry now STARTING to accrue (dogfooded v0.29.0: 14 runs, learn loop produced a `go raise` hint + `printf` next-formatter candidate). Was BLOCKED on data; now unblocking. Revisit once a realistic volume of real command runs exists; verify hints stay sensible (printf was a spurious test artifact — expected, human filters).
-- read-guard: ACTIVE mode (v0.30.1, ~/.claude/settings.json; backups .pre-readguard.bak + .pre-active.bak). Flipped observe→active after real reclaimable appeared: at 101 reads/3 sessions, 45 repeat reads = 4 reclaimable (~5.4k tok) + 39 ranged + 2 post-edit. Watching `tokenops read-guard stats` — the `blocked`/`reclaimed` line should climb over more sessions. If the agent ever fights a needed block, revert to observe or restore a backup.
+- Actions-minute budget (over 3k): build matrix now push-only (#155). Further cuts if still needed: 1-job linux/amd64 canary on PRs; trim security.yml/nox; consider reducing Test -race scope.
+- ADR 0002 Phase 3: additional SOURCES (OpenRouter /models, vendor-page scrape, curated) + optional auto-refresh poller. All-provider LiteLLM source already shipped.
+- coach-hook Phase 2+ (ADR 0001): SessionStart spend brief, UserPromptSubmit budget guardrail, PreCompact/SessionEnd wrap-up, weekly scorecard digest, Codex/Cursor Stop parity.
+- fmt learn threshold tuning — needs more real command-run telemetry.
+- read-guard: ACTIVE mode in ~/.claude/settings.json. Watch `tokenops read-guard stats`; revert to observe if the agent fights a needed block.
 
 ## [WAITING]
-- 2026-07-04: User to live-verify an OpenAI-compat provider (OpenRouter) via the hand-off script — env sandbox blocks reading opencode's key + external call from my side. Would flip 9 new providers from unit-verified to live-verified.
+- 2026-07-04: User to live-verify an OpenAI-compat provider (OpenRouter). Would flip 9 providers from unit-verified to live-verified.
 
 ## Resolved
-- 2026-07-08: CI path-filter gap — RESOLVED (#154), plus a bonus find. (1) ci.yml paths-ignore ['**.md',...] skipped CI on doc/CHANGELOG-only PRs, so required checks never reported → PR BLOCKED → --admin bypass (hit on the v0.41.0 release PR). Dropped paths-ignore from the pull_request trigger (PRs always run CI + report); kept it on push so direct main doc/memory pushes stay cheap. (2) BONUS: branch protection required "Test (ubuntu-latest)" but the test job had lost its OS matrix and reported bare "Test" — the required context was NEVER satisfied, which is why EVERY merge needed --admin. Restored a single-OS matrix so it reports "Test (ubuntu-latest)". PROOF: #154 reached mergeStateStatus=CLEAN and merged via a NORMAL squash (no --admin) — the first non-admin self-merge this session. NOTE: memory's claim that pricing.yaml/testdata skipped CI was inaccurate — they're .yaml/.json, never matched **.md, always got CI; the real gap was doc-only PRs.
-- 2026-07-08: pricing show/diff pin-awareness — DONE (#152). Both render the raw snapshot, so pinned rows now carry a [pinned] marker + a legend clarifying the cost engine uses the baseline (and warning not to 'correct' the baseline toward the shown drift). PinnedSnapshotKeys() translates catalog pin keys into the snapshot key space. Presentational only.
-- 2026-07-08: Snapshot-vs-baseline precedence — RESOLVED via verified-row pinning (#151). Confirmed the effective engine let adopted LiteLLM snapshots override the vendor-verified baseline (deepseek-chat $0.14→$0.28, mistral-small $0.15→$0.06 at runtime). `verified: true` rows are now stripped from snapshot overrides so the baseline wins; unpinned rows still auto-adopt. Effective-engine test proves it.
-- 2026-07-08: Catalog drift from the all-provider refresh — RESOLVED. Every row vendor-cross-checked; Mistral/DeepSeek/o1/grok-3 corrected (#149), two adapter false-drift bugs fixed (#150). Residual diff is now pure LiteLLM staleness, not catalog error. `pricing lint` clean over 300 models.
-- 2026-07-07: `pricing refresh` against live LiteLLM — DONE (network works from the machine; the sandbox caution was wrong). It CAUGHT the wrong Opus 'correction' → reverted to $5/$25/$0.50 (v0.39.0). Snapshot adopted.
-- 2026-07-07: fable-5 rate CONFIRMED — $10/$50/$1.00 (cache-read $1.00), verified against BOTH LiteLLM and OpenRouter; matches the baseline exactly (which is why the refresh diff never flagged it). No change needed. (Correction: an earlier note wrongly said fable isn't in LiteLLM — it is, under `claude-fable-5`.) cache-write is $12.50/M per both sources; the catalog models only input/output/cache-read, so that's unmodeled but negligible.
-- 2026-07-07: Stale-ingestion health warning — DONE (#131, ships in v0.37.0). `tokenops status` (CLI + MCP) now flags an ENABLED vendor-usage source with 0 events in 48h as a soft `warnings` + remediation next-action, degrading `state` ready→degraded (ready:true). Closes the "the measurement tool wasn't measuring" gap. `config.CheckStaleIngestion` + shared `VendorUsageSources()` helper. (Provider-unset → $0 was already covered by the `providers_unconfigured` blocker.)
-- 2026-07-03: Validate command_fmt proxy plane — DONE. Added TestDefaultPipeline_CommandFmtCompressesToolOutput: a realistic Anthropic tool_result runs through the DEFAULT pipeline and surfaces a command_fmt event with real savings. (Live-traffic validation still ideal but the wiring is proven.)
-- 2026-07-03: Commit vs gitignore memory system — DECIDED: commit (cross-machine continuity; reversible). Committed with the pipeline test.
-- 2026-07-03: Move tokenops to klarlabs-studio — DONE. Repo transferred, module → go.klarlabs.de/tokenops (vanity), blog links updated, v0.32.0 goreleaser 307 (stale release owner) fixed.
-- 2026-07-03: Full provider coverage — DONE. 4→13 proxy providers (OpenAI-compatible fleet via NewOpenAICompatible + Cohere), opencode SQLite passive reader (verified 48,540 real turns), `provider set` validation/presets, coverage docs + README matrix. Released v0.33.0 (assets + brew 0.33.0). Honest boundaries documented (Gemini CLI proxy-only, Bedrock SigV4, hosted out of reach).
-- 2026-07-03: mnemos vanity/module wiring — VERIFIED end-to-end (`go get go.klarlabs.de/mnemos@latest` → v0.33.0 live). Nothing to fix.
-- 2026-07-04: read-guard cross-agent block — FIXED (agent_id-scoped ledger). The AGENTS.md Known Failure Mode about it is now resolved in code (lands next release; installed brew binary still has the bug until upgrade).
-- 2026-07-04: Core prediction ignored the vendor meter — FIXED across session_budget + plan_headroom (window + monthly). The single biggest accuracy gap the review found.
-- 2026-07-04: Tokenizer accuracy — exact tiktoken OpenAI tokenizer wired (others still heuristic).
-- 2026-07-04: Optimizer honesty (canary estimate, retrieval_prune quality, dedupe doc) — FIXED.
-- 2026-07-04: Provider coverage 13→17 (local/gateway). Plan-catalog tiers DEFERRED (need sourced caps).
-- 2026-07-04: v0.34.0 RELEASED (assets + brew 0.34.0). Everything from the review + follow-ups shipped.
-- 2026-07-04: Over-time charts — built in tokenops (`fmt analyze --svg`) + embedded composition + tokens in the 800:1 blog post; klarlabs site deployed. Kept 800:1 (no number on chart); charts framed as recent-weeks zooms.
-- 2026-07-04: "six months" prose loose end — FIXED to "several weeks" (verified events store spans ~5-6 weeks; token numbers all confirmed).
-- 2026-07-04: Second blog post "The tool was guessing" — WRITTEN + PUBLISHED (live, deployed). Self-critical rate-limit-bug story.
-- 2026-07-04: `--charts` selector + v0.35.0 RELEASED (assets + brew 0.35.0). periodLabel axis-label bug fixed + live blog charts regenerated.
+- 2026-08-18: Gemini 2.5 cache-read vendor-verified + pinned (Pro $0.125, Flash $0.03, Flash-Lite $0.01). Gemini 1.5 no longer on Google's pricing page — left unpinned for back-pricing. `tokenops daemon install` + daemon.url 0600 + `tokenops up` copy + archlint completeness + opt-in retention.
+- 2026-08-03: 27-day silent ingestion outage made visible (#162/#165) and released as v0.43.0 (#166).
+- 2026-07-08: CI path-filter gap — RESOLVED (#154). PRs always run required checks; Test job reports "Test (ubuntu-latest)".
+- 2026-07-08: pricing show/diff pin-awareness — DONE (#152).
+- 2026-07-08: Snapshot-vs-baseline precedence — RESOLVED via verified-row pinning (#151).
+- 2026-07-08: Catalog drift from the all-provider refresh — RESOLVED (#149/#150). Residual diff is LiteLLM staleness, not catalog error.
+- 2026-07-07: `pricing refresh` caught the wrong Opus 'correction' → reverted to $5/$25/$0.50 (v0.39.0).
+- 2026-07-07: fable-5 rate CONFIRMED — $10/$50/$1.00.
+- 2026-07-07: Stale-ingestion health warning — DONE (#131, v0.37.0).
+- 2026-07-04: read-guard cross-agent block FIXED; vendor-meter prediction FIXED; tiktoken OpenAI tokenizer; v0.34.0 / v0.35.0 released.
+- 2026-07-03: Full provider coverage 4→17; repo transferred to klarlabs-studio.

@@ -48,6 +48,13 @@ func TestWriteURLHintNormalizesBindAddress(t *testing.T) {
 			if payload.PID == 0 {
 				t.Errorf("PID should be non-zero")
 			}
+			st, err := os.Stat(path)
+			if err != nil {
+				t.Fatalf("stat hint: %v", err)
+			}
+			if st.Mode().Perm() != 0o600 {
+				t.Errorf("daemon.url mode = %o; want 0600 (payload carries dashboard_token)", st.Mode().Perm())
+			}
 		})
 	}
 }
