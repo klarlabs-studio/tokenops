@@ -2,17 +2,17 @@
 updated: 2026-08-18
 ---
 ## Current State
-tokenops is a local-first MCP server + CLI for flat-rate AI subscriptions (rate-limit prediction, spend analytics, `tokenops fmt`). Repo `github.com/klarlabs-studio/tokenops`, module `go.klarlabs.de/tokenops`; brew cask `klarlabs-studio/tap/tokenops` (`brew trust` first). Latest **release v0.43.0** (2026-08-03). **Unreleased on this branch:** `tokenops daemon install` (launchd/systemd — the 27-day outage class), `daemon.url` 0600, `tokenops up` copy killed, archlint complete, Gemini 2.5 vendor-verified+pinned, opt-in retention wired.
+tokenops is a local-first MCP server + CLI for flat-rate AI subscriptions. Repo `github.com/klarlabs-studio/tokenops`, module `go.klarlabs.de/tokenops`; brew cask `klarlabs-studio/tap/tokenops` (`brew trust` first). Latest **release in flight: v0.44.0** (changelog PR). `main` has #167: `tokenops daemon install`, `daemon.url` 0600, `tokenops up` copy killed, archlint complete, Gemini 2.5 vendor-verified+pinned, opt-in retention.
 
-Pricing is researched + effective-dated (ADR 0002) with verified-row pinning. **Opus 4.x = $5/$25/$0.50**. **Gemini 2.5 Pro/Flash/Flash-Lite cache-read = 10% of input** (Google pricing page 2026-08-18; old catalog $0.31/$0.075 was the retired explicit-cache figure). Gemini 1.5 no longer on the vendor page — unpinned, historical only.
+Pricing is researched + effective-dated (ADR 0002) with verified-row pinning. **Opus 4.x = $5/$25/$0.50**. **Gemini 2.5 Pro/Flash/Flash-Lite cache-read = 10% of input**.
 
-v0.43.0 made a dead ingestion pipeline **visible** (SilentFor + measurement.trusted=false + missing-daemon warning). This branch makes it **supervisable**. `tokenops serve` still does not ingest.
+v0.43.0 made a dead ingestion pipeline **visible**. v0.44.0 makes it **supervisable**. After the tag: brew-upgrade, then `tokenops daemon install` on the operator Mac.
 
 ## Last Session Summary
-2026-08-18: evaluation of v0.43.0/main, then fixed the findings (daemon install, 0600 hint, stale `tokenops up`, archlint, Gemini pin, retention opt-in, docs/Pages/SECURITY). Prior: 2026-08-03 shipped v0.43.0 (#162/#165/#166) after a 27-day silent ingestion outage. 2026-07-08: pricing arc v0.41.0 + CI hardening (#154/#155). Detail in `memory/sessions/`.
+2026-08-18: eval of v0.43.0 → #167 merged → cutting v0.44.0. Prior: 2026-08-03 v0.43.0 (#162/#165/#166) after a 27-day silent ingestion outage.
 
 ## Next Session Should
-Ship this branch (tests + PR). After merge: brew-upgrade, `tokenops daemon install` on the operator Mac so the next reboot does not freeze the store. Optional: extra pricing sources (ADR 0002 Phase 3), coach-hook Phase 2, fmt learn once more telemetry exists.
+Tag v0.44.0 once the changelog PR merges (goreleaser + brew cask). Then on the Mac: `brew upgrade --cask klarlabs-studio/tap/tokenops` and `tokenops daemon install`. Confirm `tokenops daemon status` and `tokenops vendor-usage status`.
 
 ## Blocked / Waiting
 - BLOCKED: fmt learn threshold tuning — needs more real usage telemetry.
