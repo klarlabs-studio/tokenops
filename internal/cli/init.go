@@ -116,7 +116,7 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(),
-		"wrote %s\nstorage: %s\nrules root: %s (repo_id=%s)\nnext: configure providers and run `tokenops demo` or `tokenops start`\n",
+		"wrote %s\nstorage: %s\nrules root: %s (repo_id=%s)\nnext: configure providers, then `tokenops daemon install` (keeps ingestion alive across reboot) or `tokenops start` in the foreground\n",
 		configPath, storagePath, rulesRoot, repoID,
 	)
 

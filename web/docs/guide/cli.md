@@ -42,6 +42,24 @@ Starts the daemon in the foreground. Listens on `127.0.0.1:7878` by
 default, also advertises `tokenops.local` over mDNS. Stop with
 SIGINT / SIGTERM (Ctrl-C).
 
+### `tokenops daemon {install|uninstall|status}`
+
+Supervises `tokenops start` so ingestion survives reboot. macOS writes
+a LaunchAgent; Linux writes a systemd user unit. Placeholders in
+`deploy/launchd` / `deploy/systemd` are filled with this binary's path
+and `$HOME`.
+
+```bash
+tokenops daemon install            # write + load
+tokenops daemon install --no-load  # write only
+tokenops daemon status
+tokenops daemon uninstall
+```
+
+`tokenops serve` is the MCP server and does not ingest. A reboot that
+kills an unsupervised `start` while the client respawns `serve` is how
+a 27-day outage stayed invisible.
+
 ### `tokenops serve`
 
 MCP server over stdio. Wire into Claude Desktop / Code / Cursor /

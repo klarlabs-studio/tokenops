@@ -166,10 +166,11 @@ func TestEffectiveEngineSnapshotOverridesRightProvider(t *testing.T) {
 	dir := t.TempDir()
 	// A fetched snapshot changing ONLY a Gemini rate must override the Gemini
 	// baseline row (not Anthropic) once effective, while Anthropic keeps pricing
-	// on the baseline — proving the layering is by Key{Provider, Model}. Gemini
-	// is an UNpinned row, so the snapshot is free to override it (pinned rows are
-	// covered by TestEffectiveEngine_VerifiedRowResistsStaleSnapshot).
-	const geminiModel = "gemini-2.5-flash"
+	// on the baseline — proving the layering is by Key{Provider, Model}.
+	// gemini-1.5-flash is unpinned (retired from Google's pricing page);
+	// pinned Gemini 2.5 rows are covered by
+	// TestEffectiveEngine_VerifiedRowResistsStaleSnapshot.
+	const geminiModel = "gemini-1.5-flash"
 	baseGemini, err := spend.DefaultTable().Lookup(eventschema.ProviderGemini, geminiModel)
 	if err != nil {
 		t.Fatalf("baseline gemini lookup: %v", err)

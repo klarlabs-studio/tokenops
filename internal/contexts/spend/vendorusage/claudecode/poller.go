@@ -80,7 +80,7 @@ func (p *Poller) Run(ctx context.Context) error {
 	}
 	t := time.NewTicker(p.opts.Interval)
 	defer t.Stop()
-	// One immediate scan so the first MCP query after `tokenops up`
+	// One immediate scan so the first MCP query after `tokenops start`
 	// sees today's traffic instead of waiting for the first tick.
 	p.scan(ctx, path)
 	for {
