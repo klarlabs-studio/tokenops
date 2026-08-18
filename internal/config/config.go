@@ -48,6 +48,7 @@ type Config struct {
 	Plans       map[string]string `yaml:"plans"`
 	TLS         TLSConfig         `yaml:"tls"`
 	Storage     StorageConfig     `yaml:"storage"`
+	Retention   RetentionConfig   `yaml:"retention,omitempty"`
 	OTel        OTelConfig        `yaml:"otel"`
 	Rules       RulesConfig       `yaml:"rules"`
 	Resilience  ResilienceConfig  `yaml:"resilience"`
@@ -434,6 +435,69 @@ type StorageConfig struct {
 	Path    string `yaml:"path"`
 }
 
+// RetentionConfig is an opt-in event-store prune. Empty Keep disables
+// the scheduler entirely so a fresh install never deletes events. The
+// daemon starts the worker only when at least one keep window is
+// positive. Audit log rows are never pruned.
+type RetentionConfig struct {
+	// Interval is how often the pruner wakes. Zero defaults to 1h when
+	// the scheduler is running.
+	Interval time.Duration `yaml:"interval,omitempty"`
+	// Keep maps an event type (prompt, workflow, optimization,
+	// coaching, rule_source, rule_analysis) to a window. Values accept
+	// Go durations plus a "d" day suffix (30d = 720h).
+	Keep map[string]string `yaml:"keep,omitempty"`
+}
+
+// Enabled reports whether any keep window is set so the daemon should
+// start the pruner.
+func (c RetentionConfig) Enabled() bool {
+	for _, raw := range c.Keep {
+		d, err := ParseKeepDuration(raw)
+		if err == nil && d > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// knownRetentionTypes are the event types the pruner accepts. audit_log
+// is intentionally absent — operators rely on it for forensic queries.
+var knownRetentionTypes = map[string]struct{}{
+	"prompt":        {},
+	"workflow":      {},
+	"optimization":  {},
+	"coaching":      {},
+	"rule_source":   {},
+	"rule_analysis": {},
+}
+
+// ParseKeepDuration accepts Go durations plus a day suffix ("30d").
+func ParseKeepDuration(s string) (time.Duration, error) {
+	s = strings.TrimSpace(s)
+	if s == "" || s == "0" || s == "0s" {
+		return 0, nil
+	}
+	if strings.HasSuffix(s, "d") {
+		n, err := strconv.Atoi(strings.TrimSuffix(s, "d"))
+		if err != nil {
+			return 0, fmt.Errorf("invalid day duration %q", s)
+		}
+		if n < 0 {
+			return 0, fmt.Errorf("duration must be non-negative, got %q", s)
+		}
+		return time.Duration(n) * 24 * time.Hour, nil
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 0, fmt.Errorf("invalid duration %q: %w", s, err)
+	}
+	if d < 0 {
+		return 0, fmt.Errorf("duration must be non-negative, got %s", s)
+	}
+	return d, nil
+}
+
 // TLSConfig configures TLS termination on the local proxy.
 type TLSConfig struct {
 	// Enabled toggles HTTPS. When false, the proxy serves plain HTTP.
@@ -577,6 +641,17 @@ func (c Config) Validate() error {
 	}
 	if c.Watch.Interval < 0 {
 		return fmt.Errorf("watch.interval must be non-negative, got %s", c.Watch.Interval)
+	}
+	if c.Retention.Interval < 0 {
+		return fmt.Errorf("retention.interval must be non-negative, got %s", c.Retention.Interval)
+	}
+	for name, raw := range c.Retention.Keep {
+		if _, ok := knownRetentionTypes[name]; !ok {
+			return fmt.Errorf("retention.keep: unknown event type %q", name)
+		}
+		if _, err := ParseKeepDuration(raw); err != nil {
+			return fmt.Errorf("retention.keep[%s]: %w", name, err)
+		}
 	}
 	return nil
 }

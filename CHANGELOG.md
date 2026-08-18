@@ -1,5 +1,56 @@
 # Changelog
 
+## Unreleased
+
+Closing the 27-day outage class that v0.43.0 made *visible*: supervise
+ingestion so it survives reboot, stop leaking the dashboard token, and
+stop telling agents to run a command that does not exist.
+
+### Added
+
+- **`tokenops daemon install / uninstall / status`.** Writes a launchd
+  LaunchAgent (macOS) or systemd user unit (Linux) with the real binary
+  path and `$HOME`, then loads it. The `deploy/launchd` plist used to
+  contain `__TOKENOPS_BIN__` placeholders; copying it as-is exec'd a
+  binary that did not exist. `--no-load` writes only; `--dry-run` prints
+  the unit. `tokenops init` points here next.
+
+- **Opt-in event-store retention.** `retention.keep` maps event types to
+  windows (`30d`, `720h`, …). Empty (the default) deletes nothing. When
+  set, `tokenops start` runs the pruner that previously existed only as
+  a tested-but-unwired package. Audit log is never pruned.
+
+### Fixed
+
+- **`~/.tokenops/daemon.url` is `0600`.** It carries `dashboard_token`.
+  The dedicated token file was already `0600`; the hint file was `0644`,
+  so any local account could read dashboard auth.
+
+- **Agents are told to run `tokenops start`, not `tokenops up`.**
+  `tokenops_dashboard`, the dashboard HTML, and poller comments still
+  named a command that does not exist. Status already said `start`.
+
+- **archlint lists every `internal/contexts/*` package.** The AGENTS.md
+  contract was already broken on main (~28 of ~51 packages). Stale
+  `storageExempt` entries that did not import sqlite are gone;
+  `TestDomainPackagesComplete` and `TestStorageExemptImportsSQLite` keep
+  it from drifting.
+
+### Changed
+
+- **Gemini 2.5 catalog rows vendor-verified and pinned.** Google's
+  pricing page (and Vertex) list cache-read at 10% of input: Pro
+  `$1.25/$10/$0.125`, Flash `$0.30/$2.50/$0.03`, Flash-Lite
+  `$0.10/$0.40/$0.01`. The catalog had the older `$0.31` / `$0.075`
+  explicit-cache figures. Gemini 1.5 is no longer on the vendor page
+  and stays unpinned for back-pricing. Sources:
+  https://ai.google.dev/gemini-api/docs/pricing
+
+- Docs/install path: published quickstart, SECURITY supported versions,
+  CONTRIBUTING disclosure address, README release platforms, and Pages
+  Node 24 now match `main` (cask on `klarlabs-studio/tap`, module
+  `go.klarlabs.de/tokenops`, current minor).
+
 ## 0.43.0 - 2026-08-03
 
 Making a dead ingestion pipeline visible. Every change here comes from a

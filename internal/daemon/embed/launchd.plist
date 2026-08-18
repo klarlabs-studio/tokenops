@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  LaunchAgent for the TokenOps ingestion daemon.
+
+  Do not load this file as-is. Placeholders are filled by
+  `tokenops daemon install`, which writes
+  ~/Library/LaunchAgents/de.klarlabs.tokenops.plist with the real
+  binary path and home, then bootstraps it.
+
+  `tokenops serve` is the MCP server: the client spawns it on demand and it
+  ingests nothing. `tokenops start` runs the pollers that write events.db.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>de.klarlabs.tokenops</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>__TOKENOPS_BIN__</string>
+    <string>start</string>
+  </array>
+
+  <key>KeepAlive</key>
+  <true/>
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>__HOME__</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>__HOME__/Library/Logs/tokenops.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Library/Logs/tokenops.log</string>
+
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>

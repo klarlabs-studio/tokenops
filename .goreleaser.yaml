@@ -104,6 +104,13 @@ homebrew_casks:
     binaries:
       - tokenops
       - tokenopsd
+    caveats: |
+      Supervise the ingestion daemon so it survives reboot:
+
+        tokenops daemon install
+
+      `tokenops serve` is the MCP server and does not ingest.
+      `tokenops start` runs the pollers; the unit above keeps it alive.
     hooks:
       post:
         # The release archives are not notarized, so Gatekeeper quarantines both

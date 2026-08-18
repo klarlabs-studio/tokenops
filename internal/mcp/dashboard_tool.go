@@ -73,7 +73,7 @@ func readURLHint() (*urlHintPayload, error) {
 // RegisterDashboardTool mounts tokenops_dashboard. The tool returns a
 // markdown link to the daemon's dashboard when the daemon is running;
 // otherwise returns a structured error directing the operator to
-// `tokenops up` (mirrors the disabled-subsystem contract used by
+// `tokenops start` (mirrors the disabled-subsystem contract used by
 // other tools).
 //
 // The tool deliberately takes no inputs: the operator doesn't pick
@@ -90,7 +90,7 @@ func RegisterDashboardTool(s *Server) error {
 				if errors.Is(err, os.ErrNotExist) {
 					return jsonString(map[string]string{
 						"error": "daemon_not_running",
-						"hint":  "run `tokenops up` in another terminal so the dashboard listener starts, then call this tool again",
+						"hint":  "run `tokenops start` in another terminal so the dashboard listener starts, then call this tool again",
 					}), nil
 				}
 				return jsonString(map[string]string{

@@ -71,29 +71,30 @@ PRs that cross these boundaries must update this document.
 
 **Allowed import direction**: adapters → application → domain → ports.
 Infrastructure imports application/domain interfaces only; nothing in
-domain may import an infrastructure package by concrete type. The two
-documented exceptions today (kept under review):
+domain may import an infrastructure package by concrete type. Documented
+sqlite exemptions (enforced by `internal/archlint` `storageExempt`):
 
-- `scorecard/service.go` adapts `*sqlite.Store` to the `EventReader`
-  port in a single file, isolated from `Compute`.
-- `rules/ingest.go` Ingestor adapter holds `os` + `io/fs` imports; no
-  application service references those packages directly.
+- `scorecard/service.go` adapts `*sqlite.Store` to the `EventReader` port.
+- `observability/analytics`, `security/audit`, `workflows/workflow`,
+  `optimization/replay`, `telemetry/retention`, `tasks` take `*sqlite.Store`
+  as an isolated adapter. New sqlite users must be added to `storageExempt`
+  *and* actually import sqlite (`TestStorageExemptImportsSQLite`).
 
 ## Bounded Contexts
 
 | Context          | Package(s)                                 | Aggregate Root     | Ubiquitous Terms                              |
 |------------------|--------------------------------------------|--------------------|-----------------------------------------------|
-| Prompts          | `pkg/eventschema`, `internal/contexts/prompts/tokenizer`    | `PromptEvent`      | provider, model, prompt, tokens, hash         |
-| Workflows        | `internal/contexts/workflows/workflow`                        | `WorkflowEvent`    | workflow, step, agent, cumulative tokens      |
-| Optimization     | `internal/contexts/optimization/optimizer/*`, `internal/contexts/optimization/eval`, `internal/contexts/optimization/formatter`, `internal/contexts/optimization/fmtlearn`    | `OptimizationEvent`| optimizer kind, decision, quality score, formatter, loss level, critical line |
-| Coaching         | `internal/contexts/coaching/coaching`, `internal/contexts/coaching/efficiency` | `CoachingEvent`    | recommendation kind, efficiency score         |
-| Rule Intelligence| `internal/contexts/rules`                           | `RuleDocument`     | rule source, section, scope, ROI score        |
-| Spend            | `internal/contexts/spend/spend`, `internal/contexts/spend/forecast`      | `Engine` (svc)     | cost, pricing table, currency, burn rate      |
-| Observability    | `internal/contexts/observability/analytics`, `internal/contexts/observability/anomaly`   | (svc)              | bucket, group, row, summary, anomaly          |
-| Governance       | `internal/contexts/governance/scorecard`, `internal/contexts/governance/coverdebt` | `Scorecard`        | KPI, gate, risk score, coverage goal          |
-| Security         | `internal/contexts/security/redaction`, `internal/contexts/security/dashauth`  | `Redactor`         | finding, placeholder, secret, entropy         |
-| Replay           | `internal/contexts/optimization/replay`                          | `Engine` (svc)     | session selector, step diff, pipeline         |
-| Telemetry        | `internal/events`, `internal/otlp`, `internal/storage/sqlite` | (svc) | envelope, sink, schema version |
+| Prompts          | `pkg/eventschema`, `internal/contexts/prompts/{tokenizer,providers,llm}` | `PromptEvent` | provider, model, prompt, tokens, hash |
+| Workflows        | `internal/contexts/workflows/workflow` | `WorkflowEvent` | workflow, step, agent, cumulative tokens |
+| Optimization     | `internal/contexts/optimization/optimizer/*`, `eval`, `formatter`, `fmtlearn`, `replay` | `OptimizationEvent` | optimizer kind, formatter, loss level, critical line |
+| Coaching         | `internal/contexts/coaching/{coaching,efficiency,waste,prompts,replies,tools}` | `CoachingEvent` | recommendation kind, efficiency score |
+| Rule Intelligence| `internal/contexts/rules` | `RuleDocument` | rule source, section, scope, ROI score |
+| Spend            | `internal/contexts/spend/{spend,forecast,plans,pricing,session,vendorusage/*}` | `Engine` (svc) | cost, pricing table, plan, poller |
+| Observability    | `internal/contexts/observability/{analytics,anomaly,observ}` | (svc) | bucket, group, row, summary, anomaly |
+| Governance       | `internal/contexts/governance/{scorecard,coverdebt,budget}` | `Scorecard` | KPI, gate, risk score, coverage goal |
+| Security         | `internal/contexts/security/{redaction,dashauth,audit,rbac,tlsmint}` | `Redactor` | finding, placeholder, secret, entropy |
+| Tasks            | `internal/contexts/tasks` | `Task` | operator-marked window, metrics |
+| Telemetry        | `internal/events`, `internal/otlp`, `internal/storage/sqlite`, `internal/contexts/telemetry/retention` | (svc) | envelope, sink, schema version, prune |
 
 ## Ubiquitous Language
 
@@ -133,10 +134,18 @@ live in `internal/domainevents/events.go`.
 
 ## Composition Root
 
-`internal/bootstrap.New(ctx, opts)` is the single composition root.
-Every adapter receives `*bootstrap.Components` rather than constructing
-its own `spend.Engine`, `tokenizer.Registry`, or `sqlite.Store`. The
-daemon entry point wires bootstrap once at startup.
+`internal/bootstrap.New(ctx, opts)` builds the shared core (store, spend
+engine, tokenizer registry, redactor, domain bus). It is not the only
+composition root:
+
+- `daemon.RunWithLogger` (`internal/daemon`) wires pollers, OTLP, dashauth,
+  analytics HTTP, mDNS, retention, and the URL hint. This is what
+  `tokenops start` / `tokenopsd` run.
+- `tokenops serve` calls `bootstrap.New` independently. The two processes
+  share `events.db` and `daemon.url` — serve does not start pollers.
+
+Adapters receive `*bootstrap.Components` rather than constructing their
+own `spend.Engine` or `sqlite.Store`.
 
 ## Adapter package layout
 

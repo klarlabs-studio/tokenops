@@ -99,7 +99,15 @@ The MCP surface is a deterministic guardrail, not vibes-in-the-loop. Closed acti
 
 `recommended_action` is a closed enum (`continue | slow_down | switch_model | wait_for_reset`) so the agent picks the right branch without parsing prose. `signal_quality.level` lets the agent decide how much to trust the call: stay aggressive on `high`, defer to the human on `low`.
 
-## What's new in v0.21.1
+## What's new in v0.43.0
+
+- **Dead ingestion is visible.** `tokenops status` names how long a source has been silent and tells you to run `tokenops start` (not `serve`). Spend tools add `measurement.trusted: false` when the pipeline is dead. `tokenops_status` reports when no ingestion daemon is reachable.
+- **Supervise it.** `tokenops daemon install` writes a launchd/systemd unit that keeps `start` alive across reboot. The previous LaunchAgent template had unfilled placeholders.
+- **Gemini 2.5 rates pinned** against Google's pricing page (cache-read is 10% of input).
+
+See the [changelog](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md) for the full 0.22–0.43 arc (pricing research, fmt, coaching hooks, Homebrew cask).
+
+## Earlier highlights (v0.21.1)
 
 - **8-KPI agent scorecard.** The wedge trio (FVT / TEU / SAC) gained five agent-workflow KPIs in v0.19–v0.21, all graded A–F against tuneable thresholds:
   - **CHR** — Cache Hit Ratio (≥90/70/50)

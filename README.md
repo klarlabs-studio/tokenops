@@ -30,14 +30,14 @@ Or via Go:
 go install go.klarlabs.de/tokenops/cmd/tokenops@latest
 ```
 
-Or grab a prebuilt binary from the [releases page](https://github.com/klarlabs-studio/tokenops/releases) (darwin amd64/arm64, linux amd64/arm64, windows amd64).
+Or grab a prebuilt binary from the [releases page](https://github.com/klarlabs-studio/tokenops/releases) (darwin amd64/arm64, linux amd64/arm64).
 
 ## 90-second quickstart
 
 ```bash
 tokenops init --detect                         # sniff installed AI clients, print plan-set commands
 tokenops plan set anthropic claude-max-20x     # bind whatever fits (paste from --detect output)
-tokenops start                                 # daemon, listens 127.0.0.1:7878 + tokenops.local
+tokenops daemon install                        # supervise `tokenops start` so ingestion survives reboot
 ```
 
 Wire MCP into your agent:
@@ -84,7 +84,8 @@ for the plan catalog model.
 
 ```
 init                              Scaffold config (sqlite + rules on); --detect sniffs installed clients
-start                             Run the daemon (proxy + analytics + bus + dashboard)
+start                             Run the daemon in the foreground (proxy + analytics + bus + dashboard)
+daemon {install|uninstall|status} Supervise `tokenops start` via launchd (macOS) or systemd --user (Linux)
 serve                             MCP server over stdio
 demo                              Seed 7d of synthetic events
 status                            Daemon health + blockers[] / next_actions[]

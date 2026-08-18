@@ -34,6 +34,9 @@ func TestDefaultPinnedKeys(t *testing.T) {
 		{eventschema.ProviderMistral, "mistral-small*"},
 		{eventschema.ProviderMistral, "mistral-large*"},
 		{eventschema.ProviderOpenAI, "o1*"},
+		{eventschema.ProviderGemini, "gemini-2.5-pro*"},
+		{eventschema.ProviderGemini, "gemini-2.5-flash*"},
+		{eventschema.ProviderGemini, "gemini-2.5-flash-lite*"},
 	} {
 		if !pins[k] {
 			t.Errorf("expected %v to be pinned", k)
@@ -94,6 +97,29 @@ func TestDefaultTableCoversCurrentAnthropicModels(t *testing.T) {
 		}
 		if got != want {
 			t.Errorf("Lookup(%s) = %+v; want %+v", model, got, want)
+		}
+	}
+}
+
+func TestDefaultTableGeminiVendorVerified(t *testing.T) {
+	tab := DefaultTable()
+	cases := []struct {
+		model string
+		want  Rate
+	}{
+		{"gemini-2.5-pro", Rate{InputPerMillion: 1.25, OutputPerMillion: 10.00, CachedInputPerMillion: 0.125}},
+		{"gemini-2.5-flash", Rate{InputPerMillion: 0.30, OutputPerMillion: 2.50, CachedInputPerMillion: 0.03}},
+		// Longer prefix must win so flash-lite does not inherit flash rates.
+		{"gemini-2.5-flash-lite", Rate{InputPerMillion: 0.10, OutputPerMillion: 0.40, CachedInputPerMillion: 0.01}},
+	}
+	for _, c := range cases {
+		got, err := tab.Lookup(eventschema.ProviderGemini, c.model)
+		if err != nil {
+			t.Errorf("Lookup(%s): %v", c.model, err)
+			continue
+		}
+		if got != c.want {
+			t.Errorf("Lookup(%s) = %+v; want %+v", c.model, got, c.want)
 		}
 	}
 }

@@ -1,8 +1,9 @@
 // Package coaching wires the replay engine to the waste detector to
-// emit asynchronous coaching events for past sessions. The async
-// pipeline is what the dashboard surfaces as "5 weekly insights" — it
-// runs off the request hot path on whatever cadence the operator
-// configures (cron, on-demand, idle worker).
+// emit asynchronous coaching events for past sessions. The pipeline is
+// an on-demand worker: `tokenops coach` and `tokenops replay` are the
+// live surfaces. `tokenops start` does not run this pipeline — auto-
+// starting it would replay sessions in the background (cost and
+// surprise). Operators who want a cron can Submit jobs themselves.
 //
 // The pipeline is intentionally small: a buffered job queue, a worker
 // pool, a per-run cost budget that pauses dispatch when exceeded, and
@@ -74,8 +75,8 @@ type Config struct {
 	Logger *slog.Logger
 	// Enricher, when set, runs after the detector emits a
 	// CoachingEvent and is allowed to upgrade Summary / Details with
-	// LLM-generated text. Wired by the daemon from the configured
-	// coaching LLM backend; tests inject fakes.
+	// LLM-generated text. Callers inject it; the daemon does not start
+	// this pipeline today. Tests inject fakes.
 	Enricher SummaryEnricher
 }
 

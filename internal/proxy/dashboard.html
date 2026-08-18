@@ -270,7 +270,7 @@ createApp({
         drawCostChart();
         drawTokenChart();
       } catch (err) {
-        loadError.value = `Could not load data: ${err.message}. Is the daemon running? Try \`tokenops up\`.`;
+        loadError.value = `Could not load data: ${err.message}. Is the daemon running? Try \`tokenops start\`.`;
       }
     };
 

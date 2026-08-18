@@ -5,13 +5,18 @@ Ninety seconds from zero to "my agent knows my rate-limit window."
 ## 1. Install
 
 ```bash
-brew install felixgeelhaar/tap/tokenops
+brew trust klarlabs-studio/tap        # first time only
+brew install --cask klarlabs-studio/tap/tokenops
 ```
+
+Homebrew refuses to load a cask from a third-party tap it has not been told
+to trust, so the first install of anything from this tap needs
+`brew trust klarlabs-studio/tap` once — per machine, not per tool.
 
 Or via Go:
 
 ```bash
-go install github.com/klarlabs-studio/tokenops/cmd/tokenops@latest
+go install go.klarlabs.de/tokenops/cmd/tokenops@latest
 ```
 
 Or grab a prebuilt binary from
@@ -39,10 +44,17 @@ tokenops plan set openai gpt-plus
 tokenops start
 ```
 
+Foreground. For a machine that reboots, supervise it so ingestion
+survives (the 27-day outage class):
+
+```bash
+tokenops daemon install
+```
+
 The daemon binds `127.0.0.1:7878`, opens the SQLite store, mounts
 `/api/spend/*` + `/dashboard` (both behind a shared-secret token),
 publishes itself as `tokenops.local` over mDNS, and writes its
-listen URL + dashboard token to `~/.tokenops/daemon.url` so the MCP
+listen URL + dashboard token to `~/.tokenops/daemon.url` (`0600`) so the MCP
 server can hand both to your agent.
 
 ## 4. Wire the MCP server into your agent

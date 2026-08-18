@@ -403,3 +403,36 @@ func TestValidateBudgetBasis(t *testing.T) {
 		t.Error("invalid basis accepted")
 	}
 }
+
+func TestParseKeepDuration(t *testing.T) {
+	d, err := ParseKeepDuration("30d")
+	if err != nil || d != 30*24*time.Hour {
+		t.Fatalf("30d = %s (%v); want 720h", d, err)
+	}
+	d, err = ParseKeepDuration("1h")
+	if err != nil || d != time.Hour {
+		t.Fatalf("1h = %s (%v)", d, err)
+	}
+	if _, err := ParseKeepDuration("nope"); err == nil {
+		t.Fatal("expected error for nope")
+	}
+}
+
+func TestValidateRetention(t *testing.T) {
+	cfg := Default()
+	cfg.Retention.Keep = map[string]string{"prompt": "30d"}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("valid keep rejected: %v", err)
+	}
+	if !cfg.Retention.Enabled() {
+		t.Fatal("Enabled() false for prompt:30d")
+	}
+	cfg.Retention.Keep = map[string]string{"audit_log": "30d"}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("audit_log keep should be rejected")
+	}
+	cfg.Retention.Keep = map[string]string{"prompt": "nope"}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("invalid duration should be rejected")
+	}
+}

@@ -2,18 +2,13 @@
 <!--
   LaunchAgent for the TokenOps ingestion daemon.
 
+  Do not load this file as-is. Placeholders are filled by
+  `tokenops daemon install`, which writes
+  ~/Library/LaunchAgents/de.klarlabs.tokenops.plist with the real
+  binary path and home, then bootstraps it.
+
   `tokenops serve` is the MCP server: the client spawns it on demand and it
   ingests nothing. `tokenops start` runs the pollers that write events.db.
-  Nothing supervised `start`, so once it stopped — a reboot, an upgrade, a
-  stray kill — queries kept answering against a frozen store. That went
-  unnoticed for 27 days.
-
-  Install:
-    cp deploy/launchd/de.klarlabs.tokenops.plist ~/Library/LaunchAgents/
-    launchctl load -w ~/Library/LaunchAgents/de.klarlabs.tokenops.plist
-
-  Verify:
-    tokenops vendor-usage status     # EVENTS(WIN) should be non-zero
 -->
 <plist version="1.0">
 <dict>
@@ -26,11 +21,18 @@
     <string>start</string>
   </array>
 
-  <!-- KeepAlive so a crash restarts rather than silently ending ingestion. -->
   <key>KeepAlive</key>
   <true/>
   <key>RunAtLoad</key>
   <true/>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>__HOME__</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
 
   <key>StandardOutPath</key>
   <string>__HOME__/Library/Logs/tokenops.log</string>

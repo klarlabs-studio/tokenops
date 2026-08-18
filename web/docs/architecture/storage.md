@@ -23,20 +23,23 @@ counter — visible via `tokenops status --json`.
 
 ## Retention
 
-`internal/retention` ships a configurable retention worker that
-prunes envelopes older than a per-event-type window. Pair with
-`tokenops start` to keep the local DB bounded:
+`internal/contexts/telemetry/retention` ships a configurable retention
+worker that prunes envelopes older than a per-event-type window. It is
+**opt-in**: empty `retention.keep` (the default) deletes nothing. Pair
+with `tokenops start` (or `tokenops daemon install`) when you set it:
 
 ```yaml
 retention:
-  prompt: 30d
-  workflow: 90d
-  optimization: 30d
-  coaching: 365d
+  interval: 1h          # how often the pruner wakes; default 1h
+  keep:
+    prompt: 30d
+    workflow: 90d
+    optimization: 30d
+    coaching: 365d
 ```
 
-(The retention configuration surface lives in the `retention-config`
-task — see the source for the current YAML keys.)
+Windows of `0` skip that type. `audit_log` is never pruned. Day suffix
+(`30d`) is accepted alongside Go durations (`720h`).
 
 ## Audit log
 

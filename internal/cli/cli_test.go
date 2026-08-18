@@ -31,7 +31,7 @@ func TestRootHelpListsSubcommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("help: %v", err)
 	}
-	for _, want := range []string{"start", "status", "version", "config"} {
+	for _, want := range []string{"start", "daemon", "status", "version", "config"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("help output missing %q\n%s", want, out)
 		}
