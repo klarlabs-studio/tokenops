@@ -471,6 +471,15 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		return fmt.Errorf("start proxy: %w", err)
 	}
 
+	// The read guard prevents re-reads inside the client, where the proxy
+	// cannot see them. Ingesting its ledger is what lets those savings
+	// reach TEU — otherwise a client that never proxies scores "not
+	// measured" however much the guard actually reclaims.
+	if bus != nil {
+		go runReadGuardIngest(ctx, bus, logger, 2*time.Minute)
+		logger.Info("read-guard reclamation ingest live")
+	}
+
 	// Active-mode spend watcher: periodic budget + unpriced-model
 	// evaluation against the local store. Requires storage (no events,
 	// nothing to watch).

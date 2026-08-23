@@ -59,6 +59,13 @@ type Scorecard struct {
 	DestructiveRate      KPIResult `json:"destructive_rate,omitempty"`
 	OverallGrade         Grade     `json:"overall_grade"`
 	BaselineRef          string    `json:"baseline_ref,omitempty"`
+	// Degraded explains why the live store could not be read, when it
+	// could not. An unreadable store and an unmeasured metric both used
+	// to render as "N/A (not measured)", which made a failure look like
+	// an absence of data — widening the window past what the reader can
+	// load inside its deadline produced fewer numbers with no
+	// explanation at all.
+	Degraded string `json:"degraded,omitempty"`
 	// Checklist is populated only when no KPI was computed from real
 	// data. Renderers should show the checklist instead of an F grade
 	// — defaulted KPIs are not a verdict on the operator.
@@ -484,6 +491,9 @@ func (s *Scorecard) String() string {
 			s.DestructiveRate.Value, s.DestructiveRate.Grade)
 	}
 	fmt.Fprintf(&b, "\nOverall Grade: %s\nBaseline: %s\n", s.OverallGrade, baselineOrMissing(s.BaselineRef))
+	if s.Degraded != "" {
+		fmt.Fprintf(&b, "\n⚠ some KPIs could not be computed: %s\n", s.Degraded)
+	}
 	fmt.Fprintf(&b, "\nThresholds (green / yellow / red):\n")
 	fmt.Fprintf(&b, "  FVT:  ≤%.0f / ≤%.0f / ≤%.0f seconds\n",
 		s.FirstValueTime.Threshold.Green, s.FirstValueTime.Threshold.Yellow, s.FirstValueTime.Threshold.Red)
