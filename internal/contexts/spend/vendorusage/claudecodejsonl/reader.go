@@ -60,6 +60,12 @@ type Turn struct {
 	CacheReadInputTokens     int64
 	CacheCreationInputTokens int64
 	ServiceTier              string
+	// Latency is how long this turn took, measured as the gap from the
+	// transcript entry immediately before it. Zero means it could not be
+	// established — the first entry in a file, a backwards timestamp, or
+	// a gap long enough that the operator was plainly away rather than
+	// waiting.
+	Latency time.Duration
 	// StartsUserMessage marks the first assistant turn produced in
 	// response to a prompt the operator actually typed. One prompt fans
 	// out into many assistant turns, so exactly one turn per prompt
@@ -147,6 +153,9 @@ func readReader(r io.Reader, project string, visit func(Turn) error) error {
 	// Set when a typed prompt is seen; consumed by the next emitted
 	// assistant turn.
 	var pendingUserMessage bool
+	// Timestamp of the previous transcript entry, used to time the next
+	// assistant turn.
+	var prevAt time.Time
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if len(line) == 0 {
@@ -157,6 +166,11 @@ func readReader(r io.Reader, project string, visit func(Turn) error) error {
 			continue
 		}
 		if strings.EqualFold(raw.Type, "user") {
+			// A user row is what the next assistant turn is timed
+			// against, so advance the clock even though it emits nothing.
+			if at, err := time.Parse(time.RFC3339Nano, raw.Timestamp); err == nil {
+				prevAt = at
+			}
 			// Claude Code writes tool results back as type:"user" rows;
 			// in real sessions they outnumber typed prompts by roughly
 			// 44:1. Only a genuine prompt opens a new vendor "message".
@@ -182,11 +196,14 @@ func readReader(r io.Reader, project string, visit func(Turn) error) error {
 		if err != nil {
 			continue
 		}
+		latency := turnLatency(prevAt, ts)
+		prevAt = ts
 		// Consume the boundary on the first turn we actually emit, so a
 		// skipped zero-usage echo does not swallow the message.
 		startsMessage := pendingUserMessage
 		pendingUserMessage = false
 		if err := visit(Turn{
+			Latency:                  latency,
 			StartsUserMessage:        startsMessage,
 			Timestamp:                ts.UTC(),
 			SessionID:                raw.SessionID,
@@ -229,4 +246,24 @@ func isOperatorPrompt(content json.RawMessage) bool {
 		}
 	}
 	return false
+}
+
+// maxPlausibleTurnLatency bounds what counts as the agent working. Beyond
+// it the operator was away between entries, and recording the gap would
+// fill First-Value Time with idle minutes — wrong in the opposite
+// direction from the zero it used to report.
+const maxPlausibleTurnLatency = 15 * time.Minute
+
+// turnLatency returns the gap between two transcript entries, or zero when
+// it cannot be trusted: no previous entry, a backwards timestamp (clock
+// skew or out-of-order writes), or a gap too long to be response time.
+func turnLatency(prev, at time.Time) time.Duration {
+	if prev.IsZero() {
+		return 0
+	}
+	d := at.Sub(prev)
+	if d <= 0 || d > maxPlausibleTurnLatency {
+		return 0
+	}
+	return d
 }
