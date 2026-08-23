@@ -2,6 +2,7 @@ package scorecard
 
 import (
 	"context"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -19,9 +20,13 @@ func (a sqliteReader) ReadEvents(ctx context.Context, t eventschema.EventType, s
 	return a.store.Query(ctx, sqlite.Filter{Type: t, Since: since, Limit: 100_000})
 }
 
-// Defaults used when neither the live event store nor operator overrides
-// supply a KPI value. Kept in one place so both CLI and MCP adapters
-// share the same fallback semantics.
+// Reference values for the wedge KPIs, retained for documentation and
+// for operators calibrating their own targets.
+//
+// These are deliberately NOT fallbacks. Substituting one for a metric
+// the store could not compute is how an unmeasured TEU came to print as
+// a graded "15.0 [B]" — an invention rendered indistinguishably from an
+// observation. An unmeasured KPI now stays NaN and reports N/A.
 const (
 	DefaultFVTSeconds = 45.0
 	DefaultTEUPct     = 15.0
@@ -72,7 +77,9 @@ func Build(ctx context.Context, params BuildParams) *Scorecard {
 	if params.ClockNow == nil {
 		params.ClockNow = time.Now
 	}
-	fvt, teu, sac := DefaultFVTSeconds, DefaultTEUPct, DefaultSACPct
+	// NaN = not measured. Starting from the package defaults here is
+	// what let an uncomputed TEU render as a graded 15% B.
+	fvt, teu, sac := math.NaN(), math.NaN(), math.NaN()
 	agent := params.AgentKPIs
 	var anyComputed bool
 
@@ -144,7 +151,9 @@ func BuildFromStore(ctx context.Context, store *sqlite.Store, params BuildParams
 	if params.ClockNow == nil {
 		params.ClockNow = time.Now
 	}
-	fvt, teu, sac := DefaultFVTSeconds, DefaultTEUPct, DefaultSACPct
+	// NaN = not measured. Starting from the package defaults here is
+	// what let an uncomputed TEU render as a graded 15% B.
+	fvt, teu, sac := math.NaN(), math.NaN(), math.NaN()
 	agent := params.AgentKPIs
 	var anyComputed bool
 	if store != nil {

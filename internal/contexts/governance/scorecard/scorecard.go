@@ -241,36 +241,54 @@ func New(fvtSeconds, teuPct, sacPct float64, baselineRef string) *Scorecard {
 	return NewWithAgentKPIs(fvtSeconds, teuPct, sacPct, AgentKPIInputs{}, baselineRef)
 }
 
+// kpiOrNA fills in a KPIResult's value and grade, or leaves both blank
+// when the metric was never measured. NaN is the package's established
+// "not computed" sentinel (see AgentKPIInputs). An empty Grade is what
+// every renderer already reads as N/A, so an unmeasured metric stops
+// short of inventing a number rather than falling back to a default and
+// grading the default as though it were an observation.
+func kpiOrNA(base KPIResult, value float64, grade func(float64) Grade) KPIResult {
+	if math.IsNaN(value) {
+		base.Value = math.NaN()
+		return base
+	}
+	base.Value = math.Round(value*10) / 10
+	base.Grade = grade(value)
+	return base
+}
+
 // NewWithAgentKPIs is the v0.19 entry point that accepts the
 // agent-workflow metrics alongside the original FVT/TEU/SAC trio.
 // Callers that don't have the new metrics use New(...), which is a
 // thin wrapper around this with a zero AgentKPIInputs.
 func NewWithAgentKPIs(fvtSeconds, teuPct, sacPct float64, agent AgentKPIInputs, baselineRef string) *Scorecard {
-	fvt := KPIResult{
+	fvt := kpiOrNA(KPIResult{
 		Name:        "First Value Time (FVT)",
 		Description: "Seconds from install to first measurable insight. Lower is better.",
-		Value:       math.Round(fvtSeconds*10) / 10,
 		Unit:        "seconds",
-		Grade:       gradeFVT(fvtSeconds),
 		Threshold:   DefaultThresholds.FirstValueTime,
-	}
-	teu := KPIResult{
+	}, fvtSeconds, gradeFVT)
+	teu := kpiOrNA(KPIResult{
 		Name:        "Token Efficiency Uplift (TEU)",
 		Description: "Percent of input tokens saved by the optimizer (saved / input). Higher is better.",
-		Value:       math.Round(teuPct*10) / 10,
 		Unit:        "%",
-		Grade:       gradeTEU(teuPct),
 		Threshold:   DefaultThresholds.TokenEfficiency,
-	}
-	sac := KPIResult{
+	}, teuPct, gradeTEU)
+	sac := kpiOrNA(KPIResult{
 		Name:        "Spend Attribution Completeness (SAC)",
 		Description: "Percent of spend with workflow or agent attribution. Higher is better.",
-		Value:       math.Round(sacPct*10) / 10,
 		Unit:        "%",
-		Grade:       gradeSAC(sacPct),
 		Threshold:   DefaultThresholds.SpendAttribution,
+	}, sacPct, gradeSAC)
+	// Only graded metrics contribute to the overall. An uncomputed one
+	// must neither prop the summary up with a placeholder nor drag it
+	// down with a phantom F.
+	var grades []Grade
+	for _, k := range []KPIResult{fvt, teu, sac} {
+		if k.Grade != "" {
+			grades = append(grades, k.Grade)
+		}
 	}
-	grades := []Grade{fvt.Grade, teu.Grade, sac.Grade}
 	sc := &Scorecard{
 		GeneratedAt:      time.Now().UTC(),
 		FirstValueTime:   fvt,
@@ -367,9 +385,9 @@ func (s *Scorecard) MarshalJSON() ([]byte, error) {
 	// rather than introduce *KPIResult pointers across the API.
 	out := struct {
 		GeneratedAt          time.Time  `json:"generated_at"`
-		FirstValueTime       KPIResult  `json:"first_value_time"`
-		TokenEfficiency      KPIResult  `json:"token_efficiency_uplift"`
-		SpendAttribution     KPIResult  `json:"spend_attribution_completeness"`
+		FirstValueTime       *KPIResult `json:"first_value_time,omitempty"`
+		TokenEfficiency      *KPIResult `json:"token_efficiency_uplift,omitempty"`
+		SpendAttribution     *KPIResult `json:"spend_attribution_completeness,omitempty"`
 		CacheHitRatio        *KPIResult `json:"cache_hit_ratio,omitempty"`
 		ConfirmationGateRate *KPIResult `json:"confirmation_gate_rate,omitempty"`
 		RegenerateRate       *KPIResult `json:"regenerate_rate,omitempty"`
@@ -378,12 +396,25 @@ func (s *Scorecard) MarshalJSON() ([]byte, error) {
 		OverallGrade         Grade      `json:"overall_grade"`
 		BaselineRef          string     `json:"baseline_ref,omitempty"`
 	}{
-		GeneratedAt:      s.GeneratedAt,
-		FirstValueTime:   s.FirstValueTime,
-		TokenEfficiency:  s.TokenEfficiency,
-		SpendAttribution: s.SpendAttribution,
-		OverallGrade:     s.OverallGrade,
-		BaselineRef:      s.BaselineRef,
+		GeneratedAt:  s.GeneratedAt,
+		OverallGrade: s.OverallGrade,
+		BaselineRef:  s.BaselineRef,
+	}
+	// An unmeasured KPI carries a NaN Value, which encoding/json refuses
+	// outright. Omitting the block is also the honest wire shape: a
+	// consumer sees the metric is absent rather than reading a number
+	// that was never observed.
+	if s.FirstValueTime.Grade != "" {
+		k := s.FirstValueTime
+		out.FirstValueTime = &k
+	}
+	if s.TokenEfficiency.Grade != "" {
+		k := s.TokenEfficiency
+		out.TokenEfficiency = &k
+	}
+	if s.SpendAttribution.Grade != "" {
+		k := s.SpendAttribution
+		out.SpendAttribution = &k
 	}
 	if s.CacheHitRatio.Grade != "" {
 		k := s.CacheHitRatio
@@ -426,12 +457,12 @@ func (s *Scorecard) String() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Operator Wedge KPI Scorecard\nGenerated: %s\n\n",
 		s.GeneratedAt.Format(time.RFC3339))
-	fmt.Fprintf(&b, "FVT — First-Value Time (seconds):           %.1f [%s]\n",
-		s.FirstValueTime.Value, s.FirstValueTime.Grade)
-	fmt.Fprintf(&b, "TEU — Token Efficiency Uplift (%%):          %.1f [%s]\n",
-		s.TokenEfficiency.Value, s.TokenEfficiency.Grade)
-	fmt.Fprintf(&b, "SAC — Spend Attribution Completeness (%%):   %.1f [%s]\n",
-		s.SpendAttribution.Value, s.SpendAttribution.Grade)
+	fmt.Fprintf(&b, "FVT — First-Value Time (seconds):           %s\n",
+		renderKPI(s.FirstValueTime, 1))
+	fmt.Fprintf(&b, "TEU — Token Efficiency Uplift (%%):          %s\n",
+		renderKPI(s.TokenEfficiency, 1))
+	fmt.Fprintf(&b, "SAC — Spend Attribution Completeness (%%):   %s\n",
+		renderKPI(s.SpendAttribution, 1))
 	if s.CacheHitRatio.Grade != "" {
 		fmt.Fprintf(&b, "CHR — Cache Hit Ratio (%%):                  %.1f [%s]\n",
 			s.CacheHitRatio.Value, s.CacheHitRatio.Grade)
@@ -481,6 +512,16 @@ func (s *Scorecard) String() string {
 			s.DestructiveRate.Threshold.Green, s.DestructiveRate.Threshold.Yellow, s.DestructiveRate.Threshold.Red)
 	}
 	return b.String()
+}
+
+// renderKPI formats "<value> [<grade>]", or "N/A" for a metric that was
+// never measured. Callers rely on the N/A being visually distinct from a
+// real score — the whole point is that a reader can tell them apart.
+func renderKPI(k KPIResult, decimals int) string {
+	if k.Grade == "" {
+		return "N/A (not measured)"
+	}
+	return fmt.Sprintf("%.*f [%s]", decimals, k.Value, k.Grade)
 }
 
 func baselineOrMissing(ref string) string {
