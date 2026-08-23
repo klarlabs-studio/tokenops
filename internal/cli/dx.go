@@ -78,17 +78,58 @@ func writeDXText(w io.Writer, m agentdx.Metrics, days int) {
 		return
 	}
 
+	g := agentdx.Grade(m)
+
 	fmt.Fprintln(w, "EFFORT PER INSTRUCTION")
-	fmt.Fprintf(w, "  turns (median):        %.1f\n", m.MedianTurnsPerPrompt)
-	fmt.Fprintf(w, "  turns (p90):           %.1f%s\n", m.P90TurnsPerPrompt,
+	fmt.Fprintf(w, "  turns (median):        %-10.1f %s\n", m.MedianTurnsPerPrompt, badge(g.Turns))
+	fmt.Fprintf(w, "  turns (p90):           %-10.1f %s\n", m.P90TurnsPerPrompt,
 		tailNote(m.MedianTurnsPerPrompt, m.P90TurnsPerPrompt))
-	fmt.Fprintf(w, "  context growth/turn:   %d tokens (median)\n\n", m.MedianContextGrowthTokens)
+	fmt.Fprintf(w, "  wall-clock (median):   %-10s %s\n", humanSeconds(m.MedianSecondsPerPrompt), badge(g.Duration))
+	fmt.Fprintf(w, "  wall-clock (p90):      %s\n", humanSeconds(m.P90SecondsPerPrompt))
+	fmt.Fprintf(w, "  tokens (median):       %d\n", m.MedianTokensPerPrompt)
+	fmt.Fprintf(w, "  tool calls (median):   %.1f\n", m.MedianToolCallsPerPrompt)
+	fmt.Fprintf(w, "  context growth/turn:   %-10d %s\n\n", m.MedianContextGrowthTokens, badge(g.ContextGrowth))
 
 	fmt.Fprintln(w, "FRICTION")
-	fmt.Fprintf(w, "  rework rate:           %.1f%%  (edits revisiting a file within one instruction)\n", m.ReworkRatePct)
-	fmt.Fprintf(w, "  interrupt rate:        %.1f%%  (instructions you had to stop)\n", m.InterruptRatePct)
-	fmt.Fprintf(w, "  escalation rate:       %.1f%%  (instructions delegated to a subagent)\n", m.EscalationRatePct)
-	fmt.Fprintf(w, "  compactions/session:   %.1f\n", m.CompactionsPerSession)
+	fmt.Fprintf(w, "  first-try rate:        %-10s %s  (no rework, no interrupt, no delegation)\n",
+		fmt.Sprintf("%.1f%%", m.FirstTryRatePct), badge(g.FirstTry))
+	fmt.Fprintf(w, "  rework rate:           %-10s %s  (edits revisiting a file within one instruction)\n",
+		fmt.Sprintf("%.1f%%", m.ReworkRatePct), badge(g.Rework))
+	fmt.Fprintf(w, "  interrupt rate:        %-10s %s  (instructions you had to stop)\n",
+		fmt.Sprintf("%.1f%%", m.InterruptRatePct), badge(g.Interrupt))
+	fmt.Fprintf(w, "  escalation rate:       %-10s %s  (instructions delegated to a subagent)\n",
+		fmt.Sprintf("%.1f%%", m.EscalationRatePct), badge(g.Escalation))
+	fmt.Fprintf(w, "  compactions/session:   %-10.1f %s\n", m.CompactionsPerSession, badge(g.Compaction))
+
+	if g.Overall != "" {
+		fmt.Fprintf(w, "\nOverall: %s  (the worst grade, not the average — an experience is\n", g.Overall)
+		fmt.Fprintln(w, "         only as good as its sharpest friction)")
+	}
+	if rec, ok := agentdx.Recommend(m); ok {
+		fmt.Fprintf(w, "\nBIGGEST WIN\n  %s\n  %s\n  Do: %s\n", rec.Title, rec.Evidence, rec.Action)
+	}
+}
+
+// badge renders a grade, or nothing for a metric that was not measured.
+func badge(l agentdx.Letter) string {
+	if l == "" {
+		return ""
+	}
+	return "[" + string(l) + "]"
+}
+
+// humanSeconds renders a duration compactly.
+func humanSeconds(s float64) string {
+	switch {
+	case s <= 0:
+		return "n/a"
+	case s >= 3600:
+		return fmt.Sprintf("%.1fh", s/3600)
+	case s >= 60:
+		return fmt.Sprintf("%.1fm", s/60)
+	default:
+		return fmt.Sprintf("%.0fs", s)
+	}
 }
 
 // tailNote flags a heavy tail, where most instructions are cheap but a
