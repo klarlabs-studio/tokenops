@@ -71,8 +71,12 @@ type BudgetConfig struct {
 	Name     string  `yaml:"name"`
 	Window   string  `yaml:"window"` // daily | weekly | monthly
 	LimitUSD float64 `yaml:"limit_usd"`
-	// WarnAt / CritAt are fractional thresholds of LimitUSD; zero falls
-	// back to the budget engine defaults (0.75 / 0.95).
+	// LimitTokens is the ceiling for a `basis: tokens` budget. Required
+	// for that basis and ignored otherwise. Flat-rate plans bill $0.00
+	// at the margin, so this is the only limit that can trip for them.
+	LimitTokens int64 `yaml:"limit_tokens"`
+	// WarnAt / CritAt are fractional thresholds of the active limit;
+	// zero falls back to the budget engine defaults (0.75 / 0.95).
 	WarnAt float64 `yaml:"warn_at"`
 	CritAt float64 `yaml:"crit_at"`
 	// WorkflowID / AgentID optionally scope the limit to one workflow
@@ -80,9 +84,11 @@ type BudgetConfig struct {
 	WorkflowID string `yaml:"workflow_id"`
 	AgentID    string `yaml:"agent_id"`
 	// Basis selects what the limit watches: "spend" (default — real
-	// billed cost) or "equivalent" (API list-price value, including
-	// plan-covered usage). Flat-plan deployments use "equivalent" since
-	// their real spend is always ~0.
+	// billed cost), "equivalent" (API list-price value, including
+	// plan-covered usage), or "tokens" (raw token volume, paired with
+	// limit_tokens). Flat-plan deployments want "tokens" for a real
+	// ceiling, or "equivalent" for a list-price counterfactual — their
+	// billed spend is always ~0.
 	Basis string `yaml:"basis"`
 }
 
@@ -95,14 +101,15 @@ func (c Config) BudgetLimits() []budget.Limit {
 	out := make([]budget.Limit, 0, len(c.Budgets))
 	for _, b := range c.Budgets {
 		out = append(out, budget.Limit{
-			Name:       b.Name,
-			Window:     budget.Window(strings.ToLower(b.Window)),
-			LimitUSD:   b.LimitUSD,
-			WarnAt:     b.WarnAt,
-			CritAt:     b.CritAt,
-			WorkflowID: b.WorkflowID,
-			AgentID:    b.AgentID,
-			Basis:      strings.ToLower(b.Basis),
+			Name:        b.Name,
+			Window:      budget.Window(strings.ToLower(b.Window)),
+			LimitUSD:    b.LimitUSD,
+			LimitTokens: b.LimitTokens,
+			WarnAt:      b.WarnAt,
+			CritAt:      b.CritAt,
+			WorkflowID:  b.WorkflowID,
+			AgentID:     b.AgentID,
+			Basis:       strings.ToLower(b.Basis),
 		})
 	}
 	return out
@@ -627,16 +634,26 @@ func (c Config) Validate() error {
 		default:
 			return fmt.Errorf("budgets[%d]: window must be daily, weekly, or monthly, got %q", i, b.Window)
 		}
-		if b.LimitUSD <= 0 {
-			return fmt.Errorf("budgets[%d]: limit_usd must be positive, got %g", i, b.LimitUSD)
+		// The limit is denominated in the basis's own unit: a token
+		// budget is configured with limit_tokens, everything else with
+		// limit_usd. Requiring the wrong one is how a flat-rate operator
+		// ends up budgeting against dollars they are never billed.
+		switch basis := strings.ToLower(b.Basis); basis {
+		case budget.BasisTokens:
+			if b.LimitTokens <= 0 {
+				return fmt.Errorf("budgets[%d]: limit_tokens must be positive for basis %q, got %d",
+					i, budget.BasisTokens, b.LimitTokens)
+			}
+		case "", budget.BasisSpend, budget.BasisEquivalent:
+			if b.LimitUSD <= 0 {
+				return fmt.Errorf("budgets[%d]: limit_usd must be positive, got %g", i, b.LimitUSD)
+			}
+		default:
+			return fmt.Errorf("budgets[%d]: basis must be %q, %q, or %q, got %q",
+				i, budget.BasisSpend, budget.BasisEquivalent, budget.BasisTokens, b.Basis)
 		}
 		if b.WarnAt < 0 || b.WarnAt > 1 || b.CritAt < 0 || b.CritAt > 1 {
 			return fmt.Errorf("budgets[%d]: warn_at and crit_at must be in [0,1]", i)
-		}
-		switch strings.ToLower(b.Basis) {
-		case "", budget.BasisSpend, budget.BasisEquivalent:
-		default:
-			return fmt.Errorf("budgets[%d]: basis must be %q or %q, got %q", i, budget.BasisSpend, budget.BasisEquivalent, b.Basis)
 		}
 	}
 	if c.Watch.Interval < 0 {
