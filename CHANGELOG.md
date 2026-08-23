@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.47.0 - 2026-08-23
+
+Completes the agent-experience metrics and puts them to work: everything
+is graded, one change is named, and the agent can read them itself.
+
+### Added
+
+- **Four more DX metrics.** Wall-clock per instruction (median + p90),
+  tokens per instruction, tool calls per instruction, and a first-try
+  rate — the share of instructions completed with no rework, no
+  interrupt, and no delegation. Wall-clock matters separately from turns:
+  turns measure effort, this measures waiting, and they diverge.
+
+- **Grades on every DX metric.** Thresholds are set where a difference
+  changes what an operator would do, not at a statistical quantile. The
+  overall grade is the WORST of the measured dimensions rather than the
+  average — an experience is only as good as its sharpest friction.
+  Unmeasured metrics stay ungraded: never a zero, never an F.
+
+- **One named recommendation**, ordered by leverage rather than severity.
+  Rework and interrupts are what a clearer instruction fixes today; turn
+  count is usually their symptom.
+
+- **`tokenops_agent_dx`.** Hands the graded metrics and the
+  recommendation to the agent, so it can act on the session it is in
+  rather than the operator reading a report afterwards.
+
 ## 0.46.0 - 2026-08-23
 
 TEU stopped reporting "not measured" while real uplift was happening, and
