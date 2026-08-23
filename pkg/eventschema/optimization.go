@@ -19,6 +19,11 @@ const (
 	// before it enters the agent context. Unlike the prompt-plane
 	// optimizers this runs at the CLI/tool-output boundary.
 	OptimizationTypeCommandFmt OptimizationType = "command_fmt"
+	// OptimizationTypeReadDedup is a redundant file re-read prevented
+	// inside the client by the read guard. Like command_fmt it runs at
+	// the tool boundary rather than in the prompt plane, which is why it
+	// works for clients that never route through the proxy.
+	OptimizationTypeReadDedup OptimizationType = "read_dedup"
 )
 
 // OptimizationMode describes how the optimization was offered or applied.
