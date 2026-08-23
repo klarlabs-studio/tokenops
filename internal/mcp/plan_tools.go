@@ -150,7 +150,7 @@ func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
 			// Prefer the vendor's own reported quota when a snapshot
 			// source (Anthropic cookie / Codex rate_limits / Copilot) has
 			// emitted one; falls back to the message-count heuristic.
-			Authoritative: latestAuthoritativeWindow(ctx, reader, eventschema.Provider(provider), p, now),
+			Authoritative: plans.LatestAuthoritativeWindow(ctx, reader, eventschema.Provider(provider), p, now),
 		})
 		if err != nil {
 			return "", fmt.Errorf("budget[%s]: %w", provider, err)
@@ -217,7 +217,7 @@ func planHeadroom(ctx context.Context, d PlanDeps) (*planHeadroomResult, error) 
 			Last7DayTokens: cons.Last7DayTokens,
 			Now:            now,
 			// Copilot / Cursor have no rolling window; their meter is monthly.
-			MonthlyAuthoritative: latestAuthoritativeMonthly(ctx, reader, eventschema.Provider(provider), now),
+			MonthlyAuthoritative: plans.LatestAuthoritativeMonthly(ctx, reader, eventschema.Provider(provider), now),
 		}
 		if p, ok := plans.Lookup(planName); ok && p.RateLimitWindow > 0 {
 			win, err := plans.ConsumptionInWindow(ctx, reader, provider, now, p.RateLimitWindow)
@@ -230,7 +230,7 @@ func planHeadroom(ctx context.Context, d PlanDeps) (*planHeadroomResult, error) 
 				return nil, fmt.Errorf("signal[%s]: %w", provider, err)
 			}
 			inputs.Signal = signal
-			inputs.Authoritative = latestAuthoritativeWindow(ctx, reader, eventschema.Provider(provider), p, now)
+			inputs.Authoritative = plans.LatestAuthoritativeWindow(ctx, reader, eventschema.Provider(provider), p, now)
 		}
 		report, err := plans.ComputeHeadroom(planName, inputs)
 		if err != nil {
