@@ -60,6 +60,12 @@ type Turn struct {
 	CacheReadInputTokens     int64
 	CacheCreationInputTokens int64
 	ServiceTier              string
+	// StartsUserMessage marks the first assistant turn produced in
+	// response to a prompt the operator actually typed. One prompt fans
+	// out into many assistant turns, so exactly one turn per prompt
+	// carries this — it is what lets the plan window meter count the
+	// vendor's "messages" unit from a per-turn event stream.
+	StartsUserMessage bool
 }
 
 // rawLine is the minimal subset of a Claude Code JSONL row we care
@@ -72,7 +78,11 @@ type rawLine struct {
 	Message   struct {
 		ID    string `json:"id"`
 		Model string `json:"model"`
-		Usage struct {
+		// Content is a string for a typed prompt and an array of parts
+		// otherwise. Kept raw so isOperatorPrompt can tell a real prompt
+		// from the tool-result echoes that share type:"user".
+		Content json.RawMessage `json:"content"`
+		Usage   struct {
 			InputTokens              int64  `json:"input_tokens"`
 			OutputTokens             int64  `json:"output_tokens"`
 			CacheReadInputTokens     int64  `json:"cache_read_input_tokens"`
@@ -134,6 +144,9 @@ func readReader(r io.Reader, project string, visit func(Turn) error) error {
 	// 15 MB+ files). Bump buffer to 4 MB per line.
 	buf := make([]byte, 0, 1024*1024)
 	scanner.Buffer(buf, 4*1024*1024)
+	// Set when a typed prompt is seen; consumed by the next emitted
+	// assistant turn.
+	var pendingUserMessage bool
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if len(line) == 0 {
@@ -141,6 +154,15 @@ func readReader(r io.Reader, project string, visit func(Turn) error) error {
 		}
 		var raw rawLine
 		if err := json.Unmarshal(line, &raw); err != nil {
+			continue
+		}
+		if strings.EqualFold(raw.Type, "user") {
+			// Claude Code writes tool results back as type:"user" rows;
+			// in real sessions they outnumber typed prompts by roughly
+			// 44:1. Only a genuine prompt opens a new vendor "message".
+			if isOperatorPrompt(raw.Message.Content) {
+				pendingUserMessage = true
+			}
 			continue
 		}
 		if !strings.EqualFold(raw.Type, "assistant") {
@@ -160,7 +182,12 @@ func readReader(r io.Reader, project string, visit func(Turn) error) error {
 		if err != nil {
 			continue
 		}
+		// Consume the boundary on the first turn we actually emit, so a
+		// skipped zero-usage echo does not swallow the message.
+		startsMessage := pendingUserMessage
+		pendingUserMessage = false
 		if err := visit(Turn{
+			StartsUserMessage:        startsMessage,
 			Timestamp:                ts.UTC(),
 			SessionID:                raw.SessionID,
 			Project:                  project,
@@ -176,4 +203,30 @@ func readReader(r io.Reader, project string, visit func(Turn) error) error {
 		}
 	}
 	return scanner.Err()
+}
+
+// isOperatorPrompt reports whether a type:"user" row is a prompt the
+// operator typed rather than a tool result the agent fed back. String
+// content is always a prompt; array content counts only when it holds a
+// part that is not a tool_result.
+func isOperatorPrompt(content json.RawMessage) bool {
+	if len(content) == 0 {
+		return false
+	}
+	var asString string
+	if json.Unmarshal(content, &asString) == nil {
+		return strings.TrimSpace(asString) != ""
+	}
+	var parts []struct {
+		Type string `json:"type"`
+	}
+	if json.Unmarshal(content, &parts) != nil {
+		return false
+	}
+	for _, p := range parts {
+		if p.Type != "tool_result" {
+			return true
+		}
+	}
+	return false
 }

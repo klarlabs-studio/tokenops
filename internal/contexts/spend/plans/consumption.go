@@ -148,6 +148,14 @@ func ConsumptionInWindow(ctx context.Context, r EventReader, provider string, no
 // Counting those against a 200-messages-per-window cap would inflate
 // the meter by an order of magnitude; their tokens still count.
 func countsAsMessage(env *eventschema.Envelope) bool {
+	// A per-turn source that can identify which turn answered a typed
+	// prompt reports it explicitly. That flag is the vendor's "messages"
+	// unit, so it wins over the coarse granularity check below: without
+	// it an assistant_turn stream contributes nothing at all and the
+	// window meter reads 0 forever.
+	if v, ok := env.Attributes["starts_user_message"]; ok {
+		return v == "true"
+	}
 	switch env.Attributes["granularity"] {
 	case "assistant_turn", "daily", "bucket", "quota_snapshot", "monthly_snapshot":
 		return false
