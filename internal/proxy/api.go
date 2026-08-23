@@ -166,12 +166,17 @@ func (a *AnalyticsHandlers) spendForecast(w http.ResponseWriter, r *http.Request
 	}
 	history := forecast.SeriesFromRows(rows, forecast.CostUSD)
 	preds := forecast.AutoForecast(history, horizon, 24*time.Hour)
+	// Project tokens over the same horizon. A flat-rate plan bills
+	// nothing, so the cost series is a flat zero and the token series is
+	// the only one the dashboard can plot meaningfully.
+	tokenHistory := forecast.SeriesFromRows(rows, forecast.TotalTokens)
 	writeAPIJSON(w, http.StatusOK, map[string]any{
-		"horizon_days":   horizon,
-		"history_points": len(history),
-		"history":        rows,
-		"forecast":       preds,
-		"currency":       a.spend.Currency(),
+		"horizon_days":    horizon,
+		"history_points":  len(history),
+		"history":         rows,
+		"forecast":        preds,
+		"forecast_tokens": forecast.AutoForecast(tokenHistory, horizon, 24*time.Hour),
+		"currency":        a.spend.Currency(),
 	})
 }
 

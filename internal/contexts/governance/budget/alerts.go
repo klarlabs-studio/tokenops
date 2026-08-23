@@ -18,6 +18,8 @@ package budget
 import (
 	"fmt"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast"
@@ -38,13 +40,18 @@ const (
 // severity tripped per rule. Default WarnAt = 0.75, CritAt = 0.95 when
 // zero.
 type Limit struct {
-	Name       string
-	Window     Window
-	LimitUSD   float64
-	WarnAt     float64
-	CritAt     float64
-	WorkflowID string
-	AgentID    string
+	Name     string
+	Window   Window
+	LimitUSD float64
+	// LimitTokens is the ceiling for a BasisTokens limit. Flat-rate
+	// subscriptions bill $0.00 at the margin, so a dollar limit can
+	// never trip for them — tokens are the quantity they actually
+	// consume and the only budget they can meaningfully hold.
+	LimitTokens int64
+	WarnAt      float64
+	CritAt      float64
+	WorkflowID  string
+	AgentID     string
 	// Basis selects the metric the limit watches. The evaluator is
 	// metric-agnostic — callers resolve the actual figure; this field
 	// rides along so they know which one to fetch.
@@ -55,7 +62,52 @@ type Limit struct {
 const (
 	BasisSpend      = "spend"
 	BasisEquivalent = "equivalent"
+	BasisTokens     = "tokens"
 )
+
+// TokenBased reports whether the limit is denominated in tokens rather
+// than dollars.
+func (l Limit) TokenBased() bool { return l.Basis == BasisTokens }
+
+// Threshold returns the ceiling in the limit's own unit — tokens for
+// BasisTokens, dollars otherwise. Zero or negative means the limit is
+// unconfigured and inert.
+func (l Limit) Threshold() float64 {
+	if l.TokenBased() {
+		return float64(l.LimitTokens)
+	}
+	return l.LimitUSD
+}
+
+// formatAmount renders v in the limit's unit. Token counts are integers
+// with thousands separators; dollars keep two decimals.
+func (l Limit) formatAmount(v float64) string {
+	if l.TokenBased() {
+		return withThousands(int64(v)) + " tokens"
+	}
+	return fmt.Sprintf("$%.2f", v)
+}
+
+// withThousands renders n with comma separators so nine-digit token
+// counts stay readable in an alert line.
+func withThousands(n int64) string {
+	s := strconv.FormatInt(n, 10)
+	neg := strings.HasPrefix(s, "-")
+	if neg {
+		s = s[1:]
+	}
+	var b strings.Builder
+	for i, r := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			b.WriteByte(',')
+		}
+		b.WriteRune(r)
+	}
+	if neg {
+		return "-" + b.String()
+	}
+	return b.String()
+}
 
 // WindowStart returns the UTC start of the calendar window containing
 // now: midnight for daily, Monday midnight for weekly, first of the
@@ -137,7 +189,7 @@ type Alert struct {
 // nil — only threshold_reached alerts are then emitted.
 func Evaluate(limit Limit, actualUSD float64, forecast []forecast.Prediction) []Alert {
 	limit = applyLimitDefaults(limit)
-	if limit.LimitUSD <= 0 {
+	if limit.Threshold() <= 0 {
 		return nil
 	}
 	var alerts []Alert
@@ -190,39 +242,34 @@ func applyLimitDefaults(l Limit) Limit {
 }
 
 func thresholdAlert(l Limit, actual float64) (Alert, bool) {
-	if l.LimitUSD <= 0 {
+	ceiling := l.Threshold()
+	if ceiling <= 0 {
 		return Alert{}, false
 	}
-	frac := actual / l.LimitUSD
+	frac := actual / ceiling
+	severity := SeverityWarn
 	switch {
 	case frac >= l.CritAt:
-		return Alert{
-			Kind:      AlertThresholdReached,
-			Severity:  SeverityCrit,
-			Limit:     l,
-			ActualUSD: actual,
-			Fraction:  frac,
-			Message: fmt.Sprintf(
-				"%s: spent $%.2f of $%.2f (%.0f%% of %s budget)",
-				l.Name, actual, l.LimitUSD, frac*100, l.Window),
-		}, true
+		severity = SeverityCrit
 	case frac >= l.WarnAt:
-		return Alert{
-			Kind:      AlertThresholdReached,
-			Severity:  SeverityWarn,
-			Limit:     l,
-			ActualUSD: actual,
-			Fraction:  frac,
-			Message: fmt.Sprintf(
-				"%s: spent $%.2f of $%.2f (%.0f%% of %s budget)",
-				l.Name, actual, l.LimitUSD, frac*100, l.Window),
-		}, true
+	default:
+		return Alert{}, false
 	}
-	return Alert{}, false
+	return Alert{
+		Kind:      AlertThresholdReached,
+		Severity:  severity,
+		Limit:     l,
+		ActualUSD: actual,
+		Fraction:  frac,
+		Message: fmt.Sprintf(
+			"%s: spent %s of %s (%.0f%% of %s budget)",
+			l.Name, l.formatAmount(actual), l.formatAmount(ceiling), frac*100, l.Window),
+	}, true
 }
 
 func forecastAlert(l Limit, actual float64, fc []forecast.Prediction) (Alert, bool) {
-	if l.LimitUSD <= 0 || len(fc) == 0 {
+	ceiling := l.Threshold()
+	if ceiling <= 0 || len(fc) == 0 {
 		return Alert{}, false
 	}
 	running := actual
@@ -234,7 +281,7 @@ func forecastAlert(l Limit, actual float64, fc []forecast.Prediction) (Alert, bo
 	for _, p := range fc {
 		running += p.Value
 		projected = running
-		if !breachFound && running >= l.LimitUSD {
+		if !breachFound && running >= ceiling {
 			breachAt = p.At
 			breachFound = true
 		}
@@ -243,7 +290,7 @@ func forecastAlert(l Limit, actual float64, fc []forecast.Prediction) (Alert, bo
 		return Alert{}, false
 	}
 	severity := SeverityWarn
-	if projected >= l.LimitUSD*1.5 {
+	if projected >= ceiling*1.5 {
 		severity = SeverityCrit
 	}
 	return Alert{
@@ -252,10 +299,11 @@ func forecastAlert(l Limit, actual float64, fc []forecast.Prediction) (Alert, bo
 		Limit:        l,
 		ActualUSD:    actual,
 		ProjectedUSD: projected,
-		Fraction:     projected / l.LimitUSD,
+		Fraction:     projected / ceiling,
 		Message: fmt.Sprintf(
-			"%s: projected $%.2f vs $%.2f %s limit; breach at %s",
-			l.Name, projected, l.LimitUSD, l.Window, breachAt.Format(time.RFC3339)),
+			"%s: projected %s vs %s %s limit; breach at %s",
+			l.Name, l.formatAmount(projected), l.formatAmount(ceiling), l.Window,
+			breachAt.Format(time.RFC3339)),
 		BreachAt: breachAt,
 	}, true
 }

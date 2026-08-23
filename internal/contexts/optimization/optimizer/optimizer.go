@@ -57,6 +57,13 @@ type Request struct {
 	InputTokens  int64
 	OutputTokens int64
 	Mode         Mode
+	// CostSource mirrors the triggering PromptEvent's billing basis so
+	// cost-aware optimizers price the request the way it will actually
+	// be billed. The zero value is CostSourceMetered (per-token API
+	// billing); plan-covered traffic must set CostSourcePlanIncluded or
+	// optimizers will report dollar savings that cannot be realised on
+	// a flat-rate subscription.
+	CostSource eventschema.CostSource
 	// LatencyBudget caps wall-clock time across the pipeline. Zero
 	// disables the cap.
 	LatencyBudget time.Duration

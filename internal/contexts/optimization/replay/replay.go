@@ -61,11 +61,28 @@ type Result struct {
 
 // SavingsRatio returns EstimatedSavingsUSD / OriginalCostUSD or 0 when
 // the original cost was zero.
+//
+// A flat-rate subscription bills nothing per request, so this is 0 for
+// every plan-covered session no matter how much the optimizers removed.
+// Report SavingsRatioTokens alongside it — that is the ratio carrying
+// signal there.
 func (r Result) SavingsRatio() float64 {
 	if r.OriginalCostUSD == 0 {
 		return 0
 	}
 	return r.EstimatedSavingsUSD / r.OriginalCostUSD
+}
+
+// SavingsRatioTokens returns EstimatedSavingsTokens over the session's
+// original token volume, or 0 when the session moved no tokens. Unlike
+// SavingsRatio this stays meaningful on a subscription, where the
+// dollar denominator is always zero.
+func (r Result) SavingsRatioTokens() float64 {
+	total := r.OriginalInputTokens + r.OriginalOutputTokens
+	if total <= 0 {
+		return 0
+	}
+	return float64(r.EstimatedSavingsTokens) / float64(total)
 }
 
 // Engine replays sessions through an optimizer pipeline.
@@ -167,6 +184,7 @@ func (e *Engine) replayStep(ctx context.Context, env *eventschema.Envelope, pe *
 		InputTokens:  pe.InputTokens,
 		OutputTokens: pe.OutputTokens,
 		Mode:         optimizer.ModeReplay,
+		CostSource:   pe.CostSource,
 	}
 	out, err := e.pipeline.Run(ctx, req, nil)
 	if err != nil {
@@ -192,9 +210,13 @@ func (e *Engine) replayStep(ctx context.Context, env *eventschema.Envelope, pe *
 		// Approximate: assume saved tokens are input-side. This is the
 		// dominant case for compression / dedupe / context-trim; output-
 		// side savings (e.g. routing) carry their own USD estimate.
+		// Inherit the replayed event's billing basis: pricing
+		// plan-covered traffic at list rates would credit the replay
+		// with dollar savings the operator can never realise.
 		fake := &eventschema.PromptEvent{
 			Provider: pe.Provider, RequestModel: pe.RequestModel,
 			InputTokens: ev.EstimatedSavingsTokens,
+			CostSource:  pe.CostSource,
 		}
 		if c, err := e.spend.Compute(fake); err == nil {
 			step.EstimatedSavingsUSD += c

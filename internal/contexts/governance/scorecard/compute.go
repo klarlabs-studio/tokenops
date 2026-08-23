@@ -194,6 +194,15 @@ func computeFVT(out *LiveKPIs, prompts []*eventschema.Envelope) {
 		if key == "" {
 			continue
 		}
+		// Only sessions with a real latency can inform FVT. The passive
+		// JSONL readers reconstruct events from transcripts and have no
+		// wall-clock timing to report, so pe.Latency is the zero
+		// Duration for them. Counting those would take the median of a
+		// field that is always zero — and zero seconds grades A, handing
+		// out a perfect score for data that was never measured.
+		if pe.Latency <= 0 {
+			continue
+		}
 		if cur, exists := bySession[key]; exists && cur.seen {
 			continue
 		}

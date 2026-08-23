@@ -61,10 +61,14 @@ func watchTick(ctx context.Context, agg *analytics.Aggregator, spendEng *spend.E
 				logger.Warn("spend watcher: summarize failed", "budget", l.Name, "err", err)
 				return 0
 			}
-			if l.Basis == budget.BasisEquivalent {
+			switch l.Basis {
+			case budget.BasisTokens:
+				return float64(s.TotalTokens)
+			case budget.BasisEquivalent:
 				return s.APIEquivalentUSD
+			default:
+				return s.CostUSD
 			}
-			return s.CostUSD
 		},
 		func(l budget.Limit) []forecast.Prediction {
 			if l.Basis == budget.BasisEquivalent {
@@ -72,6 +76,12 @@ func watchTick(ctx context.Context, agg *analytics.Aggregator, spendEng *spend.E
 				// basis forecast would need a parallel recomputed series.
 				// Threshold alerts still fire — forecast is skipped.
 				return nil
+			}
+			// Token budgets forecast on the same daily rows, read through
+			// the token accessor instead of the cost one.
+			metric := forecast.CostUSD
+			if l.Basis == budget.BasisTokens {
+				metric = forecast.TotalTokens
 			}
 			start := budget.WindowStart(l.Window, now)
 			end := budget.WindowEnd(l.Window, start)
@@ -85,7 +95,7 @@ func watchTick(ctx context.Context, agg *analytics.Aggregator, spendEng *spend.E
 			if err != nil {
 				return nil
 			}
-			history := forecast.SeriesFromRows(rows, forecast.CostUSD)
+			history := forecast.SeriesFromRows(rows, metric)
 			return forecast.AutoForecast(history, daysLeft, 24*time.Hour)
 		},
 	)
