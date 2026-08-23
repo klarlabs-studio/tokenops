@@ -10,6 +10,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/cli/wire"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
+	"go.klarlabs.de/tokenops/internal/infra/readguard"
 )
 
 // setupStep is one thing init did (or deliberately did not do), so the
@@ -107,6 +108,10 @@ func wireMCPHosts(home, exe string) []setupStep {
 }
 
 // wireHooks installs the Stop coaching nudge and the read dedup guard.
+//
+// The guard's mode is chosen from its own ledger rather than hardcoded: it
+// logs waste until the operator's history shows enough redundant re-reads
+// to be worth blocking, then starts preventing them.
 func wireHooks(path, exe string) setupStep {
 	settings, _, err := loadSettings(path)
 	if err != nil {
@@ -114,14 +119,24 @@ func wireHooks(path, exe string) setupStep {
 	}
 	hooks := hooksMap(settings)
 
+	// ReadStats resolves its own default ledger location and reports an
+	// empty ledger rather than an error when there is no history yet.
+	guardMode, guardWhy := readguard.ModeObserve, "observing"
+	if stats, serr := readguard.ReadStats(""); serr == nil {
+		guardMode, guardWhy = guardModeFor(stats)
+	}
+
 	var changed []string
-	for _, sp := range specsFor(true, true, coachhook.DefaultBudgetUSD) {
+	for _, sp := range specsForMode(true, true, coachhook.DefaultBudgetUSD, guardMode) {
 		if ok, _ := mergeHook(hooks, sp.event, sp.matcher, commandEntry(exe, sp.args), sp.marker); ok {
 			changed = append(changed, sp.name)
 		}
 	}
 	if len(changed) == 0 {
-		return setupStep{Name: "Claude Code hooks", Detail: "already wired"}
+		return setupStep{
+			Name:   "Claude Code hooks",
+			Detail: "already wired; read-guard " + guardWhy,
+		}
 	}
 	settings["hooks"] = hooks
 	if err := writeSettings(path, settings); err != nil {
@@ -129,7 +144,7 @@ func wireHooks(path, exe string) setupStep {
 	}
 	return setupStep{
 		Name: "Claude Code hooks", Changed: true,
-		Detail: "installed " + strings.Join(changed, " + "),
+		Detail: "installed " + strings.Join(changed, " + ") + "; read-guard " + guardWhy,
 	}
 }
 
