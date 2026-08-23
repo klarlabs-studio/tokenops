@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.46.0 - 2026-08-23
+
+TEU stopped reporting "not measured" while real uplift was happening, and
+the product gained a second dimension: what sessions are like to work
+with, not just what they cost.
+
+### Added
+
+- **`tokenops dx`.** Six agent-experience metrics derived from
+  transcripts the client already writes — turns per instruction (median
+  and p90), context growth per turn, rework rate, interrupt rate,
+  escalation rate, compactions per session. Work is grouped by operator
+  instruction, which is turns-per-task without asking anyone to mark
+  tasks by hand.
+
+  Time-to-first-token is deliberately absent: a transcript records when a
+  turn finished, never when it started streaming, so no passive reader
+  can populate it honestly. It stays proxy-only.
+
+- **TEU counts client-side interventions.** The read guard prevents
+  redundant re-reads inside the client, where the proxy cannot see them,
+  and had reclaimed ~387,000 tokens with nothing recording it. A daemon
+  poller now publishes each blocked read as an `OptimizationEvent` under a
+  new `read_dedup` kind, so a client that never proxies can score on TEU
+  at all. Only actual blocks count — an observe-mode `would_block` saved
+  nothing.
+
+### Fixed
+
+- **The scorecard reported a failure as an absence.** `Build` discarded
+  `Compute`'s error, so an unreadable store rendered every KPI as
+  "N/A (not measured)" — indistinguishable from a metric nobody measured.
+  Widening `--since-days` past what the reader loads inside its deadline
+  therefore produced *fewer* numbers with no explanation, intermittently.
+  The reason now travels on the scorecard and is rendered.
+
 ## 0.45.0 - 2026-08-23
 
 The optimisation half of the product accounted in dollars. On a flat-rate
