@@ -174,6 +174,15 @@ func newDaemonStatusCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(out, "Unit:        %s (%o)\n", path, st.Mode().Perm())
+			// Name where the supervised daemon actually logs. Operators
+			// otherwise follow ~/.tokenops/daemon.log, which only the MCP
+			// spawn path writes and which can sit stale for months while
+			// looking authoritative.
+			if home, herr := os.UserHomeDir(); herr == nil {
+				if lp := daemon.LogPath(kind, home); lp != "" {
+					fmt.Fprintf(out, "Logs:        %s\n", lp)
+				}
+			}
 			return nil
 		},
 	}
