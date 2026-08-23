@@ -183,7 +183,11 @@ func newEnvelope(t Turn, costSource eventschema.CostSource) *eventschema.Envelop
 			CachedInputTokens: t.CacheReadInputTokens,
 			OutputTokens:      t.OutputTokens,
 			TotalTokens:       totalTokens,
-			SessionID:         t.SessionID,
+			// Wall-clock for the turn, reconstructed from transcript
+			// timestamps. Zero when it could not be established; the
+			// scorecard treats that as unmeasured rather than as instant.
+			Latency:   t.Latency,
+			SessionID: t.SessionID,
 			// AgentID = "claude-code:<project>" enables per-project
 			// rollups via group=agent in the dashboard / analytics.
 			// WorkflowID = "claude-code:<project>:<session>" so the
