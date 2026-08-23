@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/taskclass"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -34,6 +35,15 @@ type Rule struct {
 	// router itself does not probe availability; callers can wire a
 	// healthcheck via Config.IsAvailable.
 	Fallbacks []string
+	// WhenClass scopes the rule to one kind of work, as classified by
+	// taskclass ("mechanical" or "reasoning"). Empty applies the rule
+	// unconditionally, which is the historical behaviour.
+	//
+	// A scoped rule declines whenever the classifier abstains. Routing a
+	// reasoning turn down to a cheaper model is a quality trade the
+	// operator did not ask for, so an unclassifiable turn is left alone
+	// rather than guessed at.
+	WhenClass string
 }
 
 // Config tunes the router.
@@ -47,6 +57,9 @@ type Config struct {
 	// MinQuality is the floor for emitting a recommendation. Routes
 	// with Quality below this are skipped silently. Default 0.7.
 	MinQuality float64
+	// Classify tunes the task classifier used by class-scoped rules.
+	// Zero values take the taskclass defaults.
+	Classify taskclass.Config
 }
 
 // Router is the Optimizer implementation.
@@ -82,6 +95,16 @@ func (r *Router) Run(_ context.Context, req *optimizer.Request) ([]optimizer.Rec
 	if rule.Quality < r.cfg.MinQuality {
 		return nil, nil
 	}
+	// A class-scoped rule only fires when the turn is confidently the
+	// kind of work it was written for.
+	var classNote string
+	if rule.WhenClass != "" {
+		sig := taskclass.Classify(req.Body, r.cfg.Classify)
+		if string(sig.Class) != rule.WhenClass {
+			return nil, nil
+		}
+		classNote = fmt.Sprintf(" [%s: %s]", sig.Class, sig.Reason)
+	}
 	target, ok := r.pickTarget(req.Provider, rule)
 	if !ok {
 		// Original target and all fallbacks unavailable; emit a skipped
@@ -106,7 +129,7 @@ func (r *Router) Run(_ context.Context, req *optimizer.Request) ([]optimizer.Rec
 		EstimatedSavingsTokens: tokenSavings,
 		EstimatedSavingsUSD:    usdSavings,
 		QualityScore:           rule.Quality,
-		Reason:                 fmt.Sprintf("route %s -> %s", req.Model, target),
+		Reason:                 fmt.Sprintf("route %s -> %s%s", req.Model, target, classNote),
 		ApplyBody:              newBody,
 	}}, nil
 }
