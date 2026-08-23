@@ -368,9 +368,11 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 					Policies: policies,
 					Interval: cfg.Retention.Interval,
 					Logger:   logger,
+					Reclaim:  cfg.Retention.Reclaim,
 				})
 				retention.NewScheduler(pruner).Start(ctx)
-				logger.Info("retention scheduler live", "policies", len(policies))
+				logger.Info("retention scheduler live",
+					"policies", len(policies), "reclaim", cfg.Retention.Reclaim)
 			}
 		}
 

@@ -454,6 +454,12 @@ type RetentionConfig struct {
 	// coaching, rule_source, rule_analysis) to a window. Values accept
 	// Go durations plus a "d" day suffix (30d = 720h).
 	Keep map[string]string `yaml:"keep,omitempty"`
+	// Reclaim runs a VACUUM after a prune that deleted rows so the freed
+	// pages return to the filesystem. Without it SQLite keeps them on
+	// its freelist and the database file never shrinks — pruning frees
+	// space the operator cannot see. Costs a full rewrite under a write
+	// lock, so it is opt-in.
+	Reclaim bool `yaml:"reclaim,omitempty"`
 }
 
 // Enabled reports whether any keep window is set so the daemon should
