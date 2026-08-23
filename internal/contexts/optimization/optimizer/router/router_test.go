@@ -554,3 +554,139 @@ func TestNoPreferredModelKeepsExistingBehaviour(t *testing.T) {
 		t.Fatalf("without a ceiling the rule applies as before: %+v", recs)
 	}
 }
+
+// --- window-pressure routing ---------------------------------------------
+
+// The point of the whole feature: on a flat-rate plan the scarce resource
+// is the rate-limit window, not money. A rule scoped to pressure should sit
+// idle while there is headroom, so the operator keeps their best model for
+// as long as they can afford to.
+func TestPressureRuleIdleWhenWindowIsRoomy(t *testing.T) {
+	r := New(Config{
+		Rules: []Rule{{
+			Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+			ToModel: "claude-haiku-4-5", Quality: 0.9, WhenWindowPctAbove: 70,
+		}},
+		WindowPressure: func(eventschema.Provider) (float64, bool) { return 12.5, true },
+	}, nil)
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: bodyWithModel(t, "claude-opus-4-8", nil),
+	})
+	if len(recs) != 0 {
+		t.Errorf("recs = %d, want 0 at 12.5%% of the window: %+v", len(recs), recs)
+	}
+}
+
+// Once the window is genuinely tight, the same rule fires and says why.
+func TestPressureRuleFiresWhenWindowIsTight(t *testing.T) {
+	r := New(Config{
+		Rules: []Rule{{
+			Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+			ToModel: "claude-haiku-4-5", Quality: 0.9, WhenWindowPctAbove: 70,
+		}},
+		WindowPressure: func(eventschema.Provider) (float64, bool) { return 82, true },
+	}, nil)
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: bodyWithModel(t, "claude-opus-4-8", nil),
+	})
+	if len(recs) != 1 || recs[0].ApplyBody == nil {
+		t.Fatalf("a tight window should trigger the route: %+v", recs)
+	}
+	if !strings.Contains(recs[0].Reason, "window") {
+		t.Errorf("reason should explain the pressure: %q", recs[0].Reason)
+	}
+}
+
+// No window signal means no basis to act on. Routing down because the meter
+// is broken would degrade quality for a reason that does not exist — the
+// meter read 0/200 for months on this very setup.
+func TestPressureRuleIdleWhenWindowUnknown(t *testing.T) {
+	r := New(Config{
+		Rules: []Rule{{
+			Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+			ToModel: "claude-haiku-4-5", Quality: 0.9, WhenWindowPctAbove: 70,
+		}},
+		WindowPressure: func(eventschema.Provider) (float64, bool) { return 0, false },
+	}, nil)
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: bodyWithModel(t, "claude-opus-4-8", nil),
+	})
+	if len(recs) != 0 {
+		t.Errorf("recs = %d, want 0 when the window is unmeasured: %+v", len(recs), recs)
+	}
+}
+
+// Same, when nothing supplies a window reading at all.
+func TestPressureRuleIdleWithoutAProbe(t *testing.T) {
+	r := New(Config{Rules: []Rule{{
+		Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+		ToModel: "claude-haiku-4-5", Quality: 0.9, WhenWindowPctAbove: 70,
+	}}}, nil)
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: bodyWithModel(t, "claude-opus-4-8", nil),
+	})
+	if len(recs) != 0 {
+		t.Errorf("recs = %d, want 0 with no window probe wired", len(recs))
+	}
+}
+
+// Pressure composes with the task class: preserve headroom by dropping
+// mechanical turns, but never silently downgrade reasoning work, however
+// tight the window gets.
+func TestPressureAndClassCompose(t *testing.T) {
+	rules := []Rule{{
+		Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+		ToModel: "claude-haiku-4-5", Quality: 0.9,
+		WhenWindowPctAbove: 70, WhenClass: string(taskclass.Mechanical),
+	}}
+	tight := Config{
+		Rules:          rules,
+		WindowPressure: func(eventschema.Provider) (float64, bool) { return 95, true },
+	}
+
+	mechanical := New(tight, nil)
+	recs, _ := mechanical.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: chatBody(t, "claude-opus-4-8", "continue", 3),
+	})
+	if len(recs) != 1 || recs[0].ApplyBody == nil {
+		t.Errorf("mechanical turn under pressure should route: %+v", recs)
+	}
+
+	reasoning := New(tight, nil)
+	long := strings.Repeat("weigh the tradeoffs and justify the boundary ", 30)
+	recs, _ = reasoning.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: chatBody(t, "claude-opus-4-8", long, 1),
+	})
+	if len(recs) != 0 {
+		t.Errorf("reasoning work must not be downgraded even at 95%%: %+v", recs)
+	}
+}
+
+// An unscoped rule keeps applying regardless of window state.
+func TestUnscopedRuleIgnoresWindow(t *testing.T) {
+	r := New(Config{
+		Rules: []Rule{{
+			Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+			ToModel: "claude-haiku-4-5", Quality: 0.9,
+		}},
+		WindowPressure: func(eventschema.Provider) (float64, bool) { return 1, true },
+	}, nil)
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: bodyWithModel(t, "claude-opus-4-8", nil),
+	})
+	if len(recs) != 1 {
+		t.Errorf("unscoped rule should still apply: %+v", recs)
+	}
+}
