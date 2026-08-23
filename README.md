@@ -35,22 +35,31 @@ Or grab a prebuilt binary from the [releases page](https://github.com/klarlabs-s
 ## 90-second quickstart
 
 ```bash
-tokenops init --detect                         # sniff installed AI clients, print plan-set commands
-tokenops plan set anthropic claude-max-20x     # bind whatever fits (paste from --detect output)
+tokenops init                                  # writes config, registers MCP, installs hooks
+tokenops plan set anthropic claude-max-20x     # bind your tier (init tells you if it can't)
 tokenops daemon install                        # supervise `tokenops start` so ingestion survives reboot
 ```
 
-Wire MCP into your agent:
+`init` does the wiring. It finds the MCP hosts you actually have (Claude
+Code, Claude Desktop), registers `tokenops serve` with each — pinned to
+the absolute binary path, so a host can never silently run a stale build —
+installs the Claude Code hooks, and prints what still needs you:
 
-```json
-{
-  "mcpServers": {
-    "tokenops": { "command": "tokenops", "args": ["serve"] }
-  }
-}
+```
+Wiring tokenops into this machine:
+  ✓ MCP: Claude Code       registered — restart Claude Code to load the tools
+  ✓ Claude Code hooks      installed coach-hook + read-guard
+  · plan binding           detected anthropic but not which tier you pay for
 ```
 
-Ask the agent for any of: `tokenops_session_budget`, `tokenops_burn_rate`,
+Re-run it any time to repair drift. It is idempotent, backs up every file
+it touches, and refuses to overwrite a host config it cannot parse. Two
+things stay yours: picking your plan tier (the tiers differ 4x in
+headroom, so guessing would make every figure confidently wrong) and
+pointing a client at the proxy (that reroutes your real traffic).
+`--no-wire` writes the config only.
+
+Then restart your MCP host and ask the agent for any of: `tokenops_session_budget`, `tokenops_burn_rate`,
 `tokenops_dashboard`, `tokenops_plan_headroom`. Or open the browser dashboard
 the agent links you to (`http://tokenops.local:7878/dashboard?token=…`).
 
@@ -70,6 +79,8 @@ the agent links you to (`http://tokenops.local:7878/dashboard?token=…`).
 | 📋 **Reply coach** | `tokenops coach replies` detects output-compression patterns (caveman skill, article density, filler density) per session |
 | ⏱️ **Task boundaries** | `tokenops task start "fix X"` / `done` / `list --metrics` — operator-marked task units persisted to `~/.tokenops/tasks.jsonl`. List view rolls up turns / cost / TTFUO / cost-per-turn from the events store within each task window |
 | 📐 **8-KPI agent scorecard** | FVT / TEU / SAC (wedge) plus CHR / CGR / RGR / TCS / DAR (agent-workflow), all graded A–F against tuneable thresholds. v0.21.1 honest grading: TEU N/A when optimiser isn't wired; autonomous-loop sentinels filtered from CGR; column→payload attribution sync so SAC reflects reality |
+| 🧭 **Context-aware routing** | Rules scope to what a turn *is* (`when_class: mechanical`) and to how tight your plan window is (`when_window_pct_above: 70`) — keep your best model while there's headroom, conserve it only when there isn't. Both abstain rather than guess: an unclassifiable turn or an unmeasured window leaves the model alone |
+| 🛡️ **Preferred model ceiling** | `preferred_models` per provider. Cheaper routes apply automatically; a pricier one is refused and surfaced for your answer via MCP, with your preferred model offered as the alternative |
 | 🎯 **Honest signal quality** | Every prediction carries `signal_quality.level` (low / medium / high) plus a one-line caveat. Heuristic mode is labelled; proxied mode is labelled |
 | ✂️ **Command-output compression** | `tokenops fmt -- <cmd>` shrinks a command's stdout before it hits the agent context — 46 built-in formatters (git, go/pytest/jest/…, npm/pip/uv/…, mvn/gradle/bazel/dotnet/…, docker/kubectl/helm, terraform/pulumi/ansible, aws/gcloud/az, and more) plus user-defined formatters in config (no recompile). Deterministic + critical-line-safe: errors/failures/changed-state never dropped, full output kept in `~/.tokenops/recovery/`. Balanced ~57% / aggressive ~68% stdout reduction. Self-tunes per user via `fmt learn --apply` |
 | 🤖 **MCP-first** | 26 MCP tools agents call directly. Inline SVG sparkline + headroom gauge rendered in markdown so every MCP client shows them today |
@@ -232,7 +243,7 @@ and [SECURITY.md](SECURITY.md). Plans and tasks live in `.roady/` (see
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) — latest is [v0.21.1](https://github.com/klarlabs-studio/tokenops/releases/tag/v0.21.1).
+See [CHANGELOG.md](CHANGELOG.md) — latest is [v0.45.0](https://github.com/klarlabs-studio/tokenops/releases/tag/v0.45.0).
 
 ## License
 
