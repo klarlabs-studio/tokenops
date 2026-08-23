@@ -694,7 +694,20 @@ func (c Config) Blockers() []string {
 	if len(c.Providers) == 0 {
 		blockers = append(blockers, "providers_unconfigured")
 	}
+	// A rules.root that no longer exists fails silently: the analyser
+	// walks an empty tree and reports success, so a moved or renamed
+	// repository degrades rule intelligence to nothing with no signal.
+	// An empty root is fine — it means "use the working directory".
+	if c.Rules.Enabled && c.Rules.Root != "" && !dirExists(c.Rules.Root) {
+		blockers = append(blockers, "rules_root_missing")
+	}
 	return blockers
+}
+
+// dirExists reports whether path is a directory we can stat.
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 // NextActionsFor maps blockers to operator-facing remediation steps and
@@ -719,6 +732,8 @@ func NextActionsFor(blockers []string) []string {
 			add("run `tokenops init` then restart the daemon")
 		case "providers_unconfigured":
 			add("run `tokenops provider set <name> <url>` (e.g. `tokenops provider set anthropic https://api.anthropic.com`)")
+		case "rules_root_missing":
+			add("set rules.root in config.yaml to a directory that exists (the configured path is gone — did the repo move?)")
 		}
 	}
 	return out
