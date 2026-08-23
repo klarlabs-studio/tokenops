@@ -56,6 +56,7 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/tools",
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste",
 	"go.klarlabs.de/tokenops/internal/contexts/governance/budget",
+	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx",
 	"go.klarlabs.de/tokenops/internal/contexts/governance/coverdebt",
 	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard",
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics",
