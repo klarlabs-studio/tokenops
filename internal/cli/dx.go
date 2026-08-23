@@ -21,6 +21,7 @@ import (
 func newDXCmd() *cobra.Command {
 	var (
 		root    string
+		source  string
 		days    int
 		jsonOut bool
 	)
@@ -41,11 +42,14 @@ started streaming, so no passive reader can populate it honestly. It stays
 proxy-only.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			opts := agentdx.ExtractOptions{Root: root}
+			opts := agentdx.ExtractOptions{
+				Root:   root,
+				Source: agentdx.Source(source),
+			}
 			if days > 0 {
 				opts.Since = time.Now().AddDate(0, 0, -days)
 			}
-			records, err := agentdx.Extract(opts)
+			records, err := agentdx.ExtractAll(opts)
 			if err != nil {
 				return err
 			}
@@ -59,7 +63,8 @@ proxy-only.`,
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&root, "root", "", "transcript root (defaults to ~/.claude/projects)")
+	cmd.Flags().StringVar(&root, "root", "", "transcript root (defaults per source)")
+	cmd.Flags().StringVar(&source, "source", "auto", "client: auto | claude-code | codex")
 	cmd.Flags().IntVar(&days, "days", 7, "window in days; 0 reads everything")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd

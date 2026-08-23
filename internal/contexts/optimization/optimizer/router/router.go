@@ -88,6 +88,15 @@ type Config struct {
 	// choice to the operator. It must not block: this runs in the
 	// request path.
 	OnProposal func(Proposal)
+	// ProposeOnly refers every matching route to the operator instead of
+	// applying it, the way the preferred-model ceiling already treats
+	// upgrades. Routes the operator has approved still apply.
+	ProposeOnly bool
+	// ObserveOnly records what each rule would have done and changes
+	// nothing. Nothing is asked either — an observing optimizer should
+	// not fill the operator's queue with decisions it was told not to
+	// act on.
+	ObserveOnly bool
 	// WindowPressure reports how full the provider's rate-limit window
 	// is, as a percentage, and whether that reading is trustworthy at
 	// all. Rules carrying WhenWindowPctAbove consult it. Nil means no
@@ -184,6 +193,44 @@ func (r *Router) Run(_ context.Context, req *optimizer.Request) ([]optimizer.Rec
 		return []optimizer.Recommendation{{
 			Kind:         eventschema.OptimizationTypeRouter,
 			Reason:       fmt.Sprintf("router: no available target for %s", req.Model),
+			QualityScore: rule.Quality,
+		}}, nil
+	}
+
+	// Mode gates what happens next. Observe records the opportunity and
+	// stops; propose refers it and stops; automatic rewrites.
+	if r.cfg.ObserveOnly {
+		tokens, usd := r.estimateSavings(req, target)
+		return []optimizer.Recommendation{{
+			Kind:                   eventschema.OptimizationTypeRouter,
+			EstimatedSavingsTokens: tokens,
+			EstimatedSavingsUSD:    usd,
+			QualityScore:           rule.Quality,
+			Reason: fmt.Sprintf("observed: would route %s -> %s%s%s",
+				req.Model, target, windowNote, classNote),
+		}}, nil
+	}
+	if r.cfg.ProposeOnly && r.decisionFor(req.Provider, req.Model, target) != DecisionApproved {
+		if r.decisionFor(req.Provider, req.Model, target) == DecisionDenied {
+			return []optimizer.Recommendation{{
+				Kind:         eventschema.OptimizationTypeRouter,
+				Reason:       "router: route declined by operator",
+				QualityScore: rule.Quality,
+			}}, nil
+		}
+		if r.cfg.OnProposal != nil {
+			_, usd := r.estimateSavings(req, target)
+			r.cfg.OnProposal(Proposal{
+				Provider: req.Provider, FromModel: req.Model,
+				ProposedModel: target, PreferredModel: r.preferredFor(req.Provider),
+				EstimatedDeltaUSD: usd, Priced: usd != 0,
+				Reason: fmt.Sprintf("in-request mode: route %s -> %s%s%s",
+					req.Model, target, windowNote, classNote),
+			})
+		}
+		return []optimizer.Recommendation{{
+			Kind:         eventschema.OptimizationTypeRouter,
+			Reason:       "router: route awaiting operator approval",
 			QualityScore: rule.Quality,
 		}}, nil
 	}
@@ -335,4 +382,13 @@ func (r *Router) windowPct(provider eventschema.Provider) (float64, bool) {
 		return 0, false
 	}
 	return r.cfg.WindowPressure(provider)
+}
+
+// preferredFor returns the operator's ceiling model for a provider, or
+// empty when none is configured.
+func (r *Router) preferredFor(provider eventschema.Provider) string {
+	if r.cfg.PreferredModel == nil {
+		return ""
+	}
+	return r.cfg.PreferredModel(provider)
 }

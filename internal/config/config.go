@@ -189,6 +189,12 @@ func (c CoachingConfig) WasteConfig() waste.Config {
 // OptimizerConfig tunes the optimizer pipeline shared by `tokenops
 // replay` and the `tokenops_replay` MCP tool.
 type OptimizerConfig struct {
+	// Mode says what the optimizer may do with a request: "automatic"
+	// rewrites it in flight, "in_request" refers the decision to you
+	// through the MCP surface and forwards the request untouched, "off"
+	// (the default) records what the rules would have done and changes
+	// nothing.
+	Mode OptimizerMode `yaml:"mode,omitempty"`
 	// RoutingRules feed the model-routing optimizer: requests for
 	// from_model are evaluated as if routed to to_model, and the replay
 	// surfaces the projected $ savings. Empty leaves the router out of
@@ -296,7 +302,12 @@ func (o OptimizerConfig) RouterConfig() *router.Config {
 			WhenWindowPctAbove: r.WhenWindowPctAbove,
 		})
 	}
-	return &router.Config{Rules: rules, MinQuality: o.RoutingMinQuality}
+	return &router.Config{
+		Rules:       rules,
+		MinQuality:  o.RoutingMinQuality,
+		ProposeOnly: o.Mode.Proposes(),
+		ObserveOnly: o.Mode.ObserveOnly(),
+	}
 }
 
 // PricingConfig points at an optional YAML rate file that is layered on
@@ -705,6 +716,10 @@ func (c Config) Validate() error {
 		if b.WarnAt < 0 || b.WarnAt > 1 || b.CritAt < 0 || b.CritAt > 1 {
 			return fmt.Errorf("budgets[%d]: warn_at and crit_at must be in [0,1]", i)
 		}
+	}
+	if !c.Optimizer.Mode.Valid() {
+		return fmt.Errorf("optimizer.mode must be %q, %q, or %q, got %q",
+			OptimizerAutomatic, OptimizerInRequest, OptimizerOff, c.Optimizer.Mode)
 	}
 	for provider, model := range c.PreferredModels {
 		if strings.TrimSpace(model) == "" {

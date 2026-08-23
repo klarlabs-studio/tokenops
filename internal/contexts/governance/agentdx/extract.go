@@ -11,8 +11,22 @@ import (
 	"time"
 )
 
+// Source selects which client's transcripts to read.
+type Source string
+
+// Known sources. SourceAuto reads every client present on the machine,
+// which is what an operator running more than one actually wants: the
+// experience is theirs, not one tool's.
+const (
+	SourceAuto       Source = "auto"
+	SourceClaudeCode Source = "claude-code"
+	SourceCodex      Source = "codex"
+)
+
 // ExtractOptions selects which transcripts to read.
 type ExtractOptions struct {
+	// Source picks the client. Empty means SourceAuto.
+	Source Source
 	// Root is the Claude Code projects directory. Empty resolves the
 	// conventional ~/.claude/projects.
 	Root string
@@ -203,4 +217,40 @@ func firstNonEmpty(vs ...string) string {
 		}
 	}
 	return ""
+}
+
+// ExtractAll reads whichever clients the options select.
+//
+// Auto mode means "discover what is on this machine", which is inherently
+// about default locations. A caller supplying an explicit Root is not
+// discovering anything — they are pinning one tree — so a Root narrows
+// auto to a single source rather than being ignored while the readers
+// wander off to the real home directory. Without that rule a caller who
+// pinned a directory would still get whatever the machine happened to
+// hold, which is how a test ends up asserting against someone's real
+// transcripts.
+//
+// A missing client is not an error. Most operators run one; reporting a
+// failure because the other is absent would make the common case look
+// broken.
+func ExtractAll(opts ExtractOptions) ([]Record, error) {
+	switch {
+	case opts.Source == SourceClaudeCode:
+		return Extract(opts)
+	case opts.Source == SourceCodex:
+		return ExtractCodex(opts)
+	case opts.Root != "":
+		// Pinned tree, unnamed source: read it as Claude Code, the
+		// historical meaning of Root.
+		return Extract(opts)
+	}
+
+	var out []Record
+	if cc, err := Extract(opts); err == nil {
+		out = append(out, cc...)
+	}
+	if cx, err := ExtractCodex(opts); err == nil {
+		out = append(out, cx...)
+	}
+	return out, nil
 }
