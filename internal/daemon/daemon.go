@@ -446,7 +446,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			// store inline would put a full window query on the hot path.
 			if components.Store != nil && len(cfg.Plans) > 0 {
 				probe := newWindowProbe()
-				go runWindowProbe(ctx, probe, cfg, planStoreReader{store: components.Store}, logger, time.Minute)
+				go runWindowProbe(ctx, probe, cfg, planStoreReader{store: components.Store}, time.Minute)
 				rc.WindowPressure = probe.Pct
 				logger.Info("window-pressure routing available", "providers", len(cfg.Plans))
 			}

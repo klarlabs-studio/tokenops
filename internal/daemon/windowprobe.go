@@ -2,7 +2,6 @@ package daemon
 
 import (
 	"context"
-	"log/slog"
 	"sync"
 	"time"
 
@@ -74,7 +73,6 @@ func runWindowProbe(
 	probe *windowProbe,
 	cfg config.Config,
 	reader plans.EventReader,
-	logger *slog.Logger,
 	interval time.Duration,
 ) {
 	if interval <= 0 {
@@ -83,17 +81,15 @@ func runWindowProbe(
 	refresh := func() {
 		for providerName, planName := range cfg.Plans {
 			plan, ok := plans.Lookup(planName)
-			if !ok || plan.RateLimitWindow <= 0 || plan.MessagesPerWindow <= 0 {
+			if !ok {
 				continue
 			}
-			consumption, err := plans.ConsumptionInWindow(
-				ctx, reader, providerName, time.Now().UTC(), plan.RateLimitWindow)
-			if err != nil {
-				logger.Debug("window probe failed", "provider", providerName, "err", err)
+			provider := eventschema.Provider(providerName)
+			pct, ok := windowPctFor(ctx, reader, provider, plan, time.Now().UTC())
+			if !ok {
 				continue
 			}
-			pct := float64(consumption.MessagesInWindow) / float64(plan.MessagesPerWindow) * 100
-			probe.set(eventschema.Provider(providerName), pct)
+			probe.set(provider, pct)
 		}
 	}
 	refresh()
@@ -108,4 +104,36 @@ func runWindowProbe(
 			refresh()
 		}
 	}
+}
+
+// windowPctFor resolves how full a provider's rate-limit window is.
+//
+// The vendor's own reading wins wherever one exists. Codex publishes a
+// rate_limits block per turn, and Copilot and Cursor publish quota
+// snapshots; those are ground truth. Counting plan-included messages and
+// dividing by the catalog cap is a heuristic built for clients that
+// publish nothing at all — using it where the vendor already answers
+// would throw away the better signal and disagree with the number the
+// operator sees in their own dashboard.
+func windowPctFor(
+	ctx context.Context,
+	reader plans.EventReader,
+	provider eventschema.Provider,
+	plan plans.Plan,
+	now time.Time,
+) (float64, bool) {
+	if plan.RateLimitWindow > 0 {
+		if a := plans.LatestAuthoritativeWindow(ctx, reader, provider, plan, now); a != nil {
+			return a.UsedPct, true
+		}
+	}
+	if plan.RateLimitWindow <= 0 || plan.MessagesPerWindow <= 0 {
+		return 0, false
+	}
+	consumption, err := plans.ConsumptionInWindow(
+		ctx, reader, string(provider), now, plan.RateLimitWindow)
+	if err != nil {
+		return 0, false
+	}
+	return float64(consumption.MessagesInWindow) / float64(plan.MessagesPerWindow) * 100, true
 }
