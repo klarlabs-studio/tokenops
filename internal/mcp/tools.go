@@ -130,8 +130,12 @@ type forecastResult struct {
 	HorizonDays   int                   `json:"horizon_days,omitempty"`
 	HistoryPoints int                   `json:"history_points"`
 	Forecast      []forecast.Prediction `json:"forecast"`
-	Currency      string                `json:"currency,omitempty"`
-	Note          string                `json:"note,omitempty"`
+	// ForecastTokens projects token volume over the same horizon. On a
+	// flat-rate plan the dollar forecast is a flat zero, so this is the
+	// only series carrying signal — always returned alongside.
+	ForecastTokens []forecast.Prediction `json:"forecast_tokens,omitempty"`
+	Currency       string                `json:"currency,omitempty"`
+	Note           string                `json:"note,omitempty"`
 }
 
 // workflowTraceResult is the typed payload for tokenops_workflow_trace.
@@ -402,11 +406,13 @@ func forecastSpend(ctx context.Context, d Deps, in forecastInput) (*forecastResu
 		}, nil
 	}
 	preds := forecast.AutoForecast(history, horizon, 24*time.Hour)
+	tokenHistory := forecast.SeriesFromRows(rows, forecast.TotalTokens)
 	return &forecastResult{
-		HorizonDays:   horizon,
-		HistoryPoints: len(history),
-		Forecast:      preds,
-		Currency:      d.Spend.Currency(),
+		HorizonDays:    horizon,
+		HistoryPoints:  len(history),
+		Forecast:       preds,
+		ForecastTokens: forecast.AutoForecast(tokenHistory, horizon, 24*time.Hour),
+		Currency:       d.Spend.Currency(),
 	}, nil
 }
 

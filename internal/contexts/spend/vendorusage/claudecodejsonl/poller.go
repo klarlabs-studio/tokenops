@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"sync"
 	"time"
 
@@ -162,7 +163,11 @@ func newEnvelope(t Turn, costSource eventschema.CostSource) *eventschema.Envelop
 			// "messages" meter (user prompts). Plan window math reads
 			// this to count tokens without counting the event as a
 			// message (see plans.ConsumptionInWindow).
-			"granularity":          "assistant_turn",
+			"granularity": "assistant_turn",
+			// Set on the one turn per operator prompt, so the plan
+			// window meter can count the vendor's "messages" unit
+			// without counting every turn (see plans.countsAsMessage).
+			"starts_user_message":  strconv.FormatBool(t.StartsUserMessage),
 			"session_id":           t.SessionID,
 			"project":              t.Project,
 			"message_id":           t.MessageID,

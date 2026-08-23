@@ -145,7 +145,7 @@ spend within the selected window. It surfaces:
 				return err
 			}
 
-			var predictions []forecast.Prediction
+			var predictions, tokenPredictions []forecast.Prediction
 			if showForecast {
 				horizon := forecastDays
 				if horizon <= 0 {
@@ -153,6 +153,8 @@ spend within the selected window. It surfaces:
 				}
 				history := forecast.SeriesFromRows(rows, forecast.CostUSD)
 				predictions = forecast.AutoForecast(history, horizon, 24*time.Hour)
+				tokenHistory := forecast.SeriesFromRows(rows, forecast.TotalTokens)
+				tokenPredictions = forecast.AutoForecast(tokenHistory, horizon, 24*time.Hour)
 			}
 
 			view := spendView{
@@ -162,8 +164,10 @@ spend within the selected window. It surfaces:
 				GroupRows:     topRows(rows, topN),
 				GroupBy:       string(group),
 				BurnRate24h:   sumCost(burnRows),
+				BurnTokens24h: sumTokens(burnRows),
 				BurnSeries:    burnRows,
 				Forecast:      predictions,
+				ForecastToks:  tokenPredictions,
 				HideSparkline: hideSparkline,
 			}
 			if svgFile != "" {
@@ -195,14 +199,21 @@ spend within the selected window. It surfaces:
 // --- view + helpers -----------------------------------------------------
 
 type spendView struct {
-	Window        string                `json:"window"`
-	Currency      string                `json:"currency"`
-	Summary       analytics.Summary     `json:"summary"`
-	GroupBy       string                `json:"group_by"`
-	GroupRows     []analytics.Row       `json:"top"`
-	BurnRate24h   float64               `json:"burn_rate_24h"`
+	Window      string            `json:"window"`
+	Currency    string            `json:"currency"`
+	Summary     analytics.Summary `json:"summary"`
+	GroupBy     string            `json:"group_by"`
+	GroupRows   []analytics.Row   `json:"top"`
+	BurnRate24h float64           `json:"burn_rate_24h"`
+	// BurnTokens24h is the same window measured in tokens. On a
+	// subscription BurnRate24h is structurally zero, so this is the only
+	// burn figure with signal.
+	BurnTokens24h int64                 `json:"burn_tokens_24h"`
 	BurnSeries    []analytics.Row       `json:"burn_series"`
 	Forecast      []forecast.Prediction `json:"forecast,omitempty"`
+	// ForecastToks projects the same horizon in tokens — the series that
+	// stays meaningful when spend is plan-covered.
+	ForecastToks  []forecast.Prediction `json:"forecast_tokens,omitempty"`
 	HideSparkline bool                  `json:"-"`
 }
 
@@ -272,6 +283,14 @@ func topRows(rows []analytics.Row, n int) []analytics.Row {
 	return out
 }
 
+func sumTokens(rows []analytics.Row) int64 {
+	var total int64
+	for _, r := range rows {
+		total += r.TotalTokens
+	}
+	return total
+}
+
 func sumCost(rows []analytics.Row) float64 {
 	var total float64
 	for _, r := range rows {
@@ -283,22 +302,30 @@ func sumCost(rows []analytics.Row) float64 {
 // sparklineFromRows renders a unicode block-bar sparkline scaled to the
 // row series' max cost. Empty series renders an empty string.
 func sparklineFromRows(rows []analytics.Row) string {
+	return sparklineFromRowsBy(rows, func(r analytics.Row) float64 { return r.CostUSD })
+}
+
+// sparklineFromRowsBy renders rows through an arbitrary accessor. The
+// cost accessor flattens to the baseline bar for plan-covered traffic —
+// every row bills $0.00 — so callers plot tokens instead when that is
+// the series carrying the variation.
+func sparklineFromRowsBy(rows []analytics.Row, value func(analytics.Row) float64) string {
 	if len(rows) == 0 {
 		return ""
 	}
 	bars := []rune{'▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
-	max := 0.0
+	maxV := 0.0
 	for _, r := range rows {
-		if r.CostUSD > max {
-			max = r.CostUSD
+		if v := value(r); v > maxV {
+			maxV = v
 		}
 	}
-	if max == 0 {
+	if maxV == 0 {
 		return strings.Repeat(string(bars[0]), len(rows))
 	}
 	out := make([]rune, len(rows))
 	for i, r := range rows {
-		idx := int(r.CostUSD / max * float64(len(bars)-1))
+		idx := int(value(r) / maxV * float64(len(bars)-1))
 		if idx >= len(bars) {
 			idx = len(bars) - 1
 		}
@@ -323,9 +350,17 @@ func writeSpendText(w io.Writer, v spendView) error {
 		fmt.Fprintf(w, "  api equivalent:  %s (plan-covered usage at list price)\n",
 			fmtMoney(v.Summary.APIEquivalentUSD, v.Currency))
 	}
-	fmt.Fprintf(w, "  burn rate (24h): %s", fmtMoney(v.BurnRate24h, v.Currency))
+	// Plot whichever series actually varies: cost is a flat zero for
+	// plan-covered traffic, so a cost-keyed sparkline would report calm
+	// under any load.
+	metric := func(r analytics.Row) float64 { return r.CostUSD }
+	if v.BurnRate24h == 0 && v.BurnTokens24h > 0 {
+		metric = func(r analytics.Row) float64 { return float64(r.TotalTokens) }
+	}
+	fmt.Fprintf(w, "  burn rate (24h): %s / %d tokens",
+		fmtMoney(v.BurnRate24h, v.Currency), v.BurnTokens24h)
 	if !v.HideSparkline {
-		if line := sparklineFromRows(v.BurnSeries); line != "" {
+		if line := sparklineFromRowsBy(v.BurnSeries, metric); line != "" {
 			fmt.Fprintf(w, "  %s", line)
 		}
 	}
@@ -369,6 +404,19 @@ func writeSpendText(w io.Writer, v spendView) error {
 				fmtMoney(p.Lower, v.Currency),
 				fmtMoney(p.Upper, v.Currency),
 			)
+		}
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+	}
+
+	if len(v.ForecastToks) > 0 {
+		fmt.Fprintf(w, "\nToken forecast (next %d points):\n", len(v.ForecastToks))
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(tw, "WHEN\tEXPECTED\tLOW\tHIGH")
+		for _, p := range v.ForecastToks {
+			fmt.Fprintf(tw, "%s\t%.0f\t%.0f\t%.0f\n",
+				p.At.Format("2006-01-02"), p.Value, p.Lower, p.Upper)
 		}
 		if err := tw.Flush(); err != nil {
 			return err

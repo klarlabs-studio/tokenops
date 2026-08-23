@@ -32,6 +32,13 @@ type Config struct {
 	Interval time.Duration
 	// Logger receives prune logs (rows deleted, errors).
 	Logger *slog.Logger
+	// Reclaim runs a VACUUM after a pass that actually deleted rows, so
+	// the freed pages return to the filesystem instead of sitting on
+	// SQLite's freelist. Without it the database file keeps its
+	// high-water mark forever and pruning frees nothing an operator can
+	// see. Off by default: VACUUM rewrites the whole database and holds
+	// a write lock for the duration.
+	Reclaim bool
 }
 
 // PruneResult reports the outcome of one Run pass.
@@ -75,6 +82,7 @@ func (p *Pruner) Run(ctx context.Context) ([]PruneResult, error) {
 		return nil, errors.New("retention: pruner not initialised")
 	}
 	now := p.clock()
+	var deleted int64
 	out := make([]PruneResult, 0, len(p.cfg.Policies))
 	for _, pol := range p.cfg.Policies {
 		if pol.KeepFor <= 0 {
@@ -95,6 +103,7 @@ func (p *Pruner) Run(ctx context.Context) ([]PruneResult, error) {
 			Deleted:    n,
 		})
 		if n > 0 {
+			deleted += n
 			p.cfg.Logger.Info("retention prune",
 				"type", pol.EventType,
 				"deleted", n,
@@ -102,7 +111,36 @@ func (p *Pruner) Run(ctx context.Context) ([]PruneResult, error) {
 			)
 		}
 	}
+	if p.cfg.Reclaim && deleted > 0 {
+		if err := p.reclaim(ctx); err != nil {
+			// The prune itself succeeded; failing to shrink the file is
+			// not worth failing the pass over.
+			p.cfg.Logger.Warn("retention reclaim failed", "err", err)
+		}
+	}
 	return out, nil
+}
+
+// reclaim returns freed pages to the filesystem. auto_vacuum cannot be
+// switched on for an existing database without a full rewrite, so a
+// plain VACUUM is the only option that works on a store already in the
+// field. It is called only after a pass that deleted rows.
+func (p *Pruner) reclaim(ctx context.Context) error {
+	before, _ := p.freelistCount(ctx)
+	if before == 0 {
+		return nil
+	}
+	if _, err := p.store.DB().ExecContext(ctx, "VACUUM"); err != nil {
+		return fmt.Errorf("retention: vacuum: %w", err)
+	}
+	p.cfg.Logger.Info("retention reclaim", "pages_freed", before)
+	return nil
+}
+
+func (p *Pruner) freelistCount(ctx context.Context) (int64, error) {
+	var n int64
+	err := p.store.DB().QueryRowContext(ctx, "PRAGMA freelist_count").Scan(&n)
+	return n, err
 }
 
 // Scheduler runs Pruner.Run on cfg.Interval until ctx is cancelled.

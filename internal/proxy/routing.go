@@ -64,6 +64,7 @@ func (s *Server) routingMiddleware(provider providers.Provider, next http.Handle
 			OutputTokens: obs.MaxOutput,
 			Body:         body,
 			Mode:         optimizer.ModeInteractive,
+			CostSource:   obs.CostSource,
 		}
 		recs, err := s.router.Run(r.Context(), req)
 		if err != nil || len(recs) == 0 {

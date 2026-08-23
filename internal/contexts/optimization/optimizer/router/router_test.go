@@ -202,3 +202,104 @@ func TestKindIsRouter(t *testing.T) {
 		t.Errorf("kind = %s", got)
 	}
 }
+
+// --- token-first accounting ---------------------------------------------
+
+// A lateral route (same rate card on both sides) still moved real tokens.
+// Reporting zero tokens because the dollar delta was zero conflates two
+// independent measurements — and starves TEU, which sums this field.
+func TestLateralRouteStillReportsTokens(t *testing.T) {
+	r := New(Config{Rules: []Rule{
+		{Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+			ToModel: "claude-opus-4-7", Quality: 0.9},
+	}}, spend.NewEngine(spend.DefaultTable()))
+
+	recs, err := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body:        bodyWithModel(t, "claude-opus-4-8", nil),
+		InputTokens: 900_000, OutputTokens: 100_000,
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(recs) != 1 {
+		t.Fatalf("recs = %d", len(recs))
+	}
+	if got := recs[0].EstimatedSavingsTokens; got != 1_000_000 {
+		t.Errorf("EstimatedSavingsTokens = %d, want 1000000 (tokens must not be gated on a USD delta)", got)
+	}
+	if got := recs[0].EstimatedSavingsUSD; got != 0 {
+		t.Errorf("EstimatedSavingsUSD = %f, want 0 for a same-price route", got)
+	}
+}
+
+// Routing to a pricier model is a real decision an operator may make for
+// quality. It must not silently erase the token accounting.
+func TestUpgradeRouteReportsTokensAndNoNegativeUSD(t *testing.T) {
+	r := New(Config{Rules: []Rule{
+		{Provider: eventschema.ProviderAnthropic, FromModel: "claude-haiku-4-5",
+			ToModel: "claude-opus-4-8", Quality: 0.95},
+	}}, spend.NewEngine(spend.DefaultTable()))
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-haiku-4-5",
+		Body:        bodyWithModel(t, "claude-haiku-4-5", nil),
+		InputTokens: 400_000, OutputTokens: 100_000,
+	})
+	if len(recs) != 1 {
+		t.Fatalf("recs = %d", len(recs))
+	}
+	if got := recs[0].EstimatedSavingsTokens; got != 500_000 {
+		t.Errorf("EstimatedSavingsTokens = %d, want 500000", got)
+	}
+	if got := recs[0].EstimatedSavingsUSD; got != 0 {
+		t.Errorf("EstimatedSavingsUSD = %f, want 0 (never negative)", got)
+	}
+}
+
+// On a flat-rate subscription the spend engine prices every request at
+// zero. The router must inherit the request's CostSource instead of
+// silently pricing plan-covered traffic at list rates.
+func TestPlanIncludedRouteReportsNoPhantomUSD(t *testing.T) {
+	r := New(Config{Rules: []Rule{
+		{Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+			ToModel: "claude-haiku-4-5", Quality: 0.8},
+	}}, spend.NewEngine(spend.DefaultTable()))
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body:        bodyWithModel(t, "claude-opus-4-8", nil),
+		InputTokens: 1_000_000, OutputTokens: 200_000,
+		CostSource: eventschema.CostSourcePlanIncluded,
+	})
+	if len(recs) != 1 {
+		t.Fatalf("recs = %d", len(recs))
+	}
+	if got := recs[0].EstimatedSavingsUSD; got != 0 {
+		t.Errorf("EstimatedSavingsUSD = %f, want 0 — plan-covered traffic has no dollar saving", got)
+	}
+	if got := recs[0].EstimatedSavingsTokens; got != 1_200_000 {
+		t.Errorf("EstimatedSavingsTokens = %d, want 1200000 — tokens are the real currency here", got)
+	}
+}
+
+// Metered traffic keeps the dollar path intact.
+func TestMeteredRouteStillPricesInUSD(t *testing.T) {
+	r := New(Config{Rules: []Rule{
+		{Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+			ToModel: "claude-haiku-4-5", Quality: 0.8},
+	}}, spend.NewEngine(spend.DefaultTable()))
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body:        bodyWithModel(t, "claude-opus-4-8", nil),
+		InputTokens: 1_000_000, OutputTokens: 200_000,
+		CostSource: eventschema.CostSourceMetered,
+	})
+	if len(recs) != 1 {
+		t.Fatalf("recs = %d", len(recs))
+	}
+	if recs[0].EstimatedSavingsUSD <= 0 {
+		t.Errorf("metered route should still price in USD, got %f", recs[0].EstimatedSavingsUSD)
+	}
+}

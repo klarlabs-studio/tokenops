@@ -186,8 +186,12 @@ func writeReplayText(
 	fmt.Fprintf(w, "  original input:    %d tokens\n", res.OriginalInputTokens)
 	fmt.Fprintf(w, "  original output:   %d tokens\n", res.OriginalOutputTokens)
 	fmt.Fprintf(w, "  original spend:    %s\n", fmtMoney(res.OriginalCostUSD, spendEng.Currency()))
-	fmt.Fprintf(w, "  estimated savings: %d tokens / %s (%.1f%% of spend)\n\n",
+	// Lead with the token ratio: it is the one that stays meaningful on a
+	// flat-rate plan, where original spend is zero and the dollar ratio
+	// therefore reports 0% however much the optimizers removed.
+	fmt.Fprintf(w, "  estimated savings: %d tokens (%.1f%% of tokens) / %s (%.1f%% of spend)\n\n",
 		res.EstimatedSavingsTokens,
+		res.SavingsRatioTokens()*100,
 		fmtMoney(res.EstimatedSavingsUSD, spendEng.Currency()),
 		res.SavingsRatio()*100)
 
