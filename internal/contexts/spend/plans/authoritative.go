@@ -1,22 +1,21 @@
-package mcp
+package plans
 
 import (
 	"context"
 	"strconv"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
-// latestAuthoritativeWindow scans recent events for the newest vendor
+// LatestAuthoritativeWindow scans recent events for the newest vendor
 // quota snapshot matching provider + window and converts it into an
 // authoritative override for ComputeSessionBudget. The vendor pollers
 // already store their own reported "% of limit used" (+ reset time) in
 // event attributes; this is where the prediction finally reads them
 // instead of extrapolating from a message count. Returns nil when no
 // snapshot is available, so callers fall back to the heuristic.
-func latestAuthoritativeWindow(ctx context.Context, reader plans.EventReader, provider eventschema.Provider, p plans.Plan, now time.Time) *plans.AuthoritativeWindow {
+func LatestAuthoritativeWindow(ctx context.Context, reader EventReader, provider eventschema.Provider, p Plan, now time.Time) *AuthoritativeWindow {
 	weekly := p.RateLimitWindow > 24*time.Hour
 	usedKey, resetKey, source := authoritativeKeys(provider, weekly)
 	if usedKey == "" {
@@ -50,7 +49,7 @@ func latestAuthoritativeWindow(ctx context.Context, reader plans.EventReader, pr
 	if err != nil {
 		return nil
 	}
-	return &plans.AuthoritativeWindow{
+	return &AuthoritativeWindow{
 		UsedPct:  pct,
 		ResetsIn: parseResetsIn(best.Attributes[resetKey], now),
 		Source:   source,
@@ -82,12 +81,12 @@ func authoritativeKeys(provider eventschema.Provider, weekly bool) (usedKey, res
 	}
 }
 
-// latestAuthoritativeMonthly finds the newest vendor MONTHLY quota snapshot
+// LatestAuthoritativeMonthly finds the newest vendor MONTHLY quota snapshot
 // for provider and converts it to an authoritative reading. Copilot reports
 // percent_remaining (inverted to used) + a reset date; Cursor reports
 // used_pct directly. Returns nil when no snapshot exists. This is the only
 // useful monthly signal for request-quota plans that publish no token cap.
-func latestAuthoritativeMonthly(ctx context.Context, reader plans.EventReader, provider eventschema.Provider, now time.Time) *plans.AuthoritativeWindow {
+func LatestAuthoritativeMonthly(ctx context.Context, reader EventReader, provider eventschema.Provider, now time.Time) *AuthoritativeWindow {
 	usedKey, resetKey, isRemaining, source := monthlyAuthoritativeKeys(provider)
 	if usedKey == "" {
 		return nil
@@ -118,7 +117,7 @@ func latestAuthoritativeMonthly(ctx context.Context, reader plans.EventReader, p
 	if isRemaining {
 		pct = 100 - pct
 	}
-	return &plans.AuthoritativeWindow{
+	return &AuthoritativeWindow{
 		UsedPct:  pct,
 		ResetsIn: parseResetsIn(best.Attributes[resetKey], now),
 		Source:   source,
