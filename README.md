@@ -79,7 +79,7 @@ the agent links you to (`http://tokenops.local:7878/dashboard?token=…`).
 | 📋 **Reply coach** | `tokenops coach replies` detects output-compression patterns (caveman skill, article density, filler density) per session |
 | ⏱️ **Task boundaries** | `tokenops task start "fix X"` / `done` / `list --metrics` — operator-marked task units persisted to `~/.tokenops/tasks.jsonl`. List view rolls up turns / cost / TTFUO / cost-per-turn from the events store within each task window |
 | 📐 **8-KPI agent scorecard** | FVT / TEU / SAC (wedge) plus CHR / CGR / RGR / TCS / DAR (agent-workflow), all graded A–F against tuneable thresholds. v0.21.1 honest grading: TEU N/A when optimiser isn't wired; autonomous-loop sentinels filtered from CGR; column→payload attribution sync so SAC reflects reality |
-| 🩺 **Agent DX metrics** | `tokenops dx` — turns per instruction (median + p90), rework rate, interrupt rate, escalation rate, context growth/turn, compactions/session. Derived from transcripts; no proxy needed |
+| 🩺 **Agent DX metrics** | `tokenops dx` + `tokenops_agent_dx` — turns, wall-clock, tokens and tool calls per instruction, plus rework / interrupt / escalation / first-try rates, context growth and compactions. Each graded, with the single highest-leverage change named. Derived from transcripts; no proxy needed |
 | 🧭 **Context-aware routing** | Rules scope to what a turn *is* (`when_class: mechanical`) and to how tight your plan window is (`when_window_pct_above: 70`) — keep your best model while there's headroom, conserve it only when there isn't. Both abstain rather than guess: an unclassifiable turn or an unmeasured window leaves the model alone |
 | 🛡️ **Preferred model ceiling** | `preferred_models` per provider. Cheaper routes apply automatically; a pricier one is refused and surfaced for your answer via MCP, with your preferred model offered as the alternative |
 | 🎯 **Honest signal quality** | Every prediction carries `signal_quality.level` (low / medium / high) plus a one-line caveat. Heuristic mode is labelled; proxied mode is labelled |
@@ -244,7 +244,7 @@ and [SECURITY.md](SECURITY.md). Plans and tasks live in `.roady/` (see
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) — latest is [v0.46.0](https://github.com/klarlabs-studio/tokenops/releases/tag/v0.46.0).
+See [CHANGELOG.md](CHANGELOG.md) — latest is [v0.47.0](https://github.com/klarlabs-studio/tokenops/releases/tag/v0.47.0).
 
 ## License
 
