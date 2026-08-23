@@ -76,6 +76,25 @@ type Metrics struct {
 	// InterruptRatePct is the share of instructions the operator had to
 	// interrupt.
 	InterruptRatePct float64 `json:"interrupt_rate_pct"`
+	// MedianSecondsPerPrompt is the wall-clock a typical instruction
+	// takes from being typed to the agent's last turn. Turns measure
+	// effort; this measures waiting, and they diverge when turns are slow.
+	MedianSecondsPerPrompt float64 `json:"median_seconds_per_prompt"`
+	// P90SecondsPerPrompt is the waiting tail.
+	P90SecondsPerPrompt float64 `json:"p90_seconds_per_prompt"`
+	// MedianTokensPerPrompt is what a typical instruction costs in
+	// context, summed across its turns.
+	MedianTokensPerPrompt int64 `json:"median_tokens_per_prompt"`
+	// MedianToolCallsPerPrompt is how much machinery a typical
+	// instruction sets in motion.
+	MedianToolCallsPerPrompt float64 `json:"median_tool_calls_per_prompt"`
+	// FirstTryRatePct is the share of instructions the agent completed
+	// without reworking a file, being interrupted, or delegating. The
+	// closest single number to "it just worked".
+	FirstTryRatePct float64 `json:"first_try_rate_pct"`
+	// TotalEdits is the denominator behind ReworkRatePct, exposed so a
+	// caller can tell "no rework" from "no edits".
+	TotalEdits int `json:"total_edits"`
 }
 
 // escalationTools are the tools that hand work to a subagent.
@@ -108,6 +127,10 @@ func Compute(records []Record) Metrics {
 		promptsWithTask int
 		interrupted     int
 		growths         []float64
+		durations       []float64
+		tokensPer       []float64
+		toolsPer        []float64
+		firstTry        int
 	)
 
 	// Per-unit state, reset at every operator instruction.
@@ -117,6 +140,11 @@ func Compute(records []Record) Metrics {
 		unitEdited   = map[string]bool{}
 		unitTask     bool
 		unitStopped  bool
+		unitRework   bool
+		unitTools    int
+		unitTokens   int64
+		unitStart    time.Time
+		unitLast     time.Time
 		lastInputTok int64
 	)
 
@@ -125,11 +153,24 @@ func Compute(records []Record) Metrics {
 			return
 		}
 		turnsPerPrompt = append(turnsPerPrompt, float64(unitTurns))
+		toolsPer = append(toolsPer, float64(unitTools))
+		if unitTokens > 0 {
+			tokensPer = append(tokensPer, float64(unitTokens))
+		}
+		// Only time a unit that actually produced work. A prompt with no
+		// turns after it is the operator typing at the end of a session,
+		// and timing it would measure how long they left the window open.
+		if unitTurns > 0 && !unitLast.IsZero() && unitLast.After(unitStart) {
+			durations = append(durations, unitLast.Sub(unitStart).Seconds())
+		}
 		if unitTask {
 			promptsWithTask++
 		}
 		if unitStopped {
 			interrupted++
+		}
+		if unitTurns > 0 && !unitRework && !unitStopped && !unitTask {
+			firstTry++
 		}
 	}
 
@@ -145,12 +186,19 @@ func Compute(records []Record) Metrics {
 			unitEdited = map[string]bool{}
 			unitTask = false
 			unitStopped = false
+			unitRework = false
+			unitTools = 0
+			unitTokens = 0
+			unitStart = r.At
+			unitLast = time.Time{}
 			lastInputTok = 0
 		case KindAssistantTurn:
 			if !inUnit {
 				continue
 			}
 			unitTurns++
+			unitLast = r.At
+			unitTokens += r.InputTokens
 			if r.InputTokens > 0 {
 				if lastInputTok > 0 && r.InputTokens > lastInputTok {
 					growths = append(growths, float64(r.InputTokens-lastInputTok))
@@ -161,6 +209,7 @@ func Compute(records []Record) Metrics {
 			if !inUnit {
 				continue
 			}
+			unitTools++
 			if escalationTools[r.ToolName] {
 				unitTask = true
 			}
@@ -168,6 +217,7 @@ func Compute(records []Record) Metrics {
 				totalEdits++
 				if unitEdited[r.FilePath] {
 					reworkEdits++
+					unitRework = true
 				}
 				unitEdited[r.FilePath] = true
 			}
@@ -186,12 +236,18 @@ func Compute(records []Record) Metrics {
 	m.MedianTurnsPerPrompt = round1(percentile(turnsPerPrompt, 0.5))
 	m.P90TurnsPerPrompt = round1(percentile(turnsPerPrompt, 0.9))
 	m.MedianContextGrowthTokens = int64(percentile(growths, 0.5))
+	m.MedianSecondsPerPrompt = round1(percentile(durations, 0.5))
+	m.P90SecondsPerPrompt = round1(percentile(durations, 0.9))
+	m.MedianTokensPerPrompt = int64(percentile(tokensPer, 0.5))
+	m.MedianToolCallsPerPrompt = round1(percentile(toolsPer, 0.5))
+	m.TotalEdits = totalEdits
 	if totalEdits > 0 {
 		m.ReworkRatePct = round1(float64(reworkEdits) / float64(totalEdits) * 100)
 	}
 	if m.Prompts > 0 {
 		m.EscalationRatePct = round1(float64(promptsWithTask) / float64(m.Prompts) * 100)
 		m.InterruptRatePct = round1(float64(interrupted) / float64(m.Prompts) * 100)
+		m.FirstTryRatePct = round1(float64(firstTry) / float64(m.Prompts) * 100)
 	}
 	if m.Sessions > 0 {
 		m.CompactionsPerSession = round1(float64(compactions) / float64(m.Sessions))
