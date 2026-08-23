@@ -110,7 +110,18 @@ func renderCoachReplies(cmd *cobra.Command, f replies.Findings, since time.Time)
 	fmt.Fprintf(out, "  filler density:   %.2f%%   (typical ~1%%)\n", f.Baseline.FillerRatio*100)
 	fmt.Fprintf(out, "  code-block ratio: %.1f%% of replies\n", f.Baseline.CodeBlockRatio*100)
 	fmt.Fprintln(out)
-	fmt.Fprintf(out, "CAVEMAN-LIKELY SESSIONS: %d / %d  ·  est. saved tokens: %d\n",
+	// Lead with the recommendation. Densities describe; only this tells
+	// the operator what to change, which is the whole point of a coach.
+	if rec, ok := replies.Recommend(f); ok {
+		fmt.Fprintf(out, "\nBIGGEST WIN\n  %s\n", rec.Title)
+		fmt.Fprintf(out, "  %s\n", rec.Evidence)
+		fmt.Fprintf(out, "  Projected: ~%s output tokens across %d replies (%.0f → %.0f words each)\n",
+			humanTokens(rec.EstimatedTokensSaved), f.TotalReplies,
+			rec.CurrentAvgWords, rec.TargetAvgWords)
+		fmt.Fprintf(out, "  Do: %s\n", rec.Action)
+	}
+
+	fmt.Fprintf(out, "\nCAVEMAN-LIKELY SESSIONS: %d / %d  ·  est. saved tokens: %d\n",
 		f.CavemanLikelySessions, len(f.BySession), f.EstimatedTokenSavings)
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "PER SESSION")

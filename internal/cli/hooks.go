@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
+	"go.klarlabs.de/tokenops/internal/infra/readguard"
 	"go.klarlabs.de/tokenops/internal/version"
 )
 
@@ -55,6 +56,13 @@ backs up the prior settings to settings.json.bak, and writes atomically.
 // When neither is set, both are selected (install everything is the common
 // case). budget parametrises the coach entry's args.
 func specsFor(coach, readGuard bool, budget float64) []hookSpec {
+	return specsForMode(coach, readGuard, budget, readguard.ModeObserve)
+}
+
+// specsForMode is specsFor with the read-guard mode chosen by the caller,
+// so init can promote the guard to active once the operator's own ledger
+// justifies it.
+func specsForMode(coach, readGuard bool, budget float64, guardMode readguard.Mode) []hookSpec {
 	if !coach && !readGuard {
 		coach, readGuard = true, true
 	}
@@ -73,7 +81,7 @@ func specsFor(coach, readGuard bool, budget float64) []hookSpec {
 			event:   "PreToolUse",
 			matcher: "Read",
 			marker:  "read-guard",
-			args:    []string{"read-guard", "--mode", "observe"},
+			args:    []string{"read-guard", "--mode", string(guardMode)},
 		})
 	}
 	return out
