@@ -17,6 +17,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/taskclass"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -242,6 +243,14 @@ type RoutingRuleConfig struct {
 	// preserves task quality for this traffic.
 	Quality   float64  `yaml:"quality"`
 	Fallbacks []string `yaml:"fallbacks"`
+	// WhenClass scopes the rule to one kind of work: "mechanical" (a
+	// terse directive over mostly tool traffic — safe to run on a
+	// cheaper model) or "reasoning". Empty applies the rule to all
+	// matching traffic, which is the historical behaviour.
+	//
+	// A scoped rule declines whenever the classifier cannot tell, so
+	// turns that are ambiguous keep the model the client asked for.
+	WhenClass string `yaml:"when_class,omitempty"`
 }
 
 // RouterConfig maps optimizer.routing_rules into the router's domain
@@ -260,6 +269,7 @@ func (o OptimizerConfig) RouterConfig() *router.Config {
 			ToModel:   r.ToModel,
 			Quality:   r.Quality,
 			Fallbacks: r.Fallbacks,
+			WhenClass: strings.ToLower(r.WhenClass),
 		})
 	}
 	return &router.Config{Rules: rules, MinQuality: o.RoutingMinQuality}
@@ -612,6 +622,12 @@ func (c Config) Validate() error {
 	for i, r := range c.Optimizer.RoutingRules {
 		if r.Provider == "" || r.FromModel == "" || r.ToModel == "" {
 			return fmt.Errorf("optimizer.routing_rules[%d]: provider, from_model, and to_model are required", i)
+		}
+		switch strings.ToLower(r.WhenClass) {
+		case "", string(taskclass.Mechanical), string(taskclass.Reasoning):
+		default:
+			return fmt.Errorf("optimizer.routing_rules[%d]: when_class must be %q or %q, got %q",
+				i, taskclass.Mechanical, taskclass.Reasoning, r.WhenClass)
 		}
 		if r.Quality <= 0 || r.Quality > 1 {
 			return fmt.Errorf("optimizer.routing_rules[%d]: quality must be in (0,1], got %g", i, r.Quality)

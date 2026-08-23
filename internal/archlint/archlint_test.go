@@ -73,6 +73,7 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router",
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/toolfmt",
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/replay",
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/taskclass",
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/llm",
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/providers",
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer",

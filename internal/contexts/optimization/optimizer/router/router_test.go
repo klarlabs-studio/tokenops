@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/taskclass"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -301,5 +302,97 @@ func TestMeteredRouteStillPricesInUSD(t *testing.T) {
 	}
 	if recs[0].EstimatedSavingsUSD <= 0 {
 		t.Errorf("metered route should still price in USD, got %f", recs[0].EstimatedSavingsUSD)
+	}
+}
+
+// --- task-aware routing --------------------------------------------------
+
+func chatBody(t *testing.T, model, instruction string, toolPairs int) []byte {
+	t.Helper()
+	msgs := make([]any, 0, 1+2*toolPairs)
+	msgs = append(msgs, map[string]any{"role": "user", "content": instruction})
+	for range toolPairs {
+		msgs = append(msgs,
+			map[string]any{"role": "assistant", "content": []any{map[string]any{"type": "tool_use", "name": "Bash"}}},
+			map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "content": "ok"}}},
+		)
+	}
+	b, err := json.Marshal(map[string]any{"model": model, "messages": msgs})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	return b
+}
+
+// A rule scoped to mechanical work fires on a terse directive over heavy
+// tool traffic — the case where a cheaper model costs the operator nothing.
+func TestClassScopedRuleAppliesToMechanicalTurn(t *testing.T) {
+	r := New(Config{Rules: []Rule{{
+		Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+		ToModel: "claude-haiku-4-5", Quality: 0.9, WhenClass: string(taskclass.Mechanical),
+	}}}, nil)
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: chatBody(t, "claude-opus-4-8", "continue", 3),
+	})
+	if len(recs) != 1 {
+		t.Fatalf("recs = %d, want 1 for a mechanical turn", len(recs))
+	}
+	if !strings.Contains(recs[0].Reason, "mechanical") {
+		t.Errorf("reason should name the class: %q", recs[0].Reason)
+	}
+}
+
+// The same rule must not fire when the operator is doing reasoning work.
+// Silently downgrading the model there is the trade they did not ask for.
+func TestClassScopedRuleSkipsReasoningTurn(t *testing.T) {
+	long := strings.Repeat("weigh the tradeoffs and justify the boundary ", 30)
+	r := New(Config{Rules: []Rule{{
+		Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+		ToModel: "claude-haiku-4-5", Quality: 0.9, WhenClass: string(taskclass.Mechanical),
+	}}}, nil)
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: chatBody(t, "claude-opus-4-8", long, 1),
+	})
+	if len(recs) != 0 {
+		t.Errorf("recs = %d, want 0 — a reasoning turn must not be routed down: %+v", len(recs), recs)
+	}
+}
+
+// An ambiguous turn is not routed either: the classifier abstains and the
+// rule declines rather than guessing.
+func TestClassScopedRuleSkipsUnknownTurn(t *testing.T) {
+	r := New(Config{Rules: []Rule{{
+		Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+		ToModel: "claude-haiku-4-5", Quality: 0.9, WhenClass: string(taskclass.Mechanical),
+	}}}, nil)
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: chatBody(t, "claude-opus-4-8", "add a test for the retry path and run it", 1),
+	})
+	if len(recs) != 0 {
+		t.Errorf("recs = %d, want 0 for an unclassifiable turn", len(recs))
+	}
+}
+
+// An unscoped rule keeps its existing unconditional behaviour, so no
+// existing configuration changes meaning.
+func TestUnscopedRuleUnaffectedByClass(t *testing.T) {
+	long := strings.Repeat("weigh the tradeoffs and justify the boundary ", 30)
+	r := New(Config{Rules: []Rule{{
+		Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+		ToModel: "claude-haiku-4-5", Quality: 0.9,
+	}}}, nil)
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: chatBody(t, "claude-opus-4-8", long, 1),
+	})
+	if len(recs) != 1 {
+		t.Errorf("recs = %d, want 1 — an unscoped rule still applies unconditionally", len(recs))
 	}
 }
