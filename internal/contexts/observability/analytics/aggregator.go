@@ -343,10 +343,11 @@ func (a *Aggregator) Summarize(ctx context.Context, f Filter) (Summary, error) {
 		}
 		s.CostUSD += recomputed
 		s.Unpriced = unpriced
-		planValue, err := a.summarizePlanCoveredValue(ctx, f)
+		planValue, planUnpriced, err := a.summarizePlanCoveredValue(ctx, f)
 		if err != nil {
 			return Summary{}, err
 		}
+		s.Unpriced = mergeUnpriced(s.Unpriced, planUnpriced)
 		s.APIEquivalentUSD = s.CostUSD + planValue
 	} else {
 		s.APIEquivalentUSD = s.CostUSD
@@ -360,7 +361,12 @@ func (a *Aggregator) Summarize(ctx context.Context, f Filter) (Summary, error) {
 // unknown models are skipped silently here (they already surface via
 // Unpriced when metered, and pseudo-models like mcp-session would only
 // add noise).
-func (a *Aggregator) summarizePlanCoveredValue(ctx context.Context, f Filter) (float64, error) {
+// summarizePlanCoveredValue returns the list-price value the subscription
+// absorbed, plus any (provider, model) pairs it could not price. The
+// second return matters on a flat plan: an unpriced model contributes
+// nothing to the shadow value, and because its real cost is legitimately
+// zero it would otherwise leave no trace at all.
+func (a *Aggregator) summarizePlanCoveredValue(ctx context.Context, f Filter) (float64, []UnpricedModel, error) {
 	conds, args := buildConditions(f)
 	conds = append(conds,
 		`COALESCE(json_extract(payload, '$.cost_source'), '') IN ('plan_included', 'trial')`,
@@ -368,22 +374,27 @@ func (a *Aggregator) summarizePlanCoveredValue(ctx context.Context, f Filter) (f
 	q := `SELECT provider, model,
 			COALESCE(SUM(input_tokens), 0),
 			COALESCE(SUM(output_tokens), 0),
-			COALESCE(SUM(CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER)), 0)
+			COALESCE(SUM(CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER)), 0),
+			COUNT(*)
 		FROM events WHERE ` + strings.Join(conds, " AND ") +
 		` GROUP BY provider, model`
 	rows, err := a.store.DB().QueryContext(ctx, q, args...)
 	if err != nil {
-		return 0, fmt.Errorf("analytics: plan-covered value query: %w", err)
+		return 0, nil, fmt.Errorf("analytics: plan-covered value query: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	var total float64
+	var (
+		total    float64
+		unpriced []UnpricedModel
+	)
 	for rows.Next() {
 		var (
 			provider, model        sql.NullString
 			inTok, outTok, cacheIn sql.NullInt64
+			requests               sql.NullInt64
 		)
-		if err := rows.Scan(&provider, &model, &inTok, &outTok, &cacheIn); err != nil {
-			return 0, fmt.Errorf("analytics: plan-covered value scan: %w", err)
+		if err := rows.Scan(&provider, &model, &inTok, &outTok, &cacheIn, &requests); err != nil {
+			return 0, nil, fmt.Errorf("analytics: plan-covered value scan: %w", err)
 		}
 		p := &eventschema.PromptEvent{
 			Provider:          eventschema.Provider(provider.String),
@@ -392,14 +403,32 @@ func (a *Aggregator) summarizePlanCoveredValue(ctx context.Context, f Filter) (f
 			CachedInputTokens: cacheIn.Int64,
 			OutputTokens:      outTok.Int64,
 		}
-		if c, err := a.spend.Compute(p); err == nil {
-			total += c
+		c, err := a.spend.Compute(p)
+		if err != nil {
+			// tokenops' own telemetry (MCP session pings and friends)
+			// carries a pseudo-model that will never have a rate card.
+			// It is not a model call, so it is not a pricing gap.
+			if isSelfTelemetryModel(model.String) {
+				continue
+			}
+			// No rate card for a model the operator actually ran.
+			// Record it rather than discarding the error — silently
+			// dropping the row is how a subscription's dominant model can
+			// be missing from the api-equivalent figure with nothing to
+			// show for it.
+			unpriced = append(unpriced, UnpricedModel{
+				Provider: provider.String,
+				Model:    model.String,
+				Requests: requests.Int64,
+			})
+			continue
 		}
+		total += c
 	}
 	if err := rows.Err(); err != nil {
-		return 0, fmt.Errorf("analytics: plan-covered value iterate: %w", err)
+		return 0, nil, fmt.Errorf("analytics: plan-covered value iterate: %w", err)
 	}
-	return total, nil
+	return total, unpriced, nil
 }
 
 // CacheStatsResult is the per-window cache split. Token counts are
@@ -510,13 +539,22 @@ func (a *Aggregator) summarizeMissingCost(ctx context.Context, f Filter) (float6
 	return total, unpriced, nil
 }
 
-// costSourceMetered keeps cost recompute and unpriced-model detection
-// away from flat-rate traffic: plan-included and trial events are
-// zero-cost BY DESIGN (the request is covered by a subscription or
-// vendor credit), so repricing them at list rates would invent spend,
-// and their pseudo-models (e.g. "mcp-session") must not trip the
-// unpriced-model warning. The schema column carries only the bundled
-// counters, so the source is read from payload JSON.
+// selfTelemetryModels are pseudo-models tokenops emits about itself.
+// They describe daemon activity, not an LLM call, so they will never
+// have a rate card and must not be reported as pricing gaps.
+var selfTelemetryModels = map[string]bool{"mcp-session": true}
+
+func isSelfTelemetryModel(model string) bool { return selfTelemetryModels[model] }
+
+// costSourceMetered keeps cost RECOMPUTE away from flat-rate traffic:
+// plan-included and trial events are zero-cost BY DESIGN (the request is
+// covered by a subscription or vendor credit), so repricing them at list
+// rates would invent spend. Note this governs repricing only — pricing
+// GAPS in plan-covered traffic are reported separately by
+// summarizePlanCoveredValue, because on a subscription that traffic is
+// the majority and an unpriced model there would otherwise leave no
+// trace at all. The schema column carries only the bundled counters, so
+// the source is read from payload JSON.
 const costSourceMetered = `COALESCE(json_extract(payload, '$.cost_source'), '') NOT IN ('plan_included', 'trial')`
 
 func buildConditions(f Filter) ([]string, []any) {
@@ -566,4 +604,31 @@ func buildConditions(f Filter) ([]string, []any) {
 		conds = append(conds, "(source IS NULL OR source NOT IN ("+strings.Join(placeholders, ", ")+"))")
 	}
 	return conds, args
+}
+
+// mergeUnpriced folds two unpriced lists into one, summing requests for
+// pairs that appear in both (a model can be partly metered and partly
+// plan-covered inside one window).
+func mergeUnpriced(a, b []UnpricedModel) []UnpricedModel {
+	if len(b) == 0 {
+		return a
+	}
+	idx := make(map[string]int, len(a)+len(b))
+	out := make([]UnpricedModel, 0, len(a)+len(b))
+	add := func(u UnpricedModel) {
+		k := u.Provider + "/" + u.Model
+		if i, ok := idx[k]; ok {
+			out[i].Requests += u.Requests
+			return
+		}
+		idx[k] = len(out)
+		out = append(out, u)
+	}
+	for _, u := range a {
+		add(u)
+	}
+	for _, u := range b {
+		add(u)
+	}
+	return out
 }
