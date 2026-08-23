@@ -126,3 +126,52 @@ func TestWireMCPHostsReportsNoHosts(t *testing.T) {
 		t.Fatalf("absent hosts should be reported as manual: %+v", steps)
 	}
 }
+
+// Regression: runSetup must write only inside the target it was given.
+// An earlier version resolved $HOME internally, so running the CLI tests
+// repointed the developer's live MCP entry at a go-build test binary.
+func TestRunSetupTouchesOnlyItsTarget(t *testing.T) {
+	sandbox := t.TempDir()
+	hostCfg := filepath.Join(sandbox, ".claude.json")
+	if err := os.WriteFile(hostCfg, []byte("{}"), 0o600); err != nil {
+		t.Fatalf("seed host: %v", err)
+	}
+	settings := filepath.Join(sandbox, ".claude", "settings.json")
+	cfgPath := filepath.Join(sandbox, "config.yaml")
+	if err := os.WriteFile(cfgPath,
+		[]byte("listen: 127.0.0.1:7878\nplans:\n    anthropic: claude-max-20x\n"), 0o600); err != nil {
+		t.Fatalf("seed config: %v", err)
+	}
+
+	// A canary outside the sandbox: if runSetup resolves its own paths it
+	// writes here instead, and the assertions below miss it — so assert on
+	// the sandbox contents directly.
+	var buf bytes.Buffer
+	runSetup(&buf, cfgPath, setupTarget{
+		Home:         sandbox,
+		SettingsPath: settings,
+		Exe:          "/sandbox/bin/tokenops",
+	})
+
+	root := map[string]any{}
+	b, err := os.ReadFile(hostCfg)
+	if err != nil {
+		t.Fatalf("read host: %v", err)
+	}
+	if err := json.Unmarshal(b, &root); err != nil {
+		t.Fatalf("parse host: %v", err)
+	}
+	entry, ok := root["mcpServers"].(map[string]any)["tokenops"].(map[string]any)
+	if !ok {
+		t.Fatalf("tokenops not registered in the sandbox host: %v", root)
+	}
+	if entry["command"] != "/sandbox/bin/tokenops" {
+		t.Errorf("command = %v, want the injected exe", entry["command"])
+	}
+	if _, err := os.Stat(settings); err != nil {
+		t.Errorf("hooks were not written to the injected settings path: %v", err)
+	}
+	if !strings.Contains(buf.String(), "already bound") {
+		t.Errorf("expected the seeded plan to be reported:\n%s", buf.String())
+	}
+}
