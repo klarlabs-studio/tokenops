@@ -420,6 +420,19 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		logger.Info("rule intelligence enabled", "root", root, "repo_id", cfg.Rules.RepoID)
 	}
 
+	// Declare plan coverage to the proxy so the billing basis is known at
+	// request time, not just at storage time. planStampSink already
+	// backfills CostSource on the way into SQLite, but the router runs in
+	// the request path — well before that sink — so without this it would
+	// price a flat-rate subscription at API list rates and report dollar
+	// savings the operator can never realise.
+	if len(cfg.Plans) > 0 {
+		opts = append(opts, proxy.WithPlanCoverage(func(p eventschema.Provider) bool {
+			return planCostSource(cfg, p) == eventschema.CostSourcePlanIncluded
+		}))
+		logger.Info("plan-covered providers declared", "count", len(cfg.Plans))
+	}
+
 	if cfg.ActiveMode() {
 		if rc := cfg.Optimizer.RouterConfig(); rc != nil {
 			opts = append(opts, proxy.WithActiveRouting(*rc, components.Spend))

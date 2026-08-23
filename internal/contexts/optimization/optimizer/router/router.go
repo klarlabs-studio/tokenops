@@ -144,33 +144,47 @@ func (r *Router) pickTarget(provider eventschema.Provider, rule Rule) (string, b
 	return "", false
 }
 
+// estimateSavings reports the two independent currencies a route moves:
+// the token volume it redirects, and the dollar delta that redirection
+// buys. They are measured separately on purpose. Tokens are real
+// whichever way the rate cards fall — a lateral or quality-motivated
+// route still moved the whole request — and TEU sums this field, so
+// gating it on a favourable price comparison silently starves the
+// product's headline token metric.
+//
+// The dollar leg is floored at zero (a route to a pricier model is a
+// deliberate trade, not a negative saving) and priced through the
+// request's own CostSource, so a flat-rate subscription reports the
+// $0.00 it will actually be billed instead of a list-price fiction.
 func (r *Router) estimateSavings(req *optimizer.Request, target string) (int64, float64) {
+	// Token volume is observable without a rate card, so it is reported
+	// even when no spend engine is wired.
+	tokens := max(req.InputTokens+req.OutputTokens, 0)
 	if r.spend == nil {
-		return 0, 0
+		return tokens, 0
 	}
 	original := &eventschema.PromptEvent{
 		Provider: req.Provider, RequestModel: req.Model,
 		InputTokens: req.InputTokens, OutputTokens: req.OutputTokens,
+		CostSource: req.CostSource,
 	}
 	rerouted := &eventschema.PromptEvent{
 		Provider: req.Provider, RequestModel: target,
 		InputTokens: req.InputTokens, OutputTokens: req.OutputTokens,
+		CostSource: req.CostSource,
 	}
 	origCost, errA := r.spend.Compute(original)
 	newCost, errB := r.spend.Compute(rerouted)
 	if errA != nil || errB != nil {
-		return 0, 0
+		// Unpriced model on either side: the dollar leg is unknown, but
+		// the token leg is not.
+		return tokens, 0
 	}
 	usd := origCost - newCost
-	if usd <= 0 {
-		// Routing to a more expensive model — savings reported as 0,
-		// pipeline still records the recommendation.
-		return 0, 0
+	if usd < 0 {
+		usd = 0
 	}
-	// Token savings ≈ 0 (same prompt, same completion length); the win
-	// is on $/token. Report the input/output token total as informational
-	// so dashboards can show the routed-volume column.
-	return req.InputTokens + req.OutputTokens, usd
+	return tokens, usd
 }
 
 // rewriteModel replaces the top-level "model" field in body with target

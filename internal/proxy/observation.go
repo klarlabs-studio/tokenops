@@ -54,6 +54,10 @@ type requestObservation struct {
 	Start    time.Time
 	Provider eventschema.Provider
 	Prefix   string
+	// CostSource is how this request will be billed — resolved once at
+	// observation time from the server's plan coverage, then carried to
+	// both the emitted PromptEvent and any cost-aware optimizer.
+	CostSource eventschema.CostSource
 
 	PromptHash    string
 	RequestModel  string
@@ -164,6 +168,7 @@ func (r *observerRequestMeter) Done(_ int64) {
 			TimeToFirstToken: ttft,
 			Streaming:        r.obs.Streaming,
 			Status:           r.obs.Status,
+			CostSource:       r.obs.CostSource,
 			WorkflowID:       r.obs.WorkflowID,
 			AgentID:          r.obs.AgentID,
 			SessionID:        r.obs.SessionID,
@@ -224,9 +229,10 @@ func (s *Server) observerMiddleware(provider providers.Provider, next http.Handl
 		}
 
 		obs := &requestObservation{
-			Start:    time.Now().UTC(),
-			Provider: provider.ID,
-			Prefix:   provider.Prefix,
+			Start:      time.Now().UTC(),
+			Provider:   provider.ID,
+			Prefix:     provider.Prefix,
+			CostSource: s.costSourceFor(provider.ID),
 
 			WorkflowID: r.Header.Get(headerWorkflowID),
 			AgentID:    r.Header.Get(headerAgentID),

@@ -20,6 +20,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/proxy/cache"
 	"go.klarlabs.de/tokenops/internal/version"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Server is the TokenOps proxy daemon.
@@ -45,6 +46,10 @@ type Server struct {
 	// router applies live model routing when active mode is enabled
 	// (WithActiveRouting). nil = observe-only.
 	router *router.Router
+	// planCovered reports whether a provider's traffic is billed against
+	// a flat-rate subscription rather than metered per-token. nil means
+	// "everything is metered" — the historical default.
+	planCovered func(eventschema.Provider) bool
 
 	mu       sync.Mutex
 	httpSrv  *http.Server
@@ -70,6 +75,25 @@ type DashAuth interface {
 // daemon binds anything beyond loopback.
 func WithDashAuth(a DashAuth) Option {
 	return func(s *Server) { s.dashAuth = a }
+}
+
+// WithPlanCoverage declares which providers are billed against a
+// flat-rate subscription. Emitted PromptEvents carry
+// CostSourcePlanIncluded for those providers, so the spend engine prices
+// them at the $0.00 the operator is actually charged instead of a
+// list-price counterfactual — and cost-aware optimizers stop reporting
+// dollar savings that cannot be realised. Providers the callback does
+// not claim stay metered.
+func WithPlanCoverage(covered func(eventschema.Provider) bool) Option {
+	return func(s *Server) { s.planCovered = covered }
+}
+
+// costSourceFor reports how the provider's traffic should be accounted.
+func (s *Server) costSourceFor(p eventschema.Provider) eventschema.CostSource {
+	if s.planCovered != nil && s.planCovered(p) {
+		return eventschema.CostSourcePlanIncluded
+	}
+	return eventschema.CostSourceMetered
 }
 
 // WithLogger attaches a structured logger.
