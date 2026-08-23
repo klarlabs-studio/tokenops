@@ -199,6 +199,9 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if err := mcp.RegisterPlanTools(srv, planDeps); err != nil {
 		return fmt.Errorf("register plan tools: %w", err)
 	}
+	if err := mcp.RegisterAgentDXTools(srv, mcp.AgentDXDeps{}); err != nil {
+		return fmt.Errorf("register agent-dx tools: %w", err)
+	}
 	if err := mcp.RegisterApprovalTools(srv, mcp.ApprovalDeps{}); err != nil {
 		return fmt.Errorf("register approval tools: %w", err)
 	}
