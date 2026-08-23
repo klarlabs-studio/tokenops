@@ -60,6 +60,20 @@ type Config struct {
 	// Classify tunes the task classifier used by class-scoped rules.
 	// Zero values take the taskclass defaults.
 	Classify taskclass.Config
+	// PreferredModel returns the operator's preferred model for a
+	// provider, which acts as a ceiling: a rule routing to something
+	// pricier is refused and referred to them instead of applied. Nil,
+	// or an empty return, disables the ceiling and every rule applies
+	// unconditionally — the behaviour before this existed.
+	PreferredModel func(eventschema.Provider) string
+	// UpgradeDecision reports the operator's standing answer for a route
+	// that exceeds the ceiling. Nil is equivalent to always Pending.
+	UpgradeDecision func(provider eventschema.Provider, from, to string) Decision
+	// OnProposal is invoked when an upgrade is refused for want of an
+	// answer, exactly once per request. Wire it to whatever surfaces the
+	// choice to the operator. It must not block: this runs in the
+	// request path.
+	OnProposal func(Proposal)
 }
 
 // Router is the Optimizer implementation.
@@ -106,6 +120,31 @@ func (r *Router) Run(_ context.Context, req *optimizer.Request) ([]optimizer.Rec
 		classNote = fmt.Sprintf(" [%s: %s]", sig.Class, sig.Reason)
 	}
 	target, ok := r.pickTarget(req.Provider, rule)
+	if ok {
+		// The operator's ceiling outranks the routing table: an upgrade
+		// past their preferred model waits for their answer.
+		if prop, needsApproval := r.upgradeCheck(req.Provider, req.Model, target); needsApproval {
+			switch r.decisionFor(req.Provider, req.Model, target) {
+			case DecisionApproved:
+				// Fall through and route as configured.
+			case DecisionDenied:
+				return []optimizer.Recommendation{{
+					Kind:         eventschema.OptimizationTypeRouter,
+					Reason:       "router: upgrade declined by operator — " + prop.Reason,
+					QualityScore: rule.Quality,
+				}}, nil
+			default:
+				if r.cfg.OnProposal != nil {
+					r.cfg.OnProposal(prop)
+				}
+				return []optimizer.Recommendation{{
+					Kind:         eventschema.OptimizationTypeRouter,
+					Reason:       "router: upgrade awaiting operator approval — " + prop.Reason,
+					QualityScore: rule.Quality,
+				}}, nil
+			}
+		}
+	}
 	if !ok {
 		// Original target and all fallbacks unavailable; emit a skipped
 		// rec so dashboards can flag the misroute.
@@ -242,3 +281,15 @@ var (
 	ErrEmptyBody    = errors.New("router: empty body")
 	ErrNoModelField = errors.New("router: no model field")
 )
+
+// decisionFor resolves the operator's standing answer for a route.
+func (r *Router) decisionFor(provider eventschema.Provider, from, to string) Decision {
+	if r.cfg.UpgradeDecision == nil {
+		return DecisionPending
+	}
+	return r.cfg.UpgradeDecision(provider, from, to)
+}
+
+// errNoSpendEngine reports that no rate card is reachable, so two models
+// cannot be ranked against each other.
+var errNoSpendEngine = errors.New("router: no spend engine for rate comparison")

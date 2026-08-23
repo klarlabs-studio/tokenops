@@ -46,25 +46,38 @@ type Config struct {
 	// a configured plan are billed as plan_included (CostUSD=0) and
 	// roll up to the plan's monthly quota instead. See
 	// internal/contexts/spend/plans for the catalog.
-	Plans       map[string]string `yaml:"plans"`
-	TLS         TLSConfig         `yaml:"tls"`
-	Storage     StorageConfig     `yaml:"storage"`
-	Retention   RetentionConfig   `yaml:"retention,omitempty"`
-	OTel        OTelConfig        `yaml:"otel"`
-	Rules       RulesConfig       `yaml:"rules"`
-	Resilience  ResilienceConfig  `yaml:"resilience"`
-	VendorUsage VendorUsageConfig `yaml:"vendor_usage"`
-	Dashboard   DashboardConfig   `yaml:"dashboard"`
-	Pricing     PricingConfig     `yaml:"pricing"`
-	Optimizer   OptimizerConfig   `yaml:"optimizer"`
-	Coaching    CoachingConfig    `yaml:"coaching"`
-	Budgets     []BudgetConfig    `yaml:"budgets"`
-	Watch       WatchConfig       `yaml:"watch"`
+	Plans map[string]string `yaml:"plans"`
+	// PreferredModels maps provider name → the model you want to stay on
+	// (e.g. "anthropic" → "claude-opus-5"). It acts as a ceiling: a
+	// routing rule that would move you to a pricier model is refused and
+	// referred to you instead of applied, with the preferred model
+	// offered as the alternative. Routing DOWN to something cheaper
+	// still applies automatically. Empty disables the ceiling.
+	PreferredModels map[string]string `yaml:"preferred_models,omitempty"`
+	TLS             TLSConfig         `yaml:"tls"`
+	Storage         StorageConfig     `yaml:"storage"`
+	Retention       RetentionConfig   `yaml:"retention,omitempty"`
+	OTel            OTelConfig        `yaml:"otel"`
+	Rules           RulesConfig       `yaml:"rules"`
+	Resilience      ResilienceConfig  `yaml:"resilience"`
+	VendorUsage     VendorUsageConfig `yaml:"vendor_usage"`
+	Dashboard       DashboardConfig   `yaml:"dashboard"`
+	Pricing         PricingConfig     `yaml:"pricing"`
+	Optimizer       OptimizerConfig   `yaml:"optimizer"`
+	Coaching        CoachingConfig    `yaml:"coaching"`
+	Budgets         []BudgetConfig    `yaml:"budgets"`
+	Watch           WatchConfig       `yaml:"watch"`
 }
 
 // ActiveMode reports whether interventions (live routing, spend
 // watcher) are enabled. Empty Mode means passive.
 func (c Config) ActiveMode() bool { return strings.EqualFold(c.Mode, ModeActive) }
+
+// PreferredModel returns the operator's ceiling model for a provider, or
+// "" when none is configured.
+func (c Config) PreferredModel(provider eventschema.Provider) string {
+	return c.PreferredModels[string(provider)]
+}
 
 // BudgetConfig is one spend limit the watcher (active mode) and
 // on-demand evaluations check. Window is a calendar window in UTC.
@@ -676,6 +689,11 @@ func (c Config) Validate() error {
 		}
 		if b.WarnAt < 0 || b.WarnAt > 1 || b.CritAt < 0 || b.CritAt > 1 {
 			return fmt.Errorf("budgets[%d]: warn_at and crit_at must be in [0,1]", i)
+		}
+	}
+	for provider, model := range c.PreferredModels {
+		if strings.TrimSpace(model) == "" {
+			return fmt.Errorf("preferred_models[%s]: model must not be empty", provider)
 		}
 	}
 	if c.Watch.Interval < 0 {

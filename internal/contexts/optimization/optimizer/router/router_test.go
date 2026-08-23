@@ -396,3 +396,161 @@ func TestUnscopedRuleUnaffectedByClass(t *testing.T) {
 		t.Errorf("recs = %d, want 1 — an unscoped rule still applies unconditionally", len(recs))
 	}
 }
+
+// --- preferred model: ceiling + fallback ---------------------------------
+
+// The operator's preferred model is a ceiling. A rule that would route
+// them UP to something pricier is refused rather than applied silently —
+// that is a bill increase they did not agree to.
+func TestUpgradeAbovePreferredIsRefused(t *testing.T) {
+	var proposed []Proposal
+	r := New(Config{
+		Rules: []Rule{{
+			Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+			ToModel: "claude-fable-5", Quality: 0.95,
+		}},
+		PreferredModel: func(eventschema.Provider) string { return "claude-opus-4-8" },
+		OnProposal:     func(p Proposal) { proposed = append(proposed, p) },
+	}, spend.NewEngine(spend.DefaultTable()))
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body:        bodyWithModel(t, "claude-opus-4-8", nil),
+		InputTokens: 1_000_000,
+	})
+	for _, rec := range recs {
+		if rec.ApplyBody != nil {
+			t.Errorf("an upgrade above the preferred model must not be applied")
+		}
+	}
+	if len(proposed) != 1 {
+		t.Fatalf("proposals = %d, want 1", len(proposed))
+	}
+	if proposed[0].ProposedModel != "claude-fable-5" {
+		t.Errorf("ProposedModel = %q", proposed[0].ProposedModel)
+	}
+	if proposed[0].PreferredModel != "claude-opus-4-8" {
+		t.Errorf("PreferredModel = %q — the fallback the operator can accept", proposed[0].PreferredModel)
+	}
+}
+
+// Routing DOWN stays automatic. The ceiling exists to stop surprise
+// upgrades, not to gate the savings the operator asked for.
+func TestDowngradeBelowPreferredStillApplies(t *testing.T) {
+	var proposed []Proposal
+	r := New(Config{
+		Rules: []Rule{{
+			Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+			ToModel: "claude-haiku-4-5", Quality: 0.9,
+		}},
+		PreferredModel: func(eventschema.Provider) string { return "claude-opus-4-8" },
+		OnProposal:     func(p Proposal) { proposed = append(proposed, p) },
+	}, spend.NewEngine(spend.DefaultTable()))
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: bodyWithModel(t, "claude-opus-4-8", nil), InputTokens: 1_000_000,
+	})
+	if len(recs) != 1 || recs[0].ApplyBody == nil {
+		t.Fatalf("a cheaper route should still apply: %+v", recs)
+	}
+	if len(proposed) != 0 {
+		t.Errorf("a downgrade needs no approval, got %+v", proposed)
+	}
+}
+
+// Once the operator approves an upgrade, it applies without asking again.
+func TestApprovedUpgradeApplies(t *testing.T) {
+	r := New(Config{
+		Rules: []Rule{{
+			Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+			ToModel: "claude-fable-5", Quality: 0.95,
+		}},
+		PreferredModel: func(eventschema.Provider) string { return "claude-opus-4-8" },
+		UpgradeDecision: func(_ eventschema.Provider, from, to string) Decision {
+			if from == "claude-opus-4-8" && to == "claude-fable-5" {
+				return DecisionApproved
+			}
+			return DecisionPending
+		},
+	}, spend.NewEngine(spend.DefaultTable()))
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: bodyWithModel(t, "claude-opus-4-8", nil), InputTokens: 1_000_000,
+	})
+	if len(recs) != 1 || recs[0].ApplyBody == nil {
+		t.Fatalf("an approved upgrade should apply: %+v", recs)
+	}
+}
+
+// A denied upgrade stays refused and stops re-proposing.
+func TestDeniedUpgradeStaysRefusedWithoutReproposing(t *testing.T) {
+	var proposed []Proposal
+	r := New(Config{
+		Rules: []Rule{{
+			Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+			ToModel: "claude-fable-5", Quality: 0.95,
+		}},
+		PreferredModel:  func(eventschema.Provider) string { return "claude-opus-4-8" },
+		UpgradeDecision: func(eventschema.Provider, string, string) Decision { return DecisionDenied },
+		OnProposal:      func(p Proposal) { proposed = append(proposed, p) },
+	}, spend.NewEngine(spend.DefaultTable()))
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: bodyWithModel(t, "claude-opus-4-8", nil), InputTokens: 1_000_000,
+	})
+	for _, rec := range recs {
+		if rec.ApplyBody != nil {
+			t.Errorf("a denied upgrade must not apply")
+		}
+	}
+	if len(proposed) != 0 {
+		t.Errorf("a decided upgrade must not be re-proposed, got %+v", proposed)
+	}
+}
+
+// When either side has no rate card the comparison cannot be made. That
+// is exactly when NOT to act: an unverifiable change to the operator's
+// model is treated as an upgrade and referred to them.
+func TestUnpricedTargetIsTreatedAsAnUpgrade(t *testing.T) {
+	var proposed []Proposal
+	r := New(Config{
+		Rules: []Rule{{
+			Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+			ToModel: "claude-brand-new-unpriced", Quality: 0.95,
+		}},
+		PreferredModel: func(eventschema.Provider) string { return "claude-opus-4-8" },
+		OnProposal:     func(p Proposal) { proposed = append(proposed, p) },
+	}, spend.NewEngine(spend.DefaultTable()))
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: bodyWithModel(t, "claude-opus-4-8", nil), InputTokens: 1_000_000,
+	})
+	for _, rec := range recs {
+		if rec.ApplyBody != nil {
+			t.Errorf("an unpriced target must not be applied unreviewed")
+		}
+	}
+	if len(proposed) != 1 {
+		t.Errorf("proposals = %d, want 1 for an unverifiable route", len(proposed))
+	}
+}
+
+// With no preferred model configured nothing changes.
+func TestNoPreferredModelKeepsExistingBehaviour(t *testing.T) {
+	r := New(Config{Rules: []Rule{{
+		Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+		ToModel: "claude-fable-5", Quality: 0.95,
+	}}}, spend.NewEngine(spend.DefaultTable()))
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: bodyWithModel(t, "claude-opus-4-8", nil), InputTokens: 1_000_000,
+	})
+	if len(recs) != 1 || recs[0].ApplyBody == nil {
+		t.Fatalf("without a ceiling the rule applies as before: %+v", recs)
+	}
+}

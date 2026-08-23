@@ -437,6 +437,19 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 
 	if cfg.ActiveMode() {
 		if rc := cfg.Optimizer.RouterConfig(); rc != nil {
+			// The operator's preferred model is a ceiling on live
+			// routing. An upgrade past it is refused and logged as a
+			// proposal they answer through the MCP surface, rather than
+			// applied to a request they never saw.
+			if len(cfg.PreferredModels) > 0 {
+				if store, err := openRoutingApprovals(); err != nil {
+					logger.Warn("routing approvals unavailable; upgrades will not be gated", "err", err)
+				} else {
+					attachApprovalGate(rc, cfg, store, logger)
+					logger.Info("preferred-model ceiling active",
+						"providers", len(cfg.PreferredModels))
+				}
+			}
 			opts = append(opts, proxy.WithActiveRouting(*rc, components.Spend))
 			logger.Info("active mode: live model routing enabled", "rules", len(rc.Rules))
 		} else {
