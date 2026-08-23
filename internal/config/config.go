@@ -264,6 +264,16 @@ type RoutingRuleConfig struct {
 	// A scoped rule declines whenever the classifier cannot tell, so
 	// turns that are ambiguous keep the model the client asked for.
 	WhenClass string `yaml:"when_class,omitempty"`
+	// WhenWindowPctAbove scopes the rule to periods when the plan's
+	// rate-limit window is at least this full (0–100). Zero applies it
+	// regardless.
+	//
+	// On a flat-rate plan this is the objective that matters: requests
+	// bill $0.00 at the margin, so the resource that runs out is the
+	// window. Gating on it keeps you on your best model while there is
+	// headroom and conserves it only when there is not. A rule scoped
+	// this way stays idle whenever the window cannot be measured.
+	WhenWindowPctAbove float64 `yaml:"when_window_pct_above,omitempty"`
 }
 
 // RouterConfig maps optimizer.routing_rules into the router's domain
@@ -277,12 +287,13 @@ func (o OptimizerConfig) RouterConfig() *router.Config {
 	rules := make([]router.Rule, 0, len(o.RoutingRules))
 	for _, r := range o.RoutingRules {
 		rules = append(rules, router.Rule{
-			Provider:  eventschema.Provider(r.Provider),
-			FromModel: r.FromModel,
-			ToModel:   r.ToModel,
-			Quality:   r.Quality,
-			Fallbacks: r.Fallbacks,
-			WhenClass: strings.ToLower(r.WhenClass),
+			Provider:           eventschema.Provider(r.Provider),
+			FromModel:          r.FromModel,
+			ToModel:            r.ToModel,
+			Quality:            r.Quality,
+			Fallbacks:          r.Fallbacks,
+			WhenClass:          strings.ToLower(r.WhenClass),
+			WhenWindowPctAbove: r.WhenWindowPctAbove,
 		})
 	}
 	return &router.Config{Rules: rules, MinQuality: o.RoutingMinQuality}
@@ -641,6 +652,10 @@ func (c Config) Validate() error {
 		default:
 			return fmt.Errorf("optimizer.routing_rules[%d]: when_class must be %q or %q, got %q",
 				i, taskclass.Mechanical, taskclass.Reasoning, r.WhenClass)
+		}
+		if r.WhenWindowPctAbove < 0 || r.WhenWindowPctAbove > 100 {
+			return fmt.Errorf("optimizer.routing_rules[%d]: when_window_pct_above must be in [0,100], got %g",
+				i, r.WhenWindowPctAbove)
 		}
 		if r.Quality <= 0 || r.Quality > 1 {
 			return fmt.Errorf("optimizer.routing_rules[%d]: quality must be in (0,1], got %g", i, r.Quality)

@@ -35,6 +35,20 @@ type Rule struct {
 	// router itself does not probe availability; callers can wire a
 	// healthcheck via Config.IsAvailable.
 	Fallbacks []string
+	// WhenWindowPctAbove scopes the rule to periods when the plan's
+	// rate-limit window is at least this full (0–100). Zero applies the
+	// rule regardless of window state.
+	//
+	// This is the objective that matters on a flat-rate subscription:
+	// requests cost $0.00 at the margin, so the scarce resource is the
+	// window, not money. Gating on pressure keeps the operator on their
+	// best model while they can afford it and preserves headroom only
+	// when it is actually running out.
+	//
+	// A rule scoped this way stays idle whenever the window cannot be
+	// measured. Degrading quality on the strength of a meter that is not
+	// reporting would be acting on a shortage that may not exist.
+	WhenWindowPctAbove float64
 	// WhenClass scopes the rule to one kind of work, as classified by
 	// taskclass ("mechanical" or "reasoning"). Empty applies the rule
 	// unconditionally, which is the historical behaviour.
@@ -74,6 +88,15 @@ type Config struct {
 	// choice to the operator. It must not block: this runs in the
 	// request path.
 	OnProposal func(Proposal)
+	// WindowPressure reports how full the provider's rate-limit window
+	// is, as a percentage, and whether that reading is trustworthy at
+	// all. Rules carrying WhenWindowPctAbove consult it. Nil means no
+	// window signal, and every such rule stays idle.
+	//
+	// It runs in the request path, so it must be cheap and non-blocking:
+	// wire it to a cached reading refreshed in the background, never to
+	// a live query.
+	WindowPressure func(eventschema.Provider) (pct float64, ok bool)
 }
 
 // Router is the Optimizer implementation.
@@ -108,6 +131,16 @@ func (r *Router) Run(_ context.Context, req *optimizer.Request) ([]optimizer.Rec
 	}
 	if rule.Quality < r.cfg.MinQuality {
 		return nil, nil
+	}
+	// A pressure-scoped rule waits until the window is actually tight.
+	var windowNote string
+	if rule.WhenWindowPctAbove > 0 {
+		pct, ok := r.windowPct(req.Provider)
+		if !ok || pct < rule.WhenWindowPctAbove {
+			return nil, nil
+		}
+		windowNote = fmt.Sprintf(" [window %.0f%% full, threshold %.0f%%]",
+			pct, rule.WhenWindowPctAbove)
 	}
 	// A class-scoped rule only fires when the turn is confidently the
 	// kind of work it was written for.
@@ -168,7 +201,7 @@ func (r *Router) Run(_ context.Context, req *optimizer.Request) ([]optimizer.Rec
 		EstimatedSavingsTokens: tokenSavings,
 		EstimatedSavingsUSD:    usdSavings,
 		QualityScore:           rule.Quality,
-		Reason:                 fmt.Sprintf("route %s -> %s%s", req.Model, target, classNote),
+		Reason:                 fmt.Sprintf("route %s -> %s%s%s", req.Model, target, windowNote, classNote),
 		ApplyBody:              newBody,
 	}}, nil
 }
@@ -293,3 +326,13 @@ func (r *Router) decisionFor(provider eventschema.Provider, from, to string) Dec
 // errNoSpendEngine reports that no rate card is reachable, so two models
 // cannot be ranked against each other.
 var errNoSpendEngine = errors.New("router: no spend engine for rate comparison")
+
+// windowPct reads the provider's rate-limit window fill, reporting
+// whether the value can be trusted. An absent probe and an untrustworthy
+// reading are the same answer to a caller: do not act.
+func (r *Router) windowPct(provider eventschema.Provider) (float64, bool) {
+	if r.cfg.WindowPressure == nil {
+		return 0, false
+	}
+	return r.cfg.WindowPressure(provider)
+}
