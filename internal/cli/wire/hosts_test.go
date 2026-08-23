@@ -35,11 +35,21 @@ func TestDiscoverFindsMultipleHosts(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, ".claude.json"), []byte("{}"), 0o600); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	desktop := filepath.Join(home, "Library", "Application Support", "Claude")
-	if err := os.MkdirAll(desktop, 0o755); err != nil {
+	// Seed the Desktop config at whatever path THIS platform uses, rather
+	// than hardcoding macOS's layout — the same test then covers Linux.
+	var desktopCfg string
+	for _, c := range CandidateHosts(home) {
+		if c.Name == "Claude Desktop" {
+			desktopCfg = c.ConfigPath
+		}
+	}
+	if desktopCfg == "" {
+		t.Fatal("no Claude Desktop candidate for this platform")
+	}
+	if err := os.MkdirAll(filepath.Dir(desktopCfg), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(desktop, "claude_desktop_config.json"), []byte("{}"), 0o600); err != nil {
+	if err := os.WriteFile(desktopCfg, []byte("{}"), 0o600); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	got := DiscoverHosts(home)

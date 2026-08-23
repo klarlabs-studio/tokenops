@@ -20,6 +20,20 @@ type Host struct {
 // operator does not have would leave a dead entry behind and make the
 // summary claim more than was done.
 func DiscoverHosts(home string) []Host {
+	candidates := CandidateHosts(home)
+	out := make([]Host, 0, len(candidates))
+	for _, h := range candidates {
+		if _, err := os.Stat(h.ConfigPath); err == nil {
+			out = append(out, h)
+		}
+	}
+	return out
+}
+
+// CandidateHosts lists every MCP host tokenops knows how to register with
+// on this platform, present or not. Exported so callers (and tests) can
+// resolve the platform's real paths instead of hardcoding one OS's layout.
+func CandidateHosts(home string) []Host {
 	candidates := []Host{
 		{Name: "Claude Code", ConfigPath: filepath.Join(home, ".claude.json")},
 	}
@@ -35,12 +49,5 @@ func DiscoverHosts(home string) []Host {
 			ConfigPath: filepath.Join(home, ".config", "Claude", "claude_desktop_config.json"),
 		})
 	}
-
-	out := make([]Host, 0, len(candidates))
-	for _, h := range candidates {
-		if _, err := os.Stat(h.ConfigPath); err == nil {
-			out = append(out, h)
-		}
-	}
-	return out
+	return candidates
 }
