@@ -690,3 +690,98 @@ func TestUnscopedRuleIgnoresWindow(t *testing.T) {
 		t.Errorf("unscoped rule should still apply: %+v", recs)
 	}
 }
+
+// --- optimizer mode ------------------------------------------------------
+
+// Observe mode records what a rule would have done and changes nothing.
+// A recommendation still lands so the operator can see the opportunity;
+// the request goes upstream untouched.
+func TestObserveModeRecordsWithoutApplying(t *testing.T) {
+	r := New(Config{
+		Rules: []Rule{{
+			Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+			ToModel: "claude-haiku-4-5", Quality: 0.9,
+		}},
+		ProposeOnly: false, ObserveOnly: true,
+	}, nil)
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: bodyWithModel(t, "claude-opus-4-8", nil),
+	})
+	if len(recs) != 1 {
+		t.Fatalf("observe mode should still record the opportunity: %+v", recs)
+	}
+	if recs[0].ApplyBody != nil {
+		t.Error("observe mode must not rewrite the request")
+	}
+}
+
+// In-request mode refers every route to the operator, not just upgrades
+// past the preferred model.
+func TestInRequestModeProposesEveryRoute(t *testing.T) {
+	var proposed []Proposal
+	r := New(Config{
+		Rules: []Rule{{
+			Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+			ToModel: "claude-haiku-4-5", Quality: 0.9,
+		}},
+		ProposeOnly: true,
+		OnProposal:  func(p Proposal) { proposed = append(proposed, p) },
+	}, nil)
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: bodyWithModel(t, "claude-opus-4-8", nil),
+	})
+	for _, rec := range recs {
+		if rec.ApplyBody != nil {
+			t.Error("in-request mode must not rewrite unasked")
+		}
+	}
+	if len(proposed) != 1 {
+		t.Fatalf("proposals = %d, want 1", len(proposed))
+	}
+	if proposed[0].ProposedModel != "claude-haiku-4-5" {
+		t.Errorf("ProposedModel = %q", proposed[0].ProposedModel)
+	}
+}
+
+// An approved route applies even in in-request mode — that is the whole
+// point of having answered.
+func TestInRequestModeAppliesApprovedRoute(t *testing.T) {
+	r := New(Config{
+		Rules: []Rule{{
+			Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+			ToModel: "claude-haiku-4-5", Quality: 0.9,
+		}},
+		ProposeOnly: true,
+		UpgradeDecision: func(eventschema.Provider, string, string) Decision {
+			return DecisionApproved
+		},
+	}, nil)
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: bodyWithModel(t, "claude-opus-4-8", nil),
+	})
+	if len(recs) != 1 || recs[0].ApplyBody == nil {
+		t.Fatalf("an approved route should apply: %+v", recs)
+	}
+}
+
+// Automatic mode is the historical behaviour.
+func TestAutomaticModeApplies(t *testing.T) {
+	r := New(Config{Rules: []Rule{{
+		Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+		ToModel: "claude-haiku-4-5", Quality: 0.9,
+	}}}, nil)
+
+	recs, _ := r.Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: bodyWithModel(t, "claude-opus-4-8", nil),
+	})
+	if len(recs) != 1 || recs[0].ApplyBody == nil {
+		t.Fatalf("automatic mode should apply: %+v", recs)
+	}
+}

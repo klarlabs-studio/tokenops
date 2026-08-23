@@ -435,35 +435,37 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		logger.Info("plan-covered providers declared", "count", len(cfg.Plans))
 	}
 
-	if cfg.ActiveMode() {
-		if rc := cfg.Optimizer.RouterConfig(); rc != nil {
-			// The operator's preferred model is a ceiling on live
-			// routing. An upgrade past it is refused and logged as a
-			// proposal they answer through the MCP surface, rather than
-			// applied to a request they never saw.
-			// Window pressure is read per request, so it comes from a
-			// cache a background loop refreshes — scanning the event
-			// store inline would put a full window query on the hot path.
-			if components.Store != nil && len(cfg.Plans) > 0 {
-				probe := newWindowProbe()
-				go runWindowProbe(ctx, probe, cfg, planStoreReader{store: components.Store}, time.Minute)
-				rc.WindowPressure = probe.Pct
-				logger.Info("window-pressure routing available", "providers", len(cfg.Plans))
-			}
-			if len(cfg.PreferredModels) > 0 {
-				if store, err := openRoutingApprovals(); err != nil {
-					logger.Warn("routing approvals unavailable; upgrades will not be gated", "err", err)
-				} else {
-					attachApprovalGate(rc, cfg, store, logger)
-					logger.Info("preferred-model ceiling active",
-						"providers", len(cfg.PreferredModels))
-				}
-			}
-			opts = append(opts, proxy.WithActiveRouting(*rc, components.Spend))
-			logger.Info("active mode: live model routing enabled", "rules", len(rc.Rules))
-		} else {
-			logger.Info("active mode enabled but no optimizer.routing_rules configured; proxy stays observe-only")
+	// The optimizer's own mode governs what it may do with a request.
+	// The daemon-wide active flag still gates the background watcher, but
+	// routing no longer needs it: an operator can leave the daemon in its
+	// default mode and still have the optimizer propose or observe.
+	if rc := cfg.Optimizer.RouterConfig(); rc != nil {
+		// Window pressure is read per request, so it comes from a cache a
+		// background loop refreshes — scanning the event store inline
+		// would put a full window query on the hot path.
+		if components.Store != nil && len(cfg.Plans) > 0 {
+			probe := newWindowProbe()
+			go runWindowProbe(ctx, probe, cfg, planStoreReader{store: components.Store}, time.Minute)
+			rc.WindowPressure = probe.Pct
+			logger.Info("window-pressure routing available", "providers", len(cfg.Plans))
 		}
+		// Proposals need somewhere to live. Both the preferred-model
+		// ceiling and in_request mode refer decisions to the operator, so
+		// either one requires the approval log — wiring it only for the
+		// ceiling would leave in_request proposing into the void.
+		if len(cfg.PreferredModels) > 0 || cfg.Optimizer.Mode.Proposes() {
+			if store, err := openRoutingApprovals(); err != nil {
+				logger.Warn("routing approvals unavailable; routes will not be referred", "err", err)
+			} else {
+				attachApprovalGate(rc, cfg, store, logger)
+				logger.Info("routing decisions referable",
+					"preferred_models", len(cfg.PreferredModels),
+					"mode", string(cfg.Optimizer.Mode))
+			}
+		}
+		opts = append(opts, proxy.WithActiveRouting(*rc, components.Spend))
+		logger.Info("model routing wired",
+			"rules", len(rc.Rules), "mode", string(cfg.Optimizer.Mode))
 	}
 
 	srv := proxy.New(cfg.Listen, opts...)

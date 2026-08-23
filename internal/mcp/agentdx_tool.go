@@ -60,7 +60,7 @@ func RegisterAgentDXTools(s *Server, d AgentDXDeps) error {
 				opts.Since = time.Now().AddDate(0, 0, -days)
 				window = formatDays(days)
 			}
-			records, err := agentdx.Extract(opts)
+			records, err := agentdx.ExtractAll(opts)
 			if err != nil {
 				return nil, err
 			}

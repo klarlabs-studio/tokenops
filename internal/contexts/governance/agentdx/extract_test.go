@@ -1,6 +1,8 @@
 package agentdx
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -122,5 +124,26 @@ func TestCompactionIsNotAPrompt(t *testing.T) {
 	}
 	if prompts != 1 {
 		t.Errorf("prompts = %d, want 1 — a compaction summary is not an instruction", prompts)
+	}
+}
+
+// A pinned Root must not be quietly ignored while the readers scan the
+// real home directory. Auto mode is discovery; naming a tree is not.
+func TestExtractAllHonoursPinnedRoot(t *testing.T) {
+	root := t.TempDir()
+	proj := filepath.Join(root, "p")
+	if err := os.MkdirAll(proj, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	line := `{"type":"user","timestamp":"2099-01-01T10:00:00Z","sessionId":"s","message":{"content":"only me"}}`
+	if err := os.WriteFile(filepath.Join(proj, "s.jsonl"), []byte(line), 0o600); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	got, err := ExtractAll(ExtractOptions{Root: root})
+	if err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	if len(got) != 1 {
+		t.Errorf("got %d records, want exactly the pinned tree's 1 — auto mode must not wander", len(got))
 	}
 }
