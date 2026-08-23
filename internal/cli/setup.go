@@ -27,6 +27,33 @@ type setupStep struct {
 	Err    error
 }
 
+// setupTarget is where the wiring is written. It is injected rather than
+// resolved inside runSetup so tests can never reach the developer's real
+// Claude configuration — an earlier version resolved $HOME internally and
+// the test suite duly repointed the maintainer's live MCP entry at a
+// go-build test binary.
+type setupTarget struct {
+	// Home is the directory MCP hosts are discovered under.
+	Home string
+	// SettingsPath is the Claude Code settings.json hooks are merged into.
+	SettingsPath string
+	// Exe is the absolute binary path registered with hosts and hooks.
+	Exe string
+}
+
+// realSetupTarget resolves the live machine's paths.
+func realSetupTarget() (setupTarget, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return setupTarget{}, fmt.Errorf("resolve home directory: %w", err)
+	}
+	return setupTarget{
+		Home:         home,
+		SettingsPath: resolveSettingsPath(""),
+		Exe:          selfExe(),
+	}, nil
+}
+
 // runSetup wires tokenops into the machine it was just configured on:
 // registers the MCP server with every installed host, installs the Claude
 // Code hooks, and binds a subscription plan when detection is unambiguous.
@@ -36,22 +63,10 @@ type setupStep struct {
 // and pointing a client's base URL at the local proxy reroutes the
 // operator's real traffic — that is their call to make, not a side effect
 // of running init.
-func runSetup(out io.Writer, cfgPath string, exe string) {
-	var steps []setupStep
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		renderSetup(out, append(steps, setupStep{
-			Name: "discover clients",
-			Err:  fmt.Errorf("resolve home directory: %w", err),
-		}))
-		return
-	}
-
-	steps = append(steps, wireMCPHosts(home, exe)...)
-	steps = append(steps, wireHooks(exe))
+func runSetup(out io.Writer, cfgPath string, target setupTarget) {
+	steps := wireMCPHosts(target.Home, target.Exe)
+	steps = append(steps, wireHooks(target.SettingsPath, target.Exe))
 	steps = append(steps, bindPlan(cfgPath))
-
 	renderSetup(out, steps)
 }
 
@@ -92,8 +107,7 @@ func wireMCPHosts(home, exe string) []setupStep {
 }
 
 // wireHooks installs the Stop coaching nudge and the read dedup guard.
-func wireHooks(exe string) setupStep {
-	path := resolveSettingsPath("")
+func wireHooks(path, exe string) setupStep {
 	settings, _, err := loadSettings(path)
 	if err != nil {
 		return setupStep{Name: "Claude Code hooks", Err: err}

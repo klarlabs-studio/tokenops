@@ -18,6 +18,10 @@ import (
 func runInitInDir(t *testing.T, args ...string) (configPath, storagePath, stdout string) {
 	t.Helper()
 	dir := t.TempDir()
+	// init wires MCP hosts and hooks under $HOME. Pin it to the scratch
+	// directory so exercising the real command cannot reach the
+	// developer's live Claude configuration.
+	t.Setenv("HOME", dir)
 	configPath = filepath.Join(dir, "config.yaml")
 	storagePath = filepath.Join(dir, "data", "events.db")
 

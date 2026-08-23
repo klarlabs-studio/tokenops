@@ -127,7 +127,11 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 			if f.noWire {
 				return nil
 			}
-			runSetup(cmd.OutOrStdout(), configPath, selfExe())
+			target, err := realSetupTarget()
+			if err != nil {
+				return err
+			}
+			runSetup(cmd.OutOrStdout(), configPath, target)
 			return nil
 		}
 	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -157,7 +161,11 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 			"\n--no-wire: config only. Run `tokenops init` without it to register the MCP server and install hooks.")
 		return nil
 	}
-	runSetup(cmd.OutOrStdout(), configPath, selfExe())
+	target, err := realSetupTarget()
+	if err != nil {
+		return err
+	}
+	runSetup(cmd.OutOrStdout(), configPath, target)
 	return nil
 }
 
