@@ -1,5 +1,121 @@
 # Changelog
 
+## 0.45.0 - 2026-08-23
+
+The optimisation half of the product accounted in dollars. On a flat-rate
+subscription dollars are always `$0.00`, so every number was either zero
+or a counterfactual and no test failed. This release makes tokens and the
+rate-limit window first-class, stops two KPIs grading data that was never
+measured, and turns `init` into the single command that wires the machine.
+
+Minor rather than patch: `init` now registers MCP servers and installs
+hooks by default (`--no-wire` restores the old behaviour), the read guard
+promotes itself to active once its ledger justifies it, and scorecard
+JSON drops unmeasured KPI blocks instead of emitting them.
+
+### Added
+
+- **Rate-limit window routing.** `optimizer.routing_rules[].when_window_pct_above`
+  scopes a rule to periods when the plan window is at least that full. On
+  a subscription the window is what runs out, not money, so a rule can now
+  keep you on your best model while there is headroom and conserve it only
+  when there is not. A rule stays idle when the window cannot be measured
+  or its reading is over ten minutes old — acting on an unmeasured
+  shortage is worse than not acting.
+
+- **Task-aware routing.** `when_class: mechanical | reasoning` scopes a
+  rule to the kind of work a turn is, classified from instruction length,
+  tool-call density, and whether the operator just rejected the previous
+  answer. The classifier abstains rather than guesses: anything unclear
+  keeps the model the client asked for.
+
+- **Preferred model as a ceiling.** `preferred_models` per provider. Routes
+  to cheaper models still apply automatically; a route to something
+  pricier is refused, recorded, and surfaced through
+  `tokenops_routing_proposals` / `tokenops_routing_decide` for an answer.
+  Decisions apply from the next matching request without a restart.
+
+- **Token budgets.** `basis: tokens` with `limit_tokens`. Both previous
+  bases were dollar quantities and validation required a positive
+  `limit_usd`, so a flat-rate operator could only budget against imaginary
+  money.
+
+- **Token forecasts.** The dashboard API, `tokenops_forecast`, and
+  `tokenops spend --forecast` now project token volume alongside cost.
+  `forecast.TotalTokens` had existed since the forecaster was written with
+  no callers.
+
+- **`init` wires the machine.** Registers the MCP server with every host
+  found (Claude Code, Claude Desktop), installs the hooks, and reports what
+  still needs a human. Re-running repairs drift. Everything is idempotent,
+  backed up, and atomic; an unparseable host config is refused rather than
+  clobbered.
+
+- **Verified rate cards for Claude Opus 5 and Mythos 5**, checked against
+  the vendor pricing page and cross-checked against a LiteLLM snapshot.
+  Marked `verified: true` so a stale upstream cannot regress them.
+
+- **Reply coach recommendations.** `tokenops coach replies` proposes an
+  output-density target drawn from the operator's own leanest substantial
+  session, with the evidence attached. It declines when a corpus is
+  already within 25% of its own best.
+
+### Fixed
+
+- **The 5-hour window meter read `0 / 200` under any load.**
+  `countsAsMessage` excluded `assistant_turn` events on sound reasoning —
+  one prompt fans out into many turns — but that reader is ~99.8% of
+  ingested events, so nothing was left to count. The reader now marks the
+  first assistant turn after each operator prompt, identified by content
+  shape (most `type:"user"` rows are tool-result echoes). On real
+  transcripts a window holding 2,990 turns resolves to 69 prompts.
+
+- **Token savings were gated on a dollar comparison.** The router returned
+  `(0, 0)` whenever a route's price delta was not positive, discarding the
+  token measurement with it — and TEU sums that field, so a dollar test
+  starved the headline token metric.
+
+- **Plan-covered traffic was priced at list rates** in the router and
+  replay, which build synthetic events whose zero-value `CostSource`
+  deserialises as metered.
+
+- **Pricing gaps in plan-covered traffic were invisible.** The error from
+  `spend.Compute` was discarded, so an unpriced model contributed nothing
+  to the API-equivalent figure and left no trace. On a real store this hid
+  16,429 requests — 97% of a week — behind a figure computed from the rest.
+
+- **Two KPIs graded data that was never measured.** TEU fell back to a 15%
+  constant and printed `[B]`; FVT medianed a `Latency` field no passive
+  reader populated, and zero seconds grades `[A]`. Both now report N/A when
+  unmeasured — and FVT is now genuinely measured, reconstructed from
+  transcript timestamps with guards for idle gaps and clock skew.
+
+- **The 24h burn line was flat under any load.** The sparkline keyed on
+  `CostUSD`, zero for every plan-covered row.
+
+- **`replay` reported 0% saved for plan-covered sessions.** Adds
+  `SavingsRatioTokens` from fields the result already carried.
+
+- **A `rules.root` pointing at a deleted directory failed silently.** Now a
+  `rules_root_missing` blocker with a remediation line.
+
+- **Retention pruned rows but never shrank the file.** Opt-in
+  `retention.reclaim` runs a VACUUM after a pass that deleted rows.
+
+- **`daemon status` did not name the daemon's log.** The obvious-looking
+  `~/.tokenops/daemon.log` is written only by the MCP spawn path; a
+  supervised daemon logs wherever its unit redirects stdout.
+
+- **The CLI test suite wrote to the developer's real Claude config.**
+  `TestMain` now sandboxes `$HOME` for the whole package.
+
+### Changed
+
+- **The read guard activates when its own ledger justifies it.** It shipped
+  in observe mode and stayed there, logging redundant re-reads without
+  preventing any. `init` now promotes it to active past a 50k-token bar and
+  states the measured reason.
+
 ## 0.44.0 - 2026-08-18
 
 Closing the 27-day outage class that v0.43.0 made *visible*: supervise
