@@ -441,6 +441,15 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			// routing. An upgrade past it is refused and logged as a
 			// proposal they answer through the MCP surface, rather than
 			// applied to a request they never saw.
+			// Window pressure is read per request, so it comes from a
+			// cache a background loop refreshes — scanning the event
+			// store inline would put a full window query on the hot path.
+			if components.Store != nil && len(cfg.Plans) > 0 {
+				probe := newWindowProbe()
+				go runWindowProbe(ctx, probe, cfg, planStoreReader{store: components.Store}, logger, time.Minute)
+				rc.WindowPressure = probe.Pct
+				logger.Info("window-pressure routing available", "providers", len(cfg.Plans))
+			}
 			if len(cfg.PreferredModels) > 0 {
 				if store, err := openRoutingApprovals(); err != nil {
 					logger.Warn("routing approvals unavailable; upgrades will not be gated", "err", err)
