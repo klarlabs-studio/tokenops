@@ -25,6 +25,7 @@ type initFlags struct {
 	force       bool
 	printOnly   bool
 	withDetect  bool
+	noWire      bool
 }
 
 func newInitCmd() *cobra.Command {
@@ -32,16 +33,31 @@ func newInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Scaffold the TokenOps config file and enable storage + rules",
-		Long: `init writes an opinionated config to $XDG_CONFIG_HOME/tokenops/config.yaml
-(or ~/.config/tokenops/config.yaml) that enables:
+		Long: `init sets tokenops up on this machine. It writes an opinionated config
+to $XDG_CONFIG_HOME/tokenops/config.yaml (or ~/.config/tokenops/config.yaml)
+enabling:
 
   - sqlite event storage at $XDG_DATA_HOME/tokenops/events.db
   - the rules subsystem rooted at the current working directory
   - audit on the security domain bus
 
-Provider URLs are left empty; configure them via TOKENOPS_PROVIDER_*_URL or
-edit the resulting config. Re-running init is a no-op unless --force is
-passed; --print-only emits the YAML without touching disk.`,
+then wires tokenops into the clients already installed:
+
+  - registers the MCP server with every MCP host found, pinned to THIS
+    binary's absolute path (a bare "tokenops" resolves through PATH at
+    spawn time, so a host can silently run a stale build)
+  - installs the Claude Code hooks (coaching nudge + read dedup guard)
+  - reports which subscription plan still needs binding
+
+Everything it writes is idempotent and backed up, so re-running is safe and
+a second run visibly changes nothing. Two things are left to you on purpose:
+picking your plan tier (guessing would make headroom maths confidently
+wrong) and pointing a client at the local proxy (that reroutes your real
+traffic).
+
+Re-running init leaves an existing config alone unless --force is passed;
+--print-only emits the YAML without touching disk; --no-wire writes the
+config only.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runInit(cmd, f)
@@ -54,6 +70,7 @@ passed; --print-only emits the YAML without touching disk.`,
 	cmd.Flags().BoolVar(&f.force, "force", false, "overwrite an existing config file")
 	cmd.Flags().BoolVar(&f.printOnly, "print-only", false, "render the resulting YAML to stdout without writing")
 	cmd.Flags().BoolVar(&f.withDetect, "detect", false, "sniff installed AI clients and report likely plan bindings")
+	cmd.Flags().BoolVar(&f.noWire, "no-wire", false, "write the config only; skip registering the MCP server and installing hooks")
 	return cmd
 }
 
@@ -95,10 +112,22 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 
 	if existing, err := os.Stat(configPath); err == nil && !existing.IsDir() {
 		if !f.force {
-			fmt.Fprintf(cmd.ErrOrStderr(),
-				"tokenops init: config already exists at %s — re-run with --force to overwrite\n",
+			// An existing config is left alone, but the wiring still runs.
+			// Re-running init is how an operator repairs drift — a client
+			// reinstalled, a binary moved, hooks cleared — and refusing to
+			// do anything because a config file happens to exist would make
+			// the command useless for exactly that.
+			fmt.Fprintf(cmd.OutOrStdout(),
+				"config already exists at %s — leaving it alone (use --force to rewrite)\n",
 				configPath,
 			)
+			if f.withDetect {
+				renderDetection(cmd.OutOrStdout(), detect.Detect(nil))
+			}
+			if f.noWire {
+				return nil
+			}
+			runSetup(cmd.OutOrStdout(), configPath, selfExe())
 			return nil
 		}
 	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -116,13 +145,19 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(),
-		"wrote %s\nstorage: %s\nrules root: %s (repo_id=%s)\nnext: configure providers, then `tokenops daemon install` (keeps ingestion alive across reboot) or `tokenops start` in the foreground\n",
+		"wrote %s\nstorage: %s\nrules root: %s (repo_id=%s)\n",
 		configPath, storagePath, rulesRoot, repoID,
 	)
 
 	if f.withDetect {
 		renderDetection(cmd.OutOrStdout(), detect.Detect(nil))
 	}
+	if f.noWire {
+		fmt.Fprintln(cmd.OutOrStdout(),
+			"\n--no-wire: config only. Run `tokenops init` without it to register the MCP server and install hooks.")
+		return nil
+	}
+	runSetup(cmd.OutOrStdout(), configPath, selfExe())
 	return nil
 }
 
