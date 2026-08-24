@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.48.0 - 2026-08-24
+
+Agent DX now reads every client that keeps a local record, and the
+optimizer has an explicit three-way mode instead of two states buried in
+a daemon-wide flag.
+
+### Added
+
+- **`optimizer.mode`: `automatic` | `in_request` | `off`.** Automatic
+  rewrites matching requests in flight; in_request refers the decision to
+  you through the MCP surface and forwards the request untouched; off
+  records what the rules would have done and changes nothing. Unset means
+  off — opting into an intervention has to be an act, not a default, and
+  a misspelling fails validation rather than silently reading as off.
+
+  Routing no longer requires the daemon-wide `active` flag, which only
+  gated it because there was nowhere else to express intent.
+
+- **`tokenops dx --source codex`.** Codex marks what these metrics need
+  explicitly, where Claude Code leaves it inferred: `user_message` is
+  unambiguously the operator's instruction and `turn_aborted` is
+  unambiguously an interrupt.
+
+- **`tokenops dx --source cursor`.** Reads Cursor's `cursorDiskKV` store
+  read-only. A store that exists but cannot be understood returns a
+  schema error rather than an empty report — an unreadable store must not
+  render as an idle operator.
+
+- **`--source auto`** (the default) reads every client present. A pinned
+  `--root` narrows it to one tree rather than being ignored while the
+  readers scan the real home directory.
+
+### Fixed
+
+- **Window-pressure routing ignored the vendor's own reading.** Codex
+  publishes `rate_limits` per turn and Copilot and Cursor publish quota
+  snapshots; the probe counted messages instead, and that heuristic only
+  works for Claude Code — so pressure rules were inert for every other
+  provider. The resolver moved from the MCP adapter into the domain and
+  the probe now prefers ground truth.
+
 ## 0.47.0 - 2026-08-23
 
 Completes the agent-experience metrics and puts them to work: everything
