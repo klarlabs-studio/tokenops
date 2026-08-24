@@ -1,8 +1,8 @@
-// Package replies walks Claude Code (and Codex) JSONL session logs
-// and yields the assistant's textual responses. Reads the files
-// directly (same source the claudecodejsonl poller uses) so reply
-// text never lands in the event store — keeps the analyzer privacy-
-// respecting and avoids schema bloat.
+// Package replies reads the assistant's textual responses from every
+// client an operator runs: Claude Code and Codex from their JSONL
+// session logs, opencode from its SQLite store. Reads the sources
+// directly so reply text never lands in the event store — keeps the
+// analyzer privacy-respecting and avoids schema bloat.
 //
 // Sibling to the prompts package; same JSONL traversal, opposite
 // role filter. Used by `tokenops coach replies` to detect output-side
@@ -38,6 +38,7 @@ const (
 	SourceAuto       Source = ""
 	SourceClaudeCode Source = "claude-code"
 	SourceCodex      Source = "codex"
+	SourceOpencode   Source = "opencode"
 )
 
 // ExtractOptions filters the walk. Zero values mean "no filter".
@@ -77,6 +78,9 @@ type rawContentPart struct {
 func Extract(opts ExtractOptions) ([]AssistantReply, error) {
 	if opts.Source == SourceAuto && opts.Root == "" {
 		return extractAuto(opts)
+	}
+	if opts.Source == SourceOpencode {
+		return extractOpencode(opts.Root, opts)
 	}
 	src := opts.Source
 	root := opts.Root
@@ -123,6 +127,14 @@ func extractAuto(opts ExtractOptions) ([]AssistantReply, error) {
 			return nil, err
 		}
 		out = append(out, got...)
+		if opts.Limit > 0 && len(out) >= opts.Limit {
+			return out[:opts.Limit], nil
+		}
+	}
+	// opencode keeps history in SQLite, so it is a store to open rather
+	// than a root to walk. A missing one is not an error.
+	if oc, err := extractOpencode("", opts); err == nil {
+		out = append(out, oc...)
 		if opts.Limit > 0 && len(out) >= opts.Limit {
 			return out[:opts.Limit], nil
 		}
