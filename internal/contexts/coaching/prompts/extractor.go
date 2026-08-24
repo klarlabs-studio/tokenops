@@ -37,6 +37,7 @@ const (
 	SourceAuto       Source = ""
 	SourceClaudeCode Source = "claude-code"
 	SourceCodex      Source = "codex"
+	SourceOpencode   Source = "opencode"
 )
 
 // ExtractOptions filters the walk. Zero values mean "no filter".
@@ -92,6 +93,9 @@ func Extract(opts ExtractOptions) ([]UserPrompt, error) {
 	if opts.Source == SourceAuto && opts.Root == "" {
 		return extractAuto(opts)
 	}
+	if opts.Source == SourceOpencode {
+		return extractOpencode(opts.Root, opts)
+	}
 	src := opts.Source
 	root := opts.Root
 	home, _ := os.UserHomeDir()
@@ -142,6 +146,15 @@ func extractAuto(opts ExtractOptions) ([]UserPrompt, error) {
 			return nil, err
 		}
 		out = append(out, got...)
+		if opts.Limit > 0 && len(out) >= opts.Limit {
+			return out[:opts.Limit], nil
+		}
+	}
+	// opencode keeps its history in SQLite rather than JSONL, so it is
+	// not a root to walk — it is a store to open. A missing one is not an
+	// error; most operators do not run it.
+	if oc, err := extractOpencode("", opts); err == nil {
+		out = append(out, oc...)
 		if opts.Limit > 0 && len(out) >= opts.Limit {
 			return out[:opts.Limit], nil
 		}

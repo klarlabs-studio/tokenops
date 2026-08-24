@@ -149,18 +149,20 @@ func renderCoachReplies(cmd *cobra.Command, f replies.Findings, since time.Time)
 // change.
 func newCoachPromptsCmd() *cobra.Command {
 	var (
-		sinceFlag string
-		root      string
-		session   string
-		limit     int
-		jsonOut   bool
+		sourceFlag string
+		sinceFlag  string
+		root       string
+		session    string
+		limit      int
+		jsonOut    bool
 	)
 	cmd := &cobra.Command{
 		Use:   "prompts",
-		Short: "Score your Claude Code prompting against rule-based heuristics",
-		Long: `prompts walks ~/.claude/projects/**/*.jsonl, extracts every
-human-typed turn (tool results and synthetic system messages are
-filtered), and reports:
+		Short: "Score your prompting against rule-based heuristics",
+		Long: `prompts reads every client you run — Claude Code and Codex from
+their JSONL transcripts, opencode from its SQLite store — extracts every
+human-typed turn (tool results and the continuation prompts agents inject
+for themselves are filtered out), and reports:
 
   - Length distribution (under-5-word / 5-15 / 15-50 / 50-200 / >200)
   - Vague-short prompts (<15 chars, ≤3 words)
@@ -169,12 +171,13 @@ filtered), and reports:
   - Repeated prompts (same text issued 3+ times)
   - Concrete recommendations
 
-Prompt text is read from the JSONLs at scan time — never persisted to
-the TokenOps event store. --json emits machine-readable findings for
+Prompt text is read at scan time — never persisted to the TokenOps event
+store. --json emits machine-readable findings for
 agents to consume.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts := prompts.ExtractOptions{
 				Root:      root,
+				Source:    prompts.Source(sourceFlag),
 				SessionID: session,
 				Limit:     limit,
 			}
@@ -208,7 +211,8 @@ agents to consume.`,
 		},
 	}
 	cmd.Flags().StringVar(&sinceFlag, "since", "7d", "lower bound: RFC3339 timestamp or duration like 24h or 7d")
-	cmd.Flags().StringVar(&root, "root", "", "JSONL scan root (defaults to ~/.claude/projects)")
+	cmd.Flags().StringVar(&root, "root", "", "scan root (defaults per source)")
+	cmd.Flags().StringVar(&sourceFlag, "source", "", "client: auto (default) | claude-code | codex | opencode")
 	cmd.Flags().StringVar(&session, "session", "", "restrict to a single session id (filename stem)")
 	cmd.Flags().IntVar(&limit, "limit", 0, "max prompts to extract (0 = unbounded)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON instead of text")
