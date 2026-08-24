@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.51.0 - 2026-08-24
+
+The reply coach reads opencode, completing coaching coverage across every
+client that keeps a local record.
+
+### Added
+
+- **`tokenops coach replies` reads opencode.** Same store as the prompt
+  reader, opposite role filter. 14,139 replies on the maintainer's
+  machine were outside the report.
+
+  Reasoning parts are excluded: they are the model thinking, not the
+  prose the operator read, and this coach measures output density as
+  experienced.
+
+- **`--source` on `coach replies`**, mirroring `coach prompts`.
+
 ## 0.50.0 - 2026-08-24
 
 The prompt coach reads opencode.
