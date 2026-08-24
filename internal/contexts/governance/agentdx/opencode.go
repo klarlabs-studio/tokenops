@@ -54,6 +54,7 @@ type opencodeMessage struct {
 type opencodePart struct {
 	Type  string `json:"type"`
 	Tool  string `json:"tool"`
+	Text  string `json:"text"`
 	State struct {
 		Input struct {
 			FilePath string `json:"filePath"`
@@ -92,7 +93,15 @@ func ExtractOpencode(opts ExtractOptions) ([]Record, error) {
 		return nil, fmt.Errorf("%w: no message table in %s", ErrOpencodeSchema, path)
 	}
 
-	out, byMessage, err := opencodeMessages(db, opts.Since)
+	// Instruction text lives on a part row, but the prompt record is
+	// emitted from the message row — so which messages reject has to be
+	// known before the messages are walked.
+	rejecting := map[string]bool{}
+	if hasTable(db, "part") {
+		rejecting = opencodeRejectingMessages(db)
+	}
+
+	out, byMessage, err := opencodeMessages(db, opts.Since, rejecting)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +124,34 @@ type messageContext struct {
 	provider  string
 }
 
-func opencodeMessages(db *sql.DB, since time.Time) ([]Record, map[string]messageContext, error) {
+// opencodeRejectingMessages returns the ids of user messages whose text
+// rejects the answer before it. A query failure yields an empty set
+// rather than an error: a missing rejection signal degrades one metric,
+// where failing the whole read would lose all of them.
+func opencodeRejectingMessages(db *sql.DB) map[string]bool {
+	out := map[string]bool{}
+	rows, err := db.Query(`SELECT message_id, data FROM part`)
+	if err != nil {
+		return out
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var messageID, data string
+		if rows.Scan(&messageID, &data) != nil {
+			continue
+		}
+		var p opencodePart
+		if json.Unmarshal([]byte(data), &p) != nil || p.Type != "text" {
+			continue
+		}
+		if IsRejection(p.Text) {
+			out[messageID] = true
+		}
+	}
+	return out
+}
+
+func opencodeMessages(db *sql.DB, since time.Time, rejecting map[string]bool) ([]Record, map[string]messageContext, error) {
 	rows, err := db.Query(`SELECT id, session_id, data FROM message`)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: %v", ErrOpencodeSchema, err)
@@ -147,6 +183,7 @@ func opencodeMessages(db *sql.DB, since time.Time) ([]Record, map[string]message
 		switch m.Role {
 		case "user":
 			rec.Kind = KindPrompt
+			rec.Rejects = rejecting[id]
 		case "assistant":
 			rec.Kind = KindAssistantTurn
 			rec.InputTokens = m.Tokens.Input + m.Tokens.Cache.Read + m.Tokens.Cache.Write

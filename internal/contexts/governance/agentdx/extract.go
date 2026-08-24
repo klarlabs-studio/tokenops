@@ -148,6 +148,7 @@ func readTranscript(r io.Reader, since time.Time) []Record {
 			// itself. Only a typed instruction opens a unit of work.
 			if isOperatorPrompt(parts, text) {
 				base.Kind = KindPrompt
+				base.Rejects = IsRejection(text)
 				out = append(out, base)
 			}
 		case "assistant":
@@ -279,4 +280,28 @@ func ExtractAll(opts ExtractOptions) ([]Record, error) {
 		out = append(out, oc...)
 	}
 	return out, nil
+}
+
+// rejectionMarkers are short, unambiguous ways an operator says the last
+// answer was wrong. Deliberately narrow: a false positive here inflates
+// the one signal that resists the session-position confound, so the cost
+// of over-matching is higher than the cost of missing a rephrasing.
+var rejectionMarkers = []string{
+	"no,", "nope", "wrong", "try again", "that's not", "thats not",
+	"incorrect", "revert", "undo", "not what i", "still broken",
+	"doesn't work", "doesnt work", "redo", "no that",
+}
+
+// IsRejection reports whether an instruction rejects what preceded it.
+func IsRejection(text string) bool {
+	t := strings.ToLower(strings.TrimSpace(text))
+	if t == "" {
+		return false
+	}
+	for _, m := range rejectionMarkers {
+		if strings.Contains(t, m) {
+			return true
+		}
+	}
+	return false
 }
