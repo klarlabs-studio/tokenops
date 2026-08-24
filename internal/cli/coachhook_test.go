@@ -109,7 +109,8 @@ func TestCoachHook_BudgetFlagFlows(t *testing.T) {
 	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &got); err != nil {
 		t.Fatalf("--budget 1 should trip an alert, got %q (%v)", out, err)
 	}
-	if !strings.Contains(got.SystemMessage, "$1 budget") {
+	// A budget the operator passed IS theirs, unlike the shipping default.
+	if !strings.Contains(got.SystemMessage, "your $1 session budget") {
 		t.Fatalf("message should reflect the $1 budget, got %q", got.SystemMessage)
 	}
 }

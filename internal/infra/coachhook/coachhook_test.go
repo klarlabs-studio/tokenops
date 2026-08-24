@@ -112,8 +112,13 @@ func TestEvaluate_TierLatching(t *testing.T) {
 	if !d.Nudge || !approx(d.FiredFraction, 1.00) {
 		t.Fatalf("expected 100%% tier, got nudge=%v frac=%.3f", d.Nudge, d.FiredFraction)
 	}
-	if !strings.Contains(d.Message, "over your $50 session budget") {
+	// The default ceiling is not "yours" — an operator on Claude Max
+	// never chose $50, and the possessive made it read as a charge.
+	if !strings.Contains(d.Message, "the default $50 session ceiling") {
 		t.Fatalf("100%% message unexpected: %q", d.Message)
+	}
+	if strings.Contains(d.Message, "your $50") {
+		t.Fatalf("100%% message still claims the default is theirs: %q", d.Message)
 	}
 }
 
@@ -156,8 +161,11 @@ func TestEvaluate_OverBudgetEscalation(t *testing.T) {
 	if !d.Nudge || !approx(d.FiredFraction, 2.00) {
 		t.Fatalf("expected 200%% over tier, got nudge=%v frac=%.3f", d.Nudge, d.FiredFraction)
 	}
-	if !strings.Contains(d.Message, "200%") || !strings.Contains(d.Message, "$100+") {
-		t.Fatalf("200%% message should carry 200%% and $100+, got %q", d.Message)
+	// The cumulative figure is more use than the boundary it crossed:
+	// "$100.00 API-equivalent" is what actually accrued, where "$100+"
+	// only restated the tier.
+	if !strings.Contains(d.Message, "200%") || !strings.Contains(d.Message, "$100.00") {
+		t.Fatalf("200%% message should carry 200%% and the cumulative $100.00, got %q", d.Message)
 	}
 }
 

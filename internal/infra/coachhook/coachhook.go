@@ -155,7 +155,10 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 
 	model := accumulate(transcriptPath, &st)
 
+	// A budget the operator set is theirs; the shipping default is not,
+	// and the wording depends on which this is.
 	budget := cfg.BudgetUSD
+	configured := budget > 0 && budget != DefaultBudgetUSD
 	if budget <= 0 {
 		budget = DefaultBudgetUSD
 	}
@@ -166,7 +169,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 	if cfg.Enabled && fired > 0 {
 		dec.Nudge = true
 		dec.FiredFraction = fired
-		dec.Message = nudgeMessage(fired, st.CumulativeUSD, budget)
+		dec.Message = nudgeMessage(fired, st.CumulativeUSD, budget, configured)
 		st.MaxFiredFraction = fired
 	}
 
@@ -270,31 +273,56 @@ func highestBoundary(frac, maxFired float64, cfg Config) float64 {
 	return best
 }
 
-// nudgeMessage builds the operator-facing, escalating nudge for a fired budget
-// fraction. It names the lever (/compact or a fresh session) and formats the
-// real $ and % from the session's cumulative spend and budget.
-func nudgeMessage(frac, cumulative, budget float64) string {
+// nudgeMessage builds the operator-facing, escalating nudge for a fired
+// budget fraction.
+//
+// Three things about the wording are deliberate, because the earlier
+// version got all three wrong and the result read as a bill that did not
+// add up.
+//
+// It does not call the shipping default "your budget". An operator on
+// Claude Max pays $200 a month and never chose a $50 figure; a possessive
+// on a number they did not set makes it look like a charge they agreed
+// to.
+//
+// Every tier says API-equivalent, not just the quietest one. Previously
+// the louder the warning got, the more it read like real money — exactly
+// backwards.
+//
+// And it says outright that nothing is being charged. On a subscription
+// this figure is a counterfactual: what the session would have cost at
+// list price, which is the only way to see context drift compounding when
+// the actual bill is flat and identical either way.
+func nudgeMessage(frac, cumulative, budget float64, configured bool) string {
 	pct := int(math.Round(frac * 100))
 	budgetStr := formatUSD(budget)
 	cumStr := fmt.Sprintf("$%.2f", cumulative)
-	boundaryStr := formatUSD(budget * frac)
+
+	// Only a budget the operator set is theirs.
+	ceiling := "the default " + budgetStr + " session ceiling"
+	if configured {
+		ceiling = "your " + budgetStr + " session budget"
+	}
+
 	switch {
 	case frac > 1.0+fracEpsilon:
-		return fmt.Sprintf("tokenops: this session is at %d%% of your %s budget (%s+). "+
-			"Long sessions compound cache-read cost fast — /compact or split the task.",
-			pct, budgetStr, boundaryStr)
+		return fmt.Sprintf("tokenops: %s API-equivalent this session — %d%% of %s, "+
+			"and not a charge. Long sessions compound cache-read fast; /compact or split the task.",
+			cumStr, pct, ceiling)
 	case frac >= 1.0-fracEpsilon:
-		return fmt.Sprintf("tokenops: over your %s session budget (%s+). "+
-			"/compact or start fresh — you're re-reading a large cached context each turn.",
-			budgetStr, boundaryStr)
+		return fmt.Sprintf("tokenops: %s API-equivalent this session, past %s "+
+			"(not a charge — your plan bills the same either way). /compact or start fresh; "+
+			"you're re-reading a large cached context every turn.",
+			cumStr, ceiling)
 	case frac >= 0.75-fracEpsilon:
-		return fmt.Sprintf("tokenops: %d%% of your %s session budget (%s) — consider /compact "+
-			"or a fresh session soon; cache-read grows every turn you carry this context.",
-			pct, budgetStr, cumStr)
+		return fmt.Sprintf("tokenops: %s API-equivalent this session, %d%% of %s "+
+			"(not a charge). Consider /compact or a fresh session soon — cache-read grows "+
+			"every turn you carry this context.",
+			cumStr, pct, ceiling)
 	default:
-		return fmt.Sprintf("tokenops: this session is at %s of a %s budget (%d%%) in "+
-			"API-equivalent spend — mostly cache-read. A /compact resets the cached context.",
-			cumStr, budgetStr, pct)
+		return fmt.Sprintf("tokenops: %s API-equivalent this session, %d%% of %s — "+
+			"mostly cache-read, and not a charge. A /compact resets the cached context.",
+			cumStr, pct, ceiling)
 	}
 }
 
