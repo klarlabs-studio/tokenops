@@ -3,6 +3,7 @@ package agentdx
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -21,6 +22,7 @@ const (
 	SourceAuto       Source = "auto"
 	SourceClaudeCode Source = "claude-code"
 	SourceCodex      Source = "codex"
+	SourceCursor     Source = "cursor"
 )
 
 // ExtractOptions selects which transcripts to read.
@@ -239,6 +241,8 @@ func ExtractAll(opts ExtractOptions) ([]Record, error) {
 		return Extract(opts)
 	case opts.Source == SourceCodex:
 		return ExtractCodex(opts)
+	case opts.Source == SourceCursor:
+		return ExtractCursor(opts)
 	case opts.Root != "":
 		// Pinned tree, unnamed source: read it as Claude Code, the
 		// historical meaning of Root.
@@ -251,6 +255,17 @@ func ExtractAll(opts ExtractOptions) ([]Record, error) {
 	}
 	if cx, err := ExtractCodex(opts); err == nil {
 		out = append(out, cx...)
+	}
+	// A Cursor schema failure is not a silent skip. Auto mode swallowing
+	// it would put this reader back in the class of bugs it was written
+	// to avoid: an unreadable store reported as an idle one.
+	cu, err := ExtractCursor(opts)
+	if err != nil {
+		if errors.Is(err, ErrCursorSchema) {
+			return out, err
+		}
+	} else {
+		out = append(out, cu...)
 	}
 	return out, nil
 }

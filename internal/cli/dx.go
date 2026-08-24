@@ -51,7 +51,9 @@ proxy-only.`,
 			}
 			records, err := agentdx.ExtractAll(opts)
 			if err != nil {
-				return err
+				// A reader that broke is reported, but whatever the other
+				// clients yielded is still worth showing.
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err)
 			}
 			m := agentdx.Compute(records)
 			if jsonOut {
@@ -64,7 +66,7 @@ proxy-only.`,
 		},
 	}
 	cmd.Flags().StringVar(&root, "root", "", "transcript root (defaults per source)")
-	cmd.Flags().StringVar(&source, "source", "auto", "client: auto | claude-code | codex")
+	cmd.Flags().StringVar(&source, "source", "auto", "client: auto | claude-code | codex | cursor")
 	cmd.Flags().IntVar(&days, "days", 7, "window in days; 0 reads everything")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
