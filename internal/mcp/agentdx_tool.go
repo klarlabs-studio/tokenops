@@ -64,7 +64,7 @@ func RegisterAgentDXTools(s *Server, d AgentDXDeps) error {
 			if err != nil {
 				return nil, err
 			}
-			m := agentdx.Compute(records)
+			m := agentdx.ComputeByProvider(records)
 			out := &agentDXResult{Window: window, Metrics: m, Grades: agentdx.Grade(m)}
 			if m.Prompts == 0 {
 				out.Note = "no instructions in this window — widen with days, or check the transcript root"
