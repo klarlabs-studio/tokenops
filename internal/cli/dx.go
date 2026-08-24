@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -55,7 +56,7 @@ proxy-only.`,
 				// clients yielded is still worth showing.
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err)
 			}
-			m := agentdx.Compute(records)
+			m := agentdx.ComputeByProvider(records)
 			if jsonOut {
 				enc := json.NewEncoder(cmd.OutOrStdout())
 				enc.SetIndent("", "  ")
@@ -66,7 +67,7 @@ proxy-only.`,
 		},
 	}
 	cmd.Flags().StringVar(&root, "root", "", "transcript root (defaults per source)")
-	cmd.Flags().StringVar(&source, "source", "auto", "client: auto | claude-code | codex | cursor")
+	cmd.Flags().StringVar(&source, "source", "auto", "client: auto | claude-code | codex | cursor | opencode")
 	cmd.Flags().IntVar(&days, "days", 7, "window in days; 0 reads everything")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
@@ -101,7 +102,7 @@ func writeDXText(w io.Writer, m agentdx.Metrics, days int) {
 	fmt.Fprintf(w, "  first-try rate:        %-10s %s  (no rework, no interrupt, no delegation)\n",
 		fmt.Sprintf("%.1f%%", m.FirstTryRatePct), badge(g.FirstTry))
 	fmt.Fprintf(w, "  rework rate:           %-10s %s  (edits revisiting a file within one instruction)\n",
-		fmt.Sprintf("%.1f%%", m.ReworkRatePct), badge(g.Rework))
+		pctOrNA(m.ReworkRatePct, m.TotalEdits > 0), badge(g.Rework))
 	fmt.Fprintf(w, "  interrupt rate:        %-10s %s  (instructions you had to stop)\n",
 		fmt.Sprintf("%.1f%%", m.InterruptRatePct), badge(g.Interrupt))
 	fmt.Fprintf(w, "  escalation rate:       %-10s %s  (instructions delegated to a subagent)\n",
@@ -112,9 +113,37 @@ func writeDXText(w io.Writer, m agentdx.Metrics, days int) {
 		fmt.Fprintf(w, "\nOverall: %s  (the worst grade, not the average — an experience is\n", g.Overall)
 		fmt.Fprintln(w, "         only as good as its sharpest friction)")
 	}
+	if len(m.ByProvider) > 0 {
+		fmt.Fprintln(w, "\nBY PROVIDER  (only clients that route to several record this)")
+		names := make([]string, 0, len(m.ByProvider))
+		for name := range m.ByProvider {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		fmt.Fprintf(w, "  %-18s %8s %8s %10s %10s\n",
+			"PROVIDER", "PROMPTS", "TURNS", "FIRST-TRY", "REWORK")
+		for _, name := range names {
+			p := m.ByProvider[name]
+			fmt.Fprintf(w, "  %-18s %8d %8.1f %9.1f%% %10s\n",
+				name, p.Prompts, p.MedianTurnsPerPrompt, p.FirstTryRatePct,
+				pctOrNA(p.ReworkRatePct, p.TotalEdits > 0))
+		}
+	}
+
 	if rec, ok := agentdx.Recommend(m); ok {
 		fmt.Fprintf(w, "\nBIGGEST WIN\n  %s\n  %s\n  Do: %s\n", rec.Title, rec.Evidence, rec.Action)
 	}
+}
+
+// pctOrNA renders a percentage, or n/a when nothing was observed behind
+// it. A rate with an empty denominator is not zero — showing 0.0% for
+// "no edits happened" reads as "the agent never redid its work", which is
+// a claim the data does not make.
+func pctOrNA(v float64, measured bool) string {
+	if !measured {
+		return "n/a"
+	}
+	return fmt.Sprintf("%.1f%%", v)
 }
 
 // badge renders a grade, or nothing for a metric that was not measured.
