@@ -33,11 +33,12 @@ func newCoachCmd() *cobra.Command {
 // equivalent output-compression skill) engaged.
 func newCoachRepliesCmd() *cobra.Command {
 	var (
-		sinceFlag string
-		root      string
-		session   string
-		limit     int
-		jsonOut   bool
+		sinceFlag   string
+		root        string
+		replySource string
+		session     string
+		limit       int
+		jsonOut     bool
 	)
 	cmd := &cobra.Command{
 		Use:   "replies",
@@ -57,6 +58,7 @@ Reply text is read from the JSONLs at scan time — never persisted to
 the TokenOps event store.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts := replies.ExtractOptions{
+				Source:    replies.Source(replySource),
 				Root:      root,
 				SessionID: session,
 				Limit:     limit,
@@ -83,7 +85,8 @@ the TokenOps event store.`,
 		},
 	}
 	cmd.Flags().StringVar(&sinceFlag, "since", "7d", "lower bound: RFC3339 timestamp or duration like 24h or 7d")
-	cmd.Flags().StringVar(&root, "root", "", "JSONL scan root (defaults to ~/.claude/projects)")
+	cmd.Flags().StringVar(&root, "root", "", "scan root (defaults per source)")
+	cmd.Flags().StringVar(&replySource, "source", "", "client: auto (default) | claude-code | codex | opencode")
 	cmd.Flags().StringVar(&session, "session", "", "restrict to a single session id (filename stem)")
 	cmd.Flags().IntVar(&limit, "limit", 0, "max replies to extract (0 = unbounded)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON instead of text")
