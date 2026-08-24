@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.50.0 - 2026-08-24
+
+The prompt coach reads opencode.
+
+### Added
+
+- **`tokenops coach prompts` reads opencode.** It keeps history in SQLite
+  rather than JSONL, so it is a store to open rather than a root to walk:
+  prompt text lives on a part row joined to its message. 3,960 operator
+  prompts on the maintainer's machine were previously invisible to the
+  coach.
+
+  Continuation prompts opencode injects for itself are marked `synthetic`
+  and dropped — coaching someone on words they never wrote would be worse
+  than not coaching them at all.
+
+- **`--source` on `coach prompts`**: `auto` (default) | `claude-code` |
+  `codex` | `opencode`, so a single client can be inspected on its own.
+
 ## 0.49.0 - 2026-08-24
 
 Agent DX now reads opencode, and reports per upstream provider.
