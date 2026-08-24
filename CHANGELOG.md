@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.49.0 - 2026-08-24
+
+Agent DX now reads opencode, and reports per upstream provider.
+
+### Added
+
+- **`tokenops dx --source opencode`.** The richest client store and the
+  only multi-provider one: token counts and a completion time on every
+  assistant row, tool calls joined by message_id, and compactions as an
+  explicit part type rather than something to be recognised.
+
+- **Per-provider breakdown.** Only a multi-provider client records which
+  upstream served a turn, so this is the only way to ask whether one
+  provider is a worse experience than another. Providers under twenty
+  prompts are not reported separately — their percentages swing on single
+  events.
+
+### Fixed
+
+- **Tool names were matched case-sensitively.** Claude Code writes "Task"
+  and "Edit"; opencode writes "task" and "edit". The lookup silently
+  reported zero delegation and zero rework for every client but one.
+
+- **An unmeasured rate rendered as 0.0%**, which reads as "the agent never
+  redid its work" when the truth is that no edits were seen. It reports
+  n/a now — the same distinction between a missing measurement and a
+  measured zero that this work keeps turning up.
+
 ## 0.48.0 - 2026-08-24
 
 Agent DX now reads every client that keeps a local record, and the
