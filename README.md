@@ -244,7 +244,7 @@ and [SECURITY.md](SECURITY.md). Plans and tasks live in `.roady/` (see
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) — latest is [v0.51.1](https://github.com/klarlabs-studio/tokenops/releases/tag/v0.51.1).
+See [CHANGELOG.md](CHANGELOG.md) — latest is [v0.52.0](https://github.com/klarlabs-studio/tokenops/releases/tag/v0.52.0).
 
 ## License
 

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.52.0 - 2026-08-24
+
+### Added
+
+- **The Stop nudge reports context against the model's window.** Dollars
+  are a counterfactual on a flat-rate plan; context is not — it fills up,
+  forces a compaction, and until then every turn re-reads the whole of
+  it.
+
+      Context: 873k of 1.0M (87%) — worth compacting: every turn now
+      re-reads this whole context.
+
+  Window sizes come from Anthropic's pricing page (Claude 4.6 and later
+  carry the full 1M window) and are confirmed by a real 999,947-token
+  turn. An `[1m]` suffix outranks the family default. An unrecognised
+  model reports its context size with no percentage — a share against a
+  guessed denominator looks authoritative and is not.
+
+  The advice escalates: silent below 75%, a note at 75%, and at 90% the
+  fact that an automatic compaction is imminent and will choose what to
+  drop.
+
 ## 0.51.1 - 2026-08-24
 
 ### Fixed
