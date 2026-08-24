@@ -17,6 +17,7 @@ package agentdx
 import (
 	"math"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -49,6 +50,11 @@ type Record struct {
 	FilePath string
 	// InputTokens is the context size at this turn, for KindAssistantTurn.
 	InputTokens int64
+	// Provider is which upstream served the turn, when the client records
+	// it. Only opencode does — it is a multi-provider client, so the
+	// question "which provider is this experience" is one only it can
+	// answer.
+	Provider string
 }
 
 // Metrics is the agent-experience roll-up.
@@ -95,13 +101,65 @@ type Metrics struct {
 	// TotalEdits is the denominator behind ReworkRatePct, exposed so a
 	// caller can tell "no rework" from "no edits".
 	TotalEdits int `json:"total_edits"`
+	// ByProvider breaks the same metrics down per upstream, for clients
+	// that route to more than one. Empty when nothing recorded a
+	// provider — which is every client except opencode.
+	ByProvider map[string]Metrics `json:"by_provider,omitempty"`
 }
 
-// escalationTools are the tools that hand work to a subagent.
-var escalationTools = map[string]bool{"Task": true, "Agent": true}
+// escalationTools are the tools that hand work to a subagent. Names are
+// compared lower-cased: the clients spell them differently (Claude Code
+// "Task", opencode "task") and a case-sensitive match silently reported
+// zero delegation for every client but one.
+var escalationTools = map[string]bool{"task": true, "agent": true}
 
 // editTools are the tools that modify a file, for the rework signal.
-var editTools = map[string]bool{"Edit": true, "Write": true, "NotebookEdit": true}
+var editTools = map[string]bool{
+	"edit": true, "write": true, "notebookedit": true,
+	"multiedit": true, "patch": true, "apply_patch": true,
+}
+
+// isEscalation and isEdit compare tool names without regard to case.
+func isEscalation(name string) bool { return escalationTools[strings.ToLower(name)] }
+func isEdit(name string) bool       { return editTools[strings.ToLower(name)] }
+
+// ComputeByProvider rolls the records up overall and again per upstream.
+//
+// Only a multi-provider client records which upstream served a turn, so
+// this is the only way to ask whether one provider is a worse experience
+// than another — the same instruction, the same operator, a different
+// model behind it.
+func ComputeByProvider(records []Record) Metrics {
+	overall := Compute(records)
+	byProvider := map[string][]Record{}
+	for _, r := range records {
+		if r.Provider == "" {
+			continue
+		}
+		byProvider[r.Provider] = append(byProvider[r.Provider], r)
+	}
+	if len(byProvider) == 0 {
+		return overall
+	}
+	overall.ByProvider = make(map[string]Metrics, len(byProvider))
+	for provider, recs := range byProvider {
+		m := Compute(recs)
+		// A provider with almost no traffic yields percentages that swing
+		// on single events; reporting them next to a provider with
+		// thousands would invite a comparison the data cannot support.
+		if m.Prompts < minPromptsPerProvider {
+			continue
+		}
+		overall.ByProvider[provider] = m
+	}
+	if len(overall.ByProvider) == 0 {
+		overall.ByProvider = nil
+	}
+	return overall
+}
+
+// minPromptsPerProvider is the floor for reporting a provider separately.
+const minPromptsPerProvider = 20
 
 // Compute rolls transcript records into agent-experience metrics.
 //
@@ -210,10 +268,10 @@ func Compute(records []Record) Metrics {
 				continue
 			}
 			unitTools++
-			if escalationTools[r.ToolName] {
+			if isEscalation(r.ToolName) {
 				unitTask = true
 			}
-			if editTools[r.ToolName] && r.FilePath != "" {
+			if isEdit(r.ToolName) && r.FilePath != "" {
 				totalEdits++
 				if unitEdited[r.FilePath] {
 					reworkEdits++

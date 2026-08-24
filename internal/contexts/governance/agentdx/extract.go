@@ -23,6 +23,7 @@ const (
 	SourceClaudeCode Source = "claude-code"
 	SourceCodex      Source = "codex"
 	SourceCursor     Source = "cursor"
+	SourceOpencode   Source = "opencode"
 )
 
 // ExtractOptions selects which transcripts to read.
@@ -243,6 +244,8 @@ func ExtractAll(opts ExtractOptions) ([]Record, error) {
 		return ExtractCodex(opts)
 	case opts.Source == SourceCursor:
 		return ExtractCursor(opts)
+	case opts.Source == SourceOpencode:
+		return ExtractOpencode(opts)
 	case opts.Root != "":
 		// Pinned tree, unnamed source: read it as Claude Code, the
 		// historical meaning of Root.
@@ -266,6 +269,14 @@ func ExtractAll(opts ExtractOptions) ([]Record, error) {
 		}
 	} else {
 		out = append(out, cu...)
+	}
+	oc, err := ExtractOpencode(opts)
+	if err != nil {
+		if errors.Is(err, ErrOpencodeSchema) {
+			return out, err
+		}
+	} else {
+		out = append(out, oc...)
 	}
 	return out, nil
 }
