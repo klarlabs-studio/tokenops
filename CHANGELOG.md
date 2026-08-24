@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.51.1 - 2026-08-24
+
+### Fixed
+
+- **The Stop nudge read as a bill.** It told an operator paying $200 a
+  month for Claude Max that they were "over your $50 session budget".
+  Three things were wrong at once: they never chose $50 (it is the
+  shipping default, and the possessive implied an agreement never made),
+  only the quietest tier said "API-equivalent" so the louder the warning
+  got the more it looked like real money, and nothing said the figure is
+  not a charge at all.
+
+  On a subscription it is a counterfactual — what the session would have
+  cost at list price — which is the only way to watch context drift
+  compound when the actual bill is flat either way. The wording now says
+  so at every tier, calls the default a default, and reserves "your
+  budget" for one the operator actually set.
+
 ## 0.51.0 - 2026-08-24
 
 The reply coach reads opencode, completing coaching coverage across every
