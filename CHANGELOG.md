@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.54.0 - 2026-08-25
+
+Request counts stop including tokenops talking to itself.
 
 ### Changed
 
