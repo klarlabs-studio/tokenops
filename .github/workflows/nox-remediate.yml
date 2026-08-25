@@ -39,12 +39,12 @@ jobs:
     name: Apply OSV upgrades
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
         with:
           # Need full history for the diff inspection + signed-off-by.
           fetch-depth: 0
 
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.4.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v5.4.0
         with:
           go-version: "1.25"
           cache: true
@@ -54,7 +54,7 @@ jobs:
         # the upgrade plan, applies it, runs the verify command,
         # and opens / refreshes a PR. Pinned to v1.0.1's commit SHA;
         # bump deliberately after reviewing the release notes.
-        uses: nox-hq/nox-remediate-action@ab6f5e2d3db7350544fd43a9676db6b7bcaecff3 # v1.0.1
+        uses: nox-hq/nox-remediate-action@1c16a4bb803d73ca96a17760f847c9ad80e162cd # v1.0.1
         with:
           path: .
           version: "0.9.5"
