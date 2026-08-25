@@ -148,3 +148,30 @@ jobs:
           name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/
           retention-days: 7
+
+  # web/dashboard was built by nothing. pages.yml builds web/docs only, so
+  # the dashboard's dependency tree drifted into an unresolvable state —
+  # vite 8 against @vitejs/plugin-vue 5, whose peer range stops at vite 6 —
+  # and `npm install` failed for anyone who tried, while every PR touching
+  # it still reported green because only the Go jobs ran.
+  dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.2.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: web/dashboard/package-lock.json
+      # `npm ci` rather than `npm install`: it fails on a lockfile that
+      # disagrees with package.json instead of quietly resolving around it,
+      # which is the drift this job exists to catch.
+      - name: Install
+        working-directory: web/dashboard
+        run: npm ci
+      - name: Typecheck
+        working-directory: web/dashboard
+        run: npm run typecheck
+      - name: Build
+        working-directory: web/dashboard
+        run: npm run build
