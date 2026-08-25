@@ -1,3 +1,19 @@
+# Backlog (historical)
+
+This file is a record of how features were framed before they were
+planned, not a work queue. It is append-only and nothing prunes it, so
+entries stay here after they ship — several below describe behaviour
+that has been in the product for many releases.
+
+The live source of truth for what is outstanding is `.roady/`:
+
+```bash
+roady status            # counts + open tasks
+roady tasks --status ready
+```
+
+Read an entry here for the reasoning that motivated a feature. Do not
+read it as something still to build without checking roady first.
 
 ## Operator Golden Path + Wedge KPI
 
