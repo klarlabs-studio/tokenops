@@ -54,6 +54,11 @@ func TestE2EDaemonBootHealthShutdown(t *testing.T) {
 		if resp.StatusCode != 200 {
 			t.Errorf("%s status = %d", path, resp.StatusCode)
 		}
+		// Drain before closing. Closing an unread body leaves the
+		// connection active rather than idle, and Server.Shutdown waits
+		// for active connections — which is how this test intermittently
+		// spent its whole shutdown budget waiting on itself.
+		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
 	}
 
@@ -114,6 +119,10 @@ func waitFor(url string, d time.Duration) bool {
 	for time.Now().Before(deadline) {
 		resp, err := http.Get(url)
 		if err == nil {
+			// Same drain-before-close as above. This polls every 50ms
+			// until the daemon is ready, so an undrained body here can
+			// leak a whole handful of connections into the shutdown.
+			_, _ = io.Copy(io.Discard, resp.Body)
 			_ = resp.Body.Close()
 			if resp.StatusCode < 500 {
 				return true
