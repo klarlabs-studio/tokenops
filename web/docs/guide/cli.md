@@ -79,7 +79,8 @@ don't hit a dead end.
 tokenops spend                                   # last 7 days, top 5 by model
 tokenops spend --by provider --top 3 --since 24h
 tokenops spend --forecast --forecast-days 14
-tokenops spend --include-demo                    # include seeded events
+tokenops spend --include-source=demo             # include seeded events
+tokenops spend --include-source=demo,mcp-session # ...and MCP activity pings
 tokenops spend --json
 ```
 
@@ -229,9 +230,11 @@ tokenops dashboard rotate-token --json       # emit token + path as JSON
 ### `tokenops demo`
 
 Seeds synthetic events (default 7 days) tagged `source=demo`. Every
-default rollup filters them out — pass `--include-demo` (CLI) or
-`include_demo: true` (MCP) to opt in. `--reset-only` purges without
-reseeding.
+default rollup filters them out, alongside the `mcp-session`
+activity-proxy pings. Re-admit either by name with `--include-source`
+(CLI, repeatable and comma-separated) or `include_sources` (MCP);
+`--include-demo` / `include_demo: true` remain aliases for `demo`
+alone. `--reset-only` purges without reseeding.
 
 ### `tokenops replay [SESSION_ID]`
 
