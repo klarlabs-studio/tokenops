@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.54.1 - 2026-08-25
+
+Closes a reachable infinite loop in the coaching backend's HTTP path.
+
+### Fixed
+
+- **`golang.org/x/text` bumped past GO-2026-5970.** govulncheck reported
+  it as reachable, not merely present: v0.38.0 loops forever on invalid
+  input, and the trace ran from `llm.OpenAICompatBackend.Generate`
+  through `http.Client.Do` into `norm.Form`. That is the coaching
+  backend's outbound path, so the triggering input is a provider
+  response — a hang caused by something tokenops does not control.
+
+  v0.41.0 clears it. `govulncheck` now reports no vulnerabilities.
+
+### Added
+
+- **Dependabot config** (`gomod`, `github-actions`, `npm`), grouped by
+  family. The auto-merge workflow had been idling since it was added —
+  it acts on Dependabot PRs and nothing was configured to open any — so
+  Go modules were never watched, and this one drifted far enough to
+  carry a reachable CVE unnoticed.
+
 ## 0.54.0 - 2026-08-25
 
 Request counts stop including tokenops talking to itself.
