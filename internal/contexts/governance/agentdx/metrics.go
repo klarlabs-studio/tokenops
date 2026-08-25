@@ -55,6 +55,10 @@ type Record struct {
 	// question "which provider is this experience" is one only it can
 	// answer.
 	Provider string
+	// CallSignature identifies a tool call by name and arguments, so a
+	// call the agent has already made can be recognised. Empty when the
+	// client does not record arguments.
+	CallSignature string
 	// Rejects marks a prompt in which the operator rejected what they had
 	// just been given. It is the closest thing to a quality verdict a
 	// transcript holds: they read the reply and said it was wrong.

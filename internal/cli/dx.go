@@ -132,18 +132,20 @@ func writeDXText(w io.Writer, m agentdx.Metrics, bands []agentdx.ContextBand, da
 
 	if len(bands) > 0 {
 		fmt.Fprintln(w, "\nQUALITY vs CONTEXT")
-		fmt.Fprintf(w, "  %-10s %8s %10s %8s\n", "CONTEXT", "PROMPTS", "REJECTED", "TURNS")
+		fmt.Fprintf(w, "  %-10s %8s %10s %10s %8s\n",
+			"CONTEXT", "PROMPTS", "REJECTED", "REPEATED", "TURNS")
 		for _, b := range bands {
-			fmt.Fprintf(w, "  %-10s %8d %9.1f%% %8.1f\n",
-				b.Label, b.Prompts, b.RejectRatePct, b.MedianTurns)
+			fmt.Fprintf(w, "  %-10s %8d %9.1f%% %9.1f%% %8.1f\n",
+				b.Label, b.Prompts, b.RejectRatePct, b.RepeatCallRatePct, b.MedianTurns)
 		}
 		if note := agentdx.DegradationNote(bands); note != "" {
 			fmt.Fprintf(w, "\n  %s\n", note)
 		}
-		fmt.Fprintln(w, "\n  Rejection is the signal here: you read the reply and said it was wrong.")
-		fmt.Fprintln(w, "  Turns and rework are shown for context but run the other way — they fall")
-		fmt.Fprintln(w, "  as context grows, because a low-context instruction is usually an early")
-		fmt.Fprintln(w, "  one, when the agent is still orienting.")
+		fmt.Fprintln(w, "\n  REPEATED is the agent re-issuing a call it already made, within its last")
+		fmt.Fprintln(w, "  50 — losing track of what it has done. Counted over a fixed lookback so a")
+		fmt.Fprintln(w, "  long session cannot inflate it. REJECTED is you saying the reply was wrong.")
+		fmt.Fprintln(w, "  Turns are shown for shape only: they fall as context grows because a")
+		fmt.Fprintln(w, "  low-context instruction is usually an early one, mid-orientation.")
 	}
 
 	if rec, ok := agentdx.Recommend(m); ok {

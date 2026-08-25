@@ -56,10 +56,11 @@ type opencodePart struct {
 	Tool  string `json:"tool"`
 	Text  string `json:"text"`
 	State struct {
-		Input struct {
+		Input    json.RawMessage `json:"input"`
+		InputRef struct {
 			FilePath string `json:"filePath"`
 			Path     string `json:"path"`
-		} `json:"input"`
+		} `json:"-"`
 	} `json:"state"`
 }
 
@@ -230,7 +231,8 @@ func opencodeParts(db *sql.DB, byMessage map[string]messageContext, since time.T
 		case "tool":
 			rec.Kind = KindToolUse
 			rec.ToolName = p.Tool
-			rec.FilePath = firstNonEmpty(p.State.Input.FilePath, p.State.Input.Path)
+			rec.FilePath = opencodeToolPath(p.State.Input)
+			rec.CallSignature = callSignature(p.Tool, p.State.Input)
 		case "compaction":
 			rec.Kind = KindCompaction
 		default:
@@ -242,4 +244,19 @@ func opencodeParts(db *sql.DB, byMessage map[string]messageContext, since time.T
 		return nil, fmt.Errorf("%w: %v", ErrOpencodeSchema, err)
 	}
 	return out, nil
+}
+
+// opencodeToolPath pulls the edited file out of a tool call's arguments.
+func opencodeToolPath(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var in struct {
+		FilePath string `json:"filePath"`
+		Path     string `json:"path"`
+	}
+	if json.Unmarshal(raw, &in) != nil {
+		return ""
+	}
+	return firstNonEmpty(in.FilePath, in.Path)
 }

@@ -102,6 +102,31 @@ type contentPart struct {
 		FilePath string `json:"file_path"`
 		Path     string `json:"path"`
 	} `json:"input"`
+	// RawInput keeps the arguments verbatim so an identical call can be
+	// recognised, which the typed fields above cannot do.
+	RawInput json.RawMessage `json:"-"`
+}
+
+// rawToolUse mirrors contentPart for the second decode pass that keeps
+// tool arguments intact.
+type rawToolUse struct {
+	Type  string          `json:"type"`
+	Name  string          `json:"name"`
+	Input json.RawMessage `json:"input"`
+}
+
+// callSignature identifies a tool call by name and arguments. Truncated
+// because a signature only has to be distinctive, not complete, and some
+// tool inputs run to megabytes.
+func callSignature(name string, input json.RawMessage) string {
+	if name == "" {
+		return ""
+	}
+	arg := string(input)
+	if len(arg) > 400 {
+		arg = arg[:400]
+	}
+	return name + "|" + arg
 }
 
 // interruptMarker is what the client writes into the transcript when the
@@ -160,7 +185,9 @@ func readTranscript(r io.Reader, since time.Time) []Record {
 			out = append(out, turn)
 
 			parts, _ := decodeContent(e.Message.Content)
-			for _, p := range parts {
+			var raws []rawToolUse
+			_ = json.Unmarshal(e.Message.Content, &raws)
+			for i, p := range parts {
 				if p.Type != "tool_use" {
 					continue
 				}
@@ -168,6 +195,9 @@ func readTranscript(r io.Reader, since time.Time) []Record {
 				tu.Kind = KindToolUse
 				tu.ToolName = p.Name
 				tu.FilePath = firstNonEmpty(p.Input.FilePath, p.Input.Path)
+				if i < len(raws) {
+					tu.CallSignature = callSignature(p.Name, raws[i].Input)
+				}
 				out = append(out, tu)
 			}
 		}

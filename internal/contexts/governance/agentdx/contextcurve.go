@@ -19,6 +19,13 @@ type ContextBand struct {
 	MedianTurns   float64 `json:"median_turns"`
 	ReworkRatePct float64 `json:"rework_rate_pct"`
 	TotalEdits    int     `json:"total_edits"`
+	// RepeatCallRatePct is the share of tool calls the agent had already
+	// made, with identical arguments, within the recent lookback. It is
+	// the agent losing track of what it has already done — the drift an
+	// operator reads as declining quality without ever saying so.
+	RepeatCallRatePct float64 `json:"repeat_call_rate_pct"`
+	RepeatCalls       int     `json:"repeat_calls"`
+	TotalCalls        int     `json:"total_calls"`
 }
 
 // Contains reports whether a context size falls in this band.
@@ -43,6 +50,15 @@ var contextBounds = []struct {
 // minPromptsPerBand is the floor for a band to be trusted. Below it a
 // percentage swings on single events.
 const minPromptsPerBand = 50
+
+// repeatLookback bounds how far back a repeated call is recognised.
+//
+// The bound is the whole point. With unbounded history the repeat rate
+// measures session length — later calls have more prior calls to collide
+// with — and on real transcripts that confound is large enough to
+// manufacture a trend on its own. Fifty calls is roughly the span an
+// agent can be expected to remember it just did something.
+const repeatLookback = 50
 
 // ComputeContextCurve measures friction against how full the context
 // window was.
@@ -77,9 +93,10 @@ func ComputeContextCurve(records []Record) []ContextBand {
 		return nil
 	}
 	type acc struct {
-		prompts, rejects int
-		turns            []float64
-		rework, edits    int
+		prompts, rejects   int
+		turns              []float64
+		rework, edits      int
+		repeats, callsSeen int
 	}
 	accs := make([]acc, len(contextBounds))
 
@@ -99,7 +116,30 @@ func ComputeContextCurve(records []Record) []ContextBand {
 		unit       *acc
 		unitTurns  int
 		unitFiles  map[string]bool
+		// Bounded lookback over recent call signatures, kept PER SESSION.
+		//
+		// Bounded, because unbounded history makes the repeat rate a proxy
+		// for session length: the longer a session runs, the more prior
+		// calls there are to collide with, drift or no drift.
+		//
+		// Per session, because an agent cannot repeat itself across a
+		// boundary it has no memory of. Sharing one window across sessions
+		// counts two operators running the same command as the agent
+		// forgetting — which on real transcripts is enough to invert the
+		// trend entirely.
+		lookback = map[string]*callWindow{}
 	)
+	sawCall := func(sessionID, sig string) bool {
+		if sig == "" {
+			return false
+		}
+		w := lookback[sessionID]
+		if w == nil {
+			w = newCallWindow()
+			lookback[sessionID] = w
+		}
+		return w.seen(sig)
+	}
 	closeUnit := func() {
 		if unit == nil {
 			return
@@ -131,6 +171,13 @@ func ComputeContextCurve(records []Record) []ContextBand {
 				unit.rejects++
 			}
 		case KindToolUse:
+			idx := bandIndex(curContext)
+			if idx >= 0 && r.CallSignature != "" {
+				accs[idx].callsSeen++
+				if sawCall(r.SessionID, r.CallSignature) {
+					accs[idx].repeats++
+				}
+			}
 			if unit == nil || !isEdit(r.ToolName) || r.FilePath == "" {
 				continue
 			}
@@ -146,7 +193,10 @@ func ComputeContextCurve(records []Record) []ContextBand {
 	out := make([]ContextBand, 0, len(contextBounds))
 	for i, b := range contextBounds {
 		a := accs[i]
-		if a.prompts == 0 {
+		// A band is worth reporting if anything happened in it. Repeats
+		// are counted per call, so a band can carry a real signal without
+		// any instruction having started inside it.
+		if a.prompts == 0 && a.callsSeen == 0 {
 			continue
 		}
 		band := ContextBand{
@@ -158,6 +208,10 @@ func ComputeContextCurve(records []Record) []ContextBand {
 		band.RejectRatePct = round1(float64(a.rejects) / float64(a.prompts) * 100)
 		if a.edits > 0 {
 			band.ReworkRatePct = round1(float64(a.rework) / float64(a.edits) * 100)
+		}
+		band.RepeatCalls, band.TotalCalls = a.repeats, a.callsSeen
+		if a.callsSeen > 0 {
+			band.RepeatCallRatePct = round1(float64(a.repeats) / float64(a.callsSeen) * 100)
 		}
 		out = append(out, band)
 	}
@@ -185,53 +239,99 @@ func SweetSpot(bands []ContextBand) (ContextBand, bool) {
 	return best, found
 }
 
-// DegradationNote reports what the curve says about working past the
-// sweet spot — including, often, that it says nothing.
+// DegradationNote reports what the curve says about working at a large
+// context — including, often, that it says nothing.
 //
-// It compares the LARGEST populated band against the sweet spot, not the
-// worst one. Picking the worst band cherry-picks a peak out of a noisy
-// series: on the maintainer's own corpus rejection runs 3.7 / 1.9 / 3.1 /
-// 2.4 / 1.7 across the bands, where "worst vs best" reads as a 93%
-// degradation and the actual trend is flat-to-improving.
+// Repeats lead, because on real transcripts they are the signal that
+// shows the effect and rejection is not. An operator rarely tells the
+// agent off for redoing something; they just watch it happen and form an
+// impression. That impression is what this names.
 //
-// A margin is required too. These are percentages of a few hundred
-// prompts; a fraction of a point apart is noise, and a tool that names it
-// as a finding teaches its operator to distrust the ones that are real.
+// Bands are compared as two halves rather than best-versus-worst. Picking
+// the worst band cherry-picks a peak out of a noisy series: the same
+// corpus that shows a real repeat effect also shows a rejection series of
+// 3.7 / 1.9 / 3.3 / 2.4 / 1.7, where worst-versus-best reads as a
+// confident degradation and the trend is flat.
 func DegradationNote(bands []ContextBand) string {
-	spot, ok := SweetSpot(bands)
-	if !ok {
+	loRate, loN, hiRate, hiN := splitHalves(bands)
+	if loN == 0 || hiN == 0 {
 		return ""
 	}
-	var largest ContextBand
-	var haveLargest bool
-	for _, b := range bands {
-		if b.Prompts < minPromptsPerBand {
-			continue
-		}
-		if !haveLargest || b.Lo > largest.Lo {
-			largest, haveLargest = b, true
-		}
+	if loRate <= 0 {
+		return ""
 	}
-	if !haveLargest || largest.Label == spot.Label {
+	rise := (hiRate/loRate - 1) * 100
+	if rise < minRepeatRisePct {
 		return fmt.Sprintf(
-			"Your lowest rejection rate is at %s (%.1f%%), and it is also your largest "+
-				"measured band — no degradation with context in this data.",
-			spot.Label, spot.RejectRatePct)
+			"No clear drift: the agent re-issues a recent call %.1f%% of the time below %s "+
+				"and %.1f%% above — inside the noise for this corpus.",
+			loRate, splitLabel, hiRate)
 	}
-	rise := largest.RejectRatePct - spot.RejectRatePct
-	if rise < minMeaningfulRise {
-		return fmt.Sprintf(
-			"No clear degradation: %s runs %.1f%% against %.1f%% at your best band (%s), "+
-				"which is inside the noise for this many prompts.",
-			largest.Label, largest.RejectRatePct, spot.RejectRatePct, spot.Label)
-	}
-	pct := rise / spot.RejectRatePct * 100
 	return fmt.Sprintf(
-		"You reject %.0f%% more often at %s than at %s (%.1f%% vs %.1f%%) — compacting "+
-			"before %s keeps you in your own best band.",
-		pct, largest.Label, spot.Label, largest.RejectRatePct, spot.RejectRatePct, largest.Label)
+		"Past %s the agent re-issues a call it just made %.0f%% more often (%.1f%% vs %.1f%%) — "+
+			"it is losing track of what it has already done. Compacting before %s keeps it in "+
+			"the band where it does not.",
+		splitLabel, rise, hiRate, loRate, splitLabel)
 }
 
-// minMeaningfulRise is the percentage-point gap below which a difference
-// between bands is treated as noise rather than a finding.
-const minMeaningfulRise = 1.0
+// splitLabel and splitAt are where the halves divide. Chosen because it
+// is where the effect appears on real transcripts, not for roundness.
+const (
+	splitLabel       = "600k"
+	splitAt    int64 = 600_000
+	// minRepeatRisePct is the relative increase below which the halves
+	// are treated as the same. These are rates over tens of thousands of
+	// calls, but a tool that names small differences as findings teaches
+	// its operator to distrust the ones that matter.
+	minRepeatRisePct = 25.0
+)
+
+// splitHalves aggregates repeat rates below and at/above splitAt.
+func splitHalves(bands []ContextBand) (loRate float64, loN int, hiRate float64, hiN int) {
+	var loDup, hiDup int
+	for _, b := range bands {
+		if b.TotalCalls == 0 {
+			continue
+		}
+		if b.Lo < splitAt {
+			loN += b.TotalCalls
+			loDup += b.RepeatCalls
+		} else {
+			hiN += b.TotalCalls
+			hiDup += b.RepeatCalls
+		}
+	}
+	if loN > 0 {
+		loRate = round1(float64(loDup) / float64(loN) * 100)
+	}
+	if hiN > 0 {
+		hiRate = round1(float64(hiDup) / float64(hiN) * 100)
+	}
+	return loRate, loN, hiRate, hiN
+}
+
+// callWindow is a fixed-size ring of recent call signatures for one
+// session.
+type callWindow struct {
+	order []string
+	count map[string]int
+}
+
+func newCallWindow() *callWindow {
+	return &callWindow{order: make([]string, 0, repeatLookback), count: map[string]int{}}
+}
+
+// seen records sig and reports whether it was already inside the window.
+func (w *callWindow) seen(sig string) bool {
+	dup := w.count[sig] > 0
+	if len(w.order) == repeatLookback {
+		old := w.order[0]
+		w.order = w.order[1:]
+		if w.count[old]--; w.count[old] <= 0 {
+			delete(w.count, old)
+		}
+	}
+	w.order = append(w.order, sig)
+	w.count[sig]++
+	return dup
+}
