@@ -1,0 +1,56 @@
+version: 2
+
+# The auto-merge workflow (.github/workflows/dependabot-auto-merge.yml) has
+# been idling since it was added: it acts on Dependabot PRs, and nothing was
+# configured to open any. Go modules were never watched at all, which is how
+# golang.org/x/text sat on a version with a reachable infinite-loop
+# vulnerability (GO-2026-5970) without anything saying so.
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # One PR per family rather than per module. Forty individually-correct
+      # bumps is forty CI runs and forty reviews, which is how a backlog of
+      # forty stale modules accumulates in the first place.
+      golang-x:
+        patterns:
+          - "golang.org/x/*"
+      opentelemetry:
+        patterns:
+          - "go.opentelemetry.io/*"
+      klarlabs:
+        patterns:
+          - "go.klarlabs.de/*"
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: npm
+    directory: /web/dashboard
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      npm-minor-and-patch:
+        update-types:
+          - minor
+          - patch
