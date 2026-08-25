@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.53.0 - 2026-08-25
+
+Answers "does quality degrade as context grows" from the operator's own
+transcripts rather than from assumption.
+
+### Added
+
+- **`tokenops dx` reports quality against context size.** Instructions are
+  banded by how full the window was when they ran, and each band carries
+  the rejection rate, the repeated-call rate, and median turns.
+
+- **Repeated tool calls** — the agent re-issuing a call it already made
+  with identical arguments. This is the signal that shows the effect: on
+  the maintainer's Claude Code corpus it runs 1.7% below 600k of context
+  and 2.6% above, a 53% increase over roughly 80,000 calls.
+
+  It is drift rather than error, which is why rejection misses it — an
+  operator rarely tells the agent off for redoing something, they watch it
+  happen and form an impression.
+
+  Two controls make the number mean anything: the lookback is bounded to
+  fifty calls, so session length cannot inflate it, and it is scoped per
+  session, because an agent cannot repeat itself across a boundary it has
+  no memory of.
+
+- **Rejection rate per band**, the operator's own quality verdict. Worth
+  reporting even where it shows nothing: on this corpus it is flat, and
+  rework and tool errors actively fall with context — both confounded by
+  session position, since a low-context instruction is usually an early
+  one while the agent is still orienting.
+
 ## 0.52.0 - 2026-08-24
 
 ### Added
