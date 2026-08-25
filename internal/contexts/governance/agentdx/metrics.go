@@ -55,6 +55,23 @@ type Record struct {
 	// question "which provider is this experience" is one only it can
 	// answer.
 	Provider string
+	// CallSignature identifies a tool call by name and arguments, so a
+	// call the agent has already made can be recognised. Empty when the
+	// client does not record arguments.
+	CallSignature string
+	// Rejects marks a prompt in which the operator rejected what they had
+	// just been given. It is the closest thing to a quality verdict a
+	// transcript holds: they read the reply and said it was wrong.
+	Rejects bool
+}
+
+// sortedByTime returns records in chronological order without mutating
+// the caller's slice.
+func sortedByTime(records []Record) []Record {
+	out := make([]Record, len(records))
+	copy(out, records)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].At.Before(out[j].At) })
+	return out
 }
 
 // Metrics is the agent-experience roll-up.
@@ -172,9 +189,7 @@ func Compute(records []Record) Metrics {
 	if len(records) == 0 {
 		return m
 	}
-	sorted := make([]Record, len(records))
-	copy(sorted, records)
-	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].At.Before(sorted[j].At) })
+	sorted := sortedByTime(records)
 
 	sessions := map[string]bool{}
 	var (
