@@ -2,6 +2,8 @@ module go.klarlabs.de/tokenops
 
 go 1.25.0
 
+toolchain go1.25.14
+
 require (
 	github.com/google/uuid v1.6.0
 	github.com/grandcat/zeroconf v1.0.0
@@ -38,7 +40,7 @@ require (
 	golang.org/x/term v0.44.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260630182238-925bb5da69e7 // indirect
-	google.golang.org/grpc v1.82.0 // indirect
+	google.golang.org/grpc v1.82.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	modernc.org/libc v1.72.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
