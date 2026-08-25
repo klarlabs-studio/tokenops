@@ -1,0 +1,52 @@
+# warden gate — https://github.com/klarlabs-studio/warden
+#
+# Actions is NOT broken here. tokenops is public, so the spending limit that
+# stopped the private fleet's workflows never applied to it, and ci.yml is
+# green. This gate is not a replacement for CI; it is the same checks moved
+# in front of the push instead of after it, so a dev with warden installed
+# finds a lint error before it becomes a red build for everyone else.
+#
+# Because CI still works, `status: enabled` is here for parity with the rest
+# of the fleet rather than out of necessity: branch protection can keep using
+# the Actions checks, and warden/gate is available if that ever changes.
+status:
+  enabled: true
+
+hooks: { pre_commit: true, pre_push: true }
+
+commands:
+  # `go mod tidy -diff` reports what tidy WOULD change without writing it, so
+  # the step is a check rather than a mutation. ci.yml achieves the same thing
+  # by running tidy and diffing; that version rewrites the tree, which is fine
+  # in a throwaway runner and not fine in a dev's checkout.
+  tidy: go mod tidy -diff
+  fmt: sh -c 'out=$(gofmt -l .); [ -z "$out" ] || { echo "gofmt issues:"; echo "$out"; exit 1; }'
+  vet: go vet ./...
+  # --timeout matches ci.yml's golangci-lint-action args. --allow-parallel-runners
+  # because the lock is machine-global: without it a second repo's gate on the
+  # same box reports "could not run", which is not the same as passing.
+  lint: golangci-lint run --timeout=5m --allow-parallel-runners ./...
+  # -timeout is explicit on purpose. Go's default is 10m PER PACKAGE, and it
+  # fires from inside the test binary, so warden sees an ordinary non-zero exit
+  # and reports "step test failed" — a claim about the change. On a loaded
+  # machine that claim is false. Naming the budget here means the gate's own
+  # timeout governs, and a step killed by it is reported as a timeout.
+  test: go test -race -count=1 -timeout 15m ./...
+  # sec-gate, NOT `make sec`. `make sec` is a bare `nox scan .`, which exits
+  # non-zero whenever ANY finding exists — it would fail this gate forever.
+  # sec-gate is the critical-only gate the security workflow actually runs.
+  sec-gate: make sec-gate
+  vulns: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+  # Skips itself when protoc is absent, exactly as ci.yml does.
+  proto-verify: make proto-verify
+
+timeouts:
+  test: 20m
+  lint: 10m
+
+steps:
+  # pre_commit stays cheap enough to not resent: formatting and vet only.
+  pre_commit: [fmt, vet]
+  pre_push: [tidy, fmt, vet, lint, test, sec-gate, vulns, proto-verify]
+
+parallel: true
