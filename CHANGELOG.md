@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.53.0 - 2026-08-25
+
+Answers "does quality degrade as context grows" from the operator's own
+transcripts rather than from assumption.
+
+### Added
+
+- **`tokenops dx` reports quality against context size.** Instructions are
+  banded by how full the window was when they ran, and each band carries
+  the rejection rate, the repeated-call rate, and median turns.
+
+- **Repeated tool calls** — the agent re-issuing a call it already made
+  with identical arguments. This is the signal that shows the effect: on
+  the maintainer's Claude Code corpus it runs 1.7% below 600k of context
+  and 2.6% above, a 53% increase over roughly 80,000 calls.
+
+  It is drift rather than error, which is why rejection misses it — an
+  operator rarely tells the agent off for redoing something, they watch it
+  happen and form an impression.
+
+  Two controls make the number mean anything: the lookback is bounded to
+  fifty calls, so session length cannot inflate it, and it is scoped per
+  session, because an agent cannot repeat itself across a boundary it has
+  no memory of.
+
+- **Rejection rate per band**, the operator's own quality verdict. Worth
+  reporting even where it shows nothing: on this corpus it is flat, and
+  rework and tool errors actively fall with context — both confounded by
+  session position, since a low-context instruction is usually an early
+  one while the agent is still orienting.
+
+## 0.52.0 - 2026-08-24
+
+### Added
+
+- **The Stop nudge reports context against the model's window.** Dollars
+  are a counterfactual on a flat-rate plan; context is not — it fills up,
+  forces a compaction, and until then every turn re-reads the whole of
+  it.
+
+      Context: 873k of 1.0M (87%) — worth compacting: every turn now
+      re-reads this whole context.
+
+  Window sizes come from Anthropic's pricing page (Claude 4.6 and later
+  carry the full 1M window) and are confirmed by a real 999,947-token
+  turn. An `[1m]` suffix outranks the family default. An unrecognised
+  model reports its context size with no percentage — a share against a
+  guessed denominator looks authoritative and is not.
+
+  The advice escalates: silent below 75%, a note at 75%, and at 90% the
+  fact that an automatic compaction is imminent and will choose what to
+  drop.
+
 ## 0.51.1 - 2026-08-24
 
 ### Fixed

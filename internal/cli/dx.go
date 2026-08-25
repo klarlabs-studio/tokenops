@@ -62,7 +62,7 @@ proxy-only.`,
 				enc.SetIndent("", "  ")
 				return enc.Encode(m)
 			}
-			writeDXText(cmd.OutOrStdout(), m, days)
+			writeDXText(cmd.OutOrStdout(), m, agentdx.ComputeContextCurve(records), days)
 			return nil
 		},
 	}
@@ -73,7 +73,7 @@ proxy-only.`,
 	return cmd
 }
 
-func writeDXText(w io.Writer, m agentdx.Metrics, days int) {
+func writeDXText(w io.Writer, m agentdx.Metrics, bands []agentdx.ContextBand, days int) {
 	window := "all history"
 	if days > 0 {
 		window = fmt.Sprintf("last %dd", days)
@@ -128,6 +128,24 @@ func writeDXText(w io.Writer, m agentdx.Metrics, days int) {
 				name, p.Prompts, p.MedianTurnsPerPrompt, p.FirstTryRatePct,
 				pctOrNA(p.ReworkRatePct, p.TotalEdits > 0))
 		}
+	}
+
+	if len(bands) > 0 {
+		fmt.Fprintln(w, "\nQUALITY vs CONTEXT")
+		fmt.Fprintf(w, "  %-10s %8s %10s %10s %8s\n",
+			"CONTEXT", "PROMPTS", "REJECTED", "REPEATED", "TURNS")
+		for _, b := range bands {
+			fmt.Fprintf(w, "  %-10s %8d %9.1f%% %9.1f%% %8.1f\n",
+				b.Label, b.Prompts, b.RejectRatePct, b.RepeatCallRatePct, b.MedianTurns)
+		}
+		if note := agentdx.DegradationNote(bands); note != "" {
+			fmt.Fprintf(w, "\n  %s\n", note)
+		}
+		fmt.Fprintln(w, "\n  REPEATED is the agent re-issuing a call it already made, within its last")
+		fmt.Fprintln(w, "  50 — losing track of what it has done. Counted over a fixed lookback so a")
+		fmt.Fprintln(w, "  long session cannot inflate it. REJECTED is you saying the reply was wrong.")
+		fmt.Fprintln(w, "  Turns are shown for shape only: they fall as context grows because a")
+		fmt.Fprintln(w, "  low-context instruction is usually an early one, mid-orientation.")
 	}
 
 	if rec, ok := agentdx.Recommend(m); ok {

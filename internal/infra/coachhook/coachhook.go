@@ -96,6 +96,11 @@ type Decision struct {
 	// FiredFraction is the budget fraction whose boundary this Stop fired
 	// (e.g. 0.50, 1.00, 2.00). Zero when no nudge fired.
 	FiredFraction float64
+	// ContextTokens is how full the model's context window was on the
+	// newest turn. Zero when no turn was observed.
+	ContextTokens int64
+	// ContextWindow is the model's window size, when one is known for it.
+	ContextWindow int64
 }
 
 // usage is the token-usage block Claude Code records on each turn's message.
@@ -153,7 +158,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 
 	st := loadSession(dir, sessionID)
 
-	model := accumulate(transcriptPath, &st)
+	model, contextTokens := accumulate(transcriptPath, &st)
 
 	// A budget the operator set is theirs; the shipping default is not,
 	// and the wording depends on which this is.
@@ -170,6 +175,15 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		dec.Nudge = true
 		dec.FiredFraction = fired
 		dec.Message = nudgeMessage(fired, st.CumulativeUSD, budget, configured)
+		// Context is the number that actually constrains the session;
+		// lead the dollar figure with it wherever it is known.
+		if note := contextNote(contextTokens, model); note != "" {
+			dec.Message = note + " " + dec.Message
+		}
+		dec.ContextTokens = contextTokens
+		if w, ok := spend.ContextWindow(model); ok {
+			dec.ContextWindow = w
+		}
 		st.MaxFiredFraction = fired
 	}
 
@@ -193,22 +207,27 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 // timestamp. Equal timestamps are treated as already-counted (marker uses
 // strict >), an acceptable simplification: between consecutive Stops there is
 // normally ~1 new turn and its timestamp is distinct.
-func accumulate(path string, st *sessionState) string {
+func accumulate(path string, st *sessionState) (model string, contextTokens int64) {
 	lines := usageLines(path)
 	newMarker := st.LastCountedTS
-	model := ""
 	for _, tl := range lines {
 		if tl.Timestamp == "" || tl.Timestamp <= st.LastCountedTS {
 			continue
 		}
 		st.CumulativeUSD += turnCostUSD(tl.Message.Usage, tl.Message.Model)
 		model = tl.Message.Model
+		// The window holds whatever the newest turn sent: fresh input,
+		// plus everything read back from cache, plus what was just
+		// written to it. Cumulative tokens would answer a different
+		// question — this is how full the context is right now.
+		u := tl.Message.Usage
+		contextTokens = u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens
 		if tl.Timestamp > newMarker {
 			newMarker = tl.Timestamp
 		}
 	}
 	st.LastCountedTS = newMarker
-	return model
+	return model, contextTokens
 }
 
 // turnCostUSD prices a single turn's full API-equivalent cost: input, output,
@@ -545,4 +564,53 @@ func itoa(n int64) string {
 		b[i] = '-'
 	}
 	return string(b[i:])
+}
+
+// contextNote reports how full the model's context window is.
+//
+// This is the number that matters on a flat-rate plan. The dollar figure
+// beside it is a counterfactual — the operator is billed the same either
+// way — but context genuinely fills up: it forces a compaction, and until
+// then every turn re-reads the whole of it. An operator whose sessions sit
+// at 87% of a 1M window is paying for that on every single turn, and no
+// amount of dollar framing makes that visible.
+//
+// An unknown model yields no percentage. A share computed against a
+// guessed denominator looks authoritative and is not.
+func contextNote(contextTokens int64, model string) string {
+	if contextTokens <= 0 {
+		return ""
+	}
+	window, known := spend.ContextWindow(model)
+	if !known || window <= 0 {
+		return fmt.Sprintf("Context: %s in the window (no published size for %s).",
+			formatTokens(contextTokens), model)
+	}
+	pct := int(math.Round(float64(contextTokens) / float64(window) * 100))
+	base := fmt.Sprintf("Context: %s of %s (%d%%)",
+		formatTokens(contextTokens), formatTokens(window), pct)
+
+	switch {
+	case pct >= 90:
+		return base + " — compact now; an automatic compaction is close and it will " +
+			"choose what to drop for you."
+	case pct >= 75:
+		return base + " — worth compacting: every turn now re-reads this whole context."
+	case pct >= 50:
+		return base + "."
+	default:
+		return base + "."
+	}
+}
+
+// formatTokens renders a token count compactly.
+func formatTokens(n int64) string {
+	switch {
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
+	case n >= 1_000:
+		return fmt.Sprintf("%dk", n/1_000)
+	default:
+		return fmt.Sprintf("%d", n)
+	}
 }
