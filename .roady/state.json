@@ -1,6 +1,6 @@
 {
   "project_id": "tokenops",
-  "version": 289,
+  "version": 300,
   "task_states": {
     "analytics-aggregator": {
       "status": "done",
@@ -718,8 +718,14 @@
       "elapsed_minutes": 685
     },
     "task-anthropic-cookie-usage": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "ai-agent",
+      "evidence": [
+        "internal/contexts/spend/vendorusage/anthropiccookie (client+poller+tests); wired at internal/daemon/daemon.go:312. One anthropic-cookie event present in the maintainer's live store."
+      ],
+      "started_at": "2026-08-25T10:13:27.784639+02:00",
+      "completed_at": "2026-08-25T10:13:33.37602+02:00",
       "elapsed_minutes": 0
     },
     "task-auto-detect-init-wizard": {
@@ -745,11 +751,15 @@
       "elapsed_minutes": 1
     },
     "task-claudecode-jsonl-reader": {
-      "status": "in_progress",
+      "status": "done",
       "path": "",
       "owner": "ai-agent",
+      "evidence": [
+        "internal/contexts/spend/vendorusage/claudecodejsonl (reader+poller+tests); wired at internal/daemon/daemon.go:243"
+      ],
       "started_at": "2026-05-14T11:38:57.804111+02:00",
-      "elapsed_minutes": 0
+      "completed_at": "2026-08-25T10:12:39.005057+02:00",
+      "elapsed_minutes": 148233
     },
     "task-cli": {
       "status": "done",
@@ -807,18 +817,36 @@
       "elapsed_minutes": 0
     },
     "task-codex-jsonl-reader": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "ai-agent",
+      "evidence": [
+        "internal/contexts/spend/vendorusage/codexjsonl (reader+poller+tests); wired at internal/daemon/daemon.go:260"
+      ],
+      "started_at": "2026-08-25T10:12:57.930875+02:00",
+      "completed_at": "2026-08-25T10:13:03.253158+02:00",
       "elapsed_minutes": 0
     },
     "task-copilot-api-client": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "ai-agent",
+      "evidence": [
+        "internal/contexts/spend/vendorusage/copilot (client+tokenstore+poller+tests); wired at internal/daemon/daemon.go:346"
+      ],
+      "started_at": "2026-08-25T10:13:07.961429+02:00",
+      "completed_at": "2026-08-25T10:13:13.500229+02:00",
       "elapsed_minutes": 0
     },
     "task-cursor-api-client": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "ai-agent",
+      "evidence": [
+        "internal/contexts/spend/vendorusage/cursor (client+poller+tests); wired at internal/daemon/daemon.go:295. Not verified against a live Cursor account."
+      ],
+      "started_at": "2026-08-25T10:13:18.171196+02:00",
+      "completed_at": "2026-08-25T10:13:23.458674+02:00",
       "elapsed_minutes": 0
     },
     "task-dashboard": {
@@ -954,9 +982,15 @@
       "elapsed_minutes": 5
     },
     "task-include-demo-split": {
-      "status": "pending",
+      "status": "done",
       "path": "",
-      "elapsed_minutes": 0
+      "owner": "ai-agent",
+      "evidence": [
+        "PR #202 (merged): --include-source CLI flag + include_sources MCP input; analytics.Filter.IncludeSources; mcp-session added to DefaultExcludedSources"
+      ],
+      "started_at": "2026-08-25T10:13:42.609516+02:00",
+      "completed_at": "2026-08-25T10:15:07.572633+02:00",
+      "elapsed_minutes": 1
     },
     "task-integrations": {
       "status": "done",
@@ -1531,5 +1565,5 @@
       "elapsed_minutes": 3
     }
   },
-  "updated_at": "2026-05-14T11:38:57.804111+02:00"
+  "updated_at": "2026-08-25T10:15:07.572634+02:00"
 }
