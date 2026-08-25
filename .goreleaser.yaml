@@ -74,7 +74,7 @@ release:
     name: tokenops
   draft: false
 
-# Automatically bump the felixgeelhaar/homebrew-tap formula on every
+# Automatically bump the klarlabs-studio/homebrew-tap cask on every
 # tag push. Replaces the brittle sed-based update job in
 # .github/workflows/release.yml that silently no-op'd when the formula
 # schema drifted from the placeholder patterns it expected.
