@@ -69,11 +69,16 @@ func (g Group) column() string {
 // Filter narrows the events the aggregator considers. Empty fields are
 // not constrained.
 //
-// ExcludeSources gates the synthetic / demo / replay surfaces. nil
-// means "apply DefaultExcludedSources" (drops `demo` so seeded data
-// stays out of operator-facing rollups). An empty non-nil slice means
+// ExcludeSources gates the synthetic / activity-proxy surfaces. nil
+// means "apply DefaultExcludedSources". An empty non-nil slice means
 // "include every source"; callers pass that when they explicitly want
 // to see synthetic data alongside real traffic.
+//
+// IncludeSources re-admits named entries of DefaultExcludedSources
+// without disturbing the rest, so an operator asking for demo seeds
+// does not also get MCP activity pings folded in. It is ignored when
+// ExcludeSources is non-nil, because an explicit exclude list already
+// states exactly what to drop.
 type Filter struct {
 	EventType      eventschema.EventType
 	Provider       string
@@ -83,22 +88,40 @@ type Filter struct {
 	Since          time.Time
 	Until          time.Time
 	ExcludeSources []string
+	IncludeSources []string
 }
 
-// DefaultExcludedSources is applied by every analytics + plan query
-// unless the caller passes a non-nil ExcludeSources slice. Demo events
-// land here so `tokenops demo` no longer contaminates production-facing
-// numbers; opt back in via `--include-demo` / `include_demo: true`.
-var DefaultExcludedSources = []string{"demo"}
+// DefaultExcludedSources is applied by every analytics query unless the
+// caller passes a non-nil ExcludeSources slice. Neither entry is real
+// LLM traffic: `demo` is seeded by `tokenops demo`, and `mcp-session`
+// is the activity-proxy ping the MCP server records about itself, which
+// would otherwise inflate the request count an operator reads as "calls
+// I made". Opt either back in per-source via
+// `--include-source=` / `include_sources: [...]`.
+var DefaultExcludedSources = []string{"demo", "mcp-session"}
 
 // resolveExcludeSources returns the operative exclude list for a
 // Filter: caller-supplied slice when set (including empty for "show
-// everything"), the package default otherwise.
+// everything"), otherwise the package default minus anything the
+// caller re-admitted via IncludeSources.
 func resolveExcludeSources(f Filter) []string {
-	if f.ExcludeSources == nil {
+	if f.ExcludeSources != nil {
+		return f.ExcludeSources
+	}
+	if len(f.IncludeSources) == 0 {
 		return DefaultExcludedSources
 	}
-	return f.ExcludeSources
+	readmit := make(map[string]bool, len(f.IncludeSources))
+	for _, s := range f.IncludeSources {
+		readmit[s] = true
+	}
+	out := make([]string, 0, len(DefaultExcludedSources))
+	for _, s := range DefaultExcludedSources {
+		if !readmit[s] {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // Row is one (bucket, group-key) cell of an aggregate.

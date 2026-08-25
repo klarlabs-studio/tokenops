@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **The MCP server's own activity pings no longer count as traffic you
+  made.** `mcp-session` events are the MCP server recording that it was
+  called; they carry no tokens and no cost, but they were landing in the
+  request total that `tokenops spend`, `burn_rate`, `top_consumers` and
+  `forecast` report. An operator reading "42 requests" was reading some
+  number of their own calls plus some number of tokenops talking to
+  itself, with no way to tell the two apart. They are now excluded by
+  default, alongside `demo` — the scorecard already drew the line here.
+
+  Request counts on installs that use the MCP server will drop. Nothing
+  about spend or tokens changes: the pings never carried either.
+
+- **`--include-demo` splits into per-source opt-in.** It used to clear
+  the entire exclude list, so asking to see synthetic seeds folded in
+  every other excluded source too. `--include-source` (CLI, repeatable
+  and comma-separated) and `include_sources` (MCP) re-admit sources by
+  name:
+
+  ```bash
+  tokenops spend --include-source=demo                # seeds only
+  tokenops spend --include-source=demo,mcp-session    # both
+  ```
+
+  `--include-demo` and `include_demo: true` still work, as aliases for
+  `demo` alone. A named source that is not excluded by default prints a
+  note rather than failing, so the flag never silently does nothing.
+
 ## 0.53.0 - 2026-08-25
 
 Answers "does quality degrade as context grows" from the operator's own

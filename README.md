@@ -231,10 +231,24 @@ When a subsystem is off, the matching routes return `503` with a structured
 
 ## Demo data isolation
 
-`tokenops demo` writes synthetic `PromptEvent`s tagged `source=demo`. Every
-default rollup filters them out so first-run exploration never contaminates
-production numbers. Pass `--include-demo` (CLI) or `include_demo: true` (MCP
-tool input) to see the synthetic breakdown alongside real traffic.
+Two event sources are excluded from every default rollup, because neither is
+real LLM traffic you paid for or waited on:
+
+| Source | What it is |
+| --- | --- |
+| `demo` | Synthetic `PromptEvent`s seeded by `tokenops demo` |
+| `mcp-session` | Activity-proxy pings the MCP server records about itself |
+
+Re-admit them one at a time — `--include-source` (CLI, repeatable and
+comma-separated) or `include_sources` (MCP tool input):
+
+```bash
+tokenops spend --include-source=demo                # synthetic seeds too
+tokenops spend --include-source=demo,mcp-session    # and the MCP pings
+```
+
+`--include-demo` / `include_demo: true` still work as aliases for
+`demo` alone.
 
 ## Contributing
 

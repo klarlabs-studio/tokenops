@@ -44,14 +44,14 @@ bench-gate:
 # fixtures. Reports per-optimizer quality scores, compression ratios,
 # and success rates. Use this locally to iterate on optimizer changes.
 eval:
-	$(GO) test -count=1 -run TestEvalSuitesPass -v ./internal/eval/
+	$(GO) test -count=1 -run TestEvalSuitesPass -v ./internal/contexts/optimization/eval/
 
 # eval-gate is the CI regression gate for optimizer quality. It asserts
 # that the aggregate success rate across all eval fixtures stays above
 # the minimum threshold defined in the test. Add new eval fixtures to
-# internal/eval/testdata/ to expand coverage.
+# internal/contexts/optimization/eval/testdata/ to expand coverage.
 eval-gate:
-	$(GO) test -count=1 -run TestEvalSuitesPass ./internal/eval/
+	$(GO) test -count=1 -run TestEvalSuitesPass ./internal/contexts/optimization/eval/
 
 fmt:
 	$(GO) fmt $(PKG)

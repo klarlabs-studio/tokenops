@@ -63,6 +63,7 @@ func newSpendCmd(rf *rootFlags) *cobra.Command {
 		jsonOut       bool
 		hideSparkline bool
 		includeDemo   bool
+		includeSrcs   []string
 		svgFile       string
 	)
 	cmd := &cobra.Command{
@@ -115,12 +116,7 @@ spend within the selected window. It surfaces:
 				}
 				f.Until = until
 			}
-			if includeDemo {
-				// Empty (non-nil) slice opts out of the default exclude
-				// list, surfacing demo + replay sources alongside real
-				// traffic — matches the include_demo MCP tool input.
-				f.ExcludeSources = []string{}
-			}
+			f.IncludeSources = resolveIncludeSources(cmd.ErrOrStderr(), includeSrcs, includeDemo)
 
 			spendEng, err := buildSpendEngine(cfg)
 			if err != nil {
@@ -192,7 +188,9 @@ spend within the selected window. It surfaces:
 	cmd.Flags().IntVar(&forecastDays, "forecast-days", 7, "forecast horizon in days")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON instead of text")
 	cmd.Flags().BoolVar(&hideSparkline, "no-sparkline", false, "suppress the burn sparkline")
-	cmd.Flags().BoolVar(&includeDemo, "include-demo", false, "include synthetic events seeded via tokenops demo (excluded by default)")
+	cmd.Flags().StringSliceVar(&includeSrcs, "include-source", nil,
+		"re-admit an excluded event source (repeatable, comma-separated): "+strings.Join(analytics.DefaultExcludedSources, " | "))
+	cmd.Flags().BoolVar(&includeDemo, "include-demo", false, "alias for --include-source=demo")
 	return cmd
 }
 

@@ -59,7 +59,7 @@ func maybeDataWarning(ctx context.Context, store *sqlite.Store, since, until tim
 		SyntheticRatioPct: roundPct(pct),
 		RealEventCount:    real,
 		DemoEventCount:    demo,
-		Hint:              "Synthetic events dominate this window. Run `tokenops demo --reset` to clear them or pass `include_demo: true` to opt in.",
+		Hint:              "Synthetic events dominate this window. Run `tokenops demo --reset` to clear them or pass `include_sources: [\"demo\"]` to opt in.",
 	}, nil
 }
 

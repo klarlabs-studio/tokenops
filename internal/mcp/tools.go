@@ -38,29 +38,33 @@ type Deps struct {
 // --- input structs --------------------------------------------------------
 
 type spendSummaryInput struct {
-	Since       string `json:"since,omitempty" jsonschema:"description=RFC3339 timestamp or duration like '24h' or '7d'"`
-	Until       string `json:"until,omitempty" jsonschema:"description=RFC3339 timestamp"`
-	WorkflowID  string `json:"workflow_id,omitempty"`
-	AgentID     string `json:"agent_id,omitempty"`
-	IncludeDemo bool   `json:"include_demo,omitempty" jsonschema:"description=include synthetic events seeded via tokenops demo (excluded by default)"`
+	Since          string   `json:"since,omitempty" jsonschema:"description=RFC3339 timestamp or duration like '24h' or '7d'"`
+	Until          string   `json:"until,omitempty" jsonschema:"description=RFC3339 timestamp"`
+	WorkflowID     string   `json:"workflow_id,omitempty"`
+	AgentID        string   `json:"agent_id,omitempty"`
+	IncludeSources []string `json:"include_sources,omitempty" jsonschema:"description=re-admit event sources excluded by default: 'demo' (synthetic seeds from tokenops demo) and/or 'mcp-session' (MCP activity-proxy pings)"`
+	IncludeDemo    bool     `json:"include_demo,omitempty" jsonschema:"description=alias for include_sources: [demo]"`
 }
 
 type topConsumersInput struct {
-	By          string `json:"by,omitempty" jsonschema:"enum=model,enum=provider,enum=workflow,enum=agent"`
-	Top         int    `json:"top,omitempty" jsonschema:"minimum=1,maximum=50"`
-	Since       string `json:"since,omitempty"`
-	Until       string `json:"until,omitempty"`
-	IncludeDemo bool   `json:"include_demo,omitempty"`
+	By             string   `json:"by,omitempty" jsonschema:"enum=model,enum=provider,enum=workflow,enum=agent"`
+	Top            int      `json:"top,omitempty" jsonschema:"minimum=1,maximum=50"`
+	Since          string   `json:"since,omitempty"`
+	Until          string   `json:"until,omitempty"`
+	IncludeSources []string `json:"include_sources,omitempty"`
+	IncludeDemo    bool     `json:"include_demo,omitempty"`
 }
 
 type burnRateInput struct {
-	Hours       int  `json:"hours,omitempty" jsonschema:"minimum=1,maximum=168"`
-	IncludeDemo bool `json:"include_demo,omitempty"`
+	Hours          int      `json:"hours,omitempty" jsonschema:"minimum=1,maximum=168"`
+	IncludeSources []string `json:"include_sources,omitempty"`
+	IncludeDemo    bool     `json:"include_demo,omitempty"`
 }
 
 type forecastInput struct {
-	HorizonDays int  `json:"horizon_days,omitempty" jsonschema:"minimum=1,maximum=30"`
-	IncludeDemo bool `json:"include_demo,omitempty"`
+	HorizonDays    int      `json:"horizon_days,omitempty" jsonschema:"minimum=1,maximum=30"`
+	IncludeSources []string `json:"include_sources,omitempty"`
+	IncludeDemo    bool     `json:"include_demo,omitempty"`
 }
 
 type workflowTraceInput struct {
@@ -239,11 +243,7 @@ func (in spendSummaryInput) toFilter() (analytics.Filter, error) {
 		}
 		f.Until = t
 	}
-	if in.IncludeDemo {
-		// Empty (non-nil) slice opts out of the default exclude list,
-		// surfacing demo + replay sources alongside real traffic.
-		f.ExcludeSources = []string{}
-	}
+	f.IncludeSources = resolveIncludeSources(in.IncludeSources, in.IncludeDemo)
 	return f, nil
 }
 
@@ -281,7 +281,7 @@ func spendSummary(ctx context.Context, d Deps, in spendSummaryInput) (*spendSumm
 			UnpricedModels: models,
 		}
 	}
-	if !in.IncludeDemo {
+	if !demoOptedIn(in.IncludeSources, in.IncludeDemo) {
 		warn, werr := maybeDataWarning(ctx, d.Store, filter.Since, filter.Until)
 		if werr == nil && warn != nil {
 			res.DataWarning = warn
@@ -317,9 +317,7 @@ func topConsumers(ctx context.Context, d Deps, in topConsumersInput) (*topConsum
 		}
 		f.Until = t
 	}
-	if in.IncludeDemo {
-		f.ExcludeSources = []string{}
-	}
+	f.IncludeSources = resolveIncludeSources(in.IncludeSources, in.IncludeDemo)
 	rows, err := d.Aggregator.AggregateBy(ctx, f, analytics.BucketDay, group)
 	if err != nil {
 		return nil, err
@@ -359,9 +357,7 @@ func burnRate(ctx context.Context, d Deps, in burnRateInput) (string, error) {
 		hours = 24
 	}
 	f := analytics.Filter{Since: time.Now().Add(-time.Duration(hours) * time.Hour)}
-	if in.IncludeDemo {
-		f.ExcludeSources = []string{}
-	}
+	f.IncludeSources = resolveIncludeSources(in.IncludeSources, in.IncludeDemo)
 	rows, err := d.Aggregator.AggregateBy(ctx, f, analytics.BucketHour, analytics.GroupNone)
 	if err != nil {
 		return "", err
@@ -390,9 +386,7 @@ func forecastSpend(ctx context.Context, d Deps, in forecastInput) (*forecastResu
 		horizon = 7
 	}
 	f := analytics.Filter{Since: time.Now().Add(-30 * 24 * time.Hour)}
-	if in.IncludeDemo {
-		f.ExcludeSources = []string{}
-	}
+	f.IncludeSources = resolveIncludeSources(in.IncludeSources, in.IncludeDemo)
 	rows, err := d.Aggregator.AggregateBy(ctx, f, analytics.BucketDay, analytics.GroupNone)
 	if err != nil {
 		return nil, err
