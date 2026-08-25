@@ -150,3 +150,85 @@ func TestSparklineHandlesEmpty(t *testing.T) {
 		t.Errorf("empty sparkline = %q, want empty", got)
 	}
 }
+
+// seedSourceMixDB writes one prompt event per source class so the
+// include-source flag has something to re-admit.
+func seedSourceMixDB(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "events.db")
+	ctx := context.Background()
+	store, err := sqlite.Open(ctx, path, sqlite.Options{})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer store.Close()
+
+	now := time.Now().UTC()
+	for i, src := range []string{"proxy", "demo", "mcp-session"} {
+		env := &eventschema.Envelope{
+			ID:            uuid.NewString(),
+			SchemaVersion: eventschema.SchemaVersion,
+			Type:          eventschema.EventTypePrompt,
+			Timestamp:     now.Add(-time.Duration(i+1) * time.Hour),
+			Source:        src,
+			Payload: &eventschema.PromptEvent{
+				PromptHash:   "sha256:abc",
+				Provider:     eventschema.ProviderOpenAI,
+				RequestModel: "model-" + src,
+				InputTokens:  100,
+				OutputTokens: 10,
+				TotalTokens:  110,
+				Status:       200,
+				CostUSD:      1,
+			},
+		}
+		if err := store.Append(ctx, env); err != nil {
+			t.Fatalf("append: %v", err)
+		}
+	}
+	return path
+}
+
+// spendRequests runs the spend command with the given extra flags and
+// returns the headline request count.
+func spendRequests(t *testing.T, path string, extra ...string) float64 {
+	t.Helper()
+	args := append([]string{"spend", "--db", path, "--json"}, extra...)
+	out, err := executeRoot(t, args...)
+	if err != nil {
+		t.Fatalf("spend %v: %v", extra, err)
+	}
+	var parsed struct {
+		Summary struct {
+			Requests float64 `json:"Requests"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+		t.Fatalf("not json: %v\n%s", err, out)
+	}
+	return parsed.Summary.Requests
+}
+
+func TestSpendIncludeSourceReadmitsOnlyNamed(t *testing.T) {
+	path := seedSourceMixDB(t)
+	cases := []struct {
+		name  string
+		extra []string
+		want  float64
+	}{
+		{"default drops synthetic and activity proxy", nil, 1},
+		{"demo only", []string{"--include-source", "demo"}, 2},
+		{"activity proxy only", []string{"--include-source", "mcp-session"}, 2},
+		{"comma separated", []string{"--include-source", "demo,mcp-session"}, 3},
+		{"repeated flag", []string{"--include-source", "demo", "--include-source", "mcp-session"}, 3},
+		{"back-compat alias", []string{"--include-demo"}, 2},
+		{"alias composes with flag", []string{"--include-demo", "--include-source", "mcp-session"}, 3},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := spendRequests(t, path, tc.extra...); got != tc.want {
+				t.Errorf("requests = %v; want %v", got, tc.want)
+			}
+		})
+	}
+}

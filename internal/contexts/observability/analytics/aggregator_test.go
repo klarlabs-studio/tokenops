@@ -505,3 +505,96 @@ func TestSummarizeAPIEquivalent(t *testing.T) {
 		t.Errorf("APIEquivalentUSD = %.4f; want ~16.50", s.APIEquivalentUSD)
 	}
 }
+
+// Default rollups drop both synthetic seeds and the MCP activity-proxy
+// pings: neither is real LLM traffic, and counting the pings inflates
+// the request total an operator reads as "calls I made".
+func TestSummarizeExcludesDemoAndActivityProxyByDefault(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	agg := New(store, spend.NewEngine(spend.DefaultTable()))
+	seedSourceMix(t, store)
+
+	s, err := agg.Summarize(ctx, Filter{})
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	if s.Requests != 1 {
+		t.Errorf("Requests = %d; want 1 (real traffic only)", s.Requests)
+	}
+}
+
+// IncludeSources re-admits exactly the sources named — an operator
+// asking for synthetic seeds must not also get the activity-proxy
+// pings folded in.
+func TestSummarizeIncludeSourcesReadmitsOnlyNamed(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	agg := New(store, spend.NewEngine(spend.DefaultTable()))
+	seedSourceMix(t, store)
+
+	cases := []struct {
+		name     string
+		include  []string
+		wantReqs int64
+	}{
+		{"demo only", []string{"demo"}, 2},
+		{"activity proxy only", []string{"mcp-session"}, 2},
+		{"both", []string{"demo", "mcp-session"}, 3},
+		{"unknown source is inert", []string{"nonesuch"}, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, err := agg.Summarize(ctx, Filter{IncludeSources: tc.include})
+			if err != nil {
+				t.Fatalf("summarize: %v", err)
+			}
+			if s.Requests != tc.wantReqs {
+				t.Errorf("Requests = %d; want %d", s.Requests, tc.wantReqs)
+			}
+		})
+	}
+}
+
+// An explicit ExcludeSources list is the caller saying exactly what to
+// drop, so IncludeSources must not second-guess it.
+func TestSummarizeExplicitExcludeSourcesWinsOverIncludes(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	agg := New(store, spend.NewEngine(spend.DefaultTable()))
+	seedSourceMix(t, store)
+
+	s, err := agg.Summarize(ctx, Filter{
+		ExcludeSources: []string{"demo"},
+		IncludeSources: []string{"demo", "mcp-session"},
+	})
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	if s.Requests != 2 {
+		t.Errorf("Requests = %d; want 2 (real + mcp-session, demo excluded)", s.Requests)
+	}
+}
+
+// seedSourceMix writes one event per source class: real traffic, a
+// synthetic demo seed, and an MCP activity-proxy ping.
+func seedSourceMix(t *testing.T, store *sqlite.Store) {
+	t.Helper()
+	base := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
+	sources := []string{"claude-code-jsonl", "demo", "mcp-session"}
+	envs := make([]*eventschema.Envelope, 0, len(sources))
+	for i, src := range sources {
+		envs = append(envs, &eventschema.Envelope{
+			ID: "mix-" + src, SchemaVersion: eventschema.SchemaVersion,
+			Type: eventschema.EventTypePrompt, Timestamp: base.Add(time.Duration(i) * time.Minute),
+			Source: src,
+			Payload: &eventschema.PromptEvent{
+				Provider: eventschema.ProviderAnthropic, RequestModel: "claude-haiku-4-5",
+				InputTokens: 100, OutputTokens: 10, TotalTokens: 110,
+			},
+		})
+	}
+	if err := store.AppendBatch(context.Background(), envs); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+}
