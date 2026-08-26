@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.54.2 - 2026-08-26
+
+Delivers v0.54.1's security fix to Homebrew, which never received it.
+
+### Fixed
+
+- **The release workflow read a secret that does not exist.** The org
+  secret is named `kl_HOMEBREW_TAP_TOKEN`; `release.yml` asked for
+  `secrets.HOMEBREW_TAP_TOKEN`. An undefined secret expands to an empty
+  string, so goreleaser presented an empty credential and the cask step
+  failed with `401 Bad credentials` — 401 rather than 403 being the
+  tell that no credential was presented at all, rather than one lacking
+  permission.
+
+  v0.54.1 therefore published its GitHub release and binaries but never
+  updated the Homebrew cask, leaving `brew` users on 0.54.0 — the
+  version carrying the reachable `golang.org/x/text` infinite loop
+  (GO-2026-5970) that v0.54.1 exists to fix.
+
+  This release carries no code change over v0.54.1. It exists to put
+  that fix in front of Homebrew users through a release path that
+  works.
+
 ## 0.54.1 - 2026-08-25
 
 Closes a reachable infinite loop in the coaching backend's HTTP path.
