@@ -37,7 +37,10 @@ jobs:
           # the updated Casks/tokenops.rb on every release. It must be
           # the org's own tap: an org secret does not reach a personal
           # repo and answers 403 there. See .goreleaser.yaml.
-          # The secret is named kl_HOMEBREW_TAP_TOKEN. The env var keeps the
-          # unprefixed name because .goreleaser.yaml reads
-          # {{ .Env.HOMEBREW_TAP_TOKEN }}; only the lookup changes.
-          HOMEBREW_TAP_TOKEN: ${{ secrets.kl_HOMEBREW_TAP_TOKEN }}
+          # Verified present: a probe printing only character counts reported
+          # secrets.HOMEBREW_TAP_TOKEN at 93 chars — the length of a
+          # github_pat_ fine-grained token — while kl_/KL_ prefixed names
+          # were 0. So a 401 here means the token VALUE is expired or
+          # revoked, not that the name is wrong. Rotate the value; the name
+          # is correct.
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
