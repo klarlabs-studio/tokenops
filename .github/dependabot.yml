@@ -13,6 +13,19 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(deps)"
+    ignore:
+      # tiktoken-go/tokenizer v0.8.x declares `go 1.26`. Taking it forces
+      # our own go directive from 1.25.0 up to 1.26, and Dependabot drops
+      # `toolchain go1.25.14` when it does — which is PR #197's security
+      # pin, and the reason govulncheck stopped reporting reachable stdlib
+      # paths. It also raises the minimum Go version for every downstream
+      # importer of this module.
+      #
+      # Remove this entry when moving to Go 1.26 is a decision someone
+      # makes deliberately, rather than the side effect of a bump. See
+      # #209 (closed) for the failure this prevents.
+      - dependency-name: "github.com/tiktoken-go/tokenizer"
+        versions: [">=0.8.0"]
     groups:
       # One PR per family rather than per module. Forty individually-correct
       # bumps is forty CI runs and forty reviews, which is how a backlog of
