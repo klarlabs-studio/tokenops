@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.54.3 - 2026-08-26
+
+Third attempt at delivering v0.54.1's security fix to Homebrew. The
+first two failed for two different reasons, neither of them in the
+product.
+
+### Fixed
+
+- **The release workflow's tap credential.** v0.54.1's cask step failed
+  with `401 Bad credentials`. v0.54.2 was cut to fix it and failed the
+  same way, because the "fix" repointed the lookup at a secret that does
+  not exist — replacing a rejected credential with an empty one.
+
+  Settled by measuring rather than guessing. A probe printing only
+  character counts, never values, reported
+  `secrets.HOMEBREW_TAP_TOKEN` at 93 characters — the length of a
+  `github_pat_` fine-grained token — and the prefixed variants at 0. The
+  name had been right all along; the token behind it had expired.
+
+  A tag-triggered re-run replays the workflow as of that tag, so neither
+  v0.54.1 nor v0.54.2 could pick the correction up. Hence a third tag.
+
+  No code change over v0.54.1. `brew` users move from 0.54.0, and off
+  the reachable `golang.org/x/text` infinite loop (GO-2026-5970).
+
 ## 0.54.2 - 2026-08-26
 
 Delivers v0.54.1's security fix to Homebrew, which never received it.
