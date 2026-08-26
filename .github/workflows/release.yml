@@ -37,7 +37,11 @@ jobs:
           # the updated Casks/tokenops.rb on every release. It must be
           # the org's own tap: an org secret does not reach a personal
           # repo and answers 403 there. See .goreleaser.yaml.
-          # The secret is named kl_HOMEBREW_TAP_TOKEN. The env var keeps the
-          # unprefixed name because .goreleaser.yaml reads
-          # {{ .Env.HOMEBREW_TAP_TOKEN }}; only the lookup changes.
-          HOMEBREW_TAP_TOKEN: ${{ secrets.kl_HOMEBREW_TAP_TOKEN }}
+          # ONE name across the org: HOMEBREW_TAP_TOKEN. This repo used to read
+          # kl_HOMEBREW_TAP_TOKEN, which meant the same credential lived under
+          # two names — the condition release.yml in warden warns about, and
+          # the one that shipped v0.19.0 with a 401 and 0.20.0 with a 403:
+          # rotating one name leaves the other stale, and an undefined secret
+          # expands to an EMPTY STRING rather than failing, so the symptom is a
+          # confusing 401 from the forge instead of "this secret is missing".
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

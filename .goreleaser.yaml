@@ -79,9 +79,10 @@ release:
 # .github/workflows/release.yml that silently no-op'd when the formula
 # schema drifted from the placeholder patterns it expected.
 #
-# Requires HOMEBREW_TAP_TOKEN — set from the klarlabs-studio org secret
-# kl_HOMEBREW_TAP_TOKEN (note the prefix; an undefined secret expands to an
-# empty string, which GitHub answers with 401 Bad credentials) — exposed to
+# Requires HOMEBREW_TAP_TOKEN — set from the klarlabs-studio org secret of the
+# SAME name (an undefined secret expands to an empty string, which GitHub
+# answers with 401 Bad credentials rather than saying the secret is missing;
+# 401 is the tell, since insufficient permissions answer 403) — exposed to
 # the goreleaser step. It needs `contents:write` on the tap, and the tap is the
 # one owned by the org that owns this repo: an org secret does not reach a
 # personal repo, which answers 403 (briefkasten's v0.31.0 published every
