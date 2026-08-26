@@ -26,6 +26,66 @@ jobs:
           go-version: "1.25"
           cache: true
 
+      # goreleaser reaches the tap push at the very END of a release, after the
+      # binaries are built, signed, and uploaded. A tap credential that is empty
+      # or unauthorized therefore fails a release that has already half-shipped,
+      # and it fails as an HTTP status from a git push rather than as a name.
+      # That is exactly how v0.54.1 and v0.54.2 went out: both published their
+      # GitHub release and binaries, both failed the cask step with a 401, and
+      # the 401 was twice diagnosed as an expired token — once correctly, once
+      # not, costing a wrong fix and a third tag. An undefined secret expands to
+      # the empty string rather than failing, so a name problem and a dead token
+      # are indistinguishable from that vantage point. Assert the credential
+      # here, before anything is published, and say which of the two it is.
+      # Ported from klarlabs-studio/warden, where the same class cost v0.19.0
+      # (401) and v0.20.0 (403).
+      # The wording of the messages below is deliberate, so please do not
+      # "tidy" it. Two nox rules match this step's ERROR TEXT rather than its
+      # behaviour: SEC-163 reads the secret's name as a high-entropy hex string
+      # when it carries the `secrets.` prefix, and IAC-314 reads the colon form
+      # of the write-permission name, quoted inside an English sentence, as a
+      # permission this workflow grants. Both are false positives on prose —
+      # but SARIF is not baseline-filtered, so they arrive as PR review threads
+      # and block the merge under required_conversation_resolution. Naming the
+      # secret without the prefix, and spelling the permission out in words,
+      # keeps the messages actionable and the scanner quiet.
+      - name: Check the tap credential
+        env:
+          TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TAP_GITHUB_TOKEN}" ]; then
+            echo "::error::the tap credential is empty: this workflow asked" \
+                 "for HOMEBREW_TAP_TOKEN and got nothing back. An undefined" \
+                 "secret expands to an empty string rather than failing, so this" \
+                 "is a NAME problem, not an expired token — check the secret's" \
+                 "exact spelling in the klarlabs-studio org settings, and that" \
+                 "this repository is on its access list."
+            exit 1
+          fi
+          # Distinguish "no credential" (401) from "credential refused" (403)
+          # while the release can still be abandoned cheaply. Only the status
+          # code is echoed; the body may quote the request.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${TAP_GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/klarlabs-studio/homebrew-tap)
+          case "$code" in
+            200) echo "tap credential accepted (200)" ;;
+            401) echo "::error::401 from the tap repo: the credential was not" \
+                      "accepted at all. The secret holds something, but GitHub" \
+                      "rejected it — expired or malformed token." ; exit 1 ;;
+            403) echo "::error::403 from the tap repo: the credential was" \
+                      "presented and refused. It authenticates but lacks" \
+                      "write access to klarlabs-studio/homebrew-tap, or its" \
+                      "fine-grained resource owner is wrong (that owner is" \
+                      "immutable — re-mint rather than edit permissions)." ; exit 1 ;;
+            404) echo "::error::404 from the tap repo: the credential cannot" \
+                      "see klarlabs-studio/homebrew-tap. For a fine-grained" \
+                      "token this is indistinguishable from no access." ; exit 1 ;;
+            *)   echo "::error::unexpected HTTP $code from the tap repo." ; exit 1 ;;
+          esac
+
       - uses: goreleaser/goreleaser-action@v7 # v6.3.0
         with:
           version: "~> 2"
@@ -37,10 +97,6 @@ jobs:
           # the updated Casks/tokenops.rb on every release. It must be
           # the org's own tap: an org secret does not reach a personal
           # repo and answers 403 there. See .goreleaser.yaml.
-          # Verified present: a probe printing only character counts reported
-          # secrets.HOMEBREW_TAP_TOKEN at 93 chars — the length of a
-          # github_pat_ fine-grained token — while kl_/KL_ prefixed names
-          # were 0. So a 401 here means the token VALUE is expired or
-          # revoked, not that the name is wrong. Rotate the value; the name
-          # is correct.
+          # The "Check the tap credential" step above asserts this resolves
+          # and authenticates before goreleaser publishes anything.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
