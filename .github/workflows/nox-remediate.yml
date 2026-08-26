@@ -54,7 +54,7 @@ jobs:
         # the upgrade plan, applies it, runs the verify command,
         # and opens / refreshes a PR. Pinned to v1.0.1's commit SHA;
         # bump deliberately after reviewing the release notes.
-        uses: nox-hq/nox-remediate-action@1c16a4bb803d73ca96a17760f847c9ad80e162cd # v1.0.1
+        uses: nox-hq/nox-remediate-action@bd80743be12912cec91111b9d0a988b7845788f0 # v1.0.2
         with:
           path: .
           version: "0.9.5"

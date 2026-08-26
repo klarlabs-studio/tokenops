@@ -17,7 +17,7 @@ jobs:
       # doesn't break when the runner drops Node 20.
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     steps:
-      - uses: actions/checkout@v7 # v4.2.2
+      - uses: actions/checkout@v7.0.1 # v4.2.2
         with:
           fetch-depth: 0
 
