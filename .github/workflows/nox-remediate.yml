@@ -1,5 +1,21 @@
 name: Nox remediate
 
+# THE dependency-update path for this repo: .github/dependabot.yml and
+# dependabot-auto-merge.yml were removed in favour of it, matching the
+# fleet model (warden local gate + nox CI scan + nox-remediate).
+#
+# Know what this does NOT cover, so the gap is a choice rather than a
+# surprise. It remediates Go module findings that carry a `fixed_in`
+# advisory — security fixes, not version currency. Two things Dependabot
+# used to do now do not happen on their own:
+#   - web/dashboard's npm tree (verify-cmd below is Go-only, and
+#     package-lock.json is excluded in .nox.yaml)
+#   - routine minor/patch bumps with no advisory attached
+# Both are deliberate: routine currency churn is what made Dependabot
+# expensive here, and majors needed a human every time regardless
+# (TypeScript 7 and vue-router 5 both did). Run `nox scan` or bump by
+# hand when currency actually matters.
+#
 # Replaces Dependabot's "open a PR with the version bump" loop. Wraps
 # nox-hq/nox-remediate-action: scans, runs `nox fix`, optionally
 # verifies the test suite, and opens (or refreshes) a PR with the
