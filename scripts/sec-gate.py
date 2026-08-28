@@ -26,11 +26,24 @@ def load_json(path: Path) -> Any:
         return json.load(fh)
 
 
+def load_waivers(path: Path) -> Any:
+    """Waivers are optional. A repo with nothing to waive should not carry
+    an empty file to satisfy the gate — internal/secgov rejects one, and a
+    suppression list that suppresses nothing reads as a considered
+    decision. Absent means no waivers; findings.json missing still exits 2,
+    because that means the scan did not run."""
+    if not path.exists():
+        print(f"sec-gate: {path} absent — no waivers in effect", file=sys.stderr)
+        return {}
+    with path.open() as fh:
+        return json.load(fh)
+
+
 def main() -> int:
     findings_path = Path("findings.json")
     vex_path = Path("security/vex.json")
     findings_doc = load_json(findings_path)
-    vex_doc = load_json(vex_path)
+    vex_doc = load_waivers(vex_path)
 
     findings = findings_doc.get("findings", findings_doc)
     waived = {
