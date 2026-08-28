@@ -126,6 +126,9 @@ matched anything any more — they were dead entries, not active
 suppressions. Removed rather than migrated: a suppression that waives
 nothing is worse than none, because it reads as a considered decision.
 
-The document is kept with an empty `statements` array so
-`scripts/sec-gate.py` keeps working and the next genuine waiver has a
-home.
+`security/vex.json` is therefore **removed**, not emptied. This
+repository's own guard (`internal/secgov`) rejects an empty statements
+list — "remove the file or add waivers" — on exactly this reasoning, and
+`scripts/sec-gate.py` now treats an absent file as "no waivers in
+effect". Recreate it when there is a real waiver to record; the format
+above still applies.

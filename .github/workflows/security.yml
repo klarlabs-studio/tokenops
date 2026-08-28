@@ -5,7 +5,8 @@ name: Security
 # build only on critical findings; everything below critical is
 # uploaded as an artifact for triage in the Security tab.
 #
-# Waivers for false positives live in security/vex.json (OpenVEX).
+# Waivers for false positives live in security/vex.json (OpenVEX),
+# which is absent while there is nothing to waive.
 on:
   push:
     branches: [main]
@@ -56,6 +57,7 @@ jobs:
 
       - name: Critical gate
         # scripts/sec-gate.py reads findings.json + security/vex.json
+        # (the latter optional: absent means no waivers)
         # and exits non-zero only when at least one critical finding
         # is not waived in OpenVEX.
         run: python3 scripts/sec-gate.py
