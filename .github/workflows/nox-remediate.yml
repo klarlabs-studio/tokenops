@@ -1,94 +1,38 @@
-name: Nox remediate
+# Dependency and action-pin remediation, delegated to the org's central
+# workflow. This file used to carry its own copy — its own nox pin, its
+# own steps — and that is exactly why it rotted: the fleet default moved
+# to 1.30.0 while this repo sat on 0.9.5, a version that never populates
+# `fixed_in`, which `nox fix` gates on. So remediation here could not act
+# on anything for months, silently, while nine sibling repos were fine.
+#
+# The central workflow is also strictly more capable than the copy it
+# replaces. It sets up Node as well as Go (so npm is remediated, not just
+# the Go module), verifies the nox tarball's sha256 rather than trusting
+# a bare curl, and remediates outdated GitHub Actions pins alongside
+# dependencies.
+#
+# One behaviour is lost: the old copy ran `go test ./...` after applying
+# upgrades and abandoned the run if they failed. The central workflow
+# opens the PR regardless. That is the better failure mode — a red PR is
+# visible and actionable, a silently abandoned remediation is not — and
+# this repo's required checks run on that PR anyway.
+#
+# To change the nox version, bump it centrally in
+# klarlabs-studio/.github; every caller picks it up. Do not re-pin here.
+name: Nox Remediate
 
-# THE dependency-update path for this repo: .github/dependabot.yml and
-# dependabot-auto-merge.yml were removed in favour of it, matching the
-# fleet model (warden local gate + nox CI scan + nox-remediate).
-#
-# It remediates findings that carry a `fixed_in` advisory — security
-# fixes, not version currency. Routine minor/patch bumps with no advisory
-# attached do not happen on their own, which is deliberate: that churn is
-# what made Dependabot expensive here, and majors needed a human every
-# time regardless (TypeScript 7 and vue-router 5 both did).
-#
-# npm IS covered, contrary to what this comment said when the Dependabot
-# migration landed. That claim came from a run under nox 0.9.5, which
-# populated `fixed_in` on 0 of 274 dependency findings — so nothing was
-# ever eligible and the whole path was structurally dead, in every
-# ecosystem. It read as an npm gap because npm was the visible half.
-# 1.30.1 fills the field, npm included:
-#
-#   npm/vite     6.4.2   -> fixed_in 6.4.3
-#   npm/postcss  8.5.14  -> fixed_in 8.5.23
-#   go/x/mod     v0.38.0 -> fixed_in 0.40.0   (reachable=false)
-#
-# The version below is what makes this workflow able to do anything at
-# all. Keep it in step with security.yml's NOX_VERSION.
-#
-# Replaces Dependabot's "open a PR with the version bump" loop. Wraps
-# nox-hq/nox-remediate-action: scans, runs `nox fix`, optionally
-# verifies the test suite, and opens (or refreshes) a PR with the
-# resulting upgrades.
-#
-# Only VULN-001 findings carrying a `fixed_in` advisory are eligible.
-# Major-version bumps are off by default; flip include_major via the
-# workflow_dispatch input when you want to pull them in too.
 on:
   schedule:
-    # Weekly Mon 04:00 UTC — earlier than the security scan (06:00).
-    # Daily cron retired; workflow_dispatch available for ad-hoc runs.
-    - cron: "0 4 * * 1"
-  workflow_dispatch:
-    inputs:
-      include_major:
-        description: "Apply major-version bumps too (off by default; review manually)."
-        type: boolean
-        default: false
+    - cron: "17 6 * * 1" # Mondays 06:17 UTC
+  workflow_dispatch: {}
 
 permissions:
   contents: write
   pull-requests: write
 
-concurrency:
-  group: nox-remediate
-  cancel-in-progress: true
-
-# Pinned actions still default to Node 20, which GitHub removes from
-# runners 2026-09-16. Force Node 24 (the default from 2026-06-16) so
-# workflows keep running when Node 20 disappears.
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 jobs:
   remediate:
-    name: Apply OSV upgrades
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
-        with:
-          # Need full history for the diff inspection + signed-off-by.
-          fetch-depth: 0
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v5.4.0
-        with:
-          go-version: "1.25"
-          cache: true
-
-      - name: Run nox-remediate
-        # The composite action installs nox, runs the scan, builds
-        # the upgrade plan, applies it, runs the verify command,
-        # and opens / refreshes a PR. Pinned to v1.0.1's commit SHA;
-        # bump deliberately after reviewing the release notes.
-        uses: nox-hq/nox-remediate-action@bd80743be12912cec91111b9d0a988b7845788f0 # v1.0.2
-        with:
-          path: .
-          version: "1.30.1"
-          include-major: ${{ inputs.include_major || 'false' }}
-          # `nox fix` only touches the Go module by default. Run our
-          # full make verify after the upgrade so we catch breaks
-          # introduced by transitive bumps too. The action also
-          # tidies go.mod for us.
-          verify-cmd: "go test -count=1 ./... -timeout 240s"
-          pr-branch-prefix: "nox/remediate"
-          pr-title: "chore(deps): nox remediate"
-          pr-labels: "dependencies,security,nox-remediation"
-          pr-base: main
+    uses: klarlabs-studio/.github/.github/workflows/nox-remediate.yml@main
+    secrets: inherit
+    # with:
+    #   include-major: true   # also apply major-version action bumps
