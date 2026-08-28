@@ -111,3 +111,24 @@ The `tokenops-maintainers` group is the owner of all suppressions.
 Individual entries may delegate ownership to a specific team member
 via the `reviewed_by` field, but the group retains overall
 accountability.
+
+## Review log
+
+**2026-08-28 — all suppressions removed.** The scanner was pinned at nox
+0.9.5, which reported 1386 findings including 11 criticals, every one of
+them the typosquat detector firing on a well-known package (`vue` as a
+typosquat of `vite`, in a repo whose dashboard is written in Vue). All
+eleven VEX statements existed to waive those.
+
+nox 1.30.1 reports 523 findings, **0 critical**, and 1 typosquat finding.
+Its fingerprint scheme also changed, so none of the eleven statements
+matched anything any more — they were dead entries, not active
+suppressions. Removed rather than migrated: a suppression that waives
+nothing is worse than none, because it reads as a considered decision.
+
+`security/vex.json` is therefore **removed**, not emptied. This
+repository's own guard (`internal/secgov`) rejects an empty statements
+list — "remove the file or add waivers" — on exactly this reasoning, and
+`scripts/sec-gate.py` now treats an absent file as "no waivers in
+effect". Recreate it when there is a real waiver to record; the format
+above still applies.
