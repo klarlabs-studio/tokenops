@@ -35,9 +35,16 @@ uploaded as a CI artifact and inspected via the Security tab.
 
 `internal/secgov` runs in `go test ./...` and rejects any VEX waiver or
 `scan.exclude` entry that lacks the required governance metadata
-(classification, `last_reviewed`, reviewer, review age within 120
-days). This enforces `security/SUPPRESSION-GOVERNANCE.md`
-programmatically rather than relying on code review alone.
+(classification, `last_reviewed`, reviewer), or any `scan.exclude` entry
+that points at a path git does not track and does not declare
+`# Transient:`. A suppression addressed to a file that moved suppresses
+nothing, and that is checkable the day it happens.
+
+Review *age* is not enforced here — it is reported by
+`scripts/suppression-review-due.py` (`make sec-review`, and a
+non-blocking step in the security workflow), alongside waivers whose
+fingerprint matches no finding. `security/SUPPRESSION-GOVERNANCE.md`
+explains why the timer that used to block was removed.
 
 ## Run locally
 

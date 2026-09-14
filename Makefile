@@ -16,7 +16,7 @@ LDFLAGS := -s -w \
   -X go.klarlabs.de/tokenops/internal/version.Commit=$(COMMIT) \
   -X go.klarlabs.de/tokenops/internal/version.Date=$(DATE)
 
-.PHONY: all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-remediate policy-guard install-hooks eval eval-gate cover-debt cover-debt-gate
+.PHONY: all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-review sec-remediate policy-guard install-hooks eval eval-gate cover-debt cover-debt-gate
 
 all: build
 
@@ -99,6 +99,12 @@ sec:
 # in CI. Fails on any unwaived critical finding. nox scan exits non-zero
 # whenever findings exist; we ignore that and use scripts/sec-gate.py to
 # enforce the critical+VEX policy explicitly.
+# sec-review reports suppressions due for review and waivers that waive
+# nothing. Advisory: it never fails. `make sec-gate` first, so findings.json
+# is fresh enough for the dead-waiver half to mean anything.
+sec-review:
+	@python3 scripts/suppression-review-due.py
+
 sec-gate:
 	-nox scan . > /dev/null
 	@python3 scripts/sec-gate.py
