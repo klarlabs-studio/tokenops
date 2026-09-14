@@ -20,6 +20,10 @@
 # through its YAML round-tripper, so storing it in any other shape means each
 # contributor's `make install-hooks` produces a spurious diff. Comments survive
 # the round-trip; blank lines do not.
+#
+# Upstream: klarlabs-studio/warden#269. When that is fixed, this file can be
+# formatted for humans again — blank lines between sections, aligned trailing
+# comments — and this note deleted.
 status:
   enabled: true
 hooks: {pre_commit: true, pre_push: true}

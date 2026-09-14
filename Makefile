@@ -166,6 +166,8 @@ run-daemon: $(BIN_DIR)/tokenopsd
 # re-records the provenance adoption point at HEAD every time it runs, so
 # calling it on an already-adopted clone would quietly drop every commit
 # before HEAD out of `warden doctor`'s audit range.
+# Upstream: klarlabs-studio/warden#270. If init becomes idempotent, the
+# branch below collapses to a single unconditional `warden init`.
 install-hooks:
 	@if ! command -v warden >/dev/null 2>&1; then \
 		mkdir -p .git/hooks; \
