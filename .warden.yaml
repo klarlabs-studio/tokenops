@@ -9,11 +9,24 @@
 # Because CI still works, `status: enabled` is here for parity with the rest
 # of the fleet rather than out of necessity: branch protection can keep using
 # the Actions checks, and warden/gate is available if that ever changes.
+#
+# `enabled: true` states the policy, not the state of your checkout. Git hooks
+# live in .git/hooks, which is not cloned, so a fresh clone reads this file as
+# an armed gate while having no gate at all. `make install-hooks` arms it; run
+# it once per clone.
+#
+# The spacing below is warden's own normalisation, not a style choice. Every
+# arming command (`warden init`, `warden hooks enable`) rewrites this file
+# through its YAML round-tripper, so storing it in any other shape means each
+# contributor's `make install-hooks` produces a spurious diff. Comments survive
+# the round-trip; blank lines do not.
+#
+# Upstream: klarlabs-studio/warden#269. When that is fixed, this file can be
+# formatted for humans again — blank lines between sections, aligned trailing
+# comments — and this note deleted.
 status:
   enabled: true
-
-hooks: { pre_commit: true, pre_push: true }
-
+hooks: {pre_commit: true, pre_push: true}
 commands:
   # `go mod tidy -diff` reports what tidy WOULD change without writing it, so
   # the step is a check rather than a mutation. ci.yml achieves the same thing
@@ -39,14 +52,18 @@ commands:
   vulns: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
   # Skips itself when protoc is absent, exactly as ci.yml does.
   proto-verify: make proto-verify
-
+  # The protected-branch guard, folded in from scripts/git-hooks/pre-push.
+  # Both wanted .git/hooks/pre-push and git only allows one file there, so
+  # installing either used to silently disarm the other. As a step it reads
+  # only `git rev-parse --abbrev-ref HEAD` and $ALLOW_PROTECTED_PUSH — no
+  # stdin — so the emergency override still works:
+  #   ALLOW_PROTECTED_PUSH=1 git push origin main
+  protected-branch: bash scripts/require-pr-branch.sh
 timeouts:
   test: 20m
   lint: 10m
-
 steps:
   # pre_commit stays cheap enough to not resent: formatting and vet only.
   pre_commit: [fmt, vet]
-  pre_push: [tidy, fmt, vet, lint, test, sec-gate, vulns, proto-verify]
-
+  pre_push: [protected-branch, tidy, fmt, vet, lint, test, sec-gate, vulns, proto-verify]
 parallel: true
