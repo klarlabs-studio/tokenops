@@ -4,73 +4,80 @@
 
 scan:
   exclude:
-    # Roady's append-only event logs contain UUID-like hashes that the
-    # generic AWS-secret regex flags as keys; these are not credentials.
+    # Reviewed 2026-09-14. Method: every excluded path was copied into a
+    # bare tree with no .nox.yaml and rescanned (`nox scan`, nox 1.35.0),
+    # so each entry was judged on what it produces today rather than on
+    # what it produced in May. Entries that produced nothing were removed
+    # rather than re-dated — a suppression that suppresses nothing is
+    # config that reports success while doing no work.
+    #
+    # Dropped in this review (all produced zero findings):
+    #   - 9 test files excluded for SEC-569 (Gemini API-key pattern).
+    #     That rule no longer fires on them, and 7 of the 9 paths had not
+    #     existed since the DDD refactor moved the packages under
+    #     internal/contexts/, so those exclusions were already no-ops.
+    #   - pkg/eventschema/otel.go, pkg/eventschema/proto/v1/events.proto,
+    #     internal/optimizer/contexttrim/trim.go (same retired rule).
+    #   - internal/redaction/rules.go (path gone; successor is clean).
+    #   - .roady/snapshot.json — roady no longer writes this file.
+    #   - .github/workflows/*.yml — see the note at the end of this block.
+
+    # Roady's append-only logs carry UUID-like hashes that AI-036 reads as
+    # credentials; they are not. events.jsonl and state.json still trip it
+    # (3 findings). usage.json is currently clean but is the same class of
+    # file from the same writer, so it stays with its group.
     # Classification: False Positive
-    # Last reviewed: 2026-05-10
+    # Last reviewed: 2026-09-14
     - .roady/events.jsonl
     - .roady/state.json
     - .roady/usage.json
-    - .roady/snapshot.json
-    # Generated nox state — do not scan its own findings cache.
+
+    # nox's own generated state. Scanning a scanner's output cache is
+    # circular regardless of what it currently contains; findings.json
+    # trips AI-036 three times when scanned. All are gitignored, so they
+    # are absent from a clean checkout by design.
     # Classification: Acceptable Pattern
-    # Last reviewed: 2026-05-10
+    # Last reviewed: 2026-09-14
     - .nox/
     - findings.json
     - nox-findings.json
     - ai.inventory.json
+
     # npm lockfiles include hash strings the secret detector flags;
     # vulnerabilities in those trees are surfaced via VULN-001 directly.
     # Classification: False Positive
-    # Last reviewed: 2026-05-10
+    # Last reviewed: 2026-09-14
     - "**/package-lock.json"
-    # Dashboard + docs sources are first-party; their build outputs
-    # are bundled JS that re-trips the secret detector with no signal.
+
+    # Dashboard, docs and extension build outputs are first-party bundles
+    # that re-trip the secret detector with no signal. Generated, and
+    # absent from a clean checkout.
     # Classification: Acceptable Pattern
-    # Last reviewed: 2026-05-10
+    # Last reviewed: 2026-09-14
     - web/dashboard/dist/
     - web/docs/.vitepress/dist/
     - web/docs/.vitepress/cache/
-    # VS Code extension transpilation output.
-    # Classification: Acceptable Pattern
-    # Last reviewed: 2026-05-10
     - integrations/vscode/out/
-    # Test fixtures intentionally embed sample AWS keys to exercise
-    # the redaction package's secret-detection logic.
+
+    # Test fixtures intentionally embed sample AWS keys to exercise the
+    # redaction package's secret-detection logic. This is the only
+    # source-file suppression that still earns its place: rescanned in
+    # isolation it produces 23 findings (SEC-001, SEC-003, SEC-082,
+    # SEC-161, SEC-162, SEC-371, SEC-412, SEC-508). Path repointed from
+    # internal/redaction/ — the DDD refactor moved the package and the
+    # old exclusion had been inert ever since.
     # Classification: Acceptable Pattern
-    # Last reviewed: 2026-05-10
-    - internal/redaction/redactor_test.go
-    # Additional test fixtures use provider-ish placeholder strings that
-    # trigger SEC-569 (Gemini API key pattern) despite containing no
-    # credentials. Keep source scans on production code paths, but skip
-    # these high-noise test files.
-    # Classification: Acceptable Pattern
-    # Last reviewed: 2026-05-10
-    - internal/optimizer/dedupe/dedupe_test.go
-    - internal/providers/providers_test.go
-    - internal/proxy/router_test.go
-    - internal/spend/engine_test.go
-    - internal/storage/sqlite/store_test.go
-    - internal/tokenizer/tokenizer_test.go
-    - internal/optimizer/retrievalprune/prune_test.go
-    - internal/optimizer/router/router_test.go
-    # SEC-569 pattern matching treats several OpenTelemetry semantic
-    # convention keys (`gen_ai.*`) and optimizer enum strings as Gemini
-    # keys. These files contain only constant names and types.
-    # Classification: False Positive
-    # Last reviewed: 2026-05-10
-    - pkg/eventschema/otel.go
-    - pkg/eventschema/proto/v1/events.proto
-    - internal/optimizer/contexttrim/trim.go
-    # Workflow YAML files contain pinned SHA digests that look like
-    # API keys to generic detectors (SEC-659/697).
-    # Classification: False Positive
-    # Last reviewed: 2026-05-10
-    - .github/workflows/*.yml
-    # Redaction regex sources intentionally contain secret-family names.
-    # Classification: Acceptable Pattern
-    # Last reviewed: 2026-05-10
-    - internal/redaction/rules.go
+    # Last reviewed: 2026-09-14
+    - internal/contexts/security/redaction/redactor_test.go
+
+    # NOT excluded any more: .github/workflows/*.yml. It was excluded for
+    # SEC-659/697 (pinned SHA digests read as API keys), which no longer
+    # fire on those files. What the exclusion was hiding instead is nine
+    # Infrastructure findings — IAC-153, IAC-306, IAC-308, IAC-309 and
+    # IAC-314 across ci.yml, security.yml, pages.yml, release.yml and
+    # nox-remediate.yml. None are critical, so sec-gate stays green, but
+    # they are real workflow-hardening findings and belong in the report
+    # rather than behind a suppression written for a different rule.
 
 plugins:
   # Listed plugins auto-install on `nox scan` unless --no-auto-install
