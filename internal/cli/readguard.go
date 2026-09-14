@@ -39,7 +39,7 @@ type hookDecision struct {
 // newReadGuardCmd is the Claude Code Read-dedup hook. Its bare form is the
 // hook handler (reads the PreToolUse JSON on stdin, decides allow/deny); the
 // `hook` and `stats` subcommands install and inspect it.
-func newReadGuardCmd() *cobra.Command {
+func newReadGuardCmd(rf *rootFlags) *cobra.Command {
 	var (
 		mode string
 		dir  string
@@ -54,9 +54,11 @@ active mode) blocks the re-read so those tokens are never spent. It works for
 clients that never route through the tokenops proxy (e.g. Claude Code on a
 subscription), because it acts inside the client.
 
-Modes: observe (default) logs what it would block without interfering;
-active denies redundant unchanged full re-reads. Ranged reads (offset/limit)
-are always allowed.
+Modes: observe logs what it would block without interfering; active denies
+redundant unchanged full re-reads. Ranged reads (offset/limit) are always
+allowed. With no --mode, the guard follows coaching.delivery in config.yaml:
+intervene means active, anything else means observe. Pass --mode to pin one
+regardless of config.
 
 Bare invocation is the hook handler (reads PreToolUse JSON on stdin). Use
 'tokenops read-guard hook' to print the settings.json block, and
@@ -64,10 +66,10 @@ Bare invocation is the hook handler (reads PreToolUse JSON on stdin). Use
 		Args:   cobra.NoArgs,
 		Hidden: false,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runReadGuardHook(cmd, readguard.ParseMode(mode), dir)
+			return runReadGuardHook(cmd, resolveGuardMode(cmd, rf, mode), dir)
 		},
 	}
-	cmd.Flags().StringVar(&mode, "mode", "observe", "observe (log only) | active (deny redundant re-reads)")
+	cmd.Flags().StringVar(&mode, "mode", "", "observe (log only) | active (deny redundant re-reads); default follows coaching.delivery")
 	cmd.Flags().StringVar(&dir, "dir", "", "state/ledger dir (defaults to ~/.tokenops/read-guard)")
 	cmd.AddCommand(newReadGuardHookCmd())
 	cmd.AddCommand(newReadGuardStatsCmd())
@@ -182,4 +184,28 @@ func newReadGuardStatsCmd() *cobra.Command {
 	cmd.Flags().StringVar(&dir, "dir", "", "state/ledger dir (defaults to ~/.tokenops/read-guard)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
+}
+
+// resolveGuardMode decides whether the guard blocks or only observes.
+// An explicit --mode always wins: someone naming it on the command line
+// has said what they want. Otherwise coaching.delivery governs, so the
+// one config key moves every coaching channel together and takes effect
+// without re-registering the hook.
+//
+// A config that cannot be read resolves to observe rather than failing.
+// This is a hook in the agent's critical path, and the whole package
+// fails open on principle: a guard that cannot read its settings must
+// not start refusing the agent's reads.
+func resolveGuardMode(cmd *cobra.Command, rf *rootFlags, flagMode string) readguard.Mode {
+	if cmd.Flags().Changed("mode") {
+		return readguard.ParseMode(flagMode)
+	}
+	cfg, err := loadConfig(rf)
+	if err != nil {
+		return readguard.ModeObserve
+	}
+	if cfg.Coaching.AllowsIntervention() {
+		return readguard.ModeActive
+	}
+	return readguard.ModeObserve
 }

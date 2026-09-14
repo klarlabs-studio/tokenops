@@ -109,9 +109,15 @@ func wireMCPHosts(home, exe string) []setupStep {
 
 // wireHooks installs the Stop coaching nudge and the read dedup guard.
 //
-// The guard's mode is chosen from its own ledger rather than hardcoded: it
-// logs waste until the operator's history shows enough redundant re-reads
-// to be worth blocking, then starts preventing them.
+// Neither hook is pinned to a mode: both resolve their behaviour from
+// coaching.delivery at call time, so that one key moves every coaching
+// channel together and takes effect without re-registering anything.
+//
+// The guard's own ledger still decides whether blocking is *justified*,
+// but that is now reported rather than applied. Promoting a hook from
+// observing to refusing the agent's reads is precisely the decision
+// `delivery: proactive` exists to gate, and doing it silently on the
+// operator's behalf is the interruption they did not ask for.
 func wireHooks(path, exe string) setupStep {
 	settings, _, err := loadSettings(path)
 	if err != nil {
@@ -121,13 +127,10 @@ func wireHooks(path, exe string) setupStep {
 
 	// ReadStats resolves its own default ledger location and reports an
 	// empty ledger rather than an error when there is no history yet.
-	guardMode, guardWhy := readguard.ModeObserve, "observing"
-	if stats, serr := readguard.ReadStats(""); serr == nil {
-		guardMode, guardWhy = guardModeFor(stats)
-	}
+	guardWhy := deliveryDetail(readGuardRecommendation())
 
 	var changed []string
-	for _, sp := range specsForMode(true, true, coachhook.DefaultBudgetUSD, guardMode) {
+	for _, sp := range specsFor(true, true, coachhook.DefaultBudgetUSD) {
 		if ok, _ := mergeHook(hooks, sp.event, sp.matcher, commandEntry(exe, sp.args), sp.marker); ok {
 			changed = append(changed, sp.name)
 		}
@@ -225,4 +228,43 @@ func renderSetup(out io.Writer, steps []setupStep) {
 			len(manual)+len(failed))
 	}
 	fmt.Fprintln(out, "\nNext: `tokenops daemon install` to keep ingestion alive across reboot.")
+}
+
+// readGuardRecommendation reads the guard's ledger and reports whether
+// the operator's own history justifies blocking. Empty when it does not,
+// or when there is no ledger to read.
+func readGuardRecommendation() string {
+	stats, err := readguard.ReadStats("")
+	if err != nil {
+		return ""
+	}
+	if mode, why := guardModeFor(stats); mode == readguard.ModeActive {
+		return why
+	}
+	return ""
+}
+
+// deliveryDetail describes what the installed hooks will actually do,
+// which is the question an operator reading init's output has. It names
+// the current delivery level and, when the ledger has earned it, the one
+// command that turns the evidence into action.
+func deliveryDetail(recommendation string) string {
+	level := config.DeliveryAdvise
+	if path, err := config.DefaultPath(); err == nil {
+		if cfg, rerr := config.ReadMutable(path); rerr == nil {
+			level = cfg.Coaching.DeliveryLevel()
+		}
+	}
+	switch level {
+	case config.DeliveryIntervene:
+		return "delivery intervene — coach nudges, guard blocks redundant re-reads"
+	case config.DeliveryObserve:
+		return "delivery observe — hooks record but say nothing"
+	}
+	detail := "delivery advise — coach nudges, guard observes"
+	if recommendation != "" {
+		detail += "; your ledger justifies blocking (" + strings.TrimPrefix(recommendation, "active — ") +
+			") — `tokenops coach delivery intervene` to act on it"
+	}
+	return detail
 }
