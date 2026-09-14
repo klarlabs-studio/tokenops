@@ -1,0 +1,151 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/klarlabs-studio/tokenops/security/vex.json",
+  "author": "tokenops-maintainers",
+  "timestamp": "2026-09-14T00:00:00Z",
+  "version": 1,
+  "_note": [
+    "Fingerprints are taken from CI's scan (nox 1.30.1, pinned in",
+    ".github/workflows/security.yml), not from a local scan. A local nox",
+    "is a different scanner: 1.35.0 does not report the release.yml:95",
+    "statement below at all, and a fingerprint minted by the wrong",
+    "version waives nothing in the run that gates the build.",
+    "Every statement here covers a GitHub Actions configuration finding",
+    "surfaced when .github/workflows/*.yml stopped being excluded in",
+    "the 2026-09-14 suppression review. None are critical, so none of",
+    "them change the sec-gate outcome; they are recorded so the report",
+    "distinguishes reviewed from new."
+  ],
+  "statements": [
+    {
+      "vulnerability": "IAC-153",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "ci.yml uploads coverage.out, a Go coverage profile with 7-day retention that is read by the bench gate and by humans. Build-provenance attestation binds a signed claim to an artifact someone downstream installs or executes; nothing consumes this one, and it is never published. The rule is right about release artifacts and this is not one — goreleaser publishes the distributed binaries directly to the release, without upload-artifact.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "0b616c22f622f9f7c0305ba95cc4a06f162c81308c96e1543e312da993a54363",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-09-14",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "IAC-153",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "security.yml uploads findings.json — the scan's own report, 7-day retention, consumed by the summarise step and by anyone reading the run. Attesting a scanner's output to itself adds no verifiable claim: the artifact is diagnostic, not distributed.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "df5b5f3034c7cbc4e84ede14ce5ac9008f6a8f561582bf1070506ced3428f70a",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-09-14",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "IAC-306",
+      "status": "not_affected",
+      "justification": "inline_mitigations_already_exist",
+      "impact_statement": "id-token: write is mandatory for actions/deploy-pages — it is how the deployment authenticates to GitHub Pages over OIDC instead of a long-lived token. Requesting it is the mitigation the rule would otherwise recommend. The surrounding block is already least-privilege: contents stays read, and pages: write is the only other grant.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "ba6d4862014f6ce0c10df45f4e79d1dc1eeb5f1774879cd7020d19b0577c9061",
+      "_governance": {
+        "classification": "Acceptable Pattern",
+        "last_reviewed": "2026-09-14",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "IAC-308",
+      "status": "not_affected",
+      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
+      "impact_statement": "nox-remediate.yml runs weekly on a cron; workflow_dispatch exists so a maintainer can run remediation off-schedule when a CVE lands on a Tuesday. Dispatching a workflow requires write access to the repository, so the trigger grants an adversary nothing they would not already have.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "52922952e40b8c5ebd4fef0969dd782d57266e9ecccc4e9bddc9be74f0f6daa2",
+      "_governance": {
+        "classification": "Acceptable Pattern",
+        "last_reviewed": "2026-09-14",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "IAC-308",
+      "status": "not_affected",
+      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
+      "impact_statement": "pages.yml is path-filtered to web/docs/**, so a docs redeploy after an unrelated change needs a manual trigger or it never runs. Same reasoning as nox-remediate.yml: dispatch requires repository write access.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "1bf5ffaf4038a450a301180174f387e03abc28da49ffe4c9f9980cc06e41b413",
+      "_governance": {
+        "classification": "Acceptable Pattern",
+        "last_reviewed": "2026-09-14",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "IAC-309",
+      "status": "not_affected",
+      "justification": "inline_mitigations_already_exist",
+      "impact_statement": "The concurrency group is keyed on ${{ github.ref }}, so a cancel only ever supersedes an older run of the same ref by a newer commit on that ref. No run of a commit that remains current is cancelled. That this was a considered choice rather than a default is visible one workflow over: pages.yml sets cancel-in-progress: false, because there a cancel could leave a half-published site.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "8c9a05e7d0c8a05b61d4c18aefce8e2dc91a85c3456246a1c92bea30dbb416d8",
+      "_governance": {
+        "classification": "Acceptable Pattern",
+        "last_reviewed": "2026-09-14",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "IAC-309",
+      "status": "not_affected",
+      "justification": "inline_mitigations_already_exist",
+      "impact_statement": "Same ref-scoped concurrency group as ci.yml. A superseded security scan is a scan of a tree that no longer exists; the scan that replaces it covers the tree that does. Findings describe tree state, not history, so nothing is lost by the cancel.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "162a095592cae53b8ee25cadb877e2dd26172f5682b66569c434a5afe19aed4b",
+      "_governance": {
+        "classification": "Acceptable Pattern",
+        "last_reviewed": "2026-09-14",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "IAC-314",
+      "status": "not_affected",
+      "justification": "inline_mitigations_already_exist",
+      "impact_statement": "nox-remediate.yml opens dependency-remediation pull requests, which needs contents: write to push the branch and pull-requests: write to open the PR. Those two are the whole permission block. The job body is a single delegation to klarlabs-studio/.github's central workflow, so the privilege is exercised by reviewed org-level code, not by steps defined here.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "8378df7a1d4adb5806616a668bc89e456b48fe9b7212ca5799b5b8eddbe0ae9c",
+      "_governance": {
+        "classification": "Acceptable Pattern",
+        "last_reviewed": "2026-09-14",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "IAC-314",
+      "status": "not_affected",
+      "justification": "inline_mitigations_already_exist",
+      "impact_statement": "release.yml creates GitHub releases through goreleaser, which cannot write a release without contents: write. It is the only permission the workflow declares, and the workflow only triggers on v* tags — pushing one already requires write access.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "e37e2faa5f7d812400d1323a31d22e93b710b881ea06f3b656d724454d47a8f4",
+      "_governance": {
+        "classification": "Acceptable Pattern",
+        "last_reviewed": "2026-09-14",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "IAC-314",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "There is no permission declaration at release.yml:95. The line sits inside a comment explaining that the Homebrew tap secret carries contents:write on klarlabs-studio/homebrew-tap, and the detector matched that prose. nox 1.35.0 no longer reports it; CI is pinned at 1.30.1, which does. This statement is therefore version-bound and should be deleted — not re-dated — in the same commit that bumps NOX_VERSION past 1.30.1.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "c774586bc756115f6487fe6f9731d24543f5a0ec0304b33442e0b89dcd7f43cf",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-09-14",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    }
+  ]
+}
