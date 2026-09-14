@@ -39,7 +39,24 @@ Install local guardrails once per clone:
 make install-hooks
 ```
 
-The installed pre-push hook blocks direct pushes from protected branches.
+Git hooks live in `.git/hooks`, which is not cloned — so this is genuinely
+per clone, and skipping it leaves you with no local gate even though
+`.warden.yaml` says `enabled: true`.
+
+What it arms:
+
+| Hook | Runs |
+|---|---|
+| `pre-commit` | `fmt`, `vet` — kept cheap enough not to resent |
+| `pre-push` | the protected-branch guard, then `tidy`, `fmt`, `vet`, `lint`, `test`, `sec-gate`, `vulns`, `proto-verify` |
+
+The pre-push gate is the same set of checks CI runs, moved in front of the
+push instead of after it, so a lint error is yours to fix rather than a red
+build for everyone else. Without `warden` on your PATH the target installs
+the protected-branch guard on its own, so that one never depends on warden
+being present.
+
+The protected-branch guard blocks direct pushes from `main`/`master`.
 Emergency override exists for explicit incident workflows:
 
 ```bash
