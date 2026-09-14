@@ -151,10 +151,33 @@ proto-check: proto
 run-daemon: $(BIN_DIR)/tokenopsd
 	./$(BIN_DIR)/tokenopsd start
 
-# install-hooks installs repository-managed git hooks for local policy
-# checks (pre-push currently).
+# install-hooks arms the local gate. Run once per clone: git hooks live in
+# .git/hooks, which is not cloned, so a fresh checkout has none of this even
+# though .warden.yaml reads as though the gate were on.
+#
+# warden owns .git/hooks/pre-push and runs the protected-branch guard as its
+# first step. git allows exactly one file at that path, so the old behaviour
+# here -- copying scripts/git-hooks/pre-push over it -- silently disarmed
+# whichever gate was installed second. Without warden on PATH we still install
+# that script directly, so the branch guard never depends on warden being
+# present.
+#
+# `warden init` is called only when the repo has not adopted warden yet: it
+# re-records the provenance adoption point at HEAD every time it runs, so
+# calling it on an already-adopted clone would quietly drop every commit
+# before HEAD out of `warden doctor`'s audit range.
 install-hooks:
-	@mkdir -p .git/hooks
-	@cp scripts/git-hooks/pre-push .git/hooks/pre-push
-	@chmod +x .git/hooks/pre-push
-	@echo "Installed .git/hooks/pre-push"
+	@if ! command -v warden >/dev/null 2>&1; then \
+		mkdir -p .git/hooks; \
+		cp scripts/git-hooks/pre-push .git/hooks/pre-push; \
+		chmod +x .git/hooks/pre-push; \
+		echo "warden not on PATH - installed the protected-branch guard only."; \
+		echo "For the full pre-push gate: https://github.com/klarlabs-studio/warden"; \
+	elif warden status 2>&1 | grep -q 'not initialized'; then \
+		warden init >/dev/null; \
+		echo "Armed the warden gate (pre-commit, pre-push), protected-branch guard included."; \
+	else \
+		warden hooks enable pre-commit >/dev/null; \
+		warden hooks enable pre-push >/dev/null; \
+		echo "warden already adopted here; hooks re-armed."; \
+	fi
