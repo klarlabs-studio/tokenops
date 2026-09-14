@@ -1,118 +1,123 @@
 # Suppression Governance
 
 Every security-finding suppression in this repository carries a
-documented rationale, a classification, a review date, and an owner.
-This document defines the governance model.
+documented rationale, a classification, and a review date. This document
+defines what that means and what enforces it.
 
-## Finding Classification
+It is written for the maintainers who actually work on this repository —
+currently a very small number — not for an audit committee. Where it says
+"you", it means the person adding the suppression.
 
-Every finding the scanner emits is classified into one of four
-categories. The classification determines what action is required.
+## Finding classification
 
 | Category | Definition | Action |
 |---|---|---|
-| **Real Issue** | A genuine vulnerability, exposed secret, or policy violation that applies to the code as it exists in this repository. | Fix the underlying cause. No suppression. |
-| **Acceptable Pattern** | A finding that is technically accurate but describes a deliberate design choice (e.g., a known-context secret embedded in a test fixture). | Suppress with documented rationale. Classify in VEX or exclude comment. |
-| **False Positive** | A finding that is incorrect — the scanner confused a benign pattern with a signal (e.g., an npm package name flagged as typosquat, an OpenTelemetry semconv key flagged as an AI provider key). | Suppress with documented rationale explaining why the signal is absent. |
-| **Deferred** | A real issue that is not immediately actionable (e.g., requires a dependency upgrade that introduces a breaking change, or needs a larger refactor). | File a GitHub issue and suppress with a reference. Assign a review-by date. |
+| **Real Issue** | A genuine vulnerability, exposed secret, or policy violation that applies to this code. | Fix it. No suppression. |
+| **Acceptable Pattern** | Technically accurate, but describes a deliberate design choice — a known-context secret in a test fixture, a permission a workflow genuinely needs. | Suppress with a documented rationale. |
+| **False Positive** | The scanner confused a benign pattern with a signal — a semconv key read as an API key, prose in a comment read as a permission. | Suppress with a rationale explaining why the signal is absent. |
+| **Deferred** | A real issue that is not immediately actionable. | File a GitHub issue, suppress with a reference to it. |
 
-## Suppression Mechanisms
-
-There are two suppression paths:
+## The two mechanisms
 
 ### 1. `scan.exclude` in `.nox.yaml`
 
-Used for file-level exclusions where **every finding** in the file is
-the same class of false positive. Each entry **must** have a
-preceding YAML comment block explaining:
+File-level exclusion, for when *every* finding in a file is the same
+class of false positive. Each entry needs a preceding comment block with:
 
-- What triggers the detector in that file
-- Why the trigger pattern is benign
-- The classification (Acceptable Pattern or False Positive)
-- The last review date
-
-Example:
-
-```yaml
-    # This test fixture intentionally embeds sample AWS keys to exercise
-    # the redaction package's secret-detection logic.
-    # Classification: Acceptable Pattern
-    # Last reviewed: 2026-05-10
-    - internal/redaction/redactor_test.go
-```
+- what trips the detector in that file, and why the trigger is benign
+- `# Classification:` — one of the four above
+- `# Last reviewed:` — `YYYY-MM-DD`
+- `# Transient:` — **only** for a generated artifact that is legitimately
+  absent from a clean checkout (build output, scanner state). This exempts
+  the entry from the liveness check below, so it has to be a written claim.
 
 ### 2. OpenVEX statements in `security/vex.json`
 
-Used for per-finding false positives where the same file may contain
-both real and spurious signals. Each VEX statement **must** include:
+Per-finding, for when a file contains both real and spurious signals.
+Each statement needs `vulnerability`, `status: not_affected`, an OpenVEX
+`justification`, a specific `impact_statement` (not a template), the
+`_nox_fingerprint`, and a `_governance` block with `classification`,
+`last_reviewed`, and `reviewed_by`.
 
-| Field | Requirement |
-|---|---|
-| `vulnerability` | The scanner rule ID (e.g. `VULN-002`, `SEC-569`). |
-| `status` | `not_affected` for all suppressible classifications. |
-| `justification` | One of the [OpenVEX justification values](https://github.com/openvex/spec/blob/main/OPENVEX-SPEC.md). |
-| `impact_statement` | A specific, contextual explanation — not a generic template. |
-| `_nox_fingerprint` | The finding fingerprint from the scan output. |
-| `_governance` | Object with `classification`, `last_reviewed`, and `reviewed_by`. |
+**Mint fingerprints from the scanner that gates CI**, not from your local
+one. CI pins `NOX_VERSION` in `.github/workflows/security.yml`; a local
+install is usually ahead of it, and the two disagree about what they
+report. A fingerprint from the wrong version waives nothing in the run
+that matters. Take them from the `nox-findings` artifact of a main-branch
+run.
 
-Example:
+## What is enforced, and what is not
 
-```json
-{
-  "vulnerability": "VULN-002",
-  "status": "not_affected",
-  "justification": "vulnerable_code_not_present",
-  "impact_statement": "False positive. 'vue' is the official Vue.js framework, not a typosquat of 'vite'. Both are first-party packages from the Vue/Vite organisations.",
-  "products": ["github.com/klarlabs-studio/tokenops"],
-  "_nox_fingerprint": "1f4dff23501a9568fbc5c744257f8e03c7e0ec819cc9583c2d5bc764539594d3",
-  "_governance": {
-    "classification": "False Positive",
-    "last_reviewed": "2026-05-10",
-    "reviewed_by": "tokenops-maintainers"
-  }
-}
-```
+**Blocking** (`internal/secgov`, runs in `go test ./...`):
 
-## Review Cadence
+- every suppression is documented, with a valid classification and a
+  parseable review date
+- every `scan.exclude` entry points at something **git tracks**, unless it
+  declares `# Transient:`
 
-| Suppression type | Review interval | Trigger |
-|---|---|---|
-| `scan.exclude` entry | Every 90 days | Audit checklist item in quarterly security review |
-| OpenVEX waiver | Every 90 days | Audit checklist item in quarterly security review |
-| Deferred (GitHub issue) | Per issue due date | GitHub issue reminder |
+Both are cheap, deterministic, and always true — they don't depend on the
+date, on local build state, or on a scan having run.
 
-A quarterly review **must**:
+**Advisory** (`scripts/suppression-review-due.py`, `make sec-review`, and a
+non-blocking step in the security workflow):
 
-1. Re-scan the repository with the latest nox version.
-2. Re-evaluate every suppression — the scanner may have been fixed,
-   the false-positive rule may have been retired, or the excluded
-   code may have changed.
-3. Remove suppressions that are no longer needed.
-4. Update `last_reviewed` timestamps for suppressions that remain
-   valid.
+- suppressions past the 90-day review cadence
+- VEX statements whose fingerprint matches no finding in the current scan
 
-## Enforcement
+These warn. They do not fail the build.
 
-The CI gate (`scripts/sec-gate.py`) blocks the build on **any
-unwaived critical** finding. It does not enforce the governance
-metadata above — that is enforced through code review.
+### Why age is not a blocking check
 
-Reviewers **must** reject PRs that:
+It used to be: a 120-day ceiling that failed `go test ./...`. It expired on
+2026-09-07 and left `main` red for a week, blocking unrelated work, until
+someone had time to do a security review. The cheapest way out of that
+state is to bump the date — so a gate built to prevent rubber-stamping had
+made rubber-stamping the path of least resistance.
 
-- Add a `scan.exclude` entry without a rationale comment.
-- Add a VEX statement without an `impact_statement` that clearly
-  explains why this finding does not apply.
-- Introduce a suppression with `classification: Deferred` but no
-  linked GitHub issue.
+It was also measuring the wrong thing. When the review finally ran, what it
+found was not age. It was drift: twelve entries addressed to paths that had
+not existed since the DDD refactor, and a workflow exclusion written for one
+rule quietly absorbing findings from another. **Drift is directly
+measurable, and measuring it directly catches it the day it happens rather
+than at the next timer.** That is what the liveness checks do.
 
-## Owner
+The cadence still exists, because re-reading a rationale against the current
+scanner is worth doing on a schedule. It just prompts instead of blocking.
 
-The `tokenops-maintainers` group is the owner of all suppressions.
-Individual entries may delegate ownership to a specific team member
-via the `reviewed_by` field, but the group retains overall
-accountability.
+## What a review actually involves
+
+1. Re-scan with the current nox.
+2. For each suppression, check the *claim*, not the date — copy the excluded
+   path into a bare tree with no `.nox.yaml`, scan it, and see whether it
+   still produces what the comment says it produces. Rules get retired and
+   files get moved.
+3. Delete what no longer suppresses anything. A suppression that suppresses
+   nothing is worse than none: it reads as a considered decision.
+4. Update `Last reviewed:` on what remains.
 
 ## Review log
+
+**2026-09-14 — reviewed every entry against what it suppresses today.**
+Prompted by the 120-day timer expiring, which had been failing `main` for a
+week. Each of the 27 excluded paths was copied into a bare tree and
+rescanned under nox 1.35.0.
+
+Fourteen produced nothing at all. Twelve pointed at paths that had not
+existed since the DDD refactor moved those packages under
+`internal/contexts/` — inert for months while still reading as active
+policy. All were removed rather than re-dated. `redactor_test.go` was
+repointed and kept: it still produces 23 findings from the sample AWS keys
+the redaction tests embed, and is the only source-file exclusion that still
+earns its place.
+
+`.github/workflows/*.yml` was dropped entirely. It had been excluded for
+SEC-659/697, which no longer fires there — what it was actually absorbing
+was nine Infrastructure findings from a different rule family, on the
+workflow files, through a month of workflow security work. Those are now
+triaged into `vex.json`.
+
+The timer was replaced by the liveness checks described above, on the
+reasoning in "Why age is not a blocking check".
 
 **2026-08-28 — all suppressions removed.** The scanner was pinned at nox
 0.9.5, which reported 1386 findings including 11 criticals, every one of
@@ -123,12 +128,13 @@ eleven VEX statements existed to waive those.
 nox 1.30.1 reports 523 findings, **0 critical**, and 1 typosquat finding.
 Its fingerprint scheme also changed, so none of the eleven statements
 matched anything any more — they were dead entries, not active
-suppressions. Removed rather than migrated: a suppression that waives
-nothing is worse than none, because it reads as a considered decision.
+suppressions. Removed rather than migrated.
 
-`security/vex.json` is therefore **removed**, not emptied. This
-repository's own guard (`internal/secgov`) rejects an empty statements
-list — "remove the file or add waivers" — on exactly this reasoning, and
-`scripts/sec-gate.py` now treats an absent file as "no waivers in
-effect". Recreate it when there is a real waiver to record; the format
-above still applies.
+`security/vex.json` was therefore removed, not emptied — `internal/secgov`
+rejects an empty statements list, and `scripts/sec-gate.py` treats an absent
+file as "no waivers in effect". It was recreated on 2026-09-14 when there
+were real waivers to record.
+
+Worth noting in hindsight: this review touched `vex.json` and left every
+`.nox.yaml` review date at `2026-05-10`, already past the cadence. A written
+process did not catch what a test later did.

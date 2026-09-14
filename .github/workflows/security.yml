@@ -67,6 +67,14 @@ jobs:
         # whether to fail the build.
         run: nox scan . || true
 
+      - name: Suppression review
+        # Advisory, never blocking: reports suppressions past the review
+        # cadence and waivers whose fingerprint matches nothing in this
+        # scan. The blocking half lives in internal/secgov, which checks
+        # that every suppression is documented and points at a tracked
+        # path. See security/SUPPRESSION-GOVERNANCE.md.
+        run: python3 scripts/suppression-review-due.py
+
       - name: Critical gate
         # scripts/sec-gate.py reads findings.json + security/vex.json
         # (the latter optional: absent means no waivers)
