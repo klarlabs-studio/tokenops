@@ -19,6 +19,7 @@ export default defineConfig({
       { text: "Integrations", link: "/integrations/sdk-overview" },
       { text: "Architecture", link: "/architecture/overview" },
       { text: "Runbook", link: "/runbook/" },
+      { text: "Changelog", link: "/changelog" },
       { text: "GitHub", link: "https://github.com/klarlabs-studio/tokenops" },
     ],
     sidebar: {
