@@ -217,6 +217,14 @@ Honest boundaries: Gemini CLI has no local token log (proxy only); AWS Bedrock
 needs SigV4 the passthrough proxy can't do; fully-hosted agents (Jules) are out
 of reach — TokenOps is local-first with no telemetry.
 
+**Parity across clients does not exist, and the matrix says so.** Desktop and
+GitHub clients have no local token log and no base-URL override, so coaching
+there is pull-only: no transcripts means no storytelling, no proactive nudges,
+no routing. What is left is the MCP surface, which on those clients is the
+whole product. The
+[capability matrix](https://klarlabs-studio.github.io/tokenops/integrations/coverage#what-reaches-which-client)
+lists what reaches which client, feature by feature, gaps included.
+
 ## Disabled-subsystem contract
 
 When a subsystem is off, the matching routes return `503` with a structured
