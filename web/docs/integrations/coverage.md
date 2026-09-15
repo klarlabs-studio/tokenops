@@ -41,7 +41,8 @@ we got round to.
 | Capability | Needs | Claude Code | Codex CLI | opencode | Cursor | Gemini CLI | Desktop | GitHub-hosted |
 |---|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | Spend + token accounting | a local token log | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | ⚠️ |
-| Ground truth + live routing | a base-URL override | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
+| Ground truth + routing *enforcement* | a base-URL override | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
+| Routing *advice* (`tokenops_routing_advise`) | an MCP host | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Prompt + reply coaching | prompt text on disk | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Agent DX metrics (`dx`) | a transcript reader | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Work storytelling (`story`) | a reader **and** prompt text | ✅ | ⚠️ | ⚠️ | ⚠️ | ❌ | ❌ | ❌ |
@@ -67,15 +68,15 @@ we got round to.
 
 Claude Desktop, Codex Desktop and the GitHub clients have **no local
 token log and no base-URL override**. There are no transcripts to read,
-which means no storytelling, no proactive nudges, and no routing —
-nothing TokenOps does *to* a session is reachable, because nothing of the
-session is reachable.
+which means no storytelling, no proactive nudges, and no routing
+*enforcement* — nothing TokenOps does *to* a session is reachable,
+because nothing of the session is reachable.
 
 What is left is the MCP surface, and on those clients it is the whole
 product. So it is the one that has to be genuinely good there: every
 question — spend, headroom, burn rate, forecast, the work account, the DX
-metrics — is a tool call, and `tokenops_help` lists what the running
-server exposes. That is a real answer, just a smaller one than a client
+metrics, which model this turn should run on — is a tool call, and
+`tokenops_help` lists what the running server exposes. That is a real answer, just a smaller one than a client
 whose session we can sit inside.
 
 Parity is not available on those clients and will not become available;
