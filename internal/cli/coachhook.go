@@ -70,6 +70,7 @@ much your sessions have spent and which budget alerts fired.`,
 			cfg := coachhook.DefaultConfig()
 			cfg.BudgetUSD = budget
 			cfg.Enabled = advisoryCoaching(rf)
+			cfg.Quiet = quietPolicy(rf)
 			return runCoachHook(cmd, dir, cfg)
 		},
 	}
@@ -170,6 +171,14 @@ func newCoachHookStatsCmd() *cobra.Command {
 					fmt.Fprintf(out, "    %-5s %d\n", tier, n)
 				}
 			}
+			if len(s.Suppressed) > 0 {
+				fmt.Fprintf(out, "  held back by coaching.quiet: %d\n", totalOf(s.Suppressed))
+				for _, rule := range []string{"min_interval", "max_per_session"} {
+					if n := s.Suppressed[rule]; n > 0 {
+						fmt.Fprintf(out, "    %-15s %d\n", rule, n)
+					}
+				}
+			}
 			if s.Alerts == 0 {
 				fmt.Fprintln(out, "\nNo session has crossed a budget fraction yet — your spend stays lean. Keep observing.")
 			}
@@ -179,6 +188,14 @@ func newCoachHookStatsCmd() *cobra.Command {
 	cmd.Flags().StringVar(&dir, "dir", "", "state/ledger dir (defaults to ~/.tokenops/coach-hook)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
+}
+
+func totalOf(m map[string]int) int {
+	n := 0
+	for _, v := range m {
+		n += v
+	}
+	return n
 }
 
 // formatBudget renders a budget for the hook args: whole dollars without a
@@ -205,4 +222,23 @@ func advisoryCoaching(rf *rootFlags) bool {
 		return config.CoachingConfig{}.AllowsAdvice()
 	}
 	return cfg.Coaching.AllowsAdvice()
+}
+
+// quietPolicy reads coaching.quiet into the hook's rate limit.
+//
+// An unreadable config yields the zero policy — no floor, no cap — for
+// the same reason advisoryCoaching falls back to speaking: a coach that
+// silences itself because it could not parse a YAML file is the
+// silent-failure shape this tool exists to find. The per-finding latches
+// still apply, so the fallback is the behaviour that shipped before the
+// key existed, not an unbounded one.
+func quietPolicy(rf *rootFlags) coachhook.Quiet {
+	cfg, err := loadConfig(rf)
+	if err != nil {
+		return coachhook.Quiet{}
+	}
+	return coachhook.Quiet{
+		MinInterval:   cfg.Coaching.Quiet.MinInterval,
+		MaxPerSession: cfg.Coaching.Quiet.MaxPerSession,
+	}
 }
