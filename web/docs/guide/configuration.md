@@ -51,6 +51,35 @@ behaviour against the config when you want one hook to differ.
 `advise` is the default because it is what the hooks already did before
 this setting existed — upgrading changes nothing until you say so.
 
+#### `coaching.quiet` — how often the coach may speak
+
+Every finding the coach can raise already latches: a budget tier fires
+once per session and then stays quiet. `coaching.quiet` exists for the
+case a latch cannot see — two *different* findings landing back to back,
+which reads as nagging however reasonable each one was on its own.
+
+| Key | Meaning |
+|---|---|
+| `min_interval` | A floor between two proactive nudges in one session. A nudge held back by the floor is **deferred, not dropped**: its finding stays unlatched and speaks at the next opportunity past the floor. |
+| `max_per_session` | A cap on how many proactive nudges one session may carry. Unlike the floor this **drops** — a cap that queues what it refused is not a cap. Zero means no cap. |
+
+Both default to zero, which means the per-finding latches are the whole
+policy — exactly what the hooks did before the key existed. It only bites
+at `delivery: advise` and `intervene`, where something speaks at all;
+neither knob touches anything you ask for, because a direct question is
+never an interruption.
+
+`coach-hook stats` counts what the policy held back, by rule:
+
+```
+  budget alerts fired: 2
+  held back by coaching.quiet: 1
+    min_interval    1
+```
+
+That line is the point. A rate limit you cannot see working is
+indistinguishable from one that does nothing.
+
 Mode, budgets, and routing rules are also editable through the MCP
 server — `tokenops_mode`, `tokenops_budget_set`, and
 `tokenops_routing_rule_set` write the same `config.yaml` the CLI verbs
@@ -129,6 +158,10 @@ optimizer:
           aggressive: ["^INFO "]
 
 coaching:
+  delivery: advise            # observe | advise | intervene
+  quiet:                      # rate-limits the *proactive* channel only
+    min_interval: 30m         # floor between two nudges in one session
+    max_per_session: 3        # cap; 0 defers to the per-finding latches
   context_limits:             # waste-detector threshold overrides
     - workflow_prefix: "claude-code:"
       max_context_tokens: 500000

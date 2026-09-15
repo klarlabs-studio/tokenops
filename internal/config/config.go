@@ -182,11 +182,52 @@ type CoachingConfig struct {
 	// changes nothing until you say so.
 	Delivery string `yaml:"delivery,omitempty"`
 
+	// Quiet rate-limits the coach's *proactive* channel — the nudges it
+	// speaks without being asked. It has no effect on anything you ask
+	// for: a direct question is never an interruption.
+	Quiet QuietConfig `yaml:"quiet,omitempty"`
+
 	// ContextLimits override the waste detector's context thresholds per
 	// workflow-ID prefix. A matching entry replaces the built-in
 	// profiles ("claude-code:", "codex:"); zero fields inherit the
 	// detector defaults.
 	ContextLimits []ContextLimitConfig `yaml:"context_limits"`
+}
+
+// QuietConfig bounds how often the coach may speak unprompted in one
+// session. Only meaningful at delivery advise and intervene, where
+// something speaks at all.
+//
+// Each individual finding already latches — a budget tier fires once per
+// session and then stays quiet — so this is not about one finding
+// repeating itself. It is about two *different* findings landing back to
+// back and reading, to the operator, as nagging.
+//
+// Both knobs default to off, and off means the per-finding latches are
+// the whole policy, which is what the hooks did before this key existed.
+type QuietConfig struct {
+	// MinInterval is the floor between two proactive nudges in one
+	// session. A nudge suppressed by the floor is deferred, not dropped:
+	// its finding stays unlatched and speaks at the next opportunity once
+	// the floor has passed. Zero means no floor.
+	MinInterval time.Duration `yaml:"min_interval,omitempty"`
+
+	// MaxPerSession caps how many proactive nudges one session may carry.
+	// Unlike the floor this drops rather than defers — a cap that queues
+	// is not a cap. Zero means no cap, deferring entirely to the
+	// per-finding latches.
+	MaxPerSession int `yaml:"max_per_session,omitempty"`
+}
+
+// Validate rejects a quiet policy that cannot mean anything.
+func (q QuietConfig) Validate() error {
+	if q.MinInterval < 0 {
+		return fmt.Errorf("coaching.quiet.min_interval must not be negative, got %s", q.MinInterval)
+	}
+	if q.MaxPerSession < 0 {
+		return fmt.Errorf("coaching.quiet.max_per_session must not be negative, got %d", q.MaxPerSession)
+	}
+	return nil
 }
 
 // Delivery values for CoachingConfig.Delivery, in ascending order of
@@ -766,6 +807,9 @@ func (c Config) Validate() error {
 		if r.Quality <= 0 || r.Quality > 1 {
 			return fmt.Errorf("optimizer.routing_rules[%d]: quality must be in (0,1], got %g", i, r.Quality)
 		}
+	}
+	if err := c.Coaching.Quiet.Validate(); err != nil {
+		return err
 	}
 	for i, l := range c.Coaching.ContextLimits {
 		if l.WorkflowPrefix == "" {

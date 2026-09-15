@@ -70,6 +70,43 @@ type Config struct {
 	// Enabled gates nudging. When false the coach observes (accumulate +
 	// ledger only) and never latches a tier.
 	Enabled bool
+	// Quiet bounds how often the coach may speak unprompted in one
+	// session. Zero values mean the per-finding latches are the whole
+	// policy, which is what the hook did before the key existed.
+	Quiet Quiet
+}
+
+// Quiet is the rate limit on the coach's proactive channel.
+//
+// Each finding already latches, so this exists for the case a latch
+// cannot see: two *different* findings landing back to back. The floor
+// defers — the suppressed finding stays unlatched and speaks once the
+// floor has passed — and the cap drops, because a cap that queues is not
+// a cap.
+type Quiet struct {
+	// MinInterval is the floor between two nudges in one session. Zero
+	// means no floor.
+	MinInterval time.Duration
+	// MaxPerSession caps the nudges one session may carry. Zero means no
+	// cap.
+	MaxPerSession int
+}
+
+// silence reports why a nudge must not be spoken now, and whether the
+// finding behind it should keep its latch so it can retry later.
+//
+// Returning the reason rather than a bare bool is what makes the policy
+// auditable: it goes into the ledger, so `coach-hook stats` can show that
+// the coach had something to say and held it, rather than the operator
+// having to infer a working rate limit from an absence.
+func (q Quiet) silence(nudges int, last, now time.Time) (reason string, retry bool) {
+	if q.MaxPerSession > 0 && nudges >= q.MaxPerSession {
+		return "max_per_session", false
+	}
+	if q.MinInterval > 0 && !last.IsZero() && now.Sub(last) < q.MinInterval {
+		return "min_interval", true
+	}
+	return "", false
 }
 
 // DefaultConfig returns the shipping defaults: enabled, $50 budget, 50/75/100%
@@ -101,6 +138,11 @@ type Decision struct {
 	ContextTokens int64
 	// ContextWindow is the model's window size, when one is known for it.
 	ContextWindow int64
+	// Suppressed names the quiet rule that held a nudge back
+	// ("min_interval", "max_per_session"), empty when nothing was held.
+	// The coach had something to say; the operator asked it not to say it
+	// yet.
+	Suppressed string
 }
 
 // usage is the token-usage block Claude Code records on each turn's message.
@@ -131,6 +173,13 @@ type sessionState struct {
 	CumulativeUSD    float64 `json:"cumulative_usd"`
 	MaxFiredFraction float64 `json:"max_fired_fraction"`
 	LastCountedTS    string  `json:"last_counted_ts"`
+	// LastNudgeAt and Nudges are what the quiet policy is measured
+	// against: when the coach last spoke in this session, and how often.
+	// Absent on state written before the policy existed, which reads as
+	// "never spoken" — the first nudge after an upgrade is never
+	// suppressed by a floor nobody recorded.
+	LastNudgeAt string `json:"last_nudge_at,omitempty"`
+	Nudges      int    `json:"nudges,omitempty"`
 }
 
 // ledgerEvent is one appended coaching record.
@@ -142,6 +191,9 @@ type ledgerEvent struct {
 	Fraction      float64   `json:"fraction"`
 	TierFired     float64   `json:"tier_fired"` // 0 when no tier fired this Stop
 	Model         string    `json:"model"`
+	// Suppressed names the quiet rule that held a nudge back this Stop,
+	// empty when nothing was held.
+	Suppressed string `json:"suppressed,omitempty"`
 }
 
 // Evaluate is the coach's decision + side effects for one Stop event. dir is
@@ -172,19 +224,36 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 	dec := Decision{CumulativeUSD: st.CumulativeUSD, BudgetUSD: budget}
 	fired := highestBoundary(frac, st.MaxFiredFraction, cfg)
 	if cfg.Enabled && fired > 0 {
-		dec.Nudge = true
-		dec.FiredFraction = fired
-		dec.Message = nudgeMessage(fired, st.CumulativeUSD, budget, configured)
-		// Context is the number that actually constrains the session;
-		// lead the dollar figure with it wherever it is known.
-		if note := contextNote(contextTokens, model); note != "" {
-			dec.Message = note + " " + dec.Message
+		reason, retry := cfg.Quiet.silence(st.Nudges, parseTime(st.LastNudgeAt), now)
+		switch {
+		case reason == "":
+			dec.Nudge = true
+			dec.FiredFraction = fired
+			dec.Message = nudgeMessage(fired, st.CumulativeUSD, budget, configured)
+			// Context is the number that actually constrains the session;
+			// lead the dollar figure with it wherever it is known.
+			if note := contextNote(contextTokens, model); note != "" {
+				dec.Message = note + " " + dec.Message
+			}
+			dec.ContextTokens = contextTokens
+			if w, ok := spend.ContextWindow(model); ok {
+				dec.ContextWindow = w
+			}
+			st.MaxFiredFraction = fired
+			st.LastNudgeAt = now.UTC().Format(time.RFC3339Nano)
+			st.Nudges++
+		case retry:
+			// The floor defers rather than drops: leave the tier
+			// unlatched so it speaks at the next Stop past the floor.
+			// Latching here would silence the finding for the rest of the
+			// session, which is a mute, not a rate limit.
+			dec.Suppressed = reason
+		default:
+			// The cap drops. Latch it, so the coach does not re-evaluate
+			// a boundary it will never be allowed to speak.
+			dec.Suppressed = reason
+			st.MaxFiredFraction = fired
 		}
-		dec.ContextTokens = contextTokens
-		if w, ok := spend.ContextWindow(model); ok {
-			dec.ContextWindow = w
-		}
-		st.MaxFiredFraction = fired
 	}
 
 	saveSession(dir, sessionID, st)
@@ -192,6 +261,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		TS: now.UTC(), Session: sessionID,
 		CumulativeUSD: st.CumulativeUSD, BudgetUSD: budget,
 		Fraction: frac, TierFired: dec.FiredFraction, Model: model,
+		Suppressed: dec.Suppressed,
 	})
 	return dec
 }
@@ -436,6 +506,10 @@ type Stats struct {
 	AlertsByTier     map[string]int `json:"alerts_by_tier"` // "50%" -> count, "200%" -> count …
 	MaxCumulativeUSD float64        `json:"max_cumulative_usd"`
 	TotalEstSpendUSD float64        `json:"total_est_spend_usd"` // sum of each session's peak cumulative
+	// Suppressed counts nudges the quiet policy held back, by rule
+	// ("min_interval", "max_per_session"). A rate limit you cannot see
+	// working is indistinguishable from one that does nothing.
+	Suppressed map[string]int `json:"suppressed,omitempty"`
 }
 
 // ReadStats reads the ledger and aggregates it. Cumulative spend is a
@@ -468,6 +542,12 @@ func ReadStats(dir string) (Stats, error) {
 			s.Alerts++
 			s.AlertsByTier[tierLabel(e.TierFired)]++
 		}
+		if e.Suppressed != "" {
+			if s.Suppressed == nil {
+				s.Suppressed = map[string]int{}
+			}
+			s.Suppressed[e.Suppressed]++
+		}
 	}
 	s.DistinctSessions = len(peak)
 	for _, p := range peak {
@@ -496,6 +576,20 @@ func resolveDir(dir string) string {
 		return ".tokenops-coachhook"
 	}
 	return filepath.Join(home, ".tokenops", "coach-hook")
+}
+
+// parseTime reads a stored timestamp, yielding the zero time for anything
+// missing or malformed. A floor cannot be enforced against a time nobody
+// recorded, and failing open is the rule for the whole package.
+func parseTime(s string) time.Time {
+	if s == "" {
+		return time.Time{}
+	}
+	t, err := time.Parse(time.RFC3339Nano, s)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
 }
 
 func sessionFile(dir, sessionID string) string {
