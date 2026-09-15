@@ -165,3 +165,130 @@ func TestQuietFloorIgnoresUnrecordedHistory(t *testing.T) {
 		t.Fatalf("a session upgraded mid-flight was silenced by a floor it never recorded: %+v", d)
 	}
 }
+
+// The read-guard case speaks on an ordinary Stop, which is the whole
+// point: `init` already reported the recommendation, and nothing
+// surfaced it during normal use.
+func TestPromotionSpeaksDuringNormalUse(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig()
+	cfg.Promotion = "tokenops: read-guard has watched ~1.2M tokens go by."
+
+	// A cheap turn: nowhere near a budget tier.
+	tp := writeTranscript(t, dir, turnLine(ts(1), 1_000_000, opus))
+	d := Evaluate(dir, "s", tp, cfg, fixedNow)
+	if !d.Nudge || !d.Promotion {
+		t.Fatalf("Evaluate = %+v, want the read-guard case argued", d)
+	}
+	if d.Message != cfg.Promotion {
+		t.Errorf("Message = %q, want the case as built by the caller", d.Message)
+	}
+}
+
+// Argued once, then never again in that session. A standing
+// recommendation repeated every turn is nagging, not coaching.
+func TestPromotionLatchesPerSession(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig()
+	cfg.Promotion = "make the case"
+
+	tp := writeTranscript(t, dir, turnLine(ts(1), 1_000_000, opus))
+	if d := Evaluate(dir, "s", tp, cfg, fixedNow); !d.Promotion {
+		t.Fatal("the case was never argued")
+	}
+	rewrite(t, tp, turnLine(ts(1), 1_000_000, opus), turnLine(ts(2), 1_000_000, opus))
+	if d := Evaluate(dir, "s", tp, cfg, fixedNow.Add(time.Hour)); d.Nudge {
+		t.Fatalf("the case was argued twice in one session: %q", d.Message)
+	}
+	// A different session is a different conversation.
+	if d := Evaluate(dir, "other", tp, cfg, fixedNow); !d.Promotion {
+		t.Error("a new session inherited the previous session's latch")
+	}
+}
+
+// At most one thing is said per Stop, and the budget tier goes first: it
+// is about the session in flight, while the read-guard case will be just
+// as true next turn.
+func TestBudgetTierOutranksThePromotionCase(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig()
+	cfg.Promotion = "make the case"
+
+	// $30 of $50: the 50% tier is due.
+	tp := writeTranscript(t, dir, turnLine(ts(1), 60_000_000, opus))
+	d := Evaluate(dir, "s", tp, cfg, fixedNow)
+	if !d.Nudge || d.Promotion {
+		t.Fatalf("Evaluate = %+v, want the budget tier to speak alone", d)
+	}
+	if d.FiredFraction != 0.50 {
+		t.Errorf("FiredFraction = %v, want 0.50", d.FiredFraction)
+	}
+	// The case was not swallowed — it speaks on the next Stop.
+	if next := Evaluate(dir, "s", tp, cfg, fixedNow.Add(time.Hour)); !next.Promotion {
+		t.Error("the deferred read-guard case never got its turn")
+	}
+}
+
+// The case goes through the same rate limit as everything else, and a
+// case held back keeps its latch so it can still be made later.
+func TestPromotionHonoursQuiet(t *testing.T) {
+	dir := t.TempDir()
+	cfg := quietCfg(Quiet{MinInterval: time.Hour})
+	cfg.Promotion = "make the case"
+
+	tp := writeTranscript(t, dir, turnLine(ts(1), 60_000_000, opus))
+	if d := Evaluate(dir, "s", tp, cfg, fixedNow); !d.Nudge || d.Promotion {
+		t.Fatalf("first Stop = %+v, want the budget tier", d)
+	}
+	held := Evaluate(dir, "s", tp, cfg, fixedNow.Add(time.Minute))
+	if held.Nudge {
+		t.Fatalf("the case spoke inside the floor: %q", held.Message)
+	}
+	if held.Suppressed != "min_interval" {
+		t.Errorf("Suppressed = %q, want min_interval", held.Suppressed)
+	}
+	if d := Evaluate(dir, "s", tp, cfg, fixedNow.Add(2*time.Hour)); !d.Promotion {
+		t.Error("a case held back by the floor was never made")
+	}
+}
+
+// `observe` records the evidence and says nothing — including about the
+// evidence itself. And it must not latch, or the case is lost for the
+// session the operator finally lets the coach speak in.
+func TestPromotionSilentAtObserve(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig()
+	cfg.Promotion = "make the case"
+	cfg.Enabled = false
+
+	tp := writeTranscript(t, dir, turnLine(ts(1), 1_000_000, opus))
+	if d := Evaluate(dir, "s", tp, cfg, fixedNow); d.Nudge || d.Promotion {
+		t.Fatalf("observe-level Stop = %+v, want silence", d)
+	}
+	cfg.Enabled = true
+	if d := Evaluate(dir, "s", tp, cfg, fixedNow.Add(time.Minute)); !d.Promotion {
+		t.Error("the case was latched by a session that never argued it")
+	}
+}
+
+// Sessions in which the case was argued are countable, so an operator can
+// see the coach made it rather than inferring it from an absence.
+func TestPromotionIsVisibleInStats(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig()
+	cfg.Promotion = "make the case"
+
+	tp := writeTranscript(t, dir, turnLine(ts(1), 1_000_000, opus))
+	Evaluate(dir, "s", tp, cfg, fixedNow)
+
+	s, err := ReadStats(dir)
+	if err != nil {
+		t.Fatalf("ReadStats: %v", err)
+	}
+	if s.PromotionNudges != 1 {
+		t.Errorf("PromotionNudges = %d, want 1", s.PromotionNudges)
+	}
+	if s.Alerts != 0 {
+		t.Errorf("Alerts = %d, want 0 — the case is not a budget alert", s.Alerts)
+	}
+}

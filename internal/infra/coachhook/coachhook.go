@@ -74,6 +74,16 @@ type Config struct {
 	// session. Zero values mean the per-finding latches are the whole
 	// policy, which is what the hook did before the key existed.
 	Quiet Quiet
+	// Promotion is the case for letting the read guard start refusing
+	// redundant re-reads, built from the operator's own ledger. Empty
+	// when the evidence does not justify it, when the guard is already
+	// blocking, or when delivery is not `advise` — the level at which the
+	// coach makes a case and waits for a human.
+	//
+	// The caller builds it rather than this package reading the guard's
+	// ledger itself, because who is allowed to speak is a delivery
+	// question, and delivery lives in the config rather than in the hook.
+	Promotion string
 }
 
 // Quiet is the rate limit on the coach's proactive channel.
@@ -143,6 +153,9 @@ type Decision struct {
 	// The coach had something to say; the operator asked it not to say it
 	// yet.
 	Suppressed string
+	// Promotion is true when the nudge is the read-guard case rather than
+	// a budget tier.
+	Promotion bool
 }
 
 // usage is the token-usage block Claude Code records on each turn's message.
@@ -180,6 +193,9 @@ type sessionState struct {
 	// suppressed by a floor nobody recorded.
 	LastNudgeAt string `json:"last_nudge_at,omitempty"`
 	Nudges      int    `json:"nudges,omitempty"`
+	// PromotionNudged latches the read-guard case, so it is argued once
+	// per session and never becomes a recurring request.
+	PromotionNudged bool `json:"promotion_nudged,omitempty"`
 }
 
 // ledgerEvent is one appended coaching record.
@@ -194,6 +210,8 @@ type ledgerEvent struct {
 	// Suppressed names the quiet rule that held a nudge back this Stop,
 	// empty when nothing was held.
 	Suppressed string `json:"suppressed,omitempty"`
+	// Promotion records that this Stop argued the read-guard case.
+	Promotion bool `json:"promotion,omitempty"`
 }
 
 // Evaluate is the coach's decision + side effects for one Stop event. dir is
@@ -256,12 +274,35 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		}
 	}
 
+	// The budget tier is about the session in flight; the read-guard case
+	// is a standing recommendation that will be just as true next turn.
+	// So the tier speaks first and the case waits for a later Stop, and
+	// at most one thing is said per Stop either way: two findings landing
+	// in the same breath is the shape `coaching.quiet` exists to stop,
+	// and not saying both at once is the cheapest defence against it.
+	if cfg.Enabled && !dec.Nudge && cfg.Promotion != "" && !st.PromotionNudged {
+		reason, _ := cfg.Quiet.silence(st.Nudges, parseTime(st.LastNudgeAt), now)
+		switch {
+		case reason == "":
+			dec.Nudge = true
+			dec.Promotion = true
+			dec.Message = cfg.Promotion
+			// Latch only on speaking. A case held back by the rate limit
+			// is still a case; latching it here would argue it never.
+			st.PromotionNudged = true
+			st.LastNudgeAt = now.UTC().Format(time.RFC3339Nano)
+			st.Nudges++
+		case dec.Suppressed == "":
+			dec.Suppressed = reason
+		}
+	}
+
 	saveSession(dir, sessionID, st)
 	appendLedger(dir, ledgerEvent{
 		TS: now.UTC(), Session: sessionID,
 		CumulativeUSD: st.CumulativeUSD, BudgetUSD: budget,
 		Fraction: frac, TierFired: dec.FiredFraction, Model: model,
-		Suppressed: dec.Suppressed,
+		Suppressed: dec.Suppressed, Promotion: dec.Promotion,
 	})
 	return dec
 }
@@ -510,6 +551,9 @@ type Stats struct {
 	// ("min_interval", "max_per_session"). A rate limit you cannot see
 	// working is indistinguishable from one that does nothing.
 	Suppressed map[string]int `json:"suppressed,omitempty"`
+	// PromotionNudges counts the sessions in which the coach argued the
+	// read-guard case.
+	PromotionNudges int `json:"promotion_nudges,omitempty"`
 }
 
 // ReadStats reads the ledger and aggregates it. Cumulative spend is a
@@ -541,6 +585,9 @@ func ReadStats(dir string) (Stats, error) {
 		if e.TierFired > 0 {
 			s.Alerts++
 			s.AlertsByTier[tierLabel(e.TierFired)]++
+		}
+		if e.Promotion {
+			s.PromotionNudges++
 		}
 		if e.Suppressed != "" {
 			if s.Suppressed == nil {
