@@ -10,7 +10,7 @@ import (
 
 func recordsFrom(t *testing.T, lines ...string) []Record {
 	t.Helper()
-	return readTranscript(strings.NewReader(strings.Join(lines, "\n")), time.Time{})
+	return readTranscript(strings.NewReader(strings.Join(lines, "\n")), time.Time{}, true)
 }
 
 // A typed instruction opens a unit; the tool results the client writes
@@ -90,7 +90,7 @@ func TestExtractSkipsMalformedLines(t *testing.T) {
 func TestExtractHonoursSince(t *testing.T) {
 	lines := `{"type":"user","timestamp":"2026-08-01T10:00:00Z","sessionId":"s","message":{"content":"old"}}
 {"type":"user","timestamp":"2026-08-23T10:00:00Z","sessionId":"s","message":{"content":"new"}}`
-	got := readTranscript(strings.NewReader(lines), time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC))
+	got := readTranscript(strings.NewReader(lines), time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC), false)
 	if len(got) != 1 {
 		t.Errorf("got %+v, want only the entry inside the window", got)
 	}
