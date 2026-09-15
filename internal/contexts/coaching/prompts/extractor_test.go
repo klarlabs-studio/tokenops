@@ -195,3 +195,43 @@ func TestExtractToleratesMalformedLines(t *testing.T) {
 		t.Errorf("malformed-tolerant extract produced %d", len(got))
 	}
 }
+
+// The coach describes the operator's prompting. A simulation harness
+// does not prompt, and counting its turns rewrote the length
+// distribution the whole report is built on.
+func TestExtractSkipsScratchProjects(t *testing.T) {
+	root := t.TempDir()
+	write := func(project, session, text string) {
+		t.Helper()
+		dir := filepath.Join(root, project)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		line := `{"type":"user","timestamp":"2099-01-01T10:00:00Z","sessionId":"` + session +
+			`","message":{"role":"user","content":"` + text + `"}}` + "\n"
+		if err := os.WriteFile(filepath.Join(dir, session+".jsonl"), []byte(line), 0o600); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+	write("-Users-me-src-api", "real", "rewrite the boundary heuristic")
+	write("-private-var-folders-wz-abc-T-worksim-claudecode-1", "sim", "INTENT")
+
+	got, err := Extract(ExtractOptions{Root: root, Source: SourceClaudeCode})
+	if err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d prompts, want 1 — the harness session is not the operator prompting", len(got))
+	}
+	if got[0].SessionID != "real" {
+		t.Errorf("SessionID = %q, want the operator's own session", got[0].SessionID)
+	}
+
+	all, err := Extract(ExtractOptions{Root: root, Source: SourceClaudeCode, IncludeScratch: true})
+	if err != nil {
+		t.Fatalf("extract with scratch: %v", err)
+	}
+	if len(all) != 2 {
+		t.Errorf("got %d prompts with IncludeScratch, want both", len(all))
+	}
+}

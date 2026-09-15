@@ -28,6 +28,8 @@ func newStoryCmd() *cobra.Command {
 		idleGap  time.Duration
 		jsonOut  bool
 		audience string
+
+		includeScratch bool
 	)
 	cmd := &cobra.Command{
 		Use:   "story",
@@ -72,6 +74,7 @@ stored; the account is rebuilt from transcripts on every run.`,
 				// The narrative needs the words. This is the only surface
 				// that asks for them.
 				WithPromptText: true,
+				IncludeScratch: includeScratch,
 			}
 			if days > 0 {
 				opts.Since = time.Now().AddDate(0, 0, -days)
@@ -110,6 +113,7 @@ stored; the account is rebuilt from transcripts on every run.`,
 	cmd.Flags().DurationVar(&idleGap, "idle-gap", 0, "pause that starts a new task (default 10m; negative disables splitting)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (the same as --for agent)")
 	cmd.Flags().StringVar(&audience, "for", audienceMe, "who the account is written for: me | agent | report | handoff")
+	cmd.Flags().BoolVar(&includeScratch, "include-scratch", false, scratchFlagHelp)
 	return cmd
 }
 

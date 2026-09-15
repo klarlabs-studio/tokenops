@@ -25,6 +25,8 @@ func newDXCmd() *cobra.Command {
 		source  string
 		days    int
 		jsonOut bool
+
+		includeScratch bool
 	)
 	cmd := &cobra.Command{
 		Use:   "dx",
@@ -37,6 +39,11 @@ Every metric is derived from transcripts the client already writes — no
 proxy, no extra instrumentation. Work is grouped by operator instruction:
 a prompt you typed, and everything the agent did before the next one.
 
+Sessions run in throwaway directories — a benchmark harness, a temporary
+clone, anything under /tmp — are excluded. These metrics claim to describe
+how you work, and a simulated session has no operator. Pass
+--include-scratch to measure them anyway.
+
 Time-to-first-token is deliberately absent. The field exists on
 PromptEvent, but a transcript records when a turn finished, never when it
 started streaming, so no passive reader can populate it honestly. It stays
@@ -44,8 +51,9 @@ proxy-only.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts := agentdx.ExtractOptions{
-				Root:   root,
-				Source: agentdx.Source(source),
+				Root:           root,
+				Source:         agentdx.Source(source),
+				IncludeScratch: includeScratch,
 			}
 			if days > 0 {
 				opts.Since = time.Now().AddDate(0, 0, -days)
@@ -70,6 +78,7 @@ proxy-only.`,
 	cmd.Flags().StringVar(&source, "source", "auto", "client: auto | claude-code | codex | cursor | opencode")
 	cmd.Flags().IntVar(&days, "days", 7, "window in days; 0 reads everything")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
+	cmd.Flags().BoolVar(&includeScratch, "include-scratch", false, scratchFlagHelp)
 	return cmd
 }
 

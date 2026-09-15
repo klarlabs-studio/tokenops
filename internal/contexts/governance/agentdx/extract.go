@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/infra/scanscope"
 )
 
 // Source selects which client's transcripts to read.
@@ -40,6 +42,16 @@ type ExtractOptions struct {
 	// that does not carry them cannot leak them. The narrative surfaces
 	// opt in explicitly.
 	WithPromptText bool
+
+	// IncludeScratch keeps sessions run in throwaway directories — a
+	// benchmark harness, a temporary clone, anything under /tmp.
+	//
+	// They are excluded by default because these metrics claim to
+	// describe how the operator works, and a simulated session has no
+	// operator. On one real machine leaving them in made 94% of a 7-day
+	// window synthetic and graded it: 2 turns per instruction against
+	// the operator's real 20, and every dimension an A.
+	IncludeScratch bool
 }
 
 // DefaultRoot returns the conventional Claude Code projects directory.
@@ -68,6 +80,9 @@ func Extract(opts ExtractOptions) ([]Record, error) {
 	files, err := filepath.Glob(filepath.Join(root, "*", "*.jsonl"))
 	if err != nil {
 		return nil, fmt.Errorf("agentdx: glob transcripts: %w", err)
+	}
+	if !opts.IncludeScratch {
+		files = scanscope.Keep(files)
 	}
 	var out []Record
 	for _, path := range files {

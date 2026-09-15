@@ -257,6 +257,23 @@ Your work — last 2d
     · the 2nd instruction edited the same file twice
 ```
 
+**Sessions run in throwaway directories are excluded.** A benchmark
+harness, a temporary clone, anything under `/tmp` or the system temp
+root: `story`, `dx` and `coach prompts` all claim to describe how *you*
+work, and a simulated session has no operator. Pass `--include-scratch`
+to read them anyway.
+
+This is not a rounding error. On one real machine a simulation harness
+was **94% of a 7-day window**, and `dx` graded it: a median of 2.0 turns
+per instruction against the operator's actual 17.0, zero tool calls
+against 8.0, and straight A's over a corpus that contained almost none
+of their work.
+
+Spend is deliberately *not* filtered this way. A simulated session still
+spent real tokens against a real plan, so the ledger and the headroom
+math are right to count it. What it never did was say anything about how
+its operator works.
+
 **A task is inferred, not declared.** A new session always starts one, and
 a pause longer than `--idle-gap` (default 10m) splits one. Every task says
 which of those split it, because a boundary you can see is one you can

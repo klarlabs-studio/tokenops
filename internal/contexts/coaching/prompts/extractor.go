@@ -15,6 +15,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/infra/scanscope"
 )
 
 // UserPrompt is one human-typed turn from a Claude Code session log.
@@ -42,12 +44,16 @@ const (
 
 // ExtractOptions filters the walk. Zero values mean "no filter".
 type ExtractOptions struct {
-	Root      string    // base directory; defaults to ~/.claude/projects / ~/.codex/sessions per Source
-	Source    Source    // which JSONL dialect; empty = auto-detect both
-	Since     time.Time // include turns at or after this instant
-	Until     time.Time // include turns at or before this instant; zero = open
-	SessionID string    // restrict to one session (matches the filename stem)
-	Limit     int       // max prompts to return; 0 = unbounded
+	Root string // base directory; defaults to ~/.claude/projects / ~/.codex/sessions per Source
+	// IncludeScratch keeps sessions run in throwaway directories. The
+	// coach describes the operator's prompting, and a simulation harness
+	// does not prompt — see internal/infra/scanscope.
+	IncludeScratch bool
+	Source         Source    // which JSONL dialect; empty = auto-detect both
+	Since          time.Time // include turns at or after this instant
+	Until          time.Time // include turns at or before this instant; zero = open
+	SessionID      string    // restrict to one session (matches the filename stem)
+	Limit          int       // max prompts to return; 0 = unbounded
 }
 
 // turnsScanBufSize matches the claudecodejsonl reader so very large
@@ -175,6 +181,9 @@ func extractFromRoot(root string, src Source, opts ExtractOptions) ([]UserPrompt
 			return err
 		}
 		if d.IsDir() || !strings.HasSuffix(path, ".jsonl") {
+			return nil
+		}
+		if !opts.IncludeScratch && scanscope.EphemeralPath(path) {
 			return nil
 		}
 		if opts.SessionID != "" {

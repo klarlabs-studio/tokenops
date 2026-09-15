@@ -161,6 +161,8 @@ func newCoachPromptsCmd() *cobra.Command {
 		session    string
 		limit      int
 		jsonOut    bool
+
+		includeScratch bool
 	)
 	cmd := &cobra.Command{
 		Use:   "prompts",
@@ -182,10 +184,11 @@ store. --json emits machine-readable findings for
 agents to consume.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts := prompts.ExtractOptions{
-				Root:      root,
-				Source:    prompts.Source(sourceFlag),
-				SessionID: session,
-				Limit:     limit,
+				Root:           root,
+				Source:         prompts.Source(sourceFlag),
+				SessionID:      session,
+				Limit:          limit,
+				IncludeScratch: includeScratch,
 			}
 			if sinceFlag != "" {
 				since, err := parseSince(sinceFlag)
@@ -222,6 +225,7 @@ agents to consume.`,
 	cmd.Flags().StringVar(&session, "session", "", "restrict to a single session id (filename stem)")
 	cmd.Flags().IntVar(&limit, "limit", 0, "max prompts to extract (0 = unbounded)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON instead of text")
+	cmd.Flags().BoolVar(&includeScratch, "include-scratch", false, scratchFlagHelp)
 	return cmd
 }
 
