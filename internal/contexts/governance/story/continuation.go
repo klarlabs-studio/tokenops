@@ -88,7 +88,8 @@ var continuationCommands = map[string]bool{
 // is a request for work, so none of it can open or title a task.
 var harnessPrefixes = []string{
 	"<bash-input>", "<command-message>", "<command-name>",
-	"<local-command-stdout>", "stop hook feedback:",
+	"<local-command-stdout>", "<local-command-caveat>",
+	"stop hook feedback:",
 }
 
 // continuationOpeners are first words that bind an instruction to the one

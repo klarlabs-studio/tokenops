@@ -240,6 +240,8 @@ tokenops story                      # last 7d, 10 most recent tasks
 tokenops story --days 1 --limit 3
 tokenops story --json               # same account, for an agent to read back
 tokenops story --idle-gap 30m       # coarser task boundaries
+tokenops story --for report         # for someone you bill or report to
+tokenops story --for handoff        # for a teammate picking the work up
 ```
 
 ```
@@ -274,6 +276,42 @@ summed figure (`context_carried_tokens` in JSON) double-counts by
 construction, because every turn re-sends the accumulated context; that is
 the number that reads as $94k when cache-aware pricing says $10k. It is
 there for comparing tasks against each other, never as spend.
+
+#### `--for` — one account, four readings
+
+The structure is one task. The renderings differ because the audiences
+do: four people want the same work described and none of them wants the
+same document.
+
+| `--for` | Reader | Optimised for |
+|---|---|---|
+| `me` *(default)* | you | candour — what happened, including where it went sideways |
+| `agent` (`--json`) | a machine reading its own history back | fields, enumerated |
+| `report` | someone you bill or report to | **defensibility** — evidence readable by someone who was not there |
+| `handoff` | a teammate picking the work up | **state of the world** — what to open first |
+
+`--for report` is a record, not a confession. It carries what the
+transcript actually holds — when the work happened, for how long, at what
+volume, against which files — grouped by day, and it omits the friction
+narrative on purpose: "you told it the third answer was wrong" is candour
+aimed at you, and in front of a client it turns an account of work into an
+apology for it. The footer says what the figures are *not*: wall-clock
+from local transcripts is not a timesheet and not a judgement about what
+is billable.
+
+`--for handoff` is ordered by what needs attention rather than by time —
+work that ended on friction first, then what ran clean, then the files the
+work kept coming back to. It never says a task "landed": a transcript
+records what was attempted, and whether the code works is a question only
+the tests answer.
+
+Both replace your home directory with `~` and elide long paths from the
+left. A document meant for someone else should not carry your username.
+
+Titles are your own instructions in both, quoted rather than
+paraphrased — a summariser can be wrong and a quote cannot. An unknown
+`--for` is an error rather than a silent fall back to the default, because
+that fallback is how someone emails a client the candid rendering.
 
 Prompt text is read at scan time and **never persisted**. The account is
 rebuilt from transcripts on every run.

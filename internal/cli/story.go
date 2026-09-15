@@ -21,12 +21,13 @@ import (
 // there is a problem; the account tells you what the problem was.
 func newStoryCmd() *cobra.Command {
 	var (
-		root    string
-		source  string
-		days    int
-		limit   int
-		idleGap time.Duration
-		jsonOut bool
+		root     string
+		source   string
+		days     int
+		limit    int
+		idleGap  time.Duration
+		jsonOut  bool
+		audience string
 	)
 	cmd := &cobra.Command{
 		Use:   "story",
@@ -42,9 +43,28 @@ task, and a pause longer than --idle-gap splits one. Every task says which
 of those split it, because a boundary you can see is one you can argue
 with. ` + "`tokenops task start|done`" + ` remains the way to mark one exactly.
 
+The account is one structure; --for chooses who it is written for,
+because four people want the same work described and none of them wants
+the same document:
+
+  me        what happened, candidly — the default
+  agent     the same facts enumerated as JSON, for a machine reading it
+            back (--json is the same thing)
+  report    evidence for someone you bill or report to, readable by
+            someone who was not there
+  handoff   the state of the world for a teammate picking the work up
+
+Titles are your own instructions, quoted rather than paraphrased: a
+summariser can be wrong and a quote cannot. No rendering claims the work
+is correct — transcripts record what was attempted, and only the tests
+know the rest.
+
 Prompt text is read at scan time and never persisted. Nothing here is
 stored; the account is rebuilt from transcripts on every run.`,
 		Args: cobra.NoArgs,
+		PreRunE: func(_ *cobra.Command, _ []string) error {
+			return validateAudience(audience)
+		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts := agentdx.ExtractOptions{
 				Root:   root,
@@ -69,10 +89,17 @@ stored; the account is rebuilt from transcripts on every run.`,
 			if limit > 0 && len(tasks) > limit {
 				tasks = tasks[:limit]
 			}
-			if jsonOut {
-				return writeStoryJSON(cmd.OutOrStdout(), tasks, days)
+			out := cmd.OutOrStdout()
+			switch resolveAudience(audience, jsonOut) {
+			case audienceAgent:
+				return writeStoryJSON(out, tasks, days)
+			case audienceReport:
+				writeStoryReport(out, tasks, storyWindow(days))
+			case audienceHandoff:
+				writeStoryHandoff(out, tasks, storyWindow(days))
+			default:
+				writeStoryText(out, tasks, days)
 			}
-			writeStoryText(cmd.OutOrStdout(), tasks, days)
 			return nil
 		},
 	}
@@ -81,8 +108,62 @@ stored; the account is rebuilt from transcripts on every run.`,
 	cmd.Flags().IntVar(&days, "days", 7, "window in days; 0 reads everything")
 	cmd.Flags().IntVar(&limit, "limit", 10, "show at most this many tasks; 0 for all")
 	cmd.Flags().DurationVar(&idleGap, "idle-gap", 0, "pause that starts a new task (default 10m; negative disables splitting)")
-	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (the same as --for agent)")
+	cmd.Flags().StringVar(&audience, "for", audienceMe, "who the account is written for: me | agent | report | handoff")
 	return cmd
+}
+
+// Audiences for `story --for`. The account is one structure; these choose
+// the rendering.
+const (
+	audienceMe      = "me"
+	audienceAgent   = "agent"
+	audienceReport  = "report"
+	audienceHandoff = "handoff"
+)
+
+// validateAudience rejects an unknown audience rather than quietly
+// falling back to the default. A typo that silently produces the
+// operator's own rendering is how someone emails a client the candid one.
+func validateAudience(a string) error {
+	switch strings.ToLower(strings.TrimSpace(a)) {
+	case "", audienceMe, audienceAgent, audienceReport, audienceHandoff:
+		return nil
+	default:
+		return fmt.Errorf("--for %q: want one of %s, %s, %s, %s",
+			a, audienceMe, audienceAgent, audienceReport, audienceHandoff)
+	}
+}
+
+// resolveAudience applies --json, which predates --for and keeps working
+// as the machine rendering it always was.
+func resolveAudience(a string, jsonOut bool) string {
+	if jsonOut {
+		return audienceAgent
+	}
+	a = strings.ToLower(strings.TrimSpace(a))
+	if a == "" {
+		return audienceMe
+	}
+	return a
+}
+
+// storyWindow names the window in the words a reader outside the terminal
+// would use. "last 7d" is shell shorthand; a report goes to someone who
+// has never seen this tool.
+func storyWindow(days int) string {
+	switch {
+	case days <= 0:
+		return "all recorded history"
+	case days == 1:
+		return "the last day"
+	case days == 7:
+		return "the last week"
+	case days%7 == 0:
+		return fmt.Sprintf("the last %d weeks", days/7)
+	default:
+		return fmt.Sprintf("the last %d days", days)
+	}
 }
 
 func reverse(ts []story.Task) {

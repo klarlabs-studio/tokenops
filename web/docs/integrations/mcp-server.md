@@ -15,6 +15,12 @@ answered from the local event store.
 | `tokenops_burn_rate`       | Spend over the last N hours (default 24)                               |
 | `tokenops_forecast`        | Holt-forecasted daily spend for the next horizon_days                  |
 | `tokenops_workflow_trace`  | Reconstructed workflow trace + waste-detector findings                 |
+| `tokenops_agent_dx`        | What the operator's agent sessions are like to work with, graded       |
+| `tokenops_story`           | An account of recent work, task by task — what was asked, what it took, where it went sideways |
+
+`tokenops serve` registers considerably more than this — `tokenops_help`
+lists every tool the running server exposes, which is the answer that
+cannot go stale.
 
 ## Claude Desktop setup
 
