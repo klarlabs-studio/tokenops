@@ -94,19 +94,19 @@ client already writes. No proxy, no extra instrumentation:
 
 ```
 Agent DX — last 7d
-  1997 instructions across 1504 sessions
+  1904 instructions across 1513 sessions
 
 EFFORT PER INSTRUCTION
   turns (median):        3.0        [A]
-  turns (p90):           22.0         ← heavy tail: a minority of instructions cost far more than typical
+  turns (p90):           24.0         ← heavy tail: a minority of instructions cost far more than typical
   wall-clock (median):   29s        [A]
-  context growth/turn:   2216       [A]
+  context growth/turn:   2442       [A]
 
 FRICTION
-  first-try rate:        81.1%      [A]  (no rework, no interrupt, no delegation)
-  rework rate:           8.6%       [B]  (edits revisiting a file within one instruction)
+  first-try rate:        81.8%      [A]  (no rework, no interrupt, no delegation)
+  rework rate:           9.2%       [B]  (edits revisiting a file within one instruction)
   interrupt rate:        0.1%       [A]  (instructions you had to stop)
-  escalation rate:       0.4%       [A]  (instructions delegated to a subagent)
+  escalation rate:       0.5%       [A]  (instructions delegated to a subagent)
 
 Overall: B  (the worst grade, not the average — an experience is
          only as good as its sharpest friction)
