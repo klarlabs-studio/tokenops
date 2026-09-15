@@ -16,8 +16,8 @@ features:
     details: 'read-guard refuses the third redundant read of the same file. fmt compresses a 40k-token command output before it reaches the context window. coach-hook nudges as session cost crosses a budget fraction. session_budget returns a closed action enum the agent branches on: continue, slow_down, switch_model, wait_for_reset.'
   - title: It reads what is already there
     details: 'Passive readers for every client that keeps a local record — Claude Code, Codex CLI, opencode, Cursor. Six vendor-usage pollers. An optional proxy for ground truth. No change to how you or your agents work.'
-  - title: Nothing leaves the machine
-    details: 'Local SQLite, no cloud account, no telemetry, no upload path to secure. Prompt text is read at scan time and never persisted to the store. The dashboard is a localhost daemon behind a shared secret you can rotate.'
+  - title: Your prompts never leave this machine
+    details: 'Prompt text and file contents are read at scan time and never persisted — only derived numbers are. Local SQLite, no cloud account, no telemetry. The dashboard is a localhost daemon behind a shared secret you can rotate.'
   - title: Honest about what it cannot see
     details: 'Every prediction carries signal_quality (low / medium / high) plus a one-line caveat and an upgrade path. A default install reports low confidence and says so. Time-to-first-token is reported only under the proxy, because no transcript records it.'
 ---
@@ -166,20 +166,27 @@ action enum, calibrated confidence:
 without parsing prose. `signal_quality.level` lets it decide how much to trust
 the call: stay aggressive on `high`, defer to the human on `low`.
 
-## Nothing leaves the machine
-
-There is no upload path to secure, because there is no upload. The event store
-is a SQLite file under `~/.tokenops`. There is no cloud account to create and
-no telemetry to opt out of.
+## Your code and your prompts never leave this machine
 
 Prompt text is read at scan time and **never written to the store** — the
-coaching and DX surfaces compute over it in memory and persist only the
-derived metrics. The dashboard is a local daemon behind a shared secret you
-mint and rotate yourself (`tokenops dashboard rotate-token`).
+coaching, DX and story surfaces compute over it in memory and persist only
+derived numbers. Your files are read where they already sit and are never
+copied anywhere.
 
-That is a stronger guarantee than redaction-then-upload: redaction is a filter
-that can miss, and a hosted copy is a copy. Here, your sessions never become
-anyone else's rows.
+Today there is nowhere for them to go: the event store is a SQLite file under
+`~/.tokenops`, there is no cloud account to create, and no telemetry to opt out
+of. The dashboard is a local daemon behind a shared secret you mint and rotate
+yourself (`tokenops dashboard rotate-token`).
+
+The guarantee is about the content, not the address. Everything TokenOps
+derives — a rate, a grade, a token count, a headroom percentage — is computed
+here, from material that stays here. The words you typed and the files you
+opened are not in that set and cannot be moved into it by configuration.
+
+That is a stronger guarantee than redaction-then-upload. Redaction is a filter
+over unbounded input, and a filter can miss: a prompt can contain anything, and
+whoever wrote the patterns had to guess what. Here there is no sensitive
+payload to redact, because the sensitive part never enters the pipeline.
 
 ## Cache-aware, or off by 9×
 
