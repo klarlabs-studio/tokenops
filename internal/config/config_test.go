@@ -463,3 +463,38 @@ func TestValidateAcceptsUnsetQuietPolicy(t *testing.T) {
 		t.Fatalf("Validate() with no quiet policy = %v, want nil", err)
 	}
 }
+
+// A policy that cannot mean anything is rejected rather than absorbed.
+func TestValidateRejectsImpossibleSmartRouting(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		sr   SmartRoutingConfig
+	}{
+		{"window above 100", SmartRoutingConfig{Enabled: true, WindowPctAbove: 140}},
+		{"negative window", SmartRoutingConfig{Enabled: true, WindowPctAbove: -1}},
+		{"quality above 1", SmartRoutingConfig{Enabled: true, Quality: 1.5}},
+	} {
+		cfg := Default()
+		cfg.Optimizer.SmartRouting = tc.sr
+		if err := cfg.Validate(); err == nil {
+			t.Errorf("%s: Validate() = nil, want an error", tc.name)
+		}
+	}
+}
+
+// Smart routing alone is enough to wire the router: the whole point is
+// that it needs no rules table.
+func TestRouterConfigWiredBySmartRoutingAlone(t *testing.T) {
+	var o OptimizerConfig
+	if o.RouterConfig() != nil {
+		t.Fatal("RouterConfig() non-nil with neither rules nor a policy")
+	}
+	o.SmartRouting.Enabled = true
+	rc := o.RouterConfig()
+	if rc == nil {
+		t.Fatal("RouterConfig() = nil with smart routing on; the policy needs no rules")
+	}
+	if !rc.Policy.Enabled {
+		t.Error("the policy did not reach the router config")
+	}
+}

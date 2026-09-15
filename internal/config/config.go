@@ -336,6 +336,9 @@ type OptimizerConfig struct {
 	// RoutingMinQuality is the quality floor below which a routing rule
 	// is skipped silently. Zero falls back to the router default (0.7).
 	RoutingMinQuality float64 `yaml:"routing_min_quality"`
+	// SmartRouting decides routes nobody wrote a rule for, per turn and
+	// from measured signal. Disabled by default.
+	SmartRouting SmartRoutingConfig `yaml:"smart_routing,omitempty"`
 	// CommandFmt configures deterministic command-output compression
 	// (the `tokenops fmt` wrapper and the proxy tool-output optimizer).
 	CommandFmt CommandFmtConfig `yaml:"command_fmt"`
@@ -415,12 +418,49 @@ type RoutingRuleConfig struct {
 	WhenWindowPctAbove float64 `yaml:"when_window_pct_above,omitempty"`
 }
 
+// SmartRoutingConfig is the rules-free routing policy: instead of a
+// from/to pair written once, decide each turn from what kind of work it
+// is, how full the plan's rate-limit window is, and what the pricing
+// table currently calls cheapest.
+//
+// It only ever routes downwards, only for work the classifier is
+// confident is mechanical, and only while the window is genuinely tight.
+// The preferred-model ceiling still outranks it, so it cannot raise a
+// bill.
+type SmartRoutingConfig struct {
+	// Enabled turns the policy on. Off is the behaviour that shipped
+	// before it existed: a request no rule matches is left alone.
+	Enabled bool `yaml:"enabled,omitempty"`
+	// WindowPctAbove is how full the window must be before conserving
+	// starts. Zero takes the router default (70).
+	//
+	// There is deliberately no "always" setting: on a flat-rate plan a
+	// request costs nothing at the margin, so routing down while there is
+	// headroom trades quality for a saving that does not exist.
+	WindowPctAbove float64 `yaml:"window_pct_above,omitempty"`
+	// Quality is the confidence that a mechanical turn survives the
+	// cheapest model, gated by routing_min_quality like any rule. Zero
+	// takes the router default (0.75).
+	Quality float64 `yaml:"quality,omitempty"`
+}
+
+// Validate rejects a policy that cannot mean anything.
+func (s SmartRoutingConfig) Validate() error {
+	if s.WindowPctAbove < 0 || s.WindowPctAbove > 100 {
+		return fmt.Errorf("optimizer.smart_routing.window_pct_above must be in [0,100], got %g", s.WindowPctAbove)
+	}
+	if s.Quality < 0 || s.Quality > 1 {
+		return fmt.Errorf("optimizer.smart_routing.quality must be in [0,1], got %g", s.Quality)
+	}
+	return nil
+}
+
 // RouterConfig maps optimizer.routing_rules into the router's domain
 // config. Returns nil when no rules are configured. Shared by the CLI
 // replay, MCP serve, and the daemon's active-mode proxy so all
 // surfaces route identically.
 func (o OptimizerConfig) RouterConfig() *router.Config {
-	if len(o.RoutingRules) == 0 {
+	if len(o.RoutingRules) == 0 && !o.SmartRouting.Enabled {
 		return nil
 	}
 	rules := make([]router.Rule, 0, len(o.RoutingRules))
@@ -440,6 +480,11 @@ func (o OptimizerConfig) RouterConfig() *router.Config {
 		MinQuality:  o.RoutingMinQuality,
 		ProposeOnly: o.Mode.Proposes(),
 		ObserveOnly: o.Mode.ObserveOnly(),
+		Policy: router.Policy{
+			Enabled:        o.SmartRouting.Enabled,
+			WindowPctAbove: o.SmartRouting.WindowPctAbove,
+			Quality:        o.SmartRouting.Quality,
+		},
 	}
 }
 
@@ -809,6 +854,9 @@ func (c Config) Validate() error {
 		}
 	}
 	if err := c.Coaching.Quiet.Validate(); err != nil {
+		return err
+	}
+	if err := c.Optimizer.SmartRouting.Validate(); err != nil {
 		return err
 	}
 	for i, l := range c.Coaching.ContextLimits {

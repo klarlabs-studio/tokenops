@@ -205,6 +205,11 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if err := mcp.RegisterStoryTools(srv, mcp.StoryDeps{}); err != nil {
 		return fmt.Errorf("register story tools: %w", err)
 	}
+	if err := mcp.RegisterRoutingAdviceTools(srv, mcp.RoutingAdviceDeps{
+		ConfigGetter: planDeps.ConfigGetter, Config: planDeps.Config, Store: planDeps.Store,
+	}); err != nil {
+		return fmt.Errorf("register routing advice tools: %w", err)
+	}
 	if err := mcp.RegisterApprovalTools(srv, mcp.ApprovalDeps{}); err != nil {
 		return fmt.Errorf("register approval tools: %w", err)
 	}

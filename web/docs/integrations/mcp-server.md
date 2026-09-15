@@ -17,6 +17,7 @@ answered from the local event store.
 | `tokenops_workflow_trace`  | Reconstructed workflow trace + waste-detector findings                 |
 | `tokenops_agent_dx`        | What the operator's agent sessions are like to work with, graded       |
 | `tokenops_story`           | An account of recent work, task by task — what was asked, what it took, where it went sideways |
+| `tokenops_routing_advise`  | Which model a turn should run on, decided per turn from measured signal. Recommends; never applies |
 
 `tokenops serve` registers considerably more than this — `tokenops_help`
 lists every tool the running server exposes, which is the answer that
