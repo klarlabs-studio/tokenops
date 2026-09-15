@@ -1,5 +1,119 @@
 # Changelog
 
+## 0.55.0 - 2026-09-15
+
+Coaching gains a single control point, and sessions gain an account of
+what happened in them. Both were reachable only by reading code before.
+
+### Added
+
+- **`coaching.delivery` — one axis for every coaching channel.** The two
+  hooks that speak first, `coach-hook` and `read-guard`, read no config
+  at all: they took flags, and `tokenops init` baked those flags into
+  `settings.json`. Configuring the coach meant hand-editing a command
+  line in `~/.claude/settings.json`, and changing it meant re-registering
+  the hook.
+
+  The rungs are graded by *interference* rather than by who initiated,
+  because a non-blocking nudge and a refused tool call are not the same
+  imposition:
+
+  - `observe` — records everything, answers when asked. Hooks stay
+    installed but say nothing, while still keeping their ledgers.
+  - `advise` — plus the coach speaks unprompted but never blocks.
+  - `intervene` — plus the coach acts: `read-guard` refuses a redundant
+    re-read before it costs a token.
+
+  `advise` is the default because it is exactly what the hooks did
+  before this key existed. **Upgrading changes nothing until you say so.**
+
+  `tokenops coach delivery [observe|advise|intervene]` shows or sets it,
+  and takes effect immediately — the hooks resolve it on every
+  invocation, so there is nothing to re-install.
+
+- **`tokenops story` — what you asked for, what the agent did, and where
+  it went sideways.** `dx` answers "what are my sessions like" in
+  aggregate; nothing answered "what happened in this one".
+
+  The unit is a task, and it is inferred rather than demanded. A new
+  session opens one; a pause longer than `--idle-gap` splits one; an
+  instruction that only means something in reference to the work in
+  flight ("Go", "proceed", "no, like that") never opens one, however long
+  the pause. Every task reports which of those split it.
+
+  `--json` renders the same account for an agent reading its own history
+  back. Prompt text is read at scan time and never persisted.
+
+- **`agentdx.Units()`** makes the instruction unit a first-class value
+  instead of private state inside `Compute`, which now folds over it — so
+  the metrics and the narrative cannot drift into two definitions of
+  "rework".
+
+### Changed
+
+- **`hooks install` no longer pins `--mode` on read-guard.** Pinning is
+  what made `coaching.delivery` unreachable: the flag always won, so the
+  config key changed nothing until the hook was re-registered. An
+  explicit `--mode` still wins, which is how one hook gets pinned against
+  config deliberately.
+
+- **`init` no longer silently promotes read-guard to blocking** when its
+  ledger justifies it. Promoting a hook from observing to refusing the
+  agent's reads is precisely what `intervene` exists to gate. The
+  evidence is still computed and now reported, with the command that acts
+  on it.
+
+- **`make install-hooks` arms the whole local gate.** warden and the
+  repository's own protected-branch hook both wanted
+  `.git/hooks/pre-push`, and git allows one file there — so installing
+  either silently disarmed the other, and whichever ran last decided
+  which protection you had. The branch guard is now warden's first
+  pre-push step. Without warden on PATH the target still installs the
+  standalone guard, so branch protection never becomes conditional.
+
+- **Suppression governance checks liveness, not recency.** The 120-day
+  timer failed `go test ./...`, so a governance deadline was
+  indistinguishable from a broken build and a one-line date bump was the
+  cheapest way out. It was also measuring the wrong thing: of 27
+  `scan.exclude` entries, 14 suppressed nothing and 12 pointed at paths
+  that had not existed since the DDD refactor. Blocking checks now
+  require every entry to resolve to something git tracks unless it
+  declares `# Transient:`; review age moved to
+  `scripts/suppression-review-due.py` (`make sec-review`), which warns
+  without blocking.
+
+- **The privacy claim is scoped to content rather than address.** "There
+  is no upload path to secure" was true and would stop being true the day
+  a team tier ships. What is guaranteed is that prompts, file contents
+  and transcripts never leave the machine, and that everything TokenOps
+  derives is a number computed here from material that stays here.
+
+### Fixed
+
+- **Harness-injected entries were counted as operator instructions.**
+  `<task-notification>`, `<command-name>`, `<system-reminder>` and the
+  slash-command caveat arrive in the transcript with the user role
+  because that is the only role available to them. They inflated every
+  per-instruction figure, `dx` included. The sample output on the docs
+  landing page is regenerated accordingly.
+
+- **Concurrent sessions interleave, and `story` split on it.** Sorting
+  every unit into one global time order made the session appear to change
+  at nearly every unit, turning each instruction into its own task. Units
+  are partitioned by session before any boundary is inferred.
+
+- **Summed per-turn tokens are not a cost.** Every turn re-sends the
+  accumulated context, so the sum double-counts — the figure that reads
+  as $94k where cache-aware pricing says $10k. `story` reports peak
+  context, and the JSON field is named `context_carried_tokens`.
+
+- **Nine GitHub Actions findings were hidden behind a suppression written
+  for a different rule.** `.github/workflows/*.yml` was excluded for
+  SEC-659/697, which no longer fires there; what it was absorbing was
+  IAC-153/306/308/309/314. All ten are now triaged into
+  `security/vex.json` with fingerprints minted from the scanner that
+  gates CI, not from a local one.
+
 ## 0.54.3 - 2026-08-26
 
 Third attempt at delivering v0.54.1's security fix to Homebrew. The
