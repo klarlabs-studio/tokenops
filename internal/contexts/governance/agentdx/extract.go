@@ -35,6 +35,11 @@ type ExtractOptions struct {
 	Root string
 	// Since drops entries older than this. Zero reads everything.
 	Since time.Time
+	// WithPromptText carries each instruction's text into Record.Text.
+	// Off by default: the metrics never needed the words, and a scan
+	// that does not carry them cannot leak them. The narrative surfaces
+	// opt in explicitly.
+	WithPromptText bool
 }
 
 // DefaultRoot returns the conventional Claude Code projects directory.
@@ -70,7 +75,7 @@ func Extract(opts ExtractOptions) ([]Record, error) {
 		if err != nil {
 			continue
 		}
-		out = append(out, readTranscript(f, opts.Since)...)
+		out = append(out, readTranscript(f, opts.Since, opts.WithPromptText)...)
 		_ = f.Close()
 	}
 	return out, nil
@@ -133,7 +138,7 @@ func callSignature(name string, input json.RawMessage) string {
 // operator stops a turn.
 const interruptMarker = "[request interrupted"
 
-func readTranscript(r io.Reader, since time.Time) []Record {
+func readTranscript(r io.Reader, since time.Time, withText bool) []Record {
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 1<<20), 8<<20)
 	var out []Record
@@ -172,6 +177,9 @@ func readTranscript(r io.Reader, since time.Time) []Record {
 			// Most user rows are tool results the agent fed back to
 			// itself. Only a typed instruction opens a unit of work.
 			if isOperatorPrompt(parts, text) {
+				if withText {
+					base.Text = text
+				}
 				base.Kind = KindPrompt
 				base.Rejects = IsRejection(text)
 				out = append(out, base)
