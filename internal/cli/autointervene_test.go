@@ -58,3 +58,48 @@ func TestGuardModeStaysActiveOnReclaimedEvidence(t *testing.T) {
 		t.Errorf("mode = %q, want active — the guard is already recovering tokens", mode)
 	}
 }
+
+// The case is made with the operator's own numbers and names the one
+// command that acts on them. A recommendation without the command is a
+// complaint.
+func TestPromotionCaseCitesTheLedgerAndTheCommand(t *testing.T) {
+	msg := promotionCase(readguard.Stats{
+		Events: 5068, WouldBlock: 225, ReclaimableTok: 397054, DistinctSessions: 22,
+	})
+	if msg == "" {
+		t.Fatal("no case made for 397k reclaimable tokens across 22 sessions")
+	}
+	for _, want := range []string{"397", "22", "225", "tokenops coach delivery intervene"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("case %q is missing %q", msg, want)
+		}
+	}
+}
+
+// Below the evidence bar there is nothing to argue. Asking for an
+// intervention the numbers do not justify is how a tool teaches operators
+// to ignore it.
+func TestPromotionCaseSilentWithoutEvidence(t *testing.T) {
+	for _, s := range []readguard.Stats{
+		{},
+		{Events: 40, WouldBlock: 1, ReclaimableTok: 900, DistinctSessions: 2},
+	} {
+		if msg := promotionCase(s); msg != "" {
+			t.Errorf("promotionCase(%+v) = %q, want no case", s, msg)
+		}
+	}
+}
+
+// A guard that has already blocked something has had this argument and
+// won it — whether by `coach delivery intervene` or a pinned
+// `--mode=active`. Repeating the case is nagging about a settled
+// decision.
+func TestPromotionCaseSilentOnceTheGuardBlocks(t *testing.T) {
+	s := readguard.Stats{
+		Events: 5000, Blocked: 215, ReclaimedTok: 387152,
+		ReclaimableTok: 400_000, DistinctSessions: 22,
+	}
+	if msg := promotionCase(s); msg != "" {
+		t.Errorf("promotionCase on an already-blocking guard = %q, want silence", msg)
+	}
+}

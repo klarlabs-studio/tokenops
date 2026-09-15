@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -143,5 +145,62 @@ func TestSpecsForDoesNotPinGuardMode(t *testing.T) {
 				t.Fatalf("specsFor pinned --mode in %v; config must govern the default", sp.args)
 			}
 		}
+	}
+}
+
+// writeGuardLedger writes a read-guard ledger whose would-block events
+// clear the evidence bar, and returns its dir.
+func writeGuardLedger(t *testing.T, events int) string {
+	t.Helper()
+	dir := t.TempDir()
+	var b strings.Builder
+	for i := range events {
+		fmt.Fprintf(&b, `{"ts":"2026-09-15T12:00:%02dZ","mode":"observe","session":"s%d","path":"/a/b%d.go","action":"would_block","est_tokens":20000,"repeat":true}`+"\n", i%60, i, i)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(b.String()), 0o600); err != nil {
+		t.Fatalf("write guard ledger: %v", err)
+	}
+	return dir
+}
+
+// Who pulls the trigger follows coaching.delivery itself rather than a
+// second knob: observe records and says nothing, advise makes the case,
+// and intervene is already there so there is nothing left to ask for.
+func TestPromotionNudgeFollowsDelivery(t *testing.T) {
+	guardDir := writeGuardLedger(t, 10)
+	for _, tc := range []struct {
+		delivery string
+		wantCase bool
+	}{
+		{"observe", false},
+		{"advise", true},
+		{"intervene", false},
+		{"", true}, // the default is advise
+	} {
+		rf := &rootFlags{configPath: writeDeliveryConfig(t, tc.delivery)}
+		got := promotionNudge(rf, guardDir) != ""
+		if got != tc.wantCase {
+			t.Errorf("delivery %q: case made = %v, want %v", tc.delivery, got, tc.wantCase)
+		}
+	}
+}
+
+// Nothing here promotes anything. #240 removed exactly that behaviour
+// from `init`, and the case must remain a case.
+func TestPromotionNudgeNeverWritesTheConfig(t *testing.T) {
+	path := writeDeliveryConfig(t, "advise")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	if promotionNudge(&rootFlags{configPath: path}, writeGuardLedger(t, 10)) == "" {
+		t.Fatal("no case made, so this proves nothing")
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("re-read config: %v", err)
+	}
+	if string(before) != string(after) {
+		t.Error("the coach rewrote coaching.delivery; promoting is the human's call")
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
+	"go.klarlabs.de/tokenops/internal/infra/readguard"
 )
 
 // stopHookInput is the JSON Claude Code sends a Stop hook on stdin. Only the
@@ -41,8 +42,9 @@ type stopHookOutput struct {
 // subcommands install and inspect it.
 func newCoachHookCmd(rf *rootFlags) *cobra.Command {
 	var (
-		budget float64
-		dir    string
+		budget   float64
+		dir      string
+		guardDir string
 	)
 	cmd := &cobra.Command{
 		Use:   "coach-hook",
@@ -71,11 +73,13 @@ much your sessions have spent and which budget alerts fired.`,
 			cfg.BudgetUSD = budget
 			cfg.Enabled = advisoryCoaching(rf)
 			cfg.Quiet = quietPolicy(rf)
+			cfg.Promotion = promotionNudge(rf, guardDir)
 			return runCoachHook(cmd, dir, cfg)
 		},
 	}
 	cmd.Flags().Float64Var(&budget, "budget", coachhook.DefaultBudgetUSD, "per-session API-equivalent USD budget the alert fractions measure against")
 	cmd.Flags().StringVar(&dir, "dir", "", "state/ledger dir (defaults to ~/.tokenops/coach-hook)")
+	cmd.Flags().StringVar(&guardDir, "guard-dir", "", "read-guard ledger dir to read the promotion case from (defaults to ~/.tokenops/read-guard)")
 	cmd.AddCommand(newCoachHookHookCmd())
 	cmd.AddCommand(newCoachHookStatsCmd())
 	return cmd
@@ -171,6 +175,9 @@ func newCoachHookStatsCmd() *cobra.Command {
 					fmt.Fprintf(out, "    %-5s %d\n", tier, n)
 				}
 			}
+			if s.PromotionNudges > 0 {
+				fmt.Fprintf(out, "  read-guard case argued: %d session(s)\n", s.PromotionNudges)
+			}
 			if len(s.Suppressed) > 0 {
 				fmt.Fprintf(out, "  held back by coaching.quiet: %d\n", totalOf(s.Suppressed))
 				for _, rule := range []string{"min_interval", "max_per_session"} {
@@ -222,6 +229,40 @@ func advisoryCoaching(rf *rootFlags) bool {
 		return config.CoachingConfig{}.AllowsAdvice()
 	}
 	return cfg.Coaching.AllowsAdvice()
+}
+
+// promotionNudge builds the case for letting the read guard start
+// blocking, or returns empty when nobody should hear it.
+//
+// Who pulls the trigger follows `coaching.delivery` itself rather than a
+// second knob, because it is the same question that ladder already
+// answers:
+//
+//	observe    — record the evidence, say nothing
+//	advise     — make the case, wait for the human
+//	intervene  — already there
+//
+// So `advise` is the only level that argues. At `observe` the coach is
+// silent by construction; at `intervene` the guard is already refusing
+// re-reads and there is nothing left to ask for.
+func promotionNudge(rf *rootFlags, guardDir string) string {
+	cfg, err := loadConfig(rf)
+	if err != nil {
+		// An unreadable config resolves to advise elsewhere in this file,
+		// but silence is the right failure here: the case is a standing
+		// one that will be just as true after the config is fixed, and
+		// arguing for an intervention on a config we could not read is
+		// the wrong direction to fail in.
+		return ""
+	}
+	if cfg.Coaching.DeliveryLevel() != config.DeliveryAdvise {
+		return ""
+	}
+	stats, err := readguard.ReadStats(guardDir)
+	if err != nil {
+		return ""
+	}
+	return promotionCase(stats)
 }
 
 // quietPolicy reads coaching.quiet into the hook's rate limit.

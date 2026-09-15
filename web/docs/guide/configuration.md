@@ -51,12 +51,47 @@ behaviour against the config when you want one hook to differ.
 `advise` is the default because it is what the hooks already did before
 this setting existed — upgrading changes nothing until you say so.
 
+#### The coach argues for `intervene`; it never takes it
+
+`read-guard` keeps a ledger of the redundant re-reads it *would* have
+blocked. Once that evidence crosses the bar, the coach makes the case
+during an ordinary session — with your own numbers and the one command
+that acts on them:
+
+```
+tokenops: read-guard has watched ~397k tokens of redundant re-reads go by
+across 22 sessions — 225 reads it would have refused, and did not.
+`tokenops coach delivery intervene` lets it refuse them before they cost
+anything.
+```
+
+Who pulls the trigger follows `coaching.delivery` itself rather than a
+second knob, because it is the same question that ladder already answers:
+
+| Level | What happens with the evidence |
+|---|---|
+| `observe` | Recorded. Nothing is said. |
+| `advise` | The case is made, once per session. The decision stays yours. |
+| `intervene` | Already there — the guard is refusing re-reads, so there is nothing to ask for. |
+
+It never promotes itself. Flipping a hook from observing to refusing the
+agent's reads is exactly what `intervene` exists to gate, and a tool that
+crosses that line on its own has decided the question the gate was there
+to ask. A guard that has already blocked something is never argued with
+again, whether it got there by `coach delivery intervene` or a pinned
+`--mode=active`.
+
 #### `coaching.quiet` — how often the coach may speak
 
 Every finding the coach can raise already latches: a budget tier fires
-once per session and then stays quiet. `coaching.quiet` exists for the
-case a latch cannot see — two *different* findings landing back to back,
-which reads as nagging however reasonable each one was on its own.
+once per session and then stays quiet, and so does the read-guard case
+above. `coaching.quiet` exists for the case a latch cannot see — two
+*different* findings landing back to back, which reads as nagging however
+reasonable each one was on its own.
+
+The coach also says at most one thing per Stop, and the budget tier goes
+first: it is about the session in flight, while the read-guard case will
+be just as true next turn.
 
 | Key | Meaning |
 |---|---|
