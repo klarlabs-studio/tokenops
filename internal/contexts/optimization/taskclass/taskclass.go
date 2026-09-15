@@ -119,10 +119,29 @@ func Classify(body []byte, cfg Config) Signals {
 		return Signals{Class: Unknown, Reason: "no message content to inspect"}
 	}
 
+	return ClassifyTurn(lastInstruction, float64(toolParts)/float64(totalParts), cfg)
+}
+
+// ClassifyTurn is the classifier itself, over signals a caller already
+// has: the operator's latest instruction and how much of the exchange
+// around it was tool traffic.
+//
+// Split out from Classify so the two planes cannot disagree. Routing is
+// decided in the request path from a chat body and advised out of band
+// from an instruction the agent hands over, and two classifiers reaching
+// different verdicts about the same turn would be worse than having only
+// one of the paths at all.
+//
+// A caller with no tool-density signal passes zero, which can only ever
+// make the verdict more conservative: the mechanical branch requires
+// density, so the turn falls through to Unknown and the model is left
+// alone.
+func ClassifyTurn(instruction string, toolDensity float64, cfg Config) Signals {
+	cfg = cfg.withDefaults()
 	sig := Signals{
-		InstructionWords: len(strings.Fields(lastInstruction)),
-		ToolDensity:      float64(toolParts) / float64(totalParts),
-		Regenerate:       isRejection(lastInstruction),
+		InstructionWords: len(strings.Fields(instruction)),
+		ToolDensity:      toolDensity,
+		Regenerate:       isRejection(instruction),
 	}
 
 	switch {

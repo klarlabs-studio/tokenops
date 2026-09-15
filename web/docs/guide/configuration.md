@@ -174,6 +174,10 @@ pricing:
 
 optimizer:
   routing_min_quality: 0.7    # skip rules below this quality floor
+  smart_routing:              # decide per turn, with no rules (see below)
+    enabled: false
+    window_pct_above: 70      # conserve only once the window is this full
+    quality: 0.75             # confidence a mechanical turn survives it
   routing_rules:              # model-routing optimizer (see below)
     - provider: anthropic
       from_model: "claude-fable-5*"
@@ -241,6 +245,68 @@ logs the intervention, and records an applied optimization event
 the originally requested model, so you can always audit what clients
 asked for versus what was served. Routing never breaks a request — any
 parse failure forwards the original body untouched.
+
+## Smart routing (`optimizer.smart_routing`)
+
+A routing rule is a decision you made once, in advance, about a pair of
+model names. That is a reasonable thing to be *able* to write and a poor
+thing to *have* to write: the rule cannot see the turn it is deciding
+about, so it is either too broad to be safe or too narrow to fire, and it
+goes stale the moment a model is renamed.
+
+`smart_routing` is the same decision made per turn, from signal that is
+actually measured:
+
+| Signal | Where it comes from |
+|---|---|
+| What kind of work this turn is | the task classifier — a terse instruction over mostly tool traffic reads as mechanical; a long specifying one, or one that rejects the last answer, reads as reasoning |
+| How full the plan's rate-limit window is | the vendor's own meter where one exists, the plan-consumption heuristic otherwise |
+| What is cheapest right now | the live pricing table, not a model name written into config |
+
+Nobody writes a `from`/`to` pair, so nobody has to maintain one. A
+configured rule always wins where one matches; the policy only decides
+turns no rule covers.
+
+**It is deliberately narrow, and every narrowing is deliberate:**
+
+- **Downwards only.** The preferred-model ceiling outranks it, so it can
+  never raise a bill.
+- **Mechanical work only.** Routing a reasoning turn down is the quality
+  trade you did not ask for. When the classifier abstains, so does the
+  policy.
+- **Only while the window is tight.** There is no "conserve always"
+  setting. On a flat-rate plan a request costs nothing at the margin, so
+  routing down while you have headroom trades quality for a saving that
+  does not exist.
+- **An unmeasured window is not a full one.** If the meter is not
+  reporting, the policy stays put and says so. This meter read 0/200 for
+  months on a real machine; acting on that would have degraded quality to
+  relieve a shortage that was not happening.
+
+Cheapest is not the same as best, and that is the honest limit of a
+policy with no rules in it: if a provider's rate card lists a cheap model
+you would never want, the policy will pick it. The gates above are what
+make that tolerable — and if you want a specific target, write a rule.
+
+### Where routing bites, and the way round it
+
+Enforcement means rewriting the model in the request, which needs the
+proxy: `mode: active` plus a base-URL override. Most operators never wire
+that, and on those machines the optimizer holds an opinion nobody can
+hear.
+
+So the same policy is also reachable as **advice**, through the MCP tool
+`tokenops_routing_advise`. An agent hands it the instruction it is about
+to act on and the model it would otherwise use, and gets back `stay` or
+`switch` with the reason, the class, and the window reading. It
+recommends and never applies — the model stays the caller's choice, and
+ultimately yours.
+
+That path needs no proxy and no base-URL override, which makes it the one
+routing surface available on every client that speaks MCP. It runs the
+same policy the request path runs, deliberately: advice that disagreed
+with enforcement would be worse than no advice, because you would be
+surprised twice.
 
 ## Command-output compression (`command_fmt`)
 

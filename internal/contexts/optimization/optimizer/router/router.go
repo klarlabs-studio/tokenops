@@ -97,6 +97,10 @@ type Config struct {
 	// not fill the operator's queue with decisions it was told not to
 	// act on.
 	ObserveOnly bool
+	// Policy decides routes the rules table does not cover, per turn and
+	// from measured signal rather than from a from/to pair written once.
+	// Disabled by default.
+	Policy Policy
 	// WindowPressure reports how full the provider's rate-limit window
 	// is, as a percentage, and whether that reading is trustworthy at
 	// all. Rules carrying WhenWindowPctAbove consult it. Nil means no
@@ -136,7 +140,12 @@ func (r *Router) Run(_ context.Context, req *optimizer.Request) ([]optimizer.Rec
 	}
 	rule, ok := r.matchRule(req.Provider, req.Model)
 	if !ok {
-		return nil, nil
+		// Nothing written for this model. The policy decides from the
+		// turn itself, and is off unless the operator asked for it.
+		rule, ok = r.policyRule(req.Provider, req.Model, req.Body)
+		if !ok {
+			return nil, nil
+		}
 	}
 	if rule.Quality < r.cfg.MinQuality {
 		return nil, nil
