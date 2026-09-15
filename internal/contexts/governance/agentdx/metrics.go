@@ -63,6 +63,16 @@ type Record struct {
 	// just been given. It is the closest thing to a quality verdict a
 	// transcript holds: they read the reply and said it was wrong.
 	Rejects bool
+	// Text is the operator's instruction, for KindPrompt only, and only
+	// when the extraction was asked to carry it
+	// (ExtractOptions.WithPromptText). The narrative surfaces need the
+	// words; the metrics never did, so this stays opt-in and off by
+	// default.
+	//
+	// Record has no struct tags and is never serialised. Prompt text
+	// lives in memory for the length of a scan and is not written to the
+	// event store — the rule every coaching surface here follows.
+	Text string
 }
 
 // sortedByTime returns records in chronological order without mutating
@@ -189,123 +199,60 @@ func Compute(records []Record) Metrics {
 	if len(records) == 0 {
 		return m
 	}
-	sorted := sortedByTime(records)
 
+	// Sessions and compactions are counted over every record, not over
+	// units: a compaction happens between instructions, and a session
+	// exists whether or not anyone typed into it.
 	sessions := map[string]bool{}
+	compactions := 0
+	for _, r := range records {
+		if r.SessionID != "" {
+			sessions[r.SessionID] = true
+		}
+		if r.Kind == KindCompaction {
+			compactions++
+		}
+	}
+
+	units := Units(records)
+
 	var (
 		turnsPerPrompt  []float64
-		compactions     int
-		totalEdits      int
-		reworkEdits     int
-		promptsWithTask int
-		interrupted     int
 		growths         []float64
 		durations       []float64
 		tokensPer       []float64
 		toolsPer        []float64
+		totalEdits      int
+		reworkEdits     int
+		promptsWithTask int
+		interrupted     int
 		firstTry        int
 	)
-
-	// Per-unit state, reset at every operator instruction.
-	var (
-		inUnit       bool
-		unitTurns    int
-		unitEdited   = map[string]bool{}
-		unitTask     bool
-		unitStopped  bool
-		unitRework   bool
-		unitTools    int
-		unitTokens   int64
-		unitStart    time.Time
-		unitLast     time.Time
-		lastInputTok int64
-	)
-
-	closeUnit := func() {
-		if !inUnit {
-			return
+	for _, u := range units {
+		turnsPerPrompt = append(turnsPerPrompt, float64(u.Turns))
+		toolsPer = append(toolsPer, float64(u.ToolCalls))
+		if u.Tokens > 0 {
+			tokensPer = append(tokensPer, float64(u.Tokens))
 		}
-		turnsPerPrompt = append(turnsPerPrompt, float64(unitTurns))
-		toolsPer = append(toolsPer, float64(unitTools))
-		if unitTokens > 0 {
-			tokensPer = append(tokensPer, float64(unitTokens))
+		if d := u.Duration(); d > 0 {
+			durations = append(durations, d.Seconds())
 		}
-		// Only time a unit that actually produced work. A prompt with no
-		// turns after it is the operator typing at the end of a session,
-		// and timing it would measure how long they left the window open.
-		if unitTurns > 0 && !unitLast.IsZero() && unitLast.After(unitStart) {
-			durations = append(durations, unitLast.Sub(unitStart).Seconds())
-		}
-		if unitTask {
+		growths = append(growths, u.Growths...)
+		totalEdits += u.Edits
+		reworkEdits += u.ReworkEdits
+		if u.Escalated {
 			promptsWithTask++
 		}
-		if unitStopped {
+		if u.Interrupted {
 			interrupted++
 		}
-		if unitTurns > 0 && !unitRework && !unitStopped && !unitTask {
+		if u.FirstTry() {
 			firstTry++
 		}
 	}
 
-	for _, r := range sorted {
-		if r.SessionID != "" {
-			sessions[r.SessionID] = true
-		}
-		switch r.Kind {
-		case KindPrompt:
-			closeUnit()
-			inUnit = true
-			unitTurns = 0
-			unitEdited = map[string]bool{}
-			unitTask = false
-			unitStopped = false
-			unitRework = false
-			unitTools = 0
-			unitTokens = 0
-			unitStart = r.At
-			unitLast = time.Time{}
-			lastInputTok = 0
-		case KindAssistantTurn:
-			if !inUnit {
-				continue
-			}
-			unitTurns++
-			unitLast = r.At
-			unitTokens += r.InputTokens
-			if r.InputTokens > 0 {
-				if lastInputTok > 0 && r.InputTokens > lastInputTok {
-					growths = append(growths, float64(r.InputTokens-lastInputTok))
-				}
-				lastInputTok = r.InputTokens
-			}
-		case KindToolUse:
-			if !inUnit {
-				continue
-			}
-			unitTools++
-			if isEscalation(r.ToolName) {
-				unitTask = true
-			}
-			if isEdit(r.ToolName) && r.FilePath != "" {
-				totalEdits++
-				if unitEdited[r.FilePath] {
-					reworkEdits++
-					unitRework = true
-				}
-				unitEdited[r.FilePath] = true
-			}
-		case KindInterrupt:
-			if inUnit {
-				unitStopped = true
-			}
-		case KindCompaction:
-			compactions++
-		}
-	}
-	closeUnit()
-
 	m.Sessions = len(sessions)
-	m.Prompts = len(turnsPerPrompt)
+	m.Prompts = len(units)
 	m.MedianTurnsPerPrompt = round1(percentile(turnsPerPrompt, 0.5))
 	m.P90TurnsPerPrompt = round1(percentile(turnsPerPrompt, 0.9))
 	m.MedianContextGrowthTokens = int64(percentile(growths, 0.5))
