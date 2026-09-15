@@ -21,9 +21,65 @@ so everything rolls up **turn → session → project**.
 | Claude Code | ✅ `~/.claude/projects` | ✅ | ✅ `ANTHROPIC_BASE_URL` | reference integration; also the `read-guard` hook |
 | Codex CLI | ✅ `~/.codex/sessions` | ✅ | ✅ `OPENAI_BASE_URL` | reader surfaces OpenAI's official rate-limit % |
 | opencode | ✅ SQLite store | ✅ | ✅ per-provider baseURL | reader is multi-provider |
+| Cursor | ⚠️ quota only | ✅ | ❌ *(agent traffic goes through Cursor's backend)* | the usage cookie gives plan consumption, not per-turn tokens |
 | Gemini CLI | ❌ *(no token log)* | ✅ | ✅ base-URL override | its `logs.json` records prompts only — no token data |
 | Desktop apps | ❌ | ✅ *(if MCP host)* | ❌ *(no base-URL override)* | MCP tools only; Anthropic cookie for Max % |
+| GitHub-hosted (Copilot agent) | ⚠️ quota only | ❌ | ❌ | the Copilot quota endpoint gives bucket %, nothing per-turn |
 | Jules / hosted | ❌ | ❌ | ❌ | out of reach — see Boundaries |
+
+## What reaches which client
+
+The plane table above is about where the *data* comes from. This one is
+about what you actually get, which is the question you have when choosing
+a client — and the honest answer is that parity does not exist.
+
+Published rather than papered over. A matrix with gaps in it is worth
+more than a promise of everything: you can plan around a gap, and the
+gaps here are consequences of where a client keeps its state, not of what
+we got round to.
+
+| Capability | Needs | Claude Code | Codex CLI | opencode | Cursor | Gemini CLI | Desktop | GitHub-hosted |
+|---|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| Spend + token accounting | a local token log | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | ⚠️ |
+| Ground truth + live routing | a base-URL override | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
+| Prompt + reply coaching | prompt text on disk | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Agent DX metrics (`dx`) | a transcript reader | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Work storytelling (`story`) | a reader **and** prompt text | ✅ | ⚠️ | ⚠️ | ⚠️ | ❌ | ❌ | ❌ |
+| Proactive coaching (nudges) | a `Stop` hook | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `read-guard` (intervene) | a `PreToolUse` hook | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `tokenops fmt` compression | the agent runs shell commands | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| MCP tools (ask anything) | an MCP host | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+
+⚠️ means partial, and each one means something specific:
+
+- **Cursor and GitHub-hosted spend** is *quota*, not tokens. Both expose a
+  consumption endpoint the vendor's own UI reads — how much of the plan
+  is gone — and neither exposes per-turn token counts. Useful for
+  headroom; useless for "which project burns the most".
+- **Storytelling outside Claude Code** reconstructs the *structure* of the
+  work — tasks, instructions, turns, tool calls, files touched, the
+  frictions — but not the titles. Only the Claude Code reader carries
+  prompt text, so tasks from Codex, Cursor and opencode render as
+  `(no instruction text)`, and boundaries fall back to session starts and
+  idle gaps because the continuation lexicon has no words to read.
+
+### Coaching is pull-only on Desktop and GitHub clients
+
+Claude Desktop, Codex Desktop and the GitHub clients have **no local
+token log and no base-URL override**. There are no transcripts to read,
+which means no storytelling, no proactive nudges, and no routing —
+nothing TokenOps does *to* a session is reachable, because nothing of the
+session is reachable.
+
+What is left is the MCP surface, and on those clients it is the whole
+product. So it is the one that has to be genuinely good there: every
+question — spend, headroom, burn rate, forecast, the work account, the DX
+metrics — is a tool call, and `tokenops_help` lists what the running
+server exposes. That is a real answer, just a smaller one than a client
+whose session we can sit inside.
+
+Parity is not available on those clients and will not become available;
+saying so is the differentiator against a matrix that promises everything.
 
 ## Providers (proxy plane)
 
@@ -104,3 +160,10 @@ These are honest limits of a local-first, no-telemetry tool — not gaps to fill
   you control, no proxy you can insert. TokenOps can only instrument agents that
   run where you can read their logs, mount an MCP server, or sit in front of
   their API.
+- **Desktop and GitHub clients get the MCP surface and nothing else.** No local
+  token log and no base-URL override means no transcripts, so coaching there is
+  pull-only. See the capability matrix above.
+- **Storytelling titles are Claude Code only for now.** The Codex, Cursor and
+  opencode readers carry a session's structure but not its prompt text, so
+  `tokenops story` names their tasks `(no instruction text)`. This one is a gap
+  in the readers rather than in the clients — the text is on disk in all three.
