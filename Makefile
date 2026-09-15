@@ -168,12 +168,12 @@ run-daemon: $(BIN_DIR)/tokenopsd
 # that script directly, so the branch guard never depends on warden being
 # present.
 #
-# `warden init` is called only when the repo has not adopted warden yet: it
-# re-records the provenance adoption point at HEAD every time it runs, so
-# calling it on an already-adopted clone would quietly drop every commit
-# before HEAD out of `warden doctor`'s audit range.
-# Upstream: klarlabs-studio/warden#270. If init becomes idempotent, the
-# branch below collapses to a single unconditional `warden init`.
+# `warden init` is safe to run on an already-adopted clone as of warden
+# 0.33.0: it re-arms the hooks and keeps the existing provenance adoption
+# point. Earlier versions re-recorded it at HEAD on every run, which
+# quietly dropped every commit before HEAD out of `warden doctor`'s audit
+# range -- so this target used to branch on initialization state to avoid
+# calling it twice.
 install-hooks:
 	@if ! command -v warden >/dev/null 2>&1; then \
 		mkdir -p .git/hooks; \
@@ -181,11 +181,7 @@ install-hooks:
 		chmod +x .git/hooks/pre-push; \
 		echo "warden not on PATH - installed the protected-branch guard only."; \
 		echo "For the full pre-push gate: https://github.com/klarlabs-studio/warden"; \
-	elif warden status 2>&1 | grep -q 'not initialized'; then \
+	else \
 		warden init >/dev/null; \
 		echo "Armed the warden gate (pre-commit, pre-push), protected-branch guard included."; \
-	else \
-		warden hooks enable pre-commit >/dev/null; \
-		warden hooks enable pre-push >/dev/null; \
-		echo "warden already adopted here; hooks re-armed."; \
 	fi
