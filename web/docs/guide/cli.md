@@ -227,6 +227,57 @@ tokenops coach replies --since 7d
 tokenops coach replies --json
 ```
 
+## Story
+
+### `tokenops story`
+
+Reconstructs your work as an account of it, one task at a time: the
+instruction you typed, everything the agent did before the next one, what
+it cost, and the specific moments it went wrong.
+
+```bash
+tokenops story                      # last 7d, 10 most recent tasks
+tokenops story --days 1 --limit 3
+tokenops story --json               # same account, for an agent to read back
+tokenops story --idle-gap 30m       # coarser task boundaries
+```
+
+```
+Your work — last 2d
+  3 tasks
+
+─ fix the parser panic on empty input
+  Tue 09:24 → 09:28 (3m)  · split by idle gap
+  4 instructions · 73 turns · 38 tool calls · context peaked at 681k
+  touched internal/parse/lexer.go, internal/parse/parse_test.go
+  where it went sideways:
+    · you told it the 1st answer was wrong
+    · the 2nd instruction edited the same file twice
+```
+
+**A task is inferred, not declared.** A new session always starts one, and
+a pause longer than `--idle-gap` (default 10m) splits one. Every task says
+which of those split it, because a boundary you can see is one you can
+argue with. The gap is measured from when the agent *stopped working*, not
+from when you typed — a unit that ran for an hour did not leave you idle
+for an hour. `tokenops task start|done` still marks a task exactly when you
+want to be precise.
+
+Units are grouped per session before any boundary is inferred. Concurrent
+sessions are ordinary — two terminals, two projects — and their
+transcripts interleave in wall-clock time, so a global time order would
+see the session change at nearly every instruction.
+
+**`context peaked at` is not a cost.** It is the largest context a single
+turn carried — how heavy the work got, counting the context once. The
+summed figure (`context_carried_tokens` in JSON) double-counts by
+construction, because every turn re-sends the accumulated context; that is
+the number that reads as $94k when cache-aware pricing says $10k. It is
+there for comparing tasks against each other, never as spend.
+
+Prompt text is read at scan time and **never persisted**. The account is
+rebuilt from transcripts on every run.
+
 ## Dashboard
 
 ### `tokenops dashboard rotate-token`
