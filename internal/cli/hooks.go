@@ -56,12 +56,15 @@ backs up the prior settings to settings.json.bak, and writes atomically.
 // When neither is set, both are selected (install everything is the common
 // case). budget parametrises the coach entry's args.
 func specsFor(coach, readGuard bool, budget float64) []hookSpec {
-	return specsForMode(coach, readGuard, budget, readguard.ModeObserve)
+	return specsForMode(coach, readGuard, budget, "")
 }
 
-// specsForMode is specsFor with the read-guard mode chosen by the caller,
-// so init can promote the guard to active once the operator's own ledger
-// justifies it.
+// specsForMode is specsFor with the read-guard mode pinned by the caller.
+// An empty guardMode writes no --mode flag at all, which is the default:
+// the guard then resolves its behaviour from coaching.delivery on every
+// invocation, so changing that one key takes effect immediately instead
+// of requiring the hook to be re-registered. Pass a mode only to pin one
+// against config — the installed flag wins, by design.
 func specsForMode(coach, readGuard bool, budget float64, guardMode readguard.Mode) []hookSpec {
 	if !coach && !readGuard {
 		coach, readGuard = true, true
@@ -81,7 +84,7 @@ func specsForMode(coach, readGuard bool, budget float64, guardMode readguard.Mod
 			event:   "PreToolUse",
 			matcher: "Read",
 			marker:  "read-guard",
-			args:    []string{"read-guard", "--mode", string(guardMode)},
+			args:    readGuardArgs(guardMode),
 		})
 	}
 	return out
@@ -504,3 +507,13 @@ func trimSpace(b []byte) []byte {
 }
 
 func isSpace(c byte) bool { return c == ' ' || c == '\t' || c == '\n' || c == '\r' }
+
+// readGuardArgs builds the installed command. No --mode means "follow
+// coaching.delivery", which is what we want in settings.json: one place
+// to change, no re-install to make it take effect.
+func readGuardArgs(guardMode readguard.Mode) []string {
+	if guardMode == "" {
+		return []string{"read-guard"}
+	}
+	return []string{"read-guard", "--mode", string(guardMode)}
+}

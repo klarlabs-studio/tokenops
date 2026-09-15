@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/config"
+
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts"
@@ -22,6 +24,7 @@ func newCoachCmd() *cobra.Command {
 		Short: "Analyze your prompting and workflow patterns for waste + anti-patterns",
 	}
 	cmd.AddCommand(newCoachPromptsCmd())
+	cmd.AddCommand(newCoachDeliveryCmd())
 	cmd.AddCommand(newCoachRepliesCmd())
 	return cmd
 }
@@ -368,4 +371,75 @@ func pctOf(n, total int) float64 {
 		return 0
 	}
 	return 100 * float64(n) / float64(total)
+}
+
+// newCoachDeliveryCmd shows or sets how coaching reaches the operator.
+//
+// One key, three rungs, every channel: the CLI verbs always work, the
+// MCP tools always answer, and `proactive` is what lets the hooks speak
+// first. It is a separate axis from `mode` in config.yaml, which governs
+// whether TokenOps rewrites live *traffic* — an operator can reasonably
+// want live routing without a coach that interrupts, or the reverse.
+func newCoachDeliveryCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "delivery [observe|advise|intervene]",
+		Short: "Show or set how coaching reaches you",
+		Long: `delivery selects how far coaching goes. The rungs are graded by
+interference — how much of your session the coach is allowed to take — and
+each one adds a channel to the one below it:
+
+  observe     records everything, answers when asked: ` + "`tokenops coach prompts`" + `,
+              ` + "`coach replies`" + `, ` + "`dx`" + `, and the MCP coaching tools. The hooks
+              stay installed but say nothing, keeping their ledgers — so
+              ` + "`coach-hook stats`" + ` and ` + "`read-guard stats`" + ` still show what you
+              are missing before you let them speak.
+  advise      observe, plus the coach speaks unprompted but never blocks:
+              coach-hook nudges as session cost crosses a budget fraction.
+              Advice you can ignore. This is the default, and it is what the
+              hooks already did before this setting existed.
+  intervene   advise, plus the coach acts: read-guard refuses a redundant
+              re-read before it costs a token.
+
+With no argument, prints the current level. Takes effect immediately — the
+hooks read this on every invocation, so there is no need to re-run
+` + "`tokenops hooks install`" + `.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path, err := config.DefaultPath()
+			if err != nil {
+				return err
+			}
+			if len(args) == 0 {
+				cfg, rerr := config.ReadMutable(path)
+				if rerr != nil {
+					return rerr
+				}
+				fmt.Fprintln(cmd.OutOrStdout(), cfg.Coaching.DeliveryLevel())
+				return nil
+			}
+			want := strings.ToLower(strings.TrimSpace(args[0]))
+			if err := config.ValidateDelivery(want); err != nil {
+				return err
+			}
+			cfg, err := config.ReadMutable(path)
+			if err != nil {
+				return err
+			}
+			was := cfg.Coaching.DeliveryLevel()
+			cfg.Coaching.Delivery = want
+			if err := config.WriteMutable(path, cfg); err != nil {
+				return err
+			}
+			if was == want {
+				fmt.Fprintf(cmd.OutOrStdout(), "coaching delivery already %s\n", want)
+				return nil
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "coaching delivery %s → %s\n", was, want)
+			if want == config.DeliveryIntervene {
+				fmt.Fprintln(cmd.OutOrStdout(),
+					"read-guard will now refuse redundant re-reads; `tokenops coach delivery advise` backs that out")
+			}
+			return nil
+		},
+	}
 }

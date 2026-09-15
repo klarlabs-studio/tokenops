@@ -150,11 +150,103 @@ func (w WatchConfig) EffectiveInterval() time.Duration {
 // --workflow`, the tokenops_workflow_trace MCP tool, and the dashboard
 // workflow view.
 type CoachingConfig struct {
+	// Delivery selects how far coaching goes. It is a ladder graded by
+	// interference — how much of your session the coach is allowed to
+	// take — and each rung adds a channel to the one below:
+	//
+	//   observe    — records everything, answers when asked. `tokenops
+	//                coach prompts`, `coach replies`, `dx`, and the MCP
+	//                coaching tools. The hooks stay installed but say
+	//                nothing: they keep their ledgers, so `coach-hook
+	//                stats` and `read-guard stats` still show what you
+	//                are missing before you let them speak.
+	//   advise     — observe, plus the coach speaks unprompted but never
+	//                blocks: coach-hook nudges as session cost crosses a
+	//                budget fraction. Advice you can ignore. The default.
+	//   intervene  — advise, plus the coach acts: read-guard refuses a
+	//                redundant re-read before it costs a token.
+	//
+	// The rungs are graded by interference rather than by who initiated,
+	// because that is the question an operator actually has. "Does it
+	// speak without being asked" puts a non-blocking nudge and a refused
+	// tool call on the same rung, and those are not remotely the same
+	// imposition.
+	//
+	// Note this is NOT Config.Mode. Mode decides whether TokenOps
+	// intervenes in *traffic* — routing rules on the proxy, the spend
+	// watcher. Delivery decides whether it intervenes in your *session*.
+	// An operator can reasonably want either without the other.
+	//
+	// Empty means DeliveryAdvise, which is what the hooks did before this
+	// key existed: coach-hook nudged, read-guard observed. Upgrading
+	// changes nothing until you say so.
+	Delivery string `yaml:"delivery,omitempty"`
+
 	// ContextLimits override the waste detector's context thresholds per
 	// workflow-ID prefix. A matching entry replaces the built-in
 	// profiles ("claude-code:", "codex:"); zero fields inherit the
 	// detector defaults.
 	ContextLimits []ContextLimitConfig `yaml:"context_limits"`
+}
+
+// Delivery values for CoachingConfig.Delivery, in ascending order of
+// interference.
+const (
+	DeliveryObserve   = "observe"
+	DeliveryAdvise    = "advise"
+	DeliveryIntervene = "intervene"
+)
+
+// ParseDelivery normalises a delivery level, falling back to reactive for
+// anything unrecognised. Callers that need to reject a typo rather than
+// absorb it use ValidateDelivery.
+func ParseDelivery(s string) string {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case DeliveryObserve:
+		return DeliveryObserve
+	case DeliveryIntervene:
+		return DeliveryIntervene
+	default:
+		return DeliveryAdvise
+	}
+}
+
+// ValidateDelivery reports whether s names a delivery level. Empty is
+// valid and means the default.
+func ValidateDelivery(s string) error {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", DeliveryObserve, DeliveryAdvise, DeliveryIntervene:
+		return nil
+	default:
+		return fmt.Errorf("coaching.delivery %q: want one of %s, %s, %s",
+			s, DeliveryObserve, DeliveryAdvise, DeliveryIntervene)
+	}
+}
+
+// Delivery resolves the configured level, applying the default.
+func (c CoachingConfig) DeliveryLevel() string { return ParseDelivery(c.Delivery) }
+
+// AllowsPull reports whether coaching answers a direct question, through
+// the CLI verbs or the MCP tools. True at every level: asking is never an
+// interruption, and a tool that refuses to answer a direct question is a
+// worse experience than one that stays quiet.
+func (c CoachingConfig) AllowsPull() bool { return true }
+
+// AllowsAdvice reports whether the coach may speak unprompted without
+// blocking anything — the coach-hook nudge.
+func (c CoachingConfig) AllowsAdvice() bool {
+	switch c.DeliveryLevel() {
+	case DeliveryAdvise, DeliveryIntervene:
+		return true
+	default:
+		return false
+	}
+}
+
+// AllowsIntervention reports whether the coach may interfere with the
+// agent's work — read-guard refusing a redundant re-read.
+func (c CoachingConfig) AllowsIntervention() bool {
+	return c.DeliveryLevel() == DeliveryIntervene
 }
 
 // ContextLimitConfig is one per-prefix threshold override.
@@ -629,6 +721,9 @@ func (c Config) Validate() error {
 	case "debug", "info", "warn", "error":
 	default:
 		return fmt.Errorf("invalid log level %q", c.Log.Level)
+	}
+	if err := ValidateDelivery(c.Coaching.Delivery); err != nil {
+		return err
 	}
 	switch strings.ToLower(c.Log.Format) {
 	case "json", "text":

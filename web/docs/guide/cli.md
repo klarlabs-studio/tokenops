@@ -176,6 +176,21 @@ Available env vars:
 
 ## Coach
 
+### `tokenops coach delivery`
+
+Shows or sets how far coaching goes: `observe` (answers when asked),
+`advise` (also nudges, never blocks — the default), or `intervene` (also
+lets `read-guard` refuse redundant re-reads).
+
+```bash
+tokenops coach delivery              # print the current level
+tokenops coach delivery intervene    # let the guard start blocking
+```
+
+One key for every coaching channel, applied at call time — no need to
+re-run `tokenops hooks install`. See
+[Configuration](/guide/configuration) for how it differs from `mode`.
+
 ### `tokenops coach prompts`
 
 Heuristic prompt-quality feedback. Walks

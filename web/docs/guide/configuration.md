@@ -16,6 +16,41 @@ Recommended path: run passive, use `tokenops replay` to validate what a
 routing rule would have saved on real history, then flip `mode: active`
 to enforce it.
 
+### `mode` is about traffic; `coaching.delivery` is about your session
+
+These are two axes, and they are deliberately separate. `mode` decides
+whether TokenOps rewrites **traffic** — routing rules on the proxy, the
+spend watcher. `coaching.delivery` decides how much of your **session**
+the coach may take. Wanting live routing without a coach that interrupts
+is a reasonable position, and so is the reverse.
+
+`coaching.delivery` is a ladder graded by interference, each rung adding
+a channel to the one below:
+
+| Level | What the coach does |
+|---|---|
+| `observe` | Records everything, answers when asked — `tokenops coach prompts`, `coach replies`, `dx`, and the MCP coaching tools. The hooks stay installed but say nothing, while still keeping their ledgers: `coach-hook stats` and `read-guard stats` show what you are missing before you let them speak. |
+| `advise` (default) | Observe, plus the coach speaks unprompted but never blocks — `coach-hook` nudges as session cost crosses a budget fraction. Advice you can ignore. |
+| `intervene` | Advise, plus the coach acts — `read-guard` refuses a redundant re-read before it costs a token. |
+
+The rungs are graded by interference rather than by who started the
+exchange, because that is the question you actually have. "Does it speak
+without being asked" would put a non-blocking nudge and a refused tool
+call on the same rung, and those are not remotely the same imposition.
+
+```bash
+tokenops coach delivery              # print the current level
+tokenops coach delivery intervene    # let the guard start blocking
+tokenops coach delivery advise       # back it out
+```
+
+It takes effect immediately. The hooks resolve this on every invocation,
+so there is nothing to re-install. `--mode` on `read-guard` still pins a
+behaviour against the config when you want one hook to differ.
+
+`advise` is the default because it is what the hooks already did before
+this setting existed — upgrading changes nothing until you say so.
+
 Mode, budgets, and routing rules are also editable through the MCP
 server — `tokenops_mode`, `tokenops_budget_set`, and
 `tokenops_routing_rule_set` write the same `config.yaml` the CLI verbs

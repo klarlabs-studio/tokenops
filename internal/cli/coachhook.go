@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/config"
+
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
@@ -37,7 +39,7 @@ type stopHookOutput struct {
 // API-equivalent spend, and emits a graduated systemMessage nudge as that spend
 // crosses fractions of a per-session budget); the `hook` and `stats`
 // subcommands install and inspect it.
-func newCoachHookCmd() *cobra.Command {
+func newCoachHookCmd(rf *rootFlags) *cobra.Command {
 	var (
 		budget float64
 		dir    string
@@ -67,6 +69,7 @@ much your sessions have spent and which budget alerts fired.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg := coachhook.DefaultConfig()
 			cfg.BudgetUSD = budget
+			cfg.Enabled = advisoryCoaching(rf)
 			return runCoachHook(cmd, dir, cfg)
 		},
 	}
@@ -182,4 +185,24 @@ func newCoachHookStatsCmd() *cobra.Command {
 // trailing ".0" ("50"), otherwise the decimal form ("49.5").
 func formatBudget(v float64) string {
 	return strconv.FormatFloat(v, 'f', -1, 64)
+}
+
+// advisoryCoaching reports whether the coach may nudge unprompted. The
+// nudge never blocks, so it sits on the `advise` rung, which is the
+// default — installing the Stop hook is itself the operator asking for
+// it, and an upgrade must not quietly take that away.
+//
+// At `observe` the hook still runs and still records the ledger; it just
+// says nothing, which is what makes `coach-hook stats` meaningful before
+// you let it speak.
+//
+// An unreadable config falls back to the default rather than to silence.
+// A coach that goes quiet because it could not parse a YAML file is the
+// silent-failure shape this tool exists to find.
+func advisoryCoaching(rf *rootFlags) bool {
+	cfg, err := loadConfig(rf)
+	if err != nil {
+		return config.CoachingConfig{}.AllowsAdvice()
+	}
+	return cfg.Coaching.AllowsAdvice()
 }
