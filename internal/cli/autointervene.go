@@ -43,3 +43,30 @@ func guardModeFor(s readguard.Stats) (readguard.Mode, string) {
 		"observing — only ~%s tokens reclaimable so far, below the %s threshold to start blocking",
 		humanTokens(s.ReclaimableTok), humanTokens(minReclaimableTokens))
 }
+
+// promotionCase argues for letting the guard start refusing redundant
+// re-reads, using the operator's own ledger and naming the one command
+// that acts on it. Empty when there is no case to make.
+//
+// It never promotes anything. #240 removed exactly that behaviour from
+// `init`: flipping a hook from observing to refusing the agent's reads is
+// what `intervene` exists to gate, and a tool that crosses that line on
+// its own has decided the question the gate was there to ask.
+//
+// A guard that has already blocked something is not argued with. The
+// operator either promoted it deliberately or pinned `--mode=active` on
+// the hook; either way the case has been made and won, and repeating it
+// is nagging about a decision already taken.
+func promotionCase(s readguard.Stats) string {
+	if s.Blocked > 0 || s.ReclaimedTok > 0 {
+		return ""
+	}
+	if s.ReclaimableTok < minReclaimableTokens {
+		return ""
+	}
+	return fmt.Sprintf(
+		"tokenops: read-guard has watched ~%s tokens of redundant re-reads go by across %d sessions "+
+			"— %d reads it would have refused, and did not. "+
+			"`tokenops coach delivery intervene` lets it refuse them before they cost anything.",
+		humanTokens(s.ReclaimableTok), s.DistinctSessions, s.WouldBlock)
+}
