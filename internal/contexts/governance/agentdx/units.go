@@ -59,6 +59,12 @@ type Unit struct {
 	// output. It is the only quality verdict a transcript carries: the
 	// operator read the reply and said it was wrong.
 	Rejected bool
+	// PromptRejects is set when *this* unit's own instruction rejected
+	// what came before it. Rejected looks forward, this looks back, and
+	// the difference matters: an instruction that rejects is by
+	// definition about the work already in flight, so it can never be
+	// the start of something new.
+	PromptRejects bool
 }
 
 // Duration is how long the operator waited, or zero when the unit
@@ -117,7 +123,13 @@ func Units(records []Record) []Unit {
 				cur.Rejected = true
 			}
 			closeUnit()
-			cur = Unit{SessionID: r.SessionID, Prompt: r.Text, Start: r.At, Provider: r.Provider}
+			cur = Unit{
+				SessionID:     r.SessionID,
+				Prompt:        r.Text,
+				Start:         r.At,
+				Provider:      r.Provider,
+				PromptRejects: r.Rejects,
+			}
 			edited = map[string]bool{}
 			seenTool = map[string]bool{}
 			seenFile = map[string]bool{}
