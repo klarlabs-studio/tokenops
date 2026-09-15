@@ -436,3 +436,30 @@ func TestValidateRetention(t *testing.T) {
 		t.Fatal("invalid duration should be rejected")
 	}
 }
+
+// A quiet policy that cannot mean anything is rejected rather than
+// absorbed: a negative floor or cap would read as policy and do nothing,
+// which is the defect this key was held back for.
+func TestValidateRejectsNegativeQuietPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		quiet QuietConfig
+	}{
+		{"negative interval", QuietConfig{MinInterval: -time.Minute}},
+		{"negative cap", QuietConfig{MaxPerSession: -1}},
+	} {
+		cfg := Default()
+		cfg.Coaching.Quiet = tc.quiet
+		if err := cfg.Validate(); err == nil {
+			t.Errorf("%s: Validate() = nil, want an error", tc.name)
+		}
+	}
+}
+
+// Zero is the shipping default and must stay valid: it means the
+// per-finding latches are the whole policy.
+func TestValidateAcceptsUnsetQuietPolicy(t *testing.T) {
+	if err := Default().Validate(); err != nil {
+		t.Fatalf("Validate() with no quiet policy = %v, want nil", err)
+	}
+}
