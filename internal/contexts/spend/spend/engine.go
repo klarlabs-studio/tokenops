@@ -2,6 +2,7 @@ package spend
 
 import (
 	"sort"
+	"sync/atomic"
 	"time"
 
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -29,7 +30,30 @@ type DatedTable struct {
 // are treated as immutable.
 type Engine struct {
 	// tables is sorted ascending by EffectiveFrom and always has len >= 1.
-	tables []DatedTable
+	//
+	// Held atomically because a running daemon can refresh its rate card
+	// while the proxy is pricing requests on other goroutines. The
+	// pointer is swapped whole; a reader either sees the old card or the
+	// new one, never a half-applied mix.
+	tables atomic.Pointer[[]DatedTable]
+}
+
+// dated returns the current card set. Never nil once the Engine is built.
+func (e *Engine) dated() []DatedTable { return *e.tables.Load() }
+
+// Replace swaps in a new set of dated tables, for a daemon that refreshed
+// its rate card without restarting.
+//
+// A refresh that writes a snapshot the running process never reads is a
+// no-op wearing the clothes of an update — the whole reason this exists.
+// An empty set is ignored rather than installed: losing every rate is
+// strictly worse than keeping a stale one.
+func (e *Engine) Replace(tables []DatedTable) {
+	normalized := normalizeTables(tables)
+	if len(normalized) == 0 {
+		return
+	}
+	e.tables.Store(&normalized)
 }
 
 // NewEngine builds an Engine over a single Table effective from the zero
@@ -53,6 +77,14 @@ func NewDatedEngine(tables []DatedTable) *Engine {
 	if len(tables) == 0 {
 		tables = []DatedTable{{}}
 	}
+	normalized := normalizeTables(tables)
+	e := &Engine{}
+	e.tables.Store(&normalized)
+	return e
+}
+
+// normalizeTables fills defaults and sorts ascending by EffectiveFrom.
+func normalizeTables(tables []DatedTable) []DatedTable {
 	normalized := make([]DatedTable, len(tables))
 	copy(normalized, tables)
 	for i := range normalized {
@@ -66,7 +98,7 @@ func NewDatedEngine(tables []DatedTable) *Engine {
 	sort.SliceStable(normalized, func(i, j int) bool {
 		return normalized[i].EffectiveFrom.Before(normalized[j].EffectiveFrom)
 	})
-	return &Engine{tables: normalized}
+	return normalized
 }
 
 // tableFor returns the rate card in effect at ts: the table with the
@@ -76,8 +108,9 @@ func NewDatedEngine(tables []DatedTable) *Engine {
 // a missing (provider, model) is NOT resolved against a different-dated
 // table.
 func (e *Engine) tableFor(ts time.Time) Table {
-	selected := e.tables[0].Table // earliest, the never-fail default
-	for _, dt := range e.tables {
+	tables := e.dated()
+	selected := tables[0].Table // earliest, the never-fail default
+	for _, dt := range tables {
 		if dt.EffectiveFrom.After(ts) {
 			break
 		}
@@ -88,12 +121,12 @@ func (e *Engine) tableFor(ts time.Time) Table {
 
 // Currency returns the ISO 4217 code costs are denominated in, taken from
 // the latest-effective table.
-func (e *Engine) Currency() string { return e.tables[len(e.tables)-1].Table.Currency }
+func (e *Engine) Currency() string { t := e.dated(); return t[len(t)-1].Table.Currency }
 
 // Table returns the LATEST-effective pricing table — the "current rates"
 // most callers want. Historical repricing goes through Compute, which
 // selects per-event. Callers must not mutate the returned table.
-func (e *Engine) Table() Table { return e.tables[len(e.tables)-1].Table }
+func (e *Engine) Table() Table { t := e.dated(); return t[len(t)-1].Table }
 
 // TableAt returns the rate card that was in effect at ts.
 //
