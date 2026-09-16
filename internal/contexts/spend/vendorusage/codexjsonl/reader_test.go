@@ -92,3 +92,62 @@ func TestDefaultRoot(t *testing.T) {
 		t.Errorf("DefaultRoot = %q; should end in .codex/sessions", p)
 	}
 }
+
+// Codex states the model on its own turn_context record, never on the
+// token_count record that carries the usage. Turn.Model was declared and
+// never assigned, so every Codex turn entered the event store with an
+// empty model — which the spend engine cannot look up, so the whole
+// client reported $0. Measured on 40 real rollouts: 3597 turns, none of
+// them priceable.
+func TestReadFileCarriesTheModelFromTurnContext(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "rollout-2026-08-08T00-49-37-abc.jsonl")
+	lines := []string{
+		`{"timestamp":"2026-08-08T00:49:37.000Z","type":"session_meta","payload":{"id":"sess-1"}}`,
+		`{"timestamp":"2026-08-08T00:49:38.000Z","type":"turn_context","payload":{"model":"gpt-5.5"}}`,
+		`{"timestamp":"2026-08-08T00:49:39.000Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100,"cached_input_tokens":0,"output_tokens":10,"reasoning_output_tokens":0,"total_tokens":110},"model_context_window":258400}}}`,
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var got []Turn
+	if err := ReadFile(path, func(tn Turn) error { got = append(got, tn); return nil }); err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d turns, want 1", len(got))
+	}
+	if got[0].Model != "gpt-5.5" {
+		t.Errorf("Model = %q, want gpt-5.5 — an empty model is an unpriceable turn", got[0].Model)
+	}
+}
+
+// A model stated once applies to every turn after it, and a later
+// turn_context replaces it: Codex switches model mid-session.
+func TestReadFileFollowsAModelSwitch(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "rollout-2026-08-08T00-49-37-def.jsonl")
+	usage := func(ts string) string {
+		return `{"timestamp":"` + ts + `","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100,"cached_input_tokens":0,"output_tokens":10,"reasoning_output_tokens":0,"total_tokens":110}}}}`
+	}
+	lines := []string{
+		`{"timestamp":"2026-08-08T00:49:37.000Z","type":"session_meta","payload":{"id":"s"}}`,
+		`{"timestamp":"2026-08-08T00:49:38.000Z","type":"turn_context","payload":{"model":"gpt-5.5"}}`,
+		usage("2026-08-08T00:49:39.000Z"),
+		`{"timestamp":"2026-08-08T00:49:40.000Z","type":"turn_context","payload":{"model":"gpt-5.6-luna"}}`,
+		usage("2026-08-08T00:49:41.000Z"),
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var got []Turn
+	if err := ReadFile(path, func(tn Turn) error { got = append(got, tn); return nil }); err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d turns, want 2", len(got))
+	}
+	if got[0].Model != "gpt-5.5" || got[1].Model != "gpt-5.6-luna" {
+		t.Errorf("models = %q, %q — want the switch to be followed", got[0].Model, got[1].Model)
+	}
+}
