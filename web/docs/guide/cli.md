@@ -442,8 +442,26 @@ cannot swallow a real refusal.
 **It respects `coaching.delivery`** like every other read-guard surface:
 `intervene` refuses, anything below records what it would have refused.
 
-`--coach --client opencode` is **refused** for now: the nudge needs
-per-turn token counts, and tokenops cannot yet read opencode's.
+`--coach --client opencode` works too, and takes a different route from
+every other client. opencode has no end-of-turn hook that accepts a
+return value, so the nudge is delivered as a **TUI toast** — the one
+channel a plugin has to reach you. The trigger is `session.idle`.
+
+It is also the only client that already knows what its turns cost:
+opencode records a per-message `cost`, and the coach uses that in
+preference to inferring one from a rate card. That is how a session on a
+model no rate card carries still produces a number.
+
+A zero cost is usually *correct* — a Copilot turn or one through
+opencode's own gateway is included in a subscription. But the budget is
+denominated in **API-equivalent** spend, the counterfactual, so a zero
+falls back to the rate card exactly as it does for Claude Code on a
+subscription. When neither can answer, the model is reported as unpriced
+rather than counted as free.
+
+The whole session is recomputed on each idle rather than accumulated.
+`session.idle` fires every time you stop typing, and a hook that added on
+every fire would inflate a session without bound.
 
 #### Codex sessions may report $0
 

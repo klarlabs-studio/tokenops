@@ -46,7 +46,7 @@ we got round to.
 | Prompt + reply coaching | prompt text on disk | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Agent DX metrics (`dx`) | a transcript reader | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Work storytelling (`story`) | a reader **and** prompt text | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Proactive coaching (nudges) | an end-of-turn hook | ✅ | ✅ | ⬜ | ✅ | ❌ | ❌ | ❌ |
+| Proactive coaching (nudges) | an end-of-turn hook | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `read-guard` (intervene) | a **blockable** file-read hook | ✅ | 🚫 | ✅ | 🚫 | ❌ | ❌ | ❌ |
 | `tokenops fmt` compression | the agent runs shell commands | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
 | MCP tools (ask anything) | an MCP host | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |

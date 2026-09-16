@@ -15,6 +15,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
 )
@@ -27,6 +28,9 @@ type stopHookInput struct {
 	HookEventName  string `json:"hook_event_name"`
 	StopHookActive bool   `json:"stop_hook_active"`
 
+	// SessionIdle is opencode's end-of-turn event name. opencode carries
+	// no tokens in the payload and no transcript path — its turns live in
+	// its own store, which the handler reads by session id.
 	// ConversationID is Cursor's session identifier. Cursor uses the same
 	// stop event but names things differently and, crucially, reports the
 	// turn's tokens in the payload rather than pointing at a transcript.
@@ -121,9 +125,18 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config) error {
 		return nil // fail open
 	}
 	var dec coachhook.Decision
-	if in.isCursorPayload() {
+	switch {
+	case in.HookEventName == "session.idle":
+		// opencode. Its own store holds the turns, so only the id is
+		// needed — and "session.idle" is a name no other client sends.
+		dbPath, derr := opencodeDB()
+		if derr != nil {
+			return nil // fail open
+		}
+		dec = coachhook.EvaluateOpencode(dir, dbPath, in.SessionID, cfg, time.Now())
+	case in.isCursorPayload():
 		dec = coachhook.EvaluateCursor(dir, body, cfg, time.Now())
-	} else {
+	default:
 		dec = coachhook.Evaluate(dir, in.SessionID, in.TranscriptPath, cfg, time.Now())
 	}
 	if !dec.Nudge {
@@ -279,6 +292,9 @@ func advisoryCoaching(rf *rootFlags) bool {
 	}
 	return cfg.Coaching.AllowsAdvice()
 }
+
+// opencodeDB resolves opencode's store.
+func opencodeDB() (string, error) { return opencode.DefaultRoot() }
 
 // promotionNudge builds the case for letting the read guard start
 // blocking, or returns empty when nobody should hear it.
