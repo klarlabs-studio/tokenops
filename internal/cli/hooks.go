@@ -2,9 +2,12 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -96,13 +99,23 @@ func newHooksInstallCmd() *cobra.Command {
 		settingsPath     string
 		dryRun           bool
 		budget           float64
+		client           string
 	)
 	cmd := &cobra.Command{
 		Use:   "install",
-		Short: "Merge tokenops hooks into ~/.claude/settings.json",
+		Short: "Merge tokenops hooks into the client's hook config",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			path := resolveSettingsPath(settingsPath)
+			if err := validateHookClient(client); err != nil {
+				return err
+			}
+			if err := refuseUnsupportedHook(client, readGuard); err != nil {
+				return err
+			}
+			path, err := resolveHookConfigPath(client, settingsPath)
+			if err != nil {
+				return err
+			}
 			exe := selfExe()
 			out := cmd.OutOrStdout()
 
@@ -118,6 +131,9 @@ func newHooksInstallCmd() *cobra.Command {
 			var changes []string
 			for _, sp := range specs {
 				entry := commandEntry(exe, sp.args)
+				if strings.EqualFold(client, hookClientCodex) {
+					entry = codexCommandEntry(exe, sp.args)
+				}
 				changed, warn := mergeHook(hooks, sp.event, sp.matcher, entry, sp.marker)
 				if warn != "" {
 					fmt.Fprintf(out, "  warning: %s\n", warn)
@@ -146,12 +162,14 @@ func newHooksInstallCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(out, "Wrote %s (backup at %s.bak)\n", path, path)
+			writeHookTrustNote(out, client)
 			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&coach, "coach", false, "install the Stop coaching nudge")
 	cmd.Flags().BoolVar(&readGuard, "read-guard", false, "install the Read dedup guard")
-	cmd.Flags().StringVar(&settingsPath, "settings", "", "settings.json path (defaults to ~/.claude/settings.json)")
+	cmd.Flags().StringVar(&client, "client", hookClientClaudeCode, "client to arm: claude-code | codex")
+	cmd.Flags().StringVar(&settingsPath, "settings", "", "hook config path (defaults per client)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the result without writing")
 	cmd.Flags().Float64Var(&budget, "budget", coachhook.DefaultBudgetUSD, "coach: per-session API-equivalent USD budget")
 	return cmd
@@ -313,6 +331,31 @@ func hooksMap(settings map[string]any) map[string]any {
 }
 
 // commandEntry builds a Claude Code command-hook entry.
+// codexCommandEntry renders a hook as a single command string.
+//
+// Codex documents a command hook as `{"type":"command","command":"..."}`
+// with no separate argument list. tokenops' Claude Code entries carry
+// `args` alongside `command`, which Claude Code honours; assuming Codex
+// does the same would, if wrong, run the bare binary with no subcommand —
+// a hook that is installed, reports success and does nothing.
+func codexCommandEntry(exe string, args []string) map[string]any {
+	parts := append([]string{shellQuote(exe)}, args...)
+	return map[string]any{
+		"type":    "command",
+		"command": strings.Join(parts, " "),
+		"timeout": float64(10),
+	}
+}
+
+// shellQuote wraps a path holding spaces so the command string survives
+// being split by a shell.
+func shellQuote(s string) string {
+	if !strings.ContainsAny(s, " \t\"'") {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
 func commandEntry(exe string, args []string) map[string]any {
 	anyArgs := make([]any, len(args))
 	for i, a := range args {
@@ -516,4 +559,79 @@ func readGuardArgs(guardMode readguard.Mode) []string {
 		return []string{"read-guard"}
 	}
 	return []string{"read-guard", "--mode", string(guardMode)}
+}
+
+// Clients whose hook config tokenops can write.
+const (
+	hookClientClaudeCode = "claude-code"
+	hookClientCodex      = "codex"
+)
+
+func validateHookClient(c string) error {
+	switch strings.ToLower(strings.TrimSpace(c)) {
+	case "", hookClientClaudeCode, hookClientCodex:
+		return nil
+	default:
+		return fmt.Errorf("--client %q: want %s or %s", c, hookClientClaudeCode, hookClientCodex)
+	}
+}
+
+// resolveHookConfigPath picks the file this client reads hooks from.
+//
+// Codex keeps them in ~/.codex/hooks.json, in the same nested shape
+// Claude Code uses inside settings.json — event, then a list of matcher
+// groups, each holding command entries. That is not a coincidence: Codex
+// documents its hook payloads and its block decision as matching Claude
+// Code's, down to the key names, so the merge logic here transfers
+// unchanged and only the destination differs.
+func resolveHookConfigPath(client, override string) (string, error) {
+	if override != "" {
+		return override, nil
+	}
+	if strings.EqualFold(client, hookClientCodex) {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("resolve home for ~/.codex/hooks.json: %w", err)
+		}
+		return filepath.Join(home, ".codex", "hooks.json"), nil
+	}
+	return resolveSettingsPath(""), nil
+}
+
+// refuseUnsupportedHook declines to install a hook that cannot work,
+// instead of writing one that never fires.
+//
+// Codex has no file-read tool. Across 40 real rollouts every single tool
+// call was exec_command, MCP, wait, write_stdin or request_user_input:
+// reading a file there means running `cat`, which reaches PreToolUse as a
+// shell string rather than as a path. read-guard's whole value is knowing
+// the path and the file's fingerprint exactly, and a guard that has to
+// guess both from shell text would block the wrong read.
+//
+// Writing the hook anyway and reporting success is the defect this
+// codebase keeps finding in other people's tools; declining out loud is
+// the only honest option until Codex grows a read tool.
+func refuseUnsupportedHook(client string, readGuard bool) error {
+	if readGuard && strings.EqualFold(client, hookClientCodex) {
+		return errors.New(
+			"read-guard cannot work on codex: it has no file-read tool, so there is no read to intervene in " +
+				"(every file read is a shell command). Install --coach for codex; read-guard stays claude-code only")
+	}
+	return nil
+}
+
+// writeHookTrustNote says what the operator still has to do.
+//
+// Codex skips a non-managed hook until its exact definition has been
+// reviewed and trusted, and it does so silently. An installer that writes
+// the file, prints "Wrote …" and stops would be reporting success for a
+// hook that never runs — which is precisely the shape this tool exists to
+// catch.
+func writeHookTrustNote(out io.Writer, client string) {
+	if !strings.EqualFold(client, hookClientCodex) {
+		return
+	}
+	fmt.Fprintln(out, "\nNot armed yet. Codex skips a hook until you trust it:")
+	fmt.Fprintln(out, "  run `/hooks` in Codex, review the tokenops entry, and trust it.")
+	fmt.Fprintln(out, "Until then the hook is written but silently not run.")
 }

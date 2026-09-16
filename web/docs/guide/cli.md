@@ -333,6 +333,55 @@ that fallback is how someone emails a client the candid rendering.
 Prompt text is read at scan time and **never persisted**. The account is
 rebuilt from transcripts on every run.
 
+### `tokenops hooks install --client codex`
+
+Codex keeps hooks in `~/.codex/hooks.json`, in the same nested shape
+Claude Code uses inside `settings.json`, and sends the same `Stop` payload
+under the same field names. So the coaching nudge is one handler for both
+clients:
+
+```bash
+tokenops hooks install --coach --client codex
+```
+
+Two things differ and both are handled explicitly.
+
+**The entry is a single command string**, not `command` plus an `args`
+array. Codex documents it that way; assuming otherwise would run the bare
+binary with no subcommand — a hook that installs, reports success, and
+does nothing.
+
+**Codex will not run it until you trust it.** A non-managed hook is
+skipped, silently, until its exact definition has been reviewed via
+`/hooks` in Codex. The installer says so rather than printing "Wrote …"
+and stopping:
+
+```
+Not armed yet. Codex skips a hook until you trust it:
+  run `/hooks` in Codex, review the tokenops entry, and trust it.
+Until then the hook is written but silently not run.
+```
+
+`--read-guard --client codex` is **refused**, with the reason: Codex has
+no file-read tool, so there is nothing to intervene in.
+
+#### Codex sessions may report $0
+
+The shipped rate card has no entry for `gpt-5.5` or `gpt-5.6-luna`, which
+is what Codex runs today. Those turns cannot be priced, and a session
+reported as free when nobody could cost it is exactly the failure this
+tool exists to find — so `coach-hook stats` names them instead of staying
+quiet:
+
+```
+  not priced — no rate card for these models:
+    gpt-5.5                14 turn(s)
+    their spend reads as $0 above. Add rates via `pricing.path` to count them.
+```
+
+and it will not tell you your spend is lean on the strength of numbers it
+could not compute.
+
 ## Dashboard
 
 ### `tokenops dashboard rotate-token`

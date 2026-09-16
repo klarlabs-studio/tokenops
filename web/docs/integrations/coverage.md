@@ -46,12 +46,14 @@ we got round to.
 | Prompt + reply coaching | prompt text on disk | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Agent DX metrics (`dx`) | a transcript reader | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Work storytelling (`story`) | a reader **and** prompt text | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Proactive coaching (nudges) | a `Stop` hook | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| `read-guard` (intervene) | a `PreToolUse` hook | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Proactive coaching (nudges) | an end-of-turn hook | ✅ | ✅ | ⬜ | ⬜ | ❌ | ❌ | ❌ |
+| `read-guard` (intervene) | a **blockable** file-read hook | ✅ | 🚫 | ⬜ | 🚫 | ❌ | ❌ | ❌ |
 | `tokenops fmt` compression | the agent runs shell commands | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
 | MCP tools (ask anything) | an MCP host | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 
-⚠️ means partial, and each one means something specific:
+⬜ means possible and not built yet. 🚫 means the client cannot support it
+— not a backlog item. ⚠️ means partial, and each one means something
+specific:
 
 - **Cursor and GitHub-hosted spend** is *quota*, not tokens. Both expose a
   consumption endpoint the vendor's own UI reads — how much of the plan
@@ -158,6 +160,16 @@ These are honest limits of a local-first, no-telemetry tool — not gaps to fill
 - **Desktop and GitHub clients get the MCP surface and nothing else.** No local
   token log and no base-URL override means no transcripts, so coaching there is
   pull-only. See the capability matrix above.
+- **`read-guard` is permanently unavailable on Codex and Cursor**, for two
+  different reasons and neither of them ours. Codex has no file-read tool
+  at all: across 40 real rollouts every tool call was `exec_command`, MCP,
+  `wait`, `write_stdin` or `request_user_input`, so reading a file is a
+  shell command and there is no read to intervene in. Cursor has
+  `beforeReadFile`, but only `beforeShellExecution` and
+  `beforeMCPExecution` honour a permission decision — its own docs call
+  `beforeReadFile` a tripwire, not a lock. `tokenops hooks install
+  --read-guard --client codex` refuses and says so rather than writing a
+  hook that never fires.
 - **Cursor's reader is the least exercised.** It reads the same structure as
   the others and carries prompt text, but no Cursor store was available to
   verify it against real history the way Claude Code, Codex and opencode were.

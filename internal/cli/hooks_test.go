@@ -2,10 +2,22 @@ package cli
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+// runHooks executes a `hooks` subcommand against the real root.
+func runHooks(t *testing.T, args ...string) error {
+	t.Helper()
+	root := NewRoot()
+	root.SetArgs(append([]string{"hooks"}, args...))
+	root.SetOut(io.Discard)
+	root.SetErr(io.Discard)
+	return root.Execute()
+}
 
 func readJSON(t *testing.T, path string) map[string]any {
 	t.Helper()
@@ -225,5 +237,62 @@ func TestHooksInstall_MalformedSettingsRefused(t *testing.T) {
 	root.SetOut(os.Stderr)
 	if err := root.Execute(); err == nil {
 		t.Fatalf("expected an error refusing to overwrite malformed settings")
+	}
+}
+
+// Codex keeps hooks in ~/.codex/hooks.json, in the same nested shape
+// Claude Code uses — but as a single command string, not command + args.
+// Assuming otherwise would run the bare binary with no subcommand: a hook
+// that installs, reports success, and does nothing.
+func TestHooksInstallCodexWritesASingleCommandString(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "hooks.json")
+	if err := runHooks(t, "install", "--coach", "--client", "codex", "--settings", path); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+	var doc struct {
+		Hooks map[string][]struct {
+			Hooks []map[string]any `json:"hooks"`
+		} `json:"hooks"`
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+	groups := doc.Hooks["Stop"]
+	if len(groups) == 0 || len(groups[0].Hooks) == 0 {
+		t.Fatalf("no Stop hook written:\n%s", b)
+	}
+	entry := groups[0].Hooks[0]
+	if _, hasArgs := entry["args"]; hasArgs {
+		t.Error("entry carries a separate args array; Codex documents one command string")
+	}
+	cmdStr, _ := entry["command"].(string)
+	if !strings.Contains(cmdStr, "coach-hook") {
+		t.Errorf("command = %q, want the coach-hook subcommand in it", cmdStr)
+	}
+}
+
+// Codex has no file-read tool, so read-guard has nothing to intervene in.
+// Writing the hook anyway and reporting success is the defect this
+// codebase keeps finding in other people's tools.
+func TestHooksInstallRefusesReadGuardOnCodex(t *testing.T) {
+	err := runHooks(t, "install", "--read-guard", "--client", "codex")
+	if err == nil {
+		t.Fatal("install succeeded; want a refusal")
+	}
+	if !strings.Contains(err.Error(), "no file-read tool") {
+		t.Errorf("error = %q, want it to name why read-guard cannot work there", err)
+	}
+}
+
+// An unknown client is rejected rather than silently treated as Claude
+// Code, which would write the wrong file and report success.
+func TestHooksInstallRejectsAnUnknownClient(t *testing.T) {
+	if err := runHooks(t, "install", "--coach", "--client", "cursor"); err == nil {
+		t.Error("an unsupported client was accepted")
 	}
 }

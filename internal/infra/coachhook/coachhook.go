@@ -156,6 +156,15 @@ type Decision struct {
 	// Promotion is true when the nudge is the read-guard case rather than
 	// a budget tier.
 	Promotion bool
+	// UnpricedModel names a model this session ran on that the rate card
+	// does not know, empty when everything was priceable.
+	//
+	// Without it the session reports $0 and reads as a cheap one. That is
+	// the failure this tool exists to find, wearing the tool's own
+	// clothes: `gpt-5.5` and `gpt-5.6-luna` are what Codex runs today and
+	// neither is in the shipped catalog, so every Codex session would
+	// have looked free.
+	UnpricedModel string
 }
 
 // usage is the token-usage block Claude Code records on each turn's message.
@@ -212,6 +221,10 @@ type ledgerEvent struct {
 	Suppressed string `json:"suppressed,omitempty"`
 	// Promotion records that this Stop argued the read-guard case.
 	Promotion bool `json:"promotion,omitempty"`
+	// Unpriced names a model the rate card did not know. Without it a
+	// session on an uncatalogued model is indistinguishable in the ledger
+	// from one that genuinely cost nothing.
+	Unpriced string `json:"unpriced,omitempty"`
 }
 
 // Evaluate is the coach's decision + side effects for one Stop event. dir is
@@ -228,7 +241,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 
 	st := loadSession(dir, sessionID)
 
-	model, contextTokens := accumulate(transcriptPath, &st)
+	model, contextTokens, unpriced := accumulate(transcriptPath, &st)
 
 	// A budget the operator set is theirs; the shipping default is not,
 	// and the wording depends on which this is.
@@ -239,7 +252,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 	}
 	frac := st.CumulativeUSD / budget
 
-	dec := Decision{CumulativeUSD: st.CumulativeUSD, BudgetUSD: budget}
+	dec := Decision{CumulativeUSD: st.CumulativeUSD, BudgetUSD: budget, UnpricedModel: unpriced}
 	fired := highestBoundary(frac, st.MaxFiredFraction, cfg)
 	if cfg.Enabled && fired > 0 {
 		reason, retry := cfg.Quiet.silence(st.Nudges, parseTime(st.LastNudgeAt), now)
@@ -303,6 +316,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		CumulativeUSD: st.CumulativeUSD, BudgetUSD: budget,
 		Fraction: frac, TierFired: dec.FiredFraction, Model: model,
 		Suppressed: dec.Suppressed, Promotion: dec.Promotion,
+		Unpriced: dec.UnpricedModel,
 	})
 	return dec
 }
@@ -318,27 +332,150 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 // timestamp. Equal timestamps are treated as already-counted (marker uses
 // strict >), an acceptable simplification: between consecutive Stops there is
 // normally ~1 new turn and its timestamp is distinct.
-func accumulate(path string, st *sessionState) (model string, contextTokens int64) {
-	lines := usageLines(path)
+func accumulate(path string, st *sessionState) (model string, contextTokens int64, unpriced string) {
 	newMarker := st.LastCountedTS
-	for _, tl := range lines {
-		if tl.Timestamp == "" || tl.Timestamp <= st.LastCountedTS {
+	for _, t := range readTurns(path) {
+		if t.Timestamp == "" || t.Timestamp <= st.LastCountedTS {
 			continue
 		}
-		st.CumulativeUSD += turnCostUSD(tl.Message.Usage, tl.Message.Model)
-		model = tl.Message.Model
-		// The window holds whatever the newest turn sent: fresh input,
-		// plus everything read back from cache, plus what was just
-		// written to it. Cumulative tokens would answer a different
-		// question — this is how full the context is right now.
-		u := tl.Message.Usage
-		contextTokens = u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens
-		if tl.Timestamp > newMarker {
-			newMarker = tl.Timestamp
+		st.CumulativeUSD += t.CostUSD
+		model = t.Model
+		contextTokens = t.ContextTokens
+		if t.Unpriced && t.Model != "" {
+			unpriced = t.Model
+		}
+		if t.Timestamp > newMarker {
+			newMarker = t.Timestamp
 		}
 	}
 	st.LastCountedTS = newMarker
-	return model, contextTokens
+	return model, contextTokens, unpriced
+}
+
+// claudePriced and codexPriced report whether the catalog knows a model,
+// which is the difference between a turn that was free and a turn nobody
+// could put a number on.
+func claudePriced(model string) bool {
+	_, err := spend.DefaultTable().Lookup(eventschema.ProviderAnthropic, model)
+	return model != "" && err == nil
+}
+
+func codexPriced(model string) bool {
+	_, err := spend.DefaultTable().Lookup(eventschema.ProviderOpenAI, model)
+	return model != "" && err == nil
+}
+
+// turnUsage is one turn, normalised across transcript dialects. Cost is
+// computed at parse time because only the parser knows which dialect the
+// record came from, and the two are priced differently.
+type turnUsage struct {
+	Timestamp string
+	Model     string
+	CostUSD   float64
+	// Unpriced reports that the turn named a model the rate card does not
+	// know, which is not the same as a turn that cost nothing.
+	Unpriced bool
+	// ContextTokens is how full the window was on this turn: whatever it
+	// sent, plus everything read back from cache, plus what was just
+	// written to it. Cumulative tokens would answer a different question.
+	ContextTokens int64
+}
+
+// readTurns reads the transcript tail and returns each turn's usage,
+// whichever client wrote the file.
+//
+// The dialect is detected from the records rather than from the path or a
+// flag, so `coach-hook` is one handler for both clients: Codex sends the
+// same Stop payload under the same field names, and this is the only
+// place the two actually differ.
+func readTurns(path string) []turnUsage {
+	raw := tailLines(path)
+	out := make([]turnUsage, 0, len(raw))
+	// Codex states the model on its own record, ahead of the turns it
+	// applies to; carry the most recent one forward.
+	codexModel := ""
+	sawCodexUsage := false
+	for _, b := range raw {
+		if isCodexLine(b) {
+			var cl codexLine
+			if json.Unmarshal(b, &cl) != nil {
+				continue
+			}
+			if m := strings.TrimSpace(cl.Payload.Model); m != "" {
+				codexModel = m
+			}
+			if cl.Payload.Info == nil || cl.Payload.Info.LastTokenUsage == nil {
+				continue
+			}
+			u := cl.Payload.Info.LastTokenUsage
+			sawCodexUsage = true
+			out = append(out, turnUsage{
+				Timestamp: cl.Timestamp,
+				Model:     codexModel,
+				Unpriced:  true, // settled in priceCodexTurns
+				// Cached is inside input here, so the window is input plus
+				// what was written to cache — adding the cached figure
+				// again would count it twice.
+				ContextTokens: u.InputTokens + u.CacheWriteTokens,
+			})
+			continue
+		}
+		var tl transcriptLine
+		if json.Unmarshal(b, &tl) != nil || tl.Message.Usage == nil {
+			continue
+		}
+		u := tl.Message.Usage
+		out = append(out, turnUsage{
+			Timestamp:     tl.Timestamp,
+			Model:         tl.Message.Model,
+			CostUSD:       turnCostUSD(u, tl.Message.Model),
+			Unpriced:      !claudePriced(tl.Message.Model),
+			ContextTokens: u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens,
+		})
+	}
+	// A tail that never reached a turn_context leaves every Codex turn
+	// unpriced, and a session silently reported as free is worse than one
+	// reported approximately. Fall back to the model the rollout opened
+	// with.
+	if sawCodexUsage && codexModel == "" {
+		codexModel = codexModelFromHead(path)
+	}
+	if sawCodexUsage {
+		priceCodexTurns(out, raw, codexModel)
+	}
+	return out
+}
+
+// priceCodexTurns fills in the cost of Codex turns once the model is
+// settled, which cannot happen until the whole window has been read.
+func priceCodexTurns(out []turnUsage, raw [][]byte, fallbackModel string) {
+	i := 0
+	for _, b := range raw {
+		if !isCodexLine(b) {
+			continue
+		}
+		var cl codexLine
+		if json.Unmarshal(b, &cl) != nil {
+			continue
+		}
+		if cl.Payload.Info == nil || cl.Payload.Info.LastTokenUsage == nil {
+			continue
+		}
+		for i < len(out) && out[i].Timestamp != cl.Timestamp {
+			i++
+		}
+		if i >= len(out) {
+			return
+		}
+		model := out[i].Model
+		if model == "" {
+			model = fallbackModel
+			out[i].Model = model
+		}
+		out[i].CostUSD = codexTurnCostUSD(cl.Payload.Info.LastTokenUsage, model)
+		out[i].Unpriced = !codexPriced(model)
+		i++
+	}
 }
 
 // turnCostUSD prices a single turn's full API-equivalent cost: input, output,
@@ -465,11 +602,12 @@ func formatUSD(v float64) string {
 	return fmt.Sprintf("$%.2f", v)
 }
 
-// usageLines reads the tail of the transcript and returns every record carrying
-// a message.usage block, in file order. Reading only the tail keeps the hook
-// cheap on multi-MB transcripts. Returns nil on any read failure (fail open) or
-// when no usage record is found in the tail window.
-func usageLines(path string) []transcriptLine {
+// tailLines reads the tail of the transcript and returns its whole JSON
+// records in file order, leaving them unparsed because which parser
+// applies depends on the dialect. Reading only the tail keeps the hook
+// cheap on multi-MB transcripts — real rollouts reach 30 MB. Returns nil
+// on any read failure (fail open).
+func tailLines(path string) [][]byte {
 	if path == "" {
 		return nil
 	}
@@ -505,19 +643,13 @@ func usageLines(path string) []transcriptLine {
 
 	sc := bufio.NewScanner(bytes.NewReader(buf))
 	sc.Buffer(make([]byte, 0, 64<<10), int(tailBytes)+1)
-	var out []transcriptLine
+	var out [][]byte
 	for sc.Scan() {
 		b := bytes.TrimSpace(sc.Bytes())
 		if len(b) == 0 || b[0] != '{' {
 			continue
 		}
-		var tl transcriptLine
-		if json.Unmarshal(b, &tl) != nil {
-			continue
-		}
-		if tl.Message.Usage != nil {
-			out = append(out, tl)
-		}
+		out = append(out, append([]byte(nil), b...))
 	}
 	return out
 }
@@ -554,6 +686,11 @@ type Stats struct {
 	// PromotionNudges counts the sessions in which the coach argued the
 	// read-guard case.
 	PromotionNudges int `json:"promotion_nudges,omitempty"`
+	// UnpricedModels counts turns per model the rate card could not
+	// price. A budget that never moves because nothing could be costed is
+	// not a lean session, and this is the only place that difference
+	// shows.
+	UnpricedModels map[string]int `json:"unpriced_models,omitempty"`
 }
 
 // ReadStats reads the ledger and aggregates it. Cumulative spend is a
@@ -588,6 +725,12 @@ func ReadStats(dir string) (Stats, error) {
 		}
 		if e.Promotion {
 			s.PromotionNudges++
+		}
+		if e.Unpriced != "" {
+			if s.UnpricedModels == nil {
+				s.UnpricedModels = map[string]int{}
+			}
+			s.UnpricedModels[e.Unpriced]++
 		}
 		if e.Suppressed != "" {
 			if s.Suppressed == nil {
