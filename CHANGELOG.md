@@ -1,5 +1,77 @@
 # Changelog
 
+## 0.56.0 - 2026-09-16
+
+Every client TokenOps reads can now also be coached, and four silent
+zeros were found by checking each reader against the real store on disk
+rather than against its own fixtures.
+
+### Fixed
+
+- **`dx --source codex` counted nothing.** It keyed on an `event_msg`
+  /`user_message` event current Codex no longer emits, and deliberately
+  skipped the `response_item` that replaced it to avoid double-counting —
+  so it dropped 100%. On 37 real sessions holding 343 instructions it
+  reported "0 instructions across 37 sessions". The channel is now
+  decided per file. (#264)
+- **Codex spend had no model.** `Turn.Model` was declared and never
+  assigned, so every Codex turn entered the event store unpriceable and
+  the client reported `$0` in spend, burn rate, forecast and top
+  consumers. 3597 turns, none costed. Codex states the model on its own
+  `turn_context` record; it is now carried forward. (#267)
+- **The coach priced from the embedded baseline, not the dated card** the
+  daemon builds from persisted snapshots — so a machine whose snapshot
+  knew a model still had its budget measured against one that did not. On
+  a real rollout, `$0.00` versus `$0.68`, and a nudge that could never
+  fire. (#269)
+- **`dx` graded a benchmark harness.** Sessions run in throwaway
+  directories were 94% of a 7-day window and set every grade: median 2
+  turns per instruction against the operator's real 17, and straight As.
+  Now excluded, with `--include-scratch` to opt back in. (#260)
+- **Prompt text reached only the Claude Code reader**, so `story` titled
+  1258 of 1258 opencode tasks "(no instruction text)" and every
+  instruction opened its own task. Now carried by every reader. (#264)
+- **A failing test names itself.** The gate surfaces the tail of
+  `go test`, where the `--- FAIL` line has already scrolled past; two
+  pushes were refused with no usable evidence. It also fixed the flake it
+  then named: a p99 latency gate that was asserting about the machine.
+  (#272)
+
+### Added
+
+- **Coaching on every client.** Codex (`Stop`, same payload shape as
+  Claude Code), Cursor (`stop`, tokens carried inline), and opencode
+  (`session.idle`, delivered as a TUI toast from a generated plugin).
+  Three distinct cache conventions had to be told apart to price them.
+  (#266, #271, #274)
+- **read-guard on opencode** — the only other client whose hook can
+  decline a read. Codex has no file-read tool and Cursor's
+  `beforeReadFile` is observe-only; `hooks install` refuses both with the
+  reason rather than writing a hook that never fires. (#273)
+- **Smart routing** decides per turn from task class, plan-window
+  pressure and the live rate card, with no rules table.
+  `tokenops_routing_advise` reaches every MCP client, proxy or not.
+  (#259)
+- **The rate card refreshes itself** daily and applies to the running
+  daemon rather than writing a snapshot nobody reads until a restart.
+  One outbound call, documented and switchable. (#270)
+- **`story --for report` and `--for handoff`**, plus `tokenops_story` so
+  the agent reads its own history back. (#257)
+- **`coaching.quiet`** rate-limits the proactive channel, and the coach
+  argues for `intervene` from the operator's own ledger. (#255, #256)
+- **GPT-6 Astra priced** and pinned `verified`, with the two published
+  rules the schema cannot express stated in the catalog. (#268)
+
+### Documentation
+
+- **An honest client capability matrix**, marking what a client can never
+  support with the reason rather than as pending. (#258)
+
+### Security
+
+- grpc 1.82.1 → 1.83.2 for GO-2026-6348, a called vulnerability surfaced
+  by this repo's own pre-push gate. (#261)
+
 ## 0.55.0 - 2026-09-15
 
 Coaching gains a single control point, and sessions gain an account of
