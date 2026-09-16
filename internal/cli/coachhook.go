@@ -13,6 +13,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
 )
@@ -75,6 +77,7 @@ much your sessions have spent and which budget alerts fired.`,
 			cfg.Enabled = advisoryCoaching(rf)
 			cfg.Quiet = quietPolicy(rf)
 			cfg.Promotion = promotionNudge(rf, guardDir)
+			cfg.Rates = datedRates(rf)
 			return runCoachHook(cmd, dir, cfg)
 		},
 	}
@@ -286,6 +289,36 @@ func promotionNudge(rf *rootFlags, guardDir string) string {
 		return ""
 	}
 	return promotionCase(stats)
+}
+
+// datedRates resolves the rate card the rest of tokenops prices with:
+// the embedded baseline, plus the snapshots under ~/.tokenops/pricing,
+// plus any negotiated-rate override — effective-dated, so a turn is
+// priced at the card in force when it ran.
+//
+// This package used the embedded baseline alone until it turned out that
+// is not the same card. A machine whose snapshot knew gpt-5.5 still had
+// its coach-hook budget measured against a baseline that did not, so no
+// tier could fire and the session read as free.
+//
+// Nil on any failure, which falls back to the baseline: a coach that
+// cannot price is still better than a hook that refuses to run.
+func datedRates(rf *rootFlags) func(time.Time) spend.Table {
+	path := ""
+	if cfg, err := loadConfig(rf); err == nil {
+		path = cfg.Pricing.Path
+	}
+	overrides := spend.Table{}
+	if path != "" {
+		if ov, err := spend.LoadTableFile(path); err == nil {
+			overrides = ov
+		}
+	}
+	eng, err := pricing.EffectiveEngineWithOverrides("", overrides)
+	if err != nil || eng == nil {
+		return nil
+	}
+	return eng.TableAt
 }
 
 // quietPolicy reads coaching.quiet into the hook's rate limit.

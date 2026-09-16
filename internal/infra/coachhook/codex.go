@@ -68,11 +68,11 @@ func isCodexLine(b []byte) bool {
 // more cached than input is not something to reason about, so the
 // uncached figure floors at zero rather than going negative and crediting
 // the operator for tokens they used.
-func codexTurnCostUSD(u *codexUsage, model string) float64 {
+func codexTurnCostUSD(tbl spend.Table, u *codexUsage, model string) float64 {
 	if u == nil || model == "" {
 		return 0
 	}
-	r, err := spend.DefaultTable().Lookup(eventschema.ProviderOpenAI, model)
+	r, err := tbl.Lookup(eventschema.ProviderOpenAI, model)
 	if err != nil {
 		return 0
 	}
