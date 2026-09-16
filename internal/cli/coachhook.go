@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strconv"
 	"time"
 
@@ -175,6 +176,13 @@ func newCoachHookStatsCmd() *cobra.Command {
 					fmt.Fprintf(out, "    %-5s %d\n", tier, n)
 				}
 			}
+			if len(s.UnpricedModels) > 0 {
+				fmt.Fprintln(out, "  not priced — no rate card for these models:")
+				for _, m := range sortedKeys(s.UnpricedModels) {
+					fmt.Fprintf(out, "    %-22s %d turn(s)\n", m, s.UnpricedModels[m])
+				}
+				fmt.Fprintln(out, "    their spend reads as $0 above. Add rates via `pricing.path` to count them.")
+			}
 			if s.PromotionNudges > 0 {
 				fmt.Fprintf(out, "  read-guard case argued: %d session(s)\n", s.PromotionNudges)
 			}
@@ -186,7 +194,13 @@ func newCoachHookStatsCmd() *cobra.Command {
 					}
 				}
 			}
-			if s.Alerts == 0 {
+			switch {
+			case s.Alerts == 0 && len(s.UnpricedModels) > 0:
+				// "Lean" would be an over-claim: nothing crossed a budget
+				// fraction because nothing could be measured against one.
+				fmt.Fprintln(out, "\nNo session has crossed a budget fraction — but some turns could not be priced,")
+				fmt.Fprintln(out, "so this is not evidence that your spend is lean. Price those models first.")
+			case s.Alerts == 0:
 				fmt.Fprintln(out, "\nNo session has crossed a budget fraction yet — your spend stays lean. Keep observing.")
 			}
 			return nil
@@ -195,6 +209,15 @@ func newCoachHookStatsCmd() *cobra.Command {
 	cmd.Flags().StringVar(&dir, "dir", "", "state/ledger dir (defaults to ~/.tokenops/coach-hook)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
+}
+
+func sortedKeys(m map[string]int) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func totalOf(m map[string]int) int {
