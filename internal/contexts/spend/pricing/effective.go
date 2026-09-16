@@ -76,11 +76,22 @@ func EffectiveEngine(dir string) (*spend.Engine, error) {
 // overrides remain honored across all effective periods. An empty overrides
 // table is a no-op.
 func EffectiveEngineWithOverrides(dir string, overrides spend.Table) (*spend.Engine, error) {
+	return spend.NewDatedEngine(EffectiveTables(dir, overrides)), nil
+}
+
+// EffectiveTables builds the dated rate cards an Engine prices from: the
+// embedded baseline, every persisted snapshot, and the operator's
+// negotiated-rate overrides merged across all periods.
+//
+// Split out of EffectiveEngineWithOverrides so a running daemon can
+// rebuild the cards after a refresh and hand them to Engine.Replace,
+// rather than writing a snapshot the live process never reads.
+func EffectiveTables(dir string, overrides spend.Table) []spend.DatedTable {
 	dated := SnapshotsToDatedTables(AllSnapshots(dir))
 	if len(overrides.Rates) > 0 {
 		for i := range dated {
 			dated[i].Table = dated[i].Table.MergeOverrides(overrides)
 		}
 	}
-	return spend.NewDatedEngine(dated), nil
+	return dated
 }

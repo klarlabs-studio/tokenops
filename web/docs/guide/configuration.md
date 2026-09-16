@@ -408,6 +408,48 @@ coaching:
       system_redundancy_min: 3
 ```
 
+## Automatic rate-card refresh
+
+A rate card goes stale on its own. A model released after your binary was
+built prices at **zero**, so a session that cost real money reports as
+free — the exact failure this tool exists to find. So the daemon refreshes
+the card itself rather than waiting for someone to remember
+`tokenops pricing refresh`.
+
+**This is the one outbound call tokenops makes on its own.** It fetches a
+public rate card (LiteLLM's `model_prices_and_context_window.json`) and
+sends nothing: no prompt, no file, no identifier, no usage figure. The
+privacy claim is about content and no content is involved — but a tool
+that starts talking to the network without saying so has spent trust it
+cannot buy back, which is why it is documented here and switchable:
+
+```yaml
+pricing:
+  refresh:
+    disabled: true      # off
+    interval: 24h       # default 24h, floor 1h
+```
+
+Three things about how it behaves:
+
+- **It applies what it fetches.** The spend engine is built once at
+  startup, so a refresh hands the new cards to the *running* engine rather
+  than leaving them on disk for the next restart. A refresh that writes a
+  snapshot the live process never reads is a no-op wearing the clothes of
+  an update.
+- **It does not write when nothing changed.** Rate cards move on the order
+  of weeks; a daily unconditional write would leave a year of
+  near-identical snapshots and make `pricing diff` useless. A separate
+  marker records that a check happened, so a no-change check still counts
+  and a restart does not re-fetch.
+- **It fails quiet and soft.** No network, a bad payload, a source outage:
+  it logs and keeps the card already in force. Pricing is never the reason
+  ingestion stops.
+
+Your `verified: true` rows and your `pricing.path` overrides both outrank
+anything fetched, so a refresh cannot regress a rate you hand-checked or
+one you negotiated.
+
 ## Pricing overrides
 
 TokenOps ships an embedded list-price catalog (USD per million tokens)
