@@ -1,6 +1,12 @@
 package coachhook
 
-import "testing"
+import (
+	"testing"
+	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
+)
 
 // Record shapes taken verbatim from real rollouts in ~/.codex/sessions.
 func codexTurnCtx(ts, model string) string {
@@ -34,13 +40,13 @@ func TestEvaluateReadsACodexTranscript(t *testing.T) {
 // it the Claude Code way bills the cached tokens twice.
 func TestCodexPricesCachedTokensOnlyOnce(t *testing.T) {
 	const model = "gpt-4o"
-	all := codexTurnCostUSD(&codexUsage{InputTokens: 1_000_000}, model)
+	all := codexTurnCostUSD(spend.DefaultTable(), &codexUsage{InputTokens: 1_000_000}, model)
 	if all <= 0 {
 		t.Skip("no rate card for " + model)
 	}
 	// The same turn, with most of that input served from cache, must cost
 	// strictly less — never more, and never the same.
-	cached := codexTurnCostUSD(&codexUsage{InputTokens: 1_000_000, CachedInputTokens: 900_000}, model)
+	cached := codexTurnCostUSD(spend.DefaultTable(), &codexUsage{InputTokens: 1_000_000, CachedInputTokens: 900_000}, model)
 	if cached >= all {
 		t.Errorf("cached turn cost %v, uncached %v — the cached share was not discounted", cached, all)
 	}
@@ -54,7 +60,7 @@ func TestCodexPricesCachedTokensOnlyOnce(t *testing.T) {
 // A record reporting more cached than input is not something to reason
 // about; it must not credit the operator for tokens they used.
 func TestCodexNeverReturnsNegativeCost(t *testing.T) {
-	got := codexTurnCostUSD(&codexUsage{InputTokens: 10, CachedInputTokens: 1_000_000}, "gpt-4o")
+	got := codexTurnCostUSD(spend.DefaultTable(), &codexUsage{InputTokens: 10, CachedInputTokens: 1_000_000}, "gpt-4o")
 	if got < 0 {
 		t.Errorf("cost = %v, want >= 0", got)
 	}
@@ -131,5 +137,46 @@ func TestCodexStaysQuietWhenItCanPrice(t *testing.T) {
 	)
 	if dec := Evaluate(dir, "s", tp, DefaultConfig(), fixedNow); dec.UnpricedModel != "" {
 		t.Errorf("UnpricedModel = %q on a model the catalog knows", dec.UnpricedModel)
+	}
+}
+
+// The coach priced from the embedded baseline alone, which is not the
+// card the rest of tokenops uses: the daemon layers the snapshots under
+// ~/.tokenops/pricing on top of it. So a machine whose snapshot knew
+// gpt-5.5 still had its budget measured against a card that did not, and
+// no tier could fire. On one real rollout that was the difference between
+// $0.00 and $0.68.
+func TestEvaluatePricesFromTheDatedCardNotTheBaseline(t *testing.T) {
+	const model = "gpt-5.5" // deliberately absent from the embedded baseline
+	if _, err := spend.DefaultTable().Lookup(eventschema.ProviderOpenAI, model); err == nil {
+		t.Skip("baseline now knows " + model + "; pick another unpriced model")
+	}
+	dir := t.TempDir()
+	tp := writeTranscript(t, dir,
+		codexTurnCtx(ts(1), model),
+		codexTokenCount(ts(2), 1_000_000, 0, 0),
+	)
+
+	// Without a dated card: unpriceable, and said so.
+	base := Evaluate(dir, "baseline", tp, DefaultConfig(), fixedNow)
+	if base.CumulativeUSD != 0 || base.UnpricedModel != model {
+		t.Fatalf("baseline run = %+v, want $0 and an unpriced report", base)
+	}
+
+	// With one: priced, and no longer reported as unpriceable.
+	cfg := DefaultConfig()
+	cfg.Rates = func(time.Time) spend.Table {
+		return spend.Table{Rates: map[spend.Key]spend.Rate{
+			{Provider: eventschema.ProviderOpenAI, Model: model}: {
+				InputPerMillion: 5, OutputPerMillion: 30, CachedInputPerMillion: 0.5,
+			},
+		}}
+	}
+	dated := Evaluate(dir, "dated", tp, cfg, fixedNow)
+	if dated.CumulativeUSD <= 0 {
+		t.Errorf("CumulativeUSD = %v with a dated card that prices %s", dated.CumulativeUSD, model)
+	}
+	if dated.UnpricedModel != "" {
+		t.Errorf("UnpricedModel = %q, but the dated card priced it", dated.UnpricedModel)
 	}
 }
