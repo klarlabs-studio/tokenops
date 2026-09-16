@@ -45,7 +45,7 @@ we got round to.
 | Routing *advice* (`tokenops_routing_advise`) | an MCP host | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Prompt + reply coaching | prompt text on disk | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Agent DX metrics (`dx`) | a transcript reader | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Work storytelling (`story`) | a reader **and** prompt text | ✅ | ⚠️ | ⚠️ | ⚠️ | ❌ | ❌ | ❌ |
+| Work storytelling (`story`) | a reader **and** prompt text | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Proactive coaching (nudges) | a `Stop` hook | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | `read-guard` (intervene) | a `PreToolUse` hook | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | `tokenops fmt` compression | the agent runs shell commands | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
@@ -57,12 +57,6 @@ we got round to.
   consumption endpoint the vendor's own UI reads — how much of the plan
   is gone — and neither exposes per-turn token counts. Useful for
   headroom; useless for "which project burns the most".
-- **Storytelling outside Claude Code** reconstructs the *structure* of the
-  work — tasks, instructions, turns, tool calls, files touched, the
-  frictions — but not the titles. Only the Claude Code reader carries
-  prompt text, so tasks from Codex, Cursor and opencode render as
-  `(no instruction text)`, and boundaries fall back to session starts and
-  idle gaps because the continuation lexicon has no words to read.
 
 ### Coaching is pull-only on Desktop and GitHub clients
 
@@ -164,7 +158,8 @@ These are honest limits of a local-first, no-telemetry tool — not gaps to fill
 - **Desktop and GitHub clients get the MCP surface and nothing else.** No local
   token log and no base-URL override means no transcripts, so coaching there is
   pull-only. See the capability matrix above.
-- **Storytelling titles are Claude Code only for now.** The Codex, Cursor and
-  opencode readers carry a session's structure but not its prompt text, so
-  `tokenops story` names their tasks `(no instruction text)`. This one is a gap
-  in the readers rather than in the clients — the text is on disk in all three.
+- **Cursor's reader is the least exercised.** It reads the same structure as
+  the others and carries prompt text, but no Cursor store was available to
+  verify it against real history the way Claude Code, Codex and opencode were.
+  Treat its numbers as unconfirmed until you have checked them against your
+  own sessions.
