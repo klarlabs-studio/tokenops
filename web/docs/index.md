@@ -13,13 +13,13 @@ hero:
       link: /integrations/coverage
 features:
   - title: It acts, it doesn't just report
-    details: 'read-guard refuses the third redundant read of the same file. fmt compresses a 40k-token command output before it reaches the context window. coach-hook nudges as session cost crosses a budget fraction. session_budget returns a closed action enum the agent branches on: continue, slow_down, switch_model, wait_for_reset.'
+    details: 'read-guard refuses the third redundant read of the same file. fmt compresses a 40k-token command output before it reaches the context window. coach-hook nudges as session cost crosses a budget fraction — on Claude Code, Codex, Cursor and opencode. session_budget returns a closed action enum the agent branches on: continue, slow_down, switch_model, wait_for_reset.'
   - title: It reads what is already there
     details: 'Passive readers for every client that keeps a local record — Claude Code, Codex CLI, opencode, Cursor. Six vendor-usage pollers. An optional proxy for ground truth. No change to how you or your agents work.'
   - title: Your prompts never leave this machine
     details: 'Prompt text and file contents are read at scan time and never persisted — only derived numbers are. Local SQLite, no cloud account, no telemetry. The dashboard is a localhost daemon behind a shared secret you can rotate.'
   - title: Honest about what it cannot see
-    details: 'Every prediction carries signal_quality (low / medium / high) plus a one-line caveat and an upgrade path. A default install reports low confidence and says so. Time-to-first-token is reported only under the proxy, because no transcript records it.'
+    details: 'Every prediction carries signal_quality (low / medium / high) plus a one-line caveat and an upgrade path. The capability matrix marks what a client can never support — not "coming soon" — with the reason. Time-to-first-token is reported only under the proxy, because no transcript records it.'
 ---
 
 <script setup>
@@ -80,11 +80,11 @@ in a report you open the following week.
 
 | TokenOps finds | TokenOps does, in the same session |
 |---|---|
-| The same file read three times in one turn | `read-guard` refuses the third read before it costs a token |
+| The same file read three times in one turn | `read-guard` refuses the third read before it costs a token — Claude Code and opencode, the two clients whose hooks can decline one |
 | A 40k-token command output heading for the context window | `tokenops fmt` compresses it to the part the agent needs |
 | The plan window minutes from a cutoff | `tokenops_session_budget` returns `wait_for_reset`; the agent parks the work |
-| A frontier model closing work a cheap one would close | `tokenops_routing_proposals` hands back the measured delta, not a hunch |
-| Cumulative session cost crossing a budget fraction | `coach-hook` nudges mid-session, from a Claude Code Stop hook |
+| A frontier model closing work a cheap one would close | `tokenops_routing_advise` decides per turn from task class and window pressure — no rules table, and it recommends rather than rewrites |
+| Cumulative session cost crossing a budget fraction | `coach-hook` nudges mid-session — a Stop hook on Claude Code, Codex and Cursor, a TUI toast on opencode |
 
 ## What your sessions actually look like
 
@@ -94,29 +94,85 @@ client already writes. No proxy, no extra instrumentation:
 
 ```
 Agent DX — last 7d
-  1904 instructions across 1513 sessions
+  478 instructions across 14 sessions
 
 EFFORT PER INSTRUCTION
-  turns (median):        3.0        [A]
-  turns (p90):           24.0         ← heavy tail: a minority of instructions cost far more than typical
-  wall-clock (median):   29s        [A]
-  context growth/turn:   2442       [A]
+  turns (median):        17.0       [C]
+  turns (p90):           105.6        ← heavy tail: a minority of instructions cost far more than typical
+  wall-clock (median):   1.6m       [A]
+  tool calls (median):   8.0
+  context growth/turn:   2445       [A]
 
 FRICTION
-  first-try rate:        81.8%      [A]  (no rework, no interrupt, no delegation)
-  rework rate:           9.2%       [B]  (edits revisiting a file within one instruction)
-  interrupt rate:        0.1%       [A]  (instructions you had to stop)
-  escalation rate:       0.5%       [A]  (instructions delegated to a subagent)
+  first-try rate:        86.6%      [A]  (no rework, no interrupt, no delegation)
+  rework rate:           20.7%      [C]  (edits revisiting a file within one instruction)
+  interrupt rate:        0.2%       [A]  (instructions you had to stop)
+  escalation rate:       1.9%       [A]  (instructions delegated to a subagent)
+  compactions/session:   1.0        [B]
 
-Overall: B  (the worst grade, not the average — an experience is
+Overall: C  (the worst grade, not the average — an experience is
          only as good as its sharpest friction)
 ```
+
+That is this project's own last seven days, printed unedited. A `C` on the
+maintainer's machine is the point: a tool that grades your sessions and always
+returns `A` is not measuring anything.
+
 
 It also answers the question everyone assumes they know: *does quality degrade
 as context grows?* The table pairs prompt count, rejection rate, and repeated
 tool calls per context band — and says plainly when the corpus is too noisy to
 call it. Grading the worst dimension rather than the average is deliberate: an
 average hides the one thing making the session unpleasant.
+
+## Four clients, and a matrix that admits the gaps
+
+Claude Code, Codex, Cursor and opencode all keep a local record and all
+have a hook surface. TokenOps reads every one of them, and arms what each
+one can actually carry:
+
+| | reads sessions | coaching nudge | refuses a redundant read |
+|---|:--:|:--:|:--:|
+| Claude Code | ✅ | ✅ | ✅ |
+| Codex CLI | ✅ | ✅ | 🚫 |
+| Cursor | ✅ | ✅ | 🚫 |
+| opencode | ✅ | ✅ | ✅ |
+
+The two 🚫 are not a roadmap. **Codex has no file-read tool at all** —
+across 40 real rollouts every call was a shell command, so there is no
+read to intervene in. **Cursor's `beforeReadFile` cannot decline** — only
+its shell and MCP hooks honour a permission decision. `tokenops hooks
+install --read-guard` refuses on both, with the reason, rather than
+writing a hook that never fires.
+
+The [capability matrix](/integrations/coverage#what-reaches-which-client)
+carries the same honesty per feature, including for Desktop and
+GitHub-hosted clients where coaching is pull-only and always will be.
+Parity is not available everywhere. Saying so is the differentiator
+against a waitlist that promises it.
+
+## An account of the work, for whoever is asking
+
+`tokenops story` reconstructs what happened one task at a time — the
+instruction you typed, what the agent did before the next one, what it
+cost, and the specific moments it went sideways. One structure, four
+readings, because four people want the same work described and none of
+them wants the same document:
+
+```bash
+tokenops story                  # candid, for you
+tokenops story --json           # enumerated, for the agent
+tokenops story --for report     # evidence, for someone you bill
+tokenops story --for handoff    # state of the world, for a teammate
+```
+
+Titles are your own instructions, quoted rather than paraphrased — a
+summariser can be wrong and a quote cannot. The `report` rendering leaves
+out the friction narrative on purpose: "you told it the third answer was
+wrong" is candour aimed at you, and in front of a client it turns an
+account of work into an apology for it. None of the four claims the work
+is *correct*; a transcript records what was attempted, and only the tests
+know the rest.
 
 ## 90 seconds, three commands
 
@@ -133,7 +189,7 @@ stale build — installs the Claude Code hooks, and prints what still needs you:
 ```
 Wiring tokenops into this machine:
   ✓ MCP: Claude Code       registered — restart Claude Code to load the tools
-  ✓ Claude Code hooks      installed coach-hook + read-guard
+  ✓ hooks                  installed coach-hook + read-guard (Claude Code)
   · plan binding           detected anthropic but not which tier you pay for
 ```
 
@@ -188,6 +244,15 @@ over unbounded input, and a filter can miss: a prompt can contain anything, and
 whoever wrote the patterns had to guess what. Here there is no sensitive
 payload to redact, because the sensitive part never enters the pipeline.
 
+**One outbound call, named rather than discovered.** The daemon fetches a
+public rate card once a day so a model released after your binary does not
+silently price at zero. It *downloads*; it sends no prompt, no file, no
+identifier and no usage figure, and it is one line to switch off
+(`pricing.refresh.disabled: true`). A tool that starts talking to the network
+without saying so has spent trust it cannot buy back, so it is documented in
+[configuration](/guide/configuration#automatic-rate-card-refresh) and logged
+on start.
+
 ## Cache-aware, or off by 9×
 
 On agent workloads, cache reads routinely exceed 95% of input tokens — and
@@ -197,8 +262,14 @@ one real seven-day window, correcting the cache split moved the reported
 figure from **$94k to $10k**.
 
 Rates are pinned per model with dated vendor source URLs, and
-`tokenops pricing` can research, snapshot, diff, and lint them. Negotiated
-rates layer over the defaults through a pricing override file.
+`tokenops pricing` can research, snapshot, diff, and lint them — now on a
+daily timer rather than only when someone remembers. Hand-checked rows are
+marked `verified` and a fetched snapshot cannot regress them; negotiated rates
+layer over everything through a pricing override file.
+
+A model nobody can price is reported as unpriced, not costed at zero. The
+difference between "this session was free" and "we could not measure it" is
+the whole product, and a rate card goes stale on its own.
 
 ## Honest about what it sees today
 
@@ -257,7 +328,7 @@ provider mix.
 
 ---
 
-Shipping now: **v0.54.3**. See [release highlights](/changelog) for what
+Shipping now: **v0.56.0**. See [release highlights](/changelog) for what
 changed and why, or the
 [full changelog](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md)
 for every commit.

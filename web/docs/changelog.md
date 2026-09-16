@@ -4,7 +4,65 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.54.3**.
+Current release: **v0.56.0**.
+
+## v0.56.0 — every client, and four silent zeros
+
+The arc of this release is one defect wearing six different outfits: a path
+that reports success while measuring nothing. Four were found by checking each
+reader against the real store on disk instead of against its own fixtures, and
+comparing to a count taken independently.
+
+- **`dx --source codex` reported "0 instructions across 37 sessions"** on 343
+  real instructions. The reader keyed on an event current Codex stopped
+  emitting, and skipped the record that replaced it to avoid double-counting.
+  Zero-of-many is the worst version of this: an idle machine looks identical.
+- **Codex spend had no model at all.** `Turn.Model` was declared and never
+  assigned, so every Codex turn entered the store unpriceable and the whole
+  client reported `$0`. 3597 turns, none of them costed.
+- **The coach priced from the wrong card.** It used the catalog embedded in the
+  binary, not the effective-dated one the daemon builds from your snapshots —
+  so a machine whose snapshot knew `gpt-5.5` still had its budget measured
+  against a card that did not. On one real rollout that was the difference
+  between `$0.00` and `$0.68`, and the nudge that never fired.
+- **`dx` was grading a benchmark harness.** Sessions run in throwaway
+  directories were 94% of a 7-day window here, and set every grade: a median of
+  2 turns per instruction against the operator's real 17, and straight `A`s.
+- **Prompt text reached only one reader**, so `story` titled 1258 of 1258
+  opencode tasks "(no instruction text)" — and every instruction opened its own
+  task, because the continuation lexicon cannot judge words it does not have.
+
+### Every client, and an honest matrix
+
+Claude Code, Codex, Cursor and opencode now all read, all carry a coaching
+nudge, and the two whose hooks can decline a read now refuse one. Codex's
+payload matches Claude Code's field for field; Cursor carries its tokens
+inline; opencode needed a generated plugin and delivers through a TUI toast.
+
+Three cache conventions had to be told apart to price them — Claude Code keeps
+input and cache disjoint, Codex nests cache inside input, Cursor nests both —
+and getting that wrong overstates a Cursor turn by five orders of magnitude on
+the uncached line.
+
+Where a client *cannot* support something, the matrix says so with the reason
+rather than calling it pending. Codex has no file-read tool; Cursor's
+`beforeReadFile` cannot decline. `hooks install` refuses both.
+
+### Also
+
+- **Smart routing** decides per turn from task class, plan-window pressure and
+  the live rate card, with no rules table — and `tokenops_routing_advise`
+  reaches every MCP client, including the ones with no proxy.
+- **The rate card refreshes itself** daily and applies to the running daemon,
+  rather than writing a snapshot nobody reads until a restart.
+- **GPT-6 Astra** priced and pinned, with the two published rules this schema
+  cannot express written down rather than left to be discovered from a number
+  that looks low.
+- **`story` gained two more audiences** — evidence for someone you bill, state
+  of the world for a teammate — plus an MCP tool so the agent reads its own
+  history back.
+- **`coaching.quiet`** rate-limits the proactive channel, and the coach now
+  argues for `intervene` from your own ledger instead of waiting to be asked.
 
 ## v0.45.0 – v0.54.3 — agent experience, and honest units
 
