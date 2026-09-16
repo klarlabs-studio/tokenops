@@ -78,7 +78,9 @@ type rawLine struct {
 	Type      string `json:"type"`
 	Payload   struct {
 		Type string `json:"type"`
-		Info *struct {
+		// Model is stated by turn_context, never by token_count.
+		Model string `json:"model"`
+		Info  *struct {
 			LastTokenUsage *struct {
 				InputTokens           int64 `json:"input_tokens"`
 				CachedInputTokens     int64 `json:"cached_input_tokens"`
@@ -167,6 +169,9 @@ func readReader(r io.Reader, visit func(Turn) error) error {
 	buf := make([]byte, 0, 1024*1024)
 	scanner.Buffer(buf, 4*1024*1024)
 	var sessionID string
+	// model is carried forward from the most recent turn_context, which
+	// is where Codex states it.
+	var model string
 	seq := 0
 	for scanner.Scan() {
 		line := scanner.Bytes()
@@ -182,6 +187,18 @@ func readReader(r io.Reader, visit func(Turn) error) error {
 		}
 		var raw rawLine
 		if err := json.Unmarshal(line, &raw); err != nil {
+			continue
+		}
+		// Codex states the model on its own turn_context record, ahead of
+		// the turns it applies to, and never on the token_count record
+		// that carries the usage. Carrying it forward is the only way a
+		// Codex turn arrives priceable: without it every one of them
+		// entered the store with an empty model, which the spend engine
+		// cannot look up, so the whole client reported $0.
+		if raw.Type == "turn_context" {
+			if m := strings.TrimSpace(raw.Payload.Model); m != "" {
+				model = m
+			}
 			continue
 		}
 		if raw.Type != "event_msg" || raw.Payload.Type != "token_count" {
@@ -223,6 +240,7 @@ func readReader(r io.Reader, visit func(Turn) error) error {
 			OutputTokens:   u.OutputTokens,
 			ReasoningTok:   u.ReasoningOutputTokens,
 			TotalTokens:    u.TotalTokens,
+			Model:          model,
 			ContextWindow:  raw.Payload.Info.ModelContextWindow,
 			RateLimits:     rl,
 			RecordSequence: seq,
