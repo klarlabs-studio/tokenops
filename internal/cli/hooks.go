@@ -112,15 +112,25 @@ func newHooksInstallCmd() *cobra.Command {
 			if err := refuseUnsupportedHook(client, readGuard); err != nil {
 				return err
 			}
+			exe := selfExe()
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "Installing tokenops %s hooks using binary:\n  %s\n", version.String(), exe)
+
+			// opencode has no config file to merge into: its extension
+			// point is a JavaScript module, so it takes a different path
+			// entirely.
+			if opencodeClient(client) {
+				pdir, derr := opencodePluginDir(settingsPath)
+				if derr != nil {
+					return derr
+				}
+				return installOpencodePlugin(out, pdir, exe, readGuard, dryRun)
+			}
+
 			path, err := resolveHookConfigPath(client, settingsPath)
 			if err != nil {
 				return err
 			}
-			exe := selfExe()
-			out := cmd.OutOrStdout()
-
-			fmt.Fprintf(out, "Installing tokenops %s hooks using binary:\n  %s\n", version.String(), exe)
-
 			if strings.EqualFold(client, hookClientCursor) {
 				return installCursorHooks(out, path, exe, specsFor(coach, readGuard, budget), dryRun)
 			}
@@ -570,15 +580,16 @@ const (
 	hookClientClaudeCode = "claude-code"
 	hookClientCodex      = "codex"
 	hookClientCursor     = "cursor"
+	hookClientOpencode   = "opencode"
 )
 
 func validateHookClient(c string) error {
 	switch strings.ToLower(strings.TrimSpace(c)) {
-	case "", hookClientClaudeCode, hookClientCodex, hookClientCursor:
+	case "", hookClientClaudeCode, hookClientCodex, hookClientCursor, hookClientOpencode:
 		return nil
 	default:
-		return fmt.Errorf("--client %q: want one of %s, %s, %s",
-			c, hookClientClaudeCode, hookClientCodex, hookClientCursor)
+		return fmt.Errorf("--client %q: want one of %s, %s, %s, %s",
+			c, hookClientClaudeCode, hookClientCodex, hookClientCursor, hookClientOpencode)
 	}
 }
 

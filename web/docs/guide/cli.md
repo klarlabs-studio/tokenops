@@ -407,6 +407,44 @@ and a lower-camel event name. `--read-guard --client cursor` is
 **refused**: `beforeReadFile` is observe-only, so a read cannot be
 declined there.
 
+### `tokenops hooks install --read-guard --client opencode`
+
+opencode is the **only client besides Claude Code where read-guard can
+actually refuse a read**. Codex has no file-read tool at all; Cursor's
+`beforeReadFile` is observe-only. opencode has a `read` tool and a
+`tool.execute.before` hook that blocks when it throws.
+
+What it does not have is a config file to merge into — its extension
+point is a JavaScript module. So tokenops **generates** one at
+`~/.config/opencode/plugins/tokenops-read-guard.ts`:
+
+```bash
+tokenops hooks install --read-guard --client opencode
+# restart opencode to load it
+```
+
+Generated rather than shipped, deliberately. A published package would
+mean a second artifact, a second release path, and version skew between
+the plugin and the binary it calls. The generated file has none of that:
+it is written by the binary, names the version that wrote it, hardcodes
+the absolute path to that same binary, and is rewritten in place by the
+next install. It is a config file that happens to be JavaScript — the
+other three clients get one too, theirs just happen to be JSON.
+
+Delete the file to remove it.
+
+**It fails open.** A guard sitting in front of every file read must never
+be the reason a read cannot happen. A missing binary, a spawn failure,
+unparseable output — all allow the read. Only an explicit deny throws,
+and the throw happens outside the `try` so a bug in the error handling
+cannot swallow a real refusal.
+
+**It respects `coaching.delivery`** like every other read-guard surface:
+`intervene` refuses, anything below records what it would have refused.
+
+`--coach --client opencode` is **refused** for now: the nudge needs
+per-turn token counts, and tokenops cannot yet read opencode's.
+
 #### Codex sessions may report $0
 
 The shipped rate card has no entry for `gpt-5.5` or `gpt-5.6-luna`, which
