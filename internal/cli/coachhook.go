@@ -26,6 +26,24 @@ type stopHookInput struct {
 	TranscriptPath string `json:"transcript_path"`
 	HookEventName  string `json:"hook_event_name"`
 	StopHookActive bool   `json:"stop_hook_active"`
+
+	// ConversationID is Cursor's session identifier. Cursor uses the same
+	// stop event but names things differently and, crucially, reports the
+	// turn's tokens in the payload rather than pointing at a transcript.
+	ConversationID string `json:"conversation_id"`
+	InputTokens    *int64 `json:"input_tokens"`
+	OutputTokens   *int64 `json:"output_tokens"`
+}
+
+// isCursorPayload reports whether this stop event came from Cursor.
+//
+// Detected from the payload rather than from a flag, the same rule the
+// transcript dialects follow: one handler, and the operator never has to
+// tell it which client invoked it. Cursor is the only one of the three
+// that carries token counts inline, and the only one using
+// conversation_id.
+func (in stopHookInput) isCursorPayload() bool {
+	return in.ConversationID != "" && (in.InputTokens != nil || in.OutputTokens != nil)
 }
 
 // stopHookOutput is the JSON a Stop hook writes to stdout to surface a
@@ -102,7 +120,12 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config) error {
 	if err := json.Unmarshal(body, &in); err != nil {
 		return nil // fail open
 	}
-	dec := coachhook.Evaluate(dir, in.SessionID, in.TranscriptPath, cfg, time.Now())
+	var dec coachhook.Decision
+	if in.isCursorPayload() {
+		dec = coachhook.EvaluateCursor(dir, body, cfg, time.Now())
+	} else {
+		dec = coachhook.Evaluate(dir, in.SessionID, in.TranscriptPath, cfg, time.Now())
+	}
 	if !dec.Nudge {
 		return nil // no nudge: exit 0 with no stdout
 	}

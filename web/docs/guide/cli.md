@@ -365,6 +365,48 @@ Until then the hook is written but silently not run.
 `--read-guard --client codex` is **refused**, with the reason: Codex has
 no file-read tool, so there is nothing to intervene in.
 
+### `tokenops hooks install --client cursor`
+
+Cursor keeps hooks in `~/.cursor/hooks.json` and fires `stop` when the
+agent loop ends:
+
+```bash
+tokenops hooks install --coach --client cursor
+```
+
+Cursor is the cheapest of the three to support and the easiest to get
+wrong.
+
+**Cheapest,** because its `stop` payload carries the turn's token counts
+inline — `input_tokens`, `output_tokens`, `cache_read_tokens`,
+`cache_write_tokens`. There is no transcript to find or parse.
+
+**Easiest to get wrong,** because its cache accounting is a third
+distinct convention:
+
+| client | relationship |
+|---|---|
+| Claude Code | `input_tokens` and the cache figures are **disjoint** |
+| Codex | `cached_input_tokens` sits **inside** `input_tokens` |
+| Cursor | **both** cache figures sit inside `input_tokens` |
+
+Cursor's own team put it plainly: *"input_tokens is inclusive of
+cache_read_tokens and cache_write_tokens… only 14 of the 1.18M input
+tokens were genuinely uncached."* Pricing that the Claude Code way bills
+1.18M tokens at the full input rate instead of 14.
+
+Two more things the implementation accounts for. Cursor's numbers are
+**cumulative per turn** and it sends identical values on `stop` and
+`afterAgentResponse` for the same `generation_id` — so turns are
+deduplicated on that id rather than summed. And the token fields are
+**optional**: absent means "not reported", never zero-cost.
+
+The schema is **flat**, unlike Claude Code's and Codex's — an event maps
+straight to entries carrying `command`, with a top-level `"version": 1`
+and a lower-camel event name. `--read-guard --client cursor` is
+**refused**: `beforeReadFile` is observe-only, so a read cannot be
+declined there.
+
 #### Codex sessions may report $0
 
 The shipped rate card has no entry for `gpt-5.5` or `gpt-5.6-luna`, which
