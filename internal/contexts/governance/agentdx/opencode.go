@@ -98,11 +98,17 @@ func ExtractOpencode(opts ExtractOptions) ([]Record, error) {
 	// emitted from the message row — so which messages reject has to be
 	// known before the messages are walked.
 	rejecting := map[string]bool{}
+	prompts := map[string]string{}
 	if hasTable(db, "part") {
-		rejecting = opencodeRejectingMessages(db)
+		rejecting, prompts = opencodeUserText(db)
+	}
+	if !opts.WithPromptText {
+		// The words exist for the length of a scan and only when asked
+		// for, the same rule every reader follows.
+		prompts = nil
 	}
 
-	out, byMessage, err := opencodeMessages(db, opts.Since, rejecting)
+	out, byMessage, err := opencodeMessages(db, opts.Since, rejecting, prompts)
 	if err != nil {
 		return nil, err
 	}
@@ -125,15 +131,24 @@ type messageContext struct {
 	provider  string
 }
 
-// opencodeRejectingMessages returns the ids of user messages whose text
-// rejects the answer before it. A query failure yields an empty set
-// rather than an error: a missing rejection signal degrades one metric,
-// where failing the whole read would lose all of them.
-func opencodeRejectingMessages(db *sql.DB) map[string]bool {
+// opencodeUserText walks the part table once and returns two things per
+// message id: whether its text rejects the answer before it, and the text
+// itself.
+//
+// One walk rather than two because they read the same rows. opencode
+// keeps a message's words in `part`, not in `message`, which is why the
+// text has to be gathered here and handed back rather than read where
+// the record is built.
+//
+// A query failure yields empty maps rather than an error: a missing
+// rejection signal degrades one metric and a missing title degrades one
+// heading, where failing the whole read would lose every metric there is.
+func opencodeUserText(db *sql.DB) (map[string]bool, map[string]string) {
 	out := map[string]bool{}
+	text := map[string]string{}
 	rows, err := db.Query(`SELECT message_id, data FROM part`)
 	if err != nil {
-		return out
+		return out, text
 	}
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
@@ -148,11 +163,19 @@ func opencodeRejectingMessages(db *sql.DB) map[string]bool {
 		if IsRejection(p.Text) {
 			out[messageID] = true
 		}
+		// A message can carry several text parts; the instruction is all
+		// of them, in order.
+		text[messageID] += p.Text
 	}
-	return out
+	return out, text
 }
 
-func opencodeMessages(db *sql.DB, since time.Time, rejecting map[string]bool) ([]Record, map[string]messageContext, error) {
+func opencodeMessages(
+	db *sql.DB,
+	since time.Time,
+	rejecting map[string]bool,
+	prompts map[string]string,
+) ([]Record, map[string]messageContext, error) {
 	rows, err := db.Query(`SELECT id, session_id, data FROM message`)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: %v", ErrOpencodeSchema, err)
@@ -185,6 +208,7 @@ func opencodeMessages(db *sql.DB, since time.Time, rejecting map[string]bool) ([
 		case "user":
 			rec.Kind = KindPrompt
 			rec.Rejects = rejecting[id]
+			rec.Text = prompts[id]
 		case "assistant":
 			rec.Kind = KindAssistantTurn
 			rec.InputTokens = m.Tokens.Input + m.Tokens.Cache.Read + m.Tokens.Cache.Write

@@ -137,6 +137,13 @@ func ExtractCursor(opts ExtractOptions) ([]Record, error) {
 				continue
 			}
 			rec.Kind = KindPrompt
+			// The words are already parsed for the empty check above;
+			// carrying them is what lets `tokenops story` title a Cursor
+			// task with the operator's own instruction instead of
+			// "(no instruction text)".
+			if opts.WithPromptText {
+				rec.Text = b.Text
+			}
 		case b.Type == cursorBubbleAssistant:
 			rec.Kind = KindAssistantTurn
 			rec.InputTokens = b.TokenCount.InputTokens
