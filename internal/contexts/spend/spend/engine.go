@@ -95,6 +95,16 @@ func (e *Engine) Currency() string { return e.tables[len(e.tables)-1].Table.Curr
 // selects per-event. Callers must not mutate the returned table.
 func (e *Engine) Table() Table { return e.tables[len(e.tables)-1].Table }
 
+// TableAt returns the rate card that was in effect at ts.
+//
+// Exported for callers that price with their own arithmetic rather than
+// through Compute — the coaching hook, which has to split cache reads
+// from cache writes differently per client. They still need the DATED
+// card: pricing a turn from three weeks ago at today's rates, or at a
+// baseline that predates the model entirely, is the same mistake in two
+// directions.
+func (e *Engine) TableAt(ts time.Time) Table { return e.tableFor(ts) }
+
 // Compute returns the monetary cost of a PromptEvent. Cached input tokens
 // are billed at the cached rate when set; the remaining input tokens use
 // the regular input rate. Returns ErrUnknownModel when the event's

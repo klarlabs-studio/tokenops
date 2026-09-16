@@ -74,6 +74,15 @@ type Config struct {
 	// session. Zero values mean the per-finding latches are the whole
 	// policy, which is what the hook did before the key existed.
 	Quiet Quiet
+	// Rates prices a turn against the card in effect at its timestamp.
+	//
+	// Nil falls back to the embedded baseline, which is what this package
+	// used unconditionally until it turned out the baseline is not the
+	// card the rest of tokenops prices with: the daemon layers the
+	// snapshots under ~/.tokenops/pricing on top of it. A machine whose
+	// snapshot knew gpt-5.5 still had its coach-hook budget measured
+	// against a card that did not, so the tiers could not fire.
+	Rates func(at time.Time) spend.Table
 	// Promotion is the case for letting the read guard start refusing
 	// redundant re-reads, built from the operator's own ledger. Empty
 	// when the evidence does not justify it, when the guard is already
@@ -241,7 +250,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 
 	st := loadSession(dir, sessionID)
 
-	model, contextTokens, unpriced := accumulate(transcriptPath, &st)
+	model, contextTokens, unpriced := accumulate(transcriptPath, &st, cfg, now)
 
 	// A budget the operator set is theirs; the shipping default is not,
 	// and the wording depends on which this is.
@@ -332,9 +341,9 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 // timestamp. Equal timestamps are treated as already-counted (marker uses
 // strict >), an acceptable simplification: between consecutive Stops there is
 // normally ~1 new turn and its timestamp is distinct.
-func accumulate(path string, st *sessionState) (model string, contextTokens int64, unpriced string) {
+func accumulate(path string, st *sessionState, cfg Config, now time.Time) (model string, contextTokens int64, unpriced string) {
 	newMarker := st.LastCountedTS
-	for _, t := range readTurns(path) {
+	for _, t := range readTurns(path, cfg, now) {
 		if t.Timestamp == "" || t.Timestamp <= st.LastCountedTS {
 			continue
 		}
@@ -355,14 +364,33 @@ func accumulate(path string, st *sessionState) (model string, contextTokens int6
 // claudePriced and codexPriced report whether the catalog knows a model,
 // which is the difference between a turn that was free and a turn nobody
 // could put a number on.
-func claudePriced(model string) bool {
-	_, err := spend.DefaultTable().Lookup(eventschema.ProviderAnthropic, model)
+func claudePriced(tbl spend.Table, model string) bool {
+	_, err := tbl.Lookup(eventschema.ProviderAnthropic, model)
 	return model != "" && err == nil
 }
 
-func codexPriced(model string) bool {
-	_, err := spend.DefaultTable().Lookup(eventschema.ProviderOpenAI, model)
+func codexPriced(tbl spend.Table, model string) bool {
+	_, err := tbl.Lookup(eventschema.ProviderOpenAI, model)
 	return model != "" && err == nil
+}
+
+// ratesAt resolves the card for a turn, falling back to the embedded
+// baseline when no dated source was wired.
+func (c Config) ratesAt(at time.Time) spend.Table {
+	if c.Rates == nil {
+		return spend.DefaultTable()
+	}
+	return c.Rates(at)
+}
+
+// parseTurnTime reads a transcript timestamp for rate selection. An
+// unreadable one prices at the latest card rather than at the zero time,
+// which would select the oldest card there is.
+func parseTurnTime(ts string, fallback time.Time) time.Time {
+	if t, err := time.Parse(time.RFC3339Nano, ts); err == nil {
+		return t
+	}
+	return fallback
 }
 
 // turnUsage is one turn, normalised across transcript dialects. Cost is
@@ -388,7 +416,7 @@ type turnUsage struct {
 // flag, so `coach-hook` is one handler for both clients: Codex sends the
 // same Stop payload under the same field names, and this is the only
 // place the two actually differ.
-func readTurns(path string) []turnUsage {
+func readTurns(path string, cfg Config, now time.Time) []turnUsage {
 	raw := tailLines(path)
 	out := make([]turnUsage, 0, len(raw))
 	// Codex states the model on its own record, ahead of the turns it
@@ -425,11 +453,12 @@ func readTurns(path string) []turnUsage {
 			continue
 		}
 		u := tl.Message.Usage
+		tbl := cfg.ratesAt(parseTurnTime(tl.Timestamp, now))
 		out = append(out, turnUsage{
 			Timestamp:     tl.Timestamp,
 			Model:         tl.Message.Model,
-			CostUSD:       turnCostUSD(u, tl.Message.Model),
-			Unpriced:      !claudePriced(tl.Message.Model),
+			CostUSD:       turnCostUSD(tbl, u, tl.Message.Model),
+			Unpriced:      !claudePriced(tbl, tl.Message.Model),
 			ContextTokens: u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens,
 		})
 	}
@@ -441,14 +470,14 @@ func readTurns(path string) []turnUsage {
 		codexModel = codexModelFromHead(path)
 	}
 	if sawCodexUsage {
-		priceCodexTurns(out, raw, codexModel)
+		priceCodexTurns(out, raw, codexModel, cfg, now)
 	}
 	return out
 }
 
 // priceCodexTurns fills in the cost of Codex turns once the model is
 // settled, which cannot happen until the whole window has been read.
-func priceCodexTurns(out []turnUsage, raw [][]byte, fallbackModel string) {
+func priceCodexTurns(out []turnUsage, raw [][]byte, fallbackModel string, cfg Config, now time.Time) {
 	i := 0
 	for _, b := range raw {
 		if !isCodexLine(b) {
@@ -472,8 +501,9 @@ func priceCodexTurns(out []turnUsage, raw [][]byte, fallbackModel string) {
 			model = fallbackModel
 			out[i].Model = model
 		}
-		out[i].CostUSD = codexTurnCostUSD(cl.Payload.Info.LastTokenUsage, model)
-		out[i].Unpriced = !codexPriced(model)
+		tbl := cfg.ratesAt(parseTurnTime(cl.Timestamp, now))
+		out[i].CostUSD = codexTurnCostUSD(tbl, cl.Payload.Info.LastTokenUsage, model)
+		out[i].Unpriced = !codexPriced(tbl, model)
 		i++
 	}
 }
@@ -485,11 +515,11 @@ func priceCodexTurns(out []turnUsage, raw [][]byte, fallbackModel string) {
 // cache-write has no distinct catalog rate, so it is priced at the input rate.
 // An unpriceable model yields 0 — the turn still counts (marker advances) but
 // adds nothing, so the $ figure never over-states what we can defend.
-func turnCostUSD(u *usage, model string) float64 {
+func turnCostUSD(tbl spend.Table, u *usage, model string) float64 {
 	if u == nil {
 		return 0
 	}
-	r, err := spend.DefaultTable().Lookup(eventschema.ProviderAnthropic, model)
+	r, err := tbl.Lookup(eventschema.ProviderAnthropic, model)
 	if err != nil {
 		return 0
 	}
