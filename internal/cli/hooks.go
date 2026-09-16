@@ -124,7 +124,7 @@ func newHooksInstallCmd() *cobra.Command {
 				if derr != nil {
 					return derr
 				}
-				return installOpencodePlugin(out, pdir, exe, readGuard, dryRun)
+				return installOpencodePlugin(out, pdir, exe, readGuard, coach, dryRun, budget)
 			}
 
 			path, err := resolveHookConfigPath(client, settingsPath)
