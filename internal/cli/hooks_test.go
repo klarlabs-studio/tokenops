@@ -372,3 +372,109 @@ func TestHooksInstallRefusesReadGuardOnCursor(t *testing.T) {
 		t.Errorf("error = %q, want it to name why read-guard cannot work there", err)
 	}
 }
+
+// opencode has no config file to merge into — its extension point is a
+// JavaScript module — so the installer generates one. Generated rather
+// than shipped: a published package would mean a second artifact, a
+// second release path, and version skew against the binary it calls.
+func TestHooksInstallOpencodeGeneratesThePlugin(t *testing.T) {
+	dir := t.TempDir()
+	if err := runHooks(t, "install", "--read-guard", "--client", "opencode", "--settings", dir); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "tokenops-read-guard.ts"))
+	if err != nil {
+		t.Fatalf("plugin not written: %v", err)
+	}
+	src := string(b)
+	for _, want := range []string{
+		`"tool.execute.before"`,       // the hook opencode calls
+		`input?.tool !== "read"`,      // only file reads
+		`Bun.spawn`,                   // reaches the binary
+		"read-guard",                  // …with the right subcommand
+		"throw new Error(denyReason)", // blocks only on an explicit deny
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("generated plugin is missing %q", want)
+		}
+	}
+	// The absolute path to THIS binary, so the plugin cannot drift onto a
+	// different install.
+	if !strings.Contains(src, selfExe()) {
+		t.Error("plugin does not hardcode the path to the binary that wrote it")
+	}
+}
+
+// The failure that would hurt most: a guard in front of every file read
+// that stops reads working. The throw sits outside the try so a bug in
+// the error handling cannot swallow a real refusal, and nothing else can
+// escape.
+func TestOpencodePluginFailsOpen(t *testing.T) {
+	dir := t.TempDir()
+	if err := runHooks(t, "install", "--read-guard", "--client", "opencode", "--settings", dir); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "tokenops-read-guard.ts"))
+	src := string(b)
+	if !strings.Contains(src, "} catch {") {
+		t.Error("no catch-all; an unexpected error would block a read")
+	}
+	if strings.Contains(src, "throw") && strings.Index(src, "} catch {") > strings.Index(src, "throw new Error(denyReason)") {
+		t.Error("the deny throw is inside the try; a handler bug could swallow it")
+	}
+}
+
+// read-guard treats the mere presence of offset or limit as a ranged read
+// and always allows those. Sending a literal null would therefore disable
+// the guard entirely while appearing to work.
+func TestOpencodePluginOmitsRangeFieldsRatherThanNulling(t *testing.T) {
+	dir := t.TempDir()
+	if err := runHooks(t, "install", "--read-guard", "--client", "opencode", "--settings", dir); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "tokenops-read-guard.ts"))
+	src := string(b)
+	if strings.Contains(src, "offset: output.args.offset ?? null") {
+		t.Error("offset is sent as null; read-guard would treat every read as ranged and allow it")
+	}
+	if !strings.Contains(src, "!== undefined && output.args.offset !== null") {
+		t.Error("offset is not guarded before being included")
+	}
+}
+
+// Re-running must not rewrite an identical file: `make install-hooks`
+// runs once per clone and often more.
+func TestHooksInstallOpencodeIsIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	if err := runHooks(t, "install", "--read-guard", "--client", "opencode", "--settings", dir); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "tokenops-read-guard.ts")
+	before, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runHooks(t, "install", "--read-guard", "--client", "opencode", "--settings", dir); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !before.ModTime().Equal(after.ModTime()) {
+		t.Error("an unchanged plugin was rewritten")
+	}
+}
+
+// The coaching nudge needs per-turn token counts, which tokenops cannot
+// yet read from opencode. Declining out loud beats installing a hook that
+// measures nothing.
+func TestHooksInstallOpencodeRefusesCoach(t *testing.T) {
+	err := runHooks(t, "install", "--coach", "--client", "opencode", "--settings", t.TempDir())
+	if err == nil {
+		t.Fatal("install --coach succeeded for opencode; want a refusal")
+	}
+	if !strings.Contains(err.Error(), "read-guard only") {
+		t.Errorf("error = %q, want it to name what opencode does support", err)
+	}
+}
