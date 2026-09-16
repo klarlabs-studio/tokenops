@@ -121,6 +121,10 @@ func newHooksInstallCmd() *cobra.Command {
 
 			fmt.Fprintf(out, "Installing tokenops %s hooks using binary:\n  %s\n", version.String(), exe)
 
+			if strings.EqualFold(client, hookClientCursor) {
+				return installCursorHooks(out, path, exe, specsFor(coach, readGuard, budget), dryRun)
+			}
+
 			settings, _, err := loadSettings(path)
 			if err != nil {
 				return err
@@ -565,14 +569,16 @@ func readGuardArgs(guardMode readguard.Mode) []string {
 const (
 	hookClientClaudeCode = "claude-code"
 	hookClientCodex      = "codex"
+	hookClientCursor     = "cursor"
 )
 
 func validateHookClient(c string) error {
 	switch strings.ToLower(strings.TrimSpace(c)) {
-	case "", hookClientClaudeCode, hookClientCodex:
+	case "", hookClientClaudeCode, hookClientCodex, hookClientCursor:
 		return nil
 	default:
-		return fmt.Errorf("--client %q: want %s or %s", c, hookClientClaudeCode, hookClientCodex)
+		return fmt.Errorf("--client %q: want one of %s, %s, %s",
+			c, hookClientClaudeCode, hookClientCodex, hookClientCursor)
 	}
 }
 
@@ -595,6 +601,13 @@ func resolveHookConfigPath(client, override string) (string, error) {
 		}
 		return filepath.Join(home, ".codex", "hooks.json"), nil
 	}
+	if strings.EqualFold(client, hookClientCursor) {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("resolve home for ~/.cursor/hooks.json: %w", err)
+		}
+		return filepath.Join(home, ".cursor", "hooks.json"), nil
+	}
 	return resolveSettingsPath(""), nil
 }
 
@@ -612,6 +625,12 @@ func resolveHookConfigPath(client, override string) (string, error) {
 // codebase keeps finding in other people's tools; declining out loud is
 // the only honest option until Codex grows a read tool.
 func refuseUnsupportedHook(client string, readGuard bool) error {
+	if readGuard && strings.EqualFold(client, hookClientCursor) {
+		return errors.New(
+			"read-guard cannot work on cursor: its beforeReadFile hook is observe-only — only " +
+				"beforeShellExecution and beforeMCPExecution honour a permission decision, so a read " +
+				"cannot be refused. Install --coach for cursor; read-guard stays claude-code only")
+	}
 	if readGuard && strings.EqualFold(client, hookClientCodex) {
 		return errors.New(
 			"read-guard cannot work on codex: it has no file-read tool, so there is no read to intervene in " +
@@ -634,4 +653,95 @@ func writeHookTrustNote(out io.Writer, client string) {
 	fmt.Fprintln(out, "\nNot armed yet. Codex skips a hook until you trust it:")
 	fmt.Fprintln(out, "  run `/hooks` in Codex, review the tokenops entry, and trust it.")
 	fmt.Fprintln(out, "Until then the hook is written but silently not run.")
+}
+
+// installCursorHooks writes ~/.cursor/hooks.json.
+//
+// Cursor's schema is FLAT where Claude Code's and Codex's are nested:
+// an event maps straight to a list of entries carrying `command` and
+// `matcher`, with no inner "hooks" array, and the document needs a
+// top-level "version". Reusing the nested writer would produce a file
+// Cursor parses without error and never acts on — installed, reporting
+// success, doing nothing.
+//
+// Event names are lower-camel too: "stop", not "Stop".
+func installCursorHooks(out io.Writer, path, exe string, specs []hookSpec, dryRun bool) error {
+	doc, _, err := loadSettings(path)
+	if err != nil {
+		return err
+	}
+	if doc == nil {
+		doc = map[string]any{}
+	}
+	doc["version"] = float64(1)
+	hooks, _ := doc["hooks"].(map[string]any)
+	if hooks == nil {
+		hooks = map[string]any{}
+	}
+
+	var changes []string
+	for _, sp := range specs {
+		event := cursorEventName(sp.event)
+		entry := map[string]any{
+			"command": strings.Join(append([]string{shellQuote(exe)}, sp.args...), " "),
+		}
+		list, _ := hooks[event].([]any)
+		if replaceMarkedEntry(&list, entry, sp.marker) {
+			changes = append(changes, fmt.Sprintf("%s -> event %q", sp.name, event))
+		}
+		hooks[event] = list
+	}
+	doc["hooks"] = hooks
+
+	if len(changes) == 0 {
+		fmt.Fprintln(out, "Already up to date — no changes.")
+		return nil
+	}
+	for _, c := range changes {
+		fmt.Fprintf(out, "  + %s\n", c)
+	}
+	if dryRun {
+		fmt.Fprintln(out, "\n--dry-run: not writing. Resulting hooks.json:")
+		b, _ := json.MarshalIndent(doc, "", "  ")
+		fmt.Fprintln(out, string(b))
+		return nil
+	}
+	if err := writeSettings(path, doc); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "Wrote %s (backup at %s.bak)\n", path, path)
+	return nil
+}
+
+// cursorEventName maps our event names to Cursor's. Only the coaching
+// nudge reaches here; read-guard is refused for Cursor before this point.
+func cursorEventName(event string) string {
+	if strings.EqualFold(event, "Stop") {
+		return "stop"
+	}
+	return event
+}
+
+// replaceMarkedEntry adds or updates our own entry in a Cursor hook list,
+// leaving anyone else's alone. Reports whether anything changed, so a
+// re-run of `make install-hooks` does not rewrite a file it need not
+// touch.
+func replaceMarkedEntry(list *[]any, entry map[string]any, marker string) bool {
+	for i, raw := range *list {
+		m, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		cmd, _ := m["command"].(string)
+		if !strings.Contains(cmd, marker) {
+			continue
+		}
+		if cmd == entry["command"] {
+			return false // already exactly right
+		}
+		(*list)[i] = entry
+		return true
+	}
+	*list = append(*list, entry)
+	return true
 }

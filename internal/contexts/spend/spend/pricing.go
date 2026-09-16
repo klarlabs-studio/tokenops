@@ -188,3 +188,50 @@ func (t Table) Lookup(provider eventschema.Provider, model string) (Rate, error)
 	}
 	return bestRate, nil
 }
+
+// LookupAnyProvider prices a model when the vendor behind it is not
+// known — the case a reseller creates.
+//
+// Cursor reports `grok-4.6` without saying whose model it is, and the
+// card is keyed by (provider, model). Searching every provider answers
+// it, but only when the answer is unambiguous: if two vendors both price
+// a model of that name, this reports not-found rather than picking one.
+// A rate chosen by coin flip is worse than an honest "unpriced", which
+// the callers already surface.
+func (t Table) LookupAnyProvider(model string) (Rate, eventschema.Provider, error) {
+	if model == "" {
+		return Rate{}, "", fmt.Errorf("%w: empty model", ErrUnknownModel)
+	}
+	var (
+		found    []eventschema.Provider
+		rate     Rate
+		provider eventschema.Provider
+	)
+	seen := map[eventschema.Provider]bool{}
+	for p := range providersIn(t) {
+		r, err := t.Lookup(p, model)
+		if err != nil || seen[p] {
+			continue
+		}
+		seen[p] = true
+		found = append(found, p)
+		rate, provider = r, p
+	}
+	switch len(found) {
+	case 0:
+		return Rate{}, "", fmt.Errorf("%w: no provider prices %s", ErrUnknownModel, model)
+	case 1:
+		return rate, provider, nil
+	default:
+		return Rate{}, "", fmt.Errorf("%w: %s is priced by %d providers; ambiguous", ErrUnknownModel, model, len(found))
+	}
+}
+
+// providersIn lists the distinct providers the table prices.
+func providersIn(t Table) map[eventschema.Provider]struct{} {
+	out := map[eventschema.Provider]struct{}{}
+	for k := range t.Rates {
+		out[k.Provider] = struct{}{}
+	}
+	return out
+}

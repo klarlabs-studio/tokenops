@@ -292,7 +292,83 @@ func TestHooksInstallRefusesReadGuardOnCodex(t *testing.T) {
 // An unknown client is rejected rather than silently treated as Claude
 // Code, which would write the wrong file and report success.
 func TestHooksInstallRejectsAnUnknownClient(t *testing.T) {
-	if err := runHooks(t, "install", "--coach", "--client", "cursor"); err == nil {
+	if err := runHooks(t, "install", "--coach", "--client", "aider"); err == nil {
 		t.Error("an unsupported client was accepted")
+	}
+}
+
+// Cursor's schema is FLAT where Claude Code's and Codex's are nested: an
+// event maps straight to entries carrying `command`, with no inner
+// "hooks" array, and the document needs a top-level "version". Reusing
+// the nested writer would produce a file Cursor parses without error and
+// never acts on.
+func TestHooksInstallCursorWritesTheFlatSchema(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "hooks.json")
+	if err := runHooks(t, "install", "--coach", "--client", "cursor", "--settings", path); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+	var doc struct {
+		Version int                         `json:"version"`
+		Hooks   map[string][]map[string]any `json:"hooks"`
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if doc.Version != 1 {
+		t.Errorf("version = %d, want 1", doc.Version)
+	}
+	// Lower-camel: Cursor's event is "stop", not "Stop".
+	entries := doc.Hooks["stop"]
+	if len(entries) == 0 {
+		t.Fatalf("no stop hook written:\n%s", b)
+	}
+	if _, nested := entries[0]["hooks"]; nested {
+		t.Error("entry has a nested hooks array; Cursor's schema is flat")
+	}
+	cmdStr, _ := entries[0]["command"].(string)
+	if !strings.Contains(cmdStr, "coach-hook") {
+		t.Errorf("command = %q, want the coach-hook subcommand", cmdStr)
+	}
+}
+
+// Re-running install must not duplicate our entry or rewrite a file it
+// need not touch — `make install-hooks` runs once per clone and often
+// more.
+func TestHooksInstallCursorIsIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "hooks.json")
+	for range 3 {
+		if err := runHooks(t, "install", "--coach", "--client", "cursor", "--settings", path); err != nil {
+			t.Fatalf("install: %v", err)
+		}
+	}
+	var doc struct {
+		Hooks map[string][]map[string]any `json:"hooks"`
+	}
+	b, _ := os.ReadFile(path)
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(doc.Hooks["stop"]); n != 1 {
+		t.Errorf("stop has %d entries after three installs, want 1", n)
+	}
+}
+
+// Cursor's beforeReadFile is observe-only: only beforeShellExecution and
+// beforeMCPExecution honour a permission decision. A read cannot be
+// refused there, so installing read-guard would arm a guard that never
+// guards.
+func TestHooksInstallRefusesReadGuardOnCursor(t *testing.T) {
+	err := runHooks(t, "install", "--read-guard", "--client", "cursor")
+	if err == nil {
+		t.Fatal("install succeeded; want a refusal")
+	}
+	if !strings.Contains(err.Error(), "observe-only") {
+		t.Errorf("error = %q, want it to name why read-guard cannot work there", err)
 	}
 }

@@ -236,6 +236,18 @@ type ledgerEvent struct {
 	Unpriced string `json:"unpriced,omitempty"`
 }
 
+// EvaluateCursor is Evaluate for a Cursor stop event, which carries the
+// turn's tokens in the payload instead of pointing at a transcript.
+func EvaluateCursor(dir string, payload []byte, cfg Config, now time.Time) Decision {
+	dir = resolveDir(dir)
+	_ = os.MkdirAll(dir, 0o755)
+	var c cursorTurn
+	if json.Unmarshal(payload, &c) != nil {
+		return Decision{}
+	}
+	return evaluateCursor(dir, c, cfg, now)
+}
+
 // Evaluate is the coach's decision + side effects for one Stop event. dir is
 // the state/ledger root (defaults to ~/.tokenops/coach-hook when empty). It
 // loads session state, reads the tail of transcriptPath, sums the full
