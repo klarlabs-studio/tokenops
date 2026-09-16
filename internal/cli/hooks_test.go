@@ -469,12 +469,33 @@ func TestHooksInstallOpencodeIsIdempotent(t *testing.T) {
 // The coaching nudge needs per-turn token counts, which tokenops cannot
 // yet read from opencode. Declining out loud beats installing a hook that
 // measures nothing.
-func TestHooksInstallOpencodeRefusesCoach(t *testing.T) {
-	err := runHooks(t, "install", "--coach", "--client", "opencode", "--settings", t.TempDir())
-	if err == nil {
-		t.Fatal("install --coach succeeded for opencode; want a refusal")
+// The coaching half delivers through a TUI toast — opencode has no
+// end-of-turn hook that takes a return value, so that is the one channel
+// a plugin has to reach the operator.
+func TestHooksInstallOpencodeGeneratesBothHalves(t *testing.T) {
+	dir := t.TempDir()
+	if err := runHooks(t, "install", "--read-guard", "--coach", "--budget", "17",
+		"--client", "opencode", "--settings", dir); err != nil {
+		t.Fatalf("install: %v", err)
 	}
-	if !strings.Contains(err.Error(), "read-guard only") {
-		t.Errorf("error = %q, want it to name what opencode does support", err)
+	b, _ := os.ReadFile(filepath.Join(dir, "tokenops-read-guard.ts"))
+	src := string(b)
+	for _, want := range []string{
+		`"tool.execute.before"`,          // read-guard
+		`event?.type !== "session.idle"`, // the coaching trigger
+		`client.tui.showToast`,           // the only delivery channel
+		`"--budget", "17"`,               // --budget is not silently ignored here
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("generated plugin is missing %q", want)
+		}
+	}
+}
+
+// Selecting nothing is a mistake worth naming rather than writing an
+// empty plugin.
+func TestHooksInstallOpencodeRefusesAnEmptySelection(t *testing.T) {
+	if err := runHooks(t, "install", "--client", "opencode", "--settings", t.TempDir()); err == nil {
+		t.Error("install with neither --coach nor --read-guard succeeded")
 	}
 }

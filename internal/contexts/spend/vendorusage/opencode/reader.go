@@ -75,7 +75,26 @@ func DefaultRoot() (string, error) {
 // ReadMessages opens dbPath read-only and invokes visit for every assistant
 // turn that carries token usage. A missing database is not an error (opencode
 // may not be installed) — visit simply isn't called.
+// ReadSession is ReadMessages scoped to one session.
+//
+// The coaching hook runs when a session goes idle and needs only that
+// session's turns. Scanning all of them would mean a full pass over a
+// store that reaches 1.2 GB here, on a path that fires every time the
+// operator stops typing.
+func ReadSession(dbPath, sessionID string, visit func(Turn) error) error {
+	if sessionID == "" {
+		return nil
+	}
+	return readMessages(dbPath, sessionID, visit)
+}
+
 func ReadMessages(dbPath string, visit func(Turn) error) error {
+	return readMessages(dbPath, "", visit)
+}
+
+// readMessages walks the message table, optionally narrowed to one
+// session.
+func readMessages(dbPath, sessionID string, visit func(Turn) error) error {
 	if _, err := os.Stat(dbPath); err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -91,7 +110,13 @@ func ReadMessages(dbPath string, visit func(Turn) error) error {
 	}
 	defer func() { _ = db.Close() }()
 
-	rows, err := db.Query(`SELECT id, session_id, data FROM message`)
+	query := `SELECT id, session_id, data FROM message`
+	args := []any{}
+	if sessionID != "" {
+		query += ` WHERE session_id = ?`
+		args = append(args, sessionID)
+	}
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		return fmt.Errorf("query opencode messages: %w", err)
 	}
