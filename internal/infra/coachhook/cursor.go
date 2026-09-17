@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/infra/cursorturns"
 )
 
 // Cursor needs no transcript at all: its stop hook reports the turn's
@@ -117,6 +118,17 @@ func evaluateCursor(dir string, c cursorTurn, cfg Config, now time.Time) Decisio
 	if budget <= 0 {
 		budget = DefaultBudgetUSD
 	}
+
+	// Record the turn for ingestion before deciding anything. Cursor
+	// keeps no per-turn record of its own, so this payload is the only
+	// place these numbers ever exist — losing them to an early return
+	// would keep Cursor on quota-only spend forever.
+	cursorturns.Append(cfg.TurnLedgerDir, cursorturns.Turn{
+		TS: now.UTC(), ConversationID: c.ConversationID, GenerationID: c.GenerationID,
+		Model: c.Model, ModelID: c.ModelID,
+		InputTokens: c.InputTokens, OutputTokens: c.OutputTokens,
+		CacheReadTokens: c.CacheReadTokens, CacheWriteTokens: c.CacheWriteTokens,
+	})
 
 	// Already counted this generation? Fall through to the tier check
 	// without adding it again.

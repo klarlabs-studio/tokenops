@@ -21,7 +21,7 @@ so everything rolls up **turn → session → project**.
 | Claude Code | ✅ `~/.claude/projects` | ✅ | ✅ `ANTHROPIC_BASE_URL` | reference integration; also the `read-guard` hook |
 | Codex CLI | ✅ `~/.codex/sessions` | ✅ | ✅ `OPENAI_BASE_URL` | reader surfaces OpenAI's official rate-limit % |
 | opencode | ✅ SQLite store | ✅ | ✅ per-provider baseURL | reader is multi-provider |
-| Cursor | ⚠️ quota only | ✅ | ❌ *(agent traffic goes through Cursor's backend)* | the usage cookie gives plan consumption, not per-turn tokens |
+| Cursor | ✅ *(via the stop hook)* | ✅ | ❌ *(agent traffic goes through Cursor's backend)* | the usage cookie gives plan consumption; the hook gives per-turn tokens |
 | Gemini CLI | ❌ *(no token log)* | ✅ | ✅ base-URL override | its `logs.json` records prompts only — no token data |
 | Desktop apps | ❌ | ✅ *(if MCP host)* | ❌ *(no base-URL override)* | MCP tools only; Anthropic cookie for Max % |
 | GitHub-hosted (Copilot agent) | ⚠️ quota only | ❌ | ❌ | the Copilot quota endpoint gives bucket %, nothing per-turn |
@@ -40,7 +40,7 @@ we got round to.
 
 | Capability | Needs | Claude Code | Codex CLI | opencode | Cursor | Gemini CLI | Desktop | GitHub-hosted |
 |---|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| Spend + token accounting | a local token log | ✅ | ✅ | ✅ | ⚠️ | ❌ | ❌ | ⚠️ |
+| Spend + token accounting | a local token log | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ⚠️ |
 | Ground truth + routing *enforcement* | a base-URL override | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
 | Routing *advice* (`tokenops_routing_advise`) | an MCP host | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Prompt + reply coaching | prompt text on disk | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -55,10 +55,16 @@ we got round to.
 — not a backlog item. ⚠️ means partial, and each one means something
 specific:
 
-- **Cursor and GitHub-hosted spend** is *quota*, not tokens. Both expose a
-  consumption endpoint the vendor's own UI reads — how much of the plan
-  is gone — and neither exposes per-turn token counts. Useful for
-  headroom; useless for "which project burns the most".
+- **GitHub-hosted spend** is *quota*, not tokens. The Copilot endpoint
+  reports how much of the plan is gone and never a per-turn count. Useful
+  for headroom; useless for "which project burns the most".
+
+  **Cursor used to be in this bucket and no longer is.** Its usage
+  endpoint still reports only a percentage, but its `stop` hook carries
+  the turn's `input`, `output`, `cache_read` and `cache_write` — so
+  installing the coaching hook (`tokenops hooks install --coach --client
+  cursor`) is also what gives Cursor per-turn spend. Without the hook it
+  falls back to quota only.
 
 ### Coaching is pull-only on Desktop and GitHub clients
 

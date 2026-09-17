@@ -401,6 +401,14 @@ Two more things the implementation accounts for. Cursor's numbers are
 deduplicated on that id rather than summed. And the token fields are
 **optional**: absent means "not reported", never zero-cost.
 
+Installing it is also what gives Cursor **per-turn spend**. Cursor keeps
+no per-turn record on disk and its usage endpoint reports only a
+percentage of plan consumed — the hook payload is the only place those
+token counts ever exist. `coach-hook` records each one to
+`~/.tokenops/cursor-turns/`, and the daemon ingests it, so Cursor joins
+every other client in `spend`, burn rate, forecast and top consumers.
+Without the hook, Cursor stays quota-only.
+
 The schema is **flat**, unlike Claude Code's and Codex's — an event maps
 straight to entries carrying `command`, with a top-level `"version": 1`
 and a lower-camel event name. `--read-guard --client cursor` is
