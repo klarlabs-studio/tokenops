@@ -316,15 +316,29 @@ query mid-conversation.
   GPT + Copilot stacks
 - Anyone who has lost focus to a mid-task rate-limit cutoff on any provider
 
-If you don't recognise the struggling moment, this isn't the product for you
-yet.
+If you don't recognise that moment, this isn't for you — and that is a fine
+outcome. It was built to solve it, not to be adopted.
 
-## Looking for early users
+## Contributing
 
-If you'd trade a 15-minute call for hands-on help wiring TokenOps to your
-workflow, [open an issue on GitHub](https://github.com/klarlabs-studio/tokenops/issues/new)
-or DM `@felixgeelhaar`. Current focus is the first ten real users — across any
-provider mix.
+Apache 2.0, and built for its maintainer's own daily use: every number on this
+page came off this machine, including the `C`.
+
+Issues and pull requests are the front door. Two kinds of contribution are
+worth more than the rest:
+
+- **A reader that gets your client wrong.** Every silent zero this project has
+  found was found the same way — counting a real store by hand and comparing
+  it to what TokenOps reported. If those two numbers disagree on your machine,
+  that comparison *is* the bug report, and it is the most useful thing you can
+  send.
+- **A rate correction with the vendor page attached.** Rates are pinned per
+  model with dated sources, and a `verified` row is one somebody hand-checked.
+  This repo has twice paid for acting on a rate it had not.
+
+[Open an issue](https://github.com/klarlabs-studio/tokenops/issues/new) when
+either applies; [CONTRIBUTING.md](https://github.com/klarlabs-studio/tokenops/blob/main/CONTRIBUTING.md)
+covers the rest.
 
 ---
 
