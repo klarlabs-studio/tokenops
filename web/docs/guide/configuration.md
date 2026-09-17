@@ -147,9 +147,13 @@ storage:
 
 retention:                    # opt-in; empty keep deletes nothing
   interval: 1h
-  keep:
+  keep:                       # by event type
     prompt: 30d
     workflow: 90d
+  keep_by_source:             # by reader; overrides the type window
+    opencode: forever         # never prune this source
+    codex-jsonl: forever
+    read-guard: 7d            # may also be shorter than the type window
 
 tls:
   enabled: false              # serve HTTPS with auto-minted cert

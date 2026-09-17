@@ -192,3 +192,151 @@ func TestBatchWaitFlushes(t *testing.T) {
 		t.Errorf("BatchWait did not flush: total=%d", sink.total())
 	}
 }
+
+// flakySink fails the first failures-many AppendBatch calls, then succeeds.
+// It models a store that is briefly too slow (a large WAL, a checkpoint in
+// progress) rather than permanently broken.
+type flakySink struct {
+	mu       sync.Mutex
+	failures int
+	rows     []*eventschema.Envelope
+}
+
+func (f *flakySink) AppendBatch(_ context.Context, envs []*eventschema.Envelope) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failures > 0 {
+		f.failures--
+		return errors.New("context deadline exceeded")
+	}
+	f.rows = append(f.rows, envs...)
+	return nil
+}
+
+func (f *flakySink) total() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.rows)
+}
+
+// A batch the sink rejects must not be thrown away. Discarding it loses
+// every row in it with no trace the caller can act on, which on a real
+// machine silently cost 31% of one client's history.
+func TestFlushRetriesFailedBatch(t *testing.T) {
+	sink := &flakySink{failures: 2}
+	bus := NewAsync(sink, Options{
+		BatchSize: 2, BatchWait: 20 * time.Millisecond, Logger: discardLogger(),
+	})
+	defer func() { _ = bus.Close(2 * time.Second) }()
+	bus.Publish(newEnv("a"))
+	bus.Publish(newEnv("b"))
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) && sink.total() < 2 {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := sink.total(); got != 2 {
+		t.Errorf("rows persisted after retry = %d, want 2 (batch was discarded)", got)
+	}
+	if got := bus.DroppedCount(); got != 0 {
+		t.Errorf("DroppedCount = %d, want 0: the batch eventually landed", got)
+	}
+}
+
+// PublishWait is the ingestion path's contract: a backfill has no hot-path
+// latency budget to protect, so it must wait for room rather than drop.
+// Publish's non-blocking drop is correct for the proxy and ruinous here.
+func TestPublishWaitBlocksInsteadOfDropping(t *testing.T) {
+	release := make(chan struct{})
+	sink := &blockingSink{release: release}
+	bus := NewAsync(sink, Options{
+		QueueCapacity: 2, BatchSize: 1, BatchWait: time.Hour, Logger: discardLogger(),
+	})
+
+	const n = 20
+	done := make(chan error, 1)
+	go func() {
+		for i := 0; i < n; i++ {
+			if err := bus.PublishWait(context.Background(), newEnv(string(rune('a'+i)))); err != nil {
+				done <- err
+				return
+			}
+		}
+		done <- nil
+	}()
+
+	// Let the sink drain; without backpressure the queue would overflow
+	// and most of these envelopes would vanish.
+	go func() {
+		for i := 0; i < n+4; i++ {
+			select {
+			case release <- struct{}{}:
+			case <-time.After(2 * time.Second):
+				return
+			}
+		}
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("PublishWait: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("PublishWait never completed")
+	}
+	_ = bus.Close(2 * time.Second)
+
+	if got := bus.DroppedCount(); got != 0 {
+		t.Errorf("DroppedCount = %d, want 0: PublishWait must not drop", got)
+	}
+	if got := sink.total(); got != n {
+		t.Errorf("rows persisted = %d, want %d", got, n)
+	}
+}
+
+// PublishWait honours cancellation so a shutdown cannot wedge a poller.
+func TestPublishWaitRespectsContext(t *testing.T) {
+	sink := &blockingSink{release: make(chan struct{})}
+	bus := NewAsync(sink, Options{
+		QueueCapacity: 1, BatchSize: 1, BatchWait: time.Hour, Logger: discardLogger(),
+	})
+	defer func() { _ = bus.Close(time.Second) }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	var err error
+	for i := 0; i < 100; i++ {
+		if err = bus.PublishWait(ctx, newEnv("x")); err != nil {
+			break
+		}
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("err = %v, want context.DeadlineExceeded", err)
+	}
+}
+
+// blockingSink accepts a batch only once a token is read from release.
+type blockingSink struct {
+	mu      sync.Mutex
+	rows    []*eventschema.Envelope
+	release chan struct{}
+}
+
+func (b *blockingSink) AppendBatch(ctx context.Context, envs []*eventschema.Envelope) error {
+	select {
+	case <-b.release:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.rows = append(b.rows, envs...)
+	return nil
+}
+
+func (b *blockingSink) total() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.rows)
+}

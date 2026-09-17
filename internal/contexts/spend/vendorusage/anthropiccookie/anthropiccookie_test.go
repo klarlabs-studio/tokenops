@@ -190,3 +190,8 @@ func TestNewEnvelopeShape(t *testing.T) {
 		t.Errorf("extra_usage_current = %q", env.Attributes["extra_usage_current"])
 	}
 }
+
+func (b *captureBus) PublishWait(_ context.Context, env *eventschema.Envelope) error {
+	b.Publish(env)
+	return nil
+}
