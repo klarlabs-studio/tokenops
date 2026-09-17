@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.57.0 - 2026-09-17
+
+Three paths were discarding ingested usage events while reporting
+success, found the same way as last release's four: by enabling every
+reader on a real machine and counting the source stores independently.
+opencode held 48,540 assistant messages with token usage and the store
+had 33,316; Codex had 3,597 turns and the store had 845.
+
+### Fixed
+
+- **The event bus dropped envelopes whenever its queue filled.** A
+  non-blocking send is right for the proxy hot path, which must not
+  block on storage, and wrong for ingestion: a poller advances its
+  watermark *before* publishing, so a dropped envelope is never
+  revisited. The loss was permanent, invisible until one line at
+  shutdown (`published=49918 dropped=36072`), and reproduced identically
+  on every restart because the queue saturated at the same point each
+  pass. It was not even a clean truncation — February lost 63% of its
+  rows, March none, April 26% — so every period was understated by a
+  different, undetectable amount. Ingestion now waits for room. (#278)
+- **A batch the store rejected was discarded whole**, up to 64 rows at a
+  time, with no retry. Rejections were routine rather than exceptional:
+  the write-ahead log had grown to 372MB beside a 396MB database and an
+  ordinary insert no longer fit in its five-second deadline. Batches are
+  now retried with backoff, and rows count as lost only once the bus has
+  actually given up on them. (#278)
+- **The WAL never checkpointed.** SQLite can only checkpoint up to the
+  oldest snapshot a reader still holds, and this store is read
+  continuously; `VACUUM` does not truncate a WAL, so the existing
+  reclaim never touched it. Retention now checkpoints on every pass
+  rather than only after one that deleted rows — the log grows with
+  writes, so gating it on a deletion left the busiest stores never
+  checkpointed. (#278)
+- **Retention deleted imported history minutes after it landed.** Every
+  vendor-usage reader writes type `prompt`, so one window governed
+  Claude Code, Codex, opencode, Cursor and Copilot together with the
+  live stream. A backfill is by nature historical: the 120-day window
+  removed all 33,316 opencode rows four minutes after ingestion. (#278)
+
+### Added
+
+- **`retention.keep_by_source`** sets a retention window per reader,
+  overriding the per-type window in both directions — `forever` for
+  imported history, shorter than the type window for something like
+  `read-guard`. A type policy now excludes every source holding its own
+  policy, so a source rule cannot be silently overruled by the broader
+  one. `forever` and `never` are accepted alongside `0`, which in a
+  delete path reads like "keep for zero time". (#278)
+
 ## 0.56.0 - 2026-09-16
 
 Every client TokenOps reads can now also be coached, and four silent

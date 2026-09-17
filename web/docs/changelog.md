@@ -4,7 +4,40 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.56.0**.
+Current release: **v0.57.0**.
+
+## v0.57.0 — the events that never arrived
+
+Last release found four readers that measured nothing. This one follows the
+same method past the reader and into the store, and finds the events being
+counted correctly and then thrown away.
+
+Enabling every reader on one real machine and counting the source stores
+independently: opencode held 48,540 assistant messages with token usage and
+the store had 33,316. Codex had 3,597 turns and the store had 845. Three
+separate paths were discarding events while reporting success.
+
+The event bus dropped envelopes whenever its queue filled. That is the right
+trade for the proxy, which must not block on storage, and the wrong one for a
+backfill: a poller advances its watermark before publishing, so a dropped
+envelope is never revisited. The loss was permanent, surfaced only as one line
+at shutdown, and reproduced identically on every restart. It was not even a
+clean truncation — one month lost 63% of its rows, the next none — so every
+period was understated by a different amount, which is harder to notice than
+losing everything.
+
+Underneath it, a write-ahead log that had grown to 372MB beside a 396MB
+database, because SQLite can only checkpoint up to the oldest snapshot a
+reader still holds and this store is read continuously. Inserts stopped
+fitting in their deadline, and a rejected batch was discarded whole rather
+than retried.
+
+And retention, which could only be configured per event type — while every
+vendor-usage reader writes the same type. One window governed Claude Code,
+Codex, opencode and Cursor together with the live stream, so importing
+history meant watching it be deleted four minutes later. `keep_by_source`
+now sets a window per reader: keep what you imported, still trim what
+streams in.
 
 ## v0.56.0 — every client, and four silent zeros
 
