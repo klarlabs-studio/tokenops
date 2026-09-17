@@ -83,6 +83,9 @@ type Config struct {
 	// snapshot knew gpt-5.5 still had its coach-hook budget measured
 	// against a card that did not, so the tiers could not fire.
 	Rates func(at time.Time) spend.Table
+	// TurnLedgerDir is where a Cursor turn's tokens are recorded for the
+	// daemon to ingest. Empty takes the default.
+	TurnLedgerDir string
 	// Promotion is the case for letting the read guard start refusing
 	// redundant re-reads, built from the operator's own ledger. Empty
 	// when the evidence does not justify it, when the guard is already

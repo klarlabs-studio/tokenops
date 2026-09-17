@@ -30,6 +30,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
 	copilotusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilot"
 	cursorusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursor"
+	cursorturnspoll "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursorturns"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
 	"go.klarlabs.de/tokenops/internal/contexts/telemetry/retention"
 	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
@@ -307,6 +308,23 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 				"interval", cfg.VendorUsage.Cursor.Interval,
 				"user_id", cfg.VendorUsage.Cursor.UserID,
 			)
+		}
+		// Cursor's own endpoint reports plan consumption — a percentage,
+		// not tokens. Its stop hook is the only place per-turn counts
+		// exist, and coach-hook records them; this is what turns that
+		// ledger into spend. Unconditional because the ledger is empty
+		// until the hook is installed, so an operator who does not run
+		// Cursor pays nothing for it.
+		{
+			p := cursorturnspoll.NewPoller(bus, cursorturnspoll.PollerOptions{
+				PlanCovered: planCostSource(cfg, eventschema.ProviderCursor) == eventschema.CostSourcePlanIncluded,
+				Logger:      logger,
+			})
+			go func() {
+				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					logger.Warn("cursor turn poller exited", "err", err)
+				}
+			}()
 		}
 		if cfg.VendorUsage.AnthropicCookie.Enabled {
 			p := anthropiccookie.NewPoller(bus, anthropiccookie.PollerOptions{
