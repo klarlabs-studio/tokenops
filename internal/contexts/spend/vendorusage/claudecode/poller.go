@@ -151,8 +151,7 @@ func (p *Poller) scan(ctx context.Context, path string) {
 				if !ok {
 					continue
 				}
-				p.bus.Publish(env)
-				p.publishes++
+				p.publishWait(ctx, env)
 			}
 		}
 		p.lastSeen[row.Date] = seen
@@ -230,4 +229,23 @@ func splitDelta(delta int64, m Model) (input, output int64) {
 	input = delta * m.InputTokens / total
 	output = delta - input
 	return
+}
+
+// publishWait hands env to the bus and waits for room rather than letting
+// it be dropped. Ingestion advances its watermark before publishing, so a
+// dropped envelope is never revisited: the loss is permanent, silent, and
+// reproduces identically on every restart. Waiting costs a backfill some
+// wall-clock and costs the operator nothing.
+//
+// The caller holds p.mu for the whole scan, so this must not take it —
+// sync.Mutex is not reentrant and locking here deadlocks the poller.
+func (p *Poller) publishWait(ctx context.Context, env *eventschema.Envelope) {
+	if env == nil {
+		return
+	}
+	if err := p.bus.PublishWait(ctx, env); err != nil {
+		p.opts.Logger.Warn("usage event not stored", "err", err)
+		return
+	}
+	p.publishes++
 }

@@ -242,3 +242,8 @@ func TestObserverDoesNotEmitForControlEndpoints(t *testing.T) {
 		t.Errorf("control endpoint emitted %d events", got)
 	}
 }
+
+func (c *captureBus) PublishWait(_ context.Context, env *eventschema.Envelope) error {
+	c.Publish(env)
+	return nil
+}

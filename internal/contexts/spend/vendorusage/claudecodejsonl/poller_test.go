@@ -161,3 +161,8 @@ func TestNewEnvelopeStampsCostSource(t *testing.T) {
 		t.Errorf("metered CostSource = %q; want empty", pe.CostSource)
 	}
 }
+
+func (b *captureBus) PublishWait(_ context.Context, env *eventschema.Envelope) error {
+	b.Publish(env)
+	return nil
+}

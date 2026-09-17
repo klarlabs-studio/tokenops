@@ -12,10 +12,10 @@ import (
 // policies. Invalid keys/durations are errors; Validate already
 // rejects them at load time.
 func retentionPolicies(c config.RetentionConfig) ([]retention.Policy, error) {
-	if len(c.Keep) == 0 {
+	if len(c.Keep) == 0 && len(c.KeepBySource) == 0 {
 		return nil, nil
 	}
-	out := make([]retention.Policy, 0, len(c.Keep))
+	out := make([]retention.Policy, 0, len(c.Keep)+len(c.KeepBySource))
 	for name, raw := range c.Keep {
 		et, ok := retentionEventType(name)
 		if !ok {
@@ -29,6 +29,26 @@ func retentionPolicies(c config.RetentionConfig) ([]retention.Policy, error) {
 			continue
 		}
 		out = append(out, retention.Policy{EventType: et, KeepFor: d})
+	}
+	// Source policies are emitted even when the window is zero. A zero
+	// window prunes nothing, but the pruner still needs the policy in
+	// order to exclude that source from its type's window — dropping it
+	// here would let the broader rule delete the rows the operator asked
+	// to keep forever.
+	for key, raw := range c.KeepBySource {
+		typName, src := config.SplitRetentionSourceKey(key)
+		if src == "" {
+			return nil, fmt.Errorf("retention.keep_by_source: empty source in key %q", key)
+		}
+		et, ok := retentionEventType(typName)
+		if !ok {
+			return nil, fmt.Errorf("retention.keep_by_source[%s]: unknown event type %q", key, typName)
+		}
+		d, err := config.ParseKeepDuration(raw)
+		if err != nil {
+			return nil, fmt.Errorf("retention.keep_by_source[%s]: %w", key, err)
+		}
+		out = append(out, retention.Policy{EventType: et, Source: src, KeepFor: d})
 	}
 	return out, nil
 }

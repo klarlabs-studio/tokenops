@@ -162,3 +162,145 @@ func TestDefaultIntervalApplied(t *testing.T) {
 		t.Errorf("default interval = %s", p.cfg.Interval)
 	}
 }
+
+// A pass that deletes nothing must still checkpoint the WAL. Left alone,
+// the -wal file grows without bound while readers keep the automatic
+// checkpoint from ever resetting it; on one real machine it reached 372MB
+// beside a 396MB database, and every insert then took long enough that
+// whole batches timed out and were discarded.
+func TestPruneCheckpointsWALEvenWithNoDeletions(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+
+	// Write enough to push pages into the WAL.
+	for i := 0; i < 400; i++ {
+		env := mkPrompt("wal-"+string(rune('a'+i%26))+string(rune('a'+i/26)), time.Now().UTC())
+		if err := store.Append(ctx, env); err != nil {
+			t.Fatalf("append: %v", err)
+		}
+	}
+
+	p := New(store, Config{
+		Logger:  discardLogger(),
+		Reclaim: true,
+		Policies: []Policy{
+			// A window wide enough that nothing is eligible for deletion.
+			{EventType: eventschema.EventTypePrompt, KeepFor: 100 * 365 * 24 * time.Hour},
+		},
+	})
+	res, err := p.Run(ctx)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	for _, r := range res {
+		if r.Deleted != 0 {
+			t.Fatalf("expected no deletions, got %d", r.Deleted)
+		}
+	}
+
+	var busy, logSize, checkpointed int
+	row := store.DB().QueryRowContext(ctx, "PRAGMA wal_checkpoint(PASSIVE)")
+	if err := row.Scan(&busy, &logSize, &checkpointed); err != nil {
+		t.Fatalf("wal_checkpoint: %v", err)
+	}
+	// After a TRUNCATE checkpoint in the pass, the WAL should hold
+	// (almost) nothing. A large residual means the pass never ran one.
+	if logSize > 64 {
+		t.Errorf("WAL still holds %d frames after prune; checkpoint did not run", logSize)
+	}
+}
+
+func mkPromptFrom(id, source string, ts time.Time) *eventschema.Envelope {
+	e := mkPrompt(id, ts)
+	e.Source = source
+	return e
+}
+
+// Every vendor-usage reader writes type "prompt", so a per-type window is
+// the only knob an operator has and it governs Claude Code, Codex,
+// opencode and Cursor alike. A source window lets imported history be
+// kept on its own terms.
+func TestSourcePolicyOverridesTypePolicy(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	old := time.Now().Add(-200 * 24 * time.Hour).UTC()
+
+	for _, e := range []*eventschema.Envelope{
+		mkPromptFrom("keep-1", "opencode", old),
+		mkPromptFrom("keep-2", "opencode", old),
+		mkPromptFrom("drop-1", "claude-code-jsonl", old),
+	} {
+		if err := store.Append(ctx, e); err != nil {
+			t.Fatalf("append: %v", err)
+		}
+	}
+
+	p := New(store, Config{
+		Logger: discardLogger(),
+		Policies: []Policy{
+			{EventType: eventschema.EventTypePrompt, KeepFor: 120 * 24 * time.Hour},
+			// Keep opencode forever: it is imported history, not live noise.
+			{EventType: eventschema.EventTypePrompt, Source: "opencode", KeepFor: 0},
+		},
+	})
+	if _, err := p.Run(ctx); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	var opencodeLeft, claudeLeft int
+	row := store.DB().QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM events WHERE source = 'opencode'`)
+	if err := row.Scan(&opencodeLeft); err != nil {
+		t.Fatalf("count opencode: %v", err)
+	}
+	row = store.DB().QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM events WHERE source = 'claude-code-jsonl'`)
+	if err := row.Scan(&claudeLeft); err != nil {
+		t.Fatalf("count claude: %v", err)
+	}
+
+	if opencodeLeft != 2 {
+		t.Errorf("opencode rows = %d, want 2: the source policy must win over the type policy", opencodeLeft)
+	}
+	if claudeLeft != 0 {
+		t.Errorf("claude-code-jsonl rows = %d, want 0: the type policy still applies to it", claudeLeft)
+	}
+}
+
+// A shorter source window must prune even when the type window would keep
+// the row, so the override works in both directions.
+func TestSourcePolicyCanBeShorterThanTypePolicy(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	ts := time.Now().Add(-30 * 24 * time.Hour).UTC()
+
+	for _, e := range []*eventschema.Envelope{
+		mkPromptFrom("noisy-1", "read-guard", ts),
+		mkPromptFrom("kept-1", "claude-code-jsonl", ts),
+	} {
+		if err := store.Append(ctx, e); err != nil {
+			t.Fatalf("append: %v", err)
+		}
+	}
+
+	p := New(store, Config{
+		Logger: discardLogger(),
+		Policies: []Policy{
+			{EventType: eventschema.EventTypePrompt, KeepFor: 365 * 24 * time.Hour},
+			{EventType: eventschema.EventTypePrompt, Source: "read-guard", KeepFor: 7 * 24 * time.Hour},
+		},
+	})
+	if _, err := p.Run(ctx); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	var guard, claude int
+	_ = store.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM events WHERE source='read-guard'`).Scan(&guard)
+	_ = store.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM events WHERE source='claude-code-jsonl'`).Scan(&claude)
+	if guard != 0 {
+		t.Errorf("read-guard rows = %d, want 0", guard)
+	}
+	if claude != 1 {
+		t.Errorf("claude-code-jsonl rows = %d, want 1", claude)
+	}
+}

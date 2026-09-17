@@ -159,3 +159,8 @@ func overwriteCache(t *testing.T, path string, tokens map[string]int64) {
 }
 
 func today() string { return time.Now().UTC().Format("2006-01-02") }
+
+func (b *captureBus) PublishWait(_ context.Context, env *eventschema.Envelope) error {
+	b.Publish(env)
+	return nil
+}

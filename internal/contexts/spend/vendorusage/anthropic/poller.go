@@ -155,10 +155,7 @@ func (p *Poller) scan(ctx context.Context) {
 				continue
 			}
 			if p.bus != nil {
-				p.bus.Publish(env)
-				p.mu.Lock()
-				p.publishes++
-				p.mu.Unlock()
+				p.publishWait(ctx, env)
 			}
 		}
 		if bucket.EndingAt.After(newCursor) {
@@ -290,4 +287,22 @@ func safeStr(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// publishWait hands env to the bus and waits for room rather than letting
+// it be dropped. Ingestion marks each row seen before publishing, so a
+// dropped envelope is never revisited: the loss is permanent, silent, and
+// reproduces identically on every restart. Waiting costs a backfill some
+// wall-clock and costs the operator nothing.
+func (p *Poller) publishWait(ctx context.Context, env *eventschema.Envelope) {
+	if env == nil {
+		return
+	}
+	if err := p.bus.PublishWait(ctx, env); err != nil {
+		p.opts.Logger.Warn("usage event not stored", "err", err)
+		return
+	}
+	p.mu.Lock()
+	p.publishes++
+	p.mu.Unlock()
 }

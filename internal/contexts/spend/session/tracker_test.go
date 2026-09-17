@@ -83,3 +83,8 @@ func TestRecordNilBusStillCounts(t *testing.T) {
 		t.Errorf("expected counter to advance even without bus")
 	}
 }
+
+func (b *fakeBus) PublishWait(_ context.Context, env *eventschema.Envelope) error {
+	b.Publish(env)
+	return nil
+}

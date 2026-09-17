@@ -65,18 +65,18 @@ func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
 func (p *Poller) Run(ctx context.Context) error {
 	tick := time.NewTicker(p.opts.Interval)
 	defer tick.Stop()
-	p.once()
+	p.once(ctx)
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-tick.C:
-			p.once()
+			p.once(ctx)
 		}
 	}
 }
 
-func (p *Poller) once() {
+func (p *Poller) once(ctx context.Context) {
 	turns, err := cursorturns.Read(p.opts.Dir)
 	if err != nil {
 		if p.opts.Logger != nil {
@@ -86,7 +86,7 @@ func (p *Poller) once() {
 	}
 	for _, t := range turns {
 		if env := NewEnvelope(t, p.costSource()); env != nil {
-			p.bus.Publish(env)
+			p.publishWait(ctx, env)
 		}
 	}
 }
@@ -159,4 +159,17 @@ func deref(p *int64) int64 {
 		return 0
 	}
 	return *p
+}
+
+// publishWait hands env to the bus and waits for room rather than letting
+// it be dropped. This poller re-reads the whole ledger each tick, so a
+// drop would eventually be made good — but waiting costs nothing and
+// keeps one rule for every ingestion path.
+func (p *Poller) publishWait(ctx context.Context, env *eventschema.Envelope) {
+	if env == nil {
+		return
+	}
+	if err := p.bus.PublishWait(ctx, env); err != nil && p.opts.Logger != nil {
+		p.opts.Logger.Warn("cursor turn not stored", "err", err)
+	}
 }

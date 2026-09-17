@@ -101,3 +101,8 @@ func TestNewEnvelopeCarriesRateLimitsInAttributes(t *testing.T) {
 		t.Errorf("secondary_used_pct attr = %q", env.Attributes["secondary_used_pct"])
 	}
 }
+
+func (b *captureBus) PublishWait(_ context.Context, env *eventschema.Envelope) error {
+	b.Publish(env)
+	return nil
+}
