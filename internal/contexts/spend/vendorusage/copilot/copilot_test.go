@@ -184,3 +184,8 @@ func TestPollerRecordsLastError(t *testing.T) {
 		t.Fatal("expected LastError after 401")
 	}
 }
+
+func (b *captureBus) PublishWait(_ context.Context, env *eventschema.Envelope) error {
+	b.Publish(env)
+	return nil
+}

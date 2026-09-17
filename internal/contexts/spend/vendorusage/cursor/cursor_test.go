@@ -154,3 +154,8 @@ func TestNewEnvelopeAttrShape(t *testing.T) {
 		t.Errorf("num_requests = %q", env.Attributes["num_requests"])
 	}
 }
+
+func (b *captureBus) PublishWait(_ context.Context, env *eventschema.Envelope) error {
+	b.Publish(env)
+	return nil
+}

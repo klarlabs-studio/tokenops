@@ -723,6 +723,21 @@ type RetentionConfig struct {
 	// coaching, rule_source, rule_analysis) to a window. Values accept
 	// Go durations plus a "d" day suffix (30d = 720h).
 	Keep map[string]string `yaml:"keep,omitempty"`
+	// KeepBySource maps a source ("opencode", "codex-jsonl",
+	// "claude-code-jsonl", ...) to its own window, overriding the
+	// type window for that source's rows.
+	//
+	// Every vendor-usage reader writes type "prompt", so keep alone
+	// cannot tell one client from another: a window short enough for the
+	// live stream also deletes the imported history of a client last
+	// used months ago, which is exactly what a backfill consists of.
+	// A source entry of "forever" (or "never", or "0") keeps that
+	// source's rows indefinitely.
+	//
+	// Keys may be qualified with an event type ("prompt:opencode") when a
+	// source emits more than one; a bare source name applies to prompt
+	// events, which is what every usage reader writes.
+	KeepBySource map[string]string `yaml:"keep_by_source,omitempty"`
 	// Reclaim runs a VACUUM after a prune that deleted rows so the freed
 	// pages return to the filesystem. Without it SQLite keeps them on
 	// its freelist and the database file never shrinks — pruning frees
@@ -735,6 +750,14 @@ type RetentionConfig struct {
 // start the pruner.
 func (c RetentionConfig) Enabled() bool {
 	for _, raw := range c.Keep {
+		d, err := ParseKeepDuration(raw)
+		if err == nil && d > 0 {
+			return true
+		}
+	}
+	// A source window alone is enough to want the pruner running: it may
+	// be the only rule, and it may be shorter than any type window.
+	for _, raw := range c.KeepBySource {
 		d, err := ParseKeepDuration(raw)
 		if err == nil && d > 0 {
 			return true
@@ -758,6 +781,13 @@ var knownRetentionTypes = map[string]struct{}{
 func ParseKeepDuration(s string) (time.Duration, error) {
 	s = strings.TrimSpace(s)
 	if s == "" || s == "0" || s == "0s" {
+		return 0, nil
+	}
+	// A zero window means "never prune this". Spelling it out keeps a
+	// config from being read as "keep for zero time", which in a delete
+	// path is the opposite of what it does.
+	switch strings.ToLower(s) {
+	case "forever", "never":
 		return 0, nil
 	}
 	if strings.HasSuffix(s, "d") {
@@ -973,7 +1003,29 @@ func (c Config) Validate() error {
 			return fmt.Errorf("retention.keep[%s]: %w", name, err)
 		}
 	}
+	for key, raw := range c.Retention.KeepBySource {
+		typ, src := SplitRetentionSourceKey(key)
+		if src == "" {
+			return fmt.Errorf("retention.keep_by_source: empty source in key %q", key)
+		}
+		if _, ok := knownRetentionTypes[typ]; !ok {
+			return fmt.Errorf("retention.keep_by_source[%s]: unknown event type %q", key, typ)
+		}
+		if _, err := ParseKeepDuration(raw); err != nil {
+			return fmt.Errorf("retention.keep_by_source[%s]: %w", key, err)
+		}
+	}
 	return nil
+}
+
+// SplitRetentionSourceKey splits a keep_by_source key into its event type
+// and source. A bare source name means prompt events, which is what every
+// vendor-usage reader writes.
+func SplitRetentionSourceKey(key string) (eventType, source string) {
+	if typ, src, ok := strings.Cut(key, ":"); ok {
+		return strings.TrimSpace(typ), strings.TrimSpace(src)
+	}
+	return "prompt", strings.TrimSpace(key)
 }
 
 // Blockers returns the stable, machine-readable list of subsystem gates

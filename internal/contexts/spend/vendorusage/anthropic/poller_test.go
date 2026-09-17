@@ -148,3 +148,8 @@ func TestPollerClearsLastErrorOnSuccess(t *testing.T) {
 		t.Errorf("LastError should clear on success; still %v", err)
 	}
 }
+
+func (b *captureBus) PublishWait(_ context.Context, env *eventschema.Envelope) error {
+	b.Publish(env)
+	return nil
+}

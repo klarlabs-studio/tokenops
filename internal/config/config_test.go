@@ -498,3 +498,19 @@ func TestRouterConfigWiredBySmartRoutingAlone(t *testing.T) {
 		t.Error("the policy did not reach the router config")
 	}
 }
+
+// "0" is the historical way to say "never prune this", but in a delete
+// path it reads like "keep for no time at all". The keywords say what is
+// meant, so a config cannot be misread into deleting what it meant to keep.
+func TestParseKeepDurationForeverKeywords(t *testing.T) {
+	for _, in := range []string{"forever", "never", "Forever", " never "} {
+		d, err := ParseKeepDuration(in)
+		if err != nil {
+			t.Errorf("ParseKeepDuration(%q): %v", in, err)
+			continue
+		}
+		if d != 0 {
+			t.Errorf("ParseKeepDuration(%q) = %s, want 0 (never prune)", in, d)
+		}
+	}
+}
