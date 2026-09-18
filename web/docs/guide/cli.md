@@ -7,15 +7,35 @@ subcommand has a matching MCP tool (`tokenops_<name>`).
 
 ### `tokenops init`
 
-Scaffolds the config (sqlite + rules on, idempotent). `--detect`
-sniffs installed AI clients and prints the exact `tokenops plan set`
-commands for what it found.
+Scaffolds the config (sqlite + rules on, idempotent) **and wires this
+machine**: it registers the MCP server with every installed host and
+installs the Claude Code hooks. `--detect` adds a report of the clients it
+found; it does not make the command read-only. Use `tokenops detect` to
+only look, or `--print-only` / `--no-wire` for a dry run.
+
+The rules scan root is the repository `init` was run inside — it walks up
+for a `.git` — not the directory your shell happened to be in. Running it
+from your home directory is refused rather than binding the scanner to
+every project you own.
 
 ```bash
 tokenops init --detect          # write config + suggest plan-set commands
 tokenops init --print-only      # render YAML to stdout, don't write
 tokenops init --force           # overwrite existing config
 ```
+
+### `tokenops detect`
+
+Reports which AI clients are installed and changes nothing. Filesystem and
+environment only: no network calls, no credential reads, nothing written.
+
+```bash
+tokenops detect
+```
+
+A bare API key is reported as metered usage with no plan to bind — binding
+a subscription against metered traffic would make every headroom figure
+wrong in a way that looks authoritative.
 
 ### `tokenops plan {list|set|unset|catalog|headroom}`
 
@@ -26,6 +46,35 @@ tokenops plan set anthropic claude-max-20x
 tokenops plan unset cursor
 tokenops plan headroom          # live consumption + overage risk
 ```
+
+#### Plans billed at API rates
+
+`claude-enterprise` has no rate-limit window: usage-based Enterprise is
+billed at API rates from the first token, so there is no cap to be under.
+Headroom is measured against the org spend limit your admins set in the
+vendor console, and the binding is refused without it:
+
+```bash
+tokenops plan set anthropic claude-enterprise \
+  --spend-limit 5000 --limit-window monthly
+```
+
+```yaml
+plan_limits:
+  anthropic:
+    spend_limit_usd: 5000
+    window: monthly       # or weekly / daily, matching the console
+    rate_factor: 0.8      # optional: 20% off list, for a negotiated contract
+```
+
+`rate_factor` matters on a discounted contract. TokenOps costs from the
+public rate card, so without it your console limit is compared against an
+overstatement and nothing says so.
+
+Claude Team is two plans, five times apart: `claude-team-standard` (1.25x
+Pro) and `claude-team-premium` (6.25x Pro). Seat-based Enterprise is an
+allowance plus metered overflow — two denominators at once — and is not
+modelled; naming it says so.
 
 ### `tokenops provider {list|set|unset}`
 
@@ -121,6 +170,26 @@ tokenops task list --since 30d --json   # MCP-host friendly
 ```
 
 ## Vendor-side usage
+
+### `tokenops vendor-usage setup anthropic-cookie`
+
+Connects claude.ai's own usage meter — the 5-hour and 7-day utilisation
+percentages the app shows. It is the only authoritative reading TokenOps
+can get for a Claude subscription; everything else is estimated from
+message counts against a published cap.
+
+```bash
+tokenops vendor-usage setup anthropic-cookie
+```
+
+It says where the cookie is, reads it without echoing it into your
+scrollback, **verifies it against Anthropic**, prints your real
+percentages, and only then writes config. A mistyped or expired key fails
+at the prompt rather than sitting in config producing nothing — session
+cookies rotate, so a stale copy is the usual cause.
+
+Prefer this over `vendor-usage enable anthropic-cookie --session-key`,
+which writes whatever you give it without checking.
 
 ### `tokenops vendor-usage status`
 
@@ -332,6 +401,24 @@ that fallback is how someone emails a client the candid rendering.
 
 Prompt text is read at scan time and **never persisted**. The account is
 rebuilt from transcripts on every run.
+
+### `tokenops daemon restart`
+
+Restarts the supervised unit so it re-reads config. The daemon loads its
+configuration once, at boot, so a config write that is not followed by a
+restart has not taken effect yet.
+
+```bash
+tokenops daemon restart
+```
+
+The commands that write config — `plan set/unset`, `provider set/unset`,
+`vendor-usage enable`, `dashboard rotate-token` — do this for you. Pass
+`--no-restart` when writing several keys in a row, then restart once.
+
+Unsupervised (no unit installed), there is nothing to bounce: those
+commands tell you to Ctrl-C and re-run `tokenops start` instead of
+claiming a restart that did not happen.
 
 ## Hooks
 

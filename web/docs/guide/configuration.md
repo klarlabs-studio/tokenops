@@ -481,6 +481,49 @@ rates:
       cached_input_per_million: 1.00
 ```
 
+## mDNS (`mdns`)
+
+The daemon can advertise itself as `tokenops.local` so the dashboard has a
+memorable URL. By default it advertises **only when the LAN can actually
+reach it** — on the default loopback bind the record would point at
+`127.0.0.1`, which no peer can use, while the machine's hostname still went
+out on every interface.
+
+```yaml
+mdns:
+  enabled: true              # force on or off; omit to follow the bind
+  instance_name: workstation # replaces the hostname in the advertised name
+```
+
+`instance_name` is for operators who want `tokenops.local` without
+publishing what their laptop is called.
+
+## Plan limits (`plan_limits`)
+
+Figures only you can supply, for plans whose limit this tool cannot know.
+A spend-denominated plan — usage-based Enterprise — is billed at API rates
+from the first token, so headroom is measured against the org spend limit
+your admins set in the vendor console.
+
+```yaml
+plans:
+  anthropic: claude-enterprise
+plan_limits:
+  anthropic:
+    spend_limit_usd: 5000
+    window: monthly     # monthly (default), weekly or daily
+    rate_factor: 0.8    # optional: scale to a negotiated rate
+```
+
+Binding such a plan without `spend_limit_usd` is refused rather than
+defaulted: a percentage measured against a number nobody chose reads
+exactly as authoritative as a real one.
+
+`rate_factor` exists because enterprise rates are frequently negotiated
+off list while TokenOps costs from the public rate card. Without it your
+console limit is compared against an overstatement, and the error is
+invisible.
+
 ## Environment variables
 
 | Variable                          | Maps to                       |
