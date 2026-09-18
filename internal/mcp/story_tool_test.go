@@ -43,7 +43,8 @@ func TestStoryToolReturnsTheAccount(t *testing.T) {
 	lines := []string{
 		`{"type":"user","timestamp":"2099-01-01T10:00:00Z","sessionId":"s","message":{"content":"rewrite the boundary heuristic"}}`,
 		`{"type":"assistant","timestamp":"2099-01-01T10:00:01Z","sessionId":"s","message":{"usage":{"input_tokens":100},"content":[{"type":"tool_use","name":"Edit","input":{"file_path":"/a.go"}}]}}`,
-		`{"type":"assistant","timestamp":"2099-01-01T10:00:02Z","sessionId":"s","message":{"usage":{"input_tokens":200},"content":[{"type":"tool_use","name":"Edit","input":{"file_path":"/a.go"}}]}}`,
+		`{"type":"assistant","timestamp":"2099-01-01T10:00:02Z","sessionId":"s","message":{"usage":{"input_tokens":150},"content":[{"type":"tool_use","name":"Edit","input":{"file_path":"/b.go"}}]}}`,
+		`{"type":"assistant","timestamp":"2099-01-01T10:00:03Z","sessionId":"s","message":{"usage":{"input_tokens":200},"content":[{"type":"tool_use","name":"Edit","input":{"file_path":"/a.go"}}]}}`,
 	}
 	res := decodeStory(t, execTool(t, storyServer(t, strings.Join(lines, "\n")), "tokenops_story",
 		map[string]any{"days": 0}))
@@ -59,12 +60,16 @@ func TestStoryToolReturnsTheAccount(t *testing.T) {
 	if task.Instructions != 1 {
 		t.Errorf("Instructions = %d, want 1", task.Instructions)
 	}
-	if task.ToolCalls != 2 {
-		t.Errorf("ToolCalls = %d, want 2", task.ToolCalls)
+	if task.ToolCalls != 3 {
+		t.Errorf("ToolCalls = %d, want 3", task.ToolCalls)
 	}
-	// The same file twice is rework, and seeing it is the point: an agent
-	// that knows it has already edited this file can stop instead of
-	// pressing on.
+	// Returning to /a.go after moving on to /b.go is rework, and seeing it
+	// is the point: an agent that knows it has already been here can stop
+	// instead of pressing on.
+	//
+	// The fixture used to be two consecutive edits to one file, which is
+	// how a multi-part change is made rather than friction — the premise
+	// the metric itself was corrected on.
 	if task.Clean {
 		t.Error("Clean = true, want the repeated edit reported as friction")
 	}
