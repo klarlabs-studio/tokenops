@@ -47,43 +47,67 @@ func restartHint(supervised, needsMCP bool) string {
 	return daemonPart
 }
 
-// printRestartHint writes the hint for this machine.
-func printRestartHint(w io.Writer, needsMCP bool) {
-	fmt.Fprintf(w, "next: %s\n", restartHint(daemonSupervised(), needsMCP))
+// printRestartHintFor writes what the operator still has to do.
+func printRestartHintFor(w io.Writer, supervised, needsMCP bool) {
+	fmt.Fprintf(w, "next: %s\n", restartHint(supervised, needsMCP))
 }
 
-// maybeRestart performs the restart when the operator asked for it with
-// --restart, and otherwise prints what they would have to run.
+// restartDeps is what performing a restart depends on, injected so the
+// policy is testable without bouncing the developer's own daemon.
+type restartDeps struct {
+	// Supervised reports whether a unit is installed to restart.
+	Supervised bool
+	// Restart performs it.
+	Restart func() error
+}
+
+// realRestartDeps binds to this machine.
+func realRestartDeps() restartDeps {
+	return restartDeps{
+		Supervised: daemonSupervised(),
+		Restart: func() error {
+			kind, err := daemon.DetectUnitKind()
+			if err != nil {
+				return err
+			}
+			return daemon.RestartUnit(kind)
+		},
+	}
+}
+
+// applyRestart makes a config write take effect.
 //
-// Opt-in rather than automatic: restarting is a side effect on a running
-// service, and a command whose job is to write one config key should not
-// bounce a daemon unless it was told to.
-func maybeRestart(w io.Writer, restart, needsMCP bool) {
-	if !restart {
-		printRestartHint(w, needsMCP)
+// The daemon reads config once, at boot, so a write that is not followed by
+// a restart has not changed anything yet. Printing "next: restart the
+// daemon" and stopping there left the operator with a command that reported
+// success and did nothing until they ran a second one — the same
+// silent-no-op shape this codebase keeps finding elsewhere. So it restarts,
+// and --no-restart is there for someone writing several keys in a row who
+// does not want a bounce per key.
+func applyRestart(w io.Writer, restart, needsMCP bool) {
+	applyRestartWith(w, realRestartDeps(), restart, needsMCP)
+}
+
+func applyRestartWith(w io.Writer, deps restartDeps, restart, needsMCP bool) {
+	// Nothing supervised means nothing to bounce. Say what to do by hand
+	// rather than report a restart that did not happen.
+	if !restart || !deps.Supervised {
+		printRestartHintFor(w, deps.Supervised, needsMCP)
 		return
 	}
-	kind, err := daemon.DetectUnitKind()
-	if err != nil {
-		fmt.Fprintf(w, "--restart: no supervisor detected (%v)\n  %s\n", err, restartHint(false, needsMCP))
+	if err := deps.Restart(); err != nil {
+		fmt.Fprintf(w, "could not restart the daemon: %v\n  the change is written but not live — %s\n",
+			err, restartHint(true, needsMCP))
 		return
 	}
-	if !daemonSupervised() {
-		fmt.Fprintf(w, "--restart: no unit installed, nothing to restart\n  %s\n", restartHint(false, needsMCP))
-		return
-	}
-	if err := daemon.RestartUnit(kind); err != nil {
-		fmt.Fprintf(w, "--restart failed: %v\n  %s\n", err, restartHint(true, needsMCP))
-		return
-	}
-	fmt.Fprintln(w, "restarted the daemon; it has re-read the config")
+	fmt.Fprintln(w, "restarted the daemon; the change is live")
 	if needsMCP {
 		fmt.Fprintln(w, "note: restart your MCP client too — its tokenops server is a child of the client, not ours to restart")
 	}
 }
 
-// addRestartFlag registers --restart on a command that writes config.
-func addRestartFlag(cmd *cobra.Command, v *bool) {
-	cmd.Flags().BoolVar(v, "restart", false,
-		"restart the daemon afterwards so it re-reads the config (needs an installed unit)")
+// addNoRestartFlag registers --no-restart on a command that writes config.
+func addNoRestartFlag(cmd *cobra.Command, v *bool) {
+	cmd.Flags().BoolVar(v, "no-restart", false,
+		"write the config without restarting the daemon; the change stays inert until it is")
 }
