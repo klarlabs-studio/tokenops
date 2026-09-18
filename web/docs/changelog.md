@@ -4,7 +4,43 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.60.0**.
+Current release: **v0.61.0**.
+
+## v0.61.0 — a denominator you already have
+
+The previous release gave Enterprise no plan entry at all, and said so on
+purpose: usage-based Enterprise is billed at API rates from the first token,
+so there is no cap to be under, no percentage to report, and nothing for a
+headroom calculation to divide by. Inventing a window for it would have
+produced maths that looked authoritative and was fiction.
+
+That reasoning was right about the vendor and wrong about the operator. There
+is a denominator — it is just not Anthropic's. Admins set org, seat-tier and
+per-user spend limits in the console, and the person running this tool knows
+that figure perfectly well.
+
+So Enterprise is a plan again, of a different kind: one whose limit is
+supplied rather than published. Binding it without the number is refused,
+because a percentage measured against a default nobody chose reads exactly as
+confident as a real one. Give it the limit and the report is spend against
+that limit, in the same shape a window would have taken.
+
+The half that already worked is the interesting half. Enterprise traffic is
+genuinely metered, so the cost recorded against each event is what the vendor
+actually charges — unlike a subscription's traffic, which is correctly zero
+because it costs nothing at the margin. The numerator has been right all
+along; only the thing to compare it against was missing.
+
+One detail worth knowing if you are on a negotiated contract: TokenOps costs
+from the public rate card, and enterprise rates are frequently discounted off
+it. Left alone, that compares your console limit against an overstatement and
+never mentions it. `rate_factor` scales measured spend to what you actually
+pay.
+
+Seat-based Enterprise is still not modelled. It is an included allowance and
+then metered overflow — two denominators at the same time — and asking for it
+says that, rather than quietly handing you the usage-based plan and a number
+that does not describe your contract.
 
 ## v0.60.0 — one number, in one place
 
