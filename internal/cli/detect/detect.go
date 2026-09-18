@@ -38,6 +38,16 @@ type Detection struct {
 	Confidence Confidence
 	Evidence   string
 	Hint       string
+	// SuggestsPlan reports whether binding a subscription plan is the
+	// right next step for this detection.
+	//
+	// It is false for a bare API key, which means metered billing. The
+	// wizard used to print "run: tokenops plan set anthropic
+	// claude-max-20x" directly beneath the hint "raw API key — likely
+	// metered usage, no plan", contradicting itself in adjacent lines —
+	// and binding a Max plan against metered traffic makes every headroom
+	// figure wrong in a way that looks authoritative.
+	SuggestsPlan bool
 }
 
 // Env is the small interface the detector reads through. The real
@@ -74,6 +84,26 @@ func Detect(env Env) []Detection {
 		}
 		return out[i].Provider < out[j].Provider
 	})
+	return dedupeByProvider(out)
+}
+
+// dedupeByProvider keeps the strongest detection per provider.
+//
+// This doc has promised "the deduplicated set" since the package was
+// written and nothing ever deduplicated. An operator with ~/.claude AND
+// ANTHROPIC_API_KEY set was shown anthropic twice, with different and
+// partly contradictory advice under each row. The input is already sorted
+// by confidence, so the first entry for a provider is the strongest.
+func dedupeByProvider(in []Detection) []Detection {
+	seen := make(map[string]bool, len(in))
+	out := make([]Detection, 0, len(in))
+	for _, d := range in {
+		if seen[d.Provider] {
+			continue
+		}
+		seen[d.Provider] = true
+		out = append(out, d)
+	}
 	return out
 }
 
@@ -99,11 +129,12 @@ func detectClaudeCode(env Env) []Detection {
 		// cannot be inferred without an API call — the wizard must
 		// prompt.
 		return []Detection{{
-			Provider:   "anthropic",
-			Plan:       "", // ambiguous tier; wizard prompts
-			Confidence: ConfidenceMedium,
-			Evidence:   candidate,
-			Hint:       "Claude Code installed; pick your plan tier (Max 20x, Max 5x, Pro)",
+			Provider:     "anthropic",
+			Plan:         "", // ambiguous tier; wizard prompts
+			Confidence:   ConfidenceMedium,
+			Evidence:     candidate,
+			Hint:         "Claude Code installed; pick your plan tier (Max 20x, Max 5x, Pro)",
+			SuggestsPlan: true,
 		}}
 	}
 	return nil
@@ -125,11 +156,12 @@ func detectClaudeDesktop(env Env) []Detection {
 	}
 	if info, err := env.Stat(candidate); err == nil && !info.IsDir() {
 		return []Detection{{
-			Provider:   "anthropic",
-			Plan:       "",
-			Confidence: ConfidenceMedium,
-			Evidence:   candidate,
-			Hint:       "Claude Desktop installed; pick your plan tier",
+			Provider:     "anthropic",
+			Plan:         "",
+			Confidence:   ConfidenceMedium,
+			Evidence:     candidate,
+			Hint:         "Claude Desktop installed; pick your plan tier",
+			SuggestsPlan: true,
 		}}
 	}
 	return nil
@@ -147,11 +179,12 @@ func detectCursor(env Env) []Detection {
 	} {
 		if info, err := env.Stat(candidate); err == nil && info.IsDir() {
 			return []Detection{{
-				Provider:   "cursor",
-				Plan:       "",
-				Confidence: ConfidenceMedium,
-				Evidence:   candidate,
-				Hint:       "Cursor installed; pick Pro or Business",
+				Provider:     "cursor",
+				Plan:         "",
+				Confidence:   ConfidenceMedium,
+				Evidence:     candidate,
+				Hint:         "Cursor installed; pick Pro or Business",
+				SuggestsPlan: true,
 			}}
 		}
 	}
@@ -169,11 +202,12 @@ func detectChatGPTDesktop(env Env) []Detection {
 	} {
 		if info, err := env.Stat(candidate); err == nil && info.IsDir() {
 			return []Detection{{
-				Provider:   "openai",
-				Plan:       "",
-				Confidence: ConfidenceMedium,
-				Evidence:   candidate,
-				Hint:       "ChatGPT desktop installed; pick Plus / Pro / Team",
+				Provider:     "openai",
+				Plan:         "",
+				Confidence:   ConfidenceMedium,
+				Evidence:     candidate,
+				Hint:         "ChatGPT desktop installed; pick Plus / Pro / Team",
+				SuggestsPlan: true,
 			}}
 		}
 	}
@@ -197,6 +231,8 @@ func detectAPIKeys(env Env) []Detection {
 				Confidence: ConfidenceLow,
 				Evidence:   k.envVar,
 				Hint:       "raw API key — likely metered usage, no plan",
+				// Deliberately no plan suggestion: see SuggestsPlan.
+				SuggestsPlan: false,
 			})
 		}
 	}
