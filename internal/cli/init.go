@@ -83,7 +83,7 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 	if err != nil {
 		return err
 	}
-	rulesRoot, repoID, err := resolveInitRulesRoot(f.rulesRoot, f.repoID)
+	rules, err := resolveInitRulesRoot(f.rulesRoot, f.repoID)
 	if err != nil {
 		return err
 	}
@@ -91,9 +91,9 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 	cfg := config.Default()
 	cfg.Storage.Enabled = true
 	cfg.Storage.Path = storagePath
-	cfg.Rules.Enabled = true
-	cfg.Rules.Root = rulesRoot
-	cfg.Rules.RepoID = repoID
+	cfg.Rules.Enabled = rules.Enabled
+	cfg.Rules.Root = rules.Root
+	cfg.Rules.RepoID = rules.RepoID
 
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
@@ -148,10 +148,12 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 		return fmt.Errorf("mkdir %s: %w", filepath.Dir(storagePath), err)
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(),
-		"wrote %s\nstorage: %s\nrules root: %s (repo_id=%s)\n",
-		configPath, storagePath, rulesRoot, repoID,
-	)
+	fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\nstorage: %s\n", configPath, storagePath)
+	if rules.Enabled {
+		fmt.Fprintf(cmd.OutOrStdout(), "rules root: %s (repo_id=%s)\n", rules.Root, rules.RepoID)
+	} else {
+		fmt.Fprintf(cmd.OutOrStdout(), "%s\n", rules.Reason)
+	}
 
 	if f.withDetect {
 		renderDetection(cmd.OutOrStdout(), detect.Detect(nil))
@@ -230,18 +232,22 @@ func resolveInitStoragePath(override string) (string, error) {
 	return filepath.Join(home, ".tokenops", "events.db"), nil
 }
 
-func resolveInitRulesRoot(rootOverride, repoOverride string) (string, string, error) {
-	root := rootOverride
-	if root == "" {
-		wd, err := os.Getwd()
-		if err != nil {
-			return "", "", err
-		}
-		root = wd
+func resolveInitRulesRoot(rootOverride, repoOverride string) (rulesRootResult, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return rulesRootResult{}, err
 	}
-	repo := repoOverride
-	if repo == "" {
-		repo = filepath.Base(root)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		// Without a home directory there is nothing to compare against, so
+		// the guard cannot fire. That is a reason to keep going with the
+		// cwd, not to fail setup.
+		home = ""
 	}
-	return root, repo, nil
+	return resolveRulesRoot(rulesRootInput{
+		Cwd:          wd,
+		Home:         home,
+		RootOverride: rootOverride,
+		RepoOverride: repoOverride,
+	}), nil
 }
