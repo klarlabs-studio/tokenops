@@ -26,7 +26,7 @@ func TestSanitizeInstance(t *testing.T) {
 // in an integration test (gated by an env var so CI without multicast
 // doesn't flake).
 func TestStartMDNSAdvertiseBadAddr(t *testing.T) {
-	closer, url, err := startMDNSAdvertise("not-a-host-port", false)
+	closer, url, err := startMDNSAdvertise("not-a-host-port", false, "")
 	if err == nil {
 		t.Fatalf("expected error on bad addr")
 	}
