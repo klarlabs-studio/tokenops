@@ -333,6 +333,43 @@ that fallback is how someone emails a client the candid rendering.
 Prompt text is read at scan time and **never persisted**. The account is
 rebuilt from transcripts on every run.
 
+## Hooks
+
+TokenOps wires three hooks into a client, each independent:
+
+| Hook | Fires | What it does |
+|---|---|---|
+| `--coach` | end of turn | the coaching nudge, against a per-session budget |
+| `--read-guard` | before a file read | refuses a redundant re-read of an unchanged file |
+| `--route-guard` | when you submit a prompt | states the case for a cheaper model when the one in use is over-spec |
+
+`--client` selects which client to act on, and **install, status and
+uninstall all take it**:
+
+| `--client` | Where the hooks live |
+|---|---|
+| `claude-code` *(default)* | `~/.claude/settings.json` |
+| `codex` | `~/.codex/hooks.json` |
+| `cursor` | `~/.cursor/hooks.json` |
+| `opencode` | a generated plugin in `~/.config/opencode/plugins` |
+
+```bash
+tokenops hooks install --route-guard        # wire the model-fit guard
+tokenops hooks status                       # what's wired for Claude Code
+tokenops hooks status --client cursor       # ... and for Cursor
+tokenops hooks uninstall --route-guard      # remove one hook
+tokenops hooks uninstall                    # remove every tokenops hook
+```
+
+`uninstall` with no hook named removes all three. Naming one removes only
+that one, on every client — including opencode, where the generated plugin
+is rewritten with the remaining halves rather than deleted, and deleted
+only once nothing is left in it.
+
+`status` reports the hook, its event, and the binary each entry calls, and
+flags an entry pointing at a different binary than the one you ran — which
+is what a stale `hooks install` from an older install looks like.
+
 ### `tokenops hooks install --client codex`
 
 Codex keeps hooks in `~/.codex/hooks.json`, in the same nested shape

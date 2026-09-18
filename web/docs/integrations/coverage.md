@@ -47,6 +47,7 @@ we got round to.
 | Agent DX metrics (`dx`) | a transcript reader | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Work storytelling (`story`) | a reader **and** prompt text | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Proactive coaching (nudges) | an end-of-turn hook | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Routing advice *per turn* (`route-guard`) | a prompt-time hook | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `read-guard` (intervene) | a **blockable** file-read hook | ✅ | 🚫 | ✅ | 🚫 | ❌ | ❌ | ❌ |
 | `tokenops fmt` compression | the agent runs shell commands | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
 | MCP tools (ask anything) | an MCP host | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
