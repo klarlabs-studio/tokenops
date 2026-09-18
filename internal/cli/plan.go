@@ -40,7 +40,10 @@ store. Subcommands:
 }
 
 func newPlanSetCmd() *cobra.Command {
-	var configPathFlag string
+	var (
+		configPathFlag string
+		restartFlag    bool
+	)
 	cmd := &cobra.Command{
 		Use:   "set <provider> <plan>",
 		Short: "Bind a provider to a subscription plan in config.yaml",
@@ -85,19 +88,21 @@ Example:
 			} else {
 				fmt.Fprintf(cmd.OutOrStdout(), "set plans.%s = %s\n", provider, planName)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(),
-				"wrote %s\nnext: reload your MCP server (or restart the daemon) to pick up the change\n",
-				path,
-			)
+			fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", path)
+			maybeRestart(cmd.OutOrStdout(), restartFlag, true)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
+	addRestartFlag(cmd, &restartFlag)
 	return cmd
 }
 
 func newPlanUnsetCmd() *cobra.Command {
-	var configPathFlag string
+	var (
+		configPathFlag string
+		restartFlag    bool
+	)
 	cmd := &cobra.Command{
 		Use:   "unset <provider>",
 		Short: "Remove a provider's plan binding from config.yaml",
@@ -121,13 +126,15 @@ func newPlanUnsetCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(),
-				"removed plans.%s\nwrote %s\nnext: reload your MCP server\n",
+				"removed plans.%s\nwrote %s\n",
 				provider, path,
 			)
+			maybeRestart(cmd.OutOrStdout(), restartFlag, true)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
+	addRestartFlag(cmd, &restartFlag)
 	return cmd
 }
 

@@ -50,8 +50,13 @@ func TestPlanSetWritesProviderBinding(t *testing.T) {
 	if !strings.Contains(output, "claude-max-20x") {
 		t.Errorf("expected plan name in output: %s", output)
 	}
-	if !strings.Contains(output, "reload your MCP server") {
-		t.Errorf("expected reload hint in output: %s", output)
+	// Asserted on the property, not the wording: the change is inert until
+	// both readers reload, and the hint has to say so and name how.
+	if !strings.Contains(output, "MCP") {
+		t.Errorf("expected the MCP reload mentioned in output: %s", output)
+	}
+	if !strings.Contains(output, "restart") {
+		t.Errorf("expected a restart instruction in output: %s", output)
 	}
 }
 

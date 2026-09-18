@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
 )
@@ -71,6 +72,12 @@ func newStatusCmd(rf *rootFlags) *cobra.Command {
 			// warnings" rather than failing the status command.
 			if cfgErr == nil {
 				res.Warnings = statusStaleWarnings(cmd.Context(), rf, cfg)
+			}
+			// Dropped rows come from the daemon itself rather than the
+			// store — the store is precisely where they failed to land,
+			// so it cannot be asked how many are missing.
+			if w := dropWarningFrom(res.Health); w != "" {
+				res.Warnings = append(res.Warnings, w)
 			}
 			if jsonOut {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(res)
@@ -210,6 +217,25 @@ func statusStaleWarnings(ctx context.Context, rf *rootFlags, cfg config.Config) 
 		warnings = append(warnings, s.Warning())
 	}
 	return warnings
+}
+
+// dropWarningFrom renders the telemetry-loss warning carried on /healthz,
+// or "" when there is nothing to report.
+//
+// A daemon predating the field answers without it. That is an unknown, not a
+// zero: reporting "0 dropped" for a daemon that never said so would be the
+// same false reassurance this warning exists to remove, so a missing or
+// non-numeric value stays silent.
+func dropWarningFrom(health endpointResult) string {
+	raw, ok := health.Body["dropped_events"]
+	if !ok {
+		return ""
+	}
+	n, ok := raw.(float64) // encoding/json decodes every number as float64
+	if !ok {
+		return ""
+	}
+	return events.DropWarning(int64(n))
 }
 
 func writeStatusText(w io.Writer, base string, r statusResult) error {

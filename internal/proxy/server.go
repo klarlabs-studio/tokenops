@@ -41,6 +41,7 @@ type Server struct {
 	auditAPI        *AuditHandlers
 	eventCounts     func() map[string]int64
 	auditDrops      func() int64
+	eventDrops      func() int64
 	resilience      *ResilienceConfig
 	dashAuth        DashAuth
 	// router applies live model routing when active mode is enabled

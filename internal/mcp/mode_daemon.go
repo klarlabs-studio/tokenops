@@ -1,7 +1,9 @@
 package mcp
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -27,21 +29,56 @@ func (d ModeDeps) ensureDaemon(configPath string) string {
 	return fmt.Sprintf("started (pid %d) with active mode; logs: %s", pid, logPath)
 }
 
-// daemonAlive reports whether a daemon is reachable: the URL hint file
-// exists and its /healthz endpoint answers. A stale hint (daemon died
-// without cleanup) fails the HTTP probe and reads as not-running.
-func daemonAlive() (string, bool) {
+// DaemonReport is what a probe of the ingestion daemon answered.
+//
+// Presence and telemetry loss arrive together because they come from the
+// same /healthz response. Splitting them into two accessors would mean two
+// HTTP round trips per status call to read one payload twice.
+type DaemonReport struct {
+	// URL is where the daemon answered; empty when none did.
+	URL string
+	// Alive reports whether /healthz returned 200.
+	Alive bool
+	// Dropped is the rows the daemon failed to persist since it started.
+	// Absent from an older daemon's payload, which reads as zero — an
+	// unknown that stays silent rather than inventing an alarm.
+	Dropped int64
+}
+
+// probeDaemon reads the URL hint and asks the daemon how it is doing. A
+// stale hint (daemon died without cleanup) fails the HTTP probe and reads
+// as not-running.
+func probeDaemon() DaemonReport {
 	hint, err := readURLHint()
 	if err != nil || hint == nil || hint.URL == "" {
-		return "", false
+		return DaemonReport{}
 	}
 	client := http.Client{Timeout: 2 * time.Second}
 	resp, err := client.Get(hint.URL + "/healthz")
 	if err != nil {
-		return "", false
+		return DaemonReport{}
 	}
 	defer func() { _ = resp.Body.Close() }()
-	return hint.URL, resp.StatusCode == http.StatusOK
+	if resp.StatusCode != http.StatusOK {
+		return DaemonReport{URL: hint.URL}
+	}
+	out := DaemonReport{URL: hint.URL, Alive: true}
+	var body struct {
+		DroppedEvents int64 `json:"dropped_events"`
+	}
+	// A body we cannot parse still proves the daemon answered. Liveness is
+	// the load-bearing half here; the drop count is extra.
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(&body); err == nil {
+		out.Dropped = body.DroppedEvents
+	}
+	return out
+}
+
+// daemonAlive reports whether a daemon is reachable, for the mode tools,
+// which care about presence and nothing else.
+func daemonAlive() (string, bool) {
+	r := probeDaemon()
+	return r.URL, r.Alive
 }
 
 // startDaemonDetached spawns `tokenops start` as a session leader so it
