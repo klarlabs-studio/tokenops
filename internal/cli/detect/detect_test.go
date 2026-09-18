@@ -106,7 +106,10 @@ func TestDetectMultipleSortedByConfidence(t *testing.T) {
 			filepath.Join(home, ".claude"): true,
 			filepath.Join(home, ".cursor"): true,
 		},
-		envs: map[string]string{"ANTHROPIC_API_KEY": "sk-x"},
+		// A gemini key rather than an anthropic one: an anthropic key
+		// alongside ~/.claude is the same provider twice, and Detect now
+		// keeps only the strongest row per provider.
+		envs: map[string]string{"GEMINI_API_KEY": "sk-x"},
 	}
 	out := Detect(env)
 	if len(out) < 3 {
