@@ -4,7 +4,44 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.59.0**.
+Current release: **v0.60.0**.
+
+## v0.60.0 — one number, in one place
+
+A subscription tier is not a number any more. Anthropic documents Max and
+Team as multiples of Pro — "five times the Pro plan's per-session usage
+allowance" — and has stopped publishing an absolute for any tier, Pro
+included.
+
+TokenOps held three absolutes instead, written down separately, and they had
+quietly come apart from the relationship they were meant to express: Max 5x
+sat at 1.1x Pro where the vendor says 5x, Max 20x at 4.4x where it says 20x,
+and the support page both of them cited had become a 404. Nobody noticed,
+because a wrong denominator does not look wrong — it just makes a percentage
+that is always comfortable.
+
+So the tiers now derive. One pinned Pro baseline, a multiplier per tier, and
+a test that forbids a derived entry from carrying an absolute of its own,
+because holding the same fact in two places is how they drifted the first
+time. Correcting Pro corrects everything below it.
+
+**Your headroom percentage will move.** Max 5x goes from 50 to 225 messages
+per window and Max 20x from 200 to 900. You are not using less than you were;
+the number you were being measured against was too small. Two independent
+trackers recorded 45 / 225 / 900 from Anthropic's own documentation a
+fortnight ago, which is exactly what the derivation produces.
+
+Honesty about what is left: the Pro baseline cannot currently be checked
+against any vendor page, so it sits in one place with a label saying so.
+Settings → Usage in the Claude app is the only figure that is certainly
+yours.
+
+Team plans also work now — Standard and Premium seats, as two separate
+entries, because they differ by five times. Enterprise still has none, on
+purpose: usage-based Enterprise bills at API rates from the first token and
+seat-based Enterprise is an allowance with metered overflow, so neither is a
+window to have headroom in. Asking for it now says that, rather than showing
+you a list your plan is missing from.
 
 ## v0.59.0 — what the tools were not saying
 

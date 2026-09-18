@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.60.0 - 2026-09-18
+
+Anthropic documents its plan tiers only as multiples of Pro — "five times
+the Pro plan's per-session usage allowance" — and no longer publishes an
+absolute for any tier, Pro included. The catalog held three independent
+absolutes instead, and they had drifted out of that relationship:
+`claude-max-5x` was 1.1x Pro where the vendor says 5x, `claude-max-20x`
+was 4.4x where it says 20x, and the support URL both cited now 404s.
+
+That is the drift a pinned source URL exists to surface, and it surfaced.
+
+### Added
+
+- **Claude Team seats**, both verified against the vendor's help centre:
+  `claude-team-standard` (1.25x Pro) and `claude-team-premium` (6.25x
+  Pro). An operator on Team could previously bind no plan at all. (#290)
+
+### Changed
+
+- **Anthropic tiers derive from one Pro baseline.** Plans carry
+  `RelativeTo` + `Multiplier`, resolved on lookup, so a single number can
+  go stale instead of five, and correcting it corrects every tier at once.
+  A relative entry holds no absolute of its own; a test enforces that,
+  because two sources of truth in one record is how these drifted.
+
+  **This changes headroom denominators.** Max 5x moves 50 -> 225 and Max
+  20x moves 200 -> 900. Usage is unchanged; the figure it is measured
+  against is now the one the vendor documents. Two third-party trackers
+  checked in early September independently record 45 / 225 / 900, which is
+  what the derivation produces; the replaced absolutes match no source at
+  all.
+
+  The Pro baseline itself remains unverifiable at the vendor today, so it
+  is pinned in one labelled place. Settings -> Usage in the Claude app is
+  the only number that is definitely current. (#290)
+
+### Notes
+
+- **Anthropic Enterprise deliberately has no catalog entry.** Usage-based
+  Enterprise is billed at API rates from the first token, and seat-based
+  Enterprise is an included allowance plus metered overflow — neither is a
+  rate-limit window, and inventing one would produce headroom maths that
+  looks authoritative and is fiction. `plan set` now explains that instead
+  of leaving an operator to read their tier's absence off a list. (#290)
+
 ## 0.59.0 - 2026-09-18
 
 Two kinds of defect, found by auditing what was actually wired and by an
