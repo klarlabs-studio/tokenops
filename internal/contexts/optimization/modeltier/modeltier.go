@@ -80,7 +80,9 @@ type Catalog struct {
 	// operator can actually choose. The card keeps retired models and
 	// they sit at both ends of the price range, so ranking across the
 	// whole catalogue pushes the live generation into the middle.
-	candidates map[string]struct{}
+	// Keyed by normalised name so card rows can be matched, valued with
+	// the operator's own spelling so that is what gets handed back.
+	candidates map[string]string
 }
 
 // WithCandidates restricts tier ranking to the given bare model names.
@@ -94,35 +96,12 @@ func (c *Catalog) WithCandidates(models []string) *Catalog {
 	if c == nil || len(models) == 0 {
 		return c
 	}
-	set := make(map[string]struct{}, len(models))
+	set := make(map[string]string, len(models))
 	for _, m := range models {
-		set[normalise(m)] = struct{}{}
+		set[normalise(m)] = m
 	}
 	c.candidates = set
 	return c
-}
-
-// ranks reports whether a card row participates in tier banding.
-//
-// Rows are filed under a prefix pattern, so the row that prices a
-// candidate is often a shorter string than the candidate itself
-// ("claude-fable-5*" prices "claude-fable-5-1"). Matching only on
-// equality drops that row, and losing the flagship promotes whatever
-// remains into the top tier.
-func (c *Catalog) ranks(model string) bool {
-	if len(c.candidates) == 0 {
-		return true
-	}
-	key := normalise(strings.TrimSuffix(model, "*"))
-	if _, ok := c.candidates[key]; ok {
-		return true
-	}
-	for cand := range c.candidates {
-		if strings.HasPrefix(cand, key) {
-			return true
-		}
-	}
-	return false
 }
 
 // New builds a Catalog. Overrides are keyed "provider/model" and win over
@@ -194,6 +173,24 @@ func (c *Catalog) Resolve(provider eventschema.Provider, model string) Resolutio
 		return Resolution{Tier: t, Basis: BasisFamily}
 	}
 	return Resolution{Tier: TierUnknown, Basis: BasisNone}
+}
+
+// priceOf finds what a model costs per million tokens, and how.
+//
+// Lookup, not a map index: the card stores snapshot rows as prefix keys
+// ("claude-sonnet-5*") so a version-suffixed model still resolves.
+// Indexing Rates directly matches only the handful of exact rows and
+// silently misses every refreshed price.
+func (c *Catalog) priceOf(provider eventschema.Provider, model string) (float64, Basis, bool) {
+	if rate, err := c.table.Lookup(provider, model); err == nil {
+		return rate.InputPerMillion + rate.OutputPerMillion, BasisCard, true
+	}
+	if k, ok := c.byName[normalise(model)]; ok {
+		if rate, err := c.table.Lookup(k.Provider, strings.TrimSuffix(k.Model, "*")); err == nil {
+			return rate.InputPerMillion + rate.OutputPerMillion, BasisNormalised, true
+		}
+	}
+	return 0, BasisNone, false
 }
 
 // isFree recognises the two spellings vendors use for a no-cost tier:
@@ -281,28 +278,49 @@ func (c *Catalog) tierForCost(provider eventschema.Provider, cost float64) Tier 
 	}
 }
 
-// providerCosts is the provider's distinct priced costs, ascending.
-// Free rows are excluded: a zero would anchor the bottom of every band
-// and push real models up a tier they have not earned.
+// providerCosts is the ascending, distinct set of costs the tiers are
+// ranked over.
+//
+// With a declared menu it is the menu's own prices, resolved one by one.
+// It must not be assembled by scanning the card for rows a candidate
+// matches: rows are prefix patterns, so "claude-opus-4*" is a prefix of
+// the candidate "claude-opus-4-6" and every retired Opus would be read
+// back into the ranking that naming the menu was meant to exclude —
+// pushing the live model down a band and routing a turn to the model it
+// was already on.
+//
+// Free rows are excluded either way: a zero would anchor the bottom of
+// every band and push real models up a tier they have not earned.
 func (c *Catalog) providerCosts(provider eventschema.Provider) []float64 {
 	seen := map[float64]struct{}{}
 	var out []float64
+	add := func(cost float64) {
+		if cost <= 0 {
+			return
+		}
+		if _, dup := seen[cost]; dup {
+			return
+		}
+		seen[cost] = struct{}{}
+		out = append(out, cost)
+	}
+	if len(c.candidates) > 0 {
+		for _, orig := range c.candidates {
+			if isFree(orig) || localProviders[strings.ToLower(string(provider))] {
+				continue
+			}
+			if cost, _, ok := c.priceOf(provider, orig); ok {
+				add(cost)
+			}
+		}
+		sort.Float64s(out)
+		return out
+	}
 	for k, r := range c.table.Rates {
 		if k.Provider != provider {
 			continue
 		}
-		if !c.ranks(k.Model) {
-			continue
-		}
-		cost := r.InputPerMillion + r.OutputPerMillion
-		if cost <= 0 {
-			continue
-		}
-		if _, dup := seen[cost]; dup {
-			continue
-		}
-		seen[cost] = struct{}{}
-		out = append(out, cost)
+		add(r.InputPerMillion + r.OutputPerMillion)
 	}
 	sort.Float64s(out)
 	return out
@@ -318,23 +336,94 @@ func (c *Catalog) Target(provider eventschema.Provider, tier Tier) (string, bool
 	if c == nil || tier == TierUnknown {
 		return "", false
 	}
+	// Search the declared menu when there is one. A proxy provider —
+	// opencode, Copilot — serves someone else's models under its own
+	// name and has no rows in the card at all, so scanning the card for
+	// rows belonging to it finds nothing and gives up on exactly the
+	// clients that most need routing.
+	if len(c.candidates) > 0 {
+		return c.targetFromCandidates(provider, tier)
+	}
 	var (
 		best     string
 		bestCost = -1.0
 	)
 	for k, r := range c.table.Rates {
-		if k.Provider != provider || !c.ranks(k.Model) {
+		if k.Provider != provider {
 			continue
 		}
 		cost := r.InputPerMillion + r.OutputPerMillion
 		if c.tierForCost(provider, cost) != tier {
 			continue
 		}
-		// Strip the card's prefix marker: the caller needs a model name
-		// it can actually send, not the pattern the rate was filed under.
 		name := strings.TrimSuffix(k.Model, "*")
 		if bestCost < 0 || cost < bestCost || (cost == bestCost && name < best) {
 			best, bestCost = name, cost
+		}
+	}
+	return best, best != ""
+}
+
+// TargetBelow returns the most capable declared model placed strictly
+// below tier.
+//
+// A menu does not always hold four distinguishable bands: three models
+// with one of them free leaves two priced rows, which can only express
+// "cheapest" and "dearest". Asking for a middle tier then gets an honest
+// empty answer, and the turn would go unrouted even though something
+// cheaper and perfectly adequate is sitting on the menu. This asks the
+// question that still has an answer.
+func (c *Catalog) TargetBelow(provider eventschema.Provider, tier Tier) (string, bool) {
+	if c == nil || tier == TierUnknown || len(c.candidates) == 0 {
+		return "", false
+	}
+	names := make([]string, 0, len(c.candidates))
+	for _, orig := range c.candidates {
+		names = append(names, orig)
+	}
+	sort.Strings(names)
+	var (
+		best     string
+		bestRank = -1
+	)
+	for _, n := range names {
+		res := c.Resolve(provider, n)
+		r, ok := tierRank[res.Tier]
+		if !ok || r >= tierRank[tier] {
+			continue
+		}
+		if r > bestRank {
+			best, bestRank = n, r
+		}
+	}
+	return best, best != ""
+}
+
+// tierRank orders the bands so "below" is expressible.
+var tierRank = map[Tier]int{
+	TierLookup: 1, TierBalanced: 2, TierDefault: 3, TierDeep: 4,
+}
+
+// targetFromCandidates picks the cheapest declared model on the tier,
+// resolving each through the same path a running turn would take so the
+// answer cannot disagree with what Resolve says about it.
+func (c *Catalog) targetFromCandidates(provider eventschema.Provider, tier Tier) (string, bool) {
+	names := make([]string, 0, len(c.candidates))
+	for _, orig := range c.candidates {
+		names = append(names, orig)
+	}
+	sort.Strings(names) // deterministic across runs
+	var (
+		best     string
+		bestCost = -1.0
+	)
+	for _, n := range names {
+		res := c.Resolve(provider, n)
+		if res.Tier != tier {
+			continue
+		}
+		if bestCost < 0 || res.CostPerMillion < bestCost {
+			best, bestCost = n, res.CostPerMillion
 		}
 	}
 	return best, best != ""

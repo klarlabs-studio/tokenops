@@ -234,3 +234,58 @@ func TestCandidatesMatchPrefixKeys(t *testing.T) {
 		t.Errorf("fable-5-1 tier = %q, want deep", got.Tier)
 	}
 }
+
+// A proxy provider re-badges someone else's models: opencode and Copilot
+// both serve Anthropic models under their own name, and the rate card
+// has no rows filed under theirs at all. Resolution already handles that
+// by matching the model name across providers — but a target search that
+// scans the card for rows belonging to the requesting provider finds
+// nothing and silently gives up, so the client that most needs routing
+// gets none.
+//
+// The menu is the candidate list, which is what the operator declared.
+func TestTargetWorksForProxyProviders(t *testing.T) {
+	c := New(spend.Table{Currency: "USD", Rates: map[spend.Key]spend.Rate{
+		{Provider: "anthropic", Model: "claude-sonnet-5*"}: {InputPerMillion: 2, OutputPerMillion: 10},
+		{Provider: "anthropic", Model: "claude-opus-4-6*"}: {InputPerMillion: 5, OutputPerMillion: 25},
+	}}, nil).WithCandidates([]string{"glm-5-free", "claude-sonnet-5", "claude-opus-4-6"})
+
+	// The free model costs nothing and is the right answer for retrieval.
+	if got, ok := c.Target("opencode", TierLookup); !ok || got != "glm-5-free" {
+		t.Errorf("Target(opencode, lookup) = %q,%v want glm-5-free", got, ok)
+	}
+	// A three-model menu holds only two priced models, so it cannot
+	// express four bands and the balanced tier is genuinely empty.
+	// TargetBelow answers the question that still has an answer: the
+	// most capable model that is cheaper than what the turn is on.
+	if got, ok := c.TargetBelow("opencode", TierDeep); !ok || got != "claude-sonnet-5" {
+		t.Errorf("TargetBelow(opencode, deep) = %q,%v want claude-sonnet-5", got, ok)
+	}
+}
+
+// Candidates are indexed by a normalised name so they can be matched
+// against card rows, but the name handed back has to be the one the
+// operator wrote: "gpt-5.3-codex" normalises to "gpt-5-3-codex", and
+// nothing will answer to that. Anthropic names carry no dots, which is
+// why this stayed invisible until a second provider was wired.
+func TestTargetReturnsTheOperatorsSpelling(t *testing.T) {
+	c := New(spend.Table{Currency: "USD", Rates: map[spend.Key]spend.Rate{
+		{Provider: "openai", Model: "gpt-5.6-luna*"}:  {InputPerMillion: 0.4, OutputPerMillion: 1},
+		{Provider: "openai", Model: "gpt-5-mini*"}:    {InputPerMillion: 0.25, OutputPerMillion: 2},
+		{Provider: "openai", Model: "gpt-5.3-codex*"}: {InputPerMillion: 1.75, OutputPerMillion: 14},
+		{Provider: "openai", Model: "gpt-5.5*"}:       {InputPerMillion: 10, OutputPerMillion: 25},
+	}}, nil).WithCandidates([]string{"gpt-5.6-luna", "gpt-5-mini", "gpt-5.3-codex", "gpt-5.5"})
+
+	got, ok := c.Target("openai", TierLookup)
+	if !ok {
+		t.Fatal("no lookup target")
+	}
+	if got != "gpt-5.6-luna" {
+		t.Errorf("Target(openai, lookup) = %q, want gpt-5.6-luna (cheapest, and spelled as configured)", got)
+	}
+	for _, tr := range []Tier{TierLookup, TierBalanced, TierDefault, TierDeep} {
+		if m, ok := c.Target("openai", tr); ok && strings.Contains(m, "gpt-5-3") {
+			t.Errorf("Target(%s) returned a normalised name %q", tr, m)
+		}
+	}
+}

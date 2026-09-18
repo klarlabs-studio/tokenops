@@ -126,7 +126,7 @@ func tierForKind(k taskclass.Kind) (modeltier.Tier, bool) {
 	}
 }
 
-// tierRank orders tiers so "cheaper than" is expressible.
+// tierRank orders tiers so "cheaper than" is expressible here too.
 var tierRank = map[modeltier.Tier]int{
 	modeltier.TierLookup: 1, modeltier.TierBalanced: 2,
 	modeltier.TierDefault: 3, modeltier.TierDeep: 4,
@@ -170,6 +170,14 @@ func Evaluate(in Input) Decision {
 		return d
 	}
 	target, ok := cat.Target(in.Provider, wantTier)
+	if !ok {
+		// The menu may not hold a model on that exact band — three
+		// models with one free leaves two priced rows, which can only
+		// express cheapest and dearest. Fall back to the most capable
+		// thing still cheaper than what the turn is on, which is the
+		// question that still has an answer.
+		target, ok = cat.TargetBelow(in.Provider, cur.Tier)
+	}
 	if !ok || target == in.CurrentModel {
 		return d
 	}

@@ -26,6 +26,15 @@ type userPromptSubmitInput struct {
 	SessionID      string `json:"session_id"`
 	TranscriptPath string `json:"transcript_path"`
 	Prompt         string `json:"prompt"`
+	// Model is the active model slug. Codex and Cursor send it on every
+	// hook event; Claude Code does not, and the transcript is the only
+	// place its current model is written down.
+	Model string `json:"model"`
+	// ProviderID and ModelID are what the opencode shim forwards from
+	// its chat.message input, where the provider is named explicitly
+	// rather than implied by the client.
+	ProviderID string `json:"provider_id"`
+	ModelID    string `json:"model_id"`
 }
 
 // promptHookOutput injects context into the turn the operator just
@@ -39,7 +48,7 @@ type promptHookOutput struct {
 }
 
 func newRouteGuardCmd() *cobra.Command {
-	var mode, dir string
+	var mode, dir, provider string
 	cmd := &cobra.Command{
 		Use:   "route-guard",
 		Short: "UserPromptSubmit hook that checks the model still fits the work",
@@ -68,11 +77,12 @@ Use 'tokenops route-guard hook' to print the settings.json block.`,
 			if strings.TrimSpace(mode) != "" {
 				m = routeguard.ParseMode(mode)
 			}
-			return runRouteGuardHook(cmd, m, dir)
+			return runRouteGuardHook(cmd, m, dir, provider)
 		},
 	}
 	cmd.Flags().StringVar(&mode, "mode", "", "advise | delegate | auto | off")
 	cmd.Flags().StringVar(&dir, "dir", "", "state dir (defaults to ~/.tokenops/route-guard)")
+	cmd.Flags().StringVar(&provider, "provider", "", "provider whose models this client runs (anthropic|openai|cursor|...)")
 	cmd.AddCommand(newRouteGuardHookCmd())
 	return cmd
 }
@@ -82,7 +92,7 @@ Use 'tokenops route-guard hook' to print the settings.json block.`,
 //
 // Every failure path is silent: a guard that cannot decide must let the
 // turn proceed untouched rather than interrupt it with its own troubles.
-func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir string) error {
+func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir, provider string) error {
 	body, err := io.ReadAll(cmd.InOrStdin())
 	if err != nil {
 		return nil
@@ -98,10 +108,17 @@ func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir string) err
 		}
 		dir = filepath.Join(home, ".tokenops", "route-guard")
 	}
-	model := latestTranscriptModel(in.TranscriptPath)
+	// Prefer what the client stated. Codex and Cursor put the active
+	// model on every hook payload; the opencode shim forwards it from
+	// chat.message. Only Claude Code makes this a search problem.
+	model := firstNonEmptyStr(in.ModelID, in.Model)
+	if model == "" {
+		model = latestTranscriptModel(in.TranscriptPath)
+	}
 	if model == "" {
 		return nil
 	}
+	prov := eventschema.Provider(firstNonEmptyStr(in.ProviderID, provider, string(eventschema.ProviderAnthropic)))
 	// Load("") returns defaults without reading anything, so the path
 	// has to be resolved first — otherwise the guard silently runs with
 	// no model set and abstains on every turn while appearing wired.
@@ -114,7 +131,7 @@ func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir string) err
 		return nil
 	}
 	sr := cfg.Optimizer.SmartRouting
-	candidates := sr.Models[string(eventschema.ProviderAnthropic)]
+	candidates := sr.Models[string(prov)]
 	var autoKinds []taskclass.Kind
 	for _, k := range sr.AutoKinds {
 		autoKinds = append(autoKinds, taskclass.Kind(k))
@@ -124,7 +141,7 @@ func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir string) err
 	}
 	dec := routeguard.Evaluate(routeguard.Input{
 		Dir: dir, SessionID: in.SessionID, Prompt: in.Prompt,
-		CurrentModel: model, Provider: eventschema.ProviderAnthropic,
+		CurrentModel: model, Provider: prov,
 		Mode: mode, Catalog: routeCatalog(), Candidates: candidates,
 		AutoKinds: autoKinds,
 	})
@@ -185,6 +202,15 @@ func latestTranscriptModel(path string) string {
 		}
 	}
 	return model
+}
+
+func firstNonEmptyStr(vs ...string) string {
+	for _, v := range vs {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func newRouteGuardHookCmd() *cobra.Command {
