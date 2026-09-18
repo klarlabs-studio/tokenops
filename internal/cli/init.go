@@ -69,7 +69,7 @@ config only.`,
 	cmd.Flags().StringVar(&f.repoID, "repo-id", "", "rule corpus identifier prepended to source IDs (defaults to basename of rules root)")
 	cmd.Flags().BoolVar(&f.force, "force", false, "overwrite an existing config file")
 	cmd.Flags().BoolVar(&f.printOnly, "print-only", false, "render the resulting YAML to stdout without writing")
-	cmd.Flags().BoolVar(&f.withDetect, "detect", false, "sniff installed AI clients and report likely plan bindings")
+	cmd.Flags().BoolVar(&f.withDetect, "detect", false, "also report installed AI clients (init still wires everything; use `tokenops detect` to only look)")
 	cmd.Flags().BoolVar(&f.noWire, "no-wire", false, "write the config only; skip registering the MCP server and installing hooks")
 	return cmd
 }
@@ -183,6 +183,13 @@ func renderDetection(w fmtWriter, ds []detect.Detection) {
 	for _, d := range ds {
 		fmt.Fprintf(w, "  [%s] %s — %s\n", d.Confidence, d.Provider, d.Hint)
 		fmt.Fprintf(w, "    evidence: %s\n", d.Evidence)
+		// A bare API key means metered billing. Printing "run: tokenops
+		// plan set anthropic claude-max-20x" under a hint that says "no
+		// plan" contradicted itself in adjacent lines.
+		if !d.SuggestsPlan {
+			fmt.Fprintln(w, "    no plan to bind — metered traffic is costed from the rate card")
+			continue
+		}
 		switch d.Provider {
 		case "anthropic":
 			fmt.Fprintln(w, "    run: tokenops plan set anthropic claude-max-20x  # or claude-max-5x | claude-pro")
