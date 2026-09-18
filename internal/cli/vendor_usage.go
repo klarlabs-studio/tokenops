@@ -41,7 +41,7 @@ type vendorUsageEnableFlags struct {
 	root        string
 	interval    time.Duration
 	disable     bool
-	restart     bool
+	noRestart   bool
 	configPath  string
 }
 
@@ -126,7 +126,7 @@ Examples:
 	cmd.Flags().DurationVar(&f.interval, "interval", 0, "poll interval; zero keeps the existing or default")
 	cmd.Flags().BoolVar(&f.disable, "disable", false, "set enabled=false instead of true; clears no secrets")
 	cmd.Flags().StringVar(&f.configPath, "config-path", "", "override config file path")
-	addRestartFlag(cmd, &f.restart)
+	addNoRestartFlag(cmd, &f.noRestart)
 	return cmd
 }
 
@@ -235,7 +235,7 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 		"%s vendor_usage.%s\nwrote %s\n",
 		action, sourceConfigKey(source), path,
 	)
-	maybeRestart(cmd.OutOrStdout(), f.restart, false)
+	applyRestart(cmd.OutOrStdout(), !f.noRestart, false)
 	fmt.Fprintln(cmd.OutOrStdout(), "then: `tokenops vendor-usage status`")
 	return nil
 }
