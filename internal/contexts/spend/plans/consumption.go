@@ -2,6 +2,7 @@ package plans
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -162,4 +163,45 @@ func countsAsMessage(env *eventschema.Envelope) bool {
 	default:
 		return true
 	}
+}
+
+// SpendWindowStart returns the start of the period a spend limit covers.
+// An unrecognised or empty window means monthly, which is how vendor
+// consoles state org limits.
+func SpendWindowStart(now time.Time, window string) time.Time {
+	switch strings.ToLower(strings.TrimSpace(window)) {
+	case "daily", "day":
+		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	case "weekly", "week":
+		offset := (int(now.Weekday()) + 6) % 7 // ISO weeks start Monday
+		d := now.AddDate(0, 0, -offset)
+		return time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, time.UTC)
+	default:
+		return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	}
+}
+
+// SpendInWindow sums real billed cost for a provider over the spend window.
+//
+// It reads CostUSD rather than an API-equivalent: a spend-denominated plan
+// is billed at API rates from the first token, so the cost carried on the
+// event IS what the vendor charges. A plan-covered event contributes zero,
+// which is correct — that traffic is not billed.
+func SpendInWindow(ctx context.Context, reader EventReader, provider string, now time.Time, window string) (float64, error) {
+	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, SpendWindowStart(now, window))
+	if err != nil {
+		return 0, err
+	}
+	var total float64
+	for _, env := range events {
+		if env == nil {
+			continue
+		}
+		p, ok := env.Payload.(*eventschema.PromptEvent)
+		if !ok || string(p.Provider) != provider {
+			continue
+		}
+		total += p.CostUSD
+	}
+	return total, nil
 }
