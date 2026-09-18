@@ -109,7 +109,7 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 		store := components.Store
 		staleCfg := cfg
 		staleSources = func() []config.StaleSource {
-			stale, err := staleCfg.CheckStaleIngestion(ctx, store, config.StaleIngestionWindow, time.Now())
+			stale, err := staleCfg.CheckStaleIngestion(ctx, store, sourceProbes(staleCfg), config.StaleIngestionWindow, time.Now())
 			if err != nil {
 				return nil
 			}

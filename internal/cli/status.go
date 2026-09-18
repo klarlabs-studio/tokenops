@@ -208,7 +208,7 @@ func statusStaleWarnings(ctx context.Context, rf *rootFlags, cfg config.Config) 
 		return nil
 	}
 	defer func() { _ = store.Close() }()
-	stale, err := cfg.CheckStaleIngestion(ctx, store, config.StaleIngestionWindow, time.Now())
+	stale, err := cfg.CheckStaleIngestion(ctx, store, sourceProbes(cfg), config.StaleIngestionWindow, time.Now())
 	if err != nil || len(stale) == 0 {
 		return nil
 	}
