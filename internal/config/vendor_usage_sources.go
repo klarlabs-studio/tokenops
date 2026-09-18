@@ -75,6 +75,20 @@ type SourceLastSeen interface {
 	LastEventBySource(ctx context.Context) (map[string]time.Time, error)
 }
 
+// SourceProbe reports when a source last produced data at its ORIGIN — the
+// newest transcript on disk, the newest row in the client's own store.
+//
+// It is what tells "the operator has not used this vendor lately" apart
+// from "the reader died". The check could previously see only its own
+// event counts, so those two looked identical, and the machine that
+// motivated this fix sat permanently at [critical] for two sources whose
+// readers were provably complete. An alarm that is always on is one nobody
+// reads, which is how the outage it was built for happened.
+//
+// ok=false means the origin could not be read. That is an unknown, not a
+// clean bill of health, and the time-based warning stands.
+type SourceProbe func() (time.Time, bool)
+
 // StaleSource names an enabled vendor-usage source that produced no
 // events in the check window.
 type StaleSource struct {
@@ -160,7 +174,7 @@ func (s StaleSource) Warning() string {
 // window <= 0 the default StaleIngestionWindow is used. A nil counter or
 // no enabled sources yields no warnings (never an error), keeping status
 // non-panicking when the store is unavailable.
-func (c Config) CheckStaleIngestion(ctx context.Context, counter SourceCounter, window time.Duration, now time.Time) ([]StaleSource, error) {
+func (c Config) CheckStaleIngestion(ctx context.Context, counter SourceCounter, probes map[string]SourceProbe, window time.Duration, now time.Time) ([]StaleSource, error) {
 	enabled := c.EnabledVendorUsageSources()
 	if len(enabled) == 0 || counter == nil {
 		return nil, nil
@@ -187,6 +201,25 @@ func (c Config) CheckStaleIngestion(ctx context.Context, counter SourceCounter, 
 	for _, s := range enabled {
 		if counts[s.SourceTag] != 0 {
 			continue
+		}
+		// Ask the origin whether it produced anything we should have
+		// read. The comparison is against the check window, not against
+		// the last ingested event: a transcript's mtime trails its last
+		// entry by however long the client held the file open, so
+		// "newer than the last event" is true by seconds on a source
+		// that is perfectly caught up.
+		//
+		// The question the check actually asks is "did this source
+		// produce data in the window that we failed to ingest", and a
+		// source whose newest data predates the window produced nothing
+		// to miss. That makes an unused vendor quiet without making a
+		// dead reader quiet, which is the whole distinction.
+		if probe, ok := probes[s.SourceTag]; ok && probe != nil {
+			if newest, known := probe(); known {
+				if newest.IsZero() || newest.Before(now.Add(-window)) {
+					continue
+				}
+			}
 		}
 		entry := StaleSource{
 			Name:        s.Name,
