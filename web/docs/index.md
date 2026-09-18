@@ -342,7 +342,7 @@ covers the rest.
 
 ---
 
-Shipping now: **v0.62.0**. See [release highlights](/changelog) for what
+Shipping now: **v0.63.0**. See [release highlights](/changelog) for what
 changed and why, or the
 [full changelog](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md)
 for every commit.
