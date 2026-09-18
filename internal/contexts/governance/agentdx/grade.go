@@ -29,6 +29,14 @@ type Grades struct {
 	ContextGrowth Letter `json:"context_growth,omitempty"`
 	Compaction    Letter `json:"compaction,omitempty"`
 	Overall       Letter `json:"overall,omitempty"`
+	// OverallDriver names the metric Overall came from.
+	//
+	// Worst-grade-wins is deliberate, but it hands the headline to one
+	// metric and never said which. An operator could watch rework improve
+	// two grades while Overall sat unchanged, with nothing telling them
+	// what was actually holding it there — so the rule looked arbitrary
+	// when it was only unexplained.
+	OverallDriver string `json:"overall_driver,omitempty"`
 }
 
 // Threshold is the A / B / C boundary for one metric. Anything past the
@@ -94,7 +102,7 @@ func Grade(m Metrics) Grades {
 	if m.Sessions > 0 {
 		g.Compaction = grade(m.CompactionsPerSession, DefaultThresholds.Compaction)
 	}
-	g.Overall = worst(g)
+	g.Overall, g.OverallDriver = worstWithDriver(g)
 	return g
 }
 
@@ -123,25 +131,43 @@ func grade(v float64, t Threshold) Letter {
 	}
 }
 
-// worst returns the lowest grade present.
+// worstWithDriver returns the lowest grade present and the metric it came
+// from.
 //
 // The worst rather than the average, deliberately: an experience is as
 // good as its sharpest friction, and averaging lets one bad metric hide
-// behind six comfortable ones.
-func worst(g Grades) Letter {
+// behind six comfortable ones. The driver is reported alongside because
+// that rule only reads as fair when the operator can see which metric it
+// picked — otherwise a headline that refuses to move looks arbitrary
+// rather than pointed.
+//
+// A tie goes to the first in declaration order, so repeated runs over the
+// same data name the same metric.
+func worstWithDriver(g Grades) (Letter, string) {
 	rank := map[Letter]int{LetterA: 0, LetterB: 1, LetterC: 2, LetterF: 3}
 	out := Letter("")
+	driver := ""
 	best := -1
-	for _, l := range []Letter{
-		g.Turns, g.Duration, g.Rework, g.Interrupt,
-		g.Escalation, g.FirstTry, g.ContextGrowth, g.Compaction,
+	for _, m := range []struct {
+		name   string
+		letter Letter
+	}{
+		{"turns-per-prompt", g.Turns},
+		{"duration", g.Duration},
+		{"rework", g.Rework},
+		{"interrupt rate", g.Interrupt},
+		{"escalation rate", g.Escalation},
+		{"first-try rate", g.FirstTry},
+		{"context growth", g.ContextGrowth},
+		{"compactions", g.Compaction},
 	} {
+		l := m.letter
 		if l == "" {
 			continue
 		}
 		if r := rank[l]; r > best {
-			best, out = r, l
+			best, out, driver = r, l, m.name
 		}
 	}
-	return out
+	return out, driver
 }

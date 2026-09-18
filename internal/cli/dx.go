@@ -119,7 +119,11 @@ func writeDXText(w io.Writer, m agentdx.Metrics, bands []agentdx.ContextBand, da
 	fmt.Fprintf(w, "  compactions/session:   %-10.1f %s\n", m.CompactionsPerSession, badge(g.Compaction))
 
 	if g.Overall != "" {
-		fmt.Fprintf(w, "\nOverall: %s  (the worst grade, not the average — an experience is\n", g.Overall)
+		overall := string(g.Overall)
+		if g.OverallDriver != "" {
+			overall += " (" + g.OverallDriver + ")"
+		}
+		fmt.Fprintf(w, "\nOverall: %s  (the worst grade, not the average — an experience is\n", overall)
 		fmt.Fprintln(w, "         only as good as its sharpest friction)")
 	}
 	if len(m.ByProvider) > 0 {
