@@ -5,8 +5,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
+	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/version"
 )
 
@@ -230,6 +232,179 @@ func installOpencodePlugin(out io.Writer, dir, exe string, readGuard, coach, rou
 	fmt.Fprintf(out, "Wrote %s\n", path)
 	fmt.Fprintln(out, "\nRestart opencode to load it. It refuses a read only at")
 	fmt.Fprintln(out, "`coaching.delivery: intervene`; below that it records and allows.")
+	return nil
+}
+
+// opencodeMarkers pairs each verb with the opencode extension point its
+// generated body hooks, so status can name the event the way the other
+// clients' status lines do.
+var opencodeMarkers = map[string]string{
+	"read-guard":  "tool.execute.before",
+	"coach-hook":  "session.idle",
+	"route-guard": "chat.message",
+}
+
+// opencodeMarkerPresent reports whether the generated plugin still calls the
+// given verb.
+//
+// Each generated body invokes the binary by name, so the call site is the
+// marker and no JavaScript has to be parsed. It also means a file an operator
+// hand-edited is read for what it actually does rather than for what we
+// assume we wrote.
+func opencodeMarkerPresent(src, marker string) bool {
+	return strings.Contains(src, `run(["`+marker+`"`)
+}
+
+// opencodePluginExe recovers the binary path the plugin calls, so a rewrite
+// keeps pointing at whatever the install pinned.
+func opencodePluginExe(src string) string {
+	const key = "const TOKENOPS = "
+	i := strings.Index(src, key)
+	if i < 0 {
+		return ""
+	}
+	rest := src[i+len(key):]
+	if nl := strings.IndexByte(rest, '\n'); nl >= 0 {
+		rest = rest[:nl]
+	}
+	path, err := strconv.Unquote(strings.TrimSpace(rest))
+	if err != nil {
+		return ""
+	}
+	return path
+}
+
+// opencodePluginBudget recovers the budget baked into the coach call.
+//
+// A rewrite that regenerated with the default would silently move an
+// operator's configured budget back to 50 as a side effect of removing an
+// unrelated guard.
+func opencodePluginBudget(src string) (float64, bool) {
+	const key = `run(["coach-hook", "--budget", "`
+	i := strings.Index(src, key)
+	if i < 0 {
+		return 0, false
+	}
+	rest := src[i+len(key):]
+	end := strings.IndexByte(rest, '"')
+	if end < 0 {
+		return 0, false
+	}
+	v, err := strconv.ParseFloat(rest[:end], 64)
+	if err != nil {
+		return 0, false
+	}
+	return v, true
+}
+
+// statusOpencodePlugin reports which halves of the generated plugin are live.
+func statusOpencodePlugin(out io.Writer, dir, exe string) error {
+	path := filepath.Join(dir, opencodePluginName)
+	fmt.Fprintf(out, "Client: %s\n  %s\n", hookClientOpencode, path)
+	b, err := os.ReadFile(path) //nolint:gosec // a path the operator named
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Fprintf(out, "No plugin at %s — no hooks wired.\n", path)
+			return nil
+		}
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	src := string(b)
+	pluginExe := opencodePluginExe(src)
+	found := 0
+	for _, marker := range hookMarkers {
+		if !opencodeMarkerPresent(src, marker) {
+			continue
+		}
+		found++
+		fmt.Fprintf(out, "  %s  event=%s -> %s\n", marker, opencodeMarkers[marker], pluginExe)
+		if pluginExe != exe {
+			fmt.Fprintf(out, "    note: points at a different binary than this one\n")
+		}
+	}
+	if found == 0 {
+		fmt.Fprintf(out, "No tokenops hooks wired in %s.\n", path)
+	}
+	return nil
+}
+
+// uninstallOpencodePlugin removes the named verbs from the generated plugin,
+// rewriting what is left and deleting the file once nothing remains.
+//
+// Deleting outright would be simpler and wrong: the three halves are
+// installed independently, so `uninstall --route-guard` must leave a
+// still-wired read-guard alone rather than take the coaching and the read
+// dedup with it.
+func uninstallOpencodePlugin(out io.Writer, dir string, markers []string, dryRun bool) error {
+	path := filepath.Join(dir, opencodePluginName)
+	b, err := os.ReadFile(path) //nolint:gosec // a path the operator named
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Fprintf(out, "No plugin at %s — nothing to remove.\n", path)
+			return nil
+		}
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	src := string(b)
+
+	drop := make(map[string]bool, len(markers))
+	for _, m := range markers {
+		drop[m] = true
+	}
+	var removed []string
+	keep := map[string]bool{}
+	for _, marker := range hookMarkers {
+		if !opencodeMarkerPresent(src, marker) {
+			continue
+		}
+		if drop[marker] {
+			removed = append(removed, marker)
+			continue
+		}
+		keep[marker] = true
+	}
+	if len(removed) == 0 {
+		fmt.Fprintln(out, "No tokenops hook entries found — nothing to remove.")
+		return nil
+	}
+	for _, r := range removed {
+		fmt.Fprintf(out, "  - %s (opencode %s)\n", r, opencodeMarkers[r])
+	}
+
+	if len(keep) == 0 {
+		if dryRun {
+			fmt.Fprintf(out, "\n--dry-run: not writing. Would delete %s.\n", path)
+			return nil
+		}
+		if err := os.Remove(path); err != nil {
+			return fmt.Errorf("remove %s: %w", path, err)
+		}
+		fmt.Fprintf(out, "Removed %s\n", path)
+		return nil
+	}
+
+	exe := opencodePluginExe(src)
+	if exe == "" {
+		return fmt.Errorf("%s: cannot find the binary path it calls; delete the file to remove it", path)
+	}
+	budget, ok := opencodePluginBudget(src)
+	if !ok {
+		budget = coachhook.DefaultBudgetUSD
+	}
+	body := fmt.Sprintf(opencodePluginTemplate, version.String(), exe,
+		opencodeHookBody(keep["read-guard"]),
+		opencodeIdleBody(keep["coach-hook"], budget)+opencodeRouteBody(keep["route-guard"]))
+
+	if dryRun {
+		fmt.Fprintln(out, "\n--dry-run: not writing. Resulting plugin:")
+		fmt.Fprintln(out, body)
+		return nil
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil { //nolint:gosec // a plugin the operator asked for
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	fmt.Fprintf(out, "Wrote %s\n", path)
+	fmt.Fprintln(out, "\nRestart opencode to load the change.")
 	return nil
 }
 
