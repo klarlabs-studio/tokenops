@@ -78,7 +78,7 @@ func TestCheckStaleIngestion(t *testing.T) {
 		cfg := Default()
 		cfg.VendorUsage.ClaudeCodeJSONL.Enabled = true
 		counter := &fakeCounter{counts: map[string]int64{}}
-		stale, err := cfg.CheckStaleIngestion(context.Background(), counter, StaleIngestionWindow, now)
+		stale, err := cfg.CheckStaleIngestion(context.Background(), counter, nil, StaleIngestionWindow, now)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -94,7 +94,7 @@ func TestCheckStaleIngestion(t *testing.T) {
 		cfg := Default()
 		cfg.VendorUsage.ClaudeCodeJSONL.Enabled = true
 		counter := &fakeCounter{counts: map[string]int64{"claude-code-jsonl": 7}}
-		stale, err := cfg.CheckStaleIngestion(context.Background(), counter, StaleIngestionWindow, now)
+		stale, err := cfg.CheckStaleIngestion(context.Background(), counter, nil, StaleIngestionWindow, now)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -106,7 +106,7 @@ func TestCheckStaleIngestion(t *testing.T) {
 	t.Run("disabled source with zero events is not flagged", func(t *testing.T) {
 		cfg := Default() // ClaudeCodeJSONL disabled
 		counter := &fakeCounter{counts: map[string]int64{}}
-		stale, err := cfg.CheckStaleIngestion(context.Background(), counter, StaleIngestionWindow, now)
+		stale, err := cfg.CheckStaleIngestion(context.Background(), counter, nil, StaleIngestionWindow, now)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -120,7 +120,7 @@ func TestCheckStaleIngestion(t *testing.T) {
 		cfg.VendorUsage.OpenCode.Enabled = true
 		counter := &fakeCounter{counts: map[string]int64{}}
 		window := 12 * time.Hour
-		stale, err := cfg.CheckStaleIngestion(context.Background(), counter, window, now)
+		stale, err := cfg.CheckStaleIngestion(context.Background(), counter, nil, window, now)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -136,7 +136,7 @@ func TestCheckStaleIngestion(t *testing.T) {
 		cfg := Default()
 		cfg.VendorUsage.OpenCode.Enabled = true
 		counter := &fakeCounter{counts: map[string]int64{}}
-		stale, err := cfg.CheckStaleIngestion(context.Background(), counter, 0, now)
+		stale, err := cfg.CheckStaleIngestion(context.Background(), counter, nil, 0, now)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -151,7 +151,7 @@ func TestCheckStaleIngestion(t *testing.T) {
 	t.Run("nil counter yields no warnings and no error", func(t *testing.T) {
 		cfg := Default()
 		cfg.VendorUsage.ClaudeCodeJSONL.Enabled = true
-		stale, err := cfg.CheckStaleIngestion(context.Background(), nil, StaleIngestionWindow, now)
+		stale, err := cfg.CheckStaleIngestion(context.Background(), nil, nil, StaleIngestionWindow, now)
 		if err != nil || stale != nil {
 			t.Fatalf("nil counter should be a no-op; got stale=%v err=%v", stale, err)
 		}
@@ -160,7 +160,7 @@ func TestCheckStaleIngestion(t *testing.T) {
 	t.Run("no enabled sources skips the store entirely", func(t *testing.T) {
 		cfg := Default()
 		counter := &fakeCounter{counts: map[string]int64{}}
-		stale, err := cfg.CheckStaleIngestion(context.Background(), counter, StaleIngestionWindow, now)
+		stale, err := cfg.CheckStaleIngestion(context.Background(), counter, nil, StaleIngestionWindow, now)
 		if err != nil || stale != nil {
 			t.Fatalf("no enabled sources should short-circuit; got stale=%v err=%v", stale, err)
 		}
@@ -173,7 +173,7 @@ func TestCheckStaleIngestion(t *testing.T) {
 		cfg := Default()
 		cfg.VendorUsage.ClaudeCodeJSONL.Enabled = true
 		counter := &fakeCounter{err: errors.New("boom")}
-		_, err := cfg.CheckStaleIngestion(context.Background(), counter, StaleIngestionWindow, now)
+		_, err := cfg.CheckStaleIngestion(context.Background(), counter, nil, StaleIngestionWindow, now)
 		if err == nil {
 			t.Fatal("expected error to propagate")
 		}
@@ -286,7 +286,7 @@ func TestCheckStaleIngestionCarriesTheRealGap(t *testing.T) {
 		last:   map[string]time.Time{"claude-code-jsonl": now.Add(-27 * 24 * time.Hour)},
 	}
 
-	stale, err := cfg.CheckStaleIngestion(context.Background(), seer, StaleIngestionWindow, now)
+	stale, err := cfg.CheckStaleIngestion(context.Background(), seer, nil, StaleIngestionWindow, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func TestCheckStaleIngestionWithoutLastSeenStillWarns(t *testing.T) {
 	cfg := Config{}
 	cfg.VendorUsage.ClaudeCodeJSONL.Enabled = true
 
-	stale, err := cfg.CheckStaleIngestion(context.Background(), &fakeCounter{counts: map[string]int64{}}, StaleIngestionWindow, time.Now())
+	stale, err := cfg.CheckStaleIngestion(context.Background(), &fakeCounter{counts: map[string]int64{}}, nil, StaleIngestionWindow, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
