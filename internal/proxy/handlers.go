@@ -61,18 +61,41 @@ func snapshotReadyState() (blockers, nextActions []string) {
 // HTTP, without requiring the daemon to call itself.
 func IsReady() bool { return ready.Load() }
 
+// WithEventDrops installs an accessor for the number of telemetry rows the
+// event bus has failed to persist. When set, /healthz reports it.
+//
+// It goes on /healthz rather than on the analytics API because /healthz is
+// the one endpoint both readers of this figure already call: `tokenops
+// status` fetches it, and the MCP server probes it to decide whether an
+// ingestion daemon is alive. Putting it behind the dashboard's auth would
+// have kept it exactly as invisible as it was.
+func WithEventDrops(fn func() int64) Option {
+	return func(s *Server) { s.eventDrops = fn }
+}
+
 func (s *Server) registerRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /healthz", healthzHandler)
+	mux.HandleFunc("GET /healthz", s.healthzHandler)
 	mux.HandleFunc("GET /readyz", readyzHandler)
 	mux.HandleFunc("GET /version", versionHandler)
 }
 
-func healthzHandler(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
+// healthzHandler reports liveness, plus the telemetry the daemon failed to
+// write.
+//
+// Dropped rows deliberately do not make the daemon unhealthy: it is serving,
+// and a probe that flipped to 503 over a lost batch would restart a process
+// whose problem is downstream of it. The figure rides along so the commands
+// an operator actually reads can warn about it.
+func (s *Server) healthzHandler(w http.ResponseWriter, _ *http.Request) {
+	payload := map[string]any{
 		"status":     "ok",
 		"started_at": startedAt.UTC(),
 		"uptime_ns":  time.Since(startedAt).Nanoseconds(),
-	})
+	}
+	if s.eventDrops != nil {
+		payload["dropped_events"] = s.eventDrops()
+	}
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func readyzHandler(w http.ResponseWriter, _ *http.Request) {
