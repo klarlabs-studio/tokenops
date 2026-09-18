@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -19,6 +20,14 @@ type VendorUsageSource struct {
 	SourceTag string
 	// Enabled mirrors the config block's enabled flag.
 	Enabled bool
+	// AlwaysOn marks a source that runs regardless of config because it
+	// costs nothing when idle — the cursor turn poller reads a ledger
+	// that stays empty until the coach hook is installed.
+	//
+	// It is deliberately not folded into Enabled: "the operator switched
+	// this on" and "this runs anyway" are different facts, and a fresh
+	// config still enables nothing.
+	AlwaysOn bool
 }
 
 // VendorUsageSources returns every vendor-usage source in a stable
@@ -35,7 +44,54 @@ func (c Config) VendorUsageSources() []VendorUsageSource {
 		{Name: "github_copilot", SourceTag: "github-copilot", Enabled: c.VendorUsage.GitHubCopilot.Enabled},
 		{Name: "cursor_web", SourceTag: "cursor-web", Enabled: c.VendorUsage.Cursor.Enabled},
 		{Name: "anthropic_cookie", SourceTag: "anthropic-cookie", Enabled: c.VendorUsage.AnthropicCookie.Enabled},
+		// The cursor turn poller has no config block: it reads a ledger
+		// the coach hook writes, and that ledger is empty until the hook
+		// is installed, so an operator who does not run Cursor pays
+		// nothing for it. Always-on is the right design and was the
+		// reason it appeared in no registry at all — invisible to
+		// `vendor-usage status`, never staleness-checked, and impossible
+		// to name in a retention rule without guessing the tag.
+		{Name: "cursor_turns (hook ledger)", SourceTag: "cursor-hook", AlwaysOn: true},
 	}
+}
+
+// UnmatchedRetentionSources returns the keep_by_source keys that name a
+// source which neither appears in the event store nor is a configured
+// vendor-usage source — rules that are, in practice, doing nothing.
+//
+// The key is a source tag, and the tag is not always what the operator
+// sees: Cursor's ledger lives in ~/.tokenops/cursor-turns but its events
+// are stamped `cursor-hook`. A config on one machine read
+// `cursor-turns: forever`, so its author believed their Cursor history was
+// pinned while it sat on the default 120-day window.
+//
+// Validation deliberately consults the store rather than a hardcoded list
+// of tags: a closed list would reject a legitimate tag the day a new
+// emitter is added. A configured-but-not-yet-written source is a fresh
+// install, not a typo, so it is not reported.
+func (c Config) UnmatchedRetentionSources(seen map[string]int64) []string {
+	if len(c.Retention.KeepBySource) == 0 {
+		return nil
+	}
+	known := make(map[string]bool, len(seen)+8)
+	for tag := range seen {
+		known[tag] = true
+	}
+	for _, s := range c.VendorUsageSources() {
+		if s.Enabled || s.AlwaysOn {
+			known[s.SourceTag] = true
+		}
+	}
+	var out []string
+	for key := range c.Retention.KeepBySource {
+		_, source := SplitRetentionSourceKey(key)
+		if source == "" || known[source] {
+			continue
+		}
+		out = append(out, key)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // EnabledVendorUsageSources filters VendorUsageSources down to the
