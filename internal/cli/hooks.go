@@ -32,23 +32,43 @@ type hookSpec struct {
 	args    []string
 }
 
+// hookMarkers is every verb tokenops installs, in install order, and the
+// single list status and uninstall walk.
+//
+// It exists because route-guard shipped wired to install and invisible to
+// both of the commands that inspect and remove a hook: status enumerated a
+// hardcoded pair of markers, and uninstall rebuilt its specs from the
+// coach/read-guard flags alone. The guard ran on every turn while status
+// reported it absent, and no flag could take it out again. Adding a fourth
+// guard must not be able to reintroduce that, so the three commands read
+// the set from here rather than each spelling it out.
+var hookMarkers = []string{"coach-hook", "read-guard", "route-guard"}
+
 // newHooksCmd is the top-level installer/manager for tokenops Claude Code
 // hooks. It merges our entries into ~/.claude/settings.json idempotently,
 // backs up before writing, and can uninstall or report status.
 func newHooksCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "hooks",
-		Short: "Install, remove, or inspect tokenops Claude Code hooks",
-		Long: `hooks wires tokenops' Claude Code hooks into your settings.json:
-the Stop-hook coaching nudge (coach-hook) and the PreToolUse read dedup guard
-(read-guard). It merges entries idempotently — re-running never duplicates —
-backs up the prior settings to settings.json.bak, and writes atomically.
+		Short: "Install, remove, or inspect tokenops client hooks",
+		Long: `hooks wires tokenops' hooks into a client's hook config: the
+end-of-turn coaching nudge (coach-hook), the file-read dedup guard
+(read-guard), and the per-turn model-fit guard (route-guard). It merges
+entries idempotently — re-running never duplicates — backs up the prior
+config alongside it, and writes atomically.
 
-  tokenops hooks install --coach            # wire the Stop coaching nudge
-  tokenops hooks install --read-guard       # wire the Read dedup guard
-  tokenops hooks install --coach --read-guard
-  tokenops hooks status                      # show what's wired
-  tokenops hooks uninstall --coach           # remove only tokenops' entries`,
+--client selects which client to act on, and install, status and uninstall
+all take it: claude-code (~/.claude/settings.json), codex
+(~/.codex/hooks.json), cursor (~/.cursor/hooks.json) and opencode (a
+generated plugin under ~/.config/opencode/plugins).
+
+  tokenops hooks install --coach             # wire the end-of-turn nudge
+  tokenops hooks install --read-guard        # wire the Read dedup guard
+  tokenops hooks install --route-guard       # wire the model-fit guard
+  tokenops hooks status                      # show what's wired here
+  tokenops hooks status --client cursor      # ... and what's wired there
+  tokenops hooks uninstall --route-guard     # remove one of tokenops' entries
+  tokenops hooks uninstall                   # remove all of them`,
 		Args: cobra.NoArgs,
 	}
 	cmd.AddCommand(newHooksInstallCmd(), newHooksUninstallCmd(), newHooksStatusCmd())
@@ -216,7 +236,7 @@ func newHooksInstallCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&coach, "coach", false, "install the Stop coaching nudge")
 	cmd.Flags().BoolVar(&readGuard, "read-guard", false, "install the Read dedup guard")
 	cmd.Flags().BoolVar(&routeGuard, "route-guard", false, "install the per-turn model-fit guard")
-	cmd.Flags().StringVar(&client, "client", hookClientClaudeCode, "client to arm: claude-code | codex")
+	cmd.Flags().StringVar(&client, "client", hookClientClaudeCode, hookClientFlagUsage)
 	cmd.Flags().StringVar(&settingsPath, "settings", "", "hook config path (defaults per client)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the result without writing")
 	cmd.Flags().Float64Var(&budget, "budget", coachhook.DefaultBudgetUSD, "coach: per-session API-equivalent USD budget")
@@ -225,17 +245,34 @@ func newHooksInstallCmd() *cobra.Command {
 
 func newHooksUninstallCmd() *cobra.Command {
 	var (
-		coach, readGuard bool
-		settingsPath     string
-		dryRun           bool
+		coach, readGuard, routeGuard bool
+		settingsPath                 string
+		dryRun                       bool
+		client                       string
 	)
 	cmd := &cobra.Command{
 		Use:   "uninstall",
 		Short: "Remove only the hook entries tokenops added",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			path := resolveSettingsPath(settingsPath)
+			if err := validateHookClient(client); err != nil {
+				return err
+			}
 			out := cmd.OutOrStdout()
+			markers := selectedMarkers(coach, readGuard, routeGuard)
+
+			if opencodeClient(client) {
+				pdir, derr := opencodePluginDir(settingsPath)
+				if derr != nil {
+					return derr
+				}
+				return uninstallOpencodePlugin(out, pdir, markers, dryRun)
+			}
+
+			path, err := resolveHookConfigPath(client, settingsPath)
+			if err != nil {
+				return err
+			}
 
 			settings, existed, err := loadSettings(path)
 			if err != nil {
@@ -247,11 +284,10 @@ func newHooksUninstallCmd() *cobra.Command {
 			}
 			hooks := hooksMap(settings)
 
-			specs := specsFor(coach, readGuard, coachhook.DefaultBudgetUSD)
 			var removed []string
-			for _, sp := range specs {
-				if removeHook(hooks, sp.event, sp.marker) {
-					removed = append(removed, sp.name)
+			for _, marker := range markers {
+				if removeMarker(hooks, marker) {
+					removed = append(removed, marker)
 				}
 			}
 			if len(hooks) == 0 {
@@ -280,38 +316,78 @@ func newHooksUninstallCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&coach, "coach", false, "remove the coaching nudge")
 	cmd.Flags().BoolVar(&readGuard, "read-guard", false, "remove the read guard")
-	cmd.Flags().StringVar(&settingsPath, "settings", "", "settings.json path (defaults to ~/.claude/settings.json)")
+	cmd.Flags().BoolVar(&routeGuard, "route-guard", false, "remove the per-turn model-fit guard")
+	cmd.Flags().StringVar(&client, "client", hookClientClaudeCode, hookClientFlagUsage)
+	cmd.Flags().StringVar(&settingsPath, "settings", "", "hook config path (defaults per client)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would change without writing")
 	return cmd
 }
 
+// selectedMarkers maps the --coach/--read-guard/--route-guard flags to the
+// verbs they name.
+//
+// Naming none means all of them: an uninstall with no argument reads as
+// "leave nothing of yours behind", and defaulting to a subset is what let a
+// full uninstall silently keep route-guard wired.
+func selectedMarkers(coach, readGuard, routeGuard bool) []string {
+	if !coach && !readGuard && !routeGuard {
+		return hookMarkers
+	}
+	var out []string
+	if coach {
+		out = append(out, "coach-hook")
+	}
+	if readGuard {
+		out = append(out, "read-guard")
+	}
+	if routeGuard {
+		out = append(out, "route-guard")
+	}
+	return out
+}
+
 func newHooksStatusCmd() *cobra.Command {
-	var settingsPath string
+	var settingsPath, client string
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show which tokenops hooks are wired and the binary they call",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			path := resolveSettingsPath(settingsPath)
+			if err := validateHookClient(client); err != nil {
+				return err
+			}
 			out := cmd.OutOrStdout()
 			exe := selfExe()
 			fmt.Fprintf(out, "This binary: tokenops %s\n  %s\n", version.String(), exe)
 
+			if opencodeClient(client) {
+				pdir, derr := opencodePluginDir(settingsPath)
+				if derr != nil {
+					return derr
+				}
+				return statusOpencodePlugin(out, pdir, exe)
+			}
+
+			path, err := resolveHookConfigPath(client, settingsPath)
+			if err != nil {
+				return err
+			}
 			settings, existed, err := loadSettings(path)
 			if err != nil {
 				return err
 			}
+			fmt.Fprintf(out, "Client: %s\n  %s\n", hookClientName(client), path)
 			if !existed {
-				fmt.Fprintf(out, "No settings file at %s — no hooks wired.\n", path)
+				fmt.Fprintf(out, "No hook config at %s — no hooks wired.\n", path)
 				return nil
 			}
 			hooks := hooksMap(settings)
 			found := 0
-			for _, marker := range []string{"coach-hook", "read-guard"} {
+			for _, marker := range hookMarkers {
 				for _, loc := range findMarkerEntries(hooks, marker) {
 					found++
 					fmt.Fprintf(out, "  %s  event=%s matcher=%q -> %s\n", marker, loc.event, loc.matcher, loc.command)
-					if loc.command != exe {
+					if !commandRunsExe(loc.command, exe) {
 						fmt.Fprintf(out, "    note: points at a different binary than this one\n")
 					}
 				}
@@ -322,8 +398,32 @@ func newHooksStatusCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&settingsPath, "settings", "", "settings.json path (defaults to ~/.claude/settings.json)")
+	cmd.Flags().StringVar(&client, "client", hookClientClaudeCode, hookClientFlagUsage)
+	cmd.Flags().StringVar(&settingsPath, "settings", "", "hook config path (defaults per client)")
 	return cmd
+}
+
+// commandRunsExe reports whether a wired entry calls this binary.
+//
+// Claude Code stores the path alone; Codex and Cursor store the whole
+// invocation, so a plain equality check would flag every one of their
+// entries as pointing elsewhere and send an operator chasing a binary
+// mismatch that does not exist.
+func commandRunsExe(command, exe string) bool {
+	if command == exe {
+		return true
+	}
+	fields := splitCommandLine(command)
+	return len(fields) > 0 && fields[0] == exe
+}
+
+// hookClientName renders the client for status output, naming the default
+// rather than printing an empty string.
+func hookClientName(client string) string {
+	if client == "" {
+		return hookClientClaudeCode
+	}
+	return strings.ToLower(client)
 }
 
 // --- settings.json plumbing ------------------------------------------------
@@ -460,42 +560,70 @@ func mergeHook(hooks map[string]any, event, matcher string, entry map[string]any
 	return true, ""
 }
 
-// removeHook deletes every tokenops entry (matching marker) from hooks[event],
-// pruning emptied groups and the event key. Returns whether anything was
-// removed.
-func removeHook(hooks map[string]any, event, marker string) bool {
-	groups, _ := hooks[event].([]any)
-	if len(groups) == 0 {
-		return false
+// eventEntries decomposes one element of an event's list into the hook
+// entries it holds.
+//
+// Claude Code and Codex nest entries under a group carrying an optional
+// matcher; Cursor puts the entry straight in the list. Returning the group
+// (nil when the shape is flat) is what lets a caller write a filtered list
+// back into the right place without knowing which client wrote the file.
+func eventEntries(elem any) (group map[string]any, matcher string, entries []any) {
+	m, ok := elem.(map[string]any)
+	if !ok {
+		return nil, "", nil
 	}
+	if hlist, nested := m["hooks"].([]any); nested {
+		return m, matcherOf(m), hlist
+	}
+	return nil, "", []any{m}
+}
+
+// removeMarker deletes every tokenops entry carrying marker, across every
+// event, pruning emptied groups and event keys. Returns whether anything was
+// removed.
+//
+// It scans all events rather than taking one, because the event a guard is
+// wired to is a per-client fact — Cursor spells the prompt hook
+// "beforeSubmitPrompt" where Claude Code spells it "UserPromptSubmit" — and
+// an uninstall that looked only where the Claude Code installer writes would
+// leave the other clients' entries in place while reporting them removed.
+func removeMarker(hooks map[string]any, marker string) bool {
 	removed := false
-	keptGroups := groups[:0]
-	for _, g := range groups {
-		gm, ok := g.(map[string]any)
-		if !ok {
-			keptGroups = append(keptGroups, g)
+	for event, raw := range hooks {
+		list, _ := raw.([]any)
+		if len(list) == 0 {
 			continue
 		}
-		hlist, _ := gm["hooks"].([]any)
-		keptHooks := hlist[:0]
-		for _, h := range hlist {
-			hm, ok := h.(map[string]any)
-			if ok && isMarkerEntry(hm, marker) {
-				removed = true
+		kept := make([]any, 0, len(list))
+		for _, elem := range list {
+			group, _, entries := eventEntries(elem)
+			if group == nil {
+				if em, ok := elem.(map[string]any); ok && isMarkerEntry(em, marker) {
+					removed = true
+					continue
+				}
+				kept = append(kept, elem)
 				continue
 			}
-			keptHooks = append(keptHooks, h)
+			keptEntries := make([]any, 0, len(entries))
+			for _, h := range entries {
+				if hm, ok := h.(map[string]any); ok && isMarkerEntry(hm, marker) {
+					removed = true
+					continue
+				}
+				keptEntries = append(keptEntries, h)
+			}
+			if len(keptEntries) == 0 {
+				continue // drop the emptied group
+			}
+			group["hooks"] = keptEntries
+			kept = append(kept, group)
 		}
-		if len(keptHooks) == 0 {
-			continue // drop empty group
+		if len(kept) == 0 {
+			delete(hooks, event)
+			continue
 		}
-		gm["hooks"] = keptHooks
-		keptGroups = append(keptGroups, gm)
-	}
-	if len(keptGroups) == 0 {
-		delete(hooks, event)
-	} else {
-		hooks[event] = keptGroups
+		hooks[event] = kept
 	}
 	return removed
 }
@@ -510,20 +638,16 @@ type markerLoc struct {
 func findMarkerEntries(hooks map[string]any, marker string) []markerLoc {
 	var out []markerLoc
 	for event, raw := range hooks {
-		groups, _ := raw.([]any)
-		for _, g := range groups {
-			gm, ok := g.(map[string]any)
-			if !ok {
-				continue
-			}
-			hlist, _ := gm["hooks"].([]any)
-			for _, h := range hlist {
+		list, _ := raw.([]any)
+		for _, elem := range list {
+			_, matcher, entries := eventEntries(elem)
+			for _, h := range entries {
 				hm, ok := h.(map[string]any)
 				if !ok || !isMarkerEntry(hm, marker) {
 					continue
 				}
 				cmdStr, _ := hm["command"].(string)
-				out = append(out, markerLoc{event: event, matcher: matcherOf(gm), command: cmdStr})
+				out = append(out, markerLoc{event: event, matcher: matcher, command: cmdStr})
 			}
 		}
 	}
@@ -535,18 +659,73 @@ func matcherOf(group map[string]any) string {
 	return s
 }
 
-// isMarkerEntry reports whether a hook entry is one tokenops owns: a command
-// hook whose first arg is our verb (coach-hook / read-guard).
+// isMarkerEntry reports whether a hook entry is one tokenops owns.
+//
+// Three on-disk shapes reach here and only the first carries the verb in
+// args[0]. Claude Code takes `command` plus an `args` array; Codex takes the
+// whole invocation as one `command` string with type "command"; Cursor takes
+// the same string with no `type` key at all. A matcher that knew only the
+// Claude Code shape answered "no hooks wired" for two clients whose files
+// had them — so match args[0] when there is an args array, and the command
+// line's verb when there is not.
 func isMarkerEntry(entry map[string]any, marker string) bool {
-	if t, _ := entry["type"].(string); t != "command" {
+	if t, _ := entry["type"].(string); t != "" && t != "command" {
 		return false
 	}
-	args, _ := entry["args"].([]any)
-	if len(args) == 0 {
-		return false
+	if args, _ := entry["args"].([]any); len(args) > 0 {
+		first, _ := args[0].(string)
+		return first == marker
 	}
-	first, _ := args[0].(string)
-	return first == marker
+	cmd, _ := entry["command"].(string)
+	return cmd != "" && commandVerb(cmd) == marker
+}
+
+// commandVerb returns the tokenops subcommand in a one-string invocation,
+// i.e. the token after the binary path.
+//
+// It cannot be strings.Fields(cmd)[1]: the writers quote a binary path
+// holding spaces, so "'/Applications/My Tools/tokenops' route-guard" would
+// report "Tools/tokenops'" and the entry would be invisible to status and
+// survive an uninstall — on exactly the machines whose paths have spaces.
+func commandVerb(cmd string) string {
+	fields := splitCommandLine(cmd)
+	if len(fields) < 2 {
+		return ""
+	}
+	return fields[1]
+}
+
+// splitCommandLine splits on whitespace, treating a single-quoted run as one
+// token. Single quotes are all shellQuote ever emits, so a full shell lexer
+// would be answering a question nothing asks.
+func splitCommandLine(s string) []string {
+	var (
+		out     []string
+		cur     strings.Builder
+		quoted  bool
+		started bool
+	)
+	flush := func() {
+		if started {
+			out = append(out, cur.String())
+			cur.Reset()
+			started = false
+		}
+	}
+	for _, r := range s {
+		switch {
+		case r == '\'':
+			quoted = !quoted
+			started = true
+		case !quoted && (r == ' ' || r == '\t'):
+			flush()
+		default:
+			cur.WriteRune(r)
+			started = true
+		}
+	}
+	flush()
+	return out
 }
 
 // entriesEqual compares two command entries by their observable fields. It
@@ -616,6 +795,12 @@ const (
 	hookClientCursor     = "cursor"
 	hookClientOpencode   = "opencode"
 )
+
+// hookClientFlagUsage is the --client help shared by install, uninstall and
+// status. Shared because the install flag went on advertising
+// "claude-code | codex" for two releases after cursor and opencode were
+// accepted, so the only way to discover them was to read validateHookClient.
+const hookClientFlagUsage = "client to act on: claude-code | codex | cursor | opencode"
 
 func validateHookClient(c string) error {
 	switch strings.ToLower(strings.TrimSpace(c)) {
