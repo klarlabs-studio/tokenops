@@ -57,9 +57,11 @@ func TestSessionBudgetAuthoritativeOverridesMessageCount(t *testing.T) {
 	if out.WindowResetsIn != "42m0s" {
 		t.Errorf("resets_in=%q want 42m0s (vendor reset)", out.WindowResetsIn)
 	}
-	// 20x cap is 200 msgs; 13% headroom ≈ 26.
-	if out.HeadroomUntilCap != 26 {
-		t.Errorf("headroom=%d want ~26 (13%% of 200)", out.HeadroomUntilCap)
+	// 13% of the allowance remains, whatever the allowance is.
+	wantHeadroom := int64(float64(capOf(t, "claude-max-20x")) * 0.13)
+	if diff := out.HeadroomUntilCap - wantHeadroom; diff > 1 || diff < -1 {
+		t.Errorf("headroom=%d want ~%d (13%% of %d)",
+			out.HeadroomUntilCap, wantHeadroom, capOf(t, "claude-max-20x"))
 	}
 	if out.Note == "" {
 		t.Error("expected a note explaining the vendor-meter source")
@@ -107,9 +109,9 @@ func TestSessionBudgetContinueWhenLowUsage(t *testing.T) {
 }
 
 func TestSessionBudgetSlowDownWhenHighUsage(t *testing.T) {
-	// 170 of 200 msgs (85%) with moderate burn — slow down.
+	// 85% of the allowance with moderate burn — slow down.
 	out, err := ComputeSessionBudget("claude-max-20x", SessionBudgetInputs{
-		WindowMessages: 170,
+		WindowMessages: pctOf(t, "claude-max-20x", 85),
 		RecentMessages: 12,
 		RecentWindow:   30 * time.Minute,
 		Now:            time.Now().UTC(),
@@ -123,8 +125,9 @@ func TestSessionBudgetSlowDownWhenHighUsage(t *testing.T) {
 }
 
 func TestSessionBudgetWaitWhenExhausted(t *testing.T) {
+	// Fully consumed, whatever the allowance is.
 	out, err := ComputeSessionBudget("claude-max-20x", SessionBudgetInputs{
-		WindowMessages: 200,
+		WindowMessages: capOf(t, "claude-max-20x"),
 		RecentMessages: 5,
 		RecentWindow:   30 * time.Minute,
 		Now:            time.Now().UTC(),
@@ -141,11 +144,14 @@ func TestSessionBudgetWaitWhenExhausted(t *testing.T) {
 }
 
 func TestSessionBudgetSwitchModelWhenBurnHigh(t *testing.T) {
-	// 65% used, burning 40 msgs/h, 70 msgs left -> 70/40 = 1.75h < 1.5h * sometimes.
-	// Tune to land in switch_model band: 65% pct, headroom 70, rate 50/h -> 1.4h < 1.5
+	// 65% used with a burn rate that empties the remainder inside the
+	// switch_model band. The burn is scaled to the allowance for the same
+	// reason the consumption is.
+	const pct = 65
+	used := pctOf(t, "claude-max-20x", pct)
 	out, err := ComputeSessionBudget("claude-max-20x", SessionBudgetInputs{
-		WindowMessages: 130,
-		RecentMessages: 25,
+		WindowMessages: used,
+		RecentMessages: used / 5,
 		RecentWindow:   30 * time.Minute,
 		Now:            time.Now().UTC(),
 	})
@@ -160,7 +166,7 @@ func TestSessionBudgetSwitchModelWhenBurnHigh(t *testing.T) {
 
 func TestSessionBudgetLowConfidenceWithoutHistory(t *testing.T) {
 	out, err := ComputeSessionBudget("claude-max-20x", SessionBudgetInputs{
-		WindowMessages: 60,
+		WindowMessages: pctOf(t, "claude-max-20x", 30),
 		RecentMessages: 0,
 		RecentWindow:   0,
 		Now:            time.Now().UTC(),
@@ -171,4 +177,28 @@ func TestSessionBudgetLowConfidenceWithoutHistory(t *testing.T) {
 	if out.Confidence != ConfidenceLow {
 		t.Errorf("confidence=%q want low when no history", out.Confidence)
 	}
+}
+
+// capOf is the plan's per-window allowance. The budget tests are about where
+// the recommendation bands fall — at 85% slow down, at 100% wait — not about
+// any particular cap, so they express consumption as a fraction of whatever
+// the catalog says rather than hardcoding a number. They used to hardcode
+// 200, which is what tied them to an absolute that turned out to disagree
+// with the multiplier the vendor documents.
+func capOf(t *testing.T, plan string) int64 {
+	t.Helper()
+	p, ok := Lookup(plan)
+	if !ok {
+		t.Fatalf("plan %q missing", plan)
+	}
+	if p.MessagesPerWindow <= 0 {
+		t.Fatalf("plan %q has no per-window allowance", plan)
+	}
+	return p.MessagesPerWindow
+}
+
+// pctOf is n percent of the plan's allowance, rounded down.
+func pctOf(t *testing.T, plan string, pct float64) int64 {
+	t.Helper()
+	return int64(float64(capOf(t, plan)) * pct / 100)
 }

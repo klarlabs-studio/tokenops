@@ -60,8 +60,12 @@ func TestProbeFallsBackToMessageCount(t *testing.T) {
 		t.Skip("claude-max-20x not in catalog")
 	}
 	now := time.Now()
-	msgs := make(stubReader, 0, 40)
-	for range 40 {
+	// A fifth of the allowance, expressed against the catalog rather than a
+	// hardcoded 200: the Anthropic tiers derive from Pro, so the absolute
+	// moves when that baseline is corrected.
+	sent := int(plan.MessagesPerWindow / 5)
+	msgs := make(stubReader, 0, sent)
+	for range sent {
 		msgs = append(msgs, &eventschema.Envelope{
 			Type:      eventschema.EventTypePrompt,
 			Timestamp: now.Add(-time.Minute),
@@ -81,7 +85,7 @@ func TestProbeFallsBackToMessageCount(t *testing.T) {
 		t.Fatal("the message-count fallback must still work")
 	}
 	if got != 20 {
-		t.Errorf("pct = %v, want 20 (40 of 200)", got)
+		t.Errorf("pct = %v, want 20 (%d of %d)", got, sent, plan.MessagesPerWindow)
 	}
 }
 

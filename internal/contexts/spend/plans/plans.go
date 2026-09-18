@@ -12,6 +12,7 @@ package plans
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -49,6 +50,23 @@ type Plan struct {
 	// — "messages", "requests", or "premium_requests". Display only;
 	// the consumption reader always counts whole PromptEvents.
 	WindowUnit string
+	// RelativeTo names the plan this tier's allowance is defined against,
+	// and Multiplier is how many times that plan's per-window allowance it
+	// receives.
+	//
+	// Anthropic documents Max and Team only this way — "five times the Pro
+	// plan's per-session usage allowance" — and no longer publishes an
+	// absolute for any tier, Pro included. Holding three independent
+	// absolutes meant they could drift out of the relationship the vendor
+	// actually states, and they had: Pro 45 against Max 5x 50 is 1.1x
+	// where the documentation says 5x, with both Max entries citing a
+	// support URL that now 404s.
+	//
+	// Deriving leaves exactly one number that can go stale, and correcting
+	// it corrects every tier at once. A relative entry carries no
+	// MessagesPerWindow of its own; Lookup computes it.
+	RelativeTo string
+	Multiplier float64
 	// SourceURL pins the vendor page that documents these limits. Drift
 	// surfaces in PR review when the URL or numbers change.
 	SourceURL string
@@ -59,22 +77,40 @@ type Plan struct {
 // comment; bumps require a PR with refreshed URLs.
 var catalog = map[string]Plan{
 	"claude-max-5x": {
-		Name:              "claude-max-5x",
-		Provider:          "anthropic",
-		Display:           "Claude Max 5x",
-		RateLimitWindow:   5 * time.Hour,
-		MessagesPerWindow: 50,
-		WindowUnit:        "messages",
-		SourceURL:         "https://support.anthropic.com/en/articles/11014257 (2026-05)",
+		Name:       "claude-max-5x",
+		Provider:   "anthropic",
+		Display:    "Claude Max 5x",
+		RelativeTo: "claude-pro",
+		Multiplier: 5,
+		WindowUnit: "messages",
+		SourceURL:  "https://support.claude.com/en/articles/11049741-what-is-the-max-plan (2026-09): \"five times the Pro plan's per-session usage allowance\"",
 	},
 	"claude-max-20x": {
-		Name:              "claude-max-20x",
-		Provider:          "anthropic",
-		Display:           "Claude Max 20x",
-		RateLimitWindow:   5 * time.Hour,
-		MessagesPerWindow: 200,
-		WindowUnit:        "messages",
-		SourceURL:         "https://support.anthropic.com/en/articles/11014257 (2026-05)",
+		Name:       "claude-max-20x",
+		Provider:   "anthropic",
+		Display:    "Claude Max 20x",
+		RelativeTo: "claude-pro",
+		Multiplier: 20,
+		WindowUnit: "messages",
+		SourceURL:  "https://support.claude.com/en/articles/11049741-what-is-the-max-plan (2026-09): \"20 times the Pro plan's per-session usage allowance\"",
+	},
+	"claude-team-standard": {
+		Name:       "claude-team-standard",
+		Provider:   "anthropic",
+		Display:    "Claude Team (Standard seat)",
+		RelativeTo: "claude-pro",
+		Multiplier: 1.25,
+		WindowUnit: "messages",
+		SourceURL:  "https://support.claude.com/en/articles/9266767-what-is-the-team-plan (2026-09): \"1.25x the Pro plan's per-session usage allowance\"",
+	},
+	"claude-team-premium": {
+		Name:       "claude-team-premium",
+		Provider:   "anthropic",
+		Display:    "Claude Team (Premium seat)",
+		RelativeTo: "claude-pro",
+		Multiplier: 6.25,
+		WindowUnit: "messages",
+		SourceURL:  "https://support.claude.com/en/articles/9266767-what-is-the-team-plan (2026-09): \"6.25x the Pro plan's per-session usage allowance\"",
 	},
 	"claude-pro": {
 		Name:              "claude-pro",
@@ -83,7 +119,11 @@ var catalog = map[string]Plan{
 		RateLimitWindow:   5 * time.Hour,
 		MessagesPerWindow: 45,
 		WindowUnit:        "messages",
-		SourceURL:         "https://support.anthropic.com/en/articles/8325612 (2026-05)",
+		// THE baseline. Every Anthropic tier derives from this one number,
+		// so it is the only one that can go stale — and the vendor no
+		// longer publishes an absolute to check it against, which is
+		// exactly why it is pinned in one place instead of five.
+		SourceURL: "https://support.anthropic.com/en/articles/8325612 (2026-05; vendor no longer publishes an absolute)",
 	},
 	"claude-code-max": {
 		Name:            "claude-code-max",
@@ -221,7 +261,35 @@ func Lookup(name string) (Plan, bool) {
 		name = modern
 	}
 	p, ok := catalog[name]
-	return p, ok
+	if !ok {
+		return p, false
+	}
+	return resolveRelative(p), true
+}
+
+// resolveRelative fills a derived tier's per-window allowance from the plan
+// it is defined against. A non-derived plan passes through untouched.
+//
+// A missing base leaves MessagesPerWindow at zero, which the headroom
+// calculator already treats as "no published number" and renders as raw
+// consumption without a percentage. That is the right failure: a tier whose
+// baseline went missing should stop claiming a denominator, not invent one.
+func resolveRelative(p Plan) Plan {
+	if p.RelativeTo == "" || p.Multiplier <= 0 {
+		return p
+	}
+	base, ok := catalog[p.RelativeTo]
+	if !ok {
+		return p
+	}
+	p.MessagesPerWindow = int64(float64(base.MessagesPerWindow)*p.Multiplier + 0.5)
+	if p.RateLimitWindow == 0 {
+		p.RateLimitWindow = base.RateLimitWindow
+	}
+	if p.WindowUnit == "" {
+		p.WindowUnit = base.WindowUnit
+	}
+	return p
 }
 
 // Names returns the catalog keys sorted lexicographically. Used by
@@ -248,5 +316,29 @@ func Validate(name string) error {
 	if _, aliased := ResolveAlias(name); aliased {
 		return nil
 	}
+	if hint := unmodelledPlanHint(name); hint != "" {
+		return fmt.Errorf("unknown plan %q: %s", name, hint)
+	}
 	return fmt.Errorf("unknown plan %q; valid plans: %v", name, Names())
+}
+
+// unmodelledPlanHint explains the tiers that are deliberately absent, rather
+// than leaving an operator to read their own plan's absence off a list.
+//
+// Enterprise is not a rate-limit window in either of its forms. Usage-based
+// Enterprise bills at API rates from the first token, and seat-based
+// Enterprise gives an included per-seat allowance and then bills the
+// overflow at API rates. Inventing a window for either would produce
+// headroom maths that looks authoritative and is fiction.
+func unmodelledPlanHint(name string) string {
+	switch strings.ToLower(name) {
+	case "claude-enterprise", "claude-team", "enterprise", "team":
+		return "Anthropic Team seats are two plans — use claude-team-standard or " +
+			"claude-team-premium. Enterprise has no plan entry on purpose: usage-based " +
+			"Enterprise is billed at API rates from the first token, and seat-based " +
+			"Enterprise is an included allowance plus metered overflow, so neither is a " +
+			"rate-limit window. Leave the provider unbound and tokenops will cost the " +
+			"traffic from the rate card"
+	}
+	return ""
 }
