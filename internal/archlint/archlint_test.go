@@ -66,6 +66,7 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/eval",
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/fmtlearn",
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter",
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/modeltier",
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer",
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/contexttrim",
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/dedupe",
