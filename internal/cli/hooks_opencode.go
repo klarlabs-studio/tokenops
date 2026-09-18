@@ -158,14 +158,50 @@ func opencodeIdleBody(on bool, budget float64) string {
 `
 }
 
-// installOpencodePlugin writes the generated read-guard shim.
-func installOpencodePlugin(out io.Writer, dir, exe string, readGuard, coach, dryRun bool, budget float64) error {
-	if !readGuard && !coach {
-		return fmt.Errorf("nothing selected: pass --read-guard, --coach, or both")
+// opencodeRouteBody is the per-turn model-fit half.
+//
+// chat.message is opencode's prompt hook, and its input is better than
+// any other client's for this: it names the provider and the model
+// outright, where Claude Code makes the model a search through the
+// transcript. The advice is appended to the message parts, which is the
+// only channel a plugin has into the turn the operator just opened.
+func opencodeRouteBody(on bool) string {
+	if !on {
+		return ""
+	}
+	return `  "chat.message": async (input, output) => {
+    try {
+      const text = (output?.parts ?? [])
+        .filter((p) => p?.type === "text")
+        .map((p) => p.text)
+        .join(" ")
+      if (!text.trim()) return
+      const out = await run(["route-guard"], {
+        session_id: input?.sessionID ?? "",
+        prompt: text,
+        provider_id: input?.model?.providerID ?? "",
+        model_id: input?.model?.modelID ?? "",
+      })
+      if (!out) return
+      const advice = JSON.parse(out)?.hookSpecificOutput?.additionalContext
+      if (advice) {
+        output.parts.push({ type: "text", text: advice })
+      }
+    } catch {
+      // fail open: a turn must never fail because the guard could not decide
+    }
+  },
+`
+}
+
+// installOpencodePlugin writes the generated shim.
+func installOpencodePlugin(out io.Writer, dir, exe string, readGuard, coach, routeGuard, dryRun bool, budget float64) error {
+	if !readGuard && !coach && !routeGuard {
+		return fmt.Errorf("nothing selected: pass --read-guard, --coach, --route-guard, or a combination")
 	}
 	path := filepath.Join(dir, opencodePluginName)
 	body := fmt.Sprintf(opencodePluginTemplate, version.String(), exe,
-		opencodeHookBody(readGuard), opencodeIdleBody(coach, budget))
+		opencodeHookBody(readGuard), opencodeIdleBody(coach, budget)+opencodeRouteBody(routeGuard))
 
 	if existing, err := os.ReadFile(path); err == nil && string(existing) == body {
 		fmt.Fprintln(out, "Already up to date — no changes.")
@@ -176,6 +212,9 @@ func installOpencodePlugin(out io.Writer, dir, exe string, readGuard, coach, dry
 	}
 	if coach {
 		fmt.Fprintf(out, "  + coach-hook (opencode session.idle) -> %s\n", opencodePluginName)
+	}
+	if routeGuard {
+		fmt.Fprintf(out, "  + route-guard (opencode chat.message) -> %s\n", opencodePluginName)
 	}
 	if dryRun {
 		fmt.Fprintln(out, "\n--dry-run: not writing. Resulting plugin:")

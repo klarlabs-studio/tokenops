@@ -442,6 +442,23 @@ type SmartRoutingConfig struct {
 	// cheapest model, gated by routing_min_quality like any rule. Zero
 	// takes the router default (0.75).
 	Quality float64 `yaml:"quality,omitempty"`
+	// Intervention is how hard the per-turn guard pushes: advise states
+	// the case, delegate additionally marks work that may be handed to a
+	// subagent on the cheaper model, auto allows that for every kind it
+	// is confident about, off disables it. Empty means advise.
+	Intervention string `yaml:"intervention,omitempty"`
+	// AutoKinds are the task kinds delegation applies to under
+	// "delegate" — typically the cheap, low-judgement ones such as
+	// lookup and research. Ignored under "auto".
+	AutoKinds []string `yaml:"auto_kinds,omitempty"`
+	// Models lists the models actually on offer, per provider.
+	//
+	// Required for the guard to say anything. The rate card keeps every
+	// model a vendor ever priced, including retired ones that sit below
+	// the current cheap model and above the current flagship; ranking
+	// across all of them recommends a model nobody can still choose.
+	// Naming the live set is what makes the tiers mean today's menu.
+	Models map[string][]string `yaml:"models,omitempty"`
 }
 
 // Validate rejects a policy that cannot mean anything.

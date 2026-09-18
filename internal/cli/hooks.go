@@ -69,7 +69,15 @@ func specsFor(coach, readGuard bool, budget float64) []hookSpec {
 // of requiring the hook to be re-registered. Pass a mode only to pin one
 // against config — the installed flag wins, by design.
 func specsForMode(coach, readGuard bool, budget float64, guardMode readguard.Mode) []hookSpec {
-	if !coach && !readGuard {
+	return specsForModeWithRoute(coach, readGuard, false, budget, guardMode, "")
+}
+
+// specsForModeWithRoute adds the per-turn route guard, which needs to
+// know whose models the client runs: the tier catalog is keyed by
+// provider, and a client that reports "gpt-5.3-codex" priced against
+// Anthropic's card would be placed against the wrong menu entirely.
+func specsForModeWithRoute(coach, readGuard, routeGuard bool, budget float64, guardMode readguard.Mode, provider string) []hookSpec {
+	if !coach && !readGuard && !routeGuard {
 		coach, readGuard = true, true
 	}
 	var out []hookSpec
@@ -90,16 +98,41 @@ func specsForMode(coach, readGuard bool, budget float64, guardMode readguard.Mod
 			args:    readGuardArgs(guardMode),
 		})
 	}
+	if routeGuard {
+		args := []string{"route-guard"}
+		if provider != "" {
+			args = append(args, "--provider", provider)
+		}
+		out = append(out, hookSpec{
+			name:   "route-guard (per-turn model fit)",
+			event:  "UserPromptSubmit",
+			marker: "route-guard",
+			args:   args,
+		})
+	}
 	return out
+}
+
+// providerForClient names whose models a client runs, so the route guard
+// prices a turn against the right menu.
+func providerForClient(client string) string {
+	switch strings.ToLower(client) {
+	case hookClientCodex:
+		return "openai"
+	case hookClientCursor:
+		return "cursor"
+	default:
+		return "anthropic"
+	}
 }
 
 func newHooksInstallCmd() *cobra.Command {
 	var (
-		coach, readGuard bool
-		settingsPath     string
-		dryRun           bool
-		budget           float64
-		client           string
+		coach, readGuard, routeGuard bool
+		settingsPath                 string
+		dryRun                       bool
+		budget                       float64
+		client                       string
 	)
 	cmd := &cobra.Command{
 		Use:   "install",
@@ -124,15 +157,16 @@ func newHooksInstallCmd() *cobra.Command {
 				if derr != nil {
 					return derr
 				}
-				return installOpencodePlugin(out, pdir, exe, readGuard, coach, dryRun, budget)
+				return installOpencodePlugin(out, pdir, exe, readGuard, coach, routeGuard, dryRun, budget)
 			}
 
 			path, err := resolveHookConfigPath(client, settingsPath)
 			if err != nil {
 				return err
 			}
+			specs := specsForModeWithRoute(coach, readGuard, routeGuard, budget, "", providerForClient(client))
 			if strings.EqualFold(client, hookClientCursor) {
-				return installCursorHooks(out, path, exe, specsFor(coach, readGuard, budget), dryRun)
+				return installCursorHooks(out, path, exe, specs, dryRun)
 			}
 
 			settings, _, err := loadSettings(path)
@@ -141,7 +175,6 @@ func newHooksInstallCmd() *cobra.Command {
 			}
 			hooks := hooksMap(settings)
 
-			specs := specsFor(coach, readGuard, budget)
 			var changes []string
 			for _, sp := range specs {
 				entry := commandEntry(exe, sp.args)
@@ -182,6 +215,7 @@ func newHooksInstallCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&coach, "coach", false, "install the Stop coaching nudge")
 	cmd.Flags().BoolVar(&readGuard, "read-guard", false, "install the Read dedup guard")
+	cmd.Flags().BoolVar(&routeGuard, "route-guard", false, "install the per-turn model-fit guard")
 	cmd.Flags().StringVar(&client, "client", hookClientClaudeCode, "client to arm: claude-code | codex")
 	cmd.Flags().StringVar(&settingsPath, "settings", "", "hook config path (defaults per client)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the result without writing")
@@ -727,8 +761,14 @@ func installCursorHooks(out io.Writer, path, exe string, specs []hookSpec, dryRu
 // cursorEventName maps our event names to Cursor's. Only the coaching
 // nudge reaches here; read-guard is refused for Cursor before this point.
 func cursorEventName(event string) string {
-	if strings.EqualFold(event, "Stop") {
+	switch {
+	case strings.EqualFold(event, "Stop"):
 		return "stop"
+	case strings.EqualFold(event, "UserPromptSubmit"):
+		// Cursor spells the prompt-submit hook differently from every
+		// other client; writing the Claude Code name would produce a
+		// file Cursor parses happily and never acts on.
+		return "beforeSubmitPrompt"
 	}
 	return event
 }

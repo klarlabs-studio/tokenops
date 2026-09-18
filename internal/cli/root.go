@@ -69,6 +69,7 @@ func NewRoot() *cobra.Command {
 		newTaskCmd(),
 		newFmtCmd(rf),
 		newReadGuardCmd(rf),
+		newRouteGuardCmd(),
 		newCoachHookCmd(rf),
 		newHooksCmd(),
 	)
