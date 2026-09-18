@@ -34,6 +34,7 @@ func runReadGuardIngest(
 	bus events.Bus,
 	logger *slog.Logger,
 	interval time.Duration,
+	ledgerDir string,
 ) {
 	if bus == nil {
 		return
@@ -42,13 +43,25 @@ func runReadGuardIngest(
 		interval = 2 * time.Minute
 	}
 	scan := func() {
-		recs, err := readguard.Reclamations("")
+		recs, err := readguard.Reclamations(ledgerDir)
 		if err != nil {
 			logger.Debug("read-guard ingest failed", "err", err)
 			return
 		}
 		for _, r := range recs {
-			bus.Publish(reclamationEnvelope(r))
+			// PublishWait, not Publish: this replays the WHOLE ledger at
+			// boot and again every tick, which is the burst most likely to
+			// fill the queue — and Publish discards the overflow silently.
+			//
+			// Re-scanning does make a dropped record recoverable two
+			// minutes later, unlike the pollers this path was overlooked
+			// by. But it left the drop counter non-zero on every single
+			// boot (222 events on one machine, in 13 seconds), and a
+			// counter that always reads non-zero is one an operator stops
+			// reading — which is the failure it was surfaced to prevent.
+			if err := bus.PublishWait(ctx, reclamationEnvelope(r)); err != nil {
+				return // shutting down, or the bus is closed
+			}
 		}
 	}
 	scan()
