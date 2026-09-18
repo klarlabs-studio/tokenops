@@ -24,6 +24,7 @@ func newVendorUsageCmd() *cobra.Command {
 	cmd.AddCommand(newVendorUsageStatusCmd())
 	cmd.AddCommand(newVendorUsageBackfillCmd())
 	cmd.AddCommand(newVendorUsageEnableCmd())
+	cmd.AddCommand(newVendorUsageSetupCmd())
 	return cmd
 }
 
