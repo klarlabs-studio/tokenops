@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/version"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -55,10 +56,15 @@ type ControlDeps struct {
 	// check is unavailable (e.g. no store wired) and status omits
 	// warnings entirely. Surfaced as soft `warnings`, never blockers.
 	StaleSources func() []config.StaleSource
-	// DaemonAlive, when set, probes whether an ingestion daemon is
-	// reachable. Nil means the check is unavailable and status stays
+	// DaemonProbe, when set, asks the ingestion daemon how it is doing:
+	// whether it is reachable, and how much telemetry it has failed to
+	// persist. Nil means the check is unavailable and status stays
 	// silent — an unknown is not evidence of absence.
-	DaemonAlive func() (string, bool)
+	//
+	// One probe carries both because they are one /healthz response, and
+	// because the two answers belong together: a daemon that is running
+	// and losing rows looks healthy from every other angle.
+	DaemonProbe func() DaemonReport
 }
 
 type emptyInput struct{}
@@ -169,6 +175,25 @@ func statusInfo(d ControlDeps) statusResult {
 	// downgrade a `ready` state to `degraded` while keeping ready:true.
 	warnings := staleWarnings(d)
 
+	// One probe answers both questions below.
+	var report DaemonReport
+	probed := d.DaemonProbe != nil
+	if probed {
+		report = d.DaemonProbe()
+	}
+
+	// Telemetry the daemon could not write. Reported even while it is
+	// alive and ready, because that is exactly the case that looks
+	// healthy from every other angle: the daemon is up, the store opens,
+	// queries answer — against totals that are quietly short.
+	if w := events.DropWarning(report.Dropped); w != "" {
+		warnings = append(warnings, w)
+		nextActions = append(nextActions, events.DropNextAction)
+		if state == "ready" {
+			state = "degraded"
+		}
+	}
+
 	// A missing ingestion daemon is the cause; stale sources are the
 	// symptom. It is reported first because it is unambiguous — a quiet
 	// source can mean "not used lately", an absent daemon cannot — and
@@ -177,7 +202,7 @@ func statusInfo(d ControlDeps) statusResult {
 	// Not a blocker: serve genuinely answers queries against the store it
 	// has. It degrades `ready` the same way stale ingestion does, so the
 	// distinction stays "running with reduced surface area", not "broken".
-	if w := daemonPresenceWarning(d.DaemonAlive); w != "" {
+	if w := daemonPresenceWarning(report, probed); w != "" {
 		warnings = append([]string{w}, warnings...)
 		nextActions = append(nextActions, DaemonPresenceNextAction)
 		if state == "ready" {

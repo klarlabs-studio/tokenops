@@ -9,6 +9,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/cli/detect"
 	"go.klarlabs.de/tokenops/internal/cli/wire"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/daemon"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
 )
@@ -68,7 +69,49 @@ func runSetup(out io.Writer, cfgPath string, target setupTarget) {
 	steps := wireMCPHosts(target.Home, target.Exe)
 	steps = append(steps, wireHooks(target.SettingsPath, target.Exe))
 	steps = append(steps, bindPlan(cfgPath))
+	steps = append(steps, daemonUnitStep(daemonUnitPath(target.Home)))
 	renderSetup(out, steps)
+}
+
+// daemonUnitPath resolves where this platform's supervisor keeps the unit,
+// or "" when the platform has no supervisor we know how to detect.
+func daemonUnitPath(home string) string {
+	kind, err := daemon.DetectUnitKind()
+	if err != nil {
+		return ""
+	}
+	return daemon.DefaultUnitPath(kind, home)
+}
+
+// daemonUnitStep reports whether ingestion is supervised across reboot.
+//
+// It is a step rather than the trailing "Next: run `tokenops daemon install`"
+// line it replaces, because that line printed unconditionally: an operator
+// whose unit was already installed and running was told to install it every
+// single time they re-ran init, and the line sat outside the "N step(s) still
+// need you" tally so it neither counted nor ever went away. A summary that
+// asks for work already done is one an operator stops reading.
+//
+// An unresolvable path reports as outstanding, not as installed. Asking twice
+// costs a command; claiming a daemon is supervised when nothing checked costs
+// the ingestion gap that this whole line exists to prevent.
+func daemonUnitStep(path string) setupStep {
+	const name = "daemon unit"
+	ask := setupStep{
+		Name:   name,
+		Detail: "run `tokenops daemon install` to keep ingestion alive across reboot",
+		Manual: true,
+	}
+	if path == "" {
+		return ask
+	}
+	if _, err := os.Stat(path); err != nil {
+		return ask
+	}
+	return setupStep{
+		Name:   name,
+		Detail: "already installed (" + path + ")",
+	}
 }
 
 // wireMCPHosts registers tokenops with every MCP host present on the
@@ -227,7 +270,6 @@ func renderSetup(out io.Writer, steps []setupStep) {
 		fmt.Fprintf(out, "\n%d step(s) still need you — see the lines marked · and ✗ above.\n",
 			len(manual)+len(failed))
 	}
-	fmt.Fprintln(out, "\nNext: `tokenops daemon install` to keep ingestion alive across reboot.")
 }
 
 // readGuardRecommendation reads the guard's ledger and reports whether

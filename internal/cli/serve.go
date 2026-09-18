@@ -169,7 +169,7 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	// serve does not ingest; the daemon does. Probe for it so status can
 	// say the pipeline is dead rather than answering queries against a
 	// store nothing is writing.
-	deps.DaemonAlive = mcp.DaemonAlive
+	deps.DaemonProbe = mcp.ProbeDaemon
 
 	if err := mcp.RegisterControlTools(srv, deps); err != nil {
 		return fmt.Errorf("register control tools: %w", err)

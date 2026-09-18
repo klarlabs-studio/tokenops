@@ -34,7 +34,10 @@ func newDashboardCmd() *cobra.Command {
 // to revoke. Rotate the token + restart the daemon; old URLs return
 // 401 against the new daemon.
 func newDashboardRotateTokenCmd() *cobra.Command {
-	var jsonOut bool
+	var (
+		jsonOut     bool
+		restartFlag bool
+	)
 	cmd := &cobra.Command{
 		Use:   "rotate-token",
 		Short: "Mint a fresh dashboard auth token and persist it",
@@ -80,12 +83,14 @@ have no effect.`,
 				})
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "rotated dashboard token at %s\n", path)
-			fmt.Fprintln(cmd.OutOrStdout(), "next: restart the daemon (Ctrl-C + `tokenops start`) for the new token to take effect")
+			fmt.Fprintln(cmd.OutOrStdout(), "the new token takes effect only after a restart:")
+			maybeRestart(cmd.OutOrStdout(), restartFlag, false)
 			fmt.Fprintln(cmd.OutOrStdout(), "old URLs with the previous ?token=… will return 401 after restart")
 			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit the new token + path as JSON")
+	addRestartFlag(cmd, &restartFlag)
 	return cmd
 }
 

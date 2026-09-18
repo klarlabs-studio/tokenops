@@ -4,10 +4,11 @@ package mcp
 // no ingestion daemon is reachable.
 const DaemonPresenceNextAction = "start the ingestion daemon with 'tokenops start' (or 'tokenops daemon install' to supervise it)"
 
-// DaemonAlive probes whether an ingestion daemon is reachable, for callers
-// outside this package wiring ControlDeps.DaemonAlive. It is the same check
-// `mode: active` uses to decide whether activating the mode would be a no-op.
-func DaemonAlive() (string, bool) { return daemonAlive() }
+// ProbeDaemon asks the ingestion daemon how it is doing, for callers outside
+// this package wiring ControlDeps.DaemonProbe. It is the same check
+// `mode: active` uses to decide whether activating the mode would be a no-op,
+// and it carries the daemon's telemetry-loss count back with it.
+func ProbeDaemon() DaemonReport { return probeDaemon() }
 
 // daemonPresenceWarning reports that nothing is ingesting, or "" when a
 // daemon answers.
@@ -26,11 +27,12 @@ func DaemonAlive() (string, bool) { return daemonAlive() }
 //
 // A nil probe means the caller could not check. That is not evidence of
 // absence, so it stays silent rather than inventing an alarm.
-func daemonPresenceWarning(alive func() (string, bool)) string {
-	if alive == nil {
-		return ""
-	}
-	if _, ok := alive(); ok {
+// It takes an already-fetched report rather than the probe itself: the drop
+// warning needs the same response, and calling the hook here too would mean
+// two /healthz round trips to read one payload twice. probed=false means the
+// caller had no probe wired.
+func daemonPresenceWarning(r DaemonReport, probed bool) string {
+	if !probed || r.Alive {
 		return ""
 	}
 	return "no ingestion daemon is reachable: nothing is writing to the event store, " +

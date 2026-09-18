@@ -84,7 +84,10 @@ func newProviderListCmd() *cobra.Command {
 }
 
 func newProviderSetCmd() *cobra.Command {
-	var configPathFlag string
+	var (
+		configPathFlag string
+		restartFlag    bool
+	)
 	cmd := &cobra.Command{
 		Use:   "set <name> [url]",
 		Short: "Bind a known provider to an upstream URL (omit url to use the built-in preset)",
@@ -132,18 +135,23 @@ OpenAI-compatible endpoint.`,
 				presetNote = " (preset)"
 			}
 			fmt.Fprintf(cmd.OutOrStdout(),
-				"set providers.%s = %s%s\nwrote %s\nnext: restart the daemon\n",
+				"set providers.%s = %s%s\nwrote %s\n",
 				name, url, presetNote, path,
 			)
+			maybeRestart(cmd.OutOrStdout(), restartFlag, false)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
+	addRestartFlag(cmd, &restartFlag)
 	return cmd
 }
 
 func newProviderUnsetCmd() *cobra.Command {
-	var configPathFlag string
+	var (
+		configPathFlag string
+		restartFlag    bool
+	)
 	cmd := &cobra.Command{
 		Use:   "unset <name>",
 		Short: "Remove a provider binding",
@@ -167,12 +175,14 @@ func newProviderUnsetCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(),
-				"removed providers.%s\nwrote %s\nnext: restart the daemon\n",
+				"removed providers.%s\nwrote %s\n",
 				name, path,
 			)
+			maybeRestart(cmd.OutOrStdout(), restartFlag, false)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
+	addRestartFlag(cmd, &restartFlag)
 	return cmd
 }

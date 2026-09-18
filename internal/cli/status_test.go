@@ -67,3 +67,34 @@ func TestStatusJSONWarnings(t *testing.T) {
 		t.Errorf("expected warnings key omitted when empty: %s", noWarn)
 	}
 }
+
+// The daemon reports its drop count on /healthz; status has to turn that into
+// a warning, because the number's only previous reader was a log line emitted
+// at shutdown.
+func TestStatusDropWarningFromHealthBody(t *testing.T) {
+	cases := []struct {
+		name string
+		body map[string]any
+		want bool
+	}{
+		{"dropped rows warn", map[string]any{"dropped_events": float64(30254)}, true},
+		{"zero is silent", map[string]any{"dropped_events": float64(0)}, false},
+		{"absent key is silent", map[string]any{"status": "ok"}, false},
+		{"nil body is silent", nil, false},
+		// An older daemon answers /healthz without the field. That is an
+		// unknown, not a zero, and inventing "0 dropped" would report health
+		// the daemon never claimed.
+		{"non-numeric is silent", map[string]any{"dropped_events": "lots"}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := dropWarningFrom(endpointResult{Body: tc.body})
+			if (got != "") != tc.want {
+				t.Fatalf("dropWarningFrom(%v) = %q, want warning=%v", tc.body, got, tc.want)
+			}
+			if tc.want && !strings.Contains(got, "30254") {
+				t.Fatalf("warning omits the count: %q", got)
+			}
+		})
+	}
+}
