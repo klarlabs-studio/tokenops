@@ -4,7 +4,38 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.61.0**.
+Current release: **v0.62.0**.
+
+## v0.62.0 — asking Anthropic instead of estimating
+
+Everything TokenOps says about a Claude subscription's remaining capacity is
+an estimate, derived from counting messages against a published cap. There is
+one exception, and it has been sitting behind four clicks in browser devtools:
+claude.ai reports its own utilisation percentages, and your browser already
+holds the cookie that reads them.
+
+Turning that on was possible before and easy to get wrong. The flag wrote
+whatever you gave it and said it had worked, without ever asking Anthropic
+whether the key was any good. A cookie copied a week ago — they rotate — would
+be accepted, stored, and then fail silently on every poll into a log file. One
+machine collected three thousand of those failures without a single message
+anyone saw.
+
+`tokenops vendor-usage setup anthropic-cookie` asks Anthropic first. It tells
+you where the cookie is, takes it without printing it to your terminal,
+resolves which organisation to meter, fetches a real reading, and shows you
+the percentages before it writes anything. If the key is stale it says so, and
+says that rotation is the likely reason, because "invalid" on its own sends
+you checking the wrong thing.
+
+The other change is a guard rather than a feature. Three commands shipped on
+the CLI with no equivalent tool in one day, and nothing noticed, because the
+test meant to protect that only checked four tools by name. It now diffs both
+surfaces and fails when one grows without the other — while carrying, for each
+deliberate asymmetry, the reason it is deliberate. Installing hooks on this
+machine is reasonably a local act. An agent being unable to ask what a model
+costs is not, and that one is now written down as a gap rather than left to be
+rediscovered.
 
 ## v0.61.0 — a denominator you already have
 

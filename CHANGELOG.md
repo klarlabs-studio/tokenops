@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.62.0 - 2026-09-18
+
+The claude.ai cookie carries the only authoritative reading TokenOps can
+get for a Claude subscription: Anthropic's own 5-hour and 7-day
+utilisation percentages, which replace an estimate built from message
+counts against a published cap. It was also the hardest source to turn on
+and the easiest to turn on wrongly.
+
+### Added
+
+- **`tokenops vendor-usage setup anthropic-cookie`** — a guided setup that
+  verifies the key before writing it.
+
+  `vendor-usage enable anthropic-cookie --session-key ...` writes the key
+  and reports success without ever contacting Anthropic, so a mistyped or
+  expired cookie produced nothing at all: the poller logged "Usage()
+  failed" every tick into a file nobody reads, and one machine accumulated
+  3,019 of those. Setup instead says where the cookie lives, reads it
+  without echoing it into the scrollback, resolves the organization,
+  fetches a real usage snapshot, prints the percentages back, and only
+  then writes config. Every refusal ends "nothing was written".
+
+  An account in several organizations is asked which to meter rather than
+  having the first one picked, and a rejected key names the likely cause:
+  these cookies rotate, so a stale copy is the common failure. (#299)
+
+### Changed
+
+- **CLI and MCP surfaces now fail CI when they drift apart.** The previous
+  parity test asserted four named tools existed, which could not notice a
+  command shipping on one surface and not the other — three did, in a
+  single day. The new one diffs both directions against allowlists that
+  carry a reason per entry, so what fails is an asymmetry nobody decided
+  on rather than every asymmetry. (#300)
+
+### Notes
+
+- The parity test records the gaps that already exist instead of hiding
+  them. `pricing` and `vendor-usage` have no MCP tool, so an agent can
+  neither ask what a model costs nor whether ingestion is live; `mode`,
+  `preferred_model`, `budget_set`, `optimizations`, `routing_proposals`
+  and `routing_rule_set` have no CLI, so an operator must edit YAML for
+  settings an agent changes with one call. Each is marked GAP.
+
 ## 0.61.0 - 2026-09-18
 
 Usage-based Enterprise is billed at API rates from the first token. There
