@@ -86,7 +86,7 @@ func newProviderListCmd() *cobra.Command {
 func newProviderSetCmd() *cobra.Command {
 	var (
 		configPathFlag string
-		restartFlag    bool
+		noRestartFlag  bool
 	)
 	cmd := &cobra.Command{
 		Use:   "set <name> [url]",
@@ -138,19 +138,19 @@ OpenAI-compatible endpoint.`,
 				"set providers.%s = %s%s\nwrote %s\n",
 				name, url, presetNote, path,
 			)
-			maybeRestart(cmd.OutOrStdout(), restartFlag, false)
+			applyRestart(cmd.OutOrStdout(), !noRestartFlag, false)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
-	addRestartFlag(cmd, &restartFlag)
+	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }
 
 func newProviderUnsetCmd() *cobra.Command {
 	var (
 		configPathFlag string
-		restartFlag    bool
+		noRestartFlag  bool
 	)
 	cmd := &cobra.Command{
 		Use:   "unset <name>",
@@ -178,11 +178,11 @@ func newProviderUnsetCmd() *cobra.Command {
 				"removed providers.%s\nwrote %s\n",
 				name, path,
 			)
-			maybeRestart(cmd.OutOrStdout(), restartFlag, false)
+			applyRestart(cmd.OutOrStdout(), !noRestartFlag, false)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
-	addRestartFlag(cmd, &restartFlag)
+	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }

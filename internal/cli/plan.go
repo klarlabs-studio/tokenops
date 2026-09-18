@@ -42,7 +42,7 @@ store. Subcommands:
 func newPlanSetCmd() *cobra.Command {
 	var (
 		configPathFlag string
-		restartFlag    bool
+		noRestartFlag  bool
 	)
 	cmd := &cobra.Command{
 		Use:   "set <provider> <plan>",
@@ -89,19 +89,19 @@ Example:
 				fmt.Fprintf(cmd.OutOrStdout(), "set plans.%s = %s\n", provider, planName)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", path)
-			maybeRestart(cmd.OutOrStdout(), restartFlag, true)
+			applyRestart(cmd.OutOrStdout(), !noRestartFlag, true)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
-	addRestartFlag(cmd, &restartFlag)
+	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }
 
 func newPlanUnsetCmd() *cobra.Command {
 	var (
 		configPathFlag string
-		restartFlag    bool
+		noRestartFlag  bool
 	)
 	cmd := &cobra.Command{
 		Use:   "unset <provider>",
@@ -129,12 +129,12 @@ func newPlanUnsetCmd() *cobra.Command {
 				"removed plans.%s\nwrote %s\n",
 				provider, path,
 			)
-			maybeRestart(cmd.OutOrStdout(), restartFlag, true)
+			applyRestart(cmd.OutOrStdout(), !noRestartFlag, true)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
-	addRestartFlag(cmd, &restartFlag)
+	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }
 

@@ -35,8 +35,8 @@ func newDashboardCmd() *cobra.Command {
 // 401 against the new daemon.
 func newDashboardRotateTokenCmd() *cobra.Command {
 	var (
-		jsonOut     bool
-		restartFlag bool
+		jsonOut       bool
+		noRestartFlag bool
 	)
 	cmd := &cobra.Command{
 		Use:   "rotate-token",
@@ -84,13 +84,13 @@ have no effect.`,
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "rotated dashboard token at %s\n", path)
 			fmt.Fprintln(cmd.OutOrStdout(), "the new token takes effect only after a restart:")
-			maybeRestart(cmd.OutOrStdout(), restartFlag, false)
+			applyRestart(cmd.OutOrStdout(), !noRestartFlag, false)
 			fmt.Fprintln(cmd.OutOrStdout(), "old URLs with the previous ?token=… will return 401 after restart")
 			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit the new token + path as JSON")
-	addRestartFlag(cmd, &restartFlag)
+	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }
 
