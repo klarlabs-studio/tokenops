@@ -102,13 +102,27 @@ func (c *Catalog) WithCandidates(models []string) *Catalog {
 	return c
 }
 
-// ranks reports whether a model participates in tier banding.
+// ranks reports whether a card row participates in tier banding.
+//
+// Rows are filed under a prefix pattern, so the row that prices a
+// candidate is often a shorter string than the candidate itself
+// ("claude-fable-5*" prices "claude-fable-5-1"). Matching only on
+// equality drops that row, and losing the flagship promotes whatever
+// remains into the top tier.
 func (c *Catalog) ranks(model string) bool {
 	if len(c.candidates) == 0 {
 		return true
 	}
-	_, ok := c.candidates[normalise(strings.TrimSuffix(model, "*"))]
-	return ok
+	key := normalise(strings.TrimSuffix(model, "*"))
+	if _, ok := c.candidates[key]; ok {
+		return true
+	}
+	for cand := range c.candidates {
+		if strings.HasPrefix(cand, key) {
+			return true
+		}
+	}
+	return false
 }
 
 // New builds a Catalog. Overrides are keyed "provider/model" and win over

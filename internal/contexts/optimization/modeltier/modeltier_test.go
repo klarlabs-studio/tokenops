@@ -211,3 +211,26 @@ func TestTargetReturnsASendableModelName(t *testing.T) {
 		t.Errorf("Target = %q, want claude-haiku-4-5", got)
 	}
 }
+
+// The card files a rate under a prefix pattern so version-suffixed
+// models resolve to their family rate, which means a candidate named
+// exactly ("claude-fable-5-1") and the row that prices it
+// ("claude-fable-5*") are not the same string. Matching them only by
+// equality drops the model from tier ranking, and the flagship's absence
+// promotes whatever is left into the top tier.
+func TestCandidatesMatchPrefixKeys(t *testing.T) {
+	c := New(spend.Table{Currency: "USD", Rates: map[spend.Key]spend.Rate{
+		{Provider: "anthropic", Model: "claude-haiku-4-5*"}: {InputPerMillion: 1, OutputPerMillion: 5},
+		{Provider: "anthropic", Model: "claude-sonnet-5*"}:  {InputPerMillion: 2, OutputPerMillion: 10},
+		{Provider: "anthropic", Model: "claude-opus-5*"}:    {InputPerMillion: 5, OutputPerMillion: 25},
+		{Provider: "anthropic", Model: "claude-fable-5*"}:   {InputPerMillion: 10, OutputPerMillion: 50},
+	}}, nil).WithCandidates([]string{
+		"claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5", "claude-fable-5-1",
+	})
+	if got := c.Resolve("anthropic", "claude-opus-5"); got.Tier != TierDefault {
+		t.Errorf("opus-5 tier = %q, want default (fable must rank above it)", got.Tier)
+	}
+	if got := c.Resolve("anthropic", "claude-fable-5-1"); got.Tier != TierDeep {
+		t.Errorf("fable-5-1 tier = %q, want deep", got.Tier)
+	}
+}
