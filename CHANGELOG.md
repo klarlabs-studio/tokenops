@@ -1,5 +1,94 @@
 # Changelog
 
+## 0.59.0 - 2026-09-18
+
+Two kinds of defect, found by auditing what was actually wired and by an
+operator installing for the first time.
+
+The first is a command that reports success and does nothing. `hooks
+status` listed two hooks on a machine running three, and no flag could
+remove the third. `plan set` wrote the key and told the operator to
+restart the daemon, which meant the setting had not taken effect yet. A
+`keep_by_source` rule pinned a source tag that did not exist. In each
+case the tool said it had done the thing.
+
+The second is a number that is zero because nobody asked what zero means.
+A subscription's traffic costs nothing at the margin, so every money
+column on a flat-rate plan read 0.0000 while the headline reported
+thousands — including the column "top consumers" ranked by. Telemetry the
+daemon failed to write was counted and then spoken aloud only in a log
+line at shutdown; 30,254 rows went missing across five weeks with nothing
+an operator could see. An ingestion check that could only count its own
+events flagged two sources as critical failures while both readers were
+level with their source to the second.
+
+### Added
+
+- **`tokenops detect`** reports which AI clients are installed and changes
+  nothing. `init --detect` reads like a dry run and never was: `init`
+  wires the MCP server and installs hooks whether or not it is passed.
+  (#287)
+- **`tokenops daemon restart`** restarts the supervised unit. Six commands
+  ended by telling operators to restart the daemon and none could name a
+  command, because there was not one. (#283)
+- **`--restart` is now the default** on the commands that write config,
+  with `--no-restart` for writing several keys at once. The daemon reads
+  config at boot, so a write without a restart has not changed anything
+  yet. (#291)
+- **The overall DX grade names the metric that set it** — `Overall: C
+  (turns-per-prompt)`. Worst-grade-wins is deliberate, but a headline that
+  will not move and will not say why reads as arbitrary. (#289)
+- **`API EQUIV` column and per-group list-price value.** `analytics.Row`
+  now carries the shadow value `Summary` has reported since it was added,
+  so the table and the headline stop disagreeing. (#284)
+
+### Fixed
+
+- **`hooks status` and `hooks uninstall` see every hook, on every client.**
+  route-guard shipped wired to `install` and invisible to both — it ran on
+  every turn while status reported it absent, and no flag removed it. Both
+  now take `--client`, and marker matching handles Codex's command strings
+  and Cursor's flat schema, not just Claude Code's. (#282)
+- **Dropped telemetry is visible.** `/healthz` carries `dropped_events`,
+  and `tokenops status` and `tokenops_status` warn with the count and
+  degrade a ready state. (#283)
+- **`init` finds the project.** The rules scan root was the shell's
+  working directory, so running `init` from `$HOME` bound the recursive
+  scanner to the entire home directory with `repo_id: <username>`. It now
+  walks up for a repo root and refuses home and filesystem roots. Running
+  from a subdirectory no longer scans a fragment of the project under its
+  basename. (#286)
+- **Rework means returning to a file**, not editing it twice. Two edits to
+  different sections of one file — the ordinary way to make a change —
+  counted as waste, and that metric feeds the overall grade. On one real
+  14-day corpus the rate falls from 23.9% to 5.2%. (#285)
+- **mDNS no longer broadcasts the machine name to publish an address
+  nobody can reach.** The daemon advertised unconditionally on every
+  interface while binding loopback. It now advertises when the LAN can
+  reach it, with `mdns.enabled` and `mdns.instance_name` to override. The
+  TXT record also stops claiming `version=v0.10.0`, unchanged for
+  forty-eight releases. (#288)
+- **Stale ingestion means behind the source, not quiet.** Local readers
+  compare against their origin, so an unused vendor is silent and a dead
+  reader is not. Remote pollers keep the time-based check, because their
+  endpoint always has an answer. (#292)
+- **A bare API key no longer suggests a subscription plan.** The wizard
+  printed "run: tokenops plan set anthropic claude-max-20x" one line below
+  "raw API key — likely metered usage, no plan". `Detect` also
+  deduplicates, which its own doc had promised since the package was
+  written. (#287)
+- **The cursor turn source is registered.** It runs unconditionally and
+  appeared in no registry, so its tag could only be learned from source —
+  and a `keep_by_source: cursor-turns` rule, named after the ledger
+  directory rather than the `cursor-hook` tag, silently pinned nothing.
+  Unmatched retention keys are now reported. (#294)
+- **`init` stops asking for a daemon unit that is already installed.** The
+  prompt printed on every run and sat outside the "steps still need you"
+  tally, so it neither counted nor went away. (#283)
+- **A plan-covered burn rate reports tokens**, and an all-zero USD
+  forecast is replaced by the reason it is empty rather than seven rows of
+  $0.0000 with confidence bands. (#284)
+
 ## 0.58.0 - 2026-09-18
 
 Routing has been configurable since it shipped and had never rewritten a

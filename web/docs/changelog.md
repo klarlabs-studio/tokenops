@@ -4,7 +4,48 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.58.0**.
+Current release: **v0.59.0**.
+
+## v0.59.0 — what the tools were not saying
+
+This release came out of two things: an audit of what was actually wired to
+what, and someone installing TokenOps for the first time and writing down
+everything that surprised them.
+
+Both found the same shape of defect twice over.
+
+The first is a command that reports success and does nothing. `hooks status`
+listed two hooks on a machine running three, and no flag could remove the
+third — it had shipped wired to the installer and invisible to the two
+commands that inspect and remove. `plan set` wrote the key and then told the
+operator to restart the daemon, which is another way of saying the setting had
+not taken effect. A retention rule pinned a source tag that did not exist, so
+history its author believed was kept forever was quietly on a 120-day window.
+In each case the tool had said it was done.
+
+The second is a number that reads zero because nobody asked what zero means.
+A subscription's traffic costs nothing at the margin, so on a flat-rate plan
+every money column read $0.0000 while the headline reported thousands —
+including the column that "top consumers" was ranked by, which made the
+ranking meaningless. Rows the daemon failed to persist were counted and then
+spoken aloud only in a log line at shutdown, so thirty thousand of them went
+missing across five weeks with nothing an operator could see. And an ingestion
+check that could only count its own events reported two sources as critical
+failures while both readers were, provably, level with their source to the
+second — an alarm that is always on, which is how the outage it was built for
+happened in the first place.
+
+Underneath the individual fixes there is one rule: a surface should say what
+is true, and when it cannot know, say that instead. A daemon that predates a
+field reports nothing rather than zero. An origin that cannot be read is an
+unknown, not a clean bill of health. A tier whose baseline went missing stops
+claiming a denominator rather than inventing one. Guessing is the failure the
+whole release is about.
+
+Two things also stopped being secrets. `tokenops detect` will tell you what
+clients are on the machine without writing to any of them, and `tokenops
+daemon restart` exists — six commands had been ending with "restart the
+daemon" and none of them could name a command, because there was not one.
 
 ## v0.58.0 — routing that asks again
 

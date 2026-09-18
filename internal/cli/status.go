@@ -208,13 +208,24 @@ func statusStaleWarnings(ctx context.Context, rf *rootFlags, cfg config.Config) 
 		return nil
 	}
 	defer func() { _ = store.Close() }()
-	stale, err := cfg.CheckStaleIngestion(ctx, store, config.StaleIngestionWindow, time.Now())
-	if err != nil || len(stale) == 0 {
-		return nil
+	var warnings []string
+	stale, err := cfg.CheckStaleIngestion(ctx, store, sourceProbes(cfg), config.StaleIngestionWindow, time.Now())
+	if err == nil {
+		for _, s := range stale {
+			warnings = append(warnings, s.Warning())
+		}
 	}
-	warnings := make([]string, 0, len(stale))
-	for _, s := range stale {
-		warnings = append(warnings, s.Warning())
+	// A retention rule naming a source that has never written an event is
+	// doing nothing, silently. The tag is not always what the operator
+	// sees — Cursor's ledger lives in ~/.tokenops/cursor-turns while its
+	// events are stamped cursor-hook — so a plausible-looking key can pin
+	// nothing at all.
+	if counts, cerr := store.CountBySource(ctx, time.Time{}, time.Time{}); cerr == nil {
+		for _, key := range cfg.UnmatchedRetentionSources(counts) {
+			warnings = append(warnings, fmt.Sprintf(
+				"retention.keep_by_source[%q] matches no source that has produced events — "+
+					"the rule is doing nothing; check the tag with `tokenops vendor-usage status`", key))
+		}
 	}
 	return warnings
 }

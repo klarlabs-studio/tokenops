@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -19,6 +20,14 @@ type VendorUsageSource struct {
 	SourceTag string
 	// Enabled mirrors the config block's enabled flag.
 	Enabled bool
+	// AlwaysOn marks a source that runs regardless of config because it
+	// costs nothing when idle — the cursor turn poller reads a ledger
+	// that stays empty until the coach hook is installed.
+	//
+	// It is deliberately not folded into Enabled: "the operator switched
+	// this on" and "this runs anyway" are different facts, and a fresh
+	// config still enables nothing.
+	AlwaysOn bool
 }
 
 // VendorUsageSources returns every vendor-usage source in a stable
@@ -35,7 +44,54 @@ func (c Config) VendorUsageSources() []VendorUsageSource {
 		{Name: "github_copilot", SourceTag: "github-copilot", Enabled: c.VendorUsage.GitHubCopilot.Enabled},
 		{Name: "cursor_web", SourceTag: "cursor-web", Enabled: c.VendorUsage.Cursor.Enabled},
 		{Name: "anthropic_cookie", SourceTag: "anthropic-cookie", Enabled: c.VendorUsage.AnthropicCookie.Enabled},
+		// The cursor turn poller has no config block: it reads a ledger
+		// the coach hook writes, and that ledger is empty until the hook
+		// is installed, so an operator who does not run Cursor pays
+		// nothing for it. Always-on is the right design and was the
+		// reason it appeared in no registry at all — invisible to
+		// `vendor-usage status`, never staleness-checked, and impossible
+		// to name in a retention rule without guessing the tag.
+		{Name: "cursor_turns (hook ledger)", SourceTag: "cursor-hook", AlwaysOn: true},
 	}
+}
+
+// UnmatchedRetentionSources returns the keep_by_source keys that name a
+// source which neither appears in the event store nor is a configured
+// vendor-usage source — rules that are, in practice, doing nothing.
+//
+// The key is a source tag, and the tag is not always what the operator
+// sees: Cursor's ledger lives in ~/.tokenops/cursor-turns but its events
+// are stamped `cursor-hook`. A config on one machine read
+// `cursor-turns: forever`, so its author believed their Cursor history was
+// pinned while it sat on the default 120-day window.
+//
+// Validation deliberately consults the store rather than a hardcoded list
+// of tags: a closed list would reject a legitimate tag the day a new
+// emitter is added. A configured-but-not-yet-written source is a fresh
+// install, not a typo, so it is not reported.
+func (c Config) UnmatchedRetentionSources(seen map[string]int64) []string {
+	if len(c.Retention.KeepBySource) == 0 {
+		return nil
+	}
+	known := make(map[string]bool, len(seen)+8)
+	for tag := range seen {
+		known[tag] = true
+	}
+	for _, s := range c.VendorUsageSources() {
+		if s.Enabled || s.AlwaysOn {
+			known[s.SourceTag] = true
+		}
+	}
+	var out []string
+	for key := range c.Retention.KeepBySource {
+		_, source := SplitRetentionSourceKey(key)
+		if source == "" || known[source] {
+			continue
+		}
+		out = append(out, key)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // EnabledVendorUsageSources filters VendorUsageSources down to the
@@ -74,6 +130,20 @@ type SourceCounter interface {
 type SourceLastSeen interface {
 	LastEventBySource(ctx context.Context) (map[string]time.Time, error)
 }
+
+// SourceProbe reports when a source last produced data at its ORIGIN — the
+// newest transcript on disk, the newest row in the client's own store.
+//
+// It is what tells "the operator has not used this vendor lately" apart
+// from "the reader died". The check could previously see only its own
+// event counts, so those two looked identical, and the machine that
+// motivated this fix sat permanently at [critical] for two sources whose
+// readers were provably complete. An alarm that is always on is one nobody
+// reads, which is how the outage it was built for happened.
+//
+// ok=false means the origin could not be read. That is an unknown, not a
+// clean bill of health, and the time-based warning stands.
+type SourceProbe func() (time.Time, bool)
 
 // StaleSource names an enabled vendor-usage source that produced no
 // events in the check window.
@@ -160,7 +230,7 @@ func (s StaleSource) Warning() string {
 // window <= 0 the default StaleIngestionWindow is used. A nil counter or
 // no enabled sources yields no warnings (never an error), keeping status
 // non-panicking when the store is unavailable.
-func (c Config) CheckStaleIngestion(ctx context.Context, counter SourceCounter, window time.Duration, now time.Time) ([]StaleSource, error) {
+func (c Config) CheckStaleIngestion(ctx context.Context, counter SourceCounter, probes map[string]SourceProbe, window time.Duration, now time.Time) ([]StaleSource, error) {
 	enabled := c.EnabledVendorUsageSources()
 	if len(enabled) == 0 || counter == nil {
 		return nil, nil
@@ -187,6 +257,25 @@ func (c Config) CheckStaleIngestion(ctx context.Context, counter SourceCounter, 
 	for _, s := range enabled {
 		if counts[s.SourceTag] != 0 {
 			continue
+		}
+		// Ask the origin whether it produced anything we should have
+		// read. The comparison is against the check window, not against
+		// the last ingested event: a transcript's mtime trails its last
+		// entry by however long the client held the file open, so
+		// "newer than the last event" is true by seconds on a source
+		// that is perfectly caught up.
+		//
+		// The question the check actually asks is "did this source
+		// produce data in the window that we failed to ingest", and a
+		// source whose newest data predates the window produced nothing
+		// to miss. That makes an unused vendor quiet without making a
+		// dead reader quiet, which is the whole distinction.
+		if probe, ok := probes[s.SourceTag]; ok && probe != nil {
+			if newest, known := probe(); known {
+				if newest.IsZero() || newest.Before(now.Add(-window)) {
+					continue
+				}
+			}
 		}
 		entry := StaleSource{
 			Name:        s.Name,
