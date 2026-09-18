@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.58.0 - 2026-09-18
+
+Routing has been configurable since it shipped and had never rewritten a
+single request. It enforced through a proxy most operators bypass, and
+what it could express was a rule naming two models of one vendor, gated
+on plan-window pressure — so a model that did not fit the work was only
+ever corrected when the window was nearly full.
+
+The problem is simpler than scarcity. A model is chosen once at the start
+of a session and stays chosen. Every turn afterwards runs on it,
+including the retrieval and the reading-around that a cheaper and faster
+model would do just as well, because nothing asks the question again.
+
+### Added
+
+- **Capability tiers, for every provider.** A task resolves to a tier and
+  each provider resolves the tier to whatever it offers, so routing works
+  for openai, gemini, xai, mistral, openrouter and opencode's own
+  provider routing rather than one vendor's model names. Tiers come from
+  price rank inside a provider because the rate card refreshes daily,
+  while a list of model names written into the source rots every release.
+  Against the 36 models one operator had actually run: 31 placed, where
+  the card alone could price 13. (#280)
+- **Task-kind classification.** What an instruction asks for — retrieval,
+  research, a routine edit, or the deep work a flagship is for — rather
+  than how long it is. The kind belongs to the task, so a continuation
+  inherits it: on a real 1316-instruction corpus, 56% of instructions
+  were five words or fewer and 27% were a bare "go", and reading each
+  prompt alone classified 11% of them against 90.5% with inheritance.
+  (#280)
+- **`route-guard`**, a prompt-time hook on every client that has one. It
+  states the case for a cheaper model when the one in use is over-spec,
+  once per kind of work per session. It only ever routes down: suggesting
+  something pricier is a spending decision nobody delegated, and Fable is
+  capped at half the weekly allowance on Max. Assertiveness is
+  configured — advise, delegate, auto, or off — with `auto_kinds` naming
+  what may be handed to a subagent without asking. (#280)
+
+### Fixed
+
+- **Free models were invisible to routing.** Candidates were filtered on
+  a cost greater than zero, so every `:free` tier and local runtime was
+  skipped precisely because it was free — 12 of 36 on one machine, and
+  exactly the models worth routing cheap work to. (#280)
+- **Refreshed prices were missed entirely.** The card files a snapshot
+  rate under a prefix pattern so version-suffixed models resolve to their
+  family rate; reading the rate map directly matched only the few exact
+  rows and reported the current flagship as an unpriced guess. (#280)
+- **Retired models decided the tiers.** The card keeps a long-gone Haiku
+  below the current cheap model and a superseded Opus above the current
+  flagship, so ranking across the whole catalogue pushed the live
+  generation into the middle and the cheapest model an operator could
+  actually pick came back "balanced". (#280)
+- **Proxy providers got no routing at all.** opencode and Copilot serve
+  other vendors' models under their own name and the card has no rows for
+  either, so a target search scoped to the requesting provider found
+  nothing and gave up — on the clients that most need it. (#280)
+
 ## 0.57.0 - 2026-09-17
 
 Three paths were discarding ingested usage events while reporting

@@ -4,7 +4,35 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.57.0**.
+Current release: **v0.58.0**.
+
+## v0.58.0 — routing that asks again
+
+Routing had been configurable since it shipped and had never once rewritten
+a request. It enforced through a proxy most people bypass, and what it could
+say was a rule naming two models of one vendor, gated on how full the plan
+window was — so a model that did not suit the work was corrected only when
+capacity ran short.
+
+That framing was wrong. The waste is not scarcity, it is inertia: a model is
+chosen at the start of a session and stays chosen, and every turn afterwards
+runs on it, including the lookups and the reading-around that something
+cheaper and faster would do just as well. Nothing asks the question a second
+time.
+
+Now something does, once per turn, on every client that has a prompt-time
+hook. Retrieval and research drop a tier; the cross-cutting refactors and the
+hard debugging are left alone. It only ever routes down — suggesting a pricier
+model is a spending decision nobody delegated.
+
+Underneath it, tiers are derived from the rate card rather than written into
+the source, because a hardcoded list of model names is wrong within a release.
+That also made three things visible that had been quietly broken: free and
+local models were skipped by the very component meant to find something
+cheaper, because their price is zero; refreshed prices were being missed
+because the card files them as patterns; and models retired years ago were
+still setting the boundaries between tiers, pushing the current generation
+into the middle of its own catalogue.
 
 ## v0.57.0 — the events that never arrived
 
