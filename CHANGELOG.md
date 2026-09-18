@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.61.0 - 2026-09-18
+
+Usage-based Enterprise is billed at API rates from the first token. There
+is no cap to be under, so no window, no percentage, and nothing for the
+headroom model to divide by — which is why 0.60.0 gave it no catalog
+entry at all, and an operator on Enterprise could bind no plan.
+
+A denominator does exist, though. Anthropic's admins set org, seat-tier
+and per-user spend limits in the console. The number is known; it was
+simply never known to this tool.
+
+### Added
+
+- **`claude-enterprise`**, a spend-denominated plan. Its limit is supplied
+  rather than published, and `plan set` refuses the binding without one:
+
+      plan "claude-enterprise" is billed at API rates and has no usage
+      window, so headroom is measured against your org spend limit — set
+      it with --spend-limit
+
+      Claude Enterprise (usage-based) (claude-enterprise) — risk low
+        spend:   1203.44 / 5000.00 USD (24.1%)
+
+  The numerator already worked: that traffic is genuinely metered, so the
+  cost carried on each event is what the vendor charges — unlike a
+  plan-covered event, which is correctly zero. (#297)
+- **`plan_limits.<provider>`** carries the figures only an operator can
+  supply: `spend_limit_usd`, the `window` it covers (monthly, weekly or
+  daily, matching the console), and `rate_factor`. (#297)
+- **`--spend-limit`, `--limit-window` and `--rate-factor`** on
+  `tokenops plan set`. (#297)
+
+### Notes
+
+- **`rate_factor` exists because contracts are discounted.** Enterprise
+  rates are frequently negotiated off list while this tool costs from the
+  public rate card, so a console limit would otherwise be compared against
+  an overstatement — and that error is invisible, which is the kind worth
+  refusing to ship.
+- **A spend-denominated report fills no window fields.** A plan billed
+  from the first token has no window, and rendering an empty one would
+  invite the reader to believe there is a cap somewhere they are under.
+- **No limit configured** reports the spend and says why there is no
+  percentage, rather than dividing by zero or showing a comfortable 0%.
+- **Seat-based Enterprise remains unmodelled**, deliberately: it is an
+  included per-seat allowance plus metered overflow, two denominators at
+  once. Naming it says so rather than silently resolving to the
+  usage-based plan.
+
 ## 0.60.0 - 2026-09-18
 
 Anthropic documents its plan tiers only as multiples of Pro — "five times
