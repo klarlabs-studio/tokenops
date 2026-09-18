@@ -511,7 +511,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	// reach TEU — otherwise a client that never proxies scores "not
 	// measured" however much the guard actually reclaims.
 	if bus != nil {
-		go runReadGuardIngest(ctx, bus, logger, 2*time.Minute)
+		go runReadGuardIngest(ctx, bus, logger, 2*time.Minute, "")
 		logger.Info("read-guard reclamation ingest live")
 	}
 
