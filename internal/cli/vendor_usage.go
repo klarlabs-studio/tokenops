@@ -425,7 +425,8 @@ machine-readable output.`,
 				report.Sources = append(report.Sources, vendorUsageSource{
 					Name:        src.Name,
 					SourceTag:   src.SourceTag,
-					Enabled:     src.Enabled,
+					Enabled:     src.Enabled || src.AlwaysOn,
+					AlwaysOn:    src.AlwaysOn,
 					EventsInWin: counts[src.SourceTag],
 					ConfigHint:  vendorUsageConfigHint(cfg, src.SourceTag),
 				})
@@ -454,6 +455,7 @@ type vendorUsageSource struct {
 	Name        string `json:"name"`
 	SourceTag   string `json:"source_tag"`
 	Enabled     bool   `json:"enabled"`
+	AlwaysOn    bool   `json:"always_on,omitempty"`
 	EventsInWin int64  `json:"events_in_window"`
 	ConfigHint  string `json:"config_hint,omitempty"`
 }
@@ -555,8 +557,14 @@ func renderVendorUsageText(cmd *cobra.Command, r vendorUsageReport) {
 	fmt.Fprintf(out, "Vendor-usage status — window=%s\n\n", r.Window)
 	fmt.Fprintf(out, "%-26s %-30s %-9s %-12s %s\n", "NAME", "SOURCE TAG", "ENABLED", "EVENTS(WIN)", "HINT")
 	for _, s := range r.Sources {
-		fmt.Fprintf(out, "%-26s %-30s %-9v %-12d %s\n",
-			s.Name, s.SourceTag, s.Enabled, s.EventsInWin, s.ConfigHint)
+		// An always-on source has no config block to switch, so "true"
+		// would invite an operator to look for one that does not exist.
+		enabled := fmt.Sprintf("%v", s.Enabled)
+		if s.AlwaysOn {
+			enabled = "always"
+		}
+		fmt.Fprintf(out, "%-26s %-30s %-9s %-12d %s\n",
+			s.Name, s.SourceTag, enabled, s.EventsInWin, s.ConfigHint)
 	}
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Signal_quality classifier consumes these counts:")

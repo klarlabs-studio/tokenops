@@ -32,7 +32,7 @@ func TestCaughtUpSourceIsNotStale(t *testing.T) {
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
-	if len(stale) != 0 {
+	if staleFor(stale, "codex-jsonl") {
 		t.Fatalf("a fully-ingested source is not stale, got %+v", stale)
 	}
 }
@@ -52,7 +52,7 @@ func TestSourceAheadOfIngestIsStale(t *testing.T) {
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
-	if len(stale) != 1 {
+	if !staleFor(stale, "codex-jsonl") {
 		t.Fatalf("a source ahead of ingestion is stale, got %+v", stale)
 	}
 }
@@ -72,7 +72,7 @@ func TestUnknownProbeKeepsTheTimeBasedWarning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
-	if len(stale) != 1 {
+	if !staleFor(stale, "codex-jsonl") {
 		t.Fatalf("an unknown origin must not read as caught up, got %+v", stale)
 	}
 }
@@ -92,7 +92,7 @@ func TestNoProbeKeepsTheExistingBehaviour(t *testing.T) {
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
-	if len(stale) != 1 {
+	if !staleFor(stale, "anthropic-cookie") {
 		t.Fatalf("a remote poller with no events is still stale, got %+v", stale)
 	}
 }
@@ -109,7 +109,7 @@ func TestNeverIngestedWithAnEmptySourceIsNotStale(t *testing.T) {
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
-	if len(stale) != 0 {
+	if staleFor(stale, "codex-jsonl") {
 		t.Fatalf("an empty origin has nothing to ingest, got %+v", stale)
 	}
 }
@@ -126,7 +126,19 @@ func TestNeverIngestedWithDataAtSourceIsStale(t *testing.T) {
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
-	if len(stale) != 1 {
+	if !staleFor(stale, "codex-jsonl") {
 		t.Fatalf("a reader that never ingested existing data is stale, got %+v", stale)
 	}
+}
+
+// staleFor scopes an assertion to one source. The checks run over every
+// enabled source, so asserting on the length of the whole result couples a
+// test about codex-jsonl to whatever else happens to be registered.
+func staleFor(stale []StaleSource, tag string) bool {
+	for _, s := range stale {
+		if s.SourceTag == tag {
+			return true
+		}
+	}
+	return false
 }

@@ -43,6 +43,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"github_copilot", "github-copilot"},
 		{"cursor_web", "cursor-web"},
 		{"anthropic_cookie", "anthropic-cookie"},
+		{"cursor_turns (hook ledger)", "cursor-hook"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d sources, want %d", len(got), len(want))
