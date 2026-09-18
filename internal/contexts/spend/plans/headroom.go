@@ -30,6 +30,13 @@ type HeadroomReport struct {
 	WindowResetsAt time.Time `json:"window_resets_at,omitempty"`
 	WindowResetsIn string    `json:"window_resets_in,omitempty"`
 
+	// Spend* fields replace the window block for spend-denominated plans
+	// (usage-based Enterprise), where the limit is money the org set
+	// rather than a rate-limit window the vendor publishes.
+	SpendLimitUSD float64 `json:"spend_limit_usd,omitempty"`
+	SpendUSD      float64 `json:"spend_usd,omitempty"`
+	SpendPct      float64 `json:"spend_pct,omitempty"`
+
 	// SignalQuality types the trust the operator can place in this
 	// report. When the report is built from MCP-ping activity only,
 	// Level is "low" and the Caveat tells the consumer to treat it as
@@ -71,6 +78,17 @@ type HeadroomInputs struct {
 	// a trust level. Zero value is valid: defaults to the most
 	// pessimistic reading (MCP-pings only, low quality).
 	Signal SignalInputs
+	// SpendLimitUSD is the org spend limit the operator configured, and
+	// SpendUSD the spend measured against it. Only spend-denominated
+	// plans read these.
+	SpendLimitUSD float64
+	SpendUSD      float64
+	// RateFactor scales measured spend to a negotiated rate. Enterprise
+	// contracts are frequently discounted off list while this tool costs
+	// from the public rate card, so without it a console limit is compared
+	// against an overstatement — and the error is invisible. Zero or one
+	// means list price.
+	RateFactor float64
 	// Authoritative, when set, is the vendor's own reported rate-limit
 	// window % (see AuthoritativeWindow). It drives the Window* block
 	// directly instead of the WindowMessages count — the same upgrade
@@ -103,6 +121,9 @@ func ComputeHeadroom(planName string, in HeadroomInputs) (HeadroomReport, error)
 // arbitrary plan shapes (with / without token quotas) without polluting
 // the public catalog.
 func computeHeadroomFor(p Plan, in HeadroomInputs) HeadroomReport {
+	if p.SpendDenominated {
+		return computeSpendHeadroom(p, in)
+	}
 	report := HeadroomReport{
 		PlanName:       p.Name,
 		Display:        p.Display,
@@ -284,4 +305,34 @@ func daysRemainingInMonth(now time.Time) float64 {
 	now = now.UTC()
 	firstOfNext := time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, time.UTC)
 	return firstOfNext.Sub(now).Hours() / 24
+}
+
+// computeSpendHeadroom reports money against the org's own limit, for plans
+// that are billed rather than rate-limited.
+//
+// It deliberately fills none of the Window* fields. A plan billed at API
+// rates from the first token has no window, and rendering an empty one would
+// invite the reader to believe there is a cap somewhere they are under.
+func computeSpendHeadroom(p Plan, in HeadroomInputs) HeadroomReport {
+	spend := in.SpendUSD
+	if in.RateFactor > 0 && in.RateFactor != 1 {
+		spend *= in.RateFactor
+	}
+	report := HeadroomReport{
+		PlanName:      p.Name,
+		Display:       p.Display,
+		Provider:      p.Provider,
+		SpendUSD:      spend,
+		SpendLimitUSD: in.SpendLimitUSD,
+		OverageRisk:   RiskUnknown,
+		SignalQuality: ClassifySignal(in.Signal),
+	}
+	if in.SpendLimitUSD <= 0 {
+		report.Note = "no org spend limit configured, so there is no denominator — " +
+			"set plan_limits.<provider>.spend_limit_usd to the figure your admins set in the vendor console"
+		return report
+	}
+	report.SpendPct = math.Round(spend/in.SpendLimitUSD*10000) / 100
+	report.OverageRisk = classifyWindowRisk(report.SpendPct)
+	return report
 }

@@ -67,6 +67,17 @@ type Plan struct {
 	// MessagesPerWindow of its own; Lookup computes it.
 	RelativeTo string
 	Multiplier float64
+	// SpendDenominated marks a plan whose limit is money, not a
+	// rate-limit window.
+	//
+	// Usage-based Enterprise is billed at API rates from the first token:
+	// there is no cap to be under, so there is no percentage to report and
+	// no window to have headroom in. What it has instead is a spend limit
+	// the org's admins set in the vendor console — a number the operator
+	// knows and this catalog never could. So the plan declares that its
+	// denominator is supplied, and binding it without one is refused
+	// rather than defaulted.
+	SpendDenominated bool
 	// SourceURL pins the vendor page that documents these limits. Drift
 	// surfaces in PR review when the URL or numbers change.
 	SourceURL string
@@ -93,6 +104,13 @@ var catalog = map[string]Plan{
 		Multiplier: 20,
 		WindowUnit: "messages",
 		SourceURL:  "https://support.claude.com/en/articles/11049741-what-is-the-max-plan (2026-09): \"20 times the Pro plan's per-session usage allowance\"",
+	},
+	"claude-enterprise": {
+		Name:             "claude-enterprise",
+		Provider:         "anthropic",
+		Display:          "Claude Enterprise (usage-based)",
+		SpendDenominated: true,
+		SourceURL:        "https://support.claude.com/en/articles/12005970-manage-usage-credits-for-team-and-seat-based-enterprise-plans (2026-09): \"all usage is billed at API rates from the first token\"",
 	},
 	"claude-team-standard": {
 		Name:       "claude-team-standard",
@@ -332,13 +350,34 @@ func Validate(name string) error {
 // headroom maths that looks authoritative and is fiction.
 func unmodelledPlanHint(name string) string {
 	switch strings.ToLower(name) {
-	case "claude-enterprise", "claude-team", "enterprise", "team":
-		return "Anthropic Team seats are two plans — use claude-team-standard or " +
-			"claude-team-premium. Enterprise has no plan entry on purpose: usage-based " +
-			"Enterprise is billed at API rates from the first token, and seat-based " +
-			"Enterprise is an included allowance plus metered overflow, so neither is a " +
-			"rate-limit window. Leave the provider unbound and tokenops will cost the " +
-			"traffic from the rate card"
+	case "claude-team", "team":
+		return "Anthropic Team seats are two plans, and they differ by five times — use " +
+			"claude-team-standard (1.25x Pro) or claude-team-premium (6.25x Pro)"
+	case "claude-enterprise-seats", "enterprise-seats":
+		return "seat-based Enterprise is an included per-seat allowance plus metered " +
+			"overflow — two denominators at once — and is not modelled yet. For the " +
+			"usage-based plan use claude-enterprise with --spend-limit"
 	}
 	return ""
+}
+
+// ValidateSpendLimit checks that a spend-denominated plan has been given the
+// limit only its operator can supply.
+//
+// The limit lives in config rather than the catalog because it is per-org,
+// negotiated, and changeable from a console this tool cannot see. Refusing
+// the binding is the point: a spend-denominated plan with a defaulted limit
+// would report a percentage against a number nobody chose, which reads
+// exactly as authoritative as a real one.
+func ValidateSpendLimit(name string, limitUSD float64) error {
+	p, ok := Lookup(name)
+	if !ok || !p.SpendDenominated {
+		return nil
+	}
+	if limitUSD > 0 {
+		return nil
+	}
+	return fmt.Errorf("plan %q is billed at API rates and has no usage window, so headroom is measured "+
+		"against your org spend limit — set it with --spend-limit (the figure your admins configured "+
+		"in the vendor console)", name)
 }
