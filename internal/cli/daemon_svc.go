@@ -27,10 +27,11 @@ installable form of deploy/launchd and deploy/systemd.
   tokenops daemon install            # write + load the unit
   tokenops daemon install --no-load  # write only
   tokenops daemon status
+  tokenops daemon restart           # re-read config after a config change
   tokenops daemon uninstall`,
 		Args: cobra.NoArgs,
 	}
-	cmd.AddCommand(newDaemonInstallCmd(), newDaemonUninstallCmd(), newDaemonStatusCmd())
+	cmd.AddCommand(newDaemonInstallCmd(), newDaemonUninstallCmd(), newDaemonStatusCmd(), newDaemonRestartCmd())
 	return cmd
 }
 
@@ -213,4 +214,40 @@ func enableHint(kind daemon.UnitKind, path string) string {
 	default:
 		return ""
 	}
+}
+
+// newDaemonRestartCmd bounces the supervised daemon so it re-reads config.
+//
+// The daemon loads its config once, at boot, so `plan set`, `provider set`
+// and `vendor-usage enable` all end by telling the operator to restart it.
+// None of them could name a command, because there was not one.
+func newDaemonRestartCmd() *cobra.Command {
+	f := daemonFlags{}
+	cmd := &cobra.Command{
+		Use:   "restart",
+		Short: "Restart the supervised ingestion daemon so it re-reads config",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			kind, _, _, path, err := f.resolve()
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			if _, serr := os.Stat(path); serr != nil {
+				if os.IsNotExist(serr) {
+					return fmt.Errorf("no unit installed at %s; run `tokenops daemon install`, "+
+						"or restart an unsupervised daemon with Ctrl-C and `tokenops start`", path)
+				}
+				return serr
+			}
+			if err := daemon.RestartUnit(kind); err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "restarted %s (%s)\n", daemon.LaunchdLabel, kind)
+			fmt.Fprintln(out, "it has re-read the config; verify with `tokenops status`")
+			return nil
+		},
+	}
+	addDaemonFlags(cmd, &f, false)
+	return cmd
 }
