@@ -12,6 +12,7 @@ require (
 	go.klarlabs.de/bolt v1.6.0
 	go.klarlabs.de/fortify v1.10.0
 	go.klarlabs.de/mcp v1.27.0
+	golang.org/x/term v0.45.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.57.0
 )
