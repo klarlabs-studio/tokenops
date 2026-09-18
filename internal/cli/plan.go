@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -43,6 +44,9 @@ func newPlanSetCmd() *cobra.Command {
 	var (
 		configPathFlag string
 		noRestartFlag  bool
+		spendLimit     float64
+		limitWindow    string
+		rateFactor     float64
 	)
 	cmd := &cobra.Command{
 		Use:   "set <provider> <plan>",
@@ -78,6 +82,29 @@ Example:
 			if cfg.Plans == nil {
 				cfg.Plans = map[string]string{}
 			}
+			// A spend-denominated plan has no vendor window, so its
+			// denominator is the org's own spend limit. Refuse the binding
+			// without one rather than report a percentage against a number
+			// nobody chose.
+			if err := plans.ValidateSpendLimit(planName, spendLimit); err != nil {
+				return err
+			}
+			if spendLimit > 0 || rateFactor > 0 || limitWindow != "" {
+				if cfg.PlanLimits == nil {
+					cfg.PlanLimits = map[string]config.PlanLimit{}
+				}
+				pl := cfg.PlanLimits[provider]
+				if spendLimit > 0 {
+					pl.SpendLimitUSD = spendLimit
+				}
+				if limitWindow != "" {
+					pl.Window = limitWindow
+				}
+				if rateFactor > 0 {
+					pl.RateFactor = rateFactor
+				}
+				cfg.PlanLimits[provider] = pl
+			}
 			previous, existed := cfg.Plans[provider]
 			cfg.Plans[provider] = planName
 			if err := writeMutableConfig(path, cfg); err != nil {
@@ -94,6 +121,12 @@ Example:
 		},
 	}
 	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
+	cmd.Flags().Float64Var(&spendLimit, "spend-limit", 0,
+		"org spend limit in USD, for plans billed at API rates rather than rate-limited (Enterprise)")
+	cmd.Flags().StringVar(&limitWindow, "limit-window", "",
+		"period the spend limit covers: monthly (default), weekly or daily")
+	cmd.Flags().Float64Var(&rateFactor, "rate-factor", 0,
+		"scale measured spend to a negotiated rate (0.8 = 20% off list); default is list price")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }
@@ -219,6 +252,18 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 					}
 					inputs.WindowMessages = win.MessagesInWindow
 				}
+				// A spend-denominated plan is measured against the org's own
+				// limit, over the period the console states it in.
+				if p, ok := plans.Lookup(planName); ok && p.SpendDenominated {
+					lim := cfg.PlanLimits[provider]
+					inputs.SpendLimitUSD = lim.SpendLimitUSD
+					inputs.RateFactor = lim.RateFactor
+					spend, serr := plans.SpendInWindow(ctx, reader, provider, now, lim.Window)
+					if serr != nil {
+						return fmt.Errorf("spend[%s]: %w", provider, serr)
+					}
+					inputs.SpendUSD = spend
+				}
 				report, err := plans.ComputeHeadroom(planName, inputs)
 				if err != nil {
 					return fmt.Errorf("headroom[%s]: %w", provider, err)
@@ -242,7 +287,7 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 						fmt.Fprintf(cmd.OutOrStdout(), " — %.1f days headroom", r.HeadroomDays)
 					}
 					fmt.Fprintln(cmd.OutOrStdout())
-				} else {
+				} else if r.SpendLimitUSD == 0 && r.SpendUSD == 0 {
 					fmt.Fprintf(cmd.OutOrStdout(),
 						"  tokens this month: %d (no monthly cap)\n", r.ConsumedTokens,
 					)
@@ -253,6 +298,16 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 						r.WindowConsumed, r.WindowCap, r.WindowUnit,
 						r.WindowDuration, r.WindowPct, r.WindowResetsIn,
 					)
+				}
+				// A spend-denominated plan reports money against the org's
+				// own limit; it has no window and renders none.
+				if r.SpendLimitUSD > 0 {
+					fmt.Fprintf(cmd.OutOrStdout(),
+						"  spend:   %.2f / %.2f USD (%.1f%%)\n",
+						r.SpendUSD, r.SpendLimitUSD, r.SpendPct,
+					)
+				} else if r.SpendUSD > 0 {
+					fmt.Fprintf(cmd.OutOrStdout(), "  spend:   %.2f USD (no limit configured)\n", r.SpendUSD)
 				}
 				if r.Note != "" {
 					fmt.Fprintf(cmd.OutOrStdout(), "  note: %s\n", r.Note)

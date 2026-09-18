@@ -79,18 +79,29 @@ func TestTeamSeatTiersAreBothPresent(t *testing.T) {
 	}
 }
 
-// Enterprise is deliberately not a plan: usage-based Enterprise bills at API
-// rates from the first token, and seat-based Enterprise is an allowance plus
-// metered overflow. Neither is a rate-limit window, so an entry would be an
-// invented model. The error has to say so, or the operator just sees their
-// tier missing from a list.
-func TestEnterpriseIsExplainedRatherThanListed(t *testing.T) {
-	err := Validate("claude-enterprise")
-	if err == nil {
-		t.Fatal("claude-enterprise should not be a catalog entry")
+// Enterprise is a plan now, but a spend-denominated one: it has no
+// rate-limit window, so binding it without the org spend limit is refused
+// rather than defaulted. The earlier design had no entry at all, which left
+// an operator on Enterprise reading their tier's absence off a list.
+func TestEnterpriseBindsOnlyWithASpendLimit(t *testing.T) {
+	if err := Validate("claude-enterprise"); err != nil {
+		t.Fatalf("claude-enterprise should be a catalog entry: %v", err)
 	}
-	if !containsAny(err.Error(), "API rates", "metered") {
-		t.Fatalf("the error should explain why Enterprise has no plan entry, got: %v", err)
+	err := ValidateSpendLimit("claude-enterprise", 0)
+	if err == nil {
+		t.Fatal("binding Enterprise without a spend limit should be refused")
+	}
+	if !containsAny(err.Error(), "spend limit", "--spend-limit") {
+		t.Fatalf("the refusal should name what to supply, got: %v", err)
+	}
+}
+
+// Seat-based Enterprise is an allowance plus metered overflow — two
+// denominators at once — and is deliberately still unmodelled. Naming it
+// should say so rather than silently resolve to the usage-based entry.
+func TestSeatBasedEnterpriseIsNotSilentlyTheUsageBasedPlan(t *testing.T) {
+	if _, ok := Lookup("claude-enterprise-seats"); ok {
+		t.Fatal("seat-based Enterprise is not modelled and must not resolve")
 	}
 }
 
