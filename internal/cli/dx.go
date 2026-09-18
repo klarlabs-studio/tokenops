@@ -110,7 +110,7 @@ func writeDXText(w io.Writer, m agentdx.Metrics, bands []agentdx.ContextBand, da
 	fmt.Fprintln(w, "FRICTION")
 	fmt.Fprintf(w, "  first-try rate:        %-10s %s  (no rework, no interrupt, no delegation)\n",
 		fmt.Sprintf("%.1f%%", m.FirstTryRatePct), badge(g.FirstTry))
-	fmt.Fprintf(w, "  rework rate:           %-10s %s  (edits revisiting a file within one instruction)\n",
+	fmt.Fprintf(w, "  rework rate:           %-10s %s  (edits returning to a file after moving on)\n",
 		pctOrNA(m.ReworkRatePct, m.TotalEdits > 0), badge(g.Rework))
 	fmt.Fprintf(w, "  interrupt rate:        %-10s %s  (instructions you had to stop)\n",
 		fmt.Sprintf("%.1f%%", m.InterruptRatePct), badge(g.Interrupt))
