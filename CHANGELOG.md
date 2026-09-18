@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.63.0 - 2026-09-18
+
+The drop counter surfaced in 0.59.0 made its first catch, and it was a
+bug in TokenOps itself — found within a minute of upgrading to the
+release that surfaced it.
+
+### Fixed
+
+- **The read-guard replay waits for queue room instead of dropping.**
+  Every vendor-usage poller publishes through PublishWait; this ingest
+  path did not, and it is the burst most likely to overflow — it replays
+  the whole ledger at boot and again every two minutes through a Publish
+  that discards the overflow silently. The bus's own doc says "Ingestion
+  therefore uses PublishWait"; this was the one path that did not.
+
+  On one machine `tokenops status` reported 222 events dropped in the 13
+  seconds after boot, exactly the size of that machine's read-guard
+  history. Same ledger, same minute, with the fix: 0.
+
+  Nothing was permanently lost — re-scanning recovers a dropped record on
+  the next tick, unlike the pollers this path was overlooked by. What was
+  lost is the counter's usefulness: a figure that reads non-zero on every
+  boot is one an operator learns to skip, which is the failure it was
+  surfaced to prevent. (#302)
+
+### Documentation
+
+- **Every command added this cycle is now documented.** `tokenops
+  detect`, `daemon restart`, `vendor-usage setup`, the spend-limit flags,
+  the Team and Enterprise plans, `plan_limits`, `mdns` and `--no-restart`
+  had all shipped without reaching the docs site. (#303)
+- **The front page no longer advertises a stale version.** It said
+  "Shipping now: v0.56.0" while six further versions shipped: the Pages
+  deploy was current every time, the claim was hardcoded, and nothing
+  checked it. A test now compares both version claims on the site against
+  the newest CHANGELOG heading, which is written while cutting a release
+  and is therefore the one place that cannot be forgotten. (#303)
+
 ## 0.62.0 - 2026-09-18
 
 The claude.ai cookie carries the only authoritative reading TokenOps can

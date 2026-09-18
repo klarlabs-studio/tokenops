@@ -4,7 +4,35 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.62.0**.
+Current release: **v0.63.0**.
+
+## v0.63.0 — the instrument catches its own
+
+Four releases ago TokenOps started reporting the telemetry it had failed to
+write. The counter had always existed; it was only ever spoken aloud in a log
+line at shutdown, which is how thirty thousand rows once went missing without
+a word anyone saw.
+
+Its first catch in the wild was TokenOps. Upgrading a machine to the release
+that surfaced it produced, thirteen seconds after boot, a warning that 222
+events had been dropped — exactly the size of that machine's read-guard
+history.
+
+The cause was one ingestion path that had been missed when the others were
+fixed. Every vendor-usage poller waits for room in the queue rather than
+discarding what does not fit; the read-guard replay did not, and it is the
+worst candidate for that, because it republishes an entire ledger at boot and
+again every two minutes. Nothing was permanently lost — that replay recovers
+anything dropped on its next pass — but the counter read non-zero on every
+single start, and a number that is always non-zero is one you stop reading.
+That is the failure it was surfaced to prevent, so it was worth fixing for
+the counter's sake even though no data was at risk.
+
+The website got the same treatment, last and worst. Every command added
+across this cycle had shipped without reaching the documentation, and the
+front page had been advertising v0.56.0 while six further versions went out.
+The deploy was never the problem: the claim was written by hand once and
+nothing ever compared it to reality. It does now.
 
 ## v0.62.0 — asking Anthropic instead of estimating
 
