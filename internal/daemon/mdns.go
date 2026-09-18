@@ -25,7 +25,7 @@ import (
 // Returns an empty URL when the bind addr's port can't be parsed or
 // the zeroconf registration fails — the caller treats both as
 // "no advertise, fall back to loopback".
-func startMDNSAdvertise(addr string, tls bool) (close func(), publicURL string, err error) {
+func startMDNSAdvertise(addr string, tls bool, instanceName string) (close func(), publicURL string, err error) {
 	_, portStr, splitErr := net.SplitHostPort(addr)
 	if splitErr != nil {
 		return func() {}, "", fmt.Errorf("split host:port: %w", splitErr)
@@ -51,6 +51,9 @@ func startMDNSAdvertise(addr string, tls bool) (close func(), publicURL string, 
 	// non-loopback IPv4 on the host; an empty result lets the lib
 	// fall back to the OS hostname's resolved IPs.
 	instance := "TokenOps (" + sanitizeInstance(host) + ")"
+	if instanceName != "" {
+		instance = "TokenOps (" + sanitizeInstance(instanceName) + ")"
+	}
 	// Match the advertised IPs to the bind: if the daemon listens on
 	// 127.0.0.1 only, advertise just the loopback so tokenops.local
 	// resolves to a reachable address on the same host. When the
@@ -74,10 +77,7 @@ func startMDNSAdvertise(addr string, tls bool) (close func(), publicURL string, 
 		port,
 		"tokenops",
 		ips,
-		[]string{
-			"path=/dashboard",
-			"version=v0.10.0",
-		},
+		mdnsTXT(),
 		nil, // advertise on all interfaces
 	)
 	if regErr != nil {

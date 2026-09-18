@@ -531,13 +531,19 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		mdnsPublicURL  string
 		mdnsAdvertised bool
 	)
-	if closer, publicURL, err := startMDNSAdvertise(srv.Addr(), srv.TLSEnabled()); err != nil {
-		logger.Info("mdns advertise unavailable; using loopback URL", "err", err)
-	} else {
-		mdnsClose = closer
-		mdnsPublicURL = publicURL
-		mdnsAdvertised = true
-		logger.Info("mdns advertise live", "url", publicURL)
+	mdnsPlan := mdnsDecision(cfg.MDNS, srv.Addr())
+	switch {
+	case !mdnsPlan.Advertise:
+		logger.Info("mdns advertise skipped", "reason", mdnsPlan.Reason)
+	default:
+		if closer, publicURL, err := startMDNSAdvertise(srv.Addr(), srv.TLSEnabled(), mdnsPlan.InstanceName); err != nil {
+			logger.Info("mdns advertise unavailable; using loopback URL", "err", err)
+		} else {
+			mdnsClose = closer
+			mdnsPublicURL = publicURL
+			mdnsAdvertised = true
+			logger.Info("mdns advertise live", "url", publicURL)
+		}
 	}
 	defer mdnsClose()
 	// Publish the listen URL so the MCP `serve` process can return a

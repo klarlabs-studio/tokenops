@@ -61,6 +61,7 @@ type Config struct {
 	Rules           RulesConfig       `yaml:"rules"`
 	Resilience      ResilienceConfig  `yaml:"resilience"`
 	VendorUsage     VendorUsageConfig `yaml:"vendor_usage"`
+	MDNS            MDNSConfig        `yaml:"mdns,omitempty"`
 	Dashboard       DashboardConfig   `yaml:"dashboard"`
 	Pricing         PricingConfig     `yaml:"pricing"`
 	Optimizer       OptimizerConfig   `yaml:"optimizer"`
@@ -566,6 +567,25 @@ func (p PricingRefreshConfig) Every() time.Duration {
 // touching disk state.
 type DashboardConfig struct {
 	AdminToken string `yaml:"admin_token"`
+}
+
+// MDNSConfig gates the Bonjour/mDNS advertisement that makes the dashboard
+// reachable at http://tokenops.local:<port>.
+//
+// It had no config at all: the daemon advertised unconditionally, on every
+// interface, under an instance name built from the machine's hostname. A
+// local-first tool broadcasting the operator's computer name to every
+// network they join should at least be something they can turn off.
+type MDNSConfig struct {
+	// Enabled forces advertising on or off. Nil — the default — advertises
+	// only when the daemon binds an address the LAN can actually reach,
+	// because a record pointing at 127.0.0.1 tells a peer nothing while
+	// still broadcasting the name.
+	Enabled *bool `yaml:"enabled,omitempty"`
+	// InstanceName replaces the hostname in the advertised service name,
+	// for operators who want tokenops.local without publishing what their
+	// laptop is called. Empty uses the hostname, as before.
+	InstanceName string `yaml:"instance_name,omitempty"`
 }
 
 // VendorUsageConfig wires the vendor-side usage pollers. Each provider
