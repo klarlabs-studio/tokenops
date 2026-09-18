@@ -133,6 +133,16 @@ type Row struct {
 	OutputTokens int64
 	TotalTokens  int64
 	CostUSD      float64
+	// APIEquivalentUSD is what this row would have billed at API list
+	// prices: CostUSD plus a list-price recompute of its plan-included
+	// and trial traffic (which is $0 real). For metered rows it equals
+	// CostUSD.
+	//
+	// Without it a flat-rate deployment's per-group table was a column of
+	// $0.0000 under a headline reporting thousands, and "top consumers"
+	// ranked every consumer equal. The summary had carried this figure
+	// since it was added; the rows it breaks down never did.
+	APIEquivalentUSD float64
 	// CostRecomputed reports the number of rows in this bucket whose
 	// CostUSD was 0 in the store and was recomputed via spend.Engine.
 	// Useful for dashboards to flag stale pricing tables.
@@ -259,8 +269,97 @@ func (a *Aggregator) AggregateBy(ctx context.Context, f Filter, bucket Bucket, g
 		if err := a.recomputeMissingCosts(ctx, f, out); err != nil {
 			return nil, err
 		}
+		if err := a.addPlanCoveredValue(ctx, f, bucket, group, out); err != nil {
+			return nil, err
+		}
 	}
 	return out, nil
+}
+
+// addPlanCoveredValue fills Row.APIEquivalentUSD: each row's real cost plus
+// the list price of the plan-covered traffic inside it.
+//
+// It is one query for the whole result set rather than one per row, grouped
+// on the same bucket and key expressions AggregateBy used, so the rows can
+// only sum to the figure Summarize reports for the same window — the two are
+// renderings of one window and disagreeing is the bug this fixes.
+func (a *Aggregator) addPlanCoveredValue(ctx context.Context, f Filter, bucket Bucket, group Group, rows []Row) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	for i := range rows {
+		rows[i].APIEquivalentUSD = rows[i].CostUSD
+	}
+
+	width := bucket.seconds()
+	bucketExpr := fmt.Sprintf("(timestamp_ns / 1000000000 / %d) * %d", width, width)
+	groupCol := group.column()
+	groupExpr := "''"
+	if groupCol != "" {
+		groupExpr = fmt.Sprintf("COALESCE(%s, '')", groupCol)
+	}
+
+	conds, args := buildConditions(f)
+	conds = append(conds,
+		`COALESCE(json_extract(payload, '$.cost_source'), '') IN ('plan_included', 'trial')`,
+	)
+	// provider+model are carried alongside the grouping because pricing is
+	// keyed by them: grouping by workflow still has to price each model the
+	// workflow ran.
+	q := "SELECT " + bucketExpr + " AS bucket_start_sec, " + groupExpr + " AS group_key," +
+		` provider, model,
+			COALESCE(SUM(input_tokens), 0),
+			COALESCE(SUM(output_tokens), 0),
+			COALESCE(SUM(CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER)), 0)
+		FROM events WHERE ` + strings.Join(conds, " AND ") +
+		" GROUP BY bucket_start_sec, group_key, provider, model"
+
+	dbRows, err := a.store.DB().QueryContext(ctx, q, args...)
+	if err != nil {
+		return fmt.Errorf("analytics: plan-covered group value query: %w", err)
+	}
+	defer func() { _ = dbRows.Close() }()
+
+	type key struct {
+		bucketSec int64
+		groupKey  string
+	}
+	value := map[key]float64{}
+	for dbRows.Next() {
+		var (
+			bucketSec              int64
+			groupKey               string
+			provider, model        sql.NullString
+			inTok, outTok, cacheIn sql.NullInt64
+		)
+		if err := dbRows.Scan(&bucketSec, &groupKey, &provider, &model, &inTok, &outTok, &cacheIn); err != nil {
+			return fmt.Errorf("analytics: plan-covered group value scan: %w", err)
+		}
+		p := &eventschema.PromptEvent{
+			Provider:          eventschema.Provider(provider.String),
+			RequestModel:      model.String,
+			InputTokens:       inTok.Int64,
+			CachedInputTokens: cacheIn.Int64,
+			OutputTokens:      outTok.Int64,
+		}
+		// An unpriced model contributes nothing rather than failing the
+		// query. Summarize already reports the pricing gap as Unpriced, and
+		// failing the whole rollup over one missing rate card would take the
+		// figures that do work with it.
+		c, cerr := a.spend.ComputeAt(p, time.Unix(bucketSec, 0).UTC())
+		if cerr != nil {
+			continue
+		}
+		value[key{bucketSec, groupKey}] += c
+	}
+	if err := dbRows.Err(); err != nil {
+		return fmt.Errorf("analytics: plan-covered group value iterate: %w", err)
+	}
+
+	for i := range rows {
+		rows[i].APIEquivalentUSD += value[key{rows[i].BucketStart.Unix(), rows[i].GroupKey}]
+	}
+	return nil
 }
 
 // recomputeMissingCosts scans for rows where CostUSD == 0 (within their

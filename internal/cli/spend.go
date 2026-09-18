@@ -260,6 +260,7 @@ func topRows(rows []analytics.Row, n int) []analytics.Row {
 			cur.OutputTokens += rows[i].OutputTokens
 			cur.TotalTokens += rows[i].TotalTokens
 			cur.CostUSD += rows[i].CostUSD
+			cur.APIEquivalentUSD += rows[i].APIEquivalentUSD
 			continue
 		}
 		copy := rows[i]
@@ -269,11 +270,15 @@ func topRows(rows []analytics.Row, n int) []analytics.Row {
 	for _, r := range totals {
 		out = append(out, *r)
 	}
+	// Ranked on the API-equivalent, not the real cost. On a flat-rate plan
+	// every row's cost is $0 by design, so a cost-keyed ranking put every
+	// consumer in a tie and left the order to the tiebreak — a "top
+	// consumers" table that ranked nothing.
 	sort.Slice(out, func(i, j int) bool {
-		if out[i].CostUSD == out[j].CostUSD {
+		if out[i].APIEquivalentUSD == out[j].APIEquivalentUSD {
 			return out[i].TotalTokens > out[j].TotalTokens
 		}
-		return out[i].CostUSD > out[j].CostUSD
+		return out[i].APIEquivalentUSD > out[j].APIEquivalentUSD
 	})
 	if n > 0 && n < len(out) {
 		out = out[:n]
@@ -355,8 +360,14 @@ func writeSpendText(w io.Writer, v spendView) error {
 	if v.BurnRate24h == 0 && v.BurnTokens24h > 0 {
 		metric = func(r analytics.Row) float64 { return float64(r.TotalTokens) }
 	}
-	fmt.Fprintf(w, "  burn rate (24h): %s / %d tokens",
-		fmtMoney(v.BurnRate24h, v.Currency), v.BurnTokens24h)
+	// Same again: "0.0000 USD / 874275305 tokens" spends its first half
+	// saying nothing. On a plan-covered window the tokens are the burn.
+	if v.BurnRate24h == 0 && v.BurnTokens24h > 0 {
+		fmt.Fprintf(w, "  burn rate (24h): %d tokens (plan-covered, so $0 at the margin)", v.BurnTokens24h)
+	} else {
+		fmt.Fprintf(w, "  burn rate (24h): %s / %d tokens",
+			fmtMoney(v.BurnRate24h, v.Currency), v.BurnTokens24h)
+	}
 	if !v.HideSparkline {
 		if line := sparklineFromRowsBy(v.BurnSeries, metric); line != "" {
 			fmt.Fprintf(w, "  %s", line)
@@ -375,23 +386,36 @@ func writeSpendText(w io.Writer, v spendView) error {
 	if len(v.GroupRows) > 0 {
 		fmt.Fprintf(w, "\nTop consumers by %s:\n", v.GroupBy)
 		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(tw, "RANK\tKEY\tREQS\tIN TOK\tOUT TOK\tCOST")
+		// Same reasoning as the sparkline above: on a plan-covered window
+		// COST is a column of zeros, so the figure that separates the rows
+		// is the list-price equivalent. Shown only when it differs, so a
+		// metered deployment does not get a duplicate column.
+		showEquiv := groupRowsHaveEquivalent(v.GroupRows)
+		header := "RANK\tKEY\tREQS\tIN TOK\tOUT TOK\tCOST"
+		if showEquiv {
+			header += "\tAPI EQUIV"
+		}
+		fmt.Fprintln(tw, header)
 		for i, r := range v.GroupRows {
 			key := r.GroupKey
 			if key == "" {
 				key = "(unknown)"
 			}
-			fmt.Fprintf(tw, "%d\t%s\t%d\t%d\t%d\t%s\n",
+			line := fmt.Sprintf("%d\t%s\t%d\t%d\t%d\t%s",
 				i+1, truncate(key, 32), r.Requests, r.InputTokens, r.OutputTokens,
 				fmtMoney(r.CostUSD, v.Currency),
 			)
+			if showEquiv {
+				line += "\t" + fmtMoney(r.APIEquivalentUSD, v.Currency)
+			}
+			fmt.Fprintln(tw, line)
 		}
 		if err := tw.Flush(); err != nil {
 			return err
 		}
 	}
 
-	if len(v.Forecast) > 0 {
+	if len(v.Forecast) > 0 && !allZeroForecast(v.Forecast) {
 		fmt.Fprintf(w, "\nForecast (next %d points):\n", len(v.Forecast))
 		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 		fmt.Fprintln(tw, "WHEN\tEXPECTED\tLOW\tHIGH")
@@ -406,6 +430,11 @@ func writeSpendText(w io.Writer, v spendView) error {
 		if err := tw.Flush(); err != nil {
 			return err
 		}
+	}
+
+	if len(v.Forecast) > 0 && allZeroForecast(v.Forecast) {
+		fmt.Fprintln(w, "\nNo USD forecast: this window is plan-covered, so every historical point is $0 "+
+			"and a forecast of it would be seven rows of zero with confidence bands. The token forecast below is the real one.")
 	}
 
 	if len(v.ForecastToks) > 0 {
@@ -431,3 +460,30 @@ func writeSpendJSON(w io.Writer, v spendView) error {
 
 // Suppress unused-import if context dropped during refactors.
 var _ = context.Background
+
+// groupRowsHaveEquivalent reports whether the list-price equivalent says
+// something the cost column does not — i.e. the window is plan-covered.
+func groupRowsHaveEquivalent(rows []analytics.Row) bool {
+	for _, r := range rows {
+		if r.APIEquivalentUSD > r.CostUSD {
+			return true
+		}
+	}
+	return false
+}
+
+// allZeroForecast reports whether a projection is entirely zero.
+//
+// A flat-rate plan's cost history is zero at every point, so the forecaster
+// dutifully projects zero forward and prints seven rows of $0.0000 with LOW
+// and HIGH bands. That reads as a broken forecaster rather than as the
+// correct answer to a question that does not apply, and it crowds out the
+// token forecast, which is the one that carries information.
+func allZeroForecast(points []forecast.Prediction) bool {
+	for _, p := range points {
+		if p.Value != 0 || p.Lower != 0 || p.Upper != 0 {
+			return false
+		}
+	}
+	return true
+}
