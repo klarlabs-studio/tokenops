@@ -38,8 +38,11 @@ type Unit struct {
 	// number, because it counts the context once.
 	PeakContext int64
 
-	// Edits and ReworkEdits count file edits and those that revisited a
-	// file this unit had already edited.
+	// Edits counts file edits. ReworkEdits counts the subset that RETURNED
+	// to a file after the unit had moved on to another one — a run of
+	// consecutive edits to one file is a single editing episode, not
+	// rework, because making a change in several parts is how editing
+	// works.
 	Edits       int
 	ReworkEdits int
 
@@ -98,10 +101,12 @@ func Units(records []Record) []Unit {
 	sorted := sortedByTime(records)
 
 	var (
-		out          []Unit
-		cur          Unit
-		inUnit       bool
-		edited       map[string]bool
+		out    []Unit
+		cur    Unit
+		inUnit bool
+		edited map[string]bool
+		// lastEdited is the file the current editing episode belongs to.
+		lastEdited   string
 		seenTool     map[string]bool
 		seenFile     map[string]bool
 		lastInputTok int64
@@ -131,6 +136,7 @@ func Units(records []Record) []Unit {
 				PromptRejects: r.Rejects,
 			}
 			edited = map[string]bool{}
+			lastEdited = ""
 			seenTool = map[string]bool{}
 			seenFile = map[string]bool{}
 			lastInputTok = 0
@@ -168,11 +174,34 @@ func Units(records []Record) []Unit {
 			}
 			if isEdit(r.ToolName) && r.FilePath != "" {
 				cur.Edits++
-				if edited[r.FilePath] {
+				// Rework means coming BACK to a file, not editing it more
+				// than once.
+				//
+				// Keying on the path alone counted every multi-part change
+				// as waste: two Edit calls to different sections of one
+				// file — the ordinary way to make a change — scored as
+				// "revisited a file this unit had already edited". Since
+				// this metric feeds the overall grade, and the grade is the
+				// worst of its parts, ordinary editing could take the whole
+				// headline down to an F.
+				//
+				// So a run of consecutive edits to one file is a single
+				// editing episode, and only a return after working
+				// elsewhere counts. Reads and other tool calls in between
+				// do not end the episode: looking at the file you are
+				// editing is part of editing it.
+				//
+				// This under-counts one real case — editing a file, running
+				// a test that fails, and fixing the same file — because the
+				// records do not reliably say whether the intervening call
+				// failed. That is the conservative direction for a number
+				// that grades the operator's work.
+				if edited[r.FilePath] && lastEdited != r.FilePath {
 					cur.ReworkEdits++
 					cur.Reworked = true
 				}
 				edited[r.FilePath] = true
+				lastEdited = r.FilePath
 				if !seenFile[r.FilePath] {
 					seenFile[r.FilePath] = true
 					cur.Files = append(cur.Files, r.FilePath)
