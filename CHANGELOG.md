@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.65.1 - 2026-09-19
+
+The daemon held most of a CPU core indefinitely. On one real install: 17
+hours of CPU in 14.5 hours of uptime, and event-store writes timing out
+behind it.
+
+A profile of the live daemon put all of it in one place. Every 30 seconds,
+the Claude Code, Codex and opencode readers re-read everything they ingest
+from the beginning — there, 1.4 GB of Claude Code transcripts (16 of 1,769
+files had changed in the past hour) and a 1.3 GB opencode database last
+written in July. The more you used your agents, the more the tool watching
+them cost.
+
+### Fixed
+
+- **Transcripts are read incrementally.** Each file's read position is
+  remembered, so a scan parses only what was appended since the last one,
+  and a file that has not changed is not opened. On the same machine and
+  data, steady-state CPU went from ~32% to ~1.3%. The first scan after the
+  daemon starts still reads everything once. (#312)
+- **opencode is read only when its database changes.** No change means no
+  new rows, so there is nothing to read. (#312)
+- **An oversized transcript line no longer hides the rest of the file.** A
+  line over 4 MB — a large tool result — ended the read of that transcript,
+  so every turn after it was never ingested. It is now skipped on its own.
+  (#312)
+
+### Notes
+
+- A line still being written when a scan lands is left for the next scan
+  rather than read as a fragment. A file that shrank was replaced, and is
+  read again from the start.
+
 ## 0.65.0 - 2026-09-19
 
 A breaking rename, released on its own so the notice cannot be missed.
