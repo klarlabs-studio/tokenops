@@ -4,7 +4,44 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.63.0**.
+Current release: **v0.64.0**.
+
+## v0.64.0 — the same answer from both doors
+
+TokenOps has two front doors. You type at one and your agent calls the
+other, and for a long time they did not know the same things.
+
+Nobody set out to build it that way. A command gets added where it is needed
+and the other surface is a separate file, so the drift is invisible until
+somebody asks a direct question — which is what happened here: *are we at
+parity?* The honest answer was no, in both directions, and nothing had ever
+checked.
+
+The uncomfortable half is which way it ran. Four settings — the operating
+mode, the model ceiling, spend budgets, routing rules — could be changed by
+an agent through the MCP server and not by the person at the terminal, where
+`tokenops config` could only print. If you wanted your own model ceiling
+raised you edited YAML by hand, or you asked the agent to do it. A tool
+easier to drive by asking something else to use it has a design problem, and
+it went unnoticed for as long as it did because each half worked perfectly
+well on its own.
+
+Going the other way, an agent could not ask what a model costs, nor whether
+the numbers it was about to quote were still being collected. It had event
+counts, which tell you a source is quiet without telling you whether it was
+ever switched on. Those are different problems and only one of them has a
+fix.
+
+Both directions are closed now, and the parity check that found them has
+teeth: it fails when either surface grows without the other, and carries a
+written reason for each asymmetry that is genuinely deliberate — installing
+hooks on this machine is a local act and reasonably stays one.
+
+That check also had a hole of its own, found the moment it was used in
+anger. It built its own view of the tool surface from a list that could fall
+out of date, so the first two tools added after it shipped were invisible to
+it and it passed them without comment. It now reads its own source and
+refuses to run incomplete. A check you have not seen fail is not yet a check.
 
 ## v0.63.0 — the instrument catches its own
 
