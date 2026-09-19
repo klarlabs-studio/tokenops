@@ -106,9 +106,11 @@ homebrew_casks:
       - tokenops
       - tokenopsd
     caveats: |
-      Supervise the ingestion daemon so it survives reboot:
+      First install: supervise the ingestion daemon so it survives reboot:
 
         tokenops daemon install
+
+      Upgrades restart an installed daemon on the new version by themselves.
 
       `tokenops serve` is the MCP server and does not ingest.
       `tokenops start` runs the pollers; the unit above keeps it alive.
@@ -117,7 +119,24 @@ homebrew_casks:
         # The release archives are not notarized, so Gatekeeper quarantines both
         # binaries on first run. A formula was never subject to this; a cask is,
         # so without this neither tokenops nor tokenopsd will start.
+        #
+        # An upgrade replaces the binary under a daemon that keeps running the
+        # old one until restarted. Where the unit is installed, re-apply it:
+        # `daemon install` restarts an unchanged unit in place, or reloads a
+        # changed one. Operators used to be told to run it themselves, and on
+        # a running daemon it could stop the old one and fail to start the
+        # new. must_succeed: false — a daemon that will not come up is
+        # reported, but never fails the upgrade itself.
         install: |
           if OS.mac?
             system_command "xattr", args: ["-dr", "com.apple.quarantine", staged_path]
+          end
+          unit = if OS.mac?
+            File.expand_path("~/Library/LaunchAgents/de.klarlabs.tokenops.plist")
+          else
+            File.expand_path("~/.config/systemd/user/tokenops.service")
+          end
+          if File.exist?(unit)
+            bin = "#{HOMEBREW_PREFIX}/bin/tokenops"
+            system_command bin, args: ["daemon", "install", "--bin", bin], print_stdout: true, print_stderr: true, must_succeed: false
           end

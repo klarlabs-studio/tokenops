@@ -1,10 +1,14 @@
 package cli
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"go.klarlabs.de/tokenops/internal/daemon"
 )
 
 func TestDaemonInstallDryRunDoesNotWrite(t *testing.T) {
@@ -113,5 +117,62 @@ func TestDaemonStatusReportsMissing(t *testing.T) {
 	}
 	if !strings.Contains(out, "not installed") {
 		t.Fatalf("status should say not installed:\n%s", out)
+	}
+}
+
+// Applying the unit replaces the running daemon, so a failure can leave
+// none at all. That must not exit 0 — the command used to print a hint and
+// report success, so a script or setup flow carried on without ingestion —
+// and the way out it names is a tokenops command, not supervisor syntax.
+func TestDaemonInstallFailsWhenTheUnitCannotBeStarted(t *testing.T) {
+	prev := applyUnit
+	applyUnit = func(daemon.UnitKind, string, bool) error {
+		return errors.New("launchctl bootstrap: exit status 5")
+	}
+	t.Cleanup(func() { applyUnit = prev })
+
+	out, err := executeRoot(t,
+		"daemon", "install",
+		"--kind", "launchd",
+		"--bin", "/opt/homebrew/bin/tokenops",
+		"--home", "/Users/ada",
+		"--path", filepath.Join(t.TempDir(), "de.klarlabs.tokenops.plist"),
+	)
+	if err == nil {
+		t.Fatalf("install reported success although the daemon did not start:\n%s", out)
+	}
+	if strings.Contains(out, "launchctl") {
+		t.Errorf("failure hands the operator supervisor commands:\n%s", out)
+	}
+	if !strings.Contains(out, "tokenops daemon install") {
+		t.Errorf("failure should name the command that fixes it:\n%s", out)
+	}
+}
+
+// Reinstalling an unchanged unit tells the supervisor so: that is the case
+// where replacing the process in place is enough.
+func TestDaemonInstallPassesWhetherTheUnitChanged(t *testing.T) {
+	var seen []bool
+	prev := applyUnit
+	applyUnit = func(_ daemon.UnitKind, _ string, changed bool) error {
+		seen = append(seen, changed)
+		return nil
+	}
+	t.Cleanup(func() { applyUnit = prev })
+
+	args := []string{
+		"daemon", "install",
+		"--kind", "launchd",
+		"--bin", "/opt/homebrew/bin/tokenops",
+		"--home", "/Users/ada",
+		"--path", filepath.Join(t.TempDir(), "de.klarlabs.tokenops.plist"),
+	}
+	for range 2 {
+		if out, err := executeRoot(t, args...); err != nil {
+			t.Fatalf("install: %v\n%s", err, out)
+		}
+	}
+	if !slices.Equal(seen, []bool{true, false}) {
+		t.Errorf("changed = %v, want [true false]: written, then already up to date", seen)
 	}
 }
