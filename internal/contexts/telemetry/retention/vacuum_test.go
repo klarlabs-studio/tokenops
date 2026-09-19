@@ -1,8 +1,12 @@
 package retention
 
 import (
+	"bytes"
 	"context"
+	"database/sql"
+	"log/slog"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -66,9 +70,9 @@ func TestPruneReclaimsFreelistPages(t *testing.T) {
 	}
 }
 
-// Reclaim is opt-in: a full VACUUM rewrites the database and takes a
-// write lock, so an operator who has not asked for it keeps the cheap
-// delete-only behaviour.
+// Reclaim is opt-in, so an operator who has not asked for it keeps the
+// cheap delete-only behaviour. Incremental auto-vacuum frees nothing on its
+// own; pages stay on the freelist until a reclaim asks for them.
 func TestReclaimDisabledLeavesFreePages(t *testing.T) {
 	st := openStore(t)
 	seed(t, st, 400, time.Now().Add(-72*time.Hour))
@@ -104,5 +108,85 @@ func TestNoDeletionsSkipsReclaim(t *testing.T) {
 		if r.Deleted != 0 {
 			t.Fatalf("expected no deletions, got %d", r.Deleted)
 		}
+	}
+}
+
+// legacyStore opens a store whose file predates incremental auto-vacuum:
+// the database already exists, with auto_vacuum off, when the store first
+// opens it.
+func legacyStore(t *testing.T) *sqlite.Store {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "legacy.db")
+	raw, err := sql.Open("sqlite", "file:"+path+"?_pragma=auto_vacuum(NONE)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec("CREATE TABLE predates_incremental(x)"); err != nil {
+		t.Fatal(err)
+	}
+	_ = raw.Close()
+	st, err := sqlite.Open(context.Background(), path, sqlite.Options{})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	if autoVacuumMode(t, st) != 0 {
+		t.Fatal("fixture is not a legacy store: auto_vacuum already on")
+	}
+	return st
+}
+
+func autoVacuumMode(t *testing.T, st *sqlite.Store) int {
+	t.Helper()
+	var mode int
+	if err := st.DB().QueryRowContext(context.Background(), "PRAGMA auto_vacuum").Scan(&mode); err != nil {
+		t.Fatal(err)
+	}
+	return mode
+}
+
+func freelistCount(t *testing.T, st *sqlite.Store) int {
+	t.Helper()
+	var n int
+	if err := st.DB().QueryRowContext(context.Background(), "PRAGMA freelist_count").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// A full VACUUM held the write lock for 31s on a 440 MB store to return
+// ~100 pages, and every write landing in that window failed until it ended.
+// A legacy store pays for one more full VACUUM, which converts it; every
+// reclaim after that frees pages in short chunks.
+func TestReclaimConvertsALegacyStoreOnceThenRunsIncrementally(t *testing.T) {
+	st := legacyStore(t)
+	var logs bytes.Buffer
+	p := New(st, Config{
+		Policies: []Policy{{EventType: eventschema.EventTypePrompt, KeepFor: time.Hour}},
+		Reclaim:  true,
+		Logger:   slog.New(slog.NewTextHandler(&logs, nil)),
+	})
+
+	seed(t, st, 400, time.Now().Add(-72*time.Hour))
+	if _, err := p.Run(context.Background()); err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+	if autoVacuumMode(t, st) != 2 {
+		t.Fatalf("auto_vacuum = %d after the first reclaim, want 2 (incremental)", autoVacuumMode(t, st))
+	}
+	if !strings.Contains(logs.String(), "mode=convert") {
+		t.Errorf("first reclaim on a legacy store did not report the conversion:\n%s", logs.String())
+	}
+
+	logs.Reset()
+	seed(t, st, 400, time.Now().Add(-72*time.Hour))
+	if _, err := p.Run(context.Background()); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	if !strings.Contains(logs.String(), "mode=incremental") {
+		t.Errorf("reclaim on a converted store did not run incrementally:\n%s", logs.String())
+	}
+	if n := freelistCount(t, st); n != 0 {
+		t.Errorf("freelist_count = %d after an incremental reclaim, want 0", n)
 	}
 }
