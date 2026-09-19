@@ -246,7 +246,7 @@ var helpCatalog = []helpCategory{
 		Tools: []helpTool{
 			{
 				Name:    "tokenops_domain_events",
-				Summary: "Per-kind in-process domain event counts.",
+				Summary: "Per-kind domain event counts from the ingestion daemon; an explicit error when no daemon answers.",
 			},
 			{
 				Name:    "tokenops_audit",
