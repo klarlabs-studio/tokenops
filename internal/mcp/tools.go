@@ -244,14 +244,14 @@ func (in spendSummaryInput) toFilter() (analytics.Filter, error) {
 	if in.Since != "" {
 		t, err := parseTimeOrDuration(in.Since)
 		if err != nil {
-			return f, fmt.Errorf("since: %w", err)
+			return f, inputError(fmt.Errorf("since: %w", err))
 		}
 		f.Since = t
 	}
 	if in.Until != "" {
 		t, err := time.Parse(time.RFC3339, in.Until)
 		if err != nil {
-			return f, fmt.Errorf("until: %w", err)
+			return f, inputError(fmt.Errorf("until: %w", err))
 		}
 		f.Until = t
 	}
@@ -322,13 +322,13 @@ func topConsumers(ctx context.Context, d Deps, in topConsumersInput) (*topConsum
 	if !ok {
 		// The old switch fell through to model here, answering a typo
 		// with a confident ranking of something nobody asked about.
-		return nil, fmt.Errorf("by: unknown grouping %q (want model, provider, workflow, or agent)", in.By)
+		return nil, inputError(fmt.Errorf("by: unknown grouping %q (want model, provider, workflow, or agent)", in.By))
 	}
 	f := analytics.Filter{}
 	if in.Since != "" {
 		t, err := parseTimeOrDuration(in.Since)
 		if err != nil {
-			return nil, err
+			return nil, inputError(err)
 		}
 		f.Since = t
 	} else {
@@ -337,7 +337,7 @@ func topConsumers(ctx context.Context, d Deps, in topConsumersInput) (*topConsum
 	if in.Until != "" {
 		t, err := time.Parse(time.RFC3339, in.Until)
 		if err != nil {
-			return nil, err
+			return nil, inputError(err)
 		}
 		f.Until = t
 	}
@@ -482,7 +482,7 @@ func allZeroForecast(points []forecast.Prediction) bool {
 
 func workflowTrace(ctx context.Context, d Deps, in workflowTraceInput) (*workflowTraceResult, error) {
 	if in.WorkflowID == "" {
-		return nil, errors.New("workflow_id is required")
+		return nil, inputError(errors.New("workflow_id is required"))
 	}
 	trace, err := workflow.Reconstruct(ctx, d.Store, d.Spend, in.WorkflowID)
 	if err != nil {
@@ -505,7 +505,7 @@ func optimizations(ctx context.Context, d Deps, in optimizationsInput) (*optimiz
 	if in.Since != "" {
 		t, err := parseTimeOrDuration(in.Since)
 		if err != nil {
-			return nil, fmt.Errorf("since: %w", err)
+			return nil, inputError(fmt.Errorf("since: %w", err))
 		}
 		f.Since = t
 	} else {
@@ -514,7 +514,7 @@ func optimizations(ctx context.Context, d Deps, in optimizationsInput) (*optimiz
 	if in.Until != "" {
 		t, err := time.Parse(time.RFC3339, in.Until)
 		if err != nil {
-			return nil, fmt.Errorf("until: %w", err)
+			return nil, inputError(fmt.Errorf("until: %w", err))
 		}
 		f.Until = t
 	}

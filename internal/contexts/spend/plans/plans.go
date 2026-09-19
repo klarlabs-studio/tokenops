@@ -381,5 +381,5 @@ func ValidateSpendLimit(name string, limitUSD float64, vendorReportsLimit bool) 
 	}
 	return fmt.Errorf("plan %q is billed at API rates and has no usage window, so headroom is measured "+
 		"against your spend limit. Either let Anthropic report it — `tokenops vendor-usage setup "+
-		"claude-usage-meter` — or set it with --spend-limit (the figure your admins configured)", name)
+		"claude-usage-meter` — or give it yourself: --spend-limit, or spend_limit_usd from an agent (the figure your admins configured)", name)
 }

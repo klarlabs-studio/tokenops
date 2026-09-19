@@ -67,11 +67,11 @@ func RegisterApprovalTools(s *Server, d ApprovalDeps) error {
 		Handler(func(_ context.Context, _ emptyInput) (string, error) {
 			store, err := d.store()
 			if err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			pending, err := store.Pending()
 			if err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			if len(pending) == 0 {
 				return jsonString(map[string]any{
@@ -111,19 +111,19 @@ func RegisterApprovalTools(s *Server, d ApprovalDeps) error {
 		Handler(func(_ context.Context, in routingDecideInput) (string, error) {
 			store, err := d.store()
 			if err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			key := strings.TrimSpace(in.Key)
 			if key == "" {
-				return "", errors.New("key is required (from tokenops_routing_proposals)")
+				return "", inputError(errors.New("key is required (from tokenops_routing_proposals)"))
 			}
 			state, err := store.Load()
 			if err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			st, ok := state[key]
 			if !ok {
-				return "", errors.New("no routing proposal with key " + key)
+				return "", inputError(errors.New("no routing proposal with key " + key))
 			}
 
 			var decision, chosen string
@@ -133,10 +133,10 @@ func RegisterApprovalTools(s *Server, d ApprovalDeps) error {
 			case "deny", "denied":
 				decision, chosen = "denied", st.From
 			default:
-				return "", errors.New(`decision must be "approve" or "deny"`)
+				return "", inputError(errors.New(`decision must be "approve" or "deny"`))
 			}
 			if err := store.Decide(key, decision, chosen); err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			return jsonString(map[string]any{
 				"key":      key,
@@ -151,11 +151,11 @@ func RegisterApprovalTools(s *Server, d ApprovalDeps) error {
 		Handler(func(_ context.Context, in preferredModelSetInput) (string, error) {
 			path, err := d.configPath()
 			if err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			cfg, err := config.ReadMutable(path)
 			if err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			provider := strings.TrimSpace(in.Provider)
 			switch {
@@ -169,7 +169,7 @@ func RegisterApprovalTools(s *Server, d ApprovalDeps) error {
 			default:
 				model := strings.TrimSpace(in.Model)
 				if model == "" {
-					return "", errors.New("model is required unless clear=true")
+					return "", inputError(errors.New("model is required unless clear=true"))
 				}
 				if cfg.PreferredModels == nil {
 					cfg.PreferredModels = map[string]string{}
@@ -177,7 +177,7 @@ func RegisterApprovalTools(s *Server, d ApprovalDeps) error {
 				cfg.PreferredModels[provider] = model
 			}
 			if err := config.WriteMutable(path, cfg); err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			return jsonString(map[string]any{
 				"preferred_models": cfg.PreferredModels,
