@@ -57,13 +57,14 @@ type UsageResponse struct {
 	Unrecognised []string `json:"-"`
 }
 
-// Window is one rate-limit window's snapshot.
+// Window is one rate-limit window's snapshot. Observed on a real Claude
+// Max account:
 //
-// The field names are the ones public claude.ai usage trackers read. They
-// have not been confirmed against a Pro or Max response here — the only
-// responses observed so far are Enterprise and chat-only, where every
-// window is null. A window without a readable utilization is therefore
-// reported as unrecognised, never read as 0%.
+//	"five_hour": {"utilization": 18, "resets_at": "2026-09-19T20:00:00.048431+00:00",
+//	  "limit_dollars": null, "used_dollars": null, ...}
+//
+// A window without a readable utilization is reported as unrecognised,
+// never read as 0%.
 type Window struct {
 	Utilization *float64 `json:"utilization"`
 	ResetsAt    string   `json:"resets_at"`
