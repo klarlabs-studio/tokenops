@@ -17,15 +17,24 @@ import (
 // signal uniform across the surface instead of relying on each
 // handler to remember to call Tracker.Record.
 //
+// provider is asked on every call rather than read once: it is inferred
+// from the configured plans, and a plan bound after the server started —
+// by `tokenops plan set` or tokenops_plan_set — used to leave every ping
+// stamped "unknown" until the MCP client restarted the server.
+//
 // Empty tracker (or a tools/call against an unrelated tool name)
 // degrades to a pass-through.
-func SessionMiddleware(t *session.Tracker, provider eventschema.Provider) mcpgo.Middleware {
+func SessionMiddleware(t *session.Tracker, provider func() eventschema.Provider) mcpgo.Middleware {
 	return func(next mcpgo.MiddlewareHandlerFunc) mcpgo.MiddlewareHandlerFunc {
 		return func(ctx context.Context, req *protocol.Request) (*protocol.Response, error) {
 			if t != nil && req != nil && req.Method == "tools/call" {
 				if name := extractToolName(req.Params); name != "" {
+					p := eventschema.ProviderUnknown
+					if provider != nil {
+						p = provider()
+					}
 					t.Record(ctx, session.Options{
-						Provider:    provider,
+						Provider:    p,
 						SourceLabel: "mcp-session",
 					}, name)
 				}
