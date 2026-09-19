@@ -4,7 +4,32 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.66.0**.
+Current release: **v0.67.0**.
+
+## v0.67.0 — what your agent is told
+
+Most of TokenOps is read by you. More and more of it is read by your coding
+agent, through the MCP server, and this release is about what the agent was
+being told. A full review of the 41 tools found places where it was told
+something wrong, told to do something harmful, or allowed to undo something
+you had set.
+
+Some of it was quietly dangerous. An agent adjusting a token budget's
+warning level would have erased the limit itself. A healthy daemon was
+reported as missing — because TokenOps' own tests kept deleting the file
+it is found by — and the advice for a missing daemon would have started a
+second one. And every careful refusal, such as "a budget needs a ceiling",
+reached the agent as "internal error", which it cannot act on.
+
+Some of it was just wrong. On a subscription, the spend tools reported
+$0.00 for billions of tokens. The help index listed half the tools. An
+agent could not tell it was talking to an MCP server from months ago —
+which, on the machine where this was found, it was.
+
+All of it is fixed. Agents can now also bind your plan and connect the
+Claude usage meter themselves, without the session key ever passing through
+the chat. One thing only you can do: restart your MCP clients once, so they
+pick up this server. From then on, an outdated one says so.
 
 ## v0.66.0 — the meter reads the real thing
 
