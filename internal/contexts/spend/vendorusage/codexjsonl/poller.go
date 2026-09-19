@@ -99,7 +99,18 @@ func (p *Poller) scan(ctx context.Context, root string) {
 		p.opts.Logger.Debug("codex jsonl glob failed", "root", root, "err", err)
 		return
 	}
-	visit := func(turn Turn) error {
+	visit := p.visitor(ctx)
+	p.tail.Scan(ctx, files, func(_ string, r io.Reader, st *readState) (int64, error) {
+		return readLines(r, st, false, visit)
+	}, func(path string, err error) {
+		p.opts.Logger.Warn("codex jsonl read failed", "path", path, "err", err)
+	})
+}
+
+// visitor publishes each turn not already seen, keyed by session and
+// sequence.
+func (p *Poller) visitor(ctx context.Context) func(Turn) error {
+	return func(turn Turn) error {
 		key := turn.SessionID + "|" + strconv.Itoa(turn.RecordSequence)
 		p.mu.Lock()
 		if _, dup := p.seen[key]; dup {
@@ -113,11 +124,6 @@ func (p *Poller) scan(ctx context.Context, root string) {
 		}
 		return nil
 	}
-	p.tail.Scan(ctx, files, func(_ string, r io.Reader, st *readState) (int64, error) {
-		return readLines(r, st, false, visit)
-	}, func(path string, err error) {
-		p.opts.Logger.Warn("codex jsonl read failed", "path", path, "err", err)
-	})
 }
 
 // newEnvelope maps a Codex Turn to a PromptEvent envelope. Provider
