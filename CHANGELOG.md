@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.65.4 - 2026-09-19
+
+Reported from a real upgrade. `brew upgrade` told the operator to run
+`tokenops daemon install`, which stopped the running daemon, failed to start
+the new one with `Bootstrap failed: 5: Input/output error`, printed launchctl
+commands to type — and exited 0, with nothing ingesting.
+
+### Fixed
+
+- **Upgrades restart the daemon by themselves.** Where the daemon is
+  installed, the Homebrew cask now re-applies it after every upgrade, so it
+  comes up on the new version with no command to run. The install notice
+  says `tokenops daemon install` is for the first install only. (#318)
+- **`tokenops daemon install` works over a running daemon.** launchd keeps
+  hold of the old job for a moment after it is told to unload it, and
+  starting the new one in that moment is what failed. An unchanged unit is
+  now restarted in place, which never unloads at all; a changed one waits
+  for launchd to let go, and retries while launchd still refuses. (#318)
+- **On Linux, an upgrade runs the new binary.** `systemctl enable --now`
+  does not restart a daemon that is already running; install now restarts
+  it. (#318)
+- **A daemon that cannot be started is reported as a failure.** The command
+  exits non-zero and says to run `tokenops daemon install` again, instead of
+  printing supervisor commands and exiting 0. (#318)
+
+### Notes
+
+- This release is the last one where upgrading needs a command: the fix
+  runs after the upgrade that installs it, so a daemon still stopped from
+  an earlier failed install starts during this upgrade.
+
 ## 0.65.3 - 2026-09-19
 
 0.65.2 moved the first retention pass off the startup replay. The first
