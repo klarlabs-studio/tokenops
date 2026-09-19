@@ -47,7 +47,7 @@ type planStoreReader struct{ store *sqlite.Store }
 // and feeds proxy + mcp-session counts into the domain classifier so
 // every response carries an honest trust level. Vendor /usage isn't
 // wired yet so VendorAPIWired stays false.
-func classifySignalFromStore(ctx context.Context, store *sqlite.Store, since, until time.Time) (plans.SignalInputs, error) {
+func classifySignalFromStore(ctx context.Context, store *sqlite.Store, provider string, since, until time.Time) (plans.SignalInputs, error) {
 	if store == nil {
 		return plans.SignalInputs{}, nil
 	}
@@ -55,7 +55,7 @@ func classifySignalFromStore(ctx context.Context, store *sqlite.Store, since, un
 	if err != nil {
 		return plans.SignalInputs{}, err
 	}
-	return plans.SignalFromCounts(counts), nil
+	return plans.SignalFromCounts(counts, provider), nil
 }
 
 func (r planStoreReader) ReadEvents(ctx context.Context, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
@@ -166,16 +166,17 @@ func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("recent[%s]: %w", provider, err)
 		}
-		signal, err := classifySignalFromStore(ctx, d.Store, now.Add(-p.RateLimitWindow), now)
+		signal, err := classifySignalFromStore(ctx, d.Store, provider, now.Add(-p.RateLimitWindow), now)
 		if err != nil {
 			return "", fmt.Errorf("signal[%s]: %w", provider, err)
 		}
 		budget, err := plans.ComputeSessionBudget(planName, plans.SessionBudgetInputs{
-			WindowMessages: windowCons.MessagesInWindow,
-			RecentMessages: recentCons.MessagesInWindow,
-			RecentWindow:   30 * time.Minute,
-			Signal:         signal,
-			Now:            now,
+			WindowMessages:  windowCons.MessagesInWindow,
+			WindowStartedAt: windowCons.FirstActivityAt,
+			RecentMessages:  recentCons.MessagesInWindow,
+			RecentWindow:    30 * time.Minute,
+			Signal:          signal,
+			Now:             now,
 			// Prefer the vendor's own reported quota when a snapshot
 			// source (Claude usage meter / Codex rate_limits / Copilot) has
 			// emitted one; falls back to the message-count heuristic.
