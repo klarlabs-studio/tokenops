@@ -2,11 +2,31 @@ package daemon
 
 import (
 	"fmt"
+	"log/slog"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/telemetry/retention"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
+
+// retentionStartDelay holds the first retention pass after the daemon
+// starts. At startup every poller replays its history into the store, and a
+// prune with reclaim holds the write lock for its whole VACUUM — 31s on a
+// real 440 MB store, during which the replay's batches failed four attempts
+// in a row and cleared on their last. The replay finishes well inside this.
+const retentionStartDelay = 5 * time.Minute
+
+// retentionConfig is the pruner configuration the daemon runs.
+func retentionConfig(c config.RetentionConfig, policies []retention.Policy, logger *slog.Logger) retention.Config {
+	return retention.Config{
+		Policies:   policies,
+		Interval:   c.Interval,
+		StartDelay: retentionStartDelay,
+		Logger:     logger,
+		Reclaim:    c.Reclaim,
+	}
+}
 
 // retentionPolicies translates config.retention.keep into pruner
 // policies. Invalid keys/durations are errors; Validate already
