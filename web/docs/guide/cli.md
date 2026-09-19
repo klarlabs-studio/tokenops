@@ -75,6 +75,13 @@ tokenops plan set anthropic claude-enterprise \
 `plan headroom` says which you are looking at: spend *reported by the
 vendor*, or *estimated from token counts*.
 
+From an agent, the same two steps are `tokenops_vendor_usage_setup` and
+`tokenops_plan_set`. The setup tool never takes the session key as an
+argument — it is a claude.ai login, and a tool argument lands in the
+agent's transcript. It reads the key from
+`TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY` or existing config; the terminal
+`setup` reads it without echoing it.
+
 ```yaml
 plan_limits:
   anthropic:

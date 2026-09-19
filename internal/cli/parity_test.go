@@ -52,7 +52,7 @@ var cliToMCP = map[string][]string{
 	"eval":            {"tokenops_eval"},
 	"events":          {"tokenops_domain_events"},
 	"fmt":             {"tokenops_fmt_analyze", "tokenops_fmt_learn"},
-	"plan":            {"tokenops_plan_headroom"},
+	"plan":            {"tokenops_plan_headroom", "tokenops_plan_set"},
 	"replay":          {"tokenops_replay"},
 	"rules":           {"tokenops_rules_analyze", "tokenops_rules_bench", "tokenops_rules_compress", "tokenops_rules_conflicts", "tokenops_rules_inject"},
 	"scorecard":       {"tokenops_scorecard"},
@@ -62,7 +62,7 @@ var cliToMCP = map[string][]string{
 	"task":            {"tokenops_workflow_trace"},
 	"version":         {"tokenops_version"},
 	"pricing":         {"tokenops_pricing"},
-	"vendor-usage":    {"tokenops_vendor_usage_status"},
+	"vendor-usage":    {"tokenops_vendor_usage_status", "tokenops_vendor_usage_setup"},
 	"mode":            {"tokenops_mode"},
 	"preferred-model": {"tokenops_preferred_model"},
 	"budget":          {"tokenops_budget_set"},
@@ -211,6 +211,7 @@ func mcpToolNames(t *testing.T) map[string]bool {
 	must(mcp.RegisterFmtTools(srv))
 	must(mcp.RegisterCoachTools(srv, mcp.CoachDeps{}))
 	must(mcp.RegisterGapTools(srv, mcp.GapDeps{}))
+	must(mcp.RegisterSetupTools(srv, mcp.SetupDeps{}))
 
 	out := map[string]bool{}
 	for _, ti := range srv.Tools() {
