@@ -16,8 +16,9 @@ type StoryDeps struct {
 }
 
 type storyInput struct {
-	Days  int `json:"days,omitempty" jsonschema:"description=Window in days (default 7). 0 reads all history."`
-	Limit int `json:"limit,omitempty" jsonschema:"description=Most recent tasks to return (default 10). 0 returns every task in the window."`
+	Days  int  `json:"days,omitempty" jsonschema:"description=Window in days (default 7 when omitted or 0). Use all for every transcript on disk."`
+	All   bool `json:"all,omitempty" jsonschema:"description=Read all history instead of a days window. Overrides days."`
+	Limit int  `json:"limit,omitempty" jsonschema:"description=Most recent tasks to return (default 10). 0 returns every task in the window."`
 }
 
 // storyTask is one piece of work. Enumerated rather than prose-formatted:
@@ -67,10 +68,7 @@ func RegisterStoryTools(s *Server, d StoryDeps) error {
 		Description("Read back an account of recent work, one task at a time: the instruction the operator typed, how many turns and tool calls answering it took, which files it touched, and where it went sideways — an answer rejected, a file edited twice, a turn interrupted. A task is a run of consecutive instructions on one piece of work, inferred from the local transcripts. Call this to see the shape of the work in flight, to check what was already attempted before retrying something, or when the operator asks what happened in a session. Titles are the operator's own instructions, quoted rather than summarised. Nothing here says whether the work is correct — only the tests know that.").
 		OutputSchema(storyResult{}).
 		Handler(func(_ context.Context, in storyInput) (*storyResult, error) {
-			days := in.Days
-			if days == 0 {
-				days = 7
-			}
+			days := windowDays(in.Days, in.All)
 			limit := in.Limit
 			if limit == 0 {
 				limit = 10
@@ -120,7 +118,7 @@ func RegisterStoryTools(s *Server, d StoryDeps) error {
 				})
 			}
 			if len(out.Tasks) == 0 {
-				out.Note = "no tasks in this window — widen with days, or check the transcript root"
+				out.Note = "no tasks in this window — widen with days or all: true, or check the transcript root"
 			}
 			return out, nil
 		})

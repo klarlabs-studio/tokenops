@@ -7,8 +7,8 @@ import (
 
 // helpCategory groups MCP tools by typical first-time use so agents
 // and operators can navigate the surface without scrolling a flat
-// 20-entry tool list. Hick's law: a curated menu beats raw
-// enumeration when the catalogue grows past about a dozen items.
+// tool list. Hick's law: a curated menu beats raw enumeration when the
+// catalogue grows past about a dozen items.
 type helpCategory struct {
 	Name        string     `json:"name"`
 	Description string     `json:"description"`
@@ -22,13 +22,14 @@ type helpTool struct {
 }
 
 // helpCatalog is the authoritative grouping the tokenops_help tool
-// returns. Adding a new MCP tool requires adding it here so the
-// surface stays discoverable; the build-time arch tests are the
-// safety net.
+// returns. Adding a new MCP tool requires adding it here so the surface
+// stays discoverable. TestHelpCatalogCoversEveryRegisteredTool enforces
+// that in both directions — this comment once named "arch tests" as the
+// safety net when there were none, and eighteen tools went unlisted.
 var helpCatalog = []helpCategory{
 	{
 		Name:        "setup",
-		Description: "Bind the daemon's data sources. Run these first.",
+		Description: "Bind the daemon's data sources and confirm they are flowing. Run these first.",
 		Tools: []helpTool{
 			{
 				Name:    "tokenops_status",
@@ -50,6 +51,14 @@ var helpCatalog = []helpCategory{
 				Name:    "tokenops_vendor_usage_setup",
 				Summary: "Connect claude.ai's own usage meter; the session key comes from env or config, never the chat.",
 			},
+			{
+				Name:    "tokenops_vendor_usage_status",
+				Summary: "Which usage sources are on and how much each ingested recently. Check before trusting a spend or headroom figure.",
+			},
+			{
+				Name:    "tokenops_data_sources",
+				Summary: "Event counts by source (proxy, mcp-session, demo, ...), to confirm the math runs on real data, not demo seeds.",
+			},
 		},
 	},
 	{
@@ -63,35 +72,62 @@ var helpCatalog = []helpCategory{
 			},
 			{
 				Name:    "tokenops_plan_headroom",
-				Summary: "Month-to-date consumption + overage risk for every configured plan.",
+				Summary: "Month-to-date consumption + overage risk for every configured plan, including spend against an Enterprise limit.",
 			},
 		},
 	},
 	{
 		Name:        "cost",
-		Description: "Token + dollar rollups from the local event store.",
+		Description: "Token + dollar rollups from the local event store. On a flat-rate plan real cost is $0; api_equivalent_usd and tokens carry the signal.",
 		Tools: []helpTool{
 			{
 				Name:    "tokenops_spend_summary",
-				Summary: "Total requests / tokens / cost over a window. Use `since: '7d'` for the last week.",
+				Summary: "Total requests / tokens / cost / API-equivalent over a window. Use `since: '7d'` for the last week.",
 			},
 			{
 				Name:    "tokenops_burn_rate",
-				Summary: "Hourly buckets over the last N hours. Default 24.",
+				Summary: "Cost, tokens and API-equivalent over the last N hours (default 24), with the hourly series.",
 			},
 			{
 				Name:    "tokenops_top_consumers",
-				Summary: "Top N spenders grouped by model | provider | workflow | agent.",
+				Summary: "Top N consumers by model | provider | workflow | agent, ranked by API-equivalent value.",
 			},
 			{
 				Name:    "tokenops_forecast",
-				Summary: "Daily spend forecast horizon_days ahead via Holt's smoothing.",
+				Summary: "Daily spend and token forecast horizon_days ahead via Holt's smoothing.",
+			},
+			{
+				Name:    "tokenops_pricing",
+				Summary: "Per-million-token rates TokenOps prices with, and when the card was fetched.",
+			},
+			{
+				Name:    "tokenops_dashboard",
+				Summary: "Clickable URL to the local dashboard (cost, tokens, burn-rate charts) served by the daemon.",
+			},
+		},
+	},
+	{
+		Name:        "routing",
+		Description: "Which model a turn should run on. Advice and proposals only change anything once the caller or operator acts on them.",
+		Tools: []helpTool{
+			{
+				Name:    "tokenops_routing_advise",
+				Summary: "Recommend stay or switch for a turn, from its task class, the plan window, and the live pricing table. Never applies.",
+				Example: `{"instruction":"rename the handler","model":"claude-opus-5"}`,
+			},
+			{
+				Name:    "tokenops_routing_proposals",
+				Summary: "Model upgrades the proxy refused because they exceed the preferred model; surface pending ones to the operator.",
+			},
+			{
+				Name:    "tokenops_routing_decide",
+				Summary: "Record the operator's approve/deny on a pending proposal. Only once they have actually chosen.",
 			},
 		},
 	},
 	{
 		Name:        "workflows",
-		Description: "Attribution + optimization for multi-step agent runs.",
+		Description: "Attribution, replay, and the account of work done in multi-step agent runs.",
 		Tools: []helpTool{
 			{
 				Name:    "tokenops_workflow_trace",
@@ -101,16 +137,37 @@ var helpCatalog = []helpCategory{
 				Name:    "tokenops_optimizations",
 				Summary: "List optimizer events with quality scores and decisions.",
 			},
+			{
+				Name:    "tokenops_replay",
+				Summary: "Replay a session / workflow / agent through the optimizer pipeline to see would-be savings.",
+			},
+			{
+				Name:    "tokenops_story",
+				Summary: "Recent work one task at a time: the instruction, turns, tool calls, files touched, and where it went sideways.",
+				Example: `{"days":1}`,
+			},
 		},
 	},
 	{
 		Name:        "coaching",
-		Description: "Prompt-quality + workflow-pattern feedback. Privacy-respecting: prompt text is read from the JSONL files at scan time and never persisted to the event store.",
+		Description: "Prompt-quality, session-experience, and context-usage feedback. Privacy-respecting: transcript text is read at scan time and never persisted to the event store.",
 		Tools: []helpTool{
 			{
 				Name:    "tokenops_coach_prompts",
 				Summary: "Heuristic scoring of your Claude Code prompting: length distribution, vague/ack/repeat counts, recommendations.",
 				Example: `{"since":"7d"}`,
+			},
+			{
+				Name:    "tokenops_agent_dx",
+				Summary: "Graded session metrics — turns per instruction, rework, interrupts, first-try rate — with the single highest-leverage change.",
+			},
+			{
+				Name:    "tokenops_fmt_analyze",
+				Summary: "What fills your context (Read vs Bash vs prose) and what command-output compression would save on real traffic.",
+			},
+			{
+				Name:    "tokenops_fmt_learn",
+				Summary: "Where the output-compression catalog should improve next: missing formatters, over-compression, loss-level hints.",
 			},
 		},
 	},
@@ -134,11 +191,15 @@ var helpCatalog = []helpCategory{
 				Name:    "tokenops_rules_inject",
 				Summary: "Preview the dynamic rule subset the router picks for a request context.",
 			},
+			{
+				Name:    "tokenops_rules_bench",
+				Summary: "Benchmark rule profiles against scenarios from an inline or on-disk spec.",
+			},
 		},
 	},
 	{
 		Name:        "control",
-		Description: "Mutate the daemon configuration: operating mode, budgets, routing rules. Changes persist to config.yaml; the daemon applies them on restart.",
+		Description: "Mutate the daemon configuration: operating mode, budgets, routing rules, the preferred-model ceiling. Changes persist to config.yaml.",
 		Tools: []helpTool{
 			{
 				Name:    "tokenops_mode",
@@ -155,19 +216,45 @@ var helpCatalog = []helpCategory{
 				Summary: "Upsert/delete a route-X-to-Y rule. Validate via tokenops_replay, enforce via mode=active.",
 				Example: `{"provider":"anthropic","from_model":"claude-fable-5*","to_model":"claude-opus-4-8","quality":0.9}`,
 			},
+			{
+				Name:    "tokenops_preferred_model",
+				Summary: "Get or set a provider's preferred model: a ceiling that refers pricier routes to the operator.",
+			},
+		},
+	},
+	{
+		Name:        "evaluation",
+		Description: "Quality gates and KPIs computed locally.",
+		Tools: []helpTool{
+			{
+				Name:    "tokenops_eval",
+				Summary: "Run the optimizer eval harness; returns the merged report and gate result.",
+			},
+			{
+				Name:    "tokenops_scorecard",
+				Summary: "Operator wedge KPI scorecard (FVT, TEU, SAC) from the local event store.",
+			},
+			{
+				Name:    "tokenops_coverage_debt",
+				Summary: "Risk-ranked coverage debt from a Go cover profile.",
+			},
 		},
 	},
 	{
 		Name:        "debug",
-		Description: "Diagnostics for daemon + event flow.",
+		Description: "Diagnostics for daemon + event flow, and this index.",
 		Tools: []helpTool{
 			{
 				Name:    "tokenops_domain_events",
-				Summary: "Per-kind in-process domain event counts.",
+				Summary: "Per-kind domain event counts from the ingestion daemon; an explicit error when no daemon answers.",
 			},
 			{
 				Name:    "tokenops_audit",
 				Summary: "Query the audit log; daemon-only emission.",
+			},
+			{
+				Name:    "tokenops_help",
+				Summary: "This category-grouped index of every TokenOps tool.",
 			},
 		},
 	},
@@ -186,7 +273,7 @@ func RegisterHelpTool(s *Server) error {
 		return errors.New("mcp: server must not be nil")
 	}
 	s.Tool("tokenops_help").
-		Description("Return a curated, category-grouped index of TokenOps MCP tools so agents and operators can find the right tool without enumerating the 20+ flat list.").
+		Description("Return a curated, category-grouped index of every TokenOps MCP tool (setup, session, cost, routing, workflows, coaching, rules, control, evaluation, debug) so agents and operators can find the right tool without enumerating the flat tools/list.").
 		OutputSchema(helpResult{}).
 		Handler(func(_ context.Context, _ emptyInput) (helpResult, error) {
 			return helpResult{

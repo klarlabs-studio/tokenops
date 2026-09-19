@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/config"
@@ -83,7 +84,7 @@ func RegisterPlanTools(s *Server, d PlanDeps) error {
 	// every tokenops_* invocation lands in the session counter, not
 	// just the two plan tools.
 	s.Tool("tokenops_session_budget").
-		Description("Predict the operator's rate-limit headroom for the current MCP session. Returns plan_name, window_consumed, window_pct, recent_rate_per_hour, will_hit_cap_within, headroom_until_cap, confidence (low|medium|high), and recommended_action (continue|slow_down|switch_model|wait_for_reset). Designed for Claude Code / Cursor agents to call before starting a long task.").
+		Description("Predict the operator's rate-limit headroom for the current MCP session. Returns plan_name, window_consumed, window_pct, recent_rate_per_hour, will_hit_cap_within, headroom_until_cap, confidence (low|medium|high), and recommended_action (continue|slow_down|switch_model|wait_for_reset). Designed for Claude Code / Cursor agents to call before starting a long task. A plan with no rate-limit window (e.g. spend-billed claude-enterprise) has no session budget; it is explained in notes and its spend is in tokenops_plan_headroom.").
 		Handler(func(ctx context.Context, _ emptyInput) (string, error) {
 			return sessionBudget(ctx, d)
 		})
@@ -97,12 +98,43 @@ func RegisterPlanTools(s *Server, d PlanDeps) error {
 	return nil
 }
 
+// plansUnconfiguredHint names both ways to bind a plan. Config hot-reloads
+// through ConfigGetter, so the "then reload your MCP server" this used to
+// end with was a step that changed nothing — and the agent reading the
+// hint can bind the plan itself.
+const plansUnconfiguredHint = "bind a plan with tokenops_plan_set, or `tokenops plan set <provider> <plan>` " +
+	"(e.g. `tokenops plan set anthropic claude-max-20x`); the change is picked up without a restart"
+
+// sortedProviders returns the configured providers in a stable order.
+// Ranging the map directly made "the first budget" — the one rendered as
+// markdown — a different plan from call to call.
+func sortedProviders(bindings map[string]string) []string {
+	out := make([]string, 0, len(bindings))
+	for p := range bindings {
+		out = append(out, p)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// windowlessPlanNote explains a plan that has no session budget to report.
+// Skipping it silently gave an Enterprise operator {"budgets":[]}, which
+// reads the same as "nothing configured".
+func windowlessPlanNote(provider, planName string, p plans.Plan) string {
+	if p.SpendDenominated {
+		return fmt.Sprintf("%s: %s is billed by spend and has no rate-limit window, so there is no session budget; "+
+			"call tokenops_plan_headroom for spend against the limit", provider, planName)
+	}
+	return fmt.Sprintf("%s: %s has no rolling rate-limit window, so there is no session budget; "+
+		"call tokenops_plan_headroom for month-to-date consumption", provider, planName)
+}
+
 func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
 	cfg := d.activeConfig()
 	if cfg == nil || len(cfg.Plans) == 0 {
 		return jsonString(map[string]string{
 			"error": "plans_unconfigured",
-			"hint":  "run `tokenops plan set <provider> <plan>` (e.g. `tokenops plan set anthropic claude-max-20x`), then reload your MCP server",
+			"hint":  plansUnconfiguredHint,
 		}), nil
 	}
 	if d.Store == nil {
@@ -114,9 +146,16 @@ func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
 	reader := planStoreReader{store: d.Store}
 	now := time.Now().UTC()
 	budgets := make([]plans.SessionBudget, 0, len(cfg.Plans))
-	for provider, planName := range cfg.Plans {
+	var notes []string
+	for _, provider := range sortedProviders(cfg.Plans) {
+		planName := cfg.Plans[provider]
 		p, ok := plans.Lookup(planName)
-		if !ok || p.RateLimitWindow <= 0 {
+		if !ok {
+			notes = append(notes, fmt.Sprintf("%s: %s is not a known plan", provider, planName))
+			continue
+		}
+		if p.RateLimitWindow <= 0 {
+			notes = append(notes, windowlessPlanNote(provider, planName, p))
 			continue
 		}
 		windowCons, err := plans.ConsumptionInWindow(ctx, reader, provider, now, p.RateLimitWindow)
@@ -148,12 +187,16 @@ func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
 		budgets = append(budgets, budget)
 	}
 	payload := map[string]any{"budgets": budgets}
+	if len(notes) > 0 {
+		payload["notes"] = notes
+	}
 	if warn, err := maybeDataWarning(ctx, d.Store, time.Time{}, now); err == nil && warn != nil {
 		payload["data_warning"] = warn
 	}
-	// Render the first budget as a markdown table for clients that
-	// surface text content visually (Desktop, Code, Cursor). The
-	// JSON appendix stays intact for agents.
+	// Render the first budget — first in provider order, so the same
+	// plan every call — as a markdown table for clients that surface
+	// text content visually (Desktop, Code, Cursor). The JSON appendix
+	// stays intact for agents.
 	if len(budgets) == 0 {
 		out, err := json.MarshalIndent(payload, "", "  ")
 		if err != nil {
@@ -185,7 +228,7 @@ func planHeadroom(ctx context.Context, d PlanDeps) (*planHeadroomResult, error) 
 	if cfg == nil || len(cfg.Plans) == 0 {
 		return &planHeadroomResult{
 			Error: "plans_unconfigured",
-			Hint:  "run `tokenops plan set <provider> <plan>` (e.g. `tokenops plan set anthropic claude-max-20x`), then reload your MCP server",
+			Hint:  plansUnconfiguredHint,
 		}, nil
 	}
 	if d.Store == nil {
@@ -197,7 +240,8 @@ func planHeadroom(ctx context.Context, d PlanDeps) (*planHeadroomResult, error) 
 	reader := planStoreReader{store: d.Store}
 	now := time.Now().UTC()
 	reports := make([]plans.HeadroomReport, 0, len(cfg.Plans))
-	for provider, planName := range cfg.Plans {
+	for _, provider := range sortedProviders(cfg.Plans) {
+		planName := cfg.Plans[provider]
 		lim := cfg.PlanLimits[provider]
 		inputs, err := plans.AssembleHeadroomInputs(ctx, reader, d.Store.CountBySource, provider, planName,
 			plans.SpendLimit{LimitUSD: lim.SpendLimitUSD, Window: lim.Window, RateFactor: lim.RateFactor}, now)

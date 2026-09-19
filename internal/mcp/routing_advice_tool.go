@@ -18,6 +18,22 @@ type RoutingAdviceDeps struct {
 	Config       *config.Config
 	ConfigGetter func() *config.Config
 	Store        *sqlite.Store
+	// Spend prices the candidate models. serve passes the daemon's
+	// engine, which carries the refreshed rate card; nil falls back to
+	// the compiled-in table so zero-value deps stay valid.
+	//
+	// The tool used to build its own engine over the compiled-in table
+	// while every other tool in the same server priced with the live
+	// card, so "what the pricing table currently calls cheapest" was the
+	// binary's opinion, not the table's.
+	Spend *spend.Engine
+}
+
+func (d RoutingAdviceDeps) spendEngine() *spend.Engine {
+	if d.Spend != nil {
+		return d.Spend
+	}
+	return spend.NewEngine(spend.DefaultTable())
 }
 
 func (d RoutingAdviceDeps) activeConfig() *config.Config {
@@ -89,7 +105,7 @@ func RegisterRoutingAdviceTools(s *Server, d RoutingAdviceDeps) error {
 				return &routingAdviceResult{
 					Recommendation: "stay", Model: in.Model,
 					Reason: "no configuration loaded, so there is nothing to decide from",
-					Note:   "run `tokenops init`, then reload your MCP server",
+					Note:   "run `tokenops init` to create a config",
 				}, nil
 			}
 			rc := cfg.Optimizer.RouterConfig()
@@ -118,7 +134,7 @@ func RegisterRoutingAdviceTools(s *Server, d RoutingAdviceDeps) error {
 			}
 			rc.PreferredModel = cfg.PreferredModel
 
-			adv := router.New(*rc, spend.NewEngine(spend.DefaultTable())).Advise(router.AdviceInput{
+			adv := router.New(*rc, d.spendEngine()).Advise(router.AdviceInput{
 				Provider:    provider,
 				Model:       in.Model,
 				Instruction: in.Instruction,
@@ -142,7 +158,7 @@ func RegisterRoutingAdviceTools(s *Server, d RoutingAdviceDeps) error {
 				// Say why the answer is weaker than it looks. A "stay"
 				// produced by a meter that is not reporting is not the
 				// same answer as a "stay" produced by measured headroom.
-				out.Note = "the plan's rate-limit window is not being measured, so conserving cannot be justified — check `tokenops plan set` and that the daemon is ingesting"
+				out.Note = "the plan's rate-limit window is not being measured, so conserving cannot be justified — check the plan binding (tokenops_plan_set, or `tokenops plan set`) and that the daemon is ingesting"
 			}
 			return out, nil
 		})

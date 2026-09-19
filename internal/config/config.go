@@ -472,6 +472,35 @@ type RoutingRuleConfig struct {
 	WhenWindowPctAbove float64 `yaml:"when_window_pct_above,omitempty"`
 }
 
+// Validate checks one rule on its own, so the surfaces that write a rule
+// (`tokenops routing rule set`, tokenops_routing_rule_set) can refuse it
+// before touching the file and name the argument that was wrong. Checked
+// only at whole-config write time, the refusal pointed at
+// "optimizer.routing_rules[3]" — an index into a file the caller never
+// saw — and a whitespace to_model passed as present.
+func (r RoutingRuleConfig) Validate() error {
+	for _, f := range []struct{ name, v string }{
+		{"provider", r.Provider}, {"from_model", r.FromModel}, {"to_model", r.ToModel},
+	} {
+		if strings.TrimSpace(f.v) == "" {
+			return fmt.Errorf("%s is required", f.name)
+		}
+	}
+	switch strings.ToLower(r.WhenClass) {
+	case "", string(taskclass.Mechanical), string(taskclass.Reasoning):
+	default:
+		return fmt.Errorf("when_class must be %q or %q, got %q",
+			taskclass.Mechanical, taskclass.Reasoning, r.WhenClass)
+	}
+	if r.WhenWindowPctAbove < 0 || r.WhenWindowPctAbove > 100 {
+		return fmt.Errorf("when_window_pct_above must be in [0,100], got %g", r.WhenWindowPctAbove)
+	}
+	if r.Quality <= 0 || r.Quality > 1 {
+		return fmt.Errorf("quality must be in (0,1], got %g", r.Quality)
+	}
+	return nil
+}
+
 // SmartRoutingConfig is the rules-free routing policy: instead of a
 // from/to pair written once, decide each turn from what kind of work it
 // is, how full the plan's rate-limit window is, and what the pricing
@@ -1026,21 +1055,8 @@ func (c Config) Validate() error {
 		return fmt.Errorf("optimizer.routing_min_quality must be in [0,1], got %g", q)
 	}
 	for i, r := range c.Optimizer.RoutingRules {
-		if r.Provider == "" || r.FromModel == "" || r.ToModel == "" {
-			return fmt.Errorf("optimizer.routing_rules[%d]: provider, from_model, and to_model are required", i)
-		}
-		switch strings.ToLower(r.WhenClass) {
-		case "", string(taskclass.Mechanical), string(taskclass.Reasoning):
-		default:
-			return fmt.Errorf("optimizer.routing_rules[%d]: when_class must be %q or %q, got %q",
-				i, taskclass.Mechanical, taskclass.Reasoning, r.WhenClass)
-		}
-		if r.WhenWindowPctAbove < 0 || r.WhenWindowPctAbove > 100 {
-			return fmt.Errorf("optimizer.routing_rules[%d]: when_window_pct_above must be in [0,100], got %g",
-				i, r.WhenWindowPctAbove)
-		}
-		if r.Quality <= 0 || r.Quality > 1 {
-			return fmt.Errorf("optimizer.routing_rules[%d]: quality must be in (0,1], got %g", i, r.Quality)
+		if err := r.Validate(); err != nil {
+			return fmt.Errorf("optimizer.routing_rules[%d]: %w", i, err)
 		}
 	}
 	if err := c.Coaching.Quiet.Validate(); err != nil {

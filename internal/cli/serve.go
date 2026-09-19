@@ -197,6 +197,7 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	}
 	if err := mcp.RegisterRoutingAdviceTools(srv, mcp.RoutingAdviceDeps{
 		ConfigGetter: planDeps.ConfigGetter, Config: planDeps.Config, Store: planDeps.Store,
+		Spend: components.Spend,
 	}); err != nil {
 		return fmt.Errorf("register routing advice tools: %w", err)
 	}

@@ -72,31 +72,58 @@ func renderBudgetSummary(b budgetSummaryRow) string {
 	return s.String()
 }
 
+// burnTotals is the burn-rate window flattened for rendering: totals plus
+// the hourly series in both units, so the renderer can plot whichever one
+// carries the variation.
+type burnTotals struct {
+	Hours         int
+	Currency      string
+	Cost          float64
+	Tokens        int64
+	APIEquivalent float64
+	CostSeries    []float64
+	TokenSeries   []float64
+}
+
 // renderBurnSummary builds a markdown summary for the burn-rate
-// response: total cost + period + inline sparkline of the hourly
-// series. The series carries the per-bucket cost in USD; callers
-// flatten the [{BucketStart,CostUSD,...}] rows into a []float64 to
-// drive the spark.
-func renderBurnSummary(hours int, totalCost float64, currency string, series []float64) string {
+// response: the window's burn, an inline sparkline of the hourly series,
+// and the hourly range.
+//
+// It leads with tokens when the window cost nothing. A Claude Max
+// operator was shown "Total 0.0000 USD" for 2.2 billion tokens — true of
+// the bill and useless as a burn rate. `tokenops spend` phrases the same
+// case in tokens; so does this.
+func renderBurnSummary(b burnTotals) string {
+	planCovered := b.Cost == 0 && b.Tokens > 0
+	series, unit, format := b.CostSeries, b.Currency, "%.4f"
+	if planCovered {
+		series, unit, format = b.TokenSeries, "tokens", "%.0f"
+	}
+
 	var s strings.Builder
-	fmt.Fprintf(&s, "## Burn rate — last %dh\n\n", hours)
-	if spark := Sparkline(series, SparklineOptions{Label: fmt.Sprintf("burn last %dh", hours)}); spark != "" {
+	fmt.Fprintf(&s, "## Burn rate — last %dh\n\n", b.Hours)
+	if spark := Sparkline(series, SparklineOptions{Label: fmt.Sprintf("burn last %dh (%s)", b.Hours, unit)}); spark != "" {
 		s.WriteString(spark)
 		s.WriteString("\n\n")
 	}
-	fmt.Fprintf(&s, "| Total | %.4f %s |\n", totalCost, currency)
+	s.WriteString("| Metric | Value |\n|---|---|\n")
+	if planCovered {
+		fmt.Fprintf(&s, "| Tokens | %d tokens (plan-covered, so $0 at the margin) |\n", b.Tokens)
+		fmt.Fprintf(&s, "| API equivalent | %.2f %s |\n", b.APIEquivalent, b.Currency)
+	} else {
+		fmt.Fprintf(&s, "| Total | %.4f %s |\n", b.Cost, b.Currency)
+		fmt.Fprintf(&s, "| Tokens | %d |\n", b.Tokens)
+		if b.APIEquivalent > b.Cost {
+			fmt.Fprintf(&s, "| API equivalent | %.2f %s |\n", b.APIEquivalent, b.Currency)
+		}
+	}
 	fmt.Fprintf(&s, "| Buckets | %d hourly |\n", len(series))
 	if len(series) > 0 {
-		min, max := series[0], series[0]
+		lo, hi := series[0], series[0]
 		for _, v := range series {
-			if v < min {
-				min = v
-			}
-			if v > max {
-				max = v
-			}
+			lo, hi = min(lo, v), max(hi, v)
 		}
-		fmt.Fprintf(&s, "| Range | %.4f .. %.4f %s |\n", min, max, currency)
+		fmt.Fprintf(&s, "| Range | "+format+" .. "+format+" %s |\n", lo, hi, unit)
 	}
 	return s.String()
 }

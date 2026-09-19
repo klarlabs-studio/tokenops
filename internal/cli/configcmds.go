@@ -321,6 +321,12 @@ proxy rewrites matching live requests.`,
 				Quality:   quality,
 				Fallbacks: fallbacks,
 			}
+			// The same check tokenops_routing_rule_set runs, before the
+			// file is touched, so the refusal names the argument rather
+			// than an index into config.yaml.
+			if err := rule.Validate(); err != nil {
+				return fmt.Errorf("routing rule: %w", err)
+			}
 			replaced := false
 			for i, r := range cfg.Optimizer.RoutingRules {
 				if r.Provider == rule.Provider && r.FromModel == rule.FromModel {
