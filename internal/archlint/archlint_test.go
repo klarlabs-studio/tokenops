@@ -93,7 +93,7 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/spend/session",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic",
-	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropiccookie",
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecode",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl",

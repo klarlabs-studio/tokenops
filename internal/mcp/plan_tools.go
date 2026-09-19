@@ -55,15 +55,15 @@ func classifySignalFromStore(ctx context.Context, store *sqlite.Store, since, un
 		return plans.SignalInputs{}, err
 	}
 	return plans.SignalInputs{
-		ProxyEventsInWindow:     counts["proxy"],
-		MCPPingsInWindow:        counts["mcp-session"],
-		ClaudeCodeCacheInWindow: counts["claude-code-stats-cache"],
-		ClaudeCodeJSONLInWindow: counts["claude-code-jsonl"],
-		CodexJSONLInWindow:      counts["codex-jsonl"],
-		CopilotInWindow:         counts["github-copilot"],
-		CursorInWindow:          counts["cursor-web"],
-		AnthropicCookieInWindow: counts["anthropic-cookie"],
-		VendorAPIWired:          counts["vendor-usage-anthropic"] > 0,
+		ProxyEventsInWindow:      counts["proxy"],
+		MCPPingsInWindow:         counts["mcp-session"],
+		ClaudeCodeCacheInWindow:  counts["claude-code-stats-cache"],
+		ClaudeCodeJSONLInWindow:  counts["claude-code-jsonl"],
+		CodexJSONLInWindow:       counts["codex-jsonl"],
+		CopilotInWindow:          counts["github-copilot"],
+		CursorInWindow:           counts["cursor-web"],
+		ClaudeUsageMeterInWindow: counts["claude-usage-meter"],
+		VendorAPIWired:           counts["vendor-usage-anthropic"] > 0,
 	}, nil
 }
 
@@ -148,7 +148,7 @@ func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
 			Signal:         signal,
 			Now:            now,
 			// Prefer the vendor's own reported quota when a snapshot
-			// source (Anthropic cookie / Codex rate_limits / Copilot) has
+			// source (Claude usage meter / Codex rate_limits / Copilot) has
 			// emitted one; falls back to the message-count heuristic.
 			Authoritative: plans.LatestAuthoritativeWindow(ctx, reader, eventschema.Provider(provider), p, now),
 		})

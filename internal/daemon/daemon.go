@@ -24,9 +24,9 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/security/dashauth"
 	"go.klarlabs.de/tokenops/internal/contexts/security/tlsmint"
 	anthropicusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic"
-	anthropiccookie "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropiccookie"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecode"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
+	claudeusagemeter "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
 	copilotusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilot"
 	cursorusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursor"
@@ -331,20 +331,20 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 				}
 			}()
 		}
-		if cfg.VendorUsage.AnthropicCookie.Enabled {
-			p := anthropiccookie.NewPoller(bus, anthropiccookie.PollerOptions{
-				SessionKey: cfg.VendorUsage.AnthropicCookie.SessionKey,
-				OrgID:      cfg.VendorUsage.AnthropicCookie.OrgID,
-				Interval:   cfg.VendorUsage.AnthropicCookie.Interval,
+		if cfg.VendorUsage.ClaudeUsageMeter.Enabled {
+			p := claudeusagemeter.NewPoller(bus, claudeusagemeter.PollerOptions{
+				SessionKey: cfg.VendorUsage.ClaudeUsageMeter.SessionKey,
+				OrgID:      cfg.VendorUsage.ClaudeUsageMeter.OrgID,
+				Interval:   cfg.VendorUsage.ClaudeUsageMeter.Interval,
 				Logger:     logger,
 			})
 			go func() {
 				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-					logger.Warn("anthropic-cookie poller exited", "err", err)
+					logger.Warn("claude-usage-meter poller exited", "err", err)
 				}
 			}()
-			logger.Info("anthropic-cookie usage poller live",
-				"interval", cfg.VendorUsage.AnthropicCookie.Interval,
+			logger.Info("claude-usage-meter usage poller live",
+				"interval", cfg.VendorUsage.ClaudeUsageMeter.Interval,
 			)
 		}
 		if cfg.VendorUsage.Anthropic.Enabled {

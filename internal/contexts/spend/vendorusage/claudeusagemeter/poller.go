@@ -1,4 +1,4 @@
-package anthropiccookie
+package claudeusagemeter
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 // SourceTag identifies envelopes emitted by this poller. signal_quality
 // promotes Anthropic confidence to HIGH on observation with an
 // explicit ToS-grey caveat.
-const SourceTag = "anthropic-cookie"
+const SourceTag = "claude-usage-meter"
 
 // PollerOptions configures the periodic /usage poll.
 type PollerOptions struct {
@@ -104,10 +104,10 @@ func (p *Poller) scan(ctx context.Context) {
 		if err := p.ensureClient(); err != nil {
 			p.recordErr(err)
 			if errors.Is(err, ErrMissingCookie) {
-				p.opts.Logger.Debug("anthropic-cookie: session_key missing; idle")
+				p.opts.Logger.Debug("claude-usage-meter: session_key missing; idle")
 				return
 			}
-			p.opts.Logger.Warn("anthropic-cookie: client init failed", "err", err)
+			p.opts.Logger.Warn("claude-usage-meter: client init failed", "err", err)
 			return
 		}
 	}
@@ -116,10 +116,10 @@ func (p *Poller) scan(ctx context.Context) {
 		if err != nil {
 			p.recordErr(err)
 			if errors.Is(err, ErrUnauthorized) {
-				p.opts.Logger.Warn("anthropic-cookie: cookie expired, re-paste from devtools", "err", err)
+				p.opts.Logger.Warn("claude-usage-meter: cookie expired, re-paste from devtools", "err", err)
 				return
 			}
-			p.opts.Logger.Warn("anthropic-cookie: organizations lookup failed", "err", err)
+			p.opts.Logger.Warn("claude-usage-meter: organizations lookup failed", "err", err)
 			return
 		}
 		if len(orgs) == 0 {
@@ -127,16 +127,16 @@ func (p *Poller) scan(ctx context.Context) {
 			return
 		}
 		p.orgID = orgs[0].UUID
-		p.opts.Logger.Info("anthropic-cookie: resolved org_id", "org_id", p.orgID, "org_name", orgs[0].Name)
+		p.opts.Logger.Info("claude-usage-meter: resolved org_id", "org_id", p.orgID, "org_name", orgs[0].Name)
 	}
 	usage, err := p.client.Usage(ctx, p.orgID)
 	if err != nil {
 		p.recordErr(err)
 		if errors.Is(err, ErrUnauthorized) {
-			p.opts.Logger.Warn("anthropic-cookie: cookie expired, re-paste from devtools", "err", err)
+			p.opts.Logger.Warn("claude-usage-meter: cookie expired, re-paste from devtools", "err", err)
 			return
 		}
-		p.opts.Logger.Warn("anthropic-cookie: Usage() failed", "err", err)
+		p.opts.Logger.Warn("claude-usage-meter: Usage() failed", "err", err)
 		return
 	}
 	p.recordSuccess()
@@ -177,7 +177,7 @@ func (p *Poller) recordSuccess() {
 // tool can read them directly. Payload token counts stay zero —
 // this is a quota-state snapshot, not a per-turn record.
 func newEnvelope(ts time.Time, orgID string, u *UsageResponse) *eventschema.Envelope {
-	h := sha256.Sum256([]byte("anthropic-cookie|" + orgID + "|" + u.FiveHour.ResetAt))
+	h := sha256.Sum256([]byte("claude-usage-meter|" + orgID + "|" + u.FiveHour.ResetAt))
 	attrs := map[string]string{
 		"org_id":                  orgID,
 		"five_hour_used_pct":      fmt.Sprintf("%.2f", u.FiveHour.UtilizationPct),

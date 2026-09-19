@@ -171,7 +171,7 @@ tokenops task list --since 30d --json   # MCP-host friendly
 
 ## Vendor-side usage
 
-### `tokenops vendor-usage setup anthropic-cookie`
+### `tokenops vendor-usage setup claude-usage-meter`
 
 Connects claude.ai's own usage meter — the 5-hour and 7-day utilisation
 percentages the app shows. It is the only authoritative reading TokenOps
@@ -179,7 +179,7 @@ can get for a Claude subscription; everything else is estimated from
 message counts against a published cap.
 
 ```bash
-tokenops vendor-usage setup anthropic-cookie
+tokenops vendor-usage setup claude-usage-meter
 ```
 
 It says where the cookie is, reads it without echoing it into your
@@ -188,7 +188,7 @@ percentages, and only then writes config. A mistyped or expired key fails
 at the prompt rather than sitting in config producing nothing — session
 cookies rotate, so a stale copy is the usual cause.
 
-Prefer this over `vendor-usage enable anthropic-cookie --session-key`,
+Prefer this over `vendor-usage enable claude-usage-meter --session-key`,
 which writes whatever you give it without checking.
 
 ### `tokenops vendor-usage status`
@@ -217,7 +217,7 @@ tokenops vendor-usage backfill --hours 24 --dry-run
 
 Writes a vendor-usage source's config block to the active config
 file so operators don't hand-edit YAML. Six sources covered:
-`anthropic-cookie`, `cursor`, `github-copilot`, `codex-jsonl`,
+`claude-usage-meter`, `cursor`, `github-copilot`, `codex-jsonl`,
 `claude-code-jsonl`, `anthropic-admin`. Secrets accept env-var
 fallback so they don't leak through shell history.
 
@@ -230,15 +230,15 @@ tokenops vendor-usage enable claude-code-jsonl
 tokenops vendor-usage enable codex-jsonl
 
 # Secret via env to keep it out of shell history
-TOKENOPS_ANTHROPIC_COOKIE_SESSION_KEY=sk-… \
-  tokenops vendor-usage enable anthropic-cookie
+TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY=sk-… \
+  tokenops vendor-usage enable claude-usage-meter
 
 # Flip a source off without clearing the persisted secret
-tokenops vendor-usage enable anthropic-cookie --disable
+tokenops vendor-usage enable claude-usage-meter --disable
 ```
 
 Available env vars:
-`TOKENOPS_ANTHROPIC_COOKIE_SESSION_KEY`,
+`TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY`,
 `TOKENOPS_CURSOR_COOKIE`,
 `TOKENOPS_COPILOT_OAUTH_TOKEN`,
 `TOKENOPS_ANTHROPIC_ADMIN_KEY`.

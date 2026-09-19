@@ -24,7 +24,7 @@ func runCookieSetupCmd(t *testing.T, stdin string, args ...string) (string, erro
 // browser devtools, which is why `enable --session-key` was the wrong shape
 // for this source.
 func TestSetupExplainsWhereToFindTheKey(t *testing.T) {
-	out, _ := runCookieSetupCmd(t, "\n", "anthropic-cookie")
+	out, _ := runCookieSetupCmd(t, "\n", "claude-usage-meter")
 	for _, want := range []string{"claude.ai", "developer tools", "Cookies", "sessionKey"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("instructions omit %q:\n%s", want, out)
@@ -37,7 +37,7 @@ func TestSetupExplainsWhereToFindTheKey(t *testing.T) {
 // Nothing is written until Anthropic has accepted it.
 func TestSetupWritesNothingWithoutAKey(t *testing.T) {
 	path := seedConfig(t)
-	out, err := runCookieSetupCmd(t, "\n", "anthropic-cookie", "--config-path", path)
+	out, err := runCookieSetupCmd(t, "\n", "claude-usage-meter", "--config-path", path)
 	if err == nil {
 		t.Fatal("an empty key should be refused")
 	}
@@ -51,7 +51,7 @@ func TestSetupWritesNothingWithoutAKey(t *testing.T) {
 	if rerr != nil {
 		t.Fatalf("read back: %v", rerr)
 	}
-	if cfg.VendorUsage.AnthropicCookie.Enabled {
+	if cfg.VendorUsage.ClaudeUsageMeter.Enabled {
 		t.Error("the source was enabled without a verified key")
 	}
 }
@@ -60,7 +60,7 @@ func TestSetupWritesNothingWithoutAKey(t *testing.T) {
 // these cookies rotate, so a stale copy is the common case.
 func TestSetupRefusesAKeyAnthropicRejects(t *testing.T) {
 	path := seedConfig(t)
-	_, err := runCookieSetupCmd(t, "sk-ant-sid-definitely-not-valid\n", "anthropic-cookie", "--config-path", path)
+	_, err := runCookieSetupCmd(t, "sk-ant-sid-definitely-not-valid\n", "claude-usage-meter", "--config-path", path)
 	if err == nil {
 		t.Fatal("an invalid key should be refused")
 	}
@@ -71,13 +71,13 @@ func TestSetupRefusesAKeyAnthropicRejects(t *testing.T) {
 	if rerr != nil {
 		t.Fatalf("read back: %v", rerr)
 	}
-	if cfg.VendorUsage.AnthropicCookie.Enabled || cfg.VendorUsage.AnthropicCookie.SessionKey != "" {
-		t.Errorf("a rejected key was persisted: %+v", cfg.VendorUsage.AnthropicCookie)
+	if cfg.VendorUsage.ClaudeUsageMeter.Enabled || cfg.VendorUsage.ClaudeUsageMeter.SessionKey != "" {
+		t.Errorf("a rejected key was persisted: %+v", cfg.VendorUsage.ClaudeUsageMeter)
 	}
 }
 
 func TestSetupRejectsAnotherSource(t *testing.T) {
 	if _, err := runCookieSetupCmd(t, "", "cursor"); err == nil {
-		t.Fatal("setup covers anthropic-cookie only")
+		t.Fatal("setup covers claude-usage-meter only")
 	}
 }

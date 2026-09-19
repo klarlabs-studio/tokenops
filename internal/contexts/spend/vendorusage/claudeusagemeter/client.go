@@ -1,4 +1,4 @@
-// Package anthropiccookie scrapes claude.ai's session-authenticated
+// Package claudeusagemeter scrapes claude.ai's session-authenticated
 // usage endpoint. This is the silver-bullet signal for Claude Max
 // subscribers — same data Anthropic's own UI shows: 5-hour, weekly
 // all-models, and weekly Opus utilization percentages plus the reset
@@ -19,7 +19,7 @@
 // inspect (Application → Cookies → claude.ai). The cookie rolls every
 // few weeks; the daemon logs WARN when it expires so the operator
 // knows to re-paste.
-package anthropiccookie
+package claudeusagemeter
 
 import (
 	"context"
@@ -71,13 +71,13 @@ type Client struct {
 
 // ErrMissingCookie signals an empty session_key in config; poller
 // stays idle and the CLI hint surfaces the fix.
-var ErrMissingCookie = errors.New("anthropic-cookie: session_key required (paste from claude.ai devtools → Application → Cookies → sessionKey)")
+var ErrMissingCookie = errors.New("claude-usage-meter: session_key required (paste from claude.ai devtools → Application → Cookies → sessionKey)")
 
 // ErrUnauthorized indicates the cookie has expired or is invalid.
 // Surfaced separately so the daemon can log a distinct WARN telling
 // the operator to re-paste rather than burying the 401 in generic
 // http error noise.
-var ErrUnauthorized = errors.New("anthropic-cookie: claude.ai returned 401 — sessionKey likely expired, re-paste from devtools")
+var ErrUnauthorized = errors.New("claude-usage-meter: claude.ai returned 401 — sessionKey likely expired, re-paste from devtools")
 
 // NewClient binds a session cookie and returns a Client with sensible
 // defaults. The UA mimics a recent Chrome to avoid Cloudflare bot
@@ -103,7 +103,7 @@ func (c *Client) Organizations(ctx context.Context) ([]OrgEntry, error) {
 	}
 	var orgs []OrgEntry
 	if err := json.Unmarshal(body, &orgs); err != nil {
-		return nil, fmt.Errorf("anthropic-cookie: decode organizations: %w", err)
+		return nil, fmt.Errorf("claude-usage-meter: decode organizations: %w", err)
 	}
 	return orgs, nil
 }
@@ -114,7 +114,7 @@ func (c *Client) Usage(ctx context.Context, orgID string) (*UsageResponse, error
 		return nil, ErrMissingCookie
 	}
 	if orgID == "" {
-		return nil, fmt.Errorf("anthropic-cookie: org_id is required")
+		return nil, fmt.Errorf("claude-usage-meter: org_id is required")
 	}
 	body, err := c.get(ctx, "/api/organizations/"+orgID+"/usage")
 	if err != nil {
@@ -122,7 +122,7 @@ func (c *Client) Usage(ctx context.Context, orgID string) (*UsageResponse, error
 	}
 	var u UsageResponse
 	if err := json.Unmarshal(body, &u); err != nil {
-		return nil, fmt.Errorf("anthropic-cookie: decode usage: %w", err)
+		return nil, fmt.Errorf("claude-usage-meter: decode usage: %w", err)
 	}
 	return &u, nil
 }
@@ -136,7 +136,7 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, error) {
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+path, nil)
 	if err != nil {
-		return nil, fmt.Errorf("anthropic-cookie: build request: %w", err)
+		return nil, fmt.Errorf("claude-usage-meter: build request: %w", err)
 	}
 	req.Header.Set("Cookie", "sessionKey="+c.SessionKey)
 	req.Header.Set("Accept", "application/json")
@@ -146,7 +146,7 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, error) {
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("anthropic-cookie: do request: %w", err)
+		return nil, fmt.Errorf("claude-usage-meter: do request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusUnauthorized {
@@ -154,7 +154,7 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, error) {
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return nil, fmt.Errorf("anthropic-cookie: %s: status %d: %s", path, resp.StatusCode, snippet)
+		return nil, fmt.Errorf("claude-usage-meter: %s: status %d: %s", path, resp.StatusCode, snippet)
 	}
 	return io.ReadAll(resp.Body)
 }

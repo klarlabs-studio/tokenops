@@ -50,7 +50,7 @@ type vendorUsageEnableFlags struct {
 // error message on a bad key, and the test matrix all share one source of
 // truth.
 var vendorUsageSources = []string{
-	"anthropic-cookie",
+	"claude-usage-meter",
 	"cursor",
 	"github-copilot",
 	"codex-jsonl",
@@ -84,9 +84,9 @@ file. Restart the daemon to pick up the change.
 
 Sources:
 
-  anthropic-cookie    claude.ai sessionKey scraper — surfaces Claude Max
+  claude-usage-meter    claude.ai sessionKey scraper — surfaces Claude Max
                       5h + 7d + 7d-opus utilization %. Required: --session-key
-                      (or env TOKENOPS_ANTHROPIC_COOKIE_SESSION_KEY).
+                      (or env TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY).
   cursor              cursor.com /api/usage cookie scraper. Required: --cookie
                       (or env TOKENOPS_CURSOR_COOKIE) and --user-id.
   github-copilot      api.github.com/copilot_internal/user quota poller.
@@ -104,19 +104,19 @@ Sources:
 
 Examples:
 
-  TOKENOPS_ANTHROPIC_COOKIE_SESSION_KEY=sk-ant-... \
-    tokenops vendor-usage enable anthropic-cookie
+  TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY=sk-ant-... \
+    tokenops vendor-usage enable claude-usage-meter
   tokenops vendor-usage enable cursor --cookie ey... --user-id 123abc
   tokenops vendor-usage enable github-copilot
   tokenops vendor-usage enable codex-jsonl --interval 1m
-  tokenops vendor-usage enable anthropic-cookie --disable`,
+  tokenops vendor-usage enable claude-usage-meter --disable`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runVendorUsageEnable(cmd, args[0], f)
 		},
 	}
-	cmd.Flags().StringVar(&f.sessionKey, "session-key", "", "claude.ai sessionKey cookie (anthropic-cookie); env TOKENOPS_ANTHROPIC_COOKIE_SESSION_KEY")
-	cmd.Flags().StringVar(&f.orgID, "org-id", "", "Anthropic org_id (anthropic-cookie); auto-resolved on first scan when empty")
+	cmd.Flags().StringVar(&f.sessionKey, "session-key", "", "claude.ai sessionKey cookie (claude-usage-meter); env TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY")
+	cmd.Flags().StringVar(&f.orgID, "org-id", "", "Anthropic org_id (claude-usage-meter); auto-resolved on first scan when empty")
 	cmd.Flags().StringVar(&f.cookie, "cookie", "", "WorkosCursorSessionToken cookie (cursor); env TOKENOPS_CURSOR_COOKIE")
 	cmd.Flags().StringVar(&f.userID, "user-id", "", "Cursor user_id (cursor)")
 	cmd.Flags().StringVar(&f.adminKey, "admin-key", "", "Anthropic admin key (anthropic-admin); env TOKENOPS_ANTHROPIC_ADMIN_KEY")
@@ -142,20 +142,20 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 	enabled := !f.disable
 
 	switch source {
-	case "anthropic-cookie":
-		key := envSecret(f.sessionKey, "TOKENOPS_ANTHROPIC_COOKIE_SESSION_KEY")
+	case "claude-usage-meter":
+		key := envSecret(f.sessionKey, "TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY")
 		if enabled && key == "" {
-			return fmt.Errorf("anthropic-cookie requires --session-key or TOKENOPS_ANTHROPIC_COOKIE_SESSION_KEY (paste from claude.ai devtools → Application → Cookies → sessionKey)")
+			return fmt.Errorf("claude-usage-meter requires --session-key or TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY (paste from claude.ai devtools → Application → Cookies → sessionKey)")
 		}
-		cfg.VendorUsage.AnthropicCookie.Enabled = enabled
+		cfg.VendorUsage.ClaudeUsageMeter.Enabled = enabled
 		if key != "" {
-			cfg.VendorUsage.AnthropicCookie.SessionKey = key
+			cfg.VendorUsage.ClaudeUsageMeter.SessionKey = key
 		}
 		if f.orgID != "" {
-			cfg.VendorUsage.AnthropicCookie.OrgID = f.orgID
+			cfg.VendorUsage.ClaudeUsageMeter.OrgID = f.orgID
 		}
 		if f.interval > 0 {
-			cfg.VendorUsage.AnthropicCookie.Interval = f.interval
+			cfg.VendorUsage.ClaudeUsageMeter.Interval = f.interval
 		}
 	case "cursor":
 		cookie := envSecret(f.cookie, "TOKENOPS_CURSOR_COOKIE")
@@ -245,8 +245,8 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 // uses snake_case for YAML readability.
 func sourceConfigKey(source string) string {
 	switch source {
-	case "anthropic-cookie":
-		return "anthropic_cookie"
+	case "claude-usage-meter":
+		return "claude_usage_meter"
 	case "github-copilot":
 		return "github_copilot"
 	case "codex-jsonl":

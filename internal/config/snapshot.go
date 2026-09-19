@@ -17,7 +17,7 @@ const SensitiveHeaderPlaceholder = "***REDACTED***"
 //   - otel.headers values (tenant / bearer tokens)
 //   - dashboard.admin_token
 //   - vendor_usage.anthropic.admin_key (sk-ant-admin-*)
-//   - vendor_usage.anthropic_cookie.session_key (claude.ai session)
+//   - vendor_usage.claude_usage_meter.session_key (claude.ai session)
 //   - vendor_usage.cursor.cookie
 //   - vendor_usage.github_copilot.oauth_token
 func (c Config) Redacted() Config {
@@ -36,7 +36,7 @@ func (c Config) Redacted() Config {
 	}
 	mask(&redacted.Dashboard.AdminToken)
 	mask(&redacted.VendorUsage.Anthropic.AdminKey)
-	mask(&redacted.VendorUsage.AnthropicCookie.SessionKey)
+	mask(&redacted.VendorUsage.ClaudeUsageMeter.SessionKey)
 	mask(&redacted.VendorUsage.Cursor.Cookie)
 	mask(&redacted.VendorUsage.GitHubCopilot.OAuthToken)
 	return redacted

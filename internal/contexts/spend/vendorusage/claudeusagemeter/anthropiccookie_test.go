@@ -1,4 +1,4 @@
-package anthropiccookie
+package claudeusagemeter
 
 import (
 	"context"

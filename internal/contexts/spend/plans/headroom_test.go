@@ -180,7 +180,7 @@ func TestHeadroomAuthoritativeWindowScoresCaplessPlan(t *testing.T) {
 	// no window signal, but a vendor % must still drive overage risk.
 	p := windowPlan(0, 5*time.Hour) // cap 0
 	r := computeHeadroomFor(p, HeadroomInputs{
-		Authoritative: &AuthoritativeWindow{UsedPct: 92, Source: "anthropic_cookie:five_hour"},
+		Authoritative: &AuthoritativeWindow{UsedPct: 92, Source: "claude_usage_meter:five_hour"},
 		Now:           midMonth(),
 	})
 	if r.OverageRisk != RiskHigh {

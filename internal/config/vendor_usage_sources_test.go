@@ -42,7 +42,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"vendor_usage_anthropic", "vendor-usage-anthropic"},
 		{"github_copilot", "github-copilot"},
 		{"cursor_web", "cursor-web"},
-		{"anthropic_cookie", "anthropic-cookie"},
+		{"claude_usage_meter", "claude-usage-meter"},
 		{"cursor_turns (hook ledger)", "cursor-hook"},
 	}
 	if len(got) != len(want) {

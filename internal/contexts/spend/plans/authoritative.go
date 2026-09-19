@@ -58,7 +58,7 @@ func LatestAuthoritativeWindow(ctx context.Context, reader EventReader, provider
 
 // authoritativeKeys maps a provider + window kind to the rate-limit-window
 // attribute keys its poller writes. The used-% keys are provider-unique
-// (five_hour_*/seven_day_* for the Anthropic cookie, primary_*/secondary_*
+// (five_hour_*/seven_day_* for the Claude usage meter, primary_*/secondary_*
 // for Codex rate_limits), so matching on the key alone already isolates the
 // right source. All window sources report USED %, so there is no inversion
 // here (unlike the monthly Copilot meter — see monthlyAuthoritativeKeys).
@@ -66,9 +66,9 @@ func authoritativeKeys(provider eventschema.Provider, weekly bool) (usedKey, res
 	switch provider {
 	case eventschema.ProviderAnthropic:
 		if weekly {
-			return "seven_day_used_pct", "seven_day_reset_at", "anthropic_cookie:seven_day"
+			return "seven_day_used_pct", "seven_day_reset_at", "claude_usage_meter:seven_day"
 		}
-		return "five_hour_used_pct", "five_hour_reset_at", "anthropic_cookie:five_hour"
+		return "five_hour_used_pct", "five_hour_reset_at", "claude_usage_meter:five_hour"
 	case eventschema.ProviderOpenAI:
 		if weekly {
 			return "secondary_used_pct", "secondary_resets_at", "codex:secondary"
@@ -136,7 +136,7 @@ func monthlyAuthoritativeKeys(provider eventschema.Provider) (usedKey, resetKey 
 }
 
 // parseResetsIn turns a reset marker into a duration from now. It accepts
-// unix seconds (Codex), RFC3339 (Anthropic cookie), and a plain date
+// unix seconds (Codex), RFC3339 (Claude usage meter), and a plain date
 // (Copilot). A missing/unparseable/past marker yields 0, so the caller
 // falls back to the plan's nominal window length.
 func parseResetsIn(s string, now time.Time) time.Duration {

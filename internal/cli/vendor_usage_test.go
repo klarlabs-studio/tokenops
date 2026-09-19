@@ -58,15 +58,15 @@ func TestVendorUsageEnableCmdWiredOnParent(t *testing.T) {
 	}
 }
 
-// anthropic-cookie is the silver-bullet source — the only one that
+// claude-usage-meter is the silver-bullet source — the only one that
 // surfaces Claude Max weekly utilization. Verify (a) refusing without
 // a session key, (b) accepting the key, (c) accepting via env var,
 // (d) --disable round-trip preserves the previously-set secret.
-func TestVendorUsageEnableAnthropicCookie(t *testing.T) {
+func TestVendorUsageEnableClaudeUsageMeter(t *testing.T) {
 	t.Run("missing session key errors", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "config.yaml")
 		writeSeedConfig(t, path)
-		_, _, err := runEnable(t, path, "anthropic-cookie")
+		_, _, err := runEnable(t, path, "claude-usage-meter")
 		if err == nil || !strings.Contains(err.Error(), "session-key") {
 			t.Fatalf("want missing-key error; got %v", err)
 		}
@@ -75,54 +75,54 @@ func TestVendorUsageEnableAnthropicCookie(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "config.yaml")
 		writeSeedConfig(t, path)
 		cfg, out, err := runEnable(t, path,
-			"anthropic-cookie", "--session-key", "sk-cookie-xyz", "--org-id", "org-7", "--interval", "3m",
+			"claude-usage-meter", "--session-key", "sk-cookie-xyz", "--org-id", "org-7", "--interval", "3m",
 		)
 		if err != nil {
 			t.Fatalf("enable: %v", err)
 		}
-		if !cfg.VendorUsage.AnthropicCookie.Enabled {
+		if !cfg.VendorUsage.ClaudeUsageMeter.Enabled {
 			t.Error("not enabled")
 		}
-		if cfg.VendorUsage.AnthropicCookie.SessionKey != "sk-cookie-xyz" {
-			t.Errorf("session_key=%q", cfg.VendorUsage.AnthropicCookie.SessionKey)
+		if cfg.VendorUsage.ClaudeUsageMeter.SessionKey != "sk-cookie-xyz" {
+			t.Errorf("session_key=%q", cfg.VendorUsage.ClaudeUsageMeter.SessionKey)
 		}
-		if cfg.VendorUsage.AnthropicCookie.OrgID != "org-7" {
-			t.Errorf("org_id=%q", cfg.VendorUsage.AnthropicCookie.OrgID)
+		if cfg.VendorUsage.ClaudeUsageMeter.OrgID != "org-7" {
+			t.Errorf("org_id=%q", cfg.VendorUsage.ClaudeUsageMeter.OrgID)
 		}
-		if cfg.VendorUsage.AnthropicCookie.Interval != 3*time.Minute {
-			t.Errorf("interval=%v", cfg.VendorUsage.AnthropicCookie.Interval)
+		if cfg.VendorUsage.ClaudeUsageMeter.Interval != 3*time.Minute {
+			t.Errorf("interval=%v", cfg.VendorUsage.ClaudeUsageMeter.Interval)
 		}
-		if !strings.Contains(out, "enabled vendor_usage.anthropic_cookie") {
+		if !strings.Contains(out, "enabled vendor_usage.claude_usage_meter") {
 			t.Errorf("missing summary line; got %q", out)
 		}
 	})
 	t.Run("env var fallback", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "config.yaml")
 		writeSeedConfig(t, path)
-		t.Setenv("TOKENOPS_ANTHROPIC_COOKIE_SESSION_KEY", "sk-env-key")
-		cfg, _, err := runEnable(t, path, "anthropic-cookie")
+		t.Setenv("TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY", "sk-env-key")
+		cfg, _, err := runEnable(t, path, "claude-usage-meter")
 		if err != nil {
 			t.Fatalf("enable: %v", err)
 		}
-		if cfg.VendorUsage.AnthropicCookie.SessionKey != "sk-env-key" {
-			t.Errorf("env fallback ignored; got %q", cfg.VendorUsage.AnthropicCookie.SessionKey)
+		if cfg.VendorUsage.ClaudeUsageMeter.SessionKey != "sk-env-key" {
+			t.Errorf("env fallback ignored; got %q", cfg.VendorUsage.ClaudeUsageMeter.SessionKey)
 		}
 	})
 	t.Run("disable preserves secret", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "config.yaml")
 		writeSeedConfig(t, path)
-		if _, _, err := runEnable(t, path, "anthropic-cookie", "--session-key", "sk-keep"); err != nil {
+		if _, _, err := runEnable(t, path, "claude-usage-meter", "--session-key", "sk-keep"); err != nil {
 			t.Fatalf("seed enable: %v", err)
 		}
-		cfg, _, err := runEnable(t, path, "anthropic-cookie", "--disable")
+		cfg, _, err := runEnable(t, path, "claude-usage-meter", "--disable")
 		if err != nil {
 			t.Fatalf("disable: %v", err)
 		}
-		if cfg.VendorUsage.AnthropicCookie.Enabled {
+		if cfg.VendorUsage.ClaudeUsageMeter.Enabled {
 			t.Error("still enabled after --disable")
 		}
-		if cfg.VendorUsage.AnthropicCookie.SessionKey != "sk-keep" {
-			t.Errorf("secret cleared on disable; got %q", cfg.VendorUsage.AnthropicCookie.SessionKey)
+		if cfg.VendorUsage.ClaudeUsageMeter.SessionKey != "sk-keep" {
+			t.Errorf("secret cleared on disable; got %q", cfg.VendorUsage.ClaudeUsageMeter.SessionKey)
 		}
 	})
 }
@@ -130,7 +130,7 @@ func TestVendorUsageEnableAnthropicCookie(t *testing.T) {
 // Per-source happy-path matrix. One subtest per source covers the
 // minimum-args invocation that should land enabled=true with any
 // required secret/path populated. Negative paths covered in the
-// dedicated anthropic-cookie test above (the others share the same
+// dedicated claude-usage-meter test above (the others share the same
 // envSecret / required-flag plumbing).
 func TestVendorUsageEnableSources(t *testing.T) {
 	cases := []struct {
@@ -246,12 +246,12 @@ func TestVendorUsageEnableSources(t *testing.T) {
 // so the mapping is contract — pin it.
 func TestSourceConfigKey(t *testing.T) {
 	cases := map[string]string{
-		"anthropic-cookie":  "anthropic_cookie",
-		"github-copilot":    "github_copilot",
-		"codex-jsonl":       "codex_jsonl",
-		"claude-code-jsonl": "claude_code_jsonl",
-		"anthropic-admin":   "anthropic",
-		"cursor":            "cursor",
+		"claude-usage-meter": "claude_usage_meter",
+		"github-copilot":     "github_copilot",
+		"codex-jsonl":        "codex_jsonl",
+		"claude-code-jsonl":  "claude_code_jsonl",
+		"anthropic-admin":    "anthropic",
+		"cursor":             "cursor",
 	}
 	for in, want := range cases {
 		if got := sourceConfigKey(in); got != want {
