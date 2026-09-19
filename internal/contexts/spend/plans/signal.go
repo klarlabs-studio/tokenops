@@ -36,30 +36,30 @@ const (
 	SignalLevelMedium = "medium"
 	SignalLevelHigh   = "high"
 
-	SignalSourceMCPPings        = "mcp_tool_pings"
-	SignalSourceProxy           = "proxy_traffic"
-	SignalSourceVendorAPI       = "vendor_usage_api"
-	SignalSourceClaudeCodeCache = "claude_code_stats_cache"
-	SignalSourceClaudeCodeJSONL = "claude_code_jsonl"
-	SignalSourceCodexJSONL      = "codex_jsonl"
-	SignalSourceCopilot         = "github_copilot"
-	SignalSourceCursor          = "cursor_web"
-	SignalSourceAnthropicCookie = "anthropic_cookie"
+	SignalSourceMCPPings         = "mcp_tool_pings"
+	SignalSourceProxy            = "proxy_traffic"
+	SignalSourceVendorAPI        = "vendor_usage_api"
+	SignalSourceClaudeCodeCache  = "claude_code_stats_cache"
+	SignalSourceClaudeCodeJSONL  = "claude_code_jsonl"
+	SignalSourceCodexJSONL       = "codex_jsonl"
+	SignalSourceCopilot          = "github_copilot"
+	SignalSourceCursor           = "cursor_web"
+	SignalSourceClaudeUsageMeter = "claude_usage_meter"
 )
 
 // SignalInputs is the set of observations the quality classifier needs.
 // Zero values are valid: the function defaults to the most pessimistic
 // reading. The pure-function signature keeps tests trivial.
 type SignalInputs struct {
-	ProxyEventsInWindow     int64
-	MCPPingsInWindow        int64
-	ClaudeCodeCacheInWindow int64
-	ClaudeCodeJSONLInWindow int64
-	CodexJSONLInWindow      int64
-	CopilotInWindow         int64
-	CursorInWindow          int64
-	AnthropicCookieInWindow int64
-	VendorAPIWired          bool
+	ProxyEventsInWindow      int64
+	MCPPingsInWindow         int64
+	ClaudeCodeCacheInWindow  int64
+	ClaudeCodeJSONLInWindow  int64
+	CodexJSONLInWindow       int64
+	CopilotInWindow          int64
+	CursorInWindow           int64
+	ClaudeUsageMeterInWindow int64
+	VendorAPIWired           bool
 }
 
 // ClassifySignal returns the SignalQuality for a window of observations.
@@ -82,10 +82,10 @@ func ClassifySignal(in SignalInputs) SignalQuality {
 			Level:  SignalLevelHigh,
 			Source: SignalSourceVendorAPI,
 		}
-	case in.AnthropicCookieInWindow > 0:
+	case in.ClaudeUsageMeterInWindow > 0:
 		return SignalQuality{
 			Level:  SignalLevelHigh,
-			Source: SignalSourceAnthropicCookie,
+			Source: SignalSourceClaudeUsageMeter,
 			Caveat: "Polls claude.ai/api/organizations/{org_id}/usage with your browser sessionKey — same data Anthropic's own UI shows (5-hour, 7-day, 7-day-opus utilization). Undocumented endpoint; cookie expires every few weeks, daemon WARNs when re-paste is needed.",
 		}
 	case in.ClaudeCodeJSONLInWindow > 0:

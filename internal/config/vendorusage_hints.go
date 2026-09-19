@@ -28,8 +28,8 @@ func (c Config) VendorUsageConfigHint(sourceTag string) string {
 		return configHintCopilot(c.VendorUsage.GitHubCopilot)
 	case "cursor-web":
 		return configHintCursor(c.VendorUsage.Cursor)
-	case "anthropic-cookie":
-		return configHintAnthropicCookie(c.VendorUsage.AnthropicCookie)
+	case "claude-usage-meter":
+		return configHintClaudeUsageMeter(c.VendorUsage.ClaudeUsageMeter)
 	default:
 		return ""
 	}
@@ -80,12 +80,12 @@ func configHintCursor(cfg CursorUsageConfig) string {
 	return ""
 }
 
-func configHintAnthropicCookie(cfg AnthropicCookieUsageConfig) string {
+func configHintClaudeUsageMeter(cfg ClaudeUsageMeterConfig) string {
 	if !cfg.Enabled {
-		return "set vendor_usage.anthropic_cookie.{enabled, session_key} — paste sessionKey from claude.ai devtools (Application → Cookies). RECOMMENDED for Claude Max users — only source of the official 7-day utilization %"
+		return "set vendor_usage.claude_usage_meter.{enabled, session_key} — paste sessionKey from claude.ai devtools (Application → Cookies). RECOMMENDED for Claude Max users — only source of the official 7-day utilization %"
 	}
 	if cfg.SessionKey == "" {
-		return "vendor_usage.anthropic_cookie enabled but session_key missing — paste from claude.ai devtools"
+		return "vendor_usage.claude_usage_meter enabled but session_key missing — paste from claude.ai devtools"
 	}
 	return ""
 }

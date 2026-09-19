@@ -109,24 +109,24 @@ func TestClassifySignalCursorIsHigh(t *testing.T) {
 	}
 }
 
-// Anthropic cookie observation is HIGH confidence — same data
+// Claude usage meter observation is HIGH confidence — same data
 // Anthropic's own UI shows. Beats the local JSONL parser when both
 // are present because the cookie scrape is server-authoritative for
 // the Max-plan weekly + 5h windows the JSONL can't resolve.
-func TestClassifySignalAnthropicCookieIsHigh(t *testing.T) {
-	q := ClassifySignal(SignalInputs{AnthropicCookieInWindow: 1})
+func TestClassifySignalClaudeUsageMeterIsHigh(t *testing.T) {
+	q := ClassifySignal(SignalInputs{ClaudeUsageMeterInWindow: 1})
 	if q.Level != SignalLevelHigh {
-		t.Errorf("anthropic-cookie must be high; got %q", q.Level)
+		t.Errorf("claude-usage-meter must be high; got %q", q.Level)
 	}
-	if q.Source != SignalSourceAnthropicCookie {
-		t.Errorf("source = %q; want anthropic_cookie", q.Source)
+	if q.Source != SignalSourceClaudeUsageMeter {
+		t.Errorf("source = %q; want claude_usage_meter", q.Source)
 	}
 }
 
-// AnthropicCookie wins over ClaudeCodeJSONL when both are present.
+// ClaudeUsageMeter wins over ClaudeCodeJSONL when both are present.
 func TestClassifySignalCookieBeatsJSONL(t *testing.T) {
-	q := ClassifySignal(SignalInputs{AnthropicCookieInWindow: 1, ClaudeCodeJSONLInWindow: 100})
-	if q.Source != SignalSourceAnthropicCookie {
+	q := ClassifySignal(SignalInputs{ClaudeUsageMeterInWindow: 1, ClaudeCodeJSONLInWindow: 100})
+	if q.Source != SignalSourceClaudeUsageMeter {
 		t.Errorf("cookie must trump jsonl; got source=%q", q.Source)
 	}
 }

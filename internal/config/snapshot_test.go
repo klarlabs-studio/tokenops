@@ -64,24 +64,24 @@ func TestRedactedMasksAllSecrets(t *testing.T) {
 	cfg := Default()
 	cfg.Dashboard.AdminToken = "tok"
 	cfg.VendorUsage.Anthropic.AdminKey = "sk-ant-admin-x"
-	cfg.VendorUsage.AnthropicCookie.SessionKey = "sk-ant-sid02-x"
+	cfg.VendorUsage.ClaudeUsageMeter.SessionKey = "sk-ant-sid02-x"
 	cfg.VendorUsage.Cursor.Cookie = "cookie"
 	cfg.VendorUsage.GitHubCopilot.OAuthToken = "gho_x"
 
 	r := cfg.Redacted()
 	for name, got := range map[string]string{
-		"dashboard.admin_token":        r.Dashboard.AdminToken,
-		"anthropic.admin_key":          r.VendorUsage.Anthropic.AdminKey,
-		"anthropic_cookie.session_key": r.VendorUsage.AnthropicCookie.SessionKey,
-		"cursor.cookie":                r.VendorUsage.Cursor.Cookie,
-		"github_copilot.oauth_token":   r.VendorUsage.GitHubCopilot.OAuthToken,
+		"dashboard.admin_token":          r.Dashboard.AdminToken,
+		"anthropic.admin_key":            r.VendorUsage.Anthropic.AdminKey,
+		"claude_usage_meter.session_key": r.VendorUsage.ClaudeUsageMeter.SessionKey,
+		"cursor.cookie":                  r.VendorUsage.Cursor.Cookie,
+		"github_copilot.oauth_token":     r.VendorUsage.GitHubCopilot.OAuthToken,
 	} {
 		if got != SensitiveHeaderPlaceholder {
 			t.Errorf("%s not redacted: %q", name, got)
 		}
 	}
 	// Original untouched; empty secrets stay empty (no placeholder noise).
-	if cfg.VendorUsage.AnthropicCookie.SessionKey != "sk-ant-sid02-x" {
+	if cfg.VendorUsage.ClaudeUsageMeter.SessionKey != "sk-ant-sid02-x" {
 		t.Error("Redacted mutated the original")
 	}
 	if Default().Redacted().Dashboard.AdminToken != "" {

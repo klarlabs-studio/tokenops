@@ -43,7 +43,7 @@ func (c Config) VendorUsageSources() []VendorUsageSource {
 		{Name: "vendor_usage_anthropic", SourceTag: "vendor-usage-anthropic", Enabled: c.VendorUsage.Anthropic.Enabled},
 		{Name: "github_copilot", SourceTag: "github-copilot", Enabled: c.VendorUsage.GitHubCopilot.Enabled},
 		{Name: "cursor_web", SourceTag: "cursor-web", Enabled: c.VendorUsage.Cursor.Enabled},
-		{Name: "anthropic_cookie", SourceTag: "anthropic-cookie", Enabled: c.VendorUsage.AnthropicCookie.Enabled},
+		{Name: "claude_usage_meter", SourceTag: "claude-usage-meter", Enabled: c.VendorUsage.ClaudeUsageMeter.Enabled},
 		// The cursor turn poller has no config block: it reads a ledger
 		// the coach hook writes, and that ledger is empty until the hook
 		// is installed, so an operator who does not run Cursor pays
