@@ -1,7 +1,9 @@
 package sqlite
 
 import (
+	"context"
 	"database/sql"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -286,5 +288,23 @@ func TestRowToEnvelopeWithAttributes(t *testing.T) {
 	}
 	if env.Attributes["env"] != "test" {
 		t.Errorf("Attributes[env] = %q", env.Attributes["env"])
+	}
+}
+
+// A store is created with incremental auto-vacuum, so retention can return
+// freed pages in short chunks instead of a full VACUUM that rewrites the
+// whole database under the write lock.
+func TestOpenCreatesAnIncrementalVacuumStore(t *testing.T) {
+	st, err := Open(context.Background(), filepath.Join(t.TempDir(), "e.db"), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	var mode int
+	if err := st.DB().QueryRowContext(context.Background(), "PRAGMA auto_vacuum").Scan(&mode); err != nil {
+		t.Fatal(err)
+	}
+	if mode != 2 {
+		t.Errorf("auto_vacuum = %d, want 2 (incremental)", mode)
 	}
 }
