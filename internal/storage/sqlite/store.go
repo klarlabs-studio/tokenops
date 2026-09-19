@@ -360,7 +360,11 @@ func (s *Store) CountBySource(ctx context.Context, since, until time.Time) (map[
 }
 
 // buildDSN assembles a modernc.org/sqlite DSN with sane defaults: WAL
-// journaling, NORMAL synchronous, 5-second busy timeout, foreign keys on.
+// journaling, NORMAL synchronous, 5-second busy timeout, foreign keys on,
+// incremental auto-vacuum. The last takes effect when a store is created,
+// and on an existing store at its next VACUUM: retention can then return
+// freed pages in short chunks rather than rewrite the whole database under
+// the write lock.
 // The ":memory:" sentinel is special-cased (no path resolution).
 func buildDSN(path string, busy time.Duration) (string, error) {
 	var raw string
@@ -378,6 +382,7 @@ func buildDSN(path string, busy time.Duration) (string, error) {
 	v.Add("_pragma", "synchronous(NORMAL)")
 	v.Add("_pragma", "foreign_keys(ON)")
 	v.Add("_pragma", fmt.Sprintf("busy_timeout(%d)", busy.Milliseconds()))
+	v.Add("_pragma", "auto_vacuum(INCREMENTAL)")
 	return "file:" + raw + "?" + v.Encode(), nil
 }
 

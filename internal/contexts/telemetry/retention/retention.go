@@ -46,18 +46,20 @@ type Config struct {
 	// Interval is how often the scheduler wakes to prune. Default 1h.
 	Interval time.Duration
 	// StartDelay holds the scheduler's first pass. Zero runs it at once.
-	// The daemon sets it so the first prune — and its VACUUM, which holds
-	// the write lock throughout — does not land on top of the pollers
-	// replaying their history into the store at startup.
+	// The daemon sets it so the first prune — which on a store not yet
+	// converted to incremental vacuum runs a full VACUUM under the write
+	// lock — does not land on top of the pollers replaying their history
+	// into the store at startup.
 	StartDelay time.Duration
 	// Logger receives prune logs (rows deleted, errors).
 	Logger *slog.Logger
-	// Reclaim runs a VACUUM after a pass that actually deleted rows, so
-	// the freed pages return to the filesystem instead of sitting on
-	// SQLite's freelist. Without it the database file keeps its
-	// high-water mark forever and pruning frees nothing an operator can
-	// see. Off by default: VACUUM rewrites the whole database and holds
-	// a write lock for the duration.
+	// Reclaim returns freed pages to the filesystem after a pass that
+	// actually deleted rows, instead of leaving them on SQLite's freelist.
+	// Without it the database file keeps its high-water mark forever and
+	// pruning frees nothing an operator can see. It runs as incremental
+	// vacuum, in short chunks; a store created before that pays for one
+	// full VACUUM — the whole database rewritten under the write lock —
+	// which converts it. Off by default.
 	Reclaim bool
 }
 
@@ -163,11 +165,55 @@ func (p *Pruner) reclaim(ctx context.Context) error {
 	if before == 0 {
 		return nil
 	}
-	if _, err := p.store.DB().ExecContext(ctx, "VACUUM"); err != nil {
-		return fmt.Errorf("retention: vacuum: %w", err)
+	var mode int
+	if err := p.store.DB().QueryRowContext(ctx, "PRAGMA auto_vacuum").Scan(&mode); err != nil {
+		return fmt.Errorf("retention: read auto_vacuum: %w", err)
 	}
-	p.cfg.Logger.Info("retention reclaim", "pages_freed", before)
+	if mode != autoVacuumIncremental {
+		// A store created before incremental auto-vacuum. The store opens
+		// every connection asking for it, so this one full VACUUM also
+		// converts the file; later passes take the incremental path.
+		if _, err := p.store.DB().ExecContext(ctx, "VACUUM"); err != nil {
+			return fmt.Errorf("retention: vacuum: %w", err)
+		}
+		p.cfg.Logger.Info("retention reclaim", "pages_freed", before, "mode", "convert")
+		return nil
+	}
+	freed, err := p.incrementalVacuum(ctx, before)
+	if err != nil {
+		return err
+	}
+	p.cfg.Logger.Info("retention reclaim", "pages_freed", freed, "mode", "incremental")
 	return nil
+}
+
+// autoVacuumIncremental is PRAGMA auto_vacuum's value for INCREMENTAL.
+const autoVacuumIncremental = 2
+
+// reclaimChunkPages bounds one incremental_vacuum step. Each step is its
+// own short write transaction, so a writer waits for one chunk — not for a
+// VACUUM of the whole database, which held the lock for 31s on a 440 MB
+// store while every write landing in that window failed.
+const reclaimChunkPages = 256
+
+// incrementalVacuum returns free pages to the filesystem a chunk at a time
+// until the freelist is empty, ctx ends, or a step frees nothing.
+func (p *Pruner) incrementalVacuum(ctx context.Context, free int64) (int64, error) {
+	start := free
+	for free > 0 && ctx.Err() == nil {
+		if _, err := p.store.DB().ExecContext(ctx, fmt.Sprintf("PRAGMA incremental_vacuum(%d)", reclaimChunkPages)); err != nil {
+			return start - free, fmt.Errorf("retention: incremental vacuum: %w", err)
+		}
+		left, err := p.freelistCount(ctx)
+		if err != nil {
+			return start - free, err
+		}
+		if left >= free {
+			break
+		}
+		free = left
+	}
+	return start - free, nil
 }
 
 // claimedSources indexes, per event type, the sources that carry their

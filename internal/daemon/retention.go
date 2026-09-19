@@ -11,10 +11,11 @@ import (
 )
 
 // retentionStartDelay holds the first retention pass after the daemon
-// starts. At startup every poller replays its history into the store, and a
-// prune with reclaim holds the write lock for its whole VACUUM — 31s on a
-// real 440 MB store, during which the replay's batches failed four attempts
-// in a row and cleared on their last. The replay finishes well inside this.
+// starts. At startup every poller replays its history into the store. On a
+// store not yet converted to incremental vacuum, the first reclaim is a full
+// VACUUM under the write lock — 31s on a real 440 MB store, during which the
+// replay's batches failed four attempts in a row and cleared on their last.
+// The replay finishes well inside this.
 const retentionStartDelay = 5 * time.Minute
 
 // retentionConfig is the pruner configuration the daemon runs.
