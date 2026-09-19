@@ -76,3 +76,15 @@ func TestRetentionPoliciesRejectUnknownSourceType(t *testing.T) {
 		t.Fatal("expected an error for an unknown event type")
 	}
 }
+
+// The daemon's first prune must not run on top of the startup replay, and
+// a StartDelay the daemon never passes delays nothing.
+func TestRetentionConfigHoldsTheFirstPass(t *testing.T) {
+	c := retentionConfig(config.RetentionConfig{Interval: 6 * time.Hour, Reclaim: true}, nil, nil)
+	if c.StartDelay < time.Minute {
+		t.Errorf("StartDelay = %s; the first pass would overlap the startup replay", c.StartDelay)
+	}
+	if c.Interval != 6*time.Hour || !c.Reclaim {
+		t.Errorf("config not carried through: interval=%s reclaim=%v", c.Interval, c.Reclaim)
+	}
+}

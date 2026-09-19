@@ -387,15 +387,11 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 				return fmt.Errorf("retention: %w", err)
 			}
 			if len(policies) > 0 {
-				pruner := retention.New(components.Store, retention.Config{
-					Policies: policies,
-					Interval: cfg.Retention.Interval,
-					Logger:   logger,
-					Reclaim:  cfg.Retention.Reclaim,
-				})
+				pruner := retention.New(components.Store, retentionConfig(cfg.Retention, policies, logger))
 				retention.NewScheduler(pruner).Start(ctx)
 				logger.Info("retention scheduler live",
-					"policies", len(policies), "reclaim", cfg.Retention.Reclaim)
+					"policies", len(policies), "reclaim", cfg.Retention.Reclaim,
+					"first_pass_in", retentionStartDelay)
 			}
 		}
 

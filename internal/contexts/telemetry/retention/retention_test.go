@@ -304,3 +304,62 @@ func TestSourcePolicyCanBeShorterThanTypePolicy(t *testing.T) {
 		t.Errorf("claude-code-jsonl rows = %d, want 1", claude)
 	}
 }
+
+// A daemon starting up replays its sources' history into the store, and a
+// prune with Reclaim holds the write lock for as long as the VACUUM takes —
+// 31s on a real 440 MB store. Run together, the replay's batches failed four
+// attempts in a row and cleared on their last. StartDelay moves the first
+// pass out of that window.
+func TestSchedulerHoldsTheFirstPassForStartDelay(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 5, 9, 12, 0, 0, 0, time.UTC)
+	_ = store.Append(ctx, mkPrompt("old", now.Add(-48*time.Hour)))
+
+	p := New(store, Config{
+		Policies:   []Policy{{EventType: eventschema.EventTypePrompt, KeepFor: 24 * time.Hour}},
+		Interval:   time.Hour,
+		StartDelay: 300 * time.Millisecond,
+		Logger:     discardLogger(),
+	})
+	p.SetClock(func() time.Time { return now })
+	s := NewScheduler(p)
+	runCtx, cancel := context.WithCancel(ctx)
+	defer func() { cancel(); s.Wait() }()
+	s.Start(runCtx)
+
+	time.Sleep(100 * time.Millisecond)
+	if count, _ := store.Count(ctx, sqlite.Filter{}); count != 1 {
+		t.Fatalf("pruned before StartDelay elapsed: count=%d", count)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if count, _ := store.Count(ctx, sqlite.Filter{}); count == 0 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Error("did not prune once StartDelay had elapsed")
+}
+
+// Shutting down during the delay must not wait it out.
+func TestSchedulerStopsDuringStartDelay(t *testing.T) {
+	p := New(newStore(t), Config{
+		Policies:   []Policy{{EventType: eventschema.EventTypePrompt, KeepFor: 24 * time.Hour}},
+		StartDelay: time.Hour,
+		Logger:     discardLogger(),
+	})
+	s := NewScheduler(p)
+	runCtx, cancel := context.WithCancel(context.Background())
+	s.Start(runCtx)
+	cancel()
+
+	stopped := make(chan struct{})
+	go func() { s.Wait(); close(stopped) }()
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("scheduler kept waiting out StartDelay after its context was cancelled")
+	}
+}

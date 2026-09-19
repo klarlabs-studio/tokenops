@@ -45,6 +45,11 @@ type Config struct {
 	Policies []Policy
 	// Interval is how often the scheduler wakes to prune. Default 1h.
 	Interval time.Duration
+	// StartDelay holds the scheduler's first pass. Zero runs it at once.
+	// The daemon sets it so the first prune — and its VACUUM, which holds
+	// the write lock throughout — does not land on top of the pollers
+	// replaying their history into the store at startup.
+	StartDelay time.Duration
 	// Logger receives prune logs (rows deleted, errors).
 	Logger *slog.Logger
 	// Reclaim runs a VACUUM after a pass that actually deleted rows, so
@@ -271,11 +276,21 @@ func NewScheduler(p *Pruner) *Scheduler {
 	return &Scheduler{pruner: p, done: make(chan struct{})}
 }
 
-// Start begins the periodic loop. The first prune fires immediately so
-// freshly-started daemons reclaim space without waiting an Interval.
+// Start begins the periodic loop. The first prune fires after StartDelay
+// (at once when zero) so a freshly-started daemon reclaims space without
+// waiting a whole Interval.
 func (s *Scheduler) Start(ctx context.Context) {
 	go func() {
 		defer close(s.done)
+		if d := s.pruner.cfg.StartDelay; d > 0 {
+			t := time.NewTimer(d)
+			select {
+			case <-ctx.Done():
+				t.Stop()
+				return
+			case <-t.C:
+			}
+		}
 		if _, err := s.pruner.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			s.pruner.cfg.Logger.Error("retention initial prune", "err", err)
 		}
