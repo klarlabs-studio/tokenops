@@ -171,7 +171,10 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	// serve does not ingest; the daemon does. Probe for it so status can
 	// say the pipeline is dead rather than answering queries against a
 	// store nothing is writing.
-	deps.DaemonProbe = mcp.ProbeDaemon
+	// The configured listen address backs up the URL hint, which has
+	// vanished under a running daemon before.
+	daemonURL := mcp.ConfiguredDaemonURL(cfg)
+	deps.DaemonProbe = func() mcp.DaemonReport { return mcp.ProbeDaemonAt(daemonURL) }
 
 	if err := mcp.RegisterControlTools(srv, deps); err != nil {
 		return fmt.Errorf("register control tools: %w", err)
@@ -215,7 +218,9 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if err := mcp.RegisterApprovalTools(srv, mcp.ApprovalDeps{ApplyConfig: applyConfigRestart}); err != nil {
 		return fmt.Errorf("register approval tools: %w", err)
 	}
-	if err := mcp.RegisterModeTools(srv, mcp.ModeDeps{ApplyConfig: applyConfigRestart}); err != nil {
+	if err := mcp.RegisterModeTools(srv, mcp.ModeDeps{
+		ApplyConfig: applyConfigRestart, DaemonURL: daemonURL, UnitInstalled: daemon.UnitInstalled,
+	}); err != nil {
 		return fmt.Errorf("register mode tools: %w", err)
 	}
 	if err := mcp.RegisterSetupTools(srv, mcp.SetupDeps{ApplyConfig: applyConfigRestart}); err != nil {
@@ -227,7 +232,9 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if err := mcp.RegisterDataSourcesTool(srv, mcp.DataSourcesDeps{Store: components.Store}); err != nil {
 		return fmt.Errorf("register data sources tool: %w", err)
 	}
-	if err := mcp.RegisterDashboardTool(srv); err != nil {
+	if err := mcp.RegisterDashboardTool(srv, mcp.DashboardDeps{
+		DaemonURL: daemonURL, UnitInstalled: daemon.UnitInstalled,
+	}); err != nil {
 		return fmt.Errorf("register dashboard tool: %w", err)
 	}
 	if err := mcp.RegisterFmtTools(srv); err != nil {

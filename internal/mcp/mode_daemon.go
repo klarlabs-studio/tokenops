@@ -4,19 +4,35 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/config"
 )
 
 // ensureDaemon makes "mode: active" actually do something: the live
 // routing middleware and the spend watcher run in the daemon, so
 // activating the mode without one is a silent no-op. Returns a
 // human-readable status for the tool response.
+//
+// A daemon that exists read its config at boot, so the change reaches it
+// through ApplyConfig — the supervised restart every other config tool
+// uses. This used to answer "restart it (`tokenops start`)", a manual step
+// that on a supervised machine started a second daemon, and to spawn a
+// detached `tokenops start` whenever the URL hint was missing, even beside
+// a healthy launchd/systemd daemon. Under a supervisor the unit restart
+// also brings a stopped daemon back, so nothing is ever spawned there. The
+// spawn is left for the one case nothing else covers: no unit, and nothing
+// answering at the hint or the configured address.
 func (d ModeDeps) ensureDaemon(configPath string) string {
-	if url, ok := daemonAlive(); ok {
-		return fmt.Sprintf("already running at %s — it loaded its config at boot; restart it (`tokenops start`) to apply active mode", url)
+	if d.UnitInstalled != nil && d.UnitInstalled() {
+		return applyConfig(d.ApplyConfig)
+	}
+	if daemonAliveAt(d.DaemonURL) {
+		return applyConfig(d.ApplyConfig)
 	}
 	start := d.StartDaemon
 	if start == nil {
@@ -24,9 +40,34 @@ func (d ModeDeps) ensureDaemon(configPath string) string {
 	}
 	pid, logPath, err := start(configPath)
 	if err != nil {
-		return "not running and could not be started: " + err.Error() + "; run `tokenops start` manually"
+		return "not running and could not be started: " + err.Error() +
+			"; run `tokenops daemon install` to start it supervised"
 	}
 	return fmt.Sprintf("started (pid %d) with active mode; logs: %s", pid, logPath)
+}
+
+// fallbackProbeTimeout bounds the probe of the configured address. It is a
+// loopback round trip; a daemon that takes longer than this to answer
+// /healthz is not one a status call should wait on.
+const fallbackProbeTimeout = time.Second
+
+// ConfiguredDaemonURL is where a daemon started with cfg listens, as a
+// client on this machine reaches it: a wildcard bind becomes loopback, the
+// same normalisation the daemon applies when it writes its URL hint. Empty
+// when cfg has no usable listen address.
+func ConfiguredDaemonURL(cfg config.Config) string {
+	host, port, err := net.SplitHostPort(cfg.Listen)
+	if err != nil || port == "" {
+		return ""
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	scheme := "http"
+	if cfg.TLS.Enabled {
+		scheme = "https"
+	}
+	return scheme + "://" + net.JoinHostPort(host, port)
 }
 
 // DaemonReport is what a probe of the ingestion daemon answered.
@@ -45,24 +86,45 @@ type DaemonReport struct {
 	Dropped int64
 }
 
-// probeDaemon reads the URL hint and asks the daemon how it is doing. A
-// stale hint (daemon died without cleanup) fails the HTTP probe and reads
-// as not-running.
-func probeDaemon() DaemonReport {
-	hint, err := readURLHint()
-	if err != nil || hint == nil || hint.URL == "" {
-		return DaemonReport{}
+// probeDaemonAt asks the daemon how it is doing: first where its URL hint
+// says it is, then at fallbackURL — the configured listen address.
+//
+// The hint alone is not enough. It vanished on the operator's machine while
+// the daemon kept running, and status then reported "no ingestion daemon
+// is reachable" for a healthy one. A missing or stale hint is a reason to
+// ask the configured address, not evidence of absence. An empty
+// fallbackURL skips that second probe.
+func probeDaemonAt(fallbackURL string) DaemonReport {
+	var out DaemonReport
+	hintURL := ""
+	if hint, err := readURLHint(); err == nil && hint != nil {
+		hintURL = hint.URL
 	}
-	client := http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get(hint.URL + "/healthz")
+	if hintURL != "" {
+		if out = probeHealthz(hintURL, 2*time.Second); out.Alive {
+			return out
+		}
+	}
+	if fallbackURL != "" && fallbackURL != hintURL {
+		if r := probeHealthz(fallbackURL, fallbackProbeTimeout); r.Alive {
+			return r
+		}
+	}
+	return out
+}
+
+// probeHealthz asks one address for /healthz.
+func probeHealthz(url string, timeout time.Duration) DaemonReport {
+	client := http.Client{Timeout: timeout}
+	resp, err := client.Get(url + "/healthz")
 	if err != nil {
 		return DaemonReport{}
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return DaemonReport{URL: hint.URL}
+		return DaemonReport{URL: url}
 	}
-	out := DaemonReport{URL: hint.URL, Alive: true}
+	out := DaemonReport{URL: url, Alive: true}
 	var body struct {
 		DroppedEvents int64 `json:"dropped_events"`
 	}
@@ -74,11 +136,10 @@ func probeDaemon() DaemonReport {
 	return out
 }
 
-// daemonAlive reports whether a daemon is reachable, for the mode tools,
+// daemonAliveAt reports whether a daemon is reachable, for the mode tools,
 // which care about presence and nothing else.
-func daemonAlive() (string, bool) {
-	r := probeDaemon()
-	return r.URL, r.Alive
+func daemonAliveAt(fallbackURL string) bool {
+	return probeDaemonAt(fallbackURL).Alive
 }
 
 // startDaemonDetached spawns `tokenops start` as a session leader so it

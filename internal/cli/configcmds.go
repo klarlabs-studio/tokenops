@@ -56,9 +56,9 @@ running.`,
 				fmt.Fprintf(out, "  routing rules: %d\n", len(cfg.Optimizer.RoutingRules))
 				return nil
 			}
-			want := strings.ToLower(args[0])
-			if want != config.ModePassive && want != config.ModeActive {
-				return fmt.Errorf("mode must be %q or %q, got %q", config.ModePassive, config.ModeActive, want)
+			want, err := config.ParseMode(args[0])
+			if err != nil {
+				return err
 			}
 			cfg.Mode = want
 			if err := writeMutableConfig(path, cfg); err != nil {
