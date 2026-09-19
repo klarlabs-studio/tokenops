@@ -1,5 +1,96 @@
 # Changelog
 
+## 0.67.0 - 2026-09-19
+
+A full review of the MCP surface — the 41 tools an agent reaches TokenOps
+through — found places where an agent was told something wrong, told to do
+something harmful, or could quietly undo what the operator had set. This
+release fixes all of them.
+
+### Added
+
+- **An out-of-date MCP server says so.** An MCP client starts its own
+  `tokenops serve` and keeps it until the client restarts, so after an
+  upgrade an agent can go on talking to the old version — on the machine
+  that found this, a server from August, with every release since
+  invisible to the agent. `tokenops_status` and `tokenops_version` now
+  report when the running server is no longer the installed binary, and
+  say to restart the MCP client. They also show the daemon's version
+  beside the server's. (#324)
+- **`tokenops_plan_set` and `tokenops_vendor_usage_setup`**: bind a plan
+  and connect the Claude usage meter from an agent. The meter tool never
+  takes the claude.ai session key as an argument — it is a login, and a
+  tool argument lands in the agent's transcript. (#323)
+
+### Fixed
+
+- **An agent editing a budget could erase its ceiling.**
+  `tokenops_budget_set` had no token limit and rebuilt the whole budget on
+  every edit, so changing a token budget's warning threshold removed its
+  limit and left a budget that could never fire. Edits now change only the
+  fields given, token limits are supported, and a budget without a ceiling
+  is refused — the same rule, and the same code, as `tokenops budget set`.
+  (#326)
+- **A healthy daemon was reported as missing.** The MCP server found the
+  daemon only through a file the daemon writes at startup, and TokenOps'
+  own test suite deleted that file on every run. The MCP server now also
+  checks the configured address; a daemon only removes that file if it
+  wrote it; and the tests no longer touch the real home directory. (#325,
+  #326)
+- **`tokenops_mode` could start a second daemon.** Switching to active
+  mode started a new daemon whenever it did not see the running one, and
+  when it did see it, told the operator to run `tokenops start` — which
+  also starts a second one. It now restarts the supervised daemon, and
+  only ever starts one where nothing is supervised and nothing answers.
+  Several hints that recommended `tokenops start` now name the command
+  that fits the machine. (#326)
+- **Agent tools read the config as it was when they started.** After an
+  agent changed a plan or connected the meter, `tokenops_config`,
+  `tokenops_vendor_usage_status` and parts of `tokenops_status` went on
+  reporting the old state. They now read it at the time of the call.
+  (#324)
+- **`tokenops_domain_events` always answered zero.** The counts live in
+  the daemon, not the MCP server. It now asks the daemon, and says so
+  plainly when no daemon answers. (#324)
+- **Spend tools ignored subscriptions.** On a flat-rate plan,
+  `tokenops_burn_rate` reported $0.00 for billions of tokens and
+  `tokenops_top_consumers` ranked models by a cost that was zero for all of
+  them. Both now lead with tokens and the API-equivalent value, as
+  `tokenops spend` already did. (#327)
+- **`tokenops_routing_advise` priced with the rate card built into the
+  binary** rather than the daily-refreshed one it claimed to use. (#327)
+- **`tokenops_help` listed 23 of 41 tools.** It lists all of them, and a
+  test fails when a tool is added without an entry. (#327)
+- **`tokenops_session_budget`** explains a plan without a rate-limit window
+  (Claude Enterprise) instead of returning nothing, and shows the same plan
+  every time rather than whichever a map iteration picked. (#327)
+- **`days: 0` promised all history and gave seven days** in
+  `tokenops_story` and `tokenops_agent_dx`. `all: true` reads all history.
+  (#327)
+- **Routing-rule errors name the argument**, and blank values are refused.
+  (#327)
+- **Daily and per-model cost breakdowns were wrong when events were stored
+  without a cost.** A day only re-priced its first hour, and in a
+  per-model breakdown each unpriced model was charged for every model in
+  the bucket — $13.25 against $0.75 of real use in the test. Rows now add
+  up to the total for the same window. (#328)
+- **Settings an agent changes now apply without restarting its client**:
+  which provider activity is attributed to after a plan is bound, waste
+  thresholds, the replay pipeline and the coach tool's transcript folder.
+  (#328)
+- **No advice starts a second daemon.** Warnings that suggested
+  `tokenops start` now name `tokenops daemon restart` or `tokenops daemon
+  install`; `tokenops status` names the one that fits the machine. (#328)
+- **The dashboard link keeps its auth token** when the daemon's address
+  file is missing. (#328)
+- **Agents can see why a call was refused.** Every refusal the tools
+  explain — a budget without a ceiling, the Enterprise spend-limit rule, a
+  bad `since` — reached the agent as "internal error", because the MCP
+  library masks errors it is not told are the caller's to fix. They now
+  arrive as tool errors the agent can read and correct; failures inside
+  TokenOps stay masked. A rules tool pointed at a folder that does not
+  exist is refused rather than reporting an empty result. (#329)
+
 ## 0.66.0 - 2026-09-19
 
 The Claude usage meter reads what claude.ai actually sends. It was written
