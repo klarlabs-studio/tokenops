@@ -4,7 +4,30 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.64.0**.
+Current release: **v0.65.0**.
+
+## v0.65.0 — a name that says what it does
+
+One source in TokenOps reports Anthropic's own measure of how much of your
+Claude subscription is gone, rather than an estimate built from counting
+messages. It was called `anthropic-cookie`, which told you how it worked and
+nothing about why you would want it. It is now `claude-usage-meter`.
+
+This release breaks one thing on purpose. A config file still using the old
+name is refused when TokenOps starts, with a message naming the new key. That
+is deliberate: a renamed setting is otherwise ignored without a word, and the
+meter would quietly stop reporting. A startup error you can read is better
+than a feature that disappears. If you never set up the meter, nothing
+changes for you.
+
+Alongside it is a design decision worth reading if you run TokenOps for a
+team. Both Anthropic and OpenAI will tell you exactly what they are about to
+bill, and TokenOps works it out from a public price list instead — which is
+approximately right, and wrong in the ways that matter most, such as a
+negotiated discount. The fix is to ask the vendor. But asking needs an admin
+key, and admin keys belong to whoever runs the organization, not to the
+developer at the laptop. So that work is written down for the team edition,
+where the person installing it is the one who holds the key.
 
 ## v0.64.0 — the same answer from both doors
 

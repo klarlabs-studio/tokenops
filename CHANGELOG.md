@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.65.0 - 2026-09-19
+
+A breaking rename, released on its own so the notice cannot be missed.
+
+### ⚠️ Breaking
+
+- **`anthropic-cookie` is now `claude-usage-meter`.** The old name described
+  how the data was fetched — a browser cookie — rather than what it gives
+  you: Anthropic's own 5-hour and 7-day utilisation percentages, the one
+  Claude source that is not estimated from transcripts.
+
+  | | before | after |
+  |---|---|---|
+  | config | `vendor_usage.anthropic_cookie` | `vendor_usage.claude_usage_meter` |
+  | source tag | `anthropic-cookie` | `claude-usage-meter` |
+  | command | `vendor-usage setup anthropic-cookie` | `vendor-usage setup claude-usage-meter` |
+  | env | `TOKENOPS_ANTHROPIC_COOKIE_SESSION_KEY` | `TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY` |
+
+  **What you need to do:** if your config contains `anthropic_cookie`,
+  rename that key to `claude_usage_meter` — its contents are unchanged. A
+  config still using the old key is refused at load with a message saying
+  exactly this. It is refused rather than tolerated because a renamed YAML
+  key is otherwise silently ignored, and the source would simply stop
+  running with nothing to say why.
+
+  Events already stored under the old tag keep it and are no longer counted
+  in `vendor-usage status` or matched by retention rules. Headroom is
+  unaffected: it reads the utilisation on each event, not the source tag.
+  (#308)
+
+### Documentation
+
+- **ADR 0003 — vendor-reported cost outranks recomputed cost.** Both
+  Anthropic and OpenAI publish what they bill, behind an admin key, and
+  TokenOps recomputes it from a public rate card instead. The ADR applies
+  the rule already used for rate limits to money. (#309)
+
+  It is **scoped to the team plane**: an admin key belongs to whoever
+  administers the organization, and an individual developer — the operator
+  TokenOps is built for today — will not be issued one. When a team plane
+  exists, the administrator who deploys it supplies the key. (#310)
+
 ## 0.64.0 - 2026-09-19
 
 TokenOps has two surfaces, and asking each of them the same question gave
