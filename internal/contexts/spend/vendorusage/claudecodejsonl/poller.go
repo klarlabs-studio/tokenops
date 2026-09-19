@@ -5,11 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"log/slog"
 	"strconv"
 	"sync"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/jsonltail"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -53,6 +55,9 @@ type Poller struct {
 	mu        sync.Mutex
 	seen      map[string]struct{} // message IDs we've already emitted
 	publishes int64
+
+	// tail belongs to the scan goroutine alone.
+	tail jsonltail.Tail[readState]
 }
 
 // NewPoller binds the bus + options. Bus may be nil — Snapshot() then
@@ -106,34 +111,35 @@ func (p *Poller) resolveRoot() (string, error) {
 	return DefaultRoot()
 }
 
+// scan reads only what each transcript gained since the last scan.
 func (p *Poller) scan(ctx context.Context, root string) {
 	files, err := FindSessionFiles(root)
 	if err != nil {
 		p.opts.Logger.Debug("claude-code jsonl glob failed", "root", root, "err", err)
 		return
 	}
-	for _, path := range files {
-		if err := ReadFile(path, func(turn Turn) error {
-			p.mu.Lock()
-			if _, dup := p.seen[turn.MessageID]; dup {
-				p.mu.Unlock()
-				return nil
-			}
-			p.seen[turn.MessageID] = struct{}{}
+	visit := p.visitor(ctx)
+	p.tail.Scan(ctx, files, func(path string, r io.Reader, st *readState) (int64, error) {
+		return readLines(r, projectFromPath(path), st, false, visit)
+	}, func(path string, err error) {
+		p.opts.Logger.Warn("claude-code jsonl read failed", "path", path, "err", err)
+	})
+}
+
+// visitor publishes each turn not already seen.
+func (p *Poller) visitor(ctx context.Context) func(Turn) error {
+	return func(turn Turn) error {
+		p.mu.Lock()
+		if _, dup := p.seen[turn.MessageID]; dup {
 			p.mu.Unlock()
-			if p.bus != nil {
-				env := newEnvelope(turn, p.opts.CostSource)
-				p.publishWait(ctx, env)
-			}
 			return nil
-		}); err != nil {
-			p.opts.Logger.Warn("claude-code jsonl read failed", "path", path, "err", err)
 		}
-		select {
-		case <-ctx.Done():
-			return
-		default:
+		p.seen[turn.MessageID] = struct{}{}
+		p.mu.Unlock()
+		if p.bus != nil {
+			p.publishWait(ctx, newEnvelope(turn, p.opts.CostSource))
 		}
+		return nil
 	}
 }
 

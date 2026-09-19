@@ -33,7 +33,6 @@
 package claudecodejsonl
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -41,6 +40,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/jsonltail"
 )
 
 // Turn is one parsed assistant turn from a JSONL file. SessionID +
@@ -144,82 +145,86 @@ func projectFromPath(path string) string {
 	return filepath.Base(filepath.Dir(path))
 }
 
-func readReader(r io.Reader, project string, visit func(Turn) error) error {
-	scanner := bufio.NewScanner(r)
-	// JSONL lines can be large (full conversation history; observed
-	// 15 MB+ files). Bump buffer to 4 MB per line.
-	buf := make([]byte, 0, 1024*1024)
-	scanner.Buffer(buf, 4*1024*1024)
+// readState is what one transcript line depends on from the lines before
+// it. A poller resuming mid-file carries it forward, so a turn is timed and
+// bounded exactly as a read from the start would have done.
+type readState struct {
 	// Set when a typed prompt is seen; consumed by the next emitted
 	// assistant turn.
-	var pendingUserMessage bool
+	pendingUserMessage bool
 	// Timestamp of the previous transcript entry, used to time the next
 	// assistant turn.
-	var prevAt time.Time
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-		var raw rawLine
-		if err := json.Unmarshal(line, &raw); err != nil {
-			continue
-		}
-		if strings.EqualFold(raw.Type, "user") {
-			// A user row is what the next assistant turn is timed
-			// against, so advance the clock even though it emits nothing.
-			if at, err := time.Parse(time.RFC3339Nano, raw.Timestamp); err == nil {
-				prevAt = at
-			}
-			// Claude Code writes tool results back as type:"user" rows;
-			// in real sessions they outnumber typed prompts by roughly
-			// 44:1. Only a genuine prompt opens a new vendor "message".
-			if isOperatorPrompt(raw.Message.Content) {
-				pendingUserMessage = true
-			}
-			continue
-		}
-		if !strings.EqualFold(raw.Type, "assistant") {
-			continue
-		}
-		if raw.Message.ID == "" {
-			continue
-		}
-		// Skip turns with zero usage — these are no-op tool-result
-		// echoes Claude Code emits without a real model call.
-		u := raw.Message.Usage
-		if u.InputTokens == 0 && u.OutputTokens == 0 &&
-			u.CacheReadInputTokens == 0 && u.CacheCreationInputTokens == 0 {
-			continue
-		}
-		ts, err := time.Parse(time.RFC3339Nano, raw.Timestamp)
-		if err != nil {
-			continue
-		}
-		latency := turnLatency(prevAt, ts)
-		prevAt = ts
-		// Consume the boundary on the first turn we actually emit, so a
-		// skipped zero-usage echo does not swallow the message.
-		startsMessage := pendingUserMessage
-		pendingUserMessage = false
-		if err := visit(Turn{
-			Latency:                  latency,
-			StartsUserMessage:        startsMessage,
-			Timestamp:                ts.UTC(),
-			SessionID:                raw.SessionID,
-			Project:                  project,
-			Model:                    raw.Message.Model,
-			MessageID:                raw.Message.ID,
-			InputTokens:              u.InputTokens,
-			OutputTokens:             u.OutputTokens,
-			CacheReadInputTokens:     u.CacheReadInputTokens,
-			CacheCreationInputTokens: u.CacheCreationInputTokens,
-			ServiceTier:              u.ServiceTier,
-		}); err != nil {
-			return err
-		}
+	prevAt time.Time
+}
+
+func readReader(r io.Reader, project string, visit func(Turn) error) error {
+	_, err := readLines(r, project, &readState{}, true, visit)
+	return err
+}
+
+// readLines reads r's complete lines through st; see jsonltail.ReadLines
+// for what final and the returned byte count mean.
+func readLines(r io.Reader, project string, st *readState, final bool, visit func(Turn) error) (int64, error) {
+	return jsonltail.ReadLines(r, final, func(line []byte) error {
+		return st.visitLine(line, project, visit)
+	})
+}
+
+// visitLine parses one transcript line and hands an assistant turn with
+// usage to visit. Anything else only advances st.
+func (st *readState) visitLine(line []byte, project string, visit func(Turn) error) error {
+	var raw rawLine
+	if err := json.Unmarshal(line, &raw); err != nil {
+		return nil
 	}
-	return scanner.Err()
+	if strings.EqualFold(raw.Type, "user") {
+		// A user row is what the next assistant turn is timed
+		// against, so advance the clock even though it emits nothing.
+		if at, err := time.Parse(time.RFC3339Nano, raw.Timestamp); err == nil {
+			st.prevAt = at
+		}
+		// Claude Code writes tool results back as type:"user" rows;
+		// in real sessions they outnumber typed prompts by roughly
+		// 44:1. Only a genuine prompt opens a new vendor "message".
+		if isOperatorPrompt(raw.Message.Content) {
+			st.pendingUserMessage = true
+		}
+		return nil
+	}
+	if !strings.EqualFold(raw.Type, "assistant") || raw.Message.ID == "" {
+		return nil
+	}
+	// Skip turns with zero usage — these are no-op tool-result
+	// echoes Claude Code emits without a real model call.
+	u := raw.Message.Usage
+	if u.InputTokens == 0 && u.OutputTokens == 0 &&
+		u.CacheReadInputTokens == 0 && u.CacheCreationInputTokens == 0 {
+		return nil
+	}
+	ts, err := time.Parse(time.RFC3339Nano, raw.Timestamp)
+	if err != nil {
+		return nil
+	}
+	latency := turnLatency(st.prevAt, ts)
+	st.prevAt = ts
+	// Consume the boundary on the first turn we actually emit, so a
+	// skipped zero-usage echo does not swallow the message.
+	startsMessage := st.pendingUserMessage
+	st.pendingUserMessage = false
+	return visit(Turn{
+		Latency:                  latency,
+		StartsUserMessage:        startsMessage,
+		Timestamp:                ts.UTC(),
+		SessionID:                raw.SessionID,
+		Project:                  project,
+		Model:                    raw.Message.Model,
+		MessageID:                raw.Message.ID,
+		InputTokens:              u.InputTokens,
+		OutputTokens:             u.OutputTokens,
+		CacheReadInputTokens:     u.CacheReadInputTokens,
+		CacheCreationInputTokens: u.CacheCreationInputTokens,
+		ServiceTier:              u.ServiceTier,
+	})
 }
 
 // isOperatorPrompt reports whether a type:"user" row is a prompt the
