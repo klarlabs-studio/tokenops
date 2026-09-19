@@ -84,7 +84,7 @@ func parseCoachWindow(s string) (time.Time, error) {
 			return time.Now().Add(-d * 24), nil
 		}
 	}
-	return time.Time{}, errors.New("invalid time: expected RFC3339 or duration like '24h' or '7d'")
+	return time.Time{}, inputError(errors.New("invalid time: expected RFC3339 or duration like '24h' or '7d'"))
 }
 
 // root is the transcript scan root in effect for this call.

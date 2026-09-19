@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/rules"
@@ -120,9 +121,9 @@ func rulesAnalyze(in rulesAnalyzeInput) (*rulesAnalyzeResult, error) {
 	case "gemini":
 		prov = eventschema.ProviderGemini
 	default:
-		return nil, fmt.Errorf("unknown provider %q", in.Provider)
+		return nil, inputError(fmt.Errorf("unknown provider %q", in.Provider))
 	}
-	docs, err := rulesfs.LoadCorpus(in.Root, in.RepoID)
+	docs, err := loadCallerCorpus(in.Root, in.RepoID)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +137,7 @@ func rulesAnalyze(in rulesAnalyzeInput) (*rulesAnalyzeResult, error) {
 }
 
 func rulesConflicts(in rulesConflictsInput) (*rulesConflictsResult, error) {
-	docs, err := rulesfs.LoadCorpus(in.Root, in.RepoID)
+	docs, err := loadCallerCorpus(in.Root, in.RepoID)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +146,7 @@ func rulesConflicts(in rulesConflictsInput) (*rulesConflictsResult, error) {
 }
 
 func rulesCompress(in rulesCompressInput) (*rulesCompressResult, error) {
-	docs, err := rulesfs.LoadCorpus(in.Root, in.RepoID)
+	docs, err := loadCallerCorpus(in.Root, in.RepoID)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +177,7 @@ func rulesCompress(in rulesCompressInput) (*rulesCompressResult, error) {
 }
 
 func rulesInject(in rulesInjectInput) (*rules.SelectionResult, error) {
-	docs, err := rulesfs.LoadCorpus(in.Root, in.RepoID)
+	docs, err := loadCallerCorpus(in.Root, in.RepoID)
 	if err != nil {
 		return nil, err
 	}
@@ -195,4 +196,21 @@ func rulesInject(in rulesInjectInput) (*rules.SelectionResult, error) {
 		Keywords:   in.Keywords,
 	})
 	return res, nil
+}
+
+// loadCallerCorpus loads the rule corpus under a root the caller named. A root
+// that does not exist used to load as an empty corpus, so every rules tool
+// answered "nothing here" for a mistyped path; it is refused instead. Both
+// that and an unreadable root are the caller's to fix.
+func loadCallerCorpus(root, repoID string) ([]*rules.RuleDocument, error) {
+	if root != "" {
+		if _, err := os.Stat(root); err != nil {
+			return nil, inputError(fmt.Errorf("root %q: %w", root, err))
+		}
+	}
+	docs, err := rulesfs.LoadCorpus(root, repoID)
+	if err != nil {
+		return nil, inputError(err)
+	}
+	return docs, nil
 }

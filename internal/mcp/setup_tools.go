@@ -65,11 +65,11 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 		Handler(func(_ context.Context, in planSetInput) (string, error) {
 			path, err := d.path()
 			if err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			cfg, err := config.ReadMutable(path)
 			if err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			provider := strings.TrimSpace(in.Provider)
 			if provider == "" {
@@ -84,7 +84,7 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 					SpendLimitUSD: in.SpendLimitUSD, Window: in.LimitWindow, RateFactor: in.RateFactor,
 				})
 				if err != nil {
-					return "", err
+					return "", inputError(err)
 				}
 				resp["plan"] = b.Plan
 				if b.Previous != "" && b.Previous != b.Plan {
@@ -95,7 +95,7 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 				}
 			}
 			if err := config.WriteMutable(path, cfg); err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			resp["note"] = applyConfig(d.ApplyConfig)
 			return jsonString(resp), nil
@@ -106,11 +106,11 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 		Handler(func(ctx context.Context, in meterSetupInput) (string, error) {
 			path, err := d.path()
 			if err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			cfg, err := config.ReadMutable(path)
 			if err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			key := strings.TrimSpace(d.getenv(meterKeyEnv))
 			if key == "" {
@@ -138,13 +138,13 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 						"hint":  "Anthropic rejected the session key — cookies rotate every few weeks; the user needs a fresh one. Nothing was written.",
 					}), nil
 				}
-				return "", err
+				return "", inputError(err)
 			}
 			cfg.VendorUsage.ClaudeUsageMeter.Enabled = true
 			cfg.VendorUsage.ClaudeUsageMeter.SessionKey = key
 			cfg.VendorUsage.ClaudeUsageMeter.OrgID = conn.Org.UUID
 			if err := config.WriteMutable(path, cfg); err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			orgs := make([]string, 0, len(conn.Orgs))
 			for _, o := range conn.Orgs {
