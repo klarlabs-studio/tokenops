@@ -61,8 +61,8 @@ var cliToMCP = map[string][]string{
 	"story":         {"tokenops_story"},
 	"task":          {"tokenops_workflow_trace"},
 	"version":       {"tokenops_version"},
-	"pricing":       {}, // GAP: an agent cannot ask what a model costs or whether the card moved
-	"vendor-usage":  {}, // GAP: an agent cannot ask whether ingestion is live
+	"pricing":       {"tokenops_pricing"},
+	"vendor-usage":  {"tokenops_vendor_usage_status"},
 }
 
 // mcpOnly are tools with no CLI equivalent, each with the reason. Several
@@ -146,6 +146,26 @@ func TestEveryToolGroupIsWiredIntoServe(t *testing.T) {
 	}
 }
 
+// TestParityTestRegistersEveryToolGroup closes a hole in the check above.
+//
+// mcpToolNames builds its own server, so a tool group the package defines
+// and this file forgets to register is invisible to the parity diff — the
+// tools exist, reach clients through serve, and are never compared to
+// anything. That happened immediately: two tools were added and the parity
+// test passed unchanged, because it did not know to register them.
+func TestParityTestRegistersEveryToolGroup(t *testing.T) {
+	src, err := os.ReadFile("parity_test.go")
+	if err != nil {
+		t.Fatalf("read parity_test.go: %v", err)
+	}
+	for _, fn := range registerFuncsInMCP(t) {
+		if !strings.Contains(string(src), "mcp."+fn+"(") {
+			t.Errorf("mcp.%s is not registered in mcpToolNames, so its tools are absent from the "+
+				"parity diff. Add it there as well as to serve.go.", fn)
+		}
+	}
+}
+
 func cliCommandNames(t *testing.T) []string {
 	t.Helper()
 	cmds := NewRoot().Commands()
@@ -191,6 +211,7 @@ func mcpToolNames(t *testing.T) map[string]bool {
 	must(mcp.RegisterDashboardTool(srv))
 	must(mcp.RegisterFmtTools(srv))
 	must(mcp.RegisterCoachTools(srv, mcp.CoachDeps{}))
+	must(mcp.RegisterGapTools(srv, mcp.GapDeps{}))
 
 	out := map[string]bool{}
 	for _, ti := range srv.Tools() {

@@ -8,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.klarlabs.de/tokenops/internal/config"
 	anthropicusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
@@ -429,7 +428,7 @@ machine-readable output.`,
 					Enabled:     src.Enabled || src.AlwaysOn,
 					AlwaysOn:    src.AlwaysOn,
 					EventsInWin: counts[src.SourceTag],
-					ConfigHint:  vendorUsageConfigHint(cfg, src.SourceTag),
+					ConfigHint:  cfg.VendorUsageConfigHint(src.SourceTag),
 				})
 			}
 			if jsonOut {
@@ -459,98 +458,6 @@ type vendorUsageSource struct {
 	AlwaysOn    bool   `json:"always_on,omitempty"`
 	EventsInWin int64  `json:"events_in_window"`
 	ConfigHint  string `json:"config_hint,omitempty"`
-}
-
-// vendorUsageConfigHint routes a SourceTag to its per-source config
-// hint. Kept beside the report loop so adding a source is a two-line
-// change (helper entry + hint case) rather than an edit to a giant
-// literal.
-func vendorUsageConfigHint(cfg config.Config, sourceTag string) string {
-	switch sourceTag {
-	case "claude-code-jsonl":
-		return configHintClaudeCodeJSONL(cfg.VendorUsage.ClaudeCodeJSONL.Enabled)
-	case "codex-jsonl":
-		return configHintCodexJSONL(cfg.VendorUsage.CodexJSONL.Enabled)
-	case "opencode":
-		return configHintOpenCode(cfg.VendorUsage.OpenCode.Enabled)
-	case "claude-code-stats-cache":
-		return configHintClaudeCode(cfg.VendorUsage.ClaudeCode.Enabled)
-	case "vendor-usage-anthropic":
-		return configHintAnthropic(cfg.VendorUsage.Anthropic)
-	case "github-copilot":
-		return configHintCopilot(cfg.VendorUsage.GitHubCopilot)
-	case "cursor-web":
-		return configHintCursor(cfg.VendorUsage.Cursor)
-	case "anthropic-cookie":
-		return configHintAnthropicCookie(cfg.VendorUsage.AnthropicCookie)
-	default:
-		return ""
-	}
-}
-
-func configHintClaudeCode(enabled bool) string {
-	if enabled {
-		return "DEPRECATED — switch to vendor_usage.claude_code_jsonl"
-	}
-	return "deprecated; use vendor_usage.claude_code_jsonl instead"
-}
-
-func configHintClaudeCodeJSONL(enabled bool) string {
-	if enabled {
-		return ""
-	}
-	return "set vendor_usage.claude_code_jsonl.enabled: true (RECOMMENDED — live per-turn signal)"
-}
-
-func configHintCodexJSONL(enabled bool) string {
-	if enabled {
-		return ""
-	}
-	return "set vendor_usage.codex_jsonl.enabled: true (RECOMMENDED for Codex Plus/Pro users — surfaces OpenAI's official rate_limits 5h + weekly %)"
-}
-
-func configHintOpenCode(enabled bool) string {
-	if enabled {
-		return ""
-	}
-	return "set vendor_usage.opencode.enabled: true (reads opencode's SQLite store read-only — per-project, multi-provider token attribution)"
-}
-
-func configHintCopilot(cfg config.GitHubCopilotUsageConfig) string {
-	if !cfg.Enabled {
-		return "set vendor_usage.github_copilot.enabled: true (auto-discovers OAuth token from ~/.config/github-copilot)"
-	}
-	return ""
-}
-
-func configHintCursor(cfg config.CursorUsageConfig) string {
-	if !cfg.Enabled {
-		return "set vendor_usage.cursor.{enabled, cookie, user_id} — extract cookie from the Cursor IDE devtools (WorkosCursorSessionToken)"
-	}
-	if cfg.Cookie == "" || cfg.UserID == "" {
-		return "vendor_usage.cursor enabled but cookie or user_id missing — paste WorkosCursorSessionToken + your user_id from cursor.com devtools"
-	}
-	return ""
-}
-
-func configHintAnthropicCookie(cfg config.AnthropicCookieUsageConfig) string {
-	if !cfg.Enabled {
-		return "set vendor_usage.anthropic_cookie.{enabled, session_key} — paste sessionKey from claude.ai devtools (Application → Cookies). RECOMMENDED for Claude Max users — only source of the official 7-day utilization %"
-	}
-	if cfg.SessionKey == "" {
-		return "vendor_usage.anthropic_cookie enabled but session_key missing — paste from claude.ai devtools"
-	}
-	return ""
-}
-
-func configHintAnthropic(cfg config.AnthropicUsageConfig) string {
-	if !cfg.Enabled {
-		return "set vendor_usage.anthropic.enabled: true + an sk-ant-admin-* key"
-	}
-	if cfg.AdminKey == "" {
-		return "vendor_usage.anthropic.admin_key is empty; mint a key in the Claude Console"
-	}
-	return ""
 }
 
 func renderVendorUsageText(cmd *cobra.Command, r vendorUsageReport) {
