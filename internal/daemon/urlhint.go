@@ -16,8 +16,8 @@ import (
 //
 // The schema is intentionally minimal: URL is the only field readers
 // need to act on; the others are diagnostic so a stale file is easy to
-// reason about. PID is recorded so a future health check can verify
-// the daemon is still alive before trusting the URL.
+// reason about. PID is recorded so shutdown removes only the hint this
+// process wrote (see removeURLHint).
 type urlHintPayload struct {
 	URL       string    `json:"url"`
 	LocalURL  string    `json:"local_url,omitempty"`
@@ -109,10 +109,32 @@ func writeURLHint(addr string, tls bool, localURL, dashboardToken string) (strin
 // removeURLHint deletes the URL hint file on daemon shutdown so a
 // stale URL doesn't survive the process. Failures are reported to the
 // caller (logged at info level) rather than swallowed.
+//
+// It deletes only a hint this process wrote. The hint once vanished while
+// the daemon kept running, and every MCP surface then reported a healthy
+// daemon as absent: an exiting process — a duplicate `tokenops start`, or
+// the old instance of a restart finishing after its successor booted —
+// removed the file unconditionally. A hint that names another PID, or that
+// cannot be read as ours, belongs to someone else and is left alone.
+//
+// Between the read and the remove a successor could still rewrite the
+// file. That window is a few syscalls wide, and the MCP side no longer
+// depends on the file alone to find the daemon.
 func removeURLHint() error {
 	p, err := urlHintPath()
 	if err != nil {
 		return err
+	}
+	data, err := os.ReadFile(p)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var payload urlHintPayload
+	if err := json.Unmarshal(data, &payload); err != nil || payload.PID != os.Getpid() {
+		return nil
 	}
 	if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
