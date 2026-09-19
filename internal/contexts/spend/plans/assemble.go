@@ -21,19 +21,43 @@ type SpendLimit struct {
 // headroom report can be trusted; nil reports the lowest grade.
 type SourceCounter func(ctx context.Context, since, until time.Time) (map[string]int64, error)
 
+// sourceProvider names the provider a vendor-usage source reports on.
+// Sources absent here (the proxy, MCP session pings) carry traffic for any
+// provider and count for all of them.
+var sourceProvider = map[string]string{
+	"claude-code-stats-cache": "anthropic",
+	"claude-code-jsonl":       "anthropic",
+	"claude-usage-meter":      "anthropic",
+	"vendor-usage-anthropic":  "anthropic",
+	"codex-jsonl":             "openai",
+	"github-copilot":          "github",
+	"cursor-web":              "cursor",
+}
+
 // SignalFromCounts maps per-source event counts onto the observations
-// ClassifySignal grades.
-func SignalFromCounts(counts map[string]int64) SignalInputs {
+// ClassifySignal grades, keeping only sources that report on provider.
+//
+// Counting every source for every provider graded a Codex plan by Claude
+// Code's transcripts: headroom for codex-plus carried "Reads
+// ~/.claude/projects" as its signal, and its confidence came from data
+// that says nothing about Codex. An empty provider keeps every source.
+func SignalFromCounts(counts map[string]int64, provider string) SignalInputs {
+	c := func(source string) int64 {
+		if owner, ok := sourceProvider[source]; ok && provider != "" && owner != provider {
+			return 0
+		}
+		return counts[source]
+	}
 	return SignalInputs{
-		ProxyEventsInWindow:      counts["proxy"],
-		MCPPingsInWindow:         counts["mcp-session"],
-		ClaudeCodeCacheInWindow:  counts["claude-code-stats-cache"],
-		ClaudeCodeJSONLInWindow:  counts["claude-code-jsonl"],
-		CodexJSONLInWindow:       counts["codex-jsonl"],
-		CopilotInWindow:          counts["github-copilot"],
-		CursorInWindow:           counts["cursor-web"],
-		ClaudeUsageMeterInWindow: counts["claude-usage-meter"],
-		VendorAPIWired:           counts["vendor-usage-anthropic"] > 0,
+		ProxyEventsInWindow:      c("proxy"),
+		MCPPingsInWindow:         c("mcp-session"),
+		ClaudeCodeCacheInWindow:  c("claude-code-stats-cache"),
+		ClaudeCodeJSONLInWindow:  c("claude-code-jsonl"),
+		CodexJSONLInWindow:       c("codex-jsonl"),
+		CopilotInWindow:          c("github-copilot"),
+		CursorInWindow:           c("cursor-web"),
+		ClaudeUsageMeterInWindow: c("claude-usage-meter"),
+		VendorAPIWired:           c("vendor-usage-anthropic") > 0,
 	}
 }
 
@@ -66,12 +90,13 @@ func AssembleHeadroomInputs(ctx context.Context, reader EventReader, counts Sour
 			return HeadroomInputs{}, fmt.Errorf("window[%s]: %w", provider, err)
 		}
 		in.WindowMessages = win.MessagesInWindow
+		in.WindowStartedAt = win.FirstActivityAt
 		if counts != nil {
 			c, err := counts(ctx, now.Add(-p.RateLimitWindow), now)
 			if err != nil {
 				return HeadroomInputs{}, fmt.Errorf("signal[%s]: %w", provider, err)
 			}
-			in.Signal = SignalFromCounts(c)
+			in.Signal = SignalFromCounts(c, provider)
 		}
 		in.Authoritative = LatestAuthoritativeWindow(ctx, reader, providerOf(provider), p, now)
 	}

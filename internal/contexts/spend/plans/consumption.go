@@ -30,6 +30,10 @@ type Consumption struct {
 type WindowConsumption struct {
 	MessagesInWindow int64
 	TokensInWindow   int64
+	// FirstActivityAt is the earliest plan-covered event inside the
+	// window, zero when there is none. A rolling window opens with its
+	// first message, so this is what an estimated reset is measured from.
+	FirstActivityAt time.Time
 }
 
 // ConsumptionFor sums plan_included PromptEvent tokens for the given
@@ -127,6 +131,9 @@ func ConsumptionInWindow(ctx context.Context, r EventReader, provider string, no
 		}
 		if env.Timestamp.Before(cutoff) {
 			continue
+		}
+		if out.FirstActivityAt.IsZero() || env.Timestamp.Before(out.FirstActivityAt) {
+			out.FirstActivityAt = env.Timestamp
 		}
 		if countsAsMessage(env) {
 			out.MessagesInWindow++

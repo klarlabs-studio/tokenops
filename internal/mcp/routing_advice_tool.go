@@ -217,7 +217,7 @@ func windowPressure(
 	if err != nil {
 		return 0, false
 	}
-	signal, err := classifySignalFromStore(ctx, store, now.Add(-plan.RateLimitWindow), now)
+	signal, err := classifySignalFromStore(ctx, store, string(provider), now.Add(-plan.RateLimitWindow), now)
 	if err != nil {
 		return 0, false
 	}

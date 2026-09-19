@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Domain events are counted inside the ingestion daemon. The MCP server is a
@@ -68,6 +69,7 @@ func TestDomainEventsFromDaemon(t *testing.T) {
 				Counts:       map[string]int64{"workflow.started": 3, "budget.exceeded": 1},
 				Total:        4,
 				AuditDropped: &dropped,
+				Spans:        map[string]EventSpan{"budget.exceeded": {Last: time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC)}},
 			}, nil
 		},
 	})
@@ -86,6 +88,9 @@ func TestDomainEventsFromDaemon(t *testing.T) {
 	if res.Source != "daemon" {
 		t.Errorf("source = %q, want daemon", res.Source)
 	}
+	if res.Spans["budget.exceeded"].Last.Month() != 6 {
+		t.Errorf("spans not relayed, so a June alert reads as current: %+v", res.Spans)
+	}
 }
 
 func TestFetchDaemonDomainEvents(t *testing.T) {
@@ -98,6 +103,7 @@ func TestFetchDaemonDomainEvents(t *testing.T) {
 			"counts":        map[string]int64{"optimization.applied": 5},
 			"total":         5,
 			"audit_dropped": 0,
+			"spans":         map[string]any{"optimization.applied": map[string]string{"first_at": "2026-06-14T00:00:00Z", "last_at": "2026-06-15T00:00:00Z"}},
 		})
 	}))
 	defer srv.Close()
@@ -111,6 +117,10 @@ func TestFetchDaemonDomainEvents(t *testing.T) {
 	}
 	if got.AuditDropped == nil || *got.AuditDropped != 0 {
 		t.Errorf("audit_dropped present in the payload must survive decoding: %+v", got)
+	}
+	// Counts are lifetime totals; when they happened has to survive too.
+	if got.Spans["optimization.applied"].Last.Month() != 6 {
+		t.Errorf("spans lost in decoding: %+v", got.Spans)
 	}
 }
 

@@ -29,6 +29,9 @@ type HeadroomReport struct {
 	WindowPct      float64   `json:"window_pct,omitempty"`
 	WindowResetsAt time.Time `json:"window_resets_at,omitempty"`
 	WindowResetsIn string    `json:"window_resets_in,omitempty"`
+	// WindowResetEstimated is true when the reset was worked out from the
+	// first activity in the window rather than reported by the vendor.
+	WindowResetEstimated bool `json:"window_reset_estimated,omitempty"`
 
 	// Spend* fields replace the window block for spend-denominated plans
 	// (usage-based Enterprise), where the limit is money the org set
@@ -97,6 +100,11 @@ type HeadroomInputs struct {
 	// against an overstatement — and the error is invisible. Zero or one
 	// means list price.
 	RateFactor float64
+	// WindowStartedAt is the first plan-covered activity inside the
+	// rate-limit window (WindowConsumption.FirstActivityAt). Without a
+	// vendor-reported reset, the window is estimated to reset one window
+	// length after it.
+	WindowStartedAt time.Time
 	// Authoritative, when set, is the vendor's own reported rate-limit
 	// window % (see AuthoritativeWindow). It drives the Window* block
 	// directly instead of the WindowMessages count — the same upgrade
@@ -159,8 +167,7 @@ func computeHeadroomFor(p Plan, in HeadroomInputs) HeadroomReport {
 		report.WindowUnit = p.WindowUnit
 		report.WindowConsumed = in.WindowMessages
 		report.WindowPct = math.Round(float64(in.WindowMessages)/float64(p.MessagesPerWindow)*10000) / 100
-		report.WindowResetsAt = in.Now.Add(p.RateLimitWindow).UTC()
-		report.WindowResetsIn = p.RateLimitWindow.String()
+		setEstimatedReset(&report, in.WindowStartedAt, p.RateLimitWindow, in.Now)
 		windowRisk = classifyWindowRisk(report.WindowPct)
 	}
 
@@ -248,8 +255,7 @@ func applyAuthoritativeWindow(report *HeadroomReport, p Plan, in HeadroomInputs)
 		report.WindowResetsAt = in.Now.Add(a.ResetsIn).UTC()
 		report.WindowResetsIn = a.ResetsIn.Round(time.Minute).String()
 	} else {
-		report.WindowResetsAt = in.Now.Add(p.RateLimitWindow).UTC()
-		report.WindowResetsIn = p.RateLimitWindow.String()
+		setEstimatedReset(report, in.WindowStartedAt, p.RateLimitWindow, in.Now)
 	}
 	return classifyWindowRisk(report.WindowPct)
 }
@@ -355,4 +361,33 @@ func computeSpendHeadroom(p Plan, in HeadroomInputs) HeadroomReport {
 	report.SpendPct = math.Round(spend/in.SpendLimitUSD*10000) / 100
 	report.OverageRisk = classifyWindowRisk(report.SpendPct)
 	return report
+}
+
+// estimatedResetIn is how long until a rolling window resets when the vendor
+// has not said: the window opens with its first message, so it resets one
+// window length after that. ok is false when nothing has happened inside the
+// window — no window is running, so there is no reset to report.
+//
+// This replaces "now + window length", which put the reset a full window
+// away on every call — "resets in 5h0m0s" whether the window opened a
+// minute or four hours ago.
+func estimatedResetIn(started time.Time, window time.Duration, now time.Time) (time.Duration, bool) {
+	if started.IsZero() || window <= 0 {
+		return 0, false
+	}
+	d := started.Add(window).Sub(now)
+	if d <= 0 {
+		return 0, false
+	}
+	return d, true
+}
+
+func setEstimatedReset(r *HeadroomReport, started time.Time, window time.Duration, now time.Time) {
+	d, ok := estimatedResetIn(started, window, now)
+	if !ok {
+		return
+	}
+	r.WindowResetsAt = now.Add(d).UTC()
+	r.WindowResetsIn = d.Round(time.Minute).String()
+	r.WindowResetEstimated = true
 }

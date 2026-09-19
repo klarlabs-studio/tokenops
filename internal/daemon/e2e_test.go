@@ -77,6 +77,14 @@ func TestE2EDaemonBootHealthShutdown(t *testing.T) {
 	if ev.Counts == nil {
 		t.Errorf("events.counts nil")
 	}
+	// Counts are lifetime totals; the daemon must also say when they
+	// happened, or a months-old alert reads as a current one.
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err == nil {
+		if _, ok := raw["spans"]; !ok {
+			t.Errorf("/api/domain-events has no spans: %s", body)
+		}
+	}
 
 	cancel()
 	select {

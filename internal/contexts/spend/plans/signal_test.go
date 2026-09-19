@@ -1,6 +1,9 @@
 package plans
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestClassifySignalNoObservations(t *testing.T) {
 	q := ClassifySignal(SignalInputs{})
@@ -161,5 +164,24 @@ func TestClassifySignalVendorWiredTrumpsAll(t *testing.T) {
 	}
 	if q.Source != SignalSourceVendorAPI {
 		t.Errorf("source=%q want vendor_usage_api", q.Source)
+	}
+}
+
+// Counting every source for every provider graded a Codex plan by Claude
+// Code's transcripts: codex-plus headroom carried "Reads ~/.claude/projects"
+// as its signal. Each provider is graded by the sources that report on it.
+func TestSignalIsGradedPerProvider(t *testing.T) {
+	counts := map[string]int64{"claude-code-jsonl": 6087}
+	codex := ClassifySignal(SignalFromCounts(counts, "openai"))
+	if codex.Source == "claude_code_jsonl" || strings.Contains(codex.Caveat, ".claude/projects") {
+		t.Errorf("codex graded by Claude Code's transcripts: %+v", codex)
+	}
+	claude := ClassifySignal(SignalFromCounts(counts, "anthropic"))
+	if claude.Source != "claude_code_jsonl" {
+		t.Errorf("anthropic lost its own source: %+v", claude)
+	}
+	// The proxy carries traffic for every provider, so it counts for each.
+	if got := SignalFromCounts(map[string]int64{"proxy": 3}, "openai").ProxyEventsInWindow; got != 3 {
+		t.Errorf("proxy events dropped for openai: %d", got)
 	}
 }
