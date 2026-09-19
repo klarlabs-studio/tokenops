@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.64.0 - 2026-09-19
+
+TokenOps has two surfaces, and asking each of them the same question gave
+different answers. A parity check added in 0.62.0 wrote down which: eight
+capabilities existed on one side only, some deliberately and some because
+nobody had noticed. This closes all eight.
+
+The sharp ones ran the wrong way. `mode`, `preferred_model`, `budget_set`
+and `routing_rule_set` were writable through the MCP server and
+unreachable from a terminal, where `tokenops config` could only print. An
+operator wanting any of them hand-edited YAML — the tool was easier to
+drive by asking an agent than by using it.
+
+### Added
+
+- **`tokenops_pricing`** answers what a model costs and when that card was
+  fetched. The router in the same process derives its capability tiers
+  from exactly this data, while an agent choosing between models had no
+  way to ask for it. (#305)
+- **`tokenops_vendor_usage_status`** answers whether the numbers are being
+  fed. `tokenops_data_sources` reports event counts, which says a source
+  is silent but not whether it was ever switched on — "no data" and "no
+  data because nothing is configured" are different answers, and only the
+  second has a fix. (#305)
+- **Six commands for settings the terminal could not reach**: `tokenops
+  mode`, `preferred-model {list|set|unset}`, `budget {list|set|unset}`,
+  `routing proposals`, `routing rule {list|set|unset}` and
+  `optimizations`. Each writes the same config the MCP tools write and
+  restarts the daemon afterwards. (#306)
+
+### Notes
+
+- `budget set` refuses a budget with no ceiling and names both ways to
+  give it one. On a flat-rate plan real spend is $0 at the margin, so a
+  USD limit can never trip, and a budget that cannot fire is worse than no
+  budget — `--basis tokens` or `--basis equivalent` are the ones that work
+  there.
+- `mode active` now says, at the point of setting it, that active mode
+  does its work inside the daemon. That was always true and never stated
+  where it mattered.
+- The per-source config hints moved from the CLI into config so both
+  surfaces share one implementation rather than the MCP tool growing a
+  second copy that quietly diverges.
+- The parity check had a hole and it showed immediately: it built its own
+  server from a fixed list, so a tool group it did not know to register
+  was invisible to the diff. Two tools were added and it passed unchanged.
+  It now reads its own source and fails when a registration is missing.
+
+**GAP entries remaining in the parity allowlist: zero.**
+
 ## 0.63.0 - 2026-09-18
 
 The drop counter surfaced in 0.59.0 made its first catch, and it was a
