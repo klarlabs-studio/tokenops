@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -119,10 +120,17 @@ type consumerEntry struct {
 	Requests int64   `json:"requests"`
 	Tokens   int64   `json:"tokens"`
 	CostUSD  float64 `json:"cost_usd"`
+	// APIEquivalentUSD is what the group would have billed at API list
+	// prices. On a flat-rate plan CostUSD is $0 for every group, so this
+	// is the only dollar figure that tells the groups apart — and the one
+	// the list is ranked on.
+	APIEquivalentUSD float64 `json:"api_equivalent_usd"`
 }
 
 // topConsumersResult is the typed payload for tokenops_top_consumers.
 type topConsumersResult struct {
+	// By is the grouping actually applied, "model" when the caller
+	// omitted it — not an echo of the input, which was "" in that case.
 	By       string          `json:"by"`
 	Top      []consumerEntry `json:"top"`
 	Currency string          `json:"currency"`
@@ -187,14 +195,14 @@ func RegisterTools(s *Server, d Deps) error {
 		})
 
 	s.Tool("tokenops_top_consumers").
-		Description("List top N spenders grouped by model, provider, workflow, or agent. Default group=model, top=5.").
+		Description("List top N consumers grouped by model, provider, workflow, or agent (default by=model, top=5), ranked by API-equivalent value — what the traffic would bill at list prices — then by tokens. On a flat-rate plan real cost_usd is $0 for every group, so api_equivalent_usd is the figure that ranks them.").
 		OutputSchema(topConsumersResult{}).
 		Handler(func(ctx context.Context, in topConsumersInput) (*topConsumersResult, error) {
 			return topConsumers(ctx, d, in)
 		})
 
 	s.Tool("tokenops_burn_rate").
-		Description("Return the spend burn rate over the last N hours (default 24).").
+		Description("Return the burn rate over the last N hours (default 24): cost, tokens, and API-equivalent value, with the hourly series. On a flat-rate plan cost is $0 at the margin, so tokens are the burn.").
 		Handler(func(ctx context.Context, in burnRateInput) (string, error) {
 			return burnRate(ctx, d, in)
 		})
@@ -290,15 +298,27 @@ func spendSummary(ctx context.Context, d Deps, in spendSummaryInput) (*spendSumm
 	return res, nil
 }
 
+// consumerGroups maps the accepted "by" values to their aggregation. The
+// schema enum already refuses anything else at the MCP boundary; the
+// handler enforces the same set so it does not depend on every caller
+// arriving through that boundary.
+var consumerGroups = map[string]analytics.Group{
+	"model":    analytics.GroupModel,
+	"provider": analytics.GroupProvider,
+	"workflow": analytics.GroupWorkflow,
+	"agent":    analytics.GroupAgent,
+}
+
 func topConsumers(ctx context.Context, d Deps, in topConsumersInput) (*topConsumersResult, error) {
-	group := analytics.GroupModel
-	switch strings.ToLower(in.By) {
-	case "provider":
-		group = analytics.GroupProvider
-	case "workflow":
-		group = analytics.GroupWorkflow
-	case "agent":
-		group = analytics.GroupAgent
+	by := strings.ToLower(strings.TrimSpace(in.By))
+	if by == "" {
+		by = "model"
+	}
+	group, ok := consumerGroups[by]
+	if !ok {
+		// The old switch fell through to model here, answering a typo
+		// with a confident ranking of something nobody asked about.
+		return nil, fmt.Errorf("by: unknown grouping %q (want model, provider, workflow, or agent)", in.By)
 	}
 	f := analytics.Filter{}
 	if in.Since != "" {
@@ -322,25 +342,7 @@ func topConsumers(ctx context.Context, d Deps, in topConsumersInput) (*topConsum
 	if err != nil {
 		return nil, err
 	}
-	totals := map[string]float64{}
-	tokens := map[string]int64{}
-	reqs := map[string]int64{}
-	for _, r := range rows {
-		totals[r.GroupKey] += r.CostUSD
-		tokens[r.GroupKey] += r.TotalTokens
-		reqs[r.GroupKey] += r.Requests
-	}
-	out := make([]consumerEntry, 0, len(totals))
-	for k, v := range totals {
-		out = append(out, consumerEntry{Key: k, Requests: reqs[k], Tokens: tokens[k], CostUSD: v})
-	}
-	for i := 0; i < len(out); i++ {
-		for j := i + 1; j < len(out); j++ {
-			if out[j].CostUSD > out[i].CostUSD {
-				out[i], out[j] = out[j], out[i]
-			}
-		}
-	}
+	out := rankConsumers(rows)
 	top := in.Top
 	if top <= 0 {
 		top = 5
@@ -348,7 +350,45 @@ func topConsumers(ctx context.Context, d Deps, in topConsumersInput) (*topConsum
 	if top < len(out) {
 		out = out[:top]
 	}
-	return &topConsumersResult{By: in.By, Top: out, Currency: d.Spend.Currency()}, nil
+	return &topConsumersResult{By: by, Top: out, Currency: d.Spend.Currency()}, nil
+}
+
+// rankConsumers folds per-bucket rows into one entry per group key and
+// orders them the way `tokenops spend` does.
+//
+// Ranked on the API-equivalent, not the real cost. On a flat-rate plan
+// every plan-covered group costs $0, so a cost-keyed ranking put the one
+// metered call first and left the models that carried the work in map
+// order behind it. Tokens break ties (unpriced models are $0 on both
+// figures), then the key, so the order is the same on every call.
+func rankConsumers(rows []analytics.Row) []consumerEntry {
+	byKey := map[string]*consumerEntry{}
+	for _, r := range rows {
+		e, ok := byKey[r.GroupKey]
+		if !ok {
+			e = &consumerEntry{Key: r.GroupKey}
+			byKey[r.GroupKey] = e
+		}
+		e.Requests += r.Requests
+		e.Tokens += r.TotalTokens
+		e.CostUSD += r.CostUSD
+		e.APIEquivalentUSD += r.APIEquivalentUSD
+	}
+	out := make([]consumerEntry, 0, len(byKey))
+	for _, e := range byKey {
+		out = append(out, *e)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.APIEquivalentUSD != b.APIEquivalentUSD {
+			return a.APIEquivalentUSD > b.APIEquivalentUSD
+		}
+		if a.Tokens != b.Tokens {
+			return a.Tokens > b.Tokens
+		}
+		return a.Key < b.Key
+	})
+	return out
 }
 
 func burnRate(ctx context.Context, d Deps, in burnRateInput) (string, error) {
@@ -362,22 +402,29 @@ func burnRate(ctx context.Context, d Deps, in burnRateInput) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var total float64
-	series := make([]float64, 0, len(rows))
+	b := burnTotals{Hours: hours, Currency: d.Spend.Currency()}
 	for _, r := range rows {
-		total += r.CostUSD
-		series = append(series, r.CostUSD)
+		b.Cost += r.CostUSD
+		b.Tokens += r.TotalTokens
+		b.APIEquivalent += r.APIEquivalentUSD
+		b.CostSeries = append(b.CostSeries, r.CostUSD)
+		b.TokenSeries = append(b.TokenSeries, float64(r.TotalTokens))
 	}
 	payload := map[string]any{
-		"hours":    hours,
-		"cost":     total,
-		"hourly":   rows,
-		"currency": d.Spend.Currency(),
+		"hours":  hours,
+		"cost":   b.Cost,
+		"tokens": b.Tokens,
+		// The list-price value of the window. On a flat-rate plan cost
+		// is structurally zero, and this is the dollar figure that still
+		// moves with the work.
+		"api_equivalent_usd": b.APIEquivalent,
+		"hourly":             rows,
+		"currency":           b.Currency,
 	}
 	if q := measurementQuality(d); q != nil {
 		payload["measurement"] = q
 	}
-	return markdownPayload(renderBurnSummary(hours, total, d.Spend.Currency(), series), payload), nil
+	return markdownPayload(renderBurnSummary(b), payload), nil
 }
 
 func forecastSpend(ctx context.Context, d Deps, in forecastInput) (*forecastResult, error) {
@@ -401,13 +448,32 @@ func forecastSpend(ctx context.Context, d Deps, in forecastInput) (*forecastResu
 	}
 	preds := forecast.AutoForecast(history, horizon, 24*time.Hour)
 	tokenHistory := forecast.SeriesFromRows(rows, forecast.TotalTokens)
-	return &forecastResult{
+	res := &forecastResult{
 		HorizonDays:    horizon,
 		HistoryPoints:  len(history),
 		Forecast:       preds,
 		ForecastTokens: forecast.AutoForecast(tokenHistory, horizon, 24*time.Hour),
 		Currency:       d.Spend.Currency(),
-	}, nil
+	}
+	if allZeroForecast(preds) {
+		// A flat-rate cost history is zero at every point, so the
+		// projection is a flat zero with zero-width bands. Returned bare
+		// that reads as a broken forecaster rather than the correct
+		// answer to a question that does not apply.
+		res.Note = "cost history is all zero (plan-covered traffic bills $0 at the margin), so the dollar forecast is flat zero — forecast_tokens carries the signal"
+	}
+	return res, nil
+}
+
+// allZeroForecast reports whether a projection is entirely zero. The CLI's
+// `tokenops spend --forecast` suppresses the same case.
+func allZeroForecast(points []forecast.Prediction) bool {
+	for _, p := range points {
+		if p.Value != 0 || p.Lower != 0 || p.Upper != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func workflowTrace(ctx context.Context, d Deps, in workflowTraceInput) (*workflowTraceResult, error) {

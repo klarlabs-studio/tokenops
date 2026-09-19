@@ -1,13 +1,19 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 func adviceServer(t *testing.T, cfg *config.Config) *Server {
@@ -103,5 +109,77 @@ func TestRoutingAdviseInfersASingleProvider(t *testing.T) {
 		map[string]any{"instruction": "fix it", "model": "gpt-4o"}))
 	if strings.Contains(res.Reason, "no provider named") {
 		t.Errorf("refused to infer the only configured provider: %q", res.Reason)
+	}
+}
+
+// tightWindowDeps binds anthropic to a windowed plan and records a
+// usage-meter reading at 95% of the five-hour window, so a mechanical turn
+// gets as far as the pricing table.
+func tightWindowDeps(t *testing.T) RoutingAdviceDeps {
+	t.Helper()
+	st, err := sqlite.Open(context.Background(), filepath.Join(t.TempDir(), "r.db"), sqlite.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	reading := &eventschema.Envelope{
+		ID: "meter", SchemaVersion: eventschema.SchemaVersion,
+		Type: eventschema.EventTypePrompt, Timestamp: time.Now().UTC().Add(-time.Minute),
+		Source:     "claude-usage-meter",
+		Attributes: map[string]string{"five_hour_used_pct": "95"},
+		Payload:    &eventschema.PromptEvent{Provider: eventschema.ProviderAnthropic, Status: 200},
+	}
+	if err := st.Append(context.Background(), reading); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{Plans: map[string]string{"anthropic": "claude-max-20x"}}
+	cfg.Optimizer.SmartRouting.Enabled = true
+	return RoutingAdviceDeps{Config: cfg, Store: st}
+}
+
+func adviseOpus(t *testing.T, d RoutingAdviceDeps) routingAdviceResult {
+	t.Helper()
+	srv := NewServer("tokenops", "test", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err := RegisterRoutingAdviceTools(srv, d); err != nil {
+		t.Fatal(err)
+	}
+	return decodeAdvice(t, execTool(t, srv, "tokenops_routing_advise",
+		map[string]any{"instruction": "fix it", "model": "claude-opus-5", "tool_density": 0.9}))
+}
+
+// The description promises "what the pricing table currently calls
+// cheapest", but the tool built its own engine over the compiled-in table
+// while the rest of serve priced with the daemon-refreshed card. A model
+// the live card knows and the binary does not was invisible to the advice.
+func TestRoutingAdvisePricesWithTheInjectedEngine(t *testing.T) {
+	d := tightWindowDeps(t)
+	d.Spend = spend.NewEngine(spend.Table{Rates: map[spend.Key]spend.Rate{
+		{Provider: eventschema.ProviderAnthropic, Model: "claude-opus-5"}:    {InputPerMillion: 15, OutputPerMillion: 75},
+		{Provider: eventschema.ProviderAnthropic, Model: "claude-live-card"}: {InputPerMillion: 0.01, OutputPerMillion: 0.02},
+	}})
+	res := adviseOpus(t, d)
+	if res.Recommendation != "switch" || res.Model != "claude-live-card" {
+		t.Fatalf("advice = %s %q (%s), want a switch to the live card's cheapest model",
+			res.Recommendation, res.Model, res.Reason)
+	}
+}
+
+// Zero-value deps stay valid: no engine falls back to the compiled-in
+// table rather than to "no priced alternative".
+func TestRoutingAdviseFallsBackToTheDefaultTable(t *testing.T) {
+	res := adviseOpus(t, tightWindowDeps(t))
+	if res.Recommendation != "switch" || res.Model == "" || res.Model == "claude-live-card" {
+		t.Fatalf("advice = %s %q (%s), want a switch priced from the default table",
+			res.Recommendation, res.Model, res.Reason)
+	}
+}
+
+// Config hot-reloads now, so "reload your MCP server" sent the operator to
+// do something that changes nothing.
+func TestRoutingAdviseSetupNoteDoesNotAskForAReload(t *testing.T) {
+	res := decodeAdvice(t, execTool(t, adviceServer(t, nil), "tokenops_routing_advise",
+		map[string]any{"instruction": "fix it", "model": "gpt-4o", "provider": "openai"}))
+	if strings.Contains(res.Note, "reload your MCP server") {
+		t.Errorf("note still tells the operator to reload: %q", res.Note)
 	}
 }

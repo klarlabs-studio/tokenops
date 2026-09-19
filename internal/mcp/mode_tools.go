@@ -60,8 +60,8 @@ type budgetSetInput struct {
 type routingRuleSetInput struct {
 	Provider  string   `json:"provider" jsonschema:"description=Provider the rule applies to (anthropic, openai, gemini, mistral)"`
 	FromModel string   `json:"from_model" jsonschema:"description=Model to match; trailing * is a prefix match (e.g. claude-fable-5*)"`
-	ToModel   string   `json:"to_model,omitempty" jsonschema:"description=Cheaper target model"`
-	Quality   float64  `json:"quality,omitempty" jsonschema:"description=Confidence (0-1] that to_model preserves task quality"`
+	ToModel   string   `json:"to_model,omitempty" jsonschema:"description=Cheaper target model. Required unless delete."`
+	Quality   float64  `json:"quality,omitempty" jsonschema:"description=Confidence (0-1] that to_model preserves task quality. Required unless delete."`
 	Fallbacks []string `json:"fallbacks,omitempty"`
 	Delete    bool     `json:"delete,omitempty" jsonschema:"description=Remove the rule matching provider + from_model"`
 }
@@ -191,6 +191,11 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 				r := config.RoutingRuleConfig{
 					Provider: in.Provider, FromModel: in.FromModel, ToModel: in.ToModel,
 					Quality: in.Quality, Fallbacks: in.Fallbacks,
+				}
+				// Checked as given, before the file is touched, so the
+				// refusal names the argument — not an index into config.yaml.
+				if err := r.Validate(); err != nil {
+					return "", err
 				}
 				if idx >= 0 {
 					cfg.Optimizer.RoutingRules[idx] = r

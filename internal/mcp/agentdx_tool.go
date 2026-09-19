@@ -15,7 +15,26 @@ type AgentDXDeps struct {
 }
 
 type agentDXInput struct {
-	Days int `json:"days,omitempty" jsonschema:"description=Window in days (default 7). 0 reads all history."`
+	Days int  `json:"days,omitempty" jsonschema:"description=Window in days (default 7 when omitted or 0). Use all for every transcript on disk."`
+	All  bool `json:"all,omitempty" jsonschema:"description=Read all history instead of a days window. Overrides days."`
+}
+
+// windowDays resolves the transcript window for the story and agent-dx
+// tools: a positive day count, or -1 for all history.
+//
+// The schema used to say "0 reads all history" while the handler turned 0
+// into 7 — and an omitted field is also 0, so the promise was unreachable.
+// Zero has to mean the default, because that is what omitting the field
+// sends; "everything" gets its own switch. A negative days still reads
+// everything, as it always did.
+func windowDays(days int, all bool) int {
+	switch {
+	case all:
+		return -1
+	case days == 0:
+		return 7
+	}
+	return days
 }
 
 // agentDXResult is the typed payload for tokenops_agent_dx.
@@ -50,10 +69,7 @@ func RegisterAgentDXTools(s *Server, d AgentDXDeps) error {
 		Description("Measure what the operator's agent sessions are like to work with: turns and wall-clock per instruction, rework rate, interrupt rate, escalation rate, first-try rate, context growth, compactions — each graded, with the single highest-leverage change named. Derived from local transcripts; needs no proxy. Call this when asked how sessions are going, why work feels slow, or before proposing a change to how you and the operator work together.").
 		OutputSchema(agentDXResult{}).
 		Handler(func(_ context.Context, in agentDXInput) (*agentDXResult, error) {
-			days := in.Days
-			if days == 0 {
-				days = 7
-			}
+			days := windowDays(in.Days, in.All)
 			opts := agentdx.ExtractOptions{Root: d.Root}
 			window := "all history"
 			if days > 0 {
@@ -67,7 +83,7 @@ func RegisterAgentDXTools(s *Server, d AgentDXDeps) error {
 			m := agentdx.ComputeByProvider(records)
 			out := &agentDXResult{Window: window, Metrics: m, Grades: agentdx.Grade(m)}
 			if m.Prompts == 0 {
-				out.Note = "no instructions in this window — widen with days, or check the transcript root"
+				out.Note = "no instructions in this window — widen with days or all: true, or check the transcript root"
 				return out, nil
 			}
 			if rec, ok := agentdx.Recommend(m); ok {
