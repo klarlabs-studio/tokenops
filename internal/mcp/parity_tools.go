@@ -32,6 +32,10 @@ type ParityDeps struct {
 	// a pipeline built from config (optimizer.routing_rules etc.) so MCP
 	// replays match `tokenops replay`.
 	Pipeline *optimizer.Pipeline
+	// PipelineFor, when set, builds the pipeline at call time from the
+	// live config, so a routing rule written mid-session shows in the
+	// next replay. It wins over Pipeline.
+	PipelineFor func() *optimizer.Pipeline
 }
 
 // --- input structs --------------------------------------------------------
@@ -238,7 +242,7 @@ func runReplay(ctx context.Context, d ParityDeps, in replayInput) (*replay.Resul
 		}
 		sel.Until = t
 	}
-	pipeline := d.Pipeline
+	pipeline := d.pipeline()
 	if pipeline == nil {
 		pipeline = replay.DefaultPipeline(nil)
 	}
@@ -276,4 +280,13 @@ func runAudit(ctx context.Context, d ParityDeps, in auditInput) (*auditResult, e
 		return nil, err
 	}
 	return &auditResult{Entries: entries}, nil
+}
+
+// pipeline is the replay pipeline in effect for this call; nil means the
+// caller falls back to the default.
+func (d ParityDeps) pipeline() *optimizer.Pipeline {
+	if d.PipelineFor != nil {
+		return d.PipelineFor()
+	}
+	return d.Pipeline
 }

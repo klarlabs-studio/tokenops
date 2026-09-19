@@ -178,7 +178,7 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 		})
 
 	s.Tool("tokenops_routing_rule_set").
-		Description("Create, update (upsert by provider + from_model), or delete a model-routing rule. Rules show would-be savings in tokenops_replay; with mode=active the proxy rewrites matching live requests to the target model. Persists to config.yaml; daemon applies on restart.").
+		Description("Create, update (upsert by provider + from_model), or delete a model-routing rule. Rules show would-be savings in tokenops_replay; with mode=active the proxy rewrites matching live requests to the target model. Persists to config.yaml and restarts a supervised daemon so it takes effect.").
 		Handler(func(_ context.Context, in routingRuleSetInput) (string, error) {
 			path, err := d.path()
 			if err != nil {

@@ -160,7 +160,7 @@ func writeOfflineStatus(w io.Writer, base string, cfg config.Config, cfgErr erro
 		"daemon":  base,
 		"ready":   false,
 		"state":   "not_running",
-		"hint":    "daemon not running; run `tokenops start` to launch it. MCP-only deployments can ignore this and call `tokenops_status` via the MCP host instead.",
+		"hint":    "daemon not running; " + offlineRemedy(daemonSupervised()) + ". MCP-only deployments can ignore this and call `tokenops_status` via the MCP host instead.",
 		"version": version.String(),
 	}
 	if cfgErr == nil {
@@ -177,7 +177,7 @@ func writeOfflineStatus(w io.Writer, base string, cfg config.Config, cfgErr erro
 	if cfgErr == nil {
 		blockers := cfg.Blockers()
 		if len(blockers) == 0 {
-			fmt.Fprintln(w, "  blockers: none — start the daemon with `tokenops start`")
+			fmt.Fprintln(w, "  blockers: none — "+offlineRemedy(daemonSupervised()))
 		} else {
 			fmt.Fprintf(w, "  blockers: %s\n", strings.Join(blockers, ", "))
 			for _, action := range config.NextActionsFor(blockers) {
@@ -188,7 +188,7 @@ func writeOfflineStatus(w io.Writer, base string, cfg config.Config, cfgErr erro
 		fmt.Fprintf(w, "  config error: %v\n", cfgErr)
 	}
 	fmt.Fprintf(w, "  version: %s\n", version.String())
-	fmt.Fprintln(w, "  hint: run `tokenops start` to launch the daemon, or query `tokenops_status` via your MCP host for the serve-side view.")
+	fmt.Fprintln(w, "  hint: "+offlineRemedy(daemonSupervised())+", or query `tokenops_status` via your MCP host for the serve-side view.")
 	return nil
 }
 
@@ -282,4 +282,16 @@ func compactBody(body map[string]any) string {
 		return ""
 	}
 	return string(b)
+}
+
+// offlineRemedy says how to get a stopped daemon running on this machine.
+// Where a unit is installed, `tokenops start` would start a second daemon
+// beside the one launchd or systemd keeps trying to run, so the remedy is
+// the supervisor's restart; without one, installing the unit beats a
+// foreground process that dies with its terminal.
+func offlineRemedy(supervised bool) string {
+	if supervised {
+		return "it is supervised but not answering — run `tokenops daemon restart`, and check `tokenops daemon status` if it does not come up"
+	}
+	return "run `tokenops daemon install` to start it and keep it running (or `tokenops start` in a terminal you keep open)"
 }
