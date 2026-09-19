@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"os"
 	"sync"
 	"time"
 
@@ -40,6 +41,30 @@ type Poller struct {
 	mu        sync.Mutex
 	seen      map[string]struct{}
 	publishes int64
+
+	// lastSeen and dbReads belong to the scan goroutine alone.
+	lastSeen dbFingerprint
+	dbReads  int64
+}
+
+// dbFingerprint is the size and mtime of the opencode database and its
+// write-ahead log. SQLite commits land in the -wal first and reach the main
+// file at checkpoint, so a new row changes one of the two.
+type dbFingerprint struct {
+	dbSize, walSize   int64
+	dbMtime, walMtime time.Time
+}
+
+func fingerprint(dbPath string) (dbFingerprint, bool) {
+	db, err := os.Stat(dbPath)
+	if err != nil {
+		return dbFingerprint{}, false
+	}
+	fp := dbFingerprint{dbSize: db.Size(), dbMtime: db.ModTime()}
+	if wal, err := os.Stat(dbPath + "-wal"); err == nil {
+		fp.walSize, fp.walMtime = wal.Size(), wal.ModTime()
+	}
+	return fp, true
 }
 
 func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
@@ -83,7 +108,15 @@ func (p *Poller) resolveRoot() (string, error) {
 	return DefaultRoot()
 }
 
+// scan reads the message table when the database has changed since the
+// last read. An unchanged database holds no new turns; reading every row
+// of it each tick kept a 1.3 GB store untouched for months on the hot path.
 func (p *Poller) scan(ctx context.Context, root string) {
+	fp, ok := fingerprint(root)
+	if ok && fp == p.lastSeen {
+		return
+	}
+	p.dbReads++
 	if err := ReadMessages(root, func(turn Turn) error {
 		p.mu.Lock()
 		if _, dup := p.seen[turn.ID]; dup {
@@ -103,7 +136,10 @@ func (p *Poller) scan(ctx context.Context, root string) {
 		}
 	}); err != nil {
 		p.opts.Logger.Warn("opencode db read failed", "path", root, "err", err)
+		// Leave lastSeen as it was, so the next scan tries again.
+		return
 	}
+	p.lastSeen = fp
 }
 
 // newEnvelope maps an opencode Turn to a PromptEvent envelope. AgentID and
