@@ -15,6 +15,8 @@ import (
 type ApprovalDeps struct {
 	StorePath  string
 	ConfigPath string
+	// ApplyConfig makes a written config take effect; see applyConfig.
+	ApplyConfig func() string
 }
 
 func (d ApprovalDeps) store() (*routingapproval.Store, error) {
@@ -180,7 +182,7 @@ func RegisterApprovalTools(s *Server, d ApprovalDeps) error {
 			return jsonString(map[string]any{
 				"preferred_models": cfg.PreferredModels,
 				"config":           path,
-				"note":             restartHint,
+				"note":             applyConfig(d.ApplyConfig),
 			}), nil
 		})
 

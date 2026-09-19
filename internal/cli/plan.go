@@ -61,16 +61,6 @@ Example:
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			provider, planName := args[0], args[1]
-			if err := plans.Validate(planName); err != nil {
-				return err
-			}
-			if modern, aliased := plans.ResolveAlias(planName); aliased {
-				fmt.Fprintf(cmd.OutOrStdout(),
-					"renamed %s -> %s (catalog migrated in v0.6.0; using the modern name)\n",
-					planName, modern,
-				)
-				planName = modern
-			}
 			path, err := resolveMutableConfigPath(configPathFlag)
 			if err != nil {
 				return err
@@ -79,42 +69,25 @@ Example:
 			if err != nil {
 				return err
 			}
-			if cfg.Plans == nil {
-				cfg.Plans = map[string]string{}
-			}
-			// A spend-denominated plan has no vendor window, so its
-			// denominator is a spend limit — typed in, or reported by the
-			// vendor's meter. Refuse the binding with neither rather than
-			// report a percentage against a number nobody chose.
-			meterReportsLimit := provider == "anthropic" && cfg.VendorUsage.ClaudeUsageMeter.Enabled
-			if err := plans.ValidateSpendLimit(planName, spendLimit, meterReportsLimit); err != nil {
+			b, err := cfg.BindPlan(provider, planName, config.PlanLimit{
+				SpendLimitUSD: spendLimit, Window: limitWindow, RateFactor: rateFactor,
+			})
+			if err != nil {
 				return err
 			}
-			if spendLimit > 0 || rateFactor > 0 || limitWindow != "" {
-				if cfg.PlanLimits == nil {
-					cfg.PlanLimits = map[string]config.PlanLimit{}
-				}
-				pl := cfg.PlanLimits[provider]
-				if spendLimit > 0 {
-					pl.SpendLimitUSD = spendLimit
-				}
-				if limitWindow != "" {
-					pl.Window = limitWindow
-				}
-				if rateFactor > 0 {
-					pl.RateFactor = rateFactor
-				}
-				cfg.PlanLimits[provider] = pl
+			if b.RenamedFrom != "" {
+				fmt.Fprintf(cmd.OutOrStdout(),
+					"renamed %s -> %s (catalog migrated in v0.6.0; using the modern name)\n",
+					b.RenamedFrom, b.Plan,
+				)
 			}
-			previous, existed := cfg.Plans[provider]
-			cfg.Plans[provider] = planName
 			if err := writeMutableConfig(path, cfg); err != nil {
 				return err
 			}
-			if existed && previous != planName {
-				fmt.Fprintf(cmd.OutOrStdout(), "updated plans.%s: %s -> %s\n", provider, previous, planName)
+			if b.Previous != "" && b.Previous != b.Plan {
+				fmt.Fprintf(cmd.OutOrStdout(), "updated plans.%s: %s -> %s\n", provider, b.Previous, b.Plan)
 			} else {
-				fmt.Fprintf(cmd.OutOrStdout(), "set plans.%s = %s\n", provider, planName)
+				fmt.Fprintf(cmd.OutOrStdout(), "set plans.%s = %s\n", provider, b.Plan)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", path)
 			applyRestart(cmd.OutOrStdout(), !noRestartFlag, true)

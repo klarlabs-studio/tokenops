@@ -15,6 +15,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/session"
+	"go.klarlabs.de/tokenops/internal/daemon"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/mcp"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
@@ -211,11 +212,14 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	}); err != nil {
 		return fmt.Errorf("register routing advice tools: %w", err)
 	}
-	if err := mcp.RegisterApprovalTools(srv, mcp.ApprovalDeps{}); err != nil {
+	if err := mcp.RegisterApprovalTools(srv, mcp.ApprovalDeps{ApplyConfig: applyConfigRestart}); err != nil {
 		return fmt.Errorf("register approval tools: %w", err)
 	}
-	if err := mcp.RegisterModeTools(srv, mcp.ModeDeps{}); err != nil {
+	if err := mcp.RegisterModeTools(srv, mcp.ModeDeps{ApplyConfig: applyConfigRestart}); err != nil {
 		return fmt.Errorf("register mode tools: %w", err)
+	}
+	if err := mcp.RegisterSetupTools(srv, mcp.SetupDeps{ApplyConfig: applyConfigRestart}); err != nil {
+		return fmt.Errorf("register setup tools: %w", err)
 	}
 	if err := mcp.RegisterHelpTool(srv); err != nil {
 		return fmt.Errorf("register help tool: %w", err)
@@ -265,3 +269,7 @@ func gapCounts(store *sqlite.Store) func(context.Context, time.Time, time.Time) 
 	}
 	return store.CountBySource
 }
+
+// applyConfigRestart restarts the supervised daemon after an MCP tool writes
+// config, so an agent's change is live without a command nobody ran.
+func applyConfigRestart() string { return daemon.RestartForConfig().Note() }
