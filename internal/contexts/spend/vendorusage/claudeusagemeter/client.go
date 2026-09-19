@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"time"
 )
@@ -38,28 +39,112 @@ type OrgEntry struct {
 	Capabilities []string `json:"capabilities,omitempty"`
 }
 
-// UsageResponse mirrors the /api/organizations/{org_id}/usage payload.
-// All three Window blocks share the same shape, but we keep them as
-// concrete fields rather than a map so the field names appear in
-// downstream telemetry without us guessing keys.
+// UsageResponse is the part of /api/organizations/{org_id}/usage this
+// meter reads. Every block is nullable, and absent means absent: a Claude
+// Enterprise org returns null for all three windows and reports only
+// extra_usage, while a personal chat-only org returns null throughout.
+// Decoding null as a zero-value struct is how this meter used to report
+// "Anthropic says 0% used" for windows that do not exist.
 type UsageResponse struct {
-	FiveHour     Window      `json:"five_hour"`
-	SevenDay     Window      `json:"seven_day"`
-	SevenDayOpus Window      `json:"seven_day_opus"`
-	ExtraUsage   *ExtraUsage `json:"extra_usage,omitempty"`
+	FiveHour     *Window     `json:"five_hour"`
+	SevenDay     *Window     `json:"seven_day"`
+	SevenDayOpus *Window     `json:"seven_day_opus"`
+	ExtraUsage   *ExtraUsage `json:"extra_usage"`
+
+	// Unrecognised names the blocks that were present but did not have
+	// the shape this decoder reads. They are dropped rather than read as
+	// zeros; the poller reports them.
+	Unrecognised []string `json:"-"`
 }
 
 // Window is one rate-limit window's snapshot.
+//
+// The field names are the ones public claude.ai usage trackers read. They
+// have not been confirmed against a Pro or Max response here — the only
+// responses observed so far are Enterprise and chat-only, where every
+// window is null. A window without a readable utilization is therefore
+// reported as unrecognised, never read as 0%.
 type Window struct {
-	UtilizationPct float64 `json:"utilization_pct"`
-	ResetAt        string  `json:"reset_at,omitempty"`
+	Utilization *float64 `json:"utilization"`
+	ResetsAt    string   `json:"resets_at"`
 }
 
-// ExtraUsage captures the operator's add-on (overage) credit balance
-// when their plan allows top-ups beyond the standard cap.
+// ExtraUsage is the account's usage-billed allowance: on Claude Enterprise,
+// the member's monthly spend limit and what has been spent against it.
+// Amounts are in minor units of Currency, scaled by DecimalPlaces —
+// monthly_limit 150000 with decimal_places 2 is 1500.00. Observed on a real
+// Enterprise account:
+//
+//	"extra_usage": {"is_enabled": true, "monthly_limit": 150000,
+//	  "used_credits": 109563, "utilization": 73.042, "currency": "USD",
+//	  "decimal_places": 2, "spend_limit_reached": false, ...}
 type ExtraUsage struct {
-	CurrentSpending float64 `json:"current_spending"`
-	BudgetLimit     float64 `json:"budget_limit"`
+	IsEnabled         *bool    `json:"is_enabled"`
+	MonthlyLimit      *float64 `json:"monthly_limit"`
+	UsedCredits       *float64 `json:"used_credits"`
+	Utilization       *float64 `json:"utilization"`
+	Currency          string   `json:"currency"`
+	DecimalPlaces     int      `json:"decimal_places"`
+	SpendLimitReached bool     `json:"spend_limit_reached"`
+}
+
+// Amounts returns spend and limit in major units of Currency.
+func (e *ExtraUsage) Amounts() (used, limit float64) {
+	scale := math.Pow10(e.DecimalPlaces)
+	return *e.UsedCredits / scale, *e.MonthlyLimit / scale
+}
+
+// HasSignal reports whether the response carries anything to meter.
+func (u *UsageResponse) HasSignal() bool {
+	return u.FiveHour != nil || u.SevenDay != nil || u.SevenDayOpus != nil || u.ExtraUsage != nil
+}
+
+// Summary renders what Anthropic reported, one line per block, for an
+// operator to check against claude.ai. Blocks it did not report are left
+// out rather than shown as 0%.
+func (u *UsageResponse) Summary() []string {
+	var lines []string
+	for _, w := range []struct {
+		label string
+		win   *Window
+	}{{"5-hour window", u.FiveHour}, {"7-day window", u.SevenDay}, {"7-day (Opus)", u.SevenDayOpus}} {
+		if w.win != nil {
+			lines = append(lines, fmt.Sprintf("%-16s %.1f%% used", w.label+":", *w.win.Utilization))
+		}
+	}
+	if e := u.ExtraUsage; e != nil {
+		used, limit := e.Amounts()
+		lines = append(lines, fmt.Sprintf("%-16s %.2f of %.2f %s this month (%.1f%%)",
+			"Usage spend:", used, limit, e.Currency, used/limit*100))
+	}
+	return lines
+}
+
+// dropUnreadable nils every block present without the fields this decoder
+// reads, and records its name, so no caller can mistake it for a reading.
+func (u *UsageResponse) dropUnreadable() {
+	for _, w := range []struct {
+		name string
+		win  **Window
+	}{{"five_hour", &u.FiveHour}, {"seven_day", &u.SevenDay}, {"seven_day_opus", &u.SevenDayOpus}} {
+		if *w.win != nil && (*w.win).Utilization == nil {
+			*w.win = nil
+			u.Unrecognised = append(u.Unrecognised, w.name)
+		}
+	}
+	if e := u.ExtraUsage; e != nil {
+		switch {
+		case e.IsEnabled == nil:
+			u.ExtraUsage = nil
+			u.Unrecognised = append(u.Unrecognised, "extra_usage")
+		case !*e.IsEnabled:
+			// Present but switched off: nothing to meter, not unreadable.
+			u.ExtraUsage = nil
+		case e.MonthlyLimit == nil || e.UsedCredits == nil || *e.MonthlyLimit <= 0:
+			u.ExtraUsage = nil
+			u.Unrecognised = append(u.Unrecognised, "extra_usage")
+		}
+	}
 }
 
 // Client wraps the claude.ai cookie-authenticated endpoints.
@@ -124,6 +209,7 @@ func (c *Client) Usage(ctx context.Context, orgID string) (*UsageResponse, error
 	if err := json.Unmarshal(body, &u); err != nil {
 		return nil, fmt.Errorf("claude-usage-meter: decode usage: %w", err)
 	}
+	u.dropUnreadable()
 	return &u, nil
 }
 

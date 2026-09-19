@@ -87,7 +87,7 @@ func TestEnterpriseBindsOnlyWithASpendLimit(t *testing.T) {
 	if err := Validate("claude-enterprise"); err != nil {
 		t.Fatalf("claude-enterprise should be a catalog entry: %v", err)
 	}
-	err := ValidateSpendLimit("claude-enterprise", 0)
+	err := ValidateSpendLimit("claude-enterprise", 0, false)
 	if err == nil {
 		t.Fatal("binding Enterprise without a spend limit should be refused")
 	}

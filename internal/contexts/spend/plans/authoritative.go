@@ -160,3 +160,56 @@ func positiveOrZero(d time.Duration) time.Duration {
 	}
 	return 0
 }
+
+// VendorSpend is the vendor's own figure for a usage-billed allowance:
+// what has been spent this month and the limit it is spent against. On
+// Claude Enterprise the Claude usage meter reads it from claude.ai.
+type VendorSpend struct {
+	UsedUSD      float64
+	LimitUSD     float64
+	LimitReached bool
+	Source       string
+	At           time.Time
+}
+
+// LatestVendorSpend returns the newest vendor-reported spend for provider
+// in the current calendar month (UTC), or nil. A reading from an earlier
+// month describes a limit that has since reset, so it is not used; neither
+// is one in a currency other than USD, which headroom reports in.
+func LatestVendorSpend(ctx context.Context, reader EventReader, provider eventschema.Provider, now time.Time) *VendorSpend {
+	if provider != eventschema.ProviderAnthropic {
+		return nil
+	}
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, monthStart)
+	if err != nil {
+		return nil
+	}
+	var best *eventschema.Envelope
+	for _, e := range events {
+		if e == nil || e.Attributes == nil || e.Timestamp.Before(monthStart) {
+			continue
+		}
+		if _, ok := e.Attributes["extra_usage_limit"]; !ok {
+			continue
+		}
+		if best == nil || e.Timestamp.After(best.Timestamp) {
+			best = e
+		}
+	}
+	if best == nil || best.Attributes["extra_usage_currency"] != "USD" {
+		return nil
+	}
+	used, err1 := strconv.ParseFloat(best.Attributes["extra_usage_used"], 64)
+	limit, err2 := strconv.ParseFloat(best.Attributes["extra_usage_limit"], 64)
+	if err1 != nil || err2 != nil || limit <= 0 {
+		return nil
+	}
+	return &VendorSpend{
+		UsedUSD:      used,
+		LimitUSD:     limit,
+		LimitReached: best.Attributes["extra_usage_limit_reached"] == "true",
+		Source:       "claude_usage_meter:extra_usage",
+		At:           best.Timestamp,
+	}
+}

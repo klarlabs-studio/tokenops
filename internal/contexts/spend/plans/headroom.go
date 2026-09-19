@@ -36,6 +36,10 @@ type HeadroomReport struct {
 	SpendLimitUSD float64 `json:"spend_limit_usd,omitempty"`
 	SpendUSD      float64 `json:"spend_usd,omitempty"`
 	SpendPct      float64 `json:"spend_pct,omitempty"`
+	// SpendSource says where the spend figures came from: "vendor" when
+	// the vendor reported both spend and limit, "estimate" when spend was
+	// recomputed from token counts against the configured limit.
+	SpendSource string `json:"spend_source,omitempty"`
 
 	// SignalQuality types the trust the operator can place in this
 	// report. When the report is built from MCP-ping activity only,
@@ -83,6 +87,10 @@ type HeadroomInputs struct {
 	// plans read these.
 	SpendLimitUSD float64
 	SpendUSD      float64
+	// VendorSpend, when set, is the vendor's own spend and limit. It
+	// replaces both SpendUSD and SpendLimitUSD: what the vendor bills
+	// outranks a recomputation from a public rate card (ADR 0003).
+	VendorSpend *VendorSpend
 	// RateFactor scales measured spend to a negotiated rate. Enterprise
 	// contracts are frequently discounted off list while this tool costs
 	// from the public rate card, so without it a console limit is compared
@@ -314,22 +322,34 @@ func daysRemainingInMonth(now time.Time) float64 {
 // rates from the first token has no window, and rendering an empty one would
 // invite the reader to believe there is a cap somewhere they are under.
 func computeSpendHeadroom(p Plan, in HeadroomInputs) HeadroomReport {
-	spend := in.SpendUSD
-	if in.RateFactor > 0 && in.RateFactor != 1 {
-		spend *= in.RateFactor
-	}
 	report := HeadroomReport{
 		PlanName:      p.Name,
 		Display:       p.Display,
 		Provider:      p.Provider,
-		SpendUSD:      spend,
-		SpendLimitUSD: in.SpendLimitUSD,
 		OverageRisk:   RiskUnknown,
 		SignalQuality: ClassifySignal(in.Signal),
 	}
+	if v := in.VendorSpend; v != nil {
+		// The vendor's own figures: the amount it will bill against the
+		// limit it enforces. No rate factor — they are already the rate.
+		report.SpendUSD, report.SpendLimitUSD, report.SpendSource = v.UsedUSD, v.LimitUSD, "vendor"
+		report.SpendPct = math.Round(v.UsedUSD/v.LimitUSD*10000) / 100
+		report.OverageRisk = classifyWindowRisk(report.SpendPct)
+		if v.LimitReached {
+			report.OverageRisk = RiskHigh
+			report.Note = "the vendor reports the spend limit as reached"
+		}
+		return report
+	}
+	spend := in.SpendUSD
+	if in.RateFactor > 0 && in.RateFactor != 1 {
+		spend *= in.RateFactor
+	}
+	report.SpendUSD, report.SpendLimitUSD, report.SpendSource = spend, in.SpendLimitUSD, "estimate"
 	if in.SpendLimitUSD <= 0 {
-		report.Note = "no org spend limit configured, so there is no denominator — " +
-			"set plan_limits.<provider>.spend_limit_usd to the figure your admins set in the vendor console"
+		report.Note = "no spend limit known, so there is no denominator — set up the Claude usage meter " +
+			"(`tokenops vendor-usage setup claude-usage-meter`) to read it from Anthropic, or set " +
+			"plan_limits.<provider>.spend_limit_usd to the figure your admins configured"
 		return report
 	}
 	report.SpendPct = math.Round(spend/in.SpendLimitUSD*10000) / 100

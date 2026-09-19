@@ -51,13 +51,29 @@ tokenops plan headroom          # live consumption + overage risk
 
 `claude-enterprise` has no rate-limit window: usage-based Enterprise is
 billed at API rates from the first token, so there is no cap to be under.
-Headroom is measured against the org spend limit your admins set in the
-vendor console, and the binding is refused without it:
+Headroom is measured against your monthly spend limit.
+
+The best source is Anthropic itself. With the
+[Claude usage meter](#tokenops-vendor-usage-setup-claude-usage-meter) set up,
+claude.ai reports what you have spent this month and the limit you are
+spending against, and headroom uses those figures — no admin key needed,
+and nothing to type in:
+
+```bash
+tokenops vendor-usage setup claude-usage-meter
+tokenops plan set anthropic claude-enterprise
+```
+
+Without the meter, give the limit yourself; the binding is refused with
+neither, rather than measured against a number nobody chose:
 
 ```bash
 tokenops plan set anthropic claude-enterprise \
   --spend-limit 5000 --limit-window monthly
 ```
+
+`plan headroom` says which you are looking at: spend *reported by the
+vendor*, or *estimated from token counts*.
 
 ```yaml
 plan_limits:
@@ -173,10 +189,15 @@ tokenops task list --since 30d --json   # MCP-host friendly
 
 ### `tokenops vendor-usage setup claude-usage-meter`
 
-Connects claude.ai's own usage meter — the 5-hour and 7-day utilisation
-percentages the app shows. It is the only authoritative reading TokenOps
-can get for a Claude subscription; everything else is estimated from
-message counts against a published cap.
+Connects claude.ai's own usage meter — what the app itself shows: the
+5-hour and 7-day utilisation on Pro and Max, or on Claude Enterprise, what
+you have spent this month against your spend limit. It is the only
+authoritative reading TokenOps can get for a Claude subscription;
+everything else is estimated.
+
+Only what Anthropic reports is recorded. A window your plan does not have
+is left out, never shown as 0%, and a reply in a shape this version cannot
+read is logged and skipped rather than stored as zeros.
 
 ```bash
 tokenops vendor-usage setup claude-usage-meter

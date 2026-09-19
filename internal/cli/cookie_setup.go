@@ -107,11 +107,17 @@ func runCookieSetup(cmd *cobra.Command, configPath string, restart bool) error {
 		return fmt.Errorf("could not read usage for %q: %w\n  nothing was written", org.Name, err)
 	}
 
+	if !usage.HasSignal() {
+		return fmt.Errorf("the key works, but Anthropic reports no usage limits for %q — nothing to meter there. "+
+			"If you belong to another organization, run setup again and choose it. Nothing was written", org.Name)
+	}
 	fmt.Fprintf(out, "\nConnected to %s. Anthropic reports:\n", org.Name)
-	fmt.Fprintf(out, "  5-hour window:   %.1f%% used\n", usage.FiveHour.UtilizationPct)
-	fmt.Fprintf(out, "  7-day window:    %.1f%% used\n", usage.SevenDay.UtilizationPct)
-	if usage.SevenDayOpus.UtilizationPct > 0 {
-		fmt.Fprintf(out, "  7-day (Opus):    %.1f%% used\n", usage.SevenDayOpus.UtilizationPct)
+	for _, line := range usage.Summary() {
+		fmt.Fprintln(out, "  "+line)
+	}
+	if len(usage.Unrecognised) > 0 {
+		fmt.Fprintf(out, "  (also returned, in a shape this version cannot read: %s — skipped, not shown as zero)\n",
+			strings.Join(usage.Unrecognised, ", "))
 	}
 
 	path, err := resolveMutableConfigPath(configPath)

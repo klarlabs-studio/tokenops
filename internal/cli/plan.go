@@ -83,10 +83,11 @@ Example:
 				cfg.Plans = map[string]string{}
 			}
 			// A spend-denominated plan has no vendor window, so its
-			// denominator is the org's own spend limit. Refuse the binding
-			// without one rather than report a percentage against a number
-			// nobody chose.
-			if err := plans.ValidateSpendLimit(planName, spendLimit); err != nil {
+			// denominator is a spend limit — typed in, or reported by the
+			// vendor's meter. Refuse the binding with neither rather than
+			// report a percentage against a number nobody chose.
+			meterReportsLimit := provider == "anthropic" && cfg.VendorUsage.ClaudeUsageMeter.Enabled
+			if err := plans.ValidateSpendLimit(planName, spendLimit, meterReportsLimit); err != nil {
 				return err
 			}
 			if spendLimit > 0 || rateFactor > 0 || limitWindow != "" {
@@ -236,33 +237,11 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 			reports := make([]plans.HeadroomReport, 0, len(cfg.Plans))
 			now := time.Now().UTC()
 			for provider, planName := range cfg.Plans {
-				cons, err := plans.ConsumptionFor(ctx, reader, provider, now)
+				lim := cfg.PlanLimits[provider]
+				inputs, err := plans.AssembleHeadroomInputs(ctx, reader, store.CountBySource, provider, planName,
+					plans.SpendLimit{LimitUSD: lim.SpendLimitUSD, Window: lim.Window, RateFactor: lim.RateFactor}, now)
 				if err != nil {
-					return fmt.Errorf("consumption[%s]: %w", provider, err)
-				}
-				inputs := plans.HeadroomInputs{
-					ConsumedTokens: cons.ConsumedTokens,
-					Last7DayTokens: cons.Last7DayTokens,
-					Now:            now,
-				}
-				if p, ok := plans.Lookup(planName); ok && p.RateLimitWindow > 0 {
-					win, err := plans.ConsumptionInWindow(ctx, reader, provider, now, p.RateLimitWindow)
-					if err != nil {
-						return fmt.Errorf("window[%s]: %w", provider, err)
-					}
-					inputs.WindowMessages = win.MessagesInWindow
-				}
-				// A spend-denominated plan is measured against the org's own
-				// limit, over the period the console states it in.
-				if p, ok := plans.Lookup(planName); ok && p.SpendDenominated {
-					lim := cfg.PlanLimits[provider]
-					inputs.SpendLimitUSD = lim.SpendLimitUSD
-					inputs.RateFactor = lim.RateFactor
-					spend, serr := plans.SpendInWindow(ctx, reader, provider, now, lim.Window)
-					if serr != nil {
-						return fmt.Errorf("spend[%s]: %w", provider, serr)
-					}
-					inputs.SpendUSD = spend
+					return err
 				}
 				report, err := plans.ComputeHeadroom(planName, inputs)
 				if err != nil {
@@ -303,8 +282,8 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 				// own limit; it has no window and renders none.
 				if r.SpendLimitUSD > 0 {
 					fmt.Fprintf(cmd.OutOrStdout(),
-						"  spend:   %.2f / %.2f USD (%.1f%%)\n",
-						r.SpendUSD, r.SpendLimitUSD, r.SpendPct,
+						"  spend:   %.2f / %.2f USD (%.1f%%) — %s\n",
+						r.SpendUSD, r.SpendLimitUSD, r.SpendPct, spendSourceLabel(r.SpendSource),
 					)
 				} else if r.SpendUSD > 0 {
 					fmt.Fprintf(cmd.OutOrStdout(), "  spend:   %.2f USD (no limit configured)\n", r.SpendUSD)
@@ -356,4 +335,13 @@ func resolvePlanDB(override string) (string, error) {
 		return "", err
 	}
 	return filepath.Join(home, ".tokenops", "events.db"), nil
+}
+
+// spendSourceLabel says whose figure the spend line is, so an estimate is
+// never read as the bill.
+func spendSourceLabel(source string) string {
+	if source == "vendor" {
+		return "reported by the vendor"
+	}
+	return "estimated from token counts"
 }
