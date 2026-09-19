@@ -25,10 +25,25 @@ type GapDeps struct {
 	// tool rather than reporting an empty one, because "no sources" and
 	// "no config loaded" are different answers.
 	Config *config.Config
+	// ConfigGetter returns the live configuration at call time and takes
+	// precedence over Config. tokenops_vendor_usage_setup switches sources
+	// on by rewriting config.yaml under a running server; reading the
+	// startup snapshot, this tool kept reporting them off until the MCP
+	// client restarted. A nil result disables the tool, like a nil Config.
+	ConfigGetter func() *config.Config
 	// Counts returns events per source tag over a window.
 	Counts func(ctx context.Context, since, until time.Time) (map[string]int64, error)
 	// PricingDir is where rate snapshots live; empty uses the default.
 	PricingDir string
+}
+
+// activeConfig prefers the live getter and falls back to the static
+// snapshot for callers that wire no watcher.
+func (d GapDeps) activeConfig() *config.Config {
+	if d.ConfigGetter != nil {
+		return d.ConfigGetter()
+	}
+	return d.Config
 }
 
 type pricingInput struct {
@@ -130,7 +145,8 @@ func RegisterGapTools(s *Server, d GapDeps) error {
 		Description("Return which usage sources are configured, whether each is switched on, and how many events each produced recently. Call it before trusting a spend or headroom figure: a source that is off reports nothing, and a source that is on but silent means ingestion has stopped. Each row carries the config hint naming what to set when a source is dark.").
 		OutputSchema(vendorUsageResult{}).
 		Handler(func(ctx context.Context, in vendorUsageInput) (*vendorUsageResult, error) {
-			if d.Config == nil || d.Counts == nil {
+			cfg := d.activeConfig()
+			if cfg == nil || d.Counts == nil {
 				return &vendorUsageResult{
 					Error: "storage_disabled",
 					Hint:  "run `tokenops init` then restart the daemon",
@@ -146,14 +162,14 @@ func RegisterGapTools(s *Server, d GapDeps) error {
 				return nil, err
 			}
 			res := &vendorUsageResult{WindowHours: hours}
-			for _, src := range d.Config.VendorUsageSources() {
+			for _, src := range cfg.VendorUsageSources() {
 				res.Sources = append(res.Sources, vendorUsageSourceStatus{
 					Name:        src.Name,
 					SourceTag:   src.SourceTag,
 					Enabled:     src.Enabled || src.AlwaysOn,
 					AlwaysOn:    src.AlwaysOn,
 					EventsInWin: counts[src.SourceTag],
-					ConfigHint:  d.Config.VendorUsageConfigHint(src.SourceTag),
+					ConfigHint:  cfg.VendorUsageConfigHint(src.SourceTag),
 				})
 			}
 			return res, nil
