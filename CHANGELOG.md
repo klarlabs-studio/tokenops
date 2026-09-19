@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.66.0 - 2026-09-19
+
+The Claude usage meter reads what claude.ai actually sends. It was written
+against a response shape nobody had observed, and its tests were built from
+the same guess, so they could only agree with it. Checked against real
+responses from a Claude Enterprise, a Claude Max and a personal chat-only
+account, it had never read one correctly.
+
+### Added
+
+- **Claude Enterprise spend, from Anthropic.** On Enterprise, claude.ai
+  reports what you have spent this month and your spend limit. Headroom now
+  uses those figures for a spend-billed plan instead of estimating spend
+  from token counts against a limit you typed in — no admin key needed.
+  `plan headroom` says which you are looking at: spend *reported by the
+  vendor*, or *estimated from token counts*. (#320)
+- **`plan set anthropic claude-enterprise` needs no `--spend-limit`** when
+  the meter is set up, because Anthropic supplies the limit. Without the
+  meter, the typed limit still works as before. (#320)
+
+### Fixed
+
+- **Spend was never read.** The meter looked for field names the response
+  does not have; the one reading ever stored on a real install was all
+  zeros. (#320)
+- **A window the plan does not have is no longer "0% used".** Enterprise
+  has no 5-hour or weekly window; the meter turned those into 0% and
+  headroom would have trusted it as Anthropic's own figure. Only what
+  Anthropic reports is recorded now, and a reply the meter cannot read is
+  logged and skipped instead of stored as zeros. (#320)
+- **Readings no longer freeze.** Only the first reading after each 5-hour
+  reset was ever kept — and on Enterprise, only the first reading ever — so
+  headroom showed usage as it stood minutes after the reset. Every change
+  is now kept. (#320)
+- **The terminal and your agent give the same headroom.** `plan headroom`
+  never used the vendor's window percentages, and the
+  `tokenops_plan_headroom` tool never read the Enterprise spend limit, so
+  an agent was told no limit was configured when one was. Both now build
+  their report the same way. (#320)
+- **The right organization is metered.** An account can hold several — an
+  Enterprise org beside a personal or API one — and the meter took whichever
+  came first. It now takes the one that reports usage. Setup shows only what
+  Anthropic reported, and refuses an organization with nothing to meter.
+  (#320)
+
+### Notes
+
+- The field names are confirmed against real responses on all three account
+  types, and those responses are the test fixtures. (#321)
+- Enterprise spend is used only in USD and only for the current month; a
+  reading from before the month rolled over described a limit that has
+  since reset.
+
 ## 0.65.4 - 2026-09-19
 
 Reported from a real upgrade. `brew upgrade` told the operator to run
