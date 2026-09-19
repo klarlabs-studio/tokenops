@@ -4,7 +4,30 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.65.0**.
+Current release: **v0.65.1**.
+
+## v0.65.1 — the watcher stops costing more than it watches
+
+TokenOps runs a small background process that reads what your coding agents
+write to disk. It was meant to be invisible. On a well-used machine it was
+holding most of a CPU core, all day, every day.
+
+The cause was simple once measured. Every thirty seconds it re-read every
+Claude Code transcript, every Codex session and the whole opencode database
+from the start — on the machine that found it, close to three gigabytes,
+almost none of which had changed since the last look. The more you used your
+agents, the more the tool watching them cost you, which is exactly backwards
+for a tool whose job is to make agent work cheaper.
+
+It now remembers how far it has read in each file and picks up from there,
+and leaves alone anything that has not changed. On the same machine and the
+same data, its steady-state CPU went from about a third of a core to about
+one percent.
+
+One quieter fix came with it. A single very long line in a transcript —
+a large tool result — used to stop the reader for the rest of that file, so
+everything the agent did afterwards in that session went uncounted. That
+line is now skipped on its own.
 
 ## v0.65.0 — a name that says what it does
 
