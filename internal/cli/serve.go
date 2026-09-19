@@ -17,6 +17,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/session"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/mcp"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -228,6 +229,12 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if err := mcp.RegisterFmtTools(srv); err != nil {
 		return fmt.Errorf("register fmt tools: %w", err)
 	}
+	if err := mcp.RegisterGapTools(srv, mcp.GapDeps{
+		Config: gapConfig(cfg, cfgErr),
+		Counts: gapCounts(components.Store),
+	}); err != nil {
+		return fmt.Errorf("register gap tools: %w", err)
+	}
 	if err := mcp.RegisterCoachTools(srv, mcp.CoachDeps{
 		JSONLRoot: cfg.VendorUsage.ClaudeCodeJSONL.Root,
 	}); err != nil {
@@ -236,4 +243,25 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 
 	logger.Info("tokenops serve ready", "version", version.Version)
 	return mcp.ServeStdio(ctx, srv, mcp.SessionMiddleware(tracker, sessionProvider))
+}
+
+// gapConfig hands the vendor-usage tool a config only when one loaded. A
+// nil config disables that tool rather than reporting an empty source list,
+// because "no sources configured" and "no config read" are different
+// answers and only one of them is the operator's doing.
+func gapConfig(cfg config.Config, cfgErr error) *config.Config {
+	if cfgErr != nil {
+		return nil
+	}
+	c := cfg
+	return &c
+}
+
+// gapCounts adapts the store to the counting hook, or nil when storage is
+// off and there is nothing to count.
+func gapCounts(store *sqlite.Store) func(context.Context, time.Time, time.Time) (map[string]int64, error) {
+	if store == nil {
+		return nil
+	}
+	return store.CountBySource
 }
