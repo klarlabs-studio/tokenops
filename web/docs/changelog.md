@@ -4,7 +4,23 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.65.2**.
+Current release: **v0.65.3**.
+
+## v0.65.3 — tidying without stopping the room
+
+0.65.2 moved TokenOps' tidy-up away from startup, so it no longer collided
+with the history being loaded in. The next tidy-up showed why that was only
+half a fix: anything written while it ran still had to wait, and waited
+long enough to come close to being lost.
+
+The tidy-up rewrote the whole store to give back a few hundred kilobytes,
+and nothing else could write until it finished — half a minute on a
+well-used machine, every time it had anything to remove. It now gives the
+space back in small pieces, each over in a fraction of a second, so nothing
+waits behind it.
+
+Existing stores pay the old cost once more, on the first tidy-up after
+upgrading, which converts them. New ones start out converted.
 
 ## v0.65.2 — two jobs, one lock
 

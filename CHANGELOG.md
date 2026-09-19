@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.65.3 - 2026-09-19
+
+0.65.2 moved the first retention pass off the startup replay. The first
+delayed pass showed that was not enough: ordinary writes landing during it
+failed three attempts in a row and cleared only once it finished.
+
+### Fixed
+
+- **Retention reclaims space in small chunks instead of rewriting the
+  database.** With `reclaim: true`, every pass that deleted anything ran a
+  full VACUUM — the whole database rewritten under the write lock, 27–31
+  seconds on a 440 MB store, to hand back ~400 KB. Stores now use SQLite's
+  incremental auto-vacuum, and reclaim frees pages 256 at a time, each step
+  its own short write. On a copy of that store, freeing 443 pages took
+  0.295s and 0.004s. (#316)
+
+### Notes
+
+- A store created before this release pays for one more full VACUUM, on the
+  first reclaim after upgrading, which converts it. The log shows
+  `mode=convert` for that pass and `mode=incremental` after. The 5-minute
+  startup delay from 0.65.2 keeps that one conversion off the startup
+  replay.
+- New stores are created incremental and never need the conversion.
+
 ## 0.65.2 - 2026-09-19
 
 Found while verifying 0.65.1 on the machine that reported the CPU problem.
