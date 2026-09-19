@@ -361,23 +361,25 @@ func unmodelledPlanHint(name string) string {
 	return ""
 }
 
-// ValidateSpendLimit checks that a spend-denominated plan has been given the
-// limit only its operator can supply.
+// ValidateSpendLimit checks that a spend-denominated plan has a limit to be
+// measured against: one the operator supplies, or one the vendor reports.
 //
-// The limit lives in config rather than the catalog because it is per-org,
-// negotiated, and changeable from a console this tool cannot see. Refusing
-// the binding is the point: a spend-denominated plan with a defaulted limit
-// would report a percentage against a number nobody chose, which reads
-// exactly as authoritative as a real one.
-func ValidateSpendLimit(name string, limitUSD float64) error {
+// The operator's limit lives in config rather than the catalog because it
+// is per-org, negotiated, and changeable from a console this tool cannot
+// see. Refusing a binding with neither is the point: a spend-denominated
+// plan with a defaulted limit would report a percentage against a number
+// nobody chose, which reads exactly as authoritative as a real one.
+// vendorReportsLimit is true when a vendor meter that reports the limit
+// (the Claude usage meter, for Anthropic) is enabled.
+func ValidateSpendLimit(name string, limitUSD float64, vendorReportsLimit bool) error {
 	p, ok := Lookup(name)
 	if !ok || !p.SpendDenominated {
 		return nil
 	}
-	if limitUSD > 0 {
+	if limitUSD > 0 || vendorReportsLimit {
 		return nil
 	}
 	return fmt.Errorf("plan %q is billed at API rates and has no usage window, so headroom is measured "+
-		"against your org spend limit — set it with --spend-limit (the figure your admins configured "+
-		"in the vendor console)", name)
+		"against your spend limit. Either let Anthropic report it — `tokenops vendor-usage setup "+
+		"claude-usage-meter` — or set it with --spend-limit (the figure your admins configured)", name)
 }

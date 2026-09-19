@@ -54,17 +54,7 @@ func classifySignalFromStore(ctx context.Context, store *sqlite.Store, since, un
 	if err != nil {
 		return plans.SignalInputs{}, err
 	}
-	return plans.SignalInputs{
-		ProxyEventsInWindow:      counts["proxy"],
-		MCPPingsInWindow:         counts["mcp-session"],
-		ClaudeCodeCacheInWindow:  counts["claude-code-stats-cache"],
-		ClaudeCodeJSONLInWindow:  counts["claude-code-jsonl"],
-		CodexJSONLInWindow:       counts["codex-jsonl"],
-		CopilotInWindow:          counts["github-copilot"],
-		CursorInWindow:           counts["cursor-web"],
-		ClaudeUsageMeterInWindow: counts["claude-usage-meter"],
-		VendorAPIWired:           counts["vendor-usage-anthropic"] > 0,
-	}, nil
+	return plans.SignalFromCounts(counts), nil
 }
 
 func (r planStoreReader) ReadEvents(ctx context.Context, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
@@ -208,29 +198,11 @@ func planHeadroom(ctx context.Context, d PlanDeps) (*planHeadroomResult, error) 
 	now := time.Now().UTC()
 	reports := make([]plans.HeadroomReport, 0, len(cfg.Plans))
 	for provider, planName := range cfg.Plans {
-		cons, err := plans.ConsumptionFor(ctx, reader, provider, now)
+		lim := cfg.PlanLimits[provider]
+		inputs, err := plans.AssembleHeadroomInputs(ctx, reader, d.Store.CountBySource, provider, planName,
+			plans.SpendLimit{LimitUSD: lim.SpendLimitUSD, Window: lim.Window, RateFactor: lim.RateFactor}, now)
 		if err != nil {
-			return nil, fmt.Errorf("consumption[%s]: %w", provider, err)
-		}
-		inputs := plans.HeadroomInputs{
-			ConsumedTokens: cons.ConsumedTokens,
-			Last7DayTokens: cons.Last7DayTokens,
-			Now:            now,
-			// Copilot / Cursor have no rolling window; their meter is monthly.
-			MonthlyAuthoritative: plans.LatestAuthoritativeMonthly(ctx, reader, eventschema.Provider(provider), now),
-		}
-		if p, ok := plans.Lookup(planName); ok && p.RateLimitWindow > 0 {
-			win, err := plans.ConsumptionInWindow(ctx, reader, provider, now, p.RateLimitWindow)
-			if err != nil {
-				return nil, fmt.Errorf("window[%s]: %w", provider, err)
-			}
-			inputs.WindowMessages = win.MessagesInWindow
-			signal, err := classifySignalFromStore(ctx, d.Store, now.Add(-p.RateLimitWindow), now)
-			if err != nil {
-				return nil, fmt.Errorf("signal[%s]: %w", provider, err)
-			}
-			inputs.Signal = signal
-			inputs.Authoritative = plans.LatestAuthoritativeWindow(ctx, reader, eventschema.Provider(provider), p, now)
+			return nil, err
 		}
 		report, err := plans.ComputeHeadroom(planName, inputs)
 		if err != nil {

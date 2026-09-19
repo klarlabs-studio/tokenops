@@ -7,6 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,10 +32,8 @@ type PollerOptions struct {
 }
 
 // Poller wraps the cookie-auth claude.ai client with a tick loop and
-// envelope emission. Dedup is by (org_id, five_hour reset_at) since
-// the five-hour window resets are the most granular timestamp the
-// API ships; weekly utilization changes inside that bucket are
-// rolled into the same envelope (overwrite by deterministic ID).
+// envelope emission. Each reading that differs from the last one published
+// becomes its own event; the newest is what headroom reads.
 type Poller struct {
 	bus  events.Bus
 	opts PollerOptions
@@ -43,7 +44,12 @@ type Poller struct {
 	publishes   int64
 	lastErr     error
 	lastErrTime time.Time
-	lastSeenKey string
+	// lastPublished is the attribute set of the last reading published,
+	// so an unchanged reading is not stored again.
+	lastPublished string
+	// lastUnrecognised is the last set of unreadable blocks reported, so
+	// the warning is logged when it changes rather than every poll.
+	lastUnrecognised string
 }
 
 func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
@@ -112,7 +118,7 @@ func (p *Poller) scan(ctx context.Context) {
 		}
 	}
 	if p.orgID == "" {
-		orgs, err := p.client.Organizations(ctx)
+		orgID, err := p.resolveOrg(ctx)
 		if err != nil {
 			p.recordErr(err)
 			if errors.Is(err, ErrUnauthorized) {
@@ -122,12 +128,7 @@ func (p *Poller) scan(ctx context.Context) {
 			p.opts.Logger.Warn("claude-usage-meter: organizations lookup failed", "err", err)
 			return
 		}
-		if len(orgs) == 0 {
-			p.recordErr(fmt.Errorf("no organizations returned for sessionKey"))
-			return
-		}
-		p.orgID = orgs[0].UUID
-		p.opts.Logger.Info("claude-usage-meter: resolved org_id", "org_id", p.orgID, "org_name", orgs[0].Name)
+		p.orgID = orgID
 	}
 	usage, err := p.client.Usage(ctx, p.orgID)
 	if err != nil {
@@ -140,22 +141,73 @@ func (p *Poller) scan(ctx context.Context) {
 		return
 	}
 	p.recordSuccess()
-	// Dedup by five_hour.reset_at — the most granular field that
-	// changes on a known cadence. Weekly utilization shifts inside
-	// the same five-hour bucket overwrite via deterministic envelope
-	// ID and the store dedups, so this just saves a publish cycle.
-	key := usage.FiveHour.ResetAt
+	p.reportUnrecognised(usage.Unrecognised)
+	if !usage.HasSignal() {
+		p.opts.Logger.Debug("claude-usage-meter: Anthropic reports nothing to meter for this org")
+		return
+	}
+	env := newEnvelope(time.Now().UTC(), p.orgID, usage)
+	key := attrsKey(env.Attributes)
 	p.mu.Lock()
-	if key != "" && key == p.lastSeenKey {
+	if key == p.lastPublished {
 		p.mu.Unlock()
 		return
 	}
-	p.lastSeenKey = key
+	p.lastPublished = key
 	p.mu.Unlock()
-	env := newEnvelope(time.Now().UTC(), p.orgID, usage)
 	if p.bus != nil {
 		p.publishWait(ctx, env)
 	}
+}
+
+// resolveOrg picks the organization to meter when config names none. An
+// account can belong to several — a Claude Enterprise org and a personal
+// chat-only one, say — and only some carry usage. The first with anything
+// to meter wins; with none, the first listed.
+func (p *Poller) resolveOrg(ctx context.Context) (string, error) {
+	orgs, err := p.client.Organizations(ctx)
+	if err != nil {
+		return "", err
+	}
+	if len(orgs) == 0 {
+		return "", errors.New("no organizations returned for sessionKey")
+	}
+	for _, o := range orgs {
+		if u, err := p.client.Usage(ctx, o.UUID); err == nil && u.HasSignal() {
+			p.opts.Logger.Info("claude-usage-meter: resolved org_id", "org_id", o.UUID)
+			return o.UUID, nil
+		}
+	}
+	p.opts.Logger.Info("claude-usage-meter: resolved org_id; no organization reports usage yet", "org_id", orgs[0].UUID)
+	return orgs[0].UUID, nil
+}
+
+// reportUnrecognised warns when Anthropic returned a block this meter cannot
+// read. Those blocks are dropped rather than read as zeros, so without this
+// the meter would go quiet with no reason given.
+func (p *Poller) reportUnrecognised(names []string) {
+	key := strings.Join(names, ",")
+	p.mu.Lock()
+	changed := key != p.lastUnrecognised
+	p.lastUnrecognised = key
+	p.mu.Unlock()
+	if changed && key != "" {
+		p.opts.Logger.Warn("claude-usage-meter: Anthropic returned usage in a shape this version cannot read; "+
+			"those readings are skipped, not reported as zero", "blocks", key)
+	}
+}
+
+func attrsKey(attrs map[string]string) string {
+	keys := make([]string, 0, len(attrs))
+	for k := range attrs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for _, k := range keys {
+		b.WriteString(k + "=" + attrs[k] + ";")
+	}
+	return b.String()
 }
 
 func (p *Poller) recordErr(err error) {
@@ -171,25 +223,37 @@ func (p *Poller) recordSuccess() {
 	p.lastErr = nil
 }
 
-// newEnvelope serialises the usage snapshot into a PromptEvent
-// envelope. The three utilization percentages + reset timestamps
-// live in Attributes so the future Max-aware session_budget MCP
-// tool can read them directly. Payload token counts stay zero —
-// this is a quota-state snapshot, not a per-turn record.
+// newEnvelope serialises one usage reading into a PromptEvent envelope.
+// Only blocks Anthropic reported are written: a window it did not return
+// has no attribute, so headroom falls back to its estimate instead of
+// reading a 0% nobody measured. Payload token counts stay zero — this is a
+// quota-state snapshot, not a per-turn record.
+//
+// The ID is per reading. It used to be derived from the five-hour reset
+// time, and the store keeps the first event per ID, so only the first poll
+// after each reset was ever stored — and on Enterprise, with no window, the
+// first reading ever.
 func newEnvelope(ts time.Time, orgID string, u *UsageResponse) *eventschema.Envelope {
-	h := sha256.Sum256([]byte("claude-usage-meter|" + orgID + "|" + u.FiveHour.ResetAt))
-	attrs := map[string]string{
-		"org_id":                  orgID,
-		"five_hour_used_pct":      fmt.Sprintf("%.2f", u.FiveHour.UtilizationPct),
-		"five_hour_reset_at":      u.FiveHour.ResetAt,
-		"seven_day_used_pct":      fmt.Sprintf("%.2f", u.SevenDay.UtilizationPct),
-		"seven_day_reset_at":      u.SevenDay.ResetAt,
-		"seven_day_opus_used_pct": fmt.Sprintf("%.2f", u.SevenDayOpus.UtilizationPct),
-		"seven_day_opus_reset_at": u.SevenDayOpus.ResetAt,
+	h := sha256.Sum256([]byte("claude-usage-meter|" + orgID + "|" + strconv.FormatInt(ts.UnixNano(), 10)))
+	attrs := map[string]string{"org_id": orgID}
+	for _, w := range []struct {
+		prefix string
+		win    *Window
+	}{{"five_hour", u.FiveHour}, {"seven_day", u.SevenDay}, {"seven_day_opus", u.SevenDayOpus}} {
+		if w.win == nil {
+			continue
+		}
+		attrs[w.prefix+"_used_pct"] = fmt.Sprintf("%.2f", *w.win.Utilization)
+		if w.win.ResetsAt != "" {
+			attrs[w.prefix+"_reset_at"] = w.win.ResetsAt
+		}
 	}
-	if u.ExtraUsage != nil {
-		attrs["extra_usage_current"] = fmt.Sprintf("%.2f", u.ExtraUsage.CurrentSpending)
-		attrs["extra_usage_budget"] = fmt.Sprintf("%.2f", u.ExtraUsage.BudgetLimit)
+	if e := u.ExtraUsage; e != nil {
+		used, limit := e.Amounts()
+		attrs["extra_usage_used"] = fmt.Sprintf("%.2f", used)
+		attrs["extra_usage_limit"] = fmt.Sprintf("%.2f", limit)
+		attrs["extra_usage_currency"] = e.Currency
+		attrs["extra_usage_limit_reached"] = strconv.FormatBool(e.SpendLimitReached)
 	}
 	return &eventschema.Envelope{
 		ID:            "ack-" + hex.EncodeToString(h[:8]),
