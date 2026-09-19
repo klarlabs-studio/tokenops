@@ -29,7 +29,6 @@
 package codexjsonl
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -37,6 +36,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/jsonltail"
 )
 
 // Turn is one parsed token_count event. The `last_token_usage` block
@@ -165,88 +166,97 @@ func ReadFile(path string, visit func(Turn) error) error {
 }
 
 func readReader(r io.Reader, visit func(Turn) error) error {
-	scanner := bufio.NewScanner(r)
-	buf := make([]byte, 0, 1024*1024)
-	scanner.Buffer(buf, 4*1024*1024)
-	var sessionID string
+	_, err := readLines(r, &readState{}, true, visit)
+	return err
+}
+
+// readState is what one rollout line depends on from the lines before it.
+// A poller resuming mid-file carries it forward, so a turn keeps the
+// session, model and sequence number a read from the start would give it.
+type readState struct {
+	sessionID string
 	// model is carried forward from the most recent turn_context, which
 	// is where Codex states it.
-	var model string
-	seq := 0
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-		if sessionID == "" {
-			var meta sessionMeta
-			if err := json.Unmarshal(line, &meta); err == nil && meta.Type == "session_meta" {
-				sessionID = meta.Payload.ID
-				continue
-			}
-		}
-		var raw rawLine
-		if err := json.Unmarshal(line, &raw); err != nil {
-			continue
-		}
-		// Codex states the model on its own turn_context record, ahead of
-		// the turns it applies to, and never on the token_count record
-		// that carries the usage. Carrying it forward is the only way a
-		// Codex turn arrives priceable: without it every one of them
-		// entered the store with an empty model, which the spend engine
-		// cannot look up, so the whole client reported $0.
-		if raw.Type == "turn_context" {
-			if m := strings.TrimSpace(raw.Payload.Model); m != "" {
-				model = m
-			}
-			continue
-		}
-		if raw.Type != "event_msg" || raw.Payload.Type != "token_count" {
-			continue
-		}
-		// Skip the initial rate-limits-only token_count emit (info nil).
-		if raw.Payload.Info == nil || raw.Payload.Info.LastTokenUsage == nil {
-			continue
-		}
-		u := raw.Payload.Info.LastTokenUsage
-		// Zero-token turns are info-only emits we don't need.
-		if u.InputTokens == 0 && u.OutputTokens == 0 && u.ReasoningOutputTokens == 0 {
-			continue
-		}
-		ts, err := time.Parse(time.RFC3339Nano, raw.Timestamp)
-		if err != nil {
-			continue
-		}
-		rl := RateLimits{}
-		if raw.Payload.RateLimits != nil {
-			rl.PlanType = raw.Payload.RateLimits.PlanType
-			if p := raw.Payload.RateLimits.Primary; p != nil {
-				rl.PrimaryUsedPercent = p.UsedPercent
-				rl.PrimaryWindowMinutes = p.WindowMinutes
-				rl.PrimaryResetsAtUnix = p.ResetsAt
-			}
-			if s := raw.Payload.RateLimits.Secondary; s != nil {
-				rl.SecondaryUsedPercent = s.UsedPercent
-				rl.SecondaryWindowMinutes = s.WindowMinutes
-				rl.SecondaryResetsAtUnix = s.ResetsAt
-			}
-		}
-		seq++
-		if err := visit(Turn{
-			Timestamp:      ts.UTC(),
-			SessionID:      sessionID,
-			InputTokens:    u.InputTokens,
-			CachedTokens:   u.CachedInputTokens,
-			OutputTokens:   u.OutputTokens,
-			ReasoningTok:   u.ReasoningOutputTokens,
-			TotalTokens:    u.TotalTokens,
-			Model:          model,
-			ContextWindow:  raw.Payload.Info.ModelContextWindow,
-			RateLimits:     rl,
-			RecordSequence: seq,
-		}); err != nil {
-			return err
+	model string
+	seq   int
+}
+
+// readLines reads r's complete lines through st; see jsonltail.ReadLines
+// for what final and the returned byte count mean.
+func readLines(r io.Reader, st *readState, final bool, visit func(Turn) error) (int64, error) {
+	return jsonltail.ReadLines(r, final, func(line []byte) error {
+		return st.visitLine(line, visit)
+	})
+}
+
+// visitLine parses one rollout line and hands a token_count turn with
+// usage to visit. Anything else only advances st.
+func (st *readState) visitLine(line []byte, visit func(Turn) error) error {
+	if st.sessionID == "" {
+		var meta sessionMeta
+		if err := json.Unmarshal(line, &meta); err == nil && meta.Type == "session_meta" {
+			st.sessionID = meta.Payload.ID
+			return nil
 		}
 	}
-	return scanner.Err()
+	var raw rawLine
+	if err := json.Unmarshal(line, &raw); err != nil {
+		return nil
+	}
+	// Codex states the model on its own turn_context record, ahead of
+	// the turns it applies to, and never on the token_count record
+	// that carries the usage. Carrying it forward is the only way a
+	// Codex turn arrives priceable: without it every one of them
+	// entered the store with an empty model, which the spend engine
+	// cannot look up, so the whole client reported $0.
+	if raw.Type == "turn_context" {
+		if m := strings.TrimSpace(raw.Payload.Model); m != "" {
+			st.model = m
+		}
+		return nil
+	}
+	if raw.Type != "event_msg" || raw.Payload.Type != "token_count" {
+		return nil
+	}
+	// Skip the initial rate-limits-only token_count emit (info nil).
+	if raw.Payload.Info == nil || raw.Payload.Info.LastTokenUsage == nil {
+		return nil
+	}
+	u := raw.Payload.Info.LastTokenUsage
+	// Zero-token turns are info-only emits we don't need.
+	if u.InputTokens == 0 && u.OutputTokens == 0 && u.ReasoningOutputTokens == 0 {
+		return nil
+	}
+	ts, err := time.Parse(time.RFC3339Nano, raw.Timestamp)
+	if err != nil {
+		return nil
+	}
+	rl := RateLimits{}
+	if raw.Payload.RateLimits != nil {
+		rl.PlanType = raw.Payload.RateLimits.PlanType
+		if p := raw.Payload.RateLimits.Primary; p != nil {
+			rl.PrimaryUsedPercent = p.UsedPercent
+			rl.PrimaryWindowMinutes = p.WindowMinutes
+			rl.PrimaryResetsAtUnix = p.ResetsAt
+		}
+		if s := raw.Payload.RateLimits.Secondary; s != nil {
+			rl.SecondaryUsedPercent = s.UsedPercent
+			rl.SecondaryWindowMinutes = s.WindowMinutes
+			rl.SecondaryResetsAtUnix = s.ResetsAt
+		}
+	}
+	st.seq++
+	return visit(Turn{
+		Timestamp:      ts.UTC(),
+		SessionID:      st.sessionID,
+		InputTokens:    u.InputTokens,
+		CachedTokens:   u.CachedInputTokens,
+		OutputTokens:   u.OutputTokens,
+		ReasoningTok:   u.ReasoningOutputTokens,
+		TotalTokens:    u.TotalTokens,
+		Model:          st.model,
+		ContextWindow:  raw.Payload.Info.ModelContextWindow,
+		RateLimits:     rl,
+		RecordSequence: st.seq,
+	})
 }
