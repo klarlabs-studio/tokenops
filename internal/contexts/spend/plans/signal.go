@@ -86,7 +86,7 @@ func ClassifySignal(in SignalInputs) SignalQuality {
 		return SignalQuality{
 			Level:  SignalLevelHigh,
 			Source: SignalSourceClaudeUsageMeter,
-			Caveat: "Polls claude.ai/api/organizations/{org_id}/usage with your browser sessionKey — same data Anthropic's own UI shows (5-hour, 7-day, 7-day-opus utilization). Undocumented endpoint; cookie expires every few weeks, daemon WARNs when re-paste is needed.",
+			Caveat: "Polls claude.ai/api/organizations/{org_id}/usage with your browser sessionKey — same data Anthropic's own UI shows: 5-hour and 7-day utilization, or on Claude Enterprise spend against your monthly limit. Undocumented endpoint; cookie expires every few weeks, daemon WARNs when re-paste is needed.",
 		}
 	case in.ClaudeCodeJSONLInWindow > 0:
 		return SignalQuality{

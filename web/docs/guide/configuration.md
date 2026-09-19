@@ -515,9 +515,15 @@ plan_limits:
     rate_factor: 0.8    # optional: scale to a negotiated rate
 ```
 
-Binding such a plan without `spend_limit_usd` is refused rather than
-defaulted: a percentage measured against a number nobody chose reads
-exactly as authoritative as a real one.
+These figures are the fallback. When the Claude usage meter is set up
+(`tokenops vendor-usage setup claude-usage-meter`), Anthropic reports both
+the month's spend and the limit, and headroom uses those instead — what
+the vendor bills outranks a recomputation from a rate card, so neither
+`spend_limit_usd` nor `rate_factor` applies to them.
+
+Binding such a plan with neither the meter nor `spend_limit_usd` is refused
+rather than defaulted: a percentage measured against a number nobody chose
+reads exactly as authoritative as a real one.
 
 `rate_factor` exists because enterprise rates are frequently negotiated
 off list while TokenOps costs from the public rate card. Without it your

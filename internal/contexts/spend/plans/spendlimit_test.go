@@ -27,14 +27,14 @@ func TestEnterpriseIsSpendDenominated(t *testing.T) {
 // The limit is the operator's to supply. Binding the plan without one must
 // fail rather than default to a number nobody chose.
 func TestSpendDenominatedPlanNeedsALimit(t *testing.T) {
-	if err := ValidateSpendLimit("claude-enterprise", 0); err == nil {
+	if err := ValidateSpendLimit("claude-enterprise", 0, false); err == nil {
 		t.Fatal("binding a spend-denominated plan with no limit should be refused")
 	}
-	if err := ValidateSpendLimit("claude-enterprise", 5000); err != nil {
+	if err := ValidateSpendLimit("claude-enterprise", 5000, false); err != nil {
 		t.Fatalf("a supplied limit should be accepted: %v", err)
 	}
 	// A windowed plan neither needs nor accepts one.
-	if err := ValidateSpendLimit("claude-max-20x", 0); err != nil {
+	if err := ValidateSpendLimit("claude-max-20x", 0, false); err != nil {
 		t.Fatalf("a windowed plan needs no spend limit: %v", err)
 	}
 }
@@ -109,5 +109,13 @@ func TestSpendDenominatedWithoutALimitSaysSo(t *testing.T) {
 	}
 	if got.Note == "" {
 		t.Error("want a note explaining the missing limit")
+	}
+}
+
+// With the Claude usage meter on, Anthropic reports the limit itself, so
+// the plan can be bound without one typed in.
+func TestValidateSpendLimitAcceptsAVendorReportedLimit(t *testing.T) {
+	if err := ValidateSpendLimit("claude-enterprise", 0, true); err != nil {
+		t.Errorf("refused a binding whose limit the vendor reports: %v", err)
 	}
 }
