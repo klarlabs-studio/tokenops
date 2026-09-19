@@ -14,6 +14,9 @@ type CoachDeps struct {
 	// JSONLRoot overrides the default ~/.claude/projects scan root.
 	// Empty means use the default; the prompts package resolves $HOME.
 	JSONLRoot string
+	// RootFor, when set, reads the scan root at call time; it wins over
+	// JSONLRoot.
+	RootFor func() string
 }
 
 type coachPromptsInput struct {
@@ -35,7 +38,7 @@ func RegisterCoachTools(s *Server, d CoachDeps) error {
 		OutputSchema(prompts.Findings{}).
 		Handler(func(ctx context.Context, in coachPromptsInput) (prompts.Findings, error) {
 			opts := prompts.ExtractOptions{
-				Root:      d.JSONLRoot,
+				Root:      d.root(),
 				SessionID: in.SessionID,
 				Limit:     in.Limit,
 			}
@@ -82,4 +85,12 @@ func parseCoachWindow(s string) (time.Time, error) {
 		}
 	}
 	return time.Time{}, errors.New("invalid time: expected RFC3339 or duration like '24h' or '7d'")
+}
+
+// root is the transcript scan root in effect for this call.
+func (d CoachDeps) root() string {
+	if d.RootFor != nil {
+		return d.RootFor()
+	}
+	return d.JSONLRoot
 }

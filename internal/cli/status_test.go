@@ -98,3 +98,14 @@ func TestStatusDropWarningFromHealthBody(t *testing.T) {
 		})
 	}
 }
+
+// On a supervised machine `tokenops start` starts a second daemon, so the
+// offline status must name the supervisor's restart there.
+func TestOfflineRemedyFitsTheMachine(t *testing.T) {
+	if r := offlineRemedy(true); !strings.Contains(r, "tokenops daemon restart") || strings.Contains(r, "tokenops start`") {
+		t.Errorf("supervised remedy = %q", r)
+	}
+	if r := offlineRemedy(false); !strings.Contains(r, "tokenops daemon install") {
+		t.Errorf("unsupervised remedy = %q", r)
+	}
+}

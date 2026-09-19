@@ -266,7 +266,7 @@ func (a *Aggregator) AggregateBy(ctx context.Context, f Filter, bucket Bucket, g
 	}
 
 	if a.spend != nil {
-		if err := a.recomputeMissingCosts(ctx, f, out); err != nil {
+		if err := a.recomputeMissingCosts(ctx, f, bucket, group, out); err != nil {
 			return nil, err
 		}
 		if err := a.addPlanCoveredValue(ctx, f, bucket, group, out); err != nil {
@@ -362,75 +362,86 @@ func (a *Aggregator) addPlanCoveredValue(ctx context.Context, f Filter, bucket B
 	return nil
 }
 
-// recomputeMissingCosts scans for rows where CostUSD == 0 (within their
-// bucket+group) and computes the cost from per-event token totals via
-// spend.Engine, attributing the recompute to row.CostRecomputed. This
-// keeps existing event CostUSD authoritative while filling in zeros.
-func (a *Aggregator) recomputeMissingCosts(ctx context.Context, f Filter, rows []Row) error {
-	for i := range rows {
-		if rows[i].CostUSD > 0 {
-			continue
-		}
-		// Pull the underlying events for this bucket+group and recompute.
-		conds, args := buildConditions(f)
-		conds = append(conds,
-			"timestamp_ns >= ?",
-			"timestamp_ns < ?",
-			costSourceMetered,
-		)
-		args = append(args,
-			rows[i].BucketStart.UnixNano(),
-			rows[i].BucketStart.Add(time.Second*time.Duration(BucketHour.seconds())).UnixNano(),
-		)
-		// override second arg if BucketDay
-		// (kept simple; correct because the test column uses bucket_start_sec)
+// recomputeMissingCosts prices the metered events stored without a cost and
+// adds them to the row they belong to, counting each in CostRecomputed.
+// Stored costs stay authoritative; only the zeros are filled.
+//
+// It groups on the same bucket and key expressions AggregateBy used, in one
+// query — the shape addPlanCoveredValue has — so rows can only sum to what
+// Summarize reports for the window. The per-row version it replaces
+// recomputed over a fixed one-hour window whatever the bucket (a day row was
+// re-priced only for its first hour), ignored the row's group (each unpriced
+// model's row was charged for every model in the bucket), and skipped any
+// row with some stored cost, leaving its zero-cost events out.
+func (a *Aggregator) recomputeMissingCosts(ctx context.Context, f Filter, bucket Bucket, group Group, rows []Row) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	width := bucket.seconds()
+	bucketExpr := fmt.Sprintf("(timestamp_ns / 1000000000 / %d) * %d", width, width)
+	groupExpr := "''"
+	if col := group.column(); col != "" {
+		groupExpr = fmt.Sprintf("COALESCE(%s, '')", col)
+	}
+	conds, args := buildConditions(f)
+	conds = append(conds, "(cost_usd IS NULL OR cost_usd = 0)", costSourceMetered)
+	// provider+model ride along because pricing is keyed by them: a row
+	// grouped by workflow still has to price each model the workflow ran.
+	q := "SELECT " + bucketExpr + " AS bucket_start_sec, " + groupExpr + " AS group_key," +
+		` provider, model, COUNT(*),
+			COALESCE(SUM(input_tokens), 0),
+			COALESCE(SUM(output_tokens), 0),
+			COALESCE(SUM(CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER)), 0)
+		FROM events WHERE ` + strings.Join(conds, " AND ") +
+		" GROUP BY bucket_start_sec, group_key, provider, model"
+
+	dbRows, err := a.store.DB().QueryContext(ctx, q, args...)
+	if err != nil {
+		return fmt.Errorf("analytics: recompute query: %w", err)
+	}
+	defer func() { _ = dbRows.Close() }()
+
+	type key struct {
+		bucketSec int64
+		groupKey  string
+	}
+	cost := map[key]float64{}
+	fixed := map[key]int64{}
+	for dbRows.Next() {
 		var (
-			cost  float64
-			fixed int64
+			bucketSec                      int64
+			groupKey                       string
+			provider, model                sql.NullString
+			events, inTok, outTok, cacheIn sql.NullInt64
 		)
-		q := `SELECT provider, model, input_tokens, output_tokens,
-				CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER)
-			FROM events`
-		if len(conds) > 0 {
-			q += " WHERE " + strings.Join(conds, " AND ")
-		}
-		eventRows, err := a.store.DB().QueryContext(ctx, q, args...)
-		if err != nil {
-			return fmt.Errorf("analytics: recompute query: %w", err)
-		}
-		err = func() error {
-			defer func() { _ = eventRows.Close() }()
-			for eventRows.Next() {
-				var (
-					provider, model        sql.NullString
-					inTok, outTok, cacheIn sql.NullInt64
-				)
-				if err := eventRows.Scan(&provider, &model, &inTok, &outTok, &cacheIn); err != nil {
-					return err
-				}
-				p := &eventschema.PromptEvent{
-					Provider:          eventschema.Provider(provider.String),
-					RequestModel:      model.String,
-					InputTokens:       inTok.Int64,
-					CachedInputTokens: cacheIn.Int64,
-					OutputTokens:      outTok.Int64,
-				}
-				// Price at the rate card in effect for this bucket (ADR 0002
-				// Phase 2). Rate changes are dated to a day, so the bucket
-				// start is the correct effective instant; for a baseline-only
-				// engine this is identical to Compute.
-				if c, err := a.spend.ComputeAt(p, rows[i].BucketStart); err == nil {
-					cost += c
-					fixed++
-				}
-			}
-			return eventRows.Err()
-		}()
-		if err != nil {
+		if err := dbRows.Scan(&bucketSec, &groupKey, &provider, &model, &events, &inTok, &outTok, &cacheIn); err != nil {
 			return fmt.Errorf("analytics: recompute scan: %w", err)
 		}
-		rows[i].CostUSD = cost
-		rows[i].CostRecomputed = fixed
+		p := &eventschema.PromptEvent{
+			Provider:          eventschema.Provider(provider.String),
+			RequestModel:      model.String,
+			InputTokens:       inTok.Int64,
+			CachedInputTokens: cacheIn.Int64,
+			OutputTokens:      outTok.Int64,
+		}
+		// Price at the rate card in effect for this bucket (ADR 0002
+		// Phase 2). An unpriced model contributes nothing; Summarize
+		// reports the gap as Unpriced.
+		c, cerr := a.spend.ComputeAt(p, time.Unix(bucketSec, 0).UTC())
+		if cerr != nil {
+			continue
+		}
+		k := key{bucketSec, groupKey}
+		cost[k] += c
+		fixed[k] += events.Int64
+	}
+	if err := dbRows.Err(); err != nil {
+		return fmt.Errorf("analytics: recompute iterate: %w", err)
+	}
+	for i := range rows {
+		k := key{rows[i].BucketStart.Unix(), rows[i].GroupKey}
+		rows[i].CostUSD += cost[k]
+		rows[i].CostRecomputed += fixed[k]
 	}
 	return nil
 }

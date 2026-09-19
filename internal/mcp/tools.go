@@ -28,6 +28,10 @@ type Deps struct {
 	// Waste configures the workflow waste detector (operator context
 	// limits from coaching.context_limits). Zero value uses defaults.
 	Waste waste.Config
+	// WasteConfig, when set, supplies it at call time so an edit to
+	// coaching.context_limits applies without restarting the MCP client.
+	// It wins over Waste.
+	WasteConfig func() waste.Config
 
 	// StaleSources reports vendor-usage sources that have stopped
 	// ingesting. Optional: nil means the caveat is omitted, which is the
@@ -484,7 +488,7 @@ func workflowTrace(ctx context.Context, d Deps, in workflowTraceInput) (*workflo
 	if err != nil {
 		return nil, err
 	}
-	coachings := waste.New(d.Waste).Detect(trace)
+	coachings := waste.New(d.wasteConfig()).Detect(trace)
 	return &workflowTraceResult{
 		Trace:    trace,
 		Findings: coachings,
@@ -560,4 +564,12 @@ func parseTimeOrDuration(s string) (time.Time, error) {
 		return time.Time{}, err
 	}
 	return time.Now().Add(-d), nil
+}
+
+// wasteConfig is the waste detector config in effect for this call.
+func (d Deps) wasteConfig() waste.Config {
+	if d.WasteConfig != nil {
+		return d.WasteConfig()
+	}
+	return d.Waste
 }

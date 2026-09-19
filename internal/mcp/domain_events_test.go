@@ -40,8 +40,8 @@ func TestDomainEventsUnavailableWhenDaemonUnreachable(t *testing.T) {
 	if res.Error != "unavailable_in_mcp_server" || res.Total != nil || res.Counts != nil {
 		t.Errorf("unreachable daemon rendered as data: %+v", res)
 	}
-	if !strings.Contains(res.Hint, "tokenops start") {
-		t.Errorf("hint should say how to get a daemon: %q", res.Hint)
+	if !strings.Contains(res.Hint, "tokenops daemon restart") || strings.Contains(res.Hint, "'tokenops start'") {
+		t.Errorf("hint should say how to get a daemon, without starting a duplicate: %q", res.Hint)
 	}
 }
 

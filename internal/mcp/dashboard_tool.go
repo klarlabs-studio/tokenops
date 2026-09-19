@@ -80,6 +80,10 @@ type DashboardDeps struct {
 	// the daemon, so the not-running hint names the command that fits
 	// this machine. nil gives both options.
 	UnitInstalled func() bool
+	// Token returns the dashboard auth token when the URL hint, which
+	// normally carries it, is missing. nil or "" sends the link without
+	// one.
+	Token func() string
 }
 
 // RegisterDashboardTool mounts tokenops_dashboard. The tool returns a
@@ -152,7 +156,21 @@ func dashboardWithoutHint(d DashboardDeps) string {
 		})
 	}
 	dashURL := r.URL + "/dashboard"
-	note := "the daemon's URL hint is missing, so this link carries no auth token; if the dashboard asks for one, " +
+	if d.Token != nil {
+		if tok := d.Token(); tok != "" {
+			link := dashURL + "?token=" + tok
+			summary := "## Dashboard\n\n[Open " + dashURL + "](" + link + ")\n\n" +
+				"_The URL carries a one-shot auth token; first click sets a session cookie and the address bar drops the token._\n"
+			return markdownPayload(summary, map[string]any{
+				"url":             link,
+				"daemon_url":      r.URL,
+				"loopback":        r.URL,
+				"auth_token":      tok,
+				"auth_token_hint": "send as ?token=… query, Authorization: Bearer header, or session cookie",
+			})
+		}
+	}
+	note := "the daemon's URL hint is missing and no dashboard token could be read, so this link carries no auth token; if the dashboard asks for one, " +
 		"restarting the daemon rewrites the hint (`tokenops daemon restart` where a supervisor unit is installed)"
 	summary := "## Dashboard\n\n[Open " + dashURL + "](" + dashURL + ")\n\n_" + note + "._\n"
 	return markdownPayload(summary, map[string]any{

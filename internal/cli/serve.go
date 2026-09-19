@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -13,6 +14,8 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/session"
 	"go.klarlabs.de/tokenops/internal/daemon"
 	"go.klarlabs.de/tokenops/internal/events"
@@ -134,10 +137,18 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	}
 
 	if err := mcp.RegisterTools(srv, mcp.Deps{
-		Store:        components.Store,
-		Aggregator:   components.Aggregator,
-		Spend:        components.Spend,
-		Waste:        cfg.Coaching.WasteConfig(),
+		Store:      components.Store,
+		Aggregator: components.Aggregator,
+		Spend:      components.Spend,
+		Waste:      cfg.Coaching.WasteConfig(),
+		WasteConfig: func() waste.Config {
+			if currentConfig != nil {
+				if c := currentConfig(); c != nil {
+					return c.Coaching.WasteConfig()
+				}
+			}
+			return cfg.Coaching.WasteConfig()
+		},
 		StaleSources: staleSources,
 	}); err != nil {
 		return fmt.Errorf("register tools: %w", err)
@@ -149,6 +160,14 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 		Store:    components.Store,
 		Spend:    components.Spend,
 		Pipeline: buildReplayPipeline(cfg, components.Spend),
+		PipelineFor: func() *optimizer.Pipeline {
+			if currentConfig != nil {
+				if c := currentConfig(); c != nil {
+					return buildReplayPipeline(*c, components.Spend)
+				}
+			}
+			return buildReplayPipeline(cfg, components.Spend)
+		},
 	}); err != nil {
 		return fmt.Errorf("register parity tools: %w", err)
 	}
@@ -220,6 +239,7 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	}
 	if err := mcp.RegisterDashboardTool(srv, mcp.DashboardDeps{
 		DaemonURL: daemonURL, UnitInstalled: daemon.UnitInstalled,
+		Token: func() string { return dashboardTokenFor(cfg) },
 	}); err != nil {
 		return fmt.Errorf("register dashboard tool: %w", err)
 	}
@@ -231,12 +251,31 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	}
 	if err := mcp.RegisterCoachTools(srv, mcp.CoachDeps{
 		JSONLRoot: cfg.VendorUsage.ClaudeCodeJSONL.Root,
+		RootFor: func() string {
+			if currentConfig != nil {
+				if c := currentConfig(); c != nil {
+					return c.VendorUsage.ClaudeCodeJSONL.Root
+				}
+			}
+			return cfg.VendorUsage.ClaudeCodeJSONL.Root
+		},
 	}); err != nil {
 		return fmt.Errorf("register coach tools: %w", err)
 	}
 
 	logger.Info("tokenops serve ready", "version", version.Version)
-	return mcp.ServeStdio(ctx, srv, mcp.SessionMiddleware(tracker, sessionProvider))
+	// Asked per call, so a plan bound after start attributes the pings that
+	// follow it rather than leaving them "unknown" until the client restarts.
+	liveProvider := func() eventschema.Provider {
+		if currentConfig == nil {
+			return sessionProvider
+		}
+		if c := currentConfig(); c != nil {
+			return inferSessionProvider(c.Plans)
+		}
+		return sessionProvider
+	}
+	return mcp.ServeStdio(ctx, srv, mcp.SessionMiddleware(tracker, liveProvider))
 }
 
 // serveControlDeps wires the control tools to live state: config read at call
@@ -304,3 +343,22 @@ func gapCounts(store *sqlite.Store) func(context.Context, time.Time, time.Time) 
 // applyConfigRestart restarts the supervised daemon after an MCP tool writes
 // config, so an agent's change is live without a command nobody ran.
 func applyConfigRestart() string { return daemon.RestartForConfig().Note() }
+
+// dashboardTokenFor returns the token the daemon authenticates its dashboard
+// with, resolved the way the daemon resolves it: a configured
+// dashboard.admin_token wins, else the token it minted and saved. The URL
+// hint normally carries it; this is the fallback for when the hint is gone.
+func dashboardTokenFor(cfg config.Config) string {
+	if tok := strings.TrimSpace(cfg.Dashboard.AdminToken); tok != "" {
+		return tok
+	}
+	path, err := dashTokenPathCLI()
+	if err != nil {
+		return ""
+	}
+	b, err := os.ReadFile(path) //nolint:gosec // the operator's own token file, resolved like the daemon's
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}

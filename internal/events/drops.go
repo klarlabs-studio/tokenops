@@ -9,7 +9,7 @@ import "fmt"
 // sink returned — a locked database reads nothing like a full disk — and a
 // remediation that guesses would send an operator to the wrong one.
 const DropNextAction = "check the daemon log for 'append batch gave up, rows lost' to see why the writes failed; " +
-	"restarting the daemon with 'tokenops start' clears the counter but not the cause"
+	"restarting the daemon ('tokenops daemon restart') clears the counter but not the cause"
 
 // DropWarning renders the operator-facing warning for telemetry rows the
 // daemon could not persist, or "" when none were lost.

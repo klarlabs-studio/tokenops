@@ -365,7 +365,7 @@ func domainEventsInfo(d ControlDeps) domainEventsResult {
 	if !report.Alive {
 		return domainEventsResult{
 			Error: domainEventsUnavailable,
-			Hint:  "domain events are counted inside the ingestion daemon and none is reachable; start it with 'tokenops start' ('tokenops events' can tally the persisted domain-event log meanwhile)",
+			Hint:  "domain events are counted inside the ingestion daemon and none is reachable; get it running — " + config.DaemonRunRemedy + " ('tokenops events' can tally the persisted domain-event log meanwhile)",
 		}
 	}
 	ev, err := d.DaemonDomainEvents(report.URL)

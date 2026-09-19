@@ -147,7 +147,7 @@ func RegisterApprovalTools(s *Server, d ApprovalDeps) error {
 		})
 
 	s.Tool("tokenops_preferred_model").
-		Description("Get or set the preferred model for a provider. It acts as a ceiling: a routing rule that would move you to a pricier model is refused and referred to you rather than applied, while routes to cheaper models still apply automatically. Persists to config.yaml; the daemon applies it on restart.").
+		Description("Get or set the preferred model for a provider. It acts as a ceiling: a routing rule that would move you to a pricier model is refused and referred to you rather than applied, while routes to cheaper models still apply automatically. Persists to config.yaml and restarts a supervised daemon so it takes effect.").
 		Handler(func(_ context.Context, in preferredModelSetInput) (string, error) {
 			path, err := d.configPath()
 			if err != nil {

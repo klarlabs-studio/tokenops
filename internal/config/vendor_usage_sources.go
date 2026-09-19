@@ -203,13 +203,19 @@ func (s StaleSource) silence() string {
 // which conflates two different programs. During a 27-day outage eleven
 // `tokenops serve` processes were running and the ingestion daemon was not;
 // the advice pointed at the healthy half.
-const StaleIngestionNextAction = "run 'tokenops vendor-usage status'; if a source is silent, start the ingestion daemon with 'tokenops start' ('tokenops serve' is the MCP server and does not ingest)"
+const StaleIngestionNextAction = "run 'tokenops vendor-usage status'; if a source is silent, make sure the ingestion daemon runs: " + DaemonRunRemedy + " ('tokenops serve' is the MCP server and does not ingest)"
+
+// DaemonRunRemedy names how to get the ingestion daemon running without
+// knowing whether this machine supervises it. It never offers a bare
+// `tokenops start`: where launchd or systemd already keeps a daemon alive,
+// that starts a second one beside it.
+const DaemonRunRemedy = "'tokenops daemon restart' if it is supervised, 'tokenops daemon install' to supervise it"
 
 // Warning renders the operator-facing warning line for a stale source.
 // Kept here so the MCP status tool and the CLI status command emit
 // byte-identical strings.
 func (s StaleSource) Warning() string {
-	const remedy = "if you've been using it, start the ingestion daemon ('tokenops start') — note that 'tokenops serve' is the MCP server and does not ingest"
+	const remedy = "if you've been using it, make sure the ingestion daemon runs (" + DaemonRunRemedy + ") — note that 'tokenops serve' is the MCP server and does not ingest"
 
 	if s.SilentFor <= 0 {
 		return fmt.Sprintf(

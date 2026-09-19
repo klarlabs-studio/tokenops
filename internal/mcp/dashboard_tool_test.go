@@ -114,3 +114,17 @@ func TestURLHintPathHonorsXDG(t *testing.T) {
 		t.Errorf("path should start with XDG_DATA_HOME (%s): %q", xdg, p)
 	}
 }
+
+// Found without its hint, the daemon still needs the token the hint used to
+// carry; the saved one keeps the link usable instead of sending the operator
+// to a login wall.
+func TestDashboardWithoutHintCarriesTheSavedToken(t *testing.T) {
+	isolateHint(t)
+	d := healthyDaemon(t)
+	out := execTool(t, newDashboardServer(t, DashboardDeps{
+		DaemonURL: d.URL, Token: func() string { return "tok-123" },
+	}), "tokenops_dashboard", nil)
+	if !strings.Contains(out, d.URL+"/dashboard?token=tok-123") {
+		t.Errorf("link without the saved token: %s", out)
+	}
+}

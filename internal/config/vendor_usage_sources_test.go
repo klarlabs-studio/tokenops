@@ -193,7 +193,7 @@ func TestStaleSourceWarning(t *testing.T) {
 		Name: "claude_code_jsonl", SourceTag: "claude-code-jsonl",
 		WindowHours: 48, SilentFor: 27 * 24 * time.Hour,
 	}
-	want := "ingestion stale [critical]: claude-code-jsonl has produced no events for 27 days (checked a 48h window) — if you've been using it, start the ingestion daemon ('tokenops start') — note that 'tokenops serve' is the MCP server and does not ingest"
+	want := "ingestion stale [critical]: claude-code-jsonl has produced no events for 27 days (checked a 48h window) — if you've been using it, make sure the ingestion daemon runs ('tokenops daemon restart' if it is supervised, 'tokenops daemon install' to supervise it) — note that 'tokenops serve' is the MCP server and does not ingest"
 	if got := s.Warning(); got != want {
 		t.Errorf("Warning() = %q\nwant %q", got, want)
 	}
@@ -317,5 +317,20 @@ func TestCheckStaleIngestionWithoutLastSeenStillWarns(t *testing.T) {
 	}
 	if stale[0].SilentFor != 0 {
 		t.Errorf("SilentFor = %v, want zero when unknown", stale[0].SilentFor)
+	}
+}
+
+// Neither the stale warning nor its next action can tell whether a unit is
+// installed, and on a machine that has one a bare `tokenops start` starts a
+// second daemon. They name the supervised commands instead.
+func TestStaleRemediesNeverOfferAForegroundStart(t *testing.T) {
+	warn := StaleSource{Name: "x", SourceTag: "x", WindowHours: 48, SilentFor: 72 * time.Hour}.Warning()
+	for name, text := range map[string]string{"warning": warn, "next action": StaleIngestionNextAction} {
+		if strings.Contains(text, "'tokenops start'") {
+			t.Errorf("%s offers a foreground start: %s", name, text)
+		}
+		if !strings.Contains(text, "tokenops daemon restart") || !strings.Contains(text, "tokenops daemon install") {
+			t.Errorf("%s does not name the supervised commands: %s", name, text)
+		}
 	}
 }
