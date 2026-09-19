@@ -4,7 +4,29 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.65.4**.
+Current release: **v0.66.0**.
+
+## v0.66.0 — the meter reads the real thing
+
+TokenOps can read claude.ai's own usage meter: the percentages Anthropic
+shows you, rather than an estimate built from counting messages. It turned
+out it had never once read them correctly. The code was written for a reply
+nobody had actually seen, and its tests were written from the same guess —
+so they could only ever agree with it.
+
+Checking it against real replies, from an Enterprise account, a Max account
+and a personal one, found four ways it went wrong. It looked for spend under
+names that do not exist. Where a plan has no 5-hour window, it wrote down
+"0% used" and would have passed that off as Anthropic's own figure. It kept
+only the first reading after each reset, so it showed usage as it stood
+minutes in. And the terminal and your agent assembled headroom separately,
+each missing something the other had.
+
+All four are fixed, and the real replies are now the tests. The part that is
+new: on Claude Enterprise, Anthropic tells you what you have spent this
+month and what your limit is. TokenOps now uses exactly that, with no admin
+key and nothing to type in — which matters, because the person using
+Enterprise at a company is almost never the one who holds the admin key.
 
 ## v0.65.4 — upgrading is one command, not three
 
