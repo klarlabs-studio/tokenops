@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,6 +44,56 @@ func TestReadURLHint(t *testing.T) {
 	}
 	if got.URL != payload.URL || got.PID != payload.PID {
 		t.Errorf("payload mismatch: got %+v want %+v", got, payload)
+	}
+}
+
+func newDashboardServer(t *testing.T, d DashboardDeps) *Server {
+	t.Helper()
+	srv := NewServer("tokenops", "test", slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	if err := RegisterDashboardTool(srv, d); err != nil {
+		t.Fatalf("RegisterDashboardTool: %v", err)
+	}
+	return srv
+}
+
+// The dashboard used to exist only as far as the hint file did. With the
+// file gone and the daemon still serving, the tool told the operator to
+// start a daemon that was already running.
+func TestDashboardFindsDaemonWithoutHint(t *testing.T) {
+	isolateHint(t)
+	d := healthyDaemon(t)
+	srv := newDashboardServer(t, DashboardDeps{DaemonURL: d.URL})
+
+	out := execTool(t, srv, "tokenops_dashboard", nil)
+	if strings.Contains(out, "daemon_not_running") {
+		t.Fatalf("reported not running while the daemon answers: %s", out)
+	}
+	if !strings.Contains(out, d.URL+"/dashboard") {
+		t.Errorf("no dashboard link at the configured address: %s", out)
+	}
+}
+
+// With no daemon anywhere, the hint names the command that fits this
+// machine — never a foreground `tokenops start` beside a supervisor.
+func TestDashboardHintWhenAbsentFollowsSupervision(t *testing.T) {
+	isolateHint(t)
+	dead := deadURL(t)
+
+	supervised := execTool(t, newDashboardServer(t, DashboardDeps{
+		DaemonURL: dead, UnitInstalled: func() bool { return true },
+	}), "tokenops_dashboard", nil)
+	if !strings.Contains(supervised, "daemon_not_running") || !strings.Contains(supervised, "tokenops daemon restart") {
+		t.Errorf("supervised machine: want `tokenops daemon restart`: %s", supervised)
+	}
+	if strings.Contains(supervised, "tokenops start") {
+		t.Errorf("supervised machine told to run `tokenops start`: %s", supervised)
+	}
+
+	unsupervised := execTool(t, newDashboardServer(t, DashboardDeps{
+		DaemonURL: dead, UnitInstalled: func() bool { return false },
+	}), "tokenops_dashboard", nil)
+	if !strings.Contains(unsupervised, "tokenops daemon install") {
+		t.Errorf("unsupervised machine: want `tokenops daemon install`: %s", unsupervised)
 	}
 }
 

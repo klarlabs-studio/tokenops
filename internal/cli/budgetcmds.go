@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -91,10 +92,10 @@ func newBudgetSetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if limitUSD <= 0 && limitTokens <= 0 {
-				return fmt.Errorf("a budget needs a ceiling: pass --limit-usd, or --limit-tokens with --basis tokens")
-			}
-			b := config.BudgetConfig{
+			// Flags left unset keep the stored budget's values: the
+			// upsert merges, so `--warn-at 0.6` on a token budget moves
+			// the threshold and nothing else.
+			res, err := cfg.UpsertBudget(config.BudgetUpdate{
 				Name:        args[0],
 				Window:      window,
 				LimitUSD:    limitUSD,
@@ -104,32 +105,29 @@ func newBudgetSetCmd() *cobra.Command {
 				Basis:       basis,
 				WorkflowID:  workflowID,
 				AgentID:     agentID,
+			})
+			if errors.Is(err, config.ErrBudgetNoCeiling) {
+				return fmt.Errorf("a budget needs a ceiling: pass --limit-usd, or --limit-tokens with --basis tokens")
 			}
-			replaced := false
-			for i, existing := range cfg.Budgets {
-				if existing.Name == b.Name {
-					cfg.Budgets[i] = b
-					replaced = true
-					break
-				}
-			}
-			if !replaced {
-				cfg.Budgets = append(cfg.Budgets, b)
+			if err != nil {
+				return err
 			}
 			if err := writeMutableConfig(path, cfg); err != nil {
 				return err
 			}
-			verb := "added"
-			if replaced {
-				verb = "updated"
+			verb := "updated"
+			if res.Created {
+				verb = "added"
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "%s budget %q (%s)\nwrote %s\n", verb, b.Name, b.Window, path)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s budget %q (%s)\nwrote %s\n", verb, res.Budget.Name, res.Budget.Window, path)
 			applyRestart(cmd.OutOrStdout(), !noRestartFlag, false)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
-	cmd.Flags().StringVar(&window, "window", "monthly", "calendar window: daily | weekly | monthly")
+	// No flag default: a default would overwrite the window of every
+	// budget an edit touches. The upsert gives a new budget monthly.
+	cmd.Flags().StringVar(&window, "window", "", "calendar window: daily | weekly | monthly (new budgets default to "+config.DefaultBudgetWindow+")")
 	cmd.Flags().Float64Var(&limitUSD, "limit-usd", 0, "ceiling in USD")
 	cmd.Flags().Int64Var(&limitTokens, "limit-tokens", 0, "ceiling in tokens (with --basis tokens)")
 	cmd.Flags().Float64Var(&warnAt, "warn-at", 0, "fraction of the limit for a warning (default 0.75)")
@@ -159,20 +157,10 @@ func newBudgetUnsetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			kept := cfg.Budgets[:0]
-			removed := false
-			for _, b := range cfg.Budgets {
-				if b.Name == args[0] {
-					removed = true
-					continue
-				}
-				kept = append(kept, b)
-			}
-			if !removed {
+			if !cfg.RemoveBudget(args[0]) {
 				fmt.Fprintf(cmd.OutOrStdout(), "no budget named %q; nothing to do\n", args[0])
 				return nil
 			}
-			cfg.Budgets = kept
 			if err := writeMutableConfig(path, cfg); err != nil {
 				return err
 			}

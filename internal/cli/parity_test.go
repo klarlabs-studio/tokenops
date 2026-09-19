@@ -207,7 +207,7 @@ func mcpToolNames(t *testing.T) map[string]bool {
 	must(mcp.RegisterModeTools(srv, mcp.ModeDeps{}))
 	must(mcp.RegisterHelpTool(srv))
 	must(mcp.RegisterDataSourcesTool(srv, mcp.DataSourcesDeps{Store: store}))
-	must(mcp.RegisterDashboardTool(srv))
+	must(mcp.RegisterDashboardTool(srv, mcp.DashboardDeps{}))
 	must(mcp.RegisterFmtTools(srv))
 	must(mcp.RegisterCoachTools(srv, mcp.CoachDeps{}))
 	must(mcp.RegisterGapTools(srv, mcp.GapDeps{}))

@@ -29,6 +29,45 @@ func TestDaemonPresenceWarningWhenAbsent(t *testing.T) {
 	}
 }
 
+// status cannot tell whether a supervisor unit is installed. On a machine
+// that has one, `tokenops start` starts a second daemon beside the one
+// launchd/systemd keeps alive, so neither the warning nor the next action
+// may offer it as the fix; both name the two commands that are safe and
+// the condition that picks between them.
+func TestDaemonPresenceRemedyNeverOffersAForegroundStart(t *testing.T) {
+	for name, text := range map[string]string{
+		"warning":     daemonPresenceWarning(DaemonReport{}, true),
+		"next action": DaemonPresenceNextAction,
+	} {
+		for _, bad := range []string{"run 'tokenops start'", "run `tokenops start`", "with 'tokenops start'"} {
+			if strings.Contains(text, bad) {
+				t.Errorf("%s recommends a foreground start (%q): %s", name, bad, text)
+			}
+		}
+		for _, want := range []string{"tokenops daemon restart", "tokenops daemon install"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s does not name %q: %s", name, want, text)
+			}
+		}
+	}
+}
+
+// Where the caller can tell whether a unit is installed, the remedy names
+// the one command that fits this machine.
+func TestDaemonRemedyFollowsSupervision(t *testing.T) {
+	supervised := daemonRemedy(func() bool { return true })
+	if !strings.Contains(supervised, "tokenops daemon restart") || strings.Contains(supervised, "daemon install") {
+		t.Errorf("supervised remedy = %q; want only `tokenops daemon restart`", supervised)
+	}
+	unsupervised := daemonRemedy(func() bool { return false })
+	if !strings.Contains(unsupervised, "tokenops daemon install") || strings.Contains(unsupervised, "daemon restart") {
+		t.Errorf("unsupervised remedy = %q; want `tokenops daemon install`", unsupervised)
+	}
+	if unknown := daemonRemedy(nil); unknown != daemonRemedyEitherWay {
+		t.Errorf("remedy without a hook = %q; want both options", unknown)
+	}
+}
+
 func TestDaemonPresenceSilentWhenRunning(t *testing.T) {
 	if warn := daemonPresenceWarning(DaemonReport{URL: "http://127.0.0.1:7878", Alive: true}, true); warn != "" {
 		t.Errorf("warning emitted while the daemon is reachable: %s", warn)

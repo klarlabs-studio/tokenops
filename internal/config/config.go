@@ -79,6 +79,18 @@ type Config struct {
 // watcher) are enabled. Empty Mode means passive.
 func (c Config) ActiveMode() bool { return strings.EqualFold(c.Mode, ModeActive) }
 
+// ParseMode normalises an operating mode a caller asked for, refusing
+// anything but passive or active. The terminal's `mode` and the MCP tool
+// share it, so neither can write a mode the other would refuse.
+func ParseMode(s string) (string, error) {
+	switch m := strings.ToLower(strings.TrimSpace(s)); m {
+	case ModePassive, ModeActive:
+		return m, nil
+	default:
+		return "", fmt.Errorf("mode must be %q or %q, got %q", ModePassive, ModeActive, s)
+	}
+}
+
 // PreferredModel returns the operator's ceiling model for a provider, or
 // "" when none is configured.
 func (c Config) PreferredModel(provider eventschema.Provider) string {
@@ -110,6 +122,42 @@ type BudgetConfig struct {
 	// ceiling, or "equivalent" for a list-price counterfactual — their
 	// billed spend is always ~0.
 	Basis string `yaml:"basis"`
+}
+
+// Validate checks one budget on its own. Config.Validate runs it over every
+// budget; UpsertBudget runs it on the merged budget before storing it, so an
+// edit is refused with the same rule the daemon would apply at boot.
+func (b BudgetConfig) Validate() error {
+	if b.Name == "" {
+		return errors.New("name is required")
+	}
+	switch strings.ToLower(b.Window) {
+	case string(budget.WindowDaily), string(budget.WindowWeekly), string(budget.WindowMonthly):
+	default:
+		return fmt.Errorf("window must be daily, weekly, or monthly, got %q", b.Window)
+	}
+	// The limit is denominated in the basis's own unit: a token
+	// budget is configured with limit_tokens, everything else with
+	// limit_usd. Requiring the wrong one is how a flat-rate operator
+	// ends up budgeting against dollars they are never billed.
+	switch basis := strings.ToLower(b.Basis); basis {
+	case budget.BasisTokens:
+		if b.LimitTokens <= 0 {
+			return fmt.Errorf("limit_tokens must be positive for basis %q, got %d",
+				budget.BasisTokens, b.LimitTokens)
+		}
+	case "", budget.BasisSpend, budget.BasisEquivalent:
+		if b.LimitUSD <= 0 {
+			return fmt.Errorf("limit_usd must be positive, got %g", b.LimitUSD)
+		}
+	default:
+		return fmt.Errorf("basis must be %q, %q, or %q, got %q",
+			budget.BasisSpend, budget.BasisEquivalent, budget.BasisTokens, b.Basis)
+	}
+	if b.WarnAt < 0 || b.WarnAt > 1 || b.CritAt < 0 || b.CritAt > 1 {
+		return errors.New("warn_at and crit_at must be in [0,1]")
+	}
+	return nil
 }
 
 // BudgetLimits maps the configured budgets into the budget engine's
@@ -1016,34 +1064,8 @@ func (c Config) Validate() error {
 		return fmt.Errorf("mode must be %q or %q, got %q", ModePassive, ModeActive, c.Mode)
 	}
 	for i, b := range c.Budgets {
-		if b.Name == "" {
-			return fmt.Errorf("budgets[%d]: name is required", i)
-		}
-		switch strings.ToLower(b.Window) {
-		case string(budget.WindowDaily), string(budget.WindowWeekly), string(budget.WindowMonthly):
-		default:
-			return fmt.Errorf("budgets[%d]: window must be daily, weekly, or monthly, got %q", i, b.Window)
-		}
-		// The limit is denominated in the basis's own unit: a token
-		// budget is configured with limit_tokens, everything else with
-		// limit_usd. Requiring the wrong one is how a flat-rate operator
-		// ends up budgeting against dollars they are never billed.
-		switch basis := strings.ToLower(b.Basis); basis {
-		case budget.BasisTokens:
-			if b.LimitTokens <= 0 {
-				return fmt.Errorf("budgets[%d]: limit_tokens must be positive for basis %q, got %d",
-					i, budget.BasisTokens, b.LimitTokens)
-			}
-		case "", budget.BasisSpend, budget.BasisEquivalent:
-			if b.LimitUSD <= 0 {
-				return fmt.Errorf("budgets[%d]: limit_usd must be positive, got %g", i, b.LimitUSD)
-			}
-		default:
-			return fmt.Errorf("budgets[%d]: basis must be %q, %q, or %q, got %q",
-				i, budget.BasisSpend, budget.BasisEquivalent, budget.BasisTokens, b.Basis)
-		}
-		if b.WarnAt < 0 || b.WarnAt > 1 || b.CritAt < 0 || b.CritAt > 1 {
-			return fmt.Errorf("budgets[%d]: warn_at and crit_at must be in [0,1]", i)
+		if err := b.Validate(); err != nil {
+			return fmt.Errorf("budgets[%d]: %w", i, err)
 		}
 	}
 	if !c.Optimizer.Mode.Valid() {

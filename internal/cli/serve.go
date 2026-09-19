@@ -156,7 +156,13 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	// remain false forever. Treat readiness as "store opened + tools
 	// registered" — that's what serve is actually for. blockers[]
 	// still surfaces disabled subsystems for the caller.
-	deps := serveControlDeps(currentConfig, func() bool { return components.Store != nil }, staleSources, binaryDrift)
+	// serve does not ingest; the daemon does. Probe for it so status can
+	// say the pipeline is dead rather than answering queries against a
+	// store nothing is writing. The configured listen address backs up the
+	// URL hint, which has vanished under a running daemon before.
+	daemonURL := mcp.ConfiguredDaemonURL(cfg)
+	probe := func() mcp.DaemonReport { return mcp.ProbeDaemonAt(daemonURL) }
+	deps := serveControlDeps(currentConfig, func() bool { return components.Store != nil }, staleSources, binaryDrift, probe)
 	if err := mcp.RegisterControlTools(srv, deps); err != nil {
 		return fmt.Errorf("register control tools: %w", err)
 	}
@@ -197,7 +203,9 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if err := mcp.RegisterApprovalTools(srv, mcp.ApprovalDeps{ApplyConfig: applyConfigRestart}); err != nil {
 		return fmt.Errorf("register approval tools: %w", err)
 	}
-	if err := mcp.RegisterModeTools(srv, mcp.ModeDeps{ApplyConfig: applyConfigRestart}); err != nil {
+	if err := mcp.RegisterModeTools(srv, mcp.ModeDeps{
+		ApplyConfig: applyConfigRestart, DaemonURL: daemonURL, UnitInstalled: daemon.UnitInstalled,
+	}); err != nil {
 		return fmt.Errorf("register mode tools: %w", err)
 	}
 	if err := mcp.RegisterSetupTools(srv, mcp.SetupDeps{ApplyConfig: applyConfigRestart}); err != nil {
@@ -209,7 +217,9 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if err := mcp.RegisterDataSourcesTool(srv, mcp.DataSourcesDeps{Store: components.Store}); err != nil {
 		return fmt.Errorf("register data sources tool: %w", err)
 	}
-	if err := mcp.RegisterDashboardTool(srv); err != nil {
+	if err := mcp.RegisterDashboardTool(srv, mcp.DashboardDeps{
+		DaemonURL: daemonURL, UnitInstalled: daemon.UnitInstalled,
+	}); err != nil {
 		return fmt.Errorf("register dashboard tool: %w", err)
 	}
 	if err := mcp.RegisterFmtTools(srv); err != nil {
@@ -236,12 +246,12 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 // pipeline is dead rather than answering queries against a store nothing is
 // writing. The daemon it finds is also the only process that can report the
 // daemon's version and its domain-event counters, so both are read from it.
-func serveControlDeps(current func() *config.Config, ready func() bool, stale func() []config.StaleSource, drift func() mcp.BinaryDrift) mcp.ControlDeps {
+func serveControlDeps(current func() *config.Config, ready func() bool, stale func() []config.StaleSource, drift func() mcp.BinaryDrift, probe func() mcp.DaemonReport) mcp.ControlDeps {
 	return mcp.ControlDeps{
 		ConfigGetter:       current,
 		ReadyCheck:         ready,
 		StaleSources:       stale,
-		DaemonProbe:        mcp.ProbeDaemon,
+		DaemonProbe:        probe,
 		DaemonVersion:      mcp.FetchDaemonVersion,
 		DaemonDomainEvents: mcp.FetchDaemonDomainEvents,
 		BinaryDrift:        drift,

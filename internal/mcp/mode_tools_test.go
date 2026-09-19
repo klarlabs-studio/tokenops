@@ -79,6 +79,65 @@ func TestBudgetSetUpsertAndDelete(t *testing.T) {
 	}
 }
 
+// The operator's real config carries `basis: tokens` with limit_tokens. An
+// agent asked only to move warn_at used to rebuild the budget from its own
+// inputs — which had no limit_tokens field — and erased the ceiling.
+func TestBudgetSetKeepsTokenCeilingOnEdit(t *testing.T) {
+	srv, path := newModeServer(t)
+	cfg, _ := config.ReadMutable(path)
+	cfg.Budgets = []config.BudgetConfig{{
+		Name: "weekly-tokens", Window: "weekly", LimitTokens: 15_000_000_000, Basis: "tokens",
+	}}
+	if err := config.WriteMutable(path, cfg); err != nil {
+		t.Fatalf("seed budget: %v", err)
+	}
+
+	execTool(t, srv, "tokenops_budget_set", map[string]any{"name": "weekly-tokens", "warn_at": 0.6})
+
+	cfg, _ = config.ReadMutable(path)
+	want := config.BudgetConfig{
+		Name: "weekly-tokens", Window: "weekly", LimitTokens: 15_000_000_000, Basis: "tokens", WarnAt: 0.6,
+	}
+	if len(cfg.Budgets) != 1 || cfg.Budgets[0] != want {
+		t.Errorf("budgets = %+v; want [%+v]", cfg.Budgets, want)
+	}
+}
+
+// Flat-rate plans bill $0 at the margin, so a token ceiling is the only one
+// that trips for them — and the tool could not create one.
+func TestBudgetSetCreatesTokenBudget(t *testing.T) {
+	srv, path := newModeServer(t)
+	execTool(t, srv, "tokenops_budget_set", map[string]any{
+		"name": "weekly-tokens", "window": "weekly", "limit_tokens": 1_000_000, "basis": "tokens",
+	})
+	cfg, _ := config.ReadMutable(path)
+	if len(cfg.Budgets) != 1 || cfg.Budgets[0].LimitTokens != 1_000_000 || cfg.Budgets[0].Basis != "tokens" {
+		t.Errorf("budgets = %+v; want one tokens budget", cfg.Budgets)
+	}
+}
+
+// The terminal refuses a budget with no ceiling; the agent surface must
+// refuse the same one, and leave the file untouched.
+func TestBudgetSetRefusesBudgetWithoutCeiling(t *testing.T) {
+	srv, path := newModeServer(t)
+	before, _ := os.ReadFile(path)
+	err := execToolErr(t, srv, "tokenops_budget_set", map[string]any{"name": "nothing", "window": "weekly"})
+	if err == nil || !strings.Contains(err.Error(), "ceiling") {
+		t.Fatalf("err = %v; want a missing-ceiling refusal", err)
+	}
+	after, _ := os.ReadFile(path)
+	if string(before) != string(after) {
+		t.Error("refused budget still rewrote the config")
+	}
+}
+
+func TestBudgetSetDeleteUnknownIsAnError(t *testing.T) {
+	srv, _ := newModeServer(t)
+	if err := execToolErr(t, srv, "tokenops_budget_set", map[string]any{"name": "ghost", "delete": true}); err == nil {
+		t.Error("deleting a budget that does not exist reported success")
+	}
+}
+
 func TestRoutingRuleSetUpsertAndValidation(t *testing.T) {
 	srv, path := newModeServer(t)
 
@@ -182,7 +241,8 @@ func TestModeActiveSkipsSpawnWhenDaemonAlive(t *testing.T) {
 	if started {
 		t.Error("StartDaemon called although daemon is alive")
 	}
-	if !strings.Contains(out, "already running") || !strings.Contains(out, "restart") {
-		t.Errorf("response should report running daemon + restart hint: %s", out)
+	// `tokenops start` beside a running daemon starts a second one.
+	if strings.Contains(out, "tokenops start") || !strings.Contains(out, "tokenops daemon restart") {
+		t.Errorf("response should point at the restart, never `tokenops start`: %s", out)
 	}
 }

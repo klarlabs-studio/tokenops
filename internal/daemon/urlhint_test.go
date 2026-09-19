@@ -82,3 +82,45 @@ func TestRemoveURLHintIdempotent(t *testing.T) {
 		t.Errorf("hint file should be gone; stat err: %v", err)
 	}
 }
+
+// A daemon shutting down must not delete a hint another daemon wrote. The
+// hint vanished on the operator's machine while the daemon kept running,
+// and every MCP surface then reported "no ingestion daemon is reachable"
+// for a healthy one: an exiting process (a duplicate, or the old instance
+// of a restart finishing after its successor booted) removed the file
+// unconditionally.
+func TestRemoveURLHintSparesAnotherDaemonsHint(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", dir)
+	p := filepath.Join(dir, "tokenops", "daemon.url")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	other, _ := json.Marshal(urlHintPayload{URL: "http://127.0.0.1:7878", PID: os.Getpid() + 1})
+	if err := os.WriteFile(p, other, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := removeURLHint(); err != nil {
+		t.Fatalf("removeURLHint: %v", err)
+	}
+	if _, err := os.Stat(p); err != nil {
+		t.Errorf("another daemon's hint was deleted: %v", err)
+	}
+}
+
+// Our own hint still goes, so a stale URL does not outlive the process.
+func TestRemoveURLHintRemovesOwnHint(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", dir)
+	p, err := writeURLHint("127.0.0.1:8080", false, "", "")
+	if err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := removeURLHint(); err != nil {
+		t.Fatalf("removeURLHint: %v", err)
+	}
+	if _, err := os.Stat(p); !os.IsNotExist(err) {
+		t.Errorf("own hint should be gone; stat err: %v", err)
+	}
+}

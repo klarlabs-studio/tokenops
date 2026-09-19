@@ -61,7 +61,7 @@ func callServeTool(t *testing.T, srv *mcp.Server, name string) string {
 func TestServeControlToolsReadConfigWrittenAfterStart(t *testing.T) {
 	f := &liveConfigFixture{cur: config.Default()}
 	srv := serveTestServer(t,
-		serveControlDeps(f.get, func() bool { return true }, nil, nil),
+		serveControlDeps(f.get, func() bool { return true }, nil, nil, nil),
 		serveGapDeps(f.get, nil))
 
 	f.cur.Listen = "127.0.0.1:9999"
@@ -144,8 +144,9 @@ func TestServeStaleSourcesCheckNilWithoutConfig(t *testing.T) {
 // version tools need the same daemon to report its version.
 func TestServeControlDepsWireTheDaemonAndDriftHooks(t *testing.T) {
 	drift := func() mcp.BinaryDrift { return mcp.BinaryDrift{OutOfDate: true} }
-	d := serveControlDeps(nil, nil, nil, drift)
-	if d.DaemonProbe == nil || d.DaemonVersion == nil || d.DaemonDomainEvents == nil {
+	probe := func() mcp.DaemonReport { return mcp.DaemonReport{Alive: true} }
+	d := serveControlDeps(nil, nil, nil, drift, probe)
+	if d.DaemonProbe == nil || !d.DaemonProbe().Alive || d.DaemonVersion == nil || d.DaemonDomainEvents == nil {
 		t.Errorf("daemon hooks not wired: probe=%t version=%t events=%t",
 			d.DaemonProbe != nil, d.DaemonVersion != nil, d.DaemonDomainEvents != nil)
 	}
