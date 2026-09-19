@@ -68,6 +68,10 @@ func (f daemonFlags) resolve() (daemon.UnitKind, string, string, string, error) 
 	return kind, bin, home, path, nil
 }
 
+// applyUnit has the supervisor run the unit. A var so tests can fail it
+// without a real supervisor.
+var applyUnit = daemon.ApplyUnit
+
 func newDaemonInstallCmd() *cobra.Command {
 	f := daemonFlags{}
 	cmd := &cobra.Command{
@@ -93,7 +97,8 @@ func newDaemonInstallCmd() *cobra.Command {
 				return nil
 			}
 			existing, readErr := os.ReadFile(path)
-			if readErr == nil && daemon.UnitEqual(string(existing), body) {
+			changed := readErr != nil || !daemon.UnitEqual(string(existing), body)
+			if !changed {
 				fmt.Fprintf(out, "Already up to date: %s\n", path)
 			} else {
 				if err := daemon.WriteUnit(path, body); err != nil {
@@ -106,11 +111,16 @@ func newDaemonInstallCmd() *cobra.Command {
 				fmt.Fprintln(out, "  "+enableHint(kind, path))
 				return nil
 			}
-			if err := daemon.EnableUnit(kind, path); err != nil {
-				fmt.Fprintf(out, "Wrote the unit but could not load it: %v\nEnable with:\n  %s\n", err, enableHint(kind, path))
-				return nil
+			if err := applyUnit(kind, path, changed); err != nil {
+				// Applying the unit replaces the running daemon, so a
+				// failure here can leave none at all. Exit non-zero: a
+				// caller that took 0 as success would never learn
+				// ingestion had stopped.
+				fmt.Fprintln(out, "The daemon could not be started, so nothing is ingesting right now.")
+				fmt.Fprintln(out, "Run `tokenops daemon install` again; `tokenops daemon status` shows its state.")
+				return fmt.Errorf("start %s unit: %w", kind, err)
 			}
-			fmt.Fprintln(out, "Loaded. `tokenops start` will now survive reboot.")
+			fmt.Fprintln(out, "Running. `tokenops start` will now survive reboot.")
 			fmt.Fprintln(out, "Verify with: tokenops daemon status")
 			return nil
 		},
