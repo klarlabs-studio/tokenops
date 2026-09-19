@@ -34,13 +34,18 @@ const enterpriseUsage = `{
 // meter at all.
 const chatOnlyUsage = `{"five_hour": null, "seven_day": null, "seven_day_opus": null, "extra_usage": null}`
 
-// windowedUsage has the window shape public claude.ai trackers read. It is
-// NOT yet confirmed against a real Pro/Max response — see Window.
+// windowedUsage is a real Claude Max response (2026-09-19): windows carry
+// utilization and resets_at alongside dollar fields that are null on a
+// subscription, and extra_usage is present but disabled.
 const windowedUsage = `{
-  "five_hour":  {"utilization": 42.5, "resets_at": "2026-05-16T13:00:00+00:00"},
-  "seven_day":  {"utilization": 71.0, "resets_at": "2026-05-20T09:00:00+00:00"},
-  "seven_day_opus": null,
-  "extra_usage": null
+  "five_hour": {"utilization": 18, "resets_at": "2026-09-19T20:00:00.048431+00:00",
+    "limit_dollars": null, "used_dollars": null, "remaining_dollars": null, "locked_reason": null},
+  "seven_day": {"utilization": 36, "resets_at": "2026-09-25T23:00:00.048451+00:00",
+    "limit_dollars": null, "used_dollars": null, "remaining_dollars": null, "locked_reason": null},
+  "seven_day_opus": null, "seven_day_sonnet": null,
+  "extra_usage": {"is_enabled": false, "monthly_limit": null, "used_credits": null, "utilization": null,
+    "currency": null, "decimal_places": null, "disabled_reason": null, "user_disabled": false,
+    "spend_limit_reached": false, "credits_ever_enabled": false, "daily": null, "weekly": null}
 }`
 
 // inventedUsage is the shape this meter was originally written against,
@@ -147,13 +152,21 @@ func TestUsageWithNothingToMeterHasNoSignal(t *testing.T) {
 	}
 }
 
-func TestUsageDecodesWindows(t *testing.T) {
+// On Max, the windows are the reading and a disabled extra_usage is simply
+// nothing to meter — not a block it failed to read.
+func TestUsageDecodesMaxWindows(t *testing.T) {
 	u := usageFrom(t, windowedUsage)
-	if u.FiveHour == nil || *u.FiveHour.Utilization != 42.5 || u.FiveHour.ResetsAt == "" {
+	if u.FiveHour == nil || *u.FiveHour.Utilization != 18 || u.FiveHour.ResetsAt != "2026-09-19T20:00:00.048431+00:00" {
 		t.Errorf("five_hour = %+v", u.FiveHour)
+	}
+	if u.SevenDay == nil || *u.SevenDay.Utilization != 36 {
+		t.Errorf("seven_day = %+v", u.SevenDay)
 	}
 	if u.SevenDayOpus != nil {
 		t.Errorf("null seven_day_opus decoded as present")
+	}
+	if u.ExtraUsage != nil || len(u.Unrecognised) != 0 {
+		t.Errorf("disabled extra_usage: kept=%v unrecognised=%v, want dropped quietly", u.ExtraUsage, u.Unrecognised)
 	}
 }
 
