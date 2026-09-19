@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/events"
@@ -35,13 +36,22 @@ func staleWarnings(d ControlDeps) []string {
 // the analytics deps; CLI talks to the same data via the HTTP control
 // endpoints (/healthz, /readyz, /version).
 type ControlDeps struct {
-	// ConfigJSON is the marshalled active configuration. Built once at
-	// daemon start so the tool can return it without re-reading disk.
+	// ConfigJSON is the marshalled active configuration, used only when
+	// no ConfigGetter is wired.
 	ConfigJSON json.RawMessage
 	// Config is the parsed configuration. When non-nil, statusInfo
 	// derives blockers + next_actions from it so first-run callers can
-	// see which subsystems gate populated data.
+	// see which subsystems gate populated data. ConfigGetter, when set,
+	// takes precedence.
 	Config *config.Config
+	// ConfigGetter returns the live configuration at call time.
+	//
+	// serve outlives config writes: tokenops_plan_set and
+	// tokenops_vendor_usage_setup rewrite config.yaml under a running
+	// server, and with only the startup snapshot tokenops_config and the
+	// status blockers kept reporting the pre-write state until the MCP
+	// client restarted.
+	ConfigGetter func() *config.Config
 	// ReadyCheck reports daemon readiness. Returns true once the proxy
 	// has finished its boot sequence.
 	ReadyCheck func() bool
@@ -65,6 +75,26 @@ type ControlDeps struct {
 	// because the two answers belong together: a daemon that is running
 	// and losing rows looks healthy from every other angle.
 	DaemonProbe func() DaemonReport
+	// DaemonVersion, when set, returns the version the daemon at the given
+	// URL reports, or "" when unknown. Only asked of a daemon the probe
+	// found alive.
+	DaemonVersion func(url string) string
+	// DaemonDomainEvents, when set, reads the domain-event counters from
+	// the daemon at the given URL. The counters live in the daemon's
+	// process, so without this the MCP server has no counts to report.
+	DaemonDomainEvents func(url string) (DaemonDomainEvents, error)
+	// BinaryDrift, when set, reports whether the binary this MCP server
+	// runs has been replaced by a newer install. Nil means unchecked.
+	BinaryDrift func() BinaryDrift
+}
+
+// activeConfig prefers the live getter and falls back to the static
+// snapshot for callers that wire no watcher.
+func (d ControlDeps) activeConfig() *config.Config {
+	if d.ConfigGetter != nil {
+		return d.ConfigGetter()
+	}
+	return d.Config
 }
 
 type emptyInput struct{}
@@ -72,11 +102,17 @@ type emptyInput struct{}
 // versionResult is the typed payload for tokenops_version. Advertised as
 // the tool's outputSchema so clients receive typed structuredContent.
 type versionResult struct {
-	Version       string `json:"version"`
+	Version       string `json:"version" jsonschema:"description=version of this MCP server process"`
 	Commit        string `json:"commit"`
 	Date          string `json:"date"`
 	Display       string `json:"display"`
 	SchemaVersion string `json:"schema_version"`
+	// DaemonVersion is the ingestion daemon's version, when one answers.
+	// The two are separate processes and upgrade separately.
+	DaemonVersion   string   `json:"daemon_version,omitempty" jsonschema:"description=version of the ingestion daemon when one is reachable"`
+	ServerOutOfDate bool     `json:"server_out_of_date,omitempty" jsonschema:"description=true when a newer tokenops has been installed since this MCP server started"`
+	Warnings        []string `json:"warnings,omitempty"`
+	NextActions     []string `json:"next_actions,omitempty"`
 }
 
 // statusResult is the typed payload for tokenops_status.
@@ -84,18 +120,29 @@ type statusResult struct {
 	Status        string   `json:"status"`
 	Ready         bool     `json:"ready"`
 	State         string   `json:"state"`
-	Version       string   `json:"version"`
+	Version       string   `json:"version" jsonschema:"description=version of this MCP server process"`
 	SchemaVersion string   `json:"schema_version"`
 	Blockers      []string `json:"blockers"`
 	NextActions   []string `json:"next_actions"`
 	Warnings      []string `json:"warnings,omitempty"`
+	// DaemonVersion and ServerOutOfDate mirror tokenops_version, so the one
+	// call an agent makes first says whether it is talking to old code.
+	DaemonVersion   string `json:"daemon_version,omitempty" jsonschema:"description=version of the ingestion daemon when one is reachable"`
+	ServerOutOfDate bool   `json:"server_out_of_date,omitempty" jsonschema:"description=true when a newer tokenops has been installed since this MCP server started"`
 }
 
 // domainEventsResult is the typed payload for tokenops_domain_events.
+//
+// Counts and Total are omitted rather than zero when the counts cannot be
+// read: the payload then carries error + hint and no numbers, so
+// "unavailable" can never be mistaken for "nothing happened".
 type domainEventsResult struct {
-	Counts       map[string]int64 `json:"counts"`
-	Total        int64            `json:"total"`
+	Counts       map[string]int64 `json:"counts,omitempty"`
+	Total        *int64           `json:"total,omitempty"`
 	AuditDropped *int64           `json:"audit_dropped,omitempty"`
+	Source       string           `json:"source,omitempty" jsonschema:"description=where the counts came from: daemon or in_process"`
+	Error        string           `json:"error,omitempty"`
+	Hint         string           `json:"hint,omitempty"`
 }
 
 // RegisterControlTools adds version / status / config / domain_events
@@ -106,27 +153,27 @@ func RegisterControlTools(s *Server, d ControlDeps) error {
 		return errors.New("mcp: server must not be nil")
 	}
 	s.Tool("tokenops_version").
-		Description("Return TokenOps daemon build metadata. Mirrors `tokenops version` and the daemon's /version endpoint.").
+		Description("Return this MCP server's build metadata, the ingestion daemon's version when one is reachable, and whether a newer tokenops has been installed since this server started. The MCP server is a child of the client and keeps running old code after an upgrade until the client restarts it; server_out_of_date says so. Mirrors `tokenops version` and the daemon's /version endpoint.").
 		OutputSchema(versionResult{}).
 		Handler(func(_ context.Context, _ emptyInput) (versionResult, error) {
-			return versionInfo(), nil
+			return versionInfo(d), nil
 		})
 
 	s.Tool("tokenops_status").
-		Description("Return daemon readiness + version. Mirrors `tokenops status` (which queries /healthz, /readyz, /version over HTTP).").
+		Description("Return readiness, this MCP server's version and the ingestion daemon's, config blockers, and warnings — including when this MCP server is out of date against the installed tokenops. Mirrors `tokenops status` (which queries /healthz, /readyz, /version over HTTP).").
 		OutputSchema(statusResult{}).
 		Handler(func(_ context.Context, _ emptyInput) (statusResult, error) {
 			return statusInfo(d), nil
 		})
 
 	s.Tool("tokenops_config").
-		Description("Return the active daemon configuration (redacted). Mirrors `tokenops config show`.").
+		Description("Return the active configuration (redacted), read at call time so changes written by other tools are reflected. Mirrors `tokenops config show`.").
 		Handler(func(_ context.Context, _ emptyInput) (string, error) {
 			return configInfo(d), nil
 		})
 
 	s.Tool("tokenops_domain_events").
-		Description("Return per-kind counts of in-process domain events (workflow.started, optimization.applied, rule_corpus.reloaded, budget.exceeded, ...). Mirrors the audit/observ wiring; safe to poll.").
+		Description("Return per-kind domain-event counts (workflow.started, optimization.applied, rule_corpus.reloaded, budget.exceeded, ...) as counted by the ingestion daemon since it started, including events it replayed from its domain-event log at boot. Read from the daemon's /api/domain-events; when no daemon is reachable returns error=unavailable_in_mcp_server with a hint instead of counts. Mirrors `tokenops events`; safe to poll.").
 		OutputSchema(domainEventsResult{}).
 		Handler(func(_ context.Context, _ emptyInput) (domainEventsResult, error) {
 			return domainEventsInfo(d), nil
@@ -134,14 +181,33 @@ func RegisterControlTools(s *Server, d ControlDeps) error {
 	return nil
 }
 
-func versionInfo() versionResult {
-	return versionResult{
+func versionInfo(d ControlDeps) versionResult {
+	res := versionResult{
 		Version:       version.Version,
 		Commit:        version.Commit,
 		Date:          version.Date,
 		Display:       version.String(),
 		SchemaVersion: eventschema.SchemaVersion,
 	}
+	if d.DaemonProbe != nil {
+		res.DaemonVersion = daemonVersion(d, d.DaemonProbe())
+	}
+	if drift := binaryDrift(d); drift.OutOfDate {
+		res.ServerOutOfDate = true
+		res.Warnings = []string{drift.Warning()}
+		res.NextActions = []string{StaleServerNextAction}
+	}
+	return res
+}
+
+// daemonVersion asks a live daemon for its version. A daemon the probe did
+// not reach is not asked: that would add a timeout to every call to learn
+// nothing.
+func daemonVersion(d ControlDeps, r DaemonReport) string {
+	if d.DaemonVersion == nil || !r.Alive || r.URL == "" {
+		return ""
+	}
+	return d.DaemonVersion(r.URL)
 }
 
 func statusInfo(d ControlDeps) statusResult {
@@ -150,8 +216,8 @@ func statusInfo(d ControlDeps) statusResult {
 		ready = d.ReadyCheck()
 	}
 	blockers := []string{}
-	if d.Config != nil {
-		blockers = d.Config.Blockers()
+	if cfg := d.activeConfig(); cfg != nil {
+		blockers = cfg.Blockers()
 	}
 	nextActions := config.NextActionsFor(blockers)
 	state := "not_ready"
@@ -217,6 +283,19 @@ func statusInfo(d ControlDeps) statusResult {
 		}
 	}
 
+	// Checked after the ingestion block so the vendor-usage remediation is
+	// not attached to it: a stale server has nothing to do with a silent
+	// source. Listed first because it qualifies everything else — every
+	// other answer here comes from the old code.
+	drift := binaryDrift(d)
+	if drift.OutOfDate {
+		warnings = append([]string{drift.Warning()}, warnings...)
+		nextActions = append(nextActions, StaleServerNextAction)
+		if state == "ready" {
+			state = "degraded"
+		}
+	}
+
 	return statusResult{
 		Status:        "ok",
 		Ready:         ready,
@@ -226,29 +305,81 @@ func statusInfo(d ControlDeps) statusResult {
 		Blockers:      blockers,
 		NextActions:   nextActions,
 		Warnings:      warnings,
+
+		DaemonVersion:   daemonVersion(d, report),
+		ServerOutOfDate: drift.OutOfDate,
 	}
 }
 
+// configInfo marshals the live config through Snapshot, which redacts every
+// secret (session key, admin key, cookies, tokens). The raw Config must never
+// reach this output.
 func configInfo(d ControlDeps) string {
+	if d.ConfigGetter != nil {
+		if cfg := d.ConfigGetter(); cfg != nil {
+			if data, err := cfg.Snapshot(); err == nil {
+				return string(data)
+			}
+		}
+		return jsonString(map[string]any{"error": "config snapshot not available"})
+	}
 	if len(d.ConfigJSON) == 0 {
 		return jsonString(map[string]any{"error": "config snapshot not available"})
 	}
 	return string(d.ConfigJSON)
 }
 
+// domainEventsUnavailable is the error code for counts this process cannot
+// see. Domain events are published and counted inside the ingestion daemon;
+// `tokenops serve` is a different process with no bus of its own.
+const domainEventsUnavailable = "unavailable_in_mcp_server"
+
+// domainEventsInfo reports domain-event counts from wherever they are
+// actually counted: in-process when this process runs the bus, otherwise the
+// daemon over HTTP.
+//
+// serve used to answer {"counts":{},"total":0} because it never had the
+// counters wired — an empty map rendered as "nothing happened" for a fact
+// it could not see. When no source is reachable it now says so.
 func domainEventsInfo(d ControlDeps) domainEventsResult {
-	counts := map[string]int64{}
 	if d.EventCounts != nil {
-		counts = d.EventCounts()
+		counts := d.EventCounts()
+		var total int64
+		for _, v := range counts {
+			total += v
+		}
+		res := domainEventsResult{Counts: counts, Total: &total, Source: "in_process"}
+		if d.AuditDrops != nil {
+			dropped := d.AuditDrops()
+			res.AuditDropped = &dropped
+		}
+		return res
 	}
-	var total int64
-	for _, v := range counts {
-		total += v
+	if d.DaemonProbe == nil || d.DaemonDomainEvents == nil {
+		return domainEventsResult{
+			Error: domainEventsUnavailable,
+			Hint:  "domain events are counted inside the ingestion daemon ('tokenops start'), not this MCP server; run 'tokenops events' to read them",
+		}
 	}
-	res := domainEventsResult{Counts: counts, Total: total}
-	if d.AuditDrops != nil {
-		dropped := d.AuditDrops()
-		res.AuditDropped = &dropped
+	report := d.DaemonProbe()
+	if !report.Alive {
+		return domainEventsResult{
+			Error: domainEventsUnavailable,
+			Hint:  "domain events are counted inside the ingestion daemon and none is reachable; start it with 'tokenops start' ('tokenops events' can tally the persisted domain-event log meanwhile)",
+		}
 	}
-	return res
+	ev, err := d.DaemonDomainEvents(report.URL)
+	if err != nil {
+		return domainEventsResult{
+			Error: domainEventsUnavailable,
+			Hint:  fmt.Sprintf("the ingestion daemon at %s did not return its domain-event counts (%v); run 'tokenops events' to read them", report.URL, err),
+		}
+	}
+	total := ev.Total
+	return domainEventsResult{
+		Counts:       ev.Counts,
+		Total:        &total,
+		AuditDropped: ev.AuditDropped,
+		Source:       "daemon",
+	}
 }
