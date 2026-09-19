@@ -42,6 +42,14 @@ var helpCatalog = []helpCategory{
 				Name:    "tokenops_version",
 				Summary: "Build metadata + eventschema version.",
 			},
+			{
+				Name:    "tokenops_plan_set",
+				Summary: "Bind a provider to its subscription plan (claude-max-20x, claude-enterprise, ...).",
+			},
+			{
+				Name:    "tokenops_vendor_usage_setup",
+				Summary: "Connect claude.ai's own usage meter; the session key comes from env or config, never the chat.",
+			},
 		},
 	},
 	{

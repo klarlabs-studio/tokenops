@@ -12,6 +12,9 @@ import (
 // to the default init-managed location.
 type ModeDeps struct {
 	ConfigPath string
+	// ApplyConfig makes a written config take effect and returns what
+	// happened; see applyConfig.
+	ApplyConfig func() string
 	// StartDaemon launches the daemon when activating active mode and
 	// none is running. nil uses the default detached spawn of the
 	// current executable; tests inject a fake.
@@ -25,10 +28,18 @@ func (d ModeDeps) path() (string, error) {
 	return config.DefaultPath()
 }
 
-// restartHint is appended to every mutation response: the MCP serve
-// process persists the change, but mode / routing rules / the watcher
-// are wired into the daemon at boot.
-const restartHint = "persisted; restart the daemon (`tokenops start`) to apply"
+// applyConfig makes a config write take effect and says what happened. The
+// daemon reads config once, at boot, so a write it has not re-read has not
+// changed anything. These tools used to answer "restart the daemon
+// (`tokenops start`)" — a manual step, and on a supervised machine the
+// wrong one, since `tokenops start` starts a second daemon. serve wires
+// ApplyConfig to restart the supervised daemon; nil (tests) only reports.
+func applyConfig(apply func() string) string {
+	if apply == nil {
+		return "written; restart the daemon for it to take effect: `tokenops daemon restart`"
+	}
+	return apply()
+}
 
 type modeInput struct {
 	Set string `json:"set,omitempty" jsonschema:"enum=passive,enum=active,description=Omit to read the current mode. passive = analytics only; active = passive + live routing interventions + background spend watcher."`
@@ -99,7 +110,7 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 			if cfg.ActiveMode() {
 				resp["daemon"] = d.ensureDaemon(path)
 			} else {
-				resp["note"] = restartHint
+				resp["note"] = applyConfig(d.ApplyConfig)
 			}
 			return jsonString(resp), nil
 		})
@@ -147,7 +158,7 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 			return jsonString(map[string]any{
 				"budgets": cfg.Budgets,
 				"config":  path,
-				"note":    restartHint,
+				"note":    applyConfig(d.ApplyConfig),
 			}), nil
 		})
 
@@ -194,7 +205,7 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 				"routing_rules": cfg.Optimizer.RoutingRules,
 				"mode":          cfg.Mode,
 				"config":        path,
-				"note":          restartHint,
+				"note":          applyConfig(d.ApplyConfig),
 			}), nil
 		})
 
