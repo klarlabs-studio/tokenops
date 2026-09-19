@@ -19,6 +19,15 @@ type DaemonDomainEvents struct {
 	Total  int64            `json:"total"`
 	// AuditDropped is absent when the daemon has no audit subscriber.
 	AuditDropped *int64 `json:"audit_dropped,omitempty"`
+	// Spans says when each kind's counted events happened; absent from a
+	// daemon older than this field.
+	Spans map[string]EventSpan `json:"spans,omitempty"`
+}
+
+// EventSpan is when the counted events of one kind happened.
+type EventSpan struct {
+	First time.Time `json:"first_at"`
+	Last  time.Time `json:"last_at"`
 }
 
 // FetchDaemonVersion returns the version the ingestion daemon at baseURL

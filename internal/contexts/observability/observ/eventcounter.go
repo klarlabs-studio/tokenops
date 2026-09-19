@@ -4,6 +4,7 @@ import (
 	"maps"
 	"sort"
 	"sync"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/domainevents"
 )
@@ -15,11 +16,22 @@ import (
 type EventCounter struct {
 	mu     sync.RWMutex
 	counts map[string]int64
+	spans  map[string]KindSpan
+	now    func() time.Time
+}
+
+// KindSpan is when the counted events of one kind happened: the earliest
+// and the latest. The daemon hydrates the counter from its persisted log
+// at boot, so counts are lifetime totals; without the span, 274 budget
+// alerts from a budget deleted in June read as 274 happening now.
+type KindSpan struct {
+	First time.Time `json:"first_at"`
+	Last  time.Time `json:"last_at"`
 }
 
 // NewEventCounter returns an empty counter.
 func NewEventCounter() *EventCounter {
-	return &EventCounter{counts: map[string]int64{}}
+	return &EventCounter{counts: map[string]int64{}, spans: map[string]KindSpan{}, now: time.Now}
 }
 
 // Subscribe wires the counter to bus on every event kind (wildcard).
@@ -29,8 +41,21 @@ func (c *EventCounter) Subscribe(bus *domainevents.Bus) {
 		return
 	}
 	bus.Subscribe("*", func(ev domainevents.Event) {
+		at := c.now().UTC()
+		// A replayed event carries when it originally happened.
+		if t, ok := ev.(interface{ At() time.Time }); ok && !t.At().IsZero() {
+			at = t.At().UTC()
+		}
 		c.mu.Lock()
 		c.counts[ev.Kind()]++
+		sp := c.spans[ev.Kind()]
+		if sp.First.IsZero() || at.Before(sp.First) {
+			sp.First = at
+		}
+		if at.After(sp.Last) {
+			sp.Last = at
+		}
+		c.spans[ev.Kind()] = sp
 		c.mu.Unlock()
 	})
 }
@@ -44,6 +69,15 @@ func (c *EventCounter) Counts() map[string]int64 {
 	defer c.mu.RUnlock()
 	out := make(map[string]int64, len(c.counts))
 	maps.Copy(out, c.counts)
+	return out
+}
+
+// Spans returns when each kind's counted events happened.
+func (c *EventCounter) Spans() map[string]KindSpan {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make(map[string]KindSpan, len(c.spans))
+	maps.Copy(out, c.spans)
 	return out
 }
 

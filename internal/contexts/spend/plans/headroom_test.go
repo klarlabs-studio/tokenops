@@ -1,9 +1,12 @@
 package plans
 
 import (
+	"context"
 	"math"
 	"testing"
 	"time"
+
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // testPlan exercises the computeHeadroomFor path with a synthetic plan
@@ -141,14 +144,71 @@ func TestHeadroomWindowOnlyLowUsage(t *testing.T) {
 func TestHeadroomWindowHighRisk(t *testing.T) {
 	p := windowPlan(200, 5*time.Hour)
 	r := computeHeadroomFor(p, HeadroomInputs{
-		WindowMessages: 170, // 85% of cap
-		Now:            midMonth(),
+		WindowMessages:  170, // 85% of cap
+		WindowStartedAt: midMonth().Add(-90 * time.Minute),
+		Now:             midMonth(),
 	})
 	if r.OverageRisk != RiskHigh {
 		t.Errorf("risk=%q want %q at 85%% window usage", r.OverageRisk, RiskHigh)
 	}
-	if r.WindowResetsIn != "5h0m0s" {
-		t.Errorf("WindowResetsIn=%q want 5h0m0s", r.WindowResetsIn)
+	// The window opened 90 minutes ago, so it resets in 3h30m — not a full
+	// window length from now, which is what every call used to report.
+	if r.WindowResetsIn != "3h30m0s" || !r.WindowResetEstimated {
+		t.Errorf("WindowResetsIn=%q estimated=%v, want 3h30m0s estimated", r.WindowResetsIn, r.WindowResetEstimated)
+	}
+}
+
+// With nothing inside the window no window is running, so there is no
+// reset to report — not a made-up one a full window away.
+func TestHeadroomIdleWindowReportsNoReset(t *testing.T) {
+	r := computeHeadroomFor(windowPlan(200, 5*time.Hour), HeadroomInputs{Now: midMonth()})
+	if r.WindowResetsIn != "" || !r.WindowResetsAt.IsZero() {
+		t.Errorf("idle window reports a reset: in=%q at=%v", r.WindowResetsIn, r.WindowResetsAt)
+	}
+}
+
+// A vendor-reported reset is exact and is not marked as an estimate.
+func TestHeadroomVendorResetIsNotAnEstimate(t *testing.T) {
+	r := computeHeadroomFor(windowPlan(200, 5*time.Hour), HeadroomInputs{
+		Authoritative:   &AuthoritativeWindow{UsedPct: 40, ResetsIn: 2 * time.Hour, Source: "claude_usage_meter:five_hour"},
+		WindowStartedAt: midMonth().Add(-4 * time.Hour),
+		Now:             midMonth(),
+	})
+	if r.WindowResetsIn != "2h0m0s" || r.WindowResetEstimated {
+		t.Errorf("vendor reset: in=%q estimated=%v, want 2h0m0s exact", r.WindowResetsIn, r.WindowResetEstimated)
+	}
+}
+
+func TestSessionBudgetEstimatesTheResetFromTheWindowStart(t *testing.T) {
+	b, err := ComputeSessionBudget("claude-max-20x", SessionBudgetInputs{
+		WindowMessages:  10,
+		WindowStartedAt: midMonth().Add(-4 * time.Hour),
+		Now:             midMonth(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.WindowResetsIn != "1h0m0s" || !b.WindowResetEstimated {
+		t.Errorf("session budget reset = %q estimated=%v, want 1h0m0s estimated", b.WindowResetsIn, b.WindowResetEstimated)
+	}
+}
+
+func TestWindowConsumptionRecordsTheFirstActivity(t *testing.T) {
+	now := midMonth()
+	first := now.Add(-3 * time.Hour)
+	mk := func(at time.Time) *eventschema.Envelope {
+		return &eventschema.Envelope{
+			Type: eventschema.EventTypePrompt, Timestamp: at, Source: "claude-code-jsonl",
+			Payload: &eventschema.PromptEvent{Provider: eventschema.ProviderAnthropic, CostSource: eventschema.CostSourcePlanIncluded, TotalTokens: 10},
+		}
+	}
+	win, err := ConsumptionInWindow(context.Background(), staticReader{mk(now.Add(-time.Hour)), mk(first), mk(now.Add(-6 * time.Hour))},
+		"anthropic", now, 5*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !win.FirstActivityAt.Equal(first) {
+		t.Errorf("FirstActivityAt = %v, want %v (the earliest event inside the window)", win.FirstActivityAt, first)
 	}
 }
 

@@ -47,3 +47,28 @@ func TestEventCounterNilBusSafe(t *testing.T) {
 		t.Errorf("expected 0 total")
 	}
 }
+
+// The daemon hydrates the counter from its persisted log at boot, so a
+// count is a lifetime total. The span says when the counted events
+// happened: replayed ones at their original time, live ones on arrival —
+// so 274 alerts from June do not read as 274 now.
+func TestEventCounterRecordsWhenEachKindHappened(t *testing.T) {
+	c := NewEventCounter()
+	now := time.Date(2026, 9, 19, 20, 0, 0, 0, time.UTC)
+	c.now = func() time.Time { return now }
+	bus := &domainevents.Bus{}
+	c.Subscribe(bus)
+
+	june := time.Date(2026, 6, 14, 23, 49, 0, 0, time.UTC)
+	bus.Publish(domainevents.NewReplayed("budget.exceeded", june))
+	bus.Publish(domainevents.NewReplayed("budget.exceeded", june.Add(time.Hour)))
+	bus.Publish(domainevents.WorkflowStarted{WorkflowID: "wf", At: now})
+
+	spans := c.Spans()
+	if b := spans["budget.exceeded"]; !b.First.Equal(june) || !b.Last.Equal(june.Add(time.Hour)) {
+		t.Errorf("budget.exceeded span = %+v, want June, from the replayed times", b)
+	}
+	if w := spans["workflow.started"]; !w.Last.Equal(now) {
+		t.Errorf("live event span = %+v, want now", w)
+	}
+}

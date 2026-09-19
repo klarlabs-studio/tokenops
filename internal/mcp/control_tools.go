@@ -140,9 +140,13 @@ type domainEventsResult struct {
 	Counts       map[string]int64 `json:"counts,omitempty"`
 	Total        *int64           `json:"total,omitempty"`
 	AuditDropped *int64           `json:"audit_dropped,omitempty"`
-	Source       string           `json:"source,omitempty" jsonschema:"description=where the counts came from: daemon or in_process"`
-	Error        string           `json:"error,omitempty"`
-	Hint         string           `json:"hint,omitempty"`
+	// Spans says when each kind's counted events happened. The daemon
+	// replays its persisted log at boot, so counts are lifetime totals:
+	// read last_at before treating a count as current.
+	Spans  map[string]EventSpan `json:"spans,omitempty"`
+	Source string               `json:"source,omitempty" jsonschema:"description=where the counts came from: daemon or in_process"`
+	Error  string               `json:"error,omitempty"`
+	Hint   string               `json:"hint,omitempty"`
 }
 
 // RegisterControlTools adds version / status / config / domain_events
@@ -173,7 +177,7 @@ func RegisterControlTools(s *Server, d ControlDeps) error {
 		})
 
 	s.Tool("tokenops_domain_events").
-		Description("Return per-kind domain-event counts (workflow.started, optimization.applied, rule_corpus.reloaded, budget.exceeded, ...) as counted by the ingestion daemon since it started, including events it replayed from its domain-event log at boot. Read from the daemon's /api/domain-events; when no daemon is reachable returns error=unavailable_in_mcp_server with a hint instead of counts. Mirrors `tokenops events`; safe to poll.").
+		Description("Return per-kind domain-event counts (workflow.started, optimization.applied, rule_corpus.reloaded, budget.exceeded, ...) as counted by the ingestion daemon since it started, including events it replayed from its domain-event log at boot. Read from the daemon's /api/domain-events; when no daemon is reachable returns error=unavailable_in_mcp_server with a hint instead of counts. Mirrors `tokenops events`; safe to poll. Counts include events replayed from the daemon's persisted log, so they are lifetime totals: spans gives each kind's first_at and last_at; check last_at before treating a count as current.").
 		OutputSchema(domainEventsResult{}).
 		Handler(func(_ context.Context, _ emptyInput) (domainEventsResult, error) {
 			return domainEventsInfo(d), nil
@@ -380,6 +384,7 @@ func domainEventsInfo(d ControlDeps) domainEventsResult {
 		Counts:       ev.Counts,
 		Total:        &total,
 		AuditDropped: ev.AuditDropped,
+		Spans:        ev.Spans,
 		Source:       "daemon",
 	}
 }

@@ -126,6 +126,14 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		proxy.WithShutdownTimeout(cfg.Shutdown.Timeout),
 		proxy.WithProviderRoutes(routes),
 		proxy.WithEventCounts(domainEventCounter.Counts),
+		proxy.WithEventSpans(func() map[string]proxy.EventSpan {
+			spans := domainEventCounter.Spans()
+			out := make(map[string]proxy.EventSpan, len(spans))
+			for k, v := range spans {
+				out[k] = proxy.EventSpan{First: v.First, Last: v.Last}
+			}
+			return out
+		}),
 	}
 	if cfg.Resilience.Enabled {
 		opts = append(opts, proxy.WithResilience(proxy.ResilienceConfig{

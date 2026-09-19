@@ -12,18 +12,21 @@ import (
 // (linear) so the recommendation stays explainable; sophistication
 // can come later once we know which knob users actually act on.
 type SessionBudget struct {
-	PlanName          string  `json:"plan_name"`
-	Display           string  `json:"display"`
-	Provider          string  `json:"provider"`
-	WindowCap         int64   `json:"window_cap"`
-	WindowConsumed    int64   `json:"window_consumed"`
-	WindowPct         float64 `json:"window_pct"`
-	WindowResetsIn    string  `json:"window_resets_in"`
-	RecentRatePerHour float64 `json:"recent_rate_per_hour"`
-	WillHitCapWithin  string  `json:"will_hit_cap_within,omitempty"`
-	HeadroomUntilCap  int64   `json:"headroom_until_cap"`
-	Confidence        string  `json:"confidence"`
-	RecommendedAction string  `json:"recommended_action"`
+	PlanName       string  `json:"plan_name"`
+	Display        string  `json:"display"`
+	Provider       string  `json:"provider"`
+	WindowCap      int64   `json:"window_cap"`
+	WindowConsumed int64   `json:"window_consumed"`
+	WindowPct      float64 `json:"window_pct"`
+	WindowResetsIn string  `json:"window_resets_in"`
+	// WindowResetEstimated is true when WindowResetsIn was worked out
+	// from the first activity in the window, not reported by the vendor.
+	WindowResetEstimated bool    `json:"window_reset_estimated,omitempty"`
+	RecentRatePerHour    float64 `json:"recent_rate_per_hour"`
+	WillHitCapWithin     string  `json:"will_hit_cap_within,omitempty"`
+	HeadroomUntilCap     int64   `json:"headroom_until_cap"`
+	Confidence           string  `json:"confidence"`
+	RecommendedAction    string  `json:"recommended_action"`
 	// SignalQuality types the trust the operator can place in this
 	// prediction. Level=low means the math runs on MCP-ping activity
 	// only; the Caveat explains. ClassifySignal computes it.
@@ -63,6 +66,9 @@ type SessionBudgetInputs struct {
 	// reading (MCP-pings only, low quality).
 	Signal SignalInputs
 	Now    time.Time
+	// WindowStartedAt is the first plan-covered activity inside the
+	// window; see estimatedResetIn.
+	WindowStartedAt time.Time
 	// Authoritative carries the vendor's OWN reported quota for the
 	// window when a snapshot source is available (Claude usage meter
 	// five_hour/seven_day %, Codex rate_limits primary/secondary %,
@@ -105,12 +111,11 @@ func ComputeSessionBudget(planName string, in SessionBudgetInputs) (SessionBudge
 		Provider:          p.Provider,
 		WindowCap:         p.MessagesPerWindow,
 		WindowConsumed:    in.WindowMessages,
-		WindowResetsIn:    p.RateLimitWindow.String(),
-		windowResetsInDur: p.RateLimitWindow,
 		Confidence:        ConfidenceLow,
 		RecommendedAction: ActionUnknown,
 		SignalQuality:     ClassifySignal(in.Signal),
 	}
+	out.setEstimatedReset(in.WindowStartedAt, p.RateLimitWindow, in.Now)
 	if p.RateLimitWindow <= 0 || p.MessagesPerWindow <= 0 {
 		out.Note = "plan publishes no concrete rate-limit cap; budget signal unavailable"
 		return out, nil
@@ -175,8 +180,7 @@ func computeFromAuthoritative(planName string, p Plan, in SessionBudgetInputs) S
 		out.windowResetsInDur = a.ResetsIn
 		out.WindowResetsIn = a.ResetsIn.Round(time.Minute).String()
 	} else {
-		out.windowResetsInDur = p.RateLimitWindow
-		out.WindowResetsIn = p.RateLimitWindow.String()
+		out.setEstimatedReset(in.WindowStartedAt, p.RateLimitWindow, in.Now)
 	}
 	// Message headroom is only meaningful when the plan publishes a cap;
 	// otherwise the % + reset carry the whole signal.
@@ -245,4 +249,14 @@ type unknownPlanError struct{ name string }
 
 func (e *unknownPlanError) Error() string {
 	return "unknown plan: " + e.name
+}
+
+func (b *SessionBudget) setEstimatedReset(started time.Time, window time.Duration, now time.Time) {
+	d, ok := estimatedResetIn(started, window, now)
+	if !ok {
+		return
+	}
+	b.windowResetsInDur = d
+	b.WindowResetsIn = d.Round(time.Minute).String()
+	b.WindowResetEstimated = true
 }
