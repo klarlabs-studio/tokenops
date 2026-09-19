@@ -64,7 +64,7 @@ type SessionBudgetInputs struct {
 	Signal SignalInputs
 	Now    time.Time
 	// Authoritative carries the vendor's OWN reported quota for the
-	// window when a snapshot source is available (Anthropic cookie
+	// window when a snapshot source is available (Claude usage meter
 	// five_hour/seven_day %, Codex rate_limits primary/secondary %,
 	// Copilot quota). When present it overrides the message-count
 	// heuristic — WindowPct comes straight from the vendor's meter and,

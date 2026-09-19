@@ -49,6 +49,12 @@ func TestVersionSubcommand(t *testing.T) {
 }
 
 func TestConfigShowYAML(t *testing.T) {
+	// Point at an empty temp config rather than whatever happens to be in
+	// the developer's home directory. Reading the real one made this test's
+	// outcome depend on the machine running it — it failed the moment a
+	// config key was renamed, on exactly the machine that still used it.
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 	t.Setenv("TOKENOPS_LISTEN", "127.0.0.1:9999")
 	out, err := executeRoot(t, "config", "show")
 	if err != nil {

@@ -38,7 +38,7 @@ func TestSessionBudgetAuthoritativeOverridesMessageCount(t *testing.T) {
 	out, err := ComputeSessionBudget("claude-max-20x", SessionBudgetInputs{
 		WindowMessages: 0, // heuristic would see an empty window
 		Authoritative: &AuthoritativeWindow{
-			UsedPct: 87, ResetsIn: 42 * time.Minute, Source: "anthropic_cookie:seven_day",
+			UsedPct: 87, ResetsIn: 42 * time.Minute, Source: "claude_usage_meter:seven_day",
 		},
 		Now: time.Now().UTC(),
 	})

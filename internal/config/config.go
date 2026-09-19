@@ -620,14 +620,14 @@ type MDNSConfig struct {
 // stats cache; future blocks (anthropic admin API, openai usage)
 // add here as separate sub-structs.
 type VendorUsageConfig struct {
-	ClaudeCode      ClaudeCodeUsageConfig      `yaml:"claude_code"`
-	ClaudeCodeJSONL ClaudeCodeJSONLUsageConfig `yaml:"claude_code_jsonl"`
-	CodexJSONL      CodexJSONLUsageConfig      `yaml:"codex_jsonl"`
-	OpenCode        OpenCodeUsageConfig        `yaml:"opencode"`
-	Anthropic       AnthropicUsageConfig       `yaml:"anthropic"`
-	GitHubCopilot   GitHubCopilotUsageConfig   `yaml:"github_copilot"`
-	Cursor          CursorUsageConfig          `yaml:"cursor"`
-	AnthropicCookie AnthropicCookieUsageConfig `yaml:"anthropic_cookie"`
+	ClaudeCode       ClaudeCodeUsageConfig      `yaml:"claude_code"`
+	ClaudeCodeJSONL  ClaudeCodeJSONLUsageConfig `yaml:"claude_code_jsonl"`
+	CodexJSONL       CodexJSONLUsageConfig      `yaml:"codex_jsonl"`
+	OpenCode         OpenCodeUsageConfig        `yaml:"opencode"`
+	Anthropic        AnthropicUsageConfig       `yaml:"anthropic"`
+	GitHubCopilot    GitHubCopilotUsageConfig   `yaml:"github_copilot"`
+	Cursor           CursorUsageConfig          `yaml:"cursor"`
+	ClaudeUsageMeter ClaudeUsageMeterConfig     `yaml:"claude_usage_meter"`
 }
 
 // GitHubCopilotUsageConfig wires the api.github.com/copilot_internal/user
@@ -651,13 +651,13 @@ type CursorUsageConfig struct {
 	Interval time.Duration `yaml:"interval"`
 }
 
-// AnthropicCookieUsageConfig wires the claude.ai cookie-scraping
+// ClaudeUsageMeterConfig wires the claude.ai usage-meter
 // poller. SessionKey extracted from the operator's browser (devtools
 // → Application → Cookies → sessionKey). OrgID empty → poller
 // resolves it via /api/organizations on first scan. Interval defaults
 // to 5 minutes; Anthropic's cookie tier rate-limits aggressive
 // polling and the data shifts on a 5-hour bucket cadence anyway.
-type AnthropicCookieUsageConfig struct {
+type ClaudeUsageMeterConfig struct {
 	Enabled    bool          `yaml:"enabled"`
 	SessionKey string        `yaml:"session_key"`
 	OrgID      string        `yaml:"org_id"`
@@ -926,6 +926,9 @@ func Load(path string) (Config, error) {
 		}
 		if err := yaml.Unmarshal(data, &cfg); err != nil {
 			return Config{}, fmt.Errorf("parse config %q: %w", path, err)
+		}
+		if err := checkRenamedKeys(data, path); err != nil {
+			return Config{}, err
 		}
 	}
 
@@ -1223,4 +1226,39 @@ func applyEnvOverrides(cfg *Config) {
 			cfg.Plans[key] = v
 		}
 	}
+}
+
+// renamedKeys maps a key that no longer exists to what replaced it.
+//
+// A renamed YAML key is silently ignored by the decoder, so a config that
+// still uses the old spelling loads cleanly and the feature simply never
+// runs — the exact shape of failure this project keeps removing. These are
+// refused loudly instead, naming the replacement, because the error message
+// is the only migration aid a clean break offers.
+var renamedKeys = map[string]string{
+	"anthropic_cookie": "claude_usage_meter",
+}
+
+// checkRenamedKeys refuses a config still using a retired key.
+func checkRenamedKeys(data []byte, path string) error {
+	var raw struct {
+		VendorUsage map[string]any `yaml:"vendor_usage"`
+	}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil // the real decode already reported anything fatal
+	}
+	for old, replacement := range renamedKeys {
+		if _, present := raw.VendorUsage[old]; !present {
+			continue
+		}
+		return fmt.Errorf(
+			"config %q: vendor_usage.%s was renamed to vendor_usage.%s.\n"+
+				"  The old name described how the data was fetched rather than what it gives you.\n"+
+				"  Rename the key (its contents are unchanged), or re-run "+
+				"`tokenops vendor-usage setup %s`.\n"+
+				"  Events already stored under the old source tag keep it and are not counted "+
+				"against the new name",
+			path, old, replacement, strings.ReplaceAll(replacement, "_", "-"))
+	}
+	return nil
 }

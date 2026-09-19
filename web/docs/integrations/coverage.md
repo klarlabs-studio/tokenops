@@ -23,7 +23,7 @@ so everything rolls up **turn → session → project**.
 | opencode | ✅ SQLite store | ✅ | ✅ per-provider baseURL | reader is multi-provider |
 | Cursor | ✅ *(via the stop hook)* | ✅ | ❌ *(agent traffic goes through Cursor's backend)* | the usage cookie gives plan consumption; the hook gives per-turn tokens |
 | Gemini CLI | ❌ *(no token log)* | ✅ | ✅ base-URL override | its `logs.json` records prompts only — no token data |
-| Desktop apps | ❌ | ✅ *(if MCP host)* | ❌ *(no base-URL override)* | MCP tools only; Anthropic cookie for Max % |
+| Desktop apps | ❌ | ✅ *(if MCP host)* | ❌ *(no base-URL override)* | MCP tools only; Claude usage meter for Max % |
 | GitHub-hosted (Copilot agent) | ⚠️ quota only | ❌ | ❌ | the Copilot quota endpoint gives bucket %, nothing per-turn |
 | Jules / hosted | ❌ | ❌ | ❌ | out of reach — see Boundaries |
 

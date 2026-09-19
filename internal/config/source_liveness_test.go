@@ -83,16 +83,16 @@ func TestUnknownProbeKeepsTheTimeBasedWarning(t *testing.T) {
 func TestNoProbeKeepsTheExistingBehaviour(t *testing.T) {
 	now := time.Date(2026, 9, 18, 12, 0, 0, 0, time.UTC)
 	c := Config{}
-	c.VendorUsage.AnthropicCookie.Enabled = true
+	c.VendorUsage.ClaudeUsageMeter.Enabled = true
 	counter := &fakeSeer{
 		counts: map[string]int64{},
-		last:   map[string]time.Time{"anthropic-cookie": now.AddDate(0, 0, -41)},
+		last:   map[string]time.Time{"claude-usage-meter": now.AddDate(0, 0, -41)},
 	}
 	stale, err := c.CheckStaleIngestion(context.Background(), counter, nil, StaleIngestionWindow, now)
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
-	if !staleFor(stale, "anthropic-cookie") {
+	if !staleFor(stale, "claude-usage-meter") {
 		t.Fatalf("a remote poller with no events is still stale, got %+v", stale)
 	}
 }

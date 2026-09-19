@@ -14,13 +14,13 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropiccookie"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
 )
 
 // newVendorUsageSetupCmd walks an operator through wiring the claude.ai
 // cookie poller, and proves it works before writing anything.
 //
-// `vendor-usage enable anthropic-cookie --session-key ...` already existed
+// `vendor-usage enable claude-usage-meter --session-key ...` already existed
 // and is the wrong shape for this particular source. It writes the key and
 // reports success without ever contacting Anthropic, so a mistyped or
 // expired cookie surfaces as nothing at all — the poller simply logs
@@ -36,7 +36,7 @@ func newVendorUsageSetupCmd() *cobra.Command {
 		noRestartFlag bool
 	)
 	cmd := &cobra.Command{
-		Use:   "setup anthropic-cookie",
+		Use:   "setup claude-usage-meter",
 		Short: "Walk through connecting claude.ai's own usage meter, and verify it",
 		Long: `setup connects the claude.ai session cookie that carries Anthropic's own
 utilisation percentages — the 5-hour and 7-day windows shown in the app.
@@ -51,8 +51,8 @@ so a mistyped or expired cookie fails here rather than silently producing
 no data.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 1 && !strings.EqualFold(args[0], "anthropic-cookie") {
-				return fmt.Errorf("setup currently covers anthropic-cookie only; got %q", args[0])
+			if len(args) == 1 && !strings.EqualFold(args[0], "claude-usage-meter") {
+				return fmt.Errorf("setup currently covers claude-usage-meter only; got %q", args[0])
 			}
 			return runCookieSetup(cmd, configPath, !noRestartFlag)
 		},
@@ -83,7 +83,7 @@ func runCookieSetup(cmd *cobra.Command, configPath string, restart bool) error {
 
 	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
 	defer cancel()
-	client := anthropiccookie.NewClient(key)
+	client := claudeusagemeter.NewClient(key)
 
 	fmt.Fprintln(out, "\nChecking it with Anthropic...")
 	orgs, err := client.Organizations(ctx)
@@ -122,9 +122,9 @@ func runCookieSetup(cmd *cobra.Command, configPath string, restart bool) error {
 	if err != nil {
 		return err
 	}
-	cfg.VendorUsage.AnthropicCookie.Enabled = true
-	cfg.VendorUsage.AnthropicCookie.SessionKey = key
-	cfg.VendorUsage.AnthropicCookie.OrgID = org.UUID
+	cfg.VendorUsage.ClaudeUsageMeter.Enabled = true
+	cfg.VendorUsage.ClaudeUsageMeter.SessionKey = key
+	cfg.VendorUsage.ClaudeUsageMeter.OrgID = org.UUID
 	if err := writeMutableConfig(path, cfg); err != nil {
 		return err
 	}
@@ -137,7 +137,7 @@ func runCookieSetup(cmd *cobra.Command, configPath string, restart bool) error {
 // chooseOrg asks which organization to meter when the account has several.
 // Picking silently would meter the wrong workspace on exactly the accounts
 // where that matters — someone in more than one org.
-func chooseOrg(cmd *cobra.Command, orgs []anthropiccookie.OrgEntry) (anthropiccookie.OrgEntry, error) {
+func chooseOrg(cmd *cobra.Command, orgs []claudeusagemeter.OrgEntry) (claudeusagemeter.OrgEntry, error) {
 	out := cmd.OutOrStdout()
 	fmt.Fprintln(out, "\nThis account belongs to several organizations:")
 	for i, o := range orgs {
@@ -145,11 +145,11 @@ func chooseOrg(cmd *cobra.Command, orgs []anthropiccookie.OrgEntry) (anthropicco
 	}
 	line, err := readLine(cmd, fmt.Sprintf("Which one? [1-%d]: ", len(orgs)))
 	if err != nil {
-		return anthropiccookie.OrgEntry{}, err
+		return claudeusagemeter.OrgEntry{}, err
 	}
 	n, err := strconv.Atoi(strings.TrimSpace(line))
 	if err != nil || n < 1 || n > len(orgs) {
-		return anthropiccookie.OrgEntry{}, fmt.Errorf("not a choice between 1 and %d; nothing was written", len(orgs))
+		return claudeusagemeter.OrgEntry{}, fmt.Errorf("not a choice between 1 and %d; nothing was written", len(orgs))
 	}
 	return orgs[n-1], nil
 }
