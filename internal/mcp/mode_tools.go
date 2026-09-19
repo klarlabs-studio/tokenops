@@ -19,6 +19,15 @@ type ModeDeps struct {
 	// none is running. nil uses the default detached spawn of the
 	// current executable; tests inject a fake.
 	StartDaemon func(configPath string) (pid int, logPath string, err error)
+	// DaemonURL is the configured listen address as a URL (see
+	// ConfiguredDaemonURL), probed when the daemon's URL hint is missing
+	// or stale. Empty skips that probe.
+	DaemonURL string
+	// UnitInstalled reports whether a launchd/systemd unit supervises the
+	// daemon. When it does, activating active mode restarts the unit
+	// instead of ever spawning a daemon beside it. nil reads as no unit;
+	// serve always wires it.
+	UnitInstalled func() bool
 }
 
 func (d ModeDeps) path() (string, error) {
@@ -45,16 +54,29 @@ type modeInput struct {
 	Set string `json:"set,omitempty" jsonschema:"enum=passive,enum=active,description=Omit to read the current mode. passive = analytics only; active = passive + live routing interventions + background spend watcher."`
 }
 
+// budgetSetInput edits one budget. Omitted fields keep the stored budget's
+// values, so an edit names only what it changes.
 type budgetSetInput struct {
-	Name       string  `json:"name" jsonschema:"description=Budget identifier; set upserts by name"`
-	Window     string  `json:"window,omitempty" jsonschema:"enum=daily,enum=weekly,enum=monthly,description=Calendar window (UTC)"`
-	LimitUSD   float64 `json:"limit_usd,omitempty"`
-	WarnAt     float64 `json:"warn_at,omitempty" jsonschema:"description=Fraction of limit_usd for warn alerts (default 0.75)"`
-	CritAt     float64 `json:"crit_at,omitempty" jsonschema:"description=Fraction of limit_usd for critical alerts (default 0.95)"`
-	WorkflowID string  `json:"workflow_id,omitempty"`
-	AgentID    string  `json:"agent_id,omitempty"`
-	Basis      string  `json:"basis,omitempty" jsonschema:"enum=spend,enum=equivalent,description=What the limit watches: spend (real billed cost, default) or equivalent (API list-price value incl. plan-covered usage — use on flat plans where real spend is ~0)"`
-	Delete     bool    `json:"delete,omitempty" jsonschema:"description=Remove the budget with this name"`
+	Name        string  `json:"name" jsonschema:"description=Budget identifier; set upserts by name"`
+	Window      string  `json:"window,omitempty" jsonschema:"enum=daily,enum=weekly,enum=monthly,description=Calendar window (UTC); a new budget defaults to monthly"`
+	LimitUSD    float64 `json:"limit_usd,omitempty" jsonschema:"description=Ceiling in USD, for basis spend or equivalent"`
+	LimitTokens int64   `json:"limit_tokens,omitempty" jsonschema:"description=Ceiling in tokens, for basis tokens"`
+	WarnAt      float64 `json:"warn_at,omitempty" jsonschema:"description=Fraction of the limit for warn alerts (default 0.75)"`
+	CritAt      float64 `json:"crit_at,omitempty" jsonschema:"description=Fraction of the limit for critical alerts (default 0.95)"`
+	WorkflowID  string  `json:"workflow_id,omitempty"`
+	AgentID     string  `json:"agent_id,omitempty"`
+	Basis       string  `json:"basis,omitempty" jsonschema:"enum=spend,enum=equivalent,enum=tokens,description=What the limit watches: spend (real billed cost, default), equivalent (API list-price value incl. plan-covered usage), or tokens (raw token volume against limit_tokens). On flat plans real spend is ~0, so use tokens or equivalent."`
+	Delete      bool    `json:"delete,omitempty" jsonschema:"description=Remove the budget with this name"`
+}
+
+func (in budgetSetInput) update() config.BudgetUpdate {
+	return config.BudgetUpdate{
+		Name: in.Name, Window: in.Window,
+		LimitUSD: in.LimitUSD, LimitTokens: in.LimitTokens,
+		WarnAt: in.WarnAt, CritAt: in.CritAt,
+		WorkflowID: in.WorkflowID, AgentID: in.AgentID,
+		Basis: in.Basis,
+	}
 }
 
 type routingRuleSetInput struct {
@@ -76,8 +98,19 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 	}
 
 	s.Tool("tokenops_mode").
-		Description("Get or set the operating mode. passive (default) = collect + analyze on demand. active = passive + interventions: optimizer.routing_rules applied to live proxied traffic and a background watcher evaluating budgets + unpriced models. Setting persists to config.yaml; the daemon applies it on restart.").
+		Description("Get or set the operating mode. passive (default) = collect + analyze on demand. active = passive + interventions: optimizer.routing_rules applied to live proxied traffic and a background watcher evaluating budgets + unpriced models. Setting persists to config.yaml and restarts a supervised daemon so it takes effect; with no daemon anywhere, activating starts one.").
 		Handler(func(_ context.Context, in modeInput) (string, error) {
+			// Checked before any read or write, with the rule the
+			// terminal's `mode` uses, so a bad value is refused by name
+			// rather than as an invalid config after the fact.
+			var want string
+			if in.Set != "" {
+				m, err := config.ParseMode(in.Set)
+				if err != nil {
+					return "", err
+				}
+				want = m
+			}
 			path, err := d.path()
 			if err != nil {
 				return "", err
@@ -90,14 +123,14 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 			if current == "" {
 				current = config.ModePassive
 			}
-			if in.Set == "" {
+			if want == "" {
 				return jsonString(map[string]any{
 					"mode":          strings.ToLower(current),
 					"budgets":       len(cfg.Budgets),
 					"routing_rules": len(cfg.Optimizer.RoutingRules),
 				}), nil
 			}
-			cfg.Mode = strings.ToLower(in.Set)
+			cfg.Mode = want
 			if err := config.WriteMutable(path, cfg); err != nil {
 				return "", err
 			}
@@ -106,7 +139,8 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 				"config": path,
 			}
 			// Active mode without a daemon is a no-op — the proxy
-			// (routing) and the watcher live there. Ensure one runs.
+			// (routing) and the watcher live there. Ensure one runs
+			// and has read the new mode.
 			if cfg.ActiveMode() {
 				resp["daemon"] = d.ensureDaemon(path)
 			} else {
@@ -116,7 +150,7 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 		})
 
 	s.Tool("tokenops_budget_set").
-		Description("Create, update (upsert by name), or delete a spend budget (calendar window + USD limit). In active mode the daemon watcher evaluates budgets every watch.interval and logs threshold/forecast breaches. Persists to config.yaml; daemon applies on restart.").
+		Description("Create, update (upsert by name), or delete a budget: a calendar window plus a ceiling — limit_usd for basis spend/equivalent, limit_tokens for basis tokens. An update changes only the fields given; the rest of the stored budget is kept. A budget without a ceiling is refused. In active mode the daemon watcher evaluates budgets every watch.interval and logs threshold/forecast breaches. Persists to config.yaml and restarts a supervised daemon so it takes effect.").
 		Handler(func(_ context.Context, in budgetSetInput) (string, error) {
 			path, err := d.path()
 			if err != nil {
@@ -126,31 +160,12 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 			if err != nil {
 				return "", err
 			}
-			idx := -1
-			for i, b := range cfg.Budgets {
-				if b.Name == in.Name {
-					idx = i
-					break
-				}
-			}
-			switch {
-			case in.Delete:
-				if idx < 0 {
+			if in.Delete {
+				if !cfg.RemoveBudget(in.Name) {
 					return "", errors.New("no budget named " + in.Name)
 				}
-				cfg.Budgets = append(cfg.Budgets[:idx], cfg.Budgets[idx+1:]...)
-			default:
-				b := config.BudgetConfig{
-					Name: in.Name, Window: strings.ToLower(in.Window), LimitUSD: in.LimitUSD,
-					WarnAt: in.WarnAt, CritAt: in.CritAt,
-					WorkflowID: in.WorkflowID, AgentID: in.AgentID,
-					Basis: strings.ToLower(in.Basis),
-				}
-				if idx >= 0 {
-					cfg.Budgets[idx] = b
-				} else {
-					cfg.Budgets = append(cfg.Budgets, b)
-				}
+			} else if _, err := cfg.UpsertBudget(in.update()); err != nil {
+				return "", err
 			}
 			if err := config.WriteMutable(path, cfg); err != nil {
 				return "", err

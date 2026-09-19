@@ -70,15 +70,27 @@ func readURLHint() (*urlHintPayload, error) {
 	return &payload, nil
 }
 
+// DashboardDeps wires tokenops_dashboard.
+type DashboardDeps struct {
+	// DaemonURL is the configured listen address as a URL (see
+	// ConfiguredDaemonURL), asked when the URL hint is missing. Empty
+	// skips that probe.
+	DaemonURL string
+	// UnitInstalled reports whether a launchd/systemd unit supervises
+	// the daemon, so the not-running hint names the command that fits
+	// this machine. nil gives both options.
+	UnitInstalled func() bool
+}
+
 // RegisterDashboardTool mounts tokenops_dashboard. The tool returns a
 // markdown link to the daemon's dashboard when the daemon is running;
-// otherwise returns a structured error directing the operator to
-// `tokenops start` (mirrors the disabled-subsystem contract used by
+// otherwise returns a structured error naming the command that brings
+// the daemon back (mirrors the disabled-subsystem contract used by
 // other tools).
 //
 // The tool deliberately takes no inputs: the operator doesn't pick
 // a URL, they discover the one their daemon is already serving.
-func RegisterDashboardTool(s *Server) error {
+func RegisterDashboardTool(s *Server, d DashboardDeps) error {
 	if s == nil {
 		return errors.New("mcp: server must not be nil")
 	}
@@ -88,10 +100,7 @@ func RegisterDashboardTool(s *Server) error {
 			payload, err := readURLHint()
 			if err != nil {
 				if errors.Is(err, os.ErrNotExist) {
-					return jsonString(map[string]string{
-						"error": "daemon_not_running",
-						"hint":  "run `tokenops start` in another terminal so the dashboard listener starts, then call this tool again",
-					}), nil
+					return dashboardWithoutHint(d), nil
 				}
 				return jsonString(map[string]string{
 					"error": "url_hint_read_failed",
@@ -124,4 +133,32 @@ func RegisterDashboardTool(s *Server) error {
 			}), nil
 		})
 	return nil
+}
+
+// dashboardWithoutHint answers when the URL hint is missing. The hint once
+// vanished while the daemon kept serving, and this tool then told the
+// operator to start a daemon that was already running. So it asks the
+// configured address first, the same fallback status uses.
+//
+// A daemon found that way still serves the dashboard, but the auth token
+// travels in the hint, so the link goes out without it and says how to get
+// the hint back.
+func dashboardWithoutHint(d DashboardDeps) string {
+	r := probeDaemonAt(d.DaemonURL)
+	if !r.Alive {
+		return jsonString(map[string]string{
+			"error": "daemon_not_running",
+			"hint":  "the dashboard is served by the ingestion daemon: " + daemonRemedy(d.UnitInstalled) + ", then call this tool again",
+		})
+	}
+	dashURL := r.URL + "/dashboard"
+	note := "the daemon's URL hint is missing, so this link carries no auth token; if the dashboard asks for one, " +
+		"restarting the daemon rewrites the hint (`tokenops daemon restart` where a supervisor unit is installed)"
+	summary := "## Dashboard\n\n[Open " + dashURL + "](" + dashURL + ")\n\n_" + note + "._\n"
+	return markdownPayload(summary, map[string]any{
+		"url":        dashURL,
+		"daemon_url": r.URL,
+		"loopback":   r.URL,
+		"note":       note,
+	})
 }
