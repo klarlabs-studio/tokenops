@@ -4,7 +4,24 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.65.3**.
+Current release: **v0.65.4**.
+
+## v0.65.4 — upgrading is one command, not three
+
+Upgrading TokenOps used to end with an instruction: run
+`tokenops daemon install`. On a machine where the daemon was already
+running, that instruction could stop it, fail to start the new one, and
+then print two lines of `launchctl` for you to type — while reporting that
+all was well.
+
+The cause was a race. macOS keeps hold of a background job for a moment
+after it is told to let go, and starting its replacement in that moment
+fails. TokenOps now restarts a running daemon in place, waits properly when
+it has to replace one, and — the part that matters most — does it for you:
+`brew upgrade` restarts an installed daemon on the new version by itself.
+
+If it ever cannot start the daemon, it now says so, and tells you the one
+TokenOps command to run. No supervisor syntax.
 
 ## v0.65.3 — tidying without stopping the room
 
