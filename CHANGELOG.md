@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.65.2 - 2026-09-19
+
+Found while verifying 0.65.1 on the machine that reported the CPU problem.
+
+### Fixed
+
+- **The first retention pass no longer runs on top of the startup
+  replay.** When the daemon starts, every reader replays its history into
+  the store, and retention pruned at the same moment. With `reclaim: true`
+  the prune runs a VACUUM that holds the write lock throughout — 31
+  seconds on a 440 MB store — and the replay's writes failed four times in
+  a row, clearing on their fifth and last attempt. One more and 64 events
+  would have been counted as lost. The first pass now waits five minutes;
+  later passes keep their interval. (#314)
+
+### Notes
+
+- The same retries appear around every restart in older logs. The CPU load
+  fixed in 0.65.1 was hiding them.
+
 ## 0.65.1 - 2026-09-19
 
 The daemon held most of a CPU core indefinitely. On one real install: 17

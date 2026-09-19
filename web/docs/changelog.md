@@ -4,7 +4,21 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.65.1**.
+Current release: **v0.65.2**.
+
+## v0.65.2 — two jobs, one lock
+
+Fixing the CPU problem in 0.65.1 made a second problem visible, which had
+been there all along.
+
+When TokenOps starts, it re-reads your agents' history into its store. It
+also tidied the store at startup — and tidying locks it. On a
+well-used machine the lock lasted half a minute, and the history being
+written in waited, retried, and got through on its very last attempt. One
+more failure and some of it would have been counted as lost.
+
+The tidy now waits a few minutes after startup, so the two no longer run at
+the same time.
 
 ## v0.65.1 — the watcher stops costing more than it watches
 
