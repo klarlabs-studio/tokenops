@@ -131,3 +131,15 @@ func TestAssembleHeadroomInputsCarriesEverySource(t *testing.T) {
 		t.Errorf("vendor spend not carried: %+v", ent.VendorSpend)
 	}
 }
+
+// claude.ai reports reset times with microseconds and a +00:00 offset
+// (observed on a real Max account). A reset that failed to parse would
+// fall back to the plan's nominal window length.
+func TestParseResetsInReadsClaudeResetTimes(t *testing.T) {
+	now := time.Date(2026, 9, 19, 17, 0, 0, 0, time.UTC)
+	got := parseResetsIn("2026-09-19T20:00:00.048431+00:00", now)
+	want := 3*time.Hour + 48431*time.Microsecond
+	if got != want {
+		t.Errorf("resets in %s, want %s", got, want)
+	}
+}
