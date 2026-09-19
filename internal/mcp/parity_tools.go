@@ -157,15 +157,15 @@ func rulesBench(in rulesBenchInput) (*rules.BenchmarkResult, error) {
 	case in.SpecPath != "":
 		b, err := os.ReadFile(in.SpecPath)
 		if err != nil {
-			return nil, fmt.Errorf("read spec: %w", err)
+			return nil, inputError(fmt.Errorf("read spec: %w", err))
 		}
 		data = b
 	default:
-		return nil, errors.New("provide spec_json or spec_path")
+		return nil, inputError(errors.New("provide spec_json or spec_path"))
 	}
 	spec, err := rules.ParseBenchSpec(data)
 	if err != nil {
-		return nil, err
+		return nil, inputError(err)
 	}
 	res, err := rules.RunBenchSpec(spec, rulesfs.LoadCorpus)
 	if err != nil {
@@ -202,7 +202,7 @@ func runCoverageDebt(in coverageDebtInput) (*coverdebt.Report, error) {
 	}
 	cov, err := coverdebt.ReadProfile(profile)
 	if err != nil {
-		return nil, fmt.Errorf("read profile: %w", err)
+		return nil, inputError(fmt.Errorf("read profile: %w", err))
 	}
 	return coverdebt.Analyze(cov, coverdebt.DefaultPolicies), nil
 }
@@ -220,7 +220,7 @@ func runScorecard(ctx context.Context, d ParityDeps, in scorecardInput) (*scorec
 
 func runReplay(ctx context.Context, d ParityDeps, in replayInput) (*replay.Result, error) {
 	if in.SessionID == "" && in.WorkflowID == "" && in.AgentID == "" {
-		return nil, errors.New("provide session_id, workflow_id, or agent_id")
+		return nil, inputError(errors.New("provide session_id, workflow_id, or agent_id"))
 	}
 	sel := replay.SessionSelector{
 		SessionID:  in.SessionID,
@@ -231,14 +231,14 @@ func runReplay(ctx context.Context, d ParityDeps, in replayInput) (*replay.Resul
 	if in.Since != "" {
 		t, err := parseTimeOrDuration(in.Since)
 		if err != nil {
-			return nil, fmt.Errorf("since: %w", err)
+			return nil, inputError(fmt.Errorf("since: %w", err))
 		}
 		sel.Since = t
 	}
 	if in.Until != "" {
 		t, err := time.Parse(time.RFC3339, in.Until)
 		if err != nil {
-			return nil, fmt.Errorf("until: %w", err)
+			return nil, inputError(fmt.Errorf("until: %w", err))
 		}
 		sel.Until = t
 	}
@@ -264,14 +264,14 @@ func runAudit(ctx context.Context, d ParityDeps, in auditInput) (*auditResult, e
 	if in.Since != "" {
 		t, err := parseTimeOrDuration(in.Since)
 		if err != nil {
-			return nil, fmt.Errorf("since: %w", err)
+			return nil, inputError(fmt.Errorf("since: %w", err))
 		}
 		f.Since = t
 	}
 	if in.Until != "" {
 		t, err := time.Parse(time.RFC3339, in.Until)
 		if err != nil {
-			return nil, fmt.Errorf("until: %w", err)
+			return nil, inputError(fmt.Errorf("until: %w", err))
 		}
 		f.Until = t
 	}

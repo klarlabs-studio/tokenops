@@ -55,7 +55,7 @@ func RegisterDataSourcesTool(s *Server, d DataSourcesDeps) error {
 			}
 			since, until, err := parseDataSourceWindow(in)
 			if err != nil {
-				return nil, err
+				return nil, inputError(err)
 			}
 			counts, err := d.Store.CountBySource(ctx, since, until)
 			if err != nil {

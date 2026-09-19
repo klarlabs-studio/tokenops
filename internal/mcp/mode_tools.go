@@ -107,17 +107,17 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 			if in.Set != "" {
 				m, err := config.ParseMode(in.Set)
 				if err != nil {
-					return "", err
+					return "", inputError(err)
 				}
 				want = m
 			}
 			path, err := d.path()
 			if err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			cfg, err := config.ReadMutable(path)
 			if err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			current := cfg.Mode
 			if current == "" {
@@ -132,7 +132,7 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 			}
 			cfg.Mode = want
 			if err := config.WriteMutable(path, cfg); err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			resp := map[string]any{
 				"mode":   cfg.Mode,
@@ -154,21 +154,21 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 		Handler(func(_ context.Context, in budgetSetInput) (string, error) {
 			path, err := d.path()
 			if err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			cfg, err := config.ReadMutable(path)
 			if err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			if in.Delete {
 				if !cfg.RemoveBudget(in.Name) {
-					return "", errors.New("no budget named " + in.Name)
+					return "", inputError(errors.New("no budget named " + in.Name))
 				}
 			} else if _, err := cfg.UpsertBudget(in.update()); err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			if err := config.WriteMutable(path, cfg); err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			return jsonString(map[string]any{
 				"budgets": cfg.Budgets,
@@ -182,11 +182,11 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 		Handler(func(_ context.Context, in routingRuleSetInput) (string, error) {
 			path, err := d.path()
 			if err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			cfg, err := config.ReadMutable(path)
 			if err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			idx := -1
 			for i, r := range cfg.Optimizer.RoutingRules {
@@ -198,7 +198,7 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 			switch {
 			case in.Delete:
 				if idx < 0 {
-					return "", errors.New("no routing rule for " + in.Provider + "/" + in.FromModel)
+					return "", inputError(errors.New("no routing rule for " + in.Provider + "/" + in.FromModel))
 				}
 				cfg.Optimizer.RoutingRules = append(
 					cfg.Optimizer.RoutingRules[:idx], cfg.Optimizer.RoutingRules[idx+1:]...)
@@ -210,7 +210,7 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 				// Checked as given, before the file is touched, so the
 				// refusal names the argument — not an index into config.yaml.
 				if err := r.Validate(); err != nil {
-					return "", err
+					return "", inputError(err)
 				}
 				if idx >= 0 {
 					cfg.Optimizer.RoutingRules[idx] = r
@@ -219,7 +219,7 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 				}
 			}
 			if err := config.WriteMutable(path, cfg); err != nil {
-				return "", err
+				return "", inputError(err)
 			}
 			return jsonString(map[string]any{
 				"routing_rules": cfg.Optimizer.RoutingRules,
