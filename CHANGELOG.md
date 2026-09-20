@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.69.0 - 2026-09-20
+
+### Security
+
+- **Every `/api` route is behind the dashboard token now.** `/api/audit`,
+  `/api/rules/analyze`, `/api/rules/conflicts`, `/api/rules/compress`,
+  `/api/rules/inject` and `/api/domain-events` answered without a
+  credential even when dashboard auth was configured. They were mounted
+  beside the authenticated routes rather than inside them, and Go's
+  router prefers an exact path over the `/api/` pattern the middleware
+  wrapped, so the middleware never saw them. The daemon binds to
+  loopback by default, which is what kept this local; a daemon bound to
+  a LAN address served its own audit log to the network. `/healthz`,
+  `/readyz` and `/version` stay open, as probes must. (#336)
+
+### Changed
+
+- **`tokenops events` and the `tokenops_domain_events` MCP tool now send
+  the dashboard token.** They read it from the daemon's own URL hint, so
+  nothing is asked of you. If you call `/api/domain-events` from a script
+  of your own, it now needs `Authorization: Bearer <token>` or
+  `?token=…`; `tokenops dashboard rotate-token` prints a fresh one. (#336)
+
+### Fixed
+
+- **The usage meter says when Anthropic's bot check refused it.** A
+  refusal was reported as "no usage limits for this account", which sent
+  you to look at your plan instead of at the request. It now names the
+  fix: open claude.ai once in the browser the session came from, which
+  renews the `cf_clearance` cookie. That cookie is tied to the browser's
+  user-agent, so the two are sent together, and the daemon re-reads both
+  from the browser when a request is refused rather than going quiet
+  until you notice. (#336)
+- **The keychain prompt waits as long as a person needs.** The daemon
+  gives up after 15 seconds, because nobody is watching a prompt it
+  raises; an interactive setup now waits three minutes. A single timeout
+  had been cutting off the prompt the operator was reading. (#336)
+
+### Notes
+
+- The dashboard is unaffected: it authenticates with the session cookie
+  it already exchanges the token for on first open.
+
 ## 0.68.1 - 2026-09-20
 
 ### Fixed
