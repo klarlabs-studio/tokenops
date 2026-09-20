@@ -31,6 +31,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/pbkdf2"
 
@@ -53,17 +54,20 @@ type Browser struct {
 	// (Firefox).
 	keychainService string
 	keychainAccount string
+	// app is the application bundle, read for the browser's version so a
+	// request can carry its User-Agent. Empty for Firefox.
+	app string
 	// firefox selects the Firefox profile layout and schema.
 	firefox bool
 }
 
 // Known browsers, in the order they are tried.
 var known = []Browser{
-	{Name: "Chrome", dir: "Library/Application Support/Google/Chrome", keychainService: "Chrome Safe Storage", keychainAccount: "Chrome"},
-	{Name: "Arc", dir: "Library/Application Support/Arc/User Data", keychainService: "Arc Safe Storage", keychainAccount: "Arc"},
-	{Name: "Brave", dir: "Library/Application Support/BraveSoftware/Brave-Browser", keychainService: "Brave Safe Storage", keychainAccount: "Brave"},
-	{Name: "Edge", dir: "Library/Application Support/Microsoft Edge", keychainService: "Microsoft Edge Safe Storage", keychainAccount: "Microsoft Edge"},
-	{Name: "Chromium", dir: "Library/Application Support/Chromium", keychainService: "Chromium Safe Storage", keychainAccount: "Chromium"},
+	{Name: "Chrome", dir: "Library/Application Support/Google/Chrome", keychainService: "Chrome Safe Storage", keychainAccount: "Chrome", app: "/Applications/Google Chrome.app"},
+	{Name: "Arc", dir: "Library/Application Support/Arc/User Data", keychainService: "Arc Safe Storage", keychainAccount: "Arc", app: "/Applications/Arc.app"},
+	{Name: "Brave", dir: "Library/Application Support/BraveSoftware/Brave-Browser", keychainService: "Brave Safe Storage", keychainAccount: "Brave", app: "/Applications/Brave Browser.app"},
+	{Name: "Edge", dir: "Library/Application Support/Microsoft Edge", keychainService: "Microsoft Edge Safe Storage", keychainAccount: "Microsoft Edge", app: "/Applications/Microsoft Edge.app"},
+	{Name: "Chromium", dir: "Library/Application Support/Chromium", keychainService: "Chromium Safe Storage", keychainAccount: "Chromium", app: "/Applications/Chromium.app"},
 	{Name: "Firefox", dir: "Library/Application Support/Firefox/Profiles", firefox: true},
 }
 
@@ -74,6 +78,116 @@ func Names() []string {
 		out = append(out, b.Name)
 	}
 	return out
+}
+
+// SecretFunc returns a browser's value-encryption secret. Production passes
+// keychainSecret; tests pass their own.
+type SecretFunc func(Browser) (string, error)
+
+// DaemonKeychainWait bounds the keychain read where nobody is watching:
+// the daemon polls unattended, and an unanswered prompt must not stall
+// ingestion. InteractiveKeychainWait is for a command an operator just
+// typed — they need time to find the dialog and read it, and cutting them
+// off at fifteen seconds sends a working setup down the paste path.
+const (
+	DaemonKeychainWait      = 15 * time.Second
+	InteractiveKeychainWait = 3 * time.Minute
+)
+
+// KeychainSecret returns a SecretFunc that reads the browser's secret from
+// the login keychain, waiting at most wait for the operator to allow it.
+func KeychainSecret(wait time.Duration) SecretFunc {
+	return func(b Browser) (string, error) { return b.keychainSecretWithin(wait) }
+}
+
+// FindMany returns several cookies for host from ONE browser: the first
+// that has the first name in names. Cloudflare's clearance cookie only
+// works beside the session it was issued with, from the same browser, so
+// they cannot be collected from wherever each happens to exist. Names it
+// cannot find are simply absent from the result.
+func FindMany(ctx context.Context, home, host string, names []string, only string, secret SecretFunc) (map[string]string, Browser, error) {
+	if len(names) == 0 {
+		return nil, Browser{}, errors.New("browsercookie: no cookie names given")
+	}
+	if secret == nil {
+		secret = func(b Browser) (string, error) { return b.keychainSecret() }
+	}
+	var firstErr error
+	tried := 0
+	for _, b := range known {
+		if only != "" && !strings.EqualFold(only, b.Name) {
+			continue
+		}
+		root := filepath.Join(home, b.dir)
+		if _, err := os.Stat(root); err != nil {
+			continue
+		}
+		tried++
+		stores, err := b.stores(root)
+		if err != nil {
+			continue
+		}
+		for _, store := range stores {
+			primary, err := b.read(ctx, store, host, names[0], secret)
+			if err != nil {
+				if !errors.Is(err, ErrNotFound) && firstErr == nil {
+					firstErr = fmt.Errorf("%s: %w", b.Name, err)
+				}
+				continue
+			}
+			out := map[string]string{names[0]: primary}
+			for _, n := range names[1:] {
+				if v, err := b.read(ctx, store, host, n, secret); err == nil {
+					out[n] = v
+				}
+			}
+			return out, b, nil
+		}
+	}
+	if firstErr != nil {
+		return nil, Browser{}, firstErr
+	}
+	if tried == 0 {
+		return nil, Browser{}, fmt.Errorf("browsercookie: no supported browser found (looked for %s)", strings.Join(Names(), ", "))
+	}
+	return nil, Browser{}, ErrNotFound
+}
+
+// read returns one cookie from one store.
+func (b Browser) read(ctx context.Context, store, host, name string, secret SecretFunc) (string, error) {
+	if b.firefox {
+		return readFirefox(ctx, store, host, name)
+	}
+	return readChromium(ctx, store, func() (string, error) { return secret(b) }, host, name)
+}
+
+// UserAgent is the User-Agent this browser sends, or "" when it cannot be
+// determined. Cloudflare binds its clearance cookie to the agent string it
+// was issued to, so a request carrying that cookie has to match.
+func (b Browser) UserAgent() string {
+	if b.firefox || b.app == "" {
+		return ""
+	}
+	out, err := exec.Command("plutil", "-extract", "CFBundleShortVersionString", "raw", "-o", "-", //nolint:gosec // fixed argv, app path from the table above
+		filepath.Join(b.app, "Contents", "Info.plist")).Output()
+	if err != nil {
+		return ""
+	}
+	return chromiumUserAgent(strings.TrimSpace(string(out)))
+}
+
+// chromiumUserAgent renders the agent string Chromium browsers send: the
+// major version only, with the rest zeroed, as Chrome does.
+func chromiumUserAgent(version string) string {
+	major := version
+	if i := strings.Index(version, "."); i > 0 {
+		major = version[:i]
+	}
+	if major == "" {
+		return ""
+	}
+	return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) " +
+		"Chrome/" + major + ".0.0.0 Safari/537.36"
 }
 
 // Find returns the named cookie for host from the first browser that has
@@ -190,9 +304,18 @@ func contains(list []string, s string) bool {
 // secret. macOS prompts the operator to allow it; that prompt is the consent
 // step, and a refusal must read as a refusal rather than a missing cookie.
 func (b Browser) keychainSecret() (string, error) {
-	out, err := exec.Command("security", "find-generic-password", //nolint:gosec // fixed argv, service/account from the table above
+	return b.keychainSecretWithin(DaemonKeychainWait)
+}
+
+func (b Browser) keychainSecretWithin(wait time.Duration) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), wait)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "security", "find-generic-password", //nolint:gosec // fixed argv, service/account from the table above
 		"-w", "-s", b.keychainService, "-a", b.keychainAccount).Output()
 	if err != nil {
+		if ctx.Err() != nil {
+			return "", fmt.Errorf("keychain prompt for %q went unanswered after %s — allow it (or 'Always Allow') and try again", b.keychainService, wait)
+		}
 		return "", fmt.Errorf("could not read %q (%w) — allow access when macOS asks, or fall back to the paste prompt", b.keychainService, err)
 	}
 	return strings.TrimSpace(string(out)), nil

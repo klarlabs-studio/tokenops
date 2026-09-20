@@ -341,3 +341,148 @@ func (b *captureBus) PublishWait(_ context.Context, env *eventschema.Envelope) e
 	b.Publish(env)
 	return nil
 }
+
+// claude.ai sits behind a bot check that answered 403 "Just a moment..." to
+// the session cookie alone — which is why this meter never worked. The
+// browser's clearance cookie and its own User-Agent are what passed the
+// check, and they have to travel together.
+func TestClientSendsTheClearanceCookieAndBrowserAgent(t *testing.T) {
+	var gotCookie, gotUA string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotCookie, gotUA = r.Header.Get("Cookie"), r.Header.Get("User-Agent")
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer srv.Close()
+	c := NewClient("sk-ant-sid-x")
+	c.BaseURL, c.Clearance, c.UserAgent = srv.URL, "clearance-token", "Mozilla/5.0 Chrome/141.0.0.0"
+	if _, err := c.Organizations(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(gotCookie, "sessionKey=sk-ant-sid-x") || !strings.Contains(gotCookie, "cf_clearance=clearance-token") {
+		t.Errorf("cookie header = %q", strings.ReplaceAll(gotCookie, "sk-ant-sid-x", "<key>"))
+	}
+	if gotUA != "Mozilla/5.0 Chrome/141.0.0.0" {
+		t.Errorf("user agent = %q, want the browser's own", gotUA)
+	}
+}
+
+// Without a clearance cookie the request still goes out, with a plain
+// browser agent: the check is not always asking.
+func TestClientWithoutClearanceStillSendsTheSession(t *testing.T) {
+	var gotCookie, gotUA string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotCookie, gotUA = r.Header.Get("Cookie"), r.Header.Get("User-Agent")
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer srv.Close()
+	c := NewClient("sk-ant-sid-y")
+	c.BaseURL = srv.URL
+	if _, err := c.Organizations(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(gotCookie, "cf_clearance") || gotUA == "" {
+		t.Errorf("cookie = %q agent = %q", strings.ReplaceAll(gotCookie, "sk-ant-sid-y", "<key>"), gotUA)
+	}
+}
+
+// botCheckServer refuses until the request carries the clearance cookie the
+// browser holds — claude.ai's own behaviour, which is why the meter never
+// worked from a session key alone.
+type botCheckServer struct {
+	want  string
+	calls int
+}
+
+func (b *botCheckServer) start(t *testing.T) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b.calls++
+		if !strings.Contains(r.Header.Get("Cookie"), "cf_clearance="+b.want) {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`<!DOCTYPE html><title>Just a moment...</title>`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/organizations":
+			_, _ = w.Write([]byte(sampleOrgs))
+		default:
+			_, _ = w.Write([]byte(windowedUsage))
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+// The clearance cookie expires within hours. A meter that read it once
+// works today and is refused tomorrow, so a refusal re-reads the browser
+// and retries rather than waiting for someone to notice.
+func TestPollerRefreshesTheBrowserSessionWhenRefused(t *testing.T) {
+	server := &botCheckServer{want: "fresh-clearance"}
+	url := server.start(t)
+	bus := &captureBus{}
+	p := NewPoller(bus, PollerOptions{
+		SessionKey: "sk-ant-sid-old",
+		BaseURL:    url,
+		Interval:   time.Hour,
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Cookies: func(context.Context) (Session, error) {
+			return Session{Key: "sk-ant-sid-old", Clearance: "fresh-clearance", Browser: "Chrome"}, nil
+		},
+	})
+	if err := p.ensureClient(); err != nil {
+		t.Fatal(err)
+	}
+	p.scan(context.Background())
+	if bus.PublishedCount() != 1 {
+		t.Fatalf("published %d readings; the refusal was not recovered", bus.PublishedCount())
+	}
+}
+
+// With no browser to read, a refusal is reported rather than retried
+// forever, and says what renews it.
+func TestPollerReportsABotCheckItCannotRefresh(t *testing.T) {
+	server := &botCheckServer{want: "never-supplied"}
+	url := server.start(t)
+	var logs strings.Builder
+	bus := &captureBus{}
+	p := NewPoller(bus, PollerOptions{
+		SessionKey: "sk-ant-sid-old",
+		BaseURL:    url,
+		Interval:   time.Hour,
+		Logger:     slog.New(slog.NewTextHandler(&logs, nil)),
+	})
+	if err := p.ensureClient(); err != nil {
+		t.Fatal(err)
+	}
+	p.scan(context.Background())
+	if bus.PublishedCount() != 0 {
+		t.Error("published a reading it never got")
+	}
+	if !strings.Contains(logs.String(), "bot check") {
+		t.Errorf("did not report the bot check:\n%s", logs.String())
+	}
+}
+
+// A poller with no key at all but a browser to read starts from the
+// browser, so `vendor-usage setup` is not required to have stored one.
+func TestPollerStartsFromTheBrowserWithNoStoredKey(t *testing.T) {
+	server := &botCheckServer{want: "c"}
+	url := server.start(t)
+	bus := &captureBus{}
+	p := NewPoller(bus, PollerOptions{
+		BaseURL:  url,
+		Interval: time.Hour,
+		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Cookies: func(context.Context) (Session, error) {
+			return Session{Key: "sk-ant-sid-browser", Clearance: "c", Browser: "Chrome"}, nil
+		},
+	})
+	if err := p.ensureClient(); err != nil {
+		t.Fatal(err)
+	}
+	p.scan(context.Background())
+	if bus.PublishedCount() != 1 {
+		t.Errorf("published %d readings without a stored key", bus.PublishedCount())
+	}
+}

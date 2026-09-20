@@ -29,6 +29,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -153,6 +154,16 @@ type Client struct {
 	HTTPClient *http.Client
 	BaseURL    string
 	SessionKey string
+	// Clearance is Cloudflare's cf_clearance cookie from the browser the
+	// session came from. claude.ai sits behind a bot check that answers
+	// 403 "Just a moment..." to a client it does not recognise; that
+	// cookie is the browser's proof of having passed it, and it is bound
+	// to the browser's User-Agent, so the two travel together.
+	Clearance string
+	// UserAgent is that browser's own agent string. Empty falls back to a
+	// plain Chrome string, which passes on its own only when the bot
+	// check is not asking.
+	UserAgent string
 }
 
 // ErrMissingCookie signals an empty session_key in config; poller
@@ -163,6 +174,11 @@ var ErrMissingCookie = errors.New("claude-usage-meter: session_key required (pas
 // Surfaced separately so the daemon can log a distinct WARN telling
 // the operator to re-paste rather than burying the 401 in generic
 // http error noise.
+// ErrBotCheck means claude.ai's bot check refused the request. It is not a
+// bad session: the browser's cf_clearance cookie is missing or has expired,
+// and re-reading it from the browser is what fixes it.
+var ErrBotCheck = errors.New("claude-usage-meter: claude.ai's bot check refused this request — the browser's cf_clearance cookie is missing or expired")
+
 var ErrUnauthorized = errors.New("claude-usage-meter: claude.ai returned 401 — sessionKey likely expired, re-paste from devtools")
 
 // NewClient binds a session cookie and returns a Client with sensible
@@ -225,12 +241,20 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("claude-usage-meter: build request: %w", err)
 	}
-	req.Header.Set("Cookie", "sessionKey="+c.SessionKey)
+	cookie := "sessionKey=" + c.SessionKey
+	if c.Clearance != "" {
+		cookie += "; cf_clearance=" + c.Clearance
+	}
+	req.Header.Set("Cookie", cookie)
 	req.Header.Set("Accept", "application/json")
 	// Cloudflare in front of claude.ai 403s anything that doesn't look
 	// like a browser. A vanilla Chrome UA is sufficient and tolerated
 	// — we're identifying as the same caller every browser tab is.
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+	ua := c.UserAgent
+	if ua == "" {
+		ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+	}
+	req.Header.Set("User-Agent", ua)
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("claude-usage-meter: do request: %w", err)
@@ -241,7 +265,18 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, error) {
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		if resp.StatusCode == http.StatusForbidden && isBotCheck(snippet) {
+			return nil, fmt.Errorf("%w (%s)", ErrBotCheck, path)
+		}
 		return nil, fmt.Errorf("claude-usage-meter: %s: status %d: %s", path, resp.StatusCode, snippet)
 	}
 	return io.ReadAll(resp.Body)
+}
+
+// isBotCheck recognises Cloudflare's interstitial, which arrives as a 403
+// carrying an HTML challenge page rather than an API error.
+func isBotCheck(body []byte) bool {
+	b := strings.ToLower(string(body))
+	return strings.Contains(b, "just a moment") || strings.Contains(b, "cf-browser-verification") ||
+		strings.Contains(b, "cloudflare")
 }

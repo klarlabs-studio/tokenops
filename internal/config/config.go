@@ -739,6 +739,15 @@ type ClaudeUsageMeterConfig struct {
 	SessionKey string        `yaml:"session_key"`
 	OrgID      string        `yaml:"org_id"`
 	Interval   time.Duration `yaml:"interval"`
+	// FromBrowser re-reads the session and Cloudflare clearance cookies
+	// from the local browser as the daemon polls. claude.ai's bot check
+	// refuses a request without a clearance cookie, and that cookie
+	// expires within hours: a meter that stored one at setup works for an
+	// afternoon and is refused thereafter. macOS asks to allow the
+	// keychain read once per installed version.
+	FromBrowser bool `yaml:"from_browser,omitempty"`
+	// Browser limits that read to one browser by name; empty searches.
+	Browser string `yaml:"browser,omitempty"`
 }
 
 // CodexJSONLUsageConfig enables the Codex CLI session-log reader.

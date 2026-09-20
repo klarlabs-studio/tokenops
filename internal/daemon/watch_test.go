@@ -91,3 +91,16 @@ func TestPlanCostSource(t *testing.T) {
 		t.Errorf("openai (no plan) = %q; want empty", got)
 	}
 }
+
+// The clearance cookie expires within hours, so a meter that only reads it
+// at setup works for an afternoon. from_browser is what keeps it alive, and
+// wiring it is invisible when forgotten: the poller just falls back to the
+// stored key and is refused later.
+func TestBrowserSessionSourceFollowsTheConfig(t *testing.T) {
+	if browserSessionSource(config.ClaudeUsageMeterConfig{}) != nil {
+		t.Error("read the browser without being asked to")
+	}
+	if browserSessionSource(config.ClaudeUsageMeterConfig{FromBrowser: true}) == nil {
+		t.Error("from_browser set, but the poller got no way to re-read the session")
+	}
+}

@@ -230,45 +230,56 @@ func (s *Server) Start(ctx context.Context) error {
 
 	mux := http.NewServeMux()
 	s.registerRoutes(mux)
+
+	// Every /api/* and /dashboard route goes on one private sub-mux, which
+	// the auth middleware wraps in a single place. /healthz, /readyz and
+	// /version stay on the outer mux unauthenticated — a probe must never
+	// need a credential.
+	//
+	// Registering a protected route on the outer mux instead does not
+	// merely skip the middleware, it silently defeats it: ServeMux gives an
+	// exact pattern precedence over the "/api/" wildcard, so the wrapper
+	// never sees the request. /api/audit, /api/rules/* and
+	// /api/domain-events served unauthenticated that way, with auth
+	// correctly configured, until this was made one mux.
+	protected := http.NewServeMux()
 	if s.analytics != nil {
-		// Mount analytics + dashboard onto a private sub-mux so the
-		// auth middleware (when configured) wraps every protected
-		// route in one place. /healthz, /readyz, and /version stay on
-		// the outer mux unauthenticated — health probes must not
-		// require credentials.
-		protected := http.NewServeMux()
 		s.analytics.Register(protected)
 		// Dashboard only renders meaningful data when analytics is
 		// wired (it queries /api/spend/*), so mount it inside the
 		// same branch instead of leaving an empty page exposed.
 		registerDashboard(protected)
-		var protectedHandler http.Handler = protected
-		if s.dashAuth != nil {
-			protectedHandler = s.dashAuth.Middleware(protected)
-		}
-		mux.Handle("/dashboard", protectedHandler)
-		mux.Handle("/dashboard/", protectedHandler)
-		mux.Handle("/api/", protectedHandler)
 	} else {
 		stub := subsystemDisabledHandler("storage_disabled",
 			"run `tokenops init` to enable the sqlite event store, then restart the daemon")
 		for _, p := range storageDisabledPaths {
-			mux.HandleFunc(p, stub)
+			protected.HandleFunc(p, stub)
 		}
 	}
 	if s.rulesAPI != nil {
-		s.rulesAPI.Register(mux)
+		s.rulesAPI.Register(protected)
 	} else {
 		stub := subsystemDisabledHandler("rules_disabled",
 			"run `tokenops init` to enable rule intelligence, then restart the daemon")
 		for _, p := range rulesDisabledPaths {
-			mux.HandleFunc(p, stub)
+			protected.HandleFunc(p, stub)
 		}
 	}
 	if s.auditAPI != nil {
-		s.auditAPI.Register(mux)
+		s.auditAPI.Register(protected)
 	}
-	s.registerEventCountsRoute(mux)
+	s.registerEventCountsRoute(protected)
+
+	var protectedHandler http.Handler = protected
+	if s.dashAuth != nil {
+		protectedHandler = s.dashAuth.Middleware(protected)
+	}
+	mux.Handle("/api/", protectedHandler)
+	if s.analytics != nil {
+		mux.Handle("/dashboard", protectedHandler)
+		mux.Handle("/dashboard/", protectedHandler)
+	}
+
 	if err := s.registerProviderRoutes(mux); err != nil {
 		s.mu.Unlock()
 		_ = ln.Close()

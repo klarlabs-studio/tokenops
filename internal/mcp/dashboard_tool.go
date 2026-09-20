@@ -2,73 +2,26 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
 	"strconv"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/infra/daemonhint"
 )
 
-// urlHintPayload mirrors the daemon's internal/daemon.urlHintPayload
-// struct. Duplicated here (instead of importing) so the mcp package
-// doesn't take a dependency on the daemon package — keeps the layer
-// boundary clean and avoids import cycles when the daemon eventually
-// depends on mcp tooling for the in-process MCP listener.
-type urlHintPayload struct {
-	URL            string    `json:"url"`
-	LocalURL       string    `json:"local_url,omitempty"`
-	Addr           string    `json:"addr"`
-	TLS            bool      `json:"tls"`
-	PID            int       `json:"pid"`
-	StartedAt      time.Time `json:"started_at"`
-	DashboardToken string    `json:"dashboard_token,omitempty"`
-}
+// urlHintPayload is the daemon's URL hint. The reader lives in
+// internal/infra/daemonhint because the CLI needs the same file — both
+// resolve the running daemon's address, and both need its dashboard token
+// to call the credentialed /api/* routes.
+type urlHintPayload = daemonhint.Payload
 
-// preferredURL returns the URL the dashboard tool should hand to the
-// agent: mDNS hostname when the daemon successfully advertised, the
-// loopback URL otherwise. Keeping the choice in one place means a
-// future addition (Tailscale MagicDNS, dynamic DNS) plugs in here
-// without touching the tool handler.
-func (p urlHintPayload) preferredURL() string {
-	if p.LocalURL != "" {
-		return p.LocalURL
-	}
-	return p.URL
-}
-
-// urlHintPath resolves the location the daemon writes its URL hint
-// to: $XDG_DATA_HOME/tokenops/daemon.url, fallback ~/.tokenops/daemon.url.
-// Keeping the resolver here (rather than re-exporting from daemon)
-// keeps the MCP package self-contained.
-func urlHintPath() (string, error) {
-	if v := os.Getenv("XDG_DATA_HOME"); v != "" {
-		return filepath.Join(v, "tokenops", "daemon.url"), nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".tokenops", "daemon.url"), nil
-}
+// urlHintPath resolves the location the daemon writes its URL hint to.
+func urlHintPath() (string, error) { return daemonhint.Path() }
 
 // readURLHint loads the daemon URL hint. Returns os.ErrNotExist when
 // no daemon is running so callers can branch on a typed error.
-func readURLHint() (*urlHintPayload, error) {
-	p, err := urlHintPath()
-	if err != nil {
-		return nil, err
-	}
-	data, err := os.ReadFile(p)
-	if err != nil {
-		return nil, err
-	}
-	var payload urlHintPayload
-	if err := json.Unmarshal(data, &payload); err != nil {
-		return nil, err
-	}
-	return &payload, nil
-}
+func readURLHint() (*urlHintPayload, error) { return daemonhint.Read() }
 
 // DashboardDeps wires tokenops_dashboard.
 type DashboardDeps struct {
@@ -111,7 +64,7 @@ func RegisterDashboardTool(s *Server, d DashboardDeps) error {
 					"hint":  "could not read daemon URL hint: " + err.Error(),
 				}), nil
 			}
-			base := payload.preferredURL()
+			base := payload.PreferredURL()
 			dashURL := base + "/dashboard"
 			if payload.DashboardToken != "" {
 				dashURL += "?token=" + payload.DashboardToken
@@ -121,7 +74,7 @@ func RegisterDashboardTool(s *Server, d DashboardDeps) error {
 				summary += "_mDNS: " + payload.LocalURL + " — falls back to " + payload.URL + " if `.local` resolution is off._\n\n"
 			}
 			if payload.DashboardToken != "" {
-				summary += "_The URL carries a one-shot auth token; first click sets a session cookie and the address bar drops the token._\n\n"
+				summary += "_The URL carries the dashboard's auth token; the first click exchanges it for a session cookie and the address bar drops it. The token itself stays valid — rotate it with `tokenops dashboard rotate-token`._\n\n"
 			}
 			summary += "_Daemon PID " + strconv.Itoa(payload.PID) + ", started " + payload.StartedAt.Format(time.RFC3339) + "._\n"
 			return markdownPayload(summary, map[string]any{
@@ -160,7 +113,7 @@ func dashboardWithoutHint(d DashboardDeps) string {
 		if tok := d.Token(); tok != "" {
 			link := dashURL + "?token=" + tok
 			summary := "## Dashboard\n\n[Open " + dashURL + "](" + link + ")\n\n" +
-				"_The URL carries a one-shot auth token; first click sets a session cookie and the address bar drops the token._\n"
+				"_The URL carries the dashboard's auth token; the first click exchanges it for a session cookie and the address bar drops it. The token itself stays valid — rotate it with `tokenops dashboard rotate-token`._\n"
 			return markdownPayload(summary, map[string]any{
 				"url":             link,
 				"daemon_url":      r.URL,

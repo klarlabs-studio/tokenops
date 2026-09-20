@@ -19,7 +19,7 @@ func TestPreferredURL(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := c.payload.preferredURL(); got != c.want {
+			if got := c.payload.PreferredURL(); got != c.want {
 				t.Errorf("got %q want %q", got, c.want)
 			}
 		})

@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -56,9 +58,23 @@ func TestSetupWritesNothingWithoutAKey(t *testing.T) {
 	}
 }
 
+// meterServing points the verification request at a local server for the
+// duration of one test, so no test in this file reaches claude.ai.
+func meterServing(t *testing.T, h http.HandlerFunc) {
+	t.Helper()
+	ts := httptest.NewServer(h)
+	t.Cleanup(ts.Close)
+	prev := meterBaseURL
+	meterBaseURL = ts.URL
+	t.Cleanup(func() { meterBaseURL = prev })
+}
+
 // A key Anthropic rejects must fail here, naming the most likely cause:
 // these cookies rotate, so a stale copy is the common case.
 func TestSetupRefusesAKeyAnthropicRejects(t *testing.T) {
+	meterServing(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	})
 	path := seedConfig(t)
 	_, err := runCookieSetupCmd(t, "sk-ant-sid-definitely-not-valid\n", "claude-usage-meter", "--config-path", path)
 	if err == nil {
@@ -73,6 +89,35 @@ func TestSetupRefusesAKeyAnthropicRejects(t *testing.T) {
 	}
 	if cfg.VendorUsage.ClaudeUsageMeter.Enabled || cfg.VendorUsage.ClaudeUsageMeter.SessionKey != "" {
 		t.Errorf("a rejected key was persisted: %+v", cfg.VendorUsage.ClaudeUsageMeter)
+	}
+}
+
+// Cloudflare's bot check is a different failure from a rejected key, and
+// conflating them is what sent an operator to look at their plan instead of
+// at the request. The advice must name the fix: load claude.ai in the
+// browser the session came from, which renews cf_clearance.
+func TestSetupExplainsTheBotCheck(t *testing.T) {
+	meterServing(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte("<html><title>Just a moment...</title></html>"))
+	})
+	path := seedConfig(t)
+	_, err := runCookieSetupCmd(t, "sk-ant-sid-whatever\n", "claude-usage-meter", "--config-path", path)
+	if err == nil {
+		t.Fatal("a refused request should be reported")
+	}
+	if strings.Contains(err.Error(), "not accepted") {
+		t.Errorf("a bot check was reported as a bad key: %v", err)
+	}
+	if !strings.Contains(err.Error(), "claude.ai") {
+		t.Errorf("the advice should name claude.ai as the fix: %v", err)
+	}
+	cfg, rerr := config.ReadMutable(path)
+	if rerr != nil {
+		t.Fatalf("read back: %v", rerr)
+	}
+	if cfg.VendorUsage.ClaudeUsageMeter.Enabled || cfg.VendorUsage.ClaudeUsageMeter.SessionKey != "" {
+		t.Errorf("a key was persisted despite a refused request: %+v", cfg.VendorUsage.ClaudeUsageMeter)
 	}
 }
 
@@ -105,5 +150,19 @@ func TestSetupPasteSkipsTheBrowser(t *testing.T) {
 	}
 	if !strings.Contains(out, "Paste sessionKey") {
 		t.Errorf("--paste did not prompt:\n%s", out)
+	}
+}
+
+// Cloudflare's clearance cookie is short-lived and renewed by loading the
+// page, so "sign in again" sends the operator to the wrong place.
+func TestBotCheckErrorSaysHowToRenewIt(t *testing.T) {
+	err := botCheckAdvice("Chrome")
+	for _, want := range []string{"claude.ai", "Chrome", "renews"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("advice %q omits %q", err, want)
+		}
+	}
+	if strings.Contains(err.Error(), "sign in again") {
+		t.Errorf("advice blames the session: %q", err)
 	}
 }
