@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -23,6 +24,11 @@ const SourceTag = "vendor-usage-anthropic"
 
 // PollerOptions configures the periodic poller.
 type PollerOptions struct {
+	// Health, when set, receives this poller's own success/failure
+	// record. It is what lets a status surface tell a reader being
+	// refused apart from a vendor nobody is using — both produce no
+	// events. nil disables the reporting.
+	Health *freshness.Recorder
 	// AdminKey is the sk-ant-admin-* key. Required.
 	AdminKey string
 	// Interval is the gap between polls. Defaults to 5 minutes — the
@@ -175,6 +181,7 @@ func (p *Poller) scan(ctx context.Context) {
 }
 
 func (p *Poller) recordErr(err error) {
+	p.opts.Health.Failed(err, time.Now())
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.lastErr = err
@@ -182,6 +189,7 @@ func (p *Poller) recordErr(err error) {
 }
 
 func (p *Poller) recordSuccess() {
+	p.opts.Health.Succeeded(time.Now())
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.lastErr = nil

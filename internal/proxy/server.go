@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer"
 	"go.klarlabs.de/tokenops/internal/events"
@@ -43,6 +44,9 @@ type Server struct {
 	auditDrops      func() int64
 	eventSpans      func() map[string]EventSpan
 	eventDrops      func() int64
+	// sourceFreshness reports per-source ingestion health. nil leaves
+	// GET /api/sources unmounted.
+	sourceFreshness func() []freshness.Report
 	resilience      *ResilienceConfig
 	dashAuth        DashAuth
 	// router applies live model routing when active mode is enabled
@@ -269,6 +273,7 @@ func (s *Server) Start(ctx context.Context) error {
 		s.auditAPI.Register(protected)
 	}
 	s.registerEventCountsRoute(protected)
+	s.registerSourcesRoute(protected)
 
 	var protectedHandler http.Handler = protected
 	if s.dashAuth != nil {

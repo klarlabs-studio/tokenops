@@ -18,6 +18,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
+	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/observ"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
 	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
@@ -122,6 +123,12 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		return fmt.Errorf("provider routes: %w", err)
 	}
 
+	// Every reader reports its own success and failure here, so a status
+	// surface can tell a poller being refused apart from a vendor nobody
+	// is using. Both produce no events; only the poll record separates
+	// them.
+	sourceHealth := freshness.NewRegistry()
+
 	opts := []proxy.Option{
 		proxy.WithLogger(logger),
 		proxy.WithShutdownTimeout(cfg.Shutdown.Timeout),
@@ -225,6 +232,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		logger.Info("event store ready", "path", path)
 		opts = append(opts,
 			proxy.WithEventBus(bus),
+			proxy.WithSourceFreshness(sourceFreshnessFn(cfg, store, sourceHealth)),
 			proxy.WithTokenizer(components.Tokenizers),
 			// Rows the bus could not persist. Published so `tokenops
 			// status` and the MCP status tool can warn about them while
@@ -308,6 +316,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		}
 		if cfg.VendorUsage.Cursor.Enabled {
 			p := cursorusage.NewPoller(bus, cursorusage.PollerOptions{
+				Health:   sourceHealth.For("cursor-web"),
 				Cookie:   cfg.VendorUsage.Cursor.Cookie,
 				UserID:   cfg.VendorUsage.Cursor.UserID,
 				Interval: cfg.VendorUsage.Cursor.Interval,
@@ -342,6 +351,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		}
 		if cfg.VendorUsage.ClaudeUsageMeter.Enabled {
 			p := claudeusagemeter.NewPoller(bus, claudeusagemeter.PollerOptions{
+				Health:     sourceHealth.For("claude-usage-meter"),
 				SessionKey: cfg.VendorUsage.ClaudeUsageMeter.SessionKey,
 				OrgID:      cfg.VendorUsage.ClaudeUsageMeter.OrgID,
 				Interval:   cfg.VendorUsage.ClaudeUsageMeter.Interval,
@@ -360,6 +370,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		if cfg.VendorUsage.Anthropic.Enabled {
 			client := anthropicusage.NewAdminClient(cfg.VendorUsage.Anthropic.AdminKey)
 			p := anthropicusage.NewPoller(client, bus, anthropicusage.PollerOptions{
+				Health:      sourceHealth.For("vendor-usage-anthropic"),
 				AdminKey:    cfg.VendorUsage.Anthropic.AdminKey,
 				Interval:    cfg.VendorUsage.Anthropic.Interval,
 				BucketWidth: anthropicusage.BucketWidth(cfg.VendorUsage.Anthropic.BucketWidth),
@@ -377,6 +388,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		}
 		if cfg.VendorUsage.GitHubCopilot.Enabled {
 			p := copilotusage.NewPoller(bus, copilotusage.PollerOptions{
+				Health:     sourceHealth.For("github-copilot"),
 				OAuthToken: cfg.VendorUsage.GitHubCopilot.OAuthToken,
 				Interval:   cfg.VendorUsage.GitHubCopilot.Interval,
 				Logger:     logger,

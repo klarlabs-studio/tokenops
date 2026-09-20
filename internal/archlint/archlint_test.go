@@ -62,6 +62,7 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard",
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics",
 	"go.klarlabs.de/tokenops/internal/contexts/observability/anomaly",
+	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness",
 	"go.klarlabs.de/tokenops/internal/contexts/observability/observ",
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/eval",
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/fmtlearn",
