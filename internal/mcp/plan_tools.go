@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/session"
@@ -43,6 +44,12 @@ func (d PlanDeps) activeConfig() *config.Config {
 // dragging the sqlite dependency into the domain package.
 type planStoreReader struct{ store *sqlite.Store }
 
+// CountBySource satisfies headroom.Reader, so the capability can be
+// handed one port instead of a reader plus a loose function value.
+func (r planStoreReader) CountBySource(ctx context.Context, since, until time.Time) (map[string]int64, error) {
+	return r.store.CountBySource(ctx, since, until)
+}
+
 // classifySignalFromStore reads CountBySource over the headroom window
 // and feeds proxy + mcp-session counts into the domain classifier so
 // every response carries an honest trust level. Vendor /usage isn't
@@ -66,10 +73,14 @@ func (r planStoreReader) ReadEvents(ctx context.Context, t eventschema.EventType
 // the happy path Reports (+ optional DataWarning) is populated; the
 // unconfigured / storage-disabled paths set Error + Hint instead.
 type planHeadroomResult struct {
-	Reports     []plans.HeadroomReport `json:"reports,omitempty"`
-	DataWarning *DataWarning           `json:"data_warning,omitempty"`
-	Error       string                 `json:"error,omitempty"`
-	Hint        string                 `json:"hint,omitempty"`
+	Reports []plans.HeadroomReport `json:"reports,omitempty"`
+	// Notes names plans that could not be reported on. An unknown plan
+	// name used to be skipped silently, so an operator's typo produced a
+	// plan that reported nothing and said nothing, forever.
+	Notes       []string     `json:"notes,omitempty"`
+	DataWarning *DataWarning `json:"data_warning,omitempty"`
+	Error       string       `json:"error,omitempty"`
+	Hint        string       `json:"hint,omitempty"`
 }
 
 // RegisterPlanTools mounts tokenops_plan_headroom on s. Returns an
@@ -238,24 +249,18 @@ func planHeadroom(ctx context.Context, d PlanDeps) (*planHeadroomResult, error) 
 			Hint:  "run `tokenops init` then restart the daemon",
 		}, nil
 	}
-	reader := planStoreReader{store: d.Store}
 	now := time.Now().UTC()
-	reports := make([]plans.HeadroomReport, 0, len(cfg.Plans))
-	for _, provider := range sortedProviders(cfg.Plans) {
-		planName := cfg.Plans[provider]
-		lim := cfg.PlanLimits[provider]
-		inputs, err := plans.AssembleHeadroomInputs(ctx, reader, d.Store.CountBySource, provider, planName,
-			plans.SpendLimit{LimitUSD: lim.SpendLimitUSD, Window: lim.Window, RateFactor: lim.RateFactor}, now)
-		if err != nil {
-			return nil, err
-		}
-		report, err := plans.ComputeHeadroom(planName, inputs)
-		if err != nil {
-			return nil, fmt.Errorf("headroom[%s]: %w", provider, err)
-		}
-		reports = append(reports, report)
+	// One implementation, shared with `tokenops plan headroom`. The two
+	// used to be separate copies of this loop, which is how the CLI kept
+	// the unsorted-provider bug after it was fixed here.
+	computed, err := headroom.Compute(ctx, headroom.Deps{
+		Config: cfg,
+		Reader: planStoreReader{store: d.Store},
+	}, now)
+	if err != nil {
+		return nil, err
 	}
-	res := &planHeadroomResult{Reports: reports}
+	res := &planHeadroomResult{Reports: computed.Reports, Notes: computed.Notes}
 	if warn, err := maybeDataWarning(ctx, d.Store, time.Time{}, now); err == nil && warn != nil {
 		res.DataWarning = warn
 	}
