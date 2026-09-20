@@ -3,14 +3,17 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
@@ -166,7 +169,10 @@ func newPlanListCmd(rf *rootFlags) *cobra.Command {
 				fmt.Fprintln(cmd.OutOrStdout(), "no plans configured; run `tokenops plan set <provider> <plan>` (e.g. `tokenops plan set anthropic claude-max-20x`)")
 				return nil
 			}
-			for provider, planName := range cfg.Plans {
+			// Sorted for the same reason headroom is: a table whose rows
+			// reshuffle between runs is one an operator cannot diff.
+			for _, provider := range sortedPlanProviders(cfg.Plans) {
+				planName := cfg.Plans[provider]
 				p, ok := plans.Lookup(planName)
 				if !ok {
 					fmt.Fprintf(cmd.OutOrStdout(), "%-12s %s (unknown plan!)\n", provider, planName)
@@ -192,7 +198,7 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 				return err
 			}
 			if len(cfg.Plans) == 0 {
-				return fmt.Errorf("no plans configured; set `plans:` in config or TOKENOPS_PLAN_<PROVIDER>")
+				return errors.New(headroom.UnconfiguredHint)
 			}
 			resolvedPath, err := resolvePlanDB(dbPath)
 			if err != nil {
@@ -206,26 +212,24 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 			}
 			defer func() { _ = store.Close() }()
 
-			reader := storeReader{store: store}
-			reports := make([]plans.HeadroomReport, 0, len(cfg.Plans))
-			now := time.Now().UTC()
-			for provider, planName := range cfg.Plans {
-				lim := cfg.PlanLimits[provider]
-				inputs, err := plans.AssembleHeadroomInputs(ctx, reader, store.CountBySource, provider, planName,
-					plans.SpendLimit{LimitUSD: lim.SpendLimitUSD, Window: lim.Window, RateFactor: lim.RateFactor}, now)
-				if err != nil {
-					return err
-				}
-				report, err := plans.ComputeHeadroom(planName, inputs)
-				if err != nil {
-					return fmt.Errorf("headroom[%s]: %w", provider, err)
-				}
-				reports = append(reports, report)
+			// The capability decides which plans, in what order, with
+			// which limits. This command decides how to print them, which
+			// is the only part that legitimately differs from the MCP
+			// tool answering the same question.
+			res, err := headroom.Compute(ctx, headroom.Deps{
+				Config: &cfg,
+				Reader: storeReader{store: store},
+			}, time.Now().UTC())
+			if err != nil {
+				return err
 			}
 			if jsonOut {
-				return json.NewEncoder(cmd.OutOrStdout()).Encode(reports)
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(res.Reports)
 			}
-			for _, r := range reports {
+			for _, note := range res.Notes {
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", note)
+			}
+			for _, r := range res.Reports {
 				fmt.Fprintf(cmd.OutOrStdout(),
 					"%s (%s) — risk %s\n",
 					r.Display, r.PlanName, r.OverageRisk,
@@ -288,9 +292,16 @@ func newPlanCatalogCmd() *cobra.Command {
 	}
 }
 
-// storeReader adapts *sqlite.Store to the plans.EventReader port so the
-// domain package never imports sqlite directly.
+// storeReader adapts *sqlite.Store to the ports the domain and the
+// capability layer declare, so neither imports sqlite directly.
 type storeReader struct{ store *sqlite.Store }
+
+// CountBySource satisfies headroom.Reader. The capability needs both
+// reads, and taking them through one port is what stopped the CLI and
+// the MCP server each carrying their own wrapper around this store.
+func (s storeReader) CountBySource(ctx context.Context, since, until time.Time) (map[string]int64, error) {
+	return s.store.CountBySource(ctx, since, until)
+}
 
 func (s storeReader) ReadEvents(ctx context.Context, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
 	return s.store.Query(ctx, sqlite.Filter{Type: t, Since: since, Limit: 100_000})
@@ -317,4 +328,14 @@ func spendSourceLabel(source string) string {
 		return "reported by the vendor"
 	}
 	return "estimated from token counts"
+}
+
+// sortedPlanProviders keeps `plan list` in a stable order.
+func sortedPlanProviders(bindings map[string]string) []string {
+	out := make([]string, 0, len(bindings))
+	for p := range bindings {
+		out = append(out, p)
+	}
+	sort.Strings(out)
+	return out
 }
