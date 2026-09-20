@@ -170,3 +170,63 @@ Wire `llm.Backend` into `coaching.Pipeline` AND auto-pick the cheapest in-plan m
 Today MCP tool responses are plain-text JSON. Three rendering tiers, ship in order: (1) Markdown summary + JSON appendix for every cost/headroom response so Desktop/Code/Cursor render styled tables and code blocks instead of brace soup; (2) Inline SVG sparklines for burn-rate and window-headroom charts returned as ResourceContent with MimeType=image/svg+xml — most MCP clients embed SVG inline today; (3) Interactive Vue+D3 dashboard returned as text/html ResourceContent — experimental, depends on client iframe support (Claude Desktop's evolving UI app spec, Cursor's panel). Build the Vue app under web/dashboard/ (already exists), bundle as a single-file HTML blob, serve via tokenops_dashboard MCP tool. Charts to ship first: window-burn sparkline, plan-quota gauge, real-vs-synthetic ratio donut. Acceptance: tokenops_session_budget renders as a styled markdown table in Claude Desktop; tokenops_dashboard returns an interactive D3 chart in clients that support html resources.
 
 ---
+
+## Privacy and Secret Hardening
+
+Retained raw content is redacted and pruned: the fmt recovery store stops writing world-readable unredacted command output, retention covers more than the sqlite events table, and Config.Redacted gains a completeness test so a new secret field cannot leak by default. Secrets prefer platform credential stores; documented env-var injection either exists or the claim is removed.
+
+---
+
+## Measurement Provenance
+
+Every reported value carries source, confidence, observed-at and caveat. Unknown never silently becomes zero and estimated never becomes measured. Generalises the two existing patterns (plans.SignalQuality, modeltier.Basis) and closes the known silent conversions in the analytics aggregator, the proxy tokenizer path, and optimizer token-savings estimation.
+
+---
+
+## Observation Freshness as Health
+
+Health distinguishes process alive from source reachable, ingestion active, data fresh, analysis current and control path operational. Per-source last-seen and last-successful-poll become data returned by CLI, MCP and HTTP rather than a derived warning string.
+
+---
+
+## AI Work Domain Model
+
+Domain-neutral Work, Actor, Execution and Outcome primitives. Work is something someone wants accomplished; an Execution is one attempt at it, so the same work can have several and be compared; an Outcome is what the work produced, distinct from what it consumed. No core abstraction may require AI work to mean software development: repositories, commits, files and coding sessions become evidence in adapters. Existing tasks and story reconstruction become the first adapter.
+
+---
+
+## Interface-Independent Capabilities
+
+CLI, MCP, dashboard and future adapters consume shared application capabilities instead of each implementing validation, orchestration and formatting. A capability owns its request model, validation, orchestration, result model, provenance and errors. An archlint rule constrains adapter to capability-layer imports so parity is architectural rather than manually coordinated.
+
+---
+
+## Verification and Experiment
+
+An optimization recommendation is a hypothesis until measured. Interventions carry correlation identity linking recommended, applied, measured and verified. Baseline-versus-intervention comparison runs over real executions, reporting measured token, cost, latency and outcome change rather than tokens-removed times nominal price. The four existing control ladders unify into one policy concept: observe-only, recommend, require approval, automatic.
+
+---
+
+## Canonical Event Consolidation
+
+One factual substrate. The parallel in-process domainevents type folds into the canonical envelope, which gains work, execution and actor association alongside its existing schema version, timestamp, source and correlation ids. Feature-specific ingestion paths that bypass the envelope are retired in favour of source to canonical event to multiple consumers.
+
+---
+
+## Runtime Lifecycle Modules
+
+Daemon composition stays explicit but becomes modular. Runtime modules own initialization, startup, shutdown, health and background workers, replacing a single startup function that wires every subsystem inline and launches untracked goroutines nobody joins. Explicit compile-time composition; no dynamic plugin framework.
+
+---
+
+## Installed-Product Verification
+
+An end-to-end test drives the built artifact through init, daemon start, ingestion, canonical event persistence, work reconstruction, measurement, then CLI, MCP and API query. It validates semantic correctness: a healthy process with dead ingestion must fail the test.
+
+---
+
+## Intent-Oriented MCP Surface
+
+Agents ask TokenOps for outcomes rather than knowing its internals. Intent operations compose granular internal capabilities so an agent can answer why it is consuming context or how to reduce a task's cost without detailed knowledge of dozens of low-level tools.
+
+---
