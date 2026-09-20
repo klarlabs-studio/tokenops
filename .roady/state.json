@@ -1,6 +1,6 @@
 {
   "project_id": "tokenops",
-  "version": 301,
+  "version": 319,
   "task_states": {
     "analytics-aggregator": {
       "status": "done",
@@ -920,8 +920,14 @@
       "elapsed_minutes": 3
     },
     "task-data-isolation-+-surface-polish": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "shipped: rulesfs permission fix (source.go:237), per-source demo opt-in flags, README 'Demo data isolation' contract; verified 2026-09-20"
+      ],
+      "started_at": "2026-09-20T11:49:17.326219+02:00",
+      "completed_at": "2026-09-20T11:49:17.34859+02:00",
       "elapsed_minutes": 0
     },
     "task-data-telemetry": {
@@ -936,13 +942,25 @@
       "elapsed_minutes": 0
     },
     "task-first-run-activation-flow": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "shipped: internal/cli/init.go (init wizard), internal/cli/demo.go (synthetic seed); verified present 2026-09-20"
+      ],
+      "started_at": "2026-09-20T11:48:54.613607+02:00",
+      "completed_at": "2026-09-20T11:48:59.712653+02:00",
       "elapsed_minutes": 0
     },
     "task-fix-rulesfs-walker:-tolerate-permission-denied-+-skip-unreadable-subtrees": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "shipped: internal/infra/rulesfs/source.go:237 tolerates fs.ErrPermission/fs.ErrNotExist; verified 2026-09-20"
+      ],
+      "started_at": "2026-09-20T11:49:08.776106+02:00",
+      "completed_at": "2026-09-20T11:49:08.800493+02:00",
       "elapsed_minutes": 0
     },
     "task-forecasting-governance": {
@@ -1044,8 +1062,14 @@
       "elapsed_minutes": 0
     },
     "task-interactive-mcp-ui-rendering": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "shipped: markdownPayload across 4 MCP tool files (markdown summary + JSON appendix) and internal/infra/svgchart for inline sparklines; verified 2026-09-20"
+      ],
+      "started_at": "2026-09-20T11:49:17.470698+02:00",
+      "completed_at": "2026-09-20T11:49:17.491085+02:00",
       "elapsed_minutes": 0
     },
     "task-interface-independent-capabilities": {
@@ -1120,8 +1144,14 @@
       "elapsed_minutes": 3
     },
     "task-mcp-first-wedge:-session-budget-+-config-as-code": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "shipped: tokenops_session_budget + tokenops_plan_set/tokenops_config MCP tools (internal/mcp/plan_tools.go, setup_tools.go); verified 2026-09-20"
+      ],
+      "started_at": "2026-09-20T11:49:08.922233+02:00",
+      "completed_at": "2026-09-20T11:49:08.942859+02:00",
       "elapsed_minutes": 0
     },
     "task-measurement-provenance": {
@@ -1267,13 +1297,25 @@
       "elapsed_minutes": 1
     },
     "task-plan-auto-detection": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "shipped: internal/cli/detect/detect.go sniffs local agent configs for subscriptions; verified 2026-09-20"
+      ],
+      "started_at": "2026-09-20T11:49:17.424115+02:00",
+      "completed_at": "2026-09-20T11:49:17.447099+02:00",
       "elapsed_minutes": 0
     },
     "task-plan-based-cost-model": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "shipped: pkg/eventschema/prompt.go:16-18 CostSource metered|plan_included|trial; plan config + spend engine price plan_included at 0; verified 2026-09-20"
+      ],
+      "started_at": "2026-09-20T11:49:08.827198+02:00",
+      "completed_at": "2026-09-20T11:49:08.849677+02:00",
       "elapsed_minutes": 0
     },
     "task-plan-catalog-mistral-codex": {
@@ -1293,8 +1335,14 @@
       "elapsed_minutes": 0
     },
     "task-rate-limit-window-headroom": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "shipped: internal/contexts/spend/plans/headroom.go + signal.go + budget.go, window headroom with reset estimation; verified 2026-09-20"
+      ],
+      "started_at": "2026-09-20T11:49:08.876638+02:00",
+      "completed_at": "2026-09-20T11:49:08.898314+02:00",
       "elapsed_minutes": 0
     },
     "task-risk-based-test-coverage-uplift": {
@@ -1490,8 +1538,14 @@
       "elapsed_minutes": 1
     },
     "task-signal-quality-+-activation-honesty": {
-      "status": "pending",
+      "status": "done",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "shipped: internal/contexts/spend/plans/signal.go SignalQuality{Level,Source,Caveat,UpgradePaths} on session_budget + plan_headroom; verified 2026-09-20"
+      ],
+      "started_at": "2026-09-20T11:49:17.376391+02:00",
+      "completed_at": "2026-09-20T11:49:17.398225+02:00",
       "elapsed_minutes": 0
     },
     "task-telemetry-contract-and-lineage-control": {
@@ -1665,5 +1719,5 @@
       "elapsed_minutes": 3
     }
   },
-  "updated_at": "2026-08-25T10:15:07.572634+02:00"
+  "updated_at": "2026-09-20T11:49:17.491086+02:00"
 }
