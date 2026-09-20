@@ -81,3 +81,29 @@ func TestSetupRejectsAnotherSource(t *testing.T) {
 		t.Fatal("setup covers claude-usage-meter only")
 	}
 }
+
+// The paste was the friction this command existed to explain. It now looks
+// where the browser already keeps the cookie, and only asks when it cannot
+// find one — the prompt is the fallback, not the path.
+func TestSetupLooksInTheBrowserFirst(t *testing.T) {
+	// The test home has no browser profiles, so this exercises the
+	// fallback and proves the search ran before the prompt.
+	out, _ := runCookieSetupCmd(t, "\n", "claude-usage-meter")
+	search := strings.Index(out, "Looking for your claude.ai session")
+	prompt := strings.Index(out, "Paste sessionKey")
+	if search < 0 || prompt < 0 || search > prompt {
+		t.Errorf("browser search did not precede the prompt:\n%s", out)
+	}
+}
+
+// --paste is for a machine with no browser to read: a server, CI, or an
+// operator who would rather not have their keychain touched.
+func TestSetupPasteSkipsTheBrowser(t *testing.T) {
+	out, _ := runCookieSetupCmd(t, "\n", "claude-usage-meter", "--paste")
+	if strings.Contains(out, "Looking for your claude.ai session") {
+		t.Errorf("--paste still searched the browser:\n%s", out)
+	}
+	if !strings.Contains(out, "Paste sessionKey") {
+		t.Errorf("--paste did not prompt:\n%s", out)
+	}
+}
