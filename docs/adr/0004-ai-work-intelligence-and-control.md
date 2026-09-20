@@ -86,15 +86,24 @@ it TokenOps can only optimize consumption. `Execution` is what makes
 `Experiment` possible; `Actor` is what makes delegation representable. These
 three are the foundation the later horizons stand on.
 
-### Control modes exist four times, in four vocabularies
+### Control modes exist five times, in four vocabularies
 
 The intent asks for one ladder: observe-only → recommend → require approval →
-automatic. The code already has four, none of which agree:
+automatic. The code already has five, none of which agree:
 
 - `config.Mode` — `passive` | `active` (daemon-wide)
 - `CoachingConfig.Delivery` — `observe` | `advise` | `intervene`
 - `readguard.Mode` — `observe` | `active`
 - `routingapproval` — a propose/decide gate, expressed as neither
+- `SmartRoutingConfig.Intervention` — `off` | `advise` | `delegate` | `auto`
+
+*Corrected while implementing Phase 5:* this audit counted four. The fifth,
+smart routing's per-turn guard, was found while wiring the ladder. It is the
+only one whose default is not the bottom rung — the config documents an empty
+value as `advise` — so a machine that enabled smart routing without naming an
+intervention already has a subsystem speaking unprompted. Its `delegate` rung
+is also the only other expression of "requires a human decision" outside
+`routingapproval`, in different words.
 
 Control authority is currently a per-subsystem opinion. It becomes one policy
 concept in the control layer, and each subsystem expresses its authority in
