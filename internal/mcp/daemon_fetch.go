@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/infra/daemonhint"
 )
 
 // daemonFetchTimeout bounds each read from the ingestion daemon. The daemon
@@ -62,8 +64,19 @@ func getDaemonJSON(baseURL, path string, out any) error {
 	if baseURL == "" {
 		return fmt.Errorf("no daemon URL")
 	}
+	req, err := http.NewRequest(http.MethodGet, baseURL+path, nil)
+	if err != nil {
+		return err
+	}
+	// /api/* is credentialed. The token lives in the daemon's URL hint,
+	// which is 0600 and readable by whoever started the daemon — that is
+	// this process. A missing token sends the request bare and lets the
+	// daemon answer 401, which is a better diagnosis than refusing to ask.
+	if tok := daemonhint.Token(); tok != "" {
+		req.Header.Set("Authorization", "Bearer "+tok)
+	}
 	client := http.Client{Timeout: daemonFetchTimeout}
-	resp, err := client.Get(baseURL + path)
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}

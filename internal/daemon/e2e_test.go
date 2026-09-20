@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/infra/daemonhint"
 )
 
 // TestE2EDaemonBootHealthShutdown drives the daemon end-to-end:
@@ -45,7 +46,7 @@ func TestE2EDaemonBootHealthShutdown(t *testing.T) {
 		t.Fatal("daemon did not become ready")
 	}
 
-	for _, path := range []string{"/healthz", "/readyz", "/version", "/api/domain-events"} {
+	for _, path := range []string{"/healthz", "/readyz", "/version"} {
 		resp, err := http.Get(base + path)
 		if err != nil {
 			t.Errorf("%s: %v", path, err)
@@ -62,8 +63,37 @@ func TestE2EDaemonBootHealthShutdown(t *testing.T) {
 		_ = resp.Body.Close()
 	}
 
-	// /api/domain-events shape.
-	resp, _ := http.Get(base + "/api/domain-events")
+	// /api/* is credentialed. This test used to GET /api/domain-events bare
+	// and assert 200, which is how the route's missing auth looked correct
+	// for as long as it did.
+	bare, err := http.Get(base + "/api/domain-events")
+	if err != nil {
+		t.Fatalf("GET /api/domain-events: %v", err)
+	}
+	_, _ = io.Copy(io.Discard, bare.Body)
+	_ = bare.Body.Close()
+	if bare.StatusCode != 401 {
+		t.Errorf("/api/domain-events without a credential = %d, want 401", bare.StatusCode)
+	}
+
+	// /api/domain-events shape, with the token the daemon wrote to its URL
+	// hint — the same path the CLI and the MCP server take.
+	tok := daemonhint.Token()
+	if tok == "" {
+		t.Fatal("daemon wrote no dashboard token to its URL hint")
+	}
+	req, err := http.NewRequest(http.MethodGet, base+"/api/domain-events", nil)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET /api/domain-events: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("/api/domain-events with a credential = %d, want 200", resp.StatusCode)
+	}
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
 	var ev struct {
