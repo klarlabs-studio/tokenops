@@ -259,3 +259,35 @@ func TestPartialIsItsOwnResult(t *testing.T) {
 		t.Error("a partial outcome reports itself unknown")
 	}
 }
+
+// A goal the operator typed and a goal a heuristic guessed are not the
+// same claim, and the ontology has to be able to tell them apart. The
+// ledger adapter carries what someone wrote; the transcript adapter
+// carries what a documented-as-sometimes-wrong boundary detector
+// inferred from a first instruction.
+//
+// Presenting both as "the goal" would put a guess and a statement on
+// equal footing, which is the conflation refused everywhere else in
+// this codebase.
+func TestAnInferredGoalIsDistinguishableFromAStatedOne(t *testing.T) {
+	stated := work.New("w1", "ship the auth fix", work.Requested(alice, t0))
+	if stated.GoalSource != work.GoalStated {
+		t.Errorf("a goal passed to New reports %q; the caller supplied it",
+			stated.GoalSource)
+	}
+	if stated.GoalInferred() {
+		t.Error("a stated goal reports itself inferred")
+	}
+
+	guessed := stated.Inferred("split on an idle gap; the title is the first instruction")
+	if !guessed.GoalInferred() {
+		t.Error("an inferred goal does not report itself inferred")
+	}
+	if guessed.GoalCaveat == "" {
+		t.Error("an inferred goal does not say how it was arrived at")
+	}
+	// Inferring returns a copy, as every other builder here does.
+	if stated.GoalInferred() {
+		t.Error("Inferred mutated the receiver")
+	}
+}

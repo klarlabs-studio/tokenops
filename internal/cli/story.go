@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/reconstruct"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/story"
 )
@@ -204,7 +205,25 @@ func writeStoryJSON(w io.Writer, tasks []story.Task, days int) error {
 	out := struct {
 		WindowDays int             `json:"window_days"`
 		Tasks      []storyTaskJSON `json:"tasks"`
-	}{WindowDays: days, Tasks: make([]storyTaskJSON, 0, len(tasks))}
+		// Work is the same reconstruction seen through the work
+		// ontology: which goal, which attempt at it, and whether
+		// anything judged the result.
+		//
+		// An agent reading this used to get a list of tasks with no way
+		// to tell those three apart — and in particular no way to know
+		// that a story's title is a heuristic's guess rather than
+		// something a person wrote, or that no outcome means nobody
+		// assessed the work rather than that it failed.
+		//
+		// Added beside the existing fields, which are unchanged, so
+		// anything already parsing this keeps working.
+		Work []reconstruct.Work `json:"work"`
+	}{
+		WindowDays: days,
+		Tasks:      make([]storyTaskJSON, 0, len(tasks)),
+		Work:       make([]reconstruct.Work, 0, len(tasks)),
+	}
+	out.Work = append(out.Work, reconstruct.FromTasks(tasks)...)
 	for _, t := range tasks {
 		frictions := []string{}
 		for _, f := range t.Frictions() {
