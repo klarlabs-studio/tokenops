@@ -17,6 +17,16 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
 )
 
+// meterBaseURL overrides claude.ai's address for the verification request.
+// Empty in production, which leaves the client on https://claude.ai.
+//
+// It exists because the refusal tests used to reach the live internet: they
+// sent a bogus key to claude.ai and asserted on whatever came back, so they
+// passed from a laptop, where Anthropic answers 401, and failed from CI,
+// where Cloudflare answers its bot check first. A test of how this command
+// reports a refusal should not depend on which IP runs it.
+var meterBaseURL string
+
 // newVendorUsageSetupCmd walks an operator through wiring the claude.ai
 // cookie poller, and proves it works before writing anything.
 //
@@ -113,6 +123,9 @@ func runCookieSetup(cmd *cobra.Command, opts cookieSetupOptions) error {
 	defer cancel()
 	client := claudeusagemeter.NewClient(key)
 	client.Clearance, client.UserAgent = session.clearance, session.userAgent
+	if meterBaseURL != "" {
+		client.BaseURL = meterBaseURL
+	}
 
 	fmt.Fprintln(out, "\nChecking it with Anthropic...")
 	// Pick the organization that reports usage rather than asking. An
