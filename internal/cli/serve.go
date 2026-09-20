@@ -213,6 +213,12 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if err := mcp.RegisterAgentDXTools(srv, mcp.AgentDXDeps{}); err != nil {
 		return fmt.Errorf("register agent-dx tools: %w", err)
 	}
+	// verify needs both halves: the transcripts the story tool reads and
+	// the events the analytics tools read. It is the only surface that
+	// joins them.
+	if err := mcp.RegisterVerifyTool(srv, mcp.VerifyDeps{Store: components.Store}); err != nil {
+		return err
+	}
 	if err := mcp.RegisterStoryTools(srv, mcp.StoryDeps{}); err != nil {
 		return fmt.Errorf("register story tools: %w", err)
 	}
