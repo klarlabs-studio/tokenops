@@ -1,6 +1,6 @@
 id: tokenops
 title: TokenOps
-description: Open-source operational intelligence layer for AI systems. Real-time token optimization, inference observability, agent usage analytics, prompt intelligence, forecasting, governance, AI efficiency coaching across OpenAI Anthropic Gemini. Sits between clients/agents/workflows and frontier LLM providers.
+description: The operating system for AI work. TokenOps observes how humans, agents, models and tools perform work; understands what happened and why; measures resources, economics, quality and outcomes; explains inefficiencies; optimizes and safely controls execution; verifies whether interventions helped; and learns how future work should be performed. Local-first single binary. Begins with coding agents (Claude Code, Codex, Cursor, Gemini, OpenCode, Copilot) and is built to generalise to AI-mediated work.
 features:
     - id: tokenops-proxy
       title: TokenOps Proxy
@@ -161,6 +161,46 @@ features:
     - id: interactive-mcp-ui-rendering
       title: Interactive MCP UI Rendering
       description: 'Today MCP tool responses are plain-text JSON. Three rendering tiers, ship in order: (1) Markdown summary + JSON appendix for every cost/headroom response so Desktop/Code/Cursor render styled tables and code blocks instead of brace soup; (2) Inline SVG sparklines for burn-rate and window-headroom charts returned as ResourceContent with MimeType=image/svg+xml — most MCP clients embed SVG inline today; (3) Interactive Vue+D3 dashboard returned as text/html ResourceContent — experimental, depends on client iframe support (Claude Desktop''s evolving UI app spec, Cursor''s panel). Build the Vue app under web/dashboard/ (already exists), bundle as a single-file HTML blob, serve via tokenops_dashboard MCP tool. Charts to ship first: window-burn sparkline, plan-quota gauge, real-vs-synthetic ratio donut. Acceptance: tokenops_session_budget renders as a styled markdown table in Claude Desktop; tokenops_dashboard returns an interactive D3 chart in clients that support html resources.'
+      requirements: []
+    - id: privacy-and-secret-hardening
+      title: Privacy and Secret Hardening
+      description: 'Retained raw content is redacted and pruned: the fmt recovery store stops writing world-readable unredacted command output, retention covers more than the sqlite events table, and Config.Redacted gains a completeness test so a new secret field cannot leak by default. Secrets prefer platform credential stores; documented env-var injection either exists or the claim is removed.'
+      requirements: []
+    - id: measurement-provenance
+      title: Measurement Provenance
+      description: Every reported value carries source, confidence, observed-at and caveat. Unknown never silently becomes zero and estimated never becomes measured. Generalises the two existing patterns (plans.SignalQuality, modeltier.Basis) and closes the known silent conversions in the analytics aggregator, the proxy tokenizer path, and optimizer token-savings estimation.
+      requirements: []
+    - id: observation-freshness-as-health
+      title: Observation Freshness as Health
+      description: Health distinguishes process alive from source reachable, ingestion active, data fresh, analysis current and control path operational. Per-source last-seen and last-successful-poll become data returned by CLI, MCP and HTTP rather than a derived warning string.
+      requirements: []
+    - id: ai-work-domain-model
+      title: AI Work Domain Model
+      description: 'Domain-neutral Work, Actor, Execution and Outcome primitives. Work is something someone wants accomplished; an Execution is one attempt at it, so the same work can have several and be compared; an Outcome is what the work produced, distinct from what it consumed. No core abstraction may require AI work to mean software development: repositories, commits, files and coding sessions become evidence in adapters. Existing tasks and story reconstruction become the first adapter.'
+      requirements: []
+    - id: interface-independent-capabilities
+      title: Interface-Independent Capabilities
+      description: CLI, MCP, dashboard and future adapters consume shared application capabilities instead of each implementing validation, orchestration and formatting. A capability owns its request model, validation, orchestration, result model, provenance and errors. An archlint rule constrains adapter to capability-layer imports so parity is architectural rather than manually coordinated.
+      requirements: []
+    - id: verification-and-experiment
+      title: Verification and Experiment
+      description: 'An optimization recommendation is a hypothesis until measured. Interventions carry correlation identity linking recommended, applied, measured and verified. Baseline-versus-intervention comparison runs over real executions, reporting measured token, cost, latency and outcome change rather than tokens-removed times nominal price. The four existing control ladders unify into one policy concept: observe-only, recommend, require approval, automatic.'
+      requirements: []
+    - id: canonical-event-consolidation
+      title: Canonical Event Consolidation
+      description: One factual substrate. The parallel in-process domainevents type folds into the canonical envelope, which gains work, execution and actor association alongside its existing schema version, timestamp, source and correlation ids. Feature-specific ingestion paths that bypass the envelope are retired in favour of source to canonical event to multiple consumers.
+      requirements: []
+    - id: runtime-lifecycle-modules
+      title: Runtime Lifecycle Modules
+      description: Daemon composition stays explicit but becomes modular. Runtime modules own initialization, startup, shutdown, health and background workers, replacing a single startup function that wires every subsystem inline and launches untracked goroutines nobody joins. Explicit compile-time composition; no dynamic plugin framework.
+      requirements: []
+    - id: installed-product-verification
+      title: Installed-Product Verification
+      description: 'An end-to-end test drives the built artifact through init, daemon start, ingestion, canonical event persistence, work reconstruction, measurement, then CLI, MCP and API query. It validates semantic correctness: a healthy process with dead ingestion must fail the test.'
+      requirements: []
+    - id: intent-oriented-mcp-surface
+      title: Intent-Oriented MCP Surface
+      description: Agents ask TokenOps for outcomes rather than knowing its internals. Intent operations compose granular internal capabilities so an agent can answer why it is consuming context or how to reduce a task's cost without detailed knowledge of dozens of low-level tools.
       requirements: []
 constraints: []
 version: 0.1.0
