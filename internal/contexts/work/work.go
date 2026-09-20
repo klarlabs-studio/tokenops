@@ -145,6 +145,25 @@ func Requested(by Actor, at time.Time) Requester {
 	return Requester{Actor: by, At: at}
 }
 
+// GoalSource says whether a goal was stated or guessed.
+//
+// A goal the operator typed and a goal a heuristic reconstructed from a
+// transcript are not the same claim. The ledger adapter carries what
+// someone wrote; the transcript adapter carries what a
+// documented-as-sometimes-wrong boundary detector inferred from a first
+// instruction. Presenting both as "the goal" would put a guess and a
+// statement on equal footing.
+type GoalSource string
+
+const (
+	// GoalStated — the caller supplied this goal and is asserting it.
+	// The zero value, because New takes a goal its caller chose to pass.
+	// An adapter that infers one must say so with Inferred.
+	GoalStated GoalSource = ""
+	// GoalInferred — reconstructed by a heuristic. GoalCaveat says how.
+	GoalInferred GoalSource = "inferred"
+)
+
 // Work is something someone wants accomplished.
 //
 // The goal is what makes it work rather than activity. A description and
@@ -153,6 +172,11 @@ func Requested(by Actor, at time.Time) Requester {
 type Work struct {
 	ID   ID     `json:"id"`
 	Goal string `json:"goal"`
+	// GoalSource says whether the goal was stated or reconstructed.
+	GoalSource GoalSource `json:"goal_source,omitempty"`
+	// GoalCaveat explains how an inferred goal was arrived at — a
+	// boundary you can see is one you can argue with.
+	GoalCaveat string `json:"goal_caveat,omitempty"`
 	// Parent is the work this one decomposes from. Empty at the root.
 	// Decomposition is what lets consumption and outcome roll up from
 	// the attempts that actually burned tokens to the goal a person
@@ -170,6 +194,17 @@ type Work struct {
 func New(id ID, goal string, by Requester) Work {
 	return Work{ID: id, Goal: goal, RequestedBy: by, CreatedAt: by.At}
 }
+
+// Inferred marks the goal as reconstructed rather than stated, and says
+// how. Returns a copy.
+func (w Work) Inferred(how string) Work {
+	w.GoalSource = GoalInferred
+	w.GoalCaveat = how
+	return w
+}
+
+// GoalInferred reports whether the goal was guessed rather than given.
+func (w Work) GoalInferred() bool { return w.GoalSource == GoalInferred }
 
 // Under makes this work a decomposition of parent. Returns a copy.
 func (w Work) Under(parent ID) Work {
