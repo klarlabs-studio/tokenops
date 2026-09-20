@@ -59,6 +59,7 @@ var cliToMCP = map[string][]string{
 	"spend":           {"tokenops_spend_summary", "tokenops_top_consumers", "tokenops_burn_rate", "tokenops_forecast"},
 	"status":          {"tokenops_status"},
 	"story":           {"tokenops_story"},
+	"verify":          {"tokenops_verify"},
 	"task":            {"tokenops_workflow_trace"},
 	"version":         {"tokenops_version"},
 	"pricing":         {"tokenops_pricing"},
@@ -202,6 +203,7 @@ func mcpToolNames(t *testing.T) map[string]bool {
 	must(mcp.RegisterPlanTools(srv, mcp.PlanDeps{}))
 	must(mcp.RegisterAgentDXTools(srv, mcp.AgentDXDeps{}))
 	must(mcp.RegisterStoryTools(srv, mcp.StoryDeps{}))
+	must(mcp.RegisterVerifyTool(srv, mcp.VerifyDeps{}))
 	must(mcp.RegisterRoutingAdviceTools(srv, mcp.RoutingAdviceDeps{}))
 	must(mcp.RegisterApprovalTools(srv, mcp.ApprovalDeps{}))
 	must(mcp.RegisterModeTools(srv, mcp.ModeDeps{}))

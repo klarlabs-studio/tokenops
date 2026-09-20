@@ -146,6 +146,12 @@ var helpCatalog = []helpCategory{
 				Summary: "Recent work one task at a time: the instruction, turns, tool calls, files touched, and where it went sideways.",
 				Example: `{"days":1}`,
 			},
+			{
+				Name: "tokenops_verify",
+				Summary: "Did an optimization help? Compares the attempts it touched against the ones it did not. " +
+					"Read `observational` and `proven` before repeating the number.",
+				Example: `{"days":30}`,
+			},
 		},
 	},
 	{
