@@ -4,7 +4,25 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.67.1**.
+Current release: **v0.68.0**.
+
+## v0.68.0 — nothing to paste
+
+Connecting claude.ai's own usage meter used to mean opening developer
+tools, finding a cookie called `sessionKey`, copying a value you must not
+let anyone see, and pasting it into a terminal. TokenOps had a command
+whose main job was explaining those four clicks, which is a strange thing
+for a tool to be proud of.
+
+Now it reads the session from the browser you are already signed in with.
+macOS asks you once whether to allow it; you say yes, and that is the
+entire setup. Your agent can do it too, and the login never passes through
+the conversation.
+
+The reader takes exactly one cookie, for claude.ai, from a copy of the
+store — your browser can stay open, and its profile is never written to.
+If you decline the prompt, it says you declined, rather than telling you
+no session exists.
 
 ## v0.67.1 — three answers that sounded certain
 
