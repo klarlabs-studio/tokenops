@@ -26,6 +26,9 @@ type row struct {
 	AgentID       sql.NullString
 	SessionID     sql.NullString
 	UserID        sql.NullString
+	WorkID        sql.NullString
+	ExecutionID   sql.NullString
+	ActorID       sql.NullString
 	InputTokens   sql.NullInt64
 	OutputTokens  sql.NullInt64
 	TotalTokens   sql.NullInt64
@@ -70,6 +73,9 @@ func envelopeToRow(env *eventschema.Envelope) (row, error) {
 		TraceID:       nullString(env.TraceID),
 		SpanID:        nullString(env.SpanID),
 		Source:        nullString(env.Source),
+		WorkID:        nullString(env.Association.Work),
+		ExecutionID:   nullString(env.Association.Execution),
+		ActorID:       nullString(env.Association.Actor),
 		Payload:       string(payloadJSON),
 	}
 	if len(env.Attributes) > 0 {
@@ -143,7 +149,12 @@ func rowToEnvelope(r row) (*eventschema.Envelope, error) {
 		TraceID:       r.TraceID.String,
 		SpanID:        r.SpanID.String,
 		Source:        r.Source.String,
-		Payload:       payload,
+		Association: eventschema.Association{
+			Work:      r.WorkID.String,
+			Execution: r.ExecutionID.String,
+			Actor:     r.ActorID.String,
+		},
+		Payload: payload,
 	}
 	if r.Attributes.Valid {
 		if err := json.Unmarshal([]byte(r.Attributes.String), &env.Attributes); err != nil {
