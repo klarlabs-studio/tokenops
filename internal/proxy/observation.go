@@ -59,9 +59,14 @@ type requestObservation struct {
 	// both the emitted PromptEvent and any cost-aware optimizer.
 	CostSource eventschema.CostSource
 
-	PromptHash    string
-	RequestModel  string
-	InputTokens   int64
+	PromptHash   string
+	RequestModel string
+	InputTokens  int64
+	// InputCounted reports whether InputTokens is a count or a
+	// stand-in zero. A tokenizer that is absent, or that refuses this
+	// provider, leaves the field at 0, which is indistinguishable
+	// downstream from a request that carried no input.
+	InputCounted  bool
 	ContextSize   int64
 	MessageCount  int
 	SystemPresent bool
@@ -136,11 +141,24 @@ func (r *observerRequestMeter) Done(_ int64) {
 	body := append([]byte(nil), r.obs.captured.Bytes()...)
 	r.obs.captureMu.Unlock()
 
+	// Counted until something says otherwise. A tokenizer that is absent,
+	// or that refuses this provider, leaves the counts at zero — and a
+	// zero nobody produced reads downstream exactly like a request that
+	// consumed nothing. TokenSource is what tells them apart.
 	outputTokens := int64(0)
-	if r.m.tokenizer != nil {
-		if n, err := r.m.tokenizer.CountText(r.obs.Provider, string(body)); err == nil {
-			outputTokens = int64(n)
-		}
+	tokenSource := eventschema.TokenSourceCounted
+	if r.m.tokenizer == nil {
+		tokenSource = eventschema.TokenSourceUncounted
+	} else if n, err := r.m.tokenizer.CountText(r.obs.Provider, string(body)); err == nil {
+		outputTokens = int64(n)
+	} else {
+		tokenSource = eventschema.TokenSourceUncounted
+	}
+	// The request side is counted by the middleware, which records
+	// whether it managed to. Either half being uncounted makes the
+	// event's totals uncounted: TotalTokens is their sum.
+	if !r.obs.InputCounted {
+		tokenSource = eventschema.TokenSourceUncounted
 	}
 
 	ttft := time.Duration(0)
@@ -162,6 +180,7 @@ func (r *observerRequestMeter) Done(_ int64) {
 			InputTokens:      r.obs.InputTokens,
 			OutputTokens:     outputTokens,
 			TotalTokens:      r.obs.InputTokens + outputTokens,
+			TokenSource:      tokenSource,
 			ContextSize:      r.obs.ContextSize,
 			MaxOutputTokens:  r.obs.MaxOutput,
 			Latency:          latency,
@@ -256,8 +275,13 @@ func (s *Server) observerMiddleware(provider providers.Provider, next http.Handl
 				if n, err := s.tokenizer.PreflightCount(provider.ID, body); err == nil {
 					obs.InputTokens = int64(n)
 					obs.ContextSize = int64(n)
+					obs.InputCounted = true
 				}
 			}
+		} else {
+			// No body to count is not a failure to count: an empty
+			// request really did carry zero input tokens.
+			obs.InputCounted = true
 		}
 
 		ctx := context.WithValue(r.Context(), observationKey{}, obs)

@@ -18,6 +18,35 @@ const (
 	CostSourceTrial        CostSource = "trial"
 )
 
+// TokenSource identifies where a PromptEvent's token counts came from.
+//
+// It exists for the same reason CostSource does: the numbers beside it
+// are int64s, and an int64 cannot say "nobody counted these". A proxy
+// with no tokenizer wired ships events with zero counts by documented
+// design, and downstream that is indistinguishable from a request that
+// genuinely used no tokens — so a deployment that forgot the tokenizer
+// reports zero usage as confidently as one that measured it.
+type TokenSource string
+
+// Known token sources. The empty string deserialises as
+// TokenSourceCounted so envelopes written before this field existed
+// round-trip unchanged: their counts were produced by a tokenizer, which
+// is what the zero value now means.
+const (
+	// TokenSourceCounted — a tokenizer counted the request or response.
+	TokenSourceCounted TokenSource = "counted"
+	// TokenSourceVendorReported — the provider reported the counts in its
+	// response, which is better evidence than counting locally.
+	TokenSourceVendorReported TokenSource = "vendor_reported"
+	// TokenSourceEstimated — derived from a heuristic (bytes/4 and the
+	// like) rather than counted.
+	TokenSourceEstimated TokenSource = "estimated"
+	// TokenSourceUncounted — nothing counted these. The counts beside
+	// this are zeros standing in for an absent measurement, not an
+	// observation that nothing was consumed.
+	TokenSourceUncounted TokenSource = "uncounted"
+)
+
 // PromptEvent captures a single LLM request/response cycle observed by the
 // TokenOps proxy. Token counts are filled by the per-provider tokenizer.
 type PromptEvent struct {
@@ -76,6 +105,11 @@ type PromptEvent struct {
 	// the analytics pipeline).
 	CostUSD float64 `json:"cost_usd,omitempty"`
 
+	// TokenSource says where the token counts above came from. Empty
+	// (default) means a tokenizer counted them. Read TokensCounted before
+	// treating a zero as an observation.
+	TokenSource TokenSource `json:"token_source,omitempty"`
+
 	// CostSource identifies how this request was billed. Empty (default)
 	// means metered per-token billing. Plan-included requests roll up to
 	// a subscription quota rather than CostUSD; see internal/contexts/
@@ -94,3 +128,20 @@ type PromptEvent struct {
 
 // Type identifies this payload as a PromptEvent.
 func (*PromptEvent) Type() EventType { return EventTypePrompt }
+
+// TokenProvenance returns the event's TokenSource, resolving the empty
+// default to TokenSourceCounted.
+func (p PromptEvent) TokenProvenance() TokenSource {
+	if p.TokenSource == "" {
+		return TokenSourceCounted
+	}
+	return p.TokenSource
+}
+
+// TokensCounted reports whether the token counts reflect an actual
+// measurement. False means the zeros beside it stand in for a
+// measurement nobody made, and a surface reporting usage should say so
+// rather than show them.
+func (p PromptEvent) TokensCounted() bool {
+	return p.TokenProvenance() != TokenSourceUncounted
+}

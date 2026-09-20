@@ -60,6 +60,7 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/governance/story",
 	"go.klarlabs.de/tokenops/internal/contexts/governance/coverdebt",
 	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard",
+	"go.klarlabs.de/tokenops/internal/contexts/measurement",
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics",
 	"go.klarlabs.de/tokenops/internal/contexts/observability/anomaly",
 	"go.klarlabs.de/tokenops/internal/contexts/observability/observ",
