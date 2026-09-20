@@ -20,11 +20,14 @@ import (
 )
 
 // Reconstructed is one task, split into the concepts it was conflating.
+//
+// The JSON tags keep the wire names stable: without them a field rename
+// silently breaks every consumer of the serialised form.
 type Reconstructed struct {
-	Work      work.Work
-	Actor     work.Actor
-	Execution work.Execution
-	Outcome   work.Outcome
+	Work      work.Work      `json:"work"`
+	Actor     work.Actor     `json:"actor"`
+	Execution work.Execution `json:"execution"`
+	Outcome   work.Outcome   `json:"outcome"`
 }
 
 // operator is the requester for every task in the ledger.
