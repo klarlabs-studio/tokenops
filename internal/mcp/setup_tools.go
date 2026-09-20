@@ -24,6 +24,11 @@ type SetupDeps struct {
 	Getenv func(string) string
 	// MeterBaseURL overrides claude.ai for tests.
 	MeterBaseURL string
+	// BrowserCookie reads the claude.ai session from a local browser,
+	// returning the key and the browser it came from. macOS asks the
+	// operator to allow the keychain read, which is the consent this
+	// tool cannot ask for itself. nil skips the browser.
+	BrowserCookie func(ctx context.Context) (string, string, error)
 }
 
 func (d SetupDeps) path() (string, error) {
@@ -116,10 +121,21 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 			if key == "" {
 				key = cfg.VendorUsage.ClaudeUsageMeter.SessionKey
 			}
+			from := ""
+			if key == "" && d.BrowserCookie != nil {
+				// The operator is signed in to claude.ai in a browser that
+				// already holds this cookie; macOS asks them to allow the
+				// read. Nothing is typed, and the key never enters the
+				// conversation.
+				k, browser, err := d.BrowserCookie(ctx)
+				if err == nil {
+					key, from = strings.TrimSpace(k), browser
+				}
+			}
 			if key == "" {
 				return jsonString(map[string]any{
 					"error": "session_key_missing",
-					"hint": "the session key is a claude.ai login and must not go through this chat. " +
+					"hint": "no claude.ai session was found in a local browser, and the key is a login that must not go through this chat. " +
 						"Ask the user to run `tokenops vendor-usage setup claude-usage-meter` in a terminal, " +
 						"which reads it without echoing it — or to set " + meterKeyEnv + " for this MCP server and call this tool again",
 				}), nil
@@ -151,6 +167,7 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 				orgs = append(orgs, o.Name)
 			}
 			resp := map[string]any{
+				"read_from":     from,
 				"organization":  conn.Org.Name,
 				"organizations": orgs,
 				"reports":       conn.Usage.Summary(),

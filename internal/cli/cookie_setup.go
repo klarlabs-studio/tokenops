@@ -15,6 +15,7 @@ import (
 	"golang.org/x/term"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
+	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
 )
 
 // newVendorUsageSetupCmd walks an operator through wiring the claude.ai
@@ -34,6 +35,8 @@ func newVendorUsageSetupCmd() *cobra.Command {
 	var (
 		configPath    string
 		noRestartFlag bool
+		browser       string
+		paste         bool
 	)
 	cmd := &cobra.Command{
 		Use:   "setup claude-usage-meter",
@@ -54,31 +57,46 @@ no data.`,
 			if len(args) == 1 && !strings.EqualFold(args[0], "claude-usage-meter") {
 				return fmt.Errorf("setup currently covers claude-usage-meter only; got %q", args[0])
 			}
-			return runCookieSetup(cmd, configPath, !noRestartFlag)
+			return runCookieSetup(cmd, cookieSetupOptions{
+				configPath: configPath,
+				restart:    !noRestartFlag,
+				browser:    browser,
+				paste:      paste,
+			})
 		},
 	}
 	cmd.Flags().StringVar(&configPath, "config-path", "", "override config file path")
+	cmd.Flags().StringVar(&browser, "browser", "",
+		"read the cookie from this browser instead of searching ("+strings.Join(browsercookie.Names(), ", ")+")")
+	cmd.Flags().BoolVar(&paste, "paste", false,
+		"skip the browser and paste the session key at a prompt")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }
 
-func runCookieSetup(cmd *cobra.Command, configPath string, restart bool) error {
+// cookieSetupOptions are the choices setup was given.
+type cookieSetupOptions struct {
+	configPath string
+	restart    bool
+	// browser limits the search to one browser; empty searches all.
+	browser string
+	// paste skips the browser entirely and asks for the key.
+	paste bool
+}
+
+func runCookieSetup(cmd *cobra.Command, opts cookieSetupOptions) error {
 	out := cmd.OutOrStdout()
 	fmt.Fprintln(out, "Connecting claude.ai's usage meter.")
-	fmt.Fprintln(out, "\nTokenOps needs the session cookie your browser already holds:")
-	fmt.Fprintln(out, "  1. open https://claude.ai and sign in")
-	fmt.Fprintln(out, "  2. open developer tools (⌥⌘I on macOS, F12 elsewhere)")
-	fmt.Fprintln(out, "  3. Application → Storage → Cookies → https://claude.ai")
-	fmt.Fprintln(out, "  4. copy the value of the `sessionKey` row (it starts sk-ant-sid...)")
-	fmt.Fprintln(out, "\nIt is sent only to claude.ai, and stored in your local config.")
 
-	key, err := readSecret(cmd, "\nPaste sessionKey: ")
+	key, from, err := cookieSetupKey(cmd, opts)
 	if err != nil {
 		return err
 	}
-	key = strings.TrimSpace(key)
 	if key == "" {
 		return errors.New("no session key entered; nothing was written")
+	}
+	if from != "" {
+		fmt.Fprintf(out, "\nRead the claude.ai session from %s. It is sent only to claude.ai, and stored in your local config.\n", from)
 	}
 
 	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
@@ -120,7 +138,7 @@ func runCookieSetup(cmd *cobra.Command, configPath string, restart bool) error {
 			strings.Join(usage.Unrecognised, ", "))
 	}
 
-	path, err := resolveMutableConfigPath(configPath)
+	path, err := resolveMutableConfigPath(opts.configPath)
 	if err != nil {
 		return err
 	}
@@ -136,7 +154,7 @@ func runCookieSetup(cmd *cobra.Command, configPath string, restart bool) error {
 	}
 	fmt.Fprintf(out, "\nwrote %s\n", path)
 	fmt.Fprintln(out, "These readings now replace the estimated window in `plan headroom` and the coach.")
-	applyRestart(out, restart, true)
+	applyRestart(out, opts.restart, true)
 	return nil
 }
 
@@ -193,4 +211,39 @@ func readRest(r io.Reader) (string, error) {
 		return "", fmt.Errorf("read input: %w", err)
 	}
 	return line, nil
+}
+
+// cookieSetupKey gets the session key without making the operator handle it
+// where that is possible: the browser they are signed in with already holds
+// it. macOS asks them to allow the keychain read; that prompt is the
+// consent, and it replaces finding a value in devtools and pasting it into
+// a terminal. Returns the key and where it came from ("" when pasted).
+func cookieSetupKey(cmd *cobra.Command, opts cookieSetupOptions) (string, string, error) {
+	out := cmd.OutOrStdout()
+	if !opts.paste {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			fmt.Fprintln(out, "\nLooking for your claude.ai session in a local browser (macOS may ask you to allow keychain access)...")
+			key, browser, err := browsercookie.Find(cmd.Context(), home, "claude.ai", "sessionKey", opts.browser)
+			switch {
+			case err == nil:
+				return strings.TrimSpace(key), browser.Name, nil
+			case errors.Is(err, browsercookie.ErrNotFound):
+				fmt.Fprintln(out, "No claude.ai session found in a local browser — sign in there, or paste the key below.")
+			default:
+				fmt.Fprintf(out, "Could not read it from the browser: %v\n", err)
+			}
+		}
+	}
+	fmt.Fprintln(out, "\nTokenOps needs the session cookie your browser already holds:")
+	fmt.Fprintln(out, "  1. open https://claude.ai and sign in")
+	fmt.Fprintln(out, "  2. open developer tools (⌥⌘I on macOS, F12 elsewhere)")
+	fmt.Fprintln(out, "  3. Application → Storage → Cookies → https://claude.ai")
+	fmt.Fprintln(out, "  4. copy the value of the `sessionKey` row (it starts sk-ant-sid...)")
+	fmt.Fprintln(out, "\nIt is sent only to claude.ai, and stored in your local config.")
+	key, err := readSecret(cmd, "\nPaste sessionKey: ")
+	if err != nil {
+		return "", "", err
+	}
+	return strings.TrimSpace(key), "", nil
 }

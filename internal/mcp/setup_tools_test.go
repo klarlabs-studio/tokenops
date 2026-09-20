@@ -1,6 +1,9 @@
 package mcp
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -19,6 +22,7 @@ type setupFixture struct {
 	applied int
 	env     map[string]string
 	baseURL string
+	browser func(context.Context) (string, string, error)
 }
 
 func newSetupFixture(t *testing.T, initial string) *setupFixture {
@@ -38,10 +42,11 @@ func (f *setupFixture) server() *Server {
 	f.t.Helper()
 	srv := NewServer("tokenops", "test", slog.New(slog.NewTextHandler(io.Discard, nil)))
 	deps := SetupDeps{
-		ConfigPath:   f.path,
-		ApplyConfig:  func() string { f.applied++; return "restarted the daemon; the change is live" },
-		Getenv:       func(k string) string { return f.env[k] },
-		MeterBaseURL: f.baseURL,
+		ConfigPath:    f.path,
+		ApplyConfig:   func() string { f.applied++; return "restarted the daemon; the change is live" },
+		Getenv:        func(k string) string { return f.env[k] },
+		MeterBaseURL:  f.baseURL,
+		BrowserCookie: f.browser,
 	}
 	if err := RegisterSetupTools(srv, deps); err != nil {
 		f.t.Fatal(err)
@@ -186,5 +191,45 @@ func TestMeterSetupToolWritesNothingForARejectedKey(t *testing.T) {
 	}
 	if f.config().VendorUsage.ClaudeUsageMeter.Enabled || f.applied != 0 {
 		t.Error("a rejected key was written or applied")
+	}
+}
+
+// An agent should not have to ask the operator to paste a login. When the
+// key is not in the environment or config, the tool reads it from the
+// browser the operator is signed in with — macOS asks them to allow it —
+// and still never returns the key.
+func TestMeterSetupToolReadsTheBrowserSession(t *testing.T) {
+	f := newSetupFixture(t, "")
+	f.baseURL = meterStub(t, http.StatusOK)
+	f.browser = func(context.Context) (string, string, error) { return "sk-ant-sid-from-browser", "Chrome", nil }
+
+	// One call: a second would find the key in the config it just wrote.
+	raw := execTool(t, f.server(), "tokenops_vendor_usage_setup", map[string]any{})
+	if strings.Contains(raw, "sk-ant-sid-from-browser") {
+		t.Fatalf("the session key was echoed into the transcript: %s", raw)
+	}
+	var got map[string]any
+	if err := json.Unmarshal([]byte(raw), &got); err != nil {
+		t.Fatalf("decode %q: %v", raw, err)
+	}
+	if got["read_from"] != "Chrome" {
+		t.Errorf("read_from = %v, want Chrome", got["read_from"])
+	}
+	if m := f.config().VendorUsage.ClaudeUsageMeter; !m.Enabled || m.SessionKey != "sk-ant-sid-from-browser" {
+		t.Errorf("meter config = enabled:%v key set:%v", m.Enabled, m.SessionKey != "")
+	}
+}
+
+// No browser session and nothing configured: say so, and never ask for a
+// paste in the chat.
+func TestMeterSetupToolWithoutABrowserSessionStillRefusesThePaste(t *testing.T) {
+	f := newSetupFixture(t, "")
+	f.browser = func(context.Context) (string, string, error) { return "", "", errors.New("no such cookie") }
+	got := callTool(t, f.server(), "tokenops_vendor_usage_setup", map[string]any{})
+	if got["error"] != "session_key_missing" {
+		t.Fatalf("response = %v", got)
+	}
+	if hint, _ := got["hint"].(string); !strings.Contains(hint, "must not go through this chat") {
+		t.Errorf("hint invites a paste: %q", hint)
 	}
 }
