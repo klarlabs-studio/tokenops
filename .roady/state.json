@@ -1,6 +1,6 @@
 {
   "project_id": "tokenops",
-  "version": 319,
+  "version": 320,
   "task_states": {
     "analytics-aggregator": {
       "status": "done",
@@ -1330,8 +1330,10 @@
       "elapsed_minutes": 2
     },
     "task-privacy-and-secret-hardening": {
-      "status": "pending",
+      "status": "in_progress",
       "path": "",
+      "owner": "ai-agent",
+      "started_at": "2026-09-20T12:44:13.940992+02:00",
       "elapsed_minutes": 0
     },
     "task-rate-limit-window-headroom": {
@@ -1719,5 +1721,5 @@
       "elapsed_minutes": 3
     }
   },
-  "updated_at": "2026-09-20T11:49:17.491086+02:00"
+  "updated_at": "2026-09-20T12:44:13.940992+02:00"
 }
