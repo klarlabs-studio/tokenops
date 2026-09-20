@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.68.0 - 2026-09-20
+
+### Added
+
+- **The Claude usage meter connects without a paste.** `tokenops
+  vendor-usage setup claude-usage-meter` now reads the claude.ai session
+  from the browser you are signed in with — Chrome, Arc, Brave, Edge,
+  Chromium or Firefox. On macOS the system asks you to allow reading that
+  browser's keychain entry, and allowing it is the whole interaction:
+  nothing to find in developer tools, nothing to copy, nothing typed.
+  `--browser <name>` picks one; `--paste` keeps the old prompt for a
+  machine with no browser to read. (#333)
+- **`tokenops_vendor_usage_setup` reads the same session**, so an agent
+  can connect the meter without a login passing through the conversation.
+  It reports which browser the session came from and never the key
+  itself. (#333)
+
+### Notes
+
+- What the reader does: exactly the one cookie it is asked for, for
+  claude.ai only. It never lists other cookies, works on a copy of the
+  store so your browser can stay open, never writes to the browser
+  profile, and copies the write-ahead file so a session from a sign-in
+  moments ago is not missed. Declining the macOS prompt is reported as a
+  refusal, not as "no session found".
+- Safari keeps cookies in its own format behind macOS privacy controls
+  and is not supported; use `--paste` there.
+
 ## 0.67.1 - 2026-09-20
 
 Three answers that were confidently wrong, found by testing 0.67.0 against
