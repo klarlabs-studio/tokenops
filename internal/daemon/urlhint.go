@@ -78,7 +78,16 @@ func writeURLHint(addr string, tls bool, localURL, dashboardToken string) (strin
 	if err != nil {
 		return "", err
 	}
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+	// 0700, matching the mode `tokenops init` gives the storage
+	// directory beside it. The hint file itself is 0600 because it
+	// carries the dashboard token; a directory whose mode depends on
+	// which code path created it first is a permission nobody can
+	// reason about.
+	dir := filepath.Dir(p)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	if err := os.Chmod(dir, 0o700); err != nil {
 		return "", err
 	}
 	data, err := json.MarshalIndent(payload, "", "  ")
