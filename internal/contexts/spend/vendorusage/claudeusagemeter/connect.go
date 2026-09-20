@@ -49,10 +49,24 @@ func Connect(ctx context.Context, c *Client, choose string) (Connection, error) 
 		}
 		return Connection{}, fmt.Errorf("claude-usage-meter: no organization %q on this account", choose)
 	}
+	// A usage call that fails is not the same as an organization with
+	// nothing to meter: claude.ai sits behind a bot check that answers 403
+	// to a client it does not recognise, and reporting that as "no usage
+	// limits" sent the operator looking at their plan instead of at the
+	// request.
+	var lastErr error
 	for _, o := range orgs {
-		if u, err := c.Usage(ctx, o.UUID); err == nil && u.HasSignal() {
+		u, err := c.Usage(ctx, o.UUID)
+		if err != nil {
+			lastErr = fmt.Errorf("organization %q: %w", o.Name, err)
+			continue
+		}
+		if u.HasSignal() {
 			return Connection{Org: o, Usage: u, Orgs: orgs}, nil
 		}
+	}
+	if lastErr != nil {
+		return Connection{}, lastErr
 	}
 	return Connection{}, ErrNothingToMeter
 }

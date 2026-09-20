@@ -17,6 +17,16 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
 )
 
+// meterBaseURL overrides claude.ai's address for the verification request.
+// Empty in production, which leaves the client on https://claude.ai.
+//
+// It exists because the refusal tests used to reach the live internet: they
+// sent a bogus key to claude.ai and asserted on whatever came back, so they
+// passed from a laptop, where Anthropic answers 401, and failed from CI,
+// where Cloudflare answers its bot check first. A test of how this command
+// reports a refusal should not depend on which IP runs it.
+var meterBaseURL string
+
 // newVendorUsageSetupCmd walks an operator through wiring the claude.ai
 // cookie poller, and proves it works before writing anything.
 //
@@ -94,20 +104,28 @@ func runCookieSetup(cmd *cobra.Command, opts cookieSetupOptions) error {
 	out := cmd.OutOrStdout()
 	fmt.Fprintln(out, "Connecting claude.ai's usage meter.")
 
-	key, from, err := cookieSetupKey(cmd, opts)
+	session, err := cookieSetupKey(cmd, opts)
 	if err != nil {
 		return err
 	}
+	key := session.key
 	if key == "" {
 		return errors.New("no session key entered; nothing was written")
 	}
-	if from != "" {
-		fmt.Fprintf(out, "\nRead the claude.ai session from %s. It is sent only to claude.ai, and stored in your local config.\n", from)
+	if session.browser != "" {
+		fmt.Fprintf(out, "\nRead the claude.ai session from %s. It is sent only to claude.ai, and stored in your local config.\n", session.browser)
+		if session.clearance == "" {
+			fmt.Fprintln(out, "  (no cf_clearance cookie there yet — if Anthropic's bot check refuses, open claude.ai in that browser once and run this again)")
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
 	defer cancel()
 	client := claudeusagemeter.NewClient(key)
+	client.Clearance, client.UserAgent = session.clearance, session.userAgent
+	if meterBaseURL != "" {
+		client.BaseURL = meterBaseURL
+	}
 
 	fmt.Fprintln(out, "\nChecking it with Anthropic...")
 	// Pick the organization that reports usage rather than asking. An
@@ -116,6 +134,8 @@ func runCookieSetup(cmd *cobra.Command, opts cookieSetupOptions) error {
 	// question put a choice to the operator that the data already answers.
 	conn, err := claudeusagemeter.Connect(ctx, client, opts.org)
 	switch {
+	case errors.Is(err, claudeusagemeter.ErrBotCheck):
+		return botCheckAdvice(session.browser)
 	case errors.Is(err, claudeusagemeter.ErrNothingToMeter):
 		return fmt.Errorf("%w — none of this account's organizations reports usage limits. "+
 			"Nothing was written", err)
@@ -154,11 +174,21 @@ func runCookieSetup(cmd *cobra.Command, opts cookieSetupOptions) error {
 	cfg.VendorUsage.ClaudeUsageMeter.Enabled = true
 	cfg.VendorUsage.ClaudeUsageMeter.SessionKey = key
 	cfg.VendorUsage.ClaudeUsageMeter.OrgID = org.UUID
+	// Read from a browser: keep reading from it. The clearance cookie that
+	// got past the bot check expires within hours, so a stored copy would
+	// work this afternoon and be refused tomorrow.
+	cfg.VendorUsage.ClaudeUsageMeter.FromBrowser = session.browser != ""
+	if session.browser != "" {
+		cfg.VendorUsage.ClaudeUsageMeter.Browser = session.browser
+	}
 	if err := writeMutableConfig(path, cfg); err != nil {
 		return err
 	}
 	fmt.Fprintf(out, "\nwrote %s\n", path)
 	fmt.Fprintln(out, "These readings now replace the estimated window in `plan headroom` and the coach.")
+	if session.browser != "" {
+		fmt.Fprintf(out, "The daemon will keep reading the session from %s as it polls; macOS asks to allow that once per installed version.\n", session.browser)
+	}
 	applyRestart(out, opts.restart, true)
 	return nil
 }
@@ -196,21 +226,41 @@ func readRest(r io.Reader) (string, error) {
 	return line, nil
 }
 
+// browserSession is what the browser gave us: the session, the clearance
+// cookie that proves it passed claude.ai's bot check, and the agent string
+// that cookie is bound to.
+type browserSession struct {
+	key       string
+	clearance string
+	userAgent string
+	browser   string
+}
+
 // cookieSetupKey gets the session key without making the operator handle it
 // where that is possible: the browser they are signed in with already holds
 // it. macOS asks them to allow the keychain read; that prompt is the
 // consent, and it replaces finding a value in devtools and pasting it into
 // a terminal. Returns the key and where it came from ("" when pasted).
-func cookieSetupKey(cmd *cobra.Command, opts cookieSetupOptions) (string, string, error) {
+func cookieSetupKey(cmd *cobra.Command, opts cookieSetupOptions) (browserSession, error) {
 	out := cmd.OutOrStdout()
 	if !opts.paste {
 		home, err := os.UserHomeDir()
 		if err == nil {
 			fmt.Fprintln(out, "\nLooking for your claude.ai session in a local browser (macOS may ask you to allow keychain access)...")
-			key, browser, err := browsercookie.Find(cmd.Context(), home, "claude.ai", "sessionKey", opts.browser)
+			// An operator is watching this one: give them time to find the
+			// dialog macOS puts up, rather than falling to the paste path
+			// while they are still looking for it.
+			cookies, browser, err := browsercookie.FindMany(cmd.Context(), home, "claude.ai",
+				[]string{"sessionKey", "cf_clearance"}, opts.browser,
+				browsercookie.KeychainSecret(browsercookie.InteractiveKeychainWait))
 			switch {
 			case err == nil:
-				return strings.TrimSpace(key), browser.Name, nil
+				return browserSession{
+					key:       strings.TrimSpace(cookies["sessionKey"]),
+					clearance: strings.TrimSpace(cookies["cf_clearance"]),
+					userAgent: browser.UserAgent(),
+					browser:   browser.Name,
+				}, nil
 			case errors.Is(err, browsercookie.ErrNotFound):
 				fmt.Fprintln(out, "No claude.ai session found in a local browser — sign in there, or paste the key below.")
 			default:
@@ -226,7 +276,20 @@ func cookieSetupKey(cmd *cobra.Command, opts cookieSetupOptions) (string, string
 	fmt.Fprintln(out, "\nIt is sent only to claude.ai, and stored in your local config.")
 	key, err := readSecret(cmd, "\nPaste sessionKey: ")
 	if err != nil {
-		return "", "", err
+		return browserSession{}, err
 	}
-	return strings.TrimSpace(key), "", nil
+	return browserSession{key: strings.TrimSpace(key)}, nil
+}
+
+// botCheckAdvice says what actually renews Cloudflare's clearance cookie: a
+// page load in the browser it belongs to. The generic "session cookies
+// rotate, sign in again" sent operators to re-authenticate a session that
+// was never the problem.
+func botCheckAdvice(browser string) error {
+	where := "your browser"
+	if browser != "" {
+		where = browser
+	}
+	return fmt.Errorf("%w\n  open https://claude.ai in %s — one page load renews it — then run this again. Nothing was written",
+		claudeusagemeter.ErrBotCheck, where)
 }

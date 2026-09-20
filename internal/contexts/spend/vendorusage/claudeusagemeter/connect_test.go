@@ -68,12 +68,22 @@ func TestConnectHonoursAnExplicitChoice(t *testing.T) {
 	}
 }
 
-// An organization whose usage call fails — a Console API org answers 403 —
-// is passed over rather than failing the whole setup.
-func TestConnectSkipsAnOrganizationThatRefuses(t *testing.T) {
+// An organization whose usage call fails is passed over while another may
+// still answer — but if none does, the failure is what the operator needs
+// to see, not "nothing to meter".
+func TestConnectSkipsARefusingOrganizationButReportsItWhenNoneAnswer(t *testing.T) {
 	_, err := Connect(context.Background(), twoOrgServer(t, "", http.StatusForbidden), "")
-	if !errors.Is(err, ErrNothingToMeter) {
-		t.Errorf("err = %v, want ErrNothingToMeter", err)
+	if err == nil || errors.Is(err, ErrNothingToMeter) {
+		t.Fatalf("err = %v, want the refusal reported", err)
+	}
+	if !strings.Contains(err.Error(), "403") || !strings.Contains(err.Error(), "Work Org") {
+		t.Errorf("err = %v, want it to name the organization and the status", err)
+	}
+	_ = ErrBotCheck
+	// One that answers wins over one that refuses, whatever the order.
+	conn, err := Connect(context.Background(), twoOrgServer(t, enterpriseUsage, http.StatusOK), "")
+	if err != nil || conn.Org.UUID != "work" {
+		t.Errorf("conn = %+v err = %v", conn.Org, err)
 	}
 }
 
@@ -99,5 +109,33 @@ func TestConnectNoOrganizations(t *testing.T) {
 	_, err := Connect(context.Background(), c, "")
 	if err == nil || !strings.Contains(err.Error(), "no organizations") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+// claude.ai sits behind a bot check that answers 403 to a client it does
+// not recognise. Reporting that as "no usage limits" sent the operator to
+// look at their plan instead of at the request.
+func TestConnectReportsAFailedUsageCallRatherThanNothingToMeter(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/organizations" {
+			_, _ = w.Write([]byte(`[{"uuid":"a","name":"Personal"}]`))
+			return
+		}
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte("<!DOCTYPE html><title>Just a moment...</title>"))
+	}))
+	defer srv.Close()
+	c := NewClient("sk")
+	c.BaseURL = srv.URL
+
+	_, err := Connect(context.Background(), c, "")
+	if err == nil || errors.Is(err, ErrNothingToMeter) {
+		t.Fatalf("err = %v, want the 403 reported", err)
+	}
+	if !errors.Is(err, ErrBotCheck) {
+		t.Errorf("err = %v, want it recognised as the bot check", err)
+	}
+	if !strings.Contains(err.Error(), "Personal") {
+		t.Errorf("err %v does not name the organization", err)
 	}
 }

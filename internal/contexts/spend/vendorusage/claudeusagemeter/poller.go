@@ -29,6 +29,22 @@ type PollerOptions struct {
 	Interval   time.Duration // defaults 5 minutes
 	BaseURL    string        // test override
 	Logger     *slog.Logger
+	// Cookies, when set, re-reads the claude.ai session and Cloudflare
+	// clearance from the operator's browser. The clearance cookie expires
+	// within hours and is bound to the browser's address, so a meter that
+	// only ever read it once works today and is refused tomorrow. Called
+	// at startup and again whenever a request is refused.
+	Cookies func(ctx context.Context) (Session, error)
+}
+
+// Session is what a browser holds for claude.ai: the login, the proof it
+// passed the bot check, and the agent string that proof is bound to.
+type Session struct {
+	Key       string
+	Clearance string
+	UserAgent string
+	// Browser names where it came from, for logs.
+	Browser string
 }
 
 // Poller wraps the cookie-auth claude.ai client with a tick loop and
@@ -94,7 +110,7 @@ func (p *Poller) LastError() (time.Time, error) {
 }
 
 func (p *Poller) ensureClient() error {
-	if p.opts.SessionKey == "" {
+	if p.opts.SessionKey == "" && p.opts.Cookies == nil {
 		return ErrMissingCookie
 	}
 	c := NewClient(p.opts.SessionKey)
@@ -103,6 +119,33 @@ func (p *Poller) ensureClient() error {
 	}
 	p.client = c
 	return nil
+}
+
+// refreshCookies re-reads the session and clearance from the browser. It is
+// how the meter keeps working: the clearance cookie expires within hours,
+// and the alternative is an operator re-running setup every morning.
+func (p *Poller) refreshCookies(ctx context.Context) bool {
+	if p.opts.Cookies == nil || p.client == nil {
+		return false
+	}
+	s, err := p.opts.Cookies(ctx)
+	if err != nil || s.Key == "" {
+		if err != nil {
+			p.opts.Logger.Warn("claude-usage-meter: could not re-read the browser session", "err", err)
+		}
+		return false
+	}
+	changed := s.Key != p.client.SessionKey || s.Clearance != p.client.Clearance
+	p.client.SessionKey, p.client.Clearance, p.client.UserAgent = s.Key, s.Clearance, s.UserAgent
+	if changed {
+		p.opts.Logger.Info("claude-usage-meter: refreshed the session from the browser", "browser", s.Browser)
+	}
+	return changed
+}
+
+// refusedRequest reports whether err is the kind a fresh cookie fixes.
+func refusedRequest(err error) bool {
+	return errors.Is(err, ErrBotCheck) || errors.Is(err, ErrUnauthorized)
 }
 
 func (p *Poller) scan(ctx context.Context) {
@@ -117,8 +160,14 @@ func (p *Poller) scan(ctx context.Context) {
 			return
 		}
 	}
+	if p.client.SessionKey == "" {
+		p.refreshCookies(ctx)
+	}
 	if p.orgID == "" {
 		orgID, err := p.resolveOrg(ctx)
+		if err != nil && refusedRequest(err) && p.refreshCookies(ctx) {
+			orgID, err = p.resolveOrg(ctx)
+		}
 		if err != nil {
 			p.recordErr(err)
 			if errors.Is(err, ErrUnauthorized) {
@@ -131,8 +180,17 @@ func (p *Poller) scan(ctx context.Context) {
 		p.orgID = orgID
 	}
 	usage, err := p.client.Usage(ctx, p.orgID)
+	if err != nil && refusedRequest(err) && p.refreshCookies(ctx) {
+		// The browser had a fresher session; one retry rather than
+		// waiting a whole interval to use it.
+		usage, err = p.client.Usage(ctx, p.orgID)
+	}
 	if err != nil {
 		p.recordErr(err)
+		if errors.Is(err, ErrBotCheck) {
+			p.opts.Logger.Warn("claude-usage-meter: bot check refused the request; open claude.ai in your browser once to renew it", "err", err)
+			return
+		}
 		if errors.Is(err, ErrUnauthorized) {
 			p.opts.Logger.Warn("claude-usage-meter: cookie expired, re-paste from devtools", "err", err)
 			return
@@ -172,11 +230,22 @@ func (p *Poller) resolveOrg(ctx context.Context) (string, error) {
 	if len(orgs) == 0 {
 		return "", errors.New("no organizations returned for sessionKey")
 	}
+	var refused error
 	for _, o := range orgs {
-		if u, err := p.client.Usage(ctx, o.UUID); err == nil && u.HasSignal() {
+		u, err := p.client.Usage(ctx, o.UUID)
+		if err != nil {
+			if refusedRequest(err) {
+				refused = err
+			}
+			continue
+		}
+		if u.HasSignal() {
 			p.opts.Logger.Info("claude-usage-meter: resolved org_id", "org_id", o.UUID)
 			return o.UUID, nil
 		}
+	}
+	if refused != nil {
+		return "", refused
 	}
 	p.opts.Logger.Info("claude-usage-meter: resolved org_id; no organization reports usage yet", "org_id", orgs[0].UUID)
 	return orgs[0].UUID, nil

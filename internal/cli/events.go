@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/internal/infra/daemonhint"
 )
 
 // resolveDomainLogPath returns the JSONL location, honoring
@@ -78,8 +79,18 @@ Mirrors the tokenops_domain_events MCP tool.`,
 			if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {
 				url = "http://" + target + "/api/domain-events"
 			}
+			req, err := http.NewRequest(http.MethodGet, url, nil)
+			if err != nil {
+				return renderFromLogSince(cmd, rf, jsonOut, time.Time{})
+			}
+			// /api/domain-events is credentialed like the rest of /api/*.
+			// The token comes from the daemon's 0600 URL hint; without one
+			// the request goes bare and the daemon's 401 says so.
+			if tok := daemonhint.Token(); tok != "" {
+				req.Header.Set("Authorization", "Bearer "+tok)
+			}
 			client := &http.Client{Timeout: 3 * time.Second}
-			resp, err := client.Get(url)
+			resp, err := client.Do(req)
 			if err != nil {
 				return renderFromLogSince(cmd, rf, jsonOut, time.Time{})
 			}
