@@ -186,3 +186,29 @@ func TestLadderIsInAscendingOrder(t *testing.T) {
 		}
 	}
 }
+
+// A fifth ladder, with a fourth vocabulary, that the audit missed:
+// smart_routing.intervention is off | advise | delegate | auto.
+//
+// "delegate" is its own rung and maps to require-approval rather than
+// automatic: it marks work that *may* be handed to a subagent on a
+// cheaper model, which is a proposal awaiting a decision, not an action
+// taken. Mapping it to automatic would report more authority than the
+// operator granted, which is the direction that matters.
+func TestSmartRoutingInterventionMapsOntoTheLadder(t *testing.T) {
+	cases := map[string]policy.Authority{
+		"off":      policy.ObserveOnly,
+		"advise":   policy.Recommend,
+		"delegate": policy.RequireApproval,
+		"auto":     policy.Automatic,
+		// Empty is documented as advise — the one mapping whose default
+		// is not the bottom rung, because the config says so.
+		"":         policy.Recommend,
+		"nonsense": policy.ObserveOnly,
+	}
+	for in, want := range cases {
+		if got := policy.FromSmartRoutingIntervention(in); got != want {
+			t.Errorf("%q = %q, want %q", in, got, want)
+		}
+	}
+}

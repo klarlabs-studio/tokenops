@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"go.klarlabs.de/tokenops/internal/capability/authority"
 	"go.klarlabs.de/tokenops/internal/config"
 )
 
@@ -119,16 +120,8 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 			if err != nil {
 				return "", inputError(err)
 			}
-			current := cfg.Mode
-			if current == "" {
-				current = config.ModePassive
-			}
 			if want == "" {
-				return jsonString(map[string]any{
-					"mode":          strings.ToLower(current),
-					"budgets":       len(cfg.Budgets),
-					"routing_rules": len(cfg.Optimizer.RoutingRules),
-				}), nil
+				return jsonString(modeAuthorityPayload(cfg)), nil
 			}
 			cfg.Mode = want
 			if err := config.WriteMutable(path, cfg); err != nil {
@@ -230,4 +223,45 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 		})
 
 	return nil
+}
+
+// modeAuthorityPayload answers "what can TokenOps do without me", in the
+// shape `tokenops mode` prints.
+//
+// The tool used to return the daemon's rung plus counts of budgets and
+// routing rules, which answers "which of the five settings did I last
+// touch". The other four, in three other vocabularies, were absent — and
+// an agent deciding whether to propose or to act was reading one fifth
+// of the answer.
+//
+// Both surfaces read the same capability so they cannot drift into
+// disagreeing about what the operator's own machine is allowed to do.
+func modeAuthorityPayload(cfg config.Config) map[string]any {
+	a := authority.Report(cfg)
+
+	mode := cfg.Mode
+	if mode == "" {
+		mode = config.ModePassive
+	}
+	payload := map[string]any{
+		// mode stays the value `set` accepts. Repurposing it for the
+		// ladder rung would break the tool's own contract for no gain;
+		// the rung is reported beside it.
+		"mode":          strings.ToLower(mode),
+		"authority":     a.Daemon.String(),
+		"anything_acts": a.AnythingActs(),
+		"subsystems":    a.Subsystems,
+		"budgets":       len(cfg.Budgets),
+		"routing_rules": len(cfg.Optimizer.RoutingRules),
+	}
+	if held := a.HeldBack(); len(held) > 0 {
+		names := make([]string, 0, len(held))
+		for _, s := range held {
+			names = append(names, s.Name)
+		}
+		payload["held_back"] = names
+		payload["held_back_note"] = "these are configured to do more than the daemon's mode allows; " +
+			"raising mode to active lets them act"
+	}
+	return payload
 }
