@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -259,4 +260,87 @@ func encryptChromiumValue(t *testing.T, secret, v string) []byte {
 	out := make([]byte, len(padded))
 	cipher.NewCBCEncrypter(block, chromiumIV()).CryptBlocks(out, padded)
 	return append([]byte("v10"), out...)
+}
+
+// Cloudflare's clearance cookie only works beside the session it was
+// issued with, from the same browser: they have to be read together.
+func TestFindManyReturnsCookiesFromOneBrowser(t *testing.T) {
+	const secret = "keychain-secret"
+	dir := t.TempDir()
+	home := filepath.Join(dir, "home")
+	profile := filepath.Join(home, "Library/Application Support/Google/Chrome/Default")
+	if err := os.MkdirAll(profile, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	store := chromiumFixture(t, secret, ".claude.ai", "sessionKey", "sk-ant-sid-both", false)
+	if err := os.Rename(store, filepath.Join(profile, "Cookies")); err != nil {
+		t.Fatal(err)
+	}
+	addChromiumCookie(t, filepath.Join(profile, "Cookies"), secret, ".claude.ai", "cf_clearance", "clearance-value")
+
+	got, browser, err := FindMany(context.Background(), home, "claude.ai",
+		[]string{"sessionKey", "cf_clearance", "absent_cookie"}, "", func(Browser) (string, error) { return secret, nil })
+	if err != nil {
+		t.Fatalf("find: %v", err)
+	}
+	if browser.Name != "Chrome" {
+		t.Errorf("browser = %q", browser.Name)
+	}
+	if got["sessionKey"] != "sk-ant-sid-both" || got["cf_clearance"] != "clearance-value" {
+		t.Errorf("cookies = %v", redactValues(got))
+	}
+	if _, ok := got["absent_cookie"]; ok {
+		t.Errorf("absent cookie reported as present: %v", redactValues(got))
+	}
+}
+
+// redactValues keeps test failures from printing cookie values.
+func redactValues(m map[string]string) map[string]string {
+	out := map[string]string{}
+	for k, v := range m {
+		out[k] = "<" + string(rune('0'+len(v)%10)) + " chars>"
+	}
+	return out
+}
+
+func addChromiumCookie(t *testing.T, path, secret, host, name, value string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err := db.Exec(`INSERT INTO cookies (host_key, name, value, encrypted_value) VALUES (?, ?, '', ?)`,
+		host, name, encryptChromiumValue(t, secret, value)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The clearance cookie is bound to the User-Agent it was issued to, so the
+// request has to carry that browser's own.
+func TestUserAgentNamesTheBrowser(t *testing.T) {
+	ua := chromiumUserAgent("141.0.7390.55")
+	for _, want := range []string{"Mozilla/5.0", "Chrome/141.0.0.0", "Safari/537.36"} {
+		if !strings.Contains(ua, want) {
+			t.Errorf("user agent %q missing %q", ua, want)
+		}
+	}
+	if strings.Contains(ua, "7390") {
+		t.Errorf("user agent leaks the build number, which Chrome does not send: %q", ua)
+	}
+}
+
+// The wait is not one number: unattended the daemon must not stall, but an
+// operator who just typed the command needs time to find the dialog —
+// fifteen seconds sent a working setup down the paste path.
+func TestKeychainWaitsDifferPerCaller(t *testing.T) {
+	if DaemonKeychainWait >= InteractiveKeychainWait {
+		t.Errorf("daemon wait %s is not shorter than the interactive %s", DaemonKeychainWait, InteractiveKeychainWait)
+	}
+	if InteractiveKeychainWait < time.Minute {
+		t.Errorf("interactive wait %s is too short to find a dialog in", InteractiveKeychainWait)
+	}
+	if KeychainSecret(time.Second) == nil {
+		t.Error("KeychainSecret returned nothing to call")
+	}
 }

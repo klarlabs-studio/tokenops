@@ -107,3 +107,17 @@ func TestSetupPasteSkipsTheBrowser(t *testing.T) {
 		t.Errorf("--paste did not prompt:\n%s", out)
 	}
 }
+
+// Cloudflare's clearance cookie is short-lived and renewed by loading the
+// page, so "sign in again" sends the operator to the wrong place.
+func TestBotCheckErrorSaysHowToRenewIt(t *testing.T) {
+	err := botCheckAdvice("Chrome")
+	for _, want := range []string{"claude.ai", "Chrome", "renews"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("advice %q omits %q", err, want)
+		}
+	}
+	if strings.Contains(err.Error(), "sign in again") {
+		t.Errorf("advice blames the session: %q", err)
+	}
+}

@@ -36,6 +36,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
 	"go.klarlabs.de/tokenops/internal/domainevents"
 	"go.klarlabs.de/tokenops/internal/events"
+	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
 	"go.klarlabs.de/tokenops/internal/infra/rulesfs"
 	"go.klarlabs.de/tokenops/internal/otlp"
 	"go.klarlabs.de/tokenops/internal/proxy"
@@ -345,6 +346,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 				OrgID:      cfg.VendorUsage.ClaudeUsageMeter.OrgID,
 				Interval:   cfg.VendorUsage.ClaudeUsageMeter.Interval,
 				Logger:     logger,
+				Cookies:    browserSessionSource(cfg.VendorUsage.ClaudeUsageMeter),
 			})
 			go func() {
 				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
@@ -663,4 +665,32 @@ func planCostSource(cfg config.Config, provider eventschema.Provider) eventschem
 		return eventschema.CostSourcePlanIncluded
 	}
 	return ""
+}
+
+// browserSessionSource re-reads the claude.ai session and Cloudflare
+// clearance from the operator's browser while the daemon runs, when they
+// asked for that. Without it the meter is refused as soon as the clearance
+// cookie expires — hours, not weeks — and the failure looks like a dead
+// poller rather than an expired cookie.
+func browserSessionSource(cfg config.ClaudeUsageMeterConfig) func(context.Context) (claudeusagemeter.Session, error) {
+	if !cfg.FromBrowser {
+		return nil
+	}
+	return func(ctx context.Context) (claudeusagemeter.Session, error) {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return claudeusagemeter.Session{}, err
+		}
+		cookies, browser, err := browsercookie.FindMany(ctx, home, "claude.ai",
+			[]string{"sessionKey", "cf_clearance"}, cfg.Browser, nil)
+		if err != nil {
+			return claudeusagemeter.Session{}, err
+		}
+		return claudeusagemeter.Session{
+			Key:       cookies["sessionKey"],
+			Clearance: cookies["cf_clearance"],
+			UserAgent: browser.UserAgent(),
+			Browser:   browser.Name,
+		}, nil
+	}
 }
