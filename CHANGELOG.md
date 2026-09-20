@@ -1,5 +1,92 @@
 # Changelog
 
+## 0.70.0 - 2026-09-20
+
+The first five phases of ADR 0004 — TokenOps as an AI-work intelligence
+and control system. Four of them close cases where TokenOps reported a
+number, or a clean bill of health, that it had no basis for.
+
+### Security
+
+- **The `tokenops fmt` recovery store is no longer world-readable.** It
+  holds the full raw stdout and stderr of every command it wraps, which
+  is the broadest capture surface in the product, at `0644` in a `0755`
+  directory, unpruned, for as long as the machine lives. A wrapped
+  `printenv`, a verbose `curl` or a failing deploy script left its
+  credentials there permanently. Now `0600` in a `0700` directory, with
+  credential shapes redacted, pruned at 14 days. The learning index
+  beside it and `domain-events.jsonl` were `0644` for the same reason
+  and are now `0600`. (#339)
+- **`config.yaml` gets its permissions repaired on every write.**
+  `os.WriteFile` applies its mode only when it creates a file, so a
+  config that predates the `0600` default kept its old mode while
+  `vendor-usage setup` wrote new vendor credentials into it. All four
+  paths now tighten what they find, not only what they create — the
+  files already exist on every installed machine. (#339)
+- **Credentials can be kept out of `config.yaml`.** `SECURITY.md` has
+  said since v0.10.2 to use "environment substitution" for the Anthropic
+  admin key. No code implemented it. All five credentials now read from
+  the environment at load time, win over the file, and are never written
+  back; `SECURITY.md` records the correction. (#339)
+
+### Added
+
+- **Reported numbers carry their provenance.** A new measurement type
+  says whether a figure was observed, derived or estimated, and how much
+  of the population it accounts for. Unknown no longer reads as zero.
+  (#340)
+- **Per-source ingestion health, as data.** `GET /api/sources` and the
+  `tokenops_data_sources` MCP tool now report, per source, when it was
+  last seen, when its reader last polled successfully, and what it last
+  failed with. (#341)
+- **Work, Actor, Execution and Outcome.** The domain-neutral primitives
+  TokenOps had no representation of — Outcome had no non-test match
+  anywhere in the tree. Without them TokenOps can only optimize what work
+  consumes, with no way to notice it made the work worse. (#342)
+
+### Fixed
+
+- **`plan headroom` and `plan list` no longer reshuffle between runs.**
+  The MCP tool sorted the configured providers; the CLI ranged the map,
+  and Go randomises map iteration, so "the first plan" was a different
+  plan from run to run. Both now call one implementation. (#343)
+- **An unknown plan name is reported rather than skipped.** Both surfaces
+  dropped it silently, which is how a typo becomes a plan that reports
+  nothing and says nothing, forever. (#343)
+- **A cost total no longer hides the models it could not price.** An
+  unpriced model contributed `0` to the rollups feeding burn rate,
+  forecast, top consumers and the dashboard, and the total presented
+  itself as complete. `Summarize` reported that gap; `AggregateBy`, which
+  those surfaces call, did not. (#340)
+- **A proxy with no tokenizer no longer reports zero usage as though it
+  counted.** Events now carry a token source, so zeros nobody produced
+  are distinguishable from a request that consumed nothing. (#340)
+- **An optimizer that cannot measure its own effect says so.** Token
+  savings collapsed three outcomes into one integer: a counted saving, a
+  counted no-saving, and a failure to count. The third returned `0` —
+  indistinguishable from "no effect", with the confidence of a
+  measurement. (#340)
+- **A refused poller is distinguishable from an unused vendor.** Both
+  produce no events. All four pollers tracked their last error behind a
+  method with no call sites, and none recorded a success, so nothing
+  could tell an operator which situation they were in. (#341)
+
+### Changed
+
+- **Adapters are ratcheted toward a capability layer.** `internal/cli`
+  and `internal/mcp` each reached straight into the domain and each
+  implemented their own orchestration, which produced divergence rather
+  than duplication. An architecture test now records every direct
+  adapter → domain import and fails on any new one, so the list can only
+  shrink. (#343)
+
+### Notes
+
+- `GET /api/sources` is credentialed like every other `/api` route.
+- No schema migration. The new event field is omitted when it carries no
+  information, and events written before it existed read back as counted
+  — which is what they were.
+
 ## 0.69.0 - 2026-09-20
 
 ### Security
