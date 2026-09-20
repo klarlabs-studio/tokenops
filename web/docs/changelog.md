@@ -4,7 +4,49 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.69.0**.
+Current release: **v0.70.0**.
+
+## v0.70.0 — numbers that say where they came from
+
+Four of this release's five changes close the same kind of defect: a
+figure, or a clean bill of health, that TokenOps had no basis for and
+reported anyway.
+
+An unpriced model used to contribute `0` to a cost total. The gap was
+reported in one rollup and not in the other — and the silent one is what
+feeds burn rate, forecast, top consumers and the dashboard, so the total
+an operator acts on presented itself as complete. A proxy with no
+tokenizer shipped events with zero token counts by design, which
+downstream is indistinguishable from a request that consumed nothing: a
+misconfigured install reported no usage as confidently as a working one
+reported real usage. An optimizer that could not measure its own effect
+returned the same `0` as one that had measured no effect. And a poller
+being refused every minute produced exactly the same silence as a vendor
+nobody uses — all four pollers tracked their last error behind a method
+nothing called, and none recorded a success, which is the fact that
+separates the two.
+
+Numbers now carry whether they were observed, derived or estimated, and
+how much they account for. Ingestion health is data rather than a warning
+sentence: `GET /api/sources` and the `tokenops_data_sources` tool report
+when each source was last seen, when its reader last succeeded, and what
+it last failed with.
+
+The `tokenops fmt` recovery store — the full raw output of every command
+it wraps, which is the broadest capture surface in the product — was
+world-readable, unpruned and unredacted. So was the learning index beside
+it, and the domain-event log. All are now owner-only, and every write
+repairs the permissions it finds rather than only the files it creates,
+because those files already exist on every installed machine.
+`SECURITY.md` had also promised for sixty minor versions that vendor
+credentials could be supplied by the environment. Nothing implemented it.
+Now five can be, and the policy records the correction.
+
+Underneath, TokenOps gained the four primitives it never had — Work,
+Actor, Execution and Outcome. Outcome had no non-test match anywhere in
+the tree, which is why TokenOps could only ever optimize what work
+consumes: it could make work cheaper while making it worse and have no
+way to notice.
 
 ## v0.69.0 — the routes that were never behind the door
 
