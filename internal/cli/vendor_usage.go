@@ -109,7 +109,23 @@ Examples:
   tokenops vendor-usage enable cursor --cookie ey... --user-id 123abc
   tokenops vendor-usage enable github-copilot
   tokenops vendor-usage enable codex-jsonl --interval 1m
-  tokenops vendor-usage enable claude-usage-meter --disable`,
+  tokenops vendor-usage enable claude-usage-meter --disable
+
+Where secrets end up:
+
+  The env vars above are read by enable and then written into
+  config.yaml, exactly as the flags are. They keep a secret out of shell
+  history, not off disk.
+
+  To keep a credential off disk entirely, leave it out of enable and
+  export it for the daemon instead — it reads the same variables at
+  startup, they win over the file, and it does not keep a copy:
+
+    TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY  claude.ai session cookie
+    TOKENOPS_CURSOR_COOKIE                   cursor.com session cookie
+    TOKENOPS_COPILOT_OAUTH_TOKEN             GitHub Copilot OAuth token
+    TOKENOPS_ANTHROPIC_ADMIN_KEY             Anthropic admin key
+    TOKENOPS_DASHBOARD_ADMIN_TOKEN           dashboard admin token`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runVendorUsageEnable(cmd, args[0], f)
