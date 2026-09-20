@@ -210,11 +210,28 @@ read is logged and skipped rather than stored as zeros.
 tokenops vendor-usage setup claude-usage-meter
 ```
 
-It says where the cookie is, reads it without echoing it into your
-scrollback, **verifies it against Anthropic**, prints your real
-percentages, and only then writes config. A mistyped or expired key fails
-at the prompt rather than sitting in config producing nothing — session
-cookies rotate, so a stale copy is the usual cause.
+It reads the session from the browser you are already signed in with —
+Chrome, Arc, Brave, Edge, Chromium or Firefox — so there is nothing to copy
+or paste. On macOS the system asks you to allow reading the browser's
+keychain entry; that prompt is the permission step. TokenOps reads exactly
+that one cookie, from a copy of the store, and never writes to your browser
+profile.
+
+```bash
+tokenops vendor-usage setup claude-usage-meter --browser Chrome  # pick one
+tokenops vendor-usage setup claude-usage-meter --paste           # type it instead
+```
+
+With no browser session found it falls back to explaining where the cookie
+is and reading it without echoing it into your scrollback. Either way it
+**verifies the key against Anthropic**, prints your real percentages, and
+only then writes config. A mistyped or expired key fails here rather than
+sitting in config producing nothing — session cookies rotate, so a stale
+copy is the usual cause.
+
+From an agent, `tokenops_vendor_usage_setup` does the same: it reads the
+browser session (you allow the keychain prompt) and never asks for the key
+in the conversation.
 
 Prefer this over `vendor-usage enable claude-usage-meter --session-key`,
 which writes whatever you give it without checking.

@@ -19,6 +19,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/session"
 	"go.klarlabs.de/tokenops/internal/daemon"
 	"go.klarlabs.de/tokenops/internal/events"
+	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
 	"go.klarlabs.de/tokenops/internal/mcp"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
@@ -228,7 +229,10 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	}); err != nil {
 		return fmt.Errorf("register mode tools: %w", err)
 	}
-	if err := mcp.RegisterSetupTools(srv, mcp.SetupDeps{ApplyConfig: applyConfigRestart}); err != nil {
+	if err := mcp.RegisterSetupTools(srv, mcp.SetupDeps{
+		ApplyConfig:   applyConfigRestart,
+		BrowserCookie: browserSessionKey,
+	}); err != nil {
 		return fmt.Errorf("register setup tools: %w", err)
 	}
 	if err := mcp.RegisterHelpTool(srv); err != nil {
@@ -361,4 +365,19 @@ func dashboardTokenFor(cfg config.Config) string {
 		return ""
 	}
 	return strings.TrimSpace(string(b))
+}
+
+// browserSessionKey reads the claude.ai session from a local browser for the
+// MCP setup tool, so an agent can connect the meter without the operator
+// pasting a login into the conversation. macOS asks them to allow it.
+func browserSessionKey(ctx context.Context) (string, string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", "", err
+	}
+	key, browser, err := browsercookie.Find(ctx, home, "claude.ai", "sessionKey", "")
+	if err != nil {
+		return "", "", err
+	}
+	return key, browser.Name, nil
 }
