@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/measurement"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -147,6 +148,24 @@ type Row struct {
 	// CostUSD was 0 in the store and was recomputed via spend.Engine.
 	// Useful for dashboards to flag stale pricing tables.
 	CostRecomputed int64
+	// Cost is CostUSD with its provenance attached: whether the figure
+	// was observed or recomputed from a rate card, and how many events it
+	// could not account for.
+	//
+	// CostUSD alone cannot express either. An unpriced model used to
+	// contribute 0 to it and say nothing, so a bucket containing a model
+	// TokenOps has no rate card for reported a total that looked
+	// complete — on the surfaces that feed burn rate, forecast, top
+	// consumers and the dashboard. Summarize reported that gap as
+	// Unpriced; AggregateBy, which is what those surfaces call, did not.
+	//
+	// CostUSD stays as it was for callers that have not migrated. Read
+	// Cost to learn whether the number is worth acting on.
+	Cost measurement.Value
+	// APIEquivalent is APIEquivalentUSD with its provenance attached.
+	// Always derived: nobody was charged it, and the same unpriced-model
+	// gap applies to the plan-covered recompute that builds it.
+	APIEquivalent measurement.Value
 }
 
 // Summary is the global rollup over a query: total requests / tokens /
@@ -265,6 +284,14 @@ func (a *Aggregator) AggregateBy(ctx context.Context, f Filter, bucket Bucket, g
 		return nil, fmt.Errorf("analytics: iterate: %w", err)
 	}
 
+	// Seed provenance from the store. recomputeMissingCosts replaces this
+	// for rows it prices; rows it does not reach keep the stored figure,
+	// and rows nothing can price stay unknown rather than zero.
+	for i := range out {
+		out[i].Cost = storedCostValue(out[i], a.spend != nil)
+		out[i].APIEquivalent = out[i].Cost
+	}
+
 	if a.spend != nil {
 		if err := a.recomputeMissingCosts(ctx, f, bucket, group, out); err != nil {
 			return nil, err
@@ -307,7 +334,7 @@ func (a *Aggregator) addPlanCoveredValue(ctx context.Context, f Filter, bucket B
 	// keyed by them: grouping by workflow still has to price each model the
 	// workflow ran.
 	q := "SELECT " + bucketExpr + " AS bucket_start_sec, " + groupExpr + " AS group_key," +
-		` provider, model,
+		` provider, model, COUNT(*),
 			COALESCE(SUM(input_tokens), 0),
 			COALESCE(SUM(output_tokens), 0),
 			COALESCE(SUM(CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER)), 0)
@@ -325,14 +352,15 @@ func (a *Aggregator) addPlanCoveredValue(ctx context.Context, f Filter, bucket B
 		groupKey  string
 	}
 	value := map[key]float64{}
+	gaps := newGapTracker[key]()
 	for dbRows.Next() {
 		var (
-			bucketSec              int64
-			groupKey               string
-			provider, model        sql.NullString
-			inTok, outTok, cacheIn sql.NullInt64
+			bucketSec                      int64
+			groupKey                       string
+			provider, model                sql.NullString
+			events, inTok, outTok, cacheIn sql.NullInt64
 		)
-		if err := dbRows.Scan(&bucketSec, &groupKey, &provider, &model, &inTok, &outTok, &cacheIn); err != nil {
+		if err := dbRows.Scan(&bucketSec, &groupKey, &provider, &model, &events, &inTok, &outTok, &cacheIn); err != nil {
 			return fmt.Errorf("analytics: plan-covered group value scan: %w", err)
 		}
 		p := &eventschema.PromptEvent{
@@ -342,22 +370,32 @@ func (a *Aggregator) addPlanCoveredValue(ctx context.Context, f Filter, bucket B
 			CachedInputTokens: cacheIn.Int64,
 			OutputTokens:      outTok.Int64,
 		}
+		k := key{bucketSec, groupKey}
 		// An unpriced model contributes nothing rather than failing the
-		// query. Summarize already reports the pricing gap as Unpriced, and
-		// failing the whole rollup over one missing rate card would take the
-		// figures that do work with it.
+		// query — failing the whole rollup over one missing rate card would
+		// take the figures that do work with it. The events it could not
+		// price are counted against the row's coverage so the shadow value
+		// stops presenting itself as the whole of the plan-covered traffic.
 		c, cerr := a.spend.ComputeAt(p, time.Unix(bucketSec, 0).UTC())
 		if cerr != nil {
+			gaps.add(k, events.Int64, unpricedReason(provider.String, model.String))
 			continue
 		}
-		value[key{bucketSec, groupKey}] += c
+		value[k] += c
 	}
 	if err := dbRows.Err(); err != nil {
 		return fmt.Errorf("analytics: plan-covered group value iterate: %w", err)
 	}
 
 	for i := range rows {
-		rows[i].APIEquivalentUSD += value[key{rows[i].BucketStart.Unix(), rows[i].GroupKey}]
+		k := key{rows[i].BucketStart.Unix(), rows[i].GroupKey}
+		rows[i].APIEquivalentUSD += value[k]
+		// The equivalent inherits the cost figure's gaps as well as its
+		// own: it is built on top of CostUSD, so an event the metered
+		// recompute could not price is missing from both.
+		missing, why := gaps.at(k)
+		costMissing, costWhy := rows[i].Cost.Coverage().Excluded, rows[i].Cost.Coverage().Reasons
+		rows[i].APIEquivalent = equivalentValue(rows[i], missing+costMissing, mergeReasons(costWhy, why))
 	}
 	return nil
 }
@@ -407,6 +445,8 @@ func (a *Aggregator) recomputeMissingCosts(ctx context.Context, f Filter, bucket
 	}
 	cost := map[key]float64{}
 	fixed := map[key]int64{}
+	// Events whose model has no rate card, per row, with the reasons.
+	gaps := newGapTracker[key]()
 	for dbRows.Next() {
 		var (
 			bucketSec                      int64
@@ -424,14 +464,18 @@ func (a *Aggregator) recomputeMissingCosts(ctx context.Context, f Filter, bucket
 			CachedInputTokens: cacheIn.Int64,
 			OutputTokens:      outTok.Int64,
 		}
+		k := key{bucketSec, groupKey}
 		// Price at the rate card in effect for this bucket (ADR 0002
-		// Phase 2). An unpriced model contributes nothing; Summarize
-		// reports the gap as Unpriced.
+		// Phase 2). An unpriced model still contributes nothing to the
+		// total — failing the whole rollup over one missing rate card
+		// would take the figures that do work with it — but the events
+		// it could not price are now counted against the row's coverage
+		// instead of vanishing.
 		c, cerr := a.spend.ComputeAt(p, time.Unix(bucketSec, 0).UTC())
 		if cerr != nil {
+			gaps.add(k, events.Int64, unpricedReason(provider.String, model.String))
 			continue
 		}
-		k := key{bucketSec, groupKey}
 		cost[k] += c
 		fixed[k] += events.Int64
 	}
@@ -442,6 +486,8 @@ func (a *Aggregator) recomputeMissingCosts(ctx context.Context, f Filter, bucket
 		k := key{rows[i].BucketStart.Unix(), rows[i].GroupKey}
 		rows[i].CostUSD += cost[k]
 		rows[i].CostRecomputed += fixed[k]
+		missing, why := gaps.at(k)
+		rows[i].Cost = recomputedCostValue(rows[i], missing, why)
 	}
 	return nil
 }
