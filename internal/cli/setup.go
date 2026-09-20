@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 
 	"go.klarlabs.de/tokenops/internal/cli/detect"
@@ -69,6 +70,7 @@ func runSetup(out io.Writer, cfgPath string, target setupTarget) {
 	steps := wireMCPHosts(target.Home, target.Exe)
 	steps = append(steps, wireHooks(target.SettingsPath, target.Exe))
 	steps = append(steps, bindPlan(cfgPath))
+	steps = append(steps, ingestionStep(cfgPath))
 	steps = append(steps, daemonUnitStep(daemonUnitPath(target.Home)))
 	renderSetup(out, steps)
 }
@@ -309,4 +311,47 @@ func deliveryDetail(recommendation string) string {
 			") — `tokenops coach delivery intervene` to act on it"
 	}
 	return detail
+}
+
+// ingestionStep reports whether anything will actually be ingested.
+//
+// The installed-product end-to-end test found the gap this closes: init
+// writes storage, registers the MCP server and installs the Claude Code
+// hooks, and enables no ingestion source at all. A fresh install
+// therefore sees nothing, and until this step existed the wiring summary
+// did not mention it — the operator finished init, read a mostly-green
+// report and had a TokenOps that would never record a single event.
+//
+// That is the silent-success shape, sitting in the first command of the
+// journey.
+//
+// It asks rather than enabling one. Turning on a transcript reader means
+// TokenOps starts reading the operator's coding sessions from disk, and
+// that is their decision to make rather than a side effect of running
+// init — the same line already drawn around binding a plan and around
+// pointing a client at the local proxy.
+func ingestionStep(cfgPath string) setupStep {
+	const name = "ingestion source"
+	cfg, err := config.ReadMutable(cfgPath)
+	if err != nil {
+		return setupStep{Name: name, Err: err}
+	}
+
+	enabled := cfg.EnabledVendorUsageSources()
+	if len(enabled) == 0 {
+		return setupStep{
+			Name: name,
+			Detail: "nothing is enabled, so nothing will be ingested — " +
+				"run `tokenops vendor-usage enable claude-code-jsonl` " +
+				"(or `tokenops vendor-usage enable --help` for the other readers)",
+			Manual: true,
+		}
+	}
+
+	names := make([]string, 0, len(enabled))
+	for _, s := range enabled {
+		names = append(names, s.Name)
+	}
+	sort.Strings(names)
+	return setupStep{Name: name, Detail: "ingesting from " + strings.Join(names, ", ")}
 }
