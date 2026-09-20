@@ -1,6 +1,6 @@
 {
   "project_id": "tokenops",
-  "version": 300,
+  "version": 301,
   "task_states": {
     "analytics-aggregator": {
       "status": "done",
@@ -717,6 +717,11 @@
       "completed_at": "2026-05-09T21:46:13.447875+02:00",
       "elapsed_minutes": 685
     },
+    "task-ai-work-domain-model": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
     "task-anthropic-cookie-usage": {
       "status": "done",
       "path": "",
@@ -749,6 +754,11 @@
       "started_at": "2026-05-10T12:57:22.298377+02:00",
       "completed_at": "2026-05-10T12:58:41.157966+02:00",
       "elapsed_minutes": 1
+    },
+    "task-canonical-event-consolidation": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
     },
     "task-claudecode-jsonl-reader": {
       "status": "done",
@@ -814,6 +824,11 @@
       ],
       "started_at": "2026-05-10T12:29:43.907334+02:00",
       "completed_at": "2026-05-10T12:29:54.173448+02:00",
+      "elapsed_minutes": 0
+    },
+    "task-coaching-llm-auto-routing": {
+      "status": "pending",
+      "path": "",
       "elapsed_minutes": 0
     },
     "task-codex-jsonl-reader": {
@@ -904,6 +919,11 @@
       "completed_at": "2026-05-14T09:56:28.17774+02:00",
       "elapsed_minutes": 3
     },
+    "task-data-isolation-+-surface-polish": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
     "task-data-telemetry": {
       "status": "done",
       "path": "",
@@ -913,6 +933,16 @@
       ],
       "started_at": "2026-05-10T12:30:02.527983+02:00",
       "completed_at": "2026-05-10T12:30:09.740467+02:00",
+      "elapsed_minutes": 0
+    },
+    "task-first-run-activation-flow": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-fix-rulesfs-walker:-tolerate-permission-denied-+-skip-unreadable-subtrees": {
+      "status": "pending",
+      "path": "",
       "elapsed_minutes": 0
     },
     "task-forecasting-governance": {
@@ -992,6 +1022,11 @@
       "completed_at": "2026-08-25T10:15:07.572633+02:00",
       "elapsed_minutes": 1
     },
+    "task-installed-product-verification": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
     "task-integrations": {
       "status": "done",
       "path": "",
@@ -1001,6 +1036,21 @@
       ],
       "started_at": "2026-05-10T12:29:45.874633+02:00",
       "completed_at": "2026-05-10T12:29:54.2638+02:00",
+      "elapsed_minutes": 0
+    },
+    "task-intent-oriented-mcp-surface": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-interactive-mcp-ui-rendering": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-interface-independent-capabilities": {
+      "status": "pending",
+      "path": "",
       "elapsed_minutes": 0
     },
     "task-iso-data-source-ratio": {
@@ -1069,6 +1119,16 @@
       "completed_at": "2026-05-13T00:29:06.987385+02:00",
       "elapsed_minutes": 3
     },
+    "task-mcp-first-wedge:-session-budget-+-config-as-code": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-measurement-provenance": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
     "task-observability-platform": {
       "status": "done",
       "path": "",
@@ -1078,6 +1138,11 @@
       ],
       "started_at": "2026-05-10T12:29:21.839598+02:00",
       "completed_at": "2026-05-10T12:29:31.200926+02:00",
+      "elapsed_minutes": 0
+    },
+    "task-observation-freshness-as-health": {
+      "status": "pending",
+      "path": "",
       "elapsed_minutes": 0
     },
     "task-operator-golden-path-+-wedge-kpi": {
@@ -1201,6 +1266,16 @@
       "completed_at": "2026-05-12T22:52:14.966186+02:00",
       "elapsed_minutes": 1
     },
+    "task-plan-auto-detection": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-plan-based-cost-model": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
     "task-plan-catalog-mistral-codex": {
       "status": "done",
       "path": "",
@@ -1211,6 +1286,16 @@
       "started_at": "2026-05-14T09:44:45.791916+02:00",
       "completed_at": "2026-05-14T09:46:56.920214+02:00",
       "elapsed_minutes": 2
+    },
+    "task-privacy-and-secret-hardening": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
+    "task-rate-limit-window-headroom": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
     },
     "task-risk-based-test-coverage-uplift": {
       "status": "done",
@@ -1298,6 +1383,11 @@
       ],
       "started_at": "2026-05-11T22:36:54.490507+02:00",
       "completed_at": "2026-05-11T22:36:58.611431+02:00",
+      "elapsed_minutes": 0
+    },
+    "task-runtime-lifecycle-modules": {
+      "status": "pending",
+      "path": "",
       "elapsed_minutes": 0
     },
     "task-security-finding-signal-governance": {
@@ -1399,6 +1489,11 @@
       "completed_at": "2026-05-13T11:14:31.76587+02:00",
       "elapsed_minutes": 1
     },
+    "task-signal-quality-+-activation-honesty": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
+    },
     "task-telemetry-contract-and-lineage-control": {
       "status": "done",
       "path": "",
@@ -1464,6 +1559,11 @@
       "started_at": "2026-05-14T09:49:28.719096+02:00",
       "completed_at": "2026-05-14T09:51:55.660045+02:00",
       "elapsed_minutes": 2
+    },
+    "task-verification-and-experiment": {
+      "status": "pending",
+      "path": "",
+      "elapsed_minutes": 0
     },
     "task-wedge-changelog-and-readme": {
       "status": "done",
