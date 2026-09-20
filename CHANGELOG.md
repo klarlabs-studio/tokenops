@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.67.1 - 2026-09-20
+
+Three answers that were confidently wrong, found by testing 0.67.0 against
+real data rather than fixtures.
+
+### Fixed
+
+- **"Resets in 5h0m0s" was the window length, counted from whenever you
+  asked.** A rolling window opens with its first message, so a reset
+  nobody reported is now estimated from the first activity inside the
+  window and marked as an estimate. An idle window reports no reset at
+  all, and a reset Anthropic does report stays exact. (#331)
+- **A Codex plan was graded on Claude Code's transcripts.** Headroom for
+  `codex-plus` carried "Reads ~/.claude/projects" as its evidence, and its
+  confidence came from data that says nothing about Codex. Each provider
+  is graded by the sources that report on it; the proxy and MCP activity
+  count for all of them. (#331)
+- **Domain-event counts had no date.** The daemon replays its stored log
+  at startup, so its counts are lifetime totals: 274 budget alerts from a
+  budget deleted in June read as 274 happening now.
+  `tokenops_domain_events` now reports when each kind first and last
+  happened, and says to read that before treating a count as current.
+  (#331)
+
 ## 0.67.0 - 2026-09-19
 
 A full review of the MCP surface — the 41 tools an agent reaches TokenOps

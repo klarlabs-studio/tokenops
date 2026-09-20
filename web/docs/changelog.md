@@ -4,7 +4,24 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.67.0**.
+Current release: **v0.67.1**.
+
+## v0.67.1 — three answers that sounded certain
+
+Testing 0.67.0 against a real machine, rather than the fixtures a test
+suite agrees with, turned up three answers that were stated with more
+confidence than they had earned.
+
+The rate-limit window "resets in 5h0m0s" — which was simply the window's
+length, counted from the moment you asked, whether the window opened four
+hours ago or a minute ago. A Codex plan's headroom came with Claude Code's
+transcripts as its evidence, which say nothing about Codex. And the count
+of background events carried no date, so 274 budget alerts from a budget
+deleted in June looked like 274 alerts happening now.
+
+None of these was a crash or a wrong total. Each was a number that looked
+measured and was not, which is the harder kind to notice — and the kind
+this tool exists to stop other people from shipping.
 
 ## v0.67.0 — what your agent is told
 
