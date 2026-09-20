@@ -127,6 +127,7 @@ func (s *Store) AppendBatch(ctx context.Context, envs []*eventschema.Envelope) e
 			r.TraceID, r.SpanID, r.Source,
 			r.Provider, r.Model,
 			r.WorkflowID, r.AgentID, r.SessionID, r.UserID,
+			r.WorkID, r.ExecutionID, r.ActorID,
 			r.InputTokens, r.OutputTokens, r.TotalTokens, r.CostUSD,
 			r.Payload, r.Attributes,
 		); err != nil {
@@ -149,9 +150,15 @@ type Filter struct {
 	SessionID  string
 	Provider   string
 	Model      string
-	Since      time.Time
-	Until      time.Time
-	Limit      int
+	// Work, Execution and Actor filter on the ontology association.
+	// Filtering by execution is what makes two attempts at the same goal
+	// comparable, which every experiment needs.
+	Work      string
+	Execution string
+	Actor     string
+	Since     time.Time
+	Until     time.Time
+	Limit     int
 }
 
 const defaultQueryLimit = 1000
@@ -182,6 +189,18 @@ func (s *Store) Query(ctx context.Context, f Filter) ([]*eventschema.Envelope, e
 	if f.SessionID != "" {
 		conds = append(conds, "session_id = ?")
 		args = append(args, f.SessionID)
+	}
+	if f.Work != "" {
+		conds = append(conds, "work_id = ?")
+		args = append(args, f.Work)
+	}
+	if f.Execution != "" {
+		conds = append(conds, "execution_id = ?")
+		args = append(args, f.Execution)
+	}
+	if f.Actor != "" {
+		conds = append(conds, "actor_id = ?")
+		args = append(args, f.Actor)
 	}
 	if f.Provider != "" {
 		conds = append(conds, "provider = ?")
@@ -224,6 +243,7 @@ func (s *Store) Query(ctx context.Context, f Filter) ([]*eventschema.Envelope, e
 			&r.TraceID, &r.SpanID, &r.Source,
 			&r.Provider, &r.Model,
 			&r.WorkflowID, &r.AgentID, &r.SessionID, &r.UserID,
+			&r.WorkID, &r.ExecutionID, &r.ActorID,
 			&r.InputTokens, &r.OutputTokens, &r.TotalTokens, &r.CostUSD,
 			&r.Payload, &r.Attributes,
 		); err != nil {
@@ -298,9 +318,10 @@ INSERT INTO events (
     trace_id, span_id, source,
     provider, model,
     workflow_id, agent_id, session_id, user_id,
+    work_id, execution_id, actor_id,
     input_tokens, output_tokens, total_tokens, cost_usd,
     payload, attributes
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO NOTHING
 `
 
@@ -310,6 +331,7 @@ SELECT
     trace_id, span_id, source,
     provider, model,
     workflow_id, agent_id, session_id, user_id,
+    work_id, execution_id, actor_id,
     input_tokens, output_tokens, total_tokens, cost_usd,
     payload, attributes
 FROM events

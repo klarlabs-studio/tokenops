@@ -172,6 +172,7 @@ func (r *observerRequestMeter) Done(_ int64) {
 		Type:          eventschema.EventTypePrompt,
 		Timestamp:     r.obs.Start.UTC(),
 		Source:        r.m.source,
+		Association:   associationFor(r.obs),
 		Payload: &eventschema.PromptEvent{
 			PromptHash:       r.obs.PromptHash,
 			Provider:         r.obs.Provider,
@@ -287,4 +288,23 @@ func (s *Server) observerMiddleware(provider providers.Provider, next http.Handl
 		ctx := context.WithValue(r.Context(), observationKey{}, obs)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// associationFor ties an emitted event to the work ontology.
+//
+// The proxy learns who is working from the session header and nothing
+// else: it sees a request, not a goal. `session:<id>` is exactly the
+// actor form the task-ledger adapter produces, so events and
+// reconstructed work name the same actor without a translation table
+// between them.
+//
+// Work and Execution are deliberately left empty. Inventing them here
+// would attribute every request to a goal nobody stated, which is the
+// class of confident fiction the ontology exists to avoid — an
+// unassociated event is an honest gap, and gaps are fillable.
+func associationFor(obs *requestObservation) eventschema.Association {
+	if obs == nil || obs.SessionID == "" {
+		return eventschema.Association{}
+	}
+	return eventschema.Association{Actor: "session:" + obs.SessionID}
 }

@@ -58,6 +58,29 @@ CREATE INDEX audit_log_action_idx    ON audit_log (action, timestamp_ns);
 CREATE INDEX audit_log_actor_idx     ON audit_log (actor, timestamp_ns);
 `,
 	},
+	{
+		Version: 3,
+		Name:    "event_work_association",
+		SQL: `
+-- Ties an event to the work ontology introduced in ADR 0004 Phase 3.
+--
+-- The existing workflow_id / agent_id / session_id columns are
+-- attribution invented before that ontology, and none of them says which
+-- attempt at which goal produced the event. They stay: every existing
+-- query uses them. These are added beside them.
+--
+-- Columns rather than a JSON field in the payload because rolling an
+-- attempt's consumption up to the goal it served has to be a query, not
+-- a scan of every row.
+ALTER TABLE events ADD COLUMN work_id      TEXT;
+ALTER TABLE events ADD COLUMN execution_id TEXT;
+ALTER TABLE events ADD COLUMN actor_id     TEXT;
+
+CREATE INDEX events_work_idx      ON events (work_id, timestamp_ns)      WHERE work_id      IS NOT NULL;
+CREATE INDEX events_execution_idx ON events (execution_id, timestamp_ns) WHERE execution_id IS NOT NULL;
+CREATE INDEX events_actor_idx     ON events (actor_id, timestamp_ns)     WHERE actor_id     IS NOT NULL;
+`,
+	},
 }
 
 type migration struct {

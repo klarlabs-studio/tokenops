@@ -61,6 +61,13 @@ func echoUpstream(t *testing.T) *httptest.Server {
 
 func postChat(t *testing.T, base string) {
 	t.Helper()
+	postChatAs(t, base, "")
+}
+
+// postChatAs sends a request carrying a session id, the way a wrapped
+// agent identifies itself.
+func postChatAs(t *testing.T, base, session string) {
+	t.Helper()
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost,
 		base+"/openai/v1/chat/completions",
 		strings.NewReader(`{"model":"gpt-4o","messages":[{"role":"user","content":"hello world"}]}`))
@@ -68,6 +75,9 @@ func postChat(t *testing.T, base string) {
 		t.Fatalf("request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if session != "" {
+		req.Header.Set(headerSessionID, session)
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("post: %v", err)

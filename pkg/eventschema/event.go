@@ -55,6 +55,35 @@ const (
 	ProviderVercel   Provider = "vercel"
 )
 
+// Association ties an event to the work it was part of.
+//
+// The envelope already carried WorkflowID, AgentID, SessionID and
+// UserID — attribution invented before the ontology existed, and none of
+// it says which *attempt* at which *goal* produced the event. So the
+// Work, Execution and Actor introduced in Phase 3 had nothing to attach
+// to, and no event could be rolled up to a goal a person would
+// recognise.
+//
+// Every field is optional and they are filled in independently. The
+// proxy may know the actor from a request header long before anything
+// knows the goal; requiring all three would mean discarding the part
+// that is known. The older attribution fields stay where they are —
+// they are what every existing query uses — and this is added beside
+// them rather than replacing them.
+type Association struct {
+	// Work is the goal this event was in service of.
+	Work string `json:"work,omitempty"`
+	// Execution is the attempt at that goal.
+	Execution string `json:"execution,omitempty"`
+	// Actor is who or what was working.
+	Actor string `json:"actor,omitempty"`
+}
+
+// Empty reports whether nothing is associated.
+func (a Association) Empty() bool {
+	return a.Work == "" && a.Execution == "" && a.Actor == ""
+}
+
 // Envelope is the common header carried by every TokenOps event regardless of
 // payload type. The Payload field carries the type-specific body.
 type Envelope struct {
@@ -75,10 +104,24 @@ type Envelope struct {
 	// Attributes carries additional OpenTelemetry-style key/value attributes
 	// that do not fit the typed payload (e.g. tenant tags, deployment labels).
 	Attributes map[string]string `json:"attributes,omitempty"`
+	// Association ties this event to the work, attempt and actor it
+	// belongs to. Empty on every event written before the ontology
+	// existed, and on most live traffic until something reconstructs
+	// work from it — which is a gap to be filled, not a default to be
+	// invented.
+	Association Association `json:"association,omitzero"`
 	// Payload is one of *PromptEvent, *WorkflowEvent, *OptimizationEvent,
 	// *CoachingEvent. The concrete type is determined by Type.
 	Payload Payload `json:"payload"`
 }
+
+// Associated reports whether this event is tied to any part of the work
+// ontology.
+//
+// False is the honest answer for most events today and must stay
+// distinguishable from an association to an empty work: "we do not know
+// what this was for" and "this was for nothing" are different claims.
+func (e Envelope) Associated() bool { return !e.Association.Empty() }
 
 // Payload is the interface satisfied by all typed event payloads. The Type
 // method returns the EventType discriminator that identifies the concrete
