@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -24,6 +25,11 @@ const SourceTag = "claude-usage-meter"
 
 // PollerOptions configures the periodic /usage poll.
 type PollerOptions struct {
+	// Health, when set, receives this poller's own success/failure
+	// record. It is what lets a status surface tell a reader being
+	// refused apart from a vendor nobody is using — both produce no
+	// events. nil disables the reporting.
+	Health     *freshness.Recorder
 	SessionKey string
 	OrgID      string        // empty → resolved via /api/organizations on first scan
 	Interval   time.Duration // defaults 5 minutes
@@ -280,6 +286,7 @@ func attrsKey(attrs map[string]string) string {
 }
 
 func (p *Poller) recordErr(err error) {
+	p.opts.Health.Failed(err, time.Now())
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.lastErr = err
@@ -287,6 +294,7 @@ func (p *Poller) recordErr(err error) {
 }
 
 func (p *Poller) recordSuccess() {
+	p.opts.Health.Succeeded(time.Now())
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.lastErr = nil

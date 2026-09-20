@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -20,6 +21,11 @@ const SourceTag = "github-copilot"
 
 // PollerOptions configures the periodic call to /copilot_internal/user.
 type PollerOptions struct {
+	// Health, when set, receives this poller's own success/failure
+	// record. It is what lets a status surface tell a reader being
+	// refused apart from a vendor nobody is using — both produce no
+	// events. nil disables the reporting.
+	Health *freshness.Recorder
 	// OAuthToken can be set explicitly (env / config); empty means
 	// "load from disk via TokenPaths".
 	OAuthToken string
@@ -170,6 +176,7 @@ func (p *Poller) scan(ctx context.Context) {
 }
 
 func (p *Poller) recordErr(err error) {
+	p.opts.Health.Failed(err, time.Now())
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.lastErr = err
@@ -177,6 +184,7 @@ func (p *Poller) recordErr(err error) {
 }
 
 func (p *Poller) recordSuccess() {
+	p.opts.Health.Succeeded(time.Now())
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.lastErr = nil

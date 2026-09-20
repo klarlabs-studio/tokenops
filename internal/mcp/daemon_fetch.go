@@ -2,11 +2,13 @@ package mcp
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/infra/daemonhint"
 )
 
@@ -85,4 +87,34 @@ func getDaemonJSON(baseURL, path string, out any) error {
 		return fmt.Errorf("%s answered %d", path, resp.StatusCode)
 	}
 	return json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(out)
+}
+
+// DaemonSources is what the daemon's /api/sources answered: one report
+// per configured ingestion source, healthy ones included.
+type DaemonSources struct {
+	Sources   []freshness.Report `json:"sources"`
+	Unhealthy int                `json:"unhealthy"`
+}
+
+// errDaemonUnreachable marks a freshness read that failed because no
+// daemon answered, as opposed to one that answered with nothing.
+var errDaemonUnreachable = errors.New("mcp: ingestion daemon did not answer /api/sources")
+
+// FetchDaemonSources reads per-source ingestion health from the daemon.
+//
+// It has to come from there. The daemon is the only process that holds
+// all three facts at once — what was ingested, what each origin holds,
+// and whether each reader is still succeeding — because it owns the
+// store and constructs the pollers. `tokenops serve` is a different
+// process and can see none of the last two.
+//
+// A daemon too old to serve the route answers 404, which surfaces as an
+// error and leaves the caller with counts alone: the behaviour before
+// this existed.
+func FetchDaemonSources(baseURL string) (DaemonSources, error) {
+	var out DaemonSources
+	if err := getDaemonJSON(baseURL, "/api/sources", &out); err != nil {
+		return DaemonSources{}, fmt.Errorf("%w: %w", errDaemonUnreachable, err)
+	}
+	return out, nil
 }

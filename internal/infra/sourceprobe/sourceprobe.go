@@ -1,4 +1,10 @@
-package cli
+// Package sourceprobe reads how fresh an ingestion source's ORIGIN is —
+// the newest transcript on disk, the newest row in a client's own store.
+//
+// It lives here rather than in internal/cli because both the CLI status
+// command and the ingestion daemon need the same answer, and the CLI
+// imports the daemon, so the daemon cannot import back.
+package sourceprobe
 
 import (
 	"context"
@@ -17,15 +23,14 @@ import (
 	_ "modernc.org/sqlite" // pure-Go driver registered as "sqlite"
 )
 
-// sourceProbes builds the origin probes for the readers whose source of
-// truth is on this machine.
-//
 // Only the local-transcript readers get one. A remote poller — the
 // claude.ai cookie, the Admin API, the Copilot quota endpoint — has no
 // cheap local origin to compare against, and one that is enabled and has
 // ingested nothing genuinely is broken, because the vendor endpoint always
 // has an answer. Their time-based warning is correct and is left alone.
-func sourceProbes(cfg config.Config) map[string]config.SourceProbe {
+// All builds the origin probes for the readers whose source of truth is
+// on this machine.
+func All(cfg config.Config) map[string]config.SourceProbe {
 	out := map[string]config.SourceProbe{}
 	if cfg.VendorUsage.CodexJSONL.Enabled {
 		root := cfg.VendorUsage.CodexJSONL.Root

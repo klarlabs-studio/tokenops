@@ -20,6 +20,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/daemon"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
+	"go.klarlabs.de/tokenops/internal/infra/sourceprobe"
 	"go.klarlabs.de/tokenops/internal/mcp"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
@@ -238,7 +239,14 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if err := mcp.RegisterHelpTool(srv); err != nil {
 		return fmt.Errorf("register help tool: %w", err)
 	}
-	if err := mcp.RegisterDataSourcesTool(srv, mcp.DataSourcesDeps{Store: components.Store}); err != nil {
+	// Freshness comes from the daemon, not from here: serve does not
+	// ingest, so it cannot know whether a reader is still succeeding.
+	// An unreachable daemon leaves the tool answering with counts alone.
+	sources := func() (mcp.DaemonSources, error) { return mcp.FetchDaemonSources(daemonURL) }
+	if err := mcp.RegisterDataSourcesTool(srv, mcp.DataSourcesDeps{
+		Store:   components.Store,
+		Sources: sources,
+	}); err != nil {
 		return fmt.Errorf("register data sources tool: %w", err)
 	}
 	if err := mcp.RegisterDashboardTool(srv, mcp.DashboardDeps{
@@ -327,7 +335,7 @@ func staleSourcesCheck(ctx context.Context, counter config.SourceCounter, curren
 		if cfg == nil {
 			return nil
 		}
-		stale, err := cfg.CheckStaleIngestion(ctx, counter, sourceProbes(*cfg), config.StaleIngestionWindow, time.Now())
+		stale, err := cfg.CheckStaleIngestion(ctx, counter, sourceprobe.All(*cfg), config.StaleIngestionWindow, time.Now())
 		if err != nil {
 			return nil
 		}

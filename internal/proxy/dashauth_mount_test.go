@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 )
 
 // denyAll stands in for the dashboard authenticator. The real one accepts a
@@ -47,6 +49,7 @@ func TestEveryAPIRouteIsGatedByDashAuth(t *testing.T) {
 		WithRules(&RulesHandlers{}),
 		WithAudit(&AuditHandlers{}),
 		WithEventCounts(func() map[string]int64 { return map[string]int64{"k": 1} }),
+		WithSourceFreshness(func() []freshness.Report { return nil }),
 	)
 	if err := srv.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -65,6 +68,7 @@ func TestEveryAPIRouteIsGatedByDashAuth(t *testing.T) {
 		"/api/rules/compress",
 		"/api/rules/inject",
 		"/api/domain-events",
+		"/api/sources",
 	} {
 		resp, err := http.Get("http://" + srv.Addr() + path)
 		if err != nil {

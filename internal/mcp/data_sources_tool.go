@@ -5,6 +5,8 @@ import (
 	"errors"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -13,6 +15,32 @@ import (
 // the count reflects exactly what the rollups see.
 type DataSourcesDeps struct {
 	Store *sqlite.Store
+	// Sources reads per-source ingestion health from the daemon. nil, or
+	// a daemon that does not answer, leaves the result at counts alone —
+	// which is what this tool returned before freshness existed.
+	Sources func() (DaemonSources, error)
+}
+
+// freshness asks the daemon how each source is doing.
+//
+// The assessment is passed through rather than re-derived here. The
+// daemon is the only process that holds all three facts — what was
+// ingested, what each origin holds, and whether each reader is still
+// succeeding — and two surfaces computing "healthy" separately is how
+// they come to disagree in front of an operator.
+//
+// A daemon that is not running is the normal case for an MCP server
+// started on its own, so its absence degrades the answer instead of
+// failing it.
+func (d DataSourcesDeps) freshness(context.Context) []freshness.Report {
+	if d.Sources == nil {
+		return nil
+	}
+	got, err := d.Sources()
+	if err != nil {
+		return nil
+	}
+	return got.Sources
 }
 
 type dataSourcesInput struct {
@@ -32,8 +60,19 @@ type dataSourcesWindow struct {
 type dataSourcesResult struct {
 	Counts map[string]int64   `json:"counts,omitempty"`
 	Window *dataSourcesWindow `json:"window,omitempty"`
-	Error  string             `json:"error,omitempty"`
-	Hint   string             `json:"hint,omitempty"`
+	// Sources is per-source ingestion health, when the ingestion daemon
+	// could be reached. Counts alone cannot answer the question an agent
+	// actually has: a source showing 0 events is either a vendor the
+	// operator stopped using or a reader that has been refused for days,
+	// and those have opposite remedies.
+	Sources []freshness.Report `json:"sources,omitempty"`
+	// Unhealthy is how many of them need attention.
+	Unhealthy int `json:"unhealthy,omitempty"`
+	// FreshnessUnavailable says why Sources is empty, so its absence is
+	// not read as "every source is fine".
+	FreshnessUnavailable string `json:"freshness_unavailable,omitempty"`
+	Error                string `json:"error,omitempty"`
+	Hint                 string `json:"hint,omitempty"`
 }
 
 // RegisterDataSourcesTool mounts tokenops_data_sources on s. The tool
@@ -44,7 +83,7 @@ func RegisterDataSourcesTool(s *Server, d DataSourcesDeps) error {
 		return errors.New("mcp: server must not be nil")
 	}
 	s.Tool("tokenops_data_sources").
-		Description("Return event counts grouped by source (proxy, mcp-session, demo, otlp, ...). Operators inspect this to confirm headroom and spend math are running on real data instead of leftover `tokenops demo` seeds.").
+		Description("Return event counts grouped by source (proxy, mcp-session, demo, otlp, ...) plus per-source ingestion health: when each source was last seen, when its reader last polled successfully, and what it last failed with. Operators inspect this to confirm headroom and spend math are running on real data, and to tell a vendor they stopped using apart from a reader that has silently died.").
 		OutputSchema(dataSourcesResult{}).
 		Handler(func(ctx context.Context, in dataSourcesInput) (*dataSourcesResult, error) {
 			if d.Store == nil {
@@ -61,13 +100,23 @@ func RegisterDataSourcesTool(s *Server, d DataSourcesDeps) error {
 			if err != nil {
 				return nil, err
 			}
-			return &dataSourcesResult{
+			res := &dataSourcesResult{
 				Counts: counts,
 				Window: &dataSourcesWindow{
 					Since: fmtTimeOrEmpty(since),
 					Until: fmtTimeOrEmpty(until),
 				},
-			}, nil
+			}
+			res.Sources = d.freshness(ctx)
+			if res.Sources == nil {
+				res.FreshnessUnavailable = "the ingestion daemon did not answer; counts are from the local store and say nothing about whether each reader is still working (" + config.DaemonRunRemedy + ")"
+			}
+			for _, r := range res.Sources {
+				if !r.Healthy() {
+					res.Unhealthy++
+				}
+			}
+			return res, nil
 		})
 	return nil
 }
