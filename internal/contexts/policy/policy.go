@@ -198,3 +198,33 @@ func FromRoutingApproval(gated bool) Authority {
 	}
 	return Automatic
 }
+
+// FromSmartRoutingIntervention maps smart_routing.intervention onto the
+// ladder.
+//
+// This is a fifth ladder with a fourth vocabulary, and the audit that
+// produced ADR 0004 counted four. It is the only one whose default is
+// not the bottom rung: the config documents an empty value as "advise",
+// so a machine that enabled smart routing without naming an
+// intervention already has a subsystem speaking unprompted.
+//
+// "delegate" maps to RequireApproval rather than Automatic. It marks
+// work that *may* be handed to a subagent on a cheaper model — a
+// proposal awaiting a decision, not an action taken. Reporting it as
+// automatic would claim more authority than the operator granted, and
+// overstating authority is the direction that matters: an operator who
+// believes TokenOps is acting will look for effects that are not there,
+// and one who believes it is not will be surprised by effects that are.
+func FromSmartRoutingIntervention(intervention string) Authority {
+	switch strings.ToLower(strings.TrimSpace(intervention)) {
+	case "", "advise":
+		return Recommend
+	case "delegate":
+		return RequireApproval
+	case "auto":
+		return Automatic
+	default:
+		// "off" and anything unreadable.
+		return ObserveOnly
+	}
+}

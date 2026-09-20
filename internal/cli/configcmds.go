@@ -2,11 +2,13 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/authority"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/routingapproval"
 )
@@ -47,12 +49,8 @@ running.`,
 			}
 			out := cmd.OutOrStdout()
 			if len(args) == 0 {
-				current := cfg.Mode
-				if current == "" {
-					current = config.ModePassive
-				}
-				fmt.Fprintf(out, "mode: %s\n", strings.ToLower(current))
-				fmt.Fprintf(out, "  budgets:       %d\n", len(cfg.Budgets))
+				printAuthority(out, cfg)
+				fmt.Fprintf(out, "\n  budgets:       %d\n", len(cfg.Budgets))
 				fmt.Fprintf(out, "  routing rules: %d\n", len(cfg.Optimizer.RoutingRules))
 				return nil
 			}
@@ -401,4 +399,37 @@ func newRoutingRuleUnsetCmd() *cobra.Command {
 	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
+}
+
+// printAuthority answers "what can TokenOps do without me".
+//
+// The command used to print the daemon's rung and a count of budgets and
+// routing rules — which answers "which of the five settings did I last
+// touch". The other four, written in three other vocabularies, were
+// nowhere, and one of them is in no config file at all.
+func printAuthority(out io.Writer, cfg config.Config) {
+	a := authority.Report(cfg)
+
+	headline := "observes and advises; changes nothing without asking"
+	if a.AnythingActs() {
+		headline = "may act without asking — see the table below"
+	}
+	mode := cfg.Mode
+	if mode == "" {
+		mode = config.ModePassive
+	}
+	fmt.Fprintf(out, "mode: %s (%s) — %s\n\n", strings.ToLower(mode), a.Daemon, headline)
+
+	fmt.Fprintf(out, "  %-18s %-16s %-16s %s\n", "SUBSYSTEM", "CONFIGURED", "EFFECTIVE", "SETTING")
+	for _, s := range a.Subsystems {
+		note := ""
+		if s.HeldBack() {
+			// Naming this is the point. An operator who cannot see that
+			// the coach is set to intervene and is merely capped will be
+			// surprised the moment they turn the daemon up.
+			note = "  (held back by mode)"
+		}
+		fmt.Fprintf(out, "  %-18s %-16s %-16s %s%s\n",
+			s.Name, s.Configured, s.Effective, s.Setting, note)
+	}
 }
