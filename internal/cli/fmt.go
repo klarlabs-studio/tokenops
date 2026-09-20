@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter"
+	"go.klarlabs.de/tokenops/internal/contexts/security/redaction"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -355,9 +357,55 @@ func recoveryID(path string) string {
 	return strings.TrimSuffix(base, filepath.Ext(base))
 }
 
+// recoveryMaxAge is how long a recovery file is kept. Long enough that
+// "what did that command actually say?" is still answerable days later,
+// short enough that a machine running fmt from a shell hook does not
+// accumulate every command it ever ran.
+const recoveryMaxAge = 14 * 24 * time.Hour
+
+// recoveryFilePerm and recoveryDirPerm keep the store readable only by
+// the operator. These files hold the unfiltered stdout and stderr of
+// arbitrary commands, which is the broadest capture surface in TokenOps:
+// whatever a wrapped command printed is in here verbatim.
+const (
+	recoveryFilePerm os.FileMode = 0o600
+	recoveryDirPerm  os.FileMode = 0o700
+)
+
+// recoveryRedactor strips credentials from captured output.
+//
+// It runs the pattern rules only — no entropy fallback, no email rule.
+// Recovery exists so an operator can read back exactly what a command
+// said, and the entropy detector flags any random-looking 20-character
+// token, which in build and test output is usually a hash or an id. A
+// recovery file full of `<redacted:high_entropy>` would not be worth
+// keeping. Known credential shapes are what must never rest on disk;
+// the 0600 mode and the prune above cover the rest.
+var recoveryRedactor = redaction.New(redaction.Config{
+	Rules: secretRulesOnly(),
+})
+
+// secretRulesOnly is DefaultRules minus the email rule — the operator's
+// own address in their own `git log` is not the exposure this guards.
+func secretRulesOnly() []redaction.Rule {
+	all := redaction.DefaultRules()
+	kept := make([]redaction.Rule, 0, len(all))
+	for _, r := range all {
+		if r.Kind == redaction.KindEmail {
+			continue
+		}
+		kept = append(kept, r)
+	}
+	return kept
+}
+
 // writeRecovery persists the full raw output to a recovery file and returns
 // its path. The file name embeds a short content hash so re-runs of the
 // same command output are idempotent and easy to correlate.
+//
+// Credentials are stripped before the write: a wrapped command that prints
+// a key (`printenv`, a verbose curl, a failing deploy script) would
+// otherwise leave it in a file nothing ever deletes.
 func writeRecovery(dir string, argv []string, stdout, stderr []byte, exitCode int) (string, error) {
 	if dir == "" {
 		home, err := os.UserHomeDir()
@@ -366,31 +414,87 @@ func writeRecovery(dir string, argv []string, stdout, stderr []byte, exitCode in
 		}
 		dir = filepath.Join(home, ".tokenops", "recovery")
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, recoveryDirPerm); err != nil {
 		return "", err
 	}
+	// MkdirAll leaves an existing directory's mode alone, and stores
+	// created before this change are 0755. Tighten on every write so an
+	// upgrade fixes the installation rather than only new machines.
+	if err := os.Chmod(dir, recoveryDirPerm); err != nil {
+		return "", err
+	}
+	pruneRecovery(dir, time.Now())
+
 	sum := sha256.Sum256(append(append([]byte(strings.Join(argv, " ")), stdout...), stderr...))
 	name := fmt.Sprintf("%s-%x.out", time.Now().UTC().Format("20060102T150405"), sum[:6])
 	path := filepath.Join(dir, name)
 
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "# tokenops fmt recovery\n# command: %s\n# exit: %d\n# saved: %s\n\n",
-		strings.Join(argv, " "), exitCode, time.Now().UTC().Format(time.RFC3339))
+		redactRecovery(strings.Join(argv, " ")), exitCode, time.Now().UTC().Format(time.RFC3339))
 	if len(stdout) > 0 {
 		b.WriteString("## stdout\n")
-		b.Write(stdout)
+		b.WriteString(redactRecovery(string(stdout)))
 		b.WriteByte('\n')
 	}
 	if len(stderr) > 0 {
 		b.WriteString("## stderr\n")
-		b.Write(stderr)
+		b.WriteString(redactRecovery(string(stderr)))
 		b.WriteByte('\n')
 	}
-	if err := os.WriteFile(path, b.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(path, b.Bytes(), recoveryFilePerm); err != nil {
 		return "", err
 	}
 	return path, nil
 }
+
+// redactRecovery replaces credential shapes with typed placeholders.
+func redactRecovery(s string) string {
+	out, _ := recoveryRedactor.Redact(s)
+	return out
+}
+
+// pruneRecovery deletes recovery files older than recoveryMaxAge and
+// tightens the mode of the ones it keeps.
+//
+// It is best-effort by design: it runs on the write path, and losing the
+// output TokenOps was asked to preserve in order to tidy up would invert
+// the point of the store. Every error is dropped, including an
+// unreadable directory.
+//
+// Only files matching the name this package writes are considered. The
+// recovery directory is the operator's, and deleting something TokenOps
+// did not put there would be a worse bug than keeping a stale file.
+func pruneRecovery(dir string, now time.Time) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	cutoff := now.Add(-recoveryMaxAge)
+	for _, e := range entries {
+		if e.IsDir() || !isRecoveryName(e.Name()) {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		path := filepath.Join(dir, e.Name())
+		if info.ModTime().Before(cutoff) {
+			_ = os.Remove(path)
+			continue
+		}
+		if info.Mode().Perm() != recoveryFilePerm {
+			_ = os.Chmod(path, recoveryFilePerm)
+		}
+	}
+}
+
+// recoveryNamePattern matches the names writeRecovery produces:
+// <RFC3339-ish timestamp>-<12 hex chars>.out
+var recoveryNamePattern = regexp.MustCompile(`^\d{8}T\d{6}-[0-9a-f]{12}\.out$`)
+
+func isRecoveryName(name string) bool { return recoveryNamePattern.MatchString(name) }
 
 // printFmtStats writes the savings/recovery summary to stderr so it never
 // contaminates the compacted stdout an agent parses.

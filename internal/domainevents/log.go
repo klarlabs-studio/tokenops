@@ -37,6 +37,29 @@ type JSONLog struct {
 	maxBackups int
 }
 
+// logPerm keeps the log readable only by its owner. Every domain event's
+// payload lands here — spend figures, model names, rule sources, command
+// names — beside an event database SECURITY.md already treats as local
+// telemetry. It was the only file of the pair any local account could
+// read.
+const logPerm os.FileMode = 0o600
+
+// openLog opens path for append at logPerm, repairing the mode of a file
+// that already exists. Logs written before this change are on disk at
+// 0644, so opening has to tighten what it finds rather than only what it
+// creates.
+func openLog(path string) (*os.File, error) {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, logPerm)
+	if err != nil {
+		return nil, err
+	}
+	if err := f.Chmod(logPerm); err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	return f, nil
+}
+
 // NewJSONLog opens (or creates) the log at path in append mode with
 // default rotation (10 MiB, 3 backups).
 func NewJSONLog(path string) (*JSONLog, error) {
@@ -50,7 +73,7 @@ func NewJSONLogWithRotation(path string, maxBytes int64, maxBackups int) (*JSONL
 	if path == "" {
 		return nil, errors.New("domainevents: JSONLog requires a path")
 	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := openLog(path)
 	if err != nil {
 		return nil, fmt.Errorf("domainevents: open log %s: %w", path, err)
 	}
@@ -78,7 +101,7 @@ func (l *JSONLog) rotate() error {
 	if err := os.Rename(l.path, l.path+".1"); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	f, err := os.OpenFile(l.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := openLog(l.path)
 	if err != nil {
 		return err
 	}

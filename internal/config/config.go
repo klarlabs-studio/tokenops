@@ -1202,6 +1202,7 @@ func NextActionsFor(blockers []string) []string {
 }
 
 func applyEnvOverrides(cfg *Config) {
+	applyCredentialEnv(cfg)
 	if v := os.Getenv("TOKENOPS_LISTEN"); v != "" {
 		cfg.Listen = v
 	}

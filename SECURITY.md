@@ -50,9 +50,30 @@ and assumes the host is trusted. Notable surfaces:
   LAN. Operators binding beyond loopback should rotate the dashboard token
   (`tokenops dashboard rotate-token`) before sharing the host.
 - **Vendor admin credentials** (v0.10.2+). `vendor_usage.anthropic.admin_key`
-  carries a `sk-ant-admin-*` key. Stored in plain text in `config.yaml`;
-  protect the config file with filesystem permissions or environment
-  substitution.
+  carries a `sk-ant-admin-*` key, and four other fields carry vendor
+  session credentials. When written to `config.yaml` they are stored in
+  plain text; the file and its directory are kept at `0600`/`0700`, and
+  since 0.70.0 every write repairs the mode of a file it finds rather than
+  only the ones it creates.
+
+  To keep a credential out of the file entirely, set it in the
+  environment. These win over the file and are never written back:
+
+  | Variable | Credential |
+  |----------|------------|
+  | `TOKENOPS_DASHBOARD_ADMIN_TOKEN` | dashboard admin token |
+  | `TOKENOPS_ANTHROPIC_ADMIN_KEY` | Anthropic admin key (`sk-ant-admin-*`) |
+  | `TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY` | claude.ai session cookie |
+  | `TOKENOPS_CURSOR_COOKIE` | cursor.com session cookie |
+  | `TOKENOPS_COPILOT_OAUTH_TOKEN` | GitHub Copilot OAuth token |
+
+  **Correction (0.70.0).** Before 0.70.0 this entry advised "environment
+  substitution", which no code implemented: `config.Load` expanded no
+  `${VAR}`, and its environment overrides covered listen addresses and
+  endpoints but not one credential. The variables above are the promise,
+  made real. Note that `tokenops vendor-usage enable` reads similarly
+  named variables and *persists* what it finds into `config.yaml`; the
+  daemon-side reads above do not.
 - **Event store** (`~/.tokenops/events.db`). SQLite, no encryption at rest.
   Contains prompt hashes (not raw prompts) by default, plus token counts,
   model names, and timestamps. Treat as you would any other local telemetry

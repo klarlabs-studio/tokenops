@@ -190,3 +190,76 @@ func TestReplayMissingPathOK(t *testing.T) {
 		t.Errorf("missing path should be ok: %v", err)
 	}
 }
+
+// domain-events.jsonl carries every domain event's payload — spend
+// figures, model names, rule sources, command names. It sits next to the
+// event database, which SECURITY.md already says to treat as local
+// telemetry, and it was the only file of the pair any local account could
+// read.
+func TestJSONLogIsNotWorldReadable(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "domain-events.jsonl")
+	l, err := NewJSONLog(path)
+	if err != nil {
+		t.Fatalf("NewJSONLog: %v", err)
+	}
+	defer func() { _ = l.Close() }()
+
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if perm := fi.Mode().Perm(); perm != 0o600 {
+		t.Errorf("log mode = %#o, want 0600", perm)
+	}
+}
+
+// A log written by an earlier version is on disk at 0644 already.
+// Opening it has to repair the mode, or the fix only reaches machines
+// that never ran an older build.
+func TestJSONLogTightensAnExistingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "domain-events.jsonl")
+	if err := os.WriteFile(path, []byte(`{"kind":"x"}`+"\n"), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	l, err := NewJSONLog(path)
+	if err != nil {
+		t.Fatalf("NewJSONLog: %v", err)
+	}
+	defer func() { _ = l.Close() }()
+
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if perm := fi.Mode().Perm(); perm != 0o600 {
+		t.Errorf("mode after open = %#o, want 0600", perm)
+	}
+}
+
+// Rotation opens a fresh file. It must not reintroduce the loose mode
+// the rest of this change removes.
+func TestRotatedLogKeepsPrivateMode(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "events.jsonl")
+	l, err := NewJSONLogWithRotation(path, 1, 2)
+	if err != nil {
+		t.Fatalf("NewJSONLogWithRotation: %v", err)
+	}
+	defer func() { _ = l.Close() }()
+
+	bus := &Bus{}
+	l.Attach(bus, nil)
+	bus.Publish(WorkflowStarted{WorkflowID: "first", At: time.Now().UTC()})
+	bus.Publish(WorkflowStarted{WorkflowID: "second", At: time.Now().UTC()})
+
+	for _, name := range []string{"events.jsonl", "events.jsonl.1"} {
+		fi, err := os.Stat(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatalf("stat %s: %v", name, err)
+		}
+		if perm := fi.Mode().Perm(); perm != 0o600 {
+			t.Errorf("%s mode = %#o, want 0600", name, perm)
+		}
+	}
+}

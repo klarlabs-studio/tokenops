@@ -30,18 +30,39 @@ func Path(recoverDir string) (string, error) {
 	return filepath.Join(recoverDir, "index.jsonl"), nil
 }
 
+// Perms the index is kept at. The index records which commands ran and
+// which of their output was fetched back, so it is a log of the
+// operator's shell activity and belongs to them alone. It shares a
+// directory with the recovery files, which hold the output itself.
+const (
+	filePerm os.FileMode = 0o600
+	dirPerm  os.FileMode = 0o700
+)
+
 // Append writes one record to the index, creating the directory and file as
 // needed.
+//
+// It tightens the mode of a directory or index it finds rather than only
+// the ones it creates: both were 0755/0644 before this, so an upgrade has
+// to repair the store it inherits.
 func Append(recoverDir string, rec fmtlearn.Record) error {
 	path, err := Path(recoverDir)
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, dirPerm); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err := os.Chmod(dir, dirPerm); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, filePerm)
 	if err != nil {
+		return err
+	}
+	if err := f.Chmod(filePerm); err != nil {
+		_ = f.Close()
 		return err
 	}
 	defer func() { _ = f.Close() }()
