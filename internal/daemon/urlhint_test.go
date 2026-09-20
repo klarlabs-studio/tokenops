@@ -124,3 +124,31 @@ func TestRemoveURLHintRemovesOwnHint(t *testing.T) {
 		t.Errorf("own hint should be gone; stat err: %v", err)
 	}
 }
+
+// The hint file is 0600 because it carries the dashboard token, and the
+// comment there says so. Its directory was created 0755, while
+// `tokenops init` creates the storage directory beside it at 0700 — two
+// paths disagreeing about the mode of the same data directory.
+//
+// The token is not exposed by this: the file's own mode holds. But a
+// directory whose mode depends on which code path created it first is a
+// permission that cannot be reasoned about, and the fix is one line.
+func TestURLHintDirectoryIsNotWorldReadable(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", dir)
+
+	path, err := writeURLHint("127.0.0.1:7070", false, "", "tok")
+	if err != nil {
+		t.Fatalf("writeURLHint: %v", err)
+	}
+	t.Cleanup(func() { _ = removeURLHint() })
+
+	fi, err := os.Stat(filepath.Dir(path))
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if perm := fi.Mode().Perm(); perm != 0o700 {
+		t.Errorf("hint directory mode = %#o, want 0700 — it holds a file "+
+			"carrying the dashboard token", perm)
+	}
+}
