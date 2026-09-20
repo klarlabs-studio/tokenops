@@ -128,6 +128,14 @@ type Inputs struct {
 	// Polls is what each source's poller reports about itself. Optional:
 	// file readers have no poller.
 	Polls map[string]Poll
+	// Stopped names readers that have exited, and why.
+	//
+	// This is a stronger fact than a failed poll: a reader that is gone
+	// is not coming back on its own. It only became knowable once the
+	// daemon's pollers ran under a supervisor — as bare goroutines, one
+	// dying logged a line and vanished while every surface went on
+	// reporting health.
+	Stopped map[string]error
 }
 
 // Report is the assessment of one source, as data.
@@ -169,6 +177,11 @@ type Report struct {
 	// OriginNewestAt is the newest data the upstream holds, when it could
 	// be read.
 	OriginNewestAt time.Time `json:"origin_newest_at,omitzero"`
+	// ReaderStopped reports that this source's reader exited. Events may
+	// still be inside the window — they are from before it died, and
+	// reporting healthy on the strength of them is the delay that lets
+	// an outage run for weeks.
+	ReaderStopped bool `json:"reader_stopped,omitempty"`
 
 	// Window is the lookback this report was computed over.
 	Window time.Duration `json:"window"`
@@ -230,12 +243,17 @@ func assessOne(s Source, in Inputs, window time.Duration, now time.Time) Report 
 		r.OriginNewestAt = origin.At
 	}
 
+	if err, stopped := in.Stopped[s.Tag]; stopped && err != nil {
+		r.LastError = err.Error()
+		r.ReaderStopped = true
+	}
+
 	poll, hasPoll := in.Polls[s.Tag]
 	if hasPoll {
 		r.LastPollAt = poll.LastAttemptAt
 		r.LastSuccessfulPollAt = poll.LastSuccessAt
 		r.LastErrorAt = poll.LastErrorAt
-		if poll.LastError != nil {
+		if poll.LastError != nil && !r.ReaderStopped {
 			r.LastError = poll.LastError.Error()
 		}
 	}
@@ -248,6 +266,11 @@ func assessOne(s Source, in Inputs, window time.Duration, now time.Time) Report 
 // stateOf applies the three facts in the order that makes each one
 // meaningful.
 func stateOf(r Report, origin Origin, hasOrigin bool, poll Poll, hasPoll bool, window time.Duration, now time.Time) State {
+	// A reader that exited outranks everything else, including events
+	// inside the window: those are from before it died.
+	if r.ReaderStopped {
+		return StateFailing
+	}
 	if r.EventsInWindow > 0 {
 		return StateHealthy
 	}
@@ -294,6 +317,11 @@ func severityOf(r Report) string {
 	case r.SilentFor >= criticalAfter:
 		return SeverityCritical
 	case r.SilentFor >= degradedAfter:
+		return SeverityDegraded
+	case r.ReaderStopped:
+		// A dead reader has no gap yet, and will never close the one it
+		// is about to open. Grading it alongside a source that is merely
+		// quiet understates it.
 		return SeverityDegraded
 	case r.NeverSeen:
 		// Never having produced anything is not a lengthening outage; it

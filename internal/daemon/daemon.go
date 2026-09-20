@@ -38,6 +38,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/domainevents"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
+	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	"go.klarlabs.de/tokenops/internal/infra/rulesfs"
 	"go.klarlabs.de/tokenops/internal/otlp"
 	"go.klarlabs.de/tokenops/internal/proxy"
@@ -128,6 +129,13 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	// is using. Both produce no events; only the poll record separates
 	// them.
 	sourceHealth := freshness.NewRegistry()
+
+	// Every long-running subsystem runs under the supervisor rather than
+	// a bare `go func()`. Nine of them did, and nothing waited for any of
+	// them: shutdown returned while pollers were mid-request, a poller
+	// that died logged one line and was never mentioned again, and
+	// "which subsystems are up" had no answer at all.
+	sup := lifecycle.New(ctx, logger)
 
 	opts := []proxy.Option{
 		proxy.WithLogger(logger),
@@ -232,7 +240,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		logger.Info("event store ready", "path", path)
 		opts = append(opts,
 			proxy.WithEventBus(bus),
-			proxy.WithSourceFreshness(sourceFreshnessFn(cfg, store, sourceHealth)),
+			proxy.WithSourceFreshness(sourceFreshnessFn(cfg, store, sourceHealth, sup)),
 			proxy.WithTokenizer(components.Tokenizers),
 			// Rows the bus could not persist. Published so `tokenops
 			// status` and the MCP status tool can warn about them while
@@ -252,11 +260,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 				Logger:     logger,
 				CostSource: planCostSource(cfg, eventschema.ProviderAnthropic),
 			})
-			go func() {
-				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-					logger.Warn("claude-code stats poller exited", "err", err)
-				}
-			}()
+			sup.Go("claude-code-stats-cache", p.Run)
 			logger.Warn("claude-code stats cache poller is DEPRECATED — switch to vendor_usage.claude_code_jsonl for live per-turn data",
 				"interval", cfg.VendorUsage.ClaudeCode.Interval,
 				"path", cfg.VendorUsage.ClaudeCode.Path,
@@ -269,11 +273,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 				Logger:     logger,
 				CostSource: planCostSource(cfg, eventschema.ProviderAnthropic),
 			})
-			go func() {
-				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-					logger.Warn("claude-code jsonl poller exited", "err", err)
-				}
-			}()
+			sup.Go("claude-code-jsonl", p.Run)
 			logger.Info("claude-code jsonl poller live",
 				"interval", cfg.VendorUsage.ClaudeCodeJSONL.Interval,
 				"root", cfg.VendorUsage.ClaudeCodeJSONL.Root,
@@ -286,11 +286,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 				Logger:     logger,
 				CostSource: planCostSource(cfg, eventschema.ProviderOpenAI),
 			})
-			go func() {
-				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-					logger.Warn("codex jsonl poller exited", "err", err)
-				}
-			}()
+			sup.Go("codex-jsonl", p.Run)
 			logger.Info("codex jsonl poller live",
 				"interval", cfg.VendorUsage.CodexJSONL.Interval,
 				"root", cfg.VendorUsage.CodexJSONL.Root,
@@ -304,11 +300,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 				Interval: cfg.VendorUsage.OpenCode.Interval,
 				Logger:   logger,
 			})
-			go func() {
-				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-					logger.Warn("opencode poller exited", "err", err)
-				}
-			}()
+			sup.Go("opencode", p.Run)
 			logger.Info("opencode poller live",
 				"interval", cfg.VendorUsage.OpenCode.Interval,
 				"root", cfg.VendorUsage.OpenCode.Root,
@@ -322,11 +314,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 				Interval: cfg.VendorUsage.Cursor.Interval,
 				Logger:   logger,
 			})
-			go func() {
-				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-					logger.Warn("cursor poller exited", "err", err)
-				}
-			}()
+			sup.Go("cursor-web", p.Run)
 			logger.Info("cursor usage poller live",
 				"interval", cfg.VendorUsage.Cursor.Interval,
 				"user_id", cfg.VendorUsage.Cursor.UserID,
@@ -343,11 +331,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 				PlanCovered: planCostSource(cfg, eventschema.ProviderCursor) == eventschema.CostSourcePlanIncluded,
 				Logger:      logger,
 			})
-			go func() {
-				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-					logger.Warn("cursor turn poller exited", "err", err)
-				}
-			}()
+			sup.Go("cursor-hook", p.Run)
 		}
 		if cfg.VendorUsage.ClaudeUsageMeter.Enabled {
 			p := claudeusagemeter.NewPoller(bus, claudeusagemeter.PollerOptions{
@@ -358,11 +342,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 				Logger:     logger,
 				Cookies:    browserSessionSource(cfg.VendorUsage.ClaudeUsageMeter),
 			})
-			go func() {
-				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-					logger.Warn("claude-usage-meter poller exited", "err", err)
-				}
-			}()
+			sup.Go("claude-usage-meter", p.Run)
 			logger.Info("claude-usage-meter usage poller live",
 				"interval", cfg.VendorUsage.ClaudeUsageMeter.Interval,
 			)
@@ -376,11 +356,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 				BucketWidth: anthropicusage.BucketWidth(cfg.VendorUsage.Anthropic.BucketWidth),
 				Logger:      logger,
 			})
-			go func() {
-				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-					logger.Warn("anthropic admin usage poller exited", "err", err)
-				}
-			}()
+			sup.Go("vendor-usage-anthropic", p.Run)
 			logger.Info("anthropic admin usage poller live",
 				"interval", cfg.VendorUsage.Anthropic.Interval,
 				"bucket_width", cfg.VendorUsage.Anthropic.BucketWidth,
@@ -393,11 +369,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 				Interval:   cfg.VendorUsage.GitHubCopilot.Interval,
 				Logger:     logger,
 			})
-			go func() {
-				if err := p.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-					logger.Warn("github copilot poller exited", "err", err)
-				}
-			}()
+			sup.Go("github-copilot", p.Run)
 			logger.Info("github copilot usage poller live",
 				"interval", cfg.VendorUsage.GitHubCopilot.Interval,
 			)
@@ -602,7 +574,15 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("shutdown: %w", err)
 	}
-	// 2. Drain in-flight telemetry envelopes.
+	// 2. Stop the pollers and wait for them, so no subsystem is still
+	// writing when the buses below are drained. The bound is the
+	// configured shutdown timeout: one poller that ignores cancellation
+	// is a bug in that poller, not a reason for the daemon never to
+	// exit.
+	if err := sup.Wait(cfg.Shutdown.Timeout); err != nil {
+		logger.Warn("subsystem shutdown", "err", err, "running", sup.Running())
+	}
+	// 3. Drain in-flight telemetry envelopes.
 	if bus != nil {
 		if err := bus.Close(cfg.Shutdown.Timeout); err != nil {
 			logger.Warn("event bus drain", "err", err)
@@ -612,12 +592,12 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			"dropped", bus.DroppedCount(),
 		)
 	}
-	// 3. Drain the domain bus with the same timeout — slow subscribers
+	// 4. Drain the domain bus with the same timeout — slow subscribers
 	// don't block daemon exit beyond cfg.Shutdown.Timeout.
 	if !dbus.CloseWithTimeout(cfg.Shutdown.Timeout) {
 		logger.Warn("domain bus drain timed out", "timeout", cfg.Shutdown.Timeout)
 	}
-	// 4. Persistence after bus drain so the last JSONL entry lands.
+	// 5. Persistence after bus drain so the last JSONL entry lands.
 	if domainLog != nil {
 		_ = domainLog.Close()
 	}

@@ -283,3 +283,82 @@ func TestZeroWindowUsesTheDefault(t *testing.T) {
 		t.Errorf("window = %v, want the default %v", r.Window, freshness.DefaultWindow)
 	}
 }
+
+// A reader that exited is a stronger fact than a reader whose last poll
+// failed: it is not coming back on its own. The daemon ran nine pollers
+// as bare goroutines, so one dying logged a line and vanished while
+// every surface kept reporting health — the supervisor now knows, and
+// this is where that knowledge becomes an answer.
+func TestAStoppedReaderIsReportedAsFailing(t *testing.T) {
+	r := only(t, freshness.Assess(inputs(func(in *freshness.Inputs) {
+		// Everything else says healthy: events arrived inside the window.
+		in.Stopped = map[string]error{
+			"claude_usage_meter": errors.New("panic: nil map write"),
+		}
+	})))
+
+	if r.State != freshness.StateFailing {
+		t.Errorf("state = %q; a source whose reader exited was not reported "+
+			"as failing", r.State)
+	}
+	if r.LastError == "" {
+		t.Error("the reader's exit error did not reach the caller")
+	}
+	if r.Severity == freshness.SeverityOK {
+		t.Error("a dead reader was graded ok")
+	}
+}
+
+// A reader that exited outranks recent events. Events in the window are
+// from before it died, and reporting healthy on the strength of them is
+// exactly the delay that let an outage run for weeks.
+func TestAStoppedReaderOutranksRecentEvents(t *testing.T) {
+	r := only(t, freshness.Assess(inputs(func(in *freshness.Inputs) {
+		in.EventsInWindow["claude_usage_meter"] = 5000
+		in.LastEventAt["claude_usage_meter"] = ago(time.Minute)
+		in.Stopped = map[string]error{"claude_usage_meter": errors.New("exited")}
+	})))
+
+	if r.Healthy() {
+		t.Error("a source with a dead reader reported itself healthy")
+	}
+}
+
+// A source with no supervised reader — a file tailer, or one the daemon
+// never started — is unaffected.
+func TestSourcesWithoutAStoppedReaderAreUnaffected(t *testing.T) {
+	r := only(t, freshness.Assess(inputs(func(in *freshness.Inputs) {
+		in.Stopped = map[string]error{"some-other-source": errors.New("exited")}
+	})))
+	if r.State != freshness.StateHealthy {
+		t.Errorf("state = %q, want healthy", r.State)
+	}
+}
+
+// A reader that exited is graded at least degraded however recently it
+// was working. Severity normally escalates with the size of the gap,
+// but a dead reader has no gap yet and will never close the one it is
+// about to open — grading it "warning" alongside a source that is merely
+// quiet understates it.
+func TestAStoppedReaderIsAtLeastDegraded(t *testing.T) {
+	r := only(t, freshness.Assess(inputs(func(in *freshness.Inputs) {
+		in.LastEventAt["claude_usage_meter"] = ago(time.Minute)
+		in.Stopped = map[string]error{"claude_usage_meter": errors.New("exited")}
+	})))
+	if r.Severity != freshness.SeverityDegraded {
+		t.Errorf("severity = %q, want degraded for a reader that exited", r.Severity)
+	}
+}
+
+// A long-dead reader still escalates to critical: the two rules
+// compose rather than one capping the other.
+func TestALongStoppedReaderStillReachesCritical(t *testing.T) {
+	r := only(t, freshness.Assess(inputs(func(in *freshness.Inputs) {
+		in.EventsInWindow["claude_usage_meter"] = 0
+		in.LastEventAt["claude_usage_meter"] = ago(20 * 24 * time.Hour)
+		in.Stopped = map[string]error{"claude_usage_meter": errors.New("exited")}
+	})))
+	if r.Severity != freshness.SeverityCritical {
+		t.Errorf("severity = %q, want critical", r.Severity)
+	}
+}

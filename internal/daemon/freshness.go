@@ -6,6 +6,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
+	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	"go.klarlabs.de/tokenops/internal/infra/sourceprobe"
 )
 
@@ -29,7 +30,7 @@ type freshnessCounter interface {
 // The callback is evaluated per request rather than cached: a status
 // answer that is minutes old is the failure mode this whole phase is
 // about.
-func sourceFreshnessFn(cfg config.Config, store freshnessCounter, health *freshness.Registry) func() []freshness.Report {
+func sourceFreshnessFn(cfg config.Config, store freshnessCounter, health *freshness.Registry, sup *lifecycle.Supervisor) func() []freshness.Report {
 	if store == nil {
 		return nil
 	}
@@ -61,6 +62,12 @@ func sourceFreshnessFn(cfg config.Config, store freshnessCounter, health *freshn
 			LastEventAt:    lastSeen,
 			OriginNewest:   originsOf(cfg),
 			Polls:          health.Polls(),
+			// A reader that exited is the strongest signal there is, and
+			// it only became knowable once the pollers ran under a
+			// supervisor. The task names are the source tags on purpose,
+			// so a supervisor failure lines up with the source it belongs
+			// to without a translation table.
+			Stopped: stoppedReaders(sup),
 		})
 	}
 }
@@ -99,4 +106,16 @@ func originsOf(cfg config.Config) map[string]freshness.Origin {
 		out[tag] = freshness.Origin{At: at, Known: known}
 	}
 	return out
+}
+
+// stoppedReaders reports which supervised readers have exited.
+//
+// Nothing could answer this before: the daemon started nine pollers with
+// a bare `go func()`, so one dying logged a warning and vanished while
+// every status surface went on reporting the daemon healthy.
+func stoppedReaders(sup *lifecycle.Supervisor) map[string]error {
+	if sup == nil {
+		return nil
+	}
+	return sup.Failed()
 }
