@@ -13,6 +13,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/events"
+	"go.klarlabs.de/tokenops/internal/infra/sourceprobe"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
 )
@@ -209,7 +210,7 @@ func statusStaleWarnings(ctx context.Context, rf *rootFlags, cfg config.Config) 
 	}
 	defer func() { _ = store.Close() }()
 	var warnings []string
-	stale, err := cfg.CheckStaleIngestion(ctx, store, sourceProbes(cfg), config.StaleIngestionWindow, time.Now())
+	stale, err := cfg.CheckStaleIngestion(ctx, store, sourceprobe.All(cfg), config.StaleIngestionWindow, time.Now())
 	if err == nil {
 		for _, s := range stale {
 			warnings = append(warnings, s.Warning())
