@@ -4,7 +4,29 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.68.1**.
+Current release: **v0.69.0**.
+
+## v0.69.0 — the routes that were never behind the door
+
+TokenOps' security policy said `/dashboard` and `/api/*` had required a
+shared token since v0.10.3. That was true of most of `/api/*`. Six routes
+were not covered: the audit log, the four rule-intelligence endpoints, and
+the domain-event counts. They had been mounted beside the guarded routes
+rather than inside them, and Go's router prefers an exact path over the
+pattern the guard wrapped — so the guard never saw them.
+
+The daemon binds to loopback by default, which is what kept this a local
+matter for most people. A daemon bound to a LAN address, which TokenOps
+supports and documents, served its own audit log to the network.
+
+Every `/api` route now registers on the guarded mux, so a route cannot
+opt out of authentication by being added in the wrong place. Health
+probes stay open, as probes must. The daemon's own test had asserted the
+unauthenticated answer was correct, which is how this survived as long as
+it did; it now asserts the opposite.
+
+If you call `/api/domain-events` from a script, it now needs the token.
+`tokenops events` and the MCP tool read it from the daemon themselves.
 
 ## v0.68.0 — nothing to paste
 

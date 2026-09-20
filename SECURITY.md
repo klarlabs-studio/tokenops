@@ -7,8 +7,8 @@ minor; older minors receive only critical patches at maintainer discretion.
 
 | Version | Supported |
 |---------|-----------|
-| 0.44.x  | ✅        |
-| < 0.44  | ❌        |
+| 0.69.x  | ✅        |
+| < 0.69  | ❌        |
 
 ## Reporting a vulnerability
 
@@ -30,9 +30,20 @@ TokenOps is a **local-first** daemon. Default install binds `127.0.0.1`
 and assumes the host is trusted. Notable surfaces:
 
 - **Dashboard auth.** `/dashboard` and `/api/*` require a shared-secret token
-  (since v0.10.3). Health probes (`/healthz`, `/readyz`, `/version`) stay
-  public. Constant-time token comparison. The token is persisted at
-  `~/.tokenops/dashboard.token` with `0600` permissions on POSIX.
+  (since v0.10.3 — see the correction below). Health probes (`/healthz`,
+  `/readyz`, `/version`) stay public. Constant-time token comparison. The
+  token is persisted at `~/.tokenops/dashboard.token` with `0600`
+  permissions on POSIX.
+
+  **Correction (0.69.0).** From v0.10.3 until 0.69.0 that sentence was true
+  of most of `/api/*` but not all of it. `/api/audit`,
+  `/api/rules/{analyze,conflicts,compress,inject}` and `/api/domain-events`
+  were mounted beside the authenticated routes rather than inside them, and
+  Go's router prefers an exact path over the `/api/` pattern the middleware
+  wrapped — so those six answered without a credential. A loopback-bound
+  daemon, the default, was reachable only from the host; a daemon bound to a
+  LAN address served its own audit log to the network. Fixed in 0.69.0:
+  every `/api` route now registers on the mux the middleware wraps.
 - **mDNS advertise** (v0.10.1+). Advertised IPs match the bind address —
   loopback-only listener publishes `127.0.0.1`; a wildcard / LAN-bound
   listener publishes every non-loopback interface and is reachable from the
