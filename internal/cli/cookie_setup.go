@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +36,7 @@ func newVendorUsageSetupCmd() *cobra.Command {
 		noRestartFlag bool
 		browser       string
 		paste         bool
+		org           string
 	)
 	cmd := &cobra.Command{
 		Use:   "setup claude-usage-meter",
@@ -62,6 +62,7 @@ no data.`,
 				restart:    !noRestartFlag,
 				browser:    browser,
 				paste:      paste,
+				org:        org,
 			})
 		},
 	}
@@ -70,6 +71,8 @@ no data.`,
 		"read the cookie from this browser instead of searching ("+strings.Join(browsercookie.Names(), ", ")+")")
 	cmd.Flags().BoolVar(&paste, "paste", false,
 		"skip the browser and paste the session key at a prompt")
+	cmd.Flags().StringVar(&org, "org", "",
+		"organization to meter, by name or id (default: the one reporting usage)")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }
@@ -82,6 +85,9 @@ type cookieSetupOptions struct {
 	browser string
 	// paste skips the browser entirely and asks for the key.
 	paste bool
+	// org names the organization to meter; empty picks the one that
+	// reports usage.
+	org string
 }
 
 func runCookieSetup(cmd *cobra.Command, opts cookieSetupOptions) error {
@@ -104,25 +110,24 @@ func runCookieSetup(cmd *cobra.Command, opts cookieSetupOptions) error {
 	client := claudeusagemeter.NewClient(key)
 
 	fmt.Fprintln(out, "\nChecking it with Anthropic...")
-	orgs, err := client.Organizations(ctx)
-	if err != nil {
+	// Pick the organization that reports usage rather than asking. An
+	// account holds several — a personal one, a Console API one, an
+	// Enterprise one — and only some carry a usage meter at all, so the
+	// question put a choice to the operator that the data already answers.
+	conn, err := claudeusagemeter.Connect(ctx, client, opts.org)
+	switch {
+	case errors.Is(err, claudeusagemeter.ErrNothingToMeter):
+		return fmt.Errorf("%w — none of this account's organizations reports usage limits. "+
+			"Nothing was written", err)
+	case err != nil:
 		return fmt.Errorf("that key was not accepted: %w\n  "+
-			"session cookies rotate — if you copied it a while ago, copy it again. "+
+			"session cookies rotate — if the browser session is old, sign in to claude.ai again. "+
 			"Nothing was written", err)
 	}
-	if len(orgs) == 0 {
-		return errors.New("the key worked but the account has no organizations; nothing was written")
-	}
-	org := orgs[0]
-	if len(orgs) > 1 {
-		if org, err = chooseOrg(cmd, orgs); err != nil {
-			return err
-		}
-	}
-
-	usage, err := client.Usage(ctx, org.UUID)
-	if err != nil {
-		return fmt.Errorf("could not read usage for %q: %w\n  nothing was written", org.Name, err)
+	org, usage := conn.Org, conn.Usage
+	if len(conn.Orgs) > 1 {
+		fmt.Fprintf(out, "This account has %d organizations; %q is the one reporting usage (--org picks another).\n",
+			len(conn.Orgs), org.Name)
 	}
 
 	if !usage.HasSignal() {
@@ -160,23 +165,6 @@ func runCookieSetup(cmd *cobra.Command, opts cookieSetupOptions) error {
 
 // chooseOrg asks which organization to meter when the account has several.
 // Picking silently would meter the wrong workspace on exactly the accounts
-// where that matters — someone in more than one org.
-func chooseOrg(cmd *cobra.Command, orgs []claudeusagemeter.OrgEntry) (claudeusagemeter.OrgEntry, error) {
-	out := cmd.OutOrStdout()
-	fmt.Fprintln(out, "\nThis account belongs to several organizations:")
-	for i, o := range orgs {
-		fmt.Fprintf(out, "  %d) %s\n", i+1, o.Name)
-	}
-	line, err := readLine(cmd, fmt.Sprintf("Which one? [1-%d]: ", len(orgs)))
-	if err != nil {
-		return claudeusagemeter.OrgEntry{}, err
-	}
-	n, err := strconv.Atoi(strings.TrimSpace(line))
-	if err != nil || n < 1 || n > len(orgs) {
-		return claudeusagemeter.OrgEntry{}, fmt.Errorf("not a choice between 1 and %d; nothing was written", len(orgs))
-	}
-	return orgs[n-1], nil
-}
 
 // readSecret reads a credential without echoing it.
 //
@@ -197,11 +185,6 @@ func readSecret(cmd *cobra.Command, prompt string) (string, error) {
 		}
 		return string(b), nil
 	}
-	return readRest(cmd.InOrStdin())
-}
-
-func readLine(cmd *cobra.Command, prompt string) (string, error) {
-	fmt.Fprint(cmd.OutOrStdout(), prompt)
 	return readRest(cmd.InOrStdin())
 }
 

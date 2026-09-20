@@ -4,7 +4,7 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.68.0**.
+Current release: **v0.68.1**.
 
 ## v0.68.0 — nothing to paste
 

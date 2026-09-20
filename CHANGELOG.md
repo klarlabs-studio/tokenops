@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.68.1 - 2026-09-20
+
+### Fixed
+
+- **Setup no longer asks which organization to meter.** After reading the
+  session from the browser, an account with more than one organization —
+  a personal one beside a Console or Enterprise one — was asked to pick,
+  which is a question the data already answers: only some organizations
+  report usage at all. It now connects the one that does, says so when
+  there were several, and takes `--org` to force another. A run with no
+  terminal (an agent, a script) used to stop at that prompt. (#335)
+
 ## 0.68.0 - 2026-09-20
 
 ### Added
