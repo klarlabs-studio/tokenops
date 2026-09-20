@@ -43,10 +43,26 @@ func ReadMutable(path string) (Config, error) {
 	return cfg, nil
 }
 
+// Perms the config and its directory are kept at. config.yaml holds
+// every vendor credential TokenOps has been handed — the claude.ai
+// session, the Cursor cookie, the Copilot OAuth token, the Anthropic
+// admin key, the dashboard token — so nothing else on the machine has
+// any business reading it.
+const (
+	ConfigFilePerm os.FileMode = 0o600
+	ConfigDirPerm  os.FileMode = 0o700
+)
+
 // WriteMutable serialises cfg back to path with secure perms after
 // validating. Round-trips the Config struct; comments and blank lines
 // from a hand-edited config are NOT preserved (documented behaviour of
 // the init-managed config).
+//
+// The explicit Chmod is the point, not belt-and-braces: os.WriteFile
+// applies its mode only when it creates the file, and os.MkdirAll leaves
+// an existing directory alone. A config written by an older TokenOps, or
+// created by hand, kept its 0644 while every later `vendor-usage setup`
+// wrote a fresh credential into it.
 func WriteMutable(path string, cfg Config) error {
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("invalid config after mutation: %w", err)
@@ -55,11 +71,18 @@ func WriteMutable(path string, cfg Config) error {
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return fmt.Errorf("mkdir %s: %w", filepath.Dir(path), err)
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, ConfigDirPerm); err != nil {
+		return fmt.Errorf("mkdir %s: %w", dir, err)
 	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	if err := os.Chmod(dir, ConfigDirPerm); err != nil {
+		return fmt.Errorf("chmod %s: %w", dir, err)
+	}
+	if err := os.WriteFile(path, data, ConfigFilePerm); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
+	}
+	if err := os.Chmod(path, ConfigFilePerm); err != nil {
+		return fmt.Errorf("chmod %s: %w", path, err)
 	}
 	return nil
 }

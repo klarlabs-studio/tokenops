@@ -2,6 +2,7 @@ package fmtindex
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -67,5 +68,61 @@ func TestRead_SkipsMalformedRows(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].ID != "x" {
 		t.Errorf("malformed row not skipped cleanly: %+v", got)
+	}
+}
+
+// The index lives in the recovery directory and records which commands
+// were run and which of their output was fetched back. That is a log of
+// the operator's shell activity, and it was world-readable.
+func TestIndexIsNotWorldReadable(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "recovery")
+
+	if err := Append(dir, fmtlearn.Record{ID: "a", Command: "go test"}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	path, err := Path(dir)
+	if err != nil {
+		t.Fatalf("path: %v", err)
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if perm := fi.Mode().Perm(); perm != 0o600 {
+		t.Errorf("index mode = %#o, want 0600", perm)
+	}
+	di, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("stat dir: %v", err)
+	}
+	if perm := di.Mode().Perm(); perm != 0o700 {
+		t.Errorf("recovery dir mode = %#o, want 0700", perm)
+	}
+}
+
+// An index written by an older version is already on disk at 0644.
+// Appending to it must fix the mode, not inherit it — otherwise only
+// fresh installations are protected.
+func TestAppendTightensAnExistingIndex(t *testing.T) {
+	dir := t.TempDir()
+	path, err := Path(dir)
+	if err != nil {
+		t.Fatalf("path: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("{}\n"), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := Append(dir, fmtlearn.Record{ID: "b", Command: "go build"}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if perm := fi.Mode().Perm(); perm != 0o600 {
+		t.Errorf("mode after append = %#o, want 0600 (an upgrade must fix the file it finds)", perm)
 	}
 }

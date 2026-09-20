@@ -27,8 +27,14 @@ type BackendChoice struct {
 	Endpoint string
 	// CredentialSource hints at where the runtime should pull a key:
 	// "plan_session" — reuse the user's configured plan credentials;
-	// "env:<NAME>" — read from an environment variable; "none" — no
-	// auth needed (typical for Ollama).
+	// "none" — no auth needed (typical for Ollama).
+	//
+	// An "env:<NAME>" form was documented here and never produced by the
+	// router or read by any backend. Credentials that come from the
+	// environment are resolved in config.Load (config.CredentialEnvVars)
+	// before the router ever runs, so by this point a plan session either
+	// has a key or does not; where it came from is not the router's
+	// business.
 	CredentialSource string
 	// Reason is a short string the operator sees when the choice is
 	// logged. Helps explain "why this model" without grepping code.

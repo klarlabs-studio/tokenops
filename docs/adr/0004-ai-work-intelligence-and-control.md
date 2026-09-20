@@ -206,17 +206,35 @@ generalises when the underlying intelligence is ready.
 
 Ordered by dependency and cost of deferral, not by the intent's numbering.
 
-**Phase 0 — safety debt.** Independent of everything else; it is live.
-*(The `/api/*` auth bypass is closed; the rest remain.)*
+**Phase 0 — safety debt.** Independent of everything else; it was live.
+*Complete as of 0.70.0.*
 
-- `tokenops fmt`'s recovery store writes full raw stdout/stderr at `0644` in a
+- `tokenops fmt`'s recovery store wrote full raw stdout/stderr at `0644` in a
   `0755` directory, unpruned and unredacted, for commands that may print
-  credentials. The `redaction` package exists and is wired only into OTLP.
-- `domain-events.jsonl` uses the non-rotating writer at `0644` and grows
-  unbounded while a rotating one exists.
-- Three doc comments promise env-var secret injection no code reads.
-- `Config.Redacted()` is a hand-maintained allowlist with no completeness test.
-- `WriteFile` does not tighten perms on a pre-existing config.
+  credentials. The `redaction` package existed and was wired only into OTLP.
+  Now `0600`/`0700`, redacted through the pattern rules, pruned at 14 days.
+- `domain-events.jsonl` was written at `0644`. Now `0600`, on creation and
+  after rotation.
+
+  *Corrected while implementing:* this item also claimed the log "grows
+  unbounded while a rotating one exists". That was wrong. `NewJSONLog`
+  already rotates at 10 MiB keeping 3 backups, and it is the only
+  constructor the daemon calls. Only the mode was a real finding.
+- One doc comment promised an `env:<NAME>` credential source no code produced
+  or read, and `SECURITY.md` advised "environment substitution" that
+  `config.Load` did not implement.
+
+  *Corrected while implementing:* the audit counted three such comments. Two
+  of them — `SetupDeps.Getenv` and `envSecret` — describe behaviour that does
+  exist. Rather than retract the `SECURITY.md` promise, the environment path
+  is now real: `config.CredentialEnvVars` supplies all five credentials at
+  load time, they win over the file, and nothing writes them back.
+- `Config.Redacted()` was a hand-maintained allowlist with no completeness
+  test. A reflection test now fails on any credential-shaped field it misses;
+  the allowlist was in fact complete, and is now held that way.
+- `WriteFile` did not tighten perms on a pre-existing config. Both the file
+  and its directory are now repaired on every write, so an upgrade fixes the
+  installation rather than only new machines.
 
 **Phase 1 — provenance.** Nothing downstream is trustworthy without it, and it
 is additive. The common measurement type, applied first to the three silent
