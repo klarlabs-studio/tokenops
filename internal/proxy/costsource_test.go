@@ -13,6 +13,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/providers"
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -36,6 +37,7 @@ func startProxyForCostSource(t *testing.T, covered map[eventschema.Provider]bool
 		WithProviderRoutes([]ProviderRoute{{Provider: anthropic, Upstream: u}}),
 		WithEventBus(bus),
 		WithTokenizer(tokenizer.NewRegistry()),
+		WithCostEngine(spend.NewEngine(spend.DefaultTable())),
 		WithPlanCoverage(func(p eventschema.Provider) bool { return covered[p] }),
 	)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -54,13 +56,28 @@ func startProxyForCostSource(t *testing.T, covered map[eventschema.Provider]bool
 
 func postMessage(t *testing.T, base string) {
 	t.Helper()
-	body := `{"model":"claude-opus-4-8","messages":[{"role":"user","content":"hi"}]}`
+	postMessageModel(t, base, "claude-opus-4-8")
+}
+
+func postMessageModel(t *testing.T, base, model string) {
+	t.Helper()
+	body := `{"model":"` + model + `","messages":[{"role":"user","content":"hi"}]}`
 	resp, err := http.Post(base+"/anthropic/v1/messages", "application/json", strings.NewReader(body))
 	if err != nil {
 		t.Fatalf("post: %v", err)
 	}
 	_, _ = io.Copy(io.Discard, resp.Body)
 	_ = resp.Body.Close()
+}
+
+func TestUnknownModelDoesNotClaimMeasuredCost(t *testing.T) {
+	base, bus := startProxyForCostSource(t, nil)
+	postMessageModel(t, base, "not-in-rate-card")
+	waitForEvent(t, bus, 1)
+	prompt := firstPromptEvent(t, bus)
+	if prompt.CostMeasured {
+		t.Fatal("missing rate-card row must not claim measured cost")
+	}
 }
 
 func firstPromptEvent(t *testing.T, bus *captureBus) *eventschema.PromptEvent {
@@ -87,6 +104,9 @@ func TestPlanCoveredProviderEmitsPlanIncluded(t *testing.T) {
 	if got := firstPromptEvent(t, bus).CostSource; got != eventschema.CostSourcePlanIncluded {
 		t.Errorf("CostSource = %q, want %q", got, eventschema.CostSourcePlanIncluded)
 	}
+	if firstPromptEvent(t, bus).CostMeasured {
+		t.Error("plan quota event must not claim measured metered cost")
+	}
 }
 
 // Without a plan binding the provider is metered — the historical default.
@@ -95,7 +115,11 @@ func TestUnboundProviderStaysMetered(t *testing.T) {
 	postMessage(t, base)
 	waitForEvent(t, bus, 1)
 
-	if got := firstPromptEvent(t, bus).CostSource; got != eventschema.CostSourceMetered {
+	prompt := firstPromptEvent(t, bus)
+	if got := prompt.CostSource; got != eventschema.CostSourceMetered {
 		t.Errorf("CostSource = %q, want %q", got, eventschema.CostSourceMetered)
+	}
+	if !prompt.CostMeasured || prompt.CostUSD <= 0 {
+		t.Errorf("known metered model should carry measured cost, got measured=%v cost=%v", prompt.CostMeasured, prompt.CostUSD)
 	}
 }

@@ -109,6 +109,13 @@ func writeVerifyText(out io.Writer, r verify.Report) {
 	} else {
 		fmt.Fprintln(out, "  mean request latency: not established")
 	}
+	baseCost, baseCostKnown := r.BaselineMeteredCostUSD.Amount()
+	interventionCost, interventionCostKnown := r.InterventionMeteredCostUSD.Amount()
+	if baseCostKnown && interventionCostKnown {
+		fmt.Fprintf(out, "  mean metered cost: $%.6f baseline → $%.6f intervention\n", baseCost, interventionCost)
+	} else {
+		fmt.Fprintln(out, "  mean metered cost: not established (requires event-time pricing)")
+	}
 	providers := make(map[string]struct{}, len(r.BaselinePlanQuota)+len(r.InterventionPlanQuota))
 	for provider := range r.BaselinePlanQuota {
 		providers[provider] = struct{}{}

@@ -42,10 +42,11 @@ func TestVerifyToolCarriesOutcomeCohortRates(t *testing.T) {
 	base := measurement.Measured(70, "outcome_events")
 	with := measurement.Measured(75, "outcome_events")
 	payload := verifyPayload(verify.Report{
-		BaselineOutcomes:     verify.OutcomeSummary{Achieved: 7, NotAchieved: 3, SuccessRate: base},
-		InterventionOutcomes: verify.OutcomeSummary{Achieved: 7, Partial: 1, NotAchieved: 2, SuccessRate: with},
-		BaselineLatency:      measurement.Measured(250, "sqlite_events"),
-		InterventionLatency:  measurement.Measured(300, "sqlite_events"),
+		BaselineOutcomes:       verify.OutcomeSummary{Achieved: 7, NotAchieved: 3, SuccessRate: base},
+		InterventionOutcomes:   verify.OutcomeSummary{Achieved: 7, Partial: 1, NotAchieved: 2, SuccessRate: with},
+		BaselineLatency:        measurement.Measured(250, "sqlite_events"),
+		InterventionLatency:    measurement.Measured(300, "sqlite_events"),
+		BaselineMeteredCostUSD: measurement.Measured(0.002, "sqlite_events"),
 		BaselinePlanQuota: verify.QuotaSummary{
 			"anthropic": measurement.Measured(1200, "sqlite_events"),
 		},
@@ -66,6 +67,10 @@ func TestVerifyToolCarriesOutcomeCohortRates(t *testing.T) {
 	}
 	if got := payload.BaselinePlanQuota["anthropic"].AmountOr(-1); got != 1200 {
 		t.Fatalf("baseline plan quota = %v, want 1200", got)
+	}
+	cost, costOK := payload.BaselineMeteredCost.(interface{ Amount() (float64, bool) })
+	if got, ok := cost.Amount(); !costOK || !ok || got != 0.002 {
+		t.Fatalf("baseline metered cost = %v, known=%v", got, ok)
 	}
 }
 

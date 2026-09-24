@@ -104,6 +104,10 @@ type PromptEvent struct {
 	// table at event time (informational — authoritative recompute lives in
 	// the analytics pipeline).
 	CostUSD float64 `json:"cost_usd,omitempty"`
+	// CostMeasured is true only when a metered cost was successfully
+	// computed with an event-time rate card. Zero can therefore be a priced
+	// zero; false means cost is absent or belongs to a non-metered resource.
+	CostMeasured bool `json:"cost_measured,omitempty"`
 
 	// TokenSource says where the token counts above came from. Empty
 	// (default) means a tokenizer counted them. Read TokensCounted before

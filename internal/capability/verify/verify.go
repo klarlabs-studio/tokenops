@@ -47,6 +47,9 @@ type Attributed struct {
 	// genuinely free attempt are different facts, and zero is the one
 	// that quietly reads as good news.
 	Tokens measurement.Value `json:"tokens"`
+	// MeteredCostUSD includes only events explicitly priced with an
+	// event-time rate card. Subscription quota and trials stay separate.
+	MeteredCostUSD measurement.Value `json:"metered_cost_usd"`
 	// Latency is mean proxy-observed request latency during the execution.
 	// No matching request is unknown rather than zero.
 	Latency measurement.Value `json:"latency"`
@@ -102,6 +105,8 @@ func attributeOne(e work.Execution, events []*eventschema.Envelope) Attributed {
 	a := Attributed{Execution: e, Outcomes: intervention.Outcomes{Unknown: 1}, PlanQuotaTokens: make(map[string]int64)}
 
 	var tokens int64
+	var meteredCost float64
+	var meteredCostEvents int64
 	var latency time.Duration
 	var latencyEvents int64
 	var countedPrompts int64
@@ -125,6 +130,10 @@ func attributeOne(e work.Execution, events []*eventschema.Envelope) Attributed {
 		switch p := env.Payload.(type) {
 		case *eventschema.PromptEvent:
 			promptEvents++
+			if (p.CostSource == "" || p.CostSource == eventschema.CostSourceMetered) && p.CostMeasured {
+				meteredCost += p.CostUSD
+				meteredCostEvents++
+			}
 			if p.Latency > 0 {
 				latency += p.Latency
 				latencyEvents++
@@ -183,6 +192,13 @@ func attributeOne(e work.Execution, events []*eventschema.Envelope) Attributed {
 			At(e.StartedAt).
 			Covering(countedPrompts, promptEvents-countedPrompts)
 	}
+	if meteredCostEvents == 0 {
+		a.MeteredCostUSD = measurement.Unknown("no prompt events with verified metered pricing joined to this attempt")
+	} else {
+		a.MeteredCostUSD = measurement.Measured(meteredCost, "sqlite_events").
+			At(e.StartedAt).
+			Covering(meteredCostEvents, promptEvents-meteredCostEvents)
+	}
 	if latencyEvents == 0 {
 		a.Latency = measurement.Unknown("no prompt events with measured latency joined to this attempt")
 	} else {
@@ -234,14 +250,16 @@ type Report struct {
 	// BaselineCount and InterventionCount say how many attempts fell in
 	// each cohort. "Not enough data" without saying which side was short
 	// is advice nobody can act on.
-	BaselineCount         int               `json:"baseline_count"`
-	InterventionCount     int               `json:"intervention_count"`
-	BaselineOutcomes      OutcomeSummary    `json:"baseline_outcomes"`
-	InterventionOutcomes  OutcomeSummary    `json:"intervention_outcomes"`
-	BaselineLatency       measurement.Value `json:"baseline_latency_ms"`
-	InterventionLatency   measurement.Value `json:"intervention_latency_ms"`
-	BaselinePlanQuota     QuotaSummary      `json:"baseline_plan_quota_tokens"`
-	InterventionPlanQuota QuotaSummary      `json:"intervention_plan_quota_tokens"`
+	BaselineCount              int               `json:"baseline_count"`
+	InterventionCount          int               `json:"intervention_count"`
+	BaselineOutcomes           OutcomeSummary    `json:"baseline_outcomes"`
+	InterventionOutcomes       OutcomeSummary    `json:"intervention_outcomes"`
+	BaselineLatency            measurement.Value `json:"baseline_latency_ms"`
+	InterventionLatency        measurement.Value `json:"intervention_latency_ms"`
+	BaselineMeteredCostUSD     measurement.Value `json:"baseline_metered_cost_usd"`
+	InterventionMeteredCostUSD measurement.Value `json:"intervention_metered_cost_usd"`
+	BaselinePlanQuota          QuotaSummary      `json:"baseline_plan_quota_tokens"`
+	InterventionPlanQuota      QuotaSummary      `json:"intervention_plan_quota_tokens"`
 	// Attributed is the per-execution detail the comparison rests on.
 	Attributed []Attributed `json:"attributed,omitempty"`
 }
@@ -284,6 +302,8 @@ func Compare(execs []work.Execution, events []*eventschema.Envelope) Report {
 	report.InterventionOutcomes = summarizeOutcomes(report.Comparison.InterventionOutcomes)
 	report.BaselineLatency = meanLatency(baseline)
 	report.InterventionLatency = meanLatency(intervened)
+	report.BaselineMeteredCostUSD = meanMeteredCost(baseline)
+	report.InterventionMeteredCostUSD = meanMeteredCost(intervened)
 	report.BaselinePlanQuota = sumPlanQuota(baseline)
 	report.InterventionPlanQuota = sumPlanQuota(intervened)
 	report.Verdict = intervention.Judge(report.Comparison)
@@ -306,6 +326,22 @@ func Compare(execs []work.Execution, events []*eventschema.Envelope) Report {
 		}
 	}
 	return report
+}
+
+func meanMeteredCost(as []Attributed) measurement.Value {
+	if len(as) == 0 {
+		return measurement.Unknown("the cohort is empty")
+	}
+	values := make([]measurement.Value, 0, len(as))
+	for _, a := range as {
+		values = append(values, a.MeteredCostUSD)
+	}
+	total := measurement.Sum(values...)
+	amount, ok := total.Amount()
+	if !ok {
+		return total
+	}
+	return measurement.Measured(amount/float64(len(as)), total.Source()).WithCaveat(total.Caveat())
 }
 
 func sumPlanQuota(as []Attributed) QuotaSummary {
