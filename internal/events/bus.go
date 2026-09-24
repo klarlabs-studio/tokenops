@@ -40,6 +40,13 @@ type Sink interface {
 	AppendBatch(ctx context.Context, envs []*eventschema.Envelope) error
 }
 
+// NoopSink discards accepted envelopes. It is used when the daemon runs
+// without persistence but still needs canonical in-process event observers.
+type NoopSink struct{}
+
+// AppendBatch satisfies Sink and intentionally discards the batch.
+func (NoopSink) AppendBatch(context.Context, []*eventschema.Envelope) error { return nil }
+
 // ErrBusClosed reports that the bus stopped accepting envelopes.
 var ErrBusClosed = errors.New("events: bus closed")
 
