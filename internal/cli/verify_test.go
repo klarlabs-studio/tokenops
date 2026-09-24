@@ -20,6 +20,8 @@ func TestVerifyReportsTheDifferenceAndWhyItIsNotAFinding(t *testing.T) {
 		BaselineCount: 12, InterventionCount: 9,
 		BaselineOutcomes:     verify.OutcomeSummary{SuccessRate: measurement.Measured(90, "outcome_events")},
 		InterventionOutcomes: verify.OutcomeSummary{SuccessRate: measurement.Measured(60, "outcome_events")},
+		BaselineLatency:      measurement.Measured(250, "sqlite_events"),
+		InterventionLatency:  measurement.Measured(300, "sqlite_events"),
 		Comparison:           intervention.Comparison{Assignment: intervention.Observational},
 		Verdict: intervention.Verdict{
 			Observed: measurement.Measured(2000, "sqlite_events"),
@@ -41,6 +43,9 @@ func TestVerifyReportsTheDifferenceAndWhyItIsNotAFinding(t *testing.T) {
 	}
 	if !strings.Contains(out, "assessed success: 90% baseline → 60% intervention") {
 		t.Errorf("outcome quality comparison is missing:\n%s", out)
+	}
+	if !strings.Contains(out, "mean request latency: 250ms baseline → 300ms intervention") {
+		t.Errorf("latency comparison is missing:\n%s", out)
 	}
 	// The word that must not appear over an observational split.
 	if strings.Contains(strings.ToLower(out), "proven") {

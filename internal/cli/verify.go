@@ -101,6 +101,13 @@ func writeVerifyText(out io.Writer, r verify.Report) {
 	} else {
 		fmt.Fprintln(out, "  assessed success: not established (record outcomes for executions)")
 	}
+	baseLatency, baseLatencyKnown := r.BaselineLatency.Amount()
+	interventionLatency, interventionLatencyKnown := r.InterventionLatency.Amount()
+	if baseLatencyKnown && interventionLatencyKnown {
+		fmt.Fprintf(out, "  mean request latency: %.0fms baseline → %.0fms intervention\n", baseLatency, interventionLatency)
+	} else {
+		fmt.Fprintln(out, "  mean request latency: not established")
+	}
 
 	// The wording comes from the capability so this and the MCP tool
 	// cannot describe the same verdict differently.
