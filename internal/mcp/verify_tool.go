@@ -23,7 +23,8 @@ type VerifyDeps struct {
 }
 
 type verifyInput struct {
-	Days int `json:"days,omitempty" jsonschema:"description=Window in days (default 30). 0 reads every transcript and event on disk."`
+	Days         int    `json:"days,omitempty" jsonschema:"description=Window in days (default 30). 0 reads every transcript and event on disk."`
+	ExperimentID string `json:"experiment_id,omitempty" jsonschema:"description=Optional execution-linked experiment to compare; required if multiple trials are present."`
 }
 
 // verifyResult is what the agent gets back.
@@ -62,6 +63,9 @@ type verifyResult struct {
 	InterventionHumanAttention any                   `json:"intervention_human_attention_minutes,omitzero"`
 	BaselinePlanQuota          verify.QuotaSummary   `json:"baseline_plan_quota_tokens,omitempty"`
 	InterventionPlanQuota      verify.QuotaSummary   `json:"intervention_plan_quota_tokens,omitempty"`
+	RandomizedExperimentID     string                `json:"randomized_experiment_id,omitempty"`
+	RandomizedPairs            int                   `json:"randomized_pairs,omitempty"`
+	RandomizedFallback         string                `json:"randomized_fallback_reason,omitempty"`
 
 	Error string `json:"error,omitempty"`
 	Hint  string `json:"hint,omitempty"`
@@ -86,6 +90,9 @@ func verifyPayload(r verify.Report) verifyResult {
 		InterventionHumanAttention: r.InterventionHumanAttentionMinutes,
 		BaselinePlanQuota:          r.BaselinePlanQuota,
 		InterventionPlanQuota:      r.InterventionPlanQuota,
+		RandomizedExperimentID:     r.RandomizedExperimentID,
+		RandomizedPairs:            r.RandomizedPairs,
+		RandomizedFallback:         r.RandomizedFallbackReason,
 	}
 	// Proven requires both an assigned comparison and a conclusion. An
 	// observational split can never reach it.
@@ -108,7 +115,7 @@ func RegisterVerifyTool(s *Server, d VerifyDeps) error {
 		return errors.New("mcp: nil server")
 	}
 	s.Tool("tokenops_verify").
-		Description("Compare the attempts an optimization touched against the ones it did not, over real recorded work. Returns measured token difference, explicitly priced metered cost, mean proxy request latency, assessed success, operator-self-reported attention minutes, and plan-included quota tokens separately by provider. Quota tokens are not dollar cost; metered cost is unknown unless event-time pricing succeeded. Attention remains unknown unless the operator reports it. Outcome drops can flag harm, but cohorts remain observational unless assignments were randomized; read `observational` and `proven` before attributing a difference to the optimization.").
+		Description("Compare resource use and explicit outcomes across real work. When execution-linked experiment assignments form complete, measured pairs and outcomes are present, returns a randomized comparison; otherwise remains observational and explains why. Pass experiment_id when multiple trials are in the window. Returns token difference, event-time priced metered cost, mean proxy latency, assessed success, operator-reported attention, and provider-scoped plan quota. Attention remains unknown unless the operator reports it. Read observational and proven; missing assignment or outcome evidence never becomes a causal claim.").
 		OutputSchema(verifyResult{}).
 		Handler(func(ctx context.Context, in verifyInput) (*verifyResult, error) {
 			if d.Store == nil {
@@ -140,9 +147,9 @@ func RegisterVerifyTool(s *Server, d VerifyDeps) error {
 				return nil, err
 			}
 
-			report := verify.CompareReconstructed(
+			report := verify.CompareReconstructedExperiment(
 				reconstruct.FromUnits(agentdx.Units(records), reconstruct.Options{}),
-				events,
+				events, in.ExperimentID,
 			)
 			res := verifyPayload(report)
 			return &res, nil

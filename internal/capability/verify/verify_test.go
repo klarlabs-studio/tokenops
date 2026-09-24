@@ -168,6 +168,115 @@ func outcomeEvent(executionID string, result eventschema.OutcomeResult, at time.
 	}
 }
 
+func experimentAssignment(executionID, experimentID, arm string, pair int, at time.Time) *eventschema.Envelope {
+	return &eventschema.Envelope{
+		ID: "assignment-" + executionID, Type: eventschema.EventTypeExperiment, Timestamp: at,
+		Association: eventschema.Association{Execution: executionID},
+		Correlation: eventschema.Correlation{Experiment: experimentID},
+		Payload: &eventschema.ExperimentEvent{
+			Stage: eventschema.ExperimentAssigned, Kind: "model_route", Pair: pair, Assignment: arm,
+		},
+	}
+}
+
+func randomizedFixture(pairCount int, experimentID, prefix string) ([]work.Execution, []*eventschema.Envelope) {
+	var execs []work.Execution
+	var events []*eventschema.Envelope
+	for pair := 1; pair <= pairCount; pair++ {
+		at := t0.Add(time.Duration(pair) * time.Hour)
+		baseID, variantID := fmt.Sprintf("%s-base-%d", prefix, pair), fmt.Sprintf("%s-variant-%d", prefix, pair)
+		execs = append(execs,
+			execution(baseID, "session:base", at, 20*time.Minute),
+			execution(variantID, "session:variant", at, 20*time.Minute),
+		)
+		events = append(events,
+			experimentAssignment(baseID, experimentID, "baseline", pair, at),
+			experimentAssignment(variantID, experimentID, "variant", pair, at),
+			promptEvent("session:base", at.Add(time.Minute), 100),
+			promptEvent("session:variant", at.Add(time.Minute), 80),
+			outcomeEvent(baseID, eventschema.OutcomeAchieved, at.Add(2*time.Minute)),
+			outcomeEvent(variantID, eventschema.OutcomeAchieved, at.Add(2*time.Minute)),
+		)
+	}
+	return execs, events
+}
+
+func TestRandomizedComparisonUsesCompleteOutcomeLinkedPairs(t *testing.T) {
+	execs, events := randomizedFixture(5, "experiment:test", "test")
+	got := verify.Compare(execs, events)
+	if got.Observational() || got.RandomizedExperimentID != "experiment:test" || got.RandomizedPairs != 5 {
+		t.Fatalf("randomized metadata = id %q pairs %d observational %v", got.RandomizedExperimentID, got.RandomizedPairs, got.Observational())
+	}
+	if got.BaselineCount != 5 || got.InterventionCount != 5 || got.Verdict.Outcome != intervention.Improved {
+		t.Fatalf("randomized comparison = baseline %d intervention %d verdict %+v", got.BaselineCount, got.InterventionCount, got.Verdict)
+	}
+	if got.Attributed[0].ExperimentID != "experiment:test" || got.Attributed[0].ExperimentArm == "" {
+		t.Fatalf("assignment provenance missing from attributed execution: %+v", got.Attributed[0])
+	}
+}
+
+func TestRandomizedComparisonFallsBackWhenAnyAssignedOutcomeIsMissing(t *testing.T) {
+	execs, events := randomizedFixture(5, "experiment:test", "missing")
+	for i, event := range events {
+		if event != nil && event.Association.Execution == "missing-variant-3" {
+			if _, ok := event.Payload.(*eventschema.OutcomeEvent); ok {
+				events = append(events[:i], events[i+1:]...)
+				break
+			}
+		}
+	}
+	got := verify.Compare(execs, events)
+	if !got.Observational() || got.RandomizedExperimentID != "" || got.RandomizedFallbackReason == "" {
+		t.Fatalf("incomplete randomized trial was overstated: %+v", got)
+	}
+}
+
+func TestRandomizedComparisonFallsBackOnPairLedgerGap(t *testing.T) {
+	execs, events := randomizedFixture(2, "experiment:gap", "gap")
+	kept := events[:0]
+	for _, event := range events {
+		assignment, ok := event.Payload.(*eventschema.ExperimentEvent)
+		if ok && assignment.Pair == 1 {
+			continue
+		}
+		kept = append(kept, event)
+	}
+	events = kept
+	got := verify.Compare(execs, events)
+	if !got.Observational() || !strings.Contains(got.RandomizedFallbackReason, "pair ledger") {
+		t.Fatalf("gapped assignment ledger was not refused: %+v", got)
+	}
+}
+
+func TestRandomizedComparisonFallsBackForLegacyUnlinkedAssignments(t *testing.T) {
+	execs, events := randomizedFixture(5, "experiment:legacy", "legacy")
+	for _, event := range events {
+		if assignment, ok := event.Payload.(*eventschema.ExperimentEvent); ok && assignment.Stage == eventschema.ExperimentAssigned {
+			event.Association.Execution = ""
+			break
+		}
+	}
+	got := verify.Compare(execs, events)
+	if !got.Observational() || !strings.Contains(got.RandomizedFallbackReason, "unlinked assignments") {
+		t.Fatalf("legacy assignment was included in randomized comparison: %+v", got)
+	}
+}
+
+func TestRandomizedComparisonRequiresSelectionWhenTrialsAreMixed(t *testing.T) {
+	firstExecs, firstEvents := randomizedFixture(5, "experiment:first", "first")
+	secondExecs, secondEvents := randomizedFixture(5, "experiment:second", "second")
+	execs := append(firstExecs, secondExecs...)
+	events := append(firstEvents, secondEvents...)
+	got := verify.Compare(execs, events)
+	if !got.Observational() || !strings.Contains(got.RandomizedFallbackReason, "multiple experiments") {
+		t.Fatalf("mixed trials were not refused: %+v", got)
+	}
+	selected := verify.CompareExperiment(execs, events, "experiment:first")
+	if selected.Observational() || selected.RandomizedExperimentID != "experiment:first" || selected.RandomizedPairs != 5 {
+		t.Fatalf("explicit selection failed: %+v", selected)
+	}
+}
+
 // Events carried an actor and a timestamp; executions carried an actor
 // and a span. Nothing joined them, so consumption could never be
 // attributed to an attempt at a goal — which is what a comparison needs
@@ -209,6 +318,18 @@ func TestEventsFromAnotherActorAreNotAttributed(t *testing.T) {
 	got := verify.Attribute(execs, events)
 	if got[0].Tokens.AmountOr(-1) != 100 {
 		t.Errorf("tokens = %v; another actor's events were counted", got[0].Tokens.AmountOr(-1))
+	}
+}
+
+func TestExplicitExecutionAssociationOverridesMissingOrDifferentActor(t *testing.T) {
+	exec := execution("exec:exact", "session:a", t0, time.Hour)
+	matching := promptEvent("", t0.Add(time.Minute), 40)
+	matching.Association.Execution = "exec:exact"
+	other := promptEvent("session:a", t0.Add(2*time.Minute), 900)
+	other.Association.Execution = "exec:other"
+	got := verify.Attribute([]work.Execution{exec}, []*eventschema.Envelope{matching, other})
+	if tokens := got[0].Tokens.AmountOr(-1); tokens != 40 {
+		t.Fatalf("tokens = %v, want only explicitly linked event (40)", tokens)
 	}
 }
 
