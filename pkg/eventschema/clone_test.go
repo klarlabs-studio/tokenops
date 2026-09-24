@@ -46,6 +46,22 @@ func TestEnvelopeCloneAttributesIndependent(t *testing.T) {
 	}
 }
 
+func TestEnvelopeCloneDomainPayloadIndependent(t *testing.T) {
+	env := &Envelope{
+		ID: "domain", Type: EventTypeDomain, Timestamp: time.Now().UTC(),
+		Payload: &DomainEvent{Kind: "budget.exceeded", Data: []byte(`{"limit":1}`)},
+	}
+	clone, err := env.Clone()
+	if err != nil {
+		t.Fatal(err)
+	}
+	clonedPayload := clone.Payload.(*DomainEvent)
+	clonedPayload.Data[0] = '['
+	if string(env.Payload.(*DomainEvent).Data) != `{"limit":1}` {
+		t.Fatal("domain payload clone shared its data buffer")
+	}
+}
+
 func TestEnvelopeCloneNilSafe(t *testing.T) {
 	var env *Envelope
 	c, err := env.Clone()

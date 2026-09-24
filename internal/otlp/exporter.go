@@ -211,6 +211,10 @@ func (e *Exporter) envelopeToLogRecord(env *eventschema.Envelope) logRecord {
 		rec.Attributes = append(rec.Attributes, ruleSourceAttributes(p)...)
 	case *eventschema.RuleAnalysisEvent:
 		rec.Attributes = append(rec.Attributes, ruleAnalysisAttributes(p)...)
+	case *eventschema.DomainEvent:
+		// Export the stable kind only. The producer-owned payload may carry
+		// local operational detail and remains in the local event store.
+		rec.Attributes = append(rec.Attributes, stringKV(eventschema.AttrTokenOpsDomainKind, p.Kind))
 	}
 	return rec
 }
