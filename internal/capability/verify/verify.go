@@ -50,6 +50,9 @@ type Attributed struct {
 	// Latency is mean proxy-observed request latency during the execution.
 	// No matching request is unknown rather than zero.
 	Latency measurement.Value `json:"latency"`
+	// PlanQuotaTokens keeps flat-rate quota usage separate from metered
+	// consumption; provider is the resource key, not a dollar conversion.
+	PlanQuotaTokens map[string]int64 `json:"plan_quota_tokens,omitempty"`
 	// Events is how many events were attributed.
 	Events int `json:"events"`
 	// Intervened reports whether an optimization was applied during this
@@ -69,6 +72,11 @@ type OutcomeSummary struct {
 	SuccessRate measurement.Value `json:"success_rate,omitzero"`
 }
 
+// QuotaSummary reports measured plan-included tokens by provider. These
+// are quota consumption, not monetary cost, and are never combined across
+// providers into one synthetic unit.
+type QuotaSummary map[string]measurement.Value
+
 // Attribute joins events to the executions they fall inside.
 //
 // An event belongs to an execution when the actor matches and the
@@ -87,7 +95,7 @@ func Attribute(execs []work.Execution, events []*eventschema.Envelope) []Attribu
 }
 
 func attributeOne(e work.Execution, events []*eventschema.Envelope) Attributed {
-	a := Attributed{Execution: e, Outcomes: intervention.Outcomes{Unknown: 1}}
+	a := Attributed{Execution: e, Outcomes: intervention.Outcomes{Unknown: 1}, PlanQuotaTokens: make(map[string]int64)}
 
 	var tokens int64
 	var latency time.Duration
@@ -121,6 +129,9 @@ func attributeOne(e work.Execution, events []*eventschema.Envelope) Attributed {
 			if p.TokensCounted() {
 				tokens += p.TotalTokens
 				countedPrompts++
+				if p.CostSource == eventschema.CostSourcePlanIncluded {
+					a.PlanQuotaTokens[string(p.Provider)] += p.TotalTokens
+				}
 			}
 		case *eventschema.OptimizationEvent:
 			if p.Decision == eventschema.OptimizationDecisionApplied {
@@ -191,12 +202,14 @@ type Report struct {
 	// BaselineCount and InterventionCount say how many attempts fell in
 	// each cohort. "Not enough data" without saying which side was short
 	// is advice nobody can act on.
-	BaselineCount        int               `json:"baseline_count"`
-	InterventionCount    int               `json:"intervention_count"`
-	BaselineOutcomes     OutcomeSummary    `json:"baseline_outcomes"`
-	InterventionOutcomes OutcomeSummary    `json:"intervention_outcomes"`
-	BaselineLatency      measurement.Value `json:"baseline_latency_ms"`
-	InterventionLatency  measurement.Value `json:"intervention_latency_ms"`
+	BaselineCount         int               `json:"baseline_count"`
+	InterventionCount     int               `json:"intervention_count"`
+	BaselineOutcomes      OutcomeSummary    `json:"baseline_outcomes"`
+	InterventionOutcomes  OutcomeSummary    `json:"intervention_outcomes"`
+	BaselineLatency       measurement.Value `json:"baseline_latency_ms"`
+	InterventionLatency   measurement.Value `json:"intervention_latency_ms"`
+	BaselinePlanQuota     QuotaSummary      `json:"baseline_plan_quota_tokens"`
+	InterventionPlanQuota QuotaSummary      `json:"intervention_plan_quota_tokens"`
 	// Attributed is the per-execution detail the comparison rests on.
 	Attributed []Attributed `json:"attributed,omitempty"`
 }
@@ -239,6 +252,8 @@ func Compare(execs []work.Execution, events []*eventschema.Envelope) Report {
 	report.InterventionOutcomes = summarizeOutcomes(report.Comparison.InterventionOutcomes)
 	report.BaselineLatency = meanLatency(baseline)
 	report.InterventionLatency = meanLatency(intervened)
+	report.BaselinePlanQuota = sumPlanQuota(baseline)
+	report.InterventionPlanQuota = sumPlanQuota(intervened)
 	report.Verdict = intervention.Judge(report.Comparison)
 
 	// Replace the domain's sample-size caveat when it is the wrong
@@ -259,6 +274,26 @@ func Compare(execs []work.Execution, events []*eventschema.Envelope) Report {
 		}
 	}
 	return report
+}
+
+func sumPlanQuota(as []Attributed) QuotaSummary {
+	totals := make(map[string]int64)
+	counts := make(map[string]int64)
+	for _, a := range as {
+		for provider, tokens := range a.PlanQuotaTokens {
+			totals[provider] += tokens
+			counts[provider]++
+		}
+	}
+	if len(totals) == 0 {
+		return nil
+	}
+	quota := make(QuotaSummary, len(totals))
+	for provider, tokens := range totals {
+		quota[provider] = measurement.Measured(float64(tokens), "sqlite_events").
+			Covering(counts[provider], int64(len(as))-counts[provider])
+	}
+	return quota
 }
 
 func meanLatency(as []Attributed) measurement.Value {

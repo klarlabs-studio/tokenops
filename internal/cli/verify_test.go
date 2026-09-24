@@ -22,7 +22,13 @@ func TestVerifyReportsTheDifferenceAndWhyItIsNotAFinding(t *testing.T) {
 		InterventionOutcomes: verify.OutcomeSummary{SuccessRate: measurement.Measured(60, "outcome_events")},
 		BaselineLatency:      measurement.Measured(250, "sqlite_events"),
 		InterventionLatency:  measurement.Measured(300, "sqlite_events"),
-		Comparison:           intervention.Comparison{Assignment: intervention.Observational},
+		BaselinePlanQuota: verify.QuotaSummary{
+			"anthropic": measurement.Measured(1200, "sqlite_events"),
+		},
+		InterventionPlanQuota: verify.QuotaSummary{
+			"anthropic": measurement.Measured(900, "sqlite_events"),
+		},
+		Comparison: intervention.Comparison{Assignment: intervention.Observational},
 		Verdict: intervention.Verdict{
 			Observed: measurement.Measured(2000, "sqlite_events"),
 			Samples:  9,
@@ -46,6 +52,9 @@ func TestVerifyReportsTheDifferenceAndWhyItIsNotAFinding(t *testing.T) {
 	}
 	if !strings.Contains(out, "mean request latency: 250ms baseline → 300ms intervention") {
 		t.Errorf("latency comparison is missing:\n%s", out)
+	}
+	if !strings.Contains(out, "anthropic plan quota tokens: 1200 baseline → 900 intervention") {
+		t.Errorf("provider quota comparison is missing:\n%s", out)
 	}
 	// The word that must not appear over an observational split.
 	if strings.Contains(strings.ToLower(out), "proven") {

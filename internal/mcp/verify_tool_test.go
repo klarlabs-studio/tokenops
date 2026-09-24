@@ -46,6 +46,9 @@ func TestVerifyToolCarriesOutcomeCohortRates(t *testing.T) {
 		InterventionOutcomes: verify.OutcomeSummary{Achieved: 7, Partial: 1, NotAchieved: 2, SuccessRate: with},
 		BaselineLatency:      measurement.Measured(250, "sqlite_events"),
 		InterventionLatency:  measurement.Measured(300, "sqlite_events"),
+		BaselinePlanQuota: verify.QuotaSummary{
+			"anthropic": measurement.Measured(1200, "sqlite_events"),
+		},
 	})
 	if got, ok := payload.BaselineOutcomes.SuccessRate.Amount(); !ok || got != 70 {
 		t.Fatalf("baseline success rate = %v, known=%v", got, ok)
@@ -60,6 +63,9 @@ func TestVerifyToolCarriesOutcomeCohortRates(t *testing.T) {
 	withLatency, withOK := payload.InterventionLatency.(interface{ Amount() (float64, bool) })
 	if got, ok := withLatency.Amount(); !withOK || !ok || got != 300 {
 		t.Fatalf("intervention latency = %v, known=%v", got, ok)
+	}
+	if got := payload.BaselinePlanQuota["anthropic"].AmountOr(-1); got != 1200 {
+		t.Fatalf("baseline plan quota = %v, want 1200", got)
 	}
 }
 

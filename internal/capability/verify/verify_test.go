@@ -67,6 +67,32 @@ func TestMissingLatencyIsUnknownNotZero(t *testing.T) {
 	}
 }
 
+func TestPlanIncludedUsageStaysProviderScopedAndNotDollarPriced(t *testing.T) {
+	base := promptEvent("session:a", t0.Add(time.Minute), 120)
+	base.Payload.(*eventschema.PromptEvent).CostSource = eventschema.CostSourcePlanIncluded
+	treated := promptEvent("session:a", t0.Add(2*time.Hour+time.Minute), 240)
+	treated.Payload.(*eventschema.PromptEvent).CostSource = eventschema.CostSourcePlanIncluded
+	execs := []work.Execution{
+		execution("baseline", "session:a", t0, time.Hour),
+		execution("treated", "session:a", t0.Add(2*time.Hour), time.Hour),
+	}
+	events := []*eventschema.Envelope{
+		base,
+		optimizationEvent("session:a", t0.Add(2*time.Hour+30*time.Second)),
+		treated,
+	}
+	report := verify.Compare(execs, events)
+	if got := report.BaselinePlanQuota[string(eventschema.ProviderAnthropic)].AmountOr(-1); got != 120 {
+		t.Fatalf("baseline plan quota = %v tokens, want 120", got)
+	}
+	if got := report.InterventionPlanQuota[string(eventschema.ProviderAnthropic)].AmountOr(-1); got != 240 {
+		t.Fatalf("intervention plan quota = %v tokens, want 240", got)
+	}
+	if report.BaselinePlanQuota[string(eventschema.ProviderAnthropic)].Source() != "sqlite_events" {
+		t.Fatalf("plan quota has no event provenance: %+v", report.BaselinePlanQuota)
+	}
+}
+
 func optimizationEvent(actor string, at time.Time) *eventschema.Envelope {
 	return &eventschema.Envelope{
 		ID: "opt" + actor + at.String(), Type: eventschema.EventTypeOptimization, Timestamp: at,

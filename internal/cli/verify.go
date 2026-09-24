@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -107,6 +108,30 @@ func writeVerifyText(out io.Writer, r verify.Report) {
 		fmt.Fprintf(out, "  mean request latency: %.0fms baseline → %.0fms intervention\n", baseLatency, interventionLatency)
 	} else {
 		fmt.Fprintln(out, "  mean request latency: not established")
+	}
+	providers := make(map[string]struct{}, len(r.BaselinePlanQuota)+len(r.InterventionPlanQuota))
+	for provider := range r.BaselinePlanQuota {
+		providers[provider] = struct{}{}
+	}
+	for provider := range r.InterventionPlanQuota {
+		providers[provider] = struct{}{}
+	}
+	keys := make([]string, 0, len(providers))
+	for provider := range providers {
+		keys = append(keys, provider)
+	}
+	sort.Strings(keys)
+	for _, provider := range keys {
+		base, baseOK := r.BaselinePlanQuota[provider]
+		with, withOK := r.InterventionPlanQuota[provider]
+		baseValue, withValue := "not observed", "not observed"
+		if baseOK {
+			baseValue = fmt.Sprintf("%.0f", base.AmountOr(0))
+		}
+		if withOK {
+			withValue = fmt.Sprintf("%.0f", with.AmountOr(0))
+		}
+		fmt.Fprintf(out, "  %s plan quota tokens: %s baseline → %s intervention\n", provider, baseValue, withValue)
 	}
 
 	// The wording comes from the capability so this and the MCP tool
