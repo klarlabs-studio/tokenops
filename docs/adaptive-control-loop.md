@@ -62,5 +62,7 @@ events.
 execution ID, including outcomes recorded after the work ended. Both surfaces
 show assessed success rates for optimized and baseline cohorts. A drop in
 success can flag harm even when measured token use falls; absent assessments
-remain unknown. The current cohort split is observational, so it can identify
-a warning but cannot claim the intervention caused the difference.
+remain unknown. They also report mean proxy-observed request latency for each
+cohort; missing requests remain unknown rather than zero. The current cohort
+split is observational, so these measures can identify a warning but cannot
+claim the intervention caused the difference.

@@ -29,6 +29,7 @@ package verify
 import (
 	"fmt"
 	"sort"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/outcomes"
 	"go.klarlabs.de/tokenops/internal/capability/reconstruct"
@@ -46,6 +47,9 @@ type Attributed struct {
 	// genuinely free attempt are different facts, and zero is the one
 	// that quietly reads as good news.
 	Tokens measurement.Value `json:"tokens"`
+	// Latency is mean proxy-observed request latency during the execution.
+	// No matching request is unknown rather than zero.
+	Latency measurement.Value `json:"latency"`
 	// Events is how many events were attributed.
 	Events int `json:"events"`
 	// Intervened reports whether an optimization was applied during this
@@ -86,6 +90,8 @@ func attributeOne(e work.Execution, events []*eventschema.Envelope) Attributed {
 	a := Attributed{Execution: e, Outcomes: intervention.Outcomes{Unknown: 1}}
 
 	var tokens int64
+	var latency time.Duration
+	var latencyEvents int64
 	var countedPrompts int64
 	var promptEvents int64
 	var outcomeEvents []*eventschema.Envelope
@@ -105,6 +111,10 @@ func attributeOne(e work.Execution, events []*eventschema.Envelope) Attributed {
 		switch p := env.Payload.(type) {
 		case *eventschema.PromptEvent:
 			promptEvents++
+			if p.Latency > 0 {
+				latency += p.Latency
+				latencyEvents++
+			}
 			// An uncounted event contributes no tokens and should not
 			// make the total look smaller than it was. Phase 1 put that
 			// flag on the event for exactly this kind of consumer.
@@ -125,11 +135,18 @@ func attributeOne(e work.Execution, events []*eventschema.Envelope) Attributed {
 	if promptEvents == 0 || countedPrompts == 0 {
 		a.Tokens = measurement.Unknown(
 			"no events with counted prompt usage joined to this attempt — consumption is unknown")
-		return a
+	} else {
+		a.Tokens = measurement.Measured(float64(tokens), "sqlite_events").
+			At(e.StartedAt).
+			Covering(countedPrompts, promptEvents-countedPrompts)
 	}
-	a.Tokens = measurement.Measured(float64(tokens), "sqlite_events").
-		At(e.StartedAt).
-		Covering(countedPrompts, promptEvents-countedPrompts)
+	if latencyEvents == 0 {
+		a.Latency = measurement.Unknown("no prompt events with measured latency joined to this attempt")
+	} else {
+		a.Latency = measurement.Measured(float64(latency)/float64(latencyEvents)/float64(time.Millisecond), "sqlite_events").
+			At(e.StartedAt).
+			Covering(latencyEvents, promptEvents-latencyEvents)
+	}
 	return a
 }
 
@@ -174,10 +191,12 @@ type Report struct {
 	// BaselineCount and InterventionCount say how many attempts fell in
 	// each cohort. "Not enough data" without saying which side was short
 	// is advice nobody can act on.
-	BaselineCount        int            `json:"baseline_count"`
-	InterventionCount    int            `json:"intervention_count"`
-	BaselineOutcomes     OutcomeSummary `json:"baseline_outcomes"`
-	InterventionOutcomes OutcomeSummary `json:"intervention_outcomes"`
+	BaselineCount        int               `json:"baseline_count"`
+	InterventionCount    int               `json:"intervention_count"`
+	BaselineOutcomes     OutcomeSummary    `json:"baseline_outcomes"`
+	InterventionOutcomes OutcomeSummary    `json:"intervention_outcomes"`
+	BaselineLatency      measurement.Value `json:"baseline_latency_ms"`
+	InterventionLatency  measurement.Value `json:"intervention_latency_ms"`
 	// Attributed is the per-execution detail the comparison rests on.
 	Attributed []Attributed `json:"attributed,omitempty"`
 }
@@ -218,6 +237,8 @@ func Compare(execs []work.Execution, events []*eventschema.Envelope) Report {
 	}
 	report.BaselineOutcomes = summarizeOutcomes(report.Comparison.BaselineOutcomes)
 	report.InterventionOutcomes = summarizeOutcomes(report.Comparison.InterventionOutcomes)
+	report.BaselineLatency = meanLatency(baseline)
+	report.InterventionLatency = meanLatency(intervened)
 	report.Verdict = intervention.Judge(report.Comparison)
 
 	// Replace the domain's sample-size caveat when it is the wrong
@@ -238,6 +259,23 @@ func Compare(execs []work.Execution, events []*eventschema.Envelope) Report {
 		}
 	}
 	return report
+}
+
+func meanLatency(as []Attributed) measurement.Value {
+	if len(as) == 0 {
+		return measurement.Unknown("the cohort is empty")
+	}
+	values := make([]measurement.Value, 0, len(as))
+	for _, a := range as {
+		values = append(values, a.Latency)
+	}
+	total := measurement.Sum(values...)
+	amount, ok := total.Amount()
+	if !ok {
+		return total
+	}
+	return measurement.Measured(amount/float64(len(as)), total.Source()).
+		WithCaveat(total.Caveat())
 }
 
 func sumOutcomes(as []Attributed) intervention.Outcomes {

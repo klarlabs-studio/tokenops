@@ -8,6 +8,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/verify"
 	"go.klarlabs.de/tokenops/internal/contexts/intervention"
+	"go.klarlabs.de/tokenops/internal/contexts/measurement"
 	"go.klarlabs.de/tokenops/internal/contexts/work"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -25,8 +26,44 @@ func promptEvent(actor string, at time.Time, tokens int64) *eventschema.Envelope
 		Association: eventschema.Association{Actor: actor},
 		Payload: &eventschema.PromptEvent{
 			Provider: eventschema.ProviderAnthropic, RequestModel: "claude-sonnet-4-6",
-			InputTokens: tokens, TotalTokens: tokens,
+			InputTokens: tokens, TotalTokens: tokens, Latency: 250 * time.Millisecond,
 		},
+	}
+}
+
+func TestComparisonReportsMeasuredMeanLatencyByCohort(t *testing.T) {
+	execs := []work.Execution{
+		execution("baseline", "session:a", t0, time.Hour),
+		execution("treated", "session:a", t0.Add(2*time.Hour), time.Hour),
+	}
+	events := []*eventschema.Envelope{
+		promptEvent("session:a", t0.Add(time.Minute), 100),
+		optimizationEvent("session:a", t0.Add(2*time.Hour+time.Minute)),
+		promptEvent("session:a", t0.Add(2*time.Hour+2*time.Minute), 100),
+	}
+	// Keep the observations intentionally different; the verifier must
+	// preserve measurement units and report each cohort separately.
+	(*events[2].Payload.(*eventschema.PromptEvent)).Latency = 500 * time.Millisecond
+	report := verify.Compare(execs, events)
+	baseline, baselineOK := report.BaselineLatency.Amount()
+	treated, treatedOK := report.InterventionLatency.Amount()
+	if !baselineOK || !treatedOK || baseline != 250 || treated != 500 {
+		t.Fatalf("latency = %v (%v) / %v (%v) ms", baseline, baselineOK, treated, treatedOK)
+	}
+	if report.BaselineLatency.Quality() != measurement.QualityMeasured {
+		t.Fatalf("latency provenance = %q; want measured", report.BaselineLatency.Quality())
+	}
+}
+
+func TestMissingLatencyIsUnknownNotZero(t *testing.T) {
+	event := promptEvent("session:a", t0.Add(time.Minute), 100)
+	event.Payload.(*eventschema.PromptEvent).Latency = 0
+	got := verify.Attribute(
+		[]work.Execution{execution("e1", "session:a", t0, time.Hour)},
+		[]*eventschema.Envelope{event},
+	)
+	if got[0].Latency.Known() {
+		t.Fatalf("missing latency reported as measured %vms", got[0].Latency.AmountOr(-1))
 	}
 }
 

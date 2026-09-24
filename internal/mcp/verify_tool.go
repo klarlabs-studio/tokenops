@@ -54,6 +54,8 @@ type verifyResult struct {
 	InterventionCount    int                   `json:"intervention_count"`
 	BaselineOutcomes     verify.OutcomeSummary `json:"baseline_outcomes"`
 	InterventionOutcomes verify.OutcomeSummary `json:"intervention_outcomes"`
+	BaselineLatency      any                   `json:"baseline_latency_ms,omitzero"`
+	InterventionLatency  any                   `json:"intervention_latency_ms,omitzero"`
 
 	Error string `json:"error,omitempty"`
 	Hint  string `json:"hint,omitempty"`
@@ -70,6 +72,8 @@ func verifyPayload(r verify.Report) verifyResult {
 		InterventionCount:    r.InterventionCount,
 		BaselineOutcomes:     r.BaselineOutcomes,
 		InterventionOutcomes: r.InterventionOutcomes,
+		BaselineLatency:      r.BaselineLatency,
+		InterventionLatency:  r.InterventionLatency,
 	}
 	// Proven requires both an assigned comparison and a conclusion. An
 	// observational split can never reach it.
@@ -92,7 +96,7 @@ func RegisterVerifyTool(s *Server, d VerifyDeps) error {
 		return errors.New("mcp: nil server")
 	}
 	s.Tool("tokenops_verify").
-		Description("Compare the attempts an optimization touched against the ones it did not, over real recorded work. Returns measured token difference and explicit outcome success rates for both groups. Outcome drops can flag harm, but the cohorts remain observational unless assignments were randomized; read `observational` and `proven` before attributing a difference to the optimization.").
+		Description("Compare the attempts an optimization touched against the ones it did not, over real recorded work. Returns measured token difference, mean proxy request latency, and explicit outcome success rates for both groups. Outcome drops can flag harm, but the cohorts remain observational unless assignments were randomized; read `observational` and `proven` before attributing a difference to the optimization.").
 		OutputSchema(verifyResult{}).
 		Handler(func(ctx context.Context, in verifyInput) (*verifyResult, error) {
 			if d.Store == nil {

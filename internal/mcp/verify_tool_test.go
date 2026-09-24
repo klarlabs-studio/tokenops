@@ -44,12 +44,22 @@ func TestVerifyToolCarriesOutcomeCohortRates(t *testing.T) {
 	payload := verifyPayload(verify.Report{
 		BaselineOutcomes:     verify.OutcomeSummary{Achieved: 7, NotAchieved: 3, SuccessRate: base},
 		InterventionOutcomes: verify.OutcomeSummary{Achieved: 7, Partial: 1, NotAchieved: 2, SuccessRate: with},
+		BaselineLatency:      measurement.Measured(250, "sqlite_events"),
+		InterventionLatency:  measurement.Measured(300, "sqlite_events"),
 	})
 	if got, ok := payload.BaselineOutcomes.SuccessRate.Amount(); !ok || got != 70 {
 		t.Fatalf("baseline success rate = %v, known=%v", got, ok)
 	}
 	if got, ok := payload.InterventionOutcomes.SuccessRate.Amount(); !ok || got != 75 {
 		t.Fatalf("intervention success rate = %v, known=%v", got, ok)
+	}
+	baseLatency, baseOK := payload.BaselineLatency.(interface{ Amount() (float64, bool) })
+	if got, ok := baseLatency.Amount(); !baseOK || !ok || got != 250 {
+		t.Fatalf("baseline latency = %v, known=%v", got, ok)
+	}
+	withLatency, withOK := payload.InterventionLatency.(interface{ Amount() (float64, bool) })
+	if got, ok := withLatency.Amount(); !withOK || !ok || got != 300 {
+		t.Fatalf("intervention latency = %v, known=%v", got, ok)
 	}
 }
 
