@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/decide"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
@@ -48,6 +49,9 @@ type routingAdviceInput struct {
 	Provider    string  `json:"provider,omitempty" jsonschema:"description=Provider name, e.g. anthropic. Defaults to the single configured plan when there is only one."`
 	Model       string  `json:"model,omitempty" jsonschema:"description=The model this turn would otherwise run on. Without it there is nothing to compare against."`
 	ToolDensity float64 `json:"tool_density,omitempty" jsonschema:"description=Share of the recent exchange that was tool traffic (0-1), when you can estimate it. Omitting it only makes the answer more conservative."`
+	WorkID      string  `json:"work_id,omitempty" jsonschema:"description=Stable work identifier when the caller already knows it."`
+	ExecutionID string  `json:"execution_id,omitempty" jsonschema:"description=Stable execution identifier when the caller already knows it."`
+	ActorID     string  `json:"actor_id,omitempty" jsonschema:"description=Actor performing the execution when known."`
 }
 
 // routingAdviceResult is a recommendation, never an action. The
@@ -74,6 +78,12 @@ type routingAdviceResult struct {
 	// Note carries a setup problem that made the answer weaker than it
 	// could be, rather than letting it read as a considered "stay".
 	Note string `json:"note,omitempty"`
+	// DecisionID joins this recommendation to its later action and outcome.
+	DecisionID string `json:"decision_id,omitempty"`
+	Stage      string `json:"stage,omitempty"`
+	Authority  string `json:"authority,omitempty"`
+	Executable bool   `json:"executable"`
+	Recorded   bool   `json:"recorded"`
 }
 
 // RegisterRoutingAdviceTools exposes the routing decision as advice.
@@ -160,9 +170,36 @@ func RegisterRoutingAdviceTools(s *Server, d RoutingAdviceDeps) error {
 				// same answer as a "stay" produced by measured headroom.
 				out.Note = "the plan's rate-limit window is not being measured, so conserving cannot be justified — check the plan binding (tokenops_plan_set, or `tokenops plan set`) and that the daemon is ingesting"
 			}
+
+			authority := decide.RoutingAuthority(*cfg)
+			decision := decide.Route(decide.RouteInput{
+				Provider: provider, CurrentModel: in.Model, Advice: adv,
+				Authority: authority, Adapter: decide.Adapter{Name: "mcp", CanApplyRoute: false},
+				Association: eventschema.Association{Work: in.WorkID, Execution: in.ExecutionID, Actor: in.ActorID},
+				WindowKnown: known, WindowPct: pct, ObservedAt: time.Now().UTC(),
+			})
+			out.DecisionID = decision.DecisionID
+			out.Stage = string(decision.Stage)
+			out.Authority = authority.String()
+			out.Executable = decision.Executable
+			if d.Store != nil {
+				if err := d.Store.Append(ctx, decision.Event); err != nil {
+					return nil, err
+				}
+				out.Recorded = true
+			} else {
+				out.Note = appendNote(out.Note, "decision history is unavailable because storage is disabled")
+			}
 			return out, nil
 		})
 	return nil
+}
+
+func appendNote(current, next string) string {
+	if current == "" {
+		return next
+	}
+	return current + "; " + next
 }
 
 // resolveAdviceProvider takes the caller's provider, or infers it when

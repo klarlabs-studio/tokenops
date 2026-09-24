@@ -212,6 +212,7 @@ func (r *Router) Run(_ context.Context, req *optimizer.Request) ([]optimizer.Rec
 		tokens, usd := r.estimateSavings(req, target)
 		return []optimizer.Recommendation{{
 			Kind:                   eventschema.OptimizationTypeRouter,
+			TargetModel:            target,
 			EstimatedSavingsTokens: tokens,
 			EstimatedSavingsUSD:    usd,
 			QualityScore:           rule.Quality,
@@ -239,6 +240,7 @@ func (r *Router) Run(_ context.Context, req *optimizer.Request) ([]optimizer.Rec
 		}
 		return []optimizer.Recommendation{{
 			Kind:         eventschema.OptimizationTypeRouter,
+			TargetModel:  target,
 			Reason:       "router: route awaiting operator approval",
 			QualityScore: rule.Quality,
 		}}, nil
@@ -254,6 +256,7 @@ func (r *Router) Run(_ context.Context, req *optimizer.Request) ([]optimizer.Rec
 
 	return []optimizer.Recommendation{{
 		Kind:                   eventschema.OptimizationTypeRouter,
+		TargetModel:            target,
 		EstimatedSavingsTokens: tokenSavings,
 		EstimatedSavingsUSD:    usdSavings,
 		QualityScore:           rule.Quality,

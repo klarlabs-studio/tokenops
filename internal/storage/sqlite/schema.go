@@ -81,6 +81,22 @@ CREATE INDEX events_execution_idx ON events (execution_id, timestamp_ns) WHERE e
 CREATE INDEX events_actor_idx     ON events (actor_id, timestamp_ns)     WHERE actor_id     IS NOT NULL;
 `,
 	},
+	{
+		Version: 4,
+		Name:    "event_control_correlation",
+		SQL: `
+-- Decision, intervention and experiment ids are separate from trace ids:
+-- tracing describes execution mechanics, while these ids join the evidence
+-- needed to answer why TokenOps acted and what happened afterwards.
+ALTER TABLE events ADD COLUMN decision_id     TEXT;
+ALTER TABLE events ADD COLUMN intervention_id TEXT;
+ALTER TABLE events ADD COLUMN experiment_id   TEXT;
+
+CREATE INDEX events_decision_idx     ON events (decision_id, timestamp_ns)     WHERE decision_id     IS NOT NULL;
+CREATE INDEX events_intervention_idx ON events (intervention_id, timestamp_ns) WHERE intervention_id IS NOT NULL;
+CREATE INDEX events_experiment_idx   ON events (experiment_id, timestamp_ns)   WHERE experiment_id   IS NOT NULL;
+`,
+	},
 }
 
 type migration struct {

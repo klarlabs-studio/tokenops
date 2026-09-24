@@ -30,6 +30,7 @@ pass `make verify`.
 | Contract | Owner | Review Required |
 |---|---|---|
 | Event Envelope (`Envelope`) | @tokenops/proxy | Any schema change |
+| Decision, Outcome, Experiment Events | @tokenops/control | Any schema change |
 | Prompt Event (`PromptEvent`) | @tokenops/proxy | Any schema change |
 | Workflow Event (`WorkflowEvent`) | @tokenops/sdk | Any schema change |
 | Optimization Event (`OptimizationEvent`) | @tokenops/optimizer | Any schema change |
@@ -131,6 +132,17 @@ Consumers:
 | `RuleAnalysisEvent.CompressedTokens` | `rules.Compressor.Compress` | Post-distillation token count | Storage, OTLP, Dashboard |
 | `Envelope.Payload` | Event-specific type | JSON serialized | Storage (payload column) |
 
+### Control-loop correlation and payloads
+
+`Envelope.Correlation` carries optional `decision`, `intervention`, and
+`experiment` identifiers. SQLite indexes each identifier independently; these
+are lifecycle joins, not distributed trace IDs. `DecisionEvent` preserves the
+alternatives, selected resource, evidence references, effective authority,
+uncertainty, and rationale. `OutcomeEvent` keeps categorical assessment and
+provenance-bearing measurements separate from consumption. `ExperimentEvent`
+records explicit enrollment, bounds, assignments, and termination. Prompt and
+tool bodies are never copied into these payloads.
+
 ---
 
 ## 1. Envelope Contract
@@ -143,8 +155,8 @@ Consumers:
 | Field | Type | Required | SQLite Column | OTLP Key | Constraints |
 |---|---|---|---|---|---|
 | `ID` | string | yes | `id` (PK) | `tokenops.event.id` | UUIDv7 format; max 64 chars |
-| `SchemaVersion` | string | yes | `schema_version` | `tokenops.schema_version` | Semver; current `"1.2.0"` |
-| `Type` | EventType | yes | `type` | `tokenops.event.type` | One of: prompt, workflow, optimization, coaching, rule_source, rule_analysis |
+| `SchemaVersion` | string | yes | `schema_version` | `tokenops.schema_version` | Semver; current `"1.3.0"` |
+| `Type` | EventType | yes | `type` | `tokenops.event.type` | One of: prompt, workflow, optimization, coaching, rule_source, rule_analysis, decision, outcome, experiment |
 | `Timestamp` | time.Time | yes | `timestamp_ns` | (timeUnixNano) | UTC; nanosecond precision |
 | `TraceID` | *string | no | `trace_id` | `trace_id` | 32-char hex W3C format |
 | `SpanID` | *string | no | `span_id` | `span_id` | 16-char hex W3C format |

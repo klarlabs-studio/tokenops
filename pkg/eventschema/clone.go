@@ -62,6 +62,24 @@ func (env *Envelope) Clone() (*Envelope, error) {
 				return nil, err
 			}
 			cp.Payload = &p
+		case EventTypeDecision:
+			var p DecisionEvent
+			if err := json.Unmarshal(raw, &p); err != nil {
+				return nil, err
+			}
+			cp.Payload = &p
+		case EventTypeOutcome:
+			var p OutcomeEvent
+			if err := json.Unmarshal(raw, &p); err != nil {
+				return nil, err
+			}
+			cp.Payload = &p
+		case EventTypeExperiment:
+			var p ExperimentEvent
+			if err := json.Unmarshal(raw, &p); err != nil {
+				return nil, err
+			}
+			cp.Payload = &p
 		}
 	}
 	return &cp, nil

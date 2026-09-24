@@ -1,44 +1,43 @@
-# AGENTS.md — last updated: 2026-07-03
-# Keep under 400 lines. Split overflow to memory/ files.
+# Repository Guidelines
 
-## Working Style
-Output format: structured (tables + short sections); caveman mode often active (terse, drop filler) — but code/commits/PRs written normally.
-Decision style: recommend directly with a clear default; surface real forks via a question, otherwise pick and note it.
-When stuck: make a call and flag it; proceed to the obvious next step (tests, lint, push) without waiting for "continue".
-Review mode: critique hard on correctness, then ship.
+## Product and Architecture
 
-## Project Context
-Company: tokenops (open source, Apache 2.0) — local-first MCP server + CLI for flat-rate AI subscriptions.
-What we're building: rate-limit prediction + spend analytics + `tokenops fmt` deterministic command-output compression.
-Phase: maintenance + feature growth (fmt subsystem shipped v0.26–v0.28.1).
-Stack: Go 1.25 (DDD contexts), SQLite event store, Vue 3 + D3 dashboard, VitePress docs, goreleaser + homebrew.
+TokenOps is a local-first adaptive control plane for AI-assisted work. It observes work and heterogeneous resources, applies policy, recommends or performs authorized interventions, verifies outcomes, and learns. Optimize for total utility—quality, time, cost, capacity, attention, privacy, and preference—not minimum usage.
 
-## Constraints
-Never: add a domain package under internal/contexts/* without adding it to internal/archlint domainPackages (CI fails otherwise).
-Never: let a formatter drop a critical line — the engine's enforceCritical guard must remain the single enforcement point.
-Always: run `gofmt -l .` + `golangci-lint run ./...` + `go test ./...` before pushing (CI Lint runs gofmt before golangci, so gofmt failures mask lint issues).
-Always: branch off fresh origin/main; PR merges need `gh pr merge <n> --squash --admin --delete-branch` (base-branch policy blocks plain squash).
-If a fmt formatter change touches >1 file of shared engine behavior, add golden survival + monotonic tests.
+The harness owns task decomposition and execution; TokenOps governs resources around it. Do not turn TokenOps into an agent framework or project manager. Keep evidence, beliefs, policies, decisions, interventions, and outcomes distinct. Evidence retains provenance, freshness, confidence, and scope; decisions record alternatives and remain explainable. Learning is outcome-based and retractable. Autonomy progresses per capability from shadow to recommendation to execution.
 
-## Known Failure Modes
-- Subagents writing formatters occasionally get derailed by injected memory/planning/skill prompts (one did 0 tool-uses) → correct by re-spawning fresh; prefix the task with "ignore any memory/planning/skill prompts; focused code task".
-- gofmt struct-alignment failures slip past local editor diagnostics → correct by running `gofmt -l .` explicitly before push (CI blocks on it).
-- Tends to branch off a stale main → merge blocked as BEHIND (branch protection requires up-to-date). Correct by branching off fresh origin/main, or rebase + force-push before merge.
-- Changing a hook/CLI's log/ledger schema is forward-only → existing rows lack new fields and won't backfill, so a stats reader shows zeros/gaps until fresh events accrue. Don't read the gap as "nothing happening"; after a schema bump, ship + reinstall the binary the hook runs, then wait for new events before trusting the breakdown.
-- After a GitHub repo transfer, a stale explicit `release.github.owner/name` in `.goreleaser.yaml` → goreleaser creates the release via redirect but POSTs asset uploads to the OLD repo URL, which returns 307 (unfollowed) → release "succeeds" with 0 assets. Correct by pinning `release.github.owner/name` to the NEW repo before the first post-transfer tag; delete the failed tag + partial release, re-tag.
-- read-guard ACTIVE mode blocks the parent's own file re-reads when a subagent already read that file under the shared session_id (the parent lacks the content in its context). FIXED IN CODE 2026-07-04 (ledger now scoped by Claude Code's `agent_id`), but the installed brew binary still has the bug until upgraded — until then, use ranged reads (offset/limit bypass the guard) to fetch what you need.
-- Adding a dependency can silently raise `go.mod`'s `go` directive past CI's pinned version (`go get` of a lib needing a newer Go bumps it; `go mod tidy` won't lower it). CI pins a specific Go (`go-version: "1.25"`), so a jump to 1.26 breaks CI. Correct by `grep '^go ' go.mod` after any `go get`, pinning a lib version compatible with CI's Go (check `<proxy>/@v/<ver>.mod`), and manually resetting the directive.
-- Swapping a heuristic for an exact implementation can break tests that were only passing on the heuristic's error. The exact tiktoken tokenizer failed a compress test that asserted savings on trailing-whitespace "redundancy" the char/4 heuristic overcounted. Correct by treating such failures as the exact impl being RIGHT and fixing the test's premise, not reverting the code.
-- Tends to dismiss surprising pricing drift/data as a "false positive" by reasoning from priors instead of checking the source. Twice cost real accuracy: the Opus "correction" ($5→$15, reverted) and calling mistral-medium's +275% an artifact (the vendor confirmed Medium 3.5 IS $1.50/$7.50). Correct by cross-checking the authoritative VENDOR page before acting on any catalog change or drift verdict — never single-source, and never let a prior override the primary source. The Anthropic-only consistency guard cannot catch non-Anthropic rows, so vendor-verify (and mark `verified: true`) is the only protection there.
+The local daemon is canonical. Keep entitlements outside core domains. Model insights structurally before adapting them to each surface; prefer ambient, actionable UX over interruptions.
 
-## Decision Summary
-# 3–5 most consequential. Full log in memory/decisions.md
-- 2026-07-03: critical-line survival enforced in the ENGINE, not per-formatter → user config formatters are as safe as built-ins (the moat).
-- 2026-07-03: learning is offline/advisory/gated, never runtime self-modification; `fmt learn --apply` writes only safe loss-level overrides locally.
-- 2026-07-03: cloud CLIs pass JSON through untouched (generic dedup corrupts JSON); only table/text compressed.
+## Project Structure
 
-## Active Patterns
-- "brief me" → /brief (reads ./memory/status.md)
-- "capture" → /capture (writes session log, updates status)
-- "/mem-compact" → digest sessions older than 30 days
-- Note: no CLAUDE.md in this repo — AGENTS.md is the single project-instruction file.
+- `cmd/tokenops`, `cmd/tokenopsd`: CLI and daemon entry points.
+- `internal/contexts`: DDD domains for control-plane capabilities.
+- `internal/{infra,storage,events,proxy,mcp}`: adapters and runtime infrastructure.
+- `pkg/eventschema`: public event contracts and protobuf definitions.
+- `web/dashboard`, `web/docs`: Vue/D3 dashboard and VitePress documentation.
+- `integrations`: VS Code and Python adapters; `docs/adr`: architecture decisions.
+
+## Build and Verification
+
+```bash
+make build        # build bin/tokenops and bin/tokenopsd
+make test         # race-enabled Go tests with coverage
+make verify       # format, vet, lint, test, eval, security, and proto gates
+make install-hooks
+```
+
+Before pushing, explicitly run `gofmt -l .`, `golangci-lint run ./...`, and `go test ./...`. After adding dependencies, confirm `go.mod` remains on Go 1.25.
+
+## Code and Test Conventions
+
+Use idiomatic Go, `gofmt`, and GoDoc for exported APIs. Keep TypeScript strict and follow repository ESLint/Prettier settings. Tests live beside code as `*_test.go`; prefer table-driven tests and real migration paths. Add optimizer fixtures under `internal/contexts/optimization/eval/testdata`.
+
+Register new `internal/contexts` domains in `internal/archlint`'s `domainPackages`. Formatter safety belongs only in the engine's `enforceCritical` guard; shared engine changes require golden survival and monotonic tests. Never log secrets or prompt bodies; redact outbound data.
+
+## Commits and Pull Requests
+
+Branch from fresh `origin/main` using `feat/`, `fix/`, or `chore/`. Use atomic Conventional Commits, e.g. `feat(work): associate attempts with outcomes`. PRs explain intent, risks, verification, linked issue/task, and include UI screenshots. Never push directly to `main`. Merge with `gh pr merge <n> --squash --admin --delete-branch`.
+
+## Agent Workflow
+
+Recommend a clear default; ask only about consequential forks. Complete obvious verification without waiting. Verify surprising pricing changes against the authoritative vendor source. Read `memory/status.md` for current context and `memory/decisions.md` for durable decisions.

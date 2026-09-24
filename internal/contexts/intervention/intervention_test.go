@@ -1,6 +1,7 @@
 package intervention_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -167,6 +168,7 @@ func TestZeroVerdictIsInconclusive(t *testing.T) {
 // consumption. This is the multi-objective rule the intent asks for.
 func TestCheaperButWorseIsNotAWin(t *testing.T) {
 	v := intervention.Judge(intervention.Comparison{
+		Assignment:   intervention.Randomised,
 		Baseline:     measurement.Measured(5000, "tokenizer"),
 		Intervention: measurement.Measured(3000, "tokenizer"),
 		Samples:      40,
@@ -191,6 +193,9 @@ func TestCheaperButWorseIsNotAWin(t *testing.T) {
 // A genuine win: fewer tokens, outcomes held.
 func TestCheaperAndNoWorseIsAWin(t *testing.T) {
 	v := intervention.Judge(intervention.Comparison{
+		// Randomised, because these exercise the conclusion logic, and
+		// only an assigned comparison is allowed to reach one.
+		Assignment:           intervention.Randomised,
 		Baseline:             measurement.Measured(5000, "tokenizer"),
 		Intervention:         measurement.Measured(3000, "tokenizer"),
 		Samples:              40,
@@ -253,6 +258,9 @@ func TestAnUnknownBaselineCannotConclude(t *testing.T) {
 // answer, and the one an operator needs before turning something off.
 func TestNoMeaningfulChangeIsNoEffect(t *testing.T) {
 	v := intervention.Judge(intervention.Comparison{
+		// Randomised, because these exercise the conclusion logic, and
+		// only an assigned comparison is allowed to reach one.
+		Assignment:           intervention.Randomised,
 		Baseline:             measurement.Measured(5000, "tokenizer"),
 		Intervention:         measurement.Measured(4995, "tokenizer"),
 		Samples:              40,
@@ -273,6 +281,9 @@ func TestNoMeaningfulChangeIsNoEffect(t *testing.T) {
 // outcomes held.
 func TestMoreExpensiveIsHarm(t *testing.T) {
 	v := intervention.Judge(intervention.Comparison{
+		// Randomised, because these exercise the conclusion logic, and
+		// only an assigned comparison is allowed to reach one.
+		Assignment:           intervention.Randomised,
 		Baseline:             measurement.Measured(3000, "tokenizer"),
 		Intervention:         measurement.Measured(5000, "tokenizer"),
 		Samples:              40,
@@ -297,5 +308,99 @@ func TestEmptyOutcomesHaveNoRate(t *testing.T) {
 	rate, ok := intervention.Outcomes{Achieved: 3, NotAchieved: 1}.SuccessRate()
 	if !ok || rate != 0.75 {
 		t.Errorf("rate = %v, ok = %v, want 0.75", rate, ok)
+	}
+}
+
+// The confound that decides whether any of this is worth trusting.
+//
+// Splitting executions by whether an optimization happened to fire is
+// observational, not experimental. Compression applies to large outputs;
+// routing applies to turns a classifier thought were mechanical. The
+// cohorts therefore differ in ways that have nothing to do with the
+// intervention, and a difference between them cannot be attributed to
+// it.
+//
+// TokenOps can still show the difference. What it must not do is call
+// it an improvement — that is "tokens removed × nominal price" wearing a
+// statistical costume.
+func TestAnObservationalComparisonCannotConcludeItHelped(t *testing.T) {
+	v := intervention.Judge(intervention.Comparison{
+		Assignment:           intervention.Observational,
+		Baseline:             measurement.Measured(5000, "tokenizer"),
+		Intervention:         measurement.Measured(3000, "tokenizer"),
+		Samples:              400,
+		BaselineOutcomes:     intervention.Outcomes{Achieved: 400},
+		InterventionOutcomes: intervention.Outcomes{Achieved: 400},
+		At:                   t0,
+	})
+
+	if v.Outcome == intervention.Improved {
+		t.Error("an observational comparison claimed the intervention helped")
+	}
+	if v.Conclusive() {
+		t.Error("an observational comparison reported itself conclusive")
+	}
+	// The measured difference is still reported — it is the reason to
+	// run a real experiment, and hiding it would be its own dishonesty.
+	if observed, ok := v.Observed.Amount(); !ok || observed != 2000 {
+		t.Errorf("the difference was withheld: %v %v", observed, ok)
+	}
+	if !strings.Contains(v.Caveat, "not assigned") {
+		t.Errorf("the caveat does not explain the confound: %q", v.Caveat)
+	}
+}
+
+// Harm is different. An observational comparison showing the success
+// rate collapsed is a reason to stop, even though it cannot prove
+// causation: the cost of pausing an optimization that was innocent is
+// far below the cost of continuing one that is not.
+func TestObservationalHarmIsStillReported(t *testing.T) {
+	v := intervention.Judge(intervention.Comparison{
+		Assignment:           intervention.Observational,
+		Baseline:             measurement.Measured(5000, "tokenizer"),
+		Intervention:         measurement.Measured(3000, "tokenizer"),
+		Samples:              400,
+		BaselineOutcomes:     intervention.Outcomes{Achieved: 380, NotAchieved: 20},
+		InterventionOutcomes: intervention.Outcomes{Achieved: 200, NotAchieved: 200},
+		At:                   t0,
+	})
+
+	if v.Outcome != intervention.Harmed {
+		t.Errorf("outcome = %q; a collapsed success rate was not reported", v.Outcome)
+	}
+	if !strings.Contains(v.Caveat, "not assigned") {
+		t.Errorf("the harm verdict does not disclose that it is observational: %q", v.Caveat)
+	}
+}
+
+// A randomised comparison can conclude, because the cohorts were
+// assigned rather than observed. This is the rung the experiment
+// machinery has to reach before any saving is called proven.
+func TestARandomisedComparisonCanConclude(t *testing.T) {
+	v := intervention.Judge(intervention.Comparison{
+		Assignment:           intervention.Randomised,
+		Baseline:             measurement.Measured(5000, "tokenizer"),
+		Intervention:         measurement.Measured(3000, "tokenizer"),
+		Samples:              400,
+		BaselineOutcomes:     intervention.Outcomes{Achieved: 400},
+		InterventionOutcomes: intervention.Outcomes{Achieved: 400},
+		At:                   t0,
+	})
+
+	if v.Outcome != intervention.Improved {
+		t.Errorf("outcome = %q, want improved", v.Outcome)
+	}
+	if !v.Conclusive() {
+		t.Error("a randomised comparison is not conclusive")
+	}
+}
+
+// The zero Assignment is observational, so a caller that does not say
+// how cohorts were formed gets the weaker reading rather than the
+// stronger one.
+func TestUnstatedAssignmentIsObservational(t *testing.T) {
+	var c intervention.Comparison
+	if c.Assignment != intervention.Observational {
+		t.Errorf("zero assignment = %q, want observational", c.Assignment)
 	}
 }

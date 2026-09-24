@@ -102,7 +102,7 @@ func TestGoldenPromptEnvelope(t *testing.T) {
 	got := canon(t, env)
 	want := `{
   "id": "01HABCDEF0123456789KLMNOPQRS",
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "type": "prompt",
   "timestamp": "2026-05-11T12:00:00Z",
   "source": "proxy",
@@ -149,7 +149,7 @@ func TestGoldenPromptEnvelopePlanIncluded(t *testing.T) {
 	got := canon(t, env)
 	want := `{
   "id": "01HABCDEF0123456789KLMNOPQRS",
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "type": "prompt",
   "timestamp": "2026-05-11T12:00:00Z",
   "source": "proxy",
@@ -197,7 +197,7 @@ func TestGoldenRuleSourceEnvelope(t *testing.T) {
 	got := canon(t, env)
 	want := `{
   "id": "01HABCDEF0123456789KLMNOPQRS",
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "type": "rule_source",
   "timestamp": "2026-05-11T12:00:00Z",
   "source": "rule-engine",
@@ -253,7 +253,7 @@ func TestGoldenRuleAnalysisEnvelope(t *testing.T) {
 	got := canon(t, env)
 	want := `{
   "id": "01HABCDEF0123456789KLMNOPQRS",
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "type": "rule_analysis",
   "timestamp": "2026-05-11T12:00:00Z",
   "source": "rule-engine",
@@ -296,7 +296,7 @@ func TestGoldenWorkflowEnvelope(t *testing.T) {
 	}
 	want := `{
   "id": "01HABCDEF0123456789KLMNOPQRS",
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "type": "workflow",
   "timestamp": "2026-05-11T12:00:00Z",
   "source": "agent",
@@ -333,7 +333,7 @@ func TestGoldenOptimizationEnvelope(t *testing.T) {
 	}
 	want := `{
   "id": "01HABCDEF0123456789KLMNOPQRS",
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "type": "optimization",
   "timestamp": "2026-05-11T12:00:00Z",
   "source": "optimizer",
@@ -368,7 +368,7 @@ func TestGoldenCoachingEnvelope(t *testing.T) {
 	}
 	want := `{
   "id": "01HABCDEF0123456789KLMNOPQRS",
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "type": "coaching",
   "timestamp": "2026-05-11T12:00:00Z",
   "source": "coach",
@@ -384,8 +384,64 @@ func TestGoldenCoachingEnvelope(t *testing.T) {
 	assertEqualGolden(t, canon(t, env), want)
 }
 
+func TestGoldenDecisionEnvelope(t *testing.T) {
+	env := Envelope{
+		ID: fixedID, SchemaVersion: SchemaVersion, Type: EventTypeDecision,
+		Timestamp: fixedTime, Source: "decision",
+		Association: Association{Work: "work:1", Execution: "exec:1", Actor: "agent:1"},
+		Correlation: Correlation{Decision: "decision:1", Intervention: "intervention:1"},
+		Payload: &DecisionEvent{
+			Kind: "model_route", Stage: DecisionStageShadow,
+			Alternatives: []ResourceOption{{Provider: "anthropic", Model: "opus"}, {Provider: "anthropic", Model: "sonnet"}},
+			Selected:     ResourceOption{Provider: "anthropic", Model: "sonnet"},
+			Policy:       "quality_first", Authority: "observe_only", Confidence: 0.8,
+			Rationale: "mechanical work under measured capacity pressure",
+		},
+	}
+	want := `{
+  "id": "01HABCDEF0123456789KLMNOPQRS",
+  "schema_version": "1.3.0",
+  "type": "decision",
+  "timestamp": "2026-05-11T12:00:00Z",
+  "source": "decision",
+  "association": {
+    "work": "work:1",
+    "execution": "exec:1",
+    "actor": "agent:1"
+  },
+  "correlation": {
+    "decision": "decision:1",
+    "intervention": "intervention:1"
+  },
+  "payload": {
+    "kind": "model_route",
+    "stage": "shadow",
+    "alternatives": [
+      {
+        "provider": "anthropic",
+        "model": "opus"
+      },
+      {
+        "provider": "anthropic",
+        "model": "sonnet"
+      }
+    ],
+    "selected": {
+      "provider": "anthropic",
+      "model": "sonnet"
+    },
+    "policy": "quality_first",
+    "authority": "observe_only",
+    "confidence": 0.8,
+    "rationale": "mechanical work under measured capacity pressure",
+    "executable": false
+  }
+}`
+	assertEqualGolden(t, canon(t, env), want)
+}
+
 func TestGoldenSchemaVersionMatchesPolicy(t *testing.T) {
-	if SchemaVersion != "1.2.0" {
+	if SchemaVersion != "1.3.0" {
 		t.Errorf("SchemaVersion = %q; bumping requires updating docs/telemetry-contracts.md and golden tests", SchemaVersion)
 	}
 }

@@ -9,6 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"go.klarlabs.de/tokenops/internal/capability/decide"
+	"go.klarlabs.de/tokenops/internal/capability/experiments"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/providers"
@@ -80,6 +82,31 @@ func (s *Server) routingMiddleware(provider providers.Provider, next http.Handle
 			return
 		}
 
+		assignment, enrolled, assignErr := s.experiments.Assign(r.Context(), experiments.AssignmentInput{
+			Provider: string(provider.ID), BaselineModel: obs.RequestModel, VariantModel: rec.TargetModel,
+			Fingerprint: decide.RouteFingerprint(provider.ID, obs.RequestModel, rec.TargetModel, "proxy"),
+			At:          time.Now().UTC(),
+		})
+		if assignErr != nil {
+			s.logger.Warn("routing experiment assignment failed; preserving baseline", "err", assignErr)
+			next.ServeHTTP(w, r)
+			return
+		}
+		if enrolled && !assignment.Variant {
+			controlDecision := decide.Route(decide.RouteInput{
+				Provider: provider.ID, CurrentModel: obs.RequestModel,
+				Advice:      router.Advice{Model: rec.TargetModel, Reason: rec.Reason, Quality: rec.QualityScore},
+				Adapter:     decide.Adapter{Name: "proxy", CanApplyRoute: true},
+				Association: eventschema.Association{Actor: obs.AgentID},
+			})
+			controlDecision.Event.Correlation.Experiment = assignment.ExperimentID
+			controlDecision.Event.Attributes = experimentAttributes(assignment, false)
+			obs.Correlation = controlDecision.Event.Correlation
+			s.publishRoutingEvent(obs, rec, eventschema.OptimizationDecisionSkipped, controlDecision)
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		r.Body = io.NopCloser(bytes.NewReader(rec.ApplyBody))
 		r.ContentLength = int64(len(rec.ApplyBody))
 		r.Header.Set("Content-Length", strconv.Itoa(len(rec.ApplyBody)))
@@ -89,16 +116,44 @@ func (s *Server) routingMiddleware(provider providers.Provider, next http.Handle
 			"estimated_savings_usd", rec.EstimatedSavingsUSD,
 			"workflow_id", obs.WorkflowID,
 		)
-		s.publishRoutingEvent(obs, rec, eventschema.OptimizationDecisionApplied)
+		controlDecision := decide.Route(decide.RouteInput{
+			Provider: provider.ID, CurrentModel: obs.RequestModel,
+			Advice:      router.Advice{Model: rec.TargetModel, Reason: rec.Reason, Quality: rec.QualityScore},
+			Authority:   decide.AutomaticAuthority(),
+			Adapter:     decide.Adapter{Name: "proxy", CanApplyRoute: true},
+			Association: eventschema.Association{Actor: obs.AgentID},
+		})
+		if enrolled {
+			controlDecision.Event.Correlation.Experiment = assignment.ExperimentID
+			controlDecision.Event.Attributes = experimentAttributes(assignment, true)
+		}
+		obs.Correlation = controlDecision.Event.Correlation
+		s.publishRoutingEvent(obs, rec, eventschema.OptimizationDecisionApplied, controlDecision)
 		next.ServeHTTP(w, r)
 	})
 }
 
+func experimentAttributes(a experiments.Assignment, variant bool) map[string]string {
+	arm := "baseline"
+	if variant {
+		arm = "variant"
+	}
+	return map[string]string{
+		"tokenops.experiment.pair": strconv.Itoa(a.Pair),
+		"tokenops.experiment.arm":  arm,
+	}
+}
+
 // publishRoutingEvent records the routing decision on the event bus so
 // the intervention is auditable next to the PromptEvent it altered.
-func (s *Server) publishRoutingEvent(obs *requestObservation, rec optimizer.Recommendation, decision eventschema.OptimizationDecision) {
+func (s *Server) publishRoutingEvent(obs *requestObservation, rec optimizer.Recommendation, decision eventschema.OptimizationDecision, control ...decide.RouteResult) {
 	if s.bus == nil {
 		return
+	}
+	correlation := eventschema.Correlation{}
+	if len(control) > 0 {
+		correlation = control[0].Event.Correlation
+		s.bus.Publish(control[0].Event)
 	}
 	s.bus.Publish(&eventschema.Envelope{
 		ID:            uuid.NewString(),
@@ -106,6 +161,7 @@ func (s *Server) publishRoutingEvent(obs *requestObservation, rec optimizer.Reco
 		Type:          eventschema.EventTypeOptimization,
 		Timestamp:     time.Now().UTC(),
 		Source:        s.source,
+		Correlation:   correlation,
 		Payload: &eventschema.OptimizationEvent{
 			PromptHash:             obs.PromptHash,
 			Kind:                   rec.Kind,

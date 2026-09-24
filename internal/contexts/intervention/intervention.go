@@ -229,9 +229,31 @@ func (o Outcomes) SuccessRate() (float64, bool) {
 	return (float64(o.Achieved) + 0.5*float64(o.Partial)) / float64(n), true
 }
 
+// Assignment says how executions ended up in one cohort or the other.
+//
+// It is the difference between a comparison and an experiment, and it
+// decides what a verdict is allowed to claim.
+type Assignment string
+
+const (
+	// Observational — the cohorts were found, not made. Executions are
+	// split by whether an optimization happened to fire, which means the
+	// groups differ in ways that have nothing to do with the
+	// intervention: compression applies to large outputs, routing
+	// applies to turns a classifier thought were mechanical. The zero
+	// value, so a caller who does not say gets the weaker reading.
+	Observational Assignment = ""
+	// Randomised — TokenOps decided which executions got the
+	// intervention, so the cohorts differ only by that decision.
+	Randomised Assignment = "randomised"
+)
+
 // Comparison is a baseline and an intervention measured over real
 // executions.
 type Comparison struct {
+	// Assignment says how the cohorts were formed. Unstated means
+	// observational.
+	Assignment Assignment
 	// Baseline is what the work consumed without the intervention.
 	Baseline measurement.Value
 	// Intervention is what it consumed with it.
@@ -300,11 +322,31 @@ func Judge(c Comparison) Verdict {
 			"success rate fell from %.0f%% to %.0f%%; work that fails gets done again, "+
 				"which costs more than the consumption this saved",
 			baseRate*100, withRate*100)
+		// Harm is reported from observational data too, with the
+		// confound disclosed. Causation is unproven either way, but the
+		// cost of pausing an innocent optimization is far below the cost
+		// of continuing a guilty one.
+		if c.Assignment != Randomised {
+			v.Caveat += "; " + observationalCaveat
+		}
 		return v
 	}
 
 	delta := base - with
 	v.Observed = measurement.Measured(delta, c.Intervention.Source())
+
+	// Everything below this line is a causal claim, and an observational
+	// split cannot support one. The cohorts were found rather than made,
+	// so they differ in ways that have nothing to do with the
+	// intervention, and attributing the difference to it would be
+	// "tokens removed × nominal price" wearing a statistical costume.
+	//
+	// The measured difference is still reported: it is the reason to run
+	// a real experiment, and withholding it would be its own dishonesty.
+	if c.Assignment != Randomised {
+		v.Caveat = observationalCaveat
+		return v
+	}
 
 	if base != 0 && math.Abs(delta)/math.Abs(base) < materialDelta {
 		v.Outcome = NoEffect
@@ -318,3 +360,8 @@ func Judge(c Comparison) Verdict {
 	v.Caveat = "the intervention consumed more than the baseline"
 	return v
 }
+
+// observationalCaveat explains why a difference is not a finding.
+const observationalCaveat = "the cohorts were not assigned — executions were split by " +
+	"whether the intervention happened to fire, so they differ in ways unrelated to it. " +
+	"The difference is real; attributing it to the intervention is not yet warranted"

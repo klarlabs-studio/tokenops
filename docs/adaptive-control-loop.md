@@ -1,0 +1,48 @@
+# Adaptive Control Loop
+
+TokenOps keeps the harness responsible for task planning and execution. The
+control plane observes enough of that work to allocate AI resources, apply
+policy, and learn from outcomes without becoming an agent framework.
+
+## First Supported Loop
+
+The first closed loop covers coding-agent model allocation:
+
+1. Smart routing considers the current provider, model, task class, capacity,
+   pricing, preferences, and adapter capability.
+2. A durable decision records the alternatives, evidence, policy, effective
+   authority, uncertainty, and rationale.
+3. MCP surfaces advice on every supported harness. Only proxy traffic is
+   executable; other adapters remain advisory.
+4. Outcomes come from explicit human assessment or a recognized verifier run
+   after the final edit. Completion or self-report alone is not proof.
+5. Learning projects matched outcomes into retractable evidence tiers.
+
+## Evidence Tiers
+
+| Tier | Meaning | Allowed influence |
+|---|---|---|
+| `unknown` | No current strong matched evidence | History only |
+| `observed` | Some current evidence, below promotion gates | Explain and continue shadowing |
+| `supported` | At least five matched pairs, 60% strong coverage, quality non-inferiority, and meaningful resource improvement | Recommend |
+| `trusted` | At least 20 pairs and 90% strong coverage | Eligible for separately authorized automation |
+
+Evidence is scoped by a route fingerprint and expires after 90 days. Changes
+to provider, models, policy surface, or adapter invalidate rather than silently
+reuse an old belief.
+
+## Bounded Experiments
+
+Experiments require an explicit `start`, stay within one provider, randomize
+the order of baseline and variant inside each pair, and are capped at 10 pairs
+or 14 days. Their assignments and termination are append-only events. Use:
+
+```bash
+tokenops experiment start anthropic claude-opus-4-1 claude-sonnet-4-5
+tokenops experiment status <experiment-id>
+tokenops experiment stop <experiment-id> --reason "operator stopped"
+```
+
+`status` reports both persisted state and the current evidence-derived belief.
+Raw prompts, command output, and private work content are not stored in control
+events.

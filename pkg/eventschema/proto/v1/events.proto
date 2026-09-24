@@ -22,6 +22,9 @@ enum EventType {
   EVENT_TYPE_WORKFLOW = 2;
   EVENT_TYPE_OPTIMIZATION = 3;
   EVENT_TYPE_COACHING = 4;
+  EVENT_TYPE_DECISION = 7;
+  EVENT_TYPE_OUTCOME = 8;
+  EVENT_TYPE_EXPERIMENT = 9;
 }
 
 // Provider identifies the upstream LLM provider.
@@ -89,13 +92,86 @@ message Envelope {
   string span_id = 6;
   string source = 7;
   map<string, string> attributes = 8;
+  Correlation correlation = 9;
 
   oneof payload {
     PromptEvent prompt = 100;
     WorkflowEvent workflow = 101;
     OptimizationEvent optimization = 102;
     CoachingEvent coaching = 103;
+    DecisionEvent decision = 106;
+    OutcomeEvent outcome = 107;
+    ExperimentEvent experiment = 108;
   }
+}
+
+message Correlation {
+  string decision_id = 1;
+  string intervention_id = 2;
+  string experiment_id = 3;
+}
+
+message ResourceOption {
+  string provider = 1;
+  string model = 2;
+  string reason = 3;
+}
+
+message EvidenceRef {
+  string event_id = 1;
+  string kind = 2;
+  string source = 3;
+  google.protobuf.Timestamp observed_at = 4;
+  google.protobuf.Timestamp fresh_until = 5;
+  double confidence = 6;
+  string scope = 7;
+  string caveat = 8;
+}
+
+message DecisionEvent {
+  string kind = 1;
+  string stage = 2;
+  repeated ResourceOption alternatives = 3;
+  ResourceOption selected = 4;
+  repeated EvidenceRef evidence = 5;
+  string policy = 6;
+  string authority = 7;
+  double confidence = 8;
+  string rationale = 9;
+  bool executable = 10;
+  string adapter = 11;
+  string fingerprint = 12;
+}
+
+message OutcomeMetric {
+  string name = 1;
+  string unit = 2;
+  double value = 3;
+  string source = 4;
+  google.protobuf.Timestamp observed_at = 5;
+  double confidence = 6;
+  string caveat = 7;
+}
+
+message OutcomeEvent {
+  string result = 1;
+  string assessment = 2;
+  string caveat = 3;
+  repeated EvidenceRef evidence = 4;
+  repeated OutcomeMetric metrics = 5;
+}
+
+message ExperimentEvent {
+  string stage = 1;
+  string kind = 2;
+  ResourceOption baseline = 3;
+  ResourceOption variant = 4;
+  string assignment = 5;
+  int32 pair = 6;
+  int32 max_pairs = 7;
+  google.protobuf.Timestamp ends_at = 8;
+  string reason = 9;
+  string fingerprint = 10;
 }
 
 message PromptEvent {
