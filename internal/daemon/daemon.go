@@ -103,10 +103,6 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		}
 		domainLogPath = filepath.Join(filepath.Dir(eventsPath), "domain-events.jsonl")
 		logger.Info("legacy domain event import path ready", "path", domainLogPath)
-	} else {
-		// With storage disabled there is no canonical envelope bus; retain
-		// in-memory counters from the domain bus for the no-store mode.
-		domainEventCounter.SubscribeDomain(dbus)
 	}
 
 	// Async dispatch with bounded queue isolates the publisher hot
@@ -429,6 +425,13 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			return fmt.Errorf("dashboard auth: %w", err)
 		}
 		opts = append(opts, proxy.WithDashAuth(auth))
+	} else {
+		// Keep the event model canonical even when persistence is disabled.
+		// The no-op sink lets in-memory observers receive domain envelopes.
+		bus = events.NewAsync(events.NoopSink{}, events.Options{Logger: logger})
+		cancelDomainCounter := domainEventCounter.SubscribeCanonical(bus)
+		defer cancelDomainCounter()
+		domainevents.BridgeToEnvelopeBus(dbus, bus, logger)
 	}
 
 	if cfg.Rules.Enabled {
