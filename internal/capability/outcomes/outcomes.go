@@ -3,6 +3,7 @@
 package outcomes
 
 import (
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -15,13 +16,14 @@ import (
 
 // Record describes an outcome observation without raw command output.
 type Record struct {
-	ExecutionID string
-	DecisionID  string
-	Result      eventschema.OutcomeResult
-	Assessment  eventschema.OutcomeAssessment
-	Caveat      string
-	At          time.Time
-	Evidence    []eventschema.EvidenceRef
+	ExecutionID      string
+	DecisionID       string
+	Result           eventschema.OutcomeResult
+	Assessment       eventschema.OutcomeAssessment
+	Caveat           string
+	At               time.Time
+	Evidence         []eventschema.EvidenceRef
+	AttentionMinutes *float64
 }
 
 // Event builds the canonical outcome envelope.
@@ -30,13 +32,20 @@ func Event(r Record) *eventschema.Envelope {
 	if at.IsZero() {
 		at = time.Now().UTC()
 	}
+	var metrics []eventschema.OutcomeMetric
+	if r.AttentionMinutes != nil && !math.IsNaN(*r.AttentionMinutes) && !math.IsInf(*r.AttentionMinutes, 0) && *r.AttentionMinutes >= 0 {
+		metrics = append(metrics, eventschema.OutcomeMetric{
+			Name: "human_attention_minutes", Unit: "minutes", Value: *r.AttentionMinutes,
+			Source: "human_self_report", ObservedAt: at, Confidence: 1,
+		})
+	}
 	return &eventschema.Envelope{
 		ID: uuid.NewString(), SchemaVersion: eventschema.SchemaVersion,
 		Type: eventschema.EventTypeOutcome, Timestamp: at, Source: "outcome",
 		Association: eventschema.Association{Execution: r.ExecutionID},
 		Correlation: eventschema.Correlation{Decision: r.DecisionID},
 		Payload: &eventschema.OutcomeEvent{
-			Result: r.Result, Assessment: r.Assessment, Caveat: r.Caveat, Evidence: r.Evidence,
+			Result: r.Result, Assessment: r.Assessment, Caveat: r.Caveat, Evidence: r.Evidence, Metrics: metrics,
 		},
 	}
 }

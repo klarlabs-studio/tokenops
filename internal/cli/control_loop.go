@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"time"
 
@@ -94,6 +95,7 @@ func newOutcomeDetectCmd() *cobra.Command {
 
 func newOutcomeRecordCmd() *cobra.Command {
 	var result, decisionID, caveat, dbPath string
+	var attentionMinutes float64
 	cmd := &cobra.Command{
 		Use: "record <execution-id>", Short: "Record the operator's assessment", Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -101,12 +103,19 @@ func newOutcomeRecordCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			var attention *float64
+			if cmd.Flags().Changed("attention-minutes") {
+				if math.IsNaN(attentionMinutes) || math.IsInf(attentionMinutes, 0) || attentionMinutes < 0 {
+					return fmt.Errorf("--attention-minutes must be a finite non-negative number")
+				}
+				attention = &attentionMinutes
+			}
 			store, closeStore, err := openControlStore(cmd, dbPath)
 			if err != nil {
 				return err
 			}
 			defer closeStore()
-			env := outcomes.Event(outcomes.Record{ExecutionID: args[0], DecisionID: decisionID, Result: r, Assessment: eventschema.OutcomeHuman, Caveat: caveat})
+			env := outcomes.Event(outcomes.Record{ExecutionID: args[0], DecisionID: decisionID, Result: r, Assessment: eventschema.OutcomeHuman, Caveat: caveat, AttentionMinutes: attention})
 			if env.Correlation.Decision != "" {
 				history, err := store.Query(cmd.Context(), sqlite.Filter{Decision: env.Correlation.Decision, Limit: 10_000})
 				if err != nil {
@@ -123,6 +132,7 @@ func newOutcomeRecordCmd() *cobra.Command {
 	cmd.Flags().StringVar(&result, "result", "", "achieved | partial | not_achieved")
 	cmd.Flags().StringVar(&decisionID, "decision", "", "decision id this outcome evaluates")
 	cmd.Flags().StringVar(&caveat, "caveat", "", "assessment context")
+	cmd.Flags().Float64Var(&attentionMinutes, "attention-minutes", 0, "operator-reported active human effort for this execution, in minutes")
 	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db")
 	_ = cmd.MarkFlagRequired("result")
 	return cmd

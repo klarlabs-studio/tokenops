@@ -28,6 +28,7 @@ package verify
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"time"
 
@@ -50,6 +51,9 @@ type Attributed struct {
 	// MeteredCostUSD includes only events explicitly priced with an
 	// event-time rate card. Subscription quota and trials stay separate.
 	MeteredCostUSD measurement.Value `json:"metered_cost_usd"`
+	// HumanAttentionMinutes is optional operator self-report, never inferred
+	// from transcript length or agent-generated estimates.
+	HumanAttentionMinutes measurement.Value `json:"human_attention_minutes"`
 	// Latency is mean proxy-observed request latency during the execution.
 	// No matching request is unknown rather than zero.
 	Latency measurement.Value `json:"latency"`
@@ -183,6 +187,7 @@ func attributeOne(e work.Execution, events []*eventschema.Envelope) Attributed {
 	if len(outcomeEvents) > 0 {
 		a.Outcomes = outcomeCount(outcomes.Resolve(outcomeEvents))
 	}
+	a.HumanAttentionMinutes = attentionMinutes(outcomeEvents)
 
 	if promptEvents == 0 || countedPrompts == 0 {
 		a.Tokens = measurement.Unknown(
@@ -250,16 +255,18 @@ type Report struct {
 	// BaselineCount and InterventionCount say how many attempts fell in
 	// each cohort. "Not enough data" without saying which side was short
 	// is advice nobody can act on.
-	BaselineCount              int               `json:"baseline_count"`
-	InterventionCount          int               `json:"intervention_count"`
-	BaselineOutcomes           OutcomeSummary    `json:"baseline_outcomes"`
-	InterventionOutcomes       OutcomeSummary    `json:"intervention_outcomes"`
-	BaselineLatency            measurement.Value `json:"baseline_latency_ms"`
-	InterventionLatency        measurement.Value `json:"intervention_latency_ms"`
-	BaselineMeteredCostUSD     measurement.Value `json:"baseline_metered_cost_usd"`
-	InterventionMeteredCostUSD measurement.Value `json:"intervention_metered_cost_usd"`
-	BaselinePlanQuota          QuotaSummary      `json:"baseline_plan_quota_tokens"`
-	InterventionPlanQuota      QuotaSummary      `json:"intervention_plan_quota_tokens"`
+	BaselineCount                     int               `json:"baseline_count"`
+	InterventionCount                 int               `json:"intervention_count"`
+	BaselineOutcomes                  OutcomeSummary    `json:"baseline_outcomes"`
+	InterventionOutcomes              OutcomeSummary    `json:"intervention_outcomes"`
+	BaselineLatency                   measurement.Value `json:"baseline_latency_ms"`
+	InterventionLatency               measurement.Value `json:"intervention_latency_ms"`
+	BaselineMeteredCostUSD            measurement.Value `json:"baseline_metered_cost_usd"`
+	InterventionMeteredCostUSD        measurement.Value `json:"intervention_metered_cost_usd"`
+	BaselineHumanAttentionMinutes     measurement.Value `json:"baseline_human_attention_minutes"`
+	InterventionHumanAttentionMinutes measurement.Value `json:"intervention_human_attention_minutes"`
+	BaselinePlanQuota                 QuotaSummary      `json:"baseline_plan_quota_tokens"`
+	InterventionPlanQuota             QuotaSummary      `json:"intervention_plan_quota_tokens"`
 	// Attributed is the per-execution detail the comparison rests on.
 	Attributed []Attributed `json:"attributed,omitempty"`
 }
@@ -304,6 +311,8 @@ func Compare(execs []work.Execution, events []*eventschema.Envelope) Report {
 	report.InterventionLatency = meanLatency(intervened)
 	report.BaselineMeteredCostUSD = meanMeteredCost(baseline)
 	report.InterventionMeteredCostUSD = meanMeteredCost(intervened)
+	report.BaselineHumanAttentionMinutes = meanAttention(baseline)
+	report.InterventionHumanAttentionMinutes = meanAttention(intervened)
 	report.BaselinePlanQuota = sumPlanQuota(baseline)
 	report.InterventionPlanQuota = sumPlanQuota(intervened)
 	report.Verdict = intervention.Judge(report.Comparison)
@@ -326,6 +335,53 @@ func Compare(execs []work.Execution, events []*eventschema.Envelope) Report {
 		}
 	}
 	return report
+}
+
+func attentionMinutes(events []*eventschema.Envelope) measurement.Value {
+	var latest time.Time
+	var amount float64
+	found := false
+	for _, env := range events {
+		if env == nil {
+			continue
+		}
+		out, ok := env.Payload.(*eventschema.OutcomeEvent)
+		if !ok || out.Assessment != eventschema.OutcomeHuman {
+			continue
+		}
+		for _, metric := range out.Metrics {
+			if metric.Name != "human_attention_minutes" || metric.Unit != "minutes" || metric.Source != "human_self_report" || metric.Value < 0 || math.IsNaN(metric.Value) || math.IsInf(metric.Value, 0) {
+				continue
+			}
+			observed := metric.ObservedAt
+			if observed.IsZero() {
+				observed = env.Timestamp
+			}
+			if !found || observed.After(latest) {
+				latest, amount, found = observed, metric.Value, true
+			}
+		}
+	}
+	if !found {
+		return measurement.Unknown("no operator-reported human attention time for this execution")
+	}
+	return measurement.Measured(amount, "human_outcome_events").At(latest)
+}
+
+func meanAttention(as []Attributed) measurement.Value {
+	if len(as) == 0 {
+		return measurement.Unknown("the cohort is empty")
+	}
+	values := make([]measurement.Value, 0, len(as))
+	for _, a := range as {
+		values = append(values, a.HumanAttentionMinutes)
+	}
+	total := measurement.Sum(values...)
+	amount, ok := total.Amount()
+	if !ok {
+		return total
+	}
+	return measurement.Measured(amount/float64(len(as)), total.Source()).WithCaveat(total.Caveat())
 }
 
 func meanMeteredCost(as []Attributed) measurement.Value {
