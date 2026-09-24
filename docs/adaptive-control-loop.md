@@ -31,11 +31,20 @@ Evidence is scoped by a route fingerprint and expires after 90 days. Changes
 to provider, models, policy surface, or adapter invalidate rather than silently
 reuse an old belief.
 
+The proxy applies a learned route automatically only when both conditions are
+true: policy grants automatic authority and the exact route fingerprint has a
+current `trusted` belief. If evidence is missing, stale, or falls below the
+gate, the route regresses to a recorded recommendation and the baseline model
+continues. Supported evidence can recommend but cannot grant itself authority.
+
 ## Bounded Experiments
 
 Experiments require an explicit `start`, stay within one provider, randomize
 the order of baseline and variant inside each pair, and are capped at 10 pairs
-or 14 days. Their assignments and termination are append-only events. Use:
+or 14 days. Evidence from multiple fresh trials with the same fingerprint is
+combined, allowing the 20-pair trusted threshold without weakening the bound
+on any individual trial. Assignments and termination are append-only events.
+Use:
 
 ```bash
 tokenops experiment start anthropic claude-opus-4-1 claude-sonnet-4-5

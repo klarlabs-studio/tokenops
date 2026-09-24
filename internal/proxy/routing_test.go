@@ -170,7 +170,7 @@ func TestRoutingExperimentRunsOneBaselineAndOneVariant(t *testing.T) {
 		_ = srv.Shutdown(shutdown)
 	}()
 	waitListening(t, srv.Addr())
-	for range 2 {
+	for range 3 {
 		req, _ := http.NewRequest(http.MethodPost, "http://"+srv.Addr()+"/anthropic/v1/messages", strings.NewReader(`{"model":"claude-fable-5","max_tokens":100,"messages":[{"role":"user","content":"hello"}]}`))
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := http.DefaultClient.Do(req)
@@ -180,8 +180,8 @@ func TestRoutingExperimentRunsOneBaselineAndOneVariant(t *testing.T) {
 		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
 	}
-	if len(models) != 2 || models[0] == models[1] {
-		t.Fatalf("paired assignments = %v; want one baseline and one variant", models)
+	if len(models) != 3 || models[0] == models[1] || models[2] != baseline {
+		t.Fatalf("assignments = %v; want one paired baseline/variant then baseline while evidence is untrusted", models)
 	}
 }
 
