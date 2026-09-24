@@ -72,4 +72,7 @@ until its event-time pricing provenance can be established.
 
 Proxy routing optimization events carry the session association used by work
 reconstruction, so applied routes enter the intervention cohort instead of
-being silently counted as baseline attempts.
+being silently counted as baseline attempts. Verification also accepts other
+durable decision kinds only when their lifecycle reached `applied`; proposals,
+shadow decisions, rejections, and failures do not enter the intervention
+cohort. Paired routing decision/optimization records count as one kind.

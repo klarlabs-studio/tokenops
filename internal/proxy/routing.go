@@ -98,7 +98,7 @@ func (s *Server) routingMiddleware(provider providers.Provider, next http.Handle
 				Provider: provider.ID, CurrentModel: obs.RequestModel,
 				Advice:      router.Advice{Model: rec.TargetModel, Reason: rec.Reason, Quality: rec.QualityScore},
 				Adapter:     decide.Adapter{Name: "proxy", CanApplyRoute: true},
-				Association: eventschema.Association{Actor: obs.AgentID},
+				Association: associationFor(obs),
 			})
 			controlDecision.Event.Correlation.Experiment = assignment.ExperimentID
 			controlDecision.Event.Attributes = experimentAttributes(assignment, false)
@@ -151,7 +151,7 @@ func (s *Server) routingMiddleware(provider providers.Provider, next http.Handle
 			Advice:      router.Advice{Model: rec.TargetModel, Reason: rec.Reason, Quality: rec.QualityScore},
 			Authority:   decide.AutomaticAuthority(),
 			Adapter:     decide.Adapter{Name: "proxy", CanApplyRoute: true},
-			Association: eventschema.Association{Actor: obs.AgentID},
+			Association: associationFor(obs),
 			Belief:      belief,
 		})
 		if enrolled {
@@ -169,7 +169,7 @@ func (s *Server) preserveUntrustedRoute(obs *requestObservation, provider events
 		Provider: provider, CurrentModel: obs.RequestModel,
 		Advice:    router.Advice{Model: rec.TargetModel, Reason: reason + ": " + rec.Reason, Quality: rec.QualityScore},
 		Authority: decide.RecommendAuthority(), Adapter: decide.Adapter{Name: "proxy", CanApplyRoute: true},
-		Association: eventschema.Association{Actor: obs.AgentID}, Belief: belief,
+		Association: associationFor(obs), Belief: belief,
 	})
 	obs.Correlation = controlDecision.Event.Correlation
 	s.publishRoutingEvent(obs, rec, eventschema.OptimizationDecisionSkipped, controlDecision)

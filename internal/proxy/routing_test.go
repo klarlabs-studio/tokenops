@@ -97,6 +97,10 @@ func TestActiveRoutingWithoutOutcomeLedgerPreservesBaseline(t *testing.T) {
 	var promptEv *eventschema.PromptEvent
 	for _, env := range envs {
 		switch p := env.Payload.(type) {
+		case *eventschema.DecisionEvent:
+			if env.Association.Actor != "session:route-session" {
+				t.Errorf("decision association = %+v; want session actor for verification join", env.Association)
+			}
 		case *eventschema.OptimizationEvent:
 			optEv = p
 			if env.Association.Actor != "session:route-session" {

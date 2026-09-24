@@ -104,6 +104,15 @@ func optimizationEvent(actor string, at time.Time) *eventschema.Envelope {
 	}
 }
 
+func decisionEvent(actor, id, kind string, stage eventschema.DecisionStage, at time.Time) *eventschema.Envelope {
+	return &eventschema.Envelope{
+		ID: "decision-" + id, Type: eventschema.EventTypeDecision, Timestamp: at,
+		Association: eventschema.Association{Actor: actor},
+		Correlation: eventschema.Correlation{Decision: id, Intervention: "intervention-" + id},
+		Payload:     &eventschema.DecisionEvent{Kind: kind, Stage: stage},
+	}
+}
+
 func outcomeEvent(executionID string, result eventschema.OutcomeResult, at time.Time) *eventschema.Envelope {
 	return &eventschema.Envelope{
 		ID: "outcome-" + executionID + at.String(), Type: eventschema.EventTypeOutcome, Timestamp: at,
@@ -193,6 +202,40 @@ func TestAnAppliedOptimizationMarksTheExecution(t *testing.T) {
 	}
 	if got[1].Intervened {
 		t.Error("an execution with no optimization was marked")
+	}
+}
+
+func TestOnlyAppliedDurableDecisionsMarkAnIntervention(t *testing.T) {
+	exec := execution("e1", "session:a", t0, time.Hour)
+	for _, stage := range []eventschema.DecisionStage{
+		eventschema.DecisionStageShadow,
+		eventschema.DecisionStageProposed,
+		eventschema.DecisionStageRejected,
+		eventschema.DecisionStageFailed,
+	} {
+		got := verify.Attribute([]work.Execution{exec}, []*eventschema.Envelope{
+			decisionEvent("session:a", string(stage), "context_trim", stage, t0.Add(time.Minute)),
+		})
+		if got[0].Intervened {
+			t.Errorf("stage %q incorrectly entered intervention cohort", stage)
+		}
+	}
+	got := verify.Attribute([]work.Execution{exec}, []*eventschema.Envelope{
+		decisionEvent("session:a", "applied", "context_trim", eventschema.DecisionStageApplied, t0.Add(time.Minute)),
+	})
+	if !got[0].Intervened || len(got[0].InterventionKinds) != 1 || got[0].InterventionKinds[0] != "context_trim" {
+		t.Fatalf("applied durable decision not attributed: %+v", got[0])
+	}
+}
+
+func TestPairedAppliedDecisionAndOptimizationHaveOneCanonicalKind(t *testing.T) {
+	exec := execution("e1", "session:a", t0, time.Hour)
+	decision := decisionEvent("session:a", "route-1", "model_route", eventschema.DecisionStageApplied, t0.Add(time.Minute))
+	optimization := optimizationEvent("session:a", t0.Add(2*time.Minute))
+	optimization.Correlation = decision.Correlation
+	got := verify.Attribute([]work.Execution{exec}, []*eventschema.Envelope{decision, optimization})
+	if !got[0].Intervened || len(got[0].InterventionKinds) != 1 || got[0].InterventionKinds[0] != "model_route" {
+		t.Fatalf("paired decision double-counted: %+v", got[0].InterventionKinds)
 	}
 }
 
