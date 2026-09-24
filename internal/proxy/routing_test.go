@@ -131,7 +131,9 @@ func TestActiveRoutingWithoutOutcomeLedgerPreservesBaseline(t *testing.T) {
 
 func TestRoutingExperimentRunsOneBaselineAndOneVariant(t *testing.T) {
 	var models []string
+	var upstreamExecutionID string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamExecutionID = r.Header.Get(headerExecutionID)
 		var body struct {
 			Model string `json:"model"`
 		}
@@ -177,9 +179,12 @@ func TestRoutingExperimentRunsOneBaselineAndOneVariant(t *testing.T) {
 		_ = srv.Shutdown(shutdown)
 	}()
 	waitListening(t, srv.Addr())
-	for range 3 {
+	executionIDs := []string{"exec:test-a", "exec:test-a", "exec:test-b", "exec:test-c"}
+	for _, executionID := range executionIDs {
 		req, _ := http.NewRequest(http.MethodPost, "http://"+srv.Addr()+"/anthropic/v1/messages", strings.NewReader(`{"model":"claude-fable-5","max_tokens":100,"messages":[{"role":"user","content":"hello"}]}`))
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(headerExecutionID, executionID)
+		req.Header.Set(headerSessionID, "session:test")
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
@@ -187,8 +192,29 @@ func TestRoutingExperimentRunsOneBaselineAndOneVariant(t *testing.T) {
 		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
 	}
-	if len(models) != 3 || models[0] == models[1] || models[2] != baseline {
-		t.Fatalf("assignments = %v; want one paired baseline/variant then baseline while evidence is untrusted", models)
+	if len(models) != 4 || models[0] != models[1] || models[0] == models[2] || models[3] != baseline {
+		t.Fatalf("assignments = %v; want one stable arm per execution, paired arms, then baseline after the bound", models)
+	}
+	events, err := store.Query(context.Background(), sqlite.Filter{Type: eventschema.EventTypeExperiment})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var assigned int
+	seenExecutions := map[string]bool{}
+	for _, env := range events {
+		if p, ok := env.Payload.(*eventschema.ExperimentEvent); ok && p.Stage == eventschema.ExperimentAssigned {
+			assigned++
+			if env.Association.Execution == "" || seenExecutions[env.Association.Execution] {
+				t.Errorf("experiment assignment execution is missing or assigned more than once: %q", env.Association.Execution)
+			}
+			seenExecutions[env.Association.Execution] = true
+		}
+	}
+	if assigned != 2 {
+		t.Fatalf("persisted assignments = %d, want 2", assigned)
+	}
+	if upstreamExecutionID != "" {
+		t.Errorf("TokenOps execution id leaked upstream: %q", upstreamExecutionID)
 	}
 }
 

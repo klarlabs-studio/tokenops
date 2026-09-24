@@ -27,10 +27,11 @@ import (
 // case-insensitive per HTTP, but we declare the canonical form here so
 // log output and docs stay consistent.
 const (
-	headerWorkflowID = "X-Tokenops-Workflow-Id"
-	headerAgentID    = "X-Tokenops-Agent-Id"
-	headerSessionID  = "X-Tokenops-Session-Id"
-	headerUserID     = "X-Tokenops-User-Id"
+	headerWorkflowID  = "X-Tokenops-Workflow-Id"
+	headerAgentID     = "X-Tokenops-Agent-Id"
+	headerSessionID   = "X-Tokenops-Session-Id"
+	headerUserID      = "X-Tokenops-User-Id"
+	headerExecutionID = "X-Tokenops-Execution-Id"
 )
 
 // maxRequestBodyCapture caps the bytes the observer reads from a request
@@ -78,6 +79,7 @@ type requestObservation struct {
 	AgentID     string
 	SessionID   string
 	UserID      string
+	ExecutionID string
 	Correlation eventschema.Correlation
 
 	Status        int
@@ -260,17 +262,26 @@ func (s *Server) observerMiddleware(provider providers.Provider, next http.Handl
 			return
 		}
 
+		executionID := strings.TrimSpace(r.Header.Get(headerExecutionID))
+		if len(executionID) > 256 {
+			executionID = ""
+		}
 		obs := &requestObservation{
 			Start:      time.Now().UTC(),
 			Provider:   provider.ID,
 			Prefix:     provider.Prefix,
 			CostSource: s.costSourceFor(provider.ID),
 
-			WorkflowID: r.Header.Get(headerWorkflowID),
-			AgentID:    r.Header.Get(headerAgentID),
-			SessionID:  r.Header.Get(headerSessionID),
-			UserID:     r.Header.Get(headerUserID),
+			WorkflowID:  r.Header.Get(headerWorkflowID),
+			AgentID:     r.Header.Get(headerAgentID),
+			SessionID:   r.Header.Get(headerSessionID),
+			UserID:      r.Header.Get(headerUserID),
+			ExecutionID: executionID,
 		}
+		// Execution attribution is TokenOps-local metadata, not provider
+		// input. Capture it before stripping so the identifier is not sent
+		// to the upstream API.
+		r.Header.Del(headerExecutionID)
 		if len(body) > 0 {
 			sum := sha256.Sum256(body)
 			obs.PromptHash = "sha256:" + hex.EncodeToString(sum[:])
@@ -315,8 +326,12 @@ func (s *Server) observerMiddleware(provider providers.Provider, next http.Handl
 // class of confident fiction the ontology exists to avoid — an
 // unassociated event is an honest gap, and gaps are fillable.
 func associationFor(obs *requestObservation) eventschema.Association {
-	if obs == nil || obs.SessionID == "" {
+	if obs == nil {
 		return eventschema.Association{}
 	}
-	return eventschema.Association{Actor: "session:" + obs.SessionID}
+	association := eventschema.Association{Execution: obs.ExecutionID}
+	if obs.SessionID != "" {
+		association.Actor = "session:" + obs.SessionID
+	}
+	return association
 }
