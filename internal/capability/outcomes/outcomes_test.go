@@ -38,3 +38,16 @@ func TestResolvePrefersHumanAndRefusesEqualConflict(t *testing.T) {
 		t.Fatalf("conflict was hidden: %+v", got)
 	}
 }
+
+func TestCorrelateDecisionLifecycleCopiesInterventionAndExperiment(t *testing.T) {
+	env := Event(Record{ExecutionID: "exec:1", DecisionID: "decision:1", Result: eventschema.OutcomeAchieved, Assessment: eventschema.OutcomeHuman})
+	history := []*eventschema.Envelope{
+		{Correlation: eventschema.Correlation{Decision: "decision:other", Intervention: "intervention:wrong", Experiment: "experiment:wrong"}},
+		{Correlation: eventschema.Correlation{Decision: "decision:1", Intervention: "intervention:1"}},
+		{Correlation: eventschema.Correlation{Decision: "decision:1", Experiment: "experiment:1"}},
+	}
+	CorrelateDecisionLifecycle(env, history)
+	if env.Correlation.Decision != "decision:1" || env.Correlation.Intervention != "intervention:1" || env.Correlation.Experiment != "experiment:1" {
+		t.Fatalf("outcome correlation = %+v", env.Correlation)
+	}
+}

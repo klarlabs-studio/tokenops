@@ -114,7 +114,7 @@ func correlateOutcome(ctx context.Context, store *sqlite.Store, env *eventschema
 	if err != nil {
 		return err
 	}
-	outcomes.CorrelateExperiment(env, history)
+	outcomes.CorrelateDecisionLifecycle(env, history)
 	return nil
 }
 

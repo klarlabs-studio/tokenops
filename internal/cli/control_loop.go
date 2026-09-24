@@ -78,7 +78,7 @@ func newOutcomeDetectCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				outcomes.CorrelateExperiment(env, history)
+				outcomes.CorrelateDecisionLifecycle(env, history)
 			}
 			if err := store.Append(cmd.Context(), env); err != nil {
 				return err
@@ -121,7 +121,7 @@ func newOutcomeRecordCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				outcomes.CorrelateExperiment(env, history)
+				outcomes.CorrelateDecisionLifecycle(env, history)
 			}
 			if err := store.Append(cmd.Context(), env); err != nil {
 				return err

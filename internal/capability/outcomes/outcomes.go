@@ -18,6 +18,7 @@ import (
 type Record struct {
 	ExecutionID      string
 	DecisionID       string
+	InterventionID   string
 	Result           eventschema.OutcomeResult
 	Assessment       eventschema.OutcomeAssessment
 	Caveat           string
@@ -43,24 +44,31 @@ func Event(r Record) *eventschema.Envelope {
 		ID: uuid.NewString(), SchemaVersion: eventschema.SchemaVersion,
 		Type: eventschema.EventTypeOutcome, Timestamp: at, Source: "outcome",
 		Association: eventschema.Association{Execution: r.ExecutionID},
-		Correlation: eventschema.Correlation{Decision: r.DecisionID},
+		Correlation: eventschema.Correlation{
+			Decision: r.DecisionID, Intervention: r.InterventionID,
+		},
 		Payload: &eventschema.OutcomeEvent{
 			Result: r.Result, Assessment: r.Assessment, Caveat: r.Caveat, Evidence: r.Evidence, Metrics: metrics,
 		},
 	}
 }
 
-// CorrelateExperiment copies the experiment correlation from the decision
-// history. Outcome callers use this before persistence so experiment evidence
-// remains queryable without reconstructing joins later.
-func CorrelateExperiment(env *eventschema.Envelope, history []*eventschema.Envelope) {
+// CorrelateDecisionLifecycle copies intervention and experiment identity from
+// the decision history. Outcome callers use this before persistence so later
+// verification can join by durable lifecycle IDs without reconstructing them.
+func CorrelateDecisionLifecycle(env *eventschema.Envelope, history []*eventschema.Envelope) {
 	if env == nil || env.Correlation.Decision == "" {
 		return
 	}
 	for _, candidate := range history {
-		if candidate != nil && candidate.Correlation.Decision == env.Correlation.Decision && candidate.Correlation.Experiment != "" {
+		if candidate == nil || candidate.Correlation.Decision != env.Correlation.Decision {
+			continue
+		}
+		if candidate.Correlation.Intervention != "" {
+			env.Correlation.Intervention = candidate.Correlation.Intervention
+		}
+		if candidate.Correlation.Experiment != "" {
 			env.Correlation.Experiment = candidate.Correlation.Experiment
-			return
 		}
 	}
 }
