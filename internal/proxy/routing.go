@@ -110,10 +110,16 @@ func (s *Server) routingMiddleware(provider providers.Provider, next http.Handle
 
 		fingerprint := decide.RouteFingerprint(provider.ID, obs.RequestModel, rec.TargetModel, "proxy")
 		var belief *learn.Belief
-		if !enrolled && s.experiments != nil {
+		if !enrolled {
+			if s.experiments == nil {
+				s.preserveUntrustedRoute(obs, provider.ID, rec, nil, "outcome history unavailable; preserving the baseline model")
+				next.ServeHTTP(w, r)
+				return
+			}
 			learned, found, learnErr := learn.FindRouting(r.Context(), s.experiments, fingerprint, time.Now().UTC())
 			if learnErr != nil {
 				s.logger.Warn("routing belief lookup failed; preserving baseline", "err", learnErr)
+				s.preserveUntrustedRoute(obs, provider.ID, rec, nil, "outcome history could not be read; preserving the baseline model")
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -121,14 +127,11 @@ func (s *Server) routingMiddleware(provider providers.Provider, next http.Handle
 				belief = &learned
 			}
 			if !found || !learn.IsTrusted(learned) {
-				controlDecision := decide.Route(decide.RouteInput{
-					Provider: provider.ID, CurrentModel: obs.RequestModel,
-					Advice:    router.Advice{Model: rec.TargetModel, Reason: rec.Reason, Quality: rec.QualityScore},
-					Authority: decide.RecommendAuthority(), Adapter: decide.Adapter{Name: "proxy", CanApplyRoute: true},
-					Association: eventschema.Association{Actor: obs.AgentID}, Belief: belief,
-				})
-				obs.Correlation = controlDecision.Event.Correlation
-				s.publishRoutingEvent(obs, rec, eventschema.OptimizationDecisionSkipped, controlDecision)
+				reason := "no trusted outcome-linked evidence for this route; preserving the baseline model"
+				if found {
+					reason = "route evidence tier is " + string(learned.Tier) + "; preserving the baseline model"
+				}
+				s.preserveUntrustedRoute(obs, provider.ID, rec, belief, reason)
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -161,6 +164,17 @@ func (s *Server) routingMiddleware(provider providers.Provider, next http.Handle
 	})
 }
 
+func (s *Server) preserveUntrustedRoute(obs *requestObservation, provider eventschema.Provider, rec optimizer.Recommendation, belief *learn.Belief, reason string) {
+	controlDecision := decide.Route(decide.RouteInput{
+		Provider: provider, CurrentModel: obs.RequestModel,
+		Advice:    router.Advice{Model: rec.TargetModel, Reason: reason + ": " + rec.Reason, Quality: rec.QualityScore},
+		Authority: decide.RecommendAuthority(), Adapter: decide.Adapter{Name: "proxy", CanApplyRoute: true},
+		Association: eventschema.Association{Actor: obs.AgentID}, Belief: belief,
+	})
+	obs.Correlation = controlDecision.Event.Correlation
+	s.publishRoutingEvent(obs, rec, eventschema.OptimizationDecisionSkipped, controlDecision)
+}
+
 func experimentAttributes(a experiments.Assignment, variant bool) map[string]string {
 	arm := "baseline"
 	if variant {
@@ -179,8 +193,12 @@ func (s *Server) publishRoutingEvent(obs *requestObservation, rec optimizer.Reco
 		return
 	}
 	correlation := eventschema.Correlation{}
+	reason := rec.Reason
 	if len(control) > 0 {
 		correlation = control[0].Event.Correlation
+		if recorded, ok := control[0].Event.Payload.(*eventschema.DecisionEvent); ok && recorded.Rationale != "" {
+			reason = recorded.Rationale
+		}
 		s.bus.Publish(control[0].Event)
 	}
 	s.bus.Publish(&eventschema.Envelope{
@@ -198,7 +216,7 @@ func (s *Server) publishRoutingEvent(obs *requestObservation, rec optimizer.Reco
 			EstimatedSavingsUSD:    rec.EstimatedSavingsUSD,
 			QualityScore:           rec.QualityScore,
 			Decision:               decision,
-			Reason:                 rec.Reason,
+			Reason:                 reason,
 			WorkflowID:             obs.WorkflowID,
 			AgentID:                obs.AgentID,
 		},
