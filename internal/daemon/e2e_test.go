@@ -6,24 +6,39 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/domainevents"
 	"go.klarlabs.de/tokenops/internal/infra/daemonhint"
 )
 
 // TestE2EDaemonBootHealthShutdown drives the daemon end-to-end:
-// boot → /healthz → /readyz → /version → /api/domain-events → shutdown.
-// Exercises the full composition root (sqlite, bus, audit subscriber,
-// domain-events JSONL, control endpoints) without provider routes.
+// boot → legacy-event import → /healthz → /readyz → /version →
+// /api/domain-events → shutdown. Exercises canonical event persistence,
+// migration compatibility, and control endpoints without provider routes.
 func TestE2EDaemonBootHealthShutdown(t *testing.T) {
 	port, err := freePort()
 	if err != nil {
 		t.Fatalf("free port: %v", err)
 	}
 	dir := t.TempDir()
+	legacyPath := filepath.Join(dir, "domain-events.jsonl")
+	legacyRecord, err := json.Marshal(domainevents.Record{
+		Kind:    domainevents.KindBudgetExceeded,
+		At:      time.Date(2026, 9, 24, 8, 0, 0, 0, time.UTC),
+		Payload: json.RawMessage(`{"BudgetID":"daily","SpentUSD":12,"LimitUSD":10,"At":"2026-09-24T08:00:00Z"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyRecord = append(legacyRecord, '\n')
+	if err := os.WriteFile(legacyPath, legacyRecord, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	cfg := config.Config{
 		Listen: net.JoinHostPort("127.0.0.1", port),
 		Log:    config.LogConfig{Level: "info", Format: "text"},
@@ -107,6 +122,9 @@ func TestE2EDaemonBootHealthShutdown(t *testing.T) {
 	if ev.Counts == nil {
 		t.Errorf("events.counts nil")
 	}
+	if got := ev.Counts[domainevents.KindBudgetExceeded]; got != 1 {
+		t.Errorf("imported budget.exceeded count = %d, want 1", got)
+	}
 	// Counts are lifetime totals; the daemon must also say when they
 	// happened, or a months-old alert reads as a current one.
 	var raw map[string]json.RawMessage
@@ -124,6 +142,11 @@ func TestE2EDaemonBootHealthShutdown(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("daemon did not shut down within 5s")
+	}
+	if got, err := os.ReadFile(legacyPath); err != nil {
+		t.Errorf("legacy import source was removed: %v", err)
+	} else if string(got) != string(legacyRecord) {
+		t.Errorf("legacy import source changed: got %q, want %q", got, legacyRecord)
 	}
 }
 
