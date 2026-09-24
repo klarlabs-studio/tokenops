@@ -85,6 +85,7 @@ func (s *Server) routingMiddleware(provider providers.Provider, next http.Handle
 
 		assignment, enrolled, assignErr := s.experiments.Assign(r.Context(), experiments.AssignmentInput{
 			Provider: string(provider.ID), BaselineModel: obs.RequestModel, VariantModel: rec.TargetModel,
+			ExecutionID: obs.ExecutionID,
 			Fingerprint: decide.RouteFingerprint(provider.ID, obs.RequestModel, rec.TargetModel, "proxy"),
 			At:          time.Now().UTC(),
 		})

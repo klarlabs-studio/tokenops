@@ -53,7 +53,8 @@ Client Request
   ├─ proxy/observation.go: capture body, hash (SHA-256),
   │   tokenize (PreflightCount), extract attribution headers
   │   (X-Tokenops-Workflow-Id, X-Tokenops-Agent-Id,
-  │    X-Tokenops-Session-Id, X-Tokenops-User-Id)
+  │    X-Tokenops-Session-Id, X-Tokenops-User-Id,
+  │    X-Tokenops-Execution-Id)
   │
   ├─ proxy/cache_middleware.go: [optional] serve from cache,
   │   emit synthetic PromptEvent with CacheHit=true
