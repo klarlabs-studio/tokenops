@@ -65,4 +65,7 @@ success can flag harm even when measured token use falls; absent assessments
 remain unknown. They also report mean proxy-observed request latency for each
 cohort; missing requests remain unknown rather than zero. The current cohort
 split is observational, so these measures can identify a warning but cannot
-claim the intervention caused the difference.
+claim the intervention caused the difference. Plan-included token use is
+reported separately by provider as quota consumption, never converted to
+synthetic dollar savings. Metered spend remains unreported by this comparison
+until its event-time pricing provenance can be established.
