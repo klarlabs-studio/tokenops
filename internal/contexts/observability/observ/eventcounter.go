@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/domainevents"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -17,7 +16,6 @@ type EventCounter struct {
 	mu     sync.RWMutex
 	counts map[string]int64
 	spans  map[string]KindSpan
-	now    func() time.Time
 }
 
 // KindSpan is when the counted events of one kind happened: the earliest
@@ -31,7 +29,7 @@ type KindSpan struct {
 
 // NewEventCounter returns an empty counter.
 func NewEventCounter() *EventCounter {
-	return &EventCounter{counts: map[string]int64{}, spans: map[string]KindSpan{}, now: time.Now}
+	return &EventCounter{counts: map[string]int64{}, spans: map[string]KindSpan{}}
 }
 
 // SubscribeCanonical observes accepted canonical envelopes. Call once after
@@ -49,21 +47,6 @@ func (c *EventCounter) SubscribeCanonical(bus events.Observable) func() {
 			return
 		}
 		c.observe(payload.Kind, env.Timestamp.UTC())
-	})
-}
-
-// SubscribeDomain is a compatibility path for runs without canonical storage.
-// Stored daemons should use SubscribeCanonical instead.
-func (c *EventCounter) SubscribeDomain(bus *domainevents.Bus) {
-	if bus == nil {
-		return
-	}
-	bus.Subscribe("*", func(ev domainevents.Event) {
-		at := c.now().UTC()
-		if t, ok := ev.(interface{ At() time.Time }); ok && !t.At().IsZero() {
-			at = t.At().UTC()
-		}
-		c.observe(ev.Kind(), at)
 	})
 }
 
