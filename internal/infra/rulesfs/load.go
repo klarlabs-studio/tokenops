@@ -12,28 +12,26 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
-// DomainBusPublisher is the narrow port LoadCorpus uses to publish
-// RuleCorpusReloaded events when a new snapshot is materialised.
-// *internal/domainevents.Bus satisfies it.
-type DomainBusPublisher interface {
-	Publish(ev domainevents.Event)
+// DomainEventPublisher is the narrow canonical-envelope publication port.
+type DomainEventPublisher interface {
+	Publish(*eventschema.Envelope)
 }
 
 var (
-	corpusBus       DomainBusPublisher
+	corpusEventBus  DomainEventPublisher
 	lastCorpusHash  string
 	lastCorpusMutex sync.Mutex
 )
 
-// SetDomainBus installs the in-process domain bus the corpus loader
-// publishes to. nil clears it. Called once from the daemon composition
-// root.
-func SetDomainBus(b DomainBusPublisher) {
+// SetEventBus installs the canonical event bus the corpus loader publishes
+// to. nil clears it. Called once from the daemon composition root.
+func SetEventBus(b DomainEventPublisher) {
 	lastCorpusMutex.Lock()
 	defer lastCorpusMutex.Unlock()
-	corpusBus = b
+	corpusEventBus = b
 	lastCorpusHash = ""
 }
 
@@ -42,7 +40,7 @@ func SetDomainBus(b DomainBusPublisher) {
 // corpus digest against the previous publication; only genuine changes
 // fire the event.
 func publishReloaded(docs []*rules.RuleDocument) {
-	if corpusBus == nil || len(docs) == 0 {
+	if corpusEventBus == nil || len(docs) == 0 {
 		return
 	}
 	digest := corpusDigest(docs)
@@ -60,11 +58,11 @@ func publishReloaded(docs []*rules.RuleDocument) {
 		// the router uses; a precise tokenize would require a registry.
 		totalTokens += d.CharCount() / 4
 	}
-	corpusBus.Publish(domainevents.RuleCorpusReloaded{
+	domainevents.PublishCanonical(corpusEventBus, domainevents.RuleCorpusReloaded{
 		SourceCount: len(docs),
 		TotalTokens: totalTokens,
 		At:          time.Now(),
-	})
+	}, "rulesfs")
 }
 
 // corpusDigest returns a deterministic identifier for the corpus

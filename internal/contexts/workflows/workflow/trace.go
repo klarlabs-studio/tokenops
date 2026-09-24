@@ -53,22 +53,18 @@ var ErrNoTrace = errors.New("workflow: no prompts found for workflow_id")
 // Reconstruct loads all prompt events for workflowID, orders them, and
 // computes step deltas + rollups. spendEng may be nil — costs then come
 // purely from the stored CostUSD field.
-// DomainBus is the optional event publisher that broadcasts workflow
-// state transitions (WorkflowStarted, WorkflowCompleted) when a trace
-// is reconstructed. Adapters wire it via SetDomainBus; the workflow
-// package keeps the dependency optional so unit tests can run without
-// any bus.
-var domainBus DomainBusPublisher
+// eventPublisher is optional; adapters wire it via SetEventBus so this
+// package remains usable without a canonical event bus in unit tests.
+var eventPublisher DomainEventPublisher
 
-// DomainBusPublisher is the narrow port the workflow package depends on.
-// *internal/domainevents.Bus satisfies it.
-type DomainBusPublisher interface {
-	Publish(ev domainevents.Event)
+// DomainEventPublisher is the narrow canonical-envelope publication port.
+type DomainEventPublisher interface {
+	Publish(*eventschema.Envelope)
 }
 
-// SetDomainBus installs the in-process domain event bus. nil clears it.
+// SetEventBus installs the canonical envelope event bus. nil clears it.
 // Called once from the daemon composition root.
-func SetDomainBus(b DomainBusPublisher) { domainBus = b }
+func SetEventBus(b DomainEventPublisher) { eventPublisher = b }
 
 func Reconstruct(ctx context.Context, store *sqlite.Store, spendEng *spend.Engine, workflowID string) (*Trace, error) {
 	if store == nil {
@@ -148,12 +144,12 @@ func Reconstruct(ctx context.Context, store *sqlite.Store, spendEng *spend.Engin
 	// Reconstruct is an offline observation, not a live transition —
 	// publish WorkflowObserved rather than Started/Completed so
 	// subscribers can distinguish replay from real progress.
-	if domainBus != nil && len(t.Steps) > 0 {
-		domainBus.Publish(domainevents.WorkflowObserved{
+	if eventPublisher != nil && len(t.Steps) > 0 {
+		domainevents.PublishCanonical(eventPublisher, domainevents.WorkflowObserved{
 			WorkflowID: workflowID,
 			StepCount:  int64(t.StepCount),
 			At:         t.EndedAt,
-		})
+		}, "workflows")
 	}
 	return t, nil
 }

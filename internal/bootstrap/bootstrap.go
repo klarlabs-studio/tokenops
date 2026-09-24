@@ -22,7 +22,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/security/redaction"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
-	"go.klarlabs.de/tokenops/internal/domainevents"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -34,7 +33,6 @@ type Components struct {
 	Aggregator   *analytics.Aggregator
 	Tokenizers   *tokenizer.Registry
 	Redactor     *redaction.Redactor
-	DomainBus    *domainevents.Bus
 	EventCounter *observ.EventCounter
 	Logger       *slog.Logger
 }
@@ -120,14 +118,12 @@ func New(ctx context.Context, opts Options) (*Components, error) {
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: %w", err)
 	}
-	dbus := &domainevents.Bus{}
 	counter := observ.NewEventCounter()
 	c := &Components{
 		Logger:       opts.Logger,
 		Spend:        spendEng,
 		Tokenizers:   tokenizer.NewRegistry(),
 		Redactor:     redaction.New(redaction.Config{}),
-		DomainBus:    dbus,
 		EventCounter: counter,
 	}
 	if !opts.OpenStore {

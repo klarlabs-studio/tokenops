@@ -4,23 +4,23 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
-// DomainBusPublisher is the narrow port budget evaluation uses to
-// publish BudgetExceeded events. *internal/domainevents.Bus satisfies
-// it.
-type DomainBusPublisher interface {
-	Publish(ev domainevents.Event)
+// EventPublisher is the narrow canonical-envelope port budget evaluation
+// uses to publish BudgetExceeded events.
+type EventPublisher interface {
+	Publish(*eventschema.Envelope)
 }
 
-var budgetBus DomainBusPublisher
+var budgetEventBus EventPublisher
 
-// SetDomainBus installs the in-process domain bus the budget evaluator
+// SetEventBus installs the canonical event bus the budget evaluator
 // publishes to. Called once from the daemon composition root.
-func SetDomainBus(b DomainBusPublisher) { budgetBus = b }
+func SetEventBus(b EventPublisher) { budgetEventBus = b }
 
 func publishExceeded(a Alert) {
-	if budgetBus == nil {
+	if budgetEventBus == nil {
 		return
 	}
 	// Only fire BudgetExceeded for the genuine threshold-reached or
@@ -29,10 +29,10 @@ func publishExceeded(a Alert) {
 	if a.Limit.LimitUSD <= 0 {
 		return
 	}
-	budgetBus.Publish(domainevents.BudgetExceeded{
+	domainevents.PublishCanonical(budgetEventBus, domainevents.BudgetExceeded{
 		BudgetID: a.Limit.Name,
 		SpentUSD: a.ActualUSD,
 		LimitUSD: a.Limit.LimitUSD,
 		At:       time.Now(),
-	})
+	}, "budget")
 }

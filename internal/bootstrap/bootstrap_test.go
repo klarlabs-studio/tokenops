@@ -23,9 +23,6 @@ func TestNewWithoutStore(t *testing.T) {
 	if c.Redactor == nil {
 		t.Error("redactor missing")
 	}
-	if c.DomainBus == nil {
-		t.Error("domain bus missing")
-	}
 	if c.EventCounter == nil {
 		t.Error("event counter missing")
 	}
