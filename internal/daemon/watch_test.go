@@ -24,7 +24,7 @@ func TestWatchTickAlertsAndDedupes(t *testing.T) {
 	// Earlier daemon tests (RunWithLogger) install a process-global
 	// domain bus in the budget package; after their shutdown publishing
 	// to it blocks forever. Detach so this test stands alone.
-	budget.SetDomainBus(nil)
+	budget.SetEventBus(nil)
 
 	ctx := context.Background()
 	store, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "events.db"), sqlite.Options{})

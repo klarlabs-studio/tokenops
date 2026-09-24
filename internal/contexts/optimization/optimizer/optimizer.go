@@ -123,18 +123,15 @@ type Result struct {
 
 // Pipeline owns an ordered list of optimizers. The zero value is unusable;
 // construct via NewPipeline.
-// DomainBusPublisher is the narrow port the pipeline depends on for
-// publishing OptimizationApplied domain events. *internal/domainevents.Bus
-// satisfies it.
-type DomainBusPublisher interface {
-	Publish(ev domainevents.Event)
+// DomainEventPublisher is the narrow canonical-envelope publication port.
+type DomainEventPublisher interface {
+	Publish(*eventschema.Envelope)
 }
 
-var pipelineBus DomainBusPublisher
+var pipelineEventBus DomainEventPublisher
 
-// SetDomainBus installs the in-process domain bus the pipeline publishes
-// to. Called once from the daemon composition root.
-func SetDomainBus(b DomainBusPublisher) { pipelineBus = b }
+// SetEventBus installs the canonical event bus the pipeline publishes to.
+func SetEventBus(b DomainEventPublisher) { pipelineEventBus = b }
 
 type Pipeline struct {
 	optimizers []Optimizer
@@ -204,13 +201,13 @@ func (p *Pipeline) Run(ctx context.Context, req *Request, decider Decider) (*Res
 			}
 			ev := p.recommendationEvent(req, opt, mode, rec, decision, stageElapsed)
 			res.Events = append(res.Events, ev)
-			if pipelineBus != nil && decision == eventschema.OptimizationDecisionApplied {
-				pipelineBus.Publish(domainevents.OptimizationApplied{
+			if pipelineEventBus != nil && decision == eventschema.OptimizationDecisionApplied {
+				domainevents.PublishCanonical(pipelineEventBus, domainevents.OptimizationApplied{
 					PromptHash:    ev.PromptHash,
 					OptimizerKind: string(ev.Kind),
 					TokensSaved:   ev.EstimatedSavingsTokens,
 					At:            p.clock(),
-				})
+				}, "optimizer")
 			}
 		}
 	}

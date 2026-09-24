@@ -1,22 +1,23 @@
 package rulesfs
 
 import (
-	"sync/atomic"
 	"testing"
 	"testing/fstest"
 
-	"go.klarlabs.de/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
+
+type envelopeCapture struct{ events []*eventschema.Envelope }
+
+func (c *envelopeCapture) Publish(env *eventschema.Envelope) { c.events = append(c.events, env) }
 
 func TestLoadCorpusFromFSDeduplicatesReloadEvents(t *testing.T) {
 	memFS := fstest.MapFS{
 		"CLAUDE.md": {Data: []byte("# Testing\nuse tdd\n")},
 	}
-	bus := &domainevents.Bus{}
-	var reloads atomic.Int64
-	bus.Subscribe(domainevents.KindRuleCorpusReloaded, func(domainevents.Event) { reloads.Add(1) })
-	SetDomainBus(bus)
-	t.Cleanup(func() { SetDomainBus(nil) })
+	bus := &envelopeCapture{}
+	SetEventBus(bus)
+	t.Cleanup(func() { SetEventBus(nil) })
 
 	if _, err := LoadCorpusFromFS(memFS, "repo"); err != nil {
 		t.Fatalf("first load: %v", err)
@@ -24,8 +25,8 @@ func TestLoadCorpusFromFSDeduplicatesReloadEvents(t *testing.T) {
 	if _, err := LoadCorpusFromFS(memFS, "repo"); err != nil {
 		t.Fatalf("second load: %v", err)
 	}
-	if reloads.Load() != 1 {
-		t.Errorf("reloads = %d, want 1 (corpus unchanged)", reloads.Load())
+	if len(bus.events) != 1 {
+		t.Errorf("reloads = %d, want 1 (corpus unchanged)", len(bus.events))
 	}
 
 	// Mutate corpus → must fire again.
@@ -33,7 +34,7 @@ func TestLoadCorpusFromFSDeduplicatesReloadEvents(t *testing.T) {
 	if _, err := LoadCorpusFromFS(memFS, "repo"); err != nil {
 		t.Fatalf("third load: %v", err)
 	}
-	if reloads.Load() != 2 {
-		t.Errorf("reloads after change = %d, want 2", reloads.Load())
+	if len(bus.events) != 2 {
+		t.Errorf("reloads after change = %d, want 2", len(bus.events))
 	}
 }
