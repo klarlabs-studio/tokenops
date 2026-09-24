@@ -128,6 +128,7 @@ func (s *Store) AppendBatch(ctx context.Context, envs []*eventschema.Envelope) e
 			r.Provider, r.Model,
 			r.WorkflowID, r.AgentID, r.SessionID, r.UserID,
 			r.WorkID, r.ExecutionID, r.ActorID,
+			r.DecisionID, r.InterventionID, r.ExperimentID,
 			r.InputTokens, r.OutputTokens, r.TotalTokens, r.CostUSD,
 			r.Payload, r.Attributes,
 		); err != nil {
@@ -153,12 +154,15 @@ type Filter struct {
 	// Work, Execution and Actor filter on the ontology association.
 	// Filtering by execution is what makes two attempts at the same goal
 	// comparable, which every experiment needs.
-	Work      string
-	Execution string
-	Actor     string
-	Since     time.Time
-	Until     time.Time
-	Limit     int
+	Work         string
+	Execution    string
+	Actor        string
+	Decision     string
+	Intervention string
+	Experiment   string
+	Since        time.Time
+	Until        time.Time
+	Limit        int
 }
 
 const defaultQueryLimit = 1000
@@ -202,6 +206,18 @@ func (s *Store) Query(ctx context.Context, f Filter) ([]*eventschema.Envelope, e
 		conds = append(conds, "actor_id = ?")
 		args = append(args, f.Actor)
 	}
+	if f.Decision != "" {
+		conds = append(conds, "decision_id = ?")
+		args = append(args, f.Decision)
+	}
+	if f.Intervention != "" {
+		conds = append(conds, "intervention_id = ?")
+		args = append(args, f.Intervention)
+	}
+	if f.Experiment != "" {
+		conds = append(conds, "experiment_id = ?")
+		args = append(args, f.Experiment)
+	}
 	if f.Provider != "" {
 		conds = append(conds, "provider = ?")
 		args = append(args, f.Provider)
@@ -244,6 +260,7 @@ func (s *Store) Query(ctx context.Context, f Filter) ([]*eventschema.Envelope, e
 			&r.Provider, &r.Model,
 			&r.WorkflowID, &r.AgentID, &r.SessionID, &r.UserID,
 			&r.WorkID, &r.ExecutionID, &r.ActorID,
+			&r.DecisionID, &r.InterventionID, &r.ExperimentID,
 			&r.InputTokens, &r.OutputTokens, &r.TotalTokens, &r.CostUSD,
 			&r.Payload, &r.Attributes,
 		); err != nil {
@@ -285,6 +302,30 @@ func (s *Store) Count(ctx context.Context, f Filter) (int64, error) {
 		conds = append(conds, "session_id = ?")
 		args = append(args, f.SessionID)
 	}
+	if f.Work != "" {
+		conds = append(conds, "work_id = ?")
+		args = append(args, f.Work)
+	}
+	if f.Execution != "" {
+		conds = append(conds, "execution_id = ?")
+		args = append(args, f.Execution)
+	}
+	if f.Actor != "" {
+		conds = append(conds, "actor_id = ?")
+		args = append(args, f.Actor)
+	}
+	if f.Decision != "" {
+		conds = append(conds, "decision_id = ?")
+		args = append(args, f.Decision)
+	}
+	if f.Intervention != "" {
+		conds = append(conds, "intervention_id = ?")
+		args = append(args, f.Intervention)
+	}
+	if f.Experiment != "" {
+		conds = append(conds, "experiment_id = ?")
+		args = append(args, f.Experiment)
+	}
 	if f.Provider != "" {
 		conds = append(conds, "provider = ?")
 		args = append(args, f.Provider)
@@ -312,6 +353,19 @@ func (s *Store) Count(ctx context.Context, f Filter) (int64, error) {
 	return n, nil
 }
 
+// ExperimentEvents implements the bounded-experiment ledger port without
+// exposing sqlite query types to the capability layer.
+func (s *Store) ExperimentEvents(ctx context.Context, id string) ([]*eventschema.Envelope, error) {
+	filter := Filter{Experiment: id, Limit: 100_000}
+	if id == "" {
+		// Listing active experiments needs lifecycle events only. Reading one
+		// experiment returns every correlated event so learning can join the
+		// decision, prompt and outcome evidence without a second data source.
+		filter.Type = eventschema.EventTypeExperiment
+	}
+	return s.Query(ctx, filter)
+}
+
 const insertSQL = `
 INSERT INTO events (
     id, schema_version, type, timestamp_ns, day,
@@ -319,9 +373,10 @@ INSERT INTO events (
     provider, model,
     workflow_id, agent_id, session_id, user_id,
     work_id, execution_id, actor_id,
+    decision_id, intervention_id, experiment_id,
     input_tokens, output_tokens, total_tokens, cost_usd,
     payload, attributes
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO NOTHING
 `
 
@@ -332,6 +387,7 @@ SELECT
     provider, model,
     workflow_id, agent_id, session_id, user_id,
     work_id, execution_id, actor_id,
+    decision_id, intervention_id, experiment_id,
     input_tokens, output_tokens, total_tokens, cost_usd,
     payload, attributes
 FROM events

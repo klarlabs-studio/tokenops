@@ -1,0 +1,69 @@
+package experiments
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"go.klarlabs.de/tokenops/pkg/eventschema"
+)
+
+type memoryLedger struct{ events []*eventschema.Envelope }
+
+func (m *memoryLedger) Append(_ context.Context, e *eventschema.Envelope) error {
+	m.events = append(m.events, e)
+	return nil
+}
+func (m *memoryLedger) ExperimentEvents(_ context.Context, id string) ([]*eventschema.Envelope, error) {
+	if id == "" {
+		return append([]*eventschema.Envelope(nil), m.events...), nil
+	}
+	var out []*eventschema.Envelope
+	for _, e := range m.events {
+		if e.Correlation.Experiment == id {
+			out = append(out, e)
+		}
+	}
+	return out, nil
+}
+
+func TestTrialIsBoundedPairedAndPersistent(t *testing.T) {
+	ctx := context.Background()
+	ledger := &memoryLedger{}
+	m := New(ledger)
+	now := time.Unix(100, 0).UTC()
+	state, err := m.Start(ctx, StartInput{Provider: "anthropic", BaselineModel: "opus", VariantModel: "sonnet", MaxPairs: 1, At: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, ok, err := m.Assign(ctx, AssignmentInput{Provider: "anthropic", BaselineModel: "opus", VariantModel: "sonnet", ExecutionID: "e1", At: now})
+	if err != nil || !ok {
+		t.Fatalf("first assignment: %+v %v %v", a, ok, err)
+	}
+	b, ok, err := m.Assign(ctx, AssignmentInput{Provider: "anthropic", BaselineModel: "opus", VariantModel: "sonnet", ExecutionID: "e2", At: now})
+	if err != nil || !ok || a.Variant == b.Variant || a.Pair != b.Pair {
+		t.Fatalf("pair = %+v %+v, ok=%v err=%v", a, b, ok, err)
+	}
+	if _, ok, err := m.Assign(ctx, AssignmentInput{Provider: "anthropic", BaselineModel: "opus", VariantModel: "sonnet", ExecutionID: "e3", At: now}); err != nil || ok {
+		t.Fatalf("trial exceeded bound: ok=%v err=%v", ok, err)
+	}
+	got, ok, err := m.Status(ctx, state.ID, now)
+	if err != nil || !ok || got.Stage != eventschema.ExperimentCompleted {
+		t.Fatalf("state = %+v ok=%v err=%v", got, ok, err)
+	}
+}
+
+func TestFingerprintDriftPreventsAssignment(t *testing.T) {
+	ctx := context.Background()
+	ledger := &memoryLedger{}
+	m := New(ledger)
+	now := time.Unix(100, 0).UTC()
+	_, err := m.Start(ctx, StartInput{Provider: "openai", BaselineModel: "large", VariantModel: "mini", Fingerprint: "old", At: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, ok, err := m.Assign(ctx, AssignmentInput{Provider: "openai", BaselineModel: "large", VariantModel: "mini", Fingerprint: "new", At: now})
+	if err != nil || ok {
+		t.Fatalf("drift assigned: ok=%v err=%v", ok, err)
+	}
+}

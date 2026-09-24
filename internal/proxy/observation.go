@@ -73,10 +73,11 @@ type requestObservation struct {
 	Streaming     bool
 	MaxOutput     int64
 
-	WorkflowID string
-	AgentID    string
-	SessionID  string
-	UserID     string
+	WorkflowID  string
+	AgentID     string
+	SessionID   string
+	UserID      string
+	Correlation eventschema.Correlation
 
 	Status        int
 	ResponseModel string
@@ -173,6 +174,7 @@ func (r *observerRequestMeter) Done(_ int64) {
 		Timestamp:     r.obs.Start.UTC(),
 		Source:        r.m.source,
 		Association:   associationFor(r.obs),
+		Correlation:   r.obs.Correlation,
 		Payload: &eventschema.PromptEvent{
 			PromptHash:       r.obs.PromptHash,
 			Provider:         r.obs.Provider,

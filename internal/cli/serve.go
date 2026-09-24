@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
+	"go.klarlabs.de/tokenops/internal/capability/experiments"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
@@ -217,6 +218,15 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	// the events the analytics tools read. It is the only surface that
 	// joins them.
 	if err := mcp.RegisterVerifyTool(srv, mcp.VerifyDeps{Store: components.Store}); err != nil {
+		return err
+	}
+	if err := mcp.RegisterOutcomeTools(srv, mcp.OutcomeDeps{Store: components.Store}); err != nil {
+		return err
+	}
+	if err := mcp.RegisterDecisionTools(srv, mcp.DecisionDeps{Store: components.Store}); err != nil {
+		return err
+	}
+	if err := mcp.RegisterExperimentTools(srv, mcp.ExperimentDeps{Manager: experiments.New(components.Store)}); err != nil {
 		return err
 	}
 	if err := mcp.RegisterStoryTools(srv, mcp.StoryDeps{}); err != nil {

@@ -116,6 +116,16 @@ var helpCatalog = []helpCategory{
 				Example: `{"instruction":"rename the handler","model":"claude-opus-5"}`,
 			},
 			{
+				Name:    "tokenops_explain_decision",
+				Summary: "Explain a recorded decision from its original evidence, alternatives, policy, and later outcome.",
+				Example: `{"decision_id":"decision:..."}`,
+			},
+			{
+				Name:    "tokenops_experiment",
+				Summary: "Explicitly start, inspect, or stop a bounded proxy-backed routing trial.",
+				Example: `{"action":"start","provider":"anthropic","baseline_model":"opus","variant_model":"sonnet"}`,
+			},
+			{
 				Name:    "tokenops_routing_proposals",
 				Summary: "Model upgrades the proxy refused because they exceed the preferred model; surface pending ones to the operator.",
 			},
@@ -151,6 +161,16 @@ var helpCatalog = []helpCategory{
 				Summary: "Did an optimization help? Compares the attempts it touched against the ones it did not. " +
 					"Read `observational` and `proven` before repeating the number.",
 				Example: `{"days":30}`,
+			},
+			{
+				Name:    "tokenops_outcome_record",
+				Summary: "Record an explicit human assessment of whether an execution achieved its goal.",
+				Example: `{"execution_id":"exec:...","decision_id":"decision:...","result":"achieved"}`,
+			},
+			{
+				Name:    "tokenops_outcome_detect",
+				Summary: "Record the last recognized verifier result after the final edit in a local Claude Code session.",
+				Example: `{"execution_id":"exec:...","decision_id":"decision:...","session_id":"..."}`,
 			},
 		},
 	},

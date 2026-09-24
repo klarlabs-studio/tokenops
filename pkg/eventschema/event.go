@@ -14,6 +14,9 @@ const (
 	EventTypeCoaching     EventType = "coaching"
 	EventTypeRuleSource   EventType = "rule_source"
 	EventTypeRuleAnalysis EventType = "rule_analysis"
+	EventTypeDecision     EventType = "decision"
+	EventTypeOutcome      EventType = "outcome"
+	EventTypeExperiment   EventType = "experiment"
 )
 
 // Provider identifies the upstream LLM provider observed for an event.
@@ -79,6 +82,19 @@ type Association struct {
 	Actor string `json:"actor,omitempty"`
 }
 
+// Correlation joins the records in a decision, intervention and experiment
+// lifecycle without overloading tracing identifiers.
+type Correlation struct {
+	Decision     string `json:"decision,omitempty"`
+	Intervention string `json:"intervention,omitempty"`
+	Experiment   string `json:"experiment,omitempty"`
+}
+
+// Empty reports whether no control-plane lifecycle is associated.
+func (c Correlation) Empty() bool {
+	return c.Decision == "" && c.Intervention == "" && c.Experiment == ""
+}
+
 // Empty reports whether nothing is associated.
 func (a Association) Empty() bool {
 	return a.Work == "" && a.Execution == "" && a.Actor == ""
@@ -110,6 +126,9 @@ type Envelope struct {
 	// work from it — which is a gap to be filled, not a default to be
 	// invented.
 	Association Association `json:"association,omitzero"`
+	// Correlation ties the explanation, action, outcome and experiment
+	// together. It is distinct from distributed tracing.
+	Correlation Correlation `json:"correlation,omitzero"`
 	// Payload is one of *PromptEvent, *WorkflowEvent, *OptimizationEvent,
 	// *CoachingEvent. The concrete type is determined by Type.
 	Payload Payload `json:"payload"`

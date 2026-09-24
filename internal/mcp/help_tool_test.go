@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"go.klarlabs.de/tokenops/internal/capability/experiments"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
@@ -41,6 +42,9 @@ func allRegisteredTools(t *testing.T) map[string]bool {
 	must(RegisterAgentDXTools(srv, AgentDXDeps{}))
 	must(RegisterStoryTools(srv, StoryDeps{}))
 	must(RegisterVerifyTool(srv, VerifyDeps{Store: store}))
+	must(RegisterOutcomeTools(srv, OutcomeDeps{Store: store}))
+	must(RegisterDecisionTools(srv, DecisionDeps{Store: store}))
+	must(RegisterExperimentTools(srv, ExperimentDeps{Manager: experiments.New(store)}))
 	must(RegisterRoutingAdviceTools(srv, RoutingAdviceDeps{}))
 	must(RegisterApprovalTools(srv, ApprovalDeps{}))
 	must(RegisterModeTools(srv, ModeDeps{}))

@@ -73,7 +73,11 @@ type Request struct {
 // pipeline turns each Recommendation into an OptimizationEvent, attaching
 // the actual Decision based on Mode and the Decider callback.
 type Recommendation struct {
-	Kind                   eventschema.OptimizationType
+	Kind eventschema.OptimizationType
+	// TargetModel is populated by model-routing recommendations. Keeping
+	// it structural avoids reconstructing a decision from prose or parsing
+	// a provider-specific rewritten body.
+	TargetModel            string
 	EstimatedSavingsTokens int64
 	EstimatedSavingsUSD    float64
 	QualityScore           float64

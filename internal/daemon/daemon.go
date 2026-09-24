@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
+	"go.klarlabs.de/tokenops/internal/capability/experiments"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
@@ -487,6 +488,9 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			}
 		}
 		opts = append(opts, proxy.WithActiveRouting(*rc, components.Spend))
+		if components.Store != nil {
+			opts = append(opts, proxy.WithExperiments(experiments.New(components.Store)))
+		}
 		logger.Info("model routing wired",
 			"rules", len(rc.Rules), "mode", string(cfg.Optimizer.Mode))
 	}
