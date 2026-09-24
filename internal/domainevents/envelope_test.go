@@ -51,6 +51,9 @@ func TestToEnvelopePreservesKindPayloadAndOccurrenceTime(t *testing.T) {
 	if !env.Timestamp.Equal(at.UTC()) {
 		t.Fatalf("timestamp = %s, want %s", env.Timestamp, at.UTC())
 	}
+	if env.Association.Actor != "agent:1" || env.Association.Work != "" || env.Association.Execution != "" {
+		t.Fatalf("association = %+v, want actor agent:1 only", env.Association)
+	}
 	payload, ok := env.Payload.(*eventschema.DomainEvent)
 	if !ok || payload.Kind != KindWorkflowStarted {
 		t.Fatalf("payload = %#v", env.Payload)
@@ -61,6 +64,20 @@ func TestToEnvelopePreservesKindPayloadAndOccurrenceTime(t *testing.T) {
 	}
 	if data.WorkflowID != "wf:1" || data.AgentID != "agent:1" || !data.At.Equal(at) {
 		t.Fatalf("domain data = %+v", data)
+	}
+}
+
+func TestEnvelopeFromRecordRecoversExplicitActorAssociation(t *testing.T) {
+	env, err := EnvelopeFromRecord(Record{
+		Kind:    KindWorkflowStarted,
+		At:      time.Date(2026, 9, 24, 12, 30, 0, 0, time.UTC),
+		Payload: json.RawMessage(`{"WorkflowID":"wf:1","AgentID":"agent:1"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env.Association.Actor != "agent:1" {
+		t.Fatalf("migrated association = %+v", env.Association)
 	}
 }
 
