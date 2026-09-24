@@ -93,19 +93,16 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		logger.Debug("domain event", "kind", ev.Kind())
 	})
 
-	// JSONL persistence so late subscribers can replay history.
-	var domainLog *domainevents.JSONLog
+	// Keep the former JSONL location only as a migration input. New domain
+	// events are persisted through the canonical envelope bus below.
 	var domainLogPath string
 	if cfg.Storage.Enabled {
-		eventsPath, _ := resolveStoragePath(cfg.Storage.Path)
-		domainLogPath = filepath.Join(filepath.Dir(eventsPath), "domain-events.jsonl")
-		if l, err := domainevents.NewJSONLog(domainLogPath); err == nil {
-			domainLog = l
-			domainLog.Attach(dbus, nil)
-			logger.Info("domain event log ready", "path", domainLogPath)
-		} else {
-			logger.Warn("domain event log unavailable", "err", err)
+		eventsPath, err := resolveStoragePath(cfg.Storage.Path)
+		if err != nil {
+			return fmt.Errorf("storage path: %w", err)
 		}
+		domainLogPath = filepath.Join(filepath.Dir(eventsPath), "domain-events.jsonl")
+		logger.Info("legacy domain event import path ready", "path", domainLogPath)
 	}
 
 	// Async dispatch with bounded queue isolates the publisher hot
@@ -610,10 +607,6 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			"published", bus.PublishedCount(),
 			"dropped", bus.DroppedCount(),
 		)
-	}
-	// 5. Close the legacy log after both buses drain during the migration.
-	if domainLog != nil {
-		_ = domainLog.Close()
 	}
 	if components != nil {
 		_ = components.Shutdown()
