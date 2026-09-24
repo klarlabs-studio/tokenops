@@ -41,7 +41,7 @@ func newVerifyCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "verify",
-		Short: "Compare attempts that got an optimization against those that did not",
+		Short: "Compare resource use and outcomes across optimized attempts",
 		Long: `verify attributes recorded events to the attempts they were part of, then
 compares the attempts an optimization touched against the ones it did not.
 
@@ -51,6 +51,10 @@ that have nothing to do with it — compression applies to large outputs,
 routing applies to turns a classifier thought were mechanical. A
 difference between such groups is real; attributing it to the
 intervention is not warranted.
+
+Explicit human and verifier outcomes linked to an execution are included in
+each cohort's assessed success rate. A quality drop can flag harm even when
+the token count fell; missing outcomes remain unknown.
 
 What it is for: the difference is the reason to run a real experiment,
 and a collapsed success rate is worth acting on whether or not causation
@@ -89,6 +93,13 @@ func writeVerifyText(out io.Writer, r verify.Report) {
 		fmt.Fprintf(out, "  measured difference: %.0f tokens per attempt\n", observed)
 	} else {
 		fmt.Fprintln(out, "  measured difference: not established")
+	}
+	baseRate, baseKnown := r.BaselineOutcomes.SuccessRate.Amount()
+	interventionRate, interventionKnown := r.InterventionOutcomes.SuccessRate.Amount()
+	if baseKnown && interventionKnown {
+		fmt.Fprintf(out, "  assessed success: %.0f%% baseline → %.0f%% intervention\n", baseRate, interventionRate)
+	} else {
+		fmt.Fprintln(out, "  assessed success: not established (record outcomes for executions)")
 	}
 
 	// The wording comes from the capability so this and the MCP tool

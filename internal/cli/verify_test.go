@@ -18,7 +18,9 @@ import (
 func TestVerifyReportsTheDifferenceAndWhyItIsNotAFinding(t *testing.T) {
 	report := verify.Report{
 		BaselineCount: 12, InterventionCount: 9,
-		Comparison: intervention.Comparison{Assignment: intervention.Observational},
+		BaselineOutcomes:     verify.OutcomeSummary{SuccessRate: measurement.Measured(90, "outcome_events")},
+		InterventionOutcomes: verify.OutcomeSummary{SuccessRate: measurement.Measured(60, "outcome_events")},
+		Comparison:           intervention.Comparison{Assignment: intervention.Observational},
 		Verdict: intervention.Verdict{
 			Observed: measurement.Measured(2000, "sqlite_events"),
 			Samples:  9,
@@ -36,6 +38,9 @@ func TestVerifyReportsTheDifferenceAndWhyItIsNotAFinding(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(out), "not assigned") {
 		t.Errorf("nothing explains why this is not a finding:\n%s", out)
+	}
+	if !strings.Contains(out, "assessed success: 90% baseline → 60% intervention") {
+		t.Errorf("outcome quality comparison is missing:\n%s", out)
 	}
 	// The word that must not appear over an observational split.
 	if strings.Contains(strings.ToLower(out), "proven") {

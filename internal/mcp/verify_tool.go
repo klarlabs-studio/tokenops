@@ -50,8 +50,10 @@ type verifyResult struct {
 	// Caveat says why the reading is what it is.
 	Caveat string `json:"caveat,omitempty"`
 
-	BaselineCount     int `json:"baseline_count"`
-	InterventionCount int `json:"intervention_count"`
+	BaselineCount        int                   `json:"baseline_count"`
+	InterventionCount    int                   `json:"intervention_count"`
+	BaselineOutcomes     verify.OutcomeSummary `json:"baseline_outcomes"`
+	InterventionOutcomes verify.OutcomeSummary `json:"intervention_outcomes"`
 
 	Error string `json:"error,omitempty"`
 	Hint  string `json:"hint,omitempty"`
@@ -60,12 +62,14 @@ type verifyResult struct {
 // verifyPayload renders a report for an agent.
 func verifyPayload(r verify.Report) verifyResult {
 	out := verifyResult{
-		Reading:           r.Reading(),
-		Observational:     r.Observational(),
-		Harmful:           r.Harmful(),
-		Caveat:            r.Verdict.Caveat,
-		BaselineCount:     r.BaselineCount,
-		InterventionCount: r.InterventionCount,
+		Reading:              r.Reading(),
+		Observational:        r.Observational(),
+		Harmful:              r.Harmful(),
+		Caveat:               r.Verdict.Caveat,
+		BaselineCount:        r.BaselineCount,
+		InterventionCount:    r.InterventionCount,
+		BaselineOutcomes:     r.BaselineOutcomes,
+		InterventionOutcomes: r.InterventionOutcomes,
 	}
 	// Proven requires both an assigned comparison and a conclusion. An
 	// observational split can never reach it.
@@ -88,7 +92,7 @@ func RegisterVerifyTool(s *Server, d VerifyDeps) error {
 		return errors.New("mcp: nil server")
 	}
 	s.Tool("tokenops_verify").
-		Description("Compare the attempts an optimization touched against the ones it did not, over real recorded work. Returns the measured difference in tokens per attempt, and whether that difference can be attributed to the optimization — which today it cannot: the groups are split by whether an optimization happened to fire, so they differ in ways unrelated to it. Read `observational` and `proven` before repeating the number. A `harmful` reading is worth acting on regardless, because a collapsed success rate costs more than the tokens it saved.").
+		Description("Compare the attempts an optimization touched against the ones it did not, over real recorded work. Returns measured token difference and explicit outcome success rates for both groups. Outcome drops can flag harm, but the cohorts remain observational unless assignments were randomized; read `observational` and `proven` before attributing a difference to the optimization.").
 		OutputSchema(verifyResult{}).
 		Handler(func(ctx context.Context, in verifyInput) (*verifyResult, error) {
 			if d.Store == nil {
