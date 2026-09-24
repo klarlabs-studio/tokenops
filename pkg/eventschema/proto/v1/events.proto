@@ -198,6 +198,8 @@ message PromptEvent {
   bool cache_hit = 44;
 
   double cost_usd = 50;
+  string cost_source = 51;
+  bool cost_measured = 52;
 
   string workflow_id = 60;
   string agent_id = 61;

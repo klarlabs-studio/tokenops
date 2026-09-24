@@ -38,6 +38,42 @@ func TestVerifyToolCarriesTheRefusalNotOnlyTheNumber(t *testing.T) {
 	}
 }
 
+func TestVerifyToolCarriesOutcomeCohortRates(t *testing.T) {
+	base := measurement.Measured(70, "outcome_events")
+	with := measurement.Measured(75, "outcome_events")
+	payload := verifyPayload(verify.Report{
+		BaselineOutcomes:       verify.OutcomeSummary{Achieved: 7, NotAchieved: 3, SuccessRate: base},
+		InterventionOutcomes:   verify.OutcomeSummary{Achieved: 7, Partial: 1, NotAchieved: 2, SuccessRate: with},
+		BaselineLatency:        measurement.Measured(250, "sqlite_events"),
+		InterventionLatency:    measurement.Measured(300, "sqlite_events"),
+		BaselineMeteredCostUSD: measurement.Measured(0.002, "sqlite_events"),
+		BaselinePlanQuota: verify.QuotaSummary{
+			"anthropic": measurement.Measured(1200, "sqlite_events"),
+		},
+	})
+	if got, ok := payload.BaselineOutcomes.SuccessRate.Amount(); !ok || got != 70 {
+		t.Fatalf("baseline success rate = %v, known=%v", got, ok)
+	}
+	if got, ok := payload.InterventionOutcomes.SuccessRate.Amount(); !ok || got != 75 {
+		t.Fatalf("intervention success rate = %v, known=%v", got, ok)
+	}
+	baseLatency, baseOK := payload.BaselineLatency.(interface{ Amount() (float64, bool) })
+	if got, ok := baseLatency.Amount(); !baseOK || !ok || got != 250 {
+		t.Fatalf("baseline latency = %v, known=%v", got, ok)
+	}
+	withLatency, withOK := payload.InterventionLatency.(interface{ Amount() (float64, bool) })
+	if got, ok := withLatency.Amount(); !withOK || !ok || got != 300 {
+		t.Fatalf("intervention latency = %v, known=%v", got, ok)
+	}
+	if got := payload.BaselinePlanQuota["anthropic"].AmountOr(-1); got != 1200 {
+		t.Fatalf("baseline plan quota = %v, want 1200", got)
+	}
+	cost, costOK := payload.BaselineMeteredCost.(interface{ Amount() (float64, bool) })
+	if got, ok := cost.Amount(); !costOK || !ok || got != 0.002 {
+		t.Fatalf("baseline metered cost = %v, known=%v", got, ok)
+	}
+}
+
 // The CLI and the tool must describe one verdict the same way. Two
 // surfaces wording a judgement differently is how an operator and their
 // agent come to disagree about what happened.

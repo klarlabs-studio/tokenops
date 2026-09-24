@@ -1332,6 +1332,8 @@ type PromptEvent struct {
 	ErrorCode         string                 `protobuf:"bytes,43,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
 	CacheHit          bool                   `protobuf:"varint,44,opt,name=cache_hit,json=cacheHit,proto3" json:"cache_hit,omitempty"`
 	CostUsd           float64                `protobuf:"fixed64,50,opt,name=cost_usd,json=costUsd,proto3" json:"cost_usd,omitempty"`
+	CostSource        string                 `protobuf:"bytes,51,opt,name=cost_source,json=costSource,proto3" json:"cost_source,omitempty"`
+	CostMeasured      bool                   `protobuf:"varint,52,opt,name=cost_measured,json=costMeasured,proto3" json:"cost_measured,omitempty"`
 	WorkflowId        string                 `protobuf:"bytes,60,opt,name=workflow_id,json=workflowId,proto3" json:"workflow_id,omitempty"`
 	AgentId           string                 `protobuf:"bytes,61,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
 	SessionId         string                 `protobuf:"bytes,62,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
@@ -1494,6 +1496,20 @@ func (x *PromptEvent) GetCostUsd() float64 {
 		return x.CostUsd
 	}
 	return 0
+}
+
+func (x *PromptEvent) GetCostSource() string {
+	if x != nil {
+		return x.CostSource
+	}
+	return ""
+}
+
+func (x *PromptEvent) GetCostMeasured() bool {
+	if x != nil {
+		return x.CostMeasured
+	}
+	return false
 }
 
 func (x *PromptEvent) GetWorkflowId() string {
@@ -2006,7 +2022,7 @@ const file_pkg_eventschema_proto_v1_events_proto_rawDesc = "" +
 	"\aends_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\x06endsAt\x12\x16\n" +
 	"\x06reason\x18\t \x01(\tR\x06reason\x12 \n" +
 	"\vfingerprint\x18\n" +
-	" \x01(\tR\vfingerprint\"\xc8\x06\n" +
+	" \x01(\tR\vfingerprint\"\x8e\a\n" +
 	"\vPromptEvent\x12\x1f\n" +
 	"\vprompt_hash\x18\x01 \x01(\tR\n" +
 	"promptHash\x12=\n" +
@@ -2029,6 +2045,9 @@ const file_pkg_eventschema_proto_v1_events_proto_rawDesc = "" +
 	"error_code\x18+ \x01(\tR\terrorCode\x12\x1b\n" +
 	"\tcache_hit\x18, \x01(\bR\bcacheHit\x12\x19\n" +
 	"\bcost_usd\x182 \x01(\x01R\acostUsd\x12\x1f\n" +
+	"\vcost_source\x183 \x01(\tR\n" +
+	"costSource\x12#\n" +
+	"\rcost_measured\x184 \x01(\bR\fcostMeasured\x12\x1f\n" +
 	"\vworkflow_id\x18< \x01(\tR\n" +
 	"workflowId\x12\x19\n" +
 	"\bagent_id\x18= \x01(\tR\aagentId\x12\x1d\n" +

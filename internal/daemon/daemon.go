@@ -243,6 +243,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			proxy.WithEventBus(bus),
 			proxy.WithSourceFreshness(sourceFreshnessFn(cfg, store, sourceHealth, sup)),
 			proxy.WithTokenizer(components.Tokenizers),
+			proxy.WithCostEngine(components.Spend),
 			// Rows the bus could not persist. Published so `tokenops
 			// status` and the MCP status tool can warn about them while
 			// the daemon is running, rather than the count first being

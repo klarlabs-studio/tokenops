@@ -29,7 +29,9 @@ package verify
 import (
 	"fmt"
 	"sort"
+	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/outcomes"
 	"go.klarlabs.de/tokenops/internal/capability/reconstruct"
 	"go.klarlabs.de/tokenops/internal/contexts/intervention"
 	"go.klarlabs.de/tokenops/internal/contexts/measurement"
@@ -45,12 +47,42 @@ type Attributed struct {
 	// genuinely free attempt are different facts, and zero is the one
 	// that quietly reads as good news.
 	Tokens measurement.Value `json:"tokens"`
+	// MeteredCostUSD includes only events explicitly priced with an
+	// event-time rate card. Subscription quota and trials stay separate.
+	MeteredCostUSD measurement.Value `json:"metered_cost_usd"`
+	// Latency is mean proxy-observed request latency during the execution.
+	// No matching request is unknown rather than zero.
+	Latency measurement.Value `json:"latency"`
+	// PlanQuotaTokens keeps flat-rate quota usage separate from metered
+	// consumption; provider is the resource key, not a dollar conversion.
+	PlanQuotaTokens map[string]int64 `json:"plan_quota_tokens,omitempty"`
 	// Events is how many events were attributed.
 	Events int `json:"events"`
 	// Intervened reports whether an optimization was applied during this
 	// attempt. It is the cohort signal, and it is observational.
 	Intervened bool `json:"intervened"`
+	// InterventionKinds contains canonical applied decision kinds. When an
+	// applied decision also has a legacy optimization event, that paired
+	// event is not double-counted as a second kind.
+	InterventionKinds []string `json:"intervention_kinds,omitempty"`
+	// Outcomes contains the strongest explicit assessment linked directly
+	// to this execution. Unassessed attempts count as unknown, not failure.
+	Outcomes intervention.Outcomes `json:"outcomes"`
 }
+
+// OutcomeSummary is the adapter-safe cohort result for presentation.
+type OutcomeSummary struct {
+	Achieved    int               `json:"achieved"`
+	Partial     int               `json:"partial"`
+	NotAchieved int               `json:"not_achieved"`
+	Unknown     int               `json:"unknown"`
+	SuccessRate measurement.Value `json:"success_rate,omitzero"`
+}
+
+// QuotaSummary reports measured plan-included tokens by provider. These
+// are quota consumption, not monetary cost, and are never combined across
+// providers into one synthetic unit.
+type QuotaSummary map[string]measurement.Value
 
 // Attribute joins events to the executions they fall inside.
 //
@@ -70,39 +102,126 @@ func Attribute(execs []work.Execution, events []*eventschema.Envelope) []Attribu
 }
 
 func attributeOne(e work.Execution, events []*eventschema.Envelope) Attributed {
-	a := Attributed{Execution: e}
+	a := Attributed{Execution: e, Outcomes: intervention.Outcomes{Unknown: 1}, PlanQuotaTokens: make(map[string]int64)}
 
 	var tokens int64
+	var meteredCost float64
+	var meteredCostEvents int64
+	var latency time.Duration
+	var latencyEvents int64
+	var countedPrompts int64
+	var promptEvents int64
+	var outcomeEvents []*eventschema.Envelope
+	var appliedDecisions = make(map[string]string)
+	var appliedOptimizations []*eventschema.Envelope
 	for _, env := range events {
-		if env == nil || !within(e, env) {
+		if env == nil {
+			continue
+		}
+		if _, ok := env.Payload.(*eventschema.OutcomeEvent); ok && env.Association.Execution == string(e.ID) {
+			outcomeEvents = append(outcomeEvents, env)
+			a.Events++
+			continue
+		}
+		if !within(e, env) {
 			continue
 		}
 		a.Events++
 		switch p := env.Payload.(type) {
 		case *eventschema.PromptEvent:
+			promptEvents++
+			if (p.CostSource == "" || p.CostSource == eventschema.CostSourceMetered) && p.CostMeasured {
+				meteredCost += p.CostUSD
+				meteredCostEvents++
+			}
+			if p.Latency > 0 {
+				latency += p.Latency
+				latencyEvents++
+			}
 			// An uncounted event contributes no tokens and should not
 			// make the total look smaller than it was. Phase 1 put that
 			// flag on the event for exactly this kind of consumer.
 			if p.TokensCounted() {
 				tokens += p.TotalTokens
+				countedPrompts++
+				if p.CostSource == eventschema.CostSourcePlanIncluded {
+					a.PlanQuotaTokens[string(p.Provider)] += p.TotalTokens
+				}
 			}
 		case *eventschema.OptimizationEvent:
 			if p.Decision == eventschema.OptimizationDecisionApplied {
 				a.Intervened = true
+				appliedOptimizations = append(appliedOptimizations, env)
+			}
+		case *eventschema.DecisionEvent:
+			if p.Stage == eventschema.DecisionStageApplied {
+				a.Intervened = true
+				appliedDecisions[env.Correlation.Decision] = p.Kind
 			}
 		}
 	}
-
-	if a.Events == 0 {
-		a.Tokens = measurement.Unknown(
-			"no events joined to this attempt — the work was reconstructed but " +
-				"nothing recorded what it consumed")
-		return a
+	kinds := make(map[string]struct{}, len(appliedDecisions)+len(appliedOptimizations))
+	for _, kind := range appliedDecisions {
+		if kind != "" {
+			kinds[kind] = struct{}{}
+		}
 	}
-	a.Tokens = measurement.Measured(float64(tokens), "sqlite_events").
-		At(e.StartedAt).
-		Covering(int64(a.Events), 0)
+	for _, env := range appliedOptimizations {
+		if env.Correlation.Decision != "" {
+			if _, paired := appliedDecisions[env.Correlation.Decision]; paired {
+				continue
+			}
+		}
+		if p, ok := env.Payload.(*eventschema.OptimizationEvent); ok && p.Kind != "" {
+			kinds[string(p.Kind)] = struct{}{}
+		}
+	}
+	for kind := range kinds {
+		a.InterventionKinds = append(a.InterventionKinds, kind)
+	}
+	sort.Strings(a.InterventionKinds)
+	if len(outcomeEvents) > 0 {
+		a.Outcomes = outcomeCount(outcomes.Resolve(outcomeEvents))
+	}
+
+	if promptEvents == 0 || countedPrompts == 0 {
+		a.Tokens = measurement.Unknown(
+			"no events with counted prompt usage joined to this attempt — consumption is unknown")
+	} else {
+		a.Tokens = measurement.Measured(float64(tokens), "sqlite_events").
+			At(e.StartedAt).
+			Covering(countedPrompts, promptEvents-countedPrompts)
+	}
+	if meteredCostEvents == 0 {
+		a.MeteredCostUSD = measurement.Unknown("no prompt events with verified metered pricing joined to this attempt")
+	} else {
+		a.MeteredCostUSD = measurement.Measured(meteredCost, "sqlite_events").
+			At(e.StartedAt).
+			Covering(meteredCostEvents, promptEvents-meteredCostEvents)
+	}
+	if latencyEvents == 0 {
+		a.Latency = measurement.Unknown("no prompt events with measured latency joined to this attempt")
+	} else {
+		a.Latency = measurement.Measured(float64(latency)/float64(latencyEvents)/float64(time.Millisecond), "sqlite_events").
+			At(e.StartedAt).
+			Covering(latencyEvents, promptEvents-latencyEvents)
+	}
 	return a
+}
+
+func outcomeCount(out eventschema.OutcomeEvent) intervention.Outcomes {
+	counts := intervention.Outcomes{}
+	switch out.Result {
+	case eventschema.OutcomeAchieved:
+		counts.Achieved = 1
+	case eventschema.OutcomePartial:
+		counts.Partial = 1
+	case eventschema.OutcomeNotAchieved:
+		counts.NotAchieved = 1
+	default:
+		counts.Unknown = 1
+	}
+	return counts
 }
 
 // within reports whether an event belongs to an execution.
@@ -131,8 +250,16 @@ type Report struct {
 	// BaselineCount and InterventionCount say how many attempts fell in
 	// each cohort. "Not enough data" without saying which side was short
 	// is advice nobody can act on.
-	BaselineCount     int `json:"baseline_count"`
-	InterventionCount int `json:"intervention_count"`
+	BaselineCount              int               `json:"baseline_count"`
+	InterventionCount          int               `json:"intervention_count"`
+	BaselineOutcomes           OutcomeSummary    `json:"baseline_outcomes"`
+	InterventionOutcomes       OutcomeSummary    `json:"intervention_outcomes"`
+	BaselineLatency            measurement.Value `json:"baseline_latency_ms"`
+	InterventionLatency        measurement.Value `json:"intervention_latency_ms"`
+	BaselineMeteredCostUSD     measurement.Value `json:"baseline_metered_cost_usd"`
+	InterventionMeteredCostUSD measurement.Value `json:"intervention_metered_cost_usd"`
+	BaselinePlanQuota          QuotaSummary      `json:"baseline_plan_quota_tokens"`
+	InterventionPlanQuota      QuotaSummary      `json:"intervention_plan_quota_tokens"`
 	// Attributed is the per-execution detail the comparison rests on.
 	Attributed []Attributed `json:"attributed,omitempty"`
 }
@@ -167,8 +294,18 @@ func Compare(execs []work.Execution, events []*eventschema.Envelope) Report {
 		Intervention: meanTokens(intervened),
 		// The comparison is only as strong as its smaller side: ten
 		// baselines against one intervention is one observation, not ten.
-		Samples: min(len(baseline), len(intervened)),
+		Samples:              min(len(baseline), len(intervened)),
+		BaselineOutcomes:     sumOutcomes(baseline),
+		InterventionOutcomes: sumOutcomes(intervened),
 	}
+	report.BaselineOutcomes = summarizeOutcomes(report.Comparison.BaselineOutcomes)
+	report.InterventionOutcomes = summarizeOutcomes(report.Comparison.InterventionOutcomes)
+	report.BaselineLatency = meanLatency(baseline)
+	report.InterventionLatency = meanLatency(intervened)
+	report.BaselineMeteredCostUSD = meanMeteredCost(baseline)
+	report.InterventionMeteredCostUSD = meanMeteredCost(intervened)
+	report.BaselinePlanQuota = sumPlanQuota(baseline)
+	report.InterventionPlanQuota = sumPlanQuota(intervened)
 	report.Verdict = intervention.Judge(report.Comparison)
 
 	// Replace the domain's sample-size caveat when it is the wrong
@@ -189,6 +326,81 @@ func Compare(execs []work.Execution, events []*eventschema.Envelope) Report {
 		}
 	}
 	return report
+}
+
+func meanMeteredCost(as []Attributed) measurement.Value {
+	if len(as) == 0 {
+		return measurement.Unknown("the cohort is empty")
+	}
+	values := make([]measurement.Value, 0, len(as))
+	for _, a := range as {
+		values = append(values, a.MeteredCostUSD)
+	}
+	total := measurement.Sum(values...)
+	amount, ok := total.Amount()
+	if !ok {
+		return total
+	}
+	return measurement.Measured(amount/float64(len(as)), total.Source()).WithCaveat(total.Caveat())
+}
+
+func sumPlanQuota(as []Attributed) QuotaSummary {
+	totals := make(map[string]int64)
+	counts := make(map[string]int64)
+	for _, a := range as {
+		for provider, tokens := range a.PlanQuotaTokens {
+			totals[provider] += tokens
+			counts[provider]++
+		}
+	}
+	if len(totals) == 0 {
+		return nil
+	}
+	quota := make(QuotaSummary, len(totals))
+	for provider, tokens := range totals {
+		quota[provider] = measurement.Measured(float64(tokens), "sqlite_events").
+			Covering(counts[provider], int64(len(as))-counts[provider])
+	}
+	return quota
+}
+
+func meanLatency(as []Attributed) measurement.Value {
+	if len(as) == 0 {
+		return measurement.Unknown("the cohort is empty")
+	}
+	values := make([]measurement.Value, 0, len(as))
+	for _, a := range as {
+		values = append(values, a.Latency)
+	}
+	total := measurement.Sum(values...)
+	amount, ok := total.Amount()
+	if !ok {
+		return total
+	}
+	return measurement.Measured(amount/float64(len(as)), total.Source()).
+		WithCaveat(total.Caveat())
+}
+
+func sumOutcomes(as []Attributed) intervention.Outcomes {
+	var total intervention.Outcomes
+	for _, a := range as {
+		total.Achieved += a.Outcomes.Achieved
+		total.Partial += a.Outcomes.Partial
+		total.NotAchieved += a.Outcomes.NotAchieved
+		total.Unknown += a.Outcomes.Unknown
+	}
+	return total
+}
+
+func summarizeOutcomes(o intervention.Outcomes) OutcomeSummary {
+	s := OutcomeSummary{Achieved: o.Achieved, Partial: o.Partial, NotAchieved: o.NotAchieved, Unknown: o.Unknown}
+	if rate, ok := o.SuccessRate(); ok {
+		assessed := o.Achieved + o.Partial + o.NotAchieved
+		s.SuccessRate = measurement.Measured(rate*100, "outcome_events").Covering(int64(assessed), int64(o.Unknown))
+	} else {
+		s.SuccessRate = measurement.Unknown("no outcomes were assessed")
+	}
+	return s
 }
 
 // Reading is the one-line judgement, in the words a surface prints.

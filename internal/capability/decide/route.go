@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/contexts/learning"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
 	"go.klarlabs.de/tokenops/internal/contexts/policy"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -30,6 +31,9 @@ func RoutingAuthority(cfg config.Config) policy.Authority {
 // AutomaticAuthority is used by an execution adapter after its composition
 // root has already established automatic authority.
 func AutomaticAuthority() policy.Authority { return policy.Automatic }
+
+// RecommendAuthority records an eligible route without applying it.
+func RecommendAuthority() policy.Authority { return policy.Recommend }
 
 // Adapter declares what the calling surface can actually do.
 type Adapter struct {
@@ -51,6 +55,7 @@ type RouteInput struct {
 	WindowKnown  bool
 	WindowPct    float64
 	ObservedAt   time.Time
+	Belief       *learning.Belief
 }
 
 // RouteResult is the structural insight rendered by each surface.
@@ -101,6 +106,12 @@ func Route(in RouteInput) RouteResult {
 			Scope: string(in.Provider), Caveat: percentCaveat(in.WindowPct),
 		})
 	}
+	if in.Belief != nil {
+		evidence = append(evidence, eventschema.EvidenceRef{
+			Kind: "routing_belief", Source: "local_outcomes", ObservedAt: at,
+			Confidence: beliefConfidence(*in.Belief), Scope: string(in.Belief.Tier), Caveat: in.Belief.Caveat,
+		})
+	}
 
 	interventionID := ""
 	if changed {
@@ -127,6 +138,19 @@ func Route(in RouteInput) RouteResult {
 			Correlation: eventschema.Correlation{Decision: id, Intervention: interventionID},
 			Payload:     payload,
 		},
+	}
+}
+
+func beliefConfidence(b learning.Belief) float64 {
+	switch b.Tier {
+	case learning.TierTrusted:
+		return 1
+	case learning.TierSupported:
+		return .8
+	case learning.TierObserved:
+		return .4
+	default:
+		return 0
 	}
 }
 

@@ -38,7 +38,7 @@ and analytics share one column dictionary.
 
 ## Versioning
 
-`SchemaVersion` (currently `1.0.0`) follows semantic versioning:
+`SchemaVersion` (currently `1.4.0`) follows semantic versioning:
 
 - **Patch** — additive doc/clarification, no field changes.
 - **Minor** — additive enum members, additive optional fields. Old consumers

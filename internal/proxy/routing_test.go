@@ -52,10 +52,9 @@ func startProxyForRouting(t *testing.T, upstream *httptest.Server, cfg router.Co
 	return "http://" + srv.Addr(), bus
 }
 
-// Active mode: a request matching a routing rule reaches the upstream
-// with the rewritten model, the observation keeps the original model,
-// and an applied OptimizationEvent lands on the bus.
-func TestActiveRoutingRewritesModel(t *testing.T) {
+// Autonomous routing without an outcome ledger must fail closed and explain
+// that the proposed route was held back.
+func TestActiveRoutingWithoutOutcomeLedgerPreservesBaseline(t *testing.T) {
 	var upstreamModel string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
@@ -81,6 +80,7 @@ func TestActiveRoutingRewritesModel(t *testing.T) {
 		base+"/anthropic/v1/messages",
 		strings.NewReader(`{"model":"claude-fable-5","max_tokens":100,"messages":[{"role":"user","content":"hello"}]}`))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(headerSessionID, "route-session")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("do: %v", err)
@@ -88,8 +88,8 @@ func TestActiveRoutingRewritesModel(t *testing.T) {
 	_, _ = io.Copy(io.Discard, resp.Body)
 	_ = resp.Body.Close()
 
-	if upstreamModel != "claude-opus-4-8" {
-		t.Errorf("upstream model = %q; want claude-opus-4-8", upstreamModel)
+	if upstreamModel != "claude-fable-5" {
+		t.Errorf("upstream model = %q; want unchanged baseline claude-fable-5", upstreamModel)
 	}
 
 	envs := waitForEvent(t, bus, 2)
@@ -97,22 +97,29 @@ func TestActiveRoutingRewritesModel(t *testing.T) {
 	var promptEv *eventschema.PromptEvent
 	for _, env := range envs {
 		switch p := env.Payload.(type) {
+		case *eventschema.DecisionEvent:
+			if env.Association.Actor != "session:route-session" {
+				t.Errorf("decision association = %+v; want session actor for verification join", env.Association)
+			}
 		case *eventschema.OptimizationEvent:
 			optEv = p
+			if env.Association.Actor != "session:route-session" {
+				t.Errorf("optimization association = %+v; want session actor for verification join", env.Association)
+			}
 		case *eventschema.PromptEvent:
 			promptEv = p
 		}
 	}
 	if optEv == nil {
-		t.Fatal("no OptimizationEvent published for applied route")
+		t.Fatal("no OptimizationEvent published for held route")
 	}
 	if optEv.Kind != eventschema.OptimizationTypeRouter ||
-		optEv.Decision != eventschema.OptimizationDecisionApplied ||
+		optEv.Decision != eventschema.OptimizationDecisionSkipped ||
 		optEv.Mode != eventschema.OptimizationModeInteractive {
 		t.Errorf("optimization event = %+v", optEv)
 	}
-	if optEv.Reason != "route claude-fable-5 -> claude-opus-4-8" {
-		t.Errorf("reason = %q", optEv.Reason)
+	if !strings.Contains(optEv.Reason, "outcome history unavailable") {
+		t.Errorf("reason = %q; want fail-closed explanation", optEv.Reason)
 	}
 	if promptEv == nil {
 		t.Fatal("no PromptEvent published")
@@ -170,7 +177,7 @@ func TestRoutingExperimentRunsOneBaselineAndOneVariant(t *testing.T) {
 		_ = srv.Shutdown(shutdown)
 	}()
 	waitListening(t, srv.Addr())
-	for range 2 {
+	for range 3 {
 		req, _ := http.NewRequest(http.MethodPost, "http://"+srv.Addr()+"/anthropic/v1/messages", strings.NewReader(`{"model":"claude-fable-5","max_tokens":100,"messages":[{"role":"user","content":"hello"}]}`))
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := http.DefaultClient.Do(req)
@@ -180,8 +187,8 @@ func TestRoutingExperimentRunsOneBaselineAndOneVariant(t *testing.T) {
 		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
 	}
-	if len(models) != 2 || models[0] == models[1] {
-		t.Fatalf("paired assignments = %v; want one baseline and one variant", models)
+	if len(models) != 3 || models[0] == models[1] || models[2] != baseline {
+		t.Fatalf("assignments = %v; want one paired baseline/variant then baseline while evidence is untrusted", models)
 	}
 }
 
