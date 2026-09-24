@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 func TestEventCounterCountsByKind(t *testing.T) {
@@ -45,6 +46,24 @@ func TestEventCounterNilBusSafe(t *testing.T) {
 	c.Subscribe(nil) // must not panic
 	if c.Total() != 0 {
 		t.Errorf("expected 0 total")
+	}
+}
+
+func TestEventCounterHydratesCanonicalDomainEnvelopes(t *testing.T) {
+	c := NewEventCounter()
+	first := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
+	last := first.Add(time.Hour)
+	c.Hydrate([]*eventschema.Envelope{
+		{Timestamp: last, Type: eventschema.EventTypeDomain, Payload: &eventschema.DomainEvent{Kind: "budget.exceeded"}},
+		{Timestamp: first, Type: eventschema.EventTypeDomain, Payload: &eventschema.DomainEvent{Kind: "budget.exceeded"}},
+		{Timestamp: last, Type: eventschema.EventTypePrompt, Payload: &eventschema.PromptEvent{}},
+	})
+	if c.Total() != 2 || c.Counts()["budget.exceeded"] != 2 {
+		t.Fatalf("hydrated counts = %+v", c.Counts())
+	}
+	span := c.Spans()["budget.exceeded"]
+	if !span.First.Equal(first) || !span.Last.Equal(last) {
+		t.Fatalf("hydrated span = %+v", span)
 	}
 }
 
