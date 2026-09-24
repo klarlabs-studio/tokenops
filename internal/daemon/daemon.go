@@ -175,9 +175,10 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	}
 
 	var (
-		store   *sqlite.Store
-		bus     *events.AsyncBus
-		dashTok string
+		store    *sqlite.Store
+		bus      *events.AsyncBus
+		auditSub *audit.Subscriber
+		dashTok  string
 	)
 	components := earlyComponents
 	if cfg.Storage.Enabled {
@@ -201,15 +202,6 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			logger.Warn("canonical domain event counter hydration failed", "err", err)
 		} else {
 			domainEventCounter.Hydrate(history)
-		}
-
-		// Audit recorder subscribes to security-relevant domain events.
-		// Wired here (after the store opens) rather than at the dbus
-		// init block above because audit requires persistence.
-		auditSub := audit.Subscribe(dbus, audit.NewRecorder(store), logger, "daemon")
-		if auditSub != nil {
-			opts = append(opts, proxy.WithAuditDrops(auditSub.DroppedCount))
-			defer auditSub.Close()
 		}
 
 		var sinks []events.Sink
@@ -243,6 +235,12 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		bus = events.NewAsync(newPlanStampSink(events.NewMultiSink(sinks...), cfg), events.Options{Logger: logger})
 		cancelDomainCounter := domainEventCounter.SubscribeCanonical(bus)
 		defer cancelDomainCounter()
+		// The audit ledger consumes the same canonical envelopes as storage;
+		// its own table remains the durable security/audit query surface.
+		auditSub = audit.Subscribe(bus, audit.NewRecorder(store), logger, "daemon")
+		if auditSub != nil {
+			opts = append(opts, proxy.WithAuditDrops(auditSub.DroppedCount))
+		}
 		// Transitional Phase 6 bridge: domain events retain their legacy
 		// subscribers while also entering the canonical envelope stream.
 		domainevents.BridgeToEnvelopeBus(dbus, bus, logger)
@@ -617,6 +615,9 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			"published", bus.PublishedCount(),
 			"dropped", bus.DroppedCount(),
 		)
+	}
+	if auditSub != nil {
+		auditSub.Close()
 	}
 	if components != nil {
 		_ = components.Shutdown()
