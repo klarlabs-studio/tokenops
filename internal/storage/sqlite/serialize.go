@@ -12,29 +12,32 @@ import (
 // Fields lifted out of the payload exist for query-time filtering; the full
 // payload remains available as JSON.
 type row struct {
-	ID            string
-	SchemaVersion string
-	Type          eventschema.EventType
-	TimestampNS   int64
-	Day           int64
-	TraceID       sql.NullString
-	SpanID        sql.NullString
-	Source        sql.NullString
-	Provider      sql.NullString
-	Model         sql.NullString
-	WorkflowID    sql.NullString
-	AgentID       sql.NullString
-	SessionID     sql.NullString
-	UserID        sql.NullString
-	WorkID        sql.NullString
-	ExecutionID   sql.NullString
-	ActorID       sql.NullString
-	InputTokens   sql.NullInt64
-	OutputTokens  sql.NullInt64
-	TotalTokens   sql.NullInt64
-	CostUSD       sql.NullFloat64
-	Payload       string
-	Attributes    sql.NullString
+	ID             string
+	SchemaVersion  string
+	Type           eventschema.EventType
+	TimestampNS    int64
+	Day            int64
+	TraceID        sql.NullString
+	SpanID         sql.NullString
+	Source         sql.NullString
+	Provider       sql.NullString
+	Model          sql.NullString
+	WorkflowID     sql.NullString
+	AgentID        sql.NullString
+	SessionID      sql.NullString
+	UserID         sql.NullString
+	WorkID         sql.NullString
+	ExecutionID    sql.NullString
+	ActorID        sql.NullString
+	DecisionID     sql.NullString
+	InterventionID sql.NullString
+	ExperimentID   sql.NullString
+	InputTokens    sql.NullInt64
+	OutputTokens   sql.NullInt64
+	TotalTokens    sql.NullInt64
+	CostUSD        sql.NullFloat64
+	Payload        string
+	Attributes     sql.NullString
 }
 
 // secondsPerDay is used to bucket timestamps into UTC-day partitions for the
@@ -65,18 +68,21 @@ func envelopeToRow(env *eventschema.Envelope) (row, error) {
 	}
 
 	r := row{
-		ID:            env.ID,
-		SchemaVersion: env.SchemaVersion,
-		Type:          env.Type,
-		TimestampNS:   env.Timestamp.UTC().UnixNano(),
-		Day:           env.Timestamp.UTC().Unix() / secondsPerDay,
-		TraceID:       nullString(env.TraceID),
-		SpanID:        nullString(env.SpanID),
-		Source:        nullString(env.Source),
-		WorkID:        nullString(env.Association.Work),
-		ExecutionID:   nullString(env.Association.Execution),
-		ActorID:       nullString(env.Association.Actor),
-		Payload:       string(payloadJSON),
+		ID:             env.ID,
+		SchemaVersion:  env.SchemaVersion,
+		Type:           env.Type,
+		TimestampNS:    env.Timestamp.UTC().UnixNano(),
+		Day:            env.Timestamp.UTC().Unix() / secondsPerDay,
+		TraceID:        nullString(env.TraceID),
+		SpanID:         nullString(env.SpanID),
+		Source:         nullString(env.Source),
+		WorkID:         nullString(env.Association.Work),
+		ExecutionID:    nullString(env.Association.Execution),
+		ActorID:        nullString(env.Association.Actor),
+		DecisionID:     nullString(env.Correlation.Decision),
+		InterventionID: nullString(env.Correlation.Intervention),
+		ExperimentID:   nullString(env.Correlation.Experiment),
+		Payload:        string(payloadJSON),
 	}
 	if len(env.Attributes) > 0 {
 		attrJSON, err := json.Marshal(env.Attributes)
@@ -112,6 +118,9 @@ func envelopeToRow(env *eventschema.Envelope) (row, error) {
 		r.WorkflowID = nullString(p.WorkflowID)
 		r.AgentID = nullString(p.AgentID)
 		r.SessionID = nullString(p.SessionID)
+	case *eventschema.DecisionEvent, *eventschema.OutcomeEvent, *eventschema.ExperimentEvent:
+		// Control-plane payloads are joined through the envelope's indexed
+		// association and correlation columns; their full detail stays JSON.
 	default:
 		return row{}, fmt.Errorf("unsupported payload type %T", p)
 	}
@@ -153,6 +162,11 @@ func rowToEnvelope(r row) (*eventschema.Envelope, error) {
 			Work:      r.WorkID.String,
 			Execution: r.ExecutionID.String,
 			Actor:     r.ActorID.String,
+		},
+		Correlation: eventschema.Correlation{
+			Decision:     r.DecisionID.String,
+			Intervention: r.InterventionID.String,
+			Experiment:   r.ExperimentID.String,
 		},
 		Payload: payload,
 	}
@@ -198,6 +212,24 @@ func decodePayload(t eventschema.EventType, raw []byte) (eventschema.Payload, er
 		return &p, nil
 	case eventschema.EventTypeRuleAnalysis:
 		var p eventschema.RuleAnalysisEvent
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return nil, err
+		}
+		return &p, nil
+	case eventschema.EventTypeDecision:
+		var p eventschema.DecisionEvent
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return nil, err
+		}
+		return &p, nil
+	case eventschema.EventTypeOutcome:
+		var p eventschema.OutcomeEvent
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return nil, err
+		}
+		return &p, nil
+	case eventschema.EventTypeExperiment:
+		var p eventschema.ExperimentEvent
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, err
 		}

@@ -24,6 +24,9 @@ func TestEnvelopePayloadTypeConsistency(t *testing.T) {
 		{eventschema.EventTypeCoaching, &eventschema.CoachingEvent{}, "*eventschema.CoachingEvent"},
 		{eventschema.EventTypeRuleSource, &eventschema.RuleSourceEvent{}, "*eventschema.RuleSourceEvent"},
 		{eventschema.EventTypeRuleAnalysis, &eventschema.RuleAnalysisEvent{}, "*eventschema.RuleAnalysisEvent"},
+		{eventschema.EventTypeDecision, &eventschema.DecisionEvent{}, "*eventschema.DecisionEvent"},
+		{eventschema.EventTypeOutcome, &eventschema.OutcomeEvent{}, "*eventschema.OutcomeEvent"},
+		{eventschema.EventTypeExperiment, &eventschema.ExperimentEvent{}, "*eventschema.ExperimentEvent"},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.envType), func(t *testing.T) {
@@ -113,6 +116,9 @@ func TestEnumMembers(t *testing.T) {
 			eventschema.EventTypeCoaching,
 			eventschema.EventTypeRuleSource,
 			eventschema.EventTypeRuleAnalysis,
+			eventschema.EventTypeDecision,
+			eventschema.EventTypeOutcome,
+			eventschema.EventTypeExperiment,
 		}
 		_ = expected
 	})

@@ -24,6 +24,9 @@ func TestPayloadEventTypes(t *testing.T) {
 		{"coaching", &CoachingEvent{}, EventTypeCoaching},
 		{"rule_source", &RuleSourceEvent{}, EventTypeRuleSource},
 		{"rule_analysis", &RuleAnalysisEvent{}, EventTypeRuleAnalysis},
+		{"decision", &DecisionEvent{}, EventTypeDecision},
+		{"outcome", &OutcomeEvent{}, EventTypeOutcome},
+		{"experiment", &ExperimentEvent{}, EventTypeExperiment},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

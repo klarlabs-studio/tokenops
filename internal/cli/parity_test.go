@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/experiments"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/mcp"
@@ -59,6 +60,10 @@ var cliToMCP = map[string][]string{
 	"spend":           {"tokenops_spend_summary", "tokenops_top_consumers", "tokenops_burn_rate", "tokenops_forecast"},
 	"status":          {"tokenops_status"},
 	"story":           {"tokenops_story"},
+	"verify":          {"tokenops_verify"},
+	"decision":        {"tokenops_explain_decision"},
+	"outcome":         {"tokenops_outcome_record", "tokenops_outcome_detect"},
+	"experiment":      {"tokenops_experiment"},
 	"task":            {"tokenops_workflow_trace"},
 	"version":         {"tokenops_version"},
 	"pricing":         {"tokenops_pricing"},
@@ -202,6 +207,10 @@ func mcpToolNames(t *testing.T) map[string]bool {
 	must(mcp.RegisterPlanTools(srv, mcp.PlanDeps{}))
 	must(mcp.RegisterAgentDXTools(srv, mcp.AgentDXDeps{}))
 	must(mcp.RegisterStoryTools(srv, mcp.StoryDeps{}))
+	must(mcp.RegisterVerifyTool(srv, mcp.VerifyDeps{}))
+	must(mcp.RegisterOutcomeTools(srv, mcp.OutcomeDeps{Store: store}))
+	must(mcp.RegisterDecisionTools(srv, mcp.DecisionDeps{Store: store}))
+	must(mcp.RegisterExperimentTools(srv, mcp.ExperimentDeps{Manager: experiments.New(store)}))
 	must(mcp.RegisterRoutingAdviceTools(srv, mcp.RoutingAdviceDeps{}))
 	must(mcp.RegisterApprovalTools(srv, mcp.ApprovalDeps{}))
 	must(mcp.RegisterModeTools(srv, mcp.ModeDeps{}))

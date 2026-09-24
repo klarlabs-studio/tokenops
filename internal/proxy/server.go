@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/experiments"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer"
@@ -52,6 +53,9 @@ type Server struct {
 	// router applies live model routing when active mode is enabled
 	// (WithActiveRouting). nil = observe-only.
 	router *router.Router
+	// experiments assigns eligible model routes to bounded baseline/variant
+	// pairs. nil means no experiment is enrolled.
+	experiments *experiments.Manager
 	// planCovered reports whether a provider's traffic is billed against
 	// a flat-rate subscription rather than metered per-token. nil means
 	// "everything is metered" — the historical default.
@@ -92,6 +96,11 @@ func WithDashAuth(a DashAuth) Option {
 // not claim stay metered.
 func WithPlanCoverage(covered func(eventschema.Provider) bool) Option {
 	return func(s *Server) { s.planCovered = covered }
+}
+
+// WithExperiments enables explicitly enrolled routing trials.
+func WithExperiments(manager *experiments.Manager) Option {
+	return func(s *Server) { s.experiments = manager }
 }
 
 // costSourceFor reports how the provider's traffic should be accounted.

@@ -5,11 +5,11 @@
 [![License](https://img.shields.io/github/license/klarlabs-studio/tokenops)](LICENSE)
 [![Go Report](https://goreportcard.com/badge/go.klarlabs.de/tokenops)](https://goreportcard.com/report/go.klarlabs.de/tokenops)
 
-> **Predict rate-limit cutoffs inside your AI agent.** Local MCP server + CLI
-> that watches your flat-rate AI subscription window — Claude Max, ChatGPT
-> Plus / Pro / Team, GitHub Copilot, Cursor, Mistral Le Chat Pro, Codex Plus
-> — and tells the agent, before you hit the cap, to `continue`,
-> `slow_down`, `switch_model`, or `wait_for_reset`.
+> **A local-first adaptive control plane for AI-assisted work.** TokenOps
+> understands work, resource pressure, policy, decisions, and observed outcomes
+> so it can recommend—or, where an adapter is capable and authorized, apply—
+> better use of models and subscription capacity. It keeps the evidence and
+> decision history local and explains why each intervention was chosen.
 
 Docs: <https://klarlabs-studio.github.io/tokenops/> · Releases: <https://github.com/klarlabs-studio/tokenops/releases>
 
@@ -83,12 +83,14 @@ the agent links you to (`http://tokenops.local:7878/dashboard?token=…`).
 | 🪝 **Coaching on every client** | `coach-hook` nudges on Claude Code, Codex and Cursor (`Stop`) and opencode (`session.idle`, delivered as a TUI toast from a generated plugin). `read-guard` refuses a redundant re-read on Claude Code and opencode — the two whose hooks can decline one. Codex has no file-read tool and Cursor's `beforeReadFile` is observe-only; `hooks install` refuses both with the reason instead of writing a hook that never fires |
 | 📖 **Work storytelling** | `tokenops story` + `tokenops_story` — reconstructs your work as an account of it, one task at a time: the instruction you typed, what the agent did before the next one, what it cost, where it went sideways. One structure, four renderings: candid for you, JSON for an agent, `--for report` as evidence for someone you bill, `--for handoff` as state-of-the-world for a teammate. Titles are your own instructions, quoted — never summarised |
 | 🧠 **Smart routing** | `optimizer.smart_routing` decides per turn with no rules table: task class × plan-window pressure × the live pricing table. Downwards only, mechanical work only, only while the window is tight, never past your preferred-model ceiling. Enforcement needs the proxy; `tokenops_routing_advise` is the same policy as advice, reachable on any MCP client — it recommends and never applies |
+| 🔁 **Outcome-linked decisions** | Routing decisions preserve alternatives, policy, authority, evidence, uncertainty, and rationale. Record a human outcome with `tokenops outcome record`; inspect the durable explanation with `tokenops decision explain` |
+| 🧪 **Bounded local learning** | Opt-in proxy trials compare a baseline and lower-cost route in matched pairs, stop after at most 10 pairs or 14 days, and promote beliefs only when independently verified or human outcomes meet quality and coverage gates |
 | 🧭 **Context-aware routing** | Rules scope to what a turn *is* (`when_class: mechanical`) and to how tight your plan window is (`when_window_pct_above: 70`) — keep your best model while there's headroom, conserve it only when there isn't. Both abstain rather than guess: an unclassifiable turn or an unmeasured window leaves the model alone |
 | 🛡️ **Preferred model ceiling** | `preferred_models` per provider. Cheaper routes apply automatically; a pricier one is refused and surfaced for your answer via MCP, with your preferred model offered as the alternative |
 | 🔄 **Self-refreshing rate card** | The daemon fetches the public rate card daily and applies it to the *running* engine, so a model released after your binary does not silently price at zero. It downloads and sends nothing; `verified` rows and your negotiated overrides outrank anything fetched. One line to switch off |
 | 🎯 **Honest signal quality** | Every prediction carries `signal_quality.level` (low / medium / high) plus a one-line caveat. Heuristic mode is labelled; proxied mode is labelled |
 | ✂️ **Command-output compression** | `tokenops fmt -- <cmd>` shrinks a command's stdout before it hits the agent context — 46 built-in formatters (git, go/pytest/jest/…, npm/pip/uv/…, mvn/gradle/bazel/dotnet/…, docker/kubectl/helm, terraform/pulumi/ansible, aws/gcloud/az, and more) plus user-defined formatters in config (no recompile). Deterministic + critical-line-safe: errors/failures/changed-state never dropped, full output kept in `~/.tokenops/recovery/`. Balanced ~57% / aggressive ~68% stdout reduction. Self-tunes per user via `fmt learn --apply` |
-| 🤖 **MCP-first** | 29 MCP tools agents call directly. Inline SVG sparkline + headroom gauge rendered in markdown so every MCP client shows them today |
+| 🤖 **MCP-first** | MCP tools expose resource state, routing advice, decision explanations, outcome capture, and bounded experiments directly to agents. Inline SVG sparkline + headroom gauge render in markdown across clients |
 | 🧠 **Dynamic-cheapest coaching** | Coaching pipeline picks the lowest blended-rate model per provider at runtime from the pricing table — no hardcoded model names |
 | 💾 **Local-first, open source** | SQLite database, no cloud account, no telemetry. Apache 2.0. Demo-data isolation by default so synthetic seeds never contaminate the real signal |
 
@@ -118,6 +120,10 @@ scorecard                         Wedge KPI scorecard
 coverage-debt                     Risk-weighted coverage debt
 eval                              Optimizer eval harness + gate
 replay <id>                       Replay a session through the optimizer
+decision explain <decision-id>   Show the evidence, alternatives, policy, and result of a recorded decision
+outcome record <execution-id>    Attach an explicit human outcome to an execution and decision
+outcome detect <execution-id>    Record the final verifier result after the last edit in a local session
+experiment {start|status|stop}   Manage an opt-in, bounded proxy routing trial
 fmt -- <cmd>                      Run <cmd>, compress its output deterministically before it reaches the agent (full output kept in ~/.tokenops/recovery/)
 fmt bench --corpus <dir>          Measure formatter savings over captured command outputs
 fmt hook [--shell zsh|bash]       Emit env-gated shell wrappers (activate with TOKENOPS_FMT=1)
@@ -173,7 +179,10 @@ Clients / SDKs / CLIs / MCP hosts
     SQLite event store
             |
             v
- Spend / forecast / coaching
+ Decisions → outcomes → evidence tiers
+            |
+            v
+ Spend / forecast / coaching / learning
 ```
 
 DDD-organised: contexts under `internal/contexts/<ctx>/<pkg>`, adapters
