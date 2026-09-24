@@ -36,7 +36,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
 	"go.klarlabs.de/tokenops/internal/contexts/telemetry/retention"
 	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
-	"go.klarlabs.de/tokenops/internal/domainevents"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
 	"go.klarlabs.de/tokenops/internal/infra/domainmigration"
@@ -71,10 +70,9 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		"listen", cfg.Listen,
 	)
 
-	// Composition root constructs the domain bus + counter + redactor
-	// (and any other long-lived collaborators) once. Daemon never
-	// allocates a fresh bus or counter — it consumes what bootstrap
-	// hands back. Store opens later only when storage is enabled.
+	// Composition root constructs the counter + redactor (and other
+	// long-lived collaborators) once. The canonical event bus is wired
+	// once storage mode is known below.
 	earlyComponents, err := bootstrap.New(ctx, bootstrap.Options{
 		Logger:      logger,
 		OpenStore:   false,
@@ -83,15 +81,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	if err != nil {
 		return err
 	}
-	dbus := earlyComponents.DomainBus
 	domainEventCounter := earlyComponents.EventCounter
-	workflow.SetDomainBus(dbus)
-	optimizer.SetDomainBus(dbus)
-	rulesfs.SetDomainBus(dbus)
-	budget.SetDomainBus(dbus)
-	dbus.Subscribe("*", func(ev domainevents.Event) {
-		logger.Debug("domain event", "kind", ev.Kind())
-	})
 
 	// Keep the former JSONL location only as a migration input. New domain
 	// events are persisted through the canonical envelope bus below.
@@ -104,11 +94,6 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		domainLogPath = filepath.Join(filepath.Dir(eventsPath), "domain-events.jsonl")
 		logger.Info("legacy domain event import path ready", "path", domainLogPath)
 	}
-
-	// Async dispatch with bounded queue isolates the publisher hot
-	// path from any slow subscriber. Started AFTER subscribers wire so
-	// the worker sees them on first dispatch.
-	dbus.StartAsync(1024)
 
 	routes, err := proxy.BuildProviderRoutes(cfg.Providers)
 	if err != nil {
@@ -233,6 +218,8 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		// observer, future sources) inherits the plan_included contract
 		// without per-emitter wiring.
 		bus = events.NewAsync(newPlanStampSink(events.NewMultiSink(sinks...), cfg), events.Options{Logger: logger})
+		cancelDomainEvents := wireDomainEventPublishers(bus, logger)
+		defer cancelDomainEvents()
 		cancelDomainCounter := domainEventCounter.SubscribeCanonical(bus)
 		defer cancelDomainCounter()
 		// The audit ledger consumes the same canonical envelopes as storage;
@@ -241,9 +228,6 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		if auditSub != nil {
 			opts = append(opts, proxy.WithAuditDrops(auditSub.DroppedCount))
 		}
-		// Transitional Phase 6 bridge: domain events retain their legacy
-		// subscribers while also entering the canonical envelope stream.
-		domainevents.BridgeToEnvelopeBus(dbus, bus, logger)
 		logger.Info("event store ready", "path", path)
 		opts = append(opts,
 			proxy.WithEventBus(bus),
@@ -427,9 +411,10 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		// Keep the event model canonical even when persistence is disabled.
 		// The no-op sink lets in-memory observers receive domain envelopes.
 		bus = events.NewAsync(events.NoopSink{}, events.Options{Logger: logger})
+		cancelDomainEvents := wireDomainEventPublishers(bus, logger)
+		defer cancelDomainEvents()
 		cancelDomainCounter := domainEventCounter.SubscribeCanonical(bus)
 		defer cancelDomainCounter()
-		domainevents.BridgeToEnvelopeBus(dbus, bus, logger)
 	}
 
 	if cfg.Rules.Enabled {
@@ -601,12 +586,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	if err := sup.Wait(cfg.Shutdown.Timeout); err != nil {
 		logger.Warn("subsystem shutdown", "err", err, "running", sup.Running())
 	}
-	// 3. Drain the domain bus first so its canonical-envelope bridge can
-	// enqueue every final domain event before the storage bus closes.
-	if !dbus.CloseWithTimeout(cfg.Shutdown.Timeout) {
-		logger.Warn("domain bus drain timed out", "timeout", cfg.Shutdown.Timeout)
-	}
-	// 4. Drain in-flight telemetry envelopes, including the domain bridge.
+	// 3. Drain in-flight canonical envelopes after all publishers stop.
 	if bus != nil {
 		if err := bus.Close(cfg.Shutdown.Timeout); err != nil {
 			logger.Warn("event bus drain", "err", err)
@@ -624,6 +604,31 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	}
 	logger.Info("tokenops daemon stopped")
 	return nil
+}
+
+// wireDomainEventPublishers connects domain contexts directly to the
+// canonical envelope stream. The returned function detaches process-global
+// publisher ports after daemon shutdown.
+func wireDomainEventPublishers(bus *events.AsyncBus, logger *slog.Logger) func() {
+	workflow.SetEventBus(bus)
+	optimizer.SetEventBus(bus)
+	rulesfs.SetEventBus(bus)
+	budget.SetEventBus(bus)
+	cancelLog := bus.Subscribe(func(env *eventschema.Envelope) {
+		if env == nil || env.Type != eventschema.EventTypeDomain {
+			return
+		}
+		if event, ok := env.Payload.(*eventschema.DomainEvent); ok {
+			logger.Debug("domain event", "kind", event.Kind)
+		}
+	})
+	return func() {
+		cancelLog()
+		workflow.SetEventBus(nil)
+		optimizer.SetEventBus(nil)
+		rulesfs.SetEventBus(nil)
+		budget.SetEventBus(nil)
+	}
 }
 
 // SignalContext returns a context cancelled on SIGINT/SIGTERM. Callers must

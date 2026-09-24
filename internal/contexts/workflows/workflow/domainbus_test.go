@@ -3,14 +3,16 @@ package workflow
 import (
 	"context"
 	"strconv"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
-	"go.klarlabs.de/tokenops/internal/domainevents"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
+
+type envelopeCapture struct{ events []*eventschema.Envelope }
+
+func (c *envelopeCapture) Publish(env *eventschema.Envelope) { c.events = append(c.events, env) }
 
 func TestReconstructPublishesWorkflowEvents(t *testing.T) {
 	store := newStore(t)
@@ -24,18 +26,17 @@ func TestReconstructPublishesWorkflowEvents(t *testing.T) {
 			t.Fatalf("append: %v", err)
 		}
 	}
-	bus := &domainevents.Bus{}
-	var observed atomic.Int64
-	bus.Subscribe(domainevents.KindWorkflowObserved, func(domainevents.Event) { observed.Add(1) })
-	SetDomainBus(bus)
-	t.Cleanup(func() { SetDomainBus(nil) })
+	bus := &envelopeCapture{}
+	SetEventBus(bus)
+	t.Cleanup(func() { SetEventBus(nil) })
 
 	if _, err := Reconstruct(context.Background(), store, spend.NewEngine(spend.DefaultTable()), "wf-1"); err != nil {
 		t.Fatalf("reconstruct: %v", err)
 	}
-	if observed.Load() != 1 {
-		t.Errorf("workflow.observed events = %d, want 1", observed.Load())
+	if len(bus.events) != 1 {
+		t.Fatalf("workflow events = %d, want 1", len(bus.events))
+	}
+	if got := bus.events[0].Payload.(*eventschema.DomainEvent).Kind; got != "workflow.observed" {
+		t.Errorf("event kind = %q, want workflow.observed", got)
 	}
 }
-
-var _ = eventschema.EventTypePrompt // keep import grouped with sibling test

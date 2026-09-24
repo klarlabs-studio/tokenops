@@ -52,6 +52,23 @@ func ToEnvelope(ev Event) (*eventschema.Envelope, error) {
 	}, nil
 }
 
+// PublishCanonical converts a typed domain event and publishes it directly
+// to the canonical envelope stream. source identifies the emitting subsystem.
+func PublishCanonical(target EnvelopePublisher, ev Event, source string) {
+	if target == nil || ev == nil {
+		return
+	}
+	env, err := ToEnvelope(ev)
+	if err != nil {
+		slog.Error("domain event envelope conversion failed", "kind", ev.Kind(), "err", err)
+		return
+	}
+	if source != "" {
+		env.Source = source
+	}
+	target.Publish(env)
+}
+
 // EnvelopeFromRecord converts a legacy JSONL record into a canonical
 // envelope with a stable ID. Re-imports of the same record are idempotent.
 func EnvelopeFromRecord(rec Record) (*eventschema.Envelope, error) {
