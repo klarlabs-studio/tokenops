@@ -47,7 +47,8 @@ func ToEnvelope(ev Event) (*eventschema.Envelope, error) {
 	return &eventschema.Envelope{
 		ID: uuid.NewString(), SchemaVersion: eventschema.SchemaVersion,
 		Type: eventschema.EventTypeDomain, Timestamp: at, Source: "domain_bus",
-		Payload: &eventschema.DomainEvent{Kind: ev.Kind(), Data: data},
+		Association: associationFor(ev.Kind(), data),
+		Payload:     &eventschema.DomainEvent{Kind: ev.Kind(), Data: data},
 	}, nil
 }
 
@@ -79,8 +80,35 @@ func EnvelopeFromRecord(rec Record) (*eventschema.Envelope, error) {
 	return &eventschema.Envelope{
 		ID: stableID, SchemaVersion: eventschema.SchemaVersion,
 		Type: eventschema.EventTypeDomain, Timestamp: rec.At.UTC(), Source: "domain_jsonl_migration",
-		Payload: &eventschema.DomainEvent{Kind: rec.Kind, Data: compact},
+		Association: associationFor(rec.Kind, compact),
+		Payload:     &eventschema.DomainEvent{Kind: rec.Kind, Data: compact},
 	}, nil
+}
+
+// associationFor adds only associations explicitly carried by a domain
+// payload. WorkflowStarted.AgentID is an actor identity; workflow IDs are
+// not promoted to Work or Execution because their ontology is not defined
+// by the legacy event contract.
+func associationFor(kind string, data json.RawMessage) eventschema.Association {
+	if kind != KindWorkflowStarted {
+		return eventschema.Association{}
+	}
+	var payload struct {
+		AgentID      string `json:"AgentID"`
+		AgentIDSnake string `json:"agent_id"`
+		AgentIDCamel string `json:"agentId"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return eventschema.Association{}
+	}
+	actor := payload.AgentID
+	if actor == "" {
+		actor = payload.AgentIDSnake
+	}
+	if actor == "" {
+		actor = payload.AgentIDCamel
+	}
+	return eventschema.Association{Actor: actor}
 }
 
 // BridgeToEnvelopeBus temporarily mirrors domain events into the canonical
