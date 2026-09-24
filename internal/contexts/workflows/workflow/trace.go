@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
-	"go.klarlabs.de/tokenops/internal/domainevents"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -145,11 +144,14 @@ func Reconstruct(ctx context.Context, store *sqlite.Store, spendEng *spend.Engin
 	// publish WorkflowObserved rather than Started/Completed so
 	// subscribers can distinguish replay from real progress.
 	if eventPublisher != nil && len(t.Steps) > 0 {
-		domainevents.PublishCanonical(eventPublisher, domainevents.WorkflowObserved{
-			WorkflowID: workflowID,
-			StepCount:  int64(t.StepCount),
-			At:         t.EndedAt,
-		}, "workflows")
+		env, err := eventschema.NewDomainEnvelope("workflow.observed", struct {
+			WorkflowID string    `json:"WorkflowID"`
+			StepCount  int64     `json:"StepCount"`
+			At         time.Time `json:"At"`
+		}{workflowID, int64(t.StepCount), t.EndedAt}, t.EndedAt, "workflows", eventschema.Association{})
+		if err == nil {
+			eventPublisher.Publish(env)
+		}
 	}
 	return t, nil
 }

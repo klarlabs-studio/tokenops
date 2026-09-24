@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/domainevents"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -58,11 +57,15 @@ func publishReloaded(docs []*rules.RuleDocument) {
 		// the router uses; a precise tokenize would require a registry.
 		totalTokens += d.CharCount() / 4
 	}
-	domainevents.PublishCanonical(corpusEventBus, domainevents.RuleCorpusReloaded{
-		SourceCount: len(docs),
-		TotalTokens: totalTokens,
-		At:          time.Now(),
-	}, "rulesfs")
+	at := time.Now().UTC()
+	env, err := eventschema.NewDomainEnvelope("rule_corpus.reloaded", struct {
+		SourceCount int       `json:"SourceCount"`
+		TotalTokens int64     `json:"TotalTokens"`
+		At          time.Time `json:"At"`
+	}{len(docs), totalTokens, at}, at, "rulesfs", eventschema.Association{})
+	if err == nil {
+		corpusEventBus.Publish(env)
+	}
 }
 
 // corpusDigest returns a deterministic identifier for the corpus

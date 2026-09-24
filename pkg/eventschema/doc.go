@@ -15,8 +15,7 @@
 // Payload structs (PromptEvent, WorkflowEvent, OptimizationEvent,
 // CoachingEvent, RuleSourceEvent, RuleAnalysisEvent, DomainEvent) expose public
 // fields for ergonomic construction at emit time. After a payload is
-// wrapped in an Envelope and handed to events.Bus or
-// domainevents.Bus, callers MUST NOT mutate it — subscribers may run
+// wrapped in an Envelope and handed to events.AsyncBus, callers MUST NOT mutate it — subscribers may run
 // concurrently and rely on a stable view.
 //
 // The Envelope.Clone helper produces a defensive copy suitable when an
