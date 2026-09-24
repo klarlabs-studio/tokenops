@@ -57,6 +57,13 @@ type Bus interface {
 	Close(timeout time.Duration) error
 }
 
+// Observable is implemented by buses that can notify lightweight local
+// consumers when an envelope is accepted for dispatch. Observers must not
+// mutate the envelope and should return quickly; they run on the publisher.
+type Observable interface {
+	Subscribe(func(*eventschema.Envelope)) func()
+}
+
 // AsyncBus is the production Bus implementation. Construct with NewAsync.
 type AsyncBus struct {
 	sink      Sink
@@ -74,6 +81,9 @@ type AsyncBus struct {
 	stop      chan struct{}
 	done      chan struct{}
 	once      sync.Once
+	subsMu    sync.RWMutex
+	subs      map[uint64]func(*eventschema.Envelope)
+	nextSubID uint64
 }
 
 // Options tunes AsyncBus. Zero values produce sensible defaults: 1024
@@ -125,6 +135,7 @@ func NewAsync(sink Sink, opts Options) *AsyncBus {
 		flushRetryWait: opts.FlushRetryWait,
 		stop:           make(chan struct{}),
 		done:           make(chan struct{}),
+		subs:           make(map[uint64]func(*eventschema.Envelope)),
 	}
 	go b.run()
 	return b
@@ -139,6 +150,7 @@ func (b *AsyncBus) Publish(env *eventschema.Envelope) {
 	select {
 	case b.queue <- env:
 		b.published.Add(1)
+		b.notify(env)
 	default:
 		b.dropped.Add(1)
 	}
@@ -162,9 +174,43 @@ func (b *AsyncBus) PublishWait(ctx context.Context, env *eventschema.Envelope) e
 	select {
 	case b.queue <- env:
 		b.published.Add(1)
+		b.notify(env)
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+}
+
+// Subscribe registers a lightweight observer for accepted envelopes. The
+// returned function cancels the subscription and is safe to call repeatedly.
+func (b *AsyncBus) Subscribe(fn func(*eventschema.Envelope)) func() {
+	if b == nil || fn == nil {
+		return func() {}
+	}
+	b.subsMu.Lock()
+	b.nextSubID++
+	id := b.nextSubID
+	b.subs[id] = fn
+	b.subsMu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			b.subsMu.Lock()
+			delete(b.subs, id)
+			b.subsMu.Unlock()
+		})
+	}
+}
+
+func (b *AsyncBus) notify(env *eventschema.Envelope) {
+	b.subsMu.RLock()
+	callbacks := make([]func(*eventschema.Envelope), 0, len(b.subs))
+	for _, fn := range b.subs {
+		callbacks = append(callbacks, fn)
+	}
+	b.subsMu.RUnlock()
+	for _, fn := range callbacks {
+		fn(env)
 	}
 }
 

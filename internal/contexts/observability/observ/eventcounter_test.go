@@ -1,17 +1,23 @@
 package observ
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
+
+type eventCounterSink struct{}
+
+func (eventCounterSink) AppendBatch(context.Context, []*eventschema.Envelope) error { return nil }
 
 func TestEventCounterCountsByKind(t *testing.T) {
 	c := NewEventCounter()
 	bus := &domainevents.Bus{}
-	c.Subscribe(bus)
+	c.SubscribeDomain(bus)
 
 	bus.Publish(domainevents.WorkflowStarted{WorkflowID: "wf-1", At: time.Now()})
 	bus.Publish(domainevents.WorkflowStarted{WorkflowID: "wf-2", At: time.Now()})
@@ -43,7 +49,7 @@ func TestEventCounterCountsByKind(t *testing.T) {
 
 func TestEventCounterNilBusSafe(t *testing.T) {
 	c := NewEventCounter()
-	c.Subscribe(nil) // must not panic
+	c.SubscribeDomain(nil) // must not panic
 	if c.Total() != 0 {
 		t.Errorf("expected 0 total")
 	}
@@ -57,6 +63,7 @@ func TestEventCounterHydratesCanonicalDomainEnvelopes(t *testing.T) {
 		{Timestamp: last, Type: eventschema.EventTypeDomain, Payload: &eventschema.DomainEvent{Kind: "budget.exceeded"}},
 		{Timestamp: first, Type: eventschema.EventTypeDomain, Payload: &eventschema.DomainEvent{Kind: "budget.exceeded"}},
 		{Timestamp: last, Type: eventschema.EventTypePrompt, Payload: &eventschema.PromptEvent{}},
+		{Timestamp: last, Type: eventschema.EventTypePrompt, Payload: &eventschema.DomainEvent{Kind: "mismatched.type"}},
 	})
 	if c.Total() != 2 || c.Counts()["budget.exceeded"] != 2 {
 		t.Fatalf("hydrated counts = %+v", c.Counts())
@@ -67,7 +74,31 @@ func TestEventCounterHydratesCanonicalDomainEnvelopes(t *testing.T) {
 	}
 }
 
-// The daemon hydrates the counter from its persisted log at boot, so a
+func TestEventCounterObservesCanonicalBus(t *testing.T) {
+	c := NewEventCounter()
+	bus := events.NewAsync(eventCounterSink{}, events.Options{})
+	defer func() { _ = bus.Close(time.Second) }()
+	cancel := c.SubscribeCanonical(bus)
+	defer cancel()
+	at := time.Date(2026, 9, 24, 8, 0, 0, 0, time.UTC)
+	bus.Publish(&eventschema.Envelope{
+		Type: eventschema.EventTypeDomain, Timestamp: at,
+		Payload: &eventschema.DomainEvent{Kind: "budget.exceeded"},
+	})
+	bus.Publish(&eventschema.Envelope{
+		Type: eventschema.EventTypePrompt, Timestamp: at,
+		Payload: &eventschema.PromptEvent{},
+	})
+	if c.Total() != 1 || c.Counts()["budget.exceeded"] != 1 {
+		t.Fatalf("canonical counts = %+v", c.Counts())
+	}
+	span := c.Spans()["budget.exceeded"]
+	if !span.First.Equal(at) || !span.Last.Equal(at) {
+		t.Fatalf("canonical span = %+v", span)
+	}
+}
+
+// The daemon hydrates the counter from its canonical store at boot, so a
 // count is a lifetime total. The span says when the counted events
 // happened: replayed ones at their original time, live ones on arrival —
 // so 274 alerts from June do not read as 274 now.
@@ -76,7 +107,7 @@ func TestEventCounterRecordsWhenEachKindHappened(t *testing.T) {
 	now := time.Date(2026, 9, 19, 20, 0, 0, 0, time.UTC)
 	c.now = func() time.Time { return now }
 	bus := &domainevents.Bus{}
-	c.Subscribe(bus)
+	c.SubscribeDomain(bus)
 
 	june := time.Date(2026, 6, 14, 23, 49, 0, 0, time.UTC)
 	bus.Publish(domainevents.NewReplayed("budget.exceeded", june))

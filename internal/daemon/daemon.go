@@ -103,6 +103,10 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		}
 		domainLogPath = filepath.Join(filepath.Dir(eventsPath), "domain-events.jsonl")
 		logger.Info("legacy domain event import path ready", "path", domainLogPath)
+	} else {
+		// With storage disabled there is no canonical envelope bus; retain
+		// in-memory counters from the domain bus for the no-store mode.
+		domainEventCounter.SubscribeDomain(dbus)
 	}
 
 	// Async dispatch with bounded queue isolates the publisher hot
@@ -241,6 +245,8 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		// observer, future sources) inherits the plan_included contract
 		// without per-emitter wiring.
 		bus = events.NewAsync(newPlanStampSink(events.NewMultiSink(sinks...), cfg), events.Options{Logger: logger})
+		cancelDomainCounter := domainEventCounter.SubscribeCanonical(bus)
+		defer cancelDomainCounter()
 		// Transitional Phase 6 bridge: domain events retain their legacy
 		// subscribers while also entering the canonical envelope stream.
 		domainevents.BridgeToEnvelopeBus(dbus, bus, logger)

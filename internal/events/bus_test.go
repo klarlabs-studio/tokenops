@@ -177,6 +177,23 @@ func TestPublishNilIgnored(t *testing.T) {
 	}
 }
 
+func TestObservableSubscribersReceiveAcceptedEnvelopesUntilCancelled(t *testing.T) {
+	bus := NewAsync(&fakeSink{}, Options{Logger: discardLogger()})
+	defer func() { _ = bus.Close(time.Second) }()
+	var got atomic.Int64
+	cancel := bus.Subscribe(func(*eventschema.Envelope) { got.Add(1) })
+	bus.Publish(newEnv("first"))
+	if got.Load() != 1 {
+		t.Fatalf("observed after first publish = %d, want 1", got.Load())
+	}
+	cancel()
+	cancel() // cancellation is idempotent
+	bus.Publish(newEnv("second"))
+	if got.Load() != 1 {
+		t.Fatalf("observed after cancellation = %d, want 1", got.Load())
+	}
+}
+
 func TestBatchWaitFlushes(t *testing.T) {
 	sink := &fakeSink{}
 	bus := NewAsync(sink, Options{

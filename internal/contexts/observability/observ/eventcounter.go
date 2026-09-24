@@ -7,13 +7,12 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
-// EventCounter is a thread-safe per-kind counter that subscribes to a
-// domain bus and increments on every published event. Dashboards / MCP
-// tools / health probes consume Counts() to surface in-process event
-// volumes without round-tripping through storage.
+// EventCounter is a thread-safe per-kind counter that observes canonical
+// domain envelopes. Dashboards / MCP tools / health probes consume Counts().
 type EventCounter struct {
 	mu     sync.RWMutex
 	counts map[string]int64
@@ -22,7 +21,7 @@ type EventCounter struct {
 }
 
 // KindSpan is when the counted events of one kind happened: the earliest
-// and the latest. The daemon hydrates the counter from its persisted log
+// and the latest. The daemon hydrates the counter from its canonical store
 // at boot, so counts are lifetime totals; without the span, 274 budget
 // alerts from a budget deleted in June read as 274 happening now.
 type KindSpan struct {
@@ -35,15 +34,32 @@ func NewEventCounter() *EventCounter {
 	return &EventCounter{counts: map[string]int64{}, spans: map[string]KindSpan{}, now: time.Now}
 }
 
-// Subscribe wires the counter to bus on every event kind (wildcard).
-// Call once at daemon boot.
-func (c *EventCounter) Subscribe(bus *domainevents.Bus) {
+// SubscribeCanonical observes accepted canonical envelopes. Call once after
+// hydrating persisted history and before event producers start.
+func (c *EventCounter) SubscribeCanonical(bus events.Observable) func() {
+	if bus == nil {
+		return func() {}
+	}
+	return bus.Subscribe(func(env *eventschema.Envelope) {
+		if env == nil || env.Type != eventschema.EventTypeDomain {
+			return
+		}
+		payload, ok := env.Payload.(*eventschema.DomainEvent)
+		if !ok {
+			return
+		}
+		c.observe(payload.Kind, env.Timestamp.UTC())
+	})
+}
+
+// SubscribeDomain is a compatibility path for runs without canonical storage.
+// Stored daemons should use SubscribeCanonical instead.
+func (c *EventCounter) SubscribeDomain(bus *domainevents.Bus) {
 	if bus == nil {
 		return
 	}
 	bus.Subscribe("*", func(ev domainevents.Event) {
 		at := c.now().UTC()
-		// A replayed event carries when it originally happened.
 		if t, ok := ev.(interface{ At() time.Time }); ok && !t.At().IsZero() {
 			at = t.At().UTC()
 		}
@@ -54,7 +70,7 @@ func (c *EventCounter) Subscribe(bus *domainevents.Bus) {
 // Hydrate restores the lifetime counter from canonical domain envelopes.
 func (c *EventCounter) Hydrate(envelopes []*eventschema.Envelope) {
 	for _, env := range envelopes {
-		if env == nil {
+		if env == nil || env.Type != eventschema.EventTypeDomain {
 			continue
 		}
 		p, ok := env.Payload.(*eventschema.DomainEvent)
