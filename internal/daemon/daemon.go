@@ -106,11 +106,8 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	// them.
 	sourceHealth := freshness.NewRegistry()
 
-	// Every long-running subsystem runs under the supervisor rather than
-	// a bare `go func()`. Nine of them did, and nothing waited for any of
-	// them: shutdown returned while pollers were mid-request, a poller
-	// that died logged one line and was never mentioned again, and
-	// "which subsystems are up" had no answer at all.
+	// Long-running subsystems run under one supervisor so shutdown waits
+	// for workers to drain and failures remain attributable by task name.
 	sup := lifecycle.New(ctx, logger)
 
 	opts := []proxy.Option{
@@ -453,7 +450,10 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	// built otherwise prices at zero, and a session that cost real money
 	// reports as free — which is the failure this tool exists to find.
 	if cfg.Pricing.Refresh.Enabled() && components.Spend != nil {
-		go runPricingRefresh(ctx, cfg, components.Spend, logger)
+		sup.Go("pricing-refresh", func(taskCtx context.Context) error {
+			runPricingRefresh(taskCtx, cfg, components.Spend, logger)
+			return nil
+		})
 		logger.Info("automatic pricing refresh on",
 			"interval", cfg.Pricing.Refresh.Every(),
 			"note", "fetches a public rate card; sends nothing")
@@ -469,7 +469,10 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		// would put a full window query on the hot path.
 		if components.Store != nil && len(cfg.Plans) > 0 {
 			probe := newWindowProbe()
-			go runWindowProbe(ctx, probe, cfg, planStoreReader{store: components.Store}, time.Minute)
+			sup.Go("window-pressure-probe", func(taskCtx context.Context) error {
+				runWindowProbe(taskCtx, probe, cfg, planStoreReader{store: components.Store}, time.Minute)
+				return nil
+			})
 			rc.WindowPressure = probe.Pct
 			logger.Info("window-pressure routing available", "providers", len(cfg.Plans))
 		}
@@ -505,7 +508,10 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	// reach TEU — otherwise a client that never proxies scores "not
 	// measured" however much the guard actually reclaims.
 	if bus != nil {
-		go runReadGuardIngest(ctx, bus, logger, 2*time.Minute, "")
+		sup.Go("read-guard-ingest", func(taskCtx context.Context) error {
+			runReadGuardIngest(taskCtx, bus, logger, 2*time.Minute, "")
+			return nil
+		})
 		logger.Info("read-guard reclamation ingest live")
 	}
 
@@ -513,7 +519,10 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	// evaluation against the local store. Requires storage (no events,
 	// nothing to watch).
 	if cfg.ActiveMode() && components.Aggregator != nil {
-		go runSpendWatcher(ctx, cfg, components.Aggregator, components.Spend, logger)
+		sup.Go("spend-watcher", func(taskCtx context.Context) error {
+			runSpendWatcher(taskCtx, cfg, components.Aggregator, components.Spend, logger)
+			return nil
+		})
 	}
 	// Try to advertise the daemon as tokenops.local over mDNS so the
 	// dashboard URL stays memorable. Best-effort: container hosts,
