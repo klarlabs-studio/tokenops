@@ -40,6 +40,10 @@ func TestTrialIsBoundedPairedAndPersistent(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("first assignment: %+v %v %v", a, ok, err)
 	}
+	reused, ok, err := m.Assign(ctx, AssignmentInput{Provider: "anthropic", BaselineModel: "opus", VariantModel: "sonnet", ExecutionID: "e1", At: now})
+	if err != nil || !ok || reused != a || len(ledger.events) != 2 {
+		t.Fatalf("repeated request changed execution arm: first=%+v repeated=%+v ok=%v err=%v events=%d", a, reused, ok, err, len(ledger.events))
+	}
 	b, ok, err := m.Assign(ctx, AssignmentInput{Provider: "anthropic", BaselineModel: "opus", VariantModel: "sonnet", ExecutionID: "e2", At: now})
 	if err != nil || !ok || a.Variant == b.Variant || a.Pair != b.Pair {
 		t.Fatalf("pair = %+v %+v, ok=%v err=%v", a, b, ok, err)
@@ -65,5 +69,23 @@ func TestFingerprintDriftPreventsAssignment(t *testing.T) {
 	_, ok, err := m.Assign(ctx, AssignmentInput{Provider: "openai", BaselineModel: "large", VariantModel: "mini", Fingerprint: "new", At: now})
 	if err != nil || ok {
 		t.Fatalf("drift assigned: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestAssignmentRequiresExecutionIdentity(t *testing.T) {
+	ctx := context.Background()
+	ledger := &memoryLedger{}
+	m := New(ledger)
+	now := time.Unix(100, 0).UTC()
+	if _, err := m.Start(ctx, StartInput{Provider: "anthropic", BaselineModel: "opus", VariantModel: "sonnet", At: now}); err != nil {
+		t.Fatal(err)
+	}
+	if _, assigned, err := m.Assign(ctx, AssignmentInput{
+		Provider: "anthropic", BaselineModel: "opus", VariantModel: "sonnet", At: now,
+	}); err != nil || assigned {
+		t.Fatalf("assignment without execution identity = assigned %v, err %v", assigned, err)
+	}
+	if got := len(ledger.events); got != 1 {
+		t.Fatalf("unjoinable assignment was persisted: %d events", got)
 	}
 }

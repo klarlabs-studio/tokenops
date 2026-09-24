@@ -103,6 +103,12 @@ func (m *Manager) Assign(ctx context.Context, in AssignmentInput) (Assignment, b
 	if m == nil || m.ledger == nil {
 		return Assignment{}, false, nil
 	}
+	// Randomising a request without an execution key creates an assignment
+	// that cannot be joined to the outcome used to evaluate it. Stay on the
+	// ordinary policy path rather than persisting untestable experiment data.
+	if in.ExecutionID == "" || len(in.ExecutionID) > 256 {
+		return Assignment{}, false, nil
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	events, err := m.ledger.ExperimentEvents(ctx, "")
@@ -116,6 +122,23 @@ func (m *Manager) Assign(ctx context.Context, in AssignmentInput) (Assignment, b
 		}
 		if state.Fingerprint != "" && state.Fingerprint != in.Fingerprint {
 			continue
+		}
+		// One harness execution must stay in one arm across all proxy
+		// requests. Reuse its first durable assignment instead of counting
+		// every request as a new randomized sample.
+		for _, env := range events {
+			if env == nil || env.Correlation.Experiment != state.ID || env.Association.Execution != in.ExecutionID {
+				continue
+			}
+			p, ok := env.Payload.(*eventschema.ExperimentEvent)
+			if !ok || p.Stage != eventschema.ExperimentAssigned {
+				continue
+			}
+			return Assignment{
+				ExperimentID: state.ID,
+				Pair:         p.Pair,
+				Variant:      p.Assignment == "variant",
+			}, true, nil
 		}
 		used := state.Assignments
 		if used >= state.MaxPairs*2 {

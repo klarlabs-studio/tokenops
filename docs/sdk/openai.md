@@ -75,6 +75,12 @@ sessions:
 | `X-Tokenops-Agent-Id`        | identifies the agent emitting |
 | `X-Tokenops-Session-Id`      | groups conversation turns     |
 | `X-Tokenops-User-Id`         | end-user attribution          |
+| `X-Tokenops-Execution-Id`    | TokenOps execution ID used when recording the outcome; required for randomized enrollment (max 256 chars) |
+
+All requests in one harness attempt must use the same execution ID. TokenOps
+keeps that attempt in one experiment arm, records assignment-to-execution
+lineage locally, and strips this header before forwarding upstream. Requests
+without a valid execution ID are not randomized.
 
 In Python:
 
