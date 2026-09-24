@@ -30,6 +30,7 @@ pass `make verify`.
 | Contract | Owner | Review Required |
 |---|---|---|
 | Event Envelope (`Envelope`) | @tokenops/proxy | Any schema change |
+| Domain Event (`DomainEvent`) | @tokenops/platform | Any schema change |
 | Decision, Outcome, Experiment Events | @tokenops/control | Any schema change |
 | Prompt Event (`PromptEvent`) | @tokenops/proxy | Any schema change |
 | Workflow Event (`WorkflowEvent`) | @tokenops/sdk | Any schema change |
@@ -156,22 +157,38 @@ tool bodies are never copied into these payloads.
 | Field | Type | Required | SQLite Column | OTLP Key | Constraints |
 |---|---|---|---|---|---|
 | `ID` | string | yes | `id` (PK) | `tokenops.event.id` | UUIDv7 format; max 64 chars |
-| `SchemaVersion` | string | yes | `schema_version` | `tokenops.schema_version` | Semver; current `"1.3.0"` |
-| `Type` | EventType | yes | `type` | `tokenops.event.type` | One of: prompt, workflow, optimization, coaching, rule_source, rule_analysis, decision, outcome, experiment |
+| `SchemaVersion` | string | yes | `schema_version` | `tokenops.schema_version` | Semver; current `"1.5.0"` |
+| `Type` | EventType | yes | `type` | `tokenops.event.type` | One of: prompt, workflow, optimization, coaching, rule_source, rule_analysis, decision, outcome, experiment, domain |
 | `Timestamp` | time.Time | yes | `timestamp_ns` | (timeUnixNano) | UTC; nanosecond precision |
 | `TraceID` | *string | no | `trace_id` | `trace_id` | 32-char hex W3C format |
 | `SpanID` | *string | no | `span_id` | `span_id` | 16-char hex W3C format |
 | `Source` | *string | no | `source` | `tokenops.source` | Max 64 chars |
 | `Attributes` | map[string]string | no | `attributes` | (pass-through) | Max 100 entries; keys max 128 chars |
+| `Association` | object | no | `work_id, execution_id, actor_id` | — | Each association is optional; unknown is not an empty identity |
 
 ### Invariants
 - `ID` is globally unique and monotonically ordered (UUIDv7).
 - `Type` must match the concrete type of `Payload`.
+- `domain` payloads retain a stable kind plus producer-owned typed JSON data.
 - `Timestamp` must be within ±5s of the proxy's system clock.
+
+## 2. DomainEvent Contract
+
+**File:** `pkg/eventschema/domain.go`
+**SQLite:** `events` table (`type = domain`; payload stored as JSON)
+**Protobuf:** `DomainEvent` in `events.proto`
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `Kind` | string | yes | Stable cross-context name such as `workflow.started` or `budget.exceeded` |
+| `Data` | JSON | yes | Producer-owned event body; synthetic replay markers may use `null`; no raw prompts or command output |
+
+Legacy typed domain events are bridged into this envelope during Phase 6 while
+their existing subscribers and JSONL history remain available for migration.
 
 ---
 
-## 2. PromptEvent Contract
+## 3. PromptEvent Contract
 
 **File:** `pkg/eventschema/prompt.go`
 **SQLite columns:** `provider, model, input_tokens, output_tokens, total_tokens, cost_usd, workflow_id, agent_id, session_id, user_id`
@@ -199,7 +216,7 @@ tool bodies are never copied into these payloads.
 
 ---
 
-## 3. WorkflowEvent Contract
+## 4. WorkflowEvent Contract
 
 **File:** `pkg/eventschema/workflow.go`
 **SQLite columns:** `workflow_id, agent_id, input_tokens, output_tokens, total_tokens, cost_usd`
@@ -220,7 +237,7 @@ tool bodies are never copied into these payloads.
 
 ---
 
-## 4. OptimizationEvent Contract
+## 5. OptimizationEvent Contract
 
 **File:** `pkg/eventschema/optimization.go`
 **SQLite columns:** `workflow_id, agent_id`
@@ -242,7 +259,7 @@ tool bodies are never copied into these payloads.
 
 ---
 
-## 5. CoachingEvent Contract
+## 6. CoachingEvent Contract
 
 **File:** `pkg/eventschema/coaching.go`
 **SQLite columns:** `workflow_id, agent_id, session_id`
@@ -263,7 +280,7 @@ tool bodies are never copied into these payloads.
 
 ---
 
-## 6. RuleSourceEvent Contract
+## 7. RuleSourceEvent Contract
 
 **File:** `pkg/eventschema/rule.go`
 **SQLite columns:** (payload only; not indexed)
@@ -295,7 +312,7 @@ tool bodies are never copied into these payloads.
 
 ---
 
-## 7. RuleAnalysisEvent Contract
+## 8. RuleAnalysisEvent Contract
 
 **File:** `pkg/eventschema/rule.go`
 **SQLite columns:** (payload only; not indexed)

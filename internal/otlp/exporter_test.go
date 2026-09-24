@@ -162,7 +162,12 @@ func TestExporterEmitsRuleEnvelopes(t *testing.T) {
 			ROIScore:      0.42,
 		},
 	}
-	if err := exp.AppendBatch(context.Background(), []*eventschema.Envelope{src, ana}); err != nil {
+	domain := &eventschema.Envelope{
+		ID: uuid.NewString(), SchemaVersion: eventschema.SchemaVersion,
+		Type: eventschema.EventTypeDomain, Timestamp: time.Now().UTC(), Source: "domain_bus",
+		Payload: &eventschema.DomainEvent{Kind: "budget.exceeded", Data: []byte(`{"budget_id":"private-plan"}`)},
+	}
+	if err := exp.AppendBatch(context.Background(), []*eventschema.Envelope{src, ana, domain}); err != nil {
 		t.Fatalf("AppendBatch: %v", err)
 	}
 	bodyPtr := collector.bodies.Load()
@@ -180,10 +185,15 @@ func TestExporterEmitsRuleEnvelopes(t *testing.T) {
 		`"tokenops.rule.exposures"`,
 		`"tokenops.rule.context_tokens"`,
 		`"tokenops.rule.roi_score"`,
+		`"tokenops.domain.kind"`,
+		`"budget.exceeded"`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in payload:\n%s", want, got)
 		}
+	}
+	if strings.Contains(got, "private-plan") {
+		t.Errorf("domain payload details escaped into OTLP: %s", got)
 	}
 }
 

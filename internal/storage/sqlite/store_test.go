@@ -60,6 +60,28 @@ func TestOpenAppliesMigrationsIdempotently(t *testing.T) {
 	}
 }
 
+func TestDomainEnvelopePersistsAndDecodes(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	at := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
+	env := &eventschema.Envelope{
+		ID: "domain-event-1", SchemaVersion: eventschema.SchemaVersion,
+		Type: eventschema.EventTypeDomain, Timestamp: at, Source: "domain_bus",
+		Payload: &eventschema.DomainEvent{Kind: "budget.exceeded", Data: []byte(`{"budget_id":"daily"}`)},
+	}
+	if err := s.Append(ctx, env); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Query(ctx, Filter{Type: eventschema.EventTypeDomain})
+	if err != nil || len(got) != 1 {
+		t.Fatalf("query = %d events, err = %v", len(got), err)
+	}
+	payload, ok := got[0].Payload.(*eventschema.DomainEvent)
+	if !ok || payload.Kind != "budget.exceeded" || string(payload.Data) != `{"budget_id":"daily"}` {
+		t.Fatalf("decoded payload = %#v", got[0].Payload)
+	}
+}
+
 func TestAppendAndQueryRoundTripPrompt(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()

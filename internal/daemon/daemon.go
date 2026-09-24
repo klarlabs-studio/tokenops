@@ -238,6 +238,9 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		// observer, future sources) inherits the plan_included contract
 		// without per-emitter wiring.
 		bus = events.NewAsync(newPlanStampSink(events.NewMultiSink(sinks...), cfg), events.Options{Logger: logger})
+		// Transitional Phase 6 bridge: domain events retain their legacy
+		// subscribers while also entering the canonical envelope stream.
+		domainevents.BridgeToEnvelopeBus(dbus, bus, logger)
 		logger.Info("event store ready", "path", path)
 		opts = append(opts,
 			proxy.WithEventBus(bus),
@@ -587,7 +590,12 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	if err := sup.Wait(cfg.Shutdown.Timeout); err != nil {
 		logger.Warn("subsystem shutdown", "err", err, "running", sup.Running())
 	}
-	// 3. Drain in-flight telemetry envelopes.
+	// 3. Drain the domain bus first so its canonical-envelope bridge can
+	// enqueue every final domain event before the storage bus closes.
+	if !dbus.CloseWithTimeout(cfg.Shutdown.Timeout) {
+		logger.Warn("domain bus drain timed out", "timeout", cfg.Shutdown.Timeout)
+	}
+	// 4. Drain in-flight telemetry envelopes, including the domain bridge.
 	if bus != nil {
 		if err := bus.Close(cfg.Shutdown.Timeout); err != nil {
 			logger.Warn("event bus drain", "err", err)
@@ -597,12 +605,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			"dropped", bus.DroppedCount(),
 		)
 	}
-	// 4. Drain the domain bus with the same timeout — slow subscribers
-	// don't block daemon exit beyond cfg.Shutdown.Timeout.
-	if !dbus.CloseWithTimeout(cfg.Shutdown.Timeout) {
-		logger.Warn("domain bus drain timed out", "timeout", cfg.Shutdown.Timeout)
-	}
-	// 5. Persistence after bus drain so the last JSONL entry lands.
+	// 5. Close the legacy log after both buses drain during the migration.
 	if domainLog != nil {
 		_ = domainLog.Close()
 	}

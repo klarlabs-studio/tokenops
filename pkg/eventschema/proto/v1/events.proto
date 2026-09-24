@@ -25,6 +25,7 @@ enum EventType {
   EVENT_TYPE_DECISION = 7;
   EVENT_TYPE_OUTCOME = 8;
   EVENT_TYPE_EXPERIMENT = 9;
+  EVENT_TYPE_DOMAIN = 10;
 }
 
 // Provider identifies the upstream LLM provider.
@@ -93,6 +94,7 @@ message Envelope {
   string source = 7;
   map<string, string> attributes = 8;
   Correlation correlation = 9;
+  Association association = 10;
 
   oneof payload {
     PromptEvent prompt = 100;
@@ -102,7 +104,14 @@ message Envelope {
     DecisionEvent decision = 106;
     OutcomeEvent outcome = 107;
     ExperimentEvent experiment = 108;
+    DomainEvent domain_event = 109;
   }
+}
+
+message Association {
+  string work_id = 1;
+  string execution_id = 2;
+  string actor_id = 3;
 }
 
 message Correlation {
@@ -172,6 +181,13 @@ message ExperimentEvent {
   google.protobuf.Timestamp ends_at = 8;
   string reason = 9;
   string fingerprint = 10;
+}
+
+// DomainEvent carries an operational event kind and its producer-owned JSON
+// payload while sharing the canonical envelope, timestamp and associations.
+message DomainEvent {
+  string kind = 1;
+  bytes data_json = 2;
 }
 
 message PromptEvent {

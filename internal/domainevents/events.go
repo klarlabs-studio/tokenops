@@ -25,7 +25,8 @@ type WorkflowStarted struct {
 }
 
 // Kind satisfies the Event interface.
-func (WorkflowStarted) Kind() string { return KindWorkflowStarted }
+func (WorkflowStarted) Kind() string            { return KindWorkflowStarted }
+func (e WorkflowStarted) OccurredAt() time.Time { return e.At }
 
 // WorkflowObserved fires when an offline reconstruction (replay,
 // coaching, dashboard drill-down) reads a workflow trace. Distinct from
@@ -40,7 +41,8 @@ type WorkflowObserved struct {
 }
 
 // Kind satisfies the Event interface.
-func (WorkflowObserved) Kind() string { return KindWorkflowObserved }
+func (WorkflowObserved) Kind() string            { return KindWorkflowObserved }
+func (e WorkflowObserved) OccurredAt() time.Time { return e.At }
 
 // WorkflowCompleted fires when a workflow transitions to a terminal state.
 type WorkflowCompleted struct {
@@ -50,7 +52,8 @@ type WorkflowCompleted struct {
 }
 
 // Kind satisfies the Event interface.
-func (WorkflowCompleted) Kind() string { return KindWorkflowCompleted }
+func (WorkflowCompleted) Kind() string            { return KindWorkflowCompleted }
+func (e WorkflowCompleted) OccurredAt() time.Time { return e.At }
 
 // OptimizationApplied fires when the optimizer pipeline commits a
 // recommendation to a live request (not replay mode). OptimizerKind
@@ -66,7 +69,8 @@ type OptimizationApplied struct {
 }
 
 // Kind satisfies the Event interface.
-func (OptimizationApplied) Kind() string { return KindOptimizationApplied }
+func (OptimizationApplied) Kind() string            { return KindOptimizationApplied }
+func (e OptimizationApplied) OccurredAt() time.Time { return e.At }
 
 // RuleCorpusReloaded fires when the rules watcher detects a corpus
 // change and the in-memory snapshot has been refreshed.
@@ -77,7 +81,8 @@ type RuleCorpusReloaded struct {
 }
 
 // Kind satisfies the Event interface.
-func (RuleCorpusReloaded) Kind() string { return KindRuleCorpusReloaded }
+func (RuleCorpusReloaded) Kind() string            { return KindRuleCorpusReloaded }
+func (e RuleCorpusReloaded) OccurredAt() time.Time { return e.At }
 
 // BudgetExceeded fires when a spend budget threshold is breached.
 type BudgetExceeded struct {
@@ -88,4 +93,5 @@ type BudgetExceeded struct {
 }
 
 // Kind satisfies the Event interface.
-func (BudgetExceeded) Kind() string { return KindBudgetExceeded }
+func (BudgetExceeded) Kind() string            { return KindBudgetExceeded }
+func (e BudgetExceeded) OccurredAt() time.Time { return e.At }

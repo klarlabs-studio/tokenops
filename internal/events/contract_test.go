@@ -27,6 +27,7 @@ func TestEnvelopePayloadTypeConsistency(t *testing.T) {
 		{eventschema.EventTypeDecision, &eventschema.DecisionEvent{}, "*eventschema.DecisionEvent"},
 		{eventschema.EventTypeOutcome, &eventschema.OutcomeEvent{}, "*eventschema.OutcomeEvent"},
 		{eventschema.EventTypeExperiment, &eventschema.ExperimentEvent{}, "*eventschema.ExperimentEvent"},
+		{eventschema.EventTypeDomain, &eventschema.DomainEvent{}, "*eventschema.DomainEvent"},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.envType), func(t *testing.T) {
@@ -96,6 +97,7 @@ func TestOTLPAttributeKeysPrefixed(t *testing.T) {
 		"tokenops.rule.source_id":             "tokenops",
 		"tokenops.rule.source":                "tokenops",
 		"tokenops.rule.roi_score":             "tokenops",
+		"tokenops.domain.kind":                "tokenops",
 	}
 	for attr, prefix := range known {
 		t.Run(attr, func(t *testing.T) {
@@ -119,6 +121,7 @@ func TestEnumMembers(t *testing.T) {
 			eventschema.EventTypeDecision,
 			eventschema.EventTypeOutcome,
 			eventschema.EventTypeExperiment,
+			eventschema.EventTypeDomain,
 		}
 		_ = expected
 	})
