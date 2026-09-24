@@ -17,6 +17,7 @@ const (
 	EventTypeDecision     EventType = "decision"
 	EventTypeOutcome      EventType = "outcome"
 	EventTypeExperiment   EventType = "experiment"
+	EventTypeDomain       EventType = "domain"
 )
 
 // Provider identifies the upstream LLM provider observed for an event.
@@ -129,8 +130,8 @@ type Envelope struct {
 	// Correlation ties the explanation, action, outcome and experiment
 	// together. It is distinct from distributed tracing.
 	Correlation Correlation `json:"correlation,omitzero"`
-	// Payload is one of *PromptEvent, *WorkflowEvent, *OptimizationEvent,
-	// *CoachingEvent. The concrete type is determined by Type.
+	// Payload is one of the typed event payloads. The concrete type is
+	// determined by Type.
 	Payload Payload `json:"payload"`
 }
 

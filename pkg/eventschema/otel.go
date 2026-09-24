@@ -20,6 +20,7 @@ const (
 	// TokenOps-specific attributes.
 	AttrTokenOpsSchemaVersion        = "tokenops.schema_version"
 	AttrTokenOpsEventType            = "tokenops.event.type"
+	AttrTokenOpsDomainKind           = "tokenops.domain.kind"
 	AttrTokenOpsPromptHash           = "tokenops.prompt.hash"
 	AttrTokenOpsContextSize          = "tokenops.prompt.context_size"
 	AttrTokenOpsCachedInputTokens    = "tokenops.usage.cached_input_tokens"

@@ -13,7 +13,7 @@
 // # Immutability contract
 //
 // Payload structs (PromptEvent, WorkflowEvent, OptimizationEvent,
-// CoachingEvent, RuleSourceEvent, RuleAnalysisEvent) expose public
+// CoachingEvent, RuleSourceEvent, RuleAnalysisEvent, DomainEvent) expose public
 // fields for ergonomic construction at emit time. After a payload is
 // wrapped in an Envelope and handed to events.Bus or
 // domainevents.Bus, callers MUST NOT mutate it — subscribers may run

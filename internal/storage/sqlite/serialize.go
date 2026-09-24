@@ -118,9 +118,9 @@ func envelopeToRow(env *eventschema.Envelope) (row, error) {
 		r.WorkflowID = nullString(p.WorkflowID)
 		r.AgentID = nullString(p.AgentID)
 		r.SessionID = nullString(p.SessionID)
-	case *eventschema.DecisionEvent, *eventschema.OutcomeEvent, *eventschema.ExperimentEvent:
-		// Control-plane payloads are joined through the envelope's indexed
-		// association and correlation columns; their full detail stays JSON.
+	case *eventschema.DecisionEvent, *eventschema.OutcomeEvent, *eventschema.ExperimentEvent, *eventschema.DomainEvent:
+		// These payloads use the envelope's indexed association and
+		// correlation columns; their full detail stays JSON.
 	default:
 		return row{}, fmt.Errorf("unsupported payload type %T", p)
 	}
@@ -230,6 +230,12 @@ func decodePayload(t eventschema.EventType, raw []byte) (eventschema.Payload, er
 		return &p, nil
 	case eventschema.EventTypeExperiment:
 		var p eventschema.ExperimentEvent
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return nil, err
+		}
+		return &p, nil
+	case eventschema.EventTypeDomain:
+		var p eventschema.DomainEvent
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, err
 		}
