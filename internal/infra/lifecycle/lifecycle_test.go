@@ -25,10 +25,8 @@ func supCancel(t *testing.T) (*lifecycle.Supervisor, context.CancelFunc) {
 	return lifecycle.New(ctx, nil), cancel
 }
 
-// The daemon starts nine goroutines with bare `go func()`. Nothing waits
-// for them, nothing knows their names, and a subsystem that dies logs a
-// line into a file nobody reads and is never mentioned again. Shutdown
-// returns while they are still running.
+// Supervisor waits for tracked tasks to drain after cancellation, including
+// repeated instances of the same task name.
 func TestShutdownWaitsForEveryTask(t *testing.T) {
 	s, cancel := supCancel(t)
 	var stopped atomic.Int32
