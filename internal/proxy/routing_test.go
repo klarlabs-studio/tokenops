@@ -80,6 +80,7 @@ func TestActiveRoutingWithoutOutcomeLedgerPreservesBaseline(t *testing.T) {
 		base+"/anthropic/v1/messages",
 		strings.NewReader(`{"model":"claude-fable-5","max_tokens":100,"messages":[{"role":"user","content":"hello"}]}`))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(headerSessionID, "route-session")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("do: %v", err)
@@ -98,6 +99,9 @@ func TestActiveRoutingWithoutOutcomeLedgerPreservesBaseline(t *testing.T) {
 		switch p := env.Payload.(type) {
 		case *eventschema.OptimizationEvent:
 			optEv = p
+			if env.Association.Actor != "session:route-session" {
+				t.Errorf("optimization association = %+v; want session actor for verification join", env.Association)
+			}
 		case *eventschema.PromptEvent:
 			promptEv = p
 		}

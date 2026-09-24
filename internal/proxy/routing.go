@@ -207,6 +207,7 @@ func (s *Server) publishRoutingEvent(obs *requestObservation, rec optimizer.Reco
 		Type:          eventschema.EventTypeOptimization,
 		Timestamp:     time.Now().UTC(),
 		Source:        s.source,
+		Association:   associationFor(obs),
 		Correlation:   correlation,
 		Payload: &eventschema.OptimizationEvent{
 			PromptHash:             obs.PromptHash,
