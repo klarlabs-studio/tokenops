@@ -39,6 +39,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/domainevents"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
+	"go.klarlabs.de/tokenops/internal/infra/domainmigration"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	"go.klarlabs.de/tokenops/internal/infra/rulesfs"
 	"go.klarlabs.de/tokenops/internal/otlp"
@@ -94,22 +95,14 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 
 	// JSONL persistence so late subscribers can replay history.
 	var domainLog *domainevents.JSONLog
+	var domainLogPath string
 	if cfg.Storage.Enabled {
 		eventsPath, _ := resolveStoragePath(cfg.Storage.Path)
-		logPath := filepath.Join(filepath.Dir(eventsPath), "domain-events.jsonl")
-		if l, err := domainevents.NewJSONLog(logPath); err == nil {
+		domainLogPath = filepath.Join(filepath.Dir(eventsPath), "domain-events.jsonl")
+		if l, err := domainevents.NewJSONLog(domainLogPath); err == nil {
 			domainLog = l
-			// Hydrate the in-memory counter from prior runs so dashboards
-			// see continuity across restarts. Lenient mode skips bad
-			// lines instead of aborting.
-			if skipped, rerr := domainevents.ReplayLenient(logPath, func(r domainevents.Record) error {
-				dbus.Publish(domainevents.NewReplayed(r.Kind, r.At))
-				return nil
-			}); rerr != nil {
-				logger.Warn("domain event log replay", "err", rerr, "skipped", skipped)
-			}
 			domainLog.Attach(dbus, nil)
-			logger.Info("domain event log ready", "path", logPath)
+			logger.Info("domain event log ready", "path", domainLogPath)
 		} else {
 			logger.Warn("domain event log unavailable", "err", err)
 		}
@@ -199,6 +192,19 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			return err
 		}
 		store = components.Store
+		if domainLogPath != "" {
+			migrated, err := domainmigration.Import(ctx, store, domainLogPath, 3)
+			if err != nil {
+				logger.Warn("legacy domain event import incomplete; JSONL retained", "err", err)
+			} else {
+				logger.Info("legacy domain events imported", "read", migrated.Read, "imported", migrated.Imported, "duplicates", migrated.Duplicates, "skipped", migrated.Skipped)
+			}
+		}
+		if history, err := store.Query(ctx, sqlite.Filter{Type: eventschema.EventTypeDomain, Limit: 1_000_000}); err != nil {
+			logger.Warn("canonical domain event counter hydration failed", "err", err)
+		} else {
+			domainEventCounter.Hydrate(history)
+		}
 
 		// Audit recorder subscribes to security-relevant domain events.
 		// Wired here (after the store opens) rather than at the dbus
