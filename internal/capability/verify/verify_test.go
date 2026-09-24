@@ -93,6 +93,35 @@ func TestPlanIncludedUsageStaysProviderScopedAndNotDollarPriced(t *testing.T) {
 	}
 }
 
+func TestOnlyExplicitlyPricedMeteredCostIsAttributed(t *testing.T) {
+	priced := promptEvent("session:a", t0.Add(time.Minute), 100)
+	priced.Payload.(*eventschema.PromptEvent).CostUSD = 0.004
+	priced.Payload.(*eventschema.PromptEvent).CostMeasured = true
+	unpriced := promptEvent("session:a", t0.Add(2*time.Minute), 100)
+	unpriced.Payload.(*eventschema.PromptEvent).CostUSD = 99 // stale/untrusted numeric field
+	got := verify.Attribute(
+		[]work.Execution{execution("e1", "session:a", t0, time.Hour)},
+		[]*eventschema.Envelope{priced, unpriced},
+	)[0]
+	if value, ok := got.MeteredCostUSD.Amount(); !ok || value != 0.004 {
+		t.Fatalf("metered cost = %v known=%v; only explicit priced event should count", value, ok)
+	}
+	if coverage := got.MeteredCostUSD.Coverage(); coverage.Included != 1 || coverage.Excluded != 1 {
+		t.Fatalf("cost coverage = %+v; want 1 priced and 1 excluded", coverage)
+	}
+}
+
+func TestUnpricedZeroIsUnknownRatherThanFree(t *testing.T) {
+	event := promptEvent("session:a", t0.Add(time.Minute), 100)
+	got := verify.Attribute(
+		[]work.Execution{execution("e1", "session:a", t0, time.Hour)},
+		[]*eventschema.Envelope{event},
+	)[0]
+	if got.MeteredCostUSD.Known() {
+		t.Fatalf("unpriced event reported cost $%.6f", got.MeteredCostUSD.AmountOr(-1))
+	}
+}
+
 func optimizationEvent(actor string, at time.Time) *eventschema.Envelope {
 	return &eventschema.Envelope{
 		ID: "opt" + actor + at.String(), Type: eventschema.EventTypeOptimization, Timestamp: at,

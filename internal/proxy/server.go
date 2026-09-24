@@ -19,6 +19,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/proxy/cache"
 	"go.klarlabs.de/tokenops/internal/version"
@@ -60,6 +61,7 @@ type Server struct {
 	// a flat-rate subscription rather than metered per-token. nil means
 	// "everything is metered" — the historical default.
 	planCovered func(eventschema.Provider) bool
+	costEngine  *spend.Engine
 
 	mu       sync.Mutex
 	httpSrv  *http.Server
@@ -96,6 +98,13 @@ func WithDashAuth(a DashAuth) Option {
 // not claim stay metered.
 func WithPlanCoverage(covered func(eventschema.Provider) bool) Option {
 	return func(s *Server) { s.planCovered = covered }
+}
+
+// WithCostEngine supplies the same effective-dated pricing engine used by
+// analytics. The observer marks metered prompt cost measured only when this
+// engine can price the event at its occurrence time.
+func WithCostEngine(engine *spend.Engine) Option {
+	return func(s *Server) { s.costEngine = engine }
 }
 
 // WithExperiments enables explicitly enrolled routing trials.
@@ -199,9 +208,10 @@ func New(addr string, opts ...Option) *Server {
 	// it after WithEventBus.
 	if s.observerActive {
 		s.streamMeter = &observerMeter{
-			bus:       s.bus,
-			tokenizer: s.tokenizer,
-			source:    s.source,
+			bus:        s.bus,
+			tokenizer:  s.tokenizer,
+			source:     s.source,
+			costEngine: s.costEngine,
 		}
 	}
 	return s

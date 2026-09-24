@@ -18,10 +18,12 @@ import (
 func TestVerifyReportsTheDifferenceAndWhyItIsNotAFinding(t *testing.T) {
 	report := verify.Report{
 		BaselineCount: 12, InterventionCount: 9,
-		BaselineOutcomes:     verify.OutcomeSummary{SuccessRate: measurement.Measured(90, "outcome_events")},
-		InterventionOutcomes: verify.OutcomeSummary{SuccessRate: measurement.Measured(60, "outcome_events")},
-		BaselineLatency:      measurement.Measured(250, "sqlite_events"),
-		InterventionLatency:  measurement.Measured(300, "sqlite_events"),
+		BaselineOutcomes:           verify.OutcomeSummary{SuccessRate: measurement.Measured(90, "outcome_events")},
+		InterventionOutcomes:       verify.OutcomeSummary{SuccessRate: measurement.Measured(60, "outcome_events")},
+		BaselineLatency:            measurement.Measured(250, "sqlite_events"),
+		InterventionLatency:        measurement.Measured(300, "sqlite_events"),
+		BaselineMeteredCostUSD:     measurement.Measured(0.002, "sqlite_events"),
+		InterventionMeteredCostUSD: measurement.Measured(0.003, "sqlite_events"),
 		BaselinePlanQuota: verify.QuotaSummary{
 			"anthropic": measurement.Measured(1200, "sqlite_events"),
 		},
@@ -52,6 +54,9 @@ func TestVerifyReportsTheDifferenceAndWhyItIsNotAFinding(t *testing.T) {
 	}
 	if !strings.Contains(out, "mean request latency: 250ms baseline → 300ms intervention") {
 		t.Errorf("latency comparison is missing:\n%s", out)
+	}
+	if !strings.Contains(out, "mean metered cost: $0.002000 baseline → $0.003000 intervention") {
+		t.Errorf("metered cost comparison is missing:\n%s", out)
 	}
 	if !strings.Contains(out, "anthropic plan quota tokens: 1200 baseline → 900 intervention") {
 		t.Errorf("provider quota comparison is missing:\n%s", out)
