@@ -52,10 +52,9 @@ func startProxyForRouting(t *testing.T, upstream *httptest.Server, cfg router.Co
 	return "http://" + srv.Addr(), bus
 }
 
-// Active mode: a request matching a routing rule reaches the upstream
-// with the rewritten model, the observation keeps the original model,
-// and an applied OptimizationEvent lands on the bus.
-func TestActiveRoutingRewritesModel(t *testing.T) {
+// Autonomous routing without an outcome ledger must fail closed and explain
+// that the proposed route was held back.
+func TestActiveRoutingWithoutOutcomeLedgerPreservesBaseline(t *testing.T) {
 	var upstreamModel string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
@@ -88,8 +87,8 @@ func TestActiveRoutingRewritesModel(t *testing.T) {
 	_, _ = io.Copy(io.Discard, resp.Body)
 	_ = resp.Body.Close()
 
-	if upstreamModel != "claude-opus-4-8" {
-		t.Errorf("upstream model = %q; want claude-opus-4-8", upstreamModel)
+	if upstreamModel != "claude-fable-5" {
+		t.Errorf("upstream model = %q; want unchanged baseline claude-fable-5", upstreamModel)
 	}
 
 	envs := waitForEvent(t, bus, 2)
@@ -104,15 +103,15 @@ func TestActiveRoutingRewritesModel(t *testing.T) {
 		}
 	}
 	if optEv == nil {
-		t.Fatal("no OptimizationEvent published for applied route")
+		t.Fatal("no OptimizationEvent published for held route")
 	}
 	if optEv.Kind != eventschema.OptimizationTypeRouter ||
-		optEv.Decision != eventschema.OptimizationDecisionApplied ||
+		optEv.Decision != eventschema.OptimizationDecisionSkipped ||
 		optEv.Mode != eventschema.OptimizationModeInteractive {
 		t.Errorf("optimization event = %+v", optEv)
 	}
-	if optEv.Reason != "route claude-fable-5 -> claude-opus-4-8" {
-		t.Errorf("reason = %q", optEv.Reason)
+	if !strings.Contains(optEv.Reason, "outcome history unavailable") {
+		t.Errorf("reason = %q; want fail-closed explanation", optEv.Reason)
 	}
 	if promptEv == nil {
 		t.Fatal("no PromptEvent published")
