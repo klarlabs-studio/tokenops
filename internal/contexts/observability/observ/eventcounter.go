@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // EventCounter is a thread-safe per-kind counter that subscribes to a
@@ -46,18 +47,39 @@ func (c *EventCounter) Subscribe(bus *domainevents.Bus) {
 		if t, ok := ev.(interface{ At() time.Time }); ok && !t.At().IsZero() {
 			at = t.At().UTC()
 		}
-		c.mu.Lock()
-		c.counts[ev.Kind()]++
-		sp := c.spans[ev.Kind()]
-		if sp.First.IsZero() || at.Before(sp.First) {
-			sp.First = at
-		}
-		if at.After(sp.Last) {
-			sp.Last = at
-		}
-		c.spans[ev.Kind()] = sp
-		c.mu.Unlock()
+		c.observe(ev.Kind(), at)
 	})
+}
+
+// Hydrate restores the lifetime counter from canonical domain envelopes.
+func (c *EventCounter) Hydrate(envelopes []*eventschema.Envelope) {
+	for _, env := range envelopes {
+		if env == nil {
+			continue
+		}
+		p, ok := env.Payload.(*eventschema.DomainEvent)
+		if !ok || p.Kind == "" {
+			continue
+		}
+		c.observe(p.Kind, env.Timestamp.UTC())
+	}
+}
+
+func (c *EventCounter) observe(kind string, at time.Time) {
+	if kind == "" {
+		return
+	}
+	c.mu.Lock()
+	c.counts[kind]++
+	sp := c.spans[kind]
+	if sp.First.IsZero() || at.Before(sp.First) {
+		sp.First = at
+	}
+	if at.After(sp.Last) {
+		sp.Last = at
+	}
+	c.spans[kind] = sp
+	c.mu.Unlock()
 }
 
 // Counts returns a snapshot of per-kind counts as a map. Map iteration
