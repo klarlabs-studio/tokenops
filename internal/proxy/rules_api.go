@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/rules"
-	"go.klarlabs.de/tokenops/internal/domainevents"
+	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/rulesfs"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -42,16 +42,23 @@ func NewRulesHandlers(root, repoID string) (*RulesHandlers, error) {
 	return &RulesHandlers{root: root, repoID: repoID, cache: map[string]cachedAnalysis{}}, nil
 }
 
-// AttachDomainBus subscribes the handler's cache to RuleCorpusReloaded
+// AttachEventBus subscribes the handler's cache to canonical domain events
 // so the next /api/rules/analyze after a corpus change re-ingests
 // rather than serving stale data. Adapters should call this from the
-// daemon composition root once the bus is wired.
-func (h *RulesHandlers) AttachDomainBus(bus *domainevents.Bus) {
+// daemon composition root once the bus is wired. The returned function
+// detaches the observer during shutdown.
+func (h *RulesHandlers) AttachEventBus(bus events.Observable) func() {
 	if h == nil || bus == nil {
-		return
+		return func() {}
 	}
-	bus.Subscribe(domainevents.KindRuleCorpusReloaded, func(domainevents.Event) {
-		h.invalidate()
+	return bus.Subscribe(func(env *eventschema.Envelope) {
+		if env == nil || env.Type != eventschema.EventTypeDomain {
+			return
+		}
+		payload, ok := env.Payload.(*eventschema.DomainEvent)
+		if ok && payload.Kind == "rule_corpus.reloaded" {
+			h.invalidate()
+		}
 	})
 }
 

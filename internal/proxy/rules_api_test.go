@@ -9,6 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"go.klarlabs.de/tokenops/internal/events"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 func writeRulesAPICorpus(t *testing.T) string {
@@ -29,6 +33,35 @@ func writeRulesAPICorpus(t *testing.T) string {
 		}
 	}
 	return dir
+}
+
+func TestRulesCacheInvalidatesOnCanonicalCorpusReload(t *testing.T) {
+	h, err := NewRulesHandlers(t.TempDir(), "repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.storeAnalyze("key", []byte("cached"))
+	bus := events.NewAsync(events.NoopSink{}, events.Options{})
+	defer func() { _ = bus.Close(time.Second) }()
+	detach := h.AttachEventBus(bus)
+	defer detach()
+
+	bus.Publish(&eventschema.Envelope{
+		ID: "other-kind", SchemaVersion: eventschema.SchemaVersion,
+		Type: eventschema.EventTypeDomain, Timestamp: time.Now().UTC(),
+		Payload: &eventschema.DomainEvent{Kind: "workflow.started"},
+	})
+	if _, ok := h.cachedAnalyze("key"); !ok {
+		t.Fatal("unrelated domain event invalidated the rules cache")
+	}
+	bus.Publish(&eventschema.Envelope{
+		ID: "reload", SchemaVersion: eventschema.SchemaVersion,
+		Type: eventschema.EventTypeDomain, Timestamp: time.Now().UTC(),
+		Payload: &eventschema.DomainEvent{Kind: "rule_corpus.reloaded"},
+	})
+	if _, ok := h.cachedAnalyze("key"); ok {
+		t.Fatal("canonical rule_corpus.reloaded event did not invalidate cache")
+	}
 }
 
 func newRulesMux(t *testing.T, root string) *http.ServeMux {
