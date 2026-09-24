@@ -524,49 +524,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			return nil
 		})
 	}
-	// Try to advertise the daemon as tokenops.local over mDNS so the
-	// dashboard URL stays memorable. Best-effort: container hosts,
-	// firewalled networks, and CI runners frequently lack a usable
-	// multicast interface — we log + fall back to the loopback URL
-	// instead of failing the boot.
-	var (
-		mdnsClose      = func() {}
-		mdnsPublicURL  string
-		mdnsAdvertised bool
-	)
-	mdnsPlan := mdnsDecision(cfg.MDNS, srv.Addr())
-	switch {
-	case !mdnsPlan.Advertise:
-		logger.Info("mdns advertise skipped", "reason", mdnsPlan.Reason)
-	default:
-		if closer, publicURL, err := startMDNSAdvertise(srv.Addr(), srv.TLSEnabled(), mdnsPlan.InstanceName); err != nil {
-			logger.Info("mdns advertise unavailable; using loopback URL", "err", err)
-		} else {
-			mdnsClose = closer
-			mdnsPublicURL = publicURL
-			mdnsAdvertised = true
-			logger.Info("mdns advertise live", "url", publicURL)
-		}
-	}
-	defer mdnsClose()
-	// Publish the listen URL so the MCP `serve` process can return a
-	// clickable dashboard link via tokenops_dashboard. Removed on
-	// shutdown so a stale URL never survives the daemon. Failure here
-	// is non-fatal: the daemon stays up; the MCP tool just falls
-	// back to "run tokenops start" guidance.
-	if hintPath, err := writeURLHint(srv.Addr(), srv.TLSEnabled(), mdnsPublicURL, dashTok); err != nil {
-		logger.Warn("could not publish daemon URL hint", "err", err)
-	} else {
-		logger.Info("daemon URL hint published",
-			"path", hintPath,
-			"mdns_advertised", mdnsAdvertised,
-		)
-		defer func() {
-			if err := removeURLHint(); err != nil {
-				logger.Warn("could not remove daemon URL hint", "err", err)
-			}
-		}()
-	}
+	defer publishRuntimeAnnouncement(cfg, srv, dashTok, logger)()
 	// Publish blockers + remediation hints so /readyz exposes the same
 	// signal the MCP tokenops_status tool surfaces. Operators on a fresh
 	// install (storage/rules/providers off) see exactly what to fix
