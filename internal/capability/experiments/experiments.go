@@ -198,6 +198,24 @@ func (m *Manager) Events(ctx context.Context, id string) ([]*eventschema.Envelop
 	return m.ledger.ExperimentEvents(ctx, id)
 }
 
+// States returns every persisted experiment folded to its current state.
+func (m *Manager) States(ctx context.Context, at time.Time) ([]State, error) {
+	if m == nil || m.ledger == nil {
+		return nil, errors.New("experiments: storage is disabled")
+	}
+	events, err := m.ledger.ExperimentEvents(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+	states := Fold(events, utcNow(at))
+	out := make([]State, 0, len(states))
+	for _, state := range states {
+		out = append(out, state)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].EndsAt.After(out[j].EndsAt) })
+	return out, nil
+}
+
 // Active returns active trials oldest first.
 func Active(events []*eventschema.Envelope, at time.Time) []State {
 	states := Fold(events, at)

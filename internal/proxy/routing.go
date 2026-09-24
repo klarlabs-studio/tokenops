@@ -11,6 +11,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/decide"
 	"go.klarlabs.de/tokenops/internal/capability/experiments"
+	"go.klarlabs.de/tokenops/internal/capability/learn"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/providers"
@@ -107,6 +108,32 @@ func (s *Server) routingMiddleware(provider providers.Provider, next http.Handle
 			return
 		}
 
+		fingerprint := decide.RouteFingerprint(provider.ID, obs.RequestModel, rec.TargetModel, "proxy")
+		var belief *learn.Belief
+		if !enrolled && s.experiments != nil {
+			learned, found, learnErr := learn.FindRouting(r.Context(), s.experiments, fingerprint, time.Now().UTC())
+			if learnErr != nil {
+				s.logger.Warn("routing belief lookup failed; preserving baseline", "err", learnErr)
+				next.ServeHTTP(w, r)
+				return
+			}
+			if found {
+				belief = &learned
+			}
+			if !found || !learn.IsTrusted(learned) {
+				controlDecision := decide.Route(decide.RouteInput{
+					Provider: provider.ID, CurrentModel: obs.RequestModel,
+					Advice:    router.Advice{Model: rec.TargetModel, Reason: rec.Reason, Quality: rec.QualityScore},
+					Authority: decide.RecommendAuthority(), Adapter: decide.Adapter{Name: "proxy", CanApplyRoute: true},
+					Association: eventschema.Association{Actor: obs.AgentID}, Belief: belief,
+				})
+				obs.Correlation = controlDecision.Event.Correlation
+				s.publishRoutingEvent(obs, rec, eventschema.OptimizationDecisionSkipped, controlDecision)
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
 		r.Body = io.NopCloser(bytes.NewReader(rec.ApplyBody))
 		r.ContentLength = int64(len(rec.ApplyBody))
 		r.Header.Set("Content-Length", strconv.Itoa(len(rec.ApplyBody)))
@@ -122,6 +149,7 @@ func (s *Server) routingMiddleware(provider providers.Provider, next http.Handle
 			Authority:   decide.AutomaticAuthority(),
 			Adapter:     decide.Adapter{Name: "proxy", CanApplyRoute: true},
 			Association: eventschema.Association{Actor: obs.AgentID},
+			Belief:      belief,
 		})
 		if enrolled {
 			controlDecision.Event.Correlation.Experiment = assignment.ExperimentID
