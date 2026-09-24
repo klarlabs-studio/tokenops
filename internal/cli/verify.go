@@ -18,52 +18,40 @@ import (
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
-// newVerifyCmd reports whether the optimizations that ran actually
-// helped — and, for now, why that question cannot yet be answered.
-//
-// The honest answer is the feature. TokenOps has always been able to
-// report tokens removed; what it could never do was say whether removing
-// them made anything better, because nothing joined consumption to an
-// attempt at a goal and nothing compared one attempt against another.
-//
-// That join now exists. What does not yet exist is an assignment: the
-// only cohort signal available is whether an optimization happened to
-// fire, which is observational, so the difference this prints is real
-// and its cause is not established. Printing the number without that
-// sentence would be the claim ADR 0004 exists to refuse, with extra
-// steps.
+// newVerifyCmd compares outcomes and resource use across real executions.
+// It uses linked randomized assignments only when the selected trial has
+// complete execution pairs, measured tokens, and explicit outcomes;
+// otherwise the result remains explicitly observational.
 func newVerifyCmd() *cobra.Command {
 	var (
-		days     int
-		jsonOut  bool
-		dbPath   string
-		idleGap  string
-		showEach bool
+		days         int
+		jsonOut      bool
+		dbPath       string
+		idleGap      string
+		showEach     bool
+		experimentID string
 	)
 	cmd := &cobra.Command{
 		Use:   "verify",
 		Short: "Compare resource use and outcomes across optimized attempts",
-		Long: `verify attributes recorded events to the attempts they were part of, then
-compares the attempts an optimization touched against the ones it did not.
-
-It does not tell you an optimization worked. The two groups are split by
-whether an optimization happened to fire, which means they differ in ways
-that have nothing to do with it — compression applies to large outputs,
-routing applies to turns a classifier thought were mechanical. A
-difference between such groups is real; attributing it to the
-intervention is not warranted.
+		Long: `verify attributes recorded events to reconstructed attempts. By default,
+it compares attempts an optimization touched against those it did not; this is
+observational and does not establish causality. When execution-linked randomized
+assignments are available, it can instead compare a complete experiment's paired
+arms. Use --experiment-id when more than one trial is present. A randomized
+comparison requires complete pairs, measured tokens, and explicit outcomes;
+otherwise verify falls back to the observational view and explains why.
 
 Explicit human and verifier outcomes linked to an execution are included in
 each cohort's assessed success rate. A quality drop can flag harm even when
 the token count fell; missing outcomes remain unknown.
 
-What it is for: the difference is the reason to run a real experiment,
-and a collapsed success rate is worth acting on whether or not causation
-is established.`,
+Randomized results are evidence about the selected experiment, not a guarantee
+for other work.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			report, err := runVerify(cmd, verifyOptions{
-				days: days, dbPath: dbPath, idleGap: idleGap, showEach: showEach,
+				days: days, dbPath: dbPath, idleGap: idleGap, showEach: showEach, experimentID: experimentID,
 			})
 			if err != nil {
 				return err
@@ -82,12 +70,16 @@ is established.`,
 	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db (defaults to ~/.tokenops/events.db)")
 	cmd.Flags().StringVar(&idleGap, "idle-gap", "", "pause that starts a new attempt (default 10m)")
 	cmd.Flags().BoolVar(&showEach, "each", false, "list every attempt, not only the comparison")
+	cmd.Flags().StringVar(&experimentID, "experiment-id", "", "compare one execution-linked randomized experiment; required when multiple trials are in the window")
 	return cmd
 }
 
 // writeVerifyText renders the report for a person.
 func writeVerifyText(out io.Writer, r verify.Report) {
-	fmt.Fprintf(out, "attempts compared: %d without an optimization, %d with\n\n",
+	if r.RandomizedExperimentID != "" {
+		fmt.Fprintf(out, "randomized experiment %s · %d complete pair(s)\n", r.RandomizedExperimentID, r.RandomizedPairs)
+	}
+	fmt.Fprintf(out, "attempts compared: %d baseline, %d intervention\n\n",
 		r.BaselineCount, r.InterventionCount)
 
 	if observed, ok := r.Verdict.Observed.Amount(); ok {
@@ -156,17 +148,25 @@ func writeVerifyText(out io.Writer, r verify.Report) {
 		fmt.Fprintf(out, "  why: %s\n", r.Verdict.Caveat)
 	}
 
-	fmt.Fprintln(out, "\nThis is a comparison, not an experiment. To establish that an")
-	fmt.Fprintln(out, "optimization helped, TokenOps would have to decide which attempts")
-	fmt.Fprintln(out, "receive it rather than observe which ones happened to.")
+	if r.Observational() {
+		if r.RandomizedFallbackReason != "" {
+			fmt.Fprintf(out, "  randomized comparison unavailable: %s\n", r.RandomizedFallbackReason)
+		}
+		fmt.Fprintln(out, "\nThis is an observational comparison. The cohorts were not")
+		fmt.Fprintln(out, "assigned, so the measured difference is not causal evidence.")
+	} else {
+		fmt.Fprintln(out, "\nCohorts were assigned by the selected randomized experiment.")
+		fmt.Fprintln(out, "This is evidence about that experiment, not a guarantee for other work.")
+	}
 }
 
 // verifyOptions are the switches runVerify was given.
 type verifyOptions struct {
-	days     int
-	dbPath   string
-	idleGap  string
-	showEach bool
+	days         int
+	dbPath       string
+	idleGap      string
+	showEach     bool
+	experimentID string
 }
 
 // runVerify reconstructs the attempts, reads the events, and joins them.
@@ -198,7 +198,7 @@ func runVerify(cmd *cobra.Command, opt verifyOptions) (verify.Report, error) {
 		return verify.Report{}, err
 	}
 
-	report := verify.CompareReconstructed(reconstructed, events)
+	report := verify.CompareReconstructedExperiment(reconstructed, events, opt.experimentID)
 	if !opt.showEach {
 		// The per-attempt detail is the evidence, not the answer. It is
 		// long, and an operator asking "did this help" is not asking for

@@ -60,12 +60,17 @@ events.
 
 `tokenops verify` and `tokenops_verify` join outcome events to executions by
 execution ID, including outcomes recorded after the work ended. Both surfaces
-show assessed success rates for optimized and baseline cohorts. A drop in
-success can flag harm even when measured token use falls; absent assessments
-remain unknown. They also report mean proxy-observed request latency for each
-cohort; missing requests remain unknown rather than zero. The current cohort
-split is observational, so these measures can identify a warning but cannot
-claim the intervention caused the difference. Plan-included token use is
+show assessed success rates for the compared cohorts. A drop in success can
+flag harm even when measured token use falls; absent assessments remain
+unknown. They also report mean proxy-observed request latency for each cohort;
+missing requests remain unknown rather than zero. Applied-versus-not-applied
+cohorts remain observational. When execution-linked randomized assignments
+exist, verification can compare one selected trial's complete pairs; every
+assigned execution must be reconstructed and have measured tokens and an
+explicit outcome. Incomplete or mixed evidence falls back to observational
+reporting. Use `tokenops verify --experiment-id <id>` when multiple trials are
+present. The randomized result applies to that trial's executions, not to all
+work or future routing. Plan-included token use is
 reported separately by provider as quota consumption, never converted to
 synthetic dollar savings. Metered spend remains unreported by this comparison
 unless a prompt event carries `cost_measured`, which the proxy sets only after
