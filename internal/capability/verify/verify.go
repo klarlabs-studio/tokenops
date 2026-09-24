@@ -58,6 +58,10 @@ type Attributed struct {
 	// Intervened reports whether an optimization was applied during this
 	// attempt. It is the cohort signal, and it is observational.
 	Intervened bool `json:"intervened"`
+	// InterventionKinds contains canonical applied decision kinds. When an
+	// applied decision also has a legacy optimization event, that paired
+	// event is not double-counted as a second kind.
+	InterventionKinds []string `json:"intervention_kinds,omitempty"`
 	// Outcomes contains the strongest explicit assessment linked directly
 	// to this execution. Unassessed attempts count as unknown, not failure.
 	Outcomes intervention.Outcomes `json:"outcomes"`
@@ -103,6 +107,8 @@ func attributeOne(e work.Execution, events []*eventschema.Envelope) Attributed {
 	var countedPrompts int64
 	var promptEvents int64
 	var outcomeEvents []*eventschema.Envelope
+	var appliedDecisions = make(map[string]string)
+	var appliedOptimizations []*eventschema.Envelope
 	for _, env := range events {
 		if env == nil {
 			continue
@@ -136,9 +142,35 @@ func attributeOne(e work.Execution, events []*eventschema.Envelope) Attributed {
 		case *eventschema.OptimizationEvent:
 			if p.Decision == eventschema.OptimizationDecisionApplied {
 				a.Intervened = true
+				appliedOptimizations = append(appliedOptimizations, env)
+			}
+		case *eventschema.DecisionEvent:
+			if p.Stage == eventschema.DecisionStageApplied {
+				a.Intervened = true
+				appliedDecisions[env.Correlation.Decision] = p.Kind
 			}
 		}
 	}
+	kinds := make(map[string]struct{}, len(appliedDecisions)+len(appliedOptimizations))
+	for _, kind := range appliedDecisions {
+		if kind != "" {
+			kinds[kind] = struct{}{}
+		}
+	}
+	for _, env := range appliedOptimizations {
+		if env.Correlation.Decision != "" {
+			if _, paired := appliedDecisions[env.Correlation.Decision]; paired {
+				continue
+			}
+		}
+		if p, ok := env.Payload.(*eventschema.OptimizationEvent); ok && p.Kind != "" {
+			kinds[string(p.Kind)] = struct{}{}
+		}
+	}
+	for kind := range kinds {
+		a.InterventionKinds = append(a.InterventionKinds, kind)
+	}
+	sort.Strings(a.InterventionKinds)
 	if len(outcomeEvents) > 0 {
 		a.Outcomes = outcomeCount(outcomes.Resolve(outcomeEvents))
 	}
