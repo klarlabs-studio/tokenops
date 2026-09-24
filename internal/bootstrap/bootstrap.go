@@ -122,7 +122,6 @@ func New(ctx context.Context, opts Options) (*Components, error) {
 	}
 	dbus := &domainevents.Bus{}
 	counter := observ.NewEventCounter()
-	counter.Subscribe(dbus)
 	c := &Components{
 		Logger:       opts.Logger,
 		Spend:        spendEng,
