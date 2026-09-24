@@ -183,8 +183,8 @@ tool bodies are never copied into these payloads.
 | `Kind` | string | yes | Stable cross-context name such as `workflow.started` or `budget.exceeded` |
 | `Data` | JSON | yes | Producer-owned event body; synthetic replay markers may use `null`; no raw prompts or command output |
 
-Legacy typed domain events are bridged into this envelope during Phase 6 while
-their existing subscribers and JSONL history remain available for migration.
+Operational domain events are published directly in this envelope. Historical
+domain JSONL is read-only migration input; it is never appended after migration.
 
 ---
 

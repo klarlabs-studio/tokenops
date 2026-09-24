@@ -3,7 +3,6 @@ package budget
 import (
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/domainevents"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -29,10 +28,14 @@ func publishExceeded(a Alert) {
 	if a.Limit.LimitUSD <= 0 {
 		return
 	}
-	domainevents.PublishCanonical(budgetEventBus, domainevents.BudgetExceeded{
-		BudgetID: a.Limit.Name,
-		SpentUSD: a.ActualUSD,
-		LimitUSD: a.Limit.LimitUSD,
-		At:       time.Now(),
-	}, "budget")
+	at := time.Now().UTC()
+	env, err := eventschema.NewDomainEnvelope("budget.exceeded", struct {
+		BudgetID string    `json:"BudgetID"`
+		SpentUSD float64   `json:"SpentUSD"`
+		LimitUSD float64   `json:"LimitUSD"`
+		At       time.Time `json:"At"`
+	}{a.Limit.Name, a.ActualUSD, a.Limit.LimitUSD, at}, at, "budget", eventschema.Association{})
+	if err == nil {
+		budgetEventBus.Publish(env)
+	}
 }

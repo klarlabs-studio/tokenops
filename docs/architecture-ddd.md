@@ -57,7 +57,7 @@ PRs that cross these boundaries must update this document.
 │   internal/storage/sqlite       (event store adapter)      │
 │   internal/otlp                 (telemetry export adapter) │
 │   internal/events               (telemetry bus)            │
-│   internal/domainevents         (in-process domain bus)    │
+│   internal/domainevents         (legacy JSONL importer)    │
 │   internal/proxy                (HTTP server)              │
 │   internal/contexts/prompts/tokenizer            (provider tokenizer impl)  │
 │   internal/contexts/rules.Ingestor       (filesystem adapter        │
@@ -127,15 +127,15 @@ External code must use these factories instead of struct literals:
 
 ## Domain Events
 
-`internal/domainevents` carries cross-context coordination events,
-distinct from `internal/events` which carries telemetry envelopes.
-Subscribers register via `Bus.Subscribe(kind, handler)`. Canonical kinds
-live in `internal/domainevents/events.go`.
+Cross-context operational events use `pkg/eventschema.DomainEvent` inside the
+canonical envelope and travel on `internal/events`. `internal/domainevents`
+remains only as a read-only compatibility importer for historical JSONL; new
+events do not use its legacy bus or log writer.
 
 ## Composition Root
 
 `internal/bootstrap.New(ctx, opts)` builds the shared core (store, spend
-engine, tokenizer registry, redactor, domain bus). It is not the only
+engine, tokenizer registry, redactor). It is not the only
 composition root:
 
 - `daemon.RunWithLogger` (`internal/daemon`) wires pollers, OTLP, dashauth,
