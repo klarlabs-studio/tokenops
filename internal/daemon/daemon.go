@@ -447,7 +447,8 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		if err != nil {
 			return fmt.Errorf("rules handlers: %w", err)
 		}
-		rulesH.AttachDomainBus(dbus)
+		cancelRulesObserver := rulesH.AttachEventBus(bus)
+		defer cancelRulesObserver()
 		opts = append(opts, proxy.WithRules(rulesH))
 		logger.Info("rule intelligence enabled", "root", root, "repo_id", cfg.Rules.RepoID)
 	}
