@@ -17,6 +17,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/providers"
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -92,9 +93,10 @@ type requestObservation struct {
 // per-stream meter that captures bytes for token estimation and emits a
 // PromptEvent on Done.
 type observerMeter struct {
-	bus       events.Bus
-	tokenizer *tokenizer.Registry
-	source    string
+	bus        events.Bus
+	tokenizer  *tokenizer.Registry
+	costEngine *spend.Engine
+	source     string
 }
 
 // NewMeter implements StreamMeter.
@@ -167,6 +169,34 @@ func (r *observerRequestMeter) Done(_ int64) {
 		ttft = time.Unix(0, first).Sub(r.obs.Start)
 	}
 
+	prompt := &eventschema.PromptEvent{
+		PromptHash:       r.obs.PromptHash,
+		Provider:         r.obs.Provider,
+		RequestModel:     r.obs.RequestModel,
+		ResponseModel:    r.obs.ResponseModel,
+		InputTokens:      r.obs.InputTokens,
+		OutputTokens:     outputTokens,
+		TotalTokens:      r.obs.InputTokens + outputTokens,
+		TokenSource:      tokenSource,
+		ContextSize:      r.obs.ContextSize,
+		MaxOutputTokens:  r.obs.MaxOutput,
+		Latency:          latency,
+		TimeToFirstToken: ttft,
+		Streaming:        r.obs.Streaming,
+		Status:           r.obs.Status,
+		CostSource:       r.obs.CostSource,
+		WorkflowID:       r.obs.WorkflowID,
+		AgentID:          r.obs.AgentID,
+		SessionID:        r.obs.SessionID,
+		UserID:           r.obs.UserID,
+	}
+	if r.m.costEngine != nil && prompt.CostSource == eventschema.CostSourceMetered && prompt.TokensCounted() {
+		if cost, err := r.m.costEngine.ComputeAt(prompt, r.obs.Start); err == nil {
+			prompt.CostUSD = cost
+			prompt.CostMeasured = true
+		}
+	}
+
 	env := &eventschema.Envelope{
 		ID:            uuid.NewString(),
 		SchemaVersion: eventschema.SchemaVersion,
@@ -175,27 +205,7 @@ func (r *observerRequestMeter) Done(_ int64) {
 		Source:        r.m.source,
 		Association:   associationFor(r.obs),
 		Correlation:   r.obs.Correlation,
-		Payload: &eventschema.PromptEvent{
-			PromptHash:       r.obs.PromptHash,
-			Provider:         r.obs.Provider,
-			RequestModel:     r.obs.RequestModel,
-			ResponseModel:    r.obs.ResponseModel,
-			InputTokens:      r.obs.InputTokens,
-			OutputTokens:     outputTokens,
-			TotalTokens:      r.obs.InputTokens + outputTokens,
-			TokenSource:      tokenSource,
-			ContextSize:      r.obs.ContextSize,
-			MaxOutputTokens:  r.obs.MaxOutput,
-			Latency:          latency,
-			TimeToFirstToken: ttft,
-			Streaming:        r.obs.Streaming,
-			Status:           r.obs.Status,
-			CostSource:       r.obs.CostSource,
-			WorkflowID:       r.obs.WorkflowID,
-			AgentID:          r.obs.AgentID,
-			SessionID:        r.obs.SessionID,
-			UserID:           r.obs.UserID,
-		},
+		Payload:       prompt,
 	}
 	r.m.bus.Publish(env)
 }

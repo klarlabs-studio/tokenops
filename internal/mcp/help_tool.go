@@ -158,8 +158,8 @@ var helpCatalog = []helpCategory{
 			},
 			{
 				Name: "tokenops_verify",
-				Summary: "Did an optimization help? Compares the attempts it touched against the ones it did not. " +
-					"Read `observational` and `proven` before repeating the number.",
+				Summary: "Compare measured resource use and assessed success across optimized and baseline attempts. " +
+					"Read `observational` and `proven` before attributing differences.",
 				Example: `{"days":30}`,
 			},
 			{
