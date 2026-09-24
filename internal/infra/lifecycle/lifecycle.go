@@ -1,23 +1,7 @@
 // Package lifecycle supervises the daemon's long-running subsystems.
-//
-// RunWithLogger is 569 lines and starts nine goroutines with a bare
-// `go func()`. None of them is tracked. Nothing waits for them on
-// shutdown, so the daemon returns while pollers are mid-request; nothing
-// knows their names, so "which subsystems are up" has no answer; and a
-// goroutine that dies logs a warning into a file nobody reads and is
-// never mentioned again, while every status surface keeps reporting the
-// daemon healthy.
-//
-// That last failure is the one this package exists for. It is the same
-// shape as the ingestion outage that ran 27 days: a component stops
-// doing its job, says so once in a place nobody looks, and the system
-// goes on describing itself as fine.
-//
-// A Supervisor owns the goroutines instead. It names them, waits for
-// them, bounds that wait so one stuck subsystem cannot hold the process
-// open, contains a panic rather than letting it take the daemon down,
-// and keeps what failed so a status surface can say which subsystem is
-// gone.
+// A Supervisor names tasks, waits for them during shutdown, bounds that
+// wait so a stuck subsystem cannot hold the process open, contains panics,
+// and retains task failures for health surfaces and diagnostics.
 package lifecycle
 
 import (
