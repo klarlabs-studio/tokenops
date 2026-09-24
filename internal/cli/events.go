@@ -1,40 +1,23 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
+	"sort"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"go.klarlabs.de/tokenops/internal/domainevents"
-	"go.klarlabs.de/tokenops/internal/infra/daemonhint"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
-
-// resolveDomainLogPath returns the JSONL location, honoring
-// cfg.Storage.Path so the log shares its directory with events.db
-// instead of hardcoding ~/.tokenops.
-func resolveDomainLogPath(rf *rootFlags) (string, error) {
-	if rf != nil {
-		if cfg, err := loadConfig(rf); err == nil && cfg.Storage.Path != "" {
-			return filepath.Join(filepath.Dir(cfg.Storage.Path), "domain-events.jsonl"), nil
-		}
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve home: %w", err)
-	}
-	return filepath.Join(home, ".tokenops", "domain-events.jsonl"), nil
-}
 
 func newEventsCmd(rf *rootFlags) *cobra.Command {
 	var (
-		addr    string
+		dbPath  string
 		jsonOut bool
 		since   string
 		until   string
@@ -42,10 +25,10 @@ func newEventsCmd(rf *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "events",
 		Short: "Show per-kind domain event counts",
-		Long: `events queries the daemon's /api/domain-events endpoint and
-prints in-process domain event counts (workflow.started,
-optimization.applied, rule_corpus.reloaded, budget.exceeded, ...).
-Mirrors the tokenops_domain_events MCP tool.`,
+		Long: `events queries the canonical local event store and prints per-kind
+domain event counts (workflow.started, optimization.applied,
+rule_corpus.reloaded, budget.exceeded, ...). Mirrors the
+tokenops_domain_events MCP tool.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			var sinceT, untilT time.Time
@@ -61,112 +44,77 @@ Mirrors the tokenops_domain_events MCP tool.`,
 				if err != nil {
 					return fmt.Errorf("--until: %w", err)
 				}
-				untilT = t
+				// SQLite's upper bound is exclusive; preserve the CLI's
+				// historical inclusive --until behavior at nanosecond precision.
+				untilT = t.Add(time.Nanosecond)
 			}
-			if !sinceT.IsZero() || !untilT.IsZero() {
-				// Time bounds → JSONL fallback; HTTP returns lifetime totals.
-				return renderFromLogWindow(cmd, rf, jsonOut, sinceT, untilT)
+			path, err := resolveEventsDB(rf, dbPath)
+			if err != nil {
+				return err
 			}
-			target := addr
-			if target == "" {
-				cfg, err := loadConfig(rf)
-				if err != nil {
-					return err
+			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
+			defer cancel()
+			store, err := sqlite.Open(ctx, path, sqlite.Options{})
+			if err != nil {
+				return fmt.Errorf("open event store: %w", err)
+			}
+			defer func() { _ = store.Close() }()
+			events, err := store.Query(ctx, sqlite.Filter{
+				Type: eventschema.EventTypeDomain, Since: sinceT, Until: untilT, Limit: 1_000_000,
+			})
+			if err != nil {
+				return fmt.Errorf("query domain events: %w", err)
+			}
+			counts := make(map[string]int64)
+			var total int64
+			for _, env := range events {
+				if env == nil {
+					continue
 				}
-				target = cfg.Listen
-			}
-			url := target + "/api/domain-events"
-			if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {
-				url = "http://" + target + "/api/domain-events"
-			}
-			req, err := http.NewRequest(http.MethodGet, url, nil)
-			if err != nil {
-				return renderFromLogSince(cmd, rf, jsonOut, time.Time{})
-			}
-			// /api/domain-events is credentialed like the rest of /api/*.
-			// The token comes from the daemon's 0600 URL hint; without one
-			// the request goes bare and the daemon's 401 says so.
-			if tok := daemonhint.Token(); tok != "" {
-				req.Header.Set("Authorization", "Bearer "+tok)
-			}
-			client := &http.Client{Timeout: 3 * time.Second}
-			resp, err := client.Do(req)
-			if err != nil {
-				return renderFromLogSince(cmd, rf, jsonOut, time.Time{})
-			}
-			defer func() { _ = resp.Body.Close() }()
-			body, _ := io.ReadAll(resp.Body)
-			if resp.StatusCode == http.StatusNotFound {
-				return renderFromLogSince(cmd, rf, jsonOut, time.Time{})
-			}
-			if resp.StatusCode >= 300 {
-				return fmt.Errorf("daemon returned %d: %s", resp.StatusCode, body)
+				payload, ok := env.Payload.(*eventschema.DomainEvent)
+				if !ok || payload.Kind == "" {
+					continue
+				}
+				counts[payload.Kind]++
+				total++
 			}
 			if jsonOut {
-				cmd.Println(string(body))
-				return nil
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{
+					"counts": counts, "total": total, "source": "sqlite",
+				})
 			}
-			var payload struct {
-				Counts map[string]int64 `json:"counts"`
-				Total  int64            `json:"total"`
-			}
-			if err := json.Unmarshal(body, &payload); err != nil {
-				return fmt.Errorf("decode response: %w", err)
-			}
-			fmt.Fprintf(cmd.OutOrStdout(), "total: %d\n\n", payload.Total)
+			fmt.Fprintf(cmd.OutOrStdout(), "source: sqlite (%s)\ntotal: %d\n\n", path, total)
 			fmt.Fprintf(cmd.OutOrStdout(), "%-32s %10s\n", "KIND", "COUNT")
-			for k, v := range payload.Counts {
-				fmt.Fprintf(cmd.OutOrStdout(), "%-32s %10d\n", k, v)
+			kinds := make([]string, 0, len(counts))
+			for kind := range counts {
+				kinds = append(kinds, kind)
+			}
+			sort.Strings(kinds)
+			for _, kind := range kinds {
+				fmt.Fprintf(cmd.OutOrStdout(), "%-32s %10d\n", kind, counts[kind])
 			}
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&addr, "addr", "", "daemon host:port (defaults to config.listen)")
+	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db (defaults to configured storage path or ~/.tokenops/events.db)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON instead of text")
-	cmd.Flags().StringVar(&since, "since", "", "JSONL fallback only: tally events ≥ this time (RFC3339 or duration like 24h)")
-	cmd.Flags().StringVar(&until, "until", "", "JSONL fallback only: upper bound (RFC3339)")
+	cmd.Flags().StringVar(&since, "since", "", "lower bound (RFC3339 or duration like 24h)")
+	cmd.Flags().StringVar(&until, "until", "", "inclusive upper bound (RFC3339)")
 	return cmd
 }
 
-// renderFromLog falls back to scanning the persisted domain-events
-// JSONL log (~/.tokenops/domain-events.jsonl) when the daemon's HTTP
-// surface is unreachable. Tallies per-kind counts the same way the
-// in-process counter does.
-func renderFromLogSince(cmd *cobra.Command, rf *rootFlags, jsonOut bool, since time.Time) error {
-	return renderFromLogWindow(cmd, rf, jsonOut, since, time.Time{})
-}
-
-func renderFromLogWindow(cmd *cobra.Command, rf *rootFlags, jsonOut bool, since, until time.Time) error {
-	path, err := resolveDomainLogPath(rf)
+func resolveEventsDB(rf *rootFlags, override string) (string, error) {
+	if override != "" {
+		return override, nil
+	}
+	if rf != nil {
+		if cfg, err := loadConfig(rf); err == nil && cfg.Storage.Path != "" {
+			return cfg.Storage.Path, nil
+		}
+	}
+	home, err := os.UserHomeDir()
 	if err != nil {
-		return err
+		return "", fmt.Errorf("resolve home dir: %w", err)
 	}
-	counts := map[string]int64{}
-	var total int64
-	if err := domainevents.Replay(path, func(r domainevents.Record) error {
-		if !since.IsZero() && r.At.Before(since) {
-			return nil
-		}
-		if !until.IsZero() && r.At.After(until) {
-			return nil
-		}
-		counts[r.Kind]++
-		total++
-		return nil
-	}); err != nil {
-		return fmt.Errorf("replay log %s: %w", path, err)
-	}
-	if jsonOut {
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]any{
-			"counts": counts,
-			"total":  total,
-			"source": "jsonl",
-		})
-	}
-	fmt.Fprintf(cmd.OutOrStdout(), "source: jsonl (%s)\ntotal: %d\n\n", path, total)
-	fmt.Fprintf(cmd.OutOrStdout(), "%-32s %10s\n", "KIND", "COUNT")
-	for k, v := range counts {
-		fmt.Fprintf(cmd.OutOrStdout(), "%-32s %10d\n", k, v)
-	}
-	return nil
+	return filepath.Join(home, ".tokenops", "events.db"), nil
 }
