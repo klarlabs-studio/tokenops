@@ -69,3 +69,7 @@ claim the intervention caused the difference. Plan-included token use is
 reported separately by provider as quota consumption, never converted to
 synthetic dollar savings. Metered spend remains unreported by this comparison
 until its event-time pricing provenance can be established.
+
+Proxy routing optimization events carry the session association used by work
+reconstruction, so applied routes enter the intervention cohort instead of
+being silently counted as baseline attempts.
