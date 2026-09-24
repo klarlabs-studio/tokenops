@@ -55,3 +55,12 @@ tokenops experiment stop <experiment-id> --reason "operator stopped"
 `status` reports both persisted state and the current evidence-derived belief.
 Raw prompts, command output, and private work content are not stored in control
 events.
+
+## Outcome Verification
+
+`tokenops verify` and `tokenops_verify` join outcome events to executions by
+execution ID, including outcomes recorded after the work ended. Both surfaces
+show assessed success rates for optimized and baseline cohorts. A drop in
+success can flag harm even when measured token use falls; absent assessments
+remain unknown. The current cohort split is observational, so it can identify
+a warning but cannot claim the intervention caused the difference.

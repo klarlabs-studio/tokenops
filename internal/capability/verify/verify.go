@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"sort"
 
+	"go.klarlabs.de/tokenops/internal/capability/outcomes"
 	"go.klarlabs.de/tokenops/internal/capability/reconstruct"
 	"go.klarlabs.de/tokenops/internal/contexts/intervention"
 	"go.klarlabs.de/tokenops/internal/contexts/measurement"
@@ -50,6 +51,18 @@ type Attributed struct {
 	// Intervened reports whether an optimization was applied during this
 	// attempt. It is the cohort signal, and it is observational.
 	Intervened bool `json:"intervened"`
+	// Outcomes contains the strongest explicit assessment linked directly
+	// to this execution. Unassessed attempts count as unknown, not failure.
+	Outcomes intervention.Outcomes `json:"outcomes"`
+}
+
+// OutcomeSummary is the adapter-safe cohort result for presentation.
+type OutcomeSummary struct {
+	Achieved    int               `json:"achieved"`
+	Partial     int               `json:"partial"`
+	NotAchieved int               `json:"not_achieved"`
+	Unknown     int               `json:"unknown"`
+	SuccessRate measurement.Value `json:"success_rate,omitzero"`
 }
 
 // Attribute joins events to the executions they fall inside.
@@ -70,21 +83,34 @@ func Attribute(execs []work.Execution, events []*eventschema.Envelope) []Attribu
 }
 
 func attributeOne(e work.Execution, events []*eventschema.Envelope) Attributed {
-	a := Attributed{Execution: e}
+	a := Attributed{Execution: e, Outcomes: intervention.Outcomes{Unknown: 1}}
 
 	var tokens int64
+	var countedPrompts int64
+	var promptEvents int64
+	var outcomeEvents []*eventschema.Envelope
 	for _, env := range events {
-		if env == nil || !within(e, env) {
+		if env == nil {
+			continue
+		}
+		if _, ok := env.Payload.(*eventschema.OutcomeEvent); ok && env.Association.Execution == string(e.ID) {
+			outcomeEvents = append(outcomeEvents, env)
+			a.Events++
+			continue
+		}
+		if !within(e, env) {
 			continue
 		}
 		a.Events++
 		switch p := env.Payload.(type) {
 		case *eventschema.PromptEvent:
+			promptEvents++
 			// An uncounted event contributes no tokens and should not
 			// make the total look smaller than it was. Phase 1 put that
 			// flag on the event for exactly this kind of consumer.
 			if p.TokensCounted() {
 				tokens += p.TotalTokens
+				countedPrompts++
 			}
 		case *eventschema.OptimizationEvent:
 			if p.Decision == eventschema.OptimizationDecisionApplied {
@@ -92,17 +118,34 @@ func attributeOne(e work.Execution, events []*eventschema.Envelope) Attributed {
 			}
 		}
 	}
+	if len(outcomeEvents) > 0 {
+		a.Outcomes = outcomeCount(outcomes.Resolve(outcomeEvents))
+	}
 
-	if a.Events == 0 {
+	if promptEvents == 0 || countedPrompts == 0 {
 		a.Tokens = measurement.Unknown(
-			"no events joined to this attempt — the work was reconstructed but " +
-				"nothing recorded what it consumed")
+			"no events with counted prompt usage joined to this attempt — consumption is unknown")
 		return a
 	}
 	a.Tokens = measurement.Measured(float64(tokens), "sqlite_events").
 		At(e.StartedAt).
-		Covering(int64(a.Events), 0)
+		Covering(countedPrompts, promptEvents-countedPrompts)
 	return a
+}
+
+func outcomeCount(out eventschema.OutcomeEvent) intervention.Outcomes {
+	counts := intervention.Outcomes{}
+	switch out.Result {
+	case eventschema.OutcomeAchieved:
+		counts.Achieved = 1
+	case eventschema.OutcomePartial:
+		counts.Partial = 1
+	case eventschema.OutcomeNotAchieved:
+		counts.NotAchieved = 1
+	default:
+		counts.Unknown = 1
+	}
+	return counts
 }
 
 // within reports whether an event belongs to an execution.
@@ -131,8 +174,10 @@ type Report struct {
 	// BaselineCount and InterventionCount say how many attempts fell in
 	// each cohort. "Not enough data" without saying which side was short
 	// is advice nobody can act on.
-	BaselineCount     int `json:"baseline_count"`
-	InterventionCount int `json:"intervention_count"`
+	BaselineCount        int            `json:"baseline_count"`
+	InterventionCount    int            `json:"intervention_count"`
+	BaselineOutcomes     OutcomeSummary `json:"baseline_outcomes"`
+	InterventionOutcomes OutcomeSummary `json:"intervention_outcomes"`
 	// Attributed is the per-execution detail the comparison rests on.
 	Attributed []Attributed `json:"attributed,omitempty"`
 }
@@ -167,8 +212,12 @@ func Compare(execs []work.Execution, events []*eventschema.Envelope) Report {
 		Intervention: meanTokens(intervened),
 		// The comparison is only as strong as its smaller side: ten
 		// baselines against one intervention is one observation, not ten.
-		Samples: min(len(baseline), len(intervened)),
+		Samples:              min(len(baseline), len(intervened)),
+		BaselineOutcomes:     sumOutcomes(baseline),
+		InterventionOutcomes: sumOutcomes(intervened),
 	}
+	report.BaselineOutcomes = summarizeOutcomes(report.Comparison.BaselineOutcomes)
+	report.InterventionOutcomes = summarizeOutcomes(report.Comparison.InterventionOutcomes)
 	report.Verdict = intervention.Judge(report.Comparison)
 
 	// Replace the domain's sample-size caveat when it is the wrong
@@ -189,6 +238,28 @@ func Compare(execs []work.Execution, events []*eventschema.Envelope) Report {
 		}
 	}
 	return report
+}
+
+func sumOutcomes(as []Attributed) intervention.Outcomes {
+	var total intervention.Outcomes
+	for _, a := range as {
+		total.Achieved += a.Outcomes.Achieved
+		total.Partial += a.Outcomes.Partial
+		total.NotAchieved += a.Outcomes.NotAchieved
+		total.Unknown += a.Outcomes.Unknown
+	}
+	return total
+}
+
+func summarizeOutcomes(o intervention.Outcomes) OutcomeSummary {
+	s := OutcomeSummary{Achieved: o.Achieved, Partial: o.Partial, NotAchieved: o.NotAchieved, Unknown: o.Unknown}
+	if rate, ok := o.SuccessRate(); ok {
+		assessed := o.Achieved + o.Partial + o.NotAchieved
+		s.SuccessRate = measurement.Measured(rate*100, "outcome_events").Covering(int64(assessed), int64(o.Unknown))
+	} else {
+		s.SuccessRate = measurement.Unknown("no outcomes were assessed")
+	}
+	return s
 }
 
 // Reading is the one-line judgement, in the words a surface prints.

@@ -1,6 +1,7 @@
 package verify_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -37,6 +38,14 @@ func optimizationEvent(actor string, at time.Time) *eventschema.Envelope {
 			Kind:     eventschema.OptimizationTypeCommandFmt,
 			Decision: eventschema.OptimizationDecisionApplied,
 		},
+	}
+}
+
+func outcomeEvent(executionID string, result eventschema.OutcomeResult, at time.Time) *eventschema.Envelope {
+	return &eventschema.Envelope{
+		ID: "outcome-" + executionID + at.String(), Type: eventschema.EventTypeOutcome, Timestamp: at,
+		Association: eventschema.Association{Execution: executionID},
+		Payload:     &eventschema.OutcomeEvent{Result: result, Assessment: eventschema.OutcomeHuman},
 	}
 }
 
@@ -121,6 +130,50 @@ func TestAnAppliedOptimizationMarksTheExecution(t *testing.T) {
 	}
 	if got[1].Intervened {
 		t.Error("an execution with no optimization was marked")
+	}
+}
+
+func TestExplicitOutcomeJoinsByExecutionEvenWhenRecordedLater(t *testing.T) {
+	exec := execution("e1", "session:a", t0, time.Hour)
+	got := verify.Attribute([]work.Execution{exec}, []*eventschema.Envelope{
+		promptEvent("session:a", t0.Add(time.Minute), 100),
+		outcomeEvent("e1", eventschema.OutcomeAchieved, exec.EndedAt.Add(24*time.Hour)),
+	})
+	if got[0].Outcomes.Achieved != 1 || got[0].Outcomes.Unknown != 0 {
+		t.Fatalf("outcomes = %+v; outcome should join by execution id", got[0].Outcomes)
+	}
+}
+
+func TestComparisonUsesOutcomeRegressionToFlagHarm(t *testing.T) {
+	execs := make([]work.Execution, 0, 20)
+	events := make([]*eventschema.Envelope, 0, 50)
+	for i := range 20 {
+		at := t0.Add(time.Duration(i) * 2 * time.Hour)
+		id := fmt.Sprintf("execution-%d", i)
+		exec := execution(id, "session:a", at, time.Hour)
+		execs = append(execs, exec)
+		intervened := i >= 10
+		tokens, result := int64(1000), eventschema.OutcomeAchieved
+		if intervened {
+			tokens, result = 600, eventschema.OutcomeNotAchieved
+			events = append(events, optimizationEvent("session:a", at.Add(time.Minute)))
+		}
+		events = append(events,
+			promptEvent("session:a", at.Add(2*time.Minute), tokens),
+			outcomeEvent(id, result, exec.EndedAt.Add(time.Hour)),
+		)
+	}
+	report := verify.Compare(execs, events)
+	if report.Verdict.Outcome != intervention.Harmed {
+		t.Fatalf("verdict = %+v; token reduction with collapsed success must be harmful", report.Verdict)
+	}
+	base, baseOK := report.BaselineOutcomes.SuccessRate.Amount()
+	with, withOK := report.InterventionOutcomes.SuccessRate.Amount()
+	if !baseOK || !withOK || base != 100 || with != 0 {
+		t.Fatalf("success rates = %.1f%% (%v) / %.1f%% (%v)", base, baseOK, with, withOK)
+	}
+	if !report.Observational() || !strings.Contains(report.Verdict.Caveat, "not assigned") {
+		t.Fatalf("outcome harm must disclose observational assignment: %+v", report.Verdict)
 	}
 }
 
