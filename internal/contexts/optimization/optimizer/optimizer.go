@@ -26,7 +26,6 @@ import (
 	"errors"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/domainevents"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -202,12 +201,16 @@ func (p *Pipeline) Run(ctx context.Context, req *Request, decider Decider) (*Res
 			ev := p.recommendationEvent(req, opt, mode, rec, decision, stageElapsed)
 			res.Events = append(res.Events, ev)
 			if pipelineEventBus != nil && decision == eventschema.OptimizationDecisionApplied {
-				domainevents.PublishCanonical(pipelineEventBus, domainevents.OptimizationApplied{
-					PromptHash:    ev.PromptHash,
-					OptimizerKind: string(ev.Kind),
-					TokensSaved:   ev.EstimatedSavingsTokens,
-					At:            p.clock(),
-				}, "optimizer")
+				at := p.clock().UTC()
+				env, err := eventschema.NewDomainEnvelope("optimization.applied", struct {
+					PromptHash    string    `json:"PromptHash"`
+					OptimizerKind string    `json:"OptimizerKind"`
+					TokensSaved   int64     `json:"TokensSaved"`
+					At            time.Time `json:"At"`
+				}{ev.PromptHash, string(ev.Kind), ev.EstimatedSavingsTokens, at}, at, "optimizer", eventschema.Association{})
+				if err == nil {
+					pipelineEventBus.Publish(env)
+				}
 			}
 		}
 	}

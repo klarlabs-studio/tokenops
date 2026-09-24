@@ -4,70 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
 
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
-
-// EnvelopePublisher accepts canonical envelopes. The canonical events.Bus
-// satisfies this interface without coupling domainevents to its transport.
-type EnvelopePublisher interface {
-	Publish(*eventschema.Envelope)
-}
-
-// ToEnvelope converts a legacy typed domain event into the canonical event
-// envelope. The event's kind and typed JSON body remain intact while gaining
-// the shared identity, schema version, source and association fields.
-func ToEnvelope(ev Event) (*eventschema.Envelope, error) {
-	if ev == nil {
-		return nil, errors.New("domainevents: cannot envelope a nil event")
-	}
-	var data []byte
-	if replayed, ok := ev.(interface{ Payload() json.RawMessage }); ok {
-		data = replayed.Payload()
-		if len(data) == 0 {
-			data = []byte("null")
-		}
-	} else {
-		var err error
-		data, err = json.Marshal(ev)
-		if err != nil {
-			return nil, err
-		}
-	}
-	at := time.Now().UTC()
-	if timed, ok := ev.(interface{ OccurredAt() time.Time }); ok && !timed.OccurredAt().IsZero() {
-		at = timed.OccurredAt().UTC()
-	} else if replayed, ok := ev.(interface{ At() time.Time }); ok && !replayed.At().IsZero() {
-		at = replayed.At().UTC()
-	}
-	return &eventschema.Envelope{
-		ID: uuid.NewString(), SchemaVersion: eventschema.SchemaVersion,
-		Type: eventschema.EventTypeDomain, Timestamp: at, Source: "domain_bus",
-		Association: associationFor(ev.Kind(), data),
-		Payload:     &eventschema.DomainEvent{Kind: ev.Kind(), Data: data},
-	}, nil
-}
-
-// PublishCanonical converts a typed domain event and publishes it directly
-// to the canonical envelope stream. source identifies the emitting subsystem.
-func PublishCanonical(target EnvelopePublisher, ev Event, source string) {
-	if target == nil || ev == nil {
-		return
-	}
-	env, err := ToEnvelope(ev)
-	if err != nil {
-		slog.Error("domain event envelope conversion failed", "kind", ev.Kind(), "err", err)
-		return
-	}
-	if source != "" {
-		env.Source = source
-	}
-	target.Publish(env)
-}
 
 // EnvelopeFromRecord converts a legacy JSONL record into a canonical
 // envelope with a stable ID. Re-imports of the same record are idempotent.
@@ -94,12 +36,12 @@ func EnvelopeFromRecord(rec Record) (*eventschema.Envelope, error) {
 	hashInput = append(hashInput, 0)
 	hashInput = append(hashInput, compact...)
 	stableID := uuid.NewSHA1(uuid.NameSpaceURL, append([]byte("tokenops/legacy-domain-event/"), hashInput...)).String()
-	return &eventschema.Envelope{
-		ID: stableID, SchemaVersion: eventschema.SchemaVersion,
-		Type: eventschema.EventTypeDomain, Timestamp: rec.At.UTC(), Source: "domain_jsonl_migration",
-		Association: associationFor(rec.Kind, compact),
-		Payload:     &eventschema.DomainEvent{Kind: rec.Kind, Data: compact},
-	}, nil
+	env, err := eventschema.NewDomainEnvelope(rec.Kind, compact, rec.At, "domain_jsonl_migration", associationFor(rec.Kind, compact))
+	if err != nil {
+		return nil, err
+	}
+	env.ID = stableID
+	return env, nil
 }
 
 // associationFor adds only associations explicitly carried by a domain
@@ -126,24 +68,4 @@ func associationFor(kind string, data json.RawMessage) eventschema.Association {
 		actor = payload.AgentIDCamel
 	}
 	return eventschema.Association{Actor: actor}
-}
-
-// BridgeToEnvelopeBus temporarily mirrors domain events into the canonical
-// envelope stream. It returns the subscription so the composition root can
-// detach it during shutdown or after migration is complete.
-func BridgeToEnvelopeBus(source *Bus, target EnvelopePublisher, logger *slog.Logger) *Subscription {
-	if source == nil || target == nil {
-		return nil
-	}
-	if logger == nil {
-		logger = slog.Default()
-	}
-	return source.Subscribe("*", func(ev Event) {
-		env, err := ToEnvelope(ev)
-		if err != nil {
-			logger.Error("domain event envelope conversion failed", "kind", ev.Kind(), "err", err)
-			return
-		}
-		target.Publish(env)
-	})
 }
