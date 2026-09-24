@@ -95,6 +95,20 @@ func TestVerifyStatesHarmPlainly(t *testing.T) {
 	}
 }
 
+func TestVerifyTextNamesSelectedRandomizedExperiment(t *testing.T) {
+	var buf bytes.Buffer
+	writeVerifyText(&buf, verify.Report{
+		RandomizedExperimentID: "experiment:abc", RandomizedPairs: 5,
+		Comparison: intervention.Comparison{Assignment: intervention.Randomised},
+	})
+	if !strings.Contains(buf.String(), "randomized experiment experiment:abc · 5 complete pair(s)") {
+		t.Fatalf("randomized trial provenance missing:\n%s", buf.String())
+	}
+	if !strings.Contains(buf.String(), "not a guarantee for other work") {
+		t.Fatalf("scope caveat missing:\n%s", buf.String())
+	}
+}
+
 // A fresh install has no event store, and `verify` is a plausible first
 // command to try. "sqlite: ping: unable to open database file (14)" is
 // a library's error code, not an answer — it names neither what is

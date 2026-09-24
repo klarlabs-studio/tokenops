@@ -1,29 +1,20 @@
 // Package verify attributes recorded events to the attempts they were
-// part of, and compares attempts that got an intervention against those
-// that did not.
+// part of, compares observational cohorts, and uses complete execution-
+// linked experiment pairs when assignment and outcome evidence permits.
 //
 // It closes the last join in the loop. Events carried an actor and a
 // timestamp; executions carried an actor and a span; nothing put the two
 // together, so consumption could never be attributed to an attempt at a
 // goal — and a comparison with nothing to compare is not a comparison.
 //
-// # What this deliberately does not do
+// # Evidence boundary
 //
-// It does not conclude that an optimization worked.
-//
-// The only cohort signal available today is whether an optimization
-// happened to fire, and that is observational by construction.
+// An applied-versus-not-applied split is observational by construction.
 // Compression applies to large outputs. Routing applies to turns a
 // classifier thought were mechanical. The two groups therefore differ in
-// ways that have nothing to do with the intervention, and a difference
-// between them cannot be attributed to it — doing so would be "tokens
-// removed × nominal price" wearing a statistical costume, which is the
-// claim ADR 0004 exists to refuse.
-//
-// So the comparison is built, the difference is reported, and the
-// verdict says it is not yet warranted. That difference is the reason to
-// run a real experiment; the experiment is what TokenOps has to earn
-// before it calls any saving proven.
+// ways unrelated to the intervention. A randomized comparison is allowed
+// only for complete linked pairs with measured tokens and explicit
+// outcomes; missing or mixed evidence falls back to the observational view.
 package verify
 
 import (
@@ -42,6 +33,11 @@ import (
 // Attributed is one execution with the consumption recorded during it.
 type Attributed struct {
 	Execution work.Execution `json:"execution"`
+	// Experiment fields come only from execution-associated assignment
+	// events; they are absent for ordinary or ambiguous observations.
+	ExperimentID   string `json:"experiment_id,omitempty"`
+	ExperimentPair int    `json:"experiment_pair,omitempty"`
+	ExperimentArm  string `json:"experiment_arm,omitempty"`
 	// Tokens is what the attempt consumed, with provenance. Unknown
 	// rather than zero when no event joined to it: a missing join and a
 	// genuinely free attempt are different facts, and zero is the one
@@ -117,6 +113,15 @@ func attributeOne(e work.Execution, events []*eventschema.Envelope) Attributed {
 	for _, env := range events {
 		if env == nil {
 			continue
+		}
+		if env.Association.Execution == string(e.ID) {
+			if p, ok := env.Payload.(*eventschema.ExperimentEvent); ok && p.Stage == eventschema.ExperimentAssigned {
+				a.ExperimentID = env.Correlation.Experiment
+				a.ExperimentPair = p.Pair
+				a.ExperimentArm = p.Assignment
+				a.Events++
+				continue
+			}
 		}
 		if _, ok := env.Payload.(*eventschema.OutcomeEvent); ok && env.Association.Execution == string(e.ID) {
 			outcomeEvents = append(outcomeEvents, env)
@@ -229,7 +234,11 @@ func outcomeCount(out eventschema.OutcomeEvent) intervention.Outcomes {
 // A running execution has no end, so everything after its start counts:
 // the attempt is still accumulating.
 func within(e work.Execution, env *eventschema.Envelope) bool {
-	if string(e.By) == "" || env.Association.Actor != string(e.By) {
+	if env.Association.Execution != "" {
+		if env.Association.Execution != string(e.ID) {
+			return false
+		}
+	} else if string(e.By) == "" || env.Association.Actor != string(e.By) {
 		return false
 	}
 	at := env.Timestamp
@@ -260,17 +269,24 @@ type Report struct {
 	InterventionMeteredCostUSD measurement.Value `json:"intervention_metered_cost_usd"`
 	BaselinePlanQuota          QuotaSummary      `json:"baseline_plan_quota_tokens"`
 	InterventionPlanQuota      QuotaSummary      `json:"intervention_plan_quota_tokens"`
+	RandomizedExperimentID     string            `json:"randomized_experiment_id,omitempty"`
+	RandomizedPairs            int               `json:"randomized_pairs,omitempty"`
+	RandomizedFallbackReason   string            `json:"randomized_fallback_reason,omitempty"`
 	// Attributed is the per-execution detail the comparison rests on.
 	Attributed []Attributed `json:"attributed,omitempty"`
 }
 
-// Compare splits attributed executions by whether an intervention fired
-// and judges the difference.
-//
-// The split is observational and the Comparison says so, which is what
-// stops the verdict claiming the intervention helped. See the package
-// comment: this is a deliberate refusal, not a missing feature.
+// Compare prefers a complete execution-linked randomized experiment when
+// exactly one is present; otherwise it compares applied-versus-not-applied
+// observational cohorts.
 func Compare(execs []work.Execution, events []*eventschema.Envelope) Report {
+	return CompareExperiment(execs, events, "")
+}
+
+// CompareExperiment prefers an execution-linked randomized comparison for
+// experimentID. With an empty ID it auto-selects only when a single
+// experiment is represented; otherwise it preserves the observational view.
+func CompareExperiment(execs []work.Execution, events []*eventschema.Envelope, experimentID string) Report {
 	attributed := Attribute(execs, events)
 
 	var baseline, intervened []Attributed
@@ -282,14 +298,37 @@ func Compare(execs []work.Execution, events []*eventschema.Envelope) Report {
 		baseline = append(baseline, a)
 	}
 
+	assignment := intervention.Observational
+	randomizedID, randomBaseline, randomVariant, randomizedPairs, fallback := randomizedCohorts(attributed, events, experimentID)
+	if randomizedID != "" {
+		baseline, intervened = randomBaseline, randomVariant
+		assignment = intervention.Randomised
+		compared := make(map[string]struct{}, len(baseline)+len(intervened))
+		for _, a := range baseline {
+			compared[string(a.Execution.ID)] = struct{}{}
+		}
+		for _, a := range intervened {
+			compared[string(a.Execution.ID)] = struct{}{}
+		}
+		selected := make([]Attributed, 0, len(compared))
+		for _, a := range attributed {
+			if _, ok := compared[string(a.Execution.ID)]; ok {
+				selected = append(selected, a)
+			}
+		}
+		attributed = selected
+	}
 	report := Report{
-		Attributed:        attributed,
-		BaselineCount:     len(baseline),
-		InterventionCount: len(intervened),
+		Attributed:               attributed,
+		BaselineCount:            len(baseline),
+		InterventionCount:        len(intervened),
+		RandomizedExperimentID:   randomizedID,
+		RandomizedPairs:          randomizedPairs,
+		RandomizedFallbackReason: fallback,
 	}
 
 	report.Comparison = intervention.Comparison{
-		Assignment:   intervention.Observational,
+		Assignment:   assignment,
 		Baseline:     meanTokens(baseline),
 		Intervention: meanTokens(intervened),
 		// The comparison is only as strong as its smaller side: ten
@@ -326,6 +365,100 @@ func Compare(execs []work.Execution, events []*eventschema.Envelope) Report {
 		}
 	}
 	return report
+}
+
+// randomizedCohorts accepts only complete randomized pairs whose every
+// assigned execution was reconstructed and has measured tokens plus an
+// explicit outcome. Missing assignments or outcomes can bias an estimate,
+// so any such gap falls back to the full observational comparison.
+func randomizedCohorts(as []Attributed, events []*eventschema.Envelope, requested string) (string, []Attributed, []Attributed, int, string) {
+	type pairArms map[string]string
+	assignments := make(map[string]map[int]pairArms)
+	seenIDs := make(map[string]struct{})
+	seenExecutions := make(map[string]string)
+	for _, env := range events {
+		if env == nil || env.Correlation.Experiment == "" {
+			continue
+		}
+		p, ok := env.Payload.(*eventschema.ExperimentEvent)
+		if !ok || p.Stage != eventschema.ExperimentAssigned {
+			continue
+		}
+		id := env.Correlation.Experiment
+		seenIDs[id] = struct{}{}
+		if requested != "" && id != requested {
+			continue
+		}
+		if env.Association.Execution == "" {
+			return "", nil, nil, 0, "the experiment has unlinked assignments; using observational cohorts"
+		}
+		executionID := env.Association.Execution
+		assignmentKey := fmt.Sprintf("%s:%d:%s", id, p.Pair, p.Assignment)
+		if _, duplicate := seenExecutions[executionID]; duplicate {
+			return "", nil, nil, 0, "an execution has multiple randomized assignments; using observational cohorts"
+		}
+		seenExecutions[executionID] = assignmentKey
+		if p.Pair < 1 || (p.Assignment != "baseline" && p.Assignment != "variant") {
+			return "", nil, nil, 0, "experiment assignment evidence is malformed; using observational cohorts"
+		}
+		pairs := assignments[id]
+		if pairs == nil {
+			pairs = make(map[int]pairArms)
+			assignments[id] = pairs
+		}
+		arms := pairs[p.Pair]
+		if arms == nil {
+			arms = make(pairArms)
+			pairs[p.Pair] = arms
+		}
+		if _, duplicate := arms[p.Assignment]; duplicate {
+			return "", nil, nil, 0, "an experiment arm has duplicate execution assignments; using observational cohorts"
+		}
+		arms[p.Assignment] = env.Association.Execution
+	}
+	if requested == "" && len(seenIDs) > 1 {
+		return "", nil, nil, 0, "multiple experiments are present; select one with --experiment-id to avoid mixing trials"
+	}
+	id := requested
+	if id == "" {
+		for candidate := range assignments {
+			id = candidate
+		}
+	}
+	if id == "" || len(assignments[id]) == 0 {
+		if requested != "" {
+			return "", nil, nil, 0, "the selected experiment has no execution-linked assignments in this window; using observational cohorts"
+		}
+		return "", nil, nil, 0, ""
+	}
+	for pair := 1; pair <= len(assignments[id]); pair++ {
+		if _, ok := assignments[id][pair]; !ok {
+			return "", nil, nil, 0, "the selected experiment has a gap in its pair ledger; using observational cohorts"
+		}
+	}
+	byExecution := make(map[string]Attributed, len(as))
+	for _, a := range as {
+		byExecution[string(a.Execution.ID)] = a
+	}
+	var baseline, variant []Attributed
+	for _, arms := range assignments[id] {
+		baselineID, hasBaseline := arms["baseline"]
+		variantID, hasVariant := arms["variant"]
+		if !hasBaseline || !hasVariant || len(arms) != 2 {
+			return "", nil, nil, 0, "the selected experiment contains an incomplete randomized pair; using observational cohorts"
+		}
+		base, baseOK := byExecution[baselineID]
+		with, variantOK := byExecution[variantID]
+		if !baseOK || !variantOK {
+			return "", nil, nil, 0, "an assigned execution was not reconstructed; using observational cohorts"
+		}
+		if !base.Tokens.Known() || !with.Tokens.Known() || base.Outcomes.Unknown > 0 || with.Outcomes.Unknown > 0 {
+			return "", nil, nil, 0, "randomized executions need measured tokens and explicit outcomes; using observational cohorts"
+		}
+		baseline = append(baseline, base)
+		variant = append(variant, with)
+	}
+	return id, baseline, variant, len(assignments[id]), ""
 }
 
 func meanMeteredCost(as []Attributed) measurement.Value {
@@ -465,11 +598,17 @@ func meanTokens(as []Attributed) measurement.Value {
 // refuses it because a capability assembled inside one adapter is one
 // the other assembles differently.
 func CompareReconstructed(rs []reconstruct.Work, events []*eventschema.Envelope) Report {
+	return CompareReconstructedExperiment(rs, events, "")
+}
+
+// CompareReconstructedExperiment compares reconstructed work and optionally
+// selects one explicitly named randomized trial.
+func CompareReconstructedExperiment(rs []reconstruct.Work, events []*eventschema.Envelope, experimentID string) Report {
 	execs := make([]work.Execution, 0, len(rs))
 	for _, r := range rs {
 		execs = append(execs, r.Execution)
 	}
-	return Compare(execs, events)
+	return CompareExperiment(execs, events, experimentID)
 }
 
 // SortByStart orders attributed executions oldest first, for a caller

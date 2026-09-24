@@ -38,6 +38,16 @@ func TestVerifyToolCarriesTheRefusalNotOnlyTheNumber(t *testing.T) {
 	}
 }
 
+func TestVerifyToolCarriesRandomizedExperimentProvenance(t *testing.T) {
+	payload := verifyPayload(verify.Report{
+		RandomizedExperimentID: "experiment:abc", RandomizedPairs: 5,
+		Comparison: intervention.Comparison{Assignment: intervention.Randomised},
+	})
+	if payload.Observational || payload.RandomizedExperimentID != "experiment:abc" || payload.RandomizedPairs != 5 {
+		t.Fatalf("randomized provenance = %+v", payload)
+	}
+}
+
 func TestVerifyToolCarriesOutcomeCohortRates(t *testing.T) {
 	base := measurement.Measured(70, "outcome_events")
 	with := measurement.Measured(75, "outcome_events")
