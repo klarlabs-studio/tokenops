@@ -18,11 +18,8 @@ import (
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	"go.klarlabs.de/tokenops/internal/capability/experiments"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/observ"
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
-	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
 	"go.klarlabs.de/tokenops/internal/contexts/security/dashauth"
 	"go.klarlabs.de/tokenops/internal/contexts/security/tlsmint"
 	anthropicusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic"
@@ -35,15 +32,9 @@ import (
 	cursorturnspoll "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursorturns"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
 	"go.klarlabs.de/tokenops/internal/contexts/telemetry/retention"
-	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
-	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
-	"go.klarlabs.de/tokenops/internal/infra/domainmigration"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
-	"go.klarlabs.de/tokenops/internal/infra/rulesfs"
-	"go.klarlabs.de/tokenops/internal/otlp"
 	"go.klarlabs.de/tokenops/internal/proxy"
-	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -156,88 +147,19 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		opts = append(opts, proxy.WithTLS(bundle.TLSConfig()))
 	}
 
-	var (
-		store    *sqlite.Store
-		bus      *events.AsyncBus
-		auditSub *audit.Subscriber
-		dashTok  string
-	)
 	components := earlyComponents
+	eventRuntime, err := initializeEventRuntime(ctx, cfg, components, domainEventCounter, domainLogPath, sourceHealth, sup, logger)
+	if err != nil {
+		return err
+	}
+	defer eventRuntime.Detach()
+	bus := eventRuntime.Bus
+	dashTok := ""
+	opts = append(opts, eventRuntime.ProxyOptions...)
+
 	if cfg.Storage.Enabled {
-		path, err := resolveStoragePath(cfg.Storage.Path)
-		if err != nil {
-			return fmt.Errorf("storage path: %w", err)
-		}
-		if err := components.OpenStoreAt(ctx, path); err != nil {
-			return err
-		}
-		store = components.Store
-		if domainLogPath != "" {
-			migrated, err := domainmigration.Import(ctx, store, domainLogPath, 3)
-			if err != nil {
-				logger.Warn("legacy domain event import incomplete; JSONL retained", "err", err)
-			} else {
-				logger.Info("legacy domain events imported", "read", migrated.Read, "imported", migrated.Imported, "duplicates", migrated.Duplicates, "skipped", migrated.Skipped)
-			}
-		}
-		if history, err := store.Query(ctx, sqlite.Filter{Type: eventschema.EventTypeDomain, Limit: 1_000_000}); err != nil {
-			logger.Warn("canonical domain event counter hydration failed", "err", err)
-		} else {
-			domainEventCounter.Hydrate(history)
-		}
-
-		var sinks []events.Sink
-		sinks = append(sinks, store)
-
-		if cfg.OTel.Enabled {
-			expOpts := otlp.Options{
-				Endpoint:       cfg.OTel.Endpoint,
-				Headers:        cfg.OTel.Headers,
-				ServiceName:    cfg.OTel.ServiceName,
-				ServiceVersion: cfg.OTel.ServiceVersion,
-				Logger:         logger,
-			}
-			if cfg.OTel.RedactEnabled() {
-				expOpts.Redactor = earlyComponents.Redactor
-			}
-			exporter, err := otlp.New(expOpts)
-			if err != nil {
-				return fmt.Errorf("otlp exporter: %w", err)
-			}
-			sinks = append(sinks, exporter)
-			logger.Info("otlp exporter ready",
-				"endpoint", cfg.OTel.Endpoint,
-				"redact", cfg.OTel.RedactEnabled(),
-			)
-		}
-
-		// Plan stamping wraps the sink so every emitter (pollers, proxy
-		// observer, future sources) inherits the plan_included contract
-		// without per-emitter wiring.
-		bus = events.NewAsync(newPlanStampSink(events.NewMultiSink(sinks...), cfg), events.Options{Logger: logger})
-		cancelDomainEvents := wireDomainEventPublishers(bus, logger)
-		defer cancelDomainEvents()
-		cancelDomainCounter := domainEventCounter.SubscribeCanonical(bus)
-		defer cancelDomainCounter()
-		// The audit ledger consumes the same canonical envelopes as storage;
-		// its own table remains the durable security/audit query surface.
-		auditSub = audit.Subscribe(bus, audit.NewRecorder(store), logger, "daemon")
-		if auditSub != nil {
-			opts = append(opts, proxy.WithAuditDrops(auditSub.DroppedCount))
-		}
-		logger.Info("event store ready", "path", path)
-		opts = append(opts,
-			proxy.WithEventBus(bus),
-			proxy.WithSourceFreshness(sourceFreshnessFn(cfg, store, sourceHealth, sup)),
-			proxy.WithTokenizer(components.Tokenizers),
-			proxy.WithCostEngine(components.Spend),
-			// Rows the bus could not persist. Published so `tokenops
-			// status` and the MCP status tool can warn about them while
-			// the daemon is running, rather than the count first being
-			// spoken aloud in a log line at shutdown.
-			proxy.WithEventDrops(bus.DroppedCount),
-		)
-
+		// Event persistence and its observers are initialized as one runtime
+		// module above; this branch owns the storage-dependent pollers and APIs.
 		// Optional vendor-usage pollers. Each one publishes envelopes
 		// through the same bus the proxy uses, so vendor and proxy
 		// signals end up in the same store with distinct Source tags
@@ -404,14 +326,6 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 			return fmt.Errorf("dashboard auth: %w", err)
 		}
 		opts = append(opts, proxy.WithDashAuth(auth))
-	} else {
-		// Keep the event model canonical even when persistence is disabled.
-		// The no-op sink lets in-memory observers receive domain envelopes.
-		bus = events.NewAsync(events.NoopSink{}, events.Options{Logger: logger})
-		cancelDomainEvents := wireDomainEventPublishers(bus, logger)
-		defer cancelDomainEvents()
-		cancelDomainCounter := domainEventCounter.SubscribeCanonical(bus)
-		defer cancelDomainCounter()
 	}
 
 	if cfg.Rules.Enabled {
@@ -554,48 +468,18 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		logger.Warn("subsystem shutdown", "err", err, "running", sup.Running())
 	}
 	// 3. Drain in-flight canonical envelopes after all publishers stop.
-	if bus != nil {
-		if err := bus.Close(cfg.Shutdown.Timeout); err != nil {
-			logger.Warn("event bus drain", "err", err)
-		}
-		logger.Info("event bus drained",
-			"published", bus.PublishedCount(),
-			"dropped", bus.DroppedCount(),
-		)
+	if err := eventRuntime.Drain(cfg.Shutdown.Timeout); err != nil {
+		logger.Warn("event bus drain", "err", err)
 	}
-	if auditSub != nil {
-		auditSub.Close()
-	}
+	logger.Info("event bus drained",
+		"published", bus.PublishedCount(),
+		"dropped", bus.DroppedCount(),
+	)
 	if components != nil {
 		_ = components.Shutdown()
 	}
 	logger.Info("tokenops daemon stopped")
 	return nil
-}
-
-// wireDomainEventPublishers connects domain contexts directly to the
-// canonical envelope stream. The returned function detaches process-global
-// publisher ports after daemon shutdown.
-func wireDomainEventPublishers(bus *events.AsyncBus, logger *slog.Logger) func() {
-	workflow.SetEventBus(bus)
-	optimizer.SetEventBus(bus)
-	rulesfs.SetEventBus(bus)
-	budget.SetEventBus(bus)
-	cancelLog := bus.Subscribe(func(env *eventschema.Envelope) {
-		if env == nil || env.Type != eventschema.EventTypeDomain {
-			return
-		}
-		if event, ok := env.Payload.(*eventschema.DomainEvent); ok {
-			logger.Debug("domain event", "kind", event.Kind)
-		}
-	})
-	return func() {
-		cancelLog()
-		workflow.SetEventBus(nil)
-		optimizer.SetEventBus(nil)
-		rulesfs.SetEventBus(nil)
-		budget.SetEventBus(nil)
-	}
 }
 
 // SignalContext returns a context cancelled on SIGINT/SIGTERM. Callers must
