@@ -71,7 +71,11 @@ synthetic dollar savings. Metered spend remains unreported by this comparison
 unless a prompt event carries `cost_measured`, which the proxy sets only after
 the effective-dated rate card priced the event successfully. Legacy events,
 missing-rate events, and subscription/trial usage remain unknown for metered
-spend comparisons.
+spend comparisons. Human attention is reported only when an operator explicitly
+provides active effort (for example, `tokenops outcome record <execution-id>
+--result achieved --attention-minutes 3.5`); TokenOps does not infer it from
+transcripts or agent estimates. Cohort means remain unknown if any execution
+lacks an operator report.
 
 Proxy routing optimization events carry the session association used by work
 reconstruction, so applied routes enter the intervention cohort instead of

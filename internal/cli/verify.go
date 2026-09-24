@@ -116,6 +116,13 @@ func writeVerifyText(out io.Writer, r verify.Report) {
 	} else {
 		fmt.Fprintln(out, "  mean metered cost: not established (requires event-time pricing)")
 	}
+	baseAttention, baseAttentionKnown := r.BaselineHumanAttentionMinutes.Amount()
+	interventionAttention, interventionAttentionKnown := r.InterventionHumanAttentionMinutes.Amount()
+	if baseAttentionKnown && interventionAttentionKnown {
+		fmt.Fprintf(out, "  mean human attention: %.1fmin baseline → %.1fmin intervention\n", baseAttention, interventionAttention)
+	} else {
+		fmt.Fprintln(out, "  mean human attention: not established (operator self-report required)")
+	}
 	providers := make(map[string]struct{}, len(r.BaselinePlanQuota)+len(r.InterventionPlanQuota))
 	for provider := range r.BaselinePlanQuota {
 		providers[provider] = struct{}{}

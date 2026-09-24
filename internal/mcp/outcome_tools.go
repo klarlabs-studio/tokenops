@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	"go.klarlabs.de/tokenops/internal/capability/outcomes"
@@ -17,10 +18,11 @@ type OutcomeDeps struct {
 }
 
 type outcomeInput struct {
-	ExecutionID string `json:"execution_id" jsonschema:"description=The execution being assessed."`
-	DecisionID  string `json:"decision_id,omitempty" jsonschema:"description=The decision being evaluated, when known."`
-	Result      string `json:"result" jsonschema:"description=achieved | partial | not_achieved"`
-	Caveat      string `json:"caveat,omitempty" jsonschema:"description=Why the work was partial or unsuccessful, or useful context for the assessment."`
+	ExecutionID      string   `json:"execution_id" jsonschema:"description=The execution being assessed."`
+	DecisionID       string   `json:"decision_id,omitempty" jsonschema:"description=The decision being evaluated, when known."`
+	Result           string   `json:"result" jsonschema:"description=achieved | partial | not_achieved"`
+	Caveat           string   `json:"caveat,omitempty" jsonschema:"description=Why the work was partial or unsuccessful, or useful context for the assessment."`
+	AttentionMinutes *float64 `json:"attention_minutes,omitempty" jsonschema:"description=Optional active human effort in minutes, only when explicitly reported or confirmed by the operator."`
 }
 
 type outcomeResult struct {
@@ -46,7 +48,7 @@ func RegisterOutcomeTools(s *Server, d OutcomeDeps) error {
 		return errors.New("mcp: nil server")
 	}
 	s.Tool("tokenops_outcome_record").
-		Description("Record the operator's assessment of whether one execution achieved its goal. Use only after the operator has actually judged the result; a task ending or an agent saying done is not an outcome. The assessment is stored locally and linked to the decision when decision_id is supplied.").
+		Description("Record the operator's assessment of whether one execution achieved its goal. Use only after the operator has actually judged the result; a task ending or an agent saying done is not an outcome. Optionally record active human attention minutes only when the operator explicitly reports or confirms the value. The assessment is stored locally and linked to the decision when decision_id is supplied.").
 		OutputSchema(outcomeResult{}).
 		Handler(func(ctx context.Context, in outcomeInput) (*outcomeResult, error) {
 			if strings.TrimSpace(in.ExecutionID) == "" {
@@ -56,12 +58,16 @@ func RegisterOutcomeTools(s *Server, d OutcomeDeps) error {
 			if err != nil {
 				return nil, err
 			}
+			if in.AttentionMinutes != nil && (math.IsNaN(*in.AttentionMinutes) || math.IsInf(*in.AttentionMinutes, 0) || *in.AttentionMinutes < 0) {
+				return nil, fmt.Errorf("attention_minutes must be a finite non-negative number")
+			}
 			if d.Store == nil {
 				return &outcomeResult{ExecutionID: in.ExecutionID, Result: string(result), Assessment: string(eventschema.OutcomeHuman), Error: "storage_disabled", Hint: "run `tokenops init` then restart the daemon"}, nil
 			}
 			env := outcomes.Event(outcomes.Record{
 				ExecutionID: in.ExecutionID, DecisionID: in.DecisionID,
 				Result: result, Assessment: eventschema.OutcomeHuman, Caveat: strings.TrimSpace(in.Caveat),
+				AttentionMinutes: in.AttentionMinutes,
 			})
 			if err := correlateOutcome(ctx, d.Store, env); err != nil {
 				return nil, err

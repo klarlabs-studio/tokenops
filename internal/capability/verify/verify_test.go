@@ -122,6 +122,24 @@ func TestUnpricedZeroIsUnknownRatherThanFree(t *testing.T) {
 	}
 }
 
+func TestHumanAttentionRequiresExplicitOperatorMetric(t *testing.T) {
+	exec := execution("e1", "session:a", t0, time.Hour)
+	unknown := verify.Attribute([]work.Execution{exec}, nil)[0]
+	if unknown.HumanAttentionMinutes.Known() {
+		t.Fatalf("missing attention report inferred %.1f minutes", unknown.HumanAttentionMinutes.AmountOr(-1))
+	}
+	event := outcomeEvent("e1", eventschema.OutcomeAchieved, exec.EndedAt.Add(time.Minute))
+	out := event.Payload.(*eventschema.OutcomeEvent)
+	out.Metrics = []eventschema.OutcomeMetric{{
+		Name: "human_attention_minutes", Unit: "minutes", Value: 3.5,
+		Source: "human_self_report", ObservedAt: exec.EndedAt.Add(time.Minute), Confidence: 1,
+	}}
+	got := verify.Attribute([]work.Execution{exec}, []*eventschema.Envelope{event})[0]
+	if value, ok := got.HumanAttentionMinutes.Amount(); !ok || value != 3.5 {
+		t.Fatalf("attention = %v known=%v; want explicit self-report", value, ok)
+	}
+}
+
 func optimizationEvent(actor string, at time.Time) *eventschema.Envelope {
 	return &eventschema.Envelope{
 		ID: "opt" + actor + at.String(), Type: eventschema.EventTypeOptimization, Timestamp: at,
