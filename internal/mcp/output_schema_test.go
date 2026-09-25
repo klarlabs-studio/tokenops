@@ -40,7 +40,10 @@ func TestOutputSchemasGenerate(t *testing.T) {
 		"StatusInsight":      presentation.StatusInsight{},
 		"domainEventsResult": domainEventsResult{},
 		// plan_tools.go
-		"planHeadroomResult": planHeadroomResult{},
+		"planHeadroomResult":   planHeadroomResult{},
+		"sessionBudgetResult":  sessionBudgetResult{},
+		"resourceGlanceResult": resourceGlanceResult{},
+		"ResourceInsight":      presentation.ResourceInsight{},
 		// parity_tools.go
 		"rules.BenchmarkResult": rules.BenchmarkResult{},
 		"evalResult":            evalResult{},

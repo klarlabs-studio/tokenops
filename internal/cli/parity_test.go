@@ -79,13 +79,14 @@ var cliToMCP = map[string][]string{
 // are not deliberate — they are recorded here so the asymmetry is visible
 // rather than discovered, and the comment says which is which.
 var mcpOnly = map[string]string{
-	"tokenops_help":           "indexes the tool surface for an agent that cannot read --help",
-	"tokenops_data_sources":   "reports event counts by source; `vendor-usage status` is the CLI's fuller answer",
-	"tokenops_session_budget": "per-turn advice for the agent mid-session; no terminal equivalent makes sense",
-	"tokenops_routing_advise": "asks which model a turn should run on; the CLI equivalent is the route-guard hook",
-	"tokenops_routing_decide": "same, for an explicit decision",
-	"tokenops_review_work":    "composes workflow measurement and coaching into one agent-oriented review",
-	"tokenops_prepare_work":   "composes current plan headroom and per-task model advice before execution",
+	"tokenops_help":            "indexes the tool surface for an agent that cannot read --help",
+	"tokenops_data_sources":    "reports event counts by source; `vendor-usage status` is the CLI's fuller answer",
+	"tokenops_session_budget":  "per-turn advice for the agent mid-session; no terminal equivalent makes sense",
+	"tokenops_routing_advise":  "asks which model a turn should run on; the CLI equivalent is the route-guard hook",
+	"tokenops_routing_decide":  "same, for an explicit decision",
+	"tokenops_review_work":     "composes workflow measurement and coaching into one agent-oriented review",
+	"tokenops_prepare_work":    "composes current plan headroom and per-task model advice before execution",
+	"tokenops_resource_glance": "composes session budget and plan headroom into a caveated resource-pressure summary",
 }
 
 // TestCLIAndMCPParity diffs the two surfaces.
