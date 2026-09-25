@@ -64,6 +64,7 @@ func TestCallerMistakesReachTheAgent(t *testing.T) {
 		{"tokenops_spend_summary", map[string]any{"since": "yesterday-ish"}, "since"},
 		{"tokenops_top_consumers", map[string]any{"until": "not-a-time"}, "cannot parse"},
 		{"tokenops_workflow_trace", map[string]any{"workflow_id": ""}, "workflow_id is required"},
+		{"tokenops_review_work", map[string]any{"workflow_id": ""}, "workflow_id is required"},
 		{"tokenops_replay", map[string]any{}, "provide session_id"},
 		{"tokenops_data_sources", map[string]any{"since": "whenever"}, ""},
 		{"tokenops_rules_analyze", map[string]any{"root": filepath.Join(dir, "absent")}, ""},

@@ -231,6 +231,9 @@ func RegisterTools(s *Server, d Deps) error {
 		Handler(func(ctx context.Context, in optimizationsInput) (*optimizationsResult, error) {
 			return optimizations(ctx, d, in)
 		})
+	if err := registerIntentTools(s, d); err != nil {
+		return err
+	}
 	return nil
 }
 
