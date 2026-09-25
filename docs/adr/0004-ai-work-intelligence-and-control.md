@@ -279,6 +279,11 @@ modules; add the end-to-end test that runs a built binary through init → start
 behind intent operations; rewrite the README around the loop once the loop is
 real. Doing either earlier would document an intention rather than a product.
 
+**Phase 9 — surface-native insight.** Represent evidence-backed insights
+structurally before rendering, then apply surface-specific presentation
+policies. Begin with concise readiness/attention summaries shared by MCP and
+CLI; extend to actionable resource and work insights as evidence permits.
+
 ## Non-goals
 
 Rewriting TokenOps. Replacing Go or SQLite. Microservices. A generic plugin

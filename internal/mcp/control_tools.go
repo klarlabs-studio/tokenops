@@ -8,6 +8,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/events"
+	"go.klarlabs.de/tokenops/internal/presentation"
 	"go.klarlabs.de/tokenops/internal/version"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -117,40 +118,19 @@ type versionResult struct {
 
 // statusResult is the typed payload for tokenops_status.
 type statusResult struct {
-	Status        string              `json:"status"`
-	Ready         bool                `json:"ready"`
-	State         string              `json:"state"`
-	Insight       statusInsightResult `json:"insight"`
-	Version       string              `json:"version" jsonschema:"description=version of this MCP server process"`
-	SchemaVersion string              `json:"schema_version"`
-	Blockers      []string            `json:"blockers"`
-	NextActions   []string            `json:"next_actions"`
-	Warnings      []string            `json:"warnings,omitempty"`
+	Status        string                     `json:"status"`
+	Ready         bool                       `json:"ready"`
+	State         string                     `json:"state"`
+	Insight       presentation.StatusInsight `json:"insight"`
+	Version       string                     `json:"version" jsonschema:"description=version of this MCP server process"`
+	SchemaVersion string                     `json:"schema_version"`
+	Blockers      []string                   `json:"blockers"`
+	NextActions   []string                   `json:"next_actions"`
+	Warnings      []string                   `json:"warnings,omitempty"`
 	// DaemonVersion and ServerOutOfDate mirror tokenops_version, so the one
 	// call an agent makes first says whether it is talking to old code.
 	DaemonVersion   string `json:"daemon_version,omitempty" jsonschema:"description=version of the ingestion daemon when one is reachable"`
 	ServerOutOfDate bool   `json:"server_out_of_date,omitempty" jsonschema:"description=true when a newer tokenops has been installed since this MCP server started"`
-}
-
-// statusInsightResult is the compact presentation of TokenOps service health.
-// It summarizes only checks represented by tokenops_status; it does not
-// imply that current work quality or AI-resource pressure was assessed.
-type statusInsightResult struct {
-	Level   string `json:"level" jsonschema:"description=clear when service checks pass, attention when running with reduced coverage, action_required when configuration blockers remain, unavailable when readiness has not been established"`
-	Summary string `json:"summary" jsonschema:"description=concise interpretation of readiness, blockers, and warnings; detailed evidence remains in the sibling fields"`
-}
-
-func statusInsight(state string) statusInsightResult {
-	switch state {
-	case "ready":
-		return statusInsightResult{Level: "clear", Summary: "Service checks pass; this status does not assess current work or resource pressure."}
-	case "degraded":
-		return statusInsightResult{Level: "attention", Summary: "TokenOps is running with reduced coverage; inspect blockers, warnings, and next_actions."}
-	case "not_configured":
-		return statusInsightResult{Level: "action_required", Summary: "Setup is incomplete; resolve the listed blockers using next_actions."}
-	default:
-		return statusInsightResult{Level: "unavailable", Summary: "Readiness is not established; inspect blockers and next_actions."}
-	}
 }
 
 // domainEventsResult is the typed payload for tokenops_domain_events.
@@ -326,7 +306,7 @@ func statusInfo(d ControlDeps) statusResult {
 		Status:        "ok",
 		Ready:         ready,
 		State:         state,
-		Insight:       statusInsight(state),
+		Insight:       presentation.ForStatus(state),
 		Version:       version.String(),
 		SchemaVersion: eventschema.SchemaVersion,
 		Blockers:      blockers,
