@@ -119,7 +119,7 @@ func TestUnknownIsNeverComplete(t *testing.T) {
 	}
 }
 
-// The serialised form is what reaches the dashboard, the MCP tools and
+// The serialised form is what reaches the MCP tools and
 // `--json`. An unknown value must not marshal to a number there either:
 // that is the same bug, one layer out.
 func TestUnknownMarshalsWithoutANumber(t *testing.T) {
@@ -253,5 +253,18 @@ func TestSumWithUnknownWithholdsTheAmount(t *testing.T) {
 	}
 	if !strings.Contains(got.Caveat(), "no rate card") {
 		t.Errorf("the unknown's reason was dropped: %q", got.Caveat())
+	}
+}
+
+func TestSumDeduplicatesRepeatedCaveats(t *testing.T) {
+	got := measurement.Sum(
+		measurement.Unknown("no verified price for this execution"),
+		measurement.Unknown("no verified price for this execution"),
+		measurement.Unknown("attention was not reported"),
+		measurement.Unknown("no verified price for this execution"),
+	)
+	want := "no verified price for this execution; attention was not reported"
+	if got.Caveat() != want {
+		t.Fatalf("caveat = %q, want %q", got.Caveat(), want)
 	}
 }
