@@ -47,6 +47,9 @@ func TestStatusToolReportsReadiness(t *testing.T) {
 	if !strings.Contains(out, `"state": "ready"`) {
 		t.Errorf("expected state=ready: %s", out)
 	}
+	if !strings.Contains(out, `"level": "clear"`) {
+		t.Errorf("expected concise clear insight: %s", out)
+	}
 }
 
 func TestStatusToolReportsNotReady(t *testing.T) {
@@ -54,6 +57,9 @@ func TestStatusToolReportsNotReady(t *testing.T) {
 	out := execTool(t, srv, "tokenops_status", nil)
 	if !strings.Contains(out, `"ready": false`) {
 		t.Errorf("expected ready=false: %s", out)
+	}
+	if !strings.Contains(out, `"level": "unavailable"`) {
+		t.Errorf("expected unavailable insight before readiness: %s", out)
 	}
 }
 
@@ -90,6 +96,7 @@ func TestStatusToolReportsBlockersAndNextActions(t *testing.T) {
 		`"providers_unconfigured"`,
 		"run `tokenops init`",
 		`"state": "not_configured"`,
+		`"level": "action_required"`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in output: %s", want, out)
@@ -110,6 +117,9 @@ func TestStatusToolReportsDegradedWhenReadyButBlockersExist(t *testing.T) {
 	out := execTool(t, srv, "tokenops_status", nil)
 	if !strings.Contains(out, `"state": "degraded"`) {
 		t.Errorf("expected state=degraded when ready with blockers: %s", out)
+	}
+	if !strings.Contains(out, `"level": "attention"`) {
+		t.Errorf("expected attention insight for degraded status: %s", out)
 	}
 	if !strings.Contains(out, `"ready": true`) {
 		t.Errorf("expected ready=true: %s", out)
@@ -188,6 +198,9 @@ func TestStatusToolNoWarningsWhenIngestionFresh(t *testing.T) {
 	}
 	if !strings.Contains(out, `"state": "ready"`) {
 		t.Errorf("expected state=ready with no warnings: %s", out)
+	}
+	if !strings.Contains(out, `"level": "clear"`) {
+		t.Errorf("expected clear insight when sources are fresh: %s", out)
 	}
 }
 
