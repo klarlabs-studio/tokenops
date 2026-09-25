@@ -70,14 +70,12 @@ func (g Group) column() string {
 // Filter narrows the events the aggregator considers. Empty fields are
 // not constrained.
 //
-// ExcludeSources gates the synthetic / activity-proxy surfaces. nil
+// ExcludeSources gates activity-proxy surfaces. nil
 // means "apply DefaultExcludedSources". An empty non-nil slice means
-// "include every source"; callers pass that when they explicitly want
-// to see synthetic data alongside real traffic.
+// "include every source".
 //
 // IncludeSources re-admits named entries of DefaultExcludedSources
-// without disturbing the rest, so an operator asking for demo seeds
-// does not also get MCP activity pings folded in. It is ignored when
+// without disturbing the rest. It is ignored when
 // ExcludeSources is non-nil, because an explicit exclude list already
 // states exactly what to drop.
 type Filter struct {
@@ -93,13 +91,12 @@ type Filter struct {
 }
 
 // DefaultExcludedSources is applied by every analytics query unless the
-// caller passes a non-nil ExcludeSources slice. Neither entry is real
-// LLM traffic: `demo` is seeded by `tokenops demo`, and `mcp-session`
-// is the activity-proxy ping the MCP server records about itself, which
-// would otherwise inflate the request count an operator reads as "calls
-// I made". Opt either back in per-source via
+// caller passes a non-nil ExcludeSources slice. `mcp-session` is an
+// activity-proxy ping the MCP server records about itself, which would
+// otherwise inflate the request count an operator reads as "calls I made".
+// Opt it back in per-source via
 // `--include-source=` / `include_sources: [...]`.
-var DefaultExcludedSources = []string{"demo", "mcp-session"}
+var DefaultExcludedSources = []string{"mcp-session"}
 
 // resolveExcludeSources returns the operative exclude list for a
 // Filter: caller-supplied slice when set (including empty for "show

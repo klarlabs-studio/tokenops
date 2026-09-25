@@ -50,7 +50,6 @@ func allRegisteredTools(t *testing.T) map[string]bool {
 	must(RegisterModeTools(srv, ModeDeps{}))
 	must(RegisterHelpTool(srv))
 	must(RegisterDataSourcesTool(srv, DataSourcesDeps{Store: store}))
-	must(RegisterDashboardTool(srv, DashboardDeps{}))
 	must(RegisterFmtTools(srv))
 	must(RegisterCoachTools(srv, CoachDeps{}))
 	must(RegisterGapTools(srv, GapDeps{}))

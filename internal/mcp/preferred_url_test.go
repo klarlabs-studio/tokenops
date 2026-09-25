@@ -1,6 +1,10 @@
 package mcp
 
-import "testing"
+import (
+	"testing"
+
+	"go.klarlabs.de/tokenops/internal/infra/daemonhint"
+)
 
 // preferredURL must surface the mDNS hostname when present and fall
 // back to the loopback URL otherwise. This is the only place where
@@ -10,12 +14,12 @@ import "testing"
 func TestPreferredURL(t *testing.T) {
 	cases := []struct {
 		name    string
-		payload urlHintPayload
+		payload daemonhint.Payload
 		want    string
 	}{
-		{"loopback only", urlHintPayload{URL: "http://127.0.0.1:7878"}, "http://127.0.0.1:7878"},
-		{"mdns wins", urlHintPayload{URL: "http://127.0.0.1:7878", LocalURL: "http://tokenops.local:7878"}, "http://tokenops.local:7878"},
-		{"empty mdns falls back", urlHintPayload{URL: "http://127.0.0.1:7878", LocalURL: ""}, "http://127.0.0.1:7878"},
+		{"loopback only", daemonhint.Payload{URL: "http://127.0.0.1:7878"}, "http://127.0.0.1:7878"},
+		{"mdns wins", daemonhint.Payload{URL: "http://127.0.0.1:7878", LocalURL: "http://tokenops.local:7878"}, "http://tokenops.local:7878"},
+		{"empty mdns falls back", daemonhint.Payload{URL: "http://127.0.0.1:7878", LocalURL: ""}, "http://127.0.0.1:7878"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

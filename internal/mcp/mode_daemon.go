@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/infra/daemonhint"
 )
 
 // ensureDaemon makes "mode: active" actually do something: the live
@@ -97,7 +98,7 @@ type DaemonReport struct {
 func probeDaemonAt(fallbackURL string) DaemonReport {
 	var out DaemonReport
 	hintURL := ""
-	if hint, err := readURLHint(); err == nil && hint != nil {
+	if hint, err := daemonhint.Read(); err == nil && hint != nil {
 		hintURL = hint.URL
 	}
 	if hintURL != "" {

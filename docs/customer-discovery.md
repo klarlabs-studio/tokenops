@@ -88,7 +88,7 @@ Show the actual `tokenops plan headroom` output and the new
 
 Copy this into a working doc (one row per interviewee).
 
-| Date | Handle | Plan | Last incident | What they tried | Wish | Reaction to demo | Quote |
+| Date | Handle | Plan | Last incident | What they tried | Wish | Reaction to product walkthrough | Quote |
 |---|---|---|---|---|---|---|---|
 | YYYY-MM-DD |  |  |  |  |  |  |  |
 

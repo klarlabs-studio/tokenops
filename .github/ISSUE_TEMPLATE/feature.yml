@@ -19,7 +19,7 @@ body:
     id: proposal
     attributes:
       label: Proposed solution
-      description: Sketch what the API / CLI / dashboard would look like. Concrete > abstract.
+      description: Sketch what the API / CLI / MCP interaction would look like. Concrete > abstract.
 
   - type: textarea
     id: alternatives

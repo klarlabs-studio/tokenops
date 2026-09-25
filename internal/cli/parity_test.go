@@ -25,7 +25,6 @@ import (
 var cliOnly = map[string]string{
 	"init":        "writes config and wires this machine's clients",
 	"detect":      "reads this machine's filesystem to report installed clients",
-	"demo":        "seeds synthetic data into the local store",
 	"start":       "runs the ingestion daemon in the foreground",
 	"daemon":      "installs, restarts and removes a supervisor unit",
 	"serve":       "is the MCP server itself",
@@ -48,7 +47,6 @@ var cliToMCP = map[string][]string{
 	"coach":           {"tokenops_coach_prompts"},
 	"config":          {"tokenops_config"},
 	"coverage-debt":   {"tokenops_coverage_debt"},
-	"dashboard":       {"tokenops_dashboard"},
 	"dx":              {"tokenops_agent_dx"},
 	"eval":            {"tokenops_eval"},
 	"events":          {"tokenops_domain_events"},
@@ -219,7 +217,6 @@ func mcpToolNames(t *testing.T) map[string]bool {
 	must(mcp.RegisterModeTools(srv, mcp.ModeDeps{}))
 	must(mcp.RegisterHelpTool(srv))
 	must(mcp.RegisterDataSourcesTool(srv, mcp.DataSourcesDeps{Store: store}))
-	must(mcp.RegisterDashboardTool(srv, mcp.DashboardDeps{}))
 	must(mcp.RegisterFmtTools(srv))
 	must(mcp.RegisterCoachTools(srv, mcp.CoachDeps{}))
 	must(mcp.RegisterGapTools(srv, mcp.GapDeps{}))

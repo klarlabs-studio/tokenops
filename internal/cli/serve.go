@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -265,12 +264,6 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	}); err != nil {
 		return fmt.Errorf("register data sources tool: %w", err)
 	}
-	if err := mcp.RegisterDashboardTool(srv, mcp.DashboardDeps{
-		DaemonURL: daemonURL, UnitInstalled: daemon.UnitInstalled,
-		Token: func() string { return dashboardTokenFor(cfg) },
-	}); err != nil {
-		return fmt.Errorf("register dashboard tool: %w", err)
-	}
 	if err := mcp.RegisterFmtTools(srv); err != nil {
 		return fmt.Errorf("register fmt tools: %w", err)
 	}
@@ -371,25 +364,6 @@ func gapCounts(store *sqlite.Store) func(context.Context, time.Time, time.Time) 
 // applyConfigRestart restarts the supervised daemon after an MCP tool writes
 // config, so an agent's change is live without a command nobody ran.
 func applyConfigRestart() string { return daemon.RestartForConfig().Note() }
-
-// dashboardTokenFor returns the token the daemon authenticates its dashboard
-// with, resolved the way the daemon resolves it: a configured
-// dashboard.admin_token wins, else the token it minted and saved. The URL
-// hint normally carries it; this is the fallback for when the hint is gone.
-func dashboardTokenFor(cfg config.Config) string {
-	if tok := strings.TrimSpace(cfg.Dashboard.AdminToken); tok != "" {
-		return tok
-	}
-	path, err := dashTokenPathCLI()
-	if err != nil {
-		return ""
-	}
-	b, err := os.ReadFile(path) //nolint:gosec // the operator's own token file, resolved like the daemon's
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(b))
-}
 
 // browserSessionKey reads the claude.ai session from a local browser for the
 // MCP setup tool, so an agent can connect the meter without the operator

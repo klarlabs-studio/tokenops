@@ -47,22 +47,21 @@ var subToMCP = map[string][]string{
 // starting "GAP:" are not deliberate — they are recorded so the asymmetry
 // is visible, and closing one means moving it to subToMCP.
 var subCLIOnly = map[string]string{
-	"dashboard rotate-token": "rotates a local secret the dashboard authenticates with",
-	"fmt hook":               "is a hook entry point invoked by a client, not a user",
-	"fmt recover":            "prints a stored full output by recovery id, which the agent already receives inline",
-	"fmt bench":              "measures formatters over a corpus of captured outputs — a contributor tool",
-	"pricing refresh":        "fetches and snapshots the rate card — catalog maintenance, not a question",
-	"pricing diff":           "diffs rate-card snapshots — catalog maintenance",
-	"pricing lint":           "lints rate-card snapshots — catalog maintenance",
-	"budget list":            "GAP: tokenops_budget_set writes budgets but cannot list them; tokenops_config shows them",
-	"plan catalog":           "GAP: no tool lists the plan catalog; an invalid name in tokenops_plan_set is refused with the reason",
-	"coach delivery":         "GAP: coaching delivery (observe/advise/intervene) is not settable from an agent",
-	"coach replies":          "GAP: reply-compression detection has no tool",
-	"task start":             "GAP: marking a task boundary has no tool; tokenops_story reads inferred tasks",
-	"task done":              "GAP: marking a task boundary has no tool",
-	"task list":              "GAP: tokenops_story reads tasks back, but not this recorded list",
-	"vendor-usage enable":    "GAP: sources other than the Claude usage meter cannot be enabled from an agent",
-	"vendor-usage backfill":  "GAP: backfill has no tool",
+	"fmt hook":              "is a hook entry point invoked by a client, not a user",
+	"fmt recover":           "prints a stored full output by recovery id, which the agent already receives inline",
+	"fmt bench":             "measures formatters over a corpus of captured outputs — a contributor tool",
+	"pricing refresh":       "fetches and snapshots the rate card — catalog maintenance, not a question",
+	"pricing diff":          "diffs rate-card snapshots — catalog maintenance",
+	"pricing lint":          "lints rate-card snapshots — catalog maintenance",
+	"budget list":           "GAP: tokenops_budget_set writes budgets but cannot list them; tokenops_config shows them",
+	"plan catalog":          "GAP: no tool lists the plan catalog; an invalid name in tokenops_plan_set is refused with the reason",
+	"coach delivery":        "GAP: coaching delivery (observe/advise/intervene) is not settable from an agent",
+	"coach replies":         "GAP: reply-compression detection has no tool",
+	"task start":            "GAP: marking a task boundary has no tool; tokenops_story reads inferred tasks",
+	"task done":             "GAP: marking a task boundary has no tool",
+	"task list":             "GAP: tokenops_story reads tasks back, but not this recorded list",
+	"vendor-usage enable":   "GAP: sources other than the Claude usage meter cannot be enabled from an agent",
+	"vendor-usage backfill": "GAP: backfill has no tool",
 }
 
 func TestCLISubcommandParity(t *testing.T) {

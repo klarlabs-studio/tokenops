@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	mcpgo "go.klarlabs.de/mcp"
 
@@ -97,24 +96,5 @@ func resourceInsight(session *sessionBudgetResult, headroom *planHeadroomResult)
 		}
 	}
 	insight := presentation.ForResources(signals)
-	var dataWarning *DataWarning
-	if session != nil {
-		dataWarning = session.DataWarning
-	}
-	if dataWarning == nil && headroom != nil {
-		dataWarning = headroom.DataWarning
-	}
-	if dataWarning != nil {
-		warning := fmt.Sprintf("Synthetic demo events make up %.1f%% of the stored events in this window.", dataWarning.SyntheticRatioPct)
-		if insight.Level == "clear" {
-			insight.Level = "uncertain"
-			insight.Summary = "Available readings do not indicate an intervention, but demo data dominates the window; do not treat this as live capacity."
-		}
-		if insight.Caveat != "" {
-			insight.Caveat = strings.TrimSpace(insight.Caveat + " " + warning)
-		} else {
-			insight.Caveat = warning
-		}
-	}
 	return insight
 }

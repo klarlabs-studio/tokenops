@@ -51,11 +51,10 @@ survives (the 27-day outage class):
 tokenops daemon install
 ```
 
-The daemon binds `127.0.0.1:7878`, opens the SQLite store, mounts
-`/api/spend/*` + `/dashboard` (both behind a shared-secret token),
+The daemon binds `127.0.0.1:7878`, opens the SQLite store, mounts its
+authenticated `/api/*` endpoints,
 publishes itself as `tokenops.local` over mDNS, and writes its
-listen URL + dashboard token to `~/.tokenops/daemon.url` (`0600`) so the MCP
-server can hand both to your agent.
+listen URL + API token to `~/.tokenops/daemon.url` (`0600`) for local clients.
 
 ## 4. Wire the MCP server into your agent
 
@@ -75,29 +74,8 @@ Then ask your agent for any of these:
 ```text
 tokenops_session_budget        # headroom gauge + recommended action
 tokenops_burn_rate             # 24h sparkline + cost total
-tokenops_dashboard             # clickable URL to the local dashboard
 tokenops_plan_headroom         # month-to-date headroom per plan
 ```
-
-## 5. Open the dashboard
-
-Ask your agent for `tokenops_dashboard` — the response carries a
-clickable URL with the one-shot auth token pre-attached:
-
-```text
-http://tokenops.local:7878/dashboard?token=<secret>
-```
-
-First click sets a 24h session cookie and 303s to a clean URL, so
-the token never sticks in browser history. Subsequent refreshes
-work cookie-only.
-
-Vue + D3, auto-refresh every 15s. Cost-over-time line,
-tokens-per-bucket stacked bar, KPI tiles. Same data the MCP tools
-and the CLI use — one local source of truth.
-
-If `.local` resolution isn't available on your machine, the same
-URL on `http://127.0.0.1:7878` works (the MCP tool surfaces both).
 
 ## (Optional) Upgrade signal quality
 
@@ -149,8 +127,6 @@ tokenops scorecard                  # operator wedge KPIs
 tokenops plan list                  # configured plans + headroom
 tokenops vendor-usage status        # show poller state + event counts
 tokenops vendor-usage backfill --hours 168   # one-shot Anthropic Admin pull
-tokenops dashboard rotate-token     # mint + persist a fresh dashboard secret
-tokenops demo                       # seed 7d synthetic events
 ```
 
 See the [CLI reference](/guide/cli) for the full surface.

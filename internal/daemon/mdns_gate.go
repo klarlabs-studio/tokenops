@@ -59,7 +59,7 @@ func mdnsDecision(cfg config.MDNSConfig, addr string) mdnsPlan {
 // no fact, because a browser reading it has no way to know.
 func mdnsTXT() []string {
 	return []string{
-		"path=/dashboard",
+		"path=/api/",
 		"version=" + version.Version,
 	}
 }

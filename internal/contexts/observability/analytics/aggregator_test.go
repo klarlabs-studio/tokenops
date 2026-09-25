@@ -506,10 +506,9 @@ func TestSummarizeAPIEquivalent(t *testing.T) {
 	}
 }
 
-// Default rollups drop both synthetic seeds and the MCP activity-proxy
-// pings: neither is real LLM traffic, and counting the pings inflates
+// Default rollups drop MCP activity-proxy pings because counting them inflates
 // the request total an operator reads as "calls I made".
-func TestSummarizeExcludesDemoAndActivityProxyByDefault(t *testing.T) {
+func TestSummarizeExcludesActivityProxyByDefault(t *testing.T) {
 	store := newStore(t)
 	ctx := context.Background()
 	agg := New(store, spend.NewEngine(spend.DefaultTable()))
@@ -524,9 +523,7 @@ func TestSummarizeExcludesDemoAndActivityProxyByDefault(t *testing.T) {
 	}
 }
 
-// IncludeSources re-admits exactly the sources named — an operator
-// asking for synthetic seeds must not also get the activity-proxy
-// pings folded in.
+// IncludeSources re-admits exactly the sources named.
 func TestSummarizeIncludeSourcesReadmitsOnlyNamed(t *testing.T) {
 	store := newStore(t)
 	ctx := context.Background()
@@ -538,9 +535,7 @@ func TestSummarizeIncludeSourcesReadmitsOnlyNamed(t *testing.T) {
 		include  []string
 		wantReqs int64
 	}{
-		{"demo only", []string{"demo"}, 2},
 		{"activity proxy only", []string{"mcp-session"}, 2},
-		{"both", []string{"demo", "mcp-session"}, 3},
 		{"unknown source is inert", []string{"nonesuch"}, 1},
 	}
 	for _, tc := range cases {
@@ -565,23 +560,22 @@ func TestSummarizeExplicitExcludeSourcesWinsOverIncludes(t *testing.T) {
 	seedSourceMix(t, store)
 
 	s, err := agg.Summarize(ctx, Filter{
-		ExcludeSources: []string{"demo"},
-		IncludeSources: []string{"demo", "mcp-session"},
+		ExcludeSources: []string{"mcp-session"},
+		IncludeSources: []string{"mcp-session"},
 	})
 	if err != nil {
 		t.Fatalf("summarize: %v", err)
 	}
-	if s.Requests != 2 {
-		t.Errorf("Requests = %d; want 2 (real + mcp-session, demo excluded)", s.Requests)
+	if s.Requests != 1 {
+		t.Errorf("Requests = %d; want 1 (explicit exclusion wins)", s.Requests)
 	}
 }
 
-// seedSourceMix writes one event per source class: real traffic, a
-// synthetic demo seed, and an MCP activity-proxy ping.
+// seedSourceMix writes real traffic and an MCP activity-proxy ping.
 func seedSourceMix(t *testing.T, store *sqlite.Store) {
 	t.Helper()
 	base := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
-	sources := []string{"claude-code-jsonl", "demo", "mcp-session"}
+	sources := []string{"claude-code-jsonl", "mcp-session"}
 	envs := make([]*eventschema.Envelope, 0, len(sources))
 	for i, src := range sources {
 		envs = append(envs, &eventschema.Envelope{

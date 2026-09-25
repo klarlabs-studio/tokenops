@@ -20,7 +20,6 @@ func TestServeWiresTheLiveConfigHooks(t *testing.T) {
 		"replay pipeline":  regexp.MustCompile(`ParityDeps\{[\s\S]*?\bPipelineFor:\s*func\(\)`),
 		"coach root":       regexp.MustCompile(`CoachDeps\{[\s\S]*?\bRootFor:\s*func\(\)`),
 		"session provider": regexp.MustCompile(`SessionMiddleware\(tracker,\s*liveProvider\)`),
-		"dashboard token":  regexp.MustCompile(`DashboardDeps\{[\s\S]*?\bToken:\s*func\(\)`),
 	} {
 		if !re.Match(src) {
 			t.Errorf("serve.go does not wire the live %s hook", name)

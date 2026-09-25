@@ -8,17 +8,16 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 )
 
-// resolveIncludeSources folds the repeatable --include-source flag and
-// the --include-demo back-compat alias into the analytics.Filter
-// IncludeSources list.
+// resolveIncludeSources folds the repeatable --include-source flag into
+// the analytics.Filter IncludeSources list.
 //
 // A name that is not excluded by default is inert rather than fatal —
 // the operator asked to see something that is already there, which is
 // not an error — but it gets a one-line note on stderr so the flag
 // never silently does nothing.
-func resolveIncludeSources(warn io.Writer, sources []string, includeDemo bool) []string {
-	seen := make(map[string]bool, len(sources)+1)
-	out := make([]string, 0, len(sources)+1)
+func resolveIncludeSources(warn io.Writer, sources []string) []string {
+	seen := make(map[string]bool, len(sources))
+	out := make([]string, 0, len(sources))
 	add := func(s string) {
 		s = strings.TrimSpace(s)
 		if s == "" || seen[s] {
@@ -29,9 +28,6 @@ func resolveIncludeSources(warn io.Writer, sources []string, includeDemo bool) [
 	}
 	for _, s := range sources {
 		add(s)
-	}
-	if includeDemo {
-		add("demo")
 	}
 	if len(out) == 0 {
 		return nil

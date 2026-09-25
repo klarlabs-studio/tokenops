@@ -44,7 +44,6 @@ func NewRoot() *cobra.Command {
 	cmd.AddCommand(
 		newInitCmd(),
 		newDetectCmd(),
-		newDemoCmd(),
 		newStartCmd(rf),
 		newDaemonCmd(),
 		newServeCmd(),
@@ -74,7 +73,6 @@ func NewRoot() *cobra.Command {
 		newBudgetCmd(),
 		newOptimizationsCmd(),
 		newVendorUsageCmd(),
-		newDashboardCmd(),
 		newCoachCmd(),
 		newTaskCmd(),
 		newFmtCmd(rf),

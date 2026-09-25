@@ -14,7 +14,7 @@ The local daemon is canonical. Keep entitlements outside core domains. Model ins
 - `internal/contexts`: DDD domains for control-plane capabilities.
 - `internal/{infra,storage,events,proxy,mcp}`: adapters and runtime infrastructure.
 - `pkg/eventschema`: public event contracts and protobuf definitions.
-- `web/dashboard`, `web/docs`: Vue/D3 dashboard and VitePress documentation.
+- `web/docs`: VitePress documentation site. The daemon exposes a local HTTP API; there is no bundled browser dashboard.
 - `integrations`: VS Code and Python adapters; `docs/adr`: architecture decisions.
 
 ## Build and Verification

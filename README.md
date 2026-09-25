@@ -61,9 +61,7 @@ pointing a client at the proxy (that reroutes your real traffic).
 
 Then restart your MCP host and ask the agent for a compact resource view with
 `tokenops_resource_glance`, or use `tokenops_session_budget`,
-`tokenops_burn_rate`, `tokenops_dashboard`, and `tokenops_plan_headroom`
-individually. Or open the browser dashboard the agent links you to
-(`http://tokenops.local:7878/dashboard?token=…`).
+`tokenops_burn_rate`, and `tokenops_plan_headroom` individually.
 
 ## How the control loop works
 
@@ -87,9 +85,9 @@ Observe work and resources → Understand progress and constraints
 | Learn and coach | Outcomes inform local, gated beliefs. `tokenops coach`, `tokenops dx`, and `tokenops scorecard` help the user improve their own AI-assisted workflow too. |
 
 Recommendations and explanations are available through CLI, MCP, and the
-dashboard. Background status stays concise; evidence and history are available
-when requested. Autonomy is policy- and capability-specific, not a global
-on/off switch.
+authenticated local API. Background status stays concise; evidence and history
+are available when requested. Autonomy is policy- and capability-specific, not
+a global on/off switch.
 
 For an agent-facing before/after workflow, call `tokenops_prepare_work` with
 the task instruction and current model before starting. It returns plan
@@ -121,7 +119,7 @@ they do not replace the harness that plans or performs the work.
   preserves critical output and keeps full output recoverable locally. Hooks
   and integrations act only where the client supports the required authority.
 - **Local-first surfaces:** Go daemon, SQLite event store, MCP server, protected
-  Vue dashboard, and CLI. No cloud account or telemetry is required; the core
+  local API, and CLI. No cloud account or telemetry is required; the core
   product is Apache 2.0.
 
 See [docs/architecture-ddd.md](docs/architecture-ddd.md) for bounded contexts
@@ -134,16 +132,14 @@ for source coverage and client-specific limitations.
 
 ```
 init                              Scaffold config (sqlite + rules on); --detect sniffs installed clients
-start                             Run the daemon in the foreground (proxy + analytics + bus + dashboard)
+start                             Run the daemon in the foreground (proxy + analytics + bus)
 daemon {install|uninstall|status} Supervise `tokenops start` via launchd (macOS) or systemd --user (Linux)
 serve                             MCP server over stdio
-demo                              Seed 7d of synthetic events
 status                            Daemon health + blockers[] / next_actions[]
 spend [--forecast]                Spend / burn / 7d forecast
 plan {list|set|headroom|catalog}  Subscription plan headroom
 provider {list|set|unset}         Upstream LLM provider URLs
 vendor-usage {status|backfill}    Inspect / backfill vendor-side pollers
-dashboard rotate-token            Mint + persist a fresh dashboard auth token
 config show                       Active configuration (redacted)
 audit                             Query audit log
 events                            Per-kind domain-event counts
@@ -201,10 +197,10 @@ Clients / SDKs / CLIs / MCP hosts
             v
    Local TokenOps daemon (Go)
       /     |       \
- Proxy    MCP      Dashboard
+ Proxy    MCP      HTTP API
    |     server     /api/*
    v        |        |
- Provider routes     Vue+D3
+ Provider routes    CLI / integrations
  (OpenAI/Anth/Gem/Mistral)
             |
             v
@@ -227,7 +223,7 @@ internal/
   contexts/                       # bounded contexts (rules, spend, security, ...)
   cli/                            # cobra subcommands
   mcp/                            # MCP tool surface
-  proxy/                          # HTTP server + dashboard
+  proxy/                          # HTTP API server
   daemon/                         # boot sequence
   storage/sqlite/                 # event store
 pkg/eventschema/                  # public envelope + payload types
@@ -282,26 +278,21 @@ When a subsystem is off, the matching routes return `503` with a structured
 | `rules_disabled` | `tokenops init` then restart |
 | `providers_unconfigured` | `tokenops provider set …` |
 
-## Demo data isolation
+## Source inclusion
 
-Two event sources are excluded from every default rollup, because neither is
-real LLM traffic you paid for or waited on:
+MCP activity pings are excluded from default rollups because they are not
+provider requests:
 
 | Source | What it is |
 | --- | --- |
-| `demo` | Synthetic `PromptEvent`s seeded by `tokenops demo` |
 | `mcp-session` | Activity-proxy pings the MCP server records about itself |
 
-Re-admit them one at a time — `--include-source` (CLI, repeatable and
-comma-separated) or `include_sources` (MCP tool input):
+Re-admit MCP activity pings with `--include-source` (CLI) or
+`include_sources` (MCP tool input) when you explicitly need them:
 
 ```bash
-tokenops spend --include-source=demo                # synthetic seeds too
-tokenops spend --include-source=demo,mcp-session    # and the MCP pings
+tokenops spend --include-source=mcp-session
 ```
-
-`--include-demo` / `include_demo: true` still work as aliases for
-`demo` alone.
 
 ## Contributing
 

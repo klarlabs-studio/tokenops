@@ -9,9 +9,7 @@ import (
 // MeasurementWarning states that a spend figure cannot be trusted because
 // ingestion has stopped, and how badly.
 //
-// It sits beside DataWarning, which answers a different question — that one
-// says "most of this is synthetic", this one says "much of it was never
-// recorded at all". A total of zero has two causes: nothing was spent, or
+// A total of zero has two causes: nothing was spent, or
 // nothing was measured. They were formatted identically, so during a 27-day
 // ingestion outage tokenops_spend_summary answered "$0.00, 700 tokens, 1
 // request" for a period containing thousands of requests — confidently, and in

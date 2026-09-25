@@ -161,20 +161,16 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		opts = append(opts, proxy.WithAnalytics(analyticsH))
 		opts = append(opts, proxy.WithAudit(proxy.NewAuditHandlers(components.Store)))
 
-		// Dashboard + /api/* are protected by a shared-secret token.
+		// The local API is protected by a shared-secret bearer token.
 		// Either the operator sets cfg.Dashboard.AdminToken via env /
 		// config, or the daemon mints and persists one on first start.
-		// MCP tokenops_dashboard surfaces the token so the agent hands
-		// the operator a clickable URL that auto-authenticates.
 		tok, errTok := loadOrMintDashToken(cfg.Dashboard.AdminToken)
 		if errTok != nil {
-			return fmt.Errorf("dashboard token: %w", errTok)
+			return fmt.Errorf("API token: %w", errTok)
 		}
 		dashTok = tok
 		auth, err := dashauth.New(dashauth.Config{
-			AdminToken:   dashTok,
-			SessionTTL:   24 * time.Hour,
-			CookieSecure: cfg.TLS.Enabled,
+			AdminToken: dashTok,
 		})
 		if err != nil {
 			return fmt.Errorf("dashboard auth: %w", err)

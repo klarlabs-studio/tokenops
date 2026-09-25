@@ -117,9 +117,9 @@ In the `filepath.WalkDir` callback (and the `fs.WalkDir` branch above it):
 
 ---
 
-## First-Run Activation Flow
+## First-Run Activation Flow (historical)
 
-Activate new operators in under 5 minutes. Ship `tokenops init` wizard (idempotent: enables sqlite storage at $XDG_DATA_HOME or ~/.tokenops/db, default RBAC, audit on, rules root=$PWD, writes config), `tokenops demo` (seeds 7 days synthetic events so spend/burn/forecast/scorecard/top return populated data), structured `blockers[]` + `next_actions[]` fields in /healthz, /readyz, /version, and MCP status, and a disabled-subsystem error contract (`{error,hint}` instead of empty success when Storage/Rules/Providers disabled). Closes the time-to-value gap surfaced in v0.2.0 first-run review.
+The original flow included seeded sample activity. That path has been retired: first-run analytics should become useful from observed local sessions and provider telemetry, never fabricated activity. The durable pieces are `tokenops init`, structured `blockers[]` + `next_actions[]`, and disabled-subsystem errors (`{error,hint}` instead of empty success).
 
 ---
 
@@ -141,15 +141,15 @@ Three-skill review converged: TokenOps targets wrong consumption surface (proxy 
 
 ---
 
-## Data Isolation + Surface Polish
+## Data Isolation + Surface Polish (historical)
 
-Five gaps surfaced from the full v0.7.1 demo. (1) Rules walker bails on permission-denied siblings under $HOME so analyze/conflicts/inject return null even when CLAUDE.md exists — pre-existing in-progress task. (2) Synthetic demo events mix with real proxy/MCP-session events in every analytics query; need source-tagging filter + a `--include-demo` opt-in. (3) Only plan_headroom + session_budget self-record session pings; the other 20 MCP tools don't, biasing the window count. Auto-wrap at registration so every tool call records. (4) 22 MCP tools surface flat with no curation; add tokenops_help that returns a "start here" subset. (5) Status/scorecard should expose real_vs_seeded counts so operators see signal vs synthetic ratio. Skips vendor /usage ingestion (waits for customer-discovery interview data).
+Five gaps surfaced during an early product review. The seeded-activity path described in that review is retired; analytics should use observed local sessions only. The remaining notes concern rules discovery, session-ping coverage, MCP tool curation, and vendor `/usage` ingestion.
 
 ---
 
 ## Signal Quality + Activation Honesty
 
-Four-skill consensus from the v0.8.1 review. UX, Product, AI, GTM converged on a single verdict: ship trust signals + activation honesty, then run customer interviews. Concretely: (1) every session_budget / plan_headroom response carries signal_quality {level, source, caveat, upgrade_paths} so operators see it is an MCP-ping heuristic, not real Claude turn data; (2) empty-state scorecard replaces F grade with a first-week activation checklist when no KPI is computed; (3) synthetic-data banner attaches to cost/headroom responses when source=demo dominates the window; (4) MCP serve file-watches config.yaml and hot-reloads on plan/provider changes, eliminating the only remaining "leave the product to apply" step; (5) deprecated claude-max alias migration shim so users pasting old docs see a renamed-to warning instead of an error; (6) outreach plan doc: 90-second Loom + Show HN + Discord cross-post + 25 founder DMs landing 10 real users by end-of-week. Customer interviews remain operator work (Roady tracks the task).
+Four-skill consensus from the v0.8.1 review. UX, Product, AI, GTM converged on trust signals + activation honesty, then customer interviews. The shipped signal-quality fields explain that MCP pings are a heuristic, not real Claude turn data; the scorecard has an empty-state activation checklist; config reloads plan/provider changes; and the deprecated claude-max alias migrates. Customer interviews remain operator work (Roady tracks the task).
 
 ---
 
@@ -165,9 +165,9 @@ Wire `llm.Backend` into `coaching.Pipeline` AND auto-pick the cheapest in-plan m
 
 ---
 
-## Interactive MCP UI Rendering
+## Surface-Native MCP Presentation
 
-Today MCP tool responses are plain-text JSON. Three rendering tiers, ship in order: (1) Markdown summary + JSON appendix for every cost/headroom response so Desktop/Code/Cursor render styled tables and code blocks instead of brace soup; (2) Inline SVG sparklines for burn-rate and window-headroom charts returned as ResourceContent with MimeType=image/svg+xml — most MCP clients embed SVG inline today; (3) Interactive Vue+D3 dashboard returned as text/html ResourceContent — experimental, depends on client iframe support (Claude Desktop's evolving UI app spec, Cursor's panel). Build the Vue app under web/dashboard/ (already exists), bundle as a single-file HTML blob, serve via tokenops_dashboard MCP tool. Charts to ship first: window-burn sparkline, plan-quota gauge, real-vs-synthetic ratio donut. Acceptance: tokenops_session_budget renders as a styled markdown table in Claude Desktop; tokenops_dashboard returns an interactive D3 chart in clients that support html resources.
+Keep MCP responses concise and structured so each harness can render them natively: actionable summary first, typed fields for automation, and evidence on request. Prefer text tables or inline sparklines only where client support is reliable. Do not build a bundled HTML dashboard; revisit only if real workflows show a persistent comparison need that CLI/MCP cannot serve.
 
 ---
 
@@ -197,7 +197,7 @@ Domain-neutral Work, Actor, Execution and Outcome primitives. Work is something 
 
 ## Interface-Independent Capabilities
 
-CLI, MCP, dashboard and future adapters consume shared application capabilities instead of each implementing validation, orchestration and formatting. A capability owns its request model, validation, orchestration, result model, provenance and errors. An archlint rule constrains adapter to capability-layer imports so parity is architectural rather than manually coordinated.
+CLI, MCP, HTTP API and future adapters consume shared application capabilities instead of each implementing validation, orchestration and formatting. A capability owns its request model, validation, orchestration, result model, provenance and errors. An archlint rule constrains adapter to capability-layer imports so parity is architectural rather than manually coordinated.
 
 ---
 

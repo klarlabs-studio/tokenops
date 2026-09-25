@@ -398,7 +398,7 @@ FROM events
 // returned under the "(none)" bucket so dashboards can distinguish
 // "real proxy traffic missing its label" from "MCP-session ping".
 // Used by tokenops_data_sources and `tokenops_status.data_sources`
-// so operators can see real-vs-synthetic ratios at a glance.
+// so operators can inspect per-source ingestion coverage at a glance.
 func (s *Store) CountBySource(ctx context.Context, since, until time.Time) (map[string]int64, error) {
 	if s == nil || s.db == nil {
 		return nil, errors.New("sqlite: store not initialised")

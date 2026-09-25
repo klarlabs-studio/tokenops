@@ -77,13 +77,13 @@ type dataSourcesResult struct {
 
 // RegisterDataSourcesTool mounts tokenops_data_sources on s. The tool
 // returns event counts grouped by the source column so operators can
-// see real vs synthetic ratios at a glance.
+// inspect local telemetry coverage at a glance.
 func RegisterDataSourcesTool(s *Server, d DataSourcesDeps) error {
 	if s == nil {
 		return errors.New("mcp: server must not be nil")
 	}
 	s.Tool("tokenops_data_sources").
-		Description("Return event counts grouped by source (proxy, mcp-session, demo, otlp, ...) plus per-source ingestion health: when each source was last seen, when its reader last polled successfully, and what it last failed with. Operators inspect this to confirm headroom and spend math are running on real data, and to tell a vendor they stopped using apart from a reader that has silently died.").
+		Description("Return event counts grouped by source (proxy, mcp-session, otlp, ...) plus per-source ingestion health: when each source was last seen, when its reader last polled successfully, and what it last failed with. Operators inspect this to confirm headroom and spend math are running on observed data, and to tell a vendor they stopped using apart from a reader that has silently died.").
 		OutputSchema(dataSourcesResult{}).
 		Handler(func(ctx context.Context, in dataSourcesInput) (*dataSourcesResult, error) {
 			if d.Store == nil {

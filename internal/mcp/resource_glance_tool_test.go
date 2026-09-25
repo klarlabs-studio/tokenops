@@ -67,13 +67,3 @@ func TestResourceInsightPrioritizesSessionIntervention(t *testing.T) {
 		t.Fatalf("insight dropped the signal caveat: %+v", insight)
 	}
 }
-
-func TestResourceInsightDoesNotCallDemoDominatedReadingsClear(t *testing.T) {
-	insight := resourceInsight(&sessionBudgetResult{
-		Budgets:     []plans.SessionBudget{{Provider: "anthropic", Display: "Claude Max", RecommendedAction: plans.ActionContinue, SignalQuality: plans.SignalQuality{Level: plans.SignalLevelHigh}}},
-		DataWarning: &DataWarning{SyntheticRatioPct: 90},
-	}, &planHeadroomResult{Reports: []plans.HeadroomReport{{Provider: "anthropic", Display: "Claude Max", OverageRisk: plans.RiskLow}}})
-	if insight.Level != "uncertain" || !strings.Contains(insight.Caveat, "90.0%") {
-		t.Fatalf("demo-dominated insight = %+v, want uncertain with the synthetic ratio", insight)
-	}
-}

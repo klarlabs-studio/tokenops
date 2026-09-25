@@ -57,7 +57,7 @@ var helpCatalog = []helpCategory{
 			},
 			{
 				Name:    "tokenops_data_sources",
-				Summary: "Event counts by source (proxy, mcp-session, demo, ...), to confirm the math runs on real data, not demo seeds.",
+				Summary: "Event counts by source and per-source ingestion health, to confirm local telemetry is flowing.",
 			},
 		},
 	},
@@ -103,10 +103,6 @@ var helpCatalog = []helpCategory{
 			{
 				Name:    "tokenops_pricing",
 				Summary: "Per-million-token rates TokenOps prices with, and when the card was fetched.",
-			},
-			{
-				Name:    "tokenops_dashboard",
-				Summary: "Clickable URL to the local dashboard (cost, tokens, burn-rate charts) served by the daemon.",
 			},
 		},
 	},
