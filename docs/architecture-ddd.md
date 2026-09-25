@@ -9,9 +9,8 @@ PRs that cross these boundaries must update this document.
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│ adapters (CLI, MCP, HTTP, dashboard)                       │
-│   internal/cli, internal/mcp, internal/proxy/*_api.go,     │
-│   web/dashboard                                             │
+│ adapters (CLI, MCP, HTTP API)                              │
+│   internal/cli, internal/mcp, internal/proxy/*_api.go       │
 │                                                            │
 │   - parse user/protocol input                              │
 │   - format output                                          │

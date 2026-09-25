@@ -120,9 +120,6 @@ sec-remediate:
 		nox fix -input findings.json; \
 	fi
 	$(GO) mod tidy
-	@if [ -f web/dashboard/package.json ]; then \
-		(cd web/dashboard && npm install --package-lock-only --silent); \
-	fi
 	@if [ -f web/docs/package.json ]; then \
 		(cd web/docs && npm install --package-lock-only --silent); \
 	fi

@@ -62,7 +62,6 @@ func newSpendCmd(rf *rootFlags) *cobra.Command {
 		forecastDays  int
 		jsonOut       bool
 		hideSparkline bool
-		includeDemo   bool
 		includeSrcs   []string
 		svgFile       string
 	)
@@ -116,7 +115,7 @@ spend within the selected window. It surfaces:
 				}
 				f.Until = until
 			}
-			f.IncludeSources = resolveIncludeSources(cmd.ErrOrStderr(), includeSrcs, includeDemo)
+			f.IncludeSources = resolveIncludeSources(cmd.ErrOrStderr(), includeSrcs)
 
 			spendEng, err := buildSpendEngine(cfg)
 			if err != nil {
@@ -189,8 +188,7 @@ spend within the selected window. It surfaces:
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON instead of text")
 	cmd.Flags().BoolVar(&hideSparkline, "no-sparkline", false, "suppress the burn sparkline")
 	cmd.Flags().StringSliceVar(&includeSrcs, "include-source", nil,
-		"re-admit an excluded event source (repeatable, comma-separated): "+strings.Join(analytics.DefaultExcludedSources, " | "))
-	cmd.Flags().BoolVar(&includeDemo, "include-demo", false, "alias for --include-source=demo")
+		"re-admit an excluded event source (repeatable, comma-separated): mcp-session")
 	return cmd
 }
 

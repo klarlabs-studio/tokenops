@@ -39,7 +39,7 @@ per call. New `### Call N — handle` heading per call.
 - Last rate-limit incident:
 - What they tried:
 - Wish (verbatim):
-- Reaction to demo:
+- Reaction to product walkthrough:
 - Action item for TokenOps:
 
 ### Call 2 — TBD

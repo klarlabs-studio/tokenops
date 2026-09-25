@@ -11,8 +11,8 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 )
 
-// denyAll stands in for the dashboard authenticator. The real one accepts a
-// bearer token, a query token or a session cookie; what this test asserts is
+// denyAll stands in for the API authenticator. The real one accepts a bearer
+// token; what this test asserts is
 // narrower and does not depend on which: every protected route must reach the
 // middleware at all. A middleware that refuses everything makes "reached" and
 // "did not reach" visible as 401 vs 200.
@@ -78,9 +78,33 @@ func TestEveryAPIRouteIsGatedByDashAuth(t *testing.T) {
 		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusUnauthorized {
-			t.Errorf("GET %s without a credential = %d, want 401: route bypasses dashboard auth",
+			t.Errorf("GET %s without a credential = %d, want 401: route bypasses API auth",
 				path, resp.StatusCode)
 		}
+	}
+}
+
+func TestDashboardRouteIsNotServed(t *testing.T) {
+	srv := New("127.0.0.1:0", WithAnalytics(&AnalyticsHandlers{}))
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	if err := srv.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() {
+		shutdownCtx, c := context.WithTimeout(context.Background(), time.Second)
+		defer c()
+		_ = srv.Shutdown(shutdownCtx)
+	})
+	waitListening(t, srv.Addr())
+	resp, err := http.Get("http://" + srv.Addr() + "/dashboard")
+	if err != nil {
+		t.Fatalf("GET dashboard route: %v", err)
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("GET /dashboard = %d, want 404", resp.StatusCode)
 	}
 }
 

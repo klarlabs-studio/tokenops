@@ -151,8 +151,7 @@ don't hit a dead end.
 tokenops spend                                   # last 7 days, top 5 by model
 tokenops spend --by provider --top 3 --since 24h
 tokenops spend --forecast --forecast-days 14
-tokenops spend --include-source=demo             # include seeded events
-tokenops spend --include-source=demo,mcp-session # ...and MCP activity pings
+tokenops spend --include-source=mcp-session     # include MCP activity pings
 tokenops spend --json
 ```
 
@@ -458,7 +457,7 @@ tokenops daemon restart
 ```
 
 The commands that write config — `plan set/unset`, `provider set/unset`,
-`vendor-usage enable`, `dashboard rotate-token` — do this for you. Pass
+`vendor-usage enable` — do this for you. Pass
 `--no-restart` when writing several keys in a row, then restart once.
 
 Unsupervised (no unit installed), there is nothing to bounce: those
@@ -657,29 +656,7 @@ quiet:
 and it will not tell you your spend is lean on the strength of numbers it
 could not compute.
 
-## Dashboard
-
-### `tokenops dashboard rotate-token`
-
-Mints a fresh 32-byte URL-safe secret and atomic-writes it to
-`~/.tokenops/dashboard.token`. Restart the daemon for the new value
-to take effect; old URLs return 401 after restart.
-
-```bash
-tokenops dashboard rotate-token              # rotate + print path
-tokenops dashboard rotate-token --json       # emit token + path as JSON
-```
-
-## Demo + replay
-
-### `tokenops demo`
-
-Seeds synthetic events (default 7 days) tagged `source=demo`. Every
-default rollup filters them out, alongside the `mcp-session`
-activity-proxy pings. Re-admit either by name with `--include-source`
-(CLI, repeatable and comma-separated) or `include_sources` (MCP);
-`--include-demo` / `include_demo: true` remain aliases for `demo`
-alone. `--reset-only` purges without reseeding.
+## Replay
 
 ### `tokenops replay [SESSION_ID]`
 

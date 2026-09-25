@@ -69,27 +69,25 @@ func (r planStoreReader) ReadEvents(ctx context.Context, t eventschema.EventType
 }
 
 // planHeadroomResult is the typed payload for tokenops_plan_headroom. On
-// the happy path Reports (+ optional DataWarning) is populated; the
+// the happy path Reports are populated; the
 // unconfigured / storage-disabled paths set Error + Hint instead.
 type planHeadroomResult struct {
 	Reports []plans.HeadroomReport `json:"reports,omitempty"`
 	// Notes names plans that could not be reported on. An unknown plan
 	// name used to be skipped silently, so an operator's typo produced a
 	// plan that reported nothing and said nothing, forever.
-	Notes       []string     `json:"notes,omitempty"`
-	DataWarning *DataWarning `json:"data_warning,omitempty"`
-	Error       string       `json:"error,omitempty"`
-	Hint        string       `json:"hint,omitempty"`
+	Notes []string `json:"notes,omitempty"`
+	Error string   `json:"error,omitempty"`
+	Hint  string   `json:"hint,omitempty"`
 }
 
 // sessionBudgetResult is the structured counterpart to the text-first
 // tokenops_session_budget response, reused by the resource-glance tool.
 type sessionBudgetResult struct {
-	Budgets     []plans.SessionBudget `json:"budgets"`
-	Notes       []string              `json:"notes,omitempty"`
-	DataWarning *DataWarning          `json:"data_warning,omitempty"`
-	Error       string                `json:"error,omitempty"`
-	Hint        string                `json:"hint,omitempty"`
+	Budgets []plans.SessionBudget `json:"budgets"`
+	Notes   []string              `json:"notes,omitempty"`
+	Error   string                `json:"error,omitempty"`
+	Hint    string                `json:"hint,omitempty"`
 }
 
 // RegisterPlanTools mounts tokenops_plan_headroom on s. Returns an
@@ -233,9 +231,6 @@ func sessionBudgetData(ctx context.Context, d PlanDeps) (*sessionBudgetResult, e
 		budgets = append(budgets, budget)
 	}
 	result := &sessionBudgetResult{Budgets: budgets, Notes: notes}
-	if warn, err := maybeDataWarning(ctx, d.Store, time.Time{}, now); err == nil && warn != nil {
-		result.DataWarning = warn
-	}
 	return result, nil
 }
 
@@ -265,8 +260,5 @@ func planHeadroom(ctx context.Context, d PlanDeps) (*planHeadroomResult, error) 
 		return nil, err
 	}
 	res := &planHeadroomResult{Reports: computed.Reports, Notes: computed.Notes}
-	if warn, err := maybeDataWarning(ctx, d.Store, time.Time{}, now); err == nil && warn != nil {
-		res.DataWarning = warn
-	}
 	return res, nil
 }

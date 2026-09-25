@@ -92,13 +92,6 @@ Claude Max 20x (claude-max-20x) — risk low
 
 The same report is available via the `tokenops_plan_headroom` MCP tool.
 
-## Demo mode
-
-`tokenops demo --plan claude-max` stamps every PromptEvent for the
-plan's provider with `cost_source=plan_included` and zero `cost_usd`,
-so the headroom surface returns non-zero consumption on a fresh
-install.
-
 ## Adding a custom plan
 
 1. Add an entry to the `catalog` map in

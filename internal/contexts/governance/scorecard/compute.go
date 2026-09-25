@@ -70,10 +70,8 @@ func Compute(ctx context.Context, reader EventReader, since time.Time) (*LiveKPI
 	if err != nil {
 		return nil, err
 	}
-	// Strip synthetic-demo envelopes so KPIs reflect real operator
-	// activity, matching the analytics + plans layers shipped in
-	// v0.8.0. Without this filter, `tokenops demo` would inflate TEU
-	// and SAC every time it's run.
+	// Strip activity-proxy and attribution-less aggregate events so KPIs
+	// reflect real per-session operator activity.
 	prompts = filterExcludedSources(prompts)
 	opts = filterExcludedSources(opts)
 	computeFVT(out, prompts)
@@ -143,7 +141,6 @@ func (e parseError) Error() string { return string(e) }
 // list duplicated here to avoid a domain->infrastructure dependency
 // (scorecard is a context package).
 var defaultExcludedSources = []string{
-	"demo",
 	"mcp-session",
 	// Anthropic Admin API returns per-(bucket, model, api_key)
 	// rollups; no session_id by design. Excluding from SAC denominator.

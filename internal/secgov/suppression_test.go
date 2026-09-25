@@ -248,12 +248,10 @@ func TestNoxExcludesResolveToSomething(t *testing.T) {
 
 // trackedFiles is every path git has under version control, as a set.
 //
-// Tracking is the right question to ask, not existence on disk. Whether
-// web/dashboard/dist/ is present depends on whether the developer
-// running the test happens to have built the dashboard, so an
-// existence check passes on a working machine and fails on a clean
-// checkout — a test whose result depends on local build state is worse
-// than no test. What git tracks is the same for everyone.
+// Tracking is the right question to ask, not existence on disk. Generated
+// build output can be present on one developer's machine and absent on a
+// clean checkout, so a filesystem-existence test would depend on local build
+// state. What git tracks is the same for everyone.
 func trackedFiles(t *testing.T) map[string]bool {
 	t.Helper()
 	cmd := exec.Command("git", "ls-files", "-z")
