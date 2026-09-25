@@ -82,16 +82,16 @@ type optimizationsInput struct {
 
 // --- output structs -------------------------------------------------------
 
-// unpricedModel names a (provider, model) pair whose events carry no
-// stored cost and have no rate in the pricing table.
+// unpricedModel names a (provider, model) pair with no API rate in the
+// pricing table.
 type unpricedModel struct {
 	Provider string `json:"provider"`
 	Model    string `json:"model"`
 	Requests int64  `json:"requests"`
 }
 
-// pricingWarning flags that cost_usd underestimates spend because some
-// models in the window are unpriced.
+// pricingWarning explains that API-equivalent value is incomplete and
+// metered cost may omit usage for models without a rate.
 type pricingWarning struct {
 	Message        string          `json:"message"`
 	UnpricedModels []unpricedModel `json:"unpriced_models"`
@@ -287,7 +287,7 @@ func spendSummary(ctx context.Context, d Deps, in spendSummaryInput) (*spendSumm
 			})
 		}
 		res.PricingWarning = &pricingWarning{
-			Message:        "no rate in the pricing table for these models; cost_usd is underestimated",
+			Message:        "no API rate in the pricing table for these models; API-equivalent is incomplete, metered cost_usd may omit their usage, and plan-covered usage still costs $0 at the margin",
 			UnpricedModels: models,
 		}
 	}
