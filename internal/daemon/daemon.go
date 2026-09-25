@@ -227,15 +227,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		// Window pressure is read per request, so it comes from a cache a
 		// background loop refreshes — scanning the event store inline
 		// would put a full window query on the hot path.
-		if components.Store != nil && len(cfg.Plans) > 0 {
-			probe := newWindowProbe()
-			sup.Go("window-pressure-probe", func(taskCtx context.Context) error {
-				runWindowProbe(taskCtx, probe, cfg, planStoreReader{store: components.Store}, time.Minute)
-				return nil
-			})
-			rc.WindowPressure = probe.Pct
-			logger.Info("window-pressure routing available", "providers", len(cfg.Plans))
-		}
+		startWindowPressureRuntime(cfg, rc, components.Store, sup, logger)
 		// Proposals need somewhere to live. Both the preferred-model
 		// ceiling and in_request mode refer decisions to the operator, so
 		// either one requires the approval log — wiring it only for the
