@@ -22,7 +22,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/observability/observ"
 	"go.klarlabs.de/tokenops/internal/contexts/security/dashauth"
 	"go.klarlabs.de/tokenops/internal/contexts/security/tlsmint"
-	"go.klarlabs.de/tokenops/internal/contexts/telemetry/retention"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	"go.klarlabs.de/tokenops/internal/proxy"
 	"go.klarlabs.de/tokenops/internal/version"
@@ -151,18 +150,8 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		// Source-specific polling configuration lives in its runtime module.
 		startVendorUsagePollers(cfg, bus, sourceHealth, sup, logger)
 
-		if cfg.Retention.Enabled() {
-			policies, err := retentionPolicies(cfg.Retention)
-			if err != nil {
-				return fmt.Errorf("retention: %w", err)
-			}
-			if len(policies) > 0 {
-				pruner := retention.New(components.Store, retentionConfig(cfg.Retention, policies, logger))
-				retention.NewScheduler(pruner).Start(ctx)
-				logger.Info("retention scheduler live",
-					"policies", len(policies), "reclaim", cfg.Retention.Reclaim,
-					"first_pass_in", retentionStartDelay)
-			}
+		if err := startRetentionRuntime(cfg.Retention, components.Store, sup, logger); err != nil {
+			return fmt.Errorf("retention: %w", err)
 		}
 
 		analyticsH, err := proxy.NewAnalyticsHandlers(components.Store, components.Aggregator, components.Spend, cfg.Coaching.WasteConfig())
