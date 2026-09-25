@@ -33,7 +33,7 @@ var helpCatalog = []helpCategory{
 		Tools: []helpTool{
 			{
 				Name:    "tokenops_status",
-				Summary: "Health + blockers + next_actions. Start here when something is wrong.",
+				Summary: "Concise health insight + readiness, blockers, warnings, and next_actions. Start here when something is wrong.",
 			},
 			{
 				Name:    "tokenops_config",
