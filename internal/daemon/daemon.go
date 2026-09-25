@@ -217,15 +217,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	// Keep the rate card current. A model released after this binary was
 	// built otherwise prices at zero, and a session that cost real money
 	// reports as free — which is the failure this tool exists to find.
-	if cfg.Pricing.Refresh.Enabled() && components.Spend != nil {
-		sup.Go("pricing-refresh", func(taskCtx context.Context) error {
-			runPricingRefresh(taskCtx, cfg, components.Spend, logger)
-			return nil
-		})
-		logger.Info("automatic pricing refresh on",
-			"interval", cfg.Pricing.Refresh.Every(),
-			"note", "fetches a public rate card; sends nothing")
-	}
+	startPricingRefreshRuntime(cfg, components.Spend, sup, logger)
 
 	// The optimizer's own mode governs what it may do with a request.
 	// The daemon-wide active flag still gates the background watcher, but
