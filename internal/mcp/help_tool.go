@@ -140,6 +140,11 @@ var helpCatalog = []helpCategory{
 		Description: "Attribution, replay, and the account of work done in multi-step agent runs.",
 		Tools: []helpTool{
 			{
+				Name:    "tokenops_review_work",
+				Summary: "One-workflow review: measured tokens/cost, context growth, and coaching findings in one call.",
+				Example: `{"workflow_id":"workflow:..."}`,
+			},
+			{
 				Name:    "tokenops_workflow_trace",
 				Summary: "Reconstruct a workflow_id trace + run the waste detector.",
 			},

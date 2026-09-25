@@ -30,6 +30,7 @@ func TestOutputSchemasGenerate(t *testing.T) {
 		"topConsumersResult":  topConsumersResult{},
 		"forecastResult":      forecastResult{},
 		"workflowTraceResult": workflowTraceResult{},
+		"reviewWorkResult":    reviewWorkResult{},
 		"optimizationsResult": optimizationsResult{},
 		// control_tools.go
 		"versionResult":      versionResult{},
