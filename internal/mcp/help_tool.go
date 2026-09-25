@@ -150,7 +150,7 @@ var helpCatalog = []helpCategory{
 		Tools: []helpTool{
 			{
 				Name:    "tokenops_review_work",
-				Summary: "One-workflow review: measured tokens/cost, context growth, and coaching findings in one call.",
+				Summary: "One-workflow review: concise insight from the measured trace and existing waste checks, plus tokens/cost and coaching findings; no finding is not a quality assessment.",
 				Example: `{"workflow_id":"workflow:..."}`,
 			},
 			{

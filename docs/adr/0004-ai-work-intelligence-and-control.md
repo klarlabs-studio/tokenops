@@ -283,8 +283,9 @@ real. Doing either earlier would document an intention rather than a product.
 structurally before rendering, then apply surface-specific presentation
 policies. Begin with concise readiness/attention summaries shared by MCP and
 CLI; add a resource glance that composes measured session budget and plan
-headroom without inventing thresholds; extend to work insights as evidence
-permits.
+headroom without inventing thresholds; add a bounded workflow insight from
+reconstructed traces and existing waste-detector findings. Work insight must
+not infer task success or overall quality from the absence of a finding.
 
 ## Non-goals
 
