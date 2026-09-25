@@ -63,40 +63,61 @@ Then restart your MCP host and ask the agent for any of: `tokenops_session_budge
 `tokenops_dashboard`, `tokenops_plan_headroom`. Or open the browser dashboard
 the agent links you to (`http://tokenops.local:7878/dashboard?token=…`).
 
-## Features
+## How the control loop works
 
-| | |
+TokenOps surrounds the harness that owns and performs the work. It observes
+executions and available resources, then makes its evidence and uncertainty
+visible before recommending or taking an authorized action.
+
+```text
+Observe work and resources → Understand progress and constraints
+             → Compare options under policy → Recommend or act
+             → Verify the result → Learn from the outcome
+```
+
+| Loop stage | What TokenOps does |
 |---|---|
-| 🧮 **13 plan catalog** | Claude Max 5x/20x, Claude Pro, Claude Code (Max + Pro), ChatGPT Plus / Pro / Team, GitHub Copilot Individual / Business, Cursor Pro / Business, Mistral Le Chat Pro, Codex Plus — each with a dated vendor source URL pinned in code |
-| 🔌 **Provider-agnostic** | 17 proxy-metered providers — OpenAI, Anthropic, Gemini, Mistral, Cohere, the OpenAI-compatible fleet (Groq, DeepSeek, xAI, Perplexity, Fireworks, Cerebras, Together, OpenRouter), plus local/self-hosted (Ollama, LM Studio, LiteLLM, Vercel AI Gateway). Bind any with `tokenops provider set <name>` |
-| 📊 **Interactive dashboard** | Vue 3 + D3 dashboard at `/dashboard` — cost line, per-model stacked area, tokens-per-bucket, KPI tiles, 15s auto-refresh, provider + model filters that persist across refresh |
-| 📍 **mDNS-discoverable** | Daemon advertises `tokenops.local` over zeroconf so the dashboard URL is memorable on every host |
-| 🔐 **Dashboard auth** | Shared-secret token, auto-minted on first start, accepted via header / query / cookie. `tokenops dashboard rotate-token` revokes |
-| 📡 **Vendor /usage ingestion** | Live per-turn JSONL readers for Claude Code (`~/.claude/projects/`) and Codex CLI (`~/.codex/sessions/`), plus GitHub Copilot OAuth quota, Cursor cookie scrape, Anthropic cookie scraper (only source of the official Claude Max weekly %). Each source has a `tokenops vendor-usage enable <source>` wizard with env-var fallback for secrets |
-| 💰 **Cache-aware pricing** | Claude + Codex cache reads bill at ~10% of the new-input rate. For agent-heavy workloads cache reads are >95% of input — the dashboard `Cache hit: XX.X%` tile + cost-aware aggregator make the difference between a naive $94k estimate and the real $10k. Per-provider rate cards ship in code |
-| 🧪 **Per-project / per-session attribution** | JSONL pollers stamp `agent_id = "claude-code:<project>"` and `workflow_id = "claude-code:<project>:<session>"` (analogous for Codex). `group=agent` answers "which project burns the most"; coach finds per-session waste |
-| 🧠 **Prompt coach** | `tokenops coach prompts` heuristic feedback on your real prompting patterns — length distribution, vague/ack/repeat detection, concrete recommendations. Auto-discovers Claude Code + Codex JSONLs. Prompt text never persisted. Ranked recommendations (v0.18) project tangible savings: turns × tokens × dollars × hours per win |
-| 📋 **Reply coach** | `tokenops coach replies` detects output-compression patterns (caveman skill, article density, filler density) per session |
-| ⏱️ **Task boundaries** | `tokenops task start "fix X"` / `done` / `list --metrics` — operator-marked task units persisted to `~/.tokenops/tasks.jsonl`. List view rolls up turns / cost / TTFUO / cost-per-turn from the events store within each task window |
-| 📐 **8-KPI agent scorecard** | FVT / TEU / SAC (wedge) plus CHR / CGR / RGR / TCS / DAR (agent-workflow), all graded A–F against tuneable thresholds. v0.21.1 honest grading: TEU N/A when optimiser isn't wired; autonomous-loop sentinels filtered from CGR; column→payload attribution sync so SAC reflects reality |
-| 🩺 **Agent DX metrics** | `tokenops dx` + `tokenops_agent_dx` — turns, wall-clock, tokens and tool calls per instruction, plus rework / interrupt / escalation / first-try rates, context growth and compactions. Each graded, with the single highest-leverage change named. Derived from transcripts; no proxy needed |
-| 🪝 **Coaching on every client** | `coach-hook` nudges on Claude Code, Codex and Cursor (`Stop`) and opencode (`session.idle`, delivered as a TUI toast from a generated plugin). `read-guard` refuses a redundant re-read on Claude Code and opencode — the two whose hooks can decline one. Codex has no file-read tool and Cursor's `beforeReadFile` is observe-only; `hooks install` refuses both with the reason instead of writing a hook that never fires |
-| 📖 **Work storytelling** | `tokenops story` + `tokenops_story` — reconstructs your work as an account of it, one task at a time: the instruction you typed, what the agent did before the next one, what it cost, where it went sideways. One structure, four renderings: candid for you, JSON for an agent, `--for report` as evidence for someone you bill, `--for handoff` as state-of-the-world for a teammate. Titles are your own instructions, quoted — never summarised |
-| 🧠 **Smart routing** | `optimizer.smart_routing` decides per turn with no rules table: task class × plan-window pressure × the live pricing table. Downwards only, mechanical work only, only while the window is tight, never past your preferred-model ceiling. Enforcement needs the proxy and an exact, fresh trusted belief from outcome-linked trials; weaker evidence regresses to a recorded recommendation. `tokenops_routing_advise` is reachable on any MCP client and never applies |
-| 🔁 **Outcome-linked decisions** | Routing decisions preserve alternatives, policy, authority, evidence, uncertainty, and rationale. Record a human outcome with `tokenops outcome record`; inspect the durable explanation with `tokenops decision explain` |
-| 🧪 **Bounded local learning** | Opt-in proxy trials compare a baseline and lower-cost route in matched pairs, stop after at most 10 pairs or 14 days, and promote beliefs only when independently verified or human outcomes meet quality and coverage gates |
-| 🧭 **Context-aware routing** | Rules scope to what a turn *is* (`when_class: mechanical`) and to how tight your plan window is (`when_window_pct_above: 70`) — keep your best model while there's headroom, conserve it only when there isn't. Both abstain rather than guess: an unclassifiable turn or an unmeasured window leaves the model alone |
-| 🛡️ **Preferred model ceiling** | `preferred_models` per provider. Cheaper routes apply automatically; a pricier one is refused and surfaced for your answer via MCP, with your preferred model offered as the alternative |
-| 🔄 **Self-refreshing rate card** | The daemon fetches the public rate card daily and applies it to the *running* engine, so a model released after your binary does not silently price at zero. It downloads and sends nothing; `verified` rows and your negotiated overrides outrank anything fetched. One line to switch off |
-| 🎯 **Honest signal quality** | Every prediction carries `signal_quality.level` (low / medium / high) plus a one-line caveat. Heuristic mode is labelled; proxied mode is labelled |
-| ✂️ **Command-output compression** | `tokenops fmt -- <cmd>` shrinks a command's stdout before it hits the agent context — 46 built-in formatters (git, go/pytest/jest/…, npm/pip/uv/…, mvn/gradle/bazel/dotnet/…, docker/kubectl/helm, terraform/pulumi/ansible, aws/gcloud/az, and more) plus user-defined formatters in config (no recompile). Deterministic + critical-line-safe: errors/failures/changed-state never dropped, full output kept in `~/.tokenops/recovery/`. Balanced ~57% / aggressive ~68% stdout reduction. Self-tunes per user via `fmt learn --apply` |
-| 🤖 **MCP-first** | MCP tools expose resource state, routing advice, decision explanations, outcome capture, and bounded experiments directly to agents. Inline SVG sparkline + headroom gauge render in markdown across clients |
-| 🧠 **Dynamic-cheapest coaching** | Coaching pipeline picks the lowest blended-rate model per provider at runtime from the pricing table — no hardcoded model names |
-| 💾 **Local-first, open source** | SQLite database, no cloud account, no telemetry. Apache 2.0. Demo-data isolation by default so synthetic seeds never contaminate the real signal |
+| Observe | Ingests proxy traffic, local agent transcripts, subscription usage, and task boundaries into a local event store. Sources and signal quality are reported rather than assumed. |
+| Understand | Reconstructs sessions into work traces; measures cost, plan-window pressure, context health, rework, and execution state. Estimates carry confidence and caveats. |
+| Compare | Uses task class, provider capabilities, live pricing, plan capacity, and prior outcomes to consider alternatives. It can abstain when evidence is stale or incomplete. |
+| Decide | Applies configured policy and authority. Decisions retain evidence, alternatives, uncertainty, and rationale so `tokenops decision explain <id>` can answer why. |
+| Act and verify | Where an integration permits it, TokenOps can route requests or apply a bounded intervention. It records the result; it does not credit theoretical savings as proven value. |
+| Learn and coach | Outcomes inform local, gated beliefs. `tokenops coach`, `tokenops dx`, and `tokenops scorecard` help the user improve their own AI-assisted workflow too. |
 
-See [docs/architecture-ddd.md](docs/architecture-ddd.md) for the bounded
-contexts and layer rules; [docs/plan-cost-model.md](docs/plan-cost-model.md)
-for the plan catalog model.
+Recommendations and explanations are available through CLI, MCP, and the
+dashboard. Background status stays concise; evidence and history are available
+when requested. Autonomy is policy- and capability-specific, not a global
+on/off switch.
+
+## Capabilities
+
+- **Work and usage:** Claude Code and Codex transcript ingestion, proxy-based
+  provider metering, workflow reconstruction, cost-aware pricing, forecasts,
+  and subscription headroom. Setup and signal coverage: `tokenops status` and
+  `tokenops vendor-usage status`.
+- **Resource decisions:** routing advice, preferred-model ceilings, plan-window
+  constraints, approval flow, and explainable decisions. Advice is available
+  through MCP; automatic routing requires the proxy and the configured policy
+  and evidence gates.
+- **Verification and learning:** record human or verifier outcomes, explain
+  past decisions, run bounded local routing experiments, and compare results
+  against baselines. Learning is advisory and gated; it does not rewrite
+  runtime behavior on its own.
+- **Workflow coaching:** prompt and reply coaching, Agent-DX metrics, scorecards,
+  task-level cost and rework, and context/compaction signals derived from
+  supported harnesses.
+- **Execution support:** deterministic `tokenops fmt -- <cmd>` compression
+  preserves critical output and keeps full output recoverable locally. Hooks
+  and integrations act only where the client supports the required authority.
+- **Local-first surfaces:** Go daemon, SQLite event store, MCP server, protected
+  Vue dashboard, and CLI. No cloud account or telemetry is required; the core
+  product is Apache 2.0.
+
+See [docs/architecture-ddd.md](docs/architecture-ddd.md) for bounded contexts
+and layer rules; [docs/plan-cost-model.md](docs/plan-cost-model.md) for the
+subscription-plan model; and the
+[integration capability matrix](https://klarlabs-studio.github.io/tokenops/integrations/coverage)
+for source coverage and client-specific limitations.
 
 ## CLI surface
 
