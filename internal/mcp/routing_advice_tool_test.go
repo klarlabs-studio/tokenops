@@ -183,3 +183,35 @@ func TestRoutingAdviseSetupNoteDoesNotAskForAReload(t *testing.T) {
 		t.Errorf("note still tells the operator to reload: %q", res.Note)
 	}
 }
+
+func TestPrepareWorkComposesHeadroomAndRoutingWithoutApplying(t *testing.T) {
+	d := tightWindowDeps(t)
+	d.Spend = spend.NewEngine(spend.Table{Rates: map[spend.Key]spend.Rate{
+		{Provider: eventschema.ProviderAnthropic, Model: "claude-opus-5"}:     {InputPerMillion: 15, OutputPerMillion: 75},
+		{Provider: eventschema.ProviderAnthropic, Model: "claude-sonnet-4-5"}: {InputPerMillion: 3, OutputPerMillion: 15},
+	}})
+	srv := NewServer("tokenops", "test", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err := RegisterRoutingAdviceTools(srv, d); err != nil {
+		t.Fatal(err)
+	}
+	out := execTool(t, srv, "tokenops_prepare_work", map[string]any{
+		"instruction": "rename the handler", "provider": "anthropic",
+		"model": "claude-opus-5", "tool_density": 0.9,
+	})
+	var res prepareWorkResult
+	if err := json.Unmarshal([]byte(out), &res); err != nil {
+		t.Fatalf("decode preparation result: %v\n%s", err, out)
+	}
+	if res.Recommendation.Recommendation != "switch" || res.Recommendation.Model != "claude-sonnet-4-5" {
+		t.Errorf("recommendation = %s %q, want switch to the cheaper model: %+v", res.Recommendation.Recommendation, res.Recommendation.Model, res.Recommendation)
+	}
+	if !res.Recommendation.WindowKnown || !res.Recommendation.Recorded || res.Recommendation.DecisionID == "" {
+		t.Errorf("recommendation lacks measured, recorded decision context: %+v", res.Recommendation)
+	}
+	if res.Recommendation.Executable {
+		t.Error("MCP preparation should advise, not claim authority to apply the route")
+	}
+	if len(res.PlanHeadroom.Reports) != 1 {
+		t.Errorf("plan headroom reports = %d, want one configured plan: %+v", len(res.PlanHeadroom.Reports), res.PlanHeadroom)
+	}
+}
