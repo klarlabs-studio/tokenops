@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 )
 
 // Rate cards move on the order of weeks. A daily unconditional write
@@ -82,5 +83,14 @@ func TestDisabledRefreshReturnsWithoutFetching(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Error("runPricingRefresh did not return promptly when disabled")
+	}
+}
+
+func TestPricingRuntimeDoesNotRegisterWithoutAnEngine(t *testing.T) {
+	cfg := config.Default()
+	sup := lifecycle.New(t.Context(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	startPricingRefreshRuntime(cfg, nil, sup, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if got := sup.Running(); len(got) != 0 {
+		t.Fatalf("runtime registered tasks without a spend engine: %v", got)
 	}
 }
