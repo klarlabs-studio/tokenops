@@ -282,7 +282,9 @@ real. Doing either earlier would document an intention rather than a product.
 **Phase 9 — surface-native insight.** Represent evidence-backed insights
 structurally before rendering, then apply surface-specific presentation
 policies. Begin with concise readiness/attention summaries shared by MCP and
-CLI; extend to actionable resource and work insights as evidence permits.
+CLI; add a resource glance that composes measured session budget and plan
+headroom without inventing thresholds; extend to work insights as evidence
+permits.
 
 ## Non-goals
 

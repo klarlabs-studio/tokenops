@@ -59,9 +59,11 @@ headroom, so guessing would make every figure confidently wrong) and
 pointing a client at the proxy (that reroutes your real traffic).
 `--no-wire` writes the config only.
 
-Then restart your MCP host and ask the agent for any of: `tokenops_session_budget`, `tokenops_burn_rate`,
-`tokenops_dashboard`, `tokenops_plan_headroom`. Or open the browser dashboard
-the agent links you to (`http://tokenops.local:7878/dashboard?token=…`).
+Then restart your MCP host and ask the agent for a compact resource view with
+`tokenops_resource_glance`, or use `tokenops_session_budget`,
+`tokenops_burn_rate`, `tokenops_dashboard`, and `tokenops_plan_headroom`
+individually. Or open the browser dashboard the agent links you to
+(`http://tokenops.local:7878/dashboard?token=…`).
 
 ## How the control loop works
 
