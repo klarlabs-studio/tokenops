@@ -267,13 +267,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	// cannot see them. Ingesting its ledger is what lets those savings
 	// reach TEU — otherwise a client that never proxies scores "not
 	// measured" however much the guard actually reclaims.
-	if bus != nil {
-		sup.Go("read-guard-ingest", func(taskCtx context.Context) error {
-			runReadGuardIngest(taskCtx, bus, logger, 2*time.Minute, "")
-			return nil
-		})
-		logger.Info("read-guard reclamation ingest live")
-	}
+	startReadGuardRuntime(bus, sup, logger)
 
 	// Active-mode spend watcher: periodic budget + unpriced-model
 	// evaluation against the local store. Requires storage (no events,
