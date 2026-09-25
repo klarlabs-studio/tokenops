@@ -34,9 +34,10 @@ func TestOutputSchemasGenerate(t *testing.T) {
 		"prepareWorkResult":   prepareWorkResult{},
 		"optimizationsResult": optimizationsResult{},
 		// control_tools.go
-		"versionResult":      versionResult{},
-		"statusResult":       statusResult{},
-		"domainEventsResult": domainEventsResult{},
+		"versionResult":       versionResult{},
+		"statusResult":        statusResult{},
+		"statusInsightResult": statusInsightResult{},
+		"domainEventsResult":  domainEventsResult{},
 		// plan_tools.go
 		"planHeadroomResult": planHeadroomResult{},
 		// parity_tools.go
