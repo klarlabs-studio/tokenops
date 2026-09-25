@@ -89,6 +89,15 @@ dashboard. Background status stays concise; evidence and history are available
 when requested. Autonomy is policy- and capability-specific, not a global
 on/off switch.
 
+For an agent-facing before/after workflow, call `tokenops_prepare_work` with
+the task instruction and current model before starting. It returns plan
+headroom and a policy-based model recommendation without switching models.
+Afterward, call `tokenops_review_work` with the execution's stable
+`workflow_id` to get measured token/cost totals, context growth, and any
+evidence-based coaching findings. The review returns aggregate metrics, not
+prompt content. These intent tools compose existing measurements and advice;
+they do not replace the harness that plans or performs the work.
+
 ## Capabilities
 
 - **Work and usage:** Claude Code and Codex transcript ingestion, proxy-based
