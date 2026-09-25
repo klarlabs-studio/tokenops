@@ -31,6 +31,7 @@ func TestOutputSchemasGenerate(t *testing.T) {
 		"forecastResult":      forecastResult{},
 		"workflowTraceResult": workflowTraceResult{},
 		"reviewWorkResult":    reviewWorkResult{},
+		"prepareWorkResult":   prepareWorkResult{},
 		"optimizationsResult": optimizationsResult{},
 		// control_tools.go
 		"versionResult":      versionResult{},
