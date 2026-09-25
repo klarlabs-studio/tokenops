@@ -45,7 +45,7 @@ func (d RoutingAdviceDeps) activeConfig() *config.Config {
 }
 
 type routingAdviceInput struct {
-	Instruction string  `json:"instruction" jsonschema:"description=The operator's instruction you are about to act on, or the task you are about to hand a subagent. Pass it verbatim; it is classified locally and never stored."`
+	Instruction string  `json:"instruction" jsonschema:"required,description=The operator's instruction you are about to act on, or the task you are about to hand a subagent. Pass it verbatim; it is classified locally and never stored."`
 	Provider    string  `json:"provider,omitempty" jsonschema:"description=Provider name, e.g. anthropic. Defaults to the single configured plan when there is only one."`
 	Model       string  `json:"model,omitempty" jsonschema:"description=The model this turn would otherwise run on. Without it there is nothing to compare against."`
 	ToolDensity float64 `json:"tool_density,omitempty" jsonschema:"description=Share of the recent exchange that was tool traffic (0-1), when you can estimate it. Omitting it only makes the answer more conservative."`
@@ -110,89 +110,78 @@ func RegisterRoutingAdviceTools(s *Server, d RoutingAdviceDeps) error {
 		Description("Ask which model a turn should run on, decided from measured signal rather than a rule written once: what kind of work the instruction is (mechanical or reasoning), how full the plan's rate-limit window is, and what the pricing table currently calls cheapest. Call it before choosing a model for a turn or handing a task to a subagent. It only ever suggests routing DOWN, only for work it is confident is mechanical, and only while the window is genuinely tight — on a flat-rate plan a request costs nothing at the margin, so conserving while there is headroom trades quality for a saving that does not exist. It recommends and never applies; the model stays the caller's choice.").
 		OutputSchema(routingAdviceResult{}).
 		Handler(func(ctx context.Context, in routingAdviceInput) (*routingAdviceResult, error) {
-			cfg := d.activeConfig()
-			if cfg == nil {
-				return &routingAdviceResult{
-					Recommendation: "stay", Model: in.Model,
-					Reason: "no configuration loaded, so there is nothing to decide from",
-					Note:   "run `tokenops init` to create a config",
-				}, nil
-			}
-			rc := cfg.Optimizer.RouterConfig()
-			if rc == nil {
-				return &routingAdviceResult{
-					Recommendation: "stay", Model: in.Model,
-					Reason: "no routing rules, and smart routing is off",
-					Note:   "set `optimizer.smart_routing.enabled: true` to decide routes per turn without writing rules",
-				}, nil
-			}
-			provider := resolveAdviceProvider(in.Provider, cfg)
-			if provider == "" {
-				return &routingAdviceResult{
-					Recommendation: "stay", Model: in.Model,
-					Reason: "no provider named and more than one is configured, so the window reading would be the wrong one",
-					Note:   "pass provider explicitly",
-				}, nil
-			}
-
-			pct, known := windowPressure(ctx, d.Store, cfg, provider)
-			rc.WindowPressure = func(p eventschema.Provider) (float64, bool) {
-				if p != provider {
-					return 0, false
-				}
-				return pct, known
-			}
-			rc.PreferredModel = cfg.PreferredModel
-
-			adv := router.New(*rc, d.spendEngine()).Advise(router.AdviceInput{
-				Provider:    provider,
-				Model:       in.Model,
-				Instruction: in.Instruction,
-				ToolDensity: in.ToolDensity,
-			})
-
-			out := &routingAdviceResult{
-				Recommendation: "stay",
-				Model:          in.Model,
-				Reason:         adv.Reason,
-				Class:          adv.Class,
-				WindowPct:      adv.WindowPct,
-				WindowKnown:    adv.WindowKnown,
-			}
-			if !adv.Stay && adv.Model != "" {
-				out.Recommendation = "switch"
-				out.Model = adv.Model
-				out.Quality = adv.Quality
-			}
-			if !known {
-				// Say why the answer is weaker than it looks. A "stay"
-				// produced by a meter that is not reporting is not the
-				// same answer as a "stay" produced by measured headroom.
-				out.Note = "the plan's rate-limit window is not being measured, so conserving cannot be justified — check the plan binding (tokenops_plan_set, or `tokenops plan set`) and that the daemon is ingesting"
-			}
-
-			authority := decide.RoutingAuthority(*cfg)
-			decision := decide.Route(decide.RouteInput{
-				Provider: provider, CurrentModel: in.Model, Advice: adv,
-				Authority: authority, Adapter: decide.Adapter{Name: "mcp", CanApplyRoute: false},
-				Association: eventschema.Association{Work: in.WorkID, Execution: in.ExecutionID, Actor: in.ActorID},
-				WindowKnown: known, WindowPct: pct, ObservedAt: time.Now().UTC(),
-			})
-			out.DecisionID = decision.DecisionID
-			out.Stage = string(decision.Stage)
-			out.Authority = authority.String()
-			out.Executable = decision.Executable
-			if d.Store != nil {
-				if err := d.Store.Append(ctx, decision.Event); err != nil {
-					return nil, err
-				}
-				out.Recorded = true
-			} else {
-				out.Note = appendNote(out.Note, "decision history is unavailable because storage is disabled")
-			}
-			return out, nil
+			return routingAdvice(ctx, in, d)
 		})
-	return nil
+	return registerWorkPreparationTool(s, d)
+}
+
+func routingAdvice(ctx context.Context, in routingAdviceInput, d RoutingAdviceDeps) (*routingAdviceResult, error) {
+	cfg := d.activeConfig()
+	if cfg == nil {
+		return &routingAdviceResult{
+			Recommendation: "stay", Model: in.Model,
+			Reason: "no configuration loaded, so there is nothing to decide from",
+			Note:   "run `tokenops init` to create a config",
+		}, nil
+	}
+	rc := cfg.Optimizer.RouterConfig()
+	if rc == nil {
+		return &routingAdviceResult{
+			Recommendation: "stay", Model: in.Model,
+			Reason: "no routing rules, and smart routing is off",
+			Note:   "set `optimizer.smart_routing.enabled: true` to decide routes per turn without writing rules",
+		}, nil
+	}
+	provider := resolveAdviceProvider(in.Provider, cfg)
+	if provider == "" {
+		return &routingAdviceResult{
+			Recommendation: "stay", Model: in.Model,
+			Reason: "no provider named and more than one is configured, so the window reading would be the wrong one",
+			Note:   "pass provider explicitly",
+		}, nil
+	}
+
+	pct, known := windowPressure(ctx, d.Store, cfg, provider)
+	rc.WindowPressure = func(p eventschema.Provider) (float64, bool) {
+		if p != provider {
+			return 0, false
+		}
+		return pct, known
+	}
+	rc.PreferredModel = cfg.PreferredModel
+
+	adv := router.New(*rc, d.spendEngine()).Advise(router.AdviceInput{
+		Provider: provider, Model: in.Model, Instruction: in.Instruction, ToolDensity: in.ToolDensity,
+	})
+	out := &routingAdviceResult{
+		Recommendation: "stay", Model: in.Model, Reason: adv.Reason, Class: adv.Class,
+		WindowPct: adv.WindowPct, WindowKnown: adv.WindowKnown,
+	}
+	if !adv.Stay && adv.Model != "" {
+		out.Recommendation, out.Model, out.Quality = "switch", adv.Model, adv.Quality
+	}
+	if !known {
+		out.Note = "the plan's rate-limit window is not being measured, so conserving cannot be justified — check the plan binding (tokenops_plan_set, or `tokenops plan set`) and that the daemon is ingesting"
+	}
+
+	authority := decide.RoutingAuthority(*cfg)
+	decision := decide.Route(decide.RouteInput{
+		Provider: provider, CurrentModel: in.Model, Advice: adv,
+		Authority: authority, Adapter: decide.Adapter{Name: "mcp", CanApplyRoute: false},
+		Association: eventschema.Association{Work: in.WorkID, Execution: in.ExecutionID, Actor: in.ActorID},
+		WindowKnown: known, WindowPct: pct, ObservedAt: time.Now().UTC(),
+	})
+	out.DecisionID, out.Stage, out.Authority = decision.DecisionID, string(decision.Stage), authority.String()
+	out.Executable = decision.Executable
+	if d.Store != nil {
+		if err := d.Store.Append(ctx, decision.Event); err != nil {
+			return nil, err
+		}
+		out.Recorded = true
+	} else {
+		out.Note = appendNote(out.Note, "decision history is unavailable because storage is disabled")
+	}
+	return out, nil
 }
 
 func appendNote(current, next string) string {

@@ -111,6 +111,11 @@ var helpCatalog = []helpCategory{
 		Description: "Which model a turn should run on. Advice and proposals only change anything once the caller or operator acts on them.",
 		Tools: []helpTool{
 			{
+				Name:    "tokenops_prepare_work",
+				Summary: "Before a task, combine plan headroom with model advice for its instruction. Never switches models.",
+				Example: `{"instruction":"rename the handler","provider":"anthropic","model":"claude-opus-5"}`,
+			},
+			{
 				Name:    "tokenops_routing_advise",
 				Summary: "Recommend stay or switch for a turn, from its task class, the plan window, and the live pricing table. Never applies.",
 				Example: `{"instruction":"rename the handler","model":"claude-opus-5"}`,

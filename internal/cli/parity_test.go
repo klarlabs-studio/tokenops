@@ -85,6 +85,7 @@ var mcpOnly = map[string]string{
 	"tokenops_routing_advise": "asks which model a turn should run on; the CLI equivalent is the route-guard hook",
 	"tokenops_routing_decide": "same, for an explicit decision",
 	"tokenops_review_work":    "composes workflow measurement and coaching into one agent-oriented review",
+	"tokenops_prepare_work":   "composes current plan headroom and per-task model advice before execution",
 }
 
 // TestCLIAndMCPParity diffs the two surfaces.
