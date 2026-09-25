@@ -29,11 +29,12 @@ private branch, a release is cut, and the advisory publishes alongside.
 TokenOps is a **local-first** daemon. Default install binds `127.0.0.1`
 and assumes the host is trusted. Notable surfaces:
 
-- **Dashboard auth.** `/dashboard` and `/api/*` require a shared-secret token
+- **Local API auth.** `/api/*` requires a shared-secret token
   (since v0.10.3 — see the correction below). Health probes (`/healthz`,
   `/readyz`, `/version`) stay public. Constant-time token comparison. The
   token is persisted at `~/.tokenops/dashboard.token` with `0600`
-  permissions on POSIX.
+  permissions on POSIX. The setting and file retain their historical
+  `dashboard` names for compatibility; no browser UI is served.
 
   **Correction (0.69.0).** From v0.10.3 until 0.69.0 that sentence was true
   of most of `/api/*` but not all of it. `/api/audit`,
@@ -47,8 +48,8 @@ and assumes the host is trusted. Notable surfaces:
 - **mDNS advertise** (v0.10.1+). Advertised IPs match the bind address —
   loopback-only listener publishes `127.0.0.1`; a wildcard / LAN-bound
   listener publishes every non-loopback interface and is reachable from the
-  LAN. Operators binding beyond loopback should rotate the dashboard token
-  (`tokenops dashboard rotate-token`) before sharing the host.
+  LAN. Operators binding beyond loopback should configure a strong
+  `TOKENOPS_DASHBOARD_ADMIN_TOKEN` before sharing the host.
 - **Vendor admin credentials** (v0.10.2+). `vendor_usage.anthropic.admin_key`
   carries a `sk-ant-admin-*` key, and four other fields carry vendor
   session credentials. When written to `config.yaml` they are stored in
@@ -61,7 +62,7 @@ and assumes the host is trusted. Notable surfaces:
 
   | Variable | Credential |
   |----------|------------|
-  | `TOKENOPS_DASHBOARD_ADMIN_TOKEN` | dashboard admin token |
+  | `TOKENOPS_DASHBOARD_ADMIN_TOKEN` | local API admin token (legacy variable name) |
   | `TOKENOPS_ANTHROPIC_ADMIN_KEY` | Anthropic admin key (`sk-ant-admin-*`) |
   | `TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY` | claude.ai session cookie |
   | `TOKENOPS_CURSOR_COOKIE` | cursor.com session cookie |
@@ -82,6 +83,4 @@ and assumes the host is trusted. Notable surfaces:
 ## Out of scope
 
 - Denial-of-service against the local daemon by the local user
-- Cross-site script injection in the local dashboard (the operator is the
-  only viewer; CSP is not currently enforced)
 - Supply-chain attacks on third-party Go modules (we run `nox scan` in CI)

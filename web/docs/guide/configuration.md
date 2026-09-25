@@ -245,7 +245,7 @@ savings before changing any client configuration.
 With `mode: active`, the same rules are **enforced on live proxied
 traffic**: the proxy rewrites the request's model before forwarding,
 logs the intervention, and records an applied optimization event
-(visible in the dashboard and `tokenops replay`). The observation keeps
+(visible in MCP/CLI results and `tokenops replay`). The observation keeps
 the originally requested model, so you can always audit what clients
 asked for versus what was served. Routing never breaks a request — any
 parse failure forwards the original body untouched.
@@ -332,7 +332,7 @@ ansible, aws/gcloud/az, and more).
 - `overrides` — per-command loss level (a noisy command can be dialed
   up without loosening the global default).
 - `emit_events` — append a `command_fmt` OptimizationEvent per compressed
-  run so the dashboard and scorecard count the savings.
+  run so telemetry and scorecard count the savings.
 
 Two invariants hold at **every** level, for built-in and user formatters
 alike: **determinism** (pure function of input + level) and
@@ -395,7 +395,7 @@ proxy produced it.
 ## Waste-detector context limits
 
 The workflow waste detector (`tokenops replay --workflow`, the
-`tokenops_workflow_trace` MCP tool, and the dashboard workflow view)
+`tokenops_workflow_trace` MCP tool)
 ships built-in thresholds per workflow type: `claude-code:` sessions
 flag context above 900k tokens, `codex:` above 250k, everything else
 above 32k. `coaching.context_limits` overrides them per workflow-ID
@@ -483,7 +483,7 @@ rates:
 
 ## mDNS (`mdns`)
 
-The daemon can advertise itself as `tokenops.local` so the dashboard has a
+The daemon can advertise itself as `tokenops.local` so local API clients have a
 memorable URL. By default it advertises **only when the LAN can actually
 reach it** — on the default loopback bind the record would point at
 `127.0.0.1`, which no peer can use, while the machine's hostname still went

@@ -3,7 +3,7 @@ layout: home
 hero:
   name: TokenOps
   text: Analytics tells you about last week's retry loop. TokenOps ends this one.
-  tagline: Your coding agents already write down everything they do. TokenOps reads those files on your machine — Claude Code, Codex, opencode, Cursor — and hands the agent back something it can act on mid-task, instead of a dashboard you read on Friday. Nothing uploads. No account. Apache 2.0.
+  tagline: Your coding agents already write down everything they do. TokenOps reads those files on your machine — Claude Code, Codex, opencode, Cursor — and hands the agent back something it can act on mid-task. Nothing uploads. No account. Apache 2.0.
   actions:
     - theme: brand
       text: 90-second quickstart
@@ -17,62 +17,12 @@ features:
   - title: It reads what is already there
     details: 'Passive readers for every client that keeps a local record — Claude Code, Codex CLI, opencode, Cursor. Six vendor-usage pollers. An optional proxy for ground truth. No change to how you or your agents work.'
   - title: Your prompts never leave this machine
-    details: 'Prompt text and file contents are read at scan time and never persisted — only derived numbers are. Local SQLite, no cloud account, no telemetry. The dashboard is a localhost daemon behind a shared secret you can rotate.'
+    details: 'Prompt text and file contents are read at scan time and never persisted — only derived numbers are. Local SQLite, no cloud account, no telemetry. The daemon API stays on localhost by default and is protected by a shared secret.'
   - title: Honest about what it cannot see
     details: 'Every prediction carries signal_quality (low / medium / high) plus a one-line caveat and an upgrade path. The capability matrix marks what a client can never support — not "coming soon" — with the reason. Time-to-first-token is reported only under the proxy, because no transcript records it.'
 ---
 
-<script setup>
-import { withBase } from 'vitepress'
-</script>
-
-<div class="hero-cycle" role="img" aria-label="Local TokenOps dashboard cycling through 1h, 6h, 24h, 7d filters. 5 KPI tiles incl. CACHE HIT, daily cost-over-time, hourly tokens-per-bucket. Captured live against v0.17.">
-  <img :src="withBase('/media/frames/1h.jpg')" class="f1" alt="1-hour window" />
-  <img :src="withBase('/media/frames/6h.jpg')" class="f2" alt="6-hour window" />
-  <img :src="withBase('/media/frames/24h.jpg')" class="f3" alt="24-hour window" />
-  <img :src="withBase('/media/frames/7d.jpg')" class="f4" alt="7-day window" />
-</div>
-
-<style>
-.hero-cycle {
-  position: relative;
-  width: 100%;
-  max-width: 1200px;
-  aspect-ratio: 741 / 973;
-  margin: 24px auto;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid var(--vp-c-divider);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
-}
-.hero-cycle img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0;
-  animation: hero-cycle 12s linear infinite;
-  image-rendering: -webkit-optimize-contrast;
-}
-.hero-cycle .f1 { animation-delay: 0s; }
-.hero-cycle .f2 { animation-delay: 3s; }
-.hero-cycle .f3 { animation-delay: 6s; }
-.hero-cycle .f4 { animation-delay: 9s; }
-@keyframes hero-cycle {
-  0%   { opacity: 0; }
-  3%   { opacity: 1; }
-  22%  { opacity: 1; }
-  25%  { opacity: 0; }
-  100% { opacity: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .hero-cycle img { animation: none; opacity: 0; }
-  .hero-cycle .f4 { opacity: 1; }
-}
-</style>
-
-## Analytics stops at a dashboard. This doesn't.
+## Analytics stops at a report. This doesn't.
 
 Reading your agents' session files is the easy half. Every finding below is
 one TokenOps computes *and* acts on, inside the session it found it in — not
@@ -231,8 +181,7 @@ copied anywhere.
 
 Today there is nowhere for them to go: the event store is a SQLite file under
 `~/.tokenops`, there is no cloud account to create, and no telemetry to opt out
-of. The dashboard is a local daemon behind a shared secret you mint and rotate
-yourself (`tokenops dashboard rotate-token`).
+of. The daemon API is local by default and protected by a shared secret.
 
 The guarantee is about the content, not the address. Everything TokenOps
 derives — a rate, a grade, a token count, a headroom percentage — is computed

@@ -13,9 +13,8 @@
 
 TokenOps entered the market predicting rate-limit cutoffs. It now observes
 seven vendor sources, aggregates spend, grades agent DX, coaches prompts,
-guards redundant reads, routes models, compresses command output and serves a
-dashboard — and the README still promises one sentence about subscription
-windows.
+guards redundant reads, routes models and compresses command output — and the
+README still promises one sentence about subscription windows.
 
 The mismatch has shaped the architecture. Capabilities landed wherever the
 nearest adapter was, so the CLI and MCP server each grew their own copy of the
@@ -142,7 +141,7 @@ order:
 1. `analytics/aggregator.go:346,429` — an unpriced model contributes `0` via
    `if cerr != nil { continue }`. `Summarize` reports the gap as `Unpriced`;
    `AggregateBy` does not, and `AggregateBy` feeds burn rate, forecast, top
-   consumers and the dashboard.
+   consumers and the CLI/MCP surfaces.
 2. `proxy/server.go:139` — with no tokenizer wired, events ship with zero
    counts by documented design.
 3. `optimizer/tokensavings.go:25` — falls back to `bytes/4` and returns the
@@ -193,7 +192,7 @@ should query it over MCP, a workflow should call it over HTTP.
 
 ### Operational simplicity is preserved
 
-Single Go binary, SQLite, local dashboard. No mandatory cloud, external
+Single Go binary, SQLite, local API. No mandatory cloud, external
 database, broker or plugin framework. Local-first buys privacy, low friction,
 ownership and resilience, and this ADR does not spend it.
 

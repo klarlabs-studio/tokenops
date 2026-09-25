@@ -100,7 +100,7 @@ Rule corpus on disk (CLAUDE.md, AGENTS.md, .cursor/rules/**, *.mcp.{yaml,yml,jso
 
 Consumers:
   - CLI (tokenops rules analyze|conflicts|compress|inject|bench)
-  - HTTP API (/api/rules/{analyze,conflicts,compress,inject}) → Vue dashboard
+  - HTTP API (/api/rules/{analyze,conflicts,compress,inject}) → CLI / integrations
   - MCP tools (tokenops_rules_{analyze,conflicts,compress,inject})
   - OTLP exporter (redaction-aware, tokenops.rule.* attributes)
   - SQLite store (rule_source, rule_analysis payload kinds)
@@ -122,16 +122,16 @@ Consumers:
 | `PromptEvent.AgentID` | `X-Tokenops-Agent-Id` header | Pass-through | Storage (indexed), Analytics (group) |
 | `PromptEvent.CacheHit` | Cache middleware synthetic | Boolean flag | Storage, OTLP |
 | `WorkflowEvent.WorkflowID` | SDK/CLI parameter | Pass-through | Storage (indexed), Workflow reconstruction |
-| `OptimizationEvent.Kind` | Optimizer `Kind()` method | Enum value | Storage, OTLP, Dashboard |
-| `OptimizationEvent.Decision` | Pipeline `decide()` | Enum value | Storage, OTLP, Dashboard |
-| `CoachingEvent.EfficiencyScore` | Efficiency engine | Computed 0.0–1.0 | Storage, Dashboard |
-| `RuleSourceEvent.SourceID` | `rules.MakeSourceID(repoID, path)` | Stable across snapshots | Storage, OTLP (`tokenops.rule.source_id`), Dashboard |
-| `RuleSourceEvent.Source` | `rules.ClassifySource(path)` | Enum value | Storage, OTLP, Dashboard |
-| `RuleSourceEvent.TotalTokens` | `tokenizer.CountText(body)` | Tokenized | Storage, OTLP, Dashboard leaderboard |
+| `OptimizationEvent.Kind` | Optimizer `Kind()` method | Enum value | Storage, OTLP, CLI / MCP |
+| `OptimizationEvent.Decision` | Pipeline `decide()` | Enum value | Storage, OTLP, CLI / MCP |
+| `CoachingEvent.EfficiencyScore` | Efficiency engine | Computed 0.0–1.0 | Storage, CLI / MCP |
+| `RuleSourceEvent.SourceID` | `rules.MakeSourceID(repoID, path)` | Stable across snapshots | Storage, OTLP (`tokenops.rule.source_id`), CLI / MCP |
+| `RuleSourceEvent.Source` | `rules.ClassifySource(path)` | Enum value | Storage, OTLP, CLI / MCP |
+| `RuleSourceEvent.TotalTokens` | `tokenizer.CountText(body)` | Tokenized | Storage, OTLP, CLI / MCP |
 | `RuleSourceEvent.Sections[i].Hash` | `sha256(body)` | SHA-256 hex | Storage, Compressor, Conflict detector |
-| `RuleAnalysisEvent.ROIScore` | `rules.ROIEngine.score(Exposure)` | Normalized economic ratio | Storage, OTLP (`tokenops.rule.roi_score`), Dashboard |
+| `RuleAnalysisEvent.ROIScore` | `rules.ROIEngine.score(Exposure)` | Normalized economic ratio | Storage, OTLP (`tokenops.rule.roi_score`), CLI / MCP |
 | `RuleAnalysisEvent.ConflictsWith` | `rules.DetectConflicts` Finding | List of SectionIDs | Storage, OTLP (`tokenops.rule.conflicts_with`) |
-| `RuleAnalysisEvent.CompressedTokens` | `rules.Compressor.Compress` | Post-distillation token count | Storage, OTLP, Dashboard |
+| `RuleAnalysisEvent.CompressedTokens` | `rules.Compressor.Compress` | Post-distillation token count | Storage, OTLP, CLI / MCP |
 | `Envelope.Payload` | Event-specific type | JSON serialized | Storage (payload column) |
 
 ### Control-loop correlation and payloads

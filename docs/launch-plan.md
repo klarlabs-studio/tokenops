@@ -61,7 +61,7 @@ Voice: "At 85% it says slow_down. When you're cooked, wait_for_reset. Open sourc
 Run this exact sequence to avoid re-shoots:
 
 1. **Burn in real signal** — open Claude Code, call `tokenops_session_budget` 8-10 times so window_consumed climbs to a non-zero number with `confidence: medium` or `high`. Empty store demos look broken.
-2. **Clear demo contamination** — `tokenops demo --reset-only` if any seeded events remain. `tokenops_data_sources` should show only `mcp-session`.
+2. **Verify telemetry provenance** — use `tokenops_data_sources` to confirm session readers are ingesting real local transcripts.
 3. **Terminal setup** — iTerm or Ghostty, font 18pt+, dark theme, prompt trimmed to `$`. Window 1280x720.
 4. **Claude Code setup** — empty conversation, MCP server reconnected (`/mcp`), no leftover tool output visible. Single split with terminal on the right.
 5. **Recording** — Loom desktop app, 30fps, "Show clicks" on, no countdown overlay.
@@ -70,7 +70,7 @@ Run this exact sequence to avoid re-shoots:
 
 ### Post-recording checklist
 
-1. Trim to ≤60s. If the cut runs 65s, trim hook + close; never trim live demo.
+1. Trim to ≤60s. If the cut runs 65s, trim hook + close; never trim the live walkthrough.
 2. Caption-burn the voice-over (Loom auto-captions are good enough; check the technical words).
 3. Set Loom video title to: **"TokenOps — predict your Claude Max rate-limit cutoffs from inside Claude Code (60s)"**.
 4. Get a stable shareable URL. Paste into:
@@ -90,7 +90,7 @@ Run this exact sequence to avoid re-shoots:
 >
 > Honesty note: the v0.8.1 release explicitly types `signal_quality` on every response. Right now the math runs on MCP-tool activity, not on your actual Claude turns (those don't flow through TokenOps). So the signal is a heuristic. The product says so. Vendor `/usage` API ingestion is queued.
 >
-> What's in for v0.9: empty-state scorecard with a first-week checklist instead of a useless F grade; demo-data isolation so seeded events don't contaminate real rollups; hot-reload on `tokenops plan set` so MCP doesn't need a manual reconnect.
+> What's in for v0.9: empty-state scorecard with a first-week checklist instead of a useless F grade; hot-reload on `tokenops plan set` so MCP doesn't need a manual reconnect.
 >
 > Repo: https://github.com/klarlabs-studio/tokenops
 >

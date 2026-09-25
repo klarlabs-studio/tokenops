@@ -164,7 +164,7 @@ func seedSourceMixDB(t *testing.T) string {
 	defer store.Close()
 
 	now := time.Now().UTC()
-	for i, src := range []string{"proxy", "demo", "mcp-session"} {
+	for i, src := range []string{"proxy", "mcp-session"} {
 		env := &eventschema.Envelope{
 			ID:            uuid.NewString(),
 			SchemaVersion: eventschema.SchemaVersion,
@@ -216,13 +216,8 @@ func TestSpendIncludeSourceReadmitsOnlyNamed(t *testing.T) {
 		extra []string
 		want  float64
 	}{
-		{"default drops synthetic and activity proxy", nil, 1},
-		{"demo only", []string{"--include-source", "demo"}, 2},
+		{"default drops activity proxy", nil, 1},
 		{"activity proxy only", []string{"--include-source", "mcp-session"}, 2},
-		{"comma separated", []string{"--include-source", "demo,mcp-session"}, 3},
-		{"repeated flag", []string{"--include-source", "demo", "--include-source", "mcp-session"}, 3},
-		{"back-compat alias", []string{"--include-demo"}, 2},
-		{"alias composes with flag", []string{"--include-demo", "--include-source", "mcp-session"}, 3},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
