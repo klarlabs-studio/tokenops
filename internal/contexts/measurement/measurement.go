@@ -259,7 +259,16 @@ func Sum(values ...Value) Value {
 }
 
 func joinCaveats(caveats []string) string {
-	return strings.Join(caveats, "; ")
+	unique := make([]string, 0, len(caveats))
+	seen := make(map[string]struct{}, len(caveats))
+	for _, caveat := range caveats {
+		if _, ok := seen[caveat]; ok {
+			continue
+		}
+		seen[caveat] = struct{}{}
+		unique = append(unique, caveat)
+	}
+	return strings.Join(unique, "; ")
 }
 
 // wire is the serialised shape. Amount is a pointer so an unknown
