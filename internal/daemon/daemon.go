@@ -272,12 +272,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	// Active-mode spend watcher: periodic budget + unpriced-model
 	// evaluation against the local store. Requires storage (no events,
 	// nothing to watch).
-	if cfg.ActiveMode() && components.Aggregator != nil {
-		sup.Go("spend-watcher", func(taskCtx context.Context) error {
-			runSpendWatcher(taskCtx, cfg, components.Aggregator, components.Spend, logger)
-			return nil
-		})
-	}
+	startSpendWatcherRuntime(cfg, components.Aggregator, components.Spend, sup, logger)
 	defer publishRuntimeAnnouncement(cfg, srv, dashTok, logger)()
 	// Publish blockers + remediation hints so /readyz exposes the same
 	// signal the MCP tokenops_status tool surfaces. Operators on a fresh
