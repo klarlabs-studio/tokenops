@@ -66,6 +66,10 @@ var helpCatalog = []helpCategory{
 		Description: "Live rate-limit headroom for MCP-resident sessions (Claude Max / GPT Plus / Copilot / Cursor).",
 		Tools: []helpTool{
 			{
+				Name:    "tokenops_resource_glance",
+				Summary: "One compact view of session-budget and plan headroom pressure, with confidence caveats; recommends but never acts.",
+			},
+			{
 				Name:    "tokenops_session_budget",
 				Summary: "Predict whether this session will hit the rate-limit cap. Returns continue|slow_down|switch_model|wait_for_reset.",
 				Example: "Call before starting a long task to decide whether to keep going.",

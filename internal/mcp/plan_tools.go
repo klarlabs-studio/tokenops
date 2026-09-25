@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -83,6 +82,16 @@ type planHeadroomResult struct {
 	Hint        string       `json:"hint,omitempty"`
 }
 
+// sessionBudgetResult is the structured counterpart to the text-first
+// tokenops_session_budget response, reused by the resource-glance tool.
+type sessionBudgetResult struct {
+	Budgets     []plans.SessionBudget `json:"budgets"`
+	Notes       []string              `json:"notes,omitempty"`
+	DataWarning *DataWarning          `json:"data_warning,omitempty"`
+	Error       string                `json:"error,omitempty"`
+	Hint        string                `json:"hint,omitempty"`
+}
+
 // RegisterPlanTools mounts tokenops_plan_headroom on s. Returns an
 // error when deps are incomplete so callers can surface the
 // misconfiguration via the structured-error contract instead of a
@@ -106,6 +115,7 @@ func RegisterPlanTools(s *Server, d PlanDeps) error {
 		Handler(func(ctx context.Context, _ emptyInput) (*planHeadroomResult, error) {
 			return planHeadroom(ctx, d)
 		})
+	registerResourceGlanceTool(s, d)
 	return nil
 }
 
@@ -141,18 +151,42 @@ func windowlessPlanNote(provider, planName string, p plans.Plan) string {
 }
 
 func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
+	result, err := sessionBudgetData(ctx, d)
+	if err != nil {
+		return "", err
+	}
+	if result.Error != "" {
+		return jsonString(map[string]string{"error": result.Error, "hint": result.Hint}), nil
+	}
+	if len(result.Budgets) == 0 {
+		return jsonString(result), nil
+	}
+	b := result.Budgets[0]
+	row := budgetSummaryRow{
+		Display:           b.Display,
+		WindowConsumed:    b.WindowConsumed,
+		WindowCap:         b.WindowCap,
+		WindowUnit:        "messages",
+		WindowPct:         b.WindowPct,
+		WindowResetsIn:    b.WindowResetsIn,
+		WillHitCapWithin:  b.WillHitCapWithin,
+		RecentRatePerHour: b.RecentRatePerHour,
+		Confidence:        b.Confidence,
+		RecommendedAction: b.RecommendedAction,
+		SignalLevel:       b.SignalQuality.Level,
+		SignalCaveat:      b.SignalQuality.Caveat,
+		Note:              b.Note,
+	}
+	return markdownPayload(renderBudgetSummary(row), result), nil
+}
+
+func sessionBudgetData(ctx context.Context, d PlanDeps) (*sessionBudgetResult, error) {
 	cfg := d.activeConfig()
 	if cfg == nil || len(cfg.Plans) == 0 {
-		return jsonString(map[string]string{
-			"error": "plans_unconfigured",
-			"hint":  plansUnconfiguredHint,
-		}), nil
+		return &sessionBudgetResult{Error: "plans_unconfigured", Hint: plansUnconfiguredHint}, nil
 	}
 	if d.Store == nil {
-		return jsonString(map[string]string{
-			"error": "storage_disabled",
-			"hint":  "run `tokenops init` then restart the daemon",
-		}), nil
+		return &sessionBudgetResult{Error: "storage_disabled", Hint: "run `tokenops init` then restart the daemon"}, nil
 	}
 	reader := planStoreReader{store: d.Store}
 	now := time.Now().UTC()
@@ -171,15 +205,15 @@ func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
 		}
 		windowCons, err := plans.ConsumptionInWindow(ctx, reader, provider, now, p.RateLimitWindow)
 		if err != nil {
-			return "", fmt.Errorf("window[%s]: %w", provider, err)
+			return nil, fmt.Errorf("window[%s]: %w", provider, err)
 		}
 		recentCons, err := plans.ConsumptionInWindow(ctx, reader, provider, now, 30*time.Minute)
 		if err != nil {
-			return "", fmt.Errorf("recent[%s]: %w", provider, err)
+			return nil, fmt.Errorf("recent[%s]: %w", provider, err)
 		}
 		signal, err := classifySignalFromStore(ctx, d.Store, provider, now.Add(-p.RateLimitWindow), now)
 		if err != nil {
-			return "", fmt.Errorf("signal[%s]: %w", provider, err)
+			return nil, fmt.Errorf("signal[%s]: %w", provider, err)
 		}
 		budget, err := plans.ComputeSessionBudget(planName, plans.SessionBudgetInputs{
 			WindowMessages:  windowCons.MessagesInWindow,
@@ -194,45 +228,15 @@ func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
 			Authoritative: plans.LatestAuthoritativeWindow(ctx, reader, eventschema.Provider(provider), p, now),
 		})
 		if err != nil {
-			return "", fmt.Errorf("budget[%s]: %w", provider, err)
+			return nil, fmt.Errorf("budget[%s]: %w", provider, err)
 		}
 		budgets = append(budgets, budget)
 	}
-	payload := map[string]any{"budgets": budgets}
-	if len(notes) > 0 {
-		payload["notes"] = notes
-	}
+	result := &sessionBudgetResult{Budgets: budgets, Notes: notes}
 	if warn, err := maybeDataWarning(ctx, d.Store, time.Time{}, now); err == nil && warn != nil {
-		payload["data_warning"] = warn
+		result.DataWarning = warn
 	}
-	// Render the first budget — first in provider order, so the same
-	// plan every call — as a markdown table for clients that surface
-	// text content visually (Desktop, Code, Cursor). The JSON appendix
-	// stays intact for agents.
-	if len(budgets) == 0 {
-		out, err := json.MarshalIndent(payload, "", "  ")
-		if err != nil {
-			return "", err
-		}
-		return string(out), nil
-	}
-	b := budgets[0]
-	row := budgetSummaryRow{
-		Display:           b.Display,
-		WindowConsumed:    b.WindowConsumed,
-		WindowCap:         b.WindowCap,
-		WindowUnit:        "messages",
-		WindowPct:         b.WindowPct,
-		WindowResetsIn:    b.WindowResetsIn,
-		WillHitCapWithin:  b.WillHitCapWithin,
-		RecentRatePerHour: b.RecentRatePerHour,
-		Confidence:        b.Confidence,
-		RecommendedAction: b.RecommendedAction,
-		SignalLevel:       b.SignalQuality.Level,
-		SignalCaveat:      b.SignalQuality.Caveat,
-		Note:              b.Note,
-	}
-	return markdownPayload(renderBudgetSummary(row), payload), nil
+	return result, nil
 }
 
 func planHeadroom(ctx context.Context, d PlanDeps) (*planHeadroomResult, error) {
