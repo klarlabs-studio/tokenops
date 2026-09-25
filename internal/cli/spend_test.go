@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -73,6 +75,31 @@ func seedSpendDB(t *testing.T) string {
 		}
 	}
 	return path
+}
+
+func TestSpendTextDoesNotCallPlanCostUnderestimated(t *testing.T) {
+	var out bytes.Buffer
+	err := writeSpendText(&out, spendView{
+		Window:   "last 24h",
+		Currency: "USD",
+		Summary: analytics.Summary{
+			Requests: 1,
+			Unpriced: []analytics.UnpricedModel{{Provider: "openai", Model: "codex-unpublished-model", Requests: 1}},
+		},
+		HideSparkline: true,
+	})
+	if err != nil {
+		t.Fatalf("render spend: %v", err)
+	}
+	text := out.String()
+	for _, want := range []string{"API-equivalent is incomplete", "plan-covered usage still costs $0 at the margin", "openai/codex-unpublished-model"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("spend output missing %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "total spend is underestimated") {
+		t.Errorf("spend warning overstates the unpriced plan model:\n%s", text)
+	}
 }
 
 func TestSpendTextRenders(t *testing.T) {

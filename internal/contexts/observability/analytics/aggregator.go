@@ -180,10 +180,10 @@ type Summary struct {
 	// equals CostUSD; for flat-plan deployments it is the shadow value
 	// the subscription absorbed.
 	APIEquivalentUSD float64
-	// Unpriced lists (provider, model) pairs in the window whose events
-	// carry no stored cost and have no rate in the pricing table, so
-	// their cost is silently absent from CostUSD. Surfaces (e.g. a newly
-	// released model) should render this as a warning.
+	// Unpriced lists (provider, model) pairs in the window with no rate in
+	// the pricing table. For metered events their actual cost may be absent
+	// from CostUSD; for plan-covered events actual cost remains zero while
+	// the API-equivalent estimate is incomplete.
 	Unpriced []UnpricedModel `json:",omitempty"`
 }
 

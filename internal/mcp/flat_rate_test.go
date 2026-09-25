@@ -125,6 +125,31 @@ func TestTopConsumersFallsBackToTokensWhenValueTies(t *testing.T) {
 	}
 }
 
+func TestSpendSummaryDistinguishesPlanCostFromMissingAPIEquivalent(t *testing.T) {
+	now := time.Now().UTC()
+	srv := analyticsServer(t,
+		promptEnv("unknown-plan-model", now.Add(-time.Hour), "codex-unpublished-model", 10_000, eventschema.CostSourcePlanIncluded),
+	)
+	var got spendSummaryResult
+	if err := json.Unmarshal([]byte(execTool(t, srv, "tokenops_spend_summary", nil)), &got); err != nil {
+		t.Fatalf("decode spend summary: %v", err)
+	}
+	if got.CostUSD != 0 {
+		t.Fatalf("plan-covered cost_usd = %v, want measured $0", got.CostUSD)
+	}
+	if got.PricingWarning == nil {
+		t.Fatal("missing API-equivalent warning for unpriced plan-covered model")
+	}
+	for _, want := range []string{"API-equivalent is incomplete", "plan-covered usage still costs $0 at the margin"} {
+		if !strings.Contains(got.PricingWarning.Message, want) {
+			t.Errorf("warning %q missing %q", got.PricingWarning.Message, want)
+		}
+	}
+	if strings.Contains(got.PricingWarning.Message, "cost_usd is underestimated") {
+		t.Errorf("warning misstates flat-rate actual cost: %q", got.PricingWarning.Message)
+	}
+}
+
 // An unknown grouping fell through to model inside the handler, so a
 // typo'd "by" returned a confident answer to a question nobody asked. The
 // schema enum refuses it at the MCP boundary; the handler must not depend

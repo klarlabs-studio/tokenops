@@ -374,11 +374,11 @@ func writeSpendText(w io.Writer, v spendView) error {
 	fmt.Fprintln(w)
 
 	if len(v.Summary.Unpriced) > 0 {
-		fmt.Fprintf(w, "\n⚠ no pricing for %d model(s) — total spend is underestimated:\n", len(v.Summary.Unpriced))
+		fmt.Fprintf(w, "\n⚠ no API rate for %d model(s) — API-equivalent is incomplete; metered cost may omit usage (plan-covered usage still costs $0 at the margin):\n", len(v.Summary.Unpriced))
 		for _, u := range v.Summary.Unpriced {
 			fmt.Fprintf(w, "    %s/%s (%d requests)\n", u.Provider, u.Model, u.Requests)
 		}
-		fmt.Fprintln(w, "  update tokenops or add a rate for these models to the pricing table")
+		fmt.Fprintln(w, "  update pricing only when authoritative provider rates are available")
 	}
 
 	if len(v.GroupRows) > 0 {
