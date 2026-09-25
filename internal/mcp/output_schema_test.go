@@ -10,6 +10,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/replay"
 	"go.klarlabs.de/tokenops/internal/contexts/rules"
+	"go.klarlabs.de/tokenops/internal/presentation"
 )
 
 // TestOutputSchemasGenerate is a guard test for structured-output adoption.
@@ -34,10 +35,10 @@ func TestOutputSchemasGenerate(t *testing.T) {
 		"prepareWorkResult":   prepareWorkResult{},
 		"optimizationsResult": optimizationsResult{},
 		// control_tools.go
-		"versionResult":       versionResult{},
-		"statusResult":        statusResult{},
-		"statusInsightResult": statusInsightResult{},
-		"domainEventsResult":  domainEventsResult{},
+		"versionResult":      versionResult{},
+		"statusResult":       statusResult{},
+		"StatusInsight":      presentation.StatusInsight{},
+		"domainEventsResult": domainEventsResult{},
 		// plan_tools.go
 		"planHeadroomResult": planHeadroomResult{},
 		// parity_tools.go

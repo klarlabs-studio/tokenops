@@ -14,6 +14,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/sourceprobe"
+	"go.klarlabs.de/tokenops/internal/presentation"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
 )
@@ -80,6 +81,7 @@ func newStatusCmd(rf *rootFlags) *cobra.Command {
 			if w := dropWarningFrom(res.Health); w != "" {
 				res.Warnings = append(res.Warnings, w)
 			}
+			res.Insight = presentation.ForStatus(statusState(res))
 			if jsonOut {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(res)
 			}
@@ -94,10 +96,29 @@ func newStatusCmd(rf *rootFlags) *cobra.Command {
 
 // statusResult is the structured status payload returned by `--json`.
 type statusResult struct {
-	Health   endpointResult `json:"health"`
-	Ready    endpointResult `json:"ready"`
-	Version  endpointResult `json:"version"`
-	Warnings []string       `json:"warnings,omitempty"`
+	Health   endpointResult             `json:"health"`
+	Ready    endpointResult             `json:"ready"`
+	Version  endpointResult             `json:"version"`
+	Insight  presentation.StatusInsight `json:"insight"`
+	Warnings []string                   `json:"warnings,omitempty"`
+}
+
+// statusState trusts the daemon's explicit /readyz status and treats local
+// ingestion/drop warnings as reduced coverage. Missing or unrecognized
+// readiness data stays unavailable rather than being inferred from HTTP 200.
+func statusState(r statusResult) string {
+	state, _ := r.Ready.Body["status"].(string)
+	switch state {
+	case "ready":
+		if len(r.Warnings) > 0 {
+			return "degraded"
+		}
+		return "ready"
+	case "not_configured":
+		return "not_configured"
+	default:
+		return "not_ready"
+	}
 }
 
 type endpointResult struct {
@@ -161,6 +182,7 @@ func writeOfflineStatus(w io.Writer, base string, cfg config.Config, cfgErr erro
 		"daemon":  base,
 		"ready":   false,
 		"state":   "not_running",
+		"insight": presentation.ForStatus("not_running"),
 		"hint":    "daemon not running; " + offlineRemedy(daemonSupervised()) + ". MCP-only deployments can ignore this and call `tokenops_status` via the MCP host instead.",
 		"version": version.String(),
 	}
@@ -175,6 +197,8 @@ func writeOfflineStatus(w io.Writer, base string, cfg config.Config, cfgErr erro
 		return json.NewEncoder(w).Encode(payload)
 	}
 	fmt.Fprintf(w, "daemon: %s (not running)\n", base)
+	insight := presentation.ForStatus("not_running")
+	fmt.Fprintf(w, "status: %s — %s\n", insight.Level, insight.Summary)
 	if cfgErr == nil {
 		blockers := cfg.Blockers()
 		if len(blockers) == 0 {
@@ -251,8 +275,13 @@ func dropWarningFrom(health endpointResult) string {
 }
 
 func writeStatusText(w io.Writer, base string, r statusResult) error {
+	insight := r.Insight
+	if insight.Level == "" {
+		insight = presentation.ForStatus(statusState(r))
+	}
 	lines := []string{
 		fmt.Sprintf("daemon: %s", base),
+		fmt.Sprintf("status: %s — %s", insight.Level, insight.Summary),
 		formatLine("health ", r.Health),
 		formatLine("ready  ", r.Ready),
 		formatLine("version", r.Version),
