@@ -220,6 +220,7 @@ message PromptEvent {
   string finish_reason = 42;
   string error_code = 43;
   bool cache_hit = 44;
+  int64 tool_call_count = 45;
 
   double cost_usd = 50;
   string cost_source = 51;

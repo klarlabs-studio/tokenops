@@ -93,6 +93,10 @@ type PromptEvent struct {
 	// FinishReason mirrors the provider's stop/finish reason when present
 	// (e.g. "stop", "length", "tool_use").
 	FinishReason string `json:"finish_reason,omitempty"`
+	// ToolCallCount is the number of tool-call output items reported by the
+	// provider. It records only the count, never tool names, arguments, or
+	// results, so coding-agent behavior is measurable without retaining content.
+	ToolCallCount int64 `json:"tool_call_count,omitempty"`
 	// ErrorCode is set when Status indicates an error response.
 	ErrorCode string `json:"error_code,omitempty"`
 

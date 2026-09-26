@@ -53,6 +53,29 @@ pairs, and at least 10% median resource improvement with 60% of pairs improving
 by at least 10%. Trusted evidence requires at least 20 pairs and 90% coverage,
 and does not itself grant execution authority.
 
+## Coding-agent extension
+
+The exact-output cohort is not sufficient evidence for a coding agent. A
+coding-agent trial must use the same execution ID for every request in one
+attempt and additionally verify all of the following from the emitted prompt
+events:
+
+- the provider endpoint is Responses or Messages and the response is streamed;
+- every request in the execution remains in the assigned arm;
+- provider-reported input, cached-input, and output usage is present;
+- at least one provider-reported tool-call item is observed when the task
+  requires a tool; TokenOps records only the count, never its name, arguments,
+  or result;
+- latency and time-to-first-token are measured for every call;
+- the final repository verifier is recorded as the execution outcome.
+
+OpenAI Responses usage is read from the terminal `response.completed` event.
+Anthropic Messages usage is combined from `message_start` and `message_delta`.
+An incomplete stream has no authoritative usage and must not be admitted as a
+complete paired execution. Keep the task bounded to a disposable fixture or an
+isolated worktree, cap the number of pairs, and stop on the first policy,
+quality, or upstream-compatibility failure.
+
 ## Utility objective and guardrails
 
 Verification can report counted tokens, plan-quota usage, verified metered

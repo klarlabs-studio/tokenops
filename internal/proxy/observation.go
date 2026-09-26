@@ -153,10 +153,12 @@ func (r *observerRequestMeter) Done(_ int64) {
 	// consumed nothing. TokenSource is what tells them apart.
 	outputTokens := int64(0)
 	tokenSource := eventschema.TokenSourceCounted
-	if usage, ok := parseResponseUsage(body); ok {
+	usage, usageReported := parseResponseUsage(body)
+	if usageReported {
 		r.obs.InputTokens = usage.InputTokens
 		r.obs.InputCounted = true
 		outputTokens = usage.OutputTokens
+		tokenSource = eventschema.TokenSourceVendorReported
 		if usage.Model != "" {
 			r.obs.ResponseModel = usage.Model
 		}
@@ -180,25 +182,28 @@ func (r *observerRequestMeter) Done(_ int64) {
 	}
 
 	prompt := &eventschema.PromptEvent{
-		PromptHash:       r.obs.PromptHash,
-		Provider:         r.obs.Provider,
-		RequestModel:     r.obs.RequestModel,
-		ResponseModel:    r.obs.ResponseModel,
-		InputTokens:      r.obs.InputTokens,
-		OutputTokens:     outputTokens,
-		TotalTokens:      r.obs.InputTokens + outputTokens,
-		TokenSource:      tokenSource,
-		ContextSize:      r.obs.ContextSize,
-		MaxOutputTokens:  r.obs.MaxOutput,
-		Latency:          latency,
-		TimeToFirstToken: ttft,
-		Streaming:        r.obs.Streaming,
-		Status:           r.obs.Status,
-		CostSource:       r.obs.CostSource,
-		WorkflowID:       r.obs.WorkflowID,
-		AgentID:          r.obs.AgentID,
-		SessionID:        r.obs.SessionID,
-		UserID:           r.obs.UserID,
+		PromptHash:        r.obs.PromptHash,
+		Provider:          r.obs.Provider,
+		RequestModel:      r.obs.RequestModel,
+		ResponseModel:     r.obs.ResponseModel,
+		InputTokens:       r.obs.InputTokens,
+		OutputTokens:      outputTokens,
+		TotalTokens:       r.obs.InputTokens + outputTokens,
+		CachedInputTokens: usage.CachedInputTokens,
+		TokenSource:       tokenSource,
+		ContextSize:       r.obs.ContextSize,
+		MaxOutputTokens:   r.obs.MaxOutput,
+		Latency:           latency,
+		TimeToFirstToken:  ttft,
+		Streaming:         r.obs.Streaming,
+		Status:            r.obs.Status,
+		FinishReason:      usage.FinishReason,
+		ToolCallCount:     usage.ToolCallCount,
+		CostSource:        r.obs.CostSource,
+		WorkflowID:        r.obs.WorkflowID,
+		AgentID:           r.obs.AgentID,
+		SessionID:         r.obs.SessionID,
+		UserID:            r.obs.UserID,
 	}
 	if r.m.costEngine != nil && prompt.CostSource == eventschema.CostSourceMetered && prompt.TokensCounted() {
 		if cost, err := r.m.costEngine.ComputeAt(prompt, r.obs.Start); err == nil {
@@ -206,7 +211,6 @@ func (r *observerRequestMeter) Done(_ int64) {
 			prompt.CostMeasured = true
 		}
 	}
-
 	env := &eventschema.Envelope{
 		ID:            uuid.NewString(),
 		SchemaVersion: eventschema.SchemaVersion,
@@ -221,9 +225,12 @@ func (r *observerRequestMeter) Done(_ int64) {
 }
 
 type responseUsage struct {
-	Model        string
-	InputTokens  int64
-	OutputTokens int64
+	Model             string
+	InputTokens       int64
+	OutputTokens      int64
+	CachedInputTokens int64
+	FinishReason      string
+	ToolCallCount     int64
 }
 
 // parseResponseUsage extracts authoritative non-streaming provider usage.
@@ -232,25 +239,133 @@ type responseUsage struct {
 // usage or obscure the model that actually served a routed request.
 func parseResponseUsage(body []byte) (responseUsage, bool) {
 	var response struct {
-		Model string `json:"model"`
-		Usage struct {
+		Model  string `json:"model"`
+		Status string `json:"status"`
+		Usage  struct {
 			PromptTokens     *int64 `json:"prompt_tokens"`
 			CompletionTokens *int64 `json:"completion_tokens"`
 			InputTokens      *int64 `json:"input_tokens"`
 			OutputTokens     *int64 `json:"output_tokens"`
+			InputDetails     struct {
+				CachedTokens int64 `json:"cached_tokens"`
+			} `json:"input_tokens_details"`
 		} `json:"usage"`
+		Output []struct {
+			Type string `json:"type"`
+		} `json:"output"`
 	}
-	if json.Unmarshal(body, &response) != nil {
+	if json.Unmarshal(body, &response) == nil {
+		input, output := response.Usage.PromptTokens, response.Usage.CompletionTokens
+		if input == nil || output == nil {
+			input, output = response.Usage.InputTokens, response.Usage.OutputTokens
+		}
+		if input != nil && output != nil && *input >= 0 && *output >= 0 {
+			return responseUsage{
+				Model: response.Model, InputTokens: *input, OutputTokens: *output,
+				CachedInputTokens: response.Usage.InputDetails.CachedTokens,
+				FinishReason:      response.Status, ToolCallCount: countToolItems(response.Output),
+			}, true
+		}
+	}
+	return parseSSEUsage(body)
+}
+
+func parseSSEUsage(body []byte) (responseUsage, bool) {
+	normalized := bytes.ReplaceAll(body, []byte("\r\n"), []byte("\n"))
+	var aggregate responseUsage
+	var inputSeen, outputSeen bool
+	var streamedToolCalls int64
+	for _, frame := range bytes.Split(normalized, []byte("\n\n")) {
+		var data []byte
+		for _, line := range bytes.Split(frame, []byte("\n")) {
+			if bytes.HasPrefix(line, []byte("data:")) {
+				part := bytes.TrimSpace(bytes.TrimPrefix(line, []byte("data:")))
+				if len(part) > 0 && !bytes.Equal(part, []byte("[DONE]")) {
+					data = append(data, part...)
+				}
+			}
+		}
+		if len(data) == 0 {
+			continue
+		}
+		var event struct {
+			Type     string          `json:"type"`
+			Response json.RawMessage `json:"response"`
+			Message  struct {
+				Model string `json:"model"`
+				Usage struct {
+					InputTokens          int64 `json:"input_tokens"`
+					CacheReadInputTokens int64 `json:"cache_read_input_tokens"`
+				} `json:"usage"`
+			} `json:"message"`
+			Usage struct {
+				OutputTokens *int64 `json:"output_tokens"`
+			} `json:"usage"`
+			Delta struct {
+				StopReason string `json:"stop_reason"`
+			} `json:"delta"`
+			Item struct {
+				Type string `json:"type"`
+			} `json:"item"`
+			ContentBlock struct {
+				Type string `json:"type"`
+			} `json:"content_block"`
+		}
+		if json.Unmarshal(data, &event) != nil {
+			continue
+		}
+		switch event.Type {
+		case "response.completed", "response.done":
+			if usage, ok := parseResponseUsage(event.Response); ok {
+				aggregate = usage
+				inputSeen, outputSeen = true, true
+			}
+		case "response.output_item.done":
+			if isToolItem(event.Item.Type) {
+				streamedToolCalls++
+			}
+		case "message_start":
+			aggregate.Model = event.Message.Model
+			aggregate.InputTokens = event.Message.Usage.InputTokens
+			aggregate.CachedInputTokens = event.Message.Usage.CacheReadInputTokens
+			inputSeen = true
+		case "message_delta":
+			if event.Usage.OutputTokens != nil && *event.Usage.OutputTokens >= 0 {
+				aggregate.OutputTokens = *event.Usage.OutputTokens
+				outputSeen = true
+			}
+			if event.Delta.StopReason != "" {
+				aggregate.FinishReason = event.Delta.StopReason
+			}
+		case "content_block_start":
+			if isToolItem(event.ContentBlock.Type) {
+				streamedToolCalls++
+			}
+		}
+	}
+	if aggregate.ToolCallCount == 0 {
+		aggregate.ToolCallCount = streamedToolCalls
+	}
+	if !inputSeen || !outputSeen || aggregate.InputTokens < 0 || aggregate.OutputTokens < 0 {
 		return responseUsage{}, false
 	}
-	input, output := response.Usage.PromptTokens, response.Usage.CompletionTokens
-	if input == nil || output == nil {
-		input, output = response.Usage.InputTokens, response.Usage.OutputTokens
+	return aggregate, true
+}
+
+func countToolItems(items []struct {
+	Type string `json:"type"`
+}) int64 {
+	var count int64
+	for _, item := range items {
+		if isToolItem(item.Type) {
+			count++
+		}
 	}
-	if input == nil || output == nil || *input < 0 || *output < 0 {
-		return responseUsage{}, false
-	}
-	return responseUsage{Model: response.Model, InputTokens: *input, OutputTokens: *output}, true
+	return count
+}
+
+func isToolItem(kind string) bool {
+	return kind == "tool_use" || kind == "server_tool_use" || strings.HasSuffix(kind, "_call")
 }
 
 // extractResponseModel reads the response model when the upstream reports

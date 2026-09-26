@@ -62,7 +62,10 @@ const resp = await client.chat.completions.create({
 });
 ```
 
-Streaming and `responses.create` work without further changes.
+Streaming and `responses.create` work without further changes. For Responses
+SSE, TokenOps reads authoritative model and usage data from the terminal
+`response.completed` event. It also counts provider-reported tool-call output
+items without retaining tool names, arguments, results, or response text.
 
 ## Attribution headers
 
