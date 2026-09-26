@@ -2,11 +2,64 @@
 
 ## Unreleased
 
+## 0.71.0 - 2026-09-26
+
+This release completes the source and live-validation work for ADR 0004. It
+adds evidence-bounded guidance across the CLI and MCP surfaces, proves a
+bounded randomized routing cohort against metered OpenAI traffic, and tightens
+the attribution and verification rules that keep optimization claims honest.
+
+### Added
+
+- **Work-aware CLI and MCP guidance.** Status, review, preparation, resource
+  glance, and work-insight surfaces now compose the same evidence-aware control
+  loop instead of presenting disconnected counters. (#380–#386)
+- **Outcome-gated adaptive routing.** Experiments bind randomized arms to full
+  executions, compare only complete pairs, account for reported human
+  attention, and require trusted outcomes before autonomous route learning.
+  (#352–#357)
+- **Canonical work and event correlation.** Native domain envelopes preserve
+  actor, work, execution, intervention, and outcome relationships through the
+  durable event store. Legacy history can be imported without retaining a
+  second event-writing path. (#358–#369)
+- **Content-safe JSON outcome verification.** `tokenops outcome check-json`
+  records whether a response matches an expected JSON value without retaining
+  the response body. (#399)
+
+### Changed
+
+- **The daemon runtime is split into supervised lifecycle components.** Event,
+  retention, vendor-usage, pricing, read-guard, spend, and window-probe workers
+  now report their own health instead of disappearing behind one process-level
+  status. (#370–#378)
+- **Subscription names match vendor product names.** OpenAI plans use
+  `gpt-plus`, `gpt-pro`, `gpt-pro-5x`, `gpt-pro-20x`, and `gpt-business`;
+  Anthropic plans use `claude-pro`, `claude-max-5x`, `claude-max-20x`, Team,
+  and Enterprise variants. Existing unambiguous spellings remain deprecated
+  aliases. (#399)
+- **Background learning is more conservative.** Formatter projections remain
+  distinct from observed recovery evidence, and the Phase 5 decision loop
+  learns utility only from explicit outcomes. (#390–#391)
+
 ### Fixed
 
 - **Claude Opus 5.5 is priced independently from Opus 5.** Its verified
   $4/$20/$0.20 input/output/cache-read rates and 5% cache-read ratio no longer
   inherit the older Opus 5 price.
+- **GPT-6 Sol and Luna use verified pricing.** Exact input, cached-input, and
+  output rates are available to metered routing comparisons. (#399)
+- **Provider-reported response usage wins over envelope estimates.**
+  Non-streaming responses now attribute the authoritative model and token
+  counts returned by the provider. (#399)
+- **Randomized trials reject incomplete or failed evidence.** Verification
+  excludes HTTP failures, partially applied route arms, and executions that
+  cannot be durably tied to their randomized assignment. (#394–#396)
+- **Synthetic proxy execution windows include their initiating prompt.** This
+  closes the boundary gap that previously started an execution just after its
+  prompt observation. (#399)
+- **Plan-cost warnings distinguish unknown cost from zero spend.** Aggregates
+  no longer repeat provenance caveats or present unpriced plan usage as a
+  complete API-equivalent total. (#388–#389)
 
 ## 0.70.0 - 2026-09-20
 
