@@ -379,7 +379,7 @@
     {
       "id": "task-collect-real-outcome-cohort",
       "title": "Collect a real intervention/outcome cohort (Real-Work Outcome Validation)",
-      "description": "Use the current installed product on actual work, correlate an authorized intervention to measured executions, and capture only a human or recognized verifier outcome. Do not modify production data with fixtures, synthetic events, or guessed outcomes. Evaluate a causal comparison only when the evidence supports matched pairs; otherwise report the gap and remain observational.",
+      "description": "Use the current product on actual work, correlate an authorized intervention to measured executions, and capture only a human or recognized verifier outcome. Do not modify production data with fixtures, synthetic events, or guessed outcomes. Two real paid paired attempts were rejected by verifier integrity checks (partial route application; upstream HTTP 400 with fallback), so there is no valid comparison or outcome evidence yet. Codex CLI now has a local TokenOps stdio MCP registration, but model traffic is not routed through TokenOps; the initial non-interactive MCP check was blocked by tool-approval policy, and the supervised daemon is not answering. Next: verify read-only MCP calls in a fresh interactive Codex session, confirm daemon health/release state, diagnose the HTTP 400 using non-sensitive metadata, and explicitly decide whether to use metered API routing before any further paired model calls. Preserve the observational label until assignment, full-arm route evidence, resource measurements, and actual outcome evidence are all present.",
       "priority": "medium",
       "estimate": "",
       "depends_on": [],
