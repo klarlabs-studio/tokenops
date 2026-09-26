@@ -44,8 +44,7 @@ func TestCatalogCoversPublishedPlans(t *testing.T) {
 	// silently lose support.
 	want := []string{
 		"claude-max-5x", "claude-max-20x", "claude-pro",
-		"claude-code-max", "claude-code-pro",
-		"gpt-plus", "gpt-pro", "gpt-team",
+		"gpt-plus", "gpt-pro", "gpt-pro-5x", "gpt-pro-20x", "gpt-business",
 		"copilot-individual", "copilot-business",
 		"cursor-pro", "cursor-business",
 	}
@@ -53,6 +52,20 @@ func TestCatalogCoversPublishedPlans(t *testing.T) {
 		if _, ok := Lookup(w); !ok {
 			t.Errorf("catalog missing required plan %q", w)
 		}
+	}
+}
+
+func TestProductSurfaceNamesAreNotCanonicalPlans(t *testing.T) {
+	for _, name := range []string{"codex-plus", "claude-code-pro", "gpt-team"} {
+		if _, ok := catalog[name]; ok {
+			t.Errorf("%q must be an alias, not a canonical plan", name)
+		}
+		if _, aliased := ResolveAlias(name); !aliased {
+			t.Errorf("%q should remain accepted as a deprecation alias", name)
+		}
+	}
+	if _, ok := Lookup("claude-code-max"); ok {
+		t.Error("ambiguous claude-code-max must require an explicit 5x or 20x plan")
 	}
 }
 

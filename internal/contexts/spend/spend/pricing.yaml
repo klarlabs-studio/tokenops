@@ -51,6 +51,21 @@ rates:
       output_per_million: 50.00
       cached_input_per_million: 1.00
       verified: true
+    # GPT-6 Sol and Luna — exact API model IDs and Standard short-context
+    # rates from https://developers.openai.com/api/docs/pricing, verified
+    # 2026-09-26. Prompts above 272K tokens use higher long-context rates;
+    # the current flat schema cannot express that tier, so these rows retain
+    # the existing conservative caveat used for GPT-6 Astra.
+    "gpt-6-sol":
+      input_per_million: 2.00
+      output_per_million: 10.00
+      cached_input_per_million: 0.20
+      verified: true
+    "gpt-6-luna":
+      input_per_million: 0.10
+      output_per_million: 0.50
+      cached_input_per_million: 0.01
+      verified: true
     "gpt-4o-mini*":
       input_per_million: 0.15
       output_per_million: 0.60

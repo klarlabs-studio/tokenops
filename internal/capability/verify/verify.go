@@ -742,6 +742,7 @@ func appendMissingAssignedExecutions(execs []work.Execution, events []*eventsche
 		known[string(exec.ID)] = struct{}{}
 	}
 	seenExperiments := make(map[string]struct{})
+	assigned := make(map[string]string)
 	starts := make(map[string]time.Time)
 	for _, env := range events {
 		if env == nil || env.Association.Execution == "" || env.Correlation.Experiment == "" {
@@ -756,12 +757,28 @@ func appendMissingAssignedExecutions(execs []work.Execution, events []*eventsche
 		}
 		seenExperiments[env.Correlation.Experiment] = struct{}{}
 		id := env.Association.Execution
-		if prior, ok := starts[id]; !ok || env.Timestamp.Before(prior) {
-			starts[id] = env.Timestamp
-		}
+		assigned[id] = env.Correlation.Experiment
+		starts[id] = env.Timestamp
 	}
 	if requested == "" && len(seenExperiments) != 1 {
 		return execs
+	}
+	// Proxy observation starts before routing assigns the experiment arm.
+	// Anchor the synthetic execution at its earliest directly associated
+	// event, otherwise the prompt that carries usage and cost lands a few
+	// milliseconds before the assignment and is incorrectly excluded.
+	for _, env := range events {
+		if env == nil {
+			continue
+		}
+		id := env.Association.Execution
+		experimentID, ok := assigned[id]
+		if !ok || env.Correlation.Experiment != experimentID {
+			continue
+		}
+		if prior, ok := starts[id]; !ok || env.Timestamp.Before(prior) {
+			starts[id] = env.Timestamp
+		}
 	}
 	for id, startedAt := range starts {
 		if _, ok := known[id]; ok || startedAt.IsZero() {

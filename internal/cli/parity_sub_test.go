@@ -53,6 +53,7 @@ var subCLIOnly = map[string]string{
 	"pricing refresh":       "fetches and snapshots the rate card — catalog maintenance, not a question",
 	"pricing diff":          "diffs rate-card snapshots — catalog maintenance",
 	"pricing lint":          "lints rate-card snapshots — catalog maintenance",
+	"outcome check-json":    "verifies a local response file that is intentionally unavailable to remote MCP clients",
 	"budget list":           "GAP: tokenops_budget_set writes budgets but cannot list them; tokenops_config shows them",
 	"plan catalog":          "GAP: no tool lists the plan catalog; an invalid name in tokenops_plan_set is refused with the reason",
 	"coach delivery":        "GAP: coaching delivery (observe/advise/intervene) is not settable from an agent",

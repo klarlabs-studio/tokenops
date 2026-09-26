@@ -54,7 +54,7 @@ func newDecisionExplainCmd() *cobra.Command {
 
 func newOutcomeCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "outcome", Short: "Record outcome evidence for an execution"}
-	cmd.AddCommand(newOutcomeRecordCmd(), newOutcomeDetectCmd())
+	cmd.AddCommand(newOutcomeRecordCmd(), newOutcomeDetectCmd(), newOutcomeCheckJSONCmd())
 	return cmd
 }
 

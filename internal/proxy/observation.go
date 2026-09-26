@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
@@ -152,7 +153,14 @@ func (r *observerRequestMeter) Done(_ int64) {
 	// consumed nothing. TokenSource is what tells them apart.
 	outputTokens := int64(0)
 	tokenSource := eventschema.TokenSourceCounted
-	if r.m.tokenizer == nil {
+	if usage, ok := parseResponseUsage(body); ok {
+		r.obs.InputTokens = usage.InputTokens
+		r.obs.InputCounted = true
+		outputTokens = usage.OutputTokens
+		if usage.Model != "" {
+			r.obs.ResponseModel = usage.Model
+		}
+	} else if r.m.tokenizer == nil {
 		tokenSource = eventschema.TokenSourceUncounted
 	} else if n, err := r.m.tokenizer.CountText(r.obs.Provider, string(body)); err == nil {
 		outputTokens = int64(n)
@@ -210,6 +218,39 @@ func (r *observerRequestMeter) Done(_ int64) {
 		Payload:       prompt,
 	}
 	r.m.bus.Publish(env)
+}
+
+type responseUsage struct {
+	Model        string
+	InputTokens  int64
+	OutputTokens int64
+}
+
+// parseResponseUsage extracts authoritative non-streaming provider usage.
+// Falling back to tokenization remains important for providers that omit it,
+// but tokenizing the response envelope itself must never replace reported API
+// usage or obscure the model that actually served a routed request.
+func parseResponseUsage(body []byte) (responseUsage, bool) {
+	var response struct {
+		Model string `json:"model"`
+		Usage struct {
+			PromptTokens     *int64 `json:"prompt_tokens"`
+			CompletionTokens *int64 `json:"completion_tokens"`
+			InputTokens      *int64 `json:"input_tokens"`
+			OutputTokens     *int64 `json:"output_tokens"`
+		} `json:"usage"`
+	}
+	if json.Unmarshal(body, &response) != nil {
+		return responseUsage{}, false
+	}
+	input, output := response.Usage.PromptTokens, response.Usage.CompletionTokens
+	if input == nil || output == nil {
+		input, output = response.Usage.InputTokens, response.Usage.OutputTokens
+	}
+	if input == nil || output == nil || *input < 0 || *output < 0 {
+		return responseUsage{}, false
+	}
+	return responseUsage{Model: response.Model, InputTokens: *input, OutputTokens: *output}, true
 }
 
 // extractResponseModel reads the response model when the upstream reports

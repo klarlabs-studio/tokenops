@@ -143,43 +143,45 @@ var catalog = map[string]Plan{
 		// exactly why it is pinned in one place instead of five.
 		SourceURL: "https://support.anthropic.com/en/articles/8325612 (2026-05; vendor no longer publishes an absolute)",
 	},
-	"claude-code-max": {
-		Name:            "claude-code-max",
-		Provider:        "anthropic",
-		Display:         "Claude Code (Max plan)",
-		RateLimitWindow: 5 * time.Hour,
-		SourceURL:       "https://docs.claude.com/en/docs/claude-code/setup#pricing (2026-05)",
-	},
-	"claude-code-pro": {
-		Name:            "claude-code-pro",
-		Provider:        "anthropic",
-		Display:         "Claude Code (Pro plan)",
-		RateLimitWindow: 5 * time.Hour,
-		SourceURL:       "https://docs.claude.com/en/docs/claude-code/setup#pricing (2026-05)",
-	},
 	"gpt-plus": {
-		Name:              "gpt-plus",
-		Provider:          "openai",
-		Display:           "ChatGPT Plus",
-		RateLimitWindow:   3 * time.Hour,
-		MessagesPerWindow: 80,
-		WindowUnit:        "messages",
-		SourceURL:         "https://help.openai.com/en/articles/9275245 (2026-05)",
+		Name:            "gpt-plus",
+		Provider:        "openai",
+		Display:         "ChatGPT Plus",
+		RateLimitWindow: 5 * time.Hour,
+		WindowUnit:      "messages",
+		SourceURL:       "https://developers.openai.com/docs/pricing (2026-09): local-message estimates are model-dependent per five-hour window",
 	},
 	"gpt-pro": {
-		Name:      "gpt-pro",
-		Provider:  "openai",
-		Display:   "ChatGPT Pro",
-		SourceURL: "https://openai.com/chatgpt/pricing (2026-05)",
+		Name:            "gpt-pro",
+		Provider:        "openai",
+		Display:         "ChatGPT Pro (tier unspecified)",
+		RateLimitWindow: 5 * time.Hour,
+		WindowUnit:      "messages",
+		SourceURL:       "https://developers.openai.com/docs/pricing (2026-09): Pro is offered in 5x and 20x tiers",
 	},
-	"gpt-team": {
-		Name:              "gpt-team",
-		Provider:          "openai",
-		Display:           "ChatGPT Team",
-		RateLimitWindow:   3 * time.Hour,
-		MessagesPerWindow: 120,
-		WindowUnit:        "messages",
-		SourceURL:         "https://openai.com/chatgpt/pricing (2026-05)",
+	"gpt-pro-5x": {
+		Name:            "gpt-pro-5x",
+		Provider:        "openai",
+		Display:         "ChatGPT Pro 5x",
+		RateLimitWindow: 5 * time.Hour,
+		WindowUnit:      "messages",
+		SourceURL:       "https://developers.openai.com/docs/pricing (2026-09): five times Plus Codex usage",
+	},
+	"gpt-pro-20x": {
+		Name:            "gpt-pro-20x",
+		Provider:        "openai",
+		Display:         "ChatGPT Pro 20x",
+		RateLimitWindow: 5 * time.Hour,
+		WindowUnit:      "messages",
+		SourceURL:       "https://developers.openai.com/docs/pricing (2026-09): 20 times Plus Codex usage",
+	},
+	"gpt-business": {
+		Name:            "gpt-business",
+		Provider:        "openai",
+		Display:         "ChatGPT Business",
+		RateLimitWindow: 5 * time.Hour,
+		WindowUnit:      "messages",
+		SourceURL:       "https://developers.openai.com/docs/pricing (2026-09): Standard Business is the current workspace plan name",
 	},
 	"copilot-individual": {
 		Name:             "copilot-individual",
@@ -236,18 +238,6 @@ var catalog = map[string]Plan{
 		WindowUnit:        "messages",
 		SourceURL:         "https://mistral.ai/pricing (2026-05)",
 	},
-	// Codex Plus — OpenAI's subscription tier for the codex.com /
-	// Codex CLI. Window matches GPT Plus (3h rolling) per OpenAI's
-	// shared rate-limit policy across consumer products.
-	"codex-plus": {
-		Name:              "codex-plus",
-		Provider:          "openai",
-		Display:           "Codex Plus",
-		RateLimitWindow:   3 * time.Hour,
-		MessagesPerWindow: 80,
-		WindowUnit:        "messages",
-		SourceURL:         "https://platform.openai.com/docs/guides/codex (2026-05)",
-	},
 }
 
 // deprecatedAliases maps retired catalog names to the modern entry
@@ -256,7 +246,10 @@ var catalog = map[string]Plan{
 // of an error. Stale docs / blog posts from before the v0.6.0 catalog
 // split keep working.
 var deprecatedAliases = map[string]string{
-	"claude-max": "claude-max-20x",
+	"claude-max":      "claude-max-20x",
+	"claude-code-pro": "claude-pro",
+	"codex-plus":      "gpt-plus",
+	"gpt-team":        "gpt-business",
 }
 
 // ResolveAlias returns the modern catalog name when `name` is a known

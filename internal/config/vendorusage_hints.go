@@ -53,7 +53,7 @@ func configHintCodexJSONL(enabled bool) string {
 	if enabled {
 		return ""
 	}
-	return "set vendor_usage.codex_jsonl.enabled: true (RECOMMENDED for Codex Plus/Pro users — surfaces OpenAI's official rate_limits 5h + weekly %)"
+	return "set vendor_usage.codex_jsonl.enabled: true (RECOMMENDED for ChatGPT Plus/Pro users — surfaces OpenAI's official rate_limits 5h + weekly %)"
 }
 
 func configHintOpenCode(enabled bool) string {

@@ -31,7 +31,7 @@ func TestLatestAuthoritativeWindow_CodexPrimary(t *testing.T) {
 		}),
 		env(now.Add(-1*time.Minute), map[string]string{"other": "x"}), // no key
 	}}
-	p, _ := Lookup("codex-plus") // openai, 5h window
+	p, _ := Lookup("gpt-plus") // openai, 5h window
 	a := LatestAuthoritativeWindow(context.Background(), reader, eventschema.ProviderOpenAI, p, now)
 	if a == nil {
 		t.Fatal("expected an authoritative window from codex primary snapshot")

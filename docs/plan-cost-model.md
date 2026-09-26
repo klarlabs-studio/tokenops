@@ -36,26 +36,27 @@ the full catalog listed as the suggestion set.
 ## Supported plans
 
 `tokenops plan catalog` enumerates every plan TokenOps knows about.
-Snapshot as of 2026-05:
+Snapshot as of 2026-09:
 
 | Catalog name | Display | Provider | Window cap |
 |---|---|---|---|
 | `claude-max-5x` | Claude Max 5x | anthropic | ~50 msgs / 5h |
 | `claude-max-20x` | Claude Max 20x | anthropic | ~200 msgs / 5h |
 | `claude-pro` | Claude Pro | anthropic | ~45 msgs / 5h |
-| `claude-code-max` | Claude Code (Max plan) | anthropic | session-based (no published cap) |
-| `claude-code-pro` | Claude Code (Pro plan) | anthropic | session-based (no published cap) |
-| `gpt-plus` | ChatGPT Plus | openai | ~80 msgs / 3h |
-| `gpt-pro` | ChatGPT Pro | openai | no published cap |
-| `gpt-team` | ChatGPT Team | openai | ~120 msgs / 3h |
+| `gpt-plus` | ChatGPT Plus | openai | model-dependent / 5h |
+| `gpt-pro` | ChatGPT Pro (tier unspecified) | openai | model-dependent / 5h |
+| `gpt-pro-5x` | ChatGPT Pro 5x | openai | 5x Plus / 5h |
+| `gpt-pro-20x` | ChatGPT Pro 20x | openai | 20x Plus / 5h |
+| `gpt-business` | ChatGPT Business | openai | model-dependent / 5h |
 | `copilot-individual` | GitHub Copilot Individual | github | no published cap |
 | `copilot-business` | GitHub Copilot Business | github | no published cap |
 | `cursor-pro` | Cursor Pro | cursor | 500 requests / month |
 | `cursor-business` | Cursor Business | cursor | 500 requests / month |
 
-Window caps reflect the vendor's published rate-limit window — the
-shortest interval beyond which the provider throttles. Values use the
-lower bound of the vendor's range when one is given.
+Window caps reflect the vendor's published rate-limit window. When a vendor
+publishes model-dependent ranges rather than one plan-wide cap, TokenOps keeps
+the window but does not invent a single message denominator; authoritative
+usage-meter percentages drive headroom instead.
 
 Each entry in `internal/contexts/spend/plans/plans.go` carries a
 dated `SourceURL` pinning the vendor page that documents its limits.
