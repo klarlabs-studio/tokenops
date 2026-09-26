@@ -299,27 +299,31 @@ not infer task success or overall quality from the absence of a finding.
 | 2 — freshness | Complete | PR #341. |
 | 3 — work primitives | Complete | PRs #342 and #347. |
 | 4 — capability layer | Complete | PR #343. |
-| 5 — verification and experiment | Implementation shipped; live validation open | PR #345 and correlated work/event support; verifier integrity fixes in PRs #394–#396. Two real paid paired attempts were correctly rejected: one had partial route application and one had an upstream HTTP 400/fallback. Codex CLI now has a local TokenOps MCP entry, but Codex model traffic is not routed through TokenOps and the local daemon is unavailable. No valid outcome evidence or causal improvement is claimed. |
+| 5 — verification and experiment | Complete, including bounded live validation | PR #345 and correlated work/event support; verifier integrity fixes in PRs #394–#396. On 2026-09-26, the current-checkout supervised daemon completed five randomized metered `gpt-6-sol`/`gpt-6-luna` pairs. All ten calls returned HTTP 200 and independently verified exact output; each arm achieved 5/5 outcomes with 21 measured tokens per execution. Verified pricing measured $0.000090 per Sol execution and $0.0000045 per Luna execution. The experiment ledger reports supported evidence, 95% median cost reduction, and all quality/latency guardrails passing; randomized verification accepted five complete pairs without fallback. This validates only the bounded exact-output cohort, not general model-quality equivalence. |
 | 6 — canonical events | Complete | PRs #361–#369. |
-| 7 — runtime and installed-product verification | Complete in source/CI; live release check partial | Built-binary journey test in PR #349; lifecycle modules in PRs #370–#378. On 2026-09-26, installed v0.70.0 daemon health/readiness and MCP `tokenops_status` passed after a supervised restart. A temporary build of current source passed CLI and MCP status/resource-glance checks against that daemon using real local session records. The installed v0.70.0 binary still exposes demo/dashboard surfaces removed from source in PR #387; upgrade and recheck a release containing #387 under operator control. |
+| 7 — runtime and installed-product verification | Complete in source/CI; live release check partial | Built-binary journey test in PR #349; lifecycle modules in PRs #370–#378. On 2026-09-26, installed v0.70.0 health/readiness and MCP status passed, then the current checkout was built, installed as the supervised daemon, and used for the complete Phase 5 trial. It remained healthy/ready after configuration restoration. A tagged release containing post-v0.70.0 cleanup and these fixes still requires an operator-controlled release check. |
 | 8 — intent-oriented MCP | Complete | PRs #380–#382. |
 | 9 — surface-native insight | Complete | PRs #383–#386. Browser dashboard and demo surfaces were removed in PR #387; CLI, MCP, and local API remain. |
 
-### Next validation gate
+### Phase 5 live-validation result
 
-First, use a fresh interactive Codex CLI session to verify read-only TokenOps
-MCP calls; the initial non-interactive check was blocked by Codex's approval
-policy. MCP tool availability alone is not evidence that model traffic is
-routed. Confirm daemon health and release state before enabling any route.
-Decide explicitly whether to use the metered OpenAI API path; do not silently
-switch from ChatGPT-login Codex. Before another paid paired attempt, diagnose
-the prior variant HTTP 400 and ensure the whole execution stays on its assigned
-arm; do not weaken verifier integrity checks. Capture only an outcome that the
-operator or an independent verifier actually observed. Compare matched
-executions only when assignment, consistent route evidence, resource
-measurements, and explicit outcome evidence are all present. Until then,
-preserve the observational label. Do not seed demo activity or infer success
-from task completion.
+The final trial used the current checkout as the supervised daemon, explicit
+operator authorization for metered API traffic, exact sourced GPT-6 pricing,
+and a local JSON verifier that retains no response or expected content. Five
+randomized pairs supplied complete assignment, route, authoritative API usage,
+served-model, latency, metered-cost, and explicit verification evidence. The
+experiment ledger classified the evidence as supported: all five pairs met the
+50% cost-improvement objective, both arms achieved 5/5 verified outcomes, and
+all quality and latency guardrails passed. Randomized verification accepted the
+five pairs without falling back to observational cohorts.
+
+The measured result is deliberately narrow: for the exact prompt/output check,
+both models used 15 input and 6 output tokens, while the verified standard API
+rates produced $0.000090 per Sol execution and $0.0000045 per Luna execution.
+This is a 95% metered-cost reduction for that cohort. It does not establish
+general quality equivalence or authorize routing outside an enrolled trial.
+The temporary provider and route were removed, the original Codex Plus plan
+binding was restored, and the current-checkout daemon remained healthy/ready.
 
 ## Non-goals
 
