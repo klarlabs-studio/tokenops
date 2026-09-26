@@ -4,7 +4,7 @@ updated: 2026-09-26
 ## Current State
 
 TokenOps is a local-first adaptive control plane for AI-assisted work. Current
-source `main` includes PR #406; v0.72.0 contains the work through PR #404. The
+source `main` includes PR #408; v0.72.1 contains the work through PR #408. The
 CLI/MCP/API surfaces are the product; there is no bundled browser dashboard or
 demo-data workflow (PR #387).
 
@@ -75,17 +75,29 @@ assignment or model rewrite and preserves the baseline rather than changing
 instruction authority. A live guard confirmation completed on Opus 5.5 with
 only HTTP 200 responses and recorded the Sonnet route as safely skipped.
 
-A separate request-compatible Claude Code experiment
-`experiment:55c9d3c0-6c64-4b2a-a4c4-409ae1a71b5a` completed one randomized
-`claude-fable-5` / `claude-opus-5-5` pair. Both disposable Go repairs returned
-only HTTP 200 responses, stayed on one arm across every streamed tool call,
-reported authoritative model/usage/cache/latency/tool metadata, and passed
-independent `go test ./...` verification with scoped human outcomes. Mean
-metered cost was $0.035528 baseline and $0.015342 intervention (56.8% lower);
-mean request latency was 3877ms and 3648ms. The ledger reports one complete
-pair, 100% strong coverage, and all declared guardrails passing. This proves
-the Anthropic coding-agent evidence path, not comparative quality or causal
-uplift; five matched pairs remain required for a supported belief.
+A request-compatible Claude Code experiment run through the installed v0.72.1
+binary, `experiment:e1ad3cdc-e486-49f2-a1e7-34bbdbbcbc40`, completed five
+randomized `claude-fable-5` / `claude-opus-5-5` pairs across five distinct Go
+repair fixtures. All provider calls returned 2xx, every multi-call execution
+stayed on one served model, and all ten independent isolated-cache `go test
+./...` verifiers passed with paired test checksums unchanged. Authoritative
+streamed model, usage, cache, latency, and tool-call metadata plus ten scoped
+human outcomes produced supported evidence: five quality-safe and improved
+pairs, 100% strong coverage, all guardrails passing, and 55.6% median metered
+cost improvement. Mean metered cost was $0.050415 baseline and $0.019363
+intervention; mean request latency was 3859ms and 3660ms. This is supported
+evidence for this bounded coding task class, not a universal quality or causal
+claim and not autonomous execution authority.
+
+Relicta 4.2.0 published v0.72.1 from commit `0838fb2`; the tag-triggered
+GoReleaser workflow produced four platform archives, checksums, the GitHub
+release, and the Homebrew cask. Homebrew upgraded the supervised daemon, which
+reports v0.72.1 at the tagged commit with health/readiness 200 and no blockers.
+Relicta's embedded SSH push rejected GitHub's host key, so the verified local
+tag was pushed with Git CLI before resuming the same release run. The known
+Relicta defects also reproduced: `gitsign: true` produced an unsigned annotated
+tag, and `autocommitchangelog: false` appended notes locally; the uncommitted
+append was removed and never reached the tag or `main`.
 
 The final Phase 5 trial enrolled five randomized `gpt-6-sol`/`gpt-6-luna`
 pairs. All ten calls returned HTTP 200 and the exact `TOKENOPS_OK` value; the
