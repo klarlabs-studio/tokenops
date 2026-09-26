@@ -20,6 +20,7 @@ package verify
 import (
 	"fmt"
 	"math"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -546,6 +547,9 @@ func routeAssignmentIssue(executionID, arm string, spec *eventschema.ExperimentE
 	for _, env := range events {
 		if env == nil || env.Association.Execution != executionID {
 			continue
+		}
+		if prompt, ok := env.Payload.(*eventschema.PromptEvent); ok && prompt.Status >= http.StatusBadRequest {
+			return fmt.Sprintf("the assigned execution includes an upstream HTTP %d failure", prompt.Status)
 		}
 		optimization, ok := env.Payload.(*eventschema.OptimizationEvent)
 		if !ok || optimization.Kind != eventschema.OptimizationTypeRouter {

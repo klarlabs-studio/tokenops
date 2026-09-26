@@ -280,6 +280,19 @@ func TestRandomizedComparisonRejectsPartiallyAppliedVariantExecutions(t *testing
 	}
 }
 
+func TestRandomizedComparisonRejectsUpstreamRequestFailure(t *testing.T) {
+	execs, events := randomizedFixture(1, "experiment:http-failure", "http-failure")
+	failure := promptEvent("", t0.Add(time.Hour+3*time.Minute), 100)
+	failure.Association.Execution = "http-failure-variant-1"
+	failure.Payload.(*eventschema.PromptEvent).Status = 400
+	events = append(events, failure)
+
+	got := verify.Compare(execs, events)
+	if !got.Observational() || !strings.Contains(got.RandomizedFallbackReason, "assigned execution includes an upstream HTTP 400 failure") {
+		t.Fatalf("failed variant request was accepted as randomized evidence: %+v", got)
+	}
+}
+
 func TestRandomizedComparisonFallsBackWhenAnyAssignedOutcomeIsMissing(t *testing.T) {
 	execs, events := randomizedFixture(5, "experiment:test", "missing")
 	for i, event := range events {
