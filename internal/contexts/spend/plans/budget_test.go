@@ -86,6 +86,24 @@ func TestSessionBudgetAuthoritativeScoresCaplessPlan(t *testing.T) {
 	}
 }
 
+func TestSessionBudgetAuthoritativeUsesVendorShape(t *testing.T) {
+	out, err := ComputeSessionBudget("gpt-plus", SessionBudgetInputs{
+		Authoritative: &AuthoritativeWindow{
+			UsedPct:        23,
+			ResetsIn:       6 * 24 * time.Hour,
+			Duration:       7 * 24 * time.Hour,
+			Source:         "codex:primary",
+			VendorPlanType: "prolite",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.WindowDuration != "168h0m0s" || out.VendorPlanType != "prolite" {
+		t.Fatalf("budget = %+v", out)
+	}
+}
+
 func TestSessionBudgetContinueWhenLowUsage(t *testing.T) {
 	// Claude Max 20x: 200 msgs / 5h. 20 consumed, 8 in last 30 min.
 	out, err := ComputeSessionBudget("claude-max-20x", SessionBudgetInputs{

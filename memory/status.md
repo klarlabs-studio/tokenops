@@ -180,11 +180,24 @@ compression without wrapped recovery evidence. Full `make verify` passed its
 Go, lint, race, eval, and security gates at that time; local proto verification
 may still require the repository's pinned compiler version.
 
+The subscription telemetry gate exposed a live OpenAI window-shape mismatch.
+The configured plan is `gpt-plus`, while the current Codex meter reports the
+opaque plan type `prolite`, one 10,080-minute primary window at 23% used, and
+no secondary window. Released v0.72.1 incorrectly rendered that snapshot with
+the catalog's five-hour duration. The current fix reads the reported duration
+and plan type, producing a 168-hour window with the vendor reset unchanged;
+it deliberately does not infer that `prolite` equals a public catalog name.
+The configured Claude Max 20x source has genuine Claude Code token/cache
+usage, but its quota percentage and reset remain estimated because the Claude
+usage meter is not connected. Other plan semantics remain unproven without
+genuine meter records from accounts on those plans.
+
 ## Next
 
-1. Validate subscription-plan telemetry with genuine plan-meter records;
-   metered API routing is billed separately and cannot prove Plus, Pro,
-   Business, Team, Max, or Enterprise quota semantics.
+1. Complete subscription-plan telemetry validation with genuine plan-meter
+   records: reconcile OpenAI's `prolite` identifier without guessing, connect
+   the Claude usage meter for the configured Max plan, and test other plans
+   only on accounts that actually carry them.
 2. Expand representative Codex and Claude Code cohorts only when a new task
    class or policy question justifies paid evidence; the bounded Go repair
    class now has supported OpenAI and Anthropic coding-agent cohorts.
