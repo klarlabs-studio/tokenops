@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/outcomes"
@@ -425,14 +426,16 @@ func meanAttention(as []Attributed) measurement.Value {
 }
 
 // randomizedCohorts accepts only complete randomized pairs whose every
-// assigned execution was reconstructed and has measured tokens plus an
-// explicit outcome. Missing assignments or outcomes can bias an estimate,
-// so any such gap falls back to the full observational comparison.
+// assigned execution has measured tokens, an explicit outcome, and evidence
+// that the assigned model-route arm was delivered consistently. Missing
+// assignments or outcomes can bias an estimate, so any such gap falls back
+// to the full observational comparison.
 func randomizedCohorts(as []Attributed, events []*eventschema.Envelope, requested string) (string, []Attributed, []Attributed, int, string) {
 	type pairArms map[string]string
 	assignments := make(map[string]map[int]pairArms)
 	seenIDs := make(map[string]struct{})
 	seenExecutions := make(map[string]string)
+	assignmentSpecs := make(map[string]*eventschema.ExperimentEvent)
 	for _, env := range events {
 		if env == nil || env.Correlation.Experiment == "" {
 			continue
@@ -455,6 +458,7 @@ func randomizedCohorts(as []Attributed, events []*eventschema.Envelope, requeste
 			return "", nil, nil, 0, "an execution has multiple randomized assignments; using observational cohorts"
 		}
 		seenExecutions[executionID] = assignmentKey
+		assignmentSpecs[executionID] = p
 		if p.Pair < 1 || (p.Assignment != "baseline" && p.Assignment != "variant") {
 			return "", nil, nil, 0, "experiment assignment evidence is malformed; using observational cohorts"
 		}
@@ -509,6 +513,16 @@ func randomizedCohorts(as []Attributed, events []*eventschema.Envelope, requeste
 		if !baseOK || !variantOK {
 			return "", nil, nil, 0, "an assigned execution was not reconstructed; using observational cohorts"
 		}
+		if spec := assignmentSpecs[baselineID]; spec != nil && spec.Kind == "model_route" {
+			if reason := routeAssignmentIssue(baselineID, "baseline", spec, events); reason != "" {
+				return "", nil, nil, 0, reason + "; using observational cohorts"
+			}
+		}
+		if spec := assignmentSpecs[variantID]; spec != nil && spec.Kind == "model_route" {
+			if reason := routeAssignmentIssue(variantID, "variant", spec, events); reason != "" {
+				return "", nil, nil, 0, reason + "; using observational cohorts"
+			}
+		}
 		if !base.Tokens.Known() || !with.Tokens.Known() || base.Outcomes.Unknown > 0 || with.Outcomes.Unknown > 0 {
 			return "", nil, nil, 0, "randomized executions need measured tokens and explicit outcomes; using observational cohorts"
 		}
@@ -516,6 +530,50 @@ func randomizedCohorts(as []Attributed, events []*eventschema.Envelope, requeste
 		variant = append(variant, with)
 	}
 	return id, baseline, variant, len(assignments[id]), ""
+}
+
+// routeAssignmentIssue rejects pairs where proxy evidence shows that an
+// assigned model-route arm was only partially delivered. One successful
+// rewrite cannot stand in for an execution whose later matching requests
+// fell back to the original model.
+func routeAssignmentIssue(executionID, arm string, spec *eventschema.ExperimentEvent, events []*eventschema.Envelope) string {
+	if spec == nil || spec.Baseline.Model == "" || spec.Variant.Model == "" {
+		return "the model-route assignment is missing its baseline or variant model"
+	}
+	appliedReason := "route " + spec.Baseline.Model + " -> " + spec.Variant.Model
+	skippedReason := "observed: would route " + spec.Baseline.Model + " -> " + spec.Variant.Model
+	applied, skipped := 0, 0
+	for _, env := range events {
+		if env == nil || env.Association.Execution != executionID {
+			continue
+		}
+		optimization, ok := env.Payload.(*eventschema.OptimizationEvent)
+		if !ok || optimization.Kind != eventschema.OptimizationTypeRouter {
+			continue
+		}
+		switch {
+		case optimization.Decision == eventschema.OptimizationDecisionApplied && strings.HasPrefix(optimization.Reason, appliedReason):
+			applied++
+		case optimization.Decision == eventschema.OptimizationDecisionSkipped && strings.HasPrefix(optimization.Reason, skippedReason):
+			skipped++
+		}
+	}
+	if arm == "baseline" {
+		if applied > 0 {
+			return "a baseline-assigned execution contains an applied variant route"
+		}
+		if skipped == 0 {
+			return "the baseline-assigned execution has no matching route evidence"
+		}
+		return ""
+	}
+	if skipped > 0 {
+		return "the variant-assigned execution contains matching requests that were not routed"
+	}
+	if applied == 0 {
+		return "the variant-assigned execution has no applied route evidence"
+	}
+	return ""
 }
 
 func meanMeteredCost(as []Attributed) measurement.Value {
