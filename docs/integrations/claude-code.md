@@ -31,14 +31,31 @@ patching the CLI itself.
    Every request now flows through TokenOps. Verify with `tokenops status`
    (the daemon should report `ready`).
 
-## Attribution
+## Execution attribution for experiments
 
-Claude Code does not natively set TokenOps workflow / agent headers. To
-get richer rollups, wrap the CLI with a tiny launcher that injects
-attribution headers via an HTTP-aware reverse proxy or an MITM
-helper. The simplest approach is to set the headers via a one-off cURL
-during a session boundary — see `docs/sdk/anthropic.md` for the header
-list.
+Claude Code can select a proxy base URL but does not send TokenOps execution
+IDs itself. For one task attempt, launch a new session through the local
+bridge:
+
+```bash
+tokenops anthropic-bridge -- claude
+```
+
+The bridge gives the child process an ephemeral local base URL and adds one
+stable execution ID to each Anthropic request. It forwards the existing
+credentials and request content unchanged; the TokenOps proxy removes the
+correlation header before forwarding upstream. The generated execution ID is
+printed to stderr so you can record the real outcome after the task:
+
+```bash
+tokenops outcome record <execution-id> --result achieved
+```
+
+This only tags and proxies the child process; it does not start an experiment
+or change any already-running Claude Code session. Start a bounded trial
+explicitly with `tokenops experiment start`, and use comparable, non-critical
+work in each attempt. See `docs/phase5-live-validation.md` for the trial
+evidence requirements.
 
 ## Smoke test
 

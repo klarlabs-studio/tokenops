@@ -16,14 +16,17 @@ import (
 type ExperimentDeps struct{ Manager *experiments.Manager }
 
 type experimentInput struct {
-	Action        string `json:"action" jsonschema:"description=start | status | stop"`
-	ExperimentID  string `json:"experiment_id,omitempty"`
-	Provider      string `json:"provider,omitempty"`
-	BaselineModel string `json:"baseline_model,omitempty"`
-	VariantModel  string `json:"variant_model,omitempty"`
-	MaxPairs      int    `json:"max_pairs,omitempty"`
-	DurationDays  int    `json:"duration_days,omitempty"`
-	Reason        string `json:"reason,omitempty"`
+	Action            string                            `json:"action" jsonschema:"description=start | status | stop"`
+	ExperimentID      string                            `json:"experiment_id,omitempty"`
+	Provider          string                            `json:"provider,omitempty"`
+	BaselineModel     string                            `json:"baseline_model,omitempty"`
+	VariantModel      string                            `json:"variant_model,omitempty"`
+	MaxPairs          int                               `json:"max_pairs,omitempty"`
+	DurationDays      int                               `json:"duration_days,omitempty"`
+	ObjectiveMetric   string                            `json:"objective_metric,omitempty"`
+	MinImprovementPct float64                           `json:"min_improvement_pct,omitempty"`
+	Guardrails        []eventschema.ExperimentGuardrail `json:"guardrails,omitempty"`
+	Reason            string                            `json:"reason,omitempty"`
 }
 
 type experimentResult struct {
@@ -38,7 +41,7 @@ func RegisterExperimentTools(s *Server, d ExperimentDeps) error {
 		return errors.New("mcp: nil server")
 	}
 	s.Tool("tokenops_experiment").
-		Description("Start, inspect, or stop a bounded local model-routing trial. Trials run only on proxy traffic, stay within one provider, randomize baseline/variant order inside matched pairs, stop after at most 10 pairs or 14 days, and never enroll without this explicit call.").
+		Description("Start, inspect, or stop a bounded local model-routing trial. Start requires an explicit lower-is-better objective, minimum improvement percentage, and quality plus measured-resource guardrails. Missing objective or guardrail evidence blocks promotion. Trials only enroll proxy traffic, stay within one provider, randomize baseline/variant order inside matched pairs, and stop after at most 10 pairs or 14 days.").
 		OutputSchema(experimentResult{}).
 		Handler(func(ctx context.Context, in experimentInput) (*experimentResult, error) {
 			if d.Manager == nil {
@@ -54,6 +57,8 @@ func RegisterExperimentTools(s *Server, d ExperimentDeps) error {
 					Provider: in.Provider, BaselineModel: in.BaselineModel, VariantModel: in.VariantModel,
 					Fingerprint: decide.RouteFingerprint(eventschema.Provider(in.Provider), in.BaselineModel, in.VariantModel, "proxy"),
 					MaxPairs:    in.MaxPairs, Duration: time.Duration(days) * 24 * time.Hour,
+					ObjectiveMetric: in.ObjectiveMetric, MinImprovementPct: in.MinImprovementPct,
+					Guardrails: in.Guardrails,
 				})
 				if err != nil {
 					return nil, err

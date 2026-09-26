@@ -153,7 +153,9 @@ func TestRoutingExperimentRunsOneBaselineAndOneVariant(t *testing.T) {
 	provider, baseline, variant := eventschema.ProviderAnthropic, "claude-fable-5", "claude-opus-4-8"
 	if _, err := manager.Start(context.Background(), experiments.StartInput{
 		Provider: string(provider), BaselineModel: baseline, VariantModel: variant, MaxPairs: 1,
-		Fingerprint: decide.RouteFingerprint(provider, baseline, variant, "proxy"),
+		Fingerprint:     decide.RouteFingerprint(provider, baseline, variant, "proxy"),
+		ObjectiveMetric: "tokens", MinImprovementPct: 10,
+		Guardrails: []eventschema.ExperimentGuardrail{{Metric: "quality"}},
 	}); err != nil {
 		t.Fatal(err)
 	}

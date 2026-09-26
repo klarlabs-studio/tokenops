@@ -23,6 +23,8 @@ func TestExperimentToolRequiresExplicitBoundedEnrollment(t *testing.T) {
 	var started experimentResult
 	out := execTool(t, srv, "tokenops_experiment", map[string]any{
 		"action": "start", "provider": "anthropic", "baseline_model": "opus", "variant_model": "sonnet", "max_pairs": 2,
+		"objective_metric": "tokens", "min_improvement_pct": 10,
+		"guardrails": []map[string]any{{"metric": "quality"}, {"metric": "latency_ms", "max_regression_pct": 10}},
 	})
 	if err := json.Unmarshal([]byte(out), &started); err != nil {
 		t.Fatal(err)
