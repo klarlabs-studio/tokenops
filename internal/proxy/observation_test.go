@@ -1,7 +1,9 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -48,10 +50,14 @@ func (c *captureBus) snapshot() []*eventschema.Envelope {
 var _ events.Bus = (*captureBus)(nil)
 
 func startProxyForObservation(t *testing.T, upstream *httptest.Server) (string, *captureBus) {
+	return startProxyForProviderObservation(t, upstream, eventschema.ProviderOpenAI)
+}
+
+func startProxyForProviderObservation(t *testing.T, upstream *httptest.Server, providerID eventschema.Provider) (string, *captureBus) {
 	t.Helper()
 	u, _ := url.Parse(upstream.URL)
-	openai, _ := providers.Lookup(eventschema.ProviderOpenAI)
-	route := ProviderRoute{Provider: openai, Upstream: u}
+	provider, _ := providers.Lookup(providerID)
+	route := ProviderRoute{Provider: provider, Upstream: u}
 
 	bus := &captureBus{}
 	srv := New("127.0.0.1:0",
@@ -73,6 +79,67 @@ func startProxyForObservation(t *testing.T, upstream *httptest.Server) (string, 
 	})
 	waitListening(t, srv.Addr())
 	return "http://" + srv.Addr(), bus
+}
+
+func TestObserverClassifiesAnthropicErrorsWithoutRetainingContent(t *testing.T) {
+	secret := "operator-private-prompt"
+	tests := []struct {
+		name   string
+		status int
+		body   string
+		want   string
+	}{
+		{
+			name:   "sampling parameter incompatibility",
+			status: http.StatusBadRequest,
+			body:   `{"type":"error","error":{"type":"invalid_request_error","message":"temperature is not supported for this model: ` + secret + `"}}`,
+			want:   "anthropic.invalid_request.unsupported_sampling_parameter",
+		},
+		{
+			name:   "manual thinking incompatibility",
+			status: http.StatusBadRequest,
+			body:   `{"type":"error","error":{"type":"invalid_request_error","message":"thinking with budget_tokens is not supported: ` + secret + `"}}`,
+			want:   "anthropic.invalid_request.incompatible_thinking",
+		},
+		{
+			name:   "unknown provider error type",
+			status: http.StatusBadRequest,
+			body:   `{"type":"error","error":{"type":"` + secret + `","message":"` + secret + `"}}`,
+			want:   "anthropic.http_400",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tc.status)
+				_, _ = io.WriteString(w, tc.body)
+			}))
+			defer upstream.Close()
+
+			base, bus := startProxyForProviderObservation(t, upstream, eventschema.ProviderAnthropic)
+			resp, err := http.Post(base+"/anthropic/v1/messages", "application/json",
+				strings.NewReader(`{"model":"claude-sonnet-5","max_tokens":16,"messages":[{"role":"user","content":"hello"}]}`))
+			if err != nil {
+				t.Fatalf("post: %v", err)
+			}
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+
+			pe := waitForEvent(t, bus, 1)[0].Payload.(*eventschema.PromptEvent)
+			if pe.Status != tc.status || pe.ErrorCode != tc.want {
+				t.Fatalf("status/error = %d/%q, want %d/%q", pe.Status, pe.ErrorCode, tc.status, tc.want)
+			}
+			encoded, err := json.Marshal(pe)
+			if err != nil {
+				t.Fatalf("marshal event: %v", err)
+			}
+			if bytes.Contains(encoded, []byte(secret)) {
+				t.Fatalf("event retained provider message content: %s", encoded)
+			}
+		})
+	}
 }
 
 func waitForEvent(t *testing.T, bus *captureBus, n int) []*eventschema.Envelope {
