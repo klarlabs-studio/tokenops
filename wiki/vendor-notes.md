@@ -11,7 +11,7 @@ Rust CLI proxy that compresses shell command output before it hits an LLM contex
 - **tokenops-only (RTK gaps)**: make, mvn, gradle, sbt, mix, dotnet, cmake, ninja, bazel, apt/dnf/brew, terraform, ansible, helm, gcloud/az, flyway/alembic, curl, uv, composer.
 
 ## Plan catalog (rate-limit prediction)
-13 plans w/ dated vendor source URLs pinned in code: Claude Max 5x/20x/Pro, Claude Code, ChatGPT Plus/Pro/Team, Copilot Individual/Business, Cursor Pro/Business, Mistral Le Chat Pro, Codex Plus. Proxy providers: OpenAI, Anthropic, Gemini, Mistral.
+Plans with dated vendor source URLs are pinned in code: Claude Pro, Max 5x/20x, Team, and Enterprise; ChatGPT Plus, Pro 5x/20x, and Business; Copilot Individual/Business; Cursor Pro/Business; Mistral Le Chat Pro; and Google AI Premium. Product surfaces such as Codex and Claude Code are not separate subscription plans. Proxy providers: OpenAI, Anthropic, Gemini, Mistral.
 
 ## Claude Code hooks (integration facts)
 - PreToolUse hook stdin: {session_id, tool_name, tool_input:{file_path,offset,limit}, cwd, ...}. Deny via stdout {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"..."}}; exit 0 + no stdout = allow/no-op. PreToolUse can only allow/deny — it CANNOT modify tool_input.

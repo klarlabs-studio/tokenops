@@ -168,7 +168,7 @@ func TestClassifySignalVendorWiredTrumpsAll(t *testing.T) {
 }
 
 // Counting every source for every provider graded a Codex plan by Claude
-// Code's transcripts: codex-plus headroom carried "Reads ~/.claude/projects"
+// Code's transcripts: OpenAI subscription headroom carried "Reads ~/.claude/projects"
 // as its signal. Each provider is graded by the sources that report on it.
 func TestSignalIsGradedPerProvider(t *testing.T) {
 	counts := map[string]int64{"claude-code-jsonl": 6087}

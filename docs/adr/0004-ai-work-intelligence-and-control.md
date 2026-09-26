@@ -322,7 +322,7 @@ both models used 15 input and 6 output tokens, while the verified standard API
 rates produced $0.000090 per Sol execution and $0.0000045 per Luna execution.
 This is a 95% metered-cost reduction for that cohort. It does not establish
 general quality equivalence or authorize routing outside an enrolled trial.
-The temporary provider and route were removed, the original Codex Plus plan
+The temporary provider and route were removed, the original ChatGPT Plus plan
 binding was restored, and the current-checkout daemon remained healthy/ready.
 
 ## Non-goals

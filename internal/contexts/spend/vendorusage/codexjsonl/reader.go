@@ -8,7 +8,7 @@
 // `rate_limits` object that surfaces the 5-hour + weekly cap
 // percentages directly.
 //
-// Why this is the best signal source we have for Codex Plus/Pro: it
+// Why this is the best signal source we have for ChatGPT Plus/Pro: it
 // is documented (OpenAI Codex CLI reference), updated on every turn,
 // and the rate_limits block is what the codex.com UI reads. No
 // scraping, no API key, no cookie.

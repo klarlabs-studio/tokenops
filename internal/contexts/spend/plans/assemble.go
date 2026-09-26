@@ -38,7 +38,7 @@ var sourceProvider = map[string]string{
 // ClassifySignal grades, keeping only sources that report on provider.
 //
 // Counting every source for every provider graded a Codex plan by Claude
-// Code's transcripts: headroom for codex-plus carried "Reads
+// Code's transcripts: headroom for an OpenAI subscription carried "Reads
 // ~/.claude/projects" as its signal, and its confidence came from data
 // that says nothing about Codex. An empty provider keeps every source.
 func SignalFromCounts(counts map[string]int64, provider string) SignalInputs {

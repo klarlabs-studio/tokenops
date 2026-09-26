@@ -61,7 +61,8 @@ synthetic proxy executions started just after their prompt observation; and
 there was no content-safe local JSON outcome verifier. Exact verified GPT-6 Sol
 and Luna pricing was also added. The current checkout remains installed as the
 supervised daemon and reports healthy/ready. The temporary API provider and
-route were removed and the original `openai: codex-plus` plan restored.
+route were removed and the original OpenAI subscription was restored. The
+deprecated `codex-plus` spelling now resolves to canonical `gpt-plus`.
 
 A current-checkout build passed CLI health checks and MCP stdio
 initialize/tool-list/status/resource-glance calls. The resource glance read
