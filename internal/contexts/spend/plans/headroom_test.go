@@ -235,6 +235,26 @@ func TestHeadroomAuthoritativeWindowOverridesMessageCount(t *testing.T) {
 	}
 }
 
+func TestHeadroomAuthoritativeWindowUsesVendorDurationAndPlanType(t *testing.T) {
+	now := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
+	r, err := ComputeHeadroom("gpt-plus", HeadroomInputs{
+		Now: now,
+		Authoritative: &AuthoritativeWindow{
+			UsedPct:        23,
+			ResetsIn:       6 * 24 * time.Hour,
+			Duration:       7 * 24 * time.Hour,
+			Source:         "codex:primary",
+			VendorPlanType: "prolite",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.WindowDuration != "168h0m0s" || r.VendorPlanType != "prolite" {
+		t.Fatalf("report = %+v", r)
+	}
+}
+
 func TestHeadroomAuthoritativeWindowScoresCaplessPlan(t *testing.T) {
 	// A plan with a window but no message cap: message-count path yields
 	// no window signal, but a vendor % must still drive overage risk.

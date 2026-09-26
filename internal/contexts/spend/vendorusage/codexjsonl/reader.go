@@ -5,8 +5,8 @@
 // reasoning, event_msg, token_count, …); we key on the token_count
 // payload nested inside event_msg, which is the only record carrying
 // the per-turn usage block and — critically — the live OpenAI
-// `rate_limits` object that surfaces the 5-hour + weekly cap
-// percentages directly.
+// `rate_limits` object that surfaces the account's available cap windows
+// directly. Window roles and durations vary by plan.
 //
 // Why this is the best signal source we have for ChatGPT Plus/Pro: it
 // is documented (OpenAI Codex CLI reference), updated on every turn,
@@ -62,11 +62,11 @@ type Turn struct {
 // tools (signal_quality classifier, dashboards) can read the live
 // OpenAI cap state without re-parsing the JSONL.
 type RateLimits struct {
-	PrimaryUsedPercent     float64 // 5-hour rolling window % (typical)
-	PrimaryWindowMinutes   int     // 300 minutes
+	PrimaryUsedPercent     float64 // primary vendor window %
+	PrimaryWindowMinutes   int     // vendor-reported duration
 	PrimaryResetsAtUnix    int64
-	SecondaryUsedPercent   float64 // weekly window % (typical)
-	SecondaryWindowMinutes int     // 10080 minutes
+	SecondaryUsedPercent   float64 // secondary vendor window %
+	SecondaryWindowMinutes int     // vendor-reported duration
 	SecondaryResetsAtUnix  int64
 	PlanType               string // plus|pro|team|business
 }

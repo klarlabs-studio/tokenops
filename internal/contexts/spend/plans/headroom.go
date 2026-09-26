@@ -20,9 +20,11 @@ type HeadroomReport struct {
 	OverageRisk    string  `json:"overage_risk"`
 
 	// Window* fields describe the rolling rate-limit window for plans
-	// that publish one (Claude Max 5h, ChatGPT Plus 3h). Zero
-	// WindowCap means the vendor does not publish a concrete cap.
+	// that publish one. The vendor-reported duration wins when available;
+	// configured catalog durations are only the fallback. Zero WindowCap
+	// means the vendor does not publish a concrete cap.
 	WindowDuration string    `json:"window_duration,omitempty"`
+	VendorPlanType string    `json:"vendor_plan_type,omitempty"`
 	WindowCap      int64     `json:"window_cap,omitempty"`
 	WindowUnit     string    `json:"window_unit,omitempty"`
 	WindowConsumed int64     `json:"window_consumed,omitempty"`
@@ -244,7 +246,8 @@ func finishAuthoritativeMonthly(report HeadroomReport, in HeadroomInputs, window
 func applyAuthoritativeWindow(report *HeadroomReport, p Plan, in HeadroomInputs) string {
 	a := in.Authoritative
 	pct := clampPct(a.UsedPct)
-	report.WindowDuration = p.RateLimitWindow.String()
+	report.WindowDuration = authoritativeDuration(a, p.RateLimitWindow).String()
+	report.VendorPlanType = a.VendorPlanType
 	report.WindowCap = p.MessagesPerWindow
 	report.WindowUnit = p.WindowUnit
 	report.WindowPct = math.Round(pct*100) / 100
@@ -258,6 +261,13 @@ func applyAuthoritativeWindow(report *HeadroomReport, p Plan, in HeadroomInputs)
 		setEstimatedReset(report, in.WindowStartedAt, p.RateLimitWindow, in.Now)
 	}
 	return classifyWindowRisk(report.WindowPct)
+}
+
+func authoritativeDuration(a *AuthoritativeWindow, fallback time.Duration) time.Duration {
+	if a != nil && a.Duration > 0 {
+		return a.Duration
+	}
+	return fallback
 }
 
 // classifyWindowRisk maps a rate-limit-window utilisation percentage to

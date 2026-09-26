@@ -15,6 +15,8 @@ type SessionBudget struct {
 	PlanName       string  `json:"plan_name"`
 	Display        string  `json:"display"`
 	Provider       string  `json:"provider"`
+	WindowDuration string  `json:"window_duration,omitempty"`
+	VendorPlanType string  `json:"vendor_plan_type,omitempty"`
 	WindowCap      int64   `json:"window_cap"`
 	WindowConsumed int64   `json:"window_consumed"`
 	WindowPct      float64 `json:"window_pct"`
@@ -84,9 +86,11 @@ type SessionBudgetInputs struct {
 // share of the window already consumed and (when known) the time until
 // it resets. Source labels which meter it came from, for the caveat.
 type AuthoritativeWindow struct {
-	UsedPct  float64
-	ResetsIn time.Duration
-	Source   string
+	UsedPct        float64
+	ResetsIn       time.Duration
+	Duration       time.Duration
+	Source         string
+	VendorPlanType string
 }
 
 // ComputeSessionBudget returns a SessionBudget for the named plan from
@@ -109,6 +113,7 @@ func ComputeSessionBudget(planName string, in SessionBudgetInputs) (SessionBudge
 		PlanName:          planName,
 		Display:           p.Display,
 		Provider:          p.Provider,
+		WindowDuration:    p.RateLimitWindow.String(),
 		WindowCap:         p.MessagesPerWindow,
 		WindowConsumed:    in.WindowMessages,
 		Confidence:        ConfidenceLow,
@@ -169,6 +174,8 @@ func computeFromAuthoritative(planName string, p Plan, in SessionBudgetInputs) S
 		PlanName:          planName,
 		Display:           p.Display,
 		Provider:          p.Provider,
+		WindowDuration:    authoritativeDuration(a, p.RateLimitWindow).String(),
+		VendorPlanType:    a.VendorPlanType,
 		WindowCap:         p.MessagesPerWindow,
 		WindowPct:         math.Round(pct*100) / 100,
 		Confidence:        ConfidenceHigh,

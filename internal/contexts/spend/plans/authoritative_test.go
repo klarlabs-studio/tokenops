@@ -26,8 +26,9 @@ func TestLatestAuthoritativeWindow_CodexPrimary(t *testing.T) {
 		env(now.Add(-20*time.Minute), map[string]string{"primary_used_pct": "40.00"}),
 		// newest snapshot wins:
 		env(now.Add(-2*time.Minute), map[string]string{
-			"primary_used_pct":  "83.50",
-			"primary_resets_at": strconv.FormatInt(reset, 10),
+			"primary_used_pct":   "83.50",
+			"primary_resets_at":  strconv.FormatInt(reset, 10),
+			"primary_window_min": "300",
 		}),
 		env(now.Add(-1*time.Minute), map[string]string{"other": "x"}), // no key
 	}}
@@ -44,6 +45,35 @@ func TestLatestAuthoritativeWindow_CodexPrimary(t *testing.T) {
 	}
 	if a.Source != "codex:primary" {
 		t.Errorf("source=%q", a.Source)
+	}
+	if a.Duration != 5*time.Hour {
+		t.Errorf("duration=%v want 5h", a.Duration)
+	}
+}
+
+func TestLatestAuthoritativeWindow_CodexUsesReportedWeeklyPrimary(t *testing.T) {
+	now := time.Unix(1_000_000, 0).UTC()
+	reset := now.Add(6 * 24 * time.Hour).Unix()
+	reader := authFakeReader{events: []*eventschema.Envelope{
+		env(now.Add(-time.Minute), map[string]string{
+			"primary_used_pct":     "23.00",
+			"primary_resets_at":    strconv.FormatInt(reset, 10),
+			"primary_window_min":   "10080",
+			"secondary_used_pct":   "0.00",
+			"secondary_window_min": "0",
+			"plan_type":            "prolite",
+		}),
+	}}
+	p, _ := Lookup("gpt-plus")
+	a := LatestAuthoritativeWindow(context.Background(), reader, eventschema.ProviderOpenAI, p, now)
+	if a == nil {
+		t.Fatal("expected the reported Codex window")
+	}
+	if a.UsedPct != 23 || a.Duration != 7*24*time.Hour {
+		t.Fatalf("window = %+v, want 23%% over 168h", a)
+	}
+	if a.Source != "codex:primary" || a.VendorPlanType != "prolite" {
+		t.Errorf("provenance = %+v", a)
 	}
 }
 
