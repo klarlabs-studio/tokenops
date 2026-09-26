@@ -4,7 +4,7 @@ updated: 2026-09-26
 ## Current State
 
 TokenOps is a local-first adaptive control plane for AI-assisted work. Current
-source `main` includes PR #405; v0.72.0 contains the work through PR #404. The
+source `main` includes PR #406; v0.72.0 contains the work through PR #404. The
 CLI/MCP/API surfaces are the product; there is no bundled browser dashboard or
 demo-data workflow (PR #387).
 
@@ -52,6 +52,20 @@ are reduced to bounded classifications for unsupported sampling parameters,
 incompatible thinking configuration, assistant prefill, known provider error
 types, or provider-plus-HTTP-status fallback. Raw error messages and bodies are
 discarded, and the sanitized classification is exported as OTLP `error.type`.
+
+A subsequent bounded Claude Code cohort exposed that Anthropic's compressed
+Messages responses were being parsed as compressed bytes. Successful calls
+therefore lacked authoritative response model, usage, cache, and tool-call
+metadata, and the cohort was stopped with no comparison claim. A clean
+one-pair confirmation after decoding the observer's bounded gzip copy recovered
+vendor-reported streamed usage, served model, cache tokens, tool calls, and
+latency. The routed Sonnet execution still began with an opaque HTTP 400 before
+Claude Code retried successfully, so that confirmation was also stopped with
+zero completed outcome pairs. A final live confirmation recorded the failure as
+`anthropic.http_400.after_model_route`; it spent $0.033455 across both attempts
+and was likewise stopped with no outcome claim. The fix keeps forwarded bytes
+untouched and classifies opaque 400s after a model rewrite without retaining
+prompt, request, response, or credential material.
 
 The final Phase 5 trial enrolled five randomized `gpt-6-sol`/`gpt-6-luna`
 pairs. All ten calls returned HTTP 200 and the exact `TOKENOPS_OK` value; the

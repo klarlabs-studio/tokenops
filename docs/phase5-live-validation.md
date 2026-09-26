@@ -71,6 +71,11 @@ events:
 
 OpenAI Responses usage is read from the terminal `response.completed` event.
 Anthropic Messages usage is combined from `message_start` and `message_delta`.
+The observer decodes a bounded copy of gzip-compressed provider responses for
+usage and error classification; the bytes sent to the client are not changed.
+Opaque Anthropic HTTP 400 responses after a model rewrite are classified as
+route-associated without storing the request or response body. A 400 in either
+arm invalidates the pair even when the coding agent retries successfully.
 An incomplete stream has no authoritative usage and must not be admitted as a
 complete paired execution. Keep the task bounded to a disposable fixture or an
 isolated worktree, cap the number of pairs, and stop on the first policy,
