@@ -220,6 +220,93 @@ func TestRoutingExperimentRunsOneBaselineAndOneVariant(t *testing.T) {
 	}
 }
 
+func TestObserveOnlyRoutesApplyOnlyForExplicitExperimentAssignments(t *testing.T) {
+	var models []string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Model string `json:"model"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		models = append(models, body.Model)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"id":"r1","content":[{"type":"text","text":"ok"}]}`)
+	}))
+	defer upstream.Close()
+
+	store, err := sqlite.Open(context.Background(), filepath.Join(t.TempDir(), "events.db"), sqlite.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	manager := experiments.New(store)
+	provider, baseline, variant := eventschema.ProviderAnthropic, "claude-opus-5-5", "claude-sonnet-5"
+	trial, err := manager.Start(context.Background(), experiments.StartInput{
+		Provider: string(provider), BaselineModel: baseline, VariantModel: variant, MaxPairs: 1,
+		Fingerprint:     decide.RouteFingerprint(provider, baseline, variant, "proxy"),
+		ObjectiveMetric: "plan_quota_tokens", MinImprovementPct: 10,
+		Guardrails: []eventschema.ExperimentGuardrail{{Metric: "quality"}, {Metric: "latency_ms", MaxRegressionPct: 10}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	u, _ := url.Parse(upstream.URL)
+	anthropic, _ := providers.Lookup(provider)
+	bus := &captureBus{}
+	srv := New("127.0.0.1:0",
+		WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil))),
+		WithShutdownTimeout(time.Second),
+		WithProviderRoutes([]ProviderRoute{{Provider: anthropic, Upstream: u}}),
+		WithEventBus(bus), WithTokenizer(tokenizer.NewRegistry()), WithExperiments(manager),
+		WithActiveRouting(router.Config{
+			Rules:       []router.Rule{{Provider: provider, FromModel: baseline, ToModel: variant, Quality: .9}},
+			ObserveOnly: true,
+		}, spend.NewEngine(spend.DefaultTable())),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := srv.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		shutdown, stop := context.WithTimeout(context.Background(), time.Second)
+		defer stop()
+		_ = srv.Shutdown(shutdown)
+	})
+	waitListening(t, srv.Addr())
+
+	for _, executionID := range []string{"exec:trial-a", "exec:trial-b", "exec:outside"} {
+		req, _ := http.NewRequest(http.MethodPost, "http://"+srv.Addr()+"/anthropic/v1/messages", strings.NewReader(
+			`{"model":"claude-opus-5-5","max_tokens":100,"messages":[{"role":"user","content":"review status"}]}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(headerExecutionID, executionID)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}
+	if len(models) != 3 {
+		t.Fatalf("upstream models = %v, want three", models)
+	}
+	pairModels := map[string]int{models[0]: 1, models[1]: 1}
+	if len(pairModels) != 2 || pairModels[baseline] != 1 || pairModels[variant] != 1 {
+		t.Errorf("trial models = %v, want one baseline and one variant", models[:2])
+	}
+	if models[2] != baseline {
+		t.Errorf("unenrolled request model = %q, want baseline %q", models[2], baseline)
+	}
+
+	state, ok, err := manager.Status(context.Background(), trial.ID, time.Now().UTC())
+	if err != nil || !ok {
+		t.Fatalf("trial status ok=%v err=%v", ok, err)
+	}
+	if state.Assignments != 2 {
+		t.Errorf("assignments = %d, want exactly one pair", state.Assignments)
+	}
+}
+
 // Requests that match no rule pass through byte-identical.
 func TestActiveRoutingPassThroughOnNoMatch(t *testing.T) {
 	var upstreamBody string

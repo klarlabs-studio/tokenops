@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -75,24 +76,34 @@ func (s *Server) routingMiddleware(provider providers.Provider, next http.Handle
 			return
 		}
 		rec := recs[0]
-		if rec.ApplyBody == nil {
-			// Passive recommendation (no available target / unparseable
-			// body) — forward unchanged but still record the event.
-			s.publishRoutingEvent(obs, rec, eventschema.OptimizationDecisionSkipped)
-			next.ServeHTTP(w, r)
-			return
+		var trialRec *optimizer.Recommendation
+		if rec.ApplyBody == nil && strings.HasPrefix(rec.Reason, "observed:") &&
+			rec.TargetModel != "" && obs.ExecutionID != "" && s.experiments != nil {
+			// Observe-only remains the normal policy. Build an applied candidate
+			// only so an explicit, execution-linked experiment can select it.
+			// The candidate is never used unless Assign confirms enrollment.
+			trialRecs, trialErr := s.router.RunForExplicitTrial(r.Context(), req)
+			if trialErr == nil && len(trialRecs) > 0 &&
+				trialRecs[0].TargetModel == rec.TargetModel && len(trialRecs[0].ApplyBody) > 0 {
+				trialRec = &trialRecs[0]
+			}
 		}
 
-		assignment, enrolled, assignErr := s.experiments.Assign(r.Context(), experiments.AssignmentInput{
-			Provider: string(provider.ID), BaselineModel: obs.RequestModel, VariantModel: rec.TargetModel,
-			ExecutionID: obs.ExecutionID,
-			Fingerprint: decide.RouteFingerprint(provider.ID, obs.RequestModel, rec.TargetModel, "proxy"),
-			At:          time.Now().UTC(),
-		})
-		if assignErr != nil {
-			s.logger.Warn("routing experiment assignment failed; preserving baseline", "err", assignErr)
-			next.ServeHTTP(w, r)
-			return
+		var assignment experiments.Assignment
+		var enrolled bool
+		if rec.ApplyBody != nil || trialRec != nil {
+			var assignErr error
+			assignment, enrolled, assignErr = s.experiments.Assign(r.Context(), experiments.AssignmentInput{
+				Provider: string(provider.ID), BaselineModel: obs.RequestModel, VariantModel: rec.TargetModel,
+				ExecutionID: obs.ExecutionID,
+				Fingerprint: decide.RouteFingerprint(provider.ID, obs.RequestModel, rec.TargetModel, "proxy"),
+				At:          time.Now().UTC(),
+			})
+			if assignErr != nil {
+				s.logger.Warn("routing experiment assignment failed; preserving baseline", "err", assignErr)
+				next.ServeHTTP(w, r)
+				return
+			}
 		}
 		if enrolled && !assignment.Variant {
 			controlDecision := decide.Route(decide.RouteInput{
@@ -105,6 +116,16 @@ func (s *Server) routingMiddleware(provider providers.Provider, next http.Handle
 			controlDecision.Event.Attributes = experimentAttributes(assignment, false)
 			obs.Correlation = controlDecision.Event.Correlation
 			s.publishRoutingEvent(obs, rec, eventschema.OptimizationDecisionSkipped, controlDecision)
+			next.ServeHTTP(w, r)
+			return
+		}
+		if enrolled && assignment.Variant && rec.ApplyBody == nil && trialRec != nil {
+			rec = *trialRec
+		}
+		if rec.ApplyBody == nil {
+			// Passive recommendation (no available target / unparseable
+			// body) — forward unchanged but still record the event.
+			s.publishRoutingEvent(obs, rec, eventschema.OptimizationDecisionSkipped)
 			next.ServeHTTP(w, r)
 			return
 		}

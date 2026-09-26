@@ -717,6 +717,56 @@ func TestObserveModeRecordsWithoutApplying(t *testing.T) {
 	}
 }
 
+func TestExplicitTrialCanApplyObservedRecommendation(t *testing.T) {
+	r := New(Config{
+		Rules: []Rule{{
+			Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+			ToModel: "claude-haiku-4-5", Quality: 0.9,
+		}},
+		ObserveOnly: true,
+	}, nil)
+	req := &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: bodyWithModel(t, "claude-opus-4-8", nil),
+	}
+
+	observed, err := r.Run(context.Background(), req)
+	if err != nil || len(observed) != 1 || observed[0].ApplyBody != nil {
+		t.Fatalf("ordinary observe result = %+v, err %v; want recommendation only", observed, err)
+	}
+	trial, err := r.RunForExplicitTrial(context.Background(), req)
+	if err != nil || len(trial) != 1 || len(trial[0].ApplyBody) == 0 {
+		t.Fatalf("explicit trial result = %+v, err %v; want applied candidate", trial, err)
+	}
+	var routedBody map[string]any
+	if err := json.Unmarshal(trial[0].ApplyBody, &routedBody); err != nil {
+		t.Fatalf("decode trial body: %v", err)
+	}
+	if got, _ := routedBody["model"].(string); got != "claude-haiku-4-5" {
+		t.Errorf("trial model = %q, want claude-haiku-4-5", got)
+	}
+	if _, err := r.RunForExplicitTrial(context.Background(), nil); err != nil {
+		t.Errorf("nil request: err %v", err)
+	}
+}
+
+func TestExplicitTrialStillRespectsInRequestMode(t *testing.T) {
+	r := New(Config{
+		Rules: []Rule{{
+			Provider: eventschema.ProviderAnthropic, FromModel: "claude-opus-4-8",
+			ToModel: "claude-haiku-4-5", Quality: 0.9,
+		}},
+		ProposeOnly: true,
+	}, nil)
+	recs, err := r.RunForExplicitTrial(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderAnthropic, Model: "claude-opus-4-8",
+		Body: bodyWithModel(t, "claude-opus-4-8", nil),
+	})
+	if err != nil || len(recs) != 1 || recs[0].ApplyBody != nil {
+		t.Fatalf("explicit trial must respect in-request mode: %+v, err %v", recs, err)
+	}
+}
+
 // In-request mode refers every route to the operator, not just upgrades
 // past the preferred model.
 func TestInRequestModeProposesEveryRoute(t *testing.T) {

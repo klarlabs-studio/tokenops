@@ -133,6 +133,18 @@ func New(cfg Config, spendEng *spend.Engine) *Router {
 // Kind reports the optimizer category.
 func (r *Router) Kind() eventschema.OptimizationType { return eventschema.OptimizationTypeRouter }
 
+// RunForExplicitTrial computes the applied form of a recommendation for an
+// explicitly enrolled experiment. It bypasses observe-only mode only; callers
+// must persist an eligible experiment assignment before using ApplyBody.
+func (r *Router) RunForExplicitTrial(ctx context.Context, req *optimizer.Request) ([]optimizer.Recommendation, error) {
+	if r == nil {
+		return nil, nil
+	}
+	cfg := r.cfg
+	cfg.ObserveOnly = false
+	return New(cfg, r.spend).Run(ctx, req)
+}
+
 // Run consults the routing table for req. Emits at most one recommendation.
 func (r *Router) Run(_ context.Context, req *optimizer.Request) ([]optimizer.Recommendation, error) {
 	if req == nil || req.Model == "" {
