@@ -105,7 +105,11 @@ func Routing(events []*eventschema.Envelope, fingerprint string, now time.Time) 
 		pair string
 		arm  string
 	}{}
-	eligible := 0
+	byExecution := map[string]struct {
+		pair string
+		arm  string
+	}{}
+	eligibleExecutions := map[string]bool{}
 	objectiveMetric := ""
 	minImprovementPct := 0.0
 	var guardrails []learning.Guardrail
@@ -130,11 +134,17 @@ func Routing(events []*eventschema.Envelope, fingerprint string, now time.Time) 
 			continue
 		}
 		pairID := fmt.Sprintf("%s:%d", env.Correlation.Experiment, pairNo)
-		eligible++
-		byDecision[env.Correlation.Decision] = struct {
+		key := struct {
 			pair string
 			arm  string
 		}{pairID, armName}
+		byDecision[env.Correlation.Decision] = key
+		identity := "decision:" + env.Correlation.Decision
+		if env.Association.Execution != "" {
+			byExecution[env.Association.Execution] = key
+			identity = "execution:" + env.Association.Execution
+		}
+		eligibleExecutions[identity] = true
 		if pairs[pairID] == nil {
 			pairs[pairID] = &pair{}
 		}
@@ -144,6 +154,9 @@ func Routing(events []*eventschema.Envelope, fingerprint string, now time.Time) 
 			continue
 		}
 		key, ok := byDecision[env.Correlation.Decision]
+		if !ok && env.Association.Execution != "" {
+			key, ok = byExecution[env.Association.Execution]
+		}
 		if !ok {
 			continue
 		}
@@ -213,7 +226,7 @@ func Routing(events []*eventschema.Envelope, fingerprint string, now time.Time) 
 		})
 	}
 	return learning.Evaluate(learning.Evidence{
-		Eligible: eligible, Pairs: evidence, Fingerprint: fingerprint, Now: now,
+		Eligible: len(eligibleExecutions), Pairs: evidence, Fingerprint: fingerprint, Now: now,
 		ObjectiveMetric: objectiveMetric, MinImprovementPct: minImprovementPct, Guardrails: guardrails,
 	})
 }
