@@ -23,18 +23,19 @@ import (
 // install hooks on the machine it is running on, or to start the daemon that
 // hosts it, is a different proposition from asking it what spend looks like.
 var cliOnly = map[string]string{
-	"init":        "writes config and wires this machine's clients",
-	"detect":      "reads this machine's filesystem to report installed clients",
-	"start":       "runs the ingestion daemon in the foreground",
-	"daemon":      "installs, restarts and removes a supervisor unit",
-	"serve":       "is the MCP server itself",
-	"hooks":       "edits client hook configuration on this machine",
-	"coach-hook":  "is a hook entry point invoked by a client, not a user",
-	"read-guard":  "is a hook entry point invoked by a client, not a user",
-	"route-guard": "is a hook entry point invoked by a client, not a user",
-	"completion":  "is cobra's shell completion generator",
-	"help":        "is cobra's help command",
-	"provider":    "binds upstream base URLs, which only the daemon's proxy reads",
+	"init":             "writes config and wires this machine's clients",
+	"detect":           "reads this machine's filesystem to report installed clients",
+	"start":            "runs the ingestion daemon in the foreground",
+	"daemon":           "installs, restarts and removes a supervisor unit",
+	"serve":            "is the MCP server itself",
+	"anthropic-bridge": "launches a local client process with request attribution",
+	"hooks":            "edits client hook configuration on this machine",
+	"coach-hook":       "is a hook entry point invoked by a client, not a user",
+	"read-guard":       "is a hook entry point invoked by a client, not a user",
+	"route-guard":      "is a hook entry point invoked by a client, not a user",
+	"completion":       "is cobra's shell completion generator",
+	"help":             "is cobra's help command",
+	"provider":         "binds upstream base URLs, which only the daemon's proxy reads",
 }
 
 // cliToMCP maps a CLI command to the tool(s) that answer the same question.

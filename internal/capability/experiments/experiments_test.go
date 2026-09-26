@@ -32,7 +32,11 @@ func TestTrialIsBoundedPairedAndPersistent(t *testing.T) {
 	ledger := &memoryLedger{}
 	m := New(ledger)
 	now := time.Unix(100, 0).UTC()
-	state, err := m.Start(ctx, StartInput{Provider: "anthropic", BaselineModel: "opus", VariantModel: "sonnet", MaxPairs: 1, At: now})
+	state, err := m.Start(ctx, StartInput{
+		Provider: "anthropic", BaselineModel: "opus", VariantModel: "sonnet", MaxPairs: 1, At: now,
+		ObjectiveMetric: "tokens", MinImprovementPct: 10,
+		Guardrails: []eventschema.ExperimentGuardrail{{Metric: "quality"}, {Metric: "latency_ms", MaxRegressionPct: 10}},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +66,11 @@ func TestFingerprintDriftPreventsAssignment(t *testing.T) {
 	ledger := &memoryLedger{}
 	m := New(ledger)
 	now := time.Unix(100, 0).UTC()
-	_, err := m.Start(ctx, StartInput{Provider: "openai", BaselineModel: "large", VariantModel: "mini", Fingerprint: "old", At: now})
+	_, err := m.Start(ctx, StartInput{
+		Provider: "openai", BaselineModel: "large", VariantModel: "mini", Fingerprint: "old", At: now,
+		ObjectiveMetric: "tokens", MinImprovementPct: 10,
+		Guardrails: []eventschema.ExperimentGuardrail{{Metric: "quality"}},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +85,11 @@ func TestAssignmentRequiresExecutionIdentity(t *testing.T) {
 	ledger := &memoryLedger{}
 	m := New(ledger)
 	now := time.Unix(100, 0).UTC()
-	if _, err := m.Start(ctx, StartInput{Provider: "anthropic", BaselineModel: "opus", VariantModel: "sonnet", At: now}); err != nil {
+	if _, err := m.Start(ctx, StartInput{
+		Provider: "anthropic", BaselineModel: "opus", VariantModel: "sonnet", At: now,
+		ObjectiveMetric: "tokens", MinImprovementPct: 10,
+		Guardrails: []eventschema.ExperimentGuardrail{{Metric: "quality"}},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, assigned, err := m.Assign(ctx, AssignmentInput{
@@ -87,5 +99,15 @@ func TestAssignmentRequiresExecutionIdentity(t *testing.T) {
 	}
 	if got := len(ledger.events); got != 1 {
 		t.Fatalf("unjoinable assignment was persisted: %d events", got)
+	}
+}
+
+func TestTrialRequiresExplicitUtilityPolicy(t *testing.T) {
+	m := New(&memoryLedger{})
+	_, err := m.Start(context.Background(), StartInput{
+		Provider: "anthropic", BaselineModel: "opus", VariantModel: "sonnet",
+	})
+	if err == nil {
+		t.Fatal("trial without objective and guardrails was accepted")
 	}
 }

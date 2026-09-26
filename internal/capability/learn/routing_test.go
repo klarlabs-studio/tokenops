@@ -27,6 +27,10 @@ func (r experimentReader) Events(_ context.Context, id string) ([]*eventschema.E
 func TestRoutingPromotesOnlyOutcomeLinkedMatchedEvidence(t *testing.T) {
 	now := time.Unix(100000, 0).UTC()
 	var events []*eventschema.Envelope
+	events = append(events, &eventschema.Envelope{Timestamp: now, Payload: &eventschema.ExperimentEvent{
+		Stage: eventschema.ExperimentStarted, ObjectiveMetric: "tokens", MinImprovementPct: 10,
+		Guardrails: []eventschema.ExperimentGuardrail{{Metric: "quality"}},
+	}})
 	for pair := 1; pair <= 5; pair++ {
 		for _, arm := range []string{"baseline", "variant"} {
 			decision := fmt.Sprintf("d:%d:%s", pair, arm)
@@ -48,7 +52,18 @@ func TestFindRoutingAggregatesMatchingTrialsToReachTrusted(t *testing.T) {
 	reader := experimentReader{events: map[string][]*eventschema.Envelope{}}
 	for trial := 1; trial <= 2; trial++ {
 		id := fmt.Sprintf("experiment:%d", trial)
-		reader.states = append(reader.states, experiments.State{ID: id, Fingerprint: "fp", EndsAt: now.Add(time.Duration(trial) * time.Hour)})
+		reader.states = append(reader.states, experiments.State{
+			ID: id, Fingerprint: "fp", EndsAt: now.Add(time.Duration(trial) * time.Hour),
+			ObjectiveMetric: "tokens", MinImprovementPct: 10,
+			Guardrails: []eventschema.ExperimentGuardrail{{Metric: "quality"}},
+		})
+		reader.events[id] = append(reader.events[id], &eventschema.Envelope{
+			Timestamp: now, Correlation: eventschema.Correlation{Experiment: id},
+			Payload: &eventschema.ExperimentEvent{
+				Stage: eventschema.ExperimentStarted, ObjectiveMetric: "tokens", MinImprovementPct: 10,
+				Guardrails: []eventschema.ExperimentGuardrail{{Metric: "quality"}},
+			},
+		})
 		for pair := 1; pair <= 10; pair++ {
 			for _, arm := range []string{"baseline", "variant"} {
 				decision := fmt.Sprintf("d:%d:%d:%s", trial, pair, arm)
@@ -64,5 +79,41 @@ func TestFindRoutingAggregatesMatchingTrialsToReachTrusted(t *testing.T) {
 	got, found, err := FindRouting(context.Background(), reader, "fp", now)
 	if err != nil || !found || got.Tier != learning.TierTrusted || got.CompletedPairs != 20 {
 		t.Fatalf("belief = %+v found=%v err=%v", got, found, err)
+	}
+}
+
+func TestFindRoutingDoesNotPoolDifferentUtilityPolicies(t *testing.T) {
+	now := time.Unix(300000, 0).UTC()
+	reader := experimentReader{events: map[string][]*eventschema.Envelope{}}
+	for trial := 1; trial <= 2; trial++ {
+		id := fmt.Sprintf("experiment:%d", trial)
+		threshold := float64(10 * trial)
+		policy := []eventschema.ExperimentGuardrail{{Metric: "quality"}}
+		reader.states = append(reader.states, experiments.State{
+			ID: id, Fingerprint: "fp", EndsAt: now.Add(time.Duration(trial) * time.Hour),
+			ObjectiveMetric: "tokens", MinImprovementPct: threshold, Guardrails: policy,
+		})
+		reader.events[id] = append(reader.events[id], &eventschema.Envelope{
+			Timestamp: now, Correlation: eventschema.Correlation{Experiment: id},
+			Payload: &eventschema.ExperimentEvent{
+				Stage: eventschema.ExperimentStarted, ObjectiveMetric: "tokens", MinImprovementPct: threshold,
+				Guardrails: policy,
+			},
+		})
+		for pair := 1; pair <= 10; pair++ {
+			for _, arm := range []string{"baseline", "variant"} {
+				decision := fmt.Sprintf("d:%d:%d:%s", trial, pair, arm)
+				corr := eventschema.Correlation{Decision: decision, Experiment: id}
+				reader.events[id] = append(reader.events[id],
+					&eventschema.Envelope{Timestamp: now, Correlation: corr, Attributes: map[string]string{"tokenops.experiment.pair": fmt.Sprint(pair), "tokenops.experiment.arm": arm}, Payload: &eventschema.DecisionEvent{}},
+					&eventschema.Envelope{Timestamp: now, Correlation: corr, Payload: &eventschema.PromptEvent{TotalTokens: map[string]int64{"baseline": 100, "variant": 80}[arm], TokenSource: eventschema.TokenSourceCounted}},
+					&eventschema.Envelope{Timestamp: now, Correlation: corr, Payload: &eventschema.OutcomeEvent{Result: eventschema.OutcomeAchieved, Assessment: eventschema.OutcomeHuman}},
+				)
+			}
+		}
+	}
+	got, found, err := FindRouting(context.Background(), reader, "fp", now)
+	if err != nil || !found || got.Tier != learning.TierSupported || got.CompletedPairs != 10 {
+		t.Fatalf("different trial policies were pooled: %+v found=%v err=%v", got, found, err)
 	}
 }

@@ -120,6 +120,19 @@ type ExperimentEvent struct {
 	EndsAt      time.Time       `json:"ends_at,omitzero"`
 	Reason      string          `json:"reason,omitempty"`
 	Fingerprint string          `json:"fingerprint,omitempty"`
+	// ObjectiveMetric and MinImprovementPct declare the primary, lower-is-better
+	// metric and minimum per-pair improvement required for promotion.
+	ObjectiveMetric   string                `json:"objective_metric,omitempty"`
+	MinImprovementPct float64               `json:"min_improvement_pct,omitempty"`
+	Guardrails        []ExperimentGuardrail `json:"guardrails,omitempty"`
+}
+
+// ExperimentGuardrail declares a measured metric that must not regress beyond
+// MaxRegressionPct. The special metric "quality" is non-inferiority on the
+// independently assessed outcome and must use a zero threshold.
+type ExperimentGuardrail struct {
+	Metric           string  `json:"metric"`
+	MaxRegressionPct float64 `json:"max_regression_pct"`
 }
 
 // Type identifies this payload as an ExperimentEvent.

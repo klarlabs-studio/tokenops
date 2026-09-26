@@ -24,7 +24,7 @@ The first closed loop covers coding-agent model allocation:
 |---|---|---|
 | `unknown` | No current strong matched evidence | History only |
 | `observed` | Some current evidence, below promotion gates | Explain and continue shadowing |
-| `supported` | At least five matched pairs, 60% strong coverage, quality non-inferiority, and meaningful resource improvement | Recommend |
+| `supported` | At least five matched pairs and 60% strong outcome coverage; every declared guardrail is measured and passes, and the declared objective meets its improvement gate | Recommend |
 | `trusted` | At least 20 pairs and 90% strong coverage | Eligible for separately authorized automation |
 
 Evidence is scoped by a route fingerprint and expires after 90 days. Changes
@@ -47,14 +47,21 @@ on any individual trial. Assignments and termination are append-only events.
 Use:
 
 ```bash
-tokenops experiment start anthropic claude-opus-4-1 claude-sonnet-4-5
+tokenops experiment start anthropic claude-opus-4-1 claude-sonnet-4-5 \
+  --objective tokens --min-improvement-pct 10 \
+  --guardrail quality --guardrail latency_ms:10
 tokenops experiment status <experiment-id>
 tokenops experiment stop <experiment-id> --reason "operator stopped"
 ```
 
 `status` reports both persisted state and the current evidence-derived belief.
 Raw prompts, command output, and private work content are not stored in control
-events.
+events. The objective and guardrail policy is persisted with the trial. The
+objective improvement percentage and numeric guardrail tolerances are explicit
+operator choices, not universal weights. A strict `quality` non-inferiority
+guardrail is required. Missing objective or guardrail measurements, or any
+guardrail regression, keeps the belief observational. Trials with different
+utility policies are not pooled.
 
 ## Outcome Verification
 
