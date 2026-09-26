@@ -105,6 +105,12 @@ marked accordingly. Codex JSONL carries vendor-reported window duration,
 utilization, reset time, and plan type, so those fields are authoritative even
 when they differ from the configured catalog fallback.
 
+A browser-visible usage page can confirm the operator's current plan and quota
+dimensions, but it is not an ingestion source. Do not transcribe those values
+into the event store or report the meter as connected. The daemon requires the
+session-authenticated usage response so every recorded percentage retains its
+vendor timestamp and reset provenance.
+
 ## Adding a custom plan
 
 1. Add an entry to the `catalog` map in
