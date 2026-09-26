@@ -31,6 +31,7 @@ import (
 	"math"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -53,6 +54,10 @@ type UsageResponse struct {
 	SevenDay     *Window     `json:"seven_day"`
 	SevenDayOpus *Window     `json:"seven_day_opus"`
 	ExtraUsage   *ExtraUsage `json:"extra_usage"`
+	// Limits is the current unified contract used by claude.ai. Older
+	// responses exposed windows as top-level objects, so both shapes are
+	// decoded and normalized into Windows.
+	Limits []Limit `json:"limits"`
 	// Windows preserves every top-level usage window under the label sent by
 	// Anthropic. The named fields above remain compatibility aliases for the
 	// two stable aggregate windows and the historical Opus window.
@@ -62,6 +67,25 @@ type UsageResponse struct {
 	// the shape this decoder reads. They are dropped rather than read as
 	// zeros; the poller reports them.
 	Unrecognised []string `json:"-"`
+}
+
+// Limit is one entry in claude.ai's current unified limits array. Kind is
+// vendor-owned; Scope carries the optional model or surface label that makes
+// otherwise identical kinds distinct.
+type Limit struct {
+	Kind     string     `json:"kind"`
+	Percent  *float64   `json:"percent"`
+	ResetsAt string     `json:"resets_at"`
+	Scope    LimitScope `json:"scope"`
+}
+
+type LimitScope struct {
+	Model   *LimitScopeValue `json:"model"`
+	Surface *LimitScopeValue `json:"surface"`
+}
+
+type LimitScopeValue struct {
+	DisplayName string `json:"display_name"`
 }
 
 // UnmarshalJSON discovers window blocks by shape instead of maintaining a
@@ -105,8 +129,73 @@ func (u *UsageResponse) UnmarshalJSON(data []byte) error {
 		}
 		u.Windows[name] = &window
 	}
+	for index := range u.Limits {
+		limit := &u.Limits[index]
+		if limit.Kind == "" || limit.Percent == nil {
+			u.Unrecognised = append(u.Unrecognised, "limits["+strconv.Itoa(index)+"]")
+			continue
+		}
+		name := u.limitWindowName(*limit, index)
+		u.Windows[name] = &Window{
+			Utilization:  limit.Percent,
+			ResetsAt:     limit.ResetsAt,
+			Kind:         limit.Kind,
+			ModelScope:   scopeDisplayName(limit.Scope.Model),
+			SurfaceScope: scopeDisplayName(limit.Scope.Surface),
+		}
+	}
 	u.syncNamedWindows()
 	return nil
+}
+
+func scopeDisplayName(scope *LimitScopeValue) string {
+	if scope == nil {
+		return ""
+	}
+	return scope.DisplayName
+}
+
+func (u *UsageResponse) limitWindowName(limit Limit, index int) string {
+	var base string
+	switch limit.Kind {
+	case "session":
+		base = "five_hour"
+	case "weekly_all":
+		base = "seven_day"
+	default:
+		base = sanitizeWindowName(limit.Kind)
+		if model := sanitizeWindowName(scopeDisplayName(limit.Scope.Model)); model != "" {
+			base += "_" + model
+		}
+		if surface := sanitizeWindowName(scopeDisplayName(limit.Scope.Surface)); surface != "" {
+			base += "_" + surface
+		}
+	}
+	if base == "" {
+		base = "limit"
+	}
+	name := base
+	if _, exists := u.Windows[name]; exists {
+		name = base + "_" + strconv.Itoa(index)
+	}
+	return name
+}
+
+func sanitizeWindowName(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var out strings.Builder
+	underscore := false
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			out.WriteRune(r)
+			underscore = false
+		case out.Len() > 0 && !underscore:
+			out.WriteByte('_')
+			underscore = true
+		}
+	}
+	return strings.Trim(out.String(), "_")
 }
 
 func likelyUsageWindowName(name string) bool {
@@ -140,8 +229,11 @@ func (u *UsageResponse) syncNamedWindows() {
 // A window without a readable utilization is reported as unrecognised,
 // never read as 0%.
 type Window struct {
-	Utilization *float64 `json:"utilization"`
-	ResetsAt    string   `json:"resets_at"`
+	Utilization  *float64 `json:"utilization"`
+	ResetsAt     string   `json:"resets_at"`
+	Kind         string   `json:"-"`
+	ModelScope   string   `json:"-"`
+	SurfaceScope string   `json:"-"`
 }
 
 // ExtraUsage is the account's usage-billed allowance: on Claude Enterprise,

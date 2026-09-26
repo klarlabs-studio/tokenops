@@ -200,8 +200,12 @@ the session remained in an HttpOnly browser cookie and no credential, plan,
 percentage, organization identifier, or prompt was copied or stored. The
 released decoder still names its optional model-specific field
 `seven_day_opus`. The decoder now discovers utilization windows by shape and
-preserves evolving vendor labels through event attributes; do not claim live
-model-window ingestion until an actual response is captured content-safely.
+preserves evolving vendor labels through event attributes. Inspection of the
+current public Claude web bundle additionally confirmed a unified `limits`
+array with kind, percentage, reset, and optional model/surface scope; both that
+contract and the historical top-level blocks are supported. Do not claim live
+model-window ingestion until an authenticated response is captured
+content-safely.
 
 ## Next
 

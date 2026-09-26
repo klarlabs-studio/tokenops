@@ -318,6 +318,15 @@ func newEnvelope(ts time.Time, orgID string, u *UsageResponse) *eventschema.Enve
 		if window.ResetsAt != "" {
 			attrs[label+"_reset_at"] = window.ResetsAt
 		}
+		if window.Kind != "" {
+			attrs[label+"_kind"] = window.Kind
+		}
+		if window.ModelScope != "" {
+			attrs[label+"_model_scope"] = window.ModelScope
+		}
+		if window.SurfaceScope != "" {
+			attrs[label+"_surface_scope"] = window.SurfaceScope
+		}
 	}
 	if e := u.ExtraUsage; e != nil {
 		used, limit := e.Amounts()
