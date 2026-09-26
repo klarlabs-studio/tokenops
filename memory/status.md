@@ -4,7 +4,7 @@ updated: 2026-09-26
 ## Current State
 
 TokenOps is a local-first adaptive control plane for AI-assisted work. Current
-source `main` includes PR #402; v0.71.0 contains the work through PR #400. The CLI/MCP/API
+source `main` includes PR #403; v0.71.0 contains the work through PR #400. The CLI/MCP/API
 surfaces are the product; there is no bundled browser dashboard or demo-data
 workflow (PR #387).
 
@@ -112,8 +112,8 @@ may still require the repository's pinned compiler version.
 
 ## Next
 
-1. Merge and release the multi-call experiment-evidence fix validated by the
-   clean coding-agent pair; the installed daemon remains v0.71.0 until then.
+1. Release the multi-call experiment-evidence fix from PR #403; the installed
+   daemon remains v0.71.0 until then.
 2. Resolve the remaining historical Anthropic HTTP 400 ambiguity with a sanitized provider error
    classification or a local reproduction of the original request shape; do
    not log prompt or credential-bearing bodies.
@@ -129,6 +129,8 @@ may still require the repository's pinned compiler version.
 
 ## Recently Resolved
 
+- PR #403: completed the coding-agent evidence path and preserves execution
+  correlation and coverage across multi-call trials after enrollment closes.
 - PR #402: streamed Responses/Messages usage, latency, model, and content-safe
   tool-call counts are recorded for coding-agent traffic.
 - v0.71.0 / PR #400: published the Phase 5 proof and post-v0.70.0 work;
