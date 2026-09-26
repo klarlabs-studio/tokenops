@@ -1,8 +1,9 @@
 // Package claudeusagemeter scrapes claude.ai's session-authenticated
 // usage endpoint. This is the silver-bullet signal for Claude Max
-// subscribers — same data Anthropic's own UI shows: 5-hour, weekly
-// all-models, and weekly Opus utilization percentages plus the reset
-// timestamps. The cookie-scraping approach is undocumented and
+// subscribers — same data Anthropic's own UI shows: session, aggregate
+// weekly, and any model-specific utilization percentages plus reset
+// timestamps. Window labels are vendor-owned and preserved as received.
+// The cookie-scraping approach is undocumented and
 // ToS-grey, but it is what every credible Claude usage tracker
 // (Claude-Usage-Tracker, claude-bar variants) does, because no
 // documented endpoint exposes Max-plan window state.
@@ -29,6 +30,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 )
@@ -42,8 +44,8 @@ type OrgEntry struct {
 
 // UsageResponse is the part of /api/organizations/{org_id}/usage this
 // meter reads. Every block is nullable, and absent means absent: a Claude
-// Enterprise org returns null for all three windows and reports only
-// extra_usage, while a personal chat-only org returns null throughout.
+// Enterprise org can return null windows and report only extra_usage, while
+// an org without metering returns null throughout.
 // Decoding null as a zero-value struct is how this meter used to report
 // "Anthropic says 0% used" for windows that do not exist.
 type UsageResponse struct {
@@ -51,11 +53,82 @@ type UsageResponse struct {
 	SevenDay     *Window     `json:"seven_day"`
 	SevenDayOpus *Window     `json:"seven_day_opus"`
 	ExtraUsage   *ExtraUsage `json:"extra_usage"`
+	// Windows preserves every top-level usage window under the label sent by
+	// Anthropic. The named fields above remain compatibility aliases for the
+	// two stable aggregate windows and the historical Opus window.
+	Windows map[string]*Window `json:"-"`
 
 	// Unrecognised names the blocks that were present but did not have
 	// the shape this decoder reads. They are dropped rather than read as
 	// zeros; the poller reports them.
 	Unrecognised []string `json:"-"`
+}
+
+// UnmarshalJSON discovers window blocks by shape instead of maintaining a
+// model-name allowlist. Anthropic can add or rename model-specific windows
+// without silently discarding an otherwise readable vendor measurement.
+func (u *UsageResponse) UnmarshalJSON(data []byte) error {
+	type responseAlias UsageResponse
+	var named responseAlias
+	if err := json.Unmarshal(data, &named); err != nil {
+		return err
+	}
+	*u = UsageResponse(named)
+	u.Windows = make(map[string]*Window)
+
+	var blocks map[string]json.RawMessage
+	if err := json.Unmarshal(data, &blocks); err != nil {
+		return err
+	}
+	for name, raw := range blocks {
+		if name == "extra_usage" || name == "limits" || string(raw) == "null" {
+			continue
+		}
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			continue
+		}
+		if _, isWindow := fields["utilization"]; !isWindow {
+			if likelyUsageWindowName(name) {
+				u.Unrecognised = append(u.Unrecognised, name)
+			}
+			continue
+		}
+		if !validWindowName(name) {
+			u.Unrecognised = append(u.Unrecognised, name)
+			continue
+		}
+		var window Window
+		if err := json.Unmarshal(raw, &window); err != nil {
+			u.Unrecognised = append(u.Unrecognised, name)
+			continue
+		}
+		u.Windows[name] = &window
+	}
+	u.syncNamedWindows()
+	return nil
+}
+
+func likelyUsageWindowName(name string) bool {
+	return name == "five_hour" || name == "seven_day" || strings.HasPrefix(name, "five_hour_") || strings.HasPrefix(name, "seven_day_")
+}
+
+func validWindowName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, r := range name {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '_' {
+			return false
+		}
+	}
+	return true
+}
+
+func (u *UsageResponse) syncNamedWindows() {
+	u.FiveHour = u.Windows["five_hour"]
+	u.SevenDay = u.Windows["seven_day"]
+	u.SevenDayOpus = u.Windows["seven_day_opus"]
 }
 
 // Window is one rate-limit window's snapshot. Observed on a real Claude
@@ -98,7 +171,7 @@ func (e *ExtraUsage) Amounts() (used, limit float64) {
 
 // HasSignal reports whether the response carries anything to meter.
 func (u *UsageResponse) HasSignal() bool {
-	return u.FiveHour != nil || u.SevenDay != nil || u.SevenDayOpus != nil || u.ExtraUsage != nil
+	return len(u.Windows) > 0 || u.ExtraUsage != nil
 }
 
 // Summary renders what Anthropic reported, one line per block, for an
@@ -106,13 +179,13 @@ func (u *UsageResponse) HasSignal() bool {
 // out rather than shown as 0%.
 func (u *UsageResponse) Summary() []string {
 	var lines []string
-	for _, w := range []struct {
-		label string
-		win   *Window
-	}{{"5-hour window", u.FiveHour}, {"7-day window", u.SevenDay}, {"7-day (Opus)", u.SevenDayOpus}} {
-		if w.win != nil {
-			lines = append(lines, fmt.Sprintf("%-16s %.1f%% used", w.label+":", *w.win.Utilization))
-		}
+	labels := make([]string, 0, len(u.Windows))
+	for label := range u.Windows {
+		labels = append(labels, label)
+	}
+	sort.Strings(labels)
+	for _, label := range labels {
+		lines = append(lines, fmt.Sprintf("%-16s %.1f%% used", label+":", *u.Windows[label].Utilization))
 	}
 	if e := u.ExtraUsage; e != nil {
 		used, limit := e.Amounts()
@@ -125,15 +198,14 @@ func (u *UsageResponse) Summary() []string {
 // dropUnreadable nils every block present without the fields this decoder
 // reads, and records its name, so no caller can mistake it for a reading.
 func (u *UsageResponse) dropUnreadable() {
-	for _, w := range []struct {
-		name string
-		win  **Window
-	}{{"five_hour", &u.FiveHour}, {"seven_day", &u.SevenDay}, {"seven_day_opus", &u.SevenDayOpus}} {
-		if *w.win != nil && (*w.win).Utilization == nil {
-			*w.win = nil
-			u.Unrecognised = append(u.Unrecognised, w.name)
+	for name, window := range u.Windows {
+		if window.Utilization == nil {
+			delete(u.Windows, name)
+			u.Unrecognised = append(u.Unrecognised, name)
 		}
 	}
+	u.syncNamedWindows()
+	sort.Strings(u.Unrecognised)
 	if e := u.ExtraUsage; e != nil {
 		switch {
 		case e.IsEnabled == nil:
