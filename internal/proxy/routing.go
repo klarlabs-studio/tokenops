@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
@@ -87,6 +88,13 @@ func (s *Server) routingMiddleware(provider providers.Provider, next http.Handle
 				trialRecs[0].TargetModel == rec.TargetModel && len(trialRecs[0].ApplyBody) > 0 {
 				trialRec = &trialRecs[0]
 			}
+		}
+		if reason := anthropicRouteIncompatibility(provider.ID, rec.TargetModel, body); reason != "" {
+			rec.ApplyBody = nil
+			rec.Reason = reason + "; preserving the baseline model"
+			s.publishRoutingEvent(obs, rec, eventschema.OptimizationDecisionSkipped)
+			next.ServeHTTP(w, r)
+			return
 		}
 
 		var assignment experiments.Assignment
@@ -185,6 +193,42 @@ func (s *Server) routingMiddleware(provider providers.Provider, next http.Handle
 		s.publishRoutingEvent(obs, rec, eventschema.OptimizationDecisionApplied, controlDecision)
 		next.ServeHTTP(w, r)
 	})
+}
+
+// anthropicRouteIncompatibility rejects model-only rewrites when the inbound
+// request uses a feature the target model does not accept. Reinterpreting a
+// system instruction, thinking policy, sampling policy, or assistant prefill
+// would change request semantics, so the safe action is to keep the baseline.
+func anthropicRouteIncompatibility(provider eventschema.Provider, target string, body []byte) string {
+	if provider != eventschema.ProviderAnthropic || !strings.HasPrefix(target, "claude-sonnet-5") {
+		return ""
+	}
+
+	manualThinking, samplingParameter := anthropicCompatibilityTraits(body)
+	if manualThinking {
+		return "target claude-sonnet-5 does not support manual extended thinking"
+	}
+	if samplingParameter {
+		return "target claude-sonnet-5 does not support explicit sampling parameters"
+	}
+
+	var request struct {
+		Messages []struct {
+			Role string `json:"role"`
+		} `json:"messages"`
+	}
+	if json.Unmarshal(body, &request) != nil {
+		return ""
+	}
+	for _, message := range request.Messages {
+		if message.Role == "system" {
+			return "target claude-sonnet-5 does not support mid-conversation system messages"
+		}
+	}
+	if len(request.Messages) > 0 && request.Messages[len(request.Messages)-1].Role == "assistant" {
+		return "target claude-sonnet-5 does not support assistant response prefills"
+	}
+	return ""
 }
 
 func (s *Server) preserveUntrustedRoute(obs *requestObservation, provider eventschema.Provider, rec optimizer.Recommendation, belief *learn.Belief, reason string) {

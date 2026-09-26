@@ -69,6 +69,13 @@ events:
 - latency and time-to-first-token are measured for every call;
 - the final repository verifier is recorded as the execution outcome.
 
+Model routing is valid only when the target accepts the inbound request's
+capabilities. TokenOps preserves the baseline instead of rewriting Anthropic
+requests that Sonnet 5 cannot represent, including mid-conversation system
+messages, manual extended thinking, explicit sampling parameters, and
+assistant prefills. A skipped incompatible route is safe-path evidence, not a
+variant assignment. Select two request-compatible models for a paired trial.
+
 OpenAI Responses usage is read from the terminal `response.completed` event.
 Anthropic Messages usage is combined from `message_start` and `message_delta`.
 The observer decodes a bounded copy of gzip-compressed provider responses for
