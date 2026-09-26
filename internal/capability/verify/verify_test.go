@@ -215,6 +215,43 @@ func TestRandomizedComparisonUsesCompleteOutcomeLinkedPairs(t *testing.T) {
 	}
 }
 
+func TestReconstructedExperimentUsesProxyExecutionEvidenceWithoutInventingWork(t *testing.T) {
+	baseID, variantID := "claude:baseline", "claude:variant"
+	assignedAt := t0.Add(time.Hour)
+	basePrompt := promptEvent("", assignedAt.Add(time.Minute), 100)
+	basePrompt.Association.Execution = baseID
+	variantPrompt := promptEvent("", assignedAt.Add(time.Minute), 80)
+	variantPrompt.Association.Execution = variantID
+	stalePrompt := promptEvent("", t0.Add(time.Minute), 900)
+	stalePrompt.Association.Execution = baseID
+	staleOutcome := outcomeEvent(baseID, eventschema.OutcomeNotAchieved, t0.Add(2*time.Minute))
+	events := []*eventschema.Envelope{
+		experimentAssignment(baseID, "experiment:proxy", "baseline", 1, assignedAt),
+		experimentAssignment(variantID, "experiment:proxy", "variant", 1, assignedAt),
+		stalePrompt,
+		staleOutcome,
+		basePrompt,
+		variantPrompt,
+		outcomeEvent(baseID, eventschema.OutcomeAchieved, assignedAt.Add(2*time.Minute)),
+		outcomeEvent(variantID, eventschema.OutcomeAchieved, assignedAt.Add(2*time.Minute)),
+	}
+
+	got := verify.CompareReconstructedExperiment(nil, events, "experiment:proxy")
+	if got.Observational() || got.RandomizedExperimentID != "experiment:proxy" || got.RandomizedPairs != 1 {
+		t.Fatalf("proxy-linked trial was not compared: %+v", got)
+	}
+	if got.BaselineCount != 1 || got.InterventionCount != 1 ||
+		got.Comparison.Baseline.AmountOr(-1) != 100 || got.Comparison.Intervention.AmountOr(-1) != 80 {
+		t.Fatalf("proxy-linked usage includes stale or misses current prompt: %+v", got.Comparison)
+	}
+	if got.BaselineOutcomes.Achieved != 1 || got.BaselineOutcomes.NotAchieved != 0 {
+		t.Fatalf("pre-assignment outcome contaminated trial: %+v", got.BaselineOutcomes)
+	}
+	if got.Attributed[0].Execution.Work != "" {
+		t.Fatalf("proxy-only evidence invented a work goal: %+v", got.Attributed[0].Execution)
+	}
+}
+
 func TestRandomizedComparisonFallsBackWhenAnyAssignedOutcomeIsMissing(t *testing.T) {
 	execs, events := randomizedFixture(5, "experiment:test", "missing")
 	for i, event := range events {
