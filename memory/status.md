@@ -26,6 +26,13 @@ The daemon was not answering initially. A supervised restart succeeded from
 the host context, and health/readiness subsequently returned 200. The local
 MCP stdio validation also returned ready status on v0.70.0.
 
+A temporary build of current checkout (not installed) also passed CLI health
+checks and MCP stdio initialize/tool-list/status/resource-glance calls against
+that daemon. The resource glance read actual Claude Code and Codex local
+session records, reported current pressure as clear, and recommended
+continuing. This validates the surface and data path only; it does not supply
+an intervention/outcome pair or verify work quality.
+
 ## Next
 
 1. On an operator-controlled deployment, upgrade to a release containing

@@ -23,6 +23,9 @@ Roady implementation status: `.roady/plan.json` + `.roady/state.json`.
 - Host CLI/MCP validation succeeded on v0.70.0 after restarting its supervised
   daemon. That binary still exposes demo/dashboard entry points removed by
   PR #387; upgrade and verify a release containing that cleanup.
+- A temporary build of current source passed CLI and MCP status/resource-glance
+  checks against the healthy daemon, reading real Claude Code and Codex
+  session files; the insight was clear/continue. No outcome was inferred.
 - The local JSONL fallback reported 274 `budget.exceeded` events, which is
   insufficient evidence for the still-open Phase 5 outcome cohort.
 - Accumulate real, outcome-linked work and evaluate only when evidence supports

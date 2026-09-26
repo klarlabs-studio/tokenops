@@ -9,7 +9,8 @@ updated: 2026-09-26
 - Installed product verification: v0.70.0 daemon health/readiness and MCP
   status passed on 2026-09-26, but the binary still exposes demo/dashboard
   surfaces retired in PR #387. Upgrade and retest a release containing #387
-  only as an operator-controlled deployment.
+  only as an operator-controlled deployment. A temporary current-source build
+  passed CLI and MCP status/resource-glance against the real daemon.
 - fmt learning thresholds: requires more real command-run telemetry.
 
 ## Deferred by policy
