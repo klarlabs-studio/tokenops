@@ -363,8 +363,8 @@ func computeSpendHeadroom(p Plan, in HeadroomInputs) HeadroomReport {
 	}
 	report.SpendUSD, report.SpendLimitUSD, report.SpendSource = spend, in.SpendLimitUSD, "estimate"
 	if in.SpendLimitUSD <= 0 {
-		report.Note = "no spend limit known, so there is no denominator — set up the Claude usage meter " +
-			"(`tokenops vendor-usage setup claude-usage-meter`) to read it from Anthropic, or set " +
+		report.Note = "no spend limit known, so there is no denominator — set up Claude subscription telemetry " +
+			"(`tokenops vendor-usage setup claude-subscription`) to read it from Anthropic, or set " +
 			"plan_limits.<provider>.spend_limit_usd to the figure your admins configured"
 		return report
 	}

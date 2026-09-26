@@ -21,7 +21,7 @@ func TestRetiredKeyIsRefusedWithItsReplacement(t *testing.T) {
 	if err == nil {
 		t.Fatal("a config using the retired key should be refused, not silently ignored")
 	}
-	for _, want := range []string{"anthropic_cookie", "claude_usage_meter", "vendor-usage setup claude-usage-meter"} {
+	for _, want := range []string{"anthropic_cookie", "claude_usage_meter", "vendor-usage setup claude-subscription"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("the error should name %q so the operator can act on it:\n%v", want, err)
 		}

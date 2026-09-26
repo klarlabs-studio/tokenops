@@ -82,7 +82,7 @@ func configHintCursor(cfg CursorUsageConfig) string {
 
 func configHintClaudeUsageMeter(cfg ClaudeUsageMeterConfig) string {
 	if !cfg.Enabled {
-		return "run `tokenops vendor-usage setup claude-usage-meter` (use --paste-request when browser storage is protected). RECOMMENDED for Claude subscription users — reads Anthropic's official utilization windows"
+		return "run `tokenops vendor-usage setup claude-subscription` (use --paste-request when browser storage is protected). RECOMMENDED for Claude subscription users — reads Anthropic's official utilization windows"
 	}
 	if cfg.SessionKey == "" {
 		return "vendor_usage.claude_usage_meter enabled but session_key missing — paste from claude.ai devtools"

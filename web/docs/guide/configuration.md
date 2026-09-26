@@ -515,8 +515,8 @@ plan_limits:
     rate_factor: 0.8    # optional: scale to a negotiated rate
 ```
 
-These figures are the fallback. When the Claude usage meter is set up
-(`tokenops vendor-usage setup claude-usage-meter`), Anthropic reports both
+These figures are the fallback. When Claude subscription telemetry is set up
+(`tokenops vendor-usage setup claude-subscription`), Anthropic reports both
 the month's spend and the limit, and headroom uses those instead — what
 the vendor bills outranks a recomputation from a rate card, so neither
 `spend_limit_usd` nor `rate_factor` applies to them.

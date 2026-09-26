@@ -30,7 +30,7 @@ var meterBaseURL string
 // newVendorUsageSetupCmd walks an operator through wiring the claude.ai
 // cookie poller, and proves it works before writing anything.
 //
-// `vendor-usage enable claude-usage-meter --session-key ...` already existed
+// `vendor-usage enable claude-subscription --session-key ...` already existed
 // and is the wrong shape for this particular source. It writes the key and
 // reports success without ever contacting Anthropic, so a mistyped or
 // expired cookie surfaces as nothing at all — the poller simply logs
@@ -50,7 +50,7 @@ func newVendorUsageSetupCmd() *cobra.Command {
 		org           string
 	)
 	cmd := &cobra.Command{
-		Use:   "setup claude-usage-meter",
+		Use:   "setup claude-subscription",
 		Short: "Walk through connecting claude.ai's own usage meter, and verify it",
 		Long: `setup connects the claude.ai session cookie that carries Anthropic's own
 utilisation percentages — the 5-hour and 7-day windows shown in the app.
@@ -65,8 +65,8 @@ so a mistyped or expired cookie fails here rather than silently producing
 no data.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 1 && !strings.EqualFold(args[0], "claude-usage-meter") {
-				return fmt.Errorf("setup currently covers claude-usage-meter only; got %q", args[0])
+			if len(args) == 1 && !isClaudeSubscriptionSource(args[0]) {
+				return fmt.Errorf("setup currently covers claude-subscription only; got %q", args[0])
 			}
 			return runCookieSetup(cmd, cookieSetupOptions{
 				configPath:   configPath,

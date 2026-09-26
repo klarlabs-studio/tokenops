@@ -1311,7 +1311,7 @@ func checkRenamedKeys(data []byte, path string) error {
 				"`tokenops vendor-usage setup %s`.\n"+
 				"  Events already stored under the old source tag keep it and are not counted "+
 				"against the new name",
-			path, old, replacement, strings.ReplaceAll(replacement, "_", "-"))
+			path, old, replacement, "claude-subscription")
 	}
 	return nil
 }
