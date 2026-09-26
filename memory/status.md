@@ -192,6 +192,17 @@ usage, but its quota percentage and reset remain estimated because the Claude
 usage meter is not connected. Other plan semantics remain unproven without
 genuine meter records from accounts on those plans.
 
+An authenticated Claude web usage-page check then confirmed the configured
+account is Max 20x and currently exposes three genuine quota dimensions: the
+current-session window, weekly all-models usage, and a separate weekly Fable
+window. At observation time the UI reported 8%, 9%, and 0% used respectively.
+This validates the live Max 20x product shape, but not TokenOps ingestion: the
+session is held in an HttpOnly Chrome cookie, macOS denied direct access to
+Chrome's cookie database, and no credential was copied or stored. The released
+decoder still names its optional model-specific field `seven_day_opus`; do not
+claim current Fable-window ingestion until the actual response field is
+captured content-safely and the decoder is updated.
+
 ## Next
 
 1. Complete subscription-plan telemetry validation with genuine plan-meter
