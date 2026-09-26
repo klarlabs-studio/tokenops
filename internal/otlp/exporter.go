@@ -329,6 +329,9 @@ func promptAttributes(p *eventschema.PromptEvent) []kv {
 	if p.FinishReason != "" {
 		out = append(out, stringKV(eventschema.AttrGenAIResponseFinish, p.FinishReason))
 	}
+	if p.ErrorCode != "" {
+		out = append(out, stringKV("error.type", p.ErrorCode))
+	}
 	return out
 }
 

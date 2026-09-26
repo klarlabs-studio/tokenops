@@ -198,6 +198,7 @@ func (r *observerRequestMeter) Done(_ int64) {
 		Streaming:         r.obs.Streaming,
 		Status:            r.obs.Status,
 		FinishReason:      usage.FinishReason,
+		ErrorCode:         classifyUpstreamError(r.obs.Provider, r.obs.Status, body),
 		ToolCallCount:     usage.ToolCallCount,
 		CostSource:        r.obs.CostSource,
 		WorkflowID:        r.obs.WorkflowID,
@@ -222,6 +223,77 @@ func (r *observerRequestMeter) Done(_ int64) {
 		Payload:       prompt,
 	}
 	r.m.bus.Publish(env)
+}
+
+// classifyUpstreamError turns a provider error response into a bounded,
+// content-free category. Provider messages are useful for diagnosis but may
+// echo request content, so neither the raw body nor the message is retained.
+func classifyUpstreamError(provider eventschema.Provider, status int, body []byte) string {
+	if status < http.StatusBadRequest {
+		return ""
+	}
+
+	var response struct {
+		Type    string `json:"type"`
+		Message string `json:"message"`
+		Error   struct {
+			Type    string `json:"type"`
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(body, &response)
+
+	errorType := response.Error.Type
+	if errorType == "" {
+		errorType = response.Error.Code
+	}
+	message := strings.ToLower(response.Error.Message)
+	if message == "" {
+		message = strings.ToLower(response.Message)
+	}
+
+	if provider == eventschema.ProviderAnthropic {
+		if errorType == "invalid_request_error" {
+			switch {
+			case containsAny(message, "temperature", "top_p", "top_k") &&
+				containsAny(message, "unsupported", "not supported", "non-default", "not accepted"):
+				return "anthropic.invalid_request.unsupported_sampling_parameter"
+			case strings.Contains(message, "thinking") &&
+				containsAny(message, "budget_tokens", "adaptive", "unsupported", "not supported", "not accepted"):
+				return "anthropic.invalid_request.incompatible_thinking"
+			case strings.Contains(message, "assistant") && strings.Contains(message, "prefill"):
+				return "anthropic.invalid_request.unsupported_assistant_prefill"
+			default:
+				return "anthropic.invalid_request"
+			}
+		}
+		if knownAnthropicErrorType(errorType) {
+			return "anthropic." + strings.TrimSuffix(errorType, "_error")
+		}
+		return "anthropic.http_" + strconv.Itoa(status)
+	}
+
+	return string(provider) + ".http_" + strconv.Itoa(status)
+}
+
+func containsAny(value string, candidates ...string) bool {
+	for _, candidate := range candidates {
+		if strings.Contains(value, candidate) {
+			return true
+		}
+	}
+	return false
+}
+
+func knownAnthropicErrorType(value string) bool {
+	switch value {
+	case "authentication_error", "permission_error", "not_found_error",
+		"request_too_large", "rate_limit_error", "api_error", "timeout_error", "overloaded_error":
+		return true
+	default:
+		return false
+	}
 }
 
 type responseUsage struct {
