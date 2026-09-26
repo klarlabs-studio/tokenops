@@ -9,7 +9,12 @@ updated: 2026-09-26
   billing is separate from subscription quota accounting. Current Codex data
   reports opaque plan type `prolite` with one weekly window; do not map it to a
   catalog plan without authority. Claude JSONL lacks an authoritative quota
-  percentage, so connect the Claude usage meter before validating Max.
+  percentage. A content-safe authenticated Claude UI check confirms the
+  general session, aggregate-weekly, and model-specific-weekly shape, but
+  persistent ingestion remains unconnected because the HttpOnly browser cookie
+  could not be exported. Capture the actual model-window field and preserve its
+  vendor label instead of assuming the decoder's historical `seven_day_opus`
+  name.
 - Relicta release governance: resolve or guard the observed `gitsign: true`
   unsigned-tag behavior and `autocommitchangelog: false` local append before
   the next release.

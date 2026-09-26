@@ -192,6 +192,17 @@ usage, but its quota percentage and reset remain estimated because the Claude
 usage meter is not connected. Other plan semantics remain unproven without
 genuine meter records from accounts on those plans.
 
+A content-safe authenticated Claude UI check confirmed the general product can
+expose multiple quota dimensions: a current-session window, aggregate weekly
+usage, and a model-specific weekly window. This validates the evolving window
+shape, but not TokenOps ingestion or any particular account's plan or usage:
+the session remained in an HttpOnly browser cookie and no credential, plan,
+percentage, organization identifier, or prompt was copied or stored. The
+released decoder still names its optional model-specific field
+`seven_day_opus`; do not claim current model-window ingestion until the actual
+response field is captured content-safely and the decoder preserves evolving
+vendor labels.
+
 ## Next
 
 1. Complete subscription-plan telemetry validation with genuine plan-meter
