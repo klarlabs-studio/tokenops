@@ -58,7 +58,7 @@ func TestVendorUsageEnableCmdWiredOnParent(t *testing.T) {
 	}
 }
 
-// claude-usage-meter is the silver-bullet source — the only one that
+// claude-subscription is the authoritative source — the only one that
 // surfaces Claude Max weekly utilization. Verify (a) refusing without
 // a session key, (b) accepting the key, (c) accepting via env var,
 // (d) --disable round-trip preserves the previously-set secret.
@@ -66,7 +66,7 @@ func TestVendorUsageEnableClaudeUsageMeter(t *testing.T) {
 	t.Run("missing session key errors", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "config.yaml")
 		writeSeedConfig(t, path)
-		_, _, err := runEnable(t, path, "claude-usage-meter")
+		_, _, err := runEnable(t, path, "claude-subscription")
 		if err == nil || !strings.Contains(err.Error(), "session-key") {
 			t.Fatalf("want missing-key error; got %v", err)
 		}
@@ -75,7 +75,7 @@ func TestVendorUsageEnableClaudeUsageMeter(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "config.yaml")
 		writeSeedConfig(t, path)
 		cfg, out, err := runEnable(t, path,
-			"claude-usage-meter", "--session-key", "sk-cookie-xyz", "--org-id", "org-7", "--interval", "3m",
+			"claude-subscription", "--session-key", "sk-cookie-xyz", "--org-id", "org-7", "--interval", "3m",
 		)
 		if err != nil {
 			t.Fatalf("enable: %v", err)
@@ -100,7 +100,7 @@ func TestVendorUsageEnableClaudeUsageMeter(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "config.yaml")
 		writeSeedConfig(t, path)
 		t.Setenv("TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY", "sk-env-key")
-		cfg, _, err := runEnable(t, path, "claude-usage-meter")
+		cfg, _, err := runEnable(t, path, "claude-subscription")
 		if err != nil {
 			t.Fatalf("enable: %v", err)
 		}
@@ -111,10 +111,10 @@ func TestVendorUsageEnableClaudeUsageMeter(t *testing.T) {
 	t.Run("disable preserves secret", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "config.yaml")
 		writeSeedConfig(t, path)
-		if _, _, err := runEnable(t, path, "claude-usage-meter", "--session-key", "sk-keep"); err != nil {
+		if _, _, err := runEnable(t, path, "claude-subscription", "--session-key", "sk-keep"); err != nil {
 			t.Fatalf("seed enable: %v", err)
 		}
-		cfg, _, err := runEnable(t, path, "claude-usage-meter", "--disable")
+		cfg, _, err := runEnable(t, path, "claude-subscription", "--disable")
 		if err != nil {
 			t.Fatalf("disable: %v", err)
 		}
@@ -127,10 +127,22 @@ func TestVendorUsageEnableClaudeUsageMeter(t *testing.T) {
 	})
 }
 
+func TestVendorUsageEnableAcceptsLegacyClaudeUsageMeterAlias(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	writeSeedConfig(t, path)
+	cfg, _, err := runEnable(t, path, "claude-usage-meter", "--session-key", "sk-legacy")
+	if err != nil {
+		t.Fatalf("legacy alias: %v", err)
+	}
+	if !cfg.VendorUsage.ClaudeUsageMeter.Enabled {
+		t.Error("legacy alias did not enable Claude subscription telemetry")
+	}
+}
+
 // Per-source happy-path matrix. One subtest per source covers the
 // minimum-args invocation that should land enabled=true with any
 // required secret/path populated. Negative paths covered in the
-// dedicated claude-usage-meter test above (the others share the same
+// dedicated claude-subscription test above (the others share the same
 // envSecret / required-flag plumbing).
 func TestVendorUsageEnableSources(t *testing.T) {
 	cases := []struct {
@@ -246,12 +258,13 @@ func TestVendorUsageEnableSources(t *testing.T) {
 // so the mapping is contract — pin it.
 func TestSourceConfigKey(t *testing.T) {
 	cases := map[string]string{
-		"claude-usage-meter": "claude_usage_meter",
-		"github-copilot":     "github_copilot",
-		"codex-jsonl":        "codex_jsonl",
-		"claude-code-jsonl":  "claude_code_jsonl",
-		"anthropic-admin":    "anthropic",
-		"cursor":             "cursor",
+		"claude-subscription": "claude_usage_meter",
+		"claude-usage-meter":  "claude_usage_meter",
+		"github-copilot":      "github_copilot",
+		"codex-jsonl":         "codex_jsonl",
+		"claude-code-jsonl":   "claude_code_jsonl",
+		"anthropic-admin":     "anthropic",
+		"cursor":              "cursor",
 	}
 	for in, want := range cases {
 		if got := sourceConfigKey(in); got != want {

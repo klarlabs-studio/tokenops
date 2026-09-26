@@ -107,7 +107,7 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 		})
 
 	s.Tool("tokenops_vendor_usage_setup").
-		Description("Connect the Claude usage meter (the MCP twin of `tokenops vendor-usage setup claude-usage-meter`): verifies the claude.ai session key with Anthropic, picks the organization, reports what Anthropic shows — 5-hour/7-day utilization, or Enterprise spend against your limit — and enables it. The key is read from the " + meterKeyEnv + " environment variable or existing config, never from a tool argument: never ask the user to paste it into the chat.").
+		Description("Connect Claude subscription telemetry (the MCP twin of `tokenops vendor-usage setup claude-subscription`): verifies the claude.ai session key with Anthropic, picks the organization, reports the subscription windows Anthropic shows, or Enterprise spend against your limit, and enables it. The key is read from the " + meterKeyEnv + " environment variable or existing config, never from a tool argument: never ask the user to paste it into the chat.").
 		Handler(func(ctx context.Context, in meterSetupInput) (string, error) {
 			path, err := d.path()
 			if err != nil {
@@ -136,7 +136,7 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 				return jsonString(map[string]any{
 					"error": "session_key_missing",
 					"hint": "no claude.ai session was found in a local browser, and the key is a login that must not go through this chat. " +
-						"Ask the user to run `tokenops vendor-usage setup claude-usage-meter` in a terminal, " +
+						"Ask the user to run `tokenops vendor-usage setup claude-subscription` in a terminal, " +
 						"which reads it without echoing it — or to set " + meterKeyEnv + " for this MCP server and call this tool again",
 				}), nil
 			}

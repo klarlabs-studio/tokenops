@@ -54,17 +54,17 @@ billed at API rates from the first token, so there is no cap to be under.
 Headroom is measured against your monthly spend limit.
 
 The best source is Anthropic itself. With the
-[Claude usage meter](#tokenops-vendor-usage-setup-claude-usage-meter) set up,
+[Claude subscription telemetry](#tokenops-vendor-usage-setup-claude-subscription) set up,
 claude.ai reports what you have spent this month and the limit you are
 spending against, and headroom uses those figures — no admin key needed,
 and nothing to type in:
 
 ```bash
-tokenops vendor-usage setup claude-usage-meter
+tokenops vendor-usage setup claude-subscription
 tokenops plan set anthropic claude-enterprise
 ```
 
-Without the meter, give the limit yourself; the binding is refused with
+Without subscription telemetry, give the limit yourself; the binding is refused with
 neither, rather than measured against a number nobody chose:
 
 ```bash
@@ -193,20 +193,26 @@ tokenops task list --since 30d --json   # MCP-host friendly
 
 ## Vendor-side usage
 
-### `tokenops vendor-usage setup claude-usage-meter`
+### `tokenops vendor-usage setup claude-subscription`
 
-Connects claude.ai's own usage meter — what the app itself shows: the
+Connects claude.ai's subscription telemetry — what the app itself shows: the
 5-hour and 7-day utilisation on Pro and Max, or on Claude Enterprise, what
 you have spent this month against your spend limit. It is the only
 authoritative reading TokenOps can get for a Claude subscription;
 everything else is estimated.
+
+The canonical setup name is `claude-subscription`. It is intentionally not
+`claude-code`: `claude-code-jsonl` is the separate per-turn coding-activity
+source, while subscription telemetry can cover Claude web, Claude Code,
+Pro, Max, Team/Business, and Enterprise. The former
+`claude-usage-meter` command spelling remains an accepted compatibility alias.
 
 Only what Anthropic reports is recorded. A window your plan does not have
 is left out, never shown as 0%, and a reply in a shape this version cannot
 read is logged and skipped rather than stored as zeros.
 
 ```bash
-tokenops vendor-usage setup claude-usage-meter
+tokenops vendor-usage setup claude-subscription
 ```
 
 By default it reads the session from the browser you are already signed in with —
@@ -217,9 +223,9 @@ Claude session and Cloudflare clearance cookies, from a copy of the store, and n
 profile.
 
 ```bash
-tokenops vendor-usage setup claude-usage-meter --browser Chrome  # pick one
-tokenops vendor-usage setup claude-usage-meter --paste           # type it instead
-tokenops vendor-usage setup claude-usage-meter --paste-request   # import a usage request
+tokenops vendor-usage setup claude-subscription --browser Chrome  # pick one
+tokenops vendor-usage setup claude-subscription --paste           # type it instead
+tokenops vendor-usage setup claude-subscription --paste-request   # import a usage request
 ```
 
 Some operating systems protect browser cookie databases even after the
@@ -243,7 +249,7 @@ From an agent, `tokenops_vendor_usage_setup` does the same: it reads the
 browser session (you allow the keychain prompt) and never asks for the key
 in the conversation.
 
-Prefer this over `vendor-usage enable claude-usage-meter --session-key`,
+Prefer this over `vendor-usage enable claude-subscription --session-key`,
 which writes whatever you give it without checking.
 
 ### `tokenops vendor-usage status`
@@ -271,9 +277,9 @@ tokenops vendor-usage backfill --hours 24 --dry-run
 ### `tokenops vendor-usage enable <source>`
 
 Writes a vendor-usage source's config block to the active config
-file so operators don't hand-edit YAML. Six sources covered:
-`claude-usage-meter`, `cursor`, `github-copilot`, `codex-jsonl`,
-`claude-code-jsonl`, `anthropic-admin`. Secrets accept env-var
+file so operators don't hand-edit YAML. Seven sources covered:
+`claude-subscription`, `cursor`, `github-copilot`, `codex-jsonl`,
+`claude-code-jsonl`, `opencode`, `anthropic-admin`. Secrets accept env-var
 fallback so they don't leak through shell history.
 
 ```bash
@@ -286,10 +292,10 @@ tokenops vendor-usage enable codex-jsonl
 
 # Secret via env to keep it out of shell history
 TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY=sk-… \
-  tokenops vendor-usage enable claude-usage-meter
+  tokenops vendor-usage enable claude-subscription
 
 # Flip a source off without clearing the persisted secret
-tokenops vendor-usage enable claude-usage-meter --disable
+tokenops vendor-usage enable claude-subscription --disable
 ```
 
 Available env vars:

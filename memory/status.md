@@ -211,7 +211,7 @@ content-safely.
 
 1. Complete subscription-plan telemetry validation with genuine plan-meter
    records: reconcile OpenAI's `prolite` identifier without guessing, connect
-   the Claude usage meter for the configured Max plan, and test other plans
+   Claude subscription telemetry for the configured Max plan, and test other plans
    only on accounts that actually carry them.
 2. Expand representative Codex and Claude Code cohorts only when a new task
    class or policy question justifies paid evidence; the bounded Go repair
@@ -225,7 +225,7 @@ content-safely.
 6. The formatter provenance guard was merged in PR #390; tune `fmt learn`
    thresholds only after sufficient genuine wrapped-run/recovery evidence.
 
-The Claude usage-meter decoder supports both historical windows and the
+The Claude subscription decoder supports both historical windows and the
 current unified limits contract. The remaining live-ingestion constraint is
 portable authentication: direct Chrome cookie-store access can be denied by
 macOS privacy controls. Current work adds a content-safe `--paste-request`
