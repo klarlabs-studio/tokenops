@@ -121,6 +121,7 @@ Consumers:
 | `PromptEvent.WorkflowID` | `X-Tokenops-Workflow-Id` header | Pass-through | Storage (indexed), Analytics (group) |
 | `PromptEvent.AgentID` | `X-Tokenops-Agent-Id` header | Pass-through | Storage (indexed), Analytics (group) |
 | `PromptEvent.CacheHit` | Cache middleware synthetic | Boolean flag | Storage, OTLP |
+| `PromptEvent.ErrorCode` | Upstream HTTP error envelope | Allowlisted provider type plus bounded incompatibility classification; raw message discarded | Storage (payload), OTLP (`error.type`) |
 | `WorkflowEvent.WorkflowID` | SDK/CLI parameter | Pass-through | Storage (indexed), Workflow reconstruction |
 | `OptimizationEvent.Kind` | Optimizer `Kind()` method | Enum value | Storage, OTLP, CLI / MCP |
 | `OptimizationEvent.Decision` | Pipeline `decide()` | Enum value | Storage, OTLP, CLI / MCP |
@@ -208,11 +209,14 @@ domain JSONL is read-only migration input; it is never appended after migration.
 | `CostUSD` | *float64 | no | `cost_usd` | `tokenops.cost_usd` | ≥0 when set |
 | `WorkflowID` | *string | no | `workflow_id` | `tokenops.workflow.id` | From header or empty |
 | `Latency` | time.Duration | yes | — | `tokenops.latency_ns` | ≥0 |
+| `ErrorCode` | *string | no | (payload) | `error.type` | Bounded classification only; never an upstream message or response body |
 
 ### Invariants
 - `TotalTokens == InputTokens + OutputTokens` always.
 - `CostUSD` is computed by `spend.Engine` using `(provider, model, InputTokens, OutputTokens)`.
 - `PromptHash` is deterministic: same canonical body → same hash.
+- Provider error messages and response bodies are never retained in `ErrorCode`;
+  unknown types fall back to the provider and HTTP status class.
 
 ---
 

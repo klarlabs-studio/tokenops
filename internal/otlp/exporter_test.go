@@ -117,6 +117,20 @@ func TestExporterEmitsPromptEnvelope(t *testing.T) {
 	}
 }
 
+func TestPromptAttributesExportSanitizedErrorType(t *testing.T) {
+	attrs := promptAttributes(&eventschema.PromptEvent{
+		Provider:  eventschema.ProviderAnthropic,
+		ErrorCode: "anthropic.invalid_request.incompatible_thinking",
+	})
+	for _, attr := range attrs {
+		if attr.Key == "error.type" && attr.Value.StringValue != nil &&
+			*attr.Value.StringValue == "anthropic.invalid_request.incompatible_thinking" {
+			return
+		}
+	}
+	t.Fatal("prompt error.type attribute not exported")
+}
+
 func TestExporterEmitsRuleEnvelopes(t *testing.T) {
 	collector := newCaptureCollector(t)
 	exp, err := New(Options{Endpoint: collector.srv.URL})
