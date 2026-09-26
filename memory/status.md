@@ -4,7 +4,7 @@ updated: 2026-09-26
 ## Current State
 
 TokenOps is a local-first adaptive control plane for AI-assisted work. Current
-source `main` includes PR #400 and is released as v0.71.0. The CLI/MCP/API
+source `main` includes PR #402; v0.71.0 contains the work through PR #400. The CLI/MCP/API
 surfaces are the product; there is no bundled browser dashboard or demo-data
 workflow (PR #387).
 
@@ -59,14 +59,36 @@ quality/latency guardrails passing. Randomized verification accepted all five
 pairs without observational fallback. This proves only the bounded exact-output
 cohort, not general quality equivalence.
 
-The live trial exposed and fixed three genuine gaps: non-streaming provider
+The exact-output live trial exposed and fixed three genuine gaps: non-streaming provider
 usage/model metadata was not preferred over response-envelope tokenization;
 synthetic proxy executions started just after their prompt observation; and
 there was no content-safe local JSON outcome verifier. Exact verified GPT-6 Sol
-and Luna pricing was also added. The current checkout remains installed as the
-supervised daemon and reports healthy/ready. The temporary API provider and
-route were removed and the original OpenAI subscription was restored. The
+and Luna pricing was also added. The released v0.71.0 binary is installed as
+the supervised daemon and reports healthy/ready. The temporary API provider
+and route were removed and the original OpenAI subscription was restored. The
 deprecated `codex-plus` spelling now resolves to canonical `gpt-plus`.
+
+A bounded coding-agent extension then ran a disposable Go repair task through
+Codex CLI and the OpenAI Responses API. The clean confirmation experiment
+`experiment:f9cb9517-6be3-4391-9d76-bb7c56b679dc` assigned one full execution
+to each arm. The baseline made five streamed `gpt-6-sol` calls; the variant
+made six streamed calls that all returned `gpt-6-luna`. Every call retained
+the execution/decision/experiment link, reported vendor usage and latency, and
+the two executions recorded four and five content-safe tool calls. Independent
+`go test ./...` runs passed for both fixtures and were recorded as scoped human
+outcomes. Measured cost was $0.044583 baseline and $0.002401 variant; mean
+request latency was 3128ms and 2300ms. The ledger reports one complete pair,
+100% strong outcome coverage, and observed evidence only. This proves the
+coding-agent evidence path, not comparative quality or causal uplift; at least
+five matched pairs remain necessary for a supported belief.
+
+The first coding-agent pair exposed two confounders before that clean run:
+`--approve-for-me` added separate `codex-auto-review` traffic, and once a
+one-pair trial filled, later requests reused the model arm but lost experiment
+correlation. The confirmation run used the ordinary workspace sandbox, and the
+multi-call evidence fix keeps a durable execution assignment reusable after
+enrollment closes while learning counts and aggregates unique executions
+rather than per-request decisions.
 
 Relicta 4.2.0 planned, approved, and published v0.71.0, but two configuration
 settings did not behave as declared: `gitsign: true` still produced an unsigned
@@ -78,8 +100,9 @@ next release.
 A current-checkout build passed CLI health checks and MCP stdio
 initialize/tool-list/status/resource-glance calls. The resource glance read
 actual Claude Code and Codex local session records, reported current pressure
-as clear, and recommended continuing. That build is now the supervised daemon
-used for the final paired validation.
+as clear, and recommended continuing. Current-checkout builds were used only
+for the paired validations; the supervised daemon was restored to the released
+Homebrew v0.71.0 binary afterward.
 
 The formatter-learning evidence guard was merged in PR #390. It separates
 projected savings from observed estimates and avoids recommending stronger
@@ -89,14 +112,14 @@ may still require the repository's pinned compiler version.
 
 ## Next
 
-1. Prove a bounded real coding-agent workflow through API-backed routing,
-   including streaming Responses or Messages traffic, tool calls, multi-call
-   arm consistency, cost, latency, and a final verifier outcome.
+1. Merge and release the multi-call experiment-evidence fix validated by the
+   clean coding-agent pair; the installed daemon remains v0.71.0 until then.
 2. Resolve the remaining historical Anthropic HTTP 400 ambiguity with a sanitized provider error
    classification or a local reproduction of the original request shape; do
    not log prompt or credential-bearing bodies.
-3. Before another paid paired attempt, verify full-execution arm consistency
-   and obtain explicit authorization for the new model calls.
+3. Before another paid paired attempt, obtain explicit authorization for the
+   new model calls and use at least five matched pairs before interpreting an
+   arm difference as supported evidence.
 4. Record a human or recognized-verifier outcome only when actually observed;
    do not seed examples or claim causal uplift from task completion alone.
 5. Keep background coaching off until its opt-in, scope, and cost policy are
@@ -106,6 +129,8 @@ may still require the repository's pinned compiler version.
 
 ## Recently Resolved
 
+- PR #402: streamed Responses/Messages usage, latency, model, and content-safe
+  tool-call counts are recorded for coding-agent traffic.
 - v0.71.0 / PR #400: published the Phase 5 proof and post-v0.70.0 work;
   Homebrew installation and released-daemon version/commit/health were verified.
 - PR #396: randomized verification rejects assigned executions with upstream

@@ -55,6 +55,12 @@ func TestTrialIsBoundedPairedAndPersistent(t *testing.T) {
 	if _, ok, err := m.Assign(ctx, AssignmentInput{Provider: "anthropic", BaselineModel: "opus", VariantModel: "sonnet", ExecutionID: "e3", At: now}); err != nil || ok {
 		t.Fatalf("trial exceeded bound: ok=%v err=%v", ok, err)
 	}
+	for execution, want := range map[string]Assignment{"e1": a, "e2": b} {
+		got, reused, err := m.Assign(ctx, AssignmentInput{Provider: "anthropic", BaselineModel: "opus", VariantModel: "sonnet", ExecutionID: execution, At: now.Add(time.Hour)})
+		if err != nil || !reused || got != want || len(ledger.events) != 3 {
+			t.Fatalf("completed trial lost %s assignment: got=%+v want=%+v reused=%v err=%v events=%d", execution, got, want, reused, err, len(ledger.events))
+		}
+	}
 	got, ok, err := m.Status(ctx, state.ID, now)
 	if err != nil || !ok || got.Stage != eventschema.ExperimentCompleted {
 		t.Fatalf("state = %+v ok=%v err=%v", got, ok, err)

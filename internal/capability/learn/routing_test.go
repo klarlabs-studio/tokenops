@@ -47,6 +47,43 @@ func TestRoutingPromotesOnlyOutcomeLinkedMatchedEvidence(t *testing.T) {
 	}
 }
 
+func TestRoutingAggregatesMultiCallEvidenceByExecution(t *testing.T) {
+	now := time.Unix(150000, 0).UTC()
+	experiment := "experiment:multi"
+	events := make([]*eventschema.Envelope, 0, 11)
+	events = append(events, &eventschema.Envelope{
+		Timestamp: now, Correlation: eventschema.Correlation{Experiment: experiment},
+		Payload: &eventschema.ExperimentEvent{
+			Stage: eventschema.ExperimentStarted, ObjectiveMetric: "tokens", MinImprovementPct: 10,
+			Guardrails: []eventschema.ExperimentGuardrail{{Metric: "quality"}},
+		},
+	})
+	for _, tc := range []struct {
+		execution, arm string
+		perCall        int64
+	}{
+		{execution: "exec:baseline", arm: "baseline", perCall: 100},
+		{execution: "exec:variant", arm: "variant", perCall: 40},
+	} {
+		firstDecision := "decision:" + tc.arm + ":1"
+		corr := eventschema.Correlation{Decision: firstDecision, Experiment: experiment}
+		association := eventschema.Association{Execution: tc.execution}
+		events = append(events,
+			&eventschema.Envelope{Timestamp: now, Association: association, Correlation: corr, Attributes: map[string]string{"tokenops.experiment.pair": "1", "tokenops.experiment.arm": tc.arm}, Payload: &eventschema.DecisionEvent{}},
+			&eventschema.Envelope{Timestamp: now, Association: association, Correlation: corr, Payload: &eventschema.PromptEvent{TotalTokens: tc.perCall, TokenSource: eventschema.TokenSourceCounted}},
+			// A later call may have a new decision or no decision correlation;
+			// execution identity must keep both in the same arm.
+			&eventschema.Envelope{Timestamp: now, Association: association, Correlation: eventschema.Correlation{Decision: "decision:" + tc.arm + ":2", Experiment: experiment}, Attributes: map[string]string{"tokenops.experiment.pair": "1", "tokenops.experiment.arm": tc.arm}, Payload: &eventschema.DecisionEvent{}},
+			&eventschema.Envelope{Timestamp: now, Association: association, Payload: &eventschema.PromptEvent{TotalTokens: tc.perCall, TokenSource: eventschema.TokenSourceCounted}},
+			&eventschema.Envelope{Timestamp: now, Association: association, Correlation: corr, Payload: &eventschema.OutcomeEvent{Result: eventschema.OutcomeAchieved, Assessment: eventschema.OutcomeHuman}},
+		)
+	}
+	got := Routing(events, "fp", now)
+	if got.CompletedPairs != 1 || got.StrongCoverage != 1 || got.MedianChangePct != 60 {
+		t.Fatalf("multi-call belief = %+v", got)
+	}
+}
+
 func TestFindRoutingAggregatesMatchingTrialsToReachTrusted(t *testing.T) {
 	now := time.Unix(200000, 0).UTC()
 	reader := experimentReader{events: map[string][]*eventschema.Envelope{}}
