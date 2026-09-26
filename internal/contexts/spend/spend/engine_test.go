@@ -329,7 +329,7 @@ func TestCheapestPicksLowestBlendedRate(t *testing.T) {
 		provider  eventschema.Provider
 		wantModel string
 	}{
-		{eventschema.ProviderOpenAI, "gpt-4o-mini*"},
+		{eventschema.ProviderOpenAI, "gpt-6-luna"},
 		// claude-3-5-haiku is intentionally cheaper than 4-5 haiku in
 		// the seeded table; the test exists to prove Cheapest picks
 		// on price, not on version recency.

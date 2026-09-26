@@ -13,8 +13,8 @@ func TestSessionBudgetUnknownPlan(t *testing.T) {
 }
 
 func TestSessionBudgetPlanWithoutWindowCap(t *testing.T) {
-	// claude-code-max publishes no concrete window cap in the catalog.
-	out, err := ComputeSessionBudget("claude-code-max", SessionBudgetInputs{
+	// gpt-plus publishes model-dependent ranges rather than one static cap.
+	out, err := ComputeSessionBudget("gpt-plus", SessionBudgetInputs{
 		WindowMessages: 0,
 		RecentMessages: 0,
 		RecentWindow:   30 * time.Minute,
@@ -69,9 +69,9 @@ func TestSessionBudgetAuthoritativeOverridesMessageCount(t *testing.T) {
 }
 
 func TestSessionBudgetAuthoritativeScoresCaplessPlan(t *testing.T) {
-	// claude-code-max has a window but no message cap — the message-count
+	// gpt-plus has a window but no single static message cap — the message-count
 	// path returns "unknown", but a vendor % must still produce advice.
-	out, err := ComputeSessionBudget("claude-code-max", SessionBudgetInputs{
+	out, err := ComputeSessionBudget("gpt-plus", SessionBudgetInputs{
 		Authoritative: &AuthoritativeWindow{UsedPct: 96, Source: "codex:primary"},
 		Now:           time.Now().UTC(),
 	})

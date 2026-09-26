@@ -29,7 +29,7 @@ func TestRouteBackendAnthropicPlanPicksHaiku(t *testing.T) {
 	}
 }
 
-func TestRouteBackendOpenAIPlanPicksMini(t *testing.T) {
+func TestRouteBackendOpenAIPlanPicksCheapestModel(t *testing.T) {
 	out, err := RouteBackend(RouterInputs{
 		Plans:        map[string]string{"openai": "gpt-plus"},
 		PricingTable: spend.DefaultTable(),
@@ -37,8 +37,8 @@ func TestRouteBackendOpenAIPlanPicksMini(t *testing.T) {
 	if err != nil {
 		t.Fatalf("route: %v", err)
 	}
-	if out.Model != "gpt-4o-mini*" {
-		t.Errorf("model=%q want gpt-4o-mini* (cheapest openai)", out.Model)
+	if out.Model != "gpt-6-luna" {
+		t.Errorf("model=%q want gpt-6-luna (cheapest openai)", out.Model)
 	}
 }
 

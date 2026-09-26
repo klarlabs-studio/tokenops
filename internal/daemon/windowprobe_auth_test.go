@@ -37,9 +37,9 @@ func codexQuotaEvent(usedPct string, at time.Time) *eventschema.Envelope {
 // publish nothing — using it where the vendor already answers would throw
 // away the better signal.
 func TestProbePrefersVendorReading(t *testing.T) {
-	plan, ok := plans.Lookup("codex-plus")
+	plan, ok := plans.Lookup("gpt-plus")
 	if !ok {
-		t.Skip("codex-plus not in catalog")
+		t.Skip("gpt-plus not in catalog")
 	}
 	got, ok := windowPctFor(context.Background(),
 		stubReader{codexQuotaEvent("73.5", time.Now().Add(-time.Minute))},

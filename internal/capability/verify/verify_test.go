@@ -232,10 +232,12 @@ func TestRandomizedComparisonUsesCompleteOutcomeLinkedPairs(t *testing.T) {
 func TestReconstructedExperimentUsesProxyExecutionEvidenceWithoutInventingWork(t *testing.T) {
 	baseID, variantID := "claude:baseline", "claude:variant"
 	assignedAt := t0.Add(time.Hour)
-	basePrompt := promptEvent("", assignedAt.Add(time.Minute), 100)
+	basePrompt := promptEvent("", assignedAt.Add(-time.Millisecond), 100)
 	basePrompt.Association.Execution = baseID
-	variantPrompt := promptEvent("", assignedAt.Add(time.Minute), 80)
+	basePrompt.Correlation.Experiment = "experiment:proxy"
+	variantPrompt := promptEvent("", assignedAt.Add(-time.Millisecond), 80)
 	variantPrompt.Association.Execution = variantID
+	variantPrompt.Correlation.Experiment = "experiment:proxy"
 	stalePrompt := promptEvent("", t0.Add(time.Minute), 900)
 	stalePrompt.Association.Execution = baseID
 	staleOutcome := outcomeEvent(baseID, eventschema.OutcomeNotAchieved, t0.Add(2*time.Minute))
