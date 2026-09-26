@@ -12,9 +12,9 @@ updated: 2026-09-26
   percentage. A content-safe authenticated Claude UI check confirms the
   general session, aggregate-weekly, and model-specific-weekly shape, but
   persistent ingestion remains unconnected because the HttpOnly browser cookie
-  could not be exported. Capture the actual model-window field and preserve its
-  vendor label instead of assuming the decoder's historical `seven_day_opus`
-  name.
+  could not be exported. The decoder now preserves shape-valid vendor window
+  labels instead of assuming its historical `seven_day_opus` name; capture an
+  actual response content-safely before claiming live model-window ingestion.
 - Relicta release governance: resolve or guard the observed `gitsign: true`
   unsigned-tag behavior and `autocommitchangelog: false` local append before
   the next release.

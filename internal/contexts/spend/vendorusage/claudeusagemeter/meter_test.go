@@ -48,6 +48,16 @@ const windowedUsage = `{
     "spend_limit_reached": false, "credits_ever_enabled": false, "daily": null, "weekly": null}
 }`
 
+// evolvingWindowUsage is synthetic and account-neutral: it proves that a
+// model-specific label added by the vendor survives decoding and storage
+// without TokenOps needing a release for that model name.
+const evolvingWindowUsage = `{
+  "five_hour": {"utilization": 12, "resets_at": "2026-09-27T01:00:00Z"},
+  "seven_day": {"utilization": 34, "resets_at": "2026-10-02T01:00:00Z"},
+  "seven_day_future_model": {"utilization": 56, "resets_at": "2026-10-02T02:00:00Z"},
+  "extra_usage": null
+}`
+
 // inventedUsage is the shape this meter was originally written against,
 // which no real response has ever had. It must be refused, not zeroed.
 const inventedUsage = `{
@@ -167,6 +177,21 @@ func TestUsageDecodesMaxWindows(t *testing.T) {
 	}
 	if u.ExtraUsage != nil || len(u.Unrecognised) != 0 {
 		t.Errorf("disabled extra_usage: kept=%v unrecognised=%v, want dropped quietly", u.ExtraUsage, u.Unrecognised)
+	}
+}
+
+func TestUsagePreservesEvolvingVendorWindowLabels(t *testing.T) {
+	u := usageFrom(t, evolvingWindowUsage)
+	window := u.Windows["seven_day_future_model"]
+	if window == nil || *window.Utilization != 56 || window.ResetsAt != "2026-10-02T02:00:00Z" {
+		t.Fatalf("dynamic window = %+v", window)
+	}
+	env := newEnvelope(time.Now().UTC(), "org-abc", u)
+	if got := env.Attributes["seven_day_future_model_used_pct"]; got != "56.00" {
+		t.Errorf("dynamic utilization = %q, want 56.00", got)
+	}
+	if got := env.Attributes["seven_day_future_model_reset_at"]; got != "2026-10-02T02:00:00Z" {
+		t.Errorf("dynamic reset = %q", got)
 	}
 }
 
