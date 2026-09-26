@@ -313,16 +313,10 @@ func (p *Poller) recordSuccess() {
 func newEnvelope(ts time.Time, orgID string, u *UsageResponse) *eventschema.Envelope {
 	h := sha256.Sum256([]byte("claude-usage-meter|" + orgID + "|" + strconv.FormatInt(ts.UnixNano(), 10)))
 	attrs := map[string]string{"org_id": orgID}
-	for _, w := range []struct {
-		prefix string
-		win    *Window
-	}{{"five_hour", u.FiveHour}, {"seven_day", u.SevenDay}, {"seven_day_opus", u.SevenDayOpus}} {
-		if w.win == nil {
-			continue
-		}
-		attrs[w.prefix+"_used_pct"] = fmt.Sprintf("%.2f", *w.win.Utilization)
-		if w.win.ResetsAt != "" {
-			attrs[w.prefix+"_reset_at"] = w.win.ResetsAt
+	for label, window := range u.Windows {
+		attrs[label+"_used_pct"] = fmt.Sprintf("%.2f", *window.Utilization)
+		if window.ResetsAt != "" {
+			attrs[label+"_reset_at"] = window.ResetsAt
 		}
 	}
 	if e := u.ExtraUsage; e != nil {

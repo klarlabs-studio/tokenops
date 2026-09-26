@@ -199,9 +199,9 @@ shape, but not TokenOps ingestion or any particular account's plan or usage:
 the session remained in an HttpOnly browser cookie and no credential, plan,
 percentage, organization identifier, or prompt was copied or stored. The
 released decoder still names its optional model-specific field
-`seven_day_opus`; do not claim current model-window ingestion until the actual
-response field is captured content-safely and the decoder preserves evolving
-vendor labels.
+`seven_day_opus`. The decoder now discovers utilization windows by shape and
+preserves evolving vendor labels through event attributes; do not claim live
+model-window ingestion until an actual response is captured content-safely.
 
 ## Next
 
