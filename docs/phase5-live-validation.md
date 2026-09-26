@@ -60,6 +60,18 @@ verifier outcomes, no non-2xx provider responses, stable per-execution arms,
 reached `supported`; that result applies only to the bounded repair cohort and
 does not establish general model equivalence.
 
+The installed-v0.72.1 OpenAI reference run, experiment
+`experiment:e3afb408-cbd0-46a9-99de-c6e995b66322`, completed five
+`gpt-6-sol` / `gpt-6-luna` Codex CLI pairs across the same five disposable Go
+repair classes. All 52 streamed Responses calls returned 200, every execution
+kept one served model, both arms made 21 content-safe tool calls, and all ten
+independent clean-cache verifiers passed with paired test checksums unchanged.
+The ledger reached `supported`: five quality-safe and improved pairs, 100%
+strong coverage, all guardrails passing, and 95.0% median metered-cost
+improvement. Total cohort cost was $0.197459. This is bounded API-backed
+coding-agent evidence, not proof of general model equivalence or subscription
+plan accounting.
+
 ## Coding-agent extension
 
 The exact-output cohort is not sufficient evidence for a coding agent. A
