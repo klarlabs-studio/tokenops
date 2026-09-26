@@ -3,13 +3,14 @@ package pricing
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Consistency-guard tolerances and expected ratios. These encode the
 // per-family invariant that caught the Opus ⅓ error: on the Anthropic list
-// card, cache-read is 10% of input and output is 5× input. A row that
+// card, cache-read is usually 10% of input and output is 5× input. A row that
 // violates either ratio beyond the tolerance is flagged for a human to eyeball
 // before the snapshot is trusted — "consistency is not correctness", so this
 // defends against the *source itself* being wrong.
@@ -49,7 +50,8 @@ func (a Anomaly) String() string { return a.Message }
 // skipped — a missing number is not a wrong number, and cache-read is
 // legitimately zero for models without prompt caching.
 //
-// The ratio heuristics (output ≈5× input, cache-read ≈10% of input) are an
+// The ratio heuristics (output ≈5× input, cache-read usually ≈10% of input;
+// Opus 5.5 is a documented 5% exception) are an
 // ANTHROPIC-FAMILY invariant and run only on anthropic/* rows: other providers
 // price on different curves (Gemini Flash output is ~8× input; xAI cache
 // differs), so applying the Anthropic ratios to them would false-flag. Every
@@ -85,9 +87,8 @@ func Check(s Snapshot) []Anomaly {
 	return out
 }
 
-// anthropicRatioAnomalies applies the Anthropic-family ratio heuristics
-// (output ≈5× input, cache-read ≈10% of input) to a single row. The caller
-// has already ensured input > 0.
+// anthropicRatioAnomalies applies the Anthropic-family ratio heuristics to a
+// single row. The caller has already ensured input > 0.
 func anthropicRatioAnomalies(key string, r Rate) []Anomaly {
 	var out []Anomaly
 	if r.OutputPerMillion > 0 {
@@ -107,9 +108,14 @@ func anthropicRatioAnomalies(key string, r Rate) []Anomaly {
 		}
 	}
 	if r.CachedInputPerMillion > 0 {
+		_, model := splitSnapKey(key)
+		cacheRatio := expectedCacheRatio
+		if strings.HasPrefix(model, "claude-opus-5-5") {
+			cacheRatio = 0.05
+		}
 		ratio := r.CachedInputPerMillion / r.InputPerMillion
-		if !withinTolerance(ratio, expectedCacheRatio, cacheTolerance) {
-			expected := r.InputPerMillion * expectedCacheRatio
+		if !withinTolerance(ratio, cacheRatio, cacheTolerance) {
+			expected := r.InputPerMillion * cacheRatio
 			out = append(out, Anomaly{
 				Model:    key,
 				Field:    "cache_read",
@@ -118,7 +124,7 @@ func anthropicRatioAnomalies(key string, r Rate) []Anomaly {
 				Expected: expected,
 				Message: fmt.Sprintf(
 					"%s cache_read %.4g is %.0f%% of input (%.4g); expected ≈%.0f%% (≈%.4g)",
-					key, r.CachedInputPerMillion, ratio*100, r.InputPerMillion, expectedCacheRatio*100, expected),
+					key, r.CachedInputPerMillion, ratio*100, r.InputPerMillion, cacheRatio*100, expected),
 			})
 		}
 	}
