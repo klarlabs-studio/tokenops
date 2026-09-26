@@ -1548,6 +1548,7 @@ type PromptEvent struct {
 	FinishReason      string                 `protobuf:"bytes,42,opt,name=finish_reason,json=finishReason,proto3" json:"finish_reason,omitempty"`
 	ErrorCode         string                 `protobuf:"bytes,43,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
 	CacheHit          bool                   `protobuf:"varint,44,opt,name=cache_hit,json=cacheHit,proto3" json:"cache_hit,omitempty"`
+	ToolCallCount     int64                  `protobuf:"varint,45,opt,name=tool_call_count,json=toolCallCount,proto3" json:"tool_call_count,omitempty"`
 	CostUsd           float64                `protobuf:"fixed64,50,opt,name=cost_usd,json=costUsd,proto3" json:"cost_usd,omitempty"`
 	CostSource        string                 `protobuf:"bytes,51,opt,name=cost_source,json=costSource,proto3" json:"cost_source,omitempty"`
 	CostMeasured      bool                   `protobuf:"varint,52,opt,name=cost_measured,json=costMeasured,proto3" json:"cost_measured,omitempty"`
@@ -1706,6 +1707,13 @@ func (x *PromptEvent) GetCacheHit() bool {
 		return x.CacheHit
 	}
 	return false
+}
+
+func (x *PromptEvent) GetToolCallCount() int64 {
+	if x != nil {
+		return x.ToolCallCount
+	}
+	return 0
 }
 
 func (x *PromptEvent) GetCostUsd() float64 {
@@ -2257,7 +2265,7 @@ const file_pkg_eventschema_proto_v1_events_proto_rawDesc = "" +
 	"\x12max_regression_pct\x18\x02 \x01(\x01R\x10maxRegressionPct\">\n" +
 	"\vDomainEvent\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x1b\n" +
-	"\tdata_json\x18\x02 \x01(\fR\bdataJson\"\x8e\a\n" +
+	"\tdata_json\x18\x02 \x01(\fR\bdataJson\"\xb6\a\n" +
 	"\vPromptEvent\x12\x1f\n" +
 	"\vprompt_hash\x18\x01 \x01(\tR\n" +
 	"promptHash\x12=\n" +
@@ -2278,7 +2286,8 @@ const file_pkg_eventschema_proto_v1_events_proto_rawDesc = "" +
 	"\rfinish_reason\x18* \x01(\tR\ffinishReason\x12\x1d\n" +
 	"\n" +
 	"error_code\x18+ \x01(\tR\terrorCode\x12\x1b\n" +
-	"\tcache_hit\x18, \x01(\bR\bcacheHit\x12\x19\n" +
+	"\tcache_hit\x18, \x01(\bR\bcacheHit\x12&\n" +
+	"\x0ftool_call_count\x18- \x01(\x03R\rtoolCallCount\x12\x19\n" +
 	"\bcost_usd\x182 \x01(\x01R\acostUsd\x12\x1f\n" +
 	"\vcost_source\x183 \x01(\tR\n" +
 	"costSource\x12#\n" +

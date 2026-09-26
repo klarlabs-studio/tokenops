@@ -195,6 +195,46 @@ func TestObserverFlagsStreamingResponse(t *testing.T) {
 	}
 }
 
+func TestObserverRecordsAuthoritativeStreamingUsageAndToolCalls(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher := w.(http.Flusher)
+		_, _ = io.WriteString(w, "event: response.output_item.done\n")
+		_, _ = io.WriteString(w, `data: {"type":"response.output_item.done","item":{"type":"function_call","name":"shell"}}`+"\n\n")
+		flusher.Flush()
+		_, _ = io.WriteString(w, "event: response.completed\n")
+		_, _ = io.WriteString(w, `data: {"type":"response.completed","response":{"model":"gpt-6-sol-2026-09-01","status":"completed","usage":{"input_tokens":120,"output_tokens":30,"input_tokens_details":{"cached_tokens":80}},"output":[{"type":"function_call"},{"type":"message"}]}}`+"\n\n")
+		flusher.Flush()
+	}))
+	defer upstream.Close()
+
+	base, bus := startProxyForObservation(t, upstream)
+	req, _ := http.NewRequest(http.MethodPost,
+		base+"/openai/v1/responses",
+		strings.NewReader(`{"model":"gpt-6-sol","stream":true,"input":"inspect the repository","tools":[{"type":"function","name":"shell"}]}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("do: %v", err)
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+
+	pe := waitForEvent(t, bus, 1)[0].Payload.(*eventschema.PromptEvent)
+	if !pe.Streaming || pe.ResponseModel != "gpt-6-sol-2026-09-01" {
+		t.Errorf("stream/model = %v/%q", pe.Streaming, pe.ResponseModel)
+	}
+	if pe.InputTokens != 120 || pe.OutputTokens != 30 || pe.CachedInputTokens != 80 {
+		t.Errorf("usage = input %d output %d cached %d", pe.InputTokens, pe.OutputTokens, pe.CachedInputTokens)
+	}
+	if pe.TokenProvenance() != eventschema.TokenSourceVendorReported {
+		t.Errorf("token source = %q", pe.TokenProvenance())
+	}
+	if pe.ToolCallCount != 1 || pe.FinishReason != "completed" {
+		t.Errorf("tool calls/finish = %d/%q", pe.ToolCallCount, pe.FinishReason)
+	}
+}
+
 func TestObserverHashIsStableForIdenticalBodies(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
