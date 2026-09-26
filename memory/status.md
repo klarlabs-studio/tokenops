@@ -4,7 +4,7 @@ updated: 2026-09-26
 ## Current State
 
 TokenOps is a local-first adaptive control plane for AI-assisted work. Current
-source `main` includes PR #398. The CLI/MCP/API surfaces are the product;
+source `main` includes PR #399. The CLI/MCP/API surfaces are the product;
 there is no bundled browser dashboard or demo-data workflow (PR #387).
 
 ADR 0004 Phases 0–9 are implemented. Phase 5 now includes bounded live

@@ -4,7 +4,27 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.70.0**.
+Current release: **v0.71.0**.
+
+## v0.71.0 — evidence before optimization
+
+TokenOps can now connect work, actors, executions, interventions, and outcomes
+through one canonical event history. Its CLI and MCP guidance use that shared
+evidence to review work, prepare a task, inspect resource pressure, and explain
+what the control loop may do next.
+
+Randomized routing is deliberately stricter: an experiment counts only full,
+durably attributed executions with successful upstream responses and explicit
+human or verifier outcomes. A bounded five-pair OpenAI trial exercised those
+rules end to end and measured a 95% cost reduction for its exact-output cohort;
+that result is evidence for that cohort, not a claim of general model-quality
+equivalence.
+
+The release also adds verified GPT-6 Sol and Luna pricing, authoritative usage
+parsing from provider responses, content-safe JSON outcome verification, and
+canonical subscription plan names for OpenAI and Anthropic products. The
+daemon's background workers now expose supervised component health instead of
+hiding behind one process-level status.
 
 ## v0.70.0 — numbers that say where they came from
 
