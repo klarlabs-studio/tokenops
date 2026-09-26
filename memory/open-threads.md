@@ -6,8 +6,10 @@ updated: 2026-09-26
 - Phase 5 real-world validation: no matched intervention/outcome cohort has
   been observed. Continue with genuine work only; keep claims observational
   until assignment, measurement, and explicit outcome evidence join.
-- Installed product verification: host CLI/daemon last observed at v0.68.1 on
-  2026-09-25. Upgrade and retest only as an operator-controlled deployment.
+- Installed product verification: v0.70.0 daemon health/readiness and MCP
+  status passed on 2026-09-26, but the binary still exposes demo/dashboard
+  surfaces retired in PR #387. Upgrade and retest a release containing #387
+  only as an operator-controlled deployment.
 - fmt learning thresholds: requires more real command-run telemetry.
 
 ## Deferred by policy

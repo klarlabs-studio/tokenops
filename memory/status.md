@@ -13,16 +13,24 @@ matched intervention/outcome cohort, so verification must remain observational.
 The plan state is tracked in `.roady/`; current intent and phase truth are in
 `docs/adr/0004-ai-work-intelligence-and-control.md`.
 
-Last live validation (2026-09-25) exercised CLI and MCP against actual local
-session telemetry, without adding demo data. It found and fixed repeated
-measurement caveats (#388) and inaccurate unpriced-plan spend wording (#389).
-The host-installed CLI/daemon was v0.68.1 at that time; it has not been
-upgraded by this work.
+Live validation on 2026-09-26 restarted the installed supervised daemon and
+confirmed CLI health/readiness plus an MCP initialize, tools/list, and
+`tokenops_status` call against the real local store. No demo/seed command was
+run. Installed CLI/daemon is v0.70.0, but it still exposes the retired
+`demo` command and `tokenops_dashboard` MCP tool; it predates source cleanup in
+PR #387 and is not yet the current product surface. `tokenops events` used its
+JSONL fallback and reported 274 `budget.exceeded` events; this is not a matched
+intervention/outcome cohort and cannot establish quality or causal uplift.
+
+The daemon was not answering initially. A supervised restart succeeded from
+the host context, and health/readiness subsequently returned 200. The local
+MCP stdio validation also returned ready status on v0.70.0.
 
 ## Next
 
-1. On an operator-controlled deployment, upgrade the installed CLI/daemon to
-   current source and repeat the CLI/MCP checks.
+1. On an operator-controlled deployment, upgrade to a release containing
+   PR #387 and repeat CLI/MCP checks; confirm the retired demo/dashboard
+   surfaces are absent.
 2. Let real work produce a genuine intervention and outcome. Record only a
    human or recognized verifier assessment actually observed; do not seed
    example activity or claim causal uplift before matched evidence exists.

@@ -301,13 +301,13 @@ not infer task success or overall quality from the absence of a finding.
 | 4 — capability layer | Complete | PR #343. |
 | 5 — verification and experiment | Implementation shipped; live validation open | PR #345 and correlated work/event support. No real matched intervention/outcome cohort has been observed, so current verification remains observational and cannot claim causal improvement. |
 | 6 — canonical events | Complete | PRs #361–#369. |
-| 7 — runtime and installed-product verification | Complete in source/CI | Built-binary journey test in PR #349; lifecycle modules in PRs #370–#378. The locally installed CLI/daemon was last observed at v0.68.1 during 2026-09-25 validation and still needs an operator-controlled upgrade/retest. |
+| 7 — runtime and installed-product verification | Complete in source/CI; live installed check partial | Built-binary journey test in PR #349; lifecycle modules in PRs #370–#378. On 2026-09-26, installed v0.70.0 daemon health/readiness and MCP `tokenops_status` passed after a supervised restart. That binary still exposes demo/dashboard surfaces removed from current source in PR #387; upgrade and recheck a release containing #387 under operator control. |
 | 8 — intent-oriented MCP | Complete | PRs #380–#382. |
 | 9 — surface-native insight | Complete | PRs #383–#386. Browser dashboard and demo surfaces were removed in PR #387; CLI, MCP, and local API remain. |
 
 ### Next validation gate
 
-Use the current installed product on real work, then capture only an outcome
+Use a release containing the merged production cleanup on real work, then capture only an outcome
 that the operator or an independent verifier actually observed. Compare matched
 baseline/intervention executions only when assignment, resource measurements,
 and explicit outcome evidence are all present. Until then, preserve the

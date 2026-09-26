@@ -20,8 +20,11 @@ Roady implementation status: `.roady/plan.json` + `.roady/state.json`.
 
 ## Active Validation
 
-- Upgrade and re-check the host-installed CLI/daemon (last observed as v0.68.1
-  on 2026-09-25; no upgrade was performed).
+- Host CLI/MCP validation succeeded on v0.70.0 after restarting its supervised
+  daemon. That binary still exposes demo/dashboard entry points removed by
+  PR #387; upgrade and verify a release containing that cleanup.
+- The local JSONL fallback reported 274 `budget.exceeded` events, which is
+  insufficient evidence for the still-open Phase 5 outcome cohort.
 - Accumulate real, outcome-linked work and evaluate only when evidence supports
   a matched comparison. No demo seeding and no implied success from completion.
 
