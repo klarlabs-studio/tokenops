@@ -531,6 +531,20 @@ func TestPollerReportsABotCheckItCannotRefresh(t *testing.T) {
 	}
 }
 
+func TestPollerStartsWithStoredClearanceAndUserAgent(t *testing.T) {
+	p := NewPoller(nil, PollerOptions{
+		SessionKey: "sk-ant-sid-stored",
+		Clearance:  "stored-clearance",
+		UserAgent:  "Stored Browser Agent",
+	})
+	if err := p.ensureClient(); err != nil {
+		t.Fatal(err)
+	}
+	if p.client.SessionKey != "sk-ant-sid-stored" || p.client.Clearance != "stored-clearance" || p.client.UserAgent != "Stored Browser Agent" {
+		t.Fatalf("stored browser session was not applied: %+v", p.client)
+	}
+}
+
 // A poller with no key at all but a browser to read starts from the
 // browser, so `vendor-usage setup` is not required to have stored one.
 func TestPollerStartsFromTheBrowserWithNoStoredKey(t *testing.T) {

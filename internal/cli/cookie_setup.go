@@ -46,6 +46,7 @@ func newVendorUsageSetupCmd() *cobra.Command {
 		noRestartFlag bool
 		browser       string
 		paste         bool
+		pasteRequest  bool
 		org           string
 	)
 	cmd := &cobra.Command{
@@ -68,11 +69,12 @@ no data.`,
 				return fmt.Errorf("setup currently covers claude-usage-meter only; got %q", args[0])
 			}
 			return runCookieSetup(cmd, cookieSetupOptions{
-				configPath: configPath,
-				restart:    !noRestartFlag,
-				browser:    browser,
-				paste:      paste,
-				org:        org,
+				configPath:   configPath,
+				restart:      !noRestartFlag,
+				browser:      browser,
+				paste:        paste,
+				pasteRequest: pasteRequest,
+				org:          org,
 			})
 		},
 	}
@@ -81,6 +83,9 @@ no data.`,
 		"read the cookie from this browser instead of searching ("+strings.Join(browsercookie.Names(), ", ")+")")
 	cmd.Flags().BoolVar(&paste, "paste", false,
 		"skip the browser and paste the session key at a prompt")
+	cmd.Flags().BoolVar(&pasteRequest, "paste-request", false,
+		"paste a copied claude.ai usage request instead of reading browser storage")
+	cmd.MarkFlagsMutuallyExclusive("paste", "paste-request")
 	cmd.Flags().StringVar(&org, "org", "",
 		"organization to meter, by name or id (default: the one reporting usage)")
 	addNoRestartFlag(cmd, &noRestartFlag)
@@ -95,6 +100,9 @@ type cookieSetupOptions struct {
 	browser string
 	// paste skips the browser entirely and asks for the key.
 	paste bool
+	// pasteRequest imports only bounded authentication metadata from a
+	// content-free /usage request copied from browser developer tools.
+	pasteRequest bool
 	// org names the organization to meter; empty picks the one that
 	// reports usage.
 	org string
@@ -132,7 +140,11 @@ func runCookieSetup(cmd *cobra.Command, opts cookieSetupOptions) error {
 	// account holds several — a personal one, a Console API one, an
 	// Enterprise one — and only some carry a usage meter at all, so the
 	// question put a choice to the operator that the data already answers.
-	conn, err := claudeusagemeter.Connect(ctx, client, opts.org)
+	selectedOrg := opts.org
+	if selectedOrg == "" {
+		selectedOrg = session.orgID
+	}
+	conn, err := claudeusagemeter.Connect(ctx, client, selectedOrg)
 	switch {
 	case errors.Is(err, claudeusagemeter.ErrBotCheck):
 		return botCheckAdvice(session.browser)
@@ -173,6 +185,8 @@ func runCookieSetup(cmd *cobra.Command, opts cookieSetupOptions) error {
 	}
 	cfg.VendorUsage.ClaudeUsageMeter.Enabled = true
 	cfg.VendorUsage.ClaudeUsageMeter.SessionKey = key
+	cfg.VendorUsage.ClaudeUsageMeter.Clearance = session.clearance
+	cfg.VendorUsage.ClaudeUsageMeter.UserAgent = session.userAgent
 	cfg.VendorUsage.ClaudeUsageMeter.OrgID = org.UUID
 	// Read from a browser: keep reading from it. The clearance cookie that
 	// got past the bot check expires within hours, so a stored copy would
@@ -234,6 +248,7 @@ type browserSession struct {
 	clearance string
 	userAgent string
 	browser   string
+	orgID     string
 }
 
 // cookieSetupKey gets the session key without making the operator handle it
@@ -243,6 +258,14 @@ type browserSession struct {
 // a terminal. Returns the key and where it came from ("" when pasted).
 func cookieSetupKey(cmd *cobra.Command, opts cookieSetupOptions) (browserSession, error) {
 	out := cmd.OutOrStdout()
+	if opts.pasteRequest {
+		fmt.Fprintln(out, requestImportInstructions)
+		raw, err := readSecret(cmd, "\nPaste copied cURL request: ")
+		if err != nil {
+			return browserSession{}, err
+		}
+		return parseUsageRequest(raw)
+	}
 	if !opts.paste {
 		home, err := os.UserHomeDir()
 		if err == nil {
@@ -273,6 +296,7 @@ func cookieSetupKey(cmd *cobra.Command, opts cookieSetupOptions) (browserSession
 	fmt.Fprintln(out, "  2. open developer tools (⌥⌘I on macOS, F12 elsewhere)")
 	fmt.Fprintln(out, "  3. Application → Storage → Cookies → https://claude.ai")
 	fmt.Fprintln(out, "  4. copy the value of the `sessionKey` row (it starts sk-ant-sid...)")
+	fmt.Fprintln(out, "  Tip: if macOS blocks browser storage or Cloudflare refuses the request, use --paste-request.")
 	fmt.Fprintln(out, "\nIt is sent only to claude.ai, and stored in your local config.")
 	key, err := readSecret(cmd, "\nPaste sessionKey: ")
 	if err != nil {

@@ -31,6 +31,8 @@ type PollerOptions struct {
 	// events. nil disables the reporting.
 	Health     *freshness.Recorder
 	SessionKey string
+	Clearance  string
+	UserAgent  string
 	OrgID      string        // empty → resolved via /api/organizations on first scan
 	Interval   time.Duration // defaults 5 minutes
 	BaseURL    string        // test override
@@ -120,6 +122,7 @@ func (p *Poller) ensureClient() error {
 		return ErrMissingCookie
 	}
 	c := NewClient(p.opts.SessionKey)
+	c.Clearance, c.UserAgent = p.opts.Clearance, p.opts.UserAgent
 	if p.opts.BaseURL != "" {
 		c.BaseURL = p.opts.BaseURL
 	}
