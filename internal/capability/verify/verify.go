@@ -127,7 +127,8 @@ func attributeOne(e work.Execution, events []*eventschema.Envelope) Attributed {
 				continue
 			}
 		}
-		if _, ok := env.Payload.(*eventschema.OutcomeEvent); ok && env.Association.Execution == string(e.ID) {
+		if _, ok := env.Payload.(*eventschema.OutcomeEvent); ok &&
+			env.Association.Execution == string(e.ID) && !env.Timestamp.Before(e.StartedAt) {
 			outcomeEvents = append(outcomeEvents, env)
 			a.Events++
 			continue
@@ -664,7 +665,52 @@ func CompareReconstructedExperiment(rs []reconstruct.Work, events []*eventschema
 	for _, r := range rs {
 		execs = append(execs, r.Execution)
 	}
+	// A proxy bridge records an explicit execution ID on each event, but it
+	// cannot invent the user's work goal or guarantee a transcript exists.
+	// For a selected randomized trial, those durable IDs are sufficient to
+	// compare resource use and explicitly recorded outcomes without claiming
+	// that TokenOps reconstructed the work itself.
+	execs = appendMissingAssignedExecutions(execs, events, experimentID)
 	return CompareExperiment(execs, events, experimentID)
+}
+
+func appendMissingAssignedExecutions(execs []work.Execution, events []*eventschema.Envelope, requested string) []work.Execution {
+	known := make(map[string]struct{}, len(execs))
+	for _, exec := range execs {
+		known[string(exec.ID)] = struct{}{}
+	}
+	seenExperiments := make(map[string]struct{})
+	starts := make(map[string]time.Time)
+	for _, env := range events {
+		if env == nil || env.Association.Execution == "" || env.Correlation.Experiment == "" {
+			continue
+		}
+		assignment, ok := env.Payload.(*eventschema.ExperimentEvent)
+		if !ok || assignment.Stage != eventschema.ExperimentAssigned {
+			continue
+		}
+		if requested != "" && env.Correlation.Experiment != requested {
+			continue
+		}
+		seenExperiments[env.Correlation.Experiment] = struct{}{}
+		id := env.Association.Execution
+		if prior, ok := starts[id]; !ok || env.Timestamp.Before(prior) {
+			starts[id] = env.Timestamp
+		}
+	}
+	if requested == "" && len(seenExperiments) != 1 {
+		return execs
+	}
+	for id, startedAt := range starts {
+		if _, ok := known[id]; ok || startedAt.IsZero() {
+			continue
+		}
+		// Work stays unknown; only the execution identity and its start are
+		// evidenced by the assignment. Directly associated proxy events can
+		// still be attributed by ID and timestamp.
+		execs = append(execs, work.Execution{ID: work.ID(id), StartedAt: startedAt})
+	}
+	return execs
 }
 
 // SortByStart orders attributed executions oldest first, for a caller
