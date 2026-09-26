@@ -4,9 +4,9 @@ updated: 2026-09-26
 ## Current State
 
 TokenOps is a local-first adaptive control plane for AI-assisted work. Current
-source `main` includes PR #403; v0.71.0 contains the work through PR #400. The CLI/MCP/API
-surfaces are the product; there is no bundled browser dashboard or demo-data
-workflow (PR #387).
+source `main` includes PR #405; v0.72.0 contains the work through PR #404. The
+CLI/MCP/API surfaces are the product; there is no bundled browser dashboard or
+demo-data workflow (PR #387).
 
 ADR 0004 Phases 0–9 are implemented. Phase 5 now includes bounded live
 validation. PRs #394–#396 improved execution attribution and correctly rejected
@@ -37,8 +37,8 @@ The daemon was not answering initially. A supervised restart succeeded from
 the host context, and health/readiness subsequently returned 200. The local
 MCP stdio validation also returned ready status on v0.70.0.
 
-The prior variant HTTP 400 is narrowed but not conclusively diagnosed. Safe
-event metadata shows both failed variants routed `claude-opus-5-5` to
+The prior variant HTTP 400 is narrowed but cannot be conclusively diagnosed
+retroactively. Safe event metadata shows both failed variants routed `claude-opus-5-5` to
 `claude-sonnet-5`; their matched baselines returned 200. Local proxy/router
 tests confirm that a trial route changes only `model` and preserves other
 top-level request fields. Anthropic's Sonnet 5 migration documentation says it
@@ -47,6 +47,11 @@ so a preserved
 model-specific field is the leading hypothesis. TokenOps retained neither the
 request body nor the upstream error body, so the exact rejected field remains
 unknown and no prompt or credential-bearing body should be added to telemetry.
+PR #405 closes the prospective observability gap: Anthropic error envelopes
+are reduced to bounded classifications for unsupported sampling parameters,
+incompatible thinking configuration, assistant prefill, known provider error
+types, or provider-plus-HTTP-status fallback. Raw error messages and bodies are
+discarded, and the sanitized classification is exported as OTLP `error.type`.
 
 The final Phase 5 trial enrolled five randomized `gpt-6-sol`/`gpt-6-luna`
 pairs. All ten calls returned HTTP 200 and the exact `TOKENOPS_OK` value; the
@@ -90,19 +95,24 @@ multi-call evidence fix keeps a durable execution assignment reusable after
 enrollment closes while learning counts and aggregates unique executions
 rather than per-request decisions.
 
-Relicta 4.2.0 planned, approved, and published v0.71.0, but two configuration
-settings did not behave as declared: `gitsign: true` still produced an unsigned
-annotated tag, and `autocommitchangelog: false` still appended generated notes
-to the local changelog after pushing the tag. The append was removed locally
-and never reached the tag or `main`. Resolve or guard both behaviors before the
-next release.
+Relicta 4.2.0 planned, approved, and published v0.71.0 and v0.72.0, but two
+configuration settings did not behave as declared: `gitsign: true` still
+produced an unsigned annotated tag, and `autocommitchangelog: false` still
+appended generated notes to the local changelog after pushing the tag. The
+append was removed locally and never reached either tag or `main`. The defects
+reproduced during v0.72.0; resolve or guard both behaviors before the next
+release.
 
 A current-checkout build passed CLI health checks and MCP stdio
 initialize/tool-list/status/resource-glance calls. The resource glance read
 actual Claude Code and Codex local session records, reported current pressure
 as clear, and recommended continuing. Current-checkout builds were used only
 for the paired validations; the supervised daemon was restored to the released
-Homebrew v0.71.0 binary afterward.
+Homebrew binary afterward. v0.72.0 subsequently published the streaming and
+multi-call evidence fixes in four platform archives plus checksums and a
+Homebrew cask. The installed CLI and supervised daemon report v0.72.0 at
+commit `5bbdaf4`; host-local health and readiness both return 200 with no
+blockers.
 
 The formatter-learning evidence guard was merged in PR #390. It separates
 projected savings from observed estimates and avoids recommending stronger
@@ -112,14 +122,14 @@ may still require the repository's pinned compiler version.
 
 ## Next
 
-1. Release the multi-call experiment-evidence fix from PR #403; the installed
-   daemon remains v0.71.0 until then.
-2. Resolve the remaining historical Anthropic HTTP 400 ambiguity with a sanitized provider error
-   classification or a local reproduction of the original request shape; do
-   not log prompt or credential-bearing bodies.
-3. Before another paid paired attempt, obtain explicit authorization for the
+1. Before another paid paired attempt, obtain explicit authorization for the
    new model calls and use at least five matched pairs before interpreting an
    arm difference as supported evidence.
+2. Run representative Codex and Claude Code coding cohorts with independent
+   verifiers; a future Anthropic reproduction can now distinguish the leading
+   incompatibility classes without retaining response content.
+3. Resolve or guard Relicta's ignored `gitsign` and `autocommitchangelog`
+   settings before the next release.
 4. Record a human or recognized-verifier outcome only when actually observed;
    do not seed examples or claim causal uplift from task completion alone.
 5. Keep background coaching off until its opt-in, scope, and cost policy are
@@ -129,6 +139,11 @@ may still require the repository's pinned compiler version.
 
 ## Recently Resolved
 
+- PR #405: adds content-safe Anthropic upstream error classification and OTLP
+  export; the original 400 remains historically unknowable because its body
+  was not retained.
+- v0.72.0: released PRs #402–#404, installed through Homebrew, and verified the
+  supervised daemon's version, health, and readiness.
 - PR #403: completed the coding-agent evidence path and preserves execution
   correlation and coverage across multi-call trials after enrollment closes.
 - PR #402: streamed Responses/Messages usage, latency, model, and content-safe
