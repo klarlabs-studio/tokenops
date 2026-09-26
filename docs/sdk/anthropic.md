@@ -39,7 +39,10 @@ msg = client.messages.create(
 )
 ```
 
-Streaming via `client.messages.stream(...)` works without changes.
+Streaming via `client.messages.stream(...)` works without changes. TokenOps
+combines authoritative usage from the stream's `message_start` and
+`message_delta` events and counts `tool_use` blocks without retaining tool
+names, inputs, results, or response text.
 
 ## Node (`@anthropic-ai/sdk` package)
 
