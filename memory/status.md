@@ -4,7 +4,7 @@ updated: 2026-09-26
 ## Current State
 
 TokenOps is a local-first adaptive control plane for AI-assisted work. Current
-source `main` includes PR #408; v0.72.1 contains the work through PR #408. The
+source `main` includes PR #409; v0.72.1 contains the work through PR #408. The
 CLI/MCP/API surfaces are the product; there is no bundled browser dashboard or
 demo-data workflow (PR #387).
 
@@ -133,6 +133,20 @@ request latency was 3128ms and 2300ms. The ledger reports one complete pair,
 coding-agent evidence path, not comparative quality or causal uplift; at least
 five matched pairs remain necessary for a supported belief.
 
+That gate is now complete. Installed v0.72.1 ran experiment
+`experiment:e3afb408-cbd0-46a9-99de-c6e995b66322` through Codex CLI and the
+streaming OpenAI Responses API across five distinct disposable Go repair
+fixtures. The five randomized `gpt-6-sol` / `gpt-6-luna` pairs produced 52
+HTTP 200 calls, 21 tool calls in each arm, stable served models within every
+multi-call execution, and ten independent clean-cache `go test ./...` passes
+with paired verifier checksums unchanged. The ledger reports `supported`, five
+quality-safe and improved pairs, 100% strong outcome coverage, all guardrails
+passing, and 95.0% median metered-cost improvement. Mean request latency was
+2376ms baseline and 2065ms intervention; mean metered cost per execution was
+$0.037599 and $0.001892. Total cohort spend was $0.197459. This proves the
+bounded API-backed coding-agent evidence path, not universal quality
+equivalence or ChatGPT subscription-plan accounting.
+
 The first coding-agent pair exposed two confounders before that clean run:
 `--approve-for-me` added separate `codex-auto-review` traffic, and once a
 one-pair trial filled, later requests reused the model arm but lost experiment
@@ -168,12 +182,12 @@ may still require the repository's pinned compiler version.
 
 ## Next
 
-1. Before another paid paired attempt, obtain explicit authorization for the
-   new model calls and use at least five matched pairs before interpreting an
-   arm difference as supported evidence.
-2. Run representative Codex and Claude Code coding cohorts with independent
-   verifiers; a future Anthropic reproduction can now distinguish the leading
-   incompatibility classes without retaining response content.
+1. Validate subscription-plan telemetry with genuine plan-meter records;
+   metered API routing is billed separately and cannot prove Plus, Pro,
+   Business, Team, Max, or Enterprise quota semantics.
+2. Expand representative Codex and Claude Code cohorts only when a new task
+   class or policy question justifies paid evidence; the bounded Go repair
+   class now has supported OpenAI and Anthropic coding-agent cohorts.
 3. Resolve or guard Relicta's ignored `gitsign` and `autocommitchangelog`
    settings before the next release.
 4. Record a human or recognized-verifier outcome only when actually observed;
