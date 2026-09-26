@@ -175,6 +175,18 @@ func experimentAssignment(executionID, experimentID, arm string, pair int, at ti
 		Correlation: eventschema.Correlation{Experiment: experimentID},
 		Payload: &eventschema.ExperimentEvent{
 			Stage: eventschema.ExperimentAssigned, Kind: "model_route", Pair: pair, Assignment: arm,
+			Baseline: eventschema.ResourceOption{Provider: "anthropic", Model: "opus"},
+			Variant:  eventschema.ResourceOption{Provider: "anthropic", Model: "sonnet"},
+		},
+	}
+}
+
+func routeOptimizationEvent(executionID, reason string, decision eventschema.OptimizationDecision, at time.Time) *eventschema.Envelope {
+	return &eventschema.Envelope{
+		ID: "route-" + executionID + at.String(), Type: eventschema.EventTypeOptimization, Timestamp: at,
+		Association: eventschema.Association{Execution: executionID},
+		Payload: &eventschema.OptimizationEvent{
+			Kind: eventschema.OptimizationTypeRouter, Decision: decision, Reason: reason,
 		},
 	}
 }
@@ -192,6 +204,8 @@ func randomizedFixture(pairCount int, experimentID, prefix string) ([]work.Execu
 		events = append(events,
 			experimentAssignment(baseID, experimentID, "baseline", pair, at),
 			experimentAssignment(variantID, experimentID, "variant", pair, at),
+			routeOptimizationEvent(baseID, "observed: would route opus -> sonnet", eventschema.OptimizationDecisionSkipped, at.Add(time.Second)),
+			routeOptimizationEvent(variantID, "route opus -> sonnet", eventschema.OptimizationDecisionApplied, at.Add(time.Second)),
 			promptEvent("session:base", at.Add(time.Minute), 100),
 			promptEvent("session:variant", at.Add(time.Minute), 80),
 			outcomeEvent(baseID, eventschema.OutcomeAchieved, at.Add(2*time.Minute)),
@@ -228,6 +242,8 @@ func TestReconstructedExperimentUsesProxyExecutionEvidenceWithoutInventingWork(t
 	events := []*eventschema.Envelope{
 		experimentAssignment(baseID, "experiment:proxy", "baseline", 1, assignedAt),
 		experimentAssignment(variantID, "experiment:proxy", "variant", 1, assignedAt),
+		routeOptimizationEvent(baseID, "observed: would route opus -> sonnet", eventschema.OptimizationDecisionSkipped, assignedAt.Add(time.Second)),
+		routeOptimizationEvent(variantID, "route opus -> sonnet", eventschema.OptimizationDecisionApplied, assignedAt.Add(time.Second)),
 		stalePrompt,
 		staleOutcome,
 		basePrompt,
@@ -249,6 +265,18 @@ func TestReconstructedExperimentUsesProxyExecutionEvidenceWithoutInventingWork(t
 	}
 	if got.Attributed[0].Execution.Work != "" {
 		t.Fatalf("proxy-only evidence invented a work goal: %+v", got.Attributed[0].Execution)
+	}
+}
+
+func TestRandomizedComparisonRejectsPartiallyAppliedVariantExecutions(t *testing.T) {
+	execs, events := randomizedFixture(1, "experiment:partial-route", "partial-route")
+	variantID := "partial-route-variant-1"
+	events = append(events, routeOptimizationEvent(
+		variantID, "observed: would route opus -> sonnet", eventschema.OptimizationDecisionSkipped, t0.Add(time.Hour+2*time.Minute)))
+
+	got := verify.Compare(execs, events)
+	if !got.Observational() || !strings.Contains(got.RandomizedFallbackReason, "variant-assigned execution contains matching requests that were not routed") {
+		t.Fatalf("partially applied variant was accepted as randomized evidence: %+v", got)
 	}
 }
 
