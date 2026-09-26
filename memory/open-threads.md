@@ -11,7 +11,10 @@ updated: 2026-09-26
   surfaces retired in PR #387. Upgrade and retest a release containing #387
   only as an operator-controlled deployment. A temporary current-source build
   passed CLI and MCP status/resource-glance against the real daemon.
-- fmt learning thresholds: requires more real command-run telemetry.
+- fmt learning threshold tuning: current branch now distinguishes actual
+  wrapped runs from offline session projections and prevents up-tuning from
+  absent recovery reads. Still needs enough genuine runs/recovery telemetry;
+  this guard is not merged yet.
 
 ## Deferred by policy
 

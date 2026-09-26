@@ -33,6 +33,15 @@ session records, reported current pressure as clear, and recommended
 continuing. This validates the surface and data path only; it does not supply
 an intervention/outcome pair or verify work quality.
 
+Current branch adds a formatter-learning evidence guard. A read-only real
+session scan found 14 wrapped formatter runs and 18,043 offline session
+projections, with zero recovery reads. The learner now separates projected
+savings from observed estimates, leaves re-access unknown without wrapped
+evidence, and never recommends stronger compression from missing recovery
+reads. This is verified in Roady but not merged. Full `make verify` passed its
+Go, lint, race, eval, and security gates; proto-check remains blocked by the
+host's protoc 7.36.2 versus repository-generated 7.36.0 version comment.
+
 ## Next
 
 1. On an operator-controlled deployment, upgrade to a release containing
@@ -43,6 +52,8 @@ an intervention/outcome pair or verify work quality.
    example activity or claim causal uplift before matched evidence exists.
 3. Keep background coaching off until its opt-in, scope, and cost policy are
    explicit; on-demand coaching remains the safe path.
+4. Merge the formatter provenance guard before relying on `fmt learn`; tune
+   thresholds only after sufficient genuine wrapped-run/recovery evidence.
 
 ## Recently Resolved
 

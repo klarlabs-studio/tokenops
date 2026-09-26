@@ -28,6 +28,10 @@ Roady implementation status: `.roady/plan.json` + `.roady/state.json`.
   session files; the insight was clear/continue. No outcome was inferred.
 - The local JSONL fallback reported 274 `budget.exceeded` events, which is
   insufficient evidence for the still-open Phase 5 outcome cohort.
+- Formatter evidence provenance guard is implemented and verified on the
+  current branch, not merged: 14 actual wrapped runs versus 18,043 session
+  projections and zero recovery reads. Projections no longer create quality
+  hints or observed savings; stronger-compression hints are removed.
 - Accumulate real, outcome-linked work and evaluate only when evidence supports
   a matched comparison. No demo seeding and no implied success from completion.
 
@@ -35,4 +39,5 @@ Roady implementation status: `.roady/plan.json` + `.roady/state.json`.
 
 - Daemon-started background coaching: keep on-demand behavior until opt-in,
   replay scope, and cost policy are explicitly designed.
-- fmt learning threshold tuning: still needs real command-run telemetry.
+- fmt learning threshold tuning: guard is in place, but still needs enough
+  genuine wrapped-run and recovery telemetry; no threshold experiment yet.

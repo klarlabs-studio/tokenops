@@ -96,20 +96,58 @@ func TestAnalyze_AccessAttributedByID(t *testing.T) {
 	}
 }
 
-func TestAnalyze_RaiseHintWhenNeverReaccessed(t *testing.T) {
+func TestAnalyze_DoesNotRaiseHintFromNoReaccess(t *testing.T) {
 	recs := make([]Record, 0, 20)
 	for i := range 20 {
 		recs = append(recs, compress("g"+string(rune('a'+i)), "git", 800, 300, true, false))
 	}
 	rep := Analyze(recs, Thresholds{})
-	var raise bool
 	for _, h := range rep.LevelHints {
-		if h.Command == "git" && h.Suggestion == "raise" {
-			raise = true
+		if h.Suggestion == "raise" {
+			t.Fatalf("absence of a recovery re-fetch is not evidence to increase compression: %+v", h)
 		}
 	}
-	if !raise {
-		t.Errorf("expected a 'raise' hint for never-reaccessed git, got %+v", rep.LevelHints)
+	if len(rep.LevelHints) != 0 {
+		t.Errorf("want no level hints without positive re-access evidence, got %+v", rep.LevelHints)
+	}
+}
+
+func TestAnalyze_SessionProjectionCannotProduceQualityHints(t *testing.T) {
+	recs := make([]Record, 0, 10)
+	for range 10 {
+		r := compress("", "git", 800, 300, true, false)
+		r.Source = SourceSessionProjection
+		recs = append(recs, r)
+	}
+	rep := Analyze(recs, Thresholds{})
+	if rep.TotalRuns != 10 || rep.ObservedRuns != 0 || rep.ProjectedRuns != 10 {
+		t.Fatalf("run provenance was not retained: %+v", rep)
+	}
+	if rep.TokensSaved != 0 || rep.ProjectedTokensSaved == 0 {
+		t.Fatalf("projected savings must not be reported as observed: %+v", rep)
+	}
+	if rep.Commands[0].AccessRateKnown {
+		t.Fatalf("no wrapped runs means re-access rate is unknown, not zero: %+v", rep.Commands[0])
+	}
+	if len(rep.CriticalMisses) != 0 || len(rep.LevelHints) != 0 {
+		t.Fatalf("session projections must not produce outcome-based hints: %+v", rep)
+	}
+}
+
+func TestAnalyze_ProjectionDoesNotDiluteObservedReaccessRate(t *testing.T) {
+	recs := make([]Record, 0, 101)
+	for i := range 5 {
+		recs = append(recs, compress("w"+string(rune('0'+i)), "docker", 1000, 300, true, false))
+	}
+	recs = append(recs, access("w0", "docker"))
+	for range 95 {
+		r := compress("", "docker", 1000, 300, true, false)
+		r.Source = SourceSessionProjection
+		recs = append(recs, r)
+	}
+	rep := Analyze(recs, Thresholds{})
+	if len(rep.CriticalMisses) != 1 || !rep.CriticalMisses[0].AccessRateKnown || rep.CriticalMisses[0].AccessRate != 0.2 {
+		t.Fatalf("projected runs must not dilute observed re-access rate: %+v", rep.CriticalMisses)
 	}
 }
 

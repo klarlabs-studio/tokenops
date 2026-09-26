@@ -502,6 +502,7 @@ func accumulateBashROI(st *scanState, command string, out []byte) {
 
 	st.records = append(st.records, fmtlearn.Record{
 		Type:            fmtlearn.RecordCompress,
+		Source:          fmtlearn.SourceSessionProjection,
 		Command:         command,
 		RawBytes:        int64(len(out)),
 		CompactBytes:    int64(bal.BytesAfter),

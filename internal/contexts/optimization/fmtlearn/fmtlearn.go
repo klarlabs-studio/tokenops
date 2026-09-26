@@ -36,58 +36,81 @@ const (
 	RecordAccess RecordType = "access"
 )
 
+// RecordSource distinguishes observed formatting from offline session-log
+// projections. Projections help prioritize formatters but are not outcomes.
+type RecordSource string
+
+const (
+	// SourceWrapped records output TokenOps actually formatted for an agent.
+	// Empty source is treated as wrapped for compatibility with old index rows.
+	SourceWrapped RecordSource = "wrapped"
+	// SourceSessionProjection records a formatter simulation over session logs.
+	SourceSessionProjection RecordSource = "session_projection"
+)
+
 // Record is one telemetry row. Compress rows carry the compression metadata;
 // access rows carry only Type, ID, Command, and TS (the ID links an access
 // back to its compression).
 type Record struct {
-	Type            RecordType `json:"type"`
-	ID              string     `json:"id"`
-	Command         string     `json:"command"`
-	Level           string     `json:"level,omitempty"`
-	RawBytes        int64      `json:"raw_bytes,omitempty"`
-	CompactBytes    int64      `json:"compact_bytes,omitempty"`
-	TokensSaved     int64      `json:"tokens_saved,omitempty"`
-	Handled         bool       `json:"handled,omitempty"`          // a command-specific formatter ran
-	GenericFallback bool       `json:"generic_fallback,omitempty"` // fell back to the generic scrub
-	CriticalKept    bool       `json:"critical_kept,omitempty"`
-	TS              time.Time  `json:"ts"`
+	Type            RecordType   `json:"type"`
+	Source          RecordSource `json:"source,omitempty"`
+	ID              string       `json:"id"`
+	Command         string       `json:"command"`
+	Level           string       `json:"level,omitempty"`
+	RawBytes        int64        `json:"raw_bytes,omitempty"`
+	CompactBytes    int64        `json:"compact_bytes,omitempty"`
+	TokensSaved     int64        `json:"tokens_saved,omitempty"`
+	Handled         bool         `json:"handled,omitempty"`          // a command-specific formatter ran
+	GenericFallback bool         `json:"generic_fallback,omitempty"` // fell back to the generic scrub
+	CriticalKept    bool         `json:"critical_kept,omitempty"`
+	TS              time.Time    `json:"ts"`
 }
 
 // CommandStat aggregates every record for one command token.
 type CommandStat struct {
-	Command      string  `json:"command"`
-	Runs         int     `json:"runs"`
-	GenericRuns  int     `json:"generic_runs"` // runs with no dedicated formatter or a fallback
-	Accesses     int     `json:"accesses"`     // recovery re-fetches
-	RawBytes     int64   `json:"raw_bytes"`
-	TokensSaved  int64   `json:"tokens_saved"`
-	GenericRatio float64 `json:"generic_ratio"` // GenericRuns / Runs
-	AccessRate   float64 `json:"access_rate"`   // Accesses / Runs
+	Command              string  `json:"command"`
+	Runs                 int     `json:"runs"` // observed plus projected
+	ObservedRuns         int     `json:"observed_runs"`
+	ProjectedRuns        int     `json:"projected_runs"`
+	GenericRuns          int     `json:"generic_runs"` // runs with no dedicated formatter or a fallback
+	ObservedGenericRuns  int     `json:"observed_generic_runs"`
+	Accesses             int     `json:"accesses"` // recovery re-fetches
+	RawBytes             int64   `json:"raw_bytes"`
+	TokensSaved          int64   `json:"tokens_saved"` // estimate from observed runs only
+	ProjectedTokensSaved int64   `json:"projected_tokens_saved"`
+	GenericRatio         float64 `json:"generic_ratio"` // GenericRuns / Runs
+	ObservedGenericRatio float64 `json:"observed_generic_ratio"`
+	AccessRateKnown      bool    `json:"access_rate_known"`
+	AccessRate           float64 `json:"access_rate"` // Accesses / ObservedRuns
 }
 
 // LevelHint is a per-command loss-level tuning suggestion.
 type LevelHint struct {
 	Command    string  `json:"command"`
 	AccessRate float64 `json:"access_rate"`
-	Suggestion string  `json:"suggestion"` // "lower" | "raise" | "keep"
+	Suggestion string  `json:"suggestion"` // "lower"
 	Rationale  string  `json:"rationale"`
 }
 
 // Report is the advisory output of Analyze.
 type Report struct {
-	TotalRuns      int           `json:"total_runs"`
-	TotalAccesses  int           `json:"total_accesses"`
-	TokensSaved    int64         `json:"tokens_saved"`
-	Commands       []CommandStat `json:"commands"`        // all, by runs desc
-	NextFormatters []CommandStat `json:"next_formatters"` // generic-heavy, by raw bytes desc
-	CriticalMisses []CommandStat `json:"critical_misses"` // high access rate, by access rate desc
-	LevelHints     []LevelHint   `json:"level_hints"`
+	TotalRuns            int           `json:"total_runs"` // observed plus projected
+	ObservedRuns         int           `json:"observed_runs"`
+	ProjectedRuns        int           `json:"projected_runs"`
+	TotalAccesses        int           `json:"total_accesses"`
+	TokensSaved          int64         `json:"tokens_saved"` // estimate from observed runs only
+	ProjectedTokensSaved int64         `json:"projected_tokens_saved"`
+	Commands             []CommandStat `json:"commands"`        // all, by runs desc
+	NextFormatters       []CommandStat `json:"next_formatters"` // generic-heavy, by raw bytes desc
+	CriticalMisses       []CommandStat `json:"critical_misses"` // observed re-accesses only
+	LevelHints           []LevelHint   `json:"level_hints"`     // observed runs only
 }
 
 // Thresholds tunes the report. Zero value yields the defaults below.
 type Thresholds struct {
-	// MinRuns is the minimum runs before a command is eligible for a
-	// NextFormatter or LevelHint suggestion (avoids acting on one sample).
+	// MinRuns is the minimum observed runs before a command can receive a
+	// quality hint, and the minimum combined runs for a formatter-priority
+	// suggestion (avoids acting on one sample).
 	MinRuns int
 	// GenericRatioFloor: a command is a NextFormatter candidate when at
 	// least this fraction of its runs hit the generic scrub.
@@ -95,8 +118,6 @@ type Thresholds struct {
 	// AccessRateCeiling: above this re-access rate a command is flagged as
 	// a CriticalMiss (formatter too aggressive).
 	AccessRateCeiling float64
-	// AccessRateFloor: below this, an aggressive default is safe to raise.
-	AccessRateFloor float64
 }
 
 func (t Thresholds) withDefaults() Thresholds {
@@ -108,9 +129,6 @@ func (t Thresholds) withDefaults() Thresholds {
 	}
 	if t.AccessRateCeiling <= 0 {
 		t.AccessRateCeiling = 0.10
-	}
-	if t.AccessRateFloor <= 0 {
-		t.AccessRateFloor = 0.01
 	}
 	return t
 }
@@ -141,15 +159,27 @@ func Analyze(records []Record, th Thresholds) Report {
 		s := get(r.Command)
 		s.Runs++
 		s.RawBytes += r.RawBytes
-		s.TokensSaved += r.TokensSaved
+		if r.Source == SourceSessionProjection {
+			s.ProjectedRuns++
+			s.ProjectedTokensSaved += r.TokensSaved
+			rep.ProjectedRuns++
+			rep.ProjectedTokensSaved += r.TokensSaved
+		} else {
+			s.ObservedRuns++
+			s.TokensSaved += r.TokensSaved
+			rep.ObservedRuns++
+			rep.TokensSaved += r.TokensSaved
+		}
 		if !r.Handled || r.GenericFallback {
 			s.GenericRuns++
+			if r.Source != SourceSessionProjection {
+				s.ObservedGenericRuns++
+			}
 		}
 		if r.ID != "" {
 			idCommand[r.ID] = r.Command
 		}
 		rep.TotalRuns++
-		rep.TokensSaved += r.TokensSaved
 	}
 
 	// Second pass: accesses, attributed via the compression id (or the
@@ -173,17 +203,21 @@ func Analyze(records []Record, th Thresholds) Report {
 	for _, s := range stats {
 		if s.Runs > 0 {
 			s.GenericRatio = float64(s.GenericRuns) / float64(s.Runs)
-			s.AccessRate = float64(s.Accesses) / float64(s.Runs)
+			if s.ObservedRuns > 0 {
+				s.ObservedGenericRatio = float64(s.ObservedGenericRuns) / float64(s.ObservedRuns)
+				s.AccessRate = float64(s.Accesses) / float64(s.ObservedRuns)
+				s.AccessRateKnown = true
+			}
 		}
 		rep.Commands = append(rep.Commands, *s)
 
 		if s.Runs >= th.MinRuns && s.GenericRatio >= th.GenericRatioFloor {
 			rep.NextFormatters = append(rep.NextFormatters, *s)
 		}
-		if s.Runs >= th.MinRuns && s.AccessRate > th.AccessRateCeiling {
+		if s.ObservedRuns >= th.MinRuns && s.AccessRate > th.AccessRateCeiling {
 			rep.CriticalMisses = append(rep.CriticalMisses, *s)
 		}
-		if s.Runs >= th.MinRuns {
+		if s.ObservedRuns >= th.MinRuns {
 			if h, ok := levelHint(*s, th); ok {
 				rep.LevelHints = append(rep.LevelHints, h)
 			}
@@ -214,25 +248,19 @@ func Analyze(records []Record, th Thresholds) Report {
 	return rep
 }
 
-// levelHint proposes a loss-level change from the re-access rate. Only
-// commands with a dedicated formatter (some non-generic runs) get a hint —
-// tuning a generic-only command's level is meaningless.
+// levelHint proposes a loss-level change from observed re-access rates. The
+// caller must require enough actually wrapped runs; session projections do
+// not establish whether an agent needed the full output. Only commands with
+// a dedicated formatter (some non-generic runs) get a hint.
 func levelHint(s CommandStat, th Thresholds) (LevelHint, bool) {
-	if s.GenericRatio >= 1.0 {
+	if s.ObservedRuns == 0 || s.ObservedGenericRatio >= 1.0 {
 		return LevelHint{}, false
 	}
-	switch {
-	case s.AccessRate > th.AccessRateCeiling:
+	if s.AccessRate > th.AccessRateCeiling {
 		return LevelHint{
 			Command: s.Command, AccessRate: s.AccessRate, Suggestion: "lower",
-			Rationale: "compressed output re-fetched often; formatter may be dropping needed lines",
+			Rationale: "wrapped output was re-fetched often; formatter may be dropping needed lines",
 		}, true
-	case s.AccessRate <= th.AccessRateFloor:
-		return LevelHint{
-			Command: s.Command, AccessRate: s.AccessRate, Suggestion: "raise",
-			Rationale: "compact output almost never re-fetched; a more aggressive default is safe",
-		}, true
-	default:
-		return LevelHint{}, false
 	}
+	return LevelHint{}, false
 }

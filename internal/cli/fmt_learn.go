@@ -33,6 +33,7 @@ func recordCompressRun(recoverDir, command, level string, res *fmtResult, now ti
 	}
 	return appendLearnRecord(recoverDir, fmtlearn.Record{
 		Type:            fmtlearn.RecordCompress,
+		Source:          fmtlearn.SourceWrapped,
 		ID:              res.RecoveryID,
 		Command:         command,
 		Level:           level,
@@ -78,7 +79,7 @@ whose compression dropped something the agent needed.
 			command := lookupRecoveryCommand(recoverDir, id)
 			// Record the access before printing so the signal is durable.
 			_ = appendLearnRecord(recoverDir, fmtlearn.Record{
-				Type: fmtlearn.RecordAccess, ID: id, Command: command, TS: time.Now().UTC(),
+				Type: fmtlearn.RecordAccess, Source: fmtlearn.SourceWrapped, ID: id, Command: command, TS: time.Now().UTC(),
 			})
 			_, _ = cmd.OutOrStdout().Write(data)
 			return nil
@@ -191,15 +192,8 @@ func applyLearnHints(cmd *cobra.Command, rep fmtlearn.Report, configPath string)
 	for _, h := range rep.LevelHints {
 		cur := policy.LevelFor(h.Command)
 		next := cur
-		switch h.Suggestion {
-		case "lower":
-			if cur > formatter.LossConservative {
-				next = cur - 1
-			}
-		case "raise":
-			if cur < formatter.LossAggressive {
-				next = cur + 1
-			}
+		if h.Suggestion == "lower" && cur > formatter.LossConservative {
+			next = cur - 1
 		}
 		if next == cur {
 			continue
@@ -238,14 +232,14 @@ func renderLearnReport(cmd *cobra.Command, rep fmtlearn.Report) {
 		fmt.Fprintln(out, "No fmt telemetry yet. Run `tokenops fmt -- <cmd>` (recovery enabled) to gather data.")
 		return
 	}
-	fmt.Fprintf(out, "fmt learning report — %d runs, %d re-accesses, ~%d tokens saved\n\n",
-		rep.TotalRuns, rep.TotalAccesses, rep.TokensSaved)
+	fmt.Fprintf(out, "fmt learning report — %d wrapped runs, %d session projections, %d re-accesses; ~%d tokens estimated from wrapped runs, ~%d projected by session simulation\n\n",
+		rep.ObservedRuns, rep.ProjectedRuns, rep.TotalAccesses, rep.TokensSaved, rep.ProjectedTokensSaved)
 
 	if len(rep.NextFormatters) > 0 {
-		fmt.Fprintln(out, "Next formatters to write (commands falling back to the generic scrub):")
-		fmt.Fprintf(out, "  %-14s %6s %8s %10s\n", "COMMAND", "RUNS", "GENERIC%", "RAW BYTES")
+		fmt.Fprintln(out, "Formatter priorities (generic fallback observed in real command output; includes offline session projections):")
+		fmt.Fprintf(out, "  %-14s %7s %7s %8s %10s\n", "COMMAND", "WRAPPED", "PROJECTED", "GENERIC%", "RAW BYTES")
 		for _, c := range rep.NextFormatters {
-			fmt.Fprintf(out, "  %-14s %6d %7.0f%% %10d\n", c.Command, c.Runs, 100*c.GenericRatio, c.RawBytes)
+			fmt.Fprintf(out, "  %-14s %7d %9d %7.0f%% %10d\n", c.Command, c.ObservedRuns, c.ProjectedRuns, 100*c.GenericRatio, c.RawBytes)
 		}
 		fmt.Fprintln(out)
 	}
@@ -258,7 +252,7 @@ func renderLearnReport(cmd *cobra.Command, rep fmtlearn.Report) {
 		fmt.Fprintln(out)
 	}
 	if len(rep.LevelHints) > 0 {
-		fmt.Fprintln(out, "Loss-level tuning hints:")
+		fmt.Fprintln(out, "Conservative loss-level hints (based only on actual wrapped output re-accesses):")
 		for _, h := range rep.LevelHints {
 			fmt.Fprintf(out, "  %-14s %-6s (%s)\n", h.Command, h.Suggestion, h.Rationale)
 		}

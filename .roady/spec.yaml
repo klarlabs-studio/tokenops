@@ -56,7 +56,10 @@ features:
     - id: optimization-quality-evals-framework
       title: Optimization Quality Evals Framework
       description: Implement AI optimization evaluation harness with offline replay datasets and quality regression gates. Track task-success, regenerate rate, estimated token savings, and quality drift before enabling broader optimization defaults.
-      requirements: []
+      requirements:
+        - id: fmt-learning-evidence-provenance
+          title: Separate observed formatter evidence from session projections
+          description: Preserve provenance between actual tokenops fmt runs and offline session-log simulations. Report projected savings separately, keep re-access rates unknown without wrapped runs, and never recommend stronger compression from absence of a recovery read.
     - id: operator-wedge-kpi-scorecard
       title: Operator Wedge KPI Scorecard
       description: 'Define a product wedge scorecard tied to operator outcomes: first-value time, token efficiency uplift, and spend attribution completeness. Publish metric definitions, baseline capture workflow, and rollout thresholds in docs + CLI output.'

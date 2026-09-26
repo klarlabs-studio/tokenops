@@ -1,6 +1,6 @@
 {
   "project_id": "tokenops",
-  "version": 358,
+  "version": 362,
   "task_states": {
     "analytics-aggregator": {
       "status": "done",
@@ -776,6 +776,17 @@
       "completed_at": "2026-09-20T11:49:08.800493+02:00",
       "elapsed_minutes": 0
     },
+    "task-fmt-learning-evidence-provenance": {
+      "status": "verified",
+      "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "Formatter provenance guard implemented; focused Go tests and make verify gates passed except proto version check (installed protoc 7.36.2 vs repository-generated 7.36.0). Live session sample: 14 wrapped runs, 18,043 projections, zero recoveries, no up-tuning hints."
+      ],
+      "started_at": "2026-09-26T10:15:11.899317+02:00",
+      "completed_at": "2026-09-26T10:15:11.952898+02:00",
+      "elapsed_minutes": 0
+    },
     "task-forecasting-governance": {
       "status": "done",
       "path": "",
@@ -1393,5 +1404,5 @@
       "elapsed_minutes": 3
     }
   },
-  "updated_at": "2026-09-26T08:54:42.025298+02:00"
+  "updated_at": "2026-09-26T10:15:12.004482+02:00"
 }
