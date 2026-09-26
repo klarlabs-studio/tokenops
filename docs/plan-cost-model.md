@@ -111,6 +111,13 @@ into the event store or report the meter as connected. The daemon requires the
 session-authenticated usage response so every recorded percentage retains its
 vendor timestamp and reset provenance.
 
+Claude's current public web client reads a unified `limits` array whose entries
+carry a vendor `kind`, percentage, reset timestamp, and optional model or
+surface scope. TokenOps accepts that contract and the historical top-level
+window blocks. Aggregate session and weekly entries retain the compatibility
+attributes used by headroom; other entries retain their vendor kind and scope
+instead of relying on a fixed model-name allowlist.
+
 ## Adding a custom plan
 
 1. Add an entry to the `catalog` map in
