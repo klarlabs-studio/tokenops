@@ -58,6 +58,19 @@ const evolvingWindowUsage = `{
   "extra_usage": null
 }`
 
+// unifiedLimitsUsage mirrors the current public claude.ai frontend contract.
+// Values and scope labels are synthetic; only the response structure comes
+// from the vendor's public bundle.
+const unifiedLimitsUsage = `{
+  "limits": [
+    {"kind":"session","percent":12,"resets_at":"2026-09-27T01:00:00Z","scope":{}},
+    {"kind":"weekly_all","percent":34,"resets_at":"2026-10-02T01:00:00Z","scope":{}},
+    {"kind":"weekly","percent":56,"resets_at":"2026-10-02T02:00:00Z",
+      "scope":{"model":{"display_name":"Future Model"}}}
+  ],
+  "extra_usage": null
+}`
+
 // inventedUsage is the shape this meter was originally written against,
 // which no real response has ever had. It must be refused, not zeroed.
 const inventedUsage = `{
@@ -192,6 +205,35 @@ func TestUsagePreservesEvolvingVendorWindowLabels(t *testing.T) {
 	}
 	if got := env.Attributes["seven_day_future_model_reset_at"]; got != "2026-10-02T02:00:00Z" {
 		t.Errorf("dynamic reset = %q", got)
+	}
+}
+
+func TestUsageDecodesUnifiedLimits(t *testing.T) {
+	u := usageFrom(t, unifiedLimitsUsage)
+	if u.FiveHour == nil || *u.FiveHour.Utilization != 12 || u.FiveHour.Kind != "session" {
+		t.Fatalf("session limit = %+v", u.FiveHour)
+	}
+	if u.SevenDay == nil || *u.SevenDay.Utilization != 34 || u.SevenDay.Kind != "weekly_all" {
+		t.Fatalf("weekly aggregate limit = %+v", u.SevenDay)
+	}
+	model := u.Windows["weekly_future_model"]
+	if model == nil || *model.Utilization != 56 || model.ModelScope != "Future Model" {
+		t.Fatalf("model limit = %+v", model)
+	}
+	env := newEnvelope(time.Now().UTC(), "org-abc", u)
+	want := map[string]string{
+		"five_hour_used_pct":              "12.00",
+		"five_hour_kind":                  "session",
+		"seven_day_used_pct":              "34.00",
+		"seven_day_kind":                  "weekly_all",
+		"weekly_future_model_used_pct":    "56.00",
+		"weekly_future_model_kind":        "weekly",
+		"weekly_future_model_model_scope": "Future Model",
+	}
+	for key, value := range want {
+		if got := env.Attributes[key]; got != value {
+			t.Errorf("%s = %q, want %q", key, got, value)
+		}
 	}
 }
 
