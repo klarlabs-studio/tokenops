@@ -735,10 +735,15 @@ type CursorUsageConfig struct {
 // to 5 minutes; Anthropic's cookie tier rate-limits aggressive
 // polling and the data shifts on a 5-hour bucket cadence anyway.
 type ClaudeUsageMeterConfig struct {
-	Enabled    bool          `yaml:"enabled"`
-	SessionKey string        `yaml:"session_key"`
-	OrgID      string        `yaml:"org_id"`
-	Interval   time.Duration `yaml:"interval"`
+	Enabled    bool   `yaml:"enabled"`
+	SessionKey string `yaml:"session_key"`
+	// Clearance and UserAgent are an optional, matched Cloudflare session.
+	// They let installations that cannot read a browser's protected cookie
+	// database use a deliberately copied, content-free usage request instead.
+	Clearance string        `yaml:"clearance,omitempty"`
+	UserAgent string        `yaml:"user_agent,omitempty"`
+	OrgID     string        `yaml:"org_id"`
+	Interval  time.Duration `yaml:"interval"`
 	// FromBrowser re-reads the session and Cloudflare clearance cookies
 	// from the local browser as the daemon polls. claude.ai's bot check
 	// refuses a request without a clearance cookie, and that cookie

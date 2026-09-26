@@ -225,6 +225,15 @@ content-safely.
 6. The formatter provenance guard was merged in PR #390; tune `fmt learn`
    thresholds only after sufficient genuine wrapped-run/recovery evidence.
 
+The Claude usage-meter decoder supports both historical windows and the
+current unified limits contract. The remaining live-ingestion constraint is
+portable authentication: direct Chrome cookie-store access can be denied by
+macOS privacy controls. Current work adds a content-safe `--paste-request`
+fallback that accepts only a copied claude.ai organization usage GET and
+persists only its session, clearance, User-Agent, and organization fields.
+This is general product support, not evidence that a particular account was
+successfully ingested; that claim still requires a verified live setup run.
+
 ## Recently Resolved
 
 - PR #405: adds content-safe Anthropic upstream error classification and OTLP

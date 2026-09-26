@@ -209,17 +209,28 @@ read is logged and skipped rather than stored as zeros.
 tokenops vendor-usage setup claude-usage-meter
 ```
 
-It reads the session from the browser you are already signed in with —
+By default it reads the session from the browser you are already signed in with —
 Chrome, Arc, Brave, Edge, Chromium or Firefox — so there is nothing to copy
 or paste. On macOS the system asks you to allow reading the browser's
-keychain entry; that prompt is the permission step. TokenOps reads exactly
-that one cookie, from a copy of the store, and never writes to your browser
+keychain entry; that prompt is the permission step. TokenOps reads only the
+Claude session and Cloudflare clearance cookies, from a copy of the store, and never writes to your browser
 profile.
 
 ```bash
 tokenops vendor-usage setup claude-usage-meter --browser Chrome  # pick one
 tokenops vendor-usage setup claude-usage-meter --paste           # type it instead
+tokenops vendor-usage setup claude-usage-meter --paste-request   # import a usage request
 ```
+
+Some operating systems protect browser cookie databases even after the
+keychain is unlocked. `--paste-request` is the portable fallback: open
+`claude.ai/settings/usage`, select the content-free
+`/api/organizations/.../usage` GET in Developer Tools → Network, choose
+**Copy as cURL**, and paste it at the hidden prompt. TokenOps rejects other
+endpoints and extracts only `sessionKey`, `cf_clearance`, `User-Agent`, and
+the organization ID; it does not store the copied command or any response.
+The clearance is short-lived, so repeat setup if source health later reports
+that Claude's bot check refused it.
 
 With no browser session found it falls back to explaining where the cookie
 is and reading it without echoing it into your scrollback. Either way it
