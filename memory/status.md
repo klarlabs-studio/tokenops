@@ -4,14 +4,16 @@ updated: 2026-09-26
 ## Current State
 
 TokenOps is a local-first adaptive control plane for AI-assisted work. Current
-source `main` is `d664208` (PR #389). The CLI/MCP/API surfaces are the product;
+source `main` includes PR #396. The CLI/MCP/API surfaces are the product;
 there is no bundled browser dashboard or demo-data workflow (PR #387).
 
 ADR 0004 Phases 0–4 and 6–9 are implemented. Phase 5 implementation is shipped,
-but real outcome validation remains open: the observed session data has no
-matched intervention/outcome cohort, so verification must remain observational.
-The plan state is tracked in `.roady/`; current intent and phase truth are in
-`docs/adr/0004-ai-work-intelligence-and-control.md`.
+but live validation remains open. PRs #394–#396 improved execution attribution
+and reject partial or failed randomized routes. Two real paired trial attempts
+were rejected by those checks (partial route application; upstream HTTP 400
+with fallback), so neither is valid comparison or outcome evidence. Verification
+must remain observational. The plan state is tracked in `.roady/`; current
+intent and phase truth are in `docs/adr/0004-ai-work-intelligence-and-control.md`.
 
 Live validation on 2026-09-26 restarted the installed supervised daemon and
 confirmed CLI health/readiness plus an MCP initialize, tools/list, and
@@ -33,30 +35,34 @@ session records, reported current pressure as clear, and recommended
 continuing. This validates the surface and data path only; it does not supply
 an intervention/outcome pair or verify work quality.
 
-Current branch adds a formatter-learning evidence guard. A read-only real
-session scan found 14 wrapped formatter runs and 18,043 offline session
-projections, with zero recovery reads. The learner now separates projected
-savings from observed estimates, leaves re-access unknown without wrapped
-evidence, and never recommends stronger compression from missing recovery
-reads. This is verified in Roady but not merged. Full `make verify` passed its
-Go, lint, race, eval, and security gates; proto-check remains blocked by the
-host's protoc 7.36.2 versus repository-generated 7.36.0 version comment.
+The formatter-learning evidence guard was merged in PR #390. It separates
+projected savings from observed estimates and avoids recommending stronger
+compression without wrapped recovery evidence. Full `make verify` passed its
+Go, lint, race, eval, and security gates at that time; local proto verification
+may still require the repository's pinned compiler version.
 
 ## Next
 
-1. On an operator-controlled deployment, upgrade to a release containing
-   PR #387 and repeat CLI/MCP checks; confirm the retired demo/dashboard
-   surfaces are absent.
-2. Let real work produce a genuine intervention and outcome. Record only a
-   human or recognized verifier assessment actually observed; do not seed
-   example activity or claim causal uplift before matched evidence exists.
-3. Keep background coaching off until its opt-in, scope, and cost policy are
+1. Diagnose the variant request's HTTP 400 using non-sensitive request
+   metadata and a mocked/local compatibility test; do not log prompt or
+   credential-bearing bodies.
+2. Before another paid paired attempt, verify full-execution arm consistency
+   and obtain explicit authorization for the new model calls.
+3. Record a human or recognized-verifier outcome only when actually observed;
+   do not seed examples or claim causal uplift from task completion alone.
+4. Keep background coaching off until its opt-in, scope, and cost policy are
    explicit; on-demand coaching remains the safe path.
-4. Merge the formatter provenance guard before relying on `fmt learn`; tune
+5. Merge the formatter provenance guard before relying on `fmt learn`; tune
    thresholds only after sufficient genuine wrapped-run/recovery evidence.
 
 ## Recently Resolved
 
+- PR #396: randomized verification rejects assigned executions with upstream
+  HTTP failures.
+- PR #395: randomized verification rejects partially applied model-route arms.
+- PR #394: randomized verification attributes proxy executions from durable
+  assignment IDs.
+- PR #390: formatter-learning projections are distinct from observed evidence.
 - PR #387: removed demo command/data and browser dashboard surfaces.
 - PR #388: deduplicated repeated provenance caveats in aggregates.
 - PR #389: distinguished incomplete API-equivalent estimates from actual
