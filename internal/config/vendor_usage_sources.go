@@ -13,7 +13,8 @@ import (
 // enabled-source↔tag mapping so the `tokenops vendor-usage status`
 // command and the stale-ingestion health check can never drift.
 type VendorUsageSource struct {
-	// Name is the human-facing identifier (matches the config key).
+	// Name is the human-facing identifier. It normally matches the config
+	// key; compatibility-preserved config keys may retain an older spelling.
 	Name string
 	// SourceTag is the value the poller writes into the event store's
 	// source column; it is what CountBySource groups by.
@@ -43,7 +44,7 @@ func (c Config) VendorUsageSources() []VendorUsageSource {
 		{Name: "vendor_usage_anthropic", SourceTag: "vendor-usage-anthropic", Enabled: c.VendorUsage.Anthropic.Enabled},
 		{Name: "github_copilot", SourceTag: "github-copilot", Enabled: c.VendorUsage.GitHubCopilot.Enabled},
 		{Name: "cursor_web", SourceTag: "cursor-web", Enabled: c.VendorUsage.Cursor.Enabled},
-		{Name: "claude_usage_meter", SourceTag: "claude-usage-meter", Enabled: c.VendorUsage.ClaudeUsageMeter.Enabled},
+		{Name: "claude_subscription", SourceTag: "claude-usage-meter", Enabled: c.VendorUsage.ClaudeUsageMeter.Enabled},
 		// The cursor turn poller has no config block: it reads a ledger
 		// the coach hook writes, and that ledger is empty until the hook
 		// is installed, so an operator who does not run Cursor pays

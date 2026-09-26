@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -50,13 +51,17 @@ type vendorUsageEnableFlags struct {
 // error message on a bad key, and the test matrix all share one source of
 // truth.
 var vendorUsageSources = []string{
-	"claude-usage-meter",
+	"claude-subscription",
 	"cursor",
 	"github-copilot",
 	"codex-jsonl",
 	"claude-code-jsonl",
 	"opencode",
 	"anthropic-admin",
+}
+
+func isClaudeSubscriptionSource(source string) bool {
+	return strings.EqualFold(source, "claude-subscription") || strings.EqualFold(source, "claude-usage-meter")
 }
 
 // envSecret picks up secrets from the environment so operators can avoid
@@ -84,8 +89,8 @@ file. Restart the daemon to pick up the change.
 
 Sources:
 
-  claude-usage-meter    claude.ai sessionKey scraper — surfaces Claude Max
-                      5h + 7d + 7d-opus utilization %. Required: --session-key
+  claude-subscription claude.ai subscription quota — surfaces Claude Pro/Max,
+                      Team/Business, and Enterprise usage windows. Required: --session-key
                       (or env TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY).
   cursor              cursor.com /api/usage cookie scraper. Required: --cookie
                       (or env TOKENOPS_CURSOR_COOKIE) and --user-id.
@@ -105,11 +110,11 @@ Sources:
 Examples:
 
   TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY=sk-ant-... \
-    tokenops vendor-usage enable claude-usage-meter
+    tokenops vendor-usage enable claude-subscription
   tokenops vendor-usage enable cursor --cookie ey... --user-id 123abc
   tokenops vendor-usage enable github-copilot
   tokenops vendor-usage enable codex-jsonl --interval 1m
-  tokenops vendor-usage enable claude-usage-meter --disable
+  tokenops vendor-usage enable claude-subscription --disable
 
 Where secrets end up:
 
@@ -131,8 +136,8 @@ Where secrets end up:
 			return runVendorUsageEnable(cmd, args[0], f)
 		},
 	}
-	cmd.Flags().StringVar(&f.sessionKey, "session-key", "", "claude.ai sessionKey cookie (claude-usage-meter); env TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY")
-	cmd.Flags().StringVar(&f.orgID, "org-id", "", "Anthropic org_id (claude-usage-meter); auto-resolved on first scan when empty")
+	cmd.Flags().StringVar(&f.sessionKey, "session-key", "", "claude.ai sessionKey cookie (claude-subscription); env TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY")
+	cmd.Flags().StringVar(&f.orgID, "org-id", "", "Anthropic org_id (claude-subscription); auto-resolved on first scan when empty")
 	cmd.Flags().StringVar(&f.cookie, "cookie", "", "WorkosCursorSessionToken cookie (cursor); env TOKENOPS_CURSOR_COOKIE")
 	cmd.Flags().StringVar(&f.userID, "user-id", "", "Cursor user_id (cursor)")
 	cmd.Flags().StringVar(&f.adminKey, "admin-key", "", "Anthropic admin key (anthropic-admin); env TOKENOPS_ANTHROPIC_ADMIN_KEY")
@@ -158,10 +163,10 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 	enabled := !f.disable
 
 	switch source {
-	case "claude-usage-meter":
+	case "claude-subscription", "claude-usage-meter":
 		key := envSecret(f.sessionKey, "TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY")
 		if enabled && key == "" {
-			return fmt.Errorf("claude-usage-meter requires --session-key or TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY (paste from claude.ai devtools → Application → Cookies → sessionKey)")
+			return fmt.Errorf("claude-subscription requires --session-key or TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY (prefer `tokenops vendor-usage setup claude-subscription`)")
 		}
 		cfg.VendorUsage.ClaudeUsageMeter.Enabled = enabled
 		if key != "" {
@@ -261,7 +266,7 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 // uses snake_case for YAML readability.
 func sourceConfigKey(source string) string {
 	switch source {
-	case "claude-usage-meter":
+	case "claude-subscription", "claude-usage-meter":
 		return "claude_usage_meter"
 	case "github-copilot":
 		return "github_copilot"

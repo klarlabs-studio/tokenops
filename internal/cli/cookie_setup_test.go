@@ -26,7 +26,7 @@ func runCookieSetupCmd(t *testing.T, stdin string, args ...string) (string, erro
 // browser devtools, which is why `enable --session-key` was the wrong shape
 // for this source.
 func TestSetupExplainsWhereToFindTheKey(t *testing.T) {
-	out, _ := runCookieSetupCmd(t, "\n", "claude-usage-meter")
+	out, _ := runCookieSetupCmd(t, "\n", "claude-subscription")
 	for _, want := range []string{"claude.ai", "developer tools", "Cookies", "sessionKey"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("instructions omit %q:\n%s", want, out)
@@ -39,7 +39,7 @@ func TestSetupExplainsWhereToFindTheKey(t *testing.T) {
 // Nothing is written until Anthropic has accepted it.
 func TestSetupWritesNothingWithoutAKey(t *testing.T) {
 	path := seedConfig(t)
-	out, err := runCookieSetupCmd(t, "\n", "claude-usage-meter", "--config-path", path)
+	out, err := runCookieSetupCmd(t, "\n", "claude-subscription", "--config-path", path)
 	if err == nil {
 		t.Fatal("an empty key should be refused")
 	}
@@ -76,7 +76,7 @@ func TestSetupRefusesAKeyAnthropicRejects(t *testing.T) {
 		w.WriteHeader(http.StatusUnauthorized)
 	})
 	path := seedConfig(t)
-	_, err := runCookieSetupCmd(t, "sk-ant-sid-definitely-not-valid\n", "claude-usage-meter", "--config-path", path)
+	_, err := runCookieSetupCmd(t, "sk-ant-sid-definitely-not-valid\n", "claude-subscription", "--config-path", path)
 	if err == nil {
 		t.Fatal("an invalid key should be refused")
 	}
@@ -102,7 +102,7 @@ func TestSetupExplainsTheBotCheck(t *testing.T) {
 		_, _ = w.Write([]byte("<html><title>Just a moment...</title></html>"))
 	})
 	path := seedConfig(t)
-	_, err := runCookieSetupCmd(t, "sk-ant-sid-whatever\n", "claude-usage-meter", "--config-path", path)
+	_, err := runCookieSetupCmd(t, "sk-ant-sid-whatever\n", "claude-subscription", "--config-path", path)
 	if err == nil {
 		t.Fatal("a refused request should be reported")
 	}
@@ -123,7 +123,14 @@ func TestSetupExplainsTheBotCheck(t *testing.T) {
 
 func TestSetupRejectsAnotherSource(t *testing.T) {
 	if _, err := runCookieSetupCmd(t, "", "cursor"); err == nil {
-		t.Fatal("setup covers claude-usage-meter only")
+		t.Fatal("setup covers claude-subscription only")
+	}
+}
+
+func TestSetupAcceptsLegacyClaudeUsageMeterAlias(t *testing.T) {
+	out, _ := runCookieSetupCmd(t, "\n", "claude-usage-meter")
+	if !strings.Contains(out, "Connecting claude.ai") {
+		t.Fatalf("legacy setup alias did not reach subscription setup:\n%s", out)
 	}
 }
 
@@ -133,7 +140,7 @@ func TestSetupRejectsAnotherSource(t *testing.T) {
 func TestSetupLooksInTheBrowserFirst(t *testing.T) {
 	// The test home has no browser profiles, so this exercises the
 	// fallback and proves the search ran before the prompt.
-	out, _ := runCookieSetupCmd(t, "\n", "claude-usage-meter")
+	out, _ := runCookieSetupCmd(t, "\n", "claude-subscription")
 	search := strings.Index(out, "Looking for your claude.ai session")
 	prompt := strings.Index(out, "Paste sessionKey")
 	if search < 0 || prompt < 0 || search > prompt {
@@ -144,7 +151,7 @@ func TestSetupLooksInTheBrowserFirst(t *testing.T) {
 // --paste is for a machine with no browser to read: a server, CI, or an
 // operator who would rather not have their keychain touched.
 func TestSetupPasteSkipsTheBrowser(t *testing.T) {
-	out, _ := runCookieSetupCmd(t, "\n", "claude-usage-meter", "--paste")
+	out, _ := runCookieSetupCmd(t, "\n", "claude-subscription", "--paste")
 	if strings.Contains(out, "Looking for your claude.ai session") {
 		t.Errorf("--paste still searched the browser:\n%s", out)
 	}
@@ -203,7 +210,7 @@ func TestSetupPasteRequestPersistsOnlyBoundedSessionFields(t *testing.T) {
 	})
 	path := seedConfig(t)
 	raw := `curl 'https://claude.ai/api/organizations/org-test/usage' -H 'cookie: sessionKey=sk-ant-sid-test; cf_clearance=clearance-test' -H 'user-agent: Test Browser'`
-	out, err := runCookieSetupCmd(t, raw+"\n", "claude-usage-meter", "--paste-request", "--config-path", path, "--no-restart")
+	out, err := runCookieSetupCmd(t, raw+"\n", "claude-subscription", "--paste-request", "--config-path", path, "--no-restart")
 	if err != nil {
 		t.Fatalf("setup: %v\n%s", err, out)
 	}
