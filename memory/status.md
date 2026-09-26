@@ -4,7 +4,7 @@ updated: 2026-09-26
 ## Current State
 
 TokenOps is a local-first adaptive control plane for AI-assisted work. Current
-source `main` includes PR #396. The CLI/MCP/API surfaces are the product;
+source `main` includes PR #397. The CLI/MCP/API surfaces are the product;
 there is no bundled browser dashboard or demo-data workflow (PR #387).
 
 ADR 0004 Phases 0–4 and 6–9 are implemented. Phase 5 implementation is shipped,
@@ -14,6 +14,14 @@ were rejected by those checks (partial route application; upstream HTTP 400
 with fallback), so neither is valid comparison or outcome evidence. Verification
 must remain observational. The plan state is tracked in `.roady/`; current
 intent and phase truth are in `docs/adr/0004-ai-work-intelligence-and-control.md`.
+
+Codex CLI now has a global stdio MCP registration pointing at the current
+checkout's `bin/tokenops serve`. A restricted non-interactive verification
+discovered the TokenOps version/status tools, but Codex's approval policy
+blocked execution. A fresh interactive Codex CLI session is needed to verify
+those read-only calls. The local daemon is currently supervised but not
+answering. MCP registration does not route model traffic; this setup did not
+configure an OpenAI API provider or metered route.
 
 Live validation on 2026-09-26 restarted the installed supervised daemon and
 confirmed CLI health/readiness plus an MCP initialize, tools/list, and
@@ -43,16 +51,21 @@ may still require the repository's pinned compiler version.
 
 ## Next
 
-1. Diagnose the variant request's HTTP 400 using non-sensitive request
+1. In a fresh interactive Codex CLI session, verify TokenOps `version` and
+   `status` MCP tools; first resolve daemon health/release state without
+   changing model routing.
+2. Diagnose the variant request's HTTP 400 using non-sensitive request
    metadata and a mocked/local compatibility test; do not log prompt or
    credential-bearing bodies.
-2. Before another paid paired attempt, verify full-execution arm consistency
+3. Decide explicitly whether to use the metered OpenAI API path before
+   configuring Codex model traffic through the TokenOps proxy.
+4. Before another paid paired attempt, verify full-execution arm consistency
    and obtain explicit authorization for the new model calls.
-3. Record a human or recognized-verifier outcome only when actually observed;
+5. Record a human or recognized-verifier outcome only when actually observed;
    do not seed examples or claim causal uplift from task completion alone.
-4. Keep background coaching off until its opt-in, scope, and cost policy are
+6. Keep background coaching off until its opt-in, scope, and cost policy are
    explicit; on-demand coaching remains the safe path.
-5. Merge the formatter provenance guard before relying on `fmt learn`; tune
+7. The formatter provenance guard was merged in PR #390; tune `fmt learn`
    thresholds only after sufficient genuine wrapped-run/recovery evidence.
 
 ## Recently Resolved

@@ -299,7 +299,7 @@ not infer task success or overall quality from the absence of a finding.
 | 2 — freshness | Complete | PR #341. |
 | 3 — work primitives | Complete | PRs #342 and #347. |
 | 4 — capability layer | Complete | PR #343. |
-| 5 — verification and experiment | Implementation shipped; live validation open | PR #345 and correlated work/event support; verifier integrity fixes in PRs #394–#396. Two real paid paired attempts were correctly rejected: one had partial route application and one had an upstream HTTP 400/fallback. Neither produced valid outcome evidence; no causal improvement is claimed. |
+| 5 — verification and experiment | Implementation shipped; live validation open | PR #345 and correlated work/event support; verifier integrity fixes in PRs #394–#396. Two real paid paired attempts were correctly rejected: one had partial route application and one had an upstream HTTP 400/fallback. Codex CLI now has a local TokenOps MCP entry, but Codex model traffic is not routed through TokenOps and the local daemon is unavailable. No valid outcome evidence or causal improvement is claimed. |
 | 6 — canonical events | Complete | PRs #361–#369. |
 | 7 — runtime and installed-product verification | Complete in source/CI; live release check partial | Built-binary journey test in PR #349; lifecycle modules in PRs #370–#378. On 2026-09-26, installed v0.70.0 daemon health/readiness and MCP `tokenops_status` passed after a supervised restart. A temporary build of current source passed CLI and MCP status/resource-glance checks against that daemon using real local session records. The installed v0.70.0 binary still exposes demo/dashboard surfaces removed from source in PR #387; upgrade and recheck a release containing #387 under operator control. |
 | 8 — intent-oriented MCP | Complete | PRs #380–#382. |
@@ -307,11 +307,15 @@ not infer task success or overall quality from the absence of a finding.
 
 ### Next validation gate
 
-Use a release containing the merged production cleanup on real work, then capture only an outcome
-that the operator or an independent verifier actually observed. Before another
-paid paired attempt, diagnose why the selected variant request was rejected and
-ensure the whole execution stays on its assigned arm; do not weaken verifier
-integrity checks to make a pair pass. Compare matched baseline/intervention
+First, use a fresh interactive Codex CLI session to verify read-only TokenOps
+MCP calls; the initial non-interactive check was blocked by Codex's approval
+policy. MCP tool availability alone is not evidence that model traffic is
+routed. Confirm daemon health and release state before enabling any route.
+Decide explicitly whether to use the metered OpenAI API path; do not silently
+switch from ChatGPT-login Codex. Before another paid paired attempt, diagnose
+the prior variant HTTP 400 and ensure the whole execution stays on its assigned
+arm; do not weaken verifier integrity checks. Capture only an outcome that the
+operator or an independent verifier actually observed. Compare matched
 executions only when assignment, consistent route evidence, resource
 measurements, and explicit outcome evidence are all present. Until then,
 preserve the observational label. Do not seed demo activity or infer success
