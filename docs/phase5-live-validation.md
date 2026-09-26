@@ -53,6 +53,13 @@ pairs, and at least 10% median resource improvement with 60% of pairs improving
 by at least 10%. Trusted evidence requires at least 20 pairs and 90% coverage,
 and does not itself grant execution authority.
 
+The installed-v0.72.1 Anthropic reference run completed five compatible
+`claude-fable-5` / `claude-opus-5-5` coding-agent pairs with ten independent
+verifier outcomes, no non-2xx provider responses, stable per-execution arms,
+100% strong outcome coverage, and all declared guardrails passing. Its ledger
+reached `supported`; that result applies only to the bounded repair cohort and
+does not establish general model equivalence.
+
 ## Coding-agent extension
 
 The exact-output cohort is not sufficient evidence for a coding agent. A
