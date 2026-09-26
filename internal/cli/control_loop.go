@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -146,10 +148,17 @@ func newExperimentCmd() *cobra.Command {
 
 func newExperimentStartCmd() *cobra.Command {
 	var pairs, days int
+	var objective string
+	var minImprovement float64
+	var guardrailArgs []string
 	var dbPath string
 	cmd := &cobra.Command{
 		Use: "start <provider> <baseline-model> <variant-model>", Short: "Explicitly enroll a proxy-backed paired trial", Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			guardrails, err := parseExperimentGuardrails(guardrailArgs)
+			if err != nil {
+				return err
+			}
 			store, closeStore, err := openControlStore(cmd, dbPath)
 			if err != nil {
 				return err
@@ -157,8 +166,9 @@ func newExperimentStartCmd() *cobra.Command {
 			defer closeStore()
 			state, err := experiments.New(store).Start(cmd.Context(), experiments.StartInput{
 				Provider: args[0], BaselineModel: args[1], VariantModel: args[2], MaxPairs: pairs,
-				Duration:    time.Duration(days) * 24 * time.Hour,
-				Fingerprint: decide.RouteFingerprint(eventschema.Provider(args[0]), args[1], args[2], "proxy"),
+				Duration:        time.Duration(days) * 24 * time.Hour,
+				Fingerprint:     decide.RouteFingerprint(eventschema.Provider(args[0]), args[1], args[2], "proxy"),
+				ObjectiveMetric: objective, MinImprovementPct: minImprovement, Guardrails: guardrails,
 			})
 			if err != nil {
 				return err
@@ -168,8 +178,31 @@ func newExperimentStartCmd() *cobra.Command {
 	}
 	cmd.Flags().IntVar(&pairs, "pairs", 10, "matched pairs (1-10)")
 	cmd.Flags().IntVar(&days, "days", 14, "maximum duration (1-14 days)")
+	cmd.Flags().StringVar(&objective, "objective", "", "primary metric: tokens, plan_quota_tokens, metered_cost_usd, latency_ms, attention_minutes")
+	cmd.Flags().Float64Var(&minImprovement, "min-improvement-pct", 0, "required per-pair objective improvement percentage")
+	cmd.Flags().StringArrayVar(&guardrailArgs, "guardrail", nil, "guardrail as quality or metric:max-regression-pct (repeatable; include quality)")
 	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db")
 	return cmd
+}
+
+func parseExperimentGuardrails(args []string) ([]eventschema.ExperimentGuardrail, error) {
+	guardrails := make([]eventschema.ExperimentGuardrail, 0, len(args))
+	for _, arg := range args {
+		metric, threshold, hasThreshold := strings.Cut(strings.TrimSpace(arg), ":")
+		if !hasThreshold {
+			if metric != "quality" {
+				return nil, fmt.Errorf("guardrail %q must be quality or metric:max-regression-pct", arg)
+			}
+			guardrails = append(guardrails, eventschema.ExperimentGuardrail{Metric: metric})
+			continue
+		}
+		value, err := strconv.ParseFloat(threshold, 64)
+		if err != nil {
+			return nil, fmt.Errorf("guardrail %q has an invalid regression threshold", arg)
+		}
+		guardrails = append(guardrails, eventschema.ExperimentGuardrail{Metric: metric, MaxRegressionPct: value})
+	}
+	return guardrails, nil
 }
 
 func newExperimentStatusCmd() *cobra.Command {

@@ -181,6 +181,14 @@ message ExperimentEvent {
   google.protobuf.Timestamp ends_at = 8;
   string reason = 9;
   string fingerprint = 10;
+  string objective_metric = 11;
+  double min_improvement_pct = 12;
+  repeated ExperimentGuardrail guardrails = 13;
+}
+
+message ExperimentGuardrail {
+  string metric = 1;
+  double max_regression_pct = 2;
 }
 
 // DomainEvent carries an operational event kind and its producer-owned JSON

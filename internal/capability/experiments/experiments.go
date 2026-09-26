@@ -4,8 +4,10 @@ package experiments
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"sync"
 	"time"
@@ -40,6 +42,9 @@ func New(ledger Ledger) *Manager { return &Manager{ledger: ledger} }
 type StartInput struct {
 	Provider, BaselineModel, VariantModel string
 	Fingerprint                           string
+	ObjectiveMetric                       string
+	MinImprovementPct                     float64
+	Guardrails                            []eventschema.ExperimentGuardrail
 	At                                    time.Time
 	Duration                              time.Duration
 	MaxPairs                              int
@@ -55,6 +60,9 @@ func (m *Manager) Start(ctx context.Context, in StartInput) (State, error) {
 	}
 	if in.BaselineModel == in.VariantModel {
 		return State{}, errors.New("experiments: baseline and variant models must differ")
+	}
+	if err := ValidateUtilityPolicy(in.ObjectiveMetric, in.MinImprovementPct, in.Guardrails); err != nil {
+		return State{}, err
 	}
 	pairs := in.MaxPairs
 	if pairs == 0 {
@@ -77,11 +85,78 @@ func (m *Manager) Start(ctx context.Context, in StartInput) (State, error) {
 		Baseline: eventschema.ResourceOption{Provider: in.Provider, Model: in.BaselineModel},
 		Variant:  eventschema.ResourceOption{Provider: in.Provider, Model: in.VariantModel},
 		MaxPairs: pairs, EndsAt: at.Add(duration), Fingerprint: in.Fingerprint,
+		ObjectiveMetric: in.ObjectiveMetric, MinImprovementPct: in.MinImprovementPct,
+		Guardrails: append([]eventschema.ExperimentGuardrail(nil), in.Guardrails...),
 	})
 	if err := m.ledger.Append(ctx, ev); err != nil {
 		return State{}, err
 	}
-	return State{ID: id, Stage: eventschema.ExperimentStarted, Baseline: ev.Payload.(*eventschema.ExperimentEvent).Baseline, Variant: ev.Payload.(*eventschema.ExperimentEvent).Variant, MaxPairs: pairs, EndsAt: at.Add(duration), Fingerprint: in.Fingerprint}, nil
+	return State{
+		ID: id, Stage: eventschema.ExperimentStarted,
+		Baseline: ev.Payload.(*eventschema.ExperimentEvent).Baseline,
+		Variant:  ev.Payload.(*eventschema.ExperimentEvent).Variant,
+		MaxPairs: pairs, EndsAt: at.Add(duration), Fingerprint: in.Fingerprint,
+		ObjectiveMetric: in.ObjectiveMetric, MinImprovementPct: in.MinImprovementPct,
+		Guardrails: append([]eventschema.ExperimentGuardrail(nil), in.Guardrails...),
+	}, nil
+}
+
+// ValidateUtilityPolicy prevents new trials from producing promotion evidence
+// without a declared objective and quality plus resource guardrails.
+func ValidateUtilityPolicy(objective string, minImprovementPct float64, guardrails []eventschema.ExperimentGuardrail) error {
+	if objective != "tokens" && objective != "plan_quota_tokens" && objective != "metered_cost_usd" && objective != "latency_ms" && objective != "attention_minutes" {
+		return errors.New("experiments: objective must be tokens, plan_quota_tokens, metered_cost_usd, latency_ms, or attention_minutes")
+	}
+	if math.IsNaN(minImprovementPct) || math.IsInf(minImprovementPct, 0) || minImprovementPct <= 0 || minImprovementPct > 100 {
+		return errors.New("experiments: min_improvement_pct must be greater than 0 and no more than 100")
+	}
+	if len(guardrails) == 0 {
+		return errors.New("experiments: at least one guardrail is required")
+	}
+	seen := map[string]bool{}
+	quality := false
+	for _, guardrail := range guardrails {
+		if seen[guardrail.Metric] {
+			return fmt.Errorf("experiments: duplicate guardrail %q", guardrail.Metric)
+		}
+		seen[guardrail.Metric] = true
+		if guardrail.Metric == "quality" {
+			if guardrail.MaxRegressionPct != 0 {
+				return errors.New("experiments: quality guardrail is strict non-inferiority and must use a zero threshold")
+			}
+			quality = true
+			continue
+		}
+		if guardrail.Metric != "tokens" && guardrail.Metric != "plan_quota_tokens" && guardrail.Metric != "metered_cost_usd" && guardrail.Metric != "latency_ms" && guardrail.Metric != "attention_minutes" {
+			return fmt.Errorf("experiments: unsupported guardrail %q", guardrail.Metric)
+		}
+		if math.IsNaN(guardrail.MaxRegressionPct) || math.IsInf(guardrail.MaxRegressionPct, 0) || guardrail.MaxRegressionPct < 0 || guardrail.MaxRegressionPct > 100 {
+			return fmt.Errorf("experiments: guardrail %q max regression must be between 0 and 100", guardrail.Metric)
+		}
+	}
+	if !quality {
+		return errors.New("experiments: quality guardrail is required")
+	}
+	return nil
+}
+
+// UtilityPolicyFingerprint identifies compatible utility criteria so evidence
+// from trials with different objectives or thresholds is never pooled.
+func UtilityPolicyFingerprint(objective string, minImprovementPct float64, guardrails []eventschema.ExperimentGuardrail) string {
+	canonical := make([]eventschema.ExperimentGuardrail, len(guardrails))
+	copy(canonical, guardrails)
+	sort.Slice(canonical, func(i, j int) bool {
+		if canonical[i].Metric == canonical[j].Metric {
+			return canonical[i].MaxRegressionPct < canonical[j].MaxRegressionPct
+		}
+		return canonical[i].Metric < canonical[j].Metric
+	})
+	value := objective + "\x00" + fmt.Sprintf("%.8g", minImprovementPct)
+	for _, guardrail := range canonical {
+		value += "\x00" + guardrail.Metric + ":" + fmt.Sprintf("%.8g", guardrail.MaxRegressionPct)
+	}
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])
 }
 
 // AssignmentInput describes an eligible proxy route.
@@ -158,6 +233,8 @@ func (m *Manager) Assign(ctx context.Context, in AssignmentInput) (Assignment, b
 			Stage: eventschema.ExperimentAssigned, Kind: "model_route", Assignment: arm,
 			Pair: pair, Baseline: state.Baseline, Variant: state.Variant,
 			MaxPairs: state.MaxPairs, EndsAt: state.EndsAt, Fingerprint: state.Fingerprint,
+			ObjectiveMetric: state.ObjectiveMetric, MinImprovementPct: state.MinImprovementPct,
+			Guardrails: append([]eventschema.ExperimentGuardrail(nil), state.Guardrails...),
 		})
 		if err := m.ledger.Append(ctx, ev); err != nil {
 			return Assignment{}, false, err
@@ -183,20 +260,25 @@ func (m *Manager) Stop(ctx context.Context, id, reason string, at time.Time) err
 		Stage: eventschema.ExperimentStopped, Kind: "model_route", Reason: reason,
 		Baseline: state.Baseline, Variant: state.Variant, MaxPairs: state.MaxPairs,
 		EndsAt: state.EndsAt, Fingerprint: state.Fingerprint,
+		ObjectiveMetric: state.ObjectiveMetric, MinImprovementPct: state.MinImprovementPct,
+		Guardrails: append([]eventschema.ExperimentGuardrail(nil), state.Guardrails...),
 	}))
 }
 
 // State is a folded experiment ledger.
 type State struct {
-	ID          string                      `json:"id"`
-	Stage       eventschema.ExperimentStage `json:"stage"`
-	Baseline    eventschema.ResourceOption  `json:"baseline"`
-	Variant     eventschema.ResourceOption  `json:"variant"`
-	MaxPairs    int                         `json:"max_pairs"`
-	Assignments int                         `json:"assignments"`
-	EndsAt      time.Time                   `json:"ends_at"`
-	Fingerprint string                      `json:"fingerprint,omitempty"`
-	Reason      string                      `json:"reason,omitempty"`
+	ID                string                            `json:"id"`
+	Stage             eventschema.ExperimentStage       `json:"stage"`
+	Baseline          eventschema.ResourceOption        `json:"baseline"`
+	Variant           eventschema.ResourceOption        `json:"variant"`
+	MaxPairs          int                               `json:"max_pairs"`
+	Assignments       int                               `json:"assignments"`
+	EndsAt            time.Time                         `json:"ends_at"`
+	Fingerprint       string                            `json:"fingerprint,omitempty"`
+	Reason            string                            `json:"reason,omitempty"`
+	ObjectiveMetric   string                            `json:"objective_metric,omitempty"`
+	MinImprovementPct float64                           `json:"min_improvement_pct,omitempty"`
+	Guardrails        []eventschema.ExperimentGuardrail `json:"guardrails,omitempty"`
 }
 
 // Status folds one experiment.
@@ -269,6 +351,8 @@ func Fold(events []*eventschema.Envelope, at time.Time) map[string]State {
 		if p.Baseline.Model != "" {
 			s.Baseline, s.Variant = p.Baseline, p.Variant
 			s.MaxPairs, s.EndsAt, s.Fingerprint = p.MaxPairs, p.EndsAt, p.Fingerprint
+			s.ObjectiveMetric, s.MinImprovementPct = p.ObjectiveMetric, p.MinImprovementPct
+			s.Guardrails = append([]eventschema.ExperimentGuardrail(nil), p.Guardrails...)
 		}
 		if p.Stage == eventschema.ExperimentAssigned {
 			s.Assignments++
