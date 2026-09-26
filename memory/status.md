@@ -67,6 +67,26 @@ and was likewise stopped with no outcome claim. The fix keeps forwarded bytes
 untouched and classifies opaque 400s after a model rewrite without retaining
 prompt, request, response, or credential material.
 
+The remaining Anthropic incompatibility was reproduced without provider
+traffic using a content-free request-shape probe. Claude Code builds Opus 5.5
+requests with mid-conversation `system` messages; Sonnet 5 does not support
+that capability. TokenOps now checks target compatibility before experiment
+assignment or model rewrite and preserves the baseline rather than changing
+instruction authority. A live guard confirmation completed on Opus 5.5 with
+only HTTP 200 responses and recorded the Sonnet route as safely skipped.
+
+A separate request-compatible Claude Code experiment
+`experiment:55c9d3c0-6c64-4b2a-a4c4-409ae1a71b5a` completed one randomized
+`claude-fable-5` / `claude-opus-5-5` pair. Both disposable Go repairs returned
+only HTTP 200 responses, stayed on one arm across every streamed tool call,
+reported authoritative model/usage/cache/latency/tool metadata, and passed
+independent `go test ./...` verification with scoped human outcomes. Mean
+metered cost was $0.035528 baseline and $0.015342 intervention (56.8% lower);
+mean request latency was 3877ms and 3648ms. The ledger reports one complete
+pair, 100% strong coverage, and all declared guardrails passing. This proves
+the Anthropic coding-agent evidence path, not comparative quality or causal
+uplift; five matched pairs remain required for a supported belief.
+
 The final Phase 5 trial enrolled five randomized `gpt-6-sol`/`gpt-6-luna`
 pairs. All ten calls returned HTTP 200 and the exact `TOKENOPS_OK` value; the
 local JSON verifier recorded ten independent verification outcomes without
