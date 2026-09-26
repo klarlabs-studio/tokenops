@@ -3,18 +3,16 @@ updated: 2026-09-26
 ---
 ## Open
 
-- Phase 5 real-world validation: no matched intervention/outcome cohort has
-  been observed. Continue with genuine work only; keep claims observational
-  until assignment, measurement, and explicit outcome evidence join.
-- Installed product verification: v0.70.0 daemon health/readiness and MCP
-  status passed on 2026-09-26, but the binary still exposes demo/dashboard
-  surfaces retired in PR #387. Upgrade and retest a release containing #387
-  only as an operator-controlled deployment. A temporary current-source build
-  passed CLI and MCP status/resource-glance against the real daemon.
-- fmt learning threshold tuning: current branch now distinguishes actual
-  wrapped runs from offline session projections and prevents up-tuning from
-  absent recovery reads. Still needs enough genuine runs/recovery telemetry;
-  this guard is not merged yet.
+- Subscription-plan telemetry: validate canonical GPT Plus/Pro and Claude
+  Pro/Max/Business/Team/Enterprise semantics with genuine plan-meter records.
+  The supported API-backed cohorts prove routing and metered cost only; API
+  billing is separate from subscription quota accounting.
+- Relicta release governance: resolve or guard the observed `gitsign: true`
+  unsigned-tag behavior and `autocommitchangelog: false` local append before
+  the next release.
+- fmt learning threshold tuning: the merged provenance guard distinguishes
+  actual wrapped runs from offline projections and prevents up-tuning without
+  recovery reads. It still needs enough genuine recovery telemetry.
 
 ## Deferred by policy
 
@@ -29,3 +27,10 @@ updated: 2026-09-26
 - #387 removed demo and browser dashboard surfaces.
 - #388 deduplicated repeated measurement caveats.
 - #389 corrected unpriced-plan spend wording.
+
+## Resolved 2026-09-26
+
+- Installed v0.72.1 health/readiness and release identity passed after the
+  Homebrew upgrade.
+- Five-pair OpenAI and Anthropic API-backed coding-agent cohorts reached
+  supported evidence with independent verifiers and stable multi-call arms.

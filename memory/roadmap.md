@@ -10,9 +10,10 @@ Roady implementation status: `.roady/plan.json` + `.roady/state.json`.
 
 - Phases 0–4: privacy/safety, measurement provenance, freshness, work model,
   and interface-independent capabilities (#339–#343).
-- Phase 5 implementation: outcome/intervention identity, unified authority,
-  and comparison surfaces (#345, #347). **Real causal evaluation is not yet
-  demonstrated** because there are no matched real intervention/outcome pairs.
+- Phase 5 implementation and bounded live validation: outcome/intervention
+  identity, unified authority, comparison surfaces, and supported five-pair
+  API-backed Codex and Claude Code cohorts (#345, #347, #394–#409). These are
+  scoped randomized results, not universal model-quality claims.
 - Phases 6–9: canonical events (#361–#369), runtime lifecycle + installed
   binary journey (#349, #370–#378), intent-oriented MCP (#380–#382), and
   surface-native insights (#383–#386).
@@ -20,20 +21,17 @@ Roady implementation status: `.roady/plan.json` + `.roady/state.json`.
 
 ## Active Validation
 
-- Host CLI/MCP validation succeeded on v0.70.0 after restarting its supervised
-  daemon. That binary still exposes demo/dashboard entry points removed by
-  PR #387; upgrade and verify a release containing that cleanup.
-- A temporary build of current source passed CLI and MCP status/resource-glance
-  checks against the healthy daemon, reading real Claude Code and Codex
-  session files; the insight was clear/continue. No outcome was inferred.
-- The local JSONL fallback reported 274 `budget.exceeded` events, which is
-  insufficient evidence for the still-open Phase 5 outcome cohort.
-- Formatter evidence provenance guard is implemented and verified on the
-  current branch, not merged: 14 actual wrapped runs versus 18,043 session
-  projections and zero recovery reads. Projections no longer create quality
-  hints or observed savings; stronger-compression hints are removed.
-- Accumulate real, outcome-linked work and evaluate only when evidence supports
-  a matched comparison. No demo seeding and no implied success from completion.
+- Installed v0.72.1 reports its tagged version/commit and passes host-local
+  health/readiness. Read-only MCP status/resource-glance also passed against
+  genuine local Codex and Claude Code records.
+- The OpenAI and Anthropic five-pair coding-agent cohorts both reached
+  `supported` with independent verifier outcomes, stable multi-call arms,
+  provider usage, latency, cost, and content-safe tool-call evidence.
+- Validate subscription-plan telemetry separately with genuine usage-meter
+  records. API-backed routing cannot establish Plus, Pro, Max, Business, Team,
+  or Enterprise quota semantics.
+- Accumulate additional outcome-linked work only for new task classes or policy
+  questions. No demo seeding and no implied generalization from completion.
 
 ## Deferred
 
