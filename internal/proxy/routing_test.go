@@ -307,6 +307,51 @@ func TestObserveOnlyRoutesApplyOnlyForExplicitExperimentAssignments(t *testing.T
 	}
 }
 
+func TestAnthropicRouteCompatibility(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "mid-conversation system message",
+			body: `{"model":"claude-opus-5-5","messages":[{"role":"user","content":"x"},{"role":"system","content":"y"}]}`,
+			want: "mid-conversation system messages",
+		},
+		{
+			name: "manual thinking",
+			body: `{"model":"claude-opus-5-5","thinking":{"type":"enabled","budget_tokens":1024},"messages":[{"role":"user","content":"x"}]}`,
+			want: "manual extended thinking",
+		},
+		{
+			name: "sampling parameter",
+			body: `{"model":"claude-opus-5-5","temperature":0.2,"messages":[{"role":"user","content":"x"}]}`,
+			want: "explicit sampling parameters",
+		},
+		{
+			name: "assistant prefill",
+			body: `{"model":"claude-opus-5-5","messages":[{"role":"user","content":"x"},{"role":"assistant","content":"{"}]}`,
+			want: "assistant response prefills",
+		},
+		{
+			name: "compatible adaptive request",
+			body: `{"model":"claude-opus-5-5","thinking":{"type":"adaptive"},"messages":[{"role":"user","content":"x"}]}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := anthropicRouteIncompatibility(eventschema.ProviderAnthropic, "claude-sonnet-5", []byte(tc.body))
+			if tc.want == "" && got != "" {
+				t.Fatalf("unexpected incompatibility: %q", got)
+			}
+			if tc.want != "" && !strings.Contains(got, tc.want) {
+				t.Fatalf("incompatibility = %q, want substring %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // Requests that match no rule pass through byte-identical.
 func TestActiveRoutingPassThroughOnNoMatch(t *testing.T) {
 	var upstreamBody string
