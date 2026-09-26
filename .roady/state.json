@@ -1,6 +1,6 @@
 {
   "project_id": "tokenops",
-  "version": 320,
+  "version": 362,
   "task_states": {
     "analytics-aggregator": {
       "status": "done",
@@ -101,81 +101,9 @@
       "completed_at": "2026-05-10T09:28:39.260827+02:00",
       "elapsed_minutes": 1
     },
-    "dashboard-auth": {
-      "status": "done",
+    "collect-real-outcome-cohort": {
+      "status": "blocked",
       "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "internal/dashauth/{auth,auth_test}.go bearer + password+session-cookie auth, OIDC stub interface, 9 passing tests"
-      ],
-      "started_at": "2026-05-10T10:54:38.357087+02:00",
-      "completed_at": "2026-05-10T10:56:23.907631+02:00",
-      "elapsed_minutes": 1
-    },
-    "dashboard-burn-graph": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "internal/proxy/api.go /api/spend/series + LineChart.vue + SpendView.vue burn graph polling every 30s"
-      ],
-      "started_at": "2026-05-10T11:00:35.889069+02:00",
-      "completed_at": "2026-05-10T11:07:08.424871+02:00",
-      "elapsed_minutes": 6
-    },
-    "dashboard-forecast": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "/api/spend/forecast + LineChart with confidence band rendered in SpendView"
-      ],
-      "started_at": "2026-05-10T11:07:19.469507+02:00",
-      "completed_at": "2026-05-10T11:07:21.584503+02:00",
-      "elapsed_minutes": 0
-    },
-    "dashboard-heatmap": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "Heatmap.vue model × hour heatmap rendered in SpendView"
-      ],
-      "started_at": "2026-05-10T11:07:10.606267+02:00",
-      "completed_at": "2026-05-10T11:07:13.253734+02:00",
-      "elapsed_minutes": 0
-    },
-    "dashboard-opt-list": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "/api/optimizations + OptimizationsView.vue showing recs grouped by kind with decision badges"
-      ],
-      "started_at": "2026-05-10T11:07:24.004856+02:00",
-      "completed_at": "2026-05-10T11:07:25.907493+02:00",
-      "elapsed_minutes": 0
-    },
-    "dashboard-skeleton": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "web/dashboard/ — Vue 3 + Vite + vue-router scaffold. Sidebar layout, design tokens (CSS custom props), typed API client, 5 routes (home/spend/workflows/optimizations/404). Builds clean (92KB→36KB gzip)."
-      ],
-      "started_at": "2026-05-10T10:41:09.772562+02:00",
-      "completed_at": "2026-05-10T10:44:41.491023+02:00",
-      "elapsed_minutes": 3
-    },
-    "dashboard-timeline": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "/api/workflows + /api/workflows/:id endpoints + WorkflowsView.vue with step timeline + coaching findings"
-      ],
-      "started_at": "2026-05-10T11:07:15.421219+02:00",
-      "completed_at": "2026-05-10T11:07:17.319752+02:00",
       "elapsed_minutes": 0
     },
     "docs-site": {
@@ -718,19 +646,14 @@
       "elapsed_minutes": 685
     },
     "task-ai-work-domain-model": {
-      "status": "pending",
+      "status": "verified",
       "path": "",
-      "elapsed_minutes": 0
-    },
-    "task-anthropic-cookie-usage": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
+      "owner": "Felix Geelhaar",
       "evidence": [
-        "internal/contexts/spend/vendorusage/anthropiccookie (client+poller+tests); wired at internal/daemon/daemon.go:312. One anthropic-cookie event present in the maintainer's live store."
+        "Shipped in PR #342 and #347; work primitives and event association are implemented."
       ],
-      "started_at": "2026-08-25T10:13:27.784639+02:00",
-      "completed_at": "2026-08-25T10:13:33.37602+02:00",
+      "started_at": "2026-09-26T08:45:25.728587+02:00",
+      "completed_at": "2026-09-26T08:45:25.747306+02:00",
       "elapsed_minutes": 0
     },
     "task-auto-detect-init-wizard": {
@@ -756,20 +679,15 @@
       "elapsed_minutes": 1
     },
     "task-canonical-event-consolidation": {
-      "status": "pending",
+      "status": "verified",
       "path": "",
-      "elapsed_minutes": 0
-    },
-    "task-claudecode-jsonl-reader": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
+      "owner": "Felix Geelhaar",
       "evidence": [
-        "internal/contexts/spend/vendorusage/claudecodejsonl (reader+poller+tests); wired at internal/daemon/daemon.go:243"
+        "Shipped in PR #361–#369; canonical event publication and legacy writer retirement."
       ],
-      "started_at": "2026-05-14T11:38:57.804111+02:00",
-      "completed_at": "2026-08-25T10:12:39.005057+02:00",
-      "elapsed_minutes": 148233
+      "started_at": "2026-09-26T08:45:25.850254+02:00",
+      "completed_at": "2026-09-26T08:45:25.867423+02:00",
+      "elapsed_minutes": 0
     },
     "task-cli": {
       "status": "done",
@@ -827,107 +745,13 @@
       "elapsed_minutes": 0
     },
     "task-coaching-llm-auto-routing": {
-      "status": "pending",
+      "status": "blocked",
       "path": "",
       "elapsed_minutes": 0
     },
-    "task-codex-jsonl-reader": {
-      "status": "done",
+    "task-collect-real-outcome-cohort": {
+      "status": "blocked",
       "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "internal/contexts/spend/vendorusage/codexjsonl (reader+poller+tests); wired at internal/daemon/daemon.go:260"
-      ],
-      "started_at": "2026-08-25T10:12:57.930875+02:00",
-      "completed_at": "2026-08-25T10:13:03.253158+02:00",
-      "elapsed_minutes": 0
-    },
-    "task-copilot-api-client": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "internal/contexts/spend/vendorusage/copilot (client+tokenstore+poller+tests); wired at internal/daemon/daemon.go:346"
-      ],
-      "started_at": "2026-08-25T10:13:07.961429+02:00",
-      "completed_at": "2026-08-25T10:13:13.500229+02:00",
-      "elapsed_minutes": 0
-    },
-    "task-cursor-api-client": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "internal/contexts/spend/vendorusage/cursor (client+poller+tests); wired at internal/daemon/daemon.go:295. Not verified against a live Cursor account."
-      ],
-      "started_at": "2026-08-25T10:13:18.171196+02:00",
-      "completed_at": "2026-08-25T10:13:23.458674+02:00",
-      "elapsed_minutes": 0
-    },
-    "task-dashboard": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "Dashboard implemented: web/dashboard package and feature views; auth and charts reflected by completed modules"
-      ],
-      "started_at": "2026-05-10T12:30:02.516802+02:00",
-      "completed_at": "2026-05-10T12:30:09.72788+02:00",
-      "elapsed_minutes": 0
-    },
-    "task-dashboard-favicon": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "PR #59 opened with inline SVG favicon"
-      ],
-      "started_at": "2026-05-14T09:42:16.700464+02:00",
-      "completed_at": "2026-05-14T09:42:55.61353+02:00",
-      "elapsed_minutes": 0
-    },
-    "task-dashboard-filter-localstorage": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "PR #60 opened with localStorage filter persistence"
-      ],
-      "started_at": "2026-05-14T09:43:04.11237+02:00",
-      "completed_at": "2026-05-14T09:44:37.01716+02:00",
-      "elapsed_minutes": 1
-    },
-    "task-dashboard-rotate-token": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "PR #62 opened with rotate-token CLI command + tests"
-      ],
-      "started_at": "2026-05-14T09:47:06.100638+02:00",
-      "completed_at": "2026-05-14T09:49:02.456733+02:00",
-      "elapsed_minutes": 1
-    },
-    "task-dashboard-stacked-area-model": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "PR #64 opened with per-model stacked area chart"
-      ],
-      "started_at": "2026-05-14T09:53:00.005025+02:00",
-      "completed_at": "2026-05-14T09:56:28.17774+02:00",
-      "elapsed_minutes": 3
-    },
-    "task-data-isolation-+-surface-polish": {
-      "status": "done",
-      "path": "",
-      "owner": "Felix Geelhaar",
-      "evidence": [
-        "shipped: rulesfs permission fix (source.go:237), per-source demo opt-in flags, README 'Demo data isolation' contract; verified 2026-09-20"
-      ],
-      "started_at": "2026-09-20T11:49:17.326219+02:00",
-      "completed_at": "2026-09-20T11:49:17.34859+02:00",
       "elapsed_minutes": 0
     },
     "task-data-telemetry": {
@@ -941,17 +765,6 @@
       "completed_at": "2026-05-10T12:30:09.740467+02:00",
       "elapsed_minutes": 0
     },
-    "task-first-run-activation-flow": {
-      "status": "done",
-      "path": "",
-      "owner": "Felix Geelhaar",
-      "evidence": [
-        "shipped: internal/cli/init.go (init wizard), internal/cli/demo.go (synthetic seed); verified present 2026-09-20"
-      ],
-      "started_at": "2026-09-20T11:48:54.613607+02:00",
-      "completed_at": "2026-09-20T11:48:59.712653+02:00",
-      "elapsed_minutes": 0
-    },
     "task-fix-rulesfs-walker:-tolerate-permission-denied-+-skip-unreadable-subtrees": {
       "status": "done",
       "path": "",
@@ -961,6 +774,17 @@
       ],
       "started_at": "2026-09-20T11:49:08.776106+02:00",
       "completed_at": "2026-09-20T11:49:08.800493+02:00",
+      "elapsed_minutes": 0
+    },
+    "task-fmt-learning-evidence-provenance": {
+      "status": "verified",
+      "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "Formatter provenance guard implemented; focused Go tests and make verify gates passed except proto version check (installed protoc 7.36.2 vs repository-generated 7.36.0). Live session sample: 14 wrapped runs, 18,043 projections, zero recoveries, no up-tuning hints."
+      ],
+      "started_at": "2026-09-26T10:15:11.899317+02:00",
+      "completed_at": "2026-09-26T10:15:11.952898+02:00",
       "elapsed_minutes": 0
     },
     "task-forecasting-governance": {
@@ -974,75 +798,15 @@
       "completed_at": "2026-05-10T12:29:54.239808+02:00",
       "elapsed_minutes": 0
     },
-    "task-fra-demo-command": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "tokenops demo: deterministic seeder, 5 providers/models, 4 workflows, jitter, --reset/--dry-run; 4 tests in cli/demo_test.go"
-      ],
-      "started_at": "2026-05-12T21:52:08.498003+02:00",
-      "completed_at": "2026-05-12T21:54:18.398995+02:00",
-      "elapsed_minutes": 2
-    },
-    "task-fra-disabled-error-contract": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "proxy/disabled.go stubs 503 {error,hint} for storage/rules-gated routes when subsystem off; covered by TestDisabledSubsystemReturnsStructuredError"
-      ],
-      "started_at": "2026-05-12T21:50:38.763965+02:00",
-      "completed_at": "2026-05-12T21:52:06.319145+02:00",
-      "elapsed_minutes": 1
-    },
-    "task-fra-docs-quickstart": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "README Getting Started rewritten to 3-command quickstart, init/demo added to CLI table, troubleshooting table for blockers[]; full `go test ./...` green; smoke-tested binary end-to-end (init → demo → seeded 45 events)."
-      ],
-      "started_at": "2026-05-12T21:54:20.373094+02:00",
-      "completed_at": "2026-05-12T21:55:14.808655+02:00",
-      "elapsed_minutes": 0
-    },
-    "task-fra-init-command": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "tokenops init: XDG-aware paths, idempotent, --force overwrite, --print-only dry-run; 4 tests in internal/cli/init_test.go"
-      ],
-      "started_at": "2026-05-12T21:49:12.452438+02:00",
-      "completed_at": "2026-05-12T21:50:36.691585+02:00",
-      "elapsed_minutes": 1
-    },
-    "task-fra-status-blockers": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "status: blockers[]+next_actions[] wired; /readyz + tokenops_status surface them; unit tests in proxy/handlers_test.go + control_tools_test.go + config_test.go"
-      ],
-      "started_at": "2026-05-12T21:43:54.648512+02:00",
-      "completed_at": "2026-05-12T21:49:10.198849+02:00",
-      "elapsed_minutes": 5
-    },
-    "task-include-demo-split": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "PR #202 (merged): --include-source CLI flag + include_sources MCP input; analytics.Filter.IncludeSources; mcp-session added to DefaultExcludedSources"
-      ],
-      "started_at": "2026-08-25T10:13:42.609516+02:00",
-      "completed_at": "2026-08-25T10:15:07.572633+02:00",
-      "elapsed_minutes": 1
-    },
     "task-installed-product-verification": {
-      "status": "pending",
+      "status": "verified",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "Built binary init/start/transcript ingest/API/CLI/shutdown journey test shipped in PR #349; host-installed binary freshness remains an operator follow-up."
+      ],
+      "started_at": "2026-09-26T08:45:25.927274+02:00",
+      "completed_at": "2026-09-26T08:45:25.945311+02:00",
       "elapsed_minutes": 0
     },
     "task-integrations": {
@@ -1057,91 +821,26 @@
       "elapsed_minutes": 0
     },
     "task-intent-oriented-mcp-surface": {
-      "status": "pending",
-      "path": "",
-      "elapsed_minutes": 0
-    },
-    "task-interactive-mcp-ui-rendering": {
-      "status": "done",
+      "status": "verified",
       "path": "",
       "owner": "Felix Geelhaar",
       "evidence": [
-        "shipped: markdownPayload across 4 MCP tool files (markdown summary + JSON appendix) and internal/infra/svgchart for inline sparklines; verified 2026-09-20"
+        "Intent review/preparation tools and control-loop docs shipped in PR #380–#382."
       ],
-      "started_at": "2026-09-20T11:49:17.470698+02:00",
-      "completed_at": "2026-09-20T11:49:17.491085+02:00",
+      "started_at": "2026-09-26T08:45:25.967511+02:00",
+      "completed_at": "2026-09-26T08:45:25.986121+02:00",
       "elapsed_minutes": 0
     },
     "task-interface-independent-capabilities": {
-      "status": "pending",
+      "status": "verified",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "Shipped in PR #343; capability boundary and archlint ratchet implemented."
+      ],
+      "started_at": "2026-09-26T08:45:25.76885+02:00",
+      "completed_at": "2026-09-26T08:45:25.787602+02:00",
       "elapsed_minutes": 0
-    },
-    "task-iso-data-source-ratio": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "sqlite.Store.CountBySource groups events by source column with optional since/until window. tokenops_data_sources MCP tool returns counts + window so operators see real vs synthetic ratios."
-      ],
-      "started_at": "2026-05-13T00:33:09.203611+02:00",
-      "completed_at": "2026-05-13T09:16:59.714233+02:00",
-      "elapsed_minutes": 523
-    },
-    "task-iso-docs": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "CHANGELOG Unreleased section documents demo isolation, data_sources tool, session middleware, help tool, rules walker fix. README adds demo-isolation block."
-      ],
-      "started_at": "2026-05-13T09:17:02.938637+02:00",
-      "completed_at": "2026-05-13T09:17:32.427661+02:00",
-      "elapsed_minutes": 0
-    },
-    "task-iso-help-tool": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "tokenops_help MCP tool returns 6 categories (setup, session, cost, workflows, rules, debug) with curated tools + summaries + examples. Wired in cli/serve.go."
-      ],
-      "started_at": "2026-05-13T00:32:16.129267+02:00",
-      "completed_at": "2026-05-13T00:33:05.502477+02:00",
-      "elapsed_minutes": 0
-    },
-    "task-iso-mcp-autowrap": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "mcp.SessionMiddleware intercepts every `tools/call` and records to session.Tracker. ServeStdio wrapper accepts optional middleware chain. cli/serve.go passes session middleware. Per-handler Records removed from plan_headroom + session_budget (now redundant). 3 middleware tests covering tools/call, non-tools/call, nil tracker."
-      ],
-      "started_at": "2026-05-13T00:29:10.734427+02:00",
-      "completed_at": "2026-05-13T00:32:13.826164+02:00",
-      "elapsed_minutes": 3
-    },
-    "task-iso-rules-walker": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "isSkippableWalkErr + skipForEntry helpers tolerate fs.ErrPermission and fs.ErrNotExist; SkipDir for directories, nil for files. skipDirName map adds Library/Containers/Saved Application State/.Trash. 2 new tests inject permission-denied subtree + Library subtree. Smoke: tokenops rules analyze --root ~/.claude no longer aborts."
-      ],
-      "started_at": "2026-05-13T00:22:06.223328+02:00",
-      "completed_at": "2026-05-13T00:25:13.179632+02:00",
-      "elapsed_minutes": 3
-    },
-    "task-iso-source-filter": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "analytics.Filter.ExcludeSources + DefaultExcludedSources=[\"demo\"]; nil = apply default, empty slice = include everything. plans/consumption.go drops demo before tallying. tokenops_spend_summary / top_consumers / burn_rate / forecast take include_demo bool. Smoke: tokenops spend went from 184 reqs (with seeded demo) to 4 (real MCP pings only)."
-      ],
-      "started_at": "2026-05-13T00:25:16.289069+02:00",
-      "completed_at": "2026-05-13T00:29:06.987385+02:00",
-      "elapsed_minutes": 3
     },
     "task-mcp-first-wedge:-session-budget-+-config-as-code": {
       "status": "done",
@@ -1155,8 +854,14 @@
       "elapsed_minutes": 0
     },
     "task-measurement-provenance": {
-      "status": "pending",
+      "status": "verified",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "Shipped in PR #340; full suite and CI green."
+      ],
+      "started_at": "2026-09-26T08:44:57.700608+02:00",
+      "completed_at": "2026-09-26T08:44:57.72332+02:00",
       "elapsed_minutes": 0
     },
     "task-observability-platform": {
@@ -1171,8 +876,14 @@
       "elapsed_minutes": 0
     },
     "task-observation-freshness-as-health": {
-      "status": "pending",
+      "status": "verified",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "Shipped in PR #341; freshness exposed as structured source health."
+      ],
+      "started_at": "2026-09-26T08:45:25.686427+02:00",
+      "completed_at": "2026-09-26T08:45:25.70578+02:00",
       "elapsed_minutes": 0
     },
     "task-operator-golden-path-+-wedge-kpi": {
@@ -1318,23 +1029,16 @@
       "completed_at": "2026-09-20T11:49:08.849677+02:00",
       "elapsed_minutes": 0
     },
-    "task-plan-catalog-mistral-codex": {
-      "status": "done",
+    "task-privacy-and-secret-hardening": {
+      "status": "verified",
       "path": "",
       "owner": "ai-agent",
       "evidence": [
-        "PR #61 opened with Mistral + Codex Plus catalog entries + pricing"
+        "Shipped in PR #339; release v0.70.0. Implementation complete; live installed-state check remains tracked separately."
       ],
-      "started_at": "2026-05-14T09:44:45.791916+02:00",
-      "completed_at": "2026-05-14T09:46:56.920214+02:00",
-      "elapsed_minutes": 2
-    },
-    "task-privacy-and-secret-hardening": {
-      "status": "in_progress",
-      "path": "",
-      "owner": "ai-agent",
       "started_at": "2026-09-20T12:44:13.940992+02:00",
-      "elapsed_minutes": 0
+      "completed_at": "2026-09-26T08:45:25.663011+02:00",
+      "elapsed_minutes": 8401
     },
     "task-rate-limit-window-headroom": {
       "status": "done",
@@ -1436,8 +1140,14 @@
       "elapsed_minutes": 0
     },
     "task-runtime-lifecycle-modules": {
-      "status": "pending",
+      "status": "verified",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "Shipped in PR #370–#378; background runtime lifecycle modules extracted and supervised."
+      ],
+      "started_at": "2026-09-26T08:45:25.88792+02:00",
+      "completed_at": "2026-09-26T08:45:25.906153+02:00",
       "elapsed_minutes": 0
     },
     "task-security-finding-signal-governance": {
@@ -1460,6 +1170,17 @@
       ],
       "started_at": "2026-05-10T12:30:14.490793+02:00",
       "completed_at": "2026-05-10T12:30:22.590987+02:00",
+      "elapsed_minutes": 0
+    },
+    "task-shared-status-resource-work-insights": {
+      "status": "verified",
+      "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "Merged PRs #383–#386 implement shared status, resource, and bounded work insights. PR #387 removed dashboard/demo surfaces. See docs/adr/0004-ai-work-intelligence-and-control.md."
+      ],
+      "started_at": "2026-09-26T08:54:41.982499+02:00",
+      "completed_at": "2026-09-26T08:54:42.002192+02:00",
       "elapsed_minutes": 0
     },
     "task-sig-catalog-alias": {
@@ -1572,53 +1293,15 @@
       "completed_at": "2026-05-10T12:29:31.142022+02:00",
       "elapsed_minutes": 0
     },
-    "task-ui-markdown-rendering": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "internal/mcp/render.go: markdownPayload wraps human summary + JSON appendix; renderBudgetSummary builds the per-plan table. tokenops_session_budget returns markdown table + collapsed JSON; clients that render markdown (Desktop/Code/Cursor) get styled tables. Tested."
-      ],
-      "started_at": "2026-05-13T22:01:51.327827+02:00",
-      "completed_at": "2026-05-13T22:03:12.927672+02:00",
-      "elapsed_minutes": 1
-    },
-    "task-ui-svg-sparklines": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "PR #49 (cc938ce) merged v0.10.0; SVG sparkline + headroom gauge live in tokenops_burn_rate / tokenops_session_budget"
-      ],
-      "started_at": "2026-05-13T22:13:30.136005+02:00",
-      "completed_at": "2026-05-14T09:40:55.944796+02:00",
-      "elapsed_minutes": 687
-    },
-    "task-ui-vue-d3-dashboard": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "PR #50 (b176b16) merged v0.10.0; daemon serves Vue+D3 dashboard at /dashboard; tokenops_dashboard MCP tool returns clickable URL"
-      ],
-      "started_at": "2026-05-14T09:41:11.110615+02:00",
-      "completed_at": "2026-05-14T09:41:21.498619+02:00",
-      "elapsed_minutes": 0
-    },
-    "task-vendor-usage-backfill": {
-      "status": "done",
-      "path": "",
-      "owner": "ai-agent",
-      "evidence": [
-        "PR #63 opened with vendor-usage backfill subcommand + NewEnvelope export"
-      ],
-      "started_at": "2026-05-14T09:49:28.719096+02:00",
-      "completed_at": "2026-05-14T09:51:55.660045+02:00",
-      "elapsed_minutes": 2
-    },
     "task-verification-and-experiment": {
-      "status": "pending",
+      "status": "verified",
       "path": "",
+      "owner": "Felix Geelhaar",
+      "evidence": [
+        "Implementation shipped in PR #345 and supporting event/work correlation; production comparison remains observational until real linked outcome cohorts accrue."
+      ],
+      "started_at": "2026-09-26T08:45:25.810276+02:00",
+      "completed_at": "2026-09-26T08:45:25.828504+02:00",
       "elapsed_minutes": 0
     },
     "task-wedge-changelog-and-readme": {
@@ -1721,5 +1404,5 @@
       "elapsed_minutes": 3
     }
   },
-  "updated_at": "2026-09-20T12:44:13.940992+02:00"
+  "updated_at": "2026-09-26T10:15:12.004482+02:00"
 }

@@ -1,21 +1,43 @@
 ---
-updated: 2026-07-03
+updated: 2026-09-26
 ---
-## Now
-- Let real usage accrue in ~/.tokenops/recovery/index.jsonl, then tune fmt learn thresholds (currently data-blocked).
+# Current Roadmap Snapshot
 
-## Next
-- Consider a config-mutating MCP tool (add/tune formatters via MCP), extending tokenops_fmt_learn.
-- Optional: per-subcommand JSON-aware cloud formatters (aws/gcloud/az currently pass JSON through untouched).
+Canonical sequencing: `docs/adr/0004-ai-work-intelligence-and-control.md`.
+Roady implementation status: `.roady/plan.json` + `.roady/state.json`.
 
-## Later
-- Low-value RTK-parity tail (ls/cat/find/grep/diff/wget) — only if user demand; mostly signal.
-- Per-subcommand JSON-aware formatters for cloud CLIs (aws/gcloud/az currently pass JSON through untouched).
+## Shipped
 
-## Done
-- v0.26.0: fmt engine + 17 formatters + learning loop.
-- v0.27.0: catalog complete — 46 commands / 51 tokens.
-- v0.28.0: user-extensible (config formatters + learn --apply) + MCP tokenops_fmt_learn.
-- v0.28.1: full docs for the fmt subsystem.
-- 2026-07-03: proxy-plane validated via default-pipeline integration test; Agent OS memory committed.
-- 2026-07-03: catalog fast-follow — +oc (kubectl alias), nomad, packer, gem, swift, nix → 51 formatters / 57 tokens. vault deferred (secret-bearing output, low compression value).
+- Phases 0–4: privacy/safety, measurement provenance, freshness, work model,
+  and interface-independent capabilities (#339–#343).
+- Phase 5 implementation: outcome/intervention identity, unified authority,
+  and comparison surfaces (#345, #347). **Real causal evaluation is not yet
+  demonstrated** because there are no matched real intervention/outcome pairs.
+- Phases 6–9: canonical events (#361–#369), runtime lifecycle + installed
+  binary journey (#349, #370–#378), intent-oriented MCP (#380–#382), and
+  surface-native insights (#383–#386).
+- Production-only cleanup and live-data clarity fixes: #387–#389.
+
+## Active Validation
+
+- Host CLI/MCP validation succeeded on v0.70.0 after restarting its supervised
+  daemon. That binary still exposes demo/dashboard entry points removed by
+  PR #387; upgrade and verify a release containing that cleanup.
+- A temporary build of current source passed CLI and MCP status/resource-glance
+  checks against the healthy daemon, reading real Claude Code and Codex
+  session files; the insight was clear/continue. No outcome was inferred.
+- The local JSONL fallback reported 274 `budget.exceeded` events, which is
+  insufficient evidence for the still-open Phase 5 outcome cohort.
+- Formatter evidence provenance guard is implemented and verified on the
+  current branch, not merged: 14 actual wrapped runs versus 18,043 session
+  projections and zero recovery reads. Projections no longer create quality
+  hints or observed savings; stronger-compression hints are removed.
+- Accumulate real, outcome-linked work and evaluate only when evidence supports
+  a matched comparison. No demo seeding and no implied success from completion.
+
+## Deferred
+
+- Daemon-started background coaching: keep on-demand behavior until opt-in,
+  replay scope, and cost policy are explicitly designed.
+- fmt learning threshold tuning: guard is in place, but still needs enough
+  genuine wrapped-run and recovery telemetry; no threshold experiment yet.

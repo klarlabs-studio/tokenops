@@ -1,19 +1,63 @@
 ---
-updated: 2026-08-18
+updated: 2026-09-26
 ---
 ## Current State
-tokenops is a local-first MCP server + CLI for flat-rate AI subscriptions. Repo `github.com/klarlabs-studio/tokenops`, module `go.klarlabs.de/tokenops`; brew cask `klarlabs-studio/tap/tokenops` (`brew trust` first). Latest **release in flight: v0.44.0** (changelog PR). `main` has #167: `tokenops daemon install`, `daemon.url` 0600, `tokenops up` copy killed, archlint complete, Gemini 2.5 vendor-verified+pinned, opt-in retention.
 
-Pricing is researched + effective-dated (ADR 0002) with verified-row pinning. **Opus 4.x = $5/$25/$0.50**. **Gemini 2.5 Pro/Flash/Flash-Lite cache-read = 10% of input**.
+TokenOps is a local-first adaptive control plane for AI-assisted work. Current
+source `main` is `d664208` (PR #389). The CLI/MCP/API surfaces are the product;
+there is no bundled browser dashboard or demo-data workflow (PR #387).
 
-v0.43.0 made a dead ingestion pipeline **visible**. v0.44.0 makes it **supervisable**. After the tag: brew-upgrade, then `tokenops daemon install` on the operator Mac.
+ADR 0004 Phases 0–4 and 6–9 are implemented. Phase 5 implementation is shipped,
+but real outcome validation remains open: the observed session data has no
+matched intervention/outcome cohort, so verification must remain observational.
+The plan state is tracked in `.roady/`; current intent and phase truth are in
+`docs/adr/0004-ai-work-intelligence-and-control.md`.
 
-## Last Session Summary
-2026-08-18: eval of v0.43.0 → #167 merged → cutting v0.44.0. Prior: 2026-08-03 v0.43.0 (#162/#165/#166) after a 27-day silent ingestion outage.
+Live validation on 2026-09-26 restarted the installed supervised daemon and
+confirmed CLI health/readiness plus an MCP initialize, tools/list, and
+`tokenops_status` call against the real local store. No demo/seed command was
+run. Installed CLI/daemon is v0.70.0, but it still exposes the retired
+`demo` command and `tokenops_dashboard` MCP tool; it predates source cleanup in
+PR #387 and is not yet the current product surface. `tokenops events` used its
+JSONL fallback and reported 274 `budget.exceeded` events; this is not a matched
+intervention/outcome cohort and cannot establish quality or causal uplift.
 
-## Next Session Should
-Tag v0.44.0 once the changelog PR merges (goreleaser + brew cask). Then on the Mac: `brew upgrade --cask klarlabs-studio/tap/tokenops` and `tokenops daemon install`. Confirm `tokenops daemon status` and `tokenops vendor-usage status`.
+The daemon was not answering initially. A supervised restart succeeded from
+the host context, and health/readiness subsequently returned 200. The local
+MCP stdio validation also returned ready status on v0.70.0.
 
-## Blocked / Waiting
-- BLOCKED: fmt learn threshold tuning — needs more real usage telemetry.
-- WAITING: user to live-verify an OpenAI-compat provider (would flip 9 providers unit→live).
+A temporary build of current checkout (not installed) also passed CLI health
+checks and MCP stdio initialize/tool-list/status/resource-glance calls against
+that daemon. The resource glance read actual Claude Code and Codex local
+session records, reported current pressure as clear, and recommended
+continuing. This validates the surface and data path only; it does not supply
+an intervention/outcome pair or verify work quality.
+
+Current branch adds a formatter-learning evidence guard. A read-only real
+session scan found 14 wrapped formatter runs and 18,043 offline session
+projections, with zero recovery reads. The learner now separates projected
+savings from observed estimates, leaves re-access unknown without wrapped
+evidence, and never recommends stronger compression from missing recovery
+reads. This is verified in Roady but not merged. Full `make verify` passed its
+Go, lint, race, eval, and security gates; proto-check remains blocked by the
+host's protoc 7.36.2 versus repository-generated 7.36.0 version comment.
+
+## Next
+
+1. On an operator-controlled deployment, upgrade to a release containing
+   PR #387 and repeat CLI/MCP checks; confirm the retired demo/dashboard
+   surfaces are absent.
+2. Let real work produce a genuine intervention and outcome. Record only a
+   human or recognized verifier assessment actually observed; do not seed
+   example activity or claim causal uplift before matched evidence exists.
+3. Keep background coaching off until its opt-in, scope, and cost policy are
+   explicit; on-demand coaching remains the safe path.
+4. Merge the formatter provenance guard before relying on `fmt learn`; tune
+   thresholds only after sufficient genuine wrapped-run/recovery evidence.
+
+## Recently Resolved
+
+- PR #387: removed demo command/data and browser dashboard surfaces.
+- PR #388: deduplicated repeated provenance caveats in aggregates.
+- PR #389: distinguished incomplete API-equivalent estimates from actual
+  plan-covered marginal cost.
