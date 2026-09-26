@@ -160,6 +160,7 @@ func (s *Server) routingMiddleware(provider providers.Provider, next http.Handle
 		}
 
 		r.Body = io.NopCloser(bytes.NewReader(rec.ApplyBody))
+		obs.RoutedModel = rec.TargetModel
 		r.ContentLength = int64(len(rec.ApplyBody))
 		r.Header.Set("Content-Length", strconv.Itoa(len(rec.ApplyBody)))
 		s.logger.Info("active routing applied",
