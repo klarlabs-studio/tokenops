@@ -4,8 +4,9 @@ updated: 2026-09-26
 ## Current State
 
 TokenOps is a local-first adaptive control plane for AI-assisted work. Current
-source `main` includes PR #399. The CLI/MCP/API surfaces are the product;
-there is no bundled browser dashboard or demo-data workflow (PR #387).
+source `main` includes PR #400 and is released as v0.71.0. The CLI/MCP/API
+surfaces are the product; there is no bundled browser dashboard or demo-data
+workflow (PR #387).
 
 ADR 0004 Phases 0–9 are implemented. Phase 5 now includes bounded live
 validation. PRs #394–#396 improved execution attribution and correctly rejected
@@ -26,8 +27,11 @@ Live validation on 2026-09-26 first restarted installed v0.70.0 and confirmed
 CLI health/readiness plus MCP initialize, tools/list, and `tokenops_status`
 against the real local store. The current checkout was subsequently built and
 installed as the supervised daemon for the final trial. No demo/seed command
-was run. A tagged release containing the post-v0.70.0 cleanup and trial fixes
-still needs an operator-controlled release check.
+was run. v0.71.0 then published the post-v0.70.0 cleanup and trial fixes via
+GoReleaser, including four platform archives, checksums, and the Homebrew cask.
+The Homebrew upgrade restarted the supervised daemon; CLI and daemon both
+reported v0.71.0 at commit `844c9be`, with health and readiness returning 200
+and no blockers.
 
 The daemon was not answering initially. A supervised restart succeeded from
 the host context, and health/readiness subsequently returned 200. The local
@@ -64,6 +68,13 @@ supervised daemon and reports healthy/ready. The temporary API provider and
 route were removed and the original OpenAI subscription was restored. The
 deprecated `codex-plus` spelling now resolves to canonical `gpt-plus`.
 
+Relicta 4.2.0 planned, approved, and published v0.71.0, but two configuration
+settings did not behave as declared: `gitsign: true` still produced an unsigned
+annotated tag, and `autocommitchangelog: false` still appended generated notes
+to the local changelog after pushing the tag. The append was removed locally
+and never reached the tag or `main`. Resolve or guard both behaviors before the
+next release.
+
 A current-checkout build passed CLI health checks and MCP stdio
 initialize/tool-list/status/resource-glance calls. The resource glance read
 actual Claude Code and Codex local session records, reported current pressure
@@ -78,20 +89,25 @@ may still require the repository's pinned compiler version.
 
 ## Next
 
-1. Resolve the remaining historical Anthropic HTTP 400 ambiguity with a sanitized provider error
+1. Prove a bounded real coding-agent workflow through API-backed routing,
+   including streaming Responses or Messages traffic, tool calls, multi-call
+   arm consistency, cost, latency, and a final verifier outcome.
+2. Resolve the remaining historical Anthropic HTTP 400 ambiguity with a sanitized provider error
    classification or a local reproduction of the original request shape; do
    not log prompt or credential-bearing bodies.
-2. Before another paid paired attempt, verify full-execution arm consistency
+3. Before another paid paired attempt, verify full-execution arm consistency
    and obtain explicit authorization for the new model calls.
-3. Record a human or recognized-verifier outcome only when actually observed;
+4. Record a human or recognized-verifier outcome only when actually observed;
    do not seed examples or claim causal uplift from task completion alone.
-4. Keep background coaching off until its opt-in, scope, and cost policy are
+5. Keep background coaching off until its opt-in, scope, and cost policy are
    explicit; on-demand coaching remains the safe path.
-5. The formatter provenance guard was merged in PR #390; tune `fmt learn`
+6. The formatter provenance guard was merged in PR #390; tune `fmt learn`
    thresholds only after sufficient genuine wrapped-run/recovery evidence.
 
 ## Recently Resolved
 
+- v0.71.0 / PR #400: published the Phase 5 proof and post-v0.70.0 work;
+  Homebrew installation and released-daemon version/commit/health were verified.
 - PR #396: randomized verification rejects assigned executions with upstream
   HTTP failures.
 - PR #395: randomized verification rejects partially applied model-route arms.
