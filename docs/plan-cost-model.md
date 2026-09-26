@@ -76,8 +76,13 @@ Returns a `HeadroomReport` per configured plan with:
   publishes a token cap.
 - `headroom_days` — extrapolated from rolling 7-day burn rate.
 - `window_consumed`, `window_cap`, `window_unit`, `window_pct`,
-  `window_resets_in` — rolling rate-limit window usage. Populated when
-  the plan has both a `RateLimitWindow` and `MessagesPerWindow`.
+  `window_duration`, `window_resets_in` — rolling rate-limit window usage.
+  When the vendor meter reports the duration, that value overrides the
+  catalog fallback; Codex plan variants do not always expose the same primary
+  and secondary windows.
+- `vendor_plan_type` — the provider's opaque plan identifier when present.
+  TokenOps exposes it for reconciliation but does not silently equate an
+  undocumented vendor identifier with a catalog plan name.
 - `overage_risk` — `low`, `medium`, `high`, or `unknown`. The headline
   takes the worse of the monthly and window signals.
 - `note` — populated when math falls through (e.g. plan publishes no
@@ -92,6 +97,13 @@ Claude Max 20x (claude-max-20x) — risk low
 ```
 
 The same report is available via the `tokenops_plan_headroom` MCP tool.
+
+Claude Code JSONL supplies genuine per-turn token and cache usage but not an
+authoritative subscription quota percentage. Until the Claude usage meter is
+connected, its message-window percentage and reset remain estimates and are
+marked accordingly. Codex JSONL carries vendor-reported window duration,
+utilization, reset time, and plan type, so those fields are authoritative even
+when they differ from the configured catalog fallback.
 
 ## Adding a custom plan
 

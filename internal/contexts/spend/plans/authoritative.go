@@ -16,6 +16,9 @@ import (
 // instead of extrapolating from a message count. Returns nil when no
 // snapshot is available, so callers fall back to the heuristic.
 func LatestAuthoritativeWindow(ctx context.Context, reader EventReader, provider eventschema.Provider, p Plan, now time.Time) *AuthoritativeWindow {
+	if provider == eventschema.ProviderOpenAI {
+		return latestCodexWindow(ctx, reader, p, now)
+	}
 	weekly := p.RateLimitWindow > 24*time.Hour
 	usedKey, resetKey, source := authoritativeKeys(provider, weekly)
 	if usedKey == "" {
@@ -52,7 +55,96 @@ func LatestAuthoritativeWindow(ctx context.Context, reader EventReader, provider
 	return &AuthoritativeWindow{
 		UsedPct:  pct,
 		ResetsIn: parseResetsIn(best.Attributes[resetKey], now),
+		Duration: p.RateLimitWindow,
 		Source:   source,
+	}
+}
+
+type codexWindowCandidate struct {
+	usedKey   string
+	resetKey  string
+	minuteKey string
+	source    string
+}
+
+// latestCodexWindow reads the window shape from the vendor snapshot instead
+// of assuming primary always means five hours and secondary always means one
+// week. Codex plan variants can expose only one window, and that window can be
+// primary even when it is 10,080 minutes.
+func latestCodexWindow(ctx context.Context, reader EventReader, p Plan, now time.Time) *AuthoritativeWindow {
+	lookback := 2 * p.RateLimitWindow
+	if lookback < 14*24*time.Hour {
+		lookback = 14 * 24 * time.Hour
+	}
+	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, now.Add(-lookback))
+	if err != nil {
+		return nil
+	}
+	var best *eventschema.Envelope
+	for _, e := range events {
+		if e == nil || e.Attributes == nil {
+			continue
+		}
+		if _, primary := e.Attributes["primary_used_pct"]; !primary {
+			if _, secondary := e.Attributes["secondary_used_pct"]; !secondary {
+				continue
+			}
+		}
+		if best == nil || e.Timestamp.After(best.Timestamp) {
+			best = e
+		}
+	}
+	if best == nil {
+		return nil
+	}
+
+	candidates := []codexWindowCandidate{
+		{usedKey: "primary_used_pct", resetKey: "primary_resets_at", minuteKey: "primary_window_min", source: "codex:primary"},
+		{usedKey: "secondary_used_pct", resetKey: "secondary_resets_at", minuteKey: "secondary_window_min", source: "codex:secondary"},
+	}
+	selected := -1
+	selectedMinutes := 0
+	for i, candidate := range candidates {
+		minutes, _ := strconv.Atoi(best.Attributes[candidate.minuteKey])
+		if minutes <= 0 || best.Attributes[candidate.usedKey] == "" {
+			continue
+		}
+		if selected == -1 {
+			selected = i
+			selectedMinutes = minutes
+		}
+		if time.Duration(minutes)*time.Minute == p.RateLimitWindow {
+			selected = i
+			selectedMinutes = minutes
+			break
+		}
+	}
+	// Older stored snapshots did not carry the duration attributes. Preserve
+	// their authoritative percentage using the catalog duration as an explicit
+	// fallback; new snapshots always win with their reported shape above.
+	if selected == -1 {
+		for i, candidate := range candidates {
+			if best.Attributes[candidate.usedKey] != "" {
+				selected = i
+				selectedMinutes = int(p.RateLimitWindow / time.Minute)
+				break
+			}
+		}
+	}
+	if selected == -1 {
+		return nil
+	}
+	candidate := candidates[selected]
+	pct, err := strconv.ParseFloat(best.Attributes[candidate.usedKey], 64)
+	if err != nil {
+		return nil
+	}
+	return &AuthoritativeWindow{
+		UsedPct:        pct,
+		ResetsIn:       parseResetsIn(best.Attributes[candidate.resetKey], now),
+		Duration:       time.Duration(selectedMinutes) * time.Minute,
+		Source:         candidate.source,
+		VendorPlanType: best.Attributes["plan_type"],
 	}
 }
 

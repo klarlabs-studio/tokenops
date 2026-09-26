@@ -98,7 +98,7 @@ func ClassifySignal(in SignalInputs) SignalQuality {
 		return SignalQuality{
 			Level:  SignalLevelHigh,
 			Source: SignalSourceCodexJSONL,
-			Caveat: "Reads ~/.codex/sessions/**/*.jsonl — Codex CLI's per-turn token_count records. Carries OpenAI's authoritative rate_limits block (5h primary + weekly secondary used_percent + resets_at).",
+			Caveat: "Reads ~/.codex/sessions/**/*.jsonl — Codex CLI's per-turn token_count records. Carries OpenAI's authoritative rate-limit windows, utilization, reset times, and vendor plan type; available windows vary by plan.",
 		}
 	case in.CopilotInWindow > 0:
 		return SignalQuality{

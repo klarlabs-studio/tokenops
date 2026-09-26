@@ -6,7 +6,10 @@ updated: 2026-09-26
 - Subscription-plan telemetry: validate canonical GPT Plus/Pro and Claude
   Pro/Max/Business/Team/Enterprise semantics with genuine plan-meter records.
   The supported API-backed cohorts prove routing and metered cost only; API
-  billing is separate from subscription quota accounting.
+  billing is separate from subscription quota accounting. Current Codex data
+  reports opaque plan type `prolite` with one weekly window; do not map it to a
+  catalog plan without authority. Claude JSONL lacks an authoritative quota
+  percentage, so connect the Claude usage meter before validating Max.
 - Relicta release governance: resolve or guard the observed `gitsign: true`
   unsigned-tag behavior and `autocommitchangelog: false` local append before
   the next release.
