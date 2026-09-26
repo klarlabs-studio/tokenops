@@ -1,21 +1,32 @@
 ---
-updated: 2026-07-03
+updated: 2026-09-26
 ---
-## Now
-- Let real usage accrue in ~/.tokenops/recovery/index.jsonl, then tune fmt learn thresholds (currently data-blocked).
+# Current Roadmap Snapshot
 
-## Next
-- Consider a config-mutating MCP tool (add/tune formatters via MCP), extending tokenops_fmt_learn.
-- Optional: per-subcommand JSON-aware cloud formatters (aws/gcloud/az currently pass JSON through untouched).
+Canonical sequencing: `docs/adr/0004-ai-work-intelligence-and-control.md`.
+Roady implementation status: `.roady/plan.json` + `.roady/state.json`.
 
-## Later
-- Low-value RTK-parity tail (ls/cat/find/grep/diff/wget) — only if user demand; mostly signal.
-- Per-subcommand JSON-aware formatters for cloud CLIs (aws/gcloud/az currently pass JSON through untouched).
+## Shipped
 
-## Done
-- v0.26.0: fmt engine + 17 formatters + learning loop.
-- v0.27.0: catalog complete — 46 commands / 51 tokens.
-- v0.28.0: user-extensible (config formatters + learn --apply) + MCP tokenops_fmt_learn.
-- v0.28.1: full docs for the fmt subsystem.
-- 2026-07-03: proxy-plane validated via default-pipeline integration test; Agent OS memory committed.
-- 2026-07-03: catalog fast-follow — +oc (kubectl alias), nomad, packer, gem, swift, nix → 51 formatters / 57 tokens. vault deferred (secret-bearing output, low compression value).
+- Phases 0–4: privacy/safety, measurement provenance, freshness, work model,
+  and interface-independent capabilities (#339–#343).
+- Phase 5 implementation: outcome/intervention identity, unified authority,
+  and comparison surfaces (#345, #347). **Real causal evaluation is not yet
+  demonstrated** because there are no matched real intervention/outcome pairs.
+- Phases 6–9: canonical events (#361–#369), runtime lifecycle + installed
+  binary journey (#349, #370–#378), intent-oriented MCP (#380–#382), and
+  surface-native insights (#383–#386).
+- Production-only cleanup and live-data clarity fixes: #387–#389.
+
+## Active Validation
+
+- Upgrade and re-check the host-installed CLI/daemon (last observed as v0.68.1
+  on 2026-09-25; no upgrade was performed).
+- Accumulate real, outcome-linked work and evaluate only when evidence supports
+  a matched comparison. No demo seeding and no implied success from completion.
+
+## Deferred
+
+- Daemon-started background coaching: keep on-demand behavior until opt-in,
+  replay scope, and cost policy are explicitly designed.
+- fmt learning threshold tuning: still needs real command-run telemetry.

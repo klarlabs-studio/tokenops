@@ -63,6 +63,10 @@ produced, distinct from what it consumed.
 
 ## Consequences
 
+The following inventory records the baseline gaps found when this ADR was
+accepted on 2026-09-20. It is historical context, not a claim about current
+main. The execution status below supersedes those baseline statements.
+
 ### Three primitives do not exist at all
 
 Measured against the current code:
@@ -285,6 +289,30 @@ CLI; add a resource glance that composes measured session budget and plan
 headroom without inventing thresholds; add a bounded workflow insight from
 reconstructed traces and existing waste-detector findings. Work insight must
 not infer task success or overall quality from the absence of a finding.
+
+## Execution status (2026-09-26)
+
+| Phase | Status | Evidence / remaining |
+|---|---|---|
+| 0 — safety debt | Complete | PR #339; released in v0.70.0. |
+| 1 — provenance | Complete | PR #340. |
+| 2 — freshness | Complete | PR #341. |
+| 3 — work primitives | Complete | PRs #342 and #347. |
+| 4 — capability layer | Complete | PR #343. |
+| 5 — verification and experiment | Implementation shipped; live validation open | PR #345 and correlated work/event support. No real matched intervention/outcome cohort has been observed, so current verification remains observational and cannot claim causal improvement. |
+| 6 — canonical events | Complete | PRs #361–#369. |
+| 7 — runtime and installed-product verification | Complete in source/CI | Built-binary journey test in PR #349; lifecycle modules in PRs #370–#378. The locally installed CLI/daemon was last observed at v0.68.1 during 2026-09-25 validation and still needs an operator-controlled upgrade/retest. |
+| 8 — intent-oriented MCP | Complete | PRs #380–#382. |
+| 9 — surface-native insight | Complete | PRs #383–#386. Browser dashboard and demo surfaces were removed in PR #387; CLI, MCP, and local API remain. |
+
+### Next validation gate
+
+Use the current installed product on real work, then capture only an outcome
+that the operator or an independent verifier actually observed. Compare matched
+baseline/intervention executions only when assignment, resource measurements,
+and explicit outcome evidence are all present. Until then, preserve the
+observational label. Do not seed demo activity or infer success from task
+completion.
 
 ## Non-goals
 

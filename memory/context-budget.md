@@ -1,12 +1,12 @@
 ---
-updated: 2026-07-03
+updated: 2026-09-26
 ---
 | File | Est. lines | Last compact |
 |------|-----------|--------------|
-| status.md | 22 | 2026-07-03 |
-| roadmap.md | 26 | 2026-07-03 |
-| decisions.md | 12 | 2026-07-03 |
-| open-threads.md | 11 | 2026-07-03 |
+| status.md | 37 | 2026-09-26 |
+| roadmap.md | 32 | 2026-09-26 |
+| decisions.md | 49 | append-only, 2026-08-18 |
+| open-threads.md | 25 | 2026-09-26 |
 
 Note: total loaded context should stay under 30% of the context window.
-Last Compact: 2026-07-03
+Last Compact: 2026-09-26

@@ -53,13 +53,6 @@
       "source": {}
     },
     {
-      "id": "dashboard",
-      "title": "Dashboard",
-      "description": "Vue web dashboard for live token usage spend attribution forecasts agent analytics optimization opportunities.",
-      "requirements": [],
-      "source": {}
-    },
-    {
       "id": "data-telemetry",
       "title": "Data Model and Telemetry",
       "description": "Event schema for prompts workflows optimizations coaching. Local-first with optional cloud emission. OpenTelemetry compatible.",
@@ -111,21 +104,21 @@
     {
       "id": "telemetry-contract-and-lineage-control",
       "title": "Telemetry Contract and Lineage Control",
-      "description": "Add explicit data-contract and lineage docs for key event fields used across proxy, storage, OTLP, and dashboard. Include schema change policy, compatibility tests, and owner map for each telemetry contract.",
+      "description": "Add explicit data-contract and lineage docs for key event fields used across proxy, storage, and OTLP. Include schema change policy, compatibility tests, and owner map for each telemetry contract.",
       "requirements": [],
       "source": {}
     },
     {
       "id": "risk-based-test-coverage-uplift",
       "title": "Risk-Based Test Coverage Uplift",
-      "description": "Introduce repository-level quality debt dashboard for low-coverage/high-risk packages (e.g., daemon entrypoints and integration surfaces). Add targeted tests and risk-ranked coverage goals rather than blanket percentage targets.",
+      "description": "Introduce a repository quality-debt report for low-coverage/high-risk packages (e.g., daemon entrypoints and integration surfaces). Add targeted tests and risk-ranked coverage goals rather than blanket percentage targets.",
       "requirements": [],
       "source": {}
     },
     {
       "id": "rule-intelligence",
       "title": "Rule Intelligence",
-      "description": "Treat operational rule artifacts (CLAUDE.md, AGENTS.md, repo instructions, MCP policies, Cursor rules, coding conventions) as first-class telemetry. Provide a Rule Engine that ingests rule sources, analyzes ROI (tokens saved, retries avoided, context reduction, latency impact, quality drift), detects conflicts and redundancy, compresses rule corpora into distilled behavioral representations, and dynamically injects only the relevant subset per request/workflow. Includes benchmarking harness for coding/workflow rule systems. Surfaces via CLI (tokenops rules analyze|conflicts|compress|inject|bench), proxy hooks, MCP server, and dashboard. Local-first, respects redaction, OTLP-emittable. Issue #12.",
+      "description": "Treat operational rule artifacts (CLAUDE.md, AGENTS.md, repo instructions, MCP policies, Cursor rules, coding conventions) as first-class telemetry. Provide a Rule Engine that ingests rule sources, analyzes ROI (tokens saved, retries avoided, context reduction, latency impact, quality drift), detects conflicts and redundancy, compresses rule corpora into distilled behavioral representations, and dynamically injects only the relevant subset per request/workflow. Includes benchmarking harness for coding/workflow rule systems. Surfaces via CLI (tokenops rules analyze|conflicts|compress|inject|bench), proxy hooks, and MCP server. Local-first, respects redaction, OTLP-emittable. Issue #12.",
       "requirements": [],
       "source": {}
     },
@@ -137,16 +130,9 @@
       "source": {}
     },
     {
-      "id": "first-run-activation-flow",
-      "title": "First-Run Activation Flow",
-      "description": "Activate new operators in under 5 minutes. Ship `tokenops init` wizard (idempotent: enables sqlite storage at $XDG_DATA_HOME or ~/.tokenops/db, default RBAC, audit on, rules root=$PWD, writes config), `tokenops demo` (seeds 7 days synthetic events so spend/burn/forecast/scorecard/top return populated data), structured `blockers[]` + `next_actions[]` fields in /healthz, /readyz, /version, and MCP status, and a disabled-subsystem error contract (`{error,hint}` instead of empty success when Storage/Rules/Providers disabled). Closes the time-to-value gap surfaced in v0.2.0 first-run review.",
-      "requirements": [],
-      "source": {}
-    },
-    {
       "id": "plan-based-cost-model",
       "title": "Plan-Based Cost Model",
-      "description": "Support flat-rate subscription plans (Claude Max, Claude Code Pro, ChatGPT Plus/Pro, Cursor, GitHub Copilot, Cody) where per-token cost is zero but quota matters. Design: PromptEvent gains `CostSource` enum (metered|plan_included|trial), config gets `plans: {provider: plan_name}` map. Spend engine: when CostSource=plan_included, CostUSD=0 and event counts toward quota tracker instead. New metrics: plan_quota_consumed_pct, plan_headroom_days, plan_overage_risk. Dashboard + CLI surface plan headroom alongside metered cost. Backward compat: events without CostSource default to \"metered\". Requires per-plan quota config (input/output tokens/month, rate-limit windows). Initial plan catalog: claude-max, claude-pro, claude-code-max, gpt-plus, gpt-pro, gpt-team, copilot-individual, copilot-business, cursor-pro, cursor-business.",
+      "description": "Support flat-rate subscription plans (Claude Max, Claude Code Pro, ChatGPT Plus/Pro, Cursor, GitHub Copilot, Cody) where per-token cost is zero but quota matters. Design: PromptEvent gains `CostSource` enum (metered|plan_included|trial), config gets `plans: {provider: plan_name}` map. Spend engine: when CostSource=plan_included, CostUSD=0 and event counts toward quota tracker instead. New metrics: plan_quota_consumed_pct, plan_headroom_days, plan_overage_risk. CLI, MCP, and the local API surface plan headroom alongside metered cost. Backward compat: events without CostSource default to \"metered\". Requires per-plan quota config (input/output tokens/month, rate-limit windows). Initial plan catalog: claude-max, claude-pro, claude-code-max, gpt-plus, gpt-pro, gpt-team, copilot-individual, copilot-business, cursor-pro, cursor-business.",
       "requirements": [],
       "source": {}
     },
@@ -160,21 +146,14 @@
     {
       "id": "mcp-first-wedge:-session-budget-+-config-as-code",
       "title": "MCP-First Wedge: Session Budget + Config-as-Code",
-      "description": "Three-skill review converged: TokenOps targets wrong consumption surface (proxy traffic, but plan-based users go through Claude Code / Cursor MCP) and forces JSON-editing for config (Plans, Providers, Rules, OTel). The wedge bet is MCP-resident session observability + a config-as-code CLI primitive that replaces every text-edit-then-restart ritual. Ships: tokenops \u003csubsystem\u003e set verb pattern, MCP-side session traffic observer that counts Claude Code / Cursor MCP calls against plan windows, tokenops_session_budget MCP tool predicting next-2h headroom, structured error hints carrying exact next commands, customer-research scaffolding (interview script + tracker doc). Skips proxy work, optimizer expansion, dashboard polish until the wedge validates with 5 real users.",
-      "requirements": [],
-      "source": {}
-    },
-    {
-      "id": "data-isolation-+-surface-polish",
-      "title": "Data Isolation + Surface Polish",
-      "description": "Five gaps surfaced from the full v0.7.1 demo. (1) Rules walker bails on permission-denied siblings under $HOME so analyze/conflicts/inject return null even when CLAUDE.md exists — pre-existing in-progress task. (2) Synthetic demo events mix with real proxy/MCP-session events in every analytics query; need source-tagging filter + a `--include-demo` opt-in. (3) Only plan_headroom + session_budget self-record session pings; the other 20 MCP tools don't, biasing the window count. Auto-wrap at registration so every tool call records. (4) 22 MCP tools surface flat with no curation; add tokenops_help that returns a \"start here\" subset. (5) Status/scorecard should expose real_vs_seeded counts so operators see signal vs synthetic ratio. Skips vendor /usage ingestion (waits for customer-discovery interview data).",
+      "description": "Historical MCP-first wedge proposal. Its session observer, configuration commands, headroom tool, structured hints, and help curation shipped. Browser-dashboard polish was not retained; native CLI/MCP/API surfaces are current.",
       "requirements": [],
       "source": {}
     },
     {
       "id": "signal-quality-+-activation-honesty",
       "title": "Signal Quality + Activation Honesty",
-      "description": "Four-skill consensus from the v0.8.1 review. UX, Product, AI, GTM converged on a single verdict: ship trust signals + activation honesty, then run customer interviews. Concretely: (1) every session_budget / plan_headroom response carries signal_quality {level, source, caveat, upgrade_paths} so operators see it is an MCP-ping heuristic, not real Claude turn data; (2) empty-state scorecard replaces F grade with a first-week activation checklist when no KPI is computed; (3) synthetic-data banner attaches to cost/headroom responses when source=demo dominates the window; (4) MCP serve file-watches config.yaml and hot-reloads on plan/provider changes, eliminating the only remaining \"leave the product to apply\" step; (5) deprecated claude-max alias migration shim so users pasting old docs see a renamed-to warning instead of an error; (6) outreach plan doc: 90-second Loom + Show HN + Discord cross-post + 25 founder DMs landing 10 real users by end-of-week. Customer interviews remain operator work (Roady tracks the task).",
+      "description": "Historical v0.8.1 review. Shipped signal-quality fields, honest empty-state scorecard guidance, config reload, and plan-alias migration. Demo-dominance banners and the time-bound outreach checklist are no longer current product requirements.",
       "requirements": [],
       "source": {}
     },
@@ -189,13 +168,6 @@
       "id": "coaching-llm-auto-routing",
       "title": "Coaching LLM Auto-Routing",
       "description": "Wire `llm.Backend` into `coaching.Pipeline` AND auto-pick the cheapest in-plan model for each configured plan. Decision table: Claude Max/Pro user → route coaching through their Anthropic session with `claude-haiku-4.5` (cheapest + included in plan, no extra cost); ChatGPT Plus/Pro/Team → route via gpt-5-mini equivalent through their account; GitHub Copilot user → use Copilot's bundled cheap model; Cursor user → use Cursor's bundled tier; no plan configured → fall back to local Ollama (llama3.2:3b default) if reachable; else disable coaching summaries with a one-line note (\"coaching is heuristic-only — bind a plan or run Ollama for natural-language summaries\"). Add `config.Coaching.LLM` section with explicit override (`auto` | `local:\u003cmodel\u003e` | `cloud:\u003cprovider\u003e:\u003cmodel\u003e`). CLI: `tokenops coach set-model auto|local:llama3.2|cloud:anthropic:claude-haiku-4.5`. Hot-reload picks up changes. Acceptance: user with `plans.anthropic=claude-max-20x` gets coaching summaries generated through their Claude session with haiku as the cheapest model, with no separate API key configured.",
-      "requirements": [],
-      "source": {}
-    },
-    {
-      "id": "interactive-mcp-ui-rendering",
-      "title": "Interactive MCP UI Rendering",
-      "description": "Today MCP tool responses are plain-text JSON. Three rendering tiers, ship in order: (1) Markdown summary + JSON appendix for every cost/headroom response so Desktop/Code/Cursor render styled tables and code blocks instead of brace soup; (2) Inline SVG sparklines for burn-rate and window-headroom charts returned as ResourceContent with MimeType=image/svg+xml — most MCP clients embed SVG inline today; (3) Interactive Vue+D3 dashboard returned as text/html ResourceContent — experimental, depends on client iframe support (Claude Desktop's evolving UI app spec, Cursor's panel). Build the Vue app under web/dashboard/ (already exists), bundle as a single-file HTML blob, serve via tokenops_dashboard MCP tool. Charts to ship first: window-burn sparkline, plan-quota gauge, real-vs-synthetic ratio donut. Acceptance: tokenops_session_budget renders as a styled markdown table in Claude Desktop; tokenops_dashboard returns an interactive D3 chart in clients that support html resources.",
       "requirements": [],
       "source": {}
     },
@@ -230,7 +202,7 @@
     {
       "id": "interface-independent-capabilities",
       "title": "Interface-Independent Capabilities",
-      "description": "CLI, MCP, dashboard and future adapters consume shared application capabilities instead of each implementing validation, orchestration and formatting. A capability owns its request model, validation, orchestration, result model, provenance and errors. An archlint rule constrains adapter to capability-layer imports so parity is architectural rather than manually coordinated.",
+      "description": "CLI, MCP, local API and future adapters consume shared application capabilities instead of each implementing validation, orchestration and formatting. A capability owns its request model, validation, orchestration, result model, provenance and errors. An archlint rule constrains adapter to capability-layer imports so parity is architectural rather than manually coordinated.",
       "requirements": [],
       "source": {}
     },
@@ -267,6 +239,40 @@
       "title": "Intent-Oriented MCP Surface",
       "description": "Agents ask TokenOps for outcomes rather than knowing its internals. Intent operations compose granular internal capabilities so an agent can answer why it is consuming context or how to reduce a task's cost without detailed knowledge of dozens of low-level tools.",
       "requirements": [],
+      "source": {}
+    },
+    {
+      "id": "production-outcome-validation",
+      "title": "Real-Work Outcome Validation",
+      "description": "Validate intervention value with genuine local work and explicit outcome evidence. Never seed demo activity or infer success from completion. Upgrade/test the operator-installed product only as an operator-controlled action. Report observational results until assignment, resource measures, and independent or human outcomes form matched pairs.",
+      "requirements": [
+        {
+          "id": "collect-real-outcome-cohort",
+          "title": "Collect a real intervention/outcome cohort",
+          "description": "Use the current installed product on actual work, correlate an authorized intervention to measured executions, and capture only a human or recognized verifier outcome. Do not modify production data with fixtures, synthetic events, or guessed outcomes. Evaluate a causal comparison only when the evidence supports matched pairs; otherwise report the gap and remain observational.",
+          "priority": "",
+          "estimate": "",
+          "depends_on": null,
+          "source": {}
+        }
+      ],
+      "source": {}
+    },
+    {
+      "id": "surface-native-insights",
+      "title": "Surface-Native Insights",
+      "description": "Model evidence-backed insights before adapting them to CLI and MCP. Keep ambient information concise, recommendations actionable, and explanations available on demand.",
+      "requirements": [
+        {
+          "id": "shared-status-resource-work-insights",
+          "title": "Ship shared status, resource, and bounded work insights",
+          "description": "Provide concise readiness/attention summaries across CLI and MCP, a resource glance composed from measured session budget and plan headroom, and bounded workflow insights based only on reconstructed traces and existing findings. Never infer task success or overall quality from absence of a finding. Delivered in PRs",
+          "priority": "",
+          "estimate": "",
+          "depends_on": null,
+          "source": {}
+        }
+      ],
       "source": {}
     }
   ],

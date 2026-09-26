@@ -80,17 +80,6 @@
       "source": {}
     },
     {
-      "id": "task-dashboard",
-      "title": "Implement Dashboard",
-      "description": "Implement the feature: Dashboard. Vue web dashboard for live token usage spend attribution forecasts agent analytics optimization opportunities.",
-      "priority": "medium",
-      "estimate": "",
-      "depends_on": [],
-      "feature_id": "dashboard",
-      "origin": "heuristic",
-      "source": {}
-    },
-    {
       "id": "task-data-telemetry",
       "title": "Implement Data Model and Telemetry",
       "description": "Implement the feature: Data Model and Telemetry. Event schema for prompts workflows optimizations coaching. Local-first with optional cloud emission. OpenTelemetry compatible.",
@@ -170,7 +159,7 @@
     {
       "id": "task-telemetry-contract-and-lineage-control",
       "title": "Implement Telemetry Contract and Lineage Control",
-      "description": "Implement the feature: Telemetry Contract and Lineage Control. Add explicit data-contract and lineage docs for key event fields used across proxy, storage, OTLP, and dashboard. Include schema change policy, compatibility tests, and owner map for each telemetry contract.",
+      "description": "Implement the feature: Telemetry Contract and Lineage Control. Add explicit data-contract and lineage docs for key event fields used across proxy, storage, and OTLP. Include schema change policy, compatibility tests, and owner map for each telemetry contract.",
       "priority": "medium",
       "estimate": "",
       "depends_on": [],
@@ -181,7 +170,7 @@
     {
       "id": "task-risk-based-test-coverage-uplift",
       "title": "Implement Risk-Based Test Coverage Uplift",
-      "description": "Implement the feature: Risk-Based Test Coverage Uplift. Introduce repository-level quality debt dashboard for low-coverage/high-risk packages (e.g., daemon entrypoints and integration surfaces). Add targeted tests and risk-ranked coverage goals rather than blanket percentage targets.",
+      "description": "Implement the feature: Risk-Based Test Coverage Uplift. Introduce a repository quality-debt report for low-coverage/high-risk packages (e.g., daemon entrypoints and integration surfaces). Add targeted tests and risk-ranked coverage goals rather than blanket percentage targets.",
       "priority": "medium",
       "estimate": "",
       "depends_on": [],
@@ -192,7 +181,7 @@
     {
       "id": "task-rule-intelligence",
       "title": "Implement Rule Intelligence",
-      "description": "Implement the feature: Rule Intelligence. Treat operational rule artifacts (CLAUDE.md, AGENTS.md, repo instructions, MCP policies, Cursor rules, coding conventions) as first-class telemetry. Provide a Rule Engine that ingests rule sources, analyzes ROI (tokens saved, retries avoided, context reduction, latency impact, quality drift), detects conflicts and redundancy, compresses rule corpora into distilled behavioral representations, and dynamically injects only the relevant subset per request/workflow. Includes benchmarking harness for coding/workflow rule systems. Surfaces via CLI (tokenops rules analyze|conflicts|compress|inject|bench), proxy hooks, MCP server, and dashboard. Local-first, respects redaction, OTLP-emittable. Issue #12.",
+      "description": "Implement the feature: Rule Intelligence. Treat operational rule artifacts (CLAUDE.md, AGENTS.md, repo instructions, MCP policies, Cursor rules, coding conventions) as first-class telemetry. Provide a Rule Engine that ingests rule sources, analyzes ROI (tokens saved, retries avoided, context reduction, latency impact, quality drift), detects conflicts and redundancy, compresses rule corpora into distilled behavioral representations, and dynamically injects only the relevant subset per request/workflow. Includes benchmarking harness for coding/workflow rule systems. Surfaces via CLI (tokenops rules analyze|conflicts|compress|inject|bench), proxy hooks, and MCP server. Local-first, respects redaction, OTLP-emittable. Issue #12.",
       "priority": "medium",
       "estimate": "",
       "depends_on": [],
@@ -203,7 +192,7 @@
     {
       "id": "task-fix-rulesfs-walker:-tolerate-permission-denied-+-skip-unreadable-subtrees",
       "title": "Implement Fix rulesfs walker: tolerate permission-denied + skip unreadable subtrees",
-      "description": "Implement the feature: Fix rulesfs walker: tolerate permission-denied + skip unreadable subtrees. ## Problem\n\n`internal/infra/rulesfs/source.go` `Discover()` walks the filesystem under the supplied root and bails on the first error any `filepath.WalkDir` callback returns. When the root is anywhere with read-restricted siblings (notably anywhere under `$HOME` on macOS \u2014 `~/Library/Saved Application State/...`, `~/Library/Containers/...`, etc.), the walk aborts before the loader ever sees the rule artifacts.\n\nObserved cases:\n\n- `tokenops rules analyze --root ~/.claude` \u2192 returns 0 documents even though `~/.claude/CLAUDE.md` exists. The walker enters one of the hidden sibling subtrees, hits an error, and halts.\n- `tokenops rules analyze --root ~` \u2192 exits non-zero with `permission denied: open ~/Library/Saved Application State/com.shure.motivmix.savedState`.\n\n## Repro\n\n```bash\necho \"# rules\" > ~/.claude/CLAUDE.md\ntokenops rules analyze --root ~/.claude --repo-id home\n# expected: 1 document discovered\n# actual:   no rule artifacts found\n```\n\n## Root cause\n\n`Discover()` propagates every error from `filepath.WalkDir`'s callback. A single `EACCES` or `EPERM` from `os.Open` on a sibling subtree kills the whole walk. The existing hidden-dir skip (`base != \".cursor\"` line in source.go) doesn't cover Library/Containers-style dirs without a leading dot.\n\n## Fix\n\nIn the `filepath.WalkDir` callback (and the `fs.WalkDir` branch above it):\n\n1. When the WalkDir-supplied `err` is non-nil and `errors.Is(err, fs.ErrPermission)`, log + skip:\n   - If `d != nil && d.IsDir()` \u2192 return `fs.SkipDir` to skip the whole subtree.\n   - Otherwise \u2192 return `nil` to skip the single file and continue.\n2. For non-permission errors, keep current behaviour (propagate) so genuine I/O failures still surface.\n3. Optionally: add a `Patterns`-aware short-circuit so a walker that's only looking for `CLAUDE.md` / `AGENTS.md` / `.cursor/...` doesn't bother descending into `Library/`, `node_modules/`, `vendor/` etc. \u2014 already half-implemented for the latter two; extend the skip list.\n\n## Acceptance\n\n- `tokenops rules analyze --root ~/.claude` discovers `CLAUDE.md` and produces a non-empty document set.\n- `tokenops rules analyze --root ~` completes without exiting non-zero on permission errors; logs the skipped paths at debug level.\n- New unit test in `internal/infra/rulesfs/source_test.go` injects a synthetic `fs.FS` that returns `fs.ErrPermission` on a sibling dir; assert that the legitimate `CLAUDE.md` is still discovered.\n\n## Surfaces affected\n\n- `tokenops rules analyze|conflicts|compress|inject|bench` CLI subcommands.\n- `tokenops_rules_*` MCP tools (same loader path).\n- `/api/rules/*` HTTP endpoints.\n\n## References\n\n- Discovered while testing tokenops MCP integration in Claude Code / Desktop after `brew install felixgeelhaar/tap/tokenops` (v0.2.0).\n- Related: `internal/infra/rulesfs/source.go` lines ~57-104 (`Discover()`).\n",
+      "description": "Implement the feature: Fix rulesfs walker: tolerate permission-denied + skip unreadable subtrees. ## Problem\n\n`internal/infra/rulesfs/source.go` `Discover()` walks the filesystem under the supplied root and bails on the first error any `filepath.WalkDir` callback returns. When the root is anywhere with read-restricted siblings (notably anywhere under `$HOME` on macOS — `~/Library/Saved Application State/...`, `~/Library/Containers/...`, etc.), the walk aborts before the loader ever sees the rule artifacts.\n\nObserved cases:\n\n- `tokenops rules analyze --root ~/.claude` → returns 0 documents even though `~/.claude/CLAUDE.md` exists. The walker enters one of the hidden sibling subtrees, hits an error, and halts.\n- `tokenops rules analyze --root ~` → exits non-zero with `permission denied: open ~/Library/Saved Application State/com.shure.motivmix.savedState`.\n\n## Repro\n\n```bash\necho \"# rules\" \u003e ~/.claude/CLAUDE.md\ntokenops rules analyze --root ~/.claude --repo-id home\n# expected: 1 document discovered\n# actual:   no rule artifacts found\n```\n\n## Root cause\n\n`Discover()` propagates every error from `filepath.WalkDir`'s callback. A single `EACCES` or `EPERM` from `os.Open` on a sibling subtree kills the whole walk. The existing hidden-dir skip (`base != \".cursor\"` line in source.go) doesn't cover Library/Containers-style dirs without a leading dot.\n\n## Fix\n\nIn the `filepath.WalkDir` callback (and the `fs.WalkDir` branch above it):\n\n1. When the WalkDir-supplied `err` is non-nil and `errors.Is(err, fs.ErrPermission)`, log + skip:\n   - If `d != nil \u0026\u0026 d.IsDir()` → return `fs.SkipDir` to skip the whole subtree.\n   - Otherwise → return `nil` to skip the single file and continue.\n2. For non-permission errors, keep current behaviour (propagate) so genuine I/O failures still surface.\n3. Optionally: add a `Patterns`-aware short-circuit so a walker that's only looking for `CLAUDE.md` / `AGENTS.md` / `.cursor/...` doesn't bother descending into `Library/`, `node_modules/`, `vendor/` etc. — already half-implemented for the latter two; extend the skip list.\n\n## Acceptance\n\n- `tokenops rules analyze --root ~/.claude` discovers `CLAUDE.md` and produces a non-empty document set.\n- `tokenops rules analyze --root ~` completes without exiting non-zero on permission errors; logs the skipped paths at debug level.\n- New unit test in `internal/infra/rulesfs/source_test.go` injects a synthetic `fs.FS` that returns `fs.ErrPermission` on a sibling dir; assert that the legitimate `CLAUDE.md` is still discovered.\n\n## Surfaces affected\n\n- `tokenops rules analyze|conflicts|compress|inject|bench` CLI subcommands.\n- `tokenops_rules_*` MCP tools (same loader path).\n- `/api/rules/*` HTTP endpoints.\n\n## References\n\n- Discovered while testing tokenops MCP integration in Claude Code / Desktop after `brew install felixgeelhaar/tap/tokenops` (v0.2.0).\n- Related: `internal/infra/rulesfs/source.go` lines ~57-104 (`Discover()`).\n",
       "priority": "medium",
       "estimate": "",
       "depends_on": [],
@@ -212,20 +201,9 @@
       "source": {}
     },
     {
-      "id": "task-first-run-activation-flow",
-      "title": "Implement First-Run Activation Flow",
-      "description": "Implement the feature: First-Run Activation Flow. Activate new operators in under 5 minutes. Ship `tokenops init` wizard (idempotent: enables sqlite storage at $XDG_DATA_HOME or ~/.tokenops/db, default RBAC, audit on, rules root=$PWD, writes config), `tokenops demo` (seeds 7 days synthetic events so spend/burn/forecast/scorecard/top return populated data), structured `blockers[]` + `next_actions[]` fields in /healthz, /readyz, /version, and MCP status, and a disabled-subsystem error contract (`{error,hint}` instead of empty success when Storage/Rules/Providers disabled). Closes the time-to-value gap surfaced in v0.2.0 first-run review.",
-      "priority": "medium",
-      "estimate": "",
-      "depends_on": [],
-      "feature_id": "first-run-activation-flow",
-      "origin": "heuristic",
-      "source": {}
-    },
-    {
       "id": "task-plan-based-cost-model",
       "title": "Implement Plan-Based Cost Model",
-      "description": "Implement the feature: Plan-Based Cost Model. Support flat-rate subscription plans (Claude Max, Claude Code Pro, ChatGPT Plus/Pro, Cursor, GitHub Copilot, Cody) where per-token cost is zero but quota matters. Design: PromptEvent gains `CostSource` enum (metered|plan_included|trial), config gets `plans: {provider: plan_name}` map. Spend engine: when CostSource=plan_included, CostUSD=0 and event counts toward quota tracker instead. New metrics: plan_quota_consumed_pct, plan_headroom_days, plan_overage_risk. Dashboard + CLI surface plan headroom alongside metered cost. Backward compat: events without CostSource default to \"metered\". Requires per-plan quota config (input/output tokens/month, rate-limit windows). Initial plan catalog: claude-max, claude-pro, claude-code-max, gpt-plus, gpt-pro, gpt-team, copilot-individual, copilot-business, cursor-pro, cursor-business.",
+      "description": "Implement the feature: Plan-Based Cost Model. Support flat-rate subscription plans (Claude Max, Claude Code Pro, ChatGPT Plus/Pro, Cursor, GitHub Copilot, Cody) where per-token cost is zero but quota matters. Design: PromptEvent gains `CostSource` enum (metered|plan_included|trial), config gets `plans: {provider: plan_name}` map. Spend engine: when CostSource=plan_included, CostUSD=0 and event counts toward quota tracker instead. New metrics: plan_quota_consumed_pct, plan_headroom_days, plan_overage_risk. CLI, MCP, and the local API surface plan headroom alongside metered cost. Backward compat: events without CostSource default to \"metered\". Requires per-plan quota config (input/output tokens/month, rate-limit windows). Initial plan catalog: claude-max, claude-pro, claude-code-max, gpt-plus, gpt-pro, gpt-team, copilot-individual, copilot-business, cursor-pro, cursor-business.",
       "priority": "medium",
       "estimate": "",
       "depends_on": [],
@@ -247,7 +225,7 @@
     {
       "id": "task-mcp-first-wedge:-session-budget-+-config-as-code",
       "title": "Implement MCP-First Wedge: Session Budget + Config-as-Code",
-      "description": "Implement the feature: MCP-First Wedge: Session Budget + Config-as-Code. Three-skill review converged: TokenOps targets wrong consumption surface (proxy traffic, but plan-based users go through Claude Code / Cursor MCP) and forces JSON-editing for config (Plans, Providers, Rules, OTel). The wedge bet is MCP-resident session observability + a config-as-code CLI primitive that replaces every text-edit-then-restart ritual. Ships: tokenops <subsystem> set verb pattern, MCP-side session traffic observer that counts Claude Code / Cursor MCP calls against plan windows, tokenops_session_budget MCP tool predicting next-2h headroom, structured error hints carrying exact next commands, customer-research scaffolding (interview script + tracker doc). Skips proxy work, optimizer expansion, dashboard polish until the wedge validates with 5 real users.",
+      "description": "Implement the feature: MCP-First Wedge: Session Budget + Config-as-Code. Historical MCP-first wedge proposal. Its session observer, configuration commands, headroom tool, structured hints, and help curation shipped. Browser-dashboard polish was not retained; native CLI/MCP/API surfaces are current.",
       "priority": "medium",
       "estimate": "",
       "depends_on": [],
@@ -256,20 +234,9 @@
       "source": {}
     },
     {
-      "id": "task-data-isolation-+-surface-polish",
-      "title": "Implement Data Isolation + Surface Polish",
-      "description": "Implement the feature: Data Isolation + Surface Polish. Five gaps surfaced from the full v0.7.1 demo. (1) Rules walker bails on permission-denied siblings under $HOME so analyze/conflicts/inject return null even when CLAUDE.md exists \u2014 pre-existing in-progress task. (2) Synthetic demo events mix with real proxy/MCP-session events in every analytics query; need source-tagging filter + a `--include-demo` opt-in. (3) Only plan_headroom + session_budget self-record session pings; the other 20 MCP tools don't, biasing the window count. Auto-wrap at registration so every tool call records. (4) 22 MCP tools surface flat with no curation; add tokenops_help that returns a \"start here\" subset. (5) Status/scorecard should expose real_vs_seeded counts so operators see signal vs synthetic ratio. Skips vendor /usage ingestion (waits for customer-discovery interview data).",
-      "priority": "medium",
-      "estimate": "",
-      "depends_on": [],
-      "feature_id": "data-isolation-+-surface-polish",
-      "origin": "heuristic",
-      "source": {}
-    },
-    {
       "id": "task-signal-quality-+-activation-honesty",
       "title": "Implement Signal Quality + Activation Honesty",
-      "description": "Implement the feature: Signal Quality + Activation Honesty. Four-skill consensus from the v0.8.1 review. UX, Product, AI, GTM converged on a single verdict: ship trust signals + activation honesty, then run customer interviews. Concretely: (1) every session_budget / plan_headroom response carries signal_quality {level, source, caveat, upgrade_paths} so operators see it is an MCP-ping heuristic, not real Claude turn data; (2) empty-state scorecard replaces F grade with a first-week activation checklist when no KPI is computed; (3) synthetic-data banner attaches to cost/headroom responses when source=demo dominates the window; (4) MCP serve file-watches config.yaml and hot-reloads on plan/provider changes, eliminating the only remaining \"leave the product to apply\" step; (5) deprecated claude-max alias migration shim so users pasting old docs see a renamed-to warning instead of an error; (6) outreach plan doc: 90-second Loom + Show HN + Discord cross-post + 25 founder DMs landing 10 real users by end-of-week. Customer interviews remain operator work (Roady tracks the task).",
+      "description": "Implement the feature: Signal Quality + Activation Honesty. Historical v0.8.1 review. Shipped signal-quality fields, honest empty-state scorecard guidance, config reload, and plan-alias migration. Demo-dominance banners and the time-bound outreach checklist are no longer current product requirements.",
       "priority": "medium",
       "estimate": "",
       "depends_on": [],
@@ -280,7 +247,7 @@
     {
       "id": "task-plan-auto-detection",
       "title": "Implement Plan Auto-Detection",
-      "description": "Implement the feature: Plan Auto-Detection. Instead of asking users to memorise catalog names (`tokenops plan set anthropic claude-max-20x`), detect their subscriptions automatically. Sniff Claude Code config (~/.claude*, claude_desktop_config.json), Cursor config, GitHub Copilot CLI status, common AI env vars (ANTHROPIC_API_KEY \u2192 likely API user; CLAUDE_CODE_OAUTH presence \u2192 likely Max plan; CURSOR_API_KEY \u2192 Cursor Pro/Business). Run during `tokenops init` as an interactive wizard: \"I see Claude Code installed. Are you on Max 5x, Max 20x, or Pro?\" Default-detect known signatures (e.g. Claude Code's $CLAUDE_CODE_ENTITLEMENT or session JWT scope) and bind without prompting when high-confidence. Fall through to a single-question prompt when uncertain. Bonus: rerun on `tokenops doctor` to catch new subscriptions added later. Acceptance: `tokenops init` correctly auto-binds at least Claude Max + Cursor Pro for a user who has both installed.",
+      "description": "Implement the feature: Plan Auto-Detection. Instead of asking users to memorise catalog names (`tokenops plan set anthropic claude-max-20x`), detect their subscriptions automatically. Sniff Claude Code config (~/.claude*, claude_desktop_config.json), Cursor config, GitHub Copilot CLI status, common AI env vars (ANTHROPIC_API_KEY → likely API user; CLAUDE_CODE_OAUTH presence → likely Max plan; CURSOR_API_KEY → Cursor Pro/Business). Run during `tokenops init` as an interactive wizard: \"I see Claude Code installed. Are you on Max 5x, Max 20x, or Pro?\" Default-detect known signatures (e.g. Claude Code's $CLAUDE_CODE_ENTITLEMENT or session JWT scope) and bind without prompting when high-confidence. Fall through to a single-question prompt when uncertain. Bonus: rerun on `tokenops doctor` to catch new subscriptions added later. Acceptance: `tokenops init` correctly auto-binds at least Claude Max + Cursor Pro for a user who has both installed.",
       "priority": "medium",
       "estimate": "",
       "depends_on": [],
@@ -290,8 +257,8 @@
     },
     {
       "id": "task-coaching-llm-auto-routing",
-      "title": "Start the coaching pipeline in the daemon",
-      "description": "Partially shipped, and the remaining half is the half that runs. The auto-routing decision table exists and works: internal/contexts/coaching/coaching/router.go picks the cheapest in-plan model per provider from the pricing table, with a stated reason. What does not exist is anything that starts the pipeline it feeds \u2014 coaching/pipeline.go:78-79 says so outright (\"the daemon does not start this pipeline today\"), and grep finds no coaching.Pipeline construction in internal/daemon or internal/cli. Tests inject fakes, so the package is green while the feature never runs in production. Wire the pipeline into the daemon's composition root with its Enricher, or remove the router and say the capability is not shipped.",
+      "title": "Implement Coaching LLM Auto-Routing",
+      "description": "Implement the feature: Coaching LLM Auto-Routing. Wire `llm.Backend` into `coaching.Pipeline` AND auto-pick the cheapest in-plan model for each configured plan. Decision table: Claude Max/Pro user → route coaching through their Anthropic session with `claude-haiku-4.5` (cheapest + included in plan, no extra cost); ChatGPT Plus/Pro/Team → route via gpt-5-mini equivalent through their account; GitHub Copilot user → use Copilot's bundled cheap model; Cursor user → use Cursor's bundled tier; no plan configured → fall back to local Ollama (llama3.2:3b default) if reachable; else disable coaching summaries with a one-line note (\"coaching is heuristic-only — bind a plan or run Ollama for natural-language summaries\"). Add `config.Coaching.LLM` section with explicit override (`auto` | `local:\u003cmodel\u003e` | `cloud:\u003cprovider\u003e:\u003cmodel\u003e`). CLI: `tokenops coach set-model auto|local:llama3.2|cloud:anthropic:claude-haiku-4.5`. Hot-reload picks up changes. Acceptance: user with `plans.anthropic=claude-max-20x` gets coaching summaries generated through their Claude session with haiku as the cheapest model, with no separate API key configured.",
       "priority": "medium",
       "estimate": "",
       "depends_on": [],
@@ -300,22 +267,11 @@
       "source": {}
     },
     {
-      "id": "task-interactive-mcp-ui-rendering",
-      "title": "Implement Interactive MCP UI Rendering",
-      "description": "Implement the feature: Interactive MCP UI Rendering. Today MCP tool responses are plain-text JSON. Three rendering tiers, ship in order: (1) Markdown summary + JSON appendix for every cost/headroom response so Desktop/Code/Cursor render styled tables and code blocks instead of brace soup; (2) Inline SVG sparklines for burn-rate and window-headroom charts returned as ResourceContent with MimeType=image/svg+xml \u2014 most MCP clients embed SVG inline today; (3) Interactive Vue+D3 dashboard returned as text/html ResourceContent \u2014 experimental, depends on client iframe support (Claude Desktop's evolving UI app spec, Cursor's panel). Build the Vue app under web/dashboard/ (already exists), bundle as a single-file HTML blob, serve via tokenops_dashboard MCP tool. Charts to ship first: window-burn sparkline, plan-quota gauge, real-vs-synthetic ratio donut. Acceptance: tokenops_session_budget renders as a styled markdown table in Claude Desktop; tokenops_dashboard returns an interactive D3 chart in clients that support html resources.",
-      "priority": "medium",
-      "estimate": "",
-      "depends_on": [],
-      "feature_id": "interactive-mcp-ui-rendering",
-      "origin": "heuristic",
-      "source": {}
-    },
-    {
       "id": "task-privacy-and-secret-hardening",
       "title": "Implement Privacy and Secret Hardening",
       "description": "Implement the feature: Privacy and Secret Hardening. Retained raw content is redacted and pruned: the fmt recovery store stops writing world-readable unredacted command output, retention covers more than the sqlite events table, and Config.Redacted gains a completeness test so a new secret field cannot leak by default. Secrets prefer platform credential stores; documented env-var injection either exists or the claim is removed.",
-      "priority": "high",
-      "estimate": "1w",
+      "priority": "medium",
+      "estimate": "",
       "depends_on": [],
       "feature_id": "privacy-and-secret-hardening",
       "origin": "heuristic",
@@ -325,8 +281,8 @@
       "id": "task-measurement-provenance",
       "title": "Implement Measurement Provenance",
       "description": "Implement the feature: Measurement Provenance. Every reported value carries source, confidence, observed-at and caveat. Unknown never silently becomes zero and estimated never becomes measured. Generalises the two existing patterns (plans.SignalQuality, modeltier.Basis) and closes the known silent conversions in the analytics aggregator, the proxy tokenizer path, and optimizer token-savings estimation.",
-      "priority": "high",
-      "estimate": "2w",
+      "priority": "medium",
+      "estimate": "",
       "depends_on": [],
       "feature_id": "measurement-provenance",
       "origin": "heuristic",
@@ -337,7 +293,7 @@
       "title": "Implement Observation Freshness as Health",
       "description": "Implement the feature: Observation Freshness as Health. Health distinguishes process alive from source reachable, ingestion active, data fresh, analysis current and control path operational. Per-source last-seen and last-successful-poll become data returned by CLI, MCP and HTTP rather than a derived warning string.",
       "priority": "medium",
-      "estimate": "1w",
+      "estimate": "",
       "depends_on": [],
       "feature_id": "observation-freshness-as-health",
       "origin": "heuristic",
@@ -347,8 +303,8 @@
       "id": "task-ai-work-domain-model",
       "title": "Implement AI Work Domain Model",
       "description": "Implement the feature: AI Work Domain Model. Domain-neutral Work, Actor, Execution and Outcome primitives. Work is something someone wants accomplished; an Execution is one attempt at it, so the same work can have several and be compared; an Outcome is what the work produced, distinct from what it consumed. No core abstraction may require AI work to mean software development: repositories, commits, files and coding sessions become evidence in adapters. Existing tasks and story reconstruction become the first adapter.",
-      "priority": "high",
-      "estimate": "3w",
+      "priority": "medium",
+      "estimate": "",
       "depends_on": [],
       "feature_id": "ai-work-domain-model",
       "origin": "heuristic",
@@ -357,12 +313,10 @@
     {
       "id": "task-interface-independent-capabilities",
       "title": "Implement Interface-Independent Capabilities",
-      "description": "Implement the feature: Interface-Independent Capabilities. CLI, MCP, dashboard and future adapters consume shared application capabilities instead of each implementing validation, orchestration and formatting. A capability owns its request model, validation, orchestration, result model, provenance and errors. An archlint rule constrains adapter to capability-layer imports so parity is architectural rather than manually coordinated.",
-      "priority": "high",
-      "estimate": "4w",
-      "depends_on": [
-        "task-ai-work-domain-model"
-      ],
+      "description": "Implement the feature: Interface-Independent Capabilities. CLI, MCP, local API and future adapters consume shared application capabilities instead of each implementing validation, orchestration and formatting. A capability owns its request model, validation, orchestration, result model, provenance and errors. An archlint rule constrains adapter to capability-layer imports so parity is architectural rather than manually coordinated.",
+      "priority": "medium",
+      "estimate": "",
+      "depends_on": [],
       "feature_id": "interface-independent-capabilities",
       "origin": "heuristic",
       "source": {}
@@ -371,13 +325,9 @@
       "id": "task-verification-and-experiment",
       "title": "Implement Verification and Experiment",
       "description": "Implement the feature: Verification and Experiment. An optimization recommendation is a hypothesis until measured. Interventions carry correlation identity linking recommended, applied, measured and verified. Baseline-versus-intervention comparison runs over real executions, reporting measured token, cost, latency and outcome change rather than tokens-removed times nominal price. The four existing control ladders unify into one policy concept: observe-only, recommend, require approval, automatic.",
-      "priority": "high",
-      "estimate": "3w",
-      "depends_on": [
-        "task-measurement-provenance",
-        "task-ai-work-domain-model",
-        "task-interface-independent-capabilities"
-      ],
+      "priority": "medium",
+      "estimate": "",
+      "depends_on": [],
       "feature_id": "verification-and-experiment",
       "origin": "heuristic",
       "source": {}
@@ -387,10 +337,8 @@
       "title": "Implement Canonical Event Consolidation",
       "description": "Implement the feature: Canonical Event Consolidation. One factual substrate. The parallel in-process domainevents type folds into the canonical envelope, which gains work, execution and actor association alongside its existing schema version, timestamp, source and correlation ids. Feature-specific ingestion paths that bypass the envelope are retired in favour of source to canonical event to multiple consumers.",
       "priority": "medium",
-      "estimate": "2w",
-      "depends_on": [
-        "task-ai-work-domain-model"
-      ],
+      "estimate": "",
+      "depends_on": [],
       "feature_id": "canonical-event-consolidation",
       "origin": "heuristic",
       "source": {}
@@ -400,7 +348,7 @@
       "title": "Implement Runtime Lifecycle Modules",
       "description": "Implement the feature: Runtime Lifecycle Modules. Daemon composition stays explicit but becomes modular. Runtime modules own initialization, startup, shutdown, health and background workers, replacing a single startup function that wires every subsystem inline and launches untracked goroutines nobody joins. Explicit compile-time composition; no dynamic plugin framework.",
       "priority": "medium",
-      "estimate": "1w",
+      "estimate": "",
       "depends_on": [],
       "feature_id": "runtime-lifecycle-modules",
       "origin": "heuristic",
@@ -410,8 +358,8 @@
       "id": "task-installed-product-verification",
       "title": "Implement Installed-Product Verification",
       "description": "Implement the feature: Installed-Product Verification. An end-to-end test drives the built artifact through init, daemon start, ingestion, canonical event persistence, work reconstruction, measurement, then CLI, MCP and API query. It validates semantic correctness: a healthy process with dead ingestion must fail the test.",
-      "priority": "high",
-      "estimate": "1w",
+      "priority": "medium",
+      "estimate": "",
       "depends_on": [],
       "feature_id": "installed-product-verification",
       "origin": "heuristic",
@@ -422,247 +370,45 @@
       "title": "Implement Intent-Oriented MCP Surface",
       "description": "Implement the feature: Intent-Oriented MCP Surface. Agents ask TokenOps for outcomes rather than knowing its internals. Intent operations compose granular internal capabilities so an agent can answer why it is consuming context or how to reduce a task's cost without detailed knowledge of dozens of low-level tools.",
       "priority": "medium",
-      "estimate": "1w",
-      "depends_on": [
-        "task-interface-independent-capabilities"
-      ],
+      "estimate": "",
+      "depends_on": [],
       "feature_id": "intent-oriented-mcp-surface",
       "origin": "heuristic",
       "source": {}
     },
     {
-      "id": "task-fra-demo-command",
-      "title": "Implement `tokenops demo` CLI seeder",
-      "description": "Add internal/cli demo subcommand. Seeds 7 days of synthetic events via existing pkg/eventschema + internal/storage/sqlite writer: ~50 requests/day across 3 models (claude-opus-4-7, claude-sonnet-4-6, gpt-4o), 2 providers, 4 workflow_ids, 3 agent_ids, realistic token + cost values. Includes a few budget.exceeded + optimization.applied events to populate scorecard. Flags: --days N (default 7), --reset to clear before seeding, --dry-run. Acceptance: after init+demo, tokenops_spend_summary returns nonzero, tokenops_top_consumers populated, tokenops_forecast has >=2 daily buckets, tokenops_scorecard reflects real data not synthetic defaults.",
-      "priority": "high",
-      "estimate": "5h",
-      "depends_on": [
-        "task-fra-init-command"
-      ],
-      "feature_id": "first-run-activation-flow",
-      "source": {}
-    },
-    {
-      "id": "mcp-server",
-      "title": "MCP server for TokenOps queries",
-      "description": "MCP server exposing spend, forecast, replay, optimization queries.",
+      "id": "task-collect-real-outcome-cohort",
+      "title": "Collect a real intervention/outcome cohort (Real-Work Outcome Validation)",
+      "description": "Use the current installed product on actual work, correlate an authorized intervention to measured executions, and capture only a human or recognized verifier outcome. Do not modify production data with fixtures, synthetic events, or guessed outcomes. Evaluate a causal comparison only when the evidence supports matched pairs; otherwise report the gap and remain observational.",
       "priority": "medium",
-      "estimate": "5h",
-      "depends_on": [
-        "analytics-aggregator",
-        "forecasting-core",
-        "replay-engine"
-      ],
-      "feature_id": "integrations",
+      "estimate": "",
+      "depends_on": [],
+      "feature_id": "production-outcome-validation",
+      "origin": "heuristic",
       "source": {}
     },
     {
-      "id": "proxy-tls",
-      "title": "TLS termination + self-signed cert",
-      "description": "Generate self-signed CA + leaf cert on first run. OS trust store guidance. HTTPS upstream forwarding with SNI.",
-      "priority": "high",
-      "estimate": "4h",
-      "depends_on": [
-        "proxy-skeleton"
-      ],
-      "feature_id": "tokenops-proxy",
-      "source": {}
-    },
-    {
-      "id": "anomaly-detector",
-      "title": "Spike anomaly detection",
-      "description": "Detect anomalous token spikes per workflow/user. Statistical baseline + deviation thresholds.",
+      "id": "task-shared-status-resource-work-insights",
+      "title": "Ship shared status, resource, and bounded work insights (Surface-Native Insights)",
+      "description": "Provide concise readiness/attention summaries across CLI and MCP, a resource glance composed from measured session budget and plan headroom, and bounded workflow insights based only on reconstructed traces and existing findings. Never infer task success or overall quality from absence of a finding. Delivered in PRs",
       "priority": "medium",
-      "estimate": "5h",
-      "depends_on": [
-        "analytics-aggregator"
-      ],
-      "feature_id": "forecasting-governance",
+      "estimate": "",
+      "depends_on": [],
+      "feature_id": "surface-native-insights",
+      "origin": "heuristic",
       "source": {}
     },
     {
-      "id": "task-pbc-spend-engine-cost-source",
-      "title": "Spend engine honors CostSource",
-      "description": "Update internal/contexts/spend/spend/engine.go so that PromptEvents with CostSource=plan_included have CostUSD set to 0 (overriding any per-token computation) and a separate plan_quota_tokens counter accrues. Trial = 0 cost, no quota. Backward compat: missing CostSource treated as metered. Update analytics aggregator queries: cost_usd remains the metered sum; new column/derived field `plan_quota_tokens` exposed. Acceptance: existing metered events unchanged; plan events register zero spend but full token consumption.",
-      "priority": "high",
-      "estimate": "4h",
-      "depends_on": [
-        "task-pbc-cost-source-field"
-      ],
-      "feature_id": "plan-based-cost-model",
-      "source": {}
-    },
-    {
-      "id": "task-dashboard-rotate-token",
-      "title": "tokenops dashboard rotate-token CLI",
-      "description": "Mint a fresh dashboard token, atomic-write to ~/.tokenops/dashboard.token, prompt operator to restart daemon for the new value to take effect. Acceptance: command idempotent; old token invalidated on next daemon start; --json emits new token for scripting.",
-      "priority": "medium",
-      "estimate": "1h",
-      "depends_on": null,
-      "feature_id": "dashboard",
-      "source": {}
-    },
-    {
-      "id": "task-rlw-docs-update",
-      "title": "Docs + CHANGELOG for window headroom",
-      "description": "Update README plan table + docs/plan-cost-model.md with new plan IDs, window semantics, and example output. CHANGELOG entry under Unreleased detailing schema changes (Plan.MessagesPerWindow, HeadroomReport.Window*).",
-      "priority": "medium",
-      "estimate": "1h",
-      "depends_on": [
-        "task-rlw-cli-mcp-render"
-      ],
-      "feature_id": "rate-limit-window-headroom",
-      "source": {}
-    },
-    {
-      "id": "task-rlw-catalog-split",
-      "title": "Split catalog: Claude Max 5x/20x + OpenAI window caps",
-      "description": "Replace generic claude-max with claude-max-5x (~50 msgs/5h) and claude-max-20x (~200-800 msgs/5h, use lower bound). Add claude-pro window cap (~45 msgs/5h). Add gpt-plus window cap (~80 msgs/3h on GPT-4o), gpt-team (~120 msgs/3h), gpt-pro (unpublished). Update SourceURLs with dated 2026-05 references. Update plans_test.go required-plan list. README and docs/plan-cost-model.md tables updated.",
-      "priority": "high",
-      "estimate": "2h",
-      "depends_on": [
-        "task-rlw-plan-schema"
-      ],
-      "feature_id": "rate-limit-window-headroom",
-      "source": {}
-    },
-    {
-      "id": "proxy-cache",
-      "title": "Response and embedding cache",
-      "description": "Content-hash keyed cache with TTL. Eviction policy. Cache hit metrics emitted. Bypass headers.",
-      "priority": "medium",
-      "estimate": "5h",
-      "depends_on": [
-        "proxy-events"
-      ],
-      "feature_id": "tokenops-proxy",
-      "source": {}
-    },
-    {
-      "id": "local-model-integ",
-      "title": "Local model integration via Ollama",
-      "description": "Pluggable local model backend for coaching. Default Ollama; OpenAI-compatible local servers also supported.",
-      "priority": "medium",
-      "estimate": "5h",
-      "depends_on": [
-        "async-pipeline"
-      ],
-      "feature_id": "coaching-engine",
-      "source": {}
-    },
-    {
-      "id": "rbac-scaffold",
-      "title": "RBAC scaffold",
-      "description": "Role definitions admin/operator/viewer. API surface aware of roles. Enforcement post-MVP.",
-      "priority": "low",
-      "estimate": "4h",
-      "depends_on": [
-        "dashboard-auth"
-      ],
-      "feature_id": "security-privacy",
-      "source": {}
-    },
-    {
-      "id": "integ-codex-cli",
-      "title": "Codex CLI integration",
-      "description": "Codex CLI env setup. Smoke test.",
-      "priority": "medium",
-      "estimate": "2h",
-      "depends_on": [
-        "sdk-shim-openai"
-      ],
-      "feature_id": "integrations",
-      "source": {}
-    },
-    {
-      "id": "replay-engine",
-      "title": "Session replay engine",
-      "description": "Reload past session, run optimizer in replay mode, side-by-side original vs optimized. Token + spend savings.",
-      "priority": "high",
-      "estimate": "6h",
-      "depends_on": [
-        "sqlite-store",
-        "opt-engine-core"
-      ],
-      "feature_id": "coaching-engine",
-      "source": {}
-    },
-    {
-      "id": "task-sig-empty-state-scorecard",
-      "title": "Empty-state scorecard: first-week checklist",
-      "description": "When LiveKPIs.FVTComputed=false AND TEUComputed=false AND SACComputed=false, scorecard.Build returns a Scorecard variant with OverallGrade=\"warming_up\" and a Checklist []ChecklistItem (description, completed bool, next_action). Items: (a) configure proxy provider, (b) wire optimizer for TEU > 0, (c) accumulate 7 days of attributed events. Don't fabricate an F grade from defaults. CLI/MCP renderers fall through to checklist. Tests: empty store -> checklist; one KPI computed -> grade returned. Acceptance: tokenops scorecard on a fresh install shows guidance, not F.",
+      "id": "sdk-shim-openai",
+      "title": "OpenAI SDK base-URL shim",
+      "description": "Drop-in OPENAI_BASE_URL override. Python + Node SDK docs. Auth passthrough validated.",
       "priority": "high",
       "estimate": "3h",
-      "depends_on": [],
-      "feature_id": "signal-quality-+-activation-honesty",
-      "source": {}
-    },
-    {
-      "id": "task-fra-init-command",
-      "title": "Implement `tokenops init` CLI wizard",
-      "description": "Add internal/cli init subcommand. Behaviour: detect existing config; if absent, write default config to platform path ($XDG_CONFIG_HOME/tokenops/config.yaml or ~/.config/tokenops/config.yaml on darwin/linux); enable Storage with sqlite path at $XDG_DATA_HOME/tokenops/db (or ~/.tokenops/db), enable Audit, enable Rules with Root=$PWD and RepoID=basename($PWD), keep TLS off, leave Providers empty (user adds later). Idempotent: re-running detects existing config and prints diff or no-op message. Flags: --force overwrite, --print-only dry-run. Acceptance: cmd/tokenops integration test runs init twice; second run reports no changes; resulting config passes Config.Load round-trip.",
-      "priority": "high",
-      "estimate": "4h",
-      "depends_on": [],
-      "feature_id": "first-run-activation-flow",
-      "source": {}
-    },
-    {
-      "id": "rules-compress",
-      "title": "Rule corpus compression (distillation)",
-      "description": "Compress large rule corpora into distilled behavioral representation. Semantic dedup + section pruning + minimum-viable instruction set. Reuses opt-prompt-compress primitives. Quality gate against rule benchmark.",
-      "priority": "high",
-      "estimate": "8h",
       "depends_on": [
-        "rules-analyzer",
-        "opt-prompt-compress",
-        "opt-dedupe"
+        "proxy-providers",
+        "proxy-tokenizer"
       ],
-      "feature_id": "rule-intelligence",
-      "source": {}
-    },
-    {
-      "id": "opt-retrieval-prune",
-      "title": "Retrieval chunk pruning",
-      "description": "Detect oversized retrieval contexts, prune by relevance score.",
-      "priority": "high",
-      "estimate": "5h",
-      "depends_on": [
-        "opt-engine-core"
-      ],
-      "feature_id": "optimization-engine",
-      "source": {}
-    },
-    {
-      "id": "task-copilot-api-client",
-      "title": "GitHub Copilot usage client (Phase 2)",
-      "description": "GET api.github.com/copilot_internal/user using OAuth token from ~/.config/github-copilot/hosts.json. Returns quota_snapshots {chat, premium_interactions, percent_remaining, reset}. Source: copilot-internal. signal_quality: HIGH.",
-      "priority": "high",
-      "estimate": "1d",
-      "depends_on": [
-        "task-claudecode-jsonl-reader"
-      ],
-      "feature_id": "vendor-usage",
-      "source": {}
-    },
-    {
-      "id": "task-dashboard-favicon",
-      "title": "Dashboard favicon + browser-tab title polish",
-      "description": "Embed a small SVG/ICO favicon into the dashboard HTML so browser tabs show a recognizable icon instead of the default globe. Acceptance: favicon visible in tab; HTML <head> gains <link rel=\"icon\">; no extra HTTP roundtrip (inline data URL).",
-      "priority": "low",
-      "estimate": "20m",
-      "depends_on": null,
-      "feature_id": "dashboard",
-      "source": {}
-    },
-    {
-      "id": "task-iso-rules-walker",
-      "title": "Fix rulesfs walker permission-denied tolerance",
-      "description": "Internal/infra/rulesfs/source.go Discover() bails on first WalkDir error, killing the walk when scanning $HOME hits permission-denied on ~/Library/Saved Application State / Containers etc. Fix: when err is fs.ErrPermission, return fs.SkipDir for directories, nil for files; otherwise propagate. Extend skip list (vendor, node_modules) with Library/, Containers/, .Trash/. Test in internal/infra/rulesfs/source_test.go with synthetic fs.FS injecting EACCES on a sibling. Acceptance: tokenops rules analyze --root ~ discovers ~/.claude/CLAUDE.md without exiting non-zero.",
-      "priority": "high",
-      "estimate": "2h",
-      "depends_on": [],
-      "feature_id": "data-isolation-+-surface-polish",
+      "feature_id": "integrations",
       "source": {}
     },
     {
@@ -678,202 +424,110 @@
       "source": {}
     },
     {
-      "id": "dashboard-auth",
-      "title": "Dashboard auth for self-hosted",
-      "description": "Local auth (admin password or token). Optional OIDC stub. Session management.",
-      "priority": "high",
-      "estimate": "4h",
+      "id": "clickhouse-schema",
+      "title": "ClickHouse schema and ingestion",
+      "description": "Schema for all event types. Direct insert or Kafka pipeline ingest. Materialized views.",
+      "priority": "medium",
+      "estimate": "6h",
       "depends_on": [
-        "dashboard-skeleton"
+        "event-schema"
       ],
-      "feature_id": "dashboard",
+      "feature_id": "data-telemetry",
       "source": {}
     },
     {
-      "id": "proxy-streaming",
-      "title": "SSE streaming passthrough",
-      "description": "Stream upstream SSE without buffering. Token counting on the fly. Backpressure and cancel propagation.",
+      "id": "task-rlw-plan-schema",
+      "title": "Extend Plan struct with window cap fields",
+      "description": "Add MessagesPerWindow int64 + WindowUnit string ('messages'|'requests') fields to internal/contexts/spend/plans.Plan. Existing RateLimitWindow stays. Update catalog test to assert each entry sets a coherent (Window, WindowCap, WindowUnit) tuple OR documents 'unpublished' explicitly. No catalog data changes in this task — just schema + validation.",
       "priority": "high",
-      "estimate": "5h",
-      "depends_on": [
-        "proxy-providers"
-      ],
-      "feature_id": "tokenops-proxy",
+      "estimate": "1h",
+      "depends_on": [],
+      "feature_id": "rate-limit-window-headroom",
       "source": {}
     },
     {
-      "id": "task-sig-synthetic-banner",
-      "title": "Synthetic-data banner on cost/headroom responses",
-      "description": "When the queried window contains source=demo events at > 10% of total event count, attach a top-level data_warning to spend_summary / top_consumers / burn_rate / forecast / plan_headroom / session_budget responses: {synthetic_ratio_pct, real_event_count, demo_event_count, hint: 'Synthetic events dominate. Disable demo with `tokenops demo --reset` or include via include_demo: true'}. Pure derivation; lives in analytics + plans layer. Acceptance: response carries data_warning only when synthetic>10% AND default exclude is in effect (include_demo=false).",
+      "id": "sdk-shim-anthropic",
+      "title": "Anthropic SDK base-URL shim",
+      "description": "ANTHROPIC_BASE_URL override. Streaming validation. Python + Node SDK docs.",
       "priority": "high",
       "estimate": "3h",
       "depends_on": [
-        "task-sig-signal-quality"
-      ],
-      "feature_id": "signal-quality-+-activation-honesty",
-      "source": {}
-    },
-    {
-      "id": "integ-claude-code",
-      "title": "Claude Code CLI integration",
-      "description": "Document and script Claude Code env setup pointing at TokenOps proxy. End-to-end smoke test.",
-      "priority": "high",
-      "estimate": "2h",
-      "depends_on": [
-        "sdk-shim-anthropic"
+        "proxy-providers",
+        "proxy-tokenizer",
+        "proxy-streaming"
       ],
       "feature_id": "integrations",
       "source": {}
     },
     {
-      "id": "task-iso-help-tool",
-      "title": "tokenops_help MCP tool with curated subset",
-      "description": "22 MCP tools flat with no grouping \u2014 Hick's law overload. Add tokenops_help returning {categories: [{name, description, tools: [{name, summary, example}]}]}. Categories: setup (init, plan_set, provider_set), cost (spend_summary, burn_rate, top_consumers, forecast), session (plan_headroom, session_budget, data_sources), workflow (workflow_trace, optimizations), rules (rules_analyze, rules_inject, rules_compress), debug (status, version, config, domain_events, audit). Acceptance: tokenops_help returns < 5KB JSON; every shipped tool appears in exactly one category; categories ordered by typical first-time use.",
-      "priority": "medium",
-      "estimate": "2h",
-      "depends_on": [],
-      "feature_id": "data-isolation-+-surface-polish",
-      "source": {}
-    },
-    {
-      "id": "dashboard-timeline",
-      "title": "Workflow timeline view",
-      "description": "Per-workflow step-by-step timeline. Context growth viz. Optimizations applied.",
-      "priority": "medium",
-      "estimate": "5h",
-      "depends_on": [
-        "dashboard-skeleton",
-        "workflow-trace"
-      ],
-      "feature_id": "dashboard",
-      "source": {}
-    },
-    {
-      "id": "opt-context-trim",
-      "title": "Context window trimming",
-      "description": "Configurable retention policies (system always, last N turns, summarize older).",
-      "priority": "medium",
-      "estimate": "5h",
-      "depends_on": [
-        "opt-engine-core"
-      ],
-      "feature_id": "optimization-engine",
-      "source": {}
-    },
-    {
-      "id": "task-wedge-session-budget-tool",
-      "title": "`tokenops_session_budget` MCP tool: 2h headroom prediction",
-      "description": "New MCP tool: given current window consumption + window duration + recent burn rate, predict whether the operator will hit the rate-limit cap within the next 2 hours. Returns {confidence: low|medium|high, will_hit_cap_within: duration, recommended_action: 'continue' | 'slow_down' | 'switch_model' | 'wait_for_reset', headroom_until_cap: duration}. Math: extrapolate the last 30min message rate against the remaining window cap. Pure function in internal/contexts/spend/plans/budget.go; MCP wrapper in internal/mcp/plan_tools.go. Tests cover empty-history, high-burn-imminent-cap, low-burn-safe scenarios. Acceptance: a Claude Code agent calling tokenops_session_budget mid-conversation gets actionable JSON without configuring anything beyond `tokenops plan set anthropic claude-max-20x`.",
+      "id": "task-coach-auto-model-picker",
+      "title": "Auto-pick cheapest in-plan model per configured plan",
+      "description": "internal/contexts/coaching/router.go: given Config.Plans, return (provider, model, endpoint, credential-source) tuple. Mapping: anthropic claude-max-* | claude-pro -\u003e (anthropic, claude-haiku-4.5, https://api.anthropic.com, plan-session); openai gpt-plus | gpt-team -\u003e (openai, gpt-5-mini, https://api.openai.com, plan-session); copilot-* -\u003e (github, copilot-cheap-default, https://api.github.com/copilot, plan-session); cursor-* -\u003e (cursor, cursor-cheap-default, cursor-endpoint, plan-session); none configured -\u003e (local, llama3.2:3b, http://127.0.0.1:11434, none) if Ollama reachable, else disable. Acceptance: unit tests for every plan name map to the right tuple.",
       "priority": "high",
       "estimate": "3h",
       "depends_on": [
-        "task-wedge-mcp-session-observer"
+        "task-coach-llm-wiring"
       ],
-      "feature_id": "mcp-first-wedge:-session-budget-+-config-as-code",
-      "source": {}
-    },
-    {
-      "id": "proxy-providers",
-      "title": "Provider routing for OpenAI Anthropic Gemini",
-      "description": "Reverse proxy with per-provider upstream config, base-URL rewriting, auth passthrough, normalization to canonical form.",
-      "priority": "high",
-      "estimate": "6h",
-      "depends_on": [
-        "proxy-skeleton"
-      ],
-      "feature_id": "tokenops-proxy",
-      "source": {}
-    },
-    {
-      "id": "async-pipeline",
-      "title": "Async coaching batch pipeline",
-      "description": "Queue expensive sessions for off-peak coaching. Concurrency and cost budget config.",
-      "priority": "medium",
-      "estimate": "5h",
-      "depends_on": [
-        "replay-engine"
-      ],
-      "feature_id": "coaching-engine",
-      "source": {}
-    },
-    {
-      "id": "task-ui-markdown-rendering",
-      "title": "Tier 1: markdown summary on cost/headroom MCP responses",
-      "description": "Every tokenops_spend_summary, tokenops_top_consumers, tokenops_burn_rate, tokenops_forecast, tokenops_plan_headroom, tokenops_session_budget response carries both: (a) human-friendly markdown summary as primary text content (renders styled in Desktop/Code/Cursor), (b) structured JSON appendix in a code block for agent parsing. Helper: mcp.markdownPayload(summaryMD string, structured any) returns the wrapped string. Smoke test in Claude Desktop: visible table rendering. Acceptance: tokenops_session_budget renders a styled table with window pct + recommended_action highlighted instead of brace soup.",
-      "priority": "medium",
-      "estimate": "4h",
-      "depends_on": [],
-      "feature_id": "interactive-mcp-ui-rendering",
-      "source": {}
-    },
-    {
-      "id": "proxy-skeleton",
-      "title": "Proxy daemon skeleton",
-      "description": "HTTP server, config loading, structured logging, graceful shutdown, health endpoint, lifecycle commands.",
-      "priority": "high",
-      "estimate": "6h",
-      "depends_on": [
-        "repo-bootstrap"
-      ],
-      "feature_id": "tokenops-proxy",
-      "source": {}
-    },
-    {
-      "id": "task-plan-catalog-mistral-codex",
-      "title": "Add Mistral Le Chat Pro + Codex Plus plan catalog entries",
-      "description": "Extend plans.Catalog with mistral-le-chat-pro + codex-plus rows (rate-limit windows, message caps, public source URL pins). Update DefaultTable in spend/pricing.go to include Mistral pricing for blended cost. Acceptance: tokenops plan list shows both; tokenops plan set mistral mistral-le-chat-pro succeeds.",
-      "priority": "medium",
-      "estimate": "1h",
-      "depends_on": null,
-      "feature_id": "plans",
-      "source": {}
-    },
-    {
-      "id": "task-ui-svg-sparklines",
-      "title": "Tier 2: SVG sparklines for burn rate + window headroom",
-      "description": "Add internal/mcp/render/svg.go: tiny SVG generator for sparkline (burn rate hourly) and bar (window consumed). Return as ResourceContent with MimeType=image/svg+xml alongside the JSON payload. mcp-go ResourceContent supports it directly. Smoke test: Claude Desktop renders the SVG inline below the tool response. Acceptance: tokenops_burn_rate returns an embedded sparkline that visualises the 24h cost series.",
-      "priority": "low",
-      "estimate": "5h",
-      "depends_on": [
-        "task-ui-markdown-rendering"
-      ],
-      "feature_id": "interactive-mcp-ui-rendering",
-      "source": {}
-    },
-    {
-      "id": "task-anthropic-cookie-usage",
-      "title": "claude.ai session-cookie /usage scraper (Phase 3)",
-      "description": "GET claude.ai/api/organizations/{org_id}/usage with sessionKey cookie. Returns five_hour + seven_day + seven_day_opus utilization_pct + reset_at. signal_quality: HIGH (Anthropic's own data) with ToS-grey caveat. Operator pastes cookie via tokenops anthropic cookie set.",
-      "priority": "medium",
-      "estimate": "2d",
-      "depends_on": [
-        "task-claudecode-jsonl-reader"
-      ],
-      "feature_id": "vendor-usage",
-      "source": {}
-    },
-    {
-      "id": "workflow-trace",
-      "title": "Workflow trace reconstruction",
-      "description": "Reconstruct multi-step workflow from prompt events. Context growth tracking.",
-      "priority": "high",
-      "estimate": "5h",
-      "depends_on": [
-        "analytics-aggregator"
-      ],
-      "feature_id": "observability-platform",
+      "feature_id": "coaching-llm-auto-routing",
       "source": {}
     },
     {
       "id": "task-pbc-config-plans-map",
       "title": "Add plans config + env override",
-      "description": "Extend internal/config: add Plans map[string]string (provider\u2192plan_name) read from `plans:` YAML block + TOKENOPS_PLAN_<PROVIDER> env vars. Validate plan names against the catalog at Config.Validate(); reject unknown plans with helpful error listing valid options. Acceptance: Config round-trip preserves Plans; invalid plan name fails Validate with listed alternatives.",
+      "description": "Extend internal/config: add Plans map[string]string (provider→plan_name) read from `plans:` YAML block + TOKENOPS_PLAN_\u003cPROVIDER\u003e env vars. Validate plan names against the catalog at Config.Validate(); reject unknown plans with helpful error listing valid options. Acceptance: Config round-trip preserves Plans; invalid plan name fails Validate with listed alternatives.",
       "priority": "high",
       "estimate": "2h",
       "depends_on": [
         "task-pbc-plan-catalog"
       ],
       "feature_id": "plan-based-cost-model",
+      "source": {}
+    },
+    {
+      "id": "openai-agents-mw",
+      "title": "OpenAI Agents SDK middleware",
+      "description": "Middleware integrating Agents SDK with TokenOps proxy and event emission.",
+      "priority": "medium",
+      "estimate": "4h",
+      "depends_on": [
+        "sdk-shim-openai"
+      ],
+      "feature_id": "integrations",
+      "source": {}
+    },
+    {
+      "id": "task-wedge-changelog-and-readme",
+      "title": "README + CHANGELOG sweep for wedge",
+      "description": "README quickstart updated to show `tokenops plan set` instead of env-var-or-JSON-edit instructions. Add a 'MCP-first usage' section: install → `tokenops init` → `tokenops plan set anthropic claude-max-20x` → connect MCP → `tokenops_session_budget` returns live data. CHANGELOG entry under Unreleased detailing the verb pattern + session observer + budget tool. docs/plan-cost-model.md updated to reflect that proxy is not the primary observation surface anymore.",
+      "priority": "medium",
+      "estimate": "1h",
+      "depends_on": [
+        "task-wedge-session-budget-tool",
+        "task-wedge-hint-sweep"
+      ],
+      "feature_id": "mcp-first-wedge:-session-budget-+-config-as-code",
+      "source": {}
+    },
+    {
+      "id": "task-sig-catalog-alias",
+      "title": "claude-max alias migration shim",
+      "description": "plans.Lookup honours a deprecation table: 'claude-max' -\u003e 'claude-max-20x' with a Deprecated flag. tokenops plan set 'claude-max' writes the modern name to config but stdout prints 'renamed claude-max -\u003e claude-max-20x (Max 20x default tier; override with --tier 5x to pick the 5x catalog entry)'. Catalog test asserts every deprecation maps to an existing modern name. Acceptance: stale docs / blog posts pasting 'claude-max' produce a useful config write, not an error.",
+      "priority": "medium",
+      "estimate": "2h",
+      "depends_on": [],
+      "feature_id": "signal-quality-+-activation-honesty",
+      "source": {}
+    },
+    {
+      "id": "audit-log",
+      "title": "Audit log of TokenOps actions",
+      "description": "Append-only audit log for config changes, optimization accepts, telemetry toggles.",
+      "priority": "medium",
+      "estimate": "3h",
+      "depends_on": [
+        "sqlite-store"
+      ],
+      "feature_id": "security-privacy",
       "source": {}
     },
     {
@@ -890,146 +544,85 @@
       "source": {}
     },
     {
-      "id": "task-sig-signal-quality",
-      "title": "signal_quality field on session_budget + plan_headroom",
-      "description": "Every SessionBudget + HeadroomReport gains a SignalQuality struct: Level (low|medium|high), Source (mcp_tool_pings|proxy_traffic|vendor_usage_api), Caveat (operator-facing one-sentence disclaimer), UpgradePaths ([]string). Today every response is Level=low / Source=mcp_tool_pings. When the proxy is wired (cfg.Providers non-empty) and proxy events outnumber mcp-session events, bump to high. Pure derivation in plans/signal.go. Update json struct tags. Tests for every level transition. Acceptance: response payload always carries signal_quality.level + signal_quality.caveat; agents can branch on the enum.",
-      "priority": "high",
-      "estimate": "3h",
-      "depends_on": [],
-      "feature_id": "signal-quality-+-activation-honesty",
-      "source": {}
-    },
-    {
-      "id": "task-pbc-headroom-metrics",
-      "title": "Plan headroom + overage metrics",
-      "description": "Add internal/contexts/spend/plans/headroom.go with HeadroomReport (PlanName, QuotaTokens, ConsumedTokens, ConsumedPct, HeadroomDays, OverageRisk). Computes ConsumedPct from current month's plan_quota_tokens vs catalog quota; HeadroomDays via linear extrapolation of last 7-day burn rate; OverageRisk=high when ConsumedPct>=80 AND HeadroomDays<remaining days in month. Acceptance: 80%+ consumption with 3 days left = high; <50% with full month left = low.",
+      "id": "integ-gemini-cli",
+      "title": "Gemini CLI integration",
+      "description": "Gemini CLI env setup. Smoke test.",
       "priority": "medium",
-      "estimate": "3h",
+      "estimate": "2h",
       "depends_on": [
-        "task-pbc-spend-engine-cost-source",
-        "task-pbc-config-plans-map"
+        "sdk-shim-gemini"
       ],
-      "feature_id": "plan-based-cost-model",
+      "feature_id": "integrations",
       "source": {}
     },
     {
-      "id": "opt-quality-gate",
-      "title": "Quality preservation gate",
-      "description": "Refuse optimization if predicted quality drop exceeds threshold. Lightweight scoring.",
+      "id": "rules-conflicts",
+      "title": "Rule conflict and redundancy detector",
+      "description": "Detect conflicting operational guidance (e.g., be concise vs explain thoroughly), duplicated instructions across rule sources, drift between AGENTS.md and CLAUDE.md. Output structured findings with rationale.",
       "priority": "medium",
-      "estimate": "4h",
-      "depends_on": [
-        "opt-engine-core"
-      ],
-      "feature_id": "optimization-engine",
-      "source": {}
-    },
-    {
-      "id": "task-iso-mcp-autowrap",
-      "title": "Auto-wrap MCP tools with session tracker",
-      "description": "Today only plan_headroom + session_budget call Tracker.Record. Investigate mcp-go middleware/hook API; if present, register one wrapper that fires for every tool invocation. If absent, expose a small helper mcp.RecordTool(d, toolName) that every Handler calls in one line at the top (consistent grep target). Acceptance: every tokenops_* MCP invocation lands as a session.Tracker ping; window_consumed advances on spend_summary calls etc.",
-      "priority": "high",
-      "estimate": "3h",
-      "depends_on": [],
-      "feature_id": "data-isolation-+-surface-polish",
-      "source": {}
-    },
-    {
-      "id": "task-cursor-api-client",
-      "title": "Cursor usage client (Phase 2)",
-      "description": "GET cursor.com/api/usage?user=<id> using WorkosCursorSessionToken cookie extracted from Cursor IDE local storage. Per-model request counts + monthly invoice. Source: cursor-web. signal_quality: HIGH but grey (cookie-based).",
-      "priority": "medium",
-      "estimate": "1d",
-      "depends_on": [
-        "task-claudecode-jsonl-reader"
-      ],
-      "feature_id": "vendor-usage",
-      "source": {}
-    },
-    {
-      "id": "opt-engine-core",
-      "title": "Optimization engine core",
-      "description": "Pluggable optimizer pipeline. Modes passive/interactive/replay. Latency budget enforcement.",
-      "priority": "high",
       "estimate": "5h",
       "depends_on": [
-        "proxy-providers",
-        "event-schema"
-      ],
-      "feature_id": "optimization-engine",
-      "source": {}
-    },
-    {
-      "id": "rules-analyzer",
-      "title": "Per-rule token cost + section breakdown",
-      "description": "Section-level token analysis: tokenize each rule block per provider, attribute tokens, expose density metrics. Emits RuleAnalysisEvent. CLI-friendly summaries.",
-      "priority": "high",
-      "estimate": "5h",
-      "depends_on": [
-        "rules-ingest",
-        "proxy-tokenizer"
+        "rules-analyzer"
       ],
       "feature_id": "rule-intelligence",
       "source": {}
     },
     {
-      "id": "task-rlw-window-consumption",
-      "title": "Window-bounded consumption reader",
-      "description": "Add ConsumptionInWindow(ctx, reader, provider, now, window) returning request count + token sum over the last `window` duration. Sibling to ConsumptionFor. Filters by CostSource=plan_included. Tests: 5h window, 3h window, no-events case, provider mismatch.",
+      "id": "task-wedge-hint-sweep",
+      "title": "Structured-error hint sweep: include exact next command",
+      "description": "Every `hint:` string in proxy/disabled.go, mcp/plan_tools.go, mcp/control_tools.go, daemon blockers must contain the literal command the user should run, not the variable name. e.g. swap 'set TOKENOPS_PLAN_\u003cPROVIDER\u003e' for 'run `tokenops plan set anthropic claude-max-20x`'. Also extend config.NextActionsFor to emit the new tokenops verbs. Tests in proxy/handlers_test.go and mcp/control_tools_test.go assert hint strings contain the verb. Acceptance: every disabled-subsystem path returns a hint a non-expert can copy/paste.",
       "priority": "high",
-      "estimate": "2h",
-      "depends_on": [
-        "task-rlw-plan-schema"
-      ],
-      "feature_id": "rate-limit-window-headroom",
-      "source": {}
-    },
-    {
-      "id": "dashboard-burn-graph",
-      "title": "Live burn graph",
-      "description": "Real-time token consumption chart. WebSocket/SSE. Filters per provider/model/workflow.",
-      "priority": "high",
-      "estimate": "5h",
-      "depends_on": [
-        "dashboard-skeleton"
-      ],
-      "feature_id": "dashboard",
-      "source": {}
-    },
-    {
-      "id": "task-wedge-changelog-and-readme",
-      "title": "README + CHANGELOG sweep for wedge",
-      "description": "README quickstart updated to show `tokenops plan set` instead of env-var-or-JSON-edit instructions. Add a 'MCP-first usage' section: install \u2192 `tokenops init` \u2192 `tokenops plan set anthropic claude-max-20x` \u2192 connect MCP \u2192 `tokenops_session_budget` returns live data. CHANGELOG entry under Unreleased detailing the verb pattern + session observer + budget tool. docs/plan-cost-model.md updated to reflect that proxy is not the primary observation surface anymore.",
-      "priority": "medium",
       "estimate": "1h",
       "depends_on": [
-        "task-wedge-session-budget-tool",
-        "task-wedge-hint-sweep"
+        "task-wedge-config-set-primitive"
       ],
       "feature_id": "mcp-first-wedge:-session-budget-+-config-as-code",
       "source": {}
     },
     {
-      "id": "task-coach-llm-wiring",
-      "title": "Wire llm.Backend into coaching.Pipeline with per-event summary",
-      "description": "Pipeline gains optional LLM field; when set, process() generates a 1-2 sentence natural-language summary of the CoachingEvent and stamps it onto the envelope (CoachingEvent.Summary string field, omitempty). When unset, pipeline behaves as today (heuristic-only). Test: fake Backend returns canned summary; assert envelope.Payload.(*CoachingEvent).Summary matches. Acceptance: pipeline test passes with both backends and a mock detector.",
+      "id": "rules-roi",
+      "title": "Rule ROI engine",
+      "description": "Compute rule ROI by joining RuleSource exposure with downstream PromptEvent and OptimizationEvent outcomes: tokens saved, retries avoided, context reduction, latency impact, quality drift. Time-windowed; per-workflow.",
       "priority": "high",
-      "estimate": "3h",
-      "depends_on": [],
-      "feature_id": "coaching-llm-auto-routing",
+      "estimate": "7h",
+      "depends_on": [
+        "rules-analyzer",
+        "analytics-aggregator",
+        "workflow-trace"
+      ],
+      "feature_id": "rule-intelligence",
       "source": {}
     },
     {
-      "id": "spend-engine",
-      "title": "Pricing tables and spend computation",
-      "description": "Per-provider pricing config (input/output rates by model). Live spend per event. Currency support.",
-      "priority": "high",
+      "id": "task-wedge-interview-script",
+      "title": "Customer interview scaffolding: 5-user discovery sprint",
+      "description": "Add docs/customer-discovery.md with: (1) story-based interview script (Torres methodology) targeting the struggling moment 'tell me about the last time you ran into a rate limit on your AI subscription', (2) a tracker template (markdown table) capturing date / handle / plan / what-they-tried / what-they-wished-existed / quote, (3) follow-up question banks for different paths (Claude Code session interrupted, Cursor cap, Copilot premium-request math, multi-provider workflow). This is research scaffolding, not code; it unblocks the maintainer doing the 5 interviews this week. Acceptance: doc reviewed by maintainer, interview script can be opened on a call without further prep.",
+      "priority": "medium",
+      "estimate": "1h",
+      "depends_on": [],
+      "feature_id": "mcp-first-wedge:-session-budget-+-config-as-code",
+      "source": {}
+    },
+    {
+      "id": "rbac-scaffold",
+      "title": "RBAC scaffold",
+      "description": "Role definitions admin/operator/viewer. API surface aware of roles. Enforcement post-MVP.",
+      "priority": "low",
       "estimate": "4h",
+      "depends_on": [],
+      "feature_id": "security-privacy",
+      "source": {}
+    },
+    {
+      "id": "opt-retrieval-prune",
+      "title": "Retrieval chunk pruning",
+      "description": "Detect oversized retrieval contexts, prune by relevance score.",
+      "priority": "high",
+      "estimate": "5h",
       "depends_on": [
-        "event-schema",
-        "sqlite-store"
+        "opt-engine-core"
       ],
-      "feature_id": "observability-platform",
+      "feature_id": "optimization-engine",
       "source": {}
     },
     {
@@ -1062,52 +655,75 @@
       "source": {}
     },
     {
-      "id": "sdk-shim-gemini",
-      "title": "Gemini SDK base-URL shim",
-      "description": "Gemini API base URL override. Streaming + non-streaming. SDK docs.",
+      "id": "async-pipeline",
+      "title": "Async coaching batch pipeline",
+      "description": "Queue expensive sessions for off-peak coaching. Concurrency and cost budget config.",
+      "priority": "medium",
+      "estimate": "5h",
+      "depends_on": [
+        "replay-engine"
+      ],
+      "feature_id": "coaching-engine",
+      "source": {}
+    },
+    {
+      "id": "redaction",
+      "title": "Prompt redaction and secret detection",
+      "description": "Pattern + entropy-based secret detection. Redaction layer applied before non-local emission. Configurable rules.",
+      "priority": "high",
+      "estimate": "6h",
+      "depends_on": [
+        "event-schema"
+      ],
+      "feature_id": "security-privacy",
+      "source": {}
+    },
+    {
+      "id": "retention-config",
+      "title": "Data retention configuration",
+      "description": "Configurable retention windows per event type. Background pruning job.",
       "priority": "medium",
       "estimate": "3h",
       "depends_on": [
-        "proxy-providers",
-        "proxy-tokenizer"
+        "sqlite-store"
       ],
-      "feature_id": "integrations",
+      "feature_id": "security-privacy",
       "source": {}
     },
     {
-      "id": "task-rlw-plan-schema",
-      "title": "Extend Plan struct with window cap fields",
-      "description": "Add MessagesPerWindow int64 + WindowUnit string ('messages'|'requests') fields to internal/contexts/spend/plans.Plan. Existing RateLimitWindow stays. Update catalog test to assert each entry sets a coherent (Window, WindowCap, WindowUnit) tuple OR documents 'unpublished' explicitly. No catalog data changes in this task \u2014 just schema + validation.",
-      "priority": "high",
-      "estimate": "1h",
-      "depends_on": [],
-      "feature_id": "rate-limit-window-headroom",
-      "source": {}
-    },
-    {
-      "id": "task-coach-auto-model-picker",
-      "title": "Auto-pick cheapest in-plan model per configured plan",
-      "description": "internal/contexts/coaching/router.go: given Config.Plans, return (provider, model, endpoint, credential-source) tuple. Mapping: anthropic claude-max-* | claude-pro -> (anthropic, claude-haiku-4.5, https://api.anthropic.com, plan-session); openai gpt-plus | gpt-team -> (openai, gpt-5-mini, https://api.openai.com, plan-session); copilot-* -> (github, copilot-cheap-default, https://api.github.com/copilot, plan-session); cursor-* -> (cursor, cursor-cheap-default, cursor-endpoint, plan-session); none configured -> (local, llama3.2:3b, http://127.0.0.1:11434, none) if Ollama reachable, else disable. Acceptance: unit tests for every plan name map to the right tuple.",
-      "priority": "high",
+      "id": "task-pbc-cli-mcp-surface",
+      "title": "CLI + MCP surface for plan headroom",
+      "description": "Add `tokenops plan` subcommand (list configured plans, show current headroom). Add `tokenops_plan_headroom` MCP tool returning HeadroomReport JSON. Update `tokenops scorecard` to include a Plan section when plans configured. Update `tokenops_spend_summary` to add `plan_included_tokens` alongside metered cost. Acceptance: CLI + MCP both render HeadroomReport; scorecard includes plan rows only when plans is non-empty.",
+      "priority": "medium",
       "estimate": "3h",
       "depends_on": [
-        "task-coach-llm-wiring"
+        "task-pbc-headroom-metrics"
       ],
-      "feature_id": "coaching-llm-auto-routing",
+      "feature_id": "plan-based-cost-model",
       "source": {}
     },
     {
-      "id": "sdk-shim-anthropic",
-      "title": "Anthropic SDK base-URL shim",
-      "description": "ANTHROPIC_BASE_URL override. Streaming validation. Python + Node SDK docs.",
+      "id": "sqlite-store",
+      "title": "SQLite local event store",
+      "description": "Local-first event persistence with migrations, batched writes, indices for workflow/agent/model queries.",
       "priority": "high",
-      "estimate": "3h",
+      "estimate": "6h",
       "depends_on": [
-        "proxy-providers",
-        "proxy-tokenizer",
-        "proxy-streaming"
+        "event-schema"
       ],
-      "feature_id": "integrations",
+      "feature_id": "data-telemetry",
+      "source": {}
+    },
+    {
+      "id": "opt-quality-gate",
+      "title": "Quality preservation gate",
+      "description": "Refuse optimization if predicted quality drop exceeds threshold. Lightweight scoring.",
+      "priority": "medium",
+      "estimate": "4h",
+      "depends_on": [
+        "opt-engine-core"
+      ],
+      "feature_id": "optimization-engine",
       "source": {}
     },
     {
@@ -1123,105 +739,9 @@
       "source": {}
     },
     {
-      "id": "task-fra-docs-quickstart",
-      "title": "Update README + docs quickstart for init/demo",
-      "description": "README + docs/operator-golden-path.md: replace manual config instructions with 3-command quickstart (install \u2192 tokenops init \u2192 tokenops demo \u2192 tokenops status). Reference blockers[] + next_actions[]. Add troubleshooting subsection pointing at structured errors. Acceptance: README first-run section reaches first scorecard within 3 commands; smoke-test via shell in CI optional.",
-      "priority": "medium",
-      "estimate": "1h",
-      "depends_on": [
-        "task-fra-demo-command",
-        "task-fra-disabled-error-contract"
-      ],
-      "feature_id": "first-run-activation-flow",
-      "source": {}
-    },
-    {
-      "id": "langchain-callback",
-      "title": "LangChain callback handler",
-      "description": "LangChain callback emitting TokenOps events. Python package. Examples + docs.",
-      "priority": "medium",
-      "estimate": "4h",
-      "depends_on": [
-        "sdk-shim-openai",
-        "sdk-shim-anthropic"
-      ],
-      "feature_id": "integrations",
-      "source": {}
-    },
-    {
-      "id": "opt-dedupe",
-      "title": "Semantic deduplication",
-      "description": "Detect and merge repeated context across turns. Embedding-based similarity. Threshold config.",
-      "priority": "high",
-      "estimate": "6h",
-      "depends_on": [
-        "opt-engine-core"
-      ],
-      "feature_id": "optimization-engine",
-      "source": {}
-    },
-    {
-      "id": "integ-gemini-cli",
-      "title": "Gemini CLI integration",
-      "description": "Gemini CLI env setup. Smoke test.",
-      "priority": "medium",
-      "estimate": "2h",
-      "depends_on": [
-        "sdk-shim-gemini"
-      ],
-      "feature_id": "integrations",
-      "source": {}
-    },
-    {
-      "id": "task-dashboard-stacked-area-model",
-      "title": "Per-model stacked area chart on dashboard cost panel",
-      "description": "When the model dropdown is set to All, render a stacked area chart per-model so operators see the contribution mix. Switches to a single line when a specific model is selected. Acceptance: model breakdown visible in cost panel; legend shows top 5 models; D3 colour scale stable across refreshes.",
-      "priority": "medium",
-      "estimate": "2h",
-      "depends_on": [
-        "task-dashboard-filter-localstorage"
-      ],
-      "feature_id": "dashboard",
-      "source": {}
-    },
-    {
-      "id": "audit-log",
-      "title": "Audit log of TokenOps actions",
-      "description": "Append-only audit log for config changes, optimization accepts, telemetry toggles.",
-      "priority": "medium",
-      "estimate": "3h",
-      "depends_on": [
-        "sqlite-store"
-      ],
-      "feature_id": "security-privacy",
-      "source": {}
-    },
-    {
-      "id": "task-dashboard-filter-localstorage",
-      "title": "Persist dashboard filter selections in localStorage",
-      "description": "When the operator picks a provider/model/window in the dashboard, persist the selection in localStorage and rehydrate on page load so a browser refresh keeps the chosen view. Acceptance: refresh preserves filter state across sessions; clearing localStorage resets to defaults.",
-      "priority": "low",
-      "estimate": "30m",
-      "depends_on": null,
-      "feature_id": "dashboard",
-      "source": {}
-    },
-    {
-      "id": "openai-agents-mw",
-      "title": "OpenAI Agents SDK middleware",
-      "description": "Middleware integrating Agents SDK with TokenOps proxy and event emission.",
-      "priority": "medium",
-      "estimate": "4h",
-      "depends_on": [
-        "sdk-shim-openai"
-      ],
-      "feature_id": "integrations",
-      "source": {}
-    },
-    {
       "id": "task-rlw-cli-mcp-render",
       "title": "CLI + MCP render window headroom",
-      "description": "Update tokenops plan headroom text output to include window line (e.g. '47/200 msgs/5h (24%) \u2014 resets in 2h13m'). tokenops_plan_headroom MCP response carries the new window_* fields. Smoke test: tokenops demo --plan claude-max-20x then headroom shows non-zero window_pct.",
+      "description": "Historical completed task. Window headroom is rendered by CLI and MCP. The old smoke test seeded data with a demo command that was removed in PR #387; current product validation must use isolated tests or actual local telemetry, never seeded product data.",
       "priority": "medium",
       "estimate": "2h",
       "depends_on": [
@@ -1231,137 +751,29 @@
       "source": {}
     },
     {
-      "id": "analytics-aggregator",
-      "title": "Per-agent/model/workflow aggregation",
-      "description": "Rollup queries over event store. Time-bucketed aggregates. Streaming updates for live views.",
-      "priority": "high",
-      "estimate": "6h",
-      "depends_on": [
-        "sqlite-store",
-        "spend-engine"
-      ],
-      "feature_id": "observability-platform",
-      "source": {}
-    },
-    {
-      "id": "dashboard-opt-list",
-      "title": "Optimization opportunities list",
-      "description": "List with savings estimate, accept/reject, one-click apply where safe.",
+      "id": "rules-otlp",
+      "title": "OTLP export of rule events",
+      "description": "Wire RuleSourceEvent + RuleAnalysisEvent into otel-exporter. Redaction enforced. Cardinality controls per source.",
       "priority": "medium",
-      "estimate": "5h",
-      "depends_on": [
-        "dashboard-skeleton",
-        "opt-engine-core"
-      ],
-      "feature_id": "dashboard",
-      "source": {}
-    },
-    {
-      "id": "task-pbc-plan-catalog",
-      "title": "Define plan catalog with quotas",
-      "description": "Create internal/contexts/spend/plans package. Provide Plan struct (Name, Provider, InputTokensPerMonth, OutputTokensPerMonth, RequestsPerMonth, RateLimitWindow). Seed catalog: claude-max, claude-pro, claude-code-max, claude-code-pro, gpt-plus, gpt-pro, gpt-team, copilot-individual, copilot-business, cursor-pro, cursor-business with publicly documented limits as of 2026-05. Each entry includes a source URL comment for verification. Acceptance: catalog test asserts every plan has positive quotas and a non-empty source comment.",
-      "priority": "high",
       "estimate": "3h",
-      "depends_on": [],
-      "feature_id": "plan-based-cost-model",
-      "source": {}
-    },
-    {
-      "id": "proxy-events",
-      "title": "Event emission from proxy",
-      "description": "Wire interception to event bus. Emit Prompt and Workflow events with tokens, latency, provider, model, hash, context size. Async non-blocking.",
-      "priority": "high",
-      "estimate": "4h",
       "depends_on": [
-        "proxy-tokenizer",
-        "event-schema",
-        "sqlite-store"
-      ],
-      "feature_id": "tokenops-proxy",
-      "source": {}
-    },
-    {
-      "id": "rules-roi",
-      "title": "Rule ROI engine",
-      "description": "Compute rule ROI by joining RuleSource exposure with downstream PromptEvent and OptimizationEvent outcomes: tokens saved, retries avoided, context reduction, latency impact, quality drift. Time-windowed; per-workflow.",
-      "priority": "high",
-      "estimate": "7h",
-      "depends_on": [
-        "rules-analyzer",
-        "analytics-aggregator",
-        "workflow-trace"
+        "rules-schema",
+        "otel-exporter",
+        "redaction"
       ],
       "feature_id": "rule-intelligence",
       "source": {}
     },
     {
-      "id": "task-sig-outreach-plan",
-      "title": "Launch outreach plan doc + 10-user tracker",
-      "description": "Add docs/launch-plan.md: 90-second Loom outline (script + 3 scenes), Show HN post body (title + first paragraph + first comment thread plant), Discord cross-post snippet for Claude Builders / Cursor / aider / AI Engineer Foundation, 25-founder DM template (parameterised with their last AI-workflow tweet). Sibling docs/launch-tracker.md with 10 rows ready to fill in: handle, channel, install confirmed, discovery-call booked, quote. This is research-shaped, not code-shaped. Acceptance: maintainer can open the doc and act on Day 1 without further prep.",
-      "priority": "high",
-      "estimate": "2h",
-      "depends_on": [],
-      "feature_id": "signal-quality-+-activation-honesty",
-      "source": {}
-    },
-    {
-      "id": "task-wedge-config-set-primitive",
-      "title": "Ship `tokenops plan set` + generalize to subsystem set",
-      "description": "Add `tokenops plan set <provider> <plan>` and `tokenops plan unset <provider>` that read the active config file, mutate Plans map, write back with comment preservation if possible (gopkg.in/yaml.v3 Node API). Detects config file via the same resolver init uses ($XDG_CONFIG_HOME/tokenops/config.yaml or ~/.config/tokenops/config.yaml). If config missing, prompts user to run `tokenops init`. Mirror the pattern (skeleton + helper) for `tokenops provider set|unset` and `tokenops rules set-root` in the same PR so the verb is established. Tests: round-trip set/unset, missing-config error, unknown-plan rejection (delegates to plans.Validate), idempotency. Acceptance: `tokenops plan set anthropic claude-max-20x` writes Plans.anthropic into config.yaml; subsequent `tokenops plan list` reflects it; restart of MCP server picks up the change.",
+      "id": "task-sig-synthetic-banner",
+      "title": "Historical seeded-data warning (retired with demo surfaces)",
+      "description": "Historical completed task only. This warning existed to explain seeded demo activity; the demo command and dashboard surfaces were removed in PR #387. Do not use this item to reintroduce synthetic product data or demo-specific UX.",
       "priority": "high",
       "estimate": "3h",
-      "depends_on": [],
-      "feature_id": "mcp-first-wedge:-session-budget-+-config-as-code",
-      "source": {}
-    },
-    {
-      "id": "task-iso-data-source-ratio",
-      "title": "Expose real vs synthetic event ratio",
-      "description": "Add tokenops_data_sources MCP tool + matching `tokenops data sources` CLI returning {source: count} for the active window. tokenops_status response gains a `data_sources` map alongside blockers/next_actions so operators see at-a-glance whether their headroom math is on real or seeded data. Acceptance: after tokenops demo, status shows {demo: 280, mcp-session: N}; after a real proxy request lands, the proxy bucket increments.",
-      "priority": "medium",
-      "estimate": "2h",
       "depends_on": [
-        "task-iso-source-filter"
+        "task-sig-signal-quality"
       ],
-      "feature_id": "data-isolation-+-surface-polish",
-      "source": {}
-    },
-    {
-      "id": "vscode-ext-mvp",
-      "title": "VSCode extension MVP",
-      "description": "Extension surfacing burn graph, optimization suggestions, replay link. Reuses dashboard data.",
-      "priority": "low",
-      "estimate": "8h",
-      "depends_on": [
-        "dashboard-burn-graph",
-        "cli-replay"
-      ],
-      "feature_id": "integrations",
-      "source": {}
-    },
-    {
-      "id": "task-pbc-demo-plan-mode",
-      "title": "Demo + docs for plan mode",
-      "description": "Add `--plan claude-max` (or similar) flag to `tokenops demo` so it emits PromptEvents with CostSource=plan_included for the chosen plan, demonstrating the headroom surface. Update README quickstart with a plan-mode example and add `docs/plan-cost-model.md` covering supported plans + how to add custom ones. Acceptance: `tokenops demo --plan claude-max && tokenops plan` prints non-zero ConsumedPct.",
-      "priority": "medium",
-      "estimate": "2h",
-      "depends_on": [
-        "task-pbc-cli-mcp-surface"
-      ],
-      "feature_id": "plan-based-cost-model",
-      "source": {}
-    },
-    {
-      "id": "budget-alerts",
-      "title": "Budget thresholds and alerts",
-      "description": "Configurable daily/weekly budget limits. CLI + dashboard notifications. Forecast-based early warning.",
-      "priority": "high",
-      "estimate": "4h",
-      "depends_on": [
-        "forecasting-core",
-        "spend-engine"
-      ],
-      "feature_id": "forecasting-governance",
+      "feature_id": "signal-quality-+-activation-honesty",
       "source": {}
     },
     {
@@ -1379,144 +791,63 @@
       "source": {}
     },
     {
-      "id": "dashboard-forecast",
-      "title": "Spend forecast charts",
-      "description": "Forecast chart with confidence bands. Budget overlay. Anomaly markers.",
-      "priority": "medium",
+      "id": "spend-engine",
+      "title": "Pricing tables and spend computation",
+      "description": "Per-provider pricing config (input/output rates by model). Live spend per event. Currency support.",
+      "priority": "high",
       "estimate": "4h",
       "depends_on": [
-        "dashboard-skeleton",
-        "forecasting-core",
-        "budget-alerts"
-      ],
-      "feature_id": "dashboard",
-      "source": {}
-    },
-    {
-      "id": "redaction",
-      "title": "Prompt redaction and secret detection",
-      "description": "Pattern + entropy-based secret detection. Redaction layer applied before non-local emission. Configurable rules.",
-      "priority": "high",
-      "estimate": "6h",
-      "depends_on": [
-        "event-schema"
-      ],
-      "feature_id": "security-privacy",
-      "source": {}
-    },
-    {
-      "id": "task-wedge-interview-script",
-      "title": "Customer interview scaffolding: 5-user discovery sprint",
-      "description": "Add docs/customer-discovery.md with: (1) story-based interview script (Torres methodology) targeting the struggling moment 'tell me about the last time you ran into a rate limit on your AI subscription', (2) a tracker template (markdown table) capturing date / handle / plan / what-they-tried / what-they-wished-existed / quote, (3) follow-up question banks for different paths (Claude Code session interrupted, Cursor cap, Copilot premium-request math, multi-provider workflow). This is research scaffolding, not code; it unblocks the maintainer doing the 5 interviews this week. Acceptance: doc reviewed by maintainer, interview script can be opened on a call without further prep.",
-      "priority": "medium",
-      "estimate": "1h",
-      "depends_on": [],
-      "feature_id": "mcp-first-wedge:-session-budget-+-config-as-code",
-      "source": {}
-    },
-    {
-      "id": "forecasting-core",
-      "title": "Token consumption forecasting",
-      "description": "Time-series forecast per user/workflow with confidence intervals. Holt-Winters or equivalent.",
-      "priority": "medium",
-      "estimate": "6h",
-      "depends_on": [
-        "analytics-aggregator"
-      ],
-      "feature_id": "forecasting-governance",
-      "source": {}
-    },
-    {
-      "id": "task-sig-changelog-readme",
-      "title": "CHANGELOG + README sweep for honesty cycle",
-      "description": "Unreleased entry covers signal_quality, empty-state checklist, synthetic banner, hot-reload, alias shim. README quickstart adds a one-line note: 'session_budget is an MCP-ping heuristic until you wire the proxy; the response payload tells you so.' docs/plan-cost-model.md cross-links signal_quality levels.",
-      "priority": "medium",
-      "estimate": "1h",
-      "depends_on": [
-        "task-sig-signal-quality",
-        "task-sig-empty-state-scorecard",
-        "task-sig-synthetic-banner",
-        "task-sig-mcp-hot-reload",
-        "task-sig-catalog-alias"
-      ],
-      "feature_id": "signal-quality-+-activation-honesty",
-      "source": {}
-    },
-    {
-      "id": "task-auto-detect-init-wizard",
-      "title": "tokenops init wizard: auto-detect installed AI clients + bind plans",
-      "description": "Replace the silent default config write with an interactive wizard. Detection signatures: Claude Code (~/.claude*, $CLAUDE_CODE_OAUTH, claude binary on PATH) -> ask Max 5x/20x/Pro; Claude Desktop (claude_desktop_config.json present) -> assume Max unless told otherwise; Cursor ($CURSOR_API_KEY or ~/.cursor/) -> ask Pro/Business; GitHub Copilot (gh extension list shows copilot, /tmp/.copilot tokens) -> ask Individual/Business; raw ANTHROPIC_API_KEY / OPENAI_API_KEY without OAuth -> API user, skip plan binding. --non-interactive flag skips prompts and writes only high-confidence detections. Acceptance: `tokenops init` on a machine with Claude Code + Cursor installed prompts once each and writes plans.anthropic + plans.cursor.",
-      "priority": "high",
-      "estimate": "5h",
-      "depends_on": [],
-      "feature_id": "plan-auto-detection",
-      "source": {}
-    },
-    {
-      "id": "otel-exporter",
-      "title": "OTLP telemetry exporter",
-      "description": "OpenTelemetry-compatible OTLP exporter for events and metrics. Opt-in. Respects redaction.",
-      "priority": "medium",
-      "estimate": "4h",
-      "depends_on": [
-        "proxy-events",
-        "redaction"
-      ],
-      "feature_id": "data-telemetry",
-      "source": {}
-    },
-    {
-      "id": "retention-config",
-      "title": "Data retention configuration",
-      "description": "Configurable retention windows per event type. Background pruning job.",
-      "priority": "medium",
-      "estimate": "3h",
-      "depends_on": [
+        "event-schema",
         "sqlite-store"
       ],
-      "feature_id": "security-privacy",
+      "feature_id": "observability-platform",
       "source": {}
     },
     {
-      "id": "task-iso-source-filter",
-      "title": "Filter synthetic demo events from default analytics",
-      "description": "Analytics queries (spend/burn/top/forecast/scorecard) currently mix Source=demo with Source=proxy/mcp-session. Add a Filter.IncludeSources whitelist (default proxy+mcp-session+otlp; demo excluded). Surface --include-demo flag on CLI subcommands and a per-tool input on relevant MCP tools. Acceptance: after tokenops demo seeds 280 events, tokenops_spend_summary returns 0 by default; same call with include_demo=true returns the seeded total. Real events from proxy/MCP-session bypass the filter.",
-      "priority": "high",
-      "estimate": "4h",
-      "depends_on": [],
-      "feature_id": "data-isolation-+-surface-polish",
-      "source": {}
-    },
-    {
-      "id": "rules-conflicts",
-      "title": "Rule conflict and redundancy detector",
-      "description": "Detect conflicting operational guidance (e.g., be concise vs explain thoroughly), duplicated instructions across rule sources, drift between AGENTS.md and CLAUDE.md. Output structured findings with rationale.",
+      "id": "proxy-cache",
+      "title": "Response and embedding cache",
+      "description": "Content-hash keyed cache with TTL. Eviction policy. Cache hit metrics emitted. Bypass headers.",
       "priority": "medium",
       "estimate": "5h",
       "depends_on": [
-        "rules-analyzer"
+        "proxy-events"
       ],
-      "feature_id": "rule-intelligence",
+      "feature_id": "tokenops-proxy",
       "source": {}
     },
     {
-      "id": "task-claudecode-jsonl-reader",
-      "title": "Claude Code JSONL reader (Phase 1, replaces stats-cache)",
-      "description": "New poller that parses ~/.claude/projects/**/*.jsonl and emits one PromptEvent per assistant turn with real per-turn token counts from message.usage. Dedupes by Anthropic message ID across concurrent sessions. Source tag: claude-code-jsonl. signal_quality: HIGH (real data). Replaces (deprecates but keeps working) the stats-cache poller from v0.10.2.",
+      "id": "waste-detector",
+      "title": "Waste pattern detector",
+      "description": "Detect duplicate context, oversized retrieval, redundant system prompts, recursive agent loops.",
       "priority": "high",
-      "estimate": "1d",
-      "depends_on": null,
-      "feature_id": "vendor-usage",
-      "source": {}
-    },
-    {
-      "id": "proxy-tokenizer",
-      "title": "Per-provider tokenizer adapters",
-      "description": "tiktoken (OpenAI), Anthropic tokenizer, Gemini tokenizer behind common interface. Pre-request and post-response counting.",
-      "priority": "high",
-      "estimate": "5h",
+      "estimate": "6h",
       "depends_on": [
-        "proxy-providers"
+        "analytics-aggregator",
+        "workflow-trace"
+      ],
+      "feature_id": "coaching-engine",
+      "source": {}
+    },
+    {
+      "id": "integ-claude-code",
+      "title": "Claude Code CLI integration",
+      "description": "Document and script Claude Code env setup pointing at TokenOps proxy. End-to-end smoke test.",
+      "priority": "high",
+      "estimate": "2h",
+      "depends_on": [
+        "sdk-shim-anthropic"
+      ],
+      "feature_id": "integrations",
+      "source": {}
+    },
+    {
+      "id": "proxy-skeleton",
+      "title": "Proxy daemon skeleton",
+      "description": "HTTP server, config loading, structured logging, graceful shutdown, health endpoint, lifecycle commands.",
+      "priority": "high",
+      "estimate": "6h",
+      "depends_on": [
+        "repo-bootstrap"
       ],
       "feature_id": "tokenops-proxy",
       "source": {}
@@ -1536,243 +867,99 @@
       "source": {}
     },
     {
-      "id": "task-fra-disabled-error-contract",
-      "title": "Disabled-subsystem structured error contract",
-      "description": "When Storage.Enabled=false: tokenops_spend_summary, tokenops_burn_rate, tokenops_forecast, tokenops_top_consumers, tokenops_audit, tokenops_domain_events return {\"error\":\"storage_disabled\",\"hint\":\"run `tokenops init` then restart daemon\"} with non-success status code on HTTP, MCP error envelope. Same pattern for Rules.Enabled=false (rules_* tools) and Providers=nil (proxy routes). Tests cover each gated path. Acceptance: no MCP tool returns empty success when its subsystem is disabled.",
+      "id": "task-wedge-session-budget-tool",
+      "title": "`tokenops_session_budget` MCP tool: 2h headroom prediction",
+      "description": "New MCP tool: given current window consumption + window duration + recent burn rate, predict whether the operator will hit the rate-limit cap within the next 2 hours. Returns {confidence: low|medium|high, will_hit_cap_within: duration, recommended_action: 'continue' | 'slow_down' | 'switch_model' | 'wait_for_reset', headroom_until_cap: duration}. Math: extrapolate the last 30min message rate against the remaining window cap. Pure function in internal/contexts/spend/plans/budget.go; MCP wrapper in internal/mcp/plan_tools.go. Tests cover empty-history, high-burn-imminent-cap, low-burn-safe scenarios. Acceptance: a Claude Code agent calling tokenops_session_budget mid-conversation gets actionable JSON without configuring anything beyond `tokenops plan set anthropic claude-max-20x`.",
       "priority": "high",
       "estimate": "3h",
       "depends_on": [
-        "task-fra-status-blockers"
-      ],
-      "feature_id": "first-run-activation-flow",
-      "source": {}
-    },
-    {
-      "id": "task-pbc-cost-source-field",
-      "title": "Add CostSource field to PromptEvent",
-      "description": "Extend pkg/eventschema/prompt.go with `CostSource` enum: `metered` (default), `plan_included`, `trial`. Add JSON tag with omitempty when metered so old envelopes round-trip unchanged. Bump eventschema schema version + add golden test in pkg/eventschema/golden_test.go covering all three values. Acceptance: existing events deserialize without error; new field round-trips; schema version bumped consistently across CHANGELOG + version.go.",
-      "priority": "high",
-      "estimate": "2h",
-      "depends_on": [],
-      "feature_id": "plan-based-cost-model",
-      "source": {}
-    },
-    {
-      "id": "task-fra-status-blockers",
-      "title": "Add blockers[] + next_actions[] to status",
-      "description": "Extend internal/daemon (or wherever /healthz, /readyz, /version, MCP status are wired) so status responses include: blockers []string (e.g., \"storage_disabled\", \"providers_unconfigured\", \"rules_disabled\") and next_actions []string (e.g., \"run `tokenops init`\"). Derive from Config struct. Unit tests for each blocker state. Acceptance: tokenops_status MCP response returns populated arrays when subsystems off; empty when all healthy; /readyz HTTP exposes same JSON shape.",
-      "priority": "high",
-      "estimate": "2h",
-      "depends_on": [],
-      "feature_id": "first-run-activation-flow",
-      "source": {}
-    },
-    {
-      "id": "rules-mcp",
-      "title": "MCP server endpoints for rules",
-      "description": "Expose rules.analyze, rules.conflicts, rules.compress, rules.inject, rules.bench over MCP. Read-only; respects redaction.",
-      "priority": "medium",
-      "estimate": "4h",
-      "depends_on": [
-        "mcp-server",
-        "rules-roi",
-        "rules-conflicts",
-        "rules-router"
-      ],
-      "feature_id": "rule-intelligence",
-      "source": {}
-    },
-    {
-      "id": "task-rlw-window-headroom-math",
-      "title": "Extend HeadroomReport with window fields",
-      "description": "HeadroomReport gains WindowConsumed, WindowCap, WindowPct, WindowResetsAt, WindowUnit fields (json: window_*). ComputeHeadroom accepts a new HeadroomInputs.WindowConsumed. Risk classifier prefers window signal when monthly cap absent: window_pct>=80 = high, >=60 = medium. Update headroom_test.go with 3 new scenarios.",
-      "priority": "high",
-      "estimate": "2h",
-      "depends_on": [
-        "task-rlw-window-consumption",
-        "task-rlw-catalog-split"
-      ],
-      "feature_id": "rate-limit-window-headroom",
-      "source": {}
-    },
-    {
-      "id": "cli-skeleton",
-      "title": "CLI skeleton with cobra",
-      "description": "Cobra CLI. Daemon lifecycle. Config (file + env + flags). Cross-platform binaries.",
-      "priority": "high",
-      "estimate": "5h",
-      "depends_on": [
-        "proxy-skeleton"
-      ],
-      "feature_id": "cli",
-      "source": {}
-    },
-    {
-      "id": "efficiency-score",
-      "title": "Efficiency scoring algorithm",
-      "description": "Score per workflow/agent/user. Combines waste signals. Progression over time.",
-      "priority": "medium",
-      "estimate": "5h",
-      "depends_on": [
-        "analytics-aggregator"
-      ],
-      "feature_id": "observability-platform",
-      "source": {}
-    },
-    {
-      "id": "clickhouse-schema",
-      "title": "ClickHouse schema and ingestion",
-      "description": "Schema for all event types. Direct insert or Kafka pipeline ingest. Materialized views.",
-      "priority": "medium",
-      "estimate": "6h",
-      "depends_on": [
-        "event-schema"
-      ],
-      "feature_id": "data-telemetry",
-      "source": {}
-    },
-    {
-      "id": "opt-router",
-      "title": "Adaptive model routing",
-      "description": "Cost/latency/quality-aware routing. Configurable policy. Fallback chains. Routing decisions emitted.",
-      "priority": "medium",
-      "estimate": "6h",
-      "depends_on": [
-        "opt-engine-core",
-        "proxy-providers"
-      ],
-      "feature_id": "optimization-engine",
-      "source": {}
-    },
-    {
-      "id": "dashboard-skeleton",
-      "title": "Vue dashboard scaffold",
-      "description": "Vue 3 + Vite app, build, dev server, routing, layout, design tokens. API client for proxy daemon.",
-      "priority": "high",
-      "estimate": "5h",
-      "depends_on": [
-        "analytics-aggregator"
-      ],
-      "feature_id": "dashboard",
-      "source": {}
-    },
-    {
-      "id": "task-vendor-usage-backfill",
-      "title": "tokenops vendor-usage backfill --hours N",
-      "description": "One-shot CLI command that calls Anthropic Admin API for [now-N, now] and inserts the bucket events into the local store. Used on first config so the operator sees history immediately instead of waiting for the 5-min poll loop to fill in. Acceptance: command honours config.vendor_usage.anthropic.admin_key; dry-run mode prints what would be inserted; respects existing store dedup on envelope ID.",
-      "priority": "medium",
-      "estimate": "2h",
-      "depends_on": null,
-      "feature_id": "vendor-usage",
-      "source": {}
-    },
-    {
-      "id": "task-iso-docs",
-      "title": "CHANGELOG + README sweep for isolation cycle",
-      "description": "Document --include-demo opt-in, the new tokenops_help tool, the data-sources surface, and the rules walker fix. README quickstart adds 'real vs synthetic data' note: tokenops demo's output is opt-in for analytics by default.",
-      "priority": "medium",
-      "estimate": "1h",
-      "depends_on": [
-        "task-iso-source-filter",
-        "task-iso-data-source-ratio",
-        "task-iso-mcp-autowrap",
-        "task-iso-help-tool"
-      ],
-      "feature_id": "data-isolation-+-surface-polish",
-      "source": {}
-    },
-    {
-      "id": "proxy-bench",
-      "title": "Proxy overhead benchmark",
-      "description": "Benchmark harness for typical request mix. Validate sub-50ms p99. CI regression gate.",
-      "priority": "high",
-      "estimate": "4h",
-      "depends_on": [
-        "proxy-events"
-      ],
-      "feature_id": "tokenops-proxy",
-      "source": {}
-    },
-    {
-      "id": "sqlite-store",
-      "title": "SQLite local event store",
-      "description": "Local-first event persistence with migrations, batched writes, indices for workflow/agent/model queries.",
-      "priority": "high",
-      "estimate": "6h",
-      "depends_on": [
-        "event-schema"
-      ],
-      "feature_id": "data-telemetry",
-      "source": {}
-    },
-    {
-      "id": "task-wedge-hint-sweep",
-      "title": "Structured-error hint sweep: include exact next command",
-      "description": "Every `hint:` string in proxy/disabled.go, mcp/plan_tools.go, mcp/control_tools.go, daemon blockers must contain the literal command the user should run, not the variable name. e.g. swap 'set TOKENOPS_PLAN_<PROVIDER>' for 'run `tokenops plan set anthropic claude-max-20x`'. Also extend config.NextActionsFor to emit the new tokenops verbs. Tests in proxy/handlers_test.go and mcp/control_tools_test.go assert hint strings contain the verb. Acceptance: every disabled-subsystem path returns a hint a non-expert can copy/paste.",
-      "priority": "high",
-      "estimate": "1h",
-      "depends_on": [
-        "task-wedge-config-set-primitive"
+        "task-wedge-mcp-session-observer"
       ],
       "feature_id": "mcp-first-wedge:-session-budget-+-config-as-code",
       "source": {}
     },
     {
-      "id": "task-ui-vue-d3-dashboard",
-      "title": "Tier 3: interactive Vue+D3 dashboard via MCP html resource",
-      "description": "Bundle the existing web/dashboard Vue app as a single-file HTML blob (Vite single-file plugin). Return via new tokenops_dashboard MCP tool as ResourceContent with MimeType=text/html. Embed D3 charts: window-burn sparkline, plan-quota gauge, real-vs-synthetic ratio donut. EXPERIMENTAL \u2014 depends on client iframe support. Acceptance: tokenops_dashboard renders in at least one MCP client (likely Claude Desktop) with an interactive chart.",
-      "priority": "low",
-      "estimate": "8h",
+      "id": "replay-engine",
+      "title": "Session replay engine",
+      "description": "Reload past session, run optimizer in replay mode, side-by-side original vs optimized. Token + spend savings.",
+      "priority": "high",
+      "estimate": "6h",
       "depends_on": [
-        "task-ui-svg-sparklines"
+        "sqlite-store",
+        "opt-engine-core"
       ],
-      "feature_id": "interactive-mcp-ui-rendering",
+      "feature_id": "coaching-engine",
       "source": {}
     },
     {
-      "id": "task-sig-catalog-alias",
-      "title": "claude-max alias migration shim",
-      "description": "plans.Lookup honours a deprecation table: 'claude-max' -> 'claude-max-20x' with a Deprecated flag. tokenops plan set 'claude-max' writes the modern name to config but stdout prints 'renamed claude-max -> claude-max-20x (Max 20x default tier; override with --tier 5x to pick the 5x catalog entry)'. Catalog test asserts every deprecation maps to an existing modern name. Acceptance: stale docs / blog posts pasting 'claude-max' produce a useful config write, not an error.",
-      "priority": "medium",
-      "estimate": "2h",
-      "depends_on": [],
-      "feature_id": "signal-quality-+-activation-honesty",
-      "source": {}
-    },
-    {
-      "id": "task-coach-config-surface",
-      "title": "Coaching LLM config + CLI override",
-      "description": "config.Coaching.LLM block: Mode (auto|local|cloud|off), Backend overrides. CLI: tokenops coach set-model {auto|local:<model>|cloud:<provider>:<model>|off}. Hot-reload picks up changes. Acceptance: `tokenops coach set-model local:llama3.2:3b` writes config; coaching switches to local on next pipeline tick.",
+      "id": "task-pbc-demo-plan-mode",
+      "title": "Historical demo plan-mode fixture (retired)",
+      "description": "Historical completed task only. Its tokenops demo fixture was removed in PR #387 and must not be recreated. Plan-cost semantics remain covered by isolated tests and genuine provider/session telemetry.",
       "priority": "medium",
       "estimate": "2h",
       "depends_on": [
-        "task-coach-auto-model-picker"
+        "task-pbc-cli-mcp-surface"
       ],
-      "feature_id": "coaching-llm-auto-routing",
+      "feature_id": "plan-based-cost-model",
       "source": {}
     },
     {
-      "id": "dashboard-heatmap",
-      "title": "Token heatmap",
-      "description": "Heatmap by workflow/agent/model. Drilldown to timeline.",
-      "priority": "medium",
-      "estimate": "4h",
+      "id": "proxy-streaming",
+      "title": "SSE streaming passthrough",
+      "description": "Stream upstream SSE without buffering. Token counting on the fly. Backpressure and cancel propagation.",
+      "priority": "high",
+      "estimate": "5h",
       "depends_on": [
-        "dashboard-skeleton"
+        "proxy-providers"
       ],
-      "feature_id": "dashboard",
+      "feature_id": "tokenops-proxy",
       "source": {}
     },
     {
-      "id": "rules-otlp",
-      "title": "OTLP export of rule events",
-      "description": "Wire RuleSourceEvent + RuleAnalysisEvent into otel-exporter. Redaction enforced. Cardinality controls per source.",
+      "id": "anomaly-detector",
+      "title": "Spike anomaly detection",
+      "description": "Detect anomalous token spikes per workflow/user. Statistical baseline + deviation thresholds.",
       "priority": "medium",
-      "estimate": "3h",
+      "estimate": "5h",
       "depends_on": [
-        "rules-schema",
-        "otel-exporter",
-        "redaction"
+        "analytics-aggregator"
+      ],
+      "feature_id": "forecasting-governance",
+      "source": {}
+    },
+    {
+      "id": "proxy-tokenizer",
+      "title": "Per-provider tokenizer adapters",
+      "description": "tiktoken (OpenAI), Anthropic tokenizer, Gemini tokenizer behind common interface. Pre-request and post-response counting.",
+      "priority": "high",
+      "estimate": "5h",
+      "depends_on": [
+        "proxy-providers"
+      ],
+      "feature_id": "tokenops-proxy",
+      "source": {}
+    },
+    {
+      "id": "local-model-integ",
+      "title": "Local model integration via Ollama",
+      "description": "Pluggable local model backend for coaching. Default Ollama; OpenAI-compatible local servers also supported.",
+      "priority": "medium",
+      "estimate": "5h",
+      "depends_on": [
+        "async-pipeline"
+      ],
+      "feature_id": "coaching-engine",
+      "source": {}
+    },
+    {
+      "id": "rules-analyzer",
+      "title": "Per-rule token cost + section breakdown",
+      "description": "Section-level token analysis: tokenize each rule block per provider, attribute tokens, expose density metrics. Emits RuleAnalysisEvent. CLI-friendly summaries.",
+      "priority": "high",
+      "estimate": "5h",
+      "depends_on": [
+        "rules-ingest",
+        "proxy-tokenizer"
       ],
       "feature_id": "rule-intelligence",
       "source": {}
@@ -1790,87 +977,227 @@
       "source": {}
     },
     {
-      "id": "task-codex-jsonl-reader",
-      "title": "Codex CLI JSONL reader (Phase 2)",
-      "description": "Parses ~/.codex/sessions/*.jsonl. Same pattern as Claude Code JSONL \u2014 per-turn usage block. Source: codex-jsonl. Maps to ProviderOpenAI + Codex Plus plan.",
-      "priority": "high",
-      "estimate": "1d",
-      "depends_on": [
-        "task-claudecode-jsonl-reader"
-      ],
-      "feature_id": "vendor-usage",
-      "source": {}
-    },
-    {
-      "id": "task-include-demo-split",
-      "title": "Split --include-demo into per-source opt-in flags",
-      "description": "Today --include-demo on CLI + include_demo on MCP clears the entire ExcludeSources list, so it also surfaces mcp-session pings \u2014 operators meaning 'show me synthetic seeds' get the activity-proxy events folded in too. Split into --include-source=demo,mcp-session,replay (CLI repeatable flag) plus include_sources []string on MCP tool inputs. Keep --include-demo as a back-compat alias that expands to --include-source=demo. Update analytics.Filter resolution: caller-supplied includes are union'd against DefaultExcludedSources. Acceptance: tokenops spend --include-source=demo surfaces demo events only; --include-source=demo,mcp-session surfaces both; bare --include-demo still works.",
-      "priority": "low",
-      "estimate": "2h",
-      "depends_on": [],
-      "feature_id": "data-isolation-+-surface-polish",
-      "source": {}
-    },
-    {
-      "id": "task-sig-mcp-hot-reload",
-      "title": "MCP serve hot-reloads on config.yaml change",
-      "description": "cli/serve.go fsnotify-watches the resolved config path. On Write events, reload Config, refresh PlanDeps + ControlDeps Config pointers, log 'config reloaded' with diff (added/removed/changed plans + providers). Atomic swap behind a sync.RWMutex on the deps. Acceptance: tokenops plan set anthropic claude-pro changes session_budget output without restarting MCP host; integration test seeds a config, modifies it, asserts the new value flows through after a sub-second debounce.",
+      "id": "mcp-server",
+      "title": "MCP server for TokenOps queries",
+      "description": "MCP server exposing spend, forecast, replay, optimization queries.",
       "priority": "medium",
-      "estimate": "4h",
-      "depends_on": [],
-      "feature_id": "signal-quality-+-activation-honesty",
-      "source": {}
-    },
-    {
-      "id": "task-pbc-cli-mcp-surface",
-      "title": "CLI + MCP surface for plan headroom",
-      "description": "Add `tokenops plan` subcommand (list configured plans, show current headroom). Add `tokenops_plan_headroom` MCP tool returning HeadroomReport JSON. Update `tokenops scorecard` to include a Plan section when plans configured. Update `tokenops_spend_summary` to add `plan_included_tokens` alongside metered cost. Acceptance: CLI + MCP both render HeadroomReport; scorecard includes plan rows only when plans is non-empty.",
-      "priority": "medium",
-      "estimate": "3h",
-      "depends_on": [
-        "task-pbc-headroom-metrics"
-      ],
-      "feature_id": "plan-based-cost-model",
-      "source": {}
-    },
-    {
-      "id": "rules-router",
-      "title": "Dynamic rule injection / relevance routing",
-      "description": "Replace static rule blob injection with relevance-routed subset per request: pick rules by workflow, file globs, tool calls, repo. Latency-budgeted. Records selection rationale into RuleAnalysisEvent. Proxy hook + MCP exposure.",
-      "priority": "high",
-      "estimate": "7h",
-      "depends_on": [
-        "rules-compress",
-        "opt-engine-core",
-        "workflow-trace"
-      ],
-      "feature_id": "rule-intelligence",
-      "source": {}
-    },
-    {
-      "id": "waste-detector",
-      "title": "Waste pattern detector",
-      "description": "Detect duplicate context, oversized retrieval, redundant system prompts, recursive agent loops.",
-      "priority": "high",
-      "estimate": "6h",
+      "estimate": "5h",
       "depends_on": [
         "analytics-aggregator",
-        "workflow-trace"
+        "forecasting-core",
+        "replay-engine"
       ],
-      "feature_id": "coaching-engine",
+      "feature_id": "integrations",
       "source": {}
     },
     {
-      "id": "sdk-shim-openai",
-      "title": "OpenAI SDK base-URL shim",
-      "description": "Drop-in OPENAI_BASE_URL override. Python + Node SDK docs. Auth passthrough validated.",
+      "id": "vscode-ext-mvp",
+      "title": "VSCode extension MVP",
+      "description": "Extension surfacing burn graph, optimization suggestions, and replay links from TokenOps capabilities.",
+      "priority": "low",
+      "estimate": "8h",
+      "depends_on": [
+        "cli-replay"
+      ],
+      "feature_id": "integrations",
+      "source": {}
+    },
+    {
+      "id": "budget-alerts",
+      "title": "Budget thresholds and alerts",
+      "description": "Configurable daily/weekly budget limits. CLI and MCP notifications with forecast-based early warning.",
       "priority": "high",
+      "estimate": "4h",
+      "depends_on": [
+        "forecasting-core",
+        "spend-engine"
+      ],
+      "feature_id": "forecasting-governance",
+      "source": {}
+    },
+    {
+      "id": "sdk-shim-gemini",
+      "title": "Gemini SDK base-URL shim",
+      "description": "Gemini API base URL override. Streaming + non-streaming. SDK docs.",
+      "priority": "medium",
       "estimate": "3h",
       "depends_on": [
         "proxy-providers",
         "proxy-tokenizer"
       ],
       "feature_id": "integrations",
+      "source": {}
+    },
+    {
+      "id": "task-rlw-docs-update",
+      "title": "Docs + CHANGELOG for window headroom",
+      "description": "Update README plan table + docs/plan-cost-model.md with new plan IDs, window semantics, and example output. CHANGELOG entry under Unreleased detailing schema changes (Plan.MessagesPerWindow, HeadroomReport.Window*).",
+      "priority": "medium",
+      "estimate": "1h",
+      "depends_on": [
+        "task-rlw-cli-mcp-render"
+      ],
+      "feature_id": "rate-limit-window-headroom",
+      "source": {}
+    },
+    {
+      "id": "efficiency-score",
+      "title": "Efficiency scoring algorithm",
+      "description": "Score per workflow/agent/user. Combines waste signals. Progression over time.",
+      "priority": "medium",
+      "estimate": "5h",
+      "depends_on": [
+        "analytics-aggregator"
+      ],
+      "feature_id": "observability-platform",
+      "source": {}
+    },
+    {
+      "id": "integ-codex-cli",
+      "title": "Codex CLI integration",
+      "description": "Codex CLI env setup. Smoke test.",
+      "priority": "medium",
+      "estimate": "2h",
+      "depends_on": [
+        "sdk-shim-openai"
+      ],
+      "feature_id": "integrations",
+      "source": {}
+    },
+    {
+      "id": "task-pbc-headroom-metrics",
+      "title": "Plan headroom + overage metrics",
+      "description": "Add internal/contexts/spend/plans/headroom.go with HeadroomReport (PlanName, QuotaTokens, ConsumedTokens, ConsumedPct, HeadroomDays, OverageRisk). Computes ConsumedPct from current month's plan_quota_tokens vs catalog quota; HeadroomDays via linear extrapolation of last 7-day burn rate; OverageRisk=high when ConsumedPct\u003e=80 AND HeadroomDays\u003cremaining days in month. Acceptance: 80%+ consumption with 3 days left = high; \u003c50% with full month left = low.",
+      "priority": "medium",
+      "estimate": "3h",
+      "depends_on": [
+        "task-pbc-spend-engine-cost-source",
+        "task-pbc-config-plans-map"
+      ],
+      "feature_id": "plan-based-cost-model",
+      "source": {}
+    },
+    {
+      "id": "task-sig-signal-quality",
+      "title": "signal_quality field on session_budget + plan_headroom",
+      "description": "Every SessionBudget + HeadroomReport gains a SignalQuality struct: Level (low|medium|high), Source (mcp_tool_pings|proxy_traffic|vendor_usage_api), Caveat (operator-facing one-sentence disclaimer), UpgradePaths ([]string). Today every response is Level=low / Source=mcp_tool_pings. When the proxy is wired (cfg.Providers non-empty) and proxy events outnumber mcp-session events, bump to high. Pure derivation in plans/signal.go. Update json struct tags. Tests for every level transition. Acceptance: response payload always carries signal_quality.level + signal_quality.caveat; agents can branch on the enum.",
+      "priority": "high",
+      "estimate": "3h",
+      "depends_on": [],
+      "feature_id": "signal-quality-+-activation-honesty",
+      "source": {}
+    },
+    {
+      "id": "proxy-events",
+      "title": "Event emission from proxy",
+      "description": "Wire interception to event bus. Emit Prompt and Workflow events with tokens, latency, provider, model, hash, context size. Async non-blocking.",
+      "priority": "high",
+      "estimate": "4h",
+      "depends_on": [
+        "proxy-tokenizer",
+        "event-schema",
+        "sqlite-store"
+      ],
+      "feature_id": "tokenops-proxy",
+      "source": {}
+    },
+    {
+      "id": "task-sig-empty-state-scorecard",
+      "title": "Empty-state scorecard: first-week checklist",
+      "description": "When LiveKPIs.FVTComputed=false AND TEUComputed=false AND SACComputed=false, scorecard.Build returns a Scorecard variant with OverallGrade=\"warming_up\" and a Checklist []ChecklistItem (description, completed bool, next_action). Items: (a) configure proxy provider, (b) wire optimizer for TEU \u003e 0, (c) accumulate 7 days of attributed events. Don't fabricate an F grade from defaults. CLI/MCP renderers fall through to checklist. Tests: empty store -\u003e checklist; one KPI computed -\u003e grade returned. Acceptance: tokenops scorecard on a fresh install shows guidance, not F.",
+      "priority": "high",
+      "estimate": "3h",
+      "depends_on": [],
+      "feature_id": "signal-quality-+-activation-honesty",
+      "source": {}
+    },
+    {
+      "id": "proxy-tls",
+      "title": "TLS termination + self-signed cert",
+      "description": "Generate self-signed CA + leaf cert on first run. OS trust store guidance. HTTPS upstream forwarding with SNI.",
+      "priority": "high",
+      "estimate": "4h",
+      "depends_on": [
+        "proxy-skeleton"
+      ],
+      "feature_id": "tokenops-proxy",
+      "source": {}
+    },
+    {
+      "id": "rules-compress",
+      "title": "Rule corpus compression (distillation)",
+      "description": "Compress large rule corpora into distilled behavioral representation. Semantic dedup + section pruning + minimum-viable instruction set. Reuses opt-prompt-compress primitives. Quality gate against rule benchmark.",
+      "priority": "high",
+      "estimate": "8h",
+      "depends_on": [
+        "rules-analyzer",
+        "opt-prompt-compress",
+        "opt-dedupe"
+      ],
+      "feature_id": "rule-intelligence",
+      "source": {}
+    },
+    {
+      "id": "cli-skeleton",
+      "title": "CLI skeleton with cobra",
+      "description": "Cobra CLI. Daemon lifecycle. Config (file + env + flags). Cross-platform binaries.",
+      "priority": "high",
+      "estimate": "5h",
+      "depends_on": [
+        "proxy-skeleton"
+      ],
+      "feature_id": "cli",
+      "source": {}
+    },
+    {
+      "id": "analytics-aggregator",
+      "title": "Per-agent/model/workflow aggregation",
+      "description": "Rollup queries over event store. Time-bucketed aggregates. Streaming updates for live views.",
+      "priority": "high",
+      "estimate": "6h",
+      "depends_on": [
+        "sqlite-store",
+        "spend-engine"
+      ],
+      "feature_id": "observability-platform",
+      "source": {}
+    },
+    {
+      "id": "opt-router",
+      "title": "Adaptive model routing",
+      "description": "Cost/latency/quality-aware routing. Configurable policy. Fallback chains. Routing decisions emitted.",
+      "priority": "medium",
+      "estimate": "6h",
+      "depends_on": [
+        "opt-engine-core",
+        "proxy-providers"
+      ],
+      "feature_id": "optimization-engine",
+      "source": {}
+    },
+    {
+      "id": "langchain-callback",
+      "title": "LangChain callback handler",
+      "description": "LangChain callback emitting TokenOps events. Python package. Examples + docs.",
+      "priority": "medium",
+      "estimate": "4h",
+      "depends_on": [
+        "sdk-shim-openai",
+        "sdk-shim-anthropic"
+      ],
+      "feature_id": "integrations",
+      "source": {}
+    },
+    {
+      "id": "task-rlw-window-consumption",
+      "title": "Window-bounded consumption reader",
+      "description": "Add ConsumptionInWindow(ctx, reader, provider, now, window) returning request count + token sum over the last `window` duration. Sibling to ConsumptionFor. Filters by CostSource=plan_included. Tests: 5h window, 3h window, no-events case, provider mismatch.",
+      "priority": "high",
+      "estimate": "2h",
+      "depends_on": [
+        "task-rlw-plan-schema"
+      ],
+      "feature_id": "rate-limit-window-headroom",
       "source": {}
     },
     {
@@ -1884,18 +1211,27 @@
       "source": {}
     },
     {
-      "id": "rules-dashboard",
-      "title": "Rule intelligence dashboard panels",
-      "description": "Vue panels: rule ROI leaderboard, conflict list, compression preview, dynamic injection routing log, benchmark trends.",
+      "id": "forecasting-core",
+      "title": "Token consumption forecasting",
+      "description": "Time-series forecast per user/workflow with confidence intervals. Holt-Winters or equivalent.",
       "priority": "medium",
-      "estimate": "5h",
+      "estimate": "6h",
       "depends_on": [
-        "dashboard-skeleton",
-        "rules-roi",
-        "rules-conflicts",
-        "rules-bench"
+        "analytics-aggregator"
       ],
-      "feature_id": "rule-intelligence",
+      "feature_id": "forecasting-governance",
+      "source": {}
+    },
+    {
+      "id": "task-pbc-spend-engine-cost-source",
+      "title": "Spend engine honors CostSource",
+      "description": "Update internal/contexts/spend/spend/engine.go so that PromptEvents with CostSource=plan_included have CostUSD set to 0 (overriding any per-token computation) and a separate plan_quota_tokens counter accrues. Trial = 0 cost, no quota. Backward compat: missing CostSource treated as metered. Update analytics aggregator queries: cost_usd remains the metered sum; new column/derived field `plan_quota_tokens` exposed. Acceptance: existing metered events unchanged; plan events register zero spend but full token consumption.",
+      "priority": "high",
+      "estimate": "4h",
+      "depends_on": [
+        "task-pbc-cost-source-field"
+      ],
+      "feature_id": "plan-based-cost-model",
       "source": {}
     },
     {
@@ -1914,6 +1250,122 @@
       "source": {}
     },
     {
+      "id": "opt-context-trim",
+      "title": "Context window trimming",
+      "description": "Configurable retention policies (system always, last N turns, summarize older).",
+      "priority": "medium",
+      "estimate": "5h",
+      "depends_on": [
+        "opt-engine-core"
+      ],
+      "feature_id": "optimization-engine",
+      "source": {}
+    },
+    {
+      "id": "workflow-trace",
+      "title": "Workflow trace reconstruction",
+      "description": "Reconstruct multi-step workflow from prompt events. Context growth tracking.",
+      "priority": "high",
+      "estimate": "5h",
+      "depends_on": [
+        "analytics-aggregator"
+      ],
+      "feature_id": "observability-platform",
+      "source": {}
+    },
+    {
+      "id": "task-pbc-cost-source-field",
+      "title": "Add CostSource field to PromptEvent",
+      "description": "Extend pkg/eventschema/prompt.go with `CostSource` enum: `metered` (default), `plan_included`, `trial`. Add JSON tag with omitempty when metered so old envelopes round-trip unchanged. Bump eventschema schema version + add golden test in pkg/eventschema/golden_test.go covering all three values. Acceptance: existing events deserialize without error; new field round-trips; schema version bumped consistently across CHANGELOG + version.go.",
+      "priority": "high",
+      "estimate": "2h",
+      "depends_on": [],
+      "feature_id": "plan-based-cost-model",
+      "source": {}
+    },
+    {
+      "id": "proxy-bench",
+      "title": "Proxy overhead benchmark",
+      "description": "Benchmark harness for typical request mix. Validate sub-50ms p99. CI regression gate.",
+      "priority": "high",
+      "estimate": "4h",
+      "depends_on": [
+        "proxy-events"
+      ],
+      "feature_id": "tokenops-proxy",
+      "source": {}
+    },
+    {
+      "id": "opt-engine-core",
+      "title": "Optimization engine core",
+      "description": "Pluggable optimizer pipeline. Modes passive/interactive/replay. Latency budget enforcement.",
+      "priority": "high",
+      "estimate": "5h",
+      "depends_on": [
+        "proxy-providers",
+        "event-schema"
+      ],
+      "feature_id": "optimization-engine",
+      "source": {}
+    },
+    {
+      "id": "task-pbc-plan-catalog",
+      "title": "Define plan catalog with quotas",
+      "description": "Create internal/contexts/spend/plans package. Provide Plan struct (Name, Provider, InputTokensPerMonth, OutputTokensPerMonth, RequestsPerMonth, RateLimitWindow). Seed catalog: claude-max, claude-pro, claude-code-max, claude-code-pro, gpt-plus, gpt-pro, gpt-team, copilot-individual, copilot-business, cursor-pro, cursor-business with publicly documented limits as of 2026-05. Each entry includes a source URL comment for verification. Acceptance: catalog test asserts every plan has positive quotas and a non-empty source comment.",
+      "priority": "high",
+      "estimate": "3h",
+      "depends_on": [],
+      "feature_id": "plan-based-cost-model",
+      "source": {}
+    },
+    {
+      "id": "task-coach-config-surface",
+      "title": "Coaching LLM config + CLI override",
+      "description": "config.Coaching.LLM block: Mode (auto|local|cloud|off), Backend overrides. CLI: tokenops coach set-model {auto|local:\u003cmodel\u003e|cloud:\u003cprovider\u003e:\u003cmodel\u003e|off}. Hot-reload picks up changes. Acceptance: `tokenops coach set-model local:llama3.2:3b` writes config; coaching switches to local on next pipeline tick.",
+      "priority": "medium",
+      "estimate": "2h",
+      "depends_on": [
+        "task-coach-auto-model-picker"
+      ],
+      "feature_id": "coaching-llm-auto-routing",
+      "source": {}
+    },
+    {
+      "id": "opt-dedupe",
+      "title": "Semantic deduplication",
+      "description": "Detect and merge repeated context across turns. Embedding-based similarity. Threshold config.",
+      "priority": "high",
+      "estimate": "6h",
+      "depends_on": [
+        "opt-engine-core"
+      ],
+      "feature_id": "optimization-engine",
+      "source": {}
+    },
+    {
+      "id": "otel-exporter",
+      "title": "OTLP telemetry exporter",
+      "description": "OpenTelemetry-compatible OTLP exporter for events and metrics. Opt-in. Respects redaction.",
+      "priority": "medium",
+      "estimate": "4h",
+      "depends_on": [
+        "proxy-events",
+        "redaction"
+      ],
+      "feature_id": "data-telemetry",
+      "source": {}
+    },
+    {
+      "id": "task-sig-outreach-plan",
+      "title": "Launch outreach plan doc + 10-user tracker",
+      "description": "Add docs/launch-plan.md: 90-second Loom outline (script + 3 scenes), Show HN post body (title + first paragraph + first comment thread plant), Discord cross-post snippet for Claude Builders / Cursor / aider / AI Engineer Foundation, 25-founder DM template (parameterised with their last AI-workflow tweet). Sibling docs/launch-tracker.md with 10 rows ready to fill in: handle, channel, install confirmed, discovery-call booked, quote. This is research-shaped, not code-shaped. Acceptance: maintainer can open the doc and act on Day 1 without further prep.",
+      "priority": "high",
+      "estimate": "2h",
+      "depends_on": [],
+      "feature_id": "signal-quality-+-activation-honesty",
+      "source": {}
+    },
+    {
       "id": "rules-bench",
       "title": "Rule benchmarking harness",
       "description": "Offline harness benchmarking rule systems against replay datasets: task success, regen rate, tokens, quality drift. Plugs into optimization-quality-evals-framework. Compare profiles (e.g., Go backend, refactor, PR review).",
@@ -1925,9 +1377,141 @@
       ],
       "feature_id": "rule-intelligence",
       "source": {}
+    },
+    {
+      "id": "task-auto-detect-init-wizard",
+      "title": "tokenops init wizard: auto-detect installed AI clients + bind plans",
+      "description": "Replace the silent default config write with an interactive wizard. Detection signatures: Claude Code (~/.claude*, $CLAUDE_CODE_OAUTH, claude binary on PATH) -\u003e ask Max 5x/20x/Pro; Claude Desktop (claude_desktop_config.json present) -\u003e assume Max unless told otherwise; Cursor ($CURSOR_API_KEY or ~/.cursor/) -\u003e ask Pro/Business; GitHub Copilot (gh extension list shows copilot, /tmp/.copilot tokens) -\u003e ask Individual/Business; raw ANTHROPIC_API_KEY / OPENAI_API_KEY without OAuth -\u003e API user, skip plan binding. --non-interactive flag skips prompts and writes only high-confidence detections. Acceptance: `tokenops init` on a machine with Claude Code + Cursor installed prompts once each and writes plans.anthropic + plans.cursor.",
+      "priority": "high",
+      "estimate": "5h",
+      "depends_on": [],
+      "feature_id": "plan-auto-detection",
+      "source": {}
+    },
+    {
+      "id": "task-coach-llm-wiring",
+      "title": "Wire llm.Backend into coaching.Pipeline with per-event summary",
+      "description": "Pipeline gains optional LLM field; when set, process() generates a 1-2 sentence natural-language summary of the CoachingEvent and stamps it onto the envelope (CoachingEvent.Summary string field, omitempty). When unset, pipeline behaves as today (heuristic-only). Test: fake Backend returns canned summary; assert envelope.Payload.(*CoachingEvent).Summary matches. Acceptance: pipeline test passes with both backends and a mock detector.",
+      "priority": "high",
+      "estimate": "3h",
+      "depends_on": [],
+      "feature_id": "coaching-llm-auto-routing",
+      "source": {}
+    },
+    {
+      "id": "rules-router",
+      "title": "Dynamic rule injection / relevance routing",
+      "description": "Replace static rule blob injection with relevance-routed subset per request: pick rules by workflow, file globs, tool calls, repo. Latency-budgeted. Records selection rationale into RuleAnalysisEvent. Proxy hook + MCP exposure.",
+      "priority": "high",
+      "estimate": "7h",
+      "depends_on": [
+        "rules-compress",
+        "opt-engine-core",
+        "workflow-trace"
+      ],
+      "feature_id": "rule-intelligence",
+      "source": {}
+    },
+    {
+      "id": "task-rlw-catalog-split",
+      "title": "Split catalog: Claude Max 5x/20x + OpenAI window caps",
+      "description": "Replace generic claude-max with claude-max-5x (~50 msgs/5h) and claude-max-20x (~200-800 msgs/5h, use lower bound). Add claude-pro window cap (~45 msgs/5h). Add gpt-plus window cap (~80 msgs/3h on GPT-4o), gpt-team (~120 msgs/3h), gpt-pro (unpublished). Update SourceURLs with dated 2026-05 references. Update plans_test.go required-plan list. README and docs/plan-cost-model.md tables updated.",
+      "priority": "high",
+      "estimate": "2h",
+      "depends_on": [
+        "task-rlw-plan-schema"
+      ],
+      "feature_id": "rate-limit-window-headroom",
+      "source": {}
+    },
+    {
+      "id": "task-sig-changelog-readme",
+      "title": "CHANGELOG + README sweep for honesty cycle",
+      "description": "Unreleased entry covers signal_quality, empty-state checklist, synthetic banner, hot-reload, alias shim. README quickstart adds a one-line note: 'session_budget is an MCP-ping heuristic until you wire the proxy; the response payload tells you so.' docs/plan-cost-model.md cross-links signal_quality levels.",
+      "priority": "medium",
+      "estimate": "1h",
+      "depends_on": [
+        "task-sig-signal-quality",
+        "task-sig-empty-state-scorecard",
+        "task-sig-synthetic-banner",
+        "task-sig-mcp-hot-reload",
+        "task-sig-catalog-alias"
+      ],
+      "feature_id": "signal-quality-+-activation-honesty",
+      "source": {}
+    },
+    {
+      "id": "rules-dashboard",
+      "title": "Historical rule dashboard panels (retired in PR #387)",
+      "description": "Historical completed UI task. The browser dashboard was removed in PR #387; current rule intelligence is exposed through CLI, MCP, and the local API.",
+      "priority": "medium",
+      "estimate": "5h",
+      "depends_on": [],
+      "feature_id": "rule-intelligence",
+      "source": {}
+    },
+    {
+      "id": "task-rlw-window-headroom-math",
+      "title": "Extend HeadroomReport with window fields",
+      "description": "HeadroomReport gains WindowConsumed, WindowCap, WindowPct, WindowResetsAt, WindowUnit fields (json: window_*). ComputeHeadroom accepts a new HeadroomInputs.WindowConsumed. Risk classifier prefers window signal when monthly cap absent: window_pct\u003e=80 = high, \u003e=60 = medium. Update headroom_test.go with 3 new scenarios.",
+      "priority": "high",
+      "estimate": "2h",
+      "depends_on": [
+        "task-rlw-window-consumption",
+        "task-rlw-catalog-split"
+      ],
+      "feature_id": "rate-limit-window-headroom",
+      "source": {}
+    },
+    {
+      "id": "rules-mcp",
+      "title": "MCP server endpoints for rules",
+      "description": "Expose rules.analyze, rules.conflicts, rules.compress, rules.inject, rules.bench over MCP. Read-only; respects redaction.",
+      "priority": "medium",
+      "estimate": "4h",
+      "depends_on": [
+        "mcp-server",
+        "rules-roi",
+        "rules-conflicts",
+        "rules-router"
+      ],
+      "feature_id": "rule-intelligence",
+      "source": {}
+    },
+    {
+      "id": "proxy-providers",
+      "title": "Provider routing for OpenAI Anthropic Gemini",
+      "description": "Reverse proxy with per-provider upstream config, base-URL rewriting, auth passthrough, normalization to canonical form.",
+      "priority": "high",
+      "estimate": "6h",
+      "depends_on": [
+        "proxy-skeleton"
+      ],
+      "feature_id": "tokenops-proxy",
+      "source": {}
+    },
+    {
+      "id": "task-sig-mcp-hot-reload",
+      "title": "MCP serve hot-reloads on config.yaml change",
+      "description": "cli/serve.go fsnotify-watches the resolved config path. On Write events, reload Config, refresh PlanDeps + ControlDeps Config pointers, log 'config reloaded' with diff (added/removed/changed plans + providers). Atomic swap behind a sync.RWMutex on the deps. Acceptance: tokenops plan set anthropic claude-pro changes session_budget output without restarting MCP host; integration test seeds a config, modifies it, asserts the new value flows through after a sub-second debounce.",
+      "priority": "medium",
+      "estimate": "4h",
+      "depends_on": [],
+      "feature_id": "signal-quality-+-activation-honesty",
+      "source": {}
+    },
+    {
+      "id": "task-wedge-config-set-primitive",
+      "title": "Ship `tokenops plan set` + generalize to subsystem set",
+      "description": "Add `tokenops plan set \u003cprovider\u003e \u003cplan\u003e` and `tokenops plan unset \u003cprovider\u003e` that read the active config file, mutate Plans map, write back with comment preservation if possible (gopkg.in/yaml.v3 Node API). Detects config file via the same resolver init uses ($XDG_CONFIG_HOME/tokenops/config.yaml or ~/.config/tokenops/config.yaml). If config missing, prompts user to run `tokenops init`. Mirror the pattern (skeleton + helper) for `tokenops provider set|unset` and `tokenops rules set-root` in the same PR so the verb is established. Tests: round-trip set/unset, missing-config error, unknown-plan rejection (delegates to plans.Validate), idempotency. Acceptance: `tokenops plan set anthropic claude-max-20x` writes Plans.anthropic into config.yaml; subsequent `tokenops plan list` reflects it; restart of MCP server picks up the change.",
+      "priority": "high",
+      "estimate": "3h",
+      "depends_on": [],
+      "feature_id": "mcp-first-wedge:-session-budget-+-config-as-code",
+      "source": {}
     }
   ],
   "approval_status": "approved",
   "created_at": "2026-05-09T08:16:24.430801+02:00",
-  "updated_at": "2026-09-20T11:44:31.717197+02:00"
+  "updated_at": "2026-09-26T08:54:41.960425+02:00"
 }

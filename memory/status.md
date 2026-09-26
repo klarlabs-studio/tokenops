@@ -1,19 +1,37 @@
 ---
-updated: 2026-08-18
+updated: 2026-09-26
 ---
 ## Current State
-tokenops is a local-first MCP server + CLI for flat-rate AI subscriptions. Repo `github.com/klarlabs-studio/tokenops`, module `go.klarlabs.de/tokenops`; brew cask `klarlabs-studio/tap/tokenops` (`brew trust` first). Latest **release in flight: v0.44.0** (changelog PR). `main` has #167: `tokenops daemon install`, `daemon.url` 0600, `tokenops up` copy killed, archlint complete, Gemini 2.5 vendor-verified+pinned, opt-in retention.
 
-Pricing is researched + effective-dated (ADR 0002) with verified-row pinning. **Opus 4.x = $5/$25/$0.50**. **Gemini 2.5 Pro/Flash/Flash-Lite cache-read = 10% of input**.
+TokenOps is a local-first adaptive control plane for AI-assisted work. Current
+source `main` is `d664208` (PR #389). The CLI/MCP/API surfaces are the product;
+there is no bundled browser dashboard or demo-data workflow (PR #387).
 
-v0.43.0 made a dead ingestion pipeline **visible**. v0.44.0 makes it **supervisable**. After the tag: brew-upgrade, then `tokenops daemon install` on the operator Mac.
+ADR 0004 Phases 0–4 and 6–9 are implemented. Phase 5 implementation is shipped,
+but real outcome validation remains open: the observed session data has no
+matched intervention/outcome cohort, so verification must remain observational.
+The plan state is tracked in `.roady/`; current intent and phase truth are in
+`docs/adr/0004-ai-work-intelligence-and-control.md`.
 
-## Last Session Summary
-2026-08-18: eval of v0.43.0 → #167 merged → cutting v0.44.0. Prior: 2026-08-03 v0.43.0 (#162/#165/#166) after a 27-day silent ingestion outage.
+Last live validation (2026-09-25) exercised CLI and MCP against actual local
+session telemetry, without adding demo data. It found and fixed repeated
+measurement caveats (#388) and inaccurate unpriced-plan spend wording (#389).
+The host-installed CLI/daemon was v0.68.1 at that time; it has not been
+upgraded by this work.
 
-## Next Session Should
-Tag v0.44.0 once the changelog PR merges (goreleaser + brew cask). Then on the Mac: `brew upgrade --cask klarlabs-studio/tap/tokenops` and `tokenops daemon install`. Confirm `tokenops daemon status` and `tokenops vendor-usage status`.
+## Next
 
-## Blocked / Waiting
-- BLOCKED: fmt learn threshold tuning — needs more real usage telemetry.
-- WAITING: user to live-verify an OpenAI-compat provider (would flip 9 providers unit→live).
+1. On an operator-controlled deployment, upgrade the installed CLI/daemon to
+   current source and repeat the CLI/MCP checks.
+2. Let real work produce a genuine intervention and outcome. Record only a
+   human or recognized verifier assessment actually observed; do not seed
+   example activity or claim causal uplift before matched evidence exists.
+3. Keep background coaching off until its opt-in, scope, and cost policy are
+   explicit; on-demand coaching remains the safe path.
+
+## Recently Resolved
+
+- PR #387: removed demo command/data and browser dashboard surfaces.
+- PR #388: deduplicated repeated provenance caveats in aggregates.
+- PR #389: distinguished incomplete API-equivalent estimates from actual
+  plan-covered marginal cost.
