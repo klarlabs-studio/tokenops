@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -64,7 +65,12 @@ type requestObservation struct {
 
 	PromptHash   string
 	RequestModel string
-	InputTokens  int64
+	RoutedModel  string
+	// Compatibility traits retain only request structure, never values or
+	// content. They let an opaque provider 400 remain diagnostically useful.
+	ManualThinking    bool
+	SamplingParameter bool
+	InputTokens       int64
 	// InputCounted reports whether InputTokens is a count or a
 	// stand-in zero. A tokenizer that is absent, or that refuses this
 	// provider, leaves the field at 0, which is indistinguishable
@@ -85,10 +91,13 @@ type requestObservation struct {
 
 	Status        int
 	ResponseModel string
-	FirstByteAt   atomic.Int64 // unix nanos; 0 until first byte
-	captured      bytes.Buffer
-	captureMu     sync.Mutex
-	captureLimit  int
+	// ResponseEncoding is used only to decode the observer's bounded copy.
+	// The bytes forwarded to the client remain untouched.
+	ResponseEncoding string
+	FirstByteAt      atomic.Int64 // unix nanos; 0 until first byte
+	captured         bytes.Buffer
+	captureMu        sync.Mutex
+	captureLimit     int
 }
 
 // observerMeter is the StreamMeter wired into the proxy when an event bus
@@ -114,6 +123,7 @@ func (m *observerMeter) NewMeter(resp *http.Response) RequestMeter {
 	obs.captureLimit = maxResponseBodyCapture
 	obs.Status = resp.StatusCode
 	obs.ResponseModel = extractResponseModel(resp)
+	obs.ResponseEncoding = strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding")))
 	obs.Streaming = isStreamingResponse(resp)
 	return &observerRequestMeter{obs: obs, m: m}
 }
@@ -146,6 +156,7 @@ func (r *observerRequestMeter) Done(_ int64) {
 	r.obs.captureMu.Lock()
 	body := append([]byte(nil), r.obs.captured.Bytes()...)
 	r.obs.captureMu.Unlock()
+	body = decodeObservedBody(body, r.obs.ResponseEncoding)
 
 	// Counted until something says otherwise. A tokenizer that is absent,
 	// or that refuses this provider, leaves the counts at zero — and a
@@ -198,13 +209,14 @@ func (r *observerRequestMeter) Done(_ int64) {
 		Streaming:         r.obs.Streaming,
 		Status:            r.obs.Status,
 		FinishReason:      usage.FinishReason,
-		ErrorCode:         classifyUpstreamError(r.obs.Provider, r.obs.Status, body),
-		ToolCallCount:     usage.ToolCallCount,
-		CostSource:        r.obs.CostSource,
-		WorkflowID:        r.obs.WorkflowID,
-		AgentID:           r.obs.AgentID,
-		SessionID:         r.obs.SessionID,
-		UserID:            r.obs.UserID,
+		ErrorCode: classifyUpstreamError(r.obs.Provider, r.obs.Status, body,
+			r.obs.RoutedModel, r.obs.ManualThinking, r.obs.SamplingParameter),
+		ToolCallCount: usage.ToolCallCount,
+		CostSource:    r.obs.CostSource,
+		WorkflowID:    r.obs.WorkflowID,
+		AgentID:       r.obs.AgentID,
+		SessionID:     r.obs.SessionID,
+		UserID:        r.obs.UserID,
 	}
 	if r.m.costEngine != nil && prompt.CostSource == eventschema.CostSourceMetered && prompt.TokensCounted() {
 		if cost, err := r.m.costEngine.ComputeAt(prompt, r.obs.Start); err == nil {
@@ -225,24 +237,31 @@ func (r *observerRequestMeter) Done(_ int64) {
 	r.m.bus.Publish(env)
 }
 
+func decodeObservedBody(body []byte, encoding string) []byte {
+	if !strings.Contains(encoding, "gzip") || len(body) == 0 {
+		return body
+	}
+	reader, err := gzip.NewReader(bytes.NewReader(body))
+	if err != nil {
+		return body
+	}
+	decompressed, err := io.ReadAll(io.LimitReader(reader, maxResponseBodyCapture+1))
+	closeErr := reader.Close()
+	if err != nil || closeErr != nil || len(decompressed) > maxResponseBodyCapture {
+		return body
+	}
+	return decompressed
+}
+
 // classifyUpstreamError turns a provider error response into a bounded,
 // content-free category. Provider messages are useful for diagnosis but may
 // echo request content, so neither the raw body nor the message is retained.
-func classifyUpstreamError(provider eventschema.Provider, status int, body []byte) string {
+func classifyUpstreamError(provider eventschema.Provider, status int, body []byte, routedModel string, manualThinking, samplingParameter bool) string {
 	if status < http.StatusBadRequest {
 		return ""
 	}
 
-	var response struct {
-		Type    string `json:"type"`
-		Message string `json:"message"`
-		Error   struct {
-			Type    string `json:"type"`
-			Code    string `json:"code"`
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	_ = json.Unmarshal(body, &response)
+	response := parseUpstreamErrorEnvelope(body)
 
 	errorType := response.Error.Type
 	if errorType == "" {
@@ -271,10 +290,52 @@ func classifyUpstreamError(provider eventschema.Provider, status int, body []byt
 		if knownAnthropicErrorType(errorType) {
 			return "anthropic." + strings.TrimSuffix(errorType, "_error")
 		}
+		if status == http.StatusBadRequest && strings.HasPrefix(routedModel, "claude-sonnet-5") {
+			switch {
+			case manualThinking:
+				return "anthropic.http_400.with_manual_thinking"
+			case samplingParameter:
+				return "anthropic.http_400.with_sampling_parameter"
+			default:
+				// The upstream body may be deliberately opaque (or emitted by an
+				// intermediary). Preserve the one fact TokenOps can prove without
+				// retaining request content: the failure followed a model rewrite.
+				return "anthropic.http_400.after_model_route"
+			}
+		}
 		return "anthropic.http_" + strconv.Itoa(status)
 	}
 
 	return string(provider) + ".http_" + strconv.Itoa(status)
+}
+
+type upstreamErrorEnvelope struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
+	Error   struct {
+		Type    string `json:"type"`
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+func parseUpstreamErrorEnvelope(body []byte) upstreamErrorEnvelope {
+	var response upstreamErrorEnvelope
+	if json.Unmarshal(body, &response) == nil && (response.Error.Type != "" || response.Error.Code != "") {
+		return response
+	}
+	for _, frame := range bytes.Split(bytes.ReplaceAll(body, []byte("\r\n"), []byte("\n")), []byte("\n\n")) {
+		for _, line := range bytes.Split(frame, []byte("\n")) {
+			if !bytes.HasPrefix(line, []byte("data:")) {
+				continue
+			}
+			data := bytes.TrimSpace(bytes.TrimPrefix(line, []byte("data:")))
+			if json.Unmarshal(data, &response) == nil && (response.Error.Type != "" || response.Error.Code != "") {
+				return response
+			}
+		}
+	}
+	return upstreamErrorEnvelope{}
 }
 
 func containsAny(value string, candidates ...string) bool {
@@ -523,6 +584,9 @@ func (s *Server) observerMiddleware(provider providers.Provider, next http.Handl
 					obs.MaxOutput = canonical.MaxOutputTokens
 				}
 			}
+			if provider.ID == eventschema.ProviderAnthropic {
+				obs.ManualThinking, obs.SamplingParameter = anthropicCompatibilityTraits(body)
+			}
 			if s.tokenizer != nil {
 				if n, err := s.tokenizer.PreflightCount(provider.ID, body); err == nil {
 					obs.InputTokens = int64(n)
@@ -539,6 +603,28 @@ func (s *Server) observerMiddleware(provider providers.Provider, next http.Handl
 		ctx := context.WithValue(r.Context(), observationKey{}, obs)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func anthropicCompatibilityTraits(body []byte) (manualThinking, samplingParameter bool) {
+	var request struct {
+		Thinking struct {
+			Type         string          `json:"type"`
+			BudgetTokens json.RawMessage `json:"budget_tokens"`
+		} `json:"thinking"`
+		Temperature json.RawMessage `json:"temperature"`
+		TopP        json.RawMessage `json:"top_p"`
+		TopK        json.RawMessage `json:"top_k"`
+	}
+	if json.Unmarshal(body, &request) != nil {
+		return false, false
+	}
+	manualThinking = request.Thinking.Type == "enabled" && len(request.Thinking.BudgetTokens) > 0 && string(request.Thinking.BudgetTokens) != "null"
+	samplingParameter = rawJSONPresent(request.Temperature) || rawJSONPresent(request.TopP) || rawJSONPresent(request.TopK)
+	return manualThinking, samplingParameter
+}
+
+func rawJSONPresent(value json.RawMessage) bool {
+	return len(value) > 0 && string(value) != "null"
 }
 
 // associationFor ties an emitted event to the work ontology.

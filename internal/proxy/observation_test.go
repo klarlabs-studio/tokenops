@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"io"
@@ -84,10 +85,11 @@ func startProxyForProviderObservation(t *testing.T, upstream *httptest.Server, p
 func TestObserverClassifiesAnthropicErrorsWithoutRetainingContent(t *testing.T) {
 	secret := "operator-private-prompt"
 	tests := []struct {
-		name   string
-		status int
-		body   string
-		want   string
+		name       string
+		status     int
+		body       string
+		want       string
+		compressed bool
 	}{
 		{
 			name:   "sampling parameter incompatibility",
@@ -102,6 +104,13 @@ func TestObserverClassifiesAnthropicErrorsWithoutRetainingContent(t *testing.T) 
 			want:   "anthropic.invalid_request.incompatible_thinking",
 		},
 		{
+			name:       "compressed SSE sampling incompatibility",
+			status:     http.StatusBadRequest,
+			body:       "event: error\n" + `data: {"type":"error","error":{"type":"invalid_request_error","message":"top_p is not accepted for this model: ` + secret + `"}}` + "\n\n",
+			want:       "anthropic.invalid_request.unsupported_sampling_parameter",
+			compressed: true,
+		},
+		{
 			name:   "unknown provider error type",
 			status: http.StatusBadRequest,
 			body:   `{"type":"error","error":{"type":"` + secret + `","message":"` + secret + `"}}`,
@@ -113,8 +122,17 @@ func TestObserverClassifiesAnthropicErrorsWithoutRetainingContent(t *testing.T) 
 		t.Run(tc.name, func(t *testing.T) {
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
+				if tc.compressed {
+					w.Header().Set("Content-Encoding", "gzip")
+				}
 				w.WriteHeader(tc.status)
-				_, _ = io.WriteString(w, tc.body)
+				if tc.compressed {
+					zw := gzip.NewWriter(w)
+					_, _ = io.WriteString(zw, tc.body)
+					_ = zw.Close()
+				} else {
+					_, _ = io.WriteString(w, tc.body)
+				}
 			}))
 			defer upstream.Close()
 
@@ -139,6 +157,57 @@ func TestObserverClassifiesAnthropicErrorsWithoutRetainingContent(t *testing.T) 
 				t.Fatalf("event retained provider message content: %s", encoded)
 			}
 		})
+	}
+}
+
+func TestClassifyOpaqueAnthropic400FromRequestShape(t *testing.T) {
+	tests := []struct {
+		body string
+		want string
+	}{
+		{`{"thinking":{"type":"enabled","budget_tokens":1024}}`, "anthropic.http_400.with_manual_thinking"},
+		{`{"temperature":0.2}`, "anthropic.http_400.with_sampling_parameter"},
+		{`{"messages":[]}`, "anthropic.http_400.after_model_route"},
+	}
+	for _, tc := range tests {
+		manual, sampling := anthropicCompatibilityTraits([]byte(tc.body))
+		got := classifyUpstreamError(eventschema.ProviderAnthropic, 400, []byte("opaque"), "claude-sonnet-5", manual, sampling)
+		if got != tc.want {
+			t.Errorf("classification = %q, want %q", got, tc.want)
+		}
+	}
+}
+
+func TestObserverParsesCompressedStreamingUsage(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Content-Encoding", "gzip")
+		zw := gzip.NewWriter(w)
+		_, _ = io.WriteString(zw, "event: message_start\n")
+		_, _ = io.WriteString(zw, `data: {"type":"message_start","message":{"model":"claude-sonnet-5","usage":{"input_tokens":120,"cache_read_input_tokens":80}}}`+"\n\n")
+		_, _ = io.WriteString(zw, "event: content_block_start\n")
+		_, _ = io.WriteString(zw, `data: {"type":"content_block_start","content_block":{"type":"tool_use"}}`+"\n\n")
+		_, _ = io.WriteString(zw, "event: message_delta\n")
+		_, _ = io.WriteString(zw, `data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":30}}`+"\n\n")
+		_ = zw.Close()
+	}))
+	defer upstream.Close()
+
+	base, bus := startProxyForProviderObservation(t, upstream, eventschema.ProviderAnthropic)
+	resp, err := http.Post(base+"/anthropic/v1/messages", "application/json",
+		strings.NewReader(`{"model":"claude-opus-5-5","stream":true,"max_tokens":16,"messages":[{"role":"user","content":"hello"}]}`))
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+
+	pe := waitForEvent(t, bus, 1)[0].Payload.(*eventschema.PromptEvent)
+	if pe.ResponseModel != "claude-sonnet-5" || pe.InputTokens != 120 || pe.CachedInputTokens != 80 || pe.OutputTokens != 30 {
+		t.Fatalf("compressed usage/model not recovered: %+v", pe)
+	}
+	if pe.ToolCallCount != 1 || pe.TokenProvenance() != eventschema.TokenSourceVendorReported {
+		t.Fatalf("compressed tool/provenance = %d/%q", pe.ToolCallCount, pe.TokenProvenance())
 	}
 }
 
