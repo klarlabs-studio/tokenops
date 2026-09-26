@@ -11,6 +11,7 @@ func TestContextWindowForCurrentModels(t *testing.T) {
 		model string
 		want  int64
 	}{
+		{"claude-opus-5-5", 1_000_000},
 		{"claude-opus-5", 1_000_000},
 		{"claude-opus-5[1m]", 1_000_000},
 		{"claude-opus-4-8", 1_000_000},

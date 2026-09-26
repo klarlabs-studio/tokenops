@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Claude Opus 5.5 is priced independently from Opus 5.** Its verified
+  $4/$20/$0.20 input/output/cache-read rates and 5% cache-read ratio no longer
+  inherit the older Opus 5 price.
+
 ## 0.70.0 - 2026-09-20
 
 The first five phases of ADR 0004 — TokenOps as an AI-work intelligence

@@ -23,11 +23,27 @@ func TestCheck_BaselinePassesGuard(t *testing.T) {
 func TestCheck_CleanFamilyPassesQuiet(t *testing.T) {
 	s := guardSnap(map[string]Rate{
 		"anthropic/claude-opus-4-8":   {InputPerMillion: 15, OutputPerMillion: 75, CachedInputPerMillion: 1.5},
+		"anthropic/claude-opus-5-5":   {InputPerMillion: 4, OutputPerMillion: 20, CachedInputPerMillion: 0.2},
 		"anthropic/claude-sonnet-4-6": {InputPerMillion: 3, OutputPerMillion: 15, CachedInputPerMillion: 0.3},
 		"anthropic/claude-haiku-4-5":  {InputPerMillion: 1, OutputPerMillion: 5, CachedInputPerMillion: 0.1},
 	})
 	if a := Check(s); len(a) != 0 {
 		t.Errorf("clean family flagged: %v", a)
+	}
+}
+
+func TestCheck_UsesOpus55CacheReadRatio(t *testing.T) {
+	s := guardSnap(map[string]Rate{
+		"anthropic/claude-opus-5-5": {InputPerMillion: 4, OutputPerMillion: 20, CachedInputPerMillion: 0.2},
+	})
+	if anomalies := Check(s); len(anomalies) != 0 {
+		t.Fatalf("documented Opus 5.5 rates flagged: %v", anomalies)
+	}
+
+	s.Rates["anthropic/claude-opus-5-5"] = Rate{InputPerMillion: 4, OutputPerMillion: 20, CachedInputPerMillion: 0.4}
+	anomalies := Check(s)
+	if len(anomalies) != 1 || anomalies[0].Field != "cache_read" {
+		t.Fatalf("expected Opus 5.5 cache-rate anomaly, got %+v", anomalies)
 	}
 }
 

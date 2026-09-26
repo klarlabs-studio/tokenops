@@ -15,8 +15,9 @@
 // rather than erroring the caller. Snapshots cover every provider the catalog
 // prices; each rate is keyed "<provider>/<model>" so the key-space matches the
 // multi-provider engine table. The consistency guard's ratio heuristics
-// (cache-read ≈ 10% of input, output ≈ 5× input) remain an Anthropic-family
-// invariant and run only on anthropic/* rows (see guard.go).
+// (cache-read usually ≈ 10% of input, output ≈ 5× input; Opus 5.5 is a
+// documented 5% cache-read exception) remain Anthropic-family heuristics and
+// run only on anthropic/* rows (see guard.go).
 package pricing
 
 import (

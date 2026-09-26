@@ -82,6 +82,14 @@ rates:
       output_per_million: 50.00
       cached_input_per_million: 1.00
       verified: true
+    # Opus 5.5 has a distinct lower price and 5% cache-read rate; keep this
+    # longer prefix ahead of the Opus 5 family rate below.
+    # Source: https://platform.claude.com/docs/en/models/opus-5-5/overview (2026-09-26).
+    "claude-opus-5-5*":
+      input_per_million: 4.00
+      output_per_million: 20.00
+      cached_input_per_million: 0.20
+      verified: true
     "claude-opus-5*":
       input_per_million: 5.00
       output_per_million: 25.00
