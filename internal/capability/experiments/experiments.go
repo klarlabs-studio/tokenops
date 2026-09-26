@@ -191,29 +191,40 @@ func (m *Manager) Assign(ctx context.Context, in AssignmentInput) (Assignment, b
 		return Assignment{}, false, err
 	}
 	at := utcNow(in.At)
+	// An execution may issue more requests after the second arm fills the
+	// trial (or after its wall-clock deadline). Its durable assignment still
+	// governs those requests: completion closes enrollment, not the execution.
+	// Resolve reuse before filtering to active experiments so every call stays
+	// attributable to the originally selected arm.
+	states := Fold(append([]*eventschema.Envelope(nil), events...), at)
+	for i := len(events) - 1; i >= 0; i-- {
+		env := events[i]
+		if env == nil || env.Association.Execution != in.ExecutionID {
+			continue
+		}
+		p, ok := env.Payload.(*eventschema.ExperimentEvent)
+		if !ok || p.Stage != eventschema.ExperimentAssigned {
+			continue
+		}
+		state, ok := states[env.Correlation.Experiment]
+		if !ok || state.Baseline.Provider != in.Provider || state.Baseline.Model != in.BaselineModel || state.Variant.Model != in.VariantModel {
+			continue
+		}
+		if state.Fingerprint != "" && state.Fingerprint != in.Fingerprint {
+			continue
+		}
+		return Assignment{
+			ExperimentID: state.ID,
+			Pair:         p.Pair,
+			Variant:      p.Assignment == "variant",
+		}, true, nil
+	}
 	for _, state := range Active(events, at) {
 		if state.Baseline.Provider != in.Provider || state.Baseline.Model != in.BaselineModel || state.Variant.Model != in.VariantModel {
 			continue
 		}
 		if state.Fingerprint != "" && state.Fingerprint != in.Fingerprint {
 			continue
-		}
-		// One harness execution must stay in one arm across all proxy
-		// requests. Reuse its first durable assignment instead of counting
-		// every request as a new randomized sample.
-		for _, env := range events {
-			if env == nil || env.Correlation.Experiment != state.ID || env.Association.Execution != in.ExecutionID {
-				continue
-			}
-			p, ok := env.Payload.(*eventschema.ExperimentEvent)
-			if !ok || p.Stage != eventschema.ExperimentAssigned {
-				continue
-			}
-			return Assignment{
-				ExperimentID: state.ID,
-				Pair:         p.Pair,
-				Variant:      p.Assignment == "variant",
-			}, true, nil
 		}
 		used := state.Assignments
 		if used >= state.MaxPairs*2 {
