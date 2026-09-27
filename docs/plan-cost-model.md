@@ -82,7 +82,12 @@ Returns a `HeadroomReport` per configured plan with:
   and secondary windows.
 - `vendor_plan_type` — the provider's opaque plan identifier when present.
   TokenOps exposes it for reconciliation but does not silently equate an
-  undocumented vendor identifier with a catalog plan name.
+  undocumented vendor identifier with a catalog plan name. This is distinct
+  from `plan_name`, which is the operator's canonical TokenOps configuration
+  such as `gpt-plus` or `gpt-pro-5x`. For example, Codex can report
+  `vendor_plan_type: prolite` even when the configured plan is `gpt-plus`;
+  official OpenAI documentation describes the `planType` field but does not
+  publish a `prolite` mapping.
 - `overage_risk` — `low`, `medium`, `high`, or `unknown`. The headline
   takes the worse of the monthly and window signals.
 - `note` — populated when math falls through (e.g. plan publishes no
