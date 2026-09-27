@@ -11,7 +11,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/daemon"
 )
 
-func newDaemonCmd() *cobra.Command {
+func newDaemonCmd(rf *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "daemon",
 		Short: "Install, remove, or inspect the supervised ingestion daemon",
@@ -31,7 +31,7 @@ installable form of deploy/launchd and deploy/systemd.
   tokenops daemon uninstall`,
 		Args: cobra.NoArgs,
 	}
-	cmd.AddCommand(newDaemonInstallCmd(), newDaemonUninstallCmd(), newDaemonStatusCmd(), newDaemonRestartCmd())
+	cmd.AddCommand(newDaemonInstallCmd(rf), newDaemonUninstallCmd(), newDaemonStatusCmd(), newDaemonRestartCmd(rf))
 	return cmd
 }
 
@@ -72,7 +72,7 @@ func (f daemonFlags) resolve() (daemon.UnitKind, string, string, string, error) 
 // without a real supervisor.
 var applyUnit = daemon.ApplyUnit
 
-func newDaemonInstallCmd() *cobra.Command {
+func newDaemonInstallCmd(rf *rootFlags) *cobra.Command {
 	f := daemonFlags{}
 	cmd := &cobra.Command{
 		Use:   "install",
@@ -120,8 +120,10 @@ func newDaemonInstallCmd() *cobra.Command {
 				fmt.Fprintln(out, "Run `tokenops daemon install` again; `tokenops daemon status` shows its state.")
 				return fmt.Errorf("start %s unit: %w", kind, err)
 			}
-			fmt.Fprintln(out, "Running. `tokenops start` will now survive reboot.")
-			fmt.Fprintln(out, "Verify with: tokenops daemon status")
+			if err := confirmDaemonStarted(cmd, rf); err != nil {
+				return err
+			}
+			fmt.Fprintln(out, "Running and healthy. `tokenops start` will now survive reboot.")
 			return nil
 		},
 	}
@@ -231,7 +233,7 @@ func enableHint(kind daemon.UnitKind, path string) string {
 // The daemon loads its config once, at boot, so `plan set`, `provider set`
 // and `vendor-usage enable` all end by telling the operator to restart it.
 // None of them could name a command, because there was not one.
-func newDaemonRestartCmd() *cobra.Command {
+func newDaemonRestartCmd(rf *rootFlags) *cobra.Command {
 	f := daemonFlags{}
 	cmd := &cobra.Command{
 		Use:   "restart",
@@ -255,9 +257,13 @@ func newDaemonRestartCmd() *cobra.Command {
 				progress.failure("Daemon restart failed")
 				return err
 			}
-			progress.success("Daemon restarted")
+			if err := waitForConfiguredDaemon(cmd.Context(), rf); err != nil {
+				progress.failure("Daemon restarted but did not become healthy")
+				return err
+			}
+			progress.success("Daemon restarted and healthy")
 			fmt.Fprintf(out, "restarted %s (%s)\n", daemon.LaunchdLabel, kind)
-			fmt.Fprintln(out, "it has re-read the config; verify with `tokenops status`")
+			fmt.Fprintln(out, "it has re-read the config and is answering health checks")
 			return nil
 		},
 	}
