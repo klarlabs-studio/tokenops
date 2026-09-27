@@ -514,3 +514,21 @@ func TestParseKeepDurationForeverKeywords(t *testing.T) {
 		}
 	}
 }
+
+// An unknown intervention used to be accepted, and its two readers then
+// disagreed about it: the per-turn route guard fell back to advise while
+// the control policy fell back to observe-only. A typo must fail at load.
+func TestSmartRoutingInterventionValidated(t *testing.T) {
+	for _, v := range []string{"", "off", "advise", "delegate", "auto", " Auto ", "false", "no"} {
+		s := SmartRoutingConfig{Intervention: v}
+		if err := s.Validate(); err != nil {
+			t.Errorf("intervention %q rejected: %v", v, err)
+		}
+	}
+	for _, v := range []string{"yolo", "autp", "advice", "on"} {
+		s := SmartRoutingConfig{Intervention: v}
+		if err := s.Validate(); err == nil {
+			t.Errorf("intervention %q accepted, want an error", v)
+		}
+	}
+}
