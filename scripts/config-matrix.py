@@ -375,6 +375,12 @@ def run_profile(name, spec, port):
         f.write(yaml(cfg) + "\n")
     env = {k: v for k, v in os.environ.items() if not k.startswith("TOKENOPS_")}
     env["HOME"] = os.path.join(run, "home")
+    # The XDG directories win over $HOME where set. Without these, serve's
+    # config tools resolved the operator's real config.yaml through an
+    # exported XDG_CONFIG_HOME: tokenops_vendor_usage_setup read its session
+    # key, connected to claude.ai with it, and rewrote the file.
+    for k in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME"):
+        env[k] = env["HOME"]
     logf = open(os.path.join(run, "daemon.log"), "w")
     proc = subprocess.Popen([ARGS.bin, "start", "-c", cfgp], cwd=run, env=env, stdout=logf, stderr=subprocess.STDOUT)
     res = {"profile": name, "problems": [], "notes": []}
