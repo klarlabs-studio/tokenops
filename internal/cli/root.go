@@ -45,7 +45,7 @@ func NewRoot() *cobra.Command {
 		newInitCmd(),
 		newDetectCmd(),
 		newStartCmd(rf),
-		newDaemonCmd(),
+		newDaemonCmd(rf),
 		newServeCmd(),
 		newAnthropicBridgeCmd(),
 		newStatusCmd(rf),
