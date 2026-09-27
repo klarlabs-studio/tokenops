@@ -112,7 +112,7 @@ var helpCatalog = []helpCategory{
 		Tools: []helpTool{
 			{
 				Name:    "tokenops_prepare_work",
-				Summary: "Before a task, combine plan headroom with model advice for its instruction. Never switches models.",
+				Summary: "Before a task, combine plan headroom with model advice and issue the workflow_id to preserve through execution and review. Never switches models or claims execution started.",
 				Example: `{"instruction":"rename the handler","provider":"anthropic","model":"claude-opus-5"}`,
 			},
 			{
@@ -146,7 +146,7 @@ var helpCatalog = []helpCategory{
 		Tools: []helpTool{
 			{
 				Name:    "tokenops_review_work",
-				Summary: "One-workflow review: concise insight from the measured trace and existing waste checks, plus tokens/cost and coaching findings; no finding is not a quality assessment.",
+				Summary: "After execution, pass the workflow_id returned by tokenops_prepare_work for a concise measured trace, tokens/cost, and coaching findings; no finding is not a quality assessment.",
 				Example: `{"workflow_id":"workflow:..."}`,
 			},
 			{

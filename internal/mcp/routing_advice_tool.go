@@ -52,6 +52,7 @@ type routingAdviceInput struct {
 	WorkID      string  `json:"work_id,omitempty" jsonschema:"description=Stable work identifier when the caller already knows it."`
 	ExecutionID string  `json:"execution_id,omitempty" jsonschema:"description=Stable execution identifier when the caller already knows it."`
 	ActorID     string  `json:"actor_id,omitempty" jsonschema:"description=Actor performing the execution when known."`
+	WorkflowID  string  `json:"workflow_id,omitempty" jsonschema:"description=Stable workflow identifier to preserve across prepare, execution attribution, and review. tokenops_prepare_work generates one when omitted."`
 }
 
 // routingAdviceResult is a recommendation, never an action. The

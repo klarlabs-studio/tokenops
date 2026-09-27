@@ -46,13 +46,32 @@ func TestReviewWorkComposesTraceUsageAndFindings(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := execTool(t, srv, "tokenops_review_work", map[string]any{"workflow_id": workflowID})
-	for _, want := range []string{`"workflow_id": "workflow-review"`, `"step_count": 2`, `"total_tokens": 650`, `"context_growth_tokens": 400`, `"findings": []`, `"level": "no_finding"`, `this is not an assessment of task success or overall work quality`} {
+	for _, want := range []string{`"workflow_id": "workflow-review"`, `"evidence_status": "measured"`, `"step_count": 2`, `"total_tokens": 650`, `"context_growth_tokens": 400`, `"findings": []`, `"level": "no_finding"`, `this is not an assessment of task success or overall work quality`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("review result missing %s:\n%s", want, out)
 		}
 	}
 	if strings.Contains(out, `"prompt_hash"`) {
 		t.Errorf("aggregate work review included per-prompt content:\n%s", out)
+	}
+}
+
+func TestReviewWorkDistinguishesMissingEvidenceFromMeasuredZero(t *testing.T) {
+	store, err := sqlite.Open(context.Background(), filepath.Join(t.TempDir(), "review.db"), sqlite.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	eng := spend.NewEngine(spend.DefaultTable())
+	srv := NewServer("tokenops", "test", slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	if err := RegisterTools(srv, Deps{Store: store, Aggregator: analytics.New(store, eng), Spend: eng}); err != nil {
+		t.Fatal(err)
+	}
+	out := execTool(t, srv, "tokenops_review_work", map[string]any{"workflow_id": "workflow:not-observed"})
+	for _, want := range []string{`"evidence_status": "no_evidence"`, `"step_count": 0`, `"models": {}`, `No workflow steps were reconstructed`, `placeholders, not measured zero usage`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("review result missing %s:\n%s", want, out)
+		}
 	}
 }
 
