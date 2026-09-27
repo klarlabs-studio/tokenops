@@ -24,8 +24,17 @@ type Config struct {
 	// InputTokens triggers an OversizedContext finding. Default 32_768.
 	MaxContextTokens int64
 	// ContextGrowthLimitTokens flags a workflow whose total positive
-	// context growth exceeds this number. Default 16_384.
+	// context growth exceeds this number. Ignored when
+	// ContextGrowthPerStepTokens is set; when neither is set the
+	// per-step default applies.
 	ContextGrowthLimitTokens int64
+	// ContextGrowthPerStepTokens flags a workflow whose mean positive
+	// context growth per step exceeds this number, once it has at least
+	// minPerStepGrowthSteps steps. A long agent session grows a steady
+	// amount per turn and compacts now and then, so its total growth
+	// scales with its length and only a per-step rate separates runaway
+	// growth from a long session. Zero uses the total rule.
+	ContextGrowthPerStepTokens int64
 	// MaxConsecutiveAgentLoops is the threshold for the
 	// RepeatedAgentLoops pattern (a single agent firing N+ times in a
 	// row, often a sign of an unbounded retry / re-plan loop). Default 4.
@@ -45,19 +54,30 @@ type Config struct {
 // Profile overrides thresholds for workflows whose ID starts with
 // WorkflowPrefix. Zero fields inherit from the detector's base Config.
 type Profile struct {
-	WorkflowPrefix           string
-	MaxContextTokens         int64
-	ContextGrowthLimitTokens int64
-	MaxConsecutiveAgentLoops int
-	SystemRedundancyMin      int
+	WorkflowPrefix             string
+	MaxContextTokens           int64
+	ContextGrowthLimitTokens   int64
+	ContextGrowthPerStepTokens int64
+	MaxConsecutiveAgentLoops   int
+	SystemRedundancyMin        int
 }
+
+// minPerStepGrowthSteps is the fewest steps a per-step growth rate is
+// judged on; over a handful of steps one large paste dominates the mean.
+const minPerStepGrowthSteps = 10
+
+// defaultContextGrowthPerStep applies when neither growth limit is set:
+// on the default 32k window it means context doubling every four steps.
+const defaultContextGrowthPerStep = 8_192
 
 func (c *Config) defaults() {
 	if c.MaxContextTokens <= 0 {
 		c.MaxContextTokens = 32_768
 	}
-	if c.ContextGrowthLimitTokens <= 0 {
-		c.ContextGrowthLimitTokens = 16_384
+	if c.ContextGrowthLimitTokens <= 0 && c.ContextGrowthPerStepTokens <= 0 {
+		// Judged per step: a total limit flags every workflow past a
+		// certain length, whatever it does per step.
+		c.ContextGrowthPerStepTokens = defaultContextGrowthPerStep
 	}
 	if c.MaxConsecutiveAgentLoops <= 0 {
 		c.MaxConsecutiveAgentLoops = 4
@@ -94,10 +114,11 @@ func (d *Detector) Detect(trace *workflow.Trace) []*eventschema.CoachingEvent {
 		// Operator-configured limits replace the built-in profile
 		// selection entirely — they exist precisely to override it.
 		cfg = mergeConfig(cfg, Config{
-			MaxContextTokens:         p.MaxContextTokens,
-			ContextGrowthLimitTokens: p.ContextGrowthLimitTokens,
-			MaxConsecutiveAgentLoops: p.MaxConsecutiveAgentLoops,
-			SystemRedundancyMin:      p.SystemRedundancyMin,
+			MaxContextTokens:           p.MaxContextTokens,
+			ContextGrowthLimitTokens:   p.ContextGrowthLimitTokens,
+			ContextGrowthPerStepTokens: p.ContextGrowthPerStepTokens,
+			MaxConsecutiveAgentLoops:   p.MaxConsecutiveAgentLoops,
+			SystemRedundancyMin:        p.SystemRedundancyMin,
 		})
 	} else if profile := ProfileFor(trace.WorkflowID); profile != nil {
 		cfg = mergeConfig(cfg, *profile)
@@ -143,15 +164,18 @@ func (d *Detector) operatorProfile(workflowID string) (Profile, bool) {
 // long-running agent sessions don't trip on every run.
 func ProfileFor(workflowID string) *Config {
 	switch {
+	// Per-step growth limits sit at about twice the highest rate seen
+	// across 30 days of real sessions (2026-09: Claude Code p99 ~2.1k,
+	// Codex p99 ~7k tokens per step).
 	case strings.HasPrefix(workflowID, "claude-code:"):
 		return &Config{
-			MaxContextTokens:         900_000,
-			ContextGrowthLimitTokens: 2_000_000,
+			MaxContextTokens:           900_000,
+			ContextGrowthPerStepTokens: 5_000,
 		}
 	case strings.HasPrefix(workflowID, "codex:"):
 		return &Config{
-			MaxContextTokens:         250_000,
-			ContextGrowthLimitTokens: 500_000,
+			MaxContextTokens:           250_000,
+			ContextGrowthPerStepTokens: 15_000,
 		}
 	}
 	return nil
@@ -167,6 +191,12 @@ func mergeConfig(base, profile Config) Config {
 	}
 	if profile.ContextGrowthLimitTokens > 0 {
 		out.ContextGrowthLimitTokens = profile.ContextGrowthLimitTokens
+		// An explicit total asks for the total rule; a per-step limit
+		// inherited from the defaults must not shadow it.
+		out.ContextGrowthPerStepTokens = 0
+	}
+	if profile.ContextGrowthPerStepTokens > 0 {
+		out.ContextGrowthPerStepTokens = profile.ContextGrowthPerStepTokens
 	}
 	if profile.MaxConsecutiveAgentLoops > 0 {
 		out.MaxConsecutiveAgentLoops = profile.MaxConsecutiveAgentLoops
@@ -193,6 +223,25 @@ func (d *Detector) checkOversizedContext(t *workflow.Trace) *eventschema.Coachin
 }
 
 func (d *Detector) checkContextGrowth(t *workflow.Trace) *eventschema.CoachingEvent {
+	if limit := d.cfg.ContextGrowthPerStepTokens; limit > 0 {
+		if t.StepCount < minPerStepGrowthSteps {
+			return nil
+		}
+		intervals := int64(t.StepCount - 1)
+		perStep := t.ContextGrowthTotal / intervals
+		if perStep < limit {
+			return nil
+		}
+		return &eventschema.CoachingEvent{
+			WorkflowID: t.WorkflowID,
+			Kind:       eventschema.CoachingKindTrimContext,
+			Summary:    "Runaway context growth",
+			Details: fmt.Sprintf(
+				"Context grew %d tokens per step on average across %d steps (limit %d). Each step is appending more than it should.",
+				perStep, t.StepCount, limit),
+			EstimatedSavingsTokens: (perStep - limit) * intervals,
+		}
+	}
 	if t.ContextGrowthTotal < d.cfg.ContextGrowthLimitTokens {
 		return nil
 	}
@@ -208,6 +257,13 @@ func (d *Detector) checkContextGrowth(t *workflow.Trace) *eventschema.CoachingEv
 }
 
 func (d *Detector) checkAgentLoops(t *workflow.Trace) *eventschema.CoachingEvent {
+	// One agent monopolising a workflow only means something when the
+	// workflow has other agents to hand to. In a single-agent session
+	// every turn is the same agent and the run length is the session
+	// length; repetition there is checkRecursion's identical-prompt rule.
+	if distinctAgents(t) < 2 {
+		return nil
+	}
 	runLen, agent := longestAgentRun(t)
 	if runLen < d.cfg.MaxConsecutiveAgentLoops {
 		return nil
@@ -221,6 +277,17 @@ func (d *Detector) checkAgentLoops(t *workflow.Trace) *eventschema.CoachingEvent
 			"Agent %q invoked %d times consecutively (limit %d). Likely an unbounded retry or re-plan loop.",
 			agent, runLen, d.cfg.MaxConsecutiveAgentLoops),
 	}
+}
+
+// distinctAgents counts the named agents that took a step in t.
+func distinctAgents(t *workflow.Trace) int {
+	seen := map[string]struct{}{}
+	for _, step := range t.Steps {
+		if step.Prompt != nil && step.Prompt.AgentID != "" {
+			seen[step.Prompt.AgentID] = struct{}{}
+		}
+	}
+	return len(seen)
 }
 
 func longestAgentRun(t *workflow.Trace) (int, string) {

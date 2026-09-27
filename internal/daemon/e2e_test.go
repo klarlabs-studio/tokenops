@@ -237,7 +237,14 @@ func TestE2EAPIRequiresTokenWithStorageDisabled(t *testing.T) {
 		}
 	}
 
-	tok := daemonhint.Token()
+	// The hint is published alongside readiness, not strictly before it;
+	// under a loaded race run the first ready response can win.
+	var tok string
+	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		if tok = daemonhint.Token(); tok != "" {
+			break
+		}
+	}
 	if tok == "" {
 		t.Fatal("daemon wrote no API token to its URL hint")
 	}
