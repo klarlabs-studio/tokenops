@@ -32,6 +32,12 @@ const (
 	defaultFlushRetryWait = 250 * time.Millisecond
 	// flushTimeout bounds one AppendBatch attempt.
 	flushTimeout = 5 * time.Second
+	// maxFlushRetryWait caps the doubling backoff, so a batch retried
+	// through a long contention window keeps probing every few seconds.
+	maxFlushRetryWait = 5 * time.Second
+	// contendedLogEvery thins the warning once a contended batch has
+	// outlived its ordinary retry budget.
+	contendedLogEvery = 10
 )
 
 // Sink is the minimal contract the bus needs from a backing store. The
@@ -81,6 +87,7 @@ type AsyncBus struct {
 
 	flushRetries   int
 	flushRetryWait time.Duration
+	contended      func(error) bool
 
 	dropped   atomic.Int64
 	published atomic.Int64
@@ -105,8 +112,16 @@ type Options struct {
 	// the default; negative disables retrying.
 	FlushRetries int
 	// FlushRetryWait is the initial backoff between those attempts. It
-	// doubles each time. Zero uses the default.
+	// doubles each time, up to a cap. Zero uses the default.
 	FlushRetryWait time.Duration
+	// Contended reports whether a sink failure means the store is busy
+	// with another writer rather than broken. Such a batch is retried
+	// until it lands instead of being dropped after FlushRetries: the
+	// rows are delayed, not lost. Queue backpressure applies meanwhile —
+	// PublishWait blocks and Publish drops, as for any slow sink. At
+	// shutdown the ordinary budget applies again. Nil treats every
+	// failure as uncontended.
+	Contended func(error) bool
 }
 
 // NewAsync constructs an AsyncBus and starts its worker goroutine.
@@ -140,6 +155,7 @@ func NewAsync(sink Sink, opts Options) *AsyncBus {
 		batchWait:      opts.BatchWait,
 		flushRetries:   opts.FlushRetries,
 		flushRetryWait: opts.FlushRetryWait,
+		contended:      opts.Contended,
 		stop:           make(chan struct{}),
 		done:           make(chan struct{}),
 		subs:           make(map[uint64]func(*eventschema.Envelope)),
@@ -243,6 +259,26 @@ func (b *AsyncBus) Close(timeout time.Duration) error {
 	return firstErr
 }
 
+// retryFlush decides whether a failed attempt gets another. A contended
+// store keeps its batch until the contention clears, because the writer
+// holding the lock is another process whose transactions end on their own;
+// anything else, and any attempt once the bus is stopping, gets the bounded
+// budget so a broken sink cannot wedge the worker or the shutdown drain.
+func (b *AsyncBus) retryFlush(err error, attempt int) bool {
+	if attempt < b.flushRetries {
+		return true
+	}
+	if b.contended == nil || !b.contended(err) {
+		return false
+	}
+	select {
+	case <-b.stop:
+		return false
+	default:
+		return true
+	}
+}
+
 func (b *AsyncBus) run() {
 	defer close(b.done)
 	batch := make([]*eventschema.Envelope, 0, b.batchSize)
@@ -264,25 +300,24 @@ func (b *AsyncBus) run() {
 		}
 		wait := b.flushRetryWait
 		var err error
-		for attempt := 0; attempt <= b.flushRetries; attempt++ {
+		for attempt := 0; ; attempt++ {
 			ctx, cancel := context.WithTimeout(context.Background(), flushTimeout)
 			err = b.sink.AppendBatch(ctx, batch)
 			cancel()
-			if err == nil {
+			if err == nil || !b.retryFlush(err, attempt) {
 				break
 			}
-			if attempt == b.flushRetries {
-				break
+			if attempt < b.flushRetries || attempt%contendedLogEvery == 0 {
+				b.logger.Warn("events: append batch failed, retrying",
+					"size", len(batch), "attempt", attempt+1, "err", err)
 			}
-			b.logger.Warn("events: append batch failed, retrying",
-				"size", len(batch), "attempt", attempt+1, "err", err)
 			select {
 			case <-time.After(wait):
 			case <-b.stop:
 				// Shutting down: spend the remaining attempts now
 				// rather than sleeping through the drain deadline.
 			}
-			wait *= 2
+			wait = min(wait*2, maxFlushRetryWait)
 		}
 		if err != nil {
 			// Every row in this batch is lost. Say so in the rows the
@@ -292,7 +327,7 @@ func (b *AsyncBus) run() {
 			// missing without a single error an operator could see.
 			b.dropped.Add(int64(len(batch)))
 			b.logger.Error("events: append batch gave up, rows lost",
-				"rows", len(batch), "attempts", b.flushRetries+1, "err", err)
+				"rows", len(batch), "err", err)
 		}
 		batch = batch[:0]
 	}

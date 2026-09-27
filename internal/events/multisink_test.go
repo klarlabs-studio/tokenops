@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -106,3 +107,18 @@ func TestMultiSinkEmpty(t *testing.T) {
 		t.Errorf("empty multisink should swallow batch, got %v", err)
 	}
 }
+
+// The bus classifies sink failures with errors.Is, so the fan-out must keep
+// each sink's error chain rather than flattening it to text.
+func TestMultiSinkPreservesErrorChain(t *testing.T) {
+	sentinel := errors.New("contended")
+	m := NewMultiSink(&errSink{err: fmt.Errorf("sqlite: %w", sentinel)})
+	err := m.AppendBatch(context.Background(), []*eventschema.Envelope{newEnv("a")})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("errors.Is(%v, sentinel) = false; the multisink discarded the chain", err)
+	}
+}
+
+type errSink struct{ err error }
+
+func (s *errSink) AppendBatch(context.Context, []*eventschema.Envelope) error { return s.err }

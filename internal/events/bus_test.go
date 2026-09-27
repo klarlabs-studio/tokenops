@@ -357,3 +357,73 @@ func (b *blockingSink) total() int {
 	defer b.mu.Unlock()
 	return len(b.rows)
 }
+
+// A store contended by another process can refuse writes for longer than
+// the ordinary retry budget. Those rows are delayed, not lost: the bus keeps
+// retrying for as long as the sink reports contention.
+func TestContendedBatchOutlastsRetryBudget(t *testing.T) {
+	sink := &flakySink{failures: defaultFlushRetries + 6}
+	bus := NewAsync(sink, Options{
+		BatchSize: 2, BatchWait: 20 * time.Millisecond, Logger: discardLogger(),
+		FlushRetryWait: time.Millisecond,
+		Contended:      func(error) bool { return true },
+	})
+	defer func() { _ = bus.Close(2 * time.Second) }()
+	bus.Publish(newEnv("a"))
+	bus.Publish(newEnv("b"))
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) && sink.total() < 2 {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := sink.total(); got != 2 {
+		t.Errorf("rows persisted = %d, want 2: contention outlasted the retry budget and the batch was dropped", got)
+	}
+	if got := bus.DroppedCount(); got != 0 {
+		t.Errorf("DroppedCount = %d, want 0", got)
+	}
+}
+
+// Indefinite retry is reserved for contention. Any other failure keeps the
+// bounded budget, so a permanently broken sink cannot wedge the worker.
+func TestUncontendedFailureStillBounded(t *testing.T) {
+	sink := &flakySink{failures: 1 << 30}
+	bus := NewAsync(sink, Options{
+		BatchSize: 2, BatchWait: 20 * time.Millisecond, Logger: discardLogger(),
+		FlushRetryWait: time.Millisecond,
+		Contended:      func(error) bool { return false },
+	})
+	defer func() { _ = bus.Close(2 * time.Second) }()
+	bus.Publish(newEnv("a"))
+	bus.Publish(newEnv("b"))
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) && bus.DroppedCount() < 2 {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := bus.DroppedCount(); got != 2 {
+		t.Errorf("DroppedCount = %d, want 2 after the bounded budget", got)
+	}
+}
+
+// Shutdown must not wait on contention that never clears: once the bus is
+// stopping, contended batches fall back to the bounded budget and the
+// worker exits within the drain timeout.
+func TestContendedRetryStopsOnClose(t *testing.T) {
+	sink := &flakySink{failures: 1 << 30}
+	bus := NewAsync(sink, Options{
+		BatchSize: 2, BatchWait: 20 * time.Millisecond, Logger: discardLogger(),
+		FlushRetryWait: time.Millisecond,
+		Contended:      func(error) bool { return true },
+	})
+	bus.Publish(newEnv("a"))
+	bus.Publish(newEnv("b"))
+	time.Sleep(50 * time.Millisecond)
+
+	if err := bus.Close(2 * time.Second); err != nil {
+		t.Fatalf("Close = %v, want the worker to stop within the drain timeout", err)
+	}
+	if got := bus.DroppedCount(); got != 2 {
+		t.Errorf("DroppedCount = %d, want 2: rows abandoned at shutdown must be counted", got)
+	}
+}

@@ -195,7 +195,7 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	// envelope as ProviderUnknown.
 	var sessionBus events.Bus
 	if components.Store != nil {
-		ab := events.NewAsync(events.NewMultiSink(components.Store), events.Options{Logger: logger})
+		ab := events.NewAsync(events.NewMultiSink(components.Store), events.Options{Logger: logger, Contended: sqlite.IsContended})
 		sessionBus = ab
 		defer func() { _ = ab.Close(0) }()
 	}

@@ -3,7 +3,7 @@ package events
 import (
 	"context"
 	"errors"
-	"strings"
+	"fmt"
 
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -34,20 +34,22 @@ func NewMultiSink(sinks ...Sink) *MultiSink {
 // AppendBatch fans envs out to every wrapped sink. Each sink receives
 // an independent deep copy of the batch so a mutating sink (e.g. the
 // OTLP exporter's redactor) cannot pollute the view a sibling sink
-// sees. Errors are joined.
+// sees. Errors are joined with their chains intact.
 func (m *MultiSink) AppendBatch(ctx context.Context, envs []*eventschema.Envelope) error {
 	if len(m.sinks) == 0 {
 		return nil
 	}
-	var errs []string
+	var errs []error
 	for _, s := range m.sinks {
 		clones := cloneBatch(envs)
 		if err := s.AppendBatch(ctx, clones); err != nil {
-			errs = append(errs, err.Error())
+			errs = append(errs, err)
 		}
 	}
 	if len(errs) > 0 {
-		return errors.New("events: multisink: " + strings.Join(errs, "; "))
+		// Wrapped, not flattened: the bus classifies failures with
+		// errors.Is, and a joined string hides a contended store.
+		return fmt.Errorf("events: multisink: %w", errors.Join(errs...))
 	}
 	return nil
 }

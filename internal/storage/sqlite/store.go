@@ -10,14 +10,73 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 
-	_ "modernc.org/sqlite" // pure-Go driver registered as "sqlite"
+	msqlite "modernc.org/sqlite" // pure-Go driver registered as "sqlite"
 )
+
+// ErrContended marks an append that failed because the store was busy, not
+// broken: another connection held the write lock past the busy timeout, or
+// the caller's deadline ran out first. Every tokenops process on a machine
+// shares one store, so this is routine; the same batch succeeds once the
+// other writer finishes.
+var ErrContended = errors.New("sqlite: store contended")
+
+// IsContended reports whether err marks a contended store. Callers retry
+// such a failure until it clears; anything else will fail identically on
+// every attempt.
+func IsContended(err error) bool { return errors.Is(err, ErrContended) }
+
+// SQLite primary result codes that mean "busy", not "broken". Extended
+// codes carry the primary code in the low byte.
+const (
+	codeBusy      = 5
+	codeLocked    = 6
+	codeInterrupt = 9
+)
+
+// contended wraps err with ErrContended when it is lock contention or an
+// exhausted caller deadline; other errors pass through unchanged.
+func contended(ctx context.Context, err error) error {
+	if err == nil {
+		return nil
+	}
+	var se *msqlite.Error
+	if errors.As(err, &se) {
+		switch se.Code() & 0xff {
+		case codeBusy, codeLocked, codeInterrupt:
+			return fmt.Errorf("%w: %w", ErrContended, err)
+		}
+	}
+	if ctx.Err() != nil {
+		// database/sql reports an interrupted statement in several shapes
+		// ("context deadline exceeded", "sql: statement is closed"); the
+		// expired context is the reliable signal.
+		return fmt.Errorf("%w: %w", ErrContended, err)
+	}
+	return err
+}
+
+// ownerOnly is the mode for the store and its WAL sidecars. They hold usage
+// history for every agent session on the machine.
+const ownerOnly = 0o600
+
+// restrictToOwner narrows the store and any WAL sidecars to ownerOnly. A
+// store created by an older release carries the umask default, so this runs
+// on every open and repairs it.
+func restrictToOwner(path string) error {
+	for _, p := range []string{path, path + "-wal", path + "-shm"} {
+		if err := os.Chmod(p, ownerOnly); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("sqlite: restrict %s: %w", filepath.Base(p), err)
+		}
+	}
+	return nil
+}
 
 // Store is a handle to the SQLite-backed event store. It is safe for
 // concurrent use; the underlying database/sql connection pool serialises
@@ -70,6 +129,12 @@ func Open(ctx context.Context, path string, opts Options) (*Store, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	if path != ":memory:" {
+		if err := restrictToOwner(path); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
+	}
 	return s, nil
 }
 
@@ -96,6 +161,8 @@ func (s *Store) Append(ctx context.Context, env *eventschema.Envelope) error {
 // none are. Empty input is a no-op. ON CONFLICT (id) the existing row is
 // preserved — emitters are expected to use UUIDv7 / unique IDs, so a
 // collision usually means a retried emit and we want it to be idempotent.
+// A failure caused by another writer or an exhausted deadline satisfies
+// IsContended.
 func (s *Store) AppendBatch(ctx context.Context, envs []*eventschema.Envelope) error {
 	if len(envs) == 0 {
 		return nil
@@ -111,13 +178,13 @@ func (s *Store) AppendBatch(ctx context.Context, envs []*eventschema.Envelope) e
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("sqlite: begin: %w", err)
+		return fmt.Errorf("sqlite: begin: %w", contended(ctx, err))
 	}
 	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.PrepareContext(ctx, insertSQL)
 	if err != nil {
-		return fmt.Errorf("sqlite: prepare: %w", err)
+		return fmt.Errorf("sqlite: prepare: %w", contended(ctx, err))
 	}
 	defer func() { _ = stmt.Close() }()
 
@@ -132,11 +199,11 @@ func (s *Store) AppendBatch(ctx context.Context, envs []*eventschema.Envelope) e
 			r.InputTokens, r.OutputTokens, r.TotalTokens, r.CostUSD,
 			r.Payload, r.Attributes,
 		); err != nil {
-			return fmt.Errorf("sqlite: insert row %d (%s): %w", i, r.ID, err)
+			return fmt.Errorf("sqlite: insert row %d (%s): %w", i, r.ID, contended(ctx, err))
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("sqlite: commit: %w", err)
+		return fmt.Errorf("sqlite: commit: %w", contended(ctx, err))
 	}
 	return nil
 }
