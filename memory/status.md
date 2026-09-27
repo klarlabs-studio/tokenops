@@ -4,9 +4,9 @@ updated: 2026-09-27
 ## Current State
 
 TokenOps is a local-first adaptive control plane for AI-assisted work. Current
-source `main` includes PR #409; v0.72.1 contains the work through PR #408. The
-CLI/MCP/API surfaces are the product; there is no bundled browser dashboard or
-demo-data workflow (PR #387).
+source `main` and the installed Homebrew CLI/daemon are v0.73.1 at commit
+`837c627`. The CLI/MCP/API surfaces are the product; there is no bundled browser
+dashboard or demo-data workflow (PR #387).
 
 ADR 0004 Phases 0–9 are implemented. Phase 5 now includes bounded live
 validation. PRs #394–#396 improved execution attribution and correctly rejected
@@ -22,6 +22,17 @@ session passed approval review and successfully called the read-only
 v0.70.0 and ready with no blockers. MCP registration still does not route
 model traffic; this validation did not configure an OpenAI API provider or
 metered route.
+
+On 2026-09-27, the global registration was moved from the mutable checkout
+artifact to `/opt/homebrew/bin/tokenops serve`. A fresh read-only Codex session
+confirmed that both the MCP process and supervised daemon reported v0.73.1.
+It then called `tokenops_prepare_work` with an explicit provider and stable
+workflow identifier and passed the exact returned identifier to
+`tokenops_review_work`. Preparation returned recommendation-only shadow advice;
+review returned `no_evidence` and described its zero-valued fields as
+placeholders because no execution was claimed. An earlier attempt against a
+stale checkout binary exposed an incomplete pre-release result shape, which is
+why the durable registration now targets the installed release.
 
 Live validation on 2026-09-26 first restarted installed v0.70.0 and confirmed
 CLI health/readiness plus MCP initialize, tools/list, and `tokenops_status`

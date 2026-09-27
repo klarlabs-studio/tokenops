@@ -50,3 +50,13 @@ updated: 2026-09-27
   Homebrew upgrade.
 - Five-pair OpenAI and Anthropic API-backed coding-agent cohorts reached
   supported evidence with independent verifiers and stable multi-call arms.
+
+## Resolved 2026-09-27
+
+- A fresh read-only Codex session completed the released MCP
+  `tokenops_prepare_work` to `tokenops_review_work` handoff. The installed MCP
+  server and daemon both reported v0.73.1, the exact workflow identifier was
+  preserved, and an intentionally unexecuted task returned `no_evidence`
+  without presenting placeholder zeroes as measurements. The global MCP
+  registration now targets the installed Homebrew binary instead of a mutable
+  checkout build.
