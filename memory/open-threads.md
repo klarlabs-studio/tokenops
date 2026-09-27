@@ -3,16 +3,6 @@ updated: 2026-09-27
 ---
 ## Open
 
-- Event persistence loses rows under load: the supervised v0.74.0 daemon
-  reported 64 dropped events minutes after restart. `~/Library/Logs/tokenops.log`
-  holds 441 retried and 17 abandoned append batches since 2026-09-26, almost
-  all `sqlite: insert row N: context deadline exceeded`, plus one
-  `sql: statement is closed`. The store is 424 MB. `events.db` is also mode
-  `0644`, unlike the `0600` files hardened in Phase 0. Needs a fix PR.
-- Nox remediation PRs #233, #234, and #351 all fail CI because `go mod tidy`
-  raised `go.mod` to Go 1.26 against the Go 1.25 pin; their upgrades need to
-  be reapplied on 1.25.
-
 - Subscription-plan telemetry: validate canonical GPT Plus/Pro and Claude
   Pro/Max/Business/Team/Enterprise semantics with genuine plan-meter records.
   The supported API-backed cohorts prove routing and metered cost only; API
@@ -66,6 +56,16 @@ updated: 2026-09-27
   supported evidence with independent verifiers and stable multi-call arms.
 
 ## Resolved 2026-09-27
+
+- Event persistence lost rows when another connection to the shared store
+  held the write lock past the bus's bounded retry budget (17 abandoned and
+  441 retried batches since 2026-09-26). #431 retries contended batches until
+  they land and restricts `events.db` and its WAL sidecars to `0600`; released
+  in v0.74.1. The long lock holder among the `tokenops serve` processes is not
+  yet identified, and pollers still re-publish full history on every start.
+- Nox remediation PRs #233, #234, and #351 were closed; #430 applied their
+  upgrades within the Go 1.25 pin. `golang.org/x/crypto` v0.56.0 requires Go
+  1.26 and its advisories are unreachable from TokenOps per `govulncheck`.
 
 - A fresh read-only Codex session completed the released MCP
   `tokenops_prepare_work` to `tokenops_review_work` handoff. The installed MCP
