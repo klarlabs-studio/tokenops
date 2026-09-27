@@ -4,8 +4,8 @@ updated: 2026-09-27
 ## Current State
 
 TokenOps is a local-first adaptive control plane for AI-assisted work. Current
-source `main` and the installed Homebrew CLI/daemon are v0.74.1 at commit
-`5842db0`; health, readiness, and version returned 200 on 2026-09-27. The CLI/MCP/API surfaces are the product; there is no bundled browser
+source `main` and the installed Homebrew CLI/daemon are v0.74.2 at commit
+`e0d1223`; health, readiness, and version returned 200 on 2026-09-27. The CLI/MCP/API surfaces are the product; there is no bundled browser
 dashboard or demo-data workflow (PR #387).
 
 ADR 0004 Phases 0–9 are implemented. Phase 5 now includes bounded live

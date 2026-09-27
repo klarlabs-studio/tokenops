@@ -22,10 +22,11 @@ Roady implementation status: `.roady/plan.json` + `.roady/state.json`.
   generation-only Anthropic metering (#428). ADR 0004 is exhausted.
 - v0.74.1: no event loss under store lock contention and owner-only store
   permissions (#431).
+- v0.74.2: pollers skip already-stored events on restart (#432).
 
 ## Validated
 
-- Installed v0.74.1 reports its tagged version/commit and passes host-local
+- Installed v0.74.2 reports its tagged version/commit and passes host-local
   health/readiness. A bounded Claude Code run through the v0.74.0 bridge
   returned `measured` review evidence against the exact prepared workflow ID. A fresh read-only Codex session used the installed MCP
   binary to complete the `tokenops_prepare_work` to `tokenops_review_work`

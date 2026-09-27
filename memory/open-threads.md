@@ -3,6 +3,15 @@ updated: 2026-09-27
 ---
 ## Open
 
+- Long write-lock holds on the shared store: a live probe saw holds of up to
+  9.98 s with only the daemon and long-lived `tokenops serve` processes
+  attached, and no process spent more than 0.02 s CPU during any of them, so
+  the holder waits while holding the lock rather than working. Retention's
+  TRUNCATE checkpoint fits that shape but runs only every 6 h. Release
+  binaries are stripped, so stack samples cannot name it; identifying it
+  needs a symbol-bearing build or lock-hold instrumentation. Since v0.74.1
+  the holds delay writes without losing them.
+
 - Subscription-plan telemetry: validate canonical GPT Plus/Pro and Claude
   Pro/Max/Business/Team/Enterprise semantics with genuine plan-meter records.
   The supported API-backed cohorts prove routing and metered cost only; API
@@ -61,8 +70,10 @@ updated: 2026-09-27
   held the write lock past the bus's bounded retry budget (17 abandoned and
   441 retried batches since 2026-09-26). #431 retries contended batches until
   they land and restricts `events.db` and its WAL sidecars to `0600`; released
-  in v0.74.1. The long lock holder among the `tokenops serve` processes is not
-  yet identified, and pollers still re-publish full history on every start.
+  in v0.74.1.
+- Pollers re-published their full history (130-190k envelopes) on every
+  daemon start. #432 snapshots stored IDs at startup and skips them; released
+  in v0.74.2, whose first start skipped 274,172 stored events.
 - Nox remediation PRs #233, #234, and #351 were closed; #430 applied their
   upgrades within the Go 1.25 pin. `golang.org/x/crypto` v0.56.0 requires Go
   1.26 and its advisories are unreachable from TokenOps per `govulncheck`.
