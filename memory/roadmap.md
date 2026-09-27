@@ -8,6 +8,11 @@ Roady implementation status: `.roady/plan.json` + `.roady/state.json`.
 
 ## Shipped
 
+- Hook parity (#265, closed 2026-09-27): coach-hook on Claude Code, Codex,
+  Cursor, and opencode; read-guard on Claude Code and opencode, permanently
+  unavailable on Codex and Cursor (#274, #277, #282). The Codex hook is
+  trusted and firing on the maintainer's machine; Cursor is unit-tested only.
+
 - Phases 0–4: privacy/safety, measurement provenance, freshness, work model,
   and interface-independent capabilities (#339–#343).
 - Phase 5 implementation and bounded live validation: outcome/intervention
@@ -46,8 +51,6 @@ Roady implementation status: `.roady/plan.json` + `.roady/state.json`.
 
 ## Proposed Next
 
-- Coach-hook parity for Codex and Cursor (#265); both expose a compatible
-  end-of-turn hook. read-guard parity is not achievable on two of four clients.
 - The blocked outcome cohort and the unvalidated subscription plans need
   evidence from real work and accounts beyond this machine.
 - Team plane (#250) stays deferred until solo users ask for it.
