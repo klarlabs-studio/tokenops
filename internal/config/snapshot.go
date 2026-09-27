@@ -18,6 +18,7 @@ const SensitiveHeaderPlaceholder = "***REDACTED***"
 //   - dashboard.admin_token
 //   - vendor_usage.anthropic.admin_key (sk-ant-admin-*)
 //   - vendor_usage.claude_usage_meter.session_key (claude.ai session)
+//   - vendor_usage.claude_usage_meter.clearance (Cloudflare session proof)
 //   - vendor_usage.cursor.cookie
 //   - vendor_usage.github_copilot.oauth_token
 func (c Config) Redacted() Config {
@@ -37,6 +38,7 @@ func (c Config) Redacted() Config {
 	mask(&redacted.Dashboard.AdminToken)
 	mask(&redacted.VendorUsage.Anthropic.AdminKey)
 	mask(&redacted.VendorUsage.ClaudeUsageMeter.SessionKey)
+	mask(&redacted.VendorUsage.ClaudeUsageMeter.Clearance)
 	mask(&redacted.VendorUsage.Cursor.Cookie)
 	mask(&redacted.VendorUsage.GitHubCopilot.OAuthToken)
 	return redacted

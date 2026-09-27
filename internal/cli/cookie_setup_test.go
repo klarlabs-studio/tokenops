@@ -227,6 +227,48 @@ func TestSetupPasteRequestPersistsOnlyBoundedSessionFields(t *testing.T) {
 	}
 }
 
+func TestSetupPasteRequestReadsCompleteMultilineCurlFromPipe(t *testing.T) {
+	meterServing(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/organizations" {
+			_, _ = w.Write([]byte(`[{"uuid":"org-test","name":"Test"}]`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"limits":[{"kind":"session","percent":12,"resets_at":"2030-01-01T00:00:00Z"}]}`))
+	})
+	path := seedConfig(t)
+	raw := "curl 'https://claude.ai/api/organizations/org-test/usage' \\\n" +
+		"  -H 'accept: application/json' \\\n" +
+		"  -b 'other=x; sessionKey=sk-ant-sid-test; cf_clearance=clearance-test' \\\n" +
+		"  -H 'user-agent: Test Browser'"
+	out, err := runCookieSetupCmd(t, raw, "claude-subscription", "--paste-request", "--config-path", path, "--no-restart")
+	if err != nil {
+		t.Fatalf("setup: %v\n%s", err, out)
+	}
+	cfg, err := config.ReadMutable(path)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	got := cfg.VendorUsage.ClaudeUsageMeter
+	if got.SessionKey != "sk-ant-sid-test" || got.Clearance != "clearance-test" || got.UserAgent != "Test Browser" {
+		t.Fatalf("multiline request was not read completely: %+v", got)
+	}
+}
+
+func TestCurlLineContinues(t *testing.T) {
+	for _, tc := range []struct {
+		line string
+		want bool
+	}{
+		{line: `curl 'https://claude.ai/api/organizations/org/usage' \`, want: true},
+		{line: `  -H 'accept: application/json' \   `, want: true},
+		{line: `  -b 'sessionKey=secret'`, want: false},
+	} {
+		if got := curlLineContinues(tc.line); got != tc.want {
+			t.Errorf("curlLineContinues(%q) = %t, want %t", tc.line, got, tc.want)
+		}
+	}
+}
+
 // Cloudflare's clearance cookie is short-lived and renewed by loading the
 // page, so "sign in again" sends the operator to the wrong place.
 func TestBotCheckErrorSaysHowToRenewIt(t *testing.T) {
