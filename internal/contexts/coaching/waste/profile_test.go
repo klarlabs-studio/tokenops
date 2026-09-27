@@ -29,8 +29,8 @@ func TestProfileForCodex(t *testing.T) {
 	if p.MaxContextTokens != 250_000 {
 		t.Errorf("codex MaxContextTokens = %d; want 250000", p.MaxContextTokens)
 	}
-	if p.ContextGrowthLimitTokens != 500_000 {
-		t.Errorf("codex growth = %d; want 500000", p.ContextGrowthLimitTokens)
+	if p.ContextGrowthPerStepTokens != 15_000 {
+		t.Errorf("codex per-step growth = %d; want 15000", p.ContextGrowthPerStepTokens)
 	}
 }
 
@@ -48,8 +48,8 @@ func TestProfileForClaudeCode(t *testing.T) {
 		if p.MaxContextTokens != 900_000 {
 			t.Errorf("MaxContextTokens = %d", p.MaxContextTokens)
 		}
-		if p.ContextGrowthLimitTokens != 2_000_000 {
-			t.Errorf("ContextGrowthLimitTokens = %d", p.ContextGrowthLimitTokens)
+		if p.ContextGrowthPerStepTokens != 5_000 {
+			t.Errorf("ContextGrowthPerStepTokens = %d", p.ContextGrowthPerStepTokens)
 		}
 	}
 }
@@ -59,10 +59,11 @@ func TestProfileForClaudeCode(t *testing.T) {
 // 900k code-agent threshold.
 func TestDetectAppliesClaudeCodeProfile(t *testing.T) {
 	trace := &workflow.Trace{
-		WorkflowID:         "claude-code:proj:sess",
-		MaxContextSize:     500_000,
+		WorkflowID:     "claude-code:proj:sess",
+		MaxContextSize: 500_000,
+		// ~1.25k tokens per step: an ordinary Claude Code rate.
 		ContextGrowthTotal: 500_000,
-		StepCount:          50,
+		StepCount:          400,
 		Steps: []workflow.Step{
 			{Prompt: &eventschema.PromptEvent{InputTokens: 500_000}},
 		},

@@ -407,10 +407,23 @@ coaching:
   context_limits:
     - workflow_prefix: "claude-code:"
       max_context_tokens: 500000          # flag earlier than the 900k default
-      context_growth_limit_tokens: 1000000
+      context_growth_per_step_tokens: 3000  # mean growth per step (default 5k)
       max_consecutive_agent_loops: 4
       system_redundancy_min: 3
 ```
+
+Context growth is judged **per step** by default: 5k tokens per step for
+`claude-code:`, 15k for `codex:`, and 8k elsewhere, over sessions of at
+least 10 steps. A long agent session grows a steady amount per turn and
+compacts now and then, so a limit on its total growth flags every session
+past a certain length. `context_growth_limit_tokens` still sets a total
+limit for a prefix that wants one; setting it switches that prefix to the
+total rule.
+
+The repeated-agent-loop check (`max_consecutive_agent_loops`) applies only
+to workflows with more than one agent. In a single-agent session every turn
+belongs to the same agent, so a consecutive-run count is the session
+length; repetition there is caught by the identical-prompt check instead.
 
 ## Automatic rate-card refresh
 

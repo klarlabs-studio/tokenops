@@ -349,8 +349,12 @@ type ContextLimitConfig struct {
 	WorkflowPrefix           string `yaml:"workflow_prefix"`
 	MaxContextTokens         int64  `yaml:"max_context_tokens"`
 	ContextGrowthLimitTokens int64  `yaml:"context_growth_limit_tokens"`
-	MaxConsecutiveAgentLoops int    `yaml:"max_consecutive_agent_loops"`
-	SystemRedundancyMin      int    `yaml:"system_redundancy_min"`
+	// ContextGrowthPerStepTokens judges growth as a mean per step rather
+	// than a session total; when set, context_growth_limit_tokens is
+	// ignored for the prefix.
+	ContextGrowthPerStepTokens int64 `yaml:"context_growth_per_step_tokens,omitempty"`
+	MaxConsecutiveAgentLoops   int   `yaml:"max_consecutive_agent_loops"`
+	SystemRedundancyMin        int   `yaml:"system_redundancy_min"`
 }
 
 // WasteConfig maps coaching.context_limits into the waste detector's
@@ -363,11 +367,12 @@ func (c CoachingConfig) WasteConfig() waste.Config {
 	profiles := make([]waste.Profile, 0, len(c.ContextLimits))
 	for _, l := range c.ContextLimits {
 		profiles = append(profiles, waste.Profile{
-			WorkflowPrefix:           l.WorkflowPrefix,
-			MaxContextTokens:         l.MaxContextTokens,
-			ContextGrowthLimitTokens: l.ContextGrowthLimitTokens,
-			MaxConsecutiveAgentLoops: l.MaxConsecutiveAgentLoops,
-			SystemRedundancyMin:      l.SystemRedundancyMin,
+			WorkflowPrefix:             l.WorkflowPrefix,
+			MaxContextTokens:           l.MaxContextTokens,
+			ContextGrowthLimitTokens:   l.ContextGrowthLimitTokens,
+			ContextGrowthPerStepTokens: l.ContextGrowthPerStepTokens,
+			MaxConsecutiveAgentLoops:   l.MaxConsecutiveAgentLoops,
+			SystemRedundancyMin:        l.SystemRedundancyMin,
 		})
 	}
 	return waste.Config{Profiles: profiles}
@@ -1100,7 +1105,7 @@ func (c Config) Validate() error {
 		if l.WorkflowPrefix == "" {
 			return fmt.Errorf("coaching.context_limits[%d]: workflow_prefix is required", i)
 		}
-		if l.MaxContextTokens < 0 || l.ContextGrowthLimitTokens < 0 ||
+		if l.MaxContextTokens < 0 || l.ContextGrowthLimitTokens < 0 || l.ContextGrowthPerStepTokens < 0 ||
 			l.MaxConsecutiveAgentLoops < 0 || l.SystemRedundancyMin < 0 {
 			return fmt.Errorf("coaching.context_limits[%d]: thresholds must be non-negative", i)
 		}
