@@ -250,9 +250,12 @@ func newDaemonRestartCmd() *cobra.Command {
 				}
 				return serr
 			}
+			progress := startActivity(cmd.ErrOrStderr(), "Restarting "+daemon.LaunchdLabel)
 			if err := daemon.RestartUnit(kind); err != nil {
+				progress.failure("Daemon restart failed")
 				return err
 			}
+			progress.success("Daemon restarted")
 			fmt.Fprintf(out, "restarted %s (%s)\n", daemon.LaunchdLabel, kind)
 			fmt.Fprintln(out, "it has re-read the config; verify with `tokenops status`")
 			return nil

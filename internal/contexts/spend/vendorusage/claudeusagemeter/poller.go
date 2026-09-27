@@ -29,14 +29,16 @@ type PollerOptions struct {
 	// record. It is what lets a status surface tell a reader being
 	// refused apart from a vendor nobody is using — both produce no
 	// events. nil disables the reporting.
-	Health     *freshness.Recorder
-	SessionKey string
-	Clearance  string
-	UserAgent  string
-	OrgID      string        // empty → resolved via /api/organizations on first scan
-	Interval   time.Duration // defaults 5 minutes
-	BaseURL    string        // test override
-	Logger     *slog.Logger
+	Health         *freshness.Recorder
+	SessionKey     string
+	Clearance      string
+	UserAgent      string
+	BrowserHeaders map[string]string
+	BrowserCookies map[string]string
+	OrgID          string        // empty → resolved via /api/organizations on first scan
+	Interval       time.Duration // defaults 5 minutes
+	BaseURL        string        // test override
+	Logger         *slog.Logger
 	// Cookies, when set, re-reads the claude.ai session and Cloudflare
 	// clearance from the operator's browser. The clearance cookie expires
 	// within hours and is bound to the browser's address, so a meter that
@@ -123,6 +125,8 @@ func (p *Poller) ensureClient() error {
 	}
 	c := NewClient(p.opts.SessionKey)
 	c.Clearance, c.UserAgent = p.opts.Clearance, p.opts.UserAgent
+	c.BrowserHeaders = p.opts.BrowserHeaders
+	c.BrowserCookies = p.opts.BrowserCookies
 	if p.opts.BaseURL != "" {
 		c.BaseURL = p.opts.BaseURL
 	}

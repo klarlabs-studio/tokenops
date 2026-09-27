@@ -95,12 +95,14 @@ func applyRestartWith(w io.Writer, deps restartDeps, restart, needsMCP bool) {
 		printRestartHintFor(w, deps.Supervised, needsMCP)
 		return
 	}
+	progress := startActivity(w, "Restarting the supervised daemon")
 	if err := deps.Restart(); err != nil {
-		fmt.Fprintf(w, "could not restart the daemon: %v\n  the change is written but not live — %s\n",
+		progress.failure("could not restart the daemon")
+		fmt.Fprintf(w, "  error: %v\n  the change is written but not live — %s\n",
 			err, restartHint(true, needsMCP))
 		return
 	}
-	fmt.Fprintln(w, "restarted the daemon; the change is live")
+	progress.success("restarted the daemon; the change is live")
 	if needsMCP {
 		fmt.Fprintln(w, "note: restart your MCP client too — its tokenops server is a child of the client, not ours to restart")
 	}

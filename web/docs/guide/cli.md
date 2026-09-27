@@ -233,8 +233,14 @@ keychain is unlocked. `--paste-request` is the portable fallback: open
 `claude.ai/settings/usage`, select the content-free
 `/api/organizations/.../usage` GET in Developer Tools → Network, choose
 **Copy as cURL**, and paste it at the hidden prompt. TokenOps rejects other
-endpoints and extracts only `sessionKey`, `cf_clearance`, `User-Agent`, and
-the organization ID; it does not store the copied command or any response.
+endpoints and extracts only `sessionKey`, a closed allowlist of Cloudflare
+session cookies (`cf_clearance`, `__cf_bm`, and `_cfuvid`), `User-Agent`, the
+organization ID, and a closed allowlist of non-secret browser client hints
+(`Accept-Language`, `Priority`, `Sec-CH-UA*`, and `Sec-Fetch-*`). Those hints
+let the supervised daemon replay the same browser-shaped request Cloudflare
+accepted. Authorization and arbitrary headers, request bodies, the copied
+command, and responses are never stored or replayed. Every imported cookie is
+treated as a credential and redacted from CLI, MCP, and API configuration views.
 The clearance is short-lived, so repeat setup if source health later reports
 that Claude's bot check refused it.
 
@@ -244,6 +250,12 @@ is and reading it without echoing it into your scrollback. Either way it
 only then writes config. A mistyped or expired key fails here rather than
 sitting in config producing nothing — session cookies rotate, so a stale
 copy is the usual cause.
+
+When a supervised daemon is installed, setup restarts it automatically and
+waits for the command to complete. The MCP server watches the same config and
+reloads it in-process, so there is no MCP-client restart step. `--no-restart`
+is available only for advanced workflows that deliberately batch several
+configuration writes.
 
 From an agent, `tokenops_vendor_usage_setup` does the same: it reads the
 browser session (you allow the keychain prompt) and never asks for the key

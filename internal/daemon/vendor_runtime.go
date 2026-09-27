@@ -84,7 +84,9 @@ func startVendorUsagePollers(
 		p := claudeusagemeter.NewPoller(bus, claudeusagemeter.PollerOptions{
 			Health: sourceHealth.For("claude-usage-meter"), SessionKey: cfg.VendorUsage.ClaudeUsageMeter.SessionKey,
 			Clearance: cfg.VendorUsage.ClaudeUsageMeter.Clearance, UserAgent: cfg.VendorUsage.ClaudeUsageMeter.UserAgent,
-			OrgID: cfg.VendorUsage.ClaudeUsageMeter.OrgID, Interval: cfg.VendorUsage.ClaudeUsageMeter.Interval,
+			BrowserHeaders: cfg.VendorUsage.ClaudeUsageMeter.BrowserHeaders,
+			BrowserCookies: cfg.VendorUsage.ClaudeUsageMeter.BrowserCookies,
+			OrgID:          cfg.VendorUsage.ClaudeUsageMeter.OrgID, Interval: cfg.VendorUsage.ClaudeUsageMeter.Interval,
 			Logger: logger, Cookies: browserSessionSource(cfg.VendorUsage.ClaudeUsageMeter),
 		})
 		sup.Go("claude-usage-meter", p.Run)

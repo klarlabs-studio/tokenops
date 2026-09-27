@@ -740,10 +740,19 @@ type ClaudeUsageMeterConfig struct {
 	// Clearance and UserAgent are an optional, matched Cloudflare session.
 	// They let installations that cannot read a browser's protected cookie
 	// database use a deliberately copied, content-free usage request instead.
-	Clearance string        `yaml:"clearance,omitempty"`
-	UserAgent string        `yaml:"user_agent,omitempty"`
-	OrgID     string        `yaml:"org_id"`
-	Interval  time.Duration `yaml:"interval"`
+	Clearance string `yaml:"clearance,omitempty"`
+	UserAgent string `yaml:"user_agent,omitempty"`
+	// BrowserHeaders is a strict, non-secret subset of browser request
+	// metadata captured by --paste-request. Cloudflare may bind a clearance
+	// session to these client hints as well as the User-Agent. Arbitrary
+	// copied headers are never persisted.
+	BrowserHeaders map[string]string `yaml:"browser_headers,omitempty"`
+	// BrowserCookies contains only Cloudflare's short-lived bot-management
+	// cookies captured by --paste-request. Values are credentials and must be
+	// redacted anywhere configuration is displayed.
+	BrowserCookies map[string]string `yaml:"browser_cookies,omitempty"`
+	OrgID          string            `yaml:"org_id"`
+	Interval       time.Duration     `yaml:"interval"`
 	// FromBrowser re-reads the session and Cloudflare clearance cookies
 	// from the local browser as the daemon polls. claude.ai's bot check
 	// refuses a request without a clearance cookie, and that cookie

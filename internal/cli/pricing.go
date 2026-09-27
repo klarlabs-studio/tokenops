@@ -111,13 +111,15 @@ keep working on the baseline.`,
 			ctx, cancel := context.WithTimeout(cmd.Context(), 15*time.Second)
 			defer cancel()
 
-			fmt.Fprintf(out, "Fetching rates from %s…\n", src.Name())
+			progress := startActivity(errOut, "Fetching rates from "+src.Name())
 			snap, err := src.Fetch(ctx)
 			if err != nil {
+				progress.failure("Pricing fetch failed")
 				fmt.Fprintf(errOut, "pricing refresh: fetch failed: %v\n", err)
 				fmt.Fprintln(errOut, "No snapshot written. If this environment blocks outbound network, run refresh where the source is reachable (operator machine or CI).")
 				return err
 			}
+			progress.success(fmt.Sprintf("Fetched %d model rates", len(snap.Rates)))
 			fmt.Fprintf(out, "Fetched %d model rates (as of %s).\n\n", len(snap.Rates), snap.FetchedAt.Format(time.RFC3339))
 
 			// Consistency guard — warn, never block.

@@ -14,9 +14,26 @@ const requestImportInstructions = `Copy a content-free Claude usage request:
   3. select the GET request ending /api/organizations/.../usage
   4. choose Copy -> Copy as cURL
 
-TokenOps extracts only sessionKey, cf_clearance, User-Agent, and the organization
+TokenOps extracts only sessionKey, the allowlisted Cloudflare session cookies,
+the browser identity headers needed to replay the request, and the organization
 ID. It rejects any request outside claude.ai's usage endpoint and does not store
-the copied command or response.`
+the copied command, authorization headers, request body, or response.`
+
+// importedBrowserHeaders is deliberately closed. These fields describe the
+// browser request shape Cloudflare evaluated; none carries account authority.
+// Cookie and User-Agent have dedicated fields and are handled separately.
+var importedBrowserHeaders = []string{
+	"accept-language",
+	"priority",
+	"sec-ch-ua",
+	"sec-ch-ua-mobile",
+	"sec-ch-ua-platform",
+	"sec-fetch-dest",
+	"sec-fetch-mode",
+	"sec-fetch-site",
+}
+
+var importedBrowserCookies = []string{"__cf_bm", "_cfuvid"}
 
 var usageURLPattern = regexp.MustCompile(`https://claude\.ai/api/organizations/([^/?#[:space:]'"\\]+)/usage(?:[?#][^[:space:]'"\\]*)?`)
 
@@ -44,12 +61,30 @@ func parseUsageRequest(raw string) (browserSession, error) {
 	if key == "" {
 		return browserSession{}, errors.New("copied usage request has no sessionKey cookie; nothing was written")
 	}
+	headers := make(map[string]string)
+	for _, name := range importedBrowserHeaders {
+		if value := strings.TrimSpace(copiedHeader(raw, name)); validImportedHeader(value) {
+			headers[name] = value
+		}
+	}
+	browserCookies := make(map[string]string)
+	for _, name := range importedBrowserCookies {
+		if value := strings.TrimSpace(cookies[name]); value != "" {
+			browserCookies[name] = value
+		}
+	}
 	return browserSession{
-		key:       key,
-		clearance: strings.TrimSpace(cookies["cf_clearance"]),
-		userAgent: strings.TrimSpace(copiedHeader(raw, "user-agent")),
-		orgID:     match[1],
+		key:            key,
+		clearance:      strings.TrimSpace(cookies["cf_clearance"]),
+		userAgent:      strings.TrimSpace(copiedHeader(raw, "user-agent")),
+		browserHeaders: headers,
+		browserCookies: browserCookies,
+		orgID:          match[1],
 	}, nil
+}
+
+func validImportedHeader(value string) bool {
+	return value != "" && len(value) <= 1024 && !strings.ContainsAny(value, "\r\n")
 }
 
 func copiedHeader(raw, name string) string {
