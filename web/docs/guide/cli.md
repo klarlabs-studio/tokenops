@@ -128,6 +128,11 @@ tokenops daemon status
 tokenops daemon uninstall
 ```
 
+Install and upgrade wait until the supervised process answers `/healthz`
+before reporting success. Supervisor acceptance alone is not treated as a
+running daemon; a failed startup exits non-zero with the status and log path
+to inspect.
+
 `tokenops serve` is the MCP server and does not ingest. A reboot that
 kills an unsupervised `start` while the client respawns `serve` is how
 a 27-day outage stayed invisible.
@@ -479,7 +484,9 @@ rebuilt from transcripts on every run.
 
 Restarts the supervised unit so it re-reads config. The daemon loads its
 configuration once, at boot, so a config write that is not followed by a
-restart has not taken effect yet.
+restart has not taken effect yet. The command waits up to 20 seconds for the
+new process to answer `/healthz`; success means the restart is live rather
+than merely accepted by launchd or systemd.
 
 ```bash
 tokenops daemon restart

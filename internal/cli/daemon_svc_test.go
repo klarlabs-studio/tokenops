@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/daemon"
 )
@@ -154,11 +156,16 @@ func TestDaemonInstallFailsWhenTheUnitCannotBeStarted(t *testing.T) {
 func TestDaemonInstallPassesWhetherTheUnitChanged(t *testing.T) {
 	var seen []bool
 	prev := applyUnit
+	prevAwait := awaitDaemonHealth
 	applyUnit = func(_ daemon.UnitKind, _ string, changed bool) error {
 		seen = append(seen, changed)
 		return nil
 	}
-	t.Cleanup(func() { applyUnit = prev })
+	awaitDaemonHealth = func(context.Context, string, time.Duration) error { return nil }
+	t.Cleanup(func() {
+		applyUnit = prev
+		awaitDaemonHealth = prevAwait
+	})
 
 	args := []string{
 		"daemon", "install",
@@ -174,5 +181,31 @@ func TestDaemonInstallPassesWhetherTheUnitChanged(t *testing.T) {
 	}
 	if !slices.Equal(seen, []bool{true, false}) {
 		t.Errorf("changed = %v, want [true false]: written, then already up to date", seen)
+	}
+}
+
+func TestDaemonInstallDoesNotClaimRunningBeforeHealthAnswers(t *testing.T) {
+	prevApply, prevAwait := applyUnit, awaitDaemonHealth
+	applyUnit = func(daemon.UnitKind, string, bool) error { return nil }
+	awaitDaemonHealth = func(context.Context, string, time.Duration) error {
+		return errors.New("connection refused")
+	}
+	t.Cleanup(func() {
+		applyUnit = prevApply
+		awaitDaemonHealth = prevAwait
+	})
+
+	out, err := executeRoot(t,
+		"daemon", "install",
+		"--kind", "launchd",
+		"--bin", "/opt/homebrew/bin/tokenops",
+		"--home", "/Users/ada",
+		"--path", filepath.Join(t.TempDir(), "de.klarlabs.tokenops.plist"),
+	)
+	if err == nil {
+		t.Fatalf("install reported success before health answered:\n%s", out)
+	}
+	if strings.Contains(out, "Running and healthy") {
+		t.Fatalf("install claimed a healthy daemon:\n%s", out)
 	}
 }
