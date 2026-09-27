@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -82,8 +83,10 @@ func restrictToOwner(path string) error {
 // concurrent use; the underlying database/sql connection pool serialises
 // writes when SQLite locks for write.
 type Store struct {
-	db   *sql.DB
-	path string
+	db       *sql.DB
+	path     string
+	logger   *slog.Logger
+	slowLock time.Duration
 }
 
 // Options tunes the connection. Zero values fall back to sensible defaults.
@@ -93,7 +96,17 @@ type Options struct {
 	MaxOpenConns int
 	// BusyTimeout configures SQLite's busy timeout pragma. Default 5s.
 	BusyTimeout time.Duration
+	// Logger receives slow-lock diagnostics. Nil uses slog.Default, so
+	// each process reports wherever its own logs already go.
+	Logger *slog.Logger
+	// SlowLockWarn is how long a write may wait for, or hold, the lock
+	// before it is logged. Zero uses defaultSlowLockWarn.
+	SlowLockWarn time.Duration
 }
+
+// defaultSlowLockWarn flags lock waits and holds far outside the normal
+// range: an uncontended 64-row batch commits in about 15ms.
+const defaultSlowLockWarn = time.Second
 
 // Open connects to (or creates) the SQLite database at path and runs any
 // pending migrations. The special path ":memory:" is honoured for tests.
@@ -106,6 +119,12 @@ func Open(ctx context.Context, path string, opts Options) (*Store, error) {
 	}
 	if opts.BusyTimeout <= 0 {
 		opts.BusyTimeout = 5 * time.Second
+	}
+	if opts.Logger == nil {
+		opts.Logger = slog.Default()
+	}
+	if opts.SlowLockWarn <= 0 {
+		opts.SlowLockWarn = defaultSlowLockWarn
 	}
 
 	dsn, err := buildDSN(path, opts.BusyTimeout)
@@ -124,10 +143,16 @@ func Open(ctx context.Context, path string, opts Options) (*Store, error) {
 		return nil, fmt.Errorf("sqlite: ping: %w", err)
 	}
 
-	s := &Store{db: db, path: path}
+	s := &Store{db: db, path: path, logger: opts.Logger, slowLock: opts.SlowLockWarn}
+	started := time.Now()
 	if err := s.migrate(ctx); err != nil {
 		_ = db.Close()
 		return nil, err
+	}
+	if took := time.Since(started); took >= s.slowLock {
+		// migrate starts with a schema write, so a slow one waited on
+		// another process's write lock.
+		s.logSlowLock("open", took, 0, 0)
 	}
 	if path != ":memory:" {
 		if err := restrictToOwner(path); err != nil {
@@ -188,7 +213,14 @@ func (s *Store) AppendBatch(ctx context.Context, envs []*eventschema.Envelope) e
 	}
 	defer func() { _ = stmt.Close() }()
 
+	// A deferred transaction takes the write lock at its first insert, so
+	// the wait ends, and the hold begins, when that insert returns.
+	began := time.Now()
+	var locked time.Time
 	for i, r := range rows {
+		if i == 1 {
+			locked = time.Now()
+		}
 		if _, err := stmt.ExecContext(ctx,
 			r.ID, r.SchemaVersion, string(r.Type), r.TimestampNS, r.Day,
 			r.TraceID, r.SpanID, r.Source,
@@ -202,10 +234,30 @@ func (s *Store) AppendBatch(ctx context.Context, envs []*eventschema.Envelope) e
 			return fmt.Errorf("sqlite: insert row %d (%s): %w", i, r.ID, contended(ctx, err))
 		}
 	}
+	if locked.IsZero() {
+		locked = time.Now()
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("sqlite: commit: %w", contended(ctx, err))
 	}
+	wait, held := locked.Sub(began), time.Since(locked)
+	if wait >= s.slowLock || held >= s.slowLock {
+		s.logSlowLock("append", wait, held, len(rows))
+	}
 	return nil
+}
+
+// logSlowLock names the process that saw a slow write-lock wait or hold.
+// Every tokenops process logs its own, so the holder of a contended lock
+// appears as the one reporting a long hold while others report waits.
+func (s *Store) logSlowLock(op string, wait, held time.Duration, rows int) {
+	role := ""
+	if len(os.Args) > 1 {
+		role = os.Args[1]
+	}
+	s.logger.Warn("sqlite: slow write lock",
+		"op", op, "wait", wait.Round(time.Millisecond), "held", held.Round(time.Millisecond),
+		"rows", rows, "pid", os.Getpid(), "role", role)
 }
 
 // Filter selects events for Query. Empty fields are not constrained; Limit <=
