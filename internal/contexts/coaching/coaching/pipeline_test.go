@@ -57,6 +57,12 @@ func (r *recordingSink) Publish(env *eventschema.Envelope) {
 	r.count.Add(1)
 }
 
+func (r *recordingSink) snapshot() []*eventschema.Envelope {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]*eventschema.Envelope(nil), r.envs...)
+}
+
 func startPipelineForTest(t *testing.T, cfg Config, store *sqlite.Store, sink Sink) *Pipeline {
 	t.Helper()
 	rep := replay.New(store, optimizer.NewPipeline(), nil)
@@ -94,7 +100,7 @@ func TestPipelineEmitsCoachingEvents(t *testing.T) {
 	if sink.count.Load() == 0 {
 		t.Fatalf("no coaching events: stats=%s", p.Stats())
 	}
-	for _, env := range sink.envs {
+	for _, env := range sink.snapshot() {
 		if env.Type != eventschema.EventTypeCoaching {
 			t.Errorf("wrong type: %s", env.Type)
 		}
