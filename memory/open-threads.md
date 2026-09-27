@@ -7,9 +7,11 @@ updated: 2026-09-27
   Pro/Max/Business/Team/Enterprise semantics with genuine plan-meter records.
   The supported API-backed cohorts prove routing and metered cost only; API
   billing is separate from subscription quota accounting. Current Codex data
-  reports opaque plan type `prolite` with one weekly window; do not map it to a
-  catalog plan without authority. Claude JSONL lacks an authoritative quota
-  percentage. The decoder preserves shape-valid vendor window labels and
+  reports opaque plan type `prolite` with one weekly window. Codex's documented
+  `account/read` method independently returned the same value, while official
+  OpenAI documentation publishes no mapping for it; preserve it as vendor
+  identity rather than mapping it to a catalog plan. Claude JSONL lacks an
+  authoritative quota percentage. The decoder preserves shape-valid vendor window labels and
   supports the current public web client's unified limits contract. A
   content-safe copied usage request has now enabled a current-checkout
   interactive daemon to store one genuine
@@ -18,8 +20,8 @@ updated: 2026-09-27
   content-safe request importer began preserving strict allowlists of browser
   client hints and Cloudflare bot-management cookies; every imported cookie is
   centrally redacted. Do not generalize this Max-plan proof to Pro, Team,
-  Business, or Enterprise, and the opaque OpenAI `prolite` mapping remains
-  unresolved.
+  Business, or Enterprise. Additional plan validation requires genuine records
+  from accounts carrying those plans.
 - Relicta release governance: the repository guard in
   `scripts/relicta-publish-signed.sh` never invokes Relicta's unsafe publish
   action. Relicta plans, versions, writes notes, and approves; Git verifies and
