@@ -216,8 +216,9 @@ content-safely.
 2. Expand representative Codex and Claude Code cohorts only when a new task
    class or policy question justifies paid evidence; the bounded Go repair
    class now has supported OpenAI and Anthropic coding-agent cohorts.
-3. Resolve or guard Relicta's ignored `gitsign` and `autocommitchangelog`
-   settings before the next release.
+3. Use the repository's guarded Relicta publish path for the next release;
+   Relicta 4.2.0 remains the latest version and still ignores `gitsign` and
+   `autocommitchangelog` in the observed workflow.
 4. Record a human or recognized-verifier outcome only when actually observed;
    do not seed examples or claim causal uplift from task completion alone.
 5. Keep background coaching off until its opt-in, scope, and cost policy are
