@@ -42,7 +42,8 @@ the exact Anthropic `/v1/messages` generation endpoint, so the
 `/v1/messages/count_tokens` preflight no longer double-counts a request.
 
 ADR 0004 Phases 0–9 are complete and validated; its roadmap is exhausted. The
-proposed next arc is Codex/Cursor coach-hook parity (#265), with the team plane (#250) held until solo users ask.
+remaining roadmap items wait on outside evidence (plan meters, new task
+classes) or demand (team plane #250); hook parity (#265) had already shipped.
 
 Live validation on 2026-09-26 first restarted installed v0.70.0 and confirmed
 CLI health/readiness plus MCP initialize, tools/list, and `tokenops_status`
