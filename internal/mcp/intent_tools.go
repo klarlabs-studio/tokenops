@@ -8,6 +8,7 @@ import (
 
 	mcpgo "go.klarlabs.de/mcp"
 
+	workflowdomain "go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
 	"go.klarlabs.de/tokenops/internal/presentation"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -32,11 +33,12 @@ type reviewWorkTrace struct {
 // reviewWorkResult composes the measured work trace, spend view, and existing
 // waste-detector findings into one task-oriented response.
 type reviewWorkResult struct {
-	WorkflowID string                       `json:"workflow_id"`
-	Insight    presentation.WorkInsight     `json:"insight"`
-	Trace      reviewWorkTrace              `json:"trace"`
-	Usage      *spendSummaryResult          `json:"usage"`
-	Findings   []*eventschema.CoachingEvent `json:"findings"`
+	WorkflowID     string                       `json:"workflow_id"`
+	EvidenceStatus string                       `json:"evidence_status"`
+	Insight        presentation.WorkInsight     `json:"insight"`
+	Trace          reviewWorkTrace              `json:"trace"`
+	Usage          *spendSummaryResult          `json:"usage"`
+	Findings       []*eventschema.CoachingEvent `json:"findings"`
 }
 
 func registerIntentTools(s *Server, d Deps) error {
@@ -44,25 +46,34 @@ func registerIntentTools(s *Server, d Deps) error {
 		return errors.New("mcp: server must not be nil")
 	}
 	s.Tool("tokenops_review_work").
-		Description("Review one completed or in-progress workflow in one call: summarize evidence-backed work insight, steps and context growth, measure token and cost totals, and return existing coaching findings. Use this when asked why a task consumed resources or how to reduce waste on a specific workflow. Findings are evidence-based suggestions, not applied changes. Returns aggregate trace metrics, not prompt content; no finding is not a quality assessment.").
+		Description("Review one completed or in-progress workflow in one call. Pass the workflow_id returned by tokenops_prepare_work. The result explicitly distinguishes measured evidence from no_evidence, summarizes steps and context growth, measures token and cost totals, and returns existing coaching findings. Findings are evidence-based suggestions, not applied changes. Returns aggregate trace metrics, not prompt content; no finding is not a quality assessment.").
 		OutputSchema(reviewWorkResult{}).
 		Handler(func(ctx context.Context, in reviewWorkInput) (mcpgo.StructuredResult, error) {
 			trace, err := workflowTrace(ctx, d, workflowTraceInput(in))
-			if err != nil {
+			noEvidence := errors.Is(err, workflowdomain.ErrNoTrace)
+			if err != nil && !noEvidence {
 				return mcpgo.StructuredResult{}, err
 			}
 			usage, err := spendSummary(ctx, d, spendSummaryInput{WorkflowID: in.WorkflowID})
 			if err != nil {
 				return mcpgo.StructuredResult{}, err
 			}
-			findings := trace.Findings
-			if findings == nil {
-				findings = []*eventschema.CoachingEvent{}
+			findings := []*eventschema.CoachingEvent{}
+			if !noEvidence && trace.Findings != nil {
+				findings = trace.Findings
 			}
 			result := &reviewWorkResult{
-				WorkflowID: in.WorkflowID,
-				Insight:    workInsight(trace.Trace.StepCount, findings),
-				Trace: reviewWorkTrace{
+				WorkflowID:     in.WorkflowID,
+				EvidenceStatus: "no_evidence",
+				Insight:        workInsight(0, findings),
+				Trace:          reviewWorkTrace{Models: map[string]int{}},
+				Usage:          usage,
+				Findings:       findings,
+			}
+			if !noEvidence {
+				result.EvidenceStatus = "measured"
+				result.Insight = workInsight(trace.Trace.StepCount, findings)
+				result.Trace = reviewWorkTrace{
 					StepCount:         trace.Trace.StepCount,
 					TotalInputTokens:  trace.Trace.TotalInputTokens,
 					TotalOutputTokens: trace.Trace.TotalOutputTokens,
@@ -71,9 +82,7 @@ func registerIntentTools(s *Server, d Deps) error {
 					MaxContextTokens:  trace.Trace.MaxContextSize,
 					ContextGrowth:     trace.Trace.ContextGrowthTotal,
 					Models:            trace.Trace.Models,
-				},
-				Usage:    usage,
-				Findings: findings,
+				}
 			}
 			encoded, err := json.Marshal(result)
 			if err != nil {
@@ -102,7 +111,11 @@ func workInsight(stepCount int, findings []*eventschema.CoachingEvent) presentat
 }
 
 func renderWorkInsight(result *reviewWorkResult) string {
-	return fmt.Sprintf("## Work insight — `%s`\n\n%s\n\nMeasured: %d steps · %d tokens · $%.4f · %d tokens context growth. Findings are suggestions only; no changes were applied.",
-		result.Insight.Level, result.Insight.Summary, result.Trace.StepCount,
+	if result.EvidenceStatus == "no_evidence" {
+		return fmt.Sprintf("## Work insight — `%s`\n\n%s\n\nEvidence: no_evidence. No matching execution measurements were observed for `%s`; zero-valued fields are placeholders, not measured zero usage. No changes were applied.",
+			result.Insight.Level, result.Insight.Summary, result.WorkflowID)
+	}
+	return fmt.Sprintf("## Work insight — `%s`\n\n%s\n\nEvidence: %s. Measured: %d steps · %d tokens · $%.4f · %d tokens context growth. Findings are suggestions only; no changes were applied.",
+		result.Insight.Level, result.Insight.Summary, result.EvidenceStatus, result.Trace.StepCount,
 		result.Trace.TotalTokens, result.Trace.TotalCostUSD, result.Trace.ContextGrowth)
 }

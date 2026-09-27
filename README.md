@@ -91,12 +91,16 @@ a global on/off switch.
 
 For an agent-facing before/after workflow, call `tokenops_prepare_work` with
 the task instruction and current model before starting. It returns plan
-headroom and a policy-based model recommendation without switching models.
-Afterward, call `tokenops_review_work` with the execution's stable
-`workflow_id` to get measured token/cost totals, context growth, and any
+headroom and a policy-based model recommendation without switching models. It
+also returns a stable `workflow_id`, the attribution header used by compatible
+execution paths, and a ready-to-use `tokenops_review_work` handoff. Preserve
+that identifier through execution rather than inventing another one.
+Afterward, call `tokenops_review_work` with that `workflow_id` to get measured
+token/cost totals, context growth, and any
 evidence-based coaching findings. The review returns aggregate metrics, not
 prompt content. These intent tools compose existing measurements and advice;
-they do not replace the harness that plans or performs the work.
+they do not replace the harness that plans or performs the work, and preparing
+an identifier does not claim that execution started.
 
 ## Capabilities
 
