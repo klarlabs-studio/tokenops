@@ -23,10 +23,14 @@ Roady implementation status: `.roady/plan.json` + `.roady/state.json`.
 - v0.74.1: no event loss under store lock contention and owner-only store
   permissions (#431).
 - v0.74.2: pollers skip already-stored events on restart (#432).
+- v0.74.3: API token required without storage (#433); unknown smart-routing
+  interventions rejected (#434).
+- v0.75.0: per-process slow write-lock diagnostics (#436); release runs the
+  config matrix (#435).
 
 ## Validated
 
-- Installed v0.74.2 reports its tagged version/commit and passes host-local
+- Installed v0.75.0 reports its tagged version/commit and passes host-local
   health/readiness. A bounded Claude Code run through the v0.74.0 bridge
   returned `measured` review evidence against the exact prepared workflow ID. A fresh read-only Codex session used the installed MCP
   binary to complete the `tokenops_prepare_work` to `tokenops_review_work`

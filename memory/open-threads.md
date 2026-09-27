@@ -5,13 +5,13 @@ updated: 2026-09-27
 
 - Long write-lock holds on the shared store: a live probe saw holds of up to
   9.98 s with only the daemon and long-lived `tokenops serve` processes
-  attached, and no process spent more than 0.02 s CPU during any of them, so
-  the holder waits while holding the lock rather than working. Retention's
-  TRUNCATE checkpoint fits that shape but runs only every 6 h. Release
-  binaries are stripped, so stack samples cannot name it; identifying it
-  needs a symbol-bearing build or lock-hold instrumentation. Since v0.74.1
-  the holds delay writes without losing them.
-
+  attached, and no process spent more than 0.02 s CPU during any of them. A
+  shadow daemon as the only writer held at most 0.37 s at load 70 and 1.24 s
+  at load 166, which rules out the daemon alone and CPU starvation. v0.75.0
+  (#436) logs `sqlite: slow write lock` with pid and role from every process
+  that opens the store: the daemon to `~/Library/Logs/tokenops.log`, `serve`
+  to its MCP client's log. `serve` processes started before the upgrade keep
+  the old binary until their client restarts them.
 - Subscription-plan telemetry: validate canonical GPT Plus/Pro and Claude
   Pro/Max/Business/Team/Enterprise semantics with genuine plan-meter records.
   The supported API-backed cohorts prove routing and metered cost only; API
@@ -65,6 +65,13 @@ updated: 2026-09-27
   supported evidence with independent verifiers and stable multi-call arms.
 
 ## Resolved 2026-09-27
+
+- A config matrix (#435, `make config-matrix`) ran the daemon under 32
+  profiles and found two bugs, fixed in v0.74.3: `/api/*` was served without
+  the token when storage was disabled, exposing rule files from any
+  `?root=` (#433), and unknown `smart_routing.intervention` values were
+  accepted and read as advise by the route guard but observe-only by policy
+  (#434). `docs/releasing.md` runs the matrix before publishing.
 
 - Event persistence lost rows when another connection to the shared store
   held the write lock past the bus's bounded retry budget (17 abandoned and
