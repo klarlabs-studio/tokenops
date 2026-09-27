@@ -36,8 +36,10 @@ updated: 2026-09-27
 
 ## Deferred by policy
 
-- Background coaching pipeline: retain on-demand coaching until opt-in,
-  replay scope, and cost policy are explicit.
+- Background coaching: ADR 0005 (Proposed) makes opt-in, scope, and cost
+  explicit: an opt-in, heuristic-only digest of completed sessions, pulled
+  through existing attention surfaces, with no model calls. On-demand
+  coaching stays until it is accepted.
 - Coach-hook Phase 2+, extra pricing sources, OpenAI-compatible live provider
   validation, and further CI-minute reductions remain optional follow-ups;
   they are not current roadmap gates.
