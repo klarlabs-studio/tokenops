@@ -36,8 +36,11 @@ updated: 2026-09-27
 
 ## Deferred by policy
 
-- Background coaching pipeline: retain on-demand coaching until opt-in,
-  replay scope, and cost policy are explicit.
+- Background coaching: ADR 0005 accepted 2026-09-27 with a build gate. No
+  scheduler until three finding kinds pass the promotion bar (correct on
+  real sessions and acted on, ~10% effective false-positive ceiling). Next
+  coaching work: cause-and-cost findings in the waste detector, and deleting
+  the never-wired async pipeline.
 - Coach-hook Phase 2+, extra pricing sources, OpenAI-compatible live provider
   validation, and further CI-minute reductions remain optional follow-ups;
   they are not current roadmap gates.
