@@ -214,4 +214,32 @@ func TestPrepareWorkComposesHeadroomAndRoutingWithoutApplying(t *testing.T) {
 	if len(res.PlanHeadroom.Reports) != 1 {
 		t.Errorf("plan headroom reports = %d, want one configured plan: %+v", len(res.PlanHeadroom.Reports), res.PlanHeadroom)
 	}
+	if !strings.HasPrefix(res.WorkflowID, "workflow:") {
+		t.Errorf("workflow_id = %q, want generated workflow identifier", res.WorkflowID)
+	}
+	if res.AttributionHeader != "X-Tokenops-Workflow-Id" {
+		t.Errorf("attribution_header = %q", res.AttributionHeader)
+	}
+	if res.Review.Tool != "tokenops_review_work" || res.Review.WorkflowID != res.WorkflowID {
+		t.Errorf("review handoff = %+v, want generated workflow_id preserved", res.Review)
+	}
+}
+
+func TestPrepareWorkPreservesCallerWorkflowID(t *testing.T) {
+	d := tightWindowDeps(t)
+	srv := NewServer("tokenops", "test", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err := RegisterRoutingAdviceTools(srv, d); err != nil {
+		t.Fatal(err)
+	}
+	out := execTool(t, srv, "tokenops_prepare_work", map[string]any{
+		"instruction": "rename the handler", "provider": "anthropic",
+		"model": "claude-opus-5", "workflow_id": "workflow:existing",
+	})
+	var res prepareWorkResult
+	if err := json.Unmarshal([]byte(out), &res); err != nil {
+		t.Fatalf("decode preparation result: %v\n%s", err, out)
+	}
+	if res.WorkflowID != "workflow:existing" || res.Review.WorkflowID != "workflow:existing" {
+		t.Fatalf("workflow handoff = %q / %q, want caller identifier preserved", res.WorkflowID, res.Review.WorkflowID)
+	}
 }
