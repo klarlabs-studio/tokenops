@@ -216,10 +216,10 @@ content-safely.
 2. Expand representative Codex and Claude Code cohorts only when a new task
    class or policy question justifies paid evidence; the bounded Go repair
    class now has supported OpenAI and Anthropic coding-agent cohorts.
-3. Use the repository's guarded Relicta publish path for future releases;
-   Relicta 4.2.0 remains the latest version and ignored `gitsign`,
-   `autocommitchangelog`, and CLI skip-tag/skip-push controls in observed
-   workflows. Canonical config disables Relicta-native tagging and pushing.
+3. Use the repository's guarded signed-tag path for future releases and never
+   invoke `relicta publish`; Relicta 4.2.0 remains the latest version and
+   ignored signing, changelog, CLI skip, and config disable controls in observed
+   publish workflows.
 4. Record a human or recognized-verifier outcome only when actually observed;
    do not seed examples or claim causal uplift from task completion alone.
 5. Keep background coaching off until its opt-in, scope, and cost policy are
@@ -242,6 +242,14 @@ v0.72.2 at that commit with health/readiness 200 and no blockers. Relicta
 unexpectedly pushed an unsigned tag despite both CLI skip flags; that exact tag
 was replaced with a verified SSH-signed tag pointing to the same commit, the
 duplicate workflow was canceled, and the original GoReleaser run completed.
+
+v0.72.3 was published from commit `f7f5f82` with four platform archives and
+checksums, installed through Homebrew, and verified healthy/ready with no
+blockers. Its validation proved Relicta publish ignores config-level
+`gittag: false` and `gitpush: false` as well. The unexpected unsigned tag was
+replaced at the same commit with a verified SSH-signed tag, the duplicate
+workflow was canceled, and the original GoReleaser run completed. Future
+guards do not invoke Relicta publish at all.
 
 ## Recently Resolved
 

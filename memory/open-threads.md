@@ -17,12 +17,11 @@ updated: 2026-09-26
   the current public web client's unified limits contract. Capture an actual
   authenticated response content-safely before claiming live ingestion.
 - Relicta release governance: the repository guard in
-  `scripts/relicta-publish-signed.sh` restores only its known forbidden
-  changelog mutation, verifies a Git-created SSH-signed tag, and pushes only
-  after all invariants pass. v0.72.2 proved CLI skip flags alone are ignored;
-  canonical config now disables Relicta-native tagging and pushing, and the
-  guard refuses any unexpected remote tag. Retain the upstream defects as
-  known limitations.
+  `scripts/relicta-publish-signed.sh` never invokes Relicta's unsafe publish
+  action. Relicta plans, versions, writes notes, and approves; Git verifies and
+  pushes the signed tag, then the guard cancels the Relicta run so planning can
+  resume. v0.72.2 proved CLI skip flags are ignored and v0.72.3 proved config
+  disables are ignored too. Retain those upstream defects as known limitations.
 - fmt learning threshold tuning: the merged provenance guard distinguishes
   actual wrapped runs from offline projections and prevents up-tuning without
   recovery reads. It still needs enough genuine recovery telemetry.
