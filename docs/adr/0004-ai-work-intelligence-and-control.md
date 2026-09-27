@@ -290,7 +290,7 @@ headroom without inventing thresholds; add a bounded workflow insight from
 reconstructed traces and existing waste-detector findings. Work insight must
 not infer task success or overall quality from the absence of a finding.
 
-## Execution status (2026-09-26)
+## Execution status (2026-09-27)
 
 | Phase | Status | Evidence / remaining |
 |---|---|---|
@@ -301,7 +301,7 @@ not infer task success or overall quality from the absence of a finding.
 | 4 — capability layer | Complete | PR #343. |
 | 5 — verification and experiment | Complete, including bounded live validation | PR #345 and correlated work/event support; verifier integrity fixes in PRs #394–#396. On 2026-09-26, the current-checkout supervised daemon completed five randomized metered `gpt-6-sol`/`gpt-6-luna` pairs. All ten calls returned HTTP 200 and independently verified exact output; each arm achieved 5/5 outcomes with 21 measured tokens per execution. Verified pricing measured $0.000090 per Sol execution and $0.0000045 per Luna execution. The experiment ledger reports supported evidence, 95% median cost reduction, and all quality/latency guardrails passing; randomized verification accepted five complete pairs without fallback. This validates only the bounded exact-output cohort, not general model-quality equivalence. |
 | 6 — canonical events | Complete | PRs #361–#369. |
-| 7 — runtime and installed-product verification | Complete in source/CI; live release check partial | Built-binary journey test in PR #349; lifecycle modules in PRs #370–#378. On 2026-09-26, installed v0.70.0 health/readiness and MCP status passed, then the current checkout was built, installed as the supervised daemon, and used for the complete Phase 5 trial. It remained healthy/ready after configuration restoration. A tagged release containing post-v0.70.0 cleanup and these fixes still requires an operator-controlled release check. |
+| 7 — runtime and installed-product verification | Complete | Built-binary journey test in PR #349; lifecycle modules in PRs #370–#378. The operator-controlled release check is done: installed v0.73.1 and v0.74.0 each reported their tagged version/commit and passed health/readiness, and a fresh Codex session drove the installed MCP binary through `tokenops_prepare_work` → `tokenops_review_work` with exact workflow-ID preservation. |
 | 8 — intent-oriented MCP | Complete | PRs #380–#382. |
 | 9 — surface-native insight | Complete | PRs #383–#386. Browser dashboard and demo surfaces were removed in PR #387; CLI, MCP, and local API remain. |
 
