@@ -134,6 +134,25 @@ func TestSetupAcceptsLegacyClaudeUsageMeterAlias(t *testing.T) {
 	}
 }
 
+func TestSetupNeverAsksForAnMCPClientRestart(t *testing.T) {
+	meterServing(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/organizations" {
+			_, _ = w.Write([]byte(`[{"uuid":"org-test","name":"Test"}]`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"limits":[{"kind":"session","percent":12,"resets_at":"2030-01-01T00:00:00Z"}]}`))
+	})
+	path := seedConfig(t)
+	raw := `curl 'https://claude.ai/api/organizations/org-test/usage' -H 'cookie: sessionKey=sk-ant-sid-test'`
+	out, err := runCookieSetupCmd(t, raw+"\n", "claude-subscription", "--paste-request", "--config-path", path, "--no-restart")
+	if err != nil {
+		t.Fatalf("setup: %v\n%s", err, out)
+	}
+	if strings.Contains(strings.ToLower(out), "restart your mcp") {
+		t.Fatalf("setup asked for an unnecessary MCP restart:\n%s", out)
+	}
+}
+
 // The paste was the friction this command existed to explain. It now looks
 // where the browser already keeps the cookie, and only asks when it cannot
 // find one — the prompt is the fallback, not the path.
@@ -162,8 +181,9 @@ func TestSetupPasteSkipsTheBrowser(t *testing.T) {
 
 func TestParseCopiedClaudeUsageRequest(t *testing.T) {
 	raw := `curl 'https://claude.ai/api/organizations/org-public-test/usage' ` +
-		`-H 'cookie: other=x; sessionKey=sk-ant-sid-test; cf_clearance=clearance-test' ` +
-		`-H 'user-agent: Mozilla/5.0 Chrome/141.0.0.0' -H 'x-unrelated: discarded'`
+		`-H 'cookie: other=x; sessionKey=sk-ant-sid-test; cf_clearance=clearance-test; __cf_bm=bot-test; _cfuvid=visitor-test; unsafe_cookie=discarded' ` +
+		`-H 'user-agent: Mozilla/5.0 Chrome/141.0.0.0' -H 'sec-ch-ua-platform: "macOS"' ` +
+		`-H 'authorization: must-not-persist' -H 'x-unrelated: discarded'`
 	session, err := parseUsageRequest(raw)
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -173,6 +193,12 @@ func TestParseCopiedClaudeUsageRequest(t *testing.T) {
 	}
 	if session.userAgent != "Mozilla/5.0 Chrome/141.0.0.0" || session.orgID != "org-public-test" {
 		t.Fatalf("request metadata not extracted correctly: %+v", session)
+	}
+	if session.browserHeaders["sec-ch-ua-platform"] != `"macOS"` || len(session.browserHeaders) != 1 {
+		t.Fatalf("browser header allowlist not enforced: %+v", session.browserHeaders)
+	}
+	if session.browserCookies["__cf_bm"] != "bot-test" || session.browserCookies["_cfuvid"] != "visitor-test" || len(session.browserCookies) != 2 {
+		t.Fatalf("browser cookie allowlist not enforced: %+v", session.browserCookies)
 	}
 }
 
@@ -209,7 +235,7 @@ func TestSetupPasteRequestPersistsOnlyBoundedSessionFields(t *testing.T) {
 		_, _ = w.Write([]byte(`{"limits":[{"kind":"session","percent":12,"resets_at":"2030-01-01T00:00:00Z"}]}`))
 	})
 	path := seedConfig(t)
-	raw := `curl 'https://claude.ai/api/organizations/org-test/usage' -H 'cookie: sessionKey=sk-ant-sid-test; cf_clearance=clearance-test' -H 'user-agent: Test Browser'`
+	raw := `curl 'https://claude.ai/api/organizations/org-test/usage' -H 'cookie: sessionKey=sk-ant-sid-test; cf_clearance=clearance-test; __cf_bm=bot-test' -H 'user-agent: Test Browser' -H 'sec-fetch-site: same-origin'`
 	out, err := runCookieSetupCmd(t, raw+"\n", "claude-subscription", "--paste-request", "--config-path", path, "--no-restart")
 	if err != nil {
 		t.Fatalf("setup: %v\n%s", err, out)
@@ -221,6 +247,12 @@ func TestSetupPasteRequestPersistsOnlyBoundedSessionFields(t *testing.T) {
 	got := cfg.VendorUsage.ClaudeUsageMeter
 	if !got.Enabled || got.SessionKey != "sk-ant-sid-test" || got.Clearance != "clearance-test" || got.UserAgent != "Test Browser" || got.OrgID != "org-test" {
 		t.Fatalf("bounded session fields not persisted: %+v", got)
+	}
+	if got.BrowserHeaders["sec-fetch-site"] != "same-origin" || len(got.BrowserHeaders) != 1 {
+		t.Fatalf("bounded browser headers not persisted: %+v", got.BrowserHeaders)
+	}
+	if got.BrowserCookies["__cf_bm"] != "bot-test" || len(got.BrowserCookies) != 1 {
+		t.Fatalf("bounded browser cookies not persisted: %+v", got.BrowserCookies)
 	}
 	if got.FromBrowser {
 		t.Error("pasted request should not claim browser refresh access")

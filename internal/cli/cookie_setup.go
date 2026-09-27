@@ -62,7 +62,8 @@ stored in your config file.
 
 The session key is verified against Anthropic before anything is written,
 so a mistyped or expired cookie fails here rather than silently producing
-no data.`,
+no data. After setup, TokenOps restarts its supervised daemon automatically;
+the MCP server observes the updated config without a client restart.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 1 && !isClaudeSubscriptionSource(args[0]) {
@@ -131,11 +132,14 @@ func runCookieSetup(cmd *cobra.Command, opts cookieSetupOptions) error {
 	defer cancel()
 	client := claudeusagemeter.NewClient(key)
 	client.Clearance, client.UserAgent = session.clearance, session.userAgent
+	client.BrowserHeaders = session.browserHeaders
+	client.BrowserCookies = session.browserCookies
 	if meterBaseURL != "" {
 		client.BaseURL = meterBaseURL
 	}
 
-	fmt.Fprintln(out, "\nChecking it with Anthropic...")
+	fmt.Fprintln(out)
+	progress := startActivity(cmd.ErrOrStderr(), "Checking credentials with Anthropic")
 	// Pick the organization that reports usage rather than asking. An
 	// account holds several — a personal one, a Console API one, an
 	// Enterprise one — and only some carry a usage meter at all, so the
@@ -145,6 +149,11 @@ func runCookieSetup(cmd *cobra.Command, opts cookieSetupOptions) error {
 		selectedOrg = session.orgID
 	}
 	conn, err := claudeusagemeter.Connect(ctx, client, selectedOrg)
+	if err != nil {
+		progress.failure("Anthropic verification failed")
+	} else {
+		progress.success("Anthropic credentials verified")
+	}
 	switch {
 	case errors.Is(err, claudeusagemeter.ErrBotCheck):
 		return botCheckAdvice(session.browser)
@@ -187,6 +196,8 @@ func runCookieSetup(cmd *cobra.Command, opts cookieSetupOptions) error {
 	cfg.VendorUsage.ClaudeUsageMeter.SessionKey = key
 	cfg.VendorUsage.ClaudeUsageMeter.Clearance = session.clearance
 	cfg.VendorUsage.ClaudeUsageMeter.UserAgent = session.userAgent
+	cfg.VendorUsage.ClaudeUsageMeter.BrowserHeaders = session.browserHeaders
+	cfg.VendorUsage.ClaudeUsageMeter.BrowserCookies = session.browserCookies
 	cfg.VendorUsage.ClaudeUsageMeter.OrgID = org.UUID
 	// Read from a browser: keep reading from it. The clearance cookie that
 	// got past the bot check expires within hours, so a stored copy would
@@ -203,7 +214,10 @@ func runCookieSetup(cmd *cobra.Command, opts cookieSetupOptions) error {
 	if session.browser != "" {
 		fmt.Fprintf(out, "The daemon will keep reading the session from %s as it polls; macOS asks to allow that once per installed version.\n", session.browser)
 	}
-	applyRestart(out, opts.restart, true)
+	// serve watches config.yaml and swaps its snapshot in-process, so only the
+	// ingestion daemon needs a restart. Asking the operator to restart their
+	// MCP host here was both unnecessary and disruptive.
+	applyRestart(out, opts.restart, false)
 	return nil
 }
 
@@ -244,11 +258,13 @@ func readRest(r io.Reader) (string, error) {
 // cookie that proves it passed claude.ai's bot check, and the agent string
 // that cookie is bound to.
 type browserSession struct {
-	key       string
-	clearance string
-	userAgent string
-	browser   string
-	orgID     string
+	key            string
+	clearance      string
+	userAgent      string
+	browserHeaders map[string]string
+	browserCookies map[string]string
+	browser        string
+	orgID          string
 }
 
 // cookieSetupKey gets the session key without making the operator handle it

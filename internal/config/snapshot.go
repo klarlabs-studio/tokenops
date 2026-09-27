@@ -19,6 +19,7 @@ const SensitiveHeaderPlaceholder = "***REDACTED***"
 //   - vendor_usage.anthropic.admin_key (sk-ant-admin-*)
 //   - vendor_usage.claude_usage_meter.session_key (claude.ai session)
 //   - vendor_usage.claude_usage_meter.clearance (Cloudflare session proof)
+//   - vendor_usage.claude_usage_meter.browser_cookies values
 //   - vendor_usage.cursor.cookie
 //   - vendor_usage.github_copilot.oauth_token
 func (c Config) Redacted() Config {
@@ -39,6 +40,13 @@ func (c Config) Redacted() Config {
 	mask(&redacted.VendorUsage.Anthropic.AdminKey)
 	mask(&redacted.VendorUsage.ClaudeUsageMeter.SessionKey)
 	mask(&redacted.VendorUsage.ClaudeUsageMeter.Clearance)
+	if len(redacted.VendorUsage.ClaudeUsageMeter.BrowserCookies) > 0 {
+		masked := make(map[string]string, len(redacted.VendorUsage.ClaudeUsageMeter.BrowserCookies))
+		for k := range redacted.VendorUsage.ClaudeUsageMeter.BrowserCookies {
+			masked[k] = SensitiveHeaderPlaceholder
+		}
+		redacted.VendorUsage.ClaudeUsageMeter.BrowserCookies = masked
+	}
 	mask(&redacted.VendorUsage.Cursor.Cookie)
 	mask(&redacted.VendorUsage.GitHubCopilot.OAuthToken)
 	return redacted

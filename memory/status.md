@@ -258,10 +258,22 @@ current-checkout daemon stored a genuine `claude-usage-meter` event, and
 vendor percentage and reset. The trial exposed two defects now covered by
 tests: piped multiline Chrome cURL was truncated at its first line, and
 `config show` did not redact the Cloudflare clearance credential. The
-supervised launchd process still receives a bot-check refusal with the same
-fields that work in an interactive daemon, so durable background polling
-remains open; the successful event proves ingestion and consumption, not
-long-running refresh reliability.
+supervised launchd process initially received a bot-check refusal because the
+import retained `cf_clearance` but discarded Cloudflare's accompanying
+short-lived bot-management cookies. The current checkout now preserves and
+replays strict allowlists of browser client hints plus `__cf_bm` and `_cfuvid`;
+all imported cookies are centrally redacted. Authorization, arbitrary headers
+and cookies, bodies, copied commands, and responses remain excluded.
+
+A fresh content-safe request then passed interactive verification, and launchd
+started the current binary and completed its immediate background poll without
+a bot-check refusal. The daemon reported healthy/ready, `claude_subscription`
+had genuine events, and `plan headroom` consumed the authoritative 9% five-hour
+window. The live response carried legacy aggregate windows alongside the
+unified limits array; the decoder now lets unified aggregates replace aliases
+instead of emitting `five_hour_0` / `seven_day_1`, and treats
+`seven_day_breakdown` as the presentation container whose scoped measurements
+arrive through `limits`.
 
 ## Recently Resolved
 
