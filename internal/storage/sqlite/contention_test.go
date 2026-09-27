@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -77,5 +78,43 @@ func TestAppendBatchMalformedIsNotContention(t *testing.T) {
 	}
 	if IsContended(nil) || IsContended(errors.New("disk full")) {
 		t.Fatal("IsContended must be false for nil and unrelated errors")
+	}
+}
+
+// The store holds usage history for every agent session on the machine.
+// It gets the same owner-only mode as the other files under ~/.tokenops,
+// including a store created by an older release with the umask default.
+func TestOpenRestrictsStoreToOwner(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "events.db")
+	s, err := Open(context.Background(), path, Options{})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	env := mustPromptEnvelope(t, "perm-1", time.Now(), &eventschema.PromptEvent{Provider: eventschema.ProviderAnthropic})
+	if err := s.Append(context.Background(), env); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	_ = s.Close()
+	for _, p := range []string{path, path + "-wal", path + "-shm"} {
+		if _, err := os.Stat(p); err == nil {
+			if err := os.Chmod(p, 0o644); err != nil {
+				t.Fatalf("widen %s: %v", p, err)
+			}
+		}
+	}
+
+	s, err = Open(context.Background(), path, Options{})
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer func() { _ = s.Close() }()
+	for _, p := range []string{path, path + "-wal", path + "-shm"} {
+		info, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		if mode := info.Mode().Perm(); mode != 0o600 {
+			t.Errorf("%s mode = %o, want 600", filepath.Base(p), mode)
+		}
 	}
 }

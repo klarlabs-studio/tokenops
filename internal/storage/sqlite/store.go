@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -59,6 +60,22 @@ func contended(ctx context.Context, err error) error {
 		return fmt.Errorf("%w: %w", ErrContended, err)
 	}
 	return err
+}
+
+// ownerOnly is the mode for the store and its WAL sidecars. They hold usage
+// history for every agent session on the machine.
+const ownerOnly = 0o600
+
+// restrictToOwner narrows the store and any WAL sidecars to ownerOnly. A
+// store created by an older release carries the umask default, so this runs
+// on every open and repairs it.
+func restrictToOwner(path string) error {
+	for _, p := range []string{path, path + "-wal", path + "-shm"} {
+		if err := os.Chmod(p, ownerOnly); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("sqlite: restrict %s: %w", filepath.Base(p), err)
+		}
+	}
+	return nil
 }
 
 // Store is a handle to the SQLite-backed event store. It is safe for
@@ -111,6 +128,12 @@ func Open(ctx context.Context, path string, opts Options) (*Store, error) {
 	if err := s.migrate(ctx); err != nil {
 		_ = db.Close()
 		return nil, err
+	}
+	if path != ":memory:" {
+		if err := restrictToOwner(path); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
 	}
 	return s, nil
 }
