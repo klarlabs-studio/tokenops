@@ -1,11 +1,11 @@
 # Releasing TokenOps
 
 TokenOps uses Relicta for release planning, version selection, notes, and
-approval. Relicta 4.2.0 does not reliably honor `gitsign: true` or
-`autocommitchangelog: false`; it also ignored `--skip-tag` and `--skip-push`
-when the corresponding configuration remained enabled. The canonical config
-therefore disables Relicta tag creation, push, and signing. Git owns those
-steps through the repository guard.
+approval. Relicta 4.2.0's publish action ignores tag, push, and signing controls
+in the observed workflow and mutates `CHANGELOG.md` despite
+`autocommitchangelog: false`. Do not run `relicta publish`. The canonical
+config disables Relicta tag creation, push, and signing as defense in depth;
+Git owns publication through the repository guard.
 
 Prepare the release normally from a clean, up-to-date `main`:
 
@@ -23,12 +23,12 @@ scripts/relicta-publish-signed.sh
 ```
 
 The guard requires an approved Relicta run, a clean `main` aligned with
-`origin/main`, and a new version. It calls `relicta publish` with tag creation
-and pushing disabled, removes only the known forbidden `CHANGELOG.md` mutation,
-refuses any other working-tree change, creates an SSH-signed tag with Git,
-verifies its signature and target, and only then pushes the tag that triggers
-the GoReleaser workflow. As defense in depth, it refuses an unexpected remote
-tag and removes an unexpected local-only tag before signing.
+`origin/main`, and a new version. It refuses an existing local or remote tag,
+creates an SSH-signed tag with Git, verifies its signature and target, and only
+then pushes the tag that triggers the GoReleaser workflow. After the signed tag
+is visible remotely, it cancels the approved Relicta run so another plan can
+start. The tag, GitHub release, and assets—not Relicta's state label—are the
+publication record.
 
 After publishing, verify the GitHub release assets, Homebrew update, installed
 CLI/daemon version and commit, and daemon health/readiness.
