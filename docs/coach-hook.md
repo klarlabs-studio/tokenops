@@ -17,6 +17,34 @@ money.
 It works even when your traffic never reaches the tokenops proxy (e.g. Claude
 Code on a subscription), because it runs **inside** the client.
 
+## On a flat-rate plan it speaks quota, not dollars
+
+When the session's provider has a plan bound (`plans.anthropic`,
+`plans.openai`) and a live window reading exists — the claude.ai usage meter
+for Claude Code, the rate limits Codex records on every turn — the coach
+replaces the dollar ladder with the plan's own window. On a subscription the
+dollar figure is a counterfactual; the window is what stops work.
+
+> tokenops: 76% of your weekly Claude limit used, resets in 2d 4h. At this
+> pace it runs out in ~1d 9h, before the reset. Route research and lookups to
+> a smaller model and /compact long sessions to stretch it.
+
+- It judges the **most constrained** window the vendor reports (5-hour,
+  weekly, or a model-scoped weekly limit such as "weekly Fable").
+- It speaks at 50%, 75%, 90%, and 100% of that window, **each once per
+  window across all sessions**, because a window outlives any one session.
+  A new reset re-arms the tiers.
+- It adds a pace line only when the current rate of use would exhaust the
+  window before it resets.
+- It needs a reading no older than 30 minutes. Without one — no plan bound,
+  the meter not connected, or a client with no window meter (Cursor,
+  opencode) — the dollar ladder below applies unchanged.
+- The reading is a read-only query; the hook never takes the store's write
+  lock.
+
+`tokenops coach-hook stats` counts quota nudges by tier beside the dollar
+alerts.
+
 ## Why a cumulative budget (not a per-turn threshold)
 
 The first version nudged when a **single** turn's cache-read crossed a flat

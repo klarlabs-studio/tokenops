@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 
 	"github.com/spf13/cobra"
 
@@ -100,7 +102,13 @@ much your sessions have spent and which budget alerts fired.`,
 			cfg.Quiet = quietPolicy(rf)
 			cfg.Promotion = promotionNudge(rf, guardDir)
 			cfg.Rates = datedRates(rf)
-			return runCoachHook(cmd, dir, cfg)
+			quota := func(context.Context, eventschema.Provider, time.Time) *coachhook.Quota { return nil }
+			if loaded, err := loadConfig(rf); err == nil {
+				quota = func(ctx context.Context, p eventschema.Provider, now time.Time) *coachhook.Quota {
+					return liveQuota(ctx, loaded, p, now)
+				}
+			}
+			return runCoachHook(cmd, dir, cfg, quota)
 		},
 	}
 	cmd.Flags().Float64Var(&budget, "budget", coachhook.DefaultBudgetUSD, "per-session API-equivalent USD budget the alert fractions measure against")
@@ -115,7 +123,7 @@ much your sessions have spent and which budget alerts fired.`,
 // Errors never disrupt the session — a coach must fail open. On nudge it writes
 // {systemMessage, suppressOutput:true}; on no-nudge or any error it exits 0
 // with no stdout.
-func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config) error {
+func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, quota func(context.Context, eventschema.Provider, time.Time) *coachhook.Quota) error {
 	body, err := io.ReadAll(cmd.InOrStdin())
 	if err != nil {
 		return nil // fail open
@@ -123,6 +131,10 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config) error {
 	var in stopHookInput
 	if err := json.Unmarshal(body, &in); err != nil {
 		return nil // fail open
+	}
+	now := time.Now()
+	if provider, ok := hookProvider(in, in.isCursorPayload(), in.HookEventName == "session.idle"); ok && quota != nil {
+		cfg.Quota = quota(cmd.Context(), provider, now)
 	}
 	var dec coachhook.Decision
 	switch {
@@ -133,11 +145,11 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config) error {
 		if derr != nil {
 			return nil // fail open
 		}
-		dec = coachhook.EvaluateOpencode(dir, dbPath, in.SessionID, cfg, time.Now())
+		dec = coachhook.EvaluateOpencode(dir, dbPath, in.SessionID, cfg, now)
 	case in.isCursorPayload():
-		dec = coachhook.EvaluateCursor(dir, body, cfg, time.Now())
+		dec = coachhook.EvaluateCursor(dir, body, cfg, now)
 	default:
-		dec = coachhook.Evaluate(dir, in.SessionID, in.TranscriptPath, cfg, time.Now())
+		dec = coachhook.Evaluate(dir, in.SessionID, in.TranscriptPath, cfg, now)
 	}
 	if !dec.Nudge {
 		return nil // no nudge: exit 0 with no stdout
@@ -221,6 +233,14 @@ func newCoachHookStatsCmd() *cobra.Command {
 					fmt.Fprintf(out, "    %-22s %d turn(s)\n", m, s.UnpricedModels[m])
 				}
 				fmt.Fprintln(out, "    their spend reads as $0 above. Add rates via `pricing.path` to count them.")
+			}
+			if n := totalOf(s.QuotaNudges); n > 0 {
+				fmt.Fprintf(out, "  quota nudges (flat plan, live window): %d\n", n)
+				for _, tier := range []string{"50%", "75%", "90%", "100%"} {
+					if c := s.QuotaNudges[tier]; c > 0 {
+						fmt.Fprintf(out, "    %-5s %d\n", tier, c)
+					}
+				}
 			}
 			if s.PromotionNudges > 0 {
 				fmt.Fprintf(out, "  read-guard case argued: %d session(s)\n", s.PromotionNudges)

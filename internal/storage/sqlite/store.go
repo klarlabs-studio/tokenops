@@ -7,6 +7,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -161,6 +162,61 @@ func Open(ctx context.Context, path string, opts Options) (*Store, error) {
 		}
 	}
 	return s, nil
+}
+
+// OpenReadOnly opens an existing store for reads only: no migration, no
+// permission repair, and SQLite refuses any write. Short-lived callers on a
+// hot path, such as the per-turn hooks, use it so reading a value never
+// takes the write lock every tokenops process shares.
+func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: resolve path %q: %w", path, err)
+	}
+	if _, err := os.Stat(abs); err != nil {
+		return nil, fmt.Errorf("sqlite: open read-only: %w", err)
+	}
+	v := url.Values{}
+	v.Add("mode", "ro")
+	v.Add("_pragma", "busy_timeout(2000)")
+	v.Add("_pragma", "query_only(1)")
+	db, err := sql.Open("sqlite", "file:"+abs+"?"+v.Encode())
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: open read-only: %w", err)
+	}
+	db.SetMaxOpenConns(1)
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("sqlite: ping read-only: %w", err)
+	}
+	return &Store{db: db, path: abs, logger: slog.Default(), slowLock: defaultSlowLockWarn}, nil
+}
+
+// LatestAttributesBySource returns the attributes of the newest event from
+// source, no older than since, that carries key. ok is false when there is
+// none: an older reading is not reported as current.
+func (s *Store) LatestAttributesBySource(ctx context.Context, source, key string, since time.Time) (map[string]string, time.Time, bool, error) {
+	var (
+		raw sql.NullString
+		ts  int64
+	)
+	err := s.db.QueryRowContext(ctx, `
+SELECT attributes, timestamp_ns FROM events
+WHERE source = ? AND timestamp_ns >= ? AND json_extract(attributes, ?) IS NOT NULL
+ORDER BY timestamp_ns DESC LIMIT 1`, source, since.UnixNano(), "$."+key).Scan(&raw, &ts)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, time.Time{}, false, nil
+	}
+	if err != nil {
+		return nil, time.Time{}, false, fmt.Errorf("sqlite: latest %s attributes: %w", source, err)
+	}
+	attrs := map[string]string{}
+	if raw.Valid && raw.String != "" {
+		if err := json.Unmarshal([]byte(raw.String), &attrs); err != nil {
+			return nil, time.Time{}, false, fmt.Errorf("sqlite: decode %s attributes: %w", source, err)
+		}
+	}
+	return attrs, time.Unix(0, ts), true, nil
 }
 
 // Close releases the underlying connection pool.
