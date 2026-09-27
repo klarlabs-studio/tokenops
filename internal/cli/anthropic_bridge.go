@@ -19,22 +19,26 @@ import (
 
 func newAnthropicBridgeCmd() *cobra.Command {
 	var executionID string
+	var workflowID string
 	var proxyURL string
 	cmd := &cobra.Command{
 		Use:   "anthropic-bridge -- <command> [args...]",
-		Short: "Launch a client through TokenOps with a stable execution ID",
+		Short: "Launch a client through TokenOps with stable execution attribution",
 		Long: `Launch one client attempt through the local TokenOps Anthropic proxy.
 
 The child process receives an ephemeral local ANTHROPIC_BASE_URL. The bridge
-adds one execution ID to every Anthropic request and forwards credentials and
-request content unchanged. TokenOps strips the correlation ID before sending
-to Anthropic. This does not change other running clients or enroll a trial.`,
+adds one execution ID and, when supplied, one workflow ID to every Anthropic
+request while forwarding credentials and request content unchanged. TokenOps
+strips the correlation headers before sending to Anthropic. Pass the
+workflow_id returned by tokenops_prepare_work to make tokenops_review_work
+measure this execution. This does not change other running clients or enroll a
+trial.`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if strings.TrimSpace(executionID) == "" {
 				executionID = "claude:" + uuid.NewString()
 			}
-			handler, err := attributionbridge.NewHandler(proxyURL, executionID)
+			handler, err := attributionbridge.NewHandler(proxyURL, executionID, workflowID)
 			if err != nil {
 				return err
 			}
@@ -60,6 +64,9 @@ to Anthropic. This does not change other running clients or enroll a trial.`,
 			child.Stdin, child.Stdout, child.Stderr = cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr()
 			child.Env = replaceEnvironment(os.Environ(), "ANTHROPIC_BASE_URL", baseURL)
 			fmt.Fprintf(cmd.ErrOrStderr(), "TokenOps execution ID: %s\n", executionID)
+			if strings.TrimSpace(workflowID) != "" {
+				fmt.Fprintf(cmd.ErrOrStderr(), "TokenOps workflow ID: %s\n", strings.TrimSpace(workflowID))
+			}
 			err = child.Run()
 			select {
 			case serveErr := <-serveErr:
@@ -72,6 +79,7 @@ to Anthropic. This does not change other running clients or enroll a trial.`,
 		},
 	}
 	cmd.Flags().StringVar(&executionID, "execution-id", "", "stable ID for this work attempt (generated if omitted)")
+	cmd.Flags().StringVar(&workflowID, "workflow-id", "", "workflow_id returned by tokenops_prepare_work")
 	cmd.Flags().StringVar(&proxyURL, "proxy-url", "http://127.0.0.1:7878", "local TokenOps proxy base URL")
 	return cmd
 }

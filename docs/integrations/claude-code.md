@@ -38,14 +38,17 @@ IDs itself. For one task attempt, launch a new session through the local
 bridge:
 
 ```bash
-tokenops anthropic-bridge -- claude
+tokenops anthropic-bridge --workflow-id workflow:prepared -- claude
 ```
 
 The bridge gives the child process an ephemeral local base URL and adds one
-stable execution ID to each Anthropic request. It forwards the existing
+stable execution ID plus the optional prepared workflow ID to each Anthropic
+request. It forwards the existing
 credentials and request content unchanged; the TokenOps proxy removes the
-correlation header before forwarding upstream. The generated execution ID is
-printed to stderr so you can record the real outcome after the task:
+correlation headers before forwarding upstream. Obtain `workflow:prepared`
+from `tokenops_prepare_work`; passing the same ID to `tokenops_review_work`
+then reviews the measured execution. The generated execution ID is printed to
+stderr so you can record the real outcome after the task:
 
 ```bash
 tokenops outcome record <execution-id> --result achieved

@@ -24,6 +24,21 @@ Claude Code uses the Anthropic SDK under the hood, so the
    claude
    ```
 
+## Prepared workflow attribution
+
+Claude Code can select a proxy base URL but cannot attach a TokenOps workflow
+header itself. Pass the `workflow_id` returned by `tokenops_prepare_work` to
+the local bridge for one bounded execution:
+
+```bash
+tokenops anthropic-bridge --workflow-id workflow:prepared -- claude
+```
+
+The bridge adds stable execution and workflow correlation locally, prints both
+identifiers, and removes the headers before the request reaches Anthropic.
+Pass the same workflow ID to `tokenops_review_work` afterward to review the
+measured execution.
+
 ## Smoke test
 
 ```bash
