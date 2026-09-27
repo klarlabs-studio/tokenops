@@ -84,6 +84,18 @@ func TestCohereNormalize(t *testing.T) {
 	}
 }
 
+func TestAnthropicNormalizeRejectsTokenCountingEndpoint(t *testing.T) {
+	p, ok := Lookup(eventschema.ProviderAnthropic)
+	if !ok {
+		t.Fatal("anthropic should be routable")
+	}
+
+	body := []byte(`{"model":"claude-sonnet-4-5","messages":[{"role":"user","content":"hi"}]}`)
+	if _, err := p.Normalize("/v1/messages/count_tokens", body); err != ErrUnknownPath {
+		t.Fatalf("count_tokens should be ErrUnknownPath, got %v", err)
+	}
+}
+
 func TestLookup(t *testing.T) {
 	if _, ok := Lookup(eventschema.ProviderOpenAI); !ok {
 		t.Error("OpenAI should be registered")

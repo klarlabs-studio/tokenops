@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -571,19 +572,27 @@ func (s *Server) observerMiddleware(provider providers.Provider, next http.Handl
 		// input. Capture it before stripping so the identifier is not sent
 		// to the upstream API.
 		r.Header.Del(headerExecutionID)
+		var canonical providers.CanonicalRequest
+		if provider.Normalize != nil {
+			rest := strings.TrimPrefix(r.URL.Path, strings.TrimSuffix(provider.Prefix, "/"))
+			var normalizeErr error
+			canonical, normalizeErr = provider.Normalize(rest, body)
+			if errors.Is(normalizeErr, providers.ErrUnknownPath) {
+				// Auxiliary provider endpoints (for example Anthropic token
+				// counting) still pass through the proxy, but they are not model
+				// generations and must not become PromptEvents.
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
 		if len(body) > 0 {
 			sum := sha256.Sum256(body)
 			obs.PromptHash = "sha256:" + hex.EncodeToString(sum[:])
 
-			if provider.Normalize != nil {
-				rest := strings.TrimPrefix(r.URL.Path, strings.TrimSuffix(provider.Prefix, "/"))
-				if canonical, err := provider.Normalize(rest, body); err == nil {
-					obs.RequestModel = canonical.Model
-					obs.MessageCount = canonical.MessageCount
-					obs.SystemPresent = canonical.SystemPresent
-					obs.MaxOutput = canonical.MaxOutputTokens
-				}
-			}
+			obs.RequestModel = canonical.Model
+			obs.MessageCount = canonical.MessageCount
+			obs.SystemPresent = canonical.SystemPresent
+			obs.MaxOutput = canonical.MaxOutputTokens
 			if provider.ID == eventschema.ProviderAnthropic {
 				obs.ManualThinking, obs.SamplingParameter = anthropicCompatibilityTraits(body)
 			}
