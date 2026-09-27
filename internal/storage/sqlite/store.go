@@ -531,6 +531,28 @@ func buildDSN(path string, busy time.Duration) (string, error) {
 	return "file:" + raw + "?" + v.Encode(), nil
 }
 
+// EachEventID streams the ID of every stored envelope to fn, in no
+// particular order. It reads the primary-key index only, so it is cheap
+// relative to Query even on a large store.
+func (s *Store) EachEventID(ctx context.Context, fn func(id string)) error {
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM events`)
+	if err != nil {
+		return fmt.Errorf("sqlite: list event ids: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return fmt.Errorf("sqlite: scan event id: %w", err)
+		}
+		fn(id)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("sqlite: iterate event ids: %w", err)
+	}
+	return nil
+}
+
 // LastEventBySource returns the most recent event timestamp per source.
 //
 // CountBySource answers "were there events in a window", which is enough to

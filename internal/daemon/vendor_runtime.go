@@ -26,7 +26,7 @@ import (
 // Every recurring source is registered with the daemon supervisor.
 func startVendorUsagePollers(
 	cfg config.Config,
-	bus *events.AsyncBus,
+	bus events.Bus,
 	sourceHealth *freshness.Registry,
 	sup *lifecycle.Supervisor,
 	logger *slog.Logger,
