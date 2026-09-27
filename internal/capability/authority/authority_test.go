@@ -126,22 +126,36 @@ func TestTheSummarySaysWhetherAnythingActs(t *testing.T) {
 	}
 }
 
-// Read-guard's authority is not configured at all: it is computed from
-// measured re-read history, so it can escalate itself. An operator
-// cannot see it in any config file, which is exactly why the report has
-// to say where it comes from.
-func TestReadGuardIsReportedAsSelfEscalating(t *testing.T) {
-	for _, s := range authority.Report(cfg()).Subsystems {
-		if s.Name != "read_guard" {
-			continue
+// The read guard refuses redundant re-reads exactly when
+// coaching.delivery is intervene. It used to be reported as observe-only
+// and "derived from measured re-read history" while it was refusing reads
+// on the machine running the report.
+func TestReadGuardFollowsCoachingDelivery(t *testing.T) {
+	for delivery, want := range map[string]policy.Authority{
+		"intervene": policy.Automatic,
+		"advise":    policy.ObserveOnly,
+		"observe":   policy.ObserveOnly,
+	} {
+		c := cfg()
+		c.Mode = config.ModeActive
+		c.Coaching.Delivery = delivery
+		found := false
+		for _, s := range authority.Report(c).Subsystems {
+			if s.Name != "read_guard" {
+				continue
+			}
+			found = true
+			if s.Configured != want {
+				t.Errorf("delivery %q: read_guard configured %q, want %q", delivery, s.Configured, want)
+			}
+			if !strings.Contains(s.Setting, "coaching.delivery") {
+				t.Errorf("read_guard setting %q does not name coaching.delivery", s.Setting)
+			}
 		}
-		if !strings.Contains(strings.ToLower(s.Setting), "measured") {
-			t.Errorf("read_guard's setting reads %q; it does not say the "+
-				"authority is derived rather than configured", s.Setting)
+		if !found {
+			t.Fatal("read_guard was not reported")
 		}
-		return
 	}
-	t.Fatal("read_guard was not reported")
 }
 
 // Subsystems come back in a stable order so a status table does not
