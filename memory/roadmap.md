@@ -65,8 +65,8 @@ Roady implementation status: `.roady/plan.json` + `.roady/state.json`.
 
 ## Deferred
 
-- Daemon-started background coaching: keep on-demand behavior until opt-in,
-  replay scope, and cost policy are explicitly designed.
+- Daemon-started background coaching: designed in ADR 0005 (Proposed);
+  on-demand behavior stays until it is accepted.
 - fmt learning threshold tuning: the 2026-09-27 audit found 14 genuine wrapped
   runs and zero recovery reads. The remaining 33,778 runs are session-log
   projections and cannot establish re-access safety, so no threshold experiment
