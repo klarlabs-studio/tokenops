@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -25,9 +26,19 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "create sandbox home: %v\n", err)
 		os.Exit(1)
 	}
-	// Unix uses $HOME; Windows resolves USERPROFILE.
-	os.Setenv("HOME", sandbox)
-	os.Setenv("USERPROFILE", sandbox)
+	// Unix uses $HOME; Windows resolves USERPROFILE. The XDG directories
+	// win over $HOME where set: with XDG_CONFIG_HOME exported, a sandboxed
+	// $HOME still resolved the operator's real config.yaml.
+	for _, k := range []string{"HOME", "USERPROFILE", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME"} {
+		os.Setenv(k, sandbox)
+	}
+	// TOKENOPS_* variables (TOKENOPS_CONFIG among them) point commands at
+	// the operator's files and credentials directly.
+	for _, kv := range os.Environ() {
+		if k, _, _ := strings.Cut(kv, "="); strings.HasPrefix(k, "TOKENOPS_") {
+			os.Unsetenv(k)
+		}
+	}
 
 	code := m.Run()
 	_ = os.RemoveAll(sandbox)
