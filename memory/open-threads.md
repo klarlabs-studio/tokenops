@@ -3,6 +3,16 @@ updated: 2026-09-27
 ---
 ## Open
 
+- Event persistence loses rows under load: the supervised v0.74.0 daemon
+  reported 64 dropped events minutes after restart. `~/Library/Logs/tokenops.log`
+  holds 441 retried and 17 abandoned append batches since 2026-09-26, almost
+  all `sqlite: insert row N: context deadline exceeded`, plus one
+  `sql: statement is closed`. The store is 424 MB. `events.db` is also mode
+  `0644`, unlike the `0600` files hardened in Phase 0. Needs a fix PR.
+- Nox remediation PRs #233, #234, and #351 all fail CI because `go mod tidy`
+  raised `go.mod` to Go 1.26 against the Go 1.25 pin; their upgrades need to
+  be reapplied on 1.25.
+
 - Subscription-plan telemetry: validate canonical GPT Plus/Pro and Claude
   Pro/Max/Business/Team/Enterprise semantics with genuine plan-meter records.
   The supported API-backed cohorts prove routing and metered cost only; API
