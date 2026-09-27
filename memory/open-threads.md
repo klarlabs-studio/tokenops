@@ -30,7 +30,9 @@ updated: 2026-09-27
   disables are ignored too. Retain those upstream defects as known limitations.
 - fmt learning threshold tuning: the merged provenance guard distinguishes
   actual wrapped runs from offline projections and prevents up-tuning without
-  recovery reads. It still needs enough genuine recovery telemetry.
+  recovery reads. The 2026-09-27 audit found 14 genuine wrapped runs, 33,778
+  projected runs, and zero recovery reads; that is still insufficient outcome
+  evidence for a threshold experiment.
 
 ## Deferred by policy
 

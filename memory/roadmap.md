@@ -1,5 +1,5 @@
 ---
-updated: 2026-09-26
+updated: 2026-09-27
 ---
 # Current Roadmap Snapshot
 
@@ -19,17 +19,26 @@ Roady implementation status: `.roady/plan.json` + `.roady/state.json`.
   surface-native insights (#383–#386).
 - Production-only cleanup and live-data clarity fixes: #387–#389.
 
-## Active Validation
+## Validated
 
-- Installed v0.72.1 reports its tagged version/commit and passes host-local
-  health/readiness. Read-only MCP status/resource-glance also passed against
-  genuine local Codex and Claude Code records.
+- Installed v0.73.1 reports its tagged version/commit and passes host-local
+  health/readiness. A fresh read-only Codex session used the installed MCP
+  binary to complete the `tokenops_prepare_work` to `tokenops_review_work`
+  handoff with exact workflow-ID preservation and truthful `no_evidence`
+  semantics for work that was not executed.
 - The OpenAI and Anthropic five-pair coding-agent cohorts both reached
   `supported` with independent verifier outcomes, stable multi-call arms,
   provider usage, latency, cost, and content-safe tool-call evidence.
-- Validate subscription-plan telemetry separately with genuine usage-meter
-  records. API-backed routing cannot establish Plus, Pro, Max, Business, Team,
-  or Enterprise quota semantics.
+- The configured Claude Max plan has genuine supervised usage-meter records.
+  Codex JSONL and the documented `account/read` method both report the opaque
+  OpenAI identity `prolite`; official documentation publishes no public-plan
+  mapping, so TokenOps preserves it separately from canonical `gpt-plus`.
+
+## Active Validation
+
+- Validate additional subscription plans only with genuine usage-meter records
+  from accounts carrying them. API-backed routing cannot establish Plus, Pro,
+  Max, Business, Team, or Enterprise quota semantics.
 - Accumulate additional outcome-linked work only for new task classes or policy
   questions. No demo seeding and no implied generalization from completion.
 
@@ -37,5 +46,7 @@ Roady implementation status: `.roady/plan.json` + `.roady/state.json`.
 
 - Daemon-started background coaching: keep on-demand behavior until opt-in,
   replay scope, and cost policy are explicitly designed.
-- fmt learning threshold tuning: guard is in place, but still needs enough
-  genuine wrapped-run and recovery telemetry; no threshold experiment yet.
+- fmt learning threshold tuning: the 2026-09-27 audit found 14 genuine wrapped
+  runs and zero recovery reads. The remaining 33,778 runs are session-log
+  projections and cannot establish re-access safety, so no threshold experiment
+  or configuration change is justified yet.
