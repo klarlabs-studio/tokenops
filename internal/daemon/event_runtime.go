@@ -95,7 +95,10 @@ func initializeEventRuntime(
 	}
 
 	// Plan stamping ensures all sources inherit the plan_included contract.
-	rt.Bus = events.NewAsync(newPlanStampSink(events.NewMultiSink(sinks...), cfg), events.Options{Logger: logger})
+	rt.Bus = events.NewAsync(newPlanStampSink(events.NewMultiSink(sinks...), cfg), events.Options{
+		Logger:    logger,
+		Contended: sqlite.IsContended,
+	})
 	rt.detach = wireCanonicalObservers(rt.Bus, counter, logger)
 	rt.AuditSubscriber = audit.Subscribe(rt.Bus, audit.NewRecorder(rt.Store), logger, "daemon")
 	logger.Info("event store ready", "path", path)
