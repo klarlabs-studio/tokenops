@@ -532,3 +532,15 @@ func TestSmartRoutingInterventionValidated(t *testing.T) {
 		}
 	}
 }
+
+func TestContextLimitPerStepGrowthMapsAndValidates(t *testing.T) {
+	c := CoachingConfig{ContextLimits: []ContextLimitConfig{{WorkflowPrefix: "codex:", ContextGrowthPerStepTokens: 9000}}}
+	if got := c.WasteConfig().Profiles[0].ContextGrowthPerStepTokens; got != 9000 {
+		t.Fatalf("per-step limit not mapped: got %d", got)
+	}
+	cfg := Default()
+	cfg.Coaching.ContextLimits = []ContextLimitConfig{{WorkflowPrefix: "codex:", ContextGrowthPerStepTokens: -1}}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("negative per-step growth limit accepted")
+	}
+}
