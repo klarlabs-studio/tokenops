@@ -68,9 +68,11 @@ plugins:
 versioning:
     strategy: conventional
     tagprefix: v
-    gittag: true
-    gitpush: true
-    gitsign: true
+    # Relicta 4.2.0 ignores signing and CLI skip-tag/skip-push controls in the
+    # observed publish path. The repository guard owns the signed tag + push.
+    gittag: false
+    gitpush: false
+    gitsign: false
     prereleasesuffix: ""
     buildmetadata: ""
     bumpfrom: tag
