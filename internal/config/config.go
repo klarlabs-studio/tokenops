@@ -552,6 +552,14 @@ func (s SmartRoutingConfig) Validate() error {
 	if s.Quality < 0 || s.Quality > 1 {
 		return fmt.Errorf("optimizer.smart_routing.quality must be in [0,1], got %g", s.Quality)
 	}
+	// The route guard and the control policy each parse this string with
+	// their own fallback, so a value neither names would mean advise to
+	// one and observe-only to the other.
+	switch strings.ToLower(strings.TrimSpace(s.Intervention)) {
+	case "", "off", "false", "no", "advise", "delegate", "auto":
+	default:
+		return fmt.Errorf("optimizer.smart_routing.intervention must be off, advise, delegate, or auto, got %q", s.Intervention)
+	}
 	return nil
 }
 
