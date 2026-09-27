@@ -193,15 +193,19 @@ may still require the repository's pinned compiler version.
 
 The subscription telemetry gate exposed a live OpenAI window-shape mismatch.
 The configured plan is `gpt-plus`, while the current Codex meter reports the
-opaque plan type `prolite`, one 10,080-minute primary window at 23% used, and
-no secondary window. Released v0.72.1 incorrectly rendered that snapshot with
-the catalog's five-hour duration. The current fix reads the reported duration
-and plan type, producing a 168-hour window with the vendor reset unchanged;
-it deliberately does not infer that `prolite` equals a public catalog name.
-The configured Claude Max 20x source has genuine Claude Code token/cache
-usage, but its quota percentage and reset remain estimated because the Claude
-usage meter is not connected. Other plan semantics remain unproven without
-genuine meter records from accounts on those plans.
+opaque plan type `prolite` and one 10,080-minute primary window. Released
+v0.72.1 incorrectly rendered that snapshot with the catalog's five-hour
+duration. The current fix reads the reported duration and plan type, producing
+a 168-hour window with the vendor reset unchanged. A live read through Codex's
+documented `account/read` method independently returned `planType: prolite`,
+confirming this is the account identity supplied by Codex rather than a JSONL
+decoder error. Official OpenAI documentation defines the field and gives
+examples such as `pro` and `business`, but does not publish a `prolite` mapping.
+TokenOps therefore preserves it as opaque vendor identity while keeping the
+operator's canonical configured plan, `gpt-plus`, separate.
+The configured Claude Max 20x source has genuine Claude Code token/cache usage
+and an authoritative usage-meter percentage and reset. Other plan semantics
+remain unproven without genuine meter records from accounts on those plans.
 
 A content-safe authenticated Claude UI check confirmed the general product can
 expose multiple quota dimensions: a current-session window, aggregate weekly
@@ -221,9 +225,10 @@ content-safely.
 ## Next
 
 1. Complete subscription-plan telemetry validation with genuine plan-meter
-   records: reconcile OpenAI's `prolite` identifier without guessing, connect
-   Claude subscription telemetry for the configured Max plan, and test other plans
-   only on accounts that actually carry them.
+   records. The configured Claude Max plan is connected; test other OpenAI and
+   Claude plans only on accounts that actually carry them. Preserve undocumented
+   vendor identities such as OpenAI's `prolite` without guessing a public-plan
+   mapping.
 2. Expand representative Codex and Claude Code cohorts only when a new task
    class or policy question justifies paid evidence; the bounded Go repair
    class now has supported OpenAI and Anthropic coding-agent cohorts.
