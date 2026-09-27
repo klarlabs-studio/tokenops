@@ -16,9 +16,11 @@ updated: 2026-09-26
   labels instead of assuming its historical `seven_day_opus` name and supports
   the current public web client's unified limits contract. Capture an actual
   authenticated response content-safely before claiming live ingestion.
-- Relicta release governance: resolve or guard the observed `gitsign: true`
-  unsigned-tag behavior and `autocommitchangelog: false` local append before
-  the next release.
+- Relicta release governance: the repository guard in
+  `scripts/relicta-publish-signed.sh` bypasses Relicta 4.2.0 tag creation and
+  push, restores only its known forbidden changelog mutation, verifies a
+  Git-created SSH-signed tag, and pushes only after all invariants pass. Use it
+  for the next release and retain the upstream defects as known limitations.
 - fmt learning threshold tuning: the merged provenance guard distinguishes
   actual wrapped runs from offline projections and prevents up-tuning without
   recovery reads. It still needs enough genuine recovery telemetry.
