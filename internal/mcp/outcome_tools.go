@@ -52,14 +52,14 @@ func RegisterOutcomeTools(s *Server, d OutcomeDeps) error {
 		OutputSchema(outcomeResult{}).
 		Handler(func(ctx context.Context, in outcomeInput) (*outcomeResult, error) {
 			if strings.TrimSpace(in.ExecutionID) == "" {
-				return nil, fmt.Errorf("execution_id is required")
+				return nil, inputError(errors.New("execution_id is required"))
 			}
 			result, err := parseOutcomeResult(in.Result)
 			if err != nil {
-				return nil, err
+				return nil, inputError(err)
 			}
 			if in.AttentionMinutes != nil && (math.IsNaN(*in.AttentionMinutes) || math.IsInf(*in.AttentionMinutes, 0) || *in.AttentionMinutes < 0) {
-				return nil, fmt.Errorf("attention_minutes must be a finite non-negative number")
+				return nil, inputError(errors.New("attention_minutes must be a finite non-negative number"))
 			}
 			if d.Store == nil {
 				return &outcomeResult{ExecutionID: in.ExecutionID, Result: string(result), Assessment: string(eventschema.OutcomeHuman), Error: "storage_disabled", Hint: "run `tokenops init` then restart the daemon"}, nil
@@ -82,7 +82,7 @@ func RegisterOutcomeTools(s *Server, d OutcomeDeps) error {
 		OutputSchema(outcomeResult{}).
 		Handler(func(ctx context.Context, in outcomeDetectInput) (*outcomeResult, error) {
 			if strings.TrimSpace(in.ExecutionID) == "" || strings.TrimSpace(in.SessionID) == "" {
-				return nil, fmt.Errorf("execution_id and session_id are required")
+				return nil, inputError(errors.New("execution_id and session_id are required"))
 			}
 			if d.Store == nil {
 				return &outcomeResult{ExecutionID: in.ExecutionID, Result: string(eventschema.OutcomeUnknown), Error: "storage_disabled", Hint: "run `tokenops init` then restart the daemon"}, nil

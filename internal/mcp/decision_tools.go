@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	"go.klarlabs.de/tokenops/internal/capability/explain"
@@ -34,7 +33,7 @@ func RegisterDecisionTools(s *Server, d DecisionDeps) error {
 		Handler(func(ctx context.Context, in explainDecisionInput) (*explainDecisionResult, error) {
 			id := strings.TrimSpace(in.DecisionID)
 			if id == "" {
-				return nil, fmt.Errorf("decision_id is required")
+				return nil, inputError(errors.New("decision_id is required"))
 			}
 			if d.Store == nil {
 				return &explainDecisionResult{Error: "storage_disabled", Hint: "run `tokenops init` then restart the daemon"}, nil

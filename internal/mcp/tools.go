@@ -217,7 +217,14 @@ func RegisterTools(s *Server, d Deps) error {
 		Description("Reconstruct a workflow trace and run the waste detector. Returns step-level deltas plus coaching findings.").
 		OutputSchema(workflowTraceResult{}).
 		Handler(func(ctx context.Context, in workflowTraceInput) (*workflowTraceResult, error) {
-			return workflowTrace(ctx, d, in)
+			out, err := workflowTrace(ctx, d, in)
+			if errors.Is(err, workflow.ErrNoTrace) {
+				// An unknown workflow is the caller's to correct; a store
+				// failure stays masked. review_work shares workflowTrace and
+				// needs ErrNoTrace unwrapped, so the mark goes on here.
+				return nil, inputError(err)
+			}
+			return out, err
 		})
 
 	s.Tool("tokenops_optimizations").
