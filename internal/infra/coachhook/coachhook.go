@@ -63,6 +63,13 @@ type Config struct {
 	// Tiers are the budget fractions (e.g. 0.50, 0.75, 1.00) at which to
 	// nudge. Each fires at most once per session (latched).
 	Tiers []float64
+	// Quota is the live window reading for a flat-rate plan the session
+	// runs on. When set it replaces the dollar ladder: the coach speaks at
+	// QuotaTiers of the window, each once per window across sessions.
+	Quota *Quota
+	// QuotaTiers are the window shares to speak at. Empty uses
+	// DefaultQuotaTiers.
+	QuotaTiers []float64
 	// OverBudgetStep re-alerts every additional step once the budget is
 	// exceeded: with 1.00 the coach also fires at 200%, 300%, … of budget.
 	// Zero disables over-budget escalation.
@@ -168,6 +175,9 @@ type Decision struct {
 	// Promotion is true when the nudge is the read-guard case rather than
 	// a budget tier.
 	Promotion bool
+	// QuotaTier is the share of the plan's quota window this Stop spoke
+	// at (0.75 = 75%). Zero when no quota tier fired.
+	QuotaTier float64
 	// UnpricedModel names a model this session ran on that the rate card
 	// does not know, empty when everything was priceable.
 	//
@@ -237,6 +247,11 @@ type ledgerEvent struct {
 	// session on an uncatalogued model is indistinguishable in the ledger
 	// from one that genuinely cost nothing.
 	Unpriced string `json:"unpriced,omitempty"`
+	// QuotaWindow and QuotaUsedPct record the live plan window the coach
+	// judged against, when one was known; QuotaTier the tier it spoke.
+	QuotaWindow  string  `json:"quota_window,omitempty"`
+	QuotaUsedPct float64 `json:"quota_used_pct,omitempty"`
+	QuotaTier    float64 `json:"quota_tier,omitempty"`
 }
 
 // EvaluateCursor is Evaluate for a Cursor stop event, which carries the
@@ -277,7 +292,12 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 	frac := st.CumulativeUSD / budget
 
 	dec := Decision{CumulativeUSD: st.CumulativeUSD, BudgetUSD: budget, UnpricedModel: unpriced}
-	fired := highestBoundary(frac, st.MaxFiredFraction, cfg)
+	fired := 0.0
+	if cfg.Quota == nil {
+		fired = highestBoundary(frac, st.MaxFiredFraction, cfg)
+	} else {
+		evaluateQuota(dir, &dec, &st, cfg, model, contextTokens, now)
+	}
 	if cfg.Enabled && fired > 0 {
 		reason, retry := cfg.Quiet.silence(st.Nudges, parseTime(st.LastNudgeAt), now)
 		switch {
@@ -340,9 +360,65 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		CumulativeUSD: st.CumulativeUSD, BudgetUSD: budget,
 		Fraction: frac, TierFired: dec.FiredFraction, Model: model,
 		Suppressed: dec.Suppressed, Promotion: dec.Promotion,
-		Unpriced: dec.UnpricedModel,
+		Unpriced:    dec.UnpricedModel,
+		QuotaWindow: quotaLabel(cfg.Quota), QuotaUsedPct: quotaUsed(cfg.Quota), QuotaTier: dec.QuotaTier,
 	})
 	return dec
+}
+
+// evaluateQuota speaks the highest quota tier not yet said for this window.
+// It replaces the dollar ladder when a live reading exists, under the same
+// quiet policy.
+func evaluateQuota(dir string, dec *Decision, st *sessionState, cfg Config, model string, contextTokens int64, now time.Time) {
+	q := cfg.Quota
+	tiers := cfg.QuotaTiers
+	if len(tiers) == 0 {
+		tiers = DefaultQuotaTiers()
+	}
+	latch := loadQuotaLatch(dir)
+	key := quotaKey(q)
+	tier := highestQuotaTier(q.Window.UsedPct, latch[key], tiers)
+	if !cfg.Enabled || tier == 0 {
+		return
+	}
+	reason, retry := cfg.Quiet.silence(st.Nudges, parseTime(st.LastNudgeAt), now)
+	switch {
+	case reason == "":
+		dec.Nudge = true
+		dec.QuotaTier = tier
+		dec.Message = quotaMessage(q, now)
+		if note := contextNote(contextTokens, model); note != "" {
+			dec.Message = note + " " + dec.Message
+		}
+		dec.ContextTokens = contextTokens
+		if w, ok := spend.ContextWindow(model); ok {
+			dec.ContextWindow = w
+		}
+		latch[key] = tier
+		st.LastNudgeAt = now.UTC().Format(time.RFC3339Nano)
+		st.Nudges++
+	case retry:
+		dec.Suppressed = reason
+		return
+	default:
+		dec.Suppressed = reason
+		latch[key] = tier
+	}
+	saveQuotaLatch(dir, latch, now)
+}
+
+func quotaLabel(q *Quota) string {
+	if q == nil {
+		return ""
+	}
+	return q.Provider + " " + q.Window.Label
+}
+
+func quotaUsed(q *Quota) float64 {
+	if q == nil {
+		return 0
+	}
+	return q.Window.UsedPct
 }
 
 // accumulate sums the full API-equivalent cost of every turn in the transcript
@@ -736,6 +812,10 @@ type Stats struct {
 	// not a lean session, and this is the only place that difference
 	// shows.
 	UnpricedModels map[string]int `json:"unpriced_models,omitempty"`
+	// QuotaNudges counts quota-window nudges by tier ("75%" -> count),
+	// and QuotaWindows the windows they were said about.
+	QuotaNudges  map[string]int `json:"quota_nudges,omitempty"`
+	QuotaWindows map[string]int `json:"quota_windows,omitempty"`
 }
 
 // ReadStats reads the ledger and aggregates it. Cumulative spend is a
@@ -767,6 +847,13 @@ func ReadStats(dir string) (Stats, error) {
 		if e.TierFired > 0 {
 			s.Alerts++
 			s.AlertsByTier[tierLabel(e.TierFired)]++
+		}
+		if e.QuotaTier > 0 {
+			if s.QuotaNudges == nil {
+				s.QuotaNudges, s.QuotaWindows = map[string]int{}, map[string]int{}
+			}
+			s.QuotaNudges[tierLabel(e.QuotaTier)]++
+			s.QuotaWindows[e.QuotaWindow]++
 		}
 		if e.Promotion {
 			s.PromotionNudges++
