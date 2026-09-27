@@ -101,14 +101,9 @@ func Report(cfg config.Config) Answer {
 		},
 		{
 			Name:       "read_guard",
-			Configured: policy.ObserveOnly,
-			// The one authority nobody configures. It escalates itself
-			// from measured re-read history, so it appears in no config
-			// file and an operator has no way to see it — which is
-			// exactly why the report has to say where it comes from
-			// rather than leaving a blank.
-			Setting:   "not configured — derived from measured re-read history, and escalates on its own",
-			Describes: "whether a redundant re-read is refused or merely counted",
+			Configured: readGuard(cfg),
+			Setting:    "coaching.delivery (intervene lets it refuse a redundant re-read)",
+			Describes:  "whether a redundant re-read is refused or merely counted",
 		},
 		{
 			Name:       "routing_approval",
@@ -122,6 +117,18 @@ func Report(cfg config.Config) Answer {
 		subsystems[i].Effective = policy.Effective(daemon, subsystems[i].Configured)
 	}
 	return Answer{Daemon: daemon, Subsystems: subsystems}
+}
+
+// readGuard reports the read guard's authority. The hook refuses a
+// redundant re-read exactly when coaching.delivery is intervene (see
+// cli.resolveGuardMode); below that it only counts. It was reported as
+// observe-only and "derived from measured re-read history", a design that
+// no longer exists, while the guard was refusing reads.
+func readGuard(cfg config.Config) policy.Authority {
+	if cfg.Coaching.AllowsIntervention() {
+		return policy.Automatic
+	}
+	return policy.ObserveOnly
 }
 
 // smartRouting reports the routing guard's authority.
