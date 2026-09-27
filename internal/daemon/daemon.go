@@ -148,7 +148,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 
 	if cfg.Storage.Enabled {
 		// Source-specific polling configuration lives in its runtime module.
-		startVendorUsagePollers(cfg, bus, sourceHealth, sup, logger)
+		startVendorUsagePollers(cfg, ingestionBus(ctx, bus, components.Store, logger), sourceHealth, sup, logger)
 
 		if err := startRetentionRuntime(cfg.Retention, components.Store, sup, logger); err != nil {
 			return fmt.Errorf("retention: %w", err)
