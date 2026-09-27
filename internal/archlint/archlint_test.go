@@ -49,7 +49,6 @@ var storageExempt = map[string]bool{
 // are gated automatically — TestDomainPackagesComplete compares this
 // list to `go list ./internal/contexts/...`.
 var domainPackages = []string{
-	"go.klarlabs.de/tokenops/internal/contexts/coaching/coaching",
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/efficiency",
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts",
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/replies",
@@ -83,7 +82,6 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/routingapproval",
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/taskclass",
 	"go.klarlabs.de/tokenops/internal/contexts/policy",
-	"go.klarlabs.de/tokenops/internal/contexts/prompts/llm",
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/providers",
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer",
 	"go.klarlabs.de/tokenops/internal/contexts/rules",
