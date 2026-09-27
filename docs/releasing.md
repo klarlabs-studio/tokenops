@@ -16,6 +16,16 @@ relicta notes
 relicta approve
 ```
 
+Before publishing, run the daemon under every supported configuration:
+
+```bash
+make config-matrix ARGS=--long
+```
+
+Each profile runs isolated against a local fake upstream; the target exits
+non-zero if a valid profile fails to start, proxy, gate `/api/*`, or stop
+cleanly, or if an invalid one is accepted.
+
 Publish with the repository guard:
 
 ```bash

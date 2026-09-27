@@ -16,7 +16,7 @@ LDFLAGS := -s -w \
   -X go.klarlabs.de/tokenops/internal/version.Commit=$(COMMIT) \
   -X go.klarlabs.de/tokenops/internal/version.Date=$(DATE)
 
-.PHONY: all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-review sec-remediate policy-guard install-hooks eval eval-gate cover-debt cover-debt-gate
+.PHONY: all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-review sec-remediate policy-guard install-hooks eval eval-gate cover-debt cover-debt-gate config-matrix
 
 all: build
 
@@ -73,6 +73,11 @@ COVERCTL_CONFIG ?= .coverctl.yaml
 
 cover-debt:
 	-$(COVERCTL) check -config $(COVERCTL_CONFIG)
+
+# config-matrix runs the built daemon under every supported config profile
+# against a local fake upstream; add ARGS=--long for the retention pass.
+config-matrix: $(BIN_DIR)/tokenops
+	python3 scripts/config-matrix.py --bin $(BIN_DIR)/tokenops $(ARGS)
 
 verify: fmt vet lint test bench-gate eval-gate sec-gate proto-verify
 
