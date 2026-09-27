@@ -2,7 +2,6 @@ package providers
 
 import (
 	"encoding/json"
-	"strings"
 
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -27,7 +26,7 @@ type anthropicMessagesRequest struct {
 }
 
 func normalizeAnthropic(path string, body []byte) (CanonicalRequest, error) {
-	if !strings.Contains(path, "/v1/messages") {
+	if path != "/v1/messages" {
 		return CanonicalRequest{}, ErrUnknownPath
 	}
 	var req anthropicMessagesRequest

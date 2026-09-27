@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -288,6 +289,35 @@ func TestObserverEmitsPromptEvent(t *testing.T) {
 	}
 	if pe.Streaming {
 		t.Errorf("non-SSE response should not be flagged streaming")
+	}
+}
+
+func TestObserverPassesThroughAnthropicTokenCountWithoutPromptEvent(t *testing.T) {
+	var sawRequest atomic.Bool
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawRequest.Store(r.URL.Path == "/v1/messages/count_tokens")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"input_tokens":12}`)
+	}))
+	defer upstream.Close()
+
+	base, bus := startProxyForProviderObservation(t, upstream, eventschema.ProviderAnthropic)
+	req, _ := http.NewRequest(http.MethodPost,
+		base+"/anthropic/v1/messages/count_tokens",
+		strings.NewReader(`{"model":"claude-sonnet-4-5","messages":[{"role":"user","content":"hello"}]}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("do: %v", err)
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+
+	if !sawRequest.Load() {
+		t.Fatal("token-count request did not reach upstream")
+	}
+	if got := len(bus.snapshot()); got != 0 {
+		t.Fatalf("token-count request emitted %d events, want 0", got)
 	}
 }
 
