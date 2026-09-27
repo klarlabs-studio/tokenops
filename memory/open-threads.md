@@ -57,6 +57,38 @@ updated: 2026-09-27
 
 ## Resolved 2026-09-27
 
+- Long write-lock holds on the shared store (up to 66 s, with no process
+  spending CPU during them) stopped once the five Claude Code `tokenops serve`
+  processes, some running since 2026-09-26 on ~v0.70 binaries, were restarted
+  on v0.75.0: a 15-minute probe at comparable load then saw no hold over 1 s,
+  where earlier 10-minute windows saw 3-13. The daemon alone held at most
+  1.24 s even at load 166. The exact old process is unrecoverable. v0.75.0
+  logs `sqlite: slow write lock` with pid and role from every process, so a
+  recurrence names its holder; the two Claude desktop `serve` processes were
+  still on old binaries and were not implicated.
+- Stale planning docs (`docs/backlog.md`, `docs/launch-plan.md`,
+  `docs/launch-tracker.md`, `docs/customer-discovery.md`) were removed;
+  `memory/roadmap.md` and ADR 0004 are the roadmap.
+
+- A config matrix (#435, `make config-matrix`) ran the daemon under 32
+  profiles and found two bugs, fixed in v0.74.3: `/api/*` was served without
+  the token when storage was disabled, exposing rule files from any
+  `?root=` (#433), and unknown `smart_routing.intervention` values were
+  accepted and read as advise by the route guard but observe-only by policy
+  (#434). `docs/releasing.md` runs the matrix before publishing.
+
+- Event persistence lost rows when another connection to the shared store
+  held the write lock past the bus's bounded retry budget (17 abandoned and
+  441 retried batches since 2026-09-26). #431 retries contended batches until
+  they land and restricts `events.db` and its WAL sidecars to `0600`; released
+  in v0.74.1.
+- Pollers re-published their full history (130-190k envelopes) on every
+  daemon start. #432 snapshots stored IDs at startup and skips them; released
+  in v0.74.2, whose first start skipped 274,172 stored events.
+- Nox remediation PRs #233, #234, and #351 were closed; #430 applied their
+  upgrades within the Go 1.25 pin. `golang.org/x/crypto` v0.56.0 requires Go
+  1.26 and its advisories are unreachable from TokenOps per `govulncheck`.
+
 - A fresh read-only Codex session completed the released MCP
   `tokenops_prepare_work` to `tokenops_review_work` handoff. The installed MCP
   server and daemon both reported v0.73.1, the exact workflow identifier was
