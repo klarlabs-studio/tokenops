@@ -14,9 +14,12 @@ updated: 2026-09-27
   content-safe copied usage request has now enabled a current-checkout
   interactive daemon to store one genuine
   `claude-usage-meter` event and `plan headroom` consumed its authoritative
-  window. The same persisted session is refused by Cloudflare when the daemon
-  runs under launchd, so durable supervised polling remains open. Do not
-  generalize this Max-plan proof to Pro, Team, Business, or Enterprise.
+  window. Durable supervised polling now succeeds under launchd after the
+  content-safe request importer began preserving strict allowlists of browser
+  client hints and Cloudflare bot-management cookies; every imported cookie is
+  centrally redacted. Do not generalize this Max-plan proof to Pro, Team,
+  Business, or Enterprise, and the opaque OpenAI `prolite` mapping remains
+  unresolved.
 - Relicta release governance: the repository guard in
   `scripts/relicta-publish-signed.sh` never invokes Relicta's unsafe publish
   action. Relicta plans, versions, writes notes, and approves; Git verifies and

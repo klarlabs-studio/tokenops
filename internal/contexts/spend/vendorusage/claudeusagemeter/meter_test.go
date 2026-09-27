@@ -71,6 +71,24 @@ const unifiedLimitsUsage = `{
   "extra_usage": null
 }`
 
+// transitionalLimitsUsage mirrors the live migration shape: legacy aggregate
+// windows and the unified limits array can coexist. The unified values are the
+// current contract and must replace compatibility aliases, not produce noisy
+// five_hour_0 / seven_day_1 duplicates. seven_day_breakdown is a UI container;
+// scoped measurements come from limits.
+const transitionalLimitsUsage = `{
+  "five_hour":{"utilization":11,"resets_at":"2026-09-27T00:00:00Z"},
+  "seven_day":{"utilization":33,"resets_at":"2026-10-02T00:00:00Z"},
+  "seven_day_breakdown":{"models":[{"name":"not-persisted-here"}]},
+  "limits":[
+    {"kind":"session","percent":12,"resets_at":"2026-09-27T01:00:00Z","scope":{}},
+    {"kind":"weekly_all","percent":34,"resets_at":"2026-10-02T01:00:00Z","scope":{}},
+    {"kind":"weekly","percent":0,"resets_at":"2026-10-02T02:00:00Z",
+      "scope":{"model":{"display_name":"Scoped Model"}}}
+  ],
+  "extra_usage":null
+}`
+
 // inventedUsage is the shape this meter was originally written against,
 // which no real response has ever had. It must be refused, not zeroed.
 const inventedUsage = `{
@@ -234,6 +252,22 @@ func TestUsageDecodesUnifiedLimits(t *testing.T) {
 		if got := env.Attributes[key]; got != value {
 			t.Errorf("%s = %q, want %q", key, got, value)
 		}
+	}
+}
+
+func TestUsageUnifiedLimitsReplaceLegacyAliasesWithoutDuplicates(t *testing.T) {
+	u := usageFrom(t, transitionalLimitsUsage)
+	if len(u.Windows) != 3 {
+		t.Fatalf("windows = %+v, want two aggregates and one scoped window", u.Windows)
+	}
+	if *u.FiveHour.Utilization != 12 || *u.SevenDay.Utilization != 34 {
+		t.Fatalf("unified aggregates did not replace legacy values: five=%+v seven=%+v", u.FiveHour, u.SevenDay)
+	}
+	if u.Windows["five_hour_0"] != nil || u.Windows["seven_day_1"] != nil {
+		t.Fatalf("compatibility aliases were duplicated: %+v", u.Windows)
+	}
+	if len(u.Unrecognised) != 0 {
+		t.Fatalf("known breakdown container reported as unreadable: %v", u.Unrecognised)
 	}
 }
 
@@ -414,14 +448,24 @@ func (b *captureBus) PublishWait(_ context.Context, env *eventschema.Envelope) e
 // browser's clearance cookie and its own User-Agent are what passed the
 // check, and they have to travel together.
 func TestClientSendsTheClearanceCookieAndBrowserAgent(t *testing.T) {
-	var gotCookie, gotUA string
+	var gotCookie, gotUA, gotPlatform, gotAuthorization string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotCookie, gotUA = r.Header.Get("Cookie"), r.Header.Get("User-Agent")
+		gotPlatform = r.Header.Get("Sec-Ch-Ua-Platform")
+		gotAuthorization = r.Header.Get("Authorization")
 		_, _ = w.Write([]byte(`[]`))
 	}))
 	defer srv.Close()
 	c := NewClient("sk-ant-sid-x")
 	c.BaseURL, c.Clearance, c.UserAgent = srv.URL, "clearance-token", "Mozilla/5.0 Chrome/141.0.0.0"
+	c.BrowserHeaders = map[string]string{
+		"sec-ch-ua-platform": `"macOS"`,
+		"authorization":      "must-not-be-sent",
+	}
+	c.BrowserCookies = map[string]string{
+		"__cf_bm":       "bot-secret",
+		"unsafe-cookie": "must-not-be-sent",
+	}
 	if _, err := c.Organizations(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -430,6 +474,15 @@ func TestClientSendsTheClearanceCookieAndBrowserAgent(t *testing.T) {
 	}
 	if gotUA != "Mozilla/5.0 Chrome/141.0.0.0" {
 		t.Errorf("user agent = %q, want the browser's own", gotUA)
+	}
+	if gotPlatform != `"macOS"` {
+		t.Errorf("client hint = %q, want the imported browser value", gotPlatform)
+	}
+	if gotAuthorization != "" {
+		t.Errorf("unsafe configured header was sent: %q", gotAuthorization)
+	}
+	if !strings.Contains(gotCookie, "__cf_bm=bot-secret") || strings.Contains(gotCookie, "unsafe-cookie") {
+		t.Errorf("browser cookie allowlist not enforced: %q", strings.ReplaceAll(gotCookie, "sk-ant-sid-x", "<key>"))
 	}
 }
 

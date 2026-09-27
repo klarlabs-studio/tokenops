@@ -66,6 +66,7 @@ func TestRedactedMasksAllSecrets(t *testing.T) {
 	cfg.VendorUsage.Anthropic.AdminKey = "sk-ant-admin-x"
 	cfg.VendorUsage.ClaudeUsageMeter.SessionKey = "sk-ant-sid02-x"
 	cfg.VendorUsage.ClaudeUsageMeter.Clearance = "cloudflare-clearance"
+	cfg.VendorUsage.ClaudeUsageMeter.BrowserCookies = map[string]string{"__cf_bm": "cloudflare-bot-secret"}
 	cfg.VendorUsage.Cursor.Cookie = "cookie"
 	cfg.VendorUsage.GitHubCopilot.OAuthToken = "gho_x"
 
@@ -75,6 +76,7 @@ func TestRedactedMasksAllSecrets(t *testing.T) {
 		"anthropic.admin_key":            r.VendorUsage.Anthropic.AdminKey,
 		"claude_usage_meter.session_key": r.VendorUsage.ClaudeUsageMeter.SessionKey,
 		"claude_usage_meter.clearance":   r.VendorUsage.ClaudeUsageMeter.Clearance,
+		"claude_usage_meter.__cf_bm":     r.VendorUsage.ClaudeUsageMeter.BrowserCookies["__cf_bm"],
 		"cursor.cookie":                  r.VendorUsage.Cursor.Cookie,
 		"github_copilot.oauth_token":     r.VendorUsage.GitHubCopilot.OAuthToken,
 	} {
@@ -85,6 +87,9 @@ func TestRedactedMasksAllSecrets(t *testing.T) {
 	// Original untouched; empty secrets stay empty (no placeholder noise).
 	if cfg.VendorUsage.ClaudeUsageMeter.SessionKey != "sk-ant-sid02-x" {
 		t.Error("Redacted mutated the original")
+	}
+	if cfg.VendorUsage.ClaudeUsageMeter.BrowserCookies["__cf_bm"] != "cloudflare-bot-secret" {
+		t.Error("Redacted mutated the original browser cookies")
 	}
 	if Default().Redacted().Dashboard.AdminToken != "" {
 		t.Error("empty secret gained a placeholder")

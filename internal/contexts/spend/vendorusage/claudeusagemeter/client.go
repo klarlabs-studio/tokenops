@@ -105,7 +105,10 @@ func (u *UsageResponse) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	for name, raw := range blocks {
-		if name == "extra_usage" || name == "limits" || string(raw) == "null" {
+		// seven_day_breakdown is a presentation container used by the web
+		// client, not an independently metered window. Its actual scoped
+		// readings arrive in limits and are decoded below.
+		if name == "extra_usage" || name == "limits" || name == "seven_day_breakdown" || string(raw) == "null" {
 			continue
 		}
 		var fields map[string]json.RawMessage
@@ -175,7 +178,8 @@ func (u *UsageResponse) limitWindowName(limit Limit, index int) string {
 		base = "limit"
 	}
 	name := base
-	if _, exists := u.Windows[name]; exists {
+	canonical := limit.Kind == "session" || limit.Kind == "weekly_all"
+	if _, exists := u.Windows[name]; exists && !canonical {
 		name = base + "_" + strconv.Itoa(index)
 	}
 	return name
@@ -328,6 +332,13 @@ type Client struct {
 	// plain Chrome string, which passes on its own only when the bot
 	// check is not asking.
 	UserAgent string
+	// BrowserHeaders contains only the non-secret client-hint and fetch
+	// metadata allowlisted by the copied-request importer.
+	BrowserHeaders map[string]string
+	// BrowserCookies contains only Cloudflare bot-management cookie names.
+	// The request path enforces the allowlist again so hand-edited config
+	// cannot turn this into arbitrary cookie replay.
+	BrowserCookies map[string]string
 }
 
 // ErrMissingCookie signals an empty session_key in config; poller
@@ -405,11 +416,15 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("claude-usage-meter: build request: %w", err)
 	}
-	cookie := "sessionKey=" + c.SessionKey
+	req.AddCookie(&http.Cookie{Name: "sessionKey", Value: c.SessionKey})
 	if c.Clearance != "" {
-		cookie += "; cf_clearance=" + c.Clearance
+		req.AddCookie(&http.Cookie{Name: "cf_clearance", Value: c.Clearance})
 	}
-	req.Header.Set("Cookie", cookie)
+	for name, value := range c.BrowserCookies {
+		if allowedBrowserCookie(name) && value != "" {
+			req.AddCookie(&http.Cookie{Name: name, Value: value})
+		}
+	}
 	req.Header.Set("Accept", "application/json")
 	// Cloudflare in front of claude.ai 403s anything that doesn't look
 	// like a browser. A vanilla Chrome UA is sufficient and tolerated
@@ -419,6 +434,11 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, error) {
 		ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 	}
 	req.Header.Set("User-Agent", ua)
+	for name, value := range c.BrowserHeaders {
+		if allowedBrowserHeader(name) && value != "" && len(value) <= 1024 && !strings.ContainsAny(value, "\r\n") {
+			req.Header.Set(name, value)
+		}
+	}
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("claude-usage-meter: do request: %w", err)
@@ -435,6 +455,25 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, error) {
 		return nil, fmt.Errorf("claude-usage-meter: %s: status %d: %s", path, resp.StatusCode, snippet)
 	}
 	return io.ReadAll(resp.Body)
+}
+
+func allowedBrowserHeader(name string) bool {
+	switch strings.ToLower(name) {
+	case "accept-language", "priority", "sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform",
+		"sec-fetch-dest", "sec-fetch-mode", "sec-fetch-site":
+		return true
+	default:
+		return false
+	}
+}
+
+func allowedBrowserCookie(name string) bool {
+	switch name {
+	case "__cf_bm", "_cfuvid":
+		return true
+	default:
+		return false
+	}
 }
 
 // isBotCheck recognises Cloudflare's interstitial, which arrives as a 403
