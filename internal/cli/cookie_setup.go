@@ -260,7 +260,7 @@ func cookieSetupKey(cmd *cobra.Command, opts cookieSetupOptions) (browserSession
 	out := cmd.OutOrStdout()
 	if opts.pasteRequest {
 		fmt.Fprintln(out, requestImportInstructions)
-		raw, err := readSecret(cmd, "\nPaste copied cURL request: ")
+		raw, err := readCopiedRequest(cmd, "\nPaste copied cURL request: ")
 		if err != nil {
 			return browserSession{}, err
 		}
@@ -303,6 +303,50 @@ func cookieSetupKey(cmd *cobra.Command, opts cookieSetupOptions) (browserSession
 		return browserSession{}, err
 	}
 	return browserSession{key: strings.TrimSpace(key)}, nil
+}
+
+const maxCopiedRequestBytes = 1 << 20
+
+// readCopiedRequest keeps interactive credential input hidden, while reading
+// the complete command from a pipe. Chrome's "Copy as cURL" output is
+// multiline, so the ordinary single-line secret reader truncates it before
+// the cookie flags when stdin is piped from a clipboard command.
+func readCopiedRequest(cmd *cobra.Command, prompt string) (string, error) {
+	fmt.Fprint(cmd.OutOrStdout(), prompt)
+	in, ok := cmd.InOrStdin().(*os.File)
+	if ok && term.IsTerminal(int(in.Fd())) {
+		var lines []string
+		for {
+			b, err := term.ReadPassword(int(in.Fd()))
+			if err != nil {
+				fmt.Fprintln(cmd.OutOrStdout())
+				return "", fmt.Errorf("read copied request: %w", err)
+			}
+			line := string(b)
+			lines = append(lines, line)
+			if !curlLineContinues(line) {
+				break
+			}
+		}
+		fmt.Fprintln(cmd.OutOrStdout())
+		return strings.Join(lines, "\n"), nil
+	}
+
+	b, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), maxCopiedRequestBytes+1))
+	if err != nil {
+		return "", fmt.Errorf("read copied request: %w", err)
+	}
+	if len(b) > maxCopiedRequestBytes {
+		return "", errors.New("copied request is too large; nothing was written")
+	}
+	if len(b) == 0 {
+		return "", errors.New("read copied request: empty input")
+	}
+	return string(b), nil
+}
+
+func curlLineContinues(line string) bool {
+	return strings.HasSuffix(strings.TrimSpace(line), `\`)
 }
 
 // botCheckAdvice says what actually renews Cloudflare's clearance cookie: a

@@ -65,6 +65,7 @@ func TestRedactedMasksAllSecrets(t *testing.T) {
 	cfg.Dashboard.AdminToken = "tok"
 	cfg.VendorUsage.Anthropic.AdminKey = "sk-ant-admin-x"
 	cfg.VendorUsage.ClaudeUsageMeter.SessionKey = "sk-ant-sid02-x"
+	cfg.VendorUsage.ClaudeUsageMeter.Clearance = "cloudflare-clearance"
 	cfg.VendorUsage.Cursor.Cookie = "cookie"
 	cfg.VendorUsage.GitHubCopilot.OAuthToken = "gho_x"
 
@@ -73,6 +74,7 @@ func TestRedactedMasksAllSecrets(t *testing.T) {
 		"dashboard.admin_token":          r.Dashboard.AdminToken,
 		"anthropic.admin_key":            r.VendorUsage.Anthropic.AdminKey,
 		"claude_usage_meter.session_key": r.VendorUsage.ClaudeUsageMeter.SessionKey,
+		"claude_usage_meter.clearance":   r.VendorUsage.ClaudeUsageMeter.Clearance,
 		"cursor.cookie":                  r.VendorUsage.Cursor.Cookie,
 		"github_copilot.oauth_token":     r.VendorUsage.GitHubCopilot.OAuthToken,
 	} {

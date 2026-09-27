@@ -1,5 +1,5 @@
 ---
-updated: 2026-09-26
+updated: 2026-09-27
 ---
 ## Current State
 
@@ -250,6 +250,18 @@ blockers. Its validation proved Relicta publish ignores config-level
 replaced at the same commit with a verified SSH-signed tag, the duplicate
 workflow was canceled, and the original GoReleaser run completed. Future
 guards do not invoke Relicta publish at all.
+
+Live Claude subscription setup subsequently succeeded with a content-free
+Chrome usage request. Anthropic accepted the bounded session fields, the
+current-checkout daemon stored a genuine `claude-usage-meter` event, and
+`plan headroom` replaced the estimated Claude window with the authoritative
+vendor percentage and reset. The trial exposed two defects now covered by
+tests: piped multiline Chrome cURL was truncated at its first line, and
+`config show` did not redact the Cloudflare clearance credential. The
+supervised launchd process still receives a bot-check refusal with the same
+fields that work in an interactive daemon, so durable background polling
+remains open; the successful event proves ingestion and consumption, not
+long-running refresh reliability.
 
 ## Recently Resolved
 

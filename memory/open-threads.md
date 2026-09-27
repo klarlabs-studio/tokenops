@@ -1,5 +1,5 @@
 ---
-updated: 2026-09-26
+updated: 2026-09-27
 ---
 ## Open
 
@@ -9,13 +9,14 @@ updated: 2026-09-26
   billing is separate from subscription quota accounting. Current Codex data
   reports opaque plan type `prolite` with one weekly window; do not map it to a
   catalog plan without authority. Claude JSONL lacks an authoritative quota
-  percentage. A content-safe authenticated Claude UI check confirms the
-  general session, aggregate-weekly, and model-specific-weekly shape, but
-  persistent ingestion remains unconnected because the HttpOnly browser cookie
-  could not be exported. The decoder now preserves shape-valid vendor window
-  labels instead of assuming its historical `seven_day_opus` name and supports
-  the current public web client's unified limits contract. Capture an actual
-  authenticated response content-safely before claiming live ingestion.
+  percentage. The decoder preserves shape-valid vendor window labels and
+  supports the current public web client's unified limits contract. A
+  content-safe copied usage request has now enabled a current-checkout
+  interactive daemon to store one genuine
+  `claude-usage-meter` event and `plan headroom` consumed its authoritative
+  window. The same persisted session is refused by Cloudflare when the daemon
+  runs under launchd, so durable supervised polling remains open. Do not
+  generalize this Max-plan proof to Pro, Team, Business, or Enterprise.
 - Relicta release governance: the repository guard in
   `scripts/relicta-publish-signed.sh` never invokes Relicta's unsafe publish
   action. Relicta plans, versions, writes notes, and approves; Git verifies and
