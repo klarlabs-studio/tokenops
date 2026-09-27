@@ -193,3 +193,63 @@ func waitFor(url string, d time.Duration) bool {
 	}
 	return false
 }
+
+// /api/* must be credentialed whatever else is configured. Auth used to be
+// wired inside the storage block, so a daemon with storage disabled served
+// the rules API bare — and that API reads rule files from any directory a
+// caller names in ?root=.
+func TestE2EAPIRequiresTokenWithStorageDisabled(t *testing.T) {
+	port, err := freePort()
+	if err != nil {
+		t.Fatalf("free port: %v", err)
+	}
+	cfg := config.Config{
+		Listen:   net.JoinHostPort("127.0.0.1", port),
+		Log:      config.LogConfig{Level: "info", Format: "text"},
+		Rules:    config.RulesConfig{Enabled: true, Root: t.TempDir()},
+		Shutdown: config.ShutdownConfig{Timeout: 2 * time.Second},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() { errCh <- Run(ctx, cfg, io.Discard) }()
+	defer func() {
+		cancel()
+		select {
+		case <-errCh:
+		case <-time.After(5 * time.Second):
+			t.Error("daemon did not shut down within 5s")
+		}
+	}()
+
+	base := "http://" + cfg.Listen
+	if !waitFor(base+"/readyz", 3*time.Second) {
+		t.Fatal("daemon did not become ready")
+	}
+	for _, path := range []string{"/api/rules/analyze", "/api/rules/inject", "/api/spend/summary"} {
+		resp, err := http.Get(base + path)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Errorf("%s without a credential = %d, want 401", path, resp.StatusCode)
+		}
+	}
+
+	tok := daemonhint.Token()
+	if tok == "" {
+		t.Fatal("daemon wrote no API token to its URL hint")
+	}
+	req, _ := http.NewRequest(http.MethodGet, base+"/api/rules/analyze", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET /api/rules/analyze: %v", err)
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("/api/rules/analyze with a credential = %d, want 200", resp.StatusCode)
+	}
+}

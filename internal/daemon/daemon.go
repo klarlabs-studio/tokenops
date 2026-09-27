@@ -160,23 +160,25 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		}
 		opts = append(opts, proxy.WithAnalytics(analyticsH))
 		opts = append(opts, proxy.WithAudit(proxy.NewAuditHandlers(components.Store)))
-
-		// The local API is protected by a shared-secret bearer token.
-		// Either the operator sets cfg.Dashboard.AdminToken via env /
-		// config, or the daemon mints and persists one on first start.
-		tok, errTok := loadOrMintDashToken(cfg.Dashboard.AdminToken)
-		if errTok != nil {
-			return fmt.Errorf("API token: %w", errTok)
-		}
-		dashTok = tok
-		auth, err := dashauth.New(dashauth.Config{
-			AdminToken: dashTok,
-		})
-		if err != nil {
-			return fmt.Errorf("dashboard auth: %w", err)
-		}
-		opts = append(opts, proxy.WithDashAuth(auth))
 	}
+
+	// The local API is protected by a shared-secret bearer token whatever
+	// else is configured: with storage disabled /api/* still serves the
+	// rules API, which reads rule files from any ?root= a caller names.
+	// Either the operator sets cfg.Dashboard.AdminToken via env / config,
+	// or the daemon mints and persists one on first start.
+	tok, errTok := loadOrMintDashToken(cfg.Dashboard.AdminToken)
+	if errTok != nil {
+		return fmt.Errorf("API token: %w", errTok)
+	}
+	dashTok = tok
+	auth, err := dashauth.New(dashauth.Config{
+		AdminToken: dashTok,
+	})
+	if err != nil {
+		return fmt.Errorf("dashboard auth: %w", err)
+	}
+	opts = append(opts, proxy.WithDashAuth(auth))
 
 	if cfg.Rules.Enabled {
 		root := cfg.Rules.Root
