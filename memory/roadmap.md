@@ -48,8 +48,8 @@ Roady implementation status: `.roady/plan.json` + `.roady/state.json`.
 
 - Coach-hook parity for Codex and Cursor (#265); both expose a compatible
   end-of-turn hook. read-guard parity is not achievable on two of four clients.
-- Real external users via `docs/launch-tracker.md`, which has no entries. The
-  blocked outcome cohort and unvalidated plans both depend on it.
+- The blocked outcome cohort and the unvalidated subscription plans need
+  evidence from real work and accounts beyond this machine.
 - Team plane (#250) stays deferred until solo users ask for it.
 
 ## Active Validation

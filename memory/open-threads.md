@@ -3,15 +3,6 @@ updated: 2026-09-27
 ---
 ## Open
 
-- Long write-lock holds on the shared store: a live probe saw holds of up to
-  9.98 s with only the daemon and long-lived `tokenops serve` processes
-  attached, and no process spent more than 0.02 s CPU during any of them. A
-  shadow daemon as the only writer held at most 0.37 s at load 70 and 1.24 s
-  at load 166, which rules out the daemon alone and CPU starvation. v0.75.0
-  (#436) logs `sqlite: slow write lock` with pid and role from every process
-  that opens the store: the daemon to `~/Library/Logs/tokenops.log`, `serve`
-  to its MCP client's log. `serve` processes started before the upgrade keep
-  the old binary until their client restarts them.
 - Subscription-plan telemetry: validate canonical GPT Plus/Pro and Claude
   Pro/Max/Business/Team/Enterprise semantics with genuine plan-meter records.
   The supported API-backed cohorts prove routing and metered cost only; API
@@ -65,6 +56,19 @@ updated: 2026-09-27
   supported evidence with independent verifiers and stable multi-call arms.
 
 ## Resolved 2026-09-27
+
+- Long write-lock holds on the shared store (up to 66 s, with no process
+  spending CPU during them) stopped once the five Claude Code `tokenops serve`
+  processes, some running since 2026-09-26 on ~v0.70 binaries, were restarted
+  on v0.75.0: a 15-minute probe at comparable load then saw no hold over 1 s,
+  where earlier 10-minute windows saw 3-13. The daemon alone held at most
+  1.24 s even at load 166. The exact old process is unrecoverable. v0.75.0
+  logs `sqlite: slow write lock` with pid and role from every process, so a
+  recurrence names its holder; the two Claude desktop `serve` processes were
+  still on old binaries and were not implicated.
+- Stale planning docs (`docs/backlog.md`, `docs/launch-plan.md`,
+  `docs/launch-tracker.md`, `docs/customer-discovery.md`) were removed;
+  `memory/roadmap.md` and ADR 0004 are the roadmap.
 
 - A config matrix (#435, `make config-matrix`) ran the daemon under 32
   profiles and found two bugs, fixed in v0.74.3: `/api/*` was served without
