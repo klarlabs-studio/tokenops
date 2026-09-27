@@ -53,6 +53,8 @@ Roady implementation status: `.roady/plan.json` + `.roady/state.json`.
 
 - The blocked outcome cohort and the unvalidated subscription plans need
   evidence from real work and accounts beyond this machine.
+- Waste-detector findings that name a cause and a dollar amount, toward
+  ADR 0005's build gate; delete the never-wired async coaching pipeline.
 - Team plane (#250) stays deferred until solo users ask for it.
 
 ## Active Validation
@@ -65,8 +67,8 @@ Roady implementation status: `.roady/plan.json` + `.roady/state.json`.
 
 ## Deferred
 
-- Daemon-started background coaching: designed in ADR 0005 (Proposed);
-  on-demand behavior stays until it is accepted.
+- Daemon-started background coaching: ADR 0005 accepted with a build gate;
+  on-demand behavior stays until three finding kinds earn the digest.
 - fmt learning threshold tuning: the 2026-09-27 audit found 14 genuine wrapped
   runs and zero recovery reads. The remaining 33,778 runs are session-log
   projections and cannot establish re-access safety, so no threshold experiment

@@ -1,11 +1,12 @@
-# ADR 0005 — Background coaching is a local, heuristic digest
+# ADR 0005 — Background coaching is a local, heuristic, earned digest
 
-- **Status:** Proposed
+- **Status:** Accepted 2026-09-27, with a build gate (see Decision 1)
 - **Date:** 2026-09-27
 - **Deciders:** TokenOps maintainers
-- **Related:** ADR 0001 (opt-in usage-coaching hooks, Phase 4 digest), ADR 0004
-  (loop and authority ladder), `internal/contexts/coaching/coaching` (async
-  pipeline), `internal/contexts/coaching/waste` (detector), PR #438
+- **Related:** ADR 0001 (opt-in usage-coaching hooks; Phase 2 SessionStart
+  brief, Phase 4 digest), ADR 0004 (loop and authority ladder),
+  `internal/contexts/coaching/coaching` (async pipeline),
+  `internal/contexts/coaching/waste` (detector), PR #438
 
 ## Context
 
@@ -18,99 +19,135 @@ maintainer's machine on 2026-09-27:
   `coaching` envelope among 274,256 events. Waste detection runs only on
   demand: `tokenops replay`, the MCP workflow tools, and the local API.
 - **Detection is cheap.** Replay plus detection took 0.1–0.8 s of local CPU
-  per workflow; the 15 busiest workflows of a week took 3 s together. The
-  only money cost in the pipeline is the optional LLM enricher, which calls
-  the operator's model to rewrite each finding.
-- **Precision was the real blocker.** Before #438 every one of 80 real
-  workflows produced a finding, all of them measuring session length rather
-  than behaviour. After #438, 24 of 80 carry a genuine "oversized context"
-  finding and nothing else. That is real, but it recurs: a proactive channel
-  that reported it per session would nag on almost a third of sessions.
-- **The live channel exists.** The Stop-hook coach (ADR 0001) already nudges
-  during a session on budget tiers, on Claude Code, Codex, Cursor, and
-  opencode.
+  per workflow. The only money cost in the pipeline is the optional LLM
+  enricher.
+- **Precision was the blocker, and relevance still is.** Before #438 every
+  one of 80 real workflows produced a finding, all measuring session length.
+  After #438, 24 of 80 carry a genuine "oversized context" finding and
+  nothing else. It is true and recurs, and for an operator who runs large
+  contexts by choice it changes nothing.
+- **The live channel exists.** The Stop-hook coach (ADR 0001) nudges during
+  a session on budget tiers, on Claude Code, Codex, Cursor, and opencode.
+
+Established practice for proactive findings points the same way:
+
+- Google's static-analysis platform (Tricorder, ICSE 2015; "Lessons from
+  Building Static Analysis Tools at Google", CACM 2018) holds each check to
+  an **effective false-positive rate** under about 10%, where a finding the
+  developer does not act on counts as false whether or not it is correct,
+  collects "not useful" feedback on every finding, and moved results out of
+  dashboards and batch reports into the moment a decision is made.
+- The Google SRE book ("Monitoring Distributed Systems") limits alerts to
+  what needs a human decision and has a clear response; everything else is
+  a number on a dashboard.
+- Clinical decision support shows the cost of ignoring this: override rates
+  of 49–96% for drug-interaction alerts (van der Sijs et al., 2006), until
+  alerts were tiered, deduplicated, and made acknowledgeable.
+- Calm technology (Weiser & Brown, 1995; Case, 2015) puts informational
+  signals in the periphery and makes silence the normal state.
 
 ## Decision
 
 Background coaching is an **opt-in, local, heuristic digest of completed
-sessions**. It never calls a model, never interrupts, and never re-analyses
-history on its own.
+sessions that reports only findings that have earned a place in it**. It
+never calls a model, never interrupts, and never re-analyses history on its
+own.
 
-1. **Opt-in.** `coaching.background.enabled` defaults to `false`. Nothing runs
-   until the operator turns it on.
-2. **Scope: completed sessions, once each.** A session is complete when it
-   has had no new turn for `coaching.background.idle` (default 30m). Each
-   completed session is analysed once; the finding envelope's ID is
-   deterministic in (workflow, kind), so the store's ID dedup is the
-   watermark and a restart does not re-report. Sessions that completed
-   before background coaching was enabled are not analysed unless the
-   operator asks with `coaching.background.backfill` (a duration, default
-   `0`).
-3. **Cost: zero dollars by construction.** The background pass is heuristic
+1. **Build gate.** Implementation starts only when at least **three finding
+   kinds** meet the promotion bar in Decision 6. Until then coaching stays on
+   demand plus the live hooks, and detector work comes first: findings that
+   name a cause and a dollar amount (which work drove the growth, sessions
+   running long without compaction, repeated identical tool calls) rather
+   than a symptom.
+2. **Opt-in.** `coaching.background.enabled` defaults to `false`.
+3. **Scope: completed sessions, once each.** A session is complete when the
+   client reports its end (Claude Code `SessionEnd`, opencode `session.idle`)
+   or, where a client has no such event, after `coaching.background.idle` of
+   inactivity (default **2h**: an early analysis sees half a session, a late
+   one costs nothing). Each completed session is analysed once; the finding
+   envelope's ID is deterministic in (workflow, kind), so the store's ID
+   dedup is the watermark and a restart does not re-report. Sessions that
+   completed before background coaching was enabled are not analysed unless
+   the operator asks with `coaching.background.backfill` (a duration,
+   default `0`).
+4. **Cost: zero dollars by construction.** The background pass is heuristic
    only. The LLM enricher is not wired to it; rewriting a finding with a
-   model stays an explicit, on-demand choice. This also keeps finding text,
-   which is derived from the operator's sessions, from leaving the machine
-   on a schedule.
-4. **Delivery follows `coaching.delivery`, and is pull-based.**
-   - `observe`: findings are stored and nothing is surfaced.
-   - `advise`: surfaces that already summarise attention (`tokenops status`,
-     `tokenops_status`, `tokenops_resource_glance`) show a digest: finding
-     kinds with their session counts and trend since the last digest, not a
-     per-session list.
-   - `intervene`: same as `advise`. Interrupting belongs to the live hooks;
-     a finding about a session that has ended has nothing left to interrupt.
-5. **Only reviewed kinds are delivered.** A finding kind reaches the digest
-   only once its precision on real sessions has been reviewed (as #438 did).
-   Unreviewed kinds are stored under `observe` semantics. Initially only
-   the oversized-context `trim_context` finding qualifies: it is the one
-   kind that fired on the 80-workflow sample and was checked against real
-   peaks. `reuse_cache` (identical prompt repeated) never fired there, so
-   its precision is unknown until it does.
-6. **The unused async pipeline is replaced, not wired.** Its job queue,
-   worker pool, per-run dollar budget, and model router exist for work this
-   decision rules out. The implementation replaces it with a small scheduled
-   pass in the daemon's lifecycle modules and deletes the unused code.
-7. **Verification.** A digest that changes nothing is noise with a schedule.
-   The digest records which kinds it surfaced; the next digests measure
-   whether their session rate falls, which is the outcome evidence ADR 0004
-   asks every intervention to earn.
+   model stays an explicit, on-demand choice, so text derived from the
+   operator's sessions never leaves the machine on a schedule.
+5. **Digest content: new or worse, costed, few.**
+   - Compared against the operator's own **trailing 7 days**, not the
+     previous digest: digests are pulled at irregular intervals, so a
+     per-digest baseline is noise.
+   - Only findings that are **new or worsening** against that baseline
+     appear. A steady state the operator already knows is not news.
+   - Each item states its **dollar impact** and **one concrete action**.
+   - At most the **top three by dollar impact**; the rest stay available on
+     demand.
+   - When nothing qualifies the digest says so in one line.
+6. **Promotion bar: effective false-positive rate.** A finding kind enters
+   the digest only after review on real sessions shows it is correct **and**
+   acted on: after it is surfaced, the finding's rate in the operator's
+   following sessions falls, or the operator confirms the change. Kinds that
+   stay above about a 10% effective false-positive rate are demoted to
+   on-demand. Promotion and demotion are reviewed changes with evidence, like
+   #438.
+7. **Acknowledge and mute.** The operator can acknowledge a finding kind
+   ("I run 1M contexts on purpose"). A muted kind leaves the digest until its
+   rate changes materially from the acknowledged level. Mutes are local
+   config, visible in `tokenops status`, and every mute is recorded as a
+   `not useful` signal against the kind's promotion evidence.
+8. **Delivery follows `coaching.delivery`, at the point of decision.**
+   - `observe`: findings are stored; nothing is surfaced.
+   - `advise` and `intervene`: the preferred moment is the **start of the
+     next session** in the same project, through the session-start hook
+     where the client has one (ADR 0001 Phase 2). The digest is also one
+     line in the operator's pull surfaces (`tokenops status`). Nothing
+     interrupts a session; that remains the live hooks' job.
+9. **The agent is not the audience by default.** `tokenops_status`,
+   `tokenops_resource_glance`, and session-start hooks feed agents, and a
+   digest there would steer agent behaviour. Agent-facing surfaces carry the
+   digest only when `coaching.background.agent_visible` is `true` (default
+   `false`); operator surfaces carry it whenever delivery is `advise` or
+   `intervene`.
+10. **The unused async pipeline is removed.** Its job queue, worker pool,
+    per-run dollar budget, and model router serve work this decision rules
+    out. The implementation replaces it with a small scheduled pass in the
+    daemon's lifecycle modules. Until the build gate opens, the unused code
+    may be deleted on its own.
+11. **Verification.** The digest records which kinds it surfaced and when.
+    Whether their rate falls in the following sessions is the outcome
+    evidence ADR 0004 asks of every intervention, and it is the same
+    evidence the promotion bar reads.
 
 ## Alternatives considered
 
-- **Keep on-demand only.** Honest and free, and the default until this is
-  accepted. It leaves recurring waste invisible unless someone asks.
-- **Wire the existing pipeline as is.** Rejected: it defaults to replaying
-  whatever is submitted, carries a dollar budget for LLM calls this decision
-  excludes, and has no completion or dedup notion, so a restart would repeat
-  its findings.
+- **Keep on-demand only.** Honest and free; this remains the behaviour until
+  the build gate opens.
+- **Build now with the one qualifying kind.** Rejected: the digest would
+  repeat "oversized context" to an operator who chose it, which is the
+  pattern the practice above warns trains people to ignore the channel.
+- **Wire the existing pipeline as is.** Rejected: no completion or dedup
+  notion, a dollar budget for model calls this decision excludes.
 - **LLM-enriched background findings.** Rejected for the background pass:
-  recurring model spend nobody approved per call, and derived session text
-  leaving the machine on a timer. Remains available on demand.
-- **Per-session proactive nudges.** Rejected: at the measured rate they would
-  fire on about a third of sessions for the same known condition. The live
-  Stop-hook already covers the in-session moment.
-- **Full-history analysis on first enable.** Rejected as a default: a
-  surprise CPU burst and a flood of stale findings. Available through
-  `backfill`.
+  unapproved recurring spend and derived text leaving the machine on a
+  timer. Remains available on demand.
+- **Per-session proactive nudges.** Rejected: they would fire on about a
+  third of sessions for a known condition; the live Stop-hook covers the
+  in-session moment.
+- **A fixed idle window of 30 minutes.** Rejected: long builds and long
+  pauses would be analysed mid-session.
+- **Digest visible to agents by default.** Rejected: it would steer agents
+  through a channel nobody approved.
 
 ## Consequences
 
-- A new config block, `coaching.background` (`enabled`, `idle`, `backfill`),
-  validated at load and covered by the config matrix.
-- `coaching` envelopes start to exist; retention's existing `coaching` key
-  governs them.
-- The `advise` digest adds one line to existing attention surfaces rather
-  than a new surface.
-- `internal/contexts/coaching/coaching` shrinks to what the scheduled pass
-  needs; the LLM enricher and router move to the on-demand path or are
-  removed if nothing on-demand uses them.
-- Promotion of a finding kind into the digest is a reviewed change with
-  real-session evidence, like #438.
-
-## Open questions for acceptance
-
-- Is 30 minutes of inactivity the right completion signal for agent sessions
-  that pause for long builds, or should completion also accept a session-end
-  hook where the client has one?
-- Should the digest's trend compare against the previous digest or a fixed
-  trailing window (for example, the prior seven days)?
+- Near term: detector work toward cause-and-cost findings, and deletion of
+  the unused async pipeline, are the next coaching tasks. No background
+  scheduler is built yet.
+- When the gate opens: a `coaching.background` config block (`enabled`,
+  `idle`, `backfill`, `agent_visible`) validated at load and covered by the
+  config matrix; per-kind acknowledge and mute; `coaching` envelopes under
+  retention's existing `coaching` key; a session-start delivery path per
+  client that has one.
+- Every finding kind carries promotion evidence (correctness on real
+  sessions, action rate, mutes), so the digest's contents stay explainable.
