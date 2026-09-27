@@ -41,6 +41,16 @@ if [ "$(git hash-object CHANGELOG.md)" != "$changelog_before" ]; then
 fi
 [ -z "$(git status --porcelain)" ] || fail "publish changed files other than CHANGELOG.md"
 
+# Defense in depth: configuration disables native tag/push, and the CLI flags
+# repeat that intent. Relicta 4.2.0 previously ignored the CLI flags while the
+# config enabled tagging. Never overwrite a remotely visible release here.
+if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+	fail "Relicta unexpectedly pushed $tag; refusing to replace a remote release tag"
+fi
+if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+	git tag -d "$tag"
+fi
+
 git tag -s "$tag" -m "Release $tag"
 git verify-tag "$tag"
 [ "$(git rev-list -n 1 "$tag")" = "$(git rev-parse HEAD)" ] || fail "$tag does not point at HEAD"
