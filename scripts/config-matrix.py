@@ -4,7 +4,9 @@
 Every profile gets its own HOME, port, and store under a temporary
 directory. Providers point at a local fake upstream that also acts as the
 OTLP collector, so no request leaves the machine, except the public pricing
-rate card in the one profile that leaves pricing refresh on.
+rate card in the one profile that leaves pricing refresh on. Four profiles
+also drive `tokenops serve` over stdio and call every MCP tool once with
+schema-minimal arguments.
 
 Valid profiles must start, report healthy, proxy Anthropic and OpenAI
 requests into the store, gate /api/* behind the token, and stop cleanly
@@ -17,7 +19,7 @@ Optional real sources: TOKENOPS_MATRIX_OPENCODE_DB and
 TOKENOPS_MATRIX_STATS_CACHE add the opencode and stats-cache readers to the
 local-pollers profile. They are read only.
 """
-import argparse, json, os, shutil, signal, socket, sqlite3, ssl, subprocess, sys, tempfile, threading, time
+import argparse, json, os, select, shutil, signal, socket, sqlite3, ssl, subprocess, sys, tempfile, threading, time
 import urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -152,7 +154,7 @@ def merge(a, b):
 # name -> (overrides(run), expectations)
 def profiles():
     P = {}
-    P["minimal-passive"] = (lambda r: {}, {})
+    P["minimal-passive"] = (lambda r: {}, {"mcp": True})
     P["active-budgets-watch"] = (lambda r: {
         "mode": "active",
         "plans": {"anthropic": "claude-max-20x", "openai": "gpt-plus"},
@@ -160,7 +162,7 @@ def profiles():
         "budgets": [{"name": "weekly-usd", "window": "weekly", "limit_usd": 50, "warn_at": 0.5, "crit_at": 0.9},
                     {"name": "daily-tokens", "window": "daily", "basis": "tokens", "limit_tokens": 1000000}],
         "watch": {"interval": "5s"},
-    }, {})
+    }, {"mcp": True})
     def pollers(r):
         vu = {
             "claude_code_jsonl": {"enabled": True, "root": os.path.join(FIX, "claude"), "interval": "5s"},
@@ -205,8 +207,8 @@ def profiles():
         }, {"long": 330, "log_has": "retention prune"})
     P["pricing-refresh-on"] = (lambda r: {"pricing": {"refresh": {"disabled": False, "interval": "24h"}}}, {})
     P["storage-disabled"] = (lambda r: {"storage": {"enabled": False}, "rules": {"enabled": True, "root": REPO}},
-                             {"no_store": True, "api_unauth_probe": "/api/rules/analyze"})
-    P["rules-enabled"] = (lambda r: {"rules": {"enabled": True, "root": REPO, "repo_id": "matrix"}}, {})
+                             {"no_store": True, "api_unauth_probe": "/api/rules/analyze", "mcp": True})
+    P["rules-enabled"] = (lambda r: {"rules": {"enabled": True, "root": REPO, "repo_id": "matrix"}}, {"mcp": True})
     P["json-debug-admin-token"] = (lambda r: {"log": {"level": "debug", "format": "json"},
                                               "dashboard": {"admin_token": "matrix-token-123"}},
                                    {"token": "matrix-token-123"})
@@ -244,6 +246,122 @@ def req(url, method="GET", body=None, headers=None, ctx=None, timeout=5):
         return e.code, e.read().decode(errors="replace")
     except Exception as e:  # noqa: BLE001
         return None, repr(e)
+
+
+def minimal_args(schema):
+    """Smallest arguments a tool's input schema accepts: required fields only."""
+    if "enum" in schema:
+        return schema["enum"][0]
+    t = schema.get("type")
+    if t == "string":
+        return "matrix"
+    if t in ("integer", "number"):
+        lo = schema.get("minimum", schema.get("exclusiveMinimum", 0))
+        return max(1, lo + (1 if "exclusiveMinimum" in schema else 0))
+    if t == "boolean":
+        return False
+    if t == "array":
+        return []
+    if t == "object":
+        req = schema.get("required", [])
+        return {k: minimal_args(v) for k, v in schema.get("properties", {}).items() if k in req}
+    return "matrix"
+
+
+class MCPClient:
+    """Minimal stdio JSON-RPC client for `tokenops serve`."""
+
+    def __init__(self, run, cfgp, env):
+        self.stderr = os.path.join(run, "serve.stderr")
+        self.p = subprocess.Popen([ARGS.bin, "serve", "-c", cfgp], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                  stderr=open(self.stderr, "a"), env=env, cwd=run)
+        self.n = 0
+        self.call("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
+                                 "clientInfo": {"name": "config-matrix", "version": "1"}})
+        self._send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+
+    def _send(self, msg):
+        self.p.stdin.write((json.dumps(msg) + "\n").encode())
+        self.p.stdin.flush()
+
+    def call(self, method, params=None, timeout=60):
+        self.n += 1
+        msg = {"jsonrpc": "2.0", "id": self.n, "method": method}
+        if params is not None:
+            msg["params"] = params
+        self._send(msg)
+        end = time.time() + timeout
+        while time.time() < end:
+            ready, _, _ = select.select([self.p.stdout], [], [], end - time.time())
+            if not ready:
+                break
+            line = self.p.stdout.readline()
+            if not line:
+                return {"_dead": True}
+            try:
+                m = json.loads(line)
+            except ValueError:
+                continue
+            if m.get("id") == self.n:
+                return m
+        return {"_timeout": True}
+
+    def close(self):
+        self.p.stdin.close()
+        try:
+            self.p.wait(timeout=10)
+            return True
+        except subprocess.TimeoutExpired:
+            self.p.kill()
+            return False
+
+
+def probe_mcp(run, cfgp, env, res):
+    """Call every MCP tool once with schema-minimal arguments.
+
+    A tool may refuse (a tool error carrying a message the agent can act
+    on); it must not crash the server, hang, panic, or return a bare
+    JSON-RPC error, which the agent receives as "internal error".
+    """
+    client = MCPClient(run, cfgp, env)
+    tools = client.call("tools/list").get("result", {}).get("tools", [])
+    if not tools:
+        res["problems"].append("MCP tools/list returned no tools")
+    refused = 0
+    for tool in tools:
+        name = tool["name"]
+        started = time.time()
+        r = client.call("tools/call", {"name": name, "arguments": minimal_args(tool.get("inputSchema", {"type": "object"}))})
+        if r.get("_dead"):
+            res["problems"].append(f"MCP {name}: server died")
+            client = MCPClient(run, cfgp, env)
+            continue
+        if r.get("_timeout"):
+            res["problems"].append(f"MCP {name}: no response in 60s")
+            continue
+        if "error" in r:
+            code = r["error"].get("code")
+            if code == -32602:
+                refused += 1
+            else:
+                res["problems"].append(f"MCP {name}: JSON-RPC error {code} {r['error'].get('message', '')[:100]}")
+            continue
+        result = r.get("result", {})
+        text = " ".join(c.get("text", "") for c in result.get("content", []) if isinstance(c, dict))
+        if result.get("isError"):
+            refused += 1
+            if not text.strip():
+                res["problems"].append(f"MCP {name}: tool error with no message")
+        if "panic" in text.lower():
+            res["problems"].append(f"MCP {name}: result mentions a panic")
+        if time.time() - started > 20:
+            res["problems"].append(f"MCP {name}: slow ({time.time() - started:.1f}s)")
+    if not client.close():
+        res["problems"].append("MCP serve did not exit when stdin closed")
+    err = open(client.stderr).read()
+    if "panic:" in err:
+        res["problems"].append("MCP serve stderr has a panic")
+    res["notes"].append(f"MCP {len(tools)} tools called, {refused} refused cleanly")
 
 
 def run_profile(name, spec, port):
@@ -344,6 +462,8 @@ def run_profile(name, spec, port):
         if code == 200:
             res["problems"].append(f"{exp['api_unauth_probe']} served WITHOUT auth when storage is disabled")
 
+    if exp.get("mcp"):
+        probe_mcp(run, cfgp, env, res)
     time.sleep(exp.get("long", 8))
     proc.send_signal(signal.SIGINT)
     try:

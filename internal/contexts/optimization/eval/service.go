@@ -5,20 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
-	"runtime"
 )
-
-// bundledTestdataGlob resolves the path of the bundled testdata
-// directory relative to this source file using runtime.Caller, so the
-// glob works regardless of the caller's working directory.
-func bundledTestdataGlob() string {
-	_, here, _, ok := runtime.Caller(0)
-	if !ok {
-		return "internal/contexts/optimization/eval/testdata/*.json"
-	}
-	return filepath.Join(filepath.Dir(here), "testdata", "*.json")
-}
 
 // RunParams bundles everything the harness needs to produce a report.
 // Both `tokenops eval` (CLI) and `tokenops_eval` (MCP) construct one of
@@ -26,7 +13,7 @@ func bundledTestdataGlob() string {
 // merge, gate evaluation — lives in this package, not in the adapters.
 type RunParams struct {
 	// Suites is a glob matching one or more JSON suite fixtures. Empty
-	// defaults to internal/contexts/optimization/eval/testdata/*.json.
+	// runs the suites bundled into the binary (BundledSuites).
 	Suites string
 	// BaselinePath, when non-empty, points at a previously persisted
 	// Report JSON used by the gate.
@@ -50,16 +37,20 @@ type RunResult struct {
 // only adapter responsibilities are flag parsing (CLI) / argument
 // unmarshalling (MCP) and output formatting.
 func Run(ctx context.Context, params RunParams) (*RunResult, error) {
-	suitesGlob := params.Suites
-	if suitesGlob == "" {
-		suitesGlob = bundledTestdataGlob()
+	var (
+		suites []*Suite
+		err    error
+	)
+	if params.Suites == "" {
+		suites, err = BundledSuites()
+	} else {
+		suites, err = LoadSuites(params.Suites)
 	}
-	suites, err := LoadSuites(suitesGlob)
 	if err != nil {
-		return nil, fmt.Errorf("load suites %q: %w", suitesGlob, err)
+		return nil, fmt.Errorf("load suites: %w", err)
 	}
 	if len(suites) == 0 {
-		return nil, fmt.Errorf("no suites matched %q", suitesGlob)
+		return nil, fmt.Errorf("no suites matched %q", params.Suites)
 	}
 	runner := NewRunner(NewPipelineBuilder(params.OptimizerFilters...).Build())
 	merged := &Report{Name: "merged", Optimizers: map[OptimizationType]OptimizerStat{}}
