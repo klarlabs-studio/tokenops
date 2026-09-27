@@ -12,6 +12,7 @@ import (
 
 	"go.klarlabs.de/mcp/server"
 
+	"go.klarlabs.de/tokenops/internal/capability/experiments"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
@@ -46,6 +47,9 @@ func TestCallerMistakesReachTheAgent(t *testing.T) {
 		RegisterRulesTools(srv),
 		RegisterDataSourcesTool(srv, DataSourcesDeps{Store: store}),
 		RegisterRoutingAdviceTools(srv, RoutingAdviceDeps{}),
+		RegisterDecisionTools(srv, DecisionDeps{Store: store}),
+		RegisterOutcomeTools(srv, OutcomeDeps{Store: store}),
+		RegisterExperimentTools(srv, ExperimentDeps{Manager: experiments.New(store)}),
 	} {
 		if reg != nil {
 			t.Fatal(reg)
@@ -71,6 +75,15 @@ func TestCallerMistakesReachTheAgent(t *testing.T) {
 		{"tokenops_replay", map[string]any{}, "provide session_id"},
 		{"tokenops_data_sources", map[string]any{"since": "whenever"}, ""},
 		{"tokenops_rules_analyze", map[string]any{"root": filepath.Join(dir, "absent")}, ""},
+		// Found by calling every tool over stdio with schema-minimal
+		// arguments: these five tools still returned bare errors.
+		{"tokenops_explain_decision", map[string]any{}, "decision_id is required"},
+		{"tokenops_outcome_record", map[string]any{}, "execution_id is required"},
+		{"tokenops_outcome_record", map[string]any{"execution_id": "e", "result": "sort-of"}, "result must be"},
+		{"tokenops_outcome_detect", map[string]any{}, "execution_id and session_id are required"},
+		{"tokenops_experiment", map[string]any{"action": "pause"}, "action must be"},
+		{"tokenops_experiment", map[string]any{"action": "status"}, "experiment_id is required"},
+		{"tokenops_workflow_trace", map[string]any{"workflow_id": "wf-never-seen"}, "no prompts found"},
 	} {
 		err := execToolErr(t, srv, tc.tool, tc.args)
 		if err == nil {

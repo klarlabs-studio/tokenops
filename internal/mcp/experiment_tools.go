@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -70,7 +69,7 @@ func RegisterExperimentTools(s *Server, d ExperimentDeps) error {
 				return &experimentResult{State: &state, Belief: &belief}, nil
 			case "status":
 				if strings.TrimSpace(in.ExperimentID) == "" {
-					return nil, fmt.Errorf("experiment_id is required for status")
+					return nil, inputError(errors.New("experiment_id is required for status"))
 				}
 				state, ok, err := d.Manager.Status(ctx, in.ExperimentID, time.Time{})
 				if err != nil {
@@ -86,7 +85,7 @@ func RegisterExperimentTools(s *Server, d ExperimentDeps) error {
 				return &experimentResult{State: &state, Belief: &belief}, nil
 			case "stop":
 				if strings.TrimSpace(in.ExperimentID) == "" {
-					return nil, fmt.Errorf("experiment_id is required for stop")
+					return nil, inputError(errors.New("experiment_id is required for stop"))
 				}
 				if err := d.Manager.Stop(ctx, in.ExperimentID, strings.TrimSpace(in.Reason), time.Time{}); err != nil {
 					return nil, err
@@ -97,7 +96,7 @@ func RegisterExperimentTools(s *Server, d ExperimentDeps) error {
 				}
 				return &experimentResult{State: &state}, nil
 			default:
-				return nil, fmt.Errorf("action must be start, status, or stop")
+				return nil, inputError(errors.New("action must be start, status, or stop"))
 			}
 		})
 	return nil
