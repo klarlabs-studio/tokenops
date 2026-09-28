@@ -16,6 +16,47 @@ Recommended path: run passive, use `tokenops replay` to validate what a
 routing rule would have saved on real history, then flip `mode: active`
 to enforce it.
 
+### The coach: who decides, and how much it says
+
+The coach has two dials ([ADR 0006](https://github.com/klarlabs-studio/tokenops/blob/main/docs/adr/0006-one-coach.md)):
+
+```yaml
+coach:
+  autonomy: advise     # off | advise | ask | autonomous   (who decides)
+  verbosity: normal    # quiet | normal | verbose          (how much it says)
+  powers:              # optional: override autonomy for one power
+    waste: autonomous
+```
+
+`autonomy` applies to three powers: **inform** (tips on your plan's quota
+window and context fullness), **waste** (redundant re-reads), and
+**models** (moving work to a cheaper model that fits it).
+
+| `autonomy` | The coach… |
+|---|---|
+| `off` | records what it would say or do, and does neither |
+| `advise` | tells you what you could do better; changes nothing |
+| `ask` | steps in with a concrete change and waits for your approval |
+| `autonomous` | makes the change itself |
+
+A rung the coach cannot deliver yet is shown one rung lower, with the
+reason. `tokenops coach` (or the `tokenops_coach` MCP tool) shows each
+power's configured and effective rung and the setting it came from:
+
+```bash
+tokenops coach                         # the whole picture
+tokenops coach autonomy autonomous     # every power's default
+tokenops coach set models ask          # one power
+tokenops coach verbosity quiet         # how much it says
+tokenops coach off                     # records, says and does nothing
+tokenops coach migrate                 # write a coach block from the keys below
+```
+
+Without a `coach` block, the older keys keep meaning what they meant:
+`coaching.delivery` sets inform and waste, and
+`optimizer.smart_routing` sets models. A `coach` key wins where present.
+The coach's hooks never read `mode`; `coach off` is the coach's off switch.
+
 ### `mode` is about traffic; `coaching.delivery` is about your session
 
 These are two axes, and they are deliberately separate. `mode` decides

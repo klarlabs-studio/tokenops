@@ -245,6 +245,11 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	}); err != nil {
 		return fmt.Errorf("register mode tools: %w", err)
 	}
+	if err := mcp.RegisterCoachTool(srv, mcp.ModeDeps{
+		ApplyConfig: applyConfigRestart, DaemonURL: daemonURL, UnitInstalled: daemon.UnitInstalled,
+	}); err != nil {
+		return err
+	}
 	if err := mcp.RegisterSetupTools(srv, mcp.SetupDeps{
 		ApplyConfig:   applyConfigRestart,
 		BrowserCookie: browserSessionKey,

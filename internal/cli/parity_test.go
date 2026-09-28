@@ -45,7 +45,7 @@ var cliOnly = map[string]string{
 // noticing.
 var cliToMCP = map[string][]string{
 	"audit":           {"tokenops_audit"},
-	"coach":           {"tokenops_coach_prompts"},
+	"coach":           {"tokenops_coach", "tokenops_coach_prompts"},
 	"config":          {"tokenops_config"},
 	"coverage-debt":   {"tokenops_coverage_debt"},
 	"dx":              {"tokenops_agent_dx"},
@@ -216,6 +216,7 @@ func mcpToolNames(t *testing.T) map[string]bool {
 	must(mcp.RegisterRoutingAdviceTools(srv, mcp.RoutingAdviceDeps{}))
 	must(mcp.RegisterApprovalTools(srv, mcp.ApprovalDeps{}))
 	must(mcp.RegisterModeTools(srv, mcp.ModeDeps{}))
+	must(mcp.RegisterCoachTool(srv, mcp.ModeDeps{}))
 	must(mcp.RegisterHelpTool(srv))
 	must(mcp.RegisterDataSourcesTool(srv, mcp.DataSourcesDeps{Store: store}))
 	must(mcp.RegisterFmtTools(srv))

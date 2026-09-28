@@ -39,53 +39,46 @@ func TestEverySubsystemIsReportedInOneVocabulary(t *testing.T) {
 	}
 }
 
-// The daemon's authority caps every subsystem. This is the property
-// four independent ladders could not offer, and the one an operator
-// reaching for `mode: passive` in a hurry already believes they have.
-func TestTheDaemonCapsEverySubsystem(t *testing.T) {
-	c := cfg()
-	c.Mode = config.ModePassive
-	c.Coaching.Delivery = "intervene"
-	c.Optimizer.SmartRouting.Enabled = true
-	c.Optimizer.SmartRouting.Intervention = "auto"
-
-	got := authority.Report(c)
-
-	if got.Daemon != policy.ObserveOnly {
-		t.Fatalf("daemon = %q, want observe_only", got.Daemon)
-	}
-	for _, s := range got.Subsystems {
-		if s.Effective.MayAct() {
-			t.Errorf("%q may act under a passive daemon (configured %q, effective %q)",
-				s.Name, s.Configured, s.Effective)
-		}
-	}
-}
-
-// Capping must not hide what was configured. An operator needs to see
-// that the coach is set to intervene and is being held back, or turning
-// the daemon up will surprise them.
-func TestCappingKeepsTheConfiguredRungVisible(t *testing.T) {
+// The daemon's mode caps daemon-side interventions only. The coach's
+// powers act inside the client through hooks that never read the mode
+// (ADR 0006, Decision 3), so reporting them capped would describe
+// something that does not happen: a passive machine whose coach refuses
+// re-reads must say so.
+func TestTheDaemonCapsOnlyDaemonSideInterventions(t *testing.T) {
 	c := cfg()
 	c.Mode = config.ModePassive
 	c.Coaching.Delivery = "intervene"
 
 	for _, s := range authority.Report(c).Subsystems {
-		if s.Name != "coaching" {
+		switch s.Name {
+		case "routing_approval":
+			if s.Effective.MayAct() {
+				t.Errorf("routing_approval may act under a passive daemon (effective %q)", s.Effective)
+			}
+		case "read_guard":
+			if s.Effective != policy.Automatic {
+				t.Errorf("read_guard effective %q under a passive daemon; the hook refuses re-reads regardless of mode", s.Effective)
+			}
+		}
+	}
+}
+
+// A coach power configured above what it can deliver yet keeps both rungs
+// visible and reports itself held back, so turning it up does not read as
+// already done.
+func TestUndeliverableRungsStayVisible(t *testing.T) {
+	c := cfg()
+	c.Coach.Powers = map[string]string{config.PowerModels: config.AutonomyAutonomous}
+	for _, s := range authority.Report(c).Subsystems {
+		if s.Name != "smart_routing" {
 			continue
 		}
-		if s.Configured != policy.Automatic {
-			t.Errorf("configured = %q, want automatic", s.Configured)
-		}
-		if s.Effective != policy.ObserveOnly {
-			t.Errorf("effective = %q, want observe_only", s.Effective)
-		}
-		if !s.HeldBack() {
-			t.Error("a capped subsystem does not report itself held back")
+		if s.Configured != policy.Automatic || s.Effective != policy.Recommend || !s.HeldBack() {
+			t.Errorf("models autonomous = configured %q effective %q held back %v", s.Configured, s.Effective, s.HeldBack())
 		}
 		return
 	}
-	t.Fatal("coaching was not reported")
+	t.Fatal("smart_routing was not reported")
 }
 
 // An active daemon lets each subsystem's own setting decide.
@@ -133,7 +126,7 @@ func TestTheSummarySaysWhetherAnythingActs(t *testing.T) {
 func TestReadGuardFollowsCoachingDelivery(t *testing.T) {
 	for delivery, want := range map[string]policy.Authority{
 		"intervene": policy.Automatic,
-		"advise":    policy.ObserveOnly,
+		"advise":    policy.Recommend,
 		"observe":   policy.ObserveOnly,
 	} {
 		c := cfg()

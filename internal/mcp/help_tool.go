@@ -243,6 +243,11 @@ var helpCatalog = []helpCategory{
 				Example: `{"set":"active"}`,
 			},
 			{
+				Name:    "tokenops_coach",
+				Summary: "Show or set the coach: autonomy (off|advise|ask|autonomous) per power (inform, waste, models) and verbosity (quiet|normal|verbose), with each power's effective rung and why.",
+				Example: `{"power":"waste","rung":"autonomous"}`,
+			},
+			{
 				Name:    "tokenops_budget_set",
 				Summary: "Upsert/delete a calendar-window spend limit the active-mode watcher evaluates.",
 				Example: `{"name":"weekly-all","window":"weekly","limit_usd":50}`,

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/config"
@@ -128,6 +130,9 @@ func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir, provider s
 	}
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
+		return nil
+	}
+	if coachcap.Build(cfg).Effective(config.PowerModels) == config.AutonomyOff {
 		return nil
 	}
 	sr := cfg.Optimizer.SmartRouting

@@ -173,6 +173,21 @@ func FromCoachingDelivery(delivery string) Authority {
 	}
 }
 
+// FromAutonomy maps a coach autonomy rung (ADR 0006) onto the ladder:
+// off, advise, ask, autonomous are its four rungs in the coach's words.
+func FromAutonomy(rung string) Authority {
+	switch strings.ToLower(strings.TrimSpace(rung)) {
+	case "advise":
+		return Recommend
+	case "ask":
+		return RequireApproval
+	case "autonomous":
+		return Automatic
+	default:
+		return ObserveOnly
+	}
+}
+
 // FromReadGuardMode maps readguard.Mode onto the ladder.
 //
 // Its words are the daemon's and mean something else: readguard's
