@@ -52,8 +52,8 @@ Fields: `prompt_hash`, `kind` (`prompt_compress` / `semantic_dedupe` /
 Workflow-level finding emitted by the waste detector.
 
 Fields: `workflow_id`, `kind` (`trim_context`, `break_recursion`,
-`reuse_cache`, …), `summary`, `details`, `estimated_savings_tokens`,
-`replay_metadata`.
+`reuse_cache`, `compact_earlier`, …), `summary`, `details`,
+`estimated_savings_tokens`, `estimated_savings_usd`, `replay_metadata`.
 
 ## Versioning
 
