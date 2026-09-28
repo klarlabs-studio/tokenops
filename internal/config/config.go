@@ -71,8 +71,11 @@ type Config struct {
 	Pricing    PricingConfig        `yaml:"pricing"`
 	Optimizer  OptimizerConfig      `yaml:"optimizer"`
 	Coaching   CoachingConfig       `yaml:"coaching"`
-	Budgets    []BudgetConfig       `yaml:"budgets"`
-	Watch      WatchConfig          `yaml:"watch"`
+	// Coach is the coach's autonomy and verbosity (ADR 0006). Empty keeps
+	// the behaviour of the coaching and smart-routing keys.
+	Coach   CoachConfig    `yaml:"coach,omitempty"`
+	Budgets []BudgetConfig `yaml:"budgets"`
+	Watch   WatchConfig    `yaml:"watch"`
 }
 
 // ActiveMode reports whether interventions (live routing, spend
@@ -1099,6 +1102,9 @@ func (c Config) Validate() error {
 		return err
 	}
 	if err := c.Optimizer.SmartRouting.Validate(); err != nil {
+		return err
+	}
+	if err := c.Coach.Validate(); err != nil {
 		return err
 	}
 	for i, l := range c.Coaching.ContextLimits {
