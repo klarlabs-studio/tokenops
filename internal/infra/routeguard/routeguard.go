@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -88,6 +89,13 @@ type Input struct {
 	// what is available.
 	Candidates []string
 	Now        time.Time
+	// Quieted reports that advice for a kind of work has been ignored
+	// often enough that the coach stops offering it (ADR 0006,
+	// follow-through). Verbose still advises. Nil quiets nothing.
+	Quieted func(taskclass.Kind) bool
+	// NewID names a new piece of advice so its outcome can be recorded
+	// against it. Nil records nothing.
+	NewID func() string
 }
 
 // Decision is what the guard concluded.
@@ -101,13 +109,47 @@ type Decision struct {
 	From     string
 	To       string
 	Reason   string
+	// OfferID names this turn's advice when it is new, for the
+	// follow-through ledger. Empty when nothing new was advised.
+	OfferID string
+	// Quieted reports that advice was due and withheld because earlier
+	// advice of this kind kept being ignored.
+	Quieted bool
+	// Resolved are earlier pieces of advice whose outcome this turn
+	// settled.
+	Resolved []Resolution
+}
+
+// Resolution is the outcome of one earlier piece of advice.
+type Resolution struct {
+	ID       string
+	Kind     taskclass.Kind
+	Followed bool
+	Evidence string
+}
+
+// AdviceWindow is how many later turns advice waits to be followed before
+// it counts as ignored. Claude Code writes the model a turn ran on only
+// once the turn is answered, so a /model switch shows up a turn late and
+// the window allows for it.
+const AdviceWindow = 4
+
+// openAdvice is advice still waiting to be followed.
+type openAdvice struct {
+	ID string `json:"id"`
+	// FromRank is the tier the session was on when advised. Following
+	// means running below it.
+	FromRank int    `json:"from_rank"`
+	To       string `json:"to"`
+	Turns    int    `json:"turns"`
 }
 
 // state is the per-session memory: the kind of work in flight, and which
 // kinds have already been argued.
 type state struct {
-	Kind   taskclass.Kind          `json:"kind"`
-	Argued map[taskclass.Kind]bool `json:"argued"`
+	Kind   taskclass.Kind                 `json:"kind"`
+	Argued map[taskclass.Kind]bool        `json:"argued"`
+	Open   map[taskclass.Kind]*openAdvice `json:"open,omitempty"`
 }
 
 // tierForKind maps what the work is to the capability it needs.
@@ -157,12 +199,13 @@ func Evaluate(in Input) Decision {
 	defer func() { saveState(in.Dir, in.SessionID, st) }()
 
 	d := Decision{Kind: kind, From: in.CurrentModel}
+	cat := in.Catalog.WithCandidates(in.Candidates)
+	cur := cat.Resolve(in.Provider, in.CurrentModel)
+	d.Resolved = st.observe(tierRank[cur.Tier], in.CurrentModel, "the session moved to ")
 	wantTier, ok := tierForKind(kind)
 	if !ok {
 		return d
 	}
-	cat := in.Catalog.WithCandidates(in.Candidates)
-	cur := cat.Resolve(in.Provider, in.CurrentModel)
 	if cur.Tier == modeltier.TierUnknown {
 		// An unplaceable model is not an invitation to guess what it is
 		// worth replacing with.
@@ -191,21 +234,89 @@ func Evaluate(in Input) Decision {
 
 	switch in.Verbosity {
 	case "quiet":
-		if tierRank[cur.Tier]-tierRank[wantTier] >= 2 && !st.Argued[kind] {
-			d.Advise = true
-			st.Argued[kind] = true
-		}
+		d.Advise = tierRank[cur.Tier]-tierRank[wantTier] >= 2 && !st.Argued[kind]
 	case "verbose":
 		d.Advise = true
-		st.Argued[kind] = true
 	default:
-		if !st.Argued[kind] {
-			d.Advise = true
-			st.Argued[kind] = true
-		}
+		d.Advise = !st.Argued[kind]
+	}
+	if d.Advise && in.Verbosity != "verbose" && in.Quieted != nil && in.Quieted(kind) {
+		d.Advise, d.Quieted = false, true
+	}
+	if d.Advise {
+		st.Argued[kind] = true
+		d.OfferID = st.offer(kind, tierRank[cur.Tier], target, in.NewID)
 	}
 	d.Delegate = delegable(in, kind)
 	return d
+}
+
+// offer opens a piece of advice for kind and returns its ID. Advice that is
+// already open is not reopened: repeating it is not a new offer.
+func (st *state) offer(kind taskclass.Kind, fromRank int, to string, newID func() string) string {
+	if newID == nil {
+		return ""
+	}
+	if st.Open == nil {
+		st.Open = map[taskclass.Kind]*openAdvice{}
+	}
+	if st.Open[kind] != nil {
+		return ""
+	}
+	id := newID()
+	st.Open[kind] = &openAdvice{ID: id, FromRank: fromRank, To: to}
+	return id
+}
+
+// observe settles open advice against the model a turn ran on: running
+// below the tier the advice was given on is following it, and AdviceWindow
+// turns without that is ignoring it. rank 0 is a model that cannot be
+// placed, which follows nothing.
+func (st *state) observe(rank int, model, how string) []Resolution {
+	var out []Resolution
+	for kind, o := range st.Open {
+		switch {
+		case rank > 0 && rank < o.FromRank:
+			out = append(out, Resolution{ID: o.ID, Kind: kind, Followed: true, Evidence: how + model})
+		case o.Turns+1 >= AdviceWindow:
+			out = append(out, Resolution{ID: o.ID, Kind: kind, Evidence: fmt.Sprintf("still on the same tier %d turns later", AdviceWindow)})
+		default:
+			o.Turns++
+			continue
+		}
+		delete(st.Open, kind)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// ObserveSubagent settles open advice in a session when the agent launches
+// a subagent on a model below the tier the advice was given on: handing
+// the work to a cheaper subagent is one of the two ways to follow it.
+//
+// model is the model the agent asked for, before any rewrite by the coach,
+// so the coach's own moves never count as the operator following advice.
+func ObserveSubagent(dir, session, model string, provider eventschema.Provider, catalog *modeltier.Catalog, candidates []string) []Resolution {
+	if dir == "" || model == "" || catalog == nil || len(candidates) == 0 {
+		return nil
+	}
+	st := loadState(dir, session)
+	if len(st.Open) == 0 {
+		return nil
+	}
+	resolved := resolveAlias(model, candidates)
+	rank := tierRank[catalog.WithCandidates(candidates).Resolve(provider, resolved).Tier]
+	var out []Resolution
+	for kind, o := range st.Open {
+		if rank > 0 && rank < o.FromRank {
+			out = append(out, Resolution{ID: o.ID, Kind: kind, Followed: true, Evidence: "a subagent ran on " + resolved})
+			delete(st.Open, kind)
+		}
+	}
+	if len(out) > 0 {
+		saveState(dir, session, st)
+	}
+	return out
 }
 
 // delegable reports whether this turn may be moved without asking.

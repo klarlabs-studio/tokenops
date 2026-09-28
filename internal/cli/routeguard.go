@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 
@@ -18,6 +19,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/taskclass"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/infra/followthrough"
 	"go.klarlabs.de/tokenops/internal/infra/routeguard"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -110,12 +112,8 @@ func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir, provider s
 	if json.Unmarshal(body, &in) != nil || strings.TrimSpace(in.Prompt) == "" {
 		return nil
 	}
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil
-		}
-		dir = filepath.Join(home, ".tokenops", "route-guard")
+	if dir = routeGuardDir(dir); dir == "" {
+		return nil
 	}
 	// Prefer what the client stated. Codex and Cursor put the active
 	// model on every hook payload; the opencode shim forwards it from
@@ -151,22 +149,58 @@ func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir, provider s
 	if mode == "" {
 		mode = routeguard.ParseMode(sr.Intervention)
 	}
+	ledger := coachLedger()
+	now := time.Now()
 	dec := routeguard.Evaluate(routeguard.Input{
 		Dir: dir, SessionID: in.SessionID, Prompt: in.Prompt,
 		CurrentModel: model, Provider: prov,
 		Mode: mode, Catalog: routeCatalog(), Candidates: candidates,
 		Verbosity: coachcap.Build(cfg).Verbosity,
 		AutoKinds: autoKinds,
+		Quieted:   quietedKinds(ledger, now),
+		NewID:     coachcap.NewID,
 	})
+	coachcap.RecordResolutions(ledger, now, routeResolutions(dec.Resolved))
 	if !dec.Advise {
 		return nil
 	}
+	coachcap.RecordAdvice(ledger, now, dec.OfferID, in.SessionID, config.PowerModels, string(dec.Kind), dec.From, dec.To)
 	out := promptHookOutput{}
 	out.HookSpecificOutput.HookEventName = "UserPromptSubmit"
 	out.HookSpecificOutput.AdditionalContext = fmt.Sprintf(
 		"tokenops: %s. Consider %s for this task (switch with /model, or delegate it to a subagent on that model). Staying on %s is fine if you prefer.",
 		dec.Reason, dec.To, dec.From)
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
+}
+
+// coachLedger is the follow-through ledger, or nil when there is no home
+// directory to keep it in; a nil ledger records nothing.
+func coachLedger() coachcap.Ledger {
+	l, err := followthrough.Default()
+	if err != nil {
+		return nil
+	}
+	return l
+}
+
+// quietedKinds reads the ledger only when advice is actually due, since
+// most turns advise nothing.
+func quietedKinds(l coachcap.Ledger, now time.Time) func(taskclass.Kind) bool {
+	var quieted func(power, kind string) bool
+	return func(k taskclass.Kind) bool {
+		if quieted == nil {
+			quieted = coachcap.Quieter(l, now)
+		}
+		return quieted(config.PowerModels, string(k))
+	}
+}
+
+func routeResolutions(rs []routeguard.Resolution) []coachcap.Resolution {
+	out := make([]coachcap.Resolution, 0, len(rs))
+	for _, r := range rs {
+		out = append(out, coachcap.Resolution{ID: r.ID, Kind: string(r.Kind), Followed: r.Followed, Evidence: r.Evidence})
+	}
+	return out
 }
 
 // routeCatalog builds the tier catalog from the effective-dated card the

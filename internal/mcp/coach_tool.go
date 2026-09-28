@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/infra/followthrough"
 )
 
 type coachInput struct {
@@ -24,43 +26,46 @@ func RegisterCoachTool(s *Server, d ModeDeps) error {
 		return errors.New("mcp: nil server")
 	}
 	s.Tool("tokenops_coach").
-		Description("Show or set the coach (ADR 0006). With no arguments, returns verbosity and, for each power (inform: quota and context tips; waste: redundant re-reads; models: moving work to a cheaper model), the configured autonomy, the effective autonomy on this machine, the reason they differ, and the setting it came from. autonomy sets every power's default (off | advise | ask | autonomous); power + rung overrides one; verbosity sets how much it says (quiet | normal | verbose). A rung the coach cannot deliver yet is reported one rung lower with the reason.").
+		Description("Show or set the coach (ADR 0006). With no arguments, returns verbosity and, for each power (inform: quota and context tips; waste: redundant re-reads; models: moving work to a cheaper model), the configured autonomy, the effective autonomy on this machine, the reason they differ, and the setting it came from. autonomy sets every power's default (off | advise | ask | autonomous); power + rung overrides one; verbosity sets how much it says (quiet | normal | verbose). A rung the coach cannot deliver yet is reported one rung lower with the reason. follow_through reports, per kind, how often advice was followed or ignored and whether autonomous moves stood or were undone; advice ignored repeatedly is marked quiet and no longer offered unless verbosity is verbose.").
 		OutputSchema(coachcap.Report{}).
 		Handler(func(_ context.Context, in coachInput) (*coachcap.Report, error) {
 			path, err := d.path()
 			if err != nil {
 				return nil, inputError(err)
 			}
-			cfg, err := config.ReadMutable(path)
-			if err != nil {
-				return nil, inputError(err)
+			var ledger coachcap.Ledger
+			if l, err := followthrough.Default(); err == nil {
+				ledger = l
 			}
+			now := time.Now()
 			if in.Autonomy == "" && in.Verbosity == "" && in.Power == "" && in.Rung == "" {
-				r := coachcap.Build(cfg)
+				cfg, err := config.ReadMutable(path)
+				if err != nil {
+					return nil, inputError(err)
+				}
+				r := coachcap.Status(cfg, ledger, now)
 				return &r, nil
 			}
 			if (in.Power == "") != (in.Rung == "") {
 				return nil, inputError(errors.New("power and rung go together"))
 			}
-			if in.Autonomy != "" {
-				cfg.Coach.Autonomy = in.Autonomy
-			}
-			if in.Verbosity != "" {
-				cfg.Coach.Verbosity = in.Verbosity
-			}
-			if in.Power != "" {
-				if cfg.Coach.Powers == nil {
-					cfg.Coach.Powers = map[string]string{}
+			r, err := coachcap.Apply(path, ledger, now, func(cfg *config.Config) {
+				if in.Autonomy != "" {
+					cfg.Coach.Autonomy = in.Autonomy
 				}
-				cfg.Coach.Powers[strings.ToLower(strings.TrimSpace(in.Power))] = in.Rung
-			}
-			if err := cfg.Coach.Validate(); err != nil {
+				if in.Verbosity != "" {
+					cfg.Coach.Verbosity = in.Verbosity
+				}
+				if in.Power != "" {
+					if cfg.Coach.Powers == nil {
+						cfg.Coach.Powers = map[string]string{}
+					}
+					cfg.Coach.Powers[strings.ToLower(strings.TrimSpace(in.Power))] = in.Rung
+				}
+			})
+			if err != nil {
 				return nil, inputError(err)
 			}
-			if err := config.WriteMutable(path, cfg); err != nil {
-				return nil, inputError(err)
-			}
-			r := coachcap.Build(cfg)
 			return &r, nil
 		})
 	return nil

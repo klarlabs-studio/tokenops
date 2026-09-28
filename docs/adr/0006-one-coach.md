@@ -228,6 +228,12 @@ Consequences for the rungs:
   read-guard gains the `ask` rung; the route guard gains an `Agent`-tool
   approval path once the spike confirms it.
 - A follow-through ledger that ADR 0005's promotion bar and the live
-  coach's quieting both read.
+  coach's quieting both read. Built for model advice and subagent moves
+  (`internal/contexts/coaching/followthrough`): advice is followed when a
+  later turn or a subagent the agent asked for runs below the tier it was
+  given on, and ignored after four turns without that; a move is undone
+  when the operator lowers the power within 24 hours. Advice ignored five
+  times in a row within 14 days goes quiet for its kind. These are starting
+  thresholds for the evidence to revise. Tips follow in a second step.
 - The configuration guide and ADR 0004's execution notes are updated to one
   account of the kill switch.
