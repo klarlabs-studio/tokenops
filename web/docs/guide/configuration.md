@@ -55,6 +55,16 @@ session's own model is advised, never changed. It needs the route guard's
 subagent hook: `tokenops hooks install --route-guard` adds it, and
 `tokenops coach` says when it is missing.
 
+The coach keeps a **follow-through record** in
+`~/.tokenops/coach/followthrough.jsonl`: whether each piece of model advice
+was followed (a later turn, or a subagent the agent launched, ran below the
+tier it was given on) or ignored (four turns later, still on the same
+tier), and whether each subagent move stood or was undone (you lowered
+`models` within 24 hours). Advice for a kind of work that you ignore five
+times in a row within 14 days goes quiet for that kind; it is offered again
+once that evidence ages out, and `verbose` always shows it. `tokenops coach`
+lists the record per kind.
+
 A rung the coach cannot deliver yet is shown one rung lower, with the
 reason. `tokenops coach` (or the `tokenops_coach` MCP tool) shows each
 power's configured and effective rung and the setting it came from:

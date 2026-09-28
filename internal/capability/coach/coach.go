@@ -5,7 +5,10 @@
 // what it does cannot drift apart.
 package coach
 
-import "go.klarlabs.de/tokenops/internal/config"
+import (
+	"go.klarlabs.de/tokenops/internal/config"
+	ft "go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough"
+)
 
 // Power is one of the coach's powers as the operator sees it.
 type Power struct {
@@ -27,6 +30,9 @@ type Report struct {
 	Powers          []Power `json:"powers"`
 	Verbosity       string  `json:"verbosity"`
 	VerbositySource string  `json:"verbosity_source"`
+	// FollowThrough is what became of the coach's interventions, per
+	// kind (ADR 0006, decision 6). Only Status fills it.
+	FollowThrough []ft.Summary `json:"follow_through,omitempty"`
 }
 
 // Off reports whether every power is off: the coach records and says

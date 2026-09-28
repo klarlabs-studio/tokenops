@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -26,7 +27,7 @@ func coachStatus(cmd *cobra.Command, jsonOut bool) error {
 	if err != nil {
 		return err
 	}
-	r := coachcap.Build(cfg)
+	r := coachcap.Status(cfg, coachLedger(), time.Now())
 	if jsonOut {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
@@ -61,7 +62,7 @@ func renderCoachStatus(out io.Writer, r coachcap.Report) {
 	if s, err := coachhook.ReadStats(""); err == nil && s.Events > 0 {
 		activity = append(activity, fmt.Sprintf("%d tips (%d on a quota window)", s.Alerts+totalOf(s.QuotaNudges)+s.PromotionNudges, totalOf(s.QuotaNudges)))
 	}
-	if n := countDelegations(""); n > 0 {
+	if n := coachcap.CountMoves(coachLedger(), config.PowerModels); n > 0 {
 		activity = append(activity, fmt.Sprintf("%d subagents moved to a cheaper model", n))
 	}
 	if s, err := readguard.ReadStats(""); err == nil && s.Blocked > 0 {
@@ -70,6 +71,7 @@ func renderCoachStatus(out io.Writer, r coachcap.Report) {
 	if len(activity) > 0 {
 		fmt.Fprintf(out, "\n  lately: %s\n", strings.Join(activity, " · "))
 	}
+	renderFollowThrough(out, r)
 	fmt.Fprintln(out, "\n  change: tokenops coach autonomy <off|advise|ask|autonomous> · verbosity <quiet|normal|verbose>")
 	fmt.Fprintln(out, "          tokenops coach set <inform|waste|models> <rung> · tokenops coach off")
 }
@@ -96,19 +98,46 @@ func mutateCoach(cmd *cobra.Command, change func(*config.Config)) error {
 	if err != nil {
 		return err
 	}
+	now := time.Now()
+	l := coachLedger()
+	if _, err := coachcap.Apply(path, l, now, change); err != nil {
+		return err
+	}
 	cfg, err := config.ReadMutable(path)
 	if err != nil {
 		return err
 	}
-	change(&cfg)
-	if err := cfg.Coach.Validate(); err != nil {
-		return err
-	}
-	if err := config.WriteMutable(path, cfg); err != nil {
-		return err
-	}
-	renderCoachStatus(cmd.OutOrStdout(), coachcap.Build(cfg))
+	renderCoachStatus(cmd.OutOrStdout(), coachcap.Status(cfg, l, now))
 	return nil
+}
+
+// renderFollowThrough shows what became of the coach's interventions:
+// advice followed or ignored, moves that stood or were undone, and the
+// kinds it has stopped offering because they kept being ignored.
+func renderFollowThrough(out io.Writer, r coachcap.Report) {
+	var lines []string
+	for _, s := range r.FollowThrough {
+		if s.Resolved() == 0 {
+			continue
+		}
+		line := fmt.Sprintf("%s %s on %s work: ", s.Power, s.Channel, s.Kind)
+		if s.Channel == "move" {
+			line += fmt.Sprintf("%d stood, %d undone", s.Stood, s.Undone)
+		} else {
+			line += fmt.Sprintf("%d followed, %d ignored", s.Followed, s.Ignored)
+		}
+		if s.Quiet {
+			line += " · quiet now (ignored repeatedly; `verbosity verbose` still shows it)"
+		}
+		lines = append(lines, line)
+	}
+	if len(lines) == 0 {
+		return
+	}
+	fmt.Fprintln(out, "\n  follow-through:")
+	for _, l := range lines {
+		fmt.Fprintf(out, "    %s\n", l)
+	}
 }
 
 func newCoachAutonomyCmd() *cobra.Command {

@@ -31,16 +31,6 @@ type subagentHookOutput struct {
 	SystemMessage string `json:"systemMessage,omitempty"`
 }
 
-// delegationRecord is one subagent the coach moved, kept for `tokenops
-// coach` and for measuring whether the move stood.
-type delegationRecord struct {
-	TS      time.Time `json:"ts"`
-	Session string    `json:"session"`
-	Kind    string    `json:"kind"`
-	From    string    `json:"from"`
-	To      string    `json:"to"`
-}
-
 // runSubagentGuard handles Claude Code's PreToolUse on the Agent tool.
 // When coach.models is effectively autonomous and the subagent's work fits
 // a cheaper model, it rewrites the subagent's model (updatedInput) and
@@ -59,17 +49,29 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 		return nil
 	}
 	report := coachcap.Build(cfg)
-	if report.Effective(config.PowerModels) != config.AutonomyAutonomous {
+	if report.Effective(config.PowerModels) == config.AutonomyOff {
 		return nil
 	}
 	prompt, _ := in.ToolInput["prompt"].(string)
 	description, _ := in.ToolInput["description"].(string)
 	requested, _ := in.ToolInput["model"].(string)
+	catalog := routeCatalog()
+	candidates := cfg.Optimizer.SmartRouting.Models[string(eventschema.ProviderAnthropic)]
+	ledger := coachLedger()
+	now := time.Now()
+	// The agent handing work to a cheaper subagent follows the coach's
+	// advice. Read from what it asked for, before any rewrite below, so
+	// the coach's own move never counts as the operator following it.
+	coachcap.RecordResolutions(ledger, now, routeResolutions(routeguard.ObserveSubagent(
+		routeGuardDir(dir), in.SessionID, requested, eventschema.ProviderAnthropic, catalog, candidates)))
+	if report.Effective(config.PowerModels) != config.AutonomyAutonomous {
+		return nil
+	}
 	dec := routeguard.EvaluateSubagent(routeguard.SubagentInput{
 		Description: description, Prompt: prompt, Requested: requested,
 		SessionModel: latestTranscriptModel(in.TranscriptPath),
-		Provider:     eventschema.ProviderAnthropic, Catalog: routeCatalog(),
-		Candidates: cfg.Optimizer.SmartRouting.Models[string(eventschema.ProviderAnthropic)],
+		Provider:     eventschema.ProviderAnthropic, Catalog: catalog,
+		Candidates: candidates,
 	})
 	if !dec.Rewrite {
 		return nil
@@ -93,46 +95,18 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 	default:
 		out.SystemMessage = fmt.Sprintf("tokenops: moved a subagent from %s to %s (%s work).", dec.From, dec.To, dec.Kind)
 	}
-	recordDelegation(dir, delegationRecord{TS: time.Now().UTC(), Session: in.SessionID, Kind: string(dec.Kind), From: dec.From, To: dec.To})
+	coachcap.RecordMove(ledger, now, coachcap.NewID(), in.SessionID, config.PowerModels, string(dec.Kind), dec.From, dec.To)
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
 }
 
-func delegationLedger(dir string) string {
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return ""
-		}
-		dir = filepath.Join(home, ".tokenops", "route-guard")
+// routeGuardDir is the route guard's per-session state directory.
+func routeGuardDir(dir string) string {
+	if dir != "" {
+		return dir
 	}
-	return filepath.Join(dir, "delegations.jsonl")
-}
-
-func recordDelegation(dir string, r delegationRecord) {
-	path := delegationLedger(dir)
-	if path == "" || os.MkdirAll(filepath.Dir(path), 0o700) != nil {
-		return
-	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	home, err := os.UserHomeDir()
 	if err != nil {
-		return
+		return ""
 	}
-	defer func() { _ = f.Close() }()
-	b, _ := json.Marshal(r)
-	_, _ = f.Write(append(b, '\n'))
-}
-
-// countDelegations reads how many subagents the coach has moved.
-func countDelegations(dir string) int {
-	b, err := os.ReadFile(delegationLedger(dir))
-	if err != nil {
-		return 0
-	}
-	n := 0
-	for _, c := range b {
-		if c == '\n' {
-			n++
-		}
-	}
-	return n
+	return filepath.Join(home, ".tokenops", "route-guard")
 }

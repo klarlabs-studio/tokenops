@@ -50,6 +50,7 @@ var storageExempt = map[string]bool{
 // list to `go list ./internal/contexts/...`.
 var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/efficiency",
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough",
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts",
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/replies",
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/tools",
