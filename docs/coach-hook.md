@@ -120,6 +120,18 @@ coach never nags every turn. A Stop that jumps across several fractions at once
 Set `--budget` lower to be nudged earlier, higher if your normal sessions
 legitimately run large.
 
+### Follow-through
+
+Each tip is recorded in `~/.tokenops/coach/followthrough.jsonl` and settled
+over the next three turns: **followed** when the context shrinks to half or
+less (a `/compact` or a fresh start), the model changes, or the session
+ends; **ignored** when none of that happens. An early tier (50% or 75%)
+ignored five times in a row within 14 days is held back from then on
+(`coach-hook stats` counts it as "held back because earlier tips like them
+were ignored"), until that evidence ages out. `verbose` still gives it, and
+tips at 90% of a window or past the budget are never held back.
+`tokenops coach` shows the record per tier.
+
 ## Stats
 
 See how much your sessions have spent and which alerts fired:

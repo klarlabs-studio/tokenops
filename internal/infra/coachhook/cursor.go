@@ -145,10 +145,13 @@ func evaluateCursor(dir string, c cursorTurn, cfg Config, now time.Time) Decisio
 	}
 
 	dec := Decision{CumulativeUSD: st.CumulativeUSD, BudgetUSD: budget, UnpricedModel: unpriced}
+	if !alreadyCounted && c.reported() {
+		dec.Resolved = observeTip(&st, c.modelName(), cursorContextTokens(c))
+	}
 	frac := st.CumulativeUSD / budget
 	fired := highestBoundary(frac, st.MaxFiredFraction, cfg)
 	if cfg.Enabled && fired > 0 {
-		reason, retry := cfg.Quiet.silence(st.Nudges, parseTime(st.LastNudgeAt), now)
+		reason, retry := cfg.hold(budgetKind(fired), &st, now)
 		switch {
 		case reason == "":
 			dec.Nudge = true
@@ -166,6 +169,7 @@ func evaluateCursor(dir string, c cursorTurn, cfg Config, now time.Time) Decisio
 		}
 	}
 
+	offerTip(&st, &dec, cfg, tipKind(dec), c.modelName(), cursorContextTokens(c))
 	saveSession(dir, c.ConversationID, st)
 	appendLedger(dir, ledgerEvent{
 		TS: now.UTC(), Session: c.ConversationID,

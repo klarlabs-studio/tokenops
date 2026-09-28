@@ -136,6 +136,15 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, quota fu
 		return nil // fail open
 	}
 	now := time.Now()
+	ledger := coachLedger()
+	cfg.NewID = coachcap.NewID
+	var quieted func(power, kind string) bool
+	cfg.Quieted = func(kind string) bool {
+		if quieted == nil {
+			quieted = coachcap.Quieter(ledger, now)
+		}
+		return quieted(config.PowerInform, kind)
+	}
 	if provider, ok := hookProvider(in, in.isCursorPayload(), in.HookEventName == "session.idle"); ok && quota != nil {
 		cfg.Quota = quota(cmd.Context(), provider, now)
 	}
@@ -154,6 +163,8 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, quota fu
 	default:
 		dec = coachhook.Evaluate(dir, in.SessionID, in.TranscriptPath, cfg, now)
 	}
+	coachcap.RecordResolutions(ledger, now, tipResolutions(dec.Resolved))
+	coachcap.RecordTip(ledger, now, dec.OfferID, in.SessionID, dec.TipKind)
 	if !dec.Nudge {
 		return nil // no nudge: exit 0 with no stdout
 	}
@@ -248,8 +259,11 @@ func newCoachHookStatsCmd() *cobra.Command {
 			if s.PromotionNudges > 0 {
 				fmt.Fprintf(out, "  read-guard case argued: %d session(s)\n", s.PromotionNudges)
 			}
-			if len(s.Suppressed) > 0 {
-				fmt.Fprintf(out, "  held back by coaching.quiet: %d\n", totalOf(s.Suppressed))
+			if n := s.Suppressed["ignored_before"]; n > 0 {
+				fmt.Fprintf(out, "  held back because earlier tips like them were ignored: %d\n", n)
+			}
+			if n := s.Suppressed["min_interval"] + s.Suppressed["max_per_session"]; n > 0 {
+				fmt.Fprintf(out, "  held back by coaching.quiet: %d\n", n)
 				for _, rule := range []string{"min_interval", "max_per_session"} {
 					if n := s.Suppressed[rule]; n > 0 {
 						fmt.Fprintf(out, "    %-15s %d\n", rule, n)
@@ -412,4 +426,12 @@ func quietPolicy(rf *rootFlags) coachhook.Quiet {
 		MinInterval:   cfg.Coaching.Quiet.MinInterval,
 		MaxPerSession: cfg.Coaching.Quiet.MaxPerSession,
 	}
+}
+
+func tipResolutions(rs []coachhook.TipResolution) []coachcap.Resolution {
+	out := make([]coachcap.Resolution, 0, len(rs))
+	for _, r := range rs {
+		out = append(out, coachcap.Resolution{ID: r.ID, Kind: r.Kind, Followed: r.Followed, Evidence: r.Evidence})
+	}
+	return out
 }

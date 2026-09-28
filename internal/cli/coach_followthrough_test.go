@@ -106,3 +106,18 @@ func TestLoweringAPowerIsRecorded(t *testing.T) {
 		t.Errorf("raising a power was recorded as lowering: %v", got)
 	}
 }
+
+// A tip the Stop hook gives is recorded against the inform power.
+func TestTipIsRecorded(t *testing.T) {
+	dir := t.TempDir()
+	tp := writeCoachTranscript(t, dir, 60_000_000, "claude-opus-4-8")
+	start := ledgerLen(t)
+	if out := runCoach(t, dir, tp, "tip-session"); out == "" {
+		t.Fatal("no tip given")
+	}
+	got := ledgerSince(t, start)
+	if len(got) != 1 || got[0]["type"] != "offer" || got[0]["channel"] != "tip" ||
+		got[0]["power"] != config.PowerInform || got[0]["kind"] != "budget_50" || got[0]["session"] != "tip-session" {
+		t.Fatalf("ledger gained %v; want one budget_50 tip", got)
+	}
+}
