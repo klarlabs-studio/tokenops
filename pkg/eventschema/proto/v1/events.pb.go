@@ -391,6 +391,7 @@ const (
 	CoachingRecommendationKind_COACHING_KIND_SWITCH_MODEL       CoachingRecommendationKind = 5
 	CoachingRecommendationKind_COACHING_KIND_BATCH_REQUESTS     CoachingRecommendationKind = 6
 	CoachingRecommendationKind_COACHING_KIND_BREAK_RECURSION    CoachingRecommendationKind = 7
+	CoachingRecommendationKind_COACHING_KIND_COMPACT_EARLIER    CoachingRecommendationKind = 8
 )
 
 // Enum value maps for CoachingRecommendationKind.
@@ -404,6 +405,7 @@ var (
 		5: "COACHING_KIND_SWITCH_MODEL",
 		6: "COACHING_KIND_BATCH_REQUESTS",
 		7: "COACHING_KIND_BREAK_RECURSION",
+		8: "COACHING_KIND_COMPACT_EARLIER",
 	}
 	CoachingRecommendationKind_value = map[string]int32{
 		"COACHING_KIND_UNSPECIFIED":        0,
@@ -414,6 +416,7 @@ var (
 		"COACHING_KIND_SWITCH_MODEL":       5,
 		"COACHING_KIND_BATCH_REQUESTS":     6,
 		"COACHING_KIND_BREAK_RECURSION":    7,
+		"COACHING_KIND_COMPACT_EARLIER":    8,
 	}
 )
 
@@ -2389,7 +2392,7 @@ const file_pkg_eventschema_proto_v1_events_proto_rawDesc = "" +
 	"\x1dOPTIMIZATION_DECISION_APPLIED\x10\x01\x12\"\n" +
 	"\x1eOPTIMIZATION_DECISION_ACCEPTED\x10\x02\x12\"\n" +
 	"\x1eOPTIMIZATION_DECISION_REJECTED\x10\x03\x12!\n" +
-	"\x1dOPTIMIZATION_DECISION_SKIPPED\x10\x04*\xa9\x02\n" +
+	"\x1dOPTIMIZATION_DECISION_SKIPPED\x10\x04*\xcc\x02\n" +
 	"\x1aCoachingRecommendationKind\x12\x1d\n" +
 	"\x19COACHING_KIND_UNSPECIFIED\x10\x00\x12$\n" +
 	" COACHING_KIND_REDUCE_PROMPT_SIZE\x10\x01\x12\x1e\n" +
@@ -2398,7 +2401,8 @@ const file_pkg_eventschema_proto_v1_events_proto_rawDesc = "" +
 	"\x19COACHING_KIND_REUSE_CACHE\x10\x04\x12\x1e\n" +
 	"\x1aCOACHING_KIND_SWITCH_MODEL\x10\x05\x12 \n" +
 	"\x1cCOACHING_KIND_BATCH_REQUESTS\x10\x06\x12!\n" +
-	"\x1dCOACHING_KIND_BREAK_RECURSION\x10\aB@Z>go.klarlabs.de/tokenops/pkg/eventschema/proto/v1;eventschemav1b\x06proto3"
+	"\x1dCOACHING_KIND_BREAK_RECURSION\x10\a\x12!\n" +
+	"\x1dCOACHING_KIND_COMPACT_EARLIER\x10\bB@Z>go.klarlabs.de/tokenops/pkg/eventschema/proto/v1;eventschemav1b\x06proto3"
 
 var (
 	file_pkg_eventschema_proto_v1_events_proto_rawDescOnce sync.Once

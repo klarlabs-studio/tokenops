@@ -481,7 +481,17 @@ coaching:
       context_growth_per_step_tokens: 3000  # mean growth per step (default 5k)
       max_consecutive_agent_loops: 4
       system_redundancy_min: 3
+      compact_at_tokens: 400000           # compact_earlier line (default 600k)
 ```
+
+**Compacting late** (`compact_earlier`) reports a session that ran 20 or
+more steps in a row above `compact_at_tokens` without compacting: 600k for
+`claude-code:`, 150k for `codex:`, off elsewhere. It prices the stretch
+against compacting at that line, where context grows back and is compacted
+again and so averages halfway between the session's post-compaction size
+and the line. The excess is each step's context above that average, at API
+rates; on a flat plan it is the share of the plan's allowance those steps
+used. An entry that omits `compact_at_tokens` keeps the built-in line.
 
 Context growth is judged **per step** by default: 5k tokens per step for
 `claude-code:`, 15k for `codex:`, and 8k elsewhere, over sessions of at

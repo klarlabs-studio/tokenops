@@ -81,6 +81,7 @@ enum CoachingRecommendationKind {
   COACHING_KIND_SWITCH_MODEL = 5;
   COACHING_KIND_BATCH_REQUESTS = 6;
   COACHING_KIND_BREAK_RECURSION = 7;
+  COACHING_KIND_COMPACT_EARLIER = 8;
 }
 
 // Envelope is the common header carried by every TokenOps event.

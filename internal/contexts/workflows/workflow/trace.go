@@ -25,6 +25,13 @@ type Step struct {
 	ContextDelta int64
 	Latency      time.Duration
 	StartGap     time.Duration
+	// CostUSD is what the step cost: the stored figure, or the rate
+	// card's. Zero when a plan covered it.
+	CostUSD float64
+	// ListCostUSD is what the step would cost at API rates, including when
+	// a plan covered it. On a flat plan it is the measure of how much of
+	// the plan's allowance the step used, not a charge.
+	ListCostUSD float64
 }
 
 // Trace aggregates the workflow.
@@ -110,18 +117,19 @@ func Reconstruct(ctx context.Context, store *sqlite.Store, spendEng *spend.Engin
 			}
 			step.StartGap = env.Timestamp.Sub(prev.Timestamp)
 		}
-		t.Steps = append(t.Steps, step)
-
-		t.TotalInputTokens += pe.InputTokens
-		t.TotalOutputTokens += pe.OutputTokens
-		t.TotalTotalTokens += pe.TotalTokens
-
 		cost := pe.CostUSD
 		if cost == 0 && spendEng != nil {
 			if c, err := spendEng.Compute(pe); err == nil {
 				cost = c
 			}
 		}
+		step.CostUSD = cost
+		step.ListCostUSD = listCost(spendEng, pe, cost, env.Timestamp)
+		t.Steps = append(t.Steps, step)
+
+		t.TotalInputTokens += pe.InputTokens
+		t.TotalOutputTokens += pe.OutputTokens
+		t.TotalTotalTokens += pe.TotalTokens
 		t.TotalCostUSD += cost
 
 		if pe.InputTokens > t.MaxContextSize {
@@ -185,4 +193,21 @@ func (t *Trace) Summarize() Summary {
 		UniqueModels:       len(t.Models),
 		UniqueAgents:       len(t.Agents),
 	}
+}
+
+// listCost is a step's cost at API rates. A plan-covered step is priced
+// as if it were not; anything else already is.
+func listCost(eng *spend.Engine, pe *eventschema.PromptEvent, cost float64, at time.Time) float64 {
+	if eng == nil || cost > 0 {
+		return cost
+	}
+	switch pe.CostSource {
+	case eventschema.CostSourcePlanIncluded, eventschema.CostSourceTrial:
+		unplanned := *pe
+		unplanned.CostSource = ""
+		if c, err := eng.ComputeAt(&unplanned, at); err == nil {
+			return c
+		}
+	}
+	return cost
 }

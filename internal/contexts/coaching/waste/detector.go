@@ -11,6 +11,7 @@ package waste
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
@@ -45,6 +46,12 @@ type Config struct {
 	// only when the operator could obviously hoist it via the
 	// system-dedupe optimizer.
 	SystemRedundancyMin int
+	// CompactAtTokens is the context size past which a session should
+	// compact. Stretches of at least minUncompactedSteps steps above it
+	// without a compaction are reported as compact_earlier, priced as the
+	// cache-read carried above the session's post-compaction size. Zero
+	// disables the check; the code-agent profiles set it.
+	CompactAtTokens int64
 	// Profiles are operator-supplied per-workflow-prefix overrides
 	// (config: coaching.context_limits). The first matching profile wins
 	// and replaces the built-in ProfileFor selection for that workflow.
@@ -60,6 +67,7 @@ type Profile struct {
 	ContextGrowthPerStepTokens int64
 	MaxConsecutiveAgentLoops   int
 	SystemRedundancyMin        int
+	CompactAtTokens            int64
 }
 
 // minPerStepGrowthSteps is the fewest steps a per-step growth rate is
@@ -119,7 +127,16 @@ func (d *Detector) Detect(trace *workflow.Trace) []*eventschema.CoachingEvent {
 			ContextGrowthPerStepTokens: p.ContextGrowthPerStepTokens,
 			MaxConsecutiveAgentLoops:   p.MaxConsecutiveAgentLoops,
 			SystemRedundancyMin:        p.SystemRedundancyMin,
+			CompactAtTokens:            p.CompactAtTokens,
 		})
+		// compact_at_tokens is newer than the other limits, so a profile
+		// written before it existed says nothing about it; inheriting the
+		// built-in value keeps the check on rather than silently off.
+		if p.CompactAtTokens == 0 {
+			if builtin := ProfileFor(trace.WorkflowID); builtin != nil {
+				cfg.CompactAtTokens = builtin.CompactAtTokens
+			}
+		}
 	} else if profile := ProfileFor(trace.WorkflowID); profile != nil {
 		cfg = mergeConfig(cfg, *profile)
 	}
@@ -135,6 +152,9 @@ func (d *Detector) Detect(trace *workflow.Trace) []*eventschema.CoachingEvent {
 		out = append(out, ev)
 	}
 	if ev := scoped.checkRecursion(trace); ev != nil {
+		out = append(out, ev)
+	}
+	if ev := scoped.checkLateCompaction(trace); ev != nil {
 		out = append(out, ev)
 	}
 	return out
@@ -171,11 +191,13 @@ func ProfileFor(workflowID string) *Config {
 		return &Config{
 			MaxContextTokens:           900_000,
 			ContextGrowthPerStepTokens: 5_000,
+			CompactAtTokens:            600_000,
 		}
 	case strings.HasPrefix(workflowID, "codex:"):
 		return &Config{
 			MaxContextTokens:           250_000,
 			ContextGrowthPerStepTokens: 15_000,
+			CompactAtTokens:            150_000,
 		}
 	}
 	return nil
@@ -203,6 +225,9 @@ func mergeConfig(base, profile Config) Config {
 	}
 	if profile.SystemRedundancyMin > 0 {
 		out.SystemRedundancyMin = profile.SystemRedundancyMin
+	}
+	if profile.CompactAtTokens > 0 {
+		out.CompactAtTokens = profile.CompactAtTokens
 	}
 	return out
 }
@@ -344,4 +369,122 @@ func (d *Detector) checkRecursion(t *workflow.Trace) *eventschema.CoachingEvent 
 		}
 	}
 	return nil
+}
+
+// minUncompactedSteps is the shortest stretch above CompactAtTokens that is
+// reported. A few turns past the line is a session finishing a task; tens
+// of turns is a habit.
+const minUncompactedSteps = 20
+
+// compactionDrop is how far context must fall between two steps to count
+// as a compaction or a fresh start rather than ordinary variation.
+const compactionDrop = 0.5
+
+// checkLateCompaction reports stretches that ran above CompactAtTokens
+// without compacting, priced against what compacting at the threshold
+// would have carried instead.
+//
+// Every step re-reads the whole context. Compacting at the threshold does
+// not hold context at the size a compaction leaves: it grows back and is
+// compacted again, a sawtooth whose mean is halfway between that size and
+// the threshold. The excess is each step's context above that mean. The
+// post-compaction size is this session's own when it has compacted, and an
+// eighth of the threshold when it never has (the median across 30 days of
+// real Claude Code sessions, 77k at a 600k threshold).
+func (d *Detector) checkLateCompaction(t *workflow.Trace) *eventschema.CoachingEvent {
+	limit := d.cfg.CompactAtTokens
+	if limit <= 0 || t.MaxContextSize < limit {
+		return nil
+	}
+	base := postCompactionBaseline(t.Steps, limit/8)
+	mean := (base + limit) / 2
+	var (
+		run, longest, stretched int
+		excessTokens            int64
+		excessUSD               float64
+	)
+	for i, s := range t.Steps {
+		if s.Prompt == nil {
+			continue
+		}
+		ctx := s.Prompt.InputTokens
+		if i > 0 && compacted(t.Steps[i-1], s) {
+			run = 0
+		}
+		if ctx < limit {
+			// Dipping below the line without compacting leaves the
+			// stretch open: it is the same uncompacted context.
+			continue
+		}
+		run++
+		longest = max(longest, run)
+		stretched++
+		excessTokens += ctx - mean
+		excessUSD += s.ListCostUSD * float64(ctx-mean) / float64(ctx)
+	}
+	if longest < minUncompactedSteps {
+		return nil
+	}
+	return &eventschema.CoachingEvent{
+		WorkflowID: t.WorkflowID,
+		Kind:       eventschema.CoachingKindCompactEarlier,
+		Summary:    "Long stretches near the context ceiling without compacting",
+		Details: fmt.Sprintf(
+			"%d steps ran above %s context (longest stretch %d steps without a compaction). "+
+				"Compacting at that line would have kept context near %s on average; these steps re-read about %s more%s. "+
+				"Compact, or start a fresh session, once context passes %s.",
+			stretched, humanTokens(limit), longest, humanTokens(mean), humanTokens(excessTokens),
+			usdClause(excessUSD), humanTokens(limit)),
+		EstimatedSavingsTokens: excessTokens,
+		EstimatedSavingsUSD:    excessUSD,
+		ReplayMetadata: map[string]string{
+			"compact_at_tokens": fmt.Sprint(limit),
+			"steps_above":       fmt.Sprint(stretched),
+			"longest_stretch":   fmt.Sprint(longest),
+			"baseline_tokens":   fmt.Sprint(base),
+			"mean_tokens":       fmt.Sprint(mean),
+		},
+	}
+}
+
+// compacted reports whether context fell enough from prev to cur to be a
+// compaction or a fresh start.
+func compacted(prev, cur workflow.Step) bool {
+	if prev.Prompt == nil || cur.Prompt == nil {
+		return false
+	}
+	return float64(cur.Prompt.InputTokens) < float64(prev.Prompt.InputTokens)*compactionDrop
+}
+
+// postCompactionBaseline is the median context right after this trace's
+// compactions, or fallback when it has none.
+func postCompactionBaseline(steps []workflow.Step, fallback int64) int64 {
+	var after []int64
+	for i := 1; i < len(steps); i++ {
+		if compacted(steps[i-1], steps[i]) {
+			after = append(after, steps[i].Prompt.InputTokens)
+		}
+	}
+	if len(after) == 0 {
+		return fallback
+	}
+	slices.Sort(after)
+	return after[len(after)/2]
+}
+
+func humanTokens(n int64) string {
+	switch {
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.1fM tokens", float64(n)/1e6)
+	case n >= 1_000:
+		return fmt.Sprintf("%dk tokens", n/1_000)
+	}
+	return fmt.Sprintf("%d tokens", n)
+}
+
+func usdClause(usd float64) string {
+	if usd < 0.01 {
+		return ""
+	}
+	return fmt.Sprintf(" (~$%.2f at API rates; on a flat plan, that share of its allowance)", usd)
 }

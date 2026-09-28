@@ -13,6 +13,9 @@ const (
 	CoachingKindSwitchModel      CoachingRecommendationKind = "switch_model"
 	CoachingKindBatchRequests    CoachingRecommendationKind = "batch_requests"
 	CoachingKindBreakRecursion   CoachingRecommendationKind = "break_recursion"
+	// CoachingKindCompactEarlier is a session that kept running long
+	// stretches near its context ceiling instead of compacting.
+	CoachingKindCompactEarlier CoachingRecommendationKind = "compact_earlier"
 )
 
 // CoachingEvent carries a single coaching recommendation produced by replay
