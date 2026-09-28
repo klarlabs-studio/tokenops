@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -201,7 +202,7 @@ func Evaluate(in Input) Decision {
 	defer func() { saveState(in.Dir, in.SessionID, st) }()
 
 	d := Decision{Kind: kind, From: in.CurrentModel}
-	cat := in.Catalog.WithCandidates(in.Candidates)
+	cat := in.Catalog.WithCandidates(withCurrent(in.Candidates, in.CurrentModel))
 	cur := cat.Resolve(in.Provider, in.CurrentModel)
 	d.Resolved = st.observe(tierRank[cur.Tier], in.CurrentModel, "the session moved to ")
 	wantTier, ok := tierForKind(kind)
@@ -370,4 +371,21 @@ func saveState(dir, session string, st state) {
 		return
 	}
 	_ = os.WriteFile(statePath(dir, session), b, 0o600)
+}
+
+// withCurrent adds the model a session is running on to the models on
+// offer. It is available by definition, and leaving it out makes the
+// guard abstain on every turn of a session whose model is newer than the
+// configured list: claude-opus-5-5 sessions against a list naming
+// claude-opus-5 got no advice at all.
+func withCurrent(candidates []string, current string) []string {
+	if current == "" || len(candidates) == 0 {
+		return candidates
+	}
+	for _, c := range candidates {
+		if c == current {
+			return candidates
+		}
+	}
+	return append(slices.Clone(candidates), current)
 }

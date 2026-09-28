@@ -97,3 +97,21 @@ func TestSubagentOnACheaperModelFollowsAdvice(t *testing.T) {
 		t.Errorf("advice settled by the subagent resolved again: %+v", again.Resolved)
 	}
 }
+
+// A session on a model newer than the configured list is still placed:
+// the model it runs on is on offer by definition.
+func TestTheCurrentModelIsRankedEvenWhenNotListed(t *testing.T) {
+	in := input(t, "show me the retention config", "claude-fable-5-1", ModeAdvise)
+	in.Candidates = []string{"claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5"}
+	if got := Evaluate(in); !got.Advise || got.To != "claude-haiku-4-5" {
+		t.Fatalf("unlisted session model: %+v; want lookup advised down to haiku", got)
+	}
+	sub := EvaluateSubagent(SubagentInput{
+		Description: "find config", SessionModel: "claude-fable-5-1",
+		Provider: eventschema.ProviderAnthropic, Catalog: catalog(),
+		Candidates: []string{"claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5"},
+	})
+	if !sub.Rewrite || sub.ToAlias != "haiku" {
+		t.Fatalf("unlisted session model, subagent: %+v; want a move to haiku", sub)
+	}
+}
