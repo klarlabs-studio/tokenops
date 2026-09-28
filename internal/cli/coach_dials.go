@@ -124,13 +124,16 @@ func renderFollowThrough(out io.Writer, r coachcap.Report) {
 		if s.Channel == "tip" {
 			line = fmt.Sprintf("%s tips %s: ", s.Power, tipLabel(s.Kind))
 		}
-		if s.Channel == "move" {
+		switch s.Channel {
+		case "move":
 			line += fmt.Sprintf("%d stood, %d undone", s.Stood, s.Undone)
-		} else {
+		case "approval":
+			line = fmt.Sprintf("%s proposals on %s work: %d approved, %d declined", s.Power, s.Kind, s.Followed, s.Ignored)
+		default:
 			line += fmt.Sprintf("%d followed, %d ignored", s.Followed, s.Ignored)
 		}
 		if s.Quiet {
-			line += " · quiet now (ignored repeatedly; `verbosity verbose` still shows it)"
+			line += " · quiet now (turned down repeatedly; `verbosity verbose` still shows it)"
 		}
 		lines = append(lines, line)
 	}

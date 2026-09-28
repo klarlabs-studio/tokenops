@@ -68,17 +68,17 @@ func TestTheDaemonCapsOnlyDaemonSideInterventions(t *testing.T) {
 // already done.
 func TestUndeliverableRungsStayVisible(t *testing.T) {
 	c := cfg()
-	c.Coach.Powers = map[string]string{config.PowerModels: config.AutonomyAsk}
+	c.Coach.Powers = map[string]string{config.PowerWaste: config.AutonomyAsk}
 	for _, s := range authority.Report(c).Subsystems {
-		if s.Name != "smart_routing" {
+		if s.Name != "read_guard" {
 			continue
 		}
 		if s.Configured != policy.RequireApproval || s.Effective != policy.Recommend || !s.HeldBack() {
-			t.Errorf("models ask = configured %q effective %q held back %v", s.Configured, s.Effective, s.HeldBack())
+			t.Errorf("waste ask = configured %q effective %q held back %v", s.Configured, s.Effective, s.HeldBack())
 		}
 		return
 	}
-	t.Fatal("smart_routing was not reported")
+	t.Fatal("read_guard was not reported")
 }
 
 // An active daemon lets each subsystem's own setting decide.

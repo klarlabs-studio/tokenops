@@ -18,6 +18,7 @@ import (
 type agentToolInput struct {
 	SessionID      string         `json:"session_id"`
 	TranscriptPath string         `json:"transcript_path"`
+	ToolUseID      string         `json:"tool_use_id"`
 	ToolInput      map[string]any `json:"tool_input"`
 }
 
@@ -62,9 +63,19 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 	// The agent handing work to a cheaper subagent follows the coach's
 	// advice. Read from what it asked for, before any rewrite below, so
 	// the coach's own move never counts as the operator following it.
+	stateDir := routeGuardDir(dir)
 	coachcap.RecordResolutions(ledger, now, routeResolutions(routeguard.ObserveSubagent(
-		routeGuardDir(dir), in.SessionID, requested, eventschema.ProviderAnthropic, catalog, candidates)))
-	if report.Effective(config.PowerModels) != config.AutonomyAutonomous {
+		stateDir, in.SessionID, requested, eventschema.ProviderAnthropic, catalog, candidates)))
+	coachcap.RecordResolutions(ledger, now, proposalResolutions(routeguard.SettleProposals(stateDir, in.SessionID, in.TranscriptPath)))
+	rung := report.Effective(config.PowerModels)
+	if rung == config.AutonomyAsk {
+		return askSubagentMove(cmd, in, report, stateDir, ledger, now, routeguard.SubagentInput{
+			Description: description, Prompt: prompt, Requested: requested,
+			SessionModel: latestTranscriptModel(in.TranscriptPath),
+			Provider:     eventschema.ProviderAnthropic, Catalog: catalog, Candidates: candidates,
+		})
+	}
+	if rung != config.AutonomyAutonomous {
 		return nil
 	}
 	dec := routeguard.EvaluateSubagent(routeguard.SubagentInput{
@@ -109,4 +120,73 @@ func routeGuardDir(dir string) string {
 		return ""
 	}
 	return filepath.Join(home, ".tokenops", "route-guard")
+}
+
+// sessionAttended reports whether someone is at the keyboard to answer a
+// permission prompt. Claude Code sets CLAUDE_CODE_SESSION_ATTENDED to 1
+// in interactive sessions and 0 headless; anything else is treated as
+// unattended, because an ask nobody can answer is a denial the agent
+// retries until it runs out of turns.
+func sessionAttended() bool { return os.Getenv("CLAUDE_CODE_SESSION_ATTENDED") == "1" }
+
+// askSubagentMove proposes moving a subagent to a cheaper model through
+// Claude Code's permission prompt (models: ask). The prompt shows the
+// rewritten Agent call, so what is approved is exactly what runs. A call
+// the operator declined runs as planned when the agent retries it, and
+// nothing is asked when nobody is attending or when the operator keeps
+// declining this kind of move.
+func askSubagentMove(cmd *cobra.Command, in agentToolInput, report coachcap.Report, dir string, ledger coachcap.Ledger, now time.Time, sub routeguard.SubagentInput) error {
+	if !sessionAttended() || in.ToolUseID == "" {
+		return nil
+	}
+	call := routeguard.CallKey(sub.Description, sub.Prompt)
+	if routeguard.WasDeclined(dir, in.SessionID, call) {
+		return nil
+	}
+	dec := routeguard.EvaluateSubagent(sub)
+	if !dec.Rewrite {
+		return nil
+	}
+	if report.Verbosity != config.VerbosityVerbose && coachcap.Quieter(ledger, now)(config.PowerModels, string(dec.Kind)) {
+		return nil
+	}
+	updated := make(map[string]any, len(in.ToolInput))
+	for k, v := range in.ToolInput {
+		updated[k] = v
+	}
+	updated["model"] = dec.ToAlias
+	out := subagentHookOutput{}
+	out.HookSpecificOutput.HookEventName = "PreToolUse"
+	out.HookSpecificOutput.PermissionDecision = "ask"
+	// Claude Code's prompt shows this reason under the Agent call, and the
+	// call itself only by its description, so the reason carries the
+	// proposal (verified in 2.1.284).
+	out.HookSpecificOutput.PermissionDecisionReason = fmt.Sprintf(
+		"tokenops: run this subagent on %s instead of %s? Its work looks like %s. No pauses the agent; tell it to continue and it runs as planned.",
+		dec.To, dec.From, dec.Kind)
+	out.HookSpecificOutput.UpdatedInput = updated
+	if report.Verbosity == config.VerbosityVerbose {
+		// Claude Code shows this after the prompt is answered, not with
+		// it; the prompt itself carries the proposal.
+		out.SystemMessage = fmt.Sprintf("tokenops: proposed running this subagent on %s instead of %s: %s. To stop asking: `tokenops coach set models advise`.",
+			dec.To, dec.From, dec.Reason)
+	}
+	id := coachcap.NewID()
+	routeguard.Propose(dir, in.SessionID, routeguard.Proposal{
+		ID: id, ToolUseID: in.ToolUseID, Call: call, Kind: string(dec.Kind), From: dec.From, To: dec.To,
+	})
+	coachcap.RecordApproval(ledger, now, id, in.SessionID, config.PowerModels, string(dec.Kind), dec.From, dec.To)
+	return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
+}
+
+func proposalResolutions(outcomes []routeguard.ProposalOutcome) []coachcap.Resolution {
+	out := make([]coachcap.Resolution, 0, len(outcomes))
+	for _, o := range outcomes {
+		evidence := "declined at the prompt"
+		if o.Approved {
+			evidence = "approved at the prompt"
+		}
+		out = append(out, coachcap.Resolution{ID: o.ID, Kind: o.Kind, Followed: o.Approved, Evidence: evidence})
+	}
+	return out
 }

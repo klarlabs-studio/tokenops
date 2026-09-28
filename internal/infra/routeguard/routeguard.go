@@ -150,6 +150,8 @@ type state struct {
 	Kind   taskclass.Kind                 `json:"kind"`
 	Argued map[taskclass.Kind]bool        `json:"argued"`
 	Open   map[taskclass.Kind]*openAdvice `json:"open,omitempty"`
+	// Proposals are subagent moves put to the operator (models: ask).
+	Proposals []Proposal `json:"proposals,omitempty"`
 }
 
 // tierForKind maps what the work is to the capability it needs.

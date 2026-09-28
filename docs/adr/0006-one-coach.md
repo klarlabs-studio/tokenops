@@ -188,8 +188,9 @@ test):
 | `PreToolUse: ask` headless | Treated as a **denial**, recorded in `permission_denials` even though the tool was allowed. The agent receives `permissionDecisionReason` as the tool result, cannot approve, and retries until its turn limit. |
 | Does the `Agent` tool carry the subagent's model? | **Yes**: `tool_input.model` (e.g. `"haiku"`), beside `description`, `prompt`, `run_in_background`. |
 | Can a hook change it? | **Yes**: `updatedInput` rewrote a requested `sonnet` to `haiku`; the subagent's transcript shows `claude-haiku-4-5`, while the main session stayed on `claude-sonnet-5`. |
-| Can a hook tell nobody is present? | Headless hooks see `CLAUDE_CODE_SESSION_ATTENDED=0` and `CLAUDE_CODE_ENTRYPOINT=sdk-cli`. The interactive values are not yet confirmed. |
-| What does `ask` show the operator interactively? | Not yet observed; needs an interactive session. |
+| Can a hook tell nobody is present? | **Yes**: headless hooks see `CLAUDE_CODE_SESSION_ATTENDED=0` and `CLAUDE_CODE_ENTRYPOINT=sdk-cli`; interactive sessions (2.1.284) see `1` and `cli`. |
+| What does `ask` show the operator interactively? | The normal permission prompt (Yes / Yes, and don't ask again / No). For an `Agent` call it reads "Hook PreToolUse:Agent requires confirmation for this tool:" followed by `permissionDecisionReason`, and names the call only by its description, not its model. With `ask` + `updatedInput`, **Yes runs the rewritten call**: the subagent ran on `claude-haiku-4-5` from a `claude-sonnet-5-5` session. A `systemMessage` appears only after the answer. |
+| What does **No** do? | It **interrupts the turn** ("Interrupted · What should Claude do instead?"); the agent does not retry on its own. The transcript records the call's `tool_result` with `is_error: true` and "The user doesn't want to proceed with this tool use", keyed by the `tool_use_id` the hook received. |
 
 Consequences for the rungs:
 
@@ -199,8 +200,16 @@ Consequences for the rungs:
 - `ask` is used **only in attended sessions**. When the session is
   unattended (`CLAUDE_CODE_SESSION_ATTENDED=0`), every `ask` rung falls back
   to `advise`, because an unanswerable approval is a denial that stalls the
-  agent. Until the interactive signal and prompt are confirmed, hook-path
-  `ask` reports itself as `advise`.
+  agent.
+- `models: ask` **ships** (2026-09-29): in attended Claude Code sessions the
+  coach asks before moving a subagent, with a reason that names both
+  models. Yes moves it. No pauses the agent; when told to continue, the
+  retried call (same description and prompt) runs as planned and is not
+  asked about again. Approvals and declines are read from the transcript
+  into the follow-through ledger, and a kind declined repeatedly stops
+  being proposed. `inform` and `waste` have no approval step and keep
+  reporting `ask` as `advise`: declining a refused re-read would stop the
+  turn for a few thousand tokens.
 
 ## Alternatives considered
 

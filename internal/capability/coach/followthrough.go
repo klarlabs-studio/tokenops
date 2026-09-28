@@ -34,6 +34,18 @@ func RecordAdvice(l Ledger, now time.Time, id, session, power, kind, from, to st
 	})
 }
 
+// RecordApproval records a change the coach proposed and put to the
+// operator for approval.
+func RecordApproval(l Ledger, now time.Time, id, session, power, kind, from, to string) {
+	if l == nil || id == "" {
+		return
+	}
+	_ = l.Append(ft.Entry{
+		Type: ft.EntryOffer, ID: id, At: now.UTC(), Session: session,
+		Power: power, Channel: ft.ChannelApproval, Kind: kind, From: from, To: to,
+	})
+}
+
 // RecordTip records a tip the coach gave about the session, under the ID
 // it was given. Tips belong to the inform power.
 func RecordTip(l Ledger, now time.Time, id, session, kind string) {
