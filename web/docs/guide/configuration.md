@@ -39,6 +39,15 @@ window and context fullness), **waste** (redundant re-reads), and
 | `ask` | steps in with a concrete change and waits for your approval |
 | `autonomous` | makes the change itself |
 
+`verbosity` is independent of who decides:
+
+| | `quiet` | `normal` (default) | `verbose` |
+|---|---|---|---|
+| Quota tips | at 90–100% of a window, or earlier when the pace runs out before the reset | each tier (50/75/90/100%) once per window | each tier, plus the pace line always and every window listed |
+| Dollar tips (pay-per-token) | only past the budget | each tier once per session | each tier once per session |
+| The read-guard case | never | once per session | once per session |
+| Model advice | only when the model is two tiers or more above the work | once per kind of work per session | every applicable turn |
+
 A rung the coach cannot deliver yet is shown one rung lower, with the
 reason. `tokenops coach` (or the `tokenops_coach` MCP tool) shows each
 power's configured and effective rung and the setting it came from:

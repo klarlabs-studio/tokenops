@@ -104,6 +104,7 @@ much your sessions have spent and which budget alerts fired.`,
 			cfg.Quiet = quietPolicy(rf)
 			cfg.Promotion = promotionNudge(rf, guardDir)
 			cfg.Rates = datedRates(rf)
+			cfg.Verbosity = coachVerbosity(rf)
 			quota := func(context.Context, eventschema.Provider, time.Time) *coachhook.Quota { return nil }
 			if loaded, err := loadConfig(rf); err == nil {
 				quota = func(ctx context.Context, p eventschema.Provider, now time.Time) *coachhook.Quota {
@@ -313,6 +314,16 @@ func advisoryCoaching(rf *rootFlags) bool {
 		cfg = config.Default()
 	}
 	return coachcap.Build(cfg).Effective(config.PowerInform) != config.AutonomyOff
+}
+
+// coachVerbosity is how much the coach says (ADR 0006). An unreadable
+// config reads as normal: today's behaviour, never silence.
+func coachVerbosity(rf *rootFlags) string {
+	cfg, err := loadConfig(rf)
+	if err != nil {
+		return config.VerbosityNormal
+	}
+	return coachcap.Build(cfg).Verbosity
 }
 
 // opencodeDB resolves opencode's store.
