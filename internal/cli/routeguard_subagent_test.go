@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/config"
 )
 
@@ -57,6 +58,7 @@ func TestSubagentGuardMovesWorkWhenAutonomous(t *testing.T) {
 	writeCoachConfig(t, models+"coach:\n  autonomy: advise\n  powers:\n    models: autonomous\n")
 	dir := t.TempDir()
 	tp := writeCoachTranscript(t, dir, 1, "claude-opus-5")
+	moves := coachcap.CountMoves(coachLedger(), config.PowerModels)
 	out := runSubagentHook(t, dir, map[string]any{
 		"description": "find config", "prompt": "find where the retention config is defined", "run_in_background": false,
 	}, tp)
@@ -74,8 +76,8 @@ func TestSubagentGuardMovesWorkWhenAutonomous(t *testing.T) {
 	if !strings.Contains(got.SystemMessage, "moved a subagent") {
 		t.Errorf("normal verbosity says nothing: %q", got.SystemMessage)
 	}
-	if countDelegations(dir) != 1 {
-		t.Errorf("delegation not recorded")
+	if coachcap.CountMoves(coachLedger(), config.PowerModels) != moves+1 {
+		t.Errorf("move not recorded in the follow-through ledger")
 	}
 }
 
