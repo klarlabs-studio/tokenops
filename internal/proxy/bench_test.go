@@ -223,6 +223,13 @@ func TestProxyP99OverheadGate(t *testing.T) {
 	if testing.Short() {
 		t.Skip("p99 overhead gate runs without -short")
 	}
+	if raceEnabled {
+		// Under -race every request pays the detector's instrumentation,
+		// and on a loaded machine the p99 measured 264ms against a 50ms
+		// gate: a number about the detector, not the proxy. CI's Bench
+		// gate job runs this test without -race and is the gate.
+		t.Skip("p99 overhead gate measures latency, which -race distorts; the Bench gate job runs it")
+	}
 
 	const samples = 200
 	const warmup = 20
