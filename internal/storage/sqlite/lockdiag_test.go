@@ -59,8 +59,13 @@ func TestAppendBatchLogsSlowLockWait(t *testing.T) {
 
 func TestAppendBatchQuietWhenFast(t *testing.T) {
 	var buf bytes.Buffer
+	// The threshold is set far above any wait an uncontended append can
+	// have. The default is low enough that a loaded machine really does
+	// wait past it (1.1s under a full race run), and logging that wait is
+	// the diagnostic working, not the append being wrongly reported.
 	s, err := Open(context.Background(), filepath.Join(t.TempDir(), "events.db"), Options{
-		Logger: slog.New(slog.NewTextHandler(&buf, nil)),
+		Logger:       slog.New(slog.NewTextHandler(&buf, nil)),
+		SlowLockWarn: time.Minute,
 	})
 	if err != nil {
 		t.Fatalf("open: %v", err)
