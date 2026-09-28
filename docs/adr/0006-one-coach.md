@@ -177,6 +177,31 @@ itself as `ask`. Until (1) is confirmed, `ask` on the hook path is
 implemented as advice that asks the agent to seek approval, and reports
 itself that way.
 
+### Spike results (2026-09-28)
+
+Run in real Claude Code 2.1.283 sessions (`claude -p`, project-only
+settings, test hooks that log their input and return the decision under
+test):
+
+| Question | Result |
+|---|---|
+| `PreToolUse: ask` headless | Treated as a **denial**, recorded in `permission_denials` even though the tool was allowed. The agent receives `permissionDecisionReason` as the tool result, cannot approve, and retries until its turn limit. |
+| Does the `Agent` tool carry the subagent's model? | **Yes**: `tool_input.model` (e.g. `"haiku"`), beside `description`, `prompt`, `run_in_background`. |
+| Can a hook change it? | **Yes**: `updatedInput` rewrote a requested `sonnet` to `haiku`; the subagent's transcript shows `claude-haiku-4-5`, while the main session stayed on `claude-sonnet-5`. |
+| Can a hook tell nobody is present? | Headless hooks see `CLAUDE_CODE_SESSION_ATTENDED=0` and `CLAUDE_CODE_ENTRYPOINT=sdk-cli`. The interactive values are not yet confirmed. |
+| What does `ask` show the operator interactively? | Not yet observed; needs an interactive session. |
+
+Consequences for the rungs:
+
+- `models: autonomous` on the hook path is **confirmed** for subagents in
+  Claude Code: the coach may set the model of a subagent the agent launches.
+  It still never raises the model above the operator's choice.
+- `ask` is used **only in attended sessions**. When the session is
+  unattended (`CLAUDE_CODE_SESSION_ATTENDED=0`), every `ask` rung falls back
+  to `advise`, because an unanswerable approval is a denial that stalls the
+  agent. Until the interactive signal and prompt are confirmed, hook-path
+  `ask` reports itself as `advise`.
+
 ## Alternatives considered
 
 - **One dial for both.** Autonomy and talkativeness are independent: "act
