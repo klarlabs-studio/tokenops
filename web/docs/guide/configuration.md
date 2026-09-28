@@ -48,6 +48,16 @@ window and context fullness), **waste** (redundant re-reads), and
 | The read-guard case | never | once per session | once per session |
 | Model advice | only when the model is two tiers or more above the work | once per kind of work per session | every applicable turn |
 
+For **models**, `ask` puts the same move to you first, in interactive
+Claude Code sessions: the permission prompt for the subagent says which
+model the coach proposes instead. **Yes** runs it there. **No** pauses the
+agent. Tell it to continue and the subagent runs as planned, without being
+asked about again. When nobody is attending (a headless run), `ask` stays
+silent, because an unanswered question would stall the agent. Declines
+count in the follow-through record, so a kind of move you keep declining
+stops being proposed. `inform` and `waste` have nothing to approve and
+report `ask` as `advise`.
+
 For **models**, `autonomous` moves a subagent the agent launches to a
 cheaper model that fits its work (Claude Code's Agent tool; the subagent's
 short description is classified first). It only ever moves down, and the

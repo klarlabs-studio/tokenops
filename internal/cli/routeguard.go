@@ -161,6 +161,9 @@ func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir, provider s
 		NewID:     coachcap.NewID,
 	})
 	coachcap.RecordResolutions(ledger, now, routeResolutions(dec.Resolved))
+	// A declined proposal interrupts the turn and the operator's next
+	// prompt arrives here, often before any further Agent call.
+	coachcap.RecordResolutions(ledger, now, proposalResolutions(routeguard.SettleProposals(dir, in.SessionID, in.TranscriptPath)))
 	if !dec.Advise {
 		return nil
 	}

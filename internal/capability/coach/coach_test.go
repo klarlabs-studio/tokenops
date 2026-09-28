@@ -35,10 +35,14 @@ func TestEffectiveRungsAreHonest(t *testing.T) {
 	}
 	c.Coach.Autonomy = config.AutonomyAsk
 	r = coach.Build(c)
-	for _, name := range config.Powers() {
-		p := power(t, r, name)
-		if p.Effective != config.AutonomyAdvise || !strings.Contains(p.Reason, "approv") && name != config.PowerInform {
-			t.Errorf("%s ask = %+v; unverified approval prompts must fall back to advise, saying why", name, p)
+	// models asks through Claude Code's permission prompt (verified in an
+	// interactive session); the other powers have nothing to approve.
+	if m := power(t, r, config.PowerModels); m.Effective != config.AutonomyAsk || !strings.Contains(m.Note, "nobody is attending") {
+		t.Errorf("models ask = %+v; it asks when attended and must say it advises otherwise", m)
+	}
+	for _, name := range []string{config.PowerInform, config.PowerWaste} {
+		if p := power(t, r, name); p.Effective != config.AutonomyAdvise || p.Reason == "" {
+			t.Errorf("%s ask = %+v; must fall back to advise, saying why", name, p)
 		}
 	}
 }

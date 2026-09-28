@@ -38,11 +38,17 @@ func TestCoachDialsWriteAndReport(t *testing.T) {
 	if err != nil || !strings.Contains(out, "waste   autonomous  autonomous  coaching.delivery") {
 		t.Fatalf("status: %v\n%s", err, out)
 	}
+	if out, err = runCoachCmd(t, "set", "waste", "ask"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "waste is advise, not ask") {
+		t.Errorf("an undeliverable rung is not explained:\n%s", out)
+	}
 	if out, err = runCoachCmd(t, "set", "models", "ask"); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "models is advise, not ask") {
-		t.Errorf("an undeliverable rung is not explained:\n%s", out)
+	if !strings.Contains(out, "models  ask         ask") || !strings.Contains(out, "nobody is attending") {
+		t.Errorf("models ask not delivered with its note:\n%s", out)
 	}
 	if _, err = runCoachCmd(t, "autonomy", "sometimes"); err == nil {
 		t.Error("invalid autonomy accepted")
