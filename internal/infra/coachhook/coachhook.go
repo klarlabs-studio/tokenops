@@ -70,6 +70,9 @@ type Config struct {
 	// QuotaTiers are the window shares to speak at. Empty uses
 	// DefaultQuotaTiers.
 	QuotaTiers []float64
+	// Verbosity is how much the coach says (ADR 0006): quiet speaks only
+	// when work is about to stop, verbose explains; empty is normal.
+	Verbosity string
 	// OverBudgetStep re-alerts every additional step once the budget is
 	// exceeded: with 1.00 the coach also fires at 200%, 300%, … of budget.
 	// Zero disables over-budget escalation.
@@ -295,6 +298,11 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 	fired := 0.0
 	if cfg.Quota == nil {
 		fired = highestBoundary(frac, st.MaxFiredFraction, cfg)
+		if cfg.Verbosity == verbosityQuiet && fired < 1.0-fracEpsilon {
+			// Quiet speaks about money only once the budget is spent.
+			// Left unlatched, so a louder setting still hears it.
+			fired = 0
+		}
 	} else {
 		evaluateQuota(dir, &dec, &st, cfg, model, contextTokens, now)
 	}
@@ -337,7 +345,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 	// at most one thing is said per Stop either way: two findings landing
 	// in the same breath is the shape `coaching.quiet` exists to stop,
 	// and not saying both at once is the cheapest defence against it.
-	if cfg.Enabled && !dec.Nudge && cfg.Promotion != "" && !st.PromotionNudged {
+	if cfg.Enabled && !dec.Nudge && cfg.Promotion != "" && !st.PromotionNudged && cfg.Verbosity != verbosityQuiet {
 		reason, _ := cfg.Quiet.silence(st.Nudges, parseTime(st.LastNudgeAt), now)
 		switch {
 		case reason == "":
@@ -381,12 +389,19 @@ func evaluateQuota(dir string, dec *Decision, st *sessionState, cfg Config, mode
 	if !cfg.Enabled || tier == 0 {
 		return
 	}
+	if cfg.Verbosity == verbosityQuiet && tier < 0.90-fracEpsilon {
+		// Quiet speaks when work is about to stop: near the limit, or
+		// earlier only when the pace runs out before the reset.
+		if _, runsOut := q.Window.ProjectedExhaustion(now); !runsOut {
+			return
+		}
+	}
 	reason, retry := cfg.Quiet.silence(st.Nudges, parseTime(st.LastNudgeAt), now)
 	switch {
 	case reason == "":
 		dec.Nudge = true
 		dec.QuotaTier = tier
-		dec.Message = quotaMessage(q, now)
+		dec.Message = quotaMessage(q, now, cfg.Verbosity)
 		if note := contextNote(contextTokens, model); note != "" {
 			dec.Message = note + " " + dec.Message
 		}

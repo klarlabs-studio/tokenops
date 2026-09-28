@@ -34,19 +34,25 @@ var liveSource = map[eventschema.Provider]struct{ source, key string }{
 // known plan is bound, the provider has no window meter, or no reading is
 // fresher than LiveFreshness: callers then fall back rather than guess.
 func LiveWindow(ctx context.Context, cfg config.Config, r AttributeReader, provider eventschema.Provider, now time.Time) (plans.QuotaWindow, bool) {
+	return plans.MostConstrained(LiveWindows(ctx, cfg, r, provider, now))
+}
+
+// LiveWindows returns every window of the newest fresh reading for the plan
+// bound to provider, or none under the same conditions as LiveWindow.
+func LiveWindows(ctx context.Context, cfg config.Config, r AttributeReader, provider eventschema.Provider, now time.Time) []plans.QuotaWindow {
 	if r == nil {
-		return plans.QuotaWindow{}, false
+		return nil
 	}
 	if _, ok := plans.Lookup(cfg.Plans[string(provider)]); !ok {
-		return plans.QuotaWindow{}, false
+		return nil
 	}
 	src, ok := liveSource[provider]
 	if !ok {
-		return plans.QuotaWindow{}, false
+		return nil
 	}
 	attrs, _, ok, err := r.LatestAttributesBySource(ctx, src.source, src.key, now.Add(-LiveFreshness))
 	if err != nil || !ok {
-		return plans.QuotaWindow{}, false
+		return nil
 	}
-	return plans.MostConstrained(plans.QuotaWindowsFromAttributes(provider, attrs))
+	return plans.QuotaWindowsFromAttributes(provider, attrs)
 }

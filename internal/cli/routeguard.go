@@ -148,6 +148,7 @@ func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir, provider s
 		Dir: dir, SessionID: in.SessionID, Prompt: in.Prompt,
 		CurrentModel: model, Provider: prov,
 		Mode: mode, Catalog: routeCatalog(), Candidates: candidates,
+		Verbosity: coachcap.Build(cfg).Verbosity,
 		AutoKinds: autoKinds,
 	})
 	if !dec.Advise {

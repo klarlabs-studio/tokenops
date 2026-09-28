@@ -71,6 +71,10 @@ type Input struct {
 	CurrentModel string
 	Provider     eventschema.Provider
 	Mode         Mode
+	// Verbosity is how much the guard says (ADR 0006): quiet argues only
+	// a mismatch of two tiers or more, verbose argues every applicable
+	// turn, and empty (normal) argues once per kind of work per session.
+	Verbosity string
 	// AutoKinds are the kinds that may be delegated in ModeDelegate.
 	// Ignored in ModeAuto, which allows every confident kind.
 	AutoKinds []taskclass.Kind
@@ -185,9 +189,20 @@ func Evaluate(in Input) Decision {
 	d.Reason = fmt.Sprintf("this turn is %s work; %s is the %s tier and %s is on %s",
 		kind, target, wantTier, in.CurrentModel, cur.Tier)
 
-	if !st.Argued[kind] {
+	switch in.Verbosity {
+	case "quiet":
+		if tierRank[cur.Tier]-tierRank[wantTier] >= 2 && !st.Argued[kind] {
+			d.Advise = true
+			st.Argued[kind] = true
+		}
+	case "verbose":
 		d.Advise = true
 		st.Argued[kind] = true
+	default:
+		if !st.Argued[kind] {
+			d.Advise = true
+			st.Argued[kind] = true
+		}
 	}
 	d.Delegate = delegable(in, kind)
 	return d
