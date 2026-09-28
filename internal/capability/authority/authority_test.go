@@ -68,13 +68,13 @@ func TestTheDaemonCapsOnlyDaemonSideInterventions(t *testing.T) {
 // already done.
 func TestUndeliverableRungsStayVisible(t *testing.T) {
 	c := cfg()
-	c.Coach.Powers = map[string]string{config.PowerModels: config.AutonomyAutonomous}
+	c.Coach.Powers = map[string]string{config.PowerModels: config.AutonomyAsk}
 	for _, s := range authority.Report(c).Subsystems {
 		if s.Name != "smart_routing" {
 			continue
 		}
-		if s.Configured != policy.Automatic || s.Effective != policy.Recommend || !s.HeldBack() {
-			t.Errorf("models autonomous = configured %q effective %q held back %v", s.Configured, s.Effective, s.HeldBack())
+		if s.Configured != policy.RequireApproval || s.Effective != policy.Recommend || !s.HeldBack() {
+			t.Errorf("models ask = configured %q effective %q held back %v", s.Configured, s.Effective, s.HeldBack())
 		}
 		return
 	}
