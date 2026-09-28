@@ -30,8 +30,8 @@ func TestEffectiveRungsAreHonest(t *testing.T) {
 		t.Errorf("waste autonomous = %+v; read-guard refusing re-reads is shipped", w)
 	}
 	m := power(t, r, config.PowerModels)
-	if m.Configured != config.AutonomyAutonomous || m.Effective != config.AutonomyAdvise || m.Reason == "" {
-		t.Errorf("models autonomous = %+v; moving subagents is not shipped yet and must say so", m)
+	if m.Effective != config.AutonomyAutonomous || m.Note == "" {
+		t.Errorf("models autonomous = %+v; moving subagents ships, and must say it covers subagents only", m)
 	}
 	c.Coach.Autonomy = config.AutonomyAsk
 	r = coach.Build(c)
