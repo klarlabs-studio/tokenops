@@ -1,0 +1,70 @@
+package coach_test
+
+import (
+	"strings"
+	"testing"
+
+	"go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/config"
+)
+
+func power(t *testing.T, r coach.Report, name string) coach.Power {
+	t.Helper()
+	for _, p := range r.Powers {
+		if p.Name == name {
+			return p
+		}
+	}
+	t.Fatalf("power %q not reported", name)
+	return coach.Power{}
+}
+
+// A rung the coach cannot deliver yet is reported one rung lower, with the
+// reason, rather than configured and silently not done.
+func TestEffectiveRungsAreHonest(t *testing.T) {
+	c := config.Default()
+	c.Coach.Autonomy = config.AutonomyAutonomous
+	r := coach.Build(c)
+
+	if w := power(t, r, config.PowerWaste); w.Effective != config.AutonomyAutonomous || w.Reason != "" {
+		t.Errorf("waste autonomous = %+v; read-guard refusing re-reads is shipped", w)
+	}
+	m := power(t, r, config.PowerModels)
+	if m.Configured != config.AutonomyAutonomous || m.Effective != config.AutonomyAdvise || m.Reason == "" {
+		t.Errorf("models autonomous = %+v; moving subagents is not shipped yet and must say so", m)
+	}
+	c.Coach.Autonomy = config.AutonomyAsk
+	r = coach.Build(c)
+	for _, name := range config.Powers() {
+		p := power(t, r, name)
+		if p.Effective != config.AutonomyAdvise || !strings.Contains(p.Reason, "approv") && name != config.PowerInform {
+			t.Errorf("%s ask = %+v; unverified approval prompts must fall back to advise, saying why", name, p)
+		}
+	}
+}
+
+func TestOffIsOff(t *testing.T) {
+	c := config.Default()
+	c.Coach.Autonomy = config.AutonomyOff
+	r := coach.Build(c)
+	if !r.Off() {
+		t.Fatal("autonomy off does not report the coach off")
+	}
+	for _, p := range r.Powers {
+		if p.Effective != config.AutonomyOff {
+			t.Errorf("%s effective %q under autonomy off", p.Name, p.Effective)
+		}
+	}
+}
+
+func TestReportNamesTheSourceKey(t *testing.T) {
+	c := config.Default()
+	c.Coaching.Delivery = config.DeliveryIntervene
+	r := coach.Build(c)
+	if w := power(t, r, config.PowerWaste); w.Source != "coaching.delivery" || w.Effective != config.AutonomyAutonomous {
+		t.Errorf("legacy waste = %+v", w)
+	}
+	if r.Verbosity != config.VerbosityNormal || r.VerbositySource != "default" {
+		t.Errorf("verbosity = %q from %q", r.Verbosity, r.VerbositySource)
+	}
+}
