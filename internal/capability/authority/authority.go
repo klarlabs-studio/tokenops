@@ -15,6 +15,7 @@
 package authority
 
 import (
+	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/policy"
 )
@@ -85,61 +86,40 @@ func (a Answer) HeldBack() []Subsystem {
 // in — the daemon first, because it caps everything under it.
 func Report(cfg config.Config) Answer {
 	daemon := policy.FromDaemonMode(cfg.Mode)
+	coach := coachcap.Build(cfg)
 
+	// The coach's powers act inside the client through its hooks, which
+	// never read the daemon's mode (ADR 0006, Decision 3): they are shown
+	// at the rung they actually deliver, uncapped. Only daemon-side
+	// interventions sit under the daemon's cap.
 	subsystems := []Subsystem{
-		{
-			Name:       "coaching",
-			Configured: policy.FromCoachingDelivery(cfg.Coaching.Delivery),
-			Setting:    "coaching.delivery (observe | advise | intervene)",
-			Describes:  "what the coach does about an inefficient session",
-		},
-		{
-			Name:       "smart_routing",
-			Configured: smartRouting(cfg),
-			Setting:    "optimizer.smart_routing.intervention (off | advise | delegate | auto)",
-			Describes:  "whether a turn nobody wrote a rule for is moved to a cheaper model",
-		},
-		{
-			Name:       "read_guard",
-			Configured: readGuard(cfg),
-			Setting:    "coaching.delivery (intervene lets it refuse a redundant re-read)",
-			Describes:  "whether a redundant re-read is refused or merely counted",
-		},
+		coachSubsystem(coach, config.PowerInform, "coaching"),
+		coachSubsystem(coach, config.PowerModels, "smart_routing"),
+		coachSubsystem(coach, config.PowerWaste, "read_guard"),
 		{
 			Name:       "routing_approval",
 			Configured: policy.FromRoutingApproval(true),
+			Effective:  policy.Effective(daemon, policy.FromRoutingApproval(true)),
 			Setting:    "routing proposals are gated; decide them with `tokenops routing decide`",
-			Describes:  "whether a proposed model route is applied or waits for you",
+			Describes:  "whether a proposed model route on the proxy is applied or waits for you",
 		},
-	}
-
-	for i := range subsystems {
-		subsystems[i].Effective = policy.Effective(daemon, subsystems[i].Configured)
 	}
 	return Answer{Daemon: daemon, Subsystems: subsystems}
 }
 
-// readGuard reports the read guard's authority. The hook refuses a
-// redundant re-read exactly when coaching.delivery is intervene (see
-// cli.resolveGuardMode); below that it only counts. It was reported as
-// observe-only and "derived from measured re-read history", a design that
-// no longer exists, while the guard was refusing reads.
-func readGuard(cfg config.Config) policy.Authority {
-	if cfg.Coaching.AllowsIntervention() {
-		return policy.Automatic
+// coachSubsystem reports one coach power under its established name.
+func coachSubsystem(r coachcap.Report, power, name string) Subsystem {
+	for _, p := range r.Powers {
+		if p.Name != power {
+			continue
+		}
+		return Subsystem{
+			Name:       name,
+			Configured: policy.FromAutonomy(p.Configured),
+			Effective:  policy.FromAutonomy(p.Effective),
+			Setting:    p.Source + " (see `tokenops coach`)",
+			Describes:  p.Describes,
+		}
 	}
-	return policy.ObserveOnly
-}
-
-// smartRouting reports the routing guard's authority.
-//
-// Disabled outranks the intervention setting: the config documents an
-// empty intervention as "advise", so a machine that left the setting
-// alone while smart routing is off would otherwise be reported as having
-// a subsystem that speaks unprompted when it does nothing at all.
-func smartRouting(cfg config.Config) policy.Authority {
-	if !cfg.Optimizer.SmartRouting.Enabled {
-		return policy.ObserveOnly
-	}
-	return policy.FromSmartRoutingIntervention(cfg.Optimizer.SmartRouting.Intervention)
+	return Subsystem{Name: name, Setting: "unknown coach power"}
 }

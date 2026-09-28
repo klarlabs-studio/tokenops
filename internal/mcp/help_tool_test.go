@@ -48,6 +48,7 @@ func allRegisteredTools(t *testing.T) map[string]bool {
 	must(RegisterRoutingAdviceTools(srv, RoutingAdviceDeps{}))
 	must(RegisterApprovalTools(srv, ApprovalDeps{}))
 	must(RegisterModeTools(srv, ModeDeps{}))
+	must(RegisterCoachTool(srv, ModeDeps{}))
 	must(RegisterHelpTool(srv))
 	must(RegisterDataSourcesTool(srv, DataSourcesDeps{Store: store}))
 	must(RegisterFmtTools(srv))

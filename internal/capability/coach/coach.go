@@ -1,0 +1,98 @@
+// Package coach reports the coach as one capability (ADR 0006): each
+// power's configured autonomy, what it can actually do on this machine,
+// why the two differ, and the setting it came from. The CLI, the MCP
+// server, and the hooks all read it, so what the coach says it does and
+// what it does cannot drift apart.
+package coach
+
+import "go.klarlabs.de/tokenops/internal/config"
+
+// Power is one of the coach's powers as the operator sees it.
+type Power struct {
+	Name       string `json:"name"`
+	Configured string `json:"configured"`
+	// Effective is the rung the coach delivers here. It is lower than
+	// Configured when a rung is not available yet, and Reason says why.
+	Effective string `json:"effective"`
+	Reason    string `json:"reason,omitempty"`
+	// Source is the setting the configured rung came from.
+	Source    string `json:"source"`
+	Describes string `json:"describes"`
+}
+
+// Report is the whole coach.
+type Report struct {
+	Powers          []Power `json:"powers"`
+	Verbosity       string  `json:"verbosity"`
+	VerbositySource string  `json:"verbosity_source"`
+}
+
+// Off reports whether every power is off: the coach records and says
+// nothing.
+func (r Report) Off() bool {
+	for _, p := range r.Powers {
+		if p.Effective != config.AutonomyOff {
+			return false
+		}
+	}
+	return true
+}
+
+// Effective returns the effective rung of one power.
+func (r Report) Effective(power string) string {
+	for _, p := range r.Powers {
+		if p.Name == power {
+			return p.Effective
+		}
+	}
+	return config.AutonomyOff
+}
+
+var describes = map[string]string{
+	config.PowerInform: "tips on the plan's quota window and context fullness",
+	config.PowerWaste:  "redundant re-reads of unchanged files",
+	config.PowerModels: "moving work to a cheaper model that fits it",
+}
+
+// Build resolves every power from cfg.
+func Build(cfg config.Config) Report {
+	r := Report{}
+	r.Verbosity, r.VerbositySource = cfg.CoachVerbosity()
+	for _, name := range config.Powers() {
+		set := cfg.CoachPower(name)
+		eff, why := effective(name, set.Rung)
+		r.Powers = append(r.Powers, Power{
+			Name: name, Configured: set.Rung, Effective: eff, Reason: why,
+			Source: set.Source, Describes: describes[name],
+		})
+	}
+	return r
+}
+
+// approvalUnverified is why every hook-path ask falls back to advise until
+// the interactive approval prompt is confirmed (ADR 0006, spike results).
+const approvalUnverified = "approval prompts are not verified in an interactive session yet, so the coach advises instead"
+
+// effective is the rung each power can deliver today.
+func effective(power, rung string) (string, string) {
+	switch rung {
+	case config.AutonomyOff, config.AutonomyAdvise:
+		return rung, ""
+	}
+	switch power {
+	case config.PowerInform:
+		return config.AutonomyAdvise, "the coach informs by advising; changes happen through waste and models"
+	case config.PowerWaste:
+		if rung == config.AutonomyAutonomous {
+			return rung, ""
+		}
+		return config.AutonomyAdvise, approvalUnverified
+	case config.PowerModels:
+		if rung == config.AutonomyAsk {
+			return config.AutonomyAdvise, approvalUnverified +
+				"; routing proposals on the proxy still wait for `tokenops routing decide`"
+		}
+		return config.AutonomyAdvise, "moving a subagent to a cheaper model is verified possible in Claude Code and ships next"
+	}
+	return config.AutonomyOff, "unknown power"
+}

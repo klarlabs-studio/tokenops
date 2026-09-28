@@ -212,6 +212,10 @@ def profiles():
     P["json-debug-admin-token"] = (lambda r: {"log": {"level": "debug", "format": "json"},
                                               "dashboard": {"admin_token": "matrix-token-123"}},
                                    {"token": "matrix-token-123"})
+    P["coach-autonomous-quiet"] = (lambda r: {"coach": {"autonomy": "autonomous", "verbosity": "quiet"}}, {"mcp": True})
+    P["coach-powers-verbose"] = (lambda r: {"coach": {"autonomy": "advise", "verbosity": "verbose",
+                                                      "powers": {"waste": "autonomous", "models": "ask"}}}, {})
+    P["coach-off"] = (lambda r: {"coach": {"autonomy": "off"}}, {})
     P["plan-limits"] = (lambda r: {"plans": {"anthropic": "claude-max-20x"},
                                    "plan_limits": {"anthropic": {"spend_limit_usd": 200, "window": "monthly"}}}, {})
     # Invalid configs must be refused at startup with a clear message.
@@ -230,6 +234,9 @@ def profiles():
         "bad-smart-intervention": {"optimizer": {"smart_routing": {"enabled": True, "intervention": "yolo",
                                                                    "models": {"anthropic": ["claude-opus-5"]}}}},
         "empty-listen": {"listen": ""},
+        "bad-coach-autonomy": {"coach": {"autonomy": "sometimes"}},
+        "bad-coach-verbosity": {"coach": {"verbosity": "chatty"}},
+        "bad-coach-power": {"coach": {"powers": {"billing": "advise"}}},
     }
     for k, v in bad.items():
         P["invalid-" + k] = (lambda r, v=v: v, {"invalid": True})

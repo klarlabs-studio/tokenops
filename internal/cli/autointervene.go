@@ -67,6 +67,6 @@ func promotionCase(s readguard.Stats) string {
 	return fmt.Sprintf(
 		"tokenops: read-guard has watched ~%s tokens of redundant re-reads go by across %d sessions "+
 			"— %d reads it would have refused, and did not. "+
-			"`tokenops coach delivery intervene` lets it refuse them before they cost anything.",
+			"`tokenops coach set waste autonomous` lets it refuse them before they cost anything.",
 		humanTokens(s.ReclaimableTok), s.DistinctSessions, s.WouldBlock)
 }

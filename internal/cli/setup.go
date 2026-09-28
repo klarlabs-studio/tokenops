@@ -308,7 +308,7 @@ func deliveryDetail(recommendation string) string {
 	detail := "delivery advise — coach nudges, guard observes"
 	if recommendation != "" {
 		detail += "; your ledger justifies blocking (" + strings.TrimPrefix(recommendation, "active — ") +
-			") — `tokenops coach delivery intervene` to act on it"
+			") — `tokenops coach set waste autonomous` to act on it"
 	}
 	return detail
 }

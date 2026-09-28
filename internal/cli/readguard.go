@@ -7,6 +7,9 @@ import (
 	"os"
 	"time"
 
+	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/config"
+
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
@@ -204,7 +207,7 @@ func resolveGuardMode(cmd *cobra.Command, rf *rootFlags, flagMode string) readgu
 	if err != nil {
 		return readguard.ModeObserve
 	}
-	if cfg.Coaching.AllowsIntervention() {
+	if coachcap.Build(cfg).Effective(config.PowerWaste) == config.AutonomyAutonomous {
 		return readguard.ModeActive
 	}
 	return readguard.ModeObserve

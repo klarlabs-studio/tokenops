@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"time"
 
+	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 
@@ -308,9 +310,9 @@ func formatBudget(v float64) string {
 func advisoryCoaching(rf *rootFlags) bool {
 	cfg, err := loadConfig(rf)
 	if err != nil {
-		return config.CoachingConfig{}.AllowsAdvice()
+		cfg = config.Default()
 	}
-	return cfg.Coaching.AllowsAdvice()
+	return coachcap.Build(cfg).Effective(config.PowerInform) != config.AutonomyOff
 }
 
 // opencodeDB resolves opencode's store.
@@ -340,7 +342,9 @@ func promotionNudge(rf *rootFlags, guardDir string) string {
 		// the wrong direction to fail in.
 		return ""
 	}
-	if cfg.Coaching.DeliveryLevel() != config.DeliveryAdvise {
+	// Only a coach that advises about waste argues for acting on it: off
+	// says nothing, and autonomous already refuses the re-reads.
+	if coachcap.Build(cfg).Effective(config.PowerWaste) != config.AutonomyAdvise {
 		return ""
 	}
 	stats, err := readguard.ReadStats(guardDir)
