@@ -121,6 +121,9 @@ func renderFollowThrough(out io.Writer, r coachcap.Report) {
 			continue
 		}
 		line := fmt.Sprintf("%s %s on %s work: ", s.Power, s.Channel, s.Kind)
+		if s.Channel == "tip" {
+			line = fmt.Sprintf("%s tips %s: ", s.Power, tipLabel(s.Kind))
+		}
 		if s.Channel == "move" {
 			line += fmt.Sprintf("%d stood, %d undone", s.Stood, s.Undone)
 		} else {
@@ -245,4 +248,17 @@ func deliveryOverridden(cfg config.Config) string {
 		}
 	}
 	return ""
+}
+
+// tipLabel says when a tip kind is given ("budget_50", "quota_90").
+func tipLabel(kind string) string {
+	if kind == "budget_over" {
+		return "past the session budget"
+	}
+	for _, p := range []struct{ prefix, of string }{{"budget_", "the session budget"}, {"quota_", "a quota window"}} {
+		if pct, ok := strings.CutPrefix(kind, p.prefix); ok {
+			return "at " + pct + "% of " + p.of
+		}
+	}
+	return "on " + kind
 }

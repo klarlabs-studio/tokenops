@@ -25,6 +25,7 @@ func TestFoldOutcomes(t *testing.T) {
 	}{
 		{"recorded outcome wins", []Entry{offer("a", ChannelAdvice, "lookup", t0), resolve("a", OutcomeFollowed, t0.Add(time.Minute))}, t0.Add(time.Hour), OutcomeFollowed},
 		{"advice inside its window is open", []Entry{offer("a", ChannelAdvice, "lookup", t0)}, t0.Add(time.Hour), OutcomeOpen},
+		{"a tip whose session ended was followed", []Entry{offer("a", ChannelTip, "quota_75", t0)}, t0.Add(OpenFor), OutcomeFollowed},
 		{"advice whose session ended is unknown, not ignored", []Entry{offer("a", ChannelAdvice, "lookup", t0)}, t0.Add(OpenFor), OutcomeUnknown},
 		{"a move inside the undo window is open", []Entry{offer("a", ChannelMove, "lookup", t0)}, t0.Add(time.Hour), OutcomeOpen},
 		{"a move that outlives the undo window stood", []Entry{offer("a", ChannelMove, "lookup", t0)}, t0.Add(UndoWindow), OutcomeStood},

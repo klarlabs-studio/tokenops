@@ -233,7 +233,10 @@ Consequences for the rungs:
   later turn or a subagent the agent asked for runs below the tier it was
   given on, and ignored after four turns without that; a move is undone
   when the operator lowers the power within 24 hours. Advice ignored five
-  times in a row within 14 days goes quiet for its kind. These are starting
-  thresholds for the evidence to revise. Tips follow in a second step.
+  times in a row within 14 days goes quiet for its kind. Tips (quota and
+  budget tiers, on every Stop-hook client) are followed when within three
+  turns the context halves, the model changes, or the session ends; early
+  tiers (50%, 75%) can go quiet, tips near the limit never do. These are
+  starting thresholds for the evidence to revise.
 - The configuration guide and ADR 0004's execution notes are updated to one
   account of the kill switch.

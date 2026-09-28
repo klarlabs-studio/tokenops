@@ -59,11 +59,15 @@ The coach keeps a **follow-through record** in
 `~/.tokenops/coach/followthrough.jsonl`: whether each piece of model advice
 was followed (a later turn, or a subagent the agent launched, ran below the
 tier it was given on) or ignored (four turns later, still on the same
-tier), and whether each subagent move stood or was undone (you lowered
-`models` within 24 hours). Advice for a kind of work that you ignore five
-times in a row within 14 days goes quiet for that kind; it is offered again
-once that evidence ages out, and `verbose` always shows it. `tokenops coach`
-lists the record per kind.
+tier), whether each quota or budget tip was followed (within three turns
+the context shrank to half or less, the model changed, or the session
+ended) or ignored, and whether each subagent move stood or was undone (you
+lowered `models` within 24 hours). Advice for a kind of work, or an early
+tip (50% or 75% of a quota window or the session budget), that you ignore
+five times in a row within 14 days goes quiet for that kind; it is offered
+again once that evidence ages out, and `verbose` always shows it. Tips at
+90% of a window or past the budget never go quiet. `tokenops coach` lists
+the record per kind.
 
 A rung the coach cannot deliver yet is shown one rung lower, with the
 reason. `tokenops coach` (or the `tokenops_coach` MCP tool) shows each

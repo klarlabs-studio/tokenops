@@ -106,6 +106,13 @@ type Config struct {
 	// ledger itself, because who is allowed to speak is a delivery
 	// question, and delivery lives in the config rather than in the hook.
 	Promotion string
+	// NewID names a tip so its outcome can be recorded against it (ADR
+	// 0006, follow-through). Nil records nothing.
+	NewID func() string
+	// Quieted reports that tips of a kind have been ignored often enough
+	// that the coach stops giving them. Only early tiers can be quieted,
+	// and verbose still gives them. Nil quiets nothing.
+	Quieted func(kind string) bool
 }
 
 // Quiet is the rate limit on the coach's proactive channel.
@@ -190,6 +197,12 @@ type Decision struct {
 	// neither is in the shipped catalog, so every Codex session would
 	// have looked free.
 	UnpricedModel string
+	// OfferID and TipKind name the tip this Stop gave, for the
+	// follow-through ledger. Empty when none was given.
+	OfferID string
+	TipKind string
+	// Resolved are earlier tips whose outcome this Stop settled.
+	Resolved []TipResolution
 }
 
 // usage is the token-usage block Claude Code records on each turn's message.
@@ -230,6 +243,8 @@ type sessionState struct {
 	// PromotionNudged latches the read-guard case, so it is argued once
 	// per session and never becomes a recurring request.
 	PromotionNudged bool `json:"promotion_nudged,omitempty"`
+	// OpenTip is the last tip, while it waits to be acted on.
+	OpenTip *openTip `json:"open_tip,omitempty"`
 }
 
 // ledgerEvent is one appended coaching record.
@@ -284,6 +299,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 	st := loadSession(dir, sessionID)
 
 	model, contextTokens, unpriced := accumulate(transcriptPath, &st, cfg, now)
+	resolved := observeTip(&st, model, contextTokens)
 
 	// A budget the operator set is theirs; the shipping default is not,
 	// and the wording depends on which this is.
@@ -307,7 +323,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		evaluateQuota(dir, &dec, &st, cfg, model, contextTokens, now)
 	}
 	if cfg.Enabled && fired > 0 {
-		reason, retry := cfg.Quiet.silence(st.Nudges, parseTime(st.LastNudgeAt), now)
+		reason, retry := cfg.hold(budgetKind(fired), &st, now)
 		switch {
 		case reason == "":
 			dec.Nudge = true
@@ -346,7 +362,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 	// in the same breath is the shape `coaching.quiet` exists to stop,
 	// and not saying both at once is the cheapest defence against it.
 	if cfg.Enabled && !dec.Nudge && cfg.Promotion != "" && !st.PromotionNudged && cfg.Verbosity != verbosityQuiet {
-		reason, _ := cfg.Quiet.silence(st.Nudges, parseTime(st.LastNudgeAt), now)
+		reason, _ := cfg.hold("", &st, now)
 		switch {
 		case reason == "":
 			dec.Nudge = true
@@ -362,6 +378,8 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		}
 	}
 
+	dec.Resolved = resolved
+	offerTip(&st, &dec, cfg, tipKind(dec), model, contextTokens)
 	saveSession(dir, sessionID, st)
 	appendLedger(dir, ledgerEvent{
 		TS: now.UTC(), Session: sessionID,
@@ -396,7 +414,7 @@ func evaluateQuota(dir string, dec *Decision, st *sessionState, cfg Config, mode
 			return
 		}
 	}
-	reason, retry := cfg.Quiet.silence(st.Nudges, parseTime(st.LastNudgeAt), now)
+	reason, retry := cfg.hold(quotaKind(tier), st, now)
 	switch {
 	case reason == "":
 		dec.Nudge = true
@@ -1044,4 +1062,18 @@ func formatTokens(n int64) string {
 	default:
 		return fmt.Sprintf("%d", n)
 	}
+}
+
+// tipKind names the tip a Stop gave, or "" when it gave none or gave the
+// read-guard case, which is not a tip about the session.
+func tipKind(dec Decision) string {
+	switch {
+	case !dec.Nudge || dec.Promotion:
+		return ""
+	case dec.QuotaTier > 0:
+		return quotaKind(dec.QuotaTier)
+	case dec.FiredFraction > 0:
+		return budgetKind(dec.FiredFraction)
+	}
+	return ""
 }

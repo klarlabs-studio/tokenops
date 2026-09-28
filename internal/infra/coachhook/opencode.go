@@ -49,13 +49,19 @@ func EvaluateOpencode(dir, dbPath, sessionID string, cfg Config, now time.Time) 
 	}
 
 	total, model, contextTokens, unpriced := sumOpencodeSession(dbPath, sessionID, cfg, now)
+	// session.idle fires again without a new turn; only a turn that moved
+	// the total counts toward a tip's window.
+	newTurn := total != st.CumulativeUSD
 	st.CumulativeUSD = total
 
 	dec := Decision{CumulativeUSD: total, BudgetUSD: budget, UnpricedModel: unpriced}
+	if newTurn {
+		dec.Resolved = observeTip(&st, model, contextTokens)
+	}
 	frac := total / budget
 	fired := highestBoundary(frac, st.MaxFiredFraction, cfg)
 	if cfg.Enabled && fired > 0 {
-		reason, retry := cfg.Quiet.silence(st.Nudges, parseTime(st.LastNudgeAt), now)
+		reason, retry := cfg.hold(budgetKind(fired), &st, now)
 		switch {
 		case reason == "":
 			dec.Nudge = true
@@ -79,6 +85,7 @@ func EvaluateOpencode(dir, dbPath, sessionID string, cfg Config, now time.Time) 
 		}
 	}
 
+	offerTip(&st, &dec, cfg, tipKind(dec), model, contextTokens)
 	saveSession(dir, sessionID, st)
 	appendLedger(dir, ledgerEvent{
 		TS: now.UTC(), Session: sessionID,
