@@ -1,6 +1,6 @@
 # ADR 0006 — One coach: who decides, and how much it says
 
-- **Status:** Proposed
+- **Status:** Accepted 2026-09-28 (hook-path `ask` and subagent model control ship after the spikes in Decision 7)
 - **Date:** 2026-09-28
 - **Deciders:** TokenOps maintainers
 - **Related:** ADR 0001 (coaching hooks), ADR 0004 (authority ladder,
