@@ -19,10 +19,25 @@ import (
 // only the `prompts` subcommand is wired — workflow-trace coaching
 // lives in `tokenops replay` (which the docs cross-reference).
 func newCoachCmd() *cobra.Command {
+	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "coach",
-		Short: "Analyze your prompting and workflow patterns for waste + anti-patterns",
+		Short: "Show and configure the coach: who decides, and how much it says",
+		Long: `With no subcommand, shows the coach: its verbosity, and for each power
+(inform, waste, models) the configured autonomy, what it can do here, why
+those differ, and the setting it came from. See ADR 0006.
+
+The analysis subcommands (prompts, replies) answer when asked, whatever the
+coach is set to.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error { return coachStatus(cmd, jsonOut) },
 	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
+	cmd.AddCommand(newCoachAutonomyCmd())
+	cmd.AddCommand(newCoachVerbosityCmd())
+	cmd.AddCommand(newCoachSetCmd())
+	cmd.AddCommand(newCoachOffCmd())
+	cmd.AddCommand(newCoachMigrateCmd())
 	cmd.AddCommand(newCoachPromptsCmd())
 	cmd.AddCommand(newCoachDeliveryCmd())
 	cmd.AddCommand(newCoachRepliesCmd())
@@ -439,6 +454,10 @@ hooks read this on every invocation, so there is no need to re-run
 				return nil
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "coaching delivery %s → %s\n", was, want)
+			if src := deliveryOverridden(cfg); src != "" {
+				fmt.Fprintf(cmd.OutOrStdout(),
+					"note: %s overrides coaching.delivery, so this changes nothing; use `tokenops coach set` or `tokenops coach autonomy`\n", src)
+			}
 			if want == config.DeliveryIntervene {
 				fmt.Fprintln(cmd.OutOrStdout(),
 					"read-guard will now refuse redundant re-reads; `tokenops coach delivery advise` backs that out")

@@ -69,7 +69,7 @@ func TestPromotionCaseCitesTheLedgerAndTheCommand(t *testing.T) {
 	if msg == "" {
 		t.Fatal("no case made for 397k reclaimable tokens across 22 sessions")
 	}
-	for _, want := range []string{"397", "22", "225", "tokenops coach delivery intervene"} {
+	for _, want := range []string{"397", "22", "225", "tokenops coach set waste autonomous"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("case %q is missing %q", msg, want)
 		}
