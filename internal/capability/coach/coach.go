@@ -73,17 +73,17 @@ func Build(cfg config.Config) Report {
 			Name: name, Configured: set.Rung, Effective: eff, Reason: why,
 			Source: set.Source, Describes: describes[name],
 		}
-		if name == config.PowerModels && eff == config.AutonomyAutonomous {
+		switch {
+		case name == config.PowerModels && eff == config.AutonomyAutonomous:
 			p.Note = "moves subagents to a cheaper model on Claude Code; the session's own model is advised, not changed"
+		case name == config.PowerModels && eff == config.AutonomyAsk:
+			p.Note = "asks before moving a subagent to a cheaper model in interactive Claude Code sessions, and advises when nobody is attending; " +
+				"declining pauses the agent, and telling it to continue runs the subagent as planned"
 		}
 		r.Powers = append(r.Powers, p)
 	}
 	return r
 }
-
-// approvalUnverified is why every hook-path ask falls back to advise until
-// the interactive approval prompt is confirmed (ADR 0006, spike results).
-const approvalUnverified = "approval prompts are not verified in an interactive session yet, so the coach advises instead"
 
 // effective is the rung each power can deliver today.
 func effective(power, rung string) (string, string) {
@@ -98,12 +98,8 @@ func effective(power, rung string) (string, string) {
 		if rung == config.AutonomyAutonomous {
 			return rung, ""
 		}
-		return config.AutonomyAdvise, approvalUnverified
+		return config.AutonomyAdvise, "the read guard has no approval step: declining a refused re-read would stop the agent's turn, so it advises instead"
 	case config.PowerModels:
-		if rung == config.AutonomyAsk {
-			return config.AutonomyAdvise, approvalUnverified +
-				"; routing proposals on the proxy still wait for `tokenops routing decide`"
-		}
 		return rung, ""
 	}
 	return config.AutonomyOff, "unknown power"

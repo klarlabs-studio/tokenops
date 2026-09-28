@@ -30,6 +30,9 @@ const (
 	ChannelTip Channel = "tip"
 	// ChannelMove is a change the coach made itself.
 	ChannelMove Channel = "move"
+	// ChannelApproval is a change the coach proposed and the operator
+	// approved (followed) or declined (ignored).
+	ChannelApproval Channel = "approval"
 )
 
 // Outcome is what became of one intervention.
