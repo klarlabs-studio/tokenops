@@ -72,7 +72,7 @@ type Entry struct {
 	At      time.Time `json:"at"`
 	Session string    `json:"session,omitempty"`
 	// Power is inform, waste, or models.
-	Power   string  `json:"power"`
+	Power   string  `json:"power,omitempty"`
 	Channel Channel `json:"channel,omitempty"`
 	// Kind is the finding or the kind of work the offer was about
 	// ("lookup", "quota_90").
@@ -90,7 +90,8 @@ type Entry struct {
 const UndoWindow = 24 * time.Hour
 
 // OpenFor is how long an advice or tip offer without a recorded outcome
-// stays open. Past it the session has ended, and the outcome is unknown.
+// stays open. Past it the session has ended: a tip, whose levers include
+// ending the session, was followed; advice has an unknown outcome.
 const OpenFor = 24 * time.Hour
 
 // Record is one offer with its outcome.
@@ -129,6 +130,10 @@ func Fold(entries []Entry, now time.Time) []Record {
 			r.Outcome, r.ResolvedAt, r.Evidence = moveOutcome(e, lowered, now)
 		case now.Sub(e.At) < OpenFor:
 			r.Outcome = OutcomeOpen
+		case e.Channel == ChannelTip:
+			// A tip's levers include ending the session, and a session
+			// that stopped before the tip's window closed did just that.
+			r.Outcome, r.ResolvedAt, r.Evidence = OutcomeFollowed, e.At.Add(OpenFor), "the session ended"
 		default:
 			r.Outcome = OutcomeUnknown
 		}
@@ -206,7 +211,7 @@ func Summarize(records []Record, now time.Time) []Summary {
 		}
 	}
 	for i := range out {
-		out[i].Quiet = out[i].Channel == ChannelAdvice && Quieted(records, out[i].Power, out[i].Kind, now)
+		out[i].Quiet = out[i].Channel != ChannelMove && Quieted(records, out[i].Power, out[i].Kind, now)
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Power != out[j].Power {
@@ -231,14 +236,15 @@ const (
 	QuietLookback = 14 * 24 * time.Hour
 )
 
-// Quieted reports whether advice of this power and kind has been ignored
-// QuietAfter times in a row within QuietLookback, with nothing followed
-// since. Offers without a known outcome do not count either way.
+// Quieted reports whether advice or tips of this power and kind have been
+// ignored QuietAfter times in a row within QuietLookback, with nothing
+// followed since. Offers without a known outcome do not count either way.
+// Which kinds may go quiet at all is the caller's decision.
 func Quieted(records []Record, power, kind string, now time.Time) bool {
 	ignored := 0
 	for i := len(records) - 1; i >= 0; i-- {
 		r := records[i]
-		if r.Offer.Channel != ChannelAdvice || r.Offer.Power != power || r.Offer.Kind != kind {
+		if r.Offer.Channel == ChannelMove || r.Offer.Power != power || r.Offer.Kind != kind {
 			continue
 		}
 		if now.Sub(r.Offer.At) > QuietLookback {

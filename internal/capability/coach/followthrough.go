@@ -34,6 +34,18 @@ func RecordAdvice(l Ledger, now time.Time, id, session, power, kind, from, to st
 	})
 }
 
+// RecordTip records a tip the coach gave about the session, under the ID
+// it was given. Tips belong to the inform power.
+func RecordTip(l Ledger, now time.Time, id, session, kind string) {
+	if l == nil || id == "" {
+		return
+	}
+	_ = l.Append(ft.Entry{
+		Type: ft.EntryOffer, ID: id, At: now.UTC(), Session: session,
+		Power: config.PowerInform, Channel: ft.ChannelTip, Kind: kind,
+	})
+}
+
 // RecordResolutions records what became of earlier advice.
 func RecordResolutions(l Ledger, now time.Time, rs []Resolution) {
 	if l == nil || len(rs) == 0 {
