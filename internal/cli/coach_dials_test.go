@@ -38,10 +38,10 @@ func TestCoachDialsWriteAndReport(t *testing.T) {
 	if err != nil || !strings.Contains(out, "waste   autonomous  autonomous  coaching.delivery") {
 		t.Fatalf("status: %v\n%s", err, out)
 	}
-	if out, err = runCoachCmd(t, "set", "models", "autonomous"); err != nil {
+	if out, err = runCoachCmd(t, "set", "models", "ask"); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "models is advise, not autonomous") {
+	if !strings.Contains(out, "models is advise, not ask") {
 		t.Errorf("an undeliverable rung is not explained:\n%s", out)
 	}
 	if _, err = runCoachCmd(t, "autonomy", "sometimes"); err == nil {

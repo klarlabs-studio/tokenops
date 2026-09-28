@@ -129,6 +129,18 @@ func specsForModeWithRoute(coach, readGuard, routeGuard bool, budget float64, gu
 			marker: "route-guard",
 			args:   args,
 		})
+		// Claude Code's Agent tool carries the subagent's model, and a
+		// PreToolUse hook can move it to a cheaper one when coach.models
+		// is autonomous (ADR 0006). No other client has that tool.
+		if provider == "anthropic" {
+			out = append(out, hookSpec{
+				name:    "route-guard (subagent model)",
+				event:   "PreToolUse",
+				matcher: "Agent",
+				marker:  "route-guard",
+				args:    args,
+			})
+		}
 	}
 	return out
 }

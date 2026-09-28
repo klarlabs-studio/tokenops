@@ -50,10 +50,19 @@ func renderCoachStatus(out io.Writer, r coachcap.Report) {
 		if p.Reason != "" {
 			fmt.Fprintf(out, "\n  %s is %s, not %s: %s\n", p.Name, p.Effective, p.Configured, p.Reason)
 		}
+		if p.Note != "" {
+			fmt.Fprintf(out, "\n  %s: %s\n", p.Name, p.Note)
+		}
+		if p.Name == config.PowerModels && p.Effective == config.AutonomyAutonomous && !subagentHookInstalled() {
+			fmt.Fprintln(out, "\n  models: the subagent hook is not installed, so nothing is moved yet; run `tokenops hooks install --route-guard`")
+		}
 	}
 	activity := []string{}
 	if s, err := coachhook.ReadStats(""); err == nil && s.Events > 0 {
 		activity = append(activity, fmt.Sprintf("%d tips (%d on a quota window)", s.Alerts+totalOf(s.QuotaNudges)+s.PromotionNudges, totalOf(s.QuotaNudges)))
+	}
+	if n := countDelegations(""); n > 0 {
+		activity = append(activity, fmt.Sprintf("%d subagents moved to a cheaper model", n))
 	}
 	if s, err := readguard.ReadStats(""); err == nil && s.Blocked > 0 {
 		activity = append(activity, fmt.Sprintf("%d re-reads refused (~%dk tokens)", s.Blocked, s.ReclaimedTok/1000))
@@ -63,6 +72,21 @@ func renderCoachStatus(out io.Writer, r coachcap.Report) {
 	}
 	fmt.Fprintln(out, "\n  change: tokenops coach autonomy <off|advise|ask|autonomous> · verbosity <quiet|normal|verbose>")
 	fmt.Fprintln(out, "          tokenops coach set <inform|waste|models> <rung> · tokenops coach off")
+}
+
+// subagentHookInstalled reports whether Claude Code has tokenops' route
+// guard on the Agent tool, which is how models: autonomous acts.
+func subagentHookInstalled() bool {
+	settings, ok, err := loadSettings(resolveSettingsPath(""))
+	if err != nil || !ok {
+		return false
+	}
+	for _, loc := range findMarkerEntries(hooksMap(settings), "route-guard") {
+		if loc.event == "PreToolUse" && loc.matcher == "Agent" {
+			return true
+		}
+	}
+	return false
 }
 
 // mutateCoach applies change to the config, validates the result, writes

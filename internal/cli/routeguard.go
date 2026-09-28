@@ -99,6 +99,13 @@ func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir, provider s
 	if err != nil {
 		return nil
 	}
+	var probe struct {
+		HookEventName string `json:"hook_event_name"`
+		ToolName      string `json:"tool_name"`
+	}
+	if json.Unmarshal(body, &probe) == nil && probe.HookEventName == "PreToolUse" && probe.ToolName == "Agent" {
+		return runSubagentGuard(cmd, body, dir)
+	}
 	var in userPromptSubmitInput
 	if json.Unmarshal(body, &in) != nil || strings.TrimSpace(in.Prompt) == "" {
 		return nil

@@ -48,6 +48,13 @@ window and context fullness), **waste** (redundant re-reads), and
 | The read-guard case | never | once per session | once per session |
 | Model advice | only when the model is two tiers or more above the work | once per kind of work per session | every applicable turn |
 
+For **models**, `autonomous` moves a subagent the agent launches to a
+cheaper model that fits its work (Claude Code's Agent tool; the subagent's
+short description is classified first). It only ever moves down, and the
+session's own model is advised, never changed. It needs the route guard's
+subagent hook: `tokenops hooks install --route-guard` adds it, and
+`tokenops coach` says when it is missing.
+
 A rung the coach cannot deliver yet is shown one rung lower, with the
 reason. `tokenops coach` (or the `tokenops_coach` MCP tool) shows each
 power's configured and effective rung and the setting it came from:

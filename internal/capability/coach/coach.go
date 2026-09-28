@@ -15,6 +15,8 @@ type Power struct {
 	// Configured when a rung is not available yet, and Reason says why.
 	Effective string `json:"effective"`
 	Reason    string `json:"reason,omitempty"`
+	// Note qualifies what the effective rung covers here.
+	Note string `json:"note,omitempty"`
 	// Source is the setting the configured rung came from.
 	Source    string `json:"source"`
 	Describes string `json:"describes"`
@@ -61,10 +63,14 @@ func Build(cfg config.Config) Report {
 	for _, name := range config.Powers() {
 		set := cfg.CoachPower(name)
 		eff, why := effective(name, set.Rung)
-		r.Powers = append(r.Powers, Power{
+		p := Power{
 			Name: name, Configured: set.Rung, Effective: eff, Reason: why,
 			Source: set.Source, Describes: describes[name],
-		})
+		}
+		if name == config.PowerModels && eff == config.AutonomyAutonomous {
+			p.Note = "moves subagents to a cheaper model on Claude Code; the session's own model is advised, not changed"
+		}
+		r.Powers = append(r.Powers, p)
 	}
 	return r
 }
@@ -92,7 +98,7 @@ func effective(power, rung string) (string, string) {
 			return config.AutonomyAdvise, approvalUnverified +
 				"; routing proposals on the proxy still wait for `tokenops routing decide`"
 		}
-		return config.AutonomyAdvise, "moving a subagent to a cheaper model is verified possible in Claude Code and ships next"
+		return rung, ""
 	}
 	return config.AutonomyOff, "unknown power"
 }
