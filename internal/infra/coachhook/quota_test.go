@@ -136,3 +136,71 @@ func TestStatsCountQuotaNudges(t *testing.T) {
 		t.Errorf("a quota nudge counted as a dollar alert: %d", s.Alerts)
 	}
 }
+
+// quiet speaks only when work is about to stop: 90% and up, or earlier
+// when the pace runs out before the reset.
+func TestQuietSpeaksOnlyWhenWorkIsAboutToStop(t *testing.T) {
+	tp := func(dir string) string { return writeTranscript(t, dir, turnLine(ts(1), 1_000, opus)) }
+
+	dir := t.TempDir()
+	cfg := DefaultConfig()
+	cfg.Verbosity = "quiet"
+	cfg.Quota = weeklyQuota(76, 12*time.Hour) // 76%, lasts to the reset
+	if d := Evaluate(dir, "s", tp(dir), cfg, fixedNow); d.Nudge {
+		t.Fatalf("quiet spoke at 76%% with the window lasting: %q", d.Message)
+	}
+	cfg.Quota = weeklyQuota(92, 12*time.Hour)
+	if d := Evaluate(dir, "s", tp(dir), cfg, fixedNow); !d.Nudge || d.QuotaTier != 0.90 {
+		t.Fatalf("quiet stayed silent at 92%%: %+v", d)
+	}
+
+	dir = t.TempDir()
+	cfg.Quota = weeklyQuota(55, 5*24*time.Hour) // runs out before the reset
+	if d := Evaluate(dir, "s", tp(dir), cfg, fixedNow); !d.Nudge {
+		t.Fatal("quiet stayed silent while the pace runs out before the reset")
+	}
+}
+
+func TestQuietDollarLadderOnlyAtBudget(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig()
+	cfg.Verbosity = "quiet"
+	tp := writeTranscript(t, dir, turnLine(ts(1), 60_000_000, opus)) // $30 of $50
+	if d := Evaluate(dir, "s", tp, cfg, fixedNow); d.Nudge {
+		t.Fatalf("quiet spoke at 60%% of the dollar budget: %q", d.Message)
+	}
+	rewrite(t, tp, turnLine(ts(1), 60_000_000, opus), turnLine(ts(2), 50_000_000, opus)) // $55
+	if d := Evaluate(dir, "s", tp, cfg, fixedNow); !d.Nudge {
+		t.Fatal("quiet stayed silent past the dollar budget")
+	}
+}
+
+// verbose names every window and always says how the pace compares.
+func TestVerboseExplainsTheWindow(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig()
+	cfg.Verbosity = "verbose"
+	cfg.Quota = weeklyQuota(76, 12*time.Hour)
+	cfg.Quota.All = []plans.QuotaWindow{
+		{Label: "5-hour", UsedPct: 12, ResetsAt: fixedNow.Add(2 * time.Hour), Duration: 5 * time.Hour},
+		cfg.Quota.Window,
+	}
+	tp := writeTranscript(t, dir, turnLine(ts(1), 1_000, opus))
+	d := Evaluate(dir, "s", tp, cfg, fixedNow)
+	for _, want := range []string{"lasts to the reset", "5-hour 12%", "weekly 76%"} {
+		if !strings.Contains(d.Message, want) {
+			t.Errorf("verbose message missing %q: %q", want, d.Message)
+		}
+	}
+}
+
+func TestQuietHoldsBackThePromotionCase(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig()
+	cfg.Verbosity = "quiet"
+	cfg.Promotion = "tokenops: read-guard could refuse these re-reads"
+	tp := writeTranscript(t, dir, turnLine(ts(1), 1_000, opus))
+	if d := Evaluate(dir, "s", tp, cfg, fixedNow); d.Nudge {
+		t.Fatalf("quiet argued the read-guard case: %q", d.Message)
+	}
+}

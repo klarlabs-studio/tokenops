@@ -8,6 +8,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -34,11 +35,12 @@ func liveQuota(ctx context.Context, cfg config.Config, provider eventschema.Prov
 		return nil
 	}
 	defer func() { _ = store.Close() }()
-	w, ok := headroom.LiveWindow(ctx, cfg, store, provider, now)
+	all := headroom.LiveWindows(ctx, cfg, store, provider, now)
+	w, ok := plans.MostConstrained(all)
 	if !ok {
 		return nil
 	}
-	return &coachhook.Quota{Provider: string(provider), Window: w}
+	return &coachhook.Quota{Provider: string(provider), Window: w, All: all}
 }
 
 // hookProvider is the provider whose plan a Stop event's session draws on.

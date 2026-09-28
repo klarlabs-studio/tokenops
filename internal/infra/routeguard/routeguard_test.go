@@ -160,3 +160,29 @@ func TestAbstainsWithoutAKnownModelSet(t *testing.T) {
 		t.Errorf("got %+v, want advice for claude-haiku-4-5", got)
 	}
 }
+
+// quiet argues only a large mismatch: a lookup on a flagship, not research
+// one tier below it.
+func TestQuietArguesOnlyLargeMismatches(t *testing.T) {
+	in := input(t, "research how prefix keys work and summarise", "claude-opus-5", ModeAdvise)
+	in.Verbosity = "quiet"
+	if got := Evaluate(in); got.Advise {
+		t.Errorf("quiet argued a one-tier mismatch: %+v", got)
+	}
+	in = input(t, "show me the retention config", "claude-opus-5", ModeAdvise)
+	in.Verbosity = "quiet"
+	if got := Evaluate(in); !got.Advise {
+		t.Error("quiet stayed silent on a lookup running on a flagship")
+	}
+}
+
+// verbose argues every applicable turn; normal argues once per kind.
+func TestVerboseArguesEveryTurn(t *testing.T) {
+	in := input(t, "research how prefix keys work and summarise", "claude-opus-5", ModeAdvise)
+	in.Verbosity = "verbose"
+	Evaluate(in)
+	in.Prompt = "research how the retry budget works"
+	if got := Evaluate(in); !got.Advise {
+		t.Error("verbose went quiet after arguing the kind once")
+	}
+}

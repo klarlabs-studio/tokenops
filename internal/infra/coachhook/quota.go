@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
@@ -20,7 +21,15 @@ type Quota struct {
 	// Provider is the plan's provider ("anthropic", "openai").
 	Provider string
 	Window   plans.QuotaWindow
+	// All is every window the reading reported, for the verbose summary.
+	All []plans.QuotaWindow
 }
+
+// Verbosity levels (ADR 0006); empty reads as normal.
+const (
+	verbosityQuiet   = "quiet"
+	verbosityVerbose = "verbose"
+)
 
 // DefaultQuotaTiers are the shares of a window at which the coach speaks,
 // each once per window.
@@ -85,7 +94,7 @@ func highestQuotaTier(usedPct, latched float64, tiers []float64) float64 {
 
 // quotaMessage names the window, how much of it is gone, when it comes
 // back, whether the current pace outruns it, and what stretches it.
-func quotaMessage(q *Quota, now time.Time) string {
+func quotaMessage(q *Quota, now time.Time, verbosity string) string {
 	w := q.Window
 	name := fmt.Sprintf("%s %s limit", w.Label, providerName(q.Provider))
 	resets := "resets in " + formatSpan(w.ResetsAt.Sub(now))
@@ -96,6 +105,15 @@ func quotaMessage(q *Quota, now time.Time) string {
 	msg := fmt.Sprintf("tokenops: %d%% of your %s used, %s.", int(math.Round(w.UsedPct)), name, resets)
 	if at, runsOut := w.ProjectedExhaustion(now); runsOut {
 		msg += fmt.Sprintf(" At this pace it runs out in ~%s, before the reset.", formatSpan(at.Sub(now)))
+	} else if verbosity == verbosityVerbose {
+		msg += " At this pace it lasts to the reset."
+	}
+	if verbosity == verbosityVerbose && len(q.All) > 1 {
+		parts := make([]string, 0, len(q.All))
+		for _, o := range q.All {
+			parts = append(parts, fmt.Sprintf("%s %d%%", o.Label, int(math.Round(o.UsedPct))))
+		}
+		msg += " Windows: " + strings.Join(parts, ", ") + "."
 	}
 	return msg + " Route research and lookups to a smaller model and /compact long sessions to stretch it."
 }
