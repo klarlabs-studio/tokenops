@@ -51,6 +51,11 @@ Roady implementation status: `.roady/plan.json` + `.roady/state.json`.
 
 ## Proposed Next
 
+- ADR 0006 (accepted): spike PreToolUse `ask` and Agent-tool model control;
+  then the `coach` block (autonomy, verbosity) with old-key mapping and
+  `tokenops coach`; read-guard `ask` and verbosity levels; model approval and
+  delegation once confirmed; follow-through ledger.
+
 - The blocked outcome cohort and the unvalidated subscription plans need
   evidence from real work and accounts beyond this machine.
 - Waste-detector findings that name a cause and a dollar amount, toward
