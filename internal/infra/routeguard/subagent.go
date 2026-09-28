@@ -66,7 +66,7 @@ func EvaluateSubagent(in SubagentInput) SubagentDecision {
 		from = resolveAlias(r, in.Candidates)
 	}
 	d.From = from
-	cat := in.Catalog.WithCandidates(in.Candidates)
+	cat := in.Catalog.WithCandidates(withCurrent(in.Candidates, from))
 	cur := cat.Resolve(in.Provider, from)
 	if cur.Tier == modeltier.TierUnknown || tierRank[wantTier] >= tierRank[cur.Tier] {
 		return d
