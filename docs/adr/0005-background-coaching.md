@@ -151,3 +151,21 @@ own.
   client that has one.
 - Every finding kind carries promotion evidence (correctness on real
   sessions, action rate, mutes), so the digest's contents stay explainable.
+
+## Execution notes
+
+- **2026-09-28, finding kind 1 of 3: `compact_earlier`.** A session that
+  ran 20+ steps in a row above a compaction line (600k on Claude Code,
+  150k on Codex) without compacting, priced against compacting at the line
+  (a sawtooth averaging halfway between the session's post-compaction size
+  and the line) at API rates. Cause and cost are both named, and the action
+  is one step. The 600k line is where the maintainer's measured rate of
+  repeated identical tool calls rises (1.7% below, 2.6% above, z=9.0), so
+  the finding carries a quality reason as well as a cost one. Measured on
+  30 days of real sessions: 27 of 1,606 Claude Code workflows,
+  ~$6.1k API-equivalent in total, largest single session ~$1.1k.
+  **Correctness** holds by construction. **Action rate** is unmeasured: it
+  needs delivery, and the follow-through ledger (ADR 0006) is where it will
+  be recorded. The two remaining candidates, what drove the growth and
+  repeated identical tool calls, need transcript content the event store
+  does not hold.

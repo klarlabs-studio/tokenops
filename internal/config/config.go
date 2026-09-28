@@ -358,6 +358,10 @@ type ContextLimitConfig struct {
 	ContextGrowthPerStepTokens int64 `yaml:"context_growth_per_step_tokens,omitempty"`
 	MaxConsecutiveAgentLoops   int   `yaml:"max_consecutive_agent_loops"`
 	SystemRedundancyMin        int   `yaml:"system_redundancy_min"`
+	// CompactAtTokens is the context size past which a long stretch
+	// without compacting is reported (compact_earlier). Zero keeps the
+	// built-in profile's value for the prefix.
+	CompactAtTokens int64 `yaml:"compact_at_tokens,omitempty"`
 }
 
 // WasteConfig maps coaching.context_limits into the waste detector's
@@ -374,6 +378,7 @@ func (c CoachingConfig) WasteConfig() waste.Config {
 			MaxContextTokens:           l.MaxContextTokens,
 			ContextGrowthLimitTokens:   l.ContextGrowthLimitTokens,
 			ContextGrowthPerStepTokens: l.ContextGrowthPerStepTokens,
+			CompactAtTokens:            l.CompactAtTokens,
 			MaxConsecutiveAgentLoops:   l.MaxConsecutiveAgentLoops,
 			SystemRedundancyMin:        l.SystemRedundancyMin,
 		})
@@ -1111,7 +1116,7 @@ func (c Config) Validate() error {
 		if l.WorkflowPrefix == "" {
 			return fmt.Errorf("coaching.context_limits[%d]: workflow_prefix is required", i)
 		}
-		if l.MaxContextTokens < 0 || l.ContextGrowthLimitTokens < 0 || l.ContextGrowthPerStepTokens < 0 ||
+		if l.MaxContextTokens < 0 || l.ContextGrowthLimitTokens < 0 || l.ContextGrowthPerStepTokens < 0 || l.CompactAtTokens < 0 ||
 			l.MaxConsecutiveAgentLoops < 0 || l.SystemRedundancyMin < 0 {
 			return fmt.Errorf("coaching.context_limits[%d]: thresholds must be non-negative", i)
 		}
