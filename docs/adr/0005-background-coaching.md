@@ -169,3 +169,26 @@ own.
   be recorded. The two remaining candidates, what drove the growth and
   repeated identical tool calls, need transcript content the event store
   does not hold.
+- **2026-09-29, the other two candidates do not qualify.** Prototyped on
+  30 days of the maintainer's Claude Code transcripts (1,614 sessions),
+  scoped per session, with compactions resetting what is carried:
+  - *What drove the growth.* Bash output is most of the tool output
+    sessions carry (~$3.6k API-equivalent over 30 days), spread across
+    ordinary reading commands (`sed -n` 22%, `grep` 13%, `cat` 7%, `ls`
+    3%) at 200–500 tokens per call. That is the work itself; the only
+    lever is compacting, which `compact_earlier` already names. As a kind
+    of its own it would repeat that finding.
+  - *Repeated identical tool calls.* With no edit between the two calls,
+    ~1,100 repeats in 34 sessions, dominated by browser automation and
+    polling loops (`until`, `pgrep`, `gh pr checks`), where the world
+    changes without an edit: correct repeats. The one pattern that looked
+    like waste, a whole-file `cat` of a file already read, drops to **0 of
+    318** once any other shell command between the two reads (which could
+    have written the file) disqualifies it.
+  - A first prototype read compaction summaries only when their content
+    was a list; Claude Code writes them as a string, so carried output
+    never reset and totals came out ~5× too high. Scope carry to the
+    compaction window.
+
+  The build gate stays closed at one qualifying kind. Background coaching
+  remains on demand plus the live hooks, as Decision 1 intends.
