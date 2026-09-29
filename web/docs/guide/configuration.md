@@ -47,6 +47,7 @@ window and context fullness), **waste** (redundant re-reads), and
 | Dollar tips (pay-per-token) | only past the budget | each tier once per session | each tier once per session |
 | The read-guard case | never | once per session | once per session |
 | Model advice | only when the model is two tiers or more above the work | once per kind of work per session | every applicable turn |
+| Compact tip (20 turns above the compaction line) | never | once until the next compaction | once until the next compaction, with what compacting would keep context near |
 
 For **models**, `ask` puts the same move to you first, in interactive
 Claude Code sessions: the permission prompt for the subagent says which

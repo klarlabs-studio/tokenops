@@ -17,13 +17,15 @@ func tipConfig() Config {
 func TestTipFollowedByCompaction(t *testing.T) {
 	dir := t.TempDir()
 	cfg := tipConfig()
-	// 60M cache-read on opus is $30 of $50: the 50% tier.
-	tp := writeTranscript(t, dir, turnLine(ts(1), 60_000_000, opus))
+	// 500k of cache-read on opus is $0.25, 62% of a $0.40 budget: the 50%
+	// tier, at a context well short of the window's ceiling.
+	cfg.BudgetUSD = 0.40
+	tp := writeTranscript(t, dir, turnLine(ts(1), 500_000, opus))
 	d := Evaluate(dir, "s", tp, cfg, fixedNow)
 	if !d.Nudge || d.OfferID != "tip-1" || d.TipKind != "budget_50" {
 		t.Fatalf("first Stop: nudge=%v offer=%q kind=%q", d.Nudge, d.OfferID, d.TipKind)
 	}
-	rewrite(t, tp, turnLine(ts(1), 60_000_000, opus), turnLine(ts(2), 20_000, opus))
+	rewrite(t, tp, turnLine(ts(1), 500_000, opus), turnLine(ts(2), 20_000, opus))
 	d = Evaluate(dir, "s", tp, cfg, fixedNow)
 	if len(d.Resolved) != 1 || !d.Resolved[0].Followed || d.Resolved[0].ID != "tip-1" {
 		t.Fatalf("after compaction: Resolved = %+v; want tip-1 followed", d.Resolved)
@@ -99,5 +101,22 @@ func TestALaterTipClosesTheOpenOne(t *testing.T) {
 	d := Evaluate(dir, "s", tp, cfg, fixedNow)
 	if d.OfferID != "tip-2" || len(d.Resolved) != 1 || d.Resolved[0].ID != "tip-1" || d.Resolved[0].Followed {
 		t.Fatalf("offer=%q Resolved=%+v; want tip-2 opened and tip-1 ignored", d.OfferID, d.Resolved)
+	}
+}
+
+// Without a boundary in the tail, a drop that starts at the window's
+// ceiling is the client's own compaction.
+func TestADropFromTheCeilingIsAutomatic(t *testing.T) {
+	dir := t.TempDir()
+	cfg := tipConfig()
+	cfg.BudgetUSD = 0.80
+	tp := writeTranscript(t, dir, turnLine(ts(1), 990_000, opus))
+	if d := Evaluate(dir, "s", tp, cfg, fixedNow); !d.Nudge {
+		t.Fatal("no tip")
+	}
+	rewrite(t, tp, turnLine(ts(1), 990_000, opus), turnLine(ts(2), 30_000, opus))
+	d := Evaluate(dir, "s", tp, cfg, fixedNow)
+	if len(d.Resolved) != 1 || d.Resolved[0].Followed {
+		t.Fatalf("Resolved = %+v; want the ceiling compaction not credited", d.Resolved)
 	}
 }

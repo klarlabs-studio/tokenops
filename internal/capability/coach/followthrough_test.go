@@ -102,3 +102,17 @@ func TestUnreadableLedgerQuietsNothing(t *testing.T) {
 		t.Error("quieted without evidence")
 	}
 }
+
+func TestCompactAtFollowsTheFindingsLine(t *testing.T) {
+	var c config.Config
+	if got := CompactAt(c, "claude-code:"); got != 600_000 {
+		t.Errorf("claude-code default = %d; want 600000", got)
+	}
+	if got := CompactAt(c, "codex:"); got != 150_000 {
+		t.Errorf("codex default = %d; want 150000", got)
+	}
+	c.Coaching.ContextLimits = []config.ContextLimitConfig{{WorkflowPrefix: "claude-code:", CompactAtTokens: 400_000}}
+	if got := CompactAt(c, "claude-code:"); got != 400_000 {
+		t.Errorf("override = %d; want 400000", got)
+	}
+}
