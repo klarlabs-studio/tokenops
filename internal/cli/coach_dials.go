@@ -255,8 +255,11 @@ func deliveryOverridden(cfg config.Config) string {
 
 // tipLabel says when a tip kind is given ("budget_50", "quota_90").
 func tipLabel(kind string) string {
-	if kind == "budget_over" {
+	switch kind {
+	case "budget_over":
 		return "past the session budget"
+	case "compact_now":
+		return "to compact after a long stretch near the context ceiling"
 	}
 	for _, p := range []struct{ prefix, of string }{{"budget_", "the session budget"}, {"quota_", "a quota window"}} {
 		if pct, ok := strings.CutPrefix(kind, p.prefix); ok {

@@ -109,6 +109,10 @@ type Config struct {
 	// NewID names a tip so its outcome can be recorded against it (ADR
 	// 0006, follow-through). Nil records nothing.
 	NewID func() string
+	// CompactAtTokens is the context size past which a long stretch without
+	// compacting earns a tip (compact_now): the live form of the
+	// compact_earlier finding. Zero disables it.
+	CompactAtTokens int64
 	// Quieted reports that tips of a kind have been ignored often enough
 	// that the coach stops giving them. Only early tiers can be quieted,
 	// and verbose still gives them. Nil quiets nothing.
@@ -203,6 +207,8 @@ type Decision struct {
 	TipKind string
 	// Resolved are earlier tips whose outcome this Stop settled.
 	Resolved []TipResolution
+	// CompactTip is true when the nudge is the compact_now tip.
+	CompactTip bool
 }
 
 // usage is the token-usage block Claude Code records on each turn's message.
@@ -217,7 +223,13 @@ type usage struct {
 // top-level ISO8601 timestamp plus the assistant message's usage and model.
 type transcriptLine struct {
 	Timestamp string `json:"timestamp"`
-	Message   struct {
+	// Subtype and CompactMetadata mark a compaction boundary, which says
+	// whether the operator compacted or the client did at its ceiling.
+	Subtype         string `json:"subtype"`
+	CompactMetadata struct {
+		Trigger string `json:"trigger"`
+	} `json:"compactMetadata"`
+	Message struct {
 		Model string `json:"model"`
 		Usage *usage `json:"usage"`
 	} `json:"message"`
@@ -245,6 +257,17 @@ type sessionState struct {
 	PromotionNudged bool `json:"promotion_nudged,omitempty"`
 	// OpenTip is the last tip, while it waits to be acted on.
 	OpenTip *openTip `json:"open_tip,omitempty"`
+	// AboveTurns counts turns at or above CompactAtTokens since the last
+	// compaction; LastContext is the newest turn's context, to see one.
+	AboveTurns  int   `json:"above_turns,omitempty"`
+	LastContext int64 `json:"last_context,omitempty"`
+	// CompactTipped latches compact_now until the next compaction.
+	CompactTipped bool `json:"compact_tipped,omitempty"`
+	// compaction is how the newest compaction this Stop saw was
+	// triggered, "" when none; dropFrom is the context just before the
+	// newest drop to half or less. Both only live for one Evaluate.
+	compaction string
+	dropFrom   int64
 }
 
 // ledgerEvent is one appended coaching record.
@@ -261,6 +284,8 @@ type ledgerEvent struct {
 	Suppressed string `json:"suppressed,omitempty"`
 	// Promotion records that this Stop argued the read-guard case.
 	Promotion bool `json:"promotion,omitempty"`
+	// Compact records that this Stop gave the compact_now tip.
+	Compact bool `json:"compact,omitempty"`
 	// Unpriced names a model the rate card did not know. Without it a
 	// session on an uncatalogued model is indistinguishable in the ledger
 	// from one that genuinely cost nothing.
@@ -355,6 +380,8 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		}
 	}
 
+	evaluateCompactTip(&dec, &st, cfg, contextTokens, now)
+
 	// The budget tier is about the session in flight; the read-guard case
 	// is a standing recommendation that will be just as true next turn.
 	// So the tier speaks first and the case waits for a later Stop, and
@@ -385,7 +412,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		TS: now.UTC(), Session: sessionID,
 		CumulativeUSD: st.CumulativeUSD, BudgetUSD: budget,
 		Fraction: frac, TierFired: dec.FiredFraction, Model: model,
-		Suppressed: dec.Suppressed, Promotion: dec.Promotion,
+		Suppressed: dec.Suppressed, Promotion: dec.Promotion, Compact: dec.CompactTip,
 		Unpriced:    dec.UnpricedModel,
 		QuotaWindow: quotaLabel(cfg.Quota), QuotaUsedPct: quotaUsed(cfg.Quota), QuotaTier: dec.QuotaTier,
 	})
@@ -471,9 +498,17 @@ func accumulate(path string, st *sessionState, cfg Config, now time.Time) (model
 		if t.Timestamp == "" || t.Timestamp <= st.LastCountedTS {
 			continue
 		}
+		if t.Compaction != "" {
+			st.compaction = t.Compaction
+			if t.Timestamp > newMarker {
+				newMarker = t.Timestamp
+			}
+			continue
+		}
 		st.CumulativeUSD += t.CostUSD
 		model = t.Model
 		contextTokens = t.ContextTokens
+		st.countContext(t.ContextTokens, cfg.CompactAtTokens)
 		if t.Unpriced && t.Model != "" {
 			unpriced = t.Model
 		}
@@ -531,6 +566,9 @@ type turnUsage struct {
 	// sent, plus everything read back from cache, plus what was just
 	// written to it. Cumulative tokens would answer a different question.
 	ContextTokens int64
+	// Compaction is set on a compaction boundary rather than a turn: how
+	// Claude Code says it was triggered ("manual", "auto").
+	Compaction string
 }
 
 // readTurns reads the transcript tail and returns each turn's usage,
@@ -573,7 +611,18 @@ func readTurns(path string, cfg Config, now time.Time) []turnUsage {
 			continue
 		}
 		var tl transcriptLine
-		if json.Unmarshal(b, &tl) != nil || tl.Message.Usage == nil {
+		if json.Unmarshal(b, &tl) != nil {
+			continue
+		}
+		if tl.Subtype == "compact_boundary" {
+			trigger := tl.CompactMetadata.Trigger
+			if trigger == "" {
+				trigger = "unknown"
+			}
+			out = append(out, turnUsage{Timestamp: tl.Timestamp, Compaction: trigger})
+			continue
+		}
+		if tl.Message.Usage == nil {
 			continue
 		}
 		u := tl.Message.Usage
@@ -849,6 +898,8 @@ type Stats struct {
 	// and QuotaWindows the windows they were said about.
 	QuotaNudges  map[string]int `json:"quota_nudges,omitempty"`
 	QuotaWindows map[string]int `json:"quota_windows,omitempty"`
+	// CompactTips counts the compact_now tips given.
+	CompactTips int `json:"compact_tips,omitempty"`
 }
 
 // ReadStats reads the ledger and aggregates it. Cumulative spend is a
@@ -887,6 +938,9 @@ func ReadStats(dir string) (Stats, error) {
 			}
 			s.QuotaNudges[tierLabel(e.QuotaTier)]++
 			s.QuotaWindows[e.QuotaWindow]++
+		}
+		if e.Compact {
+			s.CompactTips++
 		}
 		if e.Promotion {
 			s.PromotionNudges++
@@ -1070,6 +1124,8 @@ func tipKind(dec Decision) string {
 	switch {
 	case !dec.Nudge || dec.Promotion:
 		return ""
+	case dec.CompactTip:
+		return compactKind
 	case dec.QuotaTier > 0:
 		return quotaKind(dec.QuotaTier)
 	case dec.FiredFraction > 0:
