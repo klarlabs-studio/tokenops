@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/config"
 )
 
@@ -92,5 +93,18 @@ func TestCoachMigrateKeepsBehaviour(t *testing.T) {
 		if src := after.CoachPower(p).Source; src != "coach.powers."+p {
 			t.Errorf("%s still resolved from %s after migrate", p, src)
 		}
+	}
+}
+
+func TestCoachStatusShowsTheLiveQuota(t *testing.T) {
+	var out bytes.Buffer
+	renderCoachStatus(&out, coachcap.Build(config.Default()), []string{"Claude weekly 45% · resets in 3d 2h · next tip at 50%"})
+	if !strings.Contains(out.String(), "quota: Claude weekly 45% · resets in 3d 2h · next tip at 50%") {
+		t.Errorf("quota line missing:\n%s", out.String())
+	}
+	out.Reset()
+	renderCoachStatus(&out, coachcap.Build(config.Default()), nil)
+	if strings.Contains(out.String(), "quota:") {
+		t.Errorf("quota line without a reading:\n%s", out.String())
 	}
 }

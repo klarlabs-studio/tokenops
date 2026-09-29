@@ -145,3 +145,38 @@ func formatSpan(d time.Duration) string {
 		return fmt.Sprintf("%dm", mins)
 	}
 }
+
+// QuotaStatus is one line for `tokenops coach`: the live window the coach
+// is judging, when it resets, and the share at which it will next speak.
+// Reading the same latch the hook writes keeps the promise honest: a tier
+// already said for this window is not offered again.
+func QuotaStatus(dir string, q *Quota, verbosity string, now time.Time) string {
+	if q == nil {
+		return ""
+	}
+	w := q.Window
+	line := fmt.Sprintf("%s %s %.0f%% · resets in %s", providerName(q.Provider), w.Label, w.UsedPct, formatSpan(w.ResetsAt.Sub(now)))
+	next, ok := nextQuotaTier(loadQuotaLatch(resolveDir(dir))[quotaKey(q)], w.UsedPct/100, verbosity)
+	switch {
+	case ok:
+		line += fmt.Sprintf(" · next tip at %.0f%%", next*100)
+	case w.UsedPct < 100:
+		line += " · every tip for this window already given"
+	}
+	return line
+}
+
+// nextQuotaTier is the lowest tier above both what was used and what was
+// already said. Quiet only speaks from 90% (earlier only when the pace
+// runs out before the reset, which a status line cannot promise).
+func nextQuotaTier(latched, used float64, verbosity string) (float64, bool) {
+	for _, t := range DefaultQuotaTiers() {
+		if verbosity == verbosityQuiet && t < 0.90-fracEpsilon {
+			continue
+		}
+		if t > latched+fracEpsilon && t > used+fracEpsilon {
+			return t, true
+		}
+	}
+	return 0, false
+}

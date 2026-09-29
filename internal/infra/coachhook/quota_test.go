@@ -204,3 +204,30 @@ func TestQuietHoldsBackThePromotionCase(t *testing.T) {
 		t.Fatalf("quiet argued the read-guard case: %q", d.Message)
 	}
 }
+
+func TestQuotaStatusNamesTheNextTip(t *testing.T) {
+	now := time.Date(2026, 9, 29, 20, 0, 0, 0, time.UTC)
+	q := &Quota{Provider: "anthropic", Window: plans.QuotaWindow{Label: "weekly", UsedPct: 45, ResetsAt: now.Add(74 * time.Hour)}}
+	dir := t.TempDir()
+	got := QuotaStatus(dir, q, "", now)
+	if !strings.Contains(got, "weekly 45%") || !strings.Contains(got, "next tip at 50%") || !strings.Contains(got, "resets in") {
+		t.Errorf("status = %q", got)
+	}
+	if got := QuotaStatus(dir, q, verbosityQuiet, now); !strings.Contains(got, "next tip at 90%") {
+		t.Errorf("quiet status = %q; want the 90%% tier", got)
+	}
+	// A tier already said for this window is not promised again.
+	saveQuotaLatch(dir, map[string]float64{quotaKey(q): 0.75}, now)
+	q.Window.UsedPct = 80
+	if got := QuotaStatus(dir, q, "", now); !strings.Contains(got, "next tip at 90%") {
+		t.Errorf("after 75%% was said: %q", got)
+	}
+	saveQuotaLatch(dir, map[string]float64{quotaKey(q): 1.0}, now)
+	q.Window.UsedPct = 99
+	if got := QuotaStatus(dir, q, "", now); !strings.Contains(got, "already given") {
+		t.Errorf("all tiers said: %q", got)
+	}
+	if QuotaStatus(dir, nil, "", now) != "" {
+		t.Error("no reading produced a line")
+	}
+}
