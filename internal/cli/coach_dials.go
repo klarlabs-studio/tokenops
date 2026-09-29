@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // coachStatus is `tokenops coach` with no subcommand: the coach's two
@@ -33,11 +35,11 @@ func coachStatus(cmd *cobra.Command, jsonOut bool) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(r)
 	}
-	renderCoachStatus(cmd.OutOrStdout(), r)
+	renderCoachStatus(cmd.OutOrStdout(), r, quotaStatusLines(cmd.Context(), r))
 	return nil
 }
 
-func renderCoachStatus(out io.Writer, r coachcap.Report) {
+func renderCoachStatus(out io.Writer, r coachcap.Report, quota []string) {
 	state := "on"
 	if r.Off() {
 		state = "off (records, says nothing)"
@@ -60,13 +62,23 @@ func renderCoachStatus(out io.Writer, r coachcap.Report) {
 	}
 	activity := []string{}
 	if s, err := coachhook.ReadStats(""); err == nil && s.Events > 0 {
-		activity = append(activity, fmt.Sprintf("%d tips (%d on a quota window)", s.Alerts+totalOf(s.QuotaNudges)+s.PromotionNudges, totalOf(s.QuotaNudges)))
+		tips := fmt.Sprintf("%d tips", s.Alerts+totalOf(s.QuotaNudges)+s.PromotionNudges+s.CompactTips)
+		if q := totalOf(s.QuotaNudges); q > 0 {
+			tips += fmt.Sprintf(" (%d on a quota window)", q)
+		}
+		activity = append(activity, tips)
 	}
 	if n := coachcap.CountMoves(coachLedger(), config.PowerModels); n > 0 {
 		activity = append(activity, fmt.Sprintf("%d subagents moved to a cheaper model", n))
 	}
 	if s, err := readguard.ReadStats(""); err == nil && s.Blocked > 0 {
 		activity = append(activity, fmt.Sprintf("%d re-reads refused (~%dk tokens)", s.Blocked, s.ReclaimedTok/1000))
+	}
+	if len(quota) > 0 {
+		fmt.Fprintln(out)
+		for _, q := range quota {
+			fmt.Fprintf(out, "  quota: %s\n", q)
+		}
 	}
 	if len(activity) > 0 {
 		fmt.Fprintf(out, "\n  lately: %s\n", strings.Join(activity, " · "))
@@ -107,7 +119,8 @@ func mutateCoach(cmd *cobra.Command, change func(*config.Config)) error {
 	if err != nil {
 		return err
 	}
-	renderCoachStatus(cmd.OutOrStdout(), coachcap.Status(cfg, l, now))
+	r := coachcap.Status(cfg, l, now)
+	renderCoachStatus(cmd.OutOrStdout(), r, quotaStatusLines(cmd.Context(), r))
 	return nil
 }
 
@@ -267,4 +280,30 @@ func tipLabel(kind string) string {
 		}
 	}
 	return "on " + kind
+}
+
+// quotaStatusLines reads the live plan window for each provider with a
+// plan configured, as the coach hook would, and says when the coach will
+// next speak about it. Without it "0 tips on a quota window" cannot be
+// told apart from a coach that is not reading the quota at all.
+func quotaStatusLines(ctx context.Context, r coachcap.Report) []string {
+	if r.Effective(config.PowerInform) == config.AutonomyOff {
+		return nil
+	}
+	path, err := config.DefaultPath()
+	if err != nil {
+		return nil
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		return nil
+	}
+	now := time.Now()
+	var out []string
+	for _, p := range []eventschema.Provider{eventschema.ProviderAnthropic, eventschema.ProviderOpenAI} {
+		if line := coachhook.QuotaStatus("", liveQuota(ctx, cfg, p, now), r.Verbosity, now); line != "" {
+			out = append(out, line)
+		}
+	}
+	return out
 }
