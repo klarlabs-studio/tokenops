@@ -120,6 +120,23 @@ coach never nags every turn. A Stop that jumps across several fractions at once
 Set `--budget` lower to be nudged earlier, higher if your normal sessions
 legitimately run large.
 
+### Compact tip
+
+On Claude Code and Codex the coach also counts turns above the compaction
+line (600k context on Claude Code, 150k on Codex; `compact_at_tokens` in
+`coaching.context_limits` moves it, and the `compact_earlier` finding uses
+the same line). After 20 turns in a row above it without a compaction it
+says so once:
+
+> tokenops: context has stayed above 600k for 20 turns without compacting
+> (now 812k). Every turn re-reads all of it: /compact now, or start a fresh
+> session for the next task.
+
+A compaction (context falling to half or less) opens a new window, and the
+tip can come again. It is not given at `quiet`, and it is recorded in the
+follow-through ledger like the other tips: a compaction within three turns
+counts as following it.
+
 ### Follow-through
 
 Each tip is recorded in `~/.tokenops/coach/followthrough.jsonl` and settled

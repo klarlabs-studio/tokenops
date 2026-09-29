@@ -145,8 +145,12 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, quota fu
 		}
 		return quieted(config.PowerInform, kind)
 	}
-	if provider, ok := hookProvider(in, in.isCursorPayload(), in.HookEventName == "session.idle"); ok && quota != nil {
+	provider, known := hookProvider(in, in.isCursorPayload(), in.HookEventName == "session.idle")
+	if known && quota != nil {
 		cfg.Quota = quota(cmd.Context(), provider, now)
+	}
+	if known && cfg.CompactAtTokens == 0 {
+		cfg.CompactAtTokens = compactAt(provider)
 	}
 	var dec coachhook.Decision
 	switch {
@@ -255,6 +259,9 @@ func newCoachHookStatsCmd() *cobra.Command {
 						fmt.Fprintf(out, "    %-5s %d\n", tier, c)
 					}
 				}
+			}
+			if s.CompactTips > 0 {
+				fmt.Fprintf(out, "  compact-now tips: %d\n", s.CompactTips)
 			}
 			if s.PromotionNudges > 0 {
 				fmt.Fprintf(out, "  read-guard case argued: %d session(s)\n", s.PromotionNudges)
@@ -434,4 +441,21 @@ func tipResolutions(rs []coachhook.TipResolution) []coachcap.Resolution {
 		out = append(out, coachcap.Resolution{ID: r.ID, Kind: r.Kind, Followed: r.Followed, Evidence: r.Evidence})
 	}
 	return out
+}
+
+// compactAt is where the live compact tip's stretch starts for a client:
+// the same line the compact_earlier finding uses for that client's
+// workflows, including an operator's coaching.context_limits override.
+func compactAt(provider eventschema.Provider) int64 {
+	prefix := "claude-code:"
+	if provider == eventschema.ProviderOpenAI {
+		prefix = "codex:"
+	}
+	var cfg config.Config
+	if path, err := config.DefaultPath(); err == nil {
+		if loaded, err := config.Load(path); err == nil {
+			cfg = loaded
+		}
+	}
+	return coachcap.CompactAt(cfg, prefix)
 }
