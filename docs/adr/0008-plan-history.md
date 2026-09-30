@@ -66,6 +66,12 @@ is all TokenOps knew about plans.
 - **Prices go stale.** Vendors change prices; OpenAI cut the Business seat
   price in April 2026. A price change needs a catalog PR with a refreshed
   source, like a limit change.
-- **Prices are US list prices.** Regional pricing, tax and annual
-  discounts are not modelled. A value-per-dollar figure is a comparison,
-  not an invoice.
+- **Your price wins over the list price.** A US list price is rarely what
+  anyone outside the US pays. The maintainer pays €114 for Pro 5x, which
+  lists at $100, and €214.60 for Max 20x. `plan set --price <amount>
+  --currency <code>` records the price from the bill, tax included, with
+  the switch, so a price change also splits periods.
+  - Plan cost is shown in `money.currency`.
+  - Dollar-priced usage is compared with it at `money.per_usd`, a rate the
+    operator sets and TokenOps never fetches.
+  - A price in a currency without a rate is flagged, not guessed.

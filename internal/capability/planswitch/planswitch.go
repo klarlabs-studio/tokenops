@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
@@ -40,12 +41,22 @@ type Result struct {
 // wrong.
 var ErrFuture = errors.New("planswitch: the start date is in the future")
 
+// Change is one plan switch: provider moves from Previous to Plan from
+// From on, paying Price in Currency per month when the operator gave it.
+type Change struct {
+	Provider, Previous, Plan string
+	From, Now                time.Time
+	Price                    float64
+	Currency                 string
+}
+
 // Record writes a switch of provider from previous to plan, effective
 // from `from`. When from is before now and the new plan is not empty,
 // usage recorded as billed per token since then is re-marked as covered.
 // A nil restamper skips that step (no event store), which the caller
 // reports.
-func Record(ctx context.Context, h History, r Restamper, provider, previous, plan string, from, now time.Time) (Result, error) {
+func Record(ctx context.Context, h History, r Restamper, c Change) (Result, error) {
+	provider, plan, from, now := c.Provider, c.Plan, c.From, c.Now
 	if from.After(now) {
 		return Result{}, ErrFuture
 	}
@@ -53,7 +64,9 @@ func Record(ctx context.Context, h History, r Restamper, provider, previous, pla
 	if err != nil {
 		return Result{}, err
 	}
-	bs := past.Switch(provider, previous, plan, from, now)
+	bs := past.Switch(provider, c.Previous, plan, from, now)
+	last := &bs[len(bs)-1]
+	last.Price, last.Currency = c.Price, strings.ToUpper(strings.TrimSpace(c.Currency))
 	if err := h.Append(bs...); err != nil {
 		return Result{}, err
 	}
@@ -69,12 +82,53 @@ func Record(ctx context.Context, h History, r Restamper, provider, previous, pla
 	return res, nil
 }
 
+// FX is the currency plan costs are shown in and how to reach it from
+// US dollars. The rate is the operator's: TokenOps fetches none.
+type FX struct {
+	// Currency is the ISO 4217 code costs are shown in; empty is USD.
+	Currency string
+	// PerUSD is how many units of Currency one US dollar buys. Ignored
+	// for USD.
+	PerUSD float64
+}
+
+func (f FX) code() string {
+	if c := strings.ToUpper(strings.TrimSpace(f.Currency)); c != "" {
+		return c
+	}
+	return "USD"
+}
+
+// convert brings amount in currency into f's currency, or reports that
+// it cannot without a rate.
+func (f FX) convert(amount float64, currency string) (float64, bool) {
+	currency = strings.ToUpper(strings.TrimSpace(currency))
+	if currency == "" {
+		currency = "USD"
+	}
+	switch {
+	case currency == f.code():
+		return amount, true
+	case currency == "USD" && f.PerUSD > 0:
+		return amount * f.PerUSD, true
+	}
+	return 0, false
+}
+
+// FromUSD converts a US-dollar amount into f's currency.
+func (f FX) FromUSD(usd float64) (float64, bool) { return f.convert(usd, "USD") }
+
 // PeriodCost is one stretch on one plan, priced.
 type PeriodCost struct {
 	plans.Period
-	Display string  `json:"display"`
-	USD     float64 `json:"usd"`
-	// Priced is false when the catalog has no flat price for the plan.
+	Display string `json:"display"`
+	// Amount is the period's cost in the report's currency.
+	Amount float64 `json:"amount"`
+	// Source says where the price came from: "yours" (what the operator
+	// said they pay) or "list" (the catalog's US list price).
+	Source string `json:"source,omitempty"`
+	// Priced is false when there is no price for the plan, or it is in a
+	// currency the report has no rate for.
 	Priced bool `json:"priced"`
 }
 
@@ -82,16 +136,17 @@ type PeriodCost struct {
 type ProviderCost struct {
 	Provider string       `json:"provider"`
 	Periods  []PeriodCost `json:"periods"`
-	USD      float64      `json:"usd"`
-	// Complete is false when a period's plan has no price, so USD
+	Amount   float64      `json:"amount"`
+	// Complete is false when a period could not be priced, so Amount
 	// understates what was paid.
 	Complete bool `json:"complete"`
 }
 
 // Cost prices every provider's plans over [since, until), prorated by
-// day across switches. current is the configured binding per provider.
-// Per-seat plans are priced for one seat.
-func Cost(h plans.History, current map[string]string, since, until time.Time) []ProviderCost {
+// day across switches, in fx's currency. The operator's own price wins;
+// the catalog's US list price is the fallback. Per-seat plans are priced
+// for one seat.
+func Cost(h plans.History, current map[string]string, since, until time.Time, fx FX) []ProviderCost {
 	providers := map[string]bool{}
 	for p, plan := range current {
 		if plan != "" {
@@ -111,16 +166,24 @@ func Cost(h plans.History, current map[string]string, since, until time.Time) []
 		pc := ProviderCost{Provider: provider, Complete: true}
 		for _, period := range h.Periods(provider, since, until, current[provider]) {
 			c := PeriodCost{Period: period}
+			monthly, currency := period.Price, period.Currency
+			c.Source = "yours"
 			if p, ok := plans.Lookup(period.Plan); ok {
 				c.Display = p.Display
-				if p.MonthlyUSD > 0 {
-					c.USD, c.Priced = plans.PeriodCost(p.MonthlyUSD, period), true
+				if monthly <= 0 && p.MonthlyUSD > 0 {
+					monthly, currency, c.Source = p.MonthlyUSD, "USD", "list"
+				}
+			}
+			if monthly > 0 {
+				if amount, ok := fx.convert(plans.PeriodCost(monthly, period), currency); ok {
+					c.Amount, c.Priced = amount, true
 				}
 			}
 			if !c.Priced {
+				c.Source = ""
 				pc.Complete = false
 			}
-			pc.USD += c.USD
+			pc.Amount += c.Amount
 			pc.Periods = append(pc.Periods, c)
 		}
 		if len(pc.Periods) > 0 {
@@ -131,11 +194,11 @@ func Cost(h plans.History, current map[string]string, since, until time.Time) []
 }
 
 // Total sums the providers' plan cost.
-func Total(costs []ProviderCost) (usd float64, complete bool) {
+func Total(costs []ProviderCost) (amount float64, complete bool) {
 	complete = true
 	for _, c := range costs {
-		usd += c.USD
+		amount += c.Amount
 		complete = complete && c.Complete
 	}
-	return usd, complete
+	return amount, complete
 }

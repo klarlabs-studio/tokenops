@@ -35,7 +35,7 @@ func day(d int) time.Time { return time.Date(2026, 9, d, 0, 0, 0, 0, time.UTC) }
 func TestBackdatedSwitchRecordsAndRestamps(t *testing.T) {
 	h, r := &memHistory{}, &fakeRestamper{}
 	now := day(30)
-	res, err := Record(context.Background(), h, r, "openai", "gpt-plus", "gpt-pro-5x", day(1), now)
+	res, err := Record(context.Background(), h, r, Change{Provider: "openai", Previous: "gpt-plus", Plan: "gpt-pro-5x", From: day(1), Now: now})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,10 +50,10 @@ func TestBackdatedSwitchRecordsAndRestamps(t *testing.T) {
 
 func TestSwitchNowAndUnsetDoNotRestamp(t *testing.T) {
 	h, r := &memHistory{}, &fakeRestamper{}
-	if _, err := Record(context.Background(), h, r, "openai", "", "gpt-plus", day(30), day(30)); err != nil {
+	if _, err := Record(context.Background(), h, r, Change{Provider: "openai", Plan: "gpt-plus", From: day(30), Now: day(30)}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Record(context.Background(), h, r, "openai", "gpt-plus", "", day(10), day(30)); err != nil {
+	if _, err := Record(context.Background(), h, r, Change{Provider: "openai", Previous: "gpt-plus", From: day(10), Now: day(30)}); err != nil {
 		t.Fatal(err)
 	}
 	if r.calls != 0 {
@@ -62,7 +62,7 @@ func TestSwitchNowAndUnsetDoNotRestamp(t *testing.T) {
 }
 
 func TestFutureStartIsRefused(t *testing.T) {
-	_, err := Record(context.Background(), &memHistory{}, nil, "openai", "", "gpt-plus", day(30), day(1))
+	_, err := Record(context.Background(), &memHistory{}, nil, Change{Provider: "openai", Plan: "gpt-plus", From: day(30), Now: day(1)})
 	if !errors.Is(err, ErrFuture) {
 		t.Fatalf("err = %v", err)
 	}
@@ -71,27 +71,54 @@ func TestFutureStartIsRefused(t *testing.T) {
 // A mid-month switch prices each part at its own plan.
 func TestCostProratesAcrossASwitch(t *testing.T) {
 	h := plans.History(plans.History(nil).Switch("openai", "gpt-plus", "gpt-pro-5x", day(16), day(16)))
-	costs := Cost(h, map[string]string{"openai": "gpt-pro-5x", "anthropic": "claude-max-20x"}, day(1), day(31))
+	costs := Cost(h, map[string]string{"openai": "gpt-pro-5x", "anthropic": "claude-max-20x"}, day(1), day(31), FX{})
 	if len(costs) != 2 {
 		t.Fatalf("costs = %+v", costs)
 	}
 	anthropic, openai := costs[0], costs[1]
 	perDay := func(m float64) float64 { return m / (365.2425 / 12) }
-	if math.Abs(anthropic.USD-30*perDay(200)) > 0.01 || !anthropic.Complete {
+	if math.Abs(anthropic.Amount-30*perDay(200)) > 0.01 || !anthropic.Complete {
 		t.Errorf("anthropic = %+v", anthropic)
 	}
 	want := 15*perDay(20) + 15*perDay(100)
-	if len(openai.Periods) != 2 || math.Abs(openai.USD-want) > 0.01 {
+	if len(openai.Periods) != 2 || math.Abs(openai.Amount-want) > 0.01 {
 		t.Errorf("openai = %+v, want %.2f", openai, want)
 	}
-	if usd, complete := Total(costs); !complete || math.Abs(usd-anthropic.USD-openai.USD) > 1e-9 {
+	if usd, complete := Total(costs); !complete || math.Abs(usd-anthropic.Amount-openai.Amount) > 1e-9 {
 		t.Errorf("Total = %.2f %v", usd, complete)
 	}
 }
 
 func TestCostFlagsUnpricedPlans(t *testing.T) {
-	costs := Cost(nil, map[string]string{"anthropic": "claude-enterprise"}, day(1), day(31))
-	if len(costs) != 1 || costs[0].Complete || costs[0].USD != 0 {
+	costs := Cost(nil, map[string]string{"anthropic": "claude-enterprise"}, day(1), day(31), FX{})
+	if len(costs) != 1 || costs[0].Complete || costs[0].Amount != 0 {
 		t.Fatalf("costs = %+v", costs)
+	}
+}
+
+// The operator's own price, in their currency, wins over the list price;
+// a list-priced period converts at their rate; a currency with no rate
+// is flagged rather than guessed.
+func TestCostUsesTheOperatorsPriceAndCurrency(t *testing.T) {
+	h := &memHistory{}
+	if _, err := Record(context.Background(), h, nil, Change{
+		Provider: "anthropic", Plan: "claude-max-20x", From: day(1), Now: day(1), Price: 214.60, Currency: "eur",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	perDay := func(m float64) float64 { return m / (365.2425 / 12) }
+	fx := FX{Currency: "EUR", PerUSD: 0.85}
+	costs := Cost(h.h, map[string]string{"anthropic": "claude-max-20x", "openai": "gpt-plus"}, day(1), day(11), fx)
+	anthropic, openai := costs[0], costs[1]
+	if p := anthropic.Periods[0]; p.Source != "yours" || math.Abs(p.Amount-10*perDay(214.60)) > 0.01 {
+		t.Errorf("anthropic = %+v", p)
+	}
+	if p := openai.Periods[0]; p.Source != "list" || math.Abs(p.Amount-10*perDay(20)*0.85) > 0.01 {
+		t.Errorf("openai = %+v", p)
+	}
+	// Shown in USD with no rate, the EUR price cannot be converted.
+	usd := Cost(h.h, map[string]string{"anthropic": "claude-max-20x"}, day(1), day(11), FX{})
+	if usd[0].Complete || usd[0].Periods[0].Priced {
+		t.Errorf("converted EUR without a rate: %+v", usd[0])
 	}
 }
