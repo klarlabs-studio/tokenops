@@ -36,6 +36,19 @@ type Report struct {
 	// Compaction is where each agent compacts on its own, as the context
 	// power has set it. Filled by Status and by changes to the coach.
 	Compaction []LeverResult `json:"compaction,omitempty"`
+	// Preset names the preset the coach matches, "" when it has been tuned
+	// away from all of them.
+	Preset string `json:"preset,omitempty"`
+	// Hooks reports the client hooks a preset installed or found in place.
+	Hooks []HookInstall `json:"hooks,omitempty"`
+}
+
+// HookInstall is one client's hooks after applying a preset.
+type HookInstall struct {
+	Client string `json:"client"`
+	// Status is installed, current (already in place), or error.
+	Status string `json:"status"`
+	Detail string `json:"detail,omitempty"`
 }
 
 // Off reports whether every power is off: the coach records and says
