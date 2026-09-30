@@ -249,3 +249,17 @@ Consequences for the rungs:
   starting thresholds for the evidence to revise.
 - The configuration guide and ADR 0004's execution notes are updated to one
   account of the kill switch.
+
+## Execution notes
+
+- **2026-09-30, retroactive follow-through baseline.** The coach-hook
+  ledger holds every tip given since July (559, 51 sessions). Matching 429
+  of them to their Claude Code transcripts and looking at the next three
+  operator prompts: after early dollar tiers the operator compacted
+  manually, cleared, or switched model 5.6% of the time; after past-budget
+  tiers 7.5%; at other prompts in the same sessions above 400k context,
+  3.1% (818 prompts; z ≈ 3.4 against the tips). The tips roughly doubled
+  the action rate, and ~92% were still ignored: far above ADR 0005's ~10%
+  bar. Automatic compactions outnumber manual ones (94 to 25 at baseline),
+  so follow-through must not credit them (#458). This is the baseline the
+  quota and compact tips are measured against.
