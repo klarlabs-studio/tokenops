@@ -55,6 +55,8 @@ type planSetInput struct {
 	LimitWindow   string  `json:"limit_window,omitempty" jsonschema:"enum=monthly,enum=weekly,enum=daily,description=Period the spend limit covers. Default monthly."`
 	RateFactor    float64 `json:"rate_factor,omitempty" jsonschema:"description=Scale estimated spend to a negotiated rate (0.8 = 20% off list)."`
 	Clear         bool    `json:"clear,omitempty" jsonschema:"description=Remove the provider's plan binding."`
+	Price         float64 `json:"price,omitempty" jsonschema:"description=What the user pays per month for this plan as on their bill (regional price, tax included). Only when the user states it."`
+	Currency      string  `json:"currency,omitempty" jsonschema:"description=ISO 4217 code of price, e.g. EUR. Default: the configured money.currency, else USD."`
 	Since         string  `json:"since,omitempty" jsonschema:"description=Date the plan took effect (2026-09-01) when the user was on it before today. Re-marks the provider's usage recorded as billed since then as plan-covered. Only when the user says so."`
 }
 
@@ -122,10 +124,18 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 			if in.Clear {
 				from = now // an unset is never backdated
 			}
-			if previous != next || in.Since != "" {
+			if previous != next || in.Since != "" || in.Price > 0 {
+				currency := ""
+				if in.Price > 0 && !in.Clear {
+					currency = firstNonEmpty(in.Currency, cfg.Money.Currency, "USD")
+				}
+				price := in.Price
+				if in.Clear {
+					price = 0
+				}
 				res, err := planhistory.Record(context.Background(), planhistory.Switch{
 					Provider: provider, Previous: previous, Plan: next, From: from, Now: now,
-					DBPath: storePath(cfg.Storage.Path), Actor: "mcp",
+					DBPath: storePath(cfg.Storage.Path), Actor: "mcp", Price: price, Currency: currency,
 				})
 				switch {
 				case err != nil:
@@ -249,4 +259,13 @@ func storePath(configured string) string {
 		return filepath.Join(home, strings.TrimPrefix(p, "~"))
 	}
 	return p
+}
+
+func firstNonEmpty(vs ...string) string {
+	for _, v := range vs {
+		if s := strings.TrimSpace(v); s != "" {
+			return s
+		}
+	}
+	return ""
 }
