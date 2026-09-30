@@ -31,6 +31,7 @@ var subToMCP = map[string][]string{
 	"plan list":             {"tokenops_plan_set"},
 	"plan set":              {"tokenops_plan_set"},
 	"plan unset":            {"tokenops_plan_set"},
+	"plan history":          {"tokenops_plan_set"},
 	"outcome record":        {"tokenops_outcome_record"},
 	"outcome detect":        {"tokenops_outcome_detect"},
 	"preferred-model list":  {"tokenops_preferred_model"},

@@ -738,6 +738,36 @@ off list while TokenOps costs from the public rate card. Without it your
 console limit is compared against an overstatement, and the error is
 invisible.
 
+## Switching plans
+
+`plans:` holds the plan you are on now. TokenOps also keeps a history of
+switches in `~/.tokenops/plan-history.jsonl`, so reports over a past
+period use the plan that was in force then.
+
+```bash
+tokenops plan set openai gpt-pro-5x                     # from now on
+tokenops plan set openai gpt-pro-5x --since 2026-09-01  # you were on it since then
+tokenops plan history                                   # list the switches
+tokenops plan catalog                                   # plans and their list prices
+```
+
+TokenOps decides whether a call was covered by a plan when it records the
+call. Usage recorded while no plan was set counts as billed per token,
+and setting a plan later does not change that. `--since` is how you
+correct it: it re-marks that provider's billed usage since the date as
+plan-covered and tells you how many calls it changed. Trial usage and
+other providers are left alone, and the change is written to the audit
+log. `plan unset` is never backdated, because that would turn covered
+usage into charges the vendor may never have made.
+
+`tokenops spend` prices the plans in force over its window from the
+catalog's list prices, prorated by day across switches, and shows the
+list-price value of your usage per plan dollar. Prices are US list
+prices on monthly billing, before tax. Per-seat plans are priced for one
+seat, and a plan with no flat price, such as Enterprise, is left out and
+flagged. See
+[ADR 0008](https://github.com/klarlabs-studio/tokenops/blob/main/docs/adr/0008-plan-history.md).
+
 ## Environment variables
 
 | Variable                          | Maps to                       |

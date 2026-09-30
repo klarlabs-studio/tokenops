@@ -13,8 +13,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/planswitch"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast"
+	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/infra/svgchart"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
@@ -165,6 +167,8 @@ spend within the selected window. It surfaces:
 				ForecastToks:  tokenPredictions,
 				HideSparkline: hideSparkline,
 			}
+			view.Plans = planCosts(cfg.Plans, f.Since, f.Until)
+			view.PlanUSD, view.PlanComplete = planswitch.Total(view.Plans)
 			if svgFile != "" {
 				if err := writeRatioSVG(svgFile, summary.InputTokens, summary.OutputTokens); err != nil {
 					return err
@@ -211,6 +215,31 @@ type spendView struct {
 	// stays meaningful when spend is plan-covered.
 	ForecastToks  []forecast.Prediction `json:"forecast_tokens,omitempty"`
 	HideSparkline bool                  `json:"-"`
+	// Plans is what the subscriptions in force cost over the window,
+	// prorated across switches, from the catalog's list prices.
+	Plans []planswitch.ProviderCost `json:"plans,omitempty"`
+	// PlanUSD totals them; PlanComplete is false when a plan in the
+	// window has no published flat price, so the total understates it.
+	PlanUSD      float64 `json:"plan_usd,omitempty"`
+	PlanComplete bool    `json:"plan_complete,omitempty"`
+}
+
+// planCosts prices the plans in force over the window, from the plan
+// history and the configured bindings. A history that cannot be read
+// yields nothing rather than failing the spend report.
+func planCosts(current map[string]string, since, until time.Time) []planswitch.ProviderCost {
+	if until.IsZero() {
+		until = time.Now()
+	}
+	file, err := planhistory.Default()
+	if err != nil {
+		return nil
+	}
+	h, err := file.Load()
+	if err != nil {
+		return nil
+	}
+	return planswitch.Cost(h, current, since, until)
 }
 
 func parseGroup(s string) (analytics.Group, error) {
@@ -350,6 +379,16 @@ func writeSpendText(w io.Writer, v spendView) error {
 	if v.Summary.APIEquivalentUSD > v.Summary.CostUSD {
 		fmt.Fprintf(w, "  api equivalent:  %s (plan-covered usage at list price)\n",
 			fmtMoney(v.Summary.APIEquivalentUSD, v.Currency))
+	}
+	if v.PlanUSD > 0 {
+		note := "prorated list price"
+		if !v.PlanComplete {
+			note += "; a plan without a flat price is left out"
+		}
+		fmt.Fprintf(w, "  plans:           %s (%s)\n", fmtMoney(v.PlanUSD, v.Currency), note)
+		if v.Summary.APIEquivalentUSD > 0 {
+			fmt.Fprintf(w, "  value per plan $: %.1fx (api equivalent / plans)\n", v.Summary.APIEquivalentUSD/v.PlanUSD)
+		}
 	}
 	// Plot whichever series actually varies: cost is a flat zero for
 	// plan-covered traffic, so a cost-keyed sparkline would report calm

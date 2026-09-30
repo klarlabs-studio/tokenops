@@ -31,7 +31,8 @@ store. Subcommands:
 
   tokenops plan list       — show the configured plans
   tokenops plan headroom   — compute current consumption + risk
-  tokenops plan catalog    — list every plan TokenOps knows about`,
+  tokenops plan catalog    — list every plan TokenOps knows about
+  tokenops plan history    — list recorded plan switches`,
 	}
 	cmd.AddCommand(
 		newPlanListCmd(rf),
@@ -39,6 +40,7 @@ store. Subcommands:
 		newPlanCatalogCmd(),
 		newPlanSetCmd(),
 		newPlanUnsetCmd(),
+		newPlanHistoryCmd(),
 	)
 	return cmd
 }
@@ -50,6 +52,8 @@ func newPlanSetCmd() *cobra.Command {
 		spendLimit     float64
 		limitWindow    string
 		rateFactor     float64
+		sinceFlag      string
+		dbFlag         string
 	)
 	cmd := &cobra.Command{
 		Use:   "set <provider> <plan>",
@@ -58,12 +62,22 @@ func newPlanSetCmd() *cobra.Command {
 daemon and MCP server pick up the binding on next start. Replaces the
 previous workflow of editing the MCP host's JSON env block.
 
+Every switch is recorded with the date it took effect, so reports over a
+past period use the plan in force then. --since backdates a switch and
+re-marks the provider's usage recorded as billed per token since that
+date as covered by the plan.
+
 Example:
   tokenops plan set anthropic claude-max-20x
-  tokenops plan set openai gpt-plus`,
+  tokenops plan set openai gpt-pro-5x --since 2026-09-01`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			provider, planName := args[0], args[1]
+			now := time.Now().UTC()
+			from, err := parsePlanStart(sinceFlag, now)
+			if err != nil {
+				return err
+			}
 			path, err := resolveMutableConfigPath(configPathFlag)
 			if err != nil {
 				return err
@@ -93,11 +107,19 @@ Example:
 				fmt.Fprintf(cmd.OutOrStdout(), "set plans.%s = %s\n", provider, b.Plan)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", path)
+			if b.Previous != b.Plan || sinceFlag != "" {
+				if err := recordPlanChange(cmd.Context(), cmd.OutOrStdout(), provider, b.Previous, b.Plan, from, now, dbFlag); err != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "warning: plan history not updated: %v\n", err)
+				}
+			}
 			applyRestart(cmd.OutOrStdout(), !noRestartFlag, true)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
+	cmd.Flags().StringVar(&sinceFlag, "since", "",
+		"date the plan took effect (2026-09-01); re-marks usage recorded as billed since then")
+	cmd.Flags().StringVar(&dbFlag, "db", "", "path to events.db (defaults to ~/.tokenops/events.db)")
 	cmd.Flags().Float64Var(&spendLimit, "spend-limit", 0,
 		"org spend limit in USD, for plans billed at API rates rather than rate-limited (Enterprise)")
 	cmd.Flags().StringVar(&limitWindow, "limit-window", "",
@@ -131,9 +153,14 @@ func newPlanUnsetCmd() *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "plans.%s not set; nothing to do\n", provider)
 				return nil
 			}
+			previous := cfg.Plans[provider]
 			delete(cfg.Plans, provider)
 			if err := writeMutableConfig(path, cfg); err != nil {
 				return err
+			}
+			now := time.Now().UTC()
+			if err := recordPlanChange(cmd.Context(), cmd.OutOrStdout(), provider, previous, "", now, now, ""); err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: plan history not updated: %v\n", err)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(),
 				"removed plans.%s\nwrote %s\n",
@@ -285,7 +312,14 @@ func newPlanCatalogCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			for _, name := range plans.Names() {
 				p, _ := plans.Lookup(name)
-				fmt.Fprintf(cmd.OutOrStdout(), "%-22s %s (%s)\n", name, p.Display, p.Provider)
+				price := "no flat price"
+				if p.MonthlyUSD > 0 {
+					price = fmt.Sprintf("$%g/month", p.MonthlyUSD)
+					if p.PerSeat {
+						price += " per seat"
+					}
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "%-22s %-40s %s\n", name, p.Display+" ("+p.Provider+")", price)
 			}
 			return nil
 		},

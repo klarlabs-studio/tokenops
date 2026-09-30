@@ -703,3 +703,24 @@ func (s *Store) LastEventBySource(ctx context.Context) (map[string]time.Time, er
 	}
 	return out, nil
 }
+
+// RestampPlanIncluded marks a provider's metered prompt events in
+// [from, to) as covered by a plan, and returns how many it changed.
+//
+// Cost is otherwise fixed when an event is recorded, from the plan bound
+// at that moment. This is the one deliberate exception (ADR 0008): an
+// operator who tells TokenOps they were on a plan all along corrects the
+// usage it recorded as billed while no plan was bound. Events already
+// plan-covered or on a trial are left alone.
+func (s *Store) RestampPlanIncluded(ctx context.Context, provider string, from, to time.Time) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `UPDATE events
+		SET payload = json_remove(json_set(payload, '$.cost_source', 'plan_included'), '$.cost_usd', '$.cost_measured'),
+		    cost_usd = NULL
+		WHERE type = 'prompt' AND provider = ? AND timestamp_ns >= ? AND timestamp_ns < ?
+		  AND coalesce(json_extract(payload, '$.cost_source'), '') IN ('', 'metered')`,
+		provider, from.UTC().UnixNano(), to.UTC().UnixNano())
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: restamp: %w", contended(ctx, err))
+	}
+	return res.RowsAffected()
+}
