@@ -45,7 +45,11 @@ func renderCoachStatus(out io.Writer, r coachcap.Report, quota []string) {
 	if r.Off() {
 		state = "off (records, says nothing)"
 	}
-	fmt.Fprintf(out, "coach: %s · verbosity %s (%s)\n\n", state, r.Verbosity, r.VerbositySource)
+	preset := "tuned"
+	if r.Preset != "" {
+		preset = "preset " + r.Preset
+	}
+	fmt.Fprintf(out, "coach: %s · %s · verbosity %s (%s)\n\n", state, preset, r.Verbosity, r.VerbositySource)
 	fmt.Fprintf(out, "  %-8s %-11s %-11s %s\n", "POWER", "CONFIGURED", "EFFECTIVE", "SET BY")
 	for _, p := range r.Powers {
 		fmt.Fprintf(out, "  %-8s %-11s %-11s %s\n", p.Name, p.Configured, p.Effective, p.Source)
@@ -86,7 +90,7 @@ func renderCoachStatus(out io.Writer, r coachcap.Report, quota []string) {
 		fmt.Fprintf(out, "\n  lately: %s\n", strings.Join(activity, " · "))
 	}
 	renderFollowThrough(out, r)
-	fmt.Fprintln(out, "\n  change: tokenops coach autonomy <off|advise|ask|autonomous> · verbosity <quiet|normal|verbose>")
+	fmt.Fprintln(out, "\n  change: tokenops coach preset <observe|advise|guided|autopilot> · autonomy <off|advise|ask|autonomous> · verbosity <quiet|normal|verbose>")
 	fmt.Fprintln(out, "          tokenops coach set <inform|waste|models|context> <rung> · tokenops coach off")
 }
 

@@ -18,6 +18,28 @@ to enforce it.
 
 ### The coach: who decides, and how much it says
 
+**Start with a preset.** One choice sets every power and how much the coach
+says, installs the coach's hooks on every agent installed here (Claude
+Code, Codex, Cursor, opencode, as far as each supports them), and sets or
+restores where agents compact:
+
+```bash
+tokenops coach preset            # list them; * marks yours
+tokenops coach preset guided     # set one
+tokenops init --preset autopilot # on a new machine (a new config gets advise)
+```
+
+| Preset | inform | waste | models | context | verbosity | In short |
+|---|---|---|---|---|---|---|
+| `observe` | off | off | off | off | quiet | records what it would say or do; says and does nothing |
+| `advise` | advise | advise | advise | advise | normal | tells you what you could do better; changes nothing |
+| `guided` | advise | autonomous | ask | advise | normal | refuses redundant re-reads, asks before moving subagents |
+| `autopilot` | advise | autonomous | autonomous | autonomous | quiet | acts on its own and stays quiet, including where agents compact |
+
+Asking an agent works the same way: the `tokenops_coach` tool takes
+`preset` and runs the same command. Tuning one power afterwards is fine;
+`tokenops coach` then shows the coach as *tuned*.
+
 The coach has two dials ([ADR 0006](https://github.com/klarlabs-studio/tokenops/blob/main/docs/adr/0006-one-coach.md)):
 
 ```yaml

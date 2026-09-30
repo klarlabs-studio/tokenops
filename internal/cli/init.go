@@ -6,6 +6,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
+
+	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -26,6 +29,7 @@ type initFlags struct {
 	printOnly   bool
 	withDetect  bool
 	noWire      bool
+	preset      string
 }
 
 func newInitCmd() *cobra.Command {
@@ -64,6 +68,7 @@ config only.`,
 		},
 	}
 	cmd.Flags().StringVar(&f.configPath, "config-path", "", "override config file path (defaults to XDG location)")
+	cmd.Flags().StringVar(&f.preset, "preset", "", "coach preset to set up ("+strings.Join(coachcap.PresetNames(), " | ")+"); a new config gets "+coachcap.PresetDefault+", an existing one keeps its coach unless named")
 	cmd.Flags().StringVar(&f.storagePath, "storage-path", "", "override events.db path (defaults to XDG data dir)")
 	cmd.Flags().StringVar(&f.rulesRoot, "rules-root", "", "override rule scan root (defaults to current working directory)")
 	cmd.Flags().StringVar(&f.repoID, "repo-id", "", "rule corpus identifier prepended to source IDs (defaults to basename of rules root)")
@@ -132,7 +137,9 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 				return err
 			}
 			runSetup(cmd.OutOrStdout(), configPath, target)
-			return nil
+			// An existing coach is the operator's; change it only when
+			// they named a preset.
+			return initPreset(cmd, configPath, f.preset)
 		}
 	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("stat %s: %w", configPath, err)
@@ -168,6 +175,28 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 		return err
 	}
 	runSetup(cmd.OutOrStdout(), configPath, target)
+	preset := f.preset
+	if preset == "" {
+		preset = coachcap.PresetDefault
+	}
+	return initPreset(cmd, configPath, preset)
+}
+
+// initPreset sets the coach from a preset as the last step of init, so a
+// new machine ends up with every hook the coach needs rather than the
+// subset the setup steps install.
+func initPreset(cmd *cobra.Command, configPath, preset string) error {
+	if preset == "" {
+		return nil
+	}
+	r, err := applyPresetAt(configPath, preset)
+	if err != nil {
+		return err
+	}
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "\ncoach preset: %s\n", preset)
+	renderHooks(out, r.Hooks)
+	renderCompaction(out, r)
 	return nil
 }
 

@@ -33,6 +33,7 @@ coach is set to.`,
 		RunE: func(cmd *cobra.Command, _ []string) error { return coachStatus(cmd, jsonOut) },
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
+	cmd.AddCommand(newCoachPresetCmd())
 	cmd.AddCommand(newCoachAutonomyCmd())
 	cmd.AddCommand(newCoachVerbosityCmd())
 	cmd.AddCommand(newCoachSetCmd())

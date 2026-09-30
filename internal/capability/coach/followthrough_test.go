@@ -180,3 +180,54 @@ func power(t *testing.T, r Report, name string) Power {
 	t.Fatalf("no power %s", name)
 	return Power{}
 }
+
+func TestPresetsResolveToTheirPromisedRungs(t *testing.T) {
+	want := map[string][4]string{ // inform, waste, models, context (effective)
+		"observe":   {"off", "off", "off", "off"},
+		"advise":    {"advise", "advise", "advise", "advise"},
+		"guided":    {"advise", "autonomous", "ask", "advise"},
+		"autopilot": {"advise", "autonomous", "autonomous", "autonomous"},
+	}
+	for _, p := range Presets() {
+		r := Build(config.Config{Coach: p.Coach})
+		got := [4]string{}
+		for i, power := range []string{config.PowerInform, config.PowerWaste, config.PowerModels, config.PowerContext} {
+			got[i] = r.Effective(power)
+		}
+		if got != want[p.Name] {
+			t.Errorf("%s: effective %v; want %v", p.Name, got, want[p.Name])
+		}
+		if CurrentPreset(config.Config{Coach: p.Coach}) != p.Name {
+			t.Errorf("%s: not recognised as itself", p.Name)
+		}
+	}
+	tuned := config.Config{Coach: config.CoachConfig{Autonomy: config.AutonomyAdvise, Powers: map[string]string{config.PowerModels: config.AutonomyAutonomous}}}
+	if got := CurrentPreset(tuned); got != "" {
+		t.Errorf("a tuned coach matched preset %q", got)
+	}
+}
+
+func TestApplyPresetReplacesTheCoachAndReconciles(t *testing.T) {
+	path := writeConfig(t, "coach:\n  autonomy: advise\n  powers:\n    models: ask\n")
+	l, f := &memLedger{}, &fakeLevers{}
+	p, _ := PresetByName("autopilot")
+	r, err := ApplyPreset(path, l, f, p, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Effective(config.PowerContext) != config.AutonomyAutonomous || f.applied != 1 {
+		t.Fatalf("autopilot: context %s, levers applied %d", r.Effective(config.PowerContext), f.applied)
+	}
+	p, _ = PresetByName("observe")
+	r, err = ApplyPreset(path, l, f, p, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.Off() || f.reverted != 1 {
+		t.Fatalf("observe: off=%v reverted=%d", r.Off(), f.reverted)
+	}
+	cfg, _ := config.ReadMutable(path)
+	if len(cfg.Coach.Powers) != 0 {
+		t.Errorf("a preset left earlier overrides behind: %v", cfg.Coach.Powers)
+	}
+}

@@ -277,3 +277,12 @@ Consequences for the rungs:
   is the compact tip; `autonomous` writes the settings and restores them
   byte for byte when lowered; `ask` reports as `advise`. Legacy keys never
   map to `autonomous` for this power.
+
+- **2026-09-30, presets.** One choice sets the whole coach (observe,
+  advise, guided, autopilot), installs every hook the coach needs on each
+  installed agent, and sets or restores where agents compact. The CLI
+  (`tokenops coach preset`, `tokenops init --preset`) and the MCP tool
+  (`tokenops_coach` with `preset`, which runs the same command) share one
+  implementation, so asking an agent and typing the command cannot wire a
+  machine differently. A new config gets `advise`; an existing coach is
+  changed only by naming a preset.
