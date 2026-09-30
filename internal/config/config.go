@@ -61,6 +61,9 @@ type Config struct {
 	// it names. A company can ship it through device management like any
 	// other setting.
 	ModelPolicy ModelPolicyConfig `yaml:"model_policy,omitempty"`
+	// Money is the currency you pay your plans in, for showing plan cost
+	// and value per plan unit in it.
+	Money       MoneyConfig       `yaml:"money,omitempty"`
 	TLS         TLSConfig         `yaml:"tls"`
 	Storage     StorageConfig     `yaml:"storage"`
 	Retention   RetentionConfig   `yaml:"retention,omitempty"`
@@ -99,6 +102,27 @@ func ParseMode(s string) (string, error) {
 	default:
 		return "", fmt.Errorf("mode must be %q or %q, got %q", ModePassive, ModeActive, s)
 	}
+}
+
+// MoneyConfig is the operator's currency. Usage is priced in US dollars
+// from vendor rate cards; plans are paid in whatever the bill says. The
+// rate between them is the operator's to set: TokenOps fetches none.
+type MoneyConfig struct {
+	// Currency is an ISO 4217 code, e.g. EUR. Empty means USD.
+	Currency string `yaml:"currency,omitempty"`
+	// PerUSD is how many units of Currency one US dollar buys, e.g. 0.85.
+	PerUSD float64 `yaml:"per_usd,omitempty"`
+}
+
+// Validate rejects a currency code or rate that cannot mean anything.
+func (m MoneyConfig) Validate() error {
+	if c := strings.TrimSpace(m.Currency); c != "" && len(c) != 3 {
+		return fmt.Errorf("money.currency must be a three-letter ISO 4217 code, got %q", m.Currency)
+	}
+	if m.PerUSD < 0 {
+		return fmt.Errorf("money.per_usd must not be negative, got %g", m.PerUSD)
+	}
+	return nil
 }
 
 // ModelPolicyConfig is the allow and deny lists, as glob patterns matched
@@ -1168,6 +1192,9 @@ func (c Config) Validate() error {
 		return err
 	}
 	if err := c.ModelPolicy.Policy().Validate(); err != nil {
+		return err
+	}
+	if err := c.Money.Validate(); err != nil {
 		return err
 	}
 	if err := c.Coach.Validate(); err != nil {

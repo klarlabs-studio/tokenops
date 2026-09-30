@@ -16,6 +16,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
+	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -54,6 +55,8 @@ func newPlanSetCmd() *cobra.Command {
 		rateFactor     float64
 		sinceFlag      string
 		dbFlag         string
+		priceFlag      float64
+		currencyFlag   string
 	)
 	cmd := &cobra.Command{
 		Use:   "set <provider> <plan>",
@@ -69,7 +72,12 @@ date as covered by the plan.
 
 Example:
   tokenops plan set anthropic claude-max-20x
-  tokenops plan set openai gpt-pro-5x --since 2026-09-01`,
+  tokenops plan set openai gpt-pro-5x --since 2026-09-01
+  tokenops plan set anthropic claude-max-20x --price 214.60 --currency EUR
+
+--price records what you pay per month as it appears on your bill
+(regional price, tax included); without it, reports use the catalog's
+US list price.`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			provider, planName := args[0], args[1]
@@ -107,8 +115,21 @@ Example:
 				fmt.Fprintf(cmd.OutOrStdout(), "set plans.%s = %s\n", provider, b.Plan)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", path)
-			if b.Previous != b.Plan || sinceFlag != "" {
-				if err := recordPlanChange(cmd.Context(), cmd.OutOrStdout(), provider, b.Previous, b.Plan, from, now, dbFlag); err != nil {
+			if b.Previous != b.Plan || sinceFlag != "" || priceFlag > 0 {
+				currency := currencyFlag
+				if currency == "" {
+					currency = cfg.Money.Currency
+				}
+				if currency == "" {
+					currency = "USD"
+				}
+				if priceFlag <= 0 {
+					currency = ""
+				}
+				if err := recordPlanChange(cmd.Context(), cmd.OutOrStdout(), planhistory.Switch{
+					Provider: provider, Previous: b.Previous, Plan: b.Plan, From: from, Now: now,
+					Price: priceFlag, Currency: currency,
+				}, dbFlag); err != nil {
 					fmt.Fprintf(cmd.ErrOrStderr(), "warning: plan history not updated: %v\n", err)
 				}
 			}
@@ -120,6 +141,8 @@ Example:
 	cmd.Flags().StringVar(&sinceFlag, "since", "",
 		"date the plan took effect (2026-09-01); re-marks usage recorded as billed since then")
 	cmd.Flags().StringVar(&dbFlag, "db", "", "path to events.db (defaults to ~/.tokenops/events.db)")
+	cmd.Flags().Float64Var(&priceFlag, "price", 0, "what you pay per month, as on your bill (tax included)")
+	cmd.Flags().StringVar(&currencyFlag, "currency", "", "ISO 4217 code of --price (default: money.currency, else USD)")
 	cmd.Flags().Float64Var(&spendLimit, "spend-limit", 0,
 		"org spend limit in USD, for plans billed at API rates rather than rate-limited (Enterprise)")
 	cmd.Flags().StringVar(&limitWindow, "limit-window", "",
@@ -159,7 +182,9 @@ func newPlanUnsetCmd() *cobra.Command {
 				return err
 			}
 			now := time.Now().UTC()
-			if err := recordPlanChange(cmd.Context(), cmd.OutOrStdout(), provider, previous, "", now, now, ""); err != nil {
+			if err := recordPlanChange(cmd.Context(), cmd.OutOrStdout(), planhistory.Switch{
+				Provider: provider, Previous: previous, From: now, Now: now,
+			}, ""); err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: plan history not updated: %v\n", err)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(),

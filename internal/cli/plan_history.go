@@ -35,11 +35,11 @@ func parsePlanStart(s string, now time.Time) (time.Time, error) {
 // backdated one, re-marks the usage recorded as billed since then. The
 // config write has already happened; a failure here is reported but
 // does not undo it, because the plan in force now is correct either way.
-func recordPlanChange(ctx context.Context, out io.Writer, provider, previous, plan string, from, now time.Time, dbFlag string) error {
+func recordPlanChange(ctx context.Context, out io.Writer, sw planhistory.Switch, dbFlag string) error {
 	dbPath, _ := resolvePlanDB(dbFlag)
-	res, err := planhistory.Record(ctx, planhistory.Switch{
-		Provider: provider, Previous: previous, Plan: plan, From: from, Now: now, DBPath: dbPath, Actor: "cli",
-	})
+	sw.DBPath, sw.Actor = dbPath, "cli"
+	plan, from, now := sw.Plan, sw.From, sw.Now
+	res, err := planhistory.Record(ctx, sw)
 	if res.StoreErr != nil {
 		fmt.Fprintf(out, "warning: event store unavailable, so earlier usage was not re-marked: %v\n", res.StoreErr)
 	}
@@ -87,8 +87,12 @@ func newPlanHistoryCmd() *cobra.Command {
 				if plan == "" {
 					plan = "(no plan)"
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "%-10s %-18s from %s (recorded %s)\n",
-					b.Provider, plan, from, b.Recorded.Format("2006-01-02"))
+				price := ""
+				if b.Price > 0 {
+					price = fmt.Sprintf(" at %.2f %s/month", b.Price, b.Currency)
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "%-10s %-18s from %s%s (recorded %s)\n",
+					b.Provider, plan, from, price, b.Recorded.Format("2006-01-02"))
 			}
 			return nil
 		},

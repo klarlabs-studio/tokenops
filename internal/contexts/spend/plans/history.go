@@ -14,6 +14,11 @@ type Binding struct {
 	// Recorded is when the change was written, which differs from From
 	// when a switch is backdated.
 	Recorded time.Time `json:"recorded"`
+	// Price is what the operator pays per month for this plan, in
+	// Currency (ISO 4217), as it appears on their bill: a regional price,
+	// tax included. Zero falls back to the catalog's US list price.
+	Price    float64 `json:"price,omitempty"`
+	Currency string  `json:"currency,omitempty"`
 }
 
 // History is every recorded plan change.
@@ -32,6 +37,10 @@ type Period struct {
 	Plan string    `json:"plan"`
 	From time.Time `json:"from"`
 	To   time.Time `json:"to"`
+	// Price and Currency are the operator's own price for the plan in
+	// this period, when they gave one.
+	Price    float64 `json:"price,omitempty"`
+	Currency string  `json:"currency,omitempty"`
 }
 
 // Days is the period's length in days.
@@ -59,18 +68,23 @@ func (h History) forProvider(provider string) []Binding {
 // when the provider has no recorded change. Before the first recorded
 // change the plan is unknown and At returns "".
 func (h History) At(provider string, t time.Time, current string) string {
+	return h.bindingAt(provider, t, current).Plan
+}
+
+// bindingAt is the binding in force at t.
+func (h History) bindingAt(provider string, t time.Time, current string) Binding {
 	bs := h.forProvider(provider)
 	if len(bs) == 0 {
-		return current
+		return Binding{Provider: provider, Plan: current}
 	}
-	plan := ""
+	var in Binding
 	for _, b := range bs {
 		if b.From.After(t) {
 			break
 		}
-		plan = b.Plan
+		in = b
 	}
-	return plan
+	return in
 }
 
 // Periods splits [since, until) into stretches on one plan each,
@@ -100,15 +114,16 @@ func (h History) Periods(provider string, since, until time.Time, current string
 		if !to.After(from) {
 			continue
 		}
-		plan := h.At(provider, from, current)
-		if plan == "" {
+		b := h.bindingAt(provider, from, current)
+		if b.Plan == "" {
 			continue
 		}
-		if n := len(out); n > 0 && out[n-1].Plan == plan && out[n-1].To.Equal(from) {
+		if n := len(out); n > 0 && out[n-1].Plan == b.Plan && out[n-1].Price == b.Price &&
+			out[n-1].Currency == b.Currency && out[n-1].To.Equal(from) {
 			out[n-1].To = to
 			continue
 		}
-		out = append(out, Period{Plan: plan, From: from, To: to})
+		out = append(out, Period{Plan: b.Plan, From: from, To: to, Price: b.Price, Currency: b.Currency})
 	}
 	return out
 }

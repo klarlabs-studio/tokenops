@@ -17,6 +17,10 @@ type Switch struct {
 	DBPath string
 	// Actor names who made the change in the audit log.
 	Actor string
+	// Price and Currency are what the operator pays per month, when they
+	// said.
+	Price    float64
+	Currency string
 }
 
 // Outcome is what a switch did. StoreErr is set when a backdated switch
@@ -50,7 +54,10 @@ func Record(ctx context.Context, s Switch) (Outcome, error) {
 			defer func() { _ = st.Close() }()
 		}
 	}
-	res, err := planswitch.Record(ctx, file, restamper, s.Provider, s.Previous, s.Plan, s.From, s.Now)
+	res, err := planswitch.Record(ctx, file, restamper, planswitch.Change{
+		Provider: s.Provider, Previous: s.Previous, Plan: s.Plan, From: s.From, Now: s.Now,
+		Price: s.Price, Currency: s.Currency,
+	})
 	out.Result = res
 	if err != nil {
 		return out, err
@@ -64,7 +71,7 @@ func Record(ctx context.Context, s Switch) (Outcome, error) {
 			Action: audit.ActionPlanChange, Actor: actor, Target: s.Provider,
 			Details: map[string]any{
 				"previous": s.Previous, "plan": s.Plan, "from": s.From.Format(time.RFC3339),
-				"restamped": res.Restamped,
+				"restamped": res.Restamped, "price": s.Price, "currency": s.Currency,
 			},
 		})
 	}

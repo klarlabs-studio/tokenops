@@ -98,13 +98,30 @@ func TestPlanCatalogShowsPrices(t *testing.T) {
 
 func TestSpendTextShowsPlanCostAndValue(t *testing.T) {
 	var out bytes.Buffer
-	v := spendView{Window: "last 30d", Currency: "USD", PlanUSD: 300, PlanComplete: true}
+	v := spendView{Window: "last 30d", Currency: "USD"}
 	v.Summary.APIEquivalentUSD = 11400
-	v.Summary.CostUSD = 0
+	fillPlanCost(&v, map[string]string{"anthropic": "claude-max-20x"}, "EUR", 0.85,
+		time.Now().Add(-30*24*time.Hour), time.Now())
 	if err := writeSpendText(&out, v); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "plans:") || !strings.Contains(out.String(), "38.0x") {
-		t.Errorf("spend text:\n%s", out.String())
+	// No price given: the list price, converted at the operator's rate.
+	text := out.String()
+	if !strings.Contains(text, "EUR (prorated; US list price where you gave none)") || !strings.Contains(text, "value per plan EUR:") {
+		t.Errorf("spend text:\n%s", text)
+	}
+}
+
+// A price given with --price is recorded and shown in plan history.
+func TestPlanSetRecordsThePrice(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(cfgPath, []byte("money:\n  currency: EUR\nplans:\n  anthropic: claude-max-20x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runPlanCmd(t, "set", "anthropic", "claude-max-20x", "--price", "214.60",
+		"--config-path", cfgPath, "--db", filepath.Join(dir, "events.db"), "--no-restart")
+	if hist := runPlanCmd(t, "history"); !strings.Contains(hist, "at 214.60 EUR/month") {
+		t.Errorf("plan history:\n%s", hist)
 	}
 }

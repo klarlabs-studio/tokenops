@@ -86,3 +86,16 @@ func TestCatalogPricesArePinned(t *testing.T) {
 		t.Errorf("gpt-pro-5x = %v", p.MonthlyUSD)
 	}
 }
+
+// A price change on the same plan splits the period, so each part is
+// priced at what was paid then.
+func TestPeriodsCarryThePrice(t *testing.T) {
+	h := History{
+		{Provider: "anthropic", Plan: "claude-max-20x", Recorded: day(1), Price: 214.60, Currency: "EUR"},
+		{Provider: "anthropic", Plan: "claude-max-20x", From: day(20), Recorded: day(20), Price: 199, Currency: "EUR"},
+	}
+	got := h.Periods("anthropic", day(1), day(30), "claude-max-20x")
+	if len(got) != 2 || got[0].Price != 214.60 || got[1].Price != 199 || got[1].Currency != "EUR" {
+		t.Fatalf("Periods = %+v", got)
+	}
+}

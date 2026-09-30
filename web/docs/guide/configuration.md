@@ -760,12 +760,29 @@ other providers are left alone, and the change is written to the audit
 log. `plan unset` is never backdated, because that would turn covered
 usage into charges the vendor may never have made.
 
-`tokenops spend` prices the plans in force over its window from the
-catalog's list prices, prorated by day across switches, and shows the
-list-price value of your usage per plan dollar. Prices are US list
-prices on monthly billing, before tax. Per-seat plans are priced for one
-seat, and a plan with no flat price, such as Enterprise, is left out and
-flagged. See
+`tokenops spend` prices the plans in force over its window, prorated by
+day across switches, and shows the list-price value of your usage per
+unit of plan cost. It uses what you told it you pay, and the catalog's
+US list price (monthly billing, before tax) where you gave nothing.
+Per-seat plans are priced for one seat, and a plan with no flat price,
+such as Enterprise, is left out and flagged.
+
+Record what your bill says, in your currency, with `--price`:
+
+```bash
+tokenops plan set anthropic claude-max-20x --price 214.60 --currency EUR
+```
+
+```yaml
+money:
+  currency: EUR   # show plan cost in euros; the default for --currency
+  per_usd: 0.85   # 1 USD in EUR: compares dollar-priced usage with your plans
+```
+
+Usage is priced in US dollars from vendor rate cards, so comparing it with
+a plan paid in euros needs an exchange rate. You set it; TokenOps fetches
+none. Without `per_usd`, plan cost is still shown in your currency, but a
+list-priced plan and the value comparison are left out. See
 [ADR 0008](https://github.com/klarlabs-studio/tokenops/blob/main/docs/adr/0008-plan-history.md).
 
 ## Environment variables

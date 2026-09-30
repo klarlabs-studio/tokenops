@@ -167,8 +167,7 @@ spend within the selected window. It surfaces:
 				ForecastToks:  tokenPredictions,
 				HideSparkline: hideSparkline,
 			}
-			view.Plans = planCosts(cfg.Plans, f.Since, f.Until)
-			view.PlanUSD, view.PlanComplete = planswitch.Total(view.Plans)
+			fillPlanCost(&view, cfg.Plans, cfg.Money.Currency, cfg.Money.PerUSD, f.Since, f.Until)
 			if svgFile != "" {
 				if err := writeRatioSVG(svgFile, summary.InputTokens, summary.OutputTokens); err != nil {
 					return err
@@ -216,18 +215,25 @@ type spendView struct {
 	ForecastToks  []forecast.Prediction `json:"forecast_tokens,omitempty"`
 	HideSparkline bool                  `json:"-"`
 	// Plans is what the subscriptions in force cost over the window,
-	// prorated across switches, from the catalog's list prices.
+	// prorated across switches: your own prices where you gave them, the
+	// catalog's US list prices otherwise.
 	Plans []planswitch.ProviderCost `json:"plans,omitempty"`
-	// PlanUSD totals them; PlanComplete is false when a plan in the
-	// window has no published flat price, so the total understates it.
-	PlanUSD      float64 `json:"plan_usd,omitempty"`
+	// PlanCost totals them in PlanCurrency; PlanComplete is false when a
+	// plan could not be priced, so the total understates it.
+	PlanCost     float64 `json:"plan_cost,omitempty"`
+	PlanCurrency string  `json:"plan_currency,omitempty"`
 	PlanComplete bool    `json:"plan_complete,omitempty"`
+	// ValuePerPlanUnit is the API-equivalent value per unit of plan cost,
+	// both in PlanCurrency. Zero when there is no rate to compare them.
+	ValuePerPlanUnit float64 `json:"value_per_plan_unit,omitempty"`
+	// PlanListPriced is true when some period fell back to a list price.
+	PlanListPriced bool `json:"plan_list_priced,omitempty"`
 }
 
 // planCosts prices the plans in force over the window, from the plan
 // history and the configured bindings. A history that cannot be read
 // yields nothing rather than failing the spend report.
-func planCosts(current map[string]string, since, until time.Time) []planswitch.ProviderCost {
+func planCosts(current map[string]string, since, until time.Time, fx planswitch.FX) []planswitch.ProviderCost {
 	if until.IsZero() {
 		until = time.Now()
 	}
@@ -239,7 +245,7 @@ func planCosts(current map[string]string, since, until time.Time) []planswitch.P
 	if err != nil {
 		return nil
 	}
-	return planswitch.Cost(h, current, since, until)
+	return planswitch.Cost(h, current, since, until, fx)
 }
 
 func parseGroup(s string) (analytics.Group, error) {
@@ -380,14 +386,20 @@ func writeSpendText(w io.Writer, v spendView) error {
 		fmt.Fprintf(w, "  api equivalent:  %s (plan-covered usage at list price)\n",
 			fmtMoney(v.Summary.APIEquivalentUSD, v.Currency))
 	}
-	if v.PlanUSD > 0 {
-		note := "prorated list price"
-		if !v.PlanComplete {
-			note += "; a plan without a flat price is left out"
+	if v.PlanCost > 0 {
+		note := "your prices, prorated"
+		if v.PlanListPriced {
+			note = "prorated; US list price where you gave none"
 		}
-		fmt.Fprintf(w, "  plans:           %s (%s)\n", fmtMoney(v.PlanUSD, v.Currency), note)
-		if v.Summary.APIEquivalentUSD > 0 {
-			fmt.Fprintf(w, "  value per plan $: %.1fx (api equivalent / plans)\n", v.Summary.APIEquivalentUSD/v.PlanUSD)
+		if !v.PlanComplete {
+			note += "; a plan with no price or rate is left out"
+		}
+		fmt.Fprintf(w, "  plans:           %.2f %s (%s)\n", v.PlanCost, v.PlanCurrency, note)
+		switch {
+		case v.ValuePerPlanUnit > 0:
+			fmt.Fprintf(w, "  value per plan %s: %.1fx (api equivalent / plans)\n", v.PlanCurrency, v.ValuePerPlanUnit)
+		case v.Summary.APIEquivalentUSD > 0:
+			fmt.Fprintln(w, "  value per plan:  set money.per_usd to compare dollar usage with your plan currency")
 		}
 	}
 	// Plot whichever series actually varies: cost is a flat zero for
@@ -523,4 +535,26 @@ func allZeroForecast(points []forecast.Prediction) bool {
 		}
 	}
 	return true
+}
+
+// fillPlanCost prices the plans over the window in the operator's
+// currency and compares the usage's list-price value with it.
+func fillPlanCost(v *spendView, current map[string]string, currency string, perUSD float64, since, until time.Time) {
+	fx := planswitch.FX{Currency: currency, PerUSD: perUSD}
+	v.Plans = planCosts(current, since, until, fx)
+	v.PlanCost, v.PlanComplete = planswitch.Total(v.Plans)
+	v.PlanCurrency = strings.ToUpper(strings.TrimSpace(currency))
+	if v.PlanCurrency == "" {
+		v.PlanCurrency = "USD"
+	}
+	for _, p := range v.Plans {
+		for _, period := range p.Periods {
+			if period.Source == "list" {
+				v.PlanListPriced = true
+			}
+		}
+	}
+	if value, ok := fx.FromUSD(v.Summary.APIEquivalentUSD); ok && v.PlanCost > 0 {
+		v.ValuePerPlanUnit = value / v.PlanCost
+	}
 }
