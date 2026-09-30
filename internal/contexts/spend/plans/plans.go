@@ -81,6 +81,15 @@ type Plan struct {
 	// SourceURL pins the vendor page that documents these limits. Drift
 	// surfaces in PR review when the URL or numbers change.
 	SourceURL string
+	// MonthlyUSD is the published list price per month on monthly
+	// billing, in US dollars before tax; per seat when PerSeat. Zero means
+	// no flat price is published (Enterprise: seats plus usage) or the
+	// tier is not specific enough to have one.
+	MonthlyUSD float64
+	PerSeat    bool
+	// PriceSource pins the vendor page the price was read from, with the
+	// date it was read.
+	PriceSource string
 }
 
 // catalog is the authoritative plan list. Numbers reflect the public
@@ -88,22 +97,26 @@ type Plan struct {
 // comment; bumps require a PR with refreshed URLs.
 var catalog = map[string]Plan{
 	"claude-max-5x": {
-		Name:       "claude-max-5x",
-		Provider:   "anthropic",
-		Display:    "Claude Max 5x",
-		RelativeTo: "claude-pro",
-		Multiplier: 5,
-		WindowUnit: "messages",
-		SourceURL:  "https://support.claude.com/en/articles/11049741-what-is-the-max-plan (2026-09): \"five times the Pro plan's per-session usage allowance\"",
+		Name:        "claude-max-5x",
+		Provider:    "anthropic",
+		Display:     "Claude Max 5x",
+		RelativeTo:  "claude-pro",
+		Multiplier:  5,
+		WindowUnit:  "messages",
+		SourceURL:   "https://support.claude.com/en/articles/11049741-what-is-the-max-plan (2026-09): \"five times the Pro plan's per-session usage allowance\"",
+		MonthlyUSD:  100,
+		PriceSource: "https://support.claude.com/en/articles/11049741 (2026-09-30): Max 5x $100 per month",
 	},
 	"claude-max-20x": {
-		Name:       "claude-max-20x",
-		Provider:   "anthropic",
-		Display:    "Claude Max 20x",
-		RelativeTo: "claude-pro",
-		Multiplier: 20,
-		WindowUnit: "messages",
-		SourceURL:  "https://support.claude.com/en/articles/11049741-what-is-the-max-plan (2026-09): \"20 times the Pro plan's per-session usage allowance\"",
+		Name:        "claude-max-20x",
+		Provider:    "anthropic",
+		Display:     "Claude Max 20x",
+		RelativeTo:  "claude-pro",
+		Multiplier:  20,
+		WindowUnit:  "messages",
+		SourceURL:   "https://support.claude.com/en/articles/11049741-what-is-the-max-plan (2026-09): \"20 times the Pro plan's per-session usage allowance\"",
+		MonthlyUSD:  200,
+		PriceSource: "https://support.claude.com/en/articles/11049741 (2026-09-30): Max 20x $200 per month",
 	},
 	"claude-enterprise": {
 		Name:             "claude-enterprise",
@@ -113,22 +126,28 @@ var catalog = map[string]Plan{
 		SourceURL:        "https://support.claude.com/en/articles/12005970-manage-usage-credits-for-team-and-seat-based-enterprise-plans (2026-09): \"all usage is billed at API rates from the first token\"",
 	},
 	"claude-team-standard": {
-		Name:       "claude-team-standard",
-		Provider:   "anthropic",
-		Display:    "Claude Team (Standard seat)",
-		RelativeTo: "claude-pro",
-		Multiplier: 1.25,
-		WindowUnit: "messages",
-		SourceURL:  "https://support.claude.com/en/articles/9266767-what-is-the-team-plan (2026-09): \"1.25x the Pro plan's per-session usage allowance\"",
+		Name:        "claude-team-standard",
+		Provider:    "anthropic",
+		Display:     "Claude Team (Standard seat)",
+		RelativeTo:  "claude-pro",
+		Multiplier:  1.25,
+		WindowUnit:  "messages",
+		SourceURL:   "https://support.claude.com/en/articles/9266767-what-is-the-team-plan (2026-09): \"1.25x the Pro plan's per-session usage allowance\"",
+		MonthlyUSD:  25,
+		PerSeat:     true,
+		PriceSource: "https://support.claude.com/en/articles/9266767 (2026-09-30): $25 per member per month, billed monthly",
 	},
 	"claude-team-premium": {
-		Name:       "claude-team-premium",
-		Provider:   "anthropic",
-		Display:    "Claude Team (Premium seat)",
-		RelativeTo: "claude-pro",
-		Multiplier: 6.25,
-		WindowUnit: "messages",
-		SourceURL:  "https://support.claude.com/en/articles/9266767-what-is-the-team-plan (2026-09): \"6.25x the Pro plan's per-session usage allowance\"",
+		Name:        "claude-team-premium",
+		Provider:    "anthropic",
+		Display:     "Claude Team (Premium seat)",
+		RelativeTo:  "claude-pro",
+		Multiplier:  6.25,
+		WindowUnit:  "messages",
+		SourceURL:   "https://support.claude.com/en/articles/9266767-what-is-the-team-plan (2026-09): \"6.25x the Pro plan's per-session usage allowance\"",
+		MonthlyUSD:  125,
+		PerSeat:     true,
+		PriceSource: "https://support.claude.com/en/articles/9266767 (2026-09-30): $125 per member per month, billed monthly",
 	},
 	"claude-pro": {
 		Name:              "claude-pro",
@@ -141,7 +160,9 @@ var catalog = map[string]Plan{
 		// so it is the only one that can go stale — and the vendor no
 		// longer publishes an absolute to check it against, which is
 		// exactly why it is pinned in one place instead of five.
-		SourceURL: "https://support.anthropic.com/en/articles/8325612 (2026-05; vendor no longer publishes an absolute)",
+		SourceURL:   "https://support.anthropic.com/en/articles/8325612 (2026-05; vendor no longer publishes an absolute)",
+		MonthlyUSD:  20,
+		PriceSource: "https://claude.com/pricing (2026-09-30): $20 billed monthly",
 	},
 	"gpt-plus": {
 		Name:            "gpt-plus",
@@ -150,6 +171,8 @@ var catalog = map[string]Plan{
 		RateLimitWindow: 5 * time.Hour,
 		WindowUnit:      "messages",
 		SourceURL:       "https://developers.openai.com/docs/pricing (2026-09): local-message estimates are model-dependent per five-hour window",
+		MonthlyUSD:      20,
+		PriceSource:     "https://help.openai.com/en/articles/6950777 (2026-09-30): $20/month billed monthly",
 	},
 	"gpt-pro": {
 		Name:            "gpt-pro",
@@ -166,6 +189,8 @@ var catalog = map[string]Plan{
 		RateLimitWindow: 5 * time.Hour,
 		WindowUnit:      "messages",
 		SourceURL:       "https://developers.openai.com/docs/pricing (2026-09): five times Plus Codex usage",
+		MonthlyUSD:      100,
+		PriceSource:     "https://help.openai.com/en/articles/9793128 (2026-09-30): Pro $100 unlocks 5x higher usage than Plus",
 	},
 	"gpt-pro-20x": {
 		Name:            "gpt-pro-20x",
@@ -174,6 +199,8 @@ var catalog = map[string]Plan{
 		RateLimitWindow: 5 * time.Hour,
 		WindowUnit:      "messages",
 		SourceURL:       "https://developers.openai.com/docs/pricing (2026-09): 20 times Plus Codex usage",
+		MonthlyUSD:      200,
+		PriceSource:     "https://help.openai.com/en/articles/9793128 (2026-09-30): Pro $200 unlocks 20x usage than Plus",
 	},
 	"gpt-business": {
 		Name:            "gpt-business",
@@ -182,6 +209,9 @@ var catalog = map[string]Plan{
 		RateLimitWindow: 5 * time.Hour,
 		WindowUnit:      "messages",
 		SourceURL:       "https://developers.openai.com/docs/pricing (2026-09): Standard Business is the current workspace plan name",
+		MonthlyUSD:      25,
+		PerSeat:         true,
+		PriceSource:     "https://help.openai.com/en/articles/8542115 (2026-09-30): $25 per user per month on monthly billing",
 	},
 	"copilot-individual": {
 		Name:             "copilot-individual",
@@ -190,6 +220,8 @@ var catalog = map[string]Plan{
 		RequestsPerMonth: 0,
 		RateLimitWindow:  0,
 		SourceURL:        "https://docs.github.com/en/copilot/about-github-copilot/plans-for-github-copilot (2026-05)",
+		MonthlyUSD:       10,
+		PriceSource:      "https://docs.github.com/copilot/get-started/plans (2026-09-30): Copilot Pro $10 USD per month",
 	},
 	"copilot-business": {
 		Name:             "copilot-business",
@@ -198,6 +230,9 @@ var catalog = map[string]Plan{
 		RequestsPerMonth: 0,
 		RateLimitWindow:  0,
 		SourceURL:        "https://docs.github.com/en/copilot/about-github-copilot/plans-for-github-copilot (2026-05)",
+		MonthlyUSD:       19,
+		PerSeat:          true,
+		PriceSource:      "https://docs.github.com/copilot/get-started/plans (2026-09-30): $19 USD per granted seat per month",
 	},
 	"cursor-pro": {
 		Name:             "cursor-pro",
@@ -206,6 +241,8 @@ var catalog = map[string]Plan{
 		RequestsPerMonth: 500,
 		RateLimitWindow:  0,
 		SourceURL:        "https://docs.cursor.com/account/plans-and-usage (2026-05)",
+		MonthlyUSD:       20,
+		PriceSource:      "https://cursor.com/pricing (2026-09-30): Individual $20 / mo.",
 	},
 	"cursor-business": {
 		Name:             "cursor-business",
@@ -214,16 +251,21 @@ var catalog = map[string]Plan{
 		RequestsPerMonth: 500,
 		RateLimitWindow:  0,
 		SourceURL:        "https://docs.cursor.com/account/plans-and-usage (2026-05)",
+		MonthlyUSD:       40,
+		PerSeat:          true,
+		PriceSource:      "https://cursor.com/pricing (2026-09-30): Teams $40 / user / mo.",
 	},
 	// Google One AI Premium (Gemini Advanced) — fixed monthly
 	// subscription with no published message or token caps; Google
 	// throttles dynamically. Modeled without a window so headroom math
 	// reports consumption trends instead of a cap (mirrors gpt-pro).
 	"gemini-ai-premium": {
-		Name:      "gemini-ai-premium",
-		Provider:  "gemini",
-		Display:   "Google One AI Premium",
-		SourceURL: "https://one.google.com/about/ai-premium (2026-05)",
+		Name:        "gemini-ai-premium",
+		Provider:    "gemini",
+		Display:     "Google One AI Premium",
+		SourceURL:   "https://one.google.com/about/ai-premium (2026-05)",
+		MonthlyUSD:  19.99,
+		PriceSource: "https://gemini.google/subscriptions/ (2026-09-30): Google AI Pro $19.99 / month",
 	},
 	// Mistral Le Chat Pro — fixed monthly subscription, daily message
 	// cap published in 2025-Q4. Window unit is "messages per day";
@@ -237,6 +279,8 @@ var catalog = map[string]Plan{
 		MessagesPerWindow: 200,
 		WindowUnit:        "messages",
 		SourceURL:         "https://mistral.ai/pricing (2026-05)",
+		MonthlyUSD:        14.99,
+		PriceSource:       "https://mistral.ai/pricing (2026-09-30): Pro $14.99 per month",
 	},
 }
 

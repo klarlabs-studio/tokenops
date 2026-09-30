@@ -3,12 +3,15 @@ package mcp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
+	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 )
 
 // SetupDeps wires the tools that bind a plan and connect the Claude usage
@@ -52,6 +55,7 @@ type planSetInput struct {
 	LimitWindow   string  `json:"limit_window,omitempty" jsonschema:"enum=monthly,enum=weekly,enum=daily,description=Period the spend limit covers. Default monthly."`
 	RateFactor    float64 `json:"rate_factor,omitempty" jsonschema:"description=Scale estimated spend to a negotiated rate (0.8 = 20% off list)."`
 	Clear         bool    `json:"clear,omitempty" jsonschema:"description=Remove the provider's plan binding."`
+	Since         string  `json:"since,omitempty" jsonschema:"description=Date the plan took effect (2026-09-01) when the user was on it before today. Re-marks the provider's usage recorded as billed since then as plan-covered. Only when the user says so."`
 }
 
 type meterSetupInput struct {
@@ -66,7 +70,7 @@ const meterKeyEnv = "TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY"
 // RegisterSetupTools adds tokenops_plan_set and tokenops_vendor_usage_setup.
 func RegisterSetupTools(s *Server, d SetupDeps) error {
 	s.Tool("tokenops_plan_set").
-		Description("Bind a provider to a subscription plan (the MCP twin of `tokenops plan set`), or list the bindings when provider is omitted. claude-enterprise is billed at API rates: its limit comes from the Claude usage meter when connected, otherwise pass spend_limit_usd. Restarts the supervised daemon so the change is live.").
+		Description("Bind a provider to a subscription plan (the MCP twin of `tokenops plan set`), or list the bindings and the recorded plan switches when provider is omitted. Pass since only when the user says they have been on the plan since that date: it re-marks usage recorded as billed since then as plan-covered. claude-enterprise is billed at API rates: its limit comes from the Claude usage meter when connected, otherwise pass spend_limit_usd. Restarts the supervised daemon so the change is live.").
 		Handler(func(_ context.Context, in planSetInput) (string, error) {
 			path, err := d.path()
 			if err != nil {
@@ -78,9 +82,21 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 			}
 			provider := strings.TrimSpace(in.Provider)
 			if provider == "" {
-				return jsonString(map[string]any{"plans": cfg.Plans, "plan_limits": cfg.PlanLimits, "config": path}), nil
+				listing := map[string]any{"plans": cfg.Plans, "plan_limits": cfg.PlanLimits, "config": path}
+				if file, err := planhistory.Default(); err == nil {
+					if h, err := file.Load(); err == nil && len(h) > 0 {
+						listing["history"] = h
+					}
+				}
+				return jsonString(listing), nil
 			}
 			resp := map[string]any{"provider": provider, "config": path}
+			now := time.Now().UTC()
+			from, err := planStart(in.Since, now)
+			if err != nil {
+				return "", inputError(err)
+			}
+			previous, next := cfg.Plans[provider], ""
 			if in.Clear {
 				delete(cfg.Plans, provider)
 				resp["cleared"] = true
@@ -92,6 +108,7 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 					return "", inputError(err)
 				}
 				resp["plan"] = b.Plan
+				next = b.Plan
 				if b.Previous != "" && b.Previous != b.Plan {
 					resp["previous"] = b.Previous
 				}
@@ -101,6 +118,24 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 			}
 			if err := config.WriteMutable(path, cfg); err != nil {
 				return "", inputError(err)
+			}
+			if in.Clear {
+				from = now // an unset is never backdated
+			}
+			if previous != next || in.Since != "" {
+				res, err := planhistory.Record(context.Background(), planhistory.Switch{
+					Provider: provider, Previous: previous, Plan: next, From: from, Now: now,
+					DBPath: storePath(cfg.Storage.Path), Actor: "mcp",
+				})
+				switch {
+				case err != nil:
+					resp["history_error"] = err.Error()
+				case res.StoreErr != nil:
+					resp["history_error"] = "event store unavailable, so earlier usage was not re-marked: " + res.StoreErr.Error()
+				case from.Before(now) && next != "":
+					resp["since"] = from.Format("2006-01-02")
+					resp["restamped"] = res.Restamped
+				}
 			}
 			resp["note"] = applyConfig(d.ApplyConfig)
 			return jsonString(resp), nil
@@ -180,4 +215,38 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 			return jsonString(resp), nil
 		})
 	return nil
+}
+
+// planStart reads a plan's start date: a day (2026-09-01) or an RFC3339
+// instant. Empty means now.
+func planStart(s string, now time.Time) (time.Time, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return now, nil
+	}
+	if t, err := time.Parse("2006-01-02", s); err == nil {
+		return t.UTC(), nil
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("since %q: want a date (2026-09-01) or an RFC3339 time", s)
+	}
+	return t.UTC(), nil
+}
+
+// storePath is the event store the daemon writes, from the configured
+// path as written in the file.
+func storePath(configured string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	p := strings.TrimSpace(configured)
+	switch {
+	case p == "":
+		return filepath.Join(home, ".tokenops", "events.db")
+	case p == "~" || strings.HasPrefix(p, "~/"):
+		return filepath.Join(home, strings.TrimPrefix(p, "~"))
+	}
+	return p
 }

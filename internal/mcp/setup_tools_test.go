@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 )
 
 type setupFixture struct {
@@ -231,5 +232,34 @@ func TestMeterSetupToolWithoutABrowserSessionStillRefusesThePaste(t *testing.T) 
 	}
 	if hint, _ := got["hint"].(string); !strings.Contains(hint, "must not go through this chat") {
 		t.Errorf("hint invites a paste: %q", hint)
+	}
+}
+
+// A switch through the tool is recorded in the plan history like one
+// made with `plan set`, and since backdates it.
+func TestPlanSetToolRecordsHistory(t *testing.T) {
+	f := newSetupFixture(t, "plans:\n  openai: gpt-plus\n")
+	got := callTool(t, f.server(), "tokenops_plan_set", map[string]any{
+		"provider": "openai", "plan": "gpt-pro-5x", "since": "2026-09-01",
+	})
+	if got["since"] != "2026-09-01" || got["history_error"] != nil {
+		t.Fatalf("response = %v", got)
+	}
+	file, _ := planhistory.Default()
+	h, err := file.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var openai []string
+	for _, b := range h {
+		if b.Provider == "openai" {
+			openai = append(openai, b.Plan)
+		}
+	}
+	if strings.Join(openai, ",") != "gpt-plus,gpt-pro-5x" {
+		t.Fatalf("openai history = %v", openai)
+	}
+	if listed := callTool(t, f.server(), "tokenops_plan_set", map[string]any{}); listed["history"] == nil {
+		t.Errorf("listing omits the history: %v", listed)
 	}
 }

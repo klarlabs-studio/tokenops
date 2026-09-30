@@ -38,6 +38,9 @@ const (
 	ActionBudgetExceeded     Action = "budget_exceeded"
 	ActionOptimizationApply  Action = "optimization_apply"
 	ActionDataExport         Action = "data_export"
+	// ActionPlanChange records a plan switch, and how much recorded usage
+	// a backdated one re-marked as plan-covered.
+	ActionPlanChange Action = "plan_change"
 )
 
 // Entry is one row of the audit log. ID is a UUIDv4 minted by Record;
