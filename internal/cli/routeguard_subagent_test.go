@@ -105,6 +105,43 @@ func TestSubagentGuardQuietSaysNothing(t *testing.T) {
 	}
 }
 
+// The model policy holds with the coach off: a subagent inheriting a
+// forbidden session model runs on the closest permitted one.
+func TestSubagentGuardEnforcesModelPolicyWithTheCoachOff(t *testing.T) {
+	writeCoachConfig(t, models+"model_policy:\n  deny: [\"*opus*\"]\ncoach:\n  autonomy: \"off\"\n")
+	dir := t.TempDir()
+	tp := writeCoachTranscript(t, dir, 1, "claude-opus-5")
+	out := runSubagentHook(t, dir, map[string]any{"description": "design the storage layer", "prompt": "design it"}, tp)
+	var got subagentHookOutput
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("no hook output: %q (%v)", out, err)
+	}
+	h := got.HookSpecificOutput
+	if h.PermissionDecision != "allow" || h.UpdatedInput["model"] != "sonnet" {
+		t.Fatalf("decision %q, model %v (%s)", h.PermissionDecision, h.UpdatedInput["model"], h.PermissionDecisionReason)
+	}
+	if !strings.Contains(got.SystemMessage, "model policy") {
+		t.Errorf("the move is not explained: %q", got.SystemMessage)
+	}
+}
+
+// With nothing permitted the Agent can name, the call is refused with the
+// reason, so the agent can choose again.
+func TestSubagentGuardRefusesWhenNothingIsPermitted(t *testing.T) {
+	writeCoachConfig(t, models+"model_policy:\n  allow: [\"openai/*\"]\n")
+	dir := t.TempDir()
+	tp := writeCoachTranscript(t, dir, 1, "claude-opus-5")
+	out := runSubagentHook(t, dir, map[string]any{"prompt": "anything", "model": "opus"}, tp)
+	var got subagentHookOutput
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("no hook output: %q (%v)", out, err)
+	}
+	h := got.HookSpecificOutput
+	if h.PermissionDecision != "deny" || !strings.Contains(h.PermissionDecisionReason, "model policy") {
+		t.Fatalf("decision %q reason %q", h.PermissionDecision, h.PermissionDecisionReason)
+	}
+}
+
 // install wires the Agent hook for Claude Code only.
 func TestInstallAddsTheSubagentHookForClaudeCodeOnly(t *testing.T) {
 	settings := filepath.Join(t.TempDir(), "settings.json")

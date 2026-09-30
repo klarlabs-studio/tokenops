@@ -288,3 +288,59 @@ func nameable(model string) (string, bool) {
 	}
 	return trimmed, true
 }
+
+// forbiddenRule moves a request off a model the operator's policy rules
+// out, onto the permitted model on offer that is closest in price: the
+// priciest one that costs no more, else the cheapest one above. It is the
+// operator's rule rather than a saving, so it carries full quality and no
+// window or class scope; the mode still decides whether it is observed,
+// proposed, or applied, and the preferred-model ceiling still refers an
+// upgrade.
+//
+// It needs the models on offer. Without them the only candidates are the
+// rate card's, retired models included, so the request is reported with
+// no target instead of guessed at.
+func (r *Router) forbiddenRule(provider eventschema.Provider, model string) (Rule, bool) {
+	if r.cfg.Permits(provider, model) {
+		return Rule{}, false
+	}
+	return Rule{
+		Provider: provider, FromModel: model,
+		ToModel: r.closestPermitted(provider, model), Quality: 1,
+	}, true
+}
+
+func (r *Router) closestPermitted(provider eventschema.Provider, model string) string {
+	if r.spend == nil {
+		return ""
+	}
+	table := r.spend.Table()
+	price := func(m string) (float64, bool) {
+		rate, err := table.Lookup(provider, m)
+		if err != nil {
+			return 0, false
+		}
+		return rate.InputPerMillion + rate.OutputPerMillion, true
+	}
+	ceiling, priced := price(model)
+	var below, above string
+	belowCost, aboveCost := -1.0, -1.0
+	for _, m := range r.cfg.Policy.Models[provider] {
+		cost, ok := price(m)
+		if !ok || !r.usable(provider, m) {
+			continue
+		}
+		switch {
+		case !priced || cost <= ceiling:
+			if cost > belowCost {
+				below, belowCost = m, cost
+			}
+		case aboveCost < 0 || cost < aboveCost:
+			above, aboveCost = m, cost
+		}
+	}
+	if below != "" {
+		return below
+	}
+	return above
+}
