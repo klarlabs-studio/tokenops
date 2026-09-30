@@ -68,6 +68,10 @@ type Config struct {
 	// IsAvailable, when set, gates each candidate target. Returns false
 	// to skip ToModel and try the next fallback. Default: always true.
 	IsAvailable func(provider eventschema.Provider, model string) bool
+	// Permits is the operator's model policy: a target it rules out is
+	// never routed to, whether a rule named it or the policy chose it.
+	// Default: everything is permitted.
+	Permits func(provider eventschema.Provider, model string) bool
 	// MinQuality is the floor for emitting a recommendation. Routes
 	// with Quality below this are skipped silently. Default 0.7.
 	MinQuality float64
@@ -126,6 +130,9 @@ func New(cfg Config, spendEng *spend.Engine) *Router {
 	}
 	if cfg.IsAvailable == nil {
 		cfg.IsAvailable = func(eventschema.Provider, string) bool { return true }
+	}
+	if cfg.Permits == nil {
+		cfg.Permits = func(eventschema.Provider, string) bool { return true }
 	}
 	return &Router{cfg: cfg, spend: spendEng}
 }
@@ -213,7 +220,7 @@ func (r *Router) Run(_ context.Context, req *optimizer.Request) ([]optimizer.Rec
 		// rec so dashboards can flag the misroute.
 		return []optimizer.Recommendation{{
 			Kind:         eventschema.OptimizationTypeRouter,
-			Reason:       fmt.Sprintf("router: no available target for %s", req.Model),
+			Reason:       fmt.Sprintf("router: no available, permitted target for %s", req.Model),
 			QualityScore: rule.Quality,
 		}}, nil
 	}
@@ -296,18 +303,18 @@ func (r *Router) matchRule(provider eventschema.Provider, model string) (Rule, b
 }
 
 func (r *Router) pickTarget(provider eventschema.Provider, rule Rule) (string, bool) {
-	if rule.ToModel != "" && r.cfg.IsAvailable(provider, rule.ToModel) {
-		return rule.ToModel, true
-	}
-	for _, fb := range rule.Fallbacks {
-		if fb == "" {
-			continue
-		}
-		if r.cfg.IsAvailable(provider, fb) {
-			return fb, true
+	for _, m := range append([]string{rule.ToModel}, rule.Fallbacks...) {
+		if r.usable(provider, m) {
+			return m, true
 		}
 	}
 	return "", false
+}
+
+// usable reports whether a model may be routed to: named, up, and not
+// ruled out by the operator's model policy.
+func (r *Router) usable(provider eventschema.Provider, model string) bool {
+	return model != "" && r.cfg.Permits(provider, model) && r.cfg.IsAvailable(provider, model)
 }
 
 // estimateSavings reports the two independent currencies a route moves:

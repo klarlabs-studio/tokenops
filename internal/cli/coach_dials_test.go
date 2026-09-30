@@ -108,3 +108,18 @@ func TestCoachStatusShowsTheLiveQuota(t *testing.T) {
 		t.Errorf("quota line without a reading:\n%s", out.String())
 	}
 }
+
+func TestCoachStatusShowsTheModelPolicy(t *testing.T) {
+	cfg := config.Default()
+	var out bytes.Buffer
+	renderCoachStatus(&out, coachcap.Build(cfg), nil)
+	if strings.Contains(out.String(), "model policy:") {
+		t.Errorf("model policy line without a policy:\n%s", out.String())
+	}
+	cfg.ModelPolicy = config.ModelPolicyConfig{Allow: []string{"anthropic/*"}, Deny: []string{"*opus*"}}
+	out.Reset()
+	renderCoachStatus(&out, coachcap.Build(cfg), nil)
+	if !strings.Contains(out.String(), "model policy: only anthropic/*; never *opus*") {
+		t.Errorf("model policy line missing:\n%s", out.String())
+	}
+}

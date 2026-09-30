@@ -57,7 +57,7 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 	description, _ := in.ToolInput["description"].(string)
 	requested, _ := in.ToolInput["model"].(string)
 	catalog := routeCatalog()
-	candidates := cfg.Optimizer.SmartRouting.Models[string(eventschema.ProviderAnthropic)]
+	candidates := cfg.RoutingCandidates(eventschema.ProviderAnthropic)
 	ledger := coachLedger()
 	now := time.Now()
 	// The agent handing work to a cheaper subagent follows the coach's
