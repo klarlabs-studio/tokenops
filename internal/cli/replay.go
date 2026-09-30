@@ -131,7 +131,7 @@ findings (when --workflow is set), and a summary footer.`,
 // through this so replays stay identical across surfaces.
 func buildReplayPipeline(cfg config.Config, spendEng *spend.Engine) *optimizer.Pipeline {
 	return replay.BuildPipeline(nil, replay.PipelineConfig{
-		Routing: cfg.Optimizer.RouterConfig(),
+		Routing: cfg.RouterConfig(),
 		Spend:   spendEng,
 	})
 }

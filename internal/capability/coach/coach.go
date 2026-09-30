@@ -41,6 +41,9 @@ type Report struct {
 	Preset string `json:"preset,omitempty"`
 	// Hooks reports the client hooks a preset installed or found in place.
 	Hooks []HookInstall `json:"hooks,omitempty"`
+	// ModelPolicy is the allow and deny lists every routing decision
+	// honours, empty when nothing is ruled out.
+	ModelPolicy *config.ModelPolicyConfig `json:"model_policy,omitempty"`
 }
 
 // HookInstall is one client's hooks after applying a preset.
@@ -100,6 +103,10 @@ func Build(cfg config.Config) Report {
 				"declining pauses the agent, and telling it to continue runs the subagent as planned"
 		}
 		r.Powers = append(r.Powers, p)
+	}
+	if !cfg.ModelPolicy.Policy().Empty() {
+		mp := cfg.ModelPolicy
+		r.ModelPolicy = &mp
 	}
 	return r
 }

@@ -301,12 +301,18 @@ otel:
 pricing:
   path: ~/.tokenops/pricing.yaml  # optional rate overrides (see below)
 
+model_policy:                 # models no route may land on (see below)
+  allow: ["anthropic/*"]      # optional; when set, only these
+  deny: ["*opus*"]            # always wins over allow
+
 optimizer:
   routing_min_quality: 0.7    # skip rules below this quality floor
   smart_routing:              # decide per turn, with no rules (see below)
     enabled: false
     window_pct_above: 70      # conserve only once the window is this full
     quality: 0.75             # confidence a mechanical turn survives it
+    models:                   # the models on offer; routing picks among these
+      anthropic: [claude-opus-5-5, claude-sonnet-5, claude-haiku-4-5]
   routing_rules:              # model-routing optimizer (see below)
     - provider: anthropic
       from_model: "claude-fable-5*"
@@ -413,9 +419,11 @@ turns no rule covers.
   relieve a shortage that was not happening.
 
 Cheapest is not the same as best, and that is the honest limit of a
-policy with no rules in it: if a provider's rate card lists a cheap model
-you would never want, the policy will pick it. The gates above are what
-make that tolerable — and if you want a specific target, write a rule.
+policy with no rules in it. List the models actually on offer under
+`smart_routing.models` and it picks only among them; otherwise it ranks
+the whole rate card, retired models included. Rule out anything you would
+never want with `model_policy`, and if you want a specific target, write
+a rule.
 
 ### Where routing bites, and the way round it
 
@@ -436,6 +444,38 @@ routing surface available on every client that speaks MCP. It runs the
 same policy the request path runs, deliberately: advice that disagreed
 with enforcement would be worse than no advice, because you would be
 surprised twice.
+
+## Model policy (`model_policy`)
+
+A person or a company may rule models out: a vendor with no agreement
+in place, a model too expensive for the team, one that has not passed
+review. `model_policy` is two lists of patterns that every routing
+decision honours — routing rules and smart routing on the proxy,
+`tokenops_routing_advise`, the coach's advice, and its subagent moves:
+
+```yaml
+model_policy:
+  allow: ["anthropic/*", "openai/gpt-5*"]
+  deny: ["*opus*"]
+```
+
+- **Deny always wins.** A model matching any deny pattern is never a
+  target.
+- **An allow list is exclusive.** When it is set, only the models it
+  names are targets; when it is empty, everything not denied is.
+- **Patterns** match the bare model id (`claude-opus-5`) and the
+  provider-qualified one (`anthropic/claude-opus-5`), ignoring case.
+  `*` matches any run of characters, `/` included; `?` matches one. So
+  `openai/*` rules out a vendor and `*opus*` a family wherever it is
+  served.
+
+A rule whose target is ruled out falls through to its first permitted
+fallback, and routes nowhere when there is none. `tokenops coach status`
+shows the policy in force.
+
+A company that wants the same policy on every machine ships it in the
+configuration file through its device management, like any other
+setting.
 
 ## Command-output compression (`command_fmt`)
 

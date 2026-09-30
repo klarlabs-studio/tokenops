@@ -141,7 +141,7 @@ func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir, provider s
 		return nil
 	}
 	sr := cfg.Optimizer.SmartRouting
-	candidates := sr.Models[string(prov)]
+	candidates := cfg.RoutingCandidates(prov)
 	var autoKinds []taskclass.Kind
 	for _, k := range sr.AutoKinds {
 		autoKinds = append(autoKinds, taskclass.Kind(k))

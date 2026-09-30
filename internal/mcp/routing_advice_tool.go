@@ -125,7 +125,7 @@ func routingAdvice(ctx context.Context, in routingAdviceInput, d RoutingAdviceDe
 			Note:   "run `tokenops init` to create a config",
 		}, nil
 	}
-	rc := cfg.Optimizer.RouterConfig()
+	rc := cfg.RouterConfig()
 	if rc == nil {
 		return &routingAdviceResult{
 			Recommendation: "stay", Model: in.Model,

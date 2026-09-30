@@ -44,6 +44,11 @@ type Policy struct {
 	// cheapest model, gated by Config.MinQuality like any rule. Zero
 	// takes DefaultPolicyQuality.
 	Quality float64
+	// Models lists the models actually on offer, per provider. When set,
+	// the policy picks only among them; the rate card also prices
+	// retired models, and the cheapest of those is a model nobody can
+	// still choose. Unset falls back to the whole card.
+	Models map[eventschema.Provider][]string
 }
 
 // Policy defaults.
@@ -221,44 +226,54 @@ func (r *Router) policyRule(provider eventschema.Provider, model string, body []
 	}, true
 }
 
-// cheapestTarget is the cheapest model a request can actually name.
+// cheapestTarget is the cheapest model a request can actually name and
+// the operator permits.
 //
-// The rate card prices most families by prefix ("gpt-4o-mini*",
-// "claude-haiku-4-5*"), which is the right way to hold prices and the
-// wrong thing to put in a request: no API accepts a literal asterisk. A
-// trailing "*" is trimmed, which yields the family alias the vendor
-// itself publishes; a wildcard anywhere else is not a name that can be
-// recovered, so those rows are skipped.
+// With the models on offer declared, it picks among those. Without, it
+// falls back to the rate card, which prices most families by prefix
+// ("gpt-4o-mini*", "claude-haiku-4-5*") — the right way to hold prices
+// and the wrong thing to put in a request: no API accepts a literal
+// asterisk. A trailing "*" is trimmed, which yields the family alias the
+// vendor itself publishes; a wildcard anywhere else is not a name that
+// can be recovered, so those rows are skipped.
 //
 // Cheapest is not the same as best, and this is the honest limit of a
-// policy with no rules in it: if a provider's rate card ever lists a
-// cheap model nobody should route to, the policy will pick it. The gates
-// around it are what make that tolerable — mechanical work only, a tight
-// window only, never past the operator's ceiling, and the quality floor
-// on top. An operator who wants a specific target still writes a rule,
-// and a rule always wins.
+// policy with no rules in it. The gates around it are what make that
+// tolerable — mechanical work only, a tight window only, never past the
+// operator's ceiling, never onto a model their policy rules out, and the
+// quality floor on top. An operator who wants a specific target still
+// writes a rule, and a rule always wins.
 func (r *Router) cheapestTarget(provider eventschema.Provider) (string, bool) {
 	if r.spend == nil {
 		return "", false
 	}
+	table := r.spend.Table()
 	var (
 		best     string
 		bestCost = -1.0
 	)
-	for k, rate := range r.spend.Table().Rates {
-		if k.Provider != provider {
-			continue
-		}
-		name, ok := nameable(k.Model)
-		if !ok {
-			continue
-		}
-		cost := rate.InputPerMillion + rate.OutputPerMillion
-		if cost <= 0 {
-			continue
+	consider := func(name string, cost float64) {
+		if cost <= 0 || !r.usable(provider, name) {
+			return
 		}
 		if bestCost < 0 || cost < bestCost || (cost == bestCost && name < best) {
 			bestCost, best = cost, name
+		}
+	}
+	if offered := r.cfg.Policy.Models[provider]; len(offered) > 0 {
+		for _, name := range offered {
+			if rate, err := table.Lookup(provider, name); err == nil {
+				consider(name, rate.InputPerMillion+rate.OutputPerMillion)
+			}
+		}
+		return best, best != ""
+	}
+	for k, rate := range table.Rates {
+		if k.Provider != provider {
+			continue
+		}
+		if name, ok := nameable(k.Model); ok {
+			consider(name, rate.InputPerMillion+rate.OutputPerMillion)
 		}
 	}
 	return best, best != ""

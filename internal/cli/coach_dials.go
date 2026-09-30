@@ -80,6 +80,7 @@ func renderCoachStatus(out io.Writer, r coachcap.Report, quota []string) {
 		activity = append(activity, fmt.Sprintf("%d re-reads refused (~%dk tokens)", s.Blocked, s.ReclaimedTok/1000))
 	}
 	renderCompaction(out, r)
+	renderModelPolicy(out, r)
 	if len(quota) > 0 {
 		fmt.Fprintln(out)
 		for _, q := range quota {
@@ -92,6 +93,22 @@ func renderCoachStatus(out io.Writer, r coachcap.Report, quota []string) {
 	renderFollowThrough(out, r)
 	fmt.Fprintln(out, "\n  change: tokenops coach preset <observe|advise|guided|autopilot> · autonomy <off|advise|ask|autonomous> · verbosity <quiet|normal|verbose>")
 	fmt.Fprintln(out, "          tokenops coach set <inform|waste|models|context> <rung> · tokenops coach off")
+}
+
+// renderModelPolicy states which models no route may land on.
+func renderModelPolicy(out io.Writer, r coachcap.Report) {
+	mp := r.ModelPolicy
+	if mp == nil {
+		return
+	}
+	var parts []string
+	if len(mp.Allow) > 0 {
+		parts = append(parts, "only "+strings.Join(mp.Allow, ", "))
+	}
+	if len(mp.Deny) > 0 {
+		parts = append(parts, "never "+strings.Join(mp.Deny, ", "))
+	}
+	fmt.Fprintf(out, "\n  model policy: %s (routing and the coach stay inside it)\n", strings.Join(parts, "; "))
 }
 
 // subagentHookInstalled reports whether Claude Code has tokenops' route
