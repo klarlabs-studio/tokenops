@@ -157,7 +157,10 @@ func (r *Router) Run(_ context.Context, req *optimizer.Request) ([]optimizer.Rec
 	if req == nil || req.Model == "" {
 		return nil, nil
 	}
-	rule, ok := r.matchRule(req.Provider, req.Model)
+	rule, ok := r.forbiddenRule(req.Provider, req.Model)
+	if !ok {
+		rule, ok = r.matchRule(req.Provider, req.Model)
+	}
 	if !ok {
 		// Nothing written for this model. The policy decides from the
 		// turn itself, and is off unless the operator asked for it.

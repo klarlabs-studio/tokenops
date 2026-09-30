@@ -50,3 +50,17 @@ func TestModelPolicyValidation(t *testing.T) {
 		t.Fatalf("Validate = %v, want a model_policy error", err)
 	}
 }
+
+// A policy alone still builds the router, so the proxy moves requests off
+// forbidden models even with no routing configured.
+func TestModelPolicyAloneBuildsTheRouter(t *testing.T) {
+	cfg := Default()
+	if cfg.RouterConfig() != nil {
+		t.Fatal("router built with nothing to do")
+	}
+	cfg.ModelPolicy.Deny = []string{"*opus*"}
+	rc := cfg.RouterConfig()
+	if rc == nil || rc.Permits == nil || rc.Policy.Enabled {
+		t.Fatalf("router config = %+v", rc)
+	}
+}

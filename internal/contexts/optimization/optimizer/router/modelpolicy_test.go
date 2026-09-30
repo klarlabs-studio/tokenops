@@ -82,3 +82,37 @@ func TestRuleTargetMustBePermitted(t *testing.T) {
 		})
 	}
 }
+
+// A request naming a forbidden model is moved to the permitted model on
+// offer closest in price, with no rule written for it.
+func TestForbiddenRequestIsMovedToTheClosestPermittedModel(t *testing.T) {
+	offered := map[eventschema.Provider][]string{
+		eventschema.ProviderOpenAI: {"gpt-4o", "gpt-4o-mini", "gpt-4.1"},
+	}
+	denied := map[string]bool{"gpt-4o": true}
+	r := New(Config{
+		Policy:  Policy{Models: offered},
+		Permits: func(_ eventschema.Provider, m string) bool { return !denied[m] },
+	}, spend.NewEngine(spend.DefaultTable()))
+	req := &optimizer.Request{Provider: eventschema.ProviderOpenAI, Model: "gpt-4o", Body: []byte(`{"model":"gpt-4o"}`)}
+	recs, err := r.Run(context.Background(), req)
+	if err != nil || len(recs) != 1 {
+		t.Fatalf("recs=%v err=%v", recs, err)
+	}
+	table := spend.DefaultTable()
+	own, _ := table.Lookup(eventschema.ProviderOpenAI, "gpt-4o")
+	got, _ := table.Lookup(eventschema.ProviderOpenAI, recs[0].TargetModel)
+	if recs[0].TargetModel == "" || denied[recs[0].TargetModel] || recs[0].ApplyBody == nil {
+		t.Fatalf("not moved off the forbidden model: %+v", recs[0])
+	}
+	if got.InputPerMillion+got.OutputPerMillion > own.InputPerMillion+own.OutputPerMillion {
+		t.Errorf("moved to %s, pricier than the forbidden model, though a cheaper one is on offer", recs[0].TargetModel)
+	}
+
+	// Without the models on offer there is nothing safe to move to.
+	r = New(Config{Permits: func(_ eventschema.Provider, m string) bool { return !denied[m] }}, spend.NewEngine(spend.DefaultTable()))
+	recs, _ = r.Run(context.Background(), req)
+	if len(recs) != 1 || recs[0].TargetModel != "" || recs[0].ApplyBody != nil {
+		t.Fatalf("guessed a target without the models on offer: %+v", recs)
+	}
+}

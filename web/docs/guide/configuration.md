@@ -473,6 +473,26 @@ A rule whose target is ruled out falls through to its first permitted
 fallback, and routes nowhere when there is none. `tokenops coach status`
 shows the policy in force.
 
+A request that *asks* for a forbidden model is moved off it. This holds
+whatever the coach's dials say, because it is your rule, not the coach's
+advice:
+
+- **Claude Code subagents** (needs `tokenops hooks install --route-guard`)
+  run on the permitted model closest in tier to the one requested: the
+  same tier first, then the nearest below, then the nearest above. When
+  the Agent tool can name none, the call is refused with the permitted
+  models listed, so the agent can choose again.
+- **Requests through the proxy** go to the permitted model in
+  `smart_routing.models` closest in price. `optimizer.mode` still decides
+  whether that is observed, proposed, or applied. Without
+  `smart_routing.models` there is nothing safe to move to, and the
+  request is reported, not guessed at. The proxy never fails a request
+  over the policy.
+
+A hook cannot change a session's own model, so a forbidden session model
+is only enforced on its subagents and on proxied requests. See
+[ADR 0007](https://github.com/klarlabs-studio/tokenops/blob/main/docs/adr/0007-model-policy.md).
+
 A company that wants the same policy on every machine ships it in the
 configuration file through its device management, like any other
 setting.
