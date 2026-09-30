@@ -263,3 +263,17 @@ Consequences for the rungs:
   bar. Automatic compactions outnumber manual ones (94 to 25 at baseline),
   so follow-through must not credit them (#458). This is the baseline the
   quota and compact tips are measured against.
+
+- **2026-09-30, a fourth power: `context`.** When the agent compacts. No
+  agent lets a hook compact, but three let a setting move where they
+  compact on their own, each verified in a real run: Claude Code through
+  `CLAUDE_CODE_AUTO_COMPACT_WINDOW` (compacted at 68.9k with 100k; through
+  the settings `env` block even from project settings, where the top-level
+  `autoCompactWindow` key did nothing), Codex through
+  `model_auto_compact_token_limit` (compacted at ~30k with 40k, set via
+  `-c`), opencode through a per-model `limit.input` (a `context`-only
+  override did nothing; the schema needs context and output too, taken
+  from opencode's models.dev cache). Cursor has no such setting. `advise`
+  is the compact tip; `autonomous` writes the settings and restores them
+  byte for byte when lowered; `ask` reports as `advise`. Legacy keys never
+  map to `autonomous` for this power.

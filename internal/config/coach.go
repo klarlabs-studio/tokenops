@@ -16,7 +16,8 @@ type CoachConfig struct {
 	// Verbosity is how much the coach says: quiet | normal | verbose.
 	// Approval requests are always shown whatever it says here.
 	Verbosity string `yaml:"verbosity,omitempty"`
-	// Powers overrides Autonomy for one power: inform, waste, or models.
+	// Powers overrides Autonomy for one power: inform, waste, models, or
+	// context.
 	Powers map[string]string `yaml:"powers,omitempty"`
 }
 
@@ -41,10 +42,13 @@ const (
 	PowerInform = "inform"
 	PowerWaste  = "waste"
 	PowerModels = "models"
+	// PowerContext is when the agent compacts its context: advised by the
+	// compact tip, or set in the agent's own settings when autonomous.
+	PowerContext = "context"
 )
 
 // Powers lists the coach's powers in reporting order.
-func Powers() []string { return []string{PowerInform, PowerWaste, PowerModels} }
+func Powers() []string { return []string{PowerInform, PowerWaste, PowerModels, PowerContext} }
 
 // PowerSetting is a power's configured rung and the key it came from, so a
 // report can say which setting to change.
@@ -80,9 +84,9 @@ func (c CoachConfig) Validate() error {
 	sort.Strings(keys)
 	for _, k := range keys {
 		switch normalise(k) {
-		case PowerInform, PowerWaste, PowerModels:
+		case PowerInform, PowerWaste, PowerModels, PowerContext:
 		default:
-			return fmt.Errorf("coach.powers: unknown power %q (want inform, waste, or models)", k)
+			return fmt.Errorf("coach.powers: unknown power %q (want inform, waste, models, or context)", k)
 		}
 		if !validAutonomy(c.Powers[k]) {
 			return fmt.Errorf("coach.powers.%s must be off, advise, ask, or autonomous, got %q", k, c.Powers[k])
@@ -104,7 +108,10 @@ func (c Config) CoachPower(power string) PowerSetting {
 		return PowerSetting{normalise(c.Coach.Autonomy), "coach.autonomy"}
 	}
 	switch power {
-	case PowerInform:
+	case PowerInform, PowerContext:
+		// context is newer than coaching.delivery and never inherits an
+		// autonomous rung from it: acting means writing the agents' own
+		// settings, which only an explicit coach setting may ask for.
 		if c.Coaching.DeliveryLevel() == DeliveryObserve {
 			return PowerSetting{AutonomyOff, "coaching.delivery"}
 		}

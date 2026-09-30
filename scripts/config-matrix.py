@@ -216,6 +216,9 @@ def profiles():
     P["coach-powers-verbose"] = (lambda r: {"coach": {"autonomy": "advise", "verbosity": "verbose",
                                                       "powers": {"waste": "autonomous", "models": "ask"}}}, {})
     P["coach-off"] = (lambda r: {"coach": {"autonomy": "off"}}, {})
+    P["coach-context-autonomous"] = (lambda r: {"coach": {"autonomy": "advise", "powers": {"context": "autonomous"}},
+                                                "coaching": {"context_limits": [{"workflow_prefix": "claude-code:",
+                                                                                 "compact_at_tokens": 500000}]}}, {"mcp": True})
     P["plan-limits"] = (lambda r: {"plans": {"anthropic": "claude-max-20x"},
                                    "plan_limits": {"anthropic": {"spend_limit_usd": 200, "window": "monthly"}}}, {})
     # Invalid configs must be refused at startup with a clear message.

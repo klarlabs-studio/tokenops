@@ -122,6 +122,10 @@ legitimately run large.
 
 ### Compact tip
 
+(The compact tip is the `context` power's advise rung: `tokenops coach set
+context off` silences it, and at `autonomous` the agents compact at the
+line on their own, so it is not given.)
+
 On Claude Code and Codex the coach also counts turns above the compaction
 line (600k context on Claude Code, 150k on Codex; `compact_at_tokens` in
 `coaching.context_limits` moves it, and the `compact_earlier` finding uses

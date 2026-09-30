@@ -67,7 +67,6 @@ func TestCompactTipOffWhenQuietOrUnset(t *testing.T) {
 	for name, mut := range map[string]func(*Config){
 		"quiet": func(c *Config) { c.Verbosity = verbosityQuiet },
 		"unset": func(c *Config) { c.CompactAtTokens = 0 },
-		"off":   func(c *Config) { c.Enabled = false },
 	} {
 		dir := t.TempDir()
 		cfg := compactConfig()

@@ -156,7 +156,7 @@ func lowered(before, after Report, now time.Time) []ft.Entry {
 // change, validates, writes, records any power it lowered, and returns
 // the coach as it now stands. The CLI and the MCP tool both set the coach
 // through it.
-func Apply(path string, l Ledger, now time.Time, change func(*config.Config)) (Report, error) {
+func Apply(path string, l Ledger, levers ContextLevers, now time.Time, change func(*config.Config)) (Report, error) {
 	cfg, err := config.ReadMutable(path)
 	if err != nil {
 		return Report{}, err
@@ -173,6 +173,7 @@ func Apply(path string, l Ledger, now time.Time, change func(*config.Config)) (R
 	if l != nil {
 		_ = l.Append(lowered(before, after, now)...)
 	}
+	after.Compaction = reconcileContext(before, after, levers, l, now)
 	return after, nil
 }
 
@@ -185,8 +186,11 @@ func NewID() string {
 
 // Status is the coach as Build reports it, with its follow-through
 // evidence.
-func Status(cfg config.Config, l Ledger, now time.Time) Report {
+func Status(cfg config.Config, l Ledger, levers ContextLevers, now time.Time) Report {
 	r := Build(cfg)
 	r.FollowThrough = History(l, now)
+	if levers != nil {
+		r.Compaction = levers.Check()
+	}
 	return r
 }

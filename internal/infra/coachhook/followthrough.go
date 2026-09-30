@@ -138,9 +138,12 @@ func (st *sessionState) countContext(ctx, limit int64) {
 // evaluateCompactTip gives the compact_now tip once per compaction window,
 // when nothing else was said this Stop. Quiet leaves it out: it is advice
 // about cost and drift, not a warning that work is about to stop.
+//
+// It belongs to the context power rather than inform, so Enabled does not
+// gate it: the caller sets CompactAtTokens only when context is advise.
 func evaluateCompactTip(dec *Decision, st *sessionState, cfg Config, contextTokens int64, now time.Time) {
 	limit := cfg.CompactAtTokens
-	if !cfg.Enabled || dec.Nudge || limit <= 0 || st.CompactTipped ||
+	if dec.Nudge || limit <= 0 || st.CompactTipped ||
 		st.AboveTurns < CompactAfterTurns || cfg.Verbosity == verbosityQuiet {
 		return
 	}

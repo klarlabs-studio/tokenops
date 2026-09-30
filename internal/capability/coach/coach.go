@@ -33,6 +33,9 @@ type Report struct {
 	// FollowThrough is what became of the coach's interventions, per
 	// kind (ADR 0006, decision 6). Only Status fills it.
 	FollowThrough []ft.Summary `json:"follow_through,omitempty"`
+	// Compaction is where each agent compacts on its own, as the context
+	// power has set it. Filled by Status and by changes to the coach.
+	Compaction []LeverResult `json:"compaction,omitempty"`
 }
 
 // Off reports whether every power is off: the coach records and says
@@ -57,9 +60,10 @@ func (r Report) Effective(power string) string {
 }
 
 var describes = map[string]string{
-	config.PowerInform: "tips on the plan's quota window and context fullness",
-	config.PowerWaste:  "redundant re-reads of unchanged files",
-	config.PowerModels: "moving work to a cheaper model that fits it",
+	config.PowerInform:  "tips on the plan's quota window and context fullness",
+	config.PowerWaste:   "redundant re-reads of unchanged files",
+	config.PowerModels:  "moving work to a cheaper model that fits it",
+	config.PowerContext: "when the agent compacts its context",
 }
 
 // Build resolves every power from cfg.
@@ -76,6 +80,8 @@ func Build(cfg config.Config) Report {
 		switch {
 		case name == config.PowerModels && eff == config.AutonomyAutonomous:
 			p.Note = "moves subagents to a cheaper model on Claude Code; the session's own model is advised, not changed"
+		case name == config.PowerContext && eff == config.AutonomyAutonomous:
+			p.Note = "sets where Claude Code, Codex, and opencode compact on their own; Cursor has no such setting and is advised"
 		case name == config.PowerModels && eff == config.AutonomyAsk:
 			p.Note = "asks before moving a subagent to a cheaper model in interactive Claude Code sessions, and advises when nobody is attending; " +
 				"declining pauses the agent, and telling it to continue runs the subagent as planned"
@@ -100,6 +106,11 @@ func effective(power, rung string) (string, string) {
 		}
 		return config.AutonomyAdvise, "the read guard has no approval step: declining a refused re-read would stop the agent's turn, so it advises instead"
 	case config.PowerModels:
+		return rung, ""
+	case config.PowerContext:
+		if rung == config.AutonomyAsk {
+			return config.AutonomyAdvise, "no agent offers an approval point for compacting, so the coach advises instead"
+		}
 		return rung, ""
 	}
 	return config.AutonomyOff, "unknown power"

@@ -13,6 +13,7 @@ import (
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
+	"go.klarlabs.de/tokenops/internal/infra/compactlever"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -29,7 +30,7 @@ func coachStatus(cmd *cobra.Command, jsonOut bool) error {
 	if err != nil {
 		return err
 	}
-	r := coachcap.Status(cfg, coachLedger(), time.Now())
+	r := coachcap.Status(cfg, coachLedger(), contextLevers(), time.Now())
 	if jsonOut {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
@@ -45,9 +46,9 @@ func renderCoachStatus(out io.Writer, r coachcap.Report, quota []string) {
 		state = "off (records, says nothing)"
 	}
 	fmt.Fprintf(out, "coach: %s · verbosity %s (%s)\n\n", state, r.Verbosity, r.VerbositySource)
-	fmt.Fprintf(out, "  %-7s %-11s %-11s %s\n", "POWER", "CONFIGURED", "EFFECTIVE", "SET BY")
+	fmt.Fprintf(out, "  %-8s %-11s %-11s %s\n", "POWER", "CONFIGURED", "EFFECTIVE", "SET BY")
 	for _, p := range r.Powers {
-		fmt.Fprintf(out, "  %-7s %-11s %-11s %s\n", p.Name, p.Configured, p.Effective, p.Source)
+		fmt.Fprintf(out, "  %-8s %-11s %-11s %s\n", p.Name, p.Configured, p.Effective, p.Source)
 	}
 	for _, p := range r.Powers {
 		if p.Reason != "" {
@@ -74,6 +75,7 @@ func renderCoachStatus(out io.Writer, r coachcap.Report, quota []string) {
 	if s, err := readguard.ReadStats(""); err == nil && s.Blocked > 0 {
 		activity = append(activity, fmt.Sprintf("%d re-reads refused (~%dk tokens)", s.Blocked, s.ReclaimedTok/1000))
 	}
+	renderCompaction(out, r)
 	if len(quota) > 0 {
 		fmt.Fprintln(out)
 		for _, q := range quota {
@@ -85,7 +87,7 @@ func renderCoachStatus(out io.Writer, r coachcap.Report, quota []string) {
 	}
 	renderFollowThrough(out, r)
 	fmt.Fprintln(out, "\n  change: tokenops coach autonomy <off|advise|ask|autonomous> · verbosity <quiet|normal|verbose>")
-	fmt.Fprintln(out, "          tokenops coach set <inform|waste|models> <rung> · tokenops coach off")
+	fmt.Fprintln(out, "          tokenops coach set <inform|waste|models|context> <rung> · tokenops coach off")
 }
 
 // subagentHookInstalled reports whether Claude Code has tokenops' route
@@ -112,14 +114,19 @@ func mutateCoach(cmd *cobra.Command, change func(*config.Config)) error {
 	}
 	now := time.Now()
 	l := coachLedger()
-	if _, err := coachcap.Apply(path, l, now, change); err != nil {
+	applied, err := coachcap.Apply(path, l, contextLevers(), now, change)
+	if err != nil {
 		return err
 	}
 	cfg, err := config.ReadMutable(path)
 	if err != nil {
 		return err
 	}
-	r := coachcap.Status(cfg, l, now)
+	r := coachcap.Status(cfg, l, contextLevers(), now)
+	if len(applied.Compaction) > 0 {
+		// Show what this change did, not only where things stand.
+		r.Compaction = applied.Compaction
+	}
 	renderCoachStatus(cmd.OutOrStdout(), r, quotaStatusLines(cmd.Context(), r))
 	return nil
 }
@@ -206,7 +213,7 @@ Approval requests are always shown.`,
 
 func newCoachSetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "set <inform|waste|models> <off|advise|ask|autonomous>",
+		Use:   "set <inform|waste|models|context> <off|advise|ask|autonomous>",
 		Short: "Set one power's autonomy, overriding the default",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -306,4 +313,45 @@ func quotaStatusLines(ctx context.Context, r coachcap.Report) []string {
 		}
 	}
 	return out
+}
+
+// contextLevers is the context power's port over the agents' settings,
+// planned from the current config. Nil when there is no home directory
+// to find the agents in.
+func contextLevers() coachcap.ContextLevers {
+	var cfg config.Config
+	if path, err := config.DefaultPath(); err == nil {
+		if loaded, err := config.Load(path); err == nil {
+			cfg = loaded
+		}
+	}
+	l, err := compactlever.New(cfg)
+	if err != nil {
+		return nil
+	}
+	return l
+}
+
+// renderCompaction shows where each agent compacts on its own when the
+// context power manages it, or what a change to it just did.
+func renderCompaction(out io.Writer, r coachcap.Report) {
+	autonomous := r.Effective(config.PowerContext) == config.AutonomyAutonomous
+	if len(r.Compaction) == 0 {
+		if autonomous {
+			fmt.Fprintln(out, "\n  context: autonomous, but no agent setting is in place yet; run `tokenops coach set context autonomous` to apply it")
+		}
+		return
+	}
+	fmt.Fprintln(out, "\n  compaction (where each agent compacts on its own):")
+	for _, c := range r.Compaction {
+		line := fmt.Sprintf("    %-11s ", c.Client)
+		if c.Key != "" {
+			line += fmt.Sprintf("%s = %d  ", c.Key, c.Value)
+		}
+		line += c.Status
+		if c.Note != "" {
+			line += " (" + c.Note + ")"
+		}
+		fmt.Fprintln(out, line)
+	}
 }
