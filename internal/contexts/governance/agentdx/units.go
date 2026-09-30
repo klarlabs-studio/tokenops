@@ -14,6 +14,10 @@ import "time"
 type Unit struct {
 	SessionID string
 	Provider  string
+	// Model and Effort are what served most of this unit's turns, empty
+	// when the client did not record them.
+	Model  string
+	Effort string
 
 	// Prompt is the operator's instruction. Empty unless the extraction
 	// was asked to carry text.
@@ -110,10 +114,14 @@ func Units(records []Record) []Unit {
 		seenTool     map[string]bool
 		seenFile     map[string]bool
 		lastInputTok int64
+		// Turns per model and per effort, so the unit takes the one
+		// that served most of it.
+		models, efforts map[string]int
 	)
 
 	closeUnit := func() {
 		if inUnit {
+			cur.Model, cur.Effort = mostCommon(models), mostCommon(efforts)
 			out = append(out, cur)
 		}
 		inUnit = false
@@ -140,6 +148,7 @@ func Units(records []Record) []Unit {
 			seenTool = map[string]bool{}
 			seenFile = map[string]bool{}
 			lastInputTok = 0
+			models, efforts = map[string]int{}, map[string]int{}
 			inUnit = true
 		case KindAssistantTurn:
 			if !inUnit {
@@ -147,6 +156,12 @@ func Units(records []Record) []Unit {
 			}
 			cur.Turns++
 			cur.End = r.At
+			if r.Model != "" {
+				models[r.Model]++
+			}
+			if r.Effort != "" {
+				efforts[r.Effort]++
+			}
 			cur.Tokens += r.InputTokens
 			if r.InputTokens > cur.PeakContext {
 				cur.PeakContext = r.InputTokens
@@ -215,4 +230,16 @@ func Units(records []Record) []Unit {
 	}
 	closeUnit()
 	return out
+}
+
+// mostCommon is the key with the highest count, ties broken by name so
+// the answer does not depend on map order; "" for an empty map.
+func mostCommon(counts map[string]int) string {
+	best, bestN := "", 0
+	for k, n := range counts {
+		if n > bestN || (n == bestN && k < best) {
+			best, bestN = k, n
+		}
+	}
+	return best
 }

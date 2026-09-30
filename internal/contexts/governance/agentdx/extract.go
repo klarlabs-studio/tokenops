@@ -102,8 +102,12 @@ type rawEntry struct {
 	Timestamp string `json:"timestamp"`
 	SessionID string `json:"sessionId"`
 	IsCompact bool   `json:"isCompactSummary"`
-	Message   struct {
+	// Effort is the session's effort level when this entry was written;
+	// Claude Code stamps it on assistant entries.
+	Effort  string `json:"effort"`
+	Message struct {
 		Role    string          `json:"role"`
+		Model   string          `json:"model"`
 		Content json.RawMessage `json:"content"`
 		Usage   struct {
 			InputTokens          int64 `json:"input_tokens"`
@@ -202,6 +206,8 @@ func readTranscript(r io.Reader, since time.Time, withText bool) []Record {
 		case "assistant":
 			turn := base
 			turn.Kind = KindAssistantTurn
+			turn.Model = e.Message.Model
+			turn.Effort = normEffort(e.Effort)
 			turn.InputTokens = e.Message.Usage.InputTokens +
 				e.Message.Usage.CacheReadInputTokens +
 				e.Message.Usage.CacheCreationTokens
@@ -391,3 +397,6 @@ func IsRejection(text string) bool {
 	}
 	return false
 }
+
+// normEffort canonicalises an effort level for grouping.
+func normEffort(s string) string { return strings.ToLower(strings.TrimSpace(s)) }

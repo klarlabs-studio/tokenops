@@ -55,6 +55,11 @@ type Record struct {
 	// question "which provider is this experience" is one only it can
 	// answer.
 	Provider string
+	// Model and Effort are what served an assistant turn, when the client
+	// records them: the model id and its reasoning effort ("low",
+	// "medium", "high", …), as the client names it.
+	Model  string
+	Effort string
 	// CallSignature identifies a tool call by name and arguments, so a
 	// call the agent has already made can be recognised. Empty when the
 	// client does not record arguments.
@@ -128,6 +133,9 @@ type Metrics struct {
 	// TotalEdits is the denominator behind ReworkRatePct, exposed so a
 	// caller can tell "no rework" from "no edits".
 	TotalEdits int `json:"total_edits"`
+	// ByEffort splits instructions by the model and reasoning effort that
+	// served them, where the client records effort.
+	ByEffort []EffortRow `json:"by_effort,omitempty"`
 	// ByProvider breaks the same metrics down per upstream, for clients
 	// that route to more than one. Empty when nothing recorded a
 	// provider — which is every client except opencode.
@@ -158,6 +166,7 @@ func isEdit(name string) bool       { return editTools[strings.ToLower(name)] }
 // model behind it.
 func ComputeByProvider(records []Record) Metrics {
 	overall := Compute(records)
+	overall.ByEffort = ByEffort(records)
 	byProvider := map[string][]Record{}
 	for _, r := range records {
 		if r.Provider == "" {

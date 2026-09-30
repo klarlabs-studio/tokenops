@@ -37,7 +37,11 @@ type opencodeMessage struct {
 	// ProviderID is set on assistant rows; user rows carry it nested
 	// under model instead.
 	ProviderID string `json:"providerID"`
-	Model      struct {
+	ModelID    string `json:"modelID"`
+	// Variant is the reasoning effort the turn ran at ("high",
+	// "medium"), when the model offers one.
+	Variant string `json:"variant"`
+	Model   struct {
 		ProviderID string `json:"providerID"`
 	} `json:"model"`
 	Tokens struct {
@@ -211,6 +215,7 @@ func opencodeMessages(
 			rec.Text = prompts[id]
 		case "assistant":
 			rec.Kind = KindAssistantTurn
+			rec.Model, rec.Effort = m.ModelID, normEffort(m.Variant)
 			rec.InputTokens = m.Tokens.Input + m.Tokens.Cache.Read + m.Tokens.Cache.Write
 		default:
 			continue
