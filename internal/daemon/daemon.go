@@ -221,7 +221,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	// The daemon-wide active flag still gates the background watcher, but
 	// routing no longer needs it: an operator can leave the daemon in its
 	// default mode and still have the optimizer propose or observe.
-	if rc := cfg.Optimizer.RouterConfig(); rc != nil {
+	if rc := cfg.RouterConfig(); rc != nil {
 		// Window pressure is read per request, so it comes from a cache a
 		// background loop refreshes — scanning the event store inline
 		// would put a full window query on the hot path.

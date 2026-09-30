@@ -146,7 +146,7 @@ func TestAllTargetsUnavailable(t *testing.T) {
 	if recs[0].ApplyBody != nil {
 		t.Errorf("ApplyBody should be nil when no target available: %q", recs[0].ApplyBody)
 	}
-	if !strings.Contains(recs[0].Reason, "no available target") {
+	if !strings.Contains(recs[0].Reason, "no available, permitted target") {
 		t.Errorf("reason: %q", recs[0].Reason)
 	}
 }

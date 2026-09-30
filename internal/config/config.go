@@ -16,6 +16,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
+	"go.klarlabs.de/tokenops/internal/contexts/governance/modelpolicy"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/taskclass"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
@@ -54,14 +55,20 @@ type Config struct {
 	// offered as the alternative. Routing DOWN to something cheaper
 	// still applies automatically. Empty disables the ceiling.
 	PreferredModels map[string]string `yaml:"preferred_models,omitempty"`
-	TLS             TLSConfig         `yaml:"tls"`
-	Storage         StorageConfig     `yaml:"storage"`
-	Retention       RetentionConfig   `yaml:"retention,omitempty"`
-	OTel            OTelConfig        `yaml:"otel"`
-	Rules           RulesConfig       `yaml:"rules"`
-	Resilience      ResilienceConfig  `yaml:"resilience"`
-	VendorUsage     VendorUsageConfig `yaml:"vendor_usage"`
-	MDNS            MDNSConfig        `yaml:"mdns,omitempty"`
+	// ModelPolicy rules models out of every routing decision: the
+	// proxy's rules and smart routing, the coach's advice and its
+	// subagent moves. Deny wins; a non-empty allow list admits only what
+	// it names. A company can ship it through device management like any
+	// other setting.
+	ModelPolicy ModelPolicyConfig `yaml:"model_policy,omitempty"`
+	TLS         TLSConfig         `yaml:"tls"`
+	Storage     StorageConfig     `yaml:"storage"`
+	Retention   RetentionConfig   `yaml:"retention,omitempty"`
+	OTel        OTelConfig        `yaml:"otel"`
+	Rules       RulesConfig       `yaml:"rules"`
+	Resilience  ResilienceConfig  `yaml:"resilience"`
+	VendorUsage VendorUsageConfig `yaml:"vendor_usage"`
+	MDNS        MDNSConfig        `yaml:"mdns,omitempty"`
 	// PlanLimits carries the per-provider figures only the operator can
 	// supply, keyed by provider name. Spend-denominated plans
 	// (usage-based Enterprise) have no vendor-published cap, so their
@@ -92,6 +99,26 @@ func ParseMode(s string) (string, error) {
 	default:
 		return "", fmt.Errorf("mode must be %q or %q, got %q", ModePassive, ModeActive, s)
 	}
+}
+
+// ModelPolicyConfig is the allow and deny lists, as glob patterns matched
+// against "model" and "provider/model", ignoring case — "openai/*" rules
+// out a vendor, "*opus*" a family.
+type ModelPolicyConfig struct {
+	Allow []string `yaml:"allow,omitempty"`
+	Deny  []string `yaml:"deny,omitempty"`
+}
+
+// Policy is the domain form.
+func (m ModelPolicyConfig) Policy() modelpolicy.Policy {
+	return modelpolicy.Policy{Allow: m.Allow, Deny: m.Deny}
+}
+
+// RoutingCandidates is the models on offer for a provider
+// (optimizer.smart_routing.models) that the model policy permits: the
+// only set anything may route to.
+func (c Config) RoutingCandidates(provider eventschema.Provider) []string {
+	return c.ModelPolicy.Policy().Filter(provider, c.Optimizer.SmartRouting.Models[string(provider)])
 }
 
 // PreferredModel returns the operator's ceiling model for a provider, or
@@ -605,8 +632,35 @@ func (o OptimizerConfig) RouterConfig() *router.Config {
 			Enabled:        o.SmartRouting.Enabled,
 			WindowPctAbove: o.SmartRouting.WindowPctAbove,
 			Quality:        o.SmartRouting.Quality,
+			Models:         o.SmartRouting.offered(),
 		},
 	}
+}
+
+// offered keys the models on offer by provider for the router.
+func (s SmartRoutingConfig) offered() map[eventschema.Provider][]string {
+	if len(s.Models) == 0 {
+		return nil
+	}
+	out := make(map[eventschema.Provider][]string, len(s.Models))
+	for p, models := range s.Models {
+		out[eventschema.Provider(p)] = models
+	}
+	return out
+}
+
+// RouterConfig is the optimizer's router configuration with the model
+// policy applied, so no route lands on a model the operator ruled out.
+// Nil when no routing is configured.
+func (c Config) RouterConfig() *router.Config {
+	rc := c.Optimizer.RouterConfig()
+	if rc == nil {
+		return nil
+	}
+	if policy := c.ModelPolicy.Policy(); !policy.Empty() {
+		rc.Permits = policy.Permits
+	}
+	return rc
 }
 
 // PricingConfig points at an optional YAML rate file that is layered on
@@ -1107,6 +1161,9 @@ func (c Config) Validate() error {
 		return err
 	}
 	if err := c.Optimizer.SmartRouting.Validate(); err != nil {
+		return err
+	}
+	if err := c.ModelPolicy.Policy().Validate(); err != nil {
 		return err
 	}
 	if err := c.Coach.Validate(); err != nil {
