@@ -50,13 +50,23 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 		return nil
 	}
 	report := coachcap.Build(cfg)
+	requested, _ := in.ToolInput["model"].(string)
+	catalog := routeCatalog()
+	// The model policy is the operator's rule, not the coach's advice, so
+	// it holds whatever the coach's dials say.
+	if pol := routeguard.EnforcePolicy(routeguard.PolicyInput{
+		Requested: requested, SessionModel: latestTranscriptModel(in.TranscriptPath),
+		Provider: eventschema.ProviderAnthropic, Catalog: catalog,
+		Offered: cfg.Optimizer.SmartRouting.Models[string(eventschema.ProviderAnthropic)],
+		Policy:  cfg.ModelPolicy.Policy(),
+	}); pol.Forbidden {
+		return enforceModelPolicy(cmd, in, report, pol)
+	}
 	if report.Effective(config.PowerModels) == config.AutonomyOff {
 		return nil
 	}
 	prompt, _ := in.ToolInput["prompt"].(string)
 	description, _ := in.ToolInput["description"].(string)
-	requested, _ := in.ToolInput["model"].(string)
-	catalog := routeCatalog()
 	candidates := cfg.RoutingCandidates(eventschema.ProviderAnthropic)
 	ledger := coachLedger()
 	now := time.Now()
@@ -107,6 +117,30 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 		out.SystemMessage = fmt.Sprintf("tokenops: moved a subagent from %s to %s (%s work).", dec.From, dec.To, dec.Kind)
 	}
 	coachcap.RecordMove(ledger, now, coachcap.NewID(), in.SessionID, config.PowerModels, string(dec.Kind), dec.From, dec.To)
+	return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
+}
+
+// enforceModelPolicy keeps a subagent off a model the policy rules out:
+// it moves the call to the closest permitted model, or refuses it with
+// the reason when none can take the work, so the agent can choose again.
+func enforceModelPolicy(cmd *cobra.Command, in agentToolInput, report coachcap.Report, pol routeguard.PolicyDecision) error {
+	out := subagentHookOutput{}
+	out.HookSpecificOutput.HookEventName = "PreToolUse"
+	out.HookSpecificOutput.PermissionDecisionReason = "tokenops: " + pol.Reason
+	if pol.ToAlias == "" {
+		out.HookSpecificOutput.PermissionDecision = "deny"
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
+	}
+	updated := make(map[string]any, len(in.ToolInput))
+	for k, v := range in.ToolInput {
+		updated[k] = v
+	}
+	updated["model"] = pol.ToAlias
+	out.HookSpecificOutput.PermissionDecision = "allow"
+	out.HookSpecificOutput.UpdatedInput = updated
+	if report.Verbosity != config.VerbosityQuiet {
+		out.SystemMessage = fmt.Sprintf("tokenops: ran a subagent on %s instead of %s, which your model policy rules out.", pol.To, pol.From)
+	}
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
 }
 

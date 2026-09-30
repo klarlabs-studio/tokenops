@@ -611,6 +611,10 @@ func (o OptimizerConfig) RouterConfig() *router.Config {
 	if len(o.RoutingRules) == 0 && !o.SmartRouting.Enabled {
 		return nil
 	}
+	return o.routerConfig()
+}
+
+func (o OptimizerConfig) routerConfig() *router.Config {
 	rules := make([]router.Rule, 0, len(o.RoutingRules))
 	for _, r := range o.RoutingRules {
 		rules = append(rules, router.Rule{
@@ -650,16 +654,16 @@ func (s SmartRoutingConfig) offered() map[eventschema.Provider][]string {
 }
 
 // RouterConfig is the optimizer's router configuration with the model
-// policy applied, so no route lands on a model the operator ruled out.
-// Nil when no routing is configured.
+// policy applied, so no route lands on a model the operator ruled out and
+// a request for one is moved off it. Nil when there is neither routing
+// nor a policy to apply.
 func (c Config) RouterConfig() *router.Config {
-	rc := c.Optimizer.RouterConfig()
-	if rc == nil {
-		return nil
+	policy := c.ModelPolicy.Policy()
+	if policy.Empty() {
+		return c.Optimizer.RouterConfig()
 	}
-	if policy := c.ModelPolicy.Policy(); !policy.Empty() {
-		rc.Permits = policy.Permits
-	}
+	rc := c.Optimizer.routerConfig()
+	rc.Permits = policy.Permits
 	return rc
 }
 
