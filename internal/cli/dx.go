@@ -143,6 +143,8 @@ func writeDXText(w io.Writer, m agentdx.Metrics, bands []agentdx.ContextBand, da
 		}
 	}
 
+	writeDXEffort(w, m.ByEffort)
+
 	if len(bands) > 0 {
 		fmt.Fprintln(w, "\nQUALITY vs CONTEXT")
 		fmt.Fprintf(w, "  %-10s %8s %10s %10s %8s\n",
@@ -164,6 +166,36 @@ func writeDXText(w io.Writer, m agentdx.Metrics, bands []agentdx.ContextBand, da
 	if rec, ok := agentdx.Recommend(m); ok {
 		fmt.Fprintf(w, "\nBIGGEST WIN\n  %s\n  %s\n  Do: %s\n", rec.Title, rec.Evidence, rec.Action)
 	}
+}
+
+// writeDXEffort prints the model × effort rows, where clients record
+// effort.
+func writeDXEffort(w io.Writer, rows []agentdx.EffortRow) {
+	if len(rows) == 0 {
+		return
+	}
+	fmt.Fprintln(w, "\nBY MODEL AND EFFORT")
+	fmt.Fprintf(w, "  %-26s %-7s %6s %6s %8s %9s %10s %9s\n",
+		"MODEL", "EFFORT", "INSTR", "TURNS", "TIME", "PEAK CTX", "FIRST-TRY", "REJECTED")
+	thin := false
+	for _, r := range rows {
+		mark := ""
+		if !r.Enough {
+			mark, thin = " *", true
+		}
+		model := r.Model
+		if model == "" {
+			model = "(unrecorded)"
+		}
+		fmt.Fprintf(w, "  %-26s %-7s %6d %6.1f %8s %8dk %9.1f%% %8.1f%%%s\n",
+			model, r.Effort, r.Instructions, r.MedianTurns, humanSeconds(r.MedianSeconds),
+			r.MedianPeakContext/1000, r.FirstTryPct, r.RejectedPct, mark)
+	}
+	if thin {
+		fmt.Fprintf(w, "  * fewer than %d instructions; too few to compare.\n", agentdx.MinEffortInstructions)
+	}
+	fmt.Fprintln(w, "  Compare levels within one model. You raise effort for harder work, so a")
+	fmt.Fprintln(w, "  higher level doing worse may mean harder instructions, not a worse setting.")
 }
 
 // pctOrNA renders a percentage, or n/a when nothing was observed behind

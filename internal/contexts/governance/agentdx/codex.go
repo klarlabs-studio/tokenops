@@ -85,7 +85,11 @@ type codexLine struct {
 		Name    string          `json:"name"`
 		Message string          `json:"message"`
 		Content json.RawMessage `json:"content"`
-		Info    struct {
+		// Model and Effort are set on turn_context lines, which open each
+		// turn with the settings it runs under.
+		Model  string `json:"model"`
+		Effort string `json:"effort"`
+		Info   struct {
 			LastTokenUsage struct {
 				InputTokens       int64 `json:"input_tokens"`
 				CachedInputTokens int64 `json:"cached_input_tokens"`
@@ -126,6 +130,9 @@ func readCodexTranscript(r io.Reader, sessionID string, since time.Time, withTex
 		// Context size is reported by its own event, just before the turn
 		// it describes; carry it to the next assistant message.
 		pendingContext int64
+		// The model and effort the current turn runs under, from its
+		// turn_context line.
+		model, effort string
 	)
 	for sc.Scan() {
 		var e codexLine
@@ -143,6 +150,8 @@ func readCodexTranscript(r io.Reader, sessionID string, since time.Time, withTex
 		base := Record{At: at, SessionID: sessionID}
 
 		switch e.Type {
+		case "turn_context":
+			model, effort = e.Payload.Model, normEffort(e.Payload.Effort)
 		case "event_msg":
 			switch e.Payload.Type {
 			case "user_message":
@@ -169,6 +178,7 @@ func readCodexTranscript(r io.Reader, sessionID string, since time.Time, withTex
 				switch {
 				case strings.EqualFold(e.Payload.Role, "assistant"):
 					base.Kind = KindAssistantTurn
+					base.Model, base.Effort = model, effort
 					base.InputTokens = pendingContext
 					pendingContext = 0
 					out = append(out, base)
