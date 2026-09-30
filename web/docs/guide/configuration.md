@@ -28,9 +28,9 @@ coach:
     waste: autonomous
 ```
 
-`autonomy` applies to three powers: **inform** (tips on your plan's quota
-window and context fullness), **waste** (redundant re-reads), and
-**models** (moving work to a cheaper model that fits it).
+`autonomy` applies to four powers: **inform** (tips on your plan's quota
+window), **waste** (redundant re-reads), **models** (moving work to a
+cheaper model that fits it), and **context** (when the agent compacts).
 
 | `autonomy` | The coach… |
 |---|---|
@@ -48,6 +48,27 @@ window and context fullness), **waste** (redundant re-reads), and
 | The read-guard case | never | once per session | once per session |
 | Model advice | only when the model is two tiers or more above the work | once per kind of work per session | every applicable turn |
 | Compact tip (20 turns above the compaction line) | never | once until the next compaction | once until the next compaction, with what compacting would keep context near |
+
+For **context**, `advise` is the compact tip (20 turns above the
+compaction line without compacting). `autonomous` sets where each agent
+compacts on its own, at the same line (600k on Claude Code, 150k on Codex,
+60% of each opencode model's window; `compact_at_tokens` moves it):
+
+| Agent | What tokenops sets |
+|---|---|
+| Claude Code | `env.CLAUDE_CODE_AUTO_COMPACT_WINDOW` in `~/.claude/settings.json` (the line + 33k: Claude Code compacts ~33k below it) |
+| Codex | `model_auto_compact_token_limit` in `~/.codex/config.toml` |
+| opencode | `provider.<id>.models.<id>.limit.input` in `opencode.json`, keeping the model's own context and output limits, for the models you ran in the last 30 days |
+| Cursor | nothing: Cursor has no setting for when it summarises, so it stays advised |
+
+A value you set yourself is never overwritten, and one you change after
+tokenops set it is left as you have it. Lowering `context` restores every
+file exactly as it was, byte for byte when nothing else has touched it
+since. `tokenops coach` shows each agent's setting. `ask` reports as
+`advise`: no agent offers an approval point for compacting. Setting
+`context` to `autonomous` in `config.yaml` by hand does not edit the
+agents' files; `tokenops coach set context autonomous` (or the
+`tokenops_coach` tool) does.
 
 For **models**, `ask` puts the same move to you first, in interactive
 Claude Code sessions: the permission prompt for the subagent says which

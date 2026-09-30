@@ -34,15 +34,16 @@ func writeConfig(t *testing.T, body string) string {
 func TestApplyRecordsOnlyLoweredPowers(t *testing.T) {
 	path := writeConfig(t, "coach:\n  autonomy: autonomous\n")
 	l := &memLedger{}
-	r, err := Apply(path, l, now, func(c *config.Config) { c.Coach.Autonomy = config.AutonomyAdvise })
+	r, err := Apply(path, l, nil, now, func(c *config.Config) { c.Coach.Autonomy = config.AutonomyAdvise })
 	if err != nil {
 		t.Fatal(err)
 	}
 	if r.Effective(config.PowerModels) != config.AutonomyAdvise {
 		t.Fatalf("Apply returned %+v", r)
 	}
-	// waste and models were effectively autonomous; inform was advise
-	// (its ask/autonomous rungs deliver as advise), so it did not fall.
+	// waste, models, and context were effectively autonomous; inform was
+	// advise (its ask/autonomous rungs deliver as advise), so it did not
+	// fall.
 	powers := make([]string, 0, len(l.entries))
 	for _, e := range l.entries {
 		if e.Type != ft.EntryLowered || e.From != config.AutonomyAutonomous || e.To != config.AutonomyAdvise {
@@ -50,11 +51,11 @@ func TestApplyRecordsOnlyLoweredPowers(t *testing.T) {
 		}
 		powers = append(powers, e.Power)
 	}
-	if fmt.Sprint(powers) != "[waste models]" {
-		t.Errorf("lowered powers = %v; want [waste models]", powers)
+	if fmt.Sprint(powers) != "[waste models context]" {
+		t.Errorf("lowered powers = %v; want [waste models context]", powers)
 	}
 	l.entries = nil
-	if _, err := Apply(path, l, now, func(c *config.Config) { c.Coach.Autonomy = config.AutonomyAutonomous }); err != nil {
+	if _, err := Apply(path, l, nil, now, func(c *config.Config) { c.Coach.Autonomy = config.AutonomyAutonomous }); err != nil {
 		t.Fatal(err)
 	}
 	if len(l.entries) != 0 {
@@ -66,7 +67,7 @@ func TestApplyRejectsInvalidSettingsWithoutWriting(t *testing.T) {
 	path := writeConfig(t, "coach:\n  autonomy: advise\n")
 	before, _ := os.ReadFile(path)
 	l := &memLedger{}
-	if _, err := Apply(path, l, now, func(c *config.Config) { c.Coach.Autonomy = "sometimes" }); err == nil {
+	if _, err := Apply(path, l, nil, now, func(c *config.Config) { c.Coach.Autonomy = "sometimes" }); err == nil {
 		t.Fatal("invalid rung accepted")
 	}
 	after, _ := os.ReadFile(path)
@@ -89,7 +90,7 @@ func TestMovesAndAdviceFoldIntoStatus(t *testing.T) {
 	if !Quieter(l, now)(config.PowerModels, "lookup") {
 		t.Error("repeatedly ignored advice not quieted")
 	}
-	r := Status(config.Config{}, l, now)
+	r := Status(config.Config{}, l, nil, now)
 	if len(r.FollowThrough) != 2 {
 		t.Fatalf("FollowThrough = %+v", r.FollowThrough)
 	}
@@ -115,4 +116,67 @@ func TestCompactAtFollowsTheFindingsLine(t *testing.T) {
 	if got := CompactAt(c, "claude-code:"); got != 400_000 {
 		t.Errorf("override = %d; want 400000", got)
 	}
+}
+
+type fakeLevers struct{ applied, reverted int }
+
+func (f *fakeLevers) Apply() ([]LeverResult, error) {
+	f.applied++
+	status := "applied"
+	if f.applied > 1 {
+		status = "active" // as the real levers report a setting already in place
+	}
+	return []LeverResult{{Client: "claude-code", Key: "autoCompactWindow", Value: 633_000, Status: status}}, nil
+}
+func (f *fakeLevers) Revert() ([]LeverResult, error) {
+	f.reverted++
+	return []LeverResult{{Client: "claude-code", Status: "reverted"}}, nil
+}
+func (f *fakeLevers) Check() []LeverResult { return nil }
+
+// Raising context to autonomous sets the levers and records each as a
+// move; lowering it restores them and counts as undoing those moves.
+func TestContextAutonomySetsAndRestoresTheLevers(t *testing.T) {
+	path := writeConfig(t, "coach:\n  autonomy: advise\n")
+	l, f := &memLedger{}, &fakeLevers{}
+	r, err := Apply(path, l, f, now, func(c *config.Config) {
+		c.Coach.Powers = map[string]string{config.PowerContext: config.AutonomyAutonomous}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.applied != 1 || len(r.Compaction) != 1 || CountMoves(l, config.PowerContext) != 1 {
+		t.Fatalf("raise: applied=%d compaction=%v moves=%d", f.applied, r.Compaction, CountMoves(l, config.PowerContext))
+	}
+	if _, err := Apply(path, l, f, now.Add(time.Hour), func(c *config.Config) { c.Coach.Verbosity = config.VerbosityQuiet }); err != nil {
+		t.Fatal(err)
+	}
+	if f.applied != 2 || f.reverted != 0 {
+		t.Errorf("an unrelated change: applied=%d reverted=%d; want the levers re-checked, not reverted", f.applied, f.reverted)
+	}
+	if _, err := Apply(path, l, f, now.Add(2*time.Hour), func(c *config.Config) { c.Coach.Powers[config.PowerContext] = config.AutonomyAdvise }); err != nil {
+		t.Fatal(err)
+	}
+	if f.reverted != 1 {
+		t.Fatalf("lowering did not revert")
+	}
+	for _, s := range History(l, now.Add(3*time.Hour)) {
+		if s.Power == config.PowerContext && s.Channel == "move" && s.Undone != 1 {
+			t.Errorf("context move = %+v; want undone", s)
+		}
+	}
+	if m := power(t, Build(config.Config{Coach: config.CoachConfig{Autonomy: config.AutonomyAsk}}), config.PowerContext); m.Effective != config.AutonomyAdvise || m.Reason == "" {
+		t.Errorf("context ask = %+v; want advise with the reason", m)
+	}
+}
+
+func power(t *testing.T, r Report, name string) Power {
+	t.Helper()
+	for _, p := range r.Powers {
+		if p.Name == name {
+			return p
+		}
+	}
+	t.Fatalf("no power %s", name)
+	return Power{}
 }

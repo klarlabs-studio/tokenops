@@ -150,7 +150,7 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, quota fu
 		cfg.Quota = quota(cmd.Context(), provider, now)
 	}
 	if known && cfg.CompactAtTokens == 0 {
-		cfg.CompactAtTokens = compactAt(provider)
+		cfg.CompactAtTokens = compactTipAt(provider)
 	}
 	var dec coachhook.Decision
 	switch {
@@ -446,7 +446,11 @@ func tipResolutions(rs []coachhook.TipResolution) []coachcap.Resolution {
 // compactAt is where the live compact tip's stretch starts for a client:
 // the same line the compact_earlier finding uses for that client's
 // workflows, including an operator's coaching.context_limits override.
-func compactAt(provider eventschema.Provider) int64 {
+//
+// The tip is the context power's advise rung: off says nothing, and
+// autonomous has the agent compact at that line itself, so the tip would
+// only repeat what is already happening.
+func compactTipAt(provider eventschema.Provider) int64 {
 	prefix := "claude-code:"
 	if provider == eventschema.ProviderOpenAI {
 		prefix = "codex:"
@@ -456,6 +460,9 @@ func compactAt(provider eventschema.Provider) int64 {
 		if loaded, err := config.Load(path); err == nil {
 			cfg = loaded
 		}
+	}
+	if coachcap.Build(cfg).Effective(config.PowerContext) != config.AutonomyAdvise {
+		return 0
 	}
 	return coachcap.CompactAt(cfg, prefix)
 }

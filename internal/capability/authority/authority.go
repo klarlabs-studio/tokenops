@@ -96,6 +96,7 @@ func Report(cfg config.Config) Answer {
 		coachSubsystem(coach, config.PowerInform, "coaching"),
 		coachSubsystem(coach, config.PowerModels, "smart_routing"),
 		coachSubsystem(coach, config.PowerWaste, "read_guard"),
+		coachSubsystem(coach, config.PowerContext, "compaction"),
 		{
 			Name:       "routing_approval",
 			Configured: policy.FromRoutingApproval(true),
