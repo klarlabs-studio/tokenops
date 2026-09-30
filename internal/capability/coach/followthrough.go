@@ -188,6 +188,7 @@ func NewID() string {
 // evidence.
 func Status(cfg config.Config, l Ledger, levers ContextLevers, now time.Time) Report {
 	r := Build(cfg)
+	r.Preset = CurrentPreset(cfg)
 	r.FollowThrough = History(l, now)
 	if levers != nil {
 		r.Compaction = levers.Check()

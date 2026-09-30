@@ -171,78 +171,7 @@ func newHooksInstallCmd() *cobra.Command {
 		Short: "Merge tokenops hooks into the client's hook config",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := validateHookClient(client); err != nil {
-				return err
-			}
-			if err := refuseUnsupportedHook(client, readGuard); err != nil {
-				return err
-			}
-			exe := selfExe()
-			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "Installing tokenops %s hooks using binary:\n  %s\n", version.String(), exe)
-
-			// opencode has no config file to merge into: its extension
-			// point is a JavaScript module, so it takes a different path
-			// entirely.
-			if opencodeClient(client) {
-				pdir, derr := opencodePluginDir(settingsPath)
-				if derr != nil {
-					return derr
-				}
-				return installOpencodePlugin(out, pdir, exe, readGuard, coach, routeGuard, dryRun, budget)
-			}
-
-			path, err := resolveHookConfigPath(client, settingsPath)
-			if err != nil {
-				return err
-			}
-			specs := specsForModeWithRoute(coach, readGuard, routeGuard, budget, "", providerForClient(client))
-			if strings.EqualFold(client, hookClientCursor) {
-				return installCursorHooks(out, path, exe, specs, dryRun)
-			}
-
-			settings, _, err := loadSettings(path)
-			if err != nil {
-				return err
-			}
-			hooks := hooksMap(settings)
-
-			var changes []string
-			for _, sp := range specs {
-				entry := commandEntry(exe, sp.args)
-				if strings.EqualFold(client, hookClientCodex) {
-					entry = codexCommandEntry(exe, sp.args)
-				}
-				changed, warn := mergeHook(hooks, sp.event, sp.matcher, entry, sp.marker)
-				if warn != "" {
-					fmt.Fprintf(out, "  warning: %s\n", warn)
-				}
-				if changed {
-					changes = append(changes, fmt.Sprintf("%s -> event %q matcher %q", sp.name, sp.event, sp.matcher))
-				}
-			}
-			settings["hooks"] = hooks
-
-			if len(changes) == 0 {
-				fmt.Fprintln(out, "Already up to date — no changes.")
-				return nil
-			}
-			for _, c := range changes {
-				fmt.Fprintf(out, "  + %s\n", c)
-			}
-
-			if dryRun {
-				fmt.Fprintln(out, "\n--dry-run: not writing. Resulting settings.json:")
-				b, _ := json.MarshalIndent(settings, "", "  ")
-				fmt.Fprintln(out, string(b))
-				return nil
-			}
-			if err := writeSettings(path, settings); err != nil {
-				return err
-			}
-			fmt.Fprintf(out, "Wrote %s (backup at %s.bak)\n", path, path)
-			writeHookTrustNote(out, client)
-			return nil
+			return installClientHooks(cmd.OutOrStdout(), client, settingsPath, coach, readGuard, routeGuard, dryRun, budget)
 		},
 	}
 	cmd.Flags().BoolVar(&coach, "coach", false, "install the Stop coaching nudge")
@@ -992,4 +921,81 @@ func replaceMarkedEntry(list *[]any, entry map[string]any, marker string) bool {
 	}
 	*list = append(*list, entry)
 	return true
+}
+
+// installClientHooks merges the selected tokenops hooks into one client's
+// hook config. `hooks install` and the coach presets both install through
+// it, so the two cannot wire a client differently.
+func installClientHooks(out io.Writer, client, settingsPath string, coach, readGuard, routeGuard, dryRun bool, budget float64) error {
+	if err := validateHookClient(client); err != nil {
+		return err
+	}
+	if err := refuseUnsupportedHook(client, readGuard); err != nil {
+		return err
+	}
+	exe := selfExe()
+	fmt.Fprintf(out, "Installing tokenops %s hooks using binary:\n  %s\n", version.String(), exe)
+
+	// opencode has no config file to merge into: its extension
+	// point is a JavaScript module, so it takes a different path
+	// entirely.
+	if opencodeClient(client) {
+		pdir, derr := opencodePluginDir(settingsPath)
+		if derr != nil {
+			return derr
+		}
+		return installOpencodePlugin(out, pdir, exe, readGuard, coach, routeGuard, dryRun, budget)
+	}
+
+	path, err := resolveHookConfigPath(client, settingsPath)
+	if err != nil {
+		return err
+	}
+	specs := specsForModeWithRoute(coach, readGuard, routeGuard, budget, "", providerForClient(client))
+	if strings.EqualFold(client, hookClientCursor) {
+		return installCursorHooks(out, path, exe, specs, dryRun)
+	}
+
+	settings, _, err := loadSettings(path)
+	if err != nil {
+		return err
+	}
+	hooks := hooksMap(settings)
+
+	var changes []string
+	for _, sp := range specs {
+		entry := commandEntry(exe, sp.args)
+		if strings.EqualFold(client, hookClientCodex) {
+			entry = codexCommandEntry(exe, sp.args)
+		}
+		changed, warn := mergeHook(hooks, sp.event, sp.matcher, entry, sp.marker)
+		if warn != "" {
+			fmt.Fprintf(out, "  warning: %s\n", warn)
+		}
+		if changed {
+			changes = append(changes, fmt.Sprintf("%s -> event %q matcher %q", sp.name, sp.event, sp.matcher))
+		}
+	}
+	settings["hooks"] = hooks
+
+	if len(changes) == 0 {
+		fmt.Fprintln(out, "Already up to date — no changes.")
+		return nil
+	}
+	for _, c := range changes {
+		fmt.Fprintf(out, "  + %s\n", c)
+	}
+
+	if dryRun {
+		fmt.Fprintln(out, "\n--dry-run: not writing. Resulting settings.json:")
+		b, _ := json.MarshalIndent(settings, "", "  ")
+		fmt.Fprintln(out, string(b))
+		return nil
+	}
+	if err := writeSettings(path, settings); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "Wrote %s (backup at %s.bak)\n", path, path)
+	writeHookTrustNote(out, client)
+	return nil
 }
