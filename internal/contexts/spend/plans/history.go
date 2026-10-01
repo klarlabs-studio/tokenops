@@ -19,6 +19,11 @@ type Binding struct {
 	// tax included. Zero falls back to the catalog's US list price.
 	Price    float64 `json:"price,omitempty"`
 	Currency string  `json:"currency,omitempty"`
+	// SpendLimitUSD is the spend limit in force from From, for a plan
+	// billed at API rates. Recording it per change keeps an earlier
+	// month's limit when it changes: September measured against $1,500,
+	// October against $500.
+	SpendLimitUSD float64 `json:"spend_limit_usd,omitempty"`
 }
 
 // History is every recorded plan change.
@@ -39,8 +44,9 @@ type Period struct {
 	To   time.Time `json:"to"`
 	// Price and Currency are the operator's own price for the plan in
 	// this period, when they gave one.
-	Price    float64 `json:"price,omitempty"`
-	Currency string  `json:"currency,omitempty"`
+	Price         float64 `json:"price,omitempty"`
+	Currency      string  `json:"currency,omitempty"`
+	SpendLimitUSD float64 `json:"spend_limit_usd,omitempty"`
 }
 
 // Days is the period's length in days.
@@ -119,11 +125,11 @@ func (h History) Periods(provider string, since, until time.Time, current string
 			continue
 		}
 		if n := len(out); n > 0 && out[n-1].Plan == b.Plan && out[n-1].Price == b.Price &&
-			out[n-1].Currency == b.Currency && out[n-1].To.Equal(from) {
+			out[n-1].Currency == b.Currency && out[n-1].SpendLimitUSD == b.SpendLimitUSD && out[n-1].To.Equal(from) {
 			out[n-1].To = to
 			continue
 		}
-		out = append(out, Period{Plan: b.Plan, From: from, To: to, Price: b.Price, Currency: b.Currency})
+		out = append(out, Period{Plan: b.Plan, From: from, To: to, Price: b.Price, Currency: b.Currency, SpendLimitUSD: b.SpendLimitUSD})
 	}
 	return out
 }
@@ -148,4 +154,11 @@ const averageMonthDays = 365.2425 / 12
 // PeriodCost is a period's share of a monthly price.
 func PeriodCost(monthlyUSD float64, p Period) float64 {
 	return monthlyUSD * p.Days() / averageMonthDays
+}
+
+// SpendLimitAt is the spend limit recorded for provider's plan at t, and
+// whether one was.
+func (h History) SpendLimitAt(provider string, t time.Time) (float64, bool) {
+	b := h.bindingAt(provider, t, "")
+	return b.SpendLimitUSD, b.SpendLimitUSD > 0
 }

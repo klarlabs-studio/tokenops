@@ -21,6 +21,9 @@ type Switch struct {
 	// said.
 	Price    float64
 	Currency string
+	// SpendLimitUSD is the spend limit from From on, for a plan billed at
+	// API rates.
+	SpendLimitUSD float64
 }
 
 // Outcome is what a switch did. StoreErr is set when a backdated switch
@@ -56,7 +59,7 @@ func Record(ctx context.Context, s Switch) (Outcome, error) {
 	}
 	res, err := planswitch.Record(ctx, file, restamper, planswitch.Change{
 		Provider: s.Provider, Previous: s.Previous, Plan: s.Plan, From: s.From, Now: s.Now,
-		Price: s.Price, Currency: s.Currency,
+		Price: s.Price, Currency: s.Currency, SpendLimitUSD: s.SpendLimitUSD,
 	})
 	out.Result = res
 	if err != nil {
@@ -72,6 +75,7 @@ func Record(ctx context.Context, s Switch) (Outcome, error) {
 			Details: map[string]any{
 				"previous": s.Previous, "plan": s.Plan, "from": s.From.Format(time.RFC3339),
 				"restamped": res.Restamped, "restamped_to": res.RestampedTo, "price": s.Price, "currency": s.Currency,
+				"spend_limit_usd": s.SpendLimitUSD,
 			},
 		})
 	}

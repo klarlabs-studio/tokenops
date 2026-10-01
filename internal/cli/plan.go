@@ -115,7 +115,7 @@ US list price.`,
 				fmt.Fprintf(cmd.OutOrStdout(), "set plans.%s = %s\n", provider, b.Plan)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", path)
-			if b.Previous != b.Plan || sinceFlag != "" || priceFlag > 0 {
+			if b.Previous != b.Plan || sinceFlag != "" || priceFlag > 0 || spendLimit > 0 {
 				currency := currencyFlag
 				if currency == "" {
 					currency = cfg.Money.Currency
@@ -128,7 +128,7 @@ US list price.`,
 				}
 				if err := recordPlanChange(cmd.Context(), cmd.OutOrStdout(), planhistory.Switch{
 					Provider: provider, Previous: b.Previous, Plan: b.Plan, From: from, Now: now,
-					Price: priceFlag, Currency: currency,
+					Price: priceFlag, Currency: currency, SpendLimitUSD: spendLimit,
 				}, dbFlag); err != nil {
 					fmt.Fprintf(cmd.ErrOrStderr(), "warning: plan history not updated: %v\n", err)
 				}
