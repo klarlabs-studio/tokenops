@@ -112,3 +112,36 @@ func namespaced(model string) (eventschema.Provider, bool) {
 	}
 	return "", false
 }
+
+// ForCodexTurn is the biller of a Codex turn, given the session's
+// model_provider (from its rollout's session_meta), the base URL Codex's
+// config gives that provider, and the model that served it.
+//
+//   - Codex's built-in "openai" provider is OpenAI's.
+//   - A known gateway bills its own models; a reseller bills everything;
+//     a gateway running closed models on the operator's credential leaves
+//     an OpenAI model with OpenAI.
+//   - Any other provider is named by its Codex provider ID, which is the
+//     operator's own label for it, rather than guessed.
+func ForCodexTurn(providerID, baseURL, model string) eventschema.Provider {
+	id := strings.ToLower(strings.TrimSpace(providerID))
+	if id == "" || id == "openai" {
+		return eventschema.ProviderOpenAI
+	}
+	if e, ok := EndpointFor(baseURL); ok {
+		if e.Kind == OwnCredential && isOpenAIModel(model) {
+			return eventschema.ProviderOpenAI
+		}
+		return e.Provider
+	}
+	return eventschema.Provider(id)
+}
+
+// isOpenAIModel reports whether a served model is one of OpenAI's.
+func isOpenAIModel(model string) bool {
+	m := strings.ToLower(strings.TrimSpace(model))
+	if i := strings.LastIndex(m, "/"); i >= 0 {
+		m = m[i+1:]
+	}
+	return strings.HasPrefix(m, "gpt-") || strings.HasPrefix(m, "o1") || strings.HasPrefix(m, "o3") || strings.HasPrefix(m, "o4")
+}

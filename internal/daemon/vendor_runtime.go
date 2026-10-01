@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"os"
 
+	"go.klarlabs.de/tokenops/internal/infra/codexsettings"
+
 	"go.klarlabs.de/tokenops/internal/infra/routehistory"
 
 	"go.klarlabs.de/tokenops/internal/config"
@@ -56,6 +58,7 @@ func startVendorUsagePollers(
 		p := codexjsonl.NewPoller(bus, codexjsonl.PollerOptions{
 			Root: cfg.VendorUsage.CodexJSONL.Root, Interval: cfg.VendorUsage.CodexJSONL.Interval,
 			Logger: logger, CostSource: planCostSource(cfg, eventschema.ProviderOpenAI),
+			ProviderBaseURL: codexsettings.ProviderBaseURL,
 		})
 		sup.Go("codex-jsonl", p.Run)
 		logger.Info("codex jsonl poller live", "interval", cfg.VendorUsage.CodexJSONL.Interval, "root", cfg.VendorUsage.CodexJSONL.Root)
