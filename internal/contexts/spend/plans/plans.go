@@ -408,6 +408,19 @@ var deprecatedAliases = map[string]string{
 	"gpt-team":        "gpt-business",
 }
 
+// PayAsYouGo binds a provider billed per token with no subscription, so
+// its spend is measured against a limit the operator sets: a Fireworks or
+// OpenRouter account with a monthly cap. It belongs to no provider, so it
+// can be bound to any.
+const PayAsYouGo = "pay-as-you-go"
+
+var payAsYouGo = Plan{
+	Name:             PayAsYouGo,
+	Display:          "Pay as you go (spend limit)",
+	SpendDenominated: true,
+	SourceURL:        "https://docs.fireworks.ai/serverless/pricing (2026-10-01): billed per token; the limit is the account's own",
+}
+
 // ForVendorPlanType is the catalog plan a vendor-reported plan type
 // names, when exactly one plan of that provider claims it.
 func ForVendorPlanType(provider, planType string) (string, bool) {
@@ -463,6 +476,9 @@ func ResolveAlias(name string) (string, bool) {
 // (via Names()) so configuration errors are actionable. Deprecated
 // aliases are transparently resolved.
 func Lookup(name string) (Plan, bool) {
+	if name == PayAsYouGo {
+		return payAsYouGo, true
+	}
 	if modern, aliased := ResolveAlias(name); aliased {
 		name = modern
 	}
@@ -516,7 +532,7 @@ func Names() []string {
 // through to metered cost. Deprecated aliases pass validation; callers
 // who want the rename hint should call ResolveAlias directly.
 func Validate(name string) error {
-	if _, ok := catalog[name]; ok {
+	if _, ok := catalog[name]; ok || name == PayAsYouGo {
 		return nil
 	}
 	if _, aliased := ResolveAlias(name); aliased {

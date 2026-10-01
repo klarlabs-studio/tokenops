@@ -99,3 +99,21 @@ func TestPeriodsCarryThePrice(t *testing.T) {
 		t.Fatalf("Periods = %+v", got)
 	}
 }
+
+// A limit change keeps the earlier limit for the time before it.
+func TestSpendLimitHistory(t *testing.T) {
+	h := History{
+		{Provider: "anthropic", Plan: "claude-enterprise", SpendLimitUSD: 1500},
+		{Provider: "anthropic", Plan: "claude-enterprise", From: day(30), SpendLimitUSD: 500},
+	}
+	if l, ok := h.SpendLimitAt("anthropic", day(15)); !ok || l != 1500 {
+		t.Errorf("mid-September limit %v %v, want 1500", l, ok)
+	}
+	if l, _ := h.SpendLimitAt("anthropic", day(30)); l != 500 {
+		t.Errorf("from the 30th limit %v, want 500", l)
+	}
+	ps := h.Periods("anthropic", day(1), day(30).AddDate(0, 0, 5), "claude-enterprise")
+	if len(ps) != 2 || ps[0].SpendLimitUSD != 1500 || ps[1].SpendLimitUSD != 500 {
+		t.Errorf("periods %+v; a limit change splits the period", ps)
+	}
+}

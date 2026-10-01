@@ -53,6 +53,9 @@ type Change struct {
 	From, Now                time.Time
 	Price                    float64
 	Currency                 string
+	// SpendLimitUSD is the spend limit from From on, for a plan billed at
+	// API rates.
+	SpendLimitUSD float64
 }
 
 // Record writes a switch of provider from previous to plan, effective
@@ -73,6 +76,7 @@ func Record(ctx context.Context, h History, r Restamper, c Change) (Result, erro
 	bs := past.Switch(provider, c.Previous, plan, from, now)
 	last := &bs[len(bs)-1]
 	last.Price, last.Currency = c.Price, strings.ToUpper(strings.TrimSpace(c.Currency))
+	last.SpendLimitUSD = c.SpendLimitUSD
 	if err := h.Append(bs...); err != nil {
 		return Result{}, err
 	}
@@ -231,6 +235,11 @@ func Cost(h plans.History, current map[string]string, since, until time.Time, fx
 	for _, provider := range names {
 		pc := ProviderCost{Provider: provider, Complete: true}
 		for _, period := range h.Periods(provider, since, until, current[provider]) {
+			// A plan billed at API rates has no flat fee: what it costs
+			// is the usage itself, already counted as billed spend.
+			if p, ok := plans.Lookup(period.Plan); ok && p.SpendDenominated && period.Price <= 0 {
+				continue
+			}
 			c := PeriodCost{Period: period}
 			monthly, currency := period.Price, period.Currency
 			c.Source = "yours"

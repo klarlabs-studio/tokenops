@@ -95,6 +95,9 @@ func newPlanHistoryCmd() *cobra.Command {
 				if b.Price > 0 {
 					price = fmt.Sprintf(" at %.2f %s/month", b.Price, b.Currency)
 				}
+				if b.SpendLimitUSD > 0 {
+					price += fmt.Sprintf(", spend limit %.2f USD", b.SpendLimitUSD)
+				}
 				fmt.Fprintf(cmd.OutOrStdout(), "%-10s %-18s from %s%s (recorded %s)\n",
 					b.Provider, plan, from, price, b.Recorded.Format("2006-01-02"))
 			}

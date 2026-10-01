@@ -151,3 +151,21 @@ func TestCovers(t *testing.T) {
 		}
 	}
 }
+
+// Any provider billed per token can be measured against its own limit.
+func TestPayAsYouGo(t *testing.T) {
+	if err := Validate(PayAsYouGo); err != nil {
+		t.Fatal(err)
+	}
+	p, ok := Lookup(PayAsYouGo)
+	if !ok || !p.SpendDenominated || Covers(PayAsYouGo) {
+		t.Errorf("pay-as-you-go = %+v; want billed, measured against a spend limit", p)
+	}
+	if err := ValidateSpendLimit(PayAsYouGo, 0, false); err == nil {
+		t.Error("a pay-as-you-go binding with no limit has no denominator")
+	}
+	r, err := ComputeHeadroom(PayAsYouGo, HeadroomInputs{SpendUSD: 50, SpendLimitUSD: 200})
+	if err != nil || r.SpendPct != 25 {
+		t.Errorf("headroom %+v, %v; want 25%%", r, err)
+	}
+}
