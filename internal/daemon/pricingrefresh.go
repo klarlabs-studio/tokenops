@@ -81,7 +81,7 @@ func refreshOnce(
 	eng *spend.Engine,
 	logger *slog.Logger,
 ) {
-	src := pricing.SourceByName("litellm", "")
+	src := pricing.SourceByName("default", "")
 	if src == nil {
 		return
 	}

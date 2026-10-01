@@ -97,3 +97,16 @@ func TestNewEnvelopeAttribution(t *testing.T) {
 		t.Errorf("source = %q", env.Source)
 	}
 }
+
+func TestMapProviderGatewayIDs(t *testing.T) {
+	for id, want := range map[string]eventschema.Provider{
+		"fireworks-ai": eventschema.ProviderFireworks,
+		"togetherai":   eventschema.ProviderTogether,
+		"openrouter":   eventschema.ProviderOpenRouter,
+		"opencode-go":  "opencode-go",
+	} {
+		if got := mapProvider(id); got != want {
+			t.Errorf("mapProvider(%q) = %q, want %q", id, got, want)
+		}
+	}
+}

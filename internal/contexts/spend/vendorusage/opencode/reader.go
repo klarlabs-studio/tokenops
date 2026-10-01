@@ -186,6 +186,10 @@ func mapProvider(providerID string) eventschema.Provider {
 		return eventschema.ProviderGemini
 	case "openrouter":
 		return eventschema.ProviderOpenRouter
+	case "fireworks-ai", "fireworks":
+		return eventschema.ProviderFireworks
+	case "togetherai", "together":
+		return eventschema.ProviderTogether
 	case "":
 		return eventschema.ProviderUnknown
 	default:

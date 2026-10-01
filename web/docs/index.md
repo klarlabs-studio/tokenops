@@ -194,8 +194,9 @@ whoever wrote the patterns had to guess what. Here there is no sensitive
 payload to redact, because the sensitive part never enters the pipeline.
 
 **Two outbound calls, named rather than discovered.** The daemon fetches a
-public rate card once a day so a model released after your binary does not
-silently price at zero. When your currency is not the US dollar, TokenOps
+public rate card once a day (LiteLLM's, plus models.dev's for gateways such
+as Fireworks) so a model released after your binary does not silently price
+at zero. When your currency is not the US dollar, TokenOps
 also fetches the ECB's daily euro reference rate, at most once a day, to show
 totals in your currency. Both *download*; they send no prompt, no file, no
 identifier and no usage figure, and each is one line to switch off

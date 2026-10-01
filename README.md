@@ -147,7 +147,8 @@ an identifier does not claim that execution started.
 - **Local-first surfaces:** Go daemon, SQLite event store, MCP server, protected
   local API, and CLI. No cloud account or telemetry is required; the core
   product is Apache 2.0. It makes two outbound calls of its own, both
-  downloads that send nothing about you: a daily public rate card, and the
+  downloads that send nothing about you: a daily public rate card (LiteLLM
+  and models.dev), and the
   ECB's daily exchange rate when your currency is not the US dollar. Each is
   one line to switch off (`pricing.refresh.disabled`, `money.fetch_rate`).
 

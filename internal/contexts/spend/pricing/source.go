@@ -1,6 +1,9 @@
 package pricing
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // Source is a pluggable provider of a pricing Snapshot. Implementations fetch
 // from a machine-readable feed (LiteLLM today; OpenRouter, a vendor-page
@@ -16,19 +19,68 @@ type Source interface {
 	Fetch(ctx context.Context) (Snapshot, error)
 }
 
-// SourceByName returns the built-in Source for name, or nil when unknown.
-// Phase 1 ships only "litellm"; Phase 3 adds more. url overrides the source's
+// SourceByName returns the built-in Source for name, or nil when unknown:
+// "litellm", "models.dev", or "default" (both, combined). url overrides the source's
 // default endpoint when non-empty (used for `--url` and, in tests, an
 // httptest server).
 func SourceByName(name, url string) Source {
 	switch name {
-	case "", "litellm":
+	case "litellm":
 		s := NewLiteLLMSource()
 		if url != "" {
 			s.URL = url
 		}
 		return s
+	case "models.dev", "modelsdev":
+		s := NewModelsDevSource()
+		if url != "" {
+			s.URL = url
+		}
+		return s
+	case "", "default":
+		// A URL names one endpoint, so it can only stand in for one
+		// source: LiteLLM, which "default" meant before models.dev.
+		if url != "" {
+			return SourceByName("litellm", url)
+		}
+		return Combined{NewLiteLLMSource(), NewModelsDevSource()}
 	default:
 		return nil
 	}
+}
+
+// Combined fetches several sources into one snapshot: LiteLLM for the
+// model vendors, models.dev for the gateways (ADR 0009 §6). Their keys do
+// not overlap, since each prices different providers. Any one failing
+// fails the whole fetch, so the card in force keeps pricing rather than
+// a snapshot that silently lost one source's rows.
+type Combined []Source
+
+// Name implements Source.
+func (c Combined) Name() string {
+	names := make([]string, 0, len(c))
+	for _, s := range c {
+		names = append(names, s.Name())
+	}
+	return strings.Join(names, "+")
+}
+
+// Fetch implements Source.
+func (c Combined) Fetch(ctx context.Context) (Snapshot, error) {
+	out := Snapshot{Source: c.Name(), Rates: map[string]Rate{}}
+	for _, s := range c {
+		snap, err := s.Fetch(ctx)
+		if err != nil {
+			return Snapshot{}, err
+		}
+		if snap.FetchedAt.After(out.FetchedAt) {
+			out.FetchedAt = snap.FetchedAt
+		}
+		for k, r := range snap.Rates {
+			if _, taken := out.Rates[k]; !taken {
+				out.Rates[k] = r
+			}
+		}
+	}
+	return out, nil
 }

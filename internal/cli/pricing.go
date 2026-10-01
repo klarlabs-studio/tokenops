@@ -160,7 +160,7 @@ keep working on the baseline.`,
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&source, "source", "litellm", "pricing source (litellm)")
+	cmd.Flags().StringVar(&source, "source", "default", "pricing source: default (litellm + models.dev), litellm, or models.dev")
 	cmd.Flags().StringVar(&url, "url", "", "override the source URL (default: source's built-in)")
 	cmd.Flags().StringVar(&dir, "dir", "", "pricing state dir (default: ~/.tokenops/pricing)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "fetch, lint, and diff but do not write the snapshot")
