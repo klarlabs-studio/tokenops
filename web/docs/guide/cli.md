@@ -22,7 +22,14 @@ every project you own.
 tokenops init --detect          # write config + suggest plan-set commands
 tokenops init --print-only      # render YAML to stdout, don't write
 tokenops init --force           # overwrite existing config
+tokenops init --currency EUR    # show totals in euros (default: your system region)
+tokenops init --preset guided   # set up the coach (default for a new config: advise)
 ```
+
+The currency comes from your system region when you do not name it; on
+macOS the region setting wins over the language, so an English-language
+system in Germany gets euros. Re-running `init` keeps the currency and
+coach you already have unless you name new ones.
 
 ### `tokenops detect`
 
@@ -41,11 +48,37 @@ wrong in a way that looks authoritative.
 
 ```bash
 tokenops plan list              # configured bindings + headroom
-tokenops plan catalog           # all 13 plans in the catalog
+tokenops plan catalog           # all 15 plans and their list prices
 tokenops plan set anthropic claude-max-20x
 tokenops plan unset cursor
 tokenops plan headroom          # live consumption + overage risk
+tokenops plan history           # every recorded switch, oldest first
 ```
+
+#### Switching plans
+
+Every `plan set` is recorded with the date it took effect, so a report
+over a past period uses the plan in force then rather than today's. If
+you switched before telling TokenOps, backdate it:
+
+```bash
+tokenops plan set openai gpt-pro-5x --since 2026-09-28
+```
+
+`--since` also re-marks that provider's usage recorded as billed per token
+since the date as covered by the plan, and writes the change to the audit
+log. A start date in the future is refused: record a switch once it has
+happened.
+
+`--price` records what you pay per month as your bill shows it — regional
+price, tax included — in `--currency` (default: your `money.currency`).
+Without it, plan cost uses the catalog's US list price, and `spend` says so.
+
+```bash
+tokenops plan set anthropic claude-max-20x --price 214.60 --currency EUR
+```
+
+See [Switching plans](/guide/configuration#switching-plans) and ADR 0008.
 
 #### Plans billed at API rates
 
@@ -159,6 +192,20 @@ tokenops spend --forecast --forecast-days 14
 tokenops spend --include-source=mcp-session     # include MCP activity pings
 tokenops spend --json
 ```
+
+Totals are shown in your `money.currency`, with the US-dollar figure beside
+them and a line naming the rate used:
+
+```
+  api equivalent:  9370.58 EUR (10640.30 USD) (plan-covered usage at list price)
+  plans:           244.14 EUR (your prices, prorated)
+  value per plan EUR: 38.4x (api equivalent / plans)
+  rate:            1 EUR = 1.1355 USD (ECB reference rate, 2026-09-30); converted amounts move with it
+```
+
+Usage is priced in dollars because vendors publish rate cards in dollars,
+so a converted figure moves with the exchange rate even when usage does
+not. Plans are prorated by day across switches.
 
 ### `tokenops scorecard`
 
@@ -323,7 +370,47 @@ Available env vars:
 
 ## Coach
 
+### `tokenops coach`
+
+With no subcommand, shows the coach: its verbosity, and for each power
+(`inform`, `waste`, `models`, `context`) the autonomy you set, what it can
+actually do on this machine, why those differ, and the live quota window.
+See ADR 0006.
+
+### `tokenops coach preset [observe|advise|guided|autopilot]`
+
+Sets every power and the verbosity in one choice, then makes the machine
+match it: installs the coach, read-guard and route-guard hooks on every
+installed agent (Claude Code, Codex, Cursor, opencode) as far as each
+supports them, and sets where each agent compacts.
+
+| Preset | What it does |
+|---|---|
+| `observe` | records what the coach would say or do; says and does nothing |
+| `advise` | tells you what you could do better, once per kind of thing; changes nothing |
+| `guided` | refuses redundant re-reads and asks before moving subagents to a cheaper model |
+| `autopilot` | acts on its own and stays quiet |
+
+With no argument it lists the presets and marks the one in effect.
+
+### `tokenops coach autonomy|set|verbosity|off`
+
+```bash
+tokenops coach autonomy ask          # default for every power: off | advise | ask | autonomous
+tokenops coach set models advise     # override one power
+tokenops coach verbosity quiet       # quiet | normal | verbose
+tokenops coach off                   # record only; say and do nothing
+```
+
+Autonomy decides who acts; verbosity how much the coach says. A rung the
+coach cannot deliver here is shown one rung lower, with the reason.
+Approval requests are always shown. A [`model_policy`](/guide/configuration#model-policy-model-policy)
+applies whatever the coach is set to.
+
 ### `tokenops coach delivery`
+
+The older setting the coach replaced; it still works.
+`tokenops coach migrate` writes the equivalent `coach` block.
 
 Shows or sets how far coaching goes: `observe` (answers when asked),
 `advise` (also nudges, never blocks — the default), or `intervene` (also
@@ -373,6 +460,29 @@ tokens it suppressed.
 tokenops coach replies --since 7d
 tokenops coach replies --json
 ```
+
+## Agent DX
+
+### `tokenops dx`
+
+What your agent sessions are like to work with: how many turns a typical
+instruction costs, how often the agent redoes its own work, how often you
+interrupt it. Derived from the transcripts the client already writes —
+no proxy needed. Work is grouped by operator instruction: a prompt you
+typed, and everything the agent did before the next one.
+
+```bash
+tokenops dx                       # last 7 days, every client found
+tokenops dx --days 30 --source codex
+tokenops dx --json
+```
+
+The **by model and effort** table splits instructions by the model and
+the reasoning effort that handled them (Claude Code, Codex and opencode
+record both), so comparing `high` with `medium` on the same model is a
+matter of running a week at each. A row with fewer than 30 instructions
+is shown but marked as too small to compare. Sessions in throwaway directories (`/tmp`, benchmark clones)
+are excluded unless you pass `--include-scratch`.
 
 ## Story
 
