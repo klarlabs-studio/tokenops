@@ -135,3 +135,23 @@ func TestReattributeSession(t *testing.T) {
 		}
 	}
 }
+
+func TestRenameProvider(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	e := mustPromptEnvelope(t, "o1", time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC), &eventschema.PromptEvent{Provider: "zai-coding-plan"})
+	e.Source = "opencode"
+	if err := s.AppendBatch(ctx, []*eventschema.Envelope{e}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.ProvidersFor(ctx, "opencode"); len(got) != 1 || got[0] != "zai-coding-plan" {
+		t.Fatalf("ProvidersFor = %v", got)
+	}
+	if n, err := s.RenameProvider(ctx, "opencode", "zai-coding-plan", "zai", "zai"); err != nil || n != 1 {
+		t.Fatalf("renamed %d, err %v", n, err)
+	}
+	got, _ := s.Query(ctx, Filter{Type: eventschema.EventTypePrompt})
+	if p := got[0].Payload.(*eventschema.PromptEvent); p.Provider != "zai" || got[0].Attributes["endpoint"] != "zai" {
+		t.Errorf("after rename: provider %q endpoint %q", p.Provider, got[0].Attributes["endpoint"])
+	}
+}

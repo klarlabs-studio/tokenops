@@ -21,11 +21,15 @@ import (
 
 // Turn is one assistant message extracted from the opencode message table.
 type Turn struct {
-	ID           string // message primary key — the dedup + deterministic-id source
-	SessionID    string
-	Project      string // derived from the session's working directory
-	Model        string // opencode modelID (e.g. "claude-opus-4.6")
-	Provider     eventschema.Provider
+	ID        string // message primary key — the dedup + deterministic-id source
+	SessionID string
+	Project   string // derived from the session's working directory
+	Model     string // opencode modelID (e.g. "claude-opus-4.6")
+	Provider  eventschema.Provider
+	// Endpoint names the endpoint the turn went through when the
+	// providerID says it (a coding plan's own, or a vendor's pay-as-you-go
+	// API); empty when it does not. A plan covers only its own (ADR 0009).
+	Endpoint     string
 	InputTokens  int // uncached input + cache read + cache write
 	CachedTokens int // cache read
 	OutputTokens int // output + reasoning
@@ -146,6 +150,7 @@ func readMessages(dbPath, sessionID string, visit func(Turn) error) error {
 			Project:      projectFromPath(d.Path.Root, d.Path.CWD),
 			Model:        d.ModelID,
 			Provider:     mapProvider(d.ProviderID),
+			Endpoint:     endpointFor(d.ProviderID),
 			InputTokens:  d.Tokens.Input + d.Tokens.Cache.Read + d.Tokens.Cache.Write,
 			CachedTokens: d.Tokens.Cache.Read,
 			OutputTokens: d.Tokens.Output + d.Tokens.Reasoning,
@@ -171,28 +176,71 @@ func projectFromPath(root, cwd string) string {
 	return "unknown"
 }
 
+// opencodeProviders maps opencode's providerID (models.dev's provider
+// IDs) to the TokenOps provider that bills it and the endpoint it names.
+// A vendor that sells both a coding plan and a pay-as-you-go API has an ID
+// for each: the plan's endpoint is named like the provider, the API's
+// "<provider>-api", so a bound plan covers only the plan's turns.
+var opencodeProviders = map[string]struct {
+	provider eventschema.Provider
+	endpoint string
+}{
+	"anthropic":              {eventschema.ProviderAnthropic, ""},
+	"openai":                 {eventschema.ProviderOpenAI, ""},
+	"github-copilot":         {eventschema.ProviderGitHub, ""},
+	"github":                 {eventschema.ProviderGitHub, ""},
+	"google":                 {eventschema.ProviderGemini, ""},
+	"gemini":                 {eventschema.ProviderGemini, ""},
+	"google-vertex":          {eventschema.ProviderGemini, ""},
+	"openrouter":             {eventschema.ProviderOpenRouter, "openrouter"},
+	"fireworks-ai":           {eventschema.ProviderFireworks, "fireworks"},
+	"fireworks":              {eventschema.ProviderFireworks, "fireworks"},
+	"togetherai":             {eventschema.ProviderTogether, "together"},
+	"together":               {eventschema.ProviderTogether, "together"},
+	"deepseek":               {eventschema.ProviderDeepSeek, "deepseek"},
+	"opencode":               {"opencode", "opencode"},
+	"opencode-go":            {"opencode-go", "opencode-go"},
+	"zai-coding-plan":        {"zai", "zai"},
+	"zai":                    {"zai", "zai-api"},
+	"zhipuai-coding-plan":    {"zhipuai", "zhipuai"},
+	"zhipuai":                {"zhipuai", "zhipuai-api"},
+	"kimi-for-coding":        {"kimi", "kimi"},
+	"kimi-code-plan-global":  {"kimi", "kimi"},
+	"kimi-code-plan-cn":      {"kimi", "kimi"},
+	"moonshotai":             {"moonshot", "moonshot"},
+	"moonshotai-cn":          {"moonshot", "moonshot"},
+	"minimax-coding-plan":    {"minimax", "minimax"},
+	"minimax-cn-coding-plan": {"minimax", "minimax"},
+	"minimax":                {"minimax", "minimax-api"},
+	"minimax-cn":             {"minimax", "minimax-api"},
+	"alibaba-coding-plan":    {"alibaba", "alibaba"},
+	"alibaba-coding-plan-cn": {"alibaba", "alibaba"},
+	"alibaba":                {"alibaba", "alibaba-api"},
+	"alibaba-cn":             {"alibaba", "alibaba-api"},
+}
+
 // mapProvider normalizes opencode's providerID to a TokenOps provider. The
 // Provider type is an open string, so unknown providers pass through verbatim
 // rather than collapsing to "unknown".
 func mapProvider(providerID string) eventschema.Provider {
-	switch providerID {
-	case "anthropic":
-		return eventschema.ProviderAnthropic
-	case "openai":
-		return eventschema.ProviderOpenAI
-	case "github-copilot", "github":
-		return eventschema.ProviderGitHub
-	case "google", "gemini", "google-vertex":
-		return eventschema.ProviderGemini
-	case "openrouter":
-		return eventschema.ProviderOpenRouter
-	case "fireworks-ai", "fireworks":
-		return eventschema.ProviderFireworks
-	case "togetherai", "together":
-		return eventschema.ProviderTogether
-	case "":
-		return eventschema.ProviderUnknown
-	default:
-		return eventschema.Provider(providerID)
+	if m, ok := opencodeProviders[providerID]; ok {
+		return m.provider
 	}
+	if providerID == "" {
+		return eventschema.ProviderUnknown
+	}
+	return eventschema.Provider(providerID)
+}
+
+// endpointFor is the endpoint an opencode providerID names, "" when it
+// names none (the vendor's own, as before endpoints were recorded).
+func endpointFor(providerID string) string {
+	return opencodeProviders[providerID].endpoint
+}
+
+// Provider is the TokenOps provider and endpoint an opencode providerID
+// maps to; ok is false for an ID the mapping does not know.
+func Provider(providerID string) (eventschema.Provider, string, bool) {
+	m, ok := opencodeProviders[providerID]
+	return m.provider, m.endpoint, ok
 }

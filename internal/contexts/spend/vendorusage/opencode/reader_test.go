@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"path/filepath"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 
@@ -108,5 +109,38 @@ func TestMapProviderGatewayIDs(t *testing.T) {
 		if got := mapProvider(id); got != want {
 			t.Errorf("mapProvider(%q) = %q, want %q", id, got, want)
 		}
+	}
+}
+
+func TestOpencodeProviderIDsNameTheirEndpoint(t *testing.T) {
+	for id, want := range map[string]struct {
+		provider eventschema.Provider
+		endpoint string
+	}{
+		"zai-coding-plan":       {"zai", "zai"},
+		"zai":                   {"zai", "zai-api"},
+		"kimi-code-plan-global": {"kimi", "kimi"},
+		"moonshotai":            {"moonshot", "moonshot"},
+		"minimax-coding-plan":   {"minimax", "minimax"},
+		"minimax":               {"minimax", "minimax-api"},
+		"opencode-go":           {"opencode-go", "opencode-go"},
+		"opencode":              {"opencode", "opencode"},
+		"anthropic":             {eventschema.ProviderAnthropic, ""},
+	} {
+		if p, e := mapProvider(id), endpointFor(id); p != want.provider || e != want.endpoint {
+			t.Errorf("%s: provider %q endpoint %q, want %+v", id, p, e, want)
+		}
+	}
+}
+
+// Zen bills the cost opencode stamps; a plan's turn carries none.
+func TestOnlyZenTurnsCarryOpencodesCost(t *testing.T) {
+	zen := Turn{ID: "z", Provider: "opencode", Endpoint: "opencode", Model: "claude-opus-4-6", Cost: 0.42, Timestamp: time.Unix(0, 0)}
+	if pe := newEnvelope(zen, "").Payload.(*eventschema.PromptEvent); pe.CostUSD != 0.42 {
+		t.Errorf("Zen turn cost %v, want opencode's 0.42", pe.CostUSD)
+	}
+	goTurn := Turn{ID: "g", Provider: "opencode-go", Endpoint: "opencode-go", Model: "kimi-k2.6", Cost: 0.067, Timestamp: time.Unix(0, 0)}
+	if pe := newEnvelope(goTurn, "").Payload.(*eventschema.PromptEvent); pe.CostUSD != 0 {
+		t.Errorf("Go turn cost %v; a subscription turn is priced from the card, if at all", pe.CostUSD)
 	}
 }

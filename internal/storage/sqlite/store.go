@@ -818,6 +818,39 @@ func (s *Store) ReattributeSession(ctx context.Context, source, session, from, t
 	return res.RowsAffected()
 }
 
+// ProvidersFor lists the distinct providers of a source's prompt events.
+func (s *Store) ProvidersFor(ctx context.Context, source string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT provider FROM events
+		WHERE type = 'prompt' AND source = ? AND provider IS NOT NULL AND provider != ''`, source)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: providers for: %w", contended(ctx, err))
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, fmt.Errorf("sqlite: providers for: %w", err)
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// RenameProvider moves all of a source's prompt events from one provider
+// name to another and records their endpoint; it returns how many it
+// changed. It corrects a provider recorded under a raw client ID
+// (opencode's "zai-coding-plan") that now maps to TokenOps' name.
+func (s *Store) RenameProvider(ctx context.Context, source, from, to, endpoint string) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `UPDATE events SET payload = json_set(payload, '$.provider', ?),
+		attributes = json_set(coalesce(attributes, '{}'), '$.endpoint', ?), provider = ?
+		WHERE type = 'prompt' AND source = ? AND provider = ?`, to, endpoint, to, source, from)
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: rename provider: %w", contended(ctx, err))
+	}
+	return res.RowsAffected()
+}
+
 // MarkEndpoint records the endpoint a source's prompt events for provider
 // went through in [since, until), for events that carry none, and returns
 // how many it changed. Through an endpoint other than the provider's own,

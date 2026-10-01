@@ -241,6 +241,90 @@ var catalog = map[string]Plan{
 		PerSeat:         true,
 		PriceSource:     "https://help.openai.com/en/articles/8542115 (2026-09-30): $25 per user per month on monthly billing",
 	},
+	// Coding plans sold by model vendors and gateways (ADR 0009). Read on
+	// the vendor's own pages on 2026-10-01; a tier whose price is only on
+	// a storefront TokenOps could not read carries no list price, and
+	// plan cost uses what the operator records with --price.
+	"zai-glm-coding-lite": {
+		Name: "zai-glm-coding-lite", Provider: "zai", Display: "z.ai GLM Coding Lite",
+		RateLimitWindow: 5 * time.Hour, WindowUnit: "credits",
+		SourceURL:   "https://docs.z.ai/devpack/overview (2026-10-01): 2,000 credits per 5 hours, 10,000 per week",
+		MonthlyUSD:  18,
+		PriceSource: "https://docs.z.ai/devpack/overview (2026-10-01): starting at 18 USD per month",
+	},
+	"zai-glm-coding-pro": {
+		Name: "zai-glm-coding-pro", Provider: "zai", Display: "z.ai GLM Coding Pro",
+		RateLimitWindow: 5 * time.Hour, WindowUnit: "credits",
+		SourceURL: "https://docs.z.ai/devpack/overview (2026-10-01): 12,000 credits per 5 hours, 60,000 per week; price only on the storefront",
+	},
+	"zai-glm-coding-max": {
+		Name: "zai-glm-coding-max", Provider: "zai", Display: "z.ai GLM Coding Max",
+		RateLimitWindow: 5 * time.Hour, WindowUnit: "credits",
+		SourceURL: "https://docs.z.ai/devpack/overview (2026-10-01): 28,000 credits per 5 hours, 140,000 per week; price only on the storefront",
+	},
+	"opencode-go": {
+		Name: "opencode-go", Provider: "opencode-go", Display: "opencode Go",
+		RateLimitWindow: 5 * time.Hour, WindowUnit: "usd",
+		SourceURL:   "https://opencode.ai/docs/go (2026-10-01): a dollar cap per model per month; 5h = 20%, week = 50% of it",
+		MonthlyUSD:  10,
+		PriceSource: "https://opencode.ai/docs/go (2026-10-01): Go $10 per month",
+	},
+	"opencode-go-plus": {
+		Name: "opencode-go-plus", Provider: "opencode-go", Display: "opencode Go Plus",
+		RateLimitWindow: 5 * time.Hour, WindowUnit: "usd",
+		SourceURL:   "https://opencode.ai/docs/go (2026-10-01): a dollar cap per model per month; 5h = 20%, week = 50% of it",
+		MonthlyUSD:  40,
+		PriceSource: "https://opencode.ai/docs/go (2026-10-01): Go Plus $40 per month",
+	},
+	"alibaba-coding-pro": {
+		Name: "alibaba-coding-pro", Provider: "alibaba", Display: "Alibaba Cloud Coding Plan Pro",
+		RateLimitWindow: 5 * time.Hour, MessagesPerWindow: 6000, WindowUnit: "requests",
+		SourceURL:   "https://www.alibabacloud.com/help/en/model-studio/coding-plan (2026-10-01): 6,000 requests per 5 hours, 45,000 per week, 90,000 per month",
+		MonthlyUSD:  50,
+		PriceSource: "https://www.alibabacloud.com/help/en/model-studio/coding-plan (2026-10-01): Pro $50 per month",
+	},
+	"minimax-token-plus": {
+		Name: "minimax-token-plus", Provider: "minimax", Display: "MiniMax Token Plan Plus",
+		RateLimitWindow: 5 * time.Hour, WindowUnit: "requests",
+		SourceURL:   "https://platform.minimax.io/docs/token-plan/intro (2026-10-01): rolling 5-hour and weekly windows, no published count",
+		MonthlyUSD:  22,
+		PriceSource: "https://platform.minimax.io/docs/token-plan/intro (2026-10-01): Plus $22 per month",
+	},
+	"minimax-token-max": {
+		Name: "minimax-token-max", Provider: "minimax", Display: "MiniMax Token Plan Max",
+		RateLimitWindow: 5 * time.Hour, WindowUnit: "requests",
+		SourceURL:   "https://platform.minimax.io/docs/token-plan/intro (2026-10-01): rolling 5-hour and weekly windows, no published count",
+		MonthlyUSD:  55,
+		PriceSource: "https://platform.minimax.io/docs/token-plan/intro (2026-10-01): Max $55 per month",
+	},
+	"minimax-token-ultra": {
+		Name: "minimax-token-ultra", Provider: "minimax", Display: "MiniMax Token Plan Ultra",
+		RateLimitWindow: 5 * time.Hour, WindowUnit: "requests",
+		SourceURL:   "https://platform.minimax.io/docs/token-plan/intro (2026-10-01): rolling 5-hour and weekly windows, no published count",
+		MonthlyUSD:  132,
+		PriceSource: "https://platform.minimax.io/docs/token-plan/intro (2026-10-01): Ultra $132 per month",
+	},
+	"cerebras-code-pro": {
+		Name: "cerebras-code-pro", Provider: "cerebras", Display: "Cerebras Code Pro",
+		RateLimitWindow: 24 * time.Hour, WindowUnit: "tokens",
+		SourceURL:   "https://www.cerebras.ai/code (2026-10-01): 24M tokens per day",
+		MonthlyUSD:  50,
+		PriceSource: "https://www.cerebras.ai/code (2026-10-01): Pro $50 per month",
+	},
+	"cerebras-code-max": {
+		Name: "cerebras-code-max", Provider: "cerebras", Display: "Cerebras Code Max",
+		RateLimitWindow: 24 * time.Hour, WindowUnit: "tokens",
+		SourceURL:   "https://www.cerebras.ai/code (2026-10-01): 120M tokens per day",
+		MonthlyUSD:  200,
+		PriceSource: "https://www.cerebras.ai/code (2026-10-01): Max $200 per month",
+	},
+	"synthetic-pack": {
+		Name: "synthetic-pack", Provider: "synthetic", Display: "Synthetic subscription pack",
+		RateLimitWindow: 5 * time.Hour, MessagesPerWindow: 500, WindowUnit: "requests",
+		SourceURL:   "https://synthetic.new/pricing (2026-10-01): 500 requests per 5 hours per pack",
+		MonthlyUSD:  30,
+		PriceSource: "https://synthetic.new/pricing (2026-10-01): $30 per pack per month",
+	},
 	"copilot-individual": {
 		Name:             "copilot-individual",
 		Provider:         "github",

@@ -147,12 +147,22 @@ func (p *Poller) scan(ctx context.Context, root string) {
 // rollups and the waste detector resolve opencode sessions the same way.
 func newEnvelope(t Turn, costSource eventschema.CostSource) *eventschema.Envelope {
 	h := sha256.Sum256([]byte("opencode|" + t.ID))
+	// opencode Zen bills prepaid credits at the rate opencode stamps on
+	// each message when it is made, so that cost is what was charged;
+	// re-pricing it from today's card would drift whenever Zen's rates
+	// move. Every other provider is priced from the rate card, so a
+	// plan-covered turn never carries a cost.
+	var cost float64
+	if t.Endpoint == "opencode" && t.Cost > 0 {
+		cost = t.Cost
+	}
 	attrs := map[string]string{
 		"granularity":  "assistant_turn",
 		"session_id":   t.SessionID,
 		"project":      t.Project,
 		"message_id":   t.ID,
 		"provider_id":  string(t.Provider),
+		"endpoint":     t.Endpoint,
 		"cached_input": fmt.Sprintf("%d", t.CachedTokens),
 		"cost_usd":     fmt.Sprintf("%.6f", t.Cost),
 	}
@@ -174,6 +184,7 @@ func newEnvelope(t Turn, costSource eventschema.CostSource) *eventschema.Envelop
 			AgentID:           "opencode:" + t.Project,
 			WorkflowID:        "opencode:" + t.Project + ":" + t.SessionID,
 			Status:            200,
+			CostUSD:           cost,
 			CostSource:        costSource,
 		},
 	}

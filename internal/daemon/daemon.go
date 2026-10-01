@@ -150,6 +150,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		routes := startRouteHistory(sup, logger)
 		correctGatewayAttribution(ctx, cfg, components.Store, routes, logger)
 		correctCodexAttribution(ctx, cfg, components.Store, logger)
+		correctOpencodeAttribution(ctx, components.Store, logger)
 		correctSpendCoverage(ctx, cfg, components.Store, logger)
 		// Source-specific polling configuration lives in its runtime module.
 		startVendorUsagePollers(cfg, ingestionBus(ctx, bus, components.Store, logger), sourceHealth, routes, sup, logger)
