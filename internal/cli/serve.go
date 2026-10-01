@@ -9,6 +9,9 @@ import (
 	"syscall"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/money"
+	"go.klarlabs.de/tokenops/internal/infra/fxrate"
+
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
@@ -152,6 +155,16 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 			return cfg.Coaching.WasteConfig()
 		},
 		StaleSources: staleSources,
+		Money: func(ctx context.Context) (money.Rate, bool) {
+			c := cfg
+			if currentConfig != nil {
+				if live := currentConfig(); live != nil {
+					c = *live
+				}
+			}
+			r, ok, _ := fxrate.Resolve(ctx, c.Money, time.Now())
+			return r, ok
+		},
 	}); err != nil {
 		return fmt.Errorf("register tools: %w", err)
 	}
