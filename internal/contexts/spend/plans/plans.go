@@ -90,6 +90,12 @@ type Plan struct {
 	// PriceSource pins the vendor page the price was read from, with the
 	// date it was read.
 	PriceSource string
+	// VendorPlanTypes are the plan identifiers the vendor itself reports
+	// for this plan (Codex's rate-limit `plan_type`), so a binding that
+	// disagrees with what the vendor says can be flagged. Only values seen
+	// in Codex logs are listed ("pro" is what the $200 plan reported before
+	// the cheaper tiers existed); a tier never seen reporting one has none.
+	VendorPlanTypes []string
 }
 
 // catalog is the authoritative plan list. Numbers reflect the public
@@ -173,6 +179,7 @@ var catalog = map[string]Plan{
 		SourceURL:       "https://developers.openai.com/docs/pricing (2026-09): local-message estimates are model-dependent per five-hour window",
 		MonthlyUSD:      20,
 		PriceSource:     "https://help.openai.com/en/articles/6950777 (2026-09-30): $20/month billed monthly",
+		VendorPlanTypes: []string{"plus"},
 	},
 	"gpt-pro": {
 		Name:            "gpt-pro",
@@ -180,27 +187,43 @@ var catalog = map[string]Plan{
 		Display:         "ChatGPT Pro (tier unspecified)",
 		RateLimitWindow: 5 * time.Hour,
 		WindowUnit:      "messages",
-		SourceURL:       "https://developers.openai.com/docs/pricing (2026-09): Pro is offered in 5x and 20x tiers",
+		SourceURL:       "https://chatgpt.com/pricing (2026-10-01, in-app pricing screen): Pro is offered in three tiers, Standard, More usage and Max usage",
 	},
+	// The three Pro tiers carry OpenAI's own labels from the pricing
+	// screen. Codex reports the Standard tier as plan_type "prolite".
 	"gpt-pro-5x": {
 		Name:            "gpt-pro-5x",
 		Provider:        "openai",
-		Display:         "ChatGPT Pro 5x",
+		Display:         "ChatGPT Pro Standard (5x)",
 		RateLimitWindow: 5 * time.Hour,
 		WindowUnit:      "messages",
 		SourceURL:       "https://developers.openai.com/docs/pricing (2026-09): five times Plus Codex usage",
 		MonthlyUSD:      100,
 		PriceSource:     "https://help.openai.com/en/articles/9793128 (2026-09-30): Pro $100 unlocks 5x higher usage than Plus",
+		VendorPlanTypes: []string{"prolite"},
 	},
 	"gpt-pro-20x": {
 		Name:            "gpt-pro-20x",
 		Provider:        "openai",
-		Display:         "ChatGPT Pro 20x",
+		Display:         "ChatGPT Pro More usage (20x)",
 		RateLimitWindow: 5 * time.Hour,
 		WindowUnit:      "messages",
 		SourceURL:       "https://developers.openai.com/docs/pricing (2026-09): 20 times Plus Codex usage",
 		MonthlyUSD:      200,
 		PriceSource:     "https://help.openai.com/en/articles/9793128 (2026-09-30): Pro $200 unlocks 20x usage than Plus",
+		VendorPlanTypes: []string{"pro"},
+	},
+	// Max usage appeared on ChatGPT's pricing screen in late September
+	// 2026. OpenAI publishes neither its US price nor its allowance yet,
+	// so it carries no list price: plan cost uses what the operator
+	// records with --price, and headroom shows raw consumption.
+	"gpt-pro-max": {
+		Name:            "gpt-pro-max",
+		Provider:        "openai",
+		Display:         "ChatGPT Pro Max usage",
+		RateLimitWindow: 5 * time.Hour,
+		WindowUnit:      "messages",
+		SourceURL:       "https://chatgpt.com/pricing (2026-10-01, in-app pricing screen): third Pro tier, \"Max usage\"; allowance unpublished",
 	},
 	"gpt-business": {
 		Name:            "gpt-business",
@@ -294,6 +317,30 @@ var deprecatedAliases = map[string]string{
 	"claude-code-pro": "claude-pro",
 	"codex-plus":      "gpt-plus",
 	"gpt-team":        "gpt-business",
+}
+
+// ForVendorPlanType is the catalog plan a vendor-reported plan type
+// names, when exactly one plan of that provider claims it.
+func ForVendorPlanType(provider, planType string) (string, bool) {
+	planType = strings.ToLower(strings.TrimSpace(planType))
+	if planType == "" {
+		return "", false
+	}
+	found := ""
+	for name, p := range catalog {
+		if p.Provider != provider {
+			continue
+		}
+		for _, t := range p.VendorPlanTypes {
+			if t == planType {
+				if found != "" {
+					return "", false
+				}
+				found = name
+			}
+		}
+	}
+	return found, found != ""
 }
 
 // ResolveAlias returns the modern catalog name when `name` is a known

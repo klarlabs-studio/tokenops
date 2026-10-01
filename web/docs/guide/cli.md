@@ -48,7 +48,7 @@ wrong in a way that looks authoritative.
 
 ```bash
 tokenops plan list              # configured bindings + headroom
-tokenops plan catalog           # all 15 plans and their list prices
+tokenops plan catalog           # all 16 plans and their list prices
 tokenops plan set anthropic claude-max-20x
 tokenops plan unset cursor
 tokenops plan headroom          # live consumption + overage risk

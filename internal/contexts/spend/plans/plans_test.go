@@ -44,7 +44,7 @@ func TestCatalogCoversPublishedPlans(t *testing.T) {
 	// silently lose support.
 	want := []string{
 		"claude-max-5x", "claude-max-20x", "claude-pro",
-		"gpt-plus", "gpt-pro", "gpt-pro-5x", "gpt-pro-20x", "gpt-business",
+		"gpt-plus", "gpt-pro", "gpt-pro-5x", "gpt-pro-20x", "gpt-pro-max", "gpt-business",
 		"copilot-individual", "copilot-business",
 		"cursor-pro", "cursor-business",
 	}
@@ -116,5 +116,23 @@ func TestEveryAliasResolvesToCatalogEntry(t *testing.T) {
 		if _, ok := catalog[modern]; !ok {
 			t.Errorf("alias %q maps to missing catalog entry %q", alias, modern)
 		}
+	}
+}
+
+func TestForVendorPlanType(t *testing.T) {
+	for in, want := range map[string]string{"plus": "gpt-plus", "prolite": "gpt-pro-5x", " ProLite ": "gpt-pro-5x", "pro": "gpt-pro-20x"} {
+		if got, ok := ForVendorPlanType("openai", in); !ok || got != want {
+			t.Errorf("ForVendorPlanType(openai, %q) = %q, %v; want %q", in, got, ok, want)
+		}
+	}
+	if got, ok := ForVendorPlanType("anthropic", "prolite"); ok {
+		t.Errorf("a plan type matched across providers: %q", got)
+	}
+}
+
+func TestProMaxHasNoInventedPrice(t *testing.T) {
+	p, ok := Lookup("gpt-pro-max")
+	if !ok || p.MonthlyUSD != 0 {
+		t.Fatalf("gpt-pro-max = %+v; OpenAI publishes no US price yet, so the catalog must not invent one", p)
 	}
 }

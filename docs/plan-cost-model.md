@@ -45,8 +45,9 @@ Snapshot as of 2026-09:
 | `claude-pro` | Claude Pro | anthropic | ~45 msgs / 5h |
 | `gpt-plus` | ChatGPT Plus | openai | model-dependent / 5h |
 | `gpt-pro` | ChatGPT Pro (tier unspecified) | openai | model-dependent / 5h |
-| `gpt-pro-5x` | ChatGPT Pro 5x | openai | 5x Plus / 5h |
-| `gpt-pro-20x` | ChatGPT Pro 20x | openai | 20x Plus / 5h |
+| `gpt-pro-5x` | ChatGPT Pro Standard (5x) | openai | 5x Plus / 5h |
+| `gpt-pro-20x` | ChatGPT Pro More usage (20x) | openai | 20x Plus / 5h |
+| `gpt-pro-max` | ChatGPT Pro Max usage | openai | unpublished / 5h |
 | `gpt-business` | ChatGPT Business | openai | model-dependent / 5h |
 | `copilot-individual` | GitHub Copilot Individual | github | no published cap |
 | `copilot-business` | GitHub Copilot Business | github | no published cap |
@@ -80,14 +81,17 @@ Returns a `HeadroomReport` per configured plan with:
   When the vendor meter reports the duration, that value overrides the
   catalog fallback; Codex plan variants do not always expose the same primary
   and secondary windows.
-- `vendor_plan_type` — the provider's opaque plan identifier when present.
-  TokenOps exposes it for reconciliation but does not silently equate an
-  undocumented vendor identifier with a catalog plan name. This is distinct
-  from `plan_name`, which is the operator's canonical TokenOps configuration
-  such as `gpt-plus` or `gpt-pro-5x`. For example, Codex can report
-  `vendor_plan_type: prolite` even when the configured plan is `gpt-plus`;
-  official OpenAI documentation describes the `planType` field but does not
-  publish a `prolite` mapping.
+- `vendor_plan_type` — the provider's own plan identifier when present.
+  This is distinct from `plan_name`, which is the operator's canonical
+  TokenOps configuration such as `gpt-plus` or `gpt-pro-5x`.
+- `vendor_plan` — set only when `vendor_plan_type` names a different
+  catalog plan than the one configured. A catalog plan lists the vendor
+  identifiers observed for it (`plus` → `gpt-plus`, `prolite` →
+  `gpt-pro-5x`, `pro` → `gpt-pro-20x`). OpenAI does not document these
+  values; `prolite` was confirmed on 2026-10-01 against an account whose
+  ChatGPT pricing screen showed Pro Standard as its current plan. The
+  mismatch is reported with the `plan set` command that fixes it, never
+  applied: the binding stays the operator's.
 - `overage_risk` — `low`, `medium`, `high`, or `unknown`. The headline
   takes the worse of the monthly and window signals.
 - `note` — populated when math falls through (e.g. plan publishes no
