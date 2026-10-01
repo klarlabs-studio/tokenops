@@ -57,3 +57,28 @@ func TestPlanStampSinkPassthroughWithoutPlans(t *testing.T) {
 		t.Error("no plans configured should return next unchanged")
 	}
 }
+
+// Usage-based Enterprise is billed at API rates from the first token.
+// Stamping its usage as covered reported real spend as $0 and its spend
+// limit as 0% used.
+func TestSpendPlanUsageIsNotStampedCovered(t *testing.T) {
+	cfg := config.Config{Plans: map[string]string{"anthropic": "claude-enterprise", "openai": "gpt-pro-5x"}}
+	if got := planCostSource(cfg, eventschema.ProviderAnthropic); got != "" {
+		t.Errorf("enterprise poller cost source %q, want billed", got)
+	}
+	next := &captureSink{}
+	sink := newPlanStampSink(next, cfg)
+	envs := []*eventschema.Envelope{
+		{Type: eventschema.EventTypePrompt, Payload: &eventschema.PromptEvent{Provider: eventschema.ProviderAnthropic}},
+		{Type: eventschema.EventTypePrompt, Payload: &eventschema.PromptEvent{Provider: eventschema.ProviderOpenAI}},
+	}
+	if err := sink.AppendBatch(context.Background(), envs); err != nil {
+		t.Fatal(err)
+	}
+	if got := envs[0].Payload.(*eventschema.PromptEvent).CostSource; got != "" {
+		t.Errorf("enterprise usage stamped %q", got)
+	}
+	if got := envs[1].Payload.(*eventschema.PromptEvent).CostSource; got != eventschema.CostSourcePlanIncluded {
+		t.Errorf("subscription usage stamped %q, want plan_included", got)
+	}
+}

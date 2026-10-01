@@ -7,6 +7,8 @@ import (
 	"sort"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
@@ -27,6 +29,9 @@ type PlanDeps struct {
 	Store        *sqlite.Store
 	Tracker      *session.Tracker
 	Provider     eventschema.Provider
+	// Spend prices requests for spend-denominated plans; nil counts only
+	// measured cost.
+	Spend *spend.Engine
 }
 
 // activeConfig returns the live Config snapshot: prefers ConfigGetter
@@ -252,10 +257,11 @@ func planHeadroom(ctx context.Context, d PlanDeps) (*planHeadroomResult, error) 
 	// One implementation, shared with `tokenops plan headroom`. The two
 	// used to be separate copies of this loop, which is how the CLI kept
 	// the unsorted-provider bug after it was fixed here.
-	computed, err := headroom.Compute(ctx, headroom.Deps{
-		Config: cfg,
-		Reader: planStoreReader{store: d.Store},
-	}, now)
+	deps := headroom.Deps{Config: cfg, Reader: planStoreReader{store: d.Store}}
+	if d.Spend != nil {
+		deps.Price = d.Spend.ComputeAt
+	}
+	computed, err := headroom.Compute(ctx, deps, now)
 	if err != nil {
 		return nil, err
 	}

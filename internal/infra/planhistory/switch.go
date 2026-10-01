@@ -71,7 +71,7 @@ func Record(ctx context.Context, s Switch) (Outcome, error) {
 			Action: audit.ActionPlanChange, Actor: actor, Target: s.Provider,
 			Details: map[string]any{
 				"previous": s.Previous, "plan": s.Plan, "from": s.From.Format(time.RFC3339),
-				"restamped": res.Restamped, "price": s.Price, "currency": s.Currency,
+				"restamped": res.Restamped, "restamped_to": res.RestampedTo, "price": s.Price, "currency": s.Currency,
 			},
 		})
 	}

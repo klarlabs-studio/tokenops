@@ -45,7 +45,9 @@ type Config struct {
 	// Plans maps provider name → plan catalog identifier (e.g.
 	// "anthropic" → "claude-max-20x"). Requests routed to a provider with
 	// a configured plan are billed as plan_included (CostUSD=0) and
-	// roll up to the plan's monthly quota instead. See
+	// roll up to the plan's monthly quota instead — except a
+	// spend-denominated plan (usage-based Enterprise), which is billed at
+	// API rates; see PlanCovers. See
 	// internal/contexts/spend/plans for the catalog.
 	Plans map[string]string `yaml:"plans"`
 	// PreferredModels maps provider name → the model you want to stay on
@@ -147,6 +149,10 @@ type ModelPolicyConfig struct {
 func (m ModelPolicyConfig) Policy() modelpolicy.Policy {
 	return modelpolicy.Policy{Allow: m.Allow, Deny: m.Deny}
 }
+
+// PlanCovers reports whether provider's configured plan covers its usage
+// (plans.Covers): bound, and not billed at API rates.
+func (c Config) PlanCovers(provider string) bool { return plans.Covers(c.Plans[provider]) }
 
 // RoutingCandidates is the models on offer for a provider
 // (optimizer.smart_routing.models) that the model policy permits: the
