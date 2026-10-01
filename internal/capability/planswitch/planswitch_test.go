@@ -97,7 +97,8 @@ func TestCostProratesAcrossASwitch(t *testing.T) {
 }
 
 func TestCostFlagsUnpricedPlans(t *testing.T) {
-	costs := Cost(nil, map[string]string{"anthropic": "claude-enterprise"}, day(1), day(31), FX{})
+	// A subscription with no list price (its price is only on a storefront).
+	costs := Cost(nil, map[string]string{"zai": "zai-glm-coding-pro"}, day(1), day(31), FX{})
 	if len(costs) != 1 || costs[0].Complete || costs[0].Amount != 0 {
 		t.Fatalf("costs = %+v", costs)
 	}
@@ -180,5 +181,16 @@ func TestCorrectSpendCoverageOnlyTouchesTheSpendPlansStretch(t *testing.T) {
 	}
 	if len(r.calls) != 1 || !r.calls[0].From.Equal(day(10)) || !r.calls[0].To.Equal(day(30)) {
 		t.Fatalf("restamped %+v, want only day 10 to 30", r.calls)
+	}
+}
+
+// A plan billed at API rates has no flat fee, so it neither adds to plan
+// cost nor makes the total incomplete.
+func TestCostSkipsPlansBilledAtAPIRates(t *testing.T) {
+	costs := Cost(nil, map[string]string{"anthropic": "claude-enterprise", "fireworks": "pay-as-you-go", "openai": "gpt-plus"},
+		day(1), day(30), FX{})
+	amount, complete := Total(costs)
+	if !complete || len(costs) != 1 || costs[0].Provider != "openai" || amount <= 0 {
+		t.Errorf("costs %+v, total %v complete %v; want only Plus, complete", costs, amount, complete)
 	}
 }

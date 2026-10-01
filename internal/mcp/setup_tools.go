@@ -124,7 +124,7 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 			if in.Clear {
 				from = now // an unset is never backdated
 			}
-			if previous != next || in.Since != "" || in.Price > 0 {
+			if previous != next || in.Since != "" || in.Price > 0 || in.SpendLimitUSD > 0 {
 				currency := ""
 				if in.Price > 0 && !in.Clear {
 					currency = firstNonEmpty(in.Currency, cfg.Money.Currency, "USD")
@@ -136,6 +136,7 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 				res, err := planhistory.Record(context.Background(), planhistory.Switch{
 					Provider: provider, Previous: previous, Plan: next, From: from, Now: now,
 					DBPath: storePath(cfg.Storage.Path), Actor: "mcp", Price: price, Currency: currency,
+					SpendLimitUSD: in.SpendLimitUSD,
 				})
 				switch {
 				case err != nil:

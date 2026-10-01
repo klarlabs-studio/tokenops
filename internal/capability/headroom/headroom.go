@@ -134,6 +134,11 @@ func Compute(ctx context.Context, d Deps, now time.Time) (Result, error) {
 		if err != nil {
 			return Result{}, fmt.Errorf("headroom[%s]: %w", provider, err)
 		}
+		// A plan that belongs to no provider (pay-as-you-go) reports
+		// under the provider it is bound to.
+		if report.Provider == "" {
+			report.Provider = provider
+		}
 		out.Reports = append(out.Reports, report)
 	}
 	return out, nil
