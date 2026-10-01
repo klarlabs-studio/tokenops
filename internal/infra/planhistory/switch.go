@@ -77,3 +77,29 @@ func Record(ctx context.Context, s Switch) (Outcome, error) {
 	}
 	return out, nil
 }
+
+// CorrectSpendCoverage runs planswitch.CorrectSpendCoverage against the
+// default history and audits each correction, so a change TokenOps made
+// on its own is visible in `tokenops audit`.
+func CorrectSpendCoverage(ctx context.Context, store *sqlite.Store, current map[string]string, now time.Time) ([]planswitch.Correction, error) {
+	file, err := Default()
+	if err != nil {
+		return nil, err
+	}
+	h, err := file.Load()
+	if err != nil {
+		return nil, err
+	}
+	fixed, err := planswitch.CorrectSpendCoverage(ctx, h, store, current, now)
+	for _, c := range fixed {
+		_, _ = audit.NewRecorder(store).Record(ctx, audit.Entry{
+			Action: audit.ActionCostCorrection, Actor: "tokenops", Target: c.Provider,
+			Details: map[string]any{
+				"plan": c.Plan, "from": c.From.Format(time.RFC3339), "to": c.To.Format(time.RFC3339),
+				"restamped": c.Restamped, "restamped_to": "metered",
+				"reason": "usage under a plan billed at API rates was recorded as covered at $0",
+			},
+		})
+	}
+	return fixed, err
+}

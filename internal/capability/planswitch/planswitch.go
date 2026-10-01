@@ -92,6 +92,62 @@ func Record(ctx context.Context, h History, r Restamper, c Change) (Result, erro
 	return res, nil
 }
 
+// MeteredRestamper re-marks plan-covered usage as billed per token.
+type MeteredRestamper interface {
+	RestampMetered(ctx context.Context, provider string, from, to time.Time) (int64, error)
+}
+
+// Correction is usage re-marked as billed because the plan in force
+// when it was recorded covers nothing.
+type Correction struct {
+	Provider  string    `json:"provider"`
+	Plan      string    `json:"plan"`
+	From      time.Time `json:"from"`
+	To        time.Time `json:"to"`
+	Restamped int64     `json:"restamped"`
+}
+
+// CorrectSpendCoverage re-marks usage that was recorded as covered while a
+// plan billed at API rates was in force (ADR 0009 §4).
+//
+// Before plans.Covers, any bound plan stamped its provider's usage as
+// covered, so usage-based Enterprise reported real spend as $0. That was
+// TokenOps' mistake, not the operator's statement, so it is corrected
+// without asking: the plan history (or, with none, the plan configured
+// now) says which stretches were on such a plan, and only those are
+// re-marked. It is idempotent: usage recorded since the fix is already
+// billed, and a second pass changes nothing.
+func CorrectSpendCoverage(ctx context.Context, h plans.History, r MeteredRestamper, current map[string]string, now time.Time) ([]Correction, error) {
+	providers := map[string]bool{}
+	for p := range current {
+		providers[p] = true
+	}
+	for _, b := range h {
+		providers[b.Provider] = true
+	}
+	names := make([]string, 0, len(providers))
+	for p := range providers {
+		names = append(names, p)
+	}
+	sort.Strings(names)
+	var out []Correction
+	for _, provider := range names {
+		for _, period := range h.Periods(provider, time.Unix(0, 0).UTC(), now, current[provider]) {
+			if plans.Covers(period.Plan) {
+				continue
+			}
+			n, err := r.RestampMetered(ctx, provider, period.From, period.To)
+			if err != nil {
+				return out, err
+			}
+			if n > 0 {
+				out = append(out, Correction{Provider: provider, Plan: period.Plan, From: period.From, To: period.To, Restamped: n})
+			}
+		}
+	}
+	return out, nil
+}
+
 // FX is the currency plan costs are shown in and how to reach it from
 // US dollars. The rate is the operator's: TokenOps fetches none.
 type FX struct {
