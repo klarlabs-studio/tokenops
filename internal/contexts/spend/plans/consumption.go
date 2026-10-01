@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/biller"
+
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -201,6 +203,11 @@ func SpendInWindow(ctx context.Context, reader EventReader, provider string, now
 		}
 		p, ok := env.Payload.(*eventschema.PromptEvent)
 		if !ok || string(p.Provider) != provider {
+			continue
+		}
+		// The plan's limit counts only what went through the vendor's
+		// own endpoint; a gateway's turn ran on an API key (ADR 0009).
+		if !biller.PlanApplies(provider, env.Attributes["endpoint"]) {
 			continue
 		}
 		if p.CostUSD > 0 || price == nil || !perRequest(env) {

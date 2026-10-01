@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"os"
 
-	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
+	"go.klarlabs.de/tokenops/internal/infra/routehistory"
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
@@ -30,6 +30,7 @@ func startVendorUsagePollers(
 	cfg config.Config,
 	bus events.Bus,
 	sourceHealth *freshness.Registry,
+	routes *routehistory.Tracker,
 	sup *lifecycle.Supervisor,
 	logger *slog.Logger,
 ) {
@@ -46,7 +47,7 @@ func startVendorUsagePollers(
 		p := claudecodejsonl.NewPoller(bus, claudecodejsonl.PollerOptions{
 			Root: cfg.VendorUsage.ClaudeCodeJSONL.Root, Interval: cfg.VendorUsage.ClaudeCodeJSONL.Interval,
 			Logger: logger, CostSource: planCostSource(cfg, eventschema.ProviderAnthropic),
-			BaseURL: claudesettings.BaseURL,
+			BaseURLAt: claudeCodeBaseURLAt(routes),
 		})
 		sup.Go("claude-code-jsonl", p.Run)
 		logger.Info("claude-code jsonl poller live", "interval", cfg.VendorUsage.ClaudeCodeJSONL.Interval, "root", cfg.VendorUsage.ClaudeCodeJSONL.Root)

@@ -44,10 +44,11 @@ type PollerOptions struct {
 	// Empty means metered. It applies only to turns Anthropic bills: a
 	// turn a gateway served is not covered by an Anthropic plan.
 	CostSource eventschema.CostSource
-	// BaseURL returns the endpoint Claude Code is pointed at (empty for
-	// Anthropic's default), which decides who bills a turn served by a
-	// model other than Claude (ADR 0009). nil means the default.
-	BaseURL func() string
+	// BaseURLAt returns the endpoint Claude Code was pointed at at a
+	// moment (empty for Anthropic's default), from the route history. It
+	// decides who bills a turn and whether a plan covers it (ADR 0009).
+	// nil means the default.
+	BaseURLAt func(time.Time) string
 }
 
 // Poller diffs successive scans of the JSONL tree and publishes one
@@ -133,12 +134,12 @@ func (p *Poller) scan(ctx context.Context, root string) {
 	})
 }
 
-// baseURL is the endpoint Claude Code is pointed at now.
-func (p *Poller) baseURL() string {
-	if p.opts.BaseURL == nil {
+// baseURLAt is the endpoint Claude Code was pointed at at t.
+func (p *Poller) baseURLAt(t time.Time) string {
+	if p.opts.BaseURLAt == nil {
 		return ""
 	}
-	return p.opts.BaseURL()
+	return p.opts.BaseURLAt(t)
 }
 
 // visitor publishes each turn not already seen.
@@ -152,7 +153,7 @@ func (p *Poller) visitor(ctx context.Context) func(Turn) error {
 		p.seen[turn.MessageID] = struct{}{}
 		p.mu.Unlock()
 		if p.bus != nil {
-			p.publishWait(ctx, newEnvelope(turn, p.opts.CostSource, p.baseURL()))
+			p.publishWait(ctx, newEnvelope(turn, p.opts.CostSource, p.baseURLAt(turn.Timestamp)))
 		}
 		return nil
 	}
@@ -165,8 +166,12 @@ func (p *Poller) visitor(ctx context.Context) func(Turn) error {
 // via the Attributes map).
 func newEnvelope(t Turn, costSource eventschema.CostSource, baseURL string) *eventschema.Envelope {
 	provider := biller.ForClaudeCodeTurn(t.Model, baseURL)
-	if provider != eventschema.ProviderAnthropic {
-		costSource = ""
+	endpoint := biller.EndpointName(baseURL, string(eventschema.ProviderAnthropic))
+	// The Anthropic plan covers only Claude turns through Anthropic's own
+	// endpoint. A gateway's own model is not Anthropic's, and a Claude turn
+	// through a gateway runs on an API key Anthropic bills per token.
+	if provider != eventschema.ProviderAnthropic || !biller.PlanApplies(string(provider), endpoint) {
+		costSource = eventschema.CostSourceMetered
 	}
 	inputTokens := t.InputTokens + t.CacheReadInputTokens + t.CacheCreationInputTokens
 	totalTokens := inputTokens + t.OutputTokens
@@ -186,6 +191,9 @@ func newEnvelope(t Turn, costSource eventschema.CostSource, baseURL string) *eve
 			// this to count tokens without counting the event as a
 			// message (see plans.ConsumptionInWindow).
 			"granularity": "assistant_turn",
+			// Where the turn went (ADR 0009): a plan covers only its
+			// vendor's own endpoint.
+			"endpoint": endpoint,
 			// Set on the one turn per operator prompt, so the plan
 			// window meter can count the vendor's "messages" unit
 			// without counting every turn (see plans.countsAsMessage).
