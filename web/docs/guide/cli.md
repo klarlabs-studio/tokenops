@@ -26,6 +26,11 @@ tokenops init --currency EUR    # show totals in euros (default: your system reg
 tokenops init --preset guided   # set up the coach (default for a new config: advise)
 ```
 
+`init` also turns on the transcript readers for every client whose
+sessions are on this machine (Claude Code, Codex, opencode), and says how
+to switch one off. It only does this when no reader is enabled yet, so a
+reader you turned off stays off.
+
 The currency comes from your system region when you do not name it; on
 macOS the region setting wins over the language, so an English-language
 system in Germany gets euros. Re-running `init` keeps the currency and
@@ -76,6 +81,16 @@ Without it, plan cost uses the catalog's US list price, and `spend` says so.
 
 ```bash
 tokenops plan set anthropic claude-max-20x --price 214.60 --currency EUR
+```
+
+A spend limit is recorded with the date it took effect, so an earlier
+month keeps its own; `plan history` shows it. A provider billed per token
+with an account cap binds to `pay-as-you-go`:
+
+```bash
+tokenops plan set anthropic claude-enterprise --spend-limit 1500 --since 2026-09-01
+tokenops plan set anthropic claude-enterprise --spend-limit 500 --since 2026-10-01
+tokenops plan set fireworks pay-as-you-go --spend-limit 200
 ```
 
 See [Switching plans](/guide/configuration#switching-plans) and ADR 0008.
