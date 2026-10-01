@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/money"
+
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
@@ -38,6 +40,10 @@ type Deps struct {
 	// behaviour before spend answers carried one. Supplied by the daemon,
 	// the same hook ControlDeps uses.
 	StaleSources func() []config.StaleSource
+
+	// Money returns the rate into the operator's currency, and whether
+	// there is one. Optional: nil reports in US dollars only.
+	Money func(ctx context.Context) (money.Rate, bool)
 }
 
 // --- input structs --------------------------------------------------------
@@ -111,6 +117,12 @@ type spendSummaryResult struct {
 	// Measurement is set when ingestion has stopped, so a low or zero
 	// figure is not mistaken for a measurement of low or zero spend.
 	Measurement *MeasurementWarning `json:"measurement,omitempty"`
+	// Display is the cost and value in the operator's currency, with the
+	// rate used, when it is not the US dollar. A converted figure moves
+	// with the exchange rate even when usage does not.
+	Display *money.Display `json:"display,omitempty"`
+	// RateNote names that rate, ready to quote.
+	RateNote string `json:"rate_note,omitempty"`
 }
 
 // consumerEntry is one grouped spender row in tokenops_top_consumers.
@@ -284,6 +296,13 @@ func spendSummary(ctx context.Context, d Deps, in spendSummaryInput) (*spendSumm
 		Currency:         d.Spend.Currency(),
 	}
 	res.Measurement = measurementQuality(d)
+	if d.Money != nil {
+		if r, ok := d.Money(ctx); ok {
+			if res.Display = money.Show(r, res.CostUSD, res.APIEquivalentUSD); res.Display != nil {
+				res.RateNote = r.Note()
+			}
+		}
+	}
 	if len(summary.Unpriced) > 0 {
 		models := make([]unpricedModel, 0, len(summary.Unpriced))
 		for _, u := range summary.Unpriced {

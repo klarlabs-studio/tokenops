@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/money"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
@@ -261,5 +262,38 @@ func TestForecastWithSpendHasNoZeroNote(t *testing.T) {
 	}
 	if res.Note != "" {
 		t.Errorf("note = %q on a metered forecast", res.Note)
+	}
+}
+
+// The spend summary shows euros, with the rate used, when the operator's
+// currency is not the US dollar; the dollar fields stay as they were.
+func TestSpendSummaryShowsTheOperatorsCurrency(t *testing.T) {
+	store, err := sqlite.Open(context.Background(), filepath.Join(t.TempDir(), "m.db"), sqlite.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	now := time.Now().UTC()
+	if err := store.AppendBatch(context.Background(), []*eventschema.Envelope{
+		promptEnv("opus", now.Add(-time.Hour), "claude-opus-4-8", 100_000, eventschema.CostSourcePlanIncluded),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	eng := spend.NewEngine(spend.DefaultTable())
+	eur := money.Rate{Currency: "EUR", PerUSD: 0.88, Date: "2026-10-01", Source: "ecb"}
+	d := Deps{Store: store, Spend: eng, Aggregator: analytics.New(store, eng),
+		Money: func(context.Context) (money.Rate, bool) { return eur, true }}
+	res, err := spendSummary(context.Background(), d, spendSummaryInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Display == nil || res.Display.Currency != "EUR" || res.APIEquivalentUSD <= 0 {
+		t.Fatalf("display %+v, api equivalent %v", res.Display, res.APIEquivalentUSD)
+	}
+	if got, want := res.Display.APIEquivalent, res.APIEquivalentUSD*0.88; got < want-1e-9 || got > want+1e-9 {
+		t.Errorf("api equivalent EUR %v, want %v", got, want)
+	}
+	if !strings.Contains(res.RateNote, "ECB") {
+		t.Errorf("rate note %q", res.RateNote)
 	}
 }
