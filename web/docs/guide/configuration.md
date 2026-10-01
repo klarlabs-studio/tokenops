@@ -742,7 +742,7 @@ invisible.
 
 Unlike a subscription, a spend-denominated plan covers nothing: its usage
 is recorded as billed and priced at API rates, so `spend` shows what it
-costs and headroom counts it against the limit. Before v0.87.0 such usage
+costs and headroom counts it against the limit. Before v0.86.1 such usage
 was recorded as covered, at $0, which read the limit as 0% used. To
 correct usage recorded that way, re-bind the plan from the date it took
 effect:
