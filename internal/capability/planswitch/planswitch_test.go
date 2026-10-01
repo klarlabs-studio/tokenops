@@ -143,3 +143,42 @@ func TestBackdatedSpendPlanRemarksUsageAsBilled(t *testing.T) {
 		t.Errorf("result %+v", res)
 	}
 }
+
+type rangeRestamper struct{ calls []Correction }
+
+func (r *rangeRestamper) RestampMetered(_ context.Context, provider string, from, to time.Time) (int64, error) {
+	r.calls = append(r.calls, Correction{Provider: provider, From: from, To: to})
+	return 7, nil
+}
+
+func TestCorrectSpendCoverageWithoutHistory(t *testing.T) {
+	r := &rangeRestamper{}
+	fixed, err := CorrectSpendCoverage(context.Background(), nil, r,
+		map[string]string{"anthropic": "claude-enterprise", "openai": "gpt-pro-5x"}, day(30))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Only the spend plan's provider, over all recorded time.
+	if len(r.calls) != 1 || r.calls[0].Provider != "anthropic" || !r.calls[0].To.Equal(day(30)) || r.calls[0].From.After(day(1)) {
+		t.Fatalf("restamped %+v", r.calls)
+	}
+	if len(fixed) != 1 || fixed[0].Plan != "claude-enterprise" || fixed[0].Restamped != 7 {
+		t.Errorf("fixed %+v", fixed)
+	}
+}
+
+func TestCorrectSpendCoverageOnlyTouchesTheSpendPlansStretch(t *testing.T) {
+	// Max 20x until the 10th, Enterprise since: only the Enterprise
+	// stretch is re-marked; usage under Max stays covered.
+	h := plans.History{
+		{Provider: "anthropic", Plan: "claude-max-20x"},
+		{Provider: "anthropic", Plan: "claude-enterprise", From: day(10)},
+	}
+	r := &rangeRestamper{}
+	if _, err := CorrectSpendCoverage(context.Background(), h, r, map[string]string{"anthropic": "claude-enterprise"}, day(30)); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.calls) != 1 || !r.calls[0].From.Equal(day(10)) || !r.calls[0].To.Equal(day(30)) {
+		t.Fatalf("restamped %+v, want only day 10 to 30", r.calls)
+	}
+}

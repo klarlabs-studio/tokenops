@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.86.2 - 2026-10-01
+
+### Fixed
+
+- **plans:** The daemon corrects usage recorded as covered at $0 under a plan billed at API rates on its own, at start, and audits each correction as `cost_correction`; no command needed (#476)
+
 ## 0.86.1 - 2026-10-01
 
 ### Added

@@ -2,9 +2,13 @@ package daemon
 
 import (
 	"context"
+	"log/slog"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/events"
+	"go.klarlabs.de/tokenops/internal/infra/planhistory"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -55,4 +59,23 @@ func (s *planStampSink) AppendBatch(ctx context.Context, envs []*eventschema.Env
 		}
 	}
 	return s.next.AppendBatch(ctx, envs)
+}
+
+// correctSpendCoverage re-marks usage recorded as covered under a plan
+// billed at API rates (ADR 0009 §4). It runs at start, which also follows
+// every plan change, since `plan set` restarts the daemon. A failure is
+// logged and never stops the daemon: the usage stays as recorded and the
+// next start tries again.
+func correctSpendCoverage(ctx context.Context, cfg config.Config, store *sqlite.Store, logger *slog.Logger) {
+	if store == nil {
+		return
+	}
+	fixed, err := planhistory.CorrectSpendCoverage(ctx, store, cfg.Plans, time.Now().UTC())
+	for _, c := range fixed {
+		logger.Info("re-marked usage under a plan billed at API rates as billed",
+			"provider", c.Provider, "plan", c.Plan, "calls", c.Restamped)
+	}
+	if err != nil {
+		logger.Warn("spend-plan correction failed; will retry at next start", "err", err)
+	}
 }

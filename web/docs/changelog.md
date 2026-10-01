@@ -4,7 +4,16 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.86.1**.
+Current release: **v0.86.2**.
+
+## v0.86.2 — fixing our own mistake without asking
+
+v0.86.1 stopped recording usage-based Enterprise as covered by its plan,
+but usage already recorded that way still read $0 until the operator ran a
+command to correct it. That asked them to fix a TokenOps bug. The daemon
+now does it on its own at start: the plan history says which stretches
+were on a plan billed at API rates, only those are re-marked, and each
+correction is recorded in the audit log.
 
 ## v0.86.1 — what Enterprise actually costs
 

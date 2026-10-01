@@ -41,6 +41,9 @@ const (
 	// ActionPlanChange records a plan switch, and how much recorded usage
 	// a backdated one re-marked as plan-covered.
 	ActionPlanChange Action = "plan_change"
+	// ActionCostCorrection records usage TokenOps re-marked on its own to
+	// correct how it had recorded it, with the reason.
+	ActionCostCorrection Action = "cost_correction"
 )
 
 // Entry is one row of the audit log. ID is a UUIDv4 minted by Record;
