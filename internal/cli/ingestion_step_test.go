@@ -15,6 +15,7 @@ import (
 // has a TokenOps that will never see a single event.
 func TestSetupAsksForAnIngestionSourceWhenNoneIsEnabled(t *testing.T) {
 	path := seedConfig(t)
+	stubLocalSources(t)
 
 	step := ingestionStep(path)
 
@@ -34,6 +35,7 @@ func TestSetupAsksForAnIngestionSourceWhenNoneIsEnabled(t *testing.T) {
 // reasoning the daemon-unit step is built on.
 func TestSetupStopsAskingOnceASourceIsEnabled(t *testing.T) {
 	path := seedConfig(t)
+	stubLocalSources(t)
 	cfg, err := readMutableConfig(path)
 	if err != nil {
 		t.Fatalf("read: %v", err)
@@ -59,5 +61,56 @@ func TestSetupAsksWhenTheConfigCannotBeRead(t *testing.T) {
 	step := ingestionStep("/nonexistent/config.yaml")
 	if !step.Manual && step.Err == nil {
 		t.Errorf("an unreadable config reported ingestion as configured: %+v", step)
+	}
+}
+
+func stubLocalSources(t *testing.T, present ...string) {
+	t.Helper()
+	prev := localTranscriptSources
+	localTranscriptSources = func() []string { return present }
+	t.Cleanup(func() { localTranscriptSources = prev })
+}
+
+// Autonomous by default: on a fresh install the readers whose sessions are
+// on this machine are turned on, and the step says how to stop one.
+func TestSetupTurnsOnLocalReadersWhoseDataIsPresent(t *testing.T) {
+	path := seedConfig(t)
+	stubLocalSources(t, "claude-code-jsonl", "opencode")
+
+	step := ingestionStep(path)
+	if step.Manual || step.Err != nil {
+		t.Fatalf("step %+v; want the readers turned on", step)
+	}
+	if !strings.Contains(step.Detail, "turned on claude-code-jsonl, opencode") || !strings.Contains(step.Detail, "--disable") {
+		t.Errorf("detail %q", step.Detail)
+	}
+	cfg, err := readMutableConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.VendorUsage.ClaudeCodeJSONL.Enabled || !cfg.VendorUsage.OpenCode.Enabled || cfg.VendorUsage.CodexJSONL.Enabled {
+		t.Errorf("enabled: claude %v opencode %v codex %v", cfg.VendorUsage.ClaudeCodeJSONL.Enabled, cfg.VendorUsage.OpenCode.Enabled, cfg.VendorUsage.CodexJSONL.Enabled)
+	}
+}
+
+// A reader the operator switched off stays off; init only names it.
+func TestSetupDoesNotOverrideAReaderLeftOff(t *testing.T) {
+	path := seedConfig(t)
+	cfg, err := readMutableConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.VendorUsage.ClaudeCodeJSONL.Enabled = true
+	if err := writeMutableConfig(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	stubLocalSources(t, "claude-code-jsonl", "codex-jsonl")
+
+	step := ingestionStep(path)
+	if !strings.Contains(step.Detail, "sessions found but not read: codex-jsonl") {
+		t.Errorf("detail %q", step.Detail)
+	}
+	if cfg, _ := readMutableConfig(path); cfg.VendorUsage.CodexJSONL.Enabled {
+		t.Error("init turned on a reader the operator had left off")
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -325,11 +326,14 @@ func deliveryDetail(recommendation string) string {
 // That is the silent-success shape, sitting in the first command of the
 // journey.
 //
-// It asks rather than enabling one. Turning on a transcript reader means
-// TokenOps starts reading the operator's coding sessions from disk, and
-// that is their decision to make rather than a side effect of running
-// init — the same line already drawn around binding a plan and around
-// pointing a client at the local proxy.
+// On a fresh install it turns on the local transcript readers whose data
+// is on this machine, and says so: TokenOps works out of the box, and
+// the operator can switch any reader off (ADR 0009, autonomous by
+// default). These readers only read files on disk; the ones that call a
+// vendor with a login stay a choice the operator makes. Once any reader
+// is enabled the operator has chosen, and init only names the readers
+// whose data is present but which are off, rather than overriding a
+// reader they switched off.
 func ingestionStep(cfgPath string) setupStep {
 	const name = "ingestion source"
 	cfg, err := config.ReadMutable(cfgPath)
@@ -337,21 +341,90 @@ func ingestionStep(cfgPath string) setupStep {
 		return setupStep{Name: name, Err: err}
 	}
 
+	present := localTranscriptSources()
 	enabled := cfg.EnabledVendorUsageSources()
 	if len(enabled) == 0 {
-		return setupStep{
-			Name: name,
-			Detail: "nothing is enabled, so nothing will be ingested — " +
-				"run `tokenops vendor-usage enable claude-code-jsonl` " +
-				"(or `tokenops vendor-usage enable --help` for the other readers)",
-			Manual: true,
+		if len(present) == 0 {
+			return setupStep{
+				Name: name,
+				Detail: "nothing is enabled, so nothing will be ingested — " +
+					"run `tokenops vendor-usage enable claude-code-jsonl` " +
+					"(or `tokenops vendor-usage enable --help` for the other readers)",
+				Manual: true,
+			}
 		}
+		for _, src := range present {
+			setLocalSource(&cfg, src, true)
+		}
+		if err := writeMutableConfig(cfgPath, cfg); err != nil {
+			return setupStep{Name: name, Err: err}
+		}
+		return setupStep{Name: name, Detail: "turned on " + strings.Join(present, ", ") +
+			" (their sessions are on this machine) — `tokenops vendor-usage enable <source> --disable` to stop one"}
 	}
 
 	names := make([]string, 0, len(enabled))
+	on := map[string]bool{}
 	for _, s := range enabled {
 		names = append(names, s.Name)
+		on[s.SourceTag] = true
 	}
 	sort.Strings(names)
-	return setupStep{Name: name, Detail: "ingesting from " + strings.Join(names, ", ")}
+	detail := "ingesting from " + strings.Join(names, ", ")
+	var off []string
+	for _, src := range present {
+		if !on[src] {
+			off = append(off, src)
+		}
+	}
+	if len(off) > 0 {
+		detail += "; sessions found but not read: " + strings.Join(off, ", ") +
+			" — `tokenops vendor-usage enable <source>`"
+	}
+	return setupStep{Name: name, Detail: detail}
+}
+
+// localTranscriptSources lists the local transcript readers whose data is
+// on this machine, by their source names. A variable so tests can stub
+// the filesystem.
+var localTranscriptSources = func() []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	claudeDir := os.Getenv("CLAUDE_CONFIG_DIR")
+	if claudeDir == "" {
+		claudeDir = filepath.Join(home, ".claude")
+	}
+	codexDir := os.Getenv("CODEX_HOME")
+	if codexDir == "" {
+		codexDir = filepath.Join(home, ".codex")
+	}
+	dataHome := os.Getenv("XDG_DATA_HOME")
+	if dataHome == "" {
+		dataHome = filepath.Join(home, ".local", "share")
+	}
+	var out []string
+	for _, c := range []struct{ name, path string }{
+		{"claude-code-jsonl", filepath.Join(claudeDir, "projects")},
+		{"codex-jsonl", filepath.Join(codexDir, "sessions")},
+		{"opencode", filepath.Join(dataHome, "opencode", "opencode.db")},
+	} {
+		if _, err := os.Stat(c.path); err == nil {
+			out = append(out, c.name)
+		}
+	}
+	return out
+}
+
+// setLocalSource switches a local transcript reader on or off.
+func setLocalSource(cfg *config.Config, source string, on bool) {
+	switch source {
+	case "claude-code-jsonl":
+		cfg.VendorUsage.ClaudeCodeJSONL.Enabled = on
+	case "codex-jsonl":
+		cfg.VendorUsage.CodexJSONL.Enabled = on
+	case "opencode":
+		cfg.VendorUsage.OpenCode.Enabled = on
+	}
 }
