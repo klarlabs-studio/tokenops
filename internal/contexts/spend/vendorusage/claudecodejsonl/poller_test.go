@@ -172,15 +172,23 @@ func TestGatewayTurnIsBilledByTheGateway(t *testing.T) {
 	kimi := base
 	kimi.Model = "kimi-k3"
 	pe := newEnvelope(kimi, eventschema.CostSourcePlanIncluded, fireworks).Payload.(*eventschema.PromptEvent)
-	if pe.Provider != eventschema.ProviderFireworks || pe.CostSource != "" {
+	if pe.Provider != eventschema.ProviderFireworks || pe.CostSource != eventschema.CostSourceMetered {
 		t.Errorf("kimi-k3 via Fireworks: provider %q, cost source %q; want fireworks, billed", pe.Provider, pe.CostSource)
 	}
 
+	// FireRouter runs Claude on the Anthropic API key it is given, which
+	// Anthropic bills per token: Anthropic's turn, not the plan's.
 	claude := base
 	claude.Model = "claude-opus-5-5"
-	pe = newEnvelope(claude, eventschema.CostSourcePlanIncluded, fireworks).Payload.(*eventschema.PromptEvent)
-	if pe.Provider != eventschema.ProviderAnthropic || pe.CostSource != eventschema.CostSourcePlanIncluded {
-		t.Errorf("Claude via FireRouter: provider %q, cost source %q; want anthropic under its plan", pe.Provider, pe.CostSource)
+	env := newEnvelope(claude, eventschema.CostSourcePlanIncluded, fireworks)
+	pe = env.Payload.(*eventschema.PromptEvent)
+	if pe.Provider != eventschema.ProviderAnthropic || pe.CostSource != eventschema.CostSourceMetered || env.Attributes["endpoint"] != "fireworks" {
+		t.Errorf("Claude via FireRouter: provider %q, cost source %q, endpoint %q; want anthropic, billed, fireworks",
+			pe.Provider, pe.CostSource, env.Attributes["endpoint"])
+	}
+	// Through Anthropic's own endpoint the plan covers it.
+	if pe := newEnvelope(claude, eventschema.CostSourcePlanIncluded, "").Payload.(*eventschema.PromptEvent); pe.CostSource != eventschema.CostSourcePlanIncluded {
+		t.Errorf("Claude direct: cost source %q, want plan_included", pe.CostSource)
 	}
 }
 

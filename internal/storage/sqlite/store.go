@@ -766,30 +766,56 @@ func (s *Store) ModelsFor(ctx context.Context, source, provider string) ([]strin
 	return out, rows.Err()
 }
 
-// Reattribute moves a source's prompt events for model from one provider
-// to another, and returns how many it changed (ADR 0009). When uncover is
-// set, events marked as covered by the old provider's plan become billed,
-// with their cost cleared so it is priced on read: a plan covers only its
-// own provider's usage.
-func (s *Store) Reattribute(ctx context.Context, source, model, from, to string, uncover bool) (int64, error) {
+// Reattribute moves a source's prompt events for model, recorded in
+// [since, until), from one provider to another and records the endpoint
+// they went through; it returns how many it changed (ADR 0009). When
+// uncover is set, events marked as covered by the old provider's plan
+// become billed, with their cost cleared so it is priced on read: a plan
+// covers only its own provider's usage.
+func (s *Store) Reattribute(ctx context.Context, source, model, from, to, endpoint string, since, until time.Time, uncover bool) (int64, error) {
 	payload := `json_set(payload, '$.provider', ?)`
-	args := make([]any, 0, 6)
-	args = append(args, to)
+	cost := `cost_usd`
+	args := make([]any, 0, 9)
 	if uncover {
 		payload = `CASE WHEN json_extract(payload, '$.cost_source') = 'plan_included'
 			THEN json_remove(json_set(payload, '$.provider', ?, '$.cost_source', 'metered'), '$.cost_usd', '$.cost_measured')
 			ELSE json_set(payload, '$.provider', ?) END`
+		cost = `CASE WHEN json_extract(payload, '$.cost_source') = 'plan_included' THEN NULL ELSE cost_usd END`
 		args = append(args, to)
 	}
-	clearCost := `cost_usd`
-	if uncover {
-		clearCost = `CASE WHEN json_extract(payload, '$.cost_source') = 'plan_included' THEN NULL ELSE cost_usd END`
-	}
-	args = append(args, to, source, from, model)
-	res, err := s.db.ExecContext(ctx, `UPDATE events SET cost_usd = `+clearCost+`, payload = `+payload+`, provider = ?
-		WHERE type = 'prompt' AND source = ? AND provider = ? AND model = ?`, args...)
+	args = append(args, to, endpoint, to, source, from, model, since.UTC().UnixNano(), until.UTC().UnixNano())
+	res, err := s.db.ExecContext(ctx, `UPDATE events SET cost_usd = `+cost+`, payload = `+payload+`,
+		attributes = json_set(coalesce(attributes, '{}'), '$.endpoint', ?), provider = ?
+		WHERE type = 'prompt' AND source = ? AND provider = ? AND model = ?
+		  AND timestamp_ns >= ? AND timestamp_ns < ?`, args...)
 	if err != nil {
 		return 0, fmt.Errorf("sqlite: reattribute: %w", contended(ctx, err))
+	}
+	return res.RowsAffected()
+}
+
+// MarkEndpoint records the endpoint a source's prompt events for provider
+// went through in [since, until), for events that carry none, and returns
+// how many it changed. Through an endpoint other than the provider's own,
+// a turn is not covered by the provider's plan (ADR 0009), so one marked
+// as covered becomes billed, with its cost cleared to be priced on read.
+func (s *Store) MarkEndpoint(ctx context.Context, source, provider, endpoint string, since, until time.Time) (int64, error) {
+	uncover := endpoint != provider
+	payload, cost := `payload`, `cost_usd`
+	if uncover {
+		payload = `CASE WHEN json_extract(payload, '$.cost_source') = 'plan_included'
+			THEN json_remove(json_set(payload, '$.cost_source', 'metered'), '$.cost_usd', '$.cost_measured')
+			ELSE payload END`
+		cost = `CASE WHEN json_extract(payload, '$.cost_source') = 'plan_included' THEN NULL ELSE cost_usd END`
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE events SET cost_usd = `+cost+`, payload = `+payload+`,
+		attributes = json_set(coalesce(attributes, '{}'), '$.endpoint', ?)
+		WHERE type = 'prompt' AND source = ? AND provider = ?
+		  AND timestamp_ns >= ? AND timestamp_ns < ?
+		  AND json_extract(coalesce(attributes, '{}'), '$.endpoint') IS NULL`,
+		endpoint, source, provider, since.UTC().UnixNano(), until.UTC().UnixNano())
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: mark endpoint: %w", contended(ctx, err))
 	}
 	return res.RowsAffected()
 }
