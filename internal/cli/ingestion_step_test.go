@@ -1,8 +1,13 @@
 package cli
 
 import (
+	"bytes"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"go.klarlabs.de/tokenops/internal/capability/money"
 )
 
 // The installed-product end-to-end test found this: `tokenops init`
@@ -112,5 +117,49 @@ func TestSetupDoesNotOverrideAReaderLeftOff(t *testing.T) {
 	}
 	if cfg, _ := readMutableConfig(path); cfg.VendorUsage.CodexJSONL.Enabled {
 		t.Error("init turned on a reader the operator had left off")
+	}
+}
+
+// --no-wire means "config only", and turning readers on is config: an
+// end-to-end run found a --no-wire install that ingested nothing.
+func TestInitNoWireStillTurnsOnLocalReaders(t *testing.T) {
+	stubLocalSources(t, "claude-code-jsonl")
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	var out bytes.Buffer
+	root := NewRoot()
+	root.SetArgs([]string{"init", "--config-path", cfgPath, "--storage-path", filepath.Join(dir, "events.db"), "--no-wire", "--currency", "EUR"})
+	root.SetOut(&out)
+	root.SetErr(&out)
+	if err := root.Execute(); err != nil {
+		t.Fatalf("init: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "ingestion: turned on claude-code-jsonl") {
+		t.Errorf("output: %s", out.String())
+	}
+	cfg, err := readMutableConfig(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.VendorUsage.ClaudeCodeJSONL.Enabled {
+		t.Error("the reader was not turned on")
+	}
+}
+
+// A plan bound minutes into the window costs cents; a ratio over it read
+// as a 138x return in an end-to-end run.
+func TestValuePerPlanNeedsAPlanCostToCompareWith(t *testing.T) {
+	now := time.Now().UTC()
+	v := &spendView{}
+	v.Summary.APIEquivalentUSD = 0.52
+	fillPlanCost(v, map[string]string{"ratio-test": "claude-max-20x"}, "USD", money.Rate{}, false, now.Add(-time.Minute), now)
+	if v.PlanCost >= minPlanCostForRatio || v.ValuePerPlanUnit != 0 {
+		t.Errorf("plan cost %.4f, ratio %.1f; want no ratio below one unit", v.PlanCost, v.ValuePerPlanUnit)
+	}
+	v = &spendView{}
+	v.Summary.APIEquivalentUSD = 400
+	fillPlanCost(v, map[string]string{"ratio-test": "claude-max-20x"}, "USD", money.Rate{}, false, now.AddDate(0, 0, -30), now)
+	if v.ValuePerPlanUnit <= 1 {
+		t.Errorf("a month of Max 20x against $400 of usage: ratio %.1f", v.ValuePerPlanUnit)
 	}
 }
