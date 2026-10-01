@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"os"
 
+	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
+
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic"
@@ -44,6 +46,7 @@ func startVendorUsagePollers(
 		p := claudecodejsonl.NewPoller(bus, claudecodejsonl.PollerOptions{
 			Root: cfg.VendorUsage.ClaudeCodeJSONL.Root, Interval: cfg.VendorUsage.ClaudeCodeJSONL.Interval,
 			Logger: logger, CostSource: planCostSource(cfg, eventschema.ProviderAnthropic),
+			BaseURL: claudesettings.BaseURL,
 		})
 		sup.Go("claude-code-jsonl", p.Run)
 		logger.Info("claude-code jsonl poller live", "interval", cfg.VendorUsage.ClaudeCodeJSONL.Interval, "root", cfg.VendorUsage.ClaudeCodeJSONL.Root)
