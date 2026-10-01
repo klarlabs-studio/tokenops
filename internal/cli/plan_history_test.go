@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/money"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -100,15 +101,26 @@ func TestSpendTextShowsPlanCostAndValue(t *testing.T) {
 	var out bytes.Buffer
 	v := spendView{Window: "last 30d", Currency: "USD"}
 	v.Summary.APIEquivalentUSD = 11400
-	fillPlanCost(&v, map[string]string{"anthropic": "claude-max-20x"}, "EUR", 0.85,
+	rate := money.Rate{Currency: "EUR", PerUSD: 1 / 1.1355, Date: "2026-09-30", Source: "ecb"}
+	fillPlanCost(&v, map[string]string{"anthropic": "claude-max-20x"}, "EUR", rate, true,
 		time.Now().Add(-30*24*time.Hour), time.Now())
 	if err := writeSpendText(&out, v); err != nil {
 		t.Fatal(err)
 	}
-	// No price given: the list price, converted at the operator's rate.
+	// Every total in euros, the dollar source beside it, and the rate named.
 	text := out.String()
-	if !strings.Contains(text, "EUR (prorated; US list price where you gave none)") || !strings.Contains(text, "value per plan EUR:") {
-		t.Errorf("spend text:\n%s", text)
+	for _, want := range []string{
+		"api equivalent:  10039.63 EUR (11400.00 USD)",
+		"EUR (prorated; US list price where you gave none)",
+		"value per plan EUR:",
+		"rate:            1 EUR = 1.1355 USD (ECB reference rate, 2026-09-30); converted amounts move with it",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("missing %q in:\n%s", want, text)
+		}
+	}
+	if v.Display == nil || v.Display.Currency != "EUR" {
+		t.Errorf("display = %+v", v.Display)
 	}
 }
 
@@ -123,5 +135,37 @@ func TestPlanSetRecordsThePrice(t *testing.T) {
 		"--config-path", cfgPath, "--db", filepath.Join(dir, "events.db"), "--no-restart")
 	if hist := runPlanCmd(t, "history"); !strings.Contains(hist, "at 214.60 EUR/month") {
 		t.Errorf("plan history:\n%s", hist)
+	}
+}
+
+// init records the currency once: from the region on a new config, and
+// on an existing config only when it has none or --currency names one.
+func TestInitRecordsTheCurrency(t *testing.T) {
+	old := detectCurrency
+	detectCurrency = func() (string, string) { return "EUR", "your macOS region" }
+	t.Cleanup(func() { detectCurrency = old })
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	run := func(args ...string) string {
+		var out bytes.Buffer
+		root := NewRoot()
+		root.SetArgs(append([]string{"init", "--config-path", cfgPath, "--storage-path", filepath.Join(dir, "events.db"), "--no-wire"}, args...))
+		root.SetOut(&out)
+		root.SetErr(&out)
+		if err := root.Execute(); err != nil {
+			t.Fatalf("init: %v\n%s", err, out.String())
+		}
+		return out.String()
+	}
+	if out := run(); !strings.Contains(out, "currency: EUR (from your macOS region") {
+		t.Fatalf("new config: %s", out)
+	}
+	if out := run(); strings.Contains(out, "currency:") {
+		t.Errorf("an existing currency was touched: %s", out)
+	}
+	run("--currency", "chf")
+	data, _ := os.ReadFile(cfgPath)
+	if !strings.Contains(string(data), "currency: CHF") {
+		t.Errorf("config after --currency:\n%s", data)
 	}
 }

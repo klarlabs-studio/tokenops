@@ -13,9 +13,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/money"
 	"go.klarlabs.de/tokenops/internal/capability/planswitch"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast"
+	"go.klarlabs.de/tokenops/internal/infra/fxrate"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/infra/svgchart"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
@@ -167,7 +169,11 @@ spend within the selected window. It surfaces:
 				ForecastToks:  tokenPredictions,
 				HideSparkline: hideSparkline,
 			}
-			fillPlanCost(&view, cfg.Plans, cfg.Money.Currency, cfg.Money.PerUSD, f.Since, f.Until)
+			rate, rateOK, rateWarning := fxrate.Resolve(ctx, cfg.Money, time.Now())
+			if rateWarning != "" {
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", rateWarning)
+			}
+			fillPlanCost(&view, cfg.Plans, cfg.Money.Currency, rate, rateOK, f.Since, f.Until)
 			if svgFile != "" {
 				if err := writeRatioSVG(svgFile, summary.InputTokens, summary.OutputTokens); err != nil {
 					return err
@@ -228,6 +234,30 @@ type spendView struct {
 	ValuePerPlanUnit float64 `json:"value_per_plan_unit,omitempty"`
 	// PlanListPriced is true when some period fell back to a list price.
 	PlanListPriced bool `json:"plan_list_priced,omitempty"`
+	// Display is the window's money in the operator's currency, with the
+	// rate it was converted at. Absent when that currency is USD or no
+	// rate is available.
+	Display *money.Display `json:"display,omitempty"`
+	// Rate converts the dollar figures for text output.
+	Rate money.Rate `json:"-"`
+}
+
+// money renders a US-dollar amount in the operator's currency when one
+// is set and a rate is known, and as before otherwise.
+func (v spendView) money(usd float64) string {
+	if s, ok := money.Format(v.Rate, usd); ok {
+		return s
+	}
+	return fmtMoney(usd, v.Currency)
+}
+
+// moneyWithUSD is money plus the dollar figure it came from, for the
+// summary lines where the source amount matters.
+func (v spendView) moneyWithUSD(usd float64) string {
+	if s, ok := money.Format(v.Rate, usd); ok {
+		return fmt.Sprintf("%s (%.2f USD)", s, usd)
+	}
+	return fmtMoney(usd, v.Currency)
 }
 
 // planCosts prices the plans in force over the window, from the plan
@@ -381,10 +411,10 @@ func writeSpendText(w io.Writer, v spendView) error {
 	fmt.Fprintf(w, "  input tokens:    %d\n", v.Summary.InputTokens)
 	fmt.Fprintf(w, "  output tokens:   %d\n", v.Summary.OutputTokens)
 	fmt.Fprintf(w, "  total tokens:    %d\n", v.Summary.TotalTokens)
-	fmt.Fprintf(w, "  total spend:     %s\n", fmtMoney(v.Summary.CostUSD, v.Currency))
+	fmt.Fprintf(w, "  total spend:     %s\n", v.moneyWithUSD(v.Summary.CostUSD))
 	if v.Summary.APIEquivalentUSD > v.Summary.CostUSD {
 		fmt.Fprintf(w, "  api equivalent:  %s (plan-covered usage at list price)\n",
-			fmtMoney(v.Summary.APIEquivalentUSD, v.Currency))
+			v.moneyWithUSD(v.Summary.APIEquivalentUSD))
 	}
 	if v.PlanCost > 0 {
 		note := "your prices, prorated"
@@ -399,8 +429,11 @@ func writeSpendText(w io.Writer, v spendView) error {
 		case v.ValuePerPlanUnit > 0:
 			fmt.Fprintf(w, "  value per plan %s: %.1fx (api equivalent / plans)\n", v.PlanCurrency, v.ValuePerPlanUnit)
 		case v.Summary.APIEquivalentUSD > 0:
-			fmt.Fprintln(w, "  value per plan:  set money.per_usd to compare dollar usage with your plan currency")
+			fmt.Fprintln(w, "  value per plan:  no exchange rate, so dollar usage cannot be compared with your plans")
 		}
+	}
+	if note := v.Rate.Note(); note != "" {
+		fmt.Fprintf(w, "  rate:            %s; converted amounts move with it\n", note)
 	}
 	// Plot whichever series actually varies: cost is a flat zero for
 	// plan-covered traffic, so a cost-keyed sparkline would report calm
@@ -415,7 +448,7 @@ func writeSpendText(w io.Writer, v spendView) error {
 		fmt.Fprintf(w, "  burn rate (24h): %d tokens (plan-covered, so $0 at the margin)", v.BurnTokens24h)
 	} else {
 		fmt.Fprintf(w, "  burn rate (24h): %s / %d tokens",
-			fmtMoney(v.BurnRate24h, v.Currency), v.BurnTokens24h)
+			v.money(v.BurnRate24h), v.BurnTokens24h)
 	}
 	if !v.HideSparkline {
 		if line := sparklineFromRowsBy(v.BurnSeries, metric); line != "" {
@@ -452,10 +485,10 @@ func writeSpendText(w io.Writer, v spendView) error {
 			}
 			line := fmt.Sprintf("%d\t%s\t%d\t%d\t%d\t%s",
 				i+1, truncate(key, 32), r.Requests, r.InputTokens, r.OutputTokens,
-				fmtMoney(r.CostUSD, v.Currency),
+				v.money(r.CostUSD),
 			)
 			if showEquiv {
-				line += "\t" + fmtMoney(r.APIEquivalentUSD, v.Currency)
+				line += "\t" + v.money(r.APIEquivalentUSD)
 			}
 			fmt.Fprintln(tw, line)
 		}
@@ -471,9 +504,9 @@ func writeSpendText(w io.Writer, v spendView) error {
 		for _, p := range v.Forecast {
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n",
 				p.At.Format("2006-01-02"),
-				fmtMoney(p.Value, v.Currency),
-				fmtMoney(p.Lower, v.Currency),
-				fmtMoney(p.Upper, v.Currency),
+				v.money(p.Value),
+				v.money(p.Lower),
+				v.money(p.Upper),
 			)
 		}
 		if err := tw.Flush(); err != nil {
@@ -539,9 +572,14 @@ func allZeroForecast(points []forecast.Prediction) bool {
 
 // fillPlanCost prices the plans over the window in the operator's
 // currency and compares the usage's list-price value with it.
-func fillPlanCost(v *spendView, current map[string]string, currency string, perUSD float64, since, until time.Time) {
-	fx := planswitch.FX{Currency: currency, PerUSD: perUSD}
-	v.Plans = planCosts(current, since, until, fx)
+func fillPlanCost(v *spendView, current map[string]string, currency string, rate money.Rate, rateOK bool, since, until time.Time) {
+	conv := planswitch.FX{Currency: currency}
+	if rateOK {
+		conv.PerUSD = rate.PerUSD
+		v.Rate = rate
+		v.Display = money.Show(rate, v.Summary.CostUSD, v.Summary.APIEquivalentUSD)
+	}
+	v.Plans = planCosts(current, since, until, conv)
 	v.PlanCost, v.PlanComplete = planswitch.Total(v.Plans)
 	v.PlanCurrency = strings.ToUpper(strings.TrimSpace(currency))
 	if v.PlanCurrency == "" {
@@ -554,7 +592,7 @@ func fillPlanCost(v *spendView, current map[string]string, currency string, perU
 			}
 		}
 	}
-	if value, ok := fx.FromUSD(v.Summary.APIEquivalentUSD); ok && v.PlanCost > 0 {
+	if value, ok := conv.FromUSD(v.Summary.APIEquivalentUSD); ok && v.PlanCost > 0 {
 		v.ValuePerPlanUnit = value / v.PlanCost
 	}
 }

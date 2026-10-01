@@ -628,7 +628,9 @@ free — the exact failure this tool exists to find. So the daemon refreshes
 the card itself rather than waiting for someone to remember
 `tokenops pricing refresh`.
 
-**This is the one outbound call tokenops makes on its own.** It fetches a
+**This is one of two outbound calls tokenops makes on its own** (the other
+is the [exchange rate](#switching-plans), only when your currency is not
+USD). It fetches a
 public rate card (LiteLLM's `model_prices_and_context_window.json`) and
 sends nothing: no prompt, no file, no identifier, no usage figure. The
 privacy claim is about content and no content is involved — but a tool
@@ -775,14 +777,32 @@ tokenops plan set anthropic claude-max-20x --price 214.60 --currency EUR
 
 ```yaml
 money:
-  currency: EUR   # show plan cost in euros; the default for --currency
-  per_usd: 0.85   # 1 USD in EUR: compares dollar-priced usage with your plans
+  currency: EUR      # set by `tokenops init` from your system region
+  # per_usd: 0.88    # optional: pin a rate instead of the ECB's
+  # fetch_rate: false  # optional: never fetch the ECB rate
 ```
 
-Usage is priced in US dollars from vendor rate cards, so comparing it with
-a plan paid in euros needs an exchange rate. You set it; TokenOps fetches
-none. Without `per_usd`, plan cost is still shown in your currency, but a
-list-priced plan and the value comparison are left out. See
+Every total `tokenops spend` prints is in your currency, with the dollar
+figure beside the summary lines and the rate named underneath:
+
+```
+  api equivalent:  9397.12 EUR (10670.04 USD) (plan-covered usage at list price)
+  plans:           242.96 EUR (your prices, prorated)
+  value per plan EUR: 38.7x (api equivalent / plans)
+  rate:            1 EUR = 1.1355 USD (ECB reference rate, 2026-09-30); converted amounts move with it
+```
+
+Usage is priced in US dollars, because vendors publish rate cards in
+dollars, so a euro figure moves with the exchange rate even when your usage
+does not. The rate is the European Central Bank's daily reference rate,
+fetched at most once a day and cached in `~/.tokenops/fx-ecb.json`. The fetch
+downloads a public file and sends nothing. If it fails, the last cached rate
+is used and its date says how old it is. Pin `per_usd` to use a rate of your
+own, or set `fetch_rate: false` to keep this off the network.
+
+`tokenops init` records your currency once, from `--currency` or your
+system region. On macOS it reads the region setting, so an English-language
+system in Germany is billed in euros. See
 [ADR 0008](https://github.com/klarlabs-studio/tokenops/blob/main/docs/adr/0008-plan-history.md).
 
 ## Environment variables
