@@ -29,6 +29,7 @@
 package codexjsonl
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -55,6 +56,10 @@ type Turn struct {
 	ContextWindow  int64
 	RateLimits     RateLimits
 	RecordSequence int // monotonic ordinal within the session file, used as dedup key
+	// ModelProvider is the session's model_provider from its
+	// session_meta: "openai" for Codex's built-in provider, otherwise the
+	// ID of a [model_providers.<id>] table in config.toml.
+	ModelProvider string
 }
 
 // RateLimits mirrors the Codex CLI's per-turn rate_limits block.
@@ -175,6 +180,8 @@ func readReader(r io.Reader, visit func(Turn) error) error {
 // session, model and sequence number a read from the start would give it.
 type readState struct {
 	sessionID string
+	// modelProvider is the session's, from session_meta.
+	modelProvider string
 	// model is carried forward from the most recent turn_context, which
 	// is where Codex states it.
 	model string
@@ -196,6 +203,7 @@ func (st *readState) visitLine(line []byte, visit func(Turn) error) error {
 		var meta sessionMeta
 		if err := json.Unmarshal(line, &meta); err == nil && meta.Type == "session_meta" {
 			st.sessionID = meta.Payload.ID
+			st.modelProvider = meta.Payload.ModelProvider
 			return nil
 		}
 	}
@@ -258,5 +266,42 @@ func (st *readState) visitLine(line []byte, visit func(Turn) error) error {
 		ContextWindow:  raw.Payload.Info.ModelContextWindow,
 		RateLimits:     rl,
 		RecordSequence: st.seq,
+		ModelProvider:  st.modelProvider,
 	})
+}
+
+// SessionProviders maps each rollout's session ID to its model_provider,
+// reading only the session_meta line that starts every rollout. Sessions
+// on Codex's built-in "openai" provider are left out.
+func SessionProviders(root string) (map[string]string, error) {
+	files, err := FindSessionFiles(root)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, path := range files {
+		id, provider, ok := readSessionMeta(path)
+		if ok && provider != "" && provider != "openai" {
+			out[id] = provider
+		}
+	}
+	return out, nil
+}
+
+// readSessionMeta reads a rollout's first line.
+func readSessionMeta(path string) (id, provider string, ok bool) {
+	f, err := os.Open(path) //nolint:gosec // a rollout under the sessions root
+	if err != nil {
+		return "", "", false
+	}
+	defer func() { _ = f.Close() }()
+	line, err := bufio.NewReaderSize(f, 1<<16).ReadBytes('\n')
+	if err != nil && len(line) == 0 {
+		return "", "", false
+	}
+	var meta sessionMeta
+	if json.Unmarshal(line, &meta) != nil || meta.Type != "session_meta" || meta.Payload.ID == "" {
+		return "", "", false
+	}
+	return meta.Payload.ID, meta.Payload.ModelProvider, true
 }

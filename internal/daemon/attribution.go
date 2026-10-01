@@ -9,7 +9,9 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/biller"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
+	"go.klarlabs.de/tokenops/internal/infra/codexsettings"
 	"go.klarlabs.de/tokenops/internal/infra/routehistory"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -87,5 +89,58 @@ func correctGatewayAttribution(ctx context.Context, cfg config.Config, store *sq
 				"reason": "Claude turns through a gateway run on an API key, not the plan, and were recorded as covered",
 			}, anthropic)
 		}
+	}
+}
+
+// correctCodexAttribution moves Codex turns recorded as OpenAI's to the
+// provider their session actually used (ADR 0009). Every Codex turn used
+// to be recorded as OpenAI's; a session on a custom model_provider
+// (Fireworks, z.ai, a company gateway) names it in its rollout's first
+// line. Its base URL is read from Codex's config as it is now. Idempotent
+// and audited.
+func correctCodexAttribution(ctx context.Context, cfg config.Config, store *sqlite.Store, logger *slog.Logger) {
+	if store == nil || !cfg.VendorUsage.CodexJSONL.Enabled {
+		return
+	}
+	root := cfg.VendorUsage.CodexJSONL.Root
+	if root == "" {
+		r, err := codexjsonl.DefaultRoot()
+		if err != nil {
+			return
+		}
+		root = r
+	}
+	sessions, err := codexjsonl.SessionProviders(root)
+	if err != nil {
+		logger.Warn("codex attribution check failed; will retry at next start", "err", err)
+		return
+	}
+	openai := string(eventschema.ProviderOpenAI)
+	moved := map[string]int64{}
+	for session, id := range sessions {
+		base := codexsettings.ProviderBaseURL(id)
+		to := string(biller.ForCodexTurn(id, base, ""))
+		if to == openai {
+			continue
+		}
+		n, err := store.ReattributeSession(ctx, codexjsonl.SourceTag, session, openai, to, biller.EndpointName(base, id), !cfg.PlanCovers(to))
+		if err != nil {
+			logger.Warn("codex attribution failed; will retry at next start", "err", err)
+			return
+		}
+		moved[to] += n
+	}
+	for to, n := range moved {
+		if n == 0 {
+			continue
+		}
+		logger.Info("re-attributed Codex turns a custom provider served", "to", to, "calls", n)
+		_, _ = audit.NewRecorder(store).Record(ctx, audit.Entry{
+			Action: audit.ActionCostCorrection, Actor: "tokenops", Target: to,
+			Details: map[string]any{
+				"from": openai, "to": to, "calls": n,
+				"reason": "Codex turns on a custom model_provider were recorded as OpenAI's",
+			},
+		})
 	}
 }
