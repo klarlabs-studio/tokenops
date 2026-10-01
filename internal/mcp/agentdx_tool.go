@@ -44,6 +44,25 @@ type agentDXResult struct {
 	Grades         agentdx.Grades    `json:"grades"`
 	Recommendation *dxRecommendation `json:"recommendation,omitempty"`
 	Note           string            `json:"note,omitempty"`
+	// Warnings names each client whose transcripts could not be read.
+	// The metrics cover the others; failing the whole call instead hid
+	// the cause behind "internal error".
+	Warnings []string `json:"warnings,omitempty"`
+}
+
+// readWarnings turns a partial read's error into one warning per source.
+func readWarnings(err error) []string {
+	if err == nil {
+		return nil
+	}
+	if j, ok := err.(interface{ Unwrap() []error }); ok {
+		var out []string
+		for _, e := range j.Unwrap() {
+			out = append(out, e.Error())
+		}
+		return out
+	}
+	return []string{err.Error()}
 }
 
 type dxRecommendation struct {
@@ -77,11 +96,8 @@ func RegisterAgentDXTools(s *Server, d AgentDXDeps) error {
 				window = formatDays(days)
 			}
 			records, err := agentdx.ExtractAll(opts)
-			if err != nil {
-				return nil, err
-			}
 			m := agentdx.ComputeByProvider(records)
-			out := &agentDXResult{Window: window, Metrics: m, Grades: agentdx.Grade(m)}
+			out := &agentDXResult{Window: window, Metrics: m, Grades: agentdx.Grade(m), Warnings: readWarnings(err)}
 			if m.Prompts == 0 {
 				out.Note = "no instructions in this window — widen with days or all: true, or check the transcript root"
 				return out, nil

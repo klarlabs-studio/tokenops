@@ -45,6 +45,8 @@ type storyResult struct {
 	Window string      `json:"window"`
 	Tasks  []storyTask `json:"tasks"`
 	Note   string      `json:"note,omitempty"`
+	// Warnings names each client whose transcripts could not be read.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // RegisterStoryTools hands the agent its own history back.
@@ -85,16 +87,13 @@ func RegisterStoryTools(s *Server, d StoryDeps) error {
 				opts.Since = time.Now().AddDate(0, 0, -days)
 				window = formatDays(days)
 			}
-			records, err := agentdx.ExtractAll(opts)
-			if err != nil {
-				return nil, err
-			}
+			records, readErr := agentdx.ExtractAll(opts)
 			tasks := story.Group(agentdx.Units(records), story.Options{})
 			reverseTasks(tasks) // newest first: the work being asked about is the work just done
 			if limit > 0 && len(tasks) > limit {
 				tasks = tasks[:limit]
 			}
-			out := &storyResult{Window: window, Tasks: make([]storyTask, 0, len(tasks))}
+			out := &storyResult{Window: window, Tasks: make([]storyTask, 0, len(tasks)), Warnings: readWarnings(readErr)}
 			for _, t := range tasks {
 				frictions := []string{}
 				for _, f := range t.Frictions() {

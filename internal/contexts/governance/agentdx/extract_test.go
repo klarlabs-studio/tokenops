@@ -1,6 +1,8 @@
 package agentdx
 
 import (
+	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -145,5 +147,41 @@ func TestExtractAllHonoursPinnedRoot(t *testing.T) {
 	}
 	if len(got) != 1 {
 		t.Errorf("got %d records, want exactly the pinned tree's 1 — auto mode must not wander", len(got))
+	}
+}
+
+// One unreadable store must not stop the others, and each failure is
+// named. Returning at the first one dropped opencode whenever Cursor's
+// schema moved, and the MCP tool turned the error into "internal error".
+func TestExtractAllReadsPastAnUnreadableStore(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", "")
+
+	cursorRoot, err := CursorDefaultRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	opencodePath, err := OpencodeDefaultPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{filepath.Join(cursorRoot, "globalStorage", "state.vscdb"), opencodePath} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		db, err := sql.Open("sqlite", p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`CREATE TABLE something_else (x TEXT)`); err != nil {
+			t.Fatal(err)
+		}
+		_ = db.Close()
+	}
+
+	_, err = ExtractAll(ExtractOptions{})
+	if !errors.Is(err, ErrCursorSchema) || !errors.Is(err, ErrOpencodeSchema) {
+		t.Fatalf("err = %v, want both stores named", err)
 	}
 }
