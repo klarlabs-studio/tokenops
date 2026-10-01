@@ -202,7 +202,7 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	sessionProvider := inferSessionProvider(cfg.Plans)
 	tracker := session.New(sessionBus, session.Options{Provider: sessionProvider})
 
-	planDeps := mcp.PlanDeps{Store: components.Store, Tracker: tracker, Provider: sessionProvider}
+	planDeps := mcp.PlanDeps{Store: components.Store, Tracker: tracker, Provider: sessionProvider, Spend: components.Spend}
 	if cfgErr == nil {
 		planDeps.Config = &cfg
 		planDeps.ConfigGetter = currentConfig

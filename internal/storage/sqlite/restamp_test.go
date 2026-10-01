@@ -45,3 +45,43 @@ func TestRestampPlanIncluded(t *testing.T) {
 		t.Errorf("second pass changed %d", n)
 	}
 }
+
+func TestRestampMetered(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	t0 := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	envs := []*eventschema.Envelope{
+		mustPromptEnvelope(t, "covered", t0, &eventschema.PromptEvent{Provider: "anthropic", CostSource: eventschema.CostSourcePlanIncluded}),
+		mustPromptEnvelope(t, "billed", t0, &eventschema.PromptEvent{Provider: "anthropic", CostUSD: 0.4, CostMeasured: true}),
+		mustPromptEnvelope(t, "trial", t0, &eventschema.PromptEvent{Provider: "anthropic", CostSource: eventschema.CostSourceTrial}),
+		mustPromptEnvelope(t, "other-provider", t0, &eventschema.PromptEvent{Provider: "openai", CostSource: eventschema.CostSourcePlanIncluded}),
+	}
+	if err := s.AppendBatch(ctx, envs); err != nil {
+		t.Fatal(err)
+	}
+	n, err := s.RestampMetered(ctx, "anthropic", t0.Add(-time.Hour), t0.Add(time.Hour))
+	if err != nil || n != 1 {
+		t.Fatalf("restamped %d, err %v; want 1", n, err)
+	}
+	got, err := s.Query(ctx, Filter{Type: eventschema.EventTypePrompt})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, env := range got {
+		p := env.Payload.(*eventschema.PromptEvent)
+		switch env.ID {
+		case "covered":
+			if p.CostSource != eventschema.CostSourceMetered {
+				t.Errorf("covered: cost source %q, want metered", p.CostSource)
+			}
+		case "billed":
+			if p.CostUSD != 0.4 || !p.CostMeasured {
+				t.Errorf("billed lost its measured cost: %+v", p)
+			}
+		case "trial", "other-provider":
+			if p.CostSource == eventschema.CostSourceMetered {
+				t.Errorf("%s was re-marked", env.ID)
+			}
+		}
+	}
+}

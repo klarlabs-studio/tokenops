@@ -54,6 +54,9 @@ type Deps struct {
 	// Reader is the event store. nil means storage is disabled, which is
 	// a different answer from having no plans.
 	Reader Reader
+	// Price prices a request at list rates, for spend-denominated plans
+	// whose usage is billed per token. nil counts only measured cost.
+	Price plans.Pricer
 }
 
 // Result is the capability's answer.
@@ -122,6 +125,7 @@ func Compute(ctx context.Context, d Deps, now time.Time) (Result, error) {
 				LimitUSD:   lim.SpendLimitUSD,
 				Window:     lim.Window,
 				RateFactor: lim.RateFactor,
+				Price:      d.Price,
 			}, now)
 		if err != nil {
 			return Result{}, fmt.Errorf("headroom inputs[%s]: %w", provider, err)

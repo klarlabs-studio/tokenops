@@ -28,8 +28,8 @@ func newPlanStampSink(next events.Sink, cfg config.Config) events.Sink {
 		return next
 	}
 	planned := make(map[eventschema.Provider]bool, len(cfg.Plans))
-	for provider, plan := range cfg.Plans {
-		if plan != "" {
+	for provider := range cfg.Plans {
+		if cfg.PlanCovers(provider) {
 			planned[eventschema.Provider(provider)] = true
 		}
 	}

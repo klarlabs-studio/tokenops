@@ -126,6 +126,19 @@ func ConsumptionInWindow(ctx context.Context, r EventReader, provider string, no
 	return out, nil
 }
 
+// perRequest reports whether an event is one request rather than a
+// vendor aggregate (a daily bucket, a quota snapshot). Only a request is
+// priced from its tokens: an aggregate repeats tokens the per-turn events
+// already carry, and pricing both would count the usage twice.
+func perRequest(env *eventschema.Envelope) bool {
+	switch env.Attributes["granularity"] {
+	case "", "assistant_turn", "request":
+		return true
+	default:
+		return false
+	}
+}
+
 // countsAsMessage reports whether an event approximates one entry on
 // the vendor's "messages" meter (a user prompt). Sources that emit
 // finer- or coarser-grained events declare it via the granularity
@@ -167,13 +180,16 @@ func SpendWindowStart(now time.Time, window string) time.Time {
 	}
 }
 
-// SpendInWindow sums real billed cost for a provider over the spend window.
+// SpendInWindow is what provider's usage cost since the spend window began.
 //
-// It reads CostUSD rather than an API-equivalent: a spend-denominated plan
-// is billed at API rates from the first token, so the cost carried on the
-// event IS what the vendor charges. A plan-covered event contributes zero,
-// which is correct — that traffic is not billed.
-func SpendInWindow(ctx context.Context, reader EventReader, provider string, now time.Time, window string) (float64, error) {
+// It is the numerator of a spend-denominated plan (usage-based Enterprise),
+// which is billed at API rates from the first token, so every request
+// counts at its price: the cost the proxy measured when there is one,
+// otherwise the list price from price. A request stamped as covered by a
+// plan still counts. That stamp was wrong for this kind of plan, and such
+// usage stayed in the store at $0 until it is re-marked, so the limit
+// must not read 0% because of it.
+func SpendInWindow(ctx context.Context, reader EventReader, provider string, now time.Time, window string, price Pricer) (float64, error) {
 	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, SpendWindowStart(now, window))
 	if err != nil {
 		return 0, err
@@ -187,7 +203,15 @@ func SpendInWindow(ctx context.Context, reader EventReader, provider string, now
 		if !ok || string(p.Provider) != provider {
 			continue
 		}
-		total += p.CostUSD
+		if p.CostUSD > 0 || price == nil || !perRequest(env) {
+			total += p.CostUSD
+			continue
+		}
+		billed := *p
+		billed.CostSource = eventschema.CostSourceMetered
+		if c, err := price(&billed, env.Timestamp); err == nil {
+			total += c
+		}
 	}
 	return total, nil
 }

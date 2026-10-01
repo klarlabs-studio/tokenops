@@ -47,8 +47,12 @@ func recordPlanChange(ctx context.Context, out io.Writer, sw planhistory.Switch,
 		return err
 	}
 	if from.Before(now) && plan != "" && res.StoreErr == nil {
-		fmt.Fprintf(out, "%s since %s; re-marked %d earlier call(s) from billed to plan-covered\n",
-			plan, from.Format("2006-01-02"), res.Restamped)
+		change := "from billed to plan-covered"
+		if res.RestampedTo == "metered" {
+			change = "from plan-covered to billed at API rates"
+		}
+		fmt.Fprintf(out, "%s since %s; re-marked %d earlier call(s) %s\n",
+			plan, from.Format("2006-01-02"), res.Restamped, change)
 	}
 	return nil
 }

@@ -352,7 +352,7 @@ func resolveStoragePath(configured string) (string, error) {
 // subscription-covered usage at API list rates and budget alerts would
 // fire on spend that never billed.
 func planCostSource(cfg config.Config, provider eventschema.Provider) eventschema.CostSource {
-	if cfg.Plans[string(provider)] != "" {
+	if cfg.PlanCovers(string(provider)) {
 		return eventschema.CostSourcePlanIncluded
 	}
 	return ""
