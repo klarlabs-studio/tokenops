@@ -294,7 +294,7 @@ covers the rest.
 
 ---
 
-Shipping now: **v0.86.2**. See [release highlights](/changelog) for what
+Shipping now: **v0.87.0**. See [release highlights](/changelog) for what
 changed and why, or the
 [full changelog](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md)
 for every commit.

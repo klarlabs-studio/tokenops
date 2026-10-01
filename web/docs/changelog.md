@@ -4,7 +4,33 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.86.2**.
+Current release: **v0.87.0**.
+
+## v0.87.0 — who bills what
+
+A coding agent no longer talks to one vendor. Claude Code pointed at
+Fireworks through FireConnect sends easy turns to Fireworks' open models
+and hard ones, through FireRouter, to Claude on an Anthropic API key.
+TokenOps recorded all of it as Anthropic's: Fireworks turns sat on the
+Anthropic plan or spend limit with no price, and Claude turns through the
+gateway counted as covered by Max.
+
+Every request now records who bills it (ADR 0009). TokenOps works it out
+on its own: from Claude Code's endpoint, kept as a dated route history
+and dated by FireConnect's own settings backup; from each Codex
+session's provider; from the provider opencode records per message. A
+gateway's models are billed by the gateway at its own rates, and a plan
+covers only turns through its vendor's own endpoint. Usage recorded
+under the old rules is corrected at start, and the audit log says so.
+
+The catalog grows past Claude and OpenAI: z.ai's GLM Coding Plan, opencode
+Go and Zen, Kimi Code, MiniMax, Alibaba's coding plan, DeepSeek, Cerebras
+Code, Synthetic and Chutes, with endpoints that tell a coding plan from
+the same vendor's pay-as-you-go API, and prices from models.dev where
+the vendor publishes them. Spend limits are dated, so last month keeps
+last month's limit, and any provider billed per token can be measured
+against its own cap. `init` turns on the transcript readers for the
+clients on your machine, and the MCP spend summary speaks your currency.
 
 ## v0.86.2 — fixing our own mistake without asking
 
