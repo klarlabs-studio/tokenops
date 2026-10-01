@@ -26,7 +26,7 @@ func EndpointName(baseURL, vendor string) string {
 		return vendor
 	}
 	if e, ok := EndpointFor(baseURL); ok {
-		return string(e.Provider)
+		return e.name()
 	}
 	if u, err := url.Parse(baseURL); err == nil {
 		host := u.Hostname()

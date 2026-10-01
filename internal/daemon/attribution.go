@@ -9,6 +9,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/biller"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
 	"go.klarlabs.de/tokenops/internal/infra/routehistory"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
@@ -87,5 +88,41 @@ func correctGatewayAttribution(ctx context.Context, cfg config.Config, store *sq
 				"reason": "Claude turns through a gateway run on an API key, not the plan, and were recorded as covered",
 			}, anthropic)
 		}
+	}
+}
+
+// correctOpencodeAttribution renames opencode turns stored under a raw
+// providerID that now maps to a TokenOps provider ("zai-coding-plan" is
+// z.ai's, through its plan endpoint). Idempotent and audited.
+func correctOpencodeAttribution(ctx context.Context, store *sqlite.Store, logger *slog.Logger) {
+	if store == nil {
+		return
+	}
+	stored, err := store.ProvidersFor(ctx, opencode.SourceTag)
+	if err != nil {
+		logger.Warn("opencode attribution check failed; will retry at next start", "err", err)
+		return
+	}
+	for _, from := range stored {
+		to, endpoint, ok := opencode.Provider(from)
+		if !ok || string(to) == from {
+			continue
+		}
+		n, err := store.RenameProvider(ctx, opencode.SourceTag, from, string(to), endpoint)
+		if err != nil {
+			logger.Warn("opencode attribution failed; will retry at next start", "err", err)
+			return
+		}
+		if n == 0 {
+			continue
+		}
+		logger.Info("re-attributed opencode turns", "from", from, "to", to, "calls", n)
+		_, _ = audit.NewRecorder(store).Record(ctx, audit.Entry{
+			Action: audit.ActionCostCorrection, Actor: "tokenops", Target: string(to),
+			Details: map[string]any{
+				"from": from, "to": string(to), "endpoint": endpoint, "calls": n,
+				"reason": "opencode turns were recorded under the client's provider ID, not the provider that bills them",
+			},
+		})
 	}
 }
