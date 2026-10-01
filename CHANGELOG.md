@@ -2,6 +2,193 @@
 
 ## Unreleased
 
+## 0.86.0 - 2026-10-01
+
+### Added
+
+- **money:** Show every total in your currency, with the rate it used (#468)
+
+## 0.85.0 - 2026-10-01
+
+### Added
+
+- **plans:** Record what you pay, in your currency (ADR 0008) (#467)
+- **plans:** Plan history, backdated switches, and plan prices (ADR 0008) (#466)
+- **dx:** Split instructions by model and reasoning effort (#465)
+
+## 0.84.0 - 2026-09-30
+
+### Added
+
+- **routing:** Move requests off models the policy rules out (ADR 0007) (#464)
+- **routing:** Model policy rules models out of every route (#463)
+
+## 0.83.0 - 2026-09-30
+
+### Added
+
+- **coach:** Presets set the whole coach and wire every agent (#462)
+- **coach:** Context power sets where every agent compacts (ADR 0006) (#461)
+
+## 0.82.0 - 2026-09-29
+
+### Added
+
+- **coach:** Show the live quota window and the next tip in coach status (#459)
+
+## 0.81.0 - 2026-09-29
+
+### Added
+
+- **coach:** Live compact tip after a long stretch near the ceiling (#458)
+
+## 0.80.0 - 2026-09-29
+
+### Added
+
+- **coach:** Models ask proposes subagent moves for approval (ADR 0006) (#455)
+- **waste:** Compact_earlier finding names the cost of compacting late (ADR 0005) (#453)
+
+### Fixed
+
+- **route-guard:** Rank the session's own model with the configured list (#456)
+
+## 0.79.0 - 2026-09-28
+
+### Added
+
+- **coach:** Record tip follow-through and quiet ignored early tips (#452)
+- **coach:** Record follow-through and quiet ignored advice (ADR 0006 step 5) (#451)
+
+## 0.78.0 - 2026-09-28
+
+### Added
+
+- **coach:** Models autonomous moves subagents to a cheaper model (ADR 0006 step 4) (#449)
+- **coach:** Verbosity levels change what the coach says (#448)
+
+## 0.77.0 - 2026-09-28
+
+### Added
+
+- **coach:** One coach with autonomy and verbosity dials (ADR 0006, step 2) (#447)
+
+### Fixed
+
+- **authority:** Report the read guard from coaching.delivery (#444)
+
+## 0.76.0 - 2026-09-27
+
+### Added
+
+- **coach:** Speak quota, not dollars, on flat-rate plans (#443)
+
+### Fixed
+
+- **test:** Sandbox XDG directories in CLI tests and the config matrix (#442)
+
+## 0.75.1 - 2026-09-27
+
+### Fixed
+
+- **mcp,eval:** Readable tool errors, embedded eval suites, MCP tools in the config matrix (#440)
+- **coaching:** Stop waste findings that measure session length (#438)
+
+## 0.75.0 - 2026-09-27
+
+### Added
+
+- **storage:** Log slow write-lock waits and holds per process (#436)
+
+## 0.74.3 - 2026-09-27
+
+### Fixed
+
+- **config:** Reject unknown smart-routing interventions (#434)
+- **daemon:** Require the API token when storage is disabled (#433)
+
+## 0.74.2 - 2026-09-27
+
+### Fixed
+
+- **daemon:** Skip stored events when pollers re-read history (#432)
+
+## 0.74.1 - 2026-09-27
+
+### Fixed
+
+- **events:** Stop losing rows to store lock contention (#431)
+
+## 0.74.0 - 2026-09-27
+
+### Added
+
+- **workflows:** Propagate prepared IDs through Claude bridge (#427)
+
+### Fixed
+
+- **proxy:** Ignore auxiliary provider requests (#428)
+
+## 0.73.1 - 2026-09-27
+
+### Fixed
+
+- **daemon:** Confirm health after supervised restart (#423)
+
+## 0.73.0 - 2026-09-27
+
+### Added
+
+- **mcp:** Connect work preparation and review (#422)
+
+## 0.72.5 - 2026-09-27
+
+### Fixed
+
+- **plans:** Harden Claude subscription polling (#421)
+
+## 0.72.4 - 2026-09-27
+
+### Fixed
+
+- **telemetry:** Harden Claude request import (#420)
+- **release:** Bypass unsafe Relicta publish (#419)
+
+## 0.72.3 - 2026-09-27
+
+### Fixed
+
+- **release:** Disable Relicta native tagging (#418)
+
+## 0.72.2 - 2026-09-27
+
+### Fixed
+
+- **release:** Guard signed Relicta publishing (#417)
+- **plans:** Standardize Claude subscription naming (#416)
+- **plans:** Add portable Claude meter setup (#415)
+- **plans:** Decode Claude unified limits (#414)
+- **plans:** Preserve Claude quota window labels (#413)
+- **plans:** Honor vendor-reported quota windows (#411)
+
+## 0.72.1 - 2026-09-26
+
+### Fixed
+
+- **proxy:** Preserve incompatible Anthropic routes (#408)
+- **proxy:** Observe compressed provider responses (#407)
+- **proxy:** Classify sanitized upstream errors (#405)
+
+## 0.72.0 - 2026-09-26
+
+### Added
+
+- **proxy:** Measure streamed agent traffic (#402)
+
+### Fixed
+
+- **experiments:** Preserve multi-call evidence (#403)
+
 ## 0.71.0 - 2026-09-26
 
 This release completes the source and live-validation work for ADR 0004. It
