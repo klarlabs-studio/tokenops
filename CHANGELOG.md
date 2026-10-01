@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 0.87.0 - 2026-10-01
+
+### Added
+
+- **attribution:** A dated route history decides each Claude Code turn's endpoint and plan; a plan covers only its vendor's own endpoint (#479)
+- **attribution:** Codex sessions on a custom model_provider are that provider's (#480)
+- **providers:** z.ai, opencode Go and Zen, Kimi, MiniMax, Alibaba, DeepSeek, Cerebras, Synthetic and Chutes: endpoints, coding plans and prices (#481)
+- **init:** Turn on the local transcript readers whose sessions are present (#482)
+- **plans:** Spend limits are dated, and any provider can have one (`pay-as-you-go`) (#483)
+- **mcp:** The spend summary shows the operator's currency and its rate (#484)
+- **docs:** ADR 0009 accepted with part 1 as built; gateways in the guides (#486)
+
+### Fixed
+
+- **attribution:** Claude Code turns a gateway served are billed by the gateway (#477)
+- **pricing:** Gateway turns are priced at the gateway's own rate, from models.dev and pinned Fireworks rows (#478)
+- **init,spend:** `--no-wire` turns readers on; no value-per-plan ratio over cents (#485)
+
 ## 0.86.2 - 2026-10-01
 
 ### Fixed
