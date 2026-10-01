@@ -147,6 +147,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	opts = append(opts, eventRuntime.ProxyOptions...)
 
 	if cfg.Storage.Enabled {
+		correctSpendCoverage(ctx, cfg, components.Store, logger)
 		// Source-specific polling configuration lives in its runtime module.
 		startVendorUsagePollers(cfg, ingestionBus(ctx, bus, components.Store, logger), sourceHealth, sup, logger)
 

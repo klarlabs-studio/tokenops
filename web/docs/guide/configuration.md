@@ -743,13 +743,10 @@ invisible.
 Unlike a subscription, a spend-denominated plan covers nothing: its usage
 is recorded as billed and priced at API rates, so `spend` shows what it
 costs and headroom counts it against the limit. Before v0.86.1 such usage
-was recorded as covered, at $0, which read the limit as 0% used. To
-correct usage recorded that way, re-bind the plan from the date it took
-effect:
-
-```bash
-tokenops plan set anthropic claude-enterprise --spend-limit 500 --since 2026-09-01
-```
+was recorded as covered, at $0, which read the limit as 0% used. The
+daemon corrects that on its own at start: the plan history says which
+stretches were on a plan billed at API rates, and only those are
+re-marked. Each correction is in `tokenops audit` as `cost_correction`.
 
 ## Switching plans
 

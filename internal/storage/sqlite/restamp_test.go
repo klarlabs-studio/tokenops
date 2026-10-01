@@ -85,3 +85,21 @@ func TestRestampMetered(t *testing.T) {
 		}
 	}
 }
+
+func TestRestampMeteredIsIdempotent(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	t0 := time.Date(2026, 9, 15, 9, 0, 0, 0, time.UTC)
+	if err := s.AppendBatch(ctx, []*eventschema.Envelope{
+		mustPromptEnvelope(t, "covered", t0, &eventschema.PromptEvent{Provider: "anthropic", CostSource: eventschema.CostSourcePlanIncluded}),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	from, to := time.Unix(0, 0).UTC(), t0.Add(time.Hour)
+	if n, _ := s.RestampMetered(ctx, "anthropic", from, to); n != 1 {
+		t.Fatalf("first pass %d, want 1", n)
+	}
+	if n, _ := s.RestampMetered(ctx, "anthropic", from, to); n != 0 {
+		t.Errorf("second pass changed %d; the daemon runs this at every start", n)
+	}
+}
