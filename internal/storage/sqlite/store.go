@@ -745,3 +745,51 @@ func (s *Store) RestampMetered(ctx context.Context, provider string, from, to ti
 	}
 	return res.RowsAffected()
 }
+
+// ModelsFor lists the distinct models of a source's prompt events recorded
+// under provider.
+func (s *Store) ModelsFor(ctx context.Context, source, provider string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT model FROM events
+		WHERE type = 'prompt' AND source = ? AND provider = ? AND model IS NOT NULL AND model != ''`, source, provider)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: models for: %w", contended(ctx, err))
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var m string
+		if err := rows.Scan(&m); err != nil {
+			return nil, fmt.Errorf("sqlite: models for: %w", err)
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// Reattribute moves a source's prompt events for model from one provider
+// to another, and returns how many it changed (ADR 0009). When uncover is
+// set, events marked as covered by the old provider's plan become billed,
+// with their cost cleared so it is priced on read: a plan covers only its
+// own provider's usage.
+func (s *Store) Reattribute(ctx context.Context, source, model, from, to string, uncover bool) (int64, error) {
+	payload := `json_set(payload, '$.provider', ?)`
+	args := make([]any, 0, 6)
+	args = append(args, to)
+	if uncover {
+		payload = `CASE WHEN json_extract(payload, '$.cost_source') = 'plan_included'
+			THEN json_remove(json_set(payload, '$.provider', ?, '$.cost_source', 'metered'), '$.cost_usd', '$.cost_measured')
+			ELSE json_set(payload, '$.provider', ?) END`
+		args = append(args, to)
+	}
+	clearCost := `cost_usd`
+	if uncover {
+		clearCost = `CASE WHEN json_extract(payload, '$.cost_source') = 'plan_included' THEN NULL ELSE cost_usd END`
+	}
+	args = append(args, to, source, from, model)
+	res, err := s.db.ExecContext(ctx, `UPDATE events SET cost_usd = `+clearCost+`, payload = `+payload+`, provider = ?
+		WHERE type = 'prompt' AND source = ? AND provider = ? AND model = ?`, args...)
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: reattribute: %w", contended(ctx, err))
+	}
+	return res.RowsAffected()
+}

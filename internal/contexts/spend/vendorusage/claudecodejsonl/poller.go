@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/biller"
+
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/jsonltail"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -39,8 +41,13 @@ type PollerOptions struct {
 	// CostSourcePlanIncluded when a flat-rate plan is bound to the
 	// anthropic provider (config plans:) so subscription-covered usage
 	// is never repriced at API list rates by the analytics recompute.
-	// Empty means metered.
+	// Empty means metered. It applies only to turns Anthropic bills: a
+	// turn a gateway served is not covered by an Anthropic plan.
 	CostSource eventschema.CostSource
+	// BaseURL returns the endpoint Claude Code is pointed at (empty for
+	// Anthropic's default), which decides who bills a turn served by a
+	// model other than Claude (ADR 0009). nil means the default.
+	BaseURL func() string
 }
 
 // Poller diffs successive scans of the JSONL tree and publishes one
@@ -126,6 +133,14 @@ func (p *Poller) scan(ctx context.Context, root string) {
 	})
 }
 
+// baseURL is the endpoint Claude Code is pointed at now.
+func (p *Poller) baseURL() string {
+	if p.opts.BaseURL == nil {
+		return ""
+	}
+	return p.opts.BaseURL()
+}
+
 // visitor publishes each turn not already seen.
 func (p *Poller) visitor(ctx context.Context) func(Turn) error {
 	return func(turn Turn) error {
@@ -137,7 +152,7 @@ func (p *Poller) visitor(ctx context.Context) func(Turn) error {
 		p.seen[turn.MessageID] = struct{}{}
 		p.mu.Unlock()
 		if p.bus != nil {
-			p.publishWait(ctx, newEnvelope(turn, p.opts.CostSource))
+			p.publishWait(ctx, newEnvelope(turn, p.opts.CostSource, p.baseURL()))
 		}
 		return nil
 	}
@@ -148,7 +163,11 @@ func (p *Poller) visitor(ctx context.Context) func(Turn) error {
 // on Anthropic's blended cache pricing (rough — cache-read is priced
 // lower than uncached input; future refinement can split the buckets
 // via the Attributes map).
-func newEnvelope(t Turn, costSource eventschema.CostSource) *eventschema.Envelope {
+func newEnvelope(t Turn, costSource eventschema.CostSource, baseURL string) *eventschema.Envelope {
+	provider := biller.ForClaudeCodeTurn(t.Model, baseURL)
+	if provider != eventschema.ProviderAnthropic {
+		costSource = ""
+	}
 	inputTokens := t.InputTokens + t.CacheReadInputTokens + t.CacheCreationInputTokens
 	totalTokens := inputTokens + t.OutputTokens
 	// Deterministic envelope ID per message — re-scanning the same
@@ -180,7 +199,7 @@ func newEnvelope(t Turn, costSource eventschema.CostSource) *eventschema.Envelop
 			"cache_creation_input": fmt.Sprintf("%d", t.CacheCreationInputTokens),
 		},
 		Payload: &eventschema.PromptEvent{
-			Provider:          eventschema.ProviderAnthropic,
+			Provider:          provider,
 			RequestModel:      t.Model,
 			InputTokens:       inputTokens,
 			CachedInputTokens: t.CacheReadInputTokens,
