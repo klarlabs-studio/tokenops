@@ -184,9 +184,30 @@ func (t Table) Lookup(provider eventschema.Provider, model string) (Rate, error)
 		}
 	}
 	if !found {
+		// A gateway records its own namespace ("accounts/fireworks/
+		// models/kimi-k3"); the card keys the bare name. Retry once
+		// without it.
+		if bare := gatewayModel(model); bare != model {
+			return t.Lookup(provider, bare)
+		}
 		return Rate{}, fmt.Errorf("%w: provider=%s model=%s", ErrUnknownModel, provider, model)
 	}
 	return bestRate, nil
+}
+
+// gatewayModel drops a gateway account namespace from a model ID,
+// "accounts/<account>/models/<name>" or ".../routers/<name>".
+func gatewayModel(model string) string {
+	// "[1m]" names a context-window variant, which a gateway prices the
+	// same as the base model.
+	if i := strings.Index(model, "["); i > 0 && strings.HasSuffix(model, "]") {
+		model = model[:i]
+	}
+	parts := strings.Split(model, "/")
+	if len(parts) == 4 && parts[0] == "accounts" && (parts[2] == "models" || parts[2] == "routers") {
+		return parts[3]
+	}
+	return model
 }
 
 // LookupAnyProvider prices a model when the vendor behind it is not

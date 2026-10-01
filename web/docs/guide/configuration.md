@@ -630,9 +630,10 @@ the card itself rather than waiting for someone to remember
 
 **This is one of two outbound calls tokenops makes on its own** (the other
 is the [exchange rate](#switching-plans), only when your currency is not
-USD). It fetches a
-public rate card (LiteLLM's `model_prices_and_context_window.json`) and
-sends nothing: no prompt, no file, no identifier, no usage figure. The
+USD). It fetches two public price lists, LiteLLM's
+`model_prices_and_context_window.json` for the model vendors and
+models.dev's catalog for gateways such as Fireworks and OpenRouter, whose
+own rate is what they bill. It sends nothing: no prompt, no file, no identifier, no usage figure. The
 privacy claim is about content and no content is involved — but a tool
 that starts talking to the network without saying so has spent trust it
 cannot buy back, which is why it is documented here and switchable:
