@@ -45,9 +45,9 @@ Snapshot as of 2026-09:
 | `claude-pro` | Claude Pro | anthropic | ~45 msgs / 5h |
 | `gpt-plus` | ChatGPT Plus | openai | model-dependent / 5h |
 | `gpt-pro` | ChatGPT Pro (tier unspecified) | openai | model-dependent / 5h |
-| `gpt-pro-5x` | ChatGPT Pro Standard (5x) | openai | 5x Plus / 5h |
-| `gpt-pro-20x` | ChatGPT Pro More usage (20x) | openai | 20x Plus / 5h |
-| `gpt-pro-max` | ChatGPT Pro Max usage | openai | unpublished / 5h |
+| `gpt-pro-5x` | ChatGPT Pro Standard ($100) | openai | 5x Plus / 5h |
+| `gpt-pro-20x` | ChatGPT Pro More usage ($200) | openai | 20x Plus, 10x from 2026-10-30 / 5h |
+| `gpt-pro-500` | ChatGPT Pro Max usage ($500) | openai | 25x Plus / 5h |
 | `gpt-business` | ChatGPT Business | openai | model-dependent / 5h |
 | `copilot-individual` | GitHub Copilot Individual | github | no published cap |
 | `copilot-business` | GitHub Copilot Business | github | no published cap |

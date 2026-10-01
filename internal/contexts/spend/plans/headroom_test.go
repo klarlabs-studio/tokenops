@@ -364,7 +364,7 @@ func TestHeadroomFlagsAPlanTheVendorContradicts(t *testing.T) {
 		{"gpt-pro", "prolite", "gpt-pro-5x"},
 		{"gpt-plus", "pro", "gpt-pro-20x"},
 		{"gpt-pro-5x", "prolite", ""}, // agrees
-		{"gpt-pro-max", "promax", ""}, // unknown type: no claim
+		{"gpt-pro-500", "promax", ""}, // unknown type: no claim
 		{"gpt-plus", "", ""},          // nothing reported
 	} {
 		r, err := ComputeHeadroom(tc.bound, HeadroomInputs{

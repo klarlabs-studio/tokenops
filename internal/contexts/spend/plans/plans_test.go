@@ -44,7 +44,7 @@ func TestCatalogCoversPublishedPlans(t *testing.T) {
 	// silently lose support.
 	want := []string{
 		"claude-max-5x", "claude-max-20x", "claude-pro",
-		"gpt-plus", "gpt-pro", "gpt-pro-5x", "gpt-pro-20x", "gpt-pro-max", "gpt-business",
+		"gpt-plus", "gpt-pro", "gpt-pro-5x", "gpt-pro-20x", "gpt-pro-500", "gpt-business",
 		"copilot-individual", "copilot-business",
 		"cursor-pro", "cursor-business",
 	}
@@ -130,9 +130,10 @@ func TestForVendorPlanType(t *testing.T) {
 	}
 }
 
-func TestProMaxHasNoInventedPrice(t *testing.T) {
-	p, ok := Lookup("gpt-pro-max")
-	if !ok || p.MonthlyUSD != 0 {
-		t.Fatalf("gpt-pro-max = %+v; OpenAI publishes no US price yet, so the catalog must not invent one", p)
+func TestProTiersArePricedInDollars(t *testing.T) {
+	for name, want := range map[string]float64{"gpt-pro-5x": 100, "gpt-pro-20x": 200, "gpt-pro-500": 500} {
+		if p, _ := Lookup(name); p.MonthlyUSD != want {
+			t.Errorf("%s = $%v, want $%v", name, p.MonthlyUSD, want)
+		}
 	}
 }
