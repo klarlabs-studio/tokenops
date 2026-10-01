@@ -4,7 +4,25 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.86.0**.
+Current release: **v0.87.0**.
+
+## v0.87.0 — what Enterprise actually costs
+
+Usage-based Claude Enterprise is billed at API rates from the first token,
+but TokenOps treated it like a subscription and recorded its usage as
+covered by the plan, at $0. Real cost read zero and the spend limit read
+0% used. Coverage now follows the kind of plan: a spend-limited plan
+covers nothing, its usage is priced at API rates, and headroom counts it
+against the limit, graded by the sources that fed it. Usage already
+recorded as covered is corrected by re-binding the plan with `--since`.
+
+ChatGPT Pro now comes in three tiers, $100, $200 and $500, keyed on price
+because OpenAI moves the multipliers. Headroom names a binding that
+contradicts the plan type Codex itself reports. `dx` and `story` no longer
+fail over MCP when one client's store cannot be read: they report the
+others and name the one that failed. ADR 0009 sets out how TokenOps will
+attribute work that runs through gateways and routers such as Fireworks
+and OpenRouter.
 
 ## v0.86.0 — one currency, with the rate it used
 
