@@ -15,7 +15,9 @@ const modelsDevSample = `{
     "accounts/fireworks/models/free-thing": {}
   }},
   "openrouter": {"models": {"anthropic/claude-sonnet-5": {"cost": {"input": 3, "output": 15}}}},
-  "anthropic": {"models": {"claude-sonnet-5": {"cost": {"input": 3, "output": 15}}}}
+  "anthropic": {"models": {"claude-sonnet-5": {"cost": {"input": 3, "output": 15}}}},
+  "zai-coding-plan": {"models": {"glm-5.3": {"cost": {"input": 0, "output": 0}}}},
+  "moonshotai": {"models": {"kimi-k3": {"cost": {"input": 3, "output": 15, "cache_read": 0.3}}}}
 }`
 
 func TestModelsDevSourcePricesGatewaysOnly(t *testing.T) {
@@ -31,6 +33,9 @@ func TestModelsDevSourcePricesGatewaysOnly(t *testing.T) {
 		"fireworks/kimi-k3":                    {InputPerMillion: 3, OutputPerMillion: 15, CachedInputPerMillion: 0.3},
 		"fireworks/glm-fast-latest":            {InputPerMillion: 2.1, OutputPerMillion: 6.6, CachedInputPerMillion: 0.39},
 		"openrouter/anthropic/claude-sonnet-5": {InputPerMillion: 3, OutputPerMillion: 15},
+		// A coding plan's $0 is not a price; its turns take the vendor's rate.
+		"moonshot/kimi-k3": {InputPerMillion: 3, OutputPerMillion: 15, CachedInputPerMillion: 0.3},
+		"kimi/kimi-k3":     {InputPerMillion: 3, OutputPerMillion: 15, CachedInputPerMillion: 0.3},
 	}
 	if len(snap.Rates) != len(want) {
 		t.Fatalf("rates %v; want only the gateways' priced models (a vendor is LiteLLM's)", snap.Rates)

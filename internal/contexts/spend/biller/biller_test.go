@@ -67,3 +67,48 @@ func TestForCodexTurn(t *testing.T) {
 		}
 	}
 }
+
+// One host can bill two ways; the path decides, and the endpoint name
+// says whether a plan can cover the turn.
+func TestEndpointCatalogPaths(t *testing.T) {
+	for _, tc := range []struct {
+		url, provider, name string
+	}{
+		{"https://api.z.ai/api/anthropic", "zai", "zai"},
+		{"https://api.z.ai/api/coding/paas/v4", "zai", "zai"},
+		{"https://api.z.ai/api/paas/v4", "zai", "zai-api"},
+		{"https://open.bigmodel.cn/api/anthropic", "zhipuai", "zhipuai"},
+		{"https://opencode.ai/zen/go/v1", "opencode-go", "opencode-go"},
+		{"https://opencode.ai/zen/v1", "opencode", "opencode"},
+		{"https://api.kimi.com/coding/", "kimi", "kimi"},
+		{"https://api.kimi.ai/coding/", "kimi", "kimi"},
+		{"https://api.moonshot.ai/anthropic", "moonshot", "moonshot"},
+		{"https://api.minimax.io/anthropic", "minimax", "minimax"},
+		{"https://coding-intl.dashscope.aliyuncs.com/apps/anthropic", "alibaba", "alibaba"},
+		{"https://api.deepseek.com/anthropic", "deepseek", "deepseek"},
+	} {
+		e, ok := EndpointFor(tc.url)
+		if !ok || string(e.Provider) != tc.provider {
+			t.Errorf("EndpointFor(%q) = %+v, %v; want provider %q", tc.url, e, ok, tc.provider)
+			continue
+		}
+		if got := EndpointName(tc.url, "anthropic"); got != tc.name {
+			t.Errorf("EndpointName(%q) = %q, want %q", tc.url, got, tc.name)
+		}
+	}
+	// The coding plan covers its own endpoint; the pay-as-you-go API does not.
+	if !PlanApplies("zai", EndpointName("https://api.z.ai/api/anthropic", "")) || PlanApplies("zai", EndpointName("https://api.z.ai/api/paas/v4", "")) {
+		t.Error("z.ai plan coverage follows the path")
+	}
+}
+
+// A non-Anthropic endpoint bills every turn it serves, even one it
+// reports under a Claude name.
+func TestNonAnthropicEndpointBillsClaudeNamedTurns(t *testing.T) {
+	if got := ForClaudeCodeTurn("claude-opus-5-5", "https://api.deepseek.com/anthropic"); got != eventschema.ProviderDeepSeek {
+		t.Errorf("DeepSeek's Anthropic API: %q", got)
+	}
+	if got := ForClaudeCodeTurn("glm-5.3", "https://api.z.ai/api/anthropic"); got != "zai" {
+		t.Errorf("z.ai coding plan: %q", got)
+	}
+}

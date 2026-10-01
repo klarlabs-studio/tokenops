@@ -16,14 +16,26 @@ const DefaultModelsDevURL = "https://models.dev/api.json"
 
 const modelsDevTimeout = 20 * time.Second
 
-// modelsDevGateways maps a models.dev provider ID to the TokenOps provider
-// for gateways, whose own rate is what they bill (ADR 0009 §6). LiteLLM
-// covers the model vendors; models.dev covers the gateways LiteLLM's
-// card does not price per gateway.
-var modelsDevGateways = map[string]string{
-	"fireworks-ai": "fireworks",
-	"openrouter":   "openrouter",
-	"togetherai":   "together",
+// modelsDevProviders maps a models.dev provider ID to the TokenOps
+// providers its rates price (ADR 0009 §6). LiteLLM covers the major model
+// vendors; models.dev covers gateways and the vendors that sell coding
+// plans. A coding-plan ID (zai-coding-plan, kimi-code-plan-global, …) is
+// listed there at $0, true of the plan and useless as a price, so it is
+// not mapped: plan turns are valued at the vendor's pay-as-you-go rate,
+// which is why moonshotai also prices Kimi Code ("kimi").
+var modelsDevProviders = map[string][]string{
+	"fireworks-ai": {"fireworks"},
+	"openrouter":   {"openrouter"},
+	"togetherai":   {"together"},
+	"zai":          {"zai"},
+	"zhipuai":      {"zhipuai"},
+	"moonshotai":   {"moonshot", "kimi"},
+	"minimax":      {"minimax"},
+	"alibaba":      {"alibaba"},
+	"opencode":     {"opencode"},
+	"opencode-go":  {"opencode-go"},
+	"chutes":       {"chutes"},
+	"synthetic":    {"synthetic"},
 }
 
 // ModelsDevSource fetches gateway rates from models.dev.
@@ -80,7 +92,7 @@ func (s *ModelsDevSource) Fetch(ctx context.Context) (Snapshot, error) {
 	}
 	snap := Snapshot{Source: s.Name(), SourceURL: url, FetchedAt: time.Now().UTC(), Rates: map[string]Rate{}}
 	for id, p := range catalog {
-		provider, ok := modelsDevGateways[id]
+		providers, ok := modelsDevProviders[id]
 		if !ok {
 			continue
 		}
@@ -88,10 +100,12 @@ func (s *ModelsDevSource) Fetch(ctx context.Context) (Snapshot, error) {
 			if m.Cost == nil || (m.Cost.Input <= 0 && m.Cost.Output <= 0) {
 				continue
 			}
-			snap.Rates[snapKey(provider, GatewayModelID(modelID))] = Rate{
-				InputPerMillion:       m.Cost.Input,
-				OutputPerMillion:      m.Cost.Output,
-				CachedInputPerMillion: m.Cost.CacheRead,
+			for _, provider := range providers {
+				snap.Rates[snapKey(provider, GatewayModelID(modelID))] = Rate{
+					InputPerMillion:       m.Cost.Input,
+					OutputPerMillion:      m.Cost.Output,
+					CachedInputPerMillion: m.Cost.CacheRead,
+				}
 			}
 		}
 	}
