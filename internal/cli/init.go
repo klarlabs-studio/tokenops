@@ -175,6 +175,12 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 		renderDetection(cmd.OutOrStdout(), detect.Detect(nil))
 	}
 	if f.noWire {
+		// Turning readers on changes only TokenOps' own config, so it
+		// belongs to "config only" too: without it a --no-wire install
+		// ingests nothing.
+		if step := ingestionStep(configPath); step.Err == nil && step.Detail != "" {
+			fmt.Fprintf(cmd.OutOrStdout(), "ingestion: %s\n", step.Detail)
+		}
 		fmt.Fprintln(cmd.OutOrStdout(),
 			"\n--no-wire: config only. Run `tokenops init` without it to register the MCP server and install hooks.")
 		return nil

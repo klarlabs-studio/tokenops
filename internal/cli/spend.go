@@ -428,6 +428,8 @@ func writeSpendText(w io.Writer, v spendView) error {
 		switch {
 		case v.ValuePerPlanUnit > 0:
 			fmt.Fprintf(w, "  value per plan %s: %.1fx (api equivalent / plans)\n", v.PlanCurrency, v.ValuePerPlanUnit)
+		case v.PlanCost < minPlanCostForRatio:
+			// Too little plan in the window to compare against.
 		case v.Summary.APIEquivalentUSD > 0:
 			fmt.Fprintln(w, "  value per plan:  no exchange rate, so dollar usage cannot be compared with your plans")
 		}
@@ -592,7 +594,14 @@ func fillPlanCost(v *spendView, current map[string]string, currency string, rate
 			}
 		}
 	}
-	if value, ok := conv.FromUSD(v.Summary.APIEquivalentUSD); ok && v.PlanCost > 0 {
+	// A ratio over a few cents of plan, a plan bound minutes into the
+	// window, reads as a 138x return that nobody earned. Below one unit
+	// of currency there is no plan cost to compare with.
+	if value, ok := conv.FromUSD(v.Summary.APIEquivalentUSD); ok && v.PlanCost >= minPlanCostForRatio {
 		v.ValuePerPlanUnit = value / v.PlanCost
 	}
 }
+
+// minPlanCostForRatio is the smallest plan cost, in the report's currency,
+// that value per plan unit is computed against.
+const minPlanCostForRatio = 1.0
