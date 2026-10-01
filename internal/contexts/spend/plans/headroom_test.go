@@ -355,3 +355,27 @@ func TestComputeHeadroomUsesCatalog(t *testing.T) {
 		t.Error("Display should come from catalog")
 	}
 }
+
+func TestHeadroomFlagsAPlanTheVendorContradicts(t *testing.T) {
+	for _, tc := range []struct {
+		bound, reported, want string
+	}{
+		{"gpt-pro-20x", "prolite", "gpt-pro-5x"},
+		{"gpt-pro", "prolite", "gpt-pro-5x"},
+		{"gpt-plus", "pro", "gpt-pro-20x"},
+		{"gpt-pro-5x", "prolite", ""}, // agrees
+		{"gpt-pro-500", "promax", ""}, // unknown type: no claim
+		{"gpt-plus", "", ""},          // nothing reported
+	} {
+		r, err := ComputeHeadroom(tc.bound, HeadroomInputs{
+			Authoritative: &AuthoritativeWindow{UsedPct: 10, VendorPlanType: tc.reported, Source: "codex:primary"},
+			Now:           midMonth(),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.VendorPlan != tc.want {
+			t.Errorf("bound %s, vendor %q: vendor_plan=%q want %q", tc.bound, tc.reported, r.VendorPlan, tc.want)
+		}
+	}
+}

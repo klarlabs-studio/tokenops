@@ -320,6 +320,12 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 				if r.Note != "" {
 					fmt.Fprintf(cmd.OutOrStdout(), "  note: %s\n", r.Note)
 				}
+				if r.VendorPlan != "" {
+					fmt.Fprintf(cmd.OutOrStdout(),
+						"  vendor reports %q, which is %s — run: tokenops plan set %s %s\n",
+						r.VendorPlanType, r.VendorPlan, r.Provider, r.VendorPlan,
+					)
+				}
 			}
 			return nil
 		},

@@ -234,7 +234,7 @@ func renderDetection(w fmtWriter, ds []detect.Detection) {
 		case "anthropic":
 			fmt.Fprintln(w, "    run: tokenops plan set anthropic claude-max-20x  # or claude-max-5x | claude-pro")
 		case "openai":
-			fmt.Fprintln(w, "    run: tokenops plan set openai gpt-plus  # or gpt-pro-5x | gpt-pro-20x")
+			fmt.Fprintln(w, "    run: tokenops plan set openai gpt-plus  # or gpt-pro-5x | gpt-pro-20x | gpt-pro-500")
 		case "cursor":
 			fmt.Fprintln(w, "    run: tokenops plan set cursor cursor-pro  # or cursor-business")
 		case "gemini":

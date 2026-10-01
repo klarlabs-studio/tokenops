@@ -90,6 +90,12 @@ type Plan struct {
 	// PriceSource pins the vendor page the price was read from, with the
 	// date it was read.
 	PriceSource string
+	// VendorPlanTypes are the plan identifiers the vendor itself reports
+	// for this plan (Codex's rate-limit `plan_type`), so a binding that
+	// disagrees with what the vendor says can be flagged. Only values seen
+	// in Codex logs are listed ("pro" is what the $200 plan reported before
+	// the cheaper tiers existed); a tier never seen reporting one has none.
+	VendorPlanTypes []string
 }
 
 // catalog is the authoritative plan list. Numbers reflect the public
@@ -173,6 +179,7 @@ var catalog = map[string]Plan{
 		SourceURL:       "https://developers.openai.com/docs/pricing (2026-09): local-message estimates are model-dependent per five-hour window",
 		MonthlyUSD:      20,
 		PriceSource:     "https://help.openai.com/en/articles/6950777 (2026-09-30): $20/month billed monthly",
+		VendorPlanTypes: []string{"plus"},
 	},
 	"gpt-pro": {
 		Name:            "gpt-pro",
@@ -180,27 +187,48 @@ var catalog = map[string]Plan{
 		Display:         "ChatGPT Pro (tier unspecified)",
 		RateLimitWindow: 5 * time.Hour,
 		WindowUnit:      "messages",
-		SourceURL:       "https://developers.openai.com/docs/pricing (2026-09): Pro is offered in 5x and 20x tiers",
+		SourceURL:       "https://chatgpt.com/pricing (2026-10-01, in-app pricing screen): Pro is offered at $100, $200 and $500, labelled Standard, More usage and Max usage",
 	},
+	// The three Pro tiers carry OpenAI's labels from the pricing screen
+	// and their US price, which is what stays fixed: OpenAI moved the $200
+	// tier from 20x to 10x Plus usage at DevDay 2026 without changing its
+	// price. The catalog names keep their original multipliers so existing
+	// configs resolve. Codex reports the Standard tier as plan_type
+	// "prolite".
 	"gpt-pro-5x": {
 		Name:            "gpt-pro-5x",
 		Provider:        "openai",
-		Display:         "ChatGPT Pro 5x",
+		Display:         "ChatGPT Pro Standard ($100)",
 		RateLimitWindow: 5 * time.Hour,
 		WindowUnit:      "messages",
 		SourceURL:       "https://developers.openai.com/docs/pricing (2026-09): five times Plus Codex usage",
 		MonthlyUSD:      100,
 		PriceSource:     "https://help.openai.com/en/articles/9793128 (2026-09-30): Pro $100 unlocks 5x higher usage than Plus",
+		VendorPlanTypes: []string{"prolite"},
 	},
 	"gpt-pro-20x": {
 		Name:            "gpt-pro-20x",
 		Provider:        "openai",
-		Display:         "ChatGPT Pro 20x",
+		Display:         "ChatGPT Pro More usage ($200)",
 		RateLimitWindow: 5 * time.Hour,
 		WindowUnit:      "messages",
-		SourceURL:       "https://developers.openai.com/docs/pricing (2026-09): 20 times Plus Codex usage",
+		SourceURL:       "https://developers.openai.com/codex/pricing (2026-10-01): 20x Plus usage, falling to 10x for new subscriptions and from 2026-10-30 for existing ones (announced at DevDay, 2026-09-29)",
 		MonthlyUSD:      200,
 		PriceSource:     "https://help.openai.com/en/articles/9793128 (2026-09-30): Pro $200 unlocks 20x usage than Plus",
+		VendorPlanTypes: []string{"pro"},
+	},
+	// Pro 500 ("Max usage" on the pricing screen) launched at DevDay
+	// 2026. OpenAI describes its allowance as 25x Plus; no Codex plan_type
+	// has been observed for it yet.
+	"gpt-pro-500": {
+		Name:            "gpt-pro-500",
+		Provider:        "openai",
+		Display:         "ChatGPT Pro Max usage ($500)",
+		RateLimitWindow: 5 * time.Hour,
+		WindowUnit:      "messages",
+		SourceURL:       "https://developers.openai.com/codex/pricing (2026-10-01): Pro 500, 25x Plus usage per OpenAI's DevDay recap, the only Pro tier with Astra Ultrafast",
+		MonthlyUSD:      500,
+		PriceSource:     "https://developers.openai.com/codex/pricing (2026-10-01): Pro plans at $100, $200, or $500 USD per month",
 	},
 	"gpt-business": {
 		Name:            "gpt-business",
@@ -294,6 +322,30 @@ var deprecatedAliases = map[string]string{
 	"claude-code-pro": "claude-pro",
 	"codex-plus":      "gpt-plus",
 	"gpt-team":        "gpt-business",
+}
+
+// ForVendorPlanType is the catalog plan a vendor-reported plan type
+// names, when exactly one plan of that provider claims it.
+func ForVendorPlanType(provider, planType string) (string, bool) {
+	planType = strings.ToLower(strings.TrimSpace(planType))
+	if planType == "" {
+		return "", false
+	}
+	found := ""
+	for name, p := range catalog {
+		if p.Provider != provider {
+			continue
+		}
+		for _, t := range p.VendorPlanTypes {
+			if t == planType {
+				if found != "" {
+					return "", false
+				}
+				found = name
+			}
+		}
+	}
+	return found, found != ""
 }
 
 // ResolveAlias returns the modern catalog name when `name` is a known

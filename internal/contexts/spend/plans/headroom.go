@@ -23,8 +23,12 @@ type HeadroomReport struct {
 	// that publish one. The vendor-reported duration wins when available;
 	// configured catalog durations are only the fallback. Zero WindowCap
 	// means the vendor does not publish a concrete cap.
-	WindowDuration string    `json:"window_duration,omitempty"`
-	VendorPlanType string    `json:"vendor_plan_type,omitempty"`
+	WindowDuration string `json:"window_duration,omitempty"`
+	VendorPlanType string `json:"vendor_plan_type,omitempty"`
+	// VendorPlan is the catalog plan VendorPlanType names, set only when
+	// it differs from the configured plan: the vendor says you are on a
+	// different plan than the one bound, so limits and prices are off.
+	VendorPlan     string    `json:"vendor_plan,omitempty"`
 	WindowCap      int64     `json:"window_cap,omitempty"`
 	WindowUnit     string    `json:"window_unit,omitempty"`
 	WindowConsumed int64     `json:"window_consumed,omitempty"`
@@ -248,6 +252,9 @@ func applyAuthoritativeWindow(report *HeadroomReport, p Plan, in HeadroomInputs)
 	pct := clampPct(a.UsedPct)
 	report.WindowDuration = authoritativeDuration(a, p.RateLimitWindow).String()
 	report.VendorPlanType = a.VendorPlanType
+	if named, ok := ForVendorPlanType(p.Provider, a.VendorPlanType); ok && named != p.Name {
+		report.VendorPlan = named
+	}
 	report.WindowCap = p.MessagesPerWindow
 	report.WindowUnit = p.WindowUnit
 	report.WindowPct = math.Round(pct*100) / 100

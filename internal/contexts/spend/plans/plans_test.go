@@ -44,7 +44,7 @@ func TestCatalogCoversPublishedPlans(t *testing.T) {
 	// silently lose support.
 	want := []string{
 		"claude-max-5x", "claude-max-20x", "claude-pro",
-		"gpt-plus", "gpt-pro", "gpt-pro-5x", "gpt-pro-20x", "gpt-business",
+		"gpt-plus", "gpt-pro", "gpt-pro-5x", "gpt-pro-20x", "gpt-pro-500", "gpt-business",
 		"copilot-individual", "copilot-business",
 		"cursor-pro", "cursor-business",
 	}
@@ -115,6 +115,25 @@ func TestEveryAliasResolvesToCatalogEntry(t *testing.T) {
 	for alias, modern := range deprecatedAliases {
 		if _, ok := catalog[modern]; !ok {
 			t.Errorf("alias %q maps to missing catalog entry %q", alias, modern)
+		}
+	}
+}
+
+func TestForVendorPlanType(t *testing.T) {
+	for in, want := range map[string]string{"plus": "gpt-plus", "prolite": "gpt-pro-5x", " ProLite ": "gpt-pro-5x", "pro": "gpt-pro-20x"} {
+		if got, ok := ForVendorPlanType("openai", in); !ok || got != want {
+			t.Errorf("ForVendorPlanType(openai, %q) = %q, %v; want %q", in, got, ok, want)
+		}
+	}
+	if got, ok := ForVendorPlanType("anthropic", "prolite"); ok {
+		t.Errorf("a plan type matched across providers: %q", got)
+	}
+}
+
+func TestProTiersArePricedInDollars(t *testing.T) {
+	for name, want := range map[string]float64{"gpt-pro-5x": 100, "gpt-pro-20x": 200, "gpt-pro-500": 500} {
+		if p, _ := Lookup(name); p.MonthlyUSD != want {
+			t.Errorf("%s = $%v, want $%v", name, p.MonthlyUSD, want)
 		}
 	}
 }
