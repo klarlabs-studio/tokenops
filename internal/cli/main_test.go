@@ -40,6 +40,10 @@ func TestMain(m *testing.M) {
 		}
 	}
 
+	// Currency detection reads the machine's region; tests see USD unless
+	// they say otherwise.
+	detectCurrency = func() (string, string) { return "USD", "test default" }
+
 	code := m.Run()
 	_ = os.RemoveAll(sandbox)
 	os.Exit(code)

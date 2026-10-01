@@ -193,14 +193,16 @@ over unbounded input, and a filter can miss: a prompt can contain anything, and
 whoever wrote the patterns had to guess what. Here there is no sensitive
 payload to redact, because the sensitive part never enters the pipeline.
 
-**One outbound call, named rather than discovered.** The daemon fetches a
+**Two outbound calls, named rather than discovered.** The daemon fetches a
 public rate card once a day so a model released after your binary does not
-silently price at zero. It *downloads*; it sends no prompt, no file, no
-identifier and no usage figure, and it is one line to switch off
-(`pricing.refresh.disabled: true`). A tool that starts talking to the network
-without saying so has spent trust it cannot buy back, so it is documented in
-[configuration](/guide/configuration#automatic-rate-card-refresh) and logged
-on start.
+silently price at zero. When your currency is not the US dollar, TokenOps
+also fetches the ECB's daily euro reference rate, at most once a day, to show
+totals in your currency. Both *download*; they send no prompt, no file, no
+identifier and no usage figure, and each is one line to switch off
+(`pricing.refresh.disabled: true`, `money.fetch_rate: false`). A tool that
+starts talking to the network without saying so has spent trust it cannot buy
+back, so both are documented in
+[configuration](/guide/configuration#automatic-rate-card-refresh).
 
 ## Cache-aware, or off by 9×
 
