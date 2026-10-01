@@ -103,3 +103,35 @@ func TestRestampMeteredIsIdempotent(t *testing.T) {
 		t.Errorf("second pass changed %d; the daemon runs this at every start", n)
 	}
 }
+
+func TestReattributeSession(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	at := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	mk := func(id, session string) *eventschema.Envelope {
+		e := mustPromptEnvelope(t, id, at, &eventschema.PromptEvent{Provider: "openai", SessionID: session, CostSource: eventschema.CostSourcePlanIncluded})
+		e.Source = "codex-jsonl"
+		return e
+	}
+	if err := s.AppendBatch(ctx, []*eventschema.Envelope{mk("a1", "a"), mk("a2", "a"), mk("b1", "b")}); err != nil {
+		t.Fatal(err)
+	}
+	n, err := s.ReattributeSession(ctx, "codex-jsonl", "a", "openai", "fireworks", "fireworks", true)
+	if err != nil || n != 2 {
+		t.Fatalf("moved %d, err %v; want 2", n, err)
+	}
+	if n, _ := s.ReattributeSession(ctx, "codex-jsonl", "a", "openai", "fireworks", "fireworks", true); n != 0 {
+		t.Errorf("second pass moved %d", n)
+	}
+	got, _ := s.Query(ctx, Filter{Type: eventschema.EventTypePrompt})
+	for _, env := range got {
+		p := env.Payload.(*eventschema.PromptEvent)
+		moved := env.ID != "b1"
+		if (p.Provider == "fireworks") != moved || (p.CostSource == eventschema.CostSourceMetered) != moved {
+			t.Errorf("%s: provider %q cost source %q", env.ID, p.Provider, p.CostSource)
+		}
+		if moved && env.Attributes["endpoint"] != "fireworks" {
+			t.Errorf("%s: endpoint %q", env.ID, env.Attributes["endpoint"])
+		}
+	}
+}

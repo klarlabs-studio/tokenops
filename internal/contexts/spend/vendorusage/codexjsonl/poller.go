@@ -8,8 +8,11 @@ import (
 	"io"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/biller"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/jsonltail"
 	"go.klarlabs.de/tokenops/internal/events"
@@ -32,8 +35,13 @@ type PollerOptions struct {
 	// CostSource stamps every emitted PromptEvent. The daemon sets
 	// CostSourcePlanIncluded when a flat-rate plan is bound to the
 	// openai provider (config plans:) so subscription-covered usage is
-	// never repriced at API list rates. Empty means metered.
+	// never repriced at API list rates. Empty means metered. It applies
+	// only to turns through OpenAI's own endpoint (ADR 0009).
 	CostSource eventschema.CostSource
+	// ProviderBaseURL returns the base URL Codex's config gives a
+	// model_provider ID, "" when it has none. nil treats every custom
+	// provider as unknown.
+	ProviderBaseURL func(id string) string
 }
 
 // Poller scans Codex session JSONLs, dedupes turns by (sessionID, sequence)
@@ -120,7 +128,11 @@ func (p *Poller) visitor(ctx context.Context) func(Turn) error {
 		p.seen[key] = struct{}{}
 		p.mu.Unlock()
 		if p.bus != nil {
-			p.publishWait(ctx, newEnvelope(turn, p.opts.CostSource))
+			base := ""
+			if p.opts.ProviderBaseURL != nil && turn.ModelProvider != "" {
+				base = p.opts.ProviderBaseURL(turn.ModelProvider)
+			}
+			p.publishWait(ctx, newEnvelope(turn, p.opts.CostSource, base))
 		}
 		return nil
 	}
@@ -132,7 +144,12 @@ func (p *Poller) visitor(ctx context.Context) func(Turn) error {
 // block is serialized into Attributes so the signal_quality classifier
 // (and a future Codex-aware session_budget tool) can read it without
 // re-parsing the source file.
-func newEnvelope(t Turn, costSource eventschema.CostSource) *eventschema.Envelope {
+func newEnvelope(t Turn, costSource eventschema.CostSource, baseURL string) *eventschema.Envelope {
+	provider := biller.ForCodexTurn(t.ModelProvider, baseURL, t.Model)
+	endpoint := codexEndpoint(t.ModelProvider, baseURL)
+	if provider != eventschema.ProviderOpenAI || !biller.PlanApplies(string(provider), endpoint) {
+		costSource = eventschema.CostSourceMetered
+	}
 	inputTokens := t.InputTokens
 	totalTokens := inputTokens + t.OutputTokens + t.ReasoningTok
 	h := sha256.Sum256([]byte("codex-jsonl|" + t.SessionID + "|" + strconv.Itoa(t.RecordSequence)))
@@ -141,6 +158,8 @@ func newEnvelope(t Turn, costSource eventschema.CostSource) *eventschema.Envelop
 		// user message — plan window math must not count these as
 		// messages (see plans.ConsumptionInWindow).
 		"granularity":          "assistant_turn",
+		"endpoint":             endpoint,
+		"model_provider":       t.ModelProvider,
 		"session_id":           t.SessionID,
 		"sequence":             strconv.Itoa(t.RecordSequence),
 		"cached_input":         fmt.Sprintf("%d", t.CachedTokens),
@@ -162,7 +181,7 @@ func newEnvelope(t Turn, costSource eventschema.CostSource) *eventschema.Envelop
 		Source:        SourceTag,
 		Attributes:    attrs,
 		Payload: &eventschema.PromptEvent{
-			Provider:          eventschema.ProviderOpenAI,
+			Provider:          provider,
 			RequestModel:      t.Model,
 			InputTokens:       inputTokens,
 			CachedInputTokens: t.CachedTokens,
@@ -197,4 +216,13 @@ func (p *Poller) publishWait(ctx context.Context, env *eventschema.Envelope) {
 	p.mu.Lock()
 	p.publishes++
 	p.mu.Unlock()
+}
+
+// codexEndpoint names the endpoint a Codex turn went through: OpenAI's
+// own for the built-in provider, otherwise what its base URL names.
+func codexEndpoint(providerID, baseURL string) string {
+	if id := strings.ToLower(strings.TrimSpace(providerID)); id == "" || id == "openai" {
+		return string(eventschema.ProviderOpenAI)
+	}
+	return biller.EndpointName(baseURL, providerID)
 }

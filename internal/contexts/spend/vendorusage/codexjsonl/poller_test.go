@@ -81,7 +81,7 @@ func TestNewEnvelopeCarriesRateLimitsInAttributes(t *testing.T) {
 		},
 		RecordSequence: 1,
 	}
-	env := newEnvelope(turn, "")
+	env := newEnvelope(turn, "", "")
 	if env.Source != SourceTag {
 		t.Errorf("source = %q", env.Source)
 	}
@@ -158,5 +158,43 @@ func TestPollerCarriesRolloutStateAcrossScans(t *testing.T) {
 	}
 	if sid := second.Attributes["session_id"]; sid != "sess-1" {
 		t.Errorf("session_id = %q, want sess-1 carried from the first scan's session_meta", sid)
+	}
+}
+
+// A Codex session on a custom provider is that provider's, and outside
+// the ChatGPT plan; the built-in provider stays OpenAI's under the plan.
+func TestCodexTurnOnACustomProvider(t *testing.T) {
+	turn := Turn{Timestamp: time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC), SessionID: "s", Model: "glm-5p3", ModelProvider: "fireworks", InputTokens: 10}
+	env := newEnvelope(turn, eventschema.CostSourcePlanIncluded, "https://api.fireworks.ai/inference/v1")
+	pe := env.Payload.(*eventschema.PromptEvent)
+	if pe.Provider != eventschema.ProviderFireworks || pe.CostSource != eventschema.CostSourceMetered || env.Attributes["endpoint"] != "fireworks" {
+		t.Errorf("custom provider: %q %q %q", pe.Provider, pe.CostSource, env.Attributes["endpoint"])
+	}
+	turn.ModelProvider, turn.Model = "openai", "gpt-6-sol"
+	pe = newEnvelope(turn, eventschema.CostSourcePlanIncluded, "").Payload.(*eventschema.PromptEvent)
+	if pe.Provider != eventschema.ProviderOpenAI || pe.CostSource != eventschema.CostSourcePlanIncluded {
+		t.Errorf("built-in provider: %q %q", pe.Provider, pe.CostSource)
+	}
+}
+
+func TestSessionProviders(t *testing.T) {
+	root := t.TempDir()
+	write := func(name, meta string) {
+		dir := filepath.Join(root, "2026", "10", "01")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(meta+"\n{\"type\":\"turn_context\"}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("rollout-a.jsonl", `{"type":"session_meta","payload":{"id":"a","model_provider":"fireworks"}}`)
+	write("rollout-b.jsonl", `{"type":"session_meta","payload":{"id":"b","model_provider":"openai"}}`)
+	got, err := SessionProviders(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got["a"] != "fireworks" {
+		t.Errorf("SessionProviders = %v, want only the custom one", got)
 	}
 }

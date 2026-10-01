@@ -48,3 +48,22 @@ func TestIsClaude(t *testing.T) {
 		}
 	}
 }
+
+func TestForCodexTurn(t *testing.T) {
+	const fw = "https://api.fireworks.ai/inference/v1"
+	for _, tc := range []struct {
+		id, base, model string
+		want            eventschema.Provider
+	}{
+		{"openai", "", "gpt-6-sol", eventschema.ProviderOpenAI},
+		{"", "", "gpt-6-sol", eventschema.ProviderOpenAI},
+		{"fireworks", fw, "glm-5p3", eventschema.ProviderFireworks},
+		{"fireworks", fw, "gpt-6-sol", eventschema.ProviderOpenAI}, // FireRouter on the operator's OpenAI key
+		{"openrouter", "https://openrouter.ai/api/v1", "openai/gpt-6-sol", eventschema.ProviderOpenRouter},
+		{"zai", "https://unknown.example/v4", "glm-5.3", "zai"}, // the operator's own label, not a guess
+	} {
+		if got := ForCodexTurn(tc.id, tc.base, tc.model); got != tc.want {
+			t.Errorf("ForCodexTurn(%q, %q, %q) = %q, want %q", tc.id, tc.base, tc.model, got, tc.want)
+		}
+	}
+}

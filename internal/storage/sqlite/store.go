@@ -794,6 +794,30 @@ func (s *Store) Reattribute(ctx context.Context, source, model, from, to, endpoi
 	return res.RowsAffected()
 }
 
+// ReattributeSession moves a source's prompt events for one session from
+// one provider to another and records their endpoint; it returns how many
+// it changed (ADR 0009). With uncover, events marked as covered by the old
+// provider's plan become billed.
+func (s *Store) ReattributeSession(ctx context.Context, source, session, from, to, endpoint string, uncover bool) (int64, error) {
+	payload, cost := `json_set(payload, '$.provider', ?)`, `cost_usd`
+	args := make([]any, 0, 8)
+	if uncover {
+		payload = `CASE WHEN json_extract(payload, '$.cost_source') = 'plan_included'
+			THEN json_remove(json_set(payload, '$.provider', ?, '$.cost_source', 'metered'), '$.cost_usd', '$.cost_measured')
+			ELSE json_set(payload, '$.provider', ?) END`
+		cost = `CASE WHEN json_extract(payload, '$.cost_source') = 'plan_included' THEN NULL ELSE cost_usd END`
+		args = append(args, to)
+	}
+	args = append(args, to, endpoint, to, source, from, session)
+	res, err := s.db.ExecContext(ctx, `UPDATE events SET cost_usd = `+cost+`, payload = `+payload+`,
+		attributes = json_set(coalesce(attributes, '{}'), '$.endpoint', ?), provider = ?
+		WHERE type = 'prompt' AND source = ? AND provider = ? AND session_id = ?`, args...)
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: reattribute session: %w", contended(ctx, err))
+	}
+	return res.RowsAffected()
+}
+
 // MarkEndpoint records the endpoint a source's prompt events for provider
 // went through in [since, until), for events that carry none, and returns
 // how many it changed. Through an endpoint other than the provider's own,
