@@ -53,6 +53,20 @@ Snapshot as of 2026-09:
 | `copilot-business` | GitHub Copilot Business | github | no published cap |
 | `cursor-pro` | Cursor Pro | cursor | 500 requests / month |
 | `cursor-business` | Cursor Business | cursor | 500 requests / month |
+| `zai-glm-coding-lite` / `-pro` / `-max` | z.ai GLM Coding | zai | 2,000 / 12,000 / 28,000 credits / 5h |
+| `opencode-go` / `-plus` | opencode Go | opencode-go | dollar cap per model; 5h = 20% of it |
+| `alibaba-coding-pro` | Alibaba Cloud Coding Plan Pro | alibaba | 6,000 requests / 5h |
+| `minimax-token-plus` / `-max` / `-ultra` | MiniMax Token Plan | minimax | 5h, no published count |
+| `cerebras-code-pro` / `-max` | Cerebras Code | cerebras | 24M / 120M tokens / day |
+| `synthetic-pack` | Synthetic | synthetic | 500 requests / 5h per pack |
+
+A coding plan covers only turns through its own endpoint: z.ai's
+`/api/anthropic` and `/api/coding`, not its pay-as-you-go `/api/paas`.
+opencode records which one it used per message (`zai-coding-plan` versus
+`zai`); for Claude Code and Codex the endpoint comes from their settings
+(ADR 0009). z.ai's Pro and Max tiers carry no list price: their prices are only on
+a storefront TokenOps could not read, so plan cost
+uses what you record with `--price`.
 
 Window caps reflect the vendor's published rate-limit window. When a vendor
 publishes model-dependent ranges rather than one plan-wide cap, TokenOps keeps
