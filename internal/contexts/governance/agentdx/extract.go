@@ -352,26 +352,27 @@ func ExtractAll(opts ExtractOptions) ([]Record, error) {
 	if cx, err := ExtractCodex(opts); err == nil {
 		out = append(out, cx...)
 	}
-	// A Cursor schema failure is not a silent skip. Auto mode swallowing
-	// it would put this reader back in the class of bugs it was written
-	// to avoid: an unreadable store reported as an idle one.
+	// A schema failure is not a silent skip. Auto mode swallowing it would
+	// put these readers back in the class of bugs they were written to
+	// avoid: an unreadable store reported as an idle one. Nor does it stop
+	// the others: every source that can be read still is, and the error
+	// names each one that could not.
+	var errs []error
 	cu, err := ExtractCursor(opts)
-	if err != nil {
-		if errors.Is(err, ErrCursorSchema) {
-			return out, err
-		}
-	} else {
+	switch {
+	case err == nil:
 		out = append(out, cu...)
+	case errors.Is(err, ErrCursorSchema):
+		errs = append(errs, err)
 	}
 	oc, err := ExtractOpencode(opts)
-	if err != nil {
-		if errors.Is(err, ErrOpencodeSchema) {
-			return out, err
-		}
-	} else {
+	switch {
+	case err == nil:
 		out = append(out, oc...)
+	case errors.Is(err, ErrOpencodeSchema):
+		errs = append(errs, err)
 	}
-	return out, nil
+	return out, errors.Join(errs...)
 }
 
 // rejectionMarkers are short, unambiguous ways an operator says the last
