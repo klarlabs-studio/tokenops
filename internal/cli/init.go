@@ -15,6 +15,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/cli/detect"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/infra/fxrate"
 )
 
 // initFlags holds wizard inputs. Defaults are resolved per-OS via XDG
@@ -30,6 +31,7 @@ type initFlags struct {
 	withDetect  bool
 	noWire      bool
 	preset      string
+	currency    string
 }
 
 func newInitCmd() *cobra.Command {
@@ -75,6 +77,7 @@ config only.`,
 	cmd.Flags().BoolVar(&f.force, "force", false, "overwrite an existing config file")
 	cmd.Flags().BoolVar(&f.printOnly, "print-only", false, "render the resulting YAML to stdout without writing")
 	cmd.Flags().BoolVar(&f.withDetect, "detect", false, "also report installed AI clients (init still wires everything; use `tokenops detect` to only look)")
+	cmd.Flags().StringVar(&f.currency, "currency", "", "currency you pay in (ISO 4217, e.g. EUR); totals are shown in it. Default: your system region")
 	cmd.Flags().BoolVar(&f.noWire, "no-wire", false, "write the config only; skip registering the MCP server and installing hooks")
 	return cmd
 }
@@ -99,6 +102,8 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 	cfg.Rules.Enabled = rules.Enabled
 	cfg.Rules.Root = rules.Root
 	cfg.Rules.RepoID = rules.RepoID
+	currency, currencyFrom := initCurrencyChoice(f.currency)
+	cfg.Money.Currency = currency
 
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
@@ -129,6 +134,9 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 			if f.withDetect {
 				renderDetection(cmd.OutOrStdout(), detect.Detect(nil))
 			}
+			if err := initExistingCurrency(cmd, configPath, f.currency); err != nil {
+				return err
+			}
 			if f.noWire {
 				return nil
 			}
@@ -156,6 +164,7 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\nstorage: %s\n", configPath, storagePath)
+	fmt.Fprintf(cmd.OutOrStdout(), "currency: %s (%s; change with --currency)\n", currency, currencyFrom)
 	if rules.Enabled {
 		fmt.Fprintf(cmd.OutOrStdout(), "rules root: %s (repo_id=%s)\n", rules.Root, rules.RepoID)
 	} else {
@@ -286,4 +295,44 @@ func resolveInitRulesRoot(rootOverride, repoOverride string) (rulesRootResult, e
 		RootOverride: rootOverride,
 		RepoOverride: repoOverride,
 	}), nil
+}
+
+// detectCurrency guesses the operator's currency; a variable so tests do
+// not depend on the machine's region.
+var detectCurrency = fxrate.DetectCurrency
+
+// initCurrencyChoice is the currency init records: the flag, else the
+// system region.
+func initCurrencyChoice(flag string) (currency, from string) {
+	if c := strings.ToUpper(strings.TrimSpace(flag)); c != "" {
+		return c, "from --currency"
+	}
+	c, where := detectCurrency()
+	return c, "from " + where
+}
+
+// initExistingCurrency sets the currency on a config that has none, or
+// changes it when --currency names one. A currency already chosen is
+// otherwise the operator's and is left alone.
+func initExistingCurrency(cmd *cobra.Command, configPath, flag string) error {
+	cfg, err := readMutableConfig(configPath)
+	if err != nil {
+		return err
+	}
+	if cfg.Money.Currency != "" && strings.TrimSpace(flag) == "" {
+		return nil
+	}
+	currency, from := initCurrencyChoice(flag)
+	if strings.EqualFold(cfg.Money.Currency, currency) {
+		return nil
+	}
+	cfg.Money.Currency = currency
+	if err := cfg.Money.Validate(); err != nil {
+		return err
+	}
+	if err := writeMutableConfig(configPath, cfg); err != nil {
+		return err
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "currency: %s (%s; change with --currency)\n", currency, from)
+	return nil
 }

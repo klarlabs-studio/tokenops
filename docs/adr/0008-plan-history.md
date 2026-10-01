@@ -71,7 +71,11 @@ is all TokenOps knew about plans.
   lists at $100, and €214.60 for Max 20x. `plan set --price <amount>
   --currency <code>` records the price from the bill, tax included, with
   the switch, so a price change also splits periods.
-  - Plan cost is shown in `money.currency`.
-  - Dollar-priced usage is compared with it at `money.per_usd`, a rate the
-    operator sets and TokenOps never fetches.
+  - Plan cost is shown in `money.currency`, which `tokenops init` sets
+    once from the system region.
+  - Every total is shown in that currency, with the rate named, so euros
+    are never compared with dollars. The rate is the ECB's daily reference
+    rate, fetched at most once a day and cached; it sends nothing.
+    `money.per_usd` pins a rate of the operator's own, and
+    `money.fetch_rate: false` keeps it off the network.
   - A price in a currency without a rate is flagged, not guessed.
