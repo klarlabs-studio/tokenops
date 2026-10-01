@@ -749,6 +749,42 @@ daemon corrects that on its own at start: the plan history says which
 stretches were on a plan billed at API rates, and only those are
 re-marked. Each correction is in `tokenops audit` as `cost_correction`.
 
+## Gateways, routers and who bills what
+
+TokenOps records, for every request, who bills it (ADR 0009). That used
+to be the client: every Claude Code turn was Anthropic's, every Codex
+turn OpenAI's. With a gateway in front, such as Fireworks through
+FireConnect, z.ai's coding plan, opencode Go or OpenRouter, one session
+can have several billers. TokenOps works them out on its own:
+
+- **Claude Code**: from the endpoint in Claude Code's settings
+  (`ANTHROPIC_BASE_URL`), kept as a dated route history in
+  `~/.tokenops/route-history.jsonl`. When FireConnect switched it, its
+  settings backup dates the switch.
+- **Codex**: from each session's `model_provider` and its `base_url` in
+  `~/.codex/config.toml`.
+- **opencode**: from the provider it records on every message.
+
+A gateway's own models are billed by the gateway, at its own rates
+(Fireworks' prices are built in; others refresh daily from models.dev).
+Through Fireworks' FireRouter, Claude turns run on the Anthropic API key
+FireConnect passes along, so Anthropic bills them per token: your Max
+plan does not cover them, and they do not count against a claude.ai
+Enterprise limit. **A plan covers only turns through its vendor's own
+endpoint.**
+
+Coding plans are in the catalog: z.ai GLM Coding, opencode Go, Alibaba
+Coding, MiniMax Token Plan, Cerebras Code and Synthetic. A provider billed
+per token with an account cap can be measured against it:
+
+```bash
+tokenops plan set fireworks pay-as-you-go --spend-limit 200
+```
+
+Usage recorded before TokenOps knew this is corrected by the daemon at
+start, without asking. Each correction is in `tokenops audit` as
+`cost_correction`.
+
 ## Switching plans
 
 `plans:` holds the plan you are on now. TokenOps also keeps a history of

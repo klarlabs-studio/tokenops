@@ -1,6 +1,6 @@
 # ADR 0009 — Endpoints, routers, and billers
 
-- **Status:** Proposed 2026-10-01
+- **Status:** Accepted 2026-10-01. Part 1 (§1–4, §6, §7) is implemented; part 2 (§5, governing routers) is open.
 - **Date:** 2026-10-01
 - **Deciders:** TokenOps maintainers
 - **Related:** ADR 0003 (authoritative cost), ADR 0006 (one coach), ADR 0007 (model policy), ADR 0008 (plan history)
@@ -67,16 +67,20 @@ produce choices nobody can explain.
 - **Claude Code:** transcripts do not record the endpoint. The daemon
   keeps a dated **route history** (`~/.tokenops/route-history.jsonl`,
   0600), like the plan history.
-  - It snapshots the effective endpoint settings from user, project,
-    local and managed settings and the launching environment:
-    `ANTHROPIC_BASE_URL`, `ANTHROPIC_MODEL`,
-    `ANTHROPIC_DEFAULT_*_MODEL`, `CLAUDE_CODE_SUBAGENT_MODEL`,
-    `CLAUDE_CODE_USE_BEDROCK` and `CLAUDE_CODE_USE_VERTEX`.
-  - Each turn takes the route in force at its timestamp.
-  - A namespaced served-model name (`accounts/fireworks/…`, `vendor/model`)
-    is a second signal. When it disagrees with the history, the model
-    name wins.
-- **Cursor:** `openAIBaseUrl` and the per-mode model settings.
+  - It reads `env.ANTHROPIC_BASE_URL` from managed, `settings.local.json`
+    and `settings.json`, at start and every minute, and records changes.
+  - A first sighting is dated from evidence when there is some.
+    FireConnect snapshots Claude Code's settings
+    (`~/.fireconnect/claude/provider-backup.json`) when it first routes
+    them through Fireworks, so the file's time dates the switch.
+    Without evidence, the first route applies back to the start, as in
+    the plan history.
+  - Each turn takes the route in force at its timestamp, and records the
+    endpoint it went through.
+  - A namespaced served-model name (`accounts/fireworks/…`) names its
+    biller when no endpoint does.
+- **Cursor:** `openAIBaseUrl` and the per-mode model settings. Not yet
+  implemented.
 - Only setting names and base URLs are read. Credentials and
   `apiKeyHelper` output are never read or stored.
 
@@ -87,9 +91,18 @@ produce choices nobody can explain.
   opencode Zen) is the biller for those models.
 - A router that runs closed models on the operator's own credential
   (FireRouter's "closed-model credentials") bills those turns to the
-  model's vendor. A gateway that resells closed models (OpenRouter's
-  pass-through) bills them itself.
-- Each endpoint declares which case applies in a small catalog. An
+  model's vendor. FireConnect passes an API key for this
+  (`x-anthropic-api-key` in FireConnect's source), so the vendor bills
+  them per token, as API usage.
+- A gateway that resells closed models (OpenRouter's pass-through) bills
+  them itself.
+- Any other non-Anthropic endpoint bills every turn it serves, whatever
+  the model is called. DeepSeek's Anthropic API answers `claude-opus`
+  requests with its own model.
+- Each endpoint declares which case applies in a small catalog keyed by
+  host and, where one host bills two ways, by path. z.ai serves its
+  coding plan under `/api/anthropic` and `/api/coding`, and its
+  pay-as-you-go API under `/api/paas`, which is named `zai-api`. An
   unknown endpoint is reported as such, never guessed.
 
 ### 4. Plan coverage follows the plan's kind
@@ -98,9 +111,19 @@ produce choices nobody can explain.
   which is recorded at $0 as today.
 - A spend-denominated plan (usage-based Enterprise) covers nothing. Usage
   is billed at API rates and counts against the spend limit.
-- Usage already stored as covered under a spend-denominated plan is
-  corrected through the same audited path as `plan set --since`
-  (ADR 0008).
+- A plan covers only turns through its vendor's own endpoint, with the
+  plan's login. A Claude turn through FireRouter runs on an API key, so
+  Max does not cover it and it does not count against a claude.ai
+  Enterprise limit.
+- `pay-as-you-go` binds any provider billed per token to a spend limit
+  the operator sets, such as a Fireworks account cap. Spend limits are
+  dated in the plan history, so each month keeps its own.
+- Plans billed at API rates have no flat fee, and plan cost leaves them
+  out.
+- Usage recorded under the earlier rules is corrected by the daemon at
+  start, without asking, because the mistake was TokenOps': stretch by
+  stretch from the route and plan histories. Each correction is in the
+  audit log as `cost_correction`, and a second pass changes nothing.
 
 ### 5. One router decides each turn
 
@@ -126,12 +149,38 @@ produce choices nobody can explain.
 
 ### 6. Prices come from the biller's own rate card
 
-- Fireworks, OpenRouter and opencode Zen prices are read from their own
-  pricing pages or feeds.
+- Model vendors' prices come from LiteLLM's feed. Gateways' and
+  coding-plan vendors' prices come from models.dev, which publishes
+  each provider's own rates. Rows checked against a vendor's page are
+  pinned, and no feed overrides them.
+- models.dev lists coding-plan providers (`zai-coding-plan`, …) at $0.
+  That is true of the plan and useless as a price, so plan turns are
+  valued at the vendor's pay-as-you-go rate.
+- opencode Zen turns keep the cost opencode stamps on each message,
+  which is what Zen charged.
 - The served-model name is the key. A namespaced name is normalized to
   the biller's catalog name.
 - A served model without a price is reported as unpriced, as today. It is
   never priced at the closed vendor's list rate.
+
+### 7. Evidence comes autonomously, for every vendor
+
+TokenOps uses the best evidence it can reach without asking, in this
+order, and the operator corrects it afterwards:
+
+1. What the harness writes locally: Codex's plan type and windows, the
+   endpoint in each harness's settings, opencode's provider per message.
+   The local transcript readers are turned on by `init` for every client
+   whose sessions are on the machine.
+2. The vendor's own reading, through a login already on the machine
+   (Copilot, Cursor, claude.ai with OS consent, OpenRouter's key
+   endpoint). These add outbound calls, so the setup wizard names each
+   one before it is turned on.
+3. The operator's entries, only for what nothing can see: past months,
+   negotiated prices, a bill in their currency.
+
+Where the operator's entry and the vendor disagree, the vendor wins and
+the mismatch is shown.
 
 ## Consequences
 
