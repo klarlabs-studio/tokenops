@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.87.0 - 2026-10-01
+
+### Added
+
+- **plans:** ChatGPT Pro is $100, $200 or $500 (`gpt-pro-500` added), and headroom flags a binding the plan type Codex reports contradicts (#470)
+- **docs:** ADR 0009, endpoints, routers, and billers (#471)
+
+### Fixed
+
+- **plans:** Usage-based Enterprise is billed at API rates, not covered by its plan: real cost, the spend limit and signal quality were reading $0, 0% and low (#472)
+- **dx:** Read every client a store failure does not affect; the MCP dx and story tools return partial results with warnings instead of "internal error" (#473)
+- **docs:** README, CLI reference and changelog caught up to v0.86.0 (#469)
+
 ## 0.86.0 - 2026-10-01
 
 ### Added
