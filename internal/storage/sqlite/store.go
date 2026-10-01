@@ -724,3 +724,24 @@ func (s *Store) RestampPlanIncluded(ctx context.Context, provider string, from, 
 	}
 	return res.RowsAffected()
 }
+
+// RestampMetered marks a provider's plan-covered prompt events in
+// [from, to) as billed per token, and returns how many it changed. Their
+// cost is cleared, so it is priced when read, like any billed request.
+//
+// It is the reverse of RestampPlanIncluded, for a spend-denominated plan
+// (usage-based Enterprise, ADR 0009): such a plan covers nothing, and
+// usage stamped as covered while it was bound reported real spend as $0.
+// Events on a trial are left alone.
+func (s *Store) RestampMetered(ctx context.Context, provider string, from, to time.Time) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `UPDATE events
+		SET payload = json_remove(json_set(payload, '$.cost_source', 'metered'), '$.cost_usd', '$.cost_measured'),
+		    cost_usd = NULL
+		WHERE type = 'prompt' AND provider = ? AND timestamp_ns >= ? AND timestamp_ns < ?
+		  AND json_extract(payload, '$.cost_source') = 'plan_included'`,
+		provider, from.UTC().UnixNano(), to.UTC().UnixNano())
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: restamp metered: %w", contended(ctx, err))
+	}
+	return res.RowsAffected()
+}

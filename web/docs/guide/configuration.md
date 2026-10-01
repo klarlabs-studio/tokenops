@@ -740,6 +740,17 @@ off list while TokenOps costs from the public rate card. Without it your
 console limit is compared against an overstatement, and the error is
 invisible.
 
+Unlike a subscription, a spend-denominated plan covers nothing: its usage
+is recorded as billed and priced at API rates, so `spend` shows what it
+costs and headroom counts it against the limit. Before v0.87.0 such usage
+was recorded as covered, at $0, which read the limit as 0% used. To
+correct usage recorded that way, re-bind the plan from the date it took
+effect:
+
+```bash
+tokenops plan set anthropic claude-enterprise --spend-limit 500 --since 2026-09-01
+```
+
 ## Switching plans
 
 `plans:` holds the plan you are on now. TokenOps also keeps a history of

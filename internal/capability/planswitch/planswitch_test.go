@@ -22,6 +22,13 @@ type fakeRestamper struct {
 	provider string
 	from, to time.Time
 	calls    int
+	metered  int
+}
+
+func (f *fakeRestamper) RestampMetered(_ context.Context, provider string, from, to time.Time) (int64, error) {
+	f.provider, f.from, f.to = provider, from, to
+	f.metered++
+	return 41, nil
 }
 
 func (f *fakeRestamper) RestampPlanIncluded(_ context.Context, provider string, from, to time.Time) (int64, error) {
@@ -120,5 +127,19 @@ func TestCostUsesTheOperatorsPriceAndCurrency(t *testing.T) {
 	usd := Cost(h.h, map[string]string{"anthropic": "claude-max-20x"}, day(1), day(11), FX{})
 	if usd[0].Complete || usd[0].Periods[0].Priced {
 		t.Errorf("converted EUR without a rate: %+v", usd[0])
+	}
+}
+
+func TestBackdatedSpendPlanRemarksUsageAsBilled(t *testing.T) {
+	h, r := &memHistory{}, &fakeRestamper{}
+	res, err := Record(context.Background(), h, r, Change{Provider: "anthropic", Plan: "claude-enterprise", From: day(1), Now: day(30)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.calls != 0 || r.metered != 1 {
+		t.Fatalf("plan_included restamps %d, metered %d; usage-based Enterprise covers nothing", r.calls, r.metered)
+	}
+	if res.Restamped != 41 || res.RestampedTo != "metered" {
+		t.Errorf("result %+v", res)
 	}
 }

@@ -28,7 +28,7 @@ type prepareWorkResult struct {
 }
 
 func registerWorkPreparationTool(s *Server, d RoutingAdviceDeps) error {
-	planDeps := PlanDeps{Config: d.Config, ConfigGetter: d.ConfigGetter, Store: d.Store}
+	planDeps := PlanDeps{Config: d.Config, ConfigGetter: d.ConfigGetter, Store: d.Store, Spend: d.Spend}
 	s.Tool("tokenops_prepare_work").
 		Description("Before starting a task, get one evidence-backed view of subscription headroom and the model recommendation for the supplied instruction. The result includes a stable workflow_id: propagate it as X-Tokenops-Workflow-Id when the execution path supports request headers, then pass it unchanged to tokenops_review_work. TokenOps issues correlation here but does not claim that execution started. The tool includes measurement caveats and never changes the caller's model. Pass provider when several plans are configured; pass the current model to compare alternatives.").
 		OutputSchema(prepareWorkResult{}).

@@ -15,7 +15,14 @@ type SpendLimit struct {
 	LimitUSD   float64
 	Window     string
 	RateFactor float64
+	// Price prices a request at list rates. Stored events carry no cost
+	// for usage priced at read time, so a spend total without it counts
+	// only what the proxy measured. nil keeps that behaviour.
+	Price Pricer
 }
+
+// Pricer prices a request at the rate card in force at a moment.
+type Pricer func(p *eventschema.PromptEvent, at time.Time) (float64, error)
 
 // SourceCounter counts events per source over a range. It grades how far a
 // headroom report can be trusted; nil reports the lowest grade.
@@ -103,12 +110,22 @@ func AssembleHeadroomInputs(ctx context.Context, reader EventReader, counts Sour
 	if p.SpendDenominated {
 		in.SpendLimitUSD = lim.LimitUSD
 		in.RateFactor = lim.RateFactor
-		spend, err := SpendInWindow(ctx, reader, provider, now, lim.Window)
+		spend, err := SpendInWindow(ctx, reader, provider, now, lim.Window, lim.Price)
 		if err != nil {
 			return HeadroomInputs{}, fmt.Errorf("spend[%s]: %w", provider, err)
 		}
 		in.SpendUSD = spend
 		in.VendorSpend = LatestVendorSpend(ctx, reader, providerOf(provider), now)
+		// Grade the reading by what fed it over the spend window. It was
+		// only graded for window plans, so a spend plan read from Claude
+		// Code's own logs was labelled the lowest grade.
+		if counts != nil {
+			c, err := counts(ctx, SpendWindowStart(now, lim.Window), now)
+			if err != nil {
+				return HeadroomInputs{}, fmt.Errorf("signal[%s]: %w", provider, err)
+			}
+			in.Signal = SignalFromCounts(c, provider)
+		}
 	}
 	return in, nil
 }

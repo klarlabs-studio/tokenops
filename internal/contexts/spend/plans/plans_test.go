@@ -137,3 +137,17 @@ func TestProTiersArePricedInDollars(t *testing.T) {
 		}
 	}
 }
+
+func TestCovers(t *testing.T) {
+	for name, want := range map[string]bool{
+		"claude-max-20x":    true,
+		"gpt-pro-5x":        true,
+		"claude-enterprise": false, // billed at API rates
+		"":                  false,
+		"not-in-catalog":    true, // still meant as a subscription
+	} {
+		if got := Covers(name); got != want {
+			t.Errorf("Covers(%q) = %v, want %v", name, got, want)
+		}
+	}
+}

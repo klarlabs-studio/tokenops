@@ -145,6 +145,7 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 				case from.Before(now) && next != "":
 					resp["since"] = from.Format("2006-01-02")
 					resp["restamped"] = res.Restamped
+					resp["restamped_to"] = res.RestampedTo
 				}
 			}
 			resp["note"] = applyConfig(d.ApplyConfig)

@@ -348,6 +348,21 @@ func ForVendorPlanType(provider, planType string) (string, bool) {
 	return found, found != ""
 }
 
+// Covers reports whether a plan covers its provider's usage, so that usage
+// is recorded as plan-included at no per-request cost. A rate-limited
+// subscription does. A spend-denominated plan does not: usage-based
+// Enterprise is billed at API rates from the first token, and recording it
+// as covered priced real spend at $0. An unknown plan name keeps the old
+// behaviour and covers, since a binding the catalog cannot read was still
+// meant as a subscription.
+func Covers(name string) bool {
+	if name == "" {
+		return false
+	}
+	p, ok := Lookup(name)
+	return !ok || !p.SpendDenominated
+}
+
 // ResolveAlias returns the modern catalog name when `name` is a known
 // deprecation, the input string unchanged otherwise. The second return
 // is true only when an alias was applied; callers use it to render a

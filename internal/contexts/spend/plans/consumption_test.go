@@ -176,3 +176,39 @@ func TestWindowConsumptionSkipsSnapshotGranularities(t *testing.T) {
 		t.Errorf("TokensInWindow = %d; want 30", got.TokensInWindow)
 	}
 }
+
+func TestSpendInWindowPricesUsageAPlanWronglyCovered(t *testing.T) {
+	now := time.Date(2026, 10, 1, 18, 0, 0, 0, time.UTC)
+	at := now.Add(-time.Hour)
+	measured := envAt(at, "anthropic", 100, "")
+	measured.Payload.(*eventschema.PromptEvent).CostUSD = 2
+	daily := envAt(at, "anthropic", 1000, "")
+	daily.Attributes = map[string]string{"granularity": "daily"}
+	r := fakeReader{envs: []*eventschema.Envelope{
+		measured, // proxy-measured: $2 as is
+		envAt(at, "anthropic", 100, eventschema.CostSourcePlanIncluded), // stamped covered by mistake
+		envAt(at, "anthropic", 100, ""),                                 // billed, priced on read
+		daily,                                                           // a vendor aggregate repeats the turns
+		envAt(at, "openai", 100, ""),                                    // another provider
+	}}
+	var priced []eventschema.CostSource
+	price := func(p *eventschema.PromptEvent, _ time.Time) (float64, error) {
+		priced = append(priced, p.CostSource)
+		return float64(p.TotalTokens) / 100, nil
+	}
+	got, err := SpendInWindow(context.Background(), r, "anthropic", now, "monthly", price)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 4 {
+		t.Errorf("spend = %v, want 4 ($2 measured + $1 + $1 priced)", got)
+	}
+	for _, src := range priced {
+		if src != eventschema.CostSourceMetered {
+			t.Errorf("priced as %q; the engine prices covered usage at $0", src)
+		}
+	}
+	if without, _ := SpendInWindow(context.Background(), r, "anthropic", now, "monthly", nil); without != 2 {
+		t.Errorf("without a pricer spend = %v, want only the measured 2", without)
+	}
+}

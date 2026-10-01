@@ -268,10 +268,11 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 			// which limits. This command decides how to print them, which
 			// is the only part that legitimately differs from the MCP
 			// tool answering the same question.
-			res, err := headroom.Compute(ctx, headroom.Deps{
-				Config: &cfg,
-				Reader: storeReader{store: store},
-			}, time.Now().UTC())
+			deps := headroom.Deps{Config: &cfg, Reader: storeReader{store: store}}
+			if eng, err := buildSpendEngine(cfg); err == nil {
+				deps.Price = eng.ComputeAt
+			}
+			res, err := headroom.Compute(ctx, deps, time.Now().UTC())
 			if err != nil {
 				return err
 			}

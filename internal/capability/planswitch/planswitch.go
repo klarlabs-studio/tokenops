@@ -24,16 +24,21 @@ type History interface {
 	Append(...plans.Binding) error
 }
 
-// Restamper re-marks recorded usage as covered by a plan.
+// Restamper re-marks recorded usage as covered by a plan, or as billed
+// per token for a plan that covers nothing (usage-based Enterprise).
 type Restamper interface {
 	RestampPlanIncluded(ctx context.Context, provider string, from, to time.Time) (int64, error)
+	RestampMetered(ctx context.Context, provider string, from, to time.Time) (int64, error)
 }
 
 // Result is what a switch changed.
 type Result struct {
 	Recorded []plans.Binding `json:"recorded"`
-	// Restamped counts usage re-marked from billed to plan-covered.
+	// Restamped counts usage re-marked: from billed to plan-covered, or,
+	// when the plan is billed at API rates, from plan-covered to billed.
 	Restamped int64 `json:"restamped"`
+	// RestampedTo is the cost source that usage now carries.
+	RestampedTo string `json:"restamped_to,omitempty"`
 }
 
 // ErrFuture refuses a start date after now: a plan that has not started
@@ -52,7 +57,8 @@ type Change struct {
 
 // Record writes a switch of provider from previous to plan, effective
 // from `from`. When from is before now and the new plan is not empty,
-// usage recorded as billed per token since then is re-marked as covered.
+// usage since then is re-marked to match the plan: covered for a
+// subscription, billed per token for a plan billed at API rates.
 // A nil restamper skips that step (no event store), which the caller
 // reports.
 func Record(ctx context.Context, h History, r Restamper, c Change) (Result, error) {
@@ -74,11 +80,15 @@ func Record(ctx context.Context, h History, r Restamper, c Change) (Result, erro
 	if plan == "" || r == nil || !from.Before(now) {
 		return res, nil
 	}
-	n, err := r.RestampPlanIncluded(ctx, provider, from, now)
+	restamp, to := r.RestampPlanIncluded, "plan_included"
+	if !plans.Covers(plan) {
+		restamp, to = r.RestampMetered, "metered"
+	}
+	n, err := restamp(ctx, provider, from, now)
 	if err != nil {
 		return res, err
 	}
-	res.Restamped = n
+	res.Restamped, res.RestampedTo = n, to
 	return res, nil
 }
 
