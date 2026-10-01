@@ -4,7 +4,69 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.71.0**.
+Current release: **v0.86.0**.
+
+## v0.86.0 — one currency, with the rate it used
+
+`spend` used to set a plan bill in euros beside usage valued in dollars,
+which invites comparing €243 with $11,300 as if they were one unit. Every
+total is now shown in your currency, chosen once by `tokenops init` from
+your system region (or `--currency`), with the dollar figure beside it and
+a line naming the rate: the ECB's daily reference rate, fetched at most
+once a day and cached. A converted amount moves with the exchange rate
+even when usage does not, and the report says so. This is the second
+outbound call TokenOps makes on its own; it downloads a public rate,
+sends nothing, and `money.fetch_rate: false` turns it off.
+
+## v0.85.0 — the plan you were on then
+
+The config holds the plan in force now, and every report over a past
+period used it, so switching from Plus to Pro rewrote last month's cost
+and limits. Plan switches are now recorded with the date they took effect
+(ADR 0008). `plan set --since` backdates a switch and re-marks usage that
+was recorded as billed per token in between as covered by the plan, in
+the audit log. `--price` and `--currency` record what your bill says,
+regional price and tax included; without them plan cost uses the catalog's
+US list price, which now covers fifteen plans and was checked against
+each vendor's own pricing page. `plan history` lists every switch.
+
+`dx` now splits instructions by model and reasoning effort, read from
+Claude Code, Codex and opencode transcripts, so an effort setting can be
+judged by what it did to your work rather than by its name.
+
+## v0.84.0 — models nobody may route to
+
+A person or a company can now rule models out with `model_policy`: allow
+and deny globs over `model` or `provider/model`, deny winning, a non-empty
+allow list being exclusive (ADR 0007). The file is plain YAML, so device
+management can ship it. Every route respects it — proxy routing, smart
+routing, subagent moves and routing advice — independently of how the
+coach is set. A request for a ruled-out model is moved to the
+closest-priced permitted one rather than failed.
+
+## v0.77.0 – v0.83.0 — one coach
+
+Coaching settings had grown into separate keys that each decided part of
+what the coach said and did. They are now one coach with two dials
+(ADR 0006): autonomy — off, advise, ask, autonomous — decides who acts,
+and verbosity decides how much it says. Four powers sit under it: inform,
+waste (redundant re-reads, compacting late), models (moving subagents to a
+cheaper model, or asking first) and context (where each agent compacts).
+`tokenops coach preset` sets all of it in one choice and wires the hooks
+on every installed agent. The coach records whether its advice was
+followed and quiets advice you keep ignoring, and `tokenops coach` shows
+the live quota window and the next tip. `coach migrate` writes the
+equivalent of your older settings, so behaviour does not change.
+
+## v0.72.0 – v0.76.0 — counting what was already there
+
+The proxy now measures streamed agent traffic and compressed responses.
+Claude subscription polling decodes the vendor's unified limits and keeps
+the quota windows the vendor reports instead of assuming them. The event
+store stopped losing rows to write-lock contention, and pollers that
+re-read history no longer store events twice. On flat-rate plans the
+coach speaks in quota rather than dollars, and waste findings that only
+measured how long a session was are gone.
 
 ## v0.71.0 — evidence before optimization
 

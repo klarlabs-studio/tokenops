@@ -37,6 +37,7 @@ Or grab a prebuilt binary from the [releases page](https://github.com/klarlabs-s
 ```bash
 tokenops init                                  # writes config, registers MCP, installs hooks
 tokenops plan set anthropic claude-max-20x     # bind your tier (init tells you if it can't)
+tokenops plan set anthropic claude-max-20x --price 214.60 --currency EUR   # optional: what your bill says
 tokenops daemon install                        # supervise `tokenops start` so ingestion survives reboot
 ```
 
@@ -57,7 +58,10 @@ it touches, and refuses to overwrite a host config it cannot parse. Two
 things stay yours: picking your plan tier (the tiers differ 4x in
 headroom, so guessing would make every figure confidently wrong) and
 pointing a client at the proxy (that reroutes your real traffic).
-`--no-wire` writes the config only.
+`--no-wire` writes the config only. `init` also sets the currency totals
+are shown in, from your system region (`--currency EUR` to choose), and
+the coach preset (`--preset observe|advise|guided|autopilot`; a new config
+gets `advise`).
 
 Then restart your MCP host and ask the agent for a compact resource view with
 `tokenops_resource_glance`, or use `tokenops_session_budget`,
@@ -108,10 +112,28 @@ an identifier does not claim that execution started.
   provider metering, workflow reconstruction, cost-aware pricing, forecasts,
   and subscription headroom. Setup and signal coverage: `tokenops status` and
   `tokenops vendor-usage status`.
+- **Plans and money:** plan switches are recorded with the date they took
+  effect (`plan set --since` backdates one), so a report over a past period
+  uses the plan in force then. Record what your bill says with `--price` and
+  `--currency`; every total is shown in your currency, with the rate it used
+  (the ECB's daily reference rate). See
+  [ADR 0008](docs/adr/0008-plan-history.md).
 - **Resource decisions:** routing advice, preferred-model ceilings, plan-window
   constraints, approval flow, and explainable decisions. Advice is available
   through MCP; automatic routing requires the proxy and the configured policy
   and evidence gates.
+- **Model policy:** `model_policy` allow and deny globs rule models out of
+  every route — proxy routing, subagent moves, and advice — whatever the coach
+  is set to. A company can ship it through device management; requests for a
+  ruled-out model move to the closest-priced permitted one. See
+  [ADR 0007](docs/adr/0007-model-policy.md).
+- **Coach:** one coach with an autonomy dial (off, advise, ask, autonomous)
+  and a verbosity dial, over four powers: inform, waste (redundant re-reads,
+  compacting late), models (moving subagents to a cheaper model) and context
+  (where each agent compacts). Presets
+  set it in one choice and wire every installed agent. It records whether its
+  advice was followed and quiets what you ignore. See
+  [ADR 0006](docs/adr/0006-one-coach.md).
 - **Verification and learning:** record human or verifier outcomes, explain
   past decisions, run bounded local routing experiments, and compare results
   against baselines. Learning is advisory and gated; it does not rewrite
@@ -124,7 +146,10 @@ an identifier does not claim that execution started.
   and integrations act only where the client supports the required authority.
 - **Local-first surfaces:** Go daemon, SQLite event store, MCP server, protected
   local API, and CLI. No cloud account or telemetry is required; the core
-  product is Apache 2.0.
+  product is Apache 2.0. It makes two outbound calls of its own, both
+  downloads that send nothing about you: a daily public rate card, and the
+  ECB's daily exchange rate when your currency is not the US dollar. Each is
+  one line to switch off (`pricing.refresh.disabled`, `money.fetch_rate`).
 
 See [docs/architecture-ddd.md](docs/architecture-ddd.md) for bounded contexts
 and layer rules; [docs/plan-cost-model.md](docs/plan-cost-model.md) for the
@@ -140,8 +165,11 @@ start                             Run the daemon in the foreground (proxy + anal
 daemon {install|uninstall|status} Supervise `tokenops start` via launchd (macOS) or systemd --user (Linux)
 serve                             MCP server over stdio
 status                            Daemon health + blockers[] / next_actions[]
-spend [--forecast]                Spend / burn / 7d forecast
-plan {list|set|headroom|catalog}  Subscription plan headroom
+spend [--forecast]                Spend / burn / 7d forecast, in your currency
+plan {list|set|unset|history|headroom|catalog}  Plans, switches (--since), prices (--price/--currency)
+coach {preset|autonomy|verbosity|set|off|...}   Configure the coach; `coach` alone shows its status
+dx                                Agent-DX metrics from transcripts, split by model and reasoning effort
+story                             What you asked for, what the agent did, where it went sideways
 provider {list|set|unset}         Upstream LLM provider URLs
 vendor-usage {status|backfill}    Inspect / backfill vendor-side pollers
 config show                       Active configuration (redacted)
