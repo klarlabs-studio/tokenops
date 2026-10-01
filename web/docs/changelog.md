@@ -4,9 +4,9 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.87.0**.
+Current release: **v0.86.1**.
 
-## v0.87.0 — what Enterprise actually costs
+## v0.86.1 — what Enterprise actually costs
 
 Usage-based Claude Enterprise is billed at API rates from the first token,
 but TokenOps treated it like a subscription and recorded its usage as
