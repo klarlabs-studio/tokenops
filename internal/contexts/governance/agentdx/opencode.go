@@ -1,15 +1,11 @@
 package agentdx
 
 import (
-	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"time"
+	"strings"
 
-	_ "modernc.org/sqlite" // read-only driver for opencode.db
+	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb"
 )
 
 // ErrOpencodeSchema reports that an opencode database was found but did
@@ -18,57 +14,12 @@ import (
 // read must not be reported as an operator who did no work.
 var ErrOpencodeSchema = errors.New("agentdx: unrecognised opencode database schema")
 
-// OpencodeDefaultPath returns the conventional opencode store.
-func OpencodeDefaultPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".local", "share", "opencode", "opencode.db"), nil
-}
+// OpencodeDefaultPath returns opencode's store (opencodedb.DefaultPath:
+// OPENCODE_DB, then XDG_DATA_HOME, then ~/.local/share).
+func OpencodeDefaultPath() (string, error) { return opencodedb.DefaultPath() }
 
-// opencodeMessage is the JSON blob on a message row.
-type opencodeMessage struct {
-	Role string `json:"role"`
-	Time struct {
-		Created   int64 `json:"created"`
-		Completed int64 `json:"completed"`
-	} `json:"time"`
-	// ProviderID is set on assistant rows; user rows carry it nested
-	// under model instead.
-	ProviderID string `json:"providerID"`
-	ModelID    string `json:"modelID"`
-	// Variant is the reasoning effort the turn ran at ("high",
-	// "medium"), when the model offers one.
-	Variant string `json:"variant"`
-	Model   struct {
-		ProviderID string `json:"providerID"`
-	} `json:"model"`
-	Tokens struct {
-		Input  int64 `json:"input"`
-		Output int64 `json:"output"`
-		Cache  struct {
-			Read  int64 `json:"read"`
-			Write int64 `json:"write"`
-		} `json:"cache"`
-	} `json:"tokens"`
-}
-
-// opencodePart is the JSON blob on a part row.
-type opencodePart struct {
-	Type  string `json:"type"`
-	Tool  string `json:"tool"`
-	Text  string `json:"text"`
-	State struct {
-		Input    json.RawMessage `json:"input"`
-		InputRef struct {
-			FilePath string `json:"filePath"`
-			Path     string `json:"path"`
-		} `json:"-"`
-	} `json:"state"`
-}
-
-// ExtractOpencode reads opencode's SQLite store into Records.
+// ExtractOpencode reads opencode's store into Records, from opencode 1.x
+// and 2.x alike (see opencodedb).
 //
 // opencode is the richest of the supported clients and the only
 // multi-provider one: every turn records which upstream served it, so it
@@ -84,208 +35,49 @@ func ExtractOpencode(opts ExtractOptions) ([]Record, error) {
 		}
 		path = p
 	}
-	if _, err := os.Stat(path); err != nil {
-		return nil, nil
-	}
-
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
-	if err != nil {
-		return nil, fmt.Errorf("agentdx: open opencode store: %w", err)
-	}
-	defer func() { _ = db.Close() }()
-
-	if !hasTable(db, "message") {
-		return nil, fmt.Errorf("%w: no message table in %s", ErrOpencodeSchema, path)
-	}
-
-	// Instruction text lives on a part row, but the prompt record is
-	// emitted from the message row — so which messages reject has to be
-	// known before the messages are walked.
-	rejecting := map[string]bool{}
-	prompts := map[string]string{}
-	if hasTable(db, "part") {
-		rejecting, prompts = opencodeUserText(db)
-	}
-	if !opts.WithPromptText {
-		// The words exist for the length of a scan and only when asked
-		// for, the same rule every reader follows.
-		prompts = nil
-	}
-
-	out, byMessage, err := opencodeMessages(db, opts.Since, rejecting, prompts)
-	if err != nil {
-		return nil, err
-	}
-	// The part table is optional: a store can hold messages before any
-	// tool has run. Its absence is not a schema failure.
-	if hasTable(db, "part") {
-		parts, err := opencodeParts(db, byMessage, opts.Since)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, parts...)
-	}
-	return out, nil
-}
-
-// messageContext is what a part needs from the message it belongs to.
-type messageContext struct {
-	at        time.Time
-	sessionID string
-	provider  string
-}
-
-// opencodeUserText walks the part table once and returns two things per
-// message id: whether its text rejects the answer before it, and the text
-// itself.
-//
-// One walk rather than two because they read the same rows. opencode
-// keeps a message's words in `part`, not in `message`, which is why the
-// text has to be gathered here and handed back rather than read where
-// the record is built.
-//
-// A query failure yields empty maps rather than an error: a missing
-// rejection signal degrades one metric and a missing title degrades one
-// heading, where failing the whole read would lose every metric there is.
-func opencodeUserText(db *sql.DB) (map[string]bool, map[string]string) {
-	out := map[string]bool{}
-	text := map[string]string{}
-	rows, err := db.Query(`SELECT message_id, data FROM part`)
-	if err != nil {
-		return out, text
-	}
-	defer func() { _ = rows.Close() }()
-	for rows.Next() {
-		var messageID, data string
-		if rows.Scan(&messageID, &data) != nil {
-			continue
-		}
-		var p opencodePart
-		if json.Unmarshal([]byte(data), &p) != nil || p.Type != "text" {
-			continue
-		}
-		if IsRejection(p.Text) {
-			out[messageID] = true
-		}
-		// A message can carry several text parts; the instruction is all
-		// of them, in order.
-		text[messageID] += p.Text
-	}
-	return out, text
-}
-
-func opencodeMessages(
-	db *sql.DB,
-	since time.Time,
-	rejecting map[string]bool,
-	prompts map[string]string,
-) ([]Record, map[string]messageContext, error) {
-	rows, err := db.Query(`SELECT id, session_id, data FROM message`)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: %v", ErrOpencodeSchema, err)
-	}
-	defer func() { _ = rows.Close() }()
-
 	var out []Record
-	byMessage := map[string]messageContext{}
-	for rows.Next() {
-		var id, sessionID, data string
-		if err := rows.Scan(&id, &sessionID, &data); err != nil {
-			continue
+	err := opencodedb.Read(path, opencodedb.Options{Since: opts.Since, Parts: true}, func(m opencodedb.Message) error {
+		// A record needs its moment; a row without one says nothing about
+		// how the work went.
+		if m.Created.IsZero() {
+			return nil
 		}
-		var m opencodeMessage
-		if json.Unmarshal([]byte(data), &m) != nil || m.Time.Created <= 0 {
-			continue
-		}
-		at := time.UnixMilli(m.Time.Created).UTC()
-		provider := m.ProviderID
-		if provider == "" {
-			provider = m.Model.ProviderID
-		}
-		byMessage[id] = messageContext{at: at, sessionID: sessionID, provider: provider}
-
-		if !since.IsZero() && at.Before(since) {
-			continue
-		}
-		rec := Record{At: at, SessionID: sessionID, Provider: provider}
+		rec := Record{At: m.Created, SessionID: m.SessionID, Provider: m.ProviderID}
 		switch m.Role {
-		case "user":
+		case opencodedb.User:
 			rec.Kind = KindPrompt
-			rec.Rejects = rejecting[id]
-			rec.Text = prompts[id]
-		case "assistant":
+			for _, t := range m.Text {
+				if IsRejection(t) {
+					rec.Rejects = true
+				}
+			}
+			// The words exist for the length of a scan and only when asked
+			// for, the same rule every reader follows. A message can carry
+			// several text parts; the instruction is all of them, in order.
+			if opts.WithPromptText {
+				rec.Text = strings.Join(m.Text, "")
+			}
+			out = append(out, rec)
+		case opencodedb.Assistant:
 			rec.Kind = KindAssistantTurn
 			rec.Model, rec.Effort = m.ModelID, normEffort(m.Variant)
-			rec.InputTokens = m.Tokens.Input + m.Tokens.Cache.Read + m.Tokens.Cache.Write
-		default:
-			continue
-		}
-		out = append(out, rec)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, nil, fmt.Errorf("%w: %v", ErrOpencodeSchema, err)
-	}
-	return out, byMessage, nil
-}
-
-func opencodeParts(db *sql.DB, byMessage map[string]messageContext, since time.Time) ([]Record, error) {
-	rows, err := db.Query(`SELECT message_id, data FROM part`)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrOpencodeSchema, err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	var out []Record
-	for rows.Next() {
-		var messageID, data string
-		if err := rows.Scan(&messageID, &data); err != nil {
-			continue
-		}
-		var p opencodePart
-		if json.Unmarshal([]byte(data), &p) != nil {
-			continue
-		}
-		// A part inherits its message's time and session; its own
-		// timestamp columns track edits to the row rather than when the
-		// work happened.
-		ctx, ok := byMessage[messageID]
-		if !ok {
-			continue
-		}
-		if !since.IsZero() && ctx.at.Before(since) {
-			continue
-		}
-		rec := Record{At: ctx.at, SessionID: ctx.sessionID, Provider: ctx.provider}
-		switch p.Type {
-		case "tool":
-			rec.Kind = KindToolUse
-			rec.ToolName = p.Tool
-			rec.FilePath = opencodeToolPath(p.State.Input)
-			rec.CallSignature = callSignature(p.Tool, p.State.Input)
-		case "compaction":
+			rec.InputTokens = m.Tokens.Input + m.Tokens.CacheRead + m.Tokens.CacheWrite
+			out = append(out, rec)
+			for _, tool := range m.Tools {
+				out = append(out, Record{
+					At: m.Created, SessionID: m.SessionID, Provider: m.ProviderID,
+					Kind: KindToolUse, ToolName: tool.Name, FilePath: tool.Path(),
+					CallSignature: callSignature(tool.Name, tool.Input),
+				})
+			}
+		case opencodedb.Compaction:
 			rec.Kind = KindCompaction
-		default:
-			continue
+			out = append(out, rec)
 		}
-		out = append(out, rec)
-	}
-	if err := rows.Err(); err != nil {
+		return nil
+	})
+	if errors.Is(err, opencodedb.ErrSchema) {
 		return nil, fmt.Errorf("%w: %v", ErrOpencodeSchema, err)
 	}
-	return out, nil
-}
-
-// opencodeToolPath pulls the edited file out of a tool call's arguments.
-func opencodeToolPath(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return ""
-	}
-	var in struct {
-		FilePath string `json:"filePath"`
-		Path     string `json:"path"`
-	}
-	if json.Unmarshal(raw, &in) != nil {
-		return ""
-	}
-	return firstNonEmpty(in.FilePath, in.Path)
+	return out, err
 }

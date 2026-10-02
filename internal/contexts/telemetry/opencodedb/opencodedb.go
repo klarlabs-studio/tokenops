@@ -1,0 +1,446 @@
+// Package opencodedb reads opencode's local store, in both of its shapes.
+//
+// opencode 1.x keeps messages in `message` and their text, tool calls and
+// compactions in `part`. opencode 2 keeps everything in `session_message`,
+// one row per message with its type in a column and its content inline,
+// and the session's directory in `session_v2`. Both versions use the same
+// opencode.db, and 2.x copies 1.x sessions across lazily, keeping their
+// message IDs, while 1.x keeps writing the old tables. So during the
+// transition both shapes hold live data: every message is read from
+// whichever table has it, the 2.x row winning, and none is counted twice.
+//
+// Every TokenOps reader of opencode (spend, agent DX, prompt and reply
+// coaching, the source probe) goes through here, so the two shapes are
+// handled once.
+package opencodedb
+
+import (
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	_ "modernc.org/sqlite" // read-only driver for opencode.db
+)
+
+// ErrSchema reports a store that exists but has neither shape's tables.
+// It is distinct from an empty result: a store that cannot be read must
+// not be reported as an operator who did no work.
+var ErrSchema = errors.New("opencodedb: unrecognised opencode database schema")
+
+// DefaultPath is opencode's database: OPENCODE_DB when set (opencode 2
+// honours it), else under XDG_DATA_HOME, else ~/.local/share.
+func DefaultPath() (string, error) {
+	if p := os.Getenv("OPENCODE_DB"); p != "" {
+		return p, nil
+	}
+	if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" {
+		return filepath.Join(xdg, "opencode", "opencode.db"), nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".local", "share", "opencode", "opencode.db"), nil
+}
+
+// Role is what a message is.
+type Role string
+
+// Roles.
+const (
+	User       Role = "user"
+	Assistant  Role = "assistant"
+	Compaction Role = "compaction"
+)
+
+// Tokens is a turn's usage.
+type Tokens struct {
+	Input, Output, Reasoning, CacheRead, CacheWrite int64
+}
+
+// Tool is one tool call on an assistant turn.
+type Tool struct {
+	Name  string
+	Input json.RawMessage
+}
+
+// Path is the file a tool call worked on: 1.x calls it filePath, 2.x
+// path, and a 1.x call migrated to 2.x keeps filePath.
+func (t Tool) Path() string {
+	if len(t.Input) == 0 {
+		return ""
+	}
+	var in struct {
+		FilePath string `json:"filePath"`
+		Path     string `json:"path"`
+	}
+	if json.Unmarshal(t.Input, &in) != nil {
+		return ""
+	}
+	if in.FilePath != "" {
+		return in.FilePath
+	}
+	return in.Path
+}
+
+// Message is one message, in either shape.
+type Message struct {
+	ID, SessionID string
+	Role          Role
+	Created       time.Time
+	ProviderID    string
+	ModelID       string
+	// Variant is the reasoning effort the turn ran at, when the model
+	// offers one.
+	Variant string
+	Cost    float64
+	Tokens  Tokens
+	// Root and CWD are the session's project directory and working
+	// directory. 2.x records one directory per session, given as both.
+	Root, CWD string
+	// Text is the message's prose: the instruction on a user message,
+	// the reply on an assistant one. Synthetic text (opencode prodding
+	// itself) and reasoning are left out. Set only with Options.Parts.
+	Text []string
+	// Tools are an assistant turn's tool calls. Set only with
+	// Options.Parts.
+	Tools []Tool
+}
+
+// Options narrows a read.
+type Options struct {
+	// SessionID reads one session only.
+	SessionID string
+	// Since skips messages created before it.
+	Since time.Time
+	// Parts reads text, tool calls and compactions as well as messages.
+	// In 1.x they live in a separate, much larger table.
+	Parts bool
+}
+
+// Read visits every message in the store at path. A missing store is
+// not an error: opencode may not be installed.
+func Read(path string, opts Options, visit func(Message) error) error {
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	// mode=ro reads committed WAL data without blocking a running
+	// opencode.
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	if err != nil {
+		return fmt.Errorf("opencodedb: open: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	v2, v1 := hasTable(db, "session_message"), hasTable(db, "message")
+	if !v1 && !v2 {
+		return fmt.Errorf("%w: no message table in %s", ErrSchema, path)
+	}
+	seen := map[string]bool{}
+	if v2 {
+		if err := readV2(db, opts, seen, visit); err != nil {
+			return err
+		}
+	}
+	if v1 {
+		if err := readV1(db, opts, seen, visit); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Newest is the time of the newest message in either shape, and whether
+// the store could be read.
+func Newest(path string) (time.Time, bool) {
+	if _, err := os.Stat(path); err != nil {
+		return time.Time{}, false
+	}
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro&immutable=1")
+	if err != nil {
+		return time.Time{}, false
+	}
+	defer func() { _ = db.Close() }()
+	var newest int64
+	read := false
+	for _, table := range []string{"session_message", "message"} {
+		if !hasTable(db, table) {
+			continue
+		}
+		var ms sql.NullInt64
+		if db.QueryRow(`SELECT MAX(time_created) FROM `+table).Scan(&ms) != nil {
+			continue
+		}
+		read = true
+		if ms.Valid && ms.Int64 > newest {
+			newest = ms.Int64
+		}
+	}
+	if newest == 0 {
+		return time.Time{}, read
+	}
+	return time.UnixMilli(newest).UTC(), true
+}
+
+func hasTable(db *sql.DB, name string) bool {
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, name).Scan(&n); err != nil {
+		return false
+	}
+	return n > 0
+}
+
+// v2Data is the JSON on a session_message row; which fields are set
+// depends on its type.
+type v2Data struct {
+	Text  string `json:"text"`
+	Model struct {
+		ProviderID string `json:"providerID"`
+		ID         string `json:"id"`
+		Variant    string `json:"variant"`
+	} `json:"model"`
+	Content []struct {
+		Type  string `json:"type"`
+		Text  string `json:"text"`
+		Name  string `json:"name"`
+		State struct {
+			Input json.RawMessage `json:"input"`
+		} `json:"state"`
+	} `json:"content"`
+	Cost   float64 `json:"cost"`
+	Tokens struct {
+		Input     int64 `json:"input"`
+		Output    int64 `json:"output"`
+		Reasoning int64 `json:"reasoning"`
+		Cache     struct {
+			Read  int64 `json:"read"`
+			Write int64 `json:"write"`
+		} `json:"cache"`
+	} `json:"tokens"`
+}
+
+func readV2(db *sql.DB, opts Options, seen map[string]bool, visit func(Message) error) error {
+	query := `SELECT m.id, m.session_id, m.type, m.time_created, m.data, coalesce(s.directory, '')
+		FROM session_message m LEFT JOIN session_v2 s ON s.id = m.session_id
+		WHERE m.type IN ('user', 'assistant', 'compaction')`
+	var args []any
+	if opts.SessionID != "" {
+		query += ` AND m.session_id = ?`
+		args = append(args, opts.SessionID)
+	}
+	if !opts.Since.IsZero() {
+		query += ` AND m.time_created >= ?`
+		args = append(args, opts.Since.UnixMilli())
+	}
+	rows, err := db.Query(query+` ORDER BY m.time_created`, args...)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrSchema, err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id, session, typ, data, dir string
+		var created int64
+		if rows.Scan(&id, &session, &typ, &created, &data, &dir) != nil {
+			continue
+		}
+		seen[id] = true
+		var d v2Data
+		if json.Unmarshal([]byte(data), &d) != nil {
+			continue
+		}
+		m := Message{
+			ID: id, SessionID: session, Role: Role(typ), Created: time.UnixMilli(created).UTC(),
+			ProviderID: d.Model.ProviderID, ModelID: d.Model.ID, Variant: d.Model.Variant,
+			Cost: d.Cost, Root: dir, CWD: dir,
+			Tokens: Tokens{
+				Input: d.Tokens.Input, Output: d.Tokens.Output, Reasoning: d.Tokens.Reasoning,
+				CacheRead: d.Tokens.Cache.Read, CacheWrite: d.Tokens.Cache.Write,
+			},
+		}
+		if opts.Parts {
+			if m.Role == User && strings.TrimSpace(d.Text) != "" {
+				m.Text = []string{d.Text}
+			}
+			for _, c := range d.Content {
+				switch c.Type {
+				case "text":
+					if strings.TrimSpace(c.Text) != "" {
+						m.Text = append(m.Text, c.Text)
+					}
+				case "tool":
+					m.Tools = append(m.Tools, Tool{Name: c.Name, Input: c.State.Input})
+				}
+			}
+		}
+		if err := visit(m); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+// v1Message is the JSON on a 1.x message row.
+type v1Message struct {
+	Role       string  `json:"role"`
+	ProviderID string  `json:"providerID"`
+	ModelID    string  `json:"modelID"`
+	Variant    string  `json:"variant"`
+	Cost       float64 `json:"cost"`
+	Model      struct {
+		ProviderID string `json:"providerID"`
+	} `json:"model"`
+	Time struct {
+		Created int64 `json:"created"`
+	} `json:"time"`
+	Path struct {
+		CWD  string `json:"cwd"`
+		Root string `json:"root"`
+	} `json:"path"`
+	Tokens struct {
+		Input     int64 `json:"input"`
+		Output    int64 `json:"output"`
+		Reasoning int64 `json:"reasoning"`
+		Cache     struct {
+			Read  int64 `json:"read"`
+			Write int64 `json:"write"`
+		} `json:"cache"`
+	} `json:"tokens"`
+}
+
+// v1Parts is what a 1.x message's parts add to it.
+type v1Parts struct {
+	text       []string
+	tools      []Tool
+	compaction bool
+}
+
+func readV1(db *sql.DB, opts Options, seen map[string]bool, visit func(Message) error) error {
+	var parts map[string]*v1Parts
+	if opts.Parts && hasTable(db, "part") {
+		parts = readV1Parts(db, opts.SessionID)
+	}
+	query := `SELECT id, session_id, data FROM message`
+	var args []any
+	if opts.SessionID != "" {
+		query += ` WHERE session_id = ?`
+		args = append(args, opts.SessionID)
+	}
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrSchema, err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id, session, data string
+		// A message 2.x has copied is read from there, with whatever
+		// 2.x made of its parts: 2.x copies compactions as messages of
+		// their own, so the 1.x compaction part is not read again.
+		if rows.Scan(&id, &session, &data) != nil || seen[id] {
+			continue
+		}
+		var d v1Message
+		if json.Unmarshal([]byte(data), &d) != nil {
+			continue
+		}
+		// A row without a creation time is still a turn that was paid
+		// for; it has a zero Created, and a Since filter drops it.
+		var created time.Time
+		if d.Time.Created > 0 {
+			created = time.UnixMilli(d.Time.Created).UTC()
+		}
+		if !opts.Since.IsZero() && created.Before(opts.Since) {
+			continue
+		}
+		provider := d.ProviderID
+		if provider == "" {
+			provider = d.Model.ProviderID
+		}
+		m := Message{
+			ID: id, SessionID: session, Role: Role(d.Role), Created: created,
+			ProviderID: provider, ModelID: d.ModelID, Variant: d.Variant, Cost: d.Cost,
+			Root: d.Path.Root, CWD: d.Path.CWD,
+			Tokens: Tokens{
+				Input: d.Tokens.Input, Output: d.Tokens.Output, Reasoning: d.Tokens.Reasoning,
+				CacheRead: d.Tokens.Cache.Read, CacheWrite: d.Tokens.Cache.Write,
+			},
+		}
+		p := parts[id]
+		if p != nil {
+			m.Text, m.Tools = p.text, p.tools
+		}
+		if m.Role == User || m.Role == Assistant {
+			if err := visit(m); err != nil {
+				return err
+			}
+		}
+		// 1.x marks a compaction with a part on the message that
+		// triggered it; 2.x gives it a message of its own.
+		if p != nil && p.compaction {
+			if err := visit(Message{ID: id + "#compaction", SessionID: session, Role: Compaction, Created: created,
+				ProviderID: provider, Root: m.Root, CWD: m.CWD}); err != nil {
+				return err
+			}
+		}
+	}
+	return rows.Err()
+}
+
+// readV1Parts gathers each 1.x message's text, tool calls and
+// compaction marker. A failure yields what was read: a missing part
+// degrades one signal, where failing would lose every metric.
+func readV1Parts(db *sql.DB, session string) map[string]*v1Parts {
+	out := map[string]*v1Parts{}
+	query := `SELECT message_id, data FROM part`
+	var args []any
+	if session != "" {
+		query = `SELECT p.message_id, p.data FROM part p JOIN message m ON m.id = p.message_id WHERE m.session_id = ?`
+		args = append(args, session)
+	}
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return out
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var messageID, data string
+		if rows.Scan(&messageID, &data) != nil {
+			continue
+		}
+		var p struct {
+			Type      string `json:"type"`
+			Text      string `json:"text"`
+			Synthetic bool   `json:"synthetic"`
+			Tool      string `json:"tool"`
+			State     struct {
+				Input json.RawMessage `json:"input"`
+			} `json:"state"`
+		}
+		if json.Unmarshal([]byte(data), &p) != nil {
+			continue
+		}
+		e := out[messageID]
+		if e == nil {
+			e = &v1Parts{}
+			out[messageID] = e
+		}
+		switch p.Type {
+		case "text":
+			if !p.Synthetic && strings.TrimSpace(p.Text) != "" {
+				e.text = append(e.text, p.Text)
+			}
+		case "tool":
+			e.tools = append(e.tools, Tool{Name: p.Tool, Input: p.State.Input})
+		case "compaction":
+			e.compaction = true
+		}
+	}
+	return out
+}

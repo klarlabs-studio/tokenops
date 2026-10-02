@@ -7,15 +7,10 @@
 package opencode
 
 import (
-	"database/sql"
-	"encoding/json"
-	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
-	_ "modernc.org/sqlite" // pure-Go driver, already a TokenOps dependency
-
+	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -37,48 +32,10 @@ type Turn struct {
 	Timestamp    time.Time
 }
 
-// messageData mirrors the JSON persisted in opencode's message.data column
-// for assistant turns. Only the fields TokenOps needs are modelled; opencode
-// may add others without breaking this reader.
-type messageData struct {
-	Role       string  `json:"role"`
-	ModelID    string  `json:"modelID"`
-	ProviderID string  `json:"providerID"`
-	Cost       float64 `json:"cost"`
-	Time       struct {
-		Created int64 `json:"created"`
-	} `json:"time"`
-	Path struct {
-		CWD  string `json:"cwd"`
-		Root string `json:"root"`
-	} `json:"path"`
-	Tokens struct {
-		Input     int `json:"input"`
-		Output    int `json:"output"`
-		Reasoning int `json:"reasoning"`
-		Cache     struct {
-			Read  int `json:"read"`
-			Write int `json:"write"`
-		} `json:"cache"`
-	} `json:"tokens"`
-}
+// DefaultRoot returns opencode's database path: OPENCODE_DB, then
+// XDG_DATA_HOME, then ~/.local/share (opencodedb.DefaultPath).
+func DefaultRoot() (string, error) { return opencodedb.DefaultPath() }
 
-// DefaultRoot returns the default opencode database path, honouring
-// XDG_DATA_HOME when set.
-func DefaultRoot() (string, error) {
-	if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" {
-		return filepath.Join(xdg, "opencode", "opencode.db"), nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".local", "share", "opencode", "opencode.db"), nil
-}
-
-// ReadMessages opens dbPath read-only and invokes visit for every assistant
-// turn that carries token usage. A missing database is not an error (opencode
-// may not be installed) — visit simply isn't called.
 // ReadSession is ReadMessages scoped to one session.
 //
 // The coaching hook runs when a session goes idle and needs only that
@@ -92,75 +49,36 @@ func ReadSession(dbPath, sessionID string, visit func(Turn) error) error {
 	return readMessages(dbPath, sessionID, visit)
 }
 
+// ReadMessages opens dbPath read-only and invokes visit for every assistant
+// turn that carries token usage, from opencode 1.x and 2.x alike. A missing
+// database is not an error (opencode may not be installed).
 func ReadMessages(dbPath string, visit func(Turn) error) error {
 	return readMessages(dbPath, "", visit)
 }
 
-// readMessages walks the message table, optionally narrowed to one
-// session.
 func readMessages(dbPath, sessionID string, visit func(Turn) error) error {
-	if _, err := os.Stat(dbPath); err != nil {
-		if os.IsNotExist(err) {
+	return opencodedb.Read(dbPath, opencodedb.Options{SessionID: sessionID}, func(m opencodedb.Message) error {
+		if m.Role != opencodedb.Assistant {
 			return nil
 		}
-		return err
-	}
-	// mode=ro opens read-only and still reads committed WAL data, so a live
-	// opencode process is never blocked and its uncommitted writes are
-	// invisible until flushed.
-	db, err := sql.Open("sqlite", "file:"+dbPath+"?mode=ro")
-	if err != nil {
-		return fmt.Errorf("open opencode db: %w", err)
-	}
-	defer func() { _ = db.Close() }()
-
-	query := `SELECT id, session_id, data FROM message`
-	args := []any{}
-	if sessionID != "" {
-		query += ` WHERE session_id = ?`
-		args = append(args, sessionID)
-	}
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		return fmt.Errorf("query opencode messages: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	for rows.Next() {
-		var id, sessionID, data string
-		if err := rows.Scan(&id, &sessionID, &data); err != nil {
-			return err
+		t := m.Tokens
+		if t.Input+t.Output+t.Reasoning+t.CacheRead+t.CacheWrite == 0 {
+			return nil
 		}
-		var d messageData
-		if err := json.Unmarshal([]byte(data), &d); err != nil {
-			// A single malformed row must not abort the whole scan.
-			continue
-		}
-		if d.Role != "assistant" {
-			continue
-		}
-		total := d.Tokens.Input + d.Tokens.Output + d.Tokens.Reasoning +
-			d.Tokens.Cache.Read + d.Tokens.Cache.Write
-		if total == 0 {
-			continue
-		}
-		if err := visit(Turn{
-			ID:           id,
-			SessionID:    sessionID,
-			Project:      projectFromPath(d.Path.Root, d.Path.CWD),
-			Model:        d.ModelID,
-			Provider:     mapProvider(d.ProviderID),
-			Endpoint:     endpointFor(d.ProviderID),
-			InputTokens:  d.Tokens.Input + d.Tokens.Cache.Read + d.Tokens.Cache.Write,
-			CachedTokens: d.Tokens.Cache.Read,
-			OutputTokens: d.Tokens.Output + d.Tokens.Reasoning,
-			Cost:         d.Cost,
-			Timestamp:    time.UnixMilli(d.Time.Created).UTC(),
-		}); err != nil {
-			return err
-		}
-	}
-	return rows.Err()
+		return visit(Turn{
+			ID:           m.ID,
+			SessionID:    m.SessionID,
+			Project:      projectFromPath(m.Root, m.CWD),
+			Model:        m.ModelID,
+			Provider:     mapProvider(m.ProviderID),
+			Endpoint:     endpointFor(m.ProviderID),
+			InputTokens:  int(t.Input + t.CacheRead + t.CacheWrite),
+			CachedTokens: int(t.CacheRead),
+			OutputTokens: int(t.Output + t.Reasoning),
+			Cost:         m.Cost,
+			Timestamp:    m.Created,
+		})
+	})
 }
 
 // projectFromPath derives a stable project label from the session's working

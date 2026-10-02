@@ -1,25 +1,16 @@
 package replies
 
 import (
-	"database/sql"
-	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
+	"errors"
 
-	_ "modernc.org/sqlite" // read-only driver for opencode.db
+	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb"
 )
 
-// OpencodeDefaultPath returns the conventional opencode store.
-func OpencodeDefaultPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".local", "share", "opencode", "opencode.db"), nil
-}
+// OpencodeDefaultPath returns opencode's store (opencodedb.DefaultPath).
+func OpencodeDefaultPath() (string, error) { return opencodedb.DefaultPath() }
+
+// errLimit stops a read once enough has been collected.
+var errLimit = errors.New("replies: limit reached")
 
 // extractOpencode reads the model's replies out of opencode's store.
 //
@@ -35,62 +26,26 @@ func extractOpencode(path string, opts ExtractOptions) ([]AssistantReply, error)
 		}
 		path = p
 	}
-	if _, err := os.Stat(path); err != nil {
-		return nil, nil
-	}
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
-	if err != nil {
-		return nil, fmt.Errorf("replies: open opencode store: %w", err)
-	}
-	defer func() { _ = db.Close() }()
-
-	rows, err := db.Query(`
-		SELECT m.session_id, m.data, p.data
-		FROM part p JOIN message m ON m.id = p.message_id`)
-	if err != nil {
-		return nil, fmt.Errorf("replies: query opencode store: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
 	var out []AssistantReply
-	for rows.Next() {
-		var sessionID, msgData, partData string
-		if err := rows.Scan(&sessionID, &msgData, &partData); err != nil {
-			continue
+	err := opencodedb.Read(path, opencodedb.Options{SessionID: opts.SessionID, Since: opts.Since, Parts: true}, func(m opencodedb.Message) error {
+		if m.Role != opencodedb.Assistant || m.Created.IsZero() {
+			return nil
 		}
-		var m struct {
-			Role string `json:"role"`
-			Time struct {
-				Created int64 `json:"created"`
-			} `json:"time"`
+		if !opts.Until.IsZero() && m.Created.After(opts.Until) {
+			return nil
 		}
-		if json.Unmarshal([]byte(msgData), &m) != nil || m.Role != "assistant" {
-			continue
+		// opencodedb keeps only text, never reasoning, so what remains is
+		// what the operator read; each text part is one entry, as before.
+		for _, text := range m.Text {
+			out = append(out, AssistantReply{Timestamp: m.Created, SessionID: m.SessionID, Text: text})
+			if opts.Limit > 0 && len(out) >= opts.Limit {
+				return errLimit
+			}
 		}
-		var p struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
-		}
-		if json.Unmarshal([]byte(partData), &p) != nil {
-			continue
-		}
-		if p.Type != "text" || strings.TrimSpace(p.Text) == "" {
-			continue
-		}
-		at := time.UnixMilli(m.Time.Created).UTC()
-		if !opts.Since.IsZero() && at.Before(opts.Since) {
-			continue
-		}
-		if !opts.Until.IsZero() && at.After(opts.Until) {
-			continue
-		}
-		if opts.SessionID != "" && sessionID != opts.SessionID {
-			continue
-		}
-		out = append(out, AssistantReply{Timestamp: at, SessionID: sessionID, Text: p.Text})
-		if opts.Limit > 0 && len(out) >= opts.Limit {
-			break
-		}
+		return nil
+	})
+	if errors.Is(err, errLimit) {
+		err = nil
 	}
-	return out, rows.Err()
+	return out, err
 }
