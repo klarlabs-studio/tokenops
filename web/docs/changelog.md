@@ -4,7 +4,14 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.88.0**.
+Current release: **v0.88.1**.
+
+## v0.88.1 — Cursor's timestamps
+
+Current Cursor builds write a message's time as a string. The Cursor
+reader accepted only a number, so on a real machine it read all 269,031
+messages as an unknown schema and `dx` reported Cursor as unreadable. It
+now accepts a number, a numeric string or an ISO time.
 
 ## v0.88.0 — opencode 2, and a line under the prompt
 

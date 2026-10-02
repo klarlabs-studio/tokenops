@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.88.1 - 2026-10-02
+
+### Fixed
+
+- **dx:** Read Cursor messages whose createdAt is a string, as current Cursor builds write it; every bubble was read as an unknown schema (#493)
+
 ## 0.88.0 - 2026-10-02
 
 ### Added

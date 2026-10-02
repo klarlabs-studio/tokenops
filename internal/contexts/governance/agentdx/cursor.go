@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -51,9 +52,9 @@ const (
 
 // cursorBubble is one message row from cursorDiskKV.
 type cursorBubble struct {
-	Type       int    `json:"type"`
-	Text       string `json:"text"`
-	CreatedAt  int64  `json:"createdAt"`
+	Type       int        `json:"type"`
+	Text       string     `json:"text"`
+	CreatedAt  cursorTime `json:"createdAt"`
 	TokenCount struct {
 		InputTokens int64 `json:"inputTokens"`
 	} `json:"tokenCount"`
@@ -119,10 +120,10 @@ func ExtractCursor(opts ExtractOptions) ([]Record, error) {
 		if json.Unmarshal([]byte(value), &b) != nil {
 			continue
 		}
-		if b.CreatedAt <= 0 {
+		at := time.Time(b.CreatedAt)
+		if at.IsZero() {
 			continue
 		}
-		at := time.UnixMilli(b.CreatedAt).UTC()
 		if !opts.Since.IsZero() && at.Before(opts.Since) {
 			continue
 		}
@@ -179,4 +180,35 @@ func hasTable(db *sql.DB, name string) bool {
 	err := db.QueryRow(
 		`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, name).Scan(&found)
 	return err == nil && found == name
+}
+
+// cursorTime is a bubble's createdAt. Cursor has written it as epoch
+// milliseconds and, in current builds, as a string: an ISO 8601 time or
+// milliseconds in text. A reader that accepted only the number read
+// 269,031 real bubbles as an unknown schema.
+type cursorTime time.Time
+
+// UnmarshalJSON accepts every shape Cursor has used; anything else is
+// the zero time, which the reader skips.
+func (t *cursorTime) UnmarshalJSON(b []byte) error {
+	var ms float64
+	if json.Unmarshal(b, &ms) == nil {
+		if ms > 0 {
+			*t = cursorTime(time.UnixMilli(int64(ms)).UTC())
+		}
+		return nil
+	}
+	var s string
+	if json.Unmarshal(b, &s) != nil {
+		return nil
+	}
+	s = strings.TrimSpace(s)
+	if n, err := strconv.ParseInt(s, 10, 64); err == nil && n > 0 {
+		*t = cursorTime(time.UnixMilli(n).UTC())
+		return nil
+	}
+	if at, err := time.Parse(time.RFC3339Nano, s); err == nil {
+		*t = cursorTime(at.UTC())
+	}
+	return nil
 }
