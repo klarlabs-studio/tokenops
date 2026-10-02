@@ -65,7 +65,12 @@ type Config struct {
 	ModelPolicy ModelPolicyConfig `yaml:"model_policy,omitempty"`
 	// Money is the currency you pay your plans in, for showing plan cost
 	// and value per plan unit in it.
-	Money       MoneyConfig       `yaml:"money,omitempty"`
+	Money MoneyConfig `yaml:"money,omitempty"`
+	// Statusline records whether TokenOps' line shows in Claude Code's
+	// status line. init installs it by default; an uninstall sets
+	// enabled to false, so a later init leaves it out until the operator
+	// installs it again.
+	Statusline  StatuslineConfig  `yaml:"statusline,omitempty"`
 	TLS         TLSConfig         `yaml:"tls"`
 	Storage     StorageConfig     `yaml:"storage"`
 	Retention   RetentionConfig   `yaml:"retention,omitempty"`
@@ -104,6 +109,18 @@ func ParseMode(s string) (string, error) {
 	default:
 		return "", fmt.Errorf("mode must be %q or %q, got %q", ModePassive, ModeActive, s)
 	}
+}
+
+// StatuslineConfig is the operator's choice about TokenOps' status line.
+type StatuslineConfig struct {
+	// Enabled is nil until the operator chooses; nil means on.
+	Enabled *bool `yaml:"enabled,omitempty"`
+}
+
+// StatuslineWanted reports whether init should install the status line:
+// unless the operator turned it off.
+func (c Config) StatuslineWanted() bool {
+	return c.Statusline.Enabled == nil || *c.Statusline.Enabled
 }
 
 // MoneyConfig is the operator's currency. Usage is priced in US dollars
