@@ -123,3 +123,31 @@ func TestCursorHonoursSince(t *testing.T) {
 		t.Errorf("got %d records, want only the one inside the window", len(got))
 	}
 }
+
+// Current Cursor builds write createdAt as a string; a reader that took
+// only the number reported 269,031 real bubbles as an unknown schema.
+func TestCursorCreatedAtAsString(t *testing.T) {
+	root := seedCursorDB(t, map[string]string{
+		"bubbleId:c1:b1": `{"_v":3,"type":1,"text":"fix the retry path","createdAt":"2026-10-02T09:00:00.000Z","tokenCount":{}}`,
+		"bubbleId:c1:b2": `{"_v":3,"type":2,"text":"done","createdAt":"1759395610000","tokenCount":{"inputTokens":1200}}`,
+		"bubbleId:c1:b3": `{"_v":3,"type":2,"text":"older","createdAt":1756000010000}`,
+	}, "cursorDiskKV")
+
+	recs, err := ExtractCursor(ExtractOptions{Root: root})
+	if err != nil {
+		t.Fatalf("string timestamps read as a schema failure: %v", err)
+	}
+	if len(recs) != 3 {
+		t.Fatalf("records %d, want 3", len(recs))
+	}
+	want := time.Date(2026, 10, 2, 9, 0, 0, 0, time.UTC)
+	found := false
+	for _, r := range recs {
+		if r.Kind == KindPrompt && r.At.Equal(want) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the ISO createdAt was not parsed: %+v", recs)
+	}
+}
