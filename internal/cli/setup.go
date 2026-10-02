@@ -70,7 +70,7 @@ func realSetupTarget() (setupTarget, error) {
 func runSetup(out io.Writer, cfgPath string, target setupTarget) {
 	steps := wireMCPHosts(target.Home, target.Exe)
 	steps = append(steps, wireHooks(target.SettingsPath, target.Exe))
-	steps = append(steps, statuslineStep(target.SettingsPath, target.Exe))
+	steps = append(steps, statuslineStep(cfgPath, target.SettingsPath, target.Exe))
 	steps = append(steps, bindPlan(cfgPath))
 	steps = append(steps, ingestionStep(cfgPath))
 	steps = append(steps, daemonUnitStep(daemonUnitPath(target.Home)))
@@ -433,8 +433,12 @@ func setLocalSource(cfg *config.Config, source string, on bool) {
 // statuslineStep shows TokenOps' line in Claude Code's status line,
 // keeping a status line the operator already has under it. It is on by
 // default and one command to undo (autonomous by default, ADR 0009 §7).
-func statuslineStep(settingsPath, exe string) setupStep {
+func statuslineStep(cfgPath, settingsPath, exe string) setupStep {
 	const name = "Claude Code status line"
+	if cfg, err := config.ReadMutable(cfgPath); err == nil && !cfg.StatuslineWanted() {
+		// The operator uninstalled it; their choice stands.
+		return setupStep{Name: name, Detail: "off (you uninstalled it) — `tokenops statusline install` brings it back"}
+	}
 	if _, err := os.Stat(filepath.Dir(settingsPath)); err != nil {
 		return setupStep{Name: name, Detail: "Claude Code not found; skipped"}
 	}

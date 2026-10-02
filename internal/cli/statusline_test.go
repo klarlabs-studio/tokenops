@@ -126,3 +126,54 @@ func TestStatuslineSubagentRows(t *testing.T) {
 		t.Errorf("rows %q", lines)
 	}
 }
+
+// An uninstall is the operator's choice: a later init leaves the status
+// line out, and only an explicit install brings it back.
+func TestStatuslineUninstallSticksAcrossInit(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	cfgPath := filepath.Join(home, ".config", "tokenops", "config.yaml")
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfgPath, []byte("listen: 127.0.0.1:7878\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	settings := filepath.Join(home, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(settings), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run := func(args ...string) string {
+		var out bytes.Buffer
+		root := NewRoot()
+		root.SetArgs(append([]string{"statusline"}, args...))
+		root.SetOut(&out)
+		root.SetErr(&out)
+		if err := root.Execute(); err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, out.String())
+		}
+		return out.String()
+	}
+	if step := statuslineStep(cfgPath, settings, "/opt/bin/tokenops"); readStatusLine(t, settings) == nil {
+		t.Fatalf("init did not install by default: %+v", step)
+	}
+	if out := run("uninstall", "--settings", settings); !strings.Contains(out, "init will leave it out") {
+		t.Errorf("uninstall: %s", out)
+	}
+	step := statuslineStep(cfgPath, settings, "/opt/bin/tokenops")
+	if readStatusLine(t, settings) != nil || !strings.Contains(step.Detail, "you uninstalled it") {
+		t.Fatalf("init put an uninstalled status line back: %+v", step)
+	}
+	run("install", "--settings", settings)
+	if readStatusLine(t, settings) == nil {
+		t.Fatal("install did not bring it back")
+	}
+	cfg, err := readMutableConfig(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.StatuslineWanted() {
+		t.Error("an explicit install left init's opt-out in place")
+	}
+}
