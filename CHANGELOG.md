@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.88.0 - 2026-10-02
+
+### Added
+
+- **opencode:** Read opencode 2.x's store alongside 1.x's, each message once (#488)
+- **opencode:** A plugin for opencode 2 (read-guard, route-guard), next to the 1.x one (#489)
+- **statusline:** TokenOps' line under Claude Code's prompt, in Klarlabs colours, with subagent rows; `init` installs it, wrapping an existing status line (#490)
+
+### Fixed
+
+- **statusline:** An uninstall is remembered, so `init` does not put it back (#491)
+
 ## 0.87.0 - 2026-10-01
 
 ### Added

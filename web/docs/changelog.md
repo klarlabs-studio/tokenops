@@ -4,7 +4,25 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.87.0**.
+Current release: **v0.88.0**.
+
+## v0.88.0 — opencode 2, and a line under the prompt
+
+opencode 2 keeps its sessions in new tables of the same database, copies
+1.x sessions across a few at a time, and does not run 1.x plugins. An
+upgraded opencode would have gone dark in TokenOps. Every opencode reader
+now reads both versions' tables, counting each message once, and
+`hooks install --client opencode` writes a plugin for each version
+installed: read-guard and route-guard work in opencode 2, verified in a
+real 2.x session.
+
+TokenOps also has a line under Claude Code's prompt, in Klarlabs colours:
+the quota windows Claude Code reports, the context against where the
+session compacts, the cache, the session's cost in your currency, and the
+coach's open tip. It reads only what Claude Code hands it and files
+TokenOps already keeps, and takes about 12 ms. `init` installs it and
+keeps a status line you already have under it; uninstalling it is
+remembered.
 
 ## v0.87.0 — who bills what
 
