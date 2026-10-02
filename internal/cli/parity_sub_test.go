@@ -53,6 +53,8 @@ var subToMCP = map[string][]string{
 // starting "GAP:" are not deliberate — they are recorded so the asymmetry
 // is visible, and closing one means moving it to subToMCP.
 var subCLIOnly = map[string]string{
+	"statusline install":    "edits the operator's Claude Code settings; init runs it",
+	"statusline uninstall":  "restores the operator's own status line",
 	"fmt hook":              "is a hook entry point invoked by a client, not a user",
 	"fmt recover":           "prints a stored full output by recovery id, which the agent already receives inline",
 	"fmt bench":             "measures formatters over a corpus of captured outputs — a contributor tool",

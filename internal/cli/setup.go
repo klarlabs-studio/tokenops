@@ -70,6 +70,7 @@ func realSetupTarget() (setupTarget, error) {
 func runSetup(out io.Writer, cfgPath string, target setupTarget) {
 	steps := wireMCPHosts(target.Home, target.Exe)
 	steps = append(steps, wireHooks(target.SettingsPath, target.Exe))
+	steps = append(steps, statuslineStep(target.SettingsPath, target.Exe))
 	steps = append(steps, bindPlan(cfgPath))
 	steps = append(steps, ingestionStep(cfgPath))
 	steps = append(steps, daemonUnitStep(daemonUnitPath(target.Home)))
@@ -427,4 +428,19 @@ func setLocalSource(cfg *config.Config, source string, on bool) {
 	case "opencode":
 		cfg.VendorUsage.OpenCode.Enabled = on
 	}
+}
+
+// statuslineStep shows TokenOps' line in Claude Code's status line,
+// keeping a status line the operator already has under it. It is on by
+// default and one command to undo (autonomous by default, ADR 0009 §7).
+func statuslineStep(settingsPath, exe string) setupStep {
+	const name = "Claude Code status line"
+	if _, err := os.Stat(filepath.Dir(settingsPath)); err != nil {
+		return setupStep{Name: name, Detail: "Claude Code not found; skipped"}
+	}
+	var out strings.Builder
+	if err := installStatusline(&out, settingsPath, exe); err != nil {
+		return setupStep{Name: name, Err: err}
+	}
+	return setupStep{Name: name, Detail: strings.TrimPrefix(strings.TrimSpace(out.String()), "status line: ")}
 }
