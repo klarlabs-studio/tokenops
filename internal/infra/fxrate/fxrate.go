@@ -157,3 +157,26 @@ func DetectCurrency() (currency, from string) {
 	}
 	return "USD", "no region found"
 }
+
+// Cached is the rate into m's currency from the operator's pinned rate or
+// the last ECB rates on disk, without fetching. It is for paths that run
+// on every turn, such as the statusline, which must never wait on the
+// network; ok is false when there is no rate to use.
+func Cached(m config.MoneyConfig) (fx.Rate, bool) {
+	currency := strings.ToUpper(strings.TrimSpace(m.Currency))
+	if currency == "" || currency == "USD" {
+		return fx.USD, true
+	}
+	if m.PerUSD > 0 {
+		return fx.Rate{Currency: currency, PerUSD: m.PerUSD, Source: fx.SourceConfig}, true
+	}
+	path, err := cachePath()
+	if err != nil {
+		return fx.Rate{}, false
+	}
+	cached, ok := readCache(path)
+	if !ok {
+		return fx.Rate{}, false
+	}
+	return cached.Rate(currency)
+}
