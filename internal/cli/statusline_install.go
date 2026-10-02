@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"go.klarlabs.de/tokenops/internal/config"
 )
 
 // statuslineRefreshSeconds re-runs the line while Claude Code is idle, so
@@ -26,7 +28,10 @@ func newStatuslineInstallCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return installStatusline(cmd.OutOrStdout(), resolveSettingsPath(settingsPath), exe)
+			if err := installStatusline(cmd.OutOrStdout(), resolveSettingsPath(settingsPath), exe); err != nil {
+				return err
+			}
+			return recordStatuslineChoice(true)
 		},
 	}
 	cmd.Flags().StringVar(&settingsPath, "settings", "", "Claude Code settings.json (default ~/.claude/settings.json)")
@@ -39,7 +44,15 @@ func newStatuslineUninstallCmd() *cobra.Command {
 		Use:   "uninstall",
 		Short: "Put Claude Code's status line back as it was",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return uninstallStatusline(cmd.OutOrStdout(), resolveSettingsPath(settingsPath))
+			if err := uninstallStatusline(cmd.OutOrStdout(), resolveSettingsPath(settingsPath)); err != nil {
+				return err
+			}
+			// Remembered, so a later init does not put it back.
+			if err := recordStatuslineChoice(false); err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "init will leave it out; `tokenops statusline install` brings it back")
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&settingsPath, "settings", "", "Claude Code settings.json (default ~/.claude/settings.json)")
@@ -172,4 +185,23 @@ func readOriginalStatusline() (map[string]any, bool) {
 		return nil, false
 	}
 	return m, true
+}
+
+// recordStatuslineChoice writes the operator's choice to statusline.enabled
+// in TokenOps' config. A missing config is not an error: there is nothing
+// for init to override yet.
+func recordStatuslineChoice(on bool) error {
+	path, err := config.DefaultPath()
+	if err != nil {
+		return nil
+	}
+	if _, err := os.Stat(path); err != nil {
+		return nil
+	}
+	cfg, err := config.ReadMutable(path)
+	if err != nil {
+		return err
+	}
+	cfg.Statusline.Enabled = &on
+	return writeMutableConfig(path, cfg)
 }

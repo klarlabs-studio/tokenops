@@ -416,6 +416,10 @@ tokenops statusline install     # wraps your existing status line, if any
 tokenops statusline uninstall   # puts yours back exactly
 ```
 
+Uninstalling is remembered (`statusline.enabled: false` in TokenOps'
+config), so a later `tokenops init` leaves it out; `statusline install`
+turns it back on. A company can set the same key centrally.
+
 ## Coach
 
 ### `tokenops coach`
