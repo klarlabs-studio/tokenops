@@ -201,6 +201,64 @@ func installOpencodePlugin(out io.Writer, dir, exe string, readGuard, coach, rou
 	if !readGuard && !coach && !routeGuard {
 		return fmt.Errorf("nothing selected: pass --read-guard, --coach, --route-guard, or a combination")
 	}
+	v1, v2 := opencodeVersions()
+	if v1 {
+		if err := installOpencodeV1(out, dir, exe, readGuard, coach, routeGuard, dryRun, budget); err != nil {
+			return err
+		}
+	}
+	if v2 {
+		return installOpencodeV2(out, dir, exe, readGuard, coach, routeGuard, dryRun)
+	}
+	return nil
+}
+
+// installOpencodeV2 writes the opencode 2 plugin. Coaching nudges reach
+// the operator through the TUI in 2.x, which a server plugin cannot
+// drive, so the coach half is not part of it.
+func installOpencodeV2(out io.Writer, dir, exe string, readGuard, coach, routeGuard, dryRun bool) error {
+	path := filepath.Join(dir, opencodeV2PluginName)
+	if coach && !readGuard && !routeGuard {
+		fmt.Fprintln(out, "  opencode 2: coaching nudges need the TUI, which a server plugin cannot reach; nothing to write")
+		return nil
+	}
+	body := renderOpencodeV2(exe, readGuard, routeGuard)
+	if existing, err := os.ReadFile(path); err == nil && string(existing) == body { //nolint:gosec // our own plugin file
+		fmt.Fprintln(out, "opencode 2 plugin already up to date — no changes.")
+		return nil
+	}
+	if readGuard {
+		fmt.Fprintf(out, "  + read-guard (opencode 2 tool.execute.before) -> %s\n", opencodeV2PluginName)
+	}
+	if routeGuard {
+		fmt.Fprintf(out, "  + route-guard (opencode 2 session prompt) -> %s\n", opencodeV2PluginName)
+	}
+	if coach {
+		fmt.Fprintln(out, "  · coach-hook: opencode 2 shows nudges in its TUI, which a server plugin cannot reach")
+	}
+	if dryRun {
+		fmt.Fprintln(out, "\n--dry-run: not writing. Resulting opencode 2 plugin:")
+		fmt.Fprintln(out, body)
+		return nil
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create %s: %w", dir, err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil { //nolint:gosec // a plugin the operator asked for
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	fmt.Fprintf(out, "Wrote %s\n", path)
+	return nil
+}
+
+// renderOpencodeV2 is the 2.x plugin with the chosen halves.
+func renderOpencodeV2(exe string, readGuard, routeGuard bool) string {
+	return fmt.Sprintf(opencodeV2PluginTemplate, version.String(), exe,
+		opencodeV2ReadGuardBody(readGuard)+opencodeV2RouteBody(routeGuard))
+}
+
+// installOpencodeV1 writes the opencode 1.x plugin.
+func installOpencodeV1(out io.Writer, dir, exe string, readGuard, coach, routeGuard, dryRun bool, budget float64) error {
 	path := filepath.Join(dir, opencodePluginName)
 	body := fmt.Sprintf(opencodePluginTemplate, version.String(), exe,
 		opencodeHookBody(readGuard), opencodeIdleBody(coach, budget)+opencodeRouteBody(routeGuard))
@@ -325,6 +383,31 @@ func statusOpencodePlugin(out io.Writer, dir, exe string) error {
 	if found == 0 {
 		fmt.Fprintf(out, "No tokenops hooks wired in %s.\n", path)
 	}
+	return statusOpencodeV2(out, dir, exe)
+}
+
+// statusOpencodeV2 reports the opencode 2 plugin, when there is one.
+func statusOpencodeV2(out io.Writer, dir, exe string) error {
+	path := filepath.Join(dir, opencodeV2PluginName)
+	b, err := os.ReadFile(path) //nolint:gosec // our own plugin file
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	src := string(b)
+	pluginExe := opencodePluginExe(src)
+	fmt.Fprintf(out, "  %s (opencode 2)\n", path)
+	for _, marker := range hookMarkers {
+		if !opencodeMarkerPresent(src, marker) {
+			continue
+		}
+		fmt.Fprintf(out, "  %s  event=%s -> %s\n", marker, opencodeV2Markers[marker], pluginExe)
+		if pluginExe != exe {
+			fmt.Fprintf(out, "    note: points at a different binary than this one\n")
+		}
+	}
 	return nil
 }
 
@@ -336,6 +419,63 @@ func statusOpencodePlugin(out io.Writer, dir, exe string) error {
 // still-wired read-guard alone rather than take the coaching and the read
 // dedup with it.
 func uninstallOpencodePlugin(out io.Writer, dir string, markers []string, dryRun bool) error {
+	if err := uninstallOpencodeV2(out, dir, markers, dryRun); err != nil {
+		return err
+	}
+	return uninstallOpencodeV1(out, dir, markers, dryRun)
+}
+
+// uninstallOpencodeV2 removes the named verbs from the opencode 2 plugin,
+// deleting it once nothing remains.
+func uninstallOpencodeV2(out io.Writer, dir string, markers []string, dryRun bool) error {
+	path := filepath.Join(dir, opencodeV2PluginName)
+	b, err := os.ReadFile(path) //nolint:gosec // our own plugin file
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	src := string(b)
+	drop := map[string]bool{}
+	for _, m := range markers {
+		drop[m] = true
+	}
+	keepRead := opencodeMarkerPresent(src, "read-guard") && !drop["read-guard"]
+	keepRoute := opencodeMarkerPresent(src, "route-guard") && !drop["route-guard"]
+	if keepRead == opencodeMarkerPresent(src, "read-guard") && keepRoute == opencodeMarkerPresent(src, "route-guard") {
+		return nil
+	}
+	if !keepRead && !keepRoute {
+		if dryRun {
+			fmt.Fprintf(out, "--dry-run: would delete %s.\n", path)
+			return nil
+		}
+		if err := os.Remove(path); err != nil {
+			return fmt.Errorf("remove %s: %w", path, err)
+		}
+		fmt.Fprintf(out, "Removed %s\n", path)
+		return nil
+	}
+	exe := opencodePluginExe(src)
+	if exe == "" {
+		return fmt.Errorf("%s: cannot find the binary path it calls; delete the file to remove it", path)
+	}
+	body := renderOpencodeV2(exe, keepRead, keepRoute)
+	if dryRun {
+		fmt.Fprintln(out, "--dry-run: not writing. Resulting opencode 2 plugin:")
+		fmt.Fprintln(out, body)
+		return nil
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil { //nolint:gosec // a plugin the operator asked for
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	fmt.Fprintf(out, "Wrote %s\n", path)
+	return nil
+}
+
+// uninstallOpencodeV1 removes the named verbs from the opencode 1.x plugin.
+func uninstallOpencodeV1(out io.Writer, dir string, markers []string, dryRun bool) error {
 	path := filepath.Join(dir, opencodePluginName)
 	b, err := os.ReadFile(path) //nolint:gosec // a path the operator named
 	if err != nil {
