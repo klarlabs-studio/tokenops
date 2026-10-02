@@ -113,6 +113,7 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/work/fromtasks",
 	"go.klarlabs.de/tokenops/internal/contexts/work/fromstory",
 	"go.klarlabs.de/tokenops/internal/contexts/work",
+	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb",
 	"go.klarlabs.de/tokenops/internal/contexts/telemetry/retention",
 	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow",
 	"go.klarlabs.de/tokenops/internal/domainevents",

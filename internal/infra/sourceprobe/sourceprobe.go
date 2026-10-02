@@ -7,13 +7,13 @@
 package sourceprobe
 
 import (
-	"context"
-	"database/sql"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb"
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
@@ -114,28 +114,12 @@ func newestJSONLAt(root string) (time.Time, bool) {
 }
 
 // newestOpenCodeMessage reads the newest message timestamp from opencode's
-// own SQLite store, opened read-only so the probe can never disturb the
-// client that owns it.
+// own SQLite store, in 1.x's and 2.x's tables alike, opened read-only so
+// the probe can never disturb the client that owns it. Reading only 1.x's
+// table made an upgraded opencode look idle from the day it upgraded.
 func newestOpenCodeMessage(dbPath string) (time.Time, bool) {
 	if dbPath == "" {
 		return time.Time{}, false
 	}
-	if _, err := os.Stat(dbPath); err != nil {
-		return time.Time{}, false
-	}
-	db, err := sql.Open("sqlite", "file:"+dbPath+"?mode=ro&immutable=1")
-	if err != nil {
-		return time.Time{}, false
-	}
-	defer func() { _ = db.Close() }()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	var ms sql.NullInt64
-	if err := db.QueryRowContext(ctx, `SELECT MAX(time_created) FROM message`).Scan(&ms); err != nil {
-		return time.Time{}, false
-	}
-	if !ms.Valid {
-		return time.Time{}, true // the store exists and is empty
-	}
-	return time.UnixMilli(ms.Int64).UTC(), true
+	return opencodedb.Newest(dbPath)
 }
