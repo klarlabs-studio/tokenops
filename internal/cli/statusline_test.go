@@ -82,7 +82,7 @@ func TestStatuslineInstallKeepsAndRestoresTheOriginal(t *testing.T) {
 	if err := installStatusline(&out, settings, "/opt/bin/tokenops"); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "no changes") {
+	if !strings.Contains(out.String(), "Nothing changed") {
 		t.Errorf("second install: %s", out.String())
 	}
 	if err := uninstallStatusline(&out, settings); err != nil {
@@ -175,5 +175,17 @@ func TestStatuslineUninstallSticksAcrossInit(t *testing.T) {
 	}
 	if !cfg.StatuslineWanted() {
 		t.Error("an explicit install left init's opt-out in place")
+	}
+}
+
+func TestStatuslineNameIsReadable(t *testing.T) {
+	for cmd, want := range map[string]string{
+		"/Users/x/.nvm/versions/node/v25.6.0/bin/node /Users/x/.fireconnect/cli/packages/setup-cli/bin/claude-statusline.mjs": "Your FireConnect status line",
+		"~/.claude/statusline.sh": "Your status line (statusline.sh)",
+		`printf '%s' "$(pwd)"`:    "Your previous status line",
+	} {
+		if got := statuslineName(cmd); got != want {
+			t.Errorf("statuslineName(%q) = %q, want %q", cmd, got, want)
+		}
 	}
 }

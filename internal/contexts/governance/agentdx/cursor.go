@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -51,9 +52,9 @@ const (
 
 // cursorBubble is one message row from cursorDiskKV.
 type cursorBubble struct {
-	Type       int    `json:"type"`
-	Text       string `json:"text"`
-	CreatedAt  int64  `json:"createdAt"`
+	Type       int        `json:"type"`
+	Text       string     `json:"text"`
+	CreatedAt  cursorTime `json:"createdAt"`
 	TokenCount struct {
 		InputTokens int64 `json:"inputTokens"`
 	} `json:"tokenCount"`
@@ -108,6 +109,10 @@ func ExtractCursor(opts ExtractOptions) ([]Record, error) {
 	var (
 		out     []Record
 		scanned int
+		// parsed counts bubbles in a known shape, inside the window or
+		// not; sample keeps one timestamp that could not be read.
+		parsed int
+		sample string
 	)
 	for rows.Next() {
 		var key, value string
@@ -119,10 +124,14 @@ func ExtractCursor(opts ExtractOptions) ([]Record, error) {
 		if json.Unmarshal([]byte(value), &b) != nil {
 			continue
 		}
-		if b.CreatedAt <= 0 {
+		at := b.CreatedAt.at
+		if at.IsZero() {
+			if sample == "" {
+				sample = b.CreatedAt.raw
+			}
 			continue
 		}
-		at := time.UnixMilli(b.CreatedAt).UTC()
+		parsed++
 		if !opts.Since.IsZero() && at.Before(opts.Since) {
 			continue
 		}
@@ -155,11 +164,17 @@ func ExtractCursor(opts ExtractOptions) ([]Record, error) {
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrCursorSchema, err)
 	}
-	// Rows keyed as bubbles that none of them parsed into a known role
-	// means the value shape moved, not that the operator was idle.
-	if scanned > 0 && len(out) == 0 {
-		return nil, fmt.Errorf("%w: %d bubble rows in %s, none in a known shape",
-			ErrCursorSchema, scanned, dbPath)
+	// Rows keyed as bubbles that none of them parsed means the value
+	// shape moved, not that the operator was idle. Bubbles that parsed but
+	// fall outside the window are an operator who did not use Cursor
+	// lately, which is not a schema failure.
+	if scanned > 0 && parsed == 0 {
+		hint := ""
+		if sample != "" {
+			hint = fmt.Sprintf(" (createdAt looks like %q)", sample)
+		}
+		return nil, fmt.Errorf("%w: %d bubble rows in %s, none in a known shape%s",
+			ErrCursorSchema, scanned, dbPath, hint)
 	}
 	return out, nil
 }
@@ -179,4 +194,73 @@ func hasTable(db *sql.DB, name string) bool {
 	err := db.QueryRow(
 		`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, name).Scan(&found)
 	return err == nil && found == name
+}
+
+// cursorTime is a bubble's createdAt. Cursor has written it as epoch
+// milliseconds and, in current builds, as a string. Every shape seen or
+// plausible is accepted: a number or numeric string in seconds or
+// milliseconds, or a date-time with or without a zone. raw keeps what
+// could not be read, for the schema error to show.
+type cursorTime struct {
+	at  time.Time
+	raw string
+}
+
+// cursorLayouts are the date-time forms accepted for a string createdAt.
+var cursorLayouts = []string{
+	time.RFC3339Nano,
+	"2006-01-02T15:04:05.999999999",
+	"2006-01-02 15:04:05.999999999Z07:00",
+	"2006-01-02 15:04:05.999999999",
+	time.RFC1123Z,
+	time.RFC1123,
+}
+
+// UnmarshalJSON never fails: an unreadable value is the zero time, which
+// the reader skips and reports.
+func (t *cursorTime) UnmarshalJSON(b []byte) error {
+	var n float64
+	if json.Unmarshal(b, &n) == nil {
+		t.at = epoch(n)
+		if t.at.IsZero() {
+			t.raw = string(b)
+		}
+		return nil
+	}
+	var s string
+	if json.Unmarshal(b, &s) != nil {
+		t.raw = string(b)
+		return nil
+	}
+	s = strings.TrimSpace(s)
+	if f, err := strconv.ParseFloat(s, 64); err == nil {
+		t.at = epoch(f)
+	} else {
+		for _, layout := range cursorLayouts {
+			if at, err := time.Parse(layout, s); err == nil {
+				t.at = at.UTC()
+				break
+			}
+		}
+	}
+	if t.at.IsZero() {
+		t.raw = s
+		if len(t.raw) > 40 {
+			t.raw = t.raw[:40]
+		}
+	}
+	return nil
+}
+
+// epoch reads a Unix time in seconds or milliseconds: anything below
+// 1e11 is seconds (1e11 ms is 1973, 1e11 s is the year 5138).
+func epoch(n float64) time.Time {
+	switch {
+	case n <= 0:
+		return time.Time{}
+	case n < 1e11:
+		return time.Unix(int64(n), 0).UTC()
+	default:
+		return time.UnixMilli(int64(n)).UTC()
+	}
 }
