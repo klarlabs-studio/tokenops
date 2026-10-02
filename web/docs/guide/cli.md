@@ -383,6 +383,39 @@ Available env vars:
 `TOKENOPS_COPILOT_OAUTH_TOKEN`,
 `TOKENOPS_ANTHROPIC_ADMIN_KEY`.
 
+## Status line
+
+### `tokenops statusline`
+
+TokenOps' line under Claude Code's prompt, in Klarlabs colours:
+
+```
+Opus 5.5 high · ▰▰▰▰▱▱ 5h 62% ↻12:49 · wk 41% ↻Mon · ctx 71% → 60% · cache 95% · €3.11 value
+● compact before the next task (/compact)
+```
+
+- the quota windows Claude Code reports (5-hour, weekly, or a gateway's
+  spend limit), coloured green, amber and red as they fill;
+- the context against **where the session compacts** (your coach's
+  setting), so it warns before compaction rather than at 100%;
+- the prompt cache hit ratio;
+- the session's cost in your currency — marked "value" when a plan
+  covers it, since then it is what the work was worth, not what you paid;
+- the coach's open tip, unless the coach is quiet or off.
+
+It reads only what Claude Code hands it and files TokenOps already keeps,
+never the event store or the network, and takes about 12 ms. Subagent
+rows show each subagent's model, effort and context. `NO_COLOR` turns
+the colours off.
+
+`tokenops init` sets it up, keeping a status line you already have under
+TokenOps' line. To set it up or take it out by hand:
+
+```bash
+tokenops statusline install     # wraps your existing status line, if any
+tokenops statusline uninstall   # puts yours back exactly
+```
+
 ## Coach
 
 ### `tokenops coach`

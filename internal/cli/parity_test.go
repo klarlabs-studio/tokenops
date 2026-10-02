@@ -33,6 +33,7 @@ var cliOnly = map[string]string{
 	"coach-hook":       "is a hook entry point invoked by a client, not a user",
 	"read-guard":       "is a hook entry point invoked by a client, not a user",
 	"route-guard":      "is a hook entry point invoked by a client, not a user",
+	"statusline":       "is a status line Claude Code runs on every turn, not a query an agent makes",
 	"completion":       "is cobra's shell completion generator",
 	"help":             "is cobra's help command",
 	"provider":         "binds upstream base URLs, which only the daemon's proxy reads",

@@ -79,6 +79,7 @@ func NewRoot() *cobra.Command {
 		newFmtCmd(rf),
 		newReadGuardCmd(rf),
 		newRouteGuardCmd(),
+		newStatuslineCmd(),
 		newCoachHookCmd(rf),
 		newHooksCmd(),
 	)
