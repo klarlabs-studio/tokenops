@@ -99,18 +99,25 @@ const StorageDisabledHint = "no event store: run `tokenops init`, then restart t
 // now is injected so a caller can ask about a fixed moment and so tests
 // do not depend on the clock.
 func Compute(ctx context.Context, d Deps, now time.Time) (Result, error) {
-	if d.Config == nil || len(d.Config.Plans) == 0 {
+	if d.Config == nil {
 		return Result{Unconfigured: UnconfiguredHint}, nil
 	}
 	if d.Reader == nil {
+		if len(d.Config.Plans) == 0 {
+			return Result{Unconfigured: UnconfiguredHint}, nil
+		}
 		return Result{StorageDisabled: StorageDisabledHint}, nil
+	}
+	bindings, inferred := effectiveBindings(ctx, d, now)
+	if len(bindings) == 0 {
+		return Result{Unconfigured: UnconfiguredHint}, nil
 	}
 
 	var out Result
-	out.Reports = make([]plans.HeadroomReport, 0, len(d.Config.Plans))
+	out.Reports = make([]plans.HeadroomReport, 0, len(bindings))
 
-	for _, provider := range sortedProviders(d.Config.Plans) {
-		planName := d.Config.Plans[provider]
+	for _, provider := range sortedProviders(bindings) {
+		planName := bindings[provider]
 		if _, known := plans.Lookup(planName); !known {
 			out.Notes = append(out.Notes,
 				fmt.Sprintf("%s: %q is not a plan TokenOps knows; "+
@@ -139,9 +146,31 @@ func Compute(ctx context.Context, d Deps, now time.Time) (Result, error) {
 		if report.Provider == "" {
 			report.Provider = provider
 		}
+		if inferred[provider] && report.Note == "" {
+			report.Note = provider + " reports this account as billed per token; " +
+				"`tokenops plan set " + provider + " <plan>` binds another plan"
+		}
 		out.Reports = append(out.Reports, report)
 	}
 	return out, nil
+}
+
+// effectiveBindings is the configured plans plus pay-as-you-go for every
+// provider whose own reader reported a per-token account this month and
+// that has no plan bound (ADR 0009 §7: evidence first, the operator
+// corrects). inferred names the added ones.
+func effectiveBindings(ctx context.Context, d Deps, now time.Time) (map[string]string, map[string]bool) {
+	out := make(map[string]string, len(d.Config.Plans)+1)
+	for p, name := range d.Config.Plans {
+		out[p] = name
+	}
+	inferred := map[string]bool{}
+	for _, p := range plans.PerTokenReadingProviders(ctx, d.Reader, now) {
+		if _, bound := out[p]; !bound {
+			out[p], inferred[p] = plans.PayAsYouGo, true
+		}
+	}
+	return out, inferred
 }
 
 // sortedProviders returns the configured providers in a stable order.

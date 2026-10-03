@@ -356,6 +356,10 @@ func computeSpendHeadroom(p Plan, in HeadroomInputs) HeadroomReport {
 		// The vendor's own figures: the amount it will bill against the
 		// limit it enforces. No rate factor — they are already the rate.
 		report.SpendUSD, report.SpendLimitUSD, report.SpendSource = v.UsedUSD, v.LimitUSD, "vendor"
+		if v.LimitUSD <= 0 {
+			report.Note = "no spend limit is set on the account, so there is no percentage"
+			return report
+		}
 		report.SpendPct = math.Round(v.UsedUSD/v.LimitUSD*10000) / 100
 		report.OverageRisk = classifyWindowRisk(report.SpendPct)
 		if v.LimitReached {

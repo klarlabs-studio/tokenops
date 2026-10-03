@@ -58,6 +58,7 @@ var vendorUsageSources = []string{
 	"claude-code-jsonl",
 	"opencode",
 	"anthropic-admin",
+	"fireworks",
 }
 
 func isClaudeSubscriptionSource(source string) bool {
@@ -193,6 +194,11 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 		if f.interval > 0 {
 			cfg.VendorUsage.Cursor.Interval = f.interval
 		}
+	case "fireworks":
+		cfg.VendorUsage.Fireworks.Enabled = &enabled
+		if f.interval > 0 {
+			cfg.VendorUsage.Fireworks.Interval = f.interval
+		}
 	case "github-copilot":
 		token := envSecret(f.oauthToken, "TOKENOPS_COPILOT_OAUTH_TOKEN")
 		cfg.VendorUsage.GitHubCopilot.Enabled = enabled
@@ -270,6 +276,8 @@ func sourceConfigKey(source string) string {
 		return "claude_usage_meter"
 	case "github-copilot":
 		return "github_copilot"
+	case "fireworks":
+		return "fireworks"
 	case "codex-jsonl":
 		return "codex_jsonl"
 	case "claude-code-jsonl":

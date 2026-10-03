@@ -45,6 +45,11 @@ func (c Config) VendorUsageSources() []VendorUsageSource {
 		{Name: "github_copilot", SourceTag: "github-copilot", Enabled: c.VendorUsage.GitHubCopilot.Enabled},
 		{Name: "cursor_web", SourceTag: "cursor-web", Enabled: c.VendorUsage.Cursor.Enabled},
 		{Name: "claude_subscription", SourceTag: "claude-usage-meter", Enabled: c.VendorUsage.ClaudeUsageMeter.Enabled},
+		// Fireworks' reader is on unless switched off and reads only when
+		// a Fireworks key is on the machine, so like the hook ledger it is
+		// always on rather than enabled: it is no ingestion source, and a
+		// machine without Fireworks is not a stale one.
+		{Name: "fireworks", SourceTag: "fireworks-usage", AlwaysOn: c.VendorUsage.Fireworks.On()},
 		// The cursor turn poller has no config block: it reads a ledger
 		// the coach hook writes, and that ledger is empty until the hook
 		// is installed, so an operator who does not run Cursor pays

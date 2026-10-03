@@ -353,13 +353,32 @@ tokenops vendor-usage backfill --hours 168   # full week (Admin API cap)
 tokenops vendor-usage backfill --hours 24 --dry-run
 ```
 
+### Fireworks account
+
+When a Fireworks key is on the machine, the daemon reads the account's
+spend and limit from Fireworks' documented API every 15 minutes. Nothing
+needs setting up, and `plan headroom` shows Fireworks as `pay-as-you-go`
+until you bind another plan.
+
+- **The key** is `FIREWORKS_API_KEY`, or FireConnect's own key: TokenOps
+  runs Claude Code's `apiKeyHelper` only when it is FireConnect's
+  `fireconnect key export`. The key is fetched for each reading and is
+  never stored or logged.
+- **The figures** on a company account are your own spend against your
+  per-user cap (`/users/{you}/usageLimits`). On your own account they are
+  the month's spend (`/billing/summary`) against the `monthly-spend-usd`
+  quota. Your user and account come from FireConnect's
+  `~/.fireconnect/minted-key.json`, or from the key itself.
+- **Calls** go to `api.fireworks.ai` only. Turn them off with
+  `tokenops vendor-usage enable fireworks --disable`.
+
 ### `tokenops vendor-usage enable <source>`
 
 Writes a vendor-usage source's config block to the active config
-file so operators don't hand-edit YAML. Seven sources covered:
+file so operators don't hand-edit YAML. Eight sources covered:
 `claude-subscription`, `cursor`, `github-copilot`, `codex-jsonl`,
-`claude-code-jsonl`, `opencode`, `anthropic-admin`. Secrets accept env-var
-fallback so they don't leak through shell history.
+`claude-code-jsonl`, `opencode`, `anthropic-admin`, `fireworks`. Secrets
+accept env-var fallback so they don't leak through shell history.
 
 ```bash
 # Auto-discovers OAuth token from ~/.config/github-copilot

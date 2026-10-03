@@ -19,9 +19,11 @@ import (
 	copilotusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilot"
 	cursorusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursor"
 	cursorturnspoll "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursorturns"
+	fireworksusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/fireworks"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
+	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -108,6 +110,13 @@ func startVendorUsagePollers(
 		})
 		sup.Go("vendor-usage-anthropic", p.Run)
 		logger.Info("anthropic admin usage poller live", "interval", cfg.VendorUsage.Anthropic.Interval, "bucket_width", cfg.VendorUsage.Anthropic.BucketWidth)
+	}
+	if cfg.VendorUsage.Fireworks.On() {
+		p := fireworksusage.NewPoller(bus, fireworksusage.PollerOptions{
+			Health: sourceHealth.For("fireworks-usage"), Interval: cfg.VendorUsage.Fireworks.Interval, Logger: logger,
+			Keys: fireworksusage.KeySource{Helper: claudesettings.APIKeyHelper},
+		})
+		sup.Go("fireworks-usage", p.Run)
 	}
 	if cfg.VendorUsage.GitHubCopilot.Enabled {
 		p := copilotusage.NewPoller(bus, copilotusage.PollerOptions{
