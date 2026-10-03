@@ -38,6 +38,7 @@ var sourceProvider = map[string]string{
 	"claude-code-statusline":  "anthropic",
 	"vendor-usage-anthropic":  "anthropic",
 	"codex-jsonl":             "openai",
+	"gemini-cli":              "gemini",
 	"github-copilot":          "github",
 	"cursor-web":              "cursor",
 	"fireworks-usage":         "fireworks",

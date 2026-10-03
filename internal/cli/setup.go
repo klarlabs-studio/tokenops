@@ -446,6 +446,10 @@ var localTranscriptSources = func() []string {
 	if codexDir == "" {
 		codexDir = filepath.Join(home, ".codex")
 	}
+	geminiDir := filepath.Join(home, ".gemini")
+	if h := os.Getenv("GEMINI_CLI_HOME"); h != "" {
+		geminiDir = filepath.Join(h, ".gemini")
+	}
 	dataHome := os.Getenv("XDG_DATA_HOME")
 	if dataHome == "" {
 		dataHome = filepath.Join(home, ".local", "share")
@@ -455,6 +459,7 @@ var localTranscriptSources = func() []string {
 		{"claude-code-jsonl", filepath.Join(claudeDir, "projects")},
 		{"codex-jsonl", filepath.Join(codexDir, "sessions")},
 		{"opencode", filepath.Join(dataHome, "opencode", "opencode.db")},
+		{"gemini-cli", filepath.Join(geminiDir, "tmp")},
 	} {
 		if _, err := os.Stat(c.path); err == nil {
 			out = append(out, c.name)
@@ -472,6 +477,8 @@ func setLocalSource(cfg *config.Config, source string, on bool) {
 		cfg.VendorUsage.CodexJSONL.Enabled = on
 	case "opencode":
 		cfg.VendorUsage.OpenCode.Enabled = on
+	case "gemini-cli":
+		cfg.VendorUsage.GeminiCLI.Enabled = on
 	}
 }
 

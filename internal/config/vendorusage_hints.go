@@ -20,6 +20,11 @@ func (c Config) VendorUsageConfigHint(sourceTag string) string {
 		return configHintCodexJSONL(c.VendorUsage.CodexJSONL.Enabled)
 	case "opencode":
 		return configHintOpenCode(c.VendorUsage.OpenCode.Enabled)
+	case "gemini-cli":
+		if !c.VendorUsage.GeminiCLI.Enabled {
+			return "set vendor_usage.gemini_cli.enabled: true (reads Gemini CLI's chat recordings under ~/.gemini/tmp — per-turn tokens per model)"
+		}
+		return ""
 	case "claude-code-stats-cache":
 		return configHintClaudeCode(c.VendorUsage.ClaudeCode.Enabled)
 	case "vendor-usage-anthropic":
