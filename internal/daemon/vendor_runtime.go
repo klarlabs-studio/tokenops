@@ -11,6 +11,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecode"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
@@ -114,9 +115,16 @@ func startVendorUsagePollers(
 	if cfg.VendorUsage.Fireworks.On() {
 		p := fireworksusage.NewPoller(bus, fireworksusage.PollerOptions{
 			Health: sourceHealth.For("fireworks-usage"), Interval: cfg.VendorUsage.Fireworks.Interval, Logger: logger,
-			Keys: fireworksusage.KeySource{Helper: claudesettings.APIKeyHelper},
+			Keys: fireworksusage.KeySource{Helper: claudesettings.APIKeyHelper, Fallback: fireworksFallbackKey},
 		})
 		sup.Go("fireworks-usage", p.Run)
+	}
+	if cfg.VendorUsage.Accounts.On() {
+		p := accounts.NewPoller(bus, accounts.PollerOptions{
+			Credentials: accountCredentials, Health: sourceHealth.For,
+			Interval: cfg.VendorUsage.Accounts.Interval, Logger: logger,
+		})
+		sup.Go("vendor-accounts", p.Run)
 	}
 	if cfg.VendorUsage.GitHubCopilot.Enabled {
 		p := copilotusage.NewPoller(bus, copilotusage.PollerOptions{

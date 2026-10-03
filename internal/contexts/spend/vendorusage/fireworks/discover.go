@@ -40,6 +40,9 @@ type KeySource struct {
 	// Run executes the helper and returns its output; nil runs it with
 	// sh -c.
 	Run func(ctx context.Context, cmd string) (string, error)
+	// Fallback returns a Fireworks key another harness uses (opencode,
+	// Codex), "" for none.
+	Fallback func() string
 }
 
 // Key returns the key, or ErrNoKey.
@@ -56,6 +59,11 @@ func (k KeySource) Key(ctx context.Context) (string, error) {
 	}
 	cmd := k.Helper()
 	if !IsFireConnectHelper(cmd) {
+		if k.Fallback != nil {
+			if v := strings.TrimSpace(k.Fallback()); v != "" {
+				return v, nil
+			}
+		}
 		return "", ErrNoKey
 	}
 	run := k.Run

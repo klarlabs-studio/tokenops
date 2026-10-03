@@ -284,8 +284,8 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 			}
 			for _, r := range res.Reports {
 				fmt.Fprintf(cmd.OutOrStdout(),
-					"%s (%s) — risk %s\n",
-					r.Display, r.PlanName, r.OverageRisk,
+					"%s: %s (%s) — risk %s\n",
+					r.Provider, r.Display, r.PlanName, r.OverageRisk,
 				)
 				if r.QuotaTokens > 0 {
 					fmt.Fprintf(cmd.OutOrStdout(),
@@ -317,6 +317,9 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 					)
 				} else if r.SpendUSD > 0 {
 					fmt.Fprintf(cmd.OutOrStdout(), "  spend:   %.2f USD (no limit configured)\n", r.SpendUSD)
+				}
+				if r.BalanceUSD != nil {
+					fmt.Fprintf(cmd.OutOrStdout(), "  balance: %.2f USD prepaid credit left — vendor\n", *r.BalanceUSD)
 				}
 				if r.Note != "" {
 					fmt.Fprintf(cmd.OutOrStdout(), "  note: %s\n", r.Note)

@@ -258,7 +258,13 @@ func positiveOrZero(d time.Duration) time.Duration {
 // what has been spent this month and the limit it is spent against. On
 // Claude Enterprise the Claude usage meter reads it from claude.ai.
 type VendorSpend struct {
-	UsedUSD      float64
+	UsedUSD float64
+	// UsedUnknown is set for a vendor that reports a balance but not what
+	// was spent (DeepSeek, Moonshot); spend is then estimated from usage.
+	UsedUnknown bool
+	// BalanceUSD is prepaid credit left, when HasBalance.
+	BalanceUSD   float64
+	HasBalance   bool
 	LimitUSD     float64
 	LimitReached bool
 	Source       string
@@ -278,12 +284,19 @@ func LatestVendorSpend(ctx context.Context, reader EventReader, provider eventsc
 	if best == nil || best.Attributes["extra_usage_currency"] != "USD" {
 		return nil
 	}
-	used, err1 := strconv.ParseFloat(best.Attributes["extra_usage_used"], 64)
+	perToken := best.Attributes["billing"] == "per_token"
+	usedRaw, hasUsed := best.Attributes["extra_usage_used"]
+	used, err1 := strconv.ParseFloat(usedRaw, 64)
 	limit, err2 := strconv.ParseFloat(best.Attributes["extra_usage_limit"], 64)
+	balance, err3 := strconv.ParseFloat(best.Attributes["balance_usd"], 64)
+	hasBalance := err3 == nil
+	if !perToken && (!hasUsed || err1 != nil) {
+		return nil
+	}
 	// The Claude meter reports no limit when extra usage is off, which says
 	// nothing about spend. A per-token account with no cap still spent
-	// what it reports.
-	if err1 != nil || err2 != nil || (limit <= 0 && best.Attributes["billing"] != "per_token") {
+	// what it reports, or has a balance left.
+	if err2 != nil || (limit <= 0 && !perToken) || (perToken && err1 != nil && !hasBalance) {
 		return nil
 	}
 	source := "claude_usage_meter:extra_usage"
@@ -292,6 +305,9 @@ func LatestVendorSpend(ctx context.Context, reader EventReader, provider eventsc
 	}
 	return &VendorSpend{
 		UsedUSD:      used,
+		UsedUnknown:  !hasUsed || err1 != nil,
+		BalanceUSD:   balance,
+		HasBalance:   hasBalance,
 		LimitUSD:     limit,
 		LimitReached: best.Attributes["extra_usage_limit_reached"] == "true",
 		Source:       source,
@@ -315,7 +331,7 @@ func PerTokenReadingProviders(ctx context.Context, reader EventReader, now time.
 		if e == nil || e.Attributes["billing"] != "per_token" || e.Timestamp.Before(monthStart) {
 			continue
 		}
-		if _, ok := e.Attributes["extra_usage_used"]; !ok {
+		if _, ok := e.Attributes["extra_usage_limit"]; !ok {
 			continue
 		}
 		p := string(readingProvider(e))

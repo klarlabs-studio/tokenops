@@ -362,7 +362,8 @@ until you bind another plan.
 
 - **The key** is `FIREWORKS_API_KEY`, or FireConnect's own key: TokenOps
   runs Claude Code's `apiKeyHelper` only when it is FireConnect's
-  `fireconnect key export`. The key is fetched for each reading and is
+  `fireconnect key export`. Without FireConnect, a Fireworks key that
+  opencode or Codex uses is taken instead. The key is fetched for each reading and is
   never stored or logged.
 - **The figures** on a company account are your own spend against your
   per-user cap (`/users/{you}/usageLimits`). On your own account they are
@@ -372,13 +373,37 @@ until you bind another plan.
 - **Calls** go to `api.fireworks.ai` only. Turn them off with
   `tokenops vendor-usage enable fireworks --disable`.
 
+### Other gateways and API vendors
+
+Every provider you pay per token for and used this month shows in
+`plan headroom` as `pay-as-you-go`, with spend estimated from usage.
+Where the vendor documents an account endpoint, TokenOps also reads the
+vendor's own figures every 15 minutes:
+
+| Vendor | Endpoint | Shows |
+|---|---|---|
+| OpenRouter | `GET /api/v1/key` | the key's spend, against its credit cap when it has one |
+| DeepSeek | `GET /user/balance` | prepaid USD balance left |
+| Moonshot (Kimi API) | `GET /v1/users/me/balance` | prepaid USD balance left |
+
+- **The key** is the one your harnesses already send that vendor: the key
+  next to a gateway in Claude Code's settings, Codex's
+  `[model_providers]` (`experimental_bearer_token` or `env_key`),
+  opencode's `auth.json` and `provider.*.options.apiKey`, or
+  `OPENROUTER_API_KEY`, `DEEPSEEK_API_KEY` and `MOONSHOT_API_KEY`. A key is
+  sent only to the vendor whose endpoint it was found for. It is never
+  stored or logged.
+- **Calls** go only to vendors whose key is on the machine. Turn them off
+  with `tokenops vendor-usage enable vendor-accounts --disable`.
+
 ### `tokenops vendor-usage enable <source>`
 
 Writes a vendor-usage source's config block to the active config
-file so operators don't hand-edit YAML. Eight sources covered:
+file so operators don't hand-edit YAML. Nine sources covered:
 `claude-subscription`, `cursor`, `github-copilot`, `codex-jsonl`,
-`claude-code-jsonl`, `opencode`, `anthropic-admin`, `fireworks`. Secrets
-accept env-var fallback so they don't leak through shell history.
+`claude-code-jsonl`, `opencode`, `anthropic-admin`, `fireworks`,
+`vendor-accounts`. Secrets accept env-var fallback so they don't leak
+through shell history.
 
 ```bash
 # Auto-discovers OAuth token from ~/.config/github-copilot

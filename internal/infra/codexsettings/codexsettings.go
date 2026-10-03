@@ -1,8 +1,9 @@
 // Package codexsettings reads, from Codex's config.toml, the base URL of
 // each model provider a session can name (ADR 0009). Each Codex rollout
 // records its session's model_provider; the base URL behind that ID says
-// which endpoint, and so which biller, served it. Only base_url is read:
-// keys, env_key names and every other setting are left alone.
+// which endpoint, and so which biller, served it. The key a provider is
+// called with (env_key's variable, or experimental_bearer_token) is read
+// for the vendor account readers (ADR 0009 §7), for that vendor only.
 package codexsettings
 
 import (
@@ -34,11 +35,42 @@ func ProviderBaseURL(id string) string {
 	return BaseURLs(string(b))[id]
 }
 
+// Provider is one [model_providers.<id>] table.
+type Provider struct {
+	BaseURL string
+	// EnvKey names the environment variable holding the key.
+	EnvKey string
+	// BearerToken is a key written into the config itself.
+	BearerToken string
+}
+
 // BaseURLs reads every [model_providers.<id>] table's base_url from a
-// config.toml. It understands the subset Codex writes: a table header on
-// its own line and `key = "value"` pairs, with comments.
+// config.toml.
 func BaseURLs(src string) map[string]string {
 	out := map[string]string{}
+	for id, p := range Providers(src) {
+		if p.BaseURL != "" {
+			out[id] = p.BaseURL
+		}
+	}
+	return out
+}
+
+// ReadProviders reads Codex's config and returns its provider tables; a
+// missing config has none.
+func ReadProviders() map[string]Provider {
+	b, err := os.ReadFile(ConfigPath()) //nolint:gosec // Codex's own config path
+	if err != nil {
+		return nil
+	}
+	return Providers(string(b))
+}
+
+// Providers reads every [model_providers.<id>] table from a config.toml.
+// It understands the subset Codex writes: a table header on its own line
+// and `key = "value"` pairs, with comments.
+func Providers(src string) map[string]Provider {
+	out := map[string]Provider{}
 	current := ""
 	for _, line := range strings.Split(src, "\n") {
 		line = strings.TrimSpace(line)
@@ -50,6 +82,7 @@ func BaseURLs(src string) map[string]string {
 			header := strings.Trim(strings.TrimSpace(strings.SplitN(line, "#", 2)[0]), "[]")
 			if id, ok := strings.CutPrefix(header, "model_providers."); ok {
 				current = strings.Trim(id, `"'`)
+				out[current] = Provider{}
 			}
 			continue
 		}
@@ -57,11 +90,20 @@ func BaseURLs(src string) map[string]string {
 			continue
 		}
 		key, value, ok := strings.Cut(line, "=")
-		if !ok || strings.TrimSpace(key) != "base_url" {
+		if !ok {
 			continue
 		}
-		value = strings.TrimSpace(strings.SplitN(strings.TrimSpace(value), " #", 2)[0])
-		out[current] = strings.Trim(value, `"'`)
+		value = strings.Trim(strings.TrimSpace(strings.SplitN(strings.TrimSpace(value), " #", 2)[0]), `"'`)
+		p := out[current]
+		switch strings.TrimSpace(key) {
+		case "base_url":
+			p.BaseURL = value
+		case "env_key":
+			p.EnvKey = value
+		case "experimental_bearer_token":
+			p.BearerToken = value
+		}
+		out[current] = p
 	}
 	return out
 }

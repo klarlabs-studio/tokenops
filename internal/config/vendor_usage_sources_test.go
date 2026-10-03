@@ -44,6 +44,9 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"cursor_web", "cursor-web"},
 		{"claude_subscription", "claude-usage-meter"},
 		{"fireworks", "fireworks-usage"},
+		{"openrouter_account", "openrouter-account"},
+		{"deepseek_account", "deepseek-account"},
+		{"moonshot_account", "moonshot-account"},
 		{"cursor_turns (hook ledger)", "cursor-hook"},
 	}
 	if len(got) != len(want) {

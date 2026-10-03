@@ -45,6 +45,7 @@ const (
 	SignalSourceCopilot          = "github_copilot"
 	SignalSourceCursor           = "cursor_web"
 	SignalSourceFireworks        = "fireworks_api"
+	SignalSourceVendorAccount    = "vendor_account_api"
 	SignalSourceClaudeUsageMeter = "claude_usage_meter"
 )
 
@@ -61,6 +62,7 @@ type SignalInputs struct {
 	CursorInWindow           int64
 	ClaudeUsageMeterInWindow int64
 	FireworksInWindow        int64
+	VendorAccountInWindow    int64
 	VendorAPIWired           bool
 }
 
@@ -95,6 +97,12 @@ func ClassifySignal(in SignalInputs) SignalQuality {
 			Level:  SignalLevelHigh,
 			Source: SignalSourceFireworks,
 			Caveat: "Reads Fireworks' documented API with the key FireConnect or FIREWORKS_API_KEY provides: your own spend and cap on a company account, otherwise the account's month spend and monthly-spend-usd quota. Billing is aggregated daily.",
+		}
+	case in.VendorAccountInWindow > 0:
+		return SignalQuality{
+			Level:  SignalLevelHigh,
+			Source: SignalSourceVendorAccount,
+			Caveat: "Reads the vendor's documented account endpoint (OpenRouter /api/v1/key, DeepSeek /user/balance, Moonshot /v1/users/me/balance) with the key your harness already sends it.",
 		}
 	case in.ClaudeCodeJSONLInWindow > 0:
 		return SignalQuality{
