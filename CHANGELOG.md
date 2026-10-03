@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.94.0 - 2026-10-03
+
+### Added
+
+- **init:** Plans are bound from what the clients report (Claude Code's account tier, Codex's `plan_type`), shown with their evidence and never over a plan you bound. In a terminal, init then asks only what nothing on the machine could answer: an ambiguous plan, what you pay, a spend limit nothing reports, the coach preset, and whether to supervise the daemon. `--yes` asks nothing; running out of input is never consent (#520)
+- **routers:** Where an external router chooses the model (FireRouter, OpenRouter Auto), TokenOps stands down: the route and subagent guards leave those turns alone, routing advice answers `stay` with `decided_by`, and the coach names the router (#521)
+
 ## 0.93.0 - 2026-10-03
 
 ### Added
