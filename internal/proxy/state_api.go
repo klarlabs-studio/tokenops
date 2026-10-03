@@ -25,7 +25,7 @@ func WithState(deps func() state.Deps) Option {
 	return func(s *Server) { s.state = deps }
 }
 
-func (s *Server) registerStateRoutes(mux *http.ServeMux) {
+func (s *Server) registerStateRoutes(mux RouteMux) {
 	if s.state == nil {
 		return
 	}

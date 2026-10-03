@@ -42,7 +42,7 @@ func NewAnalyticsHandlers(store *sqlite.Store, agg *analytics.Aggregator, spendE
 // Register installs every endpoint on mux. Endpoints are read-only;
 // callers should wrap them in dashauth.Middleware when authentication
 // is required.
-func (a *AnalyticsHandlers) Register(mux *http.ServeMux) {
+func (a *AnalyticsHandlers) Register(mux RouteMux) {
 	mux.HandleFunc("GET /api/spend/summary", a.spendSummary)
 	mux.HandleFunc("GET /api/spend/series", a.spendSeries)
 	mux.HandleFunc("GET /api/spend/forecast", a.spendForecast)

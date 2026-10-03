@@ -53,3 +53,7 @@ func withoutText(f prompts.Findings) prompts.Findings {
 	f.Recommendations = recs
 	return f
 }
+
+// Findings is the prompt scoring answer, named here so adapters can
+// describe it without reaching into the coaching domain.
+type Findings = prompts.Findings
