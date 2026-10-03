@@ -4,7 +4,26 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.92.0**.
+Current release: **v0.93.0**.
+
+## v0.93.0 — Coding plans and gateways
+
+`plan headroom` now shows the coding plans you use with the windows the
+vendor itself reports: z.ai's GLM Coding Plan, Kimi Code, MiniMax's
+Token Plan, Synthetic and Chutes. TokenOps reads them with the key your
+harness already sends that vendor, at that vendor's endpoint only. A
+plan TokenOps has no catalog entry for shows as `subscription`, with the
+vendor's windows. DeepInfra and Vercel AI Gateway show their balance and
+spend.
+
+A harness pointed at a gateway you run or subscribe to is now read too.
+TokenOps asks the gateway's health route what it is, without your key;
+only a recognised LiteLLM, Bifrost or ClawRouter is then sent the key,
+at the same address, to read that key's own budget.
+
+These readers follow each vendor's published endpoint or its own
+client's code. They have not yet met a live account of every kind, so
+the first readings are the real test.
 
 ## v0.92.0 — One API for every surface
 
