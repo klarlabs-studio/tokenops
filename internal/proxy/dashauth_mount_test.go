@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 )
 
@@ -52,6 +53,7 @@ func TestEveryAPIRouteIsGatedByDashAuth(t *testing.T) {
 		WithEventCounts(func() map[string]int64 { return map[string]int64{"k": 1} }),
 		WithSourceFreshness(func() []freshness.Report { return nil }),
 		WithPlans(func() headroom.Deps { return headroom.Deps{} }),
+		WithState(func() state.Deps { return state.Deps{} }),
 	)
 	if err := srv.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -74,6 +76,12 @@ func TestEveryAPIRouteIsGatedByDashAuth(t *testing.T) {
 		"/api/glance",
 		"/api/plans/headroom",
 		"/api/plans/session-budget",
+		"/api/status",
+		"/api/mode",
+		"/api/coach",
+		"/api/config",
+		"/api/data-sources",
+		"/api/vendor-usage",
 	} {
 		resp, err := http.Get("http://" + srv.Addr() + path)
 		if err != nil {

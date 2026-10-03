@@ -3,9 +3,8 @@ package mcp
 import (
 	"context"
 	"errors"
-	"strings"
 
-	"go.klarlabs.de/tokenops/internal/capability/authority"
+	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/config"
 )
 
@@ -236,32 +235,6 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 //
 // Both surfaces read the same capability so they cannot drift into
 // disagreeing about what the operator's own machine is allowed to do.
-func modeAuthorityPayload(cfg config.Config) map[string]any {
-	a := authority.Report(cfg)
-
-	mode := cfg.Mode
-	if mode == "" {
-		mode = config.ModePassive
-	}
-	payload := map[string]any{
-		// mode stays the value `set` accepts. Repurposing it for the
-		// ladder rung would break the tool's own contract for no gain;
-		// the rung is reported beside it.
-		"mode":          strings.ToLower(mode),
-		"authority":     a.Daemon.String(),
-		"anything_acts": a.AnythingActs(),
-		"subsystems":    a.Subsystems,
-		"budgets":       len(cfg.Budgets),
-		"routing_rules": len(cfg.Optimizer.RoutingRules),
-	}
-	if held := a.HeldBack(); len(held) > 0 {
-		names := make([]string, 0, len(held))
-		for _, s := range held {
-			names = append(names, s.Name)
-		}
-		payload["held_back"] = names
-		payload["held_back_note"] = "these are configured to do more than the daemon's mode allows; " +
-			"raising mode to active lets them act"
-	}
-	return payload
+func modeAuthorityPayload(cfg config.Config) state.Mode {
+	return state.ModeOf(cfg)
 }

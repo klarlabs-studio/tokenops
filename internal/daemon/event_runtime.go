@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
+	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
@@ -17,9 +19,12 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
 	"go.klarlabs.de/tokenops/internal/events"
+	"go.klarlabs.de/tokenops/internal/infra/compactlever"
 	"go.klarlabs.de/tokenops/internal/infra/domainmigration"
+	"go.klarlabs.de/tokenops/internal/infra/followthrough"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	"go.klarlabs.de/tokenops/internal/infra/rulesfs"
+	"go.klarlabs.de/tokenops/internal/infra/sourceprobe"
 	"go.klarlabs.de/tokenops/internal/otlp"
 	"go.klarlabs.de/tokenops/internal/proxy"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
@@ -108,6 +113,7 @@ func initializeEventRuntime(
 		proxy.WithEventBus(rt.Bus),
 		proxy.WithSourceFreshness(sourceFreshnessFn(cfg, rt.Store, sourceHealth, sup)),
 		proxy.WithPlans(plansDeps(cfg, rt.Store, components.Spend)),
+		proxy.WithState(stateDeps(cfg, rt.Store, sourceFreshnessFn(cfg, rt.Store, sourceHealth, sup), rt.Bus.DroppedCount)),
 		proxy.WithTokenizer(components.Tokenizers),
 		proxy.WithCostEngine(components.Spend),
 		proxy.WithEventDrops(rt.Bus.DroppedCount),
@@ -186,5 +192,40 @@ func plansDeps(cfg config.Config, store *sqlite.Store, engine *spend.Engine) fun
 			deps.Price = engine.ComputeAt
 		}
 		return deps
+	}
+}
+
+// stateDeps is what the state routes need: the daemon's own config,
+// readiness, store, readers' health and lost writes.
+func stateDeps(cfg config.Config, store *sqlite.Store, health func() []freshness.Report, dropped func() int64) func() state.Deps {
+	return func() state.Deps {
+		d := state.Deps{
+			Config:  &cfg,
+			Health:  health,
+			Ready:   proxy.IsReady,
+			Dropped: dropped,
+			Coach: func(now time.Time) coachcap.Report {
+				var ledger coachcap.Ledger
+				if l, err := followthrough.Default(); err == nil {
+					ledger = l
+				}
+				var levers coachcap.ContextLevers
+				if l, err := compactlever.New(cfg); err == nil {
+					levers = l
+				}
+				return coachcap.Status(cfg, ledger, levers, now)
+			},
+		}
+		if store != nil {
+			d.Count = store.CountBySource
+			d.Stale = func(ctx context.Context, now time.Time) []config.StaleSource {
+				stale, err := cfg.CheckStaleIngestion(ctx, store, sourceprobe.All(cfg), config.StaleIngestionWindow, now)
+				if err != nil {
+					return nil
+				}
+				return stale
+			}
+		}
+		return d
 	}
 }
