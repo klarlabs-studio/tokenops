@@ -31,7 +31,7 @@ func WithAuditDrops(fn func() int64) Option {
 	return func(s *Server) { s.auditDrops = fn }
 }
 
-func (s *Server) registerEventCountsRoute(mux *http.ServeMux) {
+func (s *Server) registerEventCountsRoute(mux RouteMux) {
 	if s.eventCounts == nil {
 		return
 	}

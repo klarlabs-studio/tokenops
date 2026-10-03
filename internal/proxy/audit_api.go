@@ -32,7 +32,7 @@ func WithAudit(h *AuditHandlers) Option {
 }
 
 // Register mounts GET /api/audit on mux.
-func (h *AuditHandlers) Register(mux *http.ServeMux) {
+func (h *AuditHandlers) Register(mux RouteMux) {
 	if h == nil {
 		return
 	}

@@ -61,7 +61,7 @@ The API answers the same questions the MCP tools do, from the same code
 `GET /api/glance` is the one-call view: session budgets, plan headroom
 with every window the vendor reports, and a ranked insight.
 `GET /api/plans/headroom` and `GET /api/plans/session-budget` return the
-two halves.
+two halves. Every route is listed in [Daemon API](./api.md).
 
 ## 4. Wire the MCP server into your agent
 

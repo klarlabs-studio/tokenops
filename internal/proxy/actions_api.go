@@ -53,37 +53,91 @@ func WithActions(deps func() ActionDeps) Option {
 	return func(s *Server) { s.actions = deps }
 }
 
+// The action request bodies. Each is the JSON a route takes; the OpenAPI
+// document is generated from them.
+
+// ModeRequest sets the operating mode: passive or active.
+type ModeRequest struct {
+	Mode string `json:"mode"`
+}
+
+// BudgetRequest creates or updates a budget by name, or deletes it.
+type BudgetRequest struct {
+	Name        string  `json:"name"`
+	Window      string  `json:"window"`
+	LimitUSD    float64 `json:"limit_usd"`
+	LimitTokens int64   `json:"limit_tokens"`
+	WarnAt      float64 `json:"warn_at"`
+	CritAt      float64 `json:"crit_at"`
+	WorkflowID  string  `json:"workflow_id"`
+	AgentID     string  `json:"agent_id"`
+	Basis       string  `json:"basis"`
+	Delete      bool    `json:"delete"`
+}
+
+// RoutingRuleRequest creates or updates the routing rule for a provider and source model, or deletes it.
+type RoutingRuleRequest struct {
+	Provider  string   `json:"provider"`
+	FromModel string   `json:"from_model"`
+	ToModel   string   `json:"to_model"`
+	Quality   float64  `json:"quality"`
+	Fallbacks []string `json:"fallbacks"`
+	Delete    bool     `json:"delete"`
+}
+
+// PlanRequest binds a provider to a plan, or clears its binding.
+type PlanRequest struct {
+	Provider      string  `json:"provider"`
+	Plan          string  `json:"plan"`
+	SpendLimitUSD float64 `json:"spend_limit_usd"`
+	LimitWindow   string  `json:"limit_window"`
+	RateFactor    float64 `json:"rate_factor"`
+	Clear         bool    `json:"clear"`
+	Price         float64 `json:"price"`
+	Currency      string  `json:"currency"`
+	Since         string  `json:"since"`
+}
+
+// PreferredModelRequest sets or clears the model a provider's routing may not move above.
+type PreferredModelRequest struct {
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+	Clear    bool   `json:"clear"`
+}
+
+// RoutingDecisionRequest answers a pending routing proposal: approve or deny.
+type RoutingDecisionRequest struct {
+	Key      string `json:"key"`
+	Decision string `json:"decision"`
+}
+
+// OutcomeRequest records the operator's judgement of an execution: achieved, partial or not_achieved.
+type OutcomeRequest struct {
+	ExecutionID      string   `json:"execution_id"`
+	DecisionID       string   `json:"decision_id"`
+	Result           string   `json:"result"`
+	Caveat           string   `json:"caveat"`
+	AttentionMinutes *float64 `json:"attention_minutes"`
+}
+
 // maxActionBody bounds a request body; the largest action is a few
 // hundred bytes.
 const maxActionBody = 64 << 10
 
-func (s *Server) registerActionRoutes(mux *http.ServeMux) {
+func (s *Server) registerActionRoutes(mux RouteMux) {
 	// A write is never served without the token, whatever else is wired.
 	if s.actions == nil || s.dashAuth == nil {
 		return
 	}
 	mux.HandleFunc("POST /api/mode", s.action("mode", restart, func(r *http.Request, path string) (any, error) {
-		var in struct {
-			Mode string `json:"mode"`
-		}
+		var in ModeRequest
 		if err := decodeAction(r, &in); err != nil {
 			return nil, err
 		}
 		return actions.SetMode(path, in.Mode)
 	}))
 	mux.HandleFunc("POST /api/budgets", s.action("budget", restart, func(r *http.Request, path string) (any, error) {
-		var in struct {
-			Name        string  `json:"name"`
-			Window      string  `json:"window"`
-			LimitUSD    float64 `json:"limit_usd"`
-			LimitTokens int64   `json:"limit_tokens"`
-			WarnAt      float64 `json:"warn_at"`
-			CritAt      float64 `json:"crit_at"`
-			WorkflowID  string  `json:"workflow_id"`
-			AgentID     string  `json:"agent_id"`
-			Basis       string  `json:"basis"`
-			Delete      bool    `json:"delete"`
-		}
+		var in BudgetRequest
 		if err := decodeAction(r, &in); err != nil {
 			return nil, err
 		}
@@ -93,14 +147,7 @@ func (s *Server) registerActionRoutes(mux *http.ServeMux) {
 		}})
 	}))
 	mux.HandleFunc("POST /api/routing/rules", s.action("routing_rule", restart, func(r *http.Request, path string) (any, error) {
-		var in struct {
-			Provider  string   `json:"provider"`
-			FromModel string   `json:"from_model"`
-			ToModel   string   `json:"to_model"`
-			Quality   float64  `json:"quality"`
-			Fallbacks []string `json:"fallbacks"`
-			Delete    bool     `json:"delete"`
-		}
+		var in RoutingRuleRequest
 		if err := decodeAction(r, &in); err != nil {
 			return nil, err
 		}
@@ -110,17 +157,7 @@ func (s *Server) registerActionRoutes(mux *http.ServeMux) {
 		})
 	}))
 	mux.HandleFunc("POST /api/plans", s.action("plan", restart, func(r *http.Request, path string) (any, error) {
-		var in struct {
-			Provider      string  `json:"provider"`
-			Plan          string  `json:"plan"`
-			SpendLimitUSD float64 `json:"spend_limit_usd"`
-			LimitWindow   string  `json:"limit_window"`
-			RateFactor    float64 `json:"rate_factor"`
-			Clear         bool    `json:"clear"`
-			Price         float64 `json:"price"`
-			Currency      string  `json:"currency"`
-			Since         string  `json:"since"`
-		}
+		var in PlanRequest
 		if err := decodeAction(r, &in); err != nil {
 			return nil, err
 		}
@@ -131,34 +168,21 @@ func (s *Server) registerActionRoutes(mux *http.ServeMux) {
 		}, time.Now().UTC())
 	}))
 	mux.HandleFunc("POST /api/preferred-models", s.action("preferred_model", restart, func(r *http.Request, path string) (any, error) {
-		var in struct {
-			Provider string `json:"provider"`
-			Model    string `json:"model"`
-			Clear    bool   `json:"clear"`
-		}
+		var in PreferredModelRequest
 		if err := decodeAction(r, &in); err != nil {
 			return nil, err
 		}
 		return actions.SetPreferredModel(path, in.Provider, in.Model, in.Clear)
 	}))
 	mux.HandleFunc("POST /api/routing/decisions", s.action("routing_decision", noRestart, func(r *http.Request, _ string) (any, error) {
-		var in struct {
-			Key      string `json:"key"`
-			Decision string `json:"decision"`
-		}
+		var in RoutingDecisionRequest
 		if err := decodeAction(r, &in); err != nil {
 			return nil, err
 		}
 		return actions.DecideRouting("", in.Key, in.Decision)
 	}))
 	mux.HandleFunc("POST /api/outcomes", s.action("outcome", noRestart, func(r *http.Request, _ string) (any, error) {
-		var in struct {
-			ExecutionID      string   `json:"execution_id"`
-			DecisionID       string   `json:"decision_id"`
-			Result           string   `json:"result"`
-			Caveat           string   `json:"caveat"`
-			AttentionMinutes *float64 `json:"attention_minutes"`
-		}
+		var in OutcomeRequest
 		if err := decodeAction(r, &in); err != nil {
 			return nil, err
 		}

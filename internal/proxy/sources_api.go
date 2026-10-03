@@ -35,7 +35,7 @@ type sourcesResponse struct {
 	Unhealthy int `json:"unhealthy"`
 }
 
-func (s *Server) registerSourcesRoute(mux *http.ServeMux) {
+func (s *Server) registerSourcesRoute(mux RouteMux) {
 	if s.sourceFreshness == nil {
 		return
 	}

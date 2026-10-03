@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 
@@ -347,7 +348,12 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // unauthenticated that way, with auth correctly configured, until this was
 // made one mux.
 func (s *Server) apiMux() *http.ServeMux {
-	protected := http.NewServeMux()
+	return s.buildAPIMux().ServeMux
+}
+
+// buildAPIMux registers every /api/* route on a mux that records them.
+func (s *Server) buildAPIMux() *recordingMux {
+	protected := &recordingMux{ServeMux: http.NewServeMux()}
 	if s.analytics != nil {
 		s.analytics.Register(protected)
 	} else {
@@ -378,6 +384,45 @@ func (s *Server) apiMux() *http.ServeMux {
 	protected.HandleFunc("GET /api/routing/proposals", proposalsHandler)
 	s.registerActionRoutes(protected)
 	return protected
+}
+
+// APIRoutes lists every /api/* route this server serves, as
+// "METHOD /path" patterns, sorted. The OpenAPI document is checked
+// against it.
+func (s *Server) APIRoutes() []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, p := range s.buildAPIMux().patterns {
+		if !seen[p] {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// RouteMux is what a route registration needs. The API mux records each
+// pattern it is given, so the routes can be listed.
+type RouteMux interface {
+	HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request))
+	Handle(pattern string, handler http.Handler)
+}
+
+// recordingMux is a ServeMux that remembers its patterns.
+type recordingMux struct {
+	*http.ServeMux
+	patterns []string
+}
+
+func (m *recordingMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+	m.patterns = append(m.patterns, pattern)
+	m.ServeMux.HandleFunc(pattern, handler)
+}
+
+func (m *recordingMux) Handle(pattern string, handler http.Handler) {
+	m.patterns = append(m.patterns, pattern)
+	m.ServeMux.Handle(pattern, handler)
 }
 
 // ServesAPI reports whether the API answers method on path, without running

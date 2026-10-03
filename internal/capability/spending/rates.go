@@ -95,3 +95,7 @@ func RateCard(dir string, q RateQuery) Rates {
 	}
 	return out
 }
+
+// ScorecardReport is the scorecard answer, named here so adapters can
+// describe it without reaching into the governance domain.
+type ScorecardReport = scorecard.Scorecard

@@ -32,7 +32,7 @@ func WithSessions(roots func() SessionRoots) Option {
 	return func(s *Server) { s.sessions = roots }
 }
 
-func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
+func (s *Server) registerSessionRoutes(mux RouteMux) {
 	if s.sessions == nil {
 		return
 	}

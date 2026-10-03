@@ -30,6 +30,7 @@ export default defineConfig({
             { text: "Quickstart", link: "/guide/quickstart" },
             { text: "Configuration", link: "/guide/configuration" },
             { text: "CLI", link: "/guide/cli" },
+            { text: "Daemon API", link: "/guide/api" },
           ],
         },
       ],
