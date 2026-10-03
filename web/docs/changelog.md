@@ -4,7 +4,22 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.93.0**.
+Current release: **v0.94.0**.
+
+## v0.94.0 — Setup that asks less, and routers left to route
+
+`tokenops init` now binds your plans from what your clients already
+record: Claude Code keeps the plan you are signed in with, Codex writes
+its plan type into every session. Each binding says which client
+reported it, and a plan you bound yourself is never changed. In a
+terminal, init then asks only what nothing on the machine could answer,
+each question with a default; without one, or with `--yes`, it asks
+nothing.
+
+Where an external router chooses the model for each turn, FireRouter in
+front of Claude Code or OpenRouter Auto in opencode, TokenOps no longer
+chooses a second time. Its model advice and subagent moves stand down for
+that harness, and the coach says which router decides.
 
 ## v0.93.0 — Coding plans and gateways
 
