@@ -1,9 +1,13 @@
 package coach
 
 import (
+	"strings"
+
 	"crypto/rand"
 	"encoding/hex"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/capability/routers"
 
 	"go.klarlabs.de/tokenops/internal/config"
 	ft "go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough"
@@ -193,5 +197,20 @@ func Status(cfg config.Config, l Ledger, levers ContextLevers, now time.Time) Re
 	if levers != nil {
 		r.Compaction = levers.Check()
 	}
+	r.Routers = DetectRouters()
+	for i, p := range r.Powers {
+		if p.Name != config.PowerModels || len(r.Routers) == 0 {
+			continue
+		}
+		where := make([]string, 0, len(r.Routers))
+		for _, rt := range r.Routers {
+			where = append(where, rt.StandDown())
+		}
+		r.Powers[i].Note = strings.TrimSpace(p.Note + " Stands down where an external router decides: " + strings.Join(where, "; ") + ".")
+	}
 	return r
 }
+
+// DetectRouters finds the external routers in each harness's path; a
+// variable so tests do not read the machine's settings.
+var DetectRouters = func() []routers.InPath { return routers.Detect(routers.Sources{}) }

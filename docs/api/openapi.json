@@ -341,6 +341,39 @@
                     "preset": {
                       "type": "string"
                     },
+                    "routers": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "harness": {
+                            "type": "string"
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "router": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "display": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "setting": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "verbosity": {
                       "type": "string"
                     },
@@ -531,6 +564,39 @@
                     },
                     "preset": {
                       "type": "string"
+                    },
+                    "routers": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "harness": {
+                            "type": "string"
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "router": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "display": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "setting": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
                     },
                     "verbosity": {
                       "type": "string"
