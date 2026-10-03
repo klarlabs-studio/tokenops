@@ -302,6 +302,16 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 					)
 				}
 				switch {
+				case len(r.Windows) > 0:
+					// What the vendor reported, as it reported it: shares
+					// used, not a count derived from a published cap.
+					for _, w := range r.Windows {
+						line := fmt.Sprintf("  window:  %.0f%% of the %s used", w.UsedPct, w.Name)
+						if w.ResetsIn != "" {
+							line += " — resets in " + friendlyDuration(w.ResetsIn)
+						}
+						fmt.Fprintln(cmd.OutOrStdout(), line)
+					}
 				case r.WindowCap > 0:
 					fmt.Fprintf(cmd.OutOrStdout(),
 						"  window:  %d / %d %s per %s (%.1f%%) — resets in %s\n",
