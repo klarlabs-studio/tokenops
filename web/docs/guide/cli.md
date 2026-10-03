@@ -406,6 +406,21 @@ the answer's fields. Treat their figures as the vendor's, read through
 an interface the vendor may change. ZenMux is not read: its usage API
 takes a separate management key, not the one your harness uses.
 
+A harness pointed at a gateway, often one you run yourself, sends it a
+key at an address TokenOps does not know. TokenOps first asks the
+address's health route, without the key, what it is; only a recognised
+gateway is then sent the key, at that same address, to read the key's
+own budget:
+
+| Gateway | Recognised by | Shows |
+|---|---|---|
+| LiteLLM proxy | `GET /health/liveliness` | `GET /key/info`: the key's spend against its budget, and when it resets |
+| Bifrost | `GET /health` | `GET /api/governance/virtual-keys/quota`: each budget's share used |
+| ClawRouter | its host, or `GET /v1/health` | `GET /v1/usage`: the policy's spend against its monthly budget |
+
+Portkey and Cloudflare AI Gateway are not asked: neither lets the key in
+use read its own spend.
+
 - **The key** is the one your harnesses already send that vendor: the key
   next to a gateway in Claude Code's settings, Codex's
   `[model_providers]` (`experimental_bearer_token` or `env_key`),

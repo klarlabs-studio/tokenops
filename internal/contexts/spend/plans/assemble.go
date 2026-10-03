@@ -51,6 +51,9 @@ var sourceProvider = map[string]string{
 	"chutes-account":          "chutes",
 	"deepinfra-account":       "deepinfra",
 	"vercel-account":          "vercel",
+	"litellm-account":         "litellm",
+	"bifrost-account":         "bifrost",
+	"clawrouter-account":      "clawrouter",
 }
 
 // SignalFromCounts maps per-source event counts onto the observations
@@ -80,7 +83,8 @@ func SignalFromCounts(counts map[string]int64, provider string) SignalInputs {
 		FireworksInWindow:        c("fireworks-usage"),
 		VendorAccountInWindow: c("openrouter-account") + c("deepseek-account") + c("moonshot-account") +
 			c("zai-account") + c("kimi-account") + c("minimax-account") + c("synthetic-account") +
-			c("chutes-account") + c("deepinfra-account") + c("vercel-account"),
+			c("chutes-account") + c("deepinfra-account") + c("vercel-account") +
+			c("litellm-account") + c("bifrost-account") + c("clawrouter-account"),
 		VendorAPIWired: c("vendor-usage-anthropic") > 0,
 	}
 }
