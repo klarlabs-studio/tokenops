@@ -3,15 +3,13 @@ package mcp
 import (
 	"context"
 	"errors"
-	"fmt"
-	"sort"
-	"strings"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 
 	"go.klarlabs.de/tokenops/internal/capability/state"
 
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing"
 )
 
 // GapDeps wires the two surfaces that were CLI-only.
@@ -54,20 +52,9 @@ type pricingInput struct {
 	Limit    int    `json:"limit,omitempty" jsonschema:"description=max rows; default 20"`
 }
 
-type pricingRate struct {
-	Model       string  `json:"model"`
-	InputPerM   float64 `json:"input_per_1m_usd"`
-	OutputPerM  float64 `json:"output_per_1m_usd"`
-	CacheReadPM float64 `json:"cache_read_per_1m_usd,omitempty"`
-}
-
-type pricingResult struct {
-	Source    string        `json:"source"`
-	FetchedAt string        `json:"fetched_at"`
-	Models    int           `json:"models_in_snapshot"`
-	Rates     []pricingRate `json:"rates"`
-	Note      string        `json:"note,omitempty"`
-}
+// pricingResult is the spending capability's payload, shared with the
+// daemon API (ADR 0010 §4).
+type pricingResult = spending.Rates
 
 type vendorUsageInput struct {
 	WindowHours int `json:"window_hours,omitempty" jsonschema:"description=lookback in hours; default 24"`
@@ -88,47 +75,8 @@ func RegisterGapTools(s *Server, d GapDeps) error {
 		Description("Return the current per-million-token rates TokenOps costs with, and when that card was fetched. Call it to answer what a model costs, to compare two models before routing work to one, or to check whether a rate moved under a figure you already quoted. Rates are pinned per model with a dated source, and the snapshot says when it was fetched — a figure quoted from a card refreshed days ago is worth re-checking before acting on it.").
 		OutputSchema(pricingResult{}).
 		Handler(func(_ context.Context, in pricingInput) (*pricingResult, error) {
-			snap, ok := pricing.LatestSnapshot(d.PricingDir)
-			if !ok {
-				snap = pricing.BaselineSnapshot()
-			}
-			limit := in.Limit
-			if limit <= 0 {
-				limit = 20
-			}
-			out := &pricingResult{
-				Source:    snap.Source,
-				FetchedAt: snap.FetchedAt.UTC().Format(time.RFC3339),
-				Models:    len(snap.Rates),
-			}
-			keys := make([]string, 0, len(snap.Rates))
-			for k := range snap.Rates {
-				if in.Provider != "" && !strings.HasPrefix(k, strings.ToLower(in.Provider)+"/") {
-					continue
-				}
-				if in.Model != "" && !strings.Contains(k, in.Model) {
-					continue
-				}
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			if len(keys) > limit {
-				out.Note = fmt.Sprintf("%d models matched; showing %d. Narrow with provider or model.", len(keys), limit)
-				keys = keys[:limit]
-			}
-			for _, k := range keys {
-				r := snap.Rates[k]
-				out.Rates = append(out.Rates, pricingRate{
-					Model:       k,
-					InputPerM:   r.InputPerMillion,
-					OutputPerM:  r.OutputPerMillion,
-					CacheReadPM: r.CachedInputPerMillion,
-				})
-			}
-			if len(out.Rates) == 0 {
-				out.Note = "no model matched that filter"
-			}
-			return out, nil
+			res := spending.RateCard(d.PricingDir, spending.RateQuery{Provider: in.Provider, Model: in.Model, Limit: in.Limit})
+			return &res, nil
 		})
 
 	s.Tool("tokenops_vendor_usage_status").

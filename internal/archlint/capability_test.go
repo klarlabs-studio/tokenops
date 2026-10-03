@@ -123,7 +123,6 @@ var directDomainImports = map[string][]string{
 		"go.klarlabs.de/tokenops/internal/contexts/security/audit",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/forecast",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/plans",
-		"go.klarlabs.de/tokenops/internal/contexts/spend/pricing",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/session",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/spend",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter",

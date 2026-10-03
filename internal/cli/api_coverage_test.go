@@ -39,16 +39,16 @@ var apiRoute = map[string]string{
 	"tokenops_agent_dx":            "/api/dx",
 	"tokenops_story":               "/api/story",
 	"tokenops_coach_prompts":       "/api/coach/prompts",
+	"tokenops_top_consumers":       "/api/spend/top",
+	"tokenops_burn_rate":           "/api/spend/burn-rate",
+	"tokenops_scorecard":           "/api/scorecard",
+	"tokenops_pricing":             "/api/pricing",
 }
 
 // apiPending is the ADR's backlog: tools a surface needs that have no route
 // yet, by slice. It may only shrink; a tool that gains a route moves to
 // apiRoute, and the test fails until it does.
 var apiPending = map[string]int{
-	"tokenops_scorecard":          3,
-	"tokenops_top_consumers":      3,
-	"tokenops_burn_rate":          3,
-	"tokenops_pricing":            3,
 	"tokenops_routing_proposals":  3,
 	"tokenops_explain_decision":   3,
 	"tokenops_preferred_model":    4,
