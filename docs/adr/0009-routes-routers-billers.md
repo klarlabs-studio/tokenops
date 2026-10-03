@@ -81,8 +81,10 @@ produce choices nobody can explain.
     biller when no endpoint does.
 - **Cursor:** `openAIBaseUrl` and the per-mode model settings. Not yet
   implemented.
-- Only setting names and base URLs are read. Credentials and
-  `apiKeyHelper` output are never read or stored.
+- Route detection reads only setting names and base URLs. Credentials
+  are never stored. The one `apiKeyHelper` ever run is FireConnect's,
+  for the Fireworks reading in §7, and its output is used only for that
+  call.
 
 ### 3. A biller is resolved from endpoint, served model, and credential
 
@@ -175,7 +177,12 @@ order, and the operator corrects it afterwards:
 2. The vendor's own reading, through a login already on the machine
    (Copilot, Cursor, claude.ai with OS consent, OpenRouter's key
    endpoint). These add outbound calls, so the setup wizard names each
-   one before it is turned on.
+   one before it is turned on. The exception is a reading that goes only
+   to the vendor the operator already sends their work to, with the
+   credential their harness already uses for it. The Fireworks reader is
+   the first: it is on by default, idle without a Fireworks key, named
+   in the docs and switchable. It runs FireConnect's `key export` helper,
+   and no other `apiKeyHelper`.
 3. The operator's entries, only for what nothing can see: past months,
    negotiated prices, a bill in their currency.
 

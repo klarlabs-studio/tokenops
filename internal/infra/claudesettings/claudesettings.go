@@ -4,8 +4,9 @@
 // Claude Code's transcripts record the model that answered, not where the
 // request went, so a gateway in front of it (Fireworks through FireConnect,
 // OpenRouter, a company proxy) is only visible in its settings. Only the
-// setting that names the endpoint is read. Keys, apiKeyHelper output and
-// every other setting are left alone.
+// setting that names the endpoint is read, and the apiKeyHelper command
+// (its text, not its output) so a Fireworks reader can recognise
+// FireConnect's. Keys and every other setting are left alone.
 package claudesettings
 
 import (
@@ -62,4 +63,23 @@ func baseURLIn(path string) string {
 		return ""
 	}
 	return s.Env["ANTHROPIC_BASE_URL"]
+}
+
+// APIKeyHelper is the apiKeyHelper command Claude Code is configured
+// with, or "". Only the command's text is read; running it is the
+// caller's decision.
+func APIKeyHelper() string {
+	for _, path := range settingsFiles() {
+		b, err := os.ReadFile(path) //nolint:gosec // fixed Claude Code settings paths
+		if err != nil {
+			continue
+		}
+		var s struct {
+			APIKeyHelper string `json:"apiKeyHelper"`
+		}
+		if json.Unmarshal(b, &s) == nil && s.APIKeyHelper != "" {
+			return s.APIKeyHelper
+		}
+	}
+	return ""
 }

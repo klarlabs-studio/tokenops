@@ -44,6 +44,7 @@ const (
 	SignalSourceCodexJSONL       = "codex_jsonl"
 	SignalSourceCopilot          = "github_copilot"
 	SignalSourceCursor           = "cursor_web"
+	SignalSourceFireworks        = "fireworks_api"
 	SignalSourceClaudeUsageMeter = "claude_usage_meter"
 )
 
@@ -59,6 +60,7 @@ type SignalInputs struct {
 	CopilotInWindow          int64
 	CursorInWindow           int64
 	ClaudeUsageMeterInWindow int64
+	FireworksInWindow        int64
 	VendorAPIWired           bool
 }
 
@@ -87,6 +89,12 @@ func ClassifySignal(in SignalInputs) SignalQuality {
 			Level:  SignalLevelHigh,
 			Source: SignalSourceClaudeUsageMeter,
 			Caveat: "Polls claude.ai/api/organizations/{org_id}/usage with your browser sessionKey — same data Anthropic's own UI shows: 5-hour and 7-day utilization, or on Claude Enterprise spend against your monthly limit. Undocumented endpoint; cookie expires every few weeks, daemon WARNs when re-paste is needed.",
+		}
+	case in.FireworksInWindow > 0:
+		return SignalQuality{
+			Level:  SignalLevelHigh,
+			Source: SignalSourceFireworks,
+			Caveat: "Reads Fireworks' documented API with the key FireConnect or FIREWORKS_API_KEY provides: your own spend and cap on a company account, otherwise the account's month spend and monthly-spend-usd quota. Billing is aggregated daily.",
 		}
 	case in.ClaudeCodeJSONLInWindow > 0:
 		return SignalQuality{

@@ -842,7 +842,21 @@ type VendorUsageConfig struct {
 	GitHubCopilot    GitHubCopilotUsageConfig   `yaml:"github_copilot"`
 	Cursor           CursorUsageConfig          `yaml:"cursor"`
 	ClaudeUsageMeter ClaudeUsageMeterConfig     `yaml:"claude_usage_meter"`
+	Fireworks        FireworksUsageConfig       `yaml:"fireworks"`
 }
+
+// FireworksUsageConfig wires the Fireworks account reader (ADR 0009 §7):
+// spend this month against the account's or the member's cap, read from
+// Fireworks' API with the key FireConnect or FIREWORKS_API_KEY already
+// provides. It is on unless Enabled is false, and idle on a machine with
+// no Fireworks key. Interval defaults to 15 minutes.
+type FireworksUsageConfig struct {
+	Enabled  *bool         `yaml:"enabled,omitempty"`
+	Interval time.Duration `yaml:"interval,omitempty"`
+}
+
+// On reports whether the reader runs: unless switched off.
+func (c FireworksUsageConfig) On() bool { return c.Enabled == nil || *c.Enabled }
 
 // GitHubCopilotUsageConfig wires the api.github.com/copilot_internal/user
 // poller. OAuthToken empty → poller reads it from

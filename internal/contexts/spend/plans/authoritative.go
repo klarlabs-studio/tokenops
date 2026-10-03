@@ -2,6 +2,7 @@ package plans
 
 import (
 	"context"
+	"sort"
 	"strconv"
 	"time"
 
@@ -265,13 +266,71 @@ type VendorSpend struct {
 }
 
 // LatestVendorSpend returns the newest vendor-reported spend for provider
-// in the current calendar month (UTC), or nil. A reading from an earlier
-// month describes a limit that has since reset, so it is not used; neither
-// is one in a currency other than USD, which headroom reports in.
+// in the current calendar month (UTC), or nil. The Claude usage meter
+// reports it for Anthropic, the Fireworks reader for Fireworks. A reading
+// from an earlier month describes a limit that has since reset, so it is
+// not used; neither is one in a currency other than USD, which headroom
+// reports in.
 func LatestVendorSpend(ctx context.Context, reader EventReader, provider eventschema.Provider, now time.Time) *VendorSpend {
-	if provider != eventschema.ProviderAnthropic {
+	best := latestSpendReading(ctx, reader, now, func(e *eventschema.Envelope) bool {
+		return readingProvider(e) == provider
+	})
+	if best == nil || best.Attributes["extra_usage_currency"] != "USD" {
 		return nil
 	}
+	used, err1 := strconv.ParseFloat(best.Attributes["extra_usage_used"], 64)
+	limit, err2 := strconv.ParseFloat(best.Attributes["extra_usage_limit"], 64)
+	// The Claude meter reports no limit when extra usage is off, which says
+	// nothing about spend. A per-token account with no cap still spent
+	// what it reports.
+	if err1 != nil || err2 != nil || (limit <= 0 && best.Attributes["billing"] != "per_token") {
+		return nil
+	}
+	source := "claude_usage_meter:extra_usage"
+	if best.Source != "" && provider != eventschema.ProviderAnthropic {
+		source = best.Source
+	}
+	return &VendorSpend{
+		UsedUSD:      used,
+		LimitUSD:     limit,
+		LimitReached: best.Attributes["extra_usage_limit_reached"] == "true",
+		Source:       source,
+		At:           best.Timestamp,
+	}
+}
+
+// PerTokenReadingProviders lists providers whose own reader reported
+// spend this month for an account billed per token (billing=per_token).
+// Headroom binds such a provider to pay-as-you-go when no plan is bound:
+// the vendor has said how it bills, so nothing needs asking.
+func PerTokenReadingProviders(ctx context.Context, reader EventReader, now time.Time) []string {
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, monthStart)
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, e := range events {
+		if e == nil || e.Attributes["billing"] != "per_token" || e.Timestamp.Before(monthStart) {
+			continue
+		}
+		if _, ok := e.Attributes["extra_usage_used"]; !ok {
+			continue
+		}
+		p := string(readingProvider(e))
+		if p != "" && !seen[p] {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// latestSpendReading is the newest spend reading this month that keep
+// accepts.
+func latestSpendReading(ctx context.Context, reader EventReader, now time.Time, keep func(*eventschema.Envelope) bool) *eventschema.Envelope {
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, monthStart)
 	if err != nil {
@@ -282,26 +341,21 @@ func LatestVendorSpend(ctx context.Context, reader EventReader, provider eventsc
 		if e == nil || e.Attributes == nil || e.Timestamp.Before(monthStart) {
 			continue
 		}
-		if _, ok := e.Attributes["extra_usage_limit"]; !ok {
+		if _, ok := e.Attributes["extra_usage_limit"]; !ok || !keep(e) {
 			continue
 		}
 		if best == nil || e.Timestamp.After(best.Timestamp) {
 			best = e
 		}
 	}
-	if best == nil || best.Attributes["extra_usage_currency"] != "USD" {
-		return nil
+	return best
+}
+
+// readingProvider is the provider a spend reading is for. The Claude
+// usage meter's readings predate the field and are Anthropic's.
+func readingProvider(e *eventschema.Envelope) eventschema.Provider {
+	if pe, ok := e.Payload.(*eventschema.PromptEvent); ok && pe != nil && pe.Provider != "" {
+		return pe.Provider
 	}
-	used, err1 := strconv.ParseFloat(best.Attributes["extra_usage_used"], 64)
-	limit, err2 := strconv.ParseFloat(best.Attributes["extra_usage_limit"], 64)
-	if err1 != nil || err2 != nil || limit <= 0 {
-		return nil
-	}
-	return &VendorSpend{
-		UsedUSD:      used,
-		LimitUSD:     limit,
-		LimitReached: best.Attributes["extra_usage_limit_reached"] == "true",
-		Source:       "claude_usage_meter:extra_usage",
-		At:           best.Timestamp,
-	}
+	return eventschema.ProviderAnthropic
 }
