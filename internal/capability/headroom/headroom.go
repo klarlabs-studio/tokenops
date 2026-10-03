@@ -108,6 +108,7 @@ func Compute(ctx context.Context, d Deps, now time.Time) (Result, error) {
 		}
 		return Result{StorageDisabled: StorageDisabledHint}, nil
 	}
+	d.Reader = newMemoReader(d.Reader, now)
 	bindings, inferred := effectiveBindings(ctx, d, now)
 	if len(bindings) == 0 {
 		return Result{Unconfigured: UnconfiguredHint}, nil

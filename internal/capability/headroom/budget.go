@@ -37,6 +37,7 @@ func SessionBudgets(ctx context.Context, d Deps, now time.Time) (BudgetResult, e
 	if d.Reader == nil {
 		return BudgetResult{StorageDisabled: StorageDisabledHint}, nil
 	}
+	d.Reader = newMemoReader(d.Reader, now)
 	out := BudgetResult{Budgets: make([]plans.SessionBudget, 0, len(d.Config.Plans))}
 	for _, provider := range sortedProviders(d.Config.Plans) {
 		planName := d.Config.Plans[provider]
@@ -108,6 +109,8 @@ type Glance struct {
 
 // ComputeGlance composes the session budgets and plan headroom.
 func ComputeGlance(ctx context.Context, d Deps, now time.Time) (Glance, error) {
+	// Both halves read the same events; one memo serves them.
+	d.Reader = newMemoReader(d.Reader, now)
 	budgets, err := SessionBudgets(ctx, d, now)
 	if err != nil {
 		return Glance{}, err
