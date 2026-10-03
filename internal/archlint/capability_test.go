@@ -110,7 +110,6 @@ var directDomainImports = map[string][]string{
 		"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx",
 		"go.klarlabs.de/tokenops/internal/contexts/governance/coverdebt",
 		"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard",
-		"go.klarlabs.de/tokenops/internal/contexts/governance/story",
 		"go.klarlabs.de/tokenops/internal/contexts/observability/analytics",
 		"go.klarlabs.de/tokenops/internal/contexts/observability/freshness",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/eval",

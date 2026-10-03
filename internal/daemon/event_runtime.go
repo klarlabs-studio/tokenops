@@ -113,6 +113,7 @@ func initializeEventRuntime(
 		proxy.WithEventBus(rt.Bus),
 		proxy.WithSourceFreshness(sourceFreshnessFn(cfg, rt.Store, sourceHealth, sup)),
 		proxy.WithPlans(plansDeps(cfg, rt.Store, components.Spend)),
+		proxy.WithSessions(func() proxy.SessionRoots { return proxy.SessionRoots{} }),
 		proxy.WithState(stateDeps(cfg, rt.Store, sourceFreshnessFn(cfg, rt.Store, sourceHealth, sup), rt.Bus.DroppedCount)),
 		proxy.WithTokenizer(components.Tokenizers),
 		proxy.WithCostEngine(components.Spend),

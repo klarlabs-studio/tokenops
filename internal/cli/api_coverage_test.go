@@ -36,19 +36,19 @@ var apiRoute = map[string]string{
 	"tokenops_config":              "/api/config",
 	"tokenops_data_sources":        "/api/data-sources",
 	"tokenops_vendor_usage_status": "/api/vendor-usage",
+	"tokenops_agent_dx":            "/api/dx",
+	"tokenops_story":               "/api/story",
+	"tokenops_coach_prompts":       "/api/coach/prompts",
 }
 
 // apiPending is the ADR's backlog: tools a surface needs that have no route
 // yet, by slice. It may only shrink; a tool that gains a route moves to
 // apiRoute, and the test fails until it does.
 var apiPending = map[string]int{
-	"tokenops_agent_dx":           3,
 	"tokenops_scorecard":          3,
-	"tokenops_story":              3,
 	"tokenops_top_consumers":      3,
 	"tokenops_burn_rate":          3,
 	"tokenops_pricing":            3,
-	"tokenops_coach_prompts":      3,
 	"tokenops_routing_proposals":  3,
 	"tokenops_explain_decision":   3,
 	"tokenops_preferred_model":    4,
@@ -88,6 +88,7 @@ func TestEveryToolIsAccountedForInTheDaemonAPI(t *testing.T) {
 		proxy.WithSourceFreshness(func() []freshness.Report { return nil }),
 		proxy.WithPlans(func() headroom.Deps { return headroom.Deps{} }),
 		proxy.WithState(func() state.Deps { return state.Deps{} }),
+		proxy.WithSessions(func() proxy.SessionRoots { return proxy.SessionRoots{} }),
 	)
 	tools := mcpToolNames(t)
 	names := make([]string, 0, len(tools))

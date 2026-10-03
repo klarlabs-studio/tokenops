@@ -5,6 +5,8 @@ import (
 	"errors"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/sessions"
+
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts"
 )
 
@@ -37,33 +39,24 @@ func RegisterCoachTools(s *Server, d CoachDeps) error {
 		Description("Score your Claude Code prompting against rule-based heuristics. Walks ~/.claude/projects/**/*.jsonl, extracts human-typed turns, returns length distribution, vague/ack/repeat counts, and concrete recommendations. Prompt text is read at scan time and is NOT persisted to the event store.").
 		OutputSchema(prompts.Findings{}).
 		Handler(func(ctx context.Context, in coachPromptsInput) (prompts.Findings, error) {
-			opts := prompts.ExtractOptions{
-				Root:      d.root(),
-				SessionID: in.SessionID,
-				Limit:     in.Limit,
-			}
+			w := sessions.PromptWindow{Root: d.root(), SessionID: in.SessionID, Limit: in.Limit}
 			if in.Since != "" {
 				since, err := parseCoachWindow(in.Since)
 				if err != nil {
 					return prompts.Findings{}, err
 				}
-				opts.Since = since
-			} else {
-				opts.Since = time.Now().Add(-7 * 24 * time.Hour)
+				w.Since = since
 			}
 			if in.Until != "" {
 				until, err := parseCoachWindow(in.Until)
 				if err != nil {
 					return prompts.Findings{}, err
 				}
-				opts.Until = until
+				w.Until = until
 			}
-			extracted, err := prompts.Extract(opts)
-			if err != nil {
-				return prompts.Findings{}, err
-			}
-			findings := prompts.Analyze(extracted)
-			return findings, nil
+			// The agent reading these is the operator's own, so the
+			// quoted instructions stay in.
+			return sessions.PromptFindings(w, true, time.Now())
 		})
 	return nil
 }
