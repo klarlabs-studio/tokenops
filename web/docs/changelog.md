@@ -4,7 +4,20 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.90.0**.
+Current release: **v0.91.0**.
+
+## v0.91.0 — Every window, as the vendor reports it
+
+`plan headroom` now shows every usage window the vendor reports, as the
+share used and when it resets: Claude's 5-hour, weekly and model-scoped
+weekly windows from the Claude usage meter, and Codex's windows, which
+were not shown before because Codex reports a percentage and no message
+cap. The busiest window sets the risk, so a weekly limit near its end
+counts even when the 5-hour window is empty.
+
+Claude's 5-hour share was shown as a message count against the plan's
+published cap, a number Anthropic never reports. Headroom and the
+session budget now show the vendor's percentages only.
 
 ## v0.90.0 — Every provider you pay per token
 
