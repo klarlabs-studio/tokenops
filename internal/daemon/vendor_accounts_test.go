@@ -17,14 +17,20 @@ func TestCredentialsForNamesTheEndpoint(t *testing.T) {
 		{ProviderID: "moonshotai-cn", Key: "e"},
 		{BaseURL: "https://llm.internal.example/v1", Key: "f"},
 		{ProviderID: "fireworks-ai", Key: "g"},
+		{BaseURL: "https://api.portkey.ai/v1", Key: "h"},
 	})
-	want := map[string]string{"a": "openrouter", "b": "openrouter", "c": "deepseek", "d": "moonshot", "g": "fireworks"}
+	// An unknown host is a possible gateway, read only at its own address;
+	// Portkey cannot read its own spend, so it is not asked.
+	want := map[string]string{"a": "openrouter", "b": "openrouter", "c": "deepseek", "d": "moonshot", "f": "gateway", "g": "fireworks"}
 	if len(got) != len(want) {
 		t.Fatalf("got %+v", got)
 	}
 	for _, c := range got {
 		if want[c.Key] != c.Endpoint {
 			t.Errorf("key %s → %q, want %q", c.Key, c.Endpoint, want[c.Key])
+		}
+		if c.Endpoint == "gateway" && c.BaseURL != "https://llm.internal.example/v1" {
+			t.Errorf("gateway key without its address: %+v", c)
 		}
 	}
 }

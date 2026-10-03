@@ -60,6 +60,9 @@ func (c Config) VendorUsageSources() []VendorUsageSource {
 		{Name: "chutes_account", SourceTag: "chutes-account", AlwaysOn: c.VendorUsage.Accounts.On()},
 		{Name: "deepinfra_account", SourceTag: "deepinfra-account", AlwaysOn: c.VendorUsage.Accounts.On()},
 		{Name: "vercel_account", SourceTag: "vercel-account", AlwaysOn: c.VendorUsage.Accounts.On()},
+		{Name: "litellm_gateway", SourceTag: "litellm-account", AlwaysOn: c.VendorUsage.Accounts.On()},
+		{Name: "bifrost_gateway", SourceTag: "bifrost-account", AlwaysOn: c.VendorUsage.Accounts.On()},
+		{Name: "clawrouter_gateway", SourceTag: "clawrouter-account", AlwaysOn: c.VendorUsage.Accounts.On()},
 		// The cursor turn poller has no config block: it reads a ledger
 		// the coach hook writes, and that ledger is empty until the hook
 		// is installed, so an operator who does not run Cursor pays

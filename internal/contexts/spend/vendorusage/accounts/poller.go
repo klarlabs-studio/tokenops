@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -23,6 +24,10 @@ type PollerOptions struct {
 	Credentials func() []Credential
 	// Readers defaults to Readers().
 	Readers []Reader
+	// Gateways defaults to Gateways().
+	Gateways []Gateway
+	// HTTP is used for gateway recognition and reads; nil uses a default.
+	HTTP *http.Client
 	// Health returns the recorder for a source tag; nil disables it.
 	Health func(source string) *freshness.Recorder
 	// Interval defaults to 15 minutes.
@@ -37,7 +42,19 @@ type Poller struct {
 	opts PollerOptions
 	mu   sync.Mutex
 	last map[string]string
+	// recognised caches which gateway each root is, nil for none.
+	recognised map[string]recognition
 }
+
+// recognition is what a gateway root turned out to be, and when.
+type recognition struct {
+	g  Gateway
+	at time.Time
+}
+
+// recogniseFor is how long a root's recognition is trusted: a gateway
+// is rarely swapped for another at the same address.
+const recogniseFor = 6 * time.Hour
 
 // NewPoller builds a poller.
 func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
@@ -53,10 +70,13 @@ func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
 	if opts.Readers == nil {
 		opts.Readers = Readers()
 	}
+	if opts.Gateways == nil {
+		opts.Gateways = Gateways()
+	}
 	if opts.Health == nil {
 		opts.Health = func(string) *freshness.Recorder { return nil }
 	}
-	return &Poller{bus: bus, opts: opts, last: map[string]string{}}
+	return &Poller{bus: bus, opts: opts, last: map[string]string{}, recognised: map[string]recognition{}}
 }
 
 // Run polls until ctx ends.
@@ -112,6 +132,65 @@ func (p *Poller) Scan(ctx context.Context) {
 		}
 		p.publish(ctx, r, NewEnvelope(now, r, reading))
 	}
+	p.scanGateways(ctx, creds, now)
+}
+
+// scanGateways reads each gateway a key is sent to. A root is recognised
+// without the key, by its health route; the key then goes to that root
+// only, which is where the harness already sends it.
+func (p *Poller) scanGateways(ctx context.Context, creds []Credential, now time.Time) {
+	done := map[string]bool{}
+	for _, c := range creds {
+		if c.Endpoint != GatewayEndpoint {
+			continue
+		}
+		root, ok := gatewayRoot(c.BaseURL)
+		if !ok || done[root] {
+			continue
+		}
+		g := p.recognise(ctx, root, now)
+		if g == nil {
+			continue
+		}
+		reading, err := g.Read(ctx, p.opts.HTTP, root, c.Key)
+		health := p.opts.Health(g.Source())
+		if err != nil {
+			health.Failed(err, now)
+			if !errors.Is(err, ErrAuth) {
+				p.opts.Logger.Warn("gateway account reading failed", "source", g.Source(), "err", err)
+			}
+			continue
+		}
+		done[root] = true
+		health.Succeeded(now)
+		if reading.Empty() {
+			continue
+		}
+		r := gatewayReader{g}
+		p.publish(ctx, r, NewEnvelope(now, r, reading))
+	}
+}
+
+// recognise returns the gateway at root, asking it at most once per
+// recogniseFor.
+func (p *Poller) recognise(ctx context.Context, root string, now time.Time) Gateway {
+	p.mu.Lock()
+	cached, ok := p.recognised[root]
+	p.mu.Unlock()
+	if ok && now.Sub(cached.at) < recogniseFor {
+		return cached.g
+	}
+	var found Gateway
+	for _, g := range p.opts.Gateways {
+		if g.Recognise(ctx, p.opts.HTTP, root) {
+			found = g
+			break
+		}
+	}
+	p.mu.Lock()
+	p.recognised[root] = recognition{g: found, at: now}
+	p.mu.Unlock()
+	return found
 }
 
 func (p *Poller) publish(ctx context.Context, r Reader, env *eventschema.Envelope) {

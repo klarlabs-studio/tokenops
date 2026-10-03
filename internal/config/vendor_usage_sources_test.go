@@ -54,6 +54,9 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"chutes_account", "chutes-account"},
 		{"deepinfra_account", "deepinfra-account"},
 		{"vercel_account", "vercel-account"},
+		{"litellm_gateway", "litellm-account"},
+		{"bifrost_gateway", "bifrost-account"},
+		{"clawrouter_gateway", "clawrouter-account"},
 		{"cursor_turns (hook ledger)", "cursor-hook"},
 		{"claude_code_statusline", "claude-code-statusline"},
 	}

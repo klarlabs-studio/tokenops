@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"net/url"
 	"strings"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/biller"
@@ -22,9 +23,15 @@ func credentialsFor(found []harnesskeys.Credential) []accounts.Credential {
 		endpoint := ""
 		switch {
 		case c.BaseURL != "":
-			// A base URL decides; an unknown host names no vendor.
+			// A base URL decides. An unknown host may be a gateway the
+			// operator runs or subscribes to; the poller recognises it by
+			// its health route before the key goes anywhere, and then
+			// sends it only there.
 			if _, ok := biller.EndpointFor(c.BaseURL); ok {
 				endpoint = biller.EndpointName(c.BaseURL, "")
+			} else if !unreadableGateway(c.BaseURL) {
+				out = append(out, accounts.Credential{Endpoint: accounts.GatewayEndpoint, Origin: c.Origin, Key: c.Key, BaseURL: c.BaseURL})
+				continue
 			}
 		case c.ProviderID != "":
 			// Mainland-China platforms issue keys their international
@@ -40,6 +47,24 @@ func credentialsFor(found []harnesskeys.Credential) []accounts.Credential {
 		out = append(out, accounts.Credential{Endpoint: endpoint, Origin: c.Origin, Key: c.Key})
 	}
 	return out
+}
+
+// unreadableGateways are gateways whose key cannot read its own spend
+// (Portkey, Cloudflare AI Gateway), so nothing is asked of them.
+var unreadableGateways = []string{"api.portkey.ai", "gateway.ai.cloudflare.com"}
+
+func unreadableGateway(baseURL string) bool {
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return true
+	}
+	host := strings.ToLower(u.Hostname())
+	for _, h := range unreadableGateways {
+		if host == h || strings.HasSuffix(host, "."+h) {
+			return true
+		}
+	}
+	return false
 }
 
 // fireworksFallbackKey is a Fireworks key a harness other than

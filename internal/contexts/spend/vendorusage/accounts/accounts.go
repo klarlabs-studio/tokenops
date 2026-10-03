@@ -29,6 +29,9 @@ type Credential struct {
 	// Origin says where it was found, for status; never the key.
 	Origin string
 	Key    string
+	// BaseURL is where the harness sends the key. A gateway credential
+	// is read there and nowhere else.
+	BaseURL string
 }
 
 // Reading is what a vendor reports about the account.
