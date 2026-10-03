@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
 )
 
 // The JSON Claude Code documents for a statusLine command.
@@ -33,6 +35,29 @@ func TestStatuslineRendersClaudeCodesInput(t *testing.T) {
 	}
 	if statusLines([]byte("not json")) != nil {
 		t.Error("garbage input produced a line; it must fail open with nothing")
+	}
+}
+
+// The windows Claude Code reports are kept for the daemon, gateway spend
+// dollars included; an update without rate_limits leaves the last reading.
+func TestStatuslineKeepsTheVendorReading(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("NO_COLOR", "1")
+	gateway := `{"rate_limits": {"spend_limit": {"used_percentage": 62.8, "resets_at": 4102444800,
+	  "used_usd": 314.12, "limit_usd": 500, "period": "monthly"}}}`
+	statusLines([]byte(gateway))
+	statusLines([]byte(`{"model": {"display_name": "Opus 5.5"}}`))
+
+	r, ok, err := claudelimits.Read("")
+	if err != nil || !ok {
+		t.Fatalf("no reading kept: ok %v, err %v", ok, err)
+	}
+	s := r.SpendLimit
+	if s == nil || s.UsedPct != 62.8 || s.UsedUSD == nil || *s.UsedUSD != 314.12 || *s.LimitUSD != 500 || s.Period != "monthly" {
+		t.Fatalf("spend limit = %+v", s)
+	}
+	if r.FiveHour != nil {
+		t.Fatalf("a window nobody reported: %+v", r.FiveHour)
 	}
 }
 

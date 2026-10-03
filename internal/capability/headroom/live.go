@@ -6,6 +6,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudestatusline"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -22,11 +23,17 @@ type AttributeReader interface {
 	LatestAttributesBySource(ctx context.Context, source, key string, since time.Time) (map[string]string, time.Time, bool, error)
 }
 
-// liveSource names where each provider's window reading is stored and a
-// key every reading carries.
-var liveSource = map[eventschema.Provider]struct{ source, key string }{
-	eventschema.ProviderAnthropic: {claudeusagemeter.SourceTag, "five_hour_used_pct"},
-	eventschema.ProviderOpenAI:    {codexjsonl.SourceTag, "primary_used_pct"},
+// liveSources names, per provider, where window readings are stored and a
+// key every reading from that source carries. Claude's come from the
+// claude.ai meter and from Claude Code's status line, in the same shape;
+// a status line reading may hold only a gateway spend limit, so it is
+// found by its granularity rather than by a window.
+var liveSources = map[eventschema.Provider][]struct{ source, key string }{
+	eventschema.ProviderAnthropic: {
+		{claudeusagemeter.SourceTag, "five_hour_used_pct"},
+		{claudestatusline.SourceTag, "granularity"},
+	},
+	eventschema.ProviderOpenAI: {{codexjsonl.SourceTag, "primary_used_pct"}},
 }
 
 // LiveWindow returns the most constrained window of the flat-rate plan
@@ -46,13 +53,20 @@ func LiveWindows(ctx context.Context, cfg config.Config, r AttributeReader, prov
 	if _, ok := plans.Lookup(cfg.Plans[string(provider)]); !ok {
 		return nil
 	}
-	src, ok := liveSource[provider]
+	src, ok := liveSources[provider]
 	if !ok {
 		return nil
 	}
-	attrs, _, ok, err := r.LatestAttributesBySource(ctx, src.source, src.key, now.Add(-LiveFreshness))
-	if err != nil || !ok {
+	newest := map[string]*eventschema.Envelope{}
+	for _, s := range src {
+		attrs, at, ok, err := r.LatestAttributesBySource(ctx, s.source, s.key, now.Add(-LiveFreshness))
+		if err != nil || !ok {
+			continue
+		}
+		newest[s.source] = &eventschema.Envelope{Source: s.source, Timestamp: at, Attributes: attrs}
+	}
+	if len(newest) == 0 {
 		return nil
 	}
-	return plans.QuotaWindowsFromAttributes(provider, attrs)
+	return plans.QuotaWindowsFromAttributes(provider, plans.MergeReadings(newest))
 }

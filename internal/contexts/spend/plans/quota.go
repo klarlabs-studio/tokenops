@@ -48,6 +48,10 @@ func QuotaWindowsFromAttributes(provider eventschema.Provider, attrs map[string]
 				continue
 			}
 			label, dur, ok := claudeWindow(name, attrs[name+"_kind"], attrs[name+"_model_scope"])
+			if name == "spend_limit" {
+				label, dur = spendLimitWindow(attrs[name+"_period"])
+				ok = true
+			}
 			if !ok {
 				continue
 			}
@@ -86,6 +90,22 @@ func claudeWindow(name, kind, scope string) (string, time.Duration, bool) {
 		return "weekly", week, true
 	}
 	return "", 0, false
+}
+
+// spendLimitWindow labels a Claude apps gateway spend limit by its period.
+// The period is optional in what Claude Code reports; without it the
+// limit is still a limit, of a length nobody said.
+func spendLimitWindow(period string) (string, time.Duration) {
+	switch period {
+	case "daily":
+		return "daily spend limit", 24 * time.Hour
+	case "weekly":
+		return "weekly spend limit", week
+	case "monthly":
+		return "monthly spend limit", 30 * 24 * time.Hour
+	default:
+		return "spend limit", 0
+	}
 }
 
 func windowLabel(d time.Duration) string {

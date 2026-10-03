@@ -2,6 +2,8 @@ package plans
 
 import (
 	"context"
+	"maps"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,14 +31,16 @@ func VendorWindows(ctx context.Context, reader EventReader, provider eventschema
 	// Each vendor's windows come from its own reader; matching on keys
 	// alone read Codex's primary window as Claude's.
 	var (
-		parse  func(map[string]string, time.Time) []VendorWindow
-		source string
+		parse   func(map[string]string, time.Time) []VendorWindow
+		sources []string
 	)
 	switch provider {
 	case eventschema.ProviderAnthropic:
-		parse, source = claudeWindows, "claude-usage-meter"
+		// The claude.ai meter and Claude Code's status line report the
+		// same windows in the same shape.
+		parse, sources = claudeWindows, ClaudeWindowSources
 	case eventschema.ProviderOpenAI:
-		parse, source = codexWindows, "codex-jsonl"
+		parse, sources = codexWindows, []string{"codex-jsonl"}
 	default:
 		return nil
 	}
@@ -44,21 +48,42 @@ func VendorWindows(ctx context.Context, reader EventReader, provider eventschema
 	if err != nil {
 		return nil
 	}
-	var best *eventschema.Envelope
+	newest := map[string]*eventschema.Envelope{}
 	for _, e := range events {
-		if e == nil || e.Source != source || e.Attributes == nil || len(parse(e.Attributes, now)) == 0 {
+		if e == nil || !slices.Contains(sources, e.Source) || e.Attributes == nil || len(parse(e.Attributes, now)) == 0 {
 			continue
 		}
-		if best == nil || e.Timestamp.After(best.Timestamp) {
-			best = e
+		if best := newest[e.Source]; best == nil || e.Timestamp.After(best.Timestamp) {
+			newest[e.Source] = e
 		}
 	}
-	if best == nil {
+	if len(newest) == 0 {
 		return nil
 	}
-	out := parse(best.Attributes, now)
+	out := parse(MergeReadings(newest), now)
 	sort.SliceStable(out, func(i, j int) bool { return out[i].UsedPct > out[j].UsedPct })
 	return out
+}
+
+// ClaudeWindowSources are the sources that report Claude's plan windows:
+// the claude.ai usage meter and Claude Code's status line.
+var ClaudeWindowSources = []string{"claude-usage-meter", "claude-code-statusline"}
+
+// MergeReadings overlays the newest reading of each source, oldest first,
+// so where two sources report the same window the newer figure wins, and
+// a window only one of them reports (the meter's model-scoped weeks) is
+// kept.
+func MergeReadings(newest map[string]*eventschema.Envelope) map[string]string {
+	readings := make([]*eventschema.Envelope, 0, len(newest))
+	for _, e := range newest {
+		readings = append(readings, e)
+	}
+	sort.Slice(readings, func(i, j int) bool { return readings[i].Timestamp.Before(readings[j].Timestamp) })
+	merged := map[string]string{}
+	for _, e := range readings {
+		maps.Copy(merged, e.Attributes)
+	}
+	return merged
 }
 
 // claudeWindows reads the Claude usage meter's <label>_used_pct keys.
@@ -79,6 +104,8 @@ func claudeWindows(attrs map[string]string, now time.Time) []VendorWindow {
 			w.Name, w.Duration = "5h", 5*time.Hour
 		case label == "seven_day" || strings.HasPrefix(label, "weekly") || strings.HasPrefix(label, "seven_day"):
 			w.Name, w.Duration = "week", 7*24*time.Hour
+		case label == "spend_limit":
+			w.Name, w.Duration = spendLimitWindow(attrs["spend_limit_period"])
 		default:
 			w.Name = strings.ReplaceAll(label, "_", " ")
 		}
