@@ -7,12 +7,14 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
+	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/observ"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
 	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/domainmigration"
@@ -105,6 +107,7 @@ func initializeEventRuntime(
 	rt.ProxyOptions = append(rt.ProxyOptions,
 		proxy.WithEventBus(rt.Bus),
 		proxy.WithSourceFreshness(sourceFreshnessFn(cfg, rt.Store, sourceHealth, sup)),
+		proxy.WithPlans(plansDeps(cfg, rt.Store, components.Spend)),
 		proxy.WithTokenizer(components.Tokenizers),
 		proxy.WithCostEngine(components.Spend),
 		proxy.WithEventDrops(rt.Bus.DroppedCount),
@@ -167,5 +170,21 @@ func wireDomainEventPublishers(bus *events.AsyncBus, logger *slog.Logger) func()
 		optimizer.SetEventBus(nil)
 		rulesfs.SetEventBus(nil)
 		budget.SetEventBus(nil)
+	}
+}
+
+// plansDeps is what the plan routes need. The daemon reads config once, at
+// boot, and a config write restarts it (RestartForConfig), so the snapshot
+// it was started with is current.
+func plansDeps(cfg config.Config, store *sqlite.Store, engine *spend.Engine) func() headroom.Deps {
+	return func() headroom.Deps {
+		deps := headroom.Deps{Config: &cfg}
+		if store != nil {
+			deps.Reader = store
+		}
+		if engine != nil {
+			deps.Price = engine.ComputeAt
+		}
+		return deps
 	}
 }
