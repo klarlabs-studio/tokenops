@@ -1,0 +1,71 @@
+/* Klarlabs brand tokens (ink, blue, green, amber, red), light and dark. */
+:root {
+  --bg: #F2F3F5;
+  --card: #FFFFFF;
+  --fg: #16181D;
+  --muted: #70757F;
+  --track: #DDE0E5;
+  --accent: #2742F5;
+  --low: #22C55E;
+  --medium: #F59E0B;
+  --high: #DC2626;
+  --border: #DDE0E5;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0E0F12;
+    --card: #16181D;
+    --fg: #F2F3F5;
+    --muted: #9DA2AC;
+    --track: #3F434D;
+    --accent: #8493FA;
+    --low: #4ADE80;
+    --medium: #FBBF24;
+    --high: #F87171;
+    --border: #23262D;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  user-select: none;
+}
+
+main { display: flex; flex-direction: column; gap: 10px; padding: 14px; height: 100%; }
+header h1 { margin: 0; font-size: 15px; font-weight: 600; }
+.insight { margin: 2px 0 0; color: var(--muted); }
+#plans { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; flex: 1; }
+
+.plan { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.plan-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.name { font-weight: 600; }
+.risk { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.risk.low { color: var(--low); } .risk.medium { color: var(--medium); } .risk.high { color: var(--high); }
+
+.row { margin-top: 6px; }
+.row-head { display: flex; justify-content: space-between; }
+.label { color: var(--fg); }
+.pct { font-variant-numeric: tabular-nums; font-weight: 600; }
+.pct.low { color: var(--fg); } .pct.medium { color: var(--medium); } .pct.high { color: var(--high); }
+.track { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; margin-top: 3px; }
+.fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width .3s; }
+.fill.medium { background: var(--medium); } .fill.high { background: var(--high); }
+.detail { font-size: 11px; margin-top: 2px; }
+.muted { color: var(--muted); }
+.error { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--card); color: var(--high); border: 1px solid var(--border); }
+
+.coach { display: flex; align-items: center; gap: 8px; }
+.coach label { color: var(--muted); }
+select { flex: 1; font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--fg); }
+
+footer { display: flex; justify-content: space-between; align-items: center; }
+button { font: inherit; padding: 4px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--fg); cursor: pointer; }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
