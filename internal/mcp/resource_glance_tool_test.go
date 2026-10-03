@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -55,11 +56,11 @@ func TestResourceGlanceDoesNotCallUnconfiguredCapacityClear(t *testing.T) {
 }
 
 func TestResourceInsightPrioritizesSessionIntervention(t *testing.T) {
-	insight := resourceInsight(&sessionBudgetResult{Budgets: []plans.SessionBudget{{
+	insight := headroom.Insight(headroom.BudgetResult{Budgets: []plans.SessionBudget{{
 		Provider: "anthropic", Display: "Claude Max", RecommendedAction: plans.ActionWaitReset,
 		WindowPct: 96, Confidence: plans.ConfidenceHigh,
 		SignalQuality: plans.SignalQuality{Level: plans.SignalLevelLow, Caveat: "MCP pings only"},
-	}}}, &planHeadroomResult{Reports: []plans.HeadroomReport{{Provider: "anthropic", Display: "Claude Max", OverageRisk: plans.RiskLow}}})
+	}}}, headroom.Result{Reports: []plans.HeadroomReport{{Provider: "anthropic", Display: "Claude Max", OverageRisk: plans.RiskLow}}})
 	if insight.Level != "attention" || insight.RecommendedAction != plans.ActionWaitReset {
 		t.Fatalf("insight = %+v, want wait_for_reset attention", insight)
 	}
