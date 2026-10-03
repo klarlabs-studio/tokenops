@@ -112,7 +112,11 @@ func AssembleHeadroomInputs(ctx context.Context, reader EventReader, counts Sour
 	if p.SpendDenominated {
 		in.SpendLimitUSD = lim.LimitUSD
 		in.RateFactor = lim.RateFactor
-		spend, err := SpendInWindow(ctx, reader, provider, now, lim.Window, lim.Price)
+		spendIn := SpendInWindow
+		if planName == PayAsYouGo {
+			spendIn = BilledSpendInWindow
+		}
+		spend, err := spendIn(ctx, reader, provider, now, lim.Window, lim.Price)
 		if err != nil {
 			return HeadroomInputs{}, fmt.Errorf("spend[%s]: %w", provider, err)
 		}
