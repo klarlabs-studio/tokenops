@@ -36,3 +36,21 @@ func TestSpendingRoutesAnswer(t *testing.T) {
 		}
 	}
 }
+
+func TestDecisionRoutesAnswer(t *testing.T) {
+	store, done := seedAnalyticsStore(t)
+	defer done()
+	base := "http://" + startAnalyticsProxy(t, store)
+
+	if p := getJSON(t, base+"/api/routing/proposals"); p["pending"] == nil {
+		t.Errorf("proposals = %v", p)
+	}
+	resp, err := http.Get(base + "/api/decisions/decision:unknown")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("unknown decision = %d, want 404", resp.StatusCode)
+	}
+}
