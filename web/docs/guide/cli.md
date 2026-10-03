@@ -24,7 +24,27 @@ tokenops init --print-only      # render YAML to stdout, don't write
 tokenops init --force           # overwrite existing config
 tokenops init --currency EUR    # show totals in euros (default: your system region)
 tokenops init --preset guided   # set up the coach (default for a new config: advise)
+tokenops init --yes             # ask nothing; take every default
 ```
+
+**Plans come from your clients.** Claude Code records the plan you are
+signed in with (its account type and rate-limit tier) and Codex records
+its `plan_type` in every session; `init` binds the plan they name and
+says which client reported it. A plan you bound yourself is never
+changed: if a client reports a different one, `init` points it out.
+
+**In a terminal it asks only what nothing on the machine could answer**,
+each with a default Enter accepts:
+
+- which plan, when the evidence fits two (a Claude Team seat, say);
+- what you pay for each plan it bound, as on your bill (optional; it
+  values your usage in your currency);
+- the monthly spend limit of a usage-billed plan nothing reports;
+- the coach preset, for a new config;
+- whether to install the daemon unit, when nothing supervises ingestion.
+
+With no terminal (MDM, CI), or with `--yes`, it asks nothing and takes
+every default.
 
 `init` also turns on the transcript readers for every client whose
 sessions are on this machine (Claude Code, Codex, opencode), and says how

@@ -32,6 +32,9 @@ type initFlags struct {
 	noWire      bool
 	preset      string
 	currency    string
+	// yes takes every default without asking, as init does with no
+	// terminal (MDM, CI).
+	yes bool
 }
 
 func newInitCmd() *cobra.Command {
@@ -53,13 +56,19 @@ then wires tokenops into the clients already installed:
     binary's absolute path (a bare "tokenops" resolves through PATH at
     spawn time, so a host can silently run a stale build)
   - installs the Claude Code hooks (coaching nudge + read dedup guard)
-  - reports which subscription plan still needs binding
+  - binds the plan each client reports (Claude Code's account tier,
+    Codex's plan_type), recorded in the plan history and never over a
+    plan you bound yourself
+
+In a terminal it then asks only what nothing on the machine could answer,
+each with a default Enter accepts: a plan the evidence fits two of, what
+you pay, a spend limit nothing reports, the coach preset for a new
+config, and whether to supervise the daemon. Without a terminal, or with
+--yes, it asks nothing. Pointing a client at the local proxy stays yours:
+that reroutes your real traffic.
 
 Everything it writes is idempotent and backed up, so re-running is safe and
-a second run visibly changes nothing. Two things are left to you on purpose:
-picking your plan tier (guessing would make headroom maths confidently
-wrong) and pointing a client at the local proxy (that reroutes your real
-traffic).
+a second run visibly changes nothing.
 
 Re-running init leaves an existing config alone unless --force is passed;
 --print-only emits the YAML without touching disk; --no-wire writes the
@@ -78,6 +87,7 @@ config only.`,
 	cmd.Flags().BoolVar(&f.printOnly, "print-only", false, "render the resulting YAML to stdout without writing")
 	cmd.Flags().BoolVar(&f.withDetect, "detect", false, "also report installed AI clients (init still wires everything; use `tokenops detect` to only look)")
 	cmd.Flags().StringVar(&f.currency, "currency", "", "currency you pay in (ISO 4217, e.g. EUR); totals are shown in it. Default: your system region")
+	cmd.Flags().BoolVar(&f.yes, "yes", false, "ask nothing: take every default (as without a terminal)")
 	cmd.Flags().BoolVar(&f.noWire, "no-wire", false, "write the config only; skip registering the MCP server and installing hooks")
 	return cmd
 }
@@ -144,7 +154,13 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 			if err != nil {
 				return err
 			}
-			runSetup(cmd.OutOrStdout(), configPath, target)
+			before := boundPlans(configPath)
+			steps := runSetup(cmd.OutOrStdout(), configPath, target)
+			if interactiveInput(cmd.InOrStdin(), f.yes) {
+				w := newWizard(cmd.InOrStdin(), cmd.OutOrStdout())
+				w.plans(configPath, target.Home, before)
+				w.daemon(steps)
+			}
 			// An existing coach is the operator's; change it only when
 			// they named a preset.
 			return initPreset(cmd, configPath, f.preset)
@@ -189,12 +205,31 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 	if err != nil {
 		return err
 	}
-	runSetup(cmd.OutOrStdout(), configPath, target)
+	steps := runSetup(cmd.OutOrStdout(), configPath, target)
 	preset := f.preset
+	if interactiveInput(cmd.InOrStdin(), f.yes) {
+		// Everything init could do on its own is done; ask only what
+		// nothing on the machine could answer.
+		w := newWizard(cmd.InOrStdin(), cmd.OutOrStdout())
+		w.plans(configPath, target.Home, nil)
+		if preset == "" {
+			preset = w.preset()
+		}
+		w.daemon(steps)
+	}
 	if preset == "" {
 		preset = coachcap.PresetDefault
 	}
 	return initPreset(cmd, configPath, preset)
+}
+
+// boundPlans is the config's plan bindings, empty when it cannot be read.
+func boundPlans(path string) map[string]string {
+	cfg, err := config.ReadMutable(path)
+	if err != nil {
+		return nil
+	}
+	return cfg.Plans
 }
 
 // initPreset sets the coach from a preset as the last step of init, so a
