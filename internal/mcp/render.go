@@ -49,7 +49,8 @@ func markdownPayload(summary string, structured any) string {
 func renderBudgetSummary(b budgetSummaryRow) string {
 	var s strings.Builder
 	fmt.Fprintf(&s, "## %s — `%s`\n\n", b.Display, b.RecommendedAction)
-	if b.WindowCap > 0 {
+	switch {
+	case b.WindowCap > 0:
 		gauge := HeadroomGauge(b.WindowConsumed, b.WindowCap, SparklineOptions{
 			Label: fmt.Sprintf("%d / %d %s", b.WindowConsumed, b.WindowCap, b.WindowUnit),
 		})
@@ -66,7 +67,13 @@ func renderBudgetSummary(b budgetSummaryRow) string {
 		fmt.Fprintf(&s, "| Burn rate | %.1f / hour |\n", b.RecentRatePerHour)
 		fmt.Fprintf(&s, "| Confidence | %s |\n", b.Confidence)
 		fmt.Fprintf(&s, "| Signal | `%s` — %s |\n", b.SignalLevel, b.SignalCaveat)
-	} else if b.Note != "" {
+	case b.WindowResetsIn != "":
+		// The vendor reports a percentage and no cap (Codex's rate limits).
+		fmt.Fprintf(&s, "| Metric | Value |\n|---|---|\n")
+		fmt.Fprintf(&s, "| Window | %.1f%% used |\n", b.WindowPct)
+		fmt.Fprintf(&s, "| Resets in | %s |\n", b.WindowResetsIn)
+		fmt.Fprintf(&s, "| Signal | `%s` — %s |\n", b.SignalLevel, b.SignalCaveat)
+	case b.Note != "":
 		fmt.Fprintf(&s, "_%s_\n", b.Note)
 	}
 	return s.String()
