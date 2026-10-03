@@ -16,13 +16,21 @@ LDFLAGS := -s -w \
   -X go.klarlabs.de/tokenops/internal/version.Commit=$(COMMIT) \
   -X go.klarlabs.de/tokenops/internal/version.Date=$(DATE)
 
-.PHONY: FORCE all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-review sec-remediate policy-guard install-hooks eval eval-gate cover-debt cover-debt-gate config-matrix
+.PHONY: FORCE menubar menubar-test all build test fmt vet lint verify clean tools tidy ci run-daemon bench bench-gate sec sec-gate sec-review sec-remediate policy-guard install-hooks eval eval-gate cover-debt cover-debt-gate config-matrix
 
 all: build
 
 build: $(addprefix $(BIN_DIR)/,$(BINARIES))
 
-# FORCE: the binaries have no file prerequisites make could compare, so
+# # The menu bar app is its own module (Vitra needs cgo). Run it against the
+# local daemon; `make menubar-test` runs its tests without a window.
+menubar:
+	cd apps/menubar && CGO_ENABLED=1 go run -tags vitra_native .
+
+menubar-test:
+	cd apps/menubar && go vet ./... && go test -count=1 ./...
+
+FORCE: the binaries have no file prerequisites make could compare, so
 # without it an existing bin/tokenops was never rebuilt and every target
 # built on it (config-matrix, the release's pre-publish check) ran a stale
 # binary. go build's own cache keeps the rebuild cheap.
@@ -191,5 +199,13 @@ install-hooks:
 		warden init >/dev/null; \
 		echo "Armed the warden gate (pre-commit, pre-push), protected-branch guard included."; \
 	fi
+
+# The menu bar app is its own module (Vitra needs cgo). Run it against the
+# local daemon; `make menubar-test` runs its tests without a window.
+menubar:
+	cd apps/menubar && CGO_ENABLED=1 go run -tags vitra_native .
+
+menubar-test:
+	cd apps/menubar && go vet ./... && go test -count=1 ./...
 
 FORCE:
