@@ -119,7 +119,7 @@ func installStatusline(out io.Writer, settingsPath, exe string) error {
 		}
 	}
 	if current != nil && fmt.Sprint(current) == fmt.Sprint(next) {
-		fmt.Fprintln(out, "status line: already TokenOps' — no changes.")
+		fmt.Fprintln(out, "✓ TokenOps is already in Claude Code's status line. Nothing changed.")
 		return nil
 	}
 	settings["statusLine"] = next
@@ -132,9 +132,11 @@ func installStatusline(out io.Writer, settingsPath, exe string) error {
 		return err
 	}
 	if wrapped != "" {
-		fmt.Fprintf(out, "status line: TokenOps' line, with your own (%s) under it — `tokenops statusline uninstall` restores it\n", wrapped)
+		fmt.Fprintf(out, "✓ TokenOps now shows in Claude Code's status line.\n  %s still shows, below it.\n", statuslineName(wrapped))
+		fmt.Fprintln(out, "  Restart Claude Code to see it. To undo: tokenops statusline uninstall")
 	} else {
-		fmt.Fprintln(out, "status line: TokenOps' line — `tokenops statusline uninstall` removes it")
+		fmt.Fprintln(out, "✓ TokenOps now shows in Claude Code's status line.")
+		fmt.Fprintln(out, "  Restart Claude Code to see it. To undo: tokenops statusline uninstall")
 	}
 	return nil
 }
@@ -148,7 +150,7 @@ func uninstallStatusline(out io.Writer, settingsPath string) error {
 	}
 	current, _ := settings["statusLine"].(map[string]any)
 	if current == nil || !isOurStatusline(current) {
-		fmt.Fprintln(out, "status line: not TokenOps' — nothing to remove.")
+		fmt.Fprintln(out, "TokenOps is not in Claude Code's status line. Nothing to remove.")
 		return nil
 	}
 	if original, ok := readOriginalStatusline(); ok {
@@ -167,7 +169,7 @@ func uninstallStatusline(out io.Writer, settingsPath string) error {
 			return err
 		}
 	}
-	fmt.Fprintln(out, "status line: restored")
+	fmt.Fprintln(out, "✓ Claude Code's status line is back to what it was.")
 	return nil
 }
 
@@ -204,4 +206,27 @@ func recordStatuslineChoice(on bool) error {
 	}
 	cfg.Statusline.Enabled = &on
 	return writeMutableConfig(path, cfg)
+}
+
+// statuslineName names a status line command for a person: the tool it
+// belongs to when it is a known one, else the script it runs. The full
+// command (an interpreter path and a script path) means nothing to most
+// readers.
+func statuslineName(command string) string {
+	switch {
+	case strings.Contains(command, ".fireconnect"):
+		return "Your FireConnect status line"
+	case strings.Contains(command, "ccstatusline"):
+		return "Your ccstatusline"
+	case strings.Contains(command, "starship"):
+		return "Your Starship status line"
+	}
+	fields := strings.Fields(command)
+	for i := len(fields) - 1; i >= 0; i-- {
+		f := strings.Trim(fields[i], `"'`)
+		if strings.ContainsAny(f, "/.") && !strings.HasPrefix(f, "-") {
+			return "Your status line (" + filepath.Base(f) + ")"
+		}
+	}
+	return "Your previous status line"
 }
