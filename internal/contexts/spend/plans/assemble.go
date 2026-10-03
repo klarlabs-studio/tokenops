@@ -39,6 +39,7 @@ var sourceProvider = map[string]string{
 	"codex-jsonl":             "openai",
 	"github-copilot":          "github",
 	"cursor-web":              "cursor",
+	"fireworks-usage":         "fireworks",
 }
 
 // SignalFromCounts maps per-source event counts onto the observations
@@ -64,6 +65,7 @@ func SignalFromCounts(counts map[string]int64, provider string) SignalInputs {
 		CopilotInWindow:          c("github-copilot"),
 		CursorInWindow:           c("cursor-web"),
 		ClaudeUsageMeterInWindow: c("claude-usage-meter"),
+		FireworksInWindow:        c("fireworks-usage"),
 		VendorAPIWired:           c("vendor-usage-anthropic") > 0,
 	}
 }

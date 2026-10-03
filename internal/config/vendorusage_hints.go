@@ -30,6 +30,11 @@ func (c Config) VendorUsageConfigHint(sourceTag string) string {
 		return configHintCursor(c.VendorUsage.Cursor)
 	case "claude-usage-meter":
 		return configHintClaudeUsageMeter(c.VendorUsage.ClaudeUsageMeter)
+	case "fireworks-usage":
+		if !c.VendorUsage.Fireworks.On() {
+			return "switched off: `tokenops vendor-usage enable fireworks` turns it back on"
+		}
+		return "on; reads only when FireConnect or FIREWORKS_API_KEY provides a Fireworks key on this machine"
 	default:
 		return ""
 	}

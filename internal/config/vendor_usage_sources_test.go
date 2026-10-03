@@ -43,6 +43,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"github_copilot", "github-copilot"},
 		{"cursor_web", "cursor-web"},
 		{"claude_subscription", "claude-usage-meter"},
+		{"fireworks", "fireworks-usage"},
 		{"cursor_turns (hook ledger)", "cursor-hook"},
 	}
 	if len(got) != len(want) {
