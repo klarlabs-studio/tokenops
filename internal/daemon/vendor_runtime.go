@@ -15,6 +15,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecode"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudestatusline"
 	claudeusagemeter "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
 	copilotusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilot"
@@ -89,6 +90,11 @@ func startVendorUsagePollers(
 		Logger:      logger,
 	})
 	sup.Go("cursor-hook", p.Run)
+
+	// Claude Code reports its plan windows to the status line, which leaves
+	// them in a file; reading a file that does not exist costs nothing.
+	sl := claudestatusline.NewPoller(bus, claudestatusline.PollerOptions{Logger: logger})
+	sup.Go("claude-code-statusline", sl.Run)
 
 	if cfg.VendorUsage.ClaudeUsageMeter.Enabled {
 		p := claudeusagemeter.NewPoller(bus, claudeusagemeter.PollerOptions{

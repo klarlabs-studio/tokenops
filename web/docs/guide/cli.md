@@ -467,6 +467,15 @@ never the event store or the network, and takes about 12 ms. Subagent
 rows show each subagent's model, effort and context. `NO_COLOR` turns
 the colours off.
 
+It also keeps the newest windows Claude Code reported in
+`~/.tokenops/claude-limits.json`, and the daemon stores them as Anthropic's
+own reading. That gives `plan headroom`, the session budget and the coach
+your 5-hour and weekly windows, or a Claude apps gateway's spend limit
+(dollars too, when the limit is monthly), with no claude.ai login. When the
+claude.ai usage meter is also connected, the newer figure wins for each
+window, and windows only the meter reports, such as a model's own weekly
+limit, are kept.
+
 `tokenops init` sets it up, keeping a status line you already have under
 TokenOps' line. To set it up or take it out by hand:
 

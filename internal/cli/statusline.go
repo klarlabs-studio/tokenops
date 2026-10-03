@@ -17,6 +17,7 @@ import (
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/statusline"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
 	"go.klarlabs.de/tokenops/internal/infra/fxrate"
 )
@@ -53,6 +54,29 @@ type claudeStatus struct {
 type claudeWindow struct {
 	UsedPercentage float64 `json:"used_percentage"`
 	ResetsAt       int64   `json:"resets_at"`
+	// Only a gateway spend limit carries these, and not always.
+	UsedUSD  *float64 `json:"used_usd"`
+	LimitUSD *float64 `json:"limit_usd"`
+	Period   string   `json:"period"`
+}
+
+// limitsReading is the rate_limits part of the update, as a reading.
+func (s claudeStatus) limitsReading(now time.Time) claudelimits.Reading {
+	conv := func(w *claudeWindow) *claudelimits.Window {
+		if w == nil {
+			return nil
+		}
+		return &claudelimits.Window{
+			UsedPct: w.UsedPercentage, ResetsAt: w.ResetsAt,
+			UsedUSD: w.UsedUSD, LimitUSD: w.LimitUSD, Period: w.Period,
+		}
+	}
+	return claudelimits.Reading{
+		ObservedAt: now.UTC(),
+		FiveHour:   conv(s.RateLimits.FiveHour),
+		SevenDay:   conv(s.RateLimits.SevenDay),
+		SpendLimit: conv(s.RateLimits.SpendLimit),
+	}
 }
 
 // statuslineWrapTimeout bounds the wrapped command. Claude Code cancels a
@@ -71,7 +95,9 @@ it on every turn with its session JSON on stdin.
 
 It reads only what Claude Code hands it and files TokenOps already keeps,
 never the event store or the network, and it fails open: on any error it
-prints what it can, or nothing.
+prints what it can, or nothing. It keeps the windows Claude Code reports
+in ~/.tokenops/claude-limits.json, for the daemon to store as Anthropic's
+own reading.
 
 --wrap runs another status line command with the same input and prints
 its output under TokenOps' line, so an existing status line keeps
@@ -102,6 +128,10 @@ func statusLines(raw []byte) []string {
 	if json.Unmarshal(raw, &s) != nil {
 		return nil
 	}
+	// The windows are the vendor's own reading; the daemon stores them so
+	// headroom has them without a claude.ai login. Failing to keep them
+	// must not cost the operator their status line.
+	_ = claudelimits.Write("", s.limitsReading(time.Now()))
 	var cfg config.Config
 	if path, err := config.DefaultPath(); err == nil {
 		if loaded, err := config.Load(path); err == nil {

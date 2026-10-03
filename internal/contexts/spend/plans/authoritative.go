@@ -300,7 +300,10 @@ func LatestVendorSpend(ctx context.Context, reader EventReader, provider eventsc
 		return nil
 	}
 	source := "claude_usage_meter:extra_usage"
-	if best.Source != "" && provider != eventschema.ProviderAnthropic {
+	switch {
+	case best.Source == "claude-code-statusline":
+		source = "claude_code_statusline:spend_limit"
+	case best.Source != "" && provider != eventschema.ProviderAnthropic:
 		source = best.Source
 	}
 	return &VendorSpend{
