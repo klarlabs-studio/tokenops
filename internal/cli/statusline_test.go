@@ -177,3 +177,25 @@ func TestStatuslineUninstallSticksAcrossInit(t *testing.T) {
 		t.Error("an explicit install left init's opt-out in place")
 	}
 }
+
+func TestExplainCommand(t *testing.T) {
+	var out bytes.Buffer
+	root := NewRoot()
+	root.SetArgs([]string{"explain", "wall-clock"})
+	root.SetOut(&out)
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"wall-clock —", "What it measures", "How to read it", "Grades"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("explain output lacks %q:\n%s", want, out.String())
+		}
+	}
+	out.Reset()
+	root = NewRoot()
+	root.SetArgs([]string{"explain"})
+	root.SetOut(&out)
+	if err := root.Execute(); err != nil || !strings.Contains(out.String(), "DX") || !strings.Contains(out.String(), "tokenops explain <term>") {
+		t.Errorf("list: %v\n%s", err, out.String())
+	}
+}

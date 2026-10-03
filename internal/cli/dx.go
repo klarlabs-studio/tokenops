@@ -166,6 +166,7 @@ func writeDXText(w io.Writer, m agentdx.Metrics, bands []agentdx.ContextBand, da
 	if rec, ok := agentdx.Recommend(m); ok {
 		fmt.Fprintf(w, "\nBIGGEST WIN\n  %s\n  %s\n  Do: %s\n", rec.Title, rec.Evidence, rec.Action)
 	}
+	fmt.Fprintln(w, "\nWhat a figure means: tokenops explain <name>, e.g. tokenops explain wall-clock")
 }
 
 // writeDXEffort prints the model × effort rows, where clients record
