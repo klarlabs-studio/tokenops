@@ -421,6 +421,18 @@ var payAsYouGo = Plan{
 	SourceURL:        "https://docs.fireworks.ai/serverless/pricing (2026-10-01): billed per token; the limit is the account's own",
 }
 
+// Subscription binds a provider whose own account reader reports a
+// subscription's usage windows, when the catalog has no plan for it or the
+// tier is not known: the vendor's windows are the whole answer, and no
+// allowance is assumed. `tokenops plan set` names the tier.
+const Subscription = "subscription"
+
+var subscription = Plan{
+	Name:      Subscription,
+	Display:   "Subscription (windows the vendor reports)",
+	SourceURL: "the vendor's own account endpoint, read with the key the harness uses",
+}
+
 // ForVendorPlanType is the catalog plan a vendor-reported plan type
 // names, when exactly one plan of that provider claims it.
 func ForVendorPlanType(provider, planType string) (string, bool) {
@@ -476,8 +488,11 @@ func ResolveAlias(name string) (string, bool) {
 // (via Names()) so configuration errors are actionable. Deprecated
 // aliases are transparently resolved.
 func Lookup(name string) (Plan, bool) {
-	if name == PayAsYouGo {
+	switch name {
+	case PayAsYouGo:
 		return payAsYouGo, true
+	case Subscription:
+		return subscription, true
 	}
 	if modern, aliased := ResolveAlias(name); aliased {
 		name = modern

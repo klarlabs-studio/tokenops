@@ -95,6 +95,8 @@ var endpoints = []Endpoint{
 	{Host: "api.deepseek.com", Provider: eventschema.ProviderDeepSeek, Kind: Direct, Source: "https://api-docs.deepseek.com/guides/anthropic_api"},
 	{Host: "llm.chutes.ai", Provider: "chutes", Kind: Reseller},
 	{Host: "api.synthetic.new", Provider: "synthetic", Kind: Reseller},
+	{Host: "api.deepinfra.com", Provider: "deepinfra", Kind: Reseller, Source: "https://deepinfra.com/docs/openai_api"},
+	{Host: "ai-gateway.vercel.sh", Provider: "vercel", Kind: Reseller, Source: "https://vercel.com/docs/ai-gateway"},
 }
 
 // EndpointFor returns the known endpoint a base URL points at, the most

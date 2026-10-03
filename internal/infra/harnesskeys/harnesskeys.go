@@ -36,6 +36,10 @@ var EnvVars = map[string]string{
 	"DEEPSEEK_API_KEY":   "deepseek",
 	"MOONSHOT_API_KEY":   "moonshotai",
 	"FIREWORKS_API_KEY":  "fireworks-ai",
+	"DEEPINFRA_API_KEY":  "deepinfra",
+	"CHUTES_API_KEY":     "chutes",
+	"SYNTHETIC_API_KEY":  "synthetic",
+	"AI_GATEWAY_API_KEY": "vercel",
 }
 
 // Options points the finder at its sources; zero values use the real ones.

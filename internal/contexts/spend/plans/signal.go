@@ -110,7 +110,7 @@ func ClassifySignal(in SignalInputs) SignalQuality {
 		return SignalQuality{
 			Level:  SignalLevelHigh,
 			Source: SignalSourceVendorAccount,
-			Caveat: "Reads the vendor's documented account endpoint (OpenRouter /api/v1/key, DeepSeek /user/balance, Moonshot /v1/users/me/balance) with the key your harness already sends it.",
+			Caveat: "Reads the vendor's own account endpoint (balance, spend, or a coding plan's windows) with the key your harness already sends it. z.ai's and Kimi's are the endpoints their own clients call, not published APIs.",
 		}
 	case in.ClaudeCodeJSONLInWindow > 0:
 		return SignalQuality{

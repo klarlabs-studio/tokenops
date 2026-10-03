@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 
@@ -42,7 +43,7 @@ func TestOpenRouter(t *testing.T) {
 		srv := serve(t, "/api/v1/key", "sk-or", tc.body)
 		got, err := OpenRouter{BaseURL: srv.URL}.Read(ctx, "sk-or")
 		srv.Close()
-		if err != nil || got != tc.want {
+		if err != nil || !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("%s: %+v %v, want %+v", name, got, err, tc.want)
 		}
 	}

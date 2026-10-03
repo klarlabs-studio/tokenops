@@ -47,6 +47,13 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"openrouter_account", "openrouter-account"},
 		{"deepseek_account", "deepseek-account"},
 		{"moonshot_account", "moonshot-account"},
+		{"zai_account", "zai-account"},
+		{"kimi_account", "kimi-account"},
+		{"minimax_account", "minimax-account"},
+		{"synthetic_account", "synthetic-account"},
+		{"chutes_account", "chutes-account"},
+		{"deepinfra_account", "deepinfra-account"},
+		{"vercel_account", "vercel-account"},
 		{"cursor_turns (hook ledger)", "cursor-hook"},
 		{"claude_code_statusline", "claude-code-statusline"},
 	}

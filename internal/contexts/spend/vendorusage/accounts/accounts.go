@@ -45,6 +45,27 @@ type Reading struct {
 	HasBalance bool
 	// LimitReached is the vendor saying requests are blocked.
 	LimitReached bool
+	// Subscription marks an account on a plan rather than billed per
+	// token; its Windows are the plan's usage windows.
+	Subscription bool
+	// Windows are usage windows as the vendor reports them.
+	Windows []Window
+}
+
+// Empty reports whether the reading says nothing worth storing: an
+// account with no plan windows, no spend and no balance (a key on a
+// vendor's free tier, say).
+func (r Reading) Empty() bool {
+	return len(r.Windows) == 0 && !r.HasUsed && !r.HasBalance && r.LimitUSD == 0 && !r.LimitReached
+}
+
+// Window is one usage window: the share used and when it resets.
+type Window struct {
+	// Name is the window in words: "5h", "week", "month".
+	Name     string
+	UsedPct  float64
+	Duration time.Duration
+	ResetsAt time.Time
 }
 
 // Reader reads one vendor's account.
@@ -58,20 +79,26 @@ type Reader interface {
 	Read(ctx context.Context, key string) (Reading, error)
 }
 
-// Readers is every vendor with a documented account endpoint.
+// Readers is every vendor with an account endpoint we read.
 func Readers() []Reader {
-	return []Reader{OpenRouter{}, DeepSeek{}, Moonshot{}}
+	return []Reader{OpenRouter{}, DeepSeek{}, Moonshot{},
+		ZAI{}, Kimi{}, MiniMax{}, Synthetic{}, Chutes{}, DeepInfra{}, Vercel{}}
 }
 
 // getJSON GETs url with a bearer key and decodes the body into out.
 func getJSON(ctx context.Context, hc *http.Client, url, key string, out any) error {
+	return getJSONAuth(ctx, hc, url, "Bearer "+key, out)
+}
+
+// getJSONAuth GETs url with the Authorization header set to auth.
+func getJSONAuth(ctx context.Context, hc *http.Client, url, auth string, out any) error {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+key)
+	req.Header.Set("Authorization", auth)
 	req.Header.Set("Accept", "application/json")
 	if hc == nil {
 		hc = &http.Client{Timeout: 20 * time.Second}
