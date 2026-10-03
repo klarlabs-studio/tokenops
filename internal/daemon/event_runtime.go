@@ -207,14 +207,7 @@ func stateDeps(cfg config.Config, store *sqlite.Store, health func() []freshness
 			Ready:   proxy.IsReady,
 			Dropped: dropped,
 			Coach: func(now time.Time) coachcap.Report {
-				var ledger coachcap.Ledger
-				if l, err := followthrough.Default(); err == nil {
-					ledger = l
-				}
-				var levers coachcap.ContextLevers
-				if l, err := compactlever.New(cfg); err == nil {
-					levers = l
-				}
+				ledger, levers := coachEnv(cfg)
 				return coachcap.Status(cfg, ledger, levers, now)
 			},
 		}
@@ -259,7 +252,9 @@ func actionDeps(cfg config.Config, store *sqlite.Store, logger *slog.Logger) fun
 				}
 			},
 		}
+		d.Coach = func() (coachcap.Ledger, coachcap.ContextLevers) { return coachEnv(cfg) }
 		if store != nil {
+			d.Store = store
 			d.Audit = func(ctx context.Context, target string, details map[string]any) {
 				if _, err := audit.NewRecorder(store).Record(ctx, audit.Entry{
 					Action: audit.ActionConfigChange, Actor: "api", Target: target, Details: details,
@@ -270,4 +265,18 @@ func actionDeps(cfg config.Config, store *sqlite.Store, logger *slog.Logger) fun
 		}
 		return d
 	}
+}
+
+// coachEnv is the follow-through ledger and the context levers the coach
+// reports against; either is nil when it cannot be opened.
+func coachEnv(cfg config.Config) (coachcap.Ledger, coachcap.ContextLevers) {
+	var ledger coachcap.Ledger
+	if l, err := followthrough.Default(); err == nil {
+		ledger = l
+	}
+	var levers coachcap.ContextLevers
+	if l, err := compactlever.New(cfg); err == nil {
+		levers = l
+	}
+	return ledger, levers
 }

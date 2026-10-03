@@ -113,7 +113,8 @@ func TestEveryAPIRouteIsGatedByDashAuth(t *testing.T) {
 // The write routes refuse a request without the token before reading it.
 func TestEveryWriteRouteIsGatedByDashAuth(t *testing.T) {
 	srv := New("127.0.0.1:0", WithDashAuth(denyAll{}), WithActions(func() ActionDeps { return ActionDeps{} }))
-	for _, path := range []string{"/api/mode", "/api/budgets", "/api/routing/rules", "/api/plans"} {
+	for _, path := range []string{"/api/mode", "/api/budgets", "/api/routing/rules", "/api/plans",
+		"/api/preferred-models", "/api/routing/decisions", "/api/outcomes", "/api/coach"} {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
 		req.Header.Set("Content-Type", "application/json")

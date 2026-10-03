@@ -1,14 +1,8 @@
 package mcp
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"os"
-	"os/exec"
-	"strings"
 	"time"
 
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
@@ -45,10 +39,8 @@ func RegisterCoachTool(s *Server, d ModeDeps) error {
 				ledger = l
 			}
 			now := time.Now()
-			if in.Preset != "" {
-				return runPreset(in.Preset)
-			}
-			if in.Autonomy == "" && in.Verbosity == "" && in.Power == "" && in.Rung == "" {
+			req := coachcap.ChangeRequest{Preset: in.Preset, Autonomy: in.Autonomy, Verbosity: in.Verbosity, Power: in.Power, Rung: in.Rung}
+			if req.Empty() {
 				cfg, err := config.ReadMutable(path)
 				if err != nil {
 					return nil, inputError(err)
@@ -56,23 +48,10 @@ func RegisterCoachTool(s *Server, d ModeDeps) error {
 				r := coachcap.Status(cfg, ledger, contextLevers(), now)
 				return &r, nil
 			}
-			if (in.Power == "") != (in.Rung == "") {
-				return nil, inputError(errors.New("power and rung go together"))
+			r, err := coachcap.Change(context.Background(), path, ledger, contextLevers(), now, req)
+			if err != nil && !errors.Is(err, coachcap.ErrPreset) && req.Preset != "" {
+				return nil, err
 			}
-			r, err := coachcap.Apply(path, ledger, contextLevers(), now, func(cfg *config.Config) {
-				if in.Autonomy != "" {
-					cfg.Coach.Autonomy = in.Autonomy
-				}
-				if in.Verbosity != "" {
-					cfg.Coach.Verbosity = in.Verbosity
-				}
-				if in.Power != "" {
-					if cfg.Coach.Powers == nil {
-						cfg.Coach.Powers = map[string]string{}
-					}
-					cfg.Coach.Powers[strings.ToLower(strings.TrimSpace(in.Power))] = in.Rung
-				}
-			})
 			if err != nil {
 				return nil, inputError(err)
 			}
@@ -95,34 +74,3 @@ func contextLevers() coachcap.ContextLevers {
 	}
 	return l
 }
-
-// runPreset applies a preset through the CLI's own implementation, run as
-// this binary, so choosing a preset by asking an agent and by typing the
-// command cannot wire a machine differently.
-func runPreset(name string) (*coachcap.Report, error) {
-	exe, err := os.Executable()
-	if err != nil {
-		return nil, err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), presetTimeout)
-	defer cancel()
-	var stdout, stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, exe, "coach", "preset", name, "--json") //nolint:gosec // this binary, fixed arguments
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = err.Error()
-		}
-		return nil, inputError(errors.New(msg))
-	}
-	var r coachcap.Report
-	if err := json.Unmarshal(stdout.Bytes(), &r); err != nil {
-		return nil, fmt.Errorf("coach preset: %w", err)
-	}
-	return &r, nil
-}
-
-// presetTimeout bounds a preset run: config writes and a few settings
-// files, nothing slow.
-const presetTimeout = 30 * time.Second

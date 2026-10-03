@@ -3,9 +3,9 @@ package mcp
 import (
 	"context"
 	"errors"
-	"fmt"
-	"math"
 	"strings"
+
+	"go.klarlabs.de/tokenops/internal/capability/actions"
 
 	"go.klarlabs.de/tokenops/internal/capability/outcomes"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
@@ -25,15 +25,9 @@ type outcomeInput struct {
 	AttentionMinutes *float64 `json:"attention_minutes,omitempty" jsonschema:"description=Optional active human effort in minutes, only when explicitly reported or confirmed by the operator."`
 }
 
-type outcomeResult struct {
-	EventID     string `json:"event_id,omitempty"`
-	ExecutionID string `json:"execution_id"`
-	Result      string `json:"result"`
-	Assessment  string `json:"assessment"`
-	Recorded    bool   `json:"recorded"`
-	Error       string `json:"error,omitempty"`
-	Hint        string `json:"hint,omitempty"`
-}
+// outcomeResult is the actions capability's payload, shared with the
+// daemon API (ADR 0010 §4).
+type outcomeResult = actions.Outcome
 
 type outcomeDetectInput struct {
 	ExecutionID string `json:"execution_id"`
@@ -51,31 +45,14 @@ func RegisterOutcomeTools(s *Server, d OutcomeDeps) error {
 		Description("Record the operator's assessment of whether one execution achieved its goal. Use only after the operator has actually judged the result; a task ending or an agent saying done is not an outcome. Optionally record active human attention minutes only when the operator explicitly reports or confirms the value. The assessment is stored locally and linked to the decision when decision_id is supplied.").
 		OutputSchema(outcomeResult{}).
 		Handler(func(ctx context.Context, in outcomeInput) (*outcomeResult, error) {
-			if strings.TrimSpace(in.ExecutionID) == "" {
-				return nil, inputError(errors.New("execution_id is required"))
-			}
-			result, err := parseOutcomeResult(in.Result)
-			if err != nil {
-				return nil, inputError(err)
-			}
-			if in.AttentionMinutes != nil && (math.IsNaN(*in.AttentionMinutes) || math.IsInf(*in.AttentionMinutes, 0) || *in.AttentionMinutes < 0) {
-				return nil, inputError(errors.New("attention_minutes must be a finite non-negative number"))
-			}
-			if d.Store == nil {
-				return &outcomeResult{ExecutionID: in.ExecutionID, Result: string(result), Assessment: string(eventschema.OutcomeHuman), Error: "storage_disabled", Hint: "run `tokenops init` then restart the daemon"}, nil
-			}
-			env := outcomes.Event(outcomes.Record{
-				ExecutionID: in.ExecutionID, DecisionID: in.DecisionID,
-				Result: result, Assessment: eventschema.OutcomeHuman, Caveat: strings.TrimSpace(in.Caveat),
-				AttentionMinutes: in.AttentionMinutes,
+			res, err := actions.RecordOutcome(ctx, d.Store, actions.OutcomeRequest{
+				ExecutionID: in.ExecutionID, DecisionID: in.DecisionID, Result: in.Result,
+				Caveat: in.Caveat, AttentionMinutes: in.AttentionMinutes,
 			})
-			if err := correlateOutcome(ctx, d.Store, env); err != nil {
-				return nil, err
+			if err != nil {
+				return nil, actionError(err)
 			}
-			if err := d.Store.Append(ctx, env); err != nil {
-				return nil, err
-			}
-			return &outcomeResult{EventID: env.ID, ExecutionID: in.ExecutionID, Result: string(result), Assessment: string(eventschema.OutcomeHuman), Recorded: true}, nil
+			return &res, nil
 		})
 	s.Tool("tokenops_outcome_detect").
 		Description("Inspect a local Claude Code transcript for the final recognized verifier after the last edit and record that limited result as verification evidence. Returns unknown instead of treating completion as success when no verifier is present.").
@@ -94,7 +71,7 @@ func RegisterOutcomeTools(s *Server, d OutcomeDeps) error {
 			if !ok {
 				return &outcomeResult{ExecutionID: in.ExecutionID, Result: string(eventschema.OutcomeUnknown), Assessment: string(eventschema.OutcomeVerification), Error: "no_verifier", Hint: "run a recognized test or lint command after the final edit, or record a human outcome"}, nil
 			}
-			if err := correlateOutcome(ctx, d.Store, env); err != nil {
+			if err := actions.CorrelateOutcome(ctx, d.Store, env); err != nil {
 				return nil, err
 			}
 			if err := d.Store.Append(ctx, env); err != nil {
@@ -104,29 +81,4 @@ func RegisterOutcomeTools(s *Server, d OutcomeDeps) error {
 			return &outcomeResult{EventID: env.ID, ExecutionID: in.ExecutionID, Result: string(out.Result), Assessment: string(out.Assessment), Recorded: true}, nil
 		})
 	return nil
-}
-
-func correlateOutcome(ctx context.Context, store *sqlite.Store, env *eventschema.Envelope) error {
-	if env.Correlation.Decision == "" {
-		return nil
-	}
-	history, err := store.Query(ctx, sqlite.Filter{Decision: env.Correlation.Decision, Limit: 10_000})
-	if err != nil {
-		return err
-	}
-	outcomes.CorrelateDecisionLifecycle(env, history)
-	return nil
-}
-
-func parseOutcomeResult(raw string) (eventschema.OutcomeResult, error) {
-	switch eventschema.OutcomeResult(strings.ToLower(strings.TrimSpace(raw))) {
-	case eventschema.OutcomeAchieved:
-		return eventschema.OutcomeAchieved, nil
-	case eventschema.OutcomePartial:
-		return eventschema.OutcomePartial, nil
-	case eventschema.OutcomeNotAchieved:
-		return eventschema.OutcomeNotAchieved, nil
-	default:
-		return eventschema.OutcomeUnknown, fmt.Errorf("result must be achieved, partial, or not_achieved")
-	}
 }

@@ -135,3 +135,51 @@ func TestBudgetRuleAndPlanActions(t *testing.T) {
 		t.Fatalf("config = %+v, %v", cfg, err)
 	}
 }
+
+func TestPreferredModelRoutingDecisionAndOutcomeActions(t *testing.T) {
+	s, f := newActionServer(t, allowAll{})
+
+	if rec := post(s, "/api/preferred-models", "application/json", `{"provider":"anthropic","model":"claude-sonnet-5"}`); rec.Code != http.StatusOK {
+		t.Fatalf("preferred model = %d %s", rec.Code, rec.Body)
+	}
+	<-f.applied // a config change restarts the daemon
+	if cfg, _ := config.ReadMutable(f.path); cfg.PreferredModels["anthropic"] != "claude-sonnet-5" {
+		t.Errorf("preferred model not written: %v", cfg.PreferredModels)
+	}
+
+	// The proposals live under HOME, which TestMain sandboxes.
+	rec := post(s, "/api/routing/decisions", "application/json", `{"key":"anthropic|a|b","decision":"approve"}`)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "no routing proposal") {
+		t.Errorf("unknown proposal = %d %s", rec.Code, rec.Body)
+	}
+
+	// No store wired: the outcome is refused as storage_disabled, not lost.
+	rec = post(s, "/api/outcomes", "application/json", `{"execution_id":"e1","result":"achieved"}`)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "storage_disabled") {
+		t.Errorf("outcome = %d %s", rec.Code, rec.Body)
+	}
+	if rec := post(s, "/api/outcomes", "application/json", `{"execution_id":"e1","result":"done"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("bad result = %d", rec.Code)
+	}
+	select {
+	case <-f.applied:
+		t.Error("a routing decision or outcome restarted the daemon")
+	default:
+	}
+}
+
+func TestCoachActionChangesDials(t *testing.T) {
+	s, f := newActionServer(t, allowAll{})
+	rec := post(s, "/api/coach", "application/json", `{"verbosity":"quiet"}`)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"verbosity":"quiet"`) {
+		t.Fatalf("coach = %d %s", rec.Code, rec.Body)
+	}
+	if cfg, _ := config.ReadMutable(f.path); cfg.Coach.Verbosity != "quiet" {
+		t.Errorf("verbosity not written: %q", cfg.Coach.Verbosity)
+	}
+	for _, body := range []string{`{}`, `{"power":"waste"}`, `{"verbosity":"shouty"}`} {
+		if rec := post(s, "/api/coach", "application/json", body); rec.Code != http.StatusBadRequest {
+			t.Errorf("POST /api/coach %s = %d, want 400", body, rec.Code)
+		}
+	}
+}

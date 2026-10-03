@@ -50,17 +50,15 @@ var apiRoute = map[string]string{
 	"tokenops_plan_set":            "POST /api/plans",
 	"tokenops_budget_set":          "POST /api/budgets",
 	"tokenops_routing_rule_set":    "POST /api/routing/rules",
+	"tokenops_preferred_model":     "POST /api/preferred-models",
+	"tokenops_routing_decide":      "POST /api/routing/decisions",
+	"tokenops_outcome_record":      "POST /api/outcomes",
 }
 
 // apiPending is the ADR's backlog: tools a surface needs that have no route
-// yet, by slice. It may only shrink; a tool that gains a route moves to
-// apiRoute, and the test fails until it does.
-var apiPending = map[string]int{
-	"tokenops_preferred_model":    4,
-	"tokenops_routing_decide":     4,
-	"tokenops_outcome_record":     4,
-	"tokenops_vendor_usage_setup": 4,
-}
+// yet, by slice. It is empty since slice 4: every such tool has a route. A
+// new tool goes on one of the three lists.
+var apiPending = map[string]int{}
 
 // apiExempt are tools no non-agent surface needs, with the reason.
 var apiExempt = map[string]string{
@@ -79,6 +77,8 @@ var apiExempt = map[string]string{
 	"tokenops_coverage_debt":  "developer harness over a local cover profile",
 	"tokenops_fmt_analyze":    "operates on the agent's command output",
 	"tokenops_fmt_learn":      "operates on the agent's command output",
+	"tokenops_vendor_usage_setup": "connects a vendor login through the operator's browser and OS consent, " +
+		"which belongs in the terminal or an agent conversation, not a background daemon",
 }
 
 func TestEveryToolIsAccountedForInTheDaemonAPI(t *testing.T) {

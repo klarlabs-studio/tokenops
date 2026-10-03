@@ -5,10 +5,11 @@ import (
 	"errors"
 	"strings"
 
+	"go.klarlabs.de/tokenops/internal/capability/actions"
+
 	"go.klarlabs.de/tokenops/internal/capability/decisions"
 
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/routingapproval"
 )
 
 // ApprovalDeps wires the routing-approval tools. StorePath empty falls
@@ -18,18 +19,6 @@ type ApprovalDeps struct {
 	ConfigPath string
 	// ApplyConfig makes a written config take effect; see applyConfig.
 	ApplyConfig func() string
-}
-
-func (d ApprovalDeps) store() (*routingapproval.Store, error) {
-	path := d.StorePath
-	if path == "" {
-		p, err := routingapproval.DefaultPath()
-		if err != nil {
-			return nil, err
-		}
-		path = p
-	}
-	return routingapproval.Open(path)
 }
 
 func (d ApprovalDeps) configPath() (string, error) {
@@ -76,41 +65,11 @@ func RegisterApprovalTools(s *Server, d ApprovalDeps) error {
 	s.Tool("tokenops_routing_decide").
 		Description("Record the operator's answer to a pending routing proposal. approve = future matching requests route to the proposed model; deny = they stay on the model already requested. Only call this once the operator has actually chosen — it changes which model their requests run on.").
 		Handler(func(_ context.Context, in routingDecideInput) (string, error) {
-			store, err := d.store()
+			res, err := actions.DecideRouting(d.StorePath, in.Key, in.Decision)
 			if err != nil {
 				return "", inputError(err)
 			}
-			key := strings.TrimSpace(in.Key)
-			if key == "" {
-				return "", inputError(errors.New("key is required (from tokenops_routing_proposals)"))
-			}
-			state, err := store.Load()
-			if err != nil {
-				return "", inputError(err)
-			}
-			st, ok := state[key]
-			if !ok {
-				return "", inputError(errors.New("no routing proposal with key " + key))
-			}
-
-			var decision, chosen string
-			switch strings.ToLower(strings.TrimSpace(in.Decision)) {
-			case "approve", "approved":
-				decision, chosen = "approved", st.To
-			case "deny", "denied":
-				decision, chosen = "denied", st.From
-			default:
-				return "", inputError(errors.New(`decision must be "approve" or "deny"`))
-			}
-			if err := store.Decide(key, decision, chosen); err != nil {
-				return "", inputError(err)
-			}
-			return jsonString(map[string]any{
-				"key":      key,
-				"decision": decision,
-				"model":    chosen,
-				"note":     "applies to matching requests from now on; no restart needed",
-			}), nil
+			return jsonString(res), nil
 		})
 
 	s.Tool("tokenops_preferred_model").
@@ -120,37 +79,18 @@ func RegisterApprovalTools(s *Server, d ApprovalDeps) error {
 			if err != nil {
 				return "", inputError(err)
 			}
-			cfg, err := config.ReadMutable(path)
+			if strings.TrimSpace(in.Provider) == "" {
+				cfg, err := config.ReadMutable(path)
+				if err != nil {
+					return "", inputError(err)
+				}
+				return jsonString(map[string]any{"preferred_models": cfg.PreferredModels, "config": path}), nil
+			}
+			res, err := actions.SetPreferredModel(path, in.Provider, in.Model, in.Clear)
 			if err != nil {
-				return "", inputError(err)
+				return "", actionError(err)
 			}
-			provider := strings.TrimSpace(in.Provider)
-			switch {
-			case provider == "":
-				return jsonString(map[string]any{
-					"preferred_models": cfg.PreferredModels,
-					"config":           path,
-				}), nil
-			case in.Clear:
-				delete(cfg.PreferredModels, provider)
-			default:
-				model := strings.TrimSpace(in.Model)
-				if model == "" {
-					return "", inputError(errors.New("model is required unless clear=true"))
-				}
-				if cfg.PreferredModels == nil {
-					cfg.PreferredModels = map[string]string{}
-				}
-				cfg.PreferredModels[provider] = model
-			}
-			if err := config.WriteMutable(path, cfg); err != nil {
-				return "", inputError(err)
-			}
-			return jsonString(map[string]any{
-				"preferred_models": cfg.PreferredModels,
-				"config":           path,
-				"note":             applyConfig(d.ApplyConfig),
-			}), nil
+			return withNote(res, applyConfig(d.ApplyConfig)), nil
 		})
 
 	return nil
