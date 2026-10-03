@@ -1,0 +1,3918 @@
+{
+  "components": {
+    "schemas": {},
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "The local daemon's API (ADR 0010): what every surface that is not an agent reads and changes. It serves derived figures only, never prompt text, file contents or transcripts. Every route needs the bearer token from ~/.tokenops/daemon.url.",
+    "license": {
+      "identifier": "Apache-2.0",
+      "name": "Apache-2.0"
+    },
+    "title": "TokenOps daemon API",
+    "version": "local"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/audit": {
+      "get": {
+        "operationId": "getAudit",
+        "parameters": [
+          {
+            "description": "e.g. config_change",
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "e.g. api",
+            "in": "query",
+            "name": "actor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "RFC 3339 time or a duration such as 24h",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "RFC 3339 time; open when omitted",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "The audit log, newest first"
+      }
+    },
+    "/api/budgets": {
+      "post": {
+        "operationId": "postBudgets",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "agent_id": {
+                    "type": "string"
+                  },
+                  "basis": {
+                    "type": "string"
+                  },
+                  "crit_at": {
+                    "type": "number"
+                  },
+                  "delete": {
+                    "type": "boolean"
+                  },
+                  "limit_tokens": {
+                    "type": "integer"
+                  },
+                  "limit_usd": {
+                    "type": "number"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "warn_at": {
+                    "type": "number"
+                  },
+                  "window": {
+                    "type": "string"
+                  },
+                  "workflow_id": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "budgets": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "AgentID": {
+                            "type": "string"
+                          },
+                          "Basis": {
+                            "type": "string"
+                          },
+                          "CritAt": {
+                            "type": "number"
+                          },
+                          "LimitTokens": {
+                            "type": "integer"
+                          },
+                          "LimitUSD": {
+                            "type": "number"
+                          },
+                          "Name": {
+                            "type": "string"
+                          },
+                          "WarnAt": {
+                            "type": "number"
+                          },
+                          "Window": {
+                            "type": "string"
+                          },
+                          "WorkflowID": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "config": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Create, update or delete a budget"
+      }
+    },
+    "/api/coach": {
+      "get": {
+        "operationId": "getCoach",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "compaction": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "client": {
+                            "type": "string"
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "note": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "follow_through": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "channel": {
+                            "type": "string"
+                          },
+                          "followed": {
+                            "type": "integer"
+                          },
+                          "ignored": {
+                            "type": "integer"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "open": {
+                            "type": "integer"
+                          },
+                          "power": {
+                            "type": "string"
+                          },
+                          "quiet": {
+                            "type": "boolean"
+                          },
+                          "stood": {
+                            "type": "integer"
+                          },
+                          "undone": {
+                            "type": "integer"
+                          },
+                          "unknown": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "hooks": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "client": {
+                            "type": "string"
+                          },
+                          "detail": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "model_policy": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "Allow": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "Deny": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "powers": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "configured": {
+                            "type": "string"
+                          },
+                          "describes": {
+                            "type": "string"
+                          },
+                          "effective": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "note": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "preset": {
+                      "type": "string"
+                    },
+                    "verbosity": {
+                      "type": "string"
+                    },
+                    "verbosity_source": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "The coach's dials and each power's autonomy"
+      },
+      "post": {
+        "operationId": "postCoach",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "autonomy": {
+                    "type": "string"
+                  },
+                  "power": {
+                    "type": "string"
+                  },
+                  "preset": {
+                    "type": "string"
+                  },
+                  "rung": {
+                    "type": "string"
+                  },
+                  "verbosity": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "compaction": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "client": {
+                            "type": "string"
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "note": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "follow_through": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "channel": {
+                            "type": "string"
+                          },
+                          "followed": {
+                            "type": "integer"
+                          },
+                          "ignored": {
+                            "type": "integer"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "open": {
+                            "type": "integer"
+                          },
+                          "power": {
+                            "type": "string"
+                          },
+                          "quiet": {
+                            "type": "boolean"
+                          },
+                          "stood": {
+                            "type": "integer"
+                          },
+                          "undone": {
+                            "type": "integer"
+                          },
+                          "unknown": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "hooks": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "client": {
+                            "type": "string"
+                          },
+                          "detail": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "model_policy": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "Allow": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "Deny": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "powers": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "configured": {
+                            "type": "string"
+                          },
+                          "describes": {
+                            "type": "string"
+                          },
+                          "effective": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "note": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "preset": {
+                      "type": "string"
+                    },
+                    "verbosity": {
+                      "type": "string"
+                    },
+                    "verbosity_source": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Apply a coach preset, or change its dials"
+      }
+    },
+    "/api/coach/prompts": {
+      "get": {
+        "operationId": "getCoachPrompts",
+        "parameters": [
+          {
+            "description": "RFC 3339 time or a duration such as 24h",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "RFC 3339 time; open when omitted",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "one Claude Code session",
+            "in": "query",
+            "name": "session_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "most recent instructions",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "acknowledgement_count": {
+                      "type": "integer"
+                    },
+                    "avg_chars": {
+                      "type": "number"
+                    },
+                    "avg_words": {
+                      "type": "number"
+                    },
+                    "length_distribution": {
+                      "properties": {},
+                      "type": "object"
+                    },
+                    "max_chars": {
+                      "type": "integer"
+                    },
+                    "min_chars": {
+                      "type": "integer"
+                    },
+                    "no_context_singles_count": {
+                      "type": "integer"
+                    },
+                    "recommendations": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "after": {
+                            "type": "string"
+                          },
+                          "before": {
+                            "type": "string"
+                          },
+                          "estimated_monthly_turns_saved": {
+                            "type": "integer"
+                          },
+                          "evidence": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "frequency": {
+                            "type": "integer"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "impact_score": {
+                            "type": "number"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "why": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "regenerate_count": {
+                      "type": "integer"
+                    },
+                    "regenerate_samples": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "repeated_prompts": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "count": {
+                            "type": "integer"
+                          },
+                          "text": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "short_question_count": {
+                      "type": "integer"
+                    },
+                    "total_prompts": {
+                      "type": "integer"
+                    },
+                    "vague_short_count": {
+                      "type": "integer"
+                    },
+                    "vague_short_samples": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Prompt scoring; quoted instructions are withheld"
+      }
+    },
+    "/api/config": {
+      "get": {
+        "operationId": "getConfig",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "The active configuration, secrets redacted"
+      }
+    },
+    "/api/data-sources": {
+      "get": {
+        "operationId": "getDataSources",
+        "parameters": [
+          {
+            "description": "RFC 3339 time or a duration such as 24h",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "RFC 3339 time; open when omitted",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "counts": {
+                      "properties": {},
+                      "type": "object"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "freshness_unavailable": {
+                      "type": "string"
+                    },
+                    "hint": {
+                      "type": "string"
+                    },
+                    "sources": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "events_in_window": {
+                            "type": "integer"
+                          },
+                          "last_error": {
+                            "type": "string"
+                          },
+                          "last_error_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "last_event_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "last_poll_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "last_successful_poll_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "never_seen": {
+                            "type": "boolean"
+                          },
+                          "origin_newest_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "reader_stopped": {
+                            "type": "boolean"
+                          },
+                          "severity": {
+                            "type": "string"
+                          },
+                          "silent_for": {
+                            "type": "integer"
+                          },
+                          "state": {
+                            "type": "string"
+                          },
+                          "tag": {
+                            "type": "string"
+                          },
+                          "window": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "unhealthy": {
+                      "type": "integer"
+                    },
+                    "window": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "since": {
+                          "type": "string"
+                        },
+                        "until": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Events per source and each reader's health"
+      }
+    },
+    "/api/decisions/{id}": {
+      "get": {
+        "operationId": "getDecisionsId",
+        "parameters": [
+          {
+            "description": "decision id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "hint": {
+                      "type": "string"
+                    },
+                    "report": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "adapter": {
+                          "type": "string"
+                        },
+                        "alternatives": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "model": {
+                                "type": "string"
+                              },
+                              "provider": {
+                                "type": "string"
+                              },
+                              "reason": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "authority": {
+                          "type": "string"
+                        },
+                        "confidence": {
+                          "type": "number"
+                        },
+                        "decision_id": {
+                          "type": "string"
+                        },
+                        "evidence": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "caveat": {
+                                "type": "string"
+                              },
+                              "confidence": {
+                                "type": "number"
+                              },
+                              "event_id": {
+                                "type": "string"
+                              },
+                              "fresh_until": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string"
+                              },
+                              "observed_at": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "scope": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "executable": {
+                          "type": "boolean"
+                        },
+                        "fingerprint": {
+                          "type": "string"
+                        },
+                        "history": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "at": {
+                                "type": "string"
+                              },
+                              "event_id": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "outcome": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "assessment": {
+                              "type": "string"
+                            },
+                            "caveat": {
+                              "type": "string"
+                            },
+                            "evidence": {
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "caveat": {
+                                    "type": "string"
+                                  },
+                                  "confidence": {
+                                    "type": "number"
+                                  },
+                                  "event_id": {
+                                    "type": "string"
+                                  },
+                                  "fresh_until": {
+                                    "format": "date-time",
+                                    "type": "string"
+                                  },
+                                  "kind": {
+                                    "type": "string"
+                                  },
+                                  "observed_at": {
+                                    "format": "date-time",
+                                    "type": "string"
+                                  },
+                                  "scope": {
+                                    "type": "string"
+                                  },
+                                  "source": {
+                                    "type": "string"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "type": "array"
+                            },
+                            "metrics": {
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "caveat": {
+                                    "type": "string"
+                                  },
+                                  "confidence": {
+                                    "type": "number"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "observed_at": {
+                                    "format": "date-time",
+                                    "type": "string"
+                                  },
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "unit": {
+                                    "type": "string"
+                                  },
+                                  "value": {
+                                    "type": "number"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "type": "array"
+                            },
+                            "result": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "policy": {
+                          "type": "string"
+                        },
+                        "rationale": {
+                          "type": "string"
+                        },
+                        "selected": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "model": {
+                              "type": "string"
+                            },
+                            "provider": {
+                              "type": "string"
+                            },
+                            "reason": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "stage": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Why a decision was made"
+      }
+    },
+    "/api/domain-events": {
+      "get": {
+        "operationId": "getDomainEvents",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Domain-event counts since the daemon started"
+      }
+    },
+    "/api/dx": {
+      "get": {
+        "operationId": "getDx",
+        "parameters": [
+          {
+            "description": "window in days; 7 when omitted",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "read all history; overrides days",
+            "in": "query",
+            "name": "all",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "grades": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "compaction": {
+                          "type": "string"
+                        },
+                        "context_growth": {
+                          "type": "string"
+                        },
+                        "duration": {
+                          "type": "string"
+                        },
+                        "escalation": {
+                          "type": "string"
+                        },
+                        "first_try": {
+                          "type": "string"
+                        },
+                        "interrupt": {
+                          "type": "string"
+                        },
+                        "overall": {
+                          "type": "string"
+                        },
+                        "overall_driver": {
+                          "type": "string"
+                        },
+                        "rework": {
+                          "type": "string"
+                        },
+                        "turns": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "metrics": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "by_effort": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "effort": {
+                                "type": "string"
+                              },
+                              "enough": {
+                                "type": "boolean"
+                              },
+                              "first_try_pct": {
+                                "type": "number"
+                              },
+                              "instructions": {
+                                "type": "integer"
+                              },
+                              "interrupted_pct": {
+                                "type": "number"
+                              },
+                              "median_carried_tokens": {
+                                "type": "integer"
+                              },
+                              "median_peak_context": {
+                                "type": "integer"
+                              },
+                              "median_seconds": {
+                                "type": "number"
+                              },
+                              "median_turns": {
+                                "type": "number"
+                              },
+                              "model": {
+                                "type": "string"
+                              },
+                              "rejected_pct": {
+                                "type": "number"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "by_provider": {
+                          "properties": {},
+                          "type": "object"
+                        },
+                        "compactions_per_session": {
+                          "type": "number"
+                        },
+                        "escalation_rate_pct": {
+                          "type": "number"
+                        },
+                        "first_try_rate_pct": {
+                          "type": "number"
+                        },
+                        "interrupt_rate_pct": {
+                          "type": "number"
+                        },
+                        "median_context_growth_tokens": {
+                          "type": "integer"
+                        },
+                        "median_seconds_per_prompt": {
+                          "type": "number"
+                        },
+                        "median_tokens_per_prompt": {
+                          "type": "integer"
+                        },
+                        "median_tool_calls_per_prompt": {
+                          "type": "number"
+                        },
+                        "median_turns_per_prompt": {
+                          "type": "number"
+                        },
+                        "p90_seconds_per_prompt": {
+                          "type": "number"
+                        },
+                        "p90_turns_per_prompt": {
+                          "type": "number"
+                        },
+                        "prompts": {
+                          "type": "integer"
+                        },
+                        "rework_rate_pct": {
+                          "type": "number"
+                        },
+                        "sessions": {
+                          "type": "integer"
+                        },
+                        "total_edits": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "note": {
+                      "type": "string"
+                    },
+                    "recommendation": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "action": {
+                          "type": "string"
+                        },
+                        "evidence": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "warnings": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "window": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Agent DX, graded, with the single change worth making"
+      }
+    },
+    "/api/glance": {
+      "get": {
+        "operationId": "getGlance",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "insight": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "basis": {
+                          "type": "string"
+                        },
+                        "caveat": {
+                          "type": "string"
+                        },
+                        "confidence": {
+                          "type": "string"
+                        },
+                        "level": {
+                          "description": "attention when an existing signal recommends intervention or reports medium/high risk, clear only when all available signals are non-alarming, uncertain when mixed with unknown signals, unavailable when no signal can assess capacity",
+                          "type": "string"
+                        },
+                        "overage_risk": {
+                          "type": "string"
+                        },
+                        "provider": {
+                          "type": "string"
+                        },
+                        "recommended_action": {
+                          "type": "string"
+                        },
+                        "signal_quality_level": {
+                          "type": "string"
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
+                        "window_pct": {
+                          "type": "number"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "plan_headroom": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "error": {
+                          "type": "string"
+                        },
+                        "hint": {
+                          "type": "string"
+                        },
+                        "notes": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "reports": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "balance_usd": {
+                                "type": "number"
+                              },
+                              "consumed_pct": {
+                                "type": "number"
+                              },
+                              "consumed_tokens": {
+                                "type": "integer"
+                              },
+                              "display": {
+                                "type": "string"
+                              },
+                              "headroom_days": {
+                                "type": "number"
+                              },
+                              "note": {
+                                "type": "string"
+                              },
+                              "overage_risk": {
+                                "type": "string"
+                              },
+                              "plan_name": {
+                                "type": "string"
+                              },
+                              "provider": {
+                                "type": "string"
+                              },
+                              "quota_tokens": {
+                                "type": "integer"
+                              },
+                              "signal_quality": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "caveat": {
+                                    "type": "string"
+                                  },
+                                  "level": {
+                                    "type": "string"
+                                  },
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "upgrade_paths": {
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "type": "array"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "spend_limit_usd": {
+                                "type": "number"
+                              },
+                              "spend_pct": {
+                                "type": "number"
+                              },
+                              "spend_source": {
+                                "type": "string"
+                              },
+                              "spend_usd": {
+                                "type": "number"
+                              },
+                              "vendor_plan": {
+                                "type": "string"
+                              },
+                              "vendor_plan_type": {
+                                "type": "string"
+                              },
+                              "window_cap": {
+                                "type": "integer"
+                              },
+                              "window_consumed": {
+                                "type": "integer"
+                              },
+                              "window_duration": {
+                                "type": "string"
+                              },
+                              "window_pct": {
+                                "type": "number"
+                              },
+                              "window_reset_estimated": {
+                                "type": "boolean"
+                              },
+                              "window_resets_at": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "window_resets_in": {
+                                "type": "string"
+                              },
+                              "window_unit": {
+                                "type": "string"
+                              },
+                              "windows": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "duration_ns": {
+                                      "type": "integer"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "resets_at": {
+                                      "format": "date-time",
+                                      "type": "string"
+                                    },
+                                    "resets_in": {
+                                      "type": "string"
+                                    },
+                                    "used_pct": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "session_budget": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "budgets": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "confidence": {
+                                "type": "string"
+                              },
+                              "display": {
+                                "type": "string"
+                              },
+                              "headroom_until_cap": {
+                                "type": "integer"
+                              },
+                              "note": {
+                                "type": "string"
+                              },
+                              "plan_name": {
+                                "type": "string"
+                              },
+                              "provider": {
+                                "type": "string"
+                              },
+                              "recent_rate_per_hour": {
+                                "type": "number"
+                              },
+                              "recommended_action": {
+                                "type": "string"
+                              },
+                              "signal_quality": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "caveat": {
+                                    "type": "string"
+                                  },
+                                  "level": {
+                                    "type": "string"
+                                  },
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "upgrade_paths": {
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "type": "array"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "vendor_plan_type": {
+                                "type": "string"
+                              },
+                              "will_hit_cap_within": {
+                                "type": "string"
+                              },
+                              "window_cap": {
+                                "type": "integer"
+                              },
+                              "window_consumed": {
+                                "type": "integer"
+                              },
+                              "window_duration": {
+                                "type": "string"
+                              },
+                              "window_pct": {
+                                "type": "number"
+                              },
+                              "window_reset_estimated": {
+                                "type": "boolean"
+                              },
+                              "window_resets_in": {
+                                "type": "string"
+                              },
+                              "windows": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "duration_ns": {
+                                      "type": "integer"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "resets_at": {
+                                      "format": "date-time",
+                                      "type": "string"
+                                    },
+                                    "resets_in": {
+                                      "type": "string"
+                                    },
+                                    "used_pct": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "error": {
+                          "type": "string"
+                        },
+                        "hint": {
+                          "type": "string"
+                        },
+                        "notes": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Session budgets, plan headroom and a ranked insight in one call"
+      }
+    },
+    "/api/mode": {
+      "get": {
+        "operationId": "getMode",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "anything_acts": {
+                      "type": "boolean"
+                    },
+                    "authority": {
+                      "type": "string"
+                    },
+                    "budgets": {
+                      "type": "integer"
+                    },
+                    "held_back": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "held_back_note": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string"
+                    },
+                    "routing_rules": {
+                      "type": "integer"
+                    },
+                    "subsystems": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "configured": {
+                            "type": "string"
+                          },
+                          "describes": {
+                            "type": "string"
+                          },
+                          "effective": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "setting": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Operating mode and what each subsystem may do"
+      },
+      "post": {
+        "operationId": "postMode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "mode": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "config": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Set the operating mode"
+      }
+    },
+    "/api/optimizations": {
+      "get": {
+        "operationId": "getOptimizations",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Optimization recommendations recorded"
+      }
+    },
+    "/api/outcomes": {
+      "post": {
+        "operationId": "postOutcomes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "attention_minutes": {
+                    "type": "number"
+                  },
+                  "caveat": {
+                    "type": "string"
+                  },
+                  "decision_id": {
+                    "type": "string"
+                  },
+                  "execution_id": {
+                    "type": "string"
+                  },
+                  "result": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "assessment": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "event_id": {
+                      "type": "string"
+                    },
+                    "execution_id": {
+                      "type": "string"
+                    },
+                    "hint": {
+                      "type": "string"
+                    },
+                    "recorded": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Record the operator's judgement of an execution"
+      }
+    },
+    "/api/plans": {
+      "post": {
+        "operationId": "postPlans",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "clear": {
+                    "type": "boolean"
+                  },
+                  "currency": {
+                    "type": "string"
+                  },
+                  "limit_window": {
+                    "type": "string"
+                  },
+                  "plan": {
+                    "type": "string"
+                  },
+                  "price": {
+                    "type": "number"
+                  },
+                  "provider": {
+                    "type": "string"
+                  },
+                  "rate_factor": {
+                    "type": "number"
+                  },
+                  "since": {
+                    "type": "string"
+                  },
+                  "spend_limit_usd": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "cleared": {
+                      "type": "boolean"
+                    },
+                    "config": {
+                      "type": "string"
+                    },
+                    "history_error": {
+                      "type": "string"
+                    },
+                    "plan": {
+                      "type": "string"
+                    },
+                    "previous": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "renamed_from": {
+                      "type": "string"
+                    },
+                    "restamped": {
+                      "type": "integer"
+                    },
+                    "restamped_to": {
+                      "type": "string"
+                    },
+                    "since": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Bind a provider to a plan, or clear it"
+      }
+    },
+    "/api/plans/headroom": {
+      "get": {
+        "operationId": "getPlansHeadroom",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "hint": {
+                      "type": "string"
+                    },
+                    "notes": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "reports": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "balance_usd": {
+                            "type": "number"
+                          },
+                          "consumed_pct": {
+                            "type": "number"
+                          },
+                          "consumed_tokens": {
+                            "type": "integer"
+                          },
+                          "display": {
+                            "type": "string"
+                          },
+                          "headroom_days": {
+                            "type": "number"
+                          },
+                          "note": {
+                            "type": "string"
+                          },
+                          "overage_risk": {
+                            "type": "string"
+                          },
+                          "plan_name": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "quota_tokens": {
+                            "type": "integer"
+                          },
+                          "signal_quality": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "caveat": {
+                                "type": "string"
+                              },
+                              "level": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string"
+                              },
+                              "upgrade_paths": {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "spend_limit_usd": {
+                            "type": "number"
+                          },
+                          "spend_pct": {
+                            "type": "number"
+                          },
+                          "spend_source": {
+                            "type": "string"
+                          },
+                          "spend_usd": {
+                            "type": "number"
+                          },
+                          "vendor_plan": {
+                            "type": "string"
+                          },
+                          "vendor_plan_type": {
+                            "type": "string"
+                          },
+                          "window_cap": {
+                            "type": "integer"
+                          },
+                          "window_consumed": {
+                            "type": "integer"
+                          },
+                          "window_duration": {
+                            "type": "string"
+                          },
+                          "window_pct": {
+                            "type": "number"
+                          },
+                          "window_reset_estimated": {
+                            "type": "boolean"
+                          },
+                          "window_resets_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "window_resets_in": {
+                            "type": "string"
+                          },
+                          "window_unit": {
+                            "type": "string"
+                          },
+                          "windows": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "duration_ns": {
+                                  "type": "integer"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "resets_at": {
+                                  "format": "date-time",
+                                  "type": "string"
+                                },
+                                "resets_in": {
+                                  "type": "string"
+                                },
+                                "used_pct": {
+                                  "type": "number"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Every bound plan: usage, the vendor's windows, spend against the limit, risk"
+      }
+    },
+    "/api/plans/session-budget": {
+      "get": {
+        "operationId": "getPlansSessionBudget",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "budgets": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "confidence": {
+                            "type": "string"
+                          },
+                          "display": {
+                            "type": "string"
+                          },
+                          "headroom_until_cap": {
+                            "type": "integer"
+                          },
+                          "note": {
+                            "type": "string"
+                          },
+                          "plan_name": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "recent_rate_per_hour": {
+                            "type": "number"
+                          },
+                          "recommended_action": {
+                            "type": "string"
+                          },
+                          "signal_quality": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "caveat": {
+                                "type": "string"
+                              },
+                              "level": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string"
+                              },
+                              "upgrade_paths": {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "vendor_plan_type": {
+                            "type": "string"
+                          },
+                          "will_hit_cap_within": {
+                            "type": "string"
+                          },
+                          "window_cap": {
+                            "type": "integer"
+                          },
+                          "window_consumed": {
+                            "type": "integer"
+                          },
+                          "window_duration": {
+                            "type": "string"
+                          },
+                          "window_pct": {
+                            "type": "number"
+                          },
+                          "window_reset_estimated": {
+                            "type": "boolean"
+                          },
+                          "window_resets_in": {
+                            "type": "string"
+                          },
+                          "windows": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "duration_ns": {
+                                  "type": "integer"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "resets_at": {
+                                  "format": "date-time",
+                                  "type": "string"
+                                },
+                                "resets_in": {
+                                  "type": "string"
+                                },
+                                "used_pct": {
+                                  "type": "number"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "hint": {
+                      "type": "string"
+                    },
+                    "notes": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Per plan window: share used, pace, and what to do"
+      }
+    },
+    "/api/preferred-models": {
+      "post": {
+        "operationId": "postPreferredModels",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "clear": {
+                    "type": "boolean"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "provider": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "config": {
+                      "type": "string"
+                    },
+                    "preferred_models": {
+                      "properties": {},
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Set or clear a provider's preferred model"
+      }
+    },
+    "/api/pricing": {
+      "get": {
+        "operationId": "getPricing",
+        "parameters": [
+          {
+            "description": "one provider",
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "models containing this",
+            "in": "query",
+            "name": "model",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "20 when omitted",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "fetched_at": {
+                      "type": "string"
+                    },
+                    "models_in_snapshot": {
+                      "type": "integer"
+                    },
+                    "note": {
+                      "type": "string"
+                    },
+                    "rates": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "cache_read_per_1m_usd": {
+                            "type": "number"
+                          },
+                          "input_per_1m_usd": {
+                            "type": "number"
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "output_per_1m_usd": {
+                            "type": "number"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "source": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "The rate card TokenOps costs with"
+      }
+    },
+    "/api/routing/decisions": {
+      "post": {
+        "operationId": "postRoutingDecisions",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "decision": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "decision": {
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "note": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Answer a routing proposal"
+      }
+    },
+    "/api/routing/proposals": {
+      "get": {
+        "operationId": "getRoutingProposals",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "note": {
+                      "type": "string"
+                    },
+                    "pending": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "extra_usd_per_million_io_tokens": {
+                            "type": "number"
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "preferred_model": {
+                            "type": "string"
+                          },
+                          "pricing": {
+                            "type": "string"
+                          },
+                          "proposed_model": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "question": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "requested_model": {
+                            "type": "string"
+                          },
+                          "times_seen": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Model upgrades waiting on the operator"
+      }
+    },
+    "/api/routing/rules": {
+      "post": {
+        "operationId": "postRoutingRules",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "delete": {
+                    "type": "boolean"
+                  },
+                  "fallbacks": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "from_model": {
+                    "type": "string"
+                  },
+                  "provider": {
+                    "type": "string"
+                  },
+                  "quality": {
+                    "type": "number"
+                  },
+                  "to_model": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "config": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string"
+                    },
+                    "routing_rules": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "Fallbacks": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "FromModel": {
+                            "type": "string"
+                          },
+                          "Provider": {
+                            "type": "string"
+                          },
+                          "Quality": {
+                            "type": "number"
+                          },
+                          "ToModel": {
+                            "type": "string"
+                          },
+                          "WhenClass": {
+                            "type": "string"
+                          },
+                          "WhenWindowPctAbove": {
+                            "type": "number"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Create, update or delete a routing rule"
+      }
+    },
+    "/api/rules/analyze": {
+      "get": {
+        "operationId": "getRulesAnalyze",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Rule files analysed"
+      }
+    },
+    "/api/rules/compress": {
+      "get": {
+        "operationId": "getRulesCompress",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Rule files compressed"
+      }
+    },
+    "/api/rules/conflicts": {
+      "get": {
+        "operationId": "getRulesConflicts",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Conflicts between rules"
+      }
+    },
+    "/api/rules/inject": {
+      "get": {
+        "operationId": "getRulesInject",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "The rules to inject for a task"
+      }
+    },
+    "/api/scorecard": {
+      "get": {
+        "operationId": "getScorecard",
+        "parameters": [
+          {
+            "description": "7 when omitted",
+            "in": "query",
+            "name": "since_days",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "baseline_ref": {
+                      "type": "string"
+                    },
+                    "cache_hit_ratio": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "description": {
+                          "type": "string"
+                        },
+                        "grade": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "thresholds": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "green": {
+                              "type": "number"
+                            },
+                            "red": {
+                              "type": "number"
+                            },
+                            "yellow": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "unit": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "number"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "checklist": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "completed": {
+                            "type": "boolean"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "next_action": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "confirmation_gate_rate": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "description": {
+                          "type": "string"
+                        },
+                        "grade": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "thresholds": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "green": {
+                              "type": "number"
+                            },
+                            "red": {
+                              "type": "number"
+                            },
+                            "yellow": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "unit": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "number"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "degraded": {
+                      "type": "string"
+                    },
+                    "destructive_rate": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "description": {
+                          "type": "string"
+                        },
+                        "grade": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "thresholds": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "green": {
+                              "type": "number"
+                            },
+                            "red": {
+                              "type": "number"
+                            },
+                            "yellow": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "unit": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "number"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "first_value_time": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "description": {
+                          "type": "string"
+                        },
+                        "grade": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "thresholds": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "green": {
+                              "type": "number"
+                            },
+                            "red": {
+                              "type": "number"
+                            },
+                            "yellow": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "unit": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "number"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "generated_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "overall_grade": {
+                      "type": "string"
+                    },
+                    "regenerate_rate": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "description": {
+                          "type": "string"
+                        },
+                        "grade": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "thresholds": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "green": {
+                              "type": "number"
+                            },
+                            "red": {
+                              "type": "number"
+                            },
+                            "yellow": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "unit": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "number"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "spend_attribution_completeness": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "description": {
+                          "type": "string"
+                        },
+                        "grade": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "thresholds": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "green": {
+                              "type": "number"
+                            },
+                            "red": {
+                              "type": "number"
+                            },
+                            "yellow": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "unit": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "number"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "token_efficiency_uplift": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "description": {
+                          "type": "string"
+                        },
+                        "grade": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "thresholds": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "green": {
+                              "type": "number"
+                            },
+                            "red": {
+                              "type": "number"
+                            },
+                            "yellow": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "unit": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "number"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "tool_success_rate": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "description": {
+                          "type": "string"
+                        },
+                        "grade": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "thresholds": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "green": {
+                              "type": "number"
+                            },
+                            "red": {
+                              "type": "number"
+                            },
+                            "yellow": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "unit": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "number"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "The wedge KPI scorecard"
+      }
+    },
+    "/api/sources": {
+      "get": {
+        "operationId": "getSources",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "sources": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "events_in_window": {
+                            "type": "integer"
+                          },
+                          "last_error": {
+                            "type": "string"
+                          },
+                          "last_error_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "last_event_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "last_poll_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "last_successful_poll_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "never_seen": {
+                            "type": "boolean"
+                          },
+                          "origin_newest_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "reader_stopped": {
+                            "type": "boolean"
+                          },
+                          "severity": {
+                            "type": "string"
+                          },
+                          "silent_for": {
+                            "type": "integer"
+                          },
+                          "state": {
+                            "type": "string"
+                          },
+                          "tag": {
+                            "type": "string"
+                          },
+                          "window": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "unhealthy": {
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Each reader's ingestion health"
+      }
+    },
+    "/api/spend/burn-rate": {
+      "get": {
+        "operationId": "getSpendBurnRate",
+        "parameters": [
+          {
+            "description": "24 when omitted",
+            "in": "query",
+            "name": "hours",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "comma-separated sources to include beyond the defaults",
+            "in": "query",
+            "name": "include_sources",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "api_equivalent_usd": {
+                      "type": "number"
+                    },
+                    "cost": {
+                      "type": "number"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "hourly": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "APIEquivalent": {
+                            "additionalProperties": false,
+                            "properties": {},
+                            "type": "object"
+                          },
+                          "APIEquivalentUSD": {
+                            "type": "number"
+                          },
+                          "BucketStart": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "Cost": {
+                            "additionalProperties": false,
+                            "properties": {},
+                            "type": "object"
+                          },
+                          "CostRecomputed": {
+                            "type": "integer"
+                          },
+                          "CostUSD": {
+                            "type": "number"
+                          },
+                          "GroupKey": {
+                            "type": "string"
+                          },
+                          "InputTokens": {
+                            "type": "integer"
+                          },
+                          "OutputTokens": {
+                            "type": "integer"
+                          },
+                          "Requests": {
+                            "type": "integer"
+                          },
+                          "TotalTokens": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "hours": {
+                      "type": "integer"
+                    },
+                    "tokens": {
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Usage over the last hours, hour by hour"
+      }
+    },
+    "/api/spend/cache_stats": {
+      "get": {
+        "operationId": "getSpendCacheStats",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Prompt cache hits and savings"
+      }
+    },
+    "/api/spend/forecast": {
+      "get": {
+        "operationId": "getSpendForecast",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Daily spend projected forward"
+      }
+    },
+    "/api/spend/series": {
+      "get": {
+        "operationId": "getSpendSeries",
+        "parameters": [
+          {
+            "description": "RFC 3339 time or a duration such as 24h",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "RFC 3339 time; open when omitted",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Spend and tokens bucketed over time"
+      }
+    },
+    "/api/spend/summary": {
+      "get": {
+        "operationId": "getSpendSummary",
+        "parameters": [
+          {
+            "description": "RFC 3339 time or a duration such as 24h",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "RFC 3339 time; open when omitted",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Spend and tokens over a window"
+      }
+    },
+    "/api/spend/top": {
+      "get": {
+        "operationId": "getSpendTop",
+        "parameters": [
+          {
+            "description": "model, provider, workflow or agent",
+            "in": "query",
+            "name": "by",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "how many; 5 when omitted",
+            "in": "query",
+            "name": "top",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "RFC 3339 time or a duration such as 24h",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "RFC 3339 time; open when omitted",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "comma-separated sources to include beyond the defaults",
+            "in": "query",
+            "name": "include_sources",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "by": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "top": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "api_equivalent_usd": {
+                            "type": "number"
+                          },
+                          "cost_usd": {
+                            "type": "number"
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "requests": {
+                            "type": "integer"
+                          },
+                          "tokens": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Top consumers, ranked on the API equivalent"
+      }
+    },
+    "/api/status": {
+      "get": {
+        "operationId": "getStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "blockers": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "insight": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "level": {
+                          "description": "clear when service checks pass, attention when running with reduced coverage, action_required when configuration blockers remain, unavailable when readiness has not been established",
+                          "type": "string"
+                        },
+                        "summary": {
+                          "description": "concise interpretation of readiness, blockers, and warnings; detailed evidence remains in sibling fields",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "next_actions": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "ready": {
+                      "type": "boolean"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Readiness, blockers, warnings and next actions"
+      }
+    },
+    "/api/story": {
+      "get": {
+        "operationId": "getStory",
+        "parameters": [
+          {
+            "description": "window in days; 7 when omitted",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "read all history; overrides days",
+            "in": "query",
+            "name": "all",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "most recent tasks; 10 when omitted",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "note": {
+                      "type": "string"
+                    },
+                    "tasks": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "boundary": {
+                            "type": "string"
+                          },
+                          "clean": {
+                            "type": "boolean"
+                          },
+                          "duration_seconds": {
+                            "type": "number"
+                          },
+                          "end": {
+                            "type": "string"
+                          },
+                          "files": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "frictions": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "instructions": {
+                            "type": "integer"
+                          },
+                          "peak_context_tokens": {
+                            "type": "integer"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "session_id": {
+                            "type": "string"
+                          },
+                          "start": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "tool_calls": {
+                            "type": "integer"
+                          },
+                          "turns": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "titles_withheld": {
+                      "type": "boolean"
+                    },
+                    "warnings": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "window": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Recent work task by task; the operator's instructions are withheld"
+      }
+    },
+    "/api/vendor-usage": {
+      "get": {
+        "operationId": "getVendorUsage",
+        "parameters": [
+          {
+            "description": "lookback in hours; 24 when omitted",
+            "in": "query",
+            "name": "window_hours",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "hint": {
+                      "type": "string"
+                    },
+                    "sources": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "always_on": {
+                            "type": "boolean"
+                          },
+                          "config_hint": {
+                            "type": "string"
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "events_in_window": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "source_tag": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "window_hours": {
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Which usage sources are on and producing"
+      }
+    },
+    "/api/workflows": {
+      "get": {
+        "operationId": "getWorkflows",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Recorded workflows"
+      }
+    },
+    "/api/workflows/{id}": {
+      "get": {
+        "operationId": "getWorkflowsId",
+        "parameters": [
+          {
+            "description": "workflow id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "One workflow's trace and the waste found in it"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearer": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "http://127.0.0.1:7878"
+    }
+  ]
+}

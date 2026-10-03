@@ -93,7 +93,7 @@ func (h *RulesHandlers) storeAnalyze(key string, body []byte) {
 }
 
 // Register installs every Rule Intelligence endpoint on mux.
-func (h *RulesHandlers) Register(mux *http.ServeMux) {
+func (h *RulesHandlers) Register(mux RouteMux) {
 	mux.HandleFunc("GET /api/rules/analyze", h.analyze)
 	mux.HandleFunc("GET /api/rules/conflicts", h.conflicts)
 	mux.HandleFunc("GET /api/rules/compress", h.compress)

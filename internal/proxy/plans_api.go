@@ -21,7 +21,7 @@ func WithPlans(deps func() headroom.Deps) Option {
 	return func(s *Server) { s.plans = deps }
 }
 
-func (s *Server) registerPlanRoutes(mux *http.ServeMux) {
+func (s *Server) registerPlanRoutes(mux RouteMux) {
 	if s.plans == nil {
 		return
 	}

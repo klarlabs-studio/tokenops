@@ -1,6 +1,6 @@
 # ADR 0010 — The daemon API serves every surface
 
-- **Status:** Accepted 2026-10-03. Slices 1–4 implemented.
+- **Status:** Accepted and implemented 2026-10-03 (slices 1–5, PRs #508–#515).
 - **Date:** 2026-10-03
 - **Deciders:** TokenOps maintainers
 - **Related:** ADR 0004 (phase 4 capability layer, phase 9 surface-native insight), ADR 0009 (endpoints, routers, billers), `docs/competitive-landscape.md` (G7, G8)
