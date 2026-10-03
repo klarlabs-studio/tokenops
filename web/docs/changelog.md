@@ -4,7 +4,25 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.88.1**.
+Current release: **v0.89.0**.
+
+## v0.89.0 — Fireworks, and what a figure means
+
+When a Fireworks key is on the machine, TokenOps reads the account's own
+figures from Fireworks' API: on a company account your spend against your
+per-user cap, otherwise the month's spend against the account's limit.
+The key is FIREWORKS_API_KEY or FireConnect's own, fetched for each
+reading and never stored. `plan headroom` shows Fireworks as
+pay-as-you-go without anything to set up.
+
+`tokenops explain wall-clock` says what a figure measures, how it is
+worked out and how to read it, with its grade bands; `tokenops explain`
+lists all thirty. Agents get the same answers from `tokenops_explain`.
+
+Headroom read at most 100,000 events, oldest first, so a busy month
+lost its newest readings; it now reads the whole range. Installing the
+status line says what happened in plain words, and Cursor is no longer
+called unreadable when you have not used it lately.
 
 ## v0.88.1 — Cursor's timestamps
 
