@@ -4,7 +4,22 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.89.0**.
+Current release: **v0.90.0**.
+
+## v0.90.0 — Every provider you pay per token
+
+`plan headroom` now shows every provider you used and pay per token for,
+without setup: OpenRouter, z.ai, Kimi, DeepSeek and the rest appear as
+pay-as-you-go with their spend this month, each row named by provider.
+Pay-as-you-go now counts every turn an API key was billed for, including
+Claude through a router on your Anthropic key.
+
+Where a vendor documents an account endpoint, TokenOps reads its own
+figures with the key your harness already sends it: OpenRouter's key
+spend and cap, and DeepSeek's and Moonshot's prepaid balance. Keys come
+from Claude Code's settings, Codex's providers, opencode's auth.json and
+config, or the environment; each goes only to its own vendor and is
+never stored.
 
 ## v0.89.0 — Fireworks, and what a figure means
 

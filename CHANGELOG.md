@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.90.0 - 2026-10-03
+
+### Added
+
+- **headroom:** Every provider billed per token this month shows as pay-as-you-go without setup, its rows named by provider (#499)
+- **spend:** OpenRouter's key spend and cap, and DeepSeek's and Moonshot's prepaid balance, read with the keys the harnesses already use (#500)
+
+### Fixed
+
+- **headroom:** Pay-as-you-go counts every turn an API key was billed for, through any endpoint (#499)
+
 ## 0.89.0 - 2026-10-03
 
 ### Added
