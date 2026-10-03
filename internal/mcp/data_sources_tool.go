@@ -5,7 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/capability/state"
+
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
@@ -49,31 +50,9 @@ type dataSourcesInput struct {
 }
 
 // dataSourcesWindow is the resolved time window echoed back to the caller.
-type dataSourcesWindow struct {
-	Since string `json:"since"`
-	Until string `json:"until"`
-}
-
-// dataSourcesResult is the typed payload for tokenops_data_sources. On the
-// happy path Counts + Window are populated; the disabled-storage path sets
-// Error + Hint instead (Counts/Window omitted).
-type dataSourcesResult struct {
-	Counts map[string]int64   `json:"counts,omitempty"`
-	Window *dataSourcesWindow `json:"window,omitempty"`
-	// Sources is per-source ingestion health, when the ingestion daemon
-	// could be reached. Counts alone cannot answer the question an agent
-	// actually has: a source showing 0 events is either a vendor the
-	// operator stopped using or a reader that has been refused for days,
-	// and those have opposite remedies.
-	Sources []freshness.Report `json:"sources,omitempty"`
-	// Unhealthy is how many of them need attention.
-	Unhealthy int `json:"unhealthy,omitempty"`
-	// FreshnessUnavailable says why Sources is empty, so its absence is
-	// not read as "every source is fine".
-	FreshnessUnavailable string `json:"freshness_unavailable,omitempty"`
-	Error                string `json:"error,omitempty"`
-	Hint                 string `json:"hint,omitempty"`
-}
+// dataSourcesResult is the state capability's payload, shared with the
+// daemon API (ADR 0010 §4).
+type dataSourcesResult = state.DataSources
 
 // RegisterDataSourcesTool mounts tokenops_data_sources on s. The tool
 // returns event counts grouped by the source column so operators can
@@ -86,37 +65,19 @@ func RegisterDataSourcesTool(s *Server, d DataSourcesDeps) error {
 		Description("Return event counts grouped by source (proxy, mcp-session, otlp, ...) plus per-source ingestion health: when each source was last seen, when its reader last polled successfully, and what it last failed with. Operators inspect this to confirm headroom and spend math are running on observed data, and to tell a vendor they stopped using apart from a reader that has silently died.").
 		OutputSchema(dataSourcesResult{}).
 		Handler(func(ctx context.Context, in dataSourcesInput) (*dataSourcesResult, error) {
-			if d.Store == nil {
-				return &dataSourcesResult{
-					Error: "storage_disabled",
-					Hint:  "run `tokenops init` then restart the daemon",
-				}, nil
-			}
 			since, until, err := parseDataSourceWindow(in)
 			if err != nil {
 				return nil, inputError(err)
 			}
-			counts, err := d.Store.CountBySource(ctx, since, until)
+			var count state.Counter
+			if d.Store != nil {
+				count = d.Store.CountBySource
+			}
+			res, err := state.DataSourcesOf(ctx, count, d.freshness(ctx), since, until)
 			if err != nil {
 				return nil, err
 			}
-			res := &dataSourcesResult{
-				Counts: counts,
-				Window: &dataSourcesWindow{
-					Since: fmtTimeOrEmpty(since),
-					Until: fmtTimeOrEmpty(until),
-				},
-			}
-			res.Sources = d.freshness(ctx)
-			if res.Sources == nil {
-				res.FreshnessUnavailable = "the ingestion daemon did not answer; counts are from the local store and say nothing about whether each reader is still working (" + config.DaemonRunRemedy + ")"
-			}
-			for _, r := range res.Sources {
-				if !r.Healthy() {
-					res.Unhealthy++
-				}
-			}
-			return res, nil
+			return &res, nil
 		})
 	return nil
 }
@@ -140,11 +101,4 @@ func parseDataSourceWindow(in dataSourcesInput) (time.Time, time.Time, error) {
 		until = t
 	}
 	return since, until, nil
-}
-
-func fmtTimeOrEmpty(t time.Time) string {
-	if t.IsZero() {
-		return ""
-	}
-	return t.UTC().Format(time.RFC3339)
 }

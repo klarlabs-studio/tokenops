@@ -17,6 +17,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/experiments"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer"
@@ -52,7 +53,10 @@ type Server struct {
 	sourceFreshness func() []freshness.Report
 	// plans supplies the headroom capability's dependencies. nil leaves
 	// the plan routes unmounted.
-	plans      func() headroom.Deps
+	plans func() headroom.Deps
+	// state supplies the control plane's own state. nil leaves the state
+	// routes unmounted.
+	state      func() state.Deps
 	resilience *ResilienceConfig
 	dashAuth   DashAuth
 	// router applies live model routing when active mode is enabled
@@ -362,6 +366,7 @@ func (s *Server) apiMux() *http.ServeMux {
 	s.registerEventCountsRoute(protected)
 	s.registerSourcesRoute(protected)
 	s.registerPlanRoutes(protected)
+	s.registerStateRoutes(protected)
 	return protected
 }
 

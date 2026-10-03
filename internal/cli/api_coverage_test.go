@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/proxy"
 )
@@ -16,47 +17,47 @@ import (
 
 // apiRoute maps a tool to the route that answers the same question.
 var apiRoute = map[string]string{
-	"tokenops_resource_glance": "/api/glance",
-	"tokenops_plan_headroom":   "/api/plans/headroom",
-	"tokenops_session_budget":  "/api/plans/session-budget",
-	"tokenops_spend_summary":   "/api/spend/summary",
-	"tokenops_forecast":        "/api/spend/forecast",
-	"tokenops_domain_events":   "/api/domain-events",
-	"tokenops_audit":           "/api/audit",
-	"tokenops_optimizations":   "/api/optimizations",
-	"tokenops_rules_analyze":   "/api/rules/analyze",
-	"tokenops_rules_compress":  "/api/rules/compress",
-	"tokenops_rules_conflicts": "/api/rules/conflicts",
-	"tokenops_rules_inject":    "/api/rules/inject",
-	"tokenops_workflow_trace":  "/api/workflows/example",
+	"tokenops_resource_glance":     "/api/glance",
+	"tokenops_plan_headroom":       "/api/plans/headroom",
+	"tokenops_session_budget":      "/api/plans/session-budget",
+	"tokenops_spend_summary":       "/api/spend/summary",
+	"tokenops_forecast":            "/api/spend/forecast",
+	"tokenops_domain_events":       "/api/domain-events",
+	"tokenops_audit":               "/api/audit",
+	"tokenops_optimizations":       "/api/optimizations",
+	"tokenops_rules_analyze":       "/api/rules/analyze",
+	"tokenops_rules_compress":      "/api/rules/compress",
+	"tokenops_rules_conflicts":     "/api/rules/conflicts",
+	"tokenops_rules_inject":        "/api/rules/inject",
+	"tokenops_workflow_trace":      "/api/workflows/example",
+	"tokenops_status":              "/api/status",
+	"tokenops_mode":                "/api/mode",
+	"tokenops_coach":               "/api/coach",
+	"tokenops_config":              "/api/config",
+	"tokenops_data_sources":        "/api/data-sources",
+	"tokenops_vendor_usage_status": "/api/vendor-usage",
 }
 
 // apiPending is the ADR's backlog: tools a surface needs that have no route
 // yet, by slice. It may only shrink; a tool that gains a route moves to
 // apiRoute, and the test fails until it does.
 var apiPending = map[string]int{
-	"tokenops_status":              2,
-	"tokenops_coach":               2,
-	"tokenops_mode":                2,
-	"tokenops_config":              2,
-	"tokenops_data_sources":        2,
-	"tokenops_vendor_usage_status": 2,
-	"tokenops_agent_dx":            3,
-	"tokenops_scorecard":           3,
-	"tokenops_story":               3,
-	"tokenops_top_consumers":       3,
-	"tokenops_burn_rate":           3,
-	"tokenops_pricing":             3,
-	"tokenops_coach_prompts":       3,
-	"tokenops_routing_proposals":   3,
-	"tokenops_explain_decision":    3,
-	"tokenops_preferred_model":     4,
-	"tokenops_plan_set":            4,
-	"tokenops_budget_set":          4,
-	"tokenops_routing_decide":      4,
-	"tokenops_routing_rule_set":    4,
-	"tokenops_outcome_record":      4,
-	"tokenops_vendor_usage_setup":  4,
+	"tokenops_agent_dx":           3,
+	"tokenops_scorecard":          3,
+	"tokenops_story":              3,
+	"tokenops_top_consumers":      3,
+	"tokenops_burn_rate":          3,
+	"tokenops_pricing":            3,
+	"tokenops_coach_prompts":      3,
+	"tokenops_routing_proposals":  3,
+	"tokenops_explain_decision":   3,
+	"tokenops_preferred_model":    4,
+	"tokenops_plan_set":           4,
+	"tokenops_budget_set":         4,
+	"tokenops_routing_decide":     4,
+	"tokenops_routing_rule_set":   4,
+	"tokenops_outcome_record":     4,
+	"tokenops_vendor_usage_setup": 4,
 }
 
 // apiExempt are tools no non-agent surface needs, with the reason.
@@ -86,6 +87,7 @@ func TestEveryToolIsAccountedForInTheDaemonAPI(t *testing.T) {
 		proxy.WithEventCounts(func() map[string]int64 { return nil }),
 		proxy.WithSourceFreshness(func() []freshness.Report { return nil }),
 		proxy.WithPlans(func() headroom.Deps { return headroom.Deps{} }),
+		proxy.WithState(func() state.Deps { return state.Deps{} }),
 	)
 	tools := mcpToolNames(t)
 	names := make([]string, 0, len(tools))
