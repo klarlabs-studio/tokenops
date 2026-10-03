@@ -1,0 +1,50 @@
+package plans
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"go.klarlabs.de/tokenops/pkg/eventschema"
+)
+
+func TestVendorWindowsPerVendor(t *testing.T) {
+	now := time.Date(2026, 10, 3, 9, 0, 0, 0, time.UTC)
+	meter := &eventschema.Envelope{Source: "claude-usage-meter", Timestamp: now.Add(-10 * time.Minute), Attributes: map[string]string{
+		"five_hour_used_pct": "13.00", "five_hour_reset_at": "2026-10-03T10:00:00.238665+00:00",
+		"seven_day_used_pct": "85.00", "seven_day_reset_at": "2026-10-09T23:00:00+00:00",
+		"weekly_scoped_fable_used_pct": "0.00", "weekly_scoped_fable_model_scope": "Fable",
+	}}
+	// Newer, and with keys the Claude parser would also match.
+	codex := &eventschema.Envelope{Source: "codex-jsonl", Timestamp: now.Add(-time.Minute), Attributes: map[string]string{
+		"primary_used_pct": "14.00", "primary_window_min": "10080", "primary_resets_at": "1791607286",
+		"secondary_used_pct": "0.00", "secondary_window_min": "0", "secondary_resets_at": "0",
+	}}
+	r := authFakeReader{events: []*eventschema.Envelope{meter, codex}}
+
+	claude := VendorWindows(context.Background(), r, eventschema.ProviderAnthropic, now)
+	if len(claude) != 3 || claude[0].Name != "week" || claude[0].UsedPct != 85 || claude[1].Name != "5h" ||
+		claude[1].ResetsIn != "1h0m0s" || claude[2].Name != "week (Fable)" {
+		t.Errorf("claude windows %+v", claude)
+	}
+	openai := VendorWindows(context.Background(), r, eventschema.ProviderOpenAI, now)
+	if len(openai) != 1 || openai[0].Name != "week" || openai[0].UsedPct != 14 {
+		t.Errorf("codex windows %+v", openai)
+	}
+	if VendorWindows(context.Background(), r, eventschema.ProviderGitHub, now) != nil {
+		t.Error("a vendor without windows has none")
+	}
+}
+
+// A weekly window near its limit is the risk, however empty the 5-hour
+// window is.
+func TestBusiestVendorWindowSetsTheRisk(t *testing.T) {
+	p, _ := Lookup("claude-max-20x")
+	report := computeHeadroomFor(p, HeadroomInputs{
+		Now:           time.Now(),
+		VendorWindows: []VendorWindow{{Name: "week", UsedPct: 85}, {Name: "5h", UsedPct: 3}},
+	})
+	if report.OverageRisk != RiskHigh || len(report.Windows) != 2 {
+		t.Errorf("risk %s windows %d", report.OverageRisk, len(report.Windows))
+	}
+}

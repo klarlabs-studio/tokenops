@@ -112,6 +112,7 @@ func AssembleHeadroomInputs(ctx context.Context, reader EventReader, counts Sour
 			in.Signal = SignalFromCounts(c, provider)
 		}
 		in.Authoritative = LatestAuthoritativeWindow(ctx, reader, providerOf(provider), p, now)
+		in.VendorWindows = VendorWindows(ctx, reader, providerOf(provider), now)
 	}
 	if p.SpendDenominated {
 		in.SpendLimitUSD = lim.LimitUSD
