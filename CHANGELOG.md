@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.92.0 - 2026-10-03
+
+### Added
+
+- **headroom:** Claude's 5-hour and weekly windows, and a Claude apps gateway's spend limit, come from Claude Code's own status line, with no claude.ai login; merged per window with the usage meter (#507)
+- **api:** The daemon API serves every surface that is not an agent (ADR 0010): glance, plan headroom and session budget (#508); status, mode, coach, config, data sources, vendor usage (#509); agent DX, story and prompt scoring with the operator's words withheld (#510); top consumers, burn rate, scorecard, pricing (#511); routing proposals and decision explanations (#512)
+- **api:** Changes through the API: mode, budgets, routing rules, plans (#513); preferred model, routing decisions, outcomes, coach (#514). Token-only, JSON-only, unknown fields refused, audited as `config_change` by `api`
+- **api:** An OpenAPI 3.1 contract generated from the handlers (`docs/api/openapi.json`) and a Daemon API guide page, both held to the served routes by tests (#515)
+
 ## 0.91.0 - 2026-10-03
 
 ### Added
