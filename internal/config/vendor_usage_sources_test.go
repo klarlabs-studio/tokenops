@@ -48,6 +48,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"deepseek_account", "deepseek-account"},
 		{"moonshot_account", "moonshot-account"},
 		{"cursor_turns (hook ledger)", "cursor-hook"},
+		{"claude_code_statusline", "claude-code-statusline"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d sources, want %d", len(got), len(want))

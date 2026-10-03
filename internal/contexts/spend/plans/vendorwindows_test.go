@@ -67,3 +67,52 @@ func TestSessionBudgetFromVendorWindows(t *testing.T) {
 		t.Errorf("%+v", out)
 	}
 }
+
+// Claude Code's status line reports the same windows as the claude.ai
+// meter. The newer figure wins per window; a window only the meter reports
+// is kept.
+func TestVendorWindowsMergeTheMeterAndTheStatusLine(t *testing.T) {
+	now := time.Date(2026, 10, 3, 9, 0, 0, 0, time.UTC)
+	meter := &eventschema.Envelope{Source: "claude-usage-meter", Timestamp: now.Add(-2 * time.Hour), Attributes: map[string]string{
+		"five_hour_used_pct": "13.00", "five_hour_reset_at": "2026-10-03T10:00:00Z",
+		"weekly_scoped_fable_used_pct": "2.00", "weekly_scoped_fable_model_scope": "Fable",
+	}}
+	statusline := &eventschema.Envelope{Source: "claude-code-statusline", Timestamp: now.Add(-time.Minute), Attributes: map[string]string{
+		"five_hour_used_pct": "40.00", "five_hour_reset_at": "2026-10-03T10:00:00Z",
+		"seven_day_used_pct": "9.00", "seven_day_reset_at": "2026-10-09T23:00:00Z",
+		"granularity": "quota_snapshot",
+	}}
+	r := authFakeReader{events: []*eventschema.Envelope{statusline, meter}}
+
+	got := VendorWindows(context.Background(), r, eventschema.ProviderAnthropic, now)
+	if len(got) != 3 || got[0].Name != "5h" || got[0].UsedPct != 40 || got[1].Name != "week" || got[2].Name != "week (Fable)" {
+		t.Errorf("windows %+v", got)
+	}
+}
+
+// A Claude apps gateway spend limit is a window, named by its period, and
+// a monthly one with dollars is the vendor's spend.
+func TestStatusLineSpendLimit(t *testing.T) {
+	now := time.Date(2026, 10, 3, 9, 0, 0, 0, time.UTC)
+	reading := &eventschema.Envelope{Source: "claude-code-statusline", Timestamp: now.Add(-time.Minute),
+		Payload: &eventschema.PromptEvent{Provider: eventschema.ProviderAnthropic},
+		Attributes: map[string]string{
+			"spend_limit_used_pct": "62.80", "spend_limit_reset_at": "2026-11-01T00:00:00Z", "spend_limit_period": "monthly",
+			"extra_usage_used": "314.12", "extra_usage_limit": "500.00", "extra_usage_currency": "USD",
+			"extra_usage_limit_reached": "false", "granularity": "quota_snapshot",
+		}}
+	r := authFakeReader{events: []*eventschema.Envelope{reading}}
+
+	got := VendorWindows(context.Background(), r, eventschema.ProviderAnthropic, now)
+	if len(got) != 1 || got[0].Name != "monthly spend limit" || got[0].UsedPct != 62.8 {
+		t.Errorf("windows %+v", got)
+	}
+	spend := LatestVendorSpend(context.Background(), r, eventschema.ProviderAnthropic, now)
+	if spend == nil || spend.UsedUSD != 314.12 || spend.LimitUSD != 500 || spend.Source != "claude_code_statusline:spend_limit" {
+		t.Errorf("spend %+v", spend)
+	}
+	quota := QuotaWindowsFromAttributes(eventschema.ProviderAnthropic, reading.Attributes)
+	if len(quota) != 1 || quota[0].Label != "monthly spend limit" {
+		t.Errorf("quota windows %+v", quota)
+	}
+}

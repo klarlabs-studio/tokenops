@@ -47,6 +47,7 @@ const (
 	SignalSourceFireworks        = "fireworks_api"
 	SignalSourceVendorAccount    = "vendor_account_api"
 	SignalSourceClaudeUsageMeter = "claude_usage_meter"
+	SignalSourceClaudeStatusline = "claude_code_statusline"
 )
 
 // SignalInputs is the set of observations the quality classifier needs.
@@ -61,6 +62,7 @@ type SignalInputs struct {
 	CopilotInWindow          int64
 	CursorInWindow           int64
 	ClaudeUsageMeterInWindow int64
+	ClaudeStatuslineInWindow int64
 	FireworksInWindow        int64
 	VendorAccountInWindow    int64
 	VendorAPIWired           bool
@@ -91,6 +93,12 @@ func ClassifySignal(in SignalInputs) SignalQuality {
 			Level:  SignalLevelHigh,
 			Source: SignalSourceClaudeUsageMeter,
 			Caveat: "Polls claude.ai/api/organizations/{org_id}/usage with your browser sessionKey — same data Anthropic's own UI shows: 5-hour and 7-day utilization, or on Claude Enterprise spend against your monthly limit. Undocumented endpoint; cookie expires every few weeks, daemon WARNs when re-paste is needed.",
+		}
+	case in.ClaudeStatuslineInWindow > 0:
+		return SignalQuality{
+			Level:  SignalLevelHigh,
+			Source: SignalSourceClaudeStatusline,
+			Caveat: "Claude Code's own report of your 5-hour and weekly windows, or of a Claude apps gateway spend limit, handed to its status line on every turn. Documented, needs no login; current while you use Claude Code with the TokenOps status line.",
 		}
 	case in.FireworksInWindow > 0:
 		return SignalQuality{

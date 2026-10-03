@@ -61,6 +61,10 @@ func (c Config) VendorUsageSources() []VendorUsageSource {
 		// `vendor-usage status`, never staleness-checked, and impossible
 		// to name in a retention rule without guessing the tag.
 		{Name: "cursor_turns (hook ledger)", SourceTag: "cursor-hook", AlwaysOn: true},
+		// Claude Code's status line leaves its plan windows in a file the
+		// daemon reads; like the hook ledger it is empty until the status
+		// line is installed.
+		{Name: "claude_code_statusline", SourceTag: "claude-code-statusline", AlwaysOn: true},
 	}
 }
 
