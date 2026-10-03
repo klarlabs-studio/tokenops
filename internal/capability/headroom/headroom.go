@@ -146,30 +146,61 @@ func Compute(ctx context.Context, d Deps, now time.Time) (Result, error) {
 		if report.Provider == "" {
 			report.Provider = provider
 		}
-		if inferred[provider] && report.Note == "" {
-			report.Note = provider + " reports this account as billed per token; " +
-				"`tokenops plan set " + provider + " <plan>` binds another plan"
+		switch inferred[provider] {
+		case fromReading:
+			if report.Note == "" {
+				report.Note = provider + " reports this account as billed per token; " +
+					"`tokenops plan set " + provider + " <plan>` binds another plan"
+			}
+		case fromUsage:
+			// Free models and trials cost nothing; a row of $0 says nothing.
+			if report.SpendUSD <= 0 {
+				continue
+			}
+			if report.Note == "" || report.SpendLimitUSD <= 0 {
+				report.Note = "billed per token this month; no limit known — " +
+					"`tokenops plan set " + provider + " pay-as-you-go --spend-limit <usd>` sets one"
+			}
 		}
 		out.Reports = append(out.Reports, report)
+	}
+	if len(out.Reports) == 0 && len(out.Notes) == 0 {
+		out.Unconfigured = UnconfiguredHint
 	}
 	return out, nil
 }
 
+// inference says why a provider was bound without the operator.
+type inference int
+
+// The zero value is a binding the operator made.
+const (
+	// fromReading: the vendor's own reader reported a per-token account.
+	fromReading inference = iota + 1
+	// fromUsage: usage billed per token was seen this month.
+	fromUsage
+)
+
 // effectiveBindings is the configured plans plus pay-as-you-go for every
-// provider whose own reader reported a per-token account this month and
-// that has no plan bound (ADR 0009 §7: evidence first, the operator
-// corrects). inferred names the added ones.
-func effectiveBindings(ctx context.Context, d Deps, now time.Time) (map[string]string, map[string]bool) {
-	out := make(map[string]string, len(d.Config.Plans)+1)
+// provider billed per token this month that has no plan bound (ADR 0009
+// §7: evidence first, the operator corrects): first those whose own reader
+// reported a per-token account, then any with metered usage. inferred
+// says how each added one was found.
+func effectiveBindings(ctx context.Context, d Deps, now time.Time) (map[string]string, map[string]inference) {
+	out := make(map[string]string, len(d.Config.Plans)+2)
 	for p, name := range d.Config.Plans {
 		out[p] = name
 	}
-	inferred := map[string]bool{}
-	for _, p := range plans.PerTokenReadingProviders(ctx, d.Reader, now) {
-		if _, bound := out[p]; !bound {
-			out[p], inferred[p] = plans.PayAsYouGo, true
+	inferred := map[string]inference{}
+	add := func(providers []string, how inference) {
+		for _, p := range providers {
+			if _, ok := out[p]; !ok {
+				out[p], inferred[p] = plans.PayAsYouGo, how
+			}
 		}
 	}
+	add(plans.PerTokenReadingProviders(ctx, d.Reader, now), fromReading)
+	add(plans.MeteredProviders(ctx, d.Reader, now), fromUsage)
 	return out, inferred
 }
 

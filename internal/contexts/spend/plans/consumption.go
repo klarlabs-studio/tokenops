@@ -2,6 +2,7 @@ package plans
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"time"
 
@@ -166,6 +167,37 @@ func countsAsMessage(env *eventschema.Envelope) bool {
 	}
 }
 
+// MeteredProviders lists providers with usage billed per token this month
+// (UTC): requests not covered by a plan. Headroom shows each one that has
+// no plan bound as pay-as-you-go, so a gateway or API key in use appears
+// without being set up.
+func MeteredProviders(ctx context.Context, reader EventReader, now time.Time) []string {
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, monthStart)
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, env := range events {
+		if env == nil || !perRequest(env) {
+			continue
+		}
+		p, ok := env.Payload.(*eventschema.PromptEvent)
+		if !ok || p.CostSource != eventschema.CostSourceMetered {
+			continue
+		}
+		name := string(p.Provider)
+		if name == "" || p.Provider == eventschema.ProviderUnknown || seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // SpendWindowStart returns the start of the period a spend limit covers.
 // An unrecognised or empty window means monthly, which is how vendor
 // consoles state org limits.
@@ -192,6 +224,19 @@ func SpendWindowStart(now time.Time, window string) time.Time {
 // usage stayed in the store at $0 until it is re-marked, so the limit
 // must not read 0% because of it.
 func SpendInWindow(ctx context.Context, reader EventReader, provider string, now time.Time, window string, price Pricer) (float64, error) {
+	return spendInWindow(ctx, reader, provider, now, window, price, true)
+}
+
+// BilledSpendInWindow is everything provider billed per token since the
+// spend window began, through any endpoint. It is the numerator of
+// pay-as-you-go: an API key is billed for every turn it runs, whether the
+// harness called the vendor directly or a router passed the key on
+// (FireRouter running Claude on the operator's Anthropic key).
+func BilledSpendInWindow(ctx context.Context, reader EventReader, provider string, now time.Time, window string, price Pricer) (float64, error) {
+	return spendInWindow(ctx, reader, provider, now, window, price, false)
+}
+
+func spendInWindow(ctx context.Context, reader EventReader, provider string, now time.Time, window string, price Pricer, ownEndpointOnly bool) (float64, error) {
 	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, SpendWindowStart(now, window))
 	if err != nil {
 		return 0, err
@@ -207,7 +252,7 @@ func SpendInWindow(ctx context.Context, reader EventReader, provider string, now
 		}
 		// The plan's limit counts only what went through the vendor's
 		// own endpoint; a gateway's turn ran on an API key (ADR 0009).
-		if !biller.PlanApplies(provider, env.Attributes["endpoint"]) {
+		if ownEndpointOnly && !biller.PlanApplies(provider, env.Attributes["endpoint"]) {
 			continue
 		}
 		if p.CostUSD > 0 || price == nil || !perRequest(env) {
