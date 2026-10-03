@@ -5,6 +5,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,6 +57,7 @@ func TestEveryAPIRouteIsGatedByDashAuth(t *testing.T) {
 		WithPlans(func() headroom.Deps { return headroom.Deps{} }),
 		WithState(func() state.Deps { return state.Deps{} }),
 		WithSessions(func() SessionRoots { return SessionRoots{} }),
+		WithActions(func() ActionDeps { return ActionDeps{} }),
 	)
 	if err := srv.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -103,6 +106,20 @@ func TestEveryAPIRouteIsGatedByDashAuth(t *testing.T) {
 		if resp.StatusCode != http.StatusUnauthorized {
 			t.Errorf("GET %s without a credential = %d, want 401: route bypasses API auth",
 				path, resp.StatusCode)
+		}
+	}
+}
+
+// The write routes refuse a request without the token before reading it.
+func TestEveryWriteRouteIsGatedByDashAuth(t *testing.T) {
+	srv := New("127.0.0.1:0", WithDashAuth(denyAll{}), WithActions(func() ActionDeps { return ActionDeps{} }))
+	for _, path := range []string{"/api/mode", "/api/budgets", "/api/routing/rules", "/api/plans"} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+		req.Header.Set("Content-Type", "application/json")
+		srv.dashAuth.Middleware(srv.apiMux()).ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("POST %s without a credential = %d, want 401", path, rec.Code)
 		}
 	}
 }
