@@ -385,12 +385,34 @@ vendor's own figures every 15 minutes:
 | OpenRouter | `GET /api/v1/key` | the key's spend, against its credit cap when it has one |
 | DeepSeek | `GET /user/balance` | prepaid USD balance left |
 | Moonshot (Kimi API) | `GET /v1/users/me/balance` | prepaid USD balance left |
+| DeepInfra | `GET /payment/checklist` | spend since the last invoice, the limit, prepaid credit |
+| Vercel AI Gateway | `GET /v1/credits` | the team's credit balance |
+
+Coding plans report their usage windows instead. A provider whose reader
+reports one, with no plan bound, shows as `subscription` with the
+vendor's windows, busiest first:
+
+| Vendor | Endpoint | Shows |
+|---|---|---|
+| z.ai GLM Coding Plan | `GET /api/monitor/usage/quota/limit` | 5-hour and weekly token windows |
+| Kimi Code | `GET /coding/v1/usages` | 5-hour, weekly and monthly windows |
+| MiniMax Token Plan | `GET /v1/token_plan/remains` | the interval and weekly windows |
+| Synthetic | `GET /v2/quotas` | the subscription's request quota |
+| Chutes | `GET /users/me/subscription_usage` | the 4-hour and monthly caps |
+
+z.ai's and Kimi's endpoints are the ones their own clients call; they are
+not in their published API docs. MiniMax documents its endpoint but not
+the answer's fields. Treat their figures as the vendor's, read through
+an interface the vendor may change. ZenMux is not read: its usage API
+takes a separate management key, not the one your harness uses.
 
 - **The key** is the one your harnesses already send that vendor: the key
   next to a gateway in Claude Code's settings, Codex's
   `[model_providers]` (`experimental_bearer_token` or `env_key`),
   opencode's `auth.json` and `provider.*.options.apiKey`, or
-  `OPENROUTER_API_KEY`, `DEEPSEEK_API_KEY` and `MOONSHOT_API_KEY`. A key is
+  `OPENROUTER_API_KEY`, `DEEPSEEK_API_KEY`, `MOONSHOT_API_KEY`,
+  `DEEPINFRA_API_KEY`, `CHUTES_API_KEY`, `SYNTHETIC_API_KEY` and
+  `AI_GATEWAY_API_KEY`. A key is
   sent only to the vendor whose endpoint it was found for. It is never
   stored or logged.
 - **Calls** go only to vendors whose key is on the machine. Turn them off

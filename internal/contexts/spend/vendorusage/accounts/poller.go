@@ -107,6 +107,9 @@ func (p *Poller) Scan(ctx context.Context) {
 			continue
 		}
 		health.Succeeded(now)
+		if reading.Empty() {
+			continue
+		}
 		p.publish(ctx, r, NewEnvelope(now, r, reading))
 	}
 }
@@ -128,24 +131,42 @@ func (p *Poller) publish(ctx context.Context, r Reader, env *eventschema.Envelop
 	p.mu.Unlock()
 }
 
-// NewEnvelope stores a reading as a quota snapshot with the spend-limit
-// attributes headroom reads (extra_usage_*), plus balance_usd for prepaid
-// credit. billing=per_token lets headroom bind pay-as-you-go unasked.
+// NewEnvelope stores a reading as a quota snapshot. A per-token account
+// carries the spend-limit attributes headroom reads (extra_usage_*) and
+// billing=per_token, which lets headroom bind pay-as-you-go unasked; a
+// subscription carries billing=subscription and its windows as
+// window_<n>_{name,used_pct,duration_min,reset_at}. Prepaid credit is
+// balance_usd either way.
 func NewEnvelope(ts time.Time, r Reader, x Reading) *eventschema.Envelope {
 	h := sha256.Sum256([]byte(r.Source() + "|" + strconv.FormatInt(ts.UnixNano(), 10)))
 	attrs := map[string]string{
-		"granularity":               "quota_snapshot",
-		"billing":                   "per_token",
-		"scope":                     x.Scope,
-		"extra_usage_limit":         fmt.Sprintf("%.2f", x.LimitUSD),
-		"extra_usage_currency":      "USD",
-		"extra_usage_limit_reached": strconv.FormatBool(x.LimitReached),
+		"granularity": "quota_snapshot",
+		"scope":       x.Scope,
 	}
-	if x.HasUsed {
-		attrs["extra_usage_used"] = fmt.Sprintf("%.2f", x.UsedUSD)
+	if x.Subscription {
+		attrs["billing"] = "subscription"
+	} else {
+		attrs["billing"] = "per_token"
+		attrs["extra_usage_limit"] = fmt.Sprintf("%.2f", x.LimitUSD)
+		attrs["extra_usage_currency"] = "USD"
+		attrs["extra_usage_limit_reached"] = strconv.FormatBool(x.LimitReached)
+		if x.HasUsed {
+			attrs["extra_usage_used"] = fmt.Sprintf("%.2f", x.UsedUSD)
+		}
 	}
 	if x.HasBalance {
 		attrs["balance_usd"] = fmt.Sprintf("%.2f", x.BalanceUSD)
+	}
+	for i, w := range x.Windows {
+		k := "window_" + strconv.Itoa(i) + "_"
+		attrs[k+"name"] = w.Name
+		attrs[k+"used_pct"] = fmt.Sprintf("%.2f", w.UsedPct)
+		if w.Duration > 0 {
+			attrs[k+"duration_min"] = strconv.Itoa(int(w.Duration / time.Minute))
+		}
+		if !w.ResetsAt.IsZero() {
+			attrs[k+"reset_at"] = w.ResetsAt.UTC().Format(time.RFC3339)
+		}
 	}
 	return &eventschema.Envelope{
 		ID:            "acct-" + hex.EncodeToString(h[:8]),

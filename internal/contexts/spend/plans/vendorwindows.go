@@ -42,7 +42,7 @@ func VendorWindows(ctx context.Context, reader EventReader, provider eventschema
 	case eventschema.ProviderOpenAI:
 		parse, sources = codexWindows, []string{"codex-jsonl"}
 	default:
-		return nil
+		return accountWindows(ctx, reader, provider, now)
 	}
 	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, now.Add(-14*24*time.Hour))
 	if err != nil {
@@ -167,4 +167,70 @@ func windowWords(d time.Duration) string {
 	default:
 		return d.String()
 	}
+}
+
+// accountWindows reads the windows a vendor account reader stored as
+// window_<n>_{name,used_pct,duration_min,reset_at}: the newest such
+// reading for provider in the last two weeks, busiest first.
+func accountWindows(ctx context.Context, reader EventReader, provider eventschema.Provider, now time.Time) []VendorWindow {
+	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, now.Add(-14*24*time.Hour))
+	if err != nil {
+		return nil
+	}
+	var best *eventschema.Envelope
+	for _, e := range events {
+		if e == nil || e.Attributes["window_0_used_pct"] == "" || readingProvider(e) != provider {
+			continue
+		}
+		if best == nil || e.Timestamp.After(best.Timestamp) {
+			best = e
+		}
+	}
+	if best == nil {
+		return nil
+	}
+	var out []VendorWindow
+	for i := 0; ; i++ {
+		k := "window_" + strconv.Itoa(i) + "_"
+		raw, ok := best.Attributes[k+"used_pct"]
+		if !ok {
+			break
+		}
+		pct, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			continue
+		}
+		w := VendorWindow{Name: best.Attributes[k+"name"], UsedPct: pct}
+		if m, err := strconv.Atoi(best.Attributes[k+"duration_min"]); err == nil && m > 0 {
+			w.Duration = time.Duration(m) * time.Minute
+		}
+		setReset(&w, best.Attributes[k+"reset_at"], now)
+		out = append(out, w)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].UsedPct > out[j].UsedPct })
+	return out
+}
+
+// SubscriptionReadingProviders lists providers whose own account reader
+// reported a subscription's windows in the last two weeks. Headroom binds
+// such a provider to Subscription when no plan is bound: the vendor has
+// said it is on a plan, and shown how much of it is used.
+func SubscriptionReadingProviders(ctx context.Context, reader EventReader, now time.Time) []string {
+	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, now.Add(-14*24*time.Hour))
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, e := range events {
+		if e == nil || e.Attributes["billing"] != "subscription" || e.Attributes["window_0_used_pct"] == "" {
+			continue
+		}
+		if p := string(readingProvider(e)); p != "" && !seen[p] {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
