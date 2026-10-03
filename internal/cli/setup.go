@@ -446,5 +446,11 @@ func statuslineStep(cfgPath, settingsPath, exe string) setupStep {
 	if err := installStatusline(&out, settingsPath, exe); err != nil {
 		return setupStep{Name: name, Err: err}
 	}
-	return setupStep{Name: name, Detail: strings.TrimPrefix(strings.TrimSpace(out.String()), "status line: ")}
+	// The install message is written for a person running the command;
+	// in init's summary one line says it.
+	detail := "TokenOps' line, shown under Claude Code's prompt — `tokenops statusline uninstall` to remove"
+	if _, ok := readOriginalStatusline(); ok {
+		detail = "TokenOps' line, with your previous status line still below it — `tokenops statusline uninstall` to restore yours"
+	}
+	return setupStep{Name: name, Detail: detail}
 }
