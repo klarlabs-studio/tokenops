@@ -3,8 +3,9 @@ package mcp
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
+
+	"go.klarlabs.de/tokenops/internal/capability/decisions"
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/routingapproval"
@@ -65,45 +66,11 @@ func RegisterApprovalTools(s *Server, d ApprovalDeps) error {
 	s.Tool("tokenops_routing_proposals").
 		Description("List model upgrades the proxy refused because they exceed your preferred model. Each entry offers a real choice: take the proposed model, or stay on your preferred one. Call this when the operator asks why a model was not switched, and surface any pending entry to them — nothing applies until they answer via tokenops_routing_decide.").
 		Handler(func(_ context.Context, _ emptyInput) (string, error) {
-			store, err := d.store()
+			res, err := decisions.PendingProposals(d.StorePath)
 			if err != nil {
 				return "", inputError(err)
 			}
-			pending, err := store.Pending()
-			if err != nil {
-				return "", inputError(err)
-			}
-			if len(pending) == 0 {
-				return jsonString(map[string]any{
-					"pending": []any{},
-					"note":    "no upgrades are waiting on you",
-				}), nil
-			}
-			out := make([]map[string]any, 0, len(pending))
-			for _, p := range pending {
-				entry := map[string]any{
-					"key":             p.Key,
-					"provider":        p.Provider,
-					"requested_model": p.From,
-					"proposed_model":  p.To,
-					"preferred_model": p.Preferred,
-					"times_seen":      p.Seen,
-					"reason":          p.Reason,
-					"question": fmt.Sprintf(
-						"Routing wants to switch %s → %s. Approve, or stay on your preferred %s?",
-						p.From, p.To, p.Preferred),
-				}
-				if p.Priced {
-					entry["extra_usd_per_million_io_tokens"] = p.DeltaUSD
-				} else {
-					entry["pricing"] = "unverifiable — no rate card for one of the models, so the route was refused rather than guessed at"
-				}
-				out = append(out, entry)
-			}
-			return jsonString(map[string]any{
-				"pending": out,
-				"note":    "ask the operator before deciding; resolve with tokenops_routing_decide",
-			}), nil
+			return jsonString(res), nil
 		})
 
 	s.Tool("tokenops_routing_decide").
