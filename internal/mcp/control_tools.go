@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
+	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/presentation"
 	"go.klarlabs.de/tokenops/internal/version"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -21,15 +21,7 @@ func staleWarnings(d ControlDeps) []string {
 	if d.StaleSources == nil {
 		return nil
 	}
-	stale := d.StaleSources()
-	if len(stale) == 0 {
-		return nil
-	}
-	warnings := make([]string, 0, len(stale))
-	for _, s := range stale {
-		warnings = append(warnings, s.Warning())
-	}
-	return warnings
+	return state.StaleWarnings(d.StaleSources())
 }
 
 // ControlDeps wires the in-process state the control tools surface. The
@@ -217,101 +209,38 @@ func daemonVersion(d ControlDeps, r DaemonReport) string {
 }
 
 func statusInfo(d ControlDeps) statusResult {
-	ready := false
+	in := state.StatusInputs{Config: d.activeConfig(), Stale: staleWarnings(d)}
 	if d.ReadyCheck != nil {
-		ready = d.ReadyCheck()
+		in.Ready = d.ReadyCheck()
 	}
-	blockers := []string{}
-	if cfg := d.activeConfig(); cfg != nil {
-		blockers = cfg.Blockers()
-	}
-	nextActions := config.NextActionsFor(blockers)
-	state := "not_ready"
-	switch {
-	case ready && len(blockers) == 0:
-		state = "ready"
-	case ready && len(blockers) > 0:
-		// MCP serve opens its own store and is functionally healthy
-		// even when daemon-side subsystems are off. Surface that as
-		// `degraded` so callers can distinguish "broken" from
-		// "running with reduced surface area".
-		state = "degraded"
-	case !ready && len(blockers) > 0:
-		state = "not_configured"
-	}
-
-	// Runtime ingestion staleness is a softer signal than config
-	// blockers: an enabled vendor-usage poller that has ingested nothing
-	// recently means status is quietly serving stale/$0 data. Surface it
-	// as `warnings` (never blockers), add a remediation next_action, and
-	// downgrade a `ready` state to `degraded` while keeping ready:true.
-	warnings := staleWarnings(d)
-
-	// One probe answers both questions below.
+	// One probe answers whether the daemon is there and whether it is
+	// losing writes.
 	var report DaemonReport
 	probed := d.DaemonProbe != nil
 	if probed {
 		report = d.DaemonProbe()
 	}
-
-	// Telemetry the daemon could not write. Reported even while it is
-	// alive and ready, because that is exactly the case that looks
-	// healthy from every other angle: the daemon is up, the store opens,
-	// queries answer — against totals that are quietly short.
-	if w := events.DropWarning(report.Dropped); w != "" {
-		warnings = append(warnings, w)
-		nextActions = append(nextActions, events.DropNextAction)
-		if state == "ready" {
-			state = "degraded"
-		}
-	}
-
-	// A missing ingestion daemon is the cause; stale sources are the
-	// symptom. It is reported first because it is unambiguous — a quiet
-	// source can mean "not used lately", an absent daemon cannot — and
-	// because it fires immediately rather than after the stale window.
-	//
-	// Not a blocker: serve genuinely answers queries against the store it
-	// has. It degrades `ready` the same way stale ingestion does, so the
-	// distinction stays "running with reduced surface area", not "broken".
+	in.Dropped = report.Dropped
+	// serve is the MCP server and does not ingest; a missing daemon means
+	// nothing is writing to the store.
 	if w := daemonPresenceWarning(report, probed); w != "" {
-		warnings = append([]string{w}, warnings...)
-		nextActions = append(nextActions, DaemonPresenceNextAction)
-		if state == "ready" {
-			state = "degraded"
-		}
+		in.DaemonMissing = &state.Problem{Warning: w, NextAction: DaemonPresenceNextAction}
 	}
-
-	if len(warnings) > 0 {
-		nextActions = append(nextActions, config.StaleIngestionNextAction)
-		if state == "ready" {
-			state = "degraded"
-		}
-	}
-
-	// Checked after the ingestion block so the vendor-usage remediation is
-	// not attached to it: a stale server has nothing to do with a silent
-	// source. Listed first because it qualifies everything else — every
-	// other answer here comes from the old code.
 	drift := binaryDrift(d)
 	if drift.OutOfDate {
-		warnings = append([]string{drift.Warning()}, warnings...)
-		nextActions = append(nextActions, StaleServerNextAction)
-		if state == "ready" {
-			state = "degraded"
-		}
+		in.Drift = &state.Problem{Warning: drift.Warning(), NextAction: StaleServerNextAction}
 	}
-
+	st := state.ComputeStatus(in)
 	return statusResult{
 		Status:        "ok",
-		Ready:         ready,
-		State:         state,
-		Insight:       presentation.ForStatus(state),
+		Ready:         st.Ready,
+		State:         st.State,
+		Insight:       st.Insight,
 		Version:       version.String(),
 		SchemaVersion: eventschema.SchemaVersion,
-		Blockers:      blockers,
-		NextActions:   nextActions,
-		Warnings:      warnings,
+		Blockers:      st.Blockers,
+		NextActions:   st.NextActions,
+		Warnings:      st.Warnings,
 
 		DaemonVersion:   daemonVersion(d, report),
 		ServerOutOfDate: drift.OutOfDate,

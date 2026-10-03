@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/state"
+
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing"
 )
@@ -71,21 +73,9 @@ type vendorUsageInput struct {
 	WindowHours int `json:"window_hours,omitempty" jsonschema:"description=lookback in hours; default 24"`
 }
 
-type vendorUsageSourceStatus struct {
-	Name        string `json:"name"`
-	SourceTag   string `json:"source_tag"`
-	Enabled     bool   `json:"enabled"`
-	AlwaysOn    bool   `json:"always_on,omitempty"`
-	EventsInWin int64  `json:"events_in_window"`
-	ConfigHint  string `json:"config_hint,omitempty"`
-}
-
-type vendorUsageResult struct {
-	WindowHours int                       `json:"window_hours"`
-	Sources     []vendorUsageSourceStatus `json:"sources"`
-	Error       string                    `json:"error,omitempty"`
-	Hint        string                    `json:"hint,omitempty"`
-}
+// vendorUsageResult is the state capability's payload, shared with the
+// daemon API (ADR 0010 §4).
+type vendorUsageResult = state.VendorUsage
 
 // RegisterGapTools mounts the tools that close the CLI-only side of the
 // parity allowlist.
@@ -145,34 +135,15 @@ func RegisterGapTools(s *Server, d GapDeps) error {
 		Description("Return which usage sources are configured, whether each is switched on, and how many events each produced recently. Call it before trusting a spend or headroom figure: a source that is off reports nothing, and a source that is on but silent means ingestion has stopped. Each row carries the config hint naming what to set when a source is dark.").
 		OutputSchema(vendorUsageResult{}).
 		Handler(func(ctx context.Context, in vendorUsageInput) (*vendorUsageResult, error) {
-			cfg := d.activeConfig()
-			if cfg == nil || d.Counts == nil {
-				return &vendorUsageResult{
-					Error: "storage_disabled",
-					Hint:  "run `tokenops init` then restart the daemon",
-				}, nil
+			var count state.Counter
+			if d.Counts != nil {
+				count = d.Counts
 			}
-			hours := in.WindowHours
-			if hours <= 0 {
-				hours = 24
-			}
-			now := time.Now()
-			counts, err := d.Counts(ctx, now.Add(-time.Duration(hours)*time.Hour), now)
+			res, err := state.VendorUsageOf(ctx, d.activeConfig(), count, in.WindowHours, time.Now())
 			if err != nil {
 				return nil, err
 			}
-			res := &vendorUsageResult{WindowHours: hours}
-			for _, src := range cfg.VendorUsageSources() {
-				res.Sources = append(res.Sources, vendorUsageSourceStatus{
-					Name:        src.Name,
-					SourceTag:   src.SourceTag,
-					Enabled:     src.Enabled || src.AlwaysOn,
-					AlwaysOn:    src.AlwaysOn,
-					EventsInWin: counts[src.SourceTag],
-					ConfigHint:  cfg.VendorUsageConfigHint(src.SourceTag),
-				})
-			}
-			return res, nil
+			return &res, nil
 		})
 	return nil
 }
