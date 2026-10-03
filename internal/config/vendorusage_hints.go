@@ -30,6 +30,11 @@ func (c Config) VendorUsageConfigHint(sourceTag string) string {
 		return configHintCursor(c.VendorUsage.Cursor)
 	case "claude-usage-meter":
 		return configHintClaudeUsageMeter(c.VendorUsage.ClaudeUsageMeter)
+	case "openrouter-account", "deepseek-account", "moonshot-account":
+		if !c.VendorUsage.Accounts.On() {
+			return "switched off: `tokenops vendor-usage enable vendor-accounts` turns it back on"
+		}
+		return "on; reads only when a harness (Claude Code, Codex, opencode) or the environment has this vendor's key"
 	case "fireworks-usage":
 		if !c.VendorUsage.Fireworks.On() {
 			return "switched off: `tokenops vendor-usage enable fireworks` turns it back on"

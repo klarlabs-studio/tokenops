@@ -56,6 +56,9 @@ type HeadroomReport struct {
 	// an activity proxy, not a quota meter. See ClassifySignal.
 	SignalQuality SignalQuality `json:"signal_quality"`
 
+	// BalanceUSD is prepaid credit the vendor reports as left, when it
+	// reports one (DeepSeek, Moonshot).
+	BalanceUSD *float64 `json:"balance_usd,omitempty"`
 	// Note explains the report when the math falls through to a
 	// special case — quota not published, insufficient burn history,
 	// already past the cap. Empty when the headline numbers are
@@ -352,7 +355,11 @@ func computeSpendHeadroom(p Plan, in HeadroomInputs) HeadroomReport {
 		OverageRisk:   RiskUnknown,
 		SignalQuality: ClassifySignal(in.Signal),
 	}
-	if v := in.VendorSpend; v != nil {
+	if v := in.VendorSpend; v != nil && v.HasBalance {
+		b := v.BalanceUSD
+		report.BalanceUSD = &b
+	}
+	if v := in.VendorSpend; v != nil && !v.UsedUnknown {
 		// The vendor's own figures: the amount it will bill against the
 		// limit it enforces. No rate factor — they are already the rate.
 		report.SpendUSD, report.SpendLimitUSD, report.SpendSource = v.UsedUSD, v.LimitUSD, "vendor"
@@ -373,6 +380,18 @@ func computeSpendHeadroom(p Plan, in HeadroomInputs) HeadroomReport {
 		spend *= in.RateFactor
 	}
 	report.SpendUSD, report.SpendLimitUSD, report.SpendSource = spend, in.SpendLimitUSD, "estimate"
+	if v := in.VendorSpend; v != nil && v.HasBalance {
+		// A prepaid account stops at an empty balance, whatever was set.
+		switch {
+		case v.LimitReached || v.BalanceUSD <= 0:
+			report.OverageRisk = RiskHigh
+			report.Note = "the vendor reports the prepaid balance as used up"
+			return report
+		case in.SpendLimitUSD <= 0:
+			report.Note = fmt.Sprintf("prepaid: %.2f USD left", v.BalanceUSD)
+			return report
+		}
+	}
 	if in.SpendLimitUSD <= 0 {
 		report.Note = "no spend limit known, so there is no denominator — set up Claude subscription telemetry " +
 			"(`tokenops vendor-usage setup claude-subscription`) to read it from Anthropic, or set " +

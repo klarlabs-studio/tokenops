@@ -843,7 +843,21 @@ type VendorUsageConfig struct {
 	Cursor           CursorUsageConfig          `yaml:"cursor"`
 	ClaudeUsageMeter ClaudeUsageMeterConfig     `yaml:"claude_usage_meter"`
 	Fireworks        FireworksUsageConfig       `yaml:"fireworks"`
+	Accounts         AccountsUsageConfig        `yaml:"accounts"`
 }
+
+// AccountsUsageConfig wires the vendor account readers (ADR 0009 §7):
+// OpenRouter's key usage and cap, DeepSeek's and Moonshot's prepaid
+// balance, each read with the key a harness already sends that vendor.
+// On unless Enabled is false; a vendor with no key on the machine is not
+// called. Interval defaults to 15 minutes.
+type AccountsUsageConfig struct {
+	Enabled  *bool         `yaml:"enabled,omitempty"`
+	Interval time.Duration `yaml:"interval,omitempty"`
+}
+
+// On reports whether the readers run: unless switched off.
+func (c AccountsUsageConfig) On() bool { return c.Enabled == nil || *c.Enabled }
 
 // FireworksUsageConfig wires the Fireworks account reader (ADR 0009 §7):
 // spend this month against the account's or the member's cap, read from

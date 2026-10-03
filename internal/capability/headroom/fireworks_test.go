@@ -127,3 +127,52 @@ func TestMeteredUsageShowsAsPayAsYouGo(t *testing.T) {
 		t.Errorf("no anthropic report: %+v notes %v", got.Reports, got.Notes)
 	}
 }
+
+// A prepaid vendor reports a balance but not spend: headroom keeps its
+// usage estimate, shows the balance, and an empty balance is high risk.
+func TestPrepaidBalanceShows(t *testing.T) {
+	ctx := context.Background()
+	for name, tc := range map[string]struct {
+		balance  string
+		risk     string
+		wantNote string
+	}{
+		"credit left": {"7.25", "", "prepaid: 7.25 USD left"},
+		"used up":     {"0.00", plans.RiskHigh, "the vendor reports the prepaid balance as used up"},
+	} {
+		store, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "e.db"), sqlite.Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		now := time.Now().UTC()
+		reading := &eventschema.Envelope{
+			ID: "r", SchemaVersion: eventschema.SchemaVersion, Type: eventschema.EventTypePrompt,
+			Timestamp: now.Add(-time.Minute), Source: "deepseek-account",
+			Attributes: map[string]string{
+				"granularity": "quota_snapshot", "billing": "per_token", "extra_usage_limit": "0.00",
+				"extra_usage_currency": "USD", "extra_usage_limit_reached": "false", "balance_usd": tc.balance,
+			},
+			Payload: &eventschema.PromptEvent{Provider: eventschema.ProviderDeepSeek, Status: 200},
+		}
+		turn := &eventschema.Envelope{
+			ID: "t", SchemaVersion: eventschema.SchemaVersion, Type: eventschema.EventTypePrompt,
+			Timestamp: now.Add(-time.Hour), Source: "test", Attributes: map[string]string{"granularity": "assistant_turn"},
+			Payload: &eventschema.PromptEvent{Provider: eventschema.ProviderDeepSeek, CostUSD: 1.5, CostSource: eventschema.CostSourceMetered},
+		}
+		if err := store.AppendBatch(ctx, []*eventschema.Envelope{reading, turn}); err != nil {
+			t.Fatal(err)
+		}
+		got, err := headroom.Compute(ctx, headroom.Deps{Config: cfgWith(nil), Reader: storeReader{store}}, now)
+		_ = store.Close()
+		if err != nil || len(got.Reports) != 1 {
+			t.Fatalf("%s: %+v %v", name, got, err)
+		}
+		r := got.Reports[0]
+		if r.BalanceUSD == nil || r.SpendUSD != 1.5 || r.SpendSource != "estimate" || r.Note != tc.wantNote {
+			t.Errorf("%s: %+v", name, r)
+		}
+		if tc.risk != "" && r.OverageRisk != tc.risk {
+			t.Errorf("%s: risk %s", name, r.OverageRisk)
+		}
+	}
+}
