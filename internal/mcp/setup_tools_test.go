@@ -238,6 +238,13 @@ func TestMeterSetupToolWithoutABrowserSessionStillRefusesThePaste(t *testing.T) 
 // A switch through the tool is recorded in the plan history like one
 // made with `plan set`, and since backdates it.
 func TestPlanSetToolRecordsHistory(t *testing.T) {
+	// The event store lives under ~/.tokenops. Without this the test only
+	// passed when an earlier test in the package had created it.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".tokenops"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	f := newSetupFixture(t, "plans:\n  openai: gpt-plus\n")
 	got := callTool(t, f.server(), "tokenops_plan_set", map[string]any{
 		"provider": "openai", "plan": "gpt-pro-5x", "since": "2026-09-01",

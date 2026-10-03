@@ -54,6 +54,7 @@ func TestEveryAPIRouteIsGatedByDashAuth(t *testing.T) {
 		WithSourceFreshness(func() []freshness.Report { return nil }),
 		WithPlans(func() headroom.Deps { return headroom.Deps{} }),
 		WithState(func() state.Deps { return state.Deps{} }),
+		WithSessions(func() SessionRoots { return SessionRoots{} }),
 	)
 	if err := srv.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -82,6 +83,9 @@ func TestEveryAPIRouteIsGatedByDashAuth(t *testing.T) {
 		"/api/config",
 		"/api/data-sources",
 		"/api/vendor-usage",
+		"/api/dx",
+		"/api/story",
+		"/api/coach/prompts",
 	} {
 		resp, err := http.Get("http://" + srv.Addr() + path)
 		if err != nil {

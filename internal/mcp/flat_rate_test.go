@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -225,7 +226,7 @@ func TestForecastExplainsAnAllZeroDollarSeries(t *testing.T) {
 	now := time.Now().UTC()
 	var envs []*eventschema.Envelope
 	for d := 1; d <= 4; d++ {
-		envs = append(envs, promptEnv("day-"+itoa(d), now.AddDate(0, 0, -d), "claude-opus-5",
+		envs = append(envs, promptEnv("day-"+strconv.Itoa(d), now.AddDate(0, 0, -d), "claude-opus-5",
 			int64(100_000*(5-d)), eventschema.CostSourcePlanIncluded))
 	}
 	srv := analyticsServer(t, envs...)
@@ -246,7 +247,7 @@ func TestForecastWithSpendHasNoZeroNote(t *testing.T) {
 	now := time.Now().UTC()
 	var envs []*eventschema.Envelope
 	for d := 1; d <= 4; d++ {
-		env := promptEnv("day-"+itoa(d), now.AddDate(0, 0, -d), "claude-haiku-4-5",
+		env := promptEnv("day-"+strconv.Itoa(d), now.AddDate(0, 0, -d), "claude-haiku-4-5",
 			200_000, eventschema.CostSourceMetered)
 		// Priced at ingest, the way the proxy records metered traffic.
 		env.Payload.(*eventschema.PromptEvent).CostUSD = 2.5

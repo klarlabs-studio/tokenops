@@ -56,7 +56,10 @@ type Server struct {
 	plans func() headroom.Deps
 	// state supplies the control plane's own state. nil leaves the state
 	// routes unmounted.
-	state      func() state.Deps
+	state func() state.Deps
+	// sessions locates transcripts. nil leaves the session routes
+	// unmounted.
+	sessions   func() SessionRoots
 	resilience *ResilienceConfig
 	dashAuth   DashAuth
 	// router applies live model routing when active mode is enabled
@@ -367,6 +370,7 @@ func (s *Server) apiMux() *http.ServeMux {
 	s.registerSourcesRoute(protected)
 	s.registerPlanRoutes(protected)
 	s.registerStateRoutes(protected)
+	s.registerSessionRoutes(protected)
 	return protected
 }
 
