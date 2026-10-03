@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/actions"
+	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 // ActionDeps is what the action routes need from the daemon.
@@ -24,6 +26,11 @@ type ActionDeps struct {
 	Apply func() (note string, after func())
 	// Audit records a change in the audit log.
 	Audit func(ctx context.Context, target string, details map[string]any)
+	// Store receives outcome records; nil answers storage_disabled.
+	Store *sqlite.Store
+	// Coach supplies the follow-through ledger and the context levers a
+	// coach change reports against.
+	Coach func() (coachcap.Ledger, coachcap.ContextLevers)
 }
 
 // WithActions serves the writes an operator makes from a surface that is
@@ -34,6 +41,10 @@ type ActionDeps struct {
 //	POST /api/budgets          a budget, upserted by name, or {"name", "delete": true}
 //	POST /api/routing/rules    a routing rule, upserted by provider + from_model
 //	POST /api/plans            a plan binding
+//	POST /api/preferred-models {"provider", "model"} or {"provider", "clear": true}
+//	POST /api/routing/decisions {"key", "decision": "approve" | "deny"}
+//	POST /api/outcomes         the operator's judgement of an execution
+//	POST /api/coach            a preset, or the coach's dials
 //
 // They are mounted only behind the API token, and take only a JSON body,
 // which a browser cannot send cross-origin without a preflight the daemon
@@ -51,7 +62,7 @@ func (s *Server) registerActionRoutes(mux *http.ServeMux) {
 	if s.actions == nil || s.dashAuth == nil {
 		return
 	}
-	mux.HandleFunc("POST /api/mode", s.action("mode", func(r *http.Request, path string) (any, error) {
+	mux.HandleFunc("POST /api/mode", s.action("mode", restart, func(r *http.Request, path string) (any, error) {
 		var in struct {
 			Mode string `json:"mode"`
 		}
@@ -60,7 +71,7 @@ func (s *Server) registerActionRoutes(mux *http.ServeMux) {
 		}
 		return actions.SetMode(path, in.Mode)
 	}))
-	mux.HandleFunc("POST /api/budgets", s.action("budget", func(r *http.Request, path string) (any, error) {
+	mux.HandleFunc("POST /api/budgets", s.action("budget", restart, func(r *http.Request, path string) (any, error) {
 		var in struct {
 			Name        string  `json:"name"`
 			Window      string  `json:"window"`
@@ -81,7 +92,7 @@ func (s *Server) registerActionRoutes(mux *http.ServeMux) {
 			WarnAt: in.WarnAt, CritAt: in.CritAt, WorkflowID: in.WorkflowID, AgentID: in.AgentID, Basis: in.Basis,
 		}})
 	}))
-	mux.HandleFunc("POST /api/routing/rules", s.action("routing_rule", func(r *http.Request, path string) (any, error) {
+	mux.HandleFunc("POST /api/routing/rules", s.action("routing_rule", restart, func(r *http.Request, path string) (any, error) {
 		var in struct {
 			Provider  string   `json:"provider"`
 			FromModel string   `json:"from_model"`
@@ -98,7 +109,7 @@ func (s *Server) registerActionRoutes(mux *http.ServeMux) {
 			Quality: in.Quality, Fallbacks: in.Fallbacks, Delete: in.Delete,
 		})
 	}))
-	mux.HandleFunc("POST /api/plans", s.action("plan", func(r *http.Request, path string) (any, error) {
+	mux.HandleFunc("POST /api/plans", s.action("plan", restart, func(r *http.Request, path string) (any, error) {
 		var in struct {
 			Provider      string  `json:"provider"`
 			Plan          string  `json:"plan"`
@@ -119,12 +130,80 @@ func (s *Server) registerActionRoutes(mux *http.ServeMux) {
 			Since: in.Since, Actor: "api",
 		}, time.Now().UTC())
 	}))
+	mux.HandleFunc("POST /api/preferred-models", s.action("preferred_model", restart, func(r *http.Request, path string) (any, error) {
+		var in struct {
+			Provider string `json:"provider"`
+			Model    string `json:"model"`
+			Clear    bool   `json:"clear"`
+		}
+		if err := decodeAction(r, &in); err != nil {
+			return nil, err
+		}
+		return actions.SetPreferredModel(path, in.Provider, in.Model, in.Clear)
+	}))
+	mux.HandleFunc("POST /api/routing/decisions", s.action("routing_decision", noRestart, func(r *http.Request, _ string) (any, error) {
+		var in struct {
+			Key      string `json:"key"`
+			Decision string `json:"decision"`
+		}
+		if err := decodeAction(r, &in); err != nil {
+			return nil, err
+		}
+		return actions.DecideRouting("", in.Key, in.Decision)
+	}))
+	mux.HandleFunc("POST /api/outcomes", s.action("outcome", noRestart, func(r *http.Request, _ string) (any, error) {
+		var in struct {
+			ExecutionID      string   `json:"execution_id"`
+			DecisionID       string   `json:"decision_id"`
+			Result           string   `json:"result"`
+			Caveat           string   `json:"caveat"`
+			AttentionMinutes *float64 `json:"attention_minutes"`
+		}
+		if err := decodeAction(r, &in); err != nil {
+			return nil, err
+		}
+		return actions.RecordOutcome(r.Context(), s.actions().Store, actions.OutcomeRequest{
+			ExecutionID: in.ExecutionID, DecisionID: in.DecisionID, Result: in.Result,
+			Caveat: in.Caveat, AttentionMinutes: in.AttentionMinutes,
+		})
+	}))
+	mux.HandleFunc("POST /api/coach", s.action("coach", noRestart, func(r *http.Request, path string) (any, error) {
+		var in coachcap.ChangeRequest
+		if err := decodeAction(r, &in); err != nil {
+			return nil, err
+		}
+		if in.Empty() {
+			return nil, actions.InputError{Err: errors.New("name a preset, or the dials to change")}
+		}
+		var (
+			ledger coachcap.Ledger
+			levers coachcap.ContextLevers
+		)
+		if env := s.actions().Coach; env != nil {
+			ledger, levers = env()
+		}
+		report, err := coachcap.Change(r.Context(), path, ledger, levers, time.Now(), in)
+		switch {
+		case err == nil:
+			return report, nil
+		case in.Preset != "" && !errors.Is(err, coachcap.ErrPreset):
+			return nil, err // the preset could not be run at all
+		default:
+			return nil, actions.InputError{Err: err} // a value the coach refused
+		}
+	}))
 }
 
 // action runs do, records it in the audit log, answers with the change and
 // the note saying whether it is live, and only then lets the change take
 // effect.
-func (s *Server) action(target string, do func(r *http.Request, path string) (any, error)) http.HandlerFunc {
+// Whether an action needs the daemon restarted to take effect.
+const (
+	restart   = true
+	noRestart = false
+)
+
+func (s *Server) action(target string, needsRestart bool, do func(r *http.Request, path string) (any, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		d := s.actions()
 		change, err := do(r, d.ConfigPath)
@@ -136,7 +215,7 @@ func (s *Server) action(target string, do func(r *http.Request, path string) (an
 			writeAPIError(w, http.StatusInternalServerError, err)
 			return
 		}
-		body, err := withField(change, "note", "")
+		body, err := withDefault(change, "note", "")
 		if err != nil {
 			writeAPIError(w, http.StatusInternalServerError, err)
 			return
@@ -149,9 +228,10 @@ func (s *Server) action(target string, do func(r *http.Request, path string) (an
 			d.Audit(r.Context(), target, details)
 		}
 		var after func()
-		if d.Apply != nil {
+		switch {
+		case needsRestart && d.Apply != nil:
 			body["note"], after = d.Apply()
-		} else {
+		case body["note"] == "":
 			delete(body, "note")
 		}
 		writeAPIJSON(w, http.StatusOK, body)
@@ -179,8 +259,9 @@ func decodeAction(r *http.Request, in any) error {
 	return nil
 }
 
-// withField renders v as a JSON object with one more field.
-func withField(v any, key string, val any) (map[string]any, error) {
+// withDefault renders v as a JSON object, with key set to val unless v
+// already has it.
+func withDefault(v any, key string, val any) (map[string]any, error) {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return nil, err
@@ -189,6 +270,8 @@ func withField(v any, key string, val any) (map[string]any, error) {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return nil, err
 	}
-	m[key] = val
+	if _, ok := m[key]; !ok {
+		m[key] = val
+	}
 	return m, nil
 }
