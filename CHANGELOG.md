@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.93.0 - 2026-10-03
+
+### Added
+
+- **accounts:** Coding plans show the windows the vendor reports, read with the key the harness already sends it: z.ai GLM Coding Plan, Kimi Code, MiniMax Token Plan, Synthetic and Chutes. A provider that reports a plan but has none bound shows as `subscription`. DeepInfra and Vercel AI Gateway report balance and spend (#517)
+- **accounts:** Gateways a harness points at are recognised by their health route, without the key, and then read for the key's own budget at that same address: LiteLLM, Bifrost and ClawRouter (#518)
+
 ## 0.92.0 - 2026-10-03
 
 ### Added
