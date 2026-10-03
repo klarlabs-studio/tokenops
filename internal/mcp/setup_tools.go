@@ -3,11 +3,11 @@ package mcp
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/capability/actions"
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
@@ -92,65 +92,15 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 				}
 				return jsonString(listing), nil
 			}
-			resp := map[string]any{"provider": provider, "config": path}
-			now := time.Now().UTC()
-			from, err := planStart(in.Since, now)
+			change, err := actions.SetPlan(context.Background(), path, actions.PlanRequest{
+				Provider: provider, Plan: in.Plan, SpendLimitUSD: in.SpendLimitUSD, LimitWindow: in.LimitWindow,
+				RateFactor: in.RateFactor, Clear: in.Clear, Price: in.Price, Currency: in.Currency,
+				Since: in.Since, Actor: "mcp",
+			}, time.Now().UTC())
 			if err != nil {
-				return "", inputError(err)
+				return "", actionError(err)
 			}
-			previous, next := cfg.Plans[provider], ""
-			if in.Clear {
-				delete(cfg.Plans, provider)
-				resp["cleared"] = true
-			} else {
-				b, err := cfg.BindPlan(provider, strings.TrimSpace(in.Plan), config.PlanLimit{
-					SpendLimitUSD: in.SpendLimitUSD, Window: in.LimitWindow, RateFactor: in.RateFactor,
-				})
-				if err != nil {
-					return "", inputError(err)
-				}
-				resp["plan"] = b.Plan
-				next = b.Plan
-				if b.Previous != "" && b.Previous != b.Plan {
-					resp["previous"] = b.Previous
-				}
-				if b.RenamedFrom != "" {
-					resp["renamed_from"] = b.RenamedFrom
-				}
-			}
-			if err := config.WriteMutable(path, cfg); err != nil {
-				return "", inputError(err)
-			}
-			if in.Clear {
-				from = now // an unset is never backdated
-			}
-			if previous != next || in.Since != "" || in.Price > 0 || in.SpendLimitUSD > 0 {
-				currency := ""
-				if in.Price > 0 && !in.Clear {
-					currency = firstNonEmpty(in.Currency, cfg.Money.Currency, "USD")
-				}
-				price := in.Price
-				if in.Clear {
-					price = 0
-				}
-				res, err := planhistory.Record(context.Background(), planhistory.Switch{
-					Provider: provider, Previous: previous, Plan: next, From: from, Now: now,
-					DBPath: storePath(cfg.Storage.Path), Actor: "mcp", Price: price, Currency: currency,
-					SpendLimitUSD: in.SpendLimitUSD,
-				})
-				switch {
-				case err != nil:
-					resp["history_error"] = err.Error()
-				case res.StoreErr != nil:
-					resp["history_error"] = "event store unavailable, so earlier usage was not re-marked: " + res.StoreErr.Error()
-				case from.Before(now) && next != "":
-					resp["since"] = from.Format("2006-01-02")
-					resp["restamped"] = res.Restamped
-					resp["restamped_to"] = res.RestampedTo
-				}
-			}
-			resp["note"] = applyConfig(d.ApplyConfig)
-			return jsonString(resp), nil
+			return withNote(change, applyConfig(d.ApplyConfig)), nil
 		})
 
 	s.Tool("tokenops_vendor_usage_setup").
@@ -227,47 +177,4 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 			return jsonString(resp), nil
 		})
 	return nil
-}
-
-// planStart reads a plan's start date: a day (2026-09-01) or an RFC3339
-// instant. Empty means now.
-func planStart(s string, now time.Time) (time.Time, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return now, nil
-	}
-	if t, err := time.Parse("2006-01-02", s); err == nil {
-		return t.UTC(), nil
-	}
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("since %q: want a date (2026-09-01) or an RFC3339 time", s)
-	}
-	return t.UTC(), nil
-}
-
-// storePath is the event store the daemon writes, from the configured
-// path as written in the file.
-func storePath(configured string) string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	p := strings.TrimSpace(configured)
-	switch {
-	case p == "":
-		return filepath.Join(home, ".tokenops", "events.db")
-	case p == "~" || strings.HasPrefix(p, "~/"):
-		return filepath.Join(home, strings.TrimPrefix(p, "~"))
-	}
-	return p
-}
-
-func firstNonEmpty(vs ...string) string {
-	for _, v := range vs {
-		if s := strings.TrimSpace(v); s != "" {
-			return s
-		}
-	}
-	return ""
 }

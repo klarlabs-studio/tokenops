@@ -59,7 +59,10 @@ type Server struct {
 	state func() state.Deps
 	// sessions locates transcripts. nil leaves the session routes
 	// unmounted.
-	sessions   func() SessionRoots
+	sessions func() SessionRoots
+	// actions supplies what the write routes need. nil leaves them
+	// unmounted.
+	actions    func() ActionDeps
 	resilience *ResilienceConfig
 	dashAuth   DashAuth
 	// router applies live model routing when active mode is enabled
@@ -373,6 +376,7 @@ func (s *Server) apiMux() *http.ServeMux {
 	s.registerSessionRoutes(protected)
 	protected.HandleFunc("GET /api/pricing", pricingHandler)
 	protected.HandleFunc("GET /api/routing/proposals", proposalsHandler)
+	s.registerActionRoutes(protected)
 	return protected
 }
 

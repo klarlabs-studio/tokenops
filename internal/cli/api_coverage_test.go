@@ -3,6 +3,7 @@ package cli
 import (
 	"net/http"
 	"sort"
+	"strings"
 	"testing"
 
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
@@ -15,7 +16,8 @@ import (
 // an agent. Every MCP tool is accounted for here, in exactly one of three
 // lists, and the test checks each claim against the daemon's routes.
 
-// apiRoute maps a tool to the route that answers the same question.
+// apiRoute maps a tool to the route that answers the same question: a
+// path for a GET, or a method and a path.
 var apiRoute = map[string]string{
 	"tokenops_resource_glance":     "/api/glance",
 	"tokenops_plan_headroom":       "/api/plans/headroom",
@@ -45,6 +47,9 @@ var apiRoute = map[string]string{
 	"tokenops_pricing":             "/api/pricing",
 	"tokenops_routing_proposals":   "/api/routing/proposals",
 	"tokenops_explain_decision":    "/api/decisions/example",
+	"tokenops_plan_set":            "POST /api/plans",
+	"tokenops_budget_set":          "POST /api/budgets",
+	"tokenops_routing_rule_set":    "POST /api/routing/rules",
 }
 
 // apiPending is the ADR's backlog: tools a surface needs that have no route
@@ -52,10 +57,7 @@ var apiRoute = map[string]string{
 // apiRoute, and the test fails until it does.
 var apiPending = map[string]int{
 	"tokenops_preferred_model":    4,
-	"tokenops_plan_set":           4,
-	"tokenops_budget_set":         4,
 	"tokenops_routing_decide":     4,
-	"tokenops_routing_rule_set":   4,
 	"tokenops_outcome_record":     4,
 	"tokenops_vendor_usage_setup": 4,
 }
@@ -89,6 +91,8 @@ func TestEveryToolIsAccountedForInTheDaemonAPI(t *testing.T) {
 		proxy.WithPlans(func() headroom.Deps { return headroom.Deps{} }),
 		proxy.WithState(func() state.Deps { return state.Deps{} }),
 		proxy.WithSessions(func() proxy.SessionRoots { return proxy.SessionRoots{} }),
+		proxy.WithActions(func() proxy.ActionDeps { return proxy.ActionDeps{} }),
+		proxy.WithDashAuth(passAuth{}),
 	)
 	tools := mcpToolNames(t)
 	names := make([]string, 0, len(tools))
@@ -106,7 +110,7 @@ func TestEveryToolIsAccountedForInTheDaemonAPI(t *testing.T) {
 			t.Errorf("%s has no API route and is not listed as pending or exempt (ADR 0010 §3)", name)
 		case n > 1:
 			t.Errorf("%s is listed more than once", name)
-		case routed && !srv.ServesAPI(http.MethodGet, route):
+		case routed && !serves(srv, route):
 			t.Errorf("%s claims %s, which the daemon does not serve", name, route)
 		}
 	}
@@ -133,3 +137,19 @@ func keys[V any](m map[string]V) map[string]bool {
 	}
 	return out
 }
+
+// serves reports whether srv answers route: "/path" for a GET, or
+// "METHOD /path".
+func serves(srv *proxy.Server, route string) bool {
+	method, path, ok := strings.Cut(route, " ")
+	if !ok {
+		method, path = http.MethodGet, route
+	}
+	return srv.ServesAPI(method, path)
+}
+
+// passAuth lets every request through; the write routes mount only behind
+// an authenticator.
+type passAuth struct{}
+
+func (passAuth) Middleware(next http.Handler) http.Handler { return next }

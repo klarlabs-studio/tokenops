@@ -33,6 +33,11 @@ const (
 
 // Config is the root daemon configuration.
 type Config struct {
+	// SourcePath is the file Load read, empty when none was. It is not
+	// part of the file: it lets a long-running process (the daemon) write
+	// a change back to the file it was started with, not the default.
+	SourcePath string `yaml:"-" json:"-"`
+
 	// Mode selects how TokenOps helps: "passive" (analytics only —
 	// observe, store, answer queries) or "active" (passive + live
 	// interventions: routing rules applied to proxied traffic, budget /
@@ -1202,6 +1207,7 @@ func Load(path string) (Config, error) {
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
 	}
+	cfg.SourcePath = path
 	return cfg, nil
 }
 

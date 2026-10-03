@@ -2,7 +2,10 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+
+	"go.klarlabs.de/tokenops/internal/capability/actions"
 
 	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/config"
@@ -115,25 +118,22 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 			if err != nil {
 				return "", inputError(err)
 			}
-			cfg, err := config.ReadMutable(path)
-			if err != nil {
-				return "", inputError(err)
-			}
 			if want == "" {
+				cfg, err := config.ReadMutable(path)
+				if err != nil {
+					return "", inputError(err)
+				}
 				return jsonString(modeAuthorityPayload(cfg)), nil
 			}
-			cfg.Mode = want
-			if err := config.WriteMutable(path, cfg); err != nil {
-				return "", inputError(err)
+			change, err := actions.SetMode(path, want)
+			if err != nil {
+				return "", actionError(err)
 			}
-			resp := map[string]any{
-				"mode":   cfg.Mode,
-				"config": path,
-			}
+			resp := map[string]any{"mode": change.Mode, "config": change.Config}
 			// Active mode without a daemon is a no-op — the proxy
 			// (routing) and the watcher live there. Ensure one runs
 			// and has read the new mode.
-			if cfg.ActiveMode() {
+			if change.Active {
 				resp["daemon"] = d.ensureDaemon(path)
 			} else {
 				resp["note"] = applyConfig(d.ApplyConfig)
@@ -148,25 +148,11 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 			if err != nil {
 				return "", inputError(err)
 			}
-			cfg, err := config.ReadMutable(path)
+			change, err := actions.SetBudget(path, actions.BudgetRequest{BudgetUpdate: in.update(), Delete: in.Delete})
 			if err != nil {
-				return "", inputError(err)
+				return "", actionError(err)
 			}
-			if in.Delete {
-				if !cfg.RemoveBudget(in.Name) {
-					return "", inputError(errors.New("no budget named " + in.Name))
-				}
-			} else if _, err := cfg.UpsertBudget(in.update()); err != nil {
-				return "", inputError(err)
-			}
-			if err := config.WriteMutable(path, cfg); err != nil {
-				return "", inputError(err)
-			}
-			return jsonString(map[string]any{
-				"budgets": cfg.Budgets,
-				"config":  path,
-				"note":    applyConfig(d.ApplyConfig),
-			}), nil
+			return withNote(change, applyConfig(d.ApplyConfig)), nil
 		})
 
 	s.Tool("tokenops_routing_rule_set").
@@ -176,49 +162,14 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 			if err != nil {
 				return "", inputError(err)
 			}
-			cfg, err := config.ReadMutable(path)
+			change, err := actions.SetRoutingRule(path, actions.RoutingRuleRequest{
+				Provider: in.Provider, FromModel: in.FromModel, ToModel: in.ToModel,
+				Quality: in.Quality, Fallbacks: in.Fallbacks, Delete: in.Delete,
+			})
 			if err != nil {
-				return "", inputError(err)
+				return "", actionError(err)
 			}
-			idx := -1
-			for i, r := range cfg.Optimizer.RoutingRules {
-				if r.Provider == in.Provider && r.FromModel == in.FromModel {
-					idx = i
-					break
-				}
-			}
-			switch {
-			case in.Delete:
-				if idx < 0 {
-					return "", inputError(errors.New("no routing rule for " + in.Provider + "/" + in.FromModel))
-				}
-				cfg.Optimizer.RoutingRules = append(
-					cfg.Optimizer.RoutingRules[:idx], cfg.Optimizer.RoutingRules[idx+1:]...)
-			default:
-				r := config.RoutingRuleConfig{
-					Provider: in.Provider, FromModel: in.FromModel, ToModel: in.ToModel,
-					Quality: in.Quality, Fallbacks: in.Fallbacks,
-				}
-				// Checked as given, before the file is touched, so the
-				// refusal names the argument — not an index into config.yaml.
-				if err := r.Validate(); err != nil {
-					return "", inputError(err)
-				}
-				if idx >= 0 {
-					cfg.Optimizer.RoutingRules[idx] = r
-				} else {
-					cfg.Optimizer.RoutingRules = append(cfg.Optimizer.RoutingRules, r)
-				}
-			}
-			if err := config.WriteMutable(path, cfg); err != nil {
-				return "", inputError(err)
-			}
-			return jsonString(map[string]any{
-				"routing_rules": cfg.Optimizer.RoutingRules,
-				"mode":          cfg.Mode,
-				"config":        path,
-				"note":          applyConfig(d.ApplyConfig),
-			}), nil
+			return withNote(change, applyConfig(d.ApplyConfig)), nil
 		})
 
 	return nil
@@ -237,4 +188,27 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 // disagreeing about what the operator's own machine is allowed to do.
 func modeAuthorityPayload(cfg config.Config) state.Mode {
 	return state.ModeOf(cfg)
+}
+
+// actionError answers a request the caller got wrong as an input error and
+// anything else as a failure.
+func actionError(err error) error {
+	if actions.IsInput(err) {
+		return inputError(err)
+	}
+	return err
+}
+
+// withNote renders a change with the note saying whether it is live.
+func withNote(change any, note string) string {
+	b, err := json.Marshal(change)
+	if err != nil {
+		return jsonString(map[string]any{"error": err.Error()})
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		return jsonString(map[string]any{"error": err.Error()})
+	}
+	m["note"] = note
+	return jsonString(m)
 }
