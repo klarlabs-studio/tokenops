@@ -20,7 +20,7 @@ func (r storeReader) CountBySource(ctx context.Context, since, until time.Time) 
 }
 
 func (r storeReader) ReadEvents(ctx context.Context, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
-	return r.s.Query(ctx, sqlite.Filter{Type: t, Since: since, Limit: 100_000})
+	return r.s.ReadEvents(ctx, t, since)
 }
 
 // A Fireworks reading with no plan bound shows up as pay-as-you-go

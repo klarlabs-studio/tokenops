@@ -370,7 +370,7 @@ func (s storeReader) CountBySource(ctx context.Context, since, until time.Time) 
 }
 
 func (s storeReader) ReadEvents(ctx context.Context, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
-	return s.store.Query(ctx, sqlite.Filter{Type: t, Since: since, Limit: 100_000})
+	return s.store.ReadEvents(ctx, t, since)
 }
 
 func resolvePlanDB(override string) (string, error) {

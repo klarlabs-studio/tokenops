@@ -17,7 +17,7 @@ import (
 type sqliteReader struct{ store *sqlite.Store }
 
 func (a sqliteReader) ReadEvents(ctx context.Context, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
-	return a.store.Query(ctx, sqlite.Filter{Type: t, Since: since, Limit: 100_000})
+	return a.store.ReadEvents(ctx, t, since)
 }
 
 // Reference values for the wedge KPIs, retained for documentation and

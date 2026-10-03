@@ -70,7 +70,7 @@ func classifySignalFromStore(ctx context.Context, store *sqlite.Store, provider 
 }
 
 func (r planStoreReader) ReadEvents(ctx context.Context, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
-	return r.store.Query(ctx, sqlite.Filter{Type: t, Since: since, Limit: 100_000})
+	return r.store.ReadEvents(ctx, t, since)
 }
 
 // planHeadroomResult is the typed payload for tokenops_plan_headroom. On

@@ -422,7 +422,47 @@ func (s *Store) Query(ctx context.Context, f Filter) ([]*eventschema.Envelope, e
 		return nil, fmt.Errorf("sqlite: query: %w", err)
 	}
 	defer func() { _ = rs.Close() }()
+	return scanEnvelopes(rs)
+}
 
+// readPage is how many rows ReadEvents fetches per query.
+const readPage = 5000
+
+// ReadEvents returns every event of type t at or after since, oldest
+// first. Unlike Query it has no cap: it reads in pages keyed on
+// (timestamp, id). A capped read dropped the newest rows of a busy month,
+// which are the ones a "latest reading" or a month's spend most needs.
+func (s *Store) ReadEvents(ctx context.Context, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
+	var (
+		out    []*eventschema.Envelope
+		lastTS = since.UTC().UnixNano() - 1
+		lastID = ""
+	)
+	// The plain range bound lets SQLite seek on (type, timestamp_ns); the
+	// OR alone made every page a scan.
+	for {
+		rs, err := s.db.QueryContext(ctx, selectSQL+`
+WHERE type = ? AND timestamp_ns >= ? AND (timestamp_ns > ? OR id > ?)
+ORDER BY timestamp_ns ASC, id ASC LIMIT ?`, string(t), lastTS, lastTS, lastID, readPage)
+		if err != nil {
+			return nil, fmt.Errorf("sqlite: read events: %w", err)
+		}
+		page, err := scanEnvelopes(rs)
+		_ = rs.Close()
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, page...)
+		if len(page) < readPage {
+			return out, nil
+		}
+		last := page[len(page)-1]
+		lastTS, lastID = last.Timestamp.UTC().UnixNano(), last.ID
+	}
+}
+
+// scanEnvelopes decodes every row of rs.
+func scanEnvelopes(rs *sql.Rows) ([]*eventschema.Envelope, error) {
 	var out []*eventschema.Envelope
 	for rs.Next() {
 		var (
