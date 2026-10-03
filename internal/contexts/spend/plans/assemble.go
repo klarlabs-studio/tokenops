@@ -44,6 +44,13 @@ var sourceProvider = map[string]string{
 	"openrouter-account":      "openrouter",
 	"deepseek-account":        "deepseek",
 	"moonshot-account":        "moonshot",
+	"zai-account":             "zai",
+	"kimi-account":            "kimi",
+	"minimax-account":         "minimax",
+	"synthetic-account":       "synthetic",
+	"chutes-account":          "chutes",
+	"deepinfra-account":       "deepinfra",
+	"vercel-account":          "vercel",
 }
 
 // SignalFromCounts maps per-source event counts onto the observations
@@ -71,8 +78,10 @@ func SignalFromCounts(counts map[string]int64, provider string) SignalInputs {
 		ClaudeUsageMeterInWindow: c("claude-usage-meter"),
 		ClaudeStatuslineInWindow: c("claude-code-statusline"),
 		FireworksInWindow:        c("fireworks-usage"),
-		VendorAccountInWindow:    c("openrouter-account") + c("deepseek-account") + c("moonshot-account"),
-		VendorAPIWired:           c("vendor-usage-anthropic") > 0,
+		VendorAccountInWindow: c("openrouter-account") + c("deepseek-account") + c("moonshot-account") +
+			c("zai-account") + c("kimi-account") + c("minimax-account") + c("synthetic-account") +
+			c("chutes-account") + c("deepinfra-account") + c("vercel-account"),
+		VendorAPIWired: c("vendor-usage-anthropic") > 0,
 	}
 }
 
@@ -114,8 +123,11 @@ func AssembleHeadroomInputs(ctx context.Context, reader EventReader, counts Sour
 			in.Signal = SignalFromCounts(c, provider)
 		}
 		in.Authoritative = LatestAuthoritativeWindow(ctx, reader, providerOf(provider), p, now)
-		in.VendorWindows = VendorWindows(ctx, reader, providerOf(provider), now)
 	}
+	// Whatever the plan, the vendor's own windows are shown when it
+	// reports them: a subscription the catalog does not know, a spend
+	// limit behind a gateway.
+	in.VendorWindows = VendorWindows(ctx, reader, providerOf(provider), now)
 	if p.SpendDenominated {
 		in.SpendLimitUSD = lim.LimitUSD
 		in.RateFactor = lim.RateFactor

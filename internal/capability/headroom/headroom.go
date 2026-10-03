@@ -147,6 +147,11 @@ func Compute(ctx context.Context, d Deps, now time.Time) (Result, error) {
 			report.Provider = provider
 		}
 		switch inferred[provider] {
+		case fromSubscription:
+			if report.Note == "" {
+				report.Note = provider + " reports a subscription; its windows are the vendor's own. " +
+					"`tokenops plan set " + provider + " <plan>` names the tier"
+			}
 		case fromReading:
 			if report.Note == "" {
 				report.Note = provider + " reports this account as billed per token; " +
@@ -179,12 +184,15 @@ const (
 	fromReading inference = iota + 1
 	// fromUsage: usage billed per token was seen this month.
 	fromUsage
+	// fromSubscription: the vendor's own reader reported a plan's windows.
+	fromSubscription
 )
 
-// effectiveBindings is the configured plans plus pay-as-you-go for every
-// provider billed per token this month that has no plan bound (ADR 0009
-// §7: evidence first, the operator corrects): first those whose own reader
-// reported a per-token account, then any with metered usage. inferred
+// effectiveBindings is the configured plans plus, for each provider with
+// no plan bound (ADR 0009 §7: evidence first, the operator corrects): a
+// subscription where the vendor's own reader reported one, pay-as-you-go
+// where it reported a per-token account, then pay-as-you-go for any
+// metered usage. inferred
 // says how each added one was found.
 func effectiveBindings(ctx context.Context, d Deps, now time.Time) (map[string]string, map[string]inference) {
 	out := make(map[string]string, len(d.Config.Plans)+2)
@@ -192,15 +200,18 @@ func effectiveBindings(ctx context.Context, d Deps, now time.Time) (map[string]s
 		out[p] = name
 	}
 	inferred := map[string]inference{}
-	add := func(providers []string, how inference) {
+	bind := func(providers []string, plan string, how inference) {
 		for _, p := range providers {
 			if _, ok := out[p]; !ok {
-				out[p], inferred[p] = plans.PayAsYouGo, how
+				out[p], inferred[p] = plan, how
 			}
 		}
 	}
-	add(plans.PerTokenReadingProviders(ctx, d.Reader, now), fromReading)
-	add(plans.MeteredProviders(ctx, d.Reader, now), fromUsage)
+	// A vendor that reports a subscription's windows is on a plan, which
+	// wins over usage that merely looks metered.
+	bind(plans.SubscriptionReadingProviders(ctx, d.Reader, now), plans.Subscription, fromSubscription)
+	bind(plans.PerTokenReadingProviders(ctx, d.Reader, now), plans.PayAsYouGo, fromReading)
+	bind(plans.MeteredProviders(ctx, d.Reader, now), plans.PayAsYouGo, fromUsage)
 	return out, inferred
 }
 
