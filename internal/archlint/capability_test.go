@@ -118,7 +118,6 @@ var directDomainImports = map[string][]string{
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/replay",
-		"go.klarlabs.de/tokenops/internal/contexts/optimization/routingapproval",
 		"go.klarlabs.de/tokenops/internal/contexts/rules",
 		"go.klarlabs.de/tokenops/internal/contexts/security/audit",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/forecast",
