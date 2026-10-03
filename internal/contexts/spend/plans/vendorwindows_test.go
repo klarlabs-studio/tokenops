@@ -48,3 +48,22 @@ func TestBusiestVendorWindowSetsTheRisk(t *testing.T) {
 		t.Errorf("risk %s windows %d", report.OverageRisk, len(report.Windows))
 	}
 }
+
+// The session budget follows the busiest window the vendor reports.
+func TestSessionBudgetFromVendorWindows(t *testing.T) {
+	now := time.Now().UTC()
+	out, err := ComputeSessionBudget("claude-max-20x", SessionBudgetInputs{
+		Now: now,
+		VendorWindows: []VendorWindow{
+			{Name: "week", UsedPct: 87, Duration: 7 * 24 * time.Hour, ResetsAt: now.Add(48 * time.Hour)},
+			{Name: "5h", UsedPct: 3, Duration: 5 * time.Hour, ResetsAt: now.Add(time.Hour)},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.WindowPct != 87 || out.RecommendedAction != ActionSlowDown || out.WindowResetsIn != "48h0m0s" ||
+		len(out.Windows) != 2 || out.WindowConsumed != 0 || out.WindowCap != 0 {
+		t.Errorf("%+v", out)
+	}
+}

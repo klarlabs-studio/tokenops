@@ -179,6 +179,7 @@ func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
 		SignalLevel:       b.SignalQuality.Level,
 		SignalCaveat:      b.SignalQuality.Caveat,
 		Note:              b.Note,
+		Windows:           b.Windows,
 	}
 	return markdownPayload(renderBudgetSummary(row), result), nil
 }
@@ -229,6 +230,7 @@ func sessionBudgetData(ctx context.Context, d PlanDeps) (*sessionBudgetResult, e
 			// source (Claude usage meter / Codex rate_limits / Copilot) has
 			// emitted one; falls back to the message-count heuristic.
 			Authoritative: plans.LatestAuthoritativeWindow(ctx, reader, eventschema.Provider(provider), p, now),
+			VendorWindows: plans.VendorWindows(ctx, reader, eventschema.Provider(provider), now),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("budget[%s]: %w", provider, err)
