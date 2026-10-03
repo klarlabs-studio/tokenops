@@ -229,9 +229,9 @@ func TestHeadroomAuthoritativeWindowOverridesMessageCount(t *testing.T) {
 	if r.WindowResetsIn != "30m0s" {
 		t.Errorf("resets_in=%q want 30m0s (vendor reset)", r.WindowResetsIn)
 	}
-	// 12% headroom of 200 cap => consumed ~176.
-	if r.WindowConsumed != 176 {
-		t.Errorf("window_consumed=%d want ~176", r.WindowConsumed)
+	// The vendor reports a share, not messages: none is derived.
+	if r.WindowConsumed != 0 || r.WindowCap != 0 {
+		t.Errorf("derived counts: consumed=%d cap=%d", r.WindowConsumed, r.WindowCap)
 	}
 }
 
