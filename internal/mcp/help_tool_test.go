@@ -40,6 +40,7 @@ func allRegisteredTools(t *testing.T) map[string]bool {
 	must(RegisterControlTools(srv, ControlDeps{}))
 	must(RegisterPlanTools(srv, PlanDeps{}))
 	must(RegisterAgentDXTools(srv, AgentDXDeps{}))
+	must(RegisterExplainTools(srv))
 	must(RegisterStoryTools(srv, StoryDeps{}))
 	must(RegisterVerifyTool(srv, VerifyDeps{Store: store}))
 	must(RegisterOutcomeTools(srv, OutcomeDeps{Store: store}))

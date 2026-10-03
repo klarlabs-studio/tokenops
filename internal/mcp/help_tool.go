@@ -198,6 +198,11 @@ var helpCatalog = []helpCategory{
 				Summary: "Graded session metrics — turns per instruction, rework, interrupts, first-try rate — with the single highest-leverage change.",
 			},
 			{
+				Name:    "tokenops_explain",
+				Summary: "What a figure means — wall-clock, turns, rework, api-equivalent, signal quality — how it is worked out and how to read it.",
+				Example: `{"term":"wall-clock"}`,
+			},
+			{
 				Name:    "tokenops_fmt_analyze",
 				Summary: "What fills your context (Read vs Bash vs prose) and what command-output compression would save on real traffic.",
 			},
