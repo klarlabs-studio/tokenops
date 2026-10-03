@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.91.0 - 2026-10-03
+
+### Added
+
+- **headroom:** Every window the vendor reports, as shares used with their reset: Claude's 5-hour, weekly and model-scoped weekly, Codex's windows; the busiest sets the risk (#503)
+
+### Fixed
+
+- **headroom:** Windows reported as a percentage with no message cap (Codex) are shown, with readable reset times (#502)
+- **budget:** The session budget advises from the busiest vendor window, and no message count is derived from a percentage (#504)
+
 ## 0.90.0 - 2026-10-03
 
 ### Added
