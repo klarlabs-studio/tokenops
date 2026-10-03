@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.89.0 - 2026-10-03
+
+### Added
+
+- **explain:** `tokenops explain [term]` and the `tokenops_explain` MCP tool say what each figure means, how it is worked out and how to read it (#495)
+- **spend:** The Fireworks account's spend and limit are read without setup, and headroom shows Fireworks as pay-as-you-go (#496)
+
+### Fixed
+
+- **statusline:** Install and uninstall say what happened in plain words, not the wrapped command's paths (#494)
+- **dx:** Cursor is no longer reported as unreadable when none of its sessions fall inside the window (#494)
+- **storage:** Headroom, the scorecard and the window probe read the whole range, not the oldest 100,000 events (#497)
+
 ## 0.88.1 - 2026-10-02
 
 ### Fixed
