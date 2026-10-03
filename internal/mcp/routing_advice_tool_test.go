@@ -243,3 +243,11 @@ func TestPrepareWorkPreservesCallerWorkflowID(t *testing.T) {
 		t.Fatalf("workflow handoff = %q / %q, want caller identifier preserved", res.WorkflowID, res.Review.WorkflowID)
 	}
 }
+
+// A turn a router decides is not decided again.
+func TestRoutingAdviceStaysOutOfARoutersTurn(t *testing.T) {
+	res, err := routingAdvice(context.Background(), routingAdviceInput{Instruction: "rename this variable", Model: "accounts/fireworks/routers/firerouter"}, RoutingAdviceDeps{})
+	if err != nil || res.Recommendation != "stay" || res.DecidedBy != "firerouter" || !strings.Contains(res.Reason, "FireRouter") {
+		t.Fatalf("got %+v, %v", res, err)
+	}
+}

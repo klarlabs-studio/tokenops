@@ -6,6 +6,7 @@
 package coach
 
 import (
+	"go.klarlabs.de/tokenops/internal/capability/routers"
 	"go.klarlabs.de/tokenops/internal/config"
 	ft "go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough"
 )
@@ -44,6 +45,10 @@ type Report struct {
 	// ModelPolicy is the allow and deny lists every routing decision
 	// honours, empty when nothing is ruled out.
 	ModelPolicy *config.ModelPolicyConfig `json:"model_policy,omitempty"`
+	// Routers are the external routers choosing models in a harness;
+	// the models power stands down there (ADR 0009 §5). Only Status
+	// fills it.
+	Routers []routers.InPath `json:"routers,omitempty"`
 }
 
 // HookInstall is one client's hooks after applying a preset.

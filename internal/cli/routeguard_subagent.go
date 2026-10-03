@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/routers"
+
 	"github.com/spf13/cobra"
 
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
@@ -62,7 +64,7 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 	}); pol.Forbidden {
 		return enforceModelPolicy(cmd, in, report, pol)
 	}
-	if report.Effective(config.PowerModels) == config.AutonomyOff {
+	if report.Effective(config.PowerModels) == config.AutonomyOff || routers.Decides(routers.Sources{}, "", true) {
 		return nil
 	}
 	prompt, _ := in.ToolInput["prompt"].(string)
