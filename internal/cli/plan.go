@@ -301,11 +301,19 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 						"  tokens this month: %d (no monthly cap)\n", r.ConsumedTokens,
 					)
 				}
-				if r.WindowCap > 0 {
+				switch {
+				case r.WindowCap > 0:
 					fmt.Fprintf(cmd.OutOrStdout(),
 						"  window:  %d / %d %s per %s (%.1f%%) — resets in %s\n",
 						r.WindowConsumed, r.WindowCap, r.WindowUnit,
-						r.WindowDuration, r.WindowPct, r.WindowResetsIn,
+						windowName(r.WindowDuration), r.WindowPct, friendlyDuration(r.WindowResetsIn),
+					)
+				case r.WindowResetsIn != "":
+					// The vendor reports a percentage and no cap (Codex's
+					// rate limits): show what it said.
+					fmt.Fprintf(cmd.OutOrStdout(),
+						"  window:  %.1f%% of the %s used — resets in %s\n",
+						r.WindowPct, windowName(r.WindowDuration), friendlyDuration(r.WindowResetsIn),
 					)
 				}
 				// A spend-denominated plan reports money against the org's
@@ -407,4 +415,42 @@ func sortedPlanProviders(bindings map[string]string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// windowName words a window length: "week", "day", or the length.
+func windowName(d string) string {
+	dur, err := time.ParseDuration(d)
+	if err != nil {
+		return d
+	}
+	switch dur {
+	case 7 * 24 * time.Hour:
+		return "week"
+	case 24 * time.Hour:
+		return "day"
+	}
+	return friendlyDuration(d)
+}
+
+// friendlyDuration renders a Go duration string as "6d 20h", "1h 7m" or
+// "12m".
+func friendlyDuration(d string) string {
+	dur, err := time.ParseDuration(d)
+	if err != nil || dur < 0 {
+		return d
+	}
+	dur = dur.Round(time.Minute)
+	days, hours, mins := int(dur/(24*time.Hour)), int(dur%(24*time.Hour)/time.Hour), int(dur%time.Hour/time.Minute)
+	switch {
+	case days > 0 && hours > 0:
+		return fmt.Sprintf("%dd %dh", days, hours)
+	case days > 0:
+		return fmt.Sprintf("%dd", days)
+	case hours > 0 && mins > 0:
+		return fmt.Sprintf("%dh %dm", hours, mins)
+	case hours > 0:
+		return fmt.Sprintf("%dh", hours)
+	default:
+		return fmt.Sprintf("%dm", mins)
+	}
 }
