@@ -57,11 +57,10 @@ func TestSessionBudgetAuthoritativeOverridesMessageCount(t *testing.T) {
 	if out.WindowResetsIn != "42m0s" {
 		t.Errorf("resets_in=%q want 42m0s (vendor reset)", out.WindowResetsIn)
 	}
-	// 13% of the allowance remains, whatever the allowance is.
-	wantHeadroom := int64(float64(capOf(t, "claude-max-20x")) * 0.13)
-	if diff := out.HeadroomUntilCap - wantHeadroom; diff > 1 || diff < -1 {
-		t.Errorf("headroom=%d want ~%d (13%% of %d)",
-			out.HeadroomUntilCap, wantHeadroom, capOf(t, "claude-max-20x"))
+	// The vendor reports a share, not messages: no count is derived
+	// from the plan's published cap.
+	if out.HeadroomUntilCap != 0 || out.WindowConsumed != 0 || out.WindowCap != 0 {
+		t.Errorf("derived counts: headroom=%d consumed=%d cap=%d", out.HeadroomUntilCap, out.WindowConsumed, out.WindowCap)
 	}
 	if out.Note == "" {
 		t.Error("expected a note explaining the vendor-meter source")

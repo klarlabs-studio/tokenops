@@ -34,6 +34,8 @@ type SessionBudget struct {
 	// only; the Caveat explains. ClassifySignal computes it.
 	SignalQuality SignalQuality `json:"signal_quality"`
 	Note          string        `json:"note,omitempty"`
+	// Windows is every window the vendor reported, busiest first.
+	Windows []VendorWindow `json:"windows,omitempty"`
 
 	windowResetsInDur   time.Duration
 	willHitCapWithinDur time.Duration
@@ -80,6 +82,9 @@ type SessionBudgetInputs struct {
 	// difference between guessing from event counts and reading the
 	// actual limit.
 	Authoritative *AuthoritativeWindow
+	// VendorWindows is every window in the vendor's latest reading,
+	// busiest first. When set, it decides the budget.
+	VendorWindows []VendorWindow
 }
 
 // AuthoritativeWindow is a vendor-reported rate-limit snapshot: the
@@ -105,6 +110,9 @@ func ComputeSessionBudget(planName string, in SessionBudgetInputs) (SessionBudge
 	// from event counts when the vendor tells us the exact % used. This
 	// also serves plans that publish a window but no message cap (e.g.
 	// Claude Code Max/Pro), which the message-count path cannot score.
+	if len(in.VendorWindows) > 0 {
+		return computeFromVendorWindows(planName, p, in), nil
+	}
 	if in.Authoritative != nil {
 		return computeFromAuthoritative(planName, p, in), nil
 	}
@@ -176,7 +184,6 @@ func computeFromAuthoritative(planName string, p Plan, in SessionBudgetInputs) S
 		Provider:          p.Provider,
 		WindowDuration:    authoritativeDuration(a, p.RateLimitWindow).String(),
 		VendorPlanType:    a.VendorPlanType,
-		WindowCap:         p.MessagesPerWindow,
 		WindowPct:         math.Round(pct*100) / 100,
 		Confidence:        ConfidenceHigh,
 		RecommendedAction: recommendActionByPct(pct),
@@ -189,15 +196,8 @@ func computeFromAuthoritative(planName string, p Plan, in SessionBudgetInputs) S
 	} else {
 		out.setEstimatedReset(in.WindowStartedAt, p.RateLimitWindow, in.Now)
 	}
-	// Message headroom is only meaningful when the plan publishes a cap;
-	// otherwise the % + reset carry the whole signal.
-	if p.MessagesPerWindow > 0 {
-		out.HeadroomUntilCap = int64(math.Round(float64(p.MessagesPerWindow) * (100 - pct) / 100))
-		if out.HeadroomUntilCap < 0 {
-			out.HeadroomUntilCap = 0
-		}
-		out.WindowConsumed = p.MessagesPerWindow - out.HeadroomUntilCap
-	}
+	// The vendor reports a share, not messages; a count derived from a
+	// published cap would be a number the vendor never gave.
 	return out
 }
 
@@ -266,4 +266,33 @@ func (b *SessionBudget) setEstimatedReset(started time.Time, window time.Duratio
 	b.windowResetsInDur = d
 	b.WindowResetsIn = d.Round(time.Minute).String()
 	b.WindowResetEstimated = true
+}
+
+// computeFromVendorWindows advises from every window the vendor reported:
+// the busiest one is the binding constraint, so it sets the share, the
+// reset and the action, and the others are listed alongside.
+func computeFromVendorWindows(planName string, p Plan, in SessionBudgetInputs) SessionBudget {
+	w := in.VendorWindows[0]
+	pct := clampPct(w.UsedPct)
+	out := SessionBudget{
+		PlanName:          planName,
+		Display:           p.Display,
+		Provider:          p.Provider,
+		WindowDuration:    w.Duration.String(),
+		WindowPct:         math.Round(pct*100) / 100,
+		Confidence:        ConfidenceHigh,
+		RecommendedAction: recommendActionByPct(pct),
+		SignalQuality:     ClassifySignal(in.Signal),
+		Windows:           in.VendorWindows,
+		Note:              "shares are the vendor's reported meter; the " + w.Name + " window is the busiest",
+	}
+	if in.Authoritative != nil {
+		out.VendorPlanType = in.Authoritative.VendorPlanType
+	}
+	if !w.ResetsAt.IsZero() && w.ResetsAt.After(in.Now) {
+		d := w.ResetsAt.Sub(in.Now)
+		out.windowResetsInDur = d
+		out.WindowResetsIn = d.Round(time.Minute).String()
+	}
+	return out
 }

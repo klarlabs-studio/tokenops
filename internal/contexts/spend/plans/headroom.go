@@ -276,12 +276,9 @@ func applyAuthoritativeWindow(report *HeadroomReport, p Plan, in HeadroomInputs)
 	if named, ok := ForVendorPlanType(p.Provider, a.VendorPlanType); ok && named != p.Name {
 		report.VendorPlan = named
 	}
-	report.WindowCap = p.MessagesPerWindow
-	report.WindowUnit = p.WindowUnit
+	// The vendor reports a share, not messages: no count is derived from
+	// the plan's published cap.
 	report.WindowPct = math.Round(pct*100) / 100
-	if p.MessagesPerWindow > 0 {
-		report.WindowConsumed = int64(math.Round(float64(p.MessagesPerWindow) * pct / 100))
-	}
 	if a.ResetsIn > 0 {
 		report.WindowResetsAt = in.Now.Add(a.ResetsIn).UTC()
 		report.WindowResetsIn = a.ResetsIn.Round(time.Minute).String()
