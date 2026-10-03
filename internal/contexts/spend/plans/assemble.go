@@ -40,6 +40,9 @@ var sourceProvider = map[string]string{
 	"github-copilot":          "github",
 	"cursor-web":              "cursor",
 	"fireworks-usage":         "fireworks",
+	"openrouter-account":      "openrouter",
+	"deepseek-account":        "deepseek",
+	"moonshot-account":        "moonshot",
 }
 
 // SignalFromCounts maps per-source event counts onto the observations
@@ -66,6 +69,7 @@ func SignalFromCounts(counts map[string]int64, provider string) SignalInputs {
 		CursorInWindow:           c("cursor-web"),
 		ClaudeUsageMeterInWindow: c("claude-usage-meter"),
 		FireworksInWindow:        c("fireworks-usage"),
+		VendorAccountInWindow:    c("openrouter-account") + c("deepseek-account") + c("moonshot-account"),
 		VendorAPIWired:           c("vendor-usage-anthropic") > 0,
 	}
 }

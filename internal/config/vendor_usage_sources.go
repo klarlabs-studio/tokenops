@@ -50,6 +50,9 @@ func (c Config) VendorUsageSources() []VendorUsageSource {
 		// always on rather than enabled: it is no ingestion source, and a
 		// machine without Fireworks is not a stale one.
 		{Name: "fireworks", SourceTag: "fireworks-usage", AlwaysOn: c.VendorUsage.Fireworks.On()},
+		{Name: "openrouter_account", SourceTag: "openrouter-account", AlwaysOn: c.VendorUsage.Accounts.On()},
+		{Name: "deepseek_account", SourceTag: "deepseek-account", AlwaysOn: c.VendorUsage.Accounts.On()},
+		{Name: "moonshot_account", SourceTag: "moonshot-account", AlwaysOn: c.VendorUsage.Accounts.On()},
 		// The cursor turn poller has no config block: it reads a ledger
 		// the coach hook writes, and that ledger is empty until the hook
 		// is installed, so an operator who does not run Cursor pays

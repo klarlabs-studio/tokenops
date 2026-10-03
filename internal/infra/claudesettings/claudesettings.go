@@ -4,9 +4,10 @@
 // Claude Code's transcripts record the model that answered, not where the
 // request went, so a gateway in front of it (Fireworks through FireConnect,
 // OpenRouter, a company proxy) is only visible in its settings. Only the
-// setting that names the endpoint is read, and the apiKeyHelper command
-// (its text, not its output) so a Fireworks reader can recognise
-// FireConnect's. Keys and every other setting are left alone.
+// setting that names the endpoint is read; the apiKeyHelper command (its
+// text, not its output), so a Fireworks reader can recognise FireConnect's;
+// and the key sent to a configured gateway, for that gateway's account
+// reader (ADR 0009 §7). Every other setting is left alone.
 package claudesettings
 
 import (
@@ -82,4 +83,29 @@ func APIKeyHelper() string {
 		}
 	}
 	return ""
+}
+
+// Credential is the key Claude Code sends to its configured base URL
+// (env.ANTHROPIC_AUTH_TOKEN, else env.ANTHROPIC_API_KEY), from the
+// settings file that sets the base URL. Both are "" when no gateway is
+// configured: Claude Code's own login is never read.
+func Credential() (baseURL, key string) {
+	for _, path := range settingsFiles() {
+		b, err := os.ReadFile(path) //nolint:gosec // fixed Claude Code settings paths
+		if err != nil {
+			continue
+		}
+		var s struct {
+			Env map[string]string `json:"env"`
+		}
+		if json.Unmarshal(b, &s) != nil || s.Env["ANTHROPIC_BASE_URL"] == "" {
+			continue
+		}
+		key := s.Env["ANTHROPIC_AUTH_TOKEN"]
+		if key == "" {
+			key = s.Env["ANTHROPIC_API_KEY"]
+		}
+		return s.Env["ANTHROPIC_BASE_URL"], key
+	}
+	return "", ""
 }

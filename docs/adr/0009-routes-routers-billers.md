@@ -81,10 +81,10 @@ produce choices nobody can explain.
     biller when no endpoint does.
 - **Cursor:** `openAIBaseUrl` and the per-mode model settings. Not yet
   implemented.
-- Route detection reads only setting names and base URLs. Credentials
-  are never stored. The one `apiKeyHelper` ever run is FireConnect's,
-  for the Fireworks reading in §7, and its output is used only for that
-  call.
+- Route detection reads only setting names and base URLs. Keys are read
+  only for the account readings in §7, each for the vendor whose
+  endpoint it is sent to, and are never stored. The one `apiKeyHelper`
+  ever run is FireConnect's.
 
 ### 3. A biller is resolved from endpoint, served model, and credential
 
@@ -182,7 +182,11 @@ order, and the operator corrects it afterwards:
    credential their harness already uses for it. The Fireworks reader is
    the first: it is on by default, idle without a Fireworks key, named
    in the docs and switchable. It runs FireConnect's `key export` helper,
-   and no other `apiKeyHelper`.
+   and no other `apiKeyHelper`. The vendor account readers (OpenRouter,
+   DeepSeek, Moonshot) follow the same rule: on by default, each called
+   only with a key a harness already sends to that vendor's endpoint
+   (Claude Code's settings, Codex's providers, opencode's auth.json and
+   config), never stored.
 3. The operator's entries, only for what nothing can see: past months,
    negotiated prices, a bill in their currency.
 

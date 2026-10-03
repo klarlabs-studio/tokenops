@@ -59,6 +59,7 @@ var vendorUsageSources = []string{
 	"opencode",
 	"anthropic-admin",
 	"fireworks",
+	"vendor-accounts",
 }
 
 func isClaudeSubscriptionSource(source string) bool {
@@ -194,6 +195,11 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 		if f.interval > 0 {
 			cfg.VendorUsage.Cursor.Interval = f.interval
 		}
+	case "vendor-accounts":
+		cfg.VendorUsage.Accounts.Enabled = &enabled
+		if f.interval > 0 {
+			cfg.VendorUsage.Accounts.Interval = f.interval
+		}
 	case "fireworks":
 		cfg.VendorUsage.Fireworks.Enabled = &enabled
 		if f.interval > 0 {
@@ -278,6 +284,8 @@ func sourceConfigKey(source string) string {
 		return "github_copilot"
 	case "fireworks":
 		return "fireworks"
+	case "vendor-accounts":
+		return "accounts"
 	case "codex-jsonl":
 		return "codex_jsonl"
 	case "claude-code-jsonl":
