@@ -3,9 +3,9 @@ package mcp
 import (
 	"context"
 	"errors"
-	"strings"
 
-	"go.klarlabs.de/tokenops/internal/capability/explain"
+	"go.klarlabs.de/tokenops/internal/capability/decisions"
+
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -16,11 +16,9 @@ type explainDecisionInput struct {
 	DecisionID string `json:"decision_id" jsonschema:"description=Decision identifier returned by a TokenOps recommendation."`
 }
 
-type explainDecisionResult struct {
-	Report *explain.Report `json:"report,omitempty"`
-	Error  string          `json:"error,omitempty"`
-	Hint   string          `json:"hint,omitempty"`
-}
+// explainDecisionResult is the decisions capability's payload, shared with
+// the daemon API (ADR 0010 §4).
+type explainDecisionResult = decisions.Explanation
 
 // RegisterDecisionTools exposes explanations captured at decision time.
 func RegisterDecisionTools(s *Server, d DecisionDeps) error {
@@ -31,22 +29,14 @@ func RegisterDecisionTools(s *Server, d DecisionDeps) error {
 		Description("Explain why TokenOps made a decision from the evidence, alternatives, policy, authority and uncertainty captured at decision time, then include the strongest later outcome assessment. Requires the decision_id returned by the original recommendation.").
 		OutputSchema(explainDecisionResult{}).
 		Handler(func(ctx context.Context, in explainDecisionInput) (*explainDecisionResult, error) {
-			id := strings.TrimSpace(in.DecisionID)
-			if id == "" {
-				return nil, inputError(errors.New("decision_id is required"))
+			res, err := decisions.Explain(ctx, d.Store, in.DecisionID)
+			if errors.Is(err, decisions.ErrMissingID) {
+				return nil, inputError(err)
 			}
-			if d.Store == nil {
-				return &explainDecisionResult{Error: "storage_disabled", Hint: "run `tokenops init` then restart the daemon"}, nil
-			}
-			events, err := d.Store.Query(ctx, sqlite.Filter{Decision: id, Limit: 10_000})
 			if err != nil {
 				return nil, err
 			}
-			report, ok := explain.Build(id, events)
-			if !ok {
-				return &explainDecisionResult{Error: "decision_not_found", Hint: "use the decision_id returned by tokenops_routing_advise or a proxy intervention"}, nil
-			}
-			return &explainDecisionResult{Report: &report}, nil
+			return &res, nil
 		})
 	return nil
 }

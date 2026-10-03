@@ -372,6 +372,7 @@ func (s *Server) apiMux() *http.ServeMux {
 	s.registerStateRoutes(protected)
 	s.registerSessionRoutes(protected)
 	protected.HandleFunc("GET /api/pricing", pricingHandler)
+	protected.HandleFunc("GET /api/routing/proposals", proposalsHandler)
 	return protected
 }
 
