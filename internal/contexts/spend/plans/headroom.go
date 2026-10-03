@@ -56,6 +56,10 @@ type HeadroomReport struct {
 	// an activity proxy, not a quota meter. See ClassifySignal.
 	SignalQuality SignalQuality `json:"signal_quality"`
 
+	// Windows is every usage window the vendor reported, busiest first,
+	// as shares used: Claude's 5-hour, weekly and model-scoped weekly,
+	// Codex's primary and secondary.
+	Windows []VendorWindow `json:"windows,omitempty"`
 	// BalanceUSD is prepaid credit the vendor reports as left, when it
 	// reports one (DeepSeek, Moonshot).
 	BalanceUSD *float64 `json:"balance_usd,omitempty"`
@@ -79,6 +83,9 @@ const (
 // headroom calculator. KEEPS the math pure: tests pass arbitrary
 // scenarios without needing a sqlite store.
 type HeadroomInputs struct {
+	// VendorWindows is every window in the vendor's latest reading.
+	VendorWindows []VendorWindow
+
 	// ConsumedTokens is the total tokens spent against the plan since
 	// the start of the current billing month.
 	ConsumedTokens int64
@@ -149,6 +156,17 @@ func computeHeadroomFor(p Plan, in HeadroomInputs) HeadroomReport {
 	if p.SpendDenominated {
 		return computeSpendHeadroom(p, in)
 	}
+	report := computeWindowHeadroom(p, in)
+	// The busiest window the vendor reports decides the risk: a weekly
+	// limit can block while the 5-hour window is nearly empty.
+	if len(in.VendorWindows) > 0 {
+		report.Windows = in.VendorWindows
+		report.OverageRisk = worstRisk(report.OverageRisk, classifyWindowRisk(in.VendorWindows[0].UsedPct))
+	}
+	return report
+}
+
+func computeWindowHeadroom(p Plan, in HeadroomInputs) HeadroomReport {
 	report := HeadroomReport{
 		PlanName:       p.Name,
 		Display:        p.Display,
