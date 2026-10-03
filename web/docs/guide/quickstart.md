@@ -56,6 +56,13 @@ authenticated `/api/*` endpoints,
 publishes itself as `tokenops.local` over mDNS, and writes its
 listen URL + API token to `~/.tokenops/daemon.url` (`0600`) for local clients.
 
+The API answers the same questions the MCP tools do, from the same code
+(ADR 0010), so a menu bar or a script never opens the store itself.
+`GET /api/glance` is the one-call view: session budgets, plan headroom
+with every window the vendor reports, and a ranked insight.
+`GET /api/plans/headroom` and `GET /api/plans/session-budget` return the
+two halves.
+
 ## 4. Wire the MCP server into your agent
 
 ```json

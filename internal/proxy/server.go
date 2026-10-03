@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/experiments"
+	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer"
@@ -49,8 +50,11 @@ type Server struct {
 	// sourceFreshness reports per-source ingestion health. nil leaves
 	// GET /api/sources unmounted.
 	sourceFreshness func() []freshness.Report
-	resilience      *ResilienceConfig
-	dashAuth        DashAuth
+	// plans supplies the headroom capability's dependencies. nil leaves
+	// the plan routes unmounted.
+	plans      func() headroom.Deps
+	resilience *ResilienceConfig
+	dashAuth   DashAuth
 	// router applies live model routing when active mode is enabled
 	// (WithActiveRouting). nil = observe-only.
 	router *router.Router
@@ -254,42 +258,7 @@ func (s *Server) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 	s.registerRoutes(mux)
 
-	// Every /api/* route goes on one private sub-mux, which
-	// the auth middleware wraps in a single place. /healthz, /readyz and
-	// /version stay on the outer mux unauthenticated — a probe must never
-	// need a credential.
-	//
-	// Registering a protected route on the outer mux instead does not
-	// merely skip the middleware, it silently defeats it: ServeMux gives an
-	// exact pattern precedence over the "/api/" wildcard, so the wrapper
-	// never sees the request. /api/audit, /api/rules/* and
-	// /api/domain-events served unauthenticated that way, with auth
-	// correctly configured, until this was made one mux.
-	protected := http.NewServeMux()
-	if s.analytics != nil {
-		s.analytics.Register(protected)
-	} else {
-		stub := subsystemDisabledHandler("storage_disabled",
-			"run `tokenops init` to enable the sqlite event store, then restart the daemon")
-		for _, p := range storageDisabledPaths {
-			protected.HandleFunc(p, stub)
-		}
-	}
-	if s.rulesAPI != nil {
-		s.rulesAPI.Register(protected)
-	} else {
-		stub := subsystemDisabledHandler("rules_disabled",
-			"run `tokenops init` to enable rule intelligence, then restart the daemon")
-		for _, p := range rulesDisabledPaths {
-			protected.HandleFunc(p, stub)
-		}
-	}
-	if s.auditAPI != nil {
-		s.auditAPI.Register(protected)
-	}
-	s.registerEventCountsRoute(protected)
-	s.registerSourcesRoute(protected)
-
+	protected := s.apiMux()
 	var protectedHandler http.Handler = protected
 	if s.dashAuth != nil {
 		protectedHandler = s.dashAuth.Middleware(protected)
@@ -353,4 +322,57 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		return nil
 	}
 	return srv.Shutdown(ctx)
+}
+
+// apiMux builds the private sub-mux every /api/* route lives on.
+//
+// Every /api/* route goes on this one mux, which the auth middleware wraps
+// in a single place. /healthz, /readyz and /version stay on the outer mux
+// unauthenticated — a probe must never need a credential.
+//
+// Registering a protected route on the outer mux instead does not merely
+// skip the middleware, it silently defeats it: ServeMux gives an exact
+// pattern precedence over the "/api/" wildcard, so the wrapper never sees
+// the request. /api/audit, /api/rules/* and /api/domain-events served
+// unauthenticated that way, with auth correctly configured, until this was
+// made one mux.
+func (s *Server) apiMux() *http.ServeMux {
+	protected := http.NewServeMux()
+	if s.analytics != nil {
+		s.analytics.Register(protected)
+	} else {
+		stub := subsystemDisabledHandler("storage_disabled",
+			"run `tokenops init` to enable the sqlite event store, then restart the daemon")
+		for _, p := range storageDisabledPaths {
+			protected.HandleFunc(p, stub)
+		}
+	}
+	if s.rulesAPI != nil {
+		s.rulesAPI.Register(protected)
+	} else {
+		stub := subsystemDisabledHandler("rules_disabled",
+			"run `tokenops init` to enable rule intelligence, then restart the daemon")
+		for _, p := range rulesDisabledPaths {
+			protected.HandleFunc(p, stub)
+		}
+	}
+	if s.auditAPI != nil {
+		s.auditAPI.Register(protected)
+	}
+	s.registerEventCountsRoute(protected)
+	s.registerSourcesRoute(protected)
+	s.registerPlanRoutes(protected)
+	return protected
+}
+
+// ServesAPI reports whether the API answers method on path, without running
+// any handler. ADR 0010's coverage test uses it to check that every agent
+// question has a route.
+func (s *Server) ServesAPI(method, path string) bool {
+	req, err := http.NewRequest(method, path, nil)
+	if err != nil {
+		return false
+	}
+	_, pattern := s.apiMux().Handler(req)
+	return pattern != ""
 }

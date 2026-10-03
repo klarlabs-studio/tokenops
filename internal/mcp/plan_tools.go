@@ -3,8 +3,6 @@ package mcp
 import (
 	"context"
 	"errors"
-	"fmt"
-	"sort"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
@@ -73,27 +71,12 @@ func (r planStoreReader) ReadEvents(ctx context.Context, t eventschema.EventType
 	return r.store.ReadEvents(ctx, t, since)
 }
 
-// planHeadroomResult is the typed payload for tokenops_plan_headroom. On
-// the happy path Reports are populated; the
-// unconfigured / storage-disabled paths set Error + Hint instead.
-type planHeadroomResult struct {
-	Reports []plans.HeadroomReport `json:"reports,omitempty"`
-	// Notes names plans that could not be reported on. An unknown plan
-	// name used to be skipped silently, so an operator's typo produced a
-	// plan that reported nothing and said nothing, forever.
-	Notes []string `json:"notes,omitempty"`
-	Error string   `json:"error,omitempty"`
-	Hint  string   `json:"hint,omitempty"`
-}
-
-// sessionBudgetResult is the structured counterpart to the text-first
-// tokenops_session_budget response, reused by the resource-glance tool.
-type sessionBudgetResult struct {
-	Budgets []plans.SessionBudget `json:"budgets"`
-	Notes   []string              `json:"notes,omitempty"`
-	Error   string                `json:"error,omitempty"`
-	Hint    string                `json:"hint,omitempty"`
-}
+// planHeadroomResult and sessionBudgetResult are the capability's wire
+// payloads, shared with the daemon API (ADR 0010 §4).
+type (
+	planHeadroomResult  = headroom.HeadroomPayload
+	sessionBudgetResult = headroom.BudgetPayload
+)
 
 // RegisterPlanTools mounts tokenops_plan_headroom on s. Returns an
 // error when deps are incomplete so callers can surface the
@@ -120,37 +103,6 @@ func RegisterPlanTools(s *Server, d PlanDeps) error {
 		})
 	registerResourceGlanceTool(s, d)
 	return nil
-}
-
-// plansUnconfiguredHint names both ways to bind a plan. Config hot-reloads
-// through ConfigGetter, so the "then reload your MCP server" this used to
-// end with was a step that changed nothing — and the agent reading the
-// hint can bind the plan itself.
-const plansUnconfiguredHint = "bind a plan with tokenops_plan_set, or `tokenops plan set <provider> <plan>` " +
-	"(e.g. `tokenops plan set anthropic claude-max-20x`); the change is picked up without a restart"
-
-// sortedProviders returns the configured providers in a stable order.
-// Ranging the map directly made "the first budget" — the one rendered as
-// markdown — a different plan from call to call.
-func sortedProviders(bindings map[string]string) []string {
-	out := make([]string, 0, len(bindings))
-	for p := range bindings {
-		out = append(out, p)
-	}
-	sort.Strings(out)
-	return out
-}
-
-// windowlessPlanNote explains a plan that has no session budget to report.
-// Skipping it silently gave an Enterprise operator {"budgets":[]}, which
-// reads the same as "nothing configured".
-func windowlessPlanNote(provider, planName string, p plans.Plan) string {
-	if p.SpendDenominated {
-		return fmt.Sprintf("%s: %s is billed by spend and has no rate-limit window, so there is no session budget; "+
-			"call tokenops_plan_headroom for spend against the limit", provider, planName)
-	}
-	return fmt.Sprintf("%s: %s has no rolling rate-limit window, so there is no session budget; "+
-		"call tokenops_plan_headroom for month-to-date consumption", provider, planName)
 }
 
 func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
@@ -185,88 +137,35 @@ func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
 }
 
 func sessionBudgetData(ctx context.Context, d PlanDeps) (*sessionBudgetResult, error) {
-	cfg := d.activeConfig()
-	if cfg == nil || len(cfg.Plans) == 0 {
-		return &sessionBudgetResult{Error: "plans_unconfigured", Hint: plansUnconfiguredHint}, nil
-	}
-	if d.Store == nil {
-		return &sessionBudgetResult{Error: "storage_disabled", Hint: "run `tokenops init` then restart the daemon"}, nil
-	}
-	reader := planStoreReader{store: d.Store}
-	now := time.Now().UTC()
-	budgets := make([]plans.SessionBudget, 0, len(cfg.Plans))
-	var notes []string
-	for _, provider := range sortedProviders(cfg.Plans) {
-		planName := cfg.Plans[provider]
-		p, ok := plans.Lookup(planName)
-		if !ok {
-			notes = append(notes, fmt.Sprintf("%s: %s is not a known plan", provider, planName))
-			continue
-		}
-		if p.RateLimitWindow <= 0 {
-			notes = append(notes, windowlessPlanNote(provider, planName, p))
-			continue
-		}
-		windowCons, err := plans.ConsumptionInWindow(ctx, reader, provider, now, p.RateLimitWindow)
-		if err != nil {
-			return nil, fmt.Errorf("window[%s]: %w", provider, err)
-		}
-		recentCons, err := plans.ConsumptionInWindow(ctx, reader, provider, now, 30*time.Minute)
-		if err != nil {
-			return nil, fmt.Errorf("recent[%s]: %w", provider, err)
-		}
-		signal, err := classifySignalFromStore(ctx, d.Store, provider, now.Add(-p.RateLimitWindow), now)
-		if err != nil {
-			return nil, fmt.Errorf("signal[%s]: %w", provider, err)
-		}
-		budget, err := plans.ComputeSessionBudget(planName, plans.SessionBudgetInputs{
-			WindowMessages:  windowCons.MessagesInWindow,
-			WindowStartedAt: windowCons.FirstActivityAt,
-			RecentMessages:  recentCons.MessagesInWindow,
-			RecentWindow:    30 * time.Minute,
-			Signal:          signal,
-			Now:             now,
-			// Prefer the vendor's own reported quota when a snapshot
-			// source (Claude usage meter / Codex rate_limits / Copilot) has
-			// emitted one; falls back to the message-count heuristic.
-			Authoritative: plans.LatestAuthoritativeWindow(ctx, reader, eventschema.Provider(provider), p, now),
-			VendorWindows: plans.VendorWindows(ctx, reader, eventschema.Provider(provider), now),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("budget[%s]: %w", provider, err)
-		}
-		budgets = append(budgets, budget)
-	}
-	result := &sessionBudgetResult{Budgets: budgets, Notes: notes}
-	return result, nil
-}
-
-func planHeadroom(ctx context.Context, d PlanDeps) (*planHeadroomResult, error) {
-	cfg := d.activeConfig()
-	if cfg == nil || len(cfg.Plans) == 0 {
-		return &planHeadroomResult{
-			Error: "plans_unconfigured",
-			Hint:  plansUnconfiguredHint,
-		}, nil
-	}
-	if d.Store == nil {
-		return &planHeadroomResult{
-			Error: "storage_disabled",
-			Hint:  "run `tokenops init` then restart the daemon",
-		}, nil
-	}
-	now := time.Now().UTC()
-	// One implementation, shared with `tokenops plan headroom`. The two
-	// used to be separate copies of this loop, which is how the CLI kept
-	// the unsorted-provider bug after it was fixed here.
-	deps := headroom.Deps{Config: cfg, Reader: planStoreReader{store: d.Store}}
-	if d.Spend != nil {
-		deps.Price = d.Spend.ComputeAt
-	}
-	computed, err := headroom.Compute(ctx, deps, now)
+	res, err := headroom.SessionBudgets(ctx, d.headroomDeps(), time.Now().UTC())
 	if err != nil {
 		return nil, err
 	}
-	res := &planHeadroomResult{Reports: computed.Reports, Notes: computed.Notes}
-	return res, nil
+	return res.Payload(), nil
+}
+
+// headroomDeps is what the headroom capability needs from this server. A
+// nil store stays a nil reader, which the capability answers as storage
+// disabled.
+func (d PlanDeps) headroomDeps() headroom.Deps {
+	deps := headroom.Deps{Config: d.activeConfig()}
+	if d.Store != nil {
+		deps.Reader = planStoreReader{store: d.Store}
+	}
+	if d.Spend != nil {
+		deps.Price = d.Spend.ComputeAt
+	}
+	return deps
+}
+
+// planHeadroom is one implementation, shared with `tokenops plan headroom`
+// and the daemon API. The CLI and this tool used to be separate copies of
+// the loop, which is how the CLI kept the unsorted-provider bug after it
+// was fixed here.
+func planHeadroom(ctx context.Context, d PlanDeps) (*planHeadroomResult, error) {
+	computed, err := headroom.Compute(ctx, d.headroomDeps(), time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	return computed.Payload(), nil
 }
