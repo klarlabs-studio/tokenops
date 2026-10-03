@@ -4,7 +4,24 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.91.0**.
+Current release: **v0.92.0**.
+
+## v0.92.0 — One API for every surface
+
+The daemon's local API now answers everything a menu bar, a script or a
+dashboard needs, from the same code as the MCP tools and the CLI, so all
+three give the same figures. It reads plan headroom and every vendor
+window, the session budget, status, mode, the coach, data sources,
+agent DX, the work account, spend and pricing; and it changes the mode,
+budgets, routing rules, plan bindings, the preferred model, routing
+answers, outcomes and the coach. Writes need the API token, take only
+JSON and are written to the audit log. It serves derived figures only:
+the operator's instructions are withheld. The contract is a generated
+OpenAPI 3.1 document; see [Daemon API](/guide/api).
+
+Claude's windows now also come from Claude Code's own status line, so
+headroom shows them without a claude.ai login, and behind a Claude apps
+gateway it shows the spend limit too.
 
 ## v0.91.0 — Every window, as the vendor reports it
 
