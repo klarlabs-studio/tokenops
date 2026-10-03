@@ -107,6 +107,7 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilot",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/fireworks",
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/geminicli",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursor",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursorturns",

@@ -22,7 +22,7 @@ so everything rolls up **turn → session → project**.
 | Codex CLI | ✅ `~/.codex/sessions` | ✅ | ✅ `OPENAI_BASE_URL` | reader surfaces OpenAI's official rate-limit % |
 | opencode | ✅ SQLite store | ✅ | ✅ per-provider baseURL | reader is multi-provider |
 | Cursor | ✅ *(via the stop hook)* | ✅ | ❌ *(agent traffic goes through Cursor's backend)* | the usage cookie gives plan consumption; the hook gives per-turn tokens |
-| Gemini CLI | ❌ *(no token log)* | ✅ | ✅ base-URL override | its `logs.json` records prompts only — no token data |
+| Gemini CLI | ✅ `~/.gemini/tmp/*/chats` | ✅ | ✅ base-URL override | each model turn's tokens from its chat recordings (`logs.json` is prompts only and is not read) |
 | Desktop apps | ❌ | ✅ *(if MCP host)* | ❌ *(no base-URL override)* | MCP tools only; Claude usage meter for Max % |
 | GitHub-hosted (Copilot agent) | ⚠️ quota only | ❌ | ❌ | the Copilot quota endpoint gives bucket %, nothing per-turn |
 | Jules / hosted | ❌ | ❌ | ❌ | out of reach — see Boundaries |
@@ -40,7 +40,7 @@ we got round to.
 
 | Capability | Needs | Claude Code | Codex CLI | opencode | Cursor | Gemini CLI | Desktop | GitHub-hosted |
 |---|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| Spend + token accounting | a local token log | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ⚠️ |
+| Spend + token accounting | a local token log | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ⚠️ |
 | Ground truth + routing *enforcement* | a base-URL override | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
 | Routing *advice* (`tokenops_routing_advise`) | an MCP host | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Prompt + reply coaching | prompt text on disk | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -156,8 +156,6 @@ So an agent on a fresh install can tell you what to run to give it better data.
 
 These are honest limits of a local-first, no-telemetry tool — not gaps to fill:
 
-- **Gemini CLI cannot be metered passively.** Its `logs.json` is a prompt log
-  with no token usage. Use the proxy plane instead.
 - **AWS Bedrock is not proxy-metered.** It requires SigV4 request signing; the
   proxy is pure passthrough with no per-provider auth hook.
 - **Jules and fully-hosted agents are out of reach.** No local logs, no MCP host

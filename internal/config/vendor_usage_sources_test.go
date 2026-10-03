@@ -38,6 +38,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"claude_code_jsonl", "claude-code-jsonl"},
 		{"codex_jsonl", "codex-jsonl"},
 		{"opencode", "opencode"},
+		{"gemini_cli", "gemini-cli"},
 		{"claude_code_stats_cache (deprecated)", "claude-code-stats-cache"},
 		{"vendor_usage_anthropic", "vendor-usage-anthropic"},
 		{"github_copilot", "github-copilot"},

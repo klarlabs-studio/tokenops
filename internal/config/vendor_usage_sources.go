@@ -40,6 +40,7 @@ func (c Config) VendorUsageSources() []VendorUsageSource {
 		{Name: "claude_code_jsonl", SourceTag: "claude-code-jsonl", Enabled: c.VendorUsage.ClaudeCodeJSONL.Enabled},
 		{Name: "codex_jsonl", SourceTag: "codex-jsonl", Enabled: c.VendorUsage.CodexJSONL.Enabled},
 		{Name: "opencode", SourceTag: "opencode", Enabled: c.VendorUsage.OpenCode.Enabled},
+		{Name: "gemini_cli", SourceTag: "gemini-cli", Enabled: c.VendorUsage.GeminiCLI.Enabled},
 		{Name: "claude_code_stats_cache (deprecated)", SourceTag: "claude-code-stats-cache", Enabled: c.VendorUsage.ClaudeCode.Enabled},
 		{Name: "vendor_usage_anthropic", SourceTag: "vendor-usage-anthropic", Enabled: c.VendorUsage.Anthropic.Enabled},
 		{Name: "github_copilot", SourceTag: "github-copilot", Enabled: c.VendorUsage.GitHubCopilot.Enabled},

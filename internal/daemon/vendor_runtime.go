@@ -22,6 +22,7 @@ import (
 	cursorusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursor"
 	cursorturnspoll "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursorturns"
 	fireworksusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/fireworks"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/geminicli"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
@@ -73,6 +74,14 @@ func startVendorUsagePollers(
 		})
 		sup.Go("opencode", p.Run)
 		logger.Info("opencode poller live", "interval", cfg.VendorUsage.OpenCode.Interval, "root", cfg.VendorUsage.OpenCode.Root)
+	}
+	if cfg.VendorUsage.GeminiCLI.Enabled {
+		p := geminicli.NewPoller(bus, geminicli.PollerOptions{
+			Root: cfg.VendorUsage.GeminiCLI.Root, Interval: cfg.VendorUsage.GeminiCLI.Interval,
+			Logger: logger, CostSource: planCostSource(cfg, eventschema.ProviderGemini),
+		})
+		sup.Go("gemini-cli", p.Run)
+		logger.Info("gemini cli poller live", "interval", cfg.VendorUsage.GeminiCLI.Interval, "root", cfg.VendorUsage.GeminiCLI.Root)
 	}
 	if cfg.VendorUsage.Cursor.Enabled {
 		p := cursorusage.NewPoller(bus, cursorusage.PollerOptions{
