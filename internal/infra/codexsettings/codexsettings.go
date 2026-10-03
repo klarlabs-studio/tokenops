@@ -107,3 +107,34 @@ func Providers(src string) map[string]Provider {
 	}
 	return out
 }
+
+// Model is the top-level model a config.toml asks for, "" when it names
+// none. Only lines before the first table are top level.
+func Model(src string) string {
+	for _, line := range strings.Split(src, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") {
+			return ""
+		}
+		key, val, ok := strings.Cut(line, "=")
+		if !ok || strings.TrimSpace(key) != "model" {
+			continue
+		}
+		val = strings.TrimSpace(val)
+		if i := strings.Index(val, "#"); i >= 0 && !strings.HasPrefix(val, "\"") {
+			val = strings.TrimSpace(val[:i])
+		}
+		val, _, _ = strings.Cut(strings.Trim(val, "\""), "\"")
+		return strings.TrimSpace(val)
+	}
+	return ""
+}
+
+// ReadModel is Model of Codex's own config.toml.
+func ReadModel() string {
+	b, err := os.ReadFile(ConfigPath()) //nolint:gosec // Codex's own config path
+	if err != nil {
+		return ""
+	}
+	return Model(string(b))
+}

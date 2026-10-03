@@ -3,9 +3,12 @@ package coach_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/routers"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/biller"
 )
 
 func power(t *testing.T, r coach.Report, name string) coach.Power {
@@ -70,5 +73,24 @@ func TestReportNamesTheSourceKey(t *testing.T) {
 	}
 	if r.Verbosity != config.VerbosityNormal || r.VerbositySource != "default" {
 		t.Errorf("verbosity = %q from %q", r.Verbosity, r.VerbositySource)
+	}
+}
+
+// The models power names the router it stands down for.
+func TestStatusNamesTheRouterTheModelsPowerStandsDownFor(t *testing.T) {
+	prev := coach.DetectRouters
+	t.Cleanup(func() { coach.DetectRouters = prev })
+	coach.DetectRouters = func() []routers.InPath {
+		return []routers.InPath{{Harness: routers.ClaudeCode, Router: biller.Router{Name: "firerouter", Display: "FireRouter"},
+			Setting: "Claude Code settings env.ANTHROPIC_MODEL", Model: "firerouter"}}
+	}
+	r := coach.Status(config.Default(), nil, nil, time.Now())
+	if len(r.Routers) != 1 {
+		t.Fatalf("routers %+v", r.Routers)
+	}
+	for _, p := range r.Powers {
+		if p.Name == config.PowerModels && !strings.Contains(p.Note, "FireRouter chooses the model in Claude Code") {
+			t.Errorf("models note %q", p.Note)
+		}
 	}
 }

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/routers"
+
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 
 	"github.com/spf13/cobra"
@@ -119,10 +121,16 @@ func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir, provider s
 	// model on every hook payload; the opencode shim forwards it from
 	// chat.message. Only Claude Code makes this a search problem.
 	model := firstNonEmptyStr(in.ModelID, in.Model)
+	claudeCode := model == ""
 	if model == "" {
 		model = latestTranscriptModel(in.TranscriptPath)
 	}
 	if model == "" {
+		return nil
+	}
+	// An external router chooses the model for this harness; two routers
+	// for one turn cannot be explained (ADR 0009 §5).
+	if routers.Decides(routers.Sources{}, model, claudeCode) {
 		return nil
 	}
 	prov := eventschema.Provider(firstNonEmptyStr(in.ProviderID, provider, string(eventschema.ProviderAnthropic)))

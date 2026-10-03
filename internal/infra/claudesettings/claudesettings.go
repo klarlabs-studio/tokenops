@@ -109,3 +109,42 @@ func Credential() (baseURL, key string) {
 	}
 	return "", ""
 }
+
+// modelSettings are the settings that name the model Claude Code asks for.
+var modelSettings = []string{
+	"ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL",
+	"ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_SMALL_FAST_MODEL",
+}
+
+// Models lists the model IDs Claude Code is configured to ask for, each
+// with the setting that names it: env.ANTHROPIC_MODEL and the per-class
+// defaults, and the top-level model setting. A router in front of Claude
+// Code (FireRouter) shows only here: transcripts record the model that
+// answered, which the router chose.
+func Models() map[string]string {
+	out := map[string]string{}
+	// Lowest precedence first, so a higher one overwrites.
+	files := settingsFiles()
+	for i := len(files) - 1; i >= 0; i-- {
+		b, err := os.ReadFile(files[i]) //nolint:gosec // fixed Claude Code settings paths
+		if err != nil {
+			continue
+		}
+		var s struct {
+			Model string            `json:"model"`
+			Env   map[string]string `json:"env"`
+		}
+		if json.Unmarshal(b, &s) != nil {
+			continue
+		}
+		if s.Model != "" {
+			out["model"] = s.Model
+		}
+		for _, k := range modelSettings {
+			if v := s.Env[k]; v != "" {
+				out["env."+k] = v
+			}
+		}
+	}
+	return out
+}

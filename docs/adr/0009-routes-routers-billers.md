@@ -1,6 +1,6 @@
 # ADR 0009 — Endpoints, routers, and billers
 
-- **Status:** Accepted 2026-10-01. Part 1 (§1–4, §6, §7) is implemented; part 2 (§5, governing routers) is open.
+- **Status:** Accepted 2026-10-01. Part 1 (§1–4, §6, §7) is implemented. Part 2 (§5): standing down is implemented (2026-10-03); governing the router (policy on route IDs, budget per biller, quality by served model) is open.
 - **Date:** 2026-10-01
 - **Deciders:** TokenOps maintainers
 - **Related:** ADR 0003 (authoritative cost), ADR 0006 (one coach), ADR 0007 (model policy), ADR 0008 (plan history)
@@ -148,6 +148,15 @@ produce choices nobody can explain.
      by price alone.
   4. **Explain.** Every routing record names the router that decided.
 - With no external router in the path, TokenOps routes as before.
+
+**Standing down (implemented 2026-10-03).** A router is recognised from
+the model ID a harness asks for: `firerouter…` and `openrouter/auto`,
+read from Claude Code's settings (`model`, `env.ANTHROPIC_MODEL` and the
+per-class defaults), Codex's `config.toml` and opencode's config. The
+route guard and the subagent guard then leave that harness's turns
+alone, `tokenops_routing_advise` answers `stay` with `decided_by`, and
+the coach report lists the router and says the models power stands down
+there. The model policy still holds for a model the agent names itself.
 
 ### 6. Prices come from the biller's own rate card
 

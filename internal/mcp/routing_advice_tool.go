@@ -5,6 +5,8 @@ import (
 	"errors"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/routers"
+
 	"go.klarlabs.de/tokenops/internal/capability/decide"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
@@ -61,6 +63,10 @@ type routingAdviceInput struct {
 type routingAdviceResult struct {
 	// Recommendation is "stay" or "switch".
 	Recommendation string `json:"recommendation"`
+	// DecidedBy names the external router that chooses this turn's
+	// model, when one does; TokenOps then does not choose a second time
+	// (ADR 0009 §5).
+	DecidedBy string `json:"decided_by,omitempty"`
 	// Model is what to run on. Always populated — on "stay" it is the
 	// model that was passed in, so a caller can use one field either way.
 	Model string `json:"model"`
@@ -117,6 +123,13 @@ func RegisterRoutingAdviceTools(s *Server, d RoutingAdviceDeps) error {
 }
 
 func routingAdvice(ctx context.Context, in routingAdviceInput, d RoutingAdviceDeps) (*routingAdviceResult, error) {
+	if r, ok := routers.RouterNamedBy(in.Model); ok {
+		return &routingAdviceResult{
+			Recommendation: "stay", Model: in.Model, DecidedBy: r.Name,
+			Reason: r.Display + " chooses the model for each turn; TokenOps does not choose a second time, " +
+				"because two routers for one turn cannot be explained",
+		}, nil
+	}
 	cfg := d.activeConfig()
 	if cfg == nil {
 		return &routingAdviceResult{

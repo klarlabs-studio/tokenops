@@ -160,3 +160,26 @@ func TestInstallAddsTheSubagentHookForClaudeCodeOnly(t *testing.T) {
 		t.Errorf("codex install gained an Agent hook:\n%s", b)
 	}
 }
+
+// Behind FireRouter the router chooses each turn's model; the coach does
+// not move the subagent as well (ADR 0009 §5).
+func TestSubagentGuardStandsDownBehindAnExternalRouter(t *testing.T) {
+	writeCoachConfig(t, models+"coach:\n  autonomy: advise\n  powers:\n    models: autonomous\n")
+	home, _ := os.UserHomeDir()
+	settings := filepath.Join(home, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(settings), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(settings, []byte(`{"env":{"ANTHROPIC_BASE_URL":"https://api.fireworks.ai/inference","ANTHROPIC_MODEL":"firerouter"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(settings) })
+	dir := t.TempDir()
+	tp := writeCoachTranscript(t, dir, 1, "claude-opus-5")
+	out := runSubagentHook(t, dir, map[string]any{
+		"description": "find config", "prompt": "find where the retention config is defined",
+	}, tp)
+	if out != "" {
+		t.Fatalf("the guard acted behind FireRouter: %q", out)
+	}
+}
