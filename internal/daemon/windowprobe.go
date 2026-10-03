@@ -16,7 +16,7 @@ import (
 type planStoreReader struct{ store *sqlite.Store }
 
 func (r planStoreReader) ReadEvents(ctx context.Context, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
-	return r.store.Query(ctx, sqlite.Filter{Type: t, Since: since, Limit: 100_000})
+	return r.store.ReadEvents(ctx, t, since)
 }
 
 // windowProbe caches how full each provider's rate-limit window is.
