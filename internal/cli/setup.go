@@ -1,18 +1,22 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/actions"
 	"go.klarlabs.de/tokenops/internal/cli/detect"
 	"go.klarlabs.de/tokenops/internal/cli/wire"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/daemon"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
+	"go.klarlabs.de/tokenops/internal/infra/planevidence"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
 )
 
@@ -67,14 +71,15 @@ func realSetupTarget() (setupTarget, error) {
 // and pointing a client's base URL at the local proxy reroutes the
 // operator's real traffic — that is their call to make, not a side effect
 // of running init.
-func runSetup(out io.Writer, cfgPath string, target setupTarget) {
+func runSetup(out io.Writer, cfgPath string, target setupTarget) []setupStep {
 	steps := wireMCPHosts(target.Home, target.Exe)
 	steps = append(steps, wireHooks(target.SettingsPath, target.Exe))
 	steps = append(steps, statuslineStep(cfgPath, target.SettingsPath, target.Exe))
-	steps = append(steps, bindPlan(cfgPath))
+	steps = append(steps, bindPlans(cfgPath, target.Home)...)
 	steps = append(steps, ingestionStep(cfgPath))
 	steps = append(steps, daemonUnitStep(daemonUnitPath(target.Home)))
 	renderSetup(out, steps)
+	return steps
 }
 
 // daemonUnitPath resolves where this platform's supervisor keeps the unit,
@@ -205,24 +210,71 @@ func wireHooks(path, exe string) setupStep {
 // Guessing would make every headroom figure wrong in a way that looks
 // authoritative, so an ambiguous result is reported rather than resolved.
 func bindPlan(cfgPath string) setupStep {
+	return bindPlans(cfgPath, "")[0]
+}
+
+// bindPlans binds each provider whose plan a client on this machine
+// reports unambiguously (Claude Code's account tier, Codex's plan_type):
+// autonomous by default, recorded in the plan history, and shown with its
+// evidence so the operator can correct it. A plan already bound is never
+// changed; a disagreeing report is pointed out instead. Where the
+// evidence names several plans, or there is none, the step is left to the
+// operator.
+func bindPlans(cfgPath, home string) []setupStep {
+	const name = "plan binding"
 	cfg, err := config.ReadMutable(cfgPath)
 	if err != nil {
-		return setupStep{Name: "plan binding", Err: err}
+		return []setupStep{{Name: name, Err: err}}
 	}
-	if len(cfg.Plans) > 0 {
-		return setupStep{
-			Name:   "plan binding",
-			Detail: fmt.Sprintf("already bound (%s)", describePlans(cfg.Plans)),
+	var evidence []planevidence.Evidence
+	if home != "" {
+		evidence = planevidence.All(home)
+	}
+	var steps []setupStep
+	seen := map[string]bool{}
+	for _, e := range evidence {
+		seen[e.Provider] = true
+		bound := cfg.Plans[e.Provider]
+		switch {
+		case bound != "" && (e.Plan == "" || e.Plan == bound):
+			steps = append(steps, setupStep{Name: name, Detail: fmt.Sprintf("%s already bound to %s", e.Provider, bound)})
+		case bound != "":
+			steps = append(steps, setupStep{Name: name, Manual: true, Detail: fmt.Sprintf(
+				"%s is bound to %s, but %s reports %s (%s) — `tokenops plan set %s %s` if you changed plans",
+				e.Provider, bound, e.From, e.Plan, e.Detail, e.Provider, e.Plan)})
+		case e.Plan == "":
+			steps = append(steps, setupStep{Name: name, Manual: true, Detail: fmt.Sprintf(
+				"%s reports %s, which could be %s — `tokenops plan set %s <plan>`",
+				e.From, e.Detail, strings.Join(e.Candidates, " or "), e.Provider)})
+		default:
+			change, err := actions.SetPlan(context.Background(), cfgPath, actions.PlanRequest{
+				Provider: e.Provider, Plan: e.Plan, Actor: "init",
+			}, time.Now().UTC())
+			if err != nil {
+				steps = append(steps, setupStep{Name: name, Err: err})
+				continue
+			}
+			steps = append(steps, setupStep{Name: name, Changed: true, Detail: fmt.Sprintf(
+				"bound %s to %s, as %s reports (%s); `tokenops plan set` changes it",
+				change.Provider, change.Plan, e.From, e.Detail)})
 		}
 	}
-
+	for provider, plan := range cfg.Plans {
+		if !seen[provider] {
+			steps = append(steps, setupStep{Name: name, Detail: fmt.Sprintf("%s already bound to %s", provider, plan)})
+		}
+	}
+	if len(steps) > 0 {
+		sort.SliceStable(steps, func(i, j int) bool { return steps[i].Detail < steps[j].Detail })
+		return steps
+	}
 	found := detect.Detect(nil)
 	if len(found) == 0 {
-		return setupStep{
-			Name:   "plan binding",
+		return []setupStep{{
+			Name:   name,
 			Detail: "no AI client detected — run `tokenops plan set <provider> <plan>` once you have one",
 			Manual: true,
-		}
+		}}
 	}
 	providers := map[string]bool{}
 	for _, d := range found {
@@ -232,21 +284,14 @@ func bindPlan(cfgPath string) setupStep {
 	for p := range providers {
 		names = append(names, p)
 	}
-	return setupStep{
-		Name: "plan binding",
+	sort.Strings(names)
+	return []setupStep{{
+		Name: name,
 		Detail: fmt.Sprintf(
-			"detected %s but not which tier you pay for — run `tokenops plan set %s claude-max-20x` (or claude-max-5x / claude-pro); headroom maths needs the right one",
+			"detected %s but no client says which tier you pay for — run `tokenops plan set %s <plan>` (`tokenops plan list` shows them); headroom maths needs the right one",
 			strings.Join(names, ", "), names[0]),
 		Manual: true,
-	}
-}
-
-func describePlans(plans map[string]string) string {
-	parts := make([]string, 0, len(plans))
-	for provider, plan := range plans {
-		parts = append(parts, provider+"="+plan)
-	}
-	return strings.Join(parts, ", ")
+	}}
 }
 
 // renderSetup prints what init did, separating completed work from the

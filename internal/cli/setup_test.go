@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"go.klarlabs.de/tokenops/internal/config"
 )
 
 // The summary has to distinguish work done from state already correct, and
@@ -173,5 +175,75 @@ func TestRunSetupTouchesOnlyItsTarget(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "already bound") {
 		t.Errorf("expected the seeded plan to be reported:\n%s", buf.String())
+	}
+}
+
+// writeHomeWithEvidence is a home where Claude Code reports Max 20x and
+// Codex reports Plus.
+func writeHomeWithEvidence(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	if err := os.WriteFile(filepath.Join(home, ".claude.json"),
+		[]byte(`{"oauthAccount":{"organizationType":"claude_max","organizationRateLimitTier":"default_claude_max_20x"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(home, ".codex", "sessions", "2026", "10", "03")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	line := `{"timestamp":"2026-10-03T08:45:14Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":10,"output_tokens":2,"total_tokens":12}},"rate_limits":{"plan_type":"plus"}}}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "rollout-1.jsonl"), []byte(line), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return home
+}
+
+// What the clients report is bound without asking, and says where it came
+// from; a second run changes nothing.
+func TestBindPlansFromWhatTheClientsReport(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(cfgPath, []byte("listen: 127.0.0.1:7878\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	home := writeHomeWithEvidence(t)
+	steps := bindPlans(cfgPath, home)
+	if len(steps) != 2 {
+		t.Fatalf("steps %+v", steps)
+	}
+	for _, s := range steps {
+		if !s.Changed || s.Manual || s.Err != nil || !strings.Contains(s.Detail, "reports") {
+			t.Errorf("step %+v", s)
+		}
+	}
+	cfg, err := config.ReadMutable(cfgPath)
+	if err != nil || cfg.Plans["anthropic"] != "claude-max-20x" || cfg.Plans["openai"] != "gpt-plus" {
+		t.Fatalf("plans %v, %v", cfg.Plans, err)
+	}
+	for _, s := range bindPlans(cfgPath, home) {
+		if s.Changed || s.Manual {
+			t.Errorf("second run changed something: %+v", s)
+		}
+	}
+}
+
+// A plan the operator bound is theirs: a client reporting another one is
+// pointed out, not applied.
+func TestBindPlansNeverOverridesTheOperator(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(cfgPath, []byte("listen: 127.0.0.1:7878\nplans:\n    anthropic: claude-pro\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var disagree *setupStep
+	for _, s := range bindPlans(cfgPath, writeHomeWithEvidence(t)) {
+		if strings.HasPrefix(s.Detail, "anthropic is bound") {
+			s := s
+			disagree = &s
+		}
+	}
+	if disagree == nil || !disagree.Manual || !strings.Contains(disagree.Detail, "claude-max-20x") {
+		t.Fatalf("disagreement not pointed out: %+v", disagree)
+	}
+	if cfg, _ := config.ReadMutable(cfgPath); cfg.Plans["anthropic"] != "claude-pro" {
+		t.Errorf("the operator's plan was replaced: %v", cfg.Plans)
 	}
 }
