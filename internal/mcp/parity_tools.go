@@ -7,6 +7,8 @@ import (
 	"os"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/spending"
+
 	"go.klarlabs.de/tokenops/internal/contexts/governance/coverdebt"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/eval"
@@ -208,12 +210,12 @@ func runCoverageDebt(in coverageDebtInput) (*coverdebt.Report, error) {
 }
 
 func runScorecard(ctx context.Context, d ParityDeps, in scorecardInput) (*scorecard.Scorecard, error) {
-	s := scorecard.BuildFromStore(ctx, d.Store, scorecard.BuildParams{
-		SinceDays:          in.SinceDays,
-		FVTSecondsOverride: in.FVTSeconds,
-		TEUPctOverride:     in.TEUPct,
-		SACPctOverride:     in.SACPct,
-		BaselineRef:        in.BaselineRef,
+	s := spending.Scorecard(ctx, d.Store, spending.ScorecardParams{
+		SinceDays:   in.SinceDays,
+		FVTSeconds:  in.FVTSeconds,
+		TEUPct:      in.TEUPct,
+		SACPct:      in.SACPct,
+		BaselineRef: in.BaselineRef,
 	})
 	return s, nil
 }

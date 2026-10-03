@@ -86,6 +86,10 @@ func TestEveryAPIRouteIsGatedByDashAuth(t *testing.T) {
 		"/api/dx",
 		"/api/story",
 		"/api/coach/prompts",
+		"/api/spend/top",
+		"/api/spend/burn-rate",
+		"/api/scorecard",
+		"/api/pricing",
 	} {
 		resp, err := http.Get("http://" + srv.Addr() + path)
 		if err != nil {

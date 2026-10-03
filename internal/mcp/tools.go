@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 
 	"go.klarlabs.de/tokenops/internal/capability/money"
 
@@ -126,26 +127,9 @@ type spendSummaryResult struct {
 }
 
 // consumerEntry is one grouped spender row in tokenops_top_consumers.
-type consumerEntry struct {
-	Key      string  `json:"key"`
-	Requests int64   `json:"requests"`
-	Tokens   int64   `json:"tokens"`
-	CostUSD  float64 `json:"cost_usd"`
-	// APIEquivalentUSD is what the group would have billed at API list
-	// prices. On a flat-rate plan CostUSD is $0 for every group, so this
-	// is the only dollar figure that tells the groups apart — and the one
-	// the list is ranked on.
-	APIEquivalentUSD float64 `json:"api_equivalent_usd"`
-}
-
-// topConsumersResult is the typed payload for tokenops_top_consumers.
-type topConsumersResult struct {
-	// By is the grouping actually applied, "model" when the caller
-	// omitted it — not an echo of the input, which was "" in that case.
-	By       string          `json:"by"`
-	Top      []consumerEntry `json:"top"`
-	Currency string          `json:"currency"`
-}
+// topConsumersResult is the spending capability's payload, shared with
+// the daemon API (ADR 0010 §4).
+type topConsumersResult = spending.TopConsumers
 
 // forecastResult is the typed payload for tokenops_forecast. Note is set
 // only when history is too short to project.
@@ -324,124 +308,49 @@ func spendSummary(ctx context.Context, d Deps, in spendSummaryInput) (*spendSumm
 // schema enum already refuses anything else at the MCP boundary; the
 // handler enforces the same set so it does not depend on every caller
 // arriving through that boundary.
-var consumerGroups = map[string]analytics.Group{
-	"model":    analytics.GroupModel,
-	"provider": analytics.GroupProvider,
-	"workflow": analytics.GroupWorkflow,
-	"agent":    analytics.GroupAgent,
-}
-
 func topConsumers(ctx context.Context, d Deps, in topConsumersInput) (*topConsumersResult, error) {
-	by := strings.ToLower(strings.TrimSpace(in.By))
-	if by == "" {
-		by = "model"
-	}
-	group, ok := consumerGroups[by]
-	if !ok {
-		// The old switch fell through to model here, answering a typo
-		// with a confident ranking of something nobody asked about.
-		return nil, inputError(fmt.Errorf("by: unknown grouping %q (want model, provider, workflow, or agent)", in.By))
-	}
-	f := analytics.Filter{}
+	q := spending.TopQuery{By: in.By, Top: in.Top, IncludeSources: in.IncludeSources}
 	if in.Since != "" {
 		t, err := parseTimeOrDuration(in.Since)
 		if err != nil {
 			return nil, inputError(err)
 		}
-		f.Since = t
-	} else {
-		f.Since = time.Now().Add(-7 * 24 * time.Hour)
+		q.Since = t
 	}
 	if in.Until != "" {
 		t, err := time.Parse(time.RFC3339, in.Until)
 		if err != nil {
 			return nil, inputError(err)
 		}
-		f.Until = t
+		q.Until = t
 	}
-	f.IncludeSources = resolveIncludeSources(in.IncludeSources)
-	rows, err := d.Aggregator.AggregateBy(ctx, f, analytics.BucketDay, group)
+	res, err := spending.Top(ctx, d.Aggregator, q, d.Spend.Currency(), time.Now())
+	if errors.Is(err, spending.ErrUnknownGrouping) {
+		return nil, inputError(err)
+	}
 	if err != nil {
 		return nil, err
 	}
-	out := rankConsumers(rows)
-	top := in.Top
-	if top <= 0 {
-		top = 5
-	}
-	if top < len(out) {
-		out = out[:top]
-	}
-	return &topConsumersResult{By: by, Top: out, Currency: d.Spend.Currency()}, nil
-}
-
-// rankConsumers folds per-bucket rows into one entry per group key and
-// orders them the way `tokenops spend` does.
-//
-// Ranked on the API-equivalent, not the real cost. On a flat-rate plan
-// every plan-covered group costs $0, so a cost-keyed ranking put the one
-// metered call first and left the models that carried the work in map
-// order behind it. Tokens break ties (unpriced models are $0 on both
-// figures), then the key, so the order is the same on every call.
-func rankConsumers(rows []analytics.Row) []consumerEntry {
-	byKey := map[string]*consumerEntry{}
-	for _, r := range rows {
-		e, ok := byKey[r.GroupKey]
-		if !ok {
-			e = &consumerEntry{Key: r.GroupKey}
-			byKey[r.GroupKey] = e
-		}
-		e.Requests += r.Requests
-		e.Tokens += r.TotalTokens
-		e.CostUSD += r.CostUSD
-		e.APIEquivalentUSD += r.APIEquivalentUSD
-	}
-	out := make([]consumerEntry, 0, len(byKey))
-	for _, e := range byKey {
-		out = append(out, *e)
-	}
-	sort.Slice(out, func(i, j int) bool {
-		a, b := out[i], out[j]
-		if a.APIEquivalentUSD != b.APIEquivalentUSD {
-			return a.APIEquivalentUSD > b.APIEquivalentUSD
-		}
-		if a.Tokens != b.Tokens {
-			return a.Tokens > b.Tokens
-		}
-		return a.Key < b.Key
-	})
-	return out
+	return &res, nil
 }
 
 func burnRate(ctx context.Context, d Deps, in burnRateInput) (string, error) {
-	hours := in.Hours
-	if hours <= 0 {
-		hours = 24
-	}
-	f := analytics.Filter{Since: time.Now().Add(-time.Duration(hours) * time.Hour)}
-	f.IncludeSources = resolveIncludeSources(in.IncludeSources)
-	rows, err := d.Aggregator.AggregateBy(ctx, f, analytics.BucketHour, analytics.GroupNone)
+	burn, err := spending.BurnRate(ctx, d.Aggregator, in.Hours, in.IncludeSources, d.Spend.Currency(), time.Now())
 	if err != nil {
 		return "", err
 	}
-	b := burnTotals{Hours: hours, Currency: d.Spend.Currency()}
-	for _, r := range rows {
-		b.Cost += r.CostUSD
-		b.Tokens += r.TotalTokens
-		b.APIEquivalent += r.APIEquivalentUSD
+	b := burnTotals{Hours: burn.Hours, Currency: burn.Currency, Cost: burn.Cost, Tokens: burn.Tokens, APIEquivalent: burn.APIEquivalentUSD}
+	for _, r := range burn.Hourly {
 		b.CostSeries = append(b.CostSeries, r.CostUSD)
 		b.TokenSeries = append(b.TokenSeries, float64(r.TotalTokens))
 	}
 	payload := map[string]any{
-		"hours":  hours,
-		"cost":   b.Cost,
-		"tokens": b.Tokens,
-		// The list-price value of the window. On a flat-rate plan cost
-		// is structurally zero, and this is the dollar figure that still
-		// moves with the work.
-		"api_equivalent_usd": b.APIEquivalent,
-		"hourly":             rows,
-		"currency":           b.Currency,
+		"hours":              burn.Hours,
+		"cost":               burn.Cost,
+		"tokens":             burn.Tokens,
+		"api_equivalent_usd": burn.APIEquivalentUSD,
+		"hourly":             burn.Hourly,
+		"currency":           burn.Currency,
 	}
 	if q := measurementQuality(d); q != nil {
 		payload["measurement"] = q

@@ -50,6 +50,9 @@ func (a *AnalyticsHandlers) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/workflows", a.listWorkflows)
 	mux.HandleFunc("GET /api/workflows/{id}", a.workflowDetail)
 	mux.HandleFunc("GET /api/optimizations", a.listOptimizations)
+	mux.HandleFunc("GET /api/spend/top", a.spendTop)
+	mux.HandleFunc("GET /api/spend/burn-rate", a.spendBurnRate)
+	mux.HandleFunc("GET /api/scorecard", a.scorecard)
 }
 
 // WithAnalytics installs analytics handlers on the proxy. Mounted
