@@ -383,6 +383,21 @@ Available env vars:
 `TOKENOPS_COPILOT_OAUTH_TOKEN`,
 `TOKENOPS_ANTHROPIC_ADMIN_KEY`.
 
+## Explain
+
+### `tokenops explain [term]`
+
+What a figure means, in plain words: what it measures, how it is worked
+out, how to read it, and for `dx` figures the grade bands.
+
+```bash
+tokenops explain                # every term, by area
+tokenops explain wall-clock
+tokenops explain "first-try rate"
+```
+
+Agents get the same answers from the `tokenops_explain` MCP tool.
+
 ## Status line
 
 ### `tokenops statusline`
