@@ -1592,6 +1592,24 @@
                                     "name": {
                                       "type": "string"
                                     },
+                                    "pace": {
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "delta_pct": {
+                                          "type": "number"
+                                        },
+                                        "lasts_to_reset": {
+                                          "type": "boolean"
+                                        },
+                                        "runs_out_in_ns": {
+                                          "type": "integer"
+                                        },
+                                        "status": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "type": "object"
+                                    },
                                     "resets_at": {
                                       "format": "date-time",
                                       "type": "string"
@@ -1700,6 +1718,24 @@
                                     },
                                     "name": {
                                       "type": "string"
+                                    },
+                                    "pace": {
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "delta_pct": {
+                                          "type": "number"
+                                        },
+                                        "lasts_to_reset": {
+                                          "type": "boolean"
+                                        },
+                                        "runs_out_in_ns": {
+                                          "type": "integer"
+                                        },
+                                        "status": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "type": "object"
                                     },
                                     "resets_at": {
                                       "format": "date-time",
@@ -2202,6 +2238,24 @@
                                 "name": {
                                   "type": "string"
                                 },
+                                "pace": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "delta_pct": {
+                                      "type": "number"
+                                    },
+                                    "lasts_to_reset": {
+                                      "type": "boolean"
+                                    },
+                                    "runs_out_in_ns": {
+                                      "type": "integer"
+                                    },
+                                    "status": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
                                 "resets_at": {
                                   "format": "date-time",
                                   "type": "string"
@@ -2331,6 +2385,24 @@
                                 },
                                 "name": {
                                   "type": "string"
+                                },
+                                "pace": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "delta_pct": {
+                                      "type": "number"
+                                    },
+                                    "lasts_to_reset": {
+                                      "type": "boolean"
+                                    },
+                                    "runs_out_in_ns": {
+                                      "type": "integer"
+                                    },
+                                    "status": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
                                 },
                                 "resets_at": {
                                   "format": "date-time",

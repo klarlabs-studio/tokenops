@@ -66,3 +66,27 @@ func TestRateCardFilters(t *testing.T) {
 		t.Errorf("filtered card %+v", none)
 	}
 }
+
+type fakeSummarizer map[time.Duration]analytics.Summary
+
+func (f fakeSummarizer) Summarize(_ context.Context, flt analytics.Filter) (analytics.Summary, error) {
+	return f[time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC).Sub(flt.Since)], nil
+}
+
+func TestCostOf(t *testing.T) {
+	now := time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC)
+	f := fakeSummarizer{
+		24 * time.Hour:      {Requests: 10, TotalTokens: 100, APIEquivalentUSD: 4},
+		30 * 24 * time.Hour: {Requests: 100, TotalTokens: 900, APIEquivalentUSD: 50, Unpriced: []analytics.UnpricedModel{{Requests: 15}, {Requests: 5}}},
+	}
+	c, err := CostOf(context.Background(), f, "openai", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Today.Tokens != 100 || c.Last30.UnpricedRequests != 20 || c.Last30.UnpricedShare() != 0.2 || !c.Last30.Covered() {
+		t.Errorf("cost = %+v", c)
+	}
+	if (Usage{}).UnpricedShare() != 0 || (Usage{CostUSD: 3, APIEquivalentUSD: 3}).Covered() {
+		t.Error("empty or billed usage misread")
+	}
+}

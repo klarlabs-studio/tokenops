@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -15,6 +16,8 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/cards"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -70,7 +73,8 @@ func runGlance(cmd *cobra.Command, rf *rootFlags, dbPath string, brief, jsonOut 
 	}
 	defer func() { _ = store.Close() }()
 	deps := headroom.Deps{Config: &cfg, Reader: storeReader{store: store}}
-	if eng, err := buildSpendEngine(cfg); err == nil {
+	eng, engErr := buildSpendEngine(cfg)
+	if engErr == nil {
 		deps.Price = eng.ComputeAt
 	}
 	now := time.Now().UTC()
@@ -84,10 +88,40 @@ func runGlance(cmd *cobra.Command, rf *rootFlags, dbPath string, brief, jsonOut 
 		enc.SetIndent("", "  ")
 		return enc.Encode(g.Payload())
 	}
-	_, err = io.WriteString(out, cards.Render(g, cards.Options{
-		Width: terminalWidth(out), Color: terminalColor(out, color), Brief: brief, Now: now,
-	}))
+	opt := cards.Options{Width: terminalWidth(out), Color: terminalColor(out, color), Brief: brief, Now: now}
+	if engErr == nil {
+		opt.Costs = glanceCosts(ctx, analytics.New(store, eng), g, now)
+	}
+	_, err = io.WriteString(out, cards.Render(g, opt))
 	return err
+}
+
+// glanceCosts is each plan's provider's usage today and over 30 days; a
+// provider whose figures cannot be read shows none.
+func glanceCosts(ctx context.Context, s spending.Summarizer, g headroom.Glance, now time.Time) map[string]spending.ProviderCost {
+	var (
+		mu  sync.Mutex
+		wg  sync.WaitGroup
+		out = map[string]spending.ProviderCost{}
+	)
+	seen := map[string]bool{}
+	for _, r := range g.Headroom.Reports {
+		if seen[r.Provider] || r.Provider == "" {
+			continue
+		}
+		seen[r.Provider] = true
+		wg.Add(1)
+		go func(provider string) {
+			defer wg.Done()
+			if c, err := spending.CostOf(ctx, s, provider, now); err == nil {
+				mu.Lock()
+				out[provider] = c
+				mu.Unlock()
+			}
+		}(r.Provider)
+	}
+	wg.Wait()
+	return out
 }
 
 // terminalWidth is $COLUMNS, else the terminal's width, else 80.

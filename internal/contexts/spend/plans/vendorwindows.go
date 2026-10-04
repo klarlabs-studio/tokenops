@@ -21,6 +21,9 @@ type VendorWindow struct {
 	Duration time.Duration `json:"duration_ns,omitempty"`
 	ResetsAt time.Time     `json:"resets_at,omitempty"`
 	ResetsIn string        `json:"resets_in,omitempty"`
+	// Pace compares the share used with the share of the window gone by;
+	// absent when the window's length or reset is unknown.
+	Pace *WindowPace `json:"pace,omitempty"`
 }
 
 // VendorWindows returns every window in the newest vendor reading for
@@ -28,6 +31,14 @@ type VendorWindow struct {
 // weekly and model-scoped weekly windows from the Claude usage meter,
 // Codex's primary and secondary windows. nil when there is none.
 func VendorWindows(ctx context.Context, reader EventReader, provider eventschema.Provider, now time.Time) []VendorWindow {
+	out := vendorWindows(ctx, reader, provider, now)
+	for i := range out {
+		out[i].Pace = out[i].PaceAt(now)
+	}
+	return out
+}
+
+func vendorWindows(ctx context.Context, reader EventReader, provider eventschema.Provider, now time.Time) []VendorWindow {
 	// Each vendor's windows come from its own reader; matching on keys
 	// alone read Codex's primary window as Claude's.
 	var (
