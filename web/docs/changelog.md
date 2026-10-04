@@ -4,7 +4,20 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.95.0**.
+Current release: **v0.96.0**.
+
+## v0.96.0 — Codex priced, a modern menu bar
+
+Codex's cost was close to zero because most of its requests used models
+missing from the price table: GPT-6.1 Sol, GPT-5.6 Sol, Terra and Luna,
+and GPT-5.5. They are priced now from OpenAI's published rates, and the
+prices apply to past usage too.
+
+The menu bar panel was redesigned: a tab per plan, every window with its
+reset and its pace (whether it lasts to the reset, or when it runs out),
+extra usage, credit left, and cost today and over 30 days. Where some
+usage has no list price yet, the panel says so instead of showing a
+figure that looks complete. It follows your light or dark appearance.
 
 ## v0.95.0 — Every plan at a glance
 

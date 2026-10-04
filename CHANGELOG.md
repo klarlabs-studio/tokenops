@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.96.0 - 2026-10-04
+
+### Added
+
+- **menubar:** a modern panel in the Klarlabs palette: a tab per plan, each window with its reset and pace (when it runs out at this rate), extra usage, credit left, and cost today and over 30 days; usage on models without a list price is left out of the money and the panel says how much (#528)
+
 ### Fixed
 
 - **pricing:** the models Codex runs on are priced — `gpt-6.1-sol`, `gpt-5.6-sol` (promotional, through at least 2026-11-21), `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.5-pro` — from OpenAI's Standard table, verified 2026-10-04. Most Codex requests were unpriced and its cost read near zero; it applies to past usage too
