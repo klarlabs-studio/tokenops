@@ -7,7 +7,11 @@ before:
     - go vet ./...
 
 builds:
-  - id: tokenops
+  # Each binary is built twice, Linux and macOS apart, so that only the
+  # macOS archives carry the menu bar app (scripts/build-menubar-app.sh,
+  # built on a macOS runner before this runs).
+  - &tokenops
+    id: tokenops-linux
     binary: tokenops
     main: ./cmd/tokenops
     flags:
@@ -21,12 +25,16 @@ builds:
       - CGO_ENABLED=0
     goos:
       - linux
-      - darwin
     goarch:
       - amd64
       - arm64
+  - <<: *tokenops
+    id: tokenops-darwin
+    goos:
+      - darwin
 
-  - id: tokenopsd
+  - &tokenopsd
+    id: tokenopsd-linux
     binary: tokenopsd
     main: ./cmd/tokenopsd
     flags:
@@ -40,17 +48,32 @@ builds:
       - CGO_ENABLED=0
     goos:
       - linux
-      - darwin
     goarch:
       - amd64
       - arm64
+  - <<: *tokenopsd
+    id: tokenopsd-darwin
+    goos:
+      - darwin
 
 archives:
-  - id: default
+  - id: linux
+    ids: [tokenops-linux, tokenopsd-linux]
     formats: ["tar.gz"]
     files:
       - LICENSE
       - README.md
+  # The menu bar app is ad hoc signed, not notarized (there is no Developer
+  # ID); the cask's post-install hook clears its quarantine flag along with
+  # the binaries', and `tokenops menubar` installs it to ~/Applications.
+  - id: darwin
+    ids: [tokenops-darwin, tokenopsd-darwin]
+    formats: ["tar.gz"]
+    files:
+      - LICENSE
+      - README.md
+      - src: menubar-dist/TokenOps.app
+        dst: TokenOps.app
 
 checksum:
   name_template: "checksums.txt"
@@ -114,6 +137,8 @@ homebrew_casks:
 
       `tokenops serve` is the MCP server and does not ingest.
       `tokenops start` runs the pollers; the unit above keeps it alive.
+
+      On macOS, `tokenops menubar` puts TokenOps in the menu bar.
     hooks:
       post:
         # The release archives are not notarized, so Gatekeeper quarantines both
@@ -136,7 +161,13 @@ homebrew_casks:
           else
             File.expand_path("~/.config/systemd/user/tokenops.service")
           end
+          bin = "#{HOMEBREW_PREFIX}/bin/tokenops"
           if File.exist?(unit)
-            bin = "#{HOMEBREW_PREFIX}/bin/tokenops"
             system_command bin, args: ["daemon", "install", "--bin", bin], print_stdout: true, print_stderr: true, must_succeed: false
+          end
+          # A menu bar app installed with `tokenops menubar` lives in
+          # ~/Applications; replace it with this version's and restart it if
+          # it was running. It does nothing where it was never installed.
+          if OS.mac?
+            system_command bin, args: ["menubar", "--refresh"], print_stdout: true, print_stderr: true, must_succeed: false
           end

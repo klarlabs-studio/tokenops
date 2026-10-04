@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- **menubar:** the menu bar app ships in the macOS release and the Homebrew cask; `tokenops menubar` installs it to `~/Applications` and opens it, and upgrades refresh it. It is ad hoc signed, not notarized; the cask clears its quarantine flag as it does the CLI's
+
+### Fixed
+
+- **menubar:** the icon appears at once instead of after the first daemon read, which on a busy machine could take minutes
+
 ## 0.97.0 - 2026-10-04
 
 ### Changed

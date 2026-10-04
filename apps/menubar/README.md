@@ -15,6 +15,21 @@ price yet is left out of the money and the panel says how much, rather
 than show a figure that looks complete. It follows the system's light or
 dark appearance in the Klarlabs palette.
 
+With the Homebrew install on macOS:
+
+```bash
+tokenops menubar    # installs it to ~/Applications and opens it
+```
+
+Its menu has Launch at Login. Upgrades replace the installed copy and
+restart it if it is running. The app is signed ad hoc, not notarized, so it
+reaches you through the Homebrew cask, whose install step clears macOS's
+quarantine flag; a copy downloaded with a browser is blocked by Gatekeeper.
+`scripts/build-menubar-app.sh` builds it (universal, arm64 and x86_64) for
+the release.
+
+From a checkout:
+
 ```bash
 make menubar        # run it against the local daemon
 make menubar-test   # tests, no window needed
@@ -26,7 +41,8 @@ make menubar-test   # tests, no window needed
 - The panel's grant names three permissions: `glance.read`
   (`glance.follow`), `coach.change` (`coach.preset`, which the daemon
   writes to its audit log) and `panel.close`.
-- The tray refreshes every minute. A daemon that is slow keeps the last
+- The icon appears at once and fills in when the first read returns; the
+  tray refreshes every minute. A daemon that is slow keeps the last
   reading on screen, marked; one that is not running says how to start it.
 - Left click opens the panel; the menu has Show Details, Refresh, Launch at
   Login (macOS 13+, packaged app) and Quit.
