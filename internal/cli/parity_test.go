@@ -27,6 +27,7 @@ var cliOnly = map[string]string{
 	"detect":           "reads this machine's filesystem to report installed clients",
 	"start":            "runs the ingestion daemon in the foreground",
 	"daemon":           "installs, restarts and removes a supervisor unit",
+	"menubar":          "installs and opens a macOS app on this machine",
 	"serve":            "is the MCP server itself",
 	"anthropic-bridge": "launches a local client process with request attribution",
 	"hooks":            "edits client hook configuration on this machine",

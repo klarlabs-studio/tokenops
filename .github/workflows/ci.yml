@@ -109,6 +109,11 @@ jobs:
         run: go test -count=1 ./...
       - name: Build the native app
         run: CGO_ENABLED=1 go build -tags vitra_native -o tokenops-menubar .
+      # The release builds TokenOps.app the same way; a packaging break
+      # shows up here rather than on a tag.
+      - name: Package TokenOps.app
+        working-directory: .
+        run: scripts/build-menubar-app.sh v0.0.0-ci "$RUNNER_TEMP/menubar-dist"
 
   bench-gate:
     name: Bench gate

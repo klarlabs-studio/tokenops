@@ -92,6 +92,13 @@ Claude Max 20x             Session             4%  4h 37m    -3% · lasts
 Colour follows the terminal and `NO_COLOR`; `--no-color` (or `--color
 never`) prints plain text. `$COLUMNS` sets the width.
 
+### `tokenops menubar`
+
+On macOS, installs the menu bar app that ships with the Homebrew install
+to `~/Applications` and opens it: the busiest plan window next to the icon,
+and a panel with every plan's windows, pace and cost and the coach's
+findings. Its menu has Launch at Login; upgrades refresh the installed copy.
+
 ## Setup
 
 ### `tokenops init`
