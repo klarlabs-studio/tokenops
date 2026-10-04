@@ -1,8 +1,9 @@
 // Package cards renders the glance (ADR 0010's one-call view) as terminal
-// cards: one per plan, with a bar for every window the vendor reports, its
-// reset, spend against a limit and credit left, laid out in a grid that
-// fits the terminal. `tokenops glance` prints it; plain text, a brief
-// table, or JSON are the alternatives.
+// cards, laid out as CodexBar's `codexbar cards` lays out its own: one card
+// per plan with its source and plan, then for every window the vendor
+// reports its share used, a bar, the reset and the pace, then spend, credit
+// and cost. The grid fits the terminal. `tokenops glance` prints it; a
+// brief table or JSON are the alternatives.
 package cards
 
 import (
@@ -15,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 )
 
@@ -38,10 +40,18 @@ type Options struct {
 	// Brief prints a compact table instead of cards.
 	Brief bool
 	Now   time.Time
+	// Costs is each provider's usage today and over 30 days, keyed by
+	// provider; a plan without an entry shows no cost.
+	Costs map[string]spending.ProviderCost
 }
 
-// cardWidth is a card's outer width: two fit an 80-column terminal.
-const cardWidth = 38
+// Cards are 38 to 42 wide with two columns between them, as CodexBar's:
+// two fit 80 columns, and they stretch to fill wider rows.
+const (
+	minCardWidth = 38
+	maxCardWidth = 42
+	cardGap      = 2
+)
 
 // Klarlabs palette (internal/brand/tokens.css), dark-mode roles.
 type rgb struct{ r, g, b int }
@@ -51,13 +61,14 @@ var (
 	porcelain = rgb{0xDD, 0xE0, 0xE5}
 	muted     = rgb{0x9D, 0xA2, 0xAC}
 	line      = rgb{0x55, 0x5A, 0x64}
+	track     = rgb{0x1B, 0x1F, 0x3A} // an empty bar cell: ink tinted cobalt
 	okC       = rgb{0x86, 0xEF, 0xAC}
 	warnC     = rgb{0xFC, 0xD3, 0x4D}
 	dangerC   = rgb{0xF8, 0x71, 0x71}
 )
 
 // basic maps each palette colour to its nearest of the 16 ANSI colours.
-var basic = map[rgb]int{cobaltFg: 94, porcelain: 97, muted: 37, line: 90, okC: 92, warnC: 93, dangerC: 91}
+var basic = map[rgb]int{cobaltFg: 94, porcelain: 97, muted: 37, line: 90, track: 90, okC: 92, warnC: 93, dangerC: 91}
 
 type painter Color
 
@@ -103,19 +114,29 @@ func blend(pct float64) rgb {
 	return mix(warnC, dangerC, (t-0.6)/0.4)
 }
 
-// bar draws pct across width cells. In true colour each filled cell takes
-// the gradient's colour at its own position, so a fuller bar reads hotter.
+// bar draws pct across width cells. In true colour the cells are solid
+// blocks of background colour, each filled one taking the gradient's
+// colour at its own position, so a fuller bar reads hotter; elsewhere a
+// heavy rule for the used part and a light one for the rest.
 func (p painter) bar(pct float64, width int) string {
 	filled := max(0, min(width, int(pct/100*float64(width)+0.5)))
-	var b strings.Builder
-	for i := range filled {
-		c := levelColor(pct)
-		if Color(p) == TrueColor {
-			c = blend(float64(i+1) / float64(width) * 100)
-		}
-		b.WriteString(p.paint(c, "█"))
+	if pct > 0 && filled == 0 {
+		filled = 1 // a window in use never looks empty
 	}
-	b.WriteString(p.paint(line, strings.Repeat("░", width-filled)))
+	var b strings.Builder
+	switch Color(p) {
+	case TrueColor:
+		for i := range width {
+			c := track
+			if i < filled {
+				c = blend(float64(i+1) / float64(width) * 100)
+			}
+			fmt.Fprintf(&b, "\x1b[48;2;%d;%d;%dm \x1b[0m", c.r, c.g, c.b)
+		}
+	default:
+		b.WriteString(p.paint(levelColor(pct), strings.Repeat("━", filled)))
+		b.WriteString(p.paint(line, strings.Repeat("─", width-filled)))
+	}
 	return b.String()
 }
 
@@ -158,120 +179,275 @@ func humanReset(s string) string {
 	return fmt.Sprintf("%dm", mins)
 }
 
+// money is "$4.20", or "$10,948" from $100 up.
 func money(usd float64) string {
-	if usd >= 100 {
-		return fmt.Sprintf("$%.0f", usd)
+	if usd < 100 {
+		return fmt.Sprintf("$%.2f", usd)
 	}
-	return fmt.Sprintf("$%.2f", usd)
+	digits := fmt.Sprintf("%.0f", usd)
+	var b strings.Builder
+	for i, d := range digits {
+		if i > 0 && (len(digits)-i)%3 == 0 {
+			b.WriteByte(',')
+		}
+		b.WriteRune(d)
+	}
+	return "$" + b.String()
 }
 
-// row is one measured line of a card.
-type row struct {
-	label  string
-	pct    float64
-	right  string // reset time or amounts
-	hasPct bool
-	text   string // a line without a bar
+// humanDuration words a duration as humanReset does.
+func humanDuration(d time.Duration) string { return humanReset(d.String()) }
+
+// vendors names each provider as its users do.
+var vendors = map[string]string{
+	"anthropic": "Claude", "openai": "Codex", "gemini": "Gemini", "github": "Copilot", "cursor": "Cursor",
+	"fireworks": "Fireworks", "openrouter": "OpenRouter", "deepseek": "DeepSeek", "moonshot": "Moonshot",
+	"zai": "z.ai", "minimax": "MiniMax", "mistral": "Mistral", "xai": "xAI",
 }
 
-// rows lists what a plan's card shows, busiest window first.
-func rows(r plans.HeadroomReport) []row {
-	var out []row
+// vendor is the card's title.
+func vendor(r plans.HeadroomReport) string {
+	if v, ok := vendors[r.Provider]; ok {
+		return v
+	}
+	if r.Provider == "" {
+		return r.Display
+	}
+	return strings.ToUpper(r.Provider[:1]) + r.Provider[1:]
+}
+
+// planName is the plan without its vendor's name: "Max 20x", "Pro
+// Standard ($100)".
+func planName(r plans.HeadroomReport) string {
+	d := r.Display
+	for _, prefix := range []string{"Claude ", "ChatGPT ", "Gemini ", "GitHub Copilot ", "Cursor "} {
+		d = strings.TrimPrefix(d, prefix)
+	}
+	return d
+}
+
+// sourceBadge is where the reading came from, in a word.
+func sourceBadge(source string) string {
+	s := strings.ToLower(strings.ReplaceAll(source, "_", " "))
+	switch {
+	case s == "":
+		return ""
+	case strings.Contains(s, "meter"):
+		return "meter"
+	case strings.Contains(s, "statusline"), strings.Contains(s, "status line"):
+		return "statusline"
+	case strings.Contains(s, "jsonl"), strings.Contains(s, "recording"), strings.Contains(s, "local"):
+		return "local"
+	case strings.Contains(s, "api"):
+		return "api"
+	}
+	return clip(s, 10)
+}
+
+// windowTitle words a window: "5h" is the session, "week (Fable)" the
+// Fable weekly window.
+func windowTitle(name string) string {
+	if model, ok := strings.CutPrefix(name, "week ("); ok {
+		return "Weekly · " + strings.TrimSuffix(model, ")")
+	}
+	switch name {
+	case "5h":
+		return "Session"
+	case "week":
+		return "Weekly"
+	case "day":
+		return "Daily"
+	case "month":
+		return "Monthly"
+	case "":
+		return "Window"
+	}
+	return strings.ToUpper(name[:1]) + name[1:]
+}
+
+// metric is one window on a card.
+type metric struct {
+	title string
+	pct   float64
+	reset string
+	pace  *plans.WindowPace
+}
+
+// detail is a "Label: value" line.
+type detail struct {
+	label, value string
+	tone         rgb
+}
+
+// metrics lists a plan's windows, busiest first, or its message window
+// when the vendor reports none.
+func metrics(r plans.HeadroomReport) []metric {
+	out := make([]metric, 0, len(r.Windows)+1)
 	for _, w := range r.Windows {
-		out = append(out, row{label: w.Name, pct: w.UsedPct, right: humanReset(w.ResetsIn), hasPct: true})
+		out = append(out, metric{title: windowTitle(w.Name), pct: w.UsedPct, reset: humanReset(w.ResetsIn), pace: w.Pace})
 	}
-	if len(r.Windows) == 0 && r.WindowCap > 0 {
-		out = append(out, row{label: windowLabel(r.WindowDuration), pct: r.WindowPct, right: humanReset(r.WindowResetsIn), hasPct: true})
+	if len(out) == 0 && r.WindowCap > 0 {
+		out = append(out, metric{title: windowTitle(windowLabel(r.WindowDuration)), pct: r.WindowPct, reset: humanReset(r.WindowResetsIn)})
 	}
+	if r.SpendLimitUSD > 0 {
+		out = append(out, metric{title: "Extra usage", pct: r.SpendPct})
+	}
+	return out
+}
+
+// details lists a plan's spend, credit and cost lines.
+func details(r plans.HeadroomReport, cost *spending.ProviderCost) []detail {
+	var out []detail
 	switch {
 	case r.SpendLimitUSD > 0:
-		out = append(out, row{label: "spend", pct: r.SpendPct, right: money(r.SpendUSD) + "/" + money(r.SpendLimitUSD), hasPct: true})
+		out = append(out, detail{"This month", money(r.SpendUSD) + " / " + money(r.SpendLimitUSD), porcelain})
 	case r.SpendUSD > 0:
-		out = append(out, row{text: money(r.SpendUSD) + " this month, no limit known"})
+		out = append(out, detail{"This month", money(r.SpendUSD) + ", no limit", porcelain})
 	}
 	if r.BalanceUSD != nil {
-		out = append(out, row{text: money(*r.BalanceUSD) + " credit left"})
+		out = append(out, detail{"Credit left", money(*r.BalanceUSD), okC})
 	}
-	if len(out) == 0 && r.ConsumedTokens > 0 {
-		out = append(out, row{text: tokens(r.ConsumedTokens) + " tokens this month"})
+	if risk := strings.ToUpper(r.OverageRisk); risk == "MEDIUM" || risk == "HIGH" {
+		out = append(out, detail{"Overage risk", risk, map[string]rgb{"MEDIUM": warnC, "HIGH": dangerC}[risk]})
+	}
+	if cost != nil {
+		out = append(out, detail{"Today", usage(cost.Today), porcelain}, detail{"30 days", usage(cost.Last30), porcelain})
+	} else if len(r.Windows) == 0 && r.WindowCap == 0 && r.SpendUSD == 0 && r.ConsumedTokens > 0 {
+		out = append(out, detail{"This month", tokens(r.ConsumedTokens) + " tok", porcelain})
 	}
 	return out
 }
 
-func windowLabel(s string) string {
-	d, _ := time.ParseDuration(s)
-	switch {
-	case d >= 7*24*time.Hour:
-		return "week"
-	case d > 0:
-		return fmt.Sprintf("%dh", int(d.Hours()))
+// usage is "$745+ · 2.24B tok": the money at API prices where a plan
+// covers it, "+" where some requests have no list price yet, and tokens
+// alone where most have none — a figure that looks complete but is not
+// is worse than none.
+func usage(u spending.Usage) string {
+	t := tokens(u.Tokens) + " tok"
+	if u.UnpricedShare() > 0.5 {
+		return t
 	}
-	return "window"
+	amount := u.CostUSD
+	if u.Covered() {
+		amount = u.APIEquivalentUSD
+	}
+	plus := ""
+	if u.UnpricedShare() > 0.02 {
+		plus = "+"
+	}
+	return money(amount) + plus + " · " + t
 }
 
-func tokens(n int64) string {
-	switch {
-	case n >= 1e9:
-		return fmt.Sprintf("%.2fB", float64(n)/1e9)
-	case n >= 1e6:
-		return fmt.Sprintf("%.1fM", float64(n)/1e6)
-	case n >= 1e3:
-		return fmt.Sprintf("%.0fk", float64(n)/1e3)
+// costNotes say what the cost lines stand for and leave out.
+func costNotes(cost *spending.ProviderCost) []string {
+	if cost == nil {
+		return nil
 	}
-	return fmt.Sprintf("%d", n)
+	u := cost.Last30
+	var notes []string
+	if u.Covered() && u.UnpricedShare() <= 0.5 {
+		notes = append(notes, "At API prices; the plan covers it.")
+	}
+	if share := u.UnpricedShare(); share > 0.02 {
+		notes = append(notes, fmt.Sprintf("%.0f%% of requests have no price yet.", share*100))
+	}
+	return notes
 }
 
-// card draws one plan.
-func (p painter) card(r plans.HeadroomReport) []string {
-	inner := cardWidth - 4
-	risk := strings.ToUpper(r.OverageRisk)
-	room := inner - 2 // no risk badge: title, a space, at least one dash
-	if risk != "" {
-		room = inner - len(risk) - 5
+// paceLine words a window's pace; its tone warns when it runs out first.
+func paceLine(pc *plans.WindowPace) (string, rgb) {
+	if pc == nil {
+		return "", muted
 	}
-	title := clip(r.Display, room)
-	riskColor := map[string]rgb{"LOW": okC, "MEDIUM": warnC, "HIGH": dangerC}[risk]
-	// ╭─ title ───── RISK ─╮ spans cardWidth: 3 + title + 1 + dashes + 1 + risk + 3.
-	top := p.paint(line, "╭─ ") + p.bold(p.paint(porcelain, title)) + " " +
-		p.paint(line, strings.Repeat("─", max(1, inner-visible(title)-len(risk)-4))) + " " +
-		p.paint(riskColor, risk) + p.paint(line, " ─╮")
-	if risk == "" {
-		top = p.paint(line, "╭─ ") + p.bold(p.paint(porcelain, title)) + " " +
-			p.paint(line, strings.Repeat("─", max(1, inner-visible(title)-2))+"─╮")
+	switch pc.Status {
+	case plans.PaceOnPace:
+		return "Pace: on pace", muted
+	case plans.PaceBehind:
+		return fmt.Sprintf("Pace: behind (%.0f%%) · lasts to reset", pc.DeltaPct), muted
 	}
-	rs := rows(r)
-	out := make([]string, 0, len(rs)+2)
-	out = append(out, top)
-	// The label column fits the card's longest label (up to 12) and the
-	// right one its widest reset or amount (7 to 13); the bar takes the
-	// rest.
-	lw, rw7 := 4, 7
-	for _, rw := range rs {
-		if rw.hasPct {
-			lw = max(lw, utf8.RuneCountInString(rw.label))
-			rw7 = max(rw7, utf8.RuneCountInString(rw.right))
+	if pc.LastsToReset {
+		return fmt.Sprintf("Pace: ahead (+%.0f%%) · lasts to reset", pc.DeltaPct), muted
+	}
+	return fmt.Sprintf("Pace: ahead (+%.0f%%) · out in %s", pc.DeltaPct, humanDuration(pc.RunsOutIn)), warnC
+}
+
+// card draws one plan width columns wide.
+func (p painter) card(r plans.HeadroomReport, cost *spending.ProviderCost, width int) []string {
+	inner := width - 4
+	side := func(body string) string {
+		return p.paint(line, "│ ") + pad(body, inner) + p.paint(line, " │")
+	}
+	// spread puts left and right at either edge.
+	spread := func(left, right string) string {
+		return left + strings.Repeat(" ", max(1, inner-visible(left)-visible(right))) + right
+	}
+	out := []string{p.paint(line, "╭"+strings.Repeat("─", width-2)+"╮")}
+
+	title := p.bold(p.paint(cobaltFg, vendor(r)))
+	if b := sourceBadge(r.SignalQuality.Source); b != "" {
+		title += " " + p.paint(muted, "["+b+"]")
+	}
+	plan := ""
+	if room := inner - visible(title) - 1; room >= 10 {
+		plan = clip("PLAN "+planName(r), room)
+		label, value, _ := strings.Cut(plan, " ")
+		plan = p.paint(muted, label) + " " + p.bold(p.paint(porcelain, value))
+	}
+	out = append(out, side(spread(title, plan)), side(p.paint(line, strings.Repeat("─", inner))))
+
+	for i, m := range metrics(r) {
+		if i > 0 {
+			out = append(out, side(""))
+		}
+		used := p.paint(levelColor(m.pct), fmt.Sprintf("%.0f%% used", m.pct))
+		out = append(out, side(spread(p.paint(porcelain, clip(m.title, inner-10)), used)))
+		out = append(out, side(p.paint(line, "[ ")+p.bar(m.pct, inner-4)+p.paint(line, " ]")))
+		if m.reset != "" {
+			out = append(out, side(p.paint(muted, "Resets in "+m.reset)))
+		}
+		if text, tone := paceLine(m.pace); text != "" {
+			out = append(out, side(p.paint(tone, clip(text, inner))))
 		}
 	}
-	lw, rw7 = min(lw, 12), min(rw7, 13)
-	bw := max(4, inner-lw-1-1-4-1-rw7)
-	for _, rw := range rs {
-		var body string
-		if rw.hasPct {
-			label := pad(p.paint(muted, clip(rw.label, lw)), lw)
-			pct := pad(p.paint(levelColor(rw.pct), fmt.Sprintf("%3.0f%%", rw.pct)), 4)
-			body = label + " " + p.bar(rw.pct, bw) + " " + pct + " " + p.paint(muted, clip(rw.right, inner-lw-bw-7+1))
-		} else {
-			body = p.paint(muted, clip(rw.text, inner))
-		}
-		out = append(out, p.paint(line, "│ ")+pad(body, inner)+p.paint(line, " │"))
+	ds := details(r, cost)
+	if len(ds) > 0 && len(out) > 3 {
+		out = append(out, side(""))
 	}
-	source := ""
-	if r.SignalQuality.Source != "" {
-		source = " " + strings.ReplaceAll(r.SignalQuality.Source, "_", " ") + " "
+	for _, d := range ds {
+		label := p.paint(muted, d.label+":")
+		out = append(out, side(spread(label, p.paint(d.tone, clip(d.value, inner-visible(label)-1)))))
 	}
-	source = clip(source, inner-2)
-	out = append(out, p.paint(line, "╰"+strings.Repeat("─", cardWidth-3-utf8.RuneCountInString(source)))+p.paint(muted, source)+p.paint(line, "─╯"))
+	for _, n := range costNotes(cost) {
+		out = append(out, side(p.paint(muted, clip(n, inner))))
+	}
+	return append(out, p.paint(line, "╰"+strings.Repeat("─", width-2)+"╯"))
+}
+
+// layout is how many cards share a row and how wide each is.
+func layout(width int) (perRow, cardWidth int) {
+	perRow = max(1, (max(width, minCardWidth)+cardGap)/(minCardWidth+cardGap))
+	cardWidth = min(maxCardWidth, max(minCardWidth, (width-(perRow-1)*cardGap)/perRow))
+	return perRow, cardWidth
+}
+
+// sorted orders plans busiest first, as the cards and the table show them.
+func sorted(reports []plans.HeadroomReport) []plans.HeadroomReport {
+	out := append([]plans.HeadroomReport(nil), reports...)
+	sort.SliceStable(out, func(i, j int) bool { return busiest(out[i]) > busiest(out[j]) })
 	return out
+}
+
+// titleLine is "TokenOps • AI Usage & Limits", the time at the right.
+func titleLine(p painter, width int, now time.Time) string {
+	left := p.bold(p.paint(cobaltFg, "TokenOps • AI Usage & Limits"))
+	if now.IsZero() {
+		return left
+	}
+	stamp := now.Local().Format("Mon 2 Jan 15:04")
+	if visible(left)+len(stamp)+1 > width {
+		return left
+	}
+	return left + strings.Repeat(" ", width-visible(left)-len(stamp)) + p.paint(muted, stamp)
 }
 
 // Render draws the glance.
@@ -280,15 +456,8 @@ func Render(g headroom.Glance, opt Options) string {
 		opt.Width = 80
 	}
 	p := painter(opt.Color)
-	if opt.Brief {
-		return brief(g, p)
-	}
 	var b strings.Builder
-	b.WriteString(p.bold(p.paint(cobaltFg, "TokenOps")))
-	if s := g.Insight.Summary; s != "" {
-		b.WriteString(p.paint(line, "  ·  ") + p.paint(porcelain, clip(s, max(20, opt.Width-14))))
-	}
-	b.WriteString("\n\n")
+	b.WriteString(titleLine(p, opt.Width, opt.Now) + "\n\n")
 	switch {
 	case g.Headroom.Unconfigured != "":
 		b.WriteString(p.paint(warnC, g.Headroom.Unconfigured) + "\n")
@@ -297,37 +466,57 @@ func Render(g headroom.Glance, opt Options) string {
 		b.WriteString(p.paint(warnC, g.Headroom.StorageDisabled) + "\n")
 		return b.String()
 	}
-	reports := append([]plans.HeadroomReport(nil), g.Headroom.Reports...)
-	sort.SliceStable(reports, func(i, j int) bool { return busiest(reports[i]) > busiest(reports[j]) })
-	perRow := max(1, (opt.Width+2)/(cardWidth+2))
-	for i := 0; i < len(reports); i += perRow {
-		group := reports[i:min(i+perRow, len(reports))]
-		drawn := make([][]string, len(group))
-		height := 0
-		for j, r := range group {
-			drawn[j] = p.card(r)
-			height = max(height, len(drawn[j]))
-		}
-		for at := range height {
-			var parts []string
-			for _, c := range drawn {
-				switch {
-				case at < len(c)-1:
-					parts = append(parts, pad(c[at], cardWidth))
-				case at == height-1:
-					parts = append(parts, pad(c[len(c)-1], cardWidth))
-				default:
-					// A shorter card is padded to its row's height.
-					parts = append(parts, p.paint(line, "│")+strings.Repeat(" ", cardWidth-2)+p.paint(line, "│"))
-				}
-			}
-			b.WriteString(strings.TrimRight(strings.Join(parts, "  "), " ") + "\n")
-		}
+	reports := sorted(g.Headroom.Reports)
+	if opt.Brief {
+		b.WriteString(brief(reports, opt, p))
+	} else {
+		b.WriteString(grid(reports, opt, p))
 	}
 	for _, n := range g.Headroom.Notes {
 		b.WriteString(p.paint(warnC, "! ") + p.paint(muted, n) + "\n")
 	}
 	return b.String()
+}
+
+// grid lays the cards out in rows that fit the terminal.
+func grid(reports []plans.HeadroomReport, opt Options, p painter) string {
+	perRow, width := layout(opt.Width)
+	var b strings.Builder
+	for i := 0; i < len(reports); i += perRow {
+		group := reports[i:min(i+perRow, len(reports))]
+		drawn := make([][]string, len(group))
+		height := 0
+		for j, r := range group {
+			drawn[j] = p.card(r, costFor(opt, r), width)
+			height = max(height, len(drawn[j]))
+		}
+		for at := range height {
+			parts := make([]string, 0, len(drawn))
+			for _, c := range drawn {
+				switch {
+				case at < len(c)-1:
+					parts = append(parts, pad(c[at], width))
+				case at == height-1:
+					parts = append(parts, pad(c[len(c)-1], width))
+				default:
+					// A shorter card is padded to its row's height.
+					parts = append(parts, p.paint(line, "│")+strings.Repeat(" ", width-2)+p.paint(line, "│"))
+				}
+			}
+			b.WriteString(strings.TrimRight(strings.Join(parts, strings.Repeat(" ", cardGap)), " ") + "\n")
+		}
+		if i+perRow < len(reports) {
+			b.WriteString("\n")
+		}
+	}
+	return b.String()
+}
+
+func costFor(opt Options, r plans.HeadroomReport) *spending.ProviderCost {
+	if c, ok := opt.Costs[r.Provider]; ok {
+		return &c
+	}
+	return nil
 }
 
 // busiest is a plan's fullest measure, to order the cards.
@@ -339,19 +528,71 @@ func busiest(r plans.HeadroomReport) float64 {
 	return math.Max(m, r.WindowPct)
 }
 
-// brief is one line per measure: plan, window, share, reset.
-func brief(g headroom.Glance, p painter) string {
+// brief is a table: one line per window, busiest plan first.
+func brief(reports []plans.HeadroomReport, opt Options, p painter) string {
+	planW := 8
+	for _, r := range reports {
+		planW = max(planW, utf8.RuneCountInString(vendor(r)+" "+planName(r)))
+	}
+	planW = min(planW, max(12, opt.Width-50))
 	var b strings.Builder
-	fmt.Fprintf(&b, "%-26s %-14s %5s  %s\n", "PLAN", "WINDOW", "USED", "RESETS")
-	for _, r := range g.Headroom.Reports {
-		for _, rw := range rows(r) {
-			if !rw.hasPct {
-				fmt.Fprintf(&b, "%-26s %s\n", clip(r.Display, 26), p.paint(muted, rw.text))
-				continue
+	head := fmt.Sprintf("%-*s  %-16s %5s  %-8s  %s", planW, "PLAN", "WINDOW", "USED", "RESETS", "PACE")
+	b.WriteString(p.paint(muted, head) + "\n")
+	for _, r := range reports {
+		name := clip(vendor(r)+" "+planName(r), planW)
+		ms := metrics(r)
+		if len(ms) == 0 {
+			if ds := details(r, costFor(opt, r)); len(ds) > 0 {
+				fmt.Fprintf(&b, "%-*s  %s\n", planW, name, p.paint(muted, ds[0].label+": "+ds[0].value))
 			}
-			used := p.paint(levelColor(rw.pct), fmt.Sprintf("%4.0f%%", rw.pct))
-			fmt.Fprintf(&b, "%-26s %-14s %s  %s\n", clip(r.Display, 26), clip(rw.label, 14), used, rw.right)
+			continue
+		}
+		for i, m := range ms {
+			if i > 0 {
+				name = ""
+			}
+			used := p.paint(levelColor(m.pct), fmt.Sprintf("%4.0f%%", m.pct))
+			pace, tone := briefPace(m.pace)
+			fmt.Fprintf(&b, "%-*s  %-16s %s  %-8s  %s\n", planW, name, clip(m.title, 16), used, m.reset, p.paint(tone, pace))
 		}
 	}
 	return b.String()
+}
+
+// briefPace is a pace in a table cell.
+func briefPace(pc *plans.WindowPace) (string, rgb) {
+	switch {
+	case pc == nil:
+		return "", muted
+	case pc.Status == plans.PaceOnPace:
+		return "on pace", muted
+	case pc.LastsToReset:
+		return fmt.Sprintf("%+.0f%% · lasts", pc.DeltaPct), muted
+	}
+	return fmt.Sprintf("%+.0f%% · out in %s", pc.DeltaPct, humanDuration(pc.RunsOutIn)), warnC
+}
+
+// windowLabel names a message window from its Go duration.
+func windowLabel(s string) string {
+	d, _ := time.ParseDuration(s)
+	switch {
+	case d >= 7*24*time.Hour:
+		return "week"
+	case d > 0:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	}
+	return ""
+}
+
+// tokens is "2.24B", "198M", "15k".
+func tokens(n int64) string {
+	switch {
+	case n >= 1e9:
+		return fmt.Sprintf("%.2fB", float64(n)/1e9)
+	case n >= 1e6:
+		return fmt.Sprintf("%.0fM", float64(n)/1e6)
+	case n >= 1e3:
+		return fmt.Sprintf("%.0fk", float64(n)/1e3)
+	}
+	return fmt.Sprintf("%d", n)
 }

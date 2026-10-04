@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Changed
+
+- **cli:** `tokenops glance` cards are laid out like CodexBar's: vendor, source and plan; each window's share, a full-width bar, its reset and its pace; then spend, credit and cost today and over 30 days, with unpriced usage marked. `--brief` gains a pace column and both list the busiest plan first. The glance-wide insight no longer heads every card
+
+### Added
+
+- **plans:** every vendor window carries its pace (`pace` in the glance and headroom payloads): on pace, behind and lasting to the reset, or ahead and when it runs out. The CLI and the menu bar show the same answer
+
 ## 0.96.0 - 2026-10-04
 
 ### Added
