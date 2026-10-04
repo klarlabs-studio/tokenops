@@ -72,6 +72,8 @@ func run() error {
 type view struct {
 	Glance json.RawMessage `json:"glance,omitempty"`
 	Coach  json.RawMessage `json:"coach,omitempty"`
+	// Findings is GET /api/findings; absent from a daemon without it.
+	Findings json.RawMessage `json:"findings,omitempty"`
 	// Costs is each provider's usage today and over the last 30 days.
 	Costs map[string]costs `json:"costs,omitempty"`
 	// Error says why there is nothing to show, in the operator's terms.
@@ -229,7 +231,8 @@ func (m *menubar) refresh(ctx context.Context) view {
 	return v
 }
 
-// read asks the daemon for the glance and the coach.
+// read asks the daemon for the glance, then the coach, its findings and
+// each plan's cost at once.
 func (m *menubar) read(ctx context.Context) view {
 	v := view{Updated: time.Now()}
 	g, err := m.daemon.glance(ctx)
@@ -238,10 +241,22 @@ func (m *menubar) read(ctx context.Context) view {
 		return v
 	}
 	v.Glance = g
-	if c, err := m.daemon.coach(ctx); err == nil {
-		v.Coach = c
-	}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		if c, err := m.daemon.coach(ctx); err == nil {
+			v.Coach = c
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if f, err := m.daemon.findings(ctx); err == nil {
+			v.Findings = f
+		}
+	}()
 	v.Costs = m.costs(ctx, g)
+	wg.Wait()
 	return v
 }
 

@@ -11,6 +11,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/actions"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/decisions"
+	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
@@ -55,6 +56,7 @@ var (
 var APICatalog = []RouteDoc{
 	// Plans (ADR 0010 slice 1).
 	{Method: "GET", Path: "/api/glance", Summary: "Session budgets, plan headroom and a ranked insight in one call", Response: headroom.GlancePayload{}},
+	{Method: "GET", Path: "/api/findings", Summary: "What the coach and the session analysis observed, ranked, with what to do", Response: findings.Report{}},
 	{Method: "GET", Path: "/api/plans/headroom", Summary: "Every bound plan: usage, the vendor's windows, spend against the limit, risk", Response: headroom.HeadroomPayload{}},
 	{Method: "GET", Path: "/api/plans/session-budget", Summary: "Per plan window: share used, pace, and what to do", Response: headroom.BudgetPayload{}},
 

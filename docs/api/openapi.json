@@ -1422,6 +1422,61 @@
         "summary": "Agent DX, graded, with the single change worth making"
       }
     },
+    "/api/findings": {
+      "get": {
+        "operationId": "getFindings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "findings": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "action": {
+                            "type": "string"
+                          },
+                          "evidence": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "level": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "sessions_read_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "What the coach and the session analysis observed, ranked, with what to do"
+      }
+    },
     "/api/glance": {
       "get": {
         "operationId": "getGlance",

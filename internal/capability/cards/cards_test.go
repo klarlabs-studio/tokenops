@@ -1,11 +1,13 @@
 package cards
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 	"unicode/utf8"
 
+	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
@@ -136,5 +138,55 @@ func TestColorModes(t *testing.T) {
 	}
 	if money(10948.4) != "$10,948" || money(745) != "$745" || money(4.2) != "$4.20" {
 		t.Errorf("money: %s %s %s", money(10948.4), money(745), money(4.2))
+	}
+}
+
+func TestCoachSection(t *testing.T) {
+	now := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
+	read := now.Add(-3 * time.Hour)
+	r := &findings.Report{SessionsReadAt: &read}
+	for i := range 8 {
+		r.Findings = append(r.Findings, findings.Finding{Level: findings.LevelNotice, Title: fmt.Sprintf("finding %d", i),
+			Evidence: "the figures behind it", Action: "Do the thing."})
+	}
+	out := Render(sample(), Options{Width: 86, Now: now, Findings: r})
+	for _, want := range []string{"Coach · 8 findings · sessions read 3h ago", "● finding 0", "the figures behind it", "→ Do the thing.", "+ 2 more: tokenops glance --findings"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("coach section lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "finding 7") {
+		t.Error("more findings than fit are listed")
+	}
+	all := Render(sample(), Options{Width: 86, Now: now, Findings: r, OnlyFindings: true})
+	if !strings.Contains(all, "finding 7") || strings.Contains(all, "╭") {
+		t.Errorf("--findings:\n%s", all)
+	}
+	brief := Render(sample(), Options{Width: 86, Now: now, Findings: r, Brief: true})
+	if strings.Contains(brief, "the figures behind it") || !strings.Contains(brief, "finding 0") {
+		t.Errorf("brief findings:\n%s", brief)
+	}
+	if out := Render(sample(), Options{Findings: &findings.Report{}}); !strings.Contains(out, "nothing stands out") {
+		t.Errorf("no findings:\n%s", out)
+	}
+}
+
+func TestWrap(t *testing.T) {
+	if got := wrap("one two three four", 9); strings.Join(got, "|") != "one two|three|four" {
+		t.Errorf("wrap = %q", got)
+	}
+	if wrap("", 10) != nil {
+		t.Error("empty text wraps to lines")
+	}
+}
+
+// A cost cut off by the time limit says so rather than vanishing.
+func TestLateCostSaysSo(t *testing.T) {
+	out := Render(sample(), Options{Width: 130, Costs: map[string]spending.ProviderCost{"openai": costs["openai"]}, CostsLate: true})
+	if !strings.Contains(out, "Cost:") || !strings.Contains(out, "not read in time") {
+		t.Errorf("late cost silent:\n%s", out)
+	}
+	if strings.Contains(Render(sample(), Options{Width: 130}), "not read in time") {
+		t.Error("a cost never asked for is reported late")
 	}
 }

@@ -119,6 +119,14 @@ func (d *daemon) coach(ctx context.Context) (json.RawMessage, error) {
 	return out, err
 }
 
+// findings reads GET /api/findings: what the coach and the session
+// analysis observed, ranked.
+func (d *daemon) findings(ctx context.Context) (json.RawMessage, error) {
+	var out json.RawMessage
+	err := d.do(ctx, http.MethodGet, "/api/findings", nil, &out)
+	return out, err
+}
+
 // setPreset applies a coach preset through the API, which audits it.
 func (d *daemon) setPreset(ctx context.Context, preset string) (json.RawMessage, error) {
 	var out json.RawMessage

@@ -78,6 +78,7 @@ func TestEveryAPIRouteIsGatedByDashAuth(t *testing.T) {
 		"/api/domain-events",
 		"/api/sources",
 		"/api/glance",
+		"/api/findings",
 		"/api/plans/headroom",
 		"/api/plans/session-budget",
 		"/api/status",
