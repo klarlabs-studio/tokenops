@@ -15,6 +15,8 @@ import (
 	"golang.org/x/term"
 
 	"go.klarlabs.de/tokenops/internal/capability/cards"
+	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
@@ -26,8 +28,8 @@ import (
 // bare `tokenops` shows.
 func newGlanceCmd(rf *rootFlags) *cobra.Command {
 	var (
-		brief, jsonOut, noColor bool
-		dbPath, color           string
+		brief, jsonOut, noColor, onlyFindings bool
+		dbPath, color                         string
 	)
 	cmd := &cobra.Command{
 		Use:   "glance",
@@ -39,24 +41,32 @@ terminal. It answers from the same code as the daemon API and the menu bar.
 
 Colour follows the terminal: the Klarlabs palette with gradient bars where
 it supports true colour, 16 colours elsewhere, plain text for a pipe,
-NO_COLOR or --no-color. --brief prints a table; --json the API's payload.`,
+NO_COLOR or --no-color. --brief prints a table; --json the API's payload. Below the cards, the
+coach's findings: a window that runs out before its reset, files the agent
+keeps re-reading, sessions past their budget, the change that would most
+improve how sessions go, sources that cannot be read. --findings lists
+them all.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if noColor {
 				color = "never"
 			}
-			return runGlance(cmd, rf, dbPath, brief, jsonOut, color)
+			return runGlance(cmd, rf, dbPath, glanceView{brief: brief, json: jsonOut, findings: onlyFindings}, color)
 		},
 	}
 	cmd.Flags().BoolVar(&brief, "brief", false, "a compact table: plan, window, used, resets")
-	cmd.Flags().BoolVar(&jsonOut, "json", false, "the glance as JSON (the daemon API's GET /api/glance)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "the glance as JSON (the daemon API's GET /api/glance); with --findings, GET /api/findings")
+	cmd.Flags().BoolVar(&onlyFindings, "findings", false, "only the coach's findings, every one of them")
 	cmd.Flags().BoolVar(&noColor, "no-color", false, "plain text (same as --color never)")
 	cmd.Flags().StringVar(&color, "color", "auto", "auto | always | never; always keeps colour when piping, e.g. into less -R")
 	cmd.Flags().StringVar(&dbPath, "db", "", "event store path (defaults to the configured one)")
 	return cmd
 }
 
-func runGlance(cmd *cobra.Command, rf *rootFlags, dbPath string, brief, jsonOut bool, color string) error {
+// glanceView is which view of the glance to print.
+type glanceView struct{ brief, json, findings bool }
+
+func runGlance(cmd *cobra.Command, rf *rootFlags, dbPath string, view glanceView, color string) error {
 	cfg, err := loadConfig(rf)
 	if err != nil {
 		return err
@@ -83,18 +93,32 @@ func runGlance(cmd *cobra.Command, rf *rootFlags, dbPath string, brief, jsonOut 
 		return err
 	}
 	out := cmd.OutOrStdout()
-	if jsonOut {
+	report := coachcap.Status(cfg, coachLedger(), contextLevers(), now)
+	found := findings.Compute(findings.Gather(&g, &report, findings.DefaultDir()))
+	if view.json {
 		enc := json.NewEncoder(out)
 		enc.SetIndent("", "  ")
+		if view.findings {
+			return enc.Encode(found)
+		}
 		return enc.Encode(g.Payload())
 	}
-	opt := cards.Options{Width: terminalWidth(out), Color: terminalColor(out, color), Brief: brief, Now: now}
-	if engErr == nil {
-		opt.Costs = glanceCosts(ctx, analytics.New(store, eng), g, now)
+	opt := cards.Options{Width: terminalWidth(out), Color: terminalColor(out, color), Brief: view.brief, Now: now,
+		Findings: &found, OnlyFindings: view.findings}
+	if engErr == nil && !view.findings {
+		// Thirty days of usage is the heaviest read here; on a busy
+		// machine the cards go out without cost rather than wait for it.
+		costCtx, cancelCost := context.WithTimeout(ctx, costBudget)
+		opt.Costs = glanceCosts(costCtx, analytics.New(store, eng), g, now)
+		opt.CostsLate = costCtx.Err() != nil
+		cancelCost()
 	}
 	_, err = io.WriteString(out, cards.Render(g, opt))
 	return err
 }
+
+// costBudget bounds the cost lookups.
+const costBudget = 4 * time.Second
 
 // glanceCosts is each plan's provider's usage today and over 30 days; a
 // provider whose figures cannot be read shows none.

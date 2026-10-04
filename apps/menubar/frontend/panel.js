@@ -176,6 +176,44 @@
     }
   }
 
+  // The coach's findings, ranked by the daemon: a mark by level, the
+  // title, the figures behind it and what to do. They concern every plan,
+  // so they follow whichever plan is shown.
+  // withCode fills e with text, setting `quoted` parts as code.
+  function withCode(e, text) {
+    text.split("`").forEach(function (part, i) {
+      if (!part) return;
+      e.appendChild(i % 2 ? el("code", null, part) : document.createTextNode(part));
+    });
+    return e;
+  }
+
+  var MARKS_BY_LEVEL = { warn: "▲", notice: "●", info: "·" };
+  function coachFindings(main, v) {
+    var report = v.findings;
+    if (!report || !report.findings) return;
+    var box = el("section", "metric coach");
+    var head = el("h3", null, "Coach");
+    var count = report.findings.length;
+    head.appendChild(el("span", "count", count ? String(count) : "nothing stands out"));
+    box.appendChild(head);
+    report.findings.forEach(function (f) {
+      var item = el("div", "finding " + f.level);
+      item.appendChild(el("span", "finding-mark", MARKS_BY_LEVEL[f.level] || "·"));
+      var body = el("div", "finding-body");
+      body.appendChild(el("div", "finding-title", f.title));
+      if (f.evidence) body.appendChild(el("div", "note", f.evidence));
+      if (f.action) body.appendChild(withCode(el("div", "finding-action"), f.action));
+      item.appendChild(body);
+      box.appendChild(item);
+    });
+    if (report.sessions_read_at) {
+      var mins = Math.round((Date.now() - new Date(report.sessions_read_at)) / 60000);
+      box.appendChild(el("div", "note", "Sessions read " + (mins < 60 ? mins + "m" : Math.round(mins / 60) + "h") + " ago."));
+    }
+    main.appendChild(box);
+  }
+
   function render() {
     var v = state.view || {};
     var error = document.getElementById("error");
@@ -190,6 +228,7 @@
     tabs(reports);
     var sel = reports.filter(function (r) { return r.provider === state.selected; })[0];
     if (sel) detail(sel, v); else document.getElementById("detail").textContent = "";
+    coachFindings(document.getElementById("detail"), v);
     var select = document.getElementById("preset");
     if (v.coach) {
       var custom = document.getElementById("preset-custom");

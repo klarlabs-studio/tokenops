@@ -222,6 +222,9 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	// reports as free — which is the failure this tool exists to find.
 	startPricingRefreshRuntime(cfg, components.Spend, sup, logger)
 
+	// The findings' session analysis is too slow to run per answer.
+	startSessionFindingsRuntime(sup, logger)
+
 	// The optimizer's own mode governs what it may do with a request.
 	// The daemon-wide active flag still gates the background watcher, but
 	// routing no longer needs it: an operator can leave the daemon in its

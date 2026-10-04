@@ -15,6 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
@@ -43,7 +44,18 @@ type Options struct {
 	// Costs is each provider's usage today and over 30 days, keyed by
 	// provider; a plan without an entry shows no cost.
 	Costs map[string]spending.ProviderCost
+	// Findings are what the coach and the session analysis observed;
+	// nil leaves the coach section out.
+	Findings *findings.Report
+	// CostsLate marks cost lookups cut off before they finished; a plan
+	// without its cost then says so instead of leaving it out silently.
+	CostsLate bool
+	// OnlyFindings prints the coach section alone, every finding in it.
+	OnlyFindings bool
 }
+
+// maxFindings is how many findings the cards show; the rest are counted.
+const maxFindings = 6
 
 // Cards are 38 to 42 wide with two columns between them, as CodexBar's:
 // two fit 80 columns, and they stretch to fill wider rows.
@@ -296,7 +308,7 @@ func metrics(r plans.HeadroomReport) []metric {
 }
 
 // details lists a plan's spend, credit and cost lines.
-func details(r plans.HeadroomReport, cost *spending.ProviderCost) []detail {
+func details(r plans.HeadroomReport, cost *spending.ProviderCost, late bool) []detail {
 	var out []detail
 	switch {
 	case r.SpendLimitUSD > 0:
@@ -310,9 +322,12 @@ func details(r plans.HeadroomReport, cost *spending.ProviderCost) []detail {
 	if risk := strings.ToUpper(r.OverageRisk); risk == "MEDIUM" || risk == "HIGH" {
 		out = append(out, detail{"Overage risk", risk, map[string]rgb{"MEDIUM": warnC, "HIGH": dangerC}[risk]})
 	}
-	if cost != nil {
+	switch {
+	case cost != nil:
 		out = append(out, detail{"Today", usage(cost.Today), porcelain}, detail{"30 days", usage(cost.Last30), porcelain})
-	} else if len(r.Windows) == 0 && r.WindowCap == 0 && r.SpendUSD == 0 && r.ConsumedTokens > 0 {
+	case late:
+		out = append(out, detail{"Cost", "not read in time", muted})
+	case len(r.Windows) == 0 && r.WindowCap == 0 && r.SpendUSD == 0 && r.ConsumedTokens > 0:
 		out = append(out, detail{"This month", tokens(r.ConsumedTokens) + " tok", porcelain})
 	}
 	return out
@@ -372,7 +387,7 @@ func paceLine(pc *plans.WindowPace) (string, rgb) {
 }
 
 // card draws one plan width columns wide.
-func (p painter) card(r plans.HeadroomReport, cost *spending.ProviderCost, width int) []string {
+func (p painter) card(r plans.HeadroomReport, cost *spending.ProviderCost, late bool, width int) []string {
 	inner := width - 4
 	side := func(body string) string {
 		return p.paint(line, "│ ") + pad(body, inner) + p.paint(line, " │")
@@ -409,7 +424,7 @@ func (p painter) card(r plans.HeadroomReport, cost *spending.ProviderCost, width
 			out = append(out, side(p.paint(tone, clip(text, inner))))
 		}
 	}
-	ds := details(r, cost)
+	ds := details(r, cost, late)
 	if len(ds) > 0 && len(out) > 3 {
 		out = append(out, side(""))
 	}
@@ -466,11 +481,17 @@ func Render(g headroom.Glance, opt Options) string {
 		b.WriteString(p.paint(warnC, g.Headroom.StorageDisabled) + "\n")
 		return b.String()
 	}
+	if opt.OnlyFindings && opt.Findings != nil {
+		return b.String() + strings.TrimPrefix(coachSection(*opt.Findings, opt, p), "\n")
+	}
 	reports := sorted(g.Headroom.Reports)
 	if opt.Brief {
 		b.WriteString(brief(reports, opt, p))
 	} else {
 		b.WriteString(grid(reports, opt, p))
+	}
+	if opt.Findings != nil {
+		b.WriteString(coachSection(*opt.Findings, opt, p))
 	}
 	for _, n := range g.Headroom.Notes {
 		b.WriteString(p.paint(warnC, "! ") + p.paint(muted, n) + "\n")
@@ -487,7 +508,7 @@ func grid(reports []plans.HeadroomReport, opt Options, p painter) string {
 		drawn := make([][]string, len(group))
 		height := 0
 		for j, r := range group {
-			drawn[j] = p.card(r, costFor(opt, r), width)
+			drawn[j] = p.card(r, costFor(opt, r), opt.CostsLate, width)
 			height = max(height, len(drawn[j]))
 		}
 		for at := range height {
@@ -542,7 +563,7 @@ func brief(reports []plans.HeadroomReport, opt Options, p painter) string {
 		name := clip(vendor(r)+" "+planName(r), planW)
 		ms := metrics(r)
 		if len(ms) == 0 {
-			if ds := details(r, costFor(opt, r)); len(ds) > 0 {
+			if ds := details(r, costFor(opt, r), false); len(ds) > 0 {
 				fmt.Fprintf(&b, "%-*s  %s\n", planW, name, p.paint(muted, ds[0].label+": "+ds[0].value))
 			}
 			continue
@@ -595,4 +616,121 @@ func tokens(n int64) string {
 		return fmt.Sprintf("%.0fk", float64(n)/1e3)
 	}
 	return fmt.Sprintf("%d", n)
+}
+
+// levelMark is a finding's mark and colour.
+func levelMark(level string) (string, rgb) {
+	switch level {
+	case findings.LevelWarn:
+		return "▲", warnC
+	case findings.LevelNotice:
+		return "●", cobaltFg
+	}
+	return "·", muted
+}
+
+// coachSection lists the findings under the cards: a mark and a title,
+// the evidence beneath it, and what to do. Brief keeps the titles only.
+func coachSection(r findings.Report, opt Options, p painter) string {
+	var b strings.Builder
+	head := p.bold(p.paint(cobaltFg, "Coach"))
+	if len(r.Findings) == 0 {
+		head += p.paint(muted, " · nothing stands out")
+	} else {
+		head += p.paint(muted, fmt.Sprintf(" · %d finding%s", len(r.Findings), plural(len(r.Findings))))
+	}
+	if r.SessionsReadAt != nil && !opt.Now.IsZero() {
+		head += p.paint(muted, " · sessions read "+ago(opt.Now.Sub(*r.SessionsReadAt)))
+	}
+	b.WriteString("\n" + head + "\n")
+	width := min(opt.Width, 100) - 4
+	shown := r.Findings
+	if len(shown) > maxFindings && !opt.OnlyFindings {
+		shown = shown[:maxFindings]
+	}
+	for _, f := range shown {
+		mark, tone := levelMark(f.Level)
+		b.WriteString("  " + p.paint(tone, mark) + " " + p.bold(p.paint(porcelain, clip(f.Title, width))) + "\n")
+		if opt.Brief {
+			continue
+		}
+		for _, l := range wrap(f.Evidence, width) {
+			b.WriteString("    " + p.paint(muted, l) + "\n")
+		}
+		inCode := false
+		for i, l := range wrap(f.Action, width-2) {
+			lead := "  "
+			if i == 0 {
+				lead = p.paint(cobaltFg, "→ ")
+			}
+			var painted string
+			painted, inCode = p.code(l, inCode)
+			b.WriteString("    " + lead + painted + "\n")
+		}
+	}
+	if more := len(r.Findings) - len(shown); more > 0 {
+		b.WriteString(p.paint(muted, fmt.Sprintf("  + %d more: tokenops glance --findings", more)) + "\n")
+	}
+	return b.String()
+}
+
+// code paints line with its `quoted` commands in the accent colour and
+// without their backticks; inCode carries a command across a line break.
+func (p painter) code(line string, inCode bool) (string, bool) {
+	var b strings.Builder
+	for i, part := range strings.Split(line, "`") {
+		if i > 0 {
+			inCode = !inCode
+		}
+		if part == "" {
+			continue
+		}
+		if inCode {
+			b.WriteString(p.bold(p.paint(cobaltFg, part)))
+		} else {
+			b.WriteString(p.paint(porcelain, part))
+		}
+	}
+	return b.String(), inCode
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}
+
+// ago is "just now", "12m ago", "3h ago".
+func ago(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d/time.Minute))
+	case d < 48*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d/time.Hour))
+	}
+	return fmt.Sprintf("%dd ago", int(d/(24*time.Hour)))
+}
+
+// wrap breaks plain s into lines of at most width runes at spaces.
+func wrap(s string, width int) []string {
+	if s == "" {
+		return nil
+	}
+	var lines []string
+	line := ""
+	for _, w := range strings.Fields(s) {
+		switch {
+		case line == "":
+			line = w
+		case utf8.RuneCountInString(line)+1+utf8.RuneCountInString(w) <= width:
+			line += " " + w
+		default:
+			lines = append(lines, line)
+			line = w
+		}
+	}
+	return append(lines, line)
 }
