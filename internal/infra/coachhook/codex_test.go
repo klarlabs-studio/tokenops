@@ -109,19 +109,20 @@ func TestCodexDetectionIgnoresThePath(t *testing.T) {
 	}
 }
 
-// A model the rate card does not know must say so. Codex runs `gpt-5.5`
-// and `gpt-5.6-luna` today and the shipped catalog has neither, so
-// without this every Codex session reports $0 and reads as a cheap one —
-// this tool's own failure mode, wearing this tool's clothes.
+// A model the rate card does not know must say so. Codex once ran
+// models the shipped catalog lacked, and every such session reported $0
+// and read as a cheap one — this tool's own failure mode, wearing this
+// tool's clothes. codex-auto-review has no API price at all.
 func TestCodexNamesAModelItCannotPrice(t *testing.T) {
+	const model = "codex-auto-review"
 	dir := t.TempDir()
 	tp := writeTranscript(t, dir,
-		codexTurnCtx(ts(1), "gpt-5.5"),
+		codexTurnCtx(ts(1), model),
 		codexTokenCount(ts(2), 1_000_000, 0, 500),
 	)
 	dec := Evaluate(dir, "s", tp, DefaultConfig(), fixedNow)
-	if dec.UnpricedModel != "gpt-5.5" {
-		t.Errorf("UnpricedModel = %q, want gpt-5.5 — a session nobody could price is not a free one", dec.UnpricedModel)
+	if dec.UnpricedModel != model {
+		t.Errorf("UnpricedModel = %q, want %s — a session nobody could price is not a free one", dec.UnpricedModel, model)
 	}
 	if dec.CumulativeUSD != 0 {
 		t.Errorf("CumulativeUSD = %v, want 0 — an unknown rate must not be guessed at", dec.CumulativeUSD)
@@ -147,7 +148,7 @@ func TestCodexStaysQuietWhenItCanPrice(t *testing.T) {
 // no tier could fire. On one real rollout that was the difference between
 // $0.00 and $0.68.
 func TestEvaluatePricesFromTheDatedCardNotTheBaseline(t *testing.T) {
-	const model = "gpt-5.5" // deliberately absent from the embedded baseline
+	const model = "codex-auto-review" // absent from the embedded baseline: it has no API price
 	if _, err := spend.DefaultTable().Lookup(eventschema.ProviderOpenAI, model); err == nil {
 		t.Skip("baseline now knows " + model + "; pick another unpriced model")
 	}
