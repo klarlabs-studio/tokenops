@@ -3,6 +3,37 @@
 The `tokenops` binary wraps the daemon's local event store. Every
 subcommand has a matching MCP tool (`tokenops_<name>`).
 
+## At a glance
+
+### `tokenops glance`
+
+`tokenops` on its own, once set up, draws every plan as a card: a bar for
+each window the vendor reports, when it resets, spend against a limit and
+credit left, busiest plan first, laid out to fit the terminal.
+
+```
+╭─ ChatGPT Pro Standard ($10… ─ LOW ─╮  ╭─ Claude Max 20x ───────────── LOW ─╮
+│ week ████████░░░░░░░░  50% 5d 22h  │  │ week         █░░░░░░░  18% 5d 17h  │
+│                                    │  │ 5h           ░░░░░░░░   4% 4h 36m  │
+│                                    │  │ week (Fable) ░░░░░░░░   0% 5d 17h  │
+╰────────────────────── codex jsonl ─╯  ╰─────────────── claude usage meter ─╯
+```
+
+Bars run green, amber, red as a window fills; in a true-colour terminal
+each cell takes the gradient's colour at its position. Each card's bottom
+edge names where the reading came from. It answers from the same code as
+the daemon API and the menu bar.
+
+```bash
+tokenops glance --brief          # a table: plan, window, used, resets
+tokenops glance --json           # the payload GET /api/glance serves
+tokenops glance --color always | less -R
+```
+
+Colour follows the terminal and `NO_COLOR`; `--no-color` (or `--color
+never`) prints plain text, which a pipe gets by default. `$COLUMNS` sets
+the width.
+
 ## Setup
 
 ### `tokenops init`
