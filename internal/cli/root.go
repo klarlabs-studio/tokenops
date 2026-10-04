@@ -5,6 +5,8 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 )
 
@@ -31,6 +33,17 @@ func NewRoot() *cobra.Command {
 		Long:          "tokenops manages the local TokenOps daemon and queries its control endpoints.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// Bare `tokenops` shows every plan at a glance once it is set up,
+		// as `codexbar` shows its cards; before that, the help.
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				return fmt.Errorf("unknown command %q for tokenops", args[0])
+			}
+			if err := runGlance(cmd, rf, "", false, false, "auto"); err != nil {
+				return cmd.Help()
+			}
+			return nil
+		},
 	}
 	cmd.SetVersionTemplate("{{.Name}} {{.Version}}\n")
 
@@ -49,6 +62,7 @@ func NewRoot() *cobra.Command {
 		newServeCmd(),
 		newAnthropicBridgeCmd(),
 		newStatusCmd(rf),
+		newGlanceCmd(rf),
 		newVersionCmd(),
 		newConfigCmd(rf),
 		newAuditCmd(rf),

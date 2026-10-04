@@ -236,3 +236,19 @@ func TestExplainCommand(t *testing.T) {
 		t.Errorf("list: %v\n%s", err, out.String())
 	}
 }
+
+// Bare `tokenops` shows the glance once set up; before that, the help.
+func TestBareTokenopsShowsHelpBeforeSetup(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	var out bytes.Buffer
+	root := NewRoot()
+	root.SetArgs(nil)
+	root.SetOut(&out)
+	root.SetErr(&out)
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "Available Commands") {
+		t.Errorf("no help before setup:\n%s", out.String())
+	}
+}
