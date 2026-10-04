@@ -71,3 +71,33 @@ func TestGPT6SolAndLunaKeysAreExact(t *testing.T) {
 		}
 	}
 }
+
+// The models Codex runs on, from OpenAI's Standard table (2026-10-04).
+// Before these rows, 80% of a Codex user's requests were unpriced.
+func TestVerifiedCodexModelRates(t *testing.T) {
+	tests := map[string]Rate{
+		"gpt-6.1-sol":   {InputPerMillion: 2.00, OutputPerMillion: 10.00, CachedInputPerMillion: 0.10},
+		"gpt-5.6-sol":   {InputPerMillion: 4.00, OutputPerMillion: 20.00, CachedInputPerMillion: 0.40},
+		"gpt-5.6-terra": {InputPerMillion: 2.00, OutputPerMillion: 12.00, CachedInputPerMillion: 0.20},
+		"gpt-5.6-luna":  {InputPerMillion: 0.20, OutputPerMillion: 1.20, CachedInputPerMillion: 0.02},
+		"gpt-5.5":       {InputPerMillion: 5.00, OutputPerMillion: 30.00, CachedInputPerMillion: 0.50},
+		"gpt-5.5-pro":   {InputPerMillion: 30.00, OutputPerMillion: 180.00},
+	}
+	for model, want := range tests {
+		got, err := DefaultTable().Lookup(eventschema.ProviderOpenAI, model)
+		if err != nil {
+			t.Errorf("%s not priced: %v", model, err)
+			continue
+		}
+		if got.InputPerMillion != want.InputPerMillion || got.OutputPerMillion != want.OutputPerMillion ||
+			got.CachedInputPerMillion != want.CachedInputPerMillion {
+			t.Errorf("%s rate = %+v, want %+v", model, got, want)
+		}
+	}
+	// Siblings at other rates stay unpriced rather than borrow a row.
+	for _, model := range []string{"gpt-5.6-cyber", "gpt-5.5-cyber", "gpt-6.1-sol-pro", "codex-auto-review"} {
+		if _, err := DefaultTable().Lookup(eventschema.ProviderOpenAI, model); err == nil {
+			t.Errorf("%s was priced from another model's row", model)
+		}
+	}
+}

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **pricing:** the models Codex runs on are priced — `gpt-6.1-sol`, `gpt-5.6-sol` (promotional, through at least 2026-11-21), `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.5-pro` — from OpenAI's Standard table, verified 2026-10-04. Most Codex requests were unpriced and its cost read near zero; it applies to past usage too
+
 ## 0.95.0 - 2026-10-04
 
 ### Added
