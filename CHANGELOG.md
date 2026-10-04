@@ -2,14 +2,16 @@
 
 ## Unreleased
 
+## 0.97.0 - 2026-10-04
+
 ### Changed
 
-- **cli:** `tokenops glance` cards are laid out like CodexBar's: vendor, source and plan; each window's share, a full-width bar, its reset and its pace; then spend, credit and cost today and over 30 days, with unpriced usage marked. `--brief` gains a pace column and both list the busiest plan first. The glance-wide insight no longer heads every card
+- **cli:** `tokenops glance` cards are laid out like CodexBar's: vendor, source and plan; each window's share, a full-width bar, its reset and its pace; then spend, credit and cost today and over 30 days, with unpriced usage marked. `--brief` gains a pace column and both list the busiest plan first. The glance-wide insight no longer heads every card (#531)
 
 ### Added
 
-- **findings:** the coach's findings under the glance cards, in the menu bar panel and at `GET /api/findings`: a window that runs out before its reset and a plan with room for the work, files re-read unchanged, sessions past their budget, the session analysis's one recommended change, unreadable session sources, advice the coach went quiet on, and what an observing coach would have said. The daemon runs the session analysis in the background every three hours. `tokenops glance --findings` lists them all
-- **plans:** every vendor window carries its pace (`pace` in the glance and headroom payloads): on pace, behind and lasting to the reset, or ahead and when it runs out. The CLI and the menu bar show the same answer
+- **findings:** the coach's findings under the glance cards, in the menu bar panel and at `GET /api/findings`: a window that runs out before its reset and a plan with room for the work, files re-read unchanged, sessions past their budget, the session analysis's one recommended change, unreadable session sources, advice the coach went quiet on, and what an observing coach would have said. The daemon runs the session analysis in the background every three hours. `tokenops glance --findings` lists them all (#532)
+- **plans:** every vendor window carries its pace (`pace` in the glance and headroom payloads): on pace, behind and lasting to the reset, or ahead and when it runs out. The CLI and the menu bar show the same answer (#531)
 
 ## 0.96.0 - 2026-10-04
 
