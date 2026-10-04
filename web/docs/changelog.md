@@ -4,7 +4,24 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.96.0**.
+Current release: **v0.97.0**.
+
+## v0.97.0 — Cards like CodexBar, and what the coach sees
+
+`tokenops` draws each plan as a card laid out like CodexBar's: the vendor,
+where the reading came from and the plan, then every window with its
+share used, a bar, when it resets and its pace — whether it lasts to the
+reset or when it runs out at the rate so far — then cost today and over
+30 days. `--brief` gains a pace column.
+
+Under the cards, the coach's findings, most urgent first, each with the
+figures behind it and what to do: a window that runs out before it resets
+and a plan with room for the work, files the agent re-reads unchanged,
+sessions past their budget, the one change that would most improve how
+sessions go, session sources that cannot be read, and what the coach
+would have said while it only observes. The menu bar panel lists them
+too, and `GET /api/findings` serves them. The session analysis runs in the
+daemon's background every three hours.
 
 ## v0.96.0 — Codex priced, a modern menu bar
 
