@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -123,4 +124,41 @@ func (d *daemon) setPreset(ctx context.Context, preset string) (json.RawMessage,
 	var out json.RawMessage
 	err := d.do(ctx, http.MethodPost, "/api/coach", map[string]string{"preset": preset}, &out)
 	return out, err
+}
+
+// spend is what a provider used over a window: tokens, money billed, and
+// what the same usage costs at API list prices (its value on a plan).
+type spend struct {
+	Tokens        int64   `json:"tokens"`
+	CostUSD       float64 `json:"cost_usd"`
+	APIEquivalent float64 `json:"api_equivalent_usd"`
+	// Requests counts every call; Unpriced those whose model has no list
+	// price yet, which the money figures leave out.
+	Requests int64 `json:"requests"`
+	Unpriced int64 `json:"unpriced_requests"`
+}
+
+// spendSince reads GET /api/spend/summary for one provider.
+func (d *daemon) spendSince(ctx context.Context, provider, since string) (spend, error) {
+	var out struct {
+		Summary struct {
+			Requests         int64   `json:"Requests"`
+			TotalTokens      int64   `json:"TotalTokens"`
+			CostUSD          float64 `json:"CostUSD"`
+			APIEquivalentUSD float64 `json:"APIEquivalentUSD"`
+			Unpriced         []struct {
+				Requests int64 `json:"Requests"`
+			} `json:"Unpriced"`
+		} `json:"summary"`
+	}
+	q := url.Values{"provider": {provider}, "since": {since}}
+	if err := d.do(ctx, http.MethodGet, "/api/spend/summary?"+q.Encode(), nil, &out); err != nil {
+		return spend{}, err
+	}
+	sp := spend{Tokens: out.Summary.TotalTokens, CostUSD: out.Summary.CostUSD,
+		APIEquivalent: out.Summary.APIEquivalentUSD, Requests: out.Summary.Requests}
+	for _, u := range out.Summary.Unpriced {
+		sp.Unpriced += u.Requests
+	}
+	return sp, nil
 }

@@ -4,124 +4,223 @@
 (function () {
   "use strict";
 
-  function invoke(command, args) {
-    return window.vitra.invoke(command, args || {}, "");
-  }
+  var NAMES = { anthropic: "Claude", openai: "Codex", gemini: "Gemini", github: "Copilot", cursor: "Cursor",
+    fireworks: "Fireworks", openrouter: "OpenRouter", deepseek: "DeepSeek", moonshot: "Moonshot", kimi: "Kimi",
+    zai: "z.ai", minimax: "MiniMax" };
+  // Two letters tell vendors apart where one would not (Claude, Codex,
+  // Copilot, Cursor).
+  var MARKS = { anthropic: "Cl", openai: "Cx", gemini: "Ge", github: "Co", cursor: "Cu" };
+  var state = { view: null, selected: null };
+  try { state.selected = localStorage.getItem("tokenops.tab"); } catch (e) { /* a private window */ }
+
+  function invoke(command, args) { return window.vitra.invoke(command, args || {}, ""); }
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
     if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
+    if (text !== undefined && text !== null) e.textContent = text;
     return e;
   }
 
-  function level(pct) {
-    if (pct >= 90) return "high";
-    if (pct >= 70) return "medium";
-    return "low";
+  function name(p) { return NAMES[p] || (p ? p.charAt(0).toUpperCase() + p.slice(1) : "?"); }
+
+  function level(pct) { return pct >= 80 ? "high" : pct >= 60 ? "medium" : "low"; }
+
+  // Go durations ("136h35m0s") as "5d 16h".
+  function seconds(s) {
+    var m = /^(?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?$/.exec(s || "");
+    if (!m || !s) return 0;
+    return (+(m[1] || 0)) * 3600 + (+(m[2] || 0)) * 60 + (+(m[3] || 0));
+  }
+  function human(sec) {
+    var min = Math.round(sec / 60), d = Math.floor(min / 1440), h = Math.floor((min % 1440) / 60), mm = min % 60;
+    if (d > 0) return d + "d " + h + "h";
+    if (h > 0) return h + "h " + mm + "m";
+    return mm + "m";
+  }
+  function money(n) { return "$" + (n >= 100 ? Math.round(n).toLocaleString() : n.toFixed(2)); }
+  function tokens(n) {
+    if (n >= 1e9) return (n / 1e9).toFixed(2) + "B";
+    if (n >= 1e6) return Math.round(n / 1e6) + "M";
+    if (n >= 1e3) return Math.round(n / 1e3) + "K";
+    return String(n);
   }
 
-  function bar(label, pct, detail) {
-    var row = el("div", "row");
-    var head = el("div", "row-head");
-    head.appendChild(el("span", "label", label));
-    head.appendChild(el("span", "pct " + level(pct), Math.round(pct) + "%"));
-    row.appendChild(head);
+  // Window names in words: "5h" is the session, "week (Fable)" Fable's week.
+  function title(w) {
+    var m = /^week \((.+)\)$/.exec(w.name);
+    if (m) return m[1] + " · weekly";
+    if (w.name === "week") return "Weekly";
+    if (w.name === "5h") return "Session";
+    if (w.name === "month") return "Monthly";
+    return w.name.charAt(0).toUpperCase() + w.name.slice(1);
+  }
+
+  // Pace compares the share used with the share of the window gone by:
+  // behind lasts to the reset; ahead may run out before it.
+  function pace(w) {
+    var total = (w.duration_ns || 0) / 1e9, left = seconds(w.resets_in);
+    if (!total || !left || left > total || !w.used_pct) return "";
+    var elapsed = total - left, gone = elapsed / total * 100, delta = w.used_pct - gone;
+    if (elapsed <= 0) return "";
+    if (Math.abs(delta) < 5) return "On pace";
+    if (delta < 0) return "Pace: behind (" + Math.round(delta) + "%) · lasts to reset";
+    var rate = w.used_pct / elapsed, toFull = (100 - w.used_pct) / rate;
+    return "Pace: ahead (+" + Math.round(delta) + "%) · " + (toFull < left ? "runs out in " + human(toFull) : "lasts to reset");
+  }
+
+  function busiest(r) {
+    var m = r.spend_limit_usd > 0 ? r.spend_pct : 0;
+    (r.windows || []).forEach(function (w) { m = Math.max(m, w.used_pct); });
+    return m;
+  }
+
+  function meter(pct) {
     var track = el("div", "track");
     var fill = el("div", "fill " + level(pct));
-    fill.style.width = Math.max(0, Math.min(pct, 100)) + "%";
+    fill.style.width = Math.max(pct > 0 ? 2 : 0, Math.min(pct, 100)) + "%";
     track.appendChild(fill);
-    row.appendChild(track);
-    if (detail) row.appendChild(el("div", "detail muted", detail));
-    return row;
+    return track;
   }
 
-  // humanDuration words a Go duration ("146h45m0s") as "6d 2h".
-  function humanDuration(s) {
-    var m = /^(?:(\d+)h)?(?:(\d+)m)?(?:[\d.]+s)?$/.exec(s || "");
-    if (!m) return s;
-    var total = (parseInt(m[1] || "0", 10) * 60) + parseInt(m[2] || "0", 10);
-    var d = Math.floor(total / 1440), h = Math.floor((total % 1440) / 60), min = total % 60;
-    if (d > 0) return d + "d " + h + "h";
-    if (h > 0) return h + "h " + min + "m";
-    return min + "m";
+  function section(heading, pct, left, right, note) {
+    var s = el("section", "metric");
+    s.appendChild(el("h3", null, heading));
+    s.appendChild(meter(pct));
+    var line = el("div", "metric-line");
+    line.appendChild(el("span", null, left));
+    line.appendChild(el("span", "muted", right || ""));
+    s.appendChild(line);
+    if (note) s.appendChild(el("div", "note", note));
+    return s;
   }
 
-  function money(n) {
-    return "$" + n.toFixed(n < 100 ? 2 : 0);
-  }
-
-  function plan(r) {
-    var card = el("article", "plan");
-    var head = el("div", "plan-head");
-    head.appendChild(el("span", "name", r.display || r.provider));
-    head.appendChild(el("span", "risk " + (r.overage_risk || "low"), r.overage_risk || ""));
-    card.appendChild(head);
-    (r.windows || []).forEach(function (w) {
-      card.appendChild(bar(w.name, w.used_pct, w.resets_in ? "resets in " + humanDuration(w.resets_in) : ""));
+  function tabs(reports) {
+    var nav = document.getElementById("tabs");
+    nav.textContent = "";
+    reports.forEach(function (r) {
+      var b = el("button", "tab" + (r.provider === state.selected ? " active" : ""));
+      b.type = "button";
+      b.setAttribute("role", "tab");
+      b.setAttribute("aria-selected", r.provider === state.selected ? "true" : "false");
+      var mark = el("span", "mark mark-" + r.provider, MARKS[r.provider] || name(r.provider).slice(0, 2));
+      b.appendChild(mark);
+      b.appendChild(el("span", "tab-name", name(r.provider)));
+      var mini = el("span", "mini");
+      var f = el("span", "mini-fill " + level(busiest(r)));
+      f.style.width = Math.min(100, busiest(r)) + "%";
+      mini.appendChild(f);
+      b.appendChild(mini);
+      b.addEventListener("click", function () {
+        state.selected = r.provider;
+        try { localStorage.setItem("tokenops.tab", r.provider); } catch (e) { /* ignore */ }
+        render();
+      });
+      nav.appendChild(b);
     });
-    if ((!r.windows || !r.windows.length) && r.spend_limit_usd > 0) {
-      card.appendChild(bar("spend", r.spend_pct, money(r.spend_usd) + " of " + money(r.spend_limit_usd)));
-    } else if ((!r.windows || !r.windows.length) && r.spend_usd > 0) {
-      card.appendChild(el("div", "detail muted", money(r.spend_usd) + " this month, no limit known"));
+  }
+
+  // The plan without its vendor's name: "Max 20x", "Pro Standard ($100)".
+  function badge(r) {
+    var d = r.display || r.plan_name || "";
+    return d.replace(/^(Claude|ChatGPT|Gemini|GitHub Copilot|Cursor)\s+/, "");
+  }
+
+  function detail(r, v) {
+    var main = document.getElementById("detail");
+    main.textContent = "";
+    var head = el("header", "head");
+    var left = el("div");
+    left.appendChild(el("h2", null, name(r.provider)));
+    var age = v.updated ? Math.round((Date.now() - new Date(v.updated)) / 60000) : 0;
+    left.appendChild(el("div", "muted", age < 1 ? "Updated just now" : "Updated " + age + "m ago"));
+    head.appendChild(left);
+    head.appendChild(el("span", "plan", badge(r)));
+    main.appendChild(head);
+
+    (r.windows || []).forEach(function (w) {
+      main.appendChild(section(title(w), w.used_pct, Math.round(w.used_pct) + "% used",
+        w.resets_in ? "Resets in " + human(seconds(w.resets_in)) : "", pace(w)));
+    });
+    if (r.spend_limit_usd > 0) {
+      main.appendChild(section("Extra usage", r.spend_pct, "This month: " + money(r.spend_usd) + " / " + money(r.spend_limit_usd),
+        Math.round(r.spend_pct) + "% used"));
+    } else if (r.spend_usd > 0) {
+      main.appendChild(el("p", "plain", "This month: " + money(r.spend_usd) + ", no limit known"));
     }
     if (r.balance_usd !== undefined && r.balance_usd !== null) {
-      card.appendChild(el("div", "detail muted", money(r.balance_usd) + " credit left"));
+      main.appendChild(el("p", "plain", money(r.balance_usd) + " credit left"));
     }
-    return card;
+    var c = v.costs && v.costs[r.provider];
+    if (c) {
+      var cost = el("section", "metric cost");
+      cost.appendChild(el("h3", null, "Cost"));
+      var covered = c.last_30_days.cost_usd === 0 && c.last_30_days.api_equivalent_usd > 0;
+      // Usage whose model has no list price yet is left out of the money:
+      // mostly unpriced shows tokens only, partly unpriced says so.
+      var share = function (s) { return s.requests ? s.unpriced_requests / s.requests : 0; };
+      var line = function (label, s) {
+        var amount = covered ? s.api_equivalent_usd : s.cost_usd;
+        var t = tokens(s.tokens) + " tokens";
+        if (share(s) > 0.5) return label + ": " + t;
+        return label + ": " + money(amount) + (share(s) > 0.02 ? "+" : "") + " · " + t;
+      };
+      cost.appendChild(el("div", null, line("Today", c.today)));
+      cost.appendChild(el("div", null, line("Last 30 days", c.last_30_days)));
+      var s30 = c.last_30_days, notes = [];
+      if (covered && share(s30) <= 0.5) notes.push("At API prices; your plan covers it.");
+      if (share(s30) > 0.02) {
+        notes.push(Math.round(share(s30) * 100) + "% of requests use models without a list price yet" +
+          (share(s30) > 0.5 ? "." : ", left out of the $ figure."));
+      }
+      if (notes.length) cost.appendChild(el("div", "note", notes.join(" ")));
+      main.appendChild(cost);
+    }
   }
 
-  function show(v) {
-    var plans = document.getElementById("plans");
+  function render() {
+    var v = state.view || {};
     var error = document.getElementById("error");
-    plans.textContent = "";
-    error.hidden = !v.error;
-    error.textContent = v.error || "";
-    var g = v.glance || {};
-    document.getElementById("insight").textContent = (g.insight && g.insight.summary) || "";
-    var head = g.plan_headroom || {};
-    if (head.error) {
-      error.hidden = false;
-      error.textContent = head.hint || head.error;
+    var head = (v.glance && v.glance.plan_headroom) || {};
+    var msg = v.error || (head.error ? (head.hint || head.error) : "");
+    error.hidden = !msg;
+    error.textContent = msg;
+    var reports = (head.reports || []).slice().sort(function (a, b) { return busiest(b) - busiest(a); });
+    if (!reports.some(function (r) { return r.provider === state.selected; }) && reports.length) {
+      state.selected = reports[0].provider;
     }
-    (head.reports || []).forEach(function (r) { plans.appendChild(plan(r)); });
+    tabs(reports);
+    var sel = reports.filter(function (r) { return r.provider === state.selected; })[0];
+    if (sel) detail(sel, v); else document.getElementById("detail").textContent = "";
+    var select = document.getElementById("preset");
     if (v.coach) {
-      var select = document.getElementById("preset");
       var custom = document.getElementById("preset-custom");
       if (v.coach.preset) {
         if (custom) custom.remove();
         select.value = v.coach.preset;
-      } else {
-        // Tuned away from every preset: say so rather than show one.
-        if (!custom) {
-          custom = el("option", "", "custom — tuned dial by dial");
-          custom.id = "preset-custom";
-          custom.disabled = true;
-          select.insertBefore(custom, select.firstChild);
-        }
-        select.value = "";
+      } else if (!custom) {
+        custom = el("option", "", "Custom");
+        custom.id = "preset-custom";
+        custom.disabled = true;
         custom.selected = true;
+        select.insertBefore(custom, select.firstChild);
       }
     }
-    if (v.updated) {
-      document.getElementById("updated").textContent = "updated " + new Date(v.updated).toLocaleTimeString();
-    }
   }
+
+  function show(v) { state.view = v; render(); }
 
   window.vitra.on("glance.update", show);
   invoke("glance.follow").then(show, function (err) {
     show({ error: (err && err.message) || "the daemon could not be read" });
   });
-
   document.getElementById("preset").addEventListener("change", function (e) {
     invoke("coach.preset", { preset: e.target.value }).then(show, function (err) {
-      show({ error: "coach not changed: " + ((err && err.message) || "refused") });
+      state.view = state.view || {};
+      state.view.error = "Coach not changed: " + ((err && err.message) || "refused");
+      render();
     });
   });
-  document.getElementById("close").addEventListener("click", function () {
-    invoke("panel.close");
-  });
-  document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape") invoke("panel.close");
-  });
+  document.getElementById("close").addEventListener("click", function () { invoke("panel.close"); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") invoke("panel.close"); });
 })();

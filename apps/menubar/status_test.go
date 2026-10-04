@@ -97,3 +97,30 @@ func TestDaemonClient(t *testing.T) {
 		t.Errorf("stopped daemon: %v", err)
 	}
 }
+
+// Spend reads one provider's window and counts the requests whose model
+// has no list price, which the money leaves out.
+func TestSpendSince(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/spend/summary" || r.URL.Query().Get("provider") != "openai" || r.URL.Query().Get("since") != "720h" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		_, _ = w.Write([]byte(`{"summary":{"Requests":10,"TotalTokens":2240000000,"CostUSD":0,"APIEquivalentUSD":5.83,
+			"Unpriced":[{"Model":"gpt-6.1-sol","Requests":6},{"Model":"codex-auto-review","Requests":2}]}}`))
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	d := &daemon{urlFile: filepath.Join(dir, "daemon.url"), hc: srv.Client()}
+	if err := os.WriteFile(d.urlFile, []byte(`{"url":"`+srv.URL+`","dashboard_token":"tok"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := d.spendSince(context.Background(), "openai", "720h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := spend{Tokens: 2240000000, APIEquivalent: 5.83, Requests: 10, Unpriced: 8}
+	if got != want {
+		t.Errorf("spend = %+v, want %+v", got, want)
+	}
+}

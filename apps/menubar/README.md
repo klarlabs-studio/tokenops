@@ -2,8 +2,18 @@
 
 TokenOps in the menu bar: the plan window closest to its limit next to the
 icon (for example **Codex 49%**), with the icon's ring filled to that share,
-and a panel with every plan's windows, spend and the coach when you click
-it. Built on [Vitra](https://github.com/klarlabs-studio/vitra).
+and a panel when you click it. Built on
+[Vitra](https://github.com/klarlabs-studio/vitra).
+
+The panel switches between plans with a tab per vendor, busiest first, each
+with a small bar of its fullest window. A plan shows every window the
+vendor reports (session, weekly, per model) with a bar, its reset and its
+pace: behind lasts to the reset, ahead says when it runs out. Below come
+extra usage against its limit, credit left, and cost today and over 30
+days, at API prices where a plan covers it. Usage on models with no list
+price yet is left out of the money and the panel says how much, rather
+than show a figure that looks complete. It follows the system's light or
+dark appearance in the Klarlabs palette.
 
 ```bash
 make menubar        # run it against the local daemon
