@@ -1,30 +1,38 @@
-/* Klarlabs brand tokens (ink, blue, green, amber, red), light and dark. */
+/* Klarlabs brand tokens (internal/brand/tokens.css): ink, blue, green,
+   amber, red. Dark is ink with a cobalt glow; light is porcelain tinted
+   blue. Both read as frosted, like the system's own popovers. */
 :root {
-  --bg: #F2F3F5;
-  --card: #FFFFFF;
+  --bg: linear-gradient(165deg, #EEF0FF 0%, #E3E7FB 45%, #DCE1FA 100%);
+  --surface: rgba(255, 255, 255, 0.55);
   --fg: #16181D;
-  --muted: #70757F;
-  --track: #DDE0E5;
+  --muted: #555A64;
+  --faint: #70757F;
+  --hair: rgba(22, 24, 29, 0.10);
+  --track: rgba(22, 24, 29, 0.10);
   --accent: #2742F5;
-  --low: #22C55E;
+  --accent-fg: #FFFFFF;
+  --low: #2742F5;
   --medium: #F59E0B;
   --high: #DC2626;
-  --border: #DDE0E5;
+  --error: #B91C1C;
   color-scheme: light dark;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0E0F12;
-    --card: #16181D;
+    --bg: radial-gradient(120% 70% at 50% -10%, rgba(39, 66, 245, 0.30) 0%, rgba(39, 66, 245, 0) 60%), linear-gradient(180deg, #16181D 0%, #0E0F12 100%);
+    --surface: rgba(255, 255, 255, 0.04);
     --fg: #F2F3F5;
-    --muted: #9DA2AC;
-    --track: #3F434D;
-    --accent: #8493FA;
-    --low: #4ADE80;
+    --muted: #C7CAD1;
+    --faint: #9DA2AC;
+    --hair: rgba(255, 255, 255, 0.08);
+    --track: rgba(255, 255, 255, 0.10);
+    --accent: #2742F5;
+    --accent-fg: #FFFFFF;
+    --low: #8493FA;
     --medium: #FBBF24;
     --high: #F87171;
-    --border: #23262D;
+    --error: #F87171;
   }
 }
 
@@ -33,39 +41,122 @@
 html, body {
   margin: 0;
   height: 100%;
-  background: var(--bg);
+  background: #0E0F12;
   color: var(--fg);
-  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font: 13px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
   user-select: none;
 }
+@media (prefers-color-scheme: light) { html, body { background: #E3E7FB; } }
 
-main { display: flex; flex-direction: column; gap: 10px; padding: 14px; height: 100%; }
-header h1 { margin: 0; font-size: 15px; font-weight: 600; }
-.insight { margin: 2px 0 0; color: var(--muted); }
-#plans { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; flex: 1; }
+.panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  padding: 10px 14px 8px;
+}
 
-.plan { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
-.plan-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
-.name { font-weight: 600; }
-.risk { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
-.risk.low { color: var(--low); } .risk.medium { color: var(--medium); } .risk.high { color: var(--high); }
+/* Plan switcher. */
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--hair);
+  overflow-x: auto;
+}
+.tab {
+  flex: 1 1 0;
+  min-width: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 7px 6px 6px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.tab:hover { background: var(--surface); color: var(--fg); }
+.tab.active { background: var(--accent); color: var(--accent-fg); box-shadow: 0 4px 14px rgba(39, 66, 245, 0.35); }
+.tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mark {
+  width: 20px; height: 20px;
+  display: grid; place-items: center;
+  border-radius: 6px;
+  font-size: 10px; font-weight: 700; letter-spacing: -.02em;
+  color: #FFFFFF;
+  background: #555A64;
+}
+.mark-anthropic { background: #5468F8; }
+.mark-openai { background: #15803D; }
+.mark-gemini { background: #F59E0B; }
+.mark-github, .mark-cursor { background: #3F434D; }
+.tab.active .mark { background: rgba(255, 255, 255, 0.22); }
+.mini { width: 70%; height: 3px; border-radius: 2px; background: var(--track); overflow: hidden; }
+.tab.active .mini { background: rgba(255, 255, 255, 0.25); }
+.mini-fill { display: block; height: 100%; border-radius: 2px; background: var(--low); }
+.tab.active .mini-fill { background: #FFFFFF; }
+.mini-fill.medium { background: var(--medium); }
+.mini-fill.high { background: var(--high); }
 
-.row { margin-top: 6px; }
-.row-head { display: flex; justify-content: space-between; }
-.label { color: var(--fg); }
-.pct { font-variant-numeric: tabular-nums; font-weight: 600; }
-.pct.low { color: var(--fg); } .pct.medium { color: var(--medium); } .pct.high { color: var(--high); }
-.track { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; margin-top: 3px; }
-.fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width .3s; }
-.fill.medium { background: var(--medium); } .fill.high { background: var(--high); }
-.detail { font-size: 11px; margin-top: 2px; }
-.muted { color: var(--muted); }
-.error { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--card); color: var(--high); border: 1px solid var(--border); }
+/* The selected plan. */
+.detail { flex: 1; overflow-y: auto; padding-top: 10px; }
+.detail::-webkit-scrollbar { width: 0; }
+.head {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  padding-bottom: 10px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--hair);
+}
+.head h2 { margin: 0 0 1px; font-size: 17px; font-weight: 650; letter-spacing: -.01em; }
+.plan {
+  font-size: 11.5px; color: var(--muted);
+  padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--hair); background: var(--surface);
+  max-width: 50%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.muted { color: var(--faint); }
 
-.coach { display: flex; align-items: center; gap: 8px; }
-.coach label { color: var(--muted); }
-select { flex: 1; font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--fg); }
+.metric { padding: 10px 0 8px; }
+.metric + .metric { border-top: 1px solid var(--hair); }
+.metric h3 { margin: 0 0 7px; font-size: 14px; font-weight: 600; }
+.track { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
+.fill { height: 100%; border-radius: 3px; background: var(--low); transition: width .35s ease; }
+.fill.medium { background: var(--medium); }
+.fill.high { background: var(--high); }
+.metric-line { display: flex; justify-content: space-between; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.note { margin-top: 4px; font-size: 11.5px; color: var(--faint); }
+.cost div:not(.note) { margin-top: 3px; font-variant-numeric: tabular-nums; }
+.plain { margin: 8px 0; color: var(--muted); }
+.error { margin: 6px 0; padding: 8px 10px; border-radius: 8px; background: var(--surface); color: var(--error); }
 
-footer { display: flex; justify-content: space-between; align-items: center; }
-button { font: inherit; padding: 4px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--fg); cursor: pointer; }
-button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Menu rows, as the system draws them. */
+.menu { border-top: 1px solid var(--hair); padding-top: 4px; }
+.row {
+  width: 100%;
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 6px;
+  border: 0; border-radius: 6px;
+  background: transparent; color: var(--fg);
+  font: inherit; font-size: 13.5px; text-align: left;
+  cursor: pointer;
+}
+.row:hover { background: var(--accent); color: var(--accent-fg); }
+.row:hover .row-icon, .row:hover kbd { color: var(--accent-fg); }
+.row-icon { width: 16px; text-align: center; color: var(--faint); }
+.row-label { flex: 1; }
+kbd { font: 11px ui-monospace, Menlo, monospace; color: var(--faint); }
+select {
+  font: inherit; font-size: 12.5px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--hair);
+  background: var(--surface);
+  color: inherit;
+}
+.coach-row:hover select { border-color: rgba(255, 255, 255, 0.4); }

@@ -8,27 +8,28 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<main>
-  <header>
-    <h1>TokenOps</h1>
-    <p id="insight" class="insight">…</p>
-  </header>
-  <section id="plans" aria-label="Plans"></section>
+<div class="panel">
+  <nav id="tabs" class="tabs" role="tablist" aria-label="Plans"></nav>
+  <main id="detail" class="detail" aria-live="polite"></main>
   <p id="error" class="error" hidden></p>
-  <section class="coach" aria-label="Coach">
-    <label for="preset">Coach</label>
-    <select id="preset">
-      <option value="observe">observe — records only</option>
-      <option value="advise">advise — tells, changes nothing</option>
-      <option value="guided">guided — refuses re-reads, asks first</option>
-      <option value="autopilot">autopilot — acts on its own</option>
-    </select>
-  </section>
-  <footer>
-    <span id="updated" class="muted"></span>
-    <button id="close" type="button" class="secondary">Close</button>
+  <footer class="menu">
+    <label class="row coach-row" for="preset">
+      <span class="row-icon" aria-hidden="true">◎</span>
+      <span class="row-label">Coach</span>
+      <select id="preset">
+        <option value="observe">Observe</option>
+        <option value="advise">Advise</option>
+        <option value="guided">Guided</option>
+        <option value="autopilot">Autopilot</option>
+      </select>
+    </label>
+    <button id="close" type="button" class="row">
+      <span class="row-icon" aria-hidden="true">✕</span>
+      <span class="row-label">Close</span>
+      <kbd>esc</kbd>
+    </button>
   </footer>
-</main>
+</div>
 <script src="panel.js"></script>
 </body>
 </html>
