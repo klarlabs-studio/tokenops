@@ -56,17 +56,15 @@
     return w.name.charAt(0).toUpperCase() + w.name.slice(1);
   }
 
-  // Pace compares the share used with the share of the window gone by:
-  // behind lasts to the reset; ahead may run out before it.
+  // Pace comes from the daemon (plans.WindowPace), the same answer the
+  // CLI's cards give: behind lasts to the reset; ahead may run out first.
   function pace(w) {
-    var total = (w.duration_ns || 0) / 1e9, left = seconds(w.resets_in);
-    if (!total || !left || left > total || !w.used_pct) return "";
-    var elapsed = total - left, gone = elapsed / total * 100, delta = w.used_pct - gone;
-    if (elapsed <= 0) return "";
-    if (Math.abs(delta) < 5) return "On pace";
-    if (delta < 0) return "Pace: behind (" + Math.round(delta) + "%) · lasts to reset";
-    var rate = w.used_pct / elapsed, toFull = (100 - w.used_pct) / rate;
-    return "Pace: ahead (+" + Math.round(delta) + "%) · " + (toFull < left ? "runs out in " + human(toFull) : "lasts to reset");
+    var p = w.pace;
+    if (!p) return "";
+    if (p.status === "on_pace") return "On pace";
+    if (p.status === "behind") return "Pace: behind (" + Math.round(p.delta_pct) + "%) · lasts to reset";
+    return "Pace: ahead (+" + Math.round(p.delta_pct) + "%) · " +
+      (p.lasts_to_reset ? "lasts to reset" : "runs out in " + human((p.runs_out_in_ns || 0) / 1e9));
   }
 
   function busiest(r) {

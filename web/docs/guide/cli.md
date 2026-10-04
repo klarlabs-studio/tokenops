@@ -7,32 +7,62 @@ subcommand has a matching MCP tool (`tokenops_<name>`).
 
 ### `tokenops glance`
 
-`tokenops` on its own, once set up, draws every plan as a card: a bar for
-each window the vendor reports, when it resets, spend against a limit and
-credit left, busiest plan first, laid out to fit the terminal.
+`tokenops` on its own, once set up, draws every plan as a card, laid out
+like CodexBar's `codexbar cards`: the vendor, where the reading came from
+and the plan; then for every window the vendor reports, its share used, a
+bar, when it resets and its pace; then spend against a limit, credit left,
+and cost today and over 30 days. Busiest plan first, in a grid that fits
+the terminal.
 
 ```
-╭─ ChatGPT Pro Standard ($10… ─ LOW ─╮  ╭─ Claude Max 20x ───────────── LOW ─╮
-│ week ████████░░░░░░░░  50% 5d 22h  │  │ week         █░░░░░░░  18% 5d 17h  │
-│                                    │  │ 5h           ░░░░░░░░   4% 4h 36m  │
-│                                    │  │ week (Fable) ░░░░░░░░   0% 5d 17h  │
-╰────────────────────── codex jsonl ─╯  ╰─────────────── claude usage meter ─╯
+TokenOps • AI Usage & Limits                                           Sun 4 Oct 09:30
+
+╭────────────────────────────────────────╮  ╭────────────────────────────────────────╮
+│ Codex [local] PLAN Pro Standard ($100) │  │ Claude [meter]            PLAN Max 20x │
+│ ────────────────────────────────────── │  │ ────────────────────────────────────── │
+│ Weekly                        91% used │  │ Session                        4% used │
+│ [ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━─── ] │  │ [ ━───────────────────────────────── ] │
+│ Resets in 30m                          │  │ Resets in 4h 37m                       │
+│ Pace: ahead (+37%) · out in 23h 47m    │  │ Pace: behind (-3%) · lasts to reset    │
+│                                        │  │                                        │
+│ Overage risk:                     HIGH │  │ Weekly · Fable                 0% used │
+│ Today:              $28.00+ · 198M tok │  │ [ ────────────────────────────────── ] │
+│ 30 days:             $745+ · 2.24B tok │  │ Resets in 5d 17h                       │
+│ At API prices; the plan covers it.     │  │                                        │
+│ 15% of requests have no price yet.     │  │ Today:                       1.00B tok │
+│                                        │  │ 30 days:            $3,214 · 6.10B tok │
+│                                        │  │ At API prices; the plan covers it.     │
+╰────────────────────────────────────────╯  ╰────────────────────────────────────────╯
 ```
 
-Bars run green, amber, red as a window fills; in a true-colour terminal
-each cell takes the gradient's colour at its position. Each card's bottom
-edge names where the reading came from. It answers from the same code as
-the daemon API and the menu bar.
+**Pace** compares the share used with the share of the window gone by:
+behind lasts to the reset; ahead says when the window runs out at the
+rate so far. The daemon API, the menu bar and MCP report the same pace.
+
+**Cost** is at API list prices where a plan covers the usage. Requests on
+models without a list price yet are left out of the money: a `+` marks a
+figure that leaves some out, and where most have no price only tokens are
+shown, since a total that looks complete but is not misleads.
+
+In a true-colour terminal the bars are solid cells running green, amber,
+red along their length, in the Klarlabs palette; 16 colours elsewhere,
+plain text for a pipe.
 
 ```bash
-tokenops glance --brief          # a table: plan, window, used, resets
+tokenops glance --brief          # a table: plan, window, used, resets, pace
 tokenops glance --json           # the payload GET /api/glance serves
 tokenops glance --color always | less -R
 ```
 
+```
+PLAN                       WINDOW            USED  RESETS    PACE
+Codex Pro Standard ($100)  Weekly             91%  30m       +37% · out in 23h 47m
+Claude Max 20x             Session             4%  4h 37m    -3% · lasts
+                           Weekly · Fable      0%  5d 17h
+```
+
 Colour follows the terminal and `NO_COLOR`; `--no-color` (or `--color
-never`) prints plain text, which a pipe gets by default. `$COLUMNS` sets
-the width.
+never`) prints plain text. `$COLUMNS` sets the width.
 
 ## Setup
 

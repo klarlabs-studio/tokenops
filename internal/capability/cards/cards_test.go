@@ -7,65 +7,111 @@ import (
 	"unicode/utf8"
 
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 )
 
 func sample() headroom.Glance {
 	balance := 12.5
 	var g headroom.Glance
-	g.Insight.Summary = "Codex is nearest its limit."
+	g.Insight.Summary = "Claude Max 20x session budget currently recommends continuing."
 	g.Headroom.Reports = []plans.HeadroomReport{
 		{Provider: "anthropic", Display: "Claude Max 20x", OverageRisk: plans.RiskLow, Windows: []plans.VendorWindow{
-			{Name: "5h", UsedPct: 4, ResetsIn: "4h37m0s"}, {Name: "week (Fable)", UsedPct: 0, ResetsIn: "137h0m0s"}}},
-		{Provider: "openai", Display: "ChatGPT Pro Standard ($100) with a long name", OverageRisk: plans.RiskHigh,
-			Windows: []plans.VendorWindow{{Name: "week", UsedPct: 91, ResetsIn: "30m0s"}}},
+			{Name: "5h", UsedPct: 4, ResetsIn: "4h37m0s", Pace: &plans.WindowPace{Status: plans.PaceBehind, DeltaPct: -3, LastsToReset: true}},
+			{Name: "week (Fable)", UsedPct: 0, ResetsIn: "137h0m0s"}}},
+		{Provider: "openai", Display: "ChatGPT Pro Standard ($100)", OverageRisk: plans.RiskHigh,
+			SignalQuality: plans.SignalQuality{Source: "codex_jsonl"},
+			Windows: []plans.VendorWindow{{Name: "week", UsedPct: 91, ResetsIn: "30m0s",
+				Pace: &plans.WindowPace{Status: plans.PaceAhead, DeltaPct: 37, RunsOutIn: 23*time.Hour + 47*time.Minute}}}},
 		{Provider: "fireworks", Display: "Pay as you go", SpendUSD: 41.5, SpendLimitUSD: 100, SpendPct: 41.5, BalanceUSD: &balance},
 	}
 	return g
 }
 
-// Every line of every card is exactly as wide, whatever it holds.
+var costs = map[string]spending.ProviderCost{
+	"openai": {
+		Today:  spending.Usage{Tokens: 198e6, APIEquivalentUSD: 28, Requests: 100, UnpricedRequests: 15},
+		Last30: spending.Usage{Tokens: 2_240_000_000, APIEquivalentUSD: 745, Requests: 1000, UnpricedRequests: 150},
+	},
+	"anthropic": {
+		Today:  spending.Usage{Tokens: 1e9, APIEquivalentUSD: 400, Requests: 10, UnpricedRequests: 9},
+		Last30: spending.Usage{Tokens: 2e10, APIEquivalentUSD: 10948, CostUSD: 0, Requests: 100},
+	},
+}
+
+func lines(out string) []string { return strings.Split(strings.TrimRight(out, "\n"), "\n") }
+
+// Every line of a row of cards is as wide as the row, whatever it holds.
 func TestCardsKeepTheirWidth(t *testing.T) {
-	out := Render(sample(), Options{Width: 40, Now: time.Now()})
-	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")[2:]
-	for _, l := range lines {
-		if strings.HasPrefix(l, "!") {
-			continue
+	for _, width := range []int{40, 80, 86, 130} {
+		out := Render(sample(), Options{Width: width, Costs: costs})
+		perRow, cw := layout(width)
+		for _, l := range lines(out)[2:] {
+			if l == "" || strings.HasPrefix(l, "!") {
+				continue
+			}
+			n := utf8.RuneCountInString(l)
+			if n%(cw+cardGap) != cw || n > perRow*(cw+cardGap) {
+				t.Errorf("width %d: line %q is %d wide; cards are %d", width, l, n, cw)
+			}
 		}
-		if n := utf8.RuneCountInString(l); n != cardWidth {
-			t.Errorf("line %q is %d wide, want %d", l, n, cardWidth)
+		if strings.Contains(out, "\x1b[") {
+			t.Error("plain output carries escapes")
 		}
-	}
-	for _, want := range []string{"week (Fable)", "5d 17h"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("output lacks %q:\n%s", want, out)
-		}
-	}
-	if strings.Contains(out, "\x1b[") {
-		t.Error("plain output carries escapes")
 	}
 }
 
-// The busiest plan comes first, and the grid fits the terminal.
-func TestCardsFillTheWidth(t *testing.T) {
-	narrow := Render(sample(), Options{Width: 40})
-	if strings.Index(narrow, "ChatGPT") > strings.Index(narrow, "Claude") {
-		t.Error("the busiest plan is not first")
+// A card reads as CodexBar's: source and plan, then each window's share,
+// bar, reset and pace, then the money.
+func TestCardContents(t *testing.T) {
+	out := Render(sample(), Options{Width: 130, Costs: costs, Now: time.Date(2026, 10, 4, 9, 30, 0, 0, time.UTC)})
+	for _, want := range []string{
+		"TokenOps • AI Usage & Limits", "Oct",
+		"Codex [local]", "PLAN Pro Standard ($100)", "Claude", "PLAN Max 20x",
+		"Weekly", "91% used", "Resets in 30m", "Pace: ahead (+37%) · out in 23h 47m",
+		"Session", "Pace: behind (-3%) · lasts to reset", "Weekly · Fable", "0% used",
+		"Extra usage", "$41.50 / $100", "Credit left:", "$12.50", "Overage risk:", "HIGH",
+		"$745+ · 2.24B tok", "15% of requests have no price yet.", "At API prices; the plan covers it.",
+		"$10,948 · 20.00B tok",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("cards lack %q:\n%s", want, out)
+		}
 	}
-	wide := Render(sample(), Options{Width: 120})
-	first := strings.Split(wide, "\n")[2]
-	if strings.Count(first, "╭") != 3 {
-		t.Errorf("120 columns hold three cards per row: %q", first)
+	// Mostly unpriced shows tokens only: a near-complete-looking figure
+	// would mislead.
+	if strings.Contains(out, "$400") || !strings.Contains(out, "1.00B tok") {
+		t.Errorf("a mostly unpriced day shows money:\n%s", out)
 	}
-	if !strings.Contains(wide, "$41.50/$100") || !strings.Contains(wide, "$12.50 credit left") {
-		t.Errorf("spend and balance missing:\n%s", wide)
+	// The glance-wide insight names one plan; it is not every card's header.
+	if strings.Contains(out, "recommends continuing") {
+		t.Error("the insight is printed over every plan")
+	}
+}
+
+// The busiest plan comes first, in the cards and in the table alike, and
+// the grid fits the terminal.
+func TestOrderAndLayout(t *testing.T) {
+	for _, brief := range []bool{false, true} {
+		out := Render(sample(), Options{Width: 80, Brief: brief})
+		codex, claude := strings.Index(out, "Codex"), strings.Index(out, "Claude")
+		if codex < 0 || claude < 0 || codex > claude {
+			t.Errorf("brief=%v: the busiest plan is not first:\n%s", brief, out)
+		}
+	}
+	for width, want := range map[int]int{40: 1, 80: 2, 86: 2, 130: 3} {
+		if perRow, cw := layout(width); perRow != want || cw < minCardWidth || cw > maxCardWidth {
+			t.Errorf("layout(%d) = %d × %d, want %d per row", width, perRow, cw, want)
+		}
 	}
 }
 
 func TestBriefAndUnconfigured(t *testing.T) {
-	b := Render(sample(), Options{Brief: true})
-	if !strings.HasPrefix(b, "PLAN") || !strings.Contains(b, "week (Fable)") || !strings.Contains(b, " 91%") {
-		t.Errorf("brief:\n%s", b)
+	b := Render(sample(), Options{Brief: true, Width: 100})
+	for _, want := range []string{"PLAN", "PACE", "Codex Pro Standard ($100)", "Weekly · Fable", " 91%", "+37% · out in 23h 47m", "-3% · lasts"} {
+		if !strings.Contains(b, want) {
+			t.Errorf("brief lacks %q:\n%s", want, b)
+		}
 	}
 	var g headroom.Glance
 	g.Headroom.Unconfigured = "bind a plan"
@@ -75,8 +121,8 @@ func TestBriefAndUnconfigured(t *testing.T) {
 }
 
 func TestColorModes(t *testing.T) {
-	if out := Render(sample(), Options{Width: 80, Color: TrueColor}); !strings.Contains(out, "\x1b[38;2;") {
-		t.Error("true colour uses no 24-bit escapes")
+	if out := Render(sample(), Options{Width: 80, Color: TrueColor}); !strings.Contains(out, "\x1b[48;2;") {
+		t.Error("true colour draws no gradient cells")
 	}
 	basic := Render(sample(), Options{Width: 80, Color: Basic})
 	if strings.Contains(basic, "38;2;") || !strings.Contains(basic, "\x1b[91m") {
@@ -87,5 +133,8 @@ func TestColorModes(t *testing.T) {
 	}
 	if c := blend(100); c != dangerC {
 		t.Errorf("blend(100) = %v", c)
+	}
+	if money(10948.4) != "$10,948" || money(745) != "$745" || money(4.2) != "$4.20" {
+		t.Errorf("money: %s %s %s", money(10948.4), money(745), money(4.2))
 	}
 }
