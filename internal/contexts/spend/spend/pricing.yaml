@@ -66,6 +66,44 @@ rates:
       output_per_million: 0.50
       cached_input_per_million: 0.01
       verified: true
+    # Models Codex runs on, from the Standard table at
+    # https://developers.openai.com/api/docs/pricing, verified 2026-10-04.
+    # Exact keys: each family has siblings at other rates (gpt-5.5-pro,
+    # gpt-5.6-cyber), which a prefix would price wrongly. Short-context
+    # rates; prompts over 272K bill higher (see GPT-6 Astra above).
+    "gpt-6.1-sol":
+      input_per_million: 2.00
+      output_per_million: 10.00
+      cached_input_per_million: 0.10
+      verified: true
+    # GPT-5.6 Sol's rate is promotional, "available at least through
+    # November 21, 2026" — recheck after that date.
+    "gpt-5.6-sol":
+      input_per_million: 4.00
+      output_per_million: 20.00
+      cached_input_per_million: 0.40
+      verified: true
+    "gpt-5.6-terra":
+      input_per_million: 2.00
+      output_per_million: 12.00
+      cached_input_per_million: 0.20
+      verified: true
+    "gpt-5.6-luna":
+      input_per_million: 0.20
+      output_per_million: 1.20
+      cached_input_per_million: 0.02
+      verified: true
+    # Published for prompts under 272K only.
+    "gpt-5.5":
+      input_per_million: 5.00
+      output_per_million: 30.00
+      cached_input_per_million: 0.50
+      verified: true
+    # No cached rate is published; cache reads bill at input.
+    "gpt-5.5-pro":
+      input_per_million: 30.00
+      output_per_million: 180.00
+      verified: true
     "gpt-4o-mini*":
       input_per_million: 0.15
       output_per_million: 0.60
