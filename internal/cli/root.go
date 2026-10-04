@@ -39,7 +39,7 @@ func NewRoot() *cobra.Command {
 			if len(args) > 0 {
 				return fmt.Errorf("unknown command %q for tokenops", args[0])
 			}
-			if err := runGlance(cmd, rf, "", false, false, "auto"); err != nil {
+			if err := runGlance(cmd, rf, "", glanceView{}, "auto"); err != nil {
 				return cmd.Help()
 			}
 			return nil

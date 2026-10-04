@@ -41,6 +41,7 @@ operator's own.
 | Route | Answers |
 |---|---|
 | `GET /api/glance` | Session budgets, plan headroom and one ranked insight |
+| `GET /api/findings` | What the coach and the session analysis observed, ranked, with what to do |
 | `GET /api/plans/headroom` | Each plan: usage, the vendor's windows, spend against the limit, risk |
 | `GET /api/plans/session-budget` | Each plan window: share used, pace, what to do |
 | `GET /api/status` | Readiness, blockers, warnings, next actions |

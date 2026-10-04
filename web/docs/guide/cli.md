@@ -44,12 +44,40 @@ models without a list price yet are left out of the money: a `+` marks a
 figure that leaves some out, and where most have no price only tokens are
 shown, since a total that looks complete but is not misleads.
 
+**Coach** findings follow the cards, most urgent first: what the coach and
+the session analysis observed, the figures behind it, and what to do.
+
+```
+Coach · 5 findings
+  ▲ Codex's weekly window runs out in 23h 32m at this pace
+    56% used, 38 points ahead of an even pace; it resets in 5d 18h
+    → Put the work that can move on Claude (25% used) until it resets.
+  ● Agents re-read 14 unchanged files in full
+    about 225k tokens of context spent on files already read, across 63 sessions
+    → tokenops coach set waste autonomous lets the read guard refuse them.
+  · The coach is observing and says nothing
+    it would have given 560 tips so far
+    → tokenops coach preset advise lets it speak, once per kind of thing.
+```
+
+They cover a quota window that runs out before it resets (and a plan with
+room to take the work), files the agent re-reads unchanged, sessions past
+their budget, the one change that would most improve how sessions go,
+session sources that cannot be read, kinds of advice the coach stopped
+giving because they were ignored, and what the coach would have said while
+it only observes. The session analysis reads a week of transcripts, so the
+daemon runs it in the background every three hours; the section says how
+old it is. `tokenops glance --findings` lists every finding, and
+`GET /api/findings` serves the same list. Findings carry figures only,
+never prompt or file text.
+
 In a true-colour terminal the bars are solid cells running green, amber,
 red along their length, in the Klarlabs palette; 16 colours elsewhere,
 plain text for a pipe.
 
 ```bash
 tokenops glance --brief          # a table: plan, window, used, resets, pace
+tokenops glance --findings       # every coach finding, nothing else
 tokenops glance --json           # the payload GET /api/glance serves
 tokenops glance --color always | less -R
 ```
