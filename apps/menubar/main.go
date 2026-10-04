@@ -72,10 +72,18 @@ func run() error {
 type view struct {
 	Glance json.RawMessage `json:"glance,omitempty"`
 	Coach  json.RawMessage `json:"coach,omitempty"`
+	// Costs is each provider's usage today and over the last 30 days.
+	Costs map[string]costs `json:"costs,omitempty"`
 	// Error says why there is nothing to show, in the operator's terms.
 	Error   string    `json:"error,omitempty"`
 	Updated time.Time `json:"updated"`
 	err     error
+}
+
+// costs is one provider's usage over two windows.
+type costs struct {
+	Today  spend `json:"today"`
+	Last30 spend `json:"last_30_days"`
 }
 
 // presetInput is the coach.preset command's argument.
@@ -108,7 +116,7 @@ func newMenubar(host app.DesktopHost, d *daemon, sink audit.Sink) (*menubar, err
 	a, err := app.New(app.Options{
 		AppID: appID, Title: "TokenOps", Assets: assets, Host: host, Runtime: rt,
 		Presentation: app.PresentationAccessory,
-		Window:       app.WindowOptions{ID: panelWindow, Width: 380, Height: 520, Kind: app.WindowKindPanel},
+		Window:       app.WindowOptions{ID: panelWindow, Width: 360, Height: 620, Kind: app.WindowKindPanel},
 	})
 	if err != nil {
 		return nil, err
@@ -233,7 +241,38 @@ func (m *menubar) read(ctx context.Context) view {
 	if c, err := m.daemon.coach(ctx); err == nil {
 		v.Coach = c
 	}
+	v.Costs = m.costs(ctx, g)
 	return v
+}
+
+// costs reads each plan's provider's usage today and over 30 days, all at
+// once. A provider whose figures cannot be read is left out.
+func (m *menubar) costs(ctx context.Context, g json.RawMessage) map[string]costs {
+	var gv glanceView
+	if json.Unmarshal(g, &gv) != nil {
+		return nil
+	}
+	var (
+		mu  sync.Mutex
+		wg  sync.WaitGroup
+		out = map[string]costs{}
+	)
+	for _, r := range gv.PlanHeadroom.Reports {
+		wg.Add(1)
+		go func(provider string) {
+			defer wg.Done()
+			today, err1 := m.daemon.spendSince(ctx, provider, "24h")
+			last30, err2 := m.daemon.spendSince(ctx, provider, "720h")
+			if err1 != nil || err2 != nil {
+				return
+			}
+			mu.Lock()
+			out[provider] = costs{Today: today, Last30: last30}
+			mu.Unlock()
+		}(r.Provider)
+	}
+	wg.Wait()
+	return out
 }
 
 // explain words an error for the operator.
