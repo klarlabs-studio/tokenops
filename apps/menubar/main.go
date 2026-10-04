@@ -178,16 +178,20 @@ func (m *menubar) register() error {
 	)
 }
 
-// Run shows the tray and blocks until the app quits.
+// Run shows the tray and blocks until the app quits. The icon appears at
+// once, marked as reading; the first read can take as long as a busy
+// daemon does, and an app that shows nothing until then looks broken.
 func (m *menubar) Run(ctx context.Context) error {
-	m.refresh(ctx)
+	m.setTray(status{Title: "—", Tooltip: "TokenOps: reading the daemon…"})
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
 	go m.poll(ctx)
 	return m.app.Run(ctx)
 }
 
+// poll reads the daemon now and every refreshEvery after.
 func (m *menubar) poll(ctx context.Context) {
+	m.refresh(ctx)
 	tick := time.NewTicker(refreshEvery)
 	defer tick.Stop()
 	for {
@@ -219,6 +223,13 @@ func (m *menubar) refresh(ctx context.Context) view {
 	if v.Glance != nil {
 		st = statusOf(v.Glance)
 	}
+	m.setTray(st)
+	_ = m.app.Emit(ctx, viewEvent, v)
+	return v
+}
+
+// setTray shows st next to the icon.
+func (m *menubar) setTray(st status) {
 	if err := m.app.SetTray(app.TraySpec{
 		Title: st.Title, Tooltip: st.Tooltip,
 		Icon: trayIcon(st.Pct), Template: true,
@@ -227,8 +238,6 @@ func (m *menubar) refresh(ctx context.Context) view {
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, "tokenops-menubar:", err)
 	}
-	_ = m.app.Emit(ctx, viewEvent, v)
-	return v
 }
 
 // read asks the daemon for the glance, then the coach, its findings and
