@@ -4,7 +4,22 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.94.0**.
+Current release: **v0.95.0**.
+
+## v0.95.0 — Every plan at a glance
+
+Run `tokenops` on its own and every plan appears as a card: a bar for
+each window the vendor reports, coloured as it fills, when it resets,
+spend against a limit and credit left, busiest first, laid out to fit
+your terminal. `tokenops glance --brief` prints a table instead.
+
+Gemini CLI is now read like Claude Code and Codex: each model turn's
+tokens from its local chat recordings, turned on by `init` where Gemini
+sessions exist.
+
+The daemon API's glance, which the new menu bar app reads, now answers
+in a fraction of a second; it read the store nineteen times per answer
+and could take minutes while the daemon was busy ingesting.
 
 ## v0.94.0 — Setup that asks less, and routers left to route
 

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.95.0 - 2026-10-04
+
+### Added
+
+- **cli:** `tokenops glance` draws every plan as terminal cards: a gradient bar for each window the vendor reports with its reset, spend against a limit, credit left, busiest first, laid out to fit the terminal. Bare `tokenops` shows it once set up. `--brief`, `--json`, `--color` (#526)
+- **vendorusage:** Gemini CLI's chat recordings are read for each model turn's tokens; init turns the reader on where Gemini sessions exist (#523)
+- **menubar:** a menu bar app on Vitra (`apps/menubar`, built from source for now): the busiest window next to the icon and a panel with every plan, from the daemon API (#525)
+
+### Fixed
+
+- **headroom:** one store read per answer instead of nineteen; `GET /api/glance` took up to two minutes in a daemon busy ingesting, and now answers in a fraction of a second (#524)
+
 ## 0.94.0 - 2026-10-03
 
 ### Added
