@@ -60,6 +60,7 @@ var cliToMCP = map[string][]string{
 	"scorecard":       {"tokenops_scorecard"},
 	"spend":           {"tokenops_spend_summary", "tokenops_top_consumers", "tokenops_burn_rate", "tokenops_forecast"},
 	"status":          {"tokenops_status"},
+	"glance":          {"tokenops_resource_glance"},
 	"story":           {"tokenops_story"},
 	"verify":          {"tokenops_verify"},
 	"decision":        {"tokenops_explain_decision"},
