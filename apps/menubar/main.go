@@ -1,7 +1,7 @@
-// Command tokenops-menubar puts TokenOps in the menu bar: the busiest plan
-// window next to the icon (for example "Claude 16%"), and a panel with
-// every plan's windows, spend and the coach when you click it. It reads the
-// local daemon's API (ADR 0010) and nothing else.
+// Command tokenops-menubar puts TokenOps in the menu bar: an icon whose
+// ring fills to the busiest plan window, and a panel with every plan's
+// windows, pace, cost and the coach's findings when you click it. It reads
+// the local daemon's API (ADR 0010) and nothing else.
 //
 //	CGO_ENABLED=1 go run -tags vitra_native .
 //
