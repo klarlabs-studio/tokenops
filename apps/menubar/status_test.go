@@ -27,9 +27,10 @@ func TestStatusShowsTheBusiestWindow(t *testing.T) {
 	if st.Title != "Codex 49%" || st.Pct != 49 {
 		t.Fatalf("status %+v", st)
 	}
-	for _, want := range []string{"Claude week: 15%, resets in 6d 2h", "Claude 5h: 6%, resets in 4h 25m", "Fireworks: $41.50 of $100.00", "recommends continuing"} {
-		if !strings.Contains(st.Tooltip, want) {
-			t.Errorf("tooltip lacks %q:\n%s", want, st.Tooltip)
+	lines := st.Tooltip
+	for _, want := range []string{"Claude · week 15% · resets in 6d 2h", "Claude · 5h 6% · resets in 4h 25m", "Codex · week 49%", "Fireworks · $41.50 of $100.00"} {
+		if !strings.Contains(lines, want) {
+			t.Errorf("tooltip lacks %q:\n%s", want, lines)
 		}
 	}
 }
