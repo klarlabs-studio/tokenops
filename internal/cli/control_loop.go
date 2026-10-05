@@ -22,7 +22,7 @@ import (
 )
 
 func newDecisionCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "decision", Short: "Inspect recorded TokenOps decisions"}
+	cmd := &cobra.Command{Use: "decision", Short: "Why TokenOps decided what it did"}
 	cmd.AddCommand(newDecisionExplainCmd())
 	return cmd
 }
@@ -30,7 +30,7 @@ func newDecisionCmd() *cobra.Command {
 func newDecisionExplainCmd() *cobra.Command {
 	var dbPath string
 	cmd := &cobra.Command{
-		Use: "explain <decision-id>", Short: "Explain a decision from its recorded evidence", Args: cobra.ExactArgs(1),
+		Use: "explain <decision-id>", Short: "What a figure means, how it is measured, and how to read it", Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, closeStore, err := openControlStore(cmd, dbPath)
 			if err != nil {
@@ -53,7 +53,7 @@ func newDecisionExplainCmd() *cobra.Command {
 }
 
 func newOutcomeCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "outcome", Short: "Record outcome evidence for an execution"}
+	cmd := &cobra.Command{Use: "outcome", Short: "Record whether a piece of work succeeded"}
 	cmd.AddCommand(newOutcomeRecordCmd(), newOutcomeDetectCmd(), newOutcomeCheckJSONCmd())
 	return cmd
 }
@@ -61,7 +61,7 @@ func newOutcomeCmd() *cobra.Command {
 func newOutcomeDetectCmd() *cobra.Command {
 	var decisionID, sessionID, dbPath string
 	cmd := &cobra.Command{
-		Use: "detect <execution-id>", Short: "Record the final local verifier result after the last edit", Args: cobra.ExactArgs(1),
+		Use: "detect <execution-id>", Short: "Which AI clients are installed on this machine (changes nothing)", Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			env, ok, err := outcomes.DetectSession(args[0], decisionID, sessionID)
 			if err != nil {
@@ -141,7 +141,7 @@ func newOutcomeRecordCmd() *cobra.Command {
 }
 
 func newExperimentCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "experiment", Short: "Manage bounded model-routing trials"}
+	cmd := &cobra.Command{Use: "experiment", Short: "Bounded trials of a routing change"}
 	cmd.AddCommand(newExperimentStartCmd(), newExperimentStatusCmd(), newExperimentStopCmd())
 	return cmd
 }
@@ -208,7 +208,7 @@ func parseExperimentGuardrails(args []string) ([]eventschema.ExperimentGuardrail
 func newExperimentStatusCmd() *cobra.Command {
 	var dbPath string
 	cmd := &cobra.Command{
-		Use: "status <experiment-id>", Short: "Show a trial's persisted state", Args: cobra.ExactArgs(1),
+		Use: "status <experiment-id>", Short: "Whether TokenOps is working: the daemon, its readers, what to fix", Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, closeStore, err := openControlStore(cmd, dbPath)
 			if err != nil {

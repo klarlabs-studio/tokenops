@@ -50,7 +50,7 @@ var hookMarkers = []string{"coach-hook", "read-guard", "route-guard"}
 func newHooksCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "hooks",
-		Short: "Install, remove, or inspect tokenops client hooks",
+		Short: "Install, inspect or remove TokenOps' hooks in your AI clients",
 		Long: `hooks wires tokenops' hooks into a client's hook config: the
 end-of-turn coaching nudge (coach-hook), the file-read dedup guard
 (read-guard), and the per-turn model-fit guard (route-guard). It merges
@@ -291,7 +291,7 @@ func newHooksStatusCmd() *cobra.Command {
 	var settingsPath, client string
 	cmd := &cobra.Command{
 		Use:   "status",
-		Short: "Show which tokenops hooks are wired and the binary they call",
+		Short: "Whether TokenOps is working: the daemon, its readers, what to fix",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := validateHookClient(client); err != nil {

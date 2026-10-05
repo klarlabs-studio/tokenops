@@ -12,6 +12,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
+	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
 )
@@ -25,7 +26,13 @@ import (
 type SessionsSnapshot struct {
 	ComputedAt time.Time   `json:"computed_at"`
 	DX         sessions.DX `json:"dx"`
+	// Curve is how first-try success changes as context grows.
+	Curve []agentdx.ContextBand `json:"context_curve,omitempty"`
 }
+
+// MaxSnapshotAge is how old an analysis `tokenops dx` still answers from;
+// the daemon refreshes it every three hours.
+const MaxSnapshotAge = 6 * time.Hour
 
 // snapshotFile names the cached analysis under the TokenOps directory.
 const snapshotFile = "session-findings.json"
@@ -87,7 +94,8 @@ func AnalyzeSessions(ctx context.Context, dir string, now time.Time) (SessionsSn
 	if err := ctx.Err(); err != nil {
 		return SessionsSnapshot{}, err
 	}
-	s := SessionsSnapshot{ComputedAt: now.UTC(), DX: sessions.ComputeDX(sessions.Window{Days: 7}, now)}
+	dx, curve := sessions.ComputeDXWithCurve(sessions.Window{Days: 7}, now)
+	s := SessionsSnapshot{ComputedAt: now.UTC(), DX: dx, Curve: curve}
 	return s, WriteSnapshot(dir, s)
 }
 

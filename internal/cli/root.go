@@ -29,8 +29,8 @@ func NewRoot() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:           "tokenops",
-		Short:         "TokenOps command-line interface",
-		Long:          "tokenops manages the local TokenOps daemon and queries its control endpoints.",
+		Short:         "Every AI coding plan at a glance, and a coach for using them",
+		Long:          rootLong,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		// Bare `tokenops` shows every plan at a glance once it is set up,
@@ -99,6 +99,7 @@ func NewRoot() *cobra.Command {
 		newCoachHookCmd(rf),
 		newHooksCmd(),
 	)
+	organize(cmd)
 	return cmd
 }
 

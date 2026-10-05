@@ -14,7 +14,7 @@ import (
 func newDaemonCmd(rf *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "daemon",
-		Short: "Install, remove, or inspect the supervised ingestion daemon",
+		Short: "Install, restart, inspect or remove the background daemon",
 		Long: `daemon writes a launchd LaunchAgent (macOS) or systemd user unit
 (Linux) that keeps ` + "`tokenops start`" + ` alive across reboot.
 
@@ -167,7 +167,7 @@ func newDaemonStatusCmd() *cobra.Command {
 	f := daemonFlags{}
 	cmd := &cobra.Command{
 		Use:   "status",
-		Short: "Show whether the supervised ingestion unit is installed",
+		Short: "Whether TokenOps is working: the daemon, its readers, what to fix",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			kind, bin, _, path, err := f.resolve()

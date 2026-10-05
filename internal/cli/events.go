@@ -24,7 +24,7 @@ func newEventsCmd(rf *rootFlags) *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "events",
-		Short: "Show per-kind domain event counts",
+		Short: "Counts of each kind of domain event",
 		Long: `events queries the canonical local event store and prints per-kind
 domain event counts (workflow.started, optimization.applied,
 rule_corpus.reloaded, budget.exceeded, ...). Mirrors the

@@ -53,7 +53,7 @@ func buildSpendEngine(cfg config.Config) (*spend.Engine, error) {
 func newPricingCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pricing",
-		Short: "Research, snapshot, diff, and lint model pricing (ADR 0002)",
+		Short: "Model prices: show, refresh, diff and lint the rate card",
 		Long: `pricing manages sourced, timestamped pricing snapshots.
 
 Instead of one hand-maintained rate table that drifts silently, pricing

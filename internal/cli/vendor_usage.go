@@ -19,7 +19,7 @@ import (
 func newVendorUsageCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "vendor-usage",
-		Short: "Inspect vendor-side usage pollers (Claude Code stats cache, Anthropic Admin API)",
+		Short: "Usage readers: Claude, Codex, Gemini and vendor accounts",
 	}
 	cmd.AddCommand(newVendorUsageStatusCmd())
 	cmd.AddCommand(newVendorUsageBackfillCmd())
@@ -432,7 +432,7 @@ func newVendorUsageStatusCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "status",
-		Short: "Show configured vendor-usage sources and their recent event counts",
+		Short: "Whether TokenOps is working: the daemon, its readers, what to fix",
 		Long: `status reads ~/.config/tokenops/config.yaml plus the event store
 (~/.tokenops/events.db) and reports per-source state:
 

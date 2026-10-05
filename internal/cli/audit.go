@@ -27,7 +27,7 @@ func newAuditCmd(rf *rootFlags) *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "audit",
-		Short: "Query the local audit log",
+		Short: "The audit log: config, plan and budget changes, optimizations, exports",
 		Long: `audit prints rows from the daemon's audit log (~/.tokenops/events.db
 or --db). Filter by --action, --actor, --since (RFC3339 or duration like
 24h / 7d), --until (RFC3339), and --limit.

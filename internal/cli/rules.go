@@ -18,7 +18,7 @@ import (
 func newRulesCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rules",
-		Short: "Rule Intelligence: analyze, detect conflicts, compress, inject, benchmark",
+		Short: "Your agent rules files: analyze, find conflicts, compress",
 		Long: `rules analyzes operational rule artifacts (CLAUDE.md, AGENTS.md,
 Cursor rules, MCP policies, repo conventions) as first-class telemetry.
 

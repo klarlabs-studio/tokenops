@@ -41,7 +41,7 @@ func newStatusCmd(rf *rootFlags) *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "status",
-		Short: "Show daemon health",
+		Short: "Whether TokenOps is working: the daemon, its readers, what to fix",
 		Long:  "status queries the daemon's /healthz, /readyz, and /version endpoints.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

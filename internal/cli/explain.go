@@ -15,7 +15,7 @@ func newExplainCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "explain [term]",
-		Short: "Explain a figure TokenOps shows: what it measures, how, and how to read it",
+		Short: "What a figure means, how it is measured, and how to read it",
 		Long: `explain says in plain words what a figure means: wall-clock, turns,
 rework, api-equivalent, signal quality and the rest. With no term it lists
 them all.
