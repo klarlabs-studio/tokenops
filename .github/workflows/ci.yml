@@ -113,7 +113,8 @@ jobs:
       # shows up here rather than on a tag.
       - name: Package TokenOps.app
         working-directory: .
-        run: scripts/build-menubar-app.sh v0.0.0-ci "$RUNNER_TEMP/menubar-dist"
+        # A relative output path, as the release passes it.
+        run: scripts/build-menubar-app.sh v0.0.0-ci menubar-dist && test -d menubar-dist/TokenOps.app
 
   bench-gate:
     name: Bench gate
