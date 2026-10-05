@@ -34,6 +34,7 @@ coach is set to.`,
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	cmd.AddCommand(newCoachPresetCmd())
+	cmd.AddCommand(newCoachStatsCmd())
 	cmd.AddCommand(newCoachAutonomyCmd())
 	cmd.AddCommand(newCoachVerbosityCmd())
 	cmd.AddCommand(newCoachSetCmd())
@@ -411,8 +412,8 @@ each one adds a channel to the one below it:
   observe     records everything, answers when asked: ` + "`tokenops coach prompts`" + `,
               ` + "`coach replies`" + `, ` + "`dx`" + `, and the MCP coaching tools. The hooks
               stay installed but say nothing, keeping their ledgers — so
-              ` + "`coach-hook stats`" + ` and ` + "`read-guard stats`" + ` still show what you
-              are missing before you let them speak.
+              ` + "`tokenops coach stats`" + ` still shows what you are missing
+              before you let them speak.
   advise      observe, plus the coach speaks unprompted but never blocks:
               coach-hook nudges as session cost crosses a budget fraction.
               Advice you can ignore. This is the default, and it is what the

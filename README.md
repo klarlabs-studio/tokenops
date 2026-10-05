@@ -84,7 +84,7 @@ Observe work and resources → Understand progress and constraints
 | Observe | Ingests proxy traffic, local agent transcripts, subscription usage, and task boundaries into a local event store. Sources and signal quality are reported rather than assumed. |
 | Understand | Reconstructs sessions into work traces; measures cost, plan-window pressure, context health, rework, and execution state. Estimates carry confidence and caveats. |
 | Compare | Uses task class, provider capabilities, live pricing, plan capacity, and prior outcomes to consider alternatives. It can abstain when evidence is stale or incomplete. |
-| Decide | Applies configured policy and authority. Decisions retain evidence, alternatives, uncertainty, and rationale so `tokenops decision explain <id>` can answer why. |
+| Decide | Applies configured policy and authority. Decisions retain evidence, alternatives, uncertainty, and rationale so `tokenops explain <id>` can answer why. |
 | Act and verify | Where an integration permits it, TokenOps can route requests or apply a bounded intervention. It records the result; it does not credit theoretical savings as proven value. |
 | Learn and coach | Outcomes inform local, gated beliefs. `tokenops coach`, `tokenops dx`, and `tokenops scorecard` help the user improve their own AI-assisted workflow too. |
 
@@ -160,37 +160,51 @@ for source coverage and client-specific limitations.
 
 ## CLI surface
 
+`tokenops` on its own shows every plan as a card, with the coach's
+findings underneath. `tokenops --help` groups the rest:
+
 ```
-init                              Scaffold config (sqlite + rules on); --detect sniffs installed clients
-start                             Run the daemon in the foreground (proxy + analytics + bus)
-daemon {install|uninstall|status} Supervise `tokenops start` via launchd (macOS) or systemd --user (Linux)
-serve                             MCP server over stdio
-status                            Daemon health + blockers[] / next_actions[]
-spend [--forecast]                Spend / burn / 7d forecast, in your currency
-plan {list|set|unset|history|headroom|catalog}  Plans, switches (--since), prices (--price/--currency)
-coach {preset|autonomy|verbosity|set|off|...}   Configure the coach; `coach` alone shows its status
-dx                                Agent-DX metrics from transcripts, split by model and reasoning effort
-story                             What you asked for, what the agent did, where it went sideways
-provider {list|set|unset}         Upstream LLM provider URLs
-vendor-usage {status|backfill}    Inspect / backfill vendor-side pollers
-config show                       Active configuration (redacted)
-audit                             Query audit log
-events                            Per-kind domain-event counts
-rules {analyze|conflicts|...}     Rule intelligence
-scorecard                         Wedge KPI scorecard
-coverage-debt                     Risk-weighted coverage debt
-eval                              Optimizer eval harness + gate
-replay <id>                       Replay a session through the optimizer
-decision explain <decision-id>   Show the evidence, alternatives, policy, and result of a recorded decision
-outcome record <execution-id>    Attach an explicit human outcome to an execution and decision
-outcome detect <execution-id>    Record the final verifier result after the last edit in a local session
-experiment {start|status|stop}   Manage an opt-in, bounded proxy routing trial
-fmt -- <cmd>                      Run <cmd>, compress its output deterministically before it reaches the agent (full output kept in ~/.tokenops/recovery/)
-fmt bench --corpus <dir>          Measure formatter savings over captured command outputs
-fmt hook [--shell zsh|bash]       Emit env-gated shell wrappers (activate with TOKENOPS_FMT=1)
-fmt recover <id>                   Print the full stored output for a run (records the re-access)
-fmt learn                         Mine fmt telemetry for next-formatter priorities + over-compression
+Every day
+  glance                    every plan's windows, pace, cost and the coach's findings
+  spend [--forecast]        what you spent, where it went, where it is heading
+  story                     what you asked for, what the agent did, where it went sideways
+  dx [--fresh]              how sessions go: turns, rework, interrupts, the one change to make
+  status                    whether TokenOps is working, and what to fix
+  explain [term | decision] what a figure means, or why TokenOps decided what it did
+
+Set up
+  init                      set up this machine: plans, client hooks, the daemon
+  detect                    which AI clients are installed (changes nothing)
+  daemon {install|restart|status|uninstall}
+  hooks {install|status|uninstall}
+  statusline {install|uninstall|subagents}
+  menubar                   install and open the menu bar app (macOS)
+  plan {set|list|headroom|history|catalog|unset}
+  budget {list|set|unset}
+  provider {list|set|unset}
+  vendor-usage {status|enable|setup|backfill}
+  pricing {show|refresh|diff|lint}
+  config show
+
+Coach, routing and policy
+  coach [preset|autonomy|verbosity|set|off|stats|prompts|replies]
+  mode [passive|active]
+  routing {proposals|rule}
+  preferred-model {list|set|unset}
+  experiment {start|status|stop}
+  rules {analyze|conflicts|compress|inject|bench}
+  fmt -- <cmd>              compress a command's output before the agent reads it
+  task {start|done|list}
+  outcome {record|detect|check-json}
+
+Look closer
+  scorecard · optimizations · verify · audit · events
 ```
+
+The hooks your clients call (`coach-hook`, `read-guard`, `route-guard`),
+the MCP server (`serve`), the daemon's foreground process (`start`) and
+the tools for working on TokenOps itself (`eval`, `coverage-debt`,
+`replay`) run as before but stay out of the help.
 
 Most CLI verbs have a matching MCP tool (`tokenops_<name>`). `fmt` is
 CLI-first (it wraps a shell command); its learning report is exposed to

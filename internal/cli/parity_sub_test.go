@@ -21,7 +21,6 @@ var subToMCP = map[string][]string{
 	"coach off":             {"tokenops_coach"},
 	"coach preset":          {"tokenops_coach"},
 	"config show":           {"tokenops_config"},
-	"decision explain":      {"tokenops_explain_decision"},
 	"experiment start":      {"tokenops_experiment"},
 	"experiment status":     {"tokenops_experiment"},
 	"experiment stop":       {"tokenops_experiment"},
@@ -54,6 +53,7 @@ var subToMCP = map[string][]string{
 // is visible, and closing one means moving it to subToMCP.
 var subCLIOnly = map[string]string{
 	"statusline install":    "edits the operator's Claude Code settings; init runs it",
+	"coach stats":           "reads the hooks' local ledgers on this machine; GET /api/findings serves what they show",
 	"statusline uninstall":  "restores the operator's own status line",
 	"fmt hook":              "is a hook entry point invoked by a client, not a user",
 	"fmt recover":           "prints a stored full output by recovery id, which the agent already receives inline",

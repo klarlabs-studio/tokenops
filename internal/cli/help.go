@@ -23,7 +23,7 @@ var helpOrder = []string{
 	"init", "detect", "daemon", "hooks", "statusline", "menubar", "plan", "budget", "provider",
 	"vendor-usage", "pricing", "config", "version",
 	"coach", "mode", "routing", "preferred-model", "experiment", "rules", "fmt", "task", "outcome",
-	"scorecard", "optimizations", "decision", "verify", "audit", "events",
+	"scorecard", "optimizations", "verify", "audit", "events",
 }
 
 // commandGroup files each command under its section.
@@ -38,7 +38,7 @@ var commandGroup = map[string]string{
 	"coach": "control", "mode": "control", "preferred-model": "control", "routing": "control",
 	"experiment": "control", "task": "control", "outcome": "control", "rules": "control", "fmt": "control",
 
-	"scorecard": "analysis", "optimizations": "analysis", "decision": "analysis", "audit": "analysis",
+	"scorecard": "analysis", "optimizations": "analysis", "audit": "analysis",
 	"events": "analysis", "verify": "analysis",
 }
 

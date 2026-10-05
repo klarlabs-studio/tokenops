@@ -121,3 +121,39 @@ func TestSubcommandsKeepTheirOwnDescriptions(t *testing.T) {
 		walk(c)
 	}
 }
+
+// coach stats shows both ledgers; explain takes a term, and names a
+// missing term or decision as either.
+func TestCoachStatsAndExplain(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	run := func(args ...string) (string, error) {
+		var out bytes.Buffer
+		root := NewRoot()
+		root.SetOut(&out)
+		root.SetErr(&out)
+		root.SetArgs(args)
+		err := root.Execute()
+		return out.String(), err
+	}
+	out, err := run("coach", "stats")
+	if err != nil || !strings.Contains(out, "No coach-hook activity yet") || !strings.Contains(out, "No read-guard activity yet") {
+		t.Errorf("coach stats: %v\n%s", err, out)
+	}
+	if out, err := run("coach", "stats", "--json"); err != nil || !strings.Contains(out, `"read_guard"`) || !strings.Contains(out, `"budget"`) {
+		t.Errorf("coach stats --json: %v\n%s", err, out)
+	}
+	if out, err := run("explain", "wall-clock"); err != nil || !strings.Contains(out, "wall-clock") {
+		t.Errorf("explain term: %v\n%s", err, out)
+	}
+	// A mistyped term gets suggestions even with no event store; a
+	// decision's ID needs the store, and says so.
+	if _, err := run("explain", "wall-clok"); err == nil || !strings.Contains(err.Error(), "no term or decision") {
+		t.Errorf("explain typo: %v", err)
+	}
+	if _, err := run("explain", "decision:missing"); err == nil || !strings.Contains(err.Error(), "event store") {
+		t.Errorf("explain decision without a store: %v", err)
+	}
+	if c, _, err := NewRoot().Find([]string{"decision"}); err == nil && c.Name() == "decision" {
+		t.Error("decision still exists; explain answers decisions")
+	}
+}

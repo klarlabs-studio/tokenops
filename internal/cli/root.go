@@ -76,7 +76,6 @@ func NewRoot() *cobra.Command {
 		newDXCmd(),
 		newStoryCmd(),
 		newVerifyCmd(),
-		newDecisionCmd(),
 		newOutcomeCmd(),
 		newExperimentCmd(),
 		newSpendCmd(rf),

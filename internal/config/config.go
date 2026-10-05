@@ -303,9 +303,9 @@ type CoachingConfig struct {
 	//   observe    — records everything, answers when asked. `tokenops
 	//                coach prompts`, `coach replies`, `dx`, and the MCP
 	//                coaching tools. The hooks stay installed but say
-	//                nothing: they keep their ledgers, so `coach-hook
-	//                stats` and `read-guard stats` still show what you
-	//                are missing before you let them speak.
+	//                nothing: they keep their ledgers, so `coach stats`
+	//                still shows what you are missing before you let
+	//                them speak.
 	//   advise     — observe, plus the coach speaks unprompted but never
 	//                blocks: coach-hook nudges as session cost crosses a
 	//                budget fraction. Advice you can ignore. The default.

@@ -21,35 +21,23 @@ import (
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
-func newDecisionCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "decision", Short: "Why TokenOps decided what it did"}
-	cmd.AddCommand(newDecisionExplainCmd())
-	return cmd
-}
-
-func newDecisionExplainCmd() *cobra.Command {
-	var dbPath string
-	cmd := &cobra.Command{
-		Use: "explain <decision-id>", Short: "Explain a decision from its recorded evidence", Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			store, closeStore, err := openControlStore(cmd, dbPath)
-			if err != nil {
-				return err
-			}
-			defer closeStore()
-			events, err := store.Query(cmd.Context(), sqlite.Filter{Decision: args[0], Limit: 10_000})
-			if err != nil {
-				return err
-			}
-			report, ok := explain.Build(args[0], events)
-			if !ok {
-				return fmt.Errorf("decision %q not found", args[0])
-			}
-			return writeControlJSON(cmd, report)
-		},
+// explainDecision answers `tokenops explain <decision-id>` from the
+// decision's recorded evidence; found is false when no decision has that ID.
+func explainDecision(cmd *cobra.Command, dbPath, id string) (found bool, err error) {
+	store, closeStore, err := openControlStore(cmd, dbPath)
+	if err != nil {
+		return false, err
 	}
-	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db")
-	return cmd
+	defer closeStore()
+	events, err := store.Query(cmd.Context(), sqlite.Filter{Decision: id, Limit: 10_000})
+	if err != nil {
+		return false, err
+	}
+	report, ok := explain.Build(id, events)
+	if !ok {
+		return false, nil
+	}
+	return true, writeControlJSON(cmd, report)
 }
 
 func newOutcomeCmd() *cobra.Command {

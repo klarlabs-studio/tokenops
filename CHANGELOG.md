@@ -5,6 +5,7 @@
 ### Changed
 
 - **cli:** `tokenops --help` groups commands by what you are doing (every day, set up, coach and routing, look closer), most used first, with a short start-here guide; every command's one-line description is rewritten in plain words. The hooks other programs call, the MCP server, the daemon's foreground process and TokenOps' own development tools are left out of the list but run as before, and the daemon overrides (`--listen`, `--tls`, …) are named once instead of under every command
+- **cli:** `tokenops coach stats` replaces `coach-hook stats` and `read-guard stats`: both ledgers in one view (`--json` gives `budget` and `read_guard`). `tokenops explain` answers a decision's ID as well as a term, and `decision explain` is gone. The hook entry points (`coach-hook hook`, `read-guard hook`, `route-guard hook`) are unchanged, so installed hooks keep working
 - **dx:** `tokenops dx` answers the default week from the daemon's background analysis when it is under six hours old — in under a second instead of minutes; `--fresh` reads the transcripts now
 
 ### Added
