@@ -4,7 +4,28 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.97.0**.
+Current release: **v0.98.0**.
+
+## v0.98.0 — A cleaner surface, and the menu bar in the box
+
+The menu bar app now ships with the Homebrew install on macOS. Run
+`tokenops menubar` once: it installs the app to ~/Applications and opens
+it. The icon sits alone in the menu bar, its ring filled to your busiest
+window; click it for every plan's windows, pace, cost and the coach's
+findings, hover for each window's reset, right-click for Launch at Login.
+Upgrades keep it current.
+
+The CLI's help is grouped by what you are doing, with examples on every
+command, `--json` on every command that reads, `--version`, and one
+`--config` flag that every command honours. `tokenops dx` answers in
+under a second from the daemon's background analysis. `tokenops coach
+stats` gathers what the coach saw, and `tokenops explain` takes a
+decision's ID as well as a term.
+
+Agents see sixteen MCP tools instead of fifty, each titled, annotated
+with whether it reads or changes settings, with described parameters and
+bounded, structured answers. Restart your agents after upgrading so they
+load the new list.
 
 ## v0.97.0 — Cards like CodexBar, and what the coach sees
 
