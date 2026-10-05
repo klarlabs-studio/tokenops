@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+
+- **cli:** `tokenops --help` groups commands by what you are doing (every day, set up, coach and routing, look closer), most used first, with a short start-here guide; every command's one-line description is rewritten in plain words. The hooks other programs call, the MCP server, the daemon's foreground process and TokenOps' own development tools are left out of the list but run as before, and the daemon overrides (`--listen`, `--tls`, …) are named once instead of under every command
+- **dx:** `tokenops dx` answers the default week from the daemon's background analysis when it is under six hours old — in under a second instead of minutes; `--fresh` reads the transcripts now
+
 ### Added
 
 - **menubar:** the menu bar app ships in the macOS release and the Homebrew cask; `tokenops menubar` installs it to `~/Applications` and opens it, and upgrades refresh it. It is ad hoc signed, not notarized; the cask clears its quarantine flag as it does the CLI's

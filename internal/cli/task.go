@@ -21,7 +21,7 @@ import (
 func newTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "task",
-		Short: "Mark task boundaries so the scorecard + coach can compute task-level metrics",
+		Short: "Mark where a task starts and ends, so figures are per task",
 		Long: `task records operator-marked task boundaries to
 $HOME/.tokenops/tasks.jsonl. Once a task is started, scorecard and
 coach commands can attribute spend, turns, and duration to that

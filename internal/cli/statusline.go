@@ -87,7 +87,7 @@ func newStatuslineCmd() *cobra.Command {
 	var wrap string
 	cmd := &cobra.Command{
 		Use:   "statusline",
-		Short: "Print TokenOps' line for Claude Code's status line (reads Claude Code's JSON on stdin)",
+		Short: "TokenOps' line in Claude Code's status line",
 		Long: `statusline prints the quota windows, the context against the point the
 session compacts at, the cache hit ratio, the session's cost in your
 currency and the coach's open tip, in Klarlabs colours. Claude Code runs

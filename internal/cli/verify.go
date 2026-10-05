@@ -33,7 +33,7 @@ func newVerifyCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "verify",
-		Short: "Compare resource use and outcomes across optimized attempts",
+		Short: "Compare resource use and outcomes with and without optimizations",
 		Long: `verify attributes recorded events to reconstructed attempts. By default,
 it compares attempts an optimization touched against those it did not; this is
 observational and does not establish causality. When execution-linked randomized

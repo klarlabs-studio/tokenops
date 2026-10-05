@@ -41,7 +41,7 @@ func newInitCmd() *cobra.Command {
 	f := &initFlags{}
 	cmd := &cobra.Command{
 		Use:   "init",
-		Short: "Scaffold the TokenOps config file and enable storage + rules",
+		Short: "Set up this machine: plans, client hooks and the daemon",
 		Long: `init sets tokenops up on this machine. It writes an opinionated config
 to $XDG_CONFIG_HOME/tokenops/config.yaml (or ~/.config/tokenops/config.yaml)
 enabling:

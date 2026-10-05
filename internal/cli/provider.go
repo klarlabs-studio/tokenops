@@ -26,7 +26,7 @@ func knownProviderNames() []string {
 func newProviderCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "provider",
-		Short: "Manage upstream LLM provider URLs in config.yaml",
+		Short: "Upstream provider URLs the daemon routes to",
 		Long: `provider mutates the providers map in config.yaml so the daemon routes
 upstream traffic without requiring an environment-variable export or a
 manual file edit. Subcommands:

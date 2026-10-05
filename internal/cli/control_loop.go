@@ -22,7 +22,7 @@ import (
 )
 
 func newDecisionCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "decision", Short: "Inspect recorded TokenOps decisions"}
+	cmd := &cobra.Command{Use: "decision", Short: "Why TokenOps decided what it did"}
 	cmd.AddCommand(newDecisionExplainCmd())
 	return cmd
 }
@@ -53,7 +53,7 @@ func newDecisionExplainCmd() *cobra.Command {
 }
 
 func newOutcomeCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "outcome", Short: "Record outcome evidence for an execution"}
+	cmd := &cobra.Command{Use: "outcome", Short: "Record whether a piece of work succeeded"}
 	cmd.AddCommand(newOutcomeRecordCmd(), newOutcomeDetectCmd(), newOutcomeCheckJSONCmd())
 	return cmd
 }
@@ -141,7 +141,7 @@ func newOutcomeRecordCmd() *cobra.Command {
 }
 
 func newExperimentCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "experiment", Short: "Manage bounded model-routing trials"}
+	cmd := &cobra.Command{Use: "experiment", Short: "Bounded trials of a routing change"}
 	cmd.AddCommand(newExperimentStartCmd(), newExperimentStatusCmd(), newExperimentStopCmd())
 	return cmd
 }

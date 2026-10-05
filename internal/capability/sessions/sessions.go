@@ -85,8 +85,19 @@ type DX struct {
 // interrupts, escalation, first-try rate, context growth and compactions,
 // grades each, and names the single change worth making.
 func ComputeDX(w Window, now time.Time) DX {
+	dx, _ := ComputeDXWithCurve(w, now)
+	return dx
+}
+
+// ComputeDXWithCurve is ComputeDX, plus how first-try success changes as
+// context grows, from the same read of the transcripts.
+func ComputeDXWithCurve(w Window, now time.Time) (DX, []agentdx.ContextBand) {
 	opts, window := w.options(now, false)
 	records, err := agentdx.ExtractAll(opts)
+	return dxOf(records, err, window), agentdx.ComputeContextCurve(records)
+}
+
+func dxOf(records []agentdx.Record, err error, window string) DX {
 	m := agentdx.ComputeByProvider(records)
 	out := DX{Window: window, Metrics: m, Grades: agentdx.Grade(m), Warnings: readWarnings(err)}
 	if m.Prompts == 0 {

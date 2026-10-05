@@ -28,7 +28,7 @@ func newModeCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "mode [passive|active]",
-		Short: "Show or set the operating mode",
+		Short: "What TokenOps may do on its own: passive or active",
 		Long: `mode with no argument prints the current mode.
 
   passive  collect and analyse on demand (default)
@@ -79,7 +79,7 @@ running.`,
 func newPreferredModelCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "preferred-model",
-		Short: "Show or set the model ceiling a provider may not be routed above",
+		Short: "The most expensive model a provider may be routed to",
 		Long: `The preferred model is a ceiling, not a default. A routing rule that
 would move you to a pricier model is refused and referred to you; routes
 to cheaper models still apply on their own.`,
@@ -198,7 +198,7 @@ func newPreferredModelUnsetCmd() *cobra.Command {
 func newRoutingCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "routing",
-		Short: "Inspect routing proposals and manage routing rules",
+		Short: "Routing proposals and the rules that route work to models",
 	}
 	cmd.AddCommand(newRoutingProposalsCmd(), newRoutingRuleCmd())
 	return cmd
