@@ -157,3 +157,54 @@ func TestCoachStatsAndExplain(t *testing.T) {
 		t.Error("decision still exists; explain answers decisions")
 	}
 }
+
+// changesThings are commands that change state, launch something or print
+// a shell snippet; every other visible command reads, and offers --json
+// (or prints JSON alone) so a script can use it.
+var changesThings = map[string]bool{
+	"tokenops init": true, "tokenops detect": true, "tokenops menubar": true,
+	"tokenops daemon install": true, "tokenops daemon uninstall": true, "tokenops daemon restart": true,
+	"tokenops hooks install": true, "tokenops hooks uninstall": true,
+	"tokenops statusline install": true, "tokenops statusline uninstall": true, "tokenops statusline subagents": true,
+	"tokenops plan set": true, "tokenops plan unset": true,
+	"tokenops budget set": true, "tokenops budget unset": true,
+	"tokenops provider set": true, "tokenops provider unset": true,
+	"tokenops vendor-usage enable": true, "tokenops vendor-usage setup": true,
+	"tokenops pricing refresh": true,
+	"tokenops coach autonomy":  true, "tokenops coach verbosity": true, "tokenops coach set": true,
+	"tokenops coach off": true, "tokenops coach migrate": true, "tokenops coach delivery": true,
+	"tokenops routing rule set": true, "tokenops routing rule unset": true,
+	"tokenops preferred-model set": true, "tokenops preferred-model unset": true,
+	"tokenops fmt bench": true, "tokenops fmt hook": true, "tokenops fmt recover": true,
+	"tokenops task start": true, "tokenops task done": true,
+	// These print JSON and nothing else.
+	"tokenops experiment start": true, "tokenops experiment status": true, "tokenops experiment stop": true,
+	"tokenops outcome record": true, "tokenops outcome detect": true, "tokenops outcome check-json": true,
+}
+
+func TestReadCommandsOfferJSON(t *testing.T) {
+	var walk func(c *cobra.Command)
+	walk = func(c *cobra.Command) {
+		for _, s := range c.Commands() {
+			if s.Hidden || s.Name() == "help" || s.Name() == "completion" {
+				continue
+			}
+			if len(s.Commands()) > 0 {
+				walk(s)
+				continue
+			}
+			path := s.CommandPath()
+			if s.Runnable() && !changesThings[path] && s.Flags().Lookup("json") == nil {
+				t.Errorf("%s reads but has no --json; add one, or list it in changesThings", path)
+			}
+		}
+	}
+	walk(NewRoot())
+	var out bytes.Buffer
+	root := NewRoot()
+	root.SetOut(&out)
+	root.SetArgs([]string{"--version"})
+	if err := root.Execute(); err != nil || !strings.HasPrefix(out.String(), "tokenops ") {
+		t.Errorf("--version: %v %q", err, out.String())
+	}
+}

@@ -8,6 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/state"
+
 	"go.klarlabs.de/tokenops/internal/capability/authority"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/routingapproval"
@@ -25,6 +27,7 @@ func newModeCmd() *cobra.Command {
 	var (
 		configPathFlag string
 		noRestartFlag  bool
+		jsonOut        bool
 	)
 	cmd := &cobra.Command{
 		Use:   "mode [passive|active]",
@@ -48,6 +51,9 @@ running.`,
 				return err
 			}
 			out := cmd.OutOrStdout()
+			if len(args) == 0 && jsonOut {
+				return writeControlJSON(cmd, state.ModeOf(cfg))
+			}
 			if len(args) == 0 {
 				printAuthority(out, cfg)
 				fmt.Fprintf(out, "\n  budgets:       %d\n", len(cfg.Budgets))
@@ -71,6 +77,7 @@ running.`,
 		},
 	}
 	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "print the mode as JSON (the daemon API's GET /api/mode)")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }
@@ -89,7 +96,10 @@ to cheaper models still apply on their own.`,
 }
 
 func newPreferredModelListCmd() *cobra.Command {
-	var configPathFlag string
+	var (
+		configPathFlag string
+		jsonOut        bool
+	)
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List the preferred model per provider",
@@ -102,6 +112,9 @@ func newPreferredModelListCmd() *cobra.Command {
 			cfg, err := readMutableConfig(path)
 			if err != nil {
 				return err
+			}
+			if jsonOut {
+				return writeControlJSON(cmd, nonNilMap(cfg.PreferredModels))
 			}
 			out := cmd.OutOrStdout()
 			if len(cfg.PreferredModels) == 0 {
@@ -120,6 +133,7 @@ func newPreferredModelListCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
 }
 
@@ -205,7 +219,10 @@ func newRoutingCmd() *cobra.Command {
 }
 
 func newRoutingProposalsCmd() *cobra.Command {
-	var storePath string
+	var (
+		storePath string
+		jsonOut   bool
+	)
 	cmd := &cobra.Command{
 		Use:   "proposals",
 		Short: "List model upgrades refused because they exceed your preferred model",
@@ -229,6 +246,12 @@ model, or stay on the preferred one. Nothing applies until you answer.`,
 			if err != nil {
 				return err
 			}
+			if jsonOut {
+				if pending == nil {
+					pending = pending[:0]
+				}
+				return writeControlJSON(cmd, pending)
+			}
 			out := cmd.OutOrStdout()
 			if len(pending) == 0 {
 				fmt.Fprintln(out, "no upgrades are waiting on you")
@@ -246,6 +269,7 @@ model, or stay on the preferred one. Nothing applies until you answer.`,
 		},
 	}
 	cmd.Flags().StringVar(&storePath, "store", "", "override the approvals store path")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
 }
 
@@ -259,7 +283,10 @@ func newRoutingRuleCmd() *cobra.Command {
 }
 
 func newRoutingRuleListCmd() *cobra.Command {
-	var configPathFlag string
+	var (
+		configPathFlag string
+		jsonOut        bool
+	)
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List configured routing rules",
@@ -273,6 +300,13 @@ func newRoutingRuleListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if jsonOut {
+				rules := cfg.Optimizer.RoutingRules
+				if rules == nil {
+					rules = rules[:0]
+				}
+				return writeControlJSON(cmd, rules)
+			}
 			out := cmd.OutOrStdout()
 			if len(cfg.Optimizer.RoutingRules) == 0 {
 				fmt.Fprintln(out, "no routing rules configured")
@@ -285,6 +319,7 @@ func newRoutingRuleListCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
 }
 

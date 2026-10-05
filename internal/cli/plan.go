@@ -208,7 +208,8 @@ func resolveMutableConfigPath(override string) (string, error) {
 }
 
 func newPlanListCmd(rf *rootFlags) *cobra.Command {
-	return &cobra.Command{
+	var jsonOut bool
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List configured plans (provider → plan name)",
 		Args:  cobra.NoArgs,
@@ -216,6 +217,20 @@ func newPlanListCmd(rf *rootFlags) *cobra.Command {
 			cfg, err := loadConfig(rf)
 			if err != nil {
 				return err
+			}
+			if jsonOut {
+				type boundPlan struct {
+					Provider string `json:"provider"`
+					Plan     string `json:"plan"`
+					Display  string `json:"display,omitempty"`
+					Known    bool   `json:"known"`
+				}
+				bound := make([]boundPlan, 0, len(cfg.Plans))
+				for _, provider := range sortedPlanProviders(cfg.Plans) {
+					p, ok := plans.Lookup(cfg.Plans[provider])
+					bound = append(bound, boundPlan{Provider: provider, Plan: cfg.Plans[provider], Display: p.Display, Known: ok})
+				}
+				return writeControlJSON(cmd, bound)
 			}
 			if len(cfg.Plans) == 0 {
 				fmt.Fprintln(cmd.OutOrStdout(), "no plans configured; run `tokenops plan set <provider> <plan>` (e.g. `tokenops plan set anthropic claude-max-20x`)")
@@ -235,6 +250,8 @@ func newPlanListCmd(rf *rootFlags) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
+	return cmd
 }
 
 func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
@@ -358,11 +375,20 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 }
 
 func newPlanCatalogCmd() *cobra.Command {
-	return &cobra.Command{
+	var jsonOut bool
+	cmd := &cobra.Command{
 		Use:   "catalog",
 		Short: "List every subscription plan TokenOps recognises",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if jsonOut {
+				catalog := make([]plans.Plan, 0, len(plans.Names()))
+				for _, name := range plans.Names() {
+					p, _ := plans.Lookup(name)
+					catalog = append(catalog, p)
+				}
+				return writeControlJSON(cmd, catalog)
+			}
 			for _, name := range plans.Names() {
 				p, _ := plans.Lookup(name)
 				price := "no flat price"
@@ -377,6 +403,8 @@ func newPlanCatalogCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
+	return cmd
 }
 
 // storeReader adapts *sqlite.Store to the ports the domain and the

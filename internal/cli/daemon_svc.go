@@ -165,6 +165,7 @@ func newDaemonUninstallCmd() *cobra.Command {
 
 func newDaemonStatusCmd() *cobra.Command {
 	f := daemonFlags{}
+	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show whether the supervised ingestion unit is installed",
@@ -173,6 +174,9 @@ func newDaemonStatusCmd() *cobra.Command {
 			kind, bin, _, path, err := f.resolve()
 			if err != nil {
 				return err
+			}
+			if jsonOut {
+				return writeControlJSON(cmd, daemonStatusOf(kind, bin, path))
 			}
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "This binary: %s\n", bin)
@@ -199,6 +203,7 @@ func newDaemonStatusCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	addDaemonFlags(cmd, &f, false)
 	return cmd
 }
@@ -269,4 +274,25 @@ func newDaemonRestartCmd(rf *rootFlags) *cobra.Command {
 	}
 	addDaemonFlags(cmd, &f, false)
 	return cmd
+}
+
+// daemonStatus is `tokenops daemon status --json`.
+type daemonStatus struct {
+	Binary     string `json:"binary"`
+	Supervisor string `json:"supervisor"`
+	OS         string `json:"os"`
+	Unit       string `json:"unit"`
+	Installed  bool   `json:"installed"`
+	Logs       string `json:"logs,omitempty"`
+}
+
+func daemonStatusOf(kind daemon.UnitKind, bin, path string) daemonStatus {
+	st := daemonStatus{Binary: bin, Supervisor: string(kind), OS: runtime.GOOS, Unit: path}
+	if _, err := os.Stat(path); err == nil {
+		st.Installed = true
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		st.Logs = daemon.LogPath(kind, home)
+	}
+	return st
 }
