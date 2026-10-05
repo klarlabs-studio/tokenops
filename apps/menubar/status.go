@@ -42,15 +42,12 @@ type window struct {
 	ResetsIn string  `json:"resets_in"`
 }
 
-// status is what the tray shows: the share the icon's ring fills, a
-// tooltip, and a line per window for the top of the menu. Title names the
-// busiest window; the icon stands alone in the menu bar, so it heads the
-// tooltip.
+// status is what the tray shows: the share the icon's ring fills, and a
+// tooltip with a line per window. Title names the busiest window.
 type status struct {
 	Title   string
 	Pct     float64
 	Tooltip string
-	Lines   []string
 }
 
 // providerNames are short names for the menu bar.
@@ -106,8 +103,7 @@ func statusOf(raw json.RawMessage) status {
 	if !found {
 		return status{Title: "TokenOps", Tooltip: "TokenOps: " + g.Insight.Summary}
 	}
-	best.Lines = lines
-	best.Tooltip = "TokenOps: " + best.Title
+	best.Tooltip = strings.Join(lines, "\n")
 	return best
 }
 

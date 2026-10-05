@@ -12,8 +12,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"go.klarlabs.de/vitra/platform"
 )
 
 const glanceSample = `{"insight":{"level":"clear","summary":"Claude Max 20x recommends continuing."},
@@ -29,35 +27,11 @@ func TestStatusShowsTheBusiestWindow(t *testing.T) {
 	if st.Title != "Codex 49%" || st.Pct != 49 {
 		t.Fatalf("status %+v", st)
 	}
-	if st.Tooltip != "TokenOps: Codex 49%" {
-		t.Errorf("tooltip %q", st.Tooltip)
-	}
-	lines := strings.Join(st.Lines, "\n")
+	lines := st.Tooltip
 	for _, want := range []string{"Claude · week 15% · resets in 6d 2h", "Claude · 5h 6% · resets in 4h 25m", "Codex · week 49%", "Fireworks · $41.50 of $100.00"} {
 		if !strings.Contains(lines, want) {
-			t.Errorf("menu lines lack %q:\n%s", want, lines)
+			t.Errorf("tooltip lacks %q:\n%s", want, lines)
 		}
-	}
-}
-
-// The menu starts with the figures, greyed out, then the actions; with no
-// figures yet it says why.
-func TestTrayItems(t *testing.T) {
-	actions := []platform.MenuItem{{ID: actionPanel, Label: "Show Details…"}}
-	items := trayItems(statusOf([]byte(glanceSample)), actions)
-	if !items[0].Disabled || !strings.HasPrefix(items[0].Label, "Claude") || !items[len(items)-2].Separator || items[len(items)-1].ID != actionPanel {
-		t.Errorf("items %+v", items)
-	}
-	seen := map[string]bool{}
-	for _, it := range items {
-		if it.ID != "" && seen[it.ID] {
-			t.Errorf("duplicate menu id %q", it.ID)
-		}
-		seen[it.ID] = true
-	}
-	reading := trayItems(status{Title: "—", Tooltip: "TokenOps: reading the daemon…"}, actions)
-	if reading[0].Label != "reading the daemon…" || !reading[0].Disabled {
-		t.Errorf("reading %+v", reading[0])
 	}
 }
 

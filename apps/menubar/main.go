@@ -19,7 +19,6 @@ import (
 	"io/fs"
 	"os"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -35,12 +34,8 @@ import (
 
 const (
 	appID = "de.klarlabs.tokenops.menubar"
-	// panelWindow is the window the app starts with: a tray panel, kept
-	// hidden since a click on the icon opens the menu instead.
+	// panelWindow is the tray panel a click on the icon opens.
 	panelWindow domain.WindowID = "panel"
-	// detailsWindow is Show Details…: the panel's view as an ordinary
-	// window.
-	detailsWindow domain.WindowID = "details"
 	// viewEvent carries each new view to the panel.
 	viewEvent domain.EventName = "glance.update"
 	// refreshEvery is how often the tray is refreshed.
@@ -49,7 +44,6 @@ const (
 
 // Tray menu action IDs.
 const (
-	actionPanel   = "panel"
 	actionRefresh = "refresh"
 	actionLogin   = "login"
 	actionQuit    = "quit"
@@ -140,7 +134,7 @@ func newMenubar(host app.DesktopHost, d *daemon, sink audit.Sink) (*menubar, err
 func (m *menubar) register() error {
 	grant, err := domain.NewCapabilityGrant(
 		"panel", "read the glance, change the coach preset, close the panel",
-		[]domain.WindowID{panelWindow, detailsWindow},
+		[]domain.WindowID{panelWindow},
 		[]domain.Origin{domain.OriginPackagedLocal},
 		[]domain.PermissionSpec{{Name: "glance.read"}, {Name: "coach.change"}, {Name: "panel.close"}},
 	)
@@ -174,13 +168,10 @@ func (m *menubar) register() error {
 		}),
 		vitra.Register(m.rt, vitra.Command[struct{}, vitra.Void]{
 			Name:        "panel.close",
-			Description: "Close the details window",
+			Description: "Hide the tray panel",
 			Permission:  "panel.close",
-			Handler: func(ctx context.Context, inv domain.Invocation, _ struct{}) (vitra.Void, error) {
-				if inv.Caller.Window == detailsWindow {
-					return vitra.Void{}, m.app.CloseWindow(ctx, detailsWindow)
-				}
-				return vitra.Void{}, nil
+			Handler: func(context.Context, domain.Invocation, struct{}) (vitra.Void, error) {
+				return vitra.Void{}, m.app.HideTrayPanel()
 			},
 		}),
 	)
@@ -236,41 +227,15 @@ func (m *menubar) refresh(ctx context.Context) view {
 	return v
 }
 
-// setTray shows the icon alone, its ring filled to the busiest window; a
-// click opens the menu, which starts with every window's figures.
+// setTray shows the icon alone, its ring filled to the busiest window. A
+// click opens the panel with every plan's details under the icon; a right
+// click opens the menu.
 func (m *menubar) setTray(st status) {
 	if err := m.app.SetTray(app.TraySpec{
 		Tooltip: st.Tooltip,
 		Icon:    trayIcon(st.Pct), Template: true,
-		Items: trayItems(st, m.menu()),
-	}); err != nil {
-		fmt.Fprintln(os.Stderr, "tokenops-menubar:", err)
-	}
-}
-
-// trayItems heads the menu with a line per window, greyed out as figures
-// rather than actions.
-func trayItems(st status, menu []platform.MenuItem) []platform.MenuItem {
-	if len(st.Lines) == 0 {
-		if st.Tooltip == "" {
-			return menu
-		}
-		st.Lines = []string{strings.TrimPrefix(st.Tooltip, "TokenOps: ")}
-	}
-	items := make([]platform.MenuItem, 0, len(st.Lines)+1+len(menu))
-	for i, l := range st.Lines {
-		items = append(items, platform.MenuItem{ID: fmt.Sprintf("figure-%d", i), Label: l, Disabled: true})
-	}
-	items = append(items, platform.MenuItem{Separator: true})
-	return append(items, menu...)
-}
-
-// showDetails opens the details window, the panel's view as an ordinary
-// window, raising it afresh if it is open.
-func (m *menubar) showDetails(ctx context.Context) {
-	_ = m.app.CloseWindow(ctx, detailsWindow)
-	if err := m.app.OpenWindow(ctx, app.WindowOptions{
-		ID: detailsWindow, Title: "TokenOps", Width: 380, Height: 700,
+		Panel: panelWindow,
+		Items: m.menu(),
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, "tokenops-menubar:", err)
 	}
@@ -350,7 +315,6 @@ func explain(err error) string {
 func (m *menubar) menu() []platform.MenuItem {
 	login, err := m.app.LoginItemEnabled()
 	return []platform.MenuItem{
-		{ID: actionPanel, Label: "Show Details…"},
 		{ID: actionRefresh, Label: "Refresh"},
 		{Separator: true},
 		{ID: actionLogin, Label: "Launch at Login", Checked: login, Disabled: err != nil},
@@ -363,8 +327,6 @@ func (m *menubar) menu() []platform.MenuItem {
 func (m *menubar) onAction(id string) {
 	ctx := context.Background()
 	switch id {
-	case actionPanel:
-		m.showDetails(ctx)
 	case actionRefresh:
 		m.refresh(ctx)
 	case actionLogin:
