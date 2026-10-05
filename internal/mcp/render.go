@@ -28,6 +28,21 @@ import (
 //
 // Clients that don't render <details> fall through to showing both
 // blocks linearly — still useful, just less compact.
+// jsonFromMarkdownPayload recovers the JSON markdownPayload embedded in s.
+func jsonFromMarkdownPayload(s string) (json.RawMessage, bool) {
+	const open, closing = "```json\n", "\n```"
+	i := strings.Index(s, open)
+	if i < 0 {
+		return nil, false
+	}
+	rest := s[i+len(open):]
+	j := strings.Index(rest, closing)
+	if j < 0 || !json.Valid([]byte(rest[:j])) {
+		return nil, false
+	}
+	return json.RawMessage(rest[:j]), true
+}
+
 func markdownPayload(summary string, structured any) string {
 	out, err := json.MarshalIndent(structured, "", "  ")
 	if err != nil {

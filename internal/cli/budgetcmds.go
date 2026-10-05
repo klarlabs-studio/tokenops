@@ -31,15 +31,14 @@ to watch the API list-price value the subscription absorbed.`,
 
 func newBudgetListCmd() *cobra.Command {
 	var (
-		configPathFlag string
-		jsonOut        bool
+		jsonOut bool
 	)
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List configured budgets",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			path, err := resolveMutableConfigPath(configPathFlag)
+			path, err := resolveMutableConfigPath(configFlag(cmd))
 			if err != nil {
 				return err
 			}
@@ -73,14 +72,12 @@ func newBudgetListCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
 }
 
 func newBudgetSetCmd() *cobra.Command {
 	var (
-		configPathFlag string
 		noRestartFlag  bool
 		window         string
 		limitUSD       float64
@@ -95,7 +92,7 @@ func newBudgetSetCmd() *cobra.Command {
 		Short: "Create or update a budget (upsert by name)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path, err := resolveMutableConfigPath(configPathFlag)
+			path, err := resolveMutableConfigPath(configFlag(cmd))
 			if err != nil {
 				return err
 			}
@@ -135,7 +132,6 @@ func newBudgetSetCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
 	// No flag default: a default would overwrite the window of every
 	// budget an edit touches. The upsert gives a new budget monthly.
 	cmd.Flags().StringVar(&window, "window", "", "calendar window: daily | weekly | monthly (new budgets default to "+config.DefaultBudgetWindow+")")
@@ -152,15 +148,14 @@ func newBudgetSetCmd() *cobra.Command {
 
 func newBudgetUnsetCmd() *cobra.Command {
 	var (
-		configPathFlag string
-		noRestartFlag  bool
+		noRestartFlag bool
 	)
 	cmd := &cobra.Command{
 		Use:   "unset <name>",
 		Short: "Remove a budget by name",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path, err := resolveMutableConfigPath(configPathFlag)
+			path, err := resolveMutableConfigPath(configFlag(cmd))
 			if err != nil {
 				return err
 			}
@@ -180,7 +175,6 @@ func newBudgetUnsetCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }

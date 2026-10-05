@@ -13,10 +13,10 @@ import (
 func TestModeReportsEveryControlSurface(t *testing.T) {
 	path := seedConfig(t)
 	var buf bytes.Buffer
-	cmd := newModeCmd()
+	cmd := withConfigFlag(newModeCmd())
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
-	cmd.SetArgs([]string{"--config-path", path})
+	cmd.SetArgs([]string{"--config", path})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("mode: %v", err)
 	}
@@ -34,10 +34,10 @@ func TestModeReportsEveryControlSurface(t *testing.T) {
 func TestModeSaysPlainlyWhetherAnythingActs(t *testing.T) {
 	path := seedConfig(t)
 	var buf bytes.Buffer
-	cmd := newModeCmd()
+	cmd := withConfigFlag(newModeCmd())
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
-	cmd.SetArgs([]string{"--config-path", path})
+	cmd.SetArgs([]string{"--config", path})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("mode: %v", err)
 	}
@@ -61,10 +61,10 @@ func TestModeNamesWhatIsHeldBack(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	cmd := newModeCmd()
+	cmd := withConfigFlag(newModeCmd())
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
-	cmd.SetArgs([]string{"--config-path", path})
+	cmd.SetArgs([]string{"--config", path})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("mode: %v", err)
 	}

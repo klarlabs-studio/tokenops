@@ -12,11 +12,11 @@ import (
 // temp-dir config. Returns the recorded output for hint assertions.
 func runPlanSet(t *testing.T, configPath, provider, planName string) string {
 	t.Helper()
-	cmd := newPlanSetCmd()
+	cmd := withConfigFlag(newPlanSetCmd())
 	out := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(out)
-	cmd.SetArgs([]string{"--config-path", configPath, provider, planName})
+	cmd.SetArgs([]string{"--config", configPath, provider, planName})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("plan set: %v\noutput: %s", err, out.String())
 	}
@@ -62,11 +62,11 @@ func TestPlanSetWritesProviderBinding(t *testing.T) {
 
 func TestPlanSetRejectsUnknownPlan(t *testing.T) {
 	path := seedConfig(t)
-	cmd := newPlanSetCmd()
+	cmd := withConfigFlag(newPlanSetCmd())
 	out := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(out)
-	cmd.SetArgs([]string{"--config-path", path, "anthropic", "claude-maxx"})
+	cmd.SetArgs([]string{"--config", path, "anthropic", "claude-maxx"})
 	if err := cmd.Execute(); err == nil {
 		t.Fatal("expected error for unknown plan")
 	}
@@ -85,11 +85,11 @@ func TestPlanUnsetRemovesBinding(t *testing.T) {
 	path := seedConfig(t)
 	runPlanSet(t, path, "anthropic", "claude-max-20x")
 
-	cmd := newPlanUnsetCmd()
+	cmd := withConfigFlag(newPlanUnsetCmd())
 	out := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(out)
-	cmd.SetArgs([]string{"--config-path", path, "anthropic"})
+	cmd.SetArgs([]string{"--config", path, "anthropic"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("plan unset: %v", err)
 	}
@@ -100,12 +100,12 @@ func TestPlanUnsetRemovesBinding(t *testing.T) {
 }
 
 func TestPlanSetMissingConfigFile(t *testing.T) {
-	cmd := newPlanSetCmd()
+	cmd := withConfigFlag(newPlanSetCmd())
 	out := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(out)
 	cmd.SetArgs([]string{
-		"--config-path", filepath.Join(t.TempDir(), "no-such.yaml"),
+		"--config", filepath.Join(t.TempDir(), "no-such.yaml"),
 		"anthropic", "claude-max-20x",
 	})
 	err := cmd.Execute()
@@ -120,11 +120,11 @@ func TestPlanSetMissingConfigFile(t *testing.T) {
 func TestProviderSetAndUnset(t *testing.T) {
 	path := seedConfig(t)
 
-	setCmd := newProviderSetCmd()
+	setCmd := withConfigFlag(newProviderSetCmd())
 	setOut := &bytes.Buffer{}
 	setCmd.SetOut(setOut)
 	setCmd.SetErr(setOut)
-	setCmd.SetArgs([]string{"--config-path", path, "anthropic", "https://api.anthropic.com"})
+	setCmd.SetArgs([]string{"--config", path, "anthropic", "https://api.anthropic.com"})
 	if err := setCmd.Execute(); err != nil {
 		t.Fatalf("provider set: %v", err)
 	}
@@ -133,11 +133,11 @@ func TestProviderSetAndUnset(t *testing.T) {
 		t.Errorf("provider not written: %+v", cfg.Providers)
 	}
 
-	unsetCmd := newProviderUnsetCmd()
+	unsetCmd := withConfigFlag(newProviderUnsetCmd())
 	unsetOut := &bytes.Buffer{}
 	unsetCmd.SetOut(unsetOut)
 	unsetCmd.SetErr(unsetOut)
-	unsetCmd.SetArgs([]string{"--config-path", path, "anthropic"})
+	unsetCmd.SetArgs([]string{"--config", path, "anthropic"})
 	if err := unsetCmd.Execute(); err != nil {
 		t.Fatalf("provider unset: %v", err)
 	}

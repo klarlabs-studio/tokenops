@@ -159,8 +159,8 @@ run the dynamic injection policy before wiring it into the proxy.`,
 	}
 	cmd.Flags().StringVar(&root, "root", "", "repository root to scan")
 	cmd.Flags().StringVar(&repoID, "repo-id", "", "opaque repository identifier")
-	cmd.Flags().StringVar(&workflow, "workflow", "", "active workflow identifier")
-	cmd.Flags().StringVar(&agent, "agent", "", "active agent identifier")
+	cmd.Flags().StringVar(&workflow, "workflow-id", "", "active workflow identifier")
+	cmd.Flags().StringVar(&agent, "agent-id", "", "active agent identifier")
 	cmd.Flags().StringSliceVar(&files, "file", nil, "file path the request touches (repeat for multiple)")
 	cmd.Flags().StringSliceVar(&tools, "tool", nil, "tool invoked by the request (repeat for multiple)")
 	cmd.Flags().StringSliceVar(&keywords, "keyword", nil, "keyword extracted from the prompt (repeat for multiple)")

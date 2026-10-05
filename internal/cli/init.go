@@ -22,7 +22,6 @@ import (
 // rules; flag overrides win so CI / containerised installs can pin paths
 // without touching env vars.
 type initFlags struct {
-	configPath  string
 	storagePath string
 	rulesRoot   string
 	repoID      string
@@ -78,7 +77,6 @@ config only.`,
 			return runInit(cmd, f)
 		},
 	}
-	cmd.Flags().StringVar(&f.configPath, "config-path", "", "override config file path (defaults to XDG location)")
 	cmd.Flags().StringVar(&f.preset, "preset", "", "coach preset to set up ("+strings.Join(coachcap.PresetNames(), " | ")+"); a new config gets "+coachcap.PresetDefault+", an existing one keeps its coach unless named")
 	cmd.Flags().StringVar(&f.storagePath, "storage-path", "", "override events.db path (defaults to XDG data dir)")
 	cmd.Flags().StringVar(&f.rulesRoot, "rules-root", "", "override rule scan root (defaults to current working directory)")
@@ -93,7 +91,7 @@ config only.`,
 }
 
 func runInit(cmd *cobra.Command, f *initFlags) error {
-	configPath, err := resolveInitConfigPath(f.configPath)
+	configPath, err := resolveInitConfigPath(configFlag(cmd))
 	if err != nil {
 		return err
 	}

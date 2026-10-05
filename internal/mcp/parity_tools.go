@@ -105,10 +105,14 @@ func runScorecard(ctx context.Context, d ParityDeps, in scorecardInput) (*scorec
 
 func runAudit(ctx context.Context, d ParityDeps, in auditInput) (*auditResult, error) {
 	rec := audit.NewRecorder(d.Store)
+	limit := in.Limit
+	if limit <= 0 {
+		limit = defaultAuditLimit
+	}
 	f := audit.Filter{
 		Action: audit.Action(in.Action),
 		Actor:  in.Actor,
-		Limit:  in.Limit,
+		Limit:  limit,
 	}
 	if in.Since != "" {
 		t, err := parseTimeOrDuration(in.Since)
@@ -139,3 +143,7 @@ func (d ParityDeps) pipeline() *optimizer.Pipeline {
 	}
 	return d.Pipeline
 }
+
+// defaultAuditLimit bounds an unfiltered audit query: the whole log ran
+// past what a client accepts from one tool call.
+const defaultAuditLimit = 50

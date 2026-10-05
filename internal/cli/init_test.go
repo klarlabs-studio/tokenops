@@ -25,12 +25,12 @@ func runInitInDir(t *testing.T, args ...string) (configPath, storagePath, stdout
 	configPath = filepath.Join(dir, "config.yaml")
 	storagePath = filepath.Join(dir, "data", "events.db")
 
-	cmd := newInitCmd()
+	cmd := withConfigFlag(newInitCmd())
 	out := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(out)
 	full := append([]string{
-		"--config-path", configPath,
+		"--config", configPath,
 		"--storage-path", storagePath,
 		"--rules-root", dir,
 		"--repo-id", "test-repo",
@@ -80,13 +80,13 @@ func TestInitIsIdempotent(t *testing.T) {
 
 	// Re-run with the same flags. Without --force, the second run must
 	// not overwrite the file and must not return an error.
-	cmd := newInitCmd()
+	cmd := withConfigFlag(newInitCmd())
 	out := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(out)
 	dir := filepath.Dir(configPath)
 	cmd.SetArgs([]string{
-		"--config-path", configPath,
+		"--config", configPath,
 		"--storage-path", filepath.Join(dir, "events.db"),
 		"--rules-root", dir,
 		"--repo-id", "test-repo",
@@ -105,13 +105,13 @@ func TestInitForceOverwrites(t *testing.T) {
 	storagePath := filepath.Join(dir, "events.db")
 	args := make([]string, 0, 9)
 	args = append(args,
-		"--config-path", configPath,
+		"--config", configPath,
 		"--storage-path", storagePath,
 		"--rules-root", dir,
 		"--repo-id", "test-repo",
 	)
 
-	first := newInitCmd()
+	first := withConfigFlag(newInitCmd())
 	first.SetOut(&bytes.Buffer{})
 	first.SetErr(&bytes.Buffer{})
 	first.SetArgs(args)
@@ -130,7 +130,7 @@ func TestInitForceOverwrites(t *testing.T) {
 		t.Fatalf("pollute: %v", err)
 	}
 
-	second := newInitCmd()
+	second := withConfigFlag(newInitCmd())
 	second.SetOut(&bytes.Buffer{})
 	second.SetErr(&bytes.Buffer{})
 	second.SetArgs(append(args, "--force"))
@@ -150,12 +150,12 @@ func TestInitPrintOnlyDoesNotWrite(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")
 
-	cmd := newInitCmd()
+	cmd := withConfigFlag(newInitCmd())
 	out := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(out)
 	cmd.SetArgs([]string{
-		"--config-path", configPath,
+		"--config", configPath,
 		"--storage-path", filepath.Join(dir, "events.db"),
 		"--rules-root", dir,
 		"--repo-id", "test-repo",

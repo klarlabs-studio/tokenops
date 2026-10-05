@@ -16,6 +16,7 @@ import (
 const mcpJSONLMaxFiles = 120
 
 type fmtLearnInput struct {
+	Limit      int    `json:"limit,omitempty" jsonschema:"description=Most commands per list (default 20); totals are always given"`
 	RecoverDir string `json:"recover_dir,omitempty" jsonschema:"description=Recovery store dir; defaults to ~/.tokenops/recovery"`
 	NoJSONL    bool   `json:"no_jsonl,omitempty" jsonschema:"description=Skip folding in Claude Code log signal (wrapped-run index only)"`
 }
@@ -53,8 +54,7 @@ func RegisterFmtTools(s *Server) error {
 					recs = append(recs, jrecs...)
 				}
 			}
-			rep := fmtlearn.Analyze(recs, fmtlearn.Thresholds{})
-			return jsonString(rep), nil
+			return jsonString(trimLearnReport(fmtlearn.Analyze(recs, fmtlearn.Thresholds{}), in.Limit)), nil
 		})
 
 	s.Tool("tokenops_fmt_analyze").
@@ -72,4 +72,28 @@ func RegisterFmtTools(s *Server) error {
 		})
 
 	return nil
+}
+
+// learnReport is the fmt learn report with its lists cut to the top
+// entries, and how many each had.
+type learnReport struct {
+	fmtlearn.Report
+	CommandsTotal       int `json:"commands_total"`
+	NextFormattersTotal int `json:"next_formatters_total"`
+	LevelHintsTotal     int `json:"level_hints_total"`
+}
+
+// defaultLearnLimit keeps the report readable by an agent: the full one
+// ran to 190 KB, past what a client accepts from one tool call.
+const defaultLearnLimit = 20
+
+func trimLearnReport(r fmtlearn.Report, limit int) learnReport {
+	if limit <= 0 {
+		limit = defaultLearnLimit
+	}
+	out := learnReport{Report: r, CommandsTotal: len(r.Commands), NextFormattersTotal: len(r.NextFormatters), LevelHintsTotal: len(r.LevelHints)}
+	out.Commands = r.Commands[:min(limit, len(r.Commands))]
+	out.NextFormatters = r.NextFormatters[:min(limit, len(r.NextFormatters))]
+	out.LevelHints = r.LevelHints[:min(limit, len(r.LevelHints))]
+	return out
 }
