@@ -25,6 +25,7 @@
 
 ### Added
 
+- **menubar:** the menu bar shows the icon alone, its ring filled to the busiest window; a click opens the menu, which starts with every plan window's share and reset, and Show Details… opens the full view as a small window
 - **menubar:** the menu bar app ships in the macOS release and the Homebrew cask; `tokenops menubar` installs it to `~/Applications` and opens it, and upgrades refresh it. It is ad hoc signed, not notarized; the cask clears its quarantine flag as it does the CLI's
 
 ### Fixed
