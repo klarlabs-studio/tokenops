@@ -4,9 +4,11 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.98.0**.
+Current release: **v0.98.1**.
 
-## v0.98.0 — A cleaner surface, and the menu bar in the box
+## v0.98.1 — A cleaner surface, and the menu bar in the box
+
+(v0.98.0 was tagged, but its build failed before publishing; this is that release.)
 
 The menu bar app now ships with the Homebrew install on macOS. Run
 `tokenops menubar` once: it installs the app to ~/Applications and opens
