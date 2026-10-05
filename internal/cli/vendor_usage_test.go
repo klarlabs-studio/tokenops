@@ -25,8 +25,8 @@ func writeSeedConfig(t *testing.T, path string) {
 // subprocess. Returns the post-mutation config + captured stdout.
 func runEnable(t *testing.T, configPath string, args ...string) (config.Config, string, error) {
 	t.Helper()
-	cmd := newVendorUsageEnableCmd()
-	cmd.SetArgs(append(args, "--config-path", configPath))
+	cmd := withConfigFlag(newVendorUsageEnableCmd())
+	cmd.SetArgs(append(args, "--config", configPath))
 	out := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(out)
@@ -45,7 +45,7 @@ func runEnable(t *testing.T, configPath string, args ...string) (config.Config, 
 // text + tab-completion surface the new verb.
 
 func TestVendorUsageEnableCmdWiredOnParent(t *testing.T) {
-	parent := newVendorUsageCmd()
+	parent := withConfigFlag(newVendorUsageCmd())
 	var found bool
 	for _, sub := range parent.Commands() {
 		if sub.Name() == "enable" {

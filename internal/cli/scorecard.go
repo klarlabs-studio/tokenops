@@ -72,7 +72,7 @@ values and --compare to diff against a stored baseline.`,
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON instead of text")
 	cmd.Flags().StringVar(&baselineRef, "baseline-ref", "", "reference identifier for the baseline (version, date, or label)")
 	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db (defaults to ~/.tokenops/events.db)")
-	cmd.Flags().IntVar(&sinceDays, "since-days", 7, "scorecard time window in days")
+	cmd.Flags().IntVar(&sinceDays, "days", 7, "window in days")
 	cmd.Flags().Float64Var(&fvtOverride, "fvt-seconds", 0, "override First-Value Time in seconds")
 	cmd.Flags().Float64Var(&teuOverride, "teu-pct", 0, "override Token Efficiency Uplift in percent")
 	cmd.Flags().Float64Var(&sacOverride, "sac-pct", 0, "override Spend Attribution Completeness in percent")

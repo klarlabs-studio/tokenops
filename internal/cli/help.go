@@ -80,6 +80,7 @@ func organize(root *cobra.Command) {
 	for _, name := range daemonOverrides {
 		_ = root.PersistentFlags().MarkHidden(name)
 	}
+	applyExamples(root)
 }
 
 // rootLong is the top of `tokenops --help`.

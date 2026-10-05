@@ -107,7 +107,7 @@ the TokenOps event store.`,
 	cmd.Flags().StringVar(&sinceFlag, "since", "7d", "lower bound: RFC3339 timestamp or duration like 24h or 7d")
 	cmd.Flags().StringVar(&root, "root", "", "scan root (defaults per source)")
 	cmd.Flags().StringVar(&replySource, "source", "", "client: auto (default) | claude-code | codex | opencode")
-	cmd.Flags().StringVar(&session, "session", "", "restrict to a single session id (filename stem)")
+	cmd.Flags().StringVar(&session, "session-id", "", "restrict to a single session id (filename stem)")
 	cmd.Flags().IntVar(&limit, "limit", 0, "max replies to extract (0 = unbounded)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON instead of text")
 	return cmd
@@ -239,7 +239,7 @@ agents to consume.`,
 	cmd.Flags().StringVar(&sinceFlag, "since", "7d", "lower bound: RFC3339 timestamp or duration like 24h or 7d")
 	cmd.Flags().StringVar(&root, "root", "", "scan root (defaults per source)")
 	cmd.Flags().StringVar(&sourceFlag, "source", "", "client: auto (default) | claude-code | codex | opencode")
-	cmd.Flags().StringVar(&session, "session", "", "restrict to a single session id (filename stem)")
+	cmd.Flags().StringVar(&session, "session-id", "", "restrict to a single session id (filename stem)")
 	cmd.Flags().IntVar(&limit, "limit", 0, "max prompts to extract (0 = unbounded)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON instead of text")
 	cmd.Flags().BoolVar(&includeScratch, "include-scratch", false, scratchFlagHelp)

@@ -10,7 +10,7 @@ import (
 
 func runBudgetSet(t *testing.T, args ...string) (string, error) {
 	t.Helper()
-	cmd := newBudgetSetCmd()
+	cmd := withConfigFlag(newBudgetSetCmd())
 	out := &bytes.Buffer{}
 	cmd.SetOut(out)
 	cmd.SetErr(out)
@@ -35,7 +35,7 @@ func TestBudgetSetEditKeepsUnnamedFields(t *testing.T) {
 		t.Fatalf("seed budget: %v", err)
 	}
 
-	out, err := runBudgetSet(t, "--config-path", path, "weekly-tokens", "--warn-at", "0.6")
+	out, err := runBudgetSet(t, "--config", path, "weekly-tokens", "--warn-at", "0.6")
 	if err != nil {
 		t.Fatalf("budget set: %v\n%s", err, out)
 	}
@@ -53,7 +53,7 @@ func TestBudgetSetEditKeepsUnnamedFields(t *testing.T) {
 
 func TestBudgetSetNewBudgetNeedsACeiling(t *testing.T) {
 	path := seedConfig(t)
-	_, err := runBudgetSet(t, "--config-path", path, "nothing")
+	_, err := runBudgetSet(t, "--config", path, "nothing")
 	if err == nil || !strings.Contains(err.Error(), "ceiling") {
 		t.Fatalf("err = %v; want a missing-ceiling refusal", err)
 	}
@@ -61,7 +61,7 @@ func TestBudgetSetNewBudgetNeedsACeiling(t *testing.T) {
 
 func TestBudgetSetNewBudgetDefaultsToMonthly(t *testing.T) {
 	path := seedConfig(t)
-	if out, err := runBudgetSet(t, "--config-path", path, "m", "--limit-usd", "50"); err != nil {
+	if out, err := runBudgetSet(t, "--config", path, "m", "--limit-usd", "50"); err != nil {
 		t.Fatalf("budget set: %v\n%s", err, out)
 	}
 	cfg, _ := config.ReadMutable(path)

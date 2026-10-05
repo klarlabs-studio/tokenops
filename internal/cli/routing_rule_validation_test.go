@@ -21,8 +21,8 @@ func TestRoutingRuleSetRefusesABadRuleByArgument(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := seedConfig(t)
-			cmd := newRoutingRuleSetCmd()
-			cmd.SetArgs(append(tc.args, "--no-restart", "--config-path", path))
+			cmd := withConfigFlag(newRoutingRuleSetCmd())
+			cmd.SetArgs(append(tc.args, "--no-restart", "--config", path))
 			cmd.SilenceUsage, cmd.SilenceErrors = true, true
 			err := cmd.Execute()
 			if err == nil {

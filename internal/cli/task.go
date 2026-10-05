@@ -62,7 +62,7 @@ func newTaskStartCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&sessionID, "session", "", "optional Claude Code session ID to attribute the task to")
+	cmd.Flags().StringVar(&sessionID, "session-id", "", "optional Claude Code session ID to attribute the task to")
 	cmd.Flags().StringVar(&pathFlag, "path", "", "tasks.jsonl path (defaults to ~/.tokenops/tasks.jsonl)")
 	return cmd
 }

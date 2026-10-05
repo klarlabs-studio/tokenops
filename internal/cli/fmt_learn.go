@@ -112,7 +112,6 @@ func newFmtLearnCmd(rf *rootFlags) *cobra.Command {
 		recoverDir string
 		jsonOut    bool
 		apply      bool
-		configPath string
 		noJSONL    bool
 		jsonlMax   int
 	)
@@ -150,7 +149,7 @@ Use --no-jsonl to restrict to the wrapped-run index only.`,
 			}
 			renderLearnReport(cmd, rep)
 			if apply {
-				return applyLearnHints(cmd, rep, configPath)
+				return applyLearnHints(cmd, rep, configFlag(cmd))
 			}
 			return nil
 		},
@@ -158,7 +157,6 @@ Use --no-jsonl to restrict to the wrapped-run index only.`,
 	cmd.Flags().StringVar(&recoverDir, "recover-dir", "", "recovery store dir (defaults to ~/.tokenops/recovery)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit the report as JSON")
 	cmd.Flags().BoolVar(&apply, "apply", false, "write safe loss-level tuning to config (overrides only)")
-	cmd.Flags().StringVar(&configPath, "config", "", "config path to write with --apply (defaults to the standard config path)")
 	cmd.Flags().BoolVar(&noJSONL, "no-jsonl", false, "do not fold in signal from Claude Code logs (wrapped-run index only)")
 	cmd.Flags().IntVar(&jsonlMax, "jsonl-max", 150, "cap Claude Code sessions scanned for learn (newest first); 0 = all")
 	return cmd

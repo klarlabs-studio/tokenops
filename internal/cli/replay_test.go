@@ -75,7 +75,7 @@ func TestReplayTextRendersSavings(t *testing.T) {
 	out, err := executeRoot(t,
 		"replay", "sess-test",
 		"--db", path,
-		"--workflow", "wf-test",
+		"--workflow-id", "wf-test",
 	)
 	if err != nil {
 		t.Fatalf("replay: %v", err)

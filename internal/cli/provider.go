@@ -41,15 +41,14 @@ manual file edit. Subcommands:
 
 func newProviderListCmd() *cobra.Command {
 	var (
-		configPathFlag string
-		jsonOut        bool
+		jsonOut bool
 	)
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List providers configured in config.yaml",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			path, err := resolveMutableConfigPath(configPathFlag)
+			path, err := resolveMutableConfigPath(configFlag(cmd))
 			if err != nil {
 				return err
 			}
@@ -89,15 +88,13 @@ func newProviderListCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
 }
 
 func newProviderSetCmd() *cobra.Command {
 	var (
-		configPathFlag string
-		noRestartFlag  bool
+		noRestartFlag bool
 	)
 	cmd := &cobra.Command{
 		Use:   "set <name> [url]",
@@ -126,7 +123,7 @@ OpenAI-compatible endpoint.`,
 			if _, err := providers.ParseUpstream(url); err != nil {
 				return err
 			}
-			path, err := resolveMutableConfigPath(configPathFlag)
+			path, err := resolveMutableConfigPath(configFlag(cmd))
 			if err != nil {
 				return err
 			}
@@ -153,15 +150,13 @@ OpenAI-compatible endpoint.`,
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }
 
 func newProviderUnsetCmd() *cobra.Command {
 	var (
-		configPathFlag string
-		noRestartFlag  bool
+		noRestartFlag bool
 	)
 	cmd := &cobra.Command{
 		Use:   "unset <name>",
@@ -169,7 +164,7 @@ func newProviderUnsetCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
-			path, err := resolveMutableConfigPath(configPathFlag)
+			path, err := resolveMutableConfigPath(configFlag(cmd))
 			if err != nil {
 				return err
 			}
@@ -193,7 +188,6 @@ func newProviderUnsetCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }

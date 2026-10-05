@@ -13,7 +13,7 @@ import (
 func runCookieSetupCmd(t *testing.T, stdin string, args ...string) (string, error) {
 	t.Helper()
 	var buf bytes.Buffer
-	cmd := newVendorUsageSetupCmd()
+	cmd := withConfigFlag(newVendorUsageSetupCmd())
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 	cmd.SetIn(strings.NewReader(stdin))
@@ -39,7 +39,7 @@ func TestSetupExplainsWhereToFindTheKey(t *testing.T) {
 // Nothing is written until Anthropic has accepted it.
 func TestSetupWritesNothingWithoutAKey(t *testing.T) {
 	path := seedConfig(t)
-	out, err := runCookieSetupCmd(t, "\n", "claude-subscription", "--config-path", path)
+	out, err := runCookieSetupCmd(t, "\n", "claude-subscription", "--config", path)
 	if err == nil {
 		t.Fatal("an empty key should be refused")
 	}
@@ -76,7 +76,7 @@ func TestSetupRefusesAKeyAnthropicRejects(t *testing.T) {
 		w.WriteHeader(http.StatusUnauthorized)
 	})
 	path := seedConfig(t)
-	_, err := runCookieSetupCmd(t, "sk-ant-sid-definitely-not-valid\n", "claude-subscription", "--config-path", path)
+	_, err := runCookieSetupCmd(t, "sk-ant-sid-definitely-not-valid\n", "claude-subscription", "--config", path)
 	if err == nil {
 		t.Fatal("an invalid key should be refused")
 	}
@@ -102,7 +102,7 @@ func TestSetupExplainsTheBotCheck(t *testing.T) {
 		_, _ = w.Write([]byte("<html><title>Just a moment...</title></html>"))
 	})
 	path := seedConfig(t)
-	_, err := runCookieSetupCmd(t, "sk-ant-sid-whatever\n", "claude-subscription", "--config-path", path)
+	_, err := runCookieSetupCmd(t, "sk-ant-sid-whatever\n", "claude-subscription", "--config", path)
 	if err == nil {
 		t.Fatal("a refused request should be reported")
 	}
@@ -144,7 +144,7 @@ func TestSetupNeverAsksForAnMCPClientRestart(t *testing.T) {
 	})
 	path := seedConfig(t)
 	raw := `curl 'https://claude.ai/api/organizations/org-test/usage' -H 'cookie: sessionKey=sk-ant-sid-test'`
-	out, err := runCookieSetupCmd(t, raw+"\n", "claude-subscription", "--paste-request", "--config-path", path, "--no-restart")
+	out, err := runCookieSetupCmd(t, raw+"\n", "claude-subscription", "--paste-request", "--config", path, "--no-restart")
 	if err != nil {
 		t.Fatalf("setup: %v\n%s", err, out)
 	}
@@ -236,7 +236,7 @@ func TestSetupPasteRequestPersistsOnlyBoundedSessionFields(t *testing.T) {
 	})
 	path := seedConfig(t)
 	raw := `curl 'https://claude.ai/api/organizations/org-test/usage' -H 'cookie: sessionKey=sk-ant-sid-test; cf_clearance=clearance-test; __cf_bm=bot-test' -H 'user-agent: Test Browser' -H 'sec-fetch-site: same-origin'`
-	out, err := runCookieSetupCmd(t, raw+"\n", "claude-subscription", "--paste-request", "--config-path", path, "--no-restart")
+	out, err := runCookieSetupCmd(t, raw+"\n", "claude-subscription", "--paste-request", "--config", path, "--no-restart")
 	if err != nil {
 		t.Fatalf("setup: %v\n%s", err, out)
 	}
@@ -272,7 +272,7 @@ func TestSetupPasteRequestReadsCompleteMultilineCurlFromPipe(t *testing.T) {
 		"  -H 'accept: application/json' \\\n" +
 		"  -b 'other=x; sessionKey=sk-ant-sid-test; cf_clearance=clearance-test' \\\n" +
 		"  -H 'user-agent: Test Browser'"
-	out, err := runCookieSetupCmd(t, raw, "claude-subscription", "--paste-request", "--config-path", path, "--no-restart")
+	out, err := runCookieSetupCmd(t, raw, "claude-subscription", "--paste-request", "--config", path, "--no-restart")
 	if err != nil {
 		t.Fatalf("setup: %v\n%s", err, out)
 	}

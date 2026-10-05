@@ -12,8 +12,8 @@ import (
 // chose, which reads exactly as authoritative as a real one.
 func TestPlanSetRefusesEnterpriseWithoutASpendLimit(t *testing.T) {
 	path := seedConfig(t)
-	cmd := newPlanSetCmd()
-	cmd.SetArgs([]string{"anthropic", "claude-enterprise", "--config-path", path})
+	cmd := withConfigFlag(newPlanSetCmd())
+	cmd.SetArgs([]string{"anthropic", "claude-enterprise", "--config", path})
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("expected a refusal")
@@ -25,11 +25,11 @@ func TestPlanSetRefusesEnterpriseWithoutASpendLimit(t *testing.T) {
 
 func TestPlanSetStoresTheSpendLimit(t *testing.T) {
 	path := seedConfig(t)
-	cmd := newPlanSetCmd()
+	cmd := withConfigFlag(newPlanSetCmd())
 	cmd.SetArgs([]string{
 		"anthropic", "claude-enterprise",
 		"--spend-limit", "5000", "--limit-window", "monthly", "--rate-factor", "0.8",
-		"--no-restart", "--config-path", path,
+		"--no-restart", "--config", path,
 	})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("set: %v", err)
@@ -50,8 +50,8 @@ func TestPlanSetStoresTheSpendLimit(t *testing.T) {
 // A windowed plan takes no spend limit and must not acquire one by accident.
 func TestPlanSetLeavesWindowedPlansAlone(t *testing.T) {
 	path := seedConfig(t)
-	cmd := newPlanSetCmd()
-	cmd.SetArgs([]string{"anthropic", "claude-max-20x", "--no-restart", "--config-path", path})
+	cmd := withConfigFlag(newPlanSetCmd())
+	cmd.SetArgs([]string{"anthropic", "claude-max-20x", "--no-restart", "--config", path})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("set: %v", err)
 	}

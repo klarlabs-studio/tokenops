@@ -579,7 +579,7 @@ proxy produced it.
 
 ## Waste-detector context limits
 
-The workflow waste detector (`tokenops replay --workflow`, the
+The workflow waste detector (`tokenops replay --workflow-id`, the
 `tokenops_records (view=workflow)` MCP tool)
 ships built-in thresholds per workflow type: `claude-code:` sessions
 flag context above 900k tokens, `codex:` above 250k, everything else

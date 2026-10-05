@@ -80,7 +80,7 @@ func newOutcomeCheckJSONCmd() *cobra.Command {
 	cmd.Flags().StringVar(&filePath, "file", "", "path to the local JSON response")
 	cmd.Flags().StringVar(&pointer, "pointer", "", "RFC 6901 JSON Pointer selecting a scalar")
 	cmd.Flags().StringVar(&expected, "equals", "", "expected scalar value")
-	cmd.Flags().StringVar(&decisionID, "decision", "", "decision id this outcome evaluates")
+	cmd.Flags().StringVar(&decisionID, "decision-id", "", "decision id this outcome evaluates")
 	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db")
 	_ = cmd.MarkFlagRequired("file")
 	_ = cmd.MarkFlagRequired("pointer")

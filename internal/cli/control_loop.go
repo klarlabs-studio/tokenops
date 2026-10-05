@@ -76,8 +76,8 @@ func newOutcomeDetectCmd() *cobra.Command {
 			return writeControlJSON(cmd, env)
 		},
 	}
-	cmd.Flags().StringVar(&sessionID, "session", "", "Claude Code session id")
-	cmd.Flags().StringVar(&decisionID, "decision", "", "decision id this outcome evaluates")
+	cmd.Flags().StringVar(&sessionID, "session-id", "", "Claude Code session id")
+	cmd.Flags().StringVar(&decisionID, "decision-id", "", "decision id this outcome evaluates")
 	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db")
 	_ = cmd.MarkFlagRequired("session")
 	return cmd
@@ -120,7 +120,7 @@ func newOutcomeRecordCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&result, "result", "", "achieved | partial | not_achieved")
-	cmd.Flags().StringVar(&decisionID, "decision", "", "decision id this outcome evaluates")
+	cmd.Flags().StringVar(&decisionID, "decision-id", "", "decision id this outcome evaluates")
 	cmd.Flags().StringVar(&caveat, "caveat", "", "assessment context")
 	cmd.Flags().Float64Var(&attentionMinutes, "attention-minutes", 0, "operator-reported active human effort for this execution, in minutes")
 	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db")
