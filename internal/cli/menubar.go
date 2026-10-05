@@ -54,9 +54,9 @@ func newMenubarCmd() *cobra.Command {
 		Use:   "menubar",
 		Short: "Open TokenOps in the menu bar (macOS)",
 		Long: `menubar installs the TokenOps menu bar app to ~/Applications and opens
-it: the busiest plan window next to the icon, and a panel with every plan's
-windows, pace and cost and the coach's findings. Its menu has Launch at
-Login.
+it: an icon whose ring fills to the busiest plan window, and, when you
+click it, a panel with every plan's windows, pace and cost and the coach's
+findings. Right-click it for Launch at Login.
 
 The app ships with the Homebrew install on macOS. Upgrades refresh the
 installed copy and restart it if it is running; --refresh does the same by
@@ -107,7 +107,7 @@ func installMenubar(out io.Writer, src, dst string, refresh bool) error {
 	if err := exec.Command("open", dst).Run(); err != nil {
 		return fmt.Errorf("open %s: %w", dst, err)
 	}
-	fmt.Fprintln(out, "TokenOps is in the menu bar. Its menu has Launch at Login.")
+	fmt.Fprintln(out, "TokenOps is in the menu bar: click the icon for the details, right-click it for Launch at Login.")
 	return nil
 }
 

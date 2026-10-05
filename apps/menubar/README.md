@@ -23,7 +23,7 @@ With the Homebrew install on macOS:
 tokenops menubar    # installs it to ~/Applications and opens it
 ```
 
-Its menu has Launch at Login. Upgrades replace the installed copy and
+Right-click the icon for Launch at Login. Upgrades replace the installed copy and
 restart it if it is running. The app is signed ad hoc, not notarized, so it
 reaches you through the Homebrew cask, whose install step clears macOS's
 quarantine flag; a copy downloaded with a browser is blocked by Gatekeeper.
