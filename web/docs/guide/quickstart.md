@@ -79,9 +79,9 @@ two halves. Every route is listed in [Daemon API](./api.md).
 Then ask your agent for any of these:
 
 ```text
-tokenops_session_budget        # headroom gauge + recommended action
-tokenops_burn_rate             # 24h sparkline + cost total
-tokenops_plan_headroom         # month-to-date headroom per plan
+tokenops_glance (view=session_budget)        # headroom gauge + recommended action
+tokenops_spend (view=burn)             # 24h sparkline + cost total
+tokenops_glance (view=headroom)         # month-to-date headroom per plan
 ```
 
 ## (Optional) Upgrade signal quality

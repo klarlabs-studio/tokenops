@@ -19,7 +19,7 @@ import (
 //
 // provider is asked on every call rather than read once: it is inferred
 // from the configured plans, and a plan bound after the server started —
-// by `tokenops plan set` or tokenops_plan_set — used to leave every ping
+// by `tokenops plan set` or tokenops_configure (setting=plan) — used to leave every ping
 // stamped "unknown" until the MCP client restarted the server.
 //
 // Empty tracker (or a tools/call against an unrelated tool name)

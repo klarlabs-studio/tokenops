@@ -120,8 +120,8 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	}
 
 	// Every tool that answers from config reads it through here, at call
-	// time. Agents write config.yaml mid-session (tokenops_plan_set,
-	// tokenops_vendor_usage_setup), and tools holding the startup snapshot
+	// time. Agents write config.yaml mid-session (tokenops_configure (setting=plan),
+	// tokenops_configure (setting=usage_meter)), and tools holding the startup snapshot
 	// kept answering with the old config until the client restarted. Nil
 	// when no config loaded, which tools treat as "no config", not as an
 	// empty one.
@@ -200,7 +200,7 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if err := mcp.RegisterControlTools(srv, deps); err != nil {
 		return fmt.Errorf("register control tools: %w", err)
 	}
-	// Session observer: each call to tokenops_plan_headroom (or
+	// Session observer: each call to tokenops_glance (view=headroom) (or
 	// related tools) lands as a plan_included PromptEvent so headroom
 	// math reflects MCP-resident activity even when no traffic flows
 	// through the proxy. Provider is inferred from Plans when a
@@ -222,6 +222,9 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	}
 	if err := mcp.RegisterPlanTools(srv, planDeps); err != nil {
 		return fmt.Errorf("register plan tools: %w", err)
+	}
+	if err := mcp.RegisterFindingsTool(srv, planDeps); err != nil {
+		return fmt.Errorf("register findings tool: %w", err)
 	}
 	if err := mcp.RegisterExplainTools(srv); err != nil {
 		return fmt.Errorf("register explain tools: %w", err)
@@ -272,9 +275,6 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	}); err != nil {
 		return fmt.Errorf("register setup tools: %w", err)
 	}
-	if err := mcp.RegisterHelpTool(srv); err != nil {
-		return fmt.Errorf("register help tool: %w", err)
-	}
 	// Freshness comes from the daemon, not from here: serve does not
 	// ingest, so it cannot know whether a reader is still succeeding.
 	// An unreachable daemon leaves the tool answering with counts alone.
@@ -303,6 +303,12 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 		},
 	}); err != nil {
 		return fmt.Errorf("register coach tools: %w", err)
+	}
+
+	// Agents see sixteen tools, each answering one question; the tools
+	// registered above answer behind them.
+	if err := mcp.Consolidate(srv); err != nil {
+		return fmt.Errorf("consolidate tools: %w", err)
 	}
 
 	logger.Info("tokenops serve ready", "version", version.Version)
@@ -351,7 +357,7 @@ func serveGapDeps(current func() *config.Config, counts func(context.Context, ti
 // staleSourcesCheck reports enabled vendor-usage sources that have ingested
 // nothing recently, so status surfaces a silently-dead poller instead of
 // quietly serving $0/stale data. It reads the live config on every call: a
-// source switched on through tokenops_vendor_usage_setup is exactly the one
+// source switched on through tokenops_configure (setting=usage_meter) is exactly the one
 // whose silence matters next, and a startup copy never saw it enabled.
 //
 // Nil without a config. Best-effort: a store error degrades to "no

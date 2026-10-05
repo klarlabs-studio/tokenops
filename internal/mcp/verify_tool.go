@@ -103,7 +103,7 @@ func verifyPayload(r verify.Report) verifyResult {
 	return out
 }
 
-// RegisterVerifyTool mounts tokenops_verify.
+// RegisterVerifyTool mounts tokenops_records (view=verify).
 //
 // It answers the question TokenOps could never answer: not "how many
 // tokens did the optimizer remove", which it has always reported, but

@@ -239,8 +239,8 @@ tokenops plan set anthropic claude-enterprise \
 `plan headroom` says which you are looking at: spend *reported by the
 vendor*, or *estimated from token counts*.
 
-From an agent, the same two steps are `tokenops_vendor_usage_setup` and
-`tokenops_plan_set`. The setup tool never takes the session key as an
+From an agent, the same two steps are `tokenops_configure (setting=usage_meter)` and
+`tokenops_configure (setting=plan)`. The setup tool never takes the session key as an
 argument — it is a claude.ai login, and a tool argument lands in the
 agent's transcript. It reads the key from
 `TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY` or existing config; the terminal
@@ -440,7 +440,7 @@ reloads it in-process, so there is no MCP-client restart step. `--no-restart`
 is available only for advanced workflows that deliberately batch several
 configuration writes.
 
-From an agent, `tokenops_vendor_usage_setup` does the same: it reads the
+From an agent, `tokenops_configure (setting=usage_meter)` does the same: it reads the
 browser session (you allow the keychain prompt) and never asks for the key
 in the conversation.
 
@@ -597,7 +597,7 @@ tokenops explain decision:6f1c…  # why TokenOps decided what it did
 ```
 
 Agents get the same answers from the `tokenops_explain` and
-`tokenops_explain_decision` MCP tools.
+`tokenops_explain (decision_id)` MCP tools.
 
 ## Status line
 
@@ -1183,7 +1183,7 @@ Mines the recovery index (compression + re-access records) and reports
 which commands need a formatter (falling back to the generic scrub) and
 which are over-compressing. `--apply` writes the safe loss-level tuning
 back to config locally; new-formatter candidates are printed as a
-paste-ready stub. The `tokenops_fmt_learn` MCP tool returns the same
+paste-ready stub. The `tokenops_fmt (view=learn)` MCP tool returns the same
 report to agents. The formatters stay deterministic — learning proposes,
 it never mutates runtime behaviour.
 

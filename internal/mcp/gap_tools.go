@@ -17,7 +17,7 @@ import (
 // Both answer questions an agent has and could not ask. `pricing` is what a
 // model costs and whether the card has moved under it; `vendor-usage status`
 // is whether the numbers it is about to quote are being fed at all.
-// tokenops_data_sources reports event counts, which tells an agent that a
+// tokenops_status (view=data_sources) reports event counts, which tells an agent that a
 // source is silent but not whether it was ever switched on — the difference
 // between "no data" and "no data because nothing is configured".
 type GapDeps struct {
@@ -26,7 +26,7 @@ type GapDeps struct {
 	// "no config loaded" are different answers.
 	Config *config.Config
 	// ConfigGetter returns the live configuration at call time and takes
-	// precedence over Config. tokenops_vendor_usage_setup switches sources
+	// precedence over Config. tokenops_configure (setting=usage_meter) switches sources
 	// on by rewriting config.yaml under a running server; reading the
 	// startup snapshot, this tool kept reporting them off until the MCP
 	// client restarted. A nil result disables the tool, like a nil Config.

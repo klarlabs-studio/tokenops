@@ -28,8 +28,8 @@ opencode is an MCP host, so it can call TokenOps directly:
 { "mcp": { "tokenops": { "command": "tokenops", "args": ["serve"] } } }
 ```
 
-The agent can then ask for `tokenops_session_budget`, `tokenops_burn_rate`,
-`tokenops_plan_headroom`, and call `tokenops_status` to discover what data
+The agent can then ask for `tokenops_glance (view=session_budget)`, `tokenops_spend (view=burn)`,
+`tokenops_glance (view=headroom)`, and call `tokenops_status` to discover what data
 sources are live and how to upgrade signal quality.
 
 ## Proxy (ground-truth metering)

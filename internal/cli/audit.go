@@ -32,7 +32,7 @@ func newAuditCmd(rf *rootFlags) *cobra.Command {
 or --db). Filter by --action, --actor, --since (RFC3339 or duration like
 24h / 7d), --until (RFC3339), and --limit.
 
-Mirrors the tokenops_audit MCP tool: both call audit.Recorder.Query.`,
+Mirrors the tokenops_records (view=audit) MCP tool: both call audit.Recorder.Query.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			path, err := resolveAuditDB(rf, dbPath)

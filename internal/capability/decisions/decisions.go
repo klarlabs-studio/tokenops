@@ -59,7 +59,7 @@ func PendingProposals(path string) (Proposals, error) {
 		out.Note = "no upgrades are waiting on you"
 		return out, nil
 	}
-	out.Note = "ask the operator before deciding; resolve with tokenops_routing_decide"
+	out.Note = "ask the operator before deciding; resolve with tokenops_routing (action=decide)"
 	for _, p := range pending {
 		pr := Proposal{
 			Key: p.Key, Provider: p.Provider,
@@ -104,7 +104,7 @@ func Explain(ctx context.Context, store *sqlite.Store, id string) (Explanation, 
 	}
 	report, ok := explain.Build(id, events)
 	if !ok {
-		return Explanation{Error: "decision_not_found", Hint: "use the decision_id returned by tokenops_routing_advise or a proxy intervention"}, nil
+		return Explanation{Error: "decision_not_found", Hint: "use the decision_id returned by tokenops_routing (action=advise) or a proxy intervention"}, nil
 	}
 	return Explanation{Report: &report}, nil
 }

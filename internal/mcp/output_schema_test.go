@@ -61,8 +61,6 @@ func TestOutputSchemasGenerate(t *testing.T) {
 		"prompts.Findings": prompts.Findings{},
 		// data_sources_tool.go
 		"dataSourcesResult": dataSourcesResult{},
-		// help_tool.go
-		"helpResult": helpResult{},
 	}
 
 	for name, v := range advertised {

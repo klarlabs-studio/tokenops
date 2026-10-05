@@ -33,6 +33,9 @@ var cliOnly = map[string]string{
 	"hooks":            "edits client hook configuration on this machine",
 	"coach-hook":       "is a hook entry point invoked by a client, not a user",
 	"read-guard":       "is a hook entry point invoked by a client, not a user",
+	"eval":             "is a tool for working on TokenOps itself",
+	"replay":           "is a tool for working on TokenOps itself",
+	"coverage-debt":    "is a tool for working on TokenOps itself",
 	"route-guard":      "is a hook entry point invoked by a client, not a user",
 	"statusline":       "is a status line Claude Code runs on every turn, not a query an agent makes",
 	"completion":       "is cobra's shell completion generator",
@@ -46,49 +49,43 @@ var cliOnly = map[string]string{
 // restart` and `vendor-usage setup` all shipped CLI-only without anything
 // noticing.
 var cliToMCP = map[string][]string{
-	"audit":           {"tokenops_audit"},
-	"coach":           {"tokenops_coach", "tokenops_coach_prompts"},
-	"config":          {"tokenops_config"},
-	"coverage-debt":   {"tokenops_coverage_debt"},
-	"dx":              {"tokenops_agent_dx"},
-	"explain":         {"tokenops_explain", "tokenops_explain_decision"},
-	"eval":            {"tokenops_eval"},
-	"events":          {"tokenops_domain_events"},
-	"fmt":             {"tokenops_fmt_analyze", "tokenops_fmt_learn"},
-	"plan":            {"tokenops_plan_headroom", "tokenops_plan_set"},
-	"replay":          {"tokenops_replay"},
-	"rules":           {"tokenops_rules_analyze", "tokenops_rules_bench", "tokenops_rules_compress", "tokenops_rules_conflicts", "tokenops_rules_inject"},
-	"scorecard":       {"tokenops_scorecard"},
-	"spend":           {"tokenops_spend_summary", "tokenops_top_consumers", "tokenops_burn_rate", "tokenops_forecast"},
+	"audit":  {"tokenops_records"},
+	"coach":  {"tokenops_coach", "tokenops_sessions"},
+	"config": {"tokenops_status"},
+
+	"dx":      {"tokenops_sessions"},
+	"explain": {"tokenops_explain"},
+
+	"events": {"tokenops_records"},
+	"fmt":    {"tokenops_fmt"},
+	"plan":   {"tokenops_glance", "tokenops_configure"},
+
+	"rules":           {"tokenops_rules"},
+	"scorecard":       {"tokenops_records"},
+	"spend":           {"tokenops_spend"},
 	"status":          {"tokenops_status"},
-	"glance":          {"tokenops_resource_glance"},
-	"story":           {"tokenops_story"},
-	"verify":          {"tokenops_verify"},
-	"outcome":         {"tokenops_outcome_record", "tokenops_outcome_detect"},
+	"glance":          {"tokenops_glance"},
+	"story":           {"tokenops_sessions"},
+	"verify":          {"tokenops_records"},
+	"outcome":         {"tokenops_outcome"},
 	"experiment":      {"tokenops_experiment"},
-	"task":            {"tokenops_workflow_trace"},
-	"version":         {"tokenops_version"},
+	"task":            {"tokenops_records"},
+	"version":         {"tokenops_status"},
 	"pricing":         {"tokenops_pricing"},
-	"vendor-usage":    {"tokenops_vendor_usage_status", "tokenops_vendor_usage_setup"},
-	"mode":            {"tokenops_mode"},
-	"preferred-model": {"tokenops_preferred_model"},
-	"budget":          {"tokenops_budget_set"},
-	"optimizations":   {"tokenops_optimizations"},
-	"routing":         {"tokenops_routing_proposals", "tokenops_routing_rule_set"},
+	"vendor-usage":    {"tokenops_status", "tokenops_configure"},
+	"mode":            {"tokenops_status"},
+	"preferred-model": {"tokenops_configure"},
+	"budget":          {"tokenops_configure"},
+	"optimizations":   {"tokenops_records"},
+	"routing":         {"tokenops_routing"},
 }
 
 // mcpOnly are tools with no CLI equivalent, each with the reason. Several
 // are not deliberate — they are recorded here so the asymmetry is visible
 // rather than discovered, and the comment says which is which.
 var mcpOnly = map[string]string{
-	"tokenops_help":            "indexes the tool surface for an agent that cannot read --help",
-	"tokenops_data_sources":    "reports event counts by source; `vendor-usage status` is the CLI's fuller answer",
-	"tokenops_session_budget":  "per-turn advice for the agent mid-session; no terminal equivalent makes sense",
-	"tokenops_routing_advise":  "asks which model a turn should run on; the CLI equivalent is the route-guard hook",
-	"tokenops_routing_decide":  "same, for an explicit decision",
-	"tokenops_review_work":     "composes workflow measurement and coaching into one agent-oriented review",
-	"tokenops_prepare_work":    "composes current plan headroom and per-task model advice before execution",
-	"tokenops_resource_glance": "composes session budget and plan headroom into a caveated resource-pressure summary",
+	"tokenops_review_work":  "composes workflow measurement and coaching into one agent-oriented review",
+	"tokenops_prepare_work": "composes current plan headroom and per-task model advice before execution",
 }
 
 // TestCLIAndMCPParity diffs the two surfaces.
@@ -210,6 +207,7 @@ func mcpToolNames(t *testing.T) map[string]bool {
 	must(mcp.RegisterParityTools(srv, mcp.ParityDeps{Store: store, Spend: eng}))
 	must(mcp.RegisterControlTools(srv, mcp.ControlDeps{}))
 	must(mcp.RegisterPlanTools(srv, mcp.PlanDeps{}))
+	must(mcp.RegisterFindingsTool(srv, mcp.PlanDeps{}))
 	must(mcp.RegisterAgentDXTools(srv, mcp.AgentDXDeps{}))
 	must(mcp.RegisterExplainTools(srv))
 	must(mcp.RegisterStoryTools(srv, mcp.StoryDeps{}))
@@ -221,12 +219,13 @@ func mcpToolNames(t *testing.T) map[string]bool {
 	must(mcp.RegisterApprovalTools(srv, mcp.ApprovalDeps{}))
 	must(mcp.RegisterModeTools(srv, mcp.ModeDeps{}))
 	must(mcp.RegisterCoachTool(srv, mcp.ModeDeps{}))
-	must(mcp.RegisterHelpTool(srv))
 	must(mcp.RegisterDataSourcesTool(srv, mcp.DataSourcesDeps{Store: store}))
 	must(mcp.RegisterFmtTools(srv))
 	must(mcp.RegisterCoachTools(srv, mcp.CoachDeps{}))
 	must(mcp.RegisterGapTools(srv, mcp.GapDeps{}))
 	must(mcp.RegisterSetupTools(srv, mcp.SetupDeps{}))
+	// Clients see the public tools, not the ones registered behind them.
+	must(mcp.Consolidate(srv))
 
 	out := map[string]bool{}
 	for _, ti := range srv.Tools() {

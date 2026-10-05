@@ -29,9 +29,9 @@ type fmtAnalyzeInput struct {
 // s. Both read data that already exists (the recovery index + your Claude
 // Code logs) — no daemon, no wrapped commands, no setup:
 //
-//   - tokenops_fmt_analyze: what fills your context (Read vs Bash vs prose)
+//   - tokenops_fmt (view=analyze): what fills your context (Read vs Bash vs prose)
 //     and what tokenops fmt would save on your real Bash traffic.
-//   - tokenops_fmt_learn: advisory report on next formatters to write and
+//   - tokenops_fmt (view=learn): advisory report on next formatters to write and
 //     over-compression, folding in signal from your Claude Code logs.
 //
 // Both are read-only and advisory; the formatters stay deterministic and the

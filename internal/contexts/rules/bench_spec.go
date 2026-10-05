@@ -8,7 +8,7 @@ import (
 )
 
 // BenchSpec is the data-transfer object (DTO) consumed by both
-// `tokenops rules bench` (CLI) and `tokenops_rules_bench` (MCP). It is
+// `tokenops rules bench`. It is
 // not a domain aggregate — RunBenchSpec translates it into the
 // domain-side Profile / Scenario / Exposure values via the Ingestor.
 // Adapters parse this DTO; the domain never sees raw paths or untyped

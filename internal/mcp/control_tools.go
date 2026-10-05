@@ -39,9 +39,9 @@ type ControlDeps struct {
 	Config *config.Config
 	// ConfigGetter returns the live configuration at call time.
 	//
-	// serve outlives config writes: tokenops_plan_set and
-	// tokenops_vendor_usage_setup rewrite config.yaml under a running
-	// server, and with only the startup snapshot tokenops_config and the
+	// serve outlives config writes: tokenops_configure (setting=plan) and
+	// tokenops_configure (setting=usage_meter) rewrite config.yaml under a running
+	// server, and with only the startup snapshot tokenops_status (view=config) and the
 	// status blockers kept reporting the pre-write state until the MCP
 	// client restarted.
 	ConfigGetter func() *config.Config
@@ -92,7 +92,7 @@ func (d ControlDeps) activeConfig() *config.Config {
 
 type emptyInput struct{}
 
-// versionResult is the typed payload for tokenops_version. Advertised as
+// versionResult is the typed payload for tokenops_status (view=version). Advertised as
 // the tool's outputSchema so clients receive typed structuredContent.
 type versionResult struct {
 	Version       string `json:"version" jsonschema:"description=version of this MCP server process"`
@@ -119,13 +119,13 @@ type statusResult struct {
 	Blockers      []string                   `json:"blockers"`
 	NextActions   []string                   `json:"next_actions"`
 	Warnings      []string                   `json:"warnings,omitempty"`
-	// DaemonVersion and ServerOutOfDate mirror tokenops_version, so the one
+	// DaemonVersion and ServerOutOfDate mirror tokenops_status (view=version), so the one
 	// call an agent makes first says whether it is talking to old code.
 	DaemonVersion   string `json:"daemon_version,omitempty" jsonschema:"description=version of the ingestion daemon when one is reachable"`
 	ServerOutOfDate bool   `json:"server_out_of_date,omitempty" jsonschema:"description=true when a newer tokenops has been installed since this MCP server started"`
 }
 
-// domainEventsResult is the typed payload for tokenops_domain_events.
+// domainEventsResult is the typed payload for tokenops_records (view=events).
 //
 // Counts and Total are omitted rather than zero when the counts cannot be
 // read: the payload then carries error + hint and no numbers, so

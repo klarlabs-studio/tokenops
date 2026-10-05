@@ -241,12 +241,12 @@ That line is the point. A rate limit you cannot see working is
 indistinguishable from one that does nothing.
 
 Mode, budgets, and routing rules are also editable through the MCP
-server — `tokenops_mode`, `tokenops_budget_set`, and
-`tokenops_routing_rule_set` write the same `config.yaml` the CLI verbs
+server — `tokenops_configure` with `setting` mode, budget, and
+`tokenops_routing (action=set_rule)` write the same `config.yaml` the CLI verbs
 manage (validated before every write). The daemon picks the changes up
 on its next restart.
 
-Setting `mode: active` via `tokenops_mode` also **ensures a daemon is
+Setting `mode: active` via `tokenops_configure (setting=mode)` also **ensures a daemon is
 running** — active mode's interventions (live routing, spend watcher)
 live in the daemon, so activating without one would be a silent no-op.
 If no daemon answers on its advertised URL, one is started detached
@@ -359,7 +359,7 @@ watch:
 ## Model routing rules
 
 `optimizer.routing_rules` feeds the model-routing optimizer used by
-`tokenops replay` and the `tokenops_replay` MCP tool. Each rule says
+`tokenops replay` and the ``tokenops replay`` MCP tool. Each rule says
 "traffic asking for `from_model` could run on `to_model`"; `quality` is
 your confidence (0–1] that the cheaper model preserves task quality.
 Replay then reports what each rule would have saved on real history:
@@ -433,7 +433,7 @@ that, and on those machines the optimizer holds an opinion nobody can
 hear.
 
 So the same policy is also reachable as **advice**, through the MCP tool
-`tokenops_routing_advise`. An agent hands it the instruction it is about
+`tokenops_routing (action=advise)`. An agent hands it the instruction it is about
 to act on and the model it would otherwise use, and gets back `stay` or
 `switch` with the reason, the class, and the window reading. It
 recommends and never applies — the model stays the caller's choice, and
@@ -451,7 +451,7 @@ A person or a company may rule models out: a vendor with no agreement
 in place, a model too expensive for the team, one that has not passed
 review. `model_policy` is two lists of patterns that every routing
 decision honours — routing rules and smart routing on the proxy,
-`tokenops_routing_advise`, the coach's advice, and its subagent moves:
+`tokenops_routing (action=advise)`, the coach's advice, and its subagent moves:
 
 ```yaml
 model_policy:
@@ -550,7 +550,7 @@ preserved and the formatter falls back safely.
 `tokenops fmt learn` mines usage telemetry to suggest which commands need a
 formatter and which are over-compressing; `tokenops fmt learn --apply`
 writes the safe loss-level tuning back to this config locally. The
-`tokenops_fmt_learn` MCP tool exposes the same report to agents. See the
+`tokenops_fmt (view=learn)` MCP tool exposes the same report to agents. See the
 [CLI reference](./cli.md#command-output-compression-fmt).
 
 ## Budgets and the spend watcher
@@ -569,7 +569,7 @@ On flat-rate plans (Claude Max, ChatGPT Plus) real spend is ~$0 — a
 the **API-equivalent value** instead: what the window's usage would
 have billed at list prices, including plan-covered traffic. The same
 figure appears as `api equivalent` in `tokenops spend` and
-`api_equivalent_usd` in the `tokenops_spend_summary` MCP tool.
+`api_equivalent_usd` in the `tokenops_spend` MCP tool.
 Equivalent-basis budgets get threshold alerts only (no forecast).
 
 Plan-covered traffic is identified centrally: every event written to
@@ -580,7 +580,7 @@ proxy produced it.
 ## Waste-detector context limits
 
 The workflow waste detector (`tokenops replay --workflow`, the
-`tokenops_workflow_trace` MCP tool)
+`tokenops_records (view=workflow)` MCP tool)
 ships built-in thresholds per workflow type: `claude-code:` sessions
 flag context above 900k tokens, `codex:` above 250k, everything else
 above 32k. `coaching.context_limits` overrides them per workflow-ID
@@ -669,7 +669,7 @@ one you negotiated.
 
 TokenOps ships an embedded list-price catalog (USD per million tokens)
 used to cost every request. When a vendor releases a model the catalog
-doesn't know yet, `tokenops spend` and the `tokenops_spend_summary` MCP
+doesn't know yet, `tokenops spend` and the `tokenops_spend` MCP
 tool flag it:
 
 ```

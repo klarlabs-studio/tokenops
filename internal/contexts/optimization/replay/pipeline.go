@@ -31,7 +31,7 @@ type PipelineConfig struct {
 }
 
 // DefaultPipeline returns the canonical optimizer pipeline used by every
-// replay path (CLI `tokenops replay`, MCP `tokenops_replay`, and any
+// replay path (CLI `tokenops replay`, and any
 // future scheduled replays). Keeping the construction in one place is a
 // DDD requirement: the pipeline is the domain rule for how a session is
 // re-evaluated; adapters must not assemble their own variant.

@@ -28,7 +28,7 @@ func newEventsCmd(rf *rootFlags) *cobra.Command {
 		Long: `events queries the canonical local event store and prints per-kind
 domain event counts (workflow.started, optimization.applied,
 rule_corpus.reloaded, budget.exceeded, ...). Mirrors the
-tokenops_domain_events MCP tool.`,
+tokenops_records (view=events) MCP tool.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			var sinceT, untilT time.Time

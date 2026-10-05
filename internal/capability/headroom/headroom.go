@@ -88,7 +88,7 @@ func (r Result) Answered() bool { return len(r.Reports) > 0 }
 // restart" — that was a step which changed nothing, and an agent reading
 // the hint can bind the plan itself.
 const UnconfiguredHint = "no plans configured; bind one with `tokenops plan set <provider> <plan>` " +
-	"(e.g. `tokenops plan set anthropic claude-max-20x`) or tokenops_plan_set, " +
+	"(e.g. `tokenops plan set anthropic claude-max-20x`) or tokenops_configure (setting=plan), " +
 	"or set TOKENOPS_PLAN_<PROVIDER>; the change is picked up without a restart"
 
 // StorageDisabledHint says how to get an event store.

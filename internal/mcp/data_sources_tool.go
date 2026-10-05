@@ -54,7 +54,7 @@ type dataSourcesInput struct {
 // daemon API (ADR 0010 §4).
 type dataSourcesResult = state.DataSources
 
-// RegisterDataSourcesTool mounts tokenops_data_sources on s. The tool
+// RegisterDataSourcesTool mounts tokenops_status (view=data_sources) on s. The tool
 // returns event counts grouped by the source column so operators can
 // inspect local telemetry coverage at a glance.
 func RegisterDataSourcesTool(s *Server, d DataSourcesDeps) error {

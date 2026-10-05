@@ -47,13 +47,13 @@ type rulesInjectInput struct {
 
 // --- output structs --------------------------------------------------------
 
-// rulesAnalyzeResult is the typed payload for tokenops_rules_analyze.
+// rulesAnalyzeResult is the typed payload for tokenops_rules (view=analyze).
 type rulesAnalyzeResult struct {
 	Documents       []rules.DocumentSummary `json:"documents"`
 	DuplicateGroups map[string][]string     `json:"duplicate_groups,omitempty"`
 }
 
-// rulesConflictsResult is the typed payload for tokenops_rules_conflicts.
+// rulesConflictsResult is the typed payload for tokenops_rules (view=conflicts).
 type rulesConflictsResult struct {
 	Findings []rules.Finding `json:"findings"`
 }
@@ -69,7 +69,7 @@ type rulesCompressView struct {
 	DroppedSections  int     `json:"dropped_sections"`
 }
 
-// rulesCompressResult is the typed payload for tokenops_rules_compress.
+// rulesCompressResult is the typed payload for tokenops_rules (view=compress).
 type rulesCompressResult struct {
 	Results []rulesCompressView `json:"results"`
 }

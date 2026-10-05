@@ -119,7 +119,7 @@ Claude Max 20x (claude-max-20x) — risk low
   window:  27 / 200 messages per 5h (13.5%) — resets in 5h0m0s
 ```
 
-The same report is available via the `tokenops_plan_headroom` MCP tool.
+The same report is available via the `tokenops_glance (view=headroom)` MCP tool.
 
 Claude Code JSONL supplies genuine per-turn token and cache usage but not an
 authoritative subscription quota percentage. Until the Claude usage meter is

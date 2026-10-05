@@ -11,7 +11,7 @@ import (
 //
 // A total of zero has two causes: nothing was spent, or
 // nothing was measured. They were formatted identically, so during a 27-day
-// ingestion outage tokenops_spend_summary answered "$0.00, 700 tokens, 1
+// ingestion outage tokenops_spend answered "$0.00, 700 tokens, 1
 // request" for a period containing thousands of requests — confidently, and in
 // the same shape as a quiet fortnight.
 type MeasurementWarning struct {

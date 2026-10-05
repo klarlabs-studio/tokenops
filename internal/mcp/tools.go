@@ -104,7 +104,7 @@ type pricingWarning struct {
 	UnpricedModels []unpricedModel `json:"unpriced_models"`
 }
 
-// spendSummaryResult is the typed payload for tokenops_spend_summary.
+// spendSummaryResult is the typed payload for tokenops_spend.
 type spendSummaryResult struct {
 	Window           spendSummaryInput `json:"window"`
 	Requests         int64             `json:"requests"`
@@ -126,12 +126,12 @@ type spendSummaryResult struct {
 	RateNote string `json:"rate_note,omitempty"`
 }
 
-// consumerEntry is one grouped spender row in tokenops_top_consumers.
+// consumerEntry is one grouped spender row in tokenops_spend (view=top).
 // topConsumersResult is the spending capability's payload, shared with
 // the daemon API (ADR 0010 §4).
 type topConsumersResult = spending.TopConsumers
 
-// forecastResult is the typed payload for tokenops_forecast. Note is set
+// forecastResult is the typed payload for tokenops_spend (view=forecast). Note is set
 // only when history is too short to project.
 type forecastResult struct {
 	HorizonDays   int                   `json:"horizon_days,omitempty"`
@@ -145,13 +145,13 @@ type forecastResult struct {
 	Note           string                `json:"note,omitempty"`
 }
 
-// workflowTraceResult is the typed payload for tokenops_workflow_trace.
+// workflowTraceResult is the typed payload for tokenops_records (view=workflow).
 type workflowTraceResult struct {
 	Trace    *workflow.Trace              `json:"trace"`
 	Findings []*eventschema.CoachingEvent `json:"findings"`
 }
 
-// optimizationEntry is one recommendation row in tokenops_optimizations.
+// optimizationEntry is one recommendation row in tokenops_records (view=optimizations).
 type optimizationEntry struct {
 	Timestamp              time.Time `json:"timestamp"`
 	Kind                   string    `json:"kind"`
@@ -165,7 +165,7 @@ type optimizationEntry struct {
 	AgentID                string    `json:"agent_id,omitempty"`
 }
 
-// optimizationsResult is the typed payload for tokenops_optimizations.
+// optimizationsResult is the typed payload for tokenops_records (view=optimizations).
 type optimizationsResult struct {
 	Optimizations []optimizationEntry `json:"optimizations"`
 	Currency      string              `json:"currency"`
