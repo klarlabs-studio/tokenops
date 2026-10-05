@@ -2,7 +2,15 @@
 
 ## Unreleased
 
-## 0.98.0 - 2026-10-05
+## 0.98.1 - 2026-10-05
+
+v0.98.0 was tagged but its release build failed before publishing anything; 0.98.1 is that release.
+
+### Fixed
+
+- **release:** the macOS job built `TokenOps.app` in the wrong directory, so v0.98.0 published no binaries and no cask update (#544)
+
+## 0.98.0 - 2026-10-05 (not published)
 
 ### Added
 
