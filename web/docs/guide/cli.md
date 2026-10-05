@@ -582,18 +582,22 @@ Available env vars:
 
 ## Explain
 
-### `tokenops explain [term]`
+### `tokenops explain [term | decision-id]`
 
 What a figure means, in plain words: what it measures, how it is worked
-out, how to read it, and for `dx` figures the grade bands.
+out, how to read it, and for `dx` figures the grade bands. Given a
+recorded decision's ID instead, it shows the evidence, the alternatives,
+the policy that applied and the result, as JSON.
 
 ```bash
 tokenops explain                # every term, by area
 tokenops explain wall-clock
 tokenops explain "first-try rate"
+tokenops explain decision:6f1c…  # why TokenOps decided what it did
 ```
 
-Agents get the same answers from the `tokenops_explain` MCP tool.
+Agents get the same answers from the `tokenops_explain` and
+`tokenops_explain_decision` MCP tools.
 
 ## Status line
 
@@ -679,6 +683,15 @@ Autonomy decides who acts; verbosity how much the coach says. A rung the
 coach cannot deliver here is shown one rung lower, with the reason.
 Approval requests are always shown. A [`model_policy`](/guide/configuration#model-policy-model-policy)
 applies whatever the coach is set to.
+
+### `tokenops coach stats`
+
+What the coach saw and did, from its two ledgers: each session's spend
+against budget fractions, the quota and compact tips it gave and what it
+held back; and files read again, which re-reads were waste, and which the
+read guard refused. Both ledgers fill while the coach only observes, so
+this shows what you would hear before you let it speak. `--json` gives
+`budget` and `read_guard`.
 
 ### `tokenops coach delivery`
 
@@ -1074,7 +1087,7 @@ every fire would inflate a session without bound.
 The shipped rate card has no entry for `gpt-5.5` or `gpt-5.6-luna`, which
 is what Codex runs today. Those turns cannot be priced, and a session
 reported as free when nobody could cost it is exactly the failure this
-tool exists to find — so `coach-hook stats` names them instead of staying
+tool exists to find — so `coach stats` names them instead of staying
 quiet:
 
 ```

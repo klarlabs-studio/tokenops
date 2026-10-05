@@ -240,7 +240,7 @@ func budget(s *coachhook.Stats) []Finding {
 		Level:    LevelNotice,
 		Title:    fmt.Sprintf("%d of %d sessions ran past their budget", over, s.DistinctSessions),
 		Evidence: fmt.Sprintf("the largest came to about %s at API prices", money(s.MaxCumulativeUSD)),
-		Action:   "`tokenops coach-hook stats` shows how far past each one went.",
+		Action:   "`tokenops coach stats` shows how far past each one went.",
 	}}
 }
 

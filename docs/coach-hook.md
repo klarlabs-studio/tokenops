@@ -42,7 +42,7 @@ dollar figure is a counterfactual; the window is what stops work.
 - The reading is a read-only query; the hook never takes the store's write
   lock.
 
-`tokenops coach-hook stats` counts quota nudges by tier beside the dollar
+`tokenops coach stats` counts quota nudges by tier beside the dollar
 alerts.
 
 ## Why a cumulative budget (not a per-turn threshold)
@@ -148,7 +148,7 @@ over the next three turns: **followed** when the context shrinks to half or
 less (a `/compact` or a fresh start), the model changes, or the session
 ends; **ignored** when none of that happens. An early tier (50% or 75%)
 ignored five times in a row within 14 days is held back from then on
-(`coach-hook stats` counts it as "held back because earlier tips like them
+(`coach stats` counts it as "held back because earlier tips like them
 were ignored"), until that evidence ages out. `verbose` still gives it, and
 tips at 90% of a window or past the budget are never held back.
 `tokenops coach` shows the record per tier.
@@ -158,8 +158,8 @@ tips at 90% of a window or past the budget are never held back.
 See how much your sessions have spent and which alerts fired:
 
 ```sh
-tokenops coach-hook stats
-tokenops coach-hook stats --json
+tokenops coach stats
+tokenops coach stats --json
 ```
 
 It reports Stop events observed, distinct sessions, the budget alerts fired

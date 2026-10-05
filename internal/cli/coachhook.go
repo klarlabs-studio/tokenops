@@ -94,7 +94,7 @@ budget over) fires once, so the coach never nags every turn.
 
 Bare invocation is the hook handler (reads Stop JSON on stdin). Use
 'tokenops coach-hook hook' to print the settings.json block (or prefer
-'tokenops hooks install --coach'), and 'tokenops coach-hook stats' to see how
+'tokenops hooks install --coach'), and 'tokenops coach stats' to see how
 much your sessions have spent and which budget alerts fired.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -118,7 +118,6 @@ much your sessions have spent and which budget alerts fired.`,
 	cmd.Flags().StringVar(&dir, "dir", "", "state/ledger dir (defaults to ~/.tokenops/coach-hook)")
 	cmd.Flags().StringVar(&guardDir, "guard-dir", "", "read-guard ledger dir to read the promotion case from (defaults to ~/.tokenops/read-guard)")
 	cmd.AddCommand(newCoachHookHookCmd())
-	cmd.AddCommand(newCoachHookStatsCmd())
 	return cmd
 }
 
@@ -213,85 +212,62 @@ func newCoachHookHookCmd() *cobra.Command {
 	return cmd
 }
 
-func newCoachHookStatsCmd() *cobra.Command {
-	var (
-		dir     string
-		jsonOut bool
-	)
-	cmd := &cobra.Command{
-		Use:   "stats",
-		Short: "Show coach-hook session spend (budget alerts fired, max/total est $)",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			s, err := coachhook.ReadStats(dir)
-			if err != nil {
-				return err
-			}
-			if jsonOut {
-				enc := json.NewEncoder(cmd.OutOrStdout())
-				enc.SetIndent("", "  ")
-				return enc.Encode(s)
-			}
-			out := cmd.OutOrStdout()
-			if s.Events == 0 {
-				fmt.Fprintln(out, "No coach-hook activity yet. Install the hook (`tokenops hooks install --coach`) and use Claude Code.")
-				return nil
-			}
-			fmt.Fprintf(out, "coach-hook — %d Stop events across %d sessions\n", s.Events, s.DistinctSessions)
-			fmt.Fprintf(out, "  est. API-equiv spend: max session ~$%.2f · total ~$%.2f\n", s.MaxCumulativeUSD, s.TotalEstSpendUSD)
-			fmt.Fprintf(out, "  budget alerts fired: %d\n", s.Alerts)
-			for _, tier := range []string{"50%", "75%", "100%", "200%", "300%"} {
-				if n := s.AlertsByTier[tier]; n > 0 {
-					fmt.Fprintf(out, "    %-5s %d\n", tier, n)
-				}
-			}
-			if len(s.UnpricedModels) > 0 {
-				fmt.Fprintln(out, "  not priced — no rate card for these models:")
-				for _, m := range sortedKeys(s.UnpricedModels) {
-					fmt.Fprintf(out, "    %-22s %d turn(s)\n", m, s.UnpricedModels[m])
-				}
-				fmt.Fprintln(out, "    their spend reads as $0 above. Add rates via `pricing.path` to count them.")
-			}
-			if n := totalOf(s.QuotaNudges); n > 0 {
-				fmt.Fprintf(out, "  quota nudges (flat plan, live window): %d\n", n)
-				for _, tier := range []string{"50%", "75%", "90%", "100%"} {
-					if c := s.QuotaNudges[tier]; c > 0 {
-						fmt.Fprintf(out, "    %-5s %d\n", tier, c)
-					}
-				}
-			}
-			if s.CompactTips > 0 {
-				fmt.Fprintf(out, "  compact-now tips: %d\n", s.CompactTips)
-			}
-			if s.PromotionNudges > 0 {
-				fmt.Fprintf(out, "  read-guard case argued: %d session(s)\n", s.PromotionNudges)
-			}
-			if n := s.Suppressed["ignored_before"]; n > 0 {
-				fmt.Fprintf(out, "  held back because earlier tips like them were ignored: %d\n", n)
-			}
-			if n := s.Suppressed["min_interval"] + s.Suppressed["max_per_session"]; n > 0 {
-				fmt.Fprintf(out, "  held back by coaching.quiet: %d\n", n)
-				for _, rule := range []string{"min_interval", "max_per_session"} {
-					if n := s.Suppressed[rule]; n > 0 {
-						fmt.Fprintf(out, "    %-15s %d\n", rule, n)
-					}
-				}
-			}
-			switch {
-			case s.Alerts == 0 && len(s.UnpricedModels) > 0:
-				// "Lean" would be an over-claim: nothing crossed a budget
-				// fraction because nothing could be measured against one.
-				fmt.Fprintln(out, "\nNo session has crossed a budget fraction — but some turns could not be priced,")
-				fmt.Fprintln(out, "so this is not evidence that your spend is lean. Price those models first.")
-			case s.Alerts == 0:
-				fmt.Fprintln(out, "\nNo session has crossed a budget fraction yet — your spend stays lean. Keep observing.")
-			}
-			return nil
-		},
+// writeCoachHookStats prints what the Stop hook saw: session spend
+// against budget fractions, quota and compact tips, what it held back.
+func writeCoachHookStats(out io.Writer, s coachhook.Stats) {
+	if s.Events == 0 {
+		fmt.Fprintln(out, "No coach-hook activity yet. Install the hook (`tokenops hooks install --coach`) and use Claude Code.")
+		return
 	}
-	cmd.Flags().StringVar(&dir, "dir", "", "state/ledger dir (defaults to ~/.tokenops/coach-hook)")
-	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
-	return cmd
+	fmt.Fprintf(out, "Budget and quota tips — %d turns across %d sessions\n", s.Events, s.DistinctSessions)
+	fmt.Fprintf(out, "  est. API-equiv spend: max session ~$%.2f · total ~$%.2f\n", s.MaxCumulativeUSD, s.TotalEstSpendUSD)
+	fmt.Fprintf(out, "  budget alerts fired: %d\n", s.Alerts)
+	for _, tier := range []string{"50%", "75%", "100%", "200%", "300%"} {
+		if n := s.AlertsByTier[tier]; n > 0 {
+			fmt.Fprintf(out, "    %-5s %d\n", tier, n)
+		}
+	}
+	if len(s.UnpricedModels) > 0 {
+		fmt.Fprintln(out, "  not priced — no rate card for these models:")
+		for _, m := range sortedKeys(s.UnpricedModels) {
+			fmt.Fprintf(out, "    %-22s %d turn(s)\n", m, s.UnpricedModels[m])
+		}
+		fmt.Fprintln(out, "    their spend reads as $0 above. Add rates via `pricing.path` to count them.")
+	}
+	if n := totalOf(s.QuotaNudges); n > 0 {
+		fmt.Fprintf(out, "  quota nudges (flat plan, live window): %d\n", n)
+		for _, tier := range []string{"50%", "75%", "90%", "100%"} {
+			if c := s.QuotaNudges[tier]; c > 0 {
+				fmt.Fprintf(out, "    %-5s %d\n", tier, c)
+			}
+		}
+	}
+	if s.CompactTips > 0 {
+		fmt.Fprintf(out, "  compact-now tips: %d\n", s.CompactTips)
+	}
+	if s.PromotionNudges > 0 {
+		fmt.Fprintf(out, "  read-guard case argued: %d session(s)\n", s.PromotionNudges)
+	}
+	if n := s.Suppressed["ignored_before"]; n > 0 {
+		fmt.Fprintf(out, "  held back because earlier tips like them were ignored: %d\n", n)
+	}
+	if n := s.Suppressed["min_interval"] + s.Suppressed["max_per_session"]; n > 0 {
+		fmt.Fprintf(out, "  held back by coaching.quiet: %d\n", n)
+		for _, rule := range []string{"min_interval", "max_per_session"} {
+			if n := s.Suppressed[rule]; n > 0 {
+				fmt.Fprintf(out, "    %-15s %d\n", rule, n)
+			}
+		}
+	}
+	switch {
+	case s.Alerts == 0 && len(s.UnpricedModels) > 0:
+		// "Lean" would be an over-claim: nothing crossed a budget
+		// fraction because nothing could be measured against one.
+		fmt.Fprintln(out, "\nNo session has crossed a budget fraction — but some turns could not be priced,")
+		fmt.Fprintln(out, "so this is not evidence that your spend is lean. Price those models first.")
+	case s.Alerts == 0:
+		fmt.Fprintln(out, "\nNo session has crossed a budget fraction yet — your spend stays lean. Keep observing.")
+	}
 }
 
 func sortedKeys(m map[string]int) []string {
@@ -323,7 +299,7 @@ func formatBudget(v float64) string {
 // it, and an upgrade must not quietly take that away.
 //
 // At `observe` the hook still runs and still records the ledger; it just
-// says nothing, which is what makes `coach-hook stats` meaningful before
+// says nothing, which is what makes `coach stats` meaningful before
 // you let it speak.
 //
 // An unreadable config falls back to the default rather than to silence.
