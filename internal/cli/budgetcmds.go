@@ -17,7 +17,7 @@ import (
 func newBudgetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "budget",
-		Short: "List, set or remove spend budgets",
+		Short: "Spend budgets: list, set or remove",
 		Long: `A budget is a calendar window and a ceiling. In active mode the daemon
 evaluates them and reports breaches.
 
@@ -185,7 +185,7 @@ func newOptimizationsCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "optimizations",
-		Short: "List optimization recommendations recorded in the event store",
+		Short: "Optimizations TokenOps recommended or applied",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			resolved, err := resolveAuditDB(&rootFlags{}, dbPath)

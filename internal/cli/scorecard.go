@@ -23,7 +23,7 @@ func newScorecardCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "scorecard",
-		Short: "Show the operator wedge KPI scorecard",
+		Short: "Time to first value, token savings and spend attribution, graded A–F",
 		Long: `scorecard computes and displays the operator wedge KPI scorecard,
 which measures three key outcomes:
 

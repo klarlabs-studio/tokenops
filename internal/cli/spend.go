@@ -71,7 +71,7 @@ func newSpendCmd(rf *rootFlags) *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "spend",
-		Short: "Show current spend, burn rate, and forecast",
+		Short: "What you spent, where it went, and where it is heading",
 		Long: `spend reads the local event store and prints a summary of the LLM
 spend within the selected window. It surfaces:
 

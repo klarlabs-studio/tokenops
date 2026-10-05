@@ -33,7 +33,7 @@ func newGlanceCmd(rf *rootFlags) *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "glance",
-		Short: "Every plan at a glance: windows, resets, spend, as terminal cards",
+		Short: "Every plan at a glance: windows, pace, cost and the coach's findings",
 		Long: `glance draws one card per plan — Claude, Codex, Gemini, pay-as-you-go
 accounts — with a bar for every window the vendor reports, when it resets,
 spend against a limit and credit left, busiest first, laid out to fit the

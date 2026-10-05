@@ -9,6 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/findings"
+
 	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
 )
 
@@ -25,12 +27,13 @@ func newDXCmd() *cobra.Command {
 		source  string
 		days    int
 		jsonOut bool
+		fresh   bool
 
 		includeScratch bool
 	)
 	cmd := &cobra.Command{
 		Use:   "dx",
-		Short: "Agent developer-experience metrics from your session transcripts",
+		Short: "How your sessions go: turns, rework, interrupts, and the one change to make",
 		Long: `dx measures what your agent sessions are like to work with: how many
 turns a typical instruction costs, how often the agent redoes its own
 work, how often you have to interrupt it.
@@ -50,6 +53,13 @@ started streaming, so no passive reader can populate it honestly. It stays
 proxy-only.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			// The default week is what the daemon analyses in the
+			// background; reading every transcript again takes minutes.
+			if !fresh && root == "" && source == "auto" && days == 7 && !includeScratch {
+				if done, err := dxFromSnapshot(cmd, jsonOut, days); done || err != nil {
+					return err
+				}
+			}
 			opts := agentdx.ExtractOptions{
 				Root:           root,
 				Source:         agentdx.Source(source),
@@ -78,8 +88,37 @@ proxy-only.`,
 	cmd.Flags().StringVar(&source, "source", "auto", "client: auto | claude-code | codex | cursor | opencode")
 	cmd.Flags().IntVar(&days, "days", 7, "window in days; 0 reads everything")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
+	cmd.Flags().BoolVar(&fresh, "fresh", false, "read the transcripts now instead of the daemon's recent analysis (takes minutes on a busy machine)")
 	cmd.Flags().BoolVar(&includeScratch, "include-scratch", false, scratchFlagHelp)
 	return cmd
+}
+
+// dxFromSnapshot answers from the daemon's last analysis when it is
+// recent; done is false when there is none to answer from.
+func dxFromSnapshot(cmd *cobra.Command, jsonOut bool, days int) (bool, error) {
+	snap, err := findings.ReadSnapshot(findings.DefaultDir())
+	age := time.Since(snapshotTime(snap))
+	if err != nil || snap == nil || age > findings.MaxSnapshotAge || snap.DX.Metrics.Prompts == 0 {
+		return false, nil
+	}
+	for _, w := range snap.DX.Warnings {
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", w)
+	}
+	if jsonOut {
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return true, enc.Encode(snap.DX.Metrics)
+	}
+	writeDXText(cmd.OutOrStdout(), snap.DX.Metrics, snap.Curve, days)
+	fmt.Fprintf(cmd.OutOrStdout(), "\nFrom the daemon's analysis %s ago; --fresh reads the transcripts now.\n", agoWords(age))
+	return true, nil
+}
+
+func snapshotTime(s *findings.SessionsSnapshot) time.Time {
+	if s == nil {
+		return time.Time{}
+	}
+	return s.ComputedAt
 }
 
 func writeDXText(w io.Writer, m agentdx.Metrics, bands []agentdx.ContextBand, days int) {
@@ -239,4 +278,16 @@ func tailNote(median, p90 float64) string {
 		return "  ← heavy tail: a minority of instructions cost far more than typical"
 	}
 	return ""
+}
+
+// agoWords is "2h 39m", "12m" or "under a minute".
+func agoWords(d time.Duration) string {
+	d = d.Round(time.Minute)
+	switch h, m := int(d/time.Hour), int(d%time.Hour/time.Minute); {
+	case h > 0:
+		return fmt.Sprintf("%dh %dm", h, m)
+	case m > 0:
+		return fmt.Sprintf("%dm", m)
+	}
+	return "under a minute"
 }

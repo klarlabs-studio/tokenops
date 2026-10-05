@@ -24,7 +24,7 @@ import (
 func newPlanCmd(rf *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "plan",
-		Short: "List subscription plans + compute headroom",
+		Short: "Your subscription plans: bind one, list them, see their headroom",
 		Long: `plan inspects the flat-rate subscription configuration (Claude Max,
 ChatGPT Plus, GitHub Copilot, Cursor, etc.) and reports remaining
 quota / overage risk based on plan_included events in the local

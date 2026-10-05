@@ -248,7 +248,7 @@ func TestBareTokenopsShowsHelpBeforeSetup(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "Available Commands") {
+	if !strings.Contains(out.String(), "Every day:") {
 		t.Errorf("no help before setup:\n%s", out.String())
 	}
 }

@@ -48,7 +48,7 @@ func newFmtCmd(rf *rootFlags) *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "fmt [flags] -- <command> [args...]",
-		Short: "Run a command and compress its output deterministically before it reaches the agent",
+		Short: "Compress a command's output before the agent reads it",
 		Long: `fmt wraps a shell command, compresses its stdout with a
 deterministic per-command formatter, and forwards the compact result. Every
 line the formatter classifies as critical (errors, failures, changed state)

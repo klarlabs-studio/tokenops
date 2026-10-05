@@ -24,7 +24,7 @@ import (
 func newDetectCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "detect",
-		Short: "Report which AI clients are installed, and change nothing",
+		Short: "Which AI clients are installed on this machine (changes nothing)",
 		Long: `detect sniffs the machine for installed AI clients and reports the
 plan bindings they imply. It reads the filesystem and environment only:
 no network calls, no credential reads, and nothing is written.

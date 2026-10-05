@@ -11,7 +11,7 @@ import (
 func newConfigCmd(rf *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
-		Short: "Inspect TokenOps configuration",
+		Short: "Show the active configuration, secrets redacted",
 	}
 	cmd.AddCommand(newConfigShowCmd(rf))
 	return cmd

@@ -19,7 +19,7 @@ import (
 func newVendorUsageCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "vendor-usage",
-		Short: "Inspect vendor-side usage pollers (Claude Code stats cache, Anthropic Admin API)",
+		Short: "Usage readers: Claude, Codex, Gemini and vendor accounts",
 	}
 	cmd.AddCommand(newVendorUsageStatusCmd())
 	cmd.AddCommand(newVendorUsageBackfillCmd())
