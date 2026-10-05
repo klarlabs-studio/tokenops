@@ -42,8 +42,8 @@ type window struct {
 	ResetsIn string  `json:"resets_in"`
 }
 
-// status is what the tray shows: a title next to the icon, the share the
-// icon's ring fills, and a tooltip.
+// status is what the tray shows: the share the icon's ring fills, and a
+// tooltip with a line per window. Title names the busiest window.
 type status struct {
 	Title   string
 	Pct     float64
@@ -90,20 +90,20 @@ func statusOf(raw json.RawMessage) status {
 	for _, r := range g.PlanHeadroom.Reports {
 		name := shortName(r.Provider)
 		for _, w := range r.Windows {
-			line := fmt.Sprintf("%s %s: %.0f%%", name, w.Name, w.UsedPct)
+			line := fmt.Sprintf("%s · %s %.0f%%", name, w.Name, w.UsedPct)
 			if w.ResetsIn != "" {
-				line += ", resets in " + humanDuration(w.ResetsIn)
+				line += " · resets in " + humanDuration(w.ResetsIn)
 			}
 			consider(name, w.UsedPct, line)
 		}
 		if len(r.Windows) == 0 && r.SpendLimitUSD > 0 {
-			consider(name, r.SpendPct, fmt.Sprintf("%s: $%.2f of $%.2f", name, r.SpendUSD, r.SpendLimitUSD))
+			consider(name, r.SpendPct, fmt.Sprintf("%s · $%.2f of $%.2f", name, r.SpendUSD, r.SpendLimitUSD))
 		}
 	}
 	if !found {
 		return status{Title: "TokenOps", Tooltip: "TokenOps: " + g.Insight.Summary}
 	}
-	best.Tooltip = strings.Join(append(lines, g.Insight.Summary), "\n")
+	best.Tooltip = strings.Join(lines, "\n")
 	return best
 }
 

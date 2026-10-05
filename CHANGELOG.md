@@ -25,6 +25,7 @@
 
 ### Added
 
+- **menubar:** the menu bar shows the icon alone, its ring filled to the busiest window; a click opens the panel with every plan's details, hovering lists each window's share and reset, and a right click has Refresh, Launch at Login and Quit
 - **menubar:** the menu bar app ships in the macOS release and the Homebrew cask; `tokenops menubar` installs it to `~/Applications` and opens it, and upgrades refresh it. It is ad hoc signed, not notarized; the cask clears its quarantine flag as it does the CLI's
 
 ### Fixed

@@ -34,7 +34,7 @@ import (
 
 const (
 	appID = "de.klarlabs.tokenops.menubar"
-	// panelWindow is the tray panel, the app's only window.
+	// panelWindow is the tray panel a click on the icon opens.
 	panelWindow domain.WindowID = "panel"
 	// viewEvent carries each new view to the panel.
 	viewEvent domain.EventName = "glance.update"
@@ -44,7 +44,6 @@ const (
 
 // Tray menu action IDs.
 const (
-	actionPanel   = "panel"
 	actionRefresh = "refresh"
 	actionLogin   = "login"
 	actionQuit    = "quit"
@@ -228,11 +227,13 @@ func (m *menubar) refresh(ctx context.Context) view {
 	return v
 }
 
-// setTray shows st next to the icon.
+// setTray shows the icon alone, its ring filled to the busiest window. A
+// click opens the panel with every plan's details under the icon; a right
+// click opens the menu.
 func (m *menubar) setTray(st status) {
 	if err := m.app.SetTray(app.TraySpec{
-		Title: st.Title, Tooltip: st.Tooltip,
-		Icon: trayIcon(st.Pct), Template: true,
+		Tooltip: st.Tooltip,
+		Icon:    trayIcon(st.Pct), Template: true,
 		Panel: panelWindow,
 		Items: m.menu(),
 	}); err != nil {
@@ -314,7 +315,6 @@ func explain(err error) string {
 func (m *menubar) menu() []platform.MenuItem {
 	login, err := m.app.LoginItemEnabled()
 	return []platform.MenuItem{
-		{ID: actionPanel, Label: "Show Details"},
 		{ID: actionRefresh, Label: "Refresh"},
 		{Separator: true},
 		{ID: actionLogin, Label: "Launch at Login", Checked: login, Disabled: err != nil},
@@ -327,8 +327,6 @@ func (m *menubar) menu() []platform.MenuItem {
 func (m *menubar) onAction(id string) {
 	ctx := context.Background()
 	switch id {
-	case actionPanel:
-		_ = m.app.ShowTrayPanel()
 	case actionRefresh:
 		m.refresh(ctx)
 	case actionLogin:
