@@ -95,9 +95,10 @@ never`) prints plain text. `$COLUMNS` sets the width.
 ### `tokenops menubar`
 
 On macOS, installs the menu bar app that ships with the Homebrew install
-to `~/Applications` and opens it: the busiest plan window next to the icon,
-and a panel with every plan's windows, pace and cost and the coach's
-findings. Its menu has Launch at Login; upgrades refresh the installed copy.
+to `~/Applications` and opens it: an icon whose ring fills to the busiest
+plan window. Click it for a panel with every plan's windows, pace and cost
+and the coach's findings; hover for each window's reset; right-click for
+Launch at Login. Upgrades refresh the installed copy.
 
 ## Setup
 
