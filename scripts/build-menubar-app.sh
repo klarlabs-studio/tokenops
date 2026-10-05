@@ -12,8 +12,11 @@
 set -euo pipefail
 
 version="${1:?version}"
-out="${2:?out dir}"
 here="$(cd "$(dirname "$0")/.." && pwd)"
+# The output directory is resolved now, before the build changes into
+# apps/menubar: a relative path would otherwise land there.
+mkdir -p "${2:?out dir}"
+out="$(cd "$2" && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
