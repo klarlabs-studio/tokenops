@@ -65,7 +65,7 @@ regardless of config.
 
 Bare invocation is the hook handler (reads PreToolUse JSON on stdin). Use
 'tokenops read-guard hook' to print the settings.json block, and
-'tokenops read-guard stats' to see reclamation.`,
+'tokenops coach stats' to see reclamation.`,
 		Args:   cobra.NoArgs,
 		Hidden: false,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -75,7 +75,6 @@ Bare invocation is the hook handler (reads PreToolUse JSON on stdin). Use
 	cmd.Flags().StringVar(&mode, "mode", "", "observe (log only) | active (deny redundant re-reads); default follows coaching.delivery")
 	cmd.Flags().StringVar(&dir, "dir", "", "state/ledger dir (defaults to ~/.tokenops/read-guard)")
 	cmd.AddCommand(newReadGuardHookCmd())
-	cmd.AddCommand(newReadGuardStatsCmd())
 	return cmd
 }
 
@@ -146,47 +145,24 @@ func newReadGuardHookCmd() *cobra.Command {
 	return cmd
 }
 
-func newReadGuardStatsCmd() *cobra.Command {
-	var (
-		dir     string
-		jsonOut bool
-	)
-	cmd := &cobra.Command{
-		Use:   "stats",
-		Short: "Show read-guard reclamation (would-block / blocked / tokens)",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			s, err := readguard.ReadStats(dir)
-			if err != nil {
-				return err
-			}
-			if jsonOut {
-				enc := json.NewEncoder(cmd.OutOrStdout())
-				enc.SetIndent("", "  ")
-				return enc.Encode(s)
-			}
-			out := cmd.OutOrStdout()
-			if s.Events == 0 {
-				fmt.Fprintln(out, "No read-guard activity yet. Install the hook (`tokenops read-guard hook`) and use Claude Code.")
-				return nil
-			}
-			fmt.Fprintf(out, "read-guard — %d reads seen across %d sessions\n", s.Events, s.DistinctSessions)
-			fmt.Fprintf(out, "  repeat reads (same file again in a session): %d\n", s.RepeatReads)
-			fmt.Fprintf(out, "    ├─ reclaimable (unchanged full re-read): %d · ~%d tokens\n", s.WouldBlock+s.Blocked, s.ReclaimableTok+s.ReclaimedTok)
-			fmt.Fprintf(out, "    ├─ post-edit (file changed — not waste):  %d\n", s.RepeatPostEdit)
-			fmt.Fprintf(out, "    └─ ranged (intentional partial re-read):  %d\n", s.RepeatRanged)
-			fmt.Fprintf(out, "  currently blocked (active mode): %d · ~%d tokens reclaimed\n", s.Blocked, s.ReclaimedTok)
-			if s.Blocked == 0 && s.WouldBlock > 0 {
-				fmt.Fprintln(out, "\nThose reclaimable re-reads are real waste. Switch the hook to --mode active to reclaim them.")
-			} else if s.RepeatReads > 0 && s.WouldBlock+s.Blocked == 0 {
-				fmt.Fprintln(out, "\nAll your repeat reads so far were post-edit or ranged — read-guard correctly leaves those alone. Keep observing.")
-			}
-			return nil
-		},
+// writeReadGuardStats prints what the read guard saw: repeat reads, the
+// reclaimable ones, and those it refused.
+func writeReadGuardStats(out io.Writer, s readguard.Stats) {
+	if s.Events == 0 {
+		fmt.Fprintln(out, "No read-guard activity yet. Install the hook (`tokenops read-guard hook`) and use Claude Code.")
+		return
 	}
-	cmd.Flags().StringVar(&dir, "dir", "", "state/ledger dir (defaults to ~/.tokenops/read-guard)")
-	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
-	return cmd
+	fmt.Fprintf(out, "Re-reads — %d file reads across %d sessions\n", s.Events, s.DistinctSessions)
+	fmt.Fprintf(out, "  repeat reads (same file again in a session): %d\n", s.RepeatReads)
+	fmt.Fprintf(out, "    ├─ reclaimable (unchanged full re-read): %d · ~%d tokens\n", s.WouldBlock+s.Blocked, s.ReclaimableTok+s.ReclaimedTok)
+	fmt.Fprintf(out, "    ├─ post-edit (file changed — not waste):  %d\n", s.RepeatPostEdit)
+	fmt.Fprintf(out, "    └─ ranged (intentional partial re-read):  %d\n", s.RepeatRanged)
+	fmt.Fprintf(out, "  currently blocked (active mode): %d · ~%d tokens reclaimed\n", s.Blocked, s.ReclaimedTok)
+	if s.Blocked == 0 && s.WouldBlock > 0 {
+		fmt.Fprintln(out, "\nThose reclaimable re-reads are real waste. Switch the hook to --mode active to reclaim them.")
+	} else if s.RepeatReads > 0 && s.WouldBlock+s.Blocked == 0 {
+		fmt.Fprintln(out, "\nAll your repeat reads so far were post-edit or ranged — read-guard correctly leaves those alone. Keep observing.")
+	}
 }
 
 // resolveGuardMode decides whether the guard blocks or only observes.

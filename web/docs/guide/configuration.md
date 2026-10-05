@@ -154,7 +154,7 @@ a channel to the one below:
 
 | Level | What the coach does |
 |---|---|
-| `observe` | Records everything, answers when asked — `tokenops coach prompts`, `coach replies`, `dx`, and the MCP coaching tools. The hooks stay installed but say nothing, while still keeping their ledgers: `coach-hook stats` and `read-guard stats` show what you are missing before you let them speak. |
+| `observe` | Records everything, answers when asked — `tokenops coach prompts`, `coach replies`, `dx`, and the MCP coaching tools. The hooks stay installed but say nothing, while still keeping their ledgers: `tokenops coach stats` shows what you are missing before you let them speak. |
 | `advise` (default) | Observe, plus the coach speaks unprompted but never blocks — `coach-hook` nudges as session cost crosses a budget fraction. Advice you can ignore. |
 | `intervene` | Advise, plus the coach acts — `read-guard` refuses a redundant re-read before it costs a token. |
 
@@ -229,7 +229,7 @@ at `delivery: advise` and `intervene`, where something speaks at all;
 neither knob touches anything you ask for, because a direct question is
 never an interruption.
 
-`coach-hook stats` counts what the policy held back, by rule:
+`coach stats` counts what the policy held back, by rule:
 
 ```
   budget alerts fired: 2

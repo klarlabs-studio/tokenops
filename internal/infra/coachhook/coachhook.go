@@ -139,7 +139,7 @@ type Quiet struct {
 // finding behind it should keep its latch so it can retry later.
 //
 // Returning the reason rather than a bare bool is what makes the policy
-// auditable: it goes into the ledger, so `coach-hook stats` can show that
+// auditable: it goes into the ledger, so `coach stats` can show that
 // the coach had something to say and held it, rather than the operator
 // having to infer a working rate limit from an absence.
 func (q Quiet) silence(nudges int, last, now time.Time) (reason string, retry bool) {

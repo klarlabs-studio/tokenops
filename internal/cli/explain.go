@@ -12,16 +12,25 @@ import (
 )
 
 func newExplainCmd() *cobra.Command {
-	var jsonOut bool
+	var (
+		jsonOut bool
+		dbPath  string
+	)
 	cmd := &cobra.Command{
-		Use:   "explain [term]",
+		Use:   "explain [term | decision-id]",
 		Short: "What a figure means, how it is measured, and how to read it",
 		Long: `explain says in plain words what a figure means: wall-clock, turns,
 rework, api-equivalent, signal quality and the rest. With no term it lists
 them all.
 
   tokenops explain wall-clock
-  tokenops explain "first-try rate"`,
+  tokenops explain "first-try rate"
+
+Given a decision's ID instead — a routing or optimization decision
+TokenOps recorded — it shows the evidence, the alternatives it weighed, the
+policy that applied and the result, as JSON.
+
+  tokenops explain decision:6f1c…`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			out := cmd.OutOrStdout()
@@ -34,10 +43,17 @@ them all.
 			}
 			t, ok, suggestions := glossary.Lookup(args[0])
 			if !ok {
-				if len(suggestions) > 0 {
-					return fmt.Errorf("no term %q; did you mean: %s", args[0], strings.Join(suggestions, ", "))
+				// Not a term, so perhaps a decision. A store that cannot
+				// be read matters only when the argument is plainly a
+				// decision's ID; a mistyped term deserves suggestions.
+				found, err := explainDecision(cmd, dbPath, args[0])
+				if found || (err != nil && strings.HasPrefix(args[0], "decision:")) {
+					return err
 				}
-				return fmt.Errorf("no term %q; `tokenops explain` lists them all", args[0])
+				if len(suggestions) > 0 {
+					return fmt.Errorf("no term or decision %q; did you mean: %s", args[0], strings.Join(suggestions, ", "))
+				}
+				return fmt.Errorf("no term or decision %q; `tokenops explain` lists the terms", args[0])
 			}
 			if jsonOut {
 				return json.NewEncoder(out).Encode(t)
@@ -47,6 +63,7 @@ them all.
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
+	cmd.Flags().StringVar(&dbPath, "db", "", "event store for decisions (defaults to the configured one)")
 	return cmd
 }
 
