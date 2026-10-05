@@ -286,3 +286,11 @@ func writeControlJSON(cmd *cobra.Command, value any) error {
 	enc.SetIndent("", "  ")
 	return enc.Encode(value)
 }
+
+// nonNilMap is m, or an empty map, so JSON prints {} rather than null.
+func nonNilMap[K comparable, V any](m map[K]V) map[K]V {
+	if m == nil {
+		return map[K]V{}
+	}
+	return m
+}
