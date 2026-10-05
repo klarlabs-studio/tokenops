@@ -42,7 +42,7 @@ we got round to.
 |---|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | Spend + token accounting | a local token log | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ⚠️ |
 | Ground truth + routing *enforcement* | a base-URL override | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
-| Routing *advice* (`tokenops_routing_advise`) | an MCP host | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Routing *advice* (`tokenops_routing (action=advise)`) | an MCP host | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Prompt + reply coaching | prompt text on disk | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Agent DX metrics (`dx`) | a transcript reader | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Work storytelling (`story`) | a reader **and** prompt text | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
@@ -78,8 +78,8 @@ because nothing of the session is reachable.
 What is left is the MCP surface, and on those clients it is the whole
 product. So it is the one that has to be genuinely good there: every
 question — spend, headroom, burn rate, forecast, the work account, the DX
-metrics, which model this turn should run on — is a tool call, and
-`tokenops_help` lists what the running server exposes. That is a real answer, just a smaller one than a client
+metrics, which model this turn should run on — is a call to one of the
+sixteen tools the server lists. That is a real answer, just a smaller one than a client
 whose session we can sit inside.
 
 Parity is not available on those clients and will not become available;
@@ -149,7 +149,7 @@ ready-to-copy example lives at
 
 The MCP surface is self-describing. An agent calls `tokenops_status` and gets
 back `signal_quality.level` plus `blockers[]` and `next_actions[]` — the exact
-commands to upgrade — and `tokenops_data_sources` reports which planes are live.
+commands to upgrade — and `tokenops_status (view=data_sources)` reports which planes are live.
 So an agent on a fresh install can tell you what to run to give it better data.
 
 ## Boundaries

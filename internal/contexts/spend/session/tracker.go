@@ -91,7 +91,7 @@ func (t *Tracker) Record(_ context.Context, opts Options, toolName string) {
 }
 
 // Counts returns a snapshot of per-tool invocation counts. Used by
-// tests and the future tokenops_session_budget tool for a sanity
+// tests and the future tokenops_glance (view=session_budget) tool for a sanity
 // check on activity level.
 func (t *Tracker) Counts() map[string]int64 {
 	if t == nil {

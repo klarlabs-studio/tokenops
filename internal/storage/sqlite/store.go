@@ -612,7 +612,7 @@ FROM events
 // optionally constrained to a since/until window. NULL sources are
 // returned under the "(none)" bucket so dashboards can distinguish
 // "real proxy traffic missing its label" from "MCP-session ping".
-// Used by tokenops_data_sources and `tokenops_status.data_sources`
+// Used by tokenops_status (view=data_sources) and `tokenops_status.data_sources`
 // so operators can inspect per-source ingestion coverage at a glance.
 func (s *Store) CountBySource(ctx context.Context, since, until time.Time) (map[string]int64, error) {
 	if s == nil || s.db == nil {

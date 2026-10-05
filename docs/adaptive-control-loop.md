@@ -65,7 +65,7 @@ utility policies are not pooled.
 
 ## Outcome Verification
 
-`tokenops verify` and `tokenops_verify` join outcome events to executions by
+`tokenops verify` and `tokenops_records (view=verify)` join outcome events to executions by
 execution ID, including outcomes recorded after the work ended. When a decision
 is supplied, CLI and MCP outcome recording copy its intervention and experiment
 IDs onto the outcome event, making the decision-to-intervention-to-outcome

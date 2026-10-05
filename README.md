@@ -64,8 +64,8 @@ the coach preset (`--preset observe|advise|guided|autopilot`; a new config
 gets `advise`).
 
 Then restart your MCP host and ask the agent for a compact resource view with
-`tokenops_resource_glance`, or use `tokenops_session_budget`,
-`tokenops_burn_rate`, and `tokenops_plan_headroom` individually.
+`tokenops_glance`, or use `tokenops_glance (view=session_budget)`,
+`tokenops_spend (view=burn)`, and `tokenops_glance (view=headroom)` individually.
 
 ## How the control loop works
 
@@ -208,7 +208,7 @@ the tools for working on TokenOps itself (`eval`, `coverage-debt`,
 
 Most CLI verbs have a matching MCP tool (`tokenops_<name>`). `fmt` is
 CLI-first (it wraps a shell command); its learning report is exposed to
-agents via `tokenops_fmt_learn`.
+agents via `tokenops_fmt (view=learn)`.
 
 ## Upgrading signal quality
 

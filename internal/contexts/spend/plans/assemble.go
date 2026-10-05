@@ -95,7 +95,7 @@ func SignalFromCounts(counts map[string]int64, provider string) SignalInputs {
 //
 // The terminal and the MCP tool used to assemble these separately, and
 // each dropped something the other had: `plan headroom` never read the
-// vendor's own window %, and `tokenops_plan_headroom` never read the
+// vendor's own window %, and `tokenops_glance (view=headroom)` never read the
 // Enterprise spend limit — so an agent was told no limit was configured
 // when one was. One assembly keeps them answering the same question.
 func AssembleHeadroomInputs(ctx context.Context, reader EventReader, counts SourceCounter, provider, planName string, lim SpendLimit, now time.Time) (HeadroomInputs, error) {

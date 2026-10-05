@@ -29,7 +29,7 @@ func TestSessionBudgetExplainsASpendBilledPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "tokenops_plan_headroom") {
+	if !strings.Contains(out, "tokenops_glance (view=headroom)") {
 		t.Errorf("empty budget with no pointer to the spend view:\n%s", out)
 	}
 	if !strings.Contains(out, "claude-enterprise") {
@@ -70,8 +70,8 @@ func TestPlanHintsNameTheMCPToolAndDropTheReload(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, hint := range map[string]string{"session_budget": budget, "plan_headroom": headroom.Hint} {
-		if !strings.Contains(hint, "tokenops_plan_set") {
-			t.Errorf("%s hint does not name tokenops_plan_set: %s", name, hint)
+		if !strings.Contains(hint, "tokenops_configure (setting=plan)") {
+			t.Errorf("%s hint does not name tokenops_configure (setting=plan): %s", name, hint)
 		}
 		if strings.Contains(hint, "reload your MCP server") {
 			t.Errorf("%s hint still asks for a reload: %s", name, hint)

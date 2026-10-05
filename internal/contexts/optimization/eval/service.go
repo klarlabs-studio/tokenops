@@ -8,7 +8,7 @@ import (
 )
 
 // RunParams bundles everything the harness needs to produce a report.
-// Both `tokenops eval` (CLI) and `tokenops_eval` (MCP) construct one of
+// `tokenops eval` constructs one of
 // these so the application logic — suite loading, pipeline build, suite
 // merge, gate evaluation — lives in this package, not in the adapters.
 type RunParams struct {

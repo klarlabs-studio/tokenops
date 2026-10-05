@@ -72,7 +72,6 @@ func TestCallerMistakesReachTheAgent(t *testing.T) {
 		{"tokenops_review_work", map[string]any{"workflow_id": ""}, "workflow_id is required"},
 		{"tokenops_prepare_work", map[string]any{"instruction": ""}, "instruction is required"},
 		{"tokenops_prepare_work", map[string]any{"instruction": "rename handler"}, "model is required"},
-		{"tokenops_replay", map[string]any{}, "provide session_id"},
 		{"tokenops_data_sources", map[string]any{"since": "whenever"}, ""},
 		{"tokenops_rules_analyze", map[string]any{"root": filepath.Join(dir, "absent")}, ""},
 		// Found by calling every tool over stdio with schema-minimal

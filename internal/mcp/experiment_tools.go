@@ -16,16 +16,16 @@ type ExperimentDeps struct{ Manager *experiments.Manager }
 
 type experimentInput struct {
 	Action            string                            `json:"action" jsonschema:"description=start | status | stop"`
-	ExperimentID      string                            `json:"experiment_id,omitempty"`
-	Provider          string                            `json:"provider,omitempty"`
-	BaselineModel     string                            `json:"baseline_model,omitempty"`
-	VariantModel      string                            `json:"variant_model,omitempty"`
-	MaxPairs          int                               `json:"max_pairs,omitempty"`
-	DurationDays      int                               `json:"duration_days,omitempty"`
-	ObjectiveMetric   string                            `json:"objective_metric,omitempty"`
-	MinImprovementPct float64                           `json:"min_improvement_pct,omitempty"`
-	Guardrails        []eventschema.ExperimentGuardrail `json:"guardrails,omitempty"`
-	Reason            string                            `json:"reason,omitempty"`
+	ExperimentID      string                            `json:"experiment_id,omitempty" jsonschema:"description=status and stop: the experiment, as start returned it"`
+	Provider          string                            `json:"provider,omitempty" jsonschema:"description=start: the provider whose traffic is split, e.g. anthropic"`
+	BaselineModel     string                            `json:"baseline_model,omitempty" jsonschema:"description=start: the model requests run on today"`
+	VariantModel      string                            `json:"variant_model,omitempty" jsonschema:"description=start: the model the trial compares against it"`
+	MaxPairs          int                               `json:"max_pairs,omitempty" jsonschema:"description=start: most paired requests before the trial ends"`
+	DurationDays      int                               `json:"duration_days,omitempty" jsonschema:"description=start: days the trial runs, at most 14"`
+	ObjectiveMetric   string                            `json:"objective_metric,omitempty" jsonschema:"enum=tokens,enum=plan_quota_tokens,enum=metered_cost_usd,enum=latency_ms,enum=attention_minutes,description=start: what the variant must improve"`
+	MinImprovementPct float64                           `json:"min_improvement_pct,omitempty" jsonschema:"description=start: improvement the variant must show to win, in percent (above 0, at most 100)"`
+	Guardrails        []eventschema.ExperimentGuardrail `json:"guardrails,omitempty" jsonschema:"description=start: at least one metric with the most regression it may show; quality must use 0"`
+	Reason            string                            `json:"reason,omitempty" jsonschema:"description=start and stop: why, for the record"`
 }
 
 type experimentResult struct {

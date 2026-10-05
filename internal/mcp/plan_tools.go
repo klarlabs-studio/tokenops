@@ -78,7 +78,7 @@ type (
 	sessionBudgetResult = headroom.BudgetPayload
 )
 
-// RegisterPlanTools mounts tokenops_plan_headroom on s. Returns an
+// RegisterPlanTools mounts tokenops_glance (view=headroom) on s. Returns an
 // error when deps are incomplete so callers can surface the
 // misconfiguration via the structured-error contract instead of a
 // silent zero-data response.
@@ -90,7 +90,7 @@ func RegisterPlanTools(s *Server, d PlanDeps) error {
 	// every tokenops_* invocation lands in the session counter, not
 	// just the two plan tools.
 	s.Tool("tokenops_session_budget").
-		Description("Predict the operator's rate-limit headroom for the current MCP session. Returns plan_name, window_consumed, window_pct, recent_rate_per_hour, will_hit_cap_within, headroom_until_cap, confidence (low|medium|high), and recommended_action (continue|slow_down|switch_model|wait_for_reset). Designed for Claude Code / Cursor agents to call before starting a long task. A plan with no rate-limit window (e.g. spend-billed claude-enterprise) has no session budget; it is explained in notes and its spend is in tokenops_plan_headroom.").
+		Description("Predict the operator's rate-limit headroom for the current MCP session. Returns plan_name, window_consumed, window_pct, recent_rate_per_hour, will_hit_cap_within, headroom_until_cap, confidence (low|medium|high), and recommended_action (continue|slow_down|switch_model|wait_for_reset). Designed for Claude Code / Cursor agents to call before starting a long task. A plan with no rate-limit window (e.g. spend-billed claude-enterprise) has no session budget; it is explained in notes and its spend is in tokenops_glance (view=headroom).").
 		Handler(func(ctx context.Context, _ emptyInput) (string, error) {
 			return sessionBudget(ctx, d)
 		})

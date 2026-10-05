@@ -29,7 +29,7 @@ func (d ApprovalDeps) configPath() (string, error) {
 }
 
 type routingDecideInput struct {
-	Key      string `json:"key" jsonschema:"description=Route identifier from tokenops_routing_proposals (provider|from_model|to_model)"`
+	Key      string `json:"key" jsonschema:"description=Route identifier from tokenops_routing (action=proposals) (provider|from_model|to_model)"`
 	Decision string `json:"decision" jsonschema:"enum=approve,enum=deny,description=approve routes future matching requests to the proposed model; deny keeps you on the model you already asked for"`
 }
 
@@ -53,7 +53,7 @@ func RegisterApprovalTools(s *Server, d ApprovalDeps) error {
 	}
 
 	s.Tool("tokenops_routing_proposals").
-		Description("List model upgrades the proxy refused because they exceed your preferred model. Each entry offers a real choice: take the proposed model, or stay on your preferred one. Call this when the operator asks why a model was not switched, and surface any pending entry to them — nothing applies until they answer via tokenops_routing_decide.").
+		Description("List model upgrades the proxy refused because they exceed your preferred model. Each entry offers a real choice: take the proposed model, or stay on your preferred one. Call this when the operator asks why a model was not switched, and surface any pending entry to them — nothing applies until they answer via tokenops_routing (action=decide).").
 		Handler(func(_ context.Context, _ emptyInput) (string, error) {
 			res, err := decisions.PendingProposals(d.StorePath)
 			if err != nil {
