@@ -291,7 +291,7 @@ func newHooksStatusCmd() *cobra.Command {
 	var settingsPath, client string
 	cmd := &cobra.Command{
 		Use:   "status",
-		Short: "Whether TokenOps is working: the daemon, its readers, what to fix",
+		Short: "Show which tokenops hooks are wired and the binary they call",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := validateHookClient(client); err != nil {

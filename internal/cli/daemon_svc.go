@@ -167,7 +167,7 @@ func newDaemonStatusCmd() *cobra.Command {
 	f := daemonFlags{}
 	cmd := &cobra.Command{
 		Use:   "status",
-		Short: "Whether TokenOps is working: the daemon, its readers, what to fix",
+		Short: "Show whether the supervised ingestion unit is installed",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			kind, bin, _, path, err := f.resolve()

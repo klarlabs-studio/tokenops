@@ -432,7 +432,7 @@ func newVendorUsageStatusCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "status",
-		Short: "Whether TokenOps is working: the daemon, its readers, what to fix",
+		Short: "Show configured vendor-usage sources and their recent event counts",
 		Long: `status reads ~/.config/tokenops/config.yaml plus the event store
 (~/.tokenops/events.db) and reports per-source state:
 

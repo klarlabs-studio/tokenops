@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 )
 
@@ -95,5 +97,27 @@ func TestDXAnswersFromTheDaemonsAnalysis(t *testing.T) {
 	}
 	if got := run("dx"); strings.Contains(got, "daemon's analysis") {
 		t.Errorf("a stale analysis was used:\n%s", got)
+	}
+}
+
+// A subcommand never carries a top-level command's description: a
+// `status` under `daemon` is not `tokenops status`.
+func TestSubcommandsKeepTheirOwnDescriptions(t *testing.T) {
+	root := NewRoot()
+	top := map[string]string{}
+	for _, c := range root.Commands() {
+		top[c.Short] = c.Name()
+	}
+	var walk func(*cobra.Command)
+	walk = func(c *cobra.Command) {
+		for _, sub := range c.Commands() {
+			if owner, ok := top[sub.Short]; ok {
+				t.Errorf("%s has %s's description %q", sub.CommandPath(), owner, sub.Short)
+			}
+			walk(sub)
+		}
+	}
+	for _, c := range root.Commands() {
+		walk(c)
 	}
 }
