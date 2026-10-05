@@ -266,6 +266,10 @@ func payloadOf(res any) (json.RawMessage, error) {
 		if json.Valid([]byte(s)) {
 			return json.RawMessage(s), nil
 		}
+		// A summary with its figures underneath: the figures are the answer.
+		if raw, ok := jsonFromMarkdownPayload(s); ok {
+			return raw, nil
+		}
 		return json.Marshal(map[string]string{"text": s})
 	}
 	return json.Marshal(res)
@@ -320,7 +324,7 @@ type recordsIn struct {
 	Until        string  `json:"until,omitempty" jsonschema:"description=optimizations and audit: RFC3339 time"`
 	WorkflowID   string  `json:"workflow_id,omitempty" jsonschema:"description=optimizations: one workflow. workflow: the workflow to trace (required)"`
 	AgentID      string  `json:"agent_id,omitempty" jsonschema:"description=optimizations: one agent"`
-	Limit        int     `json:"limit,omitempty" jsonschema:"description=optimizations and audit: most recent rows"`
+	Limit        int     `json:"limit,omitempty" jsonschema:"description=optimizations and audit: most recent rows (audit default 50)"`
 	Action       string  `json:"action,omitempty" jsonschema:"description=audit: one action, e.g. config_change"`
 	Actor        string  `json:"actor,omitempty" jsonschema:"description=audit: one actor, e.g. api"`
 	SinceDays    int     `json:"since_days,omitempty" jsonschema:"description=scorecard: window in days"`
@@ -351,6 +355,7 @@ type rulesIn struct {
 
 type fmtIn struct {
 	View       string `json:"view,omitempty" jsonschema:"enum=learn,enum=analyze,description=learn (default): which command outputs to compress next, and any over-compression. analyze: how much command output in past sessions could be compressed."`
+	Limit      int    `json:"limit,omitempty" jsonschema:"description=learn: most commands per list (default 20); the totals are always given"`
 	Root       string `json:"root,omitempty" jsonschema:"description=analyze: Claude Code projects directory (default ~/.claude/projects)"`
 	MaxFiles   int    `json:"max_files,omitempty" jsonschema:"description=analyze: most sessions to scan, newest first"`
 	RecoverDir string `json:"recover_dir,omitempty" jsonschema:"description=learn: recovery store (default ~/.tokenops/recovery)"`
@@ -595,7 +600,7 @@ func publicTools() []publicTool {
 			description: "How `tokenops fmt` is doing at compressing command output before the agent reads it: which commands to compress next and any over-compression, or how much output in past sessions could be compressed.",
 			selector:    "view", def: "learn", input: fmtIn{}, output: fmtOut{},
 			routes: map[string]route{
-				"learn":   {inner: "tokenops_fmt_learn", params: params("recover_dir", "no_jsonl")},
+				"learn":   {inner: "tokenops_fmt_learn", params: params("recover_dir", "no_jsonl", "limit")},
 				"analyze": {inner: "tokenops_fmt_analyze", params: params("root", "max_files")},
 			},
 		},

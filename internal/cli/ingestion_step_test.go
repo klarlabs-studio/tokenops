@@ -128,7 +128,7 @@ func TestInitNoWireStillTurnsOnLocalReaders(t *testing.T) {
 	cfgPath := filepath.Join(dir, "config.yaml")
 	var out bytes.Buffer
 	root := NewRoot()
-	root.SetArgs([]string{"init", "--config-path", cfgPath, "--storage-path", filepath.Join(dir, "events.db"), "--no-wire", "--currency", "EUR"})
+	root.SetArgs([]string{"init", "--config", cfgPath, "--storage-path", filepath.Join(dir, "events.db"), "--no-wire", "--currency", "EUR"})
 	root.SetOut(&out)
 	root.SetErr(&out)
 	if err := root.Execute(); err != nil {

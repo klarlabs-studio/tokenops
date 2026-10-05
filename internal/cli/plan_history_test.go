@@ -56,7 +56,7 @@ func TestPlanSetSinceRecordsHistoryAndRestamps(t *testing.T) {
 
 	since := billed.Add(-24 * time.Hour).Format("2006-01-02")
 	out := runPlanCmd(t, "set", "openai", "gpt-pro-5x", "--since", since,
-		"--config-path", cfgPath, "--db", dbPath, "--no-restart")
+		"--config", cfgPath, "--db", dbPath, "--no-restart")
 	if !strings.Contains(out, "re-marked 1 earlier call(s)") {
 		t.Fatalf("output: %s", out)
 	}
@@ -132,7 +132,7 @@ func TestPlanSetRecordsThePrice(t *testing.T) {
 		t.Fatal(err)
 	}
 	runPlanCmd(t, "set", "anthropic", "claude-max-20x", "--price", "214.60",
-		"--config-path", cfgPath, "--db", filepath.Join(dir, "events.db"), "--no-restart")
+		"--config", cfgPath, "--db", filepath.Join(dir, "events.db"), "--no-restart")
 	if hist := runPlanCmd(t, "history"); !strings.Contains(hist, "at 214.60 EUR/month") {
 		t.Errorf("plan history:\n%s", hist)
 	}
@@ -149,7 +149,7 @@ func TestInitRecordsTheCurrency(t *testing.T) {
 	run := func(args ...string) string {
 		var out bytes.Buffer
 		root := NewRoot()
-		root.SetArgs(append([]string{"init", "--config-path", cfgPath, "--storage-path", filepath.Join(dir, "events.db"), "--no-wire"}, args...))
+		root.SetArgs(append([]string{"init", "--config", cfgPath, "--storage-path", filepath.Join(dir, "events.db"), "--no-wire"}, args...))
 		root.SetOut(&out)
 		root.SetErr(&out)
 		if err := root.Execute(); err != nil {

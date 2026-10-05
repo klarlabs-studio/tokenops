@@ -117,8 +117,8 @@ findings (when --workflow is set), and a summary footer.`,
 		},
 	}
 	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db (defaults to config.storage.path)")
-	cmd.Flags().StringVar(&workflowID, "workflow", "", "filter by workflow id")
-	cmd.Flags().StringVar(&agentID, "agent", "", "filter by agent id")
+	cmd.Flags().StringVar(&workflowID, "workflow-id", "", "filter by workflow id")
+	cmd.Flags().StringVar(&agentID, "agent-id", "", "filter by agent id")
 	cmd.Flags().StringVar(&sinceFlag, "since", "", "lower bound: RFC3339 timestamp or duration like 24h")
 	cmd.Flags().StringVar(&untilFlag, "until", "", "upper bound (RFC3339 timestamp)")
 	cmd.Flags().IntVar(&limit, "limit", 1000, "max prompts to replay")

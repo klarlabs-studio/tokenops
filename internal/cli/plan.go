@@ -48,15 +48,14 @@ store. Subcommands:
 
 func newPlanSetCmd() *cobra.Command {
 	var (
-		configPathFlag string
-		noRestartFlag  bool
-		spendLimit     float64
-		limitWindow    string
-		rateFactor     float64
-		sinceFlag      string
-		dbFlag         string
-		priceFlag      float64
-		currencyFlag   string
+		noRestartFlag bool
+		spendLimit    float64
+		limitWindow   string
+		rateFactor    float64
+		sinceFlag     string
+		dbFlag        string
+		priceFlag     float64
+		currencyFlag  string
 	)
 	cmd := &cobra.Command{
 		Use:   "set <provider> <plan>",
@@ -86,7 +85,7 @@ US list price.`,
 			if err != nil {
 				return err
 			}
-			path, err := resolveMutableConfigPath(configPathFlag)
+			path, err := resolveMutableConfigPath(configFlag(cmd))
 			if err != nil {
 				return err
 			}
@@ -137,7 +136,6 @@ US list price.`,
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
 	cmd.Flags().StringVar(&sinceFlag, "since", "",
 		"date the plan took effect (2026-09-01); re-marks usage recorded as billed since then")
 	cmd.Flags().StringVar(&dbFlag, "db", "", "path to events.db (defaults to ~/.tokenops/events.db)")
@@ -155,8 +153,7 @@ US list price.`,
 
 func newPlanUnsetCmd() *cobra.Command {
 	var (
-		configPathFlag string
-		noRestartFlag  bool
+		noRestartFlag bool
 	)
 	cmd := &cobra.Command{
 		Use:   "unset <provider>",
@@ -164,7 +161,7 @@ func newPlanUnsetCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			provider := args[0]
-			path, err := resolveMutableConfigPath(configPathFlag)
+			path, err := resolveMutableConfigPath(configFlag(cmd))
 			if err != nil {
 				return err
 			}
@@ -195,7 +192,6 @@ func newPlanUnsetCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }
@@ -491,4 +487,13 @@ func friendlyDuration(d string) string {
 	default:
 		return fmt.Sprintf("%dm", mins)
 	}
+}
+
+// configFlag is the global --config, the one file every command reads
+// and writes; empty means the default path.
+func configFlag(cmd *cobra.Command) string {
+	if f := cmd.Flag("config"); f != nil {
+		return f.Value.String()
+	}
+	return ""
 }

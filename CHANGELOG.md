@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Fixed
+
+- **cli:** the global `-c/--config` now reaches every command that writes config. Commands that changed config read only their own `--config-path`, so `tokenops -c other.yaml plan set …` wrote to the default config while looking like it worked; `--config-path` and `fmt learn --config` are gone in favour of the one flag
+- **mcp:** responses are bounded and structured. `tokenops_fmt` (learn) returned 190 KB and the audit view 139 KB, past what a client accepts from one call; learn now lists the top 20 per list with totals (`limit` to change it) and the audit view defaults to the 50 newest entries. `tokenops_spend` burn and `tokenops_glance` session_budget came back as text; they return their figures
+
+### Changed
+
+- **cli:** every visible command has examples in its help, checked by a test that parses each one against the command tree. Identifier flags all end in `-id` (`--workflow-id`, `--agent-id`, `--session-id`, `--decision-id`); `scorecard --since-days` is `--days`; `verify --idle-gap` takes a duration like `story --idle-gap`
+- **mcp:** the server sends instructions and a title: which tool to reach for first, how to bracket a task, and which tools change settings and need the operator's say
+
 ### Changed
 
 - **mcp:** sixteen tools instead of fifty, each answering one question and picking its slice with a `view`, `action` or `setting`: `tokenops_glance`, `tokenops_spend`, `tokenops_sessions`, `tokenops_status`, `tokenops_explain`, `tokenops_records`, `tokenops_rules`, `tokenops_fmt`, `tokenops_pricing`, `tokenops_prepare_work`, `tokenops_review_work`, `tokenops_outcome`, `tokenops_routing`, `tokenops_configure`, `tokenops_coach` and `tokenops_experiment`. Every tool now has a title, annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), an output schema and a description for every parameter; a parameter that does not apply to the chosen view is refused with the ones that do. What an agent reads of the definitions — names, descriptions, input schemas — drops by about 40%. `tokenops_glance` gains the coach's findings as a view. The developer tools (`eval`, `replay`, `coverage_debt`, `rules_bench`) and `tokenops_help` left MCP; they remain CLI commands

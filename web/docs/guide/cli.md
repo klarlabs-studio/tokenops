@@ -355,8 +355,8 @@ JSONL `tool_use` + `tool_result` blocks. Returns `warming_up`
 with a 3-step activation checklist when no real data backs the KPIs.
 
 ```bash
-tokenops scorecard --since-days 30        # text table
-tokenops scorecard --since-days 30 --json # structured output
+tokenops scorecard --days 30        # text table
+tokenops scorecard --days 30 --json # structured output
 ```
 
 ### `tokenops task {start|done|list}`
@@ -725,7 +725,7 @@ read at scan time and is never persisted to the event store.**
 ```bash
 tokenops coach prompts --since 7d            # both Claude Code + Codex
 tokenops coach prompts --since 30d --json    # JSON for agent hosts
-tokenops coach prompts --session <id>        # restrict to one session
+tokenops coach prompts --session-id <id>        # restrict to one session
 ```
 
 Output leads with a **BIGGEST WIN** panel — the highest-impact
@@ -1107,11 +1107,11 @@ Replays past prompts through the optimizer pipeline.
 
 ```bash
 tokenops replay sess-abc123 --json
-tokenops replay --workflow research-summariser --since 24h
-tokenops replay --agent planner --since 7d --limit 200
+tokenops replay --workflow-id research-summariser --since 24h
+tokenops replay --agent-id planner --since 7d --limit 200
 ```
 
-Add `--workflow ID` to also run the waste detector against the
+Add `--workflow-id ID` to also run the waste detector against the
 reconstructed workflow trace.
 
 ## Rules + governance

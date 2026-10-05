@@ -42,7 +42,6 @@ var meterBaseURL string
 // flag cannot.
 func newVendorUsageSetupCmd() *cobra.Command {
 	var (
-		configPath    string
 		noRestartFlag bool
 		browser       string
 		paste         bool
@@ -70,7 +69,7 @@ the MCP server observes the updated config without a client restart.`,
 				return fmt.Errorf("setup currently covers claude-subscription only; got %q", args[0])
 			}
 			return runCookieSetup(cmd, cookieSetupOptions{
-				configPath:   configPath,
+				configPath:   configFlag(cmd),
 				restart:      !noRestartFlag,
 				browser:      browser,
 				paste:        paste,
@@ -79,7 +78,6 @@ the MCP server observes the updated config without a client restart.`,
 			})
 		},
 	}
-	cmd.Flags().StringVar(&configPath, "config-path", "", "override config file path")
 	cmd.Flags().StringVar(&browser, "browser", "",
 		"read the cookie from this browser instead of searching ("+strings.Join(browsercookie.Names(), ", ")+")")
 	cmd.Flags().BoolVar(&paste, "paste", false,

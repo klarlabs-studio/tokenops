@@ -27,7 +27,7 @@ func newVerifyCmd() *cobra.Command {
 		days         int
 		jsonOut      bool
 		dbPath       string
-		idleGap      string
+		idleGap      time.Duration
 		showEach     bool
 		experimentID string
 	)
@@ -68,7 +68,7 @@ for other work.`,
 	cmd.Flags().IntVar(&days, "days", 30, "window in days; 0 reads everything")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db (defaults to ~/.tokenops/events.db)")
-	cmd.Flags().StringVar(&idleGap, "idle-gap", "", "pause that starts a new attempt (default 10m)")
+	cmd.Flags().DurationVar(&idleGap, "idle-gap", 0, "pause that starts a new attempt (default 10m)")
 	cmd.Flags().BoolVar(&showEach, "each", false, "list every attempt, not only the comparison")
 	cmd.Flags().StringVar(&experimentID, "experiment-id", "", "compare one execution-linked randomized experiment; required when multiple trials are in the window")
 	return cmd
@@ -164,7 +164,7 @@ func writeVerifyText(out io.Writer, r verify.Report) {
 type verifyOptions struct {
 	days         int
 	dbPath       string
-	idleGap      string
+	idleGap      time.Duration
 	showEach     bool
 	experimentID string
 }
@@ -175,10 +175,7 @@ type verifyOptions struct {
 // MCP surface gets the same attempts, and the comparison so neither
 // surface can invent its own idea of what a cohort is.
 func runVerify(cmd *cobra.Command, opt verifyOptions) (verify.Report, error) {
-	gap, err := parseIdleGap(opt.idleGap)
-	if err != nil {
-		return verify.Report{}, err
-	}
+	gap := opt.idleGap
 
 	extract := agentdx.ExtractOptions{WithPromptText: true}
 	if opt.days > 0 {
@@ -243,16 +240,4 @@ func readVerifyEvents(cmd *cobra.Command, opt verifyOptions) ([]*eventschema.Env
 		filter.Since = time.Now().AddDate(0, 0, -opt.days)
 	}
 	return store.Query(ctx, filter)
-}
-
-// parseIdleGap reads the flag, defaulting to story's own gap.
-func parseIdleGap(s string) (time.Duration, error) {
-	if s == "" {
-		return 0, nil
-	}
-	d, err := time.ParseDuration(s)
-	if err != nil {
-		return 0, fmt.Errorf("--idle-gap: %w", err)
-	}
-	return d, nil
 }

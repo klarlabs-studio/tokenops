@@ -25,9 +25,8 @@ import (
 // newModeCmd reads or sets the operating mode.
 func newModeCmd() *cobra.Command {
 	var (
-		configPathFlag string
-		noRestartFlag  bool
-		jsonOut        bool
+		noRestartFlag bool
+		jsonOut       bool
 	)
 	cmd := &cobra.Command{
 		Use:   "mode [passive|active]",
@@ -42,7 +41,7 @@ Active mode does its work inside the daemon, so it is a no-op without one
 running.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path, err := resolveMutableConfigPath(configPathFlag)
+			path, err := resolveMutableConfigPath(configFlag(cmd))
 			if err != nil {
 				return err
 			}
@@ -76,7 +75,6 @@ running.`,
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "print the mode as JSON (the daemon API's GET /api/mode)")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
@@ -97,15 +95,14 @@ to cheaper models still apply on their own.`,
 
 func newPreferredModelListCmd() *cobra.Command {
 	var (
-		configPathFlag string
-		jsonOut        bool
+		jsonOut bool
 	)
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List the preferred model per provider",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			path, err := resolveMutableConfigPath(configPathFlag)
+			path, err := resolveMutableConfigPath(configFlag(cmd))
 			if err != nil {
 				return err
 			}
@@ -132,22 +129,20 @@ func newPreferredModelListCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
 }
 
 func newPreferredModelSetCmd() *cobra.Command {
 	var (
-		configPathFlag string
-		noRestartFlag  bool
+		noRestartFlag bool
 	)
 	cmd := &cobra.Command{
 		Use:   "set <provider> <model>",
 		Short: "Set the ceiling for a provider",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path, err := resolveMutableConfigPath(configPathFlag)
+			path, err := resolveMutableConfigPath(configFlag(cmd))
 			if err != nil {
 				return err
 			}
@@ -167,22 +162,20 @@ func newPreferredModelSetCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }
 
 func newPreferredModelUnsetCmd() *cobra.Command {
 	var (
-		configPathFlag string
-		noRestartFlag  bool
+		noRestartFlag bool
 	)
 	cmd := &cobra.Command{
 		Use:   "unset <provider>",
 		Short: "Remove a provider's ceiling",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path, err := resolveMutableConfigPath(configPathFlag)
+			path, err := resolveMutableConfigPath(configFlag(cmd))
 			if err != nil {
 				return err
 			}
@@ -203,7 +196,6 @@ func newPreferredModelUnsetCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }
@@ -284,15 +276,14 @@ func newRoutingRuleCmd() *cobra.Command {
 
 func newRoutingRuleListCmd() *cobra.Command {
 	var (
-		configPathFlag string
-		jsonOut        bool
+		jsonOut bool
 	)
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List configured routing rules",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			path, err := resolveMutableConfigPath(configPathFlag)
+			path, err := resolveMutableConfigPath(configFlag(cmd))
 			if err != nil {
 				return err
 			}
@@ -318,17 +309,15 @@ func newRoutingRuleListCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
 }
 
 func newRoutingRuleSetCmd() *cobra.Command {
 	var (
-		configPathFlag string
-		noRestartFlag  bool
-		quality        float64
-		fallbacks      []string
+		noRestartFlag bool
+		quality       float64
+		fallbacks     []string
 	)
 	cmd := &cobra.Command{
 		Use:   "set <provider> <from-model> <to-model>",
@@ -339,7 +328,7 @@ Rules show would-be savings in ` + "`tokenops replay`" + `; with mode=active the
 proxy rewrites matching live requests.`,
 		Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path, err := resolveMutableConfigPath(configPathFlag)
+			path, err := resolveMutableConfigPath(configFlag(cmd))
 			if err != nil {
 				return err
 			}
@@ -384,7 +373,6 @@ proxy rewrites matching live requests.`,
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
 	cmd.Flags().Float64Var(&quality, "quality", 0, "confidence (0-1] that the target preserves task quality")
 	cmd.Flags().StringSliceVar(&fallbacks, "fallback", nil, "fallback model if the target is unavailable (repeatable)")
 	addNoRestartFlag(cmd, &noRestartFlag)
@@ -393,15 +381,14 @@ proxy rewrites matching live requests.`,
 
 func newRoutingRuleUnsetCmd() *cobra.Command {
 	var (
-		configPathFlag string
-		noRestartFlag  bool
+		noRestartFlag bool
 	)
 	cmd := &cobra.Command{
 		Use:   "unset <provider> <from-model>",
 		Short: "Remove the routing rule matching provider + from-model",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path, err := resolveMutableConfigPath(configPathFlag)
+			path, err := resolveMutableConfigPath(configFlag(cmd))
 			if err != nil {
 				return err
 			}
@@ -431,7 +418,6 @@ func newRoutingRuleUnsetCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }

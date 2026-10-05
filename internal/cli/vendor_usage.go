@@ -43,7 +43,6 @@ type vendorUsageEnableFlags struct {
 	interval    time.Duration
 	disable     bool
 	noRestart   bool
-	configPath  string
 }
 
 // vendorUsageSources lists the keys accepted as the positional argument to
@@ -149,13 +148,12 @@ Where secrets end up:
 	cmd.Flags().StringVar(&f.root, "root", "", "filesystem root for jsonl readers (codex-jsonl, claude-code-jsonl); empty = default")
 	cmd.Flags().DurationVar(&f.interval, "interval", 0, "poll interval; zero keeps the existing or default")
 	cmd.Flags().BoolVar(&f.disable, "disable", false, "set enabled=false instead of true; clears no secrets")
-	cmd.Flags().StringVar(&f.configPath, "config-path", "", "override config file path")
 	addNoRestartFlag(cmd, &f.noRestart)
 	return cmd
 }
 
 func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnableFlags) error {
-	path, err := resolveMutableConfigPath(f.configPath)
+	path, err := resolveMutableConfigPath(configFlag(cmd))
 	if err != nil {
 		return err
 	}
