@@ -4,7 +4,7 @@ package config
 //
 // These moved out of the CLI so the MCP surface can answer the same
 // question. `vendor-usage status` was CLI-only, which meant an agent could
-// see event counts through tokenops_data_sources but could not tell whether
+// see event counts through tokenops_status (view=data_sources) but could not tell whether
 // a source was switched on, or what to switch on — the difference between
 // "no data" and "no data because nothing is configured".
 

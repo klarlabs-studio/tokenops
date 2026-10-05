@@ -84,7 +84,7 @@ first, then the team they will one day bring.
 | G2 | **Setup friction.** `npx ccusage` and a menu-bar download need nothing; TokenOps needs `init`, a daemon, choices | ccusage, CodexBar | High: first-run loss | Core. The agreed setup wizard |
 | G3 | **Gateway and admin caps in the statusline.** Claude Code now passes `rate_limits.spend_limit` [U]; we read the Enterprise limit from claude.ai instead | Anthropic | Medium, cheap | Core. One more vendor-reported reading |
 | G4 | **Outcome linkage: cost per commit and PR** | Anthropic, Faros, DX, Datadog, Codensics | Medium-high: the question finance asks | Core. Work model and outcomes exist; git linkage is local |
-| G5 | **In-session effect on harnesses without hooks.** governor ships rules files for Cursor, Codex, Gemini, Windsurf | governor | Medium | Partly there: `tokenops_rules_inject` exists but is not installed by default |
+| G5 | **In-session effect on harnesses without hooks.** governor ships rules files for Cursor, Codex, Gemini, Windsurf | governor | Medium | Partly there: `tokenops_rules (view=inject)` exists but is not installed by default |
 | G6 | **Local per-account budgets and router policy** | LiteLLM, Portkey, Cloudflare, Faros | Medium | Core. ADR 0009 phase 2 |
 | G7 | **Team view.** Rollups by team and repo, RBAC, SSO | All team products | High for the team buyer; low for solo users today | Decided: derived metrics only, hosted (2026-09-15). OTel export is a cheaper first bridge into stacks companies already run |
 | G8 | **Ambient GUI.** Menu bar, tray | CodexBar, ccseva, long tail | Low-medium: the statusline covers users inside a harness | Optional. The local API makes a thin client cheap |

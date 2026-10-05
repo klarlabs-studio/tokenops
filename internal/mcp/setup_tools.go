@@ -69,7 +69,7 @@ type meterSetupInput struct {
 // and a tool argument is written into the agent's transcript.
 const meterKeyEnv = "TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY"
 
-// RegisterSetupTools adds tokenops_plan_set and tokenops_vendor_usage_setup.
+// RegisterSetupTools adds tokenops_configure (setting=plan) and tokenops_configure (setting=usage_meter).
 func RegisterSetupTools(s *Server, d SetupDeps) error {
 	s.Tool("tokenops_plan_set").
 		Description("Bind a provider to a subscription plan (the MCP twin of `tokenops plan set`), or list the bindings and the recorded plan switches when provider is omitted. Pass since only when the user says they have been on the plan since that date: it re-marks usage recorded as billed since then as plan-covered. claude-enterprise is billed at API rates: its limit comes from the Claude usage meter when connected, otherwise pass spend_limit_usd. Restarts the supervised daemon so the change is live.").

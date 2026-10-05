@@ -9,17 +9,21 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
+	"go.klarlabs.de/tokenops/internal/mcp"
 	"go.klarlabs.de/tokenops/internal/proxy"
 )
 
 // ADR 0010: the daemon API is the read model for every surface that is not
-// an agent. Every MCP tool is accounted for here, in exactly one of three
-// lists, and the test checks each claim against the daemon's routes.
+// an agent. Every question an agent can ask — each view of each public MCP
+// tool, named by the tool that answers it — is accounted for here, in
+// exactly one of three lists, and the test checks each claim against the
+// daemon's routes.
 
 // apiRoute maps a tool to the route that answers the same question: a
 // path for a GET, or a method and a path.
 var apiRoute = map[string]string{
 	"tokenops_resource_glance":     "/api/glance",
+	"tokenops_findings":            "/api/findings",
 	"tokenops_plan_headroom":       "/api/plans/headroom",
 	"tokenops_session_budget":      "/api/plans/session-budget",
 	"tokenops_spend_summary":       "/api/spend/summary",
@@ -63,7 +67,6 @@ var apiPending = map[string]int{}
 // apiExempt are tools no non-agent surface needs, with the reason.
 var apiExempt = map[string]string{
 	"tokenops_version":        "served at /version, outside /api so probes need no credential",
-	"tokenops_help":           "the agent's own orientation",
 	"tokenops_explain":        "static glossary the client ships with",
 	"tokenops_prepare_work":   "agent handshake around a task",
 	"tokenops_review_work":    "agent handshake around a task",
@@ -71,10 +74,6 @@ var apiExempt = map[string]string{
 	"tokenops_outcome_detect": "reads the calling agent's transcript",
 	"tokenops_verify":         "experiment analysis run on demand by the operator's agent",
 	"tokenops_experiment":     "experiment enrolment through the agent",
-	"tokenops_eval":           "developer harness",
-	"tokenops_replay":         "developer harness",
-	"tokenops_rules_bench":    "developer harness",
-	"tokenops_coverage_debt":  "developer harness over a local cover profile",
 	"tokenops_fmt_analyze":    "operates on the agent's command output",
 	"tokenops_fmt_learn":      "operates on the agent's command output",
 	"tokenops_vendor_usage_setup": "connects a vendor login through the operator's browser and OS consent, " +
@@ -94,7 +93,7 @@ func TestEveryToolIsAccountedForInTheDaemonAPI(t *testing.T) {
 		proxy.WithActions(func() proxy.ActionDeps { return proxy.ActionDeps{} }),
 		proxy.WithDashAuth(passAuth{}),
 	)
-	tools := mcpToolNames(t)
+	tools := answeringTools(t)
 	names := make([]string, 0, len(tools))
 	for name := range tools {
 		names = append(names, name)
@@ -121,6 +120,23 @@ func TestEveryToolIsAccountedForInTheDaemonAPI(t *testing.T) {
 			}
 		}
 	}
+}
+
+// answeringTools are the registered tools behind the public ones: every
+// view an agent can ask for, which is what the API must also answer.
+func answeringTools(t *testing.T) map[string]bool {
+	t.Helper()
+	public := mcpToolNames(t)
+	out := map[string]bool{}
+	for tool, inner := range mcp.PublicRoutes() {
+		if !public[tool] {
+			continue
+		}
+		for _, name := range inner {
+			out[name] = true
+		}
+	}
+	return out
 }
 
 func btoi(b bool) int {

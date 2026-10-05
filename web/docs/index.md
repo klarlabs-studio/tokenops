@@ -32,8 +32,8 @@ in a report you open the following week.
 |---|---|
 | The same file read three times in one turn | `read-guard` refuses the third read before it costs a token — Claude Code and opencode, the two clients whose hooks can decline one |
 | A 40k-token command output heading for the context window | `tokenops fmt` compresses it to the part the agent needs |
-| The plan window minutes from a cutoff | `tokenops_session_budget` returns `wait_for_reset`; the agent parks the work |
-| A frontier model closing work a cheap one would close | `tokenops_routing_advise` decides per turn from task class and window pressure — no rules table, and it recommends rather than rewrites |
+| The plan window minutes from a cutoff | `tokenops_glance (view=session_budget)` returns `wait_for_reset`; the agent parks the work |
+| A frontier model closing work a cheap one would close | `tokenops_routing (action=advise)` decides per turn from task class and window pressure — no rules table, and it recommends rather than rewrites |
 | Cumulative session cost crossing a budget fraction | `coach-hook` nudges mid-session — a Stop hook on Claude Code, Codex and Cursor, a TUI toast on opencode |
 
 ## What your sessions actually look like
@@ -154,7 +154,7 @@ action enum, calibrated confidence:
 
 ```json
 {
-  "tool": "tokenops_session_budget",
+  "tool": "tokenops_glance (view=session_budget)",
   "response": {
     "headroom_pct": 62,
     "window_resets_in": "1h41m",

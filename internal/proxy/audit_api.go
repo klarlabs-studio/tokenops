@@ -12,7 +12,7 @@ import (
 
 // AuditHandlers exposes a read-only audit query surface. Daemons wire
 // it once the store opens; the CLI's `tokenops audit` and the MCP
-// `tokenops_audit` tool already query the same store directly, so
+// `tokenops_records (view=audit)` tool already query the same store directly, so
 // /api/audit completes the parity triangle.
 type AuditHandlers struct {
 	rec *audit.Recorder

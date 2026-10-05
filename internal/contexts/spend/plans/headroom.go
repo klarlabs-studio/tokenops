@@ -8,7 +8,7 @@ import (
 
 // HeadroomReport summarises a single plan's monthly consumption. It is
 // the canonical wire shape for the `tokenops plan` CLI surface and the
-// `tokenops_plan_headroom` MCP tool.
+// `tokenops_glance (view=headroom)` MCP tool.
 type HeadroomReport struct {
 	PlanName       string  `json:"plan_name"`
 	Display        string  `json:"display"`

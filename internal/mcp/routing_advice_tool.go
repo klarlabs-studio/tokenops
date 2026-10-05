@@ -175,7 +175,7 @@ func routingAdvice(ctx context.Context, in routingAdviceInput, d RoutingAdviceDe
 		out.Recommendation, out.Model, out.Quality = "switch", adv.Model, adv.Quality
 	}
 	if !known {
-		out.Note = "the plan's rate-limit window is not being measured, so conserving cannot be justified — check the plan binding (tokenops_plan_set, or `tokenops plan set`) and that the daemon is ingesting"
+		out.Note = "the plan's rate-limit window is not being measured, so conserving cannot be justified — check the plan binding (tokenops_configure (setting=plan), or `tokenops plan set`) and that the daemon is ingesting"
 	}
 
 	authority := decide.RoutingAuthority(*cfg)

@@ -16,8 +16,8 @@ import (
 )
 
 // The settings below were reachable from an agent and not from a terminal.
-// tokenops_mode, tokenops_preferred_model, tokenops_budget_set and
-// tokenops_routing_rule_set all write config.yaml through the MCP server,
+// tokenops_configure (setting mode, preferred_model or budget) and
+// tokenops_routing (action=set_rule) all write config.yaml through the MCP server,
 // while `tokenops config` could only print. An operator wanting any of them
 // had to hand-edit YAML — the tool was easier to drive by asking an agent
 // than by using it.
@@ -354,7 +354,7 @@ proxy rewrites matching live requests.`,
 				Quality:   quality,
 				Fallbacks: fallbacks,
 			}
-			// The same check tokenops_routing_rule_set runs, before the
+			// The same check tokenops_routing (action=set_rule) runs, before the
 			// file is touched, so the refusal names the argument rather
 			// than an index into config.yaml.
 			if err := rule.Validate(); err != nil {

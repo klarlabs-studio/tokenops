@@ -92,10 +92,10 @@ func sessionBudget(ctx context.Context, r Reader, provider, planName string, p p
 func windowlessPlanNote(provider, planName string, p plans.Plan) string {
 	if p.SpendDenominated {
 		return fmt.Sprintf("%s: %s is billed by spend and has no rate-limit window, so there is no session budget; "+
-			"call tokenops_plan_headroom for spend against the limit", provider, planName)
+			"call tokenops_glance (view=headroom) for spend against the limit", provider, planName)
 	}
 	return fmt.Sprintf("%s: %s has no rolling rate-limit window, so there is no session budget; "+
-		"call tokenops_plan_headroom for month-to-date consumption", provider, planName)
+		"call tokenops_glance (view=headroom) for month-to-date consumption", provider, planName)
 }
 
 // Glance is one compact view of resource pressure: the session budgets,

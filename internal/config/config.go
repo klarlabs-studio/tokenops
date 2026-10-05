@@ -293,7 +293,7 @@ func (w WatchConfig) EffectiveInterval() time.Duration {
 }
 
 // CoachingConfig tunes the waste detector behind `tokenops replay
-// --workflow`, the tokenops_workflow_trace MCP tool, and the dashboard
+// --workflow`, the tokenops_records (view=workflow) MCP tool, and the dashboard
 // workflow view.
 type CoachingConfig struct {
 	// Delivery selects how far coaching goes. It is a ladder graded by
@@ -476,7 +476,7 @@ func (c CoachingConfig) WasteConfig() waste.Config {
 }
 
 // OptimizerConfig tunes the optimizer pipeline shared by `tokenops
-// replay` and the `tokenops_replay` MCP tool.
+// replay` and the “tokenops replay“ MCP tool.
 type OptimizerConfig struct {
 	// Mode says what the optimizer may do with a request: "automatic"
 	// rewrites it in flight, "in_request" refers the decision to you
@@ -575,7 +575,7 @@ type RoutingRuleConfig struct {
 }
 
 // Validate checks one rule on its own, so the surfaces that write a rule
-// (`tokenops routing rule set`, tokenops_routing_rule_set) can refuse it
+// (`tokenops routing rule set`, tokenops_routing (action=set_rule)) can refuse it
 // before touching the file and name the argument that was wrong. Checked
 // only at whole-config write time, the refusal pointed at
 // "optimizer.routing_rules[3]" — an index into a file the caller never

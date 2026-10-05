@@ -28,7 +28,7 @@ type coachPromptsInput struct {
 	Limit     int    `json:"limit,omitempty"`
 }
 
-// RegisterCoachTools mounts tokenops_coach_prompts on s. The tool
+// RegisterCoachTools mounts tokenops_sessions (view=prompts) on s. The tool
 // returns a JSON Findings rollup an agent host can render or feed
 // back into prompt-tuning workflows.
 func RegisterCoachTools(s *Server, d CoachDeps) error {
