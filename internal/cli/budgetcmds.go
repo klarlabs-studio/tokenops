@@ -30,7 +30,10 @@ to watch the API list-price value the subscription absorbed.`,
 }
 
 func newBudgetListCmd() *cobra.Command {
-	var configPathFlag string
+	var (
+		configPathFlag string
+		jsonOut        bool
+	)
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List configured budgets",
@@ -43,6 +46,13 @@ func newBudgetListCmd() *cobra.Command {
 			cfg, err := readMutableConfig(path)
 			if err != nil {
 				return err
+			}
+			if jsonOut {
+				budgets := cfg.Budgets
+				if budgets == nil {
+					budgets = budgets[:0]
+				}
+				return writeControlJSON(cmd, budgets)
 			}
 			out := cmd.OutOrStdout()
 			if len(cfg.Budgets) == 0 {
@@ -64,6 +74,7 @@ func newBudgetListCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
 }
 
@@ -177,6 +188,7 @@ func newBudgetUnsetCmd() *cobra.Command {
 // newOptimizationsCmd lists optimization recommendations from the store.
 func newOptimizationsCmd() *cobra.Command {
 	var (
+		jsonOut    bool
 		dbPath     string
 		since      string
 		limit      int
@@ -216,6 +228,12 @@ func newOptimizationsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if jsonOut {
+				if events == nil {
+					events = events[:0]
+				}
+				return writeControlJSON(cmd, events)
+			}
 			out := cmd.OutOrStdout()
 			if len(events) == 0 {
 				fmt.Fprintln(out, "no optimizations recorded in that window")
@@ -233,5 +251,6 @@ func newOptimizationsCmd() *cobra.Command {
 	cmd.Flags().IntVar(&limit, "limit", 50, "max rows")
 	cmd.Flags().StringVar(&workflowID, "workflow-id", "", "filter to one workflow")
 	cmd.Flags().StringVar(&agentID, "agent-id", "", "filter to one agent")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit the events as JSON")
 	return cmd
 }

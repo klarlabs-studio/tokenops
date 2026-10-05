@@ -40,7 +40,10 @@ manual file edit. Subcommands:
 }
 
 func newProviderListCmd() *cobra.Command {
-	var configPathFlag string
+	var (
+		configPathFlag string
+		jsonOut        bool
+	)
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List providers configured in config.yaml",
@@ -53,6 +56,13 @@ func newProviderListCmd() *cobra.Command {
 			cfg, err := readMutableConfig(path)
 			if err != nil {
 				return err
+			}
+			if jsonOut {
+				presets := make([]map[string]string, 0, len(providers.All()))
+				for _, p := range providers.All() {
+					presets = append(presets, map[string]string{"id": string(p.ID), "default_base_url": p.DefaultBaseURL})
+				}
+				return writeControlJSON(cmd, map[string]any{"overrides": nonNilMap(cfg.Providers), "presets": presets})
 			}
 			out := cmd.OutOrStdout()
 			if len(cfg.Providers) == 0 {
@@ -80,6 +90,7 @@ func newProviderListCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&configPathFlag, "config-path", "", "override config file path")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
 }
 

@@ -222,9 +222,10 @@ func newPricingShowCmd() *cobra.Command {
 
 func newPricingDiffCmd() *cobra.Command {
 	var (
-		from string
-		to   string
-		dir  string
+		from    string
+		to      string
+		dir     string
+		jsonOut bool
 	)
 	cmd := &cobra.Command{
 		Use:   "diff",
@@ -238,6 +239,15 @@ func newPricingDiffCmd() *cobra.Command {
 			newSnap, err := pricing.FindSnapshot(dir, to)
 			if err != nil {
 				return fmt.Errorf("--to %q: %w", to, err)
+			}
+			if jsonOut {
+				changes := pricing.Diff(oldSnap, newSnap)
+				if changes == nil {
+					changes = changes[:0]
+				}
+				return writeControlJSON(cmd, map[string]any{
+					"from": oldSnap.FetchedAt, "to": newSnap.FetchedAt, "changes": changes,
+				})
 			}
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "%s (%s)  →  %s (%s)\n",
@@ -266,6 +276,7 @@ func newPricingDiffCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&from, "from", "baseline", "old snapshot: baseline | latest | <RFC3339 timestamp>")
 	cmd.Flags().StringVar(&to, "to", "latest", "new snapshot: latest | baseline | <RFC3339 timestamp>")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	cmd.Flags().StringVar(&dir, "dir", "", "pricing state dir (default: ~/.tokenops/pricing)")
 	return cmd
 }
@@ -274,6 +285,7 @@ func newPricingLintCmd() *cobra.Command {
 	var (
 		snapshot string
 		dir      string
+		jsonOut  bool
 	)
 	cmd := &cobra.Command{
 		Use:   "lint",
@@ -292,6 +304,19 @@ latest, falling back to the baseline.`,
 			}
 			out := cmd.OutOrStdout()
 			anomalies := pricing.Check(snap)
+			if jsonOut {
+				found := make([]string, 0, len(anomalies))
+				for _, a := range anomalies {
+					found = append(found, a.String())
+				}
+				if err := writeControlJSON(cmd, map[string]any{"models": len(snap.Rates), "source": snap.Source, "fetched_at": snap.FetchedAt, "anomalies": found}); err != nil {
+					return err
+				}
+				if len(anomalies) > 0 {
+					return fmt.Errorf("pricing lint: %d anomaly(ies) found", len(anomalies))
+				}
+				return nil
+			}
 			if len(anomalies) == 0 {
 				fmt.Fprintf(out, "OK — %d models, no consistency anomalies (%s @ %s).\n",
 					len(snap.Rates), snap.Source, snap.FetchedAt.Format(time.RFC3339))
@@ -306,6 +331,7 @@ latest, falling back to the baseline.`,
 		},
 	}
 	cmd.Flags().StringVar(&snapshot, "snapshot", "latest", "snapshot selector: latest | baseline | <RFC3339 timestamp>")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	cmd.Flags().StringVar(&dir, "dir", "", "pricing state dir (default: ~/.tokenops/pricing)")
 	return cmd
 }

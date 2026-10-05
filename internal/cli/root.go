@@ -8,6 +8,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"go.klarlabs.de/tokenops/internal/version"
 )
 
 // rootFlags holds the common flags inherited by every subcommand. They are
@@ -45,6 +47,8 @@ func NewRoot() *cobra.Command {
 			return nil
 		},
 	}
+	// --version prints what `tokenops version` does.
+	cmd.Version = version.String()
 	cmd.SetVersionTemplate("{{.Name}} {{.Version}}\n")
 
 	cmd.PersistentFlags().StringVarP(&rf.configPath, "config", "c", "", "path to config.yaml")
