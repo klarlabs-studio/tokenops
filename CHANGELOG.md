@@ -2,34 +2,27 @@
 
 ## Unreleased
 
-### Fixed
-
-- **cli:** the global `-c/--config` now reaches every command that writes config. Commands that changed config read only their own `--config-path`, so `tokenops -c other.yaml plan set …` wrote to the default config while looking like it worked; `--config-path` and `fmt learn --config` are gone in favour of the one flag
-- **mcp:** responses are bounded and structured. `tokenops_fmt` (learn) returned 190 KB and the audit view 139 KB, past what a client accepts from one call; learn now lists the top 20 per list with totals (`limit` to change it) and the audit view defaults to the 50 newest entries. `tokenops_spend` burn and `tokenops_glance` session_budget came back as text; they return their figures
-
-### Changed
-
-- **cli:** every visible command has examples in its help, checked by a test that parses each one against the command tree. Identifier flags all end in `-id` (`--workflow-id`, `--agent-id`, `--session-id`, `--decision-id`); `scorecard --since-days` is `--days`; `verify --idle-gap` takes a duration like `story --idle-gap`
-- **mcp:** the server sends instructions and a title: which tool to reach for first, how to bracket a task, and which tools change settings and need the operator's say
-
-### Changed
-
-- **mcp:** sixteen tools instead of fifty, each answering one question and picking its slice with a `view`, `action` or `setting`: `tokenops_glance`, `tokenops_spend`, `tokenops_sessions`, `tokenops_status`, `tokenops_explain`, `tokenops_records`, `tokenops_rules`, `tokenops_fmt`, `tokenops_pricing`, `tokenops_prepare_work`, `tokenops_review_work`, `tokenops_outcome`, `tokenops_routing`, `tokenops_configure`, `tokenops_coach` and `tokenops_experiment`. Every tool now has a title, annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), an output schema and a description for every parameter; a parameter that does not apply to the chosen view is refused with the ones that do. What an agent reads of the definitions — names, descriptions, input schemas — drops by about 40%. `tokenops_glance` gains the coach's findings as a view. The developer tools (`eval`, `replay`, `coverage_debt`, `rules_bench`) and `tokenops_help` left MCP; they remain CLI commands
-
-### Changed
-
-- **cli:** `tokenops --help` groups commands by what you are doing (every day, set up, coach and routing, look closer), most used first, with a short start-here guide; every command's one-line description is rewritten in plain words. The hooks other programs call, the MCP server, the daemon's foreground process and TokenOps' own development tools are left out of the list but run as before, and the daemon overrides (`--listen`, `--tls`, …) are named once instead of under every command
-- **cli:** `tokenops coach stats` replaces `coach-hook stats` and `read-guard stats`: both ledgers in one view (`--json` gives `budget` and `read_guard`). `tokenops explain` answers a decision's ID as well as a term, and `decision explain` is gone. The hook entry points (`coach-hook hook`, `read-guard hook`, `route-guard hook`) are unchanged, so installed hooks keep working
-- **cli:** `tokenops --version`, and `--json` on every command that reads: `mode` (the API's `GET /api/mode`), `plan list` and `plan catalog`, `budget list`, `provider list`, `preferred-model list`, `routing proposals` and `routing rule list`, `daemon status`, `hooks status`, `pricing diff` and `pricing lint`, `optimizations`, `version`. A test holds every new read command to it
-- **dx:** `tokenops dx` answers the default week from the daemon's background analysis when it is under six hours old — in under a second instead of minutes; `--fresh` reads the transcripts now
+## 0.98.0 - 2026-10-05
 
 ### Added
 
 - **menubar:** the menu bar shows the icon alone, its ring filled to the busiest window; a click opens the panel with every plan's details, hovering lists each window's share and reset, and a right click has Refresh, Launch at Login and Quit
 - **menubar:** the menu bar app ships in the macOS release and the Homebrew cask; `tokenops menubar` installs it to `~/Applications` and opens it, and upgrades refresh it. It is ad hoc signed, not notarized; the cask clears its quarantine flag as it does the CLI's
 
+### Changed
+
+- **cli:** every visible command has examples in its help, checked by a test that parses each one against the command tree. Identifier flags all end in `-id` (`--workflow-id`, `--agent-id`, `--session-id`, `--decision-id`); `scorecard --since-days` is `--days`; `verify --idle-gap` takes a duration like `story --idle-gap`
+- **mcp:** the server sends instructions and a title: which tool to reach for first, how to bracket a task, and which tools change settings and need the operator's say
+- **mcp:** sixteen tools instead of fifty, each answering one question and picking its slice with a `view`, `action` or `setting`: `tokenops_glance`, `tokenops_spend`, `tokenops_sessions`, `tokenops_status`, `tokenops_explain`, `tokenops_records`, `tokenops_rules`, `tokenops_fmt`, `tokenops_pricing`, `tokenops_prepare_work`, `tokenops_review_work`, `tokenops_outcome`, `tokenops_routing`, `tokenops_configure`, `tokenops_coach` and `tokenops_experiment`. Every tool now has a title, annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), an output schema and a description for every parameter; a parameter that does not apply to the chosen view is refused with the ones that do. What an agent reads of the definitions — names, descriptions, input schemas — drops by about 40%. `tokenops_glance` gains the coach's findings as a view. The developer tools (`eval`, `replay`, `coverage_debt`, `rules_bench`) and `tokenops_help` left MCP; they remain CLI commands
+- **cli:** `tokenops --help` groups commands by what you are doing (every day, set up, coach and routing, look closer), most used first, with a short start-here guide; every command's one-line description is rewritten in plain words. The hooks other programs call, the MCP server, the daemon's foreground process and TokenOps' own development tools are left out of the list but run as before, and the daemon overrides (`--listen`, `--tls`, …) are named once instead of under every command
+- **cli:** `tokenops coach stats` replaces `coach-hook stats` and `read-guard stats`: both ledgers in one view (`--json` gives `budget` and `read_guard`). `tokenops explain` answers a decision's ID as well as a term, and `decision explain` is gone. The hook entry points (`coach-hook hook`, `read-guard hook`, `route-guard hook`) are unchanged, so installed hooks keep working
+- **cli:** `tokenops --version`, and `--json` on every command that reads: `mode` (the API's `GET /api/mode`), `plan list` and `plan catalog`, `budget list`, `provider list`, `preferred-model list`, `routing proposals` and `routing rule list`, `daemon status`, `hooks status`, `pricing diff` and `pricing lint`, `optimizations`, `version`. A test holds every new read command to it
+- **dx:** `tokenops dx` answers the default week from the daemon's background analysis when it is under six hours old — in under a second instead of minutes; `--fresh` reads the transcripts now
+
 ### Fixed
 
+- **cli:** the global `-c/--config` now reaches every command that writes config. Commands that changed config read only their own `--config-path`, so `tokenops -c other.yaml plan set …` wrote to the default config while looking like it worked; `--config-path` and `fmt learn --config` are gone in favour of the one flag
+- **mcp:** responses are bounded and structured. `tokenops_fmt` (learn) returned 190 KB and the audit view 139 KB, past what a client accepts from one call; learn now lists the top 20 per list with totals (`limit` to change it) and the audit view defaults to the 50 newest entries. `tokenops_spend` burn and `tokenops_glance` session_budget came back as text; they return their figures
 - **menubar:** the icon appears at once instead of after the first daemon read, which on a busy machine could take minutes
 
 ## 0.97.0 - 2026-10-04
