@@ -9,6 +9,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodeoauth"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudestatusline"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexappserver"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -35,7 +36,10 @@ var liveSources = map[eventschema.Provider][]struct{ source, key string }{
 		{claudestatusline.SourceTag, "granularity"},
 		{claudecodeoauth.SourceTag, "five_hour_used_pct"},
 	},
-	eventschema.ProviderOpenAI: {{codexjsonl.SourceTag, "primary_used_pct"}},
+	eventschema.ProviderOpenAI: {
+		{codexjsonl.SourceTag, "primary_used_pct"},
+		{codexappserver.SourceTag, "primary_used_pct"},
+	},
 }
 
 // LiveWindow returns the most constrained window of the flat-rate plan

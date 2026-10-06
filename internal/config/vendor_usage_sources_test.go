@@ -45,6 +45,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"cursor_web", "cursor-web"},
 		{"claude_subscription", "claude-usage-meter"},
 		{"claude_code_oauth", "claude-code-oauth"},
+		{"codex_app_server", "codex-app-server"},
 		{"fireworks", "fireworks-usage"},
 		{"openrouter_account", "openrouter-account"},
 		{"deepseek_account", "deepseek-account"},

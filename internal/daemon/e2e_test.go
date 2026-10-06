@@ -39,6 +39,7 @@ func TestE2EDaemonBootHealthShutdown(t *testing.T) {
 	if err := os.WriteFile(legacyPath, legacyRecord, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	off := false
 	cfg := config.Config{
 		Listen: net.JoinHostPort("127.0.0.1", port),
 		Log:    config.LogConfig{Level: "info", Format: "text"},
@@ -46,7 +47,10 @@ func TestE2EDaemonBootHealthShutdown(t *testing.T) {
 			Enabled: true,
 			Path:    filepath.Join(dir, "events.db"),
 		},
-		Shutdown: config.ShutdownConfig{Timeout: 2 * time.Second},
+		// A daemon test must not ask the developer's real Codex for its
+		// plan, which would reach OpenAI.
+		VendorUsage: config.VendorUsageConfig{CodexAppServer: config.CodexAppServerConfig{Enabled: &off}},
+		Shutdown:    config.ShutdownConfig{Timeout: 2 * time.Second},
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)

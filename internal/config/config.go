@@ -849,6 +849,7 @@ type VendorUsageConfig struct {
 	Cursor           CursorUsageConfig          `yaml:"cursor"`
 	ClaudeUsageMeter ClaudeUsageMeterConfig     `yaml:"claude_usage_meter"`
 	ClaudeCodeOAuth  ClaudeCodeOAuthConfig      `yaml:"claude_code_oauth"`
+	CodexAppServer   CodexAppServerConfig       `yaml:"codex_app_server"`
 	Fireworks        FireworksUsageConfig       `yaml:"fireworks"`
 	Accounts         AccountsUsageConfig        `yaml:"accounts"`
 }
@@ -941,6 +942,19 @@ type ClaudeUsageMeterConfig struct {
 
 // BrowserNone keeps the claude.ai meter from ever reading a browser.
 const BrowserNone = "none"
+
+// CodexAppServerConfig asks Codex for its plan windows through `codex
+// app-server` (ADR 0011): Codex signs its own request, so TokenOps reads no
+// credential. On unless Enabled is false, and idle when no codex binary is
+// found. Path overrides where codex is; Interval defaults to 15 minutes.
+type CodexAppServerConfig struct {
+	Enabled  *bool         `yaml:"enabled,omitempty"`
+	Path     string        `yaml:"path,omitempty"`
+	Interval time.Duration `yaml:"interval,omitempty"`
+}
+
+// On reports whether the source runs.
+func (c CodexAppServerConfig) On() bool { return c.Enabled == nil || *c.Enabled }
 
 // ClaudeCodeOAuthConfig reads Claude's plan windows with Claude Code's own
 // sign-in (ADR 0011, opt-in). The token belongs to Claude Code: it is read

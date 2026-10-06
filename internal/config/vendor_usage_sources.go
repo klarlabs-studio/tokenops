@@ -47,6 +47,7 @@ func (c Config) VendorUsageSources() []VendorUsageSource {
 		{Name: "cursor_web", SourceTag: "cursor-web", Enabled: c.VendorUsage.Cursor.Enabled},
 		{Name: "claude_subscription", SourceTag: "claude-usage-meter", Enabled: c.VendorUsage.ClaudeUsageMeter.Enabled},
 		{Name: "claude_code_oauth", SourceTag: "claude-code-oauth", Enabled: c.VendorUsage.ClaudeCodeOAuth.Enabled},
+		{Name: "codex_app_server", SourceTag: "codex-app-server", AlwaysOn: c.VendorUsage.CodexAppServer.On()},
 		// Fireworks' reader is on unless switched off and reads only when
 		// a Fireworks key is on the machine, so like the hook ledger it is
 		// always on rather than enabled: it is no ingestion source, and a
