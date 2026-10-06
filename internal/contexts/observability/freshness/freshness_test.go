@@ -362,3 +362,38 @@ func TestALongStoppedReaderStillReachesCritical(t *testing.T) {
 		t.Errorf("severity = %q, want critical", r.Severity)
 	}
 }
+
+// A poller refused on every attempt since its last event is failing,
+// however many events the window still holds from before. Observed on
+// 2026-10-06: claude.ai expired the session, the meter was refused every
+// five minutes for 20 hours, and the source reported healthy on the
+// strength of the previous day's readings.
+func TestARefusedPollerOutranksEventsFromBefore(t *testing.T) {
+	r := only(t, freshness.Assess(inputs(func(in *freshness.Inputs) {
+		in.LastEventAt["claude_usage_meter"] = ago(20 * time.Hour)
+		in.Polls = map[string]freshness.Poll{"claude_usage_meter": {
+			LastAttemptAt: ago(time.Minute),
+			LastError:     errors.New("403 account_session_invalid"),
+			LastErrorAt:   ago(time.Minute),
+		}}
+	})))
+	if r.State != freshness.StateFailing || r.Severity == freshness.SeverityOK {
+		t.Errorf("state %q severity %q, want failing", r.State, r.Severity)
+	}
+}
+
+// One refused poll after recent success is a blip, not an outage: the
+// next poll decides.
+func TestASingleRefusalAfterRecentSuccessIsNotFailing(t *testing.T) {
+	r := only(t, freshness.Assess(inputs(func(in *freshness.Inputs) {
+		in.Polls = map[string]freshness.Poll{"claude_usage_meter": {
+			LastAttemptAt: ago(time.Minute),
+			LastSuccessAt: ago(6 * time.Minute),
+			LastError:     errors.New("timeout"),
+			LastErrorAt:   ago(time.Minute),
+		}}
+	})))
+	if r.State != freshness.StateHealthy {
+		t.Errorf("state %q, want healthy", r.State)
+	}
+}

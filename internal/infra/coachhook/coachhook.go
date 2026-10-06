@@ -70,6 +70,14 @@ type Config struct {
 	// QuotaTiers are the window shares to speak at. Empty uses
 	// DefaultQuotaTiers.
 	QuotaTiers []float64
+	// FlatPlan says the session's provider is on a flat-rate plan. Its
+	// dollar figure is then a counterfactual nobody pays, so the coach
+	// never speaks the dollar ladder there, with or without a Quota.
+	FlatPlan bool
+	// ReadingLost, on a flat-rate plan with no live Quota, says why the
+	// plan's window cannot be read and what brings it back. Empty when
+	// nothing is known (the meter was never set up): the coach is silent.
+	ReadingLost string
 	// Verbosity is how much the coach says (ADR 0006): quiet speaks only
 	// when work is about to stop, verbose explains; empty is normal.
 	Verbosity string
@@ -192,6 +200,9 @@ type Decision struct {
 	// QuotaTier is the share of the plan's quota window this Stop spoke
 	// at (0.75 = 75%). Zero when no quota tier fired.
 	QuotaTier float64
+	// ReadingLost is true when this Stop said the plan's window cannot be
+	// read.
+	ReadingLost bool
 	// UnpricedModel names a model this session ran on that the rate card
 	// does not know, empty when everything was priceable.
 	//
@@ -295,6 +306,8 @@ type ledgerEvent struct {
 	QuotaWindow  string  `json:"quota_window,omitempty"`
 	QuotaUsedPct float64 `json:"quota_used_pct,omitempty"`
 	QuotaTier    float64 `json:"quota_tier,omitempty"`
+	// ReadingLost records that this Stop said the plan reading is lost.
+	ReadingLost bool `json:"reading_lost,omitempty"`
 }
 
 // EvaluateCursor is Evaluate for a Cursor stop event, which carries the
@@ -337,15 +350,18 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 
 	dec := Decision{CumulativeUSD: st.CumulativeUSD, BudgetUSD: budget, UnpricedModel: unpriced}
 	fired := 0.0
-	if cfg.Quota == nil {
+	switch {
+	case cfg.Quota != nil:
+		evaluateQuota(dir, &dec, &st, cfg, model, contextTokens, now)
+	case cfg.FlatPlan:
+		evaluateReadingLost(dir, &dec, &st, cfg, now)
+	default:
 		fired = highestBoundary(frac, st.MaxFiredFraction, cfg)
 		if cfg.Verbosity == verbosityQuiet && fired < 1.0-fracEpsilon {
 			// Quiet speaks about money only once the budget is spent.
 			// Left unlatched, so a louder setting still hears it.
 			fired = 0
 		}
-	} else {
-		evaluateQuota(dir, &dec, &st, cfg, model, contextTokens, now)
 	}
 	if cfg.Enabled && fired > 0 {
 		reason, retry := cfg.hold(budgetKind(fired), &st, now)
@@ -415,6 +431,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		Suppressed: dec.Suppressed, Promotion: dec.Promotion, Compact: dec.CompactTip,
 		Unpriced:    dec.UnpricedModel,
 		QuotaWindow: quotaLabel(cfg.Quota), QuotaUsedPct: quotaUsed(cfg.Quota), QuotaTier: dec.QuotaTier,
+		ReadingLost: dec.ReadingLost,
 	})
 	return dec
 }

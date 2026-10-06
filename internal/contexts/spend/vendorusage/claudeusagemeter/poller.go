@@ -184,7 +184,7 @@ func (p *Poller) scan(ctx context.Context) {
 		if err != nil {
 			p.recordErr(err)
 			if errors.Is(err, ErrUnauthorized) {
-				p.opts.Logger.Warn("claude-usage-meter: cookie expired, re-paste from devtools", "err", err)
+				p.opts.Logger.Warn("claude-usage-meter: the claude.ai session has expired and the browser had no newer one", "err", err)
 				return
 			}
 			p.opts.Logger.Warn("claude-usage-meter: organizations lookup failed", "err", err)
@@ -205,7 +205,7 @@ func (p *Poller) scan(ctx context.Context) {
 			return
 		}
 		if errors.Is(err, ErrUnauthorized) {
-			p.opts.Logger.Warn("claude-usage-meter: cookie expired, re-paste from devtools", "err", err)
+			p.opts.Logger.Warn("claude-usage-meter: the claude.ai session has expired and the browser had no newer one", "err", err)
 			return
 		}
 		p.opts.Logger.Warn("claude-usage-meter: Usage() failed", "err", err)

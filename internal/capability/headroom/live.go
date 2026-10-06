@@ -70,3 +70,19 @@ func LiveWindows(ctx context.Context, cfg config.Config, r AttributeReader, prov
 	}
 	return plans.QuotaWindowsFromAttributes(provider, plans.MergeReadings(newest))
 }
+
+// LastReadingAt is when provider's newest window reading was recorded, at
+// any age. ok is false when there has never been one: a meter never set
+// up, as against one that has stopped.
+func LastReadingAt(ctx context.Context, r AttributeReader, provider eventschema.Provider) (time.Time, bool) {
+	if r == nil {
+		return time.Time{}, false
+	}
+	var newest time.Time
+	for _, s := range liveSources[provider] {
+		if _, at, ok, err := r.LatestAttributesBySource(ctx, s.source, s.key, time.Time{}); err == nil && ok && at.After(newest) {
+			newest = at
+		}
+	}
+	return newest, !newest.IsZero()
+}

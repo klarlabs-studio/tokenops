@@ -263,12 +263,39 @@ func assessOne(s Source, in Inputs, window time.Duration, now time.Time) Report 
 	return r
 }
 
+// refusedAfter is how long a poller must have gone without success, and
+// without an event, before a run of refusals counts as failing rather
+// than a blip the next poll will clear.
+const refusedAfter = 15 * time.Minute
+
+// refusedFor is how long the poller has been refused without a success or
+// an event in between; zero when its last attempt succeeded.
+func refusedFor(p Poll, lastEvent time.Time) time.Duration {
+	if p.LastError == nil || p.LastErrorAt.IsZero() {
+		return 0
+	}
+	since := lastEvent
+	if p.LastSuccessAt.After(since) {
+		since = p.LastSuccessAt
+	}
+	if since.IsZero() || !p.LastErrorAt.After(since) {
+		return 0
+	}
+	return p.LastErrorAt.Sub(since)
+}
+
 // stateOf applies the three facts in the order that makes each one
 // meaningful.
 func stateOf(r Report, origin Origin, hasOrigin bool, poll Poll, hasPoll bool, window time.Duration, now time.Time) State {
 	// A reader that exited outranks everything else, including events
 	// inside the window: those are from before it died.
 	if r.ReaderStopped {
+		return StateFailing
+	}
+	// So does a reader refused on every poll for a while: the events in
+	// the window are from before, and the surfaces built on them would
+	// go on showing a reading that has stopped being true.
+	if hasPoll && refusedFor(poll, r.LastEventAt) >= refusedAfter {
 		return StateFailing
 	}
 	if r.EventsInWindow > 0 {

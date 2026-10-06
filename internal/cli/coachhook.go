@@ -84,8 +84,14 @@ cost of the new turns — cache-read is the dominant, most reclaimable part, and
 it compounds every turn you carry a large context — and, as the session's
 cumulative spend crosses fractions of a per-session budget (default $50),
 surfaces graduated, non-blocking nudges to /compact or start a fresh session. It
-works for clients that never route through the tokenops proxy (e.g. Claude Code
-on a subscription), because it acts inside the client.
+works for clients that never route through the tokenops proxy, because it acts
+inside the client.
+
+On a flat-rate plan (Claude Max, ChatGPT Pro) dollars are a counterfactual
+nobody pays, so the coach speaks the plan's live window instead: its share
+used, its pace and when it resets. When that reading is lost (an expired
+claude.ai session, a daemon not reading), it says so once every few hours
+across sessions, with how to get it back, and never falls back to dollars.
 
 Unlike a flat per-turn threshold, a cumulative budget catches the long, flat
 sessions where no single turn looks extreme but thousands of turns compound into
@@ -105,13 +111,13 @@ much your sessions have spent and which budget alerts fired.`,
 			cfg.Promotion = promotionNudge(rf, guardDir)
 			cfg.Rates = datedRates(rf)
 			cfg.Verbosity = coachVerbosity(rf)
-			quota := func(context.Context, eventschema.Provider, time.Time) *coachhook.Quota { return nil }
+			plan := func(context.Context, eventschema.Provider, time.Time) planReading { return planReading{} }
 			if loaded, err := loadConfig(rf); err == nil {
-				quota = func(ctx context.Context, p eventschema.Provider, now time.Time) *coachhook.Quota {
-					return liveQuota(ctx, loaded, p, now)
+				plan = func(ctx context.Context, p eventschema.Provider, now time.Time) planReading {
+					return readPlan(ctx, loaded, p, now)
 				}
 			}
-			return runCoachHook(cmd, dir, cfg, quota)
+			return runCoachHook(cmd, dir, cfg, plan)
 		},
 	}
 	cmd.Flags().Float64Var(&budget, "budget", coachhook.DefaultBudgetUSD, "per-session API-equivalent USD budget the alert fractions measure against")
@@ -125,7 +131,7 @@ much your sessions have spent and which budget alerts fired.`,
 // Errors never disrupt the session — a coach must fail open. On nudge it writes
 // {systemMessage, suppressOutput:true}; on no-nudge or any error it exits 0
 // with no stdout.
-func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, quota func(context.Context, eventschema.Provider, time.Time) *coachhook.Quota) error {
+func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, plan func(context.Context, eventschema.Provider, time.Time) planReading) error {
 	body, err := io.ReadAll(cmd.InOrStdin())
 	if err != nil {
 		return nil // fail open
@@ -145,8 +151,9 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, quota fu
 		return quieted(config.PowerInform, kind)
 	}
 	provider, known := hookProvider(in, in.isCursorPayload(), in.HookEventName == "session.idle")
-	if known && quota != nil {
-		cfg.Quota = quota(cmd.Context(), provider, now)
+	if known && plan != nil {
+		r := plan(cmd.Context(), provider, now)
+		cfg.Quota, cfg.FlatPlan, cfg.ReadingLost = r.Quota, r.Flat, r.Lost
 	}
 	if known && cfg.CompactAtTokens == 0 {
 		cfg.CompactAtTokens = compactTipAt(provider)

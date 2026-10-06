@@ -3,6 +3,7 @@ package claudeusagemeter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -150,6 +151,32 @@ func TestClient401MapsToErrUnauthorized(t *testing.T) {
 	c.BaseURL = srv.URL
 	if _, err := c.Organizations(context.Background()); err != ErrUnauthorized {
 		t.Errorf("want ErrUnauthorized; got %v", err)
+	}
+}
+
+// claude.ai answers an expired session with a 403 permission_error, not a
+// 401 (observed 2026-10-06). It is the same remedy, so it is the same
+// error, and the poller refreshes the session from the browser for it.
+// Any other 403 stays a plain error.
+func TestClientExpiredSession403MapsToErrUnauthorized(t *testing.T) {
+	for body, want := range map[string]bool{
+		`{"type":"error","error":{"type":"permission_error","message":"Invalid authorization","details":{"error_code":"account_session_invalid"}}}`: true,
+		`{"type":"error","error":{"type":"permission_error","message":"not a member of this organization"}}`:                                        false,
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(403)
+			_, _ = w.Write([]byte(body))
+		}))
+		c := NewClient("expired")
+		c.BaseURL = srv.URL
+		_, err := c.Usage(context.Background(), "org")
+		srv.Close()
+		if got := errors.Is(err, ErrUnauthorized); got != want {
+			t.Errorf("%s: ErrUnauthorized = %v, want %v (err %v)", body, got, want, err)
+		}
+		if want && !refusedRequest(err) {
+			t.Error("an expired session does not trigger a refresh from the browser")
+		}
 	}
 }
 
