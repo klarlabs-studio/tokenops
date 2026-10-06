@@ -30,7 +30,7 @@ func TestRenderPlain(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("lines %q", got)
 	}
-	for _, part := range []string{"Opus 5.5 high", "▰▰▰▰▱▱ 5h 62% ↻14:10", "wk 41% ↻Mon", "ctx 71% → 80%", "cache 95%", "€3.12 value"} {
+	for _, part := range []string{"Opus 5.5 high", "▰▰▱▱▱▱ 5h 38% left ↻14:10", "wk 59% left ↻Mon", "ctx 71% → 80%", "cache 95%", "€3.12 value"} {
 		if !strings.Contains(got[0], part) {
 			t.Errorf("line %q lacks %q", got[0], part)
 		}
@@ -48,8 +48,8 @@ func TestRenderColoursFollowTheLimit(t *testing.T) {
 	in.Color = true
 	in.Windows = []Window{{Label: "5h", UsedPct: 85}}
 	line := Render(in)[0]
-	if !strings.Contains(line, dangerFg+"85%") {
-		t.Errorf("85%% is not danger-coloured: %q", line)
+	if !strings.Contains(line, dangerFg+"15% left") {
+		t.Errorf("85%% used is not danger-coloured: %q", line)
 	}
 	if !strings.Contains(line, cobaltFg+"Opus 5.5") {
 		t.Error("the model is not in the Klarlabs accent")

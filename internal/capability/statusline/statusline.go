@@ -102,6 +102,15 @@ func (p painter) bar(pct float64, width int) string {
 	return p.paint(level(pct), strings.Repeat("▰", filled)) + p.paint(line, strings.Repeat("▱", width-filled))
 }
 
+// leftBar draws the share left of a plan window used pct, coloured by
+// pct, as the menu bar and the cards do. Context stays a used gauge: it
+// is filled, not spent.
+func (p painter) leftBar(pct float64, width int) string {
+	filled := int((100-pct)/100*float64(width) + 0.5)
+	filled = max(0, min(width, filled))
+	return p.paint(level(pct), strings.Repeat("▰", filled)) + p.paint(line, strings.Repeat("▱", width-filled))
+}
+
 // Render returns the line, and a second one when the coach has a tip.
 func Render(in Input) []string {
 	p := painter(in.Color)
@@ -116,7 +125,7 @@ func Render(in Input) []string {
 		parts = append(parts, m)
 	}
 	if w, ok := tightest(in.Windows); ok {
-		s := p.bar(w.UsedPct, 6) + " " + window(p, w, in.Now)
+		s := p.leftBar(w.UsedPct, 6) + " " + window(p, w, in.Now)
 		for _, o := range in.Windows {
 			if o.Label != w.Label {
 				s += sep + window(p, o, in.Now)
@@ -173,7 +182,7 @@ func tightest(ws []Window) (Window, bool) {
 }
 
 func window(p painter, w Window, now time.Time) string {
-	s := p.paint(muted, w.Label+" ") + p.paint(level(w.UsedPct), fmt.Sprintf("%.0f%%", w.UsedPct))
+	s := p.paint(muted, w.Label+" ") + p.paint(level(w.UsedPct), fmt.Sprintf("%.0f%% left", max(0, 100-w.UsedPct)))
 	if !w.ResetsAt.IsZero() && w.ResetsAt.After(now) {
 		s += p.paint(muted, " ↻"+resetIn(w.ResetsAt, now))
 	}

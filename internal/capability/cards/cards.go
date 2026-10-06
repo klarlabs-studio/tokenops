@@ -126,14 +126,15 @@ func blend(pct float64) rgb {
 	return mix(warnC, dangerC, (t-0.6)/0.4)
 }
 
-// bar draws pct across width cells. In true colour the cells are solid
-// blocks of background colour, each filled one taking the gradient's
-// colour at its own position, so a fuller bar reads hotter; elsewhere a
-// heavy rule for the used part and a light one for the rest.
+// bar draws the share of a window left across width cells, coloured by
+// the share used (pct), so a shorter bar reads hotter. In true colour the
+// cells are solid blocks of background colour; elsewhere a heavy rule for
+// what is left and a light one for what is used.
 func (p painter) bar(pct float64, width int) string {
-	filled := max(0, min(width, int(pct/100*float64(width)+0.5)))
-	if pct > 0 && filled == 0 {
-		filled = 1 // a window in use never looks empty
+	remaining := 100 - pct
+	filled := max(0, min(width, int(remaining/100*float64(width)+0.5)))
+	if remaining > 0 && filled == 0 {
+		filled = 1 // a window with anything left never looks empty
 	}
 	var b strings.Builder
 	switch Color(p) {
@@ -141,7 +142,7 @@ func (p painter) bar(pct float64, width int) string {
 		for i := range width {
 			c := track
 			if i < filled {
-				c = blend(float64(i+1) / float64(width) * 100)
+				c = blend(pct)
 			}
 			fmt.Fprintf(&b, "\x1b[48;2;%d;%d;%dm \x1b[0m", c.r, c.g, c.b)
 		}
@@ -414,7 +415,7 @@ func (p painter) card(r plans.HeadroomReport, cost *spending.ProviderCost, late 
 		if i > 0 {
 			out = append(out, side(""))
 		}
-		used := p.paint(levelColor(m.pct), fmt.Sprintf("%.0f%% used", m.pct))
+		used := p.paint(levelColor(m.pct), fmt.Sprintf("%.0f%% left", math.Max(0, 100-m.pct)))
 		out = append(out, side(spread(p.paint(porcelain, clip(m.title, inner-10)), used)))
 		out = append(out, side(p.paint(line, "[ ")+p.bar(m.pct, inner-4)+p.paint(line, " ]")))
 		if m.reset != "" {
@@ -557,7 +558,7 @@ func brief(reports []plans.HeadroomReport, opt Options, p painter) string {
 	}
 	planW = min(planW, max(12, opt.Width-50))
 	var b strings.Builder
-	head := fmt.Sprintf("%-*s  %-16s %5s  %-8s  %s", planW, "PLAN", "WINDOW", "USED", "RESETS", "PACE")
+	head := fmt.Sprintf("%-*s  %-16s %5s  %-8s  %s", planW, "PLAN", "WINDOW", "LEFT", "RESETS", "PACE")
 	b.WriteString(p.paint(muted, head) + "\n")
 	for _, r := range reports {
 		name := clip(vendor(r)+" "+planName(r), planW)
@@ -572,7 +573,7 @@ func brief(reports []plans.HeadroomReport, opt Options, p painter) string {
 			if i > 0 {
 				name = ""
 			}
-			used := p.paint(levelColor(m.pct), fmt.Sprintf("%4.0f%%", m.pct))
+			used := p.paint(levelColor(m.pct), fmt.Sprintf("%4.0f%%", math.Max(0, 100-m.pct)))
 			pace, tone := briefPace(m.pace)
 			fmt.Fprintf(&b, "%-*s  %-16s %s  %-8s  %s\n", planW, name, clip(m.title, 16), used, m.reset, p.paint(tone, pace))
 		}
