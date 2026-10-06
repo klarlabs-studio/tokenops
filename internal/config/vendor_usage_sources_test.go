@@ -44,6 +44,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"github_copilot", "github-copilot"},
 		{"cursor_web", "cursor-web"},
 		{"claude_subscription", "claude-usage-meter"},
+		{"claude_code_oauth", "claude-code-oauth"},
 		{"fireworks", "fireworks-usage"},
 		{"openrouter_account", "openrouter-account"},
 		{"deepseek_account", "deepseek-account"},

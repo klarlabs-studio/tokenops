@@ -43,6 +43,7 @@ type VendorWindow struct {
 // line, Codex's rollouts), so an old reading from it is idle, not stopped.
 var PolledSources = map[string]time.Duration{
 	"claude-usage-meter": 30 * time.Minute,
+	"claude-code-oauth":  30 * time.Minute,
 }
 
 // stamp marks every window with the reading it came from.
@@ -148,7 +149,7 @@ func newestPerWindow(newest map[string]*eventschema.Envelope, parse func(map[str
 
 // ClaudeWindowSources are the sources that report Claude's plan windows:
 // the claude.ai usage meter and Claude Code's status line.
-var ClaudeWindowSources = []string{"claude-usage-meter", "claude-code-statusline"}
+var ClaudeWindowSources = []string{"claude-usage-meter", "claude-code-statusline", "claude-code-oauth"}
 
 // MergeReadings overlays the newest reading of each source, oldest first,
 // so where two sources report the same window the newer figure wins, and

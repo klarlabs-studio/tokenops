@@ -397,6 +397,13 @@ func (c *Client) Usage(ctx context.Context, orgID string) (*UsageResponse, error
 	if err != nil {
 		return nil, err
 	}
+	return ParseUsage(body)
+}
+
+// ParseUsage reads a usage snapshot in the shape claude.ai's /usage and
+// Anthropic's OAuth usage endpoint share, dropping blocks it cannot read
+// rather than reading them as zeros.
+func ParseUsage(body []byte) (*UsageResponse, error) {
 	var u UsageResponse
 	if err := json.Unmarshal(body, &u); err != nil {
 		return nil, fmt.Errorf("claude-usage-meter: decode usage: %w", err)

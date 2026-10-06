@@ -16,6 +16,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecode"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodeoauth"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudestatusline"
 	claudeusagemeter "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
@@ -29,6 +30,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
+	"go.klarlabs.de/tokenops/internal/version"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -117,6 +119,16 @@ func startVendorUsagePollers(
 		})
 		sup.Go("claude-usage-meter", p.Run)
 		logger.Info("claude-usage-meter usage poller live", "interval", cfg.VendorUsage.ClaudeUsageMeter.Interval)
+	}
+	if oc := cfg.VendorUsage.ClaudeCodeOAuth; oc.Enabled {
+		home, _ := os.UserHomeDir()
+		p := claudecodeoauth.NewPoller(bus, claudecodeoauth.PollerOptions{
+			Stores:   claudecodeoauth.Stores(home, oc.Keychain),
+			Client:   claudecodeoauth.Client{UserAgent: "tokenops/" + version.Version},
+			Interval: oc.Interval, Health: sourceHealth.For(claudecodeoauth.SourceTag), Logger: logger,
+		})
+		sup.Go(claudecodeoauth.SourceTag, p.Run)
+		logger.Info("claude-code-oauth usage poller live", "keychain", oc.Keychain)
 	}
 	if cfg.VendorUsage.Anthropic.Enabled {
 		client := anthropic.NewAdminClient(cfg.VendorUsage.Anthropic.AdminKey)

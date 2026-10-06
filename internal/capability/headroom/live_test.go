@@ -44,9 +44,9 @@ func TestLiveWindowPicksTheMostConstrained(t *testing.T) {
 	if !ok || w.Label != "weekly" || w.UsedPct != 81 {
 		t.Fatalf("LiveWindow = %+v, %v; want the 81%% weekly window", w, ok)
 	}
-	if len(r.sources) != 2 || r.sources[0] != "claude-usage-meter" || r.sources[1] != "claude-code-statusline" ||
+	if len(r.sources) != 3 || r.sources[0] != "claude-usage-meter" || r.sources[1] != "claude-code-statusline" || r.sources[2] != "claude-code-oauth" ||
 		now.Sub(r.since) != headroom.LiveFreshness {
-		t.Errorf("read %q since %v; want the claude.ai meter and the status line within the freshness bound", r.sources, now.Sub(r.since))
+		t.Errorf("read %q since %v; want the claude.ai meter, the status line and Claude Code's sign-in within the freshness bound", r.sources, now.Sub(r.since))
 	}
 }
 
