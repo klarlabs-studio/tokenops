@@ -544,3 +544,28 @@ func TestContextLimitPerStepGrowthMapsAndValidates(t *testing.T) {
 		t.Fatal("negative per-step growth limit accepted")
 	}
 }
+
+func TestOTelSignalDefaults(t *testing.T) {
+	off := false
+	for _, tc := range []struct {
+		cfg             OTelConfig
+		metrics, events bool
+	}{
+		{OTelConfig{}, false, false},
+		{OTelConfig{Enabled: true}, true, false},
+		{OTelConfig{Enabled: true, Events: true}, true, true},
+		{OTelConfig{Enabled: true, Metrics: &off, Events: true}, false, true},
+	} {
+		if tc.cfg.MetricsEnabled() != tc.metrics || tc.cfg.EventsEnabled() != tc.events {
+			t.Errorf("%+v: metrics %v events %v", tc.cfg, tc.cfg.MetricsEnabled(), tc.cfg.EventsEnabled())
+		}
+	}
+}
+
+func TestOTelIntervalMustNotBeNegative(t *testing.T) {
+	c := Default()
+	c.OTel.Interval = -time.Second
+	if err := c.Validate(); err == nil {
+		t.Error("a negative otel.interval validated")
+	}
+}

@@ -83,7 +83,7 @@ func initializeEventRuntime(
 	}
 
 	sinks := []events.Sink{rt.Store}
-	if cfg.OTel.Enabled {
+	if cfg.OTel.EventsEnabled() {
 		expOpts := otlp.Options{
 			Endpoint: cfg.OTel.Endpoint, Headers: cfg.OTel.Headers,
 			ServiceName: cfg.OTel.ServiceName, ServiceVersion: cfg.OTel.ServiceVersion,
@@ -100,6 +100,8 @@ func initializeEventRuntime(
 		sinks = append(sinks, exporter)
 		logger.Info("otlp exporter ready", "endpoint", cfg.OTel.Endpoint, "redact", cfg.OTel.RedactEnabled())
 	}
+
+	startOTelMetricsRuntime(cfg, rt.Store, components.Spend, sup, logger)
 
 	// Plan stamping ensures all sources inherit the plan_included contract.
 	rt.Bus = events.NewAsync(newPlanStampSink(events.NewMultiSink(sinks...), cfg), events.Options{
