@@ -131,8 +131,14 @@ know the rest.
 ## 90 seconds, three commands
 
 Want to see what a week of your agents' work cost and where it leaked
-first? `tokenops checkup` reads it straight from the transcripts, with no
-setup and nothing sent anywhere. Then:
+first? One command, nothing to install first:
+
+```bash
+npx tokenops checkup
+```
+
+It reads the week straight from the transcripts, with no setup and nothing
+sent anywhere. Then:
 
 ```bash
 brew trust klarlabs-studio/tap              # first time only

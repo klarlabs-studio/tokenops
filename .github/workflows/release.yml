@@ -133,3 +133,72 @@ jobs:
           # The "Check the tap credential" step above asserts this resolves
           # and authenticates before goreleaser publishes anything.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+  # npm is a delivery channel only: `npx tokenops checkup` with no other
+  # install. The wrapper `tokenops` launches the binary from one of four
+  # platform packages, and those are unpacked from THIS release's archives,
+  # so npm ships byte for byte what GitHub and Homebrew ship.
+  #
+  # Auth: the NPM_TOKEN secret until each of the five packages has a
+  # trusted publisher on npmjs (repo klarlabs-studio/tokenops, workflow
+  # release.yml). Then delete the NODE_AUTH_TOKEN lines: setup-node's
+  # registry-url makes npm use OIDC (warden learned the details, see its
+  # release.yml). --provenance needs id-token either way.
+  npm:
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+      - name: Unpack the release's binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          gh release download "$GITHUB_REF_NAME" -p "tokenops_${version}_*.tar.gz" -D release-archives
+          for f in release-archives/*.tar.gz; do
+            target=$(basename "$f" .tar.gz)
+            dir="npm-dist/tokenops_${target#"tokenops_${version}_"}"
+            mkdir -p "$dir"
+            tar -xzf "$f" -C "$dir" tokenops
+          done
+          ls npm-dist
+      - name: Assemble npm packages
+        run: node npm/scripts/build-packages.mjs "${GITHUB_REF_NAME#v}" npm-dist npm/packages
+      # npm versions are immutable, so a re-driven release would fail here on
+      # versions it already published. A version already on the registry is
+      # skipped; any other failure (auth, network) still fails the step.
+      - name: Publish platform packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          for d in npm/packages/*/; do
+            name=$(node -p "require('./$d/package.json').name")
+            version=$(node -p "require('./$d/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "::notice::$name@$version already published; skipping."
+              continue
+            fi
+            ( cd "$d" && npm publish --provenance --access public )
+          done
+      - name: Publish the wrapper
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          name=$(node -p "require('./npm/package.json').name")
+          version=$(node -p "require('./npm/package.json').version")
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "::notice::$name@$version already published; skipping."
+            exit 0
+          fi
+          cd npm && npm publish --provenance --access public
