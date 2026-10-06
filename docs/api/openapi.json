@@ -1678,6 +1678,9 @@
                                     },
                                     "used_pct": {
                                       "type": "number"
+                                    },
+                                    "vendor_label": {
+                                      "type": "string"
                                     }
                                   },
                                   "type": "object"
@@ -1805,6 +1808,9 @@
                                     },
                                     "used_pct": {
                                       "type": "number"
+                                    },
+                                    "vendor_label": {
+                                      "type": "string"
                                     }
                                   },
                                   "type": "object"
@@ -2324,6 +2330,9 @@
                                 },
                                 "used_pct": {
                                   "type": "number"
+                                },
+                                "vendor_label": {
+                                  "type": "string"
                                 }
                               },
                               "type": "object"
@@ -2472,6 +2481,9 @@
                                 },
                                 "used_pct": {
                                   "type": "number"
+                                },
+                                "vendor_label": {
+                                  "type": "string"
                                 }
                               },
                               "type": "object"
