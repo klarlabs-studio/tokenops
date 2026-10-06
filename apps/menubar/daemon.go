@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 )
 
@@ -169,4 +170,72 @@ func (d *daemon) spendSince(ctx context.Context, provider, since string) (spend,
 		sp.Unpriced += u.Requests
 	}
 	return sp, nil
+}
+
+// day is one day of a provider's usage.
+type day struct {
+	Date          string  `json:"date"`
+	Tokens        int64   `json:"tokens"`
+	CostUSD       float64 `json:"cost_usd"`
+	APIEquivalent float64 `json:"api_equivalent_usd"`
+}
+
+// seriesRow is a row of GET /api/spend/series.
+type seriesRow struct {
+	BucketStart      time.Time `json:"BucketStart"`
+	GroupKey         string    `json:"GroupKey"`
+	TotalTokens      int64     `json:"TotalTokens"`
+	CostUSD          float64   `json:"CostUSD"`
+	APIEquivalentUSD float64   `json:"APIEquivalentUSD"`
+}
+
+// series reads a provider's last 30 days by day, grouped as asked.
+func (d *daemon) series(ctx context.Context, provider, group string) ([]seriesRow, error) {
+	var out struct {
+		Rows []seriesRow `json:"rows"`
+	}
+	q := url.Values{"provider": {provider}, "since": {"720h"}, "bucket": {"day"}}
+	if group != "" {
+		q.Set("group", group)
+	}
+	err := d.do(ctx, http.MethodGet, "/api/spend/series?"+q.Encode(), nil, &out)
+	return out.Rows, err
+}
+
+// daily is a provider's last 30 days, one entry per day with usage, oldest
+// first.
+func (d *daemon) daily(ctx context.Context, provider string) ([]day, error) {
+	rows, err := d.series(ctx, provider, "")
+	if err != nil {
+		return nil, err
+	}
+	out := make([]day, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, day{Date: r.BucketStart.Format("2006-01-02"), Tokens: r.TotalTokens,
+			CostUSD: r.CostUSD, APIEquivalent: r.APIEquivalentUSD})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Date < out[j].Date })
+	return out, nil
+}
+
+// topModel is the model with the most tokens over a provider's last 30
+// days; empty when it used none.
+func (d *daemon) topModel(ctx context.Context, provider string) (string, error) {
+	rows, err := d.series(ctx, provider, "model")
+	if err != nil {
+		return "", err
+	}
+	totals := map[string]int64{}
+	for _, r := range rows {
+		if r.GroupKey != "" {
+			totals[r.GroupKey] += r.TotalTokens
+		}
+	}
+	var top string
+	for m, t := range totals {
+		if t > totals[top] || (t == totals[top] && m < top) {
+			top = m
+		}
+	}
+	return top, nil
 }

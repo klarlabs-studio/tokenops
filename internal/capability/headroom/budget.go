@@ -105,6 +105,8 @@ type Glance struct {
 	Insight  presentation.ResourceInsight
 	Budgets  BudgetResult
 	Headroom Result
+	// Accounts is the signed-in account per provider, when known.
+	Accounts map[string]string
 }
 
 // ComputeGlance composes the session budgets and plan headroom.
@@ -119,7 +121,11 @@ func ComputeGlance(ctx context.Context, d Deps, now time.Time) (Glance, error) {
 	if err != nil {
 		return Glance{}, err
 	}
-	return Glance{Insight: Insight(budgets, head), Budgets: budgets, Headroom: head}, nil
+	g := Glance{Insight: Insight(budgets, head), Budgets: budgets, Headroom: head}
+	if d.Accounts != nil {
+		g.Accounts = d.Accounts()
+	}
+	return g, nil
 }
 
 // Insight ranks the signals in budgets and headroom into one orientation.

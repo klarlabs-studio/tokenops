@@ -1487,6 +1487,10 @@
                 "schema": {
                   "additionalProperties": false,
                   "properties": {
+                    "accounts": {
+                      "properties": {},
+                      "type": "object"
+                    },
                     "insight": {
                       "additionalProperties": false,
                       "properties": {

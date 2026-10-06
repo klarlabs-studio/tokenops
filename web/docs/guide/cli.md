@@ -20,13 +20,13 @@ TokenOps • AI Usage & Limits                                           Sun 4 O
 ╭────────────────────────────────────────╮  ╭────────────────────────────────────────╮
 │ Codex [local] PLAN Pro Standard ($100) │  │ Claude [meter]            PLAN Max 20x │
 │ ────────────────────────────────────── │  │ ────────────────────────────────────── │
-│ Weekly                        91% used │  │ Session                        4% used │
-│ [ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━─── ] │  │ [ ━───────────────────────────────── ] │
+│ Weekly                         9% left │  │ Session                       96% left │
+│ [ ━━━─────────────────────────────── ] │  │ [ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━─ ] │
 │ Resets in 30m                          │  │ Resets in 4h 37m                       │
 │ Pace: ahead (+37%) · out in 23h 47m    │  │ Pace: behind (-3%) · lasts to reset    │
 │                                        │  │                                        │
-│ Overage risk:                     HIGH │  │ Weekly · Fable                 0% used │
-│ Today:              $28.00+ · 198M tok │  │ [ ────────────────────────────────── ] │
+│ Overage risk:                     HIGH │  │ Weekly · Fable               100% left │
+│ Today:              $28.00+ · 198M tok │  │ [ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ] │
 │ 30 days:             $745+ · 2.24B tok │  │ Resets in 5d 17h                       │
 │ At API prices; the plan covers it.     │  │                                        │
 │ 15% of requests have no price yet.     │  │ Today:                       1.00B tok │
@@ -34,6 +34,10 @@ TokenOps • AI Usage & Limits                                           Sun 4 O
 │                                        │  │ At API prices; the plan covers it.     │
 ╰────────────────────────────────────────╯  ╰────────────────────────────────────────╯
 ```
+
+Each window shows the **share left**, and its bar shrinks as the window
+fills, coloured by how much is used — the menu bar and the statusline
+read the same way.
 
 **Pace** compares the share used with the share of the window gone by:
 behind lasts to the reset; ahead says when the window runs out at the
@@ -50,8 +54,8 @@ the session analysis observed, the figures behind it, and what to do.
 ```
 Coach · 5 findings
   ▲ Codex's weekly window runs out in 23h 32m at this pace
-    56% used, 38 points ahead of an even pace; it resets in 5d 18h
-    → Put the work that can move on Claude (25% used) until it resets.
+    44% left, 38 points ahead of an even pace; it resets in 5d 18h
+    → Put the work that can move on Claude (75% left) until it resets.
   ● Agents re-read 14 unchanged files in full
     about 225k tokens of context spent on files already read, across 63 sessions
     → tokenops coach set waste autonomous lets the read guard refuse them.
@@ -108,10 +112,11 @@ tokenops otel --json
 ### `tokenops menubar`
 
 On macOS, installs the menu bar app that ships with the Homebrew install
-to `~/Applications` and opens it: an icon whose ring fills to the busiest
-plan window. Click it for a panel with every plan's windows, pace and cost
-and the coach's findings; hover for each window's reset; right-click for
-Launch at Login. Upgrades refresh the installed copy.
+to `~/Applications` and opens it: an icon with two rings for the busiest
+plan, its week outside and its session inside, each filled to the share
+left. Click it for a panel with every plan's windows, pace, usage and the
+coach's findings; hover for each window's reset; right-click for Launch at
+Login. Upgrades refresh the installed copy.
 
 ## Setup
 

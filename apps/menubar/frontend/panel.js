@@ -57,14 +57,19 @@
   }
 
   // Pace comes from the daemon (plans.WindowPace), the same answer the
-  // CLI's cards give: behind lasts to the reset; ahead may run out first.
-  function pace(w) {
-    var p = w.pace;
+  // CLI's cards give. delta_pct is the share used minus the share of the
+  // window elapsed: behind is reserve, ahead is over pace.
+  function paceWord(p) {
     if (!p) return "";
     if (p.status === "on_pace") return "On pace";
-    if (p.status === "behind") return "Pace: behind (" + Math.round(p.delta_pct) + "%) · lasts to reset";
-    return "Pace: ahead (+" + Math.round(p.delta_pct) + "%) · " +
-      (p.lasts_to_reset ? "lasts to reset" : "runs out in " + human((p.runs_out_in_ns || 0) / 1e9));
+    var d = Math.abs(Math.round(p.delta_pct));
+    return p.status === "behind" ? d + "% in reserve" : d + "% over pace";
+  }
+  function paceOutlook(p, used) {
+    if (used >= 100) return "Used up until reset";
+    if (!p) return "";
+    if (p.lasts_to_reset || p.status === "behind") return "Lasts until reset";
+    return p.runs_out_in_ns ? "Runs out in " + human(p.runs_out_in_ns / 1e9) : "";
   }
 
   function busiest(r) {
@@ -73,23 +78,38 @@
     return m;
   }
 
-  function meter(pct) {
+  function leftOf(used) { return Math.max(0, Math.min(100, 100 - used)); }
+
+  // The bar fills to the share left, coloured by how much is used. The
+  // tick is where an even spread would leave it: fill short of the tick is
+  // over pace, past it is reserve.
+  function meter(used, p) {
     var track = el("div", "track");
-    var fill = el("div", "fill " + level(pct));
-    fill.style.width = Math.max(pct > 0 ? 2 : 0, Math.min(pct, 100)) + "%";
+    var fill = el("div", "fill " + level(used));
+    fill.style.width = leftOf(used) + "%";
     track.appendChild(fill);
+    if (p) {
+      var tick = el("div", "tick");
+      tick.style.left = leftOf(used - p.delta_pct) + "%";
+      track.appendChild(tick);
+    }
     return track;
   }
 
-  function section(heading, pct, left, right, note) {
+  function pair(cls, a, b) {
+    var line = el("div", cls);
+    line.appendChild(el("span", null, a));
+    line.appendChild(el("span", "right", b || ""));
+    return line;
+  }
+
+  function windowSection(heading, used, resets, p) {
     var s = el("section", "metric");
     s.appendChild(el("h3", null, heading));
-    s.appendChild(meter(pct));
-    var line = el("div", "metric-line");
-    line.appendChild(el("span", null, left));
-    line.appendChild(el("span", "muted", right || ""));
-    s.appendChild(line);
-    if (note) s.appendChild(el("div", "note", note));
+    s.appendChild(meter(used, p));
+    s.appendChild(pair("metric-line strong", Math.round(leftOf(used)) + "% left", resets));
+    var word = paceWord(p), outlook = paceOutlook(p, used);
+    if (word || outlook) s.appendChild(pair("metric-line", word, outlook));
     return s;
   }
 
@@ -101,12 +121,11 @@
       b.type = "button";
       b.setAttribute("role", "tab");
       b.setAttribute("aria-selected", r.provider === state.selected ? "true" : "false");
-      var mark = el("span", "mark mark-" + r.provider, MARKS[r.provider] || name(r.provider).slice(0, 2));
-      b.appendChild(mark);
+      b.appendChild(el("span", "mark mark-" + r.provider, MARKS[r.provider] || name(r.provider).slice(0, 2)));
       b.appendChild(el("span", "tab-name", name(r.provider)));
       var mini = el("span", "mini");
       var f = el("span", "mini-fill " + level(busiest(r)));
-      f.style.width = Math.min(100, busiest(r)) + "%";
+      f.style.width = leftOf(busiest(r)) + "%";
       mini.appendChild(f);
       b.appendChild(mini);
       b.addEventListener("click", function () {
@@ -124,6 +143,66 @@
     return d.replace(/^(Claude|ChatGPT|Gemini|GitHub Copilot|Cursor)\s+/, "");
   }
 
+  function stat(label, value) {
+    var s = el("div", "stat");
+    s.appendChild(el("div", "stat-label", label));
+    s.appendChild(el("div", "stat-value", value));
+    return s;
+  }
+
+  // The last 30 days, a bar per day, days without usage left empty.
+  function chart(daily) {
+    var byDate = {};
+    (daily || []).forEach(function (d) { byDate[d.date] = d.tokens; });
+    var days = [], max = 0;
+    for (var i = 29; i >= 0; i--) {
+      var t = new Date(Date.now() - i * 86400000);
+      var key = t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0");
+      var n = byDate[key] || 0;
+      days.push({ key: key, n: n });
+      max = Math.max(max, n);
+    }
+    var box = el("div", "chart");
+    box.setAttribute("role", "img");
+    box.setAttribute("aria-label", "Tokens per day over the last 30 days");
+    days.forEach(function (d) {
+      var bar = el("div", "bar");
+      bar.style.height = (max ? Math.max(d.n ? 3 : 0, d.n / max * 100) : 0) + "%";
+      bar.title = d.key + ": " + tokens(d.n) + " tokens";
+      box.appendChild(bar);
+    });
+    return box;
+  }
+
+  // Usage whose model has no list price yet is left out of the money:
+  // mostly unpriced shows no money, partly unpriced marks it with "+".
+  function share(s) { return s.requests ? s.unpriced_requests / s.requests : 0; }
+  function amount(s, covered) {
+    if (share(s) > 0.5) return "—";
+    return money(covered ? s.api_equivalent_usd : s.cost_usd) + (share(s) > 0.02 ? "+" : "");
+  }
+
+  function usage(main, r, c) {
+    var box = el("section", "metric usage");
+    var covered = c.last_30_days.cost_usd === 0 && c.last_30_days.api_equivalent_usd > 0;
+    var grid = el("div", "stats");
+    grid.appendChild(stat("Today", amount(c.today, covered)));
+    grid.appendChild(stat("Last 30 days cost", amount(c.last_30_days, covered)));
+    grid.appendChild(stat("Last 30 days tokens", tokens(c.last_30_days.tokens)));
+    grid.appendChild(stat("Today tokens", tokens(c.today.tokens)));
+    box.appendChild(grid);
+    if (c.daily && c.daily.length) box.appendChild(chart(c.daily));
+    if (c.top_model) box.appendChild(el("div", "top-model", "Top model: " + c.top_model));
+    var notes = ["From local " + name(r.provider) + " logs."], s30 = c.last_30_days;
+    if (covered && share(s30) <= 0.5) notes.push("Cost at API prices; your plan covers it.");
+    if (share(s30) > 0.02) {
+      notes.push(Math.round(share(s30) * 100) + "% of requests use models without a list price yet" +
+        (share(s30) > 0.5 ? "." : ", left out of the $ figures."));
+    }
+    box.appendChild(el("div", "note", notes.join(" ")));
+    main.appendChild(box);
+  }
+
   function detail(r, v) {
     var main = document.getElementById("detail");
     main.textContent = "";
@@ -133,16 +212,19 @@
     var age = v.updated ? Math.round((Date.now() - new Date(v.updated)) / 60000) : 0;
     left.appendChild(el("div", "muted", age < 1 ? "Updated just now" : "Updated " + age + "m ago"));
     head.appendChild(left);
-    head.appendChild(el("span", "plan", badge(r)));
+    var right = el("div", "who");
+    var account = v.glance && v.glance.accounts && v.glance.accounts[r.provider];
+    if (account) right.appendChild(el("div", "account", account));
+    right.appendChild(el("div", "plan", badge(r)));
+    head.appendChild(right);
     main.appendChild(head);
 
     (r.windows || []).forEach(function (w) {
-      main.appendChild(section(title(w), w.used_pct, Math.round(w.used_pct) + "% used",
-        w.resets_in ? "Resets in " + human(seconds(w.resets_in)) : "", pace(w)));
+      main.appendChild(windowSection(title(w), w.used_pct, w.resets_in ? "Resets in " + human(seconds(w.resets_in)) : "", w.pace));
     });
     if (r.spend_limit_usd > 0) {
-      main.appendChild(section("Extra usage", r.spend_pct, "This month: " + money(r.spend_usd) + " / " + money(r.spend_limit_usd),
-        Math.round(r.spend_pct) + "% used"));
+      var s = windowSection("Extra usage", r.spend_pct, money(r.spend_usd) + " of " + money(r.spend_limit_usd) + " this month");
+      main.appendChild(s);
     } else if (r.spend_usd > 0) {
       main.appendChild(el("p", "plain", "This month: " + money(r.spend_usd) + ", no limit known"));
     }
@@ -150,30 +232,7 @@
       main.appendChild(el("p", "plain", money(r.balance_usd) + " credit left"));
     }
     var c = v.costs && v.costs[r.provider];
-    if (c) {
-      var cost = el("section", "metric cost");
-      cost.appendChild(el("h3", null, "Cost"));
-      var covered = c.last_30_days.cost_usd === 0 && c.last_30_days.api_equivalent_usd > 0;
-      // Usage whose model has no list price yet is left out of the money:
-      // mostly unpriced shows tokens only, partly unpriced says so.
-      var share = function (s) { return s.requests ? s.unpriced_requests / s.requests : 0; };
-      var line = function (label, s) {
-        var amount = covered ? s.api_equivalent_usd : s.cost_usd;
-        var t = tokens(s.tokens) + " tokens";
-        if (share(s) > 0.5) return label + ": " + t;
-        return label + ": " + money(amount) + (share(s) > 0.02 ? "+" : "") + " · " + t;
-      };
-      cost.appendChild(el("div", null, line("Today", c.today)));
-      cost.appendChild(el("div", null, line("Last 30 days", c.last_30_days)));
-      var s30 = c.last_30_days, notes = [];
-      if (covered && share(s30) <= 0.5) notes.push("At API prices; your plan covers it.");
-      if (share(s30) > 0.02) {
-        notes.push(Math.round(share(s30) * 100) + "% of requests use models without a list price yet" +
-          (share(s30) > 0.5 ? "." : ", left out of the $ figure."));
-      }
-      if (notes.length) cost.appendChild(el("div", "note", notes.join(" ")));
-      main.appendChild(cost);
-    }
+    if (c) usage(main, r, c);
   }
 
   // The coach's findings, ranked by the daemon: a mark by level, the

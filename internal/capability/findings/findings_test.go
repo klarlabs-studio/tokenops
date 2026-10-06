@@ -63,7 +63,7 @@ func TestComputeRanksEveryFinding(t *testing.T) {
 		t.Fatalf("findings:\n%s\nwant:\n%s", strings.Join(titles, "\n"), strings.Join(want, "\n"))
 	}
 	f := r.Findings[0]
-	if !strings.Contains(f.Action, "Claude (33% used)") || !strings.Contains(f.Evidence, "resets in 5d 18h") {
+	if !strings.Contains(f.Action, "Claude (67% left)") || !strings.Contains(f.Evidence, "resets in 5d 18h") {
 		t.Errorf("quota finding: %+v", f)
 	}
 	if !strings.Contains(r.Findings[1].Evidence, "newer format") {

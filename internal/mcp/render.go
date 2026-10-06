@@ -85,17 +85,17 @@ func renderBudgetSummary(b budgetSummaryRow) string {
 		fmt.Fprintf(&s, "| Confidence | %s |\n", b.Confidence)
 		fmt.Fprintf(&s, "| Signal | `%s` — %s |\n", b.SignalLevel, b.SignalCaveat)
 	case len(b.Windows) > 0:
-		// Every window the vendor reported, as shares used.
-		fmt.Fprintf(&s, "| Window | Used | Resets in |\n|---|---|---|\n")
+		// Every window the vendor reported, as shares left.
+		fmt.Fprintf(&s, "| Window | Left | Resets in |\n|---|---|---|\n")
 		for _, w := range b.Windows {
-			fmt.Fprintf(&s, "| %s | %.0f%% | %s |\n", w.Name, w.UsedPct, w.ResetsIn)
+			fmt.Fprintf(&s, "| %s | %.0f%% | %s |\n", w.Name, max(0, 100-w.UsedPct), w.ResetsIn)
 		}
 		fmt.Fprintf(&s, "\n| Metric | Value |\n|---|---|\n")
 		fmt.Fprintf(&s, "| Signal | `%s` — %s |\n", b.SignalLevel, b.SignalCaveat)
 	case b.WindowResetsIn != "":
 		// The vendor reports a percentage and no cap (Codex's rate limits).
 		fmt.Fprintf(&s, "| Metric | Value |\n|---|---|\n")
-		fmt.Fprintf(&s, "| Window | %.1f%% used |\n", b.WindowPct)
+		fmt.Fprintf(&s, "| Window | %.1f%% left |\n", max(0, 100-b.WindowPct))
 		fmt.Fprintf(&s, "| Resets in | %s |\n", b.WindowResetsIn)
 		fmt.Fprintf(&s, "| Signal | `%s` — %s |\n", b.SignalLevel, b.SignalCaveat)
 	case b.Note != "":

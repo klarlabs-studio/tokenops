@@ -40,6 +40,10 @@ type GlancePayload struct {
 	Insight       presentation.ResourceInsight `json:"insight"`
 	SessionBudget BudgetPayload                `json:"session_budget"`
 	PlanHeadroom  *HeadroomPayload             `json:"plan_headroom"`
+	// Accounts is the account each provider's client is signed in with,
+	// for the operator's own view. It never leaves the machine: the
+	// telemetry export reads figures only.
+	Accounts map[string]string `json:"accounts,omitempty"`
 }
 
 // Payload is r on the wire.
@@ -70,5 +74,6 @@ func (g Glance) Payload() *GlancePayload {
 		Insight:       g.Insight,
 		SessionBudget: *g.Budgets.Payload(),
 		PlanHeadroom:  g.Headroom.Payload(),
+		Accounts:      g.Accounts,
 	}
 }

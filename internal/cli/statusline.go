@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -222,7 +223,10 @@ func tipText(kind string) string {
 	case strings.HasPrefix(kind, "budget_"):
 		return "this session is past " + strings.TrimPrefix(kind, "budget_") + "% of its budget"
 	case strings.HasPrefix(kind, "quota_"):
-		return "your plan window is " + strings.TrimPrefix(kind, "quota_") + "% used"
+		if used, err := strconv.Atoi(strings.TrimPrefix(kind, "quota_")); err == nil {
+			return fmt.Sprintf("%d%% of your plan window is left", max(0, 100-used))
+		}
+		return strings.ReplaceAll(kind, "_", " ")
 	case kind == "":
 		return ""
 	default:
