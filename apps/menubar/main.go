@@ -46,6 +46,7 @@ const (
 const (
 	actionRefresh = "refresh"
 	actionLogin   = "login"
+	actionAlerts  = "alerts"
 	actionQuit    = "quit"
 )
 
@@ -104,6 +105,15 @@ type menubar struct {
 
 	mu   sync.Mutex
 	last view
+
+	// notify shows a desktop notification; nil where the host has none.
+	notify   func(title, body string) error
+	alerts   alerter
+	settings settings
+	// prefs is where settings live; empty when there is no config dir.
+	prefs string
+	// notifyFailed logs why notifications fail once, not every minute.
+	notifyFailed sync.Once
 }
 
 // newMenubar wires the runtime, the panel's grant and commands, and the
@@ -127,6 +137,12 @@ func newMenubar(host app.DesktopHost, d *daemon, sink audit.Sink) (*menubar, err
 		return nil, err
 	}
 	m := &menubar{app: a, rt: rt, daemon: d}
+	if n, ok := host.(platform.Notifier); ok {
+		m.notify = n.ShowNotification
+	}
+	if path, err := settingsPath(); err == nil {
+		m.prefs, m.settings = path, loadSettings(path)
+	}
 	if err := m.register(); err != nil {
 		return nil, err
 	}
@@ -221,7 +237,15 @@ func (m *menubar) refresh(ctx context.Context) view {
 	} else {
 		m.last = v
 	}
+	var notes []note
+	if v.Error == "" && v.Glance != nil {
+		notes = m.alerts.observe(v.Glance)
+	}
+	on := m.settings.alertsOn()
 	m.mu.Unlock()
+	if on {
+		m.show(notes)
+	}
 	st := status{Title: "—", Outer: -1, Inner: -1, Tooltip: "TokenOps: " + v.Error}
 	if v.Glance != nil {
 		st = statusOf(v.Glance)
@@ -229,6 +253,20 @@ func (m *menubar) refresh(ctx context.Context) view {
 	m.setTray(st)
 	_ = m.app.Emit(ctx, viewEvent, v)
 	return v
+}
+
+// show delivers notes as desktop notifications. macOS shows them only
+// for the packaged app; a failure is logged once.
+func (m *menubar) show(notes []note) {
+	if m.notify == nil {
+		return
+	}
+	for _, n := range notes {
+		if err := m.notify(n.Title, n.Body); err != nil {
+			m.notifyFailed.Do(func() { fmt.Fprintln(os.Stderr, "tokenops-menubar: notifications:", err) })
+			return
+		}
+	}
 }
 
 // setTray shows the icon alone: the busiest plan's week and session as two
@@ -327,6 +365,7 @@ func (m *menubar) menu() []platform.MenuItem {
 		{ID: actionRefresh, Label: "Refresh"},
 		{Separator: true},
 		{ID: actionLogin, Label: "Launch at Login", Checked: login, Disabled: err != nil},
+		{ID: actionAlerts, Label: "Alerts", Checked: m.alertsOn(), Disabled: m.notify == nil},
 		{Separator: true},
 		{ID: actionQuit, Label: "Quit"},
 	}
@@ -347,8 +386,32 @@ func (m *menubar) onAction(id string) {
 			fmt.Fprintln(os.Stderr, "tokenops-menubar: launch at login:", err)
 		}
 		m.refresh(ctx)
+	case actionAlerts:
+		m.toggleAlerts()
+		m.refresh(ctx)
 	case actionQuit:
 		m.app.Quit()
+	}
+}
+
+func (m *menubar) alertsOn() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.settings.alertsOn()
+}
+
+// toggleAlerts turns alerts on or off and remembers it across launches.
+func (m *menubar) toggleAlerts() {
+	m.mu.Lock()
+	on := !m.settings.alertsOn()
+	m.settings.Alerts = &on
+	s := m.settings
+	m.mu.Unlock()
+	if m.prefs == "" {
+		return
+	}
+	if err := saveSettings(m.prefs, s); err != nil {
+		fmt.Fprintln(os.Stderr, "tokenops-menubar: alerts setting:", err)
 	}
 }
 
