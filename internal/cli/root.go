@@ -79,6 +79,7 @@ func NewRoot() *cobra.Command {
 		newRulesCmd(),
 		newScorecardCmd(),
 		newDXCmd(),
+		newCheckupCmd(),
 		newStoryCmd(),
 		newVerifyCmd(),
 		newOutcomeCmd(),

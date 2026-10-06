@@ -120,6 +120,43 @@ Login and Alerts. It alerts when a window drops to 20% left, to 5%, and when it 
 saying when it resets and, while it is still running, when it runs out at
 this pace; a window that alerted says so again when it resets. Upgrades refresh the installed copy.
 
+### `tokenops checkup`
+
+A week of agent work in one read, before you set anything up. It needs no
+config, no daemon and no store: it reads what Claude Code, Codex, Gemini
+CLI and opencode already wrote, and sends nothing anywhere.
+
+```
+TokenOps checkup — last 7d
+
+HARNESS      MODEL                           TURNS     TOKENS    API VALUE
+Claude Code  claude-opus-5-5                 11997      5.40B     $1609.92
+Codex        gpt-6.1-sol                      2715     363.5M       $81.53
+Total                                        17125      6.13B    $1938.76+
+
+Sessions: A  (1880 instructions; `tokenops dx` for the breakdown)
+
+● Agents re-read 10 unchanged files
+  11 re-reads of 10 files across 3 sessions, with no edit in between
+  fix: tokenops hooks install --read-guard
+```
+
+- **API value** is what the tokens would cost on an API key. On a
+  flat-rate plan it is a measure, not a bill. A model the rate card does
+  not know is counted and marked `unpriced`, never guessed (the `+`).
+- **Findings**, each with the one command that fixes it:
+  - re-reads of a file with no edit in between;
+  - instruction files (`~/.claude/CLAUDE.md`, a repository's `CLAUDE.md`
+    and `AGENTS.md`, and their parents') re-read on every turn, as a share
+    of all input;
+  - lookups ("show me…", "list…") answered on a flagship model.
+
+  A fix that is already installed says so instead of installing it again.
+- **Sessions** is the same grade `tokenops dx` gives, from the same read.
+
+`--days 30` widens the window; `--json` prints the report as data.
+Instruction text is read in memory to classify it, and never written.
+
 ## Setup
 
 ### `tokenops init`
