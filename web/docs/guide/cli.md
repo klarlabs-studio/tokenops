@@ -339,6 +339,34 @@ Usage is priced in dollars because vendors publish rate cards in dollars,
 so a converted figure moves with the exchange rate even when usage does
 not. Plans are prorated by day across switches.
 
+#### Cost per commit
+
+`tokenops spend --by commit` lists what each of your commits cost: the
+agent work that led to it, at API prices.
+
+```
+Cost per commit since 3 Oct 07:22
+  400 commits · median $0.71 · mean $1.84 · 74% of the window's work placed on a commit
+
+  WHEN         REPO           COMMIT            COST  TURNS     WORK  SUBJECT
+  6 Oct 07:12  tokenops       3dcf8b0f96       $8.48     32       7h  fix(opencode): read opencode 1.18's store (#548)
+  5 Oct 23:48  tokenops       616c5d5611       $1.33      8      13m  docs(menubar): say what a click and a right-cli…
+
+  not yet committed:              $143  1271 turns
+  outside a repository:           $115  972 turns
+```
+
+Work is joined to commits by place and time: a turn belongs to the
+repository its session ran in (from Claude Code's and Codex's transcripts
+and opencode's sessions) and to the next commit you made there within a
+day. Commits come from your local branches, so a branch merged by squash
+and deleted leaves its work on the merged change. What cannot be placed —
+work after your last commit, with no commit within a day, outside a
+repository, or from a session whose directory is unknown — is listed
+apart, never dropped. A `+` marks a cost that leaves out turns on models
+without a list price. `GET /api/spend/commits` serves the same report with
+commit subjects withheld.
+
 ### `tokenops scorecard`
 
 Operator wedge KPI scorecard. Three classic KPIs (FVT, TEU, SAC)

@@ -40,7 +40,8 @@ tokenops glance --brief          # a table instead
 tokenops glance --findings       # only the findings, all of them`,
 	"spend": `tokenops spend                   # the last 7 days
 tokenops spend --since 24h --by provider
-tokenops spend --forecast --json`,
+tokenops spend --forecast --json
+tokenops spend --by commit --since 30d   # what each of your commits cost`,
 	"dx": `tokenops dx                      # the last week, from the daemon's analysis
 tokenops dx --fresh --days 30`,
 	"status": `tokenops status
