@@ -116,7 +116,9 @@ to `~/Applications` and opens it: an icon with two rings for the busiest
 plan, its week outside and its session inside, each filled to the share
 left. Click it for a panel with every plan's windows, pace, usage and the
 coach's findings; hover for each window's reset; right-click for Launch at
-Login. Upgrades refresh the installed copy.
+Login and Alerts. It alerts when a window drops to 20% left, to 5%, and when it is used up,
+saying when it resets and, while it is still running, when it runs out at
+this pace; a window that alerted says so again when it resets. Upgrades refresh the installed copy.
 
 ## Setup
 

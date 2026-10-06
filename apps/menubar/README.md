@@ -5,7 +5,7 @@ its limit, its week outside and its session inside, each filled to the
 share left. A click opens the panel under it with every plan's details;
 hovering lists each window's share and reset (for example
 **Codex · week 25% left · resets in 5d 14h**); a right click has Refresh,
-Launch at Login and Quit. Built on
+Launch at Login, Alerts and Quit. Built on
 [Vitra](https://github.com/klarlabs-studio/vitra).
 
 The panel switches between plans with a tab per vendor, busiest first, each
@@ -53,7 +53,15 @@ make menubar-test   # tests, no window needed
   tray refreshes every minute. A daemon that is slow keeps the last
   reading on screen, marked; one that is not running says how to start it.
 - A click opens the panel; a right click opens the menu: Refresh, Launch at
-  Login (macOS 13+, packaged app) and Quit.
+  Login (macOS 13+, packaged app), Alerts and Quit.
+- Alerts are desktop notifications, on until you untick them (remembered
+  in `~/Library/Application Support/TokenOps/menubar.json`). A window
+  alerts once each as it drops to 20% left, to 5% and to used up, with its
+  reset and, while it still runs, when it runs out at this pace; one that
+  alerted says so again when it resets. A plan with no window alerts on its
+  spend limit the same way. The first reading after launch only sets the
+  baseline, so opening the app does not repeat what was already true.
+  macOS shows notifications only for the packaged app.
 
 It is a separate Go module because Vitra needs cgo and Go 1.26, while the
 `tokenops` binary stays pure Go on 1.25.

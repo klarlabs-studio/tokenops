@@ -37,9 +37,18 @@ type report struct {
 }
 
 type window struct {
-	Name     string  `json:"name"`
-	UsedPct  float64 `json:"used_pct"`
-	ResetsIn string  `json:"resets_in"`
+	Name        string  `json:"name"`
+	VendorLabel string  `json:"vendor_label"`
+	UsedPct     float64 `json:"used_pct"`
+	ResetsIn    string  `json:"resets_in"`
+	Pace        *pace   `json:"pace"`
+}
+
+// pace is the daemon's verdict on a window (plans.WindowPace).
+type pace struct {
+	Status       string `json:"status"`
+	LastsToReset bool   `json:"lasts_to_reset"`
+	RunsOutInNs  int64  `json:"runs_out_in_ns"`
 }
 
 // status is what the tray shows. The icon's two rings are the busiest
