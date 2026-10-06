@@ -4,7 +4,33 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.98.1**.
+Current release: **v0.99.0**.
+
+## v0.99.0 — What's left, what each commit cost, and opencode 2 without the error
+
+The menu bar reads like CodexBar's, in our colours. The icon is two
+rings for your busiest plan, the week outside and the session inside,
+each filled to what is left. The panel shows the account you are signed
+in with, every window as a bar with a tick where an even pace would put
+it ("12% in reserve · lasts until reset", or "over pace · runs out in"),
+today's and the last 30 days' cost and tokens, a chart of the last 30
+days, the model you used most, and the coach. Windows now read as the
+share **left** everywhere: the menu bar, the cards, the statusline, the
+coach and the MCP answers.
+
+`tokenops spend --by commit` says what each of your commits cost: agent
+work belongs to the repository it ran in and to your next commit there.
+The daemon can push its figures — plan windows and pace, usage and its
+value, session grades, the coach's findings, cost per commit — to any
+OpenTelemetry collector; `tokenops otel` prints exactly what would leave
+the machine. Figures only, never prompts or code.
+
+opencode 2 showed a "Plugin must export a default definition" error on
+every start for the plugin TokenOps wrote for opencode 1.x. One plugin
+now serves both versions, and the daemon updates the old one when it
+starts after the upgrade: nothing to reinstall. opencode 1.18's new
+store is read again, and the usage meter's readings no longer count as
+requests.
 
 ## v0.98.1 — A cleaner surface, and the menu bar in the box
 
