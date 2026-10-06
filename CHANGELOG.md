@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **opencode:** opencode 1.18 creates `session_message` before it moves sessions to `session_v2`, and the reader joined `session_v2` whenever `session_message` existed, so the whole read failed and every opencode session was missing from spend, dx, story and coaching. It now joins whichever session table holds the directory; on this machine that brings back 54,149 messages
+
 ## 0.98.1 - 2026-10-05
 
 v0.98.0 was tagged but its release build failed before publishing anything; 0.98.1 is that release.

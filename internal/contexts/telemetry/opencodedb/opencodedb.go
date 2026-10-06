@@ -3,7 +3,8 @@
 // opencode 1.x keeps messages in `message` and their text, tool calls and
 // compactions in `part`. opencode 2 keeps everything in `session_message`,
 // one row per message with its type in a column and its content inline,
-// and the session's directory in `session_v2`. Both versions use the same
+// and the session's directory in `session_v2` (opencode 1.18 creates
+// session_message first, with sessions still in `session`). Both versions use the same
 // opencode.db, and 2.x copies 1.x sessions across lazily, keeping their
 // message IDs, while 1.x keeps writing the old tables. So during the
 // transition both shapes hold live data: every message is read from
@@ -190,6 +191,26 @@ func Newest(path string) (time.Time, bool) {
 	return time.UnixMilli(newest).UTC(), true
 }
 
+// sessionTable is the table holding sessions' directories for
+// session_message rows: session_v2 in opencode 2, session in 1.18, which
+// creates session_message first. Empty when neither has a directory.
+func sessionTable(db *sql.DB) string {
+	for _, t := range []string{"session_v2", "session"} {
+		if hasTable(db, t) && hasColumn(db, t, "directory") {
+			return t
+		}
+	}
+	return ""
+}
+
+func hasColumn(db *sql.DB, table, column string) bool {
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM pragma_table_info(?) WHERE name = ?`, table, column).Scan(&n); err != nil {
+		return false
+	}
+	return n > 0
+}
+
 func hasTable(db *sql.DB, name string) bool {
 	var n int
 	if err := db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, name).Scan(&n); err != nil {
@@ -228,8 +249,16 @@ type v2Data struct {
 }
 
 func readV2(db *sql.DB, opts Options, seen map[string]bool, visit func(Message) error) error {
-	query := `SELECT m.id, m.session_id, m.type, m.time_created, m.data, coalesce(s.directory, '')
-		FROM session_message m LEFT JOIN session_v2 s ON s.id = m.session_id
+	// A session's directory is in session_v2 once opencode has moved it;
+	// 1.18 writes session_message while its sessions are still in session.
+	from := `session_message m`
+	dir := `''`
+	if table := sessionTable(db); table != "" {
+		from += ` LEFT JOIN ` + table + ` s ON s.id = m.session_id`
+		dir = `coalesce(s.directory, '')`
+	}
+	query := `SELECT m.id, m.session_id, m.type, m.time_created, m.data, ` + dir + `
+		FROM ` + from + `
 		WHERE m.type IN ('user', 'assistant', 'compaction')`
 	var args []any
 	if opts.SessionID != "" {
