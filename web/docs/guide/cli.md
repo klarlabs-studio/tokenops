@@ -1083,16 +1083,19 @@ other three clients get one too, theirs just happen to be JSON.
 
 Delete the file to remove it.
 
-**opencode 2** does not run 1.x plugins, so for it tokenops writes a
-second file, `tokenops-v2.js`, in the same folder: read-guard on
+**One file serves opencode 1.x and opencode 2.** Its default export has
+a `server` function, which 1.x calls for its hooks, and a `setup`
+function, which opencode 2 calls to register them: read-guard on
 `tool.execute.before` (2.x calls the file `path`) and route-guard on the
-session's prompt hook. The installer writes the 1.x file when opencode 1
-is installed, the 2.x file when opencode 2 is (`opencode2` on your PATH,
-or `opencode --version` reporting 2), and both during a transition; each
-version skips the other's file. Coaching nudges are toasts in opencode's
-TUI, which a 2.x server plugin cannot reach, so `--coach` applies to 1.x
-only for now. TokenOps reads opencode 2's sessions from the same
-database, in both versions' tables.
+session's prompt hook. Each version uses the half it knows. Coaching
+nudges are toasts in opencode's TUI, which a 2.x plugin cannot reach, so
+`--coach` reaches 1.x only. TokenOps reads opencode 2's sessions from the
+same database, in both versions' tables.
+
+The daemon brings the file up to date when it starts, so an upgrade
+repairs it without a reinstall. It keeps the hooks, binary and budget
+the file already had, folds in the separate `tokenops-v2.js` older
+versions wrote, and never touches a plugin TokenOps did not write.
 
 **It fails open.** A guard sitting in front of every file read must never
 be the reason a read cannot happen. A missing binary, a spawn failure,
