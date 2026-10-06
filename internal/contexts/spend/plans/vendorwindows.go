@@ -15,16 +15,26 @@ import (
 // VendorWindow is one usage window as the vendor reported it: a share
 // used and when it resets. Vendors report percentages, not counts.
 type VendorWindow struct {
-	// Name is the window in words: "5h", "week", "week (Fable)".
-	Name     string        `json:"name"`
-	UsedPct  float64       `json:"used_pct"`
-	Duration time.Duration `json:"duration_ns,omitempty"`
-	ResetsAt time.Time     `json:"resets_at,omitempty"`
-	ResetsIn string        `json:"resets_in,omitempty"`
+	// Name is the window in words: "5h", "week", "week (Fable)", or
+	// OtherLimit for a window the vendor names in no way we know.
+	Name string `json:"name"`
+	// VendorLabel is the vendor's own key for an OtherLimit window, so it
+	// can be traced; empty for every window with a known meaning.
+	VendorLabel string        `json:"vendor_label,omitempty"`
+	UsedPct     float64       `json:"used_pct"`
+	Duration    time.Duration `json:"duration_ns,omitempty"`
+	ResetsAt    time.Time     `json:"resets_at,omitempty"`
+	ResetsIn    string        `json:"resets_in,omitempty"`
 	// Pace compares the share used with the share of the window gone by;
 	// absent when the window's length or reset is unknown.
 	Pace *WindowPace `json:"pace,omitempty"`
 }
+
+// OtherLimit names a window the vendor reports with no known meaning:
+// claude.ai has sent one under an internal codename, with no kind and a
+// month to its reset. It is still a limit that can stop work, so it is
+// shown, but under this name rather than the codename.
+const OtherLimit = "other limit"
 
 // VendorWindows returns every window in the newest vendor reading for
 // provider within the last two weeks, busiest first: Claude's 5-hour,
@@ -118,7 +128,7 @@ func claudeWindows(attrs map[string]string, now time.Time) []VendorWindow {
 		case label == "spend_limit":
 			w.Name, w.Duration = spendLimitWindow(attrs["spend_limit_period"])
 		default:
-			w.Name = strings.ReplaceAll(label, "_", " ")
+			w.Name, w.VendorLabel = OtherLimit, label
 		}
 		if scope := attrs[label+"_model_scope"]; scope != "" {
 			w.Name += " (" + scope + ")"

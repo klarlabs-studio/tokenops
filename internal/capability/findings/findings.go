@@ -118,6 +118,8 @@ func windowWords(name string) string {
 		return "weekly window"
 	case "day":
 		return "daily window"
+	case plans.OtherLimit:
+		return name
 	}
 	return name + " window"
 }
@@ -129,15 +131,27 @@ func quota(reports []plans.HeadroomReport) []Finding {
 	for _, r := range reports {
 		for _, w := range r.Windows {
 			p := w.Pace
-			if p == nil || p.Status != plans.PaceAhead || p.LastsToReset {
+			var f Finding
+			switch {
+			case p == nil:
 				continue
-			}
-			f := Finding{
-				Kind:  KindQuota,
-				Level: LevelWarn,
-				Title: fmt.Sprintf("%s's %s runs out in %s at this pace", vendor(r), windowWords(w.Name), human(p.RunsOutIn)),
-				Evidence: fmt.Sprintf("%.0f%% left, %.0f points ahead of an even pace; it resets in %s",
-					math.Max(0, 100-w.UsedPct), p.DeltaPct, human(resetsIn(w))),
+			case p.Status == plans.PaceUsedUp:
+				f = Finding{
+					Kind:     KindQuota,
+					Level:    LevelWarn,
+					Title:    fmt.Sprintf("%s's %s is used up until it resets in %s", vendor(r), windowWords(w.Name), human(resetsIn(w))),
+					Evidence: fmt.Sprintf("Nothing left; it ran %.0f points ahead of an even pace", p.DeltaPct),
+				}
+			case p.Status == plans.PaceAhead && !p.LastsToReset:
+				f = Finding{
+					Kind:  KindQuota,
+					Level: LevelWarn,
+					Title: fmt.Sprintf("%s's %s runs out in %s at this pace", vendor(r), windowWords(w.Name), human(p.RunsOutIn)),
+					Evidence: fmt.Sprintf("%.0f%% left, %.0f points ahead of an even pace; it resets in %s",
+						math.Max(0, 100-w.UsedPct), p.DeltaPct, human(resetsIn(w))),
+				}
+			default:
+				continue
 			}
 			if alt, pct, ok := roomiest(reports, r.Provider); ok {
 				f.Action = fmt.Sprintf("Put the work that can move on %s (%.0f%% left) until it resets.", alt, math.Max(0, 100-pct))

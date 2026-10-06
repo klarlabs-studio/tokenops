@@ -380,6 +380,8 @@ func paceLine(pc *plans.WindowPace) (string, rgb) {
 		return "Pace: on pace", muted
 	case plans.PaceBehind:
 		return fmt.Sprintf("Pace: behind (%.0f%%) · lasts to reset", pc.DeltaPct), muted
+	case plans.PaceUsedUp:
+		return "Pace: used up until reset", warnC
 	}
 	if pc.LastsToReset {
 		return fmt.Sprintf("Pace: ahead (+%.0f%%) · lasts to reset", pc.DeltaPct), muted
@@ -588,6 +590,8 @@ func briefPace(pc *plans.WindowPace) (string, rgb) {
 		return "", muted
 	case pc.Status == plans.PaceOnPace:
 		return "on pace", muted
+	case pc.Status == plans.PaceUsedUp:
+		return "used up", warnC
 	case pc.LastsToReset:
 		return fmt.Sprintf("%+.0f%% · lasts", pc.DeltaPct), muted
 	}

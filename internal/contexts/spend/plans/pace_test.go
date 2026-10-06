@@ -21,6 +21,8 @@ func TestPaceAt(t *testing.T) {
 			&WindowPace{Status: PaceBehind, DeltaPct: -10, LastsToReset: true}},
 		{"on pace", VendorWindow{UsedPct: 47, Duration: 10 * time.Hour, ResetsAt: in(5*time.Hour + 6*time.Minute)},
 			&WindowPace{Status: PaceOnPace, DeltaPct: -2, LastsToReset: true}},
+		{"used up", VendorWindow{UsedPct: 100, Duration: week, ResetsAt: in(week - 26*time.Hour)},
+			&WindowPace{Status: PaceUsedUp, DeltaPct: 85}},
 		{"nothing used", VendorWindow{UsedPct: 0, Duration: week, ResetsAt: in(time.Hour)}, nil},
 		{"no length", VendorWindow{UsedPct: 30, ResetsAt: in(time.Hour)}, nil},
 		{"no reset", VendorWindow{UsedPct: 30, Duration: week}, nil},
