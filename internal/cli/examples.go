@@ -79,7 +79,9 @@ tokenops vendor-usage setup claude-subscription --paste`,
 	"pricing diff":    `tokenops pricing diff --from baseline --to latest`,
 	"pricing lint":    `tokenops pricing lint`,
 	"config show":     `tokenops config show`,
-	"version":         `tokenops version --json`,
+	"otel": `tokenops otel                    # every figure the daemon pushes, computed now
+tokenops otel --json`,
+	"version": `tokenops version --json`,
 	"coach": `tokenops coach                   # the dials, what the coach did, what came of it
 tokenops coach preset advise`,
 	"coach stats":     `tokenops coach stats --json`,
