@@ -59,7 +59,10 @@ make menubar-test   # tests, no window needed
   alerts once each as it drops to 20% left, to 5% and to used up, with its
   reset and, while it still runs, when it runs out at this pace; one that
   alerted says so again when it resets. A plan with no window alerts on its
-  spend limit the same way. The first reading after launch only sets the
+  spend limit the same way. A plan whose every window has gone stale (its
+  sources stopped) alerts once that its reading stopped, with the fix, and
+  once when it is back; stale windows alert nothing else. The first
+  reading after launch only sets the
   baseline, so opening the app does not repeat what was already true.
   macOS shows notifications only for the packaged app.
 
