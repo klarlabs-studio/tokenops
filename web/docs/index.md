@@ -134,7 +134,7 @@ Want to see what a week of your agents' work cost and where it leaked
 first? One command, nothing to install first:
 
 ```bash
-npx tokenops checkup
+npx @klarlabs-studio/tokenops checkup
 ```
 
 It reads the week straight from the transcripts, with no setup and nothing
@@ -325,7 +325,7 @@ covers the rest.
 
 ---
 
-Shipping now: **v0.101.0**. See [release highlights](/changelog) for what
+Shipping now: **v0.101.1**. See [release highlights](/changelog) for what
 changed and why, or the
 [full changelog](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md)
 for every commit.
