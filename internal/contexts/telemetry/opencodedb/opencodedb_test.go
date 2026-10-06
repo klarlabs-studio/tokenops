@@ -187,3 +187,49 @@ func keys(m map[string]Message) []string {
 	}
 	return out
 }
+
+// opencode 1.18 creates session_message before it moves sessions to
+// session_v2: the new table is there, empty or not, beside the 1.x tables,
+// and its sessions live in `session`. Joining session_v2 failed the whole
+// read, so every opencode session went missing from every figure.
+func TestSessionMessageBesideTheOldSessionTable(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "opencode.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT NOT NULL)`,
+		`CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT)`,
+		`CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, data TEXT)`,
+		`CREATE TABLE session_message (id TEXT PRIMARY KEY, session_id TEXT, type TEXT, seq INTEGER, time_created INTEGER, time_updated INTEGER, data TEXT)`,
+		`INSERT INTO session VALUES ('s1','/w/proj'), ('s3','/w/new')`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if _, err := db.Exec(`INSERT INTO message VALUES ('a1','s1',?,?)`, ms(time.Minute), js(map[string]any{
+		"role": "assistant", "providerID": "anthropic", "modelID": "claude-opus-5", "time": map[string]any{"created": ms(time.Minute)},
+		"tokens": map[string]any{"input": 100, "output": 10},
+	})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO session_message VALUES ('a3','s3','assistant',1,?,?,?)`, ms(time.Hour), ms(time.Hour), js(map[string]any{
+		"model": map[string]any{"providerID": "anthropic", "id": "claude-opus-5"}, "tokens": map[string]any{"input": 7, "output": 3},
+	})); err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+
+	got := readAll(t, path, Options{})
+	if len(got) != 2 {
+		t.Fatalf("read %v, want the 1.x and the session_message row", keys(got))
+	}
+	if got["a3"].Root != "/w/new" {
+		t.Errorf("session_message row's directory = %q, want it from session", got["a3"].Root)
+	}
+	if got["a1"].ModelID != "claude-opus-5" {
+		t.Errorf("1.x row = %+v", got["a1"])
+	}
+}
