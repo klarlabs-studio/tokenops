@@ -4,7 +4,25 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.100.0**.
+Current release: **v0.101.0**.
+
+## v0.101.0 — A week of agent work in one command, nothing installed first
+
+```bash
+npx tokenops checkup
+```
+
+reads the last week of Claude Code, Codex, Gemini CLI and opencode work
+straight from what they already wrote, with no config, no daemon and
+nothing sent anywhere. It shows the tokens and their value at API prices
+per harness and model, how the sessions went, and each leak with the one
+command that fixes it: files re-read with no edit in between, instruction
+files re-read on every turn, and lookups answered on a flagship model. A
+fix you already have says so instead of asking you to install it.
+
+`tokenops checkup` works the same from Homebrew. From npm, the `tokenops`
+package runs the same binary the release ships, from a package for your
+platform, published with provenance.
 
 ## v0.100.0 — Several ways to read every plan, and no stale number shown as current
 
