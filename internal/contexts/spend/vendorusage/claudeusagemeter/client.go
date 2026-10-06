@@ -354,7 +354,7 @@ var ErrMissingCookie = errors.New("claude-usage-meter: session_key required (pas
 // and re-reading it from the browser is what fixes it.
 var ErrBotCheck = errors.New("claude-usage-meter: claude.ai's bot check refused this request — the browser's cf_clearance cookie is missing or expired")
 
-var ErrUnauthorized = errors.New("claude-usage-meter: claude.ai returned 401 — sessionKey likely expired, re-paste from devtools")
+var ErrUnauthorized = errors.New("claude-usage-meter: claude.ai refused the session — it has expired; sign in to claude.ai in your browser, or run `tokenops vendor-usage setup claude-subscription`")
 
 // NewClient binds a session cookie and returns a Client with sensible
 // defaults. The UA mimics a recent Chrome to avoid Cloudflare bot
@@ -452,6 +452,9 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, error) {
 		if resp.StatusCode == http.StatusForbidden && isBotCheck(snippet) {
 			return nil, fmt.Errorf("%w (%s)", ErrBotCheck, path)
 		}
+		if resp.StatusCode == http.StatusForbidden && isExpiredSession(snippet) {
+			return nil, ErrUnauthorized
+		}
 		return nil, fmt.Errorf("claude-usage-meter: %s: status %d: %s", path, resp.StatusCode, snippet)
 	}
 	return io.ReadAll(resp.Body)
@@ -474,6 +477,12 @@ func allowedBrowserCookie(name string) bool {
 	default:
 		return false
 	}
+}
+
+// isExpiredSession recognises claude.ai's answer to an expired session: a
+// 403 permission_error naming account_session_invalid rather than a 401.
+func isExpiredSession(body []byte) bool {
+	return strings.Contains(string(body), `"account_session_invalid"`)
 }
 
 // isBotCheck recognises Cloudflare's interstitial, which arrives as a 403

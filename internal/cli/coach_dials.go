@@ -329,7 +329,7 @@ func quotaStatusLines(ctx context.Context, r coachcap.Report) []string {
 	now := time.Now()
 	var out []string
 	for _, p := range []eventschema.Provider{eventschema.ProviderAnthropic, eventschema.ProviderOpenAI} {
-		if line := coachhook.QuotaStatus("", liveQuota(ctx, cfg, p, now), r.Verbosity, now); line != "" {
+		if line := coachhook.QuotaStatus("", readPlan(ctx, cfg, p, now).Quota, r.Verbosity, now); line != "" {
 			out = append(out, line)
 		}
 	}

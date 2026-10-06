@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,7 +38,7 @@ func TestLiveQuotaReadsTheMostConstrainedWindow(t *testing.T) {
 		"seven_day_kind": "weekly_all", "seven_day_used_pct": "81.00", "seven_day_reset_at": now.Add(48 * time.Hour).Format(time.RFC3339Nano),
 	}, "claude-usage-meter")
 	cfg := config.Config{Plans: map[string]string{"anthropic": "claude-max-20x"}, Storage: config.StorageConfig{Enabled: true, Path: path}}
-	q := liveQuota(context.Background(), cfg, eventschema.ProviderAnthropic, now)
+	q := readPlan(context.Background(), cfg, eventschema.ProviderAnthropic, now).Quota
 	if q == nil || q.Window.Label != "weekly" || q.Window.UsedPct != 81 {
 		t.Fatalf("liveQuota = %+v, want the 81%% weekly window", q)
 	}
@@ -54,9 +55,32 @@ func TestLiveQuotaNeedsAPlanAndAFreshReading(t *testing.T) {
 		"stale reading": {Plans: map[string]string{"anthropic": "claude-max-20x"}, Storage: config.StorageConfig{Enabled: true, Path: stale}},
 		"no store":      {Plans: map[string]string{"anthropic": "claude-max-20x"}, Storage: config.StorageConfig{Enabled: true, Path: filepath.Join(t.TempDir(), "absent.db")}},
 	} {
-		if q := liveQuota(context.Background(), cfg, eventschema.ProviderAnthropic, now); q != nil {
-			t.Errorf("%s: liveQuota = %+v, want nil so the coach falls back to dollars", name, q)
+		if q := readPlan(context.Background(), cfg, eventschema.ProviderAnthropic, now).Quota; q != nil {
+			t.Errorf("%s: liveQuota = %+v, want no live window", name, q)
 		}
+	}
+}
+
+// A flat plan whose reading stopped says how old it is and how to get it
+// back; one never set up says nothing; pay-as-you-go is not flat.
+func TestReadPlanSaysWhyTheReadingIsLost(t *testing.T) {
+	now := time.Now()
+	attrs := map[string]string{"five_hour_kind": "session", "five_hour_used_pct": "50.00", "five_hour_reset_at": now.Add(time.Hour).Format(time.RFC3339Nano)}
+	stale := meterStore(t, now.Add(-20*time.Hour-time.Minute), attrs, "claude-usage-meter")
+	empty := meterStore(t, now, map[string]string{"other": "x"}, "claude-code-jsonl")
+	max := map[string]string{"anthropic": "claude-max-20x"}
+
+	r := readPlan(context.Background(), config.Config{Plans: max, Storage: config.StorageConfig{Enabled: true, Path: stale}}, eventschema.ProviderAnthropic, now)
+	if r.Quota != nil || !r.Flat || !strings.Contains(r.Lost, "20h old") || !strings.Contains(r.Lost, "vendor-usage setup claude-subscription") {
+		t.Errorf("stale: %+v", r)
+	}
+	r = readPlan(context.Background(), config.Config{Plans: max, Storage: config.StorageConfig{Enabled: true, Path: empty}}, eventschema.ProviderAnthropic, now)
+	if !r.Flat || r.Lost != "" {
+		t.Errorf("never set up: %+v", r)
+	}
+	payg := map[string]string{"anthropic": "pay-as-you-go"}
+	if r = readPlan(context.Background(), config.Config{Plans: payg, Storage: config.StorageConfig{Enabled: true, Path: stale}}, eventschema.ProviderAnthropic, now); r.Flat || r.Lost != "" {
+		t.Errorf("pay as you go: %+v", r)
 	}
 }
 
