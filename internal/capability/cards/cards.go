@@ -284,6 +284,9 @@ type metric struct {
 	pct   float64
 	reset string
 	pace  *plans.WindowPace
+	// stale is how old the reading is when its source has stopped; zero
+	// when it is current.
+	stale time.Duration
 }
 
 // detail is a "Label: value" line.
@@ -297,7 +300,11 @@ type detail struct {
 func metrics(r plans.HeadroomReport) []metric {
 	out := make([]metric, 0, len(r.Windows)+1)
 	for _, w := range r.Windows {
-		out = append(out, metric{title: windowTitle(w.Name), pct: w.UsedPct, reset: humanReset(w.ResetsIn), pace: w.Pace})
+		m := metric{title: windowTitle(w.Name), pct: w.UsedPct, reset: humanReset(w.ResetsIn), pace: w.Pace}
+		if w.Stale {
+			m.stale = max(time.Minute, time.Since(w.ObservedAt))
+		}
+		out = append(out, m)
 	}
 	if len(out) == 0 && r.WindowCap > 0 {
 		out = append(out, metric{title: windowTitle(windowLabel(r.WindowDuration)), pct: r.WindowPct, reset: humanReset(r.WindowResetsIn)})
@@ -423,7 +430,11 @@ func (p painter) card(r plans.HeadroomReport, cost *spending.ProviderCost, late 
 		if m.reset != "" {
 			out = append(out, side(p.paint(muted, "Resets in "+m.reset)))
 		}
-		if text, tone := paceLine(m.pace); text != "" {
+		text, tone := paceLine(m.pace)
+		if m.stale > 0 {
+			text, tone = "Reading from "+humanDuration(m.stale)+" ago", warnC
+		}
+		if text != "" {
 			out = append(out, side(p.paint(tone, clip(text, inner))))
 		}
 	}
@@ -577,6 +588,9 @@ func brief(reports []plans.HeadroomReport, opt Options, p painter) string {
 			}
 			used := p.paint(levelColor(m.pct), fmt.Sprintf("%4.0f%%", math.Max(0, 100-m.pct)))
 			pace, tone := briefPace(m.pace)
+			if m.stale > 0 {
+				pace, tone = humanDuration(m.stale)+" old", warnC
+			}
 			fmt.Fprintf(&b, "%-*s  %-16s %s  %-8s  %s\n", planW, name, clip(m.title, 16), used, m.reset, p.paint(tone, pace))
 		}
 	}

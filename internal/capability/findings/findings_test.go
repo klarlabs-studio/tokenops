@@ -97,6 +97,39 @@ func TestUsedUpWindow(t *testing.T) {
 	}
 }
 
+// A plan whose every window is stale says so, once, with how to get the
+// reading back, and its stale windows warn about nothing else (ADR 0011).
+func TestStalePlanReading(t *testing.T) {
+	g := glance()
+	at := time.Now().Add(-20 * time.Hour)
+	g.Headroom.Reports[1].Windows = []plans.VendorWindow{
+		{Name: "5h", UsedPct: 99, Source: "claude-usage-meter", ObservedAt: at, Stale: true,
+			Pace: &plans.WindowPace{Status: plans.PaceAhead, RunsOutIn: time.Hour}},
+		{Name: "week", UsedPct: 7, Source: "claude-usage-meter", ObservedAt: at, Stale: true},
+	}
+	r := Compute(Inputs{Glance: g})
+	titles := make([]string, 0, len(r.Findings))
+	for _, f := range r.Findings {
+		titles = append(titles, f.Title)
+		if f.Kind == KindQuota && strings.HasPrefix(f.Title, "Claude's session") {
+			t.Errorf("a stale window warned: %+v", f)
+		}
+	}
+	want := "Claude's plan reading is 20h old"
+	found := false
+	for _, f := range r.Findings {
+		if f.Title == want {
+			found = true
+			if f.Level != LevelWarn || !strings.Contains(f.Action, "claude.ai") {
+				t.Errorf("stale finding %+v", f)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("no %q in %v", want, titles)
+	}
+}
+
 // A coach that already refuses re-reads is not told to; a plan with no
 // room is not offered as the place to move work; nothing is an empty
 // list, never null.

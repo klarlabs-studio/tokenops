@@ -197,3 +197,7 @@ select {
 .finding-title { font-weight: 550; }
 .finding-action { margin-top: 3px; font-size: 12px; color: var(--low); }
 .finding-action code { font: 11px ui-monospace, Menlo, monospace; padding: 0 3px; border-radius: 4px; background: var(--surface); border: 1px solid var(--hair); }
+
+/* A window whose source stopped: dimmed, its age in the warning tone. */
+.metric.stale .track { opacity: 0.45; }
+.metric-line.warn { color: var(--medium); }
