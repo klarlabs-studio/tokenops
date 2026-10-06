@@ -12,6 +12,7 @@ import (
 	mcpserver "go.klarlabs.de/mcp/server"
 
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard"
@@ -284,8 +285,8 @@ type glanceIn struct {
 }
 
 type spendIn struct {
-	View           string   `json:"view,omitempty" jsonschema:"enum=summary,enum=top,enum=burn,enum=forecast,description=summary (default): spend and tokens over a window. top: the largest consumers. burn: the last hours, hour by hour. forecast: daily spend projected forward."`
-	Since          string   `json:"since,omitempty" jsonschema:"description=summary and top: RFC3339 time or a duration such as 24h or 7d"`
+	View           string   `json:"view,omitempty" jsonschema:"enum=summary,enum=top,enum=burn,enum=forecast,enum=commits,description=summary (default): spend and tokens over a window. top: the largest consumers. burn: the last hours, hour by hour. forecast: daily spend projected forward. commits: what each of the operator's commits cost, from the agent work that led to it."`
+	Since          string   `json:"since,omitempty" jsonschema:"description=summary, top and commits: RFC3339 time or a duration such as 24h or 7d"`
 	Until          string   `json:"until,omitempty" jsonschema:"description=summary and top: RFC3339 time; open when omitted"`
 	WorkflowID     string   `json:"workflow_id,omitempty" jsonschema:"description=summary: one workflow"`
 	AgentID        string   `json:"agent_id,omitempty" jsonschema:"description=summary: one agent"`
@@ -293,6 +294,7 @@ type spendIn struct {
 	Top            int      `json:"top,omitempty" jsonschema:"minimum=1,maximum=50,description=top: how many (default 5)"`
 	Hours          int      `json:"hours,omitempty" jsonschema:"minimum=1,maximum=168,description=burn: lookback in hours (default 24)"`
 	HorizonDays    int      `json:"horizon_days,omitempty" jsonschema:"minimum=1,maximum=30,description=forecast: days ahead (default 7)"`
+	Limit          int      `json:"limit,omitempty" jsonschema:"description=commits: most recent commits to list (default 20); the totals cover them all"`
 	IncludeSources []string `json:"include_sources,omitempty" jsonschema:"description=re-admit an excluded activity source: mcp-session"`
 }
 
@@ -433,6 +435,7 @@ type spendOut struct {
 	Top      *topConsumersResult `json:"top,omitempty"`
 	Burn     map[string]any      `json:"burn,omitempty"`
 	Forecast *forecastResult     `json:"forecast,omitempty"`
+	Commits  *commits.Report     `json:"commits,omitempty"`
 }
 
 type sessionsOut struct {
@@ -531,6 +534,7 @@ func publicTools() []publicTool {
 				"top":      {inner: "tokenops_top_consumers", params: params("by", "top", "since", "until", "include_sources")},
 				"burn":     {inner: "tokenops_burn_rate", params: params("hours", "include_sources")},
 				"forecast": {inner: "tokenops_forecast", params: params("horizon_days", "include_sources")},
+				"commits":  {inner: "tokenops_cost_per_commit", params: params("since", "limit")},
 			},
 		},
 		{

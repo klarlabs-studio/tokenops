@@ -59,6 +59,7 @@ operator's own.
 | `GET /api/spend/forecast` | Daily spend projected forward |
 | `GET /api/spend/cache_stats` | Prompt cache hits and savings |
 | `GET /api/spend/top` | Top consumers, ranked on the API equivalent |
+| `GET /api/spend/commits` | What each commit cost: the agent work that led to it, priced; subjects withheld |
 | `GET /api/spend/burn-rate` | Usage over the last hours |
 | `GET /api/scorecard` | The wedge KPI scorecard |
 | `GET /api/pricing` | The rate card TokenOps costs with |

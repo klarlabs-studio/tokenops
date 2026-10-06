@@ -30,6 +30,7 @@ var storageDisabledPaths = []string{
 	"GET /api/workflows/{id}",
 	"GET /api/optimizations",
 	"GET /api/spend/top",
+	"GET /api/spend/commits",
 	"GET /api/spend/burn-rate",
 	"GET /api/scorecard",
 	"GET /api/decisions/{id}",

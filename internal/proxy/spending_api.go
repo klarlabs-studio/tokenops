@@ -1,12 +1,15 @@
 package proxy
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 )
 
 // Spending routes answer from the same capability the MCP tools call
@@ -85,4 +88,37 @@ func includeSources(r *http.Request) []string {
 		out = append(out, strings.Split(v, ",")...)
 	}
 	return out
+}
+
+// spendCommits is what each of the operator's commits in a window cost:
+// the agent work that led to it, priced. Commit subjects are the
+// repository's own text, so the API withholds them.
+func (a *AnalyticsHandlers) spendCommits(w http.ResponseWriter, r *http.Request) {
+	since := time.Now().Add(-7 * 24 * time.Hour)
+	if r.URL.Query().Get("since") != "" {
+		s, _, err := sinceUntil(r)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		since = s
+	}
+	res, err := commits.Compute(r.Context(), commits.Deps{
+		Turns: func(ctx context.Context, since time.Time) ([]analytics.SessionTurn, error) {
+			return a.aggregator.SessionTurns(ctx, analytics.Filter{Since: since})
+		},
+	}, since)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	limit, err := intParam(r, "limit")
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, err)
+		return
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	writeAPIJSON(w, http.StatusOK, res.Newest(limit).WithoutSubjects())
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 
 	"go.klarlabs.de/tokenops/internal/capability/money"
@@ -63,6 +64,19 @@ type topConsumersInput struct {
 	Since          string   `json:"since,omitempty"`
 	Until          string   `json:"until,omitempty"`
 	IncludeSources []string `json:"include_sources,omitempty"`
+}
+
+type costPerCommitInput struct {
+	Since string `json:"since,omitempty" jsonschema:"description=RFC3339 timestamp or duration like '7d'; default 7d"`
+	Limit int    `json:"limit,omitempty" jsonschema:"description=Most recent commits to list (default 20); the totals cover them all"`
+}
+
+// sinceOrDefault is since parsed, or def before now when it is empty.
+func sinceOrDefault(since string, def time.Duration) (time.Time, error) {
+	if since == "" {
+		return time.Now().Add(-def), nil
+	}
+	return parseTimeOrDuration(since)
 }
 
 type burnRateInput struct {
@@ -200,6 +214,30 @@ func RegisterTools(s *Server, d Deps) error {
 		Description("Return the burn rate over the last N hours (default 24): cost, tokens, and API-equivalent value, with the hourly series. On a flat-rate plan cost is $0 at the margin, so tokens are the burn.").
 		Handler(func(ctx context.Context, in burnRateInput) (string, error) {
 			return burnRate(ctx, d, in)
+		})
+
+	s.Tool("tokenops_cost_per_commit").
+		Description("What each of the operator's commits cost: the agent work that led to it, priced, and the work no commit followed.").
+		OutputSchema(commits.Report{}).
+		Handler(func(ctx context.Context, in costPerCommitInput) (*commits.Report, error) {
+			since, err := sinceOrDefault(in.Since, 7*24*time.Hour)
+			if err != nil {
+				return nil, inputError(err)
+			}
+			r, err := commits.Compute(ctx, commits.Deps{
+				Turns: func(ctx context.Context, since time.Time) ([]analytics.SessionTurn, error) {
+					return d.Aggregator.SessionTurns(ctx, analytics.Filter{Since: since})
+				},
+			}, since)
+			if err != nil {
+				return nil, err
+			}
+			limit := in.Limit
+			if limit <= 0 {
+				limit = 20
+			}
+			r = r.Newest(limit)
+			return &r, nil
 		})
 
 	s.Tool("tokenops_forecast").

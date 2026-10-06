@@ -167,6 +167,7 @@ findings underneath. `tokenops --help` groups the rest:
 Every day
   glance                    every plan's windows, pace, cost and the coach's findings
   spend [--forecast]        what you spent, where it went, where it is heading
+  spend --by commit         what each of your commits cost
   story                     what you asked for, what the agent did, where it went sideways
   dx [--fresh]              how sessions go: turns, rework, interrupts, the one change to make
   status                    whether TokenOps is working, and what to fix
