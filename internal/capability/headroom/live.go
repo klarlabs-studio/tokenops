@@ -6,6 +6,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodeoauth"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudestatusline"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
@@ -32,6 +33,7 @@ var liveSources = map[eventschema.Provider][]struct{ source, key string }{
 	eventschema.ProviderAnthropic: {
 		{claudeusagemeter.SourceTag, "five_hour_used_pct"},
 		{claudestatusline.SourceTag, "granularity"},
+		{claudecodeoauth.SourceTag, "five_hour_used_pct"},
 	},
 	eventschema.ProviderOpenAI: {{codexjsonl.SourceTag, "primary_used_pct"}},
 }

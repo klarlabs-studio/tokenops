@@ -279,7 +279,11 @@ func (p *Poller) reportUnrecognised(names []string) {
 	}
 }
 
-func attrsKey(attrs map[string]string) string {
+func attrsKey(attrs map[string]string) string { return AttributesKey(attrs) }
+
+// AttributesKey identifies a reading's content, so a source can skip
+// storing a reading identical to its last.
+func AttributesKey(attrs map[string]string) string {
 	keys := make([]string, 0, len(attrs))
 	for k := range attrs {
 		keys = append(keys, k)
@@ -318,8 +322,17 @@ func (p *Poller) recordSuccess() {
 // after each reset was ever stored — and on Enterprise, with no window, the
 // first reading ever.
 func newEnvelope(ts time.Time, orgID string, u *UsageResponse) *eventschema.Envelope {
-	h := sha256.Sum256([]byte("claude-usage-meter|" + orgID + "|" + strconv.FormatInt(ts.UnixNano(), 10)))
-	attrs := map[string]string{"org_id": orgID}
+	return NewReading(SourceTag, ts, orgID, u)
+}
+
+// NewReading is a usage snapshot as an event under source, in the
+// attribute shape every Claude window source writes (ADR 0011).
+func NewReading(source string, ts time.Time, orgID string, u *UsageResponse) *eventschema.Envelope {
+	h := sha256.Sum256([]byte(source + "|" + orgID + "|" + strconv.FormatInt(ts.UnixNano(), 10)))
+	attrs := map[string]string{}
+	if orgID != "" {
+		attrs["org_id"] = orgID
+	}
 	for label, window := range u.Windows {
 		attrs[label+"_used_pct"] = fmt.Sprintf("%.2f", *window.Utilization)
 		if window.ResetsAt != "" {
@@ -347,7 +360,7 @@ func newEnvelope(ts time.Time, orgID string, u *UsageResponse) *eventschema.Enve
 		SchemaVersion: eventschema.SchemaVersion,
 		Type:          eventschema.EventTypePrompt,
 		Timestamp:     ts,
-		Source:        SourceTag,
+		Source:        source,
 		Attributes:    attrs,
 		Payload: &eventschema.PromptEvent{
 			Provider: eventschema.ProviderAnthropic,

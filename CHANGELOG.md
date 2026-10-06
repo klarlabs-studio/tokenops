@@ -6,6 +6,7 @@
 
 - **plans:** several sources per provider, tried in order (ADR 0011). Every plan window carries its `source`, `observed_at` and `stale`. Where the claude.ai meter and Claude Code's status line both report a window, the newer reading wins. A window from a polling source silent for more than 30 minutes is stale: the cards and the menu bar show its age in place of its pace, it raises no pace warning or alert, and a plan whose every window is stale raises the finding "Claude's plan reading is 20h old" with how to get it back
 - **claude usage meter:** a pasted session falls back to the browser's session when claude.ai refuses it, as a browser-read one already did; `browser: none` turns that off
+- **claude code sign-in:** an opt-in source of Claude's plan windows, `tokenops vendor-usage setup claude-code`, the way CodexBar reads them. It reads Claude Code's own OAuth token from `~/.claude/.credentials.json` or, on macOS with your leave, the Keychain; holds it in memory only; sends it only to `api.anthropic.com/api/oauth/usage`; and never refreshes it, since that would sign Claude Code out. It polls every 10 minutes, honours `Retry-After`, does not ask the Keychain again for six hours after a declined prompt, and its readings merge with the status line's and the meter's, newest first
 - **menubar:** a plan whose every window has gone stale alerts once that its reading stopped, with the fix, and once when it is back
 - **plans:** Claude's `iguana_necktie` window is its cloud credits, shown as "Cloud credits"
 
