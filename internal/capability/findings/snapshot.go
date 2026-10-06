@@ -115,3 +115,16 @@ func Gather(g *headroom.Glance, c *coach.Report, cacheDir string) Inputs {
 	}
 	return in
 }
+
+// DX answers w from the daemon's last analysis when w is the week it
+// analyses and that analysis is under MaxSnapshotAge old; otherwise it
+// reads the transcripts, which takes minutes on a busy machine.
+func DX(w sessions.Window, now time.Time) sessions.DX {
+	if w.Root == "" && !w.All && (w.Days == 0 || w.Days == 7) {
+		if s, err := ReadSnapshot(DefaultDir()); err == nil && s != nil &&
+			now.Sub(s.ComputedAt) <= MaxSnapshotAge && s.DX.Metrics.Prompts > 0 {
+			return s.DX
+		}
+	}
+	return sessions.ComputeDX(w, now)
+}

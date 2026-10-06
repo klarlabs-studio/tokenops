@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 )
 
@@ -42,7 +43,7 @@ func (s *Server) registerSessionRoutes(mux RouteMux) {
 			writeAPIError(w, http.StatusBadRequest, err)
 			return
 		}
-		writeAPIJSON(w, http.StatusOK, sessions.ComputeDX(win, time.Now()))
+		writeAPIJSON(w, http.StatusOK, findings.DX(win, time.Now()))
 	})
 	mux.HandleFunc("GET /api/story", func(w http.ResponseWriter, r *http.Request) {
 		win, err := sessionWindow(r, s.sessions().Transcripts)
