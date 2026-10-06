@@ -124,7 +124,8 @@ this pace; a window that alerted says so again when it resets. Upgrades refresh 
 
 A week of agent work in one read, before you set anything up. It needs no
 config, no daemon and no store: it reads what Claude Code, Codex, Gemini
-CLI and opencode already wrote, and sends nothing anywhere.
+CLI and opencode already wrote, and sends nothing anywhere. Without
+TokenOps installed, `npx tokenops checkup` runs it from npm.
 
 ```
 TokenOps checkup — last 7d
