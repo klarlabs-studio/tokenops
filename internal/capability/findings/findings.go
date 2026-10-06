@@ -136,11 +136,11 @@ func quota(reports []plans.HeadroomReport) []Finding {
 				Kind:  KindQuota,
 				Level: LevelWarn,
 				Title: fmt.Sprintf("%s's %s runs out in %s at this pace", vendor(r), windowWords(w.Name), human(p.RunsOutIn)),
-				Evidence: fmt.Sprintf("%.0f%% used, %.0f points ahead of an even pace; it resets in %s",
-					w.UsedPct, p.DeltaPct, human(resetsIn(w))),
+				Evidence: fmt.Sprintf("%.0f%% left, %.0f points ahead of an even pace; it resets in %s",
+					math.Max(0, 100-w.UsedPct), p.DeltaPct, human(resetsIn(w))),
 			}
 			if alt, pct, ok := roomiest(reports, r.Provider); ok {
-				f.Action = fmt.Sprintf("Put the work that can move on %s (%.0f%% used) until it resets.", alt, pct)
+				f.Action = fmt.Sprintf("Put the work that can move on %s (%.0f%% left) until it resets.", alt, math.Max(0, 100-pct))
 			} else {
 				f.Action = "Pace the remaining work, or keep the long tasks for after the reset."
 			}

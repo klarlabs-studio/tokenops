@@ -1,18 +1,24 @@
 # TokenOps menu bar
 
-TokenOps in the menu bar: an icon whose ring fills to the plan window
-closest to its limit. A click opens the panel under it with every plan's
-details; hovering lists each window's share and reset (for example
-**Codex · week 75% · resets in 5d 14h**); a right click has Refresh,
+TokenOps in the menu bar: an icon with two rings for the plan closest to
+its limit, its week outside and its session inside, each filled to the
+share left. A click opens the panel under it with every plan's details;
+hovering lists each window's share and reset (for example
+**Codex · week 25% left · resets in 5d 14h**); a right click has Refresh,
 Launch at Login and Quit. Built on
 [Vitra](https://github.com/klarlabs-studio/vitra).
 
 The panel switches between plans with a tab per vendor, busiest first, each
-with a small bar of its fullest window. A plan shows every window the
-vendor reports (session, weekly, per model) with a bar, its reset and its
-pace: behind lasts to the reset, ahead says when it runs out. Below come
-extra usage against its limit, credit left, and cost today and over 30
-days, at API prices where a plan covers it. Usage on models with no list
+with a small bar of its fullest window. A plan's header names the account
+its client is signed in with (Claude Code's; Codex keeps its account only
+inside its sign-in token, which is not read) and the plan. Every window the
+vendor reports (session, weekly, per model) has a bar filled to the share
+left, a tick where an even pace would leave it, its reset, and its pace:
+reserve lasts to the reset, over pace says when it runs out. Below come
+extra usage against its limit, credit left, four figures (today, the last
+30 days' cost and tokens, today's tokens) at API prices where a plan
+covers it, the last 30 days as a chart, the top model, and the coach's
+findings. Usage on models with no list
 price yet is left out of the money and the panel says how much, rather
 than show a figure that looks complete. It follows the system's light or
 dark appearance in the Klarlabs palette.

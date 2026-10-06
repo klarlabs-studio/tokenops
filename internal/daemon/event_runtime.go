@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
@@ -23,6 +24,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/domainmigration"
 	"go.klarlabs.de/tokenops/internal/infra/followthrough"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
+	"go.klarlabs.de/tokenops/internal/infra/planevidence"
 	"go.klarlabs.de/tokenops/internal/infra/rulesfs"
 	"go.klarlabs.de/tokenops/internal/infra/sourceprobe"
 	"go.klarlabs.de/tokenops/internal/otlp"
@@ -188,7 +190,7 @@ func wireDomainEventPublishers(bus *events.AsyncBus, logger *slog.Logger) func()
 // it was started with is current.
 func plansDeps(cfg config.Config, store *sqlite.Store, engine *spend.Engine) func() headroom.Deps {
 	return func() headroom.Deps {
-		deps := headroom.Deps{Config: &cfg}
+		deps := headroom.Deps{Config: &cfg, Accounts: signedInAccounts}
 		if store != nil {
 			deps.Reader = store
 		}
@@ -281,4 +283,14 @@ func coachEnv(cfg config.Config) (coachcap.Ledger, coachcap.ContextLevers) {
 		levers = l
 	}
 	return ledger, levers
+}
+
+// signedInAccounts reads which account each client is signed in with, on
+// every glance: signing in as someone else must show at once.
+func signedInAccounts() map[string]string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	return planevidence.Accounts(home)
 }

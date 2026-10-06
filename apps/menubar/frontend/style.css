@@ -114,24 +114,49 @@ html, body {
   border-bottom: 1px solid var(--hair);
 }
 .head h2 { margin: 0 0 1px; font-size: 17px; font-weight: 650; letter-spacing: -.01em; }
+.who { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; max-width: 58%; min-width: 0; }
+.account {
+  font-size: 12.5px; font-weight: 600;
+  max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .plan {
   font-size: 11.5px; color: var(--muted);
-  padding: 2px 8px; border-radius: 999px;
+  padding: 1px 8px; border-radius: 999px;
   border: 1px solid var(--hair); background: var(--surface);
-  max-width: 50%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .muted { color: var(--faint); }
 
-.metric { padding: 10px 0 8px; }
+.metric { padding: 12px 0 10px; }
 .metric + .metric { border-top: 1px solid var(--hair); }
-.metric h3 { margin: 0 0 7px; font-size: 14px; font-weight: 600; }
-.track { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
-.fill { height: 100%; border-radius: 3px; background: var(--low); transition: width .35s ease; }
+.metric h3 { margin: 0 0 9px; font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
+.track { position: relative; height: 10px; border-radius: 5px; background: var(--track); overflow: hidden; }
+.fill { height: 100%; border-radius: 5px; background: var(--low); transition: width .35s ease; }
 .fill.medium { background: var(--medium); }
 .fill.high { background: var(--high); }
-.metric-line { display: flex; justify-content: space-between; margin-top: 6px; font-variant-numeric: tabular-nums; }
+/* Where an even spread would leave the bar. */
+.tick {
+  position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px;
+  border-radius: 2px; background: var(--high);
+}
+.metric-line { display: flex; justify-content: space-between; gap: 8px; margin-top: 2px; font-size: 12.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.metric-line.strong { margin-top: 8px; color: var(--fg); font-weight: 600; }
+.metric-line .right { text-align: right; }
+.metric-line.strong .right { color: var(--muted); font-weight: 500; }
 .note { margin-top: 4px; font-size: 11.5px; color: var(--faint); }
-.cost div:not(.note) { margin-top: 3px; font-variant-numeric: tabular-nums; }
+/* Usage: four figures, the last 30 days, the top model. */
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+.stat-label { font-size: 12px; color: var(--faint); }
+.stat-value { margin-top: 2px; font-size: 17px; font-weight: 650; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.chart {
+  display: flex; align-items: flex-end; gap: 3px;
+  height: 64px; margin: 16px 0 4px;
+  border-bottom: 1px solid var(--hair);
+}
+.bar { flex: 1; min-width: 2px; border-radius: 2px 2px 0 0; background: var(--low); opacity: .85; }
+.bar:hover { opacity: 1; }
+.top-model { margin-top: 10px; font-weight: 600; font-size: 12.5px; }
+.usage .note { margin-top: 2px; }
 .plain { margin: 8px 0; color: var(--muted); }
 .error { margin: 6px 0; padding: 8px 10px; border-radius: 8px; background: var(--surface); color: var(--error); }
 

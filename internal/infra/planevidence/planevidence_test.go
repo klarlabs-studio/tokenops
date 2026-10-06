@@ -79,3 +79,17 @@ func TestCodexPlanType(t *testing.T) {
 		t.Errorf("an unknown plan_type named a plan: %+v", unknown)
 	}
 }
+
+func TestAccountsNamesTheClaudeSignIn(t *testing.T) {
+	home := t.TempDir()
+	if got := Accounts(home); len(got) != 0 {
+		t.Fatalf("no ~/.claude.json, got %v", got)
+	}
+	body := `{"emailAddress":"top-level@x","oauthAccount":{"organizationType":"claude_max","emailAddress":"me@example.com"}}`
+	if err := os.WriteFile(filepath.Join(home, ".claude.json"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := Accounts(home); got["anthropic"] != "me@example.com" || len(got) != 1 {
+		t.Errorf("got %v", got)
+	}
+}

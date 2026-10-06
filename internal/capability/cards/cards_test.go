@@ -70,8 +70,8 @@ func TestCardContents(t *testing.T) {
 	for _, want := range []string{
 		"TokenOps • AI Usage & Limits", "Oct",
 		"Codex [local]", "PLAN Pro Standard ($100)", "Claude", "PLAN Max 20x",
-		"Weekly", "91% used", "Resets in 30m", "Pace: ahead (+37%) · out in 23h 47m",
-		"Session", "Pace: behind (-3%) · lasts to reset", "Weekly · Fable", "0% used",
+		"Weekly", "9% left", "Resets in 30m", "Pace: ahead (+37%) · out in 23h 47m",
+		"Session", "Pace: behind (-3%) · lasts to reset", "Weekly · Fable", "100% left",
 		"Extra usage", "$41.50 / $100", "Credit left:", "$12.50", "Overage risk:", "HIGH",
 		"$745+ · 2.24B tok", "15% of requests have no price yet.", "At API prices; the plan covers it.",
 		"$10,948 · 20.00B tok",
@@ -110,7 +110,7 @@ func TestOrderAndLayout(t *testing.T) {
 
 func TestBriefAndUnconfigured(t *testing.T) {
 	b := Render(sample(), Options{Brief: true, Width: 100})
-	for _, want := range []string{"PLAN", "PACE", "Codex Pro Standard ($100)", "Weekly · Fable", " 91%", "+37% · out in 23h 47m", "-3% · lasts"} {
+	for _, want := range []string{"PLAN", "PACE", "Codex Pro Standard ($100)", "Weekly · Fable", "LEFT", "   9%", "+37% · out in 23h 47m", "-3% · lasts"} {
 		if !strings.Contains(b, want) {
 			t.Errorf("brief lacks %q:\n%s", want, b)
 		}

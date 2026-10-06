@@ -20,6 +20,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
+	"go.klarlabs.de/tokenops/internal/infra/planevidence"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -82,7 +83,13 @@ func runGlance(cmd *cobra.Command, rf *rootFlags, dbPath string, view glanceView
 		return fmt.Errorf("open store: %w (run `tokenops init`)", err)
 	}
 	defer func() { _ = store.Close() }()
-	deps := headroom.Deps{Config: &cfg, Reader: storeReader{store: store}}
+	deps := headroom.Deps{Config: &cfg, Reader: storeReader{store: store}, Accounts: func() map[string]string {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil
+		}
+		return planevidence.Accounts(home)
+	}}
 	eng, engErr := buildSpendEngine(cfg)
 	if engErr == nil {
 		deps.Price = eng.ComputeAt

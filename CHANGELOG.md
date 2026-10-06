@@ -4,18 +4,19 @@
 
 ### Added
 
+- **menubar:** the panel reads like CodexBar's, in the Klarlabs palette: the account each plan's client is signed in with in the header, every window as a bar filled to the share left with a tick where an even pace would leave it, "N% in reserve" or "over pace" with "lasts until reset" or "runs out in", four figures (today, the last 30 days' cost and tokens, today's tokens), the last 30 days as a chart, the top model, and the coach. The icon is two rings for the busiest plan, its week outside and its session inside, each filled to the share left. `GET /api/glance` carries `accounts` (Claude Code's signed-in email; Codex keeps its account only inside its sign-in token, which is not read)
 - **otel:** the daemon pushes derived metrics to an OTLP/HTTP collector every `otel.interval`: plan window utilization and pace, usage and its value per provider, session grades, the coach's findings and cost per commit. Figures only, checked against a stock OpenTelemetry Collector; `tokenops otel` prints every figure that would be pushed. Forwarding every event is now opt-in (`otel.events: true`); before, `otel.enabled` forwarded events and pushed no metrics
-
 - **commits:** what each of your commits cost. `tokenops spend --by commit`, `GET /api/spend/commits` (subjects withheld) and `tokenops_spend` (view commits) join agent work to commits by place and time: a turn belongs to the repository its session ran in and to the next commit you made there within a day, across local branches, so a squash-merged change carries the work of its branch. Work after your last commit, with no commit within a day, outside a repository, or from a session whose directory is unknown is reported apart rather than dropped. Reads only the clients' own records and `git log`; nothing new is stored
+
+### Changed
+
+- **plans:** windows are shown as the share **left** everywhere a person reads them — the menu bar, `tokenops glance` cards and `--brief`, the statusline, the coach's findings and the MCP text — with bars that shrink as a window fills. The JSON keeps `used_pct`; context stays a used gauge
 
 ### Fixed
 
 - **opencode:** opencode 2 showed "Plugin must export a default definition with an id and an effect or setup function" on every start, for the plugin tokenops writes for opencode 1.x. One file now serves both: its default export carries `server` for 1.x and `setup` for opencode 2, checked on opencode 1.18.32 and 2.0.24 with the hooks firing on each. The daemon brings an older generated plugin up to date when it starts, keeping its hooks, binary and budget and folding in the separate `tokenops-v2.js`, so an upgrade repairs it with no reinstall; a plugin tokenops did not write is never touched
 - **analytics:** plan-window readings (the claude.ai usage meter, account readers) are stored as prompt events with no model and no tokens, and were counted as requests and listed as an unpriced Claude model — 2,189 of a month's requests here. Usage queries now count only events that carry usage; usage with tokens but no model still counts and still shows as unpriced
 - **dx:** `GET /api/dx` and `tokenops_sessions` (view dx) answer the default week from the daemon's background analysis when it is under six hours old, as `tokenops dx` does, instead of reading every transcript per call
-
-### Fixed
-
 - **opencode:** opencode 1.18 creates `session_message` before it moves sessions to `session_v2`, and the reader joined `session_v2` whenever `session_message` existed, so the whole read failed and every opencode session was missing from spend, dx, story and coaching. It now joins whichever session table holds the directory; on this machine that brings back 54,149 messages
 
 ## 0.98.1 - 2026-10-05

@@ -28,7 +28,7 @@ func TestStatuslineRendersClaudeCodesInput(t *testing.T) {
 	if len(lines) == 0 {
 		t.Fatal("no line")
 	}
-	for _, want := range []string{"Opus 5.5 high", "5h 24%", "wk 41%", "ctx 42%", "cache 90%"} {
+	for _, want := range []string{"Opus 5.5 high", "5h 76% left", "wk 59% left", "ctx 42%", "cache 90%"} {
 		if !strings.Contains(lines[0], want) {
 			t.Errorf("line %q lacks %q", lines[0], want)
 		}
