@@ -3,7 +3,7 @@ layout: home
 hero:
   name: TokenOps
   text: Analytics tells you about last week's retry loop. TokenOps ends this one.
-  tagline: Your coding agents already write down everything they do. TokenOps reads those files on your machine — Claude Code, Codex, opencode, Cursor — and hands the agent back something it can act on mid-task. Nothing uploads. No account. Apache 2.0.
+  tagline: Your coding agents already write down everything they do. TokenOps reads those files on your machine — Claude Code, Codex, opencode, Cursor, Gemini CLI — watches every plan's limits, and hands the agent back something it can act on mid-task. Your prompts and your code never leave this machine. No account. Apache 2.0.
   actions:
     - theme: brand
       text: 90-second quickstart
@@ -14,10 +14,12 @@ hero:
 features:
   - title: It acts, it doesn't just report
     details: 'read-guard refuses the third redundant read of the same file. fmt compresses a 40k-token command output before it reaches the context window. coach-hook nudges as session cost crosses a budget fraction — on Claude Code, Codex, Cursor and opencode. session_budget returns a closed action enum the agent branches on: continue, slow_down, switch_model, wait_for_reset.'
+  - title: Every plan's limits, from more than one source
+    details: 'Claude Max, ChatGPT Pro, Copilot, Cursor and pay-as-you-go accounts in one view: what is left in each window, the pace, when it resets. Each window is read several ways, and the newest wins. A reading from a source that stopped is shown with its age, never as current. In the terminal, the status line and the macOS menu bar, with alerts at 20% left, 5% and used up.'
   - title: It reads what is already there
-    details: 'Passive readers for every client that keeps a local record — Claude Code, Codex CLI, opencode, Cursor. Six vendor-usage pollers. An optional proxy for ground truth. No change to how you or your agents work.'
-  - title: Your prompts never leave this machine
-    details: 'Prompt text and file contents are read at scan time and never persisted — only derived numbers are. Local SQLite, no cloud account, no telemetry. The daemon API stays on localhost by default and is protected by a shared secret.'
+    details: 'Passive readers for every client that keeps a local record — Claude Code, Codex CLI, opencode, Cursor, Gemini CLI. What each of your commits cost. An optional proxy for ground truth. No change to how you or your agents work.'
+  - title: Your prompts and your code never leave this machine
+    details: 'Prompt text and file contents are read at scan time and never persisted — only derived numbers are. Local SQLite, no cloud account, no telemetry. Every outbound call is named below, and the one that can send figures (an OpenTelemetry export to your own collector) is off until you turn it on.'
   - title: Honest about what it cannot see
     details: 'Every prediction carries signal_quality (low / medium / high) plus a one-line caveat and an upgrade path. The capability matrix marks what a client can never support — not "coming soon" — with the reason. Time-to-first-token is reported only under the proxy, because no transcript records it.'
 ---
@@ -75,11 +77,11 @@ tool calls per context band — and says plainly when the corpus is too noisy to
 call it. Grading the worst dimension rather than the average is deliberate: an
 average hides the one thing making the session unpleasant.
 
-## Four clients, and a matrix that admits the gaps
+## Five clients, and a matrix that admits the gaps
 
-Claude Code, Codex, Cursor and opencode all keep a local record and all
-have a hook surface. TokenOps reads every one of them, and arms what each
-one can actually carry:
+Claude Code, Codex, Cursor, opencode and Gemini CLI all keep a local
+record. TokenOps reads every one of them, and arms what each one can
+actually carry:
 
 | | reads sessions | coaching nudge | refuses a redundant read |
 |---|:--:|:--:|:--:|
@@ -87,7 +89,9 @@ one can actually carry:
 | Codex CLI | ✅ | ✅ | 🚫 |
 | Cursor | ✅ | ✅ | 🚫 |
 | opencode | ✅ | ✅ | ✅ |
+| Gemini CLI | ✅ | ⬜ | ⬜ |
 
+⬜ is not built yet: for Gemini CLI, TokenOps reads sessions only, so far.
 The two 🚫 are not a roadmap. **Codex has no file-read tool at all** —
 across 40 real rollouts every call was a shell command, so there is no
 read to intervene in. **Cursor's `beforeReadFile` cannot decline** — only
@@ -179,7 +183,7 @@ coaching, DX and story surfaces compute over it in memory and persist only
 derived numbers. Your files are read where they already sit and are never
 copied anywhere.
 
-Today there is nowhere for them to go: the event store is a SQLite file under
+There is nowhere for them to go: the event store is a SQLite file under
 `~/.tokenops`, there is no cloud account to create, and no telemetry to opt out
 of. The daemon API is local by default and protected by a shared secret.
 
@@ -193,17 +197,30 @@ over unbounded input, and a filter can miss: a prompt can contain anything, and
 whoever wrote the patterns had to guess what. Here there is no sensitive
 payload to redact, because the sensitive part never enters the pipeline.
 
-**Two outbound calls, named rather than discovered.** The daemon fetches a
-public rate card once a day (LiteLLM's, plus models.dev's for gateways such
-as Fireworks) so a model released after your binary does not silently price
-at zero. When your currency is not the US dollar, TokenOps
-also fetches the ECB's daily euro reference rate, at most once a day, to show
-totals in your currency. Both *download*; they send no prompt, no file, no
-identifier and no usage figure, and each is one line to switch off
-(`pricing.refresh.disabled: true`, `money.fetch_rate: false`). A tool that
-starts talking to the network without saying so has spent trust it cannot buy
-back, so both are documented in
-[configuration](/guide/configuration#automatic-rate-card-refresh).
+**Every outbound call, named rather than discovered.** A tool that starts
+talking to the network without saying so has spent trust it cannot buy back.
+
+- **Rate cards and currency.** Once a day the daemon fetches a public rate
+  card (LiteLLM's, plus models.dev's for gateways such as Fireworks), so a
+  model released after your binary does not silently price at zero. When
+  your currency is not the US dollar, it also fetches the ECB's daily euro
+  rate. Both *download*. They send no prompt, no file, no identifier and no
+  usage figure, and each is one line to switch off
+  (`pricing.refresh.disabled: true`, `money.fetch_rate: false`; see
+  [configuration](/guide/configuration#automatic-rate-card-refresh)).
+- **Your own plan's limits, from the vendor.** The readers you turn on ask
+  each vendor how much of *your* plan is used: the claude.ai usage meter,
+  Claude Code's own sign-in (opt-in), `codex app-server` (Codex signs its
+  own request), and the account endpoints of the keys your harnesses already
+  hold. Each credential goes only to the vendor that issued it, and the
+  answer is a percentage and a reset time. The full list, and what each
+  needs, is on the [coverage page](/integrations/coverage#where-plan-windows-come-from).
+- **Figures to your own collector, if you ask.** `otel.enabled` pushes
+  derived metrics to an OpenTelemetry collector you name: window use and
+  pace, usage and its value, session grades, the coach's findings, cost per
+  commit. Figures only, never prompts, code or commit subjects, and
+  `tokenops otel` prints exactly what would leave. It is off until you turn
+  it on.
 
 ## Cache-aware, or off by 9×
 
@@ -223,21 +240,24 @@ A model nobody can price is reported as unpriced, not costed at zero. The
 difference between "this session was free" and "we could not measure it" is
 the whole product, and a rate card goes stale on its own.
 
-## Honest about what it sees today
+## Honest about what it sees, and how fresh it is
 
-TokenOps reports its own signal quality on every prediction. Four sources,
-ranked by faithfulness:
+A plan's windows come from the vendor's own figures, read several ways and
+least invasive first. For Claude: Claude Code's status line on every turn,
+the claude.ai usage meter between sessions, and, if you opt in, Claude
+Code's own sign-in. For Codex: its app server every 15 minutes, and the
+rate limits in every rollout. The newest reading of each window wins.
 
-- **`mcp_tool_pings` (low)** — Default. Counts MCP invocations as an activity
-  proxy. Useful as an "is the agent talking to me?" signal, not a quota meter.
-- **`claude_code_stats_cache` (medium)** — Per-model daily totals; can't
-  resolve the 5h rolling window but gives real attribution. The schema is
-  undocumented, so every response carries a caveat.
-- **`proxy_traffic` (high)** — Route your SDK's base URL through the local
-  proxy. Captures every request per-event.
-- **`vendor_usage_api` (high)** — Anthropic Admin API poller. Covers metered
-  API usage; Claude Max plan-window state has no documented endpoint and
-  stays heuristic.
+Every window says which source read it and when. When that source has
+stopped, the window shows its age in place of its pace, and raises no pace
+warning. If every window of a plan is stale, the coach says so with the fix,
+and the menu bar alerts once. On 5 October an expired claude.ai session left
+one install showing a 21-hour-old week as current, 15 points off. That
+cannot happen quietly any more.
+
+Every other prediction carries `signal_quality` (low / medium / high) with a
+one-line caveat and an upgrade path. Where no vendor figure exists, the
+estimate says it is one.
 
 ## Why TokenOps exists
 
@@ -248,17 +268,18 @@ the cap hits, and nothing tells the agent anything at all. When Claude returns
 tab or eating the wait.
 
 TokenOps puts the headroom check inside the agent's loop, for every provider it
-tracks. One CLI, one MCP server, one event schema:
+tracks, and in front of you before the cutoff: the status line, the menu bar
+and an alert at 20% left. `tokenops init` binds your plans from what your
+clients report about themselves, and asks only for what it cannot tell:
 
-```bash
-tokenops plan set anthropic claude-max-20x
-tokenops plan set openai gpt-plus
-tokenops plan set github copilot-business
-tokenops plan set cursor cursor-pro
+```
+PLAN                       WINDOW            LEFT  RESETS    PACE
+Codex Pro Standard ($100)  Weekly              0%  3d 10h    used up
+Claude Max 20x             Session            75%  1h 57m    -36% · lasts
+                           Weekly             76%  3d 5h     -30% · lasts
 ```
 
-Every plan you bind contributes to a unified headroom view your agent can
-query mid-conversation.
+That is `tokenops glance --brief` on this machine, the day it shipped.
 
 ## Who this is for
 
