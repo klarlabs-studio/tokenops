@@ -105,6 +105,7 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecode",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodeoauth",
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexappserver",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilot",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/fireworks",

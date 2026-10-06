@@ -44,6 +44,7 @@ type VendorWindow struct {
 var PolledSources = map[string]time.Duration{
 	"claude-usage-meter": 30 * time.Minute,
 	"claude-code-oauth":  30 * time.Minute,
+	"codex-app-server":   45 * time.Minute,
 }
 
 // stamp marks every window with the reading it came from.
@@ -96,7 +97,7 @@ func vendorWindows(ctx context.Context, reader EventReader, provider eventschema
 		// same windows in the same shape.
 		parse, sources = claudeWindows, ClaudeWindowSources
 	case eventschema.ProviderOpenAI:
-		parse, sources = codexWindows, []string{"codex-jsonl"}
+		parse, sources = codexWindows, []string{"codex-jsonl", "codex-app-server"}
 	default:
 		return accountWindows(ctx, reader, provider, now)
 	}

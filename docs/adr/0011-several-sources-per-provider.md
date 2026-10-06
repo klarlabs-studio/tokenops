@@ -1,6 +1,6 @@
 # ADR 0011 — Several sources per provider, tried in order
 
-- **Status:** Accepted 2026-10-06. Phase 1 shipped (#559, #560); phase 2 Claude Code sign-in shipped (opt-in).
+- **Status:** Accepted 2026-10-06. Phase 1 shipped (#559, #560); phase 2 shipped: Claude Code sign-in (opt-in) and Codex app server (on by default).
 - **Date:** 2026-10-06
 - **Deciders:** TokenOps maintainers
 - **Related:** ADR 0003 (authoritative cost), ADR 0010 (daemon API), `docs/competitive-landscape.md` (update 2026-10-06), `internal/contexts/observability/freshness`
@@ -83,7 +83,7 @@ Claude Code's own documentation (checked 2026-10-06, v2.1.289):
 | Provider | 1 Harness feed | 2 Records on disk | 3 Own sign-in | 4 Another app's credential |
 |---|---|---|---|---|
 | Claude | status line `rate_limits` (installed by `init`) | — | claude.ai meter, browser refresh | Claude Code OAuth (`setup claude-code`, opt-in) |
-| Codex | `codex app-server` `account/rateLimits/read`: Codex signs in itself (phase 2) | rollout `rate_limits` per turn | — | Codex `auth.json`: not planned; the app server makes it unnecessary |
+| Codex | `codex app-server` `account/rateLimits/read`: Codex signs in itself (shipped, on by default) | rollout `rate_limits` per turn | — | Codex `auth.json`: not planned; the app server makes it unnecessary |
 | Gemini, Copilot, Cursor and account providers | — | chat recordings, hook ledger | quota endpoints, account keys | — |
 
 ## Consequences

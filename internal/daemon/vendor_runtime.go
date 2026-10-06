@@ -19,6 +19,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodeoauth"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudestatusline"
 	claudeusagemeter "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexappserver"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
 	copilotusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilot"
 	cursorusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursor"
@@ -119,6 +120,21 @@ func startVendorUsagePollers(
 		})
 		sup.Go("claude-usage-meter", p.Run)
 		logger.Info("claude-usage-meter usage poller live", "interval", cfg.VendorUsage.ClaudeUsageMeter.Interval)
+	}
+	if cs := cfg.VendorUsage.CodexAppServer; cs.On() {
+		home, _ := os.UserHomeDir()
+		bin, found := cs.Path, cs.Path != ""
+		if !found {
+			bin, found = codexappserver.Locate(home)
+		}
+		if found {
+			p := codexappserver.NewPoller(bus, codexappserver.PollerOptions{
+				Dial: codexappserver.Command(bin), Interval: cs.Interval,
+				Health: sourceHealth.For(codexappserver.SourceTag), Logger: logger,
+			})
+			sup.Go(codexappserver.SourceTag, p.Run)
+			logger.Info("codex-app-server rate-limit poller live", "codex", bin)
+		}
 	}
 	if oc := cfg.VendorUsage.ClaudeCodeOAuth; oc.Enabled {
 		home, _ := os.UserHomeDir()

@@ -45,6 +45,11 @@ func (c Config) VendorUsageConfigHint(sourceTag string) string {
 			return "switched off: `tokenops vendor-usage enable vendor-accounts` turns it back on"
 		}
 		return "on; reads only when a harness (Claude Code, Codex, opencode) or the environment has this vendor's key"
+	case "codex-app-server":
+		if !c.VendorUsage.CodexAppServer.On() {
+			return "switched off: set vendor_usage.codex_app_server.enabled: true to ask Codex for its windows"
+		}
+		return "on; asks `codex app-server` for the plan windows every 15 minutes, Codex signing its own request"
 	case "fireworks-usage":
 		if !c.VendorUsage.Fireworks.On() {
 			return "switched off: `tokenops vendor-usage enable fireworks` turns it back on"
