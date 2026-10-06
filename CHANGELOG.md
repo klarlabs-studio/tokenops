@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.100.0 - 2026-10-06
+
 ### Added
 
 - **plans:** several sources per provider, tried in order (ADR 0011). Every plan window carries its `source`, `observed_at` and `stale`. Where the claude.ai meter and Claude Code's status line both report a window, the newer reading wins. A window from a polling source silent for more than 30 minutes is stale: the cards and the menu bar show its age in place of its pace, it raises no pace warning or alert, and a plan whose every window is stale raises the finding "Claude's plan reading is 20h old" with how to get it back
