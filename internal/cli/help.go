@@ -19,7 +19,7 @@ var helpGroups = []*cobra.Group{
 // helpOrder lists the commands in each section most used first; the help
 // keeps this order rather than sorting alphabetically.
 var helpOrder = []string{
-	"glance", "spend", "story", "dx", "status", "explain",
+	"glance", "checkup", "spend", "story", "dx", "status", "explain",
 	"init", "detect", "daemon", "hooks", "statusline", "menubar", "plan", "budget", "provider",
 	"vendor-usage", "pricing", "otel", "config", "version",
 	"coach", "mode", "routing", "preferred-model", "experiment", "rules", "fmt", "task", "outcome",
@@ -28,7 +28,7 @@ var helpOrder = []string{
 
 // commandGroup files each command under its section.
 var commandGroup = map[string]string{
-	"glance": "everyday", "spend": "everyday", "story": "everyday", "dx": "everyday",
+	"glance": "everyday", "checkup": "everyday", "spend": "everyday", "story": "everyday", "dx": "everyday",
 	"status": "everyday", "explain": "everyday",
 
 	"init": "setup", "detect": "setup", "daemon": "setup", "hooks": "setup", "statusline": "setup",

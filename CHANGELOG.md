@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **checkup:** `tokenops checkup`, a week of agent work in one read, before any setup: tokens and their value at API prices per harness and model (Claude Code, Codex, Gemini CLI, opencode), the sessions' DX grade, and each leak with the command that fixes it — re-reads of unchanged files, instruction files re-read on every turn, lookups on a flagship model. It needs no config, daemon or store, sends nothing, and says so when a fix is already installed
+
 ## 0.100.0 - 2026-10-06
 
 ### Added
