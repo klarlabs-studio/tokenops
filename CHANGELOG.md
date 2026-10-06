@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.99.0 - 2026-10-06
+
 ### Added
 
 - **menubar:** the panel reads like CodexBar's, in the Klarlabs palette: the account each plan's client is signed in with in the header, every window as a bar filled to the share left with a tick where an even pace would leave it, "N% in reserve" or "over pace" with "lasts until reset" or "runs out in", four figures (today, the last 30 days' cost and tokens, today's tokens), the last 30 days as a chart, the top model, and the coach. The icon is two rings for the busiest plan, its week outside and its session inside, each filled to the share left. `GET /api/glance` carries `accounts` (Claude Code's signed-in email; Codex keeps its account only inside its sign-in token, which is not read)
