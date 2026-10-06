@@ -28,6 +28,32 @@ type VendorWindow struct {
 	// Pace compares the share used with the share of the window gone by;
 	// absent when the window's length or reset is unknown.
 	Pace *WindowPace `json:"pace,omitempty"`
+	// Source is the reader that reported the window, and ObservedAt when
+	// (ADR 0011): where two sources report a window, the newer wins.
+	Source     string    `json:"source,omitempty"`
+	ObservedAt time.Time `json:"observed_at,omitzero"`
+	// Stale is a window from a polling source that has fallen silent, so
+	// its share is no longer known to be current.
+	Stale bool `json:"stale,omitempty"`
+}
+
+// PolledSources are the window sources that read on a schedule whether or
+// not anyone works, with how old their newest reading may be while they
+// are working. A source missing here reads as work happens (the status
+// line, Codex's rollouts), so an old reading from it is idle, not stopped.
+var PolledSources = map[string]time.Duration{
+	"claude-usage-meter": 30 * time.Minute,
+}
+
+// stamp marks every window with the reading it came from.
+func stamp(ws []VendorWindow, e *eventschema.Envelope, now time.Time) []VendorWindow {
+	for i := range ws {
+		ws[i].Source, ws[i].ObservedAt = e.Source, e.Timestamp
+		if limit, polled := PolledSources[e.Source]; polled && now.Sub(e.Timestamp) > limit {
+			ws[i].Stale = true
+		}
+	}
+	return ws
 }
 
 // OtherLimit names a window the vendor reports with no known meaning:
@@ -35,6 +61,14 @@ type VendorWindow struct {
 // month to its reset. It is still a limit that can stop work, so it is
 // shown, but under this name rather than the codename.
 const OtherLimit = "other limit"
+
+// CloudCredits names Claude's cloud-session credits, which claude.ai and
+// the OAuth usage endpoint report under the codename cloudCreditsKey (as
+// CodexBar decodes it, 2026-10-06).
+const (
+	CloudCredits    = "cloud credits"
+	cloudCreditsKey = "iguana_necktie"
+)
 
 // VendorWindows returns every window in the newest vendor reading for
 // provider within the last two weeks, busiest first: Claude's 5-hour,
@@ -81,8 +115,34 @@ func vendorWindows(ctx context.Context, reader EventReader, provider eventschema
 	if len(newest) == 0 {
 		return nil
 	}
-	out := parse(MergeReadings(newest), now)
+	out := newestPerWindow(newest, parse, now)
 	sort.SliceStable(out, func(i, j int) bool { return out[i].UsedPct > out[j].UsedPct })
+	return out
+}
+
+// newestPerWindow parses each source's newest reading on its own, so every
+// window keeps the source and time it came from, and keeps the newest
+// reading of each window across sources.
+func newestPerWindow(newest map[string]*eventschema.Envelope, parse func(map[string]string, time.Time) []VendorWindow, now time.Time) []VendorWindow {
+	byName := map[string]VendorWindow{}
+	var order []string
+	for _, e := range newest {
+		for _, w := range stamp(parse(e.Attributes, now), e, now) {
+			key := w.Name + "|" + w.VendorLabel
+			prev, seen := byName[key]
+			if !seen {
+				order = append(order, key)
+			}
+			if !seen || w.ObservedAt.After(prev.ObservedAt) {
+				byName[key] = w
+			}
+		}
+	}
+	sort.Strings(order)
+	out := make([]VendorWindow, 0, len(order))
+	for _, k := range order {
+		out = append(out, byName[k])
+	}
 	return out
 }
 
@@ -127,6 +187,8 @@ func claudeWindows(attrs map[string]string, now time.Time) []VendorWindow {
 			w.Name, w.Duration = "week", 7*24*time.Hour
 		case label == "spend_limit":
 			w.Name, w.Duration = spendLimitWindow(attrs["spend_limit_period"])
+		case label == cloudCreditsKey:
+			w.Name, w.VendorLabel = CloudCredits, label
 		default:
 			w.Name, w.VendorLabel = OtherLimit, label
 		}
@@ -228,6 +290,7 @@ func accountWindows(ctx context.Context, reader EventReader, provider eventschem
 		setReset(&w, best.Attributes[k+"reset_at"], now)
 		out = append(out, w)
 	}
+	out = stamp(out, best, now)
 	sort.SliceStable(out, func(i, j int) bool { return out[i].UsedPct > out[j].UsedPct })
 	return out
 }

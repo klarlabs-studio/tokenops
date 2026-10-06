@@ -71,6 +71,11 @@ func measures(g glanceView) []measure {
 	for _, r := range g.PlanHeadroom.Reports {
 		name := shortName(r.Provider)
 		for _, w := range r.Windows {
+			if w.Stale {
+				// The last share read before its source stopped: alerting on
+				// it would announce a change nobody measured.
+				continue
+			}
 			out = append(out, measure{
 				key: r.Provider + "/" + w.Name + "/" + w.VendorLabel, words: name + " " + windowWords(w.Name),
 				used: w.UsedPct, resetsIn: w.ResetsIn, pace: w.Pace,
@@ -125,7 +130,7 @@ func windowWords(name string) string {
 	case "month":
 		return "monthly window"
 	}
-	if strings.HasSuffix(name, "limit") {
+	if strings.HasSuffix(name, "limit") || strings.HasSuffix(name, "credits") {
 		return name
 	}
 	return name + " window"

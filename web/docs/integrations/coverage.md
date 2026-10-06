@@ -85,6 +85,33 @@ whose session we can sit inside.
 Parity is not available on those clients and will not become available;
 saying so is the differentiator against a matrix that promises everything.
 
+## Where plan windows come from
+
+A plan's windows (Claude's session and week, Codex's week) are read from
+several sources, tried in order from least to most invasive
+([ADR 0011](https://github.com/klarlabs-studio/tokenops/blob/main/docs/adr/0011-several-sources-per-provider.md)).
+Each reading keeps its source and time. Where two sources report the same
+window, the newer one wins.
+
+| Provider | Sources, in order | Covers |
+|---|---|---|
+| Claude | 1. Claude Code's status line (`rate_limits`), installed by `tokenops init` | every open Claude Code session, no credential |
+| | 2. the claude.ai usage meter (`tokenops vendor-usage setup claude-subscription`) | between sessions; re-reads the browser's session when claude.ai expires it |
+| Codex | the `rate_limits` block in each rollout | every Codex turn |
+| Gemini, Copilot, Cursor, account providers | their quota endpoint or account key | while the key works |
+
+A window whose source has stopped is never shown as current. A source
+that polls on a schedule, like the claude.ai meter, has stopped when its
+newest reading is more than 30 minutes old. A source that reads as you
+work, like the status line or Codex's rollouts, is idle when its reading
+is old, not stopped.
+
+When every window of a plan is stale:
+- the cards and the menu bar show each window's age in place of its pace;
+- the coach raises a finding, "Claude's plan reading is 20h old", with how
+  to get it back;
+- the coach's hook says so once every six hours instead of quoting dollars.
+
 ## Providers (proxy plane)
 
 Every provider below is routable through the proxy. Bind one with

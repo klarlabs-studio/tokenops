@@ -126,6 +126,16 @@ func TestBriefAndUnconfigured(t *testing.T) {
 			t.Errorf("brief=%v: used-up or other window:\n%s", brief, out)
 		}
 	}
+	// A stale window says how old it is in place of its pace.
+	stale := sample()
+	stale.Headroom.Reports[0].Windows[0].Stale = true
+	stale.Headroom.Reports[0].Windows[0].ObservedAt = time.Now().Add(-20 * time.Hour)
+	if out := Render(stale, Options{Brief: true, Width: 130}); !strings.Contains(out, "20h 0m old") {
+		t.Errorf("brief stale:\n%s", out)
+	}
+	if out := Render(stale, Options{Width: 130}); !strings.Contains(out, "Reading from 20h 0m ago") {
+		t.Errorf("card stale:\n%s", out)
+	}
 	var g headroom.Glance
 	g.Headroom.Unconfigured = "bind a plan"
 	if out := Render(g, Options{}); !strings.Contains(out, "bind a plan") {

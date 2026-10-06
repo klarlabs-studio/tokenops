@@ -92,15 +92,18 @@ func TestPlanCostSource(t *testing.T) {
 	}
 }
 
-// The clearance cookie expires within hours, so a meter that only reads it
-// at setup works for an afternoon. from_browser is what keeps it alive, and
-// wiring it is invisible when forgotten: the poller just falls back to the
-// stored key and is refused later.
+// The clearance cookie expires within hours, and claude.ai expires the
+// session itself every few weeks: a meter that cannot re-read the browser
+// stops, as a pasted one did for 20 hours on 2026-10-05. Every meter gets
+// the browser as its way back (ADR 0011) unless browser: none says not to.
 func TestBrowserSessionSourceFollowsTheConfig(t *testing.T) {
-	if browserSessionSource(config.ClaudeUsageMeterConfig{}) != nil {
-		t.Error("read the browser without being asked to")
+	if browserSessionSource(config.ClaudeUsageMeterConfig{}) == nil {
+		t.Error("a pasted session has no way back when claude.ai refuses it")
 	}
 	if browserSessionSource(config.ClaudeUsageMeterConfig{FromBrowser: true}) == nil {
 		t.Error("from_browser set, but the poller got no way to re-read the session")
+	}
+	if browserSessionSource(config.ClaudeUsageMeterConfig{Browser: "None"}) != nil {
+		t.Error("browser: none still reads a browser")
 	}
 }

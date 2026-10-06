@@ -106,6 +106,46 @@ func vendor(r plans.HeadroomReport) string {
 	return r.Display
 }
 
+// staleReading is a plan whose every window comes from a source that has
+// stopped: the plan's share is unknown, and says how to get it back.
+func staleReading(r plans.HeadroomReport) (Finding, bool) {
+	if len(r.Windows) == 0 {
+		return Finding{}, false
+	}
+	var newest time.Time
+	for _, w := range r.Windows {
+		if !w.Stale {
+			return Finding{}, false
+		}
+		if w.ObservedAt.After(newest) {
+			newest = w.ObservedAt
+		}
+	}
+	f := Finding{
+		Kind:     KindQuota,
+		Level:    LevelWarn,
+		Title:    fmt.Sprintf("%s's plan reading is %s old", vendor(r), age(time.Since(newest))),
+		Evidence: "Its windows are from the last reading before the source stopped, so how much is left is unknown",
+		Action:   "Check `tokenops status` for the source that stopped.",
+	}
+	if r.Provider == "anthropic" {
+		f.Evidence = "The claude.ai meter has stopped reading, usually because the claude.ai session expired"
+		f.Action = "Sign in to claude.ai in your browser; TokenOps picks the session up. Or run `tokenops vendor-usage setup claude-subscription`."
+	}
+	return f, true
+}
+
+// age words how old a reading is: "20h", "3d", "40m".
+func age(d time.Duration) string {
+	switch {
+	case d >= 48*time.Hour:
+		return fmt.Sprintf("%dd", int(d/(24*time.Hour)))
+	case d >= time.Hour:
+		return fmt.Sprintf("%dh", int(d/time.Hour))
+	}
+	return fmt.Sprintf("%dm", max(1, int(d/time.Minute)))
+}
+
 // windowWords names a window for a sentence: "weekly window".
 func windowWords(name string) string {
 	if model, ok := strings.CutPrefix(name, "week ("); ok {
@@ -118,7 +158,7 @@ func windowWords(name string) string {
 		return "weekly window"
 	case "day":
 		return "daily window"
-	case plans.OtherLimit:
+	case plans.OtherLimit, plans.CloudCredits:
 		return name
 	}
 	return name + " window"
@@ -129,7 +169,15 @@ func windowWords(name string) string {
 func quota(reports []plans.HeadroomReport) []Finding {
 	var out []Finding
 	for _, r := range reports {
+		if f, ok := staleReading(r); ok {
+			out = append(out, f)
+		}
 		for _, w := range r.Windows {
+			if w.Stale {
+				// Its share is not known to be current; warning on it
+				// would be advice from a reading that has stopped.
+				continue
+			}
 			p := w.Pace
 			var f Finding
 			switch {

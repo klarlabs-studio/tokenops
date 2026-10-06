@@ -98,11 +98,12 @@ func TestUnknownClaudeWindowIsAnOtherLimit(t *testing.T) {
 	now := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
 	meter := &eventschema.Envelope{Source: "claude-usage-meter", Timestamp: now.Add(-time.Minute), Attributes: map[string]string{
 		"seven_day_used_pct": "7.00", "seven_day_kind": "weekly_all", "seven_day_reset_at": "2026-10-09T23:00:00Z",
-		"iguana_necktie_used_pct": "40.00", "iguana_necktie_reset_at": "2026-11-05T07:59:00+00:00",
+		"velvet_otter_used_pct": "40.00", "velvet_otter_reset_at": "2026-11-05T07:59:00+00:00",
+		"iguana_necktie_used_pct": "0.00", "iguana_necktie_reset_at": "2026-11-05T07:59:00+00:00",
 	}}
 	got := VendorWindows(context.Background(), authFakeReader{events: []*eventschema.Envelope{meter}}, eventschema.ProviderAnthropic, now)
-	if len(got) != 2 || got[0].Name != OtherLimit || got[0].VendorLabel != "iguana_necktie" || got[0].UsedPct != 40 ||
-		got[0].ResetsAt.IsZero() || got[1].Name != "week" || got[1].VendorLabel != "" {
+	if len(got) != 3 || got[0].Name != OtherLimit || got[0].VendorLabel != "velvet_otter" || got[0].UsedPct != 40 ||
+		got[0].ResetsAt.IsZero() || got[1].Name != "week" || got[1].VendorLabel != "" || got[2].Name != CloudCredits {
 		t.Errorf("windows %+v", got)
 	}
 }
@@ -131,5 +132,39 @@ func TestStatusLineSpendLimit(t *testing.T) {
 	quota := QuotaWindowsFromAttributes(eventschema.ProviderAnthropic, reading.Attributes)
 	if len(quota) != 1 || quota[0].Label != "monthly spend limit" {
 		t.Errorf("quota windows %+v", quota)
+	}
+}
+
+// Each window says which source read it and when, the newest reading of a
+// window wins across sources, and a window from a polling source that has
+// fallen silent is stale: the meter polls every few minutes whether or not
+// anyone works, so a reading hours old means it stopped (2026-10-06).
+func TestVendorWindowsCarryTheirReading(t *testing.T) {
+	now := time.Date(2026, 10, 6, 15, 0, 0, 0, time.UTC)
+	meter := &eventschema.Envelope{Source: "claude-usage-meter", Timestamp: now.Add(-20 * time.Hour), Attributes: map[string]string{
+		"five_hour_used_pct": "26.00", "five_hour_reset_at": "2026-10-05T22:10:00Z",
+		"seven_day_used_pct": "7.00", "seven_day_reset_at": "2026-10-09T23:00:00Z",
+	}}
+	statusline := &eventschema.Envelope{Source: "claude-code-statusline", Timestamp: now.Add(-time.Minute), Attributes: map[string]string{
+		"seven_day_used_pct": "12.00", "seven_day_reset_at": "2026-10-09T23:00:00Z", "granularity": "quota_snapshot",
+	}}
+	got := VendorWindows(context.Background(), authFakeReader{events: []*eventschema.Envelope{meter, statusline}}, eventschema.ProviderAnthropic, now)
+	by := map[string]VendorWindow{}
+	for _, w := range got {
+		by[w.Name] = w
+	}
+	week, session := by["week"], by["5h"]
+	if week.UsedPct != 12 || week.Source != "claude-code-statusline" || !week.ObservedAt.Equal(now.Add(-time.Minute)) || week.Stale {
+		t.Errorf("week %+v", week)
+	}
+	if session.Source != "claude-usage-meter" || !session.Stale {
+		t.Errorf("session %+v", session)
+	}
+	// A status line reading hours old is a session that ended, not a
+	// source that stopped.
+	statusline.Timestamp = now.Add(-9 * time.Hour)
+	got = VendorWindows(context.Background(), authFakeReader{events: []*eventschema.Envelope{statusline}}, eventschema.ProviderAnthropic, now)
+	if len(got) != 1 || got[0].Stale {
+		t.Errorf("idle status line marked stale: %+v", got)
 	}
 }
