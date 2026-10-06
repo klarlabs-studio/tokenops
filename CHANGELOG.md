@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.101.0 - 2026-10-06
+
 ### Added
 
 - **npm:** `npx tokenops checkup` with nothing installed first. The `tokenops` package launches the binary from one of four platform packages (`@klarlabs-studio/tokenops-{darwin,linux}-{arm64,x64}`), unpacked from the release's own archives, so npm ships what GitHub and Homebrew ship; published with provenance from the release workflow
