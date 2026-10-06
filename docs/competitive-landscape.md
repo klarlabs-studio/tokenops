@@ -112,6 +112,63 @@ governance) rather than replacing it. Each step names the gap it closes.
 Deliberately not planned: session search (G10), failover routing (G11), and
 benchmarks or seat management (G12).
 
+## Update 2026-10-06
+
+Re-checked three days on. Sources: each product's releases, changelog or
+site; **[U]** as above.
+
+**Plan progress.** Steps 1 (#507), 5 (#518, #521), 6 (#550) and 7 (#551)
+shipped; step 3 in part (`init` binds plans from vendor evidence, #520);
+step 4 began (Gemini CLI #523, coding-plan windows for seven more
+providers #517). G8 closed: the menu bar app ships in the cask, with
+alerts as of #556. Steps 2 (landing page) and 8 (team plane) are open.
+
+**What moved in the field.**
+
+- **CodexBar** v0.72.0 (10-04), 90 providers. Beyond the windows it now
+  *acts* in small ways: shell hooks on quota thresholds and status changes,
+  Stay Awake while an agent session runs. It lists live agent sessions,
+  locally and on remote hosts over SSH, serves a dashboard API, has a Linux
+  Qt app, iCloud sync, widgets, reset notifications (10-02) and a quota
+  burndown chart (09-30). Still no per-task or per-commit cost.
+- **Promptster** is no longer only a name collision. It sells "Cut AI Coding
+  Cost Per Merged PR" to teams (Claude Code, Codex, Cursor, Copilot) and a
+  free solo `npx @promptster/cc-audit`: weekly cost, standing context,
+  redundant reads, oversized models, then your own agent writes three fix
+  plans. Our solo pitch, as one command. When it pivoted is unverified.
+- **Claude Code** 2.1.281–2.1.291: `/insights` recommends auto mode,
+  `/cost` names cache-miss causes, `/rate-limit-options`, and the statusline
+  `rate_limits.spend_limit` gained `used_usd`, `limit_usd`, `period` (read
+  since #507).
+- **tokscale** v4.18.0 added Copilot CLI and Antigravity; ccusage had added
+  Copilot session state in 09. Copilot CLI is the next reader by reach.
+- **New menu-bar meters** (UsageBar, TouchGrassBar, TokenBar, Notch Crew
+  [U], and smaller): the same 5h and weekly bars with 80/95% alerts.
+- No change: Quesma (waitlist, no pricing), ccusage releases, governor,
+  Datadog Agent Console, Faros.
+
+**Gaps, re-ranked.**
+
+| # | Gap | Severity | Status |
+|---|---|---|---|
+| G13 | **Alerts.** Every menu-bar rival warns at thresholds and on reset | High, small | Shipped in #556 |
+| G9 | **Positioning and name.** Promptster now sells our space under our category name; the landing page still says "Nothing uploads… no telemetry" although OTel export exists (opt-in, figures only), against the 2026-09-15 rule to reword before an upload path ships | **High (raised)** | Step 2, next |
+| G14 | **Zero-install first look.** `npx @promptster/cc-audit` answers in one command what `dx` and the coach answer after `init` and a daemon | Medium-high | New: a one-shot `tokenops audit` without the daemon |
+| G1 | **Harness breadth.** Copilot CLI added by tokscale and ccusage | High | Step 4 continues with Copilot CLI |
+| G15 | **Quota burndown chart.** CodexBar charts window use over time; the panel charts cost per day | Medium, small | The window readings are already stored |
+| G7 | Team plane | High for teams | Waiting on hosting region, identity, budget |
+
+Display defects found on the way and fixed in #555: a used-up window read
+"out in" an empty duration and "runs out in 0m"; a claude.ai window sent
+under an internal codename (from 2026-10-05) was shown by that name.
+
+Still not planned: remote session lists, Stay Awake, iCloud sync, widgets, a
+Linux GUI, and matching provider counts one by one.
+
+**Order from here:** landing page and name decision, then the Copilot CLI
+reader, then a one-shot `audit`, then the team plane once its three
+decisions are made.
+
 ## Watch list
 
 - **CodexBar:** if it adds attribution or acting, it becomes the main rival.
@@ -120,3 +177,6 @@ benchmarks or seat management (G12).
 - **Datadog Agent Console and Faros:** the org-level version of our thesis.
 - **Quesma:** when early access opens and what it charges.
 - **governor:** the only other in-session optimizer.
+- **Promptster:** its solo audit is the nearest thing to our solo pitch.
+- **CodexBar hooks:** threshold hooks are the first step from reporting to
+  acting.
