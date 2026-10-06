@@ -96,9 +96,13 @@ spend within the selected window. It surfaces:
 			}
 			defer func() { _ = store.Close() }()
 
-			group, err := parseGroup(groupBy)
-			if err != nil {
-				return err
+			byCommit := groupBy == "commit"
+			group := analytics.GroupModel
+			if !byCommit {
+				group, err = parseGroup(groupBy)
+				if err != nil {
+					return err
+				}
 			}
 			f := analytics.Filter{}
 			if sinceFlag != "" {
@@ -126,6 +130,9 @@ spend within the selected window. It surfaces:
 				return err
 			}
 			agg := analytics.New(store, spendEng)
+			if byCommit {
+				return runSpendByCommit(cmd, agg, f, jsonOut)
+			}
 			summary, err := agg.Summarize(ctx, f)
 			if err != nil {
 				return err
@@ -188,7 +195,7 @@ spend within the selected window. It surfaces:
 	}
 	cmd.Flags().StringVar(&svgFile, "svg", "", "also write an input-vs-output ratio chart (ratio.svg) to this file")
 	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db (defaults to config.storage.path)")
-	cmd.Flags().StringVar(&groupBy, "by", "model", "group top consumers by: model | provider | workflow | agent")
+	cmd.Flags().StringVar(&groupBy, "by", "model", "group top consumers by: model | provider | workflow | agent | commit (the work that led to each of your commits)")
 	cmd.Flags().IntVar(&topN, "top", 5, "number of top consumers to print")
 	cmd.Flags().StringVar(&sinceFlag, "since", "", "lower bound (RFC3339 or duration; default 7d)")
 	cmd.Flags().StringVar(&untilFlag, "until", "", "upper bound (RFC3339 timestamp)")

@@ -10,6 +10,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/actions"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/decisions"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
@@ -79,6 +80,7 @@ var APICatalog = []RouteDoc{
 	{Method: "GET", Path: "/api/spend/series", Summary: "Spend and tokens bucketed over time", Params: []Param{sinceParam, untilParam}},
 	{Method: "GET", Path: "/api/spend/forecast", Summary: "Daily spend projected forward"},
 	{Method: "GET", Path: "/api/spend/cache_stats", Summary: "Prompt cache hits and savings"},
+	{Method: "GET", Path: "/api/spend/commits", Summary: "What each of the operator's commits cost: the agent work that led to it, priced; subjects withheld", Params: []Param{sinceParam, q("limit", "integer", "most recent commits to list; 50 when omitted")}, Response: commits.Report{}},
 	{Method: "GET", Path: "/api/spend/top", Summary: "Top consumers, ranked on the API equivalent", Params: []Param{q("by", "string", "model, provider, workflow or agent"), q("top", "integer", "how many; 5 when omitted"), sinceParam, untilParam, includeParam}, Response: spending.TopConsumers{}},
 	{Method: "GET", Path: "/api/spend/burn-rate", Summary: "Usage over the last hours, hour by hour", Params: []Param{q("hours", "integer", "24 when omitted"), includeParam}, Response: spending.Burn{}},
 	{Method: "GET", Path: "/api/scorecard", Summary: "The wedge KPI scorecard", Params: []Param{q("since_days", "integer", "7 when omitted")}, Response: spending.ScorecardReport{}},

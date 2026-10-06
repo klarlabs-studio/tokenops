@@ -473,3 +473,37 @@ func readV1Parts(db *sql.DB, session string) map[string]*v1Parts {
 	}
 	return out
 }
+
+// SessionDirs maps each opencode session to the directory it ran in,
+// from whichever session table holds it.
+func SessionDirs(path string) (map[string]string, error) {
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	if err != nil {
+		return nil, fmt.Errorf("opencodedb: open: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+	out := map[string]string{}
+	for _, table := range []string{"session", "session_v2"} {
+		if !hasTable(db, table) || !hasColumn(db, table, "directory") {
+			continue
+		}
+		rows, err := db.Query(`SELECT id, directory FROM ` + table)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrSchema, err)
+		}
+		for rows.Next() {
+			var id, dir string
+			if rows.Scan(&id, &dir) == nil && dir != "" {
+				out[id] = dir // session_v2, read second, wins
+			}
+		}
+		_ = rows.Close()
+	}
+	return out, nil
+}

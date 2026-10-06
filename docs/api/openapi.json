@@ -3555,6 +3555,211 @@
         "summary": "Prompt cache hits and savings"
       }
     },
+    "/api/spend/commits": {
+      "get": {
+        "operationId": "getSpendCommits",
+        "parameters": [
+          {
+            "description": "RFC 3339 time or a duration such as 24h",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "most recent commits to list; 50 when omitted",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "attributed_share": {
+                      "type": "number"
+                    },
+                    "commits": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "Cost": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "api_equivalent_usd": {
+                                "type": "number"
+                              },
+                              "cost_usd": {
+                                "type": "number"
+                              },
+                              "tokens": {
+                                "type": "integer"
+                              },
+                              "turns": {
+                                "type": "integer"
+                              },
+                              "unpriced_turns": {
+                                "type": "integer"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "branch": {
+                            "type": "string"
+                          },
+                          "repo": {
+                            "type": "string"
+                          },
+                          "sessions": {
+                            "type": "integer"
+                          },
+                          "sha": {
+                            "type": "string"
+                          },
+                          "subject": {
+                            "type": "string"
+                          },
+                          "work_minutes": {
+                            "type": "number"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "commits_total": {
+                      "type": "integer"
+                    },
+                    "mean_usd": {
+                      "type": "number"
+                    },
+                    "median_usd": {
+                      "type": "number"
+                    },
+                    "method": {
+                      "type": "string"
+                    },
+                    "no_commit_within_a_day": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "api_equivalent_usd": {
+                          "type": "number"
+                        },
+                        "cost_usd": {
+                          "type": "number"
+                        },
+                        "tokens": {
+                          "type": "integer"
+                        },
+                        "turns": {
+                          "type": "integer"
+                        },
+                        "unpriced_turns": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "outside_a_repository": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "api_equivalent_usd": {
+                          "type": "number"
+                        },
+                        "cost_usd": {
+                          "type": "number"
+                        },
+                        "tokens": {
+                          "type": "integer"
+                        },
+                        "turns": {
+                          "type": "integer"
+                        },
+                        "unpriced_turns": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "since": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "subjects_withheld": {
+                      "type": "boolean"
+                    },
+                    "uncommitted": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "api_equivalent_usd": {
+                          "type": "number"
+                        },
+                        "cost_usd": {
+                          "type": "number"
+                        },
+                        "tokens": {
+                          "type": "integer"
+                        },
+                        "turns": {
+                          "type": "integer"
+                        },
+                        "unpriced_turns": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "unknown_directory": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "api_equivalent_usd": {
+                          "type": "number"
+                        },
+                        "cost_usd": {
+                          "type": "number"
+                        },
+                        "tokens": {
+                          "type": "integer"
+                        },
+                        "turns": {
+                          "type": "integer"
+                        },
+                        "unpriced_turns": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "What each of the operator's commits cost: the agent work that led to it, priced; subjects withheld"
+      }
+    },
     "/api/spend/forecast": {
       "get": {
         "operationId": "getSpendForecast",

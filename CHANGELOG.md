@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **commits:** what each of your commits cost. `tokenops spend --by commit`, `GET /api/spend/commits` (subjects withheld) and `tokenops_spend` (view commits) join agent work to commits by place and time: a turn belongs to the repository its session ran in and to the next commit you made there within a day, across local branches, so a squash-merged change carries the work of its branch. Work after your last commit, with no commit within a day, outside a repository, or from a session whose directory is unknown is reported apart rather than dropped. Reads only the clients' own records and `git log`; nothing new is stored
+
 ### Fixed
 
 - **analytics:** plan-window readings (the claude.ai usage meter, account readers) are stored as prompt events with no model and no tokens, and were counted as requests and listed as an unpriced Claude model — 2,189 of a month's requests here. Usage queries now count only events that carry usage; usage with tokens but no model still counts and still shows as unpriced

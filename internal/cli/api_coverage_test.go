@@ -24,6 +24,7 @@ import (
 var apiRoute = map[string]string{
 	"tokenops_resource_glance":     "/api/glance",
 	"tokenops_findings":            "/api/findings",
+	"tokenops_cost_per_commit":     "/api/spend/commits",
 	"tokenops_plan_headroom":       "/api/plans/headroom",
 	"tokenops_session_budget":      "/api/plans/session-budget",
 	"tokenops_spend_summary":       "/api/spend/summary",
