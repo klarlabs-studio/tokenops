@@ -2,17 +2,15 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodeoauth"
+	"go.klarlabs.de/tokenops/internal/capability/claudesignin"
 	"go.klarlabs.de/tokenops/internal/version"
 )
 
@@ -37,37 +35,25 @@ func runClaudeCodeSetup(cmd *cobra.Command, configPath string, restart, keychain
 	}
 	ctx, cancel := context.WithTimeout(cmd.Context(), time.Minute)
 	defer cancel()
-	creds, err := claudecodeoauth.ReadFirst(ctx, claudecodeoauth.Stores(home, keychain))
+	progress := startActivity(cmd.ErrOrStderr(), "Reading Claude Code's sign-in and asking Anthropic for usage")
+	r, err := claudesignin.Check(ctx, claudesignin.Options{
+		Home: home, Keychain: keychain, BaseURL: claudeCodeBaseURL, UserAgent: "tokenops/" + version.Version,
+	})
 	if err != nil {
+		progress.failure("not connected")
 		return fmt.Errorf("%w; nothing was written", err)
 	}
-	if creds.Expired(time.Now()) {
-		return fmt.Errorf("%w; nothing was written", claudecodeoauth.ErrExpired)
-	}
-	client := claudecodeoauth.Client{BaseURL: claudeCodeBaseURL, UserAgent: "tokenops/" + version.Version}
-	progress := startActivity(cmd.ErrOrStderr(), "Reading usage from Anthropic")
-	usage, err := client.Usage(ctx, creds.AccessToken, time.Now())
-	if err != nil {
-		progress.failure("Anthropic did not return usage")
+	progress.success("connected")
+	if !r.RateLimitedUntil.IsZero() {
+		fmt.Fprintf(out, "\nAnthropic is rate-limiting usage reads until %s; the sign-in itself was read.\n", r.RateLimitedUntil.Local().Format("15:04"))
 	} else {
-		progress.success("Anthropic returned usage")
-	}
-	var limited *claudecodeoauth.RateLimitedError
-	switch {
-	case errors.As(err, &limited):
-		fmt.Fprintf(out, "\nAnthropic is rate-limiting usage reads until %s; the sign-in itself was read.\n", limited.Until.Local().Format("15:04"))
-	case err != nil:
-		return fmt.Errorf("%w; nothing was written", err)
-	case !usage.HasSignal():
-		return errors.New("signed in to Claude Code, but Anthropic reports no plan windows for it; nothing was written")
-	default:
 		fmt.Fprintln(out, "\nAnthropic reports:")
-		for _, line := range usage.Summary() {
+		for _, line := range r.Summary {
 			fmt.Fprintln(out, "  "+line)
 		}
 	}
-	if creds.SubscriptionType != "" {
-		fmt.Fprintf(out, "Plan: %s\n", strings.ToUpper(creds.SubscriptionType[:1])+creds.SubscriptionType[1:])
+	if r.Plan != "" {
+		fmt.Fprintf(out, "Plan: %s\n", r.Plan)
 	}
 	return enableClaudeCodeSource(out, configPath, restart, keychain)
 }
