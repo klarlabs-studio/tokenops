@@ -4,6 +4,8 @@
 
 ### Added
 
+- **otel:** the daemon pushes derived metrics to an OTLP/HTTP collector every `otel.interval`: plan window utilization and pace, usage and its value per provider, session grades, the coach's findings and cost per commit. Figures only, checked against a stock OpenTelemetry Collector; `tokenops otel` prints every figure that would be pushed. Forwarding every event is now opt-in (`otel.events: true`); before, `otel.enabled` forwarded events and pushed no metrics
+
 - **commits:** what each of your commits cost. `tokenops spend --by commit`, `GET /api/spend/commits` (subjects withheld) and `tokenops_spend` (view commits) join agent work to commits by place and time: a turn belongs to the repository its session ran in and to the next commit you made there within a day, across local branches, so a squash-merged change carries the work of its branch. Work after your last commit, with no commit within a day, outside a repository, or from a session whose directory is unknown is reported apart rather than dropped. Reads only the clients' own records and `git log`; nothing new is stored
 
 ### Fixed

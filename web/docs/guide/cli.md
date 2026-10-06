@@ -92,6 +92,19 @@ Claude Max 20x             Session             4%  4h 37m    -3% · lasts
 Colour follows the terminal and `NO_COLOR`; `--no-color` (or `--color
 never`) prints plain text. `$COLUMNS` sets the width.
 
+### `tokenops otel`
+
+Prints every metric the daemon pushes to the OpenTelemetry collector in
+`otel.endpoint` — plan windows and pace, usage and its value, session
+grades, the coach's findings, cost per commit — computed now from this
+machine's data, and whether pushing is on. Figures only; see
+[OpenTelemetry export](/guide/configuration#opentelemetry-export).
+
+```bash
+tokenops otel
+tokenops otel --json
+```
+
 ### `tokenops menubar`
 
 On macOS, installs the menu bar app that ships with the Homebrew install

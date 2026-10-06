@@ -291,12 +291,15 @@ providers:                    # upstream URL overrides
   gemini: https://generativelanguage.googleapis.com
 
 otel:
-  enabled: false              # ship envelopes to an OTLP collector
+  enabled: false              # push derived metrics to an OTLP collector (see below)
   endpoint: http://localhost:4318
   headers:
     x-honeycomb-team: ...
+  interval: 1m                # how often metrics are pushed
+  metrics: true               # derived figures only; the default
+  events: false               # also forward every event (redacted); opt-in
   service_name: tokenops
-  redact: true
+  redact: true                # applies to events
 
 pricing:
   path: ~/.tokenops/pricing.yaml  # optional rate overrides (see below)
@@ -869,3 +872,30 @@ system in Germany is billed in euros. See
 | `TOKENOPS_PROVIDER_ANTHROPIC_URL` | `providers.anthropic`         |
 | `TOKENOPS_PROVIDER_GEMINI_URL`    | `providers.gemini`            |
 | `TOKENOPS_PRICING_PATH`           | `pricing.path`                |
+
+## OpenTelemetry export
+
+With `otel.enabled`, the daemon pushes TokenOps' derived metrics to an
+OTLP/HTTP collector every `otel.interval` — the bridge into a monitoring
+stack a company already runs. Figures only: no event, prompt, transcript,
+file or commit subject leaves the machine.
+
+| Metric | Attributes | What it is |
+|---|---|---|
+| `tokenops.plan.window.utilization` (%) | provider, plan, window | Share of a plan window used, as the vendor reports it |
+| `tokenops.plan.window.pace` (%) | provider, plan, window | Share used minus share of the window gone by |
+| `tokenops.plan.window.runs_out_in` (s) | provider, plan, window | When a window ahead of pace runs out |
+| `tokenops.plan.spend.utilization` (%) | provider, plan | Spend against a plan's limit |
+| `tokenops.usage.tokens`, `.api_equivalent` (USD), `.cost` (USD), `.unpriced_share` (%) | provider, period (24h, 30d) | Usage and its value |
+| `tokenops.sessions.dx` | measure | Turns per instruction, first-try, rework, interrupt and escalation rates, compactions |
+| `tokenops.sessions.grade` | dimension | Grades as A=4, B=3, C=2, F=0 |
+| `tokenops.coach.findings` | level, kind | The coach's current findings |
+| `tokenops.commits.cost` (USD), `.count`, `.attributed_share` (%) | statistic | Cost per commit over the last week (refreshed every 30 minutes) |
+
+`tokenops otel` prints every one of these figures, computed now from this
+machine's data, with whether and where they are pushed: the way to check
+what leaves the machine.
+
+`otel.events: true` also forwards every event as an OTLP log record,
+redacted when `otel.redact` is on. That carries far more detail than the
+metrics and is off by default.

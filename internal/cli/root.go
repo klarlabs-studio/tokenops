@@ -68,6 +68,7 @@ func NewRoot() *cobra.Command {
 		newStatusCmd(rf),
 		newGlanceCmd(rf),
 		newMenubarCmd(),
+		newOTelCmd(rf),
 		newVersionCmd(),
 		newConfigCmd(rf),
 		newAuditCmd(rf),

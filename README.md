@@ -185,6 +185,7 @@ Set up
   provider {list|set|unset}
   vendor-usage {status|enable|setup|backfill}
   pricing {show|refresh|diff|lint}
+  otel                      what the daemon pushes to an OpenTelemetry collector
   config show
 
 Coach, routing and policy
