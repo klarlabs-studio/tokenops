@@ -97,6 +97,12 @@ func ComputeDXWithCurve(w Window, now time.Time) (DX, []agentdx.ContextBand) {
 	return dxOf(records, err, window), agentdx.ComputeContextCurve(records)
 }
 
+// DXFromRecords grades records already read, for a caller that needed
+// the transcripts for more than the grade and should not read them twice.
+func DXFromRecords(records []agentdx.Record, err error, window string) DX {
+	return dxOf(records, err, window)
+}
+
 func dxOf(records []agentdx.Record, err error, window string) DX {
 	m := agentdx.ComputeByProvider(records)
 	out := DX{Window: window, Metrics: m, Grades: agentdx.Grade(m), Warnings: readWarnings(err)}
