@@ -1,0 +1,29 @@
+{
+  "name": "tokenops",
+  "_version_comment": "Set at publish time by npm/scripts/build-packages.mjs from the git tag; the literal below is never published. optionalDependencies are rewritten the same way.",
+  "version": "0.0.0-managed-by-release",
+  "description": "What your coding agents cost, where they leak, and every plan's limits — local-first. `npx tokenops checkup` reads a week of Claude Code, Codex, Gemini CLI and opencode work with no setup.",
+  "bin": {
+    "tokenops": "bin/tokenops.cjs"
+  },
+  "files": [
+    "bin/tokenops.cjs",
+    "README.md"
+  ],
+  "optionalDependencies": {
+    "@klarlabs-studio/tokenops-linux-x64": "0.0.0-managed-by-release",
+    "@klarlabs-studio/tokenops-linux-arm64": "0.0.0-managed-by-release",
+    "@klarlabs-studio/tokenops-darwin-x64": "0.0.0-managed-by-release",
+    "@klarlabs-studio/tokenops-darwin-arm64": "0.0.0-managed-by-release"
+  },
+  "keywords": ["claude-code", "codex", "ai", "tokens", "usage", "cost", "rate-limits", "coding-agents"],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/klarlabs-studio/tokenops.git"
+  },
+  "homepage": "https://github.com/klarlabs-studio/tokenops",
+  "engines": {
+    "node": ">=16"
+  }
+}

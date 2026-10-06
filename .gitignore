@@ -58,3 +58,8 @@ nox-findings.json
 ai.inventory.json
 .relicta/
 menubar-dist/
+
+# npm channel: assembled at release time
+/npm/packages/
+/npm-dist/
+/release-archives/
