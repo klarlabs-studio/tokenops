@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **glance:** a used-up window says "used up" (pace status `used_up`) instead of "out in" an empty duration or "runs out in 0m"; a window claude.ai reports under an internal codename is shown as "other limit", with the vendor's key in `vendor_label`
+
 ## 0.99.0 - 2026-10-06
 
 ### Added
