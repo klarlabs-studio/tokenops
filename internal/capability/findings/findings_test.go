@@ -80,6 +80,23 @@ func TestComputeRanksEveryFinding(t *testing.T) {
 	}
 }
 
+// A window already used up is said to be, with when it comes back; it
+// does not "run out in 0m".
+func TestUsedUpWindow(t *testing.T) {
+	g := glance()
+	g.Headroom.Reports[0].Windows[0] = plans.VendorWindow{Name: "week", UsedPct: 100, ResetsIn: "85h46m0s",
+		Pace: &plans.WindowPace{Status: plans.PaceUsedUp, DeltaPct: 51}}
+	r := Compute(Inputs{Glance: g})
+	if len(r.Findings) != 1 {
+		t.Fatalf("findings %+v", r.Findings)
+	}
+	f := r.Findings[0]
+	if f.Kind != KindQuota || f.Level != LevelWarn || f.Title != "Codex's weekly window is used up until it resets in 3d 13h" ||
+		!strings.Contains(f.Action, "Claude (67% left)") {
+		t.Errorf("used-up finding %+v", f)
+	}
+}
+
 // A coach that already refuses re-reads is not told to; a plan with no
 // room is not offered as the place to move work; nothing is an empty
 // list, never null.

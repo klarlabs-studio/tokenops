@@ -10,6 +10,8 @@ const (
 	PaceOnPace = "on_pace"
 	PaceBehind = "behind"
 	PaceAhead  = "ahead"
+	// PaceUsedUp is a window with nothing left until it resets.
+	PaceUsedUp = "used_up"
 )
 
 // onPaceBand is how far, in points, use may stray from the share of the
@@ -19,7 +21,7 @@ const onPaceBand = 5
 // WindowPace says whether a window lasts to its reset at the rate it has
 // been used so far.
 type WindowPace struct {
-	// Status is on_pace, behind (lasts to the reset) or ahead.
+	// Status is on_pace, behind (lasts to the reset), ahead, or used_up.
 	Status string `json:"status"`
 	// DeltaPct is the share used minus the share of the window elapsed,
 	// in points: +37 is 37 points ahead of an even spread.
@@ -56,6 +58,7 @@ func (w VendorWindow) PaceAt(now time.Time) *WindowPace {
 		p.Status = PaceAhead
 	}
 	if w.UsedPct >= 100 {
+		p.Status = PaceUsedUp
 		return p
 	}
 	// At the rate so far, the rest of the window lasts this long.

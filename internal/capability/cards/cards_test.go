@@ -115,6 +115,17 @@ func TestBriefAndUnconfigured(t *testing.T) {
 			t.Errorf("brief lacks %q:\n%s", want, b)
 		}
 	}
+	// A used-up window says so, not "out in" an empty duration.
+	used := sample()
+	used.Headroom.Reports[1].Windows[0] = plans.VendorWindow{Name: "week", UsedPct: 100, ResetsIn: "85h46m0s",
+		Pace: &plans.WindowPace{Status: plans.PaceUsedUp, DeltaPct: 51}}
+	used.Headroom.Reports[0].Windows = append(used.Headroom.Reports[0].Windows, plans.VendorWindow{Name: plans.OtherLimit, UsedPct: 0})
+	for _, brief := range []bool{true, false} {
+		out := Render(used, Options{Brief: brief, Width: 130})
+		if strings.Contains(out, "out in") || !strings.Contains(out, "used up") || !strings.Contains(out, "Other limit") {
+			t.Errorf("brief=%v: used-up or other window:\n%s", brief, out)
+		}
+	}
 	var g headroom.Glance
 	g.Headroom.Unconfigured = "bind a plan"
 	if out := Render(g, Options{}); !strings.Contains(out, "bind a plan") {

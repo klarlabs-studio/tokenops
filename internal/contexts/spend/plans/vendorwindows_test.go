@@ -90,6 +90,23 @@ func TestVendorWindowsMergeTheMeterAndTheStatusLine(t *testing.T) {
 	}
 }
 
+// A window claude.ai reports under a name with no known meaning (an
+// internal codename, no kind) is still a limit that can stop work: it is
+// shown as "other limit" and keeps the vendor's own label, never the
+// codename as if it were a window's name.
+func TestUnknownClaudeWindowIsAnOtherLimit(t *testing.T) {
+	now := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
+	meter := &eventschema.Envelope{Source: "claude-usage-meter", Timestamp: now.Add(-time.Minute), Attributes: map[string]string{
+		"seven_day_used_pct": "7.00", "seven_day_kind": "weekly_all", "seven_day_reset_at": "2026-10-09T23:00:00Z",
+		"iguana_necktie_used_pct": "40.00", "iguana_necktie_reset_at": "2026-11-05T07:59:00+00:00",
+	}}
+	got := VendorWindows(context.Background(), authFakeReader{events: []*eventschema.Envelope{meter}}, eventschema.ProviderAnthropic, now)
+	if len(got) != 2 || got[0].Name != OtherLimit || got[0].VendorLabel != "iguana_necktie" || got[0].UsedPct != 40 ||
+		got[0].ResetsAt.IsZero() || got[1].Name != "week" || got[1].VendorLabel != "" {
+		t.Errorf("windows %+v", got)
+	}
+}
+
 // A Claude apps gateway spend limit is a window, named by its period, and
 // a monthly one with dollars is the vendor's spend.
 func TestStatusLineSpendLimit(t *testing.T) {
