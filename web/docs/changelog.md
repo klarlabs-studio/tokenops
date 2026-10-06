@@ -4,12 +4,20 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.101.0**.
+Current release: **v0.101.1**.
+
+## v0.101.1 — The npm launcher, under its scope
+
+v0.101.0 published its four platform packages to npm but not the
+launcher: npm refused the name `tokenops` as too similar to an existing
+`token-ops`. The launcher is now `@klarlabs-studio/tokenops`, beside its
+platform packages, so `npx @klarlabs-studio/tokenops checkup` works with
+nothing installed first.
 
 ## v0.101.0 — A week of agent work in one command, nothing installed first
 
 ```bash
-npx tokenops checkup
+npx @klarlabs-studio/tokenops checkup
 ```
 
 reads the last week of Claude Code, Codex, Gemini CLI and opencode work
@@ -20,8 +28,8 @@ command that fixes it: files re-read with no edit in between, instruction
 files re-read on every turn, and lookups answered on a flagship model. A
 fix you already have says so instead of asking you to install it.
 
-`tokenops checkup` works the same from Homebrew. From npm, the `tokenops`
-package runs the same binary the release ships, from a package for your
+`tokenops checkup` works the same from Homebrew. From npm, the
+`@klarlabs-studio/tokenops` package runs the same binary the release ships, from a package for your
 platform, published with provenance.
 
 ## v0.100.0 — Several ways to read every plan, and no stale number shown as current

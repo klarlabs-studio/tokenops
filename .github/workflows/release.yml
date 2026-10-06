@@ -134,8 +134,8 @@ jobs:
           # and authenticates before goreleaser publishes anything.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
-  # npm is a delivery channel only: `npx tokenops checkup` with no other
-  # install. The wrapper `tokenops` launches the binary from one of four
+  # npm is a delivery channel only: `npx @klarlabs-studio/tokenops checkup`
+  # with no other install. The wrapper launches the binary from one of four
   # platform packages, and those are unpacked from THIS release's archives,
   # so npm ships byte for byte what GitHub and Homebrew ship.
   #
