@@ -4,7 +4,32 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.99.0**.
+Current release: **v0.100.0**.
+
+## v0.100.0 — Several ways to read every plan, and no stale number shown as current
+
+On 5 October claude.ai expired the usage meter's session. For 20 hours
+every surface went on showing the last reading as if it were current,
+and the coach, with no plan window to judge against, quoted dollars a
+Max subscriber never pays. This release makes sure that cannot happen
+quietly again, and gives every plan more than one way to be read.
+
+Every plan window now says which source read it and when. Claude's come
+from Claude Code's status line on every turn, from the claude.ai meter
+between sessions (which now falls back to your browser's session when
+claude.ai refuses a pasted one), and, if you opt in with
+`tokenops vendor-usage setup claude-code`, from Claude Code's own
+sign-in, the way CodexBar reads them. Codex's come from its rollouts and
+now also from `codex app-server` every 15 minutes, with Codex signing
+its own request. Where two sources report a window, the newer wins.
+
+A window whose source has stopped shows its age instead of its pace, and
+raises no pace warning. When every window of a plan is stale, the coach
+says "Claude's plan reading is 21h old" with how to fix it, and the menu
+bar alerts once. The menu bar also alerts as a window drops to 20% left,
+to 5% and to used up, and when it resets. On a flat-rate plan the coach
+never quotes dollars any more. A used-up window says "used up", and
+Claude's cloud credits are named as such.
 
 ## v0.99.0 — What's left, what each commit cost, and opencode 2 without the error
 
