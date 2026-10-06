@@ -1,8 +1,8 @@
 {
-  "name": "tokenops",
+  "name": "@klarlabs-studio/tokenops",
   "_version_comment": "Set at publish time by npm/scripts/build-packages.mjs from the git tag; the literal below is never published. optionalDependencies are rewritten the same way.",
   "version": "0.0.0-managed-by-release",
-  "description": "What your coding agents cost, where they leak, and every plan's limits — local-first. `npx tokenops checkup` reads a week of Claude Code, Codex, Gemini CLI and opencode work with no setup.",
+  "description": "What your coding agents cost, where they leak, and every plan's limits — local-first. `npx @klarlabs-studio/tokenops checkup` reads a week of Claude Code, Codex, Gemini CLI and opencode work with no setup.",
   "bin": {
     "tokenops": "bin/tokenops.cjs"
   },
@@ -20,7 +20,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/klarlabs-studio/tokenops.git"
+    "url": "git+https://github.com/klarlabs-studio/tokenops.git"
   },
   "homepage": "https://github.com/klarlabs-studio/tokenops",
   "engines": {

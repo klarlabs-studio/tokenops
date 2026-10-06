@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.101.1 - 2026-10-06
+
+### Fixed
+
+- **npm:** the launcher is `@klarlabs-studio/tokenops`: npm refused the unscoped name `tokenops` as too similar to an existing `token-ops`, so v0.101.0 published its four platform packages and no launcher. `npx @klarlabs-studio/tokenops checkup` runs the checkup with nothing installed first
+
 ## 0.101.0 - 2026-10-06
 
 ### Added

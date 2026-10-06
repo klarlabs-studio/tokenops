@@ -1,10 +1,10 @@
-# tokenops
+# @klarlabs-studio/tokenops
 
 What your coding agents cost, where they leak, and every plan's limits —
 read on your machine. Your prompts and your code never leave it.
 
 ```bash
-npx tokenops checkup
+npx @klarlabs-studio/tokenops checkup
 ```
 
 reads the last week of Claude Code, Codex, Gemini CLI and opencode work,

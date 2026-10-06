@@ -82,7 +82,7 @@ for (const t of TARGETS) {
         // is why every per-platform publish ENEEDAUTH'd first in the loop.
         repository: {
           type: "git",
-          url: "https://github.com/klarlabs-studio/tokenops.git",
+          url: "git+https://github.com/klarlabs-studio/tokenops.git",
         },
         os: [t.platform],
         cpu: [t.arch],
