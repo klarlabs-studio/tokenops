@@ -19,6 +19,7 @@ TOKENOPS_* environment variables) with command-line flags applied last.`,
 			if err != nil {
 				return err
 			}
+			refreshOpencodePlugin(cmd.ErrOrStderr())
 			ctx, stop := daemon.SignalContext(cmd.Context())
 			defer stop()
 			return daemon.Run(ctx, cfg, cmd.ErrOrStderr())

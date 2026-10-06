@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
+	"go.klarlabs.de/tokenops/internal/infra/opencodeplugin"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
 	"go.klarlabs.de/tokenops/internal/version"
 )
@@ -388,10 +389,10 @@ func hooksStatusOf(client, settingsPath, exe string) (hooksStatus, error) {
 			return st, err
 		}
 		src := string(b)
-		pluginExe := opencodePluginExe(src)
+		pluginExe := opencodeplugin.Exe(src)
 		for _, marker := range hookMarkers {
-			if opencodeMarkerPresent(src, marker) {
-				st.Hooks = append(st.Hooks, wiredHook{Hook: marker, Event: opencodeMarkers[marker], Command: pluginExe, ThisBinary: pluginExe == exe})
+			if opencodeplugin.Has(src, marker) {
+				st.Hooks = append(st.Hooks, wiredHook{Hook: marker, Event: opencodeplugin.Events[marker], Command: pluginExe, ThisBinary: pluginExe == exe})
 			}
 		}
 		return st, nil

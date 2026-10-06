@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- **opencode:** opencode 2 showed "Plugin must export a default definition with an id and an effect or setup function" on every start, for the plugin tokenops writes for opencode 1.x. One file now serves both: its default export carries `server` for 1.x and `setup` for opencode 2, checked on opencode 1.18.32 and 2.0.24 with the hooks firing on each. The daemon brings an older generated plugin up to date when it starts, keeping its hooks, binary and budget and folding in the separate `tokenops-v2.js`, so an upgrade repairs it with no reinstall; a plugin tokenops did not write is never touched
 - **analytics:** plan-window readings (the claude.ai usage meter, account readers) are stored as prompt events with no model and no tokens, and were counted as requests and listed as an unpriced Claude model — 2,189 of a month's requests here. Usage queries now count only events that carry usage; usage with tokens but no model still counts and still shows as unpriced
 - **dx:** `GET /api/dx` and `tokenops_sessions` (view dx) answer the default week from the daemon's background analysis when it is under six hours old, as `tokenops dx` does, instead of reading every transcript per call
 
