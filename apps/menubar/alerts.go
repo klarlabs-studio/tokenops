@@ -49,6 +49,11 @@ func (a *alerter) observe(raw json.RawMessage) []note {
 		a.steps = map[string]int{}
 	}
 	var out []note
+	for _, r := range g.PlanHeadroom.Reports {
+		if n, ok := a.reading(r); ok {
+			out = append(out, n)
+		}
+	}
 	for _, m := range measures(g) {
 		step, prev := stepOf(m.used), a.steps[m.key]
 		a.steps[m.key] = step
@@ -62,6 +67,36 @@ func (a *alerter) observe(raw json.RawMessage) []note {
 	}
 	a.primed = true
 	return out
+}
+
+// reading notes a plan whose every window has gone stale, and its return:
+// its share is the last one read, so the operator should know it is not
+// being watched (ADR 0011). Each change is said once.
+func (a *alerter) reading(r report) (note, bool) {
+	if len(r.Windows) == 0 {
+		return note{}, false
+	}
+	stopped := 1
+	for _, w := range r.Windows {
+		if !w.Stale {
+			stopped = 0
+		}
+	}
+	key := r.Provider + "/reading"
+	prev := a.steps[key]
+	a.steps[key] = stopped
+	name := shortName(r.Provider)
+	switch {
+	case !a.primed || stopped == prev:
+		return note{}, false
+	case stopped == 1:
+		body := "Its windows show the last reading. `tokenops status` names the source that stopped."
+		if r.Provider == "anthropic" {
+			body = "Sign in to claude.ai in your browser, or run `tokenops vendor-usage setup claude-subscription`."
+		}
+		return note{Title: name + "'s plan reading stopped", Body: body}, true
+	}
+	return note{Title: name + "'s plan reading is back"}, true
 }
 
 // measures lists every window of every plan, and the spend limit of a
