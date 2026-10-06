@@ -35,6 +35,11 @@ func (c Config) VendorUsageConfigHint(sourceTag string) string {
 		return configHintCursor(c.VendorUsage.Cursor)
 	case "claude-usage-meter":
 		return configHintClaudeUsageMeter(c.VendorUsage.ClaudeUsageMeter)
+	case "claude-code-oauth":
+		if !c.VendorUsage.ClaudeCodeOAuth.Enabled {
+			return "opt-in: `tokenops vendor-usage setup claude-code` reads the windows with Claude Code's own sign-in (asks macOS to allow the Keychain read)"
+		}
+		return ""
 	case "openrouter-account", "deepseek-account", "moonshot-account":
 		if !c.VendorUsage.Accounts.On() {
 			return "switched off: `tokenops vendor-usage enable vendor-accounts` turns it back on"

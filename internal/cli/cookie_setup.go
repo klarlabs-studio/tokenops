@@ -47,10 +47,11 @@ func newVendorUsageSetupCmd() *cobra.Command {
 		paste         bool
 		pasteRequest  bool
 		org           string
+		noKeychain    bool
 	)
 	cmd := &cobra.Command{
-		Use:   "setup claude-subscription",
-		Short: "Walk through connecting claude.ai's own usage meter, and verify it",
+		Use:   "setup claude-subscription|claude-code",
+		Short: "Connect a source of Claude's plan windows, and verify it",
 		Long: `setup connects the claude.ai session cookie that carries Anthropic's own
 utilisation percentages — the 5-hour and 7-day windows shown in the app.
 
@@ -62,11 +63,21 @@ stored in your config file.
 The session key is verified against Anthropic before anything is written,
 so a mistyped or expired cookie fails here rather than silently producing
 no data. After setup, TokenOps restarts its supervised daemon automatically;
-the MCP server observes the updated config without a client restart.`,
+the MCP server observes the updated config without a client restart.
+
+setup claude-code reads the windows with Claude Code's own sign-in instead
+(opt-in, ADR 0011): the token Claude Code keeps in ~/.claude/.credentials.json
+or, on macOS, the Keychain, which asks you to allow it. The token is held
+in memory only, sent only to api.anthropic.com, and never refreshed by
+TokenOps; Claude Code renews it when it runs. Nothing is written to your
+config but the switch.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 1 && strings.EqualFold(args[0], "claude-code") {
+				return runClaudeCodeSetup(cmd, configFlag(cmd), !noRestartFlag, !noKeychain)
+			}
 			if len(args) == 1 && !isClaudeSubscriptionSource(args[0]) {
-				return fmt.Errorf("setup currently covers claude-subscription only; got %q", args[0])
+				return fmt.Errorf("setup covers claude-subscription and claude-code; got %q", args[0])
 			}
 			return runCookieSetup(cmd, cookieSetupOptions{
 				configPath:   configFlag(cmd),
@@ -87,6 +98,8 @@ the MCP server observes the updated config without a client restart.`,
 	cmd.MarkFlagsMutuallyExclusive("paste", "paste-request")
 	cmd.Flags().StringVar(&org, "org", "",
 		"organization to meter, by name or id (default: the one reporting usage)")
+	cmd.Flags().BoolVar(&noKeychain, "no-keychain", false,
+		"claude-code: read only ~/.claude/.credentials.json, never the macOS Keychain")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }

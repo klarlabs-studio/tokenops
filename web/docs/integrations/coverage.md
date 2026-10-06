@@ -97,6 +97,7 @@ window, the newer one wins.
 |---|---|---|
 | Claude | 1. Claude Code's status line (`rate_limits`), installed by `tokenops init` | every open Claude Code session, no credential |
 | | 2. the claude.ai usage meter (`tokenops vendor-usage setup claude-subscription`) | between sessions; re-reads the browser's session when claude.ai expires it |
+| | 3. Claude Code's own sign-in, opt-in (`tokenops vendor-usage setup claude-code`) | between sessions without a browser session; the token is read from Claude Code's credentials file or, on macOS, the Keychain (macOS asks), held in memory, sent only to api.anthropic.com and never refreshed |
 | Codex | the `rate_limits` block in each rollout | every Codex turn |
 | Gemini, Copilot, Cursor, account providers | their quota endpoint or account key | while the key works |
 

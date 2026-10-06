@@ -848,6 +848,7 @@ type VendorUsageConfig struct {
 	GitHubCopilot    GitHubCopilotUsageConfig   `yaml:"github_copilot"`
 	Cursor           CursorUsageConfig          `yaml:"cursor"`
 	ClaudeUsageMeter ClaudeUsageMeterConfig     `yaml:"claude_usage_meter"`
+	ClaudeCodeOAuth  ClaudeCodeOAuthConfig      `yaml:"claude_code_oauth"`
 	Fireworks        FireworksUsageConfig       `yaml:"fireworks"`
 	Accounts         AccountsUsageConfig        `yaml:"accounts"`
 }
@@ -940,6 +941,20 @@ type ClaudeUsageMeterConfig struct {
 
 // BrowserNone keeps the claude.ai meter from ever reading a browser.
 const BrowserNone = "none"
+
+// ClaudeCodeOAuthConfig reads Claude's plan windows with Claude Code's own
+// sign-in (ADR 0011, opt-in). The token belongs to Claude Code: it is read
+// from ~/.claude/.credentials.json, or from the macOS Keychain only when
+// Keychain is set, held in memory, sent only to api.anthropic.com, and
+// never refreshed. Interval defaults to 10 minutes.
+type ClaudeCodeOAuthConfig struct {
+	Enabled bool `yaml:"enabled"`
+	// Keychain allows reading Claude Code's Keychain item on macOS. macOS
+	// asks the operator to allow it, and may ask again after Claude Code
+	// renews its token.
+	Keychain bool          `yaml:"keychain,omitempty"`
+	Interval time.Duration `yaml:"interval,omitempty"`
+}
 
 // CodexJSONLUsageConfig enables the Codex CLI session-log reader.
 // Parses ~/.codex/sessions/<yyyy>/<mm>/<dd>/rollout-*.jsonl. Empty
