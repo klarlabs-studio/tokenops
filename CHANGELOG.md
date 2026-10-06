@@ -8,6 +8,9 @@
 
 ### Fixed
 
+- **coach:** on a flat-rate plan the coach no longer falls back to dollars when it cannot read the plan's window. It said "$400.99 API-equivalent — 800% of the default $50 session ceiling, and not a charge… /compact" at 19% context; it now says once every six hours, across sessions, how old the plan reading is and how to get it back ("Claude's plan reading is 20h old… sign in to claude.ai in your browser, or run `tokenops vendor-usage setup claude-subscription`")
+- **claude usage meter:** claude.ai answers an expired session with a 403 `account_session_invalid`, not a 401. It is now treated as an expired session, so the meter refreshes the session from the browser as it does for a 401, and says so; before, it logged a generic failure every five minutes and never tried the browser
+- **sources:** a poller refused on every attempt for 15 minutes is `failing`, however many events the window still holds from before. The claude.ai meter was refused for 20 hours and reported `healthy` on the previous day's readings
 - **glance:** a used-up window says "used up" (pace status `used_up`) instead of "out in" an empty duration or "runs out in 0m"; a window claude.ai reports under an internal codename is shown as "other limit", with the vendor's key in `vendor_label`
 
 ## 0.99.0 - 2026-10-06
