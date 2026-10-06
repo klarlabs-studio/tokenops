@@ -57,6 +57,9 @@ type Deps struct {
 	// Price prices a request at list rates, for spend-denominated plans
 	// whose usage is billed per token. nil counts only measured cost.
 	Price plans.Pricer
+	// Accounts names the account each provider's client is signed in
+	// with, for the glance. nil names none.
+	Accounts func() map[string]string
 }
 
 // Result is the capability's answer.

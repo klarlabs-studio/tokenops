@@ -4,8 +4,8 @@
 //
 // Claude Code keeps the signed-in account's organisation type and rate
 // limit tier in ~/.claude.json; Codex writes its plan_type into every
-// session's rate_limits. Only those fields are read: nothing else in
-// either file (an email, a token) is decoded.
+// session's rate_limits. Only those fields are read, and Claude Code's
+// account email for Accounts: no token in either file is ever decoded.
 package planevidence
 
 import (
@@ -51,7 +51,25 @@ type claudeAccount struct {
 		OrganizationRateLimitTier string `json:"organizationRateLimitTier"`
 		UserRateLimitTier         string `json:"userRateLimitTier"`
 		SeatTier                  string `json:"seatTier"`
+		EmailAddress              string `json:"emailAddress"`
 	} `json:"oauthAccount"`
+}
+
+// Accounts names the account each client is signed in with, by provider,
+// for the operator's own menu bar and glance: which account the windows
+// are for. Claude Code records it in ~/.claude.json. Codex keeps it only
+// inside its sign-in token, which is not decoded, so Codex has none.
+func Accounts(home string) map[string]string {
+	out := map[string]string{}
+	b, err := os.ReadFile(filepath.Join(home, ".claude.json"))
+	if err != nil {
+		return out
+	}
+	var a claudeAccount
+	if json.Unmarshal(b, &a) == nil && a.OAuthAccount.EmailAddress != "" {
+		out["anthropic"] = a.OAuthAccount.EmailAddress
+	}
+	return out
 }
 
 // Claude reads the plan Claude Code is signed in with. ok is false when

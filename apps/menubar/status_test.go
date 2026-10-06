@@ -24,14 +24,28 @@ const glanceSample = `{"insight":{"level":"clear","summary":"Claude Max 20x reco
 // The tray shows whatever stops work first, across every plan.
 func TestStatusShowsTheBusiestWindow(t *testing.T) {
 	st := statusOf([]byte(glanceSample))
-	if st.Title != "Codex 49%" || st.Pct != 49 {
+	if st.Title != "Codex 51% left" || st.Pct != 49 || st.Outer != 49 || st.Inner != -1 {
 		t.Fatalf("status %+v", st)
 	}
 	lines := st.Tooltip
-	for _, want := range []string{"Claude · week 15% · resets in 6d 2h", "Claude · 5h 6% · resets in 4h 25m", "Codex · week 49%", "Fireworks · $41.50 of $100.00"} {
+	for _, want := range []string{"Claude · week 85% left · resets in 6d 2h", "Claude · 5h 94% left · resets in 4h 25m", "Codex · week 51% left", "Fireworks · $41.50 of $100.00"} {
 		if !strings.Contains(lines, want) {
 			t.Errorf("tooltip lacks %q:\n%s", want, lines)
 		}
+	}
+}
+
+// The icon's rings are the busiest plan's week (outer) and session (inner).
+func TestStatusRingsAreTheBusiestPlansWindows(t *testing.T) {
+	st := statusOf([]byte(`{"plan_headroom":{"reports":[
+	  {"provider":"anthropic","windows":[{"name":"5h","used_pct":70},{"name":"week","used_pct":20},{"name":"week (Fable)","used_pct":35}]},
+	  {"provider":"openai","windows":[{"name":"week","used_pct":40}]}]}}`))
+	if st.Outer != 35 || st.Inner != 70 || st.Pct != 70 {
+		t.Errorf("status %+v", st)
+	}
+	st = statusOf([]byte(`{"plan_headroom":{"reports":[{"provider":"anthropic","windows":[{"name":"5h","used_pct":30}]}]}}`))
+	if st.Outer != 30 || st.Inner != -1 {
+		t.Errorf("a session window alone is the one ring: %+v", st)
 	}
 }
 
@@ -53,12 +67,23 @@ func TestHumanDuration(t *testing.T) {
 }
 
 func TestTrayIconIsATemplate(t *testing.T) {
-	img, err := png.Decode(bytes.NewReader(trayIcon(25)))
+	img, err := png.Decode(bytes.NewReader(trayIcon(25, 50)))
 	if err != nil || img.Bounds().Dx() != iconSize {
 		t.Fatalf("icon %v %v", img, err)
 	}
-	if _, _, _, a := img.At(0, 0).RGBA(); a != 0 {
-		t.Error("corner not transparent")
+	alpha := func(x, y int) uint32 { _, _, _, a := img.At(x, y).RGBA(); return a >> 8 }
+	if alpha(0, 0) != 0 || alpha(18, 18) != 0 {
+		t.Error("corner or centre not transparent")
+	}
+	// 25% used leaves 75% of the outer ring: the right side (a quarter of
+	// the way round) is filled, the top-left (seven eighths) is track.
+	if alpha(33, 18) != 0xff || alpha(7, 7) != trackAlpha {
+		t.Errorf("outer ring: right %x, top-left %x", alpha(33, 18), alpha(7, 7))
+	}
+	// 50% used leaves the inner ring's right half: below the centre on the
+	// right is filled, on the left is track.
+	if alpha(25, 22) != 0xff || alpha(11, 22) != trackAlpha {
+		t.Errorf("inner ring: right %x, left %x", alpha(25, 22), alpha(11, 22))
 	}
 }
 
@@ -123,5 +148,34 @@ func TestSpendSince(t *testing.T) {
 	want := spend{Tokens: 2240000000, APIEquivalent: 5.83, Requests: 10, Unpriced: 8}
 	if got != want {
 		t.Errorf("spend = %+v, want %+v", got, want)
+	}
+}
+
+// The chart is a provider's days oldest first; the top model is the one
+// with the most tokens over them.
+func TestDailyAndTopModel(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if r.URL.Path != "/api/spend/series" || q.Get("provider") != "openai" || q.Get("bucket") != "day" || q.Get("since") != "720h" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if q.Get("group") == "model" {
+			_, _ = w.Write([]byte(`{"rows":[{"GroupKey":"gpt-5.5","TotalTokens":300},{"GroupKey":"gpt-6","TotalTokens":250},{"GroupKey":"gpt-6","TotalTokens":100}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"rows":[{"BucketStart":"2026-10-05T00:00:00Z","TotalTokens":7,"APIEquivalentUSD":1.5},{"BucketStart":"2026-10-04T00:00:00Z","TotalTokens":3}]}`))
+	}))
+	defer srv.Close()
+	d := &daemon{urlFile: filepath.Join(t.TempDir(), "daemon.url"), hc: srv.Client()}
+	if err := os.WriteFile(d.urlFile, []byte(`{"url":"`+srv.URL+`","dashboard_token":"tok"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	days, err := d.daily(context.Background(), "openai")
+	if err != nil || len(days) != 2 || days[0].Date != "2026-10-04" || days[1].Tokens != 7 || days[1].APIEquivalent != 1.5 {
+		t.Fatalf("daily %+v %v", days, err)
+	}
+	if top, err := d.topModel(context.Background(), "openai"); err != nil || top != "gpt-6" {
+		t.Errorf("top model %q %v", top, err)
 	}
 }

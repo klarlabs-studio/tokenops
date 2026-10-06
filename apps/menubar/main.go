@@ -81,10 +81,14 @@ type view struct {
 	err     error
 }
 
-// costs is one provider's usage over two windows.
+// costs is one provider's usage over two windows, its last 30 days day by
+// day, and the model it used most.
 type costs struct {
 	Today  spend `json:"today"`
 	Last30 spend `json:"last_30_days"`
+	Daily  []day `json:"daily,omitempty"`
+	// TopModel is the model with the most tokens over the 30 days.
+	TopModel string `json:"top_model,omitempty"`
 }
 
 // presetInput is the coach.preset command's argument.
@@ -117,7 +121,7 @@ func newMenubar(host app.DesktopHost, d *daemon, sink audit.Sink) (*menubar, err
 	a, err := app.New(app.Options{
 		AppID: appID, Title: "TokenOps", Assets: assets, Host: host, Runtime: rt,
 		Presentation: app.PresentationAccessory,
-		Window:       app.WindowOptions{ID: panelWindow, Width: 360, Height: 620, Kind: app.WindowKindPanel},
+		Window:       app.WindowOptions{ID: panelWindow, Width: 360, Height: 760, Kind: app.WindowKindPanel},
 	})
 	if err != nil {
 		return nil, err
@@ -181,7 +185,7 @@ func (m *menubar) register() error {
 // once, marked as reading; the first read can take as long as a busy
 // daemon does, and an app that shows nothing until then looks broken.
 func (m *menubar) Run(ctx context.Context) error {
-	m.setTray(status{Title: "—", Tooltip: "TokenOps: reading the daemon…"})
+	m.setTray(status{Title: "—", Outer: -1, Inner: -1, Tooltip: "TokenOps: reading the daemon…"})
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
 	go m.poll(ctx)
@@ -218,7 +222,7 @@ func (m *menubar) refresh(ctx context.Context) view {
 		m.last = v
 	}
 	m.mu.Unlock()
-	st := status{Title: "—", Tooltip: "TokenOps: " + v.Error}
+	st := status{Title: "—", Outer: -1, Inner: -1, Tooltip: "TokenOps: " + v.Error}
 	if v.Glance != nil {
 		st = statusOf(v.Glance)
 	}
@@ -227,13 +231,13 @@ func (m *menubar) refresh(ctx context.Context) view {
 	return v
 }
 
-// setTray shows the icon alone, its ring filled to the busiest window. A
-// click opens the panel with every plan's details under the icon; a right
-// click opens the menu.
+// setTray shows the icon alone: the busiest plan's week and session as two
+// rings, each filled to the share left. A click opens the panel with
+// every plan's details under the icon; a right click opens the menu.
 func (m *menubar) setTray(st status) {
 	if err := m.app.SetTray(app.TraySpec{
 		Tooltip: st.Tooltip,
-		Icon:    trayIcon(st.Pct), Template: true,
+		Icon:    trayIcon(st.Outer, st.Inner), Template: true,
 		Panel: panelWindow,
 		Items: m.menu(),
 	}); err != nil {
@@ -291,8 +295,13 @@ func (m *menubar) costs(ctx context.Context, g json.RawMessage) map[string]costs
 			if err1 != nil || err2 != nil {
 				return
 			}
+			c := costs{Today: today, Last30: last30}
+			// The chart and the top model are extras: a daemon without the
+			// series still shows the figures.
+			c.Daily, _ = m.daemon.daily(ctx, provider)
+			c.TopModel, _ = m.daemon.topModel(ctx, provider)
 			mu.Lock()
-			out[provider] = costs{Today: today, Last30: last30}
+			out[provider] = c
 			mu.Unlock()
 		}(r.Provider)
 	}
