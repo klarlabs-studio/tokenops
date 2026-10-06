@@ -57,7 +57,9 @@ func newMenubarCmd() *cobra.Command {
 it: an icon with two rings for the busiest plan, its week outside and its
 session inside, each filled to the share left, and, when you click it, a
 panel with every plan's windows, pace, usage and the coach's findings.
-Right-click it for Launch at Login.
+It alerts when a window drops to 20% left, to 5%, and when it is used up,
+saying when it resets and, while it is still running, when it runs out at
+this pace; a window that alerted says so again when it resets. Right-click it for Launch at Login and Alerts.
 
 The app ships with the Homebrew install on macOS. Upgrades refresh the
 installed copy and restart it if it is running; --refresh does the same by
@@ -108,7 +110,7 @@ func installMenubar(out io.Writer, src, dst string, refresh bool) error {
 	if err := exec.Command("open", dst).Run(); err != nil {
 		return fmt.Errorf("open %s: %w", dst, err)
 	}
-	fmt.Fprintln(out, "TokenOps is in the menu bar: click the icon for the details, right-click it for Launch at Login.")
+	fmt.Fprintln(out, "TokenOps is in the menu bar: click the icon for the details, right-click it for Launch at Login and Alerts.")
 	return nil
 }
 

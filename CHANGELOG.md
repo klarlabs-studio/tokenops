@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **menubar:** alerts. A window notifies once as it drops to 20% left, to 5% and to used up, with its reset and when it runs out at this pace; one that alerted says so again when it resets. A spend limit alerts the same way. On by default; untick Alerts in the right-click menu to stop them
+
 ### Fixed
 
 - **glance:** a used-up window says "used up" (pace status `used_up`) instead of "out in" an empty duration or "runs out in 0m"; a window claude.ai reports under an internal codename is shown as "other limit", with the vendor's key in `vendor_label`
