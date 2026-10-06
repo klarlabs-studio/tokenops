@@ -115,3 +115,24 @@ func TestAlertSettingPersists(t *testing.T) {
 		t.Error("alerts stayed on after being turned off")
 	}
 }
+
+// A plan whose every window has gone stale alerts once that its reading
+// stopped, and once that it is back; a stale window alerts nothing else.
+func TestAlertsWhenAPlansReadingStops(t *testing.T) {
+	at := func(stale bool, used float64) json.RawMessage {
+		return json.RawMessage(fmt.Sprintf(`{"plan_headroom":{"reports":[{"provider":"anthropic","windows":[
+		  {"name":"week","used_pct":%v,"stale":%v,"observed_at":"2026-10-05T18:55:05Z"},
+		  {"name":"5h","used_pct":10,"stale":%v,"observed_at":"2026-10-05T18:55:05Z"}]}]}}`, used, stale, stale))
+	}
+	var a alerter
+	a.observe(at(false, 50))
+	if got := titles(a.observe(at(true, 99))); got != "Claude's plan reading stopped" {
+		t.Errorf("stopped: %q", got)
+	}
+	if got := titles(a.observe(at(true, 99))); got != "" {
+		t.Errorf("repeated: %q", got)
+	}
+	if got := titles(a.observe(at(false, 50))); got != "Claude's plan reading is back" {
+		t.Errorf("back: %q", got)
+	}
+}
