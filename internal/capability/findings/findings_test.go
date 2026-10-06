@@ -115,3 +115,25 @@ func TestSnapshotRoundTrip(t *testing.T) {
 		t.Fatalf("read back %+v %v", got, err)
 	}
 }
+
+// The API and MCP answer the default week from the daemon's analysis when
+// it is recent, and read the transcripts otherwise.
+func TestDXUsesARecentAnalysis(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	snap := SessionsSnapshot{ComputedAt: now.Add(-time.Hour)}
+	snap.DX.Window = "cached"
+	snap.DX.Metrics.Prompts = 9
+	if err := WriteSnapshot(DefaultDir(), snap); err != nil {
+		t.Fatal(err)
+	}
+	if got := DX(sessions.Window{}, now); got.Window != "cached" {
+		t.Errorf("default week = %q, want the analysis", got.Window)
+	}
+	if got := DX(sessions.Window{Days: 30}, now); got.Window == "cached" {
+		t.Error("a 30-day window used the week's analysis")
+	}
+	if got := DX(sessions.Window{}, now.Add(MaxSnapshotAge+time.Hour)); got.Window == "cached" {
+		t.Error("a stale analysis was used")
+	}
+}

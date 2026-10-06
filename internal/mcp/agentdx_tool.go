@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 )
 
@@ -40,7 +41,7 @@ func RegisterAgentDXTools(s *Server, d AgentDXDeps) error {
 		Description("Measure what the operator's agent sessions are like to work with: turns and wall-clock per instruction, rework rate, interrupt rate, escalation rate, first-try rate, context growth, compactions — each graded, with the single highest-leverage change named. Derived from local transcripts; needs no proxy. Call this when asked how sessions are going, why work feels slow, or before proposing a change to how you and the operator work together.").
 		OutputSchema(agentDXResult{}).
 		Handler(func(_ context.Context, in agentDXInput) (*agentDXResult, error) {
-			res := sessions.ComputeDX(sessions.Window{Root: d.Root, Days: in.Days, All: in.All}, time.Now())
+			res := findings.DX(sessions.Window{Root: d.Root, Days: in.Days, All: in.All}, time.Now())
 			return &res, nil
 		})
 	return nil

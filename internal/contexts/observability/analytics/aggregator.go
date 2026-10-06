@@ -733,6 +733,15 @@ func isSelfTelemetryModel(model string) bool { return selfTelemetryModels[model]
 // the source is read from payload JSON.
 const costSourceMetered = `COALESCE(json_extract(payload, '$.cost_source'), '') NOT IN ('plan_included', 'trial')`
 
+// usageOnly keeps prompt events that carry usage. Plan-window readings
+// (the claude.ai usage meter, account readers) are stored as prompt events
+// with no model and no tokens; counted, they inflated requests and were
+// listed as an unpriced model — 2,179 of a month's "requests" here were
+// readings. Usage with tokens but no model still counts, and shows as
+// unpriced, because that is a real gap.
+const usageOnly = `(COALESCE(total_tokens, 0) > 0 OR COALESCE(input_tokens, 0) > 0
+		OR COALESCE(output_tokens, 0) > 0 OR COALESCE(model, '') <> '')`
+
 func buildConditions(f Filter) ([]string, []any) {
 	var (
 		conds []string
@@ -746,6 +755,9 @@ func buildConditions(f Filter) ([]string, []any) {
 		// carry per-request token counts in the indexed columns.
 		conds = append(conds, "type = ?")
 		args = append(args, string(eventschema.EventTypePrompt))
+	}
+	if f.EventType == "" || f.EventType == eventschema.EventTypePrompt {
+		conds = append(conds, usageOnly)
 	}
 	if f.Provider != "" {
 		conds = append(conds, "provider = ?")
