@@ -931,9 +931,15 @@ type ClaudeUsageMeterConfig struct {
 	// afternoon and is refused thereafter. macOS asks to allow the
 	// keychain read once per installed version.
 	FromBrowser bool `yaml:"from_browser,omitempty"`
-	// Browser limits that read to one browser by name; empty searches.
+	// Browser limits that read to one browser by name; empty searches,
+	// and BrowserNone never reads one. A pasted session also falls back to
+	// the browser when claude.ai refuses it (ADR 0011); FromBrowser makes
+	// the browser the first choice.
 	Browser string `yaml:"browser,omitempty"`
 }
+
+// BrowserNone keeps the claude.ai meter from ever reading a browser.
+const BrowserNone = "none"
 
 // CodexJSONLUsageConfig enables the Codex CLI session-log reader.
 // Parses ~/.codex/sessions/<yyyy>/<mm>/<dd>/rollout-*.jsonl. Empty

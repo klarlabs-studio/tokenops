@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"strings"
 
 	"go.klarlabs.de/tokenops/internal/infra/codexsettings"
 
@@ -151,8 +152,13 @@ func startVendorUsagePollers(
 	}
 }
 
+// browserSessionSource re-reads the claude.ai session from the browser.
+// It is wired for a pasted session too (ADR 0011): when claude.ai refuses
+// it, the browser's newer session is the meter's own way back, and the
+// pinned organization keeps another account's session from being metered
+// in its place. browser: none turns it off.
 func browserSessionSource(cfg config.ClaudeUsageMeterConfig) func(context.Context) (claudeusagemeter.Session, error) {
-	if !cfg.FromBrowser {
+	if strings.EqualFold(cfg.Browser, config.BrowserNone) {
 		return nil
 	}
 	return func(ctx context.Context) (claudeusagemeter.Session, error) {

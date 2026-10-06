@@ -4,6 +4,10 @@
 
 ### Added
 
+- **plans:** several sources per provider, tried in order (ADR 0011). Every plan window carries its `source`, `observed_at` and `stale`. Where the claude.ai meter and Claude Code's status line both report a window, the newer reading wins. A window from a polling source silent for more than 30 minutes is stale: the cards and the menu bar show its age in place of its pace, it raises no pace warning or alert, and a plan whose every window is stale raises the finding "Claude's plan reading is 20h old" with how to get it back
+- **claude usage meter:** a pasted session falls back to the browser's session when claude.ai refuses it, as a browser-read one already did; `browser: none` turns that off
+- **plans:** Claude's `iguana_necktie` window is its cloud credits, shown as "Cloud credits"
+
 - **menubar:** alerts. A window notifies once as it drops to 20% left, to 5% and to used up, with its reset and when it runs out at this pace; one that alerted says so again when it resets. A spend limit alerts the same way. On by default; untick Alerts in the right-click menu to stop them
 
 ### Fixed

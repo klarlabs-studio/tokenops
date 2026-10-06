@@ -104,11 +104,17 @@
     return line;
   }
 
-  function windowSection(heading, used, resets, p) {
-    var s = el("section", "metric");
+  // stale is a window whose source has stopped (ADR 0011): its share is
+  // the last one read, so its age stands where its pace would.
+  function windowSection(heading, used, resets, p, stale) {
+    var s = el("section", "metric" + (stale ? " stale" : ""));
     s.appendChild(el("h3", null, heading));
-    s.appendChild(meter(used, p));
+    s.appendChild(meter(used, stale ? null : p));
     s.appendChild(pair("metric-line strong", Math.round(leftOf(used)) + "% left", resets));
+    if (stale) {
+      s.appendChild(pair("metric-line warn", "Reading from " + human(stale) + " ago", ""));
+      return s;
+    }
     var word = paceWord(p), outlook = paceOutlook(p, used);
     if (word || outlook) s.appendChild(pair("metric-line", word, outlook));
     return s;
@@ -221,7 +227,8 @@
     main.appendChild(head);
 
     (r.windows || []).forEach(function (w) {
-      main.appendChild(windowSection(title(w), w.used_pct, w.resets_in ? "Resets in " + human(seconds(w.resets_in)) : "", w.pace));
+      var stale = w.stale && w.observed_at ? Math.max(60, (Date.now() - Date.parse(w.observed_at)) / 1000) : 0;
+      main.appendChild(windowSection(title(w), w.used_pct, w.resets_in ? "Resets in " + human(seconds(w.resets_in)) : "", w.pace, stale));
     });
     if (r.spend_limit_usd > 0) {
       var s = windowSection("Extra usage", r.spend_pct, money(r.spend_usd) + " of " + money(r.spend_limit_usd) + " this month");

@@ -42,6 +42,7 @@ type window struct {
 	UsedPct     float64 `json:"used_pct"`
 	ResetsIn    string  `json:"resets_in"`
 	Pace        *pace   `json:"pace"`
+	Stale       bool    `json:"stale"`
 }
 
 // pace is the daemon's verdict on a window (plans.WindowPace).
