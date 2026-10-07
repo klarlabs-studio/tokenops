@@ -214,7 +214,11 @@ func newEnvelope(startsAt, endsAt time.Time, r UsageResult) (*eventschema.Envelo
 	if r.Model == "" {
 		return nil, false
 	}
-	inputTokens := r.UncachedInputTokens + r.CacheReadInputTokens
+	// The report splits input into uncached tokens, cache reads and cache
+	// writes by lifetime. All of it is input; the read and the writes ride
+	// along as its portions so each is priced at its own rate.
+	writes := r.CacheCreation.Ephemeral5mInputTokens + r.CacheCreation.Ephemeral1hInputTokens
+	inputTokens := r.UncachedInputTokens + r.CacheReadInputTokens + writes
 	totalTokens := inputTokens + r.OutputTokens
 	if totalTokens == 0 {
 		return nil, false
@@ -258,12 +262,15 @@ func newEnvelope(startsAt, endsAt time.Time, r UsageResult) (*eventschema.Envelo
 		Source:        SourceTag,
 		Attributes:    attrs,
 		Payload: &eventschema.PromptEvent{
-			Provider:     eventschema.ProviderAnthropic,
-			RequestModel: r.Model,
-			InputTokens:  inputTokens,
-			OutputTokens: r.OutputTokens,
-			TotalTokens:  totalTokens,
-			Status:       200,
+			Provider:                eventschema.ProviderAnthropic,
+			RequestModel:            r.Model,
+			InputTokens:             inputTokens,
+			CachedInputTokens:       r.CacheReadInputTokens,
+			CacheWriteInputTokens:   writes,
+			CacheWrite1hInputTokens: r.CacheCreation.Ephemeral1hInputTokens,
+			OutputTokens:            r.OutputTokens,
+			TotalTokens:             totalTokens,
+			Status:                  200,
 			// Attribution: vendor admin-API rows are not per-prompt
 			// attributable to a workflow, but they ARE attributable to the
 			// vendor poller as origin. Stamping AgentID + a synthetic
