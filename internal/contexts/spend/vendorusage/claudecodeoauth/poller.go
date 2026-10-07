@@ -25,8 +25,10 @@ const keychainBackoff = 6 * time.Hour
 
 // PollerOptions configures the poller.
 type PollerOptions struct {
-	Stores   []Store
-	Client   Client
+	Stores []Store
+	// Client asks Anthropic for the windows; the daemon passes the HTTP
+	// client from internal/infra/vendorusage/claudecodeoauth.
+	Client   UsageClient
 	Interval time.Duration
 	Health   *freshness.Recorder
 	Logger   *slog.Logger
@@ -150,7 +152,7 @@ func (p *Poller) credentials(ctx context.Context, now time.Time, reread bool) (C
 func withoutKeychain(stores []Store) []Store {
 	out := make([]Store, 0, len(stores))
 	for _, s := range stores {
-		if _, ok := s.(KeychainStore); !ok {
+		if ps, ok := s.(PromptingStore); !ok || !ps.Prompts() {
 			out = append(out, s)
 		}
 	}

@@ -32,6 +32,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	anthropicapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/anthropic"
+	claudeoauthapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/claudecodeoauth"
 	claudeai "go.klarlabs.de/tokenops/internal/infra/vendorusage/claudeusagemeter"
 	codexappserverproc "go.klarlabs.de/tokenops/internal/infra/vendorusage/codexappserver"
 	copilotapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/copilot"
@@ -147,8 +148,8 @@ func startVendorUsagePollers(
 	if oc := cfg.VendorUsage.ClaudeCodeOAuth; oc.Enabled {
 		home, _ := os.UserHomeDir()
 		p := claudecodeoauth.NewPoller(bus, claudecodeoauth.PollerOptions{
-			Stores:   claudecodeoauth.Stores(home, oc.Keychain),
-			Client:   claudecodeoauth.Client{UserAgent: "tokenops/" + version.Version},
+			Stores:   claudeoauthapi.Stores(home, oc.Keychain),
+			Client:   claudeoauthapi.Client{UserAgent: "tokenops/" + version.Version},
 			Interval: oc.Interval, Health: sourceHealth.For(claudecodeoauth.SourceTag), Logger: logger,
 		})
 		sup.Go(claudecodeoauth.SourceTag, p.Run)

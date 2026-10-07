@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodeoauth"
+	claudeoauthapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/claudecodeoauth"
 )
 
 // Options say where to look and whom to ask.
@@ -43,7 +44,7 @@ func Check(ctx context.Context, o Options) (Result, error) {
 	if o.Now.IsZero() {
 		o.Now = time.Now()
 	}
-	creds, err := claudecodeoauth.ReadFirst(ctx, claudecodeoauth.Stores(o.Home, o.Keychain))
+	creds, err := claudecodeoauth.ReadFirst(ctx, claudeoauthapi.Stores(o.Home, o.Keychain))
 	if err != nil {
 		return Result{}, err
 	}
@@ -51,7 +52,7 @@ func Check(ctx context.Context, o Options) (Result, error) {
 		return Result{}, claudecodeoauth.ErrExpired
 	}
 	r := Result{Plan: title(creds.SubscriptionType)}
-	client := claudecodeoauth.Client{BaseURL: o.BaseURL, UserAgent: o.UserAgent}
+	client := claudeoauthapi.Client{BaseURL: o.BaseURL, UserAgent: o.UserAgent}
 	usage, err := client.Usage(ctx, creds.AccessToken, o.Now)
 	var limited *claudecodeoauth.RateLimitedError
 	switch {
