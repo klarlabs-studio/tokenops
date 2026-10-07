@@ -58,7 +58,7 @@ func Find(roots Roots, since time.Time) map[string]Dir {
 		}
 	}
 	if path := orDefault(roots.Opencode, opencodedb.DefaultPath); path != "" {
-		if dirs, err := opencodedb.SessionDirs(path); err == nil {
+		if dirs, err := opencodedb.SessionDirs(path, since); err == nil {
 			for id, cwd := range dirs {
 				out[id] = Dir{CWD: cwd}
 			}

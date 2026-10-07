@@ -52,6 +52,11 @@ func (r *Repos) Root(ctx context.Context, dir string) string {
 	r.mu.Unlock()
 	root, err := git(ctx, dir, "rev-parse", "--show-toplevel")
 	if err != nil {
+		// A lookup cut short says nothing about the directory: answer
+		// "unknown" now and ask git again next time.
+		if ctx.Err() != nil {
+			return ""
+		}
 		root = ""
 	}
 	r.mu.Lock()

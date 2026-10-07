@@ -139,6 +139,22 @@ func TestRootIsCachedPerDirectory(t *testing.T) {
 	}
 }
 
+// A lookup cut short by its context says nothing about the directory, so
+// it must not be remembered as "not a repository".
+func TestRootDoesNotCacheACancelledLookup(t *testing.T) {
+	isolateGit(t)
+	repo := newRepo(t, "me@example.com")
+	r := NewRepos()
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if got := r.Root(cancelled, repo); got != "" {
+		t.Fatalf("cancelled Root = %q, want empty", got)
+	}
+	if got := r.Root(context.Background(), repo); got != repo {
+		t.Errorf("Root after a cancelled lookup = %q, want %q", got, repo)
+	}
+}
+
 // Without a configured user there is no one to attribute work to, and
 // guessing would credit someone else's commits.
 func TestCommitsWithoutConfiguredUserIsEmpty(t *testing.T) {
