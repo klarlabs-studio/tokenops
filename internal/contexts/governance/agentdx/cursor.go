@@ -1,7 +1,6 @@
 package agentdx
 
 import (
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,8 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	_ "modernc.org/sqlite" // read-only driver for Cursor's state.vscdb
 )
 
 // ErrCursorSchema reports that a Cursor database was found but did not
@@ -26,6 +23,33 @@ import (
 // full load, compactions reading zero on a corpus full of them — failed
 // exactly that way: a read failure rendered as an absence of activity.
 var ErrCursorSchema = errors.New("agentdx: unrecognised Cursor database schema")
+
+// ErrNoCursorStore reports a Cursor store on disk that this process has
+// no reader for: a composition root that did not call UseCursorStore. It
+// is an error rather than an empty result for the same reason as
+// ErrCursorSchema — an unread store must not read as an idle operator.
+var ErrNoCursorStore = errors.New("agentdx: no reader for Cursor's store is wired")
+
+// CursorStore reads Cursor's chat store, the VS Code-style SQLite
+// key-value database at globalStorage/state.vscdb. The SQL lives behind
+// it, in internal/infra/cursorstate; what the rows mean stays here.
+type CursorStore interface {
+	// Bubbles calls yield with the key and JSON value of every
+	// bubbleId:* row of the store at path, opened read-only so a running
+	// Cursor is never disturbed. A row it cannot scan is skipped. An
+	// error wrapping ErrCursorSchema means the store is not in a shape
+	// it knows how to read.
+	Bubbles(path string, yield func(key, value string)) error
+}
+
+// cursorStore is the reader ExtractCursor uses; see UseCursorStore.
+var cursorStore CursorStore
+
+// UseCursorStore installs the reader for Cursor's store. The composition
+// root (internal/bootstrap) installs internal/infra/cursorstate before
+// anything extracts; without one, a Cursor store on disk is reported as
+// ErrNoCursorStore.
+func UseCursorStore(s CursorStore) { cursorStore = s }
 
 // CursorDefaultRoot returns Cursor's user-data directory.
 func CursorDefaultRoot() (string, error) {
@@ -88,23 +112,10 @@ func ExtractCursor(opts ExtractOptions) ([]Record, error) {
 		return nil, nil
 	}
 
-	// mode=ro so a running Cursor is never disturbed, and its committed
-	// WAL data is still visible.
-	db, err := sql.Open("sqlite", "file:"+dbPath+"?mode=ro")
-	if err != nil {
-		return nil, fmt.Errorf("agentdx: open Cursor store: %w", err)
+	store := cursorStore
+	if store == nil {
+		return nil, fmt.Errorf("%w: found %s", ErrNoCursorStore, dbPath)
 	}
-	defer func() { _ = db.Close() }()
-
-	if !hasTable(db, "cursorDiskKV") {
-		return nil, fmt.Errorf("%w: no cursorDiskKV table in %s", ErrCursorSchema, dbPath)
-	}
-
-	rows, err := db.Query(`SELECT key, value FROM cursorDiskKV WHERE key LIKE 'bubbleId:%'`)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrCursorSchema, err)
-	}
-	defer func() { _ = rows.Close() }()
 
 	var (
 		out     []Record
@@ -114,26 +125,22 @@ func ExtractCursor(opts ExtractOptions) ([]Record, error) {
 		parsed int
 		sample string
 	)
-	for rows.Next() {
-		var key, value string
-		if err := rows.Scan(&key, &value); err != nil {
-			continue
-		}
+	err := store.Bubbles(dbPath, func(key, value string) {
 		scanned++
 		var b cursorBubble
 		if json.Unmarshal([]byte(value), &b) != nil {
-			continue
+			return
 		}
 		at := b.CreatedAt.at
 		if at.IsZero() {
 			if sample == "" {
 				sample = b.CreatedAt.raw
 			}
-			continue
+			return
 		}
 		parsed++
 		if !opts.Since.IsZero() && at.Before(opts.Since) {
-			continue
+			return
 		}
 		rec := Record{At: at, SessionID: composerFromKey(key)}
 
@@ -143,7 +150,7 @@ func ExtractCursor(opts ExtractOptions) ([]Record, error) {
 			rec.ToolName = b.ToolFormerData.Name
 		case b.Type == cursorBubbleUser:
 			if strings.TrimSpace(b.Text) == "" {
-				continue
+				return
 			}
 			rec.Kind = KindPrompt
 			// The words are already parsed for the empty check above;
@@ -157,12 +164,12 @@ func ExtractCursor(opts ExtractOptions) ([]Record, error) {
 			rec.Kind = KindAssistantTurn
 			rec.InputTokens = b.TokenCount.InputTokens
 		default:
-			continue
+			return
 		}
 		out = append(out, rec)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrCursorSchema, err)
+	})
+	if err != nil {
+		return nil, err
 	}
 	// Rows keyed as bubbles that none of them parsed means the value
 	// shape moved, not that the operator was idle. Bubbles that parsed but
@@ -186,14 +193,6 @@ func composerFromKey(key string) string {
 		return parts[1]
 	}
 	return ""
-}
-
-// hasTable reports whether the database defines the named table.
-func hasTable(db *sql.DB, name string) bool {
-	var found string
-	err := db.QueryRow(
-		`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, name).Scan(&found)
-	return err == nil && found == name
 }
 
 // cursorTime is a bubble's createdAt. Cursor has written it as epoch

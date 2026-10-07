@@ -106,9 +106,6 @@ var forbiddenIOImports = []string{"net/http", "os/exec", "database/sql"}
 // instead. When a package stops importing one, delete its entry —
 // TestIOImportExemptNotStale fails on a stale one.
 var ioImportExempt = map[string][]string{
-	// Its Cursor reader runs SQL against Cursor's state.vscdb (cursor.go).
-	// Moves with an extraction port for agentdx's per-client readers.
-	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx": {"database/sql"},
 	// sql.Null* scan targets for the event-store queries it runs through
 	// its sqlite adapter (see storageExempt); moves with that adapter.
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics": {"database/sql"},

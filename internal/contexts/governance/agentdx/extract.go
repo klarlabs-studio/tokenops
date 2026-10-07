@@ -362,7 +362,7 @@ func ExtractAll(opts ExtractOptions) ([]Record, error) {
 	switch {
 	case err == nil:
 		out = append(out, cu...)
-	case errors.Is(err, ErrCursorSchema):
+	case errors.Is(err, ErrCursorSchema), errors.Is(err, ErrNoCursorStore):
 		errs = append(errs, err)
 	}
 	oc, err := ExtractOpencode(opts)
