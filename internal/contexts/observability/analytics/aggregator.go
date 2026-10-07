@@ -531,6 +531,28 @@ func (a *Aggregator) Summarize(ctx context.Context, f Filter) (Summary, error) {
 	return s, nil
 }
 
+// The summary totals price each (day, provider, model) group at the rate
+// card in effect at the group's latest event. Pricing an all-window
+// aggregate with no timestamp would select the oldest card: a model a
+// later refresh added would read as unpriced, a repriced one at its old
+// price. A day is the finest grain a rate card changes at in practice.
+const (
+	dayBucketExpr  = `timestamp_ns / 86400000000000`
+	pricedAtColumn = `MAX(timestamp_ns)`
+)
+
+// addUnpriced records requests for a model that could not be priced,
+// merging the per-day groups back into one entry per (provider, model).
+func addUnpriced(list []UnpricedModel, provider, model string, requests int64) []UnpricedModel {
+	for i := range list {
+		if list[i].Provider == provider && list[i].Model == model {
+			list[i].Requests += requests
+			return list
+		}
+	}
+	return append(list, UnpricedModel{Provider: provider, Model: model, Requests: requests})
+}
+
 // summarizePlanCoveredValue recomputes plan-included / trial traffic at
 // list prices — the shadow value a flat-rate subscription absorbed.
 // Mirrors summarizeMissingCost with the cost-source filter inverted;
@@ -547,13 +569,13 @@ func (a *Aggregator) summarizePlanCoveredValue(ctx context.Context, f Filter) (f
 	conds = append(conds,
 		`COALESCE(json_extract(payload, '$.cost_source'), '') IN ('plan_included', 'trial')`,
 	)
-	q := `SELECT provider, model,
+	q := `SELECT ` + pricedAtColumn + `, provider, model,
 			COALESCE(SUM(input_tokens), 0),
 			COALESCE(SUM(output_tokens), 0),
 			COALESCE(SUM(CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER)), 0),
 			COUNT(*)
 		FROM events WHERE ` + strings.Join(conds, " AND ") +
-		` GROUP BY provider, model`
+		` GROUP BY ` + dayBucketExpr + `, provider, model`
 	rows, err := a.store.DB().QueryContext(ctx, q, args...)
 	if err != nil {
 		return 0, nil, fmt.Errorf("analytics: plan-covered value query: %w", err)
@@ -565,11 +587,12 @@ func (a *Aggregator) summarizePlanCoveredValue(ctx context.Context, f Filter) (f
 	)
 	for rows.Next() {
 		var (
+			pricedAtNs             int64
 			provider, model        sql.NullString
 			inTok, outTok, cacheIn sql.NullInt64
 			requests               sql.NullInt64
 		)
-		if err := rows.Scan(&provider, &model, &inTok, &outTok, &cacheIn, &requests); err != nil {
+		if err := rows.Scan(&pricedAtNs, &provider, &model, &inTok, &outTok, &cacheIn, &requests); err != nil {
 			return 0, nil, fmt.Errorf("analytics: plan-covered value scan: %w", err)
 		}
 		p := &eventschema.PromptEvent{
@@ -579,7 +602,7 @@ func (a *Aggregator) summarizePlanCoveredValue(ctx context.Context, f Filter) (f
 			CachedInputTokens: cacheIn.Int64,
 			OutputTokens:      outTok.Int64,
 		}
-		c, err := a.spend.Compute(p)
+		c, err := a.spend.ComputeAt(p, time.Unix(0, pricedAtNs).UTC())
 		if err != nil {
 			// tokenops' own telemetry (MCP session pings and friends)
 			// carries a pseudo-model that will never have a rate card.
@@ -592,11 +615,7 @@ func (a *Aggregator) summarizePlanCoveredValue(ctx context.Context, f Filter) (f
 			// dropping the row is how a subscription's dominant model can
 			// be missing from the api-equivalent figure with nothing to
 			// show for it.
-			unpriced = append(unpriced, UnpricedModel{
-				Provider: provider.String,
-				Model:    model.String,
-				Requests: requests.Int64,
-			})
+			unpriced = addUnpriced(unpriced, provider.String, model.String, requests.Int64)
 			continue
 		}
 		total += c
@@ -667,12 +686,12 @@ func (a *Aggregator) CacheStats(ctx context.Context, f Filter) (CacheStatsResult
 func (a *Aggregator) summarizeMissingCost(ctx context.Context, f Filter) (float64, []UnpricedModel, error) {
 	conds, args := buildConditions(f)
 	conds = append(conds, "(cost_usd IS NULL OR cost_usd = 0)", costSourceMetered)
-	q := `SELECT provider, model, COUNT(*),
+	q := `SELECT ` + pricedAtColumn + `, provider, model, COUNT(*),
 			COALESCE(SUM(input_tokens), 0),
 			COALESCE(SUM(output_tokens), 0),
 			COALESCE(SUM(CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER)), 0)
 		FROM events WHERE ` + strings.Join(conds, " AND ") +
-		` GROUP BY provider, model ORDER BY provider, model`
+		` GROUP BY ` + dayBucketExpr + `, provider, model ORDER BY provider, model`
 	rows, err := a.store.DB().QueryContext(ctx, q, args...)
 	if err != nil {
 		return 0, nil, fmt.Errorf("analytics: summarize recompute query: %w", err)
@@ -684,10 +703,11 @@ func (a *Aggregator) summarizeMissingCost(ctx context.Context, f Filter) (float6
 	)
 	for rows.Next() {
 		var (
+			pricedAtNs                       int64
 			provider, model                  sql.NullString
 			requests, inTok, outTok, cacheIn sql.NullInt64
 		)
-		if err := rows.Scan(&provider, &model, &requests, &inTok, &outTok, &cacheIn); err != nil {
+		if err := rows.Scan(&pricedAtNs, &provider, &model, &requests, &inTok, &outTok, &cacheIn); err != nil {
 			return 0, nil, fmt.Errorf("analytics: summarize recompute scan: %w", err)
 		}
 		p := &eventschema.PromptEvent{
@@ -697,16 +717,12 @@ func (a *Aggregator) summarizeMissingCost(ctx context.Context, f Filter) (float6
 			CachedInputTokens: cacheIn.Int64,
 			OutputTokens:      outTok.Int64,
 		}
-		c, err := a.spend.Compute(p)
+		c, err := a.spend.ComputeAt(p, time.Unix(0, pricedAtNs).UTC())
 		switch {
 		case err == nil:
 			total += c
 		case errors.Is(err, spend.ErrUnknownModel):
-			unpriced = append(unpriced, UnpricedModel{
-				Provider: provider.String,
-				Model:    model.String,
-				Requests: requests.Int64,
-			})
+			unpriced = addUnpriced(unpriced, provider.String, model.String, requests.Int64)
 		}
 	}
 	if err := rows.Err(); err != nil {
