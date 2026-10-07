@@ -3,8 +3,12 @@ package cli
 import (
 	"context"
 	"flag"
+	"math"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -121,7 +125,35 @@ func TestSpendOutputCharacterization(t *testing.T) {
 			if err != nil {
 				t.Fatalf("spend %v: %v", tc.args, err)
 			}
+			if strings.HasSuffix(tc.golden, "forecast.json") {
+				out = roundFloats(out)
+			}
 			assertGolden(t, tc.golden, out)
 		})
 	}
+}
+
+// floatLiterals matches the fractional and exponent numbers in a JSON payload.
+var floatLiterals = regexp.MustCompile(`-?\d+\.\d+(?:[eE][-+]?\d+)?|-?\d+[eE][-+]?\d+`)
+
+// roundFloats rounds every fractional number in s to nine decimal places.
+//
+// The forecaster's arithmetic is not bit-identical across architectures:
+// Go fuses a*b+c into one FMA instruction on arm64 and not on amd64, so a
+// projection computed on a laptop and on CI differs in the last bits
+// (0.30000000000000004 against 0.30000000000000016, 1e-16 against 2e-16).
+// The goldens pin the answer, not the rounding of the machine that wrote
+// them.
+func roundFloats(s string) string {
+	return floatLiterals.ReplaceAllStringFunc(s, func(lit string) string {
+		v, err := strconv.ParseFloat(lit, 64)
+		if err != nil {
+			return lit
+		}
+		r := math.Round(v*1e9) / 1e9
+		if r == 0 {
+			r = 0 // no "-0"
+		}
+		return strconv.FormatFloat(r, 'f', -1, 64)
+	})
 }
