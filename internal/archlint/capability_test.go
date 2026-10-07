@@ -77,25 +77,10 @@ const domainPrefix = "go.klarlabs.de/tokenops/internal/contexts/"
 // from internal/cli. Four movements, none of which anyone would have
 // noticed by hand.
 var directDomainImports = map[string][]string{
-	"go.klarlabs.de/tokenops/internal/cli": {
-		"go.klarlabs.de/tokenops/internal/contexts/governance/coverdebt",
-		"go.klarlabs.de/tokenops/internal/contexts/optimization/fmtlearn",
-		"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter",
-		"go.klarlabs.de/tokenops/internal/contexts/optimization/modeltier",
-		"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer",
-		"go.klarlabs.de/tokenops/internal/contexts/optimization/replay",
-		"go.klarlabs.de/tokenops/internal/contexts/optimization/taskclass",
-		"go.klarlabs.de/tokenops/internal/contexts/prompts/providers",
-		"go.klarlabs.de/tokenops/internal/contexts/security/redaction",
-		"go.klarlabs.de/tokenops/internal/contexts/spend/session",
-		"go.klarlabs.de/tokenops/internal/contexts/spend/spend",
-		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic",
-		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode",
-		"go.klarlabs.de/tokenops/internal/contexts/tasks",
-	},
-	// The daemon and the MCP server reach no domain package directly: the
-	// daemon's startup wiring is internal/bootstrap's, and both answer
-	// through internal/capability.
+	// The CLI, the daemon and the MCP server reach no domain package
+	// directly: the daemon's startup wiring is internal/bootstrap's, and
+	// every answer comes through internal/capability.
+	"go.klarlabs.de/tokenops/internal/cli":    nil,
 	"go.klarlabs.de/tokenops/internal/daemon": nil,
 	"go.klarlabs.de/tokenops/internal/mcp":    nil,
 	// The proxy is two things in one package: the /api/* read model,

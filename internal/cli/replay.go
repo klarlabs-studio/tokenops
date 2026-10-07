@@ -14,11 +14,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/replays"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
-	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/replay"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -60,7 +58,7 @@ findings (when --workflow is set), and a summary footer.`,
 			}
 			defer func() { _ = store.Close() }()
 
-			sel := replay.SessionSelector{
+			sel := replays.Selector{
 				WorkflowID: workflowID,
 				AgentID:    agentID,
 				Limit:      limit,
@@ -90,12 +88,9 @@ findings (when --workflow is set), and a summary footer.`,
 			if err != nil {
 				return err
 			}
-			pipeline := buildReplayPipeline(cfg, spendEng)
-			eng := replay.New(store, pipeline, spendEng)
-
-			res, err := eng.Replay(ctx, sel)
+			res, err := replays.Run(ctx, store, cfg, spendEng, sel)
 			if err != nil {
-				if errors.Is(err, replay.ErrEmptySession) {
+				if errors.Is(err, replays.ErrEmptySession) {
 					return fmt.Errorf("no prompt events matched the selector")
 				}
 				return err
@@ -123,16 +118,6 @@ findings (when --workflow is set), and a summary footer.`,
 	cmd.Flags().IntVar(&limit, "limit", 1000, "max prompts to replay")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON instead of text")
 	return cmd
-}
-
-// buildReplayPipeline composes the canonical replay pipeline plus the
-// model router when routing rules are configured. CLI and MCP both go
-// through this so replays stay identical across surfaces.
-func buildReplayPipeline(cfg config.Config, spendEng *spend.Engine) *optimizer.Pipeline {
-	return replay.BuildPipeline(nil, replay.PipelineConfig{
-		Routing: cfg.RouterConfig(),
-		Spend:   spendEng,
-	})
 }
 
 // resolveStorageReadPath picks the sqlite path for the replay command.
@@ -175,10 +160,10 @@ func parseSince(s string) (time.Time, error) {
 
 func writeReplayText(
 	w io.Writer,
-	sel replay.SessionSelector,
-	res *replay.Result,
+	sel replays.Selector,
+	res *replays.Result,
 	coachings []*eventschema.CoachingEvent,
-	spendEng *spend.Engine,
+	spendEng *spending.Engine,
 ) error {
 	fmt.Fprintf(w, "Replay results — %s\n", describeSelector(sel))
 	fmt.Fprintf(w, "  prompts replayed:  %d\n", len(res.Steps))
@@ -239,7 +224,7 @@ func writeReplayText(
 // steps and prints the per-route "would save $X" rollup — the headline
 // number for operators evaluating a routing rule before enabling it on
 // live traffic.
-func writeRoutingSection(w io.Writer, res *replay.Result, spendEng *spend.Engine) {
+func writeRoutingSection(w io.Writer, res *replays.Result, spendEng *spending.Engine) {
 	type routeAgg struct {
 		requests int
 		tokens   int64
@@ -276,7 +261,7 @@ func writeRoutingSection(w io.Writer, res *replay.Result, spendEng *spend.Engine
 
 // promptModel returns the model the step was billed against, falling back
 // to the requested model.
-func promptModel(step replay.StepDiff) string {
+func promptModel(step replays.StepDiff) string {
 	if step.OriginalEnvelope == nil {
 		return ""
 	}
@@ -307,7 +292,7 @@ func summariseOptimizations(events []*eventschema.OptimizationEvent) string {
 	return strings.Join(parts, ", ")
 }
 
-func describeSelector(s replay.SessionSelector) string {
+func describeSelector(s replays.Selector) string {
 	parts := make([]string, 0, 4)
 	if s.SessionID != "" {
 		parts = append(parts, "session="+s.SessionID)
@@ -351,15 +336,15 @@ func truncate(s string, max int) string {
 
 type replayJSON struct {
 	Selector  any                          `json:"selector"`
-	Result    *replay.Result               `json:"result"`
+	Result    *replays.Result              `json:"result"`
 	Coaching  []*eventschema.CoachingEvent `json:"coaching,omitempty"`
 	Generated time.Time                    `json:"generated_at"`
 }
 
 func writeReplayJSON(
 	w io.Writer,
-	sel replay.SessionSelector,
-	res *replay.Result,
+	sel replays.Selector,
+	res *replays.Result,
 	coachings []*eventschema.CoachingEvent,
 ) error {
 	enc := json.NewEncoder(w)
