@@ -199,9 +199,6 @@ func Evaluate(limit Limit, actualUSD float64, forecast []forecast.Prediction) []
 	if a, ok := forecastAlert(limit, actualUSD, forecast); ok {
 		alerts = append(alerts, a)
 	}
-	for _, a := range alerts {
-		publishExceeded(a)
-	}
 	return alerts
 }
 

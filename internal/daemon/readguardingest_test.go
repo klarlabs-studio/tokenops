@@ -94,3 +94,30 @@ func TestReadGuardIngestStopsWhenCancelled(t *testing.T) {
 		t.Errorf("used the dropping path %d times", bus.dropping)
 	}
 }
+
+// Each reclamation is published once per process. Re-publishing the whole
+// ledger every tick was harmless to the store, which deduplicates, but the
+// bus also feeds the OTLP exporter, so an operator's collector received
+// every reclamation again every two minutes, forever.
+func TestReadGuardIngestPublishesEachReclamationOnce(t *testing.T) {
+	dir := seedLedger(t, 3)
+	bus := &recordingBus{}
+	ing := &readGuardIngester{bus: bus, dir: dir}
+	ctx := context.Background()
+	ing.scan(ctx)
+	ing.scan(ctx)
+	if bus.waiting != 3 {
+		t.Fatalf("published %d after two scans of 3 reclamations, want 3", bus.waiting)
+	}
+	f, err := os.OpenFile(filepath.Join(dir, "events.jsonl"), os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = fmt.Fprintf(f, `{"ts":%q,"session":"s","path":"/x/new.go","action":"blocked","est_tokens":42}`+"\n",
+		time.Date(2026, 5, 18, 0, 0, 0, 0, time.UTC).Format(time.RFC3339Nano))
+	_ = f.Close()
+	ing.scan(ctx)
+	if bus.waiting != 4 {
+		t.Errorf("published %d after a new reclamation, want 4", bus.waiting)
+	}
+}

@@ -5,8 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/contexts/spend/biller"
-
+	"go.klarlabs.de/tokenops/internal/capability/attribution"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
@@ -58,7 +57,7 @@ func (s *planStampSink) AppendBatch(ctx context.Context, envs []*eventschema.Env
 		}
 		// A plan covers only its vendor's own endpoint: a turn a gateway
 		// carried runs on an API key, billed per token (ADR 0009).
-		if s.planned[p.Provider] && biller.PlanApplies(string(p.Provider), env.Attributes["endpoint"]) {
+		if s.planned[p.Provider] && attribution.PlanApplies(string(p.Provider), env.Attributes["endpoint"]) {
 			p.CostSource = eventschema.CostSourcePlanIncluded
 		}
 	}
