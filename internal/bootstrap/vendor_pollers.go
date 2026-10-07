@@ -1,14 +1,11 @@
-package daemon
+package bootstrap
 
 import (
 	"context"
 	"log/slog"
 	"os"
 	"strings"
-
-	"go.klarlabs.de/tokenops/internal/infra/codexsettings"
-
-	"go.klarlabs.de/tokenops/internal/infra/routehistory"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
@@ -18,7 +15,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodeoauth"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudestatusline"
-	claudeusagemeter "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexappserver"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
 	copilotusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilot"
@@ -30,6 +27,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
+	"go.klarlabs.de/tokenops/internal/infra/codexsettings"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	accountsapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/accounts"
 	anthropicapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/anthropic"
@@ -43,20 +41,30 @@ import (
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
-// startVendorUsagePollers composes configured local and provider usage readers.
-// Every recurring source is registered with the daemon supervisor.
-func startVendorUsagePollers(
+// StartVendorUsagePollers composes the configured local and provider
+// usage readers and registers every recurring source with sup.
+//
+// It is composition-root wiring: each poller is a domain type built from
+// configuration and an infrastructure client, and the daemon only needs
+// them started. Keeping that wiring here is what keeps the daemon, which
+// is also the local API adapter, from importing every vendor-usage domain
+// package (see internal/archlint/capability_test.go).
+//
+// claudeCodeBaseURLAt answers where Claude Code was pointed at a moment;
+// the Claude Code JSONL reader uses it to attribute each turn to the
+// endpoint that served it.
+func StartVendorUsagePollers(
 	cfg config.Config,
 	bus events.Bus,
 	sourceHealth *freshness.Registry,
-	routes *routehistory.Tracker,
+	claudeCodeBaseURLAt func(time.Time) string,
 	sup *lifecycle.Supervisor,
 	logger *slog.Logger,
 ) {
 	if cfg.VendorUsage.ClaudeCode.Enabled {
 		p := claudecode.NewPoller(bus, claudecode.PollerOptions{
 			Path: cfg.VendorUsage.ClaudeCode.Path, Interval: cfg.VendorUsage.ClaudeCode.Interval,
-			Logger: logger, CostSource: planCostSource(cfg, eventschema.ProviderAnthropic),
+			Logger: logger, CostSource: PlanCostSource(cfg, eventschema.ProviderAnthropic),
 		})
 		sup.Go("claude-code-stats-cache", p.Run)
 		logger.Warn("claude-code stats cache poller is DEPRECATED — switch to vendor_usage.claude_code_jsonl for live per-turn data",
@@ -65,8 +73,8 @@ func startVendorUsagePollers(
 	if cfg.VendorUsage.ClaudeCodeJSONL.Enabled {
 		p := claudecodejsonl.NewPoller(bus, claudecodejsonl.PollerOptions{
 			Root: cfg.VendorUsage.ClaudeCodeJSONL.Root, Interval: cfg.VendorUsage.ClaudeCodeJSONL.Interval,
-			Logger: logger, CostSource: planCostSource(cfg, eventschema.ProviderAnthropic),
-			BaseURLAt: claudeCodeBaseURLAt(routes),
+			Logger: logger, CostSource: PlanCostSource(cfg, eventschema.ProviderAnthropic),
+			BaseURLAt: claudeCodeBaseURLAt,
 		})
 		sup.Go("claude-code-jsonl", p.Run)
 		logger.Info("claude-code jsonl poller live", "interval", cfg.VendorUsage.ClaudeCodeJSONL.Interval, "root", cfg.VendorUsage.ClaudeCodeJSONL.Root)
@@ -74,7 +82,7 @@ func startVendorUsagePollers(
 	if cfg.VendorUsage.CodexJSONL.Enabled {
 		p := codexjsonl.NewPoller(bus, codexjsonl.PollerOptions{
 			Root: cfg.VendorUsage.CodexJSONL.Root, Interval: cfg.VendorUsage.CodexJSONL.Interval,
-			Logger: logger, CostSource: planCostSource(cfg, eventschema.ProviderOpenAI),
+			Logger: logger, CostSource: PlanCostSource(cfg, eventschema.ProviderOpenAI),
 			ProviderBaseURL: codexsettings.ProviderBaseURL,
 		})
 		sup.Go("codex-jsonl", p.Run)
@@ -90,7 +98,7 @@ func startVendorUsagePollers(
 	if cfg.VendorUsage.GeminiCLI.Enabled {
 		p := geminicli.NewPoller(bus, geminicli.PollerOptions{
 			Root: cfg.VendorUsage.GeminiCLI.Root, Interval: cfg.VendorUsage.GeminiCLI.Interval,
-			Logger: logger, CostSource: planCostSource(cfg, eventschema.ProviderGemini),
+			Logger: logger, CostSource: PlanCostSource(cfg, eventschema.ProviderGemini),
 		})
 		sup.Go("gemini-cli", p.Run)
 		logger.Info("gemini cli poller live", "interval", cfg.VendorUsage.GeminiCLI.Interval, "root", cfg.VendorUsage.GeminiCLI.Root)
@@ -108,7 +116,7 @@ func startVendorUsagePollers(
 	// Cursor's stop hook records per-turn consumption. Reading an empty ledger
 	// is cheap and lets the hook work without additional daemon configuration.
 	p := cursorturnspoll.NewPoller(bus, cursorturnspoll.PollerOptions{
-		PlanCovered: planCostSource(cfg, eventschema.ProviderCursor) == eventschema.CostSourcePlanIncluded,
+		PlanCovered: PlanCostSource(cfg, eventschema.ProviderCursor) == eventschema.CostSourcePlanIncluded,
 		Logger:      logger,
 	})
 	sup.Go("cursor-hook", p.Run)
@@ -214,4 +222,17 @@ func browserSessionSource(cfg config.ClaudeUsageMeterConfig) func(context.Contex
 			UserAgent: browser.UserAgent(), Browser: browser.Name,
 		}, nil
 	}
+}
+
+// PlanCostSource returns the CostSource vendor-usage pollers stamp on
+// emitted events: plan_included when the operator bound a flat-rate
+// plan to the provider (config plans:), metered (empty) otherwise.
+// Without the stamp, the analytics recompute would price
+// subscription-covered usage at API list rates and budget alerts would
+// fire on spend that never billed.
+func PlanCostSource(cfg config.Config, provider eventschema.Provider) eventschema.CostSource {
+	if cfg.PlanCovers(string(provider)) {
+		return eventschema.CostSourcePlanIncluded
+	}
+	return ""
 }

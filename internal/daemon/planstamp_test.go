@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"go.klarlabs.de/tokenops/internal/bootstrap"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -63,7 +64,7 @@ func TestPlanStampSinkPassthroughWithoutPlans(t *testing.T) {
 // limit as 0% used.
 func TestSpendPlanUsageIsNotStampedCovered(t *testing.T) {
 	cfg := config.Config{Plans: map[string]string{"anthropic": "claude-enterprise", "openai": "gpt-pro-5x"}}
-	if got := planCostSource(cfg, eventschema.ProviderAnthropic); got != "" {
+	if got := bootstrap.PlanCostSource(cfg, eventschema.ProviderAnthropic); got != "" {
 		t.Errorf("enterprise poller cost source %q, want billed", got)
 	}
 	next := &captureSink{}
