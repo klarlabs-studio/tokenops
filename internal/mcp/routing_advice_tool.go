@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/routers"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -25,7 +25,7 @@ type RoutingAdviceDeps struct {
 	// while every other tool in the same server priced with the live
 	// card, so "what the pricing table currently calls cheapest" was the
 	// binary's opinion, not the table's.
-	Spend *spend.Engine
+	Spend *spending.Engine
 }
 
 func (d RoutingAdviceDeps) activeConfig() *config.Config {
