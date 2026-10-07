@@ -8,41 +8,18 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/bootstrap"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/infra/pricingsource"
 )
 
-// buildSpendEngine constructs the effective-dated cost engine for CLI
-// commands that price events outside the daemon bootstrap (spend, replay):
-// events are priced at the rate card in effect at their timestamp, from the
-// embedded baseline plus persisted snapshots under ~/.tokenops/pricing, with
-// the negotiated-rate override (cfg.Pricing.Path) layered across every
-// period. Fail-soft: any error building the effective-dated engine degrades
-// to the flat baseline+override engine so costing never breaks. A malformed
-// override file is a hard error, surfaced to the caller as before.
+// buildSpendEngine is the cost engine for CLI commands that price events
+// outside the daemon (spend, replay, glance): bootstrap.SpendEngine with
+// the configured override file, so the CLI prices as the daemon does.
 func buildSpendEngine(cfg config.Config) (*spend.Engine, error) {
-	flatTable, err := spend.TableWithOverrides(cfg.Pricing.Path)
-	if err != nil {
-		return nil, err
-	}
-	fallback := spend.NewEngine(flatTable)
-
-	overrides := spend.Table{}
-	if cfg.Pricing.Path != "" {
-		ov, oerr := spend.LoadTableFile(cfg.Pricing.Path)
-		if oerr != nil {
-			return fallback, nil
-		}
-		overrides = ov
-	}
-
-	eng, eerr := pricing.EffectiveEngineWithOverrides("", overrides)
-	if eerr != nil || eng == nil {
-		return fallback, nil
-	}
-	return eng, nil
+	return bootstrap.SpendEngine(cfg.Pricing.Path, nil)
 }
 
 // newPricingCmd builds the `tokenops pricing` command tree: the ADR 0002
