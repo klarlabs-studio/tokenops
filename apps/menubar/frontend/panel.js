@@ -255,7 +255,10 @@
     return e;
   }
 
-  var MARKS_BY_LEVEL = { warn: "▲", notice: "●", info: "·" };
+  // A mark per level, each with words: the info mark was a faint middle
+  // dot with no label, and read as a stray character.
+  var MARKS_BY_LEVEL = { warn: "▲", notice: "●", info: "○" };
+  var LEVEL_WORDS = { warn: "Needs attention", notice: "Worth a look", info: "For your information" };
   function coachFindings(main, v) {
     var report = v.findings;
     if (!report || !report.findings) return;
@@ -266,7 +269,11 @@
     box.appendChild(head);
     report.findings.forEach(function (f) {
       var item = el("div", "finding " + f.level);
-      item.appendChild(el("span", "finding-mark", MARKS_BY_LEVEL[f.level] || "·"));
+      var mark = el("span", "finding-mark", MARKS_BY_LEVEL[f.level] || MARKS_BY_LEVEL.info);
+      mark.title = LEVEL_WORDS[f.level] || LEVEL_WORDS.info;
+      mark.setAttribute("role", "img");
+      mark.setAttribute("aria-label", mark.title);
+      item.appendChild(mark);
       var body = el("div", "finding-body");
       body.appendChild(el("div", "finding-title", f.title));
       if (f.evidence) body.appendChild(el("div", "note", f.evidence));
@@ -288,6 +295,9 @@
     var msg = v.error || (head.error ? (head.hint || head.error) : "");
     error.hidden = !msg;
     error.textContent = msg;
+    var note = document.getElementById("note");
+    note.hidden = !v.note;
+    note.textContent = v.note || "";
     var reports = (head.reports || []).slice().sort(function (a, b) { return busiest(b) - busiest(a); });
     if (!reports.some(function (r) { return r.provider === state.selected; }) && reports.length) {
       state.selected = reports[0].provider;
@@ -325,6 +335,29 @@
       render();
     });
   });
+  // Refresh asks the daemon's readers to poll now; re-reading alone would
+  // return the readings the daemon already had.
+  var refreshButton = document.getElementById("refresh");
+  function refresh() {
+    if (refreshButton.disabled) return;
+    refreshButton.disabled = true;
+    invoke("sources.refresh").then(function (v) {
+      refreshButton.disabled = false;
+      show(v);
+    }, function (err) {
+      refreshButton.disabled = false;
+      state.view = state.view || {};
+      state.view.error = "Not refreshed: " + ((err && err.message) || "refused");
+      render();
+    });
+  }
+  refreshButton.addEventListener("click", refresh);
   document.getElementById("close").addEventListener("click", function () { invoke("panel.close"); });
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape") invoke("panel.close"); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") invoke("panel.close");
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "r") {
+      e.preventDefault();
+      refresh();
+    }
+  });
 })();

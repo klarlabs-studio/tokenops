@@ -3478,6 +3478,42 @@
         "summary": "Each reader's ingestion health"
       }
     },
+    "/api/sources/refresh": {
+      "post": {
+        "operationId": "postSourcesRefresh",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "next_at": {
+                      "type": "string"
+                    },
+                    "pollers": {
+                      "type": "integer"
+                    },
+                    "requested": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Ask the usage readers to poll now (at most every 30s)"
+      }
+    },
     "/api/spend/burn-rate": {
       "get": {
         "operationId": "getSpendBurnRate",

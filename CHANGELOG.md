@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **menubar:** Refresh, in the panel (⌘R) and the right-click menu, asks the daemon's usage readers to poll now instead of re-reading readings up to 15 minutes old, then reads again as the new ones arrive; the panel says what it asked. Behind it, `POST /api/sources/refresh`, accepted once every 30 seconds
+
 ### Security
 
 - **proxy:** the daemon refuses requests a web page could send it. A request whose Host is not this machine (DNS rebinding), whose Origin is not local, or that a browser marks cross-site gets 403, so a page can no longer relay through your provider routes or write spend into your history. A reverse-proxy name goes in the new `allowed_hosts`; the daemon warns at start when `listen` is reachable from the network without TLS
@@ -46,6 +50,8 @@
 - **spend:** consumers that tie are ranked by name, not in a different order each run
 - **routing:** the gated-routing hint names `tokenops routing proposals` and the `tokenops_routing` tool; it named a command that does not exist
 - **windows:** the Windows build compiles again
+- **menubar:** on macOS 27 a click on the icon opened the panel in the middle of the screen, like a window; it opens under the icon again
+- **menubar:** each coach finding's mark says what it means on hover; the faint dot in front of results such as "The read guard refused 255 re-reads" (level: for your information) is now a ring
 
 ## 0.101.1 - 2026-10-06
 

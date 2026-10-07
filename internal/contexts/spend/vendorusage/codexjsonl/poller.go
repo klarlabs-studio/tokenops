@@ -15,6 +15,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/biller"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/jsonltail"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pollnow"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -74,7 +75,7 @@ func (p *Poller) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	t := time.NewTicker(p.opts.Interval)
+	t := pollnow.NewTicker(ctx, p.opts.Interval)
 	defer t.Stop()
 	p.scan(ctx, root)
 	for {

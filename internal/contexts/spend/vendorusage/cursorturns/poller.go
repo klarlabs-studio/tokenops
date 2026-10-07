@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pollnow"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/cursorturns"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -63,7 +64,7 @@ func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
 // the store drops a repeat on conflict, so re-reading is idempotent and
 // needs no marker that could drift out of step with what was stored.
 func (p *Poller) Run(ctx context.Context) error {
-	tick := time.NewTicker(p.opts.Interval)
+	tick := pollnow.NewTicker(ctx, p.opts.Interval)
 	defer tick.Stop()
 	p.once(ctx)
 	for {

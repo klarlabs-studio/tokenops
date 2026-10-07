@@ -60,6 +60,7 @@ operator's own.
 | `GET /api/data-sources` | Events per source and each reader's health |
 | `GET /api/vendor-usage` | Which usage sources are on and producing |
 | `GET /api/sources` | Each reader's ingestion health |
+| `POST /api/sources/refresh` | Ask the usage readers to poll now, at most every 30 seconds: `202` with how many were asked, or `429` with `Retry-After` |
 | `GET /api/dx` | Agent DX, graded, with the single change worth making |
 | `GET /api/story` | Recent work, task by task, titles withheld |
 | `GET /api/coach/prompts` | Prompt scoring, quotes withheld |

@@ -77,7 +77,9 @@ type view struct {
 	// Costs is each provider's usage today and over the last 30 days.
 	Costs map[string]costs `json:"costs,omitempty"`
 	// Error says why there is nothing to show, in the operator's terms.
-	Error   string    `json:"error,omitempty"`
+	Error string `json:"error,omitempty"`
+	// Note says what the last refresh did.
+	Note    string    `json:"note,omitempty"`
 	Updated time.Time `json:"updated"`
 	err     error
 }
@@ -114,6 +116,9 @@ type menubar struct {
 	prefs string
 	// notifyFailed logs why notifications fail once, not every minute.
 	notifyFailed sync.Once
+	// note says what the last refresh did, shown until noteUntil.
+	note      string
+	noteUntil time.Time
 }
 
 // newMenubar wires the runtime, the panel's grant and commands, and the
@@ -153,10 +158,10 @@ func newMenubar(host app.DesktopHost, d *daemon, sink audit.Sink) (*menubar, err
 // register grants the panel what it needs and registers its commands.
 func (m *menubar) register() error {
 	grant, err := domain.NewCapabilityGrant(
-		"panel", "read the glance, change the coach preset, close the panel",
+		"panel", "read the glance, ask the daemon to poll now, change the coach preset, close the panel",
 		[]domain.WindowID{panelWindow},
 		[]domain.Origin{domain.OriginPackagedLocal},
-		[]domain.PermissionSpec{{Name: "glance.read"}, {Name: "coach.change"}, {Name: "panel.close"}},
+		[]domain.PermissionSpec{{Name: "glance.read"}, {Name: "glance.refresh"}, {Name: "coach.change"}, {Name: "panel.close"}},
 	)
 	if err != nil {
 		return err
@@ -173,6 +178,14 @@ func (m *menubar) register() error {
 					return view{}, err
 				}
 				return m.refresh(ctx), nil
+			},
+		}),
+		vitra.Register(m.rt, vitra.Command[struct{}, view]{
+			Name:        "sources.refresh",
+			Description: "Ask the daemon's usage readers to poll now, then read again",
+			Permission:  "glance.refresh",
+			Handler: func(ctx context.Context, _ domain.Invocation, _ struct{}) (view, error) {
+				return m.refreshNow(ctx), nil
 			},
 		}),
 		vitra.Register(m.rt, vitra.Command[presetInput, view]{
@@ -242,6 +255,9 @@ func (m *menubar) refresh(ctx context.Context) view {
 		notes = m.alerts.observe(v.Glance)
 	}
 	on := m.settings.alertsOn()
+	if time.Now().Before(m.noteUntil) {
+		v.Note = m.note
+	}
 	m.mu.Unlock()
 	if on {
 		m.show(notes)
@@ -252,6 +268,39 @@ func (m *menubar) refresh(ctx context.Context) view {
 	}
 	m.setTray(st)
 	_ = m.app.Emit(ctx, viewEvent, v)
+	return v
+}
+
+// refreshAgain is when the panel reads again after asking for a refresh:
+// most readers answer within seconds, the slowest within half a minute.
+var refreshAgain = []time.Duration{4 * time.Second, 15 * time.Second, 35 * time.Second}
+
+// refreshNow asks the daemon's readers to poll, shows what it has at once
+// with a note saying so, and reads again as the new readings arrive.
+// Re-reading alone returned the same readings: the daemon polls each
+// vendor on its own interval, up to 15 minutes.
+func (m *menubar) refreshNow(ctx context.Context) view {
+	r, err := m.daemon.refreshSources(ctx)
+	if err == nil {
+		// The note stays until the last follow-up read, so the panel says
+		// what is happening while the readings come in.
+		m.mu.Lock()
+		m.note, m.noteUntil = r.note(time.Now()), time.Now().Add(refreshAgain[len(refreshAgain)-1]+time.Second)
+		m.mu.Unlock()
+	}
+	v := m.refresh(ctx)
+	if err == nil && r.Requested {
+		// Not tied to ctx: a command's context ends when it returns, and
+		// the readings arrive after that.
+		bg := context.WithoutCancel(ctx)
+		go func() {
+			start := time.Now()
+			for _, d := range refreshAgain {
+				time.Sleep(time.Until(start.Add(d)))
+				m.refresh(bg)
+			}
+		}()
+	}
 	return v
 }
 
@@ -376,7 +425,7 @@ func (m *menubar) onAction(id string) {
 	ctx := context.Background()
 	switch id {
 	case actionRefresh:
-		m.refresh(ctx)
+		m.refreshNow(ctx)
 	case actionLogin:
 		on, err := m.app.LoginItemEnabled()
 		if err == nil {

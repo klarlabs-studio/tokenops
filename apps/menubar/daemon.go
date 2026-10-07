@@ -94,16 +94,70 @@ func (d *daemon) do(ctx context.Context, method, path string, body, out any) err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		var e struct {
 			Error string `json:"error"`
 		}
 		if json.Unmarshal(b, &e) == nil && e.Error != "" {
-			return errors.New(e.Error)
+			return &statusError{code: resp.StatusCode, body: b, msg: e.Error}
 		}
-		return fmt.Errorf("%s %s: status %d", method, path, resp.StatusCode)
+		return &statusError{code: resp.StatusCode, body: b, msg: fmt.Sprintf("%s %s: status %d", method, path, resp.StatusCode)}
 	}
 	return json.Unmarshal(b, out)
+}
+
+// statusError is a daemon answer outside 2xx, kept whole so a caller can
+// read an answer it expects, such as a refresh refused as too soon.
+type statusError struct {
+	code int
+	body []byte
+	msg  string
+}
+
+func (e *statusError) Error() string { return e.msg }
+
+// sourcesRefresh is the daemon's answer to a refresh.
+type sourcesRefresh struct {
+	Requested bool      `json:"requested"`
+	Pollers   int       `json:"pollers"`
+	NextAt    time.Time `json:"next_at"`
+	// Unsupported is a daemon from before the route: nothing to poll,
+	// and not an error.
+	Unsupported bool `json:"-"`
+}
+
+// refreshSources asks the daemon's usage readers to poll now
+// (POST /api/sources/refresh).
+func (d *daemon) refreshSources(ctx context.Context) (sourcesRefresh, error) {
+	var out sourcesRefresh
+	err := d.do(ctx, http.MethodPost, "/api/sources/refresh", nil, &out)
+	var se *statusError
+	switch {
+	case err == nil:
+		return out, nil
+	case errors.As(err, &se) && se.code == http.StatusTooManyRequests:
+		_ = json.Unmarshal(se.body, &out)
+		out.Requested = false
+		return out, nil
+	case errors.As(err, &se) && (se.code == http.StatusNotFound || se.code == http.StatusMethodNotAllowed):
+		return sourcesRefresh{Unsupported: true}, nil
+	}
+	return sourcesRefresh{}, err
+}
+
+// note says what the refresh did, for the panel.
+func (r sourcesRefresh) note(now time.Time) string {
+	switch {
+	case r.Unsupported:
+		return "This daemon cannot poll on demand; showing its latest readings."
+	case r.Requested:
+		return fmt.Sprintf("Asked %d readers to poll now; new readings arrive as they answer.", r.Pollers)
+	}
+	wait := r.NextAt.Sub(now).Round(time.Second)
+	if wait < time.Second {
+		wait = time.Second
+	}
+	return fmt.Sprintf("Refreshed moments ago; the next refresh is allowed in %s.", wait)
 }
 
 // glance is the one-call view: session budgets, plan headroom, insight.

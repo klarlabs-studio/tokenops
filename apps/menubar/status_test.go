@@ -179,3 +179,55 @@ func TestDailyAndTopModel(t *testing.T) {
 		t.Errorf("top model %q %v", top, err)
 	}
 }
+
+// Refresh asks the daemon to poll now. A refresh too soon after the last
+// says when the next is allowed, and an older daemon without the route
+// is not an error: the panel re-reads what it has.
+func TestRefreshSources(t *testing.T) {
+	answer := http.StatusAccepted
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/sources/refresh" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(answer)
+		switch answer {
+		case http.StatusAccepted:
+			_, _ = w.Write([]byte(`{"requested":true,"pollers":9,"next_at":"2026-10-07T12:00:30Z"}`))
+		case http.StatusTooManyRequests:
+			_, _ = w.Write([]byte(`{"requested":false,"pollers":0,"next_at":"2026-10-07T12:00:30Z"}`))
+		}
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	d := &daemon{urlFile: filepath.Join(dir, "daemon.url"), hc: &http.Client{Timeout: time.Second}}
+	if err := os.WriteFile(d.urlFile, []byte(`{"url":"`+srv.URL+`","dashboard_token":"tok"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if r, err := d.refreshSources(ctx); err != nil || !r.Requested || r.Pollers != 9 {
+		t.Errorf("accepted: %+v %v", r, err)
+	}
+	answer = http.StatusTooManyRequests
+	if r, err := d.refreshSources(ctx); err != nil || r.Requested || r.NextAt.IsZero() {
+		t.Errorf("too soon: %+v %v", r, err)
+	}
+	answer = http.StatusNotFound
+	if r, err := d.refreshSources(ctx); err != nil || r.Requested || !r.Unsupported {
+		t.Errorf("older daemon: %+v %v", r, err)
+	}
+}
+
+func TestRefreshNote(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 10, 0, time.UTC)
+	cases := map[string]sourcesRefresh{
+		"Asked 9 readers to poll now; new readings arrive as they answer.": {Requested: true, Pollers: 9},
+		"Refreshed moments ago; the next refresh is allowed in 20s.":       {NextAt: now.Add(20 * time.Second)},
+		"This daemon cannot poll on demand; showing its latest readings.":  {Unsupported: true},
+	}
+	for want, r := range cases {
+		if got := r.note(now); got != want {
+			t.Errorf("note(%+v) = %q, want %q", r, got, want)
+		}
+	}
+}
