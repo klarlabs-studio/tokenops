@@ -100,7 +100,7 @@ func initializeEventRuntime(
 		logger.Info("otlp exporter ready", "endpoint", cfg.OTel.Endpoint, "redact", cfg.OTel.RedactEnabled())
 	}
 
-	startOTelMetricsRuntime(cfg, rt.Store, components.Spend, sup, logger)
+	startOTelMetricsRuntime(cfg, rt.Store, components, sup, logger)
 
 	// Plan stamping ensures all sources inherit the plan_included contract.
 	rt.Bus = events.NewAsync(newPlanStampSink(events.NewMultiSink(sinks...), cfg), events.Options{

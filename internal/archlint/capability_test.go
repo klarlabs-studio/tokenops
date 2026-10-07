@@ -97,7 +97,6 @@ var directDomainImports = map[string][]string{
 		"go.klarlabs.de/tokenops/internal/contexts/tasks",
 	},
 	"go.klarlabs.de/tokenops/internal/daemon": {
-		"go.klarlabs.de/tokenops/internal/contexts/observability/analytics",
 		"go.klarlabs.de/tokenops/internal/contexts/observability/freshness",
 		"go.klarlabs.de/tokenops/internal/contexts/observability/observ",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router",
