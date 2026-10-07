@@ -185,7 +185,7 @@ func TestObserverParsesCompressedStreamingUsage(t *testing.T) {
 		w.Header().Set("Content-Encoding", "gzip")
 		zw := gzip.NewWriter(w)
 		_, _ = io.WriteString(zw, "event: message_start\n")
-		_, _ = io.WriteString(zw, `data: {"type":"message_start","message":{"model":"claude-sonnet-5","usage":{"input_tokens":120,"cache_read_input_tokens":80}}}`+"\n\n")
+		_, _ = io.WriteString(zw, `data: {"type":"message_start","message":{"model":"claude-sonnet-5","usage":{"input_tokens":40,"cache_read_input_tokens":80}}}`+"\n\n")
 		_, _ = io.WriteString(zw, "event: content_block_start\n")
 		_, _ = io.WriteString(zw, `data: {"type":"content_block_start","content_block":{"type":"tool_use"}}`+"\n\n")
 		_, _ = io.WriteString(zw, "event: message_delta\n")

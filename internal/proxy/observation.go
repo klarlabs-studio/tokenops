@@ -383,25 +383,41 @@ func parseResponseUsage(body []byte) (responseUsage, bool) {
 			InputDetails     struct {
 				CachedTokens int64 `json:"cached_tokens"`
 			} `json:"input_tokens_details"`
+			anthropicCacheUsage
 		} `json:"usage"`
 		Output []struct {
 			Type string `json:"type"`
 		} `json:"output"`
 	}
 	if json.Unmarshal(body, &response) == nil {
-		input, output := response.Usage.PromptTokens, response.Usage.CompletionTokens
+		usage := response.Usage
+		input, output := usage.PromptTokens, usage.CompletionTokens
 		if input == nil || output == nil {
-			input, output = response.Usage.InputTokens, response.Usage.OutputTokens
+			input, output = usage.InputTokens, usage.OutputTokens
 		}
 		if input != nil && output != nil && *input >= 0 && *output >= 0 {
 			return responseUsage{
-				Model: response.Model, InputTokens: *input, OutputTokens: *output,
-				CachedInputTokens: response.Usage.InputDetails.CachedTokens,
+				Model: response.Model, InputTokens: usage.totalInput(*input), OutputTokens: *output,
+				CachedInputTokens: usage.InputDetails.CachedTokens + usage.CacheReadInputTokens,
 				FinishReason:      response.Status, ToolCallCount: countToolItems(response.Output),
 			}, true
 		}
 	}
 	return parseSSEUsage(body)
+}
+
+// anthropicCacheUsage holds the cache counters Anthropic reports beside
+// input_tokens. Unlike OpenAI's prompt_tokens, Anthropic's input_tokens
+// excludes both, so the whole prompt is their sum; PromptEvent.InputTokens
+// is the whole prompt, with CachedInputTokens its cache-read subset.
+// Other providers omit these fields, leaving totalInput a no-op.
+type anthropicCacheUsage struct {
+	CacheReadInputTokens     int64 `json:"cache_read_input_tokens"`
+	CacheCreationInputTokens int64 `json:"cache_creation_input_tokens"`
+}
+
+func (u anthropicCacheUsage) totalInput(input int64) int64 {
+	return input + max(u.CacheReadInputTokens, 0) + max(u.CacheCreationInputTokens, 0)
 }
 
 func parseSSEUsage(body []byte) (responseUsage, bool) {
@@ -428,8 +444,8 @@ func parseSSEUsage(body []byte) (responseUsage, bool) {
 			Message  struct {
 				Model string `json:"model"`
 				Usage struct {
-					InputTokens          int64 `json:"input_tokens"`
-					CacheReadInputTokens int64 `json:"cache_read_input_tokens"`
+					InputTokens int64 `json:"input_tokens"`
+					anthropicCacheUsage
 				} `json:"usage"`
 			} `json:"message"`
 			Usage struct {
@@ -460,8 +476,9 @@ func parseSSEUsage(body []byte) (responseUsage, bool) {
 			}
 		case "message_start":
 			aggregate.Model = event.Message.Model
-			aggregate.InputTokens = event.Message.Usage.InputTokens
-			aggregate.CachedInputTokens = event.Message.Usage.CacheReadInputTokens
+			usage := event.Message.Usage
+			aggregate.InputTokens = usage.totalInput(usage.InputTokens)
+			aggregate.CachedInputTokens = usage.CacheReadInputTokens
 			inputSeen = true
 		case "message_delta":
 			if event.Usage.OutputTokens != nil && *event.Usage.OutputTokens >= 0 {
