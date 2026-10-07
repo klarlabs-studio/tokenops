@@ -92,8 +92,9 @@ capabilities) wires the two. The vendor-usage clients follow this split: the
 pollers, value types and envelope mapping live in
 `internal/contexts/spend/vendorusage/<vendor>`, the HTTP clients, credential
 stores and process launchers in `internal/infra/vendorusage/<vendor>`.
-Packages that predate the rule are listed, each with its reason, in
-`ioImportExempt`, which may only shrink (`TestIOImportExemptNotStale`).
+The packages that predated the rule have all moved; `ioImportExempt`, the
+list that recorded them, is empty and may only stay so
+(`TestIOImportExemptNotStale`).
 
 ## Bounded Contexts
 

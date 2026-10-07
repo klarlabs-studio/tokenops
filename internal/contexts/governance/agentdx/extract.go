@@ -369,7 +369,7 @@ func ExtractAll(opts ExtractOptions) ([]Record, error) {
 	switch {
 	case err == nil:
 		out = append(out, oc...)
-	case errors.Is(err, ErrOpencodeSchema):
+	case errors.Is(err, ErrOpencodeSchema), errors.Is(err, ErrNoOpencodeStore):
 		errs = append(errs, err)
 	}
 	return out, errors.Join(errs...)

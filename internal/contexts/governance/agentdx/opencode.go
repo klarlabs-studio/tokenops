@@ -3,6 +3,7 @@ package agentdx
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb"
@@ -13,6 +14,21 @@ import (
 // result for the same reason as the Cursor reader: a store that cannot be
 // read must not be reported as an operator who did no work.
 var ErrOpencodeSchema = errors.New("agentdx: unrecognised opencode database schema")
+
+// ErrNoOpencodeStore reports an opencode store on disk that this process
+// has no reader for: a composition root that did not call
+// UseOpencodeStore. Like ErrOpencodeSchema, it keeps an unread store from
+// reading as an idle operator.
+var ErrNoOpencodeStore = errors.New("agentdx: no reader for opencode's store is wired")
+
+// opencodeStore is the reader ExtractOpencode uses; see UseOpencodeStore.
+var opencodeStore opencodedb.Reader
+
+// UseOpencodeStore installs the reader for opencode's store, the
+// opencodedb.Reader port every opencode consumer reads through. The
+// composition root (internal/bootstrap) installs internal/infra/opencodedb
+// before anything extracts.
+func UseOpencodeStore(r opencodedb.Reader) { opencodeStore = r }
 
 // OpencodeDefaultPath returns opencode's store (opencodedb.DefaultPath:
 // OPENCODE_DB, then XDG_DATA_HOME, then ~/.local/share).
@@ -35,8 +51,16 @@ func ExtractOpencode(opts ExtractOptions) ([]Record, error) {
 		}
 		path = p
 	}
+	store := opencodeStore
+	if store == nil {
+		if _, err := os.Stat(path); err != nil {
+			// No store, nothing to read: opencode may not be installed.
+			return nil, nil
+		}
+		return nil, fmt.Errorf("%w: found %s", ErrNoOpencodeStore, path)
+	}
 	var out []Record
-	err := opencodedb.Read(path, opencodedb.Options{Since: opts.Since, Parts: true}, func(m opencodedb.Message) error {
+	err := store.Read(path, opencodedb.Options{Since: opts.Since, Parts: true}, func(m opencodedb.Message) error {
 		// A record needs its moment; a row without one says nothing about
 		// how the work went.
 		if m.Created.IsZero() {
