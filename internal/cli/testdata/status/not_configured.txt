@@ -1,0 +1,7 @@
+daemon: http://127.0.0.1:7878
+status: action_required — Setup is incomplete; resolve the listed blockers using next_actions.
+  health   200  {"status":"ok"}
+  ready    503  {"status":"not_configured"}
+  version  200  {"version":"dev"}
+warnings:
+  ! retention.keep_by_source["no-such-source"] matches no source that has produced events — the rule is doing nothing; check the tag with `tokenops vendor-usage status`

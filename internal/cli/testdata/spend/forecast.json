@@ -1,0 +1,150 @@
+{
+  "window": "since=2026-01-01T00:00:00Z until=2026-01-08T00:00:00Z",
+  "currency": "USD",
+  "summary": {
+    "Requests": 7,
+    "InputTokens": 10600,
+    "OutputTokens": 2500,
+    "TotalTokens": 13100,
+    "CostUSD": 8.25,
+    "APIEquivalentUSD": 8.25
+  },
+  "group_by": "model",
+  "top": [
+    {
+      "BucketStart": "2026-01-05T00:00:00Z",
+      "GroupKey": "claude-opus-4-8",
+      "Requests": 1,
+      "InputTokens": 4000,
+      "OutputTokens": 900,
+      "TotalTokens": 4900,
+      "CostUSD": 3.1,
+      "APIEquivalentUSD": 3.1,
+      "CostRecomputed": 0,
+      "Cost": {
+        "amount": 3.1,
+        "quality": "measured",
+        "source": "sqlite_events",
+        "observed_at": "2026-01-05T00:00:00Z",
+        "coverage": {
+          "included": 1
+        }
+      },
+      "APIEquivalent": {
+        "amount": 3.1,
+        "quality": "derived",
+        "source": "sqlite_events",
+        "caveat": "list-price equivalent, not an amount billed",
+        "observed_at": "2026-01-05T00:00:00Z",
+        "coverage": {
+          "included": 1
+        }
+      }
+    },
+    {
+      "BucketStart": "2026-01-01T00:00:00Z",
+      "GroupKey": "claude-sonnet-4-6",
+      "Requests": 3,
+      "InputTokens": 2100,
+      "OutputTokens": 750,
+      "TotalTokens": 2850,
+      "CostUSD": 2.9000000000000004,
+      "APIEquivalentUSD": 2.9000000000000004,
+      "CostRecomputed": 0,
+      "Cost": {
+        "amount": 1.2,
+        "quality": "measured",
+        "source": "sqlite_events",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "coverage": {
+          "included": 1
+        }
+      },
+      "APIEquivalent": {
+        "amount": 1.2,
+        "quality": "derived",
+        "source": "sqlite_events",
+        "caveat": "list-price equivalent, not an amount billed",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "coverage": {
+          "included": 1
+        }
+      }
+    },
+    {
+      "BucketStart": "2026-01-01T00:00:00Z",
+      "GroupKey": "gpt-4o-mini",
+      "Requests": 3,
+      "InputTokens": 4500,
+      "OutputTokens": 850,
+      "TotalTokens": 5350,
+      "CostUSD": 2.25,
+      "APIEquivalentUSD": 2.25,
+      "CostRecomputed": 0,
+      "Cost": {
+        "amount": 0.5,
+        "quality": "measured",
+        "source": "sqlite_events",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "coverage": {
+          "included": 1
+        }
+      },
+      "APIEquivalent": {
+        "amount": 0.5,
+        "quality": "derived",
+        "source": "sqlite_events",
+        "caveat": "list-price equivalent, not an amount billed",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "coverage": {
+          "included": 1
+        }
+      }
+    }
+  ],
+  "burn_rate_24h": 0,
+  "burn_tokens_24h": 0,
+  "burn_series": null,
+  "forecast": [
+    {
+      "At": "2026-01-07T00:00:00Z",
+      "Value": 1.42831406096,
+      "Lower": 0,
+      "Upper": 4.46988881610396
+    },
+    {
+      "At": "2026-01-08T00:00:00Z",
+      "Value": 1.44118293472,
+      "Lower": 0,
+      "Upper": 5.742619204416214
+    },
+    {
+      "At": "2026-01-09T00:00:00Z",
+      "Value": 1.45405180848,
+      "Lower": 0,
+      "Upper": 6.722213819408205
+    }
+  ],
+  "forecast_tokens": [
+    {
+      "At": "2026-01-07T00:00:00Z",
+      "Value": 2459.38132656,
+      "Lower": 0,
+      "Upper": 6655.906776804703
+    },
+    {
+      "At": "2026-01-08T00:00:00Z",
+      "Value": 2540.28767392,
+      "Lower": 0,
+      "Upper": 8475.07088049992
+    },
+    {
+      "At": "2026-01-09T00:00:00Z",
+      "Value": 2621.1940212800005,
+      "Lower": 0,
+      "Upper": 9889.789316359685
+    }
+  ],
+  "plan_currency": "USD",
+  "plan_complete": true
+}

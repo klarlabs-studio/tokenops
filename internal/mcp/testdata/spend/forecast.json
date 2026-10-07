@@ -1,0 +1,45 @@
+{
+  "horizon_days": 3,
+  "history_points": 5,
+  "forecast": [
+    {
+      "At": "<T>",
+      "Value": 0.30000000000000004,
+      "Lower": 0.29999999999999966,
+      "Upper": 0.30000000000000043
+    },
+    {
+      "At": "<T>",
+      "Value": 1.1102230246251565e-16,
+      "Lower": 0,
+      "Upper": 6.440403650226389e-16
+    },
+    {
+      "At": "<T>",
+      "Value": 0,
+      "Lower": 0,
+      "Upper": 0
+    }
+  ],
+  "forecast_tokens": [
+    {
+      "At": "<T>",
+      "Value": 50000,
+      "Lower": 50000,
+      "Upper": 50000
+    },
+    {
+      "At": "<T>",
+      "Value": 0,
+      "Lower": 0,
+      "Upper": 0
+    },
+    {
+      "At": "<T>",
+      "Value": 0,
+      "Lower": 0,
+      "Upper": 0
+    }
+  ],
+  "currency": "USD"
+}

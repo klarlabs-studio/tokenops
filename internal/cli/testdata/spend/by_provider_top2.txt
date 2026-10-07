@@ -1,0 +1,12 @@
+Spend report — since=2026-01-01T00:00:00Z until=2026-01-08T00:00:00Z
+  requests:        7
+  input tokens:    10600
+  output tokens:   2500
+  total tokens:    13100
+  total spend:     8.2500 USD
+  burn rate (24h): 0.0000 USD / 0 tokens
+
+Top consumers by provider:
+RANK  KEY        REQS  IN TOK  OUT TOK  COST
+1     anthropic  4     6100    1650     6.0000 USD
+2     openai     3     4500    850      2.2500 USD
