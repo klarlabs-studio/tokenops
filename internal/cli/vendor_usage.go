@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	anthropicusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic"
+	anthropicapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/anthropic"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -354,7 +355,7 @@ flag prints what would be inserted without writing to the store.`,
 				return fmt.Errorf("open store: %w", err)
 			}
 			defer func() { _ = store.Close() }()
-			client := anthropicusage.NewAdminClient(key)
+			client := anthropicapi.NewAdminClient(key)
 			now := time.Now().UTC()
 			req := anthropicusage.MessagesUsageRequest{
 				StartingAt:  now.Add(-time.Duration(hours) * time.Hour),

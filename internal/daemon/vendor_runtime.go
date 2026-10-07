@@ -31,6 +31,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
+	anthropicapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/anthropic"
 	"go.klarlabs.de/tokenops/internal/version"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -147,7 +148,7 @@ func startVendorUsagePollers(
 		logger.Info("claude-code-oauth usage poller live", "keychain", oc.Keychain)
 	}
 	if cfg.VendorUsage.Anthropic.Enabled {
-		client := anthropic.NewAdminClient(cfg.VendorUsage.Anthropic.AdminKey)
+		client := anthropicapi.NewAdminClient(cfg.VendorUsage.Anthropic.AdminKey)
 		p := anthropic.NewPoller(client, bus, anthropic.PollerOptions{
 			Health: sourceHealth.For("vendor-usage-anthropic"), AdminKey: cfg.VendorUsage.Anthropic.AdminKey,
 			Interval:    cfg.VendorUsage.Anthropic.Interval,

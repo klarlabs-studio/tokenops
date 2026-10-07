@@ -47,14 +47,14 @@ type PollerOptions struct {
 	Logger *slog.Logger
 }
 
-// Poller wraps AdminClient with a periodic loop that publishes one
+// Poller wraps a UsageReporter with a periodic loop that publishes one
 // envelope per (bucket, model) cell into the events bus. State (the
 // "last bucket end timestamp" cursor) is kept in-memory; a restart
 // re-queries from now-LookbackOnFirstScan so we lose at most a few
 // hours of catch-up. Duplicate envelopes carry deterministic IDs and
 // the store dedups them, so the overlap is harmless.
 type Poller struct {
-	client *AdminClient
+	client UsageReporter
 	bus    events.Bus
 	opts   PollerOptions
 
@@ -67,7 +67,7 @@ type Poller struct {
 
 // NewPoller binds client + bus + options. Bus may be nil for status
 // commands that want only Snapshot.
-func NewPoller(client *AdminClient, bus events.Bus, opts PollerOptions) *Poller {
+func NewPoller(client UsageReporter, bus events.Bus, opts PollerOptions) *Poller {
 	if opts.Interval <= 0 {
 		opts.Interval = 5 * time.Minute
 	}

@@ -2,10 +2,10 @@ package anthropic
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
-	"net/http"
-	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
@@ -33,6 +33,27 @@ func (b *captureBus) Close(time.Duration) error {
 	return nil
 }
 
+// fakeReporter stands in for the Admin API client: it decodes body as
+// the response, or fails with err, so the poller is tested without HTTP.
+type fakeReporter struct {
+	mu   sync.Mutex
+	body string
+	err  error
+}
+
+func (f *fakeReporter) MessagesUsage(context.Context, MessagesUsageRequest) (*MessagesUsageResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return nil, f.err
+	}
+	var r MessagesUsageResponse
+	if err := json.Unmarshal([]byte(f.body), &r); err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
 // Each non-zero (bucket, model) cell produces one envelope tagged with
 // the SourceTag so signal_quality can upgrade Anthropic confidence.
 func TestPollerEmitsOneEnvelopePerResult(t *testing.T) {
@@ -47,15 +68,8 @@ func TestPollerEmitsOneEnvelopePerResult(t *testing.T) {
 		}],
 		"has_more": false
 	}`
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(body))
-	}))
-	defer srv.Close()
-
 	bus := &captureBus{}
-	client := NewAdminClient("sk-ant-admin-test")
-	client.BaseURL = srv.URL
+	client := &fakeReporter{body: body}
 	p := NewPoller(client, bus, PollerOptions{
 		AdminKey: "sk-ant-admin-test",
 		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -87,14 +101,8 @@ func TestPollerSkipsZeroTokenResults(t *testing.T) {
 		}],
 		"has_more": false
 	}`
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(body))
-	}))
-	defer srv.Close()
 	bus := &captureBus{}
-	client := NewAdminClient("k")
-	client.BaseURL = srv.URL
+	client := &fakeReporter{body: body}
 	p := NewPoller(client, bus, PollerOptions{AdminKey: "k", Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	p.scan(context.Background())
 	if got := bus.PublishedCount(); got != 0 {
@@ -105,12 +113,7 @@ func TestPollerSkipsZeroTokenResults(t *testing.T) {
 // Errors are recorded on the poller (visible via LastError) so the
 // CLI status command can show the operator why no data is flowing.
 func TestPollerRecordsLastError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(401)
-	}))
-	defer srv.Close()
-	client := NewAdminClient("bad-key")
-	client.BaseURL = srv.URL
+	client := &fakeReporter{err: errors.New("anthropic admin: usage_report/messages: status 401: ")}
 	p := NewPoller(client, nil, PollerOptions{AdminKey: "bad-key", Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	p.scan(context.Background())
 	when, err := p.LastError()
@@ -125,24 +128,18 @@ func TestPollerRecordsLastError(t *testing.T) {
 // Successful poll after an error clears the error state so the
 // status command can report current health, not just past failures.
 func TestPollerClearsLastErrorOnSuccess(t *testing.T) {
-	fail := true
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		if fail {
-			w.WriteHeader(500)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data": [], "has_more": false}`))
-	}))
-	defer srv.Close()
-	client := NewAdminClient("k")
-	client.BaseURL = srv.URL
+	client := &fakeReporter{
+		body: `{"data": [], "has_more": false}`,
+		err:  errors.New("anthropic admin: usage_report/messages: status 500: "),
+	}
 	p := NewPoller(client, nil, PollerOptions{AdminKey: "k", Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	p.scan(context.Background())
 	if _, err := p.LastError(); err == nil {
 		t.Fatal("error should be set after first scan")
 	}
-	fail = false
+	client.mu.Lock()
+	client.err = nil
+	client.mu.Unlock()
 	p.scan(context.Background())
 	if _, err := p.LastError(); err != nil {
 		t.Errorf("LastError should clear on success; still %v", err)
