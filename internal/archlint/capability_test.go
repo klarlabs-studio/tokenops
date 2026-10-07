@@ -166,7 +166,6 @@ var directDomainImports = map[string][]string{
 		"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow",
 	},
 	"go.klarlabs.de/tokenops/internal/proxy": {
-		"go.klarlabs.de/tokenops/internal/contexts/coaching/waste",
 		"go.klarlabs.de/tokenops/internal/contexts/observability/analytics",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router",
@@ -174,7 +173,6 @@ var directDomainImports = map[string][]string{
 		"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/forecast",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/spend",
-		"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow",
 	},
 }
 

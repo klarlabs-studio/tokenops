@@ -8,11 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
+	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
-	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -26,17 +25,22 @@ type AnalyticsHandlers struct {
 	store      *sqlite.Store
 	aggregator *analytics.Aggregator
 	spend      *spend.Engine
-	waste      waste.Config
+	workflows  *workflowtrace.Reader
 }
 
 // NewAnalyticsHandlers builds the handlers. Store, aggregator, and
 // spend engine are required; wasteCfg's zero value uses the detector
 // defaults.
-func NewAnalyticsHandlers(store *sqlite.Store, agg *analytics.Aggregator, spendEng *spend.Engine, wasteCfg waste.Config) (*AnalyticsHandlers, error) {
+func NewAnalyticsHandlers(store *sqlite.Store, agg *analytics.Aggregator, spendEng *spend.Engine, wasteCfg workflowtrace.WasteConfig) (*AnalyticsHandlers, error) {
 	if store == nil || agg == nil || spendEng == nil {
 		return nil, errors.New("proxy: AnalyticsHandlers requires store + aggregator + spend engine")
 	}
-	return &AnalyticsHandlers{store: store, aggregator: agg, spend: spendEng, waste: wasteCfg}, nil
+	return &AnalyticsHandlers{
+		store:      store,
+		aggregator: agg,
+		spend:      spendEng,
+		workflows:  workflowtrace.NewReader(store, spendEng, wasteCfg),
+	}, nil
 }
 
 // Register installs every endpoint on mux. Endpoints are read-only;
@@ -259,21 +263,16 @@ func (a *AnalyticsHandlers) workflowDetail(w http.ResponseWriter, r *http.Reques
 		writeAPIError(w, http.StatusBadRequest, errors.New("workflow id required"))
 		return
 	}
-	trace, err := workflow.Reconstruct(r.Context(), a.store, a.spend, id)
+	detail, err := a.workflows.Detail(r.Context(), id)
 	if err != nil {
-		if errors.Is(err, workflow.ErrNoTrace) {
+		if errors.Is(err, workflowtrace.ErrNoTrace) {
 			writeAPIError(w, http.StatusNotFound, err)
 			return
 		}
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
-	findings := waste.New(a.waste).Detect(trace)
-	writeAPIJSON(w, http.StatusOK, map[string]any{
-		"trace":    trace,
-		"findings": findings,
-		"currency": a.spend.Currency(),
-	})
+	writeAPIJSON(w, http.StatusOK, detail)
 }
 
 func (a *AnalyticsHandlers) listOptimizations(w http.ResponseWriter, r *http.Request) {
