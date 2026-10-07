@@ -34,6 +34,7 @@ import (
 	anthropicapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/anthropic"
 	copilotapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/copilot"
 	cursorapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/cursor"
+	fireworksapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/fireworks"
 	"go.klarlabs.de/tokenops/internal/version"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -163,7 +164,7 @@ func startVendorUsagePollers(
 	if cfg.VendorUsage.Fireworks.On() {
 		p := fireworksusage.NewPoller(bus, fireworksusage.PollerOptions{
 			Health: sourceHealth.For("fireworks-usage"), Interval: cfg.VendorUsage.Fireworks.Interval, Logger: logger,
-			Keys: fireworksusage.KeySource{Helper: claudesettings.APIKeyHelper, Fallback: fireworksFallbackKey},
+			Client: &fireworksapi.Client{Key: fireworksapi.KeySource{Helper: claudesettings.APIKeyHelper, Fallback: fireworksFallbackKey}.Key},
 		})
 		sup.Go("fireworks-usage", p.Run)
 	}

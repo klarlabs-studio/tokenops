@@ -2,19 +2,15 @@ package fireworks
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
-)
 
-// ErrNoKey reports that no Fireworks key is on the machine: Fireworks is
-// not in use here, and the reader stays idle.
-var ErrNoKey = errors.New("fireworks: no API key on this machine")
+	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/fireworks"
+)
 
 // fireconnectHelper matches FireConnect's apiKeyHelper, `fireconnect key
 // export`, with the pattern FireConnect itself uses to recognise it.
@@ -45,7 +41,7 @@ type KeySource struct {
 	Fallback func() string
 }
 
-// Key returns the key, or ErrNoKey.
+// Key returns the key, or usage.ErrNoKey.
 func (k KeySource) Key(ctx context.Context) (string, error) {
 	getenv := k.Getenv
 	if getenv == nil {
@@ -55,7 +51,7 @@ func (k KeySource) Key(ctx context.Context) (string, error) {
 		return v, nil
 	}
 	if k.Helper == nil {
-		return "", ErrNoKey
+		return "", usage.ErrNoKey
 	}
 	cmd := k.Helper()
 	if !IsFireConnectHelper(cmd) {
@@ -64,7 +60,7 @@ func (k KeySource) Key(ctx context.Context) (string, error) {
 				return v, nil
 			}
 		}
-		return "", ErrNoKey
+		return "", usage.ErrNoKey
 	}
 	run := k.Run
 	if run == nil {
@@ -88,34 +84,4 @@ func runHelper(ctx context.Context, cmd string) (string, error) {
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "/bin/sh", "-c", cmd).Output() //nolint:gosec // only FireConnect's own helper, matched above
 	return string(out), err
-}
-
-// Identity is the account and user FireConnect signed in as, read from
-// the ids-only files it keeps: minted-key.json names the user
-// ("accounts/<a>/users/<u>"), config.json the SSO account. Either may be
-// empty. config.json can also hold keys, so only ssoAccountId is decoded.
-func Identity(home string) (account, user string) {
-	dir := filepath.Join(home, ".fireconnect")
-	if b, err := os.ReadFile(filepath.Join(dir, "minted-key.json")); err == nil { //nolint:gosec // fixed FireConnect path
-		var m struct {
-			UserName string `json:"userName"`
-		}
-		if json.Unmarshal(b, &m) == nil {
-			parts := strings.Split(m.UserName, "/")
-			if len(parts) == 4 && parts[0] == "accounts" && parts[2] == "users" {
-				account, user = parts[1], parts[3]
-			}
-		}
-	}
-	if account == "" {
-		if b, err := os.ReadFile(filepath.Join(dir, "config.json")); err == nil { //nolint:gosec // fixed FireConnect path
-			var c struct {
-				SSOAccountID string `json:"ssoAccountId"`
-			}
-			if json.Unmarshal(b, &c) == nil {
-				account = c.SSOAccountID
-			}
-		}
-	}
-	return account, user
 }
