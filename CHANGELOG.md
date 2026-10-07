@@ -23,6 +23,8 @@
 
 ### Fixed
 
+- **anthropic:** `tokenops vendor-usage backfill` stores the whole window it reports; it read one page of the Admin usage report, the first 24 of 168 hourly buckets. The live Admin poller reads every page too, instead of catching up a page per poll
+- **task:** `tokenops task list --metrics` reads the store every other command reads; it always opened `~/.tokenops/events.db`, whatever `TOKENOPS_STORAGE_PATH` said
 - **scorecard:** the MCP tool and `/api/scorecard` grade the agent KPIs (confirmation-gate, regenerate, tool-success and destructive-action rates) as `tokenops scorecard` always did; they graded the same week on four fewer metrics. `tokenops scorecard` reads the configured `storage.path` instead of always `~/.tokenops/events.db`
 - **scorecard, coach:** transcripts last written before the window are no longer read; a seven-day scorecard over 2.1 GB of history went from 14.5s to 7.2s
 - **coach:** `coach prompts`' average turn counts only the turns inside the window; it counted every turn in each file written during the window, and none from a session still running after it
