@@ -14,8 +14,13 @@
 - **queries:** a capped query returns the newest rows, not the oldest: `tokenops optimizations --limit`, the MCP optimizations tool and verify showed the start of the window instead of its end
 - **building from source:** needs Go 1.26 (the toolchain directive downloads it)
 - **routing:** `tokenops routing proposals` gives the answer `tokenops_routing` gives: the text names what each upgrade adds per million tokens, or why its price could not be checked, and `--json` emits `{pending, note}` with the question to put to you, where it printed the approval log's raw records
+- **dx:** `tokenops dx --json` emits the report `tokenops_agent_dx` returns, `{window, metrics, grades, recommendation}`; it carried the metrics alone, which now sit under `metrics`
 
 ### Fixed
+
+- **verify:** `tokenops_verify` and `tokenops_records` (view=verify) take `all` to compare every transcript and event, as `tokenops verify --days 0` does; their documented `days: 0` meant the 30-day default, so older work could not be compared
+- **story:** `tokenops_story` and `/api/story` give each task `context_carried_tokens`, as `tokenops story --json` does; `limit: -1` returns every task, where the documented `0` meant the default ten
+- **plan:** `tokenops plan headroom` answers from what the vendors report when no plan is bound, as the MCP tool does, instead of refusing with "no plans configured"; glance, plan headroom, verify, otel and the plan history read the configured `storage.path` instead of always `~/.tokenops/events.db`
 
 - **scorecard:** the MCP tool and `/api/scorecard` grade the agent KPIs (confirmation-gate, regenerate, tool-success and destructive-action rates) as `tokenops scorecard` always did; they graded the same week on four fewer metrics. `tokenops scorecard` reads the configured `storage.path` instead of always `~/.tokenops/events.db`
 - **scorecard, coach:** transcripts last written before the window are no longer read; a seven-day scorecard over 2.1 GB of history went from 14.5s to 7.2s
