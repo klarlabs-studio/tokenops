@@ -64,7 +64,7 @@ func TestParseResponseUsageFromAnthropicMessagesStream(t *testing.T) {
 	// InputTokens is the whole prompt, with the cache read as its subset.
 	want := responseUsage{
 		Model: "claude-sonnet-5", InputTokens: 90 + 60 + 30, OutputTokens: 18,
-		CachedInputTokens: 60, FinishReason: "tool_use", ToolCallCount: 1,
+		CachedInputTokens: 60, CacheWriteInputTokens: 30, FinishReason: "tool_use", ToolCallCount: 1,
 	}
 	got, ok := parseResponseUsage([]byte(body))
 	if !ok || got != want {
@@ -73,10 +73,11 @@ func TestParseResponseUsageFromAnthropicMessagesStream(t *testing.T) {
 }
 
 func TestParseResponseUsageFromAnthropicMessage(t *testing.T) {
-	body := `{"model":"claude-sonnet-5","stop_reason":"end_turn","usage":{"input_tokens":50,"cache_read_input_tokens":100000,"cache_creation_input_tokens":2000,"output_tokens":40}}`
+	body := `{"model":"claude-sonnet-5","stop_reason":"end_turn","usage":{"input_tokens":50,"cache_read_input_tokens":100000,"cache_creation_input_tokens":2000,"cache_creation":{"ephemeral_5m_input_tokens":1500,"ephemeral_1h_input_tokens":500},"output_tokens":40}}`
 	got, ok := parseResponseUsage([]byte(body))
-	if !ok || got.InputTokens != 102050 || got.CachedInputTokens != 100000 || got.OutputTokens != 40 {
-		t.Fatalf("parseResponseUsage() = %#v, %v; want input 102050, cached 100000, output 40", got, ok)
+	if !ok || got.InputTokens != 102050 || got.CachedInputTokens != 100000 || got.OutputTokens != 40 ||
+		got.CacheWriteInputTokens != 2000 || got.CacheWrite1hInputTokens != 500 {
+		t.Fatalf("parseResponseUsage() = %#v, %v; want input 102050, cached 100000, writes 2000 (500 1h), output 40", got, ok)
 	}
 }
 

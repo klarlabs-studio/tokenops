@@ -1533,34 +1533,36 @@ func (x *DomainEvent) GetDataJson() []byte {
 }
 
 type PromptEvent struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	PromptHash        string                 `protobuf:"bytes,1,opt,name=prompt_hash,json=promptHash,proto3" json:"prompt_hash,omitempty"`
-	Provider          Provider               `protobuf:"varint,2,opt,name=provider,proto3,enum=tokenops.eventschema.v1.Provider" json:"provider,omitempty"`
-	RequestModel      string                 `protobuf:"bytes,3,opt,name=request_model,json=requestModel,proto3" json:"request_model,omitempty"`
-	ResponseModel     string                 `protobuf:"bytes,4,opt,name=response_model,json=responseModel,proto3" json:"response_model,omitempty"`
-	InputTokens       int64                  `protobuf:"varint,10,opt,name=input_tokens,json=inputTokens,proto3" json:"input_tokens,omitempty"`
-	OutputTokens      int64                  `protobuf:"varint,11,opt,name=output_tokens,json=outputTokens,proto3" json:"output_tokens,omitempty"`
-	TotalTokens       int64                  `protobuf:"varint,12,opt,name=total_tokens,json=totalTokens,proto3" json:"total_tokens,omitempty"`
-	CachedInputTokens int64                  `protobuf:"varint,13,opt,name=cached_input_tokens,json=cachedInputTokens,proto3" json:"cached_input_tokens,omitempty"`
-	ContextSize       int64                  `protobuf:"varint,20,opt,name=context_size,json=contextSize,proto3" json:"context_size,omitempty"`
-	MaxOutputTokens   int64                  `protobuf:"varint,21,opt,name=max_output_tokens,json=maxOutputTokens,proto3" json:"max_output_tokens,omitempty"`
-	Latency           *durationpb.Duration   `protobuf:"bytes,30,opt,name=latency,proto3" json:"latency,omitempty"`
-	TimeToFirstToken  *durationpb.Duration   `protobuf:"bytes,31,opt,name=time_to_first_token,json=timeToFirstToken,proto3" json:"time_to_first_token,omitempty"`
-	Streaming         bool                   `protobuf:"varint,40,opt,name=streaming,proto3" json:"streaming,omitempty"`
-	Status            int32                  `protobuf:"varint,41,opt,name=status,proto3" json:"status,omitempty"`
-	FinishReason      string                 `protobuf:"bytes,42,opt,name=finish_reason,json=finishReason,proto3" json:"finish_reason,omitempty"`
-	ErrorCode         string                 `protobuf:"bytes,43,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
-	CacheHit          bool                   `protobuf:"varint,44,opt,name=cache_hit,json=cacheHit,proto3" json:"cache_hit,omitempty"`
-	ToolCallCount     int64                  `protobuf:"varint,45,opt,name=tool_call_count,json=toolCallCount,proto3" json:"tool_call_count,omitempty"`
-	CostUsd           float64                `protobuf:"fixed64,50,opt,name=cost_usd,json=costUsd,proto3" json:"cost_usd,omitempty"`
-	CostSource        string                 `protobuf:"bytes,51,opt,name=cost_source,json=costSource,proto3" json:"cost_source,omitempty"`
-	CostMeasured      bool                   `protobuf:"varint,52,opt,name=cost_measured,json=costMeasured,proto3" json:"cost_measured,omitempty"`
-	WorkflowId        string                 `protobuf:"bytes,60,opt,name=workflow_id,json=workflowId,proto3" json:"workflow_id,omitempty"`
-	AgentId           string                 `protobuf:"bytes,61,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
-	SessionId         string                 `protobuf:"bytes,62,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	UserId            string                 `protobuf:"bytes,63,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	PromptHash               string                 `protobuf:"bytes,1,opt,name=prompt_hash,json=promptHash,proto3" json:"prompt_hash,omitempty"`
+	Provider                 Provider               `protobuf:"varint,2,opt,name=provider,proto3,enum=tokenops.eventschema.v1.Provider" json:"provider,omitempty"`
+	RequestModel             string                 `protobuf:"bytes,3,opt,name=request_model,json=requestModel,proto3" json:"request_model,omitempty"`
+	ResponseModel            string                 `protobuf:"bytes,4,opt,name=response_model,json=responseModel,proto3" json:"response_model,omitempty"`
+	InputTokens              int64                  `protobuf:"varint,10,opt,name=input_tokens,json=inputTokens,proto3" json:"input_tokens,omitempty"`
+	OutputTokens             int64                  `protobuf:"varint,11,opt,name=output_tokens,json=outputTokens,proto3" json:"output_tokens,omitempty"`
+	TotalTokens              int64                  `protobuf:"varint,12,opt,name=total_tokens,json=totalTokens,proto3" json:"total_tokens,omitempty"`
+	CachedInputTokens        int64                  `protobuf:"varint,13,opt,name=cached_input_tokens,json=cachedInputTokens,proto3" json:"cached_input_tokens,omitempty"`
+	CacheWriteInputTokens    int64                  `protobuf:"varint,14,opt,name=cache_write_input_tokens,json=cacheWriteInputTokens,proto3" json:"cache_write_input_tokens,omitempty"`
+	CacheWrite_1HInputTokens int64                  `protobuf:"varint,15,opt,name=cache_write_1h_input_tokens,json=cacheWrite1hInputTokens,proto3" json:"cache_write_1h_input_tokens,omitempty"`
+	ContextSize              int64                  `protobuf:"varint,20,opt,name=context_size,json=contextSize,proto3" json:"context_size,omitempty"`
+	MaxOutputTokens          int64                  `protobuf:"varint,21,opt,name=max_output_tokens,json=maxOutputTokens,proto3" json:"max_output_tokens,omitempty"`
+	Latency                  *durationpb.Duration   `protobuf:"bytes,30,opt,name=latency,proto3" json:"latency,omitempty"`
+	TimeToFirstToken         *durationpb.Duration   `protobuf:"bytes,31,opt,name=time_to_first_token,json=timeToFirstToken,proto3" json:"time_to_first_token,omitempty"`
+	Streaming                bool                   `protobuf:"varint,40,opt,name=streaming,proto3" json:"streaming,omitempty"`
+	Status                   int32                  `protobuf:"varint,41,opt,name=status,proto3" json:"status,omitempty"`
+	FinishReason             string                 `protobuf:"bytes,42,opt,name=finish_reason,json=finishReason,proto3" json:"finish_reason,omitempty"`
+	ErrorCode                string                 `protobuf:"bytes,43,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	CacheHit                 bool                   `protobuf:"varint,44,opt,name=cache_hit,json=cacheHit,proto3" json:"cache_hit,omitempty"`
+	ToolCallCount            int64                  `protobuf:"varint,45,opt,name=tool_call_count,json=toolCallCount,proto3" json:"tool_call_count,omitempty"`
+	CostUsd                  float64                `protobuf:"fixed64,50,opt,name=cost_usd,json=costUsd,proto3" json:"cost_usd,omitempty"`
+	CostSource               string                 `protobuf:"bytes,51,opt,name=cost_source,json=costSource,proto3" json:"cost_source,omitempty"`
+	CostMeasured             bool                   `protobuf:"varint,52,opt,name=cost_measured,json=costMeasured,proto3" json:"cost_measured,omitempty"`
+	WorkflowId               string                 `protobuf:"bytes,60,opt,name=workflow_id,json=workflowId,proto3" json:"workflow_id,omitempty"`
+	AgentId                  string                 `protobuf:"bytes,61,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	SessionId                string                 `protobuf:"bytes,62,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	UserId                   string                 `protobuf:"bytes,63,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *PromptEvent) Reset() {
@@ -1645,6 +1647,20 @@ func (x *PromptEvent) GetTotalTokens() int64 {
 func (x *PromptEvent) GetCachedInputTokens() int64 {
 	if x != nil {
 		return x.CachedInputTokens
+	}
+	return 0
+}
+
+func (x *PromptEvent) GetCacheWriteInputTokens() int64 {
+	if x != nil {
+		return x.CacheWriteInputTokens
+	}
+	return 0
+}
+
+func (x *PromptEvent) GetCacheWrite_1HInputTokens() int64 {
+	if x != nil {
+		return x.CacheWrite_1HInputTokens
 	}
 	return 0
 }
@@ -2268,7 +2284,7 @@ const file_pkg_eventschema_proto_v1_events_proto_rawDesc = "" +
 	"\x12max_regression_pct\x18\x02 \x01(\x01R\x10maxRegressionPct\">\n" +
 	"\vDomainEvent\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x1b\n" +
-	"\tdata_json\x18\x02 \x01(\fR\bdataJson\"\xb6\a\n" +
+	"\tdata_json\x18\x02 \x01(\fR\bdataJson\"\xad\b\n" +
 	"\vPromptEvent\x12\x1f\n" +
 	"\vprompt_hash\x18\x01 \x01(\tR\n" +
 	"promptHash\x12=\n" +
@@ -2279,7 +2295,9 @@ const file_pkg_eventschema_proto_v1_events_proto_rawDesc = "" +
 	" \x01(\x03R\vinputTokens\x12#\n" +
 	"\routput_tokens\x18\v \x01(\x03R\foutputTokens\x12!\n" +
 	"\ftotal_tokens\x18\f \x01(\x03R\vtotalTokens\x12.\n" +
-	"\x13cached_input_tokens\x18\r \x01(\x03R\x11cachedInputTokens\x12!\n" +
+	"\x13cached_input_tokens\x18\r \x01(\x03R\x11cachedInputTokens\x127\n" +
+	"\x18cache_write_input_tokens\x18\x0e \x01(\x03R\x15cacheWriteInputTokens\x12<\n" +
+	"\x1bcache_write_1h_input_tokens\x18\x0f \x01(\x03R\x17cacheWrite1hInputTokens\x12!\n" +
 	"\fcontext_size\x18\x14 \x01(\x03R\vcontextSize\x12*\n" +
 	"\x11max_output_tokens\x18\x15 \x01(\x03R\x0fmaxOutputTokens\x123\n" +
 	"\alatency\x18\x1e \x01(\v2\x19.google.protobuf.DurationR\alatency\x12H\n" +

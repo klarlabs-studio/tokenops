@@ -209,6 +209,8 @@ message PromptEvent {
   int64 output_tokens = 11;
   int64 total_tokens = 12;
   int64 cached_input_tokens = 13;
+  int64 cache_write_input_tokens = 14;
+  int64 cache_write_1h_input_tokens = 15;
 
   int64 context_size = 20;
   int64 max_output_tokens = 21;

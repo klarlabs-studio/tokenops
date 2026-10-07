@@ -209,11 +209,10 @@ func (p *Poller) visitor(ctx context.Context) func(Turn) error {
 	}
 }
 
-// newEnvelope wraps one Turn as a PromptEvent envelope. Sum input +
-// cache-read into InputTokens so spend.Engine attaches a cost based
-// on Anthropic's blended cache pricing (rough — cache-read is priced
-// lower than uncached input; future refinement can split the buckets
-// via the Attributes map).
+// newEnvelope wraps one Turn as a PromptEvent envelope. Claude Code's
+// input_tokens excludes the cache read and the cache writes, so
+// InputTokens is their sum; the read and the writes ride along as its
+// portions so spend.Engine prices each at its own rate.
 func newEnvelope(t Turn, costSource eventschema.CostSource, baseURL string) *eventschema.Envelope {
 	provider := biller.ForClaudeCodeTurn(t.Model, baseURL)
 	endpoint := biller.EndpointName(baseURL, string(eventschema.ProviderAnthropic))
@@ -257,12 +256,14 @@ func newEnvelope(t Turn, costSource eventschema.CostSource, baseURL string) *eve
 			"cache_creation_input": fmt.Sprintf("%d", t.CacheCreationInputTokens),
 		},
 		Payload: &eventschema.PromptEvent{
-			Provider:          provider,
-			RequestModel:      t.Model,
-			InputTokens:       inputTokens,
-			CachedInputTokens: t.CacheReadInputTokens,
-			OutputTokens:      t.OutputTokens,
-			TotalTokens:       totalTokens,
+			Provider:                provider,
+			RequestModel:            t.Model,
+			InputTokens:             inputTokens,
+			CachedInputTokens:       t.CacheReadInputTokens,
+			CacheWriteInputTokens:   t.CacheCreationInputTokens,
+			CacheWrite1hInputTokens: t.CacheCreation1hInputTokens,
+			OutputTokens:            t.OutputTokens,
+			TotalTokens:             totalTokens,
 			// Wall-clock for the turn, reconstructed from transcript
 			// timestamps. Zero when it could not be established; the
 			// scorecard treats that as unmeasured rather than as instant.

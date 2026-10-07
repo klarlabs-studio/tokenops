@@ -228,6 +228,10 @@ type usage struct {
 	OutputTokens             int64 `json:"output_tokens"`
 	CacheCreationInputTokens int64 `json:"cache_creation_input_tokens"`
 	CacheReadInputTokens     int64 `json:"cache_read_input_tokens"`
+	// CacheCreation splits the writes by lifetime.
+	CacheCreation struct {
+		Ephemeral1hInputTokens int64 `json:"ephemeral_1h_input_tokens"`
+	} `json:"cache_creation"`
 }
 
 // transcriptLine is the subset of a transcript jsonl record we care about: the
@@ -700,9 +704,9 @@ func priceCodexTurns(out []turnUsage, raw [][]byte, fallbackModel string, cfg Co
 
 // turnCostUSD prices a single turn's full API-equivalent cost: input, output,
 // cache-write (cache_creation) and cache-read tokens each at the model's
-// per-million rate from the spend catalog. Cache-read uses the cached-input
-// rate (falling back to the input rate when the catalog leaves it zero);
-// cache-write has no distinct catalog rate, so it is priced at the input rate.
+// per-million rate from the spend catalog. Cache reads and writes use their
+// own rates, which fall back to the input rate when the catalog has none
+// (see spend.Rate); one-hour writes bill above five-minute ones.
 // An unpriceable model yields 0 — the turn still counts (marker advances) but
 // adds nothing, so the $ figure never over-states what we can defend.
 func turnCostUSD(tbl spend.Table, u *usage, model string) float64 {
@@ -713,14 +717,12 @@ func turnCostUSD(tbl spend.Table, u *usage, model string) float64 {
 	if err != nil {
 		return 0
 	}
-	cacheReadRate := r.CachedInputPerMillion
-	if cacheReadRate == 0 {
-		cacheReadRate = r.InputPerMillion
-	}
+	written1h := max(0, min(u.CacheCreation.Ephemeral1hInputTokens, u.CacheCreationInputTokens))
 	return perMillion(u.InputTokens, r.InputPerMillion) +
 		perMillion(u.OutputTokens, r.OutputPerMillion) +
-		perMillion(u.CacheCreationInputTokens, r.InputPerMillion) +
-		perMillion(u.CacheReadInputTokens, cacheReadRate)
+		perMillion(u.CacheCreationInputTokens-written1h, r.CacheWriteRate()) +
+		perMillion(written1h, r.CacheWrite1hRate()) +
+		perMillion(u.CacheReadInputTokens, r.CacheReadRate())
 }
 
 func perMillion(tokens int64, ratePerMillion float64) float64 {

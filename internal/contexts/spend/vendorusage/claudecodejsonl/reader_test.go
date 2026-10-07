@@ -19,7 +19,7 @@ func TestReadFileSkipsNonAssistantTurnsAndKeepsGoingOnMalformedLines(t *testing.
 		// User turn — no usage, skipped.
 		`{"type":"user","timestamp":"2026-05-14T09:22:40.000Z","sessionId":"s1","message":{"role":"user","content":"hi"}}`,
 		// Assistant turn WITH usage — emitted.
-		`{"type":"assistant","timestamp":"2026-05-14T09:22:45.151Z","sessionId":"s1","message":{"id":"msg_a","model":"claude-opus-4-7","usage":{"input_tokens":10,"output_tokens":20,"cache_read_input_tokens":1000,"cache_creation_input_tokens":50,"service_tier":"standard"}}}`,
+		`{"type":"assistant","timestamp":"2026-05-14T09:22:45.151Z","sessionId":"s1","message":{"id":"msg_a","model":"claude-opus-4-7","usage":{"input_tokens":10,"output_tokens":20,"cache_read_input_tokens":1000,"cache_creation_input_tokens":50,"cache_creation":{"ephemeral_5m_input_tokens":30,"ephemeral_1h_input_tokens":20},"service_tier":"standard"}}}`,
 		// Assistant turn with all-zero usage — skipped.
 		`{"type":"assistant","timestamp":"2026-05-14T09:22:46.000Z","sessionId":"s1","message":{"id":"msg_b","model":"claude-opus-4-7","usage":{"input_tokens":0,"output_tokens":0}}}`,
 		// Assistant turn with empty message ID — skipped.
@@ -49,8 +49,8 @@ func TestReadFileSkipsNonAssistantTurnsAndKeepsGoingOnMalformedLines(t *testing.
 	if turns[0].InputTokens != 10 || turns[0].OutputTokens != 20 {
 		t.Errorf("token counts: in=%d out=%d", turns[0].InputTokens, turns[0].OutputTokens)
 	}
-	if turns[0].CacheReadInputTokens != 1000 || turns[0].CacheCreationInputTokens != 50 {
-		t.Errorf("cache buckets: r=%d c=%d", turns[0].CacheReadInputTokens, turns[0].CacheCreationInputTokens)
+	if turns[0].CacheReadInputTokens != 1000 || turns[0].CacheCreationInputTokens != 50 || turns[0].CacheCreation1hInputTokens != 20 {
+		t.Errorf("cache buckets: r=%d c=%d c1h=%d", turns[0].CacheReadInputTokens, turns[0].CacheCreationInputTokens, turns[0].CacheCreation1hInputTokens)
 	}
 	if turns[0].ServiceTier != "standard" {
 		t.Errorf("service_tier = %q", turns[0].ServiceTier)

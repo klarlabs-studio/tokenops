@@ -71,6 +71,14 @@ type PromptEvent struct {
 	// CachedInputTokens, when the provider reports cache hits, captures the
 	// portion of input tokens served from the provider-side prompt cache.
 	CachedInputTokens int64 `json:"cached_input_tokens,omitempty"`
+	// CacheWriteInputTokens, when the provider reports prompt-cache writes,
+	// is the portion of input tokens written to the cache. A write bills
+	// above the plain input rate (Anthropic: 1.25× for a five-minute entry).
+	CacheWriteInputTokens int64 `json:"cache_write_input_tokens,omitempty"`
+	// CacheWrite1hInputTokens is the portion of CacheWriteInputTokens
+	// written with a one-hour lifetime, which bills higher still
+	// (Anthropic: 2×).
+	CacheWrite1hInputTokens int64 `json:"cache_write_1h_input_tokens,omitempty"`
 
 	// ContextSize is the number of tokens of context (system + history)
 	// included in the request.

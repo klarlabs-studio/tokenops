@@ -60,7 +60,10 @@ type Turn struct {
 	OutputTokens             int64
 	CacheReadInputTokens     int64
 	CacheCreationInputTokens int64
-	ServiceTier              string
+	// CacheCreation1hInputTokens is the part of CacheCreationInputTokens
+	// written with a one-hour lifetime.
+	CacheCreation1hInputTokens int64
+	ServiceTier                string
 	// Latency is how long this turn took, measured as the gap from the
 	// transcript entry immediately before it. Zero means it could not be
 	// established — the first entry in a file, a backwards timestamp, or
@@ -90,11 +93,14 @@ type rawLine struct {
 		// from the tool-result echoes that share type:"user".
 		Content json.RawMessage `json:"content"`
 		Usage   struct {
-			InputTokens              int64  `json:"input_tokens"`
-			OutputTokens             int64  `json:"output_tokens"`
-			CacheReadInputTokens     int64  `json:"cache_read_input_tokens"`
-			CacheCreationInputTokens int64  `json:"cache_creation_input_tokens"`
-			ServiceTier              string `json:"service_tier"`
+			InputTokens              int64 `json:"input_tokens"`
+			OutputTokens             int64 `json:"output_tokens"`
+			CacheReadInputTokens     int64 `json:"cache_read_input_tokens"`
+			CacheCreationInputTokens int64 `json:"cache_creation_input_tokens"`
+			CacheCreation            struct {
+				Ephemeral1hInputTokens int64 `json:"ephemeral_1h_input_tokens"`
+			} `json:"cache_creation"`
+			ServiceTier string `json:"service_tier"`
 		} `json:"usage"`
 	} `json:"message"`
 }
@@ -212,18 +218,19 @@ func (st *readState) visitLine(line []byte, project string, visit func(Turn) err
 	startsMessage := st.pendingUserMessage
 	st.pendingUserMessage = false
 	return visit(Turn{
-		Latency:                  latency,
-		StartsUserMessage:        startsMessage,
-		Timestamp:                ts.UTC(),
-		SessionID:                raw.SessionID,
-		Project:                  project,
-		Model:                    raw.Message.Model,
-		MessageID:                raw.Message.ID,
-		InputTokens:              u.InputTokens,
-		OutputTokens:             u.OutputTokens,
-		CacheReadInputTokens:     u.CacheReadInputTokens,
-		CacheCreationInputTokens: u.CacheCreationInputTokens,
-		ServiceTier:              u.ServiceTier,
+		Latency:                    latency,
+		StartsUserMessage:          startsMessage,
+		Timestamp:                  ts.UTC(),
+		SessionID:                  raw.SessionID,
+		Project:                    project,
+		Model:                      raw.Message.Model,
+		MessageID:                  raw.Message.ID,
+		InputTokens:                u.InputTokens,
+		OutputTokens:               u.OutputTokens,
+		CacheReadInputTokens:       u.CacheReadInputTokens,
+		CacheCreationInputTokens:   u.CacheCreationInputTokens,
+		CacheCreation1hInputTokens: u.CacheCreation.Ephemeral1hInputTokens,
+		ServiceTier:                u.ServiceTier,
 	})
 }
 

@@ -82,13 +82,13 @@ func TestDefaultTableReturnsIndependentCopies(t *testing.T) {
 func TestDefaultTableCoversCurrentAnthropicModels(t *testing.T) {
 	tab := DefaultTable()
 	for model, want := range map[string]Rate{
-		"claude-fable-5":     {InputPerMillion: 10.00, OutputPerMillion: 50.00, CachedInputPerMillion: 1.00},
-		"claude-fable-5[1m]": {InputPerMillion: 10.00, OutputPerMillion: 50.00, CachedInputPerMillion: 1.00},
-		"claude-opus-4-8":    {InputPerMillion: 5.00, OutputPerMillion: 25.00, CachedInputPerMillion: 0.50},
-		"claude-opus-4-7":    {InputPerMillion: 5.00, OutputPerMillion: 25.00, CachedInputPerMillion: 0.50},
-		"claude-opus-4-6":    {InputPerMillion: 5.00, OutputPerMillion: 25.00, CachedInputPerMillion: 0.50},
-		"claude-sonnet-4-6":  {InputPerMillion: 3.00, OutputPerMillion: 15.00, CachedInputPerMillion: 0.30},
-		"claude-haiku-4-5":   {InputPerMillion: 1.00, OutputPerMillion: 5.00, CachedInputPerMillion: 0.10},
+		"claude-fable-5":     {InputPerMillion: 10.00, OutputPerMillion: 50.00, CachedInputPerMillion: 1.00, CacheWritePerMillion: 12.50, CacheWrite1hPerMillion: 20.00},
+		"claude-fable-5[1m]": {InputPerMillion: 10.00, OutputPerMillion: 50.00, CachedInputPerMillion: 1.00, CacheWritePerMillion: 12.50, CacheWrite1hPerMillion: 20.00},
+		"claude-opus-4-8":    {InputPerMillion: 5.00, OutputPerMillion: 25.00, CachedInputPerMillion: 0.50, CacheWritePerMillion: 6.25, CacheWrite1hPerMillion: 10.00},
+		"claude-opus-4-7":    {InputPerMillion: 5.00, OutputPerMillion: 25.00, CachedInputPerMillion: 0.50, CacheWritePerMillion: 6.25, CacheWrite1hPerMillion: 10.00},
+		"claude-opus-4-6":    {InputPerMillion: 5.00, OutputPerMillion: 25.00, CachedInputPerMillion: 0.50, CacheWritePerMillion: 6.25, CacheWrite1hPerMillion: 10.00},
+		"claude-sonnet-4-6":  {InputPerMillion: 3.00, OutputPerMillion: 15.00, CachedInputPerMillion: 0.30, CacheWritePerMillion: 3.75, CacheWrite1hPerMillion: 6.00},
+		"claude-haiku-4-5":   {InputPerMillion: 1.00, OutputPerMillion: 5.00, CachedInputPerMillion: 0.10, CacheWritePerMillion: 1.25, CacheWrite1hPerMillion: 2.00},
 	} {
 		got, err := tab.Lookup(eventschema.ProviderAnthropic, model)
 		if err != nil {
@@ -165,7 +165,7 @@ rates:
 	if err != nil {
 		t.Fatalf("Lookup fable: %v", err)
 	}
-	want := Rate{InputPerMillion: 8.00, OutputPerMillion: 50.00, CachedInputPerMillion: 1.00}
+	want := Rate{InputPerMillion: 8.00, OutputPerMillion: 50.00, CachedInputPerMillion: 1.00, CacheWritePerMillion: 12.50, CacheWrite1hPerMillion: 20.00}
 	if got != want {
 		t.Errorf("override rate = %+v; want %+v", got, want)
 	}

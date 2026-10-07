@@ -35,6 +35,9 @@ func TestEnvelopeDoesNotDoubleCountCache(t *testing.T) {
 	if p.InputTokens != 1_000_000 {
 		t.Errorf("InputTokens = %d, want the reported input exactly once", p.InputTokens)
 	}
+	if p.CacheWriteInputTokens != 50_000 {
+		t.Errorf("CacheWriteInputTokens = %d, want 50000", p.CacheWriteInputTokens)
+	}
 	if p.CachedInputTokens != 900_000 {
 		t.Errorf("CachedInputTokens = %d, want 900000", p.CachedInputTokens)
 	}

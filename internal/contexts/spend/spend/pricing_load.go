@@ -37,6 +37,10 @@ type rateYAML struct {
 	InputPerMillion       float64 `yaml:"input_per_million"`
 	OutputPerMillion      float64 `yaml:"output_per_million"`
 	CachedInputPerMillion float64 `yaml:"cached_input_per_million"`
+	// CacheWritePerMillion and CacheWrite1hPerMillion price prompt-cache
+	// writes (five-minute and one-hour entries).
+	CacheWritePerMillion   float64 `yaml:"cache_write_per_million"`
+	CacheWrite1hPerMillion float64 `yaml:"cache_write_1h_per_million"`
 	// Verified marks a row as hand-checked against the vendor and therefore
 	// authoritative: a fetched pricing snapshot must not override it (see
 	// spend.DefaultPinnedKeys and pricing.SnapshotsToDatedTables). Purely
@@ -70,9 +74,11 @@ func parseTableAndPins(data []byte) (Table, map[Key]bool, error) {
 		for model, r := range models {
 			key := Key{eventschema.Provider(provider), model}
 			t.Rates[key] = Rate{
-				InputPerMillion:       r.InputPerMillion,
-				OutputPerMillion:      r.OutputPerMillion,
-				CachedInputPerMillion: r.CachedInputPerMillion,
+				InputPerMillion:        r.InputPerMillion,
+				OutputPerMillion:       r.OutputPerMillion,
+				CachedInputPerMillion:  r.CachedInputPerMillion,
+				CacheWritePerMillion:   r.CacheWritePerMillion,
+				CacheWrite1hPerMillion: r.CacheWrite1hPerMillion,
 			}
 			if r.Verified {
 				pins[key] = true

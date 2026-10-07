@@ -27,6 +27,7 @@ type Turn struct {
 	Endpoint     string
 	InputTokens  int // uncached input + cache read + cache write
 	CachedTokens int // cache read
+	CacheWrites  int // cache write
 	OutputTokens int // output + reasoning
 	Cost         float64
 	Timestamp    time.Time
@@ -74,6 +75,7 @@ func readMessages(dbPath, sessionID string, visit func(Turn) error) error {
 			Endpoint:     endpointFor(m.ProviderID),
 			InputTokens:  int(t.Input + t.CacheRead + t.CacheWrite),
 			CachedTokens: int(t.CacheRead),
+			CacheWrites:  int(t.CacheWrite),
 			OutputTokens: int(t.Output + t.Reasoning),
 			Cost:         m.Cost,
 			Timestamp:    m.Created,

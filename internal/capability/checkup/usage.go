@@ -43,6 +43,9 @@ type turn struct {
 	provider                eventschema.Provider
 	at                      time.Time
 	input, cached, output   int64
+	// written and written1h are the cache writes inside input, and of
+	// those the one-hour ones; each bills above the input rate.
+	written, written1h int64
 }
 
 // tally sums turns per harness and model and prices them.
@@ -65,6 +68,7 @@ func (t *tally) add(tn turn) {
 	cost, err := t.engine.ComputeAt(&eventschema.PromptEvent{
 		Provider: tn.provider, RequestModel: tn.model,
 		InputTokens: tn.input, CachedInputTokens: tn.cached, OutputTokens: tn.output,
+		CacheWriteInputTokens: tn.written, CacheWrite1hInputTokens: tn.written1h,
 	}, tn.at)
 	if err != nil {
 		u.UnpricedTurns++
@@ -221,6 +225,7 @@ func readClaudeAt(ctx context.Context, root string, rootErr error, since time.Ti
 				provider: eventschema.ProviderAnthropic,
 				input:    t.InputTokens + t.CacheReadInputTokens + t.CacheCreationInputTokens,
 				cached:   t.CacheReadInputTokens, output: t.OutputTokens,
+				written: t.CacheCreationInputTokens, written1h: t.CacheCreation1hInputTokens,
 			})
 			return nil
 		})
@@ -284,6 +289,7 @@ func readOpencode(_ context.Context, since time.Time, add func(turn)) error {
 			harness: "opencode", model: m.ModelID, session: m.SessionID, at: m.Created,
 			provider: eventschema.Provider(m.ProviderID),
 			input:    tk.Input + tk.CacheRead + tk.CacheWrite, cached: tk.CacheRead, output: tk.Output + tk.Reasoning,
+			written: tk.CacheWrite,
 		})
 		return nil
 	})

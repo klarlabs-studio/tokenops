@@ -153,3 +153,27 @@ func (b *captureBus) PublishWait(_ context.Context, env *eventschema.Envelope) e
 	b.Publish(env)
 	return nil
 }
+
+// The usage report splits a bucket's input into uncached tokens, cache
+// reads and cache writes by lifetime. Every part is input, and each bills
+// at its own rate, so the event carries the sum with the read and the
+// writes as its portions.
+func TestNewEnvelopeCarriesTheCacheSplit(t *testing.T) {
+	start := time.Date(2026, 10, 7, 0, 0, 0, 0, time.UTC)
+	env, ok := newEnvelope(start, start.Add(time.Hour), UsageResult{
+		Model:                "claude-opus-5-5",
+		UncachedInputTokens:  100,
+		CacheReadInputTokens: 1000,
+		CacheCreation:        CacheCreation{Ephemeral5mInputTokens: 40, Ephemeral1hInputTokens: 60},
+		OutputTokens:         10,
+	})
+	if !ok {
+		t.Fatal("no envelope for a bucket with usage")
+	}
+	pe := env.Payload.(*eventschema.PromptEvent)
+	if pe.InputTokens != 1200 || pe.CachedInputTokens != 1000 ||
+		pe.CacheWriteInputTokens != 100 || pe.CacheWrite1hInputTokens != 60 || pe.TotalTokens != 1210 {
+		t.Errorf("input=%d read=%d write=%d write1h=%d total=%d; want 1200/1000/100/60/1210",
+			pe.InputTokens, pe.CachedInputTokens, pe.CacheWriteInputTokens, pe.CacheWrite1hInputTokens, pe.TotalTokens)
+	}
+}

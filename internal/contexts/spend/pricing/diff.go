@@ -76,6 +76,15 @@ func fieldDeltas(old, new Rate) []FieldDelta {
 	add("input", old.InputPerMillion, new.InputPerMillion)
 	add("output", old.OutputPerMillion, new.OutputPerMillion)
 	add("cache_read", old.CachedInputPerMillion, new.CachedInputPerMillion)
+	// A source that publishes no cache-write price leaves the field zero,
+	// and the engine backfills it from the baseline: unpublished is not a
+	// price change.
+	if new.CacheWritePerMillion != 0 {
+		add("cache_write", old.CacheWritePerMillion, new.CacheWritePerMillion)
+	}
+	if new.CacheWrite1hPerMillion != 0 {
+		add("cache_write_1h", old.CacheWrite1hPerMillion, new.CacheWrite1hPerMillion)
+	}
 	return d
 }
 

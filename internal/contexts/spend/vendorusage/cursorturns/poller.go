@@ -136,13 +136,14 @@ func NewEnvelope(t cursorturns.Turn, costSource eventschema.CostSource) *eventsc
 			"composer_slug": t.Model,
 		},
 		Payload: &eventschema.PromptEvent{
-			Provider:          eventschema.ProviderCursor,
-			RequestModel:      model,
-			InputTokens:       input,
-			CachedInputTokens: read,
-			OutputTokens:      output,
-			TotalTokens:       input + output,
-			SessionID:         t.ConversationID,
+			Provider:              eventschema.ProviderCursor,
+			RequestModel:          model,
+			InputTokens:           input,
+			CachedInputTokens:     read,
+			CacheWriteInputTokens: write,
+			OutputTokens:          output,
+			TotalTokens:           input + output,
+			SessionID:             t.ConversationID,
 			// Mirrors the attribution every other client uses, so
 			// group=agent rollups and the waste detector resolve Cursor
 			// sessions the same way.

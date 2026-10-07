@@ -36,7 +36,9 @@ func (a *Aggregator) SessionTurns(ctx context.Context, f Filter) ([]SessionTurn,
 	conds = append(conds, `COALESCE(session_id, '') <> ''`)
 	q := `SELECT session_id, timestamp_ns, COALESCE(provider, ''), COALESCE(model, ''),
 			COALESCE(input_tokens, 0), COALESCE(output_tokens, 0), COALESCE(total_tokens, 0),
-			COALESCE(CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER), 0),
+			COALESCE(` + cacheReadExpr + `, 0),
+			COALESCE(` + cacheWriteExpr + `, 0),
+			COALESCE(` + cacheWrite1hExpr + `, 0),
 			COALESCE(cost_usd, 0)
 		FROM events WHERE ` + strings.Join(conds, " AND ") + ` ORDER BY timestamp_ns`
 	rows, err := a.store.DB().QueryContext(ctx, q, args...)
@@ -49,9 +51,10 @@ func (a *Aggregator) SessionTurns(ctx context.Context, f Filter) ([]SessionTurn,
 		var (
 			t                             SessionTurn
 			ns, in, outTok, total, cached int64
+			written, written1h            int64
 			cost                          sql.NullFloat64
 		)
-		if err := rows.Scan(&t.SessionID, &ns, &t.Provider, &t.Model, &in, &outTok, &total, &cached, &cost); err != nil {
+		if err := rows.Scan(&t.SessionID, &ns, &t.Provider, &t.Model, &in, &outTok, &total, &cached, &written, &written1h, &cost); err != nil {
 			return nil, fmt.Errorf("analytics: session turns scan: %w", err)
 		}
 		t.At = time.Unix(0, ns).UTC()
@@ -62,10 +65,12 @@ func (a *Aggregator) SessionTurns(ctx context.Context, f Filter) ([]SessionTurn,
 		t.CostUSD = cost.Float64
 		t.APIEquivalentUSD, t.Priced = t.CostUSD, true
 		if a.spend != nil && t.CostUSD == 0 {
-			v, err := a.spend.Compute(&eventschema.PromptEvent{
+			// Priced at the card in effect at the turn, not the oldest one.
+			v, err := a.spend.ComputeAt(&eventschema.PromptEvent{
 				Provider: eventschema.Provider(t.Provider), RequestModel: t.Model,
 				InputTokens: in, CachedInputTokens: cached, OutputTokens: outTok,
-			})
+				CacheWriteInputTokens: written, CacheWrite1hInputTokens: written1h,
+			}, t.At)
 			t.APIEquivalentUSD, t.Priced = v, err == nil
 		}
 		out = append(out, t)

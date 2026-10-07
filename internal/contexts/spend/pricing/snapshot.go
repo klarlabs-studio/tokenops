@@ -64,23 +64,31 @@ type Rate struct {
 	InputPerMillion       float64 `json:"input_per_million"`
 	OutputPerMillion      float64 `json:"output_per_million"`
 	CachedInputPerMillion float64 `json:"cached_input_per_million"`
+	// The cache-write prices are omitted when unknown, so snapshots written
+	// before they existed read back unchanged.
+	CacheWritePerMillion   float64 `json:"cache_write_per_million,omitempty"`
+	CacheWrite1hPerMillion float64 `json:"cache_write_1h_per_million,omitempty"`
 }
 
 // FromSpendRate adapts an engine rate into the snapshot rate type.
 func FromSpendRate(r spend.Rate) Rate {
 	return Rate{
-		InputPerMillion:       r.InputPerMillion,
-		OutputPerMillion:      r.OutputPerMillion,
-		CachedInputPerMillion: r.CachedInputPerMillion,
+		InputPerMillion:        r.InputPerMillion,
+		OutputPerMillion:       r.OutputPerMillion,
+		CachedInputPerMillion:  r.CachedInputPerMillion,
+		CacheWritePerMillion:   r.CacheWritePerMillion,
+		CacheWrite1hPerMillion: r.CacheWrite1hPerMillion,
 	}
 }
 
 // ToSpendRate adapts a snapshot rate back into the engine rate type.
 func (r Rate) ToSpendRate() spend.Rate {
 	return spend.Rate{
-		InputPerMillion:       r.InputPerMillion,
-		OutputPerMillion:      r.OutputPerMillion,
-		CachedInputPerMillion: r.CachedInputPerMillion,
+		InputPerMillion:        r.InputPerMillion,
+		OutputPerMillion:       r.OutputPerMillion,
+		CachedInputPerMillion:  r.CachedInputPerMillion,
+		CacheWritePerMillion:   r.CacheWritePerMillion,
+		CacheWrite1hPerMillion: r.CacheWrite1hPerMillion,
 	}
 }
 
