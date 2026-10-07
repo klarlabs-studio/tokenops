@@ -369,7 +369,9 @@ type Filter struct {
 
 const defaultQueryLimit = 1000
 
-// Query returns envelopes matching the filter, ordered by timestamp ascending.
+// Query returns envelopes matching the filter, ordered by timestamp (then
+// id) ascending. When more rows match than the limit, the newest rows are
+// kept: the limit trims the oldest end of the window.
 func (s *Store) Query(ctx context.Context, f Filter) ([]*eventschema.Envelope, error) {
 	limit := f.Limit
 	if limit <= 0 {
@@ -437,11 +439,15 @@ func (s *Store) Query(ctx context.Context, f Filter) ([]*eventschema.Envelope, e
 		args = append(args, f.Until.UTC().UnixNano())
 	}
 
-	q := selectSQL
+	// The limit keeps the newest rows in the window — a capped read is a
+	// "latest N" view, and the oldest rows are the ones that matter least —
+	// and the outer query returns them oldest first, as callers iterate.
+	inner := selectSQL
 	if len(conds) > 0 {
-		q += " WHERE " + strings.Join(conds, " AND ")
+		inner += " WHERE " + strings.Join(conds, " AND ")
 	}
-	q += " ORDER BY timestamp_ns ASC LIMIT ?"
+	inner += " ORDER BY timestamp_ns DESC, id DESC LIMIT ?"
+	q := "SELECT * FROM (" + inner + ") ORDER BY timestamp_ns ASC, id ASC"
 	args = append(args, limit)
 
 	rs, err := s.db.QueryContext(ctx, q, args...)
