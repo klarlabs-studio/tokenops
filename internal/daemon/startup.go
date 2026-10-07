@@ -248,7 +248,7 @@ func (s *startup) startStorageSubsystems(ctx context.Context) error {
 	// The composition root builds and starts the vendor-usage pollers.
 	bootstrap.StartVendorUsagePollers(s.cfg, ingestionBus(ctx, s.events.Bus, store, s.logger), s.sourceHealth, claudeCodeBaseURLAt(routes), s.sup, s.logger)
 
-	if err := startRetentionRuntime(s.cfg.Retention, store, s.sup, s.logger); err != nil {
+	if err := bootstrap.StartRetentionRuntime(s.cfg.Retention, store, s.sup, s.logger); err != nil {
 		return fmt.Errorf("retention: %w", err)
 	}
 

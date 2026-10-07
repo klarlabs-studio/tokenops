@@ -129,7 +129,6 @@ var directDomainImports = map[string][]string{
 		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode",
-		"go.klarlabs.de/tokenops/internal/contexts/telemetry/retention",
 		"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow",
 	},
 	"go.klarlabs.de/tokenops/internal/mcp": {
