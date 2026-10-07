@@ -115,9 +115,6 @@ var ioImportExempt = map[string][]string{
 	// sql.Null* columns of the audit table it writes through its sqlite
 	// adapter (see storageExempt); moves with that adapter.
 	"go.klarlabs.de/tokenops/internal/contexts/security/audit": {"database/sql"},
-	// Authenticator.Middleware is an http.Handler for the daemon's API: a
-	// presentation adapter around the token check.
-	"go.klarlabs.de/tokenops/internal/contexts/security/dashauth": {"net/http"},
 	// HTTPMiddleware is an http.Handler around the permission check.
 	"go.klarlabs.de/tokenops/internal/contexts/security/rbac": {"net/http"},
 	// Fetches the LiteLLM and models.dev price catalogs over HTTP.
