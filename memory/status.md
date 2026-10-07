@@ -1,6 +1,8 @@
 ---
 updated: 2026-09-27
 ---
+> **Dated snapshot (2026-09-27, v0.75), no longer maintained.** See `CHANGELOG.md` and `docs/adr/` for current state.
+
 ## Current State
 
 TokenOps is a local-first adaptive control plane for AI-assisted work. Current
