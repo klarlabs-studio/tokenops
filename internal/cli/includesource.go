@@ -5,11 +5,11 @@ import (
 	"io"
 	"strings"
 
-	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 )
 
 // resolveIncludeSources folds the repeatable --include-source flag into
-// the analytics.Filter IncludeSources list.
+// the spending.Window IncludeSources list.
 //
 // A name that is not excluded by default is inert rather than fatal —
 // the operator asked to see something that is already there, which is
@@ -36,7 +36,7 @@ func resolveIncludeSources(warn io.Writer, sources []string) []string {
 		for _, s := range out {
 			if !isDefaultExcluded(s) {
 				fmt.Fprintf(warn, "note: --include-source=%s has no effect; %q is not excluded by default (excluded: %s)\n",
-					s, s, strings.Join(analytics.DefaultExcludedSources, ", "))
+					s, s, strings.Join(spending.ExcludedByDefault(), ", "))
 			}
 		}
 	}
@@ -44,12 +44,7 @@ func resolveIncludeSources(warn io.Writer, sources []string) []string {
 }
 
 func isDefaultExcluded(source string) bool {
-	for _, s := range analytics.DefaultExcludedSources {
-		if s == source {
-			return true
-		}
-	}
-	return false
+	return spending.IsExcludedByDefault(source)
 }
 
 // scratchFlagHelp documents --include-scratch everywhere it appears.

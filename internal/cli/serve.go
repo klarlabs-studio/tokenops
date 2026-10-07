@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/money"
+	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/infra/fxrate"
 
 	"github.com/spf13/cobra"
@@ -23,7 +24,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/daemon"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
-	"go.klarlabs.de/tokenops/internal/infra/sourceprobe"
 	"go.klarlabs.de/tokenops/internal/mcp"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
@@ -371,11 +371,7 @@ func staleSourcesCheck(ctx context.Context, counter config.SourceCounter, curren
 		if cfg == nil {
 			return nil
 		}
-		stale, err := cfg.CheckStaleIngestion(ctx, counter, sourceprobe.All(*cfg), config.StaleIngestionWindow, time.Now())
-		if err != nil {
-			return nil
-		}
-		return stale
+		return state.StaleSources(ctx, *cfg, counter, time.Now())
 	}
 }
 

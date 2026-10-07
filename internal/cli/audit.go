@@ -11,7 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
+	"go.klarlabs.de/tokenops/internal/capability/auditlog"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -32,7 +32,7 @@ func newAuditCmd(rf *rootFlags) *cobra.Command {
 or --db). Filter by --action, --actor, --since (RFC3339 or duration like
 24h / 7d), --until (RFC3339), and --limit.
 
-Mirrors the tokenops_records (view=audit) MCP tool: both call audit.Recorder.Query.`,
+Mirrors the tokenops_records (view=audit) MCP tool: both call auditlog.Read.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			path, err := resolveAuditDB(rf, dbPath)
@@ -46,32 +46,29 @@ Mirrors the tokenops_records (view=audit) MCP tool: both call audit.Recorder.Que
 				return fmt.Errorf("open audit db: %w", err)
 			}
 			defer func() { _ = store.Close() }()
-			rec := audit.NewRecorder(store)
-			f := audit.Filter{Action: audit.Action(action), Actor: actor, Limit: limit}
+			q := auditlog.Query{Action: action, Actor: actor, Limit: limit}
 			if since != "" {
 				t, err := parseSince(since)
 				if err != nil {
 					return fmt.Errorf("--since: %w", err)
 				}
-				f.Since = t
+				q.Since = t
 			}
 			if until != "" {
 				t, err := time.Parse(time.RFC3339, until)
 				if err != nil {
 					return fmt.Errorf("--until: %w", err)
 				}
-				f.Until = t
+				q.Until = t
 			}
-			entries, err := rec.Query(ctx, f)
+			log, err := auditlog.Read(ctx, store, q)
 			if err != nil {
 				return err
 			}
 			if jsonOut {
-				return json.NewEncoder(cmd.OutOrStdout()).Encode(struct {
-					Entries []audit.Entry `json:"entries"`
-				}{Entries: entries})
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(log)
 			}
-			renderAuditText(cmd, entries)
+			renderAuditText(cmd, log.Entries)
 			return nil
 		},
 	}
@@ -101,7 +98,7 @@ func resolveAuditDB(rf *rootFlags, flagPath string) (string, error) {
 	return filepath.Join(home, ".tokenops", "events.db"), nil
 }
 
-func renderAuditText(cmd *cobra.Command, entries []audit.Entry) {
+func renderAuditText(cmd *cobra.Command, entries []auditlog.Entry) {
 	out := cmd.OutOrStdout()
 	if len(entries) == 0 {
 		fmt.Fprintln(out, "no audit entries")

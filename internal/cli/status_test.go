@@ -15,7 +15,7 @@ import (
 // present; the daemon lines are unchanged either way.
 func TestWriteStatusTextRendersWarnings(t *testing.T) {
 	warn := "ingestion stale [critical]: claude-code-jsonl has produced no events for 27 days"
-	res := statusResult{
+	res := daemonProbe{
 		Health:   endpointResult{Status: 200},
 		Ready:    endpointResult{Status: 200, Body: map[string]any{"status": "ready"}},
 		Version:  endpointResult{Status: 200},
@@ -35,7 +35,7 @@ func TestWriteStatusTextRendersWarnings(t *testing.T) {
 }
 
 func TestWriteStatusTextOmitsWarningsWhenEmpty(t *testing.T) {
-	res := statusResult{
+	res := daemonProbe{
 		Health:  endpointResult{Status: 200},
 		Ready:   endpointResult{Status: 200, Body: map[string]any{"status": "ready"}},
 		Version: endpointResult{Status: 200},
@@ -55,14 +55,14 @@ func TestWriteStatusTextOmitsWarningsWhenEmpty(t *testing.T) {
 func TestStatusStateUsesReadinessAndWarnings(t *testing.T) {
 	cases := []struct {
 		name   string
-		result statusResult
+		result daemonProbe
 		want   string
 	}{
-		{"ready", statusResult{Ready: endpointResult{Body: map[string]any{"status": "ready"}}}, "ready"},
-		{"warning reduces coverage", statusResult{Ready: endpointResult{Body: map[string]any{"status": "ready"}}, Warnings: []string{"stale source"}}, "degraded"},
-		{"setup blocker", statusResult{Ready: endpointResult{Status: 503, Body: map[string]any{"status": "not_configured"}}}, "not_configured"},
-		{"not ready", statusResult{Ready: endpointResult{Status: 503, Body: map[string]any{"status": "not_ready"}}}, "not_ready"},
-		{"missing readiness is unknown", statusResult{Ready: endpointResult{Status: 200}}, "not_ready"},
+		{"ready", daemonProbe{Ready: endpointResult{Body: map[string]any{"status": "ready"}}}, "ready"},
+		{"warning reduces coverage", daemonProbe{Ready: endpointResult{Body: map[string]any{"status": "ready"}}, Warnings: []string{"stale source"}}, "degraded"},
+		{"setup blocker", daemonProbe{Ready: endpointResult{Status: 503, Body: map[string]any{"status": "not_configured"}}}, "not_configured"},
+		{"not ready", daemonProbe{Ready: endpointResult{Status: 503, Body: map[string]any{"status": "not_ready"}}}, "not_ready"},
+		{"missing readiness is unknown", daemonProbe{Ready: endpointResult{Status: 200}}, "not_ready"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -86,7 +86,7 @@ func TestOfflineStatusRendersUnavailableInsight(t *testing.T) {
 // The --json shape carries warnings when present and omits the key when
 // empty (omitempty), so machine callers can branch on presence.
 func TestStatusJSONWarnings(t *testing.T) {
-	withWarn, err := json.Marshal(statusResult{Insight: presentation.ForStatus("degraded"), Warnings: []string{"ingestion stale [warning]: opencode has produced no events for 3 days"}})
+	withWarn, err := json.Marshal(daemonProbe{Insight: presentation.ForStatus("degraded"), Warnings: []string{"ingestion stale [warning]: opencode has produced no events for 3 days"}})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestStatusJSONWarnings(t *testing.T) {
 		t.Errorf("expected warning string in JSON: %s", withWarn)
 	}
 
-	noWarn, err := json.Marshal(statusResult{})
+	noWarn, err := json.Marshal(daemonProbe{})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}

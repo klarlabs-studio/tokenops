@@ -1,0 +1,23 @@
+{
+  "window": {
+    "since": "<T>",
+    "until": "<T>"
+  },
+  "requests": 4,
+  "input_tokens": 1440900,
+  "output_tokens": 160100,
+  "total_tokens": 1601000,
+  "cost_usd": 3.75,
+  "api_equivalent_usd": 10.05,
+  "currency": "USD",
+  "pricing_warning": {
+    "message": "no API rate in the pricing table for these models; API-equivalent is incomplete, metered cost_usd may omit their usage, and plan-covered usage still costs $0 at the margin",
+    "unpriced_models": [
+      {
+        "provider": "anthropic",
+        "model": "claude-unpriced-model",
+        "requests": 1
+      }
+    ]
+  }
+}

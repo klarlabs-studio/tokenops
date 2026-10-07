@@ -14,8 +14,6 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
-	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
@@ -27,7 +25,7 @@ import (
 // happens at the daemon level.
 type Deps struct {
 	Store      *sqlite.Store
-	Aggregator *analytics.Aggregator
+	Aggregator *spending.EventAggregator
 	Spend      *spend.Engine
 	// Waste configures the workflow waste detector (operator context
 	// limits from coaching.context_limits). Zero value uses defaults.
@@ -145,19 +143,9 @@ type spendSummaryResult struct {
 // the daemon API (ADR 0010 §4).
 type topConsumersResult = spending.TopConsumers
 
-// forecastResult is the typed payload for tokenops_spend (view=forecast). Note is set
-// only when history is too short to project.
-type forecastResult struct {
-	HorizonDays   int                   `json:"horizon_days,omitempty"`
-	HistoryPoints int                   `json:"history_points"`
-	Forecast      []forecast.Prediction `json:"forecast"`
-	// ForecastTokens projects token volume over the same horizon. On a
-	// flat-rate plan the dollar forecast is a flat zero, so this is the
-	// only series carrying signal — always returned alongside.
-	ForecastTokens []forecast.Prediction `json:"forecast_tokens,omitempty"`
-	Currency       string                `json:"currency,omitempty"`
-	Note           string                `json:"note,omitempty"`
-}
+// forecastResult is the typed payload for tokenops_spend (view=forecast),
+// the spending capability's answer (ADR 0010 §4).
+type forecastResult = spending.SpendForecast
 
 // workflowTraceResult is the typed payload for tokenops_records (view=workflow).
 type workflowTraceResult struct {
@@ -224,11 +212,7 @@ func RegisterTools(s *Server, d Deps) error {
 			if err != nil {
 				return nil, inputError(err)
 			}
-			r, err := commits.Compute(ctx, commits.Deps{
-				Turns: func(ctx context.Context, since time.Time) ([]analytics.SessionTurn, error) {
-					return d.Aggregator.SessionTurns(ctx, analytics.Filter{Since: since})
-				},
-			}, since)
+			r, err := commits.Compute(ctx, commits.Deps{Turns: commits.TurnsIn(d.Aggregator, spending.Window{})}, since)
 			if err != nil {
 				return nil, err
 			}
@@ -275,8 +259,8 @@ func RegisterTools(s *Server, d Deps) error {
 
 // --- handlers -------------------------------------------------------------
 
-func (in spendSummaryInput) toFilter() (analytics.Filter, error) {
-	f := analytics.Filter{
+func (in spendSummaryInput) toFilter() (spending.Window, error) {
+	f := spending.Window{
 		WorkflowID: in.WorkflowID,
 		AgentID:    in.AgentID,
 	}
@@ -397,52 +381,11 @@ func burnRate(ctx context.Context, d Deps, in burnRateInput) (string, error) {
 }
 
 func forecastSpend(ctx context.Context, d Deps, in forecastInput) (*forecastResult, error) {
-	horizon := in.HorizonDays
-	if horizon <= 0 {
-		horizon = 7
-	}
-	f := analytics.Filter{Since: time.Now().Add(-30 * 24 * time.Hour)}
-	f.IncludeSources = resolveIncludeSources(in.IncludeSources)
-	rows, err := d.Aggregator.AggregateBy(ctx, f, analytics.BucketDay, analytics.GroupNone)
+	res, err := spending.ForecastSpend(ctx, d.Aggregator, in.HorizonDays, in.IncludeSources, d.Spend.Currency(), time.Now())
 	if err != nil {
 		return nil, err
 	}
-	history := forecast.SeriesFromRows(rows, forecast.CostUSD)
-	if len(history) < 2 {
-		return &forecastResult{
-			HistoryPoints: len(history),
-			Forecast:      []forecast.Prediction{},
-			Note:          "insufficient history (need ≥2 daily buckets)",
-		}, nil
-	}
-	preds := forecast.AutoForecast(history, horizon, 24*time.Hour)
-	tokenHistory := forecast.SeriesFromRows(rows, forecast.TotalTokens)
-	res := &forecastResult{
-		HorizonDays:    horizon,
-		HistoryPoints:  len(history),
-		Forecast:       preds,
-		ForecastTokens: forecast.AutoForecast(tokenHistory, horizon, 24*time.Hour),
-		Currency:       d.Spend.Currency(),
-	}
-	if allZeroForecast(preds) {
-		// A flat-rate cost history is zero at every point, so the
-		// projection is a flat zero with zero-width bands. Returned bare
-		// that reads as a broken forecaster rather than the correct
-		// answer to a question that does not apply.
-		res.Note = "cost history is all zero (plan-covered traffic bills $0 at the margin), so the dollar forecast is flat zero — forecast_tokens carries the signal"
-	}
-	return res, nil
-}
-
-// allZeroForecast reports whether a projection is entirely zero. The CLI's
-// `tokenops spend --forecast` suppresses the same case.
-func allZeroForecast(points []forecast.Prediction) bool {
-	for _, p := range points {
-		if p.Value != 0 || p.Lower != 0 || p.Upper != 0 {
-			return false
-		}
-	}
-	return true
+	return &res, nil
 }
 
 func workflowTrace(ctx context.Context, d Deps, in workflowTraceInput) (*workflowTraceResult, error) {

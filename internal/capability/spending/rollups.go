@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -95,22 +94,19 @@ func bucketOf(s string) analytics.Bucket {
 	return analytics.BucketHour
 }
 
+// groupOf is the series grouping: a named one from GroupOf's table,
+// case-insensitive, and no grouping for anything else (including empty).
 func groupOf(s string) analytics.Group {
-	switch strings.ToLower(s) {
-	case "provider":
-		return analytics.GroupProvider
-	case "workflow":
-		return analytics.GroupWorkflow
-	case "agent":
-		return analytics.GroupAgent
-	case "model":
-		return analytics.GroupModel
-	default:
+	if s == "" {
 		return analytics.GroupNone
 	}
+	if g, ok := GroupOf(strings.ToLower(s)); ok {
+		return g
+	}
+	return analytics.GroupNone
 }
 
-// Forecast horizon bounds, in days.
+// Forecast horizon bounds, in days, and how much history a forecast reads.
 const (
 	defaultHorizonDays = 7
 	maxHorizonDays     = 30
@@ -131,15 +127,15 @@ func HorizonDays(s string) int {
 // ForecastReport projects daily spend and tokens from the last thirty
 // days.
 type ForecastReport struct {
-	Currency string                `json:"currency"`
-	Forecast []forecast.Prediction `json:"forecast"`
+	Currency string       `json:"currency"`
+	Forecast []Prediction `json:"forecast"`
 	// ForecastTokens projects tokens over the same horizon. A flat-rate
 	// plan bills nothing, so the cost series is a flat zero and the token
 	// series is the only one a chart can plot meaningfully.
-	ForecastTokens []forecast.Prediction `json:"forecast_tokens"`
-	History        []analytics.Row       `json:"history"`
-	HistoryPoints  int                   `json:"history_points"`
-	HorizonDays    int                   `json:"horizon_days"`
+	ForecastTokens []Prediction    `json:"forecast_tokens"`
+	History        []analytics.Row `json:"history"`
+	HistoryPoints  int             `json:"history_points"`
+	HorizonDays    int             `json:"horizon_days"`
 }
 
 // Forecast projects horizonDays ahead from the thirty days before now.
@@ -148,14 +144,13 @@ func Forecast(ctx context.Context, agg Aggregator, horizonDays int, currency str
 	if err != nil {
 		return ForecastReport{}, err
 	}
-	history := forecast.SeriesFromRows(rows, forecast.CostUSD)
-	tokenHistory := forecast.SeriesFromRows(rows, forecast.TotalTokens)
+	cost, tokens := Project(rows, horizonDays)
 	return ForecastReport{
 		Currency:       currency,
-		Forecast:       forecast.AutoForecast(history, horizonDays, 24*time.Hour),
-		ForecastTokens: forecast.AutoForecast(tokenHistory, horizonDays, 24*time.Hour),
+		Forecast:       cost,
+		ForecastTokens: tokens,
 		History:        rows,
-		HistoryPoints:  len(history),
+		HistoryPoints:  len(rows),
 		HorizonDays:    horizonDays,
 	}, nil
 }
@@ -190,37 +185,26 @@ type WorkflowTotal struct {
 	CostUSD    float64 `json:"cost_usd"`
 }
 
-// WorkflowTotals is one row per workflow. The order is unspecified.
+// WorkflowTotals is one row per workflow, ranked as RollUp ranks them.
 type WorkflowTotals struct {
 	Currency  string          `json:"currency"`
 	Workflows []WorkflowTotal `json:"workflows"`
 }
 
-// Workflows rolls the window up per workflow. Events without a workflow
-// are left out.
+// Workflows rolls the window up per workflow through RollUp, the one
+// ranking every surface shares. Events without a workflow are left out.
 func Workflows(ctx context.Context, agg Aggregator, w Window, currency string) (WorkflowTotals, error) {
 	rows, err := agg.AggregateBy(ctx, w, analytics.BucketDay, analytics.GroupWorkflow)
 	if err != nil {
 		return WorkflowTotals{}, err
 	}
-	totals := map[string]*WorkflowTotal{}
-	for _, row := range rows {
-		key := row.GroupKey
-		if key == "" {
+	rolled := RollUp(rows, 0)
+	out := make([]WorkflowTotal, 0, len(rolled))
+	for _, r := range rolled {
+		if r.GroupKey == "" {
 			continue
 		}
-		cur, ok := totals[key]
-		if !ok {
-			cur = &WorkflowTotal{WorkflowID: key}
-			totals[key] = cur
-		}
-		cur.Requests += row.Requests
-		cur.Tokens += row.TotalTokens
-		cur.CostUSD += row.CostUSD
-	}
-	out := make([]WorkflowTotal, 0, len(totals))
-	for _, e := range totals {
-		out = append(out, *e)
+		out = append(out, WorkflowTotal{WorkflowID: r.GroupKey, Requests: r.Requests, Tokens: r.TotalTokens, CostUSD: r.CostUSD})
 	}
 	return WorkflowTotals{Currency: currency, Workflows: out}, nil
 }

@@ -101,7 +101,7 @@ func (a *AnalyticsHandlers) spendCommits(w http.ResponseWriter, r *http.Request)
 		}
 		since = s
 	}
-	res, err := commits.Compute(r.Context(), commits.Deps{Turns: commits.TurnsFrom(a.aggregator)}, since)
+	res, err := commits.Compute(r.Context(), commits.Deps{Turns: commits.TurnsIn(a.aggregator, spending.Window{})}, since)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
