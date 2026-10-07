@@ -12,7 +12,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"syscall"
+
+	"go.klarlabs.de/tokenops/internal/infra/filelock"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 )
@@ -66,10 +67,11 @@ func (f File) Append(bs ...plans.Binding) error {
 		return err
 	}
 	defer func() { _ = fh.Close() }()
-	if err := syscall.Flock(int(fh.Fd()), syscall.LOCK_EX); err != nil {
+	unlock, err := filelock.Lock(fh)
+	if err != nil {
 		return err
 	}
-	defer func() { _ = syscall.Flock(int(fh.Fd()), syscall.LOCK_UN) }()
+	defer unlock()
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	for _, b := range bs {
