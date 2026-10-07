@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/fmtinsight"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/fmtlearn"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter"
 	"go.klarlabs.de/tokenops/internal/infra/fmtindex"
@@ -132,16 +133,16 @@ config stub to paste, never auto-written (they need human-authored regexes).
 Use --no-jsonl to restrict to the wrapped-run index only.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			recs, err := readLearnRecords(recoverDir)
+			// Self-wiring: fold in signal derived from the Claude Code logs
+			// so learn works without any wrapped runs. Best-effort + capped.
+			o := fmtinsight.LearnOptions{RecoverDir: recoverDir}
+			if !noJSONL {
+				o.Sessions = &fmtinsight.Window{MaxFiles: jsonlMax}
+			}
+			rep, err := fmtinsight.Learn(commandFmtConfig(rf), o, time.Now())
 			if err != nil {
 				return err
 			}
-			// Self-wiring: fold in signal derived from the Claude Code logs
-			// so learn works without any wrapped runs. Best-effort + capped.
-			if !noJSONL {
-				recs = append(recs, jsonlLearnRecords(rf, jsonlMax)...)
-			}
-			rep := fmtlearn.Analyze(recs, fmtlearn.Thresholds{})
 			if jsonOut {
 				enc := json.NewEncoder(cmd.OutOrStdout())
 				enc.SetIndent("", "  ")
@@ -166,7 +167,7 @@ Use --no-jsonl to restrict to the wrapped-run index only.`,
 // overrides — into the user's config. Level tuning cannot drop a critical
 // line (the critical rules are unchanged), so it is safe to auto-apply
 // locally. New-formatter candidates are printed as a paste-ready stub.
-func applyLearnHints(cmd *cobra.Command, rep fmtlearn.Report, configPath string) error {
+func applyLearnHints(cmd *cobra.Command, rep fmtinsight.LearnReport, configPath string) error {
 	out := cmd.OutOrStdout()
 	if configPath == "" {
 		p, err := defaultConfigPath()
@@ -224,7 +225,7 @@ func applyLearnHints(cmd *cobra.Command, rep fmtlearn.Report, configPath string)
 	return nil
 }
 
-func renderLearnReport(cmd *cobra.Command, rep fmtlearn.Report) {
+func renderLearnReport(cmd *cobra.Command, rep fmtinsight.LearnReport) {
 	out := cmd.OutOrStdout()
 	if rep.TotalRuns == 0 {
 		fmt.Fprintln(out, "No fmt telemetry yet. Run `tokenops fmt -- <cmd>` (recovery enabled) to gather data.")

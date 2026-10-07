@@ -108,8 +108,6 @@ var directDomainImports = map[string][]string{
 	},
 	"go.klarlabs.de/tokenops/internal/mcp": {
 		"go.klarlabs.de/tokenops/internal/contexts/observability/freshness",
-		"go.klarlabs.de/tokenops/internal/contexts/optimization/fmtlearn",
-		"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/session",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/spend",

@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/fmtinsight"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter"
 	"go.klarlabs.de/tokenops/internal/contexts/security/redaction"
@@ -74,7 +75,7 @@ Examples:
 			if warn != "" && !quiet {
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", warn)
 			}
-			formatters, fwarns := allFormatters(cfg.Optimizer.CommandFmt)
+			formatters, fwarns := fmtinsight.Formatters(cfg.Optimizer.CommandFmt)
 			if !quiet {
 				for _, w := range fwarns {
 					fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", w)
@@ -138,12 +139,18 @@ Examples:
 // registryFormatters resolves the built-in + config formatter set for the
 // given root flags, ignoring config-load errors (defaults still apply).
 func registryFormatters(rf *rootFlags) []formatter.Formatter {
+	formatters, _ := fmtinsight.Formatters(commandFmtConfig(rf))
+	return formatters
+}
+
+// commandFmtConfig is the fmt configuration, or none when the config
+// cannot be read: the built-in catalog then stands alone.
+func commandFmtConfig(rf *rootFlags) config.CommandFmtConfig {
 	cfg, err := loadConfig(rf)
 	if err != nil {
-		return formatter.DefaultFormatters()
+		return config.CommandFmtConfig{}
 	}
-	formatters, _ := allFormatters(cfg.Optimizer.CommandFmt)
-	return formatters
+	return cfg.Optimizer.CommandFmt
 }
 
 // emitFmtEvent appends an OptimizationEvent (kind=command_fmt) to the local
@@ -203,34 +210,6 @@ func firstArgvToken(argv []string) string {
 		t = t[i+1:]
 	}
 	return t
-}
-
-// allFormatters returns the built-in catalog plus any user-defined config
-// formatters. Config formatters appear AFTER built-ins so a user command
-// that collides with a built-in overrides it (later registration wins in
-// the registry map). Invalid user specs are skipped with a warning rather
-// than failing the whole run.
-func allFormatters(cfg config.CommandFmtConfig) ([]formatter.Formatter, []string) {
-	out := formatter.DefaultFormatters()
-	var warns []string
-	for _, fc := range cfg.Formatters {
-		spec := formatter.ConfigSpec{
-			Command:  fc.Command,
-			Aliases:  fc.Aliases,
-			Critical: fc.Critical,
-			Drop: map[formatter.LossLevel][]string{
-				formatter.LossBalanced:   fc.Drop.Balanced,
-				formatter.LossAggressive: fc.Drop.Aggressive,
-			},
-		}
-		f, err := formatter.NewConfigFormatter(spec)
-		if err != nil {
-			warns = append(warns, err.Error())
-			continue
-		}
-		out = append(out, f)
-	}
-	return out, warns
 }
 
 // buildLossPolicy maps the config strings into the domain LossPolicy and

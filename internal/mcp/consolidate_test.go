@@ -47,7 +47,7 @@ func fullServer(t *testing.T) *Server {
 		RegisterModeTools(srv, ModeDeps{}),
 		RegisterCoachTool(srv, ModeDeps{}),
 		RegisterDataSourcesTool(srv, DataSourcesDeps{Store: store}),
-		RegisterFmtTools(srv),
+		RegisterFmtTools(srv, FmtDeps{}),
 		RegisterCoachTools(srv, CoachDeps{}),
 		RegisterGapTools(srv, GapDeps{}),
 		RegisterSetupTools(srv, SetupDeps{}),

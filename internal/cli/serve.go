@@ -275,7 +275,7 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	}); err != nil {
 		return fmt.Errorf("register data sources tool: %w", err)
 	}
-	if err := mcp.RegisterFmtTools(srv); err != nil {
+	if err := mcp.RegisterFmtTools(srv, mcp.FmtDeps{ConfigGetter: currentConfig}); err != nil {
 		return fmt.Errorf("register fmt tools: %w", err)
 	}
 	if err := mcp.RegisterGapTools(srv, serveGapDeps(currentConfig, gapCounts(components.Store))); err != nil {
