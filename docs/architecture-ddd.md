@@ -79,6 +79,17 @@ sqlite exemptions (enforced by `internal/archlint` `storageExempt`):
   as an isolated adapter. New sqlite users must be added to `storageExempt`
   *and* actually import sqlite (`TestStorageExemptImportsSQLite`).
 
+Domain packages do no I/O of their own: `TestNoDomainImportsIO` forbids
+`net/http`, `os/exec` and `database/sql` under `internal/contexts`. A domain
+declares the port (a reader, a client, a store) and an `internal/infra`
+package implements it; the composition root (daemon, CLI, MCP server,
+capabilities) wires the two. The vendor-usage clients follow this split: the
+pollers, value types and envelope mapping live in
+`internal/contexts/spend/vendorusage/<vendor>`, the HTTP clients, credential
+stores and process launchers in `internal/infra/vendorusage/<vendor>`.
+Packages that predate the rule are listed, each with its reason, in
+`ioImportExempt`, which may only shrink (`TestIOImportExemptNotStale`).
+
 ## Bounded Contexts
 
 | Context          | Package(s)                                 | Aggregate Root     | Ubiquitous Terms                              |

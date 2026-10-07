@@ -31,6 +31,14 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
+	accountsapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/accounts"
+	anthropicapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/anthropic"
+	claudeoauthapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/claudecodeoauth"
+	claudeai "go.klarlabs.de/tokenops/internal/infra/vendorusage/claudeusagemeter"
+	codexappserverproc "go.klarlabs.de/tokenops/internal/infra/vendorusage/codexappserver"
+	copilotapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/copilot"
+	cursorapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/cursor"
+	fireworksapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/fireworks"
 	"go.klarlabs.de/tokenops/internal/version"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -91,6 +99,7 @@ func startVendorUsagePollers(
 		p := cursorusage.NewPoller(bus, cursorusage.PollerOptions{
 			Health: sourceHealth.For("cursor-web"), Cookie: cfg.VendorUsage.Cursor.Cookie,
 			UserID: cfg.VendorUsage.Cursor.UserID, Interval: cfg.VendorUsage.Cursor.Interval, Logger: logger,
+			NewClient: cursorapi.NewSource,
 		})
 		sup.Go("cursor-web", p.Run)
 		logger.Info("cursor usage poller live", "interval", cfg.VendorUsage.Cursor.Interval, "user_id", cfg.VendorUsage.Cursor.UserID)
@@ -117,6 +126,7 @@ func startVendorUsagePollers(
 			BrowserCookies: cfg.VendorUsage.ClaudeUsageMeter.BrowserCookies,
 			OrgID:          cfg.VendorUsage.ClaudeUsageMeter.OrgID, Interval: cfg.VendorUsage.ClaudeUsageMeter.Interval,
 			Logger: logger, Cookies: browserSessionSource(cfg.VendorUsage.ClaudeUsageMeter),
+			NewClient: claudeai.NewSessionClient,
 		})
 		sup.Go("claude-usage-meter", p.Run)
 		logger.Info("claude-usage-meter usage poller live", "interval", cfg.VendorUsage.ClaudeUsageMeter.Interval)
@@ -125,11 +135,11 @@ func startVendorUsagePollers(
 		home, _ := os.UserHomeDir()
 		bin, found := cs.Path, cs.Path != ""
 		if !found {
-			bin, found = codexappserver.Locate(home)
+			bin, found = codexappserverproc.Locate(home)
 		}
 		if found {
 			p := codexappserver.NewPoller(bus, codexappserver.PollerOptions{
-				Dial: codexappserver.Command(bin), Interval: cs.Interval,
+				Dial: codexappserverproc.Command(bin), Interval: cs.Interval,
 				Health: sourceHealth.For(codexappserver.SourceTag), Logger: logger,
 			})
 			sup.Go(codexappserver.SourceTag, p.Run)
@@ -139,15 +149,15 @@ func startVendorUsagePollers(
 	if oc := cfg.VendorUsage.ClaudeCodeOAuth; oc.Enabled {
 		home, _ := os.UserHomeDir()
 		p := claudecodeoauth.NewPoller(bus, claudecodeoauth.PollerOptions{
-			Stores:   claudecodeoauth.Stores(home, oc.Keychain),
-			Client:   claudecodeoauth.Client{UserAgent: "tokenops/" + version.Version},
+			Stores:   claudeoauthapi.Stores(home, oc.Keychain),
+			Client:   claudeoauthapi.Client{UserAgent: "tokenops/" + version.Version},
 			Interval: oc.Interval, Health: sourceHealth.For(claudecodeoauth.SourceTag), Logger: logger,
 		})
 		sup.Go(claudecodeoauth.SourceTag, p.Run)
 		logger.Info("claude-code-oauth usage poller live", "keychain", oc.Keychain)
 	}
 	if cfg.VendorUsage.Anthropic.Enabled {
-		client := anthropic.NewAdminClient(cfg.VendorUsage.Anthropic.AdminKey)
+		client := anthropicapi.NewAdminClient(cfg.VendorUsage.Anthropic.AdminKey)
 		p := anthropic.NewPoller(client, bus, anthropic.PollerOptions{
 			Health: sourceHealth.For("vendor-usage-anthropic"), AdminKey: cfg.VendorUsage.Anthropic.AdminKey,
 			Interval:    cfg.VendorUsage.Anthropic.Interval,
@@ -159,13 +169,14 @@ func startVendorUsagePollers(
 	if cfg.VendorUsage.Fireworks.On() {
 		p := fireworksusage.NewPoller(bus, fireworksusage.PollerOptions{
 			Health: sourceHealth.For("fireworks-usage"), Interval: cfg.VendorUsage.Fireworks.Interval, Logger: logger,
-			Keys: fireworksusage.KeySource{Helper: claudesettings.APIKeyHelper, Fallback: fireworksFallbackKey},
+			Client: &fireworksapi.Client{Key: fireworksapi.KeySource{Helper: claudesettings.APIKeyHelper, Fallback: fireworksFallbackKey}.Key},
 		})
 		sup.Go("fireworks-usage", p.Run)
 	}
 	if cfg.VendorUsage.Accounts.On() {
 		p := accounts.NewPoller(bus, accounts.PollerOptions{
 			Credentials: accountCredentials, Health: sourceHealth.For,
+			Readers: accountsapi.Readers(), Gateways: accountsapi.Gateways(),
 			Interval: cfg.VendorUsage.Accounts.Interval, Logger: logger,
 		})
 		sup.Go("vendor-accounts", p.Run)
@@ -173,7 +184,7 @@ func startVendorUsagePollers(
 	if cfg.VendorUsage.GitHubCopilot.Enabled {
 		p := copilotusage.NewPoller(bus, copilotusage.PollerOptions{
 			Health: sourceHealth.For("github-copilot"), OAuthToken: cfg.VendorUsage.GitHubCopilot.OAuthToken,
-			Interval: cfg.VendorUsage.GitHubCopilot.Interval, Logger: logger,
+			Interval: cfg.VendorUsage.GitHubCopilot.Interval, Logger: logger, NewClient: copilotapi.NewSource,
 		})
 		sup.Go("github-copilot", p.Run)
 		logger.Info("github copilot usage poller live", "interval", cfg.VendorUsage.GitHubCopilot.Interval)

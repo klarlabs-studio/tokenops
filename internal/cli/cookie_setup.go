@@ -15,6 +15,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
+	claudeai "go.klarlabs.de/tokenops/internal/infra/vendorusage/claudeusagemeter"
 )
 
 // meterBaseURL overrides claude.ai's address for the verification request.
@@ -141,7 +142,7 @@ func runCookieSetup(cmd *cobra.Command, opts cookieSetupOptions) error {
 
 	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
 	defer cancel()
-	client := claudeusagemeter.NewClient(key)
+	client := claudeai.NewClient(key)
 	client.Clearance, client.UserAgent = session.clearance, session.userAgent
 	client.BrowserHeaders = session.browserHeaders
 	client.BrowserCookies = session.browserCookies

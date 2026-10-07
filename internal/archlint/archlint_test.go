@@ -91,6 +91,43 @@ var outerImportExempt = map[string][]string{
 	},
 }
 
+// forbiddenIOImports are the standard-library packages that reach outside
+// the process: HTTP, subprocesses and SQL. A domain package importing one
+// is an adapter living in the domain tree. The I/O belongs under
+// internal/infra (the vendor-usage clients live in internal/infra/vendorusage),
+// behind a port the domain declares and the composition root wires.
+var forbiddenIOImports = []string{"net/http", "os/exec", "database/sql"}
+
+// ioImportExempt is the ratchet for domain packages that still import one
+// of forbiddenIOImports, each with the reason it has not moved yet.
+//
+// **This list may only shrink.** A new entry means an adapter was written
+// inside internal/contexts; put it under internal/infra behind a port
+// instead. When a package stops importing one, delete its entry —
+// TestIOImportExemptNotStale fails on a stale one.
+var ioImportExempt = map[string][]string{
+	// Its Cursor reader runs SQL against Cursor's state.vscdb (cursor.go).
+	// Moves with an extraction port for agentdx's per-client readers.
+	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx": {"database/sql"},
+	// sql.Null* scan targets for the event-store queries it runs through
+	// its sqlite adapter (see storageExempt); moves with that adapter.
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics": {"database/sql"},
+	// sql.Null* columns of the audit table it writes through its sqlite
+	// adapter (see storageExempt); moves with that adapter.
+	"go.klarlabs.de/tokenops/internal/contexts/security/audit": {"database/sql"},
+	// Authenticator.Middleware is an http.Handler for the daemon's API: a
+	// presentation adapter around the token check.
+	"go.klarlabs.de/tokenops/internal/contexts/security/dashauth": {"net/http"},
+	// HTTPMiddleware is an http.Handler around the permission check.
+	"go.klarlabs.de/tokenops/internal/contexts/security/rbac": {"net/http"},
+	// Fetches the LiteLLM and models.dev price catalogs over HTTP.
+	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing": {"net/http"},
+	// Reads opencode's SQLite store. Four domains call it directly
+	// (coaching/prompts, coaching/replies, governance/agentdx,
+	// spend/vendorusage/opencode), so moving it needs a reader port in each.
+	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb": {"database/sql"},
+}
+
 // domainPackages lists every domain package the arch test enforces.
 // Every package under internal/contexts/* belongs here so new contexts
 // are gated automatically — TestDomainPackagesComplete compares this
@@ -277,6 +314,54 @@ func TestOuterImportExemptNotStale(t *testing.T) {
 			}
 			if _, ok := direct[imp]; !ok {
 				t.Errorf("outerImportExempt[%s] lists %s but the package no longer imports it — "+
+					"delete the entry so the ratchet records the progress", pkg, imp)
+			}
+		}
+	}
+}
+
+// TestNoDomainImportsIO keeps HTTP clients, subprocesses and SQL out of the
+// domain tree: a domain package declares the port, an internal/infra
+// package does the I/O.
+func TestNoDomainImportsIO(t *testing.T) {
+	for _, pkg := range domainPackages {
+		exempt := map[string]bool{}
+		for _, imp := range ioImportExempt[pkg] {
+			exempt[imp] = true
+		}
+		direct := directImports(t, pkg)
+		for _, banned := range forbiddenIOImports {
+			if _, ok := direct[banned]; ok && !exempt[banned] {
+				t.Errorf("DDD layering violation: %s imports %s\n"+
+					"  domain packages do no I/O of their own: declare a port in the domain, "+
+					"implement it under internal/infra and wire it in the composition root "+
+					"(ioImportExempt only shrinks)", pkg, banned)
+			}
+		}
+	}
+}
+
+func TestIOImportExemptNotStale(t *testing.T) {
+	listed := map[string]bool{}
+	for _, pkg := range domainPackages {
+		listed[pkg] = true
+	}
+	banned := map[string]bool{}
+	for _, imp := range forbiddenIOImports {
+		banned[imp] = true
+	}
+	for pkg, imps := range ioImportExempt {
+		if !listed[pkg] {
+			t.Errorf("ioImportExempt lists %s but it is not in domainPackages", pkg)
+			continue
+		}
+		direct := directImports(t, pkg)
+		for _, imp := range imps {
+			if !banned[imp] {
+				t.Errorf("ioImportExempt[%s] lists %s, which no rule forbids; delete it", pkg, imp)
+			}
+			if _, ok := direct[imp]; !ok {
+				t.Errorf("ioImportExempt[%s] lists %s but the package no longer imports it — "+
 					"delete the entry so the ratchet records the progress", pkg, imp)
 			}
 		}

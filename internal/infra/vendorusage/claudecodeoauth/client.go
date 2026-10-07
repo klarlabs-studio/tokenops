@@ -1,14 +1,24 @@
+// Package claudecodeoauth holds the adapters for reading Claude's plan
+// windows with Claude Code's own sign-in (ADR 0011, source class 4): the
+// HTTP client for Anthropic's OAuth usage endpoint, and the two places
+// Claude Code keeps its sign-in — its credentials file and, on macOS, the
+// Keychain item read through /usr/bin/security. They satisfy the ports of
+// internal/contexts/spend/vendorusage/claudecodeoauth.
+//
+// The token is held in memory only, sent only to api.anthropic.com, and
+// never refreshed here: a refresh rotates the token and would sign Claude
+// Code out.
 package claudecodeoauth
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 	"time"
 
+	oauth "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodeoauth"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
 )
 
@@ -20,17 +30,6 @@ const (
 	// betaHeader is required by the OAuth usage endpoint.
 	betaHeader = "oauth-2025-04-20"
 )
-
-// ErrExpired means Anthropic refused the token: Claude Code renews it the
-// next time it runs.
-var ErrExpired = errors.New("claude-code-oauth: Claude Code's sign-in has expired; it renews it the next time it runs — open Claude Code, or run `claude`")
-
-// RateLimitedError carries when the endpoint may be asked again.
-type RateLimitedError struct{ Until time.Time }
-
-func (e *RateLimitedError) Error() string {
-	return "claude-code-oauth: Anthropic is rate-limiting usage reads until " + e.Until.Format(time.RFC3339)
-}
 
 // rateLimitWait is how long to wait after a 429 that names no time.
 const rateLimitWait = 10 * time.Minute
@@ -73,9 +72,9 @@ func (c Client) Usage(ctx context.Context, token string, now time.Time) (*claude
 	case http.StatusOK:
 		return claudeusagemeter.ParseUsage(body)
 	case http.StatusUnauthorized:
-		return nil, ErrExpired
+		return nil, oauth.ErrExpired
 	case http.StatusTooManyRequests:
-		return nil, &RateLimitedError{Until: retryAfter(resp.Header.Get("Retry-After"), now)}
+		return nil, &oauth.RateLimitedError{Until: retryAfter(resp.Header.Get("Retry-After"), now)}
 	}
 	// The body is an API error, never a credential; a short one is kept
 	// so the reason reaches the log.
@@ -91,3 +90,6 @@ func retryAfter(v string, now time.Time) time.Time {
 	}
 	return now.Add(rateLimitWait)
 }
+
+// Client satisfies the poller's port.
+var _ oauth.UsageClient = Client{}

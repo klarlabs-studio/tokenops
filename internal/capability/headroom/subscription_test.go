@@ -9,6 +9,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
+	accountsapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/accounts"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -23,7 +24,7 @@ func TestSubscriptionReadingShowsTheVendorsWindows(t *testing.T) {
 	}
 	defer func() { _ = store.Close() }()
 	now := time.Now().UTC()
-	env := accounts.NewEnvelope(now.Add(-time.Minute), accounts.Kimi{}, accounts.Reading{
+	env := accounts.NewEnvelope(now.Add(-time.Minute), accountsapi.Kimi{}, accounts.Reading{
 		Scope: "account", Subscription: true, Windows: []accounts.Window{
 			{Name: "5h", UsedPct: 20, Duration: 5 * time.Hour, ResetsAt: now.Add(2 * time.Hour)},
 			{Name: "week", UsedPct: 91, Duration: 7 * 24 * time.Hour, ResetsAt: now.Add(48 * time.Hour)},

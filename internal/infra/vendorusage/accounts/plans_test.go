@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 )
 
 // serveRaw is serve for z.ai, which takes the key without "Bearer".
@@ -45,13 +47,13 @@ func TestZAIReadsTheTokenWindows(t *testing.T) {
 	}
 	srv2 := serveRaw(t, "/api/monitor/usage/quota/limit", "zk", `{"success":false,"msg":"bad plan","code":500}`)
 	defer srv2.Close()
-	if _, err := (ZAI{BaseURL: srv2.URL}).Read(context.Background(), "zk"); err == nil || errors.Is(err, ErrAuth) {
+	if _, err := (ZAI{BaseURL: srv2.URL}).Read(context.Background(), "zk"); err == nil || errors.Is(err, usage.ErrAuth) {
 		t.Errorf("an unsuccessful answer = %v", err)
 	}
 	// As seen live: a 200 whose body refuses the key.
 	refused := serveRaw(t, "/api/monitor/usage/quota/limit", "zk", `{"code":1001,"msg":"Authentication parameter not received in Header","success":false}`)
 	defer refused.Close()
-	if _, err := (ZAI{BaseURL: refused.URL}).Read(context.Background(), "zk"); !errors.Is(err, ErrAuth) {
+	if _, err := (ZAI{BaseURL: refused.URL}).Read(context.Background(), "zk"); !errors.Is(err, usage.ErrAuth) {
 		t.Errorf("a refused key = %v, want ErrAuth", err)
 	}
 }
@@ -95,7 +97,7 @@ func TestMiniMaxTurnsRemainingIntoUsed(t *testing.T) {
 	}
 	bad := serve(t, "/v1/token_plan/remains", "mk", `{"base_resp":{"status_code":1004,"status_msg":"login fail"}}`)
 	defer bad.Close()
-	if _, err := (MiniMax{BaseURL: bad.URL}).Read(context.Background(), "mk"); !errors.Is(err, ErrAuth) {
+	if _, err := (MiniMax{BaseURL: bad.URL}).Read(context.Background(), "mk"); !errors.Is(err, usage.ErrAuth) {
 		t.Errorf("a refused key = %v, want ErrAuth", err)
 	}
 }
@@ -147,7 +149,7 @@ func TestVercelCreditsAreStrings(t *testing.T) {
 // attributes, so headroom does not bind it as per-token billing.
 func TestSubscriptionEnvelope(t *testing.T) {
 	at := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
-	env := NewEnvelope(at, Kimi{}, Reading{Scope: "account", Subscription: true, Windows: []Window{
+	env := usage.NewEnvelope(at, Kimi{}, usage.Reading{Scope: "account", Subscription: true, Windows: []usage.Window{
 		{Name: "5h", UsedPct: 30, Duration: 5 * time.Hour, ResetsAt: at.Add(time.Hour)},
 	}})
 	a := env.Attributes

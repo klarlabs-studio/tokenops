@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 )
 
 // fakeGateway serves a health route without a key and a budget route that
@@ -47,10 +49,10 @@ func TestLiteLLMKeyInfo(t *testing.T) {
 	srv := f.server(t, "/health/liveliness", `"I'm alive!"`, "/key/info", "Authorization", "Bearer ",
 		`{"key":"x","info":{"spend":12.5,"max_budget":50,"budget_duration":"30d","budget_reset_at":"2026-11-01T00:00:00Z","status":"active"}}`)
 	ctx := context.Background()
-	if !(LiteLLM{}).Recognise(ctx, nil, srv.URL) || (Bifrost{}).Recognise(ctx, nil, srv.URL) {
+	if !(LiteLLM{}).Recognise(ctx, srv.URL) || (Bifrost{}).Recognise(ctx, srv.URL) {
 		t.Fatal("recognition")
 	}
-	got, err := LiteLLM{}.Read(ctx, nil, srv.URL, "vk")
+	got, err := LiteLLM{}.Read(ctx, srv.URL, "vk")
 	if err != nil || got.UsedUSD != 12.5 || got.LimitUSD != 50 || len(got.Windows) != 1 || got.Windows[0].UsedPct != 25 || got.Windows[0].ResetsAt.IsZero() {
 		t.Fatalf("got %+v, %v", got, err)
 	}
@@ -63,10 +65,10 @@ func TestBifrostQuota(t *testing.T) {
 		 {"max_limit":10,"current_usage":2,"reset_duration":"1d","last_reset":"2026-10-03T00:00:00Z"},
 		 {"max_limit":100,"current_usage":40,"reset_duration":"1M","last_reset":"2026-10-01T00:00:00Z"}]}`)
 	ctx := context.Background()
-	if !(Bifrost{}).Recognise(ctx, nil, srv.URL) {
+	if !(Bifrost{}).Recognise(ctx, srv.URL) {
 		t.Fatal("not recognised")
 	}
-	got, err := Bifrost{}.Read(ctx, nil, srv.URL, "vk")
+	got, err := Bifrost{}.Read(ctx, srv.URL, "vk")
 	if err != nil || len(got.Windows) != 2 || got.UsedUSD != 40 || got.LimitUSD != 100 || got.LimitReached {
 		t.Fatalf("got %+v, %v", got, err)
 	}
@@ -80,10 +82,10 @@ func TestClawRouterUsageInMicros(t *testing.T) {
 	srv := f.server(t, "/v1/health", `{"ok":true,"service":"clawrouter-edge"}`, "/v1/usage", "Authorization", "Bearer ",
 		`{"policyId":"p","budget":{"configured":true,"ledger":"durable_object","limitMicros":50000000,"spentMicros":12500000}}`)
 	ctx := context.Background()
-	if !(ClawRouter{}).Recognise(ctx, nil, srv.URL) {
+	if !(ClawRouter{}).Recognise(ctx, srv.URL) {
 		t.Fatal("not recognised")
 	}
-	got, err := ClawRouter{}.Read(ctx, nil, srv.URL, "vk")
+	got, err := ClawRouter{}.Read(ctx, srv.URL, "vk")
 	if err != nil || got.UsedUSD != 12.5 || got.LimitUSD != 50 {
 		t.Fatalf("got %+v, %v", got, err)
 	}
@@ -96,10 +98,10 @@ func TestPollerSendsAGatewayKeyOnlyWhereItBelongs(t *testing.T) {
 	liteSrv := lite.server(t, "/health/liveliness", `"I'm alive!"`, "/key/info", "Authorization", "Bearer ",
 		`{"info":{"spend":3,"max_budget":10}}`)
 	otherSrv := unknown.server(t, "/nothing", "", "/key/info", "Authorization", "Bearer ", `{}`)
-	p := NewPoller(nil, PollerOptions{Readers: []Reader{}, Credentials: func() []Credential {
-		return []Credential{
-			{Endpoint: GatewayEndpoint, BaseURL: liteSrv.URL + "/anthropic", Key: "vk"},
-			{Endpoint: GatewayEndpoint, BaseURL: otherSrv.URL + "/v1", Key: "secret"},
+	p := usage.NewPoller(nil, usage.PollerOptions{Readers: []usage.Reader{}, Gateways: Gateways(), Credentials: func() []usage.Credential {
+		return []usage.Credential{
+			{Endpoint: usage.GatewayEndpoint, BaseURL: liteSrv.URL + "/anthropic", Key: "vk"},
+			{Endpoint: usage.GatewayEndpoint, BaseURL: otherSrv.URL + "/v1", Key: "secret"},
 		}
 	}})
 	p.Scan(context.Background())
