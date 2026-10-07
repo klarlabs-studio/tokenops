@@ -1,6 +1,8 @@
 package coachhook
 
 import (
+	"encoding/json"
+	"os"
 	"strings"
 	"time"
 
@@ -178,4 +180,16 @@ func evaluateCursor(dir string, c cursorTurn, cfg Config, now time.Time) Decisio
 		Suppressed: dec.Suppressed, Unpriced: dec.UnpricedModel,
 	})
 	return dec
+}
+
+// EvaluateCursor is Evaluate for a Cursor stop event, which carries the
+// turn's tokens in the payload instead of pointing at a transcript.
+func EvaluateCursor(dir string, payload []byte, cfg Config, now time.Time) Decision {
+	dir = resolveDir(dir)
+	_ = os.MkdirAll(dir, 0o755)
+	var c cursorTurn
+	if json.Unmarshal(payload, &c) != nil {
+		return Decision{}
+	}
+	return evaluateCursor(dir, c, cfg, now)
 }
