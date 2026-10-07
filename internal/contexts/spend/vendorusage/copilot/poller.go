@@ -38,8 +38,9 @@ type PollerOptions struct {
 	Interval time.Duration
 	// Logger required.
 	Logger *slog.Logger
-	// BaseURL override for tests.
-	BaseURL string
+	// NewClient binds an OAuth token to a UserSource. Required; the
+	// daemon passes the HTTP client from internal/infra/vendorusage/copilot.
+	NewClient func(token string) UserSource
 }
 
 // Poller queries /copilot_internal/user on a tick and emits one
@@ -52,7 +53,7 @@ type Poller struct {
 	opts PollerOptions
 
 	mu          sync.Mutex
-	client      *Client
+	client      UserSource
 	publishes   int64
 	lastErr     error
 	lastErrTime time.Time
@@ -102,6 +103,9 @@ func (p *Poller) LastError() (time.Time, error) {
 	return p.lastErrTime, p.lastErr
 }
 
+// errNoClientFactory reports a poller wired without PollerOptions.NewClient.
+var errNoClientFactory = errors.New("copilot poller: no client factory configured")
+
 func (p *Poller) ensureClient() error {
 	token := p.opts.OAuthToken
 	if token == "" {
@@ -119,11 +123,10 @@ func (p *Poller) ensureClient() error {
 		}
 		token = t
 	}
-	c := NewClient(token)
-	if p.opts.BaseURL != "" {
-		c.BaseURL = p.opts.BaseURL
+	if p.opts.NewClient == nil {
+		return errNoClientFactory
 	}
-	p.client = c
+	p.client = p.opts.NewClient(token)
 	return nil
 }
 

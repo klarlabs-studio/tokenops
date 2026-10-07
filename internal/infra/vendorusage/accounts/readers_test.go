@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -31,14 +32,14 @@ func TestOpenRouter(t *testing.T) {
 	ctx := context.Background()
 	for name, tc := range map[string]struct {
 		body string
-		want Reading
+		want usage.Reading
 	}{
 		"no cap": {`{"data":{"limit":null,"limit_reset":null,"limit_remaining":null,"usage":90,"usage_monthly":12.5}}`,
-			Reading{Scope: "key", UsedUSD: 12.5, HasUsed: true}},
+			usage.Reading{Scope: "key", UsedUSD: 12.5, HasUsed: true}},
 		"monthly cap": {`{"data":{"limit":50,"limit_reset":"monthly","limit_remaining":37.5,"usage":90,"usage_monthly":12.5}}`,
-			Reading{Scope: "key", UsedUSD: 12.5, HasUsed: true, LimitUSD: 50}},
+			usage.Reading{Scope: "key", UsedUSD: 12.5, HasUsed: true, LimitUSD: 50}},
 		"lifetime cap spent": {`{"data":{"limit":100,"limit_reset":null,"limit_remaining":0,"usage":100,"usage_monthly":3}}`,
-			Reading{Scope: "key", UsedUSD: 100, HasUsed: true, LimitUSD: 100, LimitReached: true}},
+			usage.Reading{Scope: "key", UsedUSD: 100, HasUsed: true, LimitUSD: 100, LimitReached: true}},
 	} {
 		srv := serve(t, "/api/v1/key", "sk-or", tc.body)
 		got, err := OpenRouter{BaseURL: srv.URL}.Read(ctx, "sk-or")
@@ -76,10 +77,10 @@ func TestPollerTriesOnlyMatchingKeys(t *testing.T) {
 	ds := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { deepseekCalled = true }))
 	defer ds.Close()
 	bus := &captureBus{}
-	p := NewPoller(bus, PollerOptions{
-		Readers: []Reader{OpenRouter{BaseURL: srv.URL}, DeepSeek{BaseURL: ds.URL}},
-		Credentials: func() []Credential {
-			return []Credential{
+	p := usage.NewPoller(bus, usage.PollerOptions{
+		Readers: []usage.Reader{OpenRouter{BaseURL: srv.URL}, DeepSeek{BaseURL: ds.URL}},
+		Credentials: func() []usage.Credential {
+			return []usage.Credential{
 				{Endpoint: "openrouter", Key: "sk-stale"},
 				{Endpoint: "fireworks", Key: "sk-good"}, // another vendor's key is never sent
 				{Endpoint: "openrouter", Key: "sk-good"},
@@ -104,7 +105,7 @@ func TestPollerTriesOnlyMatchingKeys(t *testing.T) {
 func TestRefusedKeyIsReported(t *testing.T) {
 	srv := serve(t, "/api/v1/key", "sk-good", `{}`)
 	defer srv.Close()
-	if _, err := (OpenRouter{BaseURL: srv.URL}).Read(context.Background(), "sk-bad"); !errors.Is(err, ErrAuth) {
+	if _, err := (OpenRouter{BaseURL: srv.URL}).Read(context.Background(), "sk-bad"); !errors.Is(err, usage.ErrAuth) {
 		t.Errorf("err %v", err)
 	}
 }

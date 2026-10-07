@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic"
 )
 
 // MessagesUsage sends the documented headers + query params and
@@ -50,10 +52,10 @@ func TestMessagesUsageHappyPath(t *testing.T) {
 
 	c := NewAdminClient("sk-ant-admin-test")
 	c.BaseURL = srv.URL
-	resp, err := c.MessagesUsage(context.Background(), MessagesUsageRequest{
+	resp, err := c.MessagesUsage(context.Background(), usage.MessagesUsageRequest{
 		StartingAt:  time.Date(2026, 5, 14, 0, 0, 0, 0, time.UTC),
 		EndingAt:    time.Date(2026, 5, 14, 1, 0, 0, 0, time.UTC),
-		BucketWidth: BucketWidthHour,
+		BucketWidth: usage.BucketWidthHour,
 		GroupBy:     []string{"model"},
 	})
 	if err != nil {
@@ -85,10 +87,10 @@ func TestMessagesUsageHappyPath(t *testing.T) {
 // Empty admin key returns ErrMissingAdminKey before any HTTP call.
 func TestMessagesUsageMissingKey(t *testing.T) {
 	c := &AdminClient{}
-	_, err := c.MessagesUsage(context.Background(), MessagesUsageRequest{
+	_, err := c.MessagesUsage(context.Background(), usage.MessagesUsageRequest{
 		StartingAt: time.Now(),
 	})
-	if !errors.Is(err, ErrMissingAdminKey) {
+	if !errors.Is(err, usage.ErrMissingAdminKey) {
 		t.Fatalf("want ErrMissingAdminKey; got %v", err)
 	}
 }
@@ -103,7 +105,7 @@ func TestMessagesUsageNon2xx(t *testing.T) {
 	defer srv.Close()
 	c := NewAdminClient("bad-key")
 	c.BaseURL = srv.URL
-	_, err := c.MessagesUsage(context.Background(), MessagesUsageRequest{
+	_, err := c.MessagesUsage(context.Background(), usage.MessagesUsageRequest{
 		StartingAt: time.Now(),
 	})
 	if err == nil || !strings.Contains(err.Error(), "401") {

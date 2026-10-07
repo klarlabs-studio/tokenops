@@ -2,6 +2,10 @@
 // own sign-in: the OAuth token Claude Code keeps, sent to Anthropic's usage
 // endpoint, the way CodexBar reads them (ADR 0011, source class 4).
 //
+// The package holds the credentials, the Store and UsageClient ports, the
+// poller and its reading; the credentials file, Keychain and HTTP adapters
+// live in internal/infra/vendorusage/claudecodeoauth.
+//
 // It is opt-in. The token belongs to another application, so it is read
 // only after the operator turns this source on, held in memory only, sent
 // only to api.anthropic.com, and never refreshed here: a refresh rotates
@@ -14,12 +18,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
 )
 
 // Credentials is the part of Claude Code's sign-in this source uses.
@@ -80,85 +83,35 @@ func Parse(raw []byte) (Credentials, error) {
 	return c, nil
 }
 
+// ErrExpired means Anthropic refused the token: Claude Code renews it the
+// next time it runs.
+var ErrExpired = errors.New("claude-code-oauth: Claude Code's sign-in has expired; it renews it the next time it runs — open Claude Code, or run `claude`")
+
+// RateLimitedError carries when the endpoint may be asked again.
+type RateLimitedError struct{ Until time.Time }
+
+func (e *RateLimitedError) Error() string {
+	return "claude-code-oauth: Anthropic is rate-limiting usage reads until " + e.Until.Format(time.RFC3339)
+}
+
+// UsageClient reads the plan's windows with an OAuth token. The HTTP client
+// in internal/infra/vendorusage/claudecodeoauth satisfies it.
+type UsageClient interface {
+	Usage(ctx context.Context, token string, now time.Time) (*claudeusagemeter.UsageResponse, error)
+}
+
 // Store is one place Claude Code keeps its sign-in.
 type Store interface {
 	Name() string
 	Read(ctx context.Context) (Credentials, error)
 }
 
-// FileStore is ~/.claude/.credentials.json: where Claude Code keeps its
-// sign-in on Linux and Windows, and on macOS when the Keychain refused the
-// write.
-type FileStore struct{ Path string }
-
-// Name implements Store.
-func (FileStore) Name() string { return "credentials file" }
-
-// Read implements Store.
-func (f FileStore) Read(context.Context) (Credentials, error) {
-	raw, err := os.ReadFile(f.Path)
-	if errors.Is(err, os.ErrNotExist) {
-		return Credentials{}, ErrNotSignedIn
-	}
-	if err != nil {
-		return Credentials{}, fmt.Errorf("claude-code-oauth: %w", err)
-	}
-	return Parse(raw)
-}
-
-// keychainService is the Keychain item Claude Code writes on macOS.
-const keychainService = "Claude Code-credentials"
-
-// KeychainStore reads the macOS Keychain item through /usr/bin/security.
-// macOS asks the operator to allow it; Claude Code rewrites the item when
-// it renews its token, which can ask again.
-type KeychainStore struct {
-	// Run executes a command and returns its stdout; nil uses exec.
-	Run func(ctx context.Context, name string, args ...string) ([]byte, error)
-}
-
-// Name implements Store.
-func (KeychainStore) Name() string { return "macOS Keychain" }
-
-// keychainTimeout bounds the read: a prompt nobody answers must not hold
-// the poller.
-const keychainTimeout = 30 * time.Second
-
-// Read implements Store.
-func (k KeychainStore) Read(ctx context.Context) (Credentials, error) {
-	run := k.Run
-	if run == nil {
-		run = runCommand
-	}
-	ctx, cancel := context.WithTimeout(ctx, keychainTimeout)
-	defer cancel()
-	out, err := run(ctx, "/usr/bin/security", "find-generic-password", "-s", keychainService, "-w")
-	var exit *exec.ExitError
-	switch {
-	case errors.As(err, &exit) && exit.ExitCode() == 44:
-		// errSecItemNotFound: Claude Code has not signed in here.
-		return Credentials{}, ErrNotSignedIn
-	case err != nil:
-		// A denial, a cancelled prompt and a timed-out one look alike
-		// from here; each means "not now", and none should be retried at
-		// once.
-		return Credentials{}, ErrKeychainDenied
-	}
-	return Parse(out)
-}
-
-func runCommand(ctx context.Context, name string, args ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, name, args...).Output() //nolint:gosec // fixed binary and arguments
-}
-
-// Stores are the places to look, file first: it needs no prompt. The
-// Keychain is included only when the operator allowed it.
-func Stores(home string, keychain bool) []Store {
-	out := []Store{FileStore{Path: filepath.Join(home, ".claude", ".credentials.json")}}
-	if keychain {
-		out = append(out, KeychainStore{})
-	}
-	return out
+// PromptingStore is a Store whose read asks the operator, as the macOS
+// Keychain does. After a declined read the poller passes it over for a
+// while rather than prompting again every poll.
+type PromptingStore interface {
+	Store
+	Prompts() bool
 }
 
 // ReadFirst returns the first signed-in credentials across stores. A store

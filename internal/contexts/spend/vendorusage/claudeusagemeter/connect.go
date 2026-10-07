@@ -26,7 +26,7 @@ var ErrNothingToMeter = errors.New("claude-usage-meter: Anthropic reports no usa
 // first that reports usage. An account can hold an Enterprise org beside a
 // personal or API one, and only some carry usage; an organization whose
 // usage call fails (an API org answers 403) is passed over.
-func Connect(ctx context.Context, c *Client, choose string) (Connection, error) {
+func Connect(ctx context.Context, c UsageClient, choose string) (Connection, error) {
 	orgs, err := c.Organizations(ctx)
 	if err != nil {
 		return Connection{}, err

@@ -3,16 +3,12 @@ package claudecodeoauth
 import (
 	"context"
 	"errors"
-	"net/http"
-	"net/http/httptest"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -40,102 +36,19 @@ func TestParse(t *testing.T) {
 	}
 }
 
-func exitErr(t *testing.T, code int) error {
-	t.Helper()
-	err := exec.Command("sh", "-c", "exit "+strconv.Itoa(code)).Run()
-	if err == nil {
-		t.Fatal("no exit error")
-	}
-	return err
-}
-
-// The Keychain store asks /usr/bin/security for the item's secret and
-// tells "not there" apart from "not allowed".
-func TestKeychainStore(t *testing.T) {
-	var got []string
-	ok := KeychainStore{Run: func(_ context.Context, name string, args ...string) ([]byte, error) {
-		got = append([]string{name}, args...)
-		return credsJSON("tok", now.Add(time.Hour), `["user:profile"]`), nil
-	}}
-	if c, err := ok.Read(context.Background()); err != nil || c.AccessToken != "tok" {
-		t.Fatalf("read = %+v, %v", c, err)
-	}
-	want := []string{"/usr/bin/security", "find-generic-password", "-s", "Claude Code-credentials", "-w"}
-	if len(got) != len(want) {
-		t.Fatalf("command %v", got)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("command %v", got)
-		}
-	}
-	missing := KeychainStore{Run: func(context.Context, string, ...string) ([]byte, error) { return nil, exitErr(t, 44) }}
-	if _, err := missing.Read(context.Background()); !errors.Is(err, ErrNotSignedIn) {
-		t.Errorf("missing item: %v", err)
-	}
-	denied := KeychainStore{Run: func(context.Context, string, ...string) ([]byte, error) { return nil, exitErr(t, 51) }}
-	if _, err := denied.Read(context.Background()); !errors.Is(err, ErrKeychainDenied) {
-		t.Errorf("denied: %v", err)
-	}
-}
-
-// The file is read before the Keychain, which is only asked when allowed;
-// a denial is reported, not hidden behind "not signed in".
-func TestStoresAndReadFirst(t *testing.T) {
-	home := t.TempDir()
-	if s := Stores(home, false); len(s) != 1 {
-		t.Errorf("keychain listed without being allowed: %v", s)
-	}
-	denied := KeychainStore{Run: func(context.Context, string, ...string) ([]byte, error) { return nil, exitErr(t, 51) }}
-	if _, err := ReadFirst(context.Background(), []Store{FileStore{Path: filepath.Join(home, "absent")}, denied}); !errors.Is(err, ErrKeychainDenied) {
-		t.Errorf("denial hidden: %v", err)
-	}
-	path := filepath.Join(home, ".claude", ".credentials.json")
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, credsJSON("from-file", now.Add(time.Hour), `["user:profile"]`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if c, err := ReadFirst(context.Background(), Stores(home, true)); err != nil || c.AccessToken != "from-file" {
-		t.Errorf("file first: %+v, %v", c, err)
-	}
-}
-
 const usageBody = `{"five_hour":{"utilization":10,"resets_at":"2026-10-06T15:00:00Z"},
  "seven_day":{"utilization":22,"resets_at":"2026-10-09T23:00:00Z"}}`
 
-// The request carries the token, the beta header and an honest agent; the
-// answers map to a reading, an expired sign-in, or a wait.
-func TestClient(t *testing.T) {
-	var auth, beta, agent string
-	status, retry := http.StatusOK, ""
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		auth, beta, agent = r.Header.Get("Authorization"), r.Header.Get("anthropic-beta"), r.Header.Get("User-Agent")
-		if r.URL.Path != "/api/oauth/usage" {
-			t.Errorf("path %s", r.URL.Path)
-		}
-		if retry != "" {
-			w.Header().Set("Retry-After", retry)
-		}
-		w.WriteHeader(status)
-		_, _ = w.Write([]byte(usageBody))
-	}))
-	defer srv.Close()
-	c := Client{BaseURL: srv.URL, UserAgent: "tokenops/test"}
-	u, err := c.Usage(context.Background(), "tok", now)
-	if err != nil || !u.HasSignal() || auth != "Bearer tok" || beta != "oauth-2025-04-20" || agent != "tokenops/test" {
-		t.Fatalf("usage %+v %v; headers %q %q %q", u, err, auth, beta, agent)
-	}
-	status = http.StatusUnauthorized
-	if _, err := c.Usage(context.Background(), "tok", now); !errors.Is(err, ErrExpired) {
-		t.Errorf("401: %v", err)
-	}
-	status, retry = http.StatusTooManyRequests, "120"
-	_, err = c.Usage(context.Background(), "tok", now)
-	var limited *RateLimitedError
-	if !errors.As(err, &limited) || !limited.Until.Equal(now.Add(2*time.Minute)) {
-		t.Errorf("429: %v", err)
+// fakeClient stands in for the HTTP client.
+type fakeClient func(token string, now time.Time) (*claudeusagemeter.UsageResponse, error)
+
+func (f fakeClient) Usage(_ context.Context, token string, now time.Time) (*claudeusagemeter.UsageResponse, error) {
+	return f(token, now)
+}
+
+func serves(body string) fakeClient {
+	return func(string, time.Time) (*claudeusagemeter.UsageResponse, error) {
+		return claudeusagemeter.ParseUsage([]byte(body))
 	}
 }
 
@@ -158,6 +71,11 @@ func (b *recordingBus) DroppedCount() int64       { return 0 }
 func (b *recordingBus) PublishedCount() int64     { return int64(len(b.got)) }
 func (b *recordingBus) Close(time.Duration) error { return nil }
 
+// promptingStore is a store that asks the operator, as the Keychain does.
+type promptingStore struct{ *fakeStore }
+
+func (promptingStore) Prompts() bool { return true }
+
 type fakeStore struct {
 	reads int
 	creds []Credentials
@@ -177,11 +95,9 @@ func (f *fakeStore) Read(context.Context) (Credentials, error) {
 // A reading is published under this source's tag in the meter's shape,
 // once per change; the token is read once and kept while it is valid.
 func TestPollerPublishes(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(usageBody)) }))
-	defer srv.Close()
 	bus := &recordingBus{}
 	store := &fakeStore{creds: []Credentials{{AccessToken: "tok", ExpiresAt: now.Add(time.Hour)}}}
-	p := NewPoller(bus, PollerOptions{Stores: []Store{store}, Client: Client{BaseURL: srv.URL}, Now: func() time.Time { return now }})
+	p := NewPoller(bus, PollerOptions{Stores: []Store{store}, Client: serves(usageBody), Now: func() time.Time { return now }})
 	p.Scan(context.Background())
 	p.Scan(context.Background())
 	if len(bus.got) != 1 || bus.got[0].Source != SourceTag || bus.got[0].Attributes["seven_day_used_pct"] != "22.00" {
@@ -198,17 +114,15 @@ func TestPollerPublishes(t *testing.T) {
 // Refused, the poller re-reads once: Claude Code may have renewed the
 // token since. It never refreshes it itself.
 func TestPollerRereadsARenewedToken(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer renewed" {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
+	client := fakeClient(func(token string, _ time.Time) (*claudeusagemeter.UsageResponse, error) {
+		if token != "renewed" {
+			return nil, ErrExpired
 		}
-		_, _ = w.Write([]byte(usageBody))
-	}))
-	defer srv.Close()
+		return claudeusagemeter.ParseUsage([]byte(usageBody))
+	})
 	bus := &recordingBus{}
 	store := &fakeStore{creds: []Credentials{{AccessToken: "old"}, {AccessToken: "renewed"}}}
-	p := NewPoller(bus, PollerOptions{Stores: []Store{store}, Client: Client{BaseURL: srv.URL}, Now: func() time.Time { return now }})
+	p := NewPoller(bus, PollerOptions{Stores: []Store{store}, Client: client, Now: func() time.Time { return now }})
 	p.Scan(context.Background())
 	if len(bus.got) != 1 || store.reads != 2 {
 		t.Errorf("published %d after %d reads", len(bus.got), store.reads)
@@ -219,35 +133,29 @@ func TestPollerRereadsARenewedToken(t *testing.T) {
 // request until the time it names.
 func TestPollerBacksOff(t *testing.T) {
 	at := now
-	denied := KeychainStore{Run: func(context.Context, string, ...string) ([]byte, error) { return nil, exitErr(t, 51) }}
-	asks := 0
-	counting := KeychainStore{Run: func(ctx context.Context, n string, a ...string) ([]byte, error) {
-		asks++
-		return denied.Run(ctx, n, a...)
-	}}
+	// A denied Keychain read, as the Keychain store reports it.
+	counting := promptingStore{&fakeStore{err: ErrKeychainDenied}}
 	p := NewPoller(nil, PollerOptions{Stores: []Store{counting}, Now: func() time.Time { return at }})
 	p.Scan(context.Background())
 	at = at.Add(time.Hour)
 	p.Scan(context.Background())
-	if asks != 1 {
-		t.Errorf("keychain asked %d times within the backoff", asks)
+	if counting.reads != 1 {
+		t.Errorf("keychain asked %d times within the backoff", counting.reads)
 	}
 	at = at.Add(keychainBackoff)
 	p.Scan(context.Background())
-	if asks != 2 {
-		t.Errorf("keychain not asked again after the backoff: %d", asks)
+	if counting.reads != 2 {
+		t.Errorf("keychain not asked again after the backoff: %d", counting.reads)
 	}
 
 	calls := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	limited := fakeClient(func(_ string, now time.Time) (*claudeusagemeter.UsageResponse, error) {
 		calls++
-		w.Header().Set("Retry-After", "600")
-		w.WriteHeader(http.StatusTooManyRequests)
-	}))
-	defer srv.Close()
+		return nil, &RateLimitedError{Until: now.Add(600 * time.Second)}
+	})
 	at = now
 	store := &fakeStore{creds: []Credentials{{AccessToken: "tok"}}}
-	p = NewPoller(nil, PollerOptions{Stores: []Store{store}, Client: Client{BaseURL: srv.URL}, Now: func() time.Time { return at }})
+	p = NewPoller(nil, PollerOptions{Stores: []Store{store}, Client: limited, Now: func() time.Time { return at }})
 	p.Scan(context.Background())
 	at = at.Add(5 * time.Minute)
 	p.Scan(context.Background())

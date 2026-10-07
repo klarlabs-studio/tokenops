@@ -25,16 +25,15 @@ type PollerOptions struct {
 	// Health, when set, receives success and failure, so status can tell
 	// a refused key from Fireworks not being used.
 	Health *freshness.Recorder
-	// Keys finds the API key.
-	Keys KeySource
+	// Client reads the account; the daemon passes the HTTP client from
+	// internal/infra/vendorusage/fireworks. Required.
+	Client Reader
 	// Home is where FireConnect's files are; empty uses $HOME.
 	Home string
 	// Interval defaults to 15 minutes. Fireworks aggregates billing
 	// daily and refreshes user limits about once a minute.
 	Interval time.Duration
 	Logger   *slog.Logger
-	// BaseURL overrides the API, for tests.
-	BaseURL string
 	// Now overrides the clock, for tests.
 	Now func() time.Time
 }
@@ -44,7 +43,7 @@ type PollerOptions struct {
 type Poller struct {
 	bus    events.Bus
 	opts   PollerOptions
-	client *Client
+	client Reader
 
 	mu        sync.Mutex
 	last      string
@@ -65,7 +64,7 @@ func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
 	if opts.Home == "" {
 		opts.Home, _ = os.UserHomeDir()
 	}
-	return &Poller{bus: bus, opts: opts, client: &Client{BaseURL: opts.BaseURL, Key: opts.Keys.Key}}
+	return &Poller{bus: bus, opts: opts, client: opts.Client}
 }
 
 // Run polls until ctx ends.

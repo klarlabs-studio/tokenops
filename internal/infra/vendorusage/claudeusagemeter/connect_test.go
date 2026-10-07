@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
 )
 
 // twoOrgServer serves an account holding a personal org with nothing to
@@ -40,7 +42,7 @@ func twoOrgServer(t *testing.T, workBody string, workStatus int) *Client {
 // usage at all, so the data answers the question: asking put a choice to
 // the operator that TokenOps could make.
 func TestConnectPicksTheOrganizationThatReportsUsage(t *testing.T) {
-	conn, err := Connect(context.Background(), twoOrgServer(t, enterpriseUsage, http.StatusOK), "")
+	conn, err := usage.Connect(context.Background(), twoOrgServer(t, enterpriseUsage, http.StatusOK), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,15 +58,15 @@ func TestConnectPicksTheOrganizationThatReportsUsage(t *testing.T) {
 // not on the account is refused rather than silently metering another.
 func TestConnectHonoursAnExplicitChoice(t *testing.T) {
 	c := twoOrgServer(t, enterpriseUsage, http.StatusOK)
-	conn, err := Connect(context.Background(), c, "Work Org")
+	conn, err := usage.Connect(context.Background(), c, "Work Org")
 	if err != nil || conn.Org.UUID != "work" {
 		t.Fatalf("by name: %+v %v", conn.Org, err)
 	}
-	if _, err := Connect(context.Background(), c, "Nope Ltd"); err == nil {
+	if _, err := usage.Connect(context.Background(), c, "Nope Ltd"); err == nil {
 		t.Error("accepted an organization that is not on the account")
 	}
-	if _, err := Connect(context.Background(), c, "Personal Org"); !errors.Is(err, ErrNothingToMeter) {
-		t.Errorf("an explicitly chosen org with no usage: %v, want ErrNothingToMeter", err)
+	if _, err := usage.Connect(context.Background(), c, "Personal Org"); !errors.Is(err, usage.ErrNothingToMeter) {
+		t.Errorf("an explicitly chosen org with no usage: %v, want usage.ErrNothingToMeter", err)
 	}
 }
 
@@ -72,16 +74,16 @@ func TestConnectHonoursAnExplicitChoice(t *testing.T) {
 // still answer — but if none does, the failure is what the operator needs
 // to see, not "nothing to meter".
 func TestConnectSkipsARefusingOrganizationButReportsItWhenNoneAnswer(t *testing.T) {
-	_, err := Connect(context.Background(), twoOrgServer(t, "", http.StatusForbidden), "")
-	if err == nil || errors.Is(err, ErrNothingToMeter) {
+	_, err := usage.Connect(context.Background(), twoOrgServer(t, "", http.StatusForbidden), "")
+	if err == nil || errors.Is(err, usage.ErrNothingToMeter) {
 		t.Fatalf("err = %v, want the refusal reported", err)
 	}
 	if !strings.Contains(err.Error(), "403") || !strings.Contains(err.Error(), "Work Org") {
 		t.Errorf("err = %v, want it to name the organization and the status", err)
 	}
-	_ = ErrBotCheck
+	_ = usage.ErrBotCheck
 	// One that answers wins over one that refuses, whatever the order.
-	conn, err := Connect(context.Background(), twoOrgServer(t, enterpriseUsage, http.StatusOK), "")
+	conn, err := usage.Connect(context.Background(), twoOrgServer(t, enterpriseUsage, http.StatusOK), "")
 	if err != nil || conn.Org.UUID != "work" {
 		t.Errorf("conn = %+v err = %v", conn.Org, err)
 	}
@@ -94,7 +96,7 @@ func TestConnectReportsARejectedKey(t *testing.T) {
 	defer srv.Close()
 	c := NewClient("expired")
 	c.BaseURL = srv.URL
-	if _, err := Connect(context.Background(), c, ""); !errors.Is(err, ErrUnauthorized) {
+	if _, err := usage.Connect(context.Background(), c, ""); !errors.Is(err, usage.ErrUnauthorized) {
 		t.Errorf("err = %v, want ErrUnauthorized", err)
 	}
 }
@@ -106,7 +108,7 @@ func TestConnectNoOrganizations(t *testing.T) {
 	defer srv.Close()
 	c := NewClient("sk")
 	c.BaseURL = srv.URL
-	_, err := Connect(context.Background(), c, "")
+	_, err := usage.Connect(context.Background(), c, "")
 	if err == nil || !strings.Contains(err.Error(), "no organizations") {
 		t.Errorf("err = %v", err)
 	}
@@ -128,11 +130,11 @@ func TestConnectReportsAFailedUsageCallRatherThanNothingToMeter(t *testing.T) {
 	c := NewClient("sk")
 	c.BaseURL = srv.URL
 
-	_, err := Connect(context.Background(), c, "")
-	if err == nil || errors.Is(err, ErrNothingToMeter) {
+	_, err := usage.Connect(context.Background(), c, "")
+	if err == nil || errors.Is(err, usage.ErrNothingToMeter) {
 		t.Fatalf("err = %v, want the 403 reported", err)
 	}
-	if !errors.Is(err, ErrBotCheck) {
+	if !errors.Is(err, usage.ErrBotCheck) {
 		t.Errorf("err = %v, want it recognised as the bot check", err)
 	}
 	if !strings.Contains(err.Error(), "Personal") {

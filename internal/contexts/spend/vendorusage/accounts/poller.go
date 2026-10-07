@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -22,12 +21,12 @@ type PollerOptions struct {
 	// Credentials finds the keys, freshly on every scan, so a key added or
 	// rotated in a harness is picked up.
 	Credentials func() []Credential
-	// Readers defaults to Readers().
+	// Readers are the vendors read; the daemon passes the HTTP readers
+	// from internal/infra/vendorusage/accounts. nil reads none.
 	Readers []Reader
-	// Gateways defaults to Gateways().
+	// Gateways are the gateways recognised; the daemon passes them from
+	// internal/infra/vendorusage/accounts. nil recognises none.
 	Gateways []Gateway
-	// HTTP is used for gateway recognition and reads; nil uses a default.
-	HTTP *http.Client
 	// Health returns the recorder for a source tag; nil disables it.
 	Health func(source string) *freshness.Recorder
 	// Interval defaults to 15 minutes.
@@ -66,12 +65,6 @@ func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
 	}
 	if opts.Now == nil {
 		opts.Now = time.Now
-	}
-	if opts.Readers == nil {
-		opts.Readers = Readers()
-	}
-	if opts.Gateways == nil {
-		opts.Gateways = Gateways()
 	}
 	if opts.Health == nil {
 		opts.Health = func(string) *freshness.Recorder { return nil }
@@ -152,7 +145,7 @@ func (p *Poller) scanGateways(ctx context.Context, creds []Credential, now time.
 		if g == nil {
 			continue
 		}
-		reading, err := g.Read(ctx, p.opts.HTTP, root, c.Key)
+		reading, err := g.Read(ctx, root, c.Key)
 		health := p.opts.Health(g.Source())
 		if err != nil {
 			health.Failed(err, now)
@@ -182,7 +175,7 @@ func (p *Poller) recognise(ctx context.Context, root string, now time.Time) Gate
 	}
 	var found Gateway
 	for _, g := range p.opts.Gateways {
-		if g.Recognise(ctx, p.opts.HTTP, root) {
+		if g.Recognise(ctx, root) {
 			found = g
 			break
 		}

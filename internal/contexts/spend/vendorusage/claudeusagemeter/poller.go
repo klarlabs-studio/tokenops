@@ -37,8 +37,11 @@ type PollerOptions struct {
 	BrowserCookies map[string]string
 	OrgID          string        // empty → resolved via /api/organizations on first scan
 	Interval       time.Duration // defaults 5 minutes
-	BaseURL        string        // test override
 	Logger         *slog.Logger
+	// NewClient builds the claude.ai client from the session above.
+	// Required; the daemon passes the HTTP client from
+	// internal/infra/vendorusage/claudeusagemeter.
+	NewClient func(ClientConfig) SessionClient
 	// Cookies, when set, re-reads the claude.ai session and Cloudflare
 	// clearance from the operator's browser. The clearance cookie expires
 	// within hours and is bound to the browser's address, so a meter that
@@ -65,7 +68,7 @@ type Poller struct {
 	opts PollerOptions
 
 	mu          sync.Mutex
-	client      *Client
+	client      SessionClient
 	orgID       string
 	publishes   int64
 	lastErr     error
@@ -119,18 +122,20 @@ func (p *Poller) LastError() (time.Time, error) {
 	return p.lastErrTime, p.lastErr
 }
 
+// errNoClientFactory reports a poller wired without PollerOptions.NewClient.
+var errNoClientFactory = errors.New("claude-usage-meter: no client factory configured")
+
 func (p *Poller) ensureClient() error {
 	if p.opts.SessionKey == "" && p.opts.Cookies == nil {
 		return ErrMissingCookie
 	}
-	c := NewClient(p.opts.SessionKey)
-	c.Clearance, c.UserAgent = p.opts.Clearance, p.opts.UserAgent
-	c.BrowserHeaders = p.opts.BrowserHeaders
-	c.BrowserCookies = p.opts.BrowserCookies
-	if p.opts.BaseURL != "" {
-		c.BaseURL = p.opts.BaseURL
+	if p.opts.NewClient == nil {
+		return errNoClientFactory
 	}
-	p.client = c
+	p.client = p.opts.NewClient(ClientConfig{
+		SessionKey: p.opts.SessionKey, Clearance: p.opts.Clearance, UserAgent: p.opts.UserAgent,
+		BrowserHeaders: p.opts.BrowserHeaders, BrowserCookies: p.opts.BrowserCookies,
+	})
 	return nil
 }
 
@@ -148,8 +153,9 @@ func (p *Poller) refreshCookies(ctx context.Context) bool {
 		}
 		return false
 	}
-	changed := s.Key != p.client.SessionKey || s.Clearance != p.client.Clearance
-	p.client.SessionKey, p.client.Clearance, p.client.UserAgent = s.Key, s.Clearance, s.UserAgent
+	cur := p.client.Session()
+	changed := s.Key != cur.Key || s.Clearance != cur.Clearance
+	p.client.SetSession(s)
 	if changed {
 		p.opts.Logger.Info("claude-usage-meter: refreshed the session from the browser", "browser", s.Browser)
 	}
@@ -173,7 +179,7 @@ func (p *Poller) scan(ctx context.Context) {
 			return
 		}
 	}
-	if p.client.SessionKey == "" {
+	if p.client.Session().Key == "" {
 		p.refreshCookies(ctx)
 	}
 	if p.orgID == "" {

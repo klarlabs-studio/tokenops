@@ -12,44 +12,14 @@ import (
 	"strings"
 	"time"
 
-	"go.klarlabs.de/tokenops/pkg/eventschema"
+	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 )
-
-// GatewayEndpoint is the endpoint name of a credential whose base URL is a
-// host TokenOps does not know: possibly a gateway the operator runs or
-// subscribes to. A gateway reader recognises it before reading.
-const GatewayEndpoint = "gateway"
-
-// Gateway reads the calling key's own budget on an AI gateway: one the
-// operator runs themselves (LiteLLM, Bifrost) or a hosted one
-// (ClawRouter). The key is sent only to the base URL the harness already
-// sends it to.
-type Gateway interface {
-	// Name is the gateway, e.g. "litellm"; it is also the provider the
-	// reading is reported under.
-	Name() string
-	Source() string
-	// Recognise reports whether root is this gateway, without a key.
-	Recognise(ctx context.Context, hc *http.Client, root string) bool
-	Read(ctx context.Context, hc *http.Client, root, key string) (Reading, error)
-}
 
 // Gateways is every gateway whose budget the calling key can read.
 // Portkey and Cloudflare AI Gateway are not here: neither lets the key in
 // use read its own spend.
-func Gateways() []Gateway {
-	return []Gateway{ClawRouter{}, LiteLLM{}, Bifrost{}}
-}
-
-// gatewayRoot is the scheme and host of a base URL: harnesses point at a
-// provider path under it (/anthropic, /v1), while health and budget
-// routes hang off the root.
-func gatewayRoot(baseURL string) (string, bool) {
-	u, err := url.Parse(strings.TrimSpace(baseURL))
-	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
-		return "", false
-	}
-	return u.Scheme + "://" + u.Host, true
+func Gateways() []usage.Gateway {
+	return []usage.Gateway{ClawRouter{}, LiteLLM{}, Bifrost{}}
 }
 
 // probe GETs url with no key and returns the body of a 200, for
@@ -97,7 +67,7 @@ func getGateway(ctx context.Context, hc *http.Client, url, header, value string,
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-		return fmt.Errorf("%w (%d on %s)", ErrAuth, resp.StatusCode, url)
+		return fmt.Errorf("%w (%d on %s)", usage.ErrAuth, resp.StatusCode, url)
 	case resp.StatusCode != http.StatusOK:
 		return fmt.Errorf("accounts: GET %s: status %d", url, resp.StatusCode)
 	}
@@ -109,7 +79,10 @@ func getGateway(ctx context.Context, hc *http.Client, url, header, value string,
 
 // ClawRouter reads GET /v1/usage (openclaw/clawrouter docs/api-reference):
 // the policy's budget for the calendar month, in micro-dollars.
-type ClawRouter struct{}
+type ClawRouter struct {
+	// HTTP is the client; nil uses a default.
+	HTTP *http.Client
+}
 
 func (ClawRouter) Name() string   { return "clawrouter" }
 func (ClawRouter) Source() string { return "clawrouter-account" }
@@ -117,7 +90,8 @@ func (ClawRouter) Source() string { return "clawrouter-account" }
 // clawRouterHost is the hosted service.
 const clawRouterHost = "clawrouter.openclaw.ai"
 
-func (ClawRouter) Recognise(ctx context.Context, hc *http.Client, root string) bool {
+func (g ClawRouter) Recognise(ctx context.Context, root string) bool {
+	hc := g.HTTP
 	if u, err := url.Parse(root); err == nil && u.Hostname() == clawRouterHost {
 		return true
 	}
@@ -131,7 +105,8 @@ func (ClawRouter) Recognise(ctx context.Context, hc *http.Client, root string) b
 	return json.Unmarshal(body, &h) == nil && h.Service == "clawrouter-edge"
 }
 
-func (ClawRouter) Read(ctx context.Context, hc *http.Client, root, key string) (Reading, error) {
+func (g ClawRouter) Read(ctx context.Context, root, key string) (usage.Reading, error) {
+	hc := g.HTTP
 	var resp struct {
 		Budget struct {
 			Configured  bool   `json:"configured"`
@@ -141,10 +116,10 @@ func (ClawRouter) Read(ctx context.Context, hc *http.Client, root, key string) (
 		} `json:"budget"`
 	}
 	if err := getGateway(ctx, hc, root+"/v1/usage", "Authorization", "Bearer "+key, &resp); err != nil {
-		return Reading{}, err
+		return usage.Reading{}, err
 	}
 	b := resp.Budget
-	r := Reading{Scope: "key", LimitReached: b.Ledger == "blocked"}
+	r := usage.Reading{Scope: "key", LimitReached: b.Ledger == "blocked"}
 	if b.SpentMicros.ok {
 		r.UsedUSD, r.HasUsed = b.SpentMicros.v/1e6, true
 	}
@@ -157,17 +132,22 @@ func (ClawRouter) Read(ctx context.Context, hc *http.Client, root, key string) (
 // LiteLLM reads GET /key/info, which a virtual key may call about itself
 // (BerriAI/litellm key_management_endpoints): its spend in the current
 // budget window, the budget, and when it resets.
-type LiteLLM struct{}
+type LiteLLM struct {
+	// HTTP is the client; nil uses a default.
+	HTTP *http.Client
+}
 
 func (LiteLLM) Name() string   { return "litellm" }
 func (LiteLLM) Source() string { return "litellm-account" }
 
-func (LiteLLM) Recognise(ctx context.Context, hc *http.Client, root string) bool {
+func (g LiteLLM) Recognise(ctx context.Context, root string) bool {
+	hc := g.HTTP
 	body, ok := probe(ctx, hc, root+"/health/liveliness")
 	return ok && bytes.Contains(body, []byte("I'm alive"))
 }
 
-func (LiteLLM) Read(ctx context.Context, hc *http.Client, root, key string) (Reading, error) {
+func (g LiteLLM) Read(ctx context.Context, root, key string) (usage.Reading, error) {
+	hc := g.HTTP
 	var resp struct {
 		Info struct {
 			Spend          number `json:"spend"`
@@ -179,10 +159,10 @@ func (LiteLLM) Read(ctx context.Context, hc *http.Client, root, key string) (Rea
 		} `json:"info"`
 	}
 	if err := getGateway(ctx, hc, root+"/key/info", "Authorization", "Bearer "+key, &resp); err != nil {
-		return Reading{}, err
+		return usage.Reading{}, err
 	}
 	in := resp.Info
-	r := Reading{Scope: "key", LimitReached: in.Blocked || (in.Status != "" && in.Status != "active")}
+	r := usage.Reading{Scope: "key", LimitReached: in.Blocked || (in.Status != "" && in.Status != "active")}
 	if in.Spend.ok {
 		r.UsedUSD, r.HasUsed = in.Spend.v, true
 	}
@@ -191,7 +171,7 @@ func (LiteLLM) Read(ctx context.Context, hc *http.Client, root, key string) (Rea
 		r.LimitReached = r.LimitReached || r.UsedUSD >= r.LimitUSD
 		// A budget that resets is a window: the share of it spent.
 		if d, ok := parseLiteLLMDuration(in.BudgetDuration); ok {
-			r.Windows = []Window{{Name: "budget (" + in.BudgetDuration + ")", UsedPct: pct(r.UsedUSD, r.LimitUSD),
+			r.Windows = []usage.Window{{Name: "budget (" + in.BudgetDuration + ")", UsedPct: pct(r.UsedUSD, r.LimitUSD),
 				Duration: d, ResetsAt: parseTime(in.BudgetResetAt)}}
 		}
 	}
@@ -215,12 +195,16 @@ func parseLiteLLMDuration(s string) (time.Duration, bool) {
 // Bifrost reads GET /api/governance/virtual-keys/quota, the virtual key's
 // own budgets (maximhq/bifrost docs/openapi): spend against each limit and
 // how often it resets.
-type Bifrost struct{}
+type Bifrost struct {
+	// HTTP is the client; nil uses a default.
+	HTTP *http.Client
+}
 
 func (Bifrost) Name() string   { return "bifrost" }
 func (Bifrost) Source() string { return "bifrost-account" }
 
-func (Bifrost) Recognise(ctx context.Context, hc *http.Client, root string) bool {
+func (g Bifrost) Recognise(ctx context.Context, root string) bool {
+	hc := g.HTTP
 	body, ok := probe(ctx, hc, root+"/health")
 	if !ok {
 		return false
@@ -241,7 +225,8 @@ var bifrostDurations = map[string]time.Duration{
 	"1h": time.Hour, "5m": 5 * time.Minute, "30s": 30 * time.Second,
 }
 
-func (Bifrost) Read(ctx context.Context, hc *http.Client, root, key string) (Reading, error) {
+func (g Bifrost) Read(ctx context.Context, root, key string) (usage.Reading, error) {
+	hc := g.HTTP
 	var resp struct {
 		IsActive bool `json:"is_active"`
 		Budgets  []struct {
@@ -253,15 +238,15 @@ func (Bifrost) Read(ctx context.Context, hc *http.Client, root, key string) (Rea
 	}
 	// x-bf-vk takes any virtual key; Authorization only takes sk-bf- ones.
 	if err := getGateway(ctx, hc, root+"/api/governance/virtual-keys/quota", "x-bf-vk", key, &resp); err != nil {
-		return Reading{}, err
+		return usage.Reading{}, err
 	}
-	r := Reading{Scope: "key", LimitReached: !resp.IsActive}
+	r := usage.Reading{Scope: "key", LimitReached: !resp.IsActive}
 	for _, b := range resp.Budgets {
 		if !b.MaxLimit.ok || b.MaxLimit.v <= 0 {
 			continue
 		}
 		d := bifrostDurations[b.ResetDuration]
-		w := Window{Name: "budget (" + b.ResetDuration + ")", UsedPct: pct(b.CurrentUsage.v, b.MaxLimit.v), Duration: d}
+		w := usage.Window{Name: "budget (" + b.ResetDuration + ")", UsedPct: pct(b.CurrentUsage.v, b.MaxLimit.v), Duration: d}
 		if last := parseTime(b.LastReset); !last.IsZero() && d > 0 {
 			w.ResetsAt = last.Add(d)
 		}
@@ -277,12 +262,10 @@ func (Bifrost) Read(ctx context.Context, hc *http.Client, root, key string) (Rea
 	return r, nil
 }
 
-// gatewayReader adapts a recognised gateway to Reader, for NewEnvelope.
-type gatewayReader struct{ g Gateway }
-
-func (r gatewayReader) Endpoint() string               { return GatewayEndpoint }
-func (r gatewayReader) Provider() eventschema.Provider { return eventschema.Provider(r.g.Name()) }
-func (r gatewayReader) Source() string                 { return r.g.Source() }
-func (r gatewayReader) Read(context.Context, string) (Reading, error) {
-	return Reading{}, fmt.Errorf("accounts: a gateway is read through its root")
-}
+// The readers and gateways satisfy the domain's ports.
+var (
+	_ usage.Reader  = OpenRouter{}
+	_ usage.Gateway = ClawRouter{}
+	_ usage.Gateway = LiteLLM{}
+	_ usage.Gateway = Bifrost{}
+)

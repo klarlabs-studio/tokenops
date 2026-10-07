@@ -5,11 +5,10 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
+
+	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/fireworks"
 )
 
 // fakeAPI serves the documented endpoints. userLimits is the body of the
@@ -58,7 +57,7 @@ func TestReadPrefersTheMembersOwnCap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Reading{Scope: ScopeUser, AccountID: "acme", UsedUSD: 41.5, LimitUSD: 100}
+	want := usage.Reading{Scope: usage.ScopeUser, AccountID: "acme", UsedUSD: 41.5, LimitUSD: 100}
 	if r != want {
 		t.Errorf("got %+v, want %+v", r, want)
 	}
@@ -82,7 +81,7 @@ func TestReadFallsBackToTheAccount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Reading{Scope: ScopeAccount, AccountID: "acme", UsedUSD: 15.05, LimitUSD: 200}
+	want := usage.Reading{Scope: usage.ScopeAccount, AccountID: "acme", UsedUSD: 15.05, LimitUSD: 200}
 	if r.Scope != want.Scope || r.AccountID != want.AccountID || r.LimitUSD != want.LimitUSD || r.UsedUSD < 15.049 || r.UsedUSD > 15.051 {
 		t.Errorf("got %+v, want %+v", r, want)
 	}
@@ -92,7 +91,7 @@ func TestReadReportsARefusedKey(t *testing.T) {
 	srv := fakeAPI(t, "")
 	defer srv.Close()
 	c := &Client{BaseURL: srv.URL, Key: func(context.Context) (string, error) { return "fw_wrong", nil }}
-	if _, err := c.Read(context.Background(), "", "", now); !errors.Is(err, ErrAuth) {
+	if _, err := c.Read(context.Background(), "", "", now); !errors.Is(err, usage.ErrAuth) {
 		t.Errorf("err = %v", err)
 	}
 }
@@ -115,7 +114,7 @@ func TestKeySource(t *testing.T) {
 	ran = ""
 	for _, other := range []string{"", "~/bin/anthropic-key.sh", "op read op://vault/anthropic", "fireconnect status"} {
 		_, err := KeySource{Getenv: env(""), Helper: func() string { return other }, Run: run}.Key(ctx)
-		if !errors.Is(err, ErrNoKey) || ran != "" {
+		if !errors.Is(err, usage.ErrNoKey) || ran != "" {
 			t.Errorf("%q: err %v, ran %q", other, err, ran)
 		}
 	}
@@ -132,43 +131,5 @@ func TestIsFireConnectHelper(t *testing.T) {
 		if got := IsFireConnectHelper(cmd); got != want {
 			t.Errorf("%q = %v, want %v", cmd, got, want)
 		}
-	}
-}
-
-// config.json can hold keys; only ssoAccountId is taken from it.
-func TestIdentity(t *testing.T) {
-	home := t.TempDir()
-	dir := filepath.Join(home, ".fireconnect")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	write := func(name, body string) {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write("config.json", `{"apiKey":"fw_secret","ssoAccountId":"sso-org"}`)
-	if a, u := Identity(home); a != "sso-org" || u != "" {
-		t.Errorf("config only: %q %q", a, u)
-	}
-	write("minted-key.json", `{"keyId":"k1","userName":"accounts/acme/users/felix","displayName":"fireconnect-mbp"}`)
-	if a, u := Identity(home); a != "acme" || u != "felix" {
-		t.Errorf("minted: %q %q", a, u)
-	}
-	if a, u := Identity(t.TempDir()); a != "" || u != "" {
-		t.Errorf("empty home: %q %q", a, u)
-	}
-}
-
-func TestEnvelopeCarriesNoKey(t *testing.T) {
-	env := NewEnvelope(now, Reading{Scope: ScopeUser, AccountID: "acme", UsedUSD: 41.5, LimitUSD: 100})
-	for k, v := range env.Attributes {
-		if strings.Contains(v, "fw_") {
-			t.Errorf("%s carries a key: %q", k, v)
-		}
-	}
-	if env.Attributes["extra_usage_used"] != "41.50" || env.Attributes["extra_usage_limit"] != "100.00" ||
-		env.Attributes["billing"] != "per_token" || env.Attributes["granularity"] != "quota_snapshot" {
-		t.Errorf("attrs %v", env.Attributes)
 	}
 }

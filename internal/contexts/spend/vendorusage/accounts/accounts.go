@@ -3,16 +3,17 @@
 // a key's spend and cap on OpenRouter, the prepaid balance on DeepSeek and
 // Moonshot. Each reader calls only its vendor's documented endpoint, with a
 // key found for that vendor's endpoint; keys are never stored or logged.
+//
+// The package holds the readings, the Reader and Gateway ports, the poller
+// that decides which key goes where, and the mapping to envelopes. The
+// HTTP readers live in internal/infra/vendorusage/accounts.
 package accounts
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"strconv"
+	"net/url"
 	"strings"
 	"time"
 
@@ -82,172 +83,42 @@ type Reader interface {
 	Read(ctx context.Context, key string) (Reading, error)
 }
 
-// Readers is every vendor with an account endpoint we read.
-func Readers() []Reader {
-	return []Reader{OpenRouter{}, DeepSeek{}, Moonshot{},
-		ZAI{}, Kimi{}, MiniMax{}, Synthetic{}, Chutes{}, DeepInfra{}, Vercel{}}
+// GatewayEndpoint is the endpoint name of a credential whose base URL is a
+// host TokenOps does not know: possibly a gateway the operator runs or
+// subscribes to. A gateway reader recognises it before reading.
+const GatewayEndpoint = "gateway"
+
+// Gateway reads the calling key's own budget on an AI gateway: one the
+// operator runs themselves (LiteLLM, Bifrost) or a hosted one
+// (ClawRouter). The key is sent only to the base URL the harness already
+// sends it to.
+type Gateway interface {
+	// Name is the gateway, e.g. "litellm"; it is also the provider the
+	// reading is reported under.
+	Name() string
+	Source() string
+	// Recognise reports whether root is this gateway, without a key.
+	Recognise(ctx context.Context, root string) bool
+	Read(ctx context.Context, root, key string) (Reading, error)
 }
 
-// getJSON GETs url with a bearer key and decodes the body into out.
-func getJSON(ctx context.Context, hc *http.Client, url, key string, out any) error {
-	return getJSONAuth(ctx, hc, url, "Bearer "+key, out)
+// gatewayRoot is the scheme and host of a base URL: harnesses point at a
+// provider path under it (/anthropic, /v1), while health and budget
+// routes hang off the root.
+func gatewayRoot(baseURL string) (string, bool) {
+	u, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return "", false
+	}
+	return u.Scheme + "://" + u.Host, true
 }
 
-// getJSONAuth GETs url with the Authorization header set to auth.
-func getJSONAuth(ctx context.Context, hc *http.Client, url, auth string, out any) error {
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", auth)
-	req.Header.Set("Accept", "application/json")
-	if hc == nil {
-		hc = &http.Client{Timeout: 20 * time.Second}
-	}
-	resp, err := hc.Do(req)
-	if err != nil {
-		return fmt.Errorf("accounts: GET %s: %w", hostPath(url), err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	switch {
-	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-		return fmt.Errorf("%w (%d on %s)", ErrAuth, resp.StatusCode, hostPath(url))
-	case resp.StatusCode != http.StatusOK:
-		return fmt.Errorf("accounts: GET %s: status %d", hostPath(url), resp.StatusCode)
-	}
-	if err := json.Unmarshal(body, out); err != nil {
-		return fmt.Errorf("accounts: GET %s: %w", hostPath(url), err)
-	}
-	return nil
-}
+// gatewayReader adapts a recognised gateway to Reader, for NewEnvelope.
+type gatewayReader struct{ g Gateway }
 
-func hostPath(url string) string {
-	if i := strings.Index(url, "?"); i >= 0 {
-		return url[:i]
-	}
-	return url
-}
-
-func base(override, def string) string {
-	if override != "" {
-		return strings.TrimRight(override, "/")
-	}
-	return def
-}
-
-// OpenRouter reads GET /api/v1/key: the key's usage and its credit cap
-// (https://openrouter.ai/docs/api_reference/limits). The account's own
-// credit balance needs a management key and is not read.
-type OpenRouter struct {
-	BaseURL string
-	HTTP    *http.Client
-}
-
-func (OpenRouter) Endpoint() string               { return "openrouter" }
-func (OpenRouter) Provider() eventschema.Provider { return eventschema.ProviderOpenRouter }
-func (OpenRouter) Source() string                 { return "openrouter-account" }
-
-func (o OpenRouter) Read(ctx context.Context, key string) (Reading, error) {
-	var resp struct {
-		Data struct {
-			Limit          *float64 `json:"limit"`
-			LimitReset     *string  `json:"limit_reset"`
-			LimitRemaining *float64 `json:"limit_remaining"`
-			Usage          float64  `json:"usage"`
-			UsageDaily     float64  `json:"usage_daily"`
-			UsageWeekly    float64  `json:"usage_weekly"`
-			UsageMonthly   float64  `json:"usage_monthly"`
-		} `json:"data"`
-	}
-	if err := getJSON(ctx, o.HTTP, base(o.BaseURL, "https://openrouter.ai")+"/api/v1/key", key, &resp); err != nil {
-		return Reading{}, err
-	}
-	d := resp.Data
-	r := Reading{Scope: "key", UsedUSD: d.UsageMonthly, HasUsed: true}
-	if d.Limit == nil {
-		return r, nil
-	}
-	// A cap is spent against the period it resets on.
-	r.LimitUSD = *d.Limit
-	reset := ""
-	if d.LimitReset != nil {
-		reset = strings.ToLower(*d.LimitReset)
-	}
-	switch reset {
-	case "daily":
-		r.UsedUSD = d.UsageDaily
-	case "weekly":
-		r.UsedUSD = d.UsageWeekly
-	case "monthly":
-		r.UsedUSD = d.UsageMonthly
-	default:
-		r.UsedUSD = d.Usage
-	}
-	if d.LimitRemaining != nil {
-		r.LimitReached = *d.LimitRemaining <= 0
-	}
-	return r, nil
-}
-
-// DeepSeek reads GET /user/balance: the prepaid balance
-// (https://api-docs.deepseek.com/api/get-user-balance). Only a USD
-// balance is used; headroom is in dollars.
-type DeepSeek struct {
-	BaseURL string
-	HTTP    *http.Client
-}
-
-func (DeepSeek) Endpoint() string               { return "deepseek" }
-func (DeepSeek) Provider() eventschema.Provider { return eventschema.ProviderDeepSeek }
-func (DeepSeek) Source() string                 { return "deepseek-account" }
-
-func (d DeepSeek) Read(ctx context.Context, key string) (Reading, error) {
-	var resp struct {
-		IsAvailable  bool `json:"is_available"`
-		BalanceInfos []struct {
-			Currency     string `json:"currency"`
-			TotalBalance string `json:"total_balance"`
-		} `json:"balance_infos"`
-	}
-	if err := getJSON(ctx, d.HTTP, base(d.BaseURL, "https://api.deepseek.com")+"/user/balance", key, &resp); err != nil {
-		return Reading{}, err
-	}
-	r := Reading{Scope: "account", LimitReached: !resp.IsAvailable}
-	for _, b := range resp.BalanceInfos {
-		if b.Currency != "USD" {
-			continue
-		}
-		if v, err := strconv.ParseFloat(b.TotalBalance, 64); err == nil {
-			r.BalanceUSD, r.HasBalance = v, true
-		}
-	}
-	return r, nil
-}
-
-// Moonshot reads GET /v1/users/me/balance on the international platform
-// (https://platform.kimi.ai/docs/api/balance), in USD.
-type Moonshot struct {
-	BaseURL string
-	HTTP    *http.Client
-}
-
-func (Moonshot) Endpoint() string               { return "moonshot" }
-func (Moonshot) Provider() eventschema.Provider { return "moonshot" }
-func (Moonshot) Source() string                 { return "moonshot-account" }
-
-func (m Moonshot) Read(ctx context.Context, key string) (Reading, error) {
-	var resp struct {
-		Data struct {
-			AvailableBalance float64 `json:"available_balance"`
-		} `json:"data"`
-		Status bool `json:"status"`
-	}
-	if err := getJSON(ctx, m.HTTP, base(m.BaseURL, "https://api.moonshot.ai")+"/v1/users/me/balance", key, &resp); err != nil {
-		return Reading{}, err
-	}
-	b := resp.Data.AvailableBalance
-	return Reading{Scope: "account", BalanceUSD: b, HasBalance: true, LimitReached: b <= 0}, nil
+func (r gatewayReader) Endpoint() string               { return GatewayEndpoint }
+func (r gatewayReader) Provider() eventschema.Provider { return eventschema.Provider(r.g.Name()) }
+func (r gatewayReader) Source() string                 { return r.g.Source() }
+func (r gatewayReader) Read(context.Context, string) (Reading, error) {
+	return Reading{}, fmt.Errorf("accounts: a gateway is read through its root")
 }

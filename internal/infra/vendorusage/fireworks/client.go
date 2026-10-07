@@ -1,10 +1,8 @@
-// Package fireworks reads a Fireworks account's own figures: spend this
-// month and the limit it is spent against (ADR 0009 §7). FireConnect points
-// Claude Code, Codex and opencode at Fireworks, and the open models it
-// routes to bill there, so Fireworks is a biller with limits of its own.
-//
-// Only Fireworks' documented REST API is used
-// (https://docs.fireworks.ai/api-reference, /nexus/usage-limits):
+// Package fireworks is the HTTP adapter for Fireworks' documented REST API
+// (https://docs.fireworks.ai/api-reference, /nexus/usage-limits) and the
+// discovery of the API key the operator already uses. Its Client satisfies
+// the Reader port of internal/contexts/spend/vendorusage/fireworks, whose
+// poller turns each reading into an envelope.
 //
 //   - GET /verifyApiKey names the key's account (x-fireworks-account-id).
 //   - GET /v1/accounts/{a}/users/{u}/usageLimits is a member's own spend
@@ -26,6 +24,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/fireworks"
 )
 
 // DefaultBaseURL is Fireworks' API.
@@ -35,13 +35,6 @@ const DefaultBaseURL = "https://api.fireworks.ai"
 // (`firectl quota update monthly-spend-usd`).
 const SpendQuotaName = "monthly-spend-usd"
 
-var (
-	// ErrAuth reports a key Fireworks refused.
-	ErrAuth = errors.New("fireworks: the API key was refused")
-	// ErrNotFound reports a resource the account does not have.
-	ErrNotFound = errors.New("fireworks: not found")
-)
-
 // Client calls the Fireworks API.
 type Client struct {
 	BaseURL string
@@ -49,28 +42,6 @@ type Client struct {
 	// Key returns the API key for one call. It is asked each time and
 	// never stored, so a rotated key is picked up.
 	Key func(ctx context.Context) (string, error)
-}
-
-// Scope says whose figures a Reading holds.
-type Scope string
-
-const (
-	// ScopeUser is a member's own spend against their cap.
-	ScopeUser Scope = "user"
-	// ScopeAccount is the whole account's spend against its limit.
-	ScopeAccount Scope = "account"
-)
-
-// Reading is the month's spend and limit, as Fireworks reports them.
-type Reading struct {
-	Scope     Scope
-	AccountID string
-	// UsedUSD is spend this billing period.
-	UsedUSD float64
-	// LimitUSD is the cap it is spent against, 0 when there is none.
-	LimitUSD float64
-	// LimitReached is Fireworks saying requests are blocked by the cap.
-	LimitReached bool
 }
 
 // do runs one GET and decodes the JSON body into out; hdr, when set,
@@ -108,9 +79,9 @@ func (c *Client) do(ctx context.Context, path string, q url.Values, out any, hdr
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-		return fmt.Errorf("%w (%d on %s)", ErrAuth, resp.StatusCode, path)
+		return fmt.Errorf("%w (%d on %s)", usage.ErrAuth, resp.StatusCode, path)
 	case resp.StatusCode == http.StatusNotFound:
-		return fmt.Errorf("%w: %s", ErrNotFound, path)
+		return fmt.Errorf("%w: %s", usage.ErrNotFound, path)
 	case resp.StatusCode != http.StatusOK:
 		return fmt.Errorf("fireworks: GET %s: status %d", path, resp.StatusCode)
 	}
@@ -141,27 +112,27 @@ func (c *Client) AccountID(ctx context.Context) (string, error) {
 
 // UserLimit reads one member's own spend and effective cap. A member may
 // read their own; ok is false when the user has no cap.
-func (c *Client) UserLimit(ctx context.Context, account, user string) (Reading, bool, error) {
+func (c *Client) UserLimit(ctx context.Context, account, user string) (usage.Reading, bool, error) {
 	var raw map[string]json.RawMessage
 	path := "/v1/accounts/" + url.PathEscape(account) + "/users/" + url.PathEscape(user) + "/usageLimits"
 	if err := c.do(ctx, path, nil, &raw, nil); err != nil {
-		return Reading{}, false, err
+		return usage.Reading{}, false, err
 	}
 	limit, hasLimit := amount(raw, "effectiveLimit", "effective_limit")
 	if !hasLimit {
-		return Reading{}, false, nil
+		return usage.Reading{}, false, nil
 	}
 	used, _ := amount(raw, "used", "usage")
 	_, blocked := raw["exceededUntil"]
 	if !blocked {
 		_, blocked = raw["exceeded_until"]
 	}
-	return Reading{Scope: ScopeUser, AccountID: account, UsedUSD: used, LimitUSD: limit, LimitReached: blocked}, true, nil
+	return usage.Reading{Scope: usage.ScopeUser, AccountID: account, UsedUSD: used, LimitUSD: limit, LimitReached: blocked}, true, nil
 }
 
 // AccountMonth reads the account's spend this month (UTC) and its monthly
 // spend limit, 0 when it has none.
-func (c *Client) AccountMonth(ctx context.Context, account string, now time.Time) (Reading, error) {
+func (c *Client) AccountMonth(ctx context.Context, account string, now time.Time) (usage.Reading, error) {
 	now = now.UTC()
 	start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 	// endTime is exclusive and day-granular, so tomorrow includes today.
@@ -174,9 +145,9 @@ func (c *Client) AccountMonth(ctx context.Context, account string, now time.Time
 	}
 	base := "/v1/accounts/" + url.PathEscape(account)
 	if err := c.do(ctx, base+"/billing/summary", q, &summary, nil); err != nil {
-		return Reading{}, err
+		return usage.Reading{}, err
 	}
-	r := Reading{Scope: ScopeAccount, AccountID: account}
+	r := usage.Reading{Scope: usage.ScopeAccount, AccountID: account}
 	for _, li := range summary.LineItems {
 		r.UsedUSD += li.TotalCost.Value()
 	}
@@ -244,11 +215,11 @@ func amount(raw map[string]json.RawMessage, keys ...string) (float64, bool) {
 // Read is the best reading for this operator: their own cap on a company
 // account, else the account's month. account and user may be empty; the
 // account is then looked up from the key.
-func (c *Client) Read(ctx context.Context, account, user string, now time.Time) (Reading, error) {
+func (c *Client) Read(ctx context.Context, account, user string, now time.Time) (usage.Reading, error) {
 	if account == "" {
 		id, err := c.AccountID(ctx)
 		if err != nil {
-			return Reading{}, err
+			return usage.Reading{}, err
 		}
 		account = id
 	}
@@ -261,3 +232,6 @@ func (c *Client) Read(ctx context.Context, account, user string, now time.Time) 
 	}
 	return c.AccountMonth(ctx, account, now)
 }
+
+// Client satisfies the poller's port.
+var _ usage.Reader = (*Client)(nil)

@@ -2,10 +2,10 @@ package copilot
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sync"
@@ -57,64 +57,26 @@ func TestLoadTokenReturnsErrNoToken(t *testing.T) {
 	}
 }
 
-// Client.User must send the Authorization header in token form, hit
-// the right path, and decode the documented response shape.
-func TestClientUserHappyPath(t *testing.T) {
-	var gotAuth, gotPath string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotAuth = r.Header.Get("Authorization")
-		gotPath = r.URL.Path
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(sampleResponse))
-	}))
-	defer srv.Close()
-	c := NewClient("tok-abc")
-	c.BaseURL = srv.URL
-	resp, err := c.User(context.Background())
-	if err != nil {
-		t.Fatalf("User: %v", err)
-	}
-	if gotAuth != "token tok-abc" {
-		t.Errorf("auth header = %q", gotAuth)
-	}
-	if gotPath != "/copilot_internal/user" {
-		t.Errorf("path = %q", gotPath)
-	}
-	if resp.Login != "test-user" {
-		t.Errorf("login = %q", resp.Login)
-	}
-	chat, ok := resp.QuotaSnapshots["chat"]
-	if !ok {
-		t.Fatal("chat snapshot missing")
-	}
-	if chat.PercentRemaining != 70.0 {
-		t.Errorf("chat percent_remaining = %v", chat.PercentRemaining)
-	}
+// fakeSource stands in for the HTTP client: it decodes body as the user
+// record, or fails with err.
+type fakeSource struct {
+	body string
+	err  error
 }
 
-// Empty token short-circuits with ErrNoToken before any HTTP call.
-func TestClientUserMissingToken(t *testing.T) {
-	c := &Client{}
-	_, err := c.User(context.Background())
-	if err != ErrNoToken {
-		t.Errorf("want ErrNoToken; got %v", err)
+func (f fakeSource) User(context.Context) (*UserResponse, error) {
+	if f.err != nil {
+		return nil, f.err
 	}
+	var u UserResponse
+	if err := json.Unmarshal([]byte(f.body), &u); err != nil {
+		return nil, err
+	}
+	return &u, nil
 }
 
-// Non-2xx response includes status + body snippet so operators can
-// diagnose auth failure / rate-limit.
-func TestClientUserNon2xx(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(401)
-		_, _ = w.Write([]byte(`{"message":"bad creds"}`))
-	}))
-	defer srv.Close()
-	c := NewClient("bad")
-	c.BaseURL = srv.URL
-	_, err := c.User(context.Background())
-	if err == nil {
-		t.Fatal("want error")
-	}
+func sourceFor(f fakeSource) func(string) UserSource {
+	return func(string) UserSource { return f }
 }
 
 type captureBus struct {
@@ -139,16 +101,11 @@ func (b *captureBus) Close(_ time.Duration) error { return nil }
 // poll within the same response timestamp must be a no-op (server
 // data hasn't changed yet).
 func TestPollerEmitsOneEnvelopePerSnapshotAndDedupes(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(sampleResponse))
-	}))
-	defer srv.Close()
 	bus := &captureBus{}
 	p := NewPoller(bus, PollerOptions{
 		OAuthToken: "tok",
 		Interval:   time.Hour, // we drive scans manually
-		BaseURL:    srv.URL,
+		NewClient:  sourceFor(fakeSource{body: sampleResponse}),
 		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	if err := p.ensureClient(); err != nil {
@@ -167,13 +124,9 @@ func TestPollerEmitsOneEnvelopePerSnapshotAndDedupes(t *testing.T) {
 // 401 from the API records LastError so the CLI status command can
 // surface it.
 func TestPollerRecordsLastError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(401)
-	}))
-	defer srv.Close()
 	p := NewPoller(nil, PollerOptions{
 		OAuthToken: "bad",
-		BaseURL:    srv.URL,
+		NewClient:  sourceFor(fakeSource{err: errors.New("copilot user: status 401: ")}),
 		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	if err := p.ensureClient(); err != nil {
