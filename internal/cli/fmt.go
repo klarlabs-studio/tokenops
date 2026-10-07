@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/fmtinsight"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter"
 	"go.klarlabs.de/tokenops/internal/contexts/security/redaction"
@@ -74,7 +75,7 @@ Examples:
 			if warn != "" && !quiet {
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", warn)
 			}
-			formatters, fwarns := allFormatters(cfg.Optimizer.CommandFmt)
+			formatters, fwarns := fmtinsight.Formatters(cfg.Optimizer.CommandFmt)
 			if !quiet {
 				for _, w := range fwarns {
 					fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", w)
@@ -98,7 +99,7 @@ Examples:
 			// Emit an OptimizationEvent so the dashboard/scorecard count
 			// the savings. Opt-in (flag or config), best-effort.
 			if (emitFlag || cfg.Optimizer.CommandFmt.EmitEvents) && res.Compressed {
-				if err := emitFmtEvent(cmd.Context(), dbFlag, args, res); err != nil && !quiet {
+				if err := emitFmtEvent(cmd.Context(), fmtEventDB(dbFlag, cfg), args, res); err != nil && !quiet {
 					fmt.Fprintf(cmd.ErrOrStderr(), "warning: fmt event not recorded: %v\n", err)
 				}
 			}
@@ -126,7 +127,7 @@ Examples:
 	cmd.Flags().BoolVar(&rawOnError, "raw-on-error", true, "forward raw (uncompressed) stdout when the command exits non-zero")
 	cmd.Flags().BoolVar(&statsJSON, "stats-json", false, "emit the stats line as JSON on stderr")
 	cmd.Flags().BoolVar(&emitFlag, "emit", false, "append an OptimizationEvent to the events store (also set via config command_fmt.emit_events)")
-	cmd.Flags().StringVar(&dbFlag, "db", "", "events.db path for --emit (defaults to ~/.tokenops/events.db)")
+	cmd.Flags().StringVar(&dbFlag, "db", "", "events.db path for --emit (defaults to storage.path, else ~/.tokenops/events.db)")
 	cmd.AddCommand(newFmtBenchCmd(rf))
 	cmd.AddCommand(newFmtHookCmd(rf))
 	cmd.AddCommand(newFmtRecoverCmd())
@@ -138,12 +139,18 @@ Examples:
 // registryFormatters resolves the built-in + config formatter set for the
 // given root flags, ignoring config-load errors (defaults still apply).
 func registryFormatters(rf *rootFlags) []formatter.Formatter {
+	formatters, _ := fmtinsight.Formatters(commandFmtConfig(rf))
+	return formatters
+}
+
+// commandFmtConfig is the fmt configuration, or none when the config
+// cannot be read: the built-in catalog then stands alone.
+func commandFmtConfig(rf *rootFlags) config.CommandFmtConfig {
 	cfg, err := loadConfig(rf)
 	if err != nil {
-		return formatter.DefaultFormatters()
+		return config.CommandFmtConfig{}
 	}
-	formatters, _ := allFormatters(cfg.Optimizer.CommandFmt)
-	return formatters
+	return cfg.Optimizer.CommandFmt
 }
 
 // emitFmtEvent appends an OptimizationEvent (kind=command_fmt) to the local
@@ -152,6 +159,17 @@ func registryFormatters(rf *rootFlags) []formatter.Formatter {
 // warning but never aborts the wrapped command. The workflow/agent id is
 // stamped "fmt:<command>" so `group=agent` can show which commands compress
 // most.
+// fmtEventDB is where --emit writes: --db, else the configured
+// storage.path the daemon reads, else the default "" (~/.tokenops/events.db).
+// It used to skip the config, so an operator who had moved the store got a
+// second events.db that nothing read, and their fmt savings went uncounted.
+func fmtEventDB(flag string, cfg config.Config) string {
+	if flag != "" {
+		return flag
+	}
+	return cfg.Storage.Path
+}
+
 func emitFmtEvent(ctx context.Context, dbPath string, argv []string, res *fmtResult) error {
 	if dbPath == "" {
 		home, err := os.UserHomeDir()
@@ -203,34 +221,6 @@ func firstArgvToken(argv []string) string {
 		t = t[i+1:]
 	}
 	return t
-}
-
-// allFormatters returns the built-in catalog plus any user-defined config
-// formatters. Config formatters appear AFTER built-ins so a user command
-// that collides with a built-in overrides it (later registration wins in
-// the registry map). Invalid user specs are skipped with a warning rather
-// than failing the whole run.
-func allFormatters(cfg config.CommandFmtConfig) ([]formatter.Formatter, []string) {
-	out := formatter.DefaultFormatters()
-	var warns []string
-	for _, fc := range cfg.Formatters {
-		spec := formatter.ConfigSpec{
-			Command:  fc.Command,
-			Aliases:  fc.Aliases,
-			Critical: fc.Critical,
-			Drop: map[formatter.LossLevel][]string{
-				formatter.LossBalanced:   fc.Drop.Balanced,
-				formatter.LossAggressive: fc.Drop.Aggressive,
-			},
-		}
-		f, err := formatter.NewConfigFormatter(spec)
-		if err != nil {
-			warns = append(warns, err.Error())
-			continue
-		}
-		out = append(out, f)
-	}
-	return out, warns
 }
 
 // buildLossPolicy maps the config strings into the domain LossPolicy and

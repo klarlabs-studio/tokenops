@@ -11,6 +11,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/money"
 	"go.klarlabs.de/tokenops/internal/capability/state"
+	"go.klarlabs.de/tokenops/internal/capability/usagemeter"
 	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
 	"go.klarlabs.de/tokenops/internal/infra/fxrate"
 
@@ -22,7 +23,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/session"
 	"go.klarlabs.de/tokenops/internal/daemon"
 	"go.klarlabs.de/tokenops/internal/events"
-	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
 	"go.klarlabs.de/tokenops/internal/mcp"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
@@ -275,7 +275,7 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	}); err != nil {
 		return fmt.Errorf("register data sources tool: %w", err)
 	}
-	if err := mcp.RegisterFmtTools(srv); err != nil {
+	if err := mcp.RegisterFmtTools(srv, mcp.FmtDeps{ConfigGetter: currentConfig}); err != nil {
 		return fmt.Errorf("register fmt tools: %w", err)
 	}
 	if err := mcp.RegisterGapTools(srv, serveGapDeps(currentConfig, gapCounts(components.Store))); err != nil {
@@ -381,14 +381,6 @@ func applyConfigRestart() string { return daemon.RestartForConfig().Note() }
 // browserSessionKey reads the claude.ai session from a local browser for the
 // MCP setup tool, so an agent can connect the meter without the operator
 // pasting a login into the conversation. macOS asks them to allow it.
-func browserSessionKey(ctx context.Context) (string, string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", "", err
-	}
-	key, browser, err := browsercookie.Find(ctx, home, "claude.ai", "sessionKey", "")
-	if err != nil {
-		return "", "", err
-	}
-	return key, browser.Name, nil
+func browserSessionKey(ctx context.Context) (usagemeter.Session, error) {
+	return usagemeter.FromBrowser(ctx, "", 0)
 }

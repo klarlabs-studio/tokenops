@@ -79,20 +79,17 @@ const domainPrefix = "go.klarlabs.de/tokenops/internal/contexts/"
 var directDomainImports = map[string][]string{
 	"go.klarlabs.de/tokenops/internal/cli": {
 		"go.klarlabs.de/tokenops/internal/contexts/governance/coverdebt",
-		"go.klarlabs.de/tokenops/internal/contexts/governance/story",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/fmtlearn",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/modeltier",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/replay",
-		"go.klarlabs.de/tokenops/internal/contexts/optimization/routingapproval",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/taskclass",
 		"go.klarlabs.de/tokenops/internal/contexts/prompts/providers",
 		"go.klarlabs.de/tokenops/internal/contexts/security/redaction",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/session",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/spend",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic",
-		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode",
 		"go.klarlabs.de/tokenops/internal/contexts/tasks",
 	},
@@ -108,12 +105,8 @@ var directDomainImports = map[string][]string{
 	},
 	"go.klarlabs.de/tokenops/internal/mcp": {
 		"go.klarlabs.de/tokenops/internal/contexts/observability/freshness",
-		"go.klarlabs.de/tokenops/internal/contexts/optimization/fmtlearn",
-		"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter",
-		"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/session",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/spend",
-		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter",
 	},
 	// The proxy is two things in one package: the /api/* read model,
 	// which is an adapter like the CLI and now answers entirely from
