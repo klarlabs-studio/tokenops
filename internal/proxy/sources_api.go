@@ -3,7 +3,7 @@ package proxy
 import (
 	"net/http"
 
-	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
+	"go.klarlabs.de/tokenops/internal/capability/state"
 )
 
 // WithSourceFreshness exposes per-source ingestion health on
@@ -19,20 +19,8 @@ import (
 // Passing nil, or omitting the option, leaves the route unmounted. That
 // is deliberate: an empty list would read as "no sources configured",
 // which is a claim, where a missing route is plainly an absence.
-func WithSourceFreshness(fn func() []freshness.Report) Option {
+func WithSourceFreshness(fn func() []state.SourceReport) Option {
 	return func(s *Server) { s.sourceFreshness = fn }
-}
-
-// sourcesResponse is the wire shape of GET /api/sources.
-type sourcesResponse struct {
-	// Sources is every configured source, healthy ones included. A
-	// caller that wants only the problems can filter; a caller that
-	// wants to show an operator what is being watched could not
-	// previously do so at all.
-	Sources []freshness.Report `json:"sources"`
-	// Unhealthy is how many need attention, so a caller can decide
-	// whether to render anything without walking the list.
-	Unhealthy int `json:"unhealthy"`
 }
 
 func (s *Server) registerSourcesRoute(mux RouteMux) {
@@ -40,21 +28,6 @@ func (s *Server) registerSourcesRoute(mux RouteMux) {
 		return
 	}
 	mux.HandleFunc("GET /api/sources", func(w http.ResponseWriter, _ *http.Request) {
-		reports := s.sourceFreshness()
-		unhealthy := 0
-		for _, r := range reports {
-			if !r.Healthy() {
-				unhealthy++
-			}
-		}
-		if reports == nil {
-			// Render an empty array rather than null: a caller iterating
-			// the field should not have to special-case the difference.
-			reports = []freshness.Report{}
-		}
-		writeAPIJSON(w, http.StatusOK, sourcesResponse{
-			Sources:   reports,
-			Unhealthy: unhealthy,
-		})
+		writeAPIJSON(w, http.StatusOK, state.SourceHealthOf(s.sourceFreshness()))
 	})
 }

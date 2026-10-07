@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/state"
-	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 )
 
 // WithState serves the control plane's own state from the same capability
@@ -69,7 +68,7 @@ func (s *Server) registerStateRoutes(mux RouteMux) {
 			return
 		}
 		d := s.state()
-		var health []freshness.Report
+		var health []state.SourceReport
 		if d.Health != nil {
 			health = d.Health()
 		}

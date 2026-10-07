@@ -8,9 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/contexts/rules"
+	"go.klarlabs.de/tokenops/internal/capability/ruleintel"
 	"go.klarlabs.de/tokenops/internal/events"
-	"go.klarlabs.de/tokenops/internal/infra/rulesfs"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -105,7 +104,7 @@ func WithRules(h *RulesHandlers) Option {
 	return func(s *Server) { s.rulesAPI = h }
 }
 
-func (h *RulesHandlers) opts(r *http.Request) (string, string, eventschema.Provider) {
+func (h *RulesHandlers) opts(r *http.Request) (ruleintel.Corpus, eventschema.Provider) {
 	root := r.URL.Query().Get("root")
 	if root == "" {
 		root = h.root
@@ -114,41 +113,24 @@ func (h *RulesHandlers) opts(r *http.Request) (string, string, eventschema.Provi
 	if repoID == "" {
 		repoID = h.repoID
 	}
-	prov := eventschema.ProviderOpenAI
-	switch r.URL.Query().Get("provider") {
-	case "anthropic":
-		prov = eventschema.ProviderAnthropic
-	case "gemini":
-		prov = eventschema.ProviderGemini
-	}
-	return root, repoID, prov
+	return ruleintel.Corpus{Root: root, RepoID: repoID}, ruleintel.Provider(r.URL.Query().Get("provider"))
 }
 
 func (h *RulesHandlers) analyze(w http.ResponseWriter, r *http.Request) {
-	root, repoID, prov := h.opts(r)
-	cacheKey := root + "|" + repoID + "|" + string(prov)
+	corpus, prov := h.opts(r)
+	cacheKey := corpus.Root + "|" + corpus.RepoID + "|" + string(prov)
 	if body, ok := h.cachedAnalyze(cacheKey); ok {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-Cache", "hit")
 		_, _ = w.Write(body)
 		return
 	}
-	docs, err := rulesfs.LoadCorpus(root, repoID)
+	res, err := ruleintel.Analyze(corpus, prov)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
-	res, err := rules.AnalyzeDocs(docs, rules.AnalysisOptions{
-		Providers: []eventschema.Provider{prov},
-	})
-	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, err)
-		return
-	}
-	body, mErr := json.Marshal(map[string]any{
-		"documents":        res.Documents,
-		"duplicate_groups": res.DuplicateGroups,
-	})
+	body, mErr := json.Marshal(res)
 	if mErr != nil {
 		writeAPIError(w, http.StatusInternalServerError, mErr)
 		return
@@ -160,84 +142,49 @@ func (h *RulesHandlers) analyze(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RulesHandlers) conflicts(w http.ResponseWriter, r *http.Request) {
-	root, repoID, _ := h.opts(r)
-	docs, err := rulesfs.LoadCorpus(root, repoID)
+	corpus, _ := h.opts(r)
+	res, err := ruleintel.DetectConflicts(corpus)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
-	findings := rules.DetectConflicts(docs, rules.ConflictOptions{})
-	writeAPIJSON(w, http.StatusOK, map[string]any{"findings": findings})
+	writeAPIJSON(w, http.StatusOK, res)
 }
 
 func (h *RulesHandlers) compress(w http.ResponseWriter, r *http.Request) {
-	root, repoID, _ := h.opts(r)
+	corpus, _ := h.opts(r)
 	threshold, _ := strconv.ParseFloat(r.URL.Query().Get("similarity"), 64)
 	quality, _ := strconv.ParseFloat(r.URL.Query().Get("quality_floor"), 64)
-	docs, err := rulesfs.LoadCorpus(root, repoID)
+	res, err := ruleintel.Compress(corpus, ruleintel.CompressOptions{
+		SimilarityThreshold: threshold,
+		QualityFloor:        quality,
+	})
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
-	c := rules.NewCompressor(rules.CompressConfig{
-		SimilarityThreshold: threshold,
-		QualityFloor:        quality,
-	}, nil)
-	type view struct {
-		SourceID         string  `json:"source_id"`
-		Path             string  `json:"path"`
-		OriginalTokens   int64   `json:"original_tokens"`
-		CompressedTokens int64   `json:"compressed_tokens"`
-		QualityScore     float64 `json:"quality_score"`
-		Accepted         bool    `json:"accepted"`
-		DroppedSections  int     `json:"dropped_sections"`
-	}
-	views := make([]view, 0, len(docs))
-	for _, d := range docs {
-		r := c.Compress(d)
-		dropped := 0
-		for _, s := range r.Sections {
-			if s.Dropped {
-				dropped++
-			}
-		}
-		views = append(views, view{
-			SourceID:         r.SourceID,
-			Path:             d.Path,
-			OriginalTokens:   r.OriginalTokens,
-			CompressedTokens: r.CompressedTokens,
-			QualityScore:     r.QualityScore,
-			Accepted:         r.Accepted,
-			DroppedSections:  dropped,
-		})
-	}
-	writeAPIJSON(w, http.StatusOK, map[string]any{"results": views})
+	writeAPIJSON(w, http.StatusOK, res)
 }
 
 func (h *RulesHandlers) inject(w http.ResponseWriter, r *http.Request) {
-	root, repoID, _ := h.opts(r)
+	corpus, _ := h.opts(r)
 	q := r.URL.Query()
 	minScore, _ := strconv.ParseFloat(q.Get("min_score"), 64)
 	tokenBudget, _ := strconv.ParseInt(q.Get("token_budget"), 10, 64)
-	globalAdmit := q.Get("include_global") != "false"
-	docs, err := rulesfs.LoadCorpus(root, repoID)
+	res, err := ruleintel.Inject(corpus, ruleintel.InjectQuery{
+		MinScore:           minScore,
+		TokenBudget:        tokenBudget,
+		IncludeGlobalScope: q.Get("include_global") != "false",
+		WorkflowID:         q.Get("workflow_id"),
+		AgentID:            q.Get("agent_id"),
+		FilePaths:          parseList(q.Get("files")),
+		Tools:              parseList(q.Get("tools")),
+		Keywords:           parseList(q.Get("keywords")),
+	})
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
-	router := rules.NewRouter(rules.RouterConfig{
-		MinScore:           minScore,
-		TokenBudget:        tokenBudget,
-		IncludeGlobalScope: globalAdmit,
-	})
-	res := router.Select(docs, rules.SelectionSignals{
-		WorkflowID: q.Get("workflow_id"),
-		AgentID:    q.Get("agent_id"),
-		RepoID:     repoID,
-		FilePaths:  parseList(q.Get("files")),
-		Tools:      parseList(q.Get("tools")),
-		Keywords:   parseList(q.Get("keywords")),
-	})
 	writeAPIJSON(w, http.StatusOK, res)
 }
 

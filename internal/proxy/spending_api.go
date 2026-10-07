@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -9,7 +8,6 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
-	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 )
 
 // Spending routes answer from the same capability the MCP tools call
@@ -103,11 +101,7 @@ func (a *AnalyticsHandlers) spendCommits(w http.ResponseWriter, r *http.Request)
 		}
 		since = s
 	}
-	res, err := commits.Compute(r.Context(), commits.Deps{
-		Turns: func(ctx context.Context, since time.Time) ([]analytics.SessionTurn, error) {
-			return a.aggregator.SessionTurns(ctx, analytics.Filter{Since: since})
-		},
-	}, since)
+	res, err := commits.Compute(r.Context(), commits.Deps{Turns: commits.TurnsFrom(a.aggregator)}, since)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return

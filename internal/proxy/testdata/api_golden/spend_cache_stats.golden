@@ -1,0 +1,5 @@
+200 OK
+Content-Type: application/json
+Cache-Control: no-store
+
+{"stats":{"total_input_tokens":4200,"cached_input_tokens":1000,"uncached_input_tokens":3200,"output_tokens":750,"cache_ratio":0.23809523809523808},"window":{"EventType":"","Provider":"","Model":"","WorkflowID":"","AgentID":"","Since":"2026-01-01T00:00:00Z","Until":"2026-01-10T00:00:00Z","ExcludeSources":null,"IncludeSources":null}}

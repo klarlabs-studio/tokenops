@@ -2,11 +2,8 @@ package proxy
 
 import (
 	"net/http"
-	"strconv"
-	"time"
 
-	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
-	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
+	"go.klarlabs.de/tokenops/internal/capability/auditquery"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -15,15 +12,15 @@ import (
 // `tokenops_records (view=audit)` tool already query the same store directly, so
 // /api/audit completes the parity triangle.
 type AuditHandlers struct {
-	rec *audit.Recorder
+	log *auditquery.Log
 }
 
-// NewAuditHandlers wraps an audit.Recorder for the HTTP layer.
+// NewAuditHandlers wraps the store's audit log for the HTTP layer.
 func NewAuditHandlers(store *sqlite.Store) *AuditHandlers {
 	if store == nil {
 		return nil
 	}
-	return &AuditHandlers{rec: audit.NewRecorder(store)}
+	return &AuditHandlers{log: auditquery.NewLog(store)}
 }
 
 // WithAudit installs the audit handler on the proxy.
@@ -41,31 +38,21 @@ func (h *AuditHandlers) Register(mux RouteMux) {
 
 func (h *AuditHandlers) list(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	params := analytics.QueryParams{
-		Since:        q.Get("since"),
-		Until:        q.Get("until"),
-		DefaultSince: 24 * time.Hour,
-	}
-	f, err := params.ToFilter()
+	query, err := auditquery.Parse(auditquery.Request{
+		Since:  q.Get("since"),
+		Until:  q.Get("until"),
+		Action: q.Get("action"),
+		Actor:  q.Get("actor"),
+		Limit:  q.Get("limit"),
+	})
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
-	limit, _ := strconv.Atoi(q.Get("limit"))
-	if limit <= 0 {
-		limit = 100
-	}
-	filter := audit.Filter{
-		Action: audit.Action(q.Get("action")),
-		Actor:  q.Get("actor"),
-		Since:  f.Since,
-		Until:  f.Until,
-		Limit:  limit,
-	}
-	entries, err := h.rec.Query(r.Context(), filter)
+	res, err := h.log.List(r.Context(), query)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeAPIJSON(w, http.StatusOK, map[string]any{"entries": entries})
+	writeAPIJSON(w, http.StatusOK, res)
 }

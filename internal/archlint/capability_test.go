@@ -152,19 +152,29 @@ var directDomainImports = map[string][]string{
 		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter",
 		"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow",
 	},
+	// The proxy is two things in one package: the /api/* read model,
+	// which is an adapter like the CLI and now answers entirely from
+	// internal/capability, and the provider data path, which is not an
+	// adapter over a use case but the request pipeline itself. What is
+	// left below is the data path's own domain collaborators — exempt by
+	// design, not migration debt. A new entry still fails the test: an
+	// /api/* handler that needs a domain package needs a capability.
 	"go.klarlabs.de/tokenops/internal/proxy": {
-		"go.klarlabs.de/tokenops/internal/contexts/coaching/waste",
-		"go.klarlabs.de/tokenops/internal/contexts/observability/analytics",
-		"go.klarlabs.de/tokenops/internal/contexts/observability/freshness",
+		// Live routing: builds the optimizer request for each forwarded
+		// call and acts on its recommendation (routing.go).
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router",
+		// The provider catalog the reverse-proxy routes, the cache key
+		// and the observer are built from (router.go, cache_middleware.go,
+		// observation.go).
 		"go.klarlabs.de/tokenops/internal/contexts/prompts/providers",
+		// Preflight and response token counts for each observed request
+		// (observation.go, cache_middleware.go).
 		"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer",
-		"go.klarlabs.de/tokenops/internal/contexts/rules",
-		"go.klarlabs.de/tokenops/internal/contexts/security/audit",
-		"go.klarlabs.de/tokenops/internal/contexts/spend/forecast",
+		// Prices each observed request as it is emitted (observation.go)
+		// and is the cost engine routing ranks with (routing.go). The
+		// /api/* handlers use it only for its currency.
 		"go.klarlabs.de/tokenops/internal/contexts/spend/spend",
-		"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow",
 	},
 }
 

@@ -4,17 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
-	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
+	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
-	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
-	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // AnalyticsHandlers wires the daemon's read-only analytics surface
@@ -24,19 +19,24 @@ import (
 // register them alongside the provider routes.
 type AnalyticsHandlers struct {
 	store      *sqlite.Store
-	aggregator *analytics.Aggregator
+	aggregator *spending.EventAggregator
 	spend      *spend.Engine
-	waste      waste.Config
+	workflows  *workflowtrace.Reader
 }
 
 // NewAnalyticsHandlers builds the handlers. Store, aggregator, and
 // spend engine are required; wasteCfg's zero value uses the detector
 // defaults.
-func NewAnalyticsHandlers(store *sqlite.Store, agg *analytics.Aggregator, spendEng *spend.Engine, wasteCfg waste.Config) (*AnalyticsHandlers, error) {
+func NewAnalyticsHandlers(store *sqlite.Store, agg *spending.EventAggregator, spendEng *spend.Engine, wasteCfg workflowtrace.WasteConfig) (*AnalyticsHandlers, error) {
 	if store == nil || agg == nil || spendEng == nil {
 		return nil, errors.New("proxy: AnalyticsHandlers requires store + aggregator + spend engine")
 	}
-	return &AnalyticsHandlers{store: store, aggregator: agg, spend: spendEng, waste: wasteCfg}, nil
+	return &AnalyticsHandlers{
+		store:      store,
+		aggregator: agg,
+		spend:      spendEng,
+		workflows:  workflowtrace.NewReader(store, spendEng, wasteCfg),
+	}, nil
 }
 
 // Register installs every endpoint on mux. Endpoints are read-only;
@@ -66,41 +66,19 @@ func WithAnalytics(h *AnalyticsHandlers) Option {
 
 // --- helpers ------------------------------------------------------------
 
-func filterFromQuery(r *http.Request, defaultSince time.Duration) (analytics.Filter, error) {
+// windowFromQuery reads the window every rollup takes: ?since= (RFC 3339
+// or a duration), ?until=, and the provider, model, workflow_id and
+// agent_id narrowing.
+func windowFromQuery(r *http.Request, defaultSince time.Duration) (spending.Window, error) {
 	q := r.URL.Query()
-	return analytics.QueryParams{
-		Since:        q.Get("since"),
-		Until:        q.Get("until"),
-		Provider:     q.Get("provider"),
-		Model:        q.Get("model"),
-		WorkflowID:   q.Get("workflow_id"),
-		AgentID:      q.Get("agent_id"),
-		DefaultSince: defaultSince,
-	}.ToFilter()
-}
-
-func parseBucket(s string) analytics.Bucket {
-	switch strings.ToLower(s) {
-	case "day":
-		return analytics.BucketDay
-	default:
-		return analytics.BucketHour
-	}
-}
-
-func parseGroup(s string) analytics.Group {
-	switch strings.ToLower(s) {
-	case "provider":
-		return analytics.GroupProvider
-	case "workflow":
-		return analytics.GroupWorkflow
-	case "agent":
-		return analytics.GroupAgent
-	case "model":
-		return analytics.GroupModel
-	default:
-		return analytics.GroupNone
-	}
+	return spending.WindowOf(spending.WindowQuery{
+		Since:      q.Get("since"),
+		Until:      q.Get("until"),
+		Provider:   q.Get("provider"),
+		Model:      q.Get("model"),
+		WorkflowID: q.Get("workflow_id"),
+		AgentID:    q.Get("agent_id"),
+	}, defaultSince)
 }
 
 func writeAPIJSON(w http.ResponseWriter, status int, body any) {
@@ -114,143 +92,66 @@ func writeAPIError(w http.ResponseWriter, status int, err error) {
 	writeAPIJSON(w, status, map[string]string{"error": err.Error()})
 }
 
+// writeAPIResult renders a capability's answer: a 500 when it failed,
+// the answer otherwise.
+func writeAPIResult(w http.ResponseWriter, body any, err error) {
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeAPIJSON(w, http.StatusOK, body)
+}
+
 // --- handlers -----------------------------------------------------------
 
 func (a *AnalyticsHandlers) spendSummary(w http.ResponseWriter, r *http.Request) {
-	filter, err := filterFromQuery(r, 7*24*time.Hour)
+	win, err := windowFromQuery(r, 7*24*time.Hour)
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
-	summary, err := a.aggregator.Summarize(r.Context(), filter)
-	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeAPIJSON(w, http.StatusOK, map[string]any{
-		"window":   filter,
-		"summary":  summary,
-		"currency": a.spend.Currency(),
-	})
+	res, err := spending.Summary(r.Context(), a.aggregator, win, a.spend.Currency())
+	writeAPIResult(w, res, err)
 }
 
 func (a *AnalyticsHandlers) spendSeries(w http.ResponseWriter, r *http.Request) {
-	filter, err := filterFromQuery(r, 24*time.Hour)
+	win, err := windowFromQuery(r, 24*time.Hour)
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
-	bucket := parseBucket(r.URL.Query().Get("bucket"))
-	group := parseGroup(r.URL.Query().Get("group"))
-	rows, err := a.aggregator.AggregateBy(r.Context(), filter, bucket, group)
-	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeAPIJSON(w, http.StatusOK, map[string]any{
-		"bucket":   bucket,
-		"group":    group,
-		"rows":     rows,
-		"currency": a.spend.Currency(),
-	})
+	q := r.URL.Query()
+	res, err := spending.Series(r.Context(), a.aggregator, win, q.Get("bucket"), q.Get("group"), a.spend.Currency())
+	writeAPIResult(w, res, err)
 }
 
 func (a *AnalyticsHandlers) spendForecast(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	horizon := 7
-	if v := q.Get("horizon_days"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 30 {
-			horizon = n
-		}
-	}
-	filter := analytics.Filter{Since: time.Now().Add(-30 * 24 * time.Hour)}
-	rows, err := a.aggregator.AggregateBy(r.Context(), filter, analytics.BucketDay, analytics.GroupNone)
-	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, err)
-		return
-	}
-	history := forecast.SeriesFromRows(rows, forecast.CostUSD)
-	preds := forecast.AutoForecast(history, horizon, 24*time.Hour)
-	// Project tokens over the same horizon. A flat-rate plan bills
-	// nothing, so the cost series is a flat zero and the token series is
-	// the only one the dashboard can plot meaningfully.
-	tokenHistory := forecast.SeriesFromRows(rows, forecast.TotalTokens)
-	writeAPIJSON(w, http.StatusOK, map[string]any{
-		"horizon_days":    horizon,
-		"history_points":  len(history),
-		"history":         rows,
-		"forecast":        preds,
-		"forecast_tokens": forecast.AutoForecast(tokenHistory, horizon, 24*time.Hour),
-		"currency":        a.spend.Currency(),
-	})
+	horizon := spending.HorizonDays(r.URL.Query().Get("horizon_days"))
+	res, err := spending.Forecast(r.Context(), a.aggregator, horizon, a.spend.Currency(), time.Now())
+	writeAPIResult(w, res, err)
 }
 
-// spendCacheStats reports the cache hit ratio across the events
-// table. Cache reads bill at ~10% of new-input rate for Claude
-// models — for agent-heavy workloads the ratio is the key efficiency
-// number, often >95%. JSONL events carry the split in attributes
-// (legacy) or payload.cached_input_tokens (post-v0.14.2); we
-// COALESCE so both shapes work without a backfill.
+// spendCacheStats reports the prompt-cache hit ratio over a window.
 func (a *AnalyticsHandlers) spendCacheStats(w http.ResponseWriter, r *http.Request) {
-	filter, err := filterFromQuery(r, 24*time.Hour)
+	win, err := windowFromQuery(r, 24*time.Hour)
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
-	stats, err := a.aggregator.CacheStats(r.Context(), filter)
-	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeAPIJSON(w, http.StatusOK, map[string]any{
-		"window": filter,
-		"stats":  stats,
-	})
+	res, err := spending.CacheStats(r.Context(), a.aggregator, win)
+	writeAPIResult(w, res, err)
 }
 
 // listWorkflows returns one row per workflow_id with rolled-up metrics
-// over the configured window. Used by the dashboard to populate the
-// workflow drill-down table.
+// over the window.
 func (a *AnalyticsHandlers) listWorkflows(w http.ResponseWriter, r *http.Request) {
-	filter, err := filterFromQuery(r, 7*24*time.Hour)
+	win, err := windowFromQuery(r, 7*24*time.Hour)
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
-	rows, err := a.aggregator.AggregateBy(r.Context(), filter, analytics.BucketDay, analytics.GroupWorkflow)
-	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, err)
-		return
-	}
-	type entry struct {
-		WorkflowID string  `json:"workflow_id"`
-		Requests   int64   `json:"requests"`
-		Tokens     int64   `json:"tokens"`
-		CostUSD    float64 `json:"cost_usd"`
-	}
-	totals := map[string]*entry{}
-	for _, row := range rows {
-		key := row.GroupKey
-		if key == "" {
-			continue
-		}
-		cur, ok := totals[key]
-		if !ok {
-			cur = &entry{WorkflowID: key}
-			totals[key] = cur
-		}
-		cur.Requests += row.Requests
-		cur.Tokens += row.TotalTokens
-		cur.CostUSD += row.CostUSD
-	}
-	out := make([]entry, 0, len(totals))
-	for _, e := range totals {
-		out = append(out, *e)
-	}
-	writeAPIJSON(w, http.StatusOK, map[string]any{
-		"workflows": out,
-		"currency":  a.spend.Currency(),
-	})
+	res, err := spending.Workflows(r.Context(), a.aggregator, win, a.spend.Currency())
+	writeAPIResult(w, res, err)
 }
 
 func (a *AnalyticsHandlers) workflowDetail(w http.ResponseWriter, r *http.Request) {
@@ -259,74 +160,20 @@ func (a *AnalyticsHandlers) workflowDetail(w http.ResponseWriter, r *http.Reques
 		writeAPIError(w, http.StatusBadRequest, errors.New("workflow id required"))
 		return
 	}
-	trace, err := workflow.Reconstruct(r.Context(), a.store, a.spend, id)
-	if err != nil {
-		if errors.Is(err, workflow.ErrNoTrace) {
-			writeAPIError(w, http.StatusNotFound, err)
-			return
-		}
-		writeAPIError(w, http.StatusInternalServerError, err)
+	detail, err := a.workflows.Detail(r.Context(), id)
+	if errors.Is(err, workflowtrace.ErrNoTrace) {
+		writeAPIError(w, http.StatusNotFound, err)
 		return
 	}
-	findings := waste.New(a.waste).Detect(trace)
-	writeAPIJSON(w, http.StatusOK, map[string]any{
-		"trace":    trace,
-		"findings": findings,
-		"currency": a.spend.Currency(),
-	})
+	writeAPIResult(w, detail, err)
 }
 
 func (a *AnalyticsHandlers) listOptimizations(w http.ResponseWriter, r *http.Request) {
-	filter, err := filterFromQuery(r, 7*24*time.Hour)
+	win, err := windowFromQuery(r, 7*24*time.Hour)
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
-	envs, err := a.store.Query(r.Context(), sqlite.Filter{
-		Type:       eventschema.EventTypeOptimization,
-		WorkflowID: filter.WorkflowID,
-		AgentID:    filter.AgentID,
-		Since:      filter.Since,
-		Until:      filter.Until,
-		Limit:      500,
-	})
-	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, err)
-		return
-	}
-	type entry struct {
-		Timestamp              time.Time `json:"timestamp"`
-		Kind                   string    `json:"kind"`
-		Mode                   string    `json:"mode"`
-		Decision               string    `json:"decision"`
-		EstimatedSavingsTokens int64     `json:"estimated_savings_tokens"`
-		EstimatedSavingsUSD    float64   `json:"estimated_savings_usd"`
-		QualityScore           float64   `json:"quality_score"`
-		Reason                 string    `json:"reason"`
-		WorkflowID             string    `json:"workflow_id,omitempty"`
-		AgentID                string    `json:"agent_id,omitempty"`
-	}
-	out := make([]entry, 0, len(envs))
-	for _, env := range envs {
-		oe, ok := env.Payload.(*eventschema.OptimizationEvent)
-		if !ok {
-			continue
-		}
-		out = append(out, entry{
-			Timestamp:              env.Timestamp,
-			Kind:                   string(oe.Kind),
-			Mode:                   string(oe.Mode),
-			Decision:               string(oe.Decision),
-			EstimatedSavingsTokens: oe.EstimatedSavingsTokens,
-			EstimatedSavingsUSD:    oe.EstimatedSavingsUSD,
-			QualityScore:           oe.QualityScore,
-			Reason:                 oe.Reason,
-			WorkflowID:             oe.WorkflowID,
-			AgentID:                oe.AgentID,
-		})
-	}
-	writeAPIJSON(w, http.StatusOK, map[string]any{
-		"optimizations": out,
-		"currency":      a.spend.Currency(),
-	})
+	res, err := spending.OptimizationsIn(r.Context(), a.store, win, a.spend.Currency())
+	writeAPIResult(w, res, err)
 }

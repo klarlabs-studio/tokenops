@@ -1,0 +1,5 @@
+200 OK
+Content-Type: application/json
+Cache-Control: no-store
+
+{"bucket":"hour","currency":"USD","group":"provider","rows":[{"BucketStart":"2026-01-05T10:00:00Z","GroupKey":"openai","Requests":3,"InputTokens":3000,"OutputTokens":500,"TotalTokens":3500,"CostUSD":1.04,"APIEquivalentUSD":1.04,"CostRecomputed":0,"Cost":{"amount":1.04,"quality":"measured","source":"sqlite_events","observed_at":"2026-01-05T10:00:00Z","coverage":{"included":3}},"APIEquivalent":{"amount":1.04,"quality":"derived","source":"sqlite_events","caveat":"list-price equivalent, not an amount billed","observed_at":"2026-01-05T10:00:00Z","coverage":{"included":3}}},{"BucketStart":"2026-01-06T11:00:00Z","GroupKey":"openai","Requests":1,"InputTokens":1200,"OutputTokens":250,"TotalTokens":1450,"CostUSD":0.9,"APIEquivalentUSD":0.9,"CostRecomputed":0,"Cost":{"amount":0.9,"quality":"measured","source":"sqlite_events","observed_at":"2026-01-06T11:00:00Z","coverage":{"included":1}},"APIEquivalent":{"amount":0.9,"quality":"derived","source":"sqlite_events","caveat":"list-price equivalent, not an amount billed","observed_at":"2026-01-06T11:00:00Z","coverage":{"included":1}}}]}

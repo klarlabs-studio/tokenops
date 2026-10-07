@@ -1,0 +1,5 @@
+200 OK
+Content-Type: application/json
+Cache-Control: no-store
+
+{"currency":"USD","summary":{"Requests":4,"InputTokens":4200,"OutputTokens":750,"TotalTokens":4950,"CostUSD":1.94,"APIEquivalentUSD":1.94},"window":{"EventType":"","Provider":"","Model":"","WorkflowID":"","AgentID":"","Since":"2026-01-01T00:00:00Z","Until":"2026-01-10T00:00:00Z","ExcludeSources":null,"IncludeSources":null}}

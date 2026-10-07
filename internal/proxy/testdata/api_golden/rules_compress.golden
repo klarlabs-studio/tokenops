@@ -1,0 +1,5 @@
+200 OK
+Content-Type: application/json
+Cache-Control: no-store
+
+{"results":[{"source_id":"repo:.cursor/rules/go.mdc","path":".cursor/rules/go.mdc","original_tokens":5,"compressed_tokens":5,"quality_score":1,"accepted":true,"dropped_sections":0},{"source_id":"repo:AGENTS.md","path":"AGENTS.md","original_tokens":2,"compressed_tokens":2,"quality_score":1,"accepted":true,"dropped_sections":0},{"source_id":"repo:CLAUDE.md","path":"CLAUDE.md","original_tokens":16,"compressed_tokens":16,"quality_score":1,"accepted":true,"dropped_sections":0}]}
