@@ -11,7 +11,6 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/reconstruct"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
-	"go.klarlabs.de/tokenops/internal/contexts/governance/story"
 )
 
 // newStoryCmd accounts for what actually happened in a piece of work.
@@ -76,13 +75,7 @@ stored; the account is rebuilt from transcripts on every run.`,
 				// clients yielded is still worth showing.
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err)
 			}
-			tasks := story.Group(units, story.Options{IdleGap: idleGap})
-			// Newest first: the work you are most likely asking about is
-			// the work you just did.
-			reverse(tasks)
-			if limit > 0 && len(tasks) > limit {
-				tasks = tasks[:limit]
-			}
+			tasks := reconstruct.Tasks(units, reconstruct.Options{IdleGap: idleGap, Limit: limit})
 			out := cmd.OutOrStdout()
 			switch resolveAudience(audience, jsonOut) {
 			case audienceAgent:
@@ -161,12 +154,6 @@ func storyWindow(days int) string {
 	}
 }
 
-func reverse(ts []story.Task) {
-	for i, j := 0, len(ts)-1; i < j; i, j = i+1, j-1 {
-		ts[i], ts[j] = ts[j], ts[i]
-	}
-}
-
 // storyTaskJSON is the machine rendering. It is the same account, shaped
 // for an agent reading its own history back — which is why the frictions
 // are enumerated rather than prose-formatted.
@@ -191,7 +178,7 @@ type storyTaskJSON struct {
 	Clean                bool     `json:"clean"`
 }
 
-func writeStoryJSON(w io.Writer, tasks []story.Task, days int) error {
+func writeStoryJSON(w io.Writer, tasks []reconstruct.Task, days int) error {
 	out := struct {
 		WindowDays int             `json:"window_days"`
 		Tasks      []storyTaskJSON `json:"tasks"`
@@ -242,7 +229,7 @@ func writeStoryJSON(w io.Writer, tasks []story.Task, days int) error {
 	return enc.Encode(out)
 }
 
-func writeStoryText(w io.Writer, tasks []story.Task, days int) {
+func writeStoryText(w io.Writer, tasks []reconstruct.Task, days int) {
 	if len(tasks) == 0 {
 		fmt.Fprintf(w, "No tasks in the last %dd. Run an agent session, or widen --days.\n", days)
 		return
@@ -257,7 +244,7 @@ func writeStoryText(w io.Writer, tasks []story.Task, days int) {
 		fmt.Fprintf(w, "─ %s\n", t.Title)
 		fmt.Fprintf(w, "  %s → %s (%s)",
 			t.Start.Local().Format("Mon 15:04"), t.End.Local().Format("15:04"), humanDuration(t.Duration()))
-		if t.Boundary != story.BoundarySessionStart {
+		if t.Boundary != reconstruct.BoundarySessionStart {
 			fmt.Fprintf(w, "  · split by %s", t.Boundary)
 		}
 		fmt.Fprintln(w)

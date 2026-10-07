@@ -11,7 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/fmtlearn"
+	"go.klarlabs.de/tokenops/internal/capability/fmtinsight"
 	"go.klarlabs.de/tokenops/internal/infra/jsonlfmt"
 	"go.klarlabs.de/tokenops/internal/infra/svgchart"
 )
@@ -40,9 +40,7 @@ tokenops fmt would save on your real traffic. Nothing is persisted — only
 sizes are reported. Requires no daemon and no wrapped commands.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			rep, _, err := jsonlfmt.Scan(registryFormatters(rf), jsonlfmt.Options{
-				Root: root, MaxFiles: maxFiles,
-			}, time.Now())
+			rep, err := fmtinsight.Analyze(commandFmtConfig(rf), fmtinsight.Window{Root: root, MaxFiles: maxFiles}, time.Now())
 			if err != nil {
 				return err
 			}
@@ -386,17 +384,6 @@ func renderAnalyze(cmd *cobra.Command, rep *jsonlfmt.Report, top int) {
 
 // fmtInt renders an int without thousands separators (small counts).
 func fmtInt(n int) string { return fmt.Sprintf("%d", n) }
-
-// jsonlLearnRecords returns fmtlearn records synthesised from the JSONL so
-// `fmt learn` reflects real usage without any wrapped runs. Best-effort:
-// scan errors yield an empty slice. Capped for responsiveness.
-func jsonlLearnRecords(rf *rootFlags, maxFiles int) []fmtlearn.Record {
-	_, recs, err := jsonlfmt.Scan(registryFormatters(rf), jsonlfmt.Options{MaxFiles: maxFiles}, time.Now())
-	if err != nil {
-		return nil
-	}
-	return recs
-}
 
 func pct(part, whole int64) float64 {
 	if whole <= 0 {

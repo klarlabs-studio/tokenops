@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **routing:** `tokenops routing proposals` gives the answer `tokenops_routing` gives: the text names what each upgrade adds per million tokens, or why its price could not be checked, and `--json` emits `{pending, note}` with the question to put to you, where it printed the approval log's raw records
+
 ### Fixed
 
 - **scorecard:** the MCP tool and `/api/scorecard` grade the agent KPIs (confirmation-gate, regenerate, tool-success and destructive-action rates) as `tokenops scorecard` always did; they graded the same week on four fewer metrics. `tokenops scorecard` reads the configured `storage.path` instead of always `~/.tokenops/events.db`
@@ -15,6 +19,9 @@
 - **workflows:** reading a workflow trace no longer stores a `workflow.observed` domain event, so the event counters stop counting views
 - **read guard:** each prevented re-read is published once, not every two minutes; with OTel event export on, a collector received the whole read-guard history again every tick
 - **plans:** the unconfigured-plan hint no longer offers `TOKENOPS_PLAN_<PROVIDER>` as applying without a restart; set in a shell it never reached the daemon
+- **config:** a leading `~` in `storage.path`, `pricing.path` and the other configured paths is expanded, as the configuration guide writes them; the daemon opened a directory literally named `~`, and a `~` pricing override failed to load
+- **fmt:** the MCP tools `tokenops_fmt_analyze` and `tokenops_fmt_learn` use the formatters your config defines, as the CLI does; a command you had written a formatter for showed as unhandled and came back as the next formatter to write. `tokenops fmt --emit` records into the configured `storage.path`, not always `~/.tokenops/events.db`
+- **usage meter:** connecting claude.ai's usage meter through the MCP tool keeps the browser session it reads, with its bot-check clearance, as `vendor-usage setup claude-subscription` does; it verified without the clearance and stored the session as if pasted
 
 ## 0.101.1 - 2026-10-06
 

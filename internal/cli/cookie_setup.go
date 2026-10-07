@@ -13,9 +13,8 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
+	"go.klarlabs.de/tokenops/internal/capability/usagemeter"
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
-	claudeai "go.klarlabs.de/tokenops/internal/infra/vendorusage/claudeusagemeter"
 )
 
 // meterBaseURL overrides claude.ai's address for the verification request.
@@ -142,13 +141,6 @@ func runCookieSetup(cmd *cobra.Command, opts cookieSetupOptions) error {
 
 	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
 	defer cancel()
-	client := claudeai.NewClient(key)
-	client.Clearance, client.UserAgent = session.clearance, session.userAgent
-	client.BrowserHeaders = session.browserHeaders
-	client.BrowserCookies = session.browserCookies
-	if meterBaseURL != "" {
-		client.BaseURL = meterBaseURL
-	}
 
 	fmt.Fprintln(out)
 	progress := startActivity(cmd.ErrOrStderr(), "Checking credentials with Anthropic")
@@ -156,20 +148,16 @@ func runCookieSetup(cmd *cobra.Command, opts cookieSetupOptions) error {
 	// account holds several — a personal one, a Console API one, an
 	// Enterprise one — and only some carry a usage meter at all, so the
 	// question put a choice to the operator that the data already answers.
-	selectedOrg := opts.org
-	if selectedOrg == "" {
-		selectedOrg = session.orgID
-	}
-	conn, err := claudeusagemeter.Connect(ctx, client, selectedOrg)
+	conn, err := usagemeter.Verify(ctx, session.meterSession(), opts.org, meterBaseURL)
 	if err != nil {
 		progress.failure("Anthropic verification failed")
 	} else {
 		progress.success("Anthropic credentials verified")
 	}
 	switch {
-	case errors.Is(err, claudeusagemeter.ErrBotCheck):
+	case errors.Is(err, usagemeter.ErrBotCheck):
 		return botCheckAdvice(session.browser)
-	case errors.Is(err, claudeusagemeter.ErrNothingToMeter):
+	case errors.Is(err, usagemeter.ErrNothingToMeter):
 		return fmt.Errorf("%w — none of this account's organizations reports usage limits. "+
 			"Nothing was written", err)
 	case err != nil:
@@ -204,20 +192,7 @@ func runCookieSetup(cmd *cobra.Command, opts cookieSetupOptions) error {
 	if err != nil {
 		return err
 	}
-	cfg.VendorUsage.ClaudeUsageMeter.Enabled = true
-	cfg.VendorUsage.ClaudeUsageMeter.SessionKey = key
-	cfg.VendorUsage.ClaudeUsageMeter.Clearance = session.clearance
-	cfg.VendorUsage.ClaudeUsageMeter.UserAgent = session.userAgent
-	cfg.VendorUsage.ClaudeUsageMeter.BrowserHeaders = session.browserHeaders
-	cfg.VendorUsage.ClaudeUsageMeter.BrowserCookies = session.browserCookies
-	cfg.VendorUsage.ClaudeUsageMeter.OrgID = org.UUID
-	// Read from a browser: keep reading from it. The clearance cookie that
-	// got past the bot check expires within hours, so a stored copy would
-	// work this afternoon and be refused tomorrow.
-	cfg.VendorUsage.ClaudeUsageMeter.FromBrowser = session.browser != ""
-	if session.browser != "" {
-		cfg.VendorUsage.ClaudeUsageMeter.Browser = session.browser
-	}
+	usagemeter.Apply(&cfg, session.meterSession(), conn)
 	if err := writeMutableConfig(path, cfg); err != nil {
 		return err
 	}
@@ -269,6 +244,15 @@ func readRest(r io.Reader) (string, error) {
 // browserSession is what the browser gave us: the session, the clearance
 // cookie that proves it passed claude.ai's bot check, and the agent string
 // that cookie is bound to.
+// meterSession is s as the usage-meter capability takes it.
+func (s browserSession) meterSession() usagemeter.Session {
+	return usagemeter.Session{
+		Key: s.key, Clearance: s.clearance, UserAgent: s.userAgent,
+		BrowserHeaders: s.browserHeaders, BrowserCookies: s.browserCookies,
+		Browser: s.browser, OrgID: s.orgID,
+	}
+}
+
 type browserSession struct {
 	key            string
 	clearance      string
@@ -295,24 +279,16 @@ func cookieSetupKey(cmd *cobra.Command, opts cookieSetupOptions) (browserSession
 		return parseUsageRequest(raw)
 	}
 	if !opts.paste {
-		home, err := os.UserHomeDir()
-		if err == nil {
+		if _, err := os.UserHomeDir(); err == nil {
 			fmt.Fprintln(out, "\nLooking for your claude.ai session in a local browser (macOS may ask you to allow keychain access)...")
 			// An operator is watching this one: give them time to find the
 			// dialog macOS puts up, rather than falling to the paste path
 			// while they are still looking for it.
-			cookies, browser, err := browsercookie.FindMany(cmd.Context(), home, "claude.ai",
-				[]string{"sessionKey", "cf_clearance"}, opts.browser,
-				browsercookie.KeychainSecret(browsercookie.InteractiveKeychainWait))
+			s, err := usagemeter.FromBrowser(cmd.Context(), opts.browser, browsercookie.InteractiveKeychainWait)
 			switch {
 			case err == nil:
-				return browserSession{
-					key:       strings.TrimSpace(cookies["sessionKey"]),
-					clearance: strings.TrimSpace(cookies["cf_clearance"]),
-					userAgent: browser.UserAgent(),
-					browser:   browser.Name,
-				}, nil
-			case errors.Is(err, browsercookie.ErrNotFound):
+				return browserSession{key: s.Key, clearance: s.Clearance, userAgent: s.UserAgent, browser: s.Browser}, nil
+			case errors.Is(err, usagemeter.ErrNotFound):
 				fmt.Fprintln(out, "No claude.ai session found in a local browser — sign in there, or paste the key below.")
 			default:
 				fmt.Fprintf(out, "Could not read it from the browser: %v\n", err)
@@ -387,5 +363,5 @@ func botCheckAdvice(browser string) error {
 		where = browser
 	}
 	return fmt.Errorf("%w\n  open https://claude.ai in %s — one page load renews it — then run this again. Nothing was written",
-		claudeusagemeter.ErrBotCheck, where)
+		usagemeter.ErrBotCheck, where)
 }

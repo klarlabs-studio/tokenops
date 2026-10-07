@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/contexts/governance/story"
+	"go.klarlabs.de/tokenops/internal/capability/reconstruct"
 )
 
-// The structure is one story.Task. The renderings are what differ,
+// The structure is one reconstruct.Task. The renderings are what differ,
 // because the audiences do: four people want an account of the same work
 // and none of them wants the same document.
 //
@@ -42,7 +42,7 @@ import (
 // transcripts, which is not the same thing as a timesheet and is not a
 // judgement about what is billable. A number a reader can misread as a
 // stronger claim than it is is the one way this rendering can do harm.
-func writeStoryReport(w io.Writer, tasks []story.Task, window string) {
+func writeStoryReport(w io.Writer, tasks []reconstruct.Task, window string) {
 	if len(tasks) == 0 {
 		fmt.Fprintf(w, "No AI-assisted work recorded in %s.\n", window)
 		return
@@ -92,12 +92,12 @@ func writeStoryReport(w io.Writer, tasks []story.Task, window string) {
 // and how it ended; whether the code works is a question only the tests
 // answer, and a handover that quietly implies otherwise is worse than no
 // handover at all.
-func writeStoryHandoff(w io.Writer, tasks []story.Task, window string) {
+func writeStoryHandoff(w io.Writer, tasks []reconstruct.Task, window string) {
 	if len(tasks) == 0 {
 		fmt.Fprintf(w, "No work recorded in %s — nothing to hand over.\n", window)
 		return
 	}
-	var rough, clean []story.Task
+	var rough, clean []reconstruct.Task
 	for _, t := range tasks {
 		if t.Clean() {
 			clean = append(clean, t)
@@ -138,7 +138,7 @@ func writeStoryHandoff(w io.Writer, tasks []story.Task, window string) {
 		"how the work ended, not whether it works — only the tests know that.\n")
 }
 
-func writeHandoffTask(w io.Writer, t story.Task) {
+func writeHandoffTask(w io.Writer, t reconstruct.Task) {
 	fmt.Fprintf(w, "  ─ %s\n", t.Title)
 	fmt.Fprintf(w, "      %s, %s, %d instruction%s\n",
 		t.Start.Local().Format("Mon 2 Jan 15:04"), humanDuration(t.Duration()),
@@ -152,16 +152,16 @@ func writeHandoffTask(w io.Writer, t story.Task) {
 
 type dayGroup struct {
 	date  time.Time
-	tasks []story.Task
+	tasks []reconstruct.Task
 }
 
 // groupByDay buckets tasks by local calendar day, oldest first. A record
 // of work reads forwards: a reader who was not there is following what
 // happened, not catching up on what just did.
-func groupByDay(tasks []story.Task) []dayGroup {
+func groupByDay(tasks []reconstruct.Task) []dayGroup {
 	idx := map[string]int{}
 	var out []dayGroup
-	ordered := append([]story.Task(nil), tasks...)
+	ordered := append([]reconstruct.Task(nil), tasks...)
 	sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].Start.Before(ordered[j].Start) })
 	for _, t := range ordered {
 		day := t.Start.Local().Format("2006-01-02")
@@ -184,7 +184,7 @@ type fileCount struct {
 
 // hotFiles ranks the files the work kept coming back to. Ties break on
 // name so the same window always renders the same way.
-func hotFiles(tasks []story.Task) []fileCount {
+func hotFiles(tasks []reconstruct.Task) []fileCount {
 	n := map[string]int{}
 	for _, t := range tasks {
 		for _, f := range t.Files() {

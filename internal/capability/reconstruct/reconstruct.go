@@ -56,12 +56,24 @@ func FromUnits(units []agentdx.Unit, opts Options) []Work {
 	if len(units) == 0 {
 		return nil
 	}
+	return fromstory.ConvertAll(Tasks(units, opts))
+}
+
+// Task is one piece of work as the story tells it, with its narrative.
+type Task = story.Task
+
+// BoundarySessionStart marks a task that opened its session.
+const BoundarySessionStart = story.BoundarySessionStart
+
+// Tasks groups transcript units into stories, newest first and capped
+// at opts.Limit, for a caller that renders the narrative itself.
+func Tasks(units []agentdx.Unit, opts Options) []Task {
 	tasks := story.Group(units, story.Options{IdleGap: opts.IdleGap})
 	reverse(tasks)
 	if opts.Limit > 0 && len(tasks) > opts.Limit {
 		tasks = tasks[:opts.Limit]
 	}
-	return fromstory.ConvertAll(tasks)
+	return tasks
 }
 
 // FromTasks translates already-grouped stories, for a caller that has

@@ -8,11 +8,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/decisions"
 	"go.klarlabs.de/tokenops/internal/capability/state"
 
 	"go.klarlabs.de/tokenops/internal/capability/authority"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/routingapproval"
 )
 
 // The settings below were reachable from an agent and not from a terminal.
@@ -222,39 +222,29 @@ func newRoutingProposalsCmd() *cobra.Command {
 model, or stay on the preferred one. Nothing applies until you answer.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			path := storePath
-			if path == "" {
-				p, err := routingapproval.DefaultPath()
-				if err != nil {
-					return err
-				}
-				path = p
-			}
-			store, err := routingapproval.Open(path)
-			if err != nil {
-				return err
-			}
-			pending, err := store.Pending()
+			res, err := decisions.PendingProposals(storePath)
 			if err != nil {
 				return err
 			}
 			if jsonOut {
-				if pending == nil {
-					pending = pending[:0]
-				}
-				return writeControlJSON(cmd, pending)
+				return writeControlJSON(cmd, res)
 			}
 			out := cmd.OutOrStdout()
-			if len(pending) == 0 {
-				fmt.Fprintln(out, "no upgrades are waiting on you")
+			if len(res.Pending) == 0 {
+				fmt.Fprintln(out, res.Note)
 				return nil
 			}
-			for _, p := range pending {
+			for _, p := range res.Pending {
 				fmt.Fprintf(out, "  %s\n", p.Key)
 				fmt.Fprintf(out, "    %s: %s -> %s (preferred: %s), seen %d time(s)\n",
-					p.Provider, p.From, p.To, p.Preferred, p.Seen)
+					p.Provider, p.RequestedModel, p.ProposedModel, p.PreferredModel, p.TimesSeen)
 				if p.Reason != "" {
 					fmt.Fprintf(out, "    reason: %s\n", p.Reason)
+				}
+				if p.ExtraUSDPerMillion != nil {
+					fmt.Fprintf(out, "    adds $%.2f per million input and output tokens\n", *p.ExtraUSDPerMillion)
+				} else if p.Pricing != "" {
+					fmt.Fprintf(out, "    price: %s\n", p.Pricing)
 				}
 			}
 			return nil

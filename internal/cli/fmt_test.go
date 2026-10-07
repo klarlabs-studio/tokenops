@@ -148,3 +148,16 @@ func TestEstTokens(t *testing.T) {
 		t.Errorf("estTokens(40) = %d, want 10", estTokens(40))
 	}
 }
+
+// --emit writes where the daemon reads: the configured store, unless
+// --db names another.
+func TestFmtEventsGoToTheConfiguredStore(t *testing.T) {
+	var cfg config.Config
+	cfg.Storage.Path = "/data/tokenops/events.db"
+	if got := fmtEventDB("", cfg); got != "/data/tokenops/events.db" {
+		t.Errorf("default %q, want the configured store", got)
+	}
+	if got := fmtEventDB("/tmp/x.db", cfg); got != "/tmp/x.db" {
+		t.Errorf("--db %q ignored: %q", "/tmp/x.db", got)
+	}
+}

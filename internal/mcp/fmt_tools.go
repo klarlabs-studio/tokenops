@@ -5,10 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/fmtlearn"
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter"
-	"go.klarlabs.de/tokenops/internal/infra/fmtindex"
-	"go.klarlabs.de/tokenops/internal/infra/jsonlfmt"
+	"go.klarlabs.de/tokenops/internal/capability/fmtinsight"
+	"go.klarlabs.de/tokenops/internal/config"
 )
 
 // mcpJSONLMaxFiles caps how many Claude Code sessions the MCP fmt tools scan,
@@ -37,7 +35,7 @@ type fmtAnalyzeInput struct {
 //
 // Both are read-only and advisory; the formatters stay deterministic and the
 // critical-line survival guarantee is untouched.
-func RegisterFmtTools(s *Server) error {
+func RegisterFmtTools(s *Server, d FmtDeps) error {
 	if s == nil {
 		return errors.New("mcp: server must not be nil")
 	}
@@ -45,16 +43,15 @@ func RegisterFmtTools(s *Server) error {
 	s.Tool("tokenops_fmt_learn").
 		Description("Advisory report on where the command-output-compression catalog should improve: next formatters to write (commands falling back to the generic scrub, ranked by bytes), possible over-compression, and per-command loss-level hints. Folds in signal from your Claude Code logs so it reflects real usage with no wrapped commands. Read-only; formatters stay deterministic.").
 		Handler(func(_ context.Context, in fmtLearnInput) (string, error) {
-			recs, err := fmtindex.Read(in.RecoverDir)
+			o := fmtinsight.LearnOptions{RecoverDir: in.RecoverDir}
+			if !in.NoJSONL {
+				o.Sessions = &fmtinsight.Window{MaxFiles: mcpJSONLMaxFiles}
+			}
+			rep, err := fmtinsight.Learn(d.commandFmt(), o, time.Now())
 			if err != nil {
 				return jsonString(map[string]string{"error": "read_index_failed", "hint": err.Error()}), nil
 			}
-			if !in.NoJSONL {
-				if _, jrecs, err := jsonlfmt.Scan(formatter.DefaultFormatters(), jsonlfmt.Options{MaxFiles: mcpJSONLMaxFiles}, time.Now()); err == nil {
-					recs = append(recs, jrecs...)
-				}
-			}
-			return jsonString(trimLearnReport(fmtlearn.Analyze(recs, fmtlearn.Thresholds{}), in.Limit)), nil
+			return jsonString(trimLearnReport(rep, in.Limit)), nil
 		})
 
 	s.Tool("tokenops_fmt_analyze").
@@ -64,7 +61,7 @@ func RegisterFmtTools(s *Server) error {
 			if maxFiles == 0 {
 				maxFiles = mcpJSONLMaxFiles
 			}
-			rep, _, err := jsonlfmt.Scan(formatter.DefaultFormatters(), jsonlfmt.Options{Root: in.Root, MaxFiles: maxFiles}, time.Now())
+			rep, err := fmtinsight.Analyze(d.commandFmt(), fmtinsight.Window{Root: in.Root, MaxFiles: maxFiles}, time.Now())
 			if err != nil {
 				return jsonString(map[string]string{"error": "scan_failed", "hint": err.Error()}), nil
 			}
@@ -77,7 +74,7 @@ func RegisterFmtTools(s *Server) error {
 // learnReport is the fmt learn report with its lists cut to the top
 // entries, and how many each had.
 type learnReport struct {
-	fmtlearn.Report
+	fmtinsight.LearnReport
 	CommandsTotal       int `json:"commands_total"`
 	NextFormattersTotal int `json:"next_formatters_total"`
 	LevelHintsTotal     int `json:"level_hints_total"`
@@ -87,13 +84,32 @@ type learnReport struct {
 // ran to 190 KB, past what a client accepts from one tool call.
 const defaultLearnLimit = 20
 
-func trimLearnReport(r fmtlearn.Report, limit int) learnReport {
+func trimLearnReport(r fmtinsight.LearnReport, limit int) learnReport {
 	if limit <= 0 {
 		limit = defaultLearnLimit
 	}
-	out := learnReport{Report: r, CommandsTotal: len(r.Commands), NextFormattersTotal: len(r.NextFormatters), LevelHintsTotal: len(r.LevelHints)}
+	out := learnReport{LearnReport: r, CommandsTotal: len(r.Commands), NextFormattersTotal: len(r.NextFormatters), LevelHintsTotal: len(r.LevelHints)}
 	out.Commands = r.Commands[:min(limit, len(r.Commands))]
 	out.NextFormatters = r.NextFormatters[:min(limit, len(r.NextFormatters))]
 	out.LevelHints = r.LevelHints[:min(limit, len(r.LevelHints))]
 	return out
+}
+
+// FmtDeps wires the fmt tools to the operator's configuration, whose
+// formatters extend the built-in catalog.
+type FmtDeps struct {
+	// ConfigGetter returns the live configuration; nil reads the
+	// built-in catalog alone.
+	ConfigGetter func() *config.Config
+}
+
+// commandFmt is the fmt configuration in effect now.
+func (d FmtDeps) commandFmt() config.CommandFmtConfig {
+	if d.ConfigGetter == nil {
+		return config.CommandFmtConfig{}
+	}
+	if cfg := d.ConfigGetter(); cfg != nil {
+		return cfg.Optimizer.CommandFmt
+	}
+	return config.CommandFmtConfig{}
 }
