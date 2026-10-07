@@ -16,7 +16,7 @@ func TestQueryLimitKeepsNewestRowsAscending(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	base := time.Date(2026, 5, 9, 10, 0, 0, 0, time.UTC)
-	var envs []*eventschema.Envelope
+	envs := make([]*eventschema.Envelope, 0, 10)
 	for i := range 10 {
 		envs = append(envs, mustPromptEnvelope(t, fmt.Sprintf("e-%02d", i), base.Add(time.Duration(i)*time.Minute),
 			&eventschema.PromptEvent{Provider: eventschema.ProviderOpenAI, RequestModel: "gpt-4o"}))
@@ -59,7 +59,7 @@ func TestQueryLimitBreaksTimestampTiesByID(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	at := time.Date(2026, 5, 9, 10, 0, 0, 0, time.UTC)
-	var envs []*eventschema.Envelope
+	envs := make([]*eventschema.Envelope, 0, 3)
 	for _, id := range []string{"c", "a", "b"} {
 		envs = append(envs, mustPromptEnvelope(t, id, at, &eventschema.PromptEvent{Provider: eventschema.ProviderOpenAI}))
 	}
