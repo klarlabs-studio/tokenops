@@ -173,6 +173,7 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursorturns",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/jsonltail",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode",
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pollnow",
 	"go.klarlabs.de/tokenops/internal/contexts/tasks",
 	"go.klarlabs.de/tokenops/internal/contexts/work/fromtasks",
 	"go.klarlabs.de/tokenops/internal/contexts/work/fromstory",

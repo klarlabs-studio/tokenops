@@ -51,6 +51,9 @@ type Server struct {
 	// sourceFreshness reports per-source ingestion health. nil leaves
 	// GET /api/sources unmounted.
 	sourceFreshness func() []state.SourceReport
+	// sourcesRefresh asks the pollers to poll now; nil leaves
+	// POST /api/sources/refresh unmounted.
+	sourcesRefresh func(time.Time) (int, bool, time.Time)
 	// plans supplies the headroom capability's dependencies. nil leaves
 	// the plan routes unmounted.
 	plans func() headroom.Deps

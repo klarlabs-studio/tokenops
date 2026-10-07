@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pollnow"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -97,7 +98,7 @@ func (p *Poller) Run(ctx context.Context) error {
 	// First scan reaches back LookbackOnFirstScan; subsequent scans
 	// pick up where the cursor left off.
 	p.scan(ctx)
-	t := time.NewTicker(p.opts.Interval)
+	t := pollnow.NewTicker(ctx, p.opts.Interval)
 	defer t.Stop()
 	for {
 		select {

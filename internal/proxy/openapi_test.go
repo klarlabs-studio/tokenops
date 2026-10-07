@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/state"
@@ -23,6 +24,7 @@ func fullyWired() *Server {
 		WithAnalytics(&AnalyticsHandlers{}), WithRules(&RulesHandlers{}), WithAudit(&AuditHandlers{}),
 		WithEventCounts(func() map[string]int64 { return nil }),
 		WithSourceFreshness(func() []freshness.Report { return nil }),
+		WithSourcesRefresh(func(time.Time) (int, bool, time.Time) { return 0, true, time.Time{} }),
 		WithPlans(func() headroom.Deps { return headroom.Deps{} }),
 		WithState(func() state.Deps { return state.Deps{} }),
 		WithSessions(func() SessionRoots { return SessionRoots{} }),
