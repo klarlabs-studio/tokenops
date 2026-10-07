@@ -43,6 +43,12 @@ import (
 // adapters are the packages this rule governs.
 var adapters = []string{
 	"go.klarlabs.de/tokenops/internal/cli",
+	// The daemon serves the local HTTP API every surface reads (ADR 0010),
+	// so its handlers are an adapter like the CLI and MCP server. It is
+	// also the composition root that starts the vendor-usage pollers, so
+	// some of its entries are wiring that may move to internal/bootstrap
+	// rather than into a capability package; either way they leave.
+	"go.klarlabs.de/tokenops/internal/daemon",
 	"go.klarlabs.de/tokenops/internal/mcp",
 	"go.klarlabs.de/tokenops/internal/proxy",
 }
@@ -102,6 +108,40 @@ var directDomainImports = map[string][]string{
 		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode",
 		"go.klarlabs.de/tokenops/internal/contexts/tasks",
+		"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow",
+	},
+	"go.klarlabs.de/tokenops/internal/daemon": {
+		"go.klarlabs.de/tokenops/internal/contexts/governance/budget",
+		"go.klarlabs.de/tokenops/internal/contexts/observability/analytics",
+		"go.klarlabs.de/tokenops/internal/contexts/observability/freshness",
+		"go.klarlabs.de/tokenops/internal/contexts/observability/observ",
+		"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer",
+		"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router",
+		"go.klarlabs.de/tokenops/internal/contexts/optimization/routingapproval",
+		"go.klarlabs.de/tokenops/internal/contexts/security/audit",
+		"go.klarlabs.de/tokenops/internal/contexts/security/dashauth",
+		"go.klarlabs.de/tokenops/internal/contexts/security/tlsmint",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/biller",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/forecast",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/plans",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/pricing",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/spend",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecode",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodeoauth",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudestatusline",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexappserver",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilot",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursor",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursorturns",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/fireworks",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/geminicli",
+		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode",
+		"go.klarlabs.de/tokenops/internal/contexts/telemetry/retention",
 		"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow",
 	},
 	"go.klarlabs.de/tokenops/internal/mcp": {
