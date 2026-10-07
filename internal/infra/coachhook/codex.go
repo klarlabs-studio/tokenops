@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -127,3 +128,41 @@ func codexModelFromHead(path string) string {
 // the first few records; reading further would be a scan of the whole
 // file on the hot path of every Stop.
 const headBytes int64 = 64 << 10
+
+func codexPriced(tbl spend.Table, model string) bool {
+	_, err := tbl.Lookup(eventschema.ProviderOpenAI, model)
+	return model != "" && err == nil
+}
+
+// priceCodexTurns fills in the cost of Codex turns once the model is
+// settled, which cannot happen until the whole window has been read.
+func priceCodexTurns(out []turnUsage, raw [][]byte, fallbackModel string, cfg Config, now time.Time) {
+	i := 0
+	for _, b := range raw {
+		if !isCodexLine(b) {
+			continue
+		}
+		var cl codexLine
+		if json.Unmarshal(b, &cl) != nil {
+			continue
+		}
+		if cl.Payload.Info == nil || cl.Payload.Info.LastTokenUsage == nil {
+			continue
+		}
+		for i < len(out) && out[i].Timestamp != cl.Timestamp {
+			i++
+		}
+		if i >= len(out) {
+			return
+		}
+		model := out[i].Model
+		if model == "" {
+			model = fallbackModel
+			out[i].Model = model
+		}
+		tbl := cfg.ratesAt(parseTurnTime(cl.Timestamp, now))
+		out[i].CostUSD = codexTurnCostUSD(tbl, cl.Payload.Info.LastTokenUsage, model)
+		out[i].Unpriced = !codexPriced(tbl, model)
+		i++
+	}
+}
