@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 )
 
 // Quota is the live rate-limit reading for the plan the session runs on:
@@ -179,4 +180,66 @@ func nextQuotaTier(latched, used float64, verbosity string) (float64, bool) {
 		}
 	}
 	return 0, false
+}
+
+// evaluateQuota speaks the highest quota tier not yet said for this window.
+// It replaces the dollar ladder when a live reading exists, under the same
+// quiet policy.
+func evaluateQuota(dir string, dec *Decision, st *sessionState, cfg Config, model string, contextTokens int64, now time.Time) {
+	q := cfg.Quota
+	tiers := cfg.QuotaTiers
+	if len(tiers) == 0 {
+		tiers = DefaultQuotaTiers()
+	}
+	latch := loadQuotaLatch(dir)
+	key := quotaKey(q)
+	tier := highestQuotaTier(q.Window.UsedPct, latch[key], tiers)
+	if !cfg.Enabled || tier == 0 {
+		return
+	}
+	if cfg.Verbosity == verbosityQuiet && tier < 0.90-fracEpsilon {
+		// Quiet speaks when work is about to stop: near the limit, or
+		// earlier only when the pace runs out before the reset.
+		if _, runsOut := q.Window.ProjectedExhaustion(now); !runsOut {
+			return
+		}
+	}
+	reason, retry := cfg.hold(quotaKind(tier), st, now)
+	switch {
+	case reason == "":
+		dec.Nudge = true
+		dec.QuotaTier = tier
+		dec.Message = quotaMessage(q, now, cfg.Verbosity)
+		if note := contextNote(contextTokens, model); note != "" {
+			dec.Message = note + " " + dec.Message
+		}
+		dec.ContextTokens = contextTokens
+		if w, ok := spend.ContextWindow(model); ok {
+			dec.ContextWindow = w
+		}
+		latch[key] = tier
+		st.LastNudgeAt = now.UTC().Format(time.RFC3339Nano)
+		st.Nudges++
+	case retry:
+		dec.Suppressed = reason
+		return
+	default:
+		dec.Suppressed = reason
+		latch[key] = tier
+	}
+	saveQuotaLatch(dir, latch, now)
+}
+
+func quotaLabel(q *Quota) string {
+	if q == nil {
+		return ""
+	}
+	return q.Provider + " " + q.Window.Label
+}
+
+func quotaUsed(q *Quota) float64 {
+	if q == nil {
+		return 0
+	}
+	return q.Window.UsedPct
 }

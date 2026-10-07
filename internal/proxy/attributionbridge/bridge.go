@@ -43,15 +43,16 @@ func NewHandler(target, executionID, workflowID string) (http.Handler, error) {
 		return nil, errors.New("attribution bridge: workflow ID must contain at most 256 non-header characters")
 	}
 
-	reverseProxy := httputil.NewSingleHostReverseProxy(targetURL)
-	director := reverseProxy.Director
-	reverseProxy.Director = func(req *http.Request) {
-		director(req)
-		req.Header.Set(executionHeader, executionID)
+	reverseProxy := &httputil.ReverseProxy{Rewrite: func(pr *httputil.ProxyRequest) {
+		pr.SetURL(targetURL)
+		// SetURL addresses the daemon by the target's host; keep the
+		// client's, as the bridge always has.
+		pr.Out.Host = pr.In.Host
+		pr.Out.Header.Set(executionHeader, executionID)
 		if workflowID != "" {
-			req.Header.Set(workflowHeader, workflowID)
+			pr.Out.Header.Set(workflowHeader, workflowID)
 		}
-	}
+	}}
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if req.URL.Path != "/anthropic" && !strings.HasPrefix(req.URL.Path, "/anthropic/") {
 			http.NotFound(w, req)

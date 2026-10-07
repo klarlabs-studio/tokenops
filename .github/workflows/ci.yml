@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v5.4.0
         with:
-          go-version: "1.25"
+          go-version: "1.26"
           cache: true
       - name: Verify go.mod is tidy
         run: |
@@ -65,7 +65,7 @@ jobs:
       # fixed upstream; it costs about a minute.
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v7.0.0
         with:
-          version: v2.11.4
+          version: v2.14.0
           args: --timeout=5m
           skip-cache: true
       - name: proto-verify (skip if protoc missing)
@@ -85,7 +85,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v5.4.0
         with:
-          go-version: "1.25"
+          go-version: "1.26"
           cache: true
       - name: Test
         run: go test -race -count=1 -coverprofile=coverage.out ./...
@@ -98,7 +98,7 @@ jobs:
   menubar:
     name: Menu bar
     # apps/menubar is its own module (Vitra needs cgo and a newer Go than
-    # the CLI's pure-Go 1.25 build), so the root ./... never reaches it.
+    # the CLI's pure-Go 1.26 build), so the root ./... never reaches it.
     runs-on: macos-latest
     defaults:
       run:
@@ -130,7 +130,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v5.4.0
         with:
-          go-version: "1.25"
+          go-version: "1.26"
           cache: true
       # Shared GitHub runners are noisy; loosen the threshold for CI.
       - name: Proxy p99 overhead gate
@@ -161,7 +161,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v5.4.0
         with:
-          go-version: "1.25"
+          go-version: "1.26"
           cache: true
       - name: Build binaries
         env:
