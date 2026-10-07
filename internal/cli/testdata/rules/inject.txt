@@ -1,0 +1,7 @@
+SECTION                                                    TOKENS  SCORE
+repo:AGENTS.md#/Testing                                        12   1.50
+    reasons: repo_match, kw:testing
+repo:CLAUDE.md#/Testing                                        12   1.50
+    reasons: repo_match, kw:testing
+
+considered=9 selected=2 skipped=7 tokens=24 budget_hit=false truncated=false elapsed_ns=0

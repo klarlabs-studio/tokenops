@@ -1,0 +1,36 @@
+{
+  "findings": [
+    {
+      "Kind": "anti_pattern",
+      "Members": [
+        "repo:CLAUDE.md#/Style",
+        "repo:CLAUDE.md#/Review"
+      ],
+      "Anchor": "",
+      "Detail": "sections trip opposite sides of concise_vs_verbose",
+      "Triggers": [
+        "concise_vs_verbose"
+      ]
+    },
+    {
+      "Kind": "drift",
+      "Members": [
+        "repo:AGENTS.md#/Style",
+        "repo:CLAUDE.md#/Style"
+      ],
+      "Anchor": "/Style",
+      "Detail": "anchor \"/Style\" diverges across 2 sources",
+      "Triggers": null
+    },
+    {
+      "Kind": "redundant",
+      "Members": [
+        "repo:AGENTS.md#/Testing",
+        "repo:CLAUDE.md#/Testing"
+      ],
+      "Anchor": "",
+      "Detail": "identical body across 2 sections (sha256:4c31000ee1340610b2fb26d5950b1ef10000000000be50777c3c2b2ad717b90836235a88)",
+      "Triggers": null
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+SOURCE                                   KIND                 TOKENS    CHARS   SECT
+CLAUDE.md                                claude_md                39      178      4
+AGENTS.md                                agents_md                24      107      3
+.cursor/rules/go.mdc                     cursor_rules             16       58      2
+
+Top sections by token cost:
+  SECTION                                            TOKENS    CHARS  TOK/KCHAR
+  CLAUDE.md#/Testing                                     11       51      215.7
+  CLAUDE.md#/Review                                       7       43      162.8
+  CLAUDE.md#(preamble)                                    6       27      222.2
+  CLAUDE.md#/Style                                        6       27      222.2
+  AGENTS.md#/Testing                                     11       51      215.7
+  AGENTS.md#/Style                                        4       22      181.8
+  AGENTS.md#(preamble)                                    3       14      214.3
+  .cursor/rules/go.mdc#/Go                               10       41      243.9
+  .cursor/rules/go.mdc#(preamble)                         3       11      272.7
+
+Duplicate section bodies: 1 group(s)
+  sha256:4c31e3ee1340610b2fb26d5950b1ef10e9be50777c3c2b2ad717b90836235a88
+    - repo:AGENTS.md#/Testing
+    - repo:CLAUDE.md#/Testing

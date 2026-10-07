@@ -1,0 +1,10 @@
+[anti_pattern] sections trip opposite sides of concise_vs_verbose
+  - repo:CLAUDE.md#/Style
+  - repo:CLAUDE.md#/Review
+  triggers: [concise_vs_verbose]
+[drift] anchor "/Style" diverges across 2 sources
+  - repo:AGENTS.md#/Style
+  - repo:CLAUDE.md#/Style
+[redundant] identical body across 2 sections (sha256:4c31e3ee1340610b2fb26d5950b1ef10e9be50777c3c2b2ad717b90836235a88)
+  - repo:AGENTS.md#/Testing
+  - repo:CLAUDE.md#/Testing
