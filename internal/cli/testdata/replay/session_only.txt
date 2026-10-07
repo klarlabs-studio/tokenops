@@ -1,0 +1,13 @@
+Replay results — session=sess-waste
+  prompts replayed:  5
+  original input:    67500 tokens
+  original output:   1500 tokens
+  original spend:    0.0000 USD
+  estimated savings: 0 tokens (0.0% of tokens) / 0.0000 USD (0.0% of spend)
+
+STEP  TIME      MODEL              IN     OUT  COST        SAVE TOK  SAVE $      OPTIMIZATIONS
+1     10:00:00  claude-sonnet-4-5  1200   300  0.0000 USD  0         0.0000 USD  (no recommendations)
+2     10:01:00  claude-sonnet-4-5  4800   300  0.0000 USD  0         0.0000 USD  (no recommendations)
+3     10:02:00  claude-sonnet-4-5  40000  300  0.0000 USD  0         0.0000 USD  (no recommendations)
+4     10:03:00  claude-sonnet-4-5  9000   300  0.0000 USD  0         0.0000 USD  (no recommendations)
+5     10:04:00  claude-sonnet-4-5  12500  300  0.0000 USD  0         0.0000 USD  (no recommendations)
