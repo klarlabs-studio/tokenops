@@ -37,7 +37,6 @@ var forbiddenInfra = []string{
 var storageExempt = map[string]bool{
 	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard":    true,
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics": true,
-	"go.klarlabs.de/tokenops/internal/contexts/security/audit":          true,
 	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow":      true,
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/replay":     true,
 	"go.klarlabs.de/tokenops/internal/contexts/telemetry/retention":     true,
@@ -112,9 +111,6 @@ var ioImportExempt = map[string][]string{
 	// sql.Null* scan targets for the event-store queries it runs through
 	// its sqlite adapter (see storageExempt); moves with that adapter.
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics": {"database/sql"},
-	// sql.Null* columns of the audit table it writes through its sqlite
-	// adapter (see storageExempt); moves with that adapter.
-	"go.klarlabs.de/tokenops/internal/contexts/security/audit": {"database/sql"},
 	// HTTPMiddleware is an http.Handler around the permission check.
 	"go.klarlabs.de/tokenops/internal/contexts/security/rbac": {"net/http"},
 	// Reads opencode's SQLite store. Every reader but one goes through the
