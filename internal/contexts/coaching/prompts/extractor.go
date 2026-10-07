@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb"
 	"go.klarlabs.de/tokenops/internal/infra/scanscope"
 )
 
@@ -54,6 +55,10 @@ type ExtractOptions struct {
 	Until          time.Time // include turns at or before this instant; zero = open
 	SessionID      string    // restrict to one session (matches the filename stem)
 	Limit          int       // max prompts to return; 0 = unbounded
+	// Opencode reads opencode's SQLite store. Without one an opencode
+	// extract fails with ErrNoOpencodeReader and the auto scan leaves
+	// opencode out.
+	Opencode opencodedb.Reader
 }
 
 // turnsScanBufSize matches the claudecodejsonl reader so very large

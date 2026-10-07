@@ -12,7 +12,9 @@
 //
 // Every TokenOps reader of opencode (spend, agent DX, prompt and reply
 // coaching, the source probe) goes through here, so the two shapes are
-// handled once.
+// handled once. The domains take the Reader port, which
+// internal/infra/opencodedb implements over Read; agent DX still calls
+// Read itself until it takes the port too.
 package opencodedb
 
 import (

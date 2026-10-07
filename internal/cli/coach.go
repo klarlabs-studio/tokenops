@@ -13,6 +13,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/replies"
+	opencodestore "go.klarlabs.de/tokenops/internal/infra/opencodedb"
 )
 
 // newCoachCmd is the tree for prompt + workflow coaching. For now
@@ -82,6 +83,7 @@ the TokenOps event store.`,
 				Root:      root,
 				SessionID: session,
 				Limit:     limit,
+				Opencode:  opencodestore.Store{},
 			}
 			if sinceFlag != "" {
 				since, err := parseSince(sinceFlag)
@@ -206,6 +208,7 @@ agents to consume.`,
 				SessionID:      session,
 				Limit:          limit,
 				IncludeScratch: includeScratch,
+				Opencode:       opencodestore.Store{},
 			}
 			if sinceFlag != "" {
 				since, err := parseSince(sinceFlag)

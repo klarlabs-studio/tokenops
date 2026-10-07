@@ -3,25 +3,12 @@ package audit
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/events"
-	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
-
-func openStore(t *testing.T) *sqlite.Store {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "events.db")
-	s, err := sqlite.Open(context.Background(), path, sqlite.Options{})
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
-	t.Cleanup(func() { _ = s.Close() })
-	return s
-}
 
 func waitForAuditEntries(t *testing.T, rec *Recorder, want int) []Entry {
 	t.Helper()
@@ -58,8 +45,7 @@ func publishAuditEvent(t *testing.T, bus *events.AsyncBus, kind string, at time.
 }
 
 func TestSubscribeRecordsBudgetExceeded(t *testing.T) {
-	store := openStore(t)
-	rec := NewRecorder(store)
+	rec := NewRecorder(&memStore{})
 	bus := newAuditEventBus()
 	sub := Subscribe(bus, rec, nil, "tester")
 
@@ -78,8 +64,7 @@ func TestSubscribeRecordsBudgetExceeded(t *testing.T) {
 }
 
 func TestSubscribeRecordsOptimizationApplied(t *testing.T) {
-	store := openStore(t)
-	rec := NewRecorder(store)
+	rec := NewRecorder(&memStore{})
 	bus := newAuditEventBus()
 	sub := Subscribe(bus, rec, nil, "tester")
 
@@ -98,8 +83,7 @@ func TestSubscribeRecordsOptimizationApplied(t *testing.T) {
 }
 
 func TestSubscribeIgnoresUnknownEvent(t *testing.T) {
-	store := openStore(t)
-	rec := NewRecorder(store)
+	rec := NewRecorder(&memStore{})
 	bus := newAuditEventBus()
 	sub := Subscribe(bus, rec, nil, "tester")
 
@@ -116,8 +100,7 @@ func TestSubscribeIgnoresUnknownEvent(t *testing.T) {
 }
 
 func TestSubscribeBackpressureDropsExcess(t *testing.T) {
-	store := openStore(t)
-	rec := NewRecorder(store)
+	rec := NewRecorder(&memStore{})
 	bus := newAuditEventBus()
 	sub := SubscribeWithOptions(bus, rec, nil, SubscribeOptions{Actor: "tester", MaxConcurrent: 1})
 	if sub == nil {

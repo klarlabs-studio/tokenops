@@ -1,20 +1,16 @@
 package pricing
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 )
 
-// DefaultModelsDevURL is models.dev's catalog: per-provider model lists
-// with each provider's own price, the data opencode prices from.
-const DefaultModelsDevURL = "https://models.dev/api.json"
-
-const modelsDevTimeout = 20 * time.Second
+// ModelsDevSourceName is the Source name, and Snapshot.Source, of models.dev's
+// catalog: per-provider model lists with each provider's own price, the data
+// opencode prices from. The HTTP fetch lives in internal/infra/pricingsource.
+const ModelsDevSourceName = "models.dev"
 
 // modelsDevProviders maps a models.dev provider ID to the TokenOps
 // providers its rates price (ADR 0009 §6). LiteLLM covers the major model
@@ -38,46 +34,11 @@ var modelsDevProviders = map[string][]string{
 	"synthetic":    {"synthetic"},
 }
 
-// ModelsDevSource fetches gateway rates from models.dev.
-type ModelsDevSource struct {
-	URL    string
-	Client *http.Client
-}
-
-// NewModelsDevSource returns a source pointed at the public catalog.
-func NewModelsDevSource() *ModelsDevSource { return &ModelsDevSource{URL: DefaultModelsDevURL} }
-
-// Name implements Source.
-func (s *ModelsDevSource) Name() string { return "models.dev" }
-
-// Fetch implements Source.
-func (s *ModelsDevSource) Fetch(ctx context.Context) (Snapshot, error) {
-	url := s.URL
-	if url == "" {
-		url = DefaultModelsDevURL
-	}
-	client := s.Client
-	if client == nil {
-		client = &http.Client{Timeout: modelsDevTimeout}
-	}
-	ctx, cancel := context.WithTimeout(ctx, modelsDevTimeout)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return Snapshot{}, fmt.Errorf("%w: build request: %v", ErrFetch, err)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return Snapshot{}, fmt.Errorf("%w: GET %s: %v", ErrFetch, url, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return Snapshot{}, fmt.Errorf("%w: GET %s: status %d", ErrFetch, url, resp.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
-	if err != nil {
-		return Snapshot{}, fmt.Errorf("%w: read body: %v", ErrFetch, err)
-	}
+// ParseModelsDev normalizes a models.dev catalog body into a Snapshot of the
+// gateway rates modelsDevProviders maps. sourceURL and fetchedAt are the
+// fetch's provenance. A body that does not parse, or that carries no gateway
+// rate at all, is wrapped in ErrFetch.
+func ParseModelsDev(body []byte, sourceURL string, fetchedAt time.Time) (Snapshot, error) {
 	var catalog map[string]struct {
 		Models map[string]struct {
 			Cost *struct {
@@ -91,7 +52,7 @@ func (s *ModelsDevSource) Fetch(ctx context.Context) (Snapshot, error) {
 	if err := json.Unmarshal(body, &catalog); err != nil {
 		return Snapshot{}, fmt.Errorf("%w: parse JSON: %v", ErrFetch, err)
 	}
-	snap := Snapshot{Source: s.Name(), SourceURL: url, FetchedAt: time.Now().UTC(), Rates: map[string]Rate{}}
+	snap := Snapshot{Source: ModelsDevSourceName, SourceURL: sourceURL, FetchedAt: fetchedAt, Rates: map[string]Rate{}}
 	for id, p := range catalog {
 		providers, ok := modelsDevProviders[id]
 		if !ok {
@@ -112,7 +73,7 @@ func (s *ModelsDevSource) Fetch(ctx context.Context) (Snapshot, error) {
 		}
 	}
 	if len(snap.Rates) == 0 {
-		return Snapshot{}, fmt.Errorf("%w: %s carried no gateway rates", ErrFetch, url)
+		return Snapshot{}, fmt.Errorf("%w: %s carried no gateway rates", ErrFetch, sourceURL)
 	}
 	return snap, nil
 }

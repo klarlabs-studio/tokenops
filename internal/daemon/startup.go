@@ -278,7 +278,7 @@ func (s *startup) configureAPIAuth(context.Context) error {
 	if err != nil {
 		return fmt.Errorf("dashboard auth: %w", err)
 	}
-	s.opts = append(s.opts, proxy.WithDashAuth(auth))
+	s.opts = append(s.opts, proxy.WithDashAuth(proxy.BearerAuth(auth)))
 	return nil
 }
 

@@ -1,4 +1,4 @@
-package analytics
+package analytics_test
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -47,8 +48,8 @@ func TestAggregateByHourBucketsAndSums(t *testing.T) {
 	if err := store.AppendBatch(ctx, envs); err != nil {
 		t.Fatalf("append: %v", err)
 	}
-	agg := New(store, nil)
-	rows, err := agg.AggregateBy(ctx, Filter{}, BucketHour, GroupNone)
+	agg := analytics.New(store, nil)
+	rows, err := agg.AggregateBy(ctx, analytics.Filter{}, analytics.BucketHour, analytics.GroupNone)
 	if err != nil {
 		t.Fatalf("aggregate: %v", err)
 	}
@@ -77,12 +78,12 @@ func TestAggregateByModel(t *testing.T) {
 	}
 	_ = store.AppendBatch(ctx, envs)
 
-	agg := New(store, nil)
-	rows, err := agg.AggregateBy(ctx, Filter{}, BucketHour, GroupModel)
+	agg := analytics.New(store, nil)
+	rows, err := agg.AggregateBy(ctx, analytics.Filter{}, analytics.BucketHour, analytics.GroupModel)
 	if err != nil {
 		t.Fatalf("aggregate: %v", err)
 	}
-	got := map[string]Row{}
+	got := map[string]analytics.Row{}
 	for _, r := range rows {
 		got[r.GroupKey] = r
 	}
@@ -103,8 +104,8 @@ func TestAggregateRecomputesMissingCost(t *testing.T) {
 	_ = store.Append(ctx, env)
 
 	eng := spend.NewEngine(spend.DefaultTable())
-	agg := New(store, eng)
-	rows, err := agg.AggregateBy(ctx, Filter{}, BucketHour, GroupNone)
+	agg := analytics.New(store, eng)
+	rows, err := agg.AggregateBy(ctx, analytics.Filter{}, analytics.BucketHour, analytics.GroupNone)
 	if err != nil {
 		t.Fatalf("aggregate: %v", err)
 	}
@@ -136,8 +137,8 @@ func TestSummarizeRecomputesMissingCost(t *testing.T) {
 	_ = store.Append(ctx, mkPrompt("b", base.Add(time.Minute), "gpt-4o-mini", 500_000, 500_000, 0))
 
 	eng := spend.NewEngine(spend.DefaultTable())
-	agg := New(store, eng)
-	s, err := agg.Summarize(ctx, Filter{})
+	agg := analytics.New(store, eng)
+	s, err := agg.Summarize(ctx, analytics.Filter{})
 	if err != nil {
 		t.Fatalf("summarize: %v", err)
 	}
@@ -170,8 +171,8 @@ func TestSummarizeUsesCachedInputFromPayload(t *testing.T) {
 	_ = store.Append(ctx, env)
 
 	eng := spend.NewEngine(spend.DefaultTable())
-	agg := New(store, eng)
-	s, err := agg.Summarize(ctx, Filter{})
+	agg := analytics.New(store, eng)
+	s, err := agg.Summarize(ctx, analytics.Filter{})
 	if err != nil {
 		t.Fatalf("summarize: %v", err)
 	}
@@ -203,8 +204,8 @@ func TestSummarizeMixedStoredAndRecomputedCost(t *testing.T) {
 	_ = store.Append(ctx, mkPrompt("free", base.Add(time.Minute), "gpt-4o-mini", 1_000_000, 1_000_000, 0))
 
 	eng := spend.NewEngine(spend.DefaultTable())
-	agg := New(store, eng)
-	s, err := agg.Summarize(ctx, Filter{})
+	agg := analytics.New(store, eng)
+	s, err := agg.Summarize(ctx, analytics.Filter{})
 	if err != nil {
 		t.Fatalf("summarize: %v", err)
 	}
@@ -223,8 +224,8 @@ func TestSummarizeAggregatesAcrossWindow(t *testing.T) {
 		mkPrompt("b", base.Add(time.Hour), "gpt-4o", 200, 100, 0.002),
 	}
 	_ = store.AppendBatch(ctx, envs)
-	agg := New(store, nil)
-	s, err := agg.Summarize(ctx, Filter{})
+	agg := analytics.New(store, nil)
+	s, err := agg.Summarize(ctx, analytics.Filter{})
 	if err != nil {
 		t.Fatalf("summarize: %v", err)
 	}
@@ -261,8 +262,8 @@ func TestFilterByWorkflow(t *testing.T) {
 		},
 	}
 	_ = store.AppendBatch(ctx, envs)
-	agg := New(store, nil)
-	s, err := agg.Summarize(ctx, Filter{WorkflowID: "wf-A"})
+	agg := analytics.New(store, nil)
+	s, err := agg.Summarize(ctx, analytics.Filter{WorkflowID: "wf-A"})
 	if err != nil {
 		t.Fatalf("summarize: %v", err)
 	}
@@ -273,15 +274,15 @@ func TestFilterByWorkflow(t *testing.T) {
 
 func TestEmptyStoreReturnsEmpty(t *testing.T) {
 	store := newStore(t)
-	agg := New(store, nil)
-	rows, err := agg.AggregateBy(context.Background(), Filter{}, BucketHour, GroupNone)
+	agg := analytics.New(store, nil)
+	rows, err := agg.AggregateBy(context.Background(), analytics.Filter{}, analytics.BucketHour, analytics.GroupNone)
 	if err != nil {
 		t.Fatalf("aggregate: %v", err)
 	}
 	if len(rows) != 0 {
 		t.Errorf("expected empty, got %+v", rows)
 	}
-	s, err := agg.Summarize(context.Background(), Filter{})
+	s, err := agg.Summarize(context.Background(), analytics.Filter{})
 	if err != nil {
 		t.Fatalf("summarize: %v", err)
 	}
@@ -300,8 +301,8 @@ func TestDayBucketAlignment(t *testing.T) {
 		mkPrompt("b", d2, "gpt-4o", 100, 0, 0.01),
 	}
 	_ = store.AppendBatch(ctx, envs)
-	agg := New(store, nil)
-	rows, err := agg.AggregateBy(ctx, Filter{}, BucketDay, GroupNone)
+	agg := analytics.New(store, nil)
+	rows, err := agg.AggregateBy(ctx, analytics.Filter{}, analytics.BucketDay, analytics.GroupNone)
 	if err != nil {
 		t.Fatalf("aggregate: %v", err)
 	}
@@ -323,8 +324,8 @@ func TestFilterTimeWindow(t *testing.T) {
 		mkPrompt("late", base.Add(3*time.Hour), "gpt-4o", 30, 0, 0.03),
 	}
 	_ = store.AppendBatch(ctx, envs)
-	agg := New(store, nil)
-	s, err := agg.Summarize(ctx, Filter{
+	agg := analytics.New(store, nil)
+	s, err := agg.Summarize(ctx, analytics.Filter{
 		Since: base, Until: base.Add(2 * time.Hour),
 	})
 	if err != nil {
@@ -372,8 +373,8 @@ func TestSummarizeReportsUnpricedModels(t *testing.T) {
 		t.Fatalf("append: %v", err)
 	}
 
-	agg := New(store, spend.NewEngine(spend.DefaultTable()))
-	s, err := agg.Summarize(ctx, Filter{})
+	agg := analytics.New(store, spend.NewEngine(spend.DefaultTable()))
+	s, err := agg.Summarize(ctx, analytics.Filter{})
 	if err != nil {
 		t.Fatalf("summarize: %v", err)
 	}
@@ -406,8 +407,8 @@ func TestSummarizeNoUnpricedWhenAllModelsKnown(t *testing.T) {
 	if err := store.Append(ctx, env); err != nil {
 		t.Fatalf("append: %v", err)
 	}
-	agg := New(store, spend.NewEngine(spend.DefaultTable()))
-	s, err := agg.Summarize(ctx, Filter{})
+	agg := analytics.New(store, spend.NewEngine(spend.DefaultTable()))
+	s, err := agg.Summarize(ctx, analytics.Filter{})
 	if err != nil {
 		t.Fatalf("summarize: %v", err)
 	}
@@ -449,8 +450,8 @@ func TestSummarizeSkipsPlanIncludedEvents(t *testing.T) {
 	if err := store.AppendBatch(ctx, envs); err != nil {
 		t.Fatalf("append: %v", err)
 	}
-	agg := New(store, spend.NewEngine(spend.DefaultTable()))
-	s, err := agg.Summarize(ctx, Filter{})
+	agg := analytics.New(store, spend.NewEngine(spend.DefaultTable()))
+	s, err := agg.Summarize(ctx, analytics.Filter{})
 	if err != nil {
 		t.Fatalf("summarize: %v", err)
 	}
@@ -491,8 +492,8 @@ func TestSummarizeAPIEquivalent(t *testing.T) {
 	if err := store.AppendBatch(ctx, envs); err != nil {
 		t.Fatalf("append: %v", err)
 	}
-	agg := New(store, spend.NewEngine(spend.DefaultTable()))
-	s, err := agg.Summarize(ctx, Filter{})
+	agg := analytics.New(store, spend.NewEngine(spend.DefaultTable()))
+	s, err := agg.Summarize(ctx, analytics.Filter{})
 	if err != nil {
 		t.Fatalf("summarize: %v", err)
 	}
@@ -511,10 +512,10 @@ func TestSummarizeAPIEquivalent(t *testing.T) {
 func TestSummarizeExcludesActivityProxyByDefault(t *testing.T) {
 	store := newStore(t)
 	ctx := context.Background()
-	agg := New(store, spend.NewEngine(spend.DefaultTable()))
+	agg := analytics.New(store, spend.NewEngine(spend.DefaultTable()))
 	seedSourceMix(t, store)
 
-	s, err := agg.Summarize(ctx, Filter{})
+	s, err := agg.Summarize(ctx, analytics.Filter{})
 	if err != nil {
 		t.Fatalf("summarize: %v", err)
 	}
@@ -527,7 +528,7 @@ func TestSummarizeExcludesActivityProxyByDefault(t *testing.T) {
 func TestSummarizeIncludeSourcesReadmitsOnlyNamed(t *testing.T) {
 	store := newStore(t)
 	ctx := context.Background()
-	agg := New(store, spend.NewEngine(spend.DefaultTable()))
+	agg := analytics.New(store, spend.NewEngine(spend.DefaultTable()))
 	seedSourceMix(t, store)
 
 	cases := []struct {
@@ -540,7 +541,7 @@ func TestSummarizeIncludeSourcesReadmitsOnlyNamed(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			s, err := agg.Summarize(ctx, Filter{IncludeSources: tc.include})
+			s, err := agg.Summarize(ctx, analytics.Filter{IncludeSources: tc.include})
 			if err != nil {
 				t.Fatalf("summarize: %v", err)
 			}
@@ -556,10 +557,10 @@ func TestSummarizeIncludeSourcesReadmitsOnlyNamed(t *testing.T) {
 func TestSummarizeExplicitExcludeSourcesWinsOverIncludes(t *testing.T) {
 	store := newStore(t)
 	ctx := context.Background()
-	agg := New(store, spend.NewEngine(spend.DefaultTable()))
+	agg := analytics.New(store, spend.NewEngine(spend.DefaultTable()))
 	seedSourceMix(t, store)
 
-	s, err := agg.Summarize(ctx, Filter{
+	s, err := agg.Summarize(ctx, analytics.Filter{
 		ExcludeSources: []string{"mcp-session"},
 		IncludeSources: []string{"mcp-session"},
 	})

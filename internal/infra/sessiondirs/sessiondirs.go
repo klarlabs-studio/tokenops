@@ -15,6 +15,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
 	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb"
+	opencodestore "go.klarlabs.de/tokenops/internal/infra/opencodedb"
 )
 
 // Dir is where a session ran.
@@ -58,7 +59,7 @@ func Find(roots Roots, since time.Time) map[string]Dir {
 		}
 	}
 	if path := orDefault(roots.Opencode, opencodedb.DefaultPath); path != "" {
-		if dirs, err := opencodedb.SessionDirs(path, since); err == nil {
+		if dirs, err := opencodestore.SessionDirs(path, since); err == nil {
 			for id, cwd := range dirs {
 				out[id] = Dir{CWD: cwd}
 			}

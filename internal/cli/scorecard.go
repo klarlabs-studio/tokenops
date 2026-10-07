@@ -10,6 +10,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/tools"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard"
+	opencodestore "go.klarlabs.de/tokenops/internal/infra/opencodedb"
 )
 
 func newScorecardCmd() *cobra.Command {
@@ -97,7 +98,7 @@ func computeAgentKPIs(sinceDays int) scorecard.AgentKPIInputs {
 		sinceDays = 7
 	}
 	since := time.Now().Add(-time.Duration(sinceDays) * 24 * time.Hour)
-	extracted, err := prompts.Extract(prompts.ExtractOptions{Since: since})
+	extracted, err := prompts.Extract(prompts.ExtractOptions{Since: since, Opencode: opencodestore.Store{}})
 	if err != nil || len(extracted) == 0 {
 		return scorecard.AgentKPIInputs{}
 	}

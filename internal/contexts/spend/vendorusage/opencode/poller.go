@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -22,6 +23,8 @@ type PollerOptions struct {
 	// Root is the opencode database path. Empty defaults to
 	// ~/.local/share/opencode/opencode.db.
 	Root string
+	// Store reads the database. Required: Run fails without one.
+	Store opencodedb.Reader
 	// Interval between scans. Defaults to 30s.
 	Interval time.Duration
 	// Logger required for non-fatal errors.
@@ -78,6 +81,9 @@ func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
 }
 
 func (p *Poller) Run(ctx context.Context) error {
+	if p.opts.Store == nil {
+		return errNoStore
+	}
 	root, err := p.resolveRoot()
 	if err != nil {
 		return err
@@ -117,7 +123,7 @@ func (p *Poller) scan(ctx context.Context, root string) {
 		return
 	}
 	p.dbReads++
-	if err := ReadMessages(root, func(turn Turn) error {
+	if err := ReadMessages(p.opts.Store, root, func(turn Turn) error {
 		p.mu.Lock()
 		if _, dup := p.seen[turn.ID]; dup {
 			p.mu.Unlock()

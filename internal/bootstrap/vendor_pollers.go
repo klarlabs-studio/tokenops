@@ -29,6 +29,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
 	"go.klarlabs.de/tokenops/internal/infra/codexsettings"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
+	opencodestore "go.klarlabs.de/tokenops/internal/infra/opencodedb"
 	accountsapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/accounts"
 	anthropicapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/anthropic"
 	claudeoauthapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/claudecodeoauth"
@@ -90,7 +91,7 @@ func StartVendorUsagePollers(
 	}
 	if cfg.VendorUsage.OpenCode.Enabled {
 		p := opencode.NewPoller(bus, opencode.PollerOptions{
-			Root: cfg.VendorUsage.OpenCode.Root, Interval: cfg.VendorUsage.OpenCode.Interval, Logger: logger,
+			Root: cfg.VendorUsage.OpenCode.Root, Store: opencodestore.Store{}, Interval: cfg.VendorUsage.OpenCode.Interval, Logger: logger,
 		})
 		sup.Go("opencode", p.Run)
 		logger.Info("opencode poller live", "interval", cfg.VendorUsage.OpenCode.Interval, "root", cfg.VendorUsage.OpenCode.Root)

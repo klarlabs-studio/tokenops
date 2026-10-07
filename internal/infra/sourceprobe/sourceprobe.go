@@ -13,12 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb"
-
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
+	opencodestore "go.klarlabs.de/tokenops/internal/infra/opencodedb"
 
 	_ "modernc.org/sqlite" // pure-Go driver registered as "sqlite"
 )
@@ -121,5 +120,5 @@ func newestOpenCodeMessage(dbPath string) (time.Time, bool) {
 	if dbPath == "" {
 		return time.Time{}, false
 	}
-	return opencodedb.Newest(dbPath)
+	return opencodestore.Newest(dbPath)
 }

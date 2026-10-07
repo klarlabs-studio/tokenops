@@ -1,4 +1,4 @@
-package analytics
+package analytics_test
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/measurement"
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -37,10 +38,10 @@ func TestAggregateByReportsTheUnpricedGap(t *testing.T) {
 		meteredEvent("a", "claude-sonnet-4-6", 1_000_000, 100_000),
 		meteredEvent("b", "totally-unknown-model", 5_000_000, 500_000),
 	)
-	agg := New(st, spend.NewEngine(spend.DefaultTable()))
+	agg := analytics.New(st, spend.NewEngine(spend.DefaultTable()))
 
 	rows, err := agg.AggregateBy(context.Background(),
-		Filter{Since: time.Now().Add(-24 * time.Hour)}, BucketDay, GroupNone)
+		analytics.Filter{Since: time.Now().Add(-24 * time.Hour)}, analytics.BucketDay, analytics.GroupNone)
 	if err != nil {
 		t.Fatalf("AggregateBy: %v", err)
 	}
@@ -67,10 +68,10 @@ func TestAggregateByReportsTheUnpricedGap(t *testing.T) {
 // becomes noise every operator learns to ignore.
 func TestAggregateByReportsNoGapWhenEverythingIsPriced(t *testing.T) {
 	st := storeWith(t, meteredEvent("a", "claude-sonnet-4-6", 1_000_000, 100_000))
-	agg := New(st, spend.NewEngine(spend.DefaultTable()))
+	agg := analytics.New(st, spend.NewEngine(spend.DefaultTable()))
 
 	rows, err := agg.AggregateBy(context.Background(),
-		Filter{Since: time.Now().Add(-24 * time.Hour)}, BucketDay, GroupNone)
+		analytics.Filter{Since: time.Now().Add(-24 * time.Hour)}, analytics.BucketDay, analytics.GroupNone)
 	if err != nil {
 		t.Fatalf("AggregateBy: %v", err)
 	}
@@ -94,10 +95,10 @@ func TestRowCostMatchesTheLegacyFloat(t *testing.T) {
 		meteredEvent("a", "claude-sonnet-4-6", 1_000_000, 100_000),
 		meteredEvent("b", "claude-haiku-4-5", 2_000_000, 200_000),
 	)
-	agg := New(st, spend.NewEngine(spend.DefaultTable()))
+	agg := analytics.New(st, spend.NewEngine(spend.DefaultTable()))
 
 	rows, err := agg.AggregateBy(context.Background(),
-		Filter{Since: time.Now().Add(-24 * time.Hour)}, BucketDay, GroupNone)
+		analytics.Filter{Since: time.Now().Add(-24 * time.Hour)}, analytics.BucketDay, analytics.GroupNone)
 	if err != nil {
 		t.Fatalf("AggregateBy: %v", err)
 	}
@@ -113,10 +114,10 @@ func TestRowCostMatchesTheLegacyFloat(t *testing.T) {
 // what we worked out you were billed".
 func TestRecomputedCostIsDerivedNotMeasured(t *testing.T) {
 	st := storeWith(t, meteredEvent("a", "claude-sonnet-4-6", 1_000_000, 100_000))
-	agg := New(st, spend.NewEngine(spend.DefaultTable()))
+	agg := analytics.New(st, spend.NewEngine(spend.DefaultTable()))
 
 	rows, err := agg.AggregateBy(context.Background(),
-		Filter{Since: time.Now().Add(-24 * time.Hour)}, BucketDay, GroupNone)
+		analytics.Filter{Since: time.Now().Add(-24 * time.Hour)}, analytics.BucketDay, analytics.GroupNone)
 	if err != nil {
 		t.Fatalf("AggregateBy: %v", err)
 	}
@@ -138,10 +139,10 @@ func TestRecomputedCostIsDerivedNotMeasured(t *testing.T) {
 // dashboard shows "$0.00" or "pricing unavailable".
 func TestNoSpendEngineReportsUnknownRatherThanZero(t *testing.T) {
 	st := storeWith(t, meteredEvent("a", "claude-sonnet-4-6", 1_000_000, 100_000))
-	agg := New(st, nil)
+	agg := analytics.New(st, nil)
 
 	rows, err := agg.AggregateBy(context.Background(),
-		Filter{Since: time.Now().Add(-24 * time.Hour)}, BucketDay, GroupNone)
+		analytics.Filter{Since: time.Now().Add(-24 * time.Hour)}, analytics.BucketDay, analytics.GroupNone)
 	if err != nil {
 		t.Fatalf("AggregateBy: %v", err)
 	}

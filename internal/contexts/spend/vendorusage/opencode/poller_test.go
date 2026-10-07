@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/pkg/eventschema"
+
+	opencodestore "go.klarlabs.de/tokenops/internal/infra/opencodedb"
 )
 
 type captureBus struct {
@@ -41,7 +43,7 @@ func (b *captureBus) Close(_ time.Duration) error { return nil }
 func TestScanSkipsAnUnchangedDatabase(t *testing.T) {
 	path := newTestDB(t, map[string]string{"m1": `{"role":"assistant","time":{"created":1771056613283},"modelID":"claude-opus-4.6","providerID":"anthropic","tokens":{"input":10,"output":20,"reasoning":0,"cache":{"read":0,"write":0}}}`})
 	bus := &captureBus{}
-	p := NewPoller(bus, PollerOptions{Root: path, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	p := NewPoller(bus, PollerOptions{Root: path, Store: opencodestore.Store{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 
 	p.scan(context.Background(), path)
 	p.scan(context.Background(), path)

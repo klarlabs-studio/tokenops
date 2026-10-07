@@ -1,10 +1,11 @@
-package analytics
+package analytics_test
 
 import (
 	"context"
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -23,8 +24,8 @@ func TestReadingsAreNotRequests(t *testing.T) {
 	if err := store.AppendBatch(ctx, []*eventschema.Envelope{reading, usage, nameless}); err != nil {
 		t.Fatal(err)
 	}
-	agg := New(store, spend.NewEngine(spend.DefaultTable()))
-	s, err := agg.Summarize(ctx, Filter{Since: now.Add(-24 * time.Hour)})
+	agg := analytics.New(store, spend.NewEngine(spend.DefaultTable()))
+	s, err := agg.Summarize(ctx, analytics.Filter{Since: now.Add(-24 * time.Hour)})
 	if err != nil {
 		t.Fatal(err)
 	}

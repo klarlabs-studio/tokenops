@@ -9,6 +9,8 @@ import (
 	_ "modernc.org/sqlite"
 
 	"go.klarlabs.de/tokenops/pkg/eventschema"
+
+	opencodestore "go.klarlabs.de/tokenops/internal/infra/opencodedb"
 )
 
 // newTestDB creates a minimal opencode-shaped database with the given message
@@ -38,7 +40,7 @@ func TestReadMessagesParsesAssistantTurn(t *testing.T) {
 	path := newTestDB(t, map[string]string{"m1": assistant, "m2": user})
 
 	var got []Turn
-	if err := ReadMessages(path, func(tn Turn) error { got = append(got, tn); return nil }); err != nil {
+	if err := ReadMessages(opencodestore.Store{}, path, func(tn Turn) error { got = append(got, tn); return nil }); err != nil {
 		t.Fatalf("ReadMessages: %v", err)
 	}
 	if len(got) != 1 {
@@ -71,7 +73,7 @@ func TestReadMessagesParsesAssistantTurn(t *testing.T) {
 }
 
 func TestReadMessagesMissingDBIsNotError(t *testing.T) {
-	if err := ReadMessages(filepath.Join(t.TempDir(), "nope.db"), func(Turn) error {
+	if err := ReadMessages(opencodestore.Store{}, filepath.Join(t.TempDir(), "nope.db"), func(Turn) error {
 		t.Fatal("visit should not be called for a missing db")
 		return nil
 	}); err != nil {

@@ -11,6 +11,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/infra/pricingsource"
 )
 
 // The rate card goes stale on its own. A model released after the binary
@@ -81,7 +82,7 @@ func refreshOnce(
 	eng *spend.Engine,
 	logger *slog.Logger,
 ) {
-	src := pricing.SourceByName("default", "")
+	src := pricingsource.ByName("default", "")
 	if src == nil {
 		return
 	}

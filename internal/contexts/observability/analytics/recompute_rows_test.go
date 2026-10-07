@@ -1,4 +1,4 @@
-package analytics
+package analytics_test
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -19,7 +20,7 @@ func TestAggregateRecomputesTheWholeDayBucket(t *testing.T) {
 	day := time.Date(2026, 5, 9, 0, 0, 0, 0, time.UTC)
 	_ = store.Append(ctx, mkPrompt("late", day.Add(15*time.Hour), "gpt-4o-mini", 1_000_000, 1_000_000, 0))
 
-	rows, err := New(store, spend.NewEngine(spend.DefaultTable())).AggregateBy(ctx, Filter{}, BucketDay, GroupNone)
+	rows, err := analytics.New(store, spend.NewEngine(spend.DefaultTable())).AggregateBy(ctx, analytics.Filter{}, analytics.BucketDay, analytics.GroupNone)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +39,7 @@ func TestAggregateRecomputesEachGroupOnItsOwnEvents(t *testing.T) {
 	_ = store.Append(ctx, mkPrompt("full", at.Add(time.Minute), "gpt-4o", 1_000_000, 1_000_000, 0))
 
 	eng := spend.NewEngine(spend.DefaultTable())
-	rows, err := New(store, eng).AggregateBy(ctx, Filter{}, BucketHour, GroupModel)
+	rows, err := analytics.New(store, eng).AggregateBy(ctx, analytics.Filter{}, analytics.BucketHour, analytics.GroupModel)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,14 +69,14 @@ func TestAggregateRowsSumToSummarize(t *testing.T) {
 	_ = store.Append(ctx, mkPrompt("unpriced", day.Add(9*time.Hour), "gpt-4o", 1_000_000, 1_000_000, 0))
 	_ = store.Append(ctx, mkPrompt("other", day.Add(20*time.Hour), "gpt-4o-mini", 1_000_000, 0, 0))
 
-	agg := New(store, spend.NewEngine(spend.DefaultTable()))
-	sum, err := agg.Summarize(ctx, Filter{})
+	agg := analytics.New(store, spend.NewEngine(spend.DefaultTable()))
+	sum, err := agg.Summarize(ctx, analytics.Filter{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, b := range []Bucket{BucketHour, BucketDay} {
-		for _, g := range []Group{GroupNone, GroupModel} {
-			rows, err := agg.AggregateBy(ctx, Filter{}, b, g)
+	for _, b := range []analytics.Bucket{analytics.BucketHour, analytics.BucketDay} {
+		for _, g := range []analytics.Group{analytics.GroupNone, analytics.GroupModel} {
+			rows, err := agg.AggregateBy(ctx, analytics.Filter{}, b, g)
 			if err != nil {
 				t.Fatal(err)
 			}

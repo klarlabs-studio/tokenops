@@ -6,9 +6,10 @@ import (
 )
 
 // Source is a pluggable provider of a pricing Snapshot. Implementations fetch
-// from a machine-readable feed (LiteLLM today; OpenRouter, a vendor-page
-// scraper, or a curated override later) and normalize to the internal
-// Snapshot model. Keeping the engine behind this interface is the ADR 0002
+// from a machine-readable feed (LiteLLM and models.dev today, in
+// internal/infra/pricingsource; OpenRouter, a vendor-page scraper, or a
+// curated override later) and normalize to the internal Snapshot model with
+// ParseLiteLLM / ParseModelsDev. Keeping the engine behind this interface is the ADR 0002
 // decision: adding a source never touches the cost path.
 type Source interface {
 	// Name is the stable identifier used by `pricing refresh --source <name>`.
@@ -17,36 +18,6 @@ type Source interface {
 	// cancellation) and return a wrapped ErrFetch on any network or parse
 	// failure so the caller can fall back to the baseline without writing.
 	Fetch(ctx context.Context) (Snapshot, error)
-}
-
-// SourceByName returns the built-in Source for name, or nil when unknown:
-// "litellm", "models.dev", or "default" (both, combined). url overrides the source's
-// default endpoint when non-empty (used for `--url` and, in tests, an
-// httptest server).
-func SourceByName(name, url string) Source {
-	switch name {
-	case "litellm":
-		s := NewLiteLLMSource()
-		if url != "" {
-			s.URL = url
-		}
-		return s
-	case "models.dev", "modelsdev":
-		s := NewModelsDevSource()
-		if url != "" {
-			s.URL = url
-		}
-		return s
-	case "", "default":
-		// A URL names one endpoint, so it can only stand in for one
-		// source: LiteLLM, which "default" meant before models.dev.
-		if url != "" {
-			return SourceByName("litellm", url)
-		}
-		return Combined{NewLiteLLMSource(), NewModelsDevSource()}
-	default:
-		return nil
-	}
 }
 
 // Combined fetches several sources into one snapshot: LiteLLM for the
