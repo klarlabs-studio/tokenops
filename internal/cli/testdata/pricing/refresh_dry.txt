@@ -1,0 +1,15 @@
+Fetched 2 model rates (as of <NOW>).
+
+Changes vs 2026-09-15T00:00:00Z (litellm):
+  ~ anthropic/claude-opus-4-7 cache_read 1.5 → 0.5 (-67%)
+  ~ openai/gpt-4o cache_read 3 → 5 (+67%)
+  - openai/gpt-4o-mini (removed)
+
+--dry-run: snapshot not written.
+--- stderr ---
+Fetching rates from litellm...
+✓ Fetched 2 model rates
+⚠ consistency guard flagged 1 anomaly(ies) in the fetched rates:
+  - openai/gpt-4o cache_read 5 exceeds input 2.5; a cache read should never cost more than fresh input
+  (fetched anyway — review before trusting these rates.)
+

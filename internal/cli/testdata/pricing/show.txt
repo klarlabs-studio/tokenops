@@ -1,0 +1,9 @@
+source: litellm (https://example.test/rates.json)
+fetched_at: 2026-09-15T00:00:00Z
+models: 3
+
+PROVIDER/MODEL                            INPUT       OUTPUT   CACHE_READ
+anthropic/claude-opus-4-7                     5           25          1.5
+openai/gpt-4o                               2.5           10            3
+openai/gpt-4o-mini                         0.15          0.6            0
+--- stderr ---

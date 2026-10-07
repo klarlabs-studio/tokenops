@@ -1,0 +1,39 @@
+{
+  "changes": [
+    {
+      "model": "anthropic/claude-opus-4-7",
+      "kind": "modified",
+      "fields": [
+        {
+          "field": "cache_read",
+          "old": 0.5,
+          "new": 1.5,
+          "pct_delta": 200
+        }
+      ]
+    },
+    {
+      "model": "mistral/mistral-large",
+      "kind": "removed"
+    },
+    {
+      "model": "openai/gpt-4o",
+      "kind": "modified",
+      "fields": [
+        {
+          "field": "cache_read",
+          "old": 1.25,
+          "new": 3,
+          "pct_delta": 140
+        }
+      ]
+    },
+    {
+      "model": "openai/gpt-4o-mini",
+      "kind": "added"
+    }
+  ],
+  "from": "2026-09-01T00:00:00Z",
+  "to": "2026-09-15T00:00:00Z"
+}
+--- stderr ---
