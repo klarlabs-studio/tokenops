@@ -78,7 +78,7 @@ func TestComputeFVTMedianPerSession(t *testing.T) {
 		// Second event in session a — should not affect median.
 		&eventschema.PromptEvent{Provider: eventschema.ProviderOpenAI, RequestModel: "m", SessionID: "a", InputTokens: 10, OutputTokens: 5, TotalTokens: 15, Latency: 60 * time.Second},
 	)
-	kpis, err := Compute(context.Background(), sqliteReader{store: store}, time.Now().Add(-time.Hour))
+	kpis, err := Compute(context.Background(), store, time.Now().Add(-time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestComputeTEU(t *testing.T) {
 		&eventschema.OptimizationEvent{PromptHash: "h", Kind: eventschema.OptimizationTypePromptCompress, Mode: eventschema.OptimizationModePassive, Decision: eventschema.OptimizationDecisionApplied, EstimatedSavingsTokens: 500},
 		&eventschema.OptimizationEvent{PromptHash: "h", Kind: eventschema.OptimizationTypeDedupe, Mode: eventschema.OptimizationModePassive, Decision: eventschema.OptimizationDecisionApplied, EstimatedSavingsTokens: 500},
 	)
-	kpis, err := Compute(context.Background(), sqliteReader{store: store}, time.Now().Add(-time.Hour))
+	kpis, err := Compute(context.Background(), store, time.Now().Add(-time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestComputeSAC(t *testing.T) {
 		&eventschema.PromptEvent{Provider: eventschema.ProviderOpenAI, RequestModel: "m", InputTokens: 1, OutputTokens: 1, TotalTokens: 2},
 		&eventschema.PromptEvent{Provider: eventschema.ProviderOpenAI, RequestModel: "m", SessionID: "s-1", InputTokens: 1, OutputTokens: 1, TotalTokens: 2},
 	)
-	kpis, err := Compute(context.Background(), sqliteReader{store: store}, time.Now().Add(-time.Hour))
+	kpis, err := Compute(context.Background(), store, time.Now().Add(-time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestComputeSAC(t *testing.T) {
 
 func TestComputeEmptyStoreFlagsUnComputed(t *testing.T) {
 	store := openTempStore(t)
-	kpis, err := Compute(context.Background(), sqliteReader{store: store}, time.Now().Add(-time.Hour))
+	kpis, err := Compute(context.Background(), store, time.Now().Add(-time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}

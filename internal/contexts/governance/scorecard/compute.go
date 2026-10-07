@@ -8,11 +8,9 @@ import (
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
-// EventReader is the read-side port the scorecard depends on. Concrete
-// sqlite-backed implementations satisfy it via the storeAdapter in
-// service.go, but tests and future infrastructure adapters (ClickHouse,
-// gRPC stream) can substitute their own without dragging the storage
-// package into the domain.
+// EventReader is the read-side port the scorecard depends on. The event
+// store (*sqlite.Store) satisfies it directly, so the domain never
+// imports the storage package.
 type EventReader interface {
 	// ReadEvents returns envelopes of the requested type whose timestamp
 	// falls on or after since. The implementation is responsible for any

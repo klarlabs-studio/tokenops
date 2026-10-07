@@ -1,36 +1,13 @@
 package spending
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing"
-	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
-
-// ScorecardParams selects the scorecard's window and operator overrides.
-type ScorecardParams struct {
-	// SinceDays is the window; seven when zero.
-	SinceDays int
-	// The overrides replace a measured KPI with the operator's figure.
-	FVTSeconds, TEUPct, SACPct float64
-	BaselineRef                string
-}
-
-// Scorecard computes the wedge KPI scorecard (FVT, TEU, SAC) from the store.
-func Scorecard(ctx context.Context, store *sqlite.Store, p ScorecardParams) *scorecard.Scorecard {
-	return scorecard.BuildFromStore(ctx, store, scorecard.BuildParams{
-		SinceDays:          p.SinceDays,
-		FVTSecondsOverride: p.FVTSeconds,
-		TEUPctOverride:     p.TEUPct,
-		SACPctOverride:     p.SACPct,
-		BaselineRef:        p.BaselineRef,
-	})
-}
 
 // RateQuery filters the rate card.
 type RateQuery struct {
@@ -95,7 +72,3 @@ func RateCard(dir string, q RateQuery) Rates {
 	}
 	return out
 }
-
-// ScorecardReport is the scorecard answer, named here so adapters can
-// describe it without reaching into the governance domain.
-type ScorecardReport = scorecard.Scorecard

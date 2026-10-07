@@ -80,9 +80,7 @@ var directDomainImports = map[string][]string{
 	"go.klarlabs.de/tokenops/internal/cli": {
 		"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts",
 		"go.klarlabs.de/tokenops/internal/contexts/coaching/replies",
-		"go.klarlabs.de/tokenops/internal/contexts/coaching/tools",
 		"go.klarlabs.de/tokenops/internal/contexts/governance/coverdebt",
-		"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard",
 		"go.klarlabs.de/tokenops/internal/contexts/governance/story",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/eval",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/fmtlearn",
@@ -125,8 +123,6 @@ var directDomainImports = map[string][]string{
 		"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow",
 	},
 	"go.klarlabs.de/tokenops/internal/mcp": {
-		"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts",
-		"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard",
 		"go.klarlabs.de/tokenops/internal/contexts/observability/freshness",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/fmtlearn",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter",

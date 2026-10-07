@@ -9,7 +9,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/auditlog"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 
-	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
@@ -55,8 +54,8 @@ func RegisterParityTools(s *Server, d ParityDeps) error {
 	}
 	s.Tool("tokenops_scorecard").
 		Description("Operator wedge KPI scorecard (FVT, TEU, SAC) computed from the local event store. Mirrors `tokenops scorecard`.").
-		OutputSchema(scorecard.Scorecard{}).
-		Handler(func(ctx context.Context, in scorecardInput) (*scorecard.Scorecard, error) {
+		OutputSchema(spending.ScorecardReport{}).
+		Handler(func(ctx context.Context, in scorecardInput) (*spending.ScorecardReport, error) {
 			return runScorecard(ctx, d, in)
 		})
 
@@ -73,7 +72,7 @@ func RegisterParityTools(s *Server, d ParityDeps) error {
 
 // --- handlers -------------------------------------------------------------
 
-func runScorecard(ctx context.Context, d ParityDeps, in scorecardInput) (*scorecard.Scorecard, error) {
+func runScorecard(ctx context.Context, d ParityDeps, in scorecardInput) (*spending.ScorecardReport, error) {
 	s := spending.Scorecard(ctx, d.Store, spending.ScorecardParams{
 		SinceDays:   in.SinceDays,
 		FVTSeconds:  in.FVTSeconds,
