@@ -362,14 +362,14 @@ func ExtractAll(opts ExtractOptions) ([]Record, error) {
 	switch {
 	case err == nil:
 		out = append(out, cu...)
-	case errors.Is(err, ErrCursorSchema):
+	case errors.Is(err, ErrCursorSchema), errors.Is(err, ErrNoCursorStore):
 		errs = append(errs, err)
 	}
 	oc, err := ExtractOpencode(opts)
 	switch {
 	case err == nil:
 		out = append(out, oc...)
-	case errors.Is(err, ErrOpencodeSchema):
+	case errors.Is(err, ErrOpencodeSchema), errors.Is(err, ErrNoOpencodeStore):
 		errs = append(errs, err)
 	}
 	return out, errors.Join(errs...)

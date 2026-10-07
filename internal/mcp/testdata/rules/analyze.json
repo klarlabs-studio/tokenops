@@ -1,0 +1,142 @@
+{
+  "documents": [
+    {
+      "SourceID": "repo:.cursor/rules/go.mdc",
+      "Source": "cursor_rules",
+      "Scope": "file_glob",
+      "Path": ".cursor/rules/go.mdc",
+      "RepoID": "repo",
+      "Provider": "openai",
+      "TotalTokens": 16,
+      "TotalChars": 58,
+      "Sections": 2,
+      "Hash": "sha256:8ac9b307e52869a5015163d799040838fe14b754a330000d1b9ebff671e573a038",
+      "TopSections": [
+        {
+          "SourceID": "repo:.cursor/rules/go.mdc",
+          "SectionID": "repo:.cursor/rules/go.mdc#/Go",
+          "Anchor": "/Go",
+          "TokenCount": 10,
+          "CharCount": 41,
+          "TokensPerKChar": 243.902439024,
+          "Hash": "sha256:13375a3758c6c10613d4d969eab3ef74a4569eed2661a5a1d1070333d1a79fed",
+          "Provider": "openai"
+        },
+        {
+          "SourceID": "repo:.cursor/rules/go.mdc",
+          "SectionID": "repo:.cursor/rules/go.mdc#_preamble",
+          "Anchor": "",
+          "TokenCount": 3,
+          "CharCount": 11,
+          "TokensPerKChar": 272.727272727,
+          "Hash": "sha256:e9c1f36b8b94beb1a451d1eabef11c9f807cf30000000e401b4783aaa66688f0a2bf8",
+          "Provider": "openai"
+        }
+      ]
+    },
+    {
+      "SourceID": "repo:AGENTS.md",
+      "Source": "agents_md",
+      "Scope": "repo",
+      "Path": "AGENTS.md",
+      "RepoID": "repo",
+      "Provider": "openai",
+      "TotalTokens": 24,
+      "TotalChars": 107,
+      "Sections": 3,
+      "Hash": "sha256:e3bcd502b0ae41eb18ccb72a2c196232af85a1479da636b95db9fa50e558d35b",
+      "TopSections": [
+        {
+          "SourceID": "repo:AGENTS.md",
+          "SectionID": "repo:AGENTS.md#/Testing",
+          "Anchor": "/Testing",
+          "TokenCount": 11,
+          "CharCount": 51,
+          "TokensPerKChar": 215.68627451,
+          "Hash": "sha256:4c31000ee1340610b2fb26d5950b1ef10000000000be50777c3c2b2ad717b90836235a88",
+          "Provider": "openai"
+        },
+        {
+          "SourceID": "repo:AGENTS.md",
+          "SectionID": "repo:AGENTS.md#/Style",
+          "Anchor": "/Style",
+          "TokenCount": 4,
+          "CharCount": 22,
+          "TokensPerKChar": 181.818181818,
+          "Hash": "sha256:df9d41236529a23a86a3d4292b2cf81553781705a5514d99535b1c8a03e7170a",
+          "Provider": "openai"
+        },
+        {
+          "SourceID": "repo:AGENTS.md",
+          "SectionID": "repo:AGENTS.md#_preamble",
+          "Anchor": "",
+          "TokenCount": 3,
+          "CharCount": 14,
+          "TokensPerKChar": 214.285714286,
+          "Hash": "sha256:801581cc91675b97b20192a55000000000a7ef0576a6bd6b24417404fb1cc94825e509a",
+          "Provider": "openai"
+        }
+      ]
+    },
+    {
+      "SourceID": "repo:CLAUDE.md",
+      "Source": "claude_md",
+      "Scope": "repo",
+      "Path": "CLAUDE.md",
+      "RepoID": "repo",
+      "Provider": "openai",
+      "TotalTokens": 39,
+      "TotalChars": 178,
+      "Sections": 4,
+      "Hash": "sha256:66ce3b53931c12fdd4c1200a23d61b71000f7055b4737ec53b86f2f0d89cd05ce",
+      "TopSections": [
+        {
+          "SourceID": "repo:CLAUDE.md",
+          "SectionID": "repo:CLAUDE.md#/Testing",
+          "Anchor": "/Testing",
+          "TokenCount": 11,
+          "CharCount": 51,
+          "TokensPerKChar": 215.68627451,
+          "Hash": "sha256:4c31000ee1340610b2fb26d5950b1ef10000000000be50777c3c2b2ad717b90836235a88",
+          "Provider": "openai"
+        },
+        {
+          "SourceID": "repo:CLAUDE.md",
+          "SectionID": "repo:CLAUDE.md#/Review",
+          "Anchor": "/Review",
+          "TokenCount": 7,
+          "CharCount": 43,
+          "TokensPerKChar": 162.790697674,
+          "Hash": "sha256:2a8b430000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c08a5c63fc5d13dac9022c994dc8d6d29f68d30bf95c919874f3",
+          "Provider": "openai"
+        },
+        {
+          "SourceID": "repo:CLAUDE.md",
+          "SectionID": "repo:CLAUDE.md#_preamble",
+          "Anchor": "",
+          "TokenCount": 6,
+          "CharCount": 27,
+          "TokensPerKChar": 222.222222222,
+          "Hash": "sha256:e1f334c63a5a8a181eedce41ce381f74a40cadfa41ffd8f57982baa4be93d188",
+          "Provider": "openai"
+        },
+        {
+          "SourceID": "repo:CLAUDE.md",
+          "SectionID": "repo:CLAUDE.md#/Style",
+          "Anchor": "/Style",
+          "TokenCount": 6,
+          "CharCount": 27,
+          "TokensPerKChar": 222.222222222,
+          "Hash": "sha256:2098682fb056ee359b525040f57e2571f6c9f9b74771bf2fe9faa6b92a88ac5",
+          "Provider": "openai"
+        }
+      ]
+    }
+  ],
+  "duplicate_groups": {
+    "sha256:4c31000ee1340610b2fb26d5950b1ef10000000000be50777c3c2b2ad717b90836235a88": [
+      "repo:AGENTS.md#/Testing",
+      "repo:CLAUDE.md#/Testing"
+    ]
+  }
+}

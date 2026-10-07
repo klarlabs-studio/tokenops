@@ -1,0 +1,110 @@
+{
+  "window_days": 0,
+  "tasks": [
+    {
+      "title": "add a changelog entry for 1.4",
+      "session_id": "s2",
+      "start": "2026-01-06T09:00:00Z",
+      "end": "2026-01-06T09:01:00Z",
+      "duration_seconds": 60,
+      "boundary": "session start",
+      "instructions": 1,
+      "turns": 2,
+      "tool_calls": 1,
+      "context_carried_tokens": 8500,
+      "peak_context_tokens": 4500,
+      "files": [
+        "/work/lib/CHANGELOG.md"
+      ],
+      "frictions": [],
+      "clean": true
+    },
+    {
+      "title": "fix the retry path in the uploader",
+      "session_id": "s1",
+      "start": "2026-01-05T10:00:00Z",
+      "end": "2026-01-05T10:06:00Z",
+      "duration_seconds": 360,
+      "boundary": "session start",
+      "instructions": 2,
+      "turns": 6,
+      "tool_calls": 5,
+      "context_carried_tokens": 123000,
+      "peak_context_tokens": 27000,
+      "files": [
+        "/work/app/upload.go",
+        "/work/app/retry.go"
+      ],
+      "frictions": [
+        "you stopped the agent during the 1st instruction",
+        "you told it the 1st answer was wrong",
+        "the 1st instruction edited the same file twice"
+      ],
+      "clean": false
+    }
+  ],
+  "work": [
+    {
+      "work": {
+        "id": "work:story:be27c67113377ef0",
+        "goal": "add a changelog entry for 1.4",
+        "goal_source": "inferred",
+        "goal_caveat": "reconstructed from the transcript: split on session start, and the title is the first instruction of the group — a heuristic that is sometimes wrong",
+        "requested_by": {
+          "id": "operator",
+          "kind": "human",
+          "at": "2026-01-06T09:00:00Z"
+        },
+        "created_at": "2026-01-06T09:00:00Z"
+      },
+      "actor": {
+        "id": "session:s2",
+        "kind": "agent",
+        "on_behalf_of": "operator"
+      },
+      "execution": {
+        "id": "exec:story:be27c67113377ef0",
+        "work": "work:story:be27c67113377ef0",
+        "by": "session:s2",
+        "started_at": "2026-01-06T09:00:00Z",
+        "ended_at": "2026-01-06T09:01:00Z",
+        "status": "succeeded"
+      },
+      "outcome": {
+        "execution": "exec:story:be27c67113377ef0",
+        "caveat": "a transcript records what was said, not whether the goal was met; nothing assessed this work"
+      }
+    },
+    {
+      "work": {
+        "id": "work:story:13bd15501c972fe4",
+        "goal": "fix the retry path in the uploader",
+        "goal_source": "inferred",
+        "goal_caveat": "reconstructed from the transcript: split on session start, and the title is the first instruction of the group — a heuristic that is sometimes wrong",
+        "requested_by": {
+          "id": "operator",
+          "kind": "human",
+          "at": "2026-01-05T10:00:00Z"
+        },
+        "created_at": "2026-01-05T10:00:00Z"
+      },
+      "actor": {
+        "id": "session:s1",
+        "kind": "agent",
+        "on_behalf_of": "operator"
+      },
+      "execution": {
+        "id": "exec:story:13bd15501c972fe4",
+        "work": "work:story:13bd15501c972fe4",
+        "by": "session:s1",
+        "started_at": "2026-01-05T10:00:00Z",
+        "ended_at": "2026-01-05T10:06:00Z",
+        "status": "succeeded"
+      },
+      "outcome": {
+        "execution": "exec:story:13bd15501c972fe4",
+        "caveat": "a transcript records what was said, not whether the goal was met; nothing assessed this work"
+      }
+    }
+  ]
+}

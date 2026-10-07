@@ -1,0 +1,18 @@
+Your work — all history
+  2 tasks
+
+─ add a changelog entry for 1.4
+  Tue 09:00 → 09:01 (1m)
+  1 instruction · 2 turns · 1 tool calls · context peaked at 4k
+  touched /work/lib/CHANGELOG.md
+  clean run — no rework, nothing rejected, nothing interrupted
+
+─ fix the retry path in the uploader
+  Mon 10:00 → 10:06 (6m)
+  2 instructions · 6 turns · 5 tool calls · context peaked at 27k
+  touched /work/app/upload.go, /work/app/retry.go
+  where it went sideways:
+    · you stopped the agent during the 1st instruction
+    · you told it the 1st answer was wrong
+    · the 1st instruction edited the same file twice
+

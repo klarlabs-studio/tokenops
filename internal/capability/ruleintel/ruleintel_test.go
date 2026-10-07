@@ -1,6 +1,7 @@
 package ruleintel
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -74,6 +75,63 @@ func TestInjectUsesTheCorpusRepository(t *testing.T) {
 	}
 	if res == nil || res.Considered == 0 {
 		t.Fatalf("selection considered nothing: %+v", res)
+	}
+}
+
+func TestParseProviderRefusesWhatProviderWouldDefault(t *testing.T) {
+	if p, ok := ParseProvider("gemini"); !ok || p != eventschema.ProviderGemini {
+		t.Errorf("gemini = %q, %v", p, ok)
+	}
+	if p, ok := ParseProvider(""); !ok || p != eventschema.ProviderOpenAI {
+		t.Errorf("empty = %q, %v", p, ok)
+	}
+	if _, ok := ParseProvider("mistral"); ok {
+		t.Error("mistral should be refused")
+	}
+}
+
+// CompressDetailed is Compress plus sections, and the body only when it
+// is asked for.
+func TestCompressDetailedAgreesWithCompress(t *testing.T) {
+	c := writeCorpus(t)
+	summary, err := Compress(c, CompressOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bare, err := CompressDetailed(c, CompressOptions{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withBody, err := CompressDetailed(c, CompressOptions{}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, d := range bare {
+		if d.CompressedDocument != summary.Results[i] {
+			t.Errorf("document %d: detailed %+v, summary %+v", i, d.CompressedDocument, summary.Results[i])
+		}
+		if len(d.Sections) == 0 || d.Body != "" {
+			t.Errorf("document %d: sections %d, body %q", i, len(d.Sections), d.Body)
+		}
+		if withBody[i].Body == "" {
+			t.Errorf("document %d: no body when asked for one", i)
+		}
+	}
+}
+
+// A CorpusError reads as the read failure it wraps, so marking one does
+// not change the message a caller sees.
+func TestCorpusErrorReadsAsItsCause(t *testing.T) {
+	cause := os.ErrPermission
+	var err error = &CorpusError{Err: cause}
+	if err.Error() != cause.Error() || !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("err = %q, want %q wrapping it", err, cause)
+	}
+}
+
+func TestBenchRefusesABadSpec(t *testing.T) {
+	if _, err := Bench([]byte("profiles: [")); err == nil {
+		t.Fatal("a malformed spec should be refused")
 	}
 }
 

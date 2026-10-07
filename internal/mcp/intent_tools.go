@@ -8,7 +8,7 @@ import (
 
 	mcpgo "go.klarlabs.de/mcp"
 
-	workflowdomain "go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
+	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
 	"go.klarlabs.de/tokenops/internal/presentation"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -50,7 +50,7 @@ func registerIntentTools(s *Server, d Deps) error {
 		OutputSchema(reviewWorkResult{}).
 		Handler(func(ctx context.Context, in reviewWorkInput) (mcpgo.StructuredResult, error) {
 			trace, err := workflowTrace(ctx, d, workflowTraceInput(in))
-			noEvidence := errors.Is(err, workflowdomain.ErrNoTrace)
+			noEvidence := errors.Is(err, workflowtrace.ErrNoTrace)
 			if err != nil && !noEvidence {
 				return mcpgo.StructuredResult{}, err
 			}

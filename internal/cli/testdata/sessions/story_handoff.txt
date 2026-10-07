@@ -1,0 +1,22 @@
+Handover — all recorded history, 2 tasks
+
+Ended on friction — start here
+  ─ fix the retry path in the uploader
+      Mon 5 Jan 10:00, 6m, 2 instructions
+      touched /work/app/upload.go, /work/app/retry.go
+      interrupted: you stopped the agent during the 1st instruction
+      rejected: you told it the 1st answer was wrong
+      rework: the 1st instruction edited the same file twice
+
+Ran clean — nothing rejected, reworked or interrupted
+  ─ add a changelog entry for 1.4
+      Tue 6 Jan 09:00, 1m, 1 instruction
+      touched /work/lib/CHANGELOG.md
+
+Files this work touched most
+  /work/app/retry.go                                   1 task
+  /work/app/upload.go                                  1 task
+  /work/lib/CHANGELOG.md                               1 task
+
+Reconstructed from local transcripts. It says what was asked for and
+how the work ended, not whether it works — only the tests know that.

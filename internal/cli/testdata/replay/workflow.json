@@ -1,0 +1,185 @@
+{
+  "selector": {
+    "WorkflowID": "wf-waste",
+    "SessionID": "sess-waste",
+    "AgentID": "",
+    "Since": "0001-01-01T00:00:00Z",
+    "Until": "0001-01-01T00:00:00Z",
+    "Limit": 1000
+  },
+  "result": {
+    "Steps": [
+      {
+        "OriginalEnvelope": {
+          "id": "wt-0",
+          "schema_version": "1.5.0",
+          "type": "prompt",
+          "timestamp": "2026-01-05T10:00:00Z",
+          "source": "test",
+          "payload": {
+            "prompt_hash": "sha256:0",
+            "provider": "anthropic",
+            "request_model": "claude-sonnet-4-5",
+            "response_model": "claude-sonnet-4-5",
+            "input_tokens": 1200,
+            "output_tokens": 300,
+            "total_tokens": 1500,
+            "context_size": 1200,
+            "latency_ns": 0,
+            "streaming": false,
+            "status": 200,
+            "workflow_id": "wf-waste",
+            "agent_id": "agent-loop",
+            "session_id": "sess-waste"
+          }
+        },
+        "OriginalCostUSD": 0,
+        "OriginalInputTokens": 1200,
+        "OriginalOutputTokens": 300,
+        "OptimizationEvents": null,
+        "EstimatedSavingsTokens": 0,
+        "EstimatedSavingsUSD": 0
+      },
+      {
+        "OriginalEnvelope": {
+          "id": "wt-1",
+          "schema_version": "1.5.0",
+          "type": "prompt",
+          "timestamp": "2026-01-05T10:01:00Z",
+          "source": "test",
+          "payload": {
+            "prompt_hash": "sha256:1",
+            "provider": "anthropic",
+            "request_model": "claude-sonnet-4-5",
+            "response_model": "claude-sonnet-4-5",
+            "input_tokens": 4800,
+            "output_tokens": 300,
+            "total_tokens": 5100,
+            "context_size": 4800,
+            "latency_ns": 0,
+            "streaming": false,
+            "status": 200,
+            "workflow_id": "wf-waste",
+            "agent_id": "agent-loop",
+            "session_id": "sess-waste"
+          }
+        },
+        "OriginalCostUSD": 0,
+        "OriginalInputTokens": 4800,
+        "OriginalOutputTokens": 300,
+        "OptimizationEvents": null,
+        "EstimatedSavingsTokens": 0,
+        "EstimatedSavingsUSD": 0
+      },
+      {
+        "OriginalEnvelope": {
+          "id": "wt-2",
+          "schema_version": "1.5.0",
+          "type": "prompt",
+          "timestamp": "2026-01-05T10:02:00Z",
+          "source": "test",
+          "payload": {
+            "prompt_hash": "sha256:2",
+            "provider": "anthropic",
+            "request_model": "claude-sonnet-4-5",
+            "response_model": "claude-sonnet-4-5",
+            "input_tokens": 40000,
+            "output_tokens": 300,
+            "total_tokens": 40300,
+            "context_size": 40000,
+            "latency_ns": 0,
+            "streaming": false,
+            "status": 200,
+            "workflow_id": "wf-waste",
+            "agent_id": "agent-loop",
+            "session_id": "sess-waste"
+          }
+        },
+        "OriginalCostUSD": 0,
+        "OriginalInputTokens": 40000,
+        "OriginalOutputTokens": 300,
+        "OptimizationEvents": null,
+        "EstimatedSavingsTokens": 0,
+        "EstimatedSavingsUSD": 0
+      },
+      {
+        "OriginalEnvelope": {
+          "id": "wt-3",
+          "schema_version": "1.5.0",
+          "type": "prompt",
+          "timestamp": "2026-01-05T10:03:00Z",
+          "source": "test",
+          "payload": {
+            "prompt_hash": "sha256:3",
+            "provider": "anthropic",
+            "request_model": "claude-sonnet-4-5",
+            "response_model": "claude-sonnet-4-5",
+            "input_tokens": 9000,
+            "output_tokens": 300,
+            "total_tokens": 9300,
+            "context_size": 9000,
+            "latency_ns": 0,
+            "streaming": false,
+            "status": 200,
+            "workflow_id": "wf-waste",
+            "agent_id": "agent-loop",
+            "session_id": "sess-waste"
+          }
+        },
+        "OriginalCostUSD": 0,
+        "OriginalInputTokens": 9000,
+        "OriginalOutputTokens": 300,
+        "OptimizationEvents": null,
+        "EstimatedSavingsTokens": 0,
+        "EstimatedSavingsUSD": 0
+      },
+      {
+        "OriginalEnvelope": {
+          "id": "wt-4",
+          "schema_version": "1.5.0",
+          "type": "prompt",
+          "timestamp": "2026-01-05T10:04:00Z",
+          "source": "test",
+          "payload": {
+            "prompt_hash": "sha256:4",
+            "provider": "anthropic",
+            "request_model": "claude-sonnet-4-5",
+            "response_model": "claude-sonnet-4-5",
+            "input_tokens": 12500,
+            "output_tokens": 300,
+            "total_tokens": 12800,
+            "context_size": 12500,
+            "latency_ns": 0,
+            "streaming": false,
+            "status": 200,
+            "workflow_id": "wf-waste",
+            "agent_id": "agent-loop",
+            "session_id": "sess-waste"
+          }
+        },
+        "OriginalCostUSD": 0,
+        "OriginalInputTokens": 12500,
+        "OriginalOutputTokens": 300,
+        "OptimizationEvents": null,
+        "EstimatedSavingsTokens": 0,
+        "EstimatedSavingsUSD": 0
+      }
+    ],
+    "OriginalCostUSD": 0,
+    "EstimatedSavingsTokens": 0,
+    "EstimatedSavingsUSD": 0,
+    "OriginalInputTokens": 67500,
+    "OriginalOutputTokens": 1500
+  },
+  "coaching": [
+    {
+      "session_id": "",
+      "workflow_id": "wf-waste",
+      "kind": "trim_context",
+      "summary": "Oversized context window",
+      "details": "Workflow peak context = 40000 tokens (limit 32768). Consider trimming older turns or summarising.",
+      "estimated_savings_tokens": 7232
+    }
+  ],
+  "generated_at": "<T>"
+}

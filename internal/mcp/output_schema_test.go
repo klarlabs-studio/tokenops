@@ -47,7 +47,6 @@ func TestOutputSchemasGenerate(t *testing.T) {
 		"WorkInsight":          presentation.WorkInsight{},
 		// parity_tools.go
 		"rules.BenchmarkResult": rules.BenchmarkResult{},
-		"evalResult":            evalResult{},
 		"coverdebt.Report":      coverdebt.Report{},
 		"scorecard.Scorecard":   scorecard.Scorecard{},
 		"replay.Result":         replay.Result{},

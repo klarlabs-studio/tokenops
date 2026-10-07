@@ -9,13 +9,12 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
+	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
 
 	"go.klarlabs.de/tokenops/internal/capability/money"
 
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
-	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -29,11 +28,11 @@ type Deps struct {
 	Spend      *spend.Engine
 	// Waste configures the workflow waste detector (operator context
 	// limits from coaching.context_limits). Zero value uses defaults.
-	Waste waste.Config
+	Waste workflowtrace.WasteConfig
 	// WasteConfig, when set, supplies it at call time so an edit to
 	// coaching.context_limits applies without restarting the MCP client.
 	// It wins over Waste.
-	WasteConfig func() waste.Config
+	WasteConfig func() workflowtrace.WasteConfig
 
 	// StaleSources reports vendor-usage sources that have stopped
 	// ingesting. Optional: nil means the caveat is omitted, which is the
@@ -149,7 +148,7 @@ type forecastResult = spending.SpendForecast
 
 // workflowTraceResult is the typed payload for tokenops_records (view=workflow).
 type workflowTraceResult struct {
-	Trace    *workflow.Trace              `json:"trace"`
+	Trace    *workflowtrace.Trace         `json:"trace"`
 	Findings []*eventschema.CoachingEvent `json:"findings"`
 }
 
@@ -236,7 +235,7 @@ func RegisterTools(s *Server, d Deps) error {
 		OutputSchema(workflowTraceResult{}).
 		Handler(func(ctx context.Context, in workflowTraceInput) (*workflowTraceResult, error) {
 			out, err := workflowTrace(ctx, d, in)
-			if errors.Is(err, workflow.ErrNoTrace) {
+			if errors.Is(err, workflowtrace.ErrNoTrace) {
 				// An unknown workflow is the caller's to correct; a store
 				// failure stays masked. review_work shares workflowTrace and
 				// needs ErrNoTrace unwrapped, so the mark goes on here.
@@ -392,14 +391,13 @@ func workflowTrace(ctx context.Context, d Deps, in workflowTraceInput) (*workflo
 	if in.WorkflowID == "" {
 		return nil, inputError(errors.New("workflow_id is required"))
 	}
-	trace, err := workflow.Reconstruct(ctx, d.Store, d.Spend, in.WorkflowID)
+	det, err := workflowtrace.Find(ctx, d.Store, d.Spend, in.WorkflowID, d.wasteConfig())
 	if err != nil {
 		return nil, err
 	}
-	coachings := waste.New(d.wasteConfig()).Detect(trace)
 	return &workflowTraceResult{
-		Trace:    trace,
-		Findings: coachings,
+		Trace:    det.Trace,
+		Findings: det.Findings,
 	}, nil
 }
 
@@ -475,7 +473,7 @@ func parseTimeOrDuration(s string) (time.Time, error) {
 }
 
 // wasteConfig is the waste detector config in effect for this call.
-func (d Deps) wasteConfig() waste.Config {
+func (d Deps) wasteConfig() workflowtrace.WasteConfig {
 	if d.WasteConfig != nil {
 		return d.WasteConfig()
 	}

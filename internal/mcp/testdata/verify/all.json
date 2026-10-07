@@ -1,0 +1,61 @@
+{
+  "reading": "nothing can be concluded yet",
+  "observational": true,
+  "proven": false,
+  "harmful": false,
+  "caveat": "1 attempt(s) without an intervention and 0 with; a comparison needs some of each",
+  "baseline_count": 1,
+  "intervention_count": 0,
+  "baseline_outcomes": {
+    "achieved": 0,
+    "partial": 0,
+    "not_achieved": 0,
+    "unknown": 1,
+    "success_rate": {
+      "quality": "unknown",
+      "caveat": "no outcomes were assessed",
+      "observed_at": "<T>"
+    }
+  },
+  "intervention_outcomes": {
+    "achieved": 0,
+    "partial": 0,
+    "not_achieved": 0,
+    "unknown": 0,
+    "success_rate": {
+      "quality": "unknown",
+      "caveat": "no outcomes were assessed",
+      "observed_at": "<T>"
+    }
+  },
+  "baseline_latency_ms": {
+    "quality": "unknown",
+    "caveat": "no prompt events with measured latency joined to this attempt",
+    "observed_at": "<T>"
+  },
+  "intervention_latency_ms": {
+    "quality": "unknown",
+    "caveat": "the cohort is empty",
+    "observed_at": "<T>"
+  },
+  "baseline_metered_cost_usd": {
+    "quality": "unknown",
+    "caveat": "no prompt events with verified metered pricing joined to this attempt",
+    "observed_at": "<T>"
+  },
+  "intervention_metered_cost_usd": {
+    "quality": "unknown",
+    "caveat": "the cohort is empty",
+    "observed_at": "<T>"
+  },
+  "baseline_human_attention_minutes": {
+    "quality": "unknown",
+    "caveat": "no operator-reported human attention time for this execution",
+    "observed_at": "<T>"
+  },
+  "intervention_human_attention_minutes": {
+    "quality": "unknown",
+    "caveat": "the cohort is empty",
+    "observed_at": "<T>"
+  }
+}

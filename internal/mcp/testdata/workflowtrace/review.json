@@ -1,0 +1,62 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "## Work insight — `attention`\n\nCurrent waste checks reported 1 finding(s); first: Oversized context window\n\nEvidence: measured. Measured: 5 steps · 69000 tokens · $0 · 42300 tokens context growth. Findings are suggestions only; no changes were applied.\n\n\u003cdetails\u003e\u003csummary\u003eJSON\u003c/summary\u003e\n\n```json\n{\n  \"workflow_id\": \"wf-waste\",\n  \"evidence_status\": \"measured\",\n  \"insight\": {\n    \"level\": \"attention\",\n    \"summary\": \"Current waste checks reported 1 finding(s); first: Oversized context window\",\n    \"finding_count\": 1,\n    \"scope\": \"workflow_trace_and_waste_detector\"\n  },\n  \"trace\": {\n    \"step_count\": 5,\n    \"total_input_tokens\": 67500,\n    \"total_output_tokens\": 1500,\n    \"total_tokens\": 69000,\n    \"total_cost_usd\": 0,\n    \"max_context_tokens\": 40000,\n    \"context_growth_tokens\": 42300,\n    \"models\": {\n      \"claude-sonnet-4-5\": 5\n    }\n  },\n  \"usage\": {\n    \"window\": {\n      \"workflow_id\": \"wf-waste\"\n    },\n    \"requests\": 5,\n    \"input_tokens\": 67500,\n    \"output_tokens\": 1500,\n    \"total_tokens\": 69000,\n    \"cost_usd\": 0,\n    \"api_equivalent_usd\": 0,\n    \"currency\": \"USD\",\n    \"pricing_warning\": {\n      \"message\": \"no API rate in the pricing table for these models; API-equivalent is incomplete, metered cost_usd may omit their usage, and plan-covered usage still costs $0 at the margin\",\n      \"unpriced_models\": [\n        {\n          \"provider\": \"anthropic\",\n          \"model\": \"claude-sonnet-4-5\",\n          \"requests\": 5\n        }\n      ]\n    }\n  },\n  \"findings\": [\n    {\n      \"session_id\": \"\",\n      \"workflow_id\": \"wf-waste\",\n      \"kind\": \"trim_context\",\n      \"summary\": \"Oversized context window\",\n      \"details\": \"Workflow peak context = 40000 tokens (limit 32768). Consider trimming older turns or summarising.\",\n      \"estimated_savings_tokens\": 7232\n    }\n  ]\n}\n```\n\n\u003c/details\u003e\n"
+    }
+  ],
+  "structuredContent": {
+    "evidence_status": "measured",
+    "findings": [
+      {
+        "details": "Workflow peak context = 40000 tokens (limit 32768). Consider trimming older turns or summarising.",
+        "estimated_savings_tokens": 7232,
+        "kind": "trim_context",
+        "session_id": "",
+        "summary": "Oversized context window",
+        "workflow_id": "wf-waste"
+      }
+    ],
+    "insight": {
+      "finding_count": 1,
+      "level": "attention",
+      "scope": "workflow_trace_and_waste_detector",
+      "summary": "Current waste checks reported 1 finding(s); first: Oversized context window"
+    },
+    "trace": {
+      "context_growth_tokens": 42300,
+      "max_context_tokens": 40000,
+      "models": {
+        "claude-sonnet-4-5": 5
+      },
+      "step_count": 5,
+      "total_cost_usd": 0,
+      "total_input_tokens": 67500,
+      "total_output_tokens": 1500,
+      "total_tokens": 69000
+    },
+    "usage": {
+      "api_equivalent_usd": 0,
+      "cost_usd": 0,
+      "currency": "USD",
+      "input_tokens": 67500,
+      "output_tokens": 1500,
+      "pricing_warning": {
+        "message": "no API rate in the pricing table for these models; API-equivalent is incomplete, metered cost_usd may omit their usage, and plan-covered usage still costs $0 at the margin",
+        "unpriced_models": [
+          {
+            "model": "claude-sonnet-4-5",
+            "provider": "anthropic",
+            "requests": 5
+          }
+        ]
+      },
+      "requests": 5,
+      "total_tokens": 69000,
+      "window": {
+        "workflow_id": "wf-waste"
+      }
+    },
+    "workflow_id": "wf-waste"
+  }
+}

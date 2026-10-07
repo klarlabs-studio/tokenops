@@ -17,7 +17,6 @@ func TestServeWiresTheLiveConfigHooks(t *testing.T) {
 	}
 	for name, re := range map[string]*regexp.Regexp{
 		"waste config":     regexp.MustCompile(`mcp\.Deps\{[\s\S]*?\bWasteConfig:\s*func\(\)`),
-		"replay pipeline":  regexp.MustCompile(`ParityDeps\{[\s\S]*?\bPipelineFor:\s*func\(\)`),
 		"coach root":       regexp.MustCompile(`CoachDeps\{[\s\S]*?\bRootFor:\s*func\(\)`),
 		"session provider": regexp.MustCompile(`SessionMiddleware\(tracker,\s*liveProvider\)`),
 	} {

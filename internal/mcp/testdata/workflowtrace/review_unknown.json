@@ -1,0 +1,41 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "## Work insight — `unavailable`\n\nNo workflow steps were reconstructed; verify the workflow_id and source ingestion.\n\nEvidence: no_evidence. No matching execution measurements were observed for `wf-never-seen`; zero-valued fields are placeholders, not measured zero usage. No changes were applied.\n\n\u003cdetails\u003e\u003csummary\u003eJSON\u003c/summary\u003e\n\n```json\n{\n  \"workflow_id\": \"wf-never-seen\",\n  \"evidence_status\": \"no_evidence\",\n  \"insight\": {\n    \"level\": \"unavailable\",\n    \"summary\": \"No workflow steps were reconstructed; verify the workflow_id and source ingestion.\",\n    \"finding_count\": 0,\n    \"scope\": \"workflow_trace_and_waste_detector\"\n  },\n  \"trace\": {\n    \"step_count\": 0,\n    \"total_input_tokens\": 0,\n    \"total_output_tokens\": 0,\n    \"total_tokens\": 0,\n    \"total_cost_usd\": 0,\n    \"max_context_tokens\": 0,\n    \"context_growth_tokens\": 0,\n    \"models\": {}\n  },\n  \"usage\": {\n    \"window\": {\n      \"workflow_id\": \"wf-never-seen\"\n    },\n    \"requests\": 0,\n    \"input_tokens\": 0,\n    \"output_tokens\": 0,\n    \"total_tokens\": 0,\n    \"cost_usd\": 0,\n    \"api_equivalent_usd\": 0,\n    \"currency\": \"USD\"\n  },\n  \"findings\": []\n}\n```\n\n\u003c/details\u003e\n"
+    }
+  ],
+  "structuredContent": {
+    "evidence_status": "no_evidence",
+    "findings": [],
+    "insight": {
+      "finding_count": 0,
+      "level": "unavailable",
+      "scope": "workflow_trace_and_waste_detector",
+      "summary": "No workflow steps were reconstructed; verify the workflow_id and source ingestion."
+    },
+    "trace": {
+      "context_growth_tokens": 0,
+      "max_context_tokens": 0,
+      "models": {},
+      "step_count": 0,
+      "total_cost_usd": 0,
+      "total_input_tokens": 0,
+      "total_output_tokens": 0,
+      "total_tokens": 0
+    },
+    "usage": {
+      "api_equivalent_usd": 0,
+      "cost_usd": 0,
+      "currency": "USD",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "total_tokens": 0,
+      "window": {
+        "workflow_id": "wf-never-seen"
+      }
+    },
+    "workflow_id": "wf-never-seen"
+  }
+}

@@ -1,6 +1,8 @@
 // Package sessions answers what agent sessions are like to work with and
 // what happened in them, from the transcripts the clients already write.
-// The MCP tools and the daemon API both call it (ADR 0010).
+// The MCP tools, the daemon API and the dx, story and verify commands all
+// call it (ADR 0010); it is the agent-DX capability ADR 0010 calls
+// capability/dx.
 package sessions
 
 import (
@@ -19,6 +21,12 @@ type Window struct {
 	Days int
 	// All reads every transcript and overrides Days.
 	All bool
+	// Source names one client to read (claude-code, codex, cursor,
+	// opencode); empty reads every client present.
+	Source string
+	// IncludeScratch keeps sessions run in throwaway directories, which
+	// are left out by default because they have no operator.
+	IncludeScratch bool
 }
 
 // days resolves the window: a positive day count, or -1 for all history.
@@ -37,7 +45,10 @@ func (w Window) days() int {
 }
 
 func (w Window) options(now time.Time, withPromptText bool) (agentdx.ExtractOptions, string) {
-	opts := agentdx.ExtractOptions{Root: w.Root, WithPromptText: withPromptText}
+	opts := agentdx.ExtractOptions{
+		Root: w.Root, Source: agentdx.Source(w.Source),
+		WithPromptText: withPromptText, IncludeScratch: w.IncludeScratch,
+	}
 	days := w.days()
 	if days <= 0 {
 		return opts, "all history"
@@ -61,6 +72,42 @@ func readWarnings(err error) []string {
 	return []string{err.Error()}
 }
 
+// The agent-DX domain's types, aliased so it stays their single
+// definition and a surface can render them without reaching into it.
+type (
+	// Metrics is what instructions cost and how often they went wrong.
+	Metrics = agentdx.Metrics
+	// Grades grades each metric.
+	Grades = agentdx.Grades
+	// Letter is one grade.
+	Letter = agentdx.Letter
+	// ContextBand is first-try success at one band of context size.
+	ContextBand = agentdx.ContextBand
+	// EffortRow is one model and effort level's figures.
+	EffortRow = agentdx.EffortRow
+	// Unit is one instruction and everything the agent did for it.
+	Unit = agentdx.Unit
+)
+
+// MinEffortInstructions is how many instructions a model and effort
+// level needs before its row is worth comparing.
+const MinEffortInstructions = agentdx.MinEffortInstructions
+
+// DegradationNote names how quality falls off as context grows, or is
+// empty when it does not.
+func DegradationNote(bands []ContextBand) string { return agentdx.DegradationNote(bands) }
+
+// Units reads the instructions in w, with the operator's own words, for
+// the surfaces that group or reconstruct work from them. The text is read
+// at scan time and never persisted. A client whose transcripts could not
+// be read is reported in the error, which joins one per client; whatever
+// the others yielded is still returned.
+func Units(w Window, now time.Time) ([]Unit, error) {
+	opts, _ := w.options(now, true)
+	records, err := agentdx.ExtractAll(opts)
+	return agentdx.Units(records), err
+}
+
 // Recommendation is the single highest-leverage change.
 type Recommendation struct {
 	Title    string `json:"title"`
@@ -71,8 +118,8 @@ type Recommendation struct {
 // DX is what sessions are like to work with, graded.
 type DX struct {
 	Window         string          `json:"window"`
-	Metrics        agentdx.Metrics `json:"metrics"`
-	Grades         agentdx.Grades  `json:"grades"`
+	Metrics        Metrics         `json:"metrics"`
+	Grades         Grades          `json:"grades"`
 	Recommendation *Recommendation `json:"recommendation,omitempty"`
 	Note           string          `json:"note,omitempty"`
 	// Warnings names each client whose transcripts could not be read.

@@ -7,9 +7,7 @@ import (
 	"os"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/contexts/rules"
-	"go.klarlabs.de/tokenops/internal/infra/rulesfs"
-	"go.klarlabs.de/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/capability/ruleintel"
 )
 
 // --- input structs --------------------------------------------------------
@@ -49,37 +47,24 @@ type rulesInjectInput struct {
 
 // rulesAnalyzeResult is the typed payload for tokenops_rules (view=analyze).
 type rulesAnalyzeResult struct {
-	Documents       []rules.DocumentSummary `json:"documents"`
-	DuplicateGroups map[string][]string     `json:"duplicate_groups,omitempty"`
+	Documents       []ruleintel.DocumentSummary `json:"documents"`
+	DuplicateGroups map[string][]string         `json:"duplicate_groups,omitempty"`
 }
 
 // rulesConflictsResult is the typed payload for tokenops_rules (view=conflicts).
 type rulesConflictsResult struct {
-	Findings []rules.Finding `json:"findings"`
+	Findings []ruleintel.Finding `json:"findings"`
 }
 
-// rulesCompressView is one per-document compression summary.
-type rulesCompressView struct {
-	SourceID         string  `json:"source_id"`
-	Path             string  `json:"path"`
-	OriginalTokens   int64   `json:"original_tokens"`
-	CompressedTokens int64   `json:"compressed_tokens"`
-	QualityScore     float64 `json:"quality_score"`
-	Accepted         bool    `json:"accepted"`
-	DroppedSections  int     `json:"dropped_sections"`
-}
-
-// rulesCompressResult is the typed payload for tokenops_rules (view=compress).
-type rulesCompressResult struct {
-	Results []rulesCompressView `json:"results"`
-}
+// rulesCompressResult is the typed payload for tokenops_rules
+// (view=compress), the capability's answer.
+type rulesCompressResult = ruleintel.Compression
 
 // RegisterRulesTools attaches the Rule Intelligence MCP tool surface
 // (analyze, conflicts, compress, inject) to s. Read-only.
 //
-// The MCP layer reuses the same Ingestor + Router + Compressor
-// implementations the CLI calls, so behavior stays consistent across
-// surfaces. Raw rule body content is never returned — only metrics,
+// Each tool answers from capability/ruleintel, as the CLI and the daemon's
+// /api/rules/* routes do, so behavior stays consistent across surfaces. Raw rule body content is never returned — only metrics,
 // hashes, anchors, and routing rationale — keeping redaction structural.
 func RegisterRulesTools(s *Server) error {
 	if s == nil {
@@ -105,112 +90,96 @@ func RegisterRulesTools(s *Server) error {
 		})
 	s.Tool("tokenops_rules_inject").
 		Description("Preview the dynamic rule subset the router selects for a request context (workflow, agent, files, tools, keywords). Returns selections with rationale and budget metrics.").
-		OutputSchema(rules.SelectionResult{}).
-		Handler(func(_ context.Context, in rulesInjectInput) (*rules.SelectionResult, error) {
+		OutputSchema(ruleintel.Selection{}).
+		Handler(func(_ context.Context, in rulesInjectInput) (*ruleintel.Selection, error) {
 			return rulesInject(in)
 		})
 	return nil
 }
 
 func rulesAnalyze(in rulesAnalyzeInput) (*rulesAnalyzeResult, error) {
-	prov := eventschema.ProviderOpenAI
-	switch in.Provider {
-	case "", "openai":
-	case "anthropic":
-		prov = eventschema.ProviderAnthropic
-	case "gemini":
-		prov = eventschema.ProviderGemini
-	default:
+	prov, ok := ruleintel.ParseProvider(in.Provider)
+	if !ok {
 		return nil, inputError(fmt.Errorf("unknown provider %q", in.Provider))
 	}
-	docs, err := loadCallerCorpus(in.Root, in.RepoID)
+	corpus, err := callerCorpus(in.Root, in.RepoID)
 	if err != nil {
 		return nil, err
 	}
-	res, err := rules.AnalyzeDocs(docs, rules.AnalysisOptions{
-		Providers: []eventschema.Provider{prov},
-	})
+	res, err := ruleintel.Analyze(corpus, prov)
 	if err != nil {
-		return nil, err
+		return nil, corpusError(err)
 	}
 	return &rulesAnalyzeResult{Documents: res.Documents, DuplicateGroups: res.DuplicateGroups}, nil
 }
 
 func rulesConflicts(in rulesConflictsInput) (*rulesConflictsResult, error) {
-	docs, err := loadCallerCorpus(in.Root, in.RepoID)
+	corpus, err := callerCorpus(in.Root, in.RepoID)
 	if err != nil {
 		return nil, err
 	}
-	findings := rules.DetectConflicts(docs, rules.ConflictOptions{})
-	return &rulesConflictsResult{Findings: findings}, nil
+	res, err := ruleintel.DetectConflicts(corpus)
+	if err != nil {
+		return nil, corpusError(err)
+	}
+	return &rulesConflictsResult{Findings: res.Findings}, nil
 }
 
 func rulesCompress(in rulesCompressInput) (*rulesCompressResult, error) {
-	docs, err := loadCallerCorpus(in.Root, in.RepoID)
+	corpus, err := callerCorpus(in.Root, in.RepoID)
 	if err != nil {
 		return nil, err
 	}
-	c := rules.NewCompressor(rules.CompressConfig{
+	res, err := ruleintel.Compress(corpus, ruleintel.CompressOptions{
 		SimilarityThreshold: in.SimilarityThreshold,
 		QualityFloor:        in.QualityFloor,
-	}, nil)
-	views := make([]rulesCompressView, 0, len(docs))
-	for _, d := range docs {
-		r := c.Compress(d)
-		dropped := 0
-		for _, s := range r.Sections {
-			if s.Dropped {
-				dropped++
-			}
-		}
-		views = append(views, rulesCompressView{
-			SourceID:         r.SourceID,
-			Path:             d.Path,
-			OriginalTokens:   r.OriginalTokens,
-			CompressedTokens: r.CompressedTokens,
-			QualityScore:     r.QualityScore,
-			Accepted:         r.Accepted,
-			DroppedSections:  dropped,
-		})
+	})
+	if err != nil {
+		return nil, corpusError(err)
 	}
-	return &rulesCompressResult{Results: views}, nil
+	return &res, nil
 }
 
-func rulesInject(in rulesInjectInput) (*rules.SelectionResult, error) {
-	docs, err := loadCallerCorpus(in.Root, in.RepoID)
+func rulesInject(in rulesInjectInput) (*ruleintel.Selection, error) {
+	corpus, err := callerCorpus(in.Root, in.RepoID)
 	if err != nil {
 		return nil, err
 	}
-	r := rules.NewRouter(rules.RouterConfig{
+	res, err := ruleintel.Inject(corpus, ruleintel.InjectQuery{
 		TokenBudget:        in.TokenBudget,
 		MinScore:           in.MinScore,
 		IncludeGlobalScope: in.IncludeGlobal,
 		LatencyBudget:      200 * time.Millisecond,
+		WorkflowID:         in.WorkflowID,
+		AgentID:            in.AgentID,
+		FilePaths:          in.Files,
+		Tools:              in.Tools,
+		Keywords:           in.Keywords,
 	})
-	res := r.Select(docs, rules.SelectionSignals{
-		WorkflowID: in.WorkflowID,
-		AgentID:    in.AgentID,
-		RepoID:     in.RepoID,
-		FilePaths:  in.Files,
-		Tools:      in.Tools,
-		Keywords:   in.Keywords,
-	})
+	if err != nil {
+		return nil, corpusError(err)
+	}
 	return res, nil
 }
 
-// loadCallerCorpus loads the rule corpus under a root the caller named. A root
+// callerCorpus names the rule corpus under a root the caller gave. A root
 // that does not exist used to load as an empty corpus, so every rules tool
-// answered "nothing here" for a mistyped path; it is refused instead. Both
-// that and an unreadable root are the caller's to fix.
-func loadCallerCorpus(root, repoID string) ([]*rules.RuleDocument, error) {
+// answered "nothing here" for a mistyped path; it is refused instead.
+func callerCorpus(root, repoID string) (ruleintel.Corpus, error) {
 	if root != "" {
 		if _, err := os.Stat(root); err != nil {
-			return nil, inputError(fmt.Errorf("root %q: %w", root, err))
+			return ruleintel.Corpus{}, inputError(fmt.Errorf("root %q: %w", root, err))
 		}
 	}
-	docs, err := rulesfs.LoadCorpus(root, repoID)
-	if err != nil {
-		return nil, inputError(err)
+	return ruleintel.Corpus{Root: root, RepoID: repoID}, nil
+}
+
+// corpusError marks a corpus that could not be read as the caller's to
+// fix; any other failure stays masked.
+func corpusError(err error) error {
+	var ce *ruleintel.CorpusError
+	if errors.As(err, &ce) {
+		return inputError(err)
 	}
-	return docs, nil
+	return err
 }

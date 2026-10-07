@@ -104,17 +104,7 @@ var forbiddenIOImports = []string{"net/http", "os/exec", "database/sql"}
 // inside internal/contexts; put it under internal/infra behind a port
 // instead. When a package stops importing one, delete its entry —
 // TestIOImportExemptNotStale fails on a stale one.
-var ioImportExempt = map[string][]string{
-	// Its Cursor reader runs SQL against Cursor's state.vscdb (cursor.go).
-	// Moves with an extraction port for agentdx's per-client readers.
-	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx": {"database/sql"},
-	// Reads opencode's SQLite store. Every reader but one goes through the
-	// opencodedb.Reader port that internal/infra/opencodedb implements;
-	// governance/agentdx (being migrated separately) still calls
-	// opencodedb.Read directly. Once it takes the port, the SQL moves into
-	// internal/infra/opencodedb and this entry goes.
-	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb": {"database/sql"},
-}
+var ioImportExempt = map[string][]string{}
 
 // domainPackages lists every domain package the arch test enforces.
 // Every package under internal/contexts/* belongs here so new contexts

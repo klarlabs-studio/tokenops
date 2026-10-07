@@ -1,0 +1,12 @@
+attempts compared: 2 baseline, 0 intervention
+
+  measured difference: not established
+  assessed success: not established (record outcomes for executions)
+  mean request latency: not established
+  mean metered cost: not established (requires event-time pricing)
+  mean human attention: not established (operator self-report required)
+  reading: nothing can be concluded yet
+  why: 2 attempt(s) without an intervention and 0 with; a comparison needs some of each
+
+This is an observational comparison. The cohorts were not
+assigned, so the measured difference is not causal evidence.

@@ -14,12 +14,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/replay"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
-	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -104,9 +103,9 @@ findings (when --workflow is set), and a summary footer.`,
 
 			var coachings []*eventschema.CoachingEvent
 			if sel.WorkflowID != "" {
-				trace, err := workflow.Reconstruct(ctx, store, spendEng, sel.WorkflowID)
-				if err == nil && trace != nil {
-					coachings = waste.New(cfg.Coaching.WasteConfig()).Detect(trace)
+				// A workflow with no trace replays without findings.
+				if det, err := workflowtrace.Find(ctx, store, spendEng, sel.WorkflowID, cfg.Coaching.WasteConfig()); err == nil {
+					coachings = det.Findings
 				}
 			}
 

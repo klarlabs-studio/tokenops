@@ -1,18 +1,51 @@
 package agentdx
 
 import (
-	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
-
-	_ "modernc.org/sqlite"
 )
 
-// seedCursorDB writes a state.vscdb with Cursor's documented shape.
+// fakeCursor is a CursorStore over rows in memory. The SQL that reads a
+// real state.vscdb is internal/infra/cursorstate's, tested there; what
+// the rows mean is tested here.
+type fakeCursor struct {
+	rows  map[string]string
+	table string
+}
+
+func (f fakeCursor) Bubbles(path string, yield func(key, value string)) error {
+	if f.table != "cursorDiskKV" {
+		return fmt.Errorf("%w: no cursorDiskKV table in %s", ErrCursorSchema, path)
+	}
+	keys := make([]string, 0, len(f.rows))
+	for k := range f.rows {
+		if strings.HasPrefix(k, "bubbleId:") {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		yield(k, f.rows[k])
+	}
+	return nil
+}
+
+// useCursor installs s as the Cursor reader for one test.
+func useCursor(t *testing.T, s CursorStore) {
+	t.Helper()
+	prev := cursorStore
+	UseCursorStore(s)
+	t.Cleanup(func() { UseCursorStore(prev) })
+}
+
+// seedCursorDB lays out a Cursor user-data directory whose state.vscdb
+// holds rows in table, served by a fakeCursor.
 func seedCursorDB(t *testing.T, rows map[string]string, table string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -20,21 +53,38 @@ func seedCursorDB(t *testing.T, rows map[string]string, table string) string {
 	if err := os.MkdirAll(global, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	path := filepath.Join(global, "state.vscdb")
-	db, err := sql.Open("sqlite", path)
-	if err != nil {
-		t.Fatalf("open: %v", err)
+	if err := os.WriteFile(filepath.Join(global, "state.vscdb"), nil, 0o600); err != nil {
+		t.Fatalf("write: %v", err)
 	}
-	defer func() { _ = db.Close() }()
-	if _, err := db.Exec(`CREATE TABLE ` + table + ` (key TEXT PRIMARY KEY, value TEXT)`); err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	for k, v := range rows {
-		if _, err := db.Exec(`INSERT INTO `+table+` (key, value) VALUES (?, ?)`, k, v); err != nil {
-			t.Fatalf("insert: %v", err)
-		}
-	}
+	useCursor(t, fakeCursor{rows: rows, table: table})
 	return dir
+}
+
+// A Cursor store on disk that this process cannot read is reported, never
+// read as an operator who did not use Cursor.
+func TestCursorWithoutAReaderIsReported(t *testing.T) {
+	root := seedCursorDB(t, nil, "cursorDiskKV")
+	useCursor(t, nil)
+	if _, err := ExtractCursor(ExtractOptions{Root: root}); !errors.Is(err, ErrNoCursorStore) {
+		t.Fatalf("err = %v, want ErrNoCursorStore", err)
+	}
+	// Auto mode names it alongside whatever else it read.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", "")
+	cursorRoot, err := CursorDefaultRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(cursorRoot, "globalStorage"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cursorRoot, "globalStorage", "state.vscdb"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ExtractAll(ExtractOptions{}); !errors.Is(err, ErrNoCursorStore) {
+		t.Fatalf("auto: err = %v, want ErrNoCursorStore", err)
+	}
 }
 
 // Cursor keys each message as bubbleId:<composer>:<bubble> in cursorDiskKV.

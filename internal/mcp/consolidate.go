@@ -14,9 +14,9 @@ import (
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
+	"go.klarlabs.de/tokenops/internal/capability/ruleintel"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard"
-	"go.klarlabs.de/tokenops/internal/contexts/rules"
 )
 
 // Agents read every tool definition before their first call. Fifty tools
@@ -472,11 +472,11 @@ type recordsOut struct {
 }
 
 type rulesOut struct {
-	View      string                 `json:"view"`
-	Analyze   *rulesAnalyzeResult    `json:"analyze,omitempty"`
-	Conflicts *rulesConflictsResult  `json:"conflicts,omitempty"`
-	Compress  *rulesCompressResult   `json:"compress,omitempty"`
-	Inject    *rules.SelectionResult `json:"inject,omitempty"`
+	View      string                `json:"view"`
+	Analyze   *rulesAnalyzeResult   `json:"analyze,omitempty"`
+	Conflicts *rulesConflictsResult `json:"conflicts,omitempty"`
+	Compress  *rulesCompressResult  `json:"compress,omitempty"`
+	Inject    *ruleintel.Selection  `json:"inject,omitempty"`
 }
 
 type fmtOut struct {

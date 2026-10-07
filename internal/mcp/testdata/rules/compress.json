@@ -1,0 +1,31 @@
+{
+  "results": [
+    {
+      "source_id": "repo:.cursor/rules/go.mdc",
+      "path": ".cursor/rules/go.mdc",
+      "original_tokens": 14,
+      "compressed_tokens": 13,
+      "quality_score": 0.928571429,
+      "accepted": true,
+      "dropped_sections": 0
+    },
+    {
+      "source_id": "repo:AGENTS.md",
+      "path": "AGENTS.md",
+      "original_tokens": 23,
+      "compressed_tokens": 22,
+      "quality_score": 0.956521739,
+      "accepted": true,
+      "dropped_sections": 0
+    },
+    {
+      "source_id": "repo:CLAUDE.md",
+      "path": "CLAUDE.md",
+      "original_tokens": 38,
+      "compressed_tokens": 38,
+      "quality_score": 1,
+      "accepted": true,
+      "dropped_sections": 0
+    }
+  ]
+}

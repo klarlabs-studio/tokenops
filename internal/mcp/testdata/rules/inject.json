@@ -1,0 +1,32 @@
+{
+  "Selections": [
+    {
+      "SourceID": "repo:AGENTS.md",
+      "SectionID": "repo:AGENTS.md#/Testing",
+      "Anchor": "/Testing",
+      "TokenCount": 12,
+      "Score": 1.5,
+      "Reasons": [
+        "repo_match",
+        "kw:testing"
+      ]
+    },
+    {
+      "SourceID": "repo:CLAUDE.md",
+      "SectionID": "repo:CLAUDE.md#/Testing",
+      "Anchor": "/Testing",
+      "TokenCount": 12,
+      "Score": 1.5,
+      "Reasons": [
+        "repo_match",
+        "kw:testing"
+      ]
+    }
+  ],
+  "SkippedCount": 7,
+  "TotalTokens": 24,
+  "Truncated": false,
+  "BudgetHit": false,
+  <ELAPSED>,
+  "Considered": 9
+}
