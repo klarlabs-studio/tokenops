@@ -1,40 +1,34 @@
 package pricing
 
 import (
-	"context"
 	"errors"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
-// fixtureServer serves the trimmed LiteLLM sample from testdata over httptest,
-// so the suite never touches the live network.
-func fixtureServer(t *testing.T) *httptest.Server {
+// fixtureURL is the provenance the fixture snapshot records.
+const fixtureURL = "https://fixture.invalid/litellm.json"
+
+// parseFixture normalizes the trimmed LiteLLM sample from testdata. The HTTP
+// fetch is internal/infra/pricingsource's and is tested there.
+func parseFixture(t *testing.T) Snapshot {
 	t.Helper()
 	body, err := os.ReadFile(filepath.Join("testdata", "litellm_sample.json"))
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(body)
-	}))
-	t.Cleanup(srv.Close)
-	return srv
+	snap, err := ParseLiteLLM(body, fixtureURL, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	return snap
 }
 
-func TestLiteLLMSource_MapsEveryCatalogProvider(t *testing.T) {
-	srv := fixtureServer(t)
-	src := &LiteLLMSource{URL: srv.URL, Client: srv.Client()}
-
-	snap, err := src.Fetch(context.Background())
-	if err != nil {
-		t.Fatalf("fetch: %v", err)
-	}
-	if snap.Source != "litellm" || snap.SourceURL != srv.URL {
+func TestParseLiteLLM_MapsEveryCatalogProvider(t *testing.T) {
+	snap := parseFixture(t)
+	if snap.Source != "litellm" || snap.SourceURL != fixtureURL {
 		t.Errorf("provenance = %q/%q", snap.Source, snap.SourceURL)
 	}
 	// Anthropic, OpenAI, and Mistral entries all map to their tokenops
@@ -60,13 +54,8 @@ func TestLiteLLMSource_MapsEveryCatalogProvider(t *testing.T) {
 	}
 }
 
-func TestLiteLLMSource_PerTokenToPerMillion(t *testing.T) {
-	srv := fixtureServer(t)
-	src := &LiteLLMSource{URL: srv.URL, Client: srv.Client()}
-	snap, err := src.Fetch(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestParseLiteLLM_PerTokenToPerMillion(t *testing.T) {
+	snap := parseFixture(t)
 	opus, ok := snap.Rates["anthropic/claude-opus-4-8"]
 	if !ok {
 		t.Fatalf("opus not mapped; keys=%v", snap.Models())
@@ -93,13 +82,8 @@ func TestLiteLLMSource_PerTokenToPerMillion(t *testing.T) {
 	}
 }
 
-func TestLiteLLMSource_KeyMapping(t *testing.T) {
-	srv := fixtureServer(t)
-	src := &LiteLLMSource{URL: srv.URL, Client: srv.Client()}
-	snap, err := src.Fetch(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestParseLiteLLM_KeyMapping(t *testing.T) {
+	snap := parseFixture(t)
 	// Dated ids collapse to the catalog prefix key (provider-qualified).
 	if _, ok := snap.Rates["anthropic/claude-3-5-sonnet"]; !ok {
 		t.Errorf("dated sonnet not mapped to catalog key; keys=%v", snap.Models())
@@ -148,13 +132,8 @@ func TestPreferID_CurrentPriceWins(t *testing.T) {
 // be the newest dated snapshot, not the oldest archived one nor a stale
 // "-latest" alias. The fixture's mistral-large-2402 ($4/$12) and -latest ($3/$9)
 // must lose to the newest dated -2411 ($0.50/$1.50, the current Large 3 rate).
-func TestLiteLLMSource_CollisionAdoptsCurrentRate(t *testing.T) {
-	srv := fixtureServer(t)
-	src := &LiteLLMSource{URL: srv.URL, Client: srv.Client()}
-	snap, err := src.Fetch(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestParseLiteLLM_CollisionAdoptsCurrentRate(t *testing.T) {
+	snap := parseFixture(t)
 	large, ok := snap.Rates["mistral/mistral-large"]
 	if !ok {
 		t.Fatalf("mistral-large not mapped; keys=%v", snap.Models())
@@ -167,13 +146,8 @@ func TestLiteLLMSource_CollisionAdoptsCurrentRate(t *testing.T) {
 // OpenAI's MMDD snapshots (gpt-3.5-turbo-1106 = Nov, -0125 = Jan) must not be
 // treated as YYMM dates — 1106 > 0125 numerically would pick the older, pricier
 // November SKU. The bare "gpt-3.5-turbo" alias ($0.50/$1.50) must win instead.
-func TestLiteLLMSource_MMDDNotMisorderedAsDate(t *testing.T) {
-	srv := fixtureServer(t)
-	src := &LiteLLMSource{URL: srv.URL, Client: srv.Client()}
-	snap, err := src.Fetch(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestParseLiteLLM_MMDDNotMisorderedAsDate(t *testing.T) {
+	snap := parseFixture(t)
 	gpt, ok := snap.Rates["openai/gpt-3.5-turbo"]
 	if !ok {
 		t.Fatalf("gpt-3.5-turbo not mapped; keys=%v", snap.Models())
@@ -186,13 +160,8 @@ func TestLiteLLMSource_MMDDNotMisorderedAsDate(t *testing.T) {
 // A broad catalog key must not absorb a distinct SKU tier: grok-3-fast ($5/$25)
 // and grok-3-mini ($0.30/$0.50) must not fold into grok-3 ($3/$15), or the base
 // model's fetched rate would be a different product's price.
-func TestLiteLLMSource_DistinctSKUTierNotFolded(t *testing.T) {
-	srv := fixtureServer(t)
-	src := &LiteLLMSource{URL: srv.URL, Client: srv.Client()}
-	snap, err := src.Fetch(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestParseLiteLLM_DistinctSKUTierNotFolded(t *testing.T) {
+	snap := parseFixture(t)
 	base, ok := snap.Rates["xai/grok-3"]
 	if !ok {
 		t.Fatalf("grok-3 not mapped; keys=%v", snap.Models())
@@ -208,25 +177,15 @@ func TestLiteLLMSource_DistinctSKUTierNotFolded(t *testing.T) {
 	}
 }
 
-func TestLiteLLMSource_FetchedSnapshotPassesGuard(t *testing.T) {
-	srv := fixtureServer(t)
-	src := &LiteLLMSource{URL: srv.URL, Client: srv.Client()}
-	snap, err := src.Fetch(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestParseLiteLLM_FetchedSnapshotPassesGuard(t *testing.T) {
+	snap := parseFixture(t)
 	if a := Check(snap); len(a) != 0 {
 		t.Errorf("clean fixture flagged by guard: %v", a)
 	}
 }
 
-func TestLiteLLMSource_DiffVsBaselineIsClean(t *testing.T) {
-	srv := fixtureServer(t)
-	src := &LiteLLMSource{URL: srv.URL, Client: srv.Client()}
-	snap, err := src.Fetch(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestParseLiteLLM_DiffVsBaselineIsClean(t *testing.T) {
+	snap := parseFixture(t)
 	// The fixture's overlapping models match the corrected baseline, so the
 	// only diffs should be additions (claude-3-opus), never a modification of
 	// an existing rate.
@@ -237,41 +196,8 @@ func TestLiteLLMSource_DiffVsBaselineIsClean(t *testing.T) {
 	}
 }
 
-func TestLiteLLMSource_FetchErrorWrapped(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer srv.Close()
-	src := &LiteLLMSource{URL: srv.URL, Client: srv.Client()}
-	if _, err := src.Fetch(context.Background()); !errors.Is(err, ErrFetch) {
-		t.Errorf("status 500 should wrap ErrFetch, got %v", err)
-	}
-}
-
-func TestLiteLLMSource_BadJSONWrapped(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("not json"))
-	}))
-	defer srv.Close()
-	src := &LiteLLMSource{URL: srv.URL, Client: srv.Client()}
-	if _, err := src.Fetch(context.Background()); !errors.Is(err, ErrFetch) {
+func TestParseLiteLLM_BadJSONWrapped(t *testing.T) {
+	if _, err := ParseLiteLLM([]byte("not json"), fixtureURL, time.Now()); !errors.Is(err, ErrFetch) {
 		t.Errorf("bad JSON should wrap ErrFetch, got %v", err)
-	}
-}
-
-func TestSourceByName(t *testing.T) {
-	if s := SourceByName("litellm", "http://x"); s == nil || s.Name() != "litellm" {
-		t.Error("litellm source not returned")
-	}
-	if s := SourceByName("", ""); s == nil {
-		t.Error("empty name should default to litellm")
-	}
-	if s := SourceByName("nope", ""); s != nil {
-		t.Error("unknown source should be nil")
-	}
-	// --url override propagates.
-	ls, ok := SourceByName("litellm", "http://override").(*LiteLLMSource)
-	if !ok || ls.URL != "http://override" {
-		t.Error("url override not applied")
 	}
 }

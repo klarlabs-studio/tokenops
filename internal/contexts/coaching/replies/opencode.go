@@ -12,6 +12,11 @@ func OpencodeDefaultPath() (string, error) { return opencodedb.DefaultPath() }
 // errLimit stops a read once enough has been collected.
 var errLimit = errors.New("replies: limit reached")
 
+// ErrNoOpencodeReader reports an opencode extract with no store reader
+// wired in ExtractOptions.Opencode: the store was not read, which is not the
+// same as an operator who wrote nothing there.
+var ErrNoOpencodeReader = errors.New("replies: no opencode reader configured (ExtractOptions.Opencode)")
+
 // extractOpencode reads the model's replies out of opencode's store.
 //
 // Only text parts on assistant messages count. Reasoning parts are the
@@ -19,6 +24,9 @@ var errLimit = errors.New("replies: limit reached")
 // measures output density as experienced — counting reasoning would make
 // every reply look far longer than what actually reached the screen.
 func extractOpencode(path string, opts ExtractOptions) ([]AssistantReply, error) {
+	if opts.Opencode == nil {
+		return nil, ErrNoOpencodeReader
+	}
 	if path == "" {
 		p, err := OpencodeDefaultPath()
 		if err != nil {
@@ -27,7 +35,7 @@ func extractOpencode(path string, opts ExtractOptions) ([]AssistantReply, error)
 		path = p
 	}
 	var out []AssistantReply
-	err := opencodedb.Read(path, opencodedb.Options{SessionID: opts.SessionID, Since: opts.Since, Parts: true}, func(m opencodedb.Message) error {
+	err := opts.Opencode.Read(path, opencodedb.Options{SessionID: opts.SessionID, Since: opts.Since, Parts: true}, func(m opencodedb.Message) error {
 		if m.Role != opencodedb.Assistant || m.Created.IsZero() {
 			return nil
 		}

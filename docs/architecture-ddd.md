@@ -74,9 +74,14 @@ domain may import an infrastructure package by concrete type. Documented
 sqlite exemptions (enforced by `internal/archlint` `storageExempt`):
 
 - `scorecard/service.go` adapts `*sqlite.Store` to the `EventReader` port.
-- `observability/analytics`, `security/audit`, `workflows/workflow`,
-  `optimization/replay`, `telemetry/retention`, `tasks` take `*sqlite.Store`
-  as an isolated adapter. New sqlite users must be added to `storageExempt`
+- `workflows/workflow`, `optimization/replay`, `telemetry/retention`, `tasks`
+  take `*sqlite.Store` as an isolated adapter.
+- `security/audit` and `observability/analytics` are the pattern the rest
+  should follow: the domain declares a port (`audit.Store`, `analytics.Store`)
+  and `*sqlite.Store` implements it (`internal/storage/sqlite/audit.go`,
+  `analytics.go`), so the domain imports neither sqlite nor `database/sql`.
+  The SQL — filters, groupings, NULL handling — is the adapter's; pricing,
+  provenance and coverage stay in the domain. New sqlite users must be added to `storageExempt`
   *and* actually import sqlite (`TestStorageExemptImportsSQLite`).
 
 Domain packages do no I/O of their own: `TestNoDomainImportsIO` forbids

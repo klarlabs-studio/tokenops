@@ -2,10 +2,13 @@ package replies
 
 import (
 	"database/sql"
+	"errors"
 	"path/filepath"
 	"testing"
 
 	_ "modernc.org/sqlite"
+
+	opencodestore "go.klarlabs.de/tokenops/internal/infra/opencodedb"
 )
 
 func seedOpencode(t *testing.T, rows [][4]string) string {
@@ -44,7 +47,7 @@ func TestOpencodeExtractsAssistantText(t *testing.T) {
 		{"m1", "s1", `{"role":"assistant","time":{"created":1771056604952}}`,
 			`{"type":"text","text":"Refactored the retry loop and added a test."}`},
 	})
-	got, err := extractOpencode(path, ExtractOptions{})
+	got, err := extractOpencode(path, ExtractOptions{Opencode: opencodestore.Store{}})
 	if err != nil {
 		t.Fatalf("extract: %v", err)
 	}
@@ -60,7 +63,7 @@ func TestOpencodeIgnoresUserText(t *testing.T) {
 		{"m1", "s1", `{"role":"user","time":{"created":1771056604952}}`,
 			`{"type":"text","text":"do the thing"}`},
 	})
-	if got, _ := extractOpencode(path, ExtractOptions{}); len(got) != 0 {
+	if got, _ := extractOpencode(path, ExtractOptions{Opencode: opencodestore.Store{}}); len(got) != 0 {
 		t.Errorf("got %+v, want nothing for a user turn", got)
 	}
 }
@@ -72,15 +75,23 @@ func TestOpencodeIgnoresReasoningParts(t *testing.T) {
 		{"m1", "s1", `{"role":"assistant","time":{"created":1771056604952}}`,
 			`{"type":"reasoning","text":"considering the options at length"}`},
 	})
-	if got, _ := extractOpencode(path, ExtractOptions{}); len(got) != 0 {
+	if got, _ := extractOpencode(path, ExtractOptions{Opencode: opencodestore.Store{}}); len(got) != 0 {
 		t.Errorf("got %+v, want nothing for a reasoning part", got)
 	}
 }
 
 // A missing store is not an error.
 func TestOpencodeAbsentIsNotAnError(t *testing.T) {
-	got, err := extractOpencode(filepath.Join(t.TempDir(), "nope.db"), ExtractOptions{})
+	got, err := extractOpencode(filepath.Join(t.TempDir(), "nope.db"), ExtractOptions{Opencode: opencodestore.Store{}})
 	if err != nil || len(got) != 0 {
 		t.Errorf("got %+v err=%v, want empty and no error", got, err)
+	}
+}
+
+// Without a reader the store is not read, and an explicit opencode extract
+// says so rather than reporting an operator who wrote nothing.
+func TestOpencodeWithoutReaderFails(t *testing.T) {
+	if _, err := Extract(ExtractOptions{Source: SourceOpencode, Root: filepath.Join(t.TempDir(), "opencode.db")}); !errors.Is(err, ErrNoOpencodeReader) {
+		t.Errorf("err = %v, want ErrNoOpencodeReader", err)
 	}
 }

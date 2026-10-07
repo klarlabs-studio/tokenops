@@ -1,13 +1,15 @@
-package analytics
+package analytics_test
 
 import (
 	"testing"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 )
 
 func TestQueryParamsToFilterRFC3339(t *testing.T) {
 	now := func() time.Time { return time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC) }
-	q := QueryParams{Since: "2026-05-01T00:00:00Z", Now: now}
+	q := analytics.QueryParams{Since: "2026-05-01T00:00:00Z", Now: now}
 	f, err := q.ToFilter()
 	if err != nil {
 		t.Fatal(err)
@@ -19,7 +21,7 @@ func TestQueryParamsToFilterRFC3339(t *testing.T) {
 
 func TestQueryParamsToFilterDays(t *testing.T) {
 	now := func() time.Time { return time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC) }
-	q := QueryParams{Since: "7d", Now: now}
+	q := analytics.QueryParams{Since: "7d", Now: now}
 	f, err := q.ToFilter()
 	if err != nil {
 		t.Fatal(err)
@@ -32,7 +34,7 @@ func TestQueryParamsToFilterDays(t *testing.T) {
 
 func TestQueryParamsToFilterDuration(t *testing.T) {
 	now := func() time.Time { return time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC) }
-	q := QueryParams{Since: "2h", Now: now}
+	q := analytics.QueryParams{Since: "2h", Now: now}
 	f, err := q.ToFilter()
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +46,7 @@ func TestQueryParamsToFilterDuration(t *testing.T) {
 
 func TestQueryParamsToFilterDefaultSince(t *testing.T) {
 	now := func() time.Time { return time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC) }
-	q := QueryParams{DefaultSince: time.Hour, Now: now}
+	q := analytics.QueryParams{DefaultSince: time.Hour, Now: now}
 	f, err := q.ToFilter()
 	if err != nil {
 		t.Fatal(err)
@@ -55,23 +57,23 @@ func TestQueryParamsToFilterDefaultSince(t *testing.T) {
 }
 
 func TestQueryParamsToFilterUntilNonRFC3339Fails(t *testing.T) {
-	q := QueryParams{Until: "not-a-time"}
+	q := analytics.QueryParams{Until: "not-a-time"}
 	if _, err := q.ToFilter(); err == nil {
 		t.Fatal("expected error for non-RFC3339 until")
 	}
 }
 
 func TestResolveBucketAndGroup(t *testing.T) {
-	if (QueryParams{Bucket: "day"}).ResolveBucket() != BucketDay {
+	if (analytics.QueryParams{Bucket: "day"}).ResolveBucket() != analytics.BucketDay {
 		t.Errorf("Bucket day failed")
 	}
-	if (QueryParams{Bucket: ""}).ResolveBucket() != BucketHour {
+	if (analytics.QueryParams{Bucket: ""}).ResolveBucket() != analytics.BucketHour {
 		t.Errorf("Bucket default failed")
 	}
-	if (QueryParams{Group: "provider"}).ResolveGroup() != GroupProvider {
+	if (analytics.QueryParams{Group: "provider"}).ResolveGroup() != analytics.GroupProvider {
 		t.Errorf("Group provider failed")
 	}
-	if (QueryParams{Group: "unknown"}).ResolveGroup() != GroupNone {
+	if (analytics.QueryParams{Group: "unknown"}).ResolveGroup() != analytics.GroupNone {
 		t.Errorf("Group unknown should default to none")
 	}
 }

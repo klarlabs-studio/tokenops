@@ -11,6 +11,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/infra/pricingsource"
 )
 
 // buildSpendEngine constructs the effective-dated cost engine for CLI
@@ -103,7 +104,7 @@ keep working on the baseline.`,
 			out := cmd.OutOrStdout()
 			errOut := cmd.ErrOrStderr()
 
-			src := pricing.SourceByName(source, url)
+			src := pricingsource.ByName(source, url)
 			if src == nil {
 				return fmt.Errorf("unknown pricing source %q (known: litellm)", source)
 			}

@@ -2,130 +2,70 @@ package audit
 
 import (
 	"context"
-	"path/filepath"
+	"errors"
+	"sort"
+	"sync"
 	"testing"
 	"time"
-
-	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
-func newRecorder(t *testing.T) *Recorder {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "events.db")
-	store, err := sqlite.Open(context.Background(), path, sqlite.Options{})
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
-	t.Cleanup(func() { _ = store.Close() })
-	return NewRecorder(store)
+// memStore is an in-memory Store. The SQL implementation, with its
+// filters and ordering, is tested in internal/storage/sqlite.
+type memStore struct {
+	mu      sync.Mutex
+	entries []Entry
+	err     error
 }
 
-func TestRecordAndQueryRoundTrip(t *testing.T) {
-	rec := newRecorder(t)
-	ctx := context.Background()
-	got, err := rec.Record(ctx, Entry{
-		Action: ActionConfigChange,
-		Actor:  "felix@example",
-		Target: "config.yaml",
-		Details: map[string]any{
-			"path":     "tls.enabled",
-			"oldValue": false,
-			"newValue": true,
-		},
-	})
+func (m *memStore) AppendAudit(_ context.Context, e Entry) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.err != nil {
+		return m.err
+	}
+	m.entries = append(m.entries, e)
+	return nil
+}
+
+func (m *memStore) QueryAudit(_ context.Context, f Filter) ([]Entry, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := append([]Entry(nil), m.entries...)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Timestamp.After(out[j].Timestamp) })
+	if f.Limit > 0 && len(out) > f.Limit {
+		out = out[:f.Limit]
+	}
+	return out, nil
+}
+
+func TestRecordMintsIDAndTimestamp(t *testing.T) {
+	store := &memStore{}
+	got, err := NewRecorder(store).Record(context.Background(), Entry{Action: ActionConfigChange, Actor: "a"})
 	if err != nil {
 		t.Fatalf("record: %v", err)
 	}
-	if got.ID == "" {
-		t.Error("ID not minted")
+	if got.ID == "" || got.Timestamp.IsZero() {
+		t.Errorf("entry not completed: %+v", got)
 	}
-	if got.Timestamp.IsZero() {
-		t.Error("timestamp not set")
+	if len(store.entries) != 1 || store.entries[0].ID != got.ID {
+		t.Errorf("store holds %+v, want the returned entry", store.entries)
 	}
-	entries, err := rec.Query(ctx, Filter{})
+}
+
+func TestRecordKeepsGivenIDAndTimestamp(t *testing.T) {
+	at := time.Date(2026, 5, 9, 10, 0, 0, 0, time.UTC)
+	got, err := NewRecorder(&memStore{}).Record(context.Background(), Entry{ID: "x", Timestamp: at, Action: ActionConfigChange, Actor: "a"})
 	if err != nil {
-		t.Fatalf("query: %v", err)
+		t.Fatal(err)
 	}
-	if len(entries) != 1 {
-		t.Fatalf("entries = %d", len(entries))
-	}
-	e := entries[0]
-	if e.Action != ActionConfigChange || e.Actor != "felix@example" || e.Target != "config.yaml" {
-		t.Errorf("entry mismatch: %+v", e)
-	}
-	if e.Details["path"] != "tls.enabled" {
-		t.Errorf("details lost: %+v", e.Details)
-	}
-}
-
-func TestQueryFiltersByAction(t *testing.T) {
-	rec := newRecorder(t)
-	ctx := context.Background()
-	if _, err := rec.Record(ctx, Entry{Action: ActionConfigChange, Actor: "a"}); err != nil {
-		t.Fatalf("rec: %v", err)
-	}
-	if _, err := rec.Record(ctx, Entry{Action: ActionTelemetryToggle, Actor: "a"}); err != nil {
-		t.Fatalf("rec: %v", err)
-	}
-	got, err := rec.Query(ctx, Filter{Action: ActionTelemetryToggle})
-	if err != nil {
-		t.Fatalf("query: %v", err)
-	}
-	if len(got) != 1 || got[0].Action != ActionTelemetryToggle {
-		t.Errorf("filter wrong: %+v", got)
-	}
-}
-
-func TestQueryFiltersByActor(t *testing.T) {
-	rec := newRecorder(t)
-	ctx := context.Background()
-	_, _ = rec.Record(ctx, Entry{Action: ActionConfigChange, Actor: "alice"})
-	_, _ = rec.Record(ctx, Entry{Action: ActionConfigChange, Actor: "bob"})
-	got, _ := rec.Query(ctx, Filter{Actor: "bob"})
-	if len(got) != 1 || got[0].Actor != "bob" {
-		t.Errorf("actor filter: %+v", got)
-	}
-}
-
-func TestQueryOrdersDescending(t *testing.T) {
-	rec := newRecorder(t)
-	ctx := context.Background()
-	t1 := time.Date(2026, 5, 9, 10, 0, 0, 0, time.UTC)
-	t2 := time.Date(2026, 5, 9, 11, 0, 0, 0, time.UTC)
-	_, _ = rec.Record(ctx, Entry{Action: ActionConfigChange, Actor: "a", Timestamp: t1})
-	_, _ = rec.Record(ctx, Entry{Action: ActionConfigChange, Actor: "a", Timestamp: t2})
-	got, _ := rec.Query(ctx, Filter{})
-	if len(got) != 2 {
-		t.Fatalf("len = %d", len(got))
-	}
-	if !got[0].Timestamp.Equal(t2) {
-		t.Errorf("ordering wrong: %v vs %v", got[0].Timestamp, got[1].Timestamp)
-	}
-}
-
-func TestQueryTimeWindow(t *testing.T) {
-	rec := newRecorder(t)
-	ctx := context.Background()
-	base := time.Date(2026, 5, 9, 10, 0, 0, 0, time.UTC)
-	for i, ts := range []time.Time{base, base.Add(time.Hour), base.Add(2 * time.Hour)} {
-		_, err := rec.Record(ctx, Entry{
-			Action: ActionConfigChange, Actor: "a", Timestamp: ts,
-			Target: "t" + string(rune('0'+i)),
-		})
-		if err != nil {
-			t.Fatalf("rec: %v", err)
-		}
-	}
-	got, _ := rec.Query(ctx, Filter{
-		Since: base.Add(30 * time.Minute), Until: base.Add(90 * time.Minute),
-	})
-	if len(got) != 1 || got[0].Target != "t1" {
-		t.Errorf("window filter: %+v", got)
+	if got.ID != "x" || !got.Timestamp.Equal(at) {
+		t.Errorf("entry rewritten: %+v", got)
 	}
 }
 
 func TestRecordRequiresActionAndActor(t *testing.T) {
-	rec := newRecorder(t)
+	store := &memStore{}
+	rec := NewRecorder(store)
 	ctx := context.Background()
 	if _, err := rec.Record(ctx, Entry{Actor: "a"}); err == nil {
 		t.Error("expected action error")
@@ -133,52 +73,49 @@ func TestRecordRequiresActionAndActor(t *testing.T) {
 	if _, err := rec.Record(ctx, Entry{Action: ActionConfigChange}); err == nil {
 		t.Error("expected actor error")
 	}
+	if len(store.entries) != 0 {
+		t.Errorf("invalid entries persisted: %+v", store.entries)
+	}
+}
+
+func TestRecordSurfacesStoreError(t *testing.T) {
+	boom := errors.New("boom")
+	if _, err := NewRecorder(&memStore{err: boom}).Record(context.Background(), Entry{Action: ActionConfigChange, Actor: "a"}); !errors.Is(err, boom) {
+		t.Errorf("err = %v, want the store's", err)
+	}
+}
+
+func TestQueryDefaultsLimit(t *testing.T) {
+	var got Filter
+	spy := spyStore{query: func(f Filter) { got = f }}
+	if _, err := NewRecorder(spy).Query(context.Background(), Filter{}); err != nil {
+		t.Fatal(err)
+	}
+	if got.Limit != defaultQueryLimit {
+		t.Errorf("limit = %d, want %d", got.Limit, defaultQueryLimit)
+	}
+	if _, err := NewRecorder(spy).Query(context.Background(), Filter{Limit: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if got.Limit != 2 {
+		t.Errorf("limit = %d, want the caller's 2", got.Limit)
+	}
+}
+
+type spyStore struct{ query func(Filter) }
+
+func (spyStore) AppendAudit(context.Context, Entry) error { return nil }
+func (s spyStore) QueryAudit(_ context.Context, f Filter) ([]Entry, error) {
+	s.query(f)
+	return nil, nil
 }
 
 func TestNilRecorder(t *testing.T) {
 	var r *Recorder
-	if _, err := r.Record(context.Background(), Entry{Action: ActionConfigChange, Actor: "a"}); err == nil {
-		t.Error("expected nil receiver error")
+	if _, err := r.Record(context.Background(), Entry{Action: ActionConfigChange, Actor: "a"}); !errors.Is(err, ErrNotInitialised) {
+		t.Errorf("err = %v, want ErrNotInitialised", err)
 	}
-}
-
-func TestLimitCapsResults(t *testing.T) {
-	rec := newRecorder(t)
-	ctx := context.Background()
-	for i := 0; i < 5; i++ {
-		_, _ = rec.Record(ctx, Entry{Action: ActionConfigChange, Actor: "a"})
-	}
-	got, _ := rec.Query(ctx, Filter{Limit: 2})
-	if len(got) != 2 {
-		t.Errorf("limit: got %d, want 2", len(got))
-	}
-}
-
-func TestDetailsRoundTrip(t *testing.T) {
-	rec := newRecorder(t)
-	ctx := context.Background()
-	in := map[string]any{
-		"nested": map[string]any{
-			"key": "value",
-		},
-		"count": float64(42),
-	}
-	_, err := rec.Record(ctx, Entry{
-		Action: ActionRedactionUpdate, Actor: "ai", Details: in,
-	})
-	if err != nil {
-		t.Fatalf("rec: %v", err)
-	}
-	got, _ := rec.Query(ctx, Filter{})
-	if len(got) != 1 {
-		t.Fatalf("len = %d", len(got))
-	}
-	d := got[0].Details
-	nested, ok := d["nested"].(map[string]any)
-	if !ok || nested["key"] != "value" {
-		t.Errorf("nested details lost: %+v", d)
-	}
-	if d["count"].(float64) != 42 {
-		t.Errorf("count lost: %+v", d)
+	if _, err := NewRecorder(nil).Query(context.Background(), Filter{}); !errors.Is(err, ErrNotInitialised) {
+		t.Errorf("err = %v, want ErrNotInitialised", err)
 	}
 }
