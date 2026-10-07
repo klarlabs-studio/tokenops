@@ -14,7 +14,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/observ"
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
 	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/events"
@@ -162,7 +161,6 @@ func wireCanonicalObservers(bus *events.AsyncBus, counter *observ.EventCounter, 
 }
 
 func wireDomainEventPublishers(bus *events.AsyncBus, logger *slog.Logger) func() {
-	optimizer.SetEventBus(bus)
 	rulesfs.SetEventBus(bus)
 	cancelLog := bus.Subscribe(func(env *eventschema.Envelope) {
 		if env == nil || env.Type != eventschema.EventTypeDomain {
@@ -174,7 +172,6 @@ func wireDomainEventPublishers(bus *events.AsyncBus, logger *slog.Logger) func()
 	})
 	return func() {
 		cancelLog()
-		optimizer.SetEventBus(nil)
 		rulesfs.SetEventBus(nil)
 	}
 }
