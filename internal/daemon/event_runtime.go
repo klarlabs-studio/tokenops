@@ -12,13 +12,10 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/observ"
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
 	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
-	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/compactlever"
 	"go.klarlabs.de/tokenops/internal/infra/domainmigration"
@@ -103,7 +100,7 @@ func initializeEventRuntime(
 		logger.Info("otlp exporter ready", "endpoint", cfg.OTel.Endpoint, "redact", cfg.OTel.RedactEnabled())
 	}
 
-	startOTelMetricsRuntime(cfg, rt.Store, components.Spend, sup, logger)
+	startOTelMetricsRuntime(cfg, rt.Store, components, sup, logger)
 
 	// Plan stamping ensures all sources inherit the plan_included contract.
 	rt.Bus = events.NewAsync(newPlanStampSink(events.NewMultiSink(sinks...), cfg), events.Options{
@@ -164,10 +161,7 @@ func wireCanonicalObservers(bus *events.AsyncBus, counter *observ.EventCounter, 
 }
 
 func wireDomainEventPublishers(bus *events.AsyncBus, logger *slog.Logger) func() {
-	workflow.SetEventBus(bus)
-	optimizer.SetEventBus(bus)
 	rulesfs.SetEventBus(bus)
-	budget.SetEventBus(bus)
 	cancelLog := bus.Subscribe(func(env *eventschema.Envelope) {
 		if env == nil || env.Type != eventschema.EventTypeDomain {
 			return
@@ -178,10 +172,7 @@ func wireDomainEventPublishers(bus *events.AsyncBus, logger *slog.Logger) func()
 	})
 	return func() {
 		cancelLog()
-		workflow.SetEventBus(nil)
-		optimizer.SetEventBus(nil)
 		rulesfs.SetEventBus(nil)
-		budget.SetEventBus(nil)
 	}
 }
 

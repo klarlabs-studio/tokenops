@@ -867,11 +867,35 @@ func (s *Store) Reattribute(ctx context.Context, source, model, from, to, endpoi
 	return res.RowsAffected()
 }
 
-// ReattributeSession moves a source's prompt events for one session from
-// one provider to another and records their endpoint; it returns how many
-// it changed (ADR 0009). With uncover, events marked as covered by the old
-// provider's plan become billed.
-func (s *Store) ReattributeSession(ctx context.Context, source, session, from, to, endpoint string, uncover bool) (int64, error) {
+// SessionModels lists the distinct models of one session's prompt events
+// recorded under provider, sorted; a turn with no model is listed as "".
+func (s *Store) SessionModels(ctx context.Context, source, provider, session string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT coalesce(model, '') AS m FROM events
+		WHERE type = 'prompt' AND source = ? AND provider = ? AND session_id = ? ORDER BY m`, source, provider, session)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: session models: %w", contended(ctx, err))
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var m string
+		if err := rows.Scan(&m); err != nil {
+			return nil, fmt.Errorf("sqlite: session models: %w", err)
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// ReattributeSession moves a source's prompt events for one session and
+// model ("" for turns with none) from one provider to another and records
+// their endpoint; it returns how many it changed (ADR 0009). With uncover,
+// events marked as covered by the old provider's plan become billed.
+//
+// It is per model because the biller is: a gateway running OpenAI's
+// models on the operator's own credential bills its own models and
+// leaves OpenAI's with OpenAI, in the same session.
+func (s *Store) ReattributeSession(ctx context.Context, source, session, model, from, to, endpoint string, uncover bool) (int64, error) {
 	payload, cost := `json_set(payload, '$.provider', ?)`, `cost_usd`
 	args := make([]any, 0, 8)
 	if uncover {
@@ -881,10 +905,14 @@ func (s *Store) ReattributeSession(ctx context.Context, source, session, from, t
 		cost = `CASE WHEN json_extract(payload, '$.cost_source') = 'plan_included' THEN NULL ELSE cost_usd END`
 		args = append(args, to)
 	}
-	args = append(args, to, endpoint, to, source, from, session)
+	// Only rows not already where they are going: from may equal to, when
+	// a turn keeps its provider and gains its endpoint.
+	args = append(args, to, endpoint, to, source, from, session, model, to, endpoint, uncover)
 	res, err := s.db.ExecContext(ctx, `UPDATE events SET cost_usd = `+cost+`, payload = `+payload+`,
 		attributes = json_set(coalesce(attributes, '{}'), '$.endpoint', ?), provider = ?
-		WHERE type = 'prompt' AND source = ? AND provider = ? AND session_id = ?`, args...)
+		WHERE type = 'prompt' AND source = ? AND provider = ? AND session_id = ? AND coalesce(model, '') = ?
+		  AND (provider != ? OR coalesce(json_extract(attributes, '$.endpoint'), '') != ?
+		       OR (? AND json_extract(payload, '$.cost_source') = 'plan_included'))`, args...)
 	if err != nil {
 		return 0, fmt.Errorf("sqlite: reattribute session: %w", contended(ctx, err))
 	}

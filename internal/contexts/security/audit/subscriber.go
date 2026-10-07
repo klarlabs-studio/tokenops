@@ -152,23 +152,34 @@ func entryFromEnvelope(env *eventschema.Envelope, actor string) (Entry, bool) {
 	switch payload.Kind {
 	case "budget.exceeded":
 		var e struct {
-			BudgetID string  `json:"BudgetID"`
-			SpentUSD float64 `json:"SpentUSD"`
-			LimitUSD float64 `json:"LimitUSD"`
+			BudgetID    string  `json:"BudgetID"`
+			Basis       string  `json:"Basis"`
+			SpentUSD    float64 `json:"SpentUSD"`
+			LimitUSD    float64 `json:"LimitUSD"`
+			SpentTokens int64   `json:"SpentTokens"`
+			LimitTokens int64   `json:"LimitTokens"`
 		}
 		if err := json.Unmarshal(payload.Data, &e); err != nil {
 			return Entry{}, false
+		}
+		details := map[string]any{
+			"spent_usd": e.SpentUSD,
+			"limit_usd": e.LimitUSD,
+			"fraction":  ratio(e.SpentUSD, e.LimitUSD),
+		}
+		if e.Basis == "tokens" {
+			details = map[string]any{
+				"spent_tokens": e.SpentTokens,
+				"limit_tokens": e.LimitTokens,
+				"fraction":     ratio(float64(e.SpentTokens), float64(e.LimitTokens)),
+			}
 		}
 		return Entry{
 			Action:    ActionBudgetExceeded,
 			Actor:     actor,
 			Target:    e.BudgetID,
 			Timestamp: env.Timestamp,
-			Details: map[string]any{
-				"spent_usd": e.SpentUSD,
-				"limit_usd": e.LimitUSD,
-				"fraction":  ratio(e.SpentUSD, e.LimitUSD),
-			},
+			Details:   details,
 		}, true
 	case "optimization.applied":
 		var e struct {

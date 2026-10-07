@@ -5,11 +5,10 @@ import (
 	"log/slog"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/bootstrap"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/telemetry"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	"go.klarlabs.de/tokenops/internal/otlp"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
@@ -19,8 +18,9 @@ import (
 // startOTelMetricsRuntime pushes TokenOps' derived metrics to the
 // configured collector every interval: the figures the glance, the coach
 // and cost per commit show, and nothing they are derived from.
-func startOTelMetricsRuntime(cfg config.Config, store *sqlite.Store, eng *spend.Engine, sup *lifecycle.Supervisor, logger *slog.Logger) {
-	if !cfg.OTel.MetricsEnabled() || store == nil || eng == nil {
+func startOTelMetricsRuntime(cfg config.Config, store *sqlite.Store, components *bootstrap.Components, sup *lifecycle.Supervisor, logger *slog.Logger) {
+	eng := components.Spend
+	if !cfg.OTel.MetricsEnabled() || store == nil || eng == nil || components.Aggregator == nil {
 		return
 	}
 	exp, err := otlp.NewMetrics(otlp.Options{
@@ -36,7 +36,7 @@ func startOTelMetricsRuntime(cfg config.Config, store *sqlite.Store, eng *spend.
 	if every <= 0 {
 		every = telemetry.Every
 	}
-	g := &telemetry.Gatherer{Glance: plansDeps(cfg, store, eng), Agg: analytics.New(store, eng), Coach: func(now time.Time) *coachcap.Report {
+	g := &telemetry.Gatherer{Glance: plansDeps(cfg, store, eng), Agg: components.Aggregator, Coach: func(now time.Time) *coachcap.Report {
 		ledger, levers := coachEnv(cfg)
 		r := coachcap.Status(cfg, ledger, levers, now)
 		return &r

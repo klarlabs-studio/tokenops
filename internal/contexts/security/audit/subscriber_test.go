@@ -63,6 +63,26 @@ func TestSubscribeRecordsBudgetExceeded(t *testing.T) {
 	}
 }
 
+// A token budget is recorded in tokens, not as $0 of $0.
+func TestSubscribeRecordsATokenBudgetInTokens(t *testing.T) {
+	rec := NewRecorder(&memStore{})
+	bus := newAuditEventBus()
+	sub := Subscribe(bus, rec, nil, "tester")
+	publishAuditEvent(t, bus, "budget.exceeded", time.Now().UTC(), map[string]any{
+		"BudgetID": "daily-tokens", "Basis": "tokens", "SpentTokens": 1200000, "LimitTokens": 1000000,
+	})
+	entries := waitForAuditEntries(t, rec, 1)
+	sub.Close()
+	_ = bus.Close(time.Second)
+	d := entries[0].Details
+	if d["spent_tokens"] != int64(1200000) || d["limit_tokens"] != int64(1000000) || d["fraction"] != "1.200" {
+		t.Errorf("details %v", d)
+	}
+	if _, ok := d["spent_usd"]; ok {
+		t.Errorf("a token budget recorded dollars: %v", d)
+	}
+}
+
 func TestSubscribeRecordsOptimizationApplied(t *testing.T) {
 	rec := NewRecorder(&memStore{})
 	bus := newAuditEventBus()

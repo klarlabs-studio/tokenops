@@ -10,6 +10,11 @@
 - **coach, eval:** `coach replies` and `tokenops eval` print their rows in one order; tied sessions and the per-optimizer and drift rows came out in a different order each run
 - **routing:** the route guard tiers models by the card the cost engine prices with, the negotiated rates in `pricing.path` included; it read the latest pricing snapshot alone, so a model the operator pays little for still tiered as a flagship
 - **pricing:** `pricing show/diff/lint --snapshot/--from/--to` accept the timestamp `pricing show` prints (`2026-09-15T00:00:00Z`); only a bare date matched before. `pricing refresh --source` names every known source in its error
+- **attribution:** the startup correction for Codex moved every turn of a session on a gateway such as Fireworks to that gateway, including the OpenAI models Fireworks runs on your own key, and undid live ingestion's correct attribution at every start. Turns are now decided per model; turns it moved go back to OpenAI, and turns from before endpoints were known gain their endpoint and are billed per token rather than covered by the ChatGPT plan
+- **budgets:** an exceeded budget is recorded once per window. The watcher raised `budget.exceeded` on every tick (every 15 minutes) and after every restart, at the 75% warning and on a forecast breach too, so the audit log filled with budgets "exceeded" that were not; a token budget never raised one. It now fires once, at or past the limit, in tokens for a token budget, and not again when the audit log already has it
+- **workflows:** reading a workflow trace no longer stores a `workflow.observed` domain event, so the event counters stop counting views
+- **read guard:** each prevented re-read is published once, not every two minutes; with OTel event export on, a collector received the whole read-guard history again every tick
+- **plans:** the unconfigured-plan hint no longer offers `TOKENOPS_PLAN_<PROVIDER>` as applying without a restart; set in a shell it never reached the daemon
 
 ## 0.101.1 - 2026-10-06
 

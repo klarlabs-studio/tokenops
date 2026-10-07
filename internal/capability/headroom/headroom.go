@@ -87,12 +87,14 @@ func (r Result) Answered() bool { return len(r.Reports) > 0 }
 
 // UnconfiguredHint names both ways to bind a plan.
 //
-// Config hot-reloads, so this deliberately does not end with "then
-// restart" — that was a step which changed nothing, and an agent reading
-// the hint can bind the plan itself.
+// Both restart a supervised daemon themselves, so this does not end with
+// "then restart", and an agent reading the hint can bind the plan itself.
+// It used to also offer TOKENOPS_PLAN_<PROVIDER> as "picked up without a
+// restart"; that variable is read once, when a process loads its config,
+// so set in a shell it never reached a running daemon.
 const UnconfiguredHint = "no plans configured; bind one with `tokenops plan set <provider> <plan>` " +
-	"(e.g. `tokenops plan set anthropic claude-max-20x`) or tokenops_configure (setting=plan), " +
-	"or set TOKENOPS_PLAN_<PROVIDER>; the change is picked up without a restart"
+	"(e.g. `tokenops plan set anthropic claude-max-20x`) or tokenops_configure (setting=plan); " +
+	"either restarts a supervised daemon so the plan applies at once"
 
 // StorageDisabledHint says how to get an event store.
 const StorageDisabledHint = "no event store: run `tokenops init`, then restart the daemon"

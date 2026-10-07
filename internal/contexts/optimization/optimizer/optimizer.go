@@ -122,16 +122,6 @@ type Result struct {
 
 // Pipeline owns an ordered list of optimizers. The zero value is unusable;
 // construct via NewPipeline.
-// DomainEventPublisher is the narrow canonical-envelope publication port.
-type DomainEventPublisher interface {
-	Publish(*eventschema.Envelope)
-}
-
-var pipelineEventBus DomainEventPublisher
-
-// SetEventBus installs the canonical event bus the pipeline publishes to.
-func SetEventBus(b DomainEventPublisher) { pipelineEventBus = b }
-
 type Pipeline struct {
 	optimizers []Optimizer
 	clock      func() time.Time
@@ -200,18 +190,6 @@ func (p *Pipeline) Run(ctx context.Context, req *Request, decider Decider) (*Res
 			}
 			ev := p.recommendationEvent(req, opt, mode, rec, decision, stageElapsed)
 			res.Events = append(res.Events, ev)
-			if pipelineEventBus != nil && decision == eventschema.OptimizationDecisionApplied {
-				at := p.clock().UTC()
-				env, err := eventschema.NewDomainEnvelope("optimization.applied", struct {
-					PromptHash    string    `json:"PromptHash"`
-					OptimizerKind string    `json:"OptimizerKind"`
-					TokensSaved   int64     `json:"TokensSaved"`
-					At            time.Time `json:"At"`
-				}{ev.PromptHash, string(ev.Kind), ev.EstimatedSavingsTokens, at}, at, "optimizer", eventschema.Association{})
-				if err == nil {
-					pipelineEventBus.Publish(env)
-				}
-			}
 		}
 	}
 

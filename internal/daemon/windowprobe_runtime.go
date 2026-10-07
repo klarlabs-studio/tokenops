@@ -19,7 +19,7 @@ func startWindowPressureRuntime(cfg config.Config, rc *router.Config, store *sql
 	}
 	probe := newWindowProbe()
 	sup.Go("window-pressure-probe", func(taskCtx context.Context) error {
-		runWindowProbe(taskCtx, probe, cfg, planStoreReader{store: store}, time.Minute)
+		runWindowProbe(taskCtx, probe, cfg, store, time.Minute)
 		return nil
 	})
 	rc.WindowPressure = probe.Pct

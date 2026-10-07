@@ -5,8 +5,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/google/uuid"
-
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -26,9 +24,11 @@ const readGuardSource = "read-guard"
 // happening. TEU counted only optimizer events from the proxy, so a client
 // that never proxies could never score on it.
 //
-// Each reclamation carries a stable ID, and the store dedups on it, so
-// re-scanning the whole ledger every tick republishes the same savings
-// harmlessly rather than inflating the total.
+// Each reclamation is published once per process: the ingester remembers
+// what it published, and at boot the bus it is given skips what the store
+// already holds. Re-publishing the whole ledger every tick was harmless to
+// the store, which deduplicates on the stable ID, but not to the OTLP
+// exporter on the same bus, which sent every reclamation again each tick.
 func runReadGuardIngest(
 	ctx context.Context,
 	bus events.Bus,
@@ -42,29 +42,8 @@ func runReadGuardIngest(
 	if interval <= 0 {
 		interval = 2 * time.Minute
 	}
-	scan := func() {
-		recs, err := readguard.Reclamations(ledgerDir)
-		if err != nil {
-			logger.Debug("read-guard ingest failed", "err", err)
-			return
-		}
-		for _, r := range recs {
-			// PublishWait, not Publish: this replays the WHOLE ledger at
-			// boot and again every tick, which is the burst most likely to
-			// fill the queue — and Publish discards the overflow silently.
-			//
-			// Re-scanning does make a dropped record recoverable two
-			// minutes later, unlike the pollers this path was overlooked
-			// by. But it left the drop counter non-zero on every single
-			// boot (222 events on one machine, in 13 seconds), and a
-			// counter that always reads non-zero is one an operator stops
-			// reading — which is the failure it was surfaced to prevent.
-			if err := bus.PublishWait(ctx, reclamationEnvelope(r)); err != nil {
-				return // shutting down, or the bus is closed
-			}
-		}
-	}
-	scan()
+	ing := &readGuardIngester{bus: bus, dir: ledgerDir, logger: logger}
+	ing.scan(ctx)
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -73,19 +52,53 @@ func runReadGuardIngest(
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			scan()
+			ing.scan(ctx)
 		}
+	}
+}
+
+// readGuardIngester publishes the ledger's reclamations it has not yet
+// published.
+type readGuardIngester struct {
+	bus       events.Bus
+	dir       string
+	logger    *slog.Logger
+	published map[string]bool
+}
+
+// scan reads the ledger and publishes what is new.
+func (g *readGuardIngester) scan(ctx context.Context) {
+	if g.published == nil {
+		g.published = map[string]bool{}
+	}
+	recs, err := readguard.Reclamations(g.dir)
+	if err != nil {
+		if g.logger != nil {
+			g.logger.Debug("read-guard ingest failed", "err", err)
+		}
+		return
+	}
+	for _, r := range recs {
+		id := r.ID()
+		if g.published[id] {
+			continue
+		}
+		// PublishWait, not Publish: the first scan replays the whole
+		// ledger, the burst most likely to fill the queue, and Publish
+		// discards the overflow silently. A drop counter non-zero on
+		// every boot (222 events on one machine, in 13 seconds) is one
+		// an operator stops reading.
+		if err := g.bus.PublishWait(ctx, reclamationEnvelope(r)); err != nil {
+			return // shutting down, or the bus is closed; retried next scan
+		}
+		g.published[id] = true
 	}
 }
 
 // reclamationEnvelope wraps one prevented re-read as an OptimizationEvent.
 func reclamationEnvelope(r readguard.Reclamation) *eventschema.Envelope {
-	id := r.ID()
-	if id == "" {
-		id = uuid.NewString()
-	}
 	return &eventschema.Envelope{
-		ID:            id,
+		ID:            r.ID(),
 		SchemaVersion: eventschema.SchemaVersion,
 		Type:          eventschema.EventTypeOptimization,
 		Timestamp:     r.At,
