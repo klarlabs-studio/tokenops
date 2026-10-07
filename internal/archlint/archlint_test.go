@@ -44,6 +44,53 @@ var storageExempt = map[string]bool{
 	"go.klarlabs.de/tokenops/internal/contexts/tasks":                   true,
 }
 
+// forbiddenOuterPrefixes names the outer layers no domain package may
+// import directly: the daemon and its composition root, configuration,
+// presentation, and every infrastructure adapter under internal/infra/.
+// An entry ending in "/" matches every package beneath it; any other
+// entry matches the package itself and its sub-packages.
+//
+// internal/events is deliberately absent. It is the event-bus port the
+// domains publish to: the domain code uses only its Bus and Observable
+// interfaces, and the package imports nothing from this module except
+// pkg/eventschema (TestEventsPackageStaysAPort holds it to that). Moving
+// those two interfaces elsewhere would churn 16 packages to relabel a
+// port that is already infrastructure-free.
+var forbiddenOuterPrefixes = []string{
+	"go.klarlabs.de/tokenops/internal/daemon",
+	"go.klarlabs.de/tokenops/internal/config",
+	"go.klarlabs.de/tokenops/internal/bootstrap",
+	"go.klarlabs.de/tokenops/internal/presentation",
+	"go.klarlabs.de/tokenops/internal/infra/",
+}
+
+// outerImportExempt is the ratchet for direct domain → outer-layer
+// imports that already existed when forbiddenOuterPrefixes landed.
+//
+// **This list may only shrink.** A new entry means a domain package now
+// depends on an adapter; define a port in the domain instead and let the
+// adapter satisfy it. When a dependency is removed, delete its line —
+// TestOuterImportExemptNotStale fails on a stale entry, so the list stays
+// an accurate count of what is left to invert.
+var outerImportExempt = map[string][]string{
+	// Skips scratch-directory transcripts via scanscope.EphemeralPath.
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts": {
+		"go.klarlabs.de/tokenops/internal/infra/scanscope",
+	},
+	// Narrows its transcript scan via scanscope.Keep.
+	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx": {
+		"go.klarlabs.de/tokenops/internal/infra/scanscope",
+	},
+	// The poller reads, and builds envelopes from, claudelimits.Reading.
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudestatusline": {
+		"go.klarlabs.de/tokenops/internal/infra/claudelimits",
+	},
+	// The poller reads, and builds envelopes from, cursorturns.Turn.
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/cursorturns": {
+		"go.klarlabs.de/tokenops/internal/infra/cursorturns",
+	},
+}
+
 // domainPackages lists every domain package the arch test enforces.
 // Every package under internal/contexts/* belongs here so new contexts
 // are gated automatically — TestDomainPackagesComplete compares this
@@ -176,6 +223,75 @@ func TestNoDomainImportsInfraExceptDocumented(t *testing.T) {
 				t.Errorf("DDD layering violation: %s imports %s directly\n"+
 					"  add an exemption (with rationale) to storageExempt + docs/architecture-ddd.md", pkg, banned)
 			}
+		}
+	}
+}
+
+// isOuterLayer reports whether imp falls under forbiddenOuterPrefixes.
+func isOuterLayer(imp string) bool {
+	for _, p := range forbiddenOuterPrefixes {
+		if strings.HasSuffix(p, "/") {
+			if strings.HasPrefix(imp, p) {
+				return true
+			}
+			continue
+		}
+		if imp == p || strings.HasPrefix(imp, p+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+func TestNoDomainImportsOuterLayer(t *testing.T) {
+	for _, pkg := range domainPackages {
+		exempt := map[string]bool{}
+		for _, imp := range outerImportExempt[pkg] {
+			exempt[imp] = true
+		}
+		for imp := range directImports(t, pkg) {
+			if isOuterLayer(imp) && !exempt[imp] {
+				t.Errorf("DDD layering violation: %s imports %s directly\n"+
+					"  domain packages must not depend on daemon, config, bootstrap, "+
+					"presentation or internal/infra; declare a port in the domain and "+
+					"let the adapter satisfy it (outerImportExempt only shrinks)", pkg, imp)
+			}
+		}
+	}
+}
+
+func TestOuterImportExemptNotStale(t *testing.T) {
+	listed := map[string]bool{}
+	for _, pkg := range domainPackages {
+		listed[pkg] = true
+	}
+	for pkg, imps := range outerImportExempt {
+		if !listed[pkg] {
+			t.Errorf("outerImportExempt lists %s but it is not in domainPackages", pkg)
+			continue
+		}
+		direct := directImports(t, pkg)
+		for _, imp := range imps {
+			if !isOuterLayer(imp) {
+				t.Errorf("outerImportExempt[%s] lists %s, which no rule forbids; delete it", pkg, imp)
+			}
+			if _, ok := direct[imp]; !ok {
+				t.Errorf("outerImportExempt[%s] lists %s but the package no longer imports it — "+
+					"delete the entry so the ratchet records the progress", pkg, imp)
+			}
+		}
+	}
+}
+
+// TestEventsPackageStaysAPort keeps internal/events eligible for the
+// domain-facing exemption above: it may import the standard library and
+// pkg/eventschema, and nothing else from this module.
+func TestEventsPackageStaysAPort(t *testing.T) {
+	const module = "go.klarlabs.de/tokenops/"
+	for imp := range directImports(t, module+"internal/events") {
+		if strings.HasPrefix(imp, module) && imp != module+"pkg/eventschema" {
+			t.Errorf("internal/events imports %s; domains depend on it as a port, so it "+
+				"must stay free of other module packages", imp)
 		}
 	}
 }
