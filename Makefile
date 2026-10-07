@@ -22,15 +22,7 @@ all: build
 
 build: $(addprefix $(BIN_DIR)/,$(BINARIES))
 
-# # The menu bar app is its own module (Vitra needs cgo). Run it against the
-# local daemon; `make menubar-test` runs its tests without a window.
-menubar:
-	cd apps/menubar && CGO_ENABLED=1 go run -tags vitra_native .
-
-menubar-test:
-	cd apps/menubar && go vet ./... && go test -count=1 ./...
-
-FORCE: the binaries have no file prerequisites make could compare, so
+# FORCE: the binaries have no file prerequisites make could compare, so
 # without it an existing bin/tokenops was never rebuilt and every target
 # built on it (config-matrix, the release's pre-publish check) ran a stale
 # binary. go build's own cache keeps the rebuild cheap.
