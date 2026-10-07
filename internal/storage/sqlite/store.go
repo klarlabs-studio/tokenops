@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -88,6 +89,8 @@ type Store struct {
 	path     string
 	logger   *slog.Logger
 	slowLock time.Duration
+	// skippedInvalid counts envelopes AppendBatch refused to store.
+	skippedInvalid atomic.Int64
 }
 
 // Options tunes the connection. Zero values fall back to sensible defaults.
@@ -232,29 +235,53 @@ func (s *Store) Close() error {
 // should prefer Append/Query.
 func (s *Store) DB() *sql.DB { return s.db }
 
-// Append persists a single envelope. It is a convenience wrapper around
-// AppendBatch and inherits the same transactional guarantees.
+// Append persists a single envelope. Unlike AppendBatch it reports an
+// invalid envelope as an error: a lone caller can act on it.
 func (s *Store) Append(ctx context.Context, env *eventschema.Envelope) error {
-	return s.AppendBatch(ctx, []*eventschema.Envelope{env})
+	r, err := envelopeToRow(env)
+	if err != nil {
+		return fmt.Errorf("sqlite: envelope: %w", err)
+	}
+	return s.insertRows(ctx, []row{r})
 }
 
-// AppendBatch persists envs atomically. Either all rows are committed or
-// none are. Empty input is a no-op. ON CONFLICT (id) the existing row is
-// preserved — emitters are expected to use UUIDv7 / unique IDs, so a
-// collision usually means a retried emit and we want it to be idempotent.
-// A failure caused by another writer or an exhausted deadline satisfies
-// IsContended.
+// AppendBatch persists the valid envelopes of envs atomically: either all
+// of them are committed or none are. Empty input is a no-op. An envelope
+// that cannot be stored (nil, missing id or type, payload mismatch) is
+// skipped, logged and counted in SkippedInvalid rather than failing the
+// batch: the bus retries a failed batch and then drops it, so one bad
+// envelope would otherwise cost every good row beside it. ON CONFLICT (id)
+// the existing row is preserved — emitters are expected to use UUIDv7 /
+// unique IDs, so a collision usually means a retried emit and we want it
+// to be idempotent. A failure caused by another writer or an exhausted
+// deadline satisfies IsContended.
 func (s *Store) AppendBatch(ctx context.Context, envs []*eventschema.Envelope) error {
-	if len(envs) == 0 {
-		return nil
-	}
-	rows := make([]row, len(envs))
+	rows := make([]row, 0, len(envs))
 	for i, env := range envs {
 		r, err := envelopeToRow(env)
 		if err != nil {
-			return fmt.Errorf("sqlite: envelope %d: %w", i, err)
+			s.skippedInvalid.Add(1)
+			id, typ := "", ""
+			if env != nil {
+				id, typ = env.ID, string(env.Type)
+			}
+			s.logger.Warn("sqlite: invalid envelope skipped",
+				"index", i, "id", id, "type", typ, "err", err)
+			continue
 		}
-		rows[i] = r
+		rows = append(rows, r)
+	}
+	return s.insertRows(ctx, rows)
+}
+
+// SkippedInvalid reports how many envelopes AppendBatch has refused to
+// store since Open because they were malformed.
+func (s *Store) SkippedInvalid() int64 { return s.skippedInvalid.Load() }
+
+// insertRows writes rows in one transaction.
+func (s *Store) insertRows(ctx context.Context, rows []row) error {
+	if len(rows) == 0 {
+		return nil
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
