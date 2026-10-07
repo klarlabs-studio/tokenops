@@ -43,13 +43,13 @@ jobs:
           # at https://github.com/nox-hq/nox/releases, and update the
           # checksum in the same commit — a version bump without one
           # silently reverts this step to trusting the network.
-          NOX_VERSION: "1.30.1"
+          NOX_VERSION: "1.48.1"
           # sha256 of nox_<version>_linux_amd64.tar.gz, from the release's
           # checksums.txt. The org's central workflows verify this; this
           # step used to pipe curl straight into tar, so a compromised or
           # substituted release would have been unpacked and run against
           # the whole repository without a word.
-          NOX_SHA256: "e90114e9f37b038af6d2e7f603c5f40684d7a3120f4f377b8a5741aba1b031da"
+          NOX_SHA256: "65a725c14bbd4ef533ffcc430ace3f52362e7a657f4d4ccc3a1f63d8c7343313"
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.local/bin"
