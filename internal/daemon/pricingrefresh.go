@@ -8,10 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/ratecards"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
-	"go.klarlabs.de/tokenops/internal/infra/pricingsource"
 )
 
 // The rate card goes stale on its own. A model released after the binary
@@ -51,7 +50,7 @@ func runPricingRefresh(
 	if !rc.Enabled() || eng == nil {
 		return
 	}
-	dir := pricing.ResolveDir("")
+	dir := ratecards.Dir("")
 	every := rc.Every()
 
 	// Only reach out at startup if the card is actually stale. A daemon
@@ -82,8 +81,8 @@ func refreshOnce(
 	eng *spend.Engine,
 	logger *slog.Logger,
 ) {
-	src := pricingsource.ByName("default", "")
-	if src == nil {
+	src, err := ratecards.SourceNamed("default", "")
+	if err != nil {
 		return
 	}
 	fetchCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -100,18 +99,18 @@ func refreshOnce(
 
 	// The guard warns, never blocks — same contract as the CLI. An
 	// anomaly is a reason to look, not a reason to price nothing.
-	if anomalies := pricing.Check(snap); len(anomalies) > 0 {
+	verdict := ratecards.Assess(dir, snap)
+	if anomalies := verdict.Anomalies; len(anomalies) > 0 {
 		logger.Warn("pricing consistency guard flagged the fetched rates",
 			"anomalies", len(anomalies), "first", anomalies[0].String())
 	}
 
-	prev, _ := pricing.LatestSnapshot(dir)
-	changes := pricing.Diff(prev, snap)
+	changes := verdict.Changes
 	if len(changes) == 0 {
 		logger.Debug("pricing refresh: no change", "rates", len(snap.Rates))
 		return
 	}
-	path, err := pricing.SaveSnapshot(dir, snap)
+	path, err := ratecards.Save(dir, snap)
 	if err != nil {
 		logger.Warn("pricing refresh: snapshot not written", "err", err)
 		return
@@ -119,23 +118,10 @@ func refreshOnce(
 
 	// Apply it to the running engine. Without this the daemon would price
 	// from the card it started with until someone restarted it.
-	eng.Replace(pricing.EffectiveTables(dir, overridesFor(cfg)))
+	eng.Replace(ratecards.Tables(dir, cfg.Pricing.Path))
 	logger.Info("pricing refreshed",
 		"changes", len(changes), "rates", len(snap.Rates),
-		"snapshot", filepath.Base(path), "first_change", pricing.FormatChange(changes[0]))
-}
-
-// overridesFor reloads the operator's negotiated rates so a refresh
-// cannot drop them. They outrank every fetched card by construction.
-func overridesFor(cfg config.Config) spend.Table {
-	if cfg.Pricing.Path == "" {
-		return spend.Table{}
-	}
-	ov, err := spend.LoadTableFile(cfg.Pricing.Path)
-	if err != nil {
-		return spend.Table{}
-	}
-	return ov
+		"snapshot", filepath.Base(path), "first_change", ratecards.FormatChange(changes[0]))
 }
 
 func sinceLastCheck(dir string) time.Duration {
