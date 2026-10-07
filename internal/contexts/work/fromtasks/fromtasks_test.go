@@ -55,7 +55,7 @@ func TestACompletedTaskDoesNotClaimTheGoalWasMet(t *testing.T) {
 	if got.Outcome.Result == work.ResultAchieved {
 		t.Error("a completion marker was read as the goal being achieved")
 	}
-	if got.Outcome.Known() {
+	if got.Outcome.Result != work.ResultUnknown {
 		t.Error("an unassessed task produced a known outcome")
 	}
 	if !strings.Contains(got.Outcome.Caveat, "marker") {
@@ -78,7 +78,7 @@ func TestAnOpenTaskIsARunningExecution(t *testing.T) {
 	if got.Execution.Status == work.Failed {
 		t.Error("an open task was read as failed")
 	}
-	if got.Outcome.Known() {
+	if got.Outcome.Result != work.ResultUnknown {
 		t.Error("work still in progress produced a known outcome")
 	}
 }
