@@ -50,14 +50,11 @@ func (s *Server) routingMiddleware(provider providers.Provider, next http.Handle
 			next.ServeHTTP(w, r)
 			return
 		}
-		body, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBodyCapture+1))
-		_ = r.Body.Close()
-		if err != nil || int64(len(body)) > maxRequestBodyCapture {
-			r.Body = io.NopCloser(bytes.NewReader(body))
+		body, complete, err := captureRequestBody(r)
+		if err != nil || !complete {
 			next.ServeHTTP(w, r)
 			return
 		}
-		r.Body = io.NopCloser(bytes.NewReader(body))
 
 		req := &optimizer.Request{
 			PromptHash:   obs.PromptHash,

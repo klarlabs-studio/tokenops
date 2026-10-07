@@ -514,29 +514,33 @@ func extractResponseModel(resp *http.Response) string {
 	return ""
 }
 
-// captureRequestBody reads (up to maxRequestBodyCapture bytes from) r.Body,
-// re-attaches a fresh reader so downstream handlers see the same bytes,
-// and returns the captured slice. ContentLength is fixed up so the
-// upstream sees an accurate length when we did not truncate.
-func captureRequestBody(r *http.Request) ([]byte, error) {
+// captureRequestBody reads up to maxRequestBodyCapture bytes from r.Body
+// and re-attaches a reader that replays them, so downstream handlers and
+// the upstream see the same bytes. complete reports whether the capture
+// holds the whole body; when it does not, the unread remainder stays
+// attached behind the captured prefix and is forwarded untouched, so a
+// body over the limit degrades observation, never the request.
+func captureRequestBody(r *http.Request) (body []byte, complete bool, err error) {
 	if r.Body == nil {
-		return nil, nil
+		return nil, true, nil
 	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBodyCapture+1))
-	_ = r.Body.Close()
+	body, err = io.ReadAll(io.LimitReader(r.Body, maxRequestBodyCapture+1))
 	if err != nil {
-		return nil, err
+		_ = r.Body.Close()
+		return nil, false, err
 	}
-	truncated := len(body) > maxRequestBodyCapture
-	if truncated {
-		body = body[:maxRequestBodyCapture]
+	if len(body) > maxRequestBodyCapture {
+		r.Body = struct {
+			io.Reader
+			io.Closer
+		}{io.MultiReader(bytes.NewReader(body), r.Body), r.Body}
+		return body[:maxRequestBodyCapture], false, nil
 	}
+	_ = r.Body.Close()
 	r.Body = io.NopCloser(bytes.NewReader(body))
-	if !truncated {
-		r.ContentLength = int64(len(body))
-		r.Header.Set("Content-Length", strconv.Itoa(len(body)))
-	}
-	return body, nil
+	r.ContentLength = int64(len(body))
+	r.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	return body, true, nil
 }
 
 // observerMiddleware is the http.Handler wrapper installed in front of
@@ -545,11 +549,16 @@ func captureRequestBody(r *http.Request) ([]byte, error) {
 // and stashes it in the request context for ModifyResponse + the meter.
 func (s *Server) observerMiddleware(provider providers.Provider, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, err := captureRequestBody(r)
+		body, complete, err := captureRequestBody(r)
 		if err != nil {
 			s.logger.Warn("capture request body", "err", err, "provider", provider.ID)
 			next.ServeHTTP(w, r)
 			return
+		}
+		if !complete {
+			// A prefix is not the prompt: hashing or counting it would
+			// record a wrong identity and size. Observe the response only.
+			body = nil
 		}
 
 		executionID := strings.TrimSpace(r.Header.Get(headerExecutionID))
