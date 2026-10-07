@@ -15,7 +15,7 @@
   },
   "overrides": {
     "esbuild": "^0.25.0",
-    "vite": "^6.4.2"
+    "vite": "^6.4.4"
   },
   "dependencies": {
     "nanoid": "^3.3.18",

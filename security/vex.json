@@ -5,7 +5,7 @@
   "timestamp": "2026-09-14T00:00:00Z",
   "version": 1,
   "_note": [
-    "Fingerprints are taken from CI's scan (nox 1.30.1, pinned in",
+    "Fingerprints are taken from CI's scan (nox 1.48.1, pinned in",
     ".github/workflows/security.yml), not from a local scan. A local nox",
     "is a different scanner: 1.35.0 does not report the release.yml:95",
     "statement below at all, and a fingerprint minted by the wrong",
@@ -135,15 +135,15 @@
       }
     },
     {
-      "vulnerability": "IAC-314",
+      "vulnerability": "TAINT-002",
       "status": "not_affected",
-      "justification": "vulnerable_code_not_present",
-      "impact_statement": "There is no permission declaration at release.yml:95. The line sits inside a comment explaining that the Homebrew tap secret carries contents:write on klarlabs-studio/homebrew-tap, and the detector matched that prose. nox 1.35.0 no longer reports it; CI is pinned at 1.30.1, which does. This statement is therefore version-bound and should be deleted — not re-dated — in the same commit that bumps NOX_VERSION past 1.30.1.",
+      "justification": "inline_mitigations_already_exist",
+      "impact_statement": "scripts/config-matrix.py is the release's pre-publish harness. It starts the just-built tokenops with subprocess.Popen and an argument LIST ([ARGS.bin, \"start\", \"-c\", cfgp]), never shell=True, so no shell parses anything and the environment cannot inject a command. The \"tainted\" env is the harness's own environment with every TOKENOPS_ variable removed and HOME and XDG pointed at a throwaway directory: the isolation the harness exists to provide. ARGS.bin is the binary the operator running the harness names on its command line.",
       "products": ["github.com/klarlabs-studio/tokenops"],
-      "_nox_fingerprint": "c774586bc756115f6487fe6f9731d24543f5a0ec0304b33442e0b89dcd7f43cf",
+      "_nox_fingerprint": "f61c861ce383116dc8f1f41e2d6a3296a993d2dc11fc51c47bda228aa538ecca",
       "_governance": {
         "classification": "False Positive",
-        "last_reviewed": "2026-09-14",
+        "last_reviewed": "2026-10-07",
         "reviewed_by": "tokenops-maintainers"
       }
     }
