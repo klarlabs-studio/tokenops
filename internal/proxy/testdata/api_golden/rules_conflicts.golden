@@ -1,0 +1,5 @@
+200 OK
+Content-Type: application/json
+Cache-Control: no-store
+
+{"findings":[{"Kind":"anti_pattern","Members":["repo:CLAUDE.md#Testing/Style","repo:CLAUDE.md#Testing/Other"],"Anchor":"","Detail":"sections trip opposite sides of concise_vs_verbose","Triggers":["concise_vs_verbose"]},{"Kind":"redundant","Members":["repo:AGENTS.md#Testing","repo:CLAUDE.md#Testing"],"Anchor":"","Detail":"identical body across 2 sections (sha256:cfd1db96abb1369cfa37de75ce53c8a41b9aad1281e0d04c0cd4dfa9470d147f)","Triggers":null}]}

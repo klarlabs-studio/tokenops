@@ -1,0 +1,5 @@
+200 OK
+Content-Type: application/json
+Cache-Control: no-store
+
+{"sources":[{"name":"Cursor","tag":"cursor-web","state":"failing","severity":"degraded","last_event_at":"2026-01-05T11:00:00Z","silent_for":10800000000000,"events_in_window":0,"last_poll_at":"2026-01-05T14:00:00Z","last_successful_poll_at":"2026-01-05T11:00:00Z","last_error":"401 unauthorized","window":0},{"name":"Claude Code","tag":"claude-code","state":"healthy","severity":"","last_event_at":"2026-01-05T11:00:00Z","events_in_window":0,"window":0}],"unhealthy":1}

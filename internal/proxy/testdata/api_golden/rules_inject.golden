@@ -1,0 +1,5 @@
+200 OK
+Content-Type: application/json
+Cache-Control: no-store
+
+{"Selections":[{"SourceID":"repo:AGENTS.md","SectionID":"repo:AGENTS.md#Testing","Anchor":"Testing","TokenCount":2,"Score":1.5,"Reasons":["repo_match","kw:testing"]},{"SourceID":"repo:CLAUDE.md","SectionID":"repo:CLAUDE.md#Testing","Anchor":"Testing","TokenCount":2,"Score":1.5,"Reasons":["repo_match","kw:testing"]},{"SourceID":"repo:CLAUDE.md","SectionID":"repo:CLAUDE.md#Testing/Other","Anchor":"Testing/Other","TokenCount":10,"Score":1.5,"Reasons":["repo_match","kw:testing"]},{"SourceID":"repo:CLAUDE.md","SectionID":"repo:CLAUDE.md#Testing/Style","Anchor":"Testing/Style","TokenCount":2,"Score":1.5,"Reasons":["repo_match","kw:testing"]}],"SkippedCount":4,"TotalTokens":16,"Truncated":false,"BudgetHit":false,"ElapsedNS":0,"Considered":8}

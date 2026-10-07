@@ -1,0 +1,5 @@
+200 OK
+Content-Type: application/json
+Cache-Control: no-store
+
+{"currency":"USD","optimizations":[{"timestamp":"2026-01-05T10:03:00Z","kind":"unknown","mode":"passive","decision":"applied","estimated_savings_tokens":120,"estimated_savings_usd":0.05,"quality_score":0.9,"reason":"trimmed context","workflow_id":"wf-a","agent_id":"agent-1"}]}
