@@ -19,7 +19,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	"go.klarlabs.de/tokenops/internal/capability/experiments"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/session"
 	"go.klarlabs.de/tokenops/internal/daemon"
 	"go.klarlabs.de/tokenops/internal/events"
@@ -172,17 +171,8 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 		return fmt.Errorf("register rules tools: %w", err)
 	}
 	if err := mcp.RegisterParityTools(srv, mcp.ParityDeps{
-		Store:    components.Store,
-		Spend:    components.Spend,
-		Pipeline: buildReplayPipeline(cfg, components.Spend),
-		PipelineFor: func() *optimizer.Pipeline {
-			if currentConfig != nil {
-				if c := currentConfig(); c != nil {
-					return buildReplayPipeline(*c, components.Spend)
-				}
-			}
-			return buildReplayPipeline(cfg, components.Spend)
-		},
+		Store: components.Store,
+		Spend: components.Spend,
 	}); err != nil {
 		return fmt.Errorf("register parity tools: %w", err)
 	}
