@@ -8,6 +8,8 @@
 - **scorecard, coach:** transcripts last written before the window are no longer read; a seven-day scorecard over 2.1 GB of history went from 14.5s to 7.2s
 - **coach:** `coach prompts`' average turn counts only the turns inside the window; it counted every turn in each file written during the window, and none from a session still running after it
 - **coach, eval:** `coach replies` and `tokenops eval` print their rows in one order; tied sessions and the per-optimizer and drift rows came out in a different order each run
+- **routing:** the route guard tiers models by the card the cost engine prices with, the negotiated rates in `pricing.path` included; it read the latest pricing snapshot alone, so a model the operator pays little for still tiered as a flagship
+- **pricing:** `pricing show/diff/lint --snapshot/--from/--to` accept the timestamp `pricing show` prints (`2026-09-15T00:00:00Z`); only a bare date matched before. `pricing refresh --source` names every known source in its error
 
 ## 0.101.1 - 2026-10-06
 

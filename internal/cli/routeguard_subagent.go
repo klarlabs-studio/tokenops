@@ -53,7 +53,7 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 	}
 	report := coachcap.Build(cfg)
 	requested, _ := in.ToolInput["model"].(string)
-	catalog := routeCatalog()
+	catalog := routeCatalog(cfg)
 	// The model policy is the operator's rule, not the coach's advice, so
 	// it holds whatever the coach's dials say.
 	if pol := routeguard.EnforcePolicy(routeguard.PolicyInput{

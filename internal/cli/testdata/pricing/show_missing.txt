@@ -1,0 +1,3 @@
+--- stderr ---
+--- error ---
+pricing: snapshot not found: "2020-01-01T00:00:00Z"

@@ -1,0 +1,8 @@
+2026-09-01T00:00:00Z (litellm)  →  2026-09-15T00:00:00Z (litellm)
+  ~ anthropic/claude-opus-4-7 cache_read 0.5 → 1.5 (+200%)
+  - mistral/mistral-large (removed)  [pinned: runtime keeps baseline]
+  ~ openai/gpt-4o cache_read 1.25 → 3 (+140%)
+  + openai/gpt-4o-mini (added)
+
+[pinned] = verified catalog row; the cost engine ignores the source here and prices at the baseline. Do not "correct" the baseline toward this drift without re-checking the vendor.
+--- stderr ---

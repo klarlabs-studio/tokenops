@@ -14,8 +14,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/planswitch"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -223,7 +223,7 @@ func newPlanListCmd(rf *rootFlags) *cobra.Command {
 				}
 				bound := make([]boundPlan, 0, len(cfg.Plans))
 				for _, provider := range sortedPlanProviders(cfg.Plans) {
-					p, ok := plans.Lookup(cfg.Plans[provider])
+					p, ok := planswitch.Lookup(cfg.Plans[provider])
 					bound = append(bound, boundPlan{Provider: provider, Plan: cfg.Plans[provider], Display: p.Display, Known: ok})
 				}
 				return writeControlJSON(cmd, bound)
@@ -236,7 +236,7 @@ func newPlanListCmd(rf *rootFlags) *cobra.Command {
 			// reshuffle between runs is one an operator cannot diff.
 			for _, provider := range sortedPlanProviders(cfg.Plans) {
 				planName := cfg.Plans[provider]
-				p, ok := plans.Lookup(planName)
+				p, ok := planswitch.Lookup(planName)
 				if !ok {
 					fmt.Fprintf(cmd.OutOrStdout(), "%-12s %s (unknown plan!)\n", provider, planName)
 					continue
@@ -378,15 +378,9 @@ func newPlanCatalogCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if jsonOut {
-				catalog := make([]plans.Plan, 0, len(plans.Names()))
-				for _, name := range plans.Names() {
-					p, _ := plans.Lookup(name)
-					catalog = append(catalog, p)
-				}
-				return writeControlJSON(cmd, catalog)
+				return writeControlJSON(cmd, planswitch.Catalog())
 			}
-			for _, name := range plans.Names() {
-				p, _ := plans.Lookup(name)
+			for _, p := range planswitch.Catalog() {
 				price := "no flat price"
 				if p.MonthlyUSD > 0 {
 					price = fmt.Sprintf("$%g/month", p.MonthlyUSD)
@@ -394,7 +388,7 @@ func newPlanCatalogCmd() *cobra.Command {
 						price += " per seat"
 					}
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "%-22s %-40s %s\n", name, p.Display+" ("+p.Provider+")", price)
+				fmt.Fprintf(cmd.OutOrStdout(), "%-22s %-40s %s\n", p.Name, p.Display+" ("+p.Provider+")", price)
 			}
 			return nil
 		},

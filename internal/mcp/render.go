@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
+	"go.klarlabs.de/tokenops/internal/capability/headroom"
 )
 
 // markdownPayload wraps a human-friendly markdown summary and a
@@ -161,9 +161,8 @@ func renderBurnSummary(b burnTotals) string {
 }
 
 // budgetSummaryRow is the minimal flat view the renderer needs. The
-// caller flattens plans.SessionBudget into this so the renderer
-// doesn't depend on the plans package (keeps the mcp package's
-// rendering helpers reusable).
+// caller flattens a session budget into this so the renderer stays
+// independent of the budget's full shape.
 type budgetSummaryRow struct {
 	Display           string
 	WindowConsumed    int64
@@ -171,7 +170,7 @@ type budgetSummaryRow struct {
 	WindowUnit        string
 	WindowPct         float64
 	WindowResetsIn    string
-	Windows           []plans.VendorWindow
+	Windows           []headroom.VendorWindow
 	WillHitCapWithin  string
 	RecentRatePerHour float64
 	Confidence        string
