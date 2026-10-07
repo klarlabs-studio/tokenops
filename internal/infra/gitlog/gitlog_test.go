@@ -250,6 +250,39 @@ func TestCommitsMatchesTheAuthorAddressExactly(t *testing.T) {
 	}
 }
 
+// The branch a commit names is the local branch at its tip — including
+// the slash-named feat/… and fix/… branches most repositories use — and
+// never a remote copy of it or a tag.
+func TestCommitsNamesTheLocalBranchAtTheTip(t *testing.T) {
+	isolateGit(t)
+	const me = "me@example.com"
+	since := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	repo := newRepo(t, me)
+	commit(t, repo, me, "base", since.Add(time.Hour))
+	run(t, repo, nil, "tag", "v1")
+	run(t, repo, nil, "update-ref", "refs/remotes/origin/main", "HEAD")
+	run(t, repo, nil, "checkout", "-q", "-b", "feat/attribution")
+	commit(t, repo, me, "feature tip", since.Add(2*time.Hour))
+	run(t, repo, nil, "update-ref", "refs/remotes/origin/feat/attribution", "HEAD")
+	commit(t, repo, me, "pushed copy is behind", since.Add(3*time.Hour))
+	run(t, repo, nil, "checkout", "-q", "main")
+
+	got, err := NewRepos().Commits(context.Background(), repo, since)
+	if err != nil {
+		t.Fatal(err)
+	}
+	branches := map[string]string{}
+	for _, c := range got {
+		branches[c.Subject] = c.Branch
+	}
+	want := map[string]string{"base": "main", "feature tip": "", "pushed copy is behind": "feat/attribution"}
+	for subject, branch := range want {
+		if b, ok := branches[subject]; !ok || b != branch {
+			t.Errorf("%q branch = %q, want %q (all: %v)", subject, b, branch, branches)
+		}
+	}
+}
+
 func TestBranchOf(t *testing.T) {
 	tests := []struct {
 		decoration, want string
@@ -259,6 +292,9 @@ func TestBranchOf(t *testing.T) {
 		{"HEAD -> main, origin/main, origin/HEAD", "main"},
 		{"tag: v1.2.0, main", "main"},
 		{"tag: v1.2.0", ""},
+		{"HEAD", ""},
+		{"HEAD -> feat/x", "feat/x"},
+		{"feat/x, fix/y", "feat/x"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.decoration, func(t *testing.T) {

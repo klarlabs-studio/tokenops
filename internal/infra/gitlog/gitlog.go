@@ -79,6 +79,10 @@ func (r *Repos) Commits(ctx context.Context, root string, since time.Time) ([]Co
 	out, err := git(ctx, root, "log", "--branches", "--no-merges", "--reverse",
 		"--fixed-strings", "--author=<"+email+">",
 		"--since=@"+strconv.FormatInt(since.Unix(), 10),
+		// Decorate with local branches only, so a slash-named branch
+		// (feat/x) is told from a remote copy (origin/feat/x) by where it
+		// lives rather than by the shape of its name.
+		"--decorate-refs=refs/heads/",
 		"--format=%H%x1f%at%x1f%s%x1f%D")
 	if err != nil {
 		return nil, err
@@ -102,11 +106,12 @@ func (r *Repos) Commits(ctx context.Context, root string, since time.Time) ([]Co
 	return commits, nil
 }
 
-// branchOf is the first local branch in a %D decoration.
+// branchOf is the first branch in a %D decoration already limited to
+// local branches. A detached HEAD or a tag names no branch.
 func branchOf(decoration string) string {
 	for _, ref := range strings.Split(decoration, ", ") {
 		ref = strings.TrimPrefix(ref, "HEAD -> ")
-		if ref != "" && !strings.HasPrefix(ref, "tag: ") && !strings.Contains(ref, "/") {
+		if ref != "" && ref != "HEAD" && !strings.HasPrefix(ref, "tag: ") {
 			return ref
 		}
 	}
