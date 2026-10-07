@@ -3,9 +3,8 @@ package pricing
 import (
 	"context"
 	"errors"
-	"net/http"
-	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 const modelsDevSample = `{
@@ -20,12 +19,8 @@ const modelsDevSample = `{
   "moonshotai": {"models": {"kimi-k3": {"cost": {"input": 3, "output": 15, "cache_read": 0.3}}}}
 }`
 
-func TestModelsDevSourcePricesGatewaysOnly(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(modelsDevSample))
-	}))
-	defer srv.Close()
-	snap, err := (&ModelsDevSource{URL: srv.URL}).Fetch(context.Background())
+func TestParseModelsDevPricesGatewaysOnly(t *testing.T) {
+	snap, err := ParseModelsDev([]byte(modelsDevSample), "https://fixture.invalid/api.json", time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,6 +42,13 @@ func TestModelsDevSourcePricesGatewaysOnly(t *testing.T) {
 	}
 }
 
+type okSource struct{}
+
+func (okSource) Name() string { return "up" }
+func (okSource) Fetch(context.Context) (Snapshot, error) {
+	return ParseModelsDev([]byte(modelsDevSample), "https://fixture.invalid/api.json", time.Now())
+}
+
 type failSource struct{}
 
 func (failSource) Name() string { return "down" }
@@ -55,12 +57,43 @@ func (failSource) Fetch(context.Context) (Snapshot, error) {
 }
 
 func TestCombinedFailsWholeWhenOneSourceFails(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(modelsDevSample))
-	}))
-	defer srv.Close()
-	_, err := Combined{&ModelsDevSource{URL: srv.URL}, failSource{}}.Fetch(context.Background())
+	_, err := Combined{okSource{}, failSource{}}.Fetch(context.Background())
 	if !errors.Is(err, ErrFetch) {
 		t.Errorf("err = %v; a snapshot missing one source's rows must not be written", err)
 	}
 }
+
+func TestParseModelsDevErrorsWrapped(t *testing.T) {
+	for name, body := range map[string]string{
+		"bad JSON":        "not json",
+		"no gateway rate": `{"anthropic": {"models": {"claude-sonnet-5": {"cost": {"input": 3, "output": 15}}}}}`,
+	} {
+		if _, err := ParseModelsDev([]byte(body), "https://fixture.invalid/api.json", time.Now()); !errors.Is(err, ErrFetch) {
+			t.Errorf("%s: err = %v, want ErrFetch", name, err)
+		}
+	}
+}
+
+func TestCombinedMergesSources(t *testing.T) {
+	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	a := fixedSource{name: "a", snap: Snapshot{FetchedAt: at, Rates: map[string]Rate{"x/m": {InputPerMillion: 1}}}}
+	b := fixedSource{name: "b", snap: Snapshot{FetchedAt: at.Add(time.Hour), Rates: map[string]Rate{"x/m": {InputPerMillion: 9}, "y/n": {InputPerMillion: 2}}}}
+	snap, err := Combined{a, b}.Fetch(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.Source != "a+b" || !snap.FetchedAt.Equal(at.Add(time.Hour)) {
+		t.Errorf("provenance = %q @ %v", snap.Source, snap.FetchedAt)
+	}
+	if snap.Rates["x/m"].InputPerMillion != 1 || snap.Rates["y/n"].InputPerMillion != 2 {
+		t.Errorf("rates = %v; the first source keeps a shared key", snap.Rates)
+	}
+}
+
+type fixedSource struct {
+	name string
+	snap Snapshot
+}
+
+func (f fixedSource) Name() string                            { return f.name }
+func (f fixedSource) Fetch(context.Context) (Snapshot, error) { return f.snap, nil }

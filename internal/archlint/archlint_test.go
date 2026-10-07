@@ -117,8 +117,6 @@ var ioImportExempt = map[string][]string{
 	"go.klarlabs.de/tokenops/internal/contexts/security/audit": {"database/sql"},
 	// HTTPMiddleware is an http.Handler around the permission check.
 	"go.klarlabs.de/tokenops/internal/contexts/security/rbac": {"net/http"},
-	// Fetches the LiteLLM and models.dev price catalogs over HTTP.
-	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing": {"net/http"},
 	// Reads opencode's SQLite store. Four domains call it directly
 	// (coaching/prompts, coaching/replies, governance/agentdx,
 	// spend/vendorusage/opencode), so moving it needs a reader port in each.
