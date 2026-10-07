@@ -81,7 +81,6 @@ var directDomainImports = map[string][]string{
 		"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts",
 		"go.klarlabs.de/tokenops/internal/contexts/coaching/replies",
 		"go.klarlabs.de/tokenops/internal/contexts/coaching/tools",
-		"go.klarlabs.de/tokenops/internal/contexts/coaching/waste",
 		"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx",
 		"go.klarlabs.de/tokenops/internal/contexts/governance/coverdebt",
 		"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard",
@@ -105,7 +104,6 @@ var directDomainImports = map[string][]string{
 		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode",
 		"go.klarlabs.de/tokenops/internal/contexts/tasks",
-		"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow",
 	},
 	"go.klarlabs.de/tokenops/internal/daemon": {
 		"go.klarlabs.de/tokenops/internal/contexts/governance/budget",
@@ -130,7 +128,6 @@ var directDomainImports = map[string][]string{
 	},
 	"go.klarlabs.de/tokenops/internal/mcp": {
 		"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts",
-		"go.klarlabs.de/tokenops/internal/contexts/coaching/waste",
 		"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx",
 		"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard",
 		"go.klarlabs.de/tokenops/internal/contexts/observability/freshness",
@@ -144,7 +141,6 @@ var directDomainImports = map[string][]string{
 		"go.klarlabs.de/tokenops/internal/contexts/spend/session",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/spend",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter",
-		"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow",
 	},
 	// The proxy is two things in one package: the /api/* read model,
 	// which is an adapter like the CLI and now answers entirely from

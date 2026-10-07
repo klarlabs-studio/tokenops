@@ -11,6 +11,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/money"
 	"go.klarlabs.de/tokenops/internal/capability/state"
+	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
 	"go.klarlabs.de/tokenops/internal/infra/fxrate"
 
 	"github.com/spf13/cobra"
@@ -18,7 +19,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	"go.klarlabs.de/tokenops/internal/capability/experiments"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/session"
 	"go.klarlabs.de/tokenops/internal/daemon"
@@ -146,7 +146,7 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 		Aggregator: components.Aggregator,
 		Spend:      components.Spend,
 		Waste:      cfg.Coaching.WasteConfig(),
-		WasteConfig: func() waste.Config {
+		WasteConfig: func() workflowtrace.WasteConfig {
 			if currentConfig != nil {
 				if c := currentConfig(); c != nil {
 					return c.Coaching.WasteConfig()
