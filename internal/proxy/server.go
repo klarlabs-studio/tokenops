@@ -66,6 +66,9 @@ type Server struct {
 	actions    func() ActionDeps
 	resilience *ResilienceConfig
 	dashAuth   DashAuth
+	// allowedHosts are the Host names admitted beyond loopback and the
+	// listen address (see hostGuard).
+	allowedHosts []string
 	// router applies live model routing when active mode is enabled
 	// (WithActiveRouting). nil = observe-only.
 	router *router.Router
@@ -102,6 +105,14 @@ type DashAuth interface {
 // daemon binds anything beyond loopback.
 func WithDashAuth(a DashAuth) Option {
 	return func(s *Server) { s.dashAuth = a }
+}
+
+// WithAllowedHosts admits requests addressed to hosts beyond loopback and
+// the listen address: TLS certificate names, the mDNS name, or a name a
+// reverse proxy forwards. Every other Host is refused with 403, which is
+// what stops a DNS-rebinding page from reaching the provider routes.
+func WithAllowedHosts(hosts ...string) Option {
+	return func(s *Server) { s.allowedHosts = append(s.allowedHosts, hosts...) }
 }
 
 // WithPlanCoverage declares which providers are billed against a
@@ -283,7 +294,7 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 
 	s.httpSrv = &http.Server{
-		Handler:           mux,
+		Handler:           newHostGuard(s.addr, s.allowedHosts).middleware(s.logger, mux),
 		ReadHeaderTimeout: 10 * time.Second,
 		TLSConfig:         s.tlsConfig,
 	}
