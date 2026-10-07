@@ -22,6 +22,15 @@ curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7878/api/glance
 `/healthz`, `/readyz` and `/version` need no token, so a supervisor can
 probe them.
 
+The daemon answers only requests addressed to this machine: a loopback
+`Host` (`127.0.0.0/8`, `::1`, `localhost`), the listen address, or a name
+it was told about (`tls.hostnames`, the advertised `tokenops.local`,
+[`allowed_hosts`](./configuration.md#network-exposure)). Browser requests
+from another site — an `Origin` that is not local, or
+`Sec-Fetch-Site: cross-site` — are refused with `403`. CLI tools and SDKs
+send neither header and are unaffected; the probes answer whatever the
+`Host`.
+
 ## What it never serves
 
 Derived figures only: windows, spend, grades, counts, tips. Never

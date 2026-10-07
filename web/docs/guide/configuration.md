@@ -260,6 +260,7 @@ restart it so it picks up the new mode.
 mode: passive                 # passive | active (see Operating modes)
 
 listen: 127.0.0.1:7878        # bind address
+allowed_hosts: []             # extra Host names to answer (see Network exposure)
 log:
   level: info                 # debug | info | warn | error
   format: text                # text | json
@@ -694,6 +695,36 @@ rates:
       output_per_million: 50.00
       cached_input_per_million: 1.00
 ```
+
+## Network exposure
+
+The provider routes (`/anthropic/...`, `/openai/...`) carry no TokenOps
+credential — your client sends its own vendor key — so the daemon decides
+who may use them by where a request comes from:
+
+- **Host.** A request must be addressed to a loopback name (`127.0.0.0/8`,
+  `::1`, `localhost`), the `listen` host, a `tls.hostnames` entry, the
+  advertised `tokenops.local`, or an `allowed_hosts` entry. When `listen`
+  binds a wildcard (`0.0.0.0`, `::`, `:7878`) any IP address and the
+  machine's own name (`laptop`, `laptop.local`) are accepted too. Anything
+  else gets `403`, which is what stops a DNS-rebinding web page.
+- **Browser origin.** A request carrying an `Origin` that is not one of the
+  names above, or `Sec-Fetch-Site: cross-site` without one, gets `403`. A
+  page on `http://localhost:3000` may still call the daemon.
+
+CLI tools, SDKs and `tokenops anthropic-bridge` send no `Origin` and are
+unaffected. `/healthz`, `/readyz` and `/version` answer whatever the `Host`.
+
+```yaml
+allowed_hosts:
+  - tokenops.internal        # a name a reverse proxy forwards
+  - gateway.lan:7878         # a port is accepted and ignored
+```
+
+Binding beyond loopback is allowed — LAN access, a container port mapping —
+but on plain HTTP the daemon logs a warning at startup: any peer that can
+reach the port can relay requests through it, and vendor keys cross the
+network in clear text. Prefer `127.0.0.1`, or set `tls.enabled: true`.
 
 ## mDNS (`mdns`)
 
