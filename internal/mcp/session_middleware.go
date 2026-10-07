@@ -7,7 +7,7 @@ import (
 	mcpgo "go.klarlabs.de/mcp"
 	"go.klarlabs.de/mcp/protocol"
 
-	"go.klarlabs.de/tokenops/internal/contexts/spend/session"
+	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -24,7 +24,7 @@ import (
 //
 // Empty tracker (or a tools/call against an unrelated tool name)
 // degrades to a pass-through.
-func SessionMiddleware(t *session.Tracker, provider func() eventschema.Provider) mcpgo.Middleware {
+func SessionMiddleware(t *headroom.SessionTracker, provider func() eventschema.Provider) mcpgo.Middleware {
 	return func(next mcpgo.MiddlewareHandlerFunc) mcpgo.MiddlewareHandlerFunc {
 		return func(ctx context.Context, req *protocol.Request) (*protocol.Response, error) {
 			if t != nil && req != nil && req.Method == "tools/call" {
@@ -33,7 +33,7 @@ func SessionMiddleware(t *session.Tracker, provider func() eventschema.Provider)
 					if provider != nil {
 						p = provider()
 					}
-					t.Record(ctx, session.Options{
+					t.Record(ctx, headroom.SessionPing{
 						Provider:    p,
 						SourceLabel: "mcp-session",
 					}, name)

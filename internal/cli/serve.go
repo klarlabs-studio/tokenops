@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/money"
 	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/capability/usagemeter"
@@ -20,7 +21,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	"go.klarlabs.de/tokenops/internal/capability/experiments"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/session"
 	"go.klarlabs.de/tokenops/internal/daemon"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/mcp"
@@ -203,7 +203,7 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 		defer func() { _ = ab.Close(0) }()
 	}
 	sessionProvider := inferSessionProvider(cfg.Plans)
-	tracker := session.New(sessionBus, session.Options{Provider: sessionProvider})
+	tracker := headroom.NewSessionTracker(sessionBus, sessionProvider)
 
 	planDeps := mcp.PlanDeps{Store: components.Store, Tracker: tracker, Provider: sessionProvider, Spend: components.Spend}
 	if cfgErr == nil {

@@ -4,14 +4,14 @@ import (
 	"context"
 	"log/slog"
 
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 )
 
 // startPricingRefreshRuntime owns registration and operator-facing status for
 // the recurring pricing refresh loop.
-func startPricingRefreshRuntime(cfg config.Config, engine *spend.Engine, sup *lifecycle.Supervisor, logger *slog.Logger) {
+func startPricingRefreshRuntime(cfg config.Config, engine *spending.Engine, sup *lifecycle.Supervisor, logger *slog.Logger) {
 	if !cfg.Pricing.Refresh.Enabled() || engine == nil {
 		return
 	}

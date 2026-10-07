@@ -19,8 +19,6 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/fmtinsight"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter"
-	"go.klarlabs.de/tokenops/internal/contexts/security/redaction"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -81,7 +79,7 @@ Examples:
 					fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", w)
 				}
 			}
-			reg := formatter.NewRegistry(policy, formatters...)
+			reg := fmtinsight.NewRegistry(policy, formatters...)
 
 			res, err := runFmt(cmd.Context(), reg, args, fmtOptions{
 				RecoverDir: recoverDir,
@@ -138,7 +136,7 @@ Examples:
 
 // registryFormatters resolves the built-in + config formatter set for the
 // given root flags, ignoring config-load errors (defaults still apply).
-func registryFormatters(rf *rootFlags) []formatter.Formatter {
+func registryFormatters(rf *rootFlags) []fmtinsight.Formatter {
 	formatters, _ := fmtinsight.Formatters(commandFmtConfig(rf))
 	return formatters
 }
@@ -223,35 +221,10 @@ func firstArgvToken(argv []string) string {
 	return t
 }
 
-// buildLossPolicy maps the config strings into the domain LossPolicy and
-// applies an optional single-run level override. It returns a human-
-// readable warning when a configured token is invalid (the offending entry
-// falls back to conservative).
-func buildLossPolicy(cfg config.CommandFmtConfig, override string) (formatter.LossPolicy, string) {
-	var warns []string
-	def, ok := formatter.ParseLossLevel(cfg.Default)
-	if !ok && cfg.Default != "" {
-		warns = append(warns, fmt.Sprintf("invalid command_fmt.default %q, using conservative", cfg.Default))
-	}
-	overrides := make(map[string]formatter.LossLevel, len(cfg.Overrides))
-	for cmdTok, lvl := range cfg.Overrides {
-		parsed, ok := formatter.ParseLossLevel(lvl)
-		if !ok {
-			warns = append(warns, fmt.Sprintf("invalid command_fmt.overrides[%s]=%q, using conservative", cmdTok, lvl))
-		}
-		overrides[strings.ToLower(cmdTok)] = parsed
-	}
-	if override != "" {
-		lvl, ok := formatter.ParseLossLevel(override)
-		if !ok {
-			warns = append(warns, fmt.Sprintf("invalid --level %q, using conservative", override))
-		}
-		// A run-level override replaces the default AND clears per-command
-		// overrides for the run — the operator asked for this level.
-		def = lvl
-		overrides = nil
-	}
-	return formatter.LossPolicy{Default: def, Overrides: overrides}, strings.Join(warns, "; ")
+// buildLossPolicy maps the config strings into a LossPolicy and applies an
+// optional single-run level override; see fmtinsight.Policy.
+func buildLossPolicy(cfg config.CommandFmtConfig, override string) (fmtinsight.LossPolicy, string) {
+	return fmtinsight.Policy(cfg, override)
 }
 
 // fmtOptions carries the recovery/behaviour switches into runFmt.
@@ -281,7 +254,7 @@ type fmtResult struct {
 // and (unless disabled) writes the full raw output to the recovery store.
 // It never returns an error for a non-zero child exit — that is reported in
 // fmtResult.ExitCode — only for failures to launch the process.
-func runFmt(ctx context.Context, reg *formatter.Registry, argv []string, opt fmtOptions) (*fmtResult, error) {
+func runFmt(ctx context.Context, reg *fmtinsight.Registry, argv []string, opt fmtOptions) (*fmtResult, error) {
 	if len(argv) == 0 {
 		return nil, fmt.Errorf("fmt: no command given")
 	}
@@ -362,33 +335,6 @@ const (
 	recoveryDirPerm  os.FileMode = 0o700
 )
 
-// recoveryRedactor strips credentials from captured output.
-//
-// It runs the pattern rules only — no entropy fallback, no email rule.
-// Recovery exists so an operator can read back exactly what a command
-// said, and the entropy detector flags any random-looking 20-character
-// token, which in build and test output is usually a hash or an id. A
-// recovery file full of `<redacted:high_entropy>` would not be worth
-// keeping. Known credential shapes are what must never rest on disk;
-// the 0600 mode and the prune above cover the rest.
-var recoveryRedactor = redaction.New(redaction.Config{
-	Rules: secretRulesOnly(),
-})
-
-// secretRulesOnly is DefaultRules minus the email rule — the operator's
-// own address in their own `git log` is not the exposure this guards.
-func secretRulesOnly() []redaction.Rule {
-	all := redaction.DefaultRules()
-	kept := make([]redaction.Rule, 0, len(all))
-	for _, r := range all {
-		if r.Kind == redaction.KindEmail {
-			continue
-		}
-		kept = append(kept, r)
-	}
-	return kept
-}
-
 // writeRecovery persists the full raw output to a recovery file and returns
 // its path. The file name embeds a short content hash so re-runs of the
 // same command output are idempotent and easy to correlate.
@@ -438,11 +384,10 @@ func writeRecovery(dir string, argv []string, stdout, stderr []byte, exitCode in
 	return path, nil
 }
 
-// redactRecovery replaces credential shapes with typed placeholders.
-func redactRecovery(s string) string {
-	out, _ := recoveryRedactor.Redact(s)
-	return out
-}
+// redactRecovery replaces credential shapes with typed placeholders: the
+// pattern rules only, so hashes and ids in build output survive. The 0600
+// mode and the prune cover the rest.
+func redactRecovery(s string) string { return fmtinsight.RedactForRecovery(s) }
 
 // pruneRecovery deletes recovery files older than recoveryMaxAge and
 // tightens the mode of the ones it keeps.

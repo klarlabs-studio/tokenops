@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.klarlabs.de/tokenops/internal/contexts/governance/coverdebt"
+	"go.klarlabs.de/tokenops/internal/capability/coverage"
 )
 
 func newCoverageDebtCmd() *cobra.Command {
@@ -23,18 +23,17 @@ func newCoverageDebtCmd() *cobra.Command {
 
 Each package's Risk Score is impact × (1 - coverage); impact buckets
 are defined in docs/coverage-debt.md and seeded in
-internal/coverdebt/coverdebt.go. With --enforce, any package missing
+internal/contexts/governance/coverdebt/coverdebt.go. With --enforce, any package missing
 its per-risk goal causes a non-zero exit.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if profile == "" {
 				return fmt.Errorf("--profile is required (run 'go test -coverprofile coverage.out ./...' first)")
 			}
-			cov, err := coverdebt.ReadProfile(profile)
+			report, err := coverage.Debt(profile)
 			if err != nil {
-				return fmt.Errorf("read profile: %w", err)
+				return err
 			}
-			report := coverdebt.Analyze(cov, coverdebt.DefaultPolicies)
 			if jsonOut {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(report)
 			}
@@ -51,7 +50,7 @@ its per-risk goal causes a non-zero exit.`,
 	return cmd
 }
 
-func renderCoverageDebtText(cmd *cobra.Command, r *coverdebt.Report) {
+func renderCoverageDebtText(cmd *cobra.Command, r *coverage.Report) {
 	out := cmd.OutOrStdout()
 	fmt.Fprintf(out, "Overall Score: %.1f  (weighted by risk)\n", r.OverallScore)
 	fmt.Fprintf(out, "Total Risk:    %.0f\n\n", r.TotalRisk)

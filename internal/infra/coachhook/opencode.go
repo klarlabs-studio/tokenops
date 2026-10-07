@@ -28,6 +28,9 @@ import (
 // counterfactual the budget is denominated in, and "unpriced" reported
 // out loud when neither can answer.
 
+// OpencodeDB is where opencode keeps its store on this machine.
+func OpencodeDB() (string, error) { return opencode.DefaultRoot() }
+
 // EvaluateOpencode accounts for one opencode session going idle.
 //
 // The whole session is recomputed rather than accumulated. opencode's

@@ -9,8 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	anthropicusage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic"
-	anthropicapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/anthropic"
+	"go.klarlabs.de/tokenops/internal/capability/backfill"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -355,39 +354,14 @@ flag prints what would be inserted without writing to the store.`,
 				return fmt.Errorf("open store: %w", err)
 			}
 			defer func() { _ = store.Close() }()
-			client := anthropicapi.NewAdminClient(key)
-			now := time.Now().UTC()
-			req := anthropicusage.MessagesUsageRequest{
-				StartingAt:  now.Add(-time.Duration(hours) * time.Hour),
-				EndingAt:    now,
-				BucketWidth: anthropicusage.BucketWidthHour,
-				GroupBy:     []string{"model"},
-			}
-			resp, err := client.MessagesUsage(ctx, req)
+			res, err := backfill.Anthropic(ctx, store, backfill.AnthropicRequest{AdminKey: key, Hours: hours, DryRun: dryRun}, time.Now().UTC())
 			if err != nil {
-				return fmt.Errorf("fetch usage: %w", err)
+				return err
 			}
-			var inserted, skipped int
-			for _, bucket := range resp.Data {
-				for _, r := range bucket.Results {
-					env, ok := anthropicusage.NewEnvelope(bucket.StartingAt, bucket.EndingAt, r)
-					if !ok {
-						skipped++
-						continue
-					}
-					if dryRun {
-						inserted++
-						continue
-					}
-					if err := store.Append(ctx, env); err != nil {
-						return fmt.Errorf("append envelope %s: %w", env.ID, err)
-					}
-					inserted++
-				}
-			}
+			inserted, skipped := res.Inserted, res.Skipped
 			report := map[string]any{
 				"hours":    hours,
-				"buckets":  len(resp.Data),
+				"buckets":  res.Buckets,
 				"inserted": inserted,
 				"skipped":  skipped,
 				"dry_run":  dryRun,

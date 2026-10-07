@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/ratecards"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 )
 
 // The rate card goes stale on its own. A model released after the binary
@@ -43,7 +43,7 @@ const lastCheckedFile = "last-checked"
 func runPricingRefresh(
 	ctx context.Context,
 	cfg config.Config,
-	eng *spend.Engine,
+	eng *spending.Engine,
 	logger *slog.Logger,
 ) {
 	rc := cfg.Pricing.Refresh
@@ -78,7 +78,7 @@ func refreshOnce(
 	ctx context.Context,
 	cfg config.Config,
 	dir string,
-	eng *spend.Engine,
+	eng *spending.Engine,
 	logger *slog.Logger,
 ) {
 	src, err := ratecards.SourceNamed("default", "")

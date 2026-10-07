@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter"
+	"go.klarlabs.de/tokenops/internal/capability/fmtinsight"
 )
 
 // newFmtHookCmd prints a shell snippet that transparently routes the
@@ -54,7 +54,7 @@ Scope to specific commands with --commands, and set a default level with
 
 			levelArg := ""
 			if level != "" {
-				if _, ok := formatter.ParseLossLevel(level); !ok {
+				if _, ok := fmtinsight.ParseLossLevel(level); !ok {
 					return fmt.Errorf("hook: invalid --level %q", level)
 				}
 				levelArg = " --level " + level
@@ -81,7 +81,7 @@ Scope to specific commands with --commands, and set a default level with
 // (built-in + user config), derived from the registered set so the hook
 // stays in sync with the catalog.
 func formatterCommands(rf *rootFlags) []string {
-	reg := formatter.NewRegistry(formatter.LossPolicy{}, registryFormatters(rf)...)
+	reg := fmtinsight.NewRegistry(fmtinsight.LossPolicy{}, registryFormatters(rf)...)
 	cmds := reg.Commands()
 	// Drop the generic sentinel (empty token) if present.
 	out := cmds[:0]

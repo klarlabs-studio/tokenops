@@ -8,14 +8,12 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
+	"go.klarlabs.de/tokenops/internal/capability/auditlog"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
-	"go.klarlabs.de/tokenops/internal/contexts/observability/observ"
-	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/compactlever"
 	"go.klarlabs.de/tokenops/internal/infra/domainmigration"
@@ -35,7 +33,7 @@ import (
 type eventRuntime struct {
 	Store           *sqlite.Store
 	Bus             *events.AsyncBus
-	AuditSubscriber *audit.Subscriber
+	AuditSubscriber *auditlog.Subscriber
 	ProxyOptions    []proxy.Option
 	detach          func()
 }
@@ -46,9 +44,9 @@ func initializeEventRuntime(
 	ctx context.Context,
 	cfg config.Config,
 	components *bootstrap.Components,
-	counter *observ.EventCounter,
+	counter *bootstrap.EventCounter,
 	legacyPath string,
-	sourceHealth *freshness.Registry,
+	sourceHealth *state.SourceRegistry,
 	sup *lifecycle.Supervisor,
 	logger *slog.Logger,
 ) (*eventRuntime, error) {
@@ -108,7 +106,7 @@ func initializeEventRuntime(
 		Contended: sqlite.IsContended,
 	})
 	rt.detach = wireCanonicalObservers(rt.Bus, counter, logger)
-	rt.AuditSubscriber = audit.Subscribe(rt.Bus, audit.NewRecorder(rt.Store), logger, "daemon")
+	rt.AuditSubscriber = auditlog.Follow(rt.Bus, rt.Store, logger, "daemon")
 	logger.Info("event store ready", "path", path)
 	rt.ProxyOptions = append(rt.ProxyOptions,
 		proxy.WithEventBus(rt.Bus),
@@ -151,7 +149,7 @@ func (rt *eventRuntime) Drain(timeout time.Duration) error {
 	return drainErr
 }
 
-func wireCanonicalObservers(bus *events.AsyncBus, counter *observ.EventCounter, logger *slog.Logger) func() {
+func wireCanonicalObservers(bus *events.AsyncBus, counter *bootstrap.EventCounter, logger *slog.Logger) func() {
 	cancelPublishers := wireDomainEventPublishers(bus, logger)
 	cancelCounter := counter.SubscribeCanonical(bus)
 	return func() {
@@ -179,7 +177,7 @@ func wireDomainEventPublishers(bus *events.AsyncBus, logger *slog.Logger) func()
 // plansDeps is what the plan routes need. The daemon reads config once, at
 // boot, and a config write restarts it (RestartForConfig), so the snapshot
 // it was started with is current.
-func plansDeps(cfg config.Config, store *sqlite.Store, engine *spend.Engine) func() headroom.Deps {
+func plansDeps(cfg config.Config, store *sqlite.Store, engine *spending.Engine) func() headroom.Deps {
 	return func() headroom.Deps {
 		deps := headroom.Deps{Config: &cfg, Accounts: signedInAccounts}
 		if store != nil {
@@ -194,7 +192,7 @@ func plansDeps(cfg config.Config, store *sqlite.Store, engine *spend.Engine) fun
 
 // stateDeps is what the state routes need: the daemon's own config,
 // readiness, store, readers' health and lost writes.
-func stateDeps(cfg config.Config, store *sqlite.Store, health func() []freshness.Report, dropped func() int64) func() state.Deps {
+func stateDeps(cfg config.Config, store *sqlite.Store, health func() []state.SourceReport, dropped func() int64) func() state.Deps {
 	return func() state.Deps {
 		d := state.Deps{
 			Config:  &cfg,
@@ -251,9 +249,7 @@ func actionDeps(cfg config.Config, store *sqlite.Store, logger *slog.Logger) fun
 		if store != nil {
 			d.Store = store
 			d.Audit = func(ctx context.Context, target string, details map[string]any) {
-				if _, err := audit.NewRecorder(store).Record(ctx, audit.Entry{
-					Action: audit.ActionConfigChange, Actor: "api", Target: target, Details: details,
-				}); err != nil {
+				if err := auditlog.RecordConfigChange(ctx, store, "api", target, details); err != nil {
 					logger.Warn("audit record for an API change failed", "err", err)
 				}
 			}

@@ -9,7 +9,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/auditlog"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 
-	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -19,7 +18,7 @@ import (
 // beyond argument unmarshalling. Replay and eval left MCP for the CLI.
 type ParityDeps struct {
 	Store *sqlite.Store
-	Spend *spend.Engine
+	Spend *spending.Engine
 }
 
 // --- input structs --------------------------------------------------------

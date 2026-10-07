@@ -141,7 +141,7 @@ func (p *Poller) scan(ctx context.Context) {
 		BucketWidth: p.opts.BucketWidth,
 		GroupBy:     []string{"model"},
 	}
-	resp, err := p.client.MessagesUsage(ctx, req)
+	buckets, err := FetchAll(ctx, p.client, req)
 	if err != nil {
 		p.recordErr(err)
 		// Don't log key-missing case at warn level — that's a
@@ -155,7 +155,7 @@ func (p *Poller) scan(ctx context.Context) {
 	}
 	p.recordSuccess()
 	var newCursor time.Time
-	for _, bucket := range resp.Data {
+	for _, bucket := range buckets {
 		for _, r := range bucket.Results {
 			env, ok := newEnvelope(bucket.StartingAt, bucket.EndingAt, r)
 			if !ok {

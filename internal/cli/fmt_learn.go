@@ -10,18 +10,16 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/capability/fmtinsight"
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/fmtlearn"
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter"
 	"go.klarlabs.de/tokenops/internal/infra/fmtindex"
 )
 
 // appendLearnRecord and readLearnRecords delegate to the shared fmtindex
 // adapter so the CLI and the MCP tool surface read/write one index.
-func appendLearnRecord(recoverDir string, rec fmtlearn.Record) error {
+func appendLearnRecord(recoverDir string, rec fmtinsight.LearnRecord) error {
 	return fmtindex.Append(recoverDir, rec)
 }
 
-func readLearnRecords(recoverDir string) ([]fmtlearn.Record, error) {
+func readLearnRecords(recoverDir string) ([]fmtinsight.LearnRecord, error) {
 	return fmtindex.Read(recoverDir)
 }
 
@@ -32,9 +30,9 @@ func recordCompressRun(recoverDir, command, level string, res *fmtResult, now ti
 	if res.RecoveryID == "" {
 		return nil // recovery disabled -> nothing to correlate against
 	}
-	return appendLearnRecord(recoverDir, fmtlearn.Record{
-		Type:            fmtlearn.RecordCompress,
-		Source:          fmtlearn.SourceWrapped,
+	return appendLearnRecord(recoverDir, fmtinsight.LearnRecord{
+		Type:            fmtinsight.RecordCompress,
+		Source:          fmtinsight.SourceWrapped,
 		ID:              res.RecoveryID,
 		Command:         command,
 		Level:           level,
@@ -79,8 +77,8 @@ whose compression dropped something the agent needed.
 			}
 			command := lookupRecoveryCommand(recoverDir, id)
 			// Record the access before printing so the signal is durable.
-			_ = appendLearnRecord(recoverDir, fmtlearn.Record{
-				Type: fmtlearn.RecordAccess, Source: fmtlearn.SourceWrapped, ID: id, Command: command, TS: time.Now().UTC(),
+			_ = appendLearnRecord(recoverDir, fmtinsight.LearnRecord{
+				Type: fmtinsight.RecordAccess, Source: fmtinsight.SourceWrapped, ID: id, Command: command, TS: time.Now().UTC(),
 			})
 			_, _ = cmd.OutOrStdout().Write(data)
 			return nil
@@ -98,7 +96,7 @@ func lookupRecoveryCommand(recoverDir, id string) string {
 		return ""
 	}
 	for _, r := range recs {
-		if r.Type == fmtlearn.RecordCompress && r.ID == id {
+		if r.Type == fmtinsight.RecordCompress && r.ID == id {
 			return r.Command
 		}
 	}
@@ -191,7 +189,7 @@ func applyLearnHints(cmd *cobra.Command, rep fmtinsight.LearnReport, configPath 
 	for _, h := range rep.LevelHints {
 		cur := policy.LevelFor(h.Command)
 		next := cur
-		if h.Suggestion == "lower" && cur > formatter.LossConservative {
+		if h.Suggestion == "lower" && cur > fmtinsight.LossConservative {
 			next = cur - 1
 		}
 		if next == cur {

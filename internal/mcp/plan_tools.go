@@ -5,11 +5,9 @@ import (
 	"errors"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
-
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/session"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -24,11 +22,11 @@ type PlanDeps struct {
 	Config       *config.Config
 	ConfigGetter func() *config.Config
 	Store        *sqlite.Store
-	Tracker      *session.Tracker
+	Tracker      *headroom.SessionTracker
 	Provider     eventschema.Provider
 	// Spend prices requests for spend-denominated plans; nil counts only
 	// measured cost.
-	Spend *spend.Engine
+	Spend *spending.Engine
 }
 
 // activeConfig returns the live Config snapshot: prefers ConfigGetter

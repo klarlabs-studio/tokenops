@@ -1,4 +1,4 @@
-package daemon
+package routers
 
 import (
 	"log/slog"
@@ -9,10 +9,18 @@ import (
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
-// openRoutingApprovals opens the shared approval log. The daemon writes
-// proposals to it and the MCP server reads them, so it lives on disk
-// rather than in either process.
-func openRoutingApprovals() (*routingapproval.Store, error) {
+// Config is the live router's configuration: its rules, the window
+// reading it gates on, and the approval gate.
+type Config = router.Config
+
+// Approvals is the shared log of routing proposals and the operator's
+// answers.
+type Approvals = routingapproval.Store
+
+// OpenApprovals opens the shared approval log. The daemon writes proposals
+// to it and the MCP server reads them, so it lives on disk rather than in
+// either process.
+func OpenApprovals() (*Approvals, error) {
 	path, err := routingapproval.DefaultPath()
 	if err != nil {
 		return nil, err
@@ -20,19 +28,14 @@ func openRoutingApprovals() (*routingapproval.Store, error) {
 	return routingapproval.Open(path)
 }
 
-// attachApprovalGate wires the preferred-model ceiling into a router
-// config: which model is preferred, what the operator has already
-// decided, and where a fresh proposal goes.
+// AttachApprovalGate wires the preferred-model ceiling into rc: which
+// model is preferred, what the operator has already decided, and where a
+// fresh proposal goes.
 //
 // Decisions are re-read per request rather than cached. The operator
 // answers in a different process, and an answer that only took effect
 // after a daemon restart would be worse than useless.
-func attachApprovalGate(
-	rc *router.Config,
-	cfg config.Config,
-	store *routingapproval.Store,
-	logger *slog.Logger,
-) {
+func AttachApprovalGate(rc *Config, cfg config.Config, store *Approvals, logger *slog.Logger) {
 	rc.PreferredModel = cfg.PreferredModel
 
 	rc.UpgradeDecision = func(provider eventschema.Provider, from, to string) router.Decision {

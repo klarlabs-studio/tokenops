@@ -10,11 +10,9 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	"go.klarlabs.de/tokenops/internal/capability/experiments"
+	"go.klarlabs.de/tokenops/internal/capability/routers"
+	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
-	"go.klarlabs.de/tokenops/internal/contexts/observability/observ"
-	"go.klarlabs.de/tokenops/internal/contexts/security/dashauth"
-	"go.klarlabs.de/tokenops/internal/contexts/security/tlsmint"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	"go.klarlabs.de/tokenops/internal/proxy"
@@ -31,10 +29,10 @@ type startup struct {
 	logger *slog.Logger
 
 	components     *bootstrap.Components
-	eventCounter   *observ.EventCounter
+	eventCounter   *bootstrap.EventCounter
 	domainLogPath  string
 	providerRoutes []proxy.ProviderRoute
-	sourceHealth   *freshness.Registry
+	sourceHealth   *state.SourceRegistry
 	sup            *lifecycle.Supervisor
 	events         *eventRuntime
 	// ingest is the bus readers replaying history publish to: the event
@@ -157,7 +155,7 @@ func (s *startup) buildProviderRoutes(context.Context) error {
 // waits for workers to drain and failures remain attributable by task
 // name.
 func (s *startup) startSupervision(ctx context.Context) error {
-	s.sourceHealth = freshness.NewRegistry()
+	s.sourceHealth = state.NewSourceRegistry()
 	s.sup = lifecycle.New(ctx, s.logger)
 	return nil
 }
@@ -209,9 +207,7 @@ func (s *startup) configureTLS(context.Context) error {
 	if err != nil {
 		return fmt.Errorf("tls cert dir: %w", err)
 	}
-	bundle, err := tlsmint.EnsureBundle(certDir, tlsmint.Options{
-		Hostnames: s.cfg.TLS.Hostnames,
-	})
+	bundle, err := bootstrap.TLSBundle(certDir, s.cfg.TLS.Hostnames)
 	if err != nil {
 		return fmt.Errorf("tls bundle: %w", err)
 	}
@@ -277,9 +273,7 @@ func (s *startup) configureAPIAuth(context.Context) error {
 		return fmt.Errorf("API token: %w", err)
 	}
 	s.dashToken = tok
-	auth, err := dashauth.New(dashauth.Config{
-		AdminToken: tok,
-	})
+	auth, err := bootstrap.APIAuthenticator(tok)
 	if err != nil {
 		return fmt.Errorf("dashboard auth: %w", err)
 	}
@@ -362,10 +356,10 @@ func (s *startup) configureRouting(context.Context) error {
 	// requires the approval log — wiring it only for the ceiling would
 	// leave in_request proposing into the void.
 	if len(s.cfg.PreferredModels) > 0 || s.cfg.Optimizer.Mode.Proposes() {
-		if store, err := openRoutingApprovals(); err != nil {
+		if store, err := routers.OpenApprovals(); err != nil {
 			s.logger.Warn("routing approvals unavailable; routes will not be referred", "err", err)
 		} else {
-			attachApprovalGate(rc, s.cfg, store, s.logger)
+			routers.AttachApprovalGate(rc, s.cfg, store, s.logger)
 			s.logger.Info("routing decisions referable",
 				"preferred_models", len(s.cfg.PreferredModels),
 				"mode", string(s.cfg.Optimizer.Mode))
