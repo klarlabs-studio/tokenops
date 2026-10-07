@@ -15,8 +15,8 @@ import (
 	"syscall"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/bootstrap"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/observability/observ"
 )
 
 // Run boots the daemon with cfg and blocks until ctx is cancelled (e.g. by
@@ -26,7 +26,7 @@ func Run(ctx context.Context, cfg config.Config, logWriter io.Writer) error {
 	if logWriter == nil {
 		logWriter = os.Stderr
 	}
-	logger := observ.NewLogger(logWriter, cfg.Log.Level, cfg.Log.Format)
+	logger := bootstrap.NewLogger(logWriter, cfg.Log.Level, cfg.Log.Format)
 	return RunWithLogger(ctx, cfg, logger)
 }
 

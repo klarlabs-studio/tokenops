@@ -14,7 +14,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/money"
 
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -25,7 +24,7 @@ import (
 type Deps struct {
 	Store      *sqlite.Store
 	Aggregator *spending.EventAggregator
-	Spend      *spend.Engine
+	Spend      *spending.Engine
 	// Waste configures the workflow waste detector (operator context
 	// limits from coaching.context_limits). Zero value uses defaults.
 	Waste workflowtrace.WasteConfig
