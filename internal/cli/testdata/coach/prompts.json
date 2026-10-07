@@ -1,0 +1,43 @@
+{
+  "findings": {
+    "total_prompts": 4,
+    "avg_chars": 32.25,
+    "avg_words": 6,
+    "min_chars": 29,
+    "max_chars": 37,
+    "length_distribution": {
+      "15-50w": 0,
+      "5-15w": 3,
+      "50-200w": 0,
+      "\u003c5w": 1,
+      "\u003e200w": 0
+    },
+    "vague_short_count": 0,
+    "acknowledgement_count": 0,
+    "short_question_count": 0,
+    "no_context_singles_count": 1,
+    "regenerate_count": 1,
+    "regenerate_samples": [
+      "no, that's wrong — keep the backoff"
+    ],
+    "recommendations": [
+      {
+        "id": "healthy",
+        "title": "Prompting balance looks healthy. No anti-pattern flagged.",
+        "why": "",
+        "frequency": 0,
+        "impact_score": 0,
+        "estimated_monthly_turns_saved": 0
+      }
+    ]
+  },
+  "turn_stats": {
+    "total_turns": 8,
+    "avg_input_tokens": 16437.5,
+    "avg_cached_tokens": 0,
+    "avg_output_tokens": 375,
+    "avg_cost_usd": 0.0865625,
+    "avg_seconds": 45,
+    "window_description": "2026-01-01T00:00:00Z"
+  }
+}
