@@ -1,0 +1,17 @@
+{
+  "sessions": 2,
+  "prompts": 3,
+  "median_turns_per_prompt": 2,
+  "p90_turns_per_prompt": 3.6,
+  "rework_rate_pct": 20,
+  "escalation_rate_pct": 0,
+  "median_context_growth_tokens": 3000,
+  "compactions_per_session": 0,
+  "interrupt_rate_pct": 33.3,
+  "median_seconds_per_prompt": 120,
+  "p90_seconds_per_prompt": 168,
+  "median_tokens_per_prompt": 53000,
+  "median_tool_calls_per_prompt": 1,
+  "first_try_rate_pct": 66.7,
+  "total_edits": 5
+}

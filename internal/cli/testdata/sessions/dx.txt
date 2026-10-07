@@ -1,0 +1,38 @@
+Agent DX — all history
+  3 instructions across 2 sessions
+
+EFFORT PER INSTRUCTION
+  turns (median):        2.0        [A]
+  turns (p90):           3.6        
+  wall-clock (median):   2.0m       [A]
+  wall-clock (p90):      2.8m
+  tokens (median):       53000
+  tool calls (median):   1.0
+  context growth/turn:   3000       [A]
+
+FRICTION
+  first-try rate:        66.7%      [B]  (no rework, no interrupt, no delegation)
+  rework rate:           20.0%      [C]  (edits returning to a file after moving on)
+  interrupt rate:        33.3%      [F]  (instructions you had to stop)
+  escalation rate:       0.0%       [A]  (instructions delegated to a subagent)
+  compactions/session:   0.0        [A]
+
+Overall: F (interrupt rate)  (the worst grade, not the average — an experience is
+         only as good as its sharpest friction)
+
+QUALITY vs CONTEXT
+  CONTEXT     PROMPTS   REJECTED   REPEATED    TURNS
+  <200k             3      33.3%      33.3%      2.0
+
+  REPEATED is the agent re-issuing a call it already made, within its last
+  50 — losing track of what it has done. Counted over a fixed lookback so a
+  long session cannot inflate it. REJECTED is you saying the reply was wrong.
+  Turns are shown for shape only: they fall as context grows because a
+  low-context instruction is usually an early one, mid-orientation.
+
+BIGGEST WIN
+  The agent is redoing its own edits
+  20.0% of edits revisit a file already edited answering the same instruction, across 5 edits
+  Do: state the whole change up front — which files, which cases — so the first attempt has what the second one needed
+
+What a figure means: tokenops explain <name>, e.g. tokenops explain wall-clock
