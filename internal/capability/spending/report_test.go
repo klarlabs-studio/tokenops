@@ -2,6 +2,7 @@ package spending
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 
@@ -104,5 +105,69 @@ func TestWindowLabel(t *testing.T) {
 		if got := WindowLabel(f); got != want {
 			t.Errorf("WindowLabel = %q, want %q", got, want)
 		}
+	}
+}
+
+// groupedSource returns per-model rows when asked to group and their daily
+// totals when not, as the event store does.
+type groupedSource struct{ fakeSource }
+
+func (g *groupedSource) AggregateBy(_ context.Context, flt Window, b analytics.Bucket, group analytics.Group) ([]Row, error) {
+	g.calls = append(g.calls, flt)
+	if b != analytics.BucketDay {
+		return nil, nil
+	}
+	day := func(d int) time.Time { return time.Date(2026, 10, d, 0, 0, 0, 0, time.UTC) }
+	if group == analytics.GroupNone {
+		return []Row{
+			{BucketStart: day(1), CostUSD: 3, TotalTokens: 30},
+			{BucketStart: day(2), CostUSD: 5, TotalTokens: 50},
+			{BucketStart: day(3), CostUSD: 4, TotalTokens: 40},
+		}, nil
+	}
+	return []Row{
+		{BucketStart: day(1), GroupKey: "a", CostUSD: 1, TotalTokens: 10},
+		{BucketStart: day(1), GroupKey: "b", CostUSD: 2, TotalTokens: 20},
+		{BucketStart: day(2), GroupKey: "a", CostUSD: 5, TotalTokens: 50},
+		{BucketStart: day(3), GroupKey: "a", CostUSD: 1, TotalTokens: 10},
+		{BucketStart: day(3), GroupKey: "b", CostUSD: 3, TotalTokens: 30},
+	}, nil
+}
+
+// `tokenops spend --forecast` and the forecast tool answer the same
+// question, so they project the same series: the daily totals, whatever
+// the report is grouped by. Projecting the grouped rows fitted one point
+// per model per day.
+func TestSpendReportForecastMatchesTheForecastTool(t *testing.T) {
+	now := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
+	for _, group := range []analytics.Group{analytics.GroupModel, analytics.GroupNone} {
+		src := &groupedSource{}
+		got, err := SpendReport(context.Background(), src,
+			ReportQuery{Group: group, Forecast: true, Horizon: 5}, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := ForecastSpend(context.Background(), src, 5, nil, "", now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(got.Forecast, want.Forecast) || !reflect.DeepEqual(got.ForecastTokens, want.ForecastTokens) {
+			t.Errorf("group %q: report forecast %v differs from the tool's %v", group, got.Forecast, want.Forecast)
+		}
+	}
+}
+
+// A report bounded by --until forecasts from that bound, not from now.
+func TestSpendReportForecastsFromTheGivenInstant(t *testing.T) {
+	now := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
+	from := time.Date(2026, 1, 8, 0, 0, 0, 0, time.UTC)
+	src := &groupedSource{}
+	if _, err := SpendReport(context.Background(), src,
+		ReportQuery{Forecast: true, ForecastFrom: from}, now); err != nil {
+		t.Fatal(err)
+	}
+	last := src.calls[len(src.calls)-1]
+	if want := from.Add(-forecastLookback); !last.Since.Equal(want) {
+		t.Errorf("forecast history since %v, want %v", last.Since, want)
 	}
 }
