@@ -33,6 +33,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	anthropicapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/anthropic"
 	copilotapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/copilot"
+	cursorapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/cursor"
 	"go.klarlabs.de/tokenops/internal/version"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -93,6 +94,7 @@ func startVendorUsagePollers(
 		p := cursorusage.NewPoller(bus, cursorusage.PollerOptions{
 			Health: sourceHealth.For("cursor-web"), Cookie: cfg.VendorUsage.Cursor.Cookie,
 			UserID: cfg.VendorUsage.Cursor.UserID, Interval: cfg.VendorUsage.Cursor.Interval, Logger: logger,
+			NewClient: cursorapi.NewSource,
 		})
 		sup.Go("cursor-web", p.Run)
 		logger.Info("cursor usage poller live", "interval", cfg.VendorUsage.Cursor.Interval, "user_id", cfg.VendorUsage.Cursor.UserID)

@@ -30,8 +30,11 @@ type PollerOptions struct {
 	Cookie   string
 	UserID   string
 	Interval time.Duration
-	BaseURL  string // test override
 	Logger   *slog.Logger
+	// NewClient binds the cookie and user ID to a UsageSource. Required;
+	// the daemon passes the HTTP client from
+	// internal/infra/vendorusage/cursor.
+	NewClient func(cookie, userID string) UsageSource
 }
 
 // Poller fetches one /api/usage snapshot per tick and emits one
@@ -42,7 +45,7 @@ type Poller struct {
 	opts PollerOptions
 
 	mu          sync.Mutex
-	client      *Client
+	client      UsageSource
 	publishes   int64
 	lastErr     error
 	lastErrTime time.Time
@@ -90,15 +93,17 @@ func (p *Poller) LastError() (time.Time, error) {
 	return p.lastErrTime, p.lastErr
 }
 
+// errNoClientFactory reports a poller wired without PollerOptions.NewClient.
+var errNoClientFactory = errors.New("cursor poller: no client factory configured")
+
 func (p *Poller) ensureClient() error {
 	if p.opts.Cookie == "" || p.opts.UserID == "" {
 		return ErrMissingCredential
 	}
-	c := NewClient(p.opts.Cookie, p.opts.UserID)
-	if p.opts.BaseURL != "" {
-		c.BaseURL = p.opts.BaseURL
+	if p.opts.NewClient == nil {
+		return errNoClientFactory
 	}
-	p.client = c
+	p.client = p.opts.NewClient(p.opts.Cookie, p.opts.UserID)
 	return nil
 }
 

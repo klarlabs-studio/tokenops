@@ -15,18 +15,28 @@
 // extension uses the endpoint so it's tolerated, but the contract
 // can shift without notice. signal_quality marks any observation
 // HIGH while telling consumers the source is undocumented.
+//
+// The package holds the response's value types, the poller and the
+// mapping to envelopes; the HTTP client lives in
+// internal/infra/vendorusage/cursor and reaches the poller through the
+// UsageSource port.
 package cursor
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"time"
 )
+
+// UsageSource fetches one usage snapshot. The HTTP client in
+// internal/infra/vendorusage/cursor satisfies it.
+type UsageSource interface {
+	Usage(ctx context.Context) (*UsageResponse, error)
+}
+
+// ErrMissingCredential signals that either Cookie or UserID is
+// unconfigured. Poller treats this as "stay idle" rather than fatal.
+var ErrMissingCredential = errors.New("cursor: WorkosCursorSessionToken + user_id required")
 
 // UsageResponse mirrors the observed cursor.com /api/usage payload.
 // The map keys are model identifiers (`gpt-4`, `gpt-4-32k`,
@@ -65,67 +75,4 @@ func (u *UsageResponse) UnmarshalJSON(data []byte) error {
 		}
 	}
 	return nil
-}
-
-// Client wraps the Cursor /api/usage endpoint. Cookie + UserID must
-// both be set; an empty value short-circuits with ErrMissingCredential
-// so callers can distinguish config gaps from network failures.
-type Client struct {
-	HTTPClient *http.Client
-	BaseURL    string
-	Cookie     string
-	UserID     string
-}
-
-// ErrMissingCredential signals that either Cookie or UserID is
-// unconfigured. Poller treats this as "stay idle" rather than fatal.
-var ErrMissingCredential = errors.New("cursor: WorkosCursorSessionToken + user_id required")
-
-// NewClient binds cookie + user ID and returns a Client with sensible
-// defaults.
-func NewClient(cookie, userID string) *Client {
-	return &Client{
-		HTTPClient: &http.Client{Timeout: 30 * time.Second},
-		BaseURL:    "https://cursor.com",
-		Cookie:     cookie,
-		UserID:     userID,
-	}
-}
-
-// Usage hits GET /api/usage?user=<UserID> with WorkosCursorSessionToken
-// in the Cookie header. Returns typed errors for empty creds /
-// non-2xx / decode failure.
-func (c *Client) Usage(ctx context.Context) (*UsageResponse, error) {
-	if c.Cookie == "" || c.UserID == "" {
-		return nil, ErrMissingCredential
-	}
-	if c.BaseURL == "" {
-		c.BaseURL = "https://cursor.com"
-	}
-	if c.HTTPClient == nil {
-		c.HTTPClient = &http.Client{Timeout: 30 * time.Second}
-	}
-	q := url.Values{}
-	q.Set("user", c.UserID)
-	endpoint := c.BaseURL + "/api/usage?" + q.Encode()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, fmt.Errorf("cursor usage: build request: %w", err)
-	}
-	req.Header.Set("Cookie", "WorkosCursorSessionToken="+c.Cookie)
-	req.Header.Set("Accept", "application/json")
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("cursor usage: do request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return nil, fmt.Errorf("cursor usage: status %d: %s", resp.StatusCode, snippet)
-	}
-	var u UsageResponse
-	if err := json.NewDecoder(resp.Body).Decode(&u); err != nil {
-		return nil, fmt.Errorf("cursor usage: decode: %w", err)
-	}
-	return &u, nil
 }
