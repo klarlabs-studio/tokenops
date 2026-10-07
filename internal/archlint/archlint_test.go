@@ -108,8 +108,6 @@ var ioImportExempt = map[string][]string{
 	// Its Cursor reader runs SQL against Cursor's state.vscdb (cursor.go).
 	// Moves with an extraction port for agentdx's per-client readers.
 	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx": {"database/sql"},
-	// HTTPMiddleware is an http.Handler around the permission check.
-	"go.klarlabs.de/tokenops/internal/contexts/security/rbac": {"net/http"},
 	// Reads opencode's SQLite store. Every reader but one goes through the
 	// opencodedb.Reader port that internal/infra/opencodedb implements;
 	// governance/agentdx (being migrated separately) still calls
@@ -123,7 +121,6 @@ var ioImportExempt = map[string][]string{
 // are gated automatically — TestDomainPackagesComplete compares this
 // list to `go list ./internal/contexts/...`.
 var domainPackages = []string{
-	"go.klarlabs.de/tokenops/internal/contexts/coaching/efficiency",
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough",
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts",
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/replies",
@@ -139,7 +136,6 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/learning",
 	"go.klarlabs.de/tokenops/internal/contexts/measurement",
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics",
-	"go.klarlabs.de/tokenops/internal/contexts/observability/anomaly",
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness",
 	"go.klarlabs.de/tokenops/internal/contexts/observability/observ",
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/eval",
@@ -163,7 +159,6 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/rules",
 	"go.klarlabs.de/tokenops/internal/contexts/security/audit",
 	"go.klarlabs.de/tokenops/internal/contexts/security/dashauth",
-	"go.klarlabs.de/tokenops/internal/contexts/security/rbac",
 	"go.klarlabs.de/tokenops/internal/contexts/security/redaction",
 	"go.klarlabs.de/tokenops/internal/contexts/security/tlsmint",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/biller",

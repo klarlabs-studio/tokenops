@@ -44,7 +44,7 @@ func TestComparisonReportsMeasuredMeanLatencyByCohort(t *testing.T) {
 	// Keep the observations intentionally different; the verifier must
 	// preserve measurement units and report each cohort separately.
 	(*events[2].Payload.(*eventschema.PromptEvent)).Latency = 500 * time.Millisecond
-	report := verify.Compare(execs, events)
+	report := verify.CompareExperiment(execs, events, "")
 	baseline, baselineOK := report.BaselineLatency.Amount()
 	treated, treatedOK := report.InterventionLatency.Amount()
 	if !baselineOK || !treatedOK || baseline != 250 || treated != 500 {
@@ -81,7 +81,7 @@ func TestPlanIncludedUsageStaysProviderScopedAndNotDollarPriced(t *testing.T) {
 		optimizationEvent("session:a", t0.Add(2*time.Hour+30*time.Second)),
 		treated,
 	}
-	report := verify.Compare(execs, events)
+	report := verify.CompareExperiment(execs, events, "")
 	if got := report.BaselinePlanQuota[string(eventschema.ProviderAnthropic)].AmountOr(-1); got != 120 {
 		t.Fatalf("baseline plan quota = %v tokens, want 120", got)
 	}
@@ -217,7 +217,7 @@ func randomizedFixture(pairCount int, experimentID, prefix string) ([]work.Execu
 
 func TestRandomizedComparisonUsesCompleteOutcomeLinkedPairs(t *testing.T) {
 	execs, events := randomizedFixture(5, "experiment:test", "test")
-	got := verify.Compare(execs, events)
+	got := verify.CompareExperiment(execs, events, "")
 	if got.Observational() || got.RandomizedExperimentID != "experiment:test" || got.RandomizedPairs != 5 {
 		t.Fatalf("randomized metadata = id %q pairs %d observational %v", got.RandomizedExperimentID, got.RandomizedPairs, got.Observational())
 	}
@@ -276,7 +276,7 @@ func TestRandomizedComparisonRejectsPartiallyAppliedVariantExecutions(t *testing
 	events = append(events, routeOptimizationEvent(
 		variantID, "observed: would route opus -> sonnet", eventschema.OptimizationDecisionSkipped, t0.Add(time.Hour+2*time.Minute)))
 
-	got := verify.Compare(execs, events)
+	got := verify.CompareExperiment(execs, events, "")
 	if !got.Observational() || !strings.Contains(got.RandomizedFallbackReason, "variant-assigned execution contains matching requests that were not routed") {
 		t.Fatalf("partially applied variant was accepted as randomized evidence: %+v", got)
 	}
@@ -289,7 +289,7 @@ func TestRandomizedComparisonRejectsUpstreamRequestFailure(t *testing.T) {
 	failure.Payload.(*eventschema.PromptEvent).Status = 400
 	events = append(events, failure)
 
-	got := verify.Compare(execs, events)
+	got := verify.CompareExperiment(execs, events, "")
 	if !got.Observational() || !strings.Contains(got.RandomizedFallbackReason, "assigned execution includes an upstream HTTP 400 failure") {
 		t.Fatalf("failed variant request was accepted as randomized evidence: %+v", got)
 	}
@@ -305,7 +305,7 @@ func TestRandomizedComparisonFallsBackWhenAnyAssignedOutcomeIsMissing(t *testing
 			}
 		}
 	}
-	got := verify.Compare(execs, events)
+	got := verify.CompareExperiment(execs, events, "")
 	if !got.Observational() || got.RandomizedExperimentID != "" || got.RandomizedFallbackReason == "" {
 		t.Fatalf("incomplete randomized trial was overstated: %+v", got)
 	}
@@ -322,7 +322,7 @@ func TestRandomizedComparisonFallsBackOnPairLedgerGap(t *testing.T) {
 		kept = append(kept, event)
 	}
 	events = kept
-	got := verify.Compare(execs, events)
+	got := verify.CompareExperiment(execs, events, "")
 	if !got.Observational() || !strings.Contains(got.RandomizedFallbackReason, "pair ledger") {
 		t.Fatalf("gapped assignment ledger was not refused: %+v", got)
 	}
@@ -336,7 +336,7 @@ func TestRandomizedComparisonFallsBackForLegacyUnlinkedAssignments(t *testing.T)
 			break
 		}
 	}
-	got := verify.Compare(execs, events)
+	got := verify.CompareExperiment(execs, events, "")
 	if !got.Observational() || !strings.Contains(got.RandomizedFallbackReason, "unlinked assignments") {
 		t.Fatalf("legacy assignment was included in randomized comparison: %+v", got)
 	}
@@ -347,7 +347,7 @@ func TestRandomizedComparisonRequiresSelectionWhenTrialsAreMixed(t *testing.T) {
 	secondExecs, secondEvents := randomizedFixture(5, "experiment:second", "second")
 	execs := append(firstExecs, secondExecs...)
 	events := append(firstEvents, secondEvents...)
-	got := verify.Compare(execs, events)
+	got := verify.CompareExperiment(execs, events, "")
 	if !got.Observational() || !strings.Contains(got.RandomizedFallbackReason, "multiple experiments") {
 		t.Fatalf("mixed trials were not refused: %+v", got)
 	}
@@ -517,7 +517,7 @@ func TestComparisonUsesOutcomeRegressionToFlagHarm(t *testing.T) {
 			outcomeEvent(id, result, exec.EndedAt.Add(time.Hour)),
 		)
 	}
-	report := verify.Compare(execs, events)
+	report := verify.CompareExperiment(execs, events, "")
 	if report.Verdict.Outcome != intervention.Harmed {
 		t.Fatalf("verdict = %+v; token reduction with collapsed success must be harmful", report.Verdict)
 	}
@@ -551,7 +551,7 @@ func TestTheComparisonItBuildsIsObservational(t *testing.T) {
 		events = append(events, promptEvent("session:a", at.Add(2*time.Minute), tokens))
 	}
 
-	report := verify.Compare(execs, events)
+	report := verify.CompareExperiment(execs, events, "")
 
 	if report.Comparison.Assignment != intervention.Observational {
 		t.Errorf("assignment = %q, want observational", report.Comparison.Assignment)
@@ -576,7 +576,7 @@ func TestTooFewInEitherCohortIsReported(t *testing.T) {
 	execs := []work.Execution{execution("e1", "session:a", t0, time.Hour)}
 	events := []*eventschema.Envelope{promptEvent("session:a", t0.Add(time.Minute), 100)}
 
-	report := verify.Compare(execs, events)
+	report := verify.CompareExperiment(execs, events, "")
 	if report.Verdict.Conclusive() {
 		t.Error("one execution produced a conclusive verdict")
 	}
@@ -586,7 +586,7 @@ func TestTooFewInEitherCohortIsReported(t *testing.T) {
 }
 
 func TestNothingToCompareIsNotAnError(t *testing.T) {
-	report := verify.Compare(nil, nil)
+	report := verify.CompareExperiment(nil, nil, "")
 	if report.Verdict.Conclusive() {
 		t.Error("an empty comparison concluded something")
 	}
@@ -601,7 +601,7 @@ func TestNothingToCompareIsNotAnError(t *testing.T) {
 // none is the same class of unhelpful answer as reporting a refused
 // poller as an unused vendor.
 func TestNoAttemptsSaysNothingWasReconstructed(t *testing.T) {
-	report := verify.Compare(nil, nil)
+	report := verify.CompareExperiment(nil, nil, "")
 
 	if !strings.Contains(report.Verdict.Caveat, "no attempts") {
 		t.Errorf("the caveat blames sample size rather than the empty "+
@@ -621,7 +621,7 @@ func TestAttemptsInOnlyOneCohortSaysWhichSide(t *testing.T) {
 		promptEvent("session:a", t0.Add(2*time.Hour+time.Minute), 100),
 	}
 
-	report := verify.Compare(execs, events)
+	report := verify.CompareExperiment(execs, events, "")
 	if strings.Contains(report.Verdict.Caveat, "no attempts") {
 		t.Errorf("two attempts were reported as none: %q", report.Verdict.Caveat)
 	}

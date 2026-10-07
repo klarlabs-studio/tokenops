@@ -125,7 +125,7 @@ Consumers:
 | `WorkflowEvent.WorkflowID` | SDK/CLI parameter | Pass-through | Storage (indexed), Workflow reconstruction |
 | `OptimizationEvent.Kind` | Optimizer `Kind()` method | Enum value | Storage, OTLP, CLI / MCP |
 | `OptimizationEvent.Decision` | Pipeline `decide()` | Enum value | Storage, OTLP, CLI / MCP |
-| `CoachingEvent.EfficiencyScore` | Efficiency engine | Computed 0.0–1.0 | Storage, CLI / MCP |
+| `CoachingEvent.EfficiencyScore` | Reserved — no producer sets it | 0.0–1.0 when set | Storage, CLI / MCP |
 | `RuleSourceEvent.SourceID` | `rules.MakeSourceID(repoID, path)` | Stable across snapshots | Storage, OTLP (`tokenops.rule.source_id`), CLI / MCP |
 | `RuleSourceEvent.Source` | `rules.ClassifySource(path)` | Enum value | Storage, OTLP, CLI / MCP |
 | `RuleSourceEvent.TotalTokens` | `tokenizer.CountText(body)` | Tokenized | Storage, OTLP, CLI / MCP |
@@ -277,8 +277,9 @@ domain JSONL is read-only migration input; it is never appended after migration.
 | `EfficiencyDelta` | *float64 | no | — | — | May be negative |
 
 ### Invariants
-- `EfficiencyScore` is computed from the efficiency package and may be
-  nil before the first baseline evaluation.
+- `EfficiencyScore` is reserved: no producer sets it today (the
+  efficiency scorer it was meant for was never wired and has been
+  removed). Consumers must treat it as absent.
 - `Decision` defaults to `skipped` until the user acts on the coaching
   recommendation.
 

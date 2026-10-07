@@ -85,38 +85,6 @@ func TestDaemonModeMapsOntoTheLadder(t *testing.T) {
 	}
 }
 
-// CoachingConfig.Delivery: observe | advise | intervene. This is the
-// ladder that already had three rungs, and the only one whose middle
-// rung maps to recommend.
-func TestCoachingDeliveryMapsOntoTheLadder(t *testing.T) {
-	cases := map[string]policy.Authority{
-		"observe":   policy.ObserveOnly,
-		"advise":    policy.Recommend,
-		"intervene": policy.Automatic,
-		"":          policy.ObserveOnly,
-		"nonsense":  policy.ObserveOnly,
-	}
-	for in, want := range cases {
-		if got := policy.FromCoachingDelivery(in); got != want {
-			t.Errorf("%q = %q, want %q", in, got, want)
-		}
-	}
-}
-
-// readguard.Mode: observe | active. Two rungs with the same words as
-// the daemon's, meaning something different.
-func TestReadGuardModeMapsOntoTheLadder(t *testing.T) {
-	if got := policy.FromReadGuardMode("observe"); got != policy.ObserveOnly {
-		t.Errorf("observe = %q", got)
-	}
-	if got := policy.FromReadGuardMode("active"); got != policy.Automatic {
-		t.Errorf("active = %q", got)
-	}
-	if got := policy.FromReadGuardMode(""); got != policy.ObserveOnly {
-		t.Errorf("empty = %q", got)
-	}
-}
-
 // routingapproval is a propose/decide gate expressed as neither a mode
 // nor a delivery. Its whole existence is the require-approval rung,
 // which no other ladder can express.
@@ -145,45 +113,6 @@ func TestEffectiveAuthorityIsTheLesserOfTheTwo(t *testing.T) {
 	got = policy.Effective(policy.Automatic, policy.Recommend)
 	if got != policy.Recommend {
 		t.Errorf("effective = %q, want recommend", got)
-	}
-}
-
-// Every rung must render to something an operator would recognise, and
-// parse back. A ladder that cannot round-trip cannot be configured.
-func TestEveryRungRoundTrips(t *testing.T) {
-	for _, a := range policy.Ladder() {
-		back, err := policy.Parse(string(a))
-		if err != nil {
-			t.Errorf("parse(%q): %v", a, err)
-			continue
-		}
-		if back != a {
-			t.Errorf("%q round-tripped to %q", a, back)
-		}
-		if a.Describe() == "" {
-			t.Errorf("%q has no description", a)
-		}
-	}
-}
-
-// An unparseable rung is an error, not a silent default. Config
-// validation should refuse it rather than quietly observing.
-func TestParseRefusesAnUnknownRung(t *testing.T) {
-	if _, err := policy.Parse("do-whatever"); err == nil {
-		t.Error("an unknown rung parsed without error")
-	}
-}
-
-// The ladder is what a surface enumerates when it offers the choice.
-func TestLadderIsInAscendingOrder(t *testing.T) {
-	l := policy.Ladder()
-	if len(l) != 4 {
-		t.Fatalf("want 4 rungs, got %v", l)
-	}
-	for i := 1; i < len(l); i++ {
-		if !l[i].AtLeast(l[i-1]) {
-			t.Errorf("Ladder() is not ascending: %v", l)
-		}
 	}
 }
 

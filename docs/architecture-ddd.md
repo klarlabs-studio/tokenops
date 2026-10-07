@@ -107,7 +107,7 @@ Packages that predate the rule are listed, each with its reason, in
 | Spend            | `internal/contexts/spend/{spend,forecast,plans,pricing,session,vendorusage/*}` | `Engine` (svc) | cost, pricing table, plan, poller |
 | Observability    | `internal/contexts/observability/{analytics,anomaly,observ}` | (svc) | bucket, group, row, summary, anomaly |
 | Governance       | `internal/contexts/governance/{scorecard,coverdebt,budget}` | `Scorecard` | KPI, gate, risk score, coverage goal |
-| Security         | `internal/contexts/security/{redaction,dashauth,audit,rbac,tlsmint}` | `Redactor` | finding, placeholder, secret, entropy |
+| Security         | `internal/contexts/security/{redaction,dashauth,audit,tlsmint}` | `Redactor` | finding, placeholder, secret, entropy |
 | Tasks            | `internal/contexts/tasks` | `Task` | operator-marked window, metrics |
 | Telemetry        | `internal/events`, `internal/otlp`, `internal/storage/sqlite`, `internal/contexts/telemetry/retention` | (svc) | envelope, sink, schema version, prune |
 

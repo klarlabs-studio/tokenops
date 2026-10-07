@@ -8,23 +8,11 @@
 // a system that reports the delta as a saving will report savings it did
 // not deliver.
 //
-// # Nothing correlated the stages
-//
-// Propose, apply, observe and verify lived in four disconnected stores
-// with no identity joining them: OptimizationEvent carries no
-// recommendation id, routing approvals record proposed and decided and
-// never a result, and eventschema's coaching Decision is documented as
-// recording adoption while nothing anywhere writes it. An Intervention
-// is that missing identity.
-//
-// # Two existing pieces had the right shape
-//
-// The read guard measures an intervention it actually performed and
-// deliberately excludes observe-mode would_block, because crediting it
-// would report uplift the guard did not deliver. fmt learn mines
-// compression records against later recover events as a "did this harm
-// the agent" signal, and never changes runtime behaviour on its own.
-// Delivered and Verdict generalise those two instincts.
+// It judges that question: a Comparison of an intervention's executions
+// against a baseline yields a Verdict, and only a randomised comparison
+// may conclude that something helped. The read guard and fmt learn had
+// the right instinct first — credit only what was actually performed,
+// and treat harm as a signal — and Verdict generalises it.
 package intervention
 
 import (
@@ -33,128 +21,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/measurement"
-	"go.klarlabs.de/tokenops/internal/contexts/work"
 )
-
-// ID identifies an intervention. It is the correlation key the four
-// stages never had.
-type ID string
-
-// Kind names what was changed. Open enough for new optimizers, closed
-// enough that a surface can group by it.
-type Kind string
-
-const (
-	// KindModelRoute — run the work on a different model.
-	KindModelRoute Kind = "model_route"
-	// KindPromptCompress — send a smaller prompt.
-	KindPromptCompress Kind = "prompt_compress"
-	// KindContextTrim — send less history.
-	KindContextTrim Kind = "context_trim"
-	// KindReadGuard — refuse a redundant read.
-	KindReadGuard Kind = "read_guard"
-	// KindCommandFmt — compress a command's output before an agent sees
-	// it.
-	KindCommandFmt Kind = "command_fmt"
-	// KindCoaching — advise the actor rather than change the request.
-	KindCoaching Kind = "coaching"
-	// KindCache — serve from cache instead of the provider.
-	KindCache Kind = "cache"
-)
-
-// Decision is what became of an intervention.
-type Decision string
-
-const (
-	// Proposed — suggested, nothing done yet. The zero Decision.
-	Proposed Decision = ""
-	// Observed — the system decided it *would* act but did not, because
-	// it is running in observe mode. Recorded because the
-	// counterfactual is how an operator decides whether to switch the
-	// thing on; never credited with an effect.
-	Observed Decision = "observed"
-	// Applied — the intervention changed what actually happened.
-	Applied Decision = "applied"
-	// Rejected — a person or a policy declined it. Worth keeping: a
-	// proposal that keeps being declined is a signal about the proposer.
-	Rejected Decision = "rejected"
-	// Expired — nobody decided in time.
-	Expired Decision = "expired"
-)
-
-// Intervention is one attempt to change how work is performed.
-type Intervention struct {
-	ID   ID   `json:"id"`
-	Kind Kind `json:"kind"`
-	// Target is the execution or work this acted on.
-	Target work.ID `json:"target"`
-
-	Decision   Decision  `json:"decision,omitempty"`
-	ProposedAt time.Time `json:"proposed_at"`
-	DecidedAt  time.Time `json:"decided_at,omitzero"`
-	// Reason explains a rejection, or why the proposal was made.
-	Reason string `json:"reason,omitempty"`
-
-	// Claimed is the effect the proposer expected — usually an estimate,
-	// and never by itself evidence of anything.
-	Claimed measurement.Value `json:"claimed,omitzero"`
-	// Verdict is what a comparison against a baseline concluded. The
-	// zero Verdict is inconclusive, so an unverified intervention does
-	// not read as one that was measured and found neutral.
-	Verdict Verdict `json:"verdict,omitzero"`
-}
-
-// Propose records an intervention that has been suggested.
-func Propose(id ID, kind Kind, target work.ID, at time.Time) Intervention {
-	return Intervention{ID: id, Kind: kind, Target: target, ProposedAt: at}
-}
-
-// Observed marks an intervention the system would have made but did not,
-// because it is running in observe mode. Returns a copy.
-func (i Intervention) Observed(at time.Time) Intervention {
-	i.Decision, i.DecidedAt = Observed, at
-	return i
-}
-
-// Applied marks an intervention that changed what happened.
-func (i Intervention) Applied(at time.Time) Intervention {
-	i.Decision, i.DecidedAt = Applied, at
-	return i
-}
-
-// Rejected marks a declined proposal and keeps the reason.
-func (i Intervention) Rejected(at time.Time, why string) Intervention {
-	i.Decision, i.DecidedAt, i.Reason = Rejected, at, why
-	return i
-}
-
-// Claiming attaches the effect the proposer expected.
-func (i Intervention) Claiming(v measurement.Value) Intervention {
-	i.Claimed = v
-	return i
-}
-
-// Verified attaches what a comparison concluded.
-func (i Intervention) Verified(v Verdict) Intervention {
-	i.Verdict = v
-	return i
-}
-
-// Delivered reports whether this intervention actually changed what
-// happened.
-//
-// Only Applied qualifies. An observe-mode decision is a counterfactual,
-// and crediting it reports uplift the system did not deliver — the
-// mistake the read guard avoids by hand and which this makes structural.
-func (i Intervention) Delivered() bool { return i.Decision == Applied }
-
-// Proven reports whether the claim was checked against a baseline and
-// the check concluded anything.
-//
-// A claim on its own is never proof, however carefully it was computed.
-func (i Intervention) Proven() bool {
-	return i.Delivered() && i.Verdict.Conclusive()
-}
 
 // Result is what a comparison concluded.
 type Result string

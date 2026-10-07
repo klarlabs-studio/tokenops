@@ -28,7 +28,6 @@
 package policy
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -101,34 +100,6 @@ func (a Authority) Describe() string {
 	}
 }
 
-// Ladder returns the rungs in ascending order, for a surface offering
-// the choice.
-func Ladder() []Authority {
-	return []Authority{ObserveOnly, Recommend, RequireApproval, Automatic}
-}
-
-// Parse reads a rung, refusing anything it does not recognise.
-//
-// Unlike the FromX mappings, this errors rather than defaulting:
-// configuration validation should tell an operator their setting is
-// wrong, where a runtime read of an already-validated field should stay
-// on the safe rung.
-func Parse(s string) (Authority, error) {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "observe_only", "observe-only", "observe", "":
-		return ObserveOnly, nil
-	case "recommend":
-		return Recommend, nil
-	case "require_approval", "require-approval", "approval":
-		return RequireApproval, nil
-	case "automatic", "auto":
-		return Automatic, nil
-	}
-	return ObserveOnly, fmt.Errorf(
-		"policy: %q is not a control rung; use one of observe_only, recommend, "+
-			"require_approval, automatic", s)
-}
-
 // Effective is the authority a subsystem actually has: the lesser of the
 // daemon's and its own.
 //
@@ -157,22 +128,6 @@ func FromDaemonMode(mode string) Authority {
 	}
 }
 
-// FromCoachingDelivery maps CoachingConfig.Delivery onto the ladder.
-//
-// This is the only existing ladder with three rungs, and the only one
-// whose middle rung is genuinely "recommend": advise is documented as
-// the coach speaking unprompted but never acting.
-func FromCoachingDelivery(delivery string) Authority {
-	switch strings.ToLower(strings.TrimSpace(delivery)) {
-	case "advise":
-		return Recommend
-	case "intervene":
-		return Automatic
-	default:
-		return ObserveOnly
-	}
-}
-
 // FromAutonomy maps a coach autonomy rung (ADR 0006) onto the ladder:
 // off, advise, ask, autonomous are its four rungs in the coach's words.
 func FromAutonomy(rung string) Authority {
@@ -182,20 +137,6 @@ func FromAutonomy(rung string) Authority {
 	case "ask":
 		return RequireApproval
 	case "autonomous":
-		return Automatic
-	default:
-		return ObserveOnly
-	}
-}
-
-// FromReadGuardMode maps readguard.Mode onto the ladder.
-//
-// Its words are the daemon's and mean something else: readguard's
-// "observe" records a would_block it deliberately does not credit, and
-// its "active" refuses the read outright.
-func FromReadGuardMode(mode string) Authority {
-	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case "active":
 		return Automatic
 	default:
 		return ObserveOnly

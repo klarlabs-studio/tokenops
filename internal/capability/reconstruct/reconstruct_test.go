@@ -42,7 +42,7 @@ func TestUnitsBecomeReconstructedWork(t *testing.T) {
 		if r.Work.GoalSource != work.GoalInferred {
 			t.Errorf("goal source = %q, want inferred", r.Work.GoalSource)
 		}
-		if r.Outcome.Known() {
+		if r.Outcome.Result != work.ResultUnknown {
 			t.Error("a reconstructed story produced a known outcome")
 		}
 	}
