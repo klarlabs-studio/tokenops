@@ -12,8 +12,8 @@ import (
 
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/telemetry"
-	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/otlp"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
@@ -57,7 +57,7 @@ file or commit subject is among them, and this is how to check.`,
 			deps := headroom.Deps{Config: &cfg, Reader: storeReader{store: store}, Price: eng.ComputeAt}
 			g := &telemetry.Gatherer{
 				Glance: func() headroom.Deps { return deps },
-				Agg:    analytics.New(store, eng),
+				Agg:    spending.NewAggregator(store, eng),
 				Coach: func(now time.Time) *coachcap.Report {
 					r := coachcap.Status(cfg, coachLedger(), contextLevers(), now)
 					return &r

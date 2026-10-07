@@ -1,6 +1,6 @@
 # ADR 0010 — The daemon API serves every surface
 
-- **Status:** Accepted. API implemented 2026-10-03 (slices 1–5, PRs #508–#515). Adapter migration remaining: 94 direct adapter → domain imports in the `internal/archlint/capability_test.go` ratchet as of 2026-10-07 (cli 31, daemon 32, mcp 19, proxy 12).
+- **Status:** Accepted. API implemented 2026-10-03 (slices 1–5, PRs #508–#515). Adapter migration remaining: 68 direct adapter → domain imports in the `internal/archlint/capability_test.go` ratchet as of 2026-10-07 (cli 28, daemon 19, mcp 16, proxy 5), down from 94 (cli 31, daemon 32, mcp 19, proxy 12) earlier the same day.
 - **Date:** 2026-10-03
 - **Deciders:** TokenOps maintainers
 - **Related:** ADR 0004 (phase 4 capability layer, phase 9 surface-native insight), ADR 0009 (endpoints, routers, billers), `docs/competitive-landscape.md` (G7, G8)

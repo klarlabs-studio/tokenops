@@ -11,9 +11,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/events"
-	"go.klarlabs.de/tokenops/internal/infra/sourceprobe"
 	"go.klarlabs.de/tokenops/internal/presentation"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
@@ -94,8 +94,10 @@ func newStatusCmd(rf *rootFlags) *cobra.Command {
 	return cmd
 }
 
-// statusResult is the structured status payload returned by `--json`.
-type statusResult struct {
+// daemonProbe is `tokenops status --json`: what each of the daemon's
+// probe endpoints answered, graded. It is not the MCP tool's payload,
+// which describes the MCP server's own process.
+type daemonProbe struct {
 	Health   endpointResult             `json:"health"`
 	Ready    endpointResult             `json:"ready"`
 	Version  endpointResult             `json:"version"`
@@ -103,22 +105,11 @@ type statusResult struct {
 	Warnings []string                   `json:"warnings,omitempty"`
 }
 
-// statusState trusts the daemon's explicit /readyz status and treats local
-// ingestion/drop warnings as reduced coverage. Missing or unrecognized
-// readiness data stays unavailable rather than being inferred from HTTP 200.
-func statusState(r statusResult) string {
-	state, _ := r.Ready.Body["status"].(string)
-	switch state {
-	case "ready":
-		if len(r.Warnings) > 0 {
-			return "degraded"
-		}
-		return "ready"
-	case "not_configured":
-		return "not_configured"
-	default:
-		return "not_ready"
-	}
+// statusState grades the daemon the way every surface does: its explicit
+// /readyz status, degraded by local ingestion or drop warnings.
+func statusState(r daemonProbe) string {
+	readyz, _ := r.Ready.Body["status"].(string)
+	return state.OfDaemon(readyz, len(r.Warnings) > 0)
 }
 
 type endpointResult struct {
@@ -128,8 +119,8 @@ type endpointResult struct {
 	Error  string         `json:"error,omitempty"`
 }
 
-func fetchStatus(ctx context.Context, base string) (statusResult, error) {
-	res := statusResult{
+func fetchStatus(ctx context.Context, base string) (daemonProbe, error) {
+	res := daemonProbe{
 		Health:  fetchEndpoint(ctx, base+"/healthz"),
 		Ready:   fetchEndpoint(ctx, base+"/readyz"),
 		Version: fetchEndpoint(ctx, base+"/version"),
@@ -217,12 +208,10 @@ func writeOfflineStatus(w io.Writer, base string, cfg config.Config, cfgErr erro
 	return nil
 }
 
-// statusStaleWarnings computes ingestion-staleness warnings by reading
-// the local event store directly, mirroring the MCP tokenops_status
-// tool. Best-effort by design: an unresolvable DB path, an unopenable
-// store, or a count error all degrade to "no warnings" so the status
-// command never fails on the health check. Returns nil when nothing is
-// stale.
+// statusStaleWarnings is the store's ingestion warnings, read directly
+// like `vendor-usage status`. Best-effort by design: an unresolvable DB
+// path or an unopenable store degrades to "no warnings" so the status
+// command never fails on the health check.
 func statusStaleWarnings(ctx context.Context, rf *rootFlags, cfg config.Config) []string {
 	dbPath, err := resolveAuditDB(rf, "")
 	if err != nil {
@@ -233,26 +222,7 @@ func statusStaleWarnings(ctx context.Context, rf *rootFlags, cfg config.Config) 
 		return nil
 	}
 	defer func() { _ = store.Close() }()
-	var warnings []string
-	stale, err := cfg.CheckStaleIngestion(ctx, store, sourceprobe.All(cfg), config.StaleIngestionWindow, time.Now())
-	if err == nil {
-		for _, s := range stale {
-			warnings = append(warnings, s.Warning())
-		}
-	}
-	// A retention rule naming a source that has never written an event is
-	// doing nothing, silently. The tag is not always what the operator
-	// sees — Cursor's ledger lives in ~/.tokenops/cursor-turns while its
-	// events are stamped cursor-hook — so a plausible-looking key can pin
-	// nothing at all.
-	if counts, cerr := store.CountBySource(ctx, time.Time{}, time.Time{}); cerr == nil {
-		for _, key := range cfg.UnmatchedRetentionSources(counts) {
-			warnings = append(warnings, fmt.Sprintf(
-				"retention.keep_by_source[%q] matches no source that has produced events — "+
-					"the rule is doing nothing; check the tag with `tokenops vendor-usage status`", key))
-		}
-	}
-	return warnings
+	return state.LocalWarnings(ctx, cfg, store, time.Now())
 }
 
 // dropWarningFrom renders the telemetry-loss warning carried on /healthz,
@@ -274,7 +244,7 @@ func dropWarningFrom(health endpointResult) string {
 	return events.DropWarning(int64(n))
 }
 
-func writeStatusText(w io.Writer, base string, r statusResult) error {
+func writeStatusText(w io.Writer, base string, r daemonProbe) error {
 	insight := r.Insight
 	if insight.Level == "" {
 		insight = presentation.ForStatus(statusState(r))

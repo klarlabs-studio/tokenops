@@ -155,7 +155,7 @@ func TestStatusJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("status: %v", err)
 	}
-	var got statusResult
+	var got daemonProbe
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("not json: %v\n%s", err, out)
 	}

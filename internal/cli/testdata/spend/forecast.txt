@@ -1,0 +1,25 @@
+Spend report — since=2026-01-01T00:00:00Z until=2026-01-08T00:00:00Z
+  requests:        7
+  input tokens:    10600
+  output tokens:   2500
+  total tokens:    13100
+  total spend:     8.2500 USD
+  burn rate (24h): 0.0000 USD / 0 tokens
+
+Top consumers by model:
+RANK  KEY                REQS  IN TOK  OUT TOK  COST
+1     claude-opus-4-8    1     4000    900      3.1000 USD
+2     claude-sonnet-4-6  3     2100    750      2.9000 USD
+3     gpt-4o-mini        3     4500    850      2.2500 USD
+
+Forecast (next 3 points):
+WHEN        EXPECTED    LOW         HIGH
+2026-01-07  1.4283 USD  0.0000 USD  4.4699 USD
+2026-01-08  1.4412 USD  0.0000 USD  5.7426 USD
+2026-01-09  1.4541 USD  0.0000 USD  6.7222 USD
+
+Token forecast (next 3 points):
+WHEN        EXPECTED  LOW  HIGH
+2026-01-07  2459      0    6656
+2026-01-08  2540      0    8475
+2026-01-09  2621      0    9890

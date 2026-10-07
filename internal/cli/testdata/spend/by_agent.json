@@ -1,0 +1,50 @@
+{
+  "window": "since=2026-01-01T00:00:00Z until=2026-01-08T00:00:00Z",
+  "currency": "USD",
+  "summary": {
+    "Requests": 7,
+    "InputTokens": 10600,
+    "OutputTokens": 2500,
+    "TotalTokens": 13100,
+    "CostUSD": 8.25,
+    "APIEquivalentUSD": 8.25
+  },
+  "group_by": "agent",
+  "top": [
+    {
+      "BucketStart": "2026-01-01T00:00:00Z",
+      "GroupKey": "agent-golden",
+      "Requests": 7,
+      "InputTokens": 10600,
+      "OutputTokens": 2500,
+      "TotalTokens": 13100,
+      "CostUSD": 8.25,
+      "APIEquivalentUSD": 8.25,
+      "CostRecomputed": 0,
+      "Cost": {
+        "amount": 1.7,
+        "quality": "measured",
+        "source": "sqlite_events",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "coverage": {
+          "included": 2
+        }
+      },
+      "APIEquivalent": {
+        "amount": 1.7,
+        "quality": "derived",
+        "source": "sqlite_events",
+        "caveat": "list-price equivalent, not an amount billed",
+        "observed_at": "2026-01-01T00:00:00Z",
+        "coverage": {
+          "included": 2
+        }
+      }
+    }
+  ],
+  "burn_rate_24h": 0,
+  "burn_tokens_24h": 0,
+  "burn_series": null,
+  "plan_currency": "USD",
+  "plan_complete": true
+}

@@ -1,0 +1,33 @@
+{
+  "entries": [
+    {
+      "ID": "a3",
+      "Timestamp": "<T>",
+      "Action": "config_change",
+      "Actor": "mcp",
+      "Target": "mode",
+      "Details": {
+        "from": "observe",
+        "to": "advise"
+      }
+    },
+    {
+      "ID": "a2",
+      "Timestamp": "<T>",
+      "Action": "budget_update",
+      "Actor": "mcp",
+      "Target": "budget.daily",
+      "Details": null
+    },
+    {
+      "ID": "a1",
+      "Timestamp": "<T>",
+      "Action": "config_change",
+      "Actor": "cli",
+      "Target": "plans.anthropic",
+      "Details": {
+        "to": "claude-max-5x"
+      }
+    }
+  ]
+}

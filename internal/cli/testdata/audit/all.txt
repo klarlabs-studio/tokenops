@@ -1,0 +1,6 @@
+WHEN                      ACTION                 ACTOR           TARGET
+2026-01-02T11:00:00Z      config_change          mcp             mode
+  to=advise
+2026-01-02T10:00:00Z      budget_update          mcp             budget.daily
+2026-01-02T09:00:00Z      config_change          cli             plans.anthropic
+  to=claude-max-5x

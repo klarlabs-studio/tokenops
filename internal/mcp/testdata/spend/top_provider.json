@@ -1,0 +1,13 @@
+{
+  "by": "provider",
+  "top": [
+    {
+      "key": "anthropic",
+      "requests": 4,
+      "tokens": 1601000,
+      "cost_usd": 3.75,
+      "api_equivalent_usd": 10.05
+    }
+  ],
+  "currency": "USD"
+}

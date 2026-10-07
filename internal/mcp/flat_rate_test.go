@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/money"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
@@ -258,7 +259,7 @@ func TestForecastWithSpendHasNoZeroNote(t *testing.T) {
 	if err := json.Unmarshal([]byte(execTool(t, srv, "tokenops_forecast", nil)), &res); err != nil {
 		t.Fatal(err)
 	}
-	if allZeroForecast(res.Forecast) {
+	if spending.AllZero(res.Forecast) {
 		t.Fatalf("fixture produced a zero dollar forecast; it cannot test the metered case: %+v", res.Forecast)
 	}
 	if res.Note != "" {

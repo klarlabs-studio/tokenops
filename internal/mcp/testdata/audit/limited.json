@@ -1,0 +1,15 @@
+{
+  "entries": [
+    {
+      "ID": "a3",
+      "Timestamp": "<T>",
+      "Action": "config_change",
+      "Actor": "mcp",
+      "Target": "mode",
+      "Details": {
+        "from": "observe",
+        "to": "advise"
+      }
+    }
+  ]
+}
