@@ -87,8 +87,11 @@ func rateForModel(model string) spend.Rate {
 // assistant turns with a non-zero usage block contribute. Model, when
 // present, prices the turn at that model's catalog rate.
 type turnLine struct {
-	Type    string `json:"type"`
-	Message struct {
+	Type string `json:"type"`
+	// Timestamp is kept as text: a line whose stamp does not parse is
+	// still a turn, just one the window cannot place.
+	Timestamp string `json:"timestamp"`
+	Message   struct {
 		Model string `json:"model"`
 		Usage struct {
 			InputTokens              int64 `json:"input_tokens"`
@@ -167,6 +170,9 @@ func computeTurnStatsRoot(root string, opts ExtractOptions) (TurnStats, error) {
 		if d.IsDir() || !strings.HasSuffix(path, ".jsonl") {
 			return nil
 		}
+		if writtenBefore(d, opts.Since) {
+			return nil
+		}
 		f, openErr := os.Open(path)
 		if openErr != nil {
 			return nil
@@ -174,24 +180,15 @@ func computeTurnStatsRoot(root string, opts ExtractOptions) (TurnStats, error) {
 		defer func() { _ = f.Close() }()
 		scanner := bufio.NewScanner(f)
 		scanner.Buffer(make([]byte, 0, 64*1024), turnsScanBufSize)
-		// File-level time filter check via mod time — coarse but
-		// avoids scanning entirely out-of-window files. Per-line
-		// timestamps would catch edge cases but the assistant turns
-		// don't always carry them in Codex format.
-		if info, statErr := d.Info(); statErr == nil {
-			if !opts.Since.IsZero() && info.ModTime().Before(opts.Since) {
-				return nil
-			}
-			if !opts.Until.IsZero() && info.ModTime().After(opts.Until) {
-				return nil
-			}
-		}
 		for scanner.Scan() {
 			var t turnLine
 			if jsonErr := json.Unmarshal(scanner.Bytes(), &t); jsonErr != nil {
 				continue
 			}
 			if !strings.EqualFold(t.Type, "assistant") {
+				continue
+			}
+			if !inWindow(t.Timestamp, opts) {
 				continue
 			}
 			u := t.Message.Usage
@@ -301,4 +298,18 @@ func ProjectSavings(rec Recommendation, stats TurnStats) SavingsEstimate {
 		Seconds:    secs,
 		HoursSaved: secs / 3600.0,
 	}
+}
+
+// inWindow reports whether a turn stamped at ts falls in opts' window. A
+// turn without a readable stamp counts: Codex does not stamp every line,
+// and its file was already kept by modification time.
+func inWindow(ts string, opts ExtractOptions) bool {
+	at, err := time.Parse(time.RFC3339Nano, ts)
+	if err != nil {
+		return true
+	}
+	if !opts.Since.IsZero() && at.Before(opts.Since) {
+		return false
+	}
+	return opts.Until.IsZero() || !at.After(opts.Until)
 }
