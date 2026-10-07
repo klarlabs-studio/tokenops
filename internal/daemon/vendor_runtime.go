@@ -31,6 +31,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
+	accountsapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/accounts"
 	anthropicapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/anthropic"
 	claudeoauthapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/claudecodeoauth"
 	claudeai "go.klarlabs.de/tokenops/internal/infra/vendorusage/claudeusagemeter"
@@ -175,6 +176,7 @@ func startVendorUsagePollers(
 	if cfg.VendorUsage.Accounts.On() {
 		p := accounts.NewPoller(bus, accounts.PollerOptions{
 			Credentials: accountCredentials, Health: sourceHealth.For,
+			Readers: accountsapi.Readers(), Gateways: accountsapi.Gateways(),
 			Interval: cfg.VendorUsage.Accounts.Interval, Logger: logger,
 		})
 		sup.Go("vendor-accounts", p.Run)

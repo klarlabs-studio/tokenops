@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -89,7 +90,7 @@ func (ZAI) Source() string                 { return "zai-account" }
 // parsers; z.ai does not document it.
 var zaiUnits = map[int]time.Duration{1: 24 * time.Hour, 3: time.Hour, 5: time.Minute, 6: 7 * 24 * time.Hour}
 
-func (z ZAI) Read(ctx context.Context, key string) (Reading, error) {
+func (z ZAI) Read(ctx context.Context, key string) (usage.Reading, error) {
 	var resp struct {
 		Success bool   `json:"success"`
 		Code    int    `json:"code"`
@@ -105,24 +106,24 @@ func (z ZAI) Read(ctx context.Context, key string) (Reading, error) {
 		} `json:"data"`
 	}
 	if err := getJSONAuth(ctx, z.HTTP, base(z.BaseURL, "https://api.z.ai")+"/api/monitor/usage/quota/limit", key, &resp); err != nil {
-		return Reading{}, err
+		return usage.Reading{}, err
 	}
 	if !resp.Success {
 		// z.ai answers 200 with the refusal in the body: 1001 when no key
 		// came, 1002 and up for a key it does not accept.
 		if resp.Code >= 1000 && resp.Code < 1100 {
-			return Reading{}, fmt.Errorf("%w (z.ai %d)", ErrAuth, resp.Code)
+			return usage.Reading{}, fmt.Errorf("%w (z.ai %d)", usage.ErrAuth, resp.Code)
 		}
-		return Reading{}, fmt.Errorf("accounts: z.ai quota: %d %s", resp.Code, resp.Msg)
+		return usage.Reading{}, fmt.Errorf("accounts: z.ai quota: %d %s", resp.Code, resp.Msg)
 	}
-	r := Reading{Scope: "key", Subscription: true}
+	r := usage.Reading{Scope: "key", Subscription: true}
 	for _, l := range resp.Data.Limits {
 		// TOKENS_LIMIT is the coding plan's 5-hour and weekly windows;
 		// the MCP tool quota is not usage of the model.
 		if l.Type != "TOKENS_LIMIT" || !l.Percentage.ok {
 			continue
 		}
-		w := Window{UsedPct: l.Percentage.v}
+		w := usage.Window{UsedPct: l.Percentage.v}
 		if unit, ok := zaiUnits[l.Unit]; ok && l.Number > 0 {
 			w.Duration = unit * time.Duration(l.Number)
 		}
@@ -147,7 +148,7 @@ func (Kimi) Endpoint() string               { return "kimi" }
 func (Kimi) Provider() eventschema.Provider { return "kimi" }
 func (Kimi) Source() string                 { return "kimi-account" }
 
-func (k Kimi) Read(ctx context.Context, key string) (Reading, error) {
+func (k Kimi) Read(ctx context.Context, key string) (usage.Reading, error) {
 	type limit struct {
 		UsedRatio number `json:"used_ratio"`
 		ResetTime string `json:"reset_time"`
@@ -156,9 +157,9 @@ func (k Kimi) Read(ctx context.Context, key string) (Reading, error) {
 		Usages map[string]limit `json:"usages"`
 	}
 	if err := getJSON(ctx, k.HTTP, base(k.BaseURL, "https://api.kimi.com")+"/coding/v1/usages", key, &resp); err != nil {
-		return Reading{}, err
+		return usage.Reading{}, err
 	}
-	r := Reading{Scope: "account", Subscription: true}
+	r := usage.Reading{Scope: "account", Subscription: true}
 	for _, w := range []struct {
 		key, name string
 		d         time.Duration
@@ -171,7 +172,7 @@ func (k Kimi) Read(ctx context.Context, key string) (Reading, error) {
 		if !ok || !l.UsedRatio.ok {
 			continue
 		}
-		r.Windows = append(r.Windows, Window{Name: w.name, UsedPct: l.UsedRatio.v * 100, Duration: w.d, ResetsAt: parseTime(l.ResetTime)})
+		r.Windows = append(r.Windows, usage.Window{Name: w.name, UsedPct: l.UsedRatio.v * 100, Duration: w.d, ResetsAt: parseTime(l.ResetTime)})
 	}
 	return r, nil
 }
@@ -196,7 +197,7 @@ const minimaxUnlimited = 3
 // with HTTP 200 (seen 2026-10-03).
 const minimaxLoginFail = 1004
 
-func (m MiniMax) Read(ctx context.Context, key string) (Reading, error) {
+func (m MiniMax) Read(ctx context.Context, key string) (usage.Reading, error) {
 	var resp struct {
 		ModelRemains []struct {
 			ModelName       string `json:"model_name"`
@@ -214,17 +215,17 @@ func (m MiniMax) Read(ctx context.Context, key string) (Reading, error) {
 		} `json:"base_resp"`
 	}
 	if err := getJSON(ctx, m.HTTP, base(m.BaseURL, "https://api.minimax.io")+"/v1/token_plan/remains", key, &resp); err != nil {
-		return Reading{}, err
+		return usage.Reading{}, err
 	}
 	switch resp.BaseResp.StatusCode {
 	case 0:
 	case minimaxLoginFail:
 		// MiniMax answers 200 with the refusal in the body.
-		return Reading{}, fmt.Errorf("%w (MiniMax %d)", ErrAuth, minimaxLoginFail)
+		return usage.Reading{}, fmt.Errorf("%w (MiniMax %d)", usage.ErrAuth, minimaxLoginFail)
 	default:
-		return Reading{}, fmt.Errorf("accounts: MiniMax remains: %d %s", resp.BaseResp.StatusCode, resp.BaseResp.StatusMsg)
+		return usage.Reading{}, fmt.Errorf("accounts: MiniMax remains: %d %s", resp.BaseResp.StatusCode, resp.BaseResp.StatusMsg)
 	}
-	r := Reading{Scope: "key", Subscription: true}
+	r := usage.Reading{Scope: "key", Subscription: true}
 	if len(resp.ModelRemains) == 0 {
 		return r, nil
 	}
@@ -237,7 +238,7 @@ func (m MiniMax) Read(ctx context.Context, key string) (Reading, error) {
 		}
 	}
 	if e.IntervalStatus != minimaxUnlimited && e.IntervalLeftPct.ok {
-		w := Window{UsedPct: 100 - e.IntervalLeftPct.v}
+		w := usage.Window{UsedPct: 100 - e.IntervalLeftPct.v}
 		if e.EndTime > e.StartTime && e.StartTime > 0 {
 			w.Duration = time.Duration(e.EndTime-e.StartTime) * time.Millisecond
 		}
@@ -248,7 +249,7 @@ func (m MiniMax) Read(ctx context.Context, key string) (Reading, error) {
 		r.Windows = append(r.Windows, w)
 	}
 	if e.WeeklyStatus != minimaxUnlimited && e.WeeklyLeftPct.ok {
-		w := Window{Name: "week", UsedPct: 100 - e.WeeklyLeftPct.v, Duration: 7 * 24 * time.Hour}
+		w := usage.Window{Name: "week", UsedPct: 100 - e.WeeklyLeftPct.v, Duration: 7 * 24 * time.Hour}
 		if e.WeeklyEndTime > 0 {
 			w.ResetsAt = time.UnixMilli(e.WeeklyEndTime).UTC()
 		}
@@ -269,7 +270,7 @@ func (Synthetic) Endpoint() string               { return "synthetic" }
 func (Synthetic) Provider() eventschema.Provider { return "synthetic" }
 func (Synthetic) Source() string                 { return "synthetic-account" }
 
-func (s Synthetic) Read(ctx context.Context, key string) (Reading, error) {
+func (s Synthetic) Read(ctx context.Context, key string) (usage.Reading, error) {
 	var resp struct {
 		Subscription *struct {
 			Limit    number `json:"limit"`
@@ -278,13 +279,13 @@ func (s Synthetic) Read(ctx context.Context, key string) (Reading, error) {
 		} `json:"subscription"`
 	}
 	if err := getJSON(ctx, s.HTTP, base(s.BaseURL, "https://api.synthetic.new")+"/v2/quotas", key, &resp); err != nil {
-		return Reading{}, err
+		return usage.Reading{}, err
 	}
 	sub := resp.Subscription
 	if sub == nil || !sub.Limit.ok || sub.Limit.v <= 0 {
-		return Reading{Scope: "account"}, nil
+		return usage.Reading{Scope: "account"}, nil
 	}
-	return Reading{Scope: "account", Subscription: true, Windows: []Window{{
+	return usage.Reading{Scope: "account", Subscription: true, Windows: []usage.Window{{
 		Name: "requests", UsedPct: pct(sub.Requests.v, sub.Limit.v), ResetsAt: parseTime(sub.RenewsAt),
 	}}}, nil
 }
@@ -302,7 +303,7 @@ func (Chutes) Endpoint() string               { return "chutes" }
 func (Chutes) Provider() eventschema.Provider { return "chutes" }
 func (Chutes) Source() string                 { return "chutes-account" }
 
-func (c Chutes) Read(ctx context.Context, key string) (Reading, error) {
+func (c Chutes) Read(ctx context.Context, key string) (usage.Reading, error) {
 	type capped struct {
 		Usage    number `json:"usage"`
 		Cap      number `json:"cap"`
@@ -315,12 +316,12 @@ func (c Chutes) Read(ctx context.Context, key string) (Reading, error) {
 		Monthly      *capped `json:"monthly"`
 	}
 	if err := getJSON(ctx, c.HTTP, base(c.BaseURL, "https://api.chutes.ai")+"/users/me/subscription_usage", key, &resp); err != nil {
-		return Reading{}, err
+		return usage.Reading{}, err
 	}
 	if !resp.Subscription {
-		return Reading{Scope: "account"}, nil
+		return usage.Reading{Scope: "account"}, nil
 	}
-	r := Reading{Scope: "account", Subscription: true}
+	r := usage.Reading{Scope: "account", Subscription: true}
 	for _, w := range []struct {
 		name string
 		d    time.Duration
@@ -329,7 +330,7 @@ func (c Chutes) Read(ctx context.Context, key string) (Reading, error) {
 		if w.c == nil || w.c.Uncapped || !w.c.Cap.ok || w.c.Cap.v <= 0 {
 			continue
 		}
-		r.Windows = append(r.Windows, Window{Name: w.name, UsedPct: pct(w.c.Usage.v, w.c.Cap.v), Duration: w.d, ResetsAt: parseTime(w.c.ResetAt)})
+		r.Windows = append(r.Windows, usage.Window{Name: w.name, UsedPct: pct(w.c.Usage.v, w.c.Cap.v), Duration: w.d, ResetsAt: parseTime(w.c.ResetAt)})
 	}
 	return r, nil
 }
@@ -346,7 +347,7 @@ func (DeepInfra) Endpoint() string               { return "deepinfra" }
 func (DeepInfra) Provider() eventschema.Provider { return "deepinfra" }
 func (DeepInfra) Source() string                 { return "deepinfra-account" }
 
-func (d DeepInfra) Read(ctx context.Context, key string) (Reading, error) {
+func (d DeepInfra) Read(ctx context.Context, key string) (usage.Reading, error) {
 	var resp struct {
 		StripeBalance number `json:"stripe_balance"`
 		Recent        number `json:"recent"`
@@ -354,9 +355,9 @@ func (d DeepInfra) Read(ctx context.Context, key string) (Reading, error) {
 		Suspended     bool   `json:"suspended"`
 	}
 	if err := getJSON(ctx, d.HTTP, base(d.BaseURL, "https://api.deepinfra.com")+"/payment/checklist?compute_owed=true", key, &resp); err != nil {
-		return Reading{}, err
+		return usage.Reading{}, err
 	}
-	r := Reading{Scope: "account", LimitReached: resp.Suspended}
+	r := usage.Reading{Scope: "account", LimitReached: resp.Suspended}
 	if resp.Recent.ok {
 		r.UsedUSD, r.HasUsed = resp.Recent.v, true
 	}
@@ -381,15 +382,15 @@ func (Vercel) Endpoint() string               { return "vercel" }
 func (Vercel) Provider() eventschema.Provider { return "vercel" }
 func (Vercel) Source() string                 { return "vercel-account" }
 
-func (v Vercel) Read(ctx context.Context, key string) (Reading, error) {
+func (v Vercel) Read(ctx context.Context, key string) (usage.Reading, error) {
 	var resp struct {
 		Balance number `json:"balance"`
 	}
 	if err := getJSON(ctx, v.HTTP, base(v.BaseURL, "https://ai-gateway.vercel.sh")+"/v1/credits", key, &resp); err != nil {
-		return Reading{}, err
+		return usage.Reading{}, err
 	}
 	if !resp.Balance.ok {
-		return Reading{}, errors.New("accounts: Vercel AI Gateway credits: no balance in the answer")
+		return usage.Reading{}, errors.New("accounts: Vercel AI Gateway credits: no balance in the answer")
 	}
-	return Reading{Scope: "team", BalanceUSD: resp.Balance.v, HasBalance: true, LimitReached: resp.Balance.v <= 0}, nil
+	return usage.Reading{Scope: "team", BalanceUSD: resp.Balance.v, HasBalance: true, LimitReached: resp.Balance.v <= 0}, nil
 }
