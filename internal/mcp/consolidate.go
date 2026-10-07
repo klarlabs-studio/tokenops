@@ -302,7 +302,7 @@ type sessionsIn struct {
 	View      string `json:"view,omitempty" jsonschema:"enum=dx,enum=story,enum=prompts,description=dx (default): how sessions go, graded, with the one change worth making. story: recent work task by task. prompts: the operator's instructions scored against prompting heuristics (quotes withheld)."`
 	Days      int    `json:"days,omitempty" jsonschema:"description=dx and story: window in days (default 7)"`
 	All       bool   `json:"all,omitempty" jsonschema:"description=dx and story: read all history; overrides days"`
-	Limit     int    `json:"limit,omitempty" jsonschema:"description=story: most recent tasks (default 10, 0 for all). prompts: most recent instructions"`
+	Limit     int    `json:"limit,omitempty" jsonschema:"description=story: most recent tasks (default 10, -1 for all). prompts: most recent instructions"`
 	Since     string `json:"since,omitempty" jsonschema:"description=prompts: RFC3339 time or a duration such as 24h (default 7d)"`
 	Until     string `json:"until,omitempty" jsonschema:"description=prompts: RFC3339 time"`
 	SessionID string `json:"session_id,omitempty" jsonschema:"description=prompts: one Claude Code session"`
@@ -334,7 +334,8 @@ type recordsIn struct {
 	TEUPct       float64 `json:"teu_pct,omitempty" jsonschema:"description=scorecard: a measured token-efficiency uplift to grade, in percent"`
 	SACPct       float64 `json:"sac_pct,omitempty" jsonschema:"description=scorecard: a measured spend-attribution completeness to grade, in percent"`
 	BaselineRef  string  `json:"baseline_ref,omitempty" jsonschema:"description=scorecard: the baseline to compare against"`
-	Days         int     `json:"days,omitempty" jsonschema:"description=verify: window in days (default 30, 0 for all)"`
+	Days         int     `json:"days,omitempty" jsonschema:"description=verify: window in days (default 30)"`
+	All          bool    `json:"all,omitempty" jsonschema:"description=verify: read every transcript and event; overrides days"`
 	ExperimentID string  `json:"experiment_id,omitempty" jsonschema:"description=verify: the experiment to compare; required when several are present"`
 }
 
@@ -585,7 +586,7 @@ func publicTools() []publicTool {
 				"events":        {inner: "tokenops_domain_events"},
 				"workflow":      {inner: "tokenops_workflow_trace", params: params("workflow_id")},
 				"scorecard":     {inner: "tokenops_scorecard", params: params("since_days", "fvt_seconds", "teu_pct", "sac_pct", "baseline_ref")},
-				"verify":        {inner: "tokenops_verify", params: params("days", "experiment_id")},
+				"verify":        {inner: "tokenops_verify", params: params("days", "all", "experiment_id")},
 			},
 		},
 		{

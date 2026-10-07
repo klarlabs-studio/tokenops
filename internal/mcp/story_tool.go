@@ -17,7 +17,7 @@ type StoryDeps struct {
 type storyInput struct {
 	Days  int  `json:"days,omitempty" jsonschema:"description=Window in days (default 7 when omitted or 0). Use all for every transcript on disk."`
 	All   bool `json:"all,omitempty" jsonschema:"description=Read all history instead of a days window. Overrides days."`
-	Limit int  `json:"limit,omitempty" jsonschema:"description=Most recent tasks to return (default 10). 0 returns every task in the window."`
+	Limit int  `json:"limit,omitempty" jsonschema:"description=Most recent tasks to return (default 10). -1 returns every task in the window."`
 }
 
 // storyResult is the sessions capability's payload, shared with the

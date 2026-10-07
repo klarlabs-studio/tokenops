@@ -39,7 +39,7 @@ file or commit subject is among them, and this is how to check.`,
 			if err != nil {
 				return err
 			}
-			resolved, err := resolvePlanDB(dbPath)
+			resolved, err := resolvePlanDBIn(dbPath, cfg.Storage.Path)
 			if err != nil {
 				return err
 			}

@@ -169,20 +169,23 @@ func dxOf(records []agentdx.Record, err error, window string) DX {
 type Task struct {
 	// Title is the operator's own instruction, quoted. Empty when the
 	// caller withheld prompt text.
-	Title        string   `json:"title,omitempty"`
-	SessionID    string   `json:"session_id"`
-	Provider     string   `json:"provider,omitempty"`
-	Start        string   `json:"start"`
-	End          string   `json:"end"`
-	DurationSec  float64  `json:"duration_seconds"`
-	Boundary     string   `json:"boundary"`
-	Instructions int      `json:"instructions"`
-	Turns        int      `json:"turns"`
-	ToolCalls    int      `json:"tool_calls"`
-	PeakContext  int64    `json:"peak_context_tokens"`
-	Files        []string `json:"files,omitempty"`
-	Frictions    []string `json:"frictions"`
-	Clean        bool     `json:"clean"`
+	Title        string  `json:"title,omitempty"`
+	SessionID    string  `json:"session_id"`
+	Provider     string  `json:"provider,omitempty"`
+	Start        string  `json:"start"`
+	End          string  `json:"end"`
+	DurationSec  float64 `json:"duration_seconds"`
+	Boundary     string  `json:"boundary"`
+	Instructions int     `json:"instructions"`
+	Turns        int     `json:"turns"`
+	ToolCalls    int     `json:"tool_calls"`
+	// ContextCarried is the context tokens every turn of the task carried,
+	// summed: what it cost, where PeakContext is how large it grew.
+	ContextCarried int64    `json:"context_carried_tokens"`
+	PeakContext    int64    `json:"peak_context_tokens"`
+	Files          []string `json:"files,omitempty"`
+	Frictions      []string `json:"frictions"`
+	Clean          bool     `json:"clean"`
 }
 
 // Story is an account of recent work, newest task first.
@@ -224,19 +227,20 @@ func ComputeStory(w Window, limit int, titles bool, now time.Time) Story {
 			frictions = append(frictions, f.Detail)
 		}
 		task := Task{
-			SessionID:    t.SessionID,
-			Provider:     t.Provider,
-			Start:        t.Start.Format(time.RFC3339),
-			End:          t.End.Format(time.RFC3339),
-			DurationSec:  t.Duration().Seconds(),
-			Boundary:     string(t.Boundary),
-			Instructions: t.Instructions(),
-			Turns:        t.Turns(),
-			ToolCalls:    t.ToolCalls(),
-			PeakContext:  t.PeakContext(),
-			Files:        t.Files(),
-			Frictions:    frictions,
-			Clean:        t.Clean(),
+			SessionID:      t.SessionID,
+			Provider:       t.Provider,
+			Start:          t.Start.Format(time.RFC3339),
+			End:            t.End.Format(time.RFC3339),
+			DurationSec:    t.Duration().Seconds(),
+			Boundary:       string(t.Boundary),
+			Instructions:   t.Instructions(),
+			Turns:          t.Turns(),
+			ToolCalls:      t.ToolCalls(),
+			ContextCarried: t.ContextCarried(),
+			PeakContext:    t.PeakContext(),
+			Files:          t.Files(),
+			Frictions:      frictions,
+			Clean:          t.Clean(),
 		}
 		if titles {
 			task.Title = t.Title

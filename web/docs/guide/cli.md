@@ -913,7 +913,7 @@ typed, and everything the agent did before the next one.
 ```bash
 tokenops dx                       # last 7 days, every client found
 tokenops dx --days 30 --source codex
-tokenops dx --json
+tokenops dx --json                # {window, metrics, grades, recommendation}, as tokenops_agent_dx
 ```
 
 The **by model and effort** table splits instructions by the model and

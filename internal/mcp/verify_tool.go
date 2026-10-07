@@ -5,8 +5,6 @@ import (
 	"errors"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/capability/reconstruct"
-	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/capability/verify"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
@@ -23,7 +21,8 @@ type VerifyDeps struct {
 }
 
 type verifyInput struct {
-	Days         int    `json:"days,omitempty" jsonschema:"description=Window in days (default 30). 0 reads every transcript and event on disk."`
+	Days         int    `json:"days,omitempty" jsonschema:"description=Window in days (default 30)."`
+	All          bool   `json:"all,omitempty" jsonschema:"description=Read every transcript and event on disk. Overrides days."`
 	ExperimentID string `json:"experiment_id,omitempty" jsonschema:"description=Optional execution-linked experiment to compare; required if multiple trials are present."`
 }
 
@@ -128,26 +127,13 @@ func RegisterVerifyTool(s *Server, d VerifyDeps) error {
 			if days == 0 {
 				days = 30
 			}
-
-			window := sessions.Window{Root: d.Root, Days: days, All: days <= 0}
 			// A reader that broke is not fatal: whatever the other
 			// clients yielded is still worth comparing, and failing the
 			// call would hide the comparison entirely.
-			units, _ := sessions.Units(window, time.Now())
-
-			filter := sqlite.Filter{Limit: 200_000}
-			if days > 0 {
-				filter.Since = time.Now().AddDate(0, 0, -days)
-			}
-			events, err := d.Store.Query(ctx, filter)
+			report, _, err := verify.Run(ctx, d.Store, verify.Window{Root: d.Root, Days: days, All: in.All}, in.ExperimentID, time.Now())
 			if err != nil {
 				return nil, err
 			}
-
-			report := verify.CompareReconstructedExperiment(
-				reconstruct.FromUnits(units, reconstruct.Options{}),
-				events, in.ExperimentID,
-			)
 			res := verifyPayload(report)
 			return &res, nil
 		})

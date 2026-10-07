@@ -4185,6 +4185,9 @@
                           "clean": {
                             "type": "boolean"
                           },
+                          "context_carried_tokens": {
+                            "type": "integer"
+                          },
                           "duration_seconds": {
                             "type": "number"
                           },
