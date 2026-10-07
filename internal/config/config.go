@@ -160,6 +160,7 @@ func Load(path string) (Config, error) {
 	}
 
 	applyEnvOverrides(&cfg)
+	expandHomePaths(&cfg)
 
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
