@@ -72,8 +72,13 @@ func (r *Repos) Commits(ctx context.Context, root string, since time.Time) ([]Co
 	if err != nil || email == "" {
 		return nil, nil
 	}
+	// --author matches a pattern anywhere in "Name <email>": a bare
+	// address also matches jimbob@ for bob@, and its dots match any
+	// character. The bracketed address as a fixed string matches the
+	// operator's address whole and nothing else.
 	out, err := git(ctx, root, "log", "--branches", "--no-merges", "--reverse",
-		"--author="+email, "--since=@"+strconv.FormatInt(since.Unix(), 10),
+		"--fixed-strings", "--author=<"+email+">",
+		"--since=@"+strconv.FormatInt(since.Unix(), 10),
 		"--format=%H%x1f%at%x1f%s%x1f%D")
 	if err != nil {
 		return nil, err

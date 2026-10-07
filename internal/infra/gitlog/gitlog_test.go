@@ -228,6 +228,28 @@ func TestCommitsSelectsTheOperatorsRecentLocalWork(t *testing.T) {
 	}
 }
 
+// Author matching is the operator's address, whole: a longer address
+// that merely contains it, or one that only matches it as a regular
+// expression, belongs to someone else.
+func TestCommitsMatchesTheAuthorAddressExactly(t *testing.T) {
+	isolateGit(t)
+	const me = "bob.s@example.com"
+	since := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	repo := newRepo(t, me)
+	commit(t, repo, me, "mine", since.Add(time.Hour))
+	commit(t, repo, "jim"+me, "contains my address", since.Add(2*time.Hour))
+	commit(t, repo, "bobXs@example.com", "matches as a regexp", since.Add(3*time.Hour))
+	commit(t, repo, me+".au", "my address as a prefix", since.Add(4*time.Hour))
+
+	got, err := NewRepos().Commits(context.Background(), repo, since)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := subjects(got); len(s) != 1 || s[0] != "mine" {
+		t.Errorf("subjects = %q, want only the operator's own commit", s)
+	}
+}
+
 func TestBranchOf(t *testing.T) {
 	tests := []struct {
 		decoration, want string
