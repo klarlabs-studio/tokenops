@@ -163,6 +163,16 @@ func (p *Poller) refreshCookies(ctx context.Context) bool {
 	return changed
 }
 
+// expiredMessage says what an expired session means for this meter: one
+// read from a browser found no newer session there; a pasted one is not
+// read from a browser at all, so it needs connecting again.
+func (p *Poller) expiredMessage() string {
+	if p.opts.Cookies == nil {
+		return "claude-usage-meter: the claude.ai session has expired; run `tokenops vendor-usage setup claude-subscription` to connect it again"
+	}
+	return "claude-usage-meter: the claude.ai session has expired and the browser had no newer one"
+}
+
 // refusedRequest reports whether err is the kind a fresh cookie fixes.
 func refusedRequest(err error) bool {
 	return errors.Is(err, ErrBotCheck) || errors.Is(err, ErrUnauthorized)
@@ -191,7 +201,7 @@ func (p *Poller) scan(ctx context.Context) {
 		if err != nil {
 			p.recordErr(err)
 			if errors.Is(err, ErrUnauthorized) {
-				p.opts.Logger.Warn("claude-usage-meter: the claude.ai session has expired and the browser had no newer one", "err", err)
+				p.opts.Logger.Warn(p.expiredMessage(), "err", err)
 				return
 			}
 			p.opts.Logger.Warn("claude-usage-meter: organizations lookup failed", "err", err)
@@ -212,7 +222,7 @@ func (p *Poller) scan(ctx context.Context) {
 			return
 		}
 		if errors.Is(err, ErrUnauthorized) {
-			p.opts.Logger.Warn("claude-usage-meter: the claude.ai session has expired and the browser had no newer one", "err", err)
+			p.opts.Logger.Warn(p.expiredMessage(), "err", err)
 			return
 		}
 		p.opts.Logger.Warn("claude-usage-meter: Usage() failed", "err", err)

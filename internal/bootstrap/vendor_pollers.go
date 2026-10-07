@@ -206,13 +206,18 @@ func StartVendorUsagePollers(
 	return sig.Refresh
 }
 
-// browserSessionSource re-reads the claude.ai session from the browser.
-// It is wired for a pasted session too (ADR 0011): when claude.ai refuses
-// it, the browser's newer session is the meter's own way back, and the
-// pinned organization keeps another account's session from being metered
-// in its place. browser: none turns it off.
+// browserSessionSource re-reads the claude.ai session from the browser,
+// for a session the operator connected from one (from_browser): the
+// browser's newer session is then the meter's way back when claude.ai
+// refuses the stored one. browser: none turns it off.
+//
+// A pasted session gets none. The read opens the browser's "Safe Storage"
+// Keychain item, and the daemon raising that prompt in the background, for
+// a session nobody had read from a browser, was a dialog the operator had
+// not started. An expired pasted session stops, and the stale-reading
+// finding says how to reconnect it.
 func browserSessionSource(cfg config.ClaudeUsageMeterConfig) func(context.Context) (claudeusagemeter.Session, error) {
-	if strings.EqualFold(cfg.Browser, config.BrowserNone) {
+	if !cfg.FromBrowser || strings.EqualFold(cfg.Browser, config.BrowserNone) {
 		return nil
 	}
 	return func(ctx context.Context) (claudeusagemeter.Session, error) {
