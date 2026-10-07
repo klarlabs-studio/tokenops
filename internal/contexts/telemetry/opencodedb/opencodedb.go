@@ -475,8 +475,10 @@ func readV1Parts(db *sql.DB, session string) map[string]*v1Parts {
 }
 
 // SessionDirs maps each opencode session to the directory it ran in,
-// from whichever session table holds it.
-func SessionDirs(path string) (map[string]string, error) {
+// from whichever session table holds it. A non-zero since keeps the
+// sessions active since then, by the table's update (or else creation)
+// time; a table that records neither is read whole.
+func SessionDirs(path string, since time.Time) (map[string]string, error) {
 	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -493,7 +495,12 @@ func SessionDirs(path string) (map[string]string, error) {
 		if !hasTable(db, table) || !hasColumn(db, table, "directory") {
 			continue
 		}
-		rows, err := db.Query(`SELECT id, directory FROM ` + table)
+		query, args := `SELECT id, directory FROM `+table, []any{}
+		if col := activityColumn(db, table); col != "" && !since.IsZero() {
+			query += ` WHERE ` + col + ` >= ?`
+			args = append(args, since.UnixMilli())
+		}
+		rows, err := db.Query(query, args...)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrSchema, err)
 		}
@@ -506,4 +513,15 @@ func SessionDirs(path string) (map[string]string, error) {
 		_ = rows.Close()
 	}
 	return out, nil
+}
+
+// activityColumn names the column that says when a session was last
+// active, or "" when the table records no time.
+func activityColumn(db *sql.DB, table string) string {
+	for _, col := range []string{"time_updated", "time_created"} {
+		if hasColumn(db, table, col) {
+			return col
+		}
+	}
+	return ""
 }

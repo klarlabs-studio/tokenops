@@ -101,8 +101,9 @@ func Report(cfg config.Config) Answer {
 			Name:       "routing_approval",
 			Configured: policy.FromRoutingApproval(true),
 			Effective:  policy.Effective(daemon, policy.FromRoutingApproval(true)),
-			Setting:    "routing proposals are gated; decide them with `tokenops routing decide`",
-			Describes:  "whether a proposed model route on the proxy is applied or waits for you",
+			Setting: "routing proposals are gated; list them with `tokenops routing proposals` and decide them " +
+				"with the tokenops_routing tool (action decide) or POST /api/routing/decisions",
+			Describes: "whether a proposed model route on the proxy is applied or waits for you",
 		},
 	}
 	return Answer{Daemon: daemon, Subsystems: subsystems}

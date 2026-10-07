@@ -233,3 +233,36 @@ func TestSessionMessageBesideTheOldSessionTable(t *testing.T) {
 		t.Errorf("1.x row = %+v", got["a1"])
 	}
 }
+
+// SessionDirs answers for the window asked about. Without the bound, a
+// caller looking at last week ran git in every directory opencode had
+// ever been used in.
+func TestSessionDirsHonoursSince(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "opencode.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT NOT NULL, time_created INTEGER, time_updated INTEGER)`,
+		`INSERT INTO session VALUES ('old','/w/old',` + js(ms(-48*time.Hour)) + `,` + js(ms(-48*time.Hour)) + `)`,
+		`INSERT INTO session VALUES ('resumed','/w/resumed',` + js(ms(-48*time.Hour)) + `,` + js(ms(time.Hour)) + `)`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	_ = db.Close()
+
+	got, err := SessionDirs(path, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got["resumed"] != "/w/resumed" {
+		t.Errorf("SessionDirs since t0 = %v, want only the session updated since", got)
+	}
+	all, err := SessionDirs(path, time.Time{})
+	if err != nil || len(all) != 2 {
+		t.Errorf("SessionDirs with no bound = %v, %v; want both", all, err)
+	}
+}
