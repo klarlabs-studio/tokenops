@@ -291,9 +291,14 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		waitSubsystems: sup.Wait,
 		drainEvents: func(d time.Duration) error {
 			err := eventRuntime.Drain(d)
+			var skipped int64
+			if eventRuntime.Store != nil {
+				skipped = eventRuntime.Store.SkippedInvalid()
+			}
 			logger.Info("event bus drained",
 				"published", bus.PublishedCount(),
 				"dropped", bus.DroppedCount(),
+				"skipped_invalid", skipped,
 			)
 			return err
 		},

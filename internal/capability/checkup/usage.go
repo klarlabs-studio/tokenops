@@ -2,6 +2,9 @@ package checkup
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -70,9 +73,23 @@ func (t *tally) add(tn turn) {
 	u.CostUSD += cost
 }
 
+// usageRead is what readUsage gathered.
+type usageRead struct {
+	usage      []Usage
+	turnsByCWD map[string]int
+	// warnings names each source that could not be read in full.
+	warnings []string
+	// partial means the read stopped before every source was read, so the
+	// totals undercount.
+	partial bool
+}
+
+// reader reads one client's turns since since into add.
+type reader func(ctx context.Context, since time.Time, add func(turn)) error
+
 // readUsage reads every client's turns since since, and how many turns
 // ran in each working directory (for the standing-context finding).
-func readUsage(ctx context.Context, home string, since time.Time) ([]Usage, map[string]int, []string) {
+func readUsage(ctx context.Context, home string, since time.Time) usageRead {
 	engine, err := pricing.EffectiveEngine(filepath.Join(home, ".tokenops", "pricing"))
 	if err != nil {
 		// A fresh machine has no refreshed card; the embedded one prices.
@@ -87,18 +104,23 @@ func readUsage(ctx context.Context, home string, since time.Time) ([]Usage, map[
 		t.add(tn)
 		sessionTurns[tn.session]++
 	}
-	var warnings []string
-	for _, read := range []func(time.Time, func(turn)) error{readClaude, readCodex, readGemini, readOpencode} {
-		if err := read(since, add); err != nil {
-			warnings = append(warnings, err.Error())
+	var r usageRead
+	for _, read := range []reader{readClaude, readCodex, readGemini, readOpencode} {
+		if err := read(ctx, since, add); err != nil {
+			r.warnings = append(r.warnings, err.Error())
 		}
 	}
-	out := make([]Usage, 0, len(t.by))
-	for _, u := range t.by {
-		out = append(out, *u)
+	if err := ctx.Err(); err != nil {
+		r.partial = true
+		r.warnings = append(r.warnings, fmt.Sprintf("usage read stopped early (%v): totals are partial", err))
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].CostUSD > out[j].CostUSD })
-	return out, turnsPerDir(sessionTurns, since), warnings
+	r.usage = make([]Usage, 0, len(t.by))
+	for _, u := range t.by {
+		r.usage = append(r.usage, *u)
+	}
+	sort.Slice(r.usage, func(i, j int) bool { return r.usage[i].CostUSD > r.usage[j].CostUSD })
+	r.turnsByCWD = turnsPerDir(sessionTurns, since)
+	return r
 }
 
 // turnsPerDir folds turns per session into turns per working directory.
@@ -125,20 +147,69 @@ func recentFiles(files []string, since time.Time) []string {
 	return out
 }
 
-func readClaude(since time.Time, add func(turn)) error {
-	root, err := claudecodejsonl.DefaultRoot()
-	if err != nil {
-		return nil
+// sessionFiles lists a client's session files under root. A root that
+// does not exist means the client is not in use and is not worth a
+// warning; one that exists but cannot be read is, or its usage would read
+// as none.
+func sessionFiles(harness, root string, rootErr error, find func(string) ([]string, error)) ([]string, error) {
+	if rootErr != nil {
+		return nil, fmt.Errorf("%s: locate session records: %w", harness, rootErr)
 	}
-	files, err := claudecodejsonl.FindSessionFiles(root)
+	d, err := os.Open(root)
 	if err != nil {
-		return nil
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("%s: session records unreadable, usage not counted: %w", harness, err)
+	}
+	_ = d.Close()
+	files, err := find(root)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("%s: list session records: %w", harness, err)
+	}
+	return files, nil
+}
+
+// readFiles reads each file changed since since and reports the ones that
+// could not be read. A file removed between listing and reading is gone,
+// not unreadable. It stops when ctx ends; readUsage reports that.
+func readFiles(ctx context.Context, harness string, files []string, since time.Time, read func(string) error) error {
+	var (
+		failed int
+		first  error
+	)
+	for _, f := range recentFiles(files, since) {
+		if ctx.Err() != nil {
+			break
+		}
+		if err := read(f); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			failed++
+			if first == nil {
+				first = err
+			}
+		}
+	}
+	if failed > 0 {
+		return fmt.Errorf("%s: %d session file(s) unreadable, usage undercounted: %w", harness, failed, first)
+	}
+	return nil
+}
+
+func readClaude(ctx context.Context, since time.Time, add func(turn)) error {
+	root, err := claudecodejsonl.DefaultRoot()
+	return readClaudeAt(ctx, root, err, since, add)
+}
+
+func readClaudeAt(ctx context.Context, root string, rootErr error, since time.Time, add func(turn)) error {
+	files, err := sessionFiles("Claude Code", root, rootErr, claudecodejsonl.FindSessionFiles)
+	if err != nil {
+		return err
 	}
 	// Claude Code writes a message once per content block; the message
 	// id is what makes it one turn.
 	seen := map[string]bool{}
-	for _, f := range recentFiles(files, since) {
-		_ = claudecodejsonl.ReadFile(f, func(t claudecodejsonl.Turn) error {
+	return readFiles(ctx, "Claude Code", files, since, func(f string) error {
+		return claudecodejsonl.ReadFile(f, func(t claudecodejsonl.Turn) error {
 			if t.MessageID != "" {
 				if seen[t.MessageID] {
 					return nil
@@ -153,21 +224,17 @@ func readClaude(since time.Time, add func(turn)) error {
 			})
 			return nil
 		})
-	}
-	return nil
+	})
 }
 
-func readCodex(since time.Time, add func(turn)) error {
+func readCodex(ctx context.Context, since time.Time, add func(turn)) error {
 	root, err := codexjsonl.DefaultRoot()
+	files, err := sessionFiles("Codex", root, err, codexjsonl.FindSessionFiles)
 	if err != nil {
-		return nil
+		return err
 	}
-	files, err := codexjsonl.FindSessionFiles(root)
-	if err != nil {
-		return nil
-	}
-	for _, f := range recentFiles(files, since) {
-		_ = codexjsonl.ReadFile(f, func(t codexjsonl.Turn) error {
+	return readFiles(ctx, "Codex", files, since, func(f string) error {
+		return codexjsonl.ReadFile(f, func(t codexjsonl.Turn) error {
 			add(turn{
 				harness: "Codex", model: t.Model, session: t.SessionID, at: t.Timestamp,
 				provider: eventschema.ProviderOpenAI,
@@ -175,22 +242,18 @@ func readCodex(since time.Time, add func(turn)) error {
 			})
 			return nil
 		})
-	}
-	return nil
+	})
 }
 
-func readGemini(since time.Time, add func(turn)) error {
+func readGemini(ctx context.Context, since time.Time, add func(turn)) error {
 	root, err := geminicli.DefaultRoot()
+	files, err := sessionFiles("Gemini CLI", root, err, geminicli.FindSessionFiles)
 	if err != nil {
-		return nil
-	}
-	files, err := geminicli.FindSessionFiles(root)
-	if err != nil {
-		return nil
+		return err
 	}
 	now := time.Now()
-	for _, f := range recentFiles(files, since) {
-		_ = geminicli.ReadFile(f, now, func(t geminicli.Turn) error {
+	return readFiles(ctx, "Gemini CLI", files, since, func(f string) error {
+		return geminicli.ReadFile(f, now, func(t geminicli.Turn) error {
 			add(turn{
 				harness: "Gemini CLI", model: t.Model, session: t.SessionID, at: t.Timestamp,
 				provider: eventschema.ProviderGemini,
@@ -198,17 +261,19 @@ func readGemini(since time.Time, add func(turn)) error {
 			})
 			return nil
 		})
-	}
-	return nil
+	})
 }
 
-func readOpencode(since time.Time, add func(turn)) error {
+func readOpencode(_ context.Context, since time.Time, add func(turn)) error {
 	path, err := opencodedb.DefaultPath()
 	if err != nil {
-		return nil
+		return fmt.Errorf("opencode: locate database: %w", err)
 	}
 	if _, err := os.Stat(path); err != nil {
-		return nil
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("opencode: database unreadable, usage not counted: %w", err)
 	}
 	return opencodedb.Read(path, opencodedb.Options{Since: since}, func(m opencodedb.Message) error {
 		if m.Role != opencodedb.Assistant {

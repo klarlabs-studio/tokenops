@@ -63,6 +63,9 @@ type Report struct {
 	Findings []Finding   `json:"findings"`
 	// Warnings names what could not be read; the rest is still reported.
 	Warnings []string `json:"warnings,omitempty"`
+	// Partial means the usage read stopped before every source was read,
+	// so Usage and Total undercount.
+	Partial bool `json:"partial,omitempty"`
 }
 
 // Compute runs the checkup.
@@ -76,14 +79,16 @@ func Compute(ctx context.Context, o Options) Report {
 	since := o.Now.AddDate(0, 0, -o.Days)
 	window := "last " + strconv.Itoa(o.Days) + "d"
 
-	usage, turnsByCWD, warnings := readUsage(ctx, o.Home, since)
+	read := readUsage(ctx, o.Home, since)
+	turnsByCWD := read.turnsByCWD
 	records, err := agentdx.ExtractAll(agentdx.ExtractOptions{Since: since, WithPromptText: true})
 	r := Report{
 		Window:   window,
-		Usage:    usage,
-		Total:    total(usage),
+		Usage:    read.usage,
+		Total:    total(read.usage),
 		DX:       sessions.DXFromRecords(records, err, window),
-		Warnings: warnings,
+		Warnings: read.warnings,
+		Partial:  read.partial,
 	}
 	r.Findings = append(r.Findings, rereads(records, o.Installed["read-guard"])...)
 	r.Findings = append(r.Findings, standingContext(o.Home, turnsByCWD, r.Total)...)

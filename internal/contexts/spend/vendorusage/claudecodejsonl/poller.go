@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -51,17 +52,34 @@ type PollerOptions struct {
 	BaseURLAt func(time.Time) string
 }
 
+// The in-memory dedup set is bounded. A duplicate message ID comes from
+// the next content block of the same message, written seconds later, or
+// from a recent session continued into another file, so IDs of turns older
+// than seenHorizon are dropped after each scan, and the set never holds
+// more than maxSeenIDs. An evicted ID that does reappear is caught by the
+// store, which keeps the first row for the deterministic envelope ID — the
+// same guarantee a daemon restart, which starts with an empty set, relies
+// on.
+const (
+	seenHorizon = 7 * 24 * time.Hour
+	maxSeenIDs  = 200_000
+)
+
 // Poller diffs successive scans of the JSONL tree and publishes one
 // PromptEvent per newly-seen assistant turn into the events bus.
-// Dedup is by Anthropic message ID kept in-memory; across daemon
-// restarts the store's envelope-ID dedup catches any replay because
-// envelope IDs are deterministic per (message_id).
+// Dedup is by Anthropic message ID kept in-memory and bounded (see
+// seenHorizon); across daemon restarts the store's envelope-ID dedup
+// catches any replay because envelope IDs are deterministic per
+// (message_id).
 type Poller struct {
 	bus  events.Bus
 	opts PollerOptions
 
-	mu        sync.Mutex
-	seen      map[string]struct{} // message IDs we've already emitted
+	mu sync.Mutex
+	// seen maps each emitted message ID to its turn's time (unix ns).
+	seen      map[string]int64
+	maxSeen   int
+	now       func() time.Time
 	publishes int64
 
 	// tail belongs to the scan goroutine alone.
@@ -78,9 +96,11 @@ func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
 		opts.Logger = slog.Default()
 	}
 	return &Poller{
-		bus:  bus,
-		opts: opts,
-		seen: make(map[string]struct{}),
+		bus:     bus,
+		opts:    opts,
+		seen:    make(map[string]int64),
+		maxSeen: maxSeenIDs,
+		now:     time.Now,
 	}
 }
 
@@ -132,6 +152,36 @@ func (p *Poller) scan(ctx context.Context, root string) {
 	}, func(path string, err error) {
 		p.opts.Logger.Warn("claude-code jsonl read failed", "path", path, "err", err)
 	})
+	p.pruneSeen()
+}
+
+// pruneSeen drops message IDs no later scan is likely to meet again, then
+// the oldest ones beyond the cap.
+func (p *Poller) pruneSeen() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	cutoff := p.now().Add(-seenHorizon).UnixNano()
+	for id, at := range p.seen {
+		if at < cutoff {
+			delete(p.seen, id)
+		}
+	}
+	over := len(p.seen) - p.maxSeen
+	if over <= 0 {
+		return
+	}
+	ats := make([]int64, 0, len(p.seen))
+	for _, at := range p.seen {
+		ats = append(ats, at)
+	}
+	slices.Sort(ats)
+	// Ties at the boundary go too: the cap is a ceiling, not a target.
+	newestEvicted := ats[over-1]
+	for id, at := range p.seen {
+		if at <= newestEvicted {
+			delete(p.seen, id)
+		}
+	}
 }
 
 // baseURLAt is the endpoint Claude Code was pointed at at t.
@@ -150,7 +200,7 @@ func (p *Poller) visitor(ctx context.Context) func(Turn) error {
 			p.mu.Unlock()
 			return nil
 		}
-		p.seen[turn.MessageID] = struct{}{}
+		p.seen[turn.MessageID] = turn.Timestamp.UnixNano()
 		p.mu.Unlock()
 		if p.bus != nil {
 			p.publishWait(ctx, newEnvelope(turn, p.opts.CostSource, p.baseURLAt(turn.Timestamp)))

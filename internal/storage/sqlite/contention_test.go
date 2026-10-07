@@ -66,12 +66,19 @@ func TestAppendBatchDeadlineIsContention(t *testing.T) {
 }
 
 // A malformed envelope will fail identically on every attempt, so it must
-// not be reported as contention or the bus would retry it forever.
+// not be reported as contention or the bus would retry it forever. In a
+// batch it is skipped outright; alone, Append reports it.
 func TestAppendBatchMalformedIsNotContention(t *testing.T) {
 	s := newTestStore(t)
-	err := s.AppendBatch(context.Background(), []*eventschema.Envelope{{ID: "broken"}})
+	if err := s.AppendBatch(context.Background(), []*eventschema.Envelope{{ID: "broken"}}); err != nil {
+		t.Fatalf("AppendBatch = %v, want the malformed envelope skipped", err)
+	}
+	if s.SkippedInvalid() != 1 {
+		t.Fatalf("SkippedInvalid = %d, want 1", s.SkippedInvalid())
+	}
+	err := s.Append(context.Background(), &eventschema.Envelope{ID: "broken"})
 	if err == nil {
-		t.Fatal("AppendBatch accepted an envelope with no payload")
+		t.Fatal("Append accepted an envelope with no payload")
 	}
 	if IsContended(err) {
 		t.Fatalf("IsContended(%v) = true, want false", err)
