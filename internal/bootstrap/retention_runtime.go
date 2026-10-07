@@ -1,4 +1,4 @@
-package daemon
+package bootstrap
 
 import (
 	"context"
@@ -10,10 +10,12 @@ import (
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
-// startRetentionRuntime creates and supervises the configured event-retention
+// StartRetentionRuntime creates and supervises the configured event-retention
 // worker. The wrapper waits for the scheduler's internal loop to stop, making
-// its shutdown part of the daemon lifecycle.
-func startRetentionRuntime(cfg config.RetentionConfig, store *sqlite.Store, sup *lifecycle.Supervisor, logger *slog.Logger) error {
+// its shutdown part of the daemon lifecycle. A config whose policies do not
+// parse is an error; a config with retention off or no policies starts
+// nothing.
+func StartRetentionRuntime(cfg config.RetentionConfig, store *sqlite.Store, sup *lifecycle.Supervisor, logger *slog.Logger) error {
 	if !cfg.Enabled() {
 		return nil
 	}
