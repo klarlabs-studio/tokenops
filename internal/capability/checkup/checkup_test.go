@@ -1,6 +1,7 @@
 package checkup
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -108,5 +109,22 @@ func TestTally(t *testing.T) {
 	x := tl.by[[2]string{"Codex", "no-such-model"}]
 	if x.UnpricedTurns != 1 || x.CostUSD != 0 {
 		t.Errorf("unpriced = %+v", x)
+	}
+}
+
+// A cache write is part of a turn's input but bills above it, so a
+// write-heavy turn is worth more than the same tokens as plain input.
+func TestTallyPricesCacheWrites(t *testing.T) {
+	value := func(tn turn) float64 {
+		tl := &tally{engine: spend.NewEngine(spend.DefaultTable()), by: map[[2]string]*Usage{}}
+		tl.add(tn)
+		return tl.by[[2]string{tn.harness, tn.model}].CostUSD
+	}
+	plain := turn{harness: "Claude Code", model: "claude-sonnet-5", provider: eventschema.ProviderAnthropic, at: t0, input: 1_000_000}
+	written := plain
+	written.written, written.written1h = 1_000_000, 500_000
+	// claude-sonnet-5: $2 input, so writes are $2.50 (5m) and $4 (1h).
+	if got, want := value(written)-value(plain), 0.5*2.5+0.5*4-2.0; math.Abs(got-want) > 1e-9 {
+		t.Errorf("write premium = %v, want %v", got, want)
 	}
 }

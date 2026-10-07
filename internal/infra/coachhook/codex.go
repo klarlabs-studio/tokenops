@@ -76,17 +76,13 @@ func codexTurnCostUSD(tbl spend.Table, u *codexUsage, model string) float64 {
 	if err != nil {
 		return 0
 	}
-	cachedRate := r.CachedInputPerMillion
-	if cachedRate == 0 {
-		cachedRate = r.InputPerMillion
-	}
 	uncached := u.InputTokens - u.CachedInputTokens
 	if uncached < 0 {
 		uncached = 0
 	}
 	return perMillion(uncached, r.InputPerMillion) +
-		perMillion(u.CachedInputTokens, cachedRate) +
-		perMillion(u.CacheWriteTokens, r.InputPerMillion) +
+		perMillion(u.CachedInputTokens, r.CacheReadRate()) +
+		perMillion(u.CacheWriteTokens, r.CacheWriteRate()) +
 		perMillion(u.OutputTokens, r.OutputPerMillion)
 }
 
