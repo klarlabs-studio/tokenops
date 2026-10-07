@@ -27,7 +27,8 @@
 - **verify:** `tokenops_verify` and `tokenops_records` (view=verify) take `all` to compare every transcript and event, as `tokenops verify --days 0` does; their documented `days: 0` meant the 30-day default, so older work could not be compared
 - **story:** `tokenops_story` and `/api/story` give each task `context_carried_tokens`, as `tokenops story --json` does; `limit: -1` returns every task, where the documented `0` meant the default ten
 - **plan:** `tokenops plan headroom` answers from what the vendors report when no plan is bound, as the MCP tool does, instead of refusing with "no plans configured"; glance, plan headroom, verify, otel and the plan history read the configured `storage.path` instead of always `~/.tokenops/events.db`
-
+- **anthropic:** `tokenops vendor-usage backfill` stores the whole window it reports; it read one page of the Admin usage report, the first 24 of 168 hourly buckets. The live Admin poller reads every page too, instead of catching up a page per poll
+- **task:** `tokenops task list --metrics` reads the store every other command reads; it always opened `~/.tokenops/events.db`, whatever `TOKENOPS_STORAGE_PATH` said
 - **scorecard:** the MCP tool and `/api/scorecard` grade the agent KPIs (confirmation-gate, regenerate, tool-success and destructive-action rates) as `tokenops scorecard` always did; they graded the same week on four fewer metrics. `tokenops scorecard` reads the configured `storage.path` instead of always `~/.tokenops/events.db`
 - **scorecard, coach:** transcripts last written before the window are no longer read; a seven-day scorecard over 2.1 GB of history went from 14.5s to 7.2s
 - **coach:** `coach prompts`' average turn counts only the turns inside the window; it counted every turn in each file written during the window, and none from a session still running after it
