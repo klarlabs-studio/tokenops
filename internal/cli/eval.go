@@ -4,13 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"os"
-	"path/filepath"
 	"slices"
 
 	"github.com/spf13/cobra"
 
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/eval"
+	"go.klarlabs.de/tokenops/internal/capability/evals"
 )
 
 func newEvalCmd() *cobra.Command {
@@ -39,35 +37,26 @@ internal/contexts/optimization/eval/testdata. Use --output to persist the new re
 next baseline.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			typed := make([]eval.OptimizationType, 0, len(filters))
-			for _, f := range filters {
-				typed = append(typed, eval.OptimizationType(f))
-			}
-			result, err := eval.Run(cmd.Context(), eval.RunParams{
-				Suites:           suitesGlob,
-				BaselinePath:     baselinePath,
-				OptimizerFilters: typed,
-				Gate: eval.Gate{
-					MaxSuccessRateDropPct: maxDrop,
-					MaxQualityDriftPct:    maxDrift,
-					MinTotalCases:         minCases,
-				},
+			result, err := evals.Run(cmd.Context(), evals.Params{
+				Suites:             suitesGlob,
+				Baseline:           baselinePath,
+				Optimizers:         filters,
+				MaxSuccessDropPct:  maxDrop,
+				MaxQualityDriftPct: maxDrift,
+				MinCases:           minCases,
 			})
 			if err != nil {
 				return err
 			}
 			if outputPath != "" {
-				if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
-					return fmt.Errorf("write report: %w", err)
-				}
-				if err := eval.PersistBaseline(outputPath, result.Report); err != nil {
-					return fmt.Errorf("write report: %w", err)
+				if err := evals.SaveBaseline(outputPath, result.Report); err != nil {
+					return err
 				}
 			}
 			if jsonOut {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(struct {
-					Report *eval.Report     `json:"report"`
-					Gate   *eval.GateResult `json:"gate"`
+					Report *evals.Report     `json:"report"`
+					Gate   *evals.GateResult `json:"gate"`
 				}{Report: result.Report, Gate: result.Gate})
 			}
 			renderEvalText(cmd, result.Suites, result.Report, result.Gate)
@@ -90,9 +79,9 @@ next baseline.`,
 	return cmd
 }
 
-func renderEvalText(cmd *cobra.Command, suites []*eval.Suite, r *eval.Report, g *eval.GateResult) {
+func renderEvalText(cmd *cobra.Command, suites []*evals.Suite, r *evals.Report, g *evals.GateResult) {
 	out := cmd.OutOrStdout()
-	fmt.Fprintf(out, "suites: %s\n", eval.SuiteNames(suites))
+	fmt.Fprintf(out, "suites: %s\n", evals.SuiteNames(suites))
 	fmt.Fprintf(out, "cases:  %d (passed=%d, success=%.2f%%)\n",
 		r.TotalCases, r.PassedCases, r.SuccessRate)
 	fmt.Fprintln(out)
