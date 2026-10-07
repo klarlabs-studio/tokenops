@@ -106,7 +106,6 @@ var directDomainImports = map[string][]string{
 		"go.klarlabs.de/tokenops/internal/contexts/security/audit",
 		"go.klarlabs.de/tokenops/internal/contexts/security/dashauth",
 		"go.klarlabs.de/tokenops/internal/contexts/security/tlsmint",
-		"go.klarlabs.de/tokenops/internal/contexts/spend/plans",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/spend",
 		"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow",
 	},
