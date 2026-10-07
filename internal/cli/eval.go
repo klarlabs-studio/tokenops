@@ -3,8 +3,10 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -33,7 +35,7 @@ compares the current report against the baseline and (with --enforce)
 exits non-zero on any violation.
 
 The default suite glob covers the bundled fixtures under
-internal/eval/testdata. Use --output to persist the new report as the
+internal/contexts/optimization/eval/testdata. Use --output to persist the new report as the
 next baseline.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -96,7 +98,9 @@ func renderEvalText(cmd *cobra.Command, suites []*eval.Suite, r *eval.Report, g 
 	fmt.Fprintln(out)
 	fmt.Fprintf(out, "%-22s %6s %6s %8s %10s %8s\n",
 		"OPTIMIZER", "CASES", "PASS", "AVG_QUAL", "SAVED_TOK", "APPLY%")
-	for k, s := range r.Optimizers {
+	// Sorted: ranging over the maps printed a different order each run.
+	for _, k := range slices.Sorted(maps.Keys(r.Optimizers)) {
+		s := r.Optimizers[k]
 		fmt.Fprintf(out, "%-22s %6d %6d %8.3f %10d %8.2f\n",
 			k, s.TotalCases, s.PassedCases, s.AvgQuality, s.TotalSaved, s.ApplyRate)
 	}
@@ -114,7 +118,8 @@ func renderEvalText(cmd *cobra.Command, suites []*eval.Suite, r *eval.Report, g 
 	}
 	if len(g.Drift) > 0 {
 		fmt.Fprintln(out, "drift:")
-		for k, d := range g.Drift {
+		for _, k := range slices.Sorted(maps.Keys(g.Drift)) {
+			d := g.Drift[k]
 			sign := "+"
 			if d < 0 {
 				sign = ""
