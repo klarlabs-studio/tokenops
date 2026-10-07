@@ -51,13 +51,20 @@ function findBinary(t) {
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 
+// Every target ships every release. A missing binary means the release is
+// incomplete, and publishing the rest would leave npx broken on that
+// platform while the job reports success, so fail before writing anything.
+const missing = TARGETS.filter((t) => !findBinary(t));
+if (missing.length > 0) {
+  for (const t of missing) {
+    console.error(`missing ${t.platform}-${t.arch}: no tokenops_${t.goos}_${t.goarch}*/tokenops under ${distDir}`);
+  }
+  process.exit(1);
+}
+
 const built = [];
 for (const t of TARGETS) {
   const src = findBinary(t);
-  if (!src) {
-    console.warn(`skip ${t.platform}-${t.arch}: no binary under ${distDir}`);
-    continue;
-  }
   const name = `@klarlabs-studio/tokenops-${t.platform}-${t.arch}`;
   const pkgDir = join(outDir, `tokenops-${t.platform}-${t.arch}`);
   const binDir = join(pkgDir, "bin");
