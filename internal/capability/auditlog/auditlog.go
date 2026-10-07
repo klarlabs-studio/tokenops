@@ -1,22 +1,29 @@
 // Package auditlog reads the audit log: who changed configuration, plans,
-// budgets and optimizations, and when. `tokenops audit` and the MCP
-// audit view both answer from here (ADR 0010), so the CLI and an agent
-// cannot filter the same log differently.
+// budgets and optimizations, and when. `tokenops audit`, the MCP audit
+// view and the daemon's GET /api/audit all answer from here (ADR 0010),
+// so no two surfaces can filter the same log differently.
+//
+// A query written as text (the HTTP form) is parsed in one step and run
+// in another, so an adapter can tell a caller's mistake (a window that
+// does not parse) from a store failure without inspecting error text.
 package auditlog
 
 import (
 	"context"
+	"strconv"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
-// Entry is one audited change.
+// Entry is one audited change. Aliased so the audit domain stays its
+// single definition.
 type Entry = audit.Entry
 
 // Query narrows the log. Empty fields are not constrained; Limit is
-// passed through, so each surface keeps its own default.
+// passed through as given.
 type Query struct {
 	Action string
 	Actor  string
@@ -43,4 +50,38 @@ func Read(ctx context.Context, store *sqlite.Store, q Query) (Log, error) {
 		return Log{}, err
 	}
 	return Log{Entries: entries}, nil
+}
+
+// defaultLookback is a written query's window when it names no since.
+const defaultLookback = 24 * time.Hour
+
+// defaultLimit caps a written query when it names no positive limit.
+const defaultLimit = 100
+
+// Request is a query as a caller wrote it: since is RFC 3339 or a
+// duration such as 24h (24h when empty), until is RFC 3339 (open when
+// empty), limit is a positive integer (100 otherwise).
+type Request struct {
+	Since, Until  string
+	Action, Actor string
+	Limit         string
+}
+
+// Parse validates the window. Its error is the caller's mistake and its
+// text is fit to show them; an unparsable limit falls back to the
+// default rather than failing.
+func Parse(r Request) (Query, error) {
+	f, err := analytics.QueryParams{
+		Since:        r.Since,
+		Until:        r.Until,
+		DefaultSince: defaultLookback,
+	}.ToFilter()
+	if err != nil {
+		return Query{}, err
+	}
+	limit, _ := strconv.Atoi(r.Limit)
+	if limit <= 0 {
+		limit = defaultLimit
+	}
+	return Query{Action: r.Action, Actor: r.Actor, Since: f.Since, Until: f.Until, Limit: limit}, nil
 }

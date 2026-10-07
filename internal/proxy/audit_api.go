@@ -3,7 +3,7 @@ package proxy
 import (
 	"net/http"
 
-	"go.klarlabs.de/tokenops/internal/capability/auditquery"
+	"go.klarlabs.de/tokenops/internal/capability/auditlog"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -12,7 +12,7 @@ import (
 // `tokenops_records (view=audit)` tool already query the same store directly, so
 // /api/audit completes the parity triangle.
 type AuditHandlers struct {
-	log *auditquery.Log
+	store *sqlite.Store
 }
 
 // NewAuditHandlers wraps the store's audit log for the HTTP layer.
@@ -20,7 +20,7 @@ func NewAuditHandlers(store *sqlite.Store) *AuditHandlers {
 	if store == nil {
 		return nil
 	}
-	return &AuditHandlers{log: auditquery.NewLog(store)}
+	return &AuditHandlers{store: store}
 }
 
 // WithAudit installs the audit handler on the proxy.
@@ -38,7 +38,7 @@ func (h *AuditHandlers) Register(mux RouteMux) {
 
 func (h *AuditHandlers) list(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	query, err := auditquery.Parse(auditquery.Request{
+	query, err := auditlog.Parse(auditlog.Request{
 		Since:  q.Get("since"),
 		Until:  q.Get("until"),
 		Action: q.Get("action"),
@@ -49,7 +49,7 @@ func (h *AuditHandlers) list(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
-	res, err := h.log.List(r.Context(), query)
+	res, err := auditlog.Read(r.Context(), h.store, query)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return

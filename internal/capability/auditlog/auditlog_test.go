@@ -52,3 +52,43 @@ func TestReadFiltersNewestFirst(t *testing.T) {
 		t.Fatalf("limited = %+v", limited.Entries)
 	}
 }
+
+func TestParse(t *testing.T) {
+	tests := []struct {
+		name      string
+		req       Request
+		wantErr   bool
+		wantLimit int
+	}{
+		{"defaults", Request{}, false, defaultLimit},
+		{"explicit limit", Request{Limit: "5"}, false, 5},
+		{"bad limit falls back", Request{Limit: "lots"}, false, defaultLimit},
+		{"negative limit falls back", Request{Limit: "-3"}, false, defaultLimit},
+		{"bad since", Request{Since: "nope"}, true, 0},
+		{"bad until", Request{Until: "nope"}, true, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := Parse(tt.req)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err == nil && q.Limit != tt.wantLimit {
+				t.Errorf("limit = %d, want %d", q.Limit, tt.wantLimit)
+			}
+		})
+	}
+}
+
+func TestParseDefaultsToTheLastDay(t *testing.T) {
+	q, err := Parse(Request{Action: "config_change", Actor: "api"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if age := time.Since(q.Since); age < 23*time.Hour || age > 25*time.Hour {
+		t.Errorf("since is %v ago, want about 24h", age)
+	}
+	if q.Action != "config_change" || q.Actor != "api" || !q.Until.IsZero() {
+		t.Errorf("query %+v", q)
+	}
+}
