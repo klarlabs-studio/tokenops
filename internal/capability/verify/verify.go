@@ -286,13 +286,6 @@ type Report struct {
 	Attributed []Attributed `json:"attributed,omitempty"`
 }
 
-// Compare prefers a complete execution-linked randomized experiment when
-// exactly one is present; otherwise it compares applied-versus-not-applied
-// observational cohorts.
-func Compare(execs []work.Execution, events []*eventschema.Envelope) Report {
-	return CompareExperiment(execs, events, "")
-}
-
 // CompareExperiment prefers an execution-linked randomized comparison for
 // experimentID. With an empty ID it auto-selects only when a single
 // experiment is represented; otherwise it preserves the observational view.
@@ -708,18 +701,6 @@ func meanTokens(as []Attributed) measurement.Value {
 		WithCaveat(total.Caveat())
 }
 
-// CompareReconstructed is Compare over the output of the reconstruct
-// capability.
-//
-// It exists so an adapter never has to name work.Execution to use this:
-// reaching into the ontology from internal/cli is the direct
-// adapter → domain import the architecture ratchet refuses, and it
-// refuses it because a capability assembled inside one adapter is one
-// the other assembles differently.
-func CompareReconstructed(rs []reconstruct.Work, events []*eventschema.Envelope) Report {
-	return CompareReconstructedExperiment(rs, events, "")
-}
-
 // CompareReconstructedExperiment compares reconstructed work and optionally
 // selects one explicitly named randomized trial.
 func CompareReconstructedExperiment(rs []reconstruct.Work, events []*eventschema.Envelope, experimentID string) Report {
@@ -790,12 +771,4 @@ func appendMissingAssignedExecutions(execs []work.Execution, events []*eventsche
 		execs = append(execs, work.Execution{ID: work.ID(id), StartedAt: startedAt})
 	}
 	return execs
-}
-
-// SortByStart orders attributed executions oldest first, for a caller
-// rendering a timeline.
-func SortByStart(as []Attributed) {
-	sort.Slice(as, func(i, j int) bool {
-		return as[i].Execution.StartedAt.Before(as[j].Execution.StartedAt)
-	})
 }

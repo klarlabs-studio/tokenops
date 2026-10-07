@@ -85,7 +85,7 @@ func TestTheSessionIsTheActor(t *testing.T) {
 func TestAReconstructedStoryHasNoKnownOutcome(t *testing.T) {
 	got := fromstory.Convert(task("ship it", "sess-1", t0, t0.Add(time.Minute), story.BoundaryIdle))
 
-	if got.Outcome.Known() {
+	if got.Outcome.Result != work.ResultUnknown {
 		t.Error("a reconstructed story produced a known outcome")
 	}
 	if got.Outcome.Caveat == "" {

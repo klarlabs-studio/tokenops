@@ -35,7 +35,6 @@
 package work
 
 import (
-	"reflect"
 	"time"
 )
 
@@ -78,60 +77,6 @@ type Actor struct {
 	// subagent's consumption and outcome can be attributed to the agent
 	// that spawned it, and through it to the human who asked.
 	OnBehalfOf ActorID `json:"on_behalf_of,omitempty"`
-}
-
-// Delegated reports whether this actor is acting for another.
-func (a Actor) Delegated() bool { return a.OnBehalfOf != "" }
-
-// ConstraintKind names what a constraint limits.
-type ConstraintKind string
-
-const (
-	// ConstraintMaxCost — an upper bound in the currency the spend
-	// context reports.
-	ConstraintMaxCost ConstraintKind = "max_cost"
-	// ConstraintMaxTokens — an upper bound on tokens consumed.
-	ConstraintMaxTokens ConstraintKind = "max_tokens"
-	// ConstraintDeadline — work not finished by then has failed its
-	// requester whatever else it achieved. Carried in Until.
-	ConstraintDeadline ConstraintKind = "deadline"
-	// ConstraintMinQuality — a floor the outcome must clear, expressed
-	// on whatever scale the assessor uses.
-	ConstraintMinQuality ConstraintKind = "min_quality"
-)
-
-// Constraint is something the requester is not willing to trade away.
-//
-// Multi-objective optimization needs these stated rather than inferred.
-// Halving the tokens a piece of work consumes is not a win if it breaks
-// a quality floor nobody wrote down, and an optimizer with no constraints
-// to respect will find exactly that trade.
-type Constraint struct {
-	Kind ConstraintKind `json:"kind"`
-	// Limit is the numeric bound, for the kinds that have one.
-	Limit float64 `json:"limit,omitempty"`
-	// Until is the bound for ConstraintDeadline.
-	Until time.Time `json:"until,omitzero"`
-}
-
-// MaxCost caps what the work may cost.
-func MaxCost(limit float64) Constraint {
-	return Constraint{Kind: ConstraintMaxCost, Limit: limit}
-}
-
-// MaxTokens caps what the work may consume.
-func MaxTokens(limit float64) Constraint {
-	return Constraint{Kind: ConstraintMaxTokens, Limit: limit}
-}
-
-// Deadline sets when the work stops being useful.
-func Deadline(at time.Time) Constraint {
-	return Constraint{Kind: ConstraintDeadline, Until: at}
-}
-
-// MinQuality sets the floor the outcome must clear.
-func MinQuality(limit float64) Constraint {
-	return Constraint{Kind: ConstraintMinQuality, Limit: limit}
 }
 
 // Requester records who asked for work and when.
@@ -177,15 +122,8 @@ type Work struct {
 	// GoalCaveat explains how an inferred goal was arrived at — a
 	// boundary you can see is one you can argue with.
 	GoalCaveat string `json:"goal_caveat,omitempty"`
-	// Parent is the work this one decomposes from. Empty at the root.
-	// Decomposition is what lets consumption and outcome roll up from
-	// the attempts that actually burned tokens to the goal a person
-	// recognises.
-	Parent ID `json:"parent,omitempty"`
 	// RequestedBy is who wants this accomplished.
 	RequestedBy Requester `json:"requested_by"`
-	// Constraints are the bounds the requester set.
-	Constraints []Constraint `json:"constraints,omitempty"`
 	// CreatedAt is when the work was recorded.
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -201,44 +139,6 @@ func (w Work) Inferred(how string) Work {
 	w.GoalSource = GoalInferred
 	w.GoalCaveat = how
 	return w
-}
-
-// GoalInferred reports whether the goal was guessed rather than given.
-func (w Work) GoalInferred() bool { return w.GoalSource == GoalInferred }
-
-// Under makes this work a decomposition of parent. Returns a copy.
-func (w Work) Under(parent ID) Work {
-	w.Parent = parent
-	return w
-}
-
-// Constrained attaches bounds. Returns a copy.
-func (w Work) Constrained(cs ...Constraint) Work {
-	w.Constraints = append(append([]Constraint(nil), w.Constraints...), cs...)
-	return w
-}
-
-// Constraint returns the bound of the given kind, if the requester set
-// one. The bool is what keeps an unstated constraint from reading as a
-// limit of zero.
-func (w Work) Constraint(kind ConstraintKind) (Constraint, bool) {
-	for _, c := range w.Constraints {
-		if c.Kind == kind {
-			return c, true
-		}
-	}
-	return Constraint{}, false
-}
-
-// HasField reports whether Work carries a field of the given name.
-//
-// It exists for the invariant test. The rule it guards — that no core
-// abstraction may assume AI work means software development — is
-// violated one convenient field at a time, and a test that names the
-// fields it refuses is the only form of that rule a compiler can check.
-func HasField(name string) bool {
-	_, ok := reflect.TypeFor[Work]().FieldByName(name)
-	return ok
 }
 
 // Status is where an attempt ended up.
@@ -341,22 +241,6 @@ const (
 	AssessedByHuman Assessment = "human"
 )
 
-// strength orders assessments. Treating an agent's own report as equal
-// to a passing test is how self-reported success quietly becomes
-// measured success.
-func (a Assessment) strength() int {
-	switch a {
-	case AssessedBySelfReport:
-		return 1
-	case AssessedByVerification:
-		return 2
-	case AssessedByHuman:
-		return 3
-	default:
-		return 0
-	}
-}
-
 // Outcome is what an execution produced, as distinct from what it
 // consumed.
 //
@@ -380,23 +264,6 @@ type Outcome struct {
 	Caveat string `json:"caveat,omitempty"`
 }
 
-// Achieved records that an execution met its goal.
-func Achieved(of ID, at time.Time, by Assessment) Outcome {
-	return Outcome{Execution: of, Result: ResultAchieved, Assessment: by, AssessedAt: at}
-}
-
-// Partial records that an execution met part of its goal.
-func Partial(of ID, at time.Time, by Assessment, why string) Outcome {
-	return Outcome{Execution: of, Result: ResultPartial, Assessment: by, AssessedAt: at, Caveat: why}
-}
-
-// NotAchieved records that an execution was tried and did not meet its
-// goal. A recorded failure is useful: it is what distinguishes work that
-// was abandoned from work that was attempted and did not succeed.
-func NotAchieved(of ID, at time.Time, by Assessment, why string) Outcome {
-	return Outcome{Execution: of, Result: ResultNotAchieved, Assessment: by, AssessedAt: at, Caveat: why}
-}
-
 // UnknownOutcome records that nothing assessed an execution, and why.
 //
 // This is the honest default and must stay easy to reach. Most work
@@ -404,15 +271,4 @@ func NotAchieved(of ID, at time.Time, by Assessment, why string) Outcome {
 // recording that plainly is letting an unassessed attempt read as a win.
 func UnknownOutcome(of ID, why string) Outcome {
 	return Outcome{Execution: of, Result: ResultUnknown, Caveat: why}
-}
-
-// Known reports whether anything actually judged this outcome.
-func (o Outcome) Known() bool {
-	return o.Result != ResultUnknown && o.Assessment != AssessedByNothing
-}
-
-// StrongerThan reports whether this outcome rests on better evidence
-// than another.
-func (o Outcome) StrongerThan(other Outcome) bool {
-	return o.Assessment.strength() > other.Assessment.strength()
 }
