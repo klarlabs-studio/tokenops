@@ -32,6 +32,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	anthropicapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/anthropic"
+	codexappserverproc "go.klarlabs.de/tokenops/internal/infra/vendorusage/codexappserver"
 	copilotapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/copilot"
 	cursorapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/cursor"
 	fireworksapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/fireworks"
@@ -130,11 +131,11 @@ func startVendorUsagePollers(
 		home, _ := os.UserHomeDir()
 		bin, found := cs.Path, cs.Path != ""
 		if !found {
-			bin, found = codexappserver.Locate(home)
+			bin, found = codexappserverproc.Locate(home)
 		}
 		if found {
 			p := codexappserver.NewPoller(bus, codexappserver.PollerOptions{
-				Dial: codexappserver.Command(bin), Interval: cs.Interval,
+				Dial: codexappserverproc.Command(bin), Interval: cs.Interval,
 				Health: sourceHealth.For(codexappserver.SourceTag), Logger: logger,
 			})
 			sup.Go(codexappserver.SourceTag, p.Run)

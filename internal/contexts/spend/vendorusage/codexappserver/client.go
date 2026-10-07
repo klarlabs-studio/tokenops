@@ -3,6 +3,10 @@
 // account/rateLimits/read answers with the windows Codex signs in for
 // (ADR 0011, a harness feed). TokenOps never sees a credential; Codex
 // authenticates its own request, as CodexBar's CLI source does.
+//
+// The package holds the JSON-RPC conversation over a Conn, the poller and
+// the mapping to envelopes; starting the codex process and finding its
+// binary live in internal/infra/vendorusage/codexappserver.
 package codexappserver
 
 import (
@@ -12,9 +16,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"time"
 )
 
@@ -48,44 +49,9 @@ type Conn interface {
 	Close() error
 }
 
-// Dial starts the app server; tests replace it.
+// Dial starts the app server. The process launcher lives in
+// internal/infra/vendorusage/codexappserver; tests replace it.
 type Dial func(ctx context.Context) (Conn, error)
-
-// Command dials `codex -s read-only -a never app-server`: read-only and
-// never approving anything, since it only answers questions here.
-func Command(bin string) Dial {
-	return func(ctx context.Context) (Conn, error) {
-		cmd := exec.CommandContext(ctx, bin, "-s", "read-only", "-a", "never", "app-server") //nolint:gosec // the operator's own codex
-		in, err := cmd.StdinPipe()
-		if err != nil {
-			return nil, err
-		}
-		out, err := cmd.StdoutPipe()
-		if err != nil {
-			return nil, err
-		}
-		if err := cmd.Start(); err != nil {
-			return nil, fmt.Errorf("codex-app-server: start %s: %w", bin, err)
-		}
-		return &procConn{Writer: in, Reader: out, stdin: in, cmd: cmd}, nil
-	}
-}
-
-type procConn struct {
-	io.Writer
-	io.Reader
-	stdin io.Closer
-	cmd   *exec.Cmd
-}
-
-func (p *procConn) Close() error {
-	_ = p.stdin.Close()
-	if p.cmd.Process != nil {
-		_ = p.cmd.Process.Kill()
-	}
-	_ = p.cmd.Wait()
-	return nil
-}
 
 // Read asks the app server for the account's rate limits.
 func Read(ctx context.Context, dial Dial) (Snapshot, error) {
@@ -164,23 +130,4 @@ func await(ctx context.Context, lines *bufio.Scanner, id int) (json.RawMessage, 
 		return nil, fmt.Errorf("codex-app-server: no answer in %s", rpcTimeout)
 	}
 	return nil, errors.New("codex-app-server: the app server closed without answering")
-}
-
-// Locate finds the codex binary: on PATH, else where installers put it.
-// The daemon runs under launchd with a minimal PATH, which would hide a
-// codex the operator's shell finds.
-func Locate(home string) (string, bool) {
-	if p, err := exec.LookPath("codex"); err == nil {
-		return p, true
-	}
-	for _, dir := range []string{
-		filepath.Join(home, ".local", "bin"), "/opt/homebrew/bin", "/usr/local/bin",
-		filepath.Join(home, ".npm-global", "bin"), filepath.Join(home, ".bun", "bin"),
-	} {
-		p := filepath.Join(dir, "codex")
-		if info, err := os.Stat(p); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
-			return p, true
-		}
-	}
-	return "", false
 }
