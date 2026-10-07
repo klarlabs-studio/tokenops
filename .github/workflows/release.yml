@@ -121,7 +121,9 @@ jobs:
 
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
         with:
-          version: "~> 2"
+          # Exact, not "~> 2": a range fetches whichever goreleaser is newest
+          # at tag time into a job holding the tap credential. Bump deliberately.
+          version: "v2.18.2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -163,7 +165,22 @@ jobs:
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
-          gh release download "$GITHUB_REF_NAME" -p "tokenops_${version}_*.tar.gz" -D release-archives
+          gh release download "$GITHUB_REF_NAME" -p "tokenops_${version}_*.tar.gz" -p checksums.txt -D release-archives
+          # Verify every archive against goreleaser's checksums.txt before
+          # anything is unpacked. sha256sum --check fails on a mismatch or on
+          # a listed archive that did not download; the loop fails on a
+          # downloaded archive the manifest does not list, which --check
+          # alone would let through unverified.
+          (
+            cd release-archives
+            grep -F "  tokenops_${version}_" checksums.txt | grep -E '\.tar\.gz$' > archives.sha256 \
+              || { echo "::error::checksums.txt lists no tokenops ${version} archives"; exit 1; }
+            sha256sum --check --strict archives.sha256
+            for f in tokenops_"${version}"_*.tar.gz; do
+              grep -qxF "$(sha256sum "$f")" archives.sha256 \
+                || { echo "::error::$f is not listed in checksums.txt"; exit 1; }
+            done
+          )
           for f in release-archives/*.tar.gz; do
             target=$(basename "$f" .tar.gz)
             dir="npm-dist/tokenops_${target#"tokenops_${version}_"}"

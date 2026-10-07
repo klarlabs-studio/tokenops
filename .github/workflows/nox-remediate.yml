@@ -18,7 +18,8 @@
 # this repo's required checks run on that PR anyway.
 #
 # To change the nox version, bump it centrally in
-# klarlabs-studio/.github; every caller picks it up. Do not re-pin here.
+# klarlabs-studio/.github, then move the commit pin below to pick it up.
+# Do not re-pin nox here.
 name: Nox Remediate
 
 on:
@@ -32,7 +33,11 @@ permissions:
 
 jobs:
   remediate:
-    uses: klarlabs-studio/.github/.github/workflows/nox-remediate.yml@main
+    # Pinned to a commit, not @main: this job inherits every secret and
+    # holds contents: write, so a moving ref would run whatever lands on
+    # the central repo's main with this repo's credentials. Move the pin
+    # deliberately when the central workflow changes.
+    uses: klarlabs-studio/.github/.github/workflows/nox-remediate.yml@75edaf97c1274c4036460d3895dd85f9d7dbc021 # main
     secrets: inherit
     # with:
     #   include-major: true   # also apply major-version action bumps
