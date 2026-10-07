@@ -14,7 +14,6 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/waste"
-	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
@@ -26,7 +25,7 @@ import (
 // happens at the daemon level.
 type Deps struct {
 	Store      *sqlite.Store
-	Aggregator *analytics.Aggregator
+	Aggregator *spending.Engine
 	Spend      *spend.Engine
 	// Waste configures the workflow waste detector (operator context
 	// limits from coaching.context_limits). Zero value uses defaults.
@@ -213,11 +212,7 @@ func RegisterTools(s *Server, d Deps) error {
 			if err != nil {
 				return nil, inputError(err)
 			}
-			r, err := commits.Compute(ctx, commits.Deps{
-				Turns: func(ctx context.Context, since time.Time) ([]analytics.SessionTurn, error) {
-					return d.Aggregator.SessionTurns(ctx, analytics.Filter{Since: since})
-				},
-			}, since)
+			r, err := commits.Compute(ctx, commits.Deps{Turns: commits.TurnsIn(d.Aggregator, spending.Filter{})}, since)
 			if err != nil {
 				return nil, err
 			}
@@ -264,8 +259,8 @@ func RegisterTools(s *Server, d Deps) error {
 
 // --- handlers -------------------------------------------------------------
 
-func (in spendSummaryInput) toFilter() (analytics.Filter, error) {
-	f := analytics.Filter{
+func (in spendSummaryInput) toFilter() (spending.Filter, error) {
+	f := spending.Filter{
 		WorkflowID: in.WorkflowID,
 		AgentID:    in.AgentID,
 	}

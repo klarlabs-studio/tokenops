@@ -1,27 +1,19 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/capability/commits"
-	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 )
 
 // runSpendByCommit is `tokenops spend --by commit`: what each of the
 // operator's commits in the window cost, and the work no commit followed.
-func runSpendByCommit(cmd *cobra.Command, agg *analytics.Aggregator, f analytics.Filter, jsonOut bool) error {
-	report, err := commits.Compute(cmd.Context(), commits.Deps{
-		Turns: func(ctx context.Context, since time.Time) ([]analytics.SessionTurn, error) {
-			g := f
-			g.Since = since
-			return agg.SessionTurns(ctx, g)
-		},
-	}, f.Since)
+func runSpendByCommit(cmd *cobra.Command, agg *spending.Engine, f spending.Filter, jsonOut bool) error {
+	report, err := commits.Compute(cmd.Context(), commits.Deps{Turns: commits.TurnsIn(agg, f)}, f.Since)
 	if err != nil {
 		return err
 	}

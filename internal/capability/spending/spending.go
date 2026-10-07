@@ -5,7 +5,6 @@ package spending
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -67,7 +66,7 @@ func Top(ctx context.Context, agg Aggregator, q TopQuery, currency string, now t
 	if by == "" {
 		by = "model"
 	}
-	group, ok := groups[by]
+	group, ok := GroupOf(by)
 	if !ok {
 		// Falling back to model answered a typo with a confident ranking
 		// of something nobody asked about.
@@ -92,36 +91,20 @@ func Top(ctx context.Context, agg Aggregator, q TopQuery, currency string, now t
 	return TopConsumers{By: by, Top: out, Currency: currency}, nil
 }
 
-// rank folds per-bucket rows into one entry per group, ranked on the API
-// equivalent, then tokens (unpriced models are $0 on both figures), then
-// the key, so the order is the same on every call.
+// rank folds per-bucket rows into one entry per group, ranked as RollUp
+// ranks them, so the order is the same on every call and on every surface.
 func rank(rows []analytics.Row) []Consumer {
-	byKey := map[string]*Consumer{}
-	for _, r := range rows {
-		c, ok := byKey[r.GroupKey]
-		if !ok {
-			c = &Consumer{Key: r.GroupKey}
-			byKey[r.GroupKey] = c
-		}
-		c.Requests += r.Requests
-		c.Tokens += r.TotalTokens
-		c.CostUSD += r.CostUSD
-		c.APIEquivalentUSD += r.APIEquivalentUSD
+	rolled := RollUp(rows, 0)
+	out := make([]Consumer, 0, len(rolled))
+	for _, r := range rolled {
+		out = append(out, Consumer{
+			Key:              r.GroupKey,
+			Requests:         r.Requests,
+			Tokens:           r.TotalTokens,
+			CostUSD:          r.CostUSD,
+			APIEquivalentUSD: r.APIEquivalentUSD,
+		})
 	}
-	out := make([]Consumer, 0, len(byKey))
-	for _, c := range byKey {
-		out = append(out, *c)
-	}
-	sort.Slice(out, func(i, j int) bool {
-		a, b := out[i], out[j]
-		if a.APIEquivalentUSD != b.APIEquivalentUSD {
-			return a.APIEquivalentUSD > b.APIEquivalentUSD
-		}
-		if a.Tokens != b.Tokens {
-			return a.Tokens > b.Tokens
-		}
-		return a.Key < b.Key
-	})
 	return out
 }
 

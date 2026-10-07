@@ -1,12 +1,10 @@
 package cli
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -16,7 +14,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/money"
 	"go.klarlabs.de/tokenops/internal/capability/planswitch"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
-	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/infra/fxrate"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/infra/svgchart"
@@ -97,14 +94,14 @@ spend within the selected window. It surfaces:
 			defer func() { _ = store.Close() }()
 
 			byCommit := groupBy == "commit"
-			group := analytics.GroupModel
+			var group spending.Group
 			if !byCommit {
 				group, err = parseGroup(groupBy)
 				if err != nil {
 					return err
 				}
 			}
-			f := analytics.Filter{}
+			f := spending.Filter{}
 			if sinceFlag != "" {
 				since, err := parseSince(sinceFlag)
 				if err != nil {
@@ -129,44 +126,29 @@ spend within the selected window. It surfaces:
 			if err != nil {
 				return err
 			}
-			agg := analytics.New(store, spendEng)
+			agg := spending.NewEngine(store, spendEng)
 			if byCommit {
 				return runSpendByCommit(cmd, agg, f, jsonOut)
 			}
-			summary, err := agg.Summarize(ctx, f)
+			report, err := spending.SpendReport(ctx, agg, spending.ReportQuery{
+				Filter: f, Group: group, Top: topN, Forecast: showForecast, Horizon: forecastDays,
+			}, time.Now())
 			if err != nil {
 				return err
 			}
-			rows, err := agg.AggregateBy(ctx, f, analytics.BucketDay, group)
-			if err != nil {
-				return err
-			}
-
-			// Burn-rate window: last 24h hourly.
-			burnFilter := analytics.Filter{
-				Since: time.Now().Add(-24 * time.Hour),
-			}
-			burnRows, err := agg.AggregateBy(ctx, burnFilter, analytics.BucketHour, analytics.GroupNone)
-			if err != nil {
-				return err
-			}
-
-			var predictions, tokenPredictions []spending.Prediction
-			if showForecast {
-				predictions, tokenPredictions = spending.Project(rows, forecastDays)
-			}
+			summary := report.Totals
 
 			view := spendView{
-				Window:        windowDescription(f),
+				Window:        spending.Window(f),
 				Currency:      spendEng.Currency(),
 				Summary:       summary,
-				GroupRows:     topRows(rows, topN),
+				GroupRows:     report.Top,
 				GroupBy:       string(group),
-				BurnRate24h:   sumCost(burnRows),
-				BurnTokens24h: sumTokens(burnRows),
-				BurnSeries:    burnRows,
-				Forecast:      predictions,
-				ForecastToks:  tokenPredictions,
+				BurnRate24h:   report.BurnCost,
+				BurnTokens24h: report.BurnTokens,
+				BurnSeries:    report.Burn,
+				Forecast:      report.Forecast,
+				ForecastToks:  report.ForecastTokens,
 				HideSparkline: hideSparkline,
 			}
 			rate, rateOK, rateWarning := fxrate.Resolve(ctx, cfg.Money, time.Now())
@@ -204,17 +186,17 @@ spend within the selected window. It surfaces:
 // --- view + helpers -----------------------------------------------------
 
 type spendView struct {
-	Window      string            `json:"window"`
-	Currency    string            `json:"currency"`
-	Summary     analytics.Summary `json:"summary"`
-	GroupBy     string            `json:"group_by"`
-	GroupRows   []analytics.Row   `json:"top"`
-	BurnRate24h float64           `json:"burn_rate_24h"`
+	Window      string          `json:"window"`
+	Currency    string          `json:"currency"`
+	Summary     spending.Totals `json:"summary"`
+	GroupBy     string          `json:"group_by"`
+	GroupRows   []spending.Row  `json:"top"`
+	BurnRate24h float64         `json:"burn_rate_24h"`
 	// BurnTokens24h is the same window measured in tokens. On a
 	// subscription BurnRate24h is structurally zero, so this is the only
 	// burn figure with signal.
 	BurnTokens24h int64                 `json:"burn_tokens_24h"`
-	BurnSeries    []analytics.Row       `json:"burn_series"`
+	BurnSeries    []spending.Row        `json:"burn_series"`
 	Forecast      []spending.Prediction `json:"forecast,omitempty"`
 	// ForecastToks projects the same horizon in tokens — the series that
 	// stays meaningful when spend is plan-covered.
@@ -278,104 +260,24 @@ func planCosts(current map[string]string, since, until time.Time, fx planswitch.
 	return planswitch.Cost(h, current, since, until, fx)
 }
 
-func parseGroup(s string) (analytics.Group, error) {
-	switch strings.ToLower(s) {
-	case "", "model":
-		return analytics.GroupModel, nil
-	case "provider":
-		return analytics.GroupProvider, nil
-	case "workflow":
-		return analytics.GroupWorkflow, nil
-	case "agent":
-		return analytics.GroupAgent, nil
-	default:
-		return "", fmt.Errorf("unknown --by value %q (use model|provider|workflow|agent)", s)
+func parseGroup(s string) (spending.Group, error) {
+	if g, ok := spending.GroupOf(strings.ToLower(s)); ok {
+		return g, nil
 	}
-}
-
-func windowDescription(f analytics.Filter) string {
-	parts := make([]string, 0, 2)
-	if !f.Since.IsZero() {
-		parts = append(parts, "since="+f.Since.Format(time.RFC3339))
-	}
-	if !f.Until.IsZero() {
-		parts = append(parts, "until="+f.Until.Format(time.RFC3339))
-	}
-	if len(parts) == 0 {
-		return "all time"
-	}
-	return strings.Join(parts, " ")
-}
-
-// topRows aggregates rows by group key (across buckets) and returns the
-// top N by cost. AggregateBy emits one row per (bucket, key); summing
-// across buckets gives the per-key total.
-func topRows(rows []analytics.Row, n int) []analytics.Row {
-	if len(rows) == 0 {
-		return nil
-	}
-	totals := make(map[string]*analytics.Row)
-	for i := range rows {
-		key := rows[i].GroupKey
-		if cur, ok := totals[key]; ok {
-			cur.Requests += rows[i].Requests
-			cur.InputTokens += rows[i].InputTokens
-			cur.OutputTokens += rows[i].OutputTokens
-			cur.TotalTokens += rows[i].TotalTokens
-			cur.CostUSD += rows[i].CostUSD
-			cur.APIEquivalentUSD += rows[i].APIEquivalentUSD
-			continue
-		}
-		copy := rows[i]
-		totals[key] = &copy
-	}
-	out := make([]analytics.Row, 0, len(totals))
-	for _, r := range totals {
-		out = append(out, *r)
-	}
-	// Ranked on the API-equivalent, not the real cost. On a flat-rate plan
-	// every row's cost is $0 by design, so a cost-keyed ranking put every
-	// consumer in a tie and left the order to the tiebreak — a "top
-	// consumers" table that ranked nothing.
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].APIEquivalentUSD == out[j].APIEquivalentUSD {
-			return out[i].TotalTokens > out[j].TotalTokens
-		}
-		return out[i].APIEquivalentUSD > out[j].APIEquivalentUSD
-	})
-	if n > 0 && n < len(out) {
-		out = out[:n]
-	}
-	return out
-}
-
-func sumTokens(rows []analytics.Row) int64 {
-	var total int64
-	for _, r := range rows {
-		total += r.TotalTokens
-	}
-	return total
-}
-
-func sumCost(rows []analytics.Row) float64 {
-	var total float64
-	for _, r := range rows {
-		total += r.CostUSD
-	}
-	return total
+	return "", fmt.Errorf("unknown --by value %q (use model|provider|workflow|agent)", s)
 }
 
 // sparklineFromRows renders a unicode block-bar sparkline scaled to the
 // row series' max cost. Empty series renders an empty string.
-func sparklineFromRows(rows []analytics.Row) string {
-	return sparklineFromRowsBy(rows, func(r analytics.Row) float64 { return r.CostUSD })
+func sparklineFromRows(rows []spending.Row) string {
+	return sparklineFromRowsBy(rows, func(r spending.Row) float64 { return r.CostUSD })
 }
 
 // sparklineFromRowsBy renders rows through an arbitrary accessor. The
 // cost accessor flattens to the baseline bar for plan-covered traffic —
 // every row bills $0.00 — so callers plot tokens instead when that is
 // the series carrying the variation.
-func sparklineFromRowsBy(rows []analytics.Row, value func(analytics.Row) float64) string {
+func sparklineFromRowsBy(rows []spending.Row, value func(spending.Row) float64) string {
 	if len(rows) == 0 {
 		return ""
 	}
@@ -440,9 +342,9 @@ func writeSpendText(w io.Writer, v spendView) error {
 	// Plot whichever series actually varies: cost is a flat zero for
 	// plan-covered traffic, so a cost-keyed sparkline would report calm
 	// under any load.
-	metric := func(r analytics.Row) float64 { return r.CostUSD }
+	metric := func(r spending.Row) float64 { return r.CostUSD }
 	if v.BurnRate24h == 0 && v.BurnTokens24h > 0 {
-		metric = func(r analytics.Row) float64 { return float64(r.TotalTokens) }
+		metric = func(r spending.Row) float64 { return float64(r.TotalTokens) }
 	}
 	// Same again: "0.0000 USD / 874275305 tokens" spends its first half
 	// saying nothing. On a plan-covered window the tokens are the burn.
@@ -542,12 +444,9 @@ func writeSpendJSON(w io.Writer, v spendView) error {
 	return enc.Encode(v)
 }
 
-// Suppress unused-import if context dropped during refactors.
-var _ = context.Background
-
 // groupRowsHaveEquivalent reports whether the list-price equivalent says
 // something the cost column does not — i.e. the window is plan-covered.
-func groupRowsHaveEquivalent(rows []analytics.Row) bool {
+func groupRowsHaveEquivalent(rows []spending.Row) bool {
 	for _, r := range rows {
 		if r.APIEquivalentUSD > r.CostUSD {
 			return true
