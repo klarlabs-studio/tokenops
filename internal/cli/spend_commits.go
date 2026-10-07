@@ -12,7 +12,7 @@ import (
 
 // runSpendByCommit is `tokenops spend --by commit`: what each of the
 // operator's commits in the window cost, and the work no commit followed.
-func runSpendByCommit(cmd *cobra.Command, agg *spending.Engine, f spending.Filter, jsonOut bool) error {
+func runSpendByCommit(cmd *cobra.Command, agg *spending.EventAggregator, f spending.Window, jsonOut bool) error {
 	report, err := commits.Compute(cmd.Context(), commits.Deps{Turns: commits.TurnsIn(agg, f)}, f.Since)
 	if err != nil {
 		return err

@@ -7,17 +7,19 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 )
 
-// TurnSource reads the session turns a filter selects.
-type TurnSource interface {
+// TurnReader reads each session's turns from the event store.
+type TurnReader interface {
 	SessionTurns(ctx context.Context, f analytics.Filter) ([]analytics.SessionTurn, error)
 }
 
-// TurnsIn reads turns from src within base's bounds and sources, from
-// whatever since the report asks for.
-func TurnsIn(src TurnSource, base analytics.Filter) func(ctx context.Context, since time.Time) ([]analytics.SessionTurn, error) {
+// TurnsIn adapts a turn reader to Deps.Turns: the turns within base's
+// bounds and sources, from whatever since the report asks for. A zero
+// base reads every turn since since. The CLI, the MCP tool and the
+// daemon API all read turns through it.
+func TurnsIn(r TurnReader, base analytics.Filter) func(ctx context.Context, since time.Time) ([]analytics.SessionTurn, error) {
 	return func(ctx context.Context, since time.Time) ([]analytics.SessionTurn, error) {
 		f := base
 		f.Since = since
-		return src.SessionTurns(ctx, f)
+		return r.SessionTurns(ctx, f)
 	}
 }

@@ -101,7 +101,7 @@ spend within the selected window. It surfaces:
 					return err
 				}
 			}
-			f := spending.Filter{}
+			f := spending.Window{}
 			if sinceFlag != "" {
 				since, err := parseSince(sinceFlag)
 				if err != nil {
@@ -126,7 +126,7 @@ spend within the selected window. It surfaces:
 			if err != nil {
 				return err
 			}
-			agg := spending.NewEngine(store, spendEng)
+			agg := spending.NewAggregator(store, spendEng)
 			if byCommit {
 				return runSpendByCommit(cmd, agg, f, jsonOut)
 			}
@@ -139,7 +139,7 @@ spend within the selected window. It surfaces:
 			summary := report.Totals
 
 			view := spendView{
-				Window:        spending.Window(f),
+				Window:        spending.WindowLabel(f),
 				Currency:      spendEng.Currency(),
 				Summary:       summary,
 				GroupRows:     report.Top,

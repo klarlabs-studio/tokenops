@@ -12,14 +12,11 @@ import (
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
-// The analytics vocabulary the surfaces render. Aliases, so a payload
-// marshals exactly as the domain type does and the adapters do not
-// reach into the domain to name it.
+// The analytics vocabulary the surfaces render, beside EventAggregator
+// and Window in rollups.go. Aliases, so a payload marshals exactly as the
+// domain type does and the adapters do not reach into the domain to name
+// it.
 type (
-	// Engine rolls stored events up into summaries and rows.
-	Engine = analytics.Aggregator
-	// Filter narrows the events a query considers.
-	Filter = analytics.Filter
 	// Row is one (bucket, group) cell of a rollup.
 	Row = analytics.Row
 	// Totals is the headline summary of a window.
@@ -28,13 +25,14 @@ type (
 	Group = analytics.Group
 )
 
-// NewEngine rolls up store's events, priced by eng.
-func NewEngine(store *sqlite.Store, eng *spend.Engine) *Engine {
+// NewAggregator rolls up store's events, priced by eng.
+func NewAggregator(store *sqlite.Store, eng *spend.Engine) *EventAggregator {
 	return analytics.New(store, eng)
 }
 
 // GroupOf is the grouping a caller named: model, provider, workflow or
 // agent, model when by is empty. The match is exact; callers normalise.
+// It is the one table of groupings every surface accepts.
 func GroupOf(by string) (Group, bool) {
 	if by == "" {
 		return analytics.GroupModel, true
@@ -102,12 +100,12 @@ func RollUp(rows []Row, n int) []Row {
 // Source is what a spend report reads.
 type Source interface {
 	Aggregator
-	Summarize(ctx context.Context, f Filter) (Totals, error)
+	Summarize(ctx context.Context, f Window) (Totals, error)
 }
 
 // ReportQuery asks for a window's spend report.
 type ReportQuery struct {
-	Filter Filter
+	Filter Window
 	Group  Group
 	// Top is how many consumers to keep; all when not positive.
 	Top int
@@ -147,7 +145,7 @@ func SpendReport(ctx context.Context, src Source, q ReportQuery, now time.Time) 
 	}
 	// The burn window ignores the report's source filter: it is the
 	// machine's last day, as it always has been.
-	burn, err := src.AggregateBy(ctx, Filter{Since: now.Add(-burnWindow)}, analytics.BucketHour, analytics.GroupNone)
+	burn, err := src.AggregateBy(ctx, Window{Since: now.Add(-burnWindow)}, analytics.BucketHour, analytics.GroupNone)
 	if err != nil {
 		return Report{}, err
 	}
@@ -162,8 +160,8 @@ func SpendReport(ctx context.Context, src Source, q ReportQuery, now time.Time) 
 	return out, nil
 }
 
-// Window describes a filter's bounds, "all time" when it has none.
-func Window(f Filter) string {
+// WindowLabel describes a window's bounds, "all time" when it has none.
+func WindowLabel(f Window) string {
 	parts := make([]string, 0, 2)
 	if !f.Since.IsZero() {
 		parts = append(parts, "since="+f.Since.Format(time.RFC3339))

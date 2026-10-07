@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
@@ -79,31 +78,5 @@ func TestWatchTickAlertsAndDedupes(t *testing.T) {
 	watchTick(ctx, agg, spendEng, limits, seen, logger)
 	if got := buf.String(); strings.Contains(got, "budget alert") || strings.Contains(got, "unpriced model") {
 		t.Errorf("alerts re-logged on unchanged state:\n%s", got)
-	}
-}
-
-func TestPlanCostSource(t *testing.T) {
-	cfg := config.Config{Plans: map[string]string{"anthropic": "claude-max-20x"}}
-	if got := planCostSource(cfg, eventschema.ProviderAnthropic); got != eventschema.CostSourcePlanIncluded {
-		t.Errorf("anthropic = %q; want plan_included", got)
-	}
-	if got := planCostSource(cfg, eventschema.ProviderOpenAI); got != "" {
-		t.Errorf("openai (no plan) = %q; want empty", got)
-	}
-}
-
-// The clearance cookie expires within hours, and claude.ai expires the
-// session itself every few weeks: a meter that cannot re-read the browser
-// stops, as a pasted one did for 20 hours on 2026-10-05. Every meter gets
-// the browser as its way back (ADR 0011) unless browser: none says not to.
-func TestBrowserSessionSourceFollowsTheConfig(t *testing.T) {
-	if browserSessionSource(config.ClaudeUsageMeterConfig{}) == nil {
-		t.Error("a pasted session has no way back when claude.ai refuses it")
-	}
-	if browserSessionSource(config.ClaudeUsageMeterConfig{FromBrowser: true}) == nil {
-		t.Error("from_browser set, but the poller got no way to re-read the session")
-	}
-	if browserSessionSource(config.ClaudeUsageMeterConfig{Browser: "None"}) != nil {
-		t.Error("browser: none still reads a browser")
 	}
 }

@@ -1,4 +1,4 @@
-package daemon
+package bootstrap
 
 import (
 	"context"
@@ -21,7 +21,7 @@ func TestRetentionRuntimeStopsUnderSupervisor(t *testing.T) {
 	defer func() { _ = store.Close() }()
 	sup := lifecycle.New(ctx, slog.New(slog.DiscardHandler))
 	cfg := config.RetentionConfig{Keep: map[string]string{"prompt": "1h"}}
-	if err := startRetentionRuntime(cfg, store, sup, slog.New(slog.DiscardHandler)); err != nil {
+	if err := StartRetentionRuntime(cfg, store, sup, slog.New(slog.DiscardHandler)); err != nil {
 		t.Fatal(err)
 	}
 	cancel()

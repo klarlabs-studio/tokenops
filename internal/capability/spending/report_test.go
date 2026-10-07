@@ -45,12 +45,12 @@ func TestGroupOf(t *testing.T) {
 type fakeSource struct {
 	totals Totals
 	rows   map[analytics.Bucket][]Row
-	calls  []Filter
+	calls  []Window
 }
 
-func (f *fakeSource) Summarize(context.Context, Filter) (Totals, error) { return f.totals, nil }
+func (f *fakeSource) Summarize(context.Context, Window) (Totals, error) { return f.totals, nil }
 
-func (f *fakeSource) AggregateBy(_ context.Context, flt Filter, b analytics.Bucket, _ analytics.Group) ([]Row, error) {
+func (f *fakeSource) AggregateBy(_ context.Context, flt Window, b analytics.Bucket, _ analytics.Group) ([]Row, error) {
 	f.calls = append(f.calls, flt)
 	return f.rows[b], nil
 }
@@ -67,7 +67,7 @@ func TestSpendReport(t *testing.T) {
 			analytics.BucketHour: {{CostUSD: 0.5, TotalTokens: 5}, {CostUSD: 0.25, TotalTokens: 7}},
 		},
 	}
-	q := ReportQuery{Filter: Filter{IncludeSources: []string{"mcp-session"}}, Group: analytics.GroupModel, Top: 5}
+	q := ReportQuery{Filter: Window{IncludeSources: []string{"mcp-session"}}, Group: analytics.GroupModel, Top: 5}
 	got, err := SpendReport(context.Background(), src, q, now)
 	if err != nil {
 		t.Fatal(err)
@@ -93,16 +93,16 @@ func TestSpendReport(t *testing.T) {
 	}
 }
 
-func TestWindow(t *testing.T) {
+func TestWindowLabel(t *testing.T) {
 	since := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	cases := map[string]Filter{
+	cases := map[string]Window{
 		"all time":                   {},
 		"since=2026-01-01T00:00:00Z": {Since: since},
 		"since=2026-01-01T00:00:00Z until=2026-01-02T00:00:00Z": {Since: since, Until: since.AddDate(0, 0, 1)},
 	}
 	for want, f := range cases {
-		if got := Window(f); got != want {
-			t.Errorf("Window = %q, want %q", got, want)
+		if got := WindowLabel(f); got != want {
+			t.Errorf("WindowLabel = %q, want %q", got, want)
 		}
 	}
 }

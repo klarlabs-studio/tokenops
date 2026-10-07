@@ -25,7 +25,7 @@ import (
 // happens at the daemon level.
 type Deps struct {
 	Store      *sqlite.Store
-	Aggregator *spending.Engine
+	Aggregator *spending.EventAggregator
 	Spend      *spend.Engine
 	// Waste configures the workflow waste detector (operator context
 	// limits from coaching.context_limits). Zero value uses defaults.
@@ -145,7 +145,7 @@ type topConsumersResult = spending.TopConsumers
 
 // forecastResult is the typed payload for tokenops_spend (view=forecast),
 // the spending capability's answer (ADR 0010 §4).
-type forecastResult = spending.Forecast
+type forecastResult = spending.SpendForecast
 
 // workflowTraceResult is the typed payload for tokenops_records (view=workflow).
 type workflowTraceResult struct {
@@ -212,7 +212,7 @@ func RegisterTools(s *Server, d Deps) error {
 			if err != nil {
 				return nil, inputError(err)
 			}
-			r, err := commits.Compute(ctx, commits.Deps{Turns: commits.TurnsIn(d.Aggregator, spending.Filter{})}, since)
+			r, err := commits.Compute(ctx, commits.Deps{Turns: commits.TurnsIn(d.Aggregator, spending.Window{})}, since)
 			if err != nil {
 				return nil, err
 			}
@@ -259,8 +259,8 @@ func RegisterTools(s *Server, d Deps) error {
 
 // --- handlers -------------------------------------------------------------
 
-func (in spendSummaryInput) toFilter() (spending.Filter, error) {
-	f := spending.Filter{
+func (in spendSummaryInput) toFilter() (spending.Window, error) {
+	f := spending.Window{
 		WorkflowID: in.WorkflowID,
 		AgentID:    in.AgentID,
 	}

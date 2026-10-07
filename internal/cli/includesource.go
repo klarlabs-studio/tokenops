@@ -9,7 +9,7 @@ import (
 )
 
 // resolveIncludeSources folds the repeatable --include-source flag into
-// the spending.Filter IncludeSources list.
+// the spending.Window IncludeSources list.
 //
 // A name that is not excluded by default is inert rather than fatal —
 // the operator asked to see something that is already there, which is

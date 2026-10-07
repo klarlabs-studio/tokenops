@@ -115,7 +115,7 @@ func runGlance(cmd *cobra.Command, rf *rootFlags, dbPath string, view glanceView
 		// Thirty days of usage is the heaviest read here; on a busy
 		// machine the cards go out without cost rather than wait for it.
 		costCtx, cancelCost := context.WithTimeout(ctx, costBudget)
-		opt.Costs = glanceCosts(costCtx, spending.NewEngine(store, eng), g, now)
+		opt.Costs = glanceCosts(costCtx, spending.NewAggregator(store, eng), g, now)
 		opt.CostsLate = costCtx.Err() != nil
 		cancelCost()
 	}

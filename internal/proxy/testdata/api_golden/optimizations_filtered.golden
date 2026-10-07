@@ -1,0 +1,5 @@
+200 OK
+Content-Type: application/json
+Cache-Control: no-store
+
+{"currency":"USD","optimizations":[]}

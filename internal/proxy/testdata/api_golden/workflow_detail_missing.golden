@@ -1,0 +1,5 @@
+404 Not Found
+Content-Type: application/json
+Cache-Control: no-store
+
+{"error":"workflow: no prompts found for workflow_id"}

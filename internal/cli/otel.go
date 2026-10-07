@@ -57,7 +57,7 @@ file or commit subject is among them, and this is how to check.`,
 			deps := headroom.Deps{Config: &cfg, Reader: storeReader{store: store}, Price: eng.ComputeAt}
 			g := &telemetry.Gatherer{
 				Glance: func() headroom.Deps { return deps },
-				Agg:    spending.NewEngine(store, eng),
+				Agg:    spending.NewAggregator(store, eng),
 				Coach: func(now time.Time) *coachcap.Report {
 					r := coachcap.Status(cfg, coachLedger(), contextLevers(), now)
 					return &r

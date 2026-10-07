@@ -11,12 +11,6 @@ import (
 // Prediction is one projected point with its 95% band.
 type Prediction = forecast.Prediction
 
-// defaultHorizonDays is how far a forecast looks when the caller says nothing.
-const defaultHorizonDays = 7
-
-// forecastHistory is how much daily history a spend forecast reads.
-const forecastHistory = 30 * 24 * time.Hour
-
 // Project forecasts daily rows horizon days ahead (seven when not
 // positive), in dollars and in tokens. The token series is returned
 // alongside because on a flat-rate plan the dollar history is zero at
@@ -45,9 +39,11 @@ func AllZero(points []Prediction) bool {
 	return true
 }
 
-// Forecast is the daily spend projection. Note is set when there is too
-// little history to project, or when the dollar series is all zero.
-type Forecast struct {
+// SpendForecast is the agent's daily spend projection. Note is set when
+// there is too little history to project, or when the dollar series is
+// all zero. The daemon API's ForecastReport projects the same series with
+// the same Project; it carries the history instead of a note.
+type SpendForecast struct {
 	HorizonDays   int          `json:"horizon_days,omitempty"`
 	HistoryPoints int          `json:"history_points"`
 	Forecast      []Prediction `json:"forecast"`
@@ -67,24 +63,24 @@ const (
 
 // ForecastSpend projects daily spend horizon days ahead (seven when not
 // positive) from the last thirty days.
-func ForecastSpend(ctx context.Context, agg Aggregator, horizon int, include []string, currency string, now time.Time) (Forecast, error) {
+func ForecastSpend(ctx context.Context, agg Aggregator, horizon int, include []string, currency string, now time.Time) (SpendForecast, error) {
 	if horizon <= 0 {
 		horizon = defaultHorizonDays
 	}
-	f := analytics.Filter{Since: now.Add(-forecastHistory), IncludeSources: dedupe(include)}
+	f := Window{Since: now.Add(-forecastLookback), IncludeSources: dedupe(include)}
 	rows, err := agg.AggregateBy(ctx, f, analytics.BucketDay, analytics.GroupNone)
 	if err != nil {
-		return Forecast{}, err
+		return SpendForecast{}, err
 	}
 	if len(rows) < 2 {
-		return Forecast{
+		return SpendForecast{
 			HistoryPoints: len(rows),
 			Forecast:      []Prediction{},
 			Note:          NoteInsufficientHistory,
 		}, nil
 	}
 	cost, tokens := Project(rows, horizon)
-	out := Forecast{
+	out := SpendForecast{
 		HorizonDays:    horizon,
 		HistoryPoints:  len(rows),
 		Forecast:       cost,
