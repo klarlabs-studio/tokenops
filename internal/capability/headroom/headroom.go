@@ -112,7 +112,10 @@ func Compute(ctx context.Context, d Deps, now time.Time) (Result, error) {
 		return Result{StorageDisabled: StorageDisabledHint}, nil
 	}
 	d.Reader = newMemoReader(d.Reader, now)
-	bindings, inferred := effectiveBindings(ctx, d, now)
+	bindings, inferred, err := effectiveBindings(ctx, d, now)
+	if err != nil {
+		return Result{}, fmt.Errorf("headroom bindings: %w", err)
+	}
 	if len(bindings) == 0 {
 		return Result{Unconfigured: UnconfiguredHint}, nil
 	}
@@ -198,25 +201,35 @@ const (
 // where it reported a per-token account, then pay-as-you-go for any
 // metered usage. inferred
 // says how each added one was found.
-func effectiveBindings(ctx context.Context, d Deps, now time.Time) (map[string]string, map[string]inference) {
+func effectiveBindings(ctx context.Context, d Deps, now time.Time) (map[string]string, map[string]inference, error) {
 	out := make(map[string]string, len(d.Config.Plans)+2)
 	for p, name := range d.Config.Plans {
 		out[p] = name
 	}
 	inferred := map[string]inference{}
-	bind := func(providers []string, plan string, how inference) {
+	// A vendor that reports a subscription's windows is on a plan, which
+	// wins over usage that merely looks metered.
+	sources := []struct {
+		providers func(context.Context, plans.EventReader, time.Time) ([]string, error)
+		plan      string
+		how       inference
+	}{
+		{plans.SubscriptionReadingProviders, plans.Subscription, fromSubscription},
+		{plans.PerTokenReadingProviders, plans.PayAsYouGo, fromReading},
+		{plans.MeteredProviders, plans.PayAsYouGo, fromUsage},
+	}
+	for _, src := range sources {
+		providers, err := src.providers(ctx, d.Reader, now)
+		if err != nil {
+			return nil, nil, err
+		}
 		for _, p := range providers {
 			if _, ok := out[p]; !ok {
-				out[p], inferred[p] = plan, how
+				out[p], inferred[p] = src.plan, src.how
 			}
 		}
 	}
-	// A vendor that reports a subscription's windows is on a plan, which
-	// wins over usage that merely looks metered.
-	bind(plans.SubscriptionReadingProviders(ctx, d.Reader, now), plans.Subscription, fromSubscription)
-	bind(plans.PerTokenReadingProviders(ctx, d.Reader, now), plans.PayAsYouGo, fromReading)
-	bind(plans.MeteredProviders(ctx, d.Reader, now), plans.PayAsYouGo, fromUsage)
-	return out, inferred
+	return out, inferred, nil
 }
 
 // sortedProviders returns the configured providers in a stable order.

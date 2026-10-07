@@ -301,10 +301,13 @@ func accountWindows(ctx context.Context, reader EventReader, provider eventschem
 // reported a subscription's windows in the last two weeks. Headroom binds
 // such a provider to Subscription when no plan is bound: the vendor has
 // said it is on a plan, and shown how much of it is used.
-func SubscriptionReadingProviders(ctx context.Context, reader EventReader, now time.Time) []string {
+//
+// A read failure is returned, not read as "none": callers infer plan
+// bindings from this, and no evidence is not the same as no plan.
+func SubscriptionReadingProviders(ctx context.Context, reader EventReader, now time.Time) ([]string, error) {
 	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, now.Add(-14*24*time.Hour))
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	seen := map[string]bool{}
 	var out []string
@@ -318,5 +321,5 @@ func SubscriptionReadingProviders(ctx context.Context, reader EventReader, now t
 		}
 	}
 	sort.Strings(out)
-	return out
+	return out, nil
 }
