@@ -286,33 +286,74 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	<-ctx.Done()
 	logger.Info("shutdown signal received")
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Shutdown.Timeout+time.Second)
+	err = stopDaemon(logger, cfg.Shutdown.Timeout, shutdownSteps{
+		server:         srv,
+		waitSubsystems: sup.Wait,
+		drainEvents: func(d time.Duration) error {
+			err := eventRuntime.Drain(d)
+			logger.Info("event bus drained",
+				"published", bus.PublishedCount(),
+				"dropped", bus.DroppedCount(),
+			)
+			return err
+		},
+		closeComponents: func() {
+			if components != nil {
+				_ = components.Shutdown()
+			}
+		},
+		running: sup.Running,
+	})
+	logger.Info("tokenops daemon stopped")
+	return err
+}
+
+// httpServer is the part of the proxy server the shutdown sequence uses.
+type httpServer interface {
+	Shutdown(context.Context) error
+	Close() error
+}
+
+// shutdownSteps are the daemon's teardown stages, in the order
+// stopDaemon runs them.
+type shutdownSteps struct {
+	server          httpServer
+	waitSubsystems  func(time.Duration) error
+	drainEvents     func(time.Duration) error
+	closeComponents func()
+	running         func() []string
+}
+
+// stopDaemon tears the daemon down in dependency order: stop serving,
+// stop the pollers, drain the event bus, close storage. Every stage runs
+// even when an earlier one fails: an HTTP request that outlives the grace
+// period (a long LLM stream, routinely) must not skip the drain and lose
+// the queued events. The HTTP shutdown error, if any, is returned last.
+func stopDaemon(logger *slog.Logger, timeout time.Duration, steps shutdownSteps) error {
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout+time.Second)
 	defer cancel()
+	var serveErr error
 	// 1. Stop accepting new requests so no fresh domain events fire.
-	if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
-		return fmt.Errorf("shutdown: %w", err)
+	if err := steps.server.Shutdown(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
+		logger.Warn("http shutdown incomplete; closing remaining connections", "err", err)
+		_ = steps.server.Close()
+		serveErr = fmt.Errorf("shutdown: %w", err)
 	}
 	// 2. Stop the pollers and wait for them, so no subsystem is still
 	// writing when the buses below are drained. The bound is the
 	// configured shutdown timeout: one poller that ignores cancellation
 	// is a bug in that poller, not a reason for the daemon never to
 	// exit.
-	if err := sup.Wait(cfg.Shutdown.Timeout); err != nil {
-		logger.Warn("subsystem shutdown", "err", err, "running", sup.Running())
+	if err := steps.waitSubsystems(timeout); err != nil {
+		logger.Warn("subsystem shutdown", "err", err, "running", steps.running())
 	}
 	// 3. Drain in-flight canonical envelopes after all publishers stop.
-	if err := eventRuntime.Drain(cfg.Shutdown.Timeout); err != nil {
+	if err := steps.drainEvents(timeout); err != nil {
 		logger.Warn("event bus drain", "err", err)
 	}
-	logger.Info("event bus drained",
-		"published", bus.PublishedCount(),
-		"dropped", bus.DroppedCount(),
-	)
-	if components != nil {
-		_ = components.Shutdown()
-	}
-	logger.Info("tokenops daemon stopped")
-	return nil
+	// 4. Close storage last, once nothing writes to it.
+	steps.closeComponents()
+	return serveErr
 }
 
 // SignalContext returns a context cancelled on SIGINT/SIGTERM. Callers must

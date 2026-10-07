@@ -335,6 +335,18 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return srv.Shutdown(ctx)
 }
 
+// Close closes the listener and every connection at once, cutting
+// requests still in flight. Use it after Shutdown's grace period ends.
+func (s *Server) Close() error {
+	s.mu.Lock()
+	srv := s.httpSrv
+	s.mu.Unlock()
+	if srv == nil {
+		return nil
+	}
+	return srv.Close()
+}
+
 // apiMux builds the private sub-mux every /api/* route lives on.
 //
 // Every /api/* route goes on this one mux, which the auth middleware wraps
