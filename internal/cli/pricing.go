@@ -83,7 +83,7 @@ keep working on the baseline.`,
 
 			src := pricingsource.ByName(source, url)
 			if src == nil {
-				return fmt.Errorf("unknown pricing source %q (known: litellm)", source)
+				return fmt.Errorf("unknown pricing source %q (known: default, litellm, models.dev)", source)
 			}
 
 			ctx, cancel := context.WithTimeout(cmd.Context(), 15*time.Second)
