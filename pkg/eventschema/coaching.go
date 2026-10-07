@@ -40,8 +40,9 @@ type CoachingEvent struct {
 	EstimatedSavingsTokens int64   `json:"estimated_savings_tokens,omitempty"`
 	EstimatedSavingsUSD    float64 `json:"estimated_savings_usd,omitempty"`
 
-	// EfficiencyScore is the user/workflow score that produced this
-	// recommendation, on a 0.0–1.0 scale (higher is better).
+	// EfficiencyScore is reserved for a user/workflow score behind this
+	// recommendation, on a 0.0–1.0 scale (higher is better). No producer
+	// sets it today; the field stays so the wire contract is unchanged.
 	EfficiencyScore float64 `json:"efficiency_score,omitempty"`
 	// EfficiencyDelta is the score's change versus the previous evaluation.
 	EfficiencyDelta float64 `json:"efficiency_delta,omitempty"`
