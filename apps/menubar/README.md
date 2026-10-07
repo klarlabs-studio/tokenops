@@ -46,9 +46,17 @@ make menubar-test   # tests, no window needed
 - It reads only the local daemon's API (ADR 0010), with the token the
   daemon writes to `~/.tokenops/daemon.url`. The token stays in the Go
   process; the panel never sees it.
-- The panel's grant names three permissions: `glance.read`
-  (`glance.follow`), `coach.change` (`coach.preset`, which the daemon
-  writes to its audit log) and `panel.close`.
+- The panel's grant names four permissions: `glance.read`
+  (`glance.follow`), `glance.refresh` (`sources.refresh`), `coach.change`
+  (`coach.preset`, which the daemon writes to its audit log) and
+  `panel.close`.
+- Refresh, in the panel (⌘R) or the right-click menu, asks the daemon's
+  usage readers to poll now (`POST /api/sources/refresh`), shows what the
+  daemon has at once, and reads again as the new readings arrive. The
+  daemon accepts one refresh every 30 seconds; a daemon from before the
+  route shows its latest readings and says it cannot poll on demand.
+- Each coach finding has a mark for its level, with its words on hover:
+  ▲ needs attention, ● worth a look, ○ for your information.
 - The icon appears at once and fills in when the first read returns; the
   tray refreshes every minute. A daemon that is slow keeps the last
   reading on screen, marked; one that is not running says how to start it.
