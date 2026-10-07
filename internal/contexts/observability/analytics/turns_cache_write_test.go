@@ -45,3 +45,18 @@ func TestSessionTurnsPriceCacheWrites(t *testing.T) {
 		}
 	}
 }
+
+// The summary's API-equivalent value prices plan-covered cache writes at
+// the write rate.
+func TestSummarizePricesCacheWrites(t *testing.T) {
+	env := planEvent("w", "claude-sonnet-5", 1_000_000, 0)
+	env.Payload.(*eventschema.PromptEvent).CacheWriteInputTokens = 1_000_000
+	got, err := New(storeWith(t, env), spend.NewEngine(spend.DefaultTable())).
+		Summarize(context.Background(), Filter{Since: time.Now().Add(-24 * time.Hour)})
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	if math.Abs(got.APIEquivalentUSD-2.5) > 1e-9 {
+		t.Errorf("APIEquivalentUSD = %v, want 2.5", got.APIEquivalentUSD)
+	}
+}
