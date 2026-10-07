@@ -1,3 +1,7 @@
+// Package copilot is the HTTP adapter for GitHub Copilot's internal user
+// endpoint (`api.github.com/copilot_internal/user`). It satisfies the
+// UserSource port of internal/contexts/spend/vendorusage/copilot, whose
+// poller turns the quota snapshots into envelopes.
 package copilot
 
 import (
@@ -7,31 +11,9 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilot"
 )
-
-// UserResponse mirrors the (undocumented but stable since 2022)
-// `GET api.github.com/copilot_internal/user` shape. We capture the
-// fields the IDE plugins read: quota snapshots for chat and
-// premium-interaction buckets, plus a freshness timestamp.
-type UserResponse struct {
-	Login          string                   `json:"login"`
-	ChatEnabled    bool                     `json:"chat_enabled"`
-	QuotaResetDate string                   `json:"quota_reset_date"`
-	QuotaSnapshots map[string]QuotaSnapshot `json:"quota_snapshots"`
-	TimestampUTC   string                   `json:"timestamp_utc"`
-}
-
-// QuotaSnapshot is one row of the quota_snapshots map. Keys observed
-// in the wild: `chat`, `premium_interactions`, `completions`.
-// `Unlimited=true` means the operator is on a plan with no cap
-// (typically Copilot Business / Enterprise); UI shows ∞.
-type QuotaSnapshot struct {
-	Entitlement      int     `json:"entitlement"`
-	Remaining        float64 `json:"remaining"`
-	PercentRemaining float64 `json:"percent_remaining"`
-	OverageCount     int     `json:"overage_count"`
-	Unlimited        bool    `json:"unlimited"`
-}
 
 // Client wraps the Copilot internal-user endpoint. HTTPClient is
 // injectable so tests stub the transport without touching the
@@ -55,9 +37,9 @@ func NewClient(token string) *Client {
 // User fetches the operator's current Copilot user record. Returns a
 // typed error for empty token / non-2xx / decode failure so the
 // poller can log the right thing.
-func (c *Client) User(ctx context.Context) (*UserResponse, error) {
+func (c *Client) User(ctx context.Context) (*usage.UserResponse, error) {
 	if c.OAuthToken == "" {
-		return nil, ErrNoToken
+		return nil, usage.ErrNoToken
 	}
 	if c.BaseURL == "" {
 		c.BaseURL = "https://api.github.com"
@@ -80,9 +62,16 @@ func (c *Client) User(ctx context.Context) (*UserResponse, error) {
 		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return nil, fmt.Errorf("copilot user: status %d: %s", resp.StatusCode, snippet)
 	}
-	var u UserResponse
+	var u usage.UserResponse
 	if err := json.NewDecoder(resp.Body).Decode(&u); err != nil {
 		return nil, fmt.Errorf("copilot user: decode: %w", err)
 	}
 	return &u, nil
 }
+
+// NewSource is the poller's client factory: it binds token to a Client
+// on GitHub's API.
+func NewSource(token string) usage.UserSource { return NewClient(token) }
+
+// Client satisfies the poller's port.
+var _ usage.UserSource = (*Client)(nil)

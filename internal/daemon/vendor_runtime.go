@@ -32,6 +32,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	anthropicapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/anthropic"
+	copilotapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/copilot"
 	"go.klarlabs.de/tokenops/internal/version"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -174,7 +175,7 @@ func startVendorUsagePollers(
 	if cfg.VendorUsage.GitHubCopilot.Enabled {
 		p := copilotusage.NewPoller(bus, copilotusage.PollerOptions{
 			Health: sourceHealth.For("github-copilot"), OAuthToken: cfg.VendorUsage.GitHubCopilot.OAuthToken,
-			Interval: cfg.VendorUsage.GitHubCopilot.Interval, Logger: logger,
+			Interval: cfg.VendorUsage.GitHubCopilot.Interval, Logger: logger, NewClient: copilotapi.NewSource,
 		})
 		sup.Go("github-copilot", p.Run)
 		logger.Info("github copilot usage poller live", "interval", cfg.VendorUsage.GitHubCopilot.Interval)
