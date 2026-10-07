@@ -104,6 +104,27 @@ func TestWindowResolvesDays(t *testing.T) {
 	if opts.Root != "/r" || opts.WithPromptText {
 		t.Errorf("options = %+v, want the root carried and no prompt text", opts)
 	}
+	opts, _ = Window{Source: "codex", IncludeScratch: true}.options(now, false)
+	if opts.Source != agentdx.SourceCodex || !opts.IncludeScratch {
+		t.Errorf("options = %+v, want the source and scratch switch carried", opts)
+	}
+}
+
+// Units carries the operator's words, which story titles and verify
+// reconstructs attempts from.
+func TestUnitsCarryTheInstruction(t *testing.T) {
+	isolateHome(t)
+	root := writeRoot(t, session{id: "s1", at: now.Add(-time.Hour), prompt: "rename the handler", edits: []string{"/w/repo/h.go"}})
+	units, err := Units(Window{Root: root, Days: 1}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(units) != 1 || units[0].Prompt != "rename the handler" {
+		t.Fatalf("units = %+v", units)
+	}
+	if units, _ := Units(Window{Root: root, Days: 1}, now.AddDate(0, 0, 2)); len(units) != 0 {
+		t.Errorf("a window that ended before the session read %d units", len(units))
+	}
 }
 
 func TestReadWarnings(t *testing.T) {

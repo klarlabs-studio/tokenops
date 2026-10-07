@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/capability/reconstruct"
-	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
+	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/story"
 )
 
@@ -69,24 +69,14 @@ stored; the account is rebuilt from transcripts on every run.`,
 			return validateAudience(audience)
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			opts := agentdx.ExtractOptions{
-				Root:   root,
-				Source: agentdx.Source(source),
-				// The narrative needs the words. This is the only surface
-				// that asks for them.
-				WithPromptText: true,
-				IncludeScratch: includeScratch,
-			}
-			if days > 0 {
-				opts.Since = time.Now().AddDate(0, 0, -days)
-			}
-			records, err := agentdx.ExtractAll(opts)
+			// The narrative needs the words; Units reads them.
+			units, err := sessions.Units(transcriptWindow(root, source, days, includeScratch), time.Now())
 			if err != nil {
 				// A reader that broke is reported, but whatever the other
 				// clients yielded is still worth showing.
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err)
 			}
-			tasks := story.Group(agentdx.Units(records), story.Options{IdleGap: idleGap})
+			tasks := story.Group(units, story.Options{IdleGap: idleGap})
 			// Newest first: the work you are most likely asking about is
 			// the work you just did.
 			reverse(tasks)
