@@ -331,23 +331,20 @@ tokenops provider list
 
 ## Running the daemon
 
-### `tokenops start`
+### `tokenops daemon {install|uninstall|status|restart}`
 
-Starts the daemon in the foreground. Listens on `127.0.0.1:7878` by
-default, also advertises `tokenops.local` over mDNS. Stop with
-SIGINT / SIGTERM (Ctrl-C).
-
-### `tokenops daemon {install|uninstall|status}`
-
-Supervises `tokenops start` so ingestion survives reboot. macOS writes
-a LaunchAgent; Linux writes a systemd user unit. Placeholders in
-`deploy/launchd` / `deploy/systemd` are filled with this binary's path
-and `$HOME`.
+Supervises `tokenops start`, the daemon's foreground process (left out of
+`--help`, since the unit runs it), so ingestion survives reboot.
+macOS writes a LaunchAgent; Linux writes a systemd user unit.
+Placeholders in `deploy/launchd` / `deploy/systemd` are filled with this
+binary's path and `$HOME`. The daemon listens on `127.0.0.1:7878` by
+default and also advertises `tokenops.local` over mDNS.
 
 ```bash
 tokenops daemon install            # write + load
 tokenops daemon install --no-load  # write only
 tokenops daemon status
+tokenops daemon restart            # re-read config after a config change
 tokenops daemon uninstall
 ```
 
@@ -356,14 +353,30 @@ before reporting success. Supervisor acceptance alone is not treated as a
 running daemon; a failed startup exits non-zero with the status and log path
 to inspect.
 
-`tokenops serve` is the MCP server and does not ingest. A reboot that
-kills an unsupervised `start` while the client respawns `serve` is how
-a 27-day outage stayed invisible.
+The MCP server your client launches (`tokenops serve`, also left out of
+`--help`) does not ingest. A reboot that kills an unsupervised `start`
+while the client respawns `serve` is how a 27-day outage stayed invisible.
 
-### `tokenops serve`
+#### `tokenops daemon restart`
 
-MCP server over stdio. Wire into Claude Desktop / Code / Cursor /
-aider via your client's `mcpServers` config.
+Restarts the supervised unit so it re-reads config. The daemon loads its
+configuration once, at boot, so a config write that is not followed by a
+restart has not taken effect yet. The command waits up to 20 seconds for the
+new process to answer `/healthz`; success means the restart is live rather
+than merely accepted by launchd or systemd.
+
+```bash
+tokenops daemon restart
+```
+
+The commands that write config — `plan set/unset`, `provider set/unset`,
+`budget set/unset`, `mode`, `routing rule set/unset`,
+`preferred-model set/unset`, `vendor-usage enable` — do this for you. Pass
+`--no-restart` when writing several keys in a row, then restart once.
+
+Unsupervised (no unit installed), there is nothing to bounce: those
+commands tell you to Ctrl-C and re-run `tokenops start` instead of
+claiming a restart that did not happen.
 
 ### `tokenops status`
 
@@ -424,6 +437,28 @@ repository, or from a session whose directory is unknown — is listed
 apart, never dropped. A `+` marks a cost that leaves out turns on models
 without a list price. `GET /api/spend/commits` serves the same report with
 commit subjects withheld.
+
+### `tokenops budget {list|set|unset}`
+
+A budget is a calendar window (`daily`, `weekly` or `monthly`; new
+budgets default to monthly) and a ceiling, upserted by name. In active
+[mode](#tokenops-mode-passive-active) the daemon evaluates them and
+reports breaches, warning at `--warn-at` (default 0.75 of the limit) and
+alerting at `--crit-at` (default 0.95).
+
+```bash
+tokenops budget list --json
+tokenops budget set monthly --limit-usd 200
+tokenops budget set weekly-tokens --basis tokens --limit-tokens 50000000 --window weekly
+tokenops budget set planner --limit-usd 50 --agent-id planner   # one agent only
+tokenops budget unset monthly
+```
+
+On a flat-rate plan real spend is $0 at the margin, so a USD limit can
+never trip: use `--basis tokens` with `--limit-tokens`, or
+`--basis equivalent` to watch the API list-price value the subscription
+absorbed. `--workflow-id` and `--agent-id` scope a budget to one workflow
+or agent.
 
 ### `tokenops scorecard`
 
@@ -666,6 +701,37 @@ Available env vars:
 `TOKENOPS_CURSOR_COOKIE`,
 `TOKENOPS_COPILOT_OAUTH_TOKEN`,
 `TOKENOPS_ANTHROPIC_ADMIN_KEY`.
+
+## Pricing
+
+### `tokenops pricing {refresh|show|diff|lint}`
+
+Model prices as sourced, timestamped snapshots rather than one
+hand-maintained table that drifts silently. `refresh` fetches rates from a
+pluggable source (default: LiteLLM plus models.dev), stores each fetch
+with its provenance under `~/.tokenops/pricing/snapshots/`, and diffs it
+against the previous snapshot, so a change like
+`anthropic/claude-opus-4-8 cache_read 0.50 → 1.50 (+200%)` shouts instead
+of hiding. The embedded `pricing.yaml` is always there as the offline
+baseline.
+
+```bash
+tokenops pricing refresh --dry-run            # fetch, lint and diff; write nothing
+tokenops pricing refresh --source litellm     # default | litellm | models.dev
+tokenops pricing show --json                  # latest snapshot, else the baseline
+tokenops pricing diff --from baseline --to latest
+tokenops pricing lint                         # exits non-zero on anomalies
+```
+
+`refresh` reaches the network. On any fetch error it says so and exits
+non-zero **without** writing a snapshot; offline callers keep working on
+the baseline. Snapshot selectors are `latest`, `baseline` or an RFC 3339
+timestamp.
+
+`lint` runs the consistency guard: every row gets a conservative sanity
+check (cache-read must not exceed input), and `anthropic/*` rows also get
+the family-ratio check (cache-read ≈10% of input, output ≈5× input). It
+exits non-zero on anomalies, so it can gate CI.
 
 ## Explain
 
@@ -963,26 +1029,6 @@ that fallback is how someone emails a client the candid rendering.
 Prompt text is read at scan time and **never persisted**. The account is
 rebuilt from transcripts on every run.
 
-### `tokenops daemon restart`
-
-Restarts the supervised unit so it re-reads config. The daemon loads its
-configuration once, at boot, so a config write that is not followed by a
-restart has not taken effect yet. The command waits up to 20 seconds for the
-new process to answer `/healthz`; success means the restart is live rather
-than merely accepted by launchd or systemd.
-
-```bash
-tokenops daemon restart
-```
-
-The commands that write config — `plan set/unset`, `provider set/unset`,
-`vendor-usage enable` — do this for you. Pass
-`--no-restart` when writing several keys in a row, then restart once.
-
-Unsupervised (no unit installed), there is nothing to bounce: those
-commands tell you to Ctrl-C and re-run `tokenops start` instead of
-claiming a restart that did not happen.
-
 ## Hooks
 
 TokenOps wires three hooks into a client, each independent:
@@ -1189,36 +1235,95 @@ quiet:
 and it will not tell you your spend is lean on the strength of numbers it
 could not compute.
 
-## Replay
+## Routing and policy
 
-### `tokenops replay [SESSION_ID]`
+### `tokenops mode [passive|active]`
 
-Replays past prompts through the optimizer pipeline.
+What TokenOps may do on its own. With no argument it prints the mode and,
+per subsystem (coaching, smart routing, the read guard, compaction,
+routing approval), the configured and effective authority and the
+setting that controls it.
+
+- `passive` — collect and analyse on demand (the default).
+- `active` — passive, plus live interventions: routing rules applied to
+  proxied traffic, and a watcher evaluating [budgets](#tokenops-budget-list-set-unset).
 
 ```bash
-tokenops replay sess-abc123 --json
-tokenops replay --workflow-id research-summariser --since 24h
-tokenops replay --agent-id planner --since 7d --limit 200
+tokenops mode                    # print the mode
+tokenops mode --json             # the daemon API's GET /api/mode
+tokenops mode active
 ```
 
-Add `--workflow-id ID` to also run the waste detector against the
-reconstructed workflow trace.
+Active mode does its work inside the daemon, so it is a no-op without one
+running. See [Configuration](/guide/configuration) for what each mode
+does and how it differs from the coach's autonomy.
 
-## Rules + governance
+### `tokenops routing {proposals|rule}`
+
+Model-routing rules and the proposals they raise.
+
+```bash
+tokenops routing rule list --json
+tokenops routing rule set anthropic claude-opus-5 claude-sonnet-5 --quality 0.9
+tokenops routing rule set anthropic 'claude-fable-5*' claude-sonnet-5 --quality 0.9
+tokenops routing rule unset anthropic claude-opus-5
+tokenops routing proposals --json
+```
+
+`rule set` adds or updates a rule, upserted by provider and from-model; a
+trailing `*` in from-model is a prefix match. `--quality` is the
+confidence (0–1] that the target preserves task quality, and `--fallback`
+(repeatable) names a model to use if the target is unavailable. In
+passive mode a rule only shows its would-be savings on recorded history;
+with `mode active` the proxy rewrites matching live requests.
+
+`proposals` lists model upgrades a rule wanted but your
+[preferred model](#tokenops-preferred-model-list-set-unset) refused. Each is
+a real choice waiting on you — take the proposed model, or stay on the
+preferred one — and nothing applies until you answer. Proposals are
+answered through the `tokenops_routing_decide` MCP tool or
+`POST /api/routing/decisions`.
+
+### `tokenops preferred-model {list|set|unset}`
+
+The most expensive model a provider may be routed to. The preferred model
+is a ceiling, not a default: a routing rule that would move you to a
+pricier model is refused and referred to you as a proposal; routes to
+cheaper models still apply on their own.
+
+```bash
+tokenops preferred-model list
+tokenops preferred-model set anthropic claude-sonnet-5
+tokenops preferred-model unset anthropic
+```
+
+### `tokenops experiment {start|status|stop}`
+
+Bounded, explicitly enrolled trials of a routing change: a proxy-backed
+paired comparison of a baseline model against a variant, for at most 10
+matched pairs (`--pairs`) and 14 days (`--days`).
+
+```bash
+tokenops experiment start anthropic claude-opus-5 claude-sonnet-5 \
+  --objective tokens --min-improvement-pct 10 --guardrail quality
+tokenops experiment status experiment:6f1c…
+tokenops experiment stop experiment:6f1c… --reason "enough evidence"
+```
+
+`--objective` is the primary metric — `tokens`, `plan_quota_tokens`,
+`metered_cost_usd`, `latency_ms` or `attention_minutes` — and
+`--min-improvement-pct` the per-pair improvement the variant must show.
+`--guardrail` (repeatable) is `quality` or `metric:max-regression-pct`;
+include `quality`. `status` and `stop` print the trial's persisted state
+and what TokenOps has learned about the route, as JSON. Stopping keeps the
+evidence. [`tokenops verify`](#tokenops-verify) compares the arms.
+
+## Rules
 
 ### `tokenops rules {analyze|conflicts|compress|inject|bench}`
 
 Rule Intelligence subsystem — analyses ClaudeMD / agent-instruction
 files, detects conflicts, compresses, injects, benchmarks.
-
-### `tokenops eval`
-
-Optimizer eval harness — gates new model/prompt configurations
-against a baseline.
-
-### `tokenops coverage-debt`
-
-Risk-weighted coverage debt report.
 
 ## Command-output compression (`fmt`)
 
@@ -1276,6 +1381,67 @@ back to config locally; new-formatter candidates are printed as a
 paste-ready stub. The `tokenops_fmt (view=learn)` MCP tool returns the same
 report to agents. The formatters stay deterministic — learning proposes,
 it never mutates runtime behaviour.
+
+## Outcomes and verification
+
+### `tokenops outcome {record|detect|check-json}`
+
+Records whether a piece of work succeeded, against an execution ID, so
+[`verify`](#tokenops-verify) can weigh savings against quality. Each form
+can name the `--decision-id` the outcome evaluates.
+
+```bash
+tokenops outcome record exec-42 --result achieved            # achieved | partial | not_achieved
+tokenops outcome record exec-42 --result partial --caveat "needed a manual fix" --attention-minutes 15
+tokenops outcome detect exec-42 --session-id 9420028c
+tokenops outcome check-json exec-42 --file response.json --pointer /status --equals ok
+```
+
+- `record` is the operator's assessment; `--attention-minutes` is the
+  active human effort the execution took.
+- `detect` reads a Claude Code session and records the result of the last
+  recognised verifier (a test run, say) after the final edit. With no
+  verifier after the last edit it fails and asks you to run tests or
+  record a human outcome.
+- `check-json` verifies one scalar in a local JSON response, selected by
+  an RFC 6901 JSON Pointer.
+
+### `tokenops verify`
+
+Compares resource use and outcomes with and without optimizations. It
+attributes recorded events to reconstructed attempts (a pause longer than
+`--idle-gap`, default 10m, starts a new one). By default it compares
+attempts an optimization touched against those it did not; that view is
+observational and does not establish causality.
+
+```bash
+tokenops verify --days 30 --each          # list every attempt, not only the comparison
+tokenops verify --experiment-id experiment:6f1c… --json
+```
+
+When execution-linked randomized assignments exist, it compares a complete
+[experiment](#tokenops-experiment-start-status-stop)'s paired arms instead;
+`--experiment-id` picks one when the window holds several. A randomized
+comparison needs complete pairs, measured tokens and explicit outcomes;
+otherwise `verify` falls back to the observational view and says why.
+
+Explicit human and verifier outcomes count toward each cohort's assessed
+success rate, so a quality drop can flag harm even when the token count
+fell; missing outcomes stay unknown. Randomized results are evidence about
+that experiment, not a guarantee for other work.
+
+### `tokenops optimizations`
+
+Optimizations TokenOps recommended or applied, from the event store.
+
+```bash
+tokenops optimizations --since 24h --json
+tokenops optimizations --workflow-id research-summariser --limit 200
+```
+
+`--since` takes an RFC 3339 time or a duration (default `7d`);
+`--workflow-id` and `--agent-id` filter, and `--limit` caps the rows
+(default 50).
 
 ## Inspection
 

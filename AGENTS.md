@@ -40,4 +40,4 @@ Branch from fresh `origin/main` using `feat/`, `fix/`, or `chore/`. Use atomic C
 
 ## Agent Workflow
 
-Recommend a clear default; ask only about consequential forks. Complete obvious verification without waiting. Verify surprising pricing changes against the authoritative vendor source. Read `memory/status.md` for current context and `memory/decisions.md` for durable decisions.
+Recommend a clear default; ask only about consequential forks. Complete obvious verification without waiting. Verify surprising pricing changes against the authoritative vendor source. For context, read `CHANGELOG.md` (what shipped, newest first) and the ADRs in `docs/adr` (durable decisions; ADR 0004 sets the roadmap's sequencing). `memory/` is an unmaintained archive of dated snapshots: verify anything there against the code before relying on it.
