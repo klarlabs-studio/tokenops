@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts"
+	opencodestore "go.klarlabs.de/tokenops/internal/infra/opencodedb"
 )
 
 // PromptWindow selects which typed instructions to score.
@@ -21,7 +22,7 @@ type PromptWindow struct {
 // only counts and recommendations remain, as the daemon API serves them
 // (ADR 0010 §5). The text is read at scan time and never persisted.
 func PromptFindings(w PromptWindow, withText bool, now time.Time) (prompts.Findings, error) {
-	opts := prompts.ExtractOptions{Root: w.Root, SessionID: w.SessionID, Limit: w.Limit, Since: w.Since, Until: w.Until}
+	opts := prompts.ExtractOptions{Root: w.Root, SessionID: w.SessionID, Limit: w.Limit, Since: w.Since, Until: w.Until, Opencode: opencodestore.Store{}}
 	if opts.Since.IsZero() {
 		opts.Since = now.Add(-7 * 24 * time.Hour)
 	}

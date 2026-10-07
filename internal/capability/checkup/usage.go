@@ -16,6 +16,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/geminicli"
 	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb"
+	opencodestore "go.klarlabs.de/tokenops/internal/infra/opencodedb"
 	"go.klarlabs.de/tokenops/internal/infra/sessiondirs"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -280,7 +281,7 @@ func readOpencode(_ context.Context, since time.Time, add func(turn)) error {
 		}
 		return fmt.Errorf("opencode: database unreadable, usage not counted: %w", err)
 	}
-	return opencodedb.Read(path, opencodedb.Options{Since: since}, func(m opencodedb.Message) error {
+	return opencodestore.Store{}.Read(path, opencodedb.Options{Since: since}, func(m opencodedb.Message) error {
 		if m.Role != opencodedb.Assistant {
 			return nil
 		}

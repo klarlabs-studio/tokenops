@@ -6,6 +6,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
+	opencodestore "go.klarlabs.de/tokenops/internal/infra/opencodedb"
 )
 
 // opencode is the one client that already knows what its turns cost. It
@@ -103,7 +104,7 @@ func sumOpencodeSession(
 	cfg Config,
 	now time.Time,
 ) (total float64, model string, contextTokens int64, unpriced string) {
-	_ = opencode.ReadSession(dbPath, sessionID, func(t opencode.Turn) error {
+	_ = opencode.ReadSession(opencodestore.Store{}, dbPath, sessionID, func(t opencode.Turn) error {
 		model = t.Model
 		// The window holds whatever the newest turn carried. opencode
 		// keeps its figures disjoint — total is input + output +
