@@ -1,0 +1,21 @@
+{
+  "Selections": [
+    {
+      "SourceID": "repo:AGENTS.md",
+      "SectionID": "repo:AGENTS.md#/Style",
+      "Anchor": "/Style",
+      "TokenCount": 5,
+      "Score": 1.5,
+      "Reasons": [
+        "repo_match",
+        "kw:style"
+      ]
+    }
+  ],
+  "SkippedCount": 8,
+  "TotalTokens": 5,
+  "Truncated": false,
+  "BudgetHit": true,
+  <ELAPSED>,
+  "Considered": 9
+}

@@ -1,0 +1,4 @@
+SOURCE                                     ORIGINAL COMPRESSED  QUALITY       OK
+.cursor/rules/go.mdc                             14         13     0.93      yes
+AGENTS.md                                        23         22     0.96      yes
+CLAUDE.md                                        38         38     1.00      yes

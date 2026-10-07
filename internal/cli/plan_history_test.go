@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/money"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -98,6 +99,25 @@ func TestPlanCatalogShowsPrices(t *testing.T) {
 }
 
 func TestSpendTextShowsPlanCostAndValue(t *testing.T) {
+	// The plan cost comes from the plan history under $HOME. The package
+	// shares one sandboxed HOME, so this test only passed when an earlier
+	// test happened to have bound an Anthropic plan there; run alone it
+	// found no history and no plan cost. Give it its own HOME and the one
+	// binding it reads.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	file, err := planhistory.Default()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Append(plans.Binding{
+		Provider: "anthropic", Plan: "claude-max-20x",
+		From: time.Now().Add(-60 * 24 * time.Hour), Recorded: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
 	var out bytes.Buffer
 	v := spendView{Window: "last 30d", Currency: "USD"}
 	v.Summary.APIEquivalentUSD = 11400

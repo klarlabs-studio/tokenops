@@ -10,9 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.klarlabs.de/tokenops/internal/contexts/rules"
-	"go.klarlabs.de/tokenops/internal/infra/rulesfs"
-	"go.klarlabs.de/tokenops/pkg/eventschema"
+	"go.klarlabs.de/tokenops/internal/capability/ruleintel"
 )
 
 func newRulesCmd() *cobra.Command {
@@ -58,11 +56,7 @@ systems (e.g. lean vs bloat, refactor vs PR-review).`,
 			if err != nil {
 				return fmt.Errorf("read spec: %w", err)
 			}
-			spec, err := rules.ParseBenchSpec(data)
-			if err != nil {
-				return err
-			}
-			res, err := rules.RunBenchSpec(spec, rulesfs.LoadCorpus)
+			res, err := ruleintel.Bench(data)
 			if err != nil {
 				return err
 			}
@@ -78,7 +72,7 @@ systems (e.g. lean vs bloat, refactor vs PR-review).`,
 	return cmd
 }
 
-func renderBenchText(cmd *cobra.Command, res *rules.BenchmarkResult) {
+func renderBenchText(cmd *cobra.Command, res *ruleintel.BenchmarkResult) {
 	out := cmd.OutOrStdout()
 	if len(res.Scores) == 0 {
 		fmt.Fprintln(out, "no scores")
@@ -129,27 +123,23 @@ run the dynamic injection policy before wiring it into the proxy.`,
 				}
 				root = wd
 			}
-			docs, err := rulesfs.LoadCorpus(root, repoID)
-			if err != nil {
-				return err
-			}
-			cfg := rules.RouterConfig{
+			q := ruleintel.InjectQuery{
 				TokenBudget:        budget,
 				MinScore:           minScore,
 				IncludeGlobalScope: global,
+				WorkflowID:         workflow,
+				AgentID:            agent,
+				FilePaths:          files,
+				Tools:              tools,
+				Keywords:           keywords,
 			}
 			if latencyMS > 0 {
-				cfg.LatencyBudget = time.Duration(latencyMS) * time.Millisecond
+				q.LatencyBudget = time.Duration(latencyMS) * time.Millisecond
 			}
-			r := rules.NewRouter(cfg)
-			res := r.Select(docs, rules.SelectionSignals{
-				WorkflowID: workflow,
-				AgentID:    agent,
-				RepoID:     repoID,
-				FilePaths:  files,
-				Tools:      tools,
-				Keywords:   keywords,
-			})
+			res, err := ruleintel.Inject(ruleintel.Corpus{Root: root, RepoID: repoID}, q)
+			if err != nil {
+				return err
+			}
 			if jsonOut {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(res)
 			}
@@ -172,7 +162,7 @@ run the dynamic injection policy before wiring it into the proxy.`,
 	return cmd
 }
 
-func renderInjectText(cmd *cobra.Command, res *rules.SelectionResult) {
+func renderInjectText(cmd *cobra.Command, res *ruleintel.Selection) {
 	out := cmd.OutOrStdout()
 	if len(res.Selections) == 0 {
 		fmt.Fprintln(out, "no sections selected")
@@ -191,14 +181,14 @@ func renderInjectText(cmd *cobra.Command, res *rules.SelectionResult) {
 }
 
 type compressView struct {
-	SourceID         string                    `json:"source_id"`
-	Path             string                    `json:"path"`
-	OriginalTokens   int64                     `json:"original_tokens"`
-	CompressedTokens int64                     `json:"compressed_tokens"`
-	QualityScore     float64                   `json:"quality_score"`
-	Accepted         bool                      `json:"accepted"`
-	Sections         []rules.CompressedSection `json:"sections,omitempty"`
-	Body             string                    `json:"body,omitempty"`
+	SourceID         string                        `json:"source_id"`
+	Path             string                        `json:"path"`
+	OriginalTokens   int64                         `json:"original_tokens"`
+	CompressedTokens int64                         `json:"compressed_tokens"`
+	QualityScore     float64                       `json:"quality_score"`
+	Accepted         bool                          `json:"accepted"`
+	Sections         []ruleintel.CompressedSection `json:"sections,omitempty"`
+	Body             string                        `json:"body,omitempty"`
 }
 
 func newRulesCompressCmd() *cobra.Command {
@@ -233,30 +223,23 @@ original corpus.`,
 				}
 				root = wd
 			}
-			docs, err := rulesfs.LoadCorpus(root, repoID)
+			docs, err := ruleintel.CompressDetailed(ruleintel.Corpus{Root: root, RepoID: repoID},
+				ruleintel.CompressOptions{SimilarityThreshold: threshold, QualityFloor: quality}, emitBody)
 			if err != nil {
 				return err
 			}
-			c := rules.NewCompressor(rules.CompressConfig{
-				SimilarityThreshold: threshold,
-				QualityFloor:        quality,
-			}, nil)
 			views := make([]compressView, 0, len(docs))
 			for _, d := range docs {
-				r := c.Compress(d)
-				view := compressView{
-					SourceID:         r.SourceID,
+				views = append(views, compressView{
+					SourceID:         d.SourceID,
 					Path:             d.Path,
-					OriginalTokens:   r.OriginalTokens,
-					CompressedTokens: r.CompressedTokens,
-					QualityScore:     r.QualityScore,
-					Accepted:         r.Accepted,
-					Sections:         r.Sections,
-				}
-				if emitBody {
-					view.Body = r.CompactedBody()
-				}
-				views = append(views, view)
+					OriginalTokens:   d.OriginalTokens,
+					CompressedTokens: d.CompressedTokens,
+					QualityScore:     d.QualityScore,
+					Accepted:         d.Accepted,
+					Sections:         d.Sections,
+					Body:             d.Body,
+				})
 			}
 			if jsonOut {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(struct {
@@ -330,17 +313,14 @@ section bodies, so the output is safe to forward to OTLP collectors.`,
 				}
 				root = wd
 			}
-			docs, err := rulesfs.LoadCorpus(root, repoID)
+			res, err := ruleintel.DetectConflicts(ruleintel.Corpus{Root: root, RepoID: repoID})
 			if err != nil {
 				return err
 			}
-			findings := rules.DetectConflicts(docs, rules.ConflictOptions{})
 			if jsonOut {
-				return json.NewEncoder(cmd.OutOrStdout()).Encode(struct {
-					Findings []rules.Finding `json:"findings"`
-				}{Findings: findings})
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(res)
 			}
-			renderConflictsText(cmd, findings)
+			renderConflictsText(cmd, res.Findings)
 			return nil
 		},
 	}
@@ -350,7 +330,7 @@ section bodies, so the output is safe to forward to OTLP collectors.`,
 	return cmd
 }
 
-func renderConflictsText(cmd *cobra.Command, findings []rules.Finding) {
+func renderConflictsText(cmd *cobra.Command, findings []ruleintel.Finding) {
 	out := cmd.OutOrStdout()
 	if len(findings) == 0 {
 		fmt.Fprintln(out, "no conflicts detected")
@@ -394,24 +374,18 @@ are skipped.`,
 				}
 				root = wd
 			}
-			prov, err := parseProvider(provider)
-			if err != nil {
-				return err
+			prov, ok := ruleintel.ParseProvider(provider)
+			if !ok {
+				return fmt.Errorf("unknown provider %q (want openai|anthropic|gemini)", provider)
 			}
-			docs, err := rulesfs.LoadCorpus(root, repoID)
-			if err != nil {
-				return err
-			}
-			res, err := rules.AnalyzeDocs(docs, rules.AnalysisOptions{
-				Providers: []eventschema.Provider{prov},
-			})
+			res, err := ruleintel.Analyze(ruleintel.Corpus{Root: root, RepoID: repoID}, prov)
 			if err != nil {
 				return err
 			}
 			if jsonOut {
 				out := struct {
-					Documents       []rules.DocumentSummary `json:"documents"`
-					DuplicateGroups map[string][]string     `json:"duplicate_groups,omitempty"`
+					Documents       []ruleintel.DocumentSummary `json:"documents"`
+					DuplicateGroups map[string][]string         `json:"duplicate_groups,omitempty"`
 				}{Documents: res.Documents, DuplicateGroups: res.DuplicateGroups}
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
 			}
@@ -426,20 +400,7 @@ are skipped.`,
 	return cmd
 }
 
-func parseProvider(s string) (eventschema.Provider, error) {
-	switch s {
-	case "", "openai":
-		return eventschema.ProviderOpenAI, nil
-	case "anthropic":
-		return eventschema.ProviderAnthropic, nil
-	case "gemini":
-		return eventschema.ProviderGemini, nil
-	default:
-		return "", fmt.Errorf("unknown provider %q (want openai|anthropic|gemini)", s)
-	}
-}
-
-func renderAnalyzeText(cmd *cobra.Command, res *rules.AnalysisResult) {
+func renderAnalyzeText(cmd *cobra.Command, res ruleintel.Analysis) {
 	out := cmd.OutOrStdout()
 	if len(res.Documents) == 0 {
 		fmt.Fprintln(out, "no rule artifacts found")

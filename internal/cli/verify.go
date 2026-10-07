@@ -12,8 +12,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/capability/reconstruct"
+	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/capability/verify"
-	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -177,18 +177,14 @@ type verifyOptions struct {
 func runVerify(cmd *cobra.Command, opt verifyOptions) (verify.Report, error) {
 	gap := opt.idleGap
 
-	extract := agentdx.ExtractOptions{WithPromptText: true}
-	if opt.days > 0 {
-		extract.Since = time.Now().AddDate(0, 0, -opt.days)
-	}
-	records, err := agentdx.ExtractAll(extract)
+	units, err := sessions.Units(transcriptWindow("", "", opt.days, false), time.Now())
 	if err != nil {
 		// A reader that broke is reported; whatever the others yielded is
 		// still worth comparing.
 		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err)
 	}
 
-	reconstructed := reconstruct.FromUnits(agentdx.Units(records), reconstruct.Options{IdleGap: gap})
+	reconstructed := reconstruct.FromUnits(units, reconstruct.Options{IdleGap: gap})
 
 	events, err := readVerifyEvents(cmd, opt)
 	if err != nil {

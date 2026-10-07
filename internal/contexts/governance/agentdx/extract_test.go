@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	_ "modernc.org/sqlite" // writes the unreadable opencode store below
 )
 
 func recordsFrom(t *testing.T, lines ...string) []Record {
@@ -179,6 +181,10 @@ func TestExtractAllReadsPastAnUnreadableStore(t *testing.T) {
 		}
 		_ = db.Close()
 	}
+
+	// Cursor's SQL is behind a port; a store with the wrong table reads
+	// as one through it.
+	useCursor(t, fakeCursor{table: "something_else"})
 
 	_, err = ExtractAll(ExtractOptions{})
 	if !errors.Is(err, ErrCursorSchema) || !errors.Is(err, ErrOpencodeSchema) {

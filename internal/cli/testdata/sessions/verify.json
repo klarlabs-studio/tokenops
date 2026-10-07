@@ -1,0 +1,89 @@
+{
+  "comparison": {
+    "Assignment": "",
+    "Baseline": {
+      "quality": "unknown",
+      "caveat": "no events with counted prompt usage joined to this attempt — consumption is unknown",
+      "observed_at": "0001-01-01T00:00:00Z"
+    },
+    "Intervention": {
+      "quality": "unknown",
+      "caveat": "the cohort is empty",
+      "observed_at": "0001-01-01T00:00:00Z"
+    },
+    "Samples": 0,
+    "BaselineOutcomes": {
+      "achieved": 0,
+      "partial": 0,
+      "not_achieved": 0,
+      "unknown": 2
+    },
+    "InterventionOutcomes": {
+      "achieved": 0,
+      "partial": 0,
+      "not_achieved": 0,
+      "unknown": 0
+    },
+    "At": "0001-01-01T00:00:00Z"
+  },
+  "verdict": {
+    "samples": 0,
+    "caveat": "2 attempt(s) without an intervention and 0 with; a comparison needs some of each"
+  },
+  "baseline_count": 2,
+  "intervention_count": 0,
+  "baseline_outcomes": {
+    "achieved": 0,
+    "partial": 0,
+    "not_achieved": 0,
+    "unknown": 2,
+    "success_rate": {
+      "quality": "unknown",
+      "caveat": "no outcomes were assessed",
+      "observed_at": "0001-01-01T00:00:00Z"
+    }
+  },
+  "intervention_outcomes": {
+    "achieved": 0,
+    "partial": 0,
+    "not_achieved": 0,
+    "unknown": 0,
+    "success_rate": {
+      "quality": "unknown",
+      "caveat": "no outcomes were assessed",
+      "observed_at": "0001-01-01T00:00:00Z"
+    }
+  },
+  "baseline_latency_ms": {
+    "quality": "unknown",
+    "caveat": "no prompt events with measured latency joined to this attempt",
+    "observed_at": "0001-01-01T00:00:00Z"
+  },
+  "intervention_latency_ms": {
+    "quality": "unknown",
+    "caveat": "the cohort is empty",
+    "observed_at": "0001-01-01T00:00:00Z"
+  },
+  "baseline_metered_cost_usd": {
+    "quality": "unknown",
+    "caveat": "no prompt events with verified metered pricing joined to this attempt",
+    "observed_at": "0001-01-01T00:00:00Z"
+  },
+  "intervention_metered_cost_usd": {
+    "quality": "unknown",
+    "caveat": "the cohort is empty",
+    "observed_at": "0001-01-01T00:00:00Z"
+  },
+  "baseline_human_attention_minutes": {
+    "quality": "unknown",
+    "caveat": "no operator-reported human attention time for this execution",
+    "observed_at": "0001-01-01T00:00:00Z"
+  },
+  "intervention_human_attention_minutes": {
+    "quality": "unknown",
+    "caveat": "the cohort is empty",
+    "observed_at": "0001-01-01T00:00:00Z"
+  },
+  "baseline_plan_quota_tokens": null,
+  "intervention_plan_quota_tokens": null
+}

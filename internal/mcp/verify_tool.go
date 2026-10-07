@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/reconstruct"
+	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/capability/verify"
-	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -129,14 +129,11 @@ func RegisterVerifyTool(s *Server, d VerifyDeps) error {
 				days = 30
 			}
 
-			extract := agentdx.ExtractOptions{Root: d.Root, WithPromptText: true}
-			if days > 0 {
-				extract.Since = time.Now().AddDate(0, 0, -days)
-			}
+			window := sessions.Window{Root: d.Root, Days: days, All: days <= 0}
 			// A reader that broke is not fatal: whatever the other
 			// clients yielded is still worth comparing, and failing the
 			// call would hide the comparison entirely.
-			records, _ := agentdx.ExtractAll(extract)
+			units, _ := sessions.Units(window, time.Now())
 
 			filter := sqlite.Filter{Limit: 200_000}
 			if days > 0 {
@@ -148,7 +145,7 @@ func RegisterVerifyTool(s *Server, d VerifyDeps) error {
 			}
 
 			report := verify.CompareReconstructedExperiment(
-				reconstruct.FromUnits(agentdx.Units(records), reconstruct.Options{}),
+				reconstruct.FromUnits(units, reconstruct.Options{}),
 				events, in.ExperimentID,
 			)
 			res := verifyPayload(report)

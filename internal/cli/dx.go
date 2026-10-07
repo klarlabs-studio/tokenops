@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/capability/findings"
-
-	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
+	"go.klarlabs.de/tokenops/internal/capability/sessions"
 )
 
 // newDXCmd reports what agent sessions are like to work with, as opposed
@@ -60,27 +60,14 @@ proxy-only.`,
 					return err
 				}
 			}
-			opts := agentdx.ExtractOptions{
-				Root:           root,
-				Source:         agentdx.Source(source),
-				IncludeScratch: includeScratch,
-			}
-			if days > 0 {
-				opts.Since = time.Now().AddDate(0, 0, -days)
-			}
-			records, err := agentdx.ExtractAll(opts)
-			if err != nil {
-				// A reader that broke is reported, but whatever the other
-				// clients yielded is still worth showing.
-				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err)
-			}
-			m := agentdx.ComputeByProvider(records)
+			dx, curve := sessions.ComputeDXWithCurve(transcriptWindow(root, source, days, includeScratch), time.Now())
+			warnRead(cmd, dx.Warnings)
 			if jsonOut {
 				enc := json.NewEncoder(cmd.OutOrStdout())
 				enc.SetIndent("", "  ")
-				return enc.Encode(m)
+				return enc.Encode(dx.Metrics)
 			}
-			writeDXText(cmd.OutOrStdout(), m, agentdx.ComputeContextCurve(records), days)
+			writeDXText(cmd.OutOrStdout(), dx, curve, days)
 			return nil
 		},
 	}
@@ -109,7 +96,7 @@ func dxFromSnapshot(cmd *cobra.Command, jsonOut bool, days int) (bool, error) {
 		enc.SetIndent("", "  ")
 		return true, enc.Encode(snap.DX.Metrics)
 	}
-	writeDXText(cmd.OutOrStdout(), snap.DX.Metrics, snap.Curve, days)
+	writeDXText(cmd.OutOrStdout(), snap.DX, snap.Curve, days)
 	fmt.Fprintf(cmd.OutOrStdout(), "\nFrom the daemon's analysis %s ago; --fresh reads the transcripts now.\n", agoWords(age))
 	return true, nil
 }
@@ -121,7 +108,27 @@ func snapshotTime(s *findings.SessionsSnapshot) time.Time {
 	return s.ComputedAt
 }
 
-func writeDXText(w io.Writer, m agentdx.Metrics, bands []agentdx.ContextBand, days int) {
+// transcriptWindow is the transcripts a dx, story or verify run reads:
+// the last days days, or everything when days is zero or less.
+func transcriptWindow(root, source string, days int, includeScratch bool) sessions.Window {
+	w := sessions.Window{Root: root, Days: days, Source: source, IncludeScratch: includeScratch}
+	if days <= 0 {
+		w.All = true
+	}
+	return w
+}
+
+// warnRead reports the clients whose transcripts could not be read. A
+// reader that broke is reported, but whatever the others yielded is
+// still worth showing.
+func warnRead(cmd *cobra.Command, warnings []string) {
+	if len(warnings) > 0 {
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", strings.Join(warnings, "\n"))
+	}
+}
+
+func writeDXText(w io.Writer, dx sessions.DX, bands []sessions.ContextBand, days int) {
+	m := dx.Metrics
 	window := "all history"
 	if days > 0 {
 		window = fmt.Sprintf("last %dd", days)
@@ -134,7 +141,7 @@ func writeDXText(w io.Writer, m agentdx.Metrics, bands []agentdx.ContextBand, da
 		return
 	}
 
-	g := agentdx.Grade(m)
+	g := dx.Grades
 
 	fmt.Fprintln(w, "EFFORT PER INSTRUCTION")
 	fmt.Fprintf(w, "  turns (median):        %-10.1f %s\n", m.MedianTurnsPerPrompt, badge(g.Turns))
@@ -192,7 +199,7 @@ func writeDXText(w io.Writer, m agentdx.Metrics, bands []agentdx.ContextBand, da
 			fmt.Fprintf(w, "  %-10s %8d %9.1f%% %9.1f%% %8.1f\n",
 				b.Label, b.Prompts, b.RejectRatePct, b.RepeatCallRatePct, b.MedianTurns)
 		}
-		if note := agentdx.DegradationNote(bands); note != "" {
+		if note := sessions.DegradationNote(bands); note != "" {
 			fmt.Fprintf(w, "\n  %s\n", note)
 		}
 		fmt.Fprintln(w, "\n  REPEATED is the agent re-issuing a call it already made, within its last")
@@ -202,7 +209,7 @@ func writeDXText(w io.Writer, m agentdx.Metrics, bands []agentdx.ContextBand, da
 		fmt.Fprintln(w, "  low-context instruction is usually an early one, mid-orientation.")
 	}
 
-	if rec, ok := agentdx.Recommend(m); ok {
+	if rec := dx.Recommendation; rec != nil {
 		fmt.Fprintf(w, "\nBIGGEST WIN\n  %s\n  %s\n  Do: %s\n", rec.Title, rec.Evidence, rec.Action)
 	}
 	fmt.Fprintln(w, "\nWhat a figure means: tokenops explain <name>, e.g. tokenops explain wall-clock")
@@ -210,7 +217,7 @@ func writeDXText(w io.Writer, m agentdx.Metrics, bands []agentdx.ContextBand, da
 
 // writeDXEffort prints the model × effort rows, where clients record
 // effort.
-func writeDXEffort(w io.Writer, rows []agentdx.EffortRow) {
+func writeDXEffort(w io.Writer, rows []sessions.EffortRow) {
 	if len(rows) == 0 {
 		return
 	}
@@ -232,7 +239,7 @@ func writeDXEffort(w io.Writer, rows []agentdx.EffortRow) {
 			r.MedianPeakContext/1000, r.FirstTryPct, r.RejectedPct, mark)
 	}
 	if thin {
-		fmt.Fprintf(w, "  * fewer than %d instructions; too few to compare.\n", agentdx.MinEffortInstructions)
+		fmt.Fprintf(w, "  * fewer than %d instructions; too few to compare.\n", sessions.MinEffortInstructions)
 	}
 	fmt.Fprintln(w, "  Compare levels within one model. You raise effort for harder work, so a")
 	fmt.Fprintln(w, "  higher level doing worse may mean harder instructions, not a worse setting.")
@@ -250,7 +257,7 @@ func pctOrNA(v float64, measured bool) string {
 }
 
 // badge renders a grade, or nothing for a metric that was not measured.
-func badge(l agentdx.Letter) string {
+func badge(l sessions.Letter) string {
 	if l == "" {
 		return ""
 	}

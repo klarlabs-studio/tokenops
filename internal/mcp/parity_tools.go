@@ -10,29 +10,17 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 
 	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard"
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/eval"
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
-// ParityDeps wires the engines the parity tools depend on. Store is reused
-// for replay + scorecard live KPI computation. CLI and MCP adapters call
-// the same domain service functions (rules.RunBenchSpec, eval.Run,
-// scorecard.BuildFromStore, coverdebt.Analyze, replay.Engine) — there is
-// no adapter-specific logic in this file beyond argument unmarshalling.
+// ParityDeps wires the engines the parity tools depend on. Store backs the
+// scorecard's live KPIs and the audit log; both answer from the
+// capability layer, so there is no adapter-specific logic in this file
+// beyond argument unmarshalling. Replay and eval left MCP for the CLI.
 type ParityDeps struct {
 	Store *sqlite.Store
 	Spend *spend.Engine
-	// Pipeline overrides the optimizer pipeline used by `tokenops replay`.
-	// nil falls back to replay.DefaultPipeline. The serve adapter passes
-	// a pipeline built from config (optimizer.routing_rules etc.) so MCP
-	// replays match `tokenops replay`.
-	Pipeline *optimizer.Pipeline
-	// PipelineFor, when set, builds the pipeline at call time from the
-	// live config, so a routing rule written mid-session shows in the
-	// next replay. It wins over Pipeline.
-	PipelineFor func() *optimizer.Pipeline
 }
 
 // --- input structs --------------------------------------------------------
@@ -54,12 +42,6 @@ type auditInput struct {
 }
 
 // --- output structs --------------------------------------------------------
-
-// evalResult is the typed payload for `tokenops eval`.
-type evalResult struct {
-	Report *eval.Report     `json:"report"`
-	Gate   *eval.GateResult `json:"gate"`
-}
 
 // auditResult is the typed payload for tokenops_records (view=audit), the
 // audit-log capability's answer.
@@ -127,15 +109,6 @@ func runAudit(ctx context.Context, d ParityDeps, in auditInput) (*auditResult, e
 		return nil, err
 	}
 	return &log, nil
-}
-
-// pipeline is the replay pipeline in effect for this call; nil means the
-// caller falls back to the default.
-func (d ParityDeps) pipeline() *optimizer.Pipeline {
-	if d.PipelineFor != nil {
-		return d.PipelineFor()
-	}
-	return d.Pipeline
 }
 
 // defaultAuditLimit bounds an unfiltered audit query: the whole log ran

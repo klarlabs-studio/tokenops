@@ -3,6 +3,8 @@ package opencodedb
 import (
 	"os"
 	"testing"
+
+	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb"
 )
 
 // TestLiveStore reads a real opencode.db when OPENCODEDB_LIVE names one
@@ -15,9 +17,9 @@ func TestLiveStore(t *testing.T) {
 		t.Skip("set OPENCODEDB_LIVE to a copy of an opencode.db")
 	}
 	ids := map[string]int{}
-	roles := map[Role]int{}
+	roles := map[opencodedb.Role]int{}
 	tools := 0
-	if err := Read(path, Options{Parts: true}, func(m Message) error {
+	if err := Read(path, opencodedb.Options{Parts: true}, func(m opencodedb.Message) error {
 		ids[m.ID]++
 		roles[m.Role]++
 		tools += len(m.Tools)
