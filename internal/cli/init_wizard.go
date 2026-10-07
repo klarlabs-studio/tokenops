@@ -17,8 +17,8 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/actions"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/planswitch"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/infra/planevidence"
 )
 
@@ -188,7 +188,7 @@ func (w *wizard) plans(cfgPath, home string, boundBefore map[string]string) {
 		if boundBefore[provider] == name {
 			continue // the operator's own binding, priced or not already
 		}
-		p, ok := plans.Lookup(name)
+		p, ok := planswitch.Lookup(name)
 		if !ok {
 			continue
 		}

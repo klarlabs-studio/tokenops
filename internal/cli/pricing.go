@@ -8,41 +8,17 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/bootstrap"
+	"go.klarlabs.de/tokenops/internal/capability/ratecards"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
-	"go.klarlabs.de/tokenops/internal/infra/pricingsource"
 )
 
-// buildSpendEngine constructs the effective-dated cost engine for CLI
-// commands that price events outside the daemon bootstrap (spend, replay):
-// events are priced at the rate card in effect at their timestamp, from the
-// embedded baseline plus persisted snapshots under ~/.tokenops/pricing, with
-// the negotiated-rate override (cfg.Pricing.Path) layered across every
-// period. Fail-soft: any error building the effective-dated engine degrades
-// to the flat baseline+override engine so costing never breaks. A malformed
-// override file is a hard error, surfaced to the caller as before.
+// buildSpendEngine is the cost engine for CLI commands that price events
+// outside the daemon (spend, replay, glance): bootstrap.SpendEngine with
+// the configured override file, so the CLI prices as the daemon does.
 func buildSpendEngine(cfg config.Config) (*spend.Engine, error) {
-	flatTable, err := spend.TableWithOverrides(cfg.Pricing.Path)
-	if err != nil {
-		return nil, err
-	}
-	fallback := spend.NewEngine(flatTable)
-
-	overrides := spend.Table{}
-	if cfg.Pricing.Path != "" {
-		ov, oerr := spend.LoadTableFile(cfg.Pricing.Path)
-		if oerr != nil {
-			return fallback, nil
-		}
-		overrides = ov
-	}
-
-	eng, eerr := pricing.EffectiveEngineWithOverrides("", overrides)
-	if eerr != nil || eng == nil {
-		return fallback, nil
-	}
-	return eng, nil
+	return bootstrap.SpendEngine(cfg.Pricing.Path, nil)
 }
 
 // newPricingCmd builds the `tokenops pricing` command tree: the ADR 0002
@@ -50,7 +26,7 @@ func buildSpendEngine(cfg config.Config) (*spend.Engine, error) {
 // diffs them so drift is loud, and lints them for the family-ratio anomalies
 // that hid the Opus ⅓ error. As of Phase 2 the cost engine consults these
 // snapshots: events are priced at the rate card in effect at their timestamp
-// (see buildSpendEngine / pricing.EffectiveEngine).
+// (see bootstrap.SpendEngine).
 func newPricingCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pricing",
@@ -104,9 +80,9 @@ keep working on the baseline.`,
 			out := cmd.OutOrStdout()
 			errOut := cmd.ErrOrStderr()
 
-			src := pricingsource.ByName(source, url)
-			if src == nil {
-				return fmt.Errorf("unknown pricing source %q (known: litellm)", source)
+			src, err := ratecards.SourceNamed(source, url)
+			if err != nil {
+				return err
 			}
 
 			ctx, cancel := context.WithTimeout(cmd.Context(), 15*time.Second)
@@ -123,8 +99,9 @@ keep working on the baseline.`,
 			progress.success(fmt.Sprintf("Fetched %d model rates", len(snap.Rates)))
 			fmt.Fprintf(out, "Fetched %d model rates (as of %s).\n\n", len(snap.Rates), snap.FetchedAt.Format(time.RFC3339))
 
+			verdict := ratecards.Assess(dir, snap)
 			// Consistency guard — warn, never block.
-			if anomalies := pricing.Check(snap); len(anomalies) > 0 {
+			if anomalies := verdict.Anomalies; len(anomalies) > 0 {
 				fmt.Fprintf(errOut, "⚠ consistency guard flagged %d anomaly(ies) in the fetched rates:\n", len(anomalies))
 				for _, a := range anomalies {
 					fmt.Fprintf(errOut, "  - %s\n", a.String())
@@ -134,18 +111,18 @@ keep working on the baseline.`,
 			}
 
 			// Diff against the latest snapshot (or baseline when none exists).
-			prev, real := pricing.LatestSnapshot(dir)
+			prev := verdict.Previous
 			label := "baseline"
-			if real {
+			if verdict.PreviousStored {
 				label = prev.FetchedAt.Format(time.RFC3339)
 			}
-			changes := pricing.Diff(prev, snap)
+			changes := verdict.Changes
 			if len(changes) == 0 {
 				fmt.Fprintf(out, "No changes vs %s (%s).\n", label, prev.Source)
 			} else {
 				fmt.Fprintf(out, "Changes vs %s (%s):\n", label, prev.Source)
 				for _, c := range changes {
-					fmt.Fprintf(out, "  %s\n", pricing.FormatChange(c))
+					fmt.Fprintf(out, "  %s\n", ratecards.FormatChange(c))
 				}
 			}
 
@@ -153,7 +130,7 @@ keep working on the baseline.`,
 				fmt.Fprintln(out, "\n--dry-run: snapshot not written.")
 				return nil
 			}
-			path, err := pricing.SaveSnapshot(dir, snap)
+			path, err := ratecards.Save(dir, snap)
 			if err != nil {
 				return fmt.Errorf("write snapshot: %w", err)
 			}
@@ -179,7 +156,7 @@ func newPricingShowCmd() *cobra.Command {
 		Short: "Print the rates in a snapshot (default: latest, else baseline)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			snap, err := pricing.FindSnapshot(dir, snapshot)
+			snap, err := ratecards.Find(dir, snapshot)
 			if err != nil {
 				return err
 			}
@@ -198,7 +175,7 @@ func newPricingShowCmd() *cobra.Command {
 			fmt.Fprintf(out, "%-34s %12s %12s %12s\n", "PROVIDER/MODEL", "INPUT", "OUTPUT", "CACHE_READ")
 			// Models() returns "<provider>/<model>" keys sorted lexically, so
 			// rows already group by provider.
-			pinned := pricing.PinnedSnapshotKeys()
+			pinned := ratecards.Pinned()
 			anyPinned := false
 			for _, m := range snap.Models() {
 				r := snap.Rates[m]
@@ -233,16 +210,16 @@ func newPricingDiffCmd() *cobra.Command {
 		Short: "Diff two snapshots (default: baseline → latest)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			oldSnap, err := pricing.FindSnapshot(dir, from)
+			oldSnap, err := ratecards.Find(dir, from)
 			if err != nil {
 				return fmt.Errorf("--from %q: %w", from, err)
 			}
-			newSnap, err := pricing.FindSnapshot(dir, to)
+			newSnap, err := ratecards.Find(dir, to)
 			if err != nil {
 				return fmt.Errorf("--to %q: %w", to, err)
 			}
 			if jsonOut {
-				changes := pricing.Diff(oldSnap, newSnap)
+				changes := ratecards.Diff(oldSnap, newSnap)
 				if changes == nil {
 					changes = changes[:0]
 				}
@@ -254,15 +231,15 @@ func newPricingDiffCmd() *cobra.Command {
 			fmt.Fprintf(out, "%s (%s)  →  %s (%s)\n",
 				oldSnap.FetchedAt.Format(time.RFC3339), oldSnap.Source,
 				newSnap.FetchedAt.Format(time.RFC3339), newSnap.Source)
-			changes := pricing.Diff(oldSnap, newSnap)
+			changes := ratecards.Diff(oldSnap, newSnap)
 			if len(changes) == 0 {
 				fmt.Fprintln(out, "no changes.")
 				return nil
 			}
-			pinned := pricing.PinnedSnapshotKeys()
+			pinned := ratecards.Pinned()
 			anyPinned := false
 			for _, c := range changes {
-				line := pricing.FormatChange(c)
+				line := ratecards.FormatChange(c)
 				if pinned[c.Model] {
 					line += "  [pinned: runtime keeps baseline]"
 					anyPinned = true
@@ -299,12 +276,12 @@ It exits non-zero when anomalies are found, so it can gate CI. Default snapshot:
 latest, falling back to the baseline.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			snap, err := pricing.FindSnapshot(dir, snapshot)
+			snap, err := ratecards.Find(dir, snapshot)
 			if err != nil {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			anomalies := pricing.Check(snap)
+			anomalies := ratecards.Lint(snap)
 			if jsonOut {
 				found := make([]string, 0, len(anomalies))
 				for _, a := range anomalies {

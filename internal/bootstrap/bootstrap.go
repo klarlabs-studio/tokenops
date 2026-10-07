@@ -114,7 +114,7 @@ func New(ctx context.Context, opts Options) (*Components, error) {
 	if opts.Logger == nil {
 		opts.Logger = slog.Default()
 	}
-	spendEng, err := buildSpendEngine(opts.PricingPath, opts.Logger)
+	spendEng, err := SpendEngine(opts.PricingPath, opts.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: %w", err)
 	}
@@ -149,7 +149,7 @@ func New(ctx context.Context, opts Options) (*Components, error) {
 	return c, nil
 }
 
-// buildSpendEngine constructs the effective-dated cost engine (ADR 0002
+// SpendEngine constructs the effective-dated cost engine (ADR 0002
 // Phase 2): events are priced at the rate card that was in effect at their
 // timestamp, using the embedded baseline plus any persisted pricing
 // snapshots under ~/.tokenops/pricing, with the negotiated-rate override
@@ -159,7 +159,11 @@ func New(ctx context.Context, opts Options) (*Components, error) {
 // the override file for it) falls back to the flat baseline+override engine
 // so costing never breaks. A malformed override file is still a hard error —
 // that is operator misconfiguration, surfaced exactly as before.
-func buildSpendEngine(pricingPath string, logger *slog.Logger) (*spend.Engine, error) {
+//
+// It is the one place the engine is built. The daemon, the CLI, the coach
+// hook and the route guard each had their own copy, and the route guard's
+// had dropped the override file.
+func SpendEngine(pricingPath string, logger *slog.Logger) (*spend.Engine, error) {
 	// Flat engine over baseline + overrides — the guaranteed fallback and
 	// the source of truth for override-file validity.
 	flatTable, err := spend.TableWithOverrides(pricingPath)

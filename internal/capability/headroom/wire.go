@@ -77,3 +77,7 @@ func (g Glance) Payload() *GlancePayload {
 		Accounts:      g.Accounts,
 	}
 }
+
+// VendorWindow is one of the vendor's own rate-limit windows as a session
+// budget carries it.
+type VendorWindow = plans.VendorWindow

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -19,7 +18,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/modeltier"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/taskclass"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/infra/followthrough"
 	"go.klarlabs.de/tokenops/internal/infra/routeguard"
@@ -162,7 +160,7 @@ func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir, provider s
 	dec := routeguard.Evaluate(routeguard.Input{
 		Dir: dir, SessionID: in.SessionID, Prompt: in.Prompt,
 		CurrentModel: model, Provider: prov,
-		Mode: mode, Catalog: routeCatalog(), Candidates: candidates,
+		Mode: mode, Catalog: routeCatalog(cfg), Candidates: candidates,
 		Verbosity: coachcap.Build(cfg).Verbosity,
 		AutoKinds: autoKinds,
 		Quieted:   quietedKinds(ledger, now),
@@ -214,19 +212,19 @@ func routeResolutions(rs []routeguard.Resolution) []coachcap.Resolution {
 	return out
 }
 
-// routeCatalog builds the tier catalog from the effective-dated card the
-// daemon maintains, falling back to the embedded baseline.
+// routeCatalog builds the tier catalog from the card the cost engine
+// prices with now: the effective-dated snapshots with the operator's
+// negotiated rates over them, falling back to the embedded baseline.
 //
 // The baseline alone is the wrong table to decide from: it does not know
 // the prices a refresh has since learned, and pricing from it is what
-// made an earlier coach report nothing was worth saying.
-func routeCatalog() *modeltier.Catalog {
+// made an earlier coach report nothing was worth saying. The latest
+// snapshot alone missed the override file, so a model the operator pays
+// little for still tiered as a flagship.
+func routeCatalog(cfg config.Config) *modeltier.Catalog {
 	table := spend.DefaultTable()
-	if home, err := os.UserHomeDir(); err == nil {
-		snaps := pricing.LoadSnapshots(filepath.Join(home, ".tokenops", "pricing"))
-		if dated := pricing.SnapshotsToDatedTables(snaps); len(dated) > 0 {
-			table = dated[len(dated)-1].Table
-		}
+	if eng := hookSpendEngine(cfg.Pricing.Path); eng != nil {
+		table = eng.Table()
 	}
 	return modeltier.New(table, nil)
 }

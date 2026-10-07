@@ -1,0 +1,12 @@
+{
+  "anomalies": [
+    "anthropic/claude-opus-4-7 cache_read 1.5 is 30% of input (5); expected ≈10% (≈0.5)",
+    "openai/gpt-4o cache_read 3 exceeds input 2.5; a cache read should never cost more than fresh input"
+  ],
+  "fetched_at": "2026-09-15T00:00:00Z",
+  "models": 3,
+  "source": "litellm"
+}
+--- stderr ---
+--- error ---
+pricing lint: 2 anomaly(ies) found

@@ -135,7 +135,8 @@ func FindSnapshot(dir, selector string) (Snapshot, error) {
 	case "baseline":
 		return BaselineSnapshot(), nil
 	}
-	want := strings.TrimSuffix(selector, ".json")
+	// The stamp as printed has colons; the file name has dashes.
+	want := strings.NewReplacer(":", "-").Replace(strings.TrimSuffix(selector, ".json"))
 	for _, s := range LoadSnapshots(dir) {
 		stamp := strings.TrimSuffix(snapshotFilename(s.FetchedAt), ".json")
 		if stamp == want || strings.HasPrefix(stamp, want) {

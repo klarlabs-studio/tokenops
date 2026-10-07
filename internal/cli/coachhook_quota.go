@@ -9,7 +9,6 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -35,8 +34,7 @@ type planReading struct {
 // rather than fall back to dollars nobody pays.
 func readPlan(ctx context.Context, cfg config.Config, provider eventschema.Provider, now time.Time) planReading {
 	name := cfg.Plans[string(provider)]
-	p, known := plans.Lookup(name)
-	out := planReading{Flat: known && name != plans.PayAsYouGo && !p.SpendDenominated}
+	out := planReading{Flat: headroom.FlatRate(name)}
 	if !cfg.Storage.Enabled || name == "" {
 		return out
 	}
@@ -52,7 +50,7 @@ func readPlan(ctx context.Context, cfg config.Config, provider eventschema.Provi
 	}
 	defer func() { _ = store.Close() }()
 	all := headroom.LiveWindows(ctx, cfg, store, provider, now)
-	if w, ok := plans.MostConstrained(all); ok {
+	if w, ok := headroom.MostConstrained(all); ok {
 		out.Quota = &coachhook.Quota{Provider: string(provider), Window: w, All: all}
 		return out
 	}

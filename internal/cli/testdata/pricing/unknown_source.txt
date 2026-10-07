@@ -1,0 +1,3 @@
+--- stderr ---
+--- error ---
+unknown pricing source "nope" (known: default, litellm, models.dev)

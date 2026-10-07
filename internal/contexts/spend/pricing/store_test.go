@@ -126,3 +126,20 @@ func TestLoadSnapshots_MissingDirIsEmpty(t *testing.T) {
 		t.Errorf("missing dir should load empty, got %d", len(got))
 	}
 }
+
+// The selector is the timestamp `pricing show` prints, colons and all.
+// Matching it against the file name, where colons are dashes, found
+// nothing for any full RFC3339 stamp.
+func TestFindSnapshotByTheTimestampItPrints(t *testing.T) {
+	dir := t.TempDir()
+	at := time.Date(2026, 9, 1, 12, 30, 0, 0, time.UTC)
+	if _, err := SaveSnapshot(dir, Snapshot{Source: "litellm", FetchedAt: at, Rates: map[string]Rate{}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, sel := range []string{at.Format(time.RFC3339), "2026-09-01T12-30-00Z", "2026-09-01", "2026-09-01T12-30-00Z.json"} {
+		got, err := FindSnapshot(dir, sel)
+		if err != nil || !got.FetchedAt.Equal(at) {
+			t.Errorf("FindSnapshot(%q) = %v, %v", sel, got.FetchedAt, err)
+		}
+	}
+}

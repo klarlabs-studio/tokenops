@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/bootstrap"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 
 	"go.klarlabs.de/tokenops/internal/config"
@@ -17,7 +18,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
@@ -386,17 +386,24 @@ func datedRates(rf *rootFlags) func(time.Time) spend.Table {
 	if cfg, err := loadConfig(rf); err == nil {
 		path = cfg.Pricing.Path
 	}
-	overrides := spend.Table{}
-	if path != "" {
-		if ov, err := spend.LoadTableFile(path); err == nil {
-			overrides = ov
-		}
+	if eng := hookSpendEngine(path); eng != nil {
+		return eng.TableAt
 	}
-	eng, err := pricing.EffectiveEngineWithOverrides("", overrides)
-	if err != nil || eng == nil {
+	return nil
+}
+
+// hookSpendEngine is the cost engine with the negotiated rates at path,
+// nil when none can be built. A malformed override file prices without
+// it: a hook must not refuse to run over the operator's YAML.
+func hookSpendEngine(path string) *spend.Engine {
+	eng, err := bootstrap.SpendEngine(path, nil)
+	if err != nil {
+		eng, err = bootstrap.SpendEngine("", nil)
+	}
+	if err != nil {
 		return nil
 	}
-	return eng.TableAt
+	return eng
 }
 
 // quietPolicy reads coaching.quiet into the hook's rate limit.
