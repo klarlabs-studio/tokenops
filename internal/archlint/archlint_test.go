@@ -23,8 +23,9 @@ var forbiddenAdapters = []string{
 
 // forbiddenInfra lists infrastructure packages domain packages must
 // not import directly. analytics is the contracted read-side
-// abstraction so packages that depend on analytics.Row (forecast,
-// spend) are still allowed; they must NOT import sqlite themselves.
+// abstraction (its Store port is implemented by *sqlite.Store), so
+// packages that depend on analytics.Row (forecast, spend) are still
+// allowed; they must NOT import sqlite themselves.
 var forbiddenInfra = []string{
 	"go.klarlabs.de/tokenops/internal/storage/sqlite",
 }
@@ -35,12 +36,11 @@ var forbiddenInfra = []string{
 // fails the build if an exemption is stale. Documented in
 // docs/architecture-ddd.md.
 var storageExempt = map[string]bool{
-	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard":    true,
-	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics": true,
-	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow":      true,
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/replay":     true,
-	"go.klarlabs.de/tokenops/internal/contexts/telemetry/retention":     true,
-	"go.klarlabs.de/tokenops/internal/contexts/tasks":                   true,
+	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard": true,
+	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow":   true,
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/replay":  true,
+	"go.klarlabs.de/tokenops/internal/contexts/telemetry/retention":  true,
+	"go.klarlabs.de/tokenops/internal/contexts/tasks":                true,
 }
 
 // forbiddenOuterPrefixes names the outer layers no domain package may
@@ -108,9 +108,6 @@ var ioImportExempt = map[string][]string{
 	// Its Cursor reader runs SQL against Cursor's state.vscdb (cursor.go).
 	// Moves with an extraction port for agentdx's per-client readers.
 	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx": {"database/sql"},
-	// sql.Null* scan targets for the event-store queries it runs through
-	// its sqlite adapter (see storageExempt); moves with that adapter.
-	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics": {"database/sql"},
 	// HTTPMiddleware is an http.Handler around the permission check.
 	"go.klarlabs.de/tokenops/internal/contexts/security/rbac": {"net/http"},
 	// Reads opencode's SQLite store. Every reader but one goes through the

@@ -1,4 +1,4 @@
-package analytics
+package analytics_test
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -30,8 +31,8 @@ func TestSessionTurnsPriceCacheWrites(t *testing.T) {
 		turn("payload", 1_000_000, nil),
 		turn("legacy", 0, map[string]string{"cache_creation_input": "1000000"}),
 	)
-	turns, err := New(st, spend.NewEngine(spend.DefaultTable())).SessionTurns(context.Background(),
-		Filter{Since: time.Now().Add(-24 * time.Hour)})
+	turns, err := analytics.New(st, spend.NewEngine(spend.DefaultTable())).SessionTurns(context.Background(),
+		analytics.Filter{Since: time.Now().Add(-24 * time.Hour)})
 	if err != nil {
 		t.Fatalf("session turns: %v", err)
 	}
@@ -51,8 +52,8 @@ func TestSessionTurnsPriceCacheWrites(t *testing.T) {
 func TestSummarizePricesCacheWrites(t *testing.T) {
 	env := planEvent("w", "claude-sonnet-5", 1_000_000, 0)
 	env.Payload.(*eventschema.PromptEvent).CacheWriteInputTokens = 1_000_000
-	got, err := New(storeWith(t, env), spend.NewEngine(spend.DefaultTable())).
-		Summarize(context.Background(), Filter{Since: time.Now().Add(-24 * time.Hour)})
+	got, err := analytics.New(storeWith(t, env), spend.NewEngine(spend.DefaultTable())).
+		Summarize(context.Background(), analytics.Filter{Since: time.Now().Add(-24 * time.Hour)})
 	if err != nil {
 		t.Fatalf("summarize: %v", err)
 	}

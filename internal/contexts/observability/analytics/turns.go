@@ -2,9 +2,6 @@ package analytics
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
-	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -29,51 +26,32 @@ type SessionTurn struct {
 // to a session, priced. It is what attributes cost to work outside the
 // event store — a commit, a branch — by joining on the session.
 func (a *Aggregator) SessionTurns(ctx context.Context, f Filter) ([]SessionTurn, error) {
-	if a == nil || a.store == nil {
-		return nil, fmt.Errorf("analytics: aggregator not initialised")
+	if !a.ready() {
+		return nil, ErrNotInitialised
 	}
-	conds, args := buildConditions(f)
-	conds = append(conds, `COALESCE(session_id, '') <> ''`)
-	q := `SELECT session_id, timestamp_ns, COALESCE(provider, ''), COALESCE(model, ''),
-			COALESCE(input_tokens, 0), COALESCE(output_tokens, 0), COALESCE(total_tokens, 0),
-			COALESCE(` + cacheReadExpr + `, 0),
-			COALESCE(` + cacheWriteExpr + `, 0),
-			COALESCE(` + cacheWrite1hExpr + `, 0),
-			COALESCE(cost_usd, 0)
-		FROM events WHERE ` + strings.Join(conds, " AND ") + ` ORDER BY timestamp_ns`
-	rows, err := a.store.DB().QueryContext(ctx, q, args...)
+	usage, err := a.store.SessionUsage(ctx, f)
 	if err != nil {
-		return nil, fmt.Errorf("analytics: session turns: %w", err)
+		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
 	var out []SessionTurn
-	for rows.Next() {
-		var (
-			t                             SessionTurn
-			ns, in, outTok, total, cached int64
-			written, written1h            int64
-			cost                          sql.NullFloat64
-		)
-		if err := rows.Scan(&t.SessionID, &ns, &t.Provider, &t.Model, &in, &outTok, &total, &cached, &written, &written1h, &cost); err != nil {
-			return nil, fmt.Errorf("analytics: session turns scan: %w", err)
-		}
-		t.At = time.Unix(0, ns).UTC()
-		t.Tokens = total
+	for _, u := range usage {
+		t := SessionTurn{SessionID: u.SessionID, At: u.At, Provider: u.Provider, Model: u.Model}
+		t.Tokens = u.TotalTokens
 		if t.Tokens == 0 {
-			t.Tokens = in + outTok
+			t.Tokens = u.InputTokens + u.OutputTokens
 		}
-		t.CostUSD = cost.Float64
+		t.CostUSD = u.CostUSD
 		t.APIEquivalentUSD, t.Priced = t.CostUSD, true
 		if a.spend != nil && t.CostUSD == 0 {
 			// Priced at the card in effect at the turn, not the oldest one.
 			v, err := a.spend.ComputeAt(&eventschema.PromptEvent{
 				Provider: eventschema.Provider(t.Provider), RequestModel: t.Model,
-				InputTokens: in, CachedInputTokens: cached, OutputTokens: outTok,
-				CacheWriteInputTokens: written, CacheWrite1hInputTokens: written1h,
+				InputTokens: u.InputTokens, CachedInputTokens: u.CacheReadTokens, OutputTokens: u.OutputTokens,
+				CacheWriteInputTokens: u.CacheWriteTokens, CacheWrite1hInputTokens: u.CacheWrite1hTokens,
 			}, t.At)
 			t.APIEquivalentUSD, t.Priced = v, err == nil
 		}
 		out = append(out, t)
 	}
-	return out, rows.Err()
+	return out, nil
 }
