@@ -73,8 +73,10 @@ func (s *Server) cacheMiddleware(provider providers.Provider, next http.Handler)
 			return
 		}
 
-		body, err := captureRequestBody(r)
-		if err != nil || len(body) == 0 {
+		// A body over the capture limit cannot be keyed exactly: two
+		// requests sharing a prefix would collide. Forward it uncached.
+		body, complete, err := captureRequestBody(r)
+		if err != nil || !complete || len(body) == 0 {
 			next.ServeHTTP(w, r)
 			return
 		}

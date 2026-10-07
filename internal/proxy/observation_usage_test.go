@@ -55,18 +55,28 @@ data: [DONE]
 
 func TestParseResponseUsageFromAnthropicMessagesStream(t *testing.T) {
 	body := "event: message_start\r\n" +
-		"data: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5\",\"usage\":{\"input_tokens\":90,\"cache_read_input_tokens\":60}}}\r\n\r\n" +
+		"data: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-5\",\"usage\":{\"input_tokens\":90,\"cache_read_input_tokens\":60,\"cache_creation_input_tokens\":30}}}\r\n\r\n" +
 		"event: content_block_start\r\n" +
 		"data: {\"type\":\"content_block_start\",\"content_block\":{\"type\":\"tool_use\",\"name\":\"Read\"}}\r\n\r\n" +
 		"event: message_delta\r\n" +
 		"data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"},\"usage\":{\"output_tokens\":18}}\r\n\r\n"
+	// Anthropic's input_tokens excludes cache reads and writes; the event's
+	// InputTokens is the whole prompt, with the cache read as its subset.
 	want := responseUsage{
-		Model: "claude-sonnet-5", InputTokens: 90, OutputTokens: 18,
+		Model: "claude-sonnet-5", InputTokens: 90 + 60 + 30, OutputTokens: 18,
 		CachedInputTokens: 60, FinishReason: "tool_use", ToolCallCount: 1,
 	}
 	got, ok := parseResponseUsage([]byte(body))
 	if !ok || got != want {
 		t.Fatalf("parseResponseUsage() = %#v, %v; want %#v, true", got, ok, want)
+	}
+}
+
+func TestParseResponseUsageFromAnthropicMessage(t *testing.T) {
+	body := `{"model":"claude-sonnet-5","stop_reason":"end_turn","usage":{"input_tokens":50,"cache_read_input_tokens":100000,"cache_creation_input_tokens":2000,"output_tokens":40}}`
+	got, ok := parseResponseUsage([]byte(body))
+	if !ok || got.InputTokens != 102050 || got.CachedInputTokens != 100000 || got.OutputTokens != 40 {
+		t.Fatalf("parseResponseUsage() = %#v, %v; want input 102050, cached 100000, output 40", got, ok)
 	}
 }
 
