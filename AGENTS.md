@@ -26,7 +26,7 @@ make verify       # format, vet, lint, test, eval, security, and proto gates
 make install-hooks
 ```
 
-Before pushing, explicitly run `gofmt -l .`, `golangci-lint run ./...`, and `go test ./...`. After adding dependencies, confirm `go.mod` remains on Go 1.25.
+Before pushing, explicitly run `gofmt -l .`, `golangci-lint run ./...`, and `go test ./...`. After adding dependencies, confirm `go.mod` remains on Go 1.26.
 
 ## Code and Test Conventions
 
