@@ -15,6 +15,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/observability/observ"
 	"go.klarlabs.de/tokenops/internal/contexts/security/dashauth"
 	"go.klarlabs.de/tokenops/internal/contexts/security/tlsmint"
+	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	"go.klarlabs.de/tokenops/internal/proxy"
 	"go.klarlabs.de/tokenops/internal/version"
@@ -36,9 +37,13 @@ type startup struct {
 	sourceHealth   *freshness.Registry
 	sup            *lifecycle.Supervisor
 	events         *eventRuntime
-	opts           []proxy.Option
-	dashToken      string
-	server         *proxy.Server
+	// ingest is the bus readers replaying history publish to: the event
+	// bus minus what the store already held at boot. Without storage it
+	// is the event bus itself.
+	ingest    events.Bus
+	opts      []proxy.Option
+	dashToken string
+	server    *proxy.Server
 
 	// cleanups run in reverse order when the run ends, as the deferred
 	// calls they replace did.
@@ -244,7 +249,8 @@ func (s *startup) startStorageSubsystems(ctx context.Context) error {
 	correctAttribution(ctx, s.cfg, store, routes, s.logger)
 	correctSpendCoverage(ctx, s.cfg, store, s.logger)
 	// The composition root builds and starts the vendor-usage pollers.
-	bootstrap.StartVendorUsagePollers(s.cfg, ingestionBus(ctx, s.events.Bus, store, s.logger), s.sourceHealth, claudeCodeBaseURLAt(routes), s.sup, s.logger)
+	s.ingest = ingestionBus(ctx, s.events.Bus, store, s.logger)
+	bootstrap.StartVendorUsagePollers(s.cfg, s.ingest, s.sourceHealth, claudeCodeBaseURLAt(routes), s.sup, s.logger)
 
 	if err := bootstrap.StartRetentionRuntime(s.cfg.Retention, store, s.sup, s.logger); err != nil {
 		return fmt.Errorf("retention: %w", err)
@@ -391,7 +397,11 @@ func (s *startup) startPostServeSubsystems(context.Context) error {
 	// cannot see them. Ingesting its ledger is what lets those savings
 	// reach TEU — otherwise a client that never proxies scores "not
 	// measured" however much the guard actually reclaims.
-	startReadGuardRuntime(s.events.Bus, s.sup, s.logger)
+	ingest := s.ingest
+	if ingest == nil {
+		ingest = s.events.Bus
+	}
+	startReadGuardRuntime(ingest, s.sup, s.logger)
 
 	// Active-mode spend watcher: periodic budget + unpriced-model
 	// evaluation against the local store. Requires storage (no events,
