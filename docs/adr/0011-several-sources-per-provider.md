@@ -65,8 +65,12 @@ Claude Code's own documentation (checked 2026-10-06, v2.1.289):
    15 minutes is `failing`, whatever older events it holds (#558).
 
 4. **A refused source tries its own recovery before it fails over.** The
-   claude.ai meter re-reads the browser on an expired session, whether the
-   session was first read from a browser or pasted.
+   claude.ai meter re-reads the browser on an expired session when the
+   session was first read from a browser. A pasted session is not: the
+   read opens the browser's Keychain item, and on 2026-10-07 a background
+   prompt nobody had started worried an operator's colleague. An expired
+   pasted session stops, and the stale-reading finding says how to connect
+   it again. No agent-facing tool reads a browser.
 
 5. **The operator hears once when every source of a provider has stopped:**
    a coach finding, so it reaches `glance`, the menu bar's alerts and the

@@ -12,7 +12,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/money"
 	"go.klarlabs.de/tokenops/internal/capability/state"
-	"go.klarlabs.de/tokenops/internal/capability/usagemeter"
 	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
 	"go.klarlabs.de/tokenops/internal/infra/fxrate"
 
@@ -260,8 +259,7 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 		return err
 	}
 	if err := mcp.RegisterSetupTools(srv, mcp.SetupDeps{
-		ApplyConfig:   applyConfigRestart,
-		BrowserCookie: browserSessionKey,
+		ApplyConfig: applyConfigRestart,
 	}); err != nil {
 		return fmt.Errorf("register setup tools: %w", err)
 	}
@@ -377,10 +375,3 @@ func gapCounts(store *sqlite.Store) func(context.Context, time.Time, time.Time) 
 // applyConfigRestart restarts the supervised daemon after an MCP tool writes
 // config, so an agent's change is live without a command nobody ran.
 func applyConfigRestart() string { return daemon.RestartForConfig().Note() }
-
-// browserSessionKey reads the claude.ai session from a local browser for the
-// MCP setup tool, so an agent can connect the meter without the operator
-// pasting a login into the conversation. macOS asks them to allow it.
-func browserSessionKey(ctx context.Context) (usagemeter.Session, error) {
-	return usagemeter.FromBrowser(ctx, "", 0)
-}

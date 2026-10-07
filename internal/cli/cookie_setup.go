@@ -253,6 +253,14 @@ func (s browserSession) meterSession() usagemeter.Session {
 	}
 }
 
+// keychainNotice says, before macOS asks, which Keychain item the browser
+// read opens and what for, so the prompt is one the operator expected.
+const keychainNotice = `macOS may ask to let tokenops read your browser's "Safe Storage" item from the Keychain
+("Chrome Safe Storage", "Arc Safe Storage", ...): it is the key the browser encrypts its cookies
+with. TokenOps uses it to read two claude.ai cookies, sessionKey and cf_clearance, and nothing else.
+The daemon reads them again when claude.ai renews the session, and macOS may ask again after each
+TokenOps upgrade. --paste skips the browser and the Keychain.`
+
 type browserSession struct {
 	key            string
 	clearance      string
@@ -280,7 +288,8 @@ func cookieSetupKey(cmd *cobra.Command, opts cookieSetupOptions) (browserSession
 	}
 	if !opts.paste {
 		if _, err := os.UserHomeDir(); err == nil {
-			fmt.Fprintln(out, "\nLooking for your claude.ai session in a local browser (macOS may ask you to allow keychain access)...")
+			fmt.Fprintln(out, "\nLooking for your claude.ai session in a local browser.")
+			fmt.Fprintln(out, keychainNotice)
 			// An operator is watching this one: give them time to find the
 			// dialog macOS puts up, rather than falling to the paste path
 			// while they are still looking for it.

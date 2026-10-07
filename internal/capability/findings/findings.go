@@ -130,7 +130,7 @@ func staleReading(r plans.HeadroomReport) (Finding, bool) {
 	}
 	if r.Provider == "anthropic" {
 		f.Evidence = "The claude.ai meter has stopped reading, usually because the claude.ai session expired"
-		f.Action = "Sign in to claude.ai in your browser; TokenOps picks the session up. Or run `tokenops vendor-usage setup claude-subscription`."
+		f.Action = "Run `tokenops vendor-usage setup claude-subscription` to connect it again. If you connected it from your browser, signing in to claude.ai there is enough."
 	}
 	return f, true
 }
