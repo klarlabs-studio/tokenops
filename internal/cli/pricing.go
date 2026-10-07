@@ -10,14 +10,14 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	"go.klarlabs.de/tokenops/internal/capability/ratecards"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 )
 
 // buildSpendEngine is the cost engine for CLI commands that price events
 // outside the daemon (spend, replay, glance): bootstrap.SpendEngine with
 // the configured override file, so the CLI prices as the daemon does.
-func buildSpendEngine(cfg config.Config) (*spend.Engine, error) {
+func buildSpendEngine(cfg config.Config) (*spending.Engine, error) {
 	return bootstrap.SpendEngine(cfg.Pricing.Path, nil)
 }
 

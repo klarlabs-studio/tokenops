@@ -10,15 +10,13 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/routers"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/modeltier"
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/taskclass"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/infra/followthrough"
 	"go.klarlabs.de/tokenops/internal/infra/routeguard"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -148,10 +146,7 @@ func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir, provider s
 	}
 	sr := cfg.Optimizer.SmartRouting
 	candidates := cfg.RoutingCandidates(prov)
-	var autoKinds []taskclass.Kind
-	for _, k := range sr.AutoKinds {
-		autoKinds = append(autoKinds, taskclass.Kind(k))
-	}
+	autoKinds := routeguard.KindsOf(sr.AutoKinds)
 	if mode == "" {
 		mode = routeguard.ParseMode(sr.Intervention)
 	}
@@ -194,9 +189,9 @@ func coachLedger() coachcap.Ledger {
 
 // quietedKinds reads the ledger only when advice is actually due, since
 // most turns advise nothing.
-func quietedKinds(l coachcap.Ledger, now time.Time) func(taskclass.Kind) bool {
+func quietedKinds(l coachcap.Ledger, now time.Time) func(routeguard.Kind) bool {
 	var quieted func(power, kind string) bool
-	return func(k taskclass.Kind) bool {
+	return func(k routeguard.Kind) bool {
 		if quieted == nil {
 			quieted = coachcap.Quieter(l, now)
 		}
@@ -221,12 +216,12 @@ func routeResolutions(rs []routeguard.Resolution) []coachcap.Resolution {
 // made an earlier coach report nothing was worth saying. The latest
 // snapshot alone missed the override file, so a model the operator pays
 // little for still tiered as a flagship.
-func routeCatalog(cfg config.Config) *modeltier.Catalog {
-	table := spend.DefaultTable()
+func routeCatalog(cfg config.Config) *routeguard.Catalog {
+	table := spending.DefaultTable()
 	if eng := hookSpendEngine(cfg.Pricing.Path); eng != nil {
 		table = eng.Table()
 	}
-	return modeltier.New(table, nil)
+	return routeguard.NewCatalog(table)
 }
 
 // latestTranscriptModel reads the model off the most recent assistant

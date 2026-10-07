@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter"
+	"go.klarlabs.de/tokenops/internal/capability/fmtinsight"
 )
 
 // newFmtBenchCmd measures the deterministic compression the formatter set
@@ -51,17 +51,17 @@ leading token selects the formatter (git.status.txt -> git formatter).
 				return fmt.Errorf("bench: no .txt corpus files in %s", corpusDir)
 			}
 
-			levels := []formatter.LossLevel{
-				formatter.LossConservative,
-				formatter.LossBalanced,
-				formatter.LossAggressive,
+			levels := []fmtinsight.LossLevel{
+				fmtinsight.LossConservative,
+				fmtinsight.LossBalanced,
+				fmtinsight.LossAggressive,
 			}
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "%-22s %8s  %s\n", "FILE (command)", "RAW B", "SAVINGS (bytes / est-tok / %) per level")
 			fmt.Fprintf(out, "%-22s %8s  %-24s %-24s %-24s\n", "", "", "conservative", "balanced", "aggressive")
 
 			var totalRaw int
-			totals := map[formatter.LossLevel]int{} // saved bytes per level
+			totals := map[fmtinsight.LossLevel]int{} // saved bytes per level
 			for _, name := range files {
 				raw, err := os.ReadFile(filepath.Join(corpusDir, name))
 				if err != nil {
@@ -73,7 +73,7 @@ leading token selects the formatter (git.status.txt -> git formatter).
 				formatters := registryFormatters(rf)
 				cols := make([]string, 0, len(levels))
 				for _, lvl := range levels {
-					reg := formatter.NewRegistry(formatter.LossPolicy{Default: lvl}, formatters...)
+					reg := fmtinsight.NewRegistry(fmtinsight.LossPolicy{Default: lvl}, formatters...)
 					res, _ := reg.Format([]string{command}, raw)
 					saved := max(len(raw)-res.BytesAfter, 0)
 					totals[lvl] += saved

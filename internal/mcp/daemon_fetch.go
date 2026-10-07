@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
+	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/infra/daemonhint"
 )
 
@@ -92,8 +92,8 @@ func getDaemonJSON(baseURL, path string, out any) error {
 // DaemonSources is what the daemon's /api/sources answered: one report
 // per configured ingestion source, healthy ones included.
 type DaemonSources struct {
-	Sources   []freshness.Report `json:"sources"`
-	Unhealthy int                `json:"unhealthy"`
+	Sources   []state.SourceReport `json:"sources"`
+	Unhealthy int                  `json:"unhealthy"`
 }
 
 // errDaemonUnreachable marks a freshness read that failed because no

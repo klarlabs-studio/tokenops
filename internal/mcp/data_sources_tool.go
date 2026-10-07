@@ -7,7 +7,6 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/state"
 
-	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -33,7 +32,7 @@ type DataSourcesDeps struct {
 // A daemon that is not running is the normal case for an MCP server
 // started on its own, so its absence degrades the answer instead of
 // failing it.
-func (d DataSourcesDeps) freshness(context.Context) []freshness.Report {
+func (d DataSourcesDeps) freshness(context.Context) []state.SourceReport {
 	if d.Sources == nil {
 		return nil
 	}
