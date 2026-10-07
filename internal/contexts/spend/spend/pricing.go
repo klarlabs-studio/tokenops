@@ -28,6 +28,13 @@ type Rate struct {
 	// CachedInputPerMillion is the price of cached input tokens. When zero,
 	// callers must fall back to InputPerMillion.
 	CachedInputPerMillion float64
+	// CacheWritePerMillion is the price of input tokens written to the
+	// prompt cache (a five-minute entry). When zero, callers fall back to
+	// InputPerMillion.
+	CacheWritePerMillion float64
+	// CacheWrite1hPerMillion is the price of a one-hour cache write. When
+	// zero, callers fall back to CacheWritePerMillion.
+	CacheWrite1hPerMillion float64
 }
 
 // Effective returns r with zero values backfilled from a default Rate so
@@ -43,8 +50,26 @@ func (r Rate) Effective(def Rate) Rate {
 	if r.CachedInputPerMillion == 0 {
 		r.CachedInputPerMillion = def.CachedInputPerMillion
 	}
+	if r.CacheWritePerMillion == 0 {
+		r.CacheWritePerMillion = def.CacheWritePerMillion
+	}
+	if r.CacheWrite1hPerMillion == 0 {
+		r.CacheWrite1hPerMillion = def.CacheWrite1hPerMillion
+	}
 	return r
 }
+
+// CacheReadRate is the price of a cache read, the input price when the
+// card publishes none.
+func (r Rate) CacheReadRate() float64 { return orRate(r.CachedInputPerMillion, r.InputPerMillion) }
+
+// CacheWriteRate is the price of a five-minute cache write, the input
+// price when the card publishes none.
+func (r Rate) CacheWriteRate() float64 { return orRate(r.CacheWritePerMillion, r.InputPerMillion) }
+
+// CacheWrite1hRate is the price of a one-hour cache write, the
+// five-minute write price when the card publishes none.
+func (r Rate) CacheWrite1hRate() float64 { return orRate(r.CacheWrite1hPerMillion, r.CacheWriteRate()) }
 
 // Table is the lookup index from (provider, model) to Rate. Models are
 // matched by exact ID first, then by registered prefix (e.g. "gpt-4o-"),

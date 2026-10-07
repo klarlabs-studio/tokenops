@@ -81,9 +81,10 @@ func (s *ModelsDevSource) Fetch(ctx context.Context) (Snapshot, error) {
 	var catalog map[string]struct {
 		Models map[string]struct {
 			Cost *struct {
-				Input     float64 `json:"input"`
-				Output    float64 `json:"output"`
-				CacheRead float64 `json:"cache_read"`
+				Input      float64 `json:"input"`
+				Output     float64 `json:"output"`
+				CacheRead  float64 `json:"cache_read"`
+				CacheWrite float64 `json:"cache_write"`
 			} `json:"cost"`
 		} `json:"models"`
 	}
@@ -105,6 +106,7 @@ func (s *ModelsDevSource) Fetch(ctx context.Context) (Snapshot, error) {
 					InputPerMillion:       m.Cost.Input,
 					OutputPerMillion:      m.Cost.Output,
 					CachedInputPerMillion: m.Cost.CacheRead,
+					CacheWritePerMillion:  m.Cost.CacheWrite,
 				}
 			}
 		}

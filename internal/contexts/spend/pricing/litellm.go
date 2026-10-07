@@ -50,6 +50,9 @@ type litellmEntry struct {
 	OutputCost        float64 `json:"output_cost_per_token"`
 	CacheReadCost     float64 `json:"cache_read_input_token_cost"`
 	CacheCreationCost float64 `json:"cache_creation_input_token_cost"`
+	// CacheCreation1hCost is the one-hour cache-write price, where the
+	// vendor charges one.
+	CacheCreation1hCost float64 `json:"cache_creation_input_token_cost_above_1hr"`
 }
 
 // perMillion converts a per-token cost to per-million tokens.
@@ -180,9 +183,11 @@ func (s *LiteLLMSource) Fetch(ctx context.Context) (Snapshot, error) {
 		groups[key] = append(groups[key], candidate{
 			id: id,
 			rate: Rate{
-				InputPerMillion:       perMillionCost(e.InputCostPerToken),
-				OutputPerMillion:      perMillionCost(e.OutputCost),
-				CachedInputPerMillion: perMillionCost(e.CacheReadCost),
+				InputPerMillion:        perMillionCost(e.InputCostPerToken),
+				OutputPerMillion:       perMillionCost(e.OutputCost),
+				CachedInputPerMillion:  perMillionCost(e.CacheReadCost),
+				CacheWritePerMillion:   perMillionCost(e.CacheCreationCost),
+				CacheWrite1hPerMillion: perMillionCost(e.CacheCreation1hCost),
 			},
 		})
 	}

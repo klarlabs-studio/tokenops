@@ -180,22 +180,17 @@ func (e *Engine) ComputeAt(p *eventschema.PromptEvent, at time.Time) (float64, e
 	if err != nil {
 		return 0, err
 	}
-	cached := p.CachedInputTokens
-	if cached < 0 {
-		cached = 0
-	}
-	if cached > p.InputTokens {
-		cached = p.InputTokens
-	}
-	uncached := p.InputTokens - cached
-
-	cachedRate := rate.CachedInputPerMillion
-	if cachedRate == 0 {
-		cachedRate = rate.InputPerMillion
-	}
+	// Cache reads and writes are both portions of InputTokens. Reported
+	// counts are clamped to the input they belong to, reads first.
+	cached := clampTokens(p.CachedInputTokens, p.InputTokens)
+	written := clampTokens(p.CacheWriteInputTokens, p.InputTokens-cached)
+	written1h := clampTokens(p.CacheWrite1hInputTokens, written)
+	uncached := p.InputTokens - cached - written
 
 	cost := perMillion(uncached, rate.InputPerMillion) +
-		perMillion(cached, cachedRate) +
+		perMillion(cached, rate.CacheReadRate()) +
+		perMillion(written-written1h, rate.CacheWriteRate()) +
+		perMillion(written1h, rate.CacheWrite1hRate()) +
 		perMillion(p.OutputTokens, rate.OutputPerMillion)
 	return cost, nil
 }
@@ -237,6 +232,19 @@ func (e *Engine) ApplyToEnvelope(env *eventschema.Envelope) error {
 // perMillion is a small helper that turns a token count and a $/M rate
 // into a USD figure. Kept private because the math is trivial but the
 // accidental swap of factors would silently mis-cost everything.
+// clampTokens bounds a reported token count to [0, limit].
+func clampTokens(n, limit int64) int64 {
+	return max(0, min(n, limit))
+}
+
+// orRate returns rate, or fallback when the card leaves rate unset.
+func orRate(rate, fallback float64) float64 {
+	if rate == 0 {
+		return fallback
+	}
+	return rate
+}
+
 func perMillion(tokens int64, ratePerMillion float64) float64 {
 	if tokens <= 0 || ratePerMillion <= 0 {
 		return 0
