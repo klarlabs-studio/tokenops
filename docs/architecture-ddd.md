@@ -22,7 +22,7 @@ PRs that cross these boundaries must update this document.
 │ application services (per bounded context)                 │
 │   rules.LoadCorpus, rules.RunBenchSpec                     │
 │   eval.Run, eval.PersistBaseline                           │
-│   scorecard.Build / BuildFromStore                         │
+│   spending.Scorecard (capability)                          │
 │   coverdebt.Analyze                                        │
 │   forecast.AutoForecast                                    │
 │   replay.DefaultPipeline + Engine.Replay                   │
@@ -73,12 +73,11 @@ Infrastructure imports application/domain interfaces only; nothing in
 domain may import an infrastructure package by concrete type. Documented
 sqlite exemptions (enforced by `internal/archlint` `storageExempt`):
 
-- `scorecard/service.go` adapts `*sqlite.Store` to the `EventReader` port.
 - `workflows/workflow`, `optimization/replay`, `telemetry/retention`, `tasks`
   take `*sqlite.Store` as an isolated adapter.
-- `security/audit` and `observability/analytics` are the pattern the rest
-  should follow: the domain declares a port (`audit.Store`, `analytics.Store`)
-  and `*sqlite.Store` implements it (`internal/storage/sqlite/audit.go`,
+- `security/audit`, `observability/analytics` and `governance/scorecard`
+  are the pattern the rest should follow: the domain declares a port
+  (`audit.Store`, `analytics.Store`, `scorecard.EventReader`) and `*sqlite.Store` implements it (`internal/storage/sqlite/audit.go`,
   `analytics.go`), so the domain imports neither sqlite nor `database/sql`.
   The SQL — filters, groupings, NULL handling — is the adapter's; pricing,
   provenance and coverage stay in the domain. New sqlite users must be added to `storageExempt`
@@ -186,7 +185,7 @@ Cross-context translation happens only at the adapter boundary:
 - HTTP/MCP/CLI translate protocol payloads into application service
   inputs (e.g., `rules.BenchSpec` is the published wire form; the
   domain consumes only materialised `rules.Profile` / `rules.Scenario`).
-- `scorecard.sqliteReader` translates `*sqlite.Store` queries into the
-  `EventReader` port the domain understands.
+- `*sqlite.Store` satisfies the scorecard's `EventReader` port directly;
+  `capability/spending` passes it in, so the domain never imports storage.
 - `redaction.Redactor` mediates between raw user content and any
   outbound envelope, never the other direction.

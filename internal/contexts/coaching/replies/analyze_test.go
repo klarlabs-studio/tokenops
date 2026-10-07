@@ -102,3 +102,20 @@ func contains(s, sub string) bool {
 	}
 	return false
 }
+
+// Sessions that tie on verdict and reply count print in a fixed order,
+// not the order Go happened to range over the session map.
+func TestAnalyze_TiedSessionsOrderBySessionID(t *testing.T) {
+	rs := []AssistantReply{
+		{SessionID: "c", Text: "done"},
+		{SessionID: "a", Text: "added"},
+		{SessionID: "b", Text: "fixed"},
+	}
+	for range 20 {
+		f := Analyze(rs)
+		got := []string{f.BySession[0].SessionID, f.BySession[1].SessionID, f.BySession[2].SessionID}
+		if got[0] != "a" || got[1] != "b" || got[2] != "c" {
+			t.Fatalf("order %v, want [a b c]", got)
+		}
+	}
+}

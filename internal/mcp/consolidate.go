@@ -15,8 +15,8 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/ruleintel"
-	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts"
-	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard"
+	"go.klarlabs.de/tokenops/internal/capability/sessions"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 )
 
 // Agents read every tool definition before their first call. Fifty tools
@@ -439,10 +439,10 @@ type spendOut struct {
 }
 
 type sessionsOut struct {
-	View    string            `json:"view"`
-	DX      *agentDXResult    `json:"dx,omitempty"`
-	Story   *storyResult      `json:"story,omitempty"`
-	Prompts *prompts.Findings `json:"prompts,omitempty"`
+	View    string             `json:"view"`
+	DX      *agentDXResult     `json:"dx,omitempty"`
+	Story   *storyResult       `json:"story,omitempty"`
+	Prompts *sessions.Findings `json:"prompts,omitempty"`
 }
 
 type statusOut struct {
@@ -462,13 +462,13 @@ type explainOut struct {
 }
 
 type recordsOut struct {
-	View          string               `json:"view"`
-	Optimizations *optimizationsResult `json:"optimizations,omitempty"`
-	Audit         *auditResult         `json:"audit,omitempty"`
-	Events        *domainEventsResult  `json:"events,omitempty"`
-	Workflow      *workflowTraceResult `json:"workflow,omitempty"`
-	Scorecard     *scorecard.Scorecard `json:"scorecard,omitempty"`
-	Verify        *verifyResult        `json:"verify,omitempty"`
+	View          string                    `json:"view"`
+	Optimizations *optimizationsResult      `json:"optimizations,omitempty"`
+	Audit         *auditResult              `json:"audit,omitempty"`
+	Events        *domainEventsResult       `json:"events,omitempty"`
+	Workflow      *workflowTraceResult      `json:"workflow,omitempty"`
+	Scorecard     *spending.ScorecardReport `json:"scorecard,omitempty"`
+	Verify        *verifyResult             `json:"verify,omitempty"`
 }
 
 type rulesOut struct {

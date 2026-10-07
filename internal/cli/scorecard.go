@@ -1,19 +1,20 @@
 package cli
 
 import (
+	"context"
+	"errors"
 	"fmt"
-	"strings"
+	"io/fs"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts"
-	"go.klarlabs.de/tokenops/internal/contexts/coaching/tools"
-	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard"
-	opencodestore "go.klarlabs.de/tokenops/internal/infra/opencodedb"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
-func newScorecardCmd() *cobra.Command {
+func newScorecardCmd(rf *rootFlags) *cobra.Command {
 	var jsonOut bool
 	var baselineRef string
 	var dbPath string
@@ -46,15 +47,17 @@ Use --capture-baseline (not yet implemented) to persist the current
 values and --compare to diff against a stored baseline.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			agent := computeAgentKPIs(sinceDays)
-			s := scorecard.Build(cmd.Context(), scorecard.BuildParams{
-				DBPath:             dbPath,
-				SinceDays:          sinceDays,
-				FVTSecondsOverride: fvtOverride,
-				TEUPctOverride:     teuOverride,
-				SACPctOverride:     sacOverride,
-				AgentKPIs:          agent,
-				BaselineRef:        baselineRef,
+			store, closeStore, err := openScorecardStore(cmd.Context(), rf, dbPath)
+			if err != nil {
+				return err
+			}
+			defer closeStore()
+			s := spending.Scorecard(cmd.Context(), store, spending.ScorecardParams{
+				SinceDays:   sinceDays,
+				FVTSeconds:  fvtOverride,
+				TEUPct:      teuOverride,
+				SACPct:      sacOverride,
+				BaselineRef: baselineRef,
 			})
 
 			if jsonOut {
@@ -80,87 +83,23 @@ values and --compare to diff against a stored baseline.`,
 	return cmd
 }
 
-// computeAgentKPIs derives the v0.19 agent KPIs that the scorecard
-// package can't compute from events.db alone (CGR + RGR need prompt
-// text). Walks both Claude Code + Codex JSONL roots via the prompts
-// extractor, runs Analyze, and packs the ratios into AgentKPIInputs.
-// Returns a zero-valued struct (no *Computed flags set) when the
-// extractor can't find any prompts — Build then falls through to
-// the in-store CHR computation only.
-//
-// CGR autonomous-loop filter: `continue`, `proceed`, `keep going`
-// appearing >5x in the same session are autonomous-loop sentinels
-// (the /loop dynamic-mode pacing) rather than real human acks.
-// Counting them in CGR penalizes the operator's autonomous
-// workflows. Strip them before computing the rate.
-func computeAgentKPIs(sinceDays int) scorecard.AgentKPIInputs {
-	if sinceDays <= 0 {
-		sinceDays = 7
+// openScorecardStore opens the event store read for the live KPIs. A
+// fresh install has none yet, which is not an error: the scorecard
+// reports warming up. Opening would create an empty database, so a
+// missing file returns a nil store instead.
+func openScorecardStore(ctx context.Context, rf *rootFlags, flagPath string) (*sqlite.Store, func(), error) {
+	path, err := resolveAuditDB(rf, flagPath)
+	if err != nil {
+		return nil, func() {}, err
 	}
-	since := time.Now().Add(-time.Duration(sinceDays) * 24 * time.Hour)
-	extracted, err := prompts.Extract(prompts.ExtractOptions{Since: since, Opencode: opencodestore.Store{}})
-	if err != nil || len(extracted) == 0 {
-		return scorecard.AgentKPIInputs{}
+	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+		return nil, func() {}, nil
 	}
-	filtered := filterAutonomousLoopSentinels(extracted)
-	f := prompts.Analyze(filtered)
-	if f.TotalPrompts == 0 {
-		return scorecard.AgentKPIInputs{}
+	openCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	store, err := sqlite.Open(openCtx, path, sqlite.Options{})
+	if err != nil {
+		return nil, func() {}, fmt.Errorf("open events db: %w", err)
 	}
-	cgr := 100.0 * float64(f.Acknowledgements) / float64(f.TotalPrompts)
-	rgr := 100.0 * float64(f.Regenerates) / float64(f.TotalPrompts)
-	out := scorecard.AgentKPIInputs{
-		ConfirmationGateRatePct:  cgr,
-		ConfirmationGateComputed: true,
-		RegenerateRatePct:        rgr,
-		RegenerateComputed:       true,
-	}
-	if toolEvs, err := tools.Extract(tools.ExtractOptions{Since: since}); err == nil && len(toolEvs) > 0 {
-		ts := tools.Analyze(toolEvs)
-		if ts.TotalToolCalls > 0 {
-			out.ToolSuccessRatePct = ts.SuccessRate
-			out.ToolSuccessComputed = true
-			out.DestructiveRatePct = ts.DestructiveRate
-			out.DestructiveComputed = true
-		}
-	}
-	return out
-}
-
-// filterAutonomousLoopSentinels drops `continue` / `proceed` /
-// `keep going` prompts that repeat >5x in a single session. Those
-// are /loop dynamic-mode pacing sentinels (the harness wakes the
-// agent), not real human acks. Counting them in CGR penalizes the
-// operator's autonomous workflows. The 5-times threshold is the
-// gap between "I clicked continue twice" (real human steering) and
-// "the autonomous loop fired 50+ times" (synthetic).
-func filterAutonomousLoopSentinels(in []prompts.UserPrompt) []prompts.UserPrompt {
-	type key struct {
-		session, text string
-	}
-	counts := map[key]int{}
-	sentinel := map[string]bool{
-		"continue": true, "proceed": true, "keep going": true,
-	}
-	for _, p := range in {
-		lc := normalizeLoopSentinel(p.Text)
-		if sentinel[lc] {
-			counts[key{p.SessionID, lc}]++
-		}
-	}
-	out := in[:0]
-	for _, p := range in {
-		lc := normalizeLoopSentinel(p.Text)
-		if sentinel[lc] && counts[key{p.SessionID, lc}] > 5 {
-			continue
-		}
-		out = append(out, p)
-	}
-	return out
-}
-
-func normalizeLoopSentinel(s string) string {
-	s = strings.ToLower(s)
-	s = strings.TrimSpace(s)
-	return s
+	return store, func() { _ = store.Close() }, nil
 }
