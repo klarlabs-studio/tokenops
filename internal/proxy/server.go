@@ -19,7 +19,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/experiments"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/state"
-	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
 	"go.klarlabs.de/tokenops/internal/contexts/prompts/tokenizer"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
@@ -51,7 +50,7 @@ type Server struct {
 	eventDrops      func() int64
 	// sourceFreshness reports per-source ingestion health. nil leaves
 	// GET /api/sources unmounted.
-	sourceFreshness func() []freshness.Report
+	sourceFreshness func() []state.SourceReport
 	// plans supplies the headroom capability's dependencies. nil leaves
 	// the plan routes unmounted.
 	plans func() headroom.Deps

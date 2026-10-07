@@ -1,0 +1,5 @@
+200 OK
+Content-Type: application/json
+Cache-Control: no-store
+
+{"currency":"USD","summary":{"Requests":3,"InputTokens":3000,"OutputTokens":500,"TotalTokens":3500,"CostUSD":1.04,"APIEquivalentUSD":1.04},"window":{"EventType":"","Provider":"openai","Model":"gpt-4o-mini","WorkflowID":"wf-a","AgentID":"agent-1","Since":"2026-01-01T00:00:00Z","Until":"2026-01-10T00:00:00Z","ExcludeSources":null,"IncludeSources":null}}

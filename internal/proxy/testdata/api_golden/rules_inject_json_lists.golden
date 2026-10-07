@@ -1,0 +1,5 @@
+200 OK
+Content-Type: application/json
+Cache-Control: no-store
+
+{"Selections":[{"SourceID":"repo:.cursor/rules/go.mdc","SectionID":"repo:.cursor/rules/go.mdc#Go","Anchor":"Go","TokenCount":4,"Score":1.5,"Reasons":["repo_match","kw:go"]},{"SourceID":"repo:CLAUDE.md","SectionID":"repo:CLAUDE.md#Testing/Style","Anchor":"Testing/Style","TokenCount":2,"Score":1.5,"Reasons":["repo_match","kw:style"]}],"SkippedCount":6,"TotalTokens":6,"Truncated":false,"BudgetHit":false,"ElapsedNS":0,"Considered":8}

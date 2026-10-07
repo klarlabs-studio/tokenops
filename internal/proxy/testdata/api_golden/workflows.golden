@@ -1,0 +1,5 @@
+200 OK
+Content-Type: application/json
+Cache-Control: no-store
+
+{"currency":"USD","workflows":[{"workflow_id":"wf-a","requests":3,"tokens":3500,"cost_usd":1.04}]}

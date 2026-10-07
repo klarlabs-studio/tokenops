@@ -1,0 +1,5 @@
+200 OK
+Content-Type: application/json
+Cache-Control: no-store
+
+{"entries":[{"ID":"UUID","Timestamp":"2026-01-05T11:00:00Z","Action":"optimization_apply","Actor":"golden","Target":"weekly","Details":{"spent_usd":150}},{"ID":"UUID","Timestamp":"2026-01-05T10:00:00Z","Action":"budget_exceeded","Actor":"golden","Target":"weekly","Details":{"spent_usd":150}}]}
