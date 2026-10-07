@@ -8,11 +8,10 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/actions"
+	"go.klarlabs.de/tokenops/internal/capability/usagemeter"
 
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
-	claudeai "go.klarlabs.de/tokenops/internal/infra/vendorusage/claudeusagemeter"
 )
 
 // SetupDeps wires the tools that bind a plan and connect the Claude usage
@@ -28,11 +27,11 @@ type SetupDeps struct {
 	Getenv func(string) string
 	// MeterBaseURL overrides claude.ai for tests.
 	MeterBaseURL string
-	// BrowserCookie reads the claude.ai session from a local browser,
-	// returning the key and the browser it came from. macOS asks the
-	// operator to allow the keychain read, which is the consent this
-	// tool cannot ask for itself. nil skips the browser.
-	BrowserCookie func(ctx context.Context) (string, string, error)
+	// BrowserCookie reads the claude.ai session, with its clearance,
+	// from a local browser. macOS asks the operator to allow the keychain
+	// read, which is the consent this tool cannot ask for itself. nil
+	// skips the browser.
+	BrowserCookie func(ctx context.Context) (usagemeter.Session, error)
 }
 
 func (d SetupDeps) path() (string, error) {
@@ -115,22 +114,28 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 			if err != nil {
 				return "", inputError(err)
 			}
-			key := strings.TrimSpace(d.getenv(meterKeyEnv))
-			if key == "" {
-				key = cfg.VendorUsage.ClaudeUsageMeter.SessionKey
+			session := usagemeter.Session{Key: strings.TrimSpace(d.getenv(meterKeyEnv))}
+			if session.Key == "" {
+				// The stored session, with what travels with it: setting
+				// only the key would drop its clearance and its browser.
+				m := cfg.VendorUsage.ClaudeUsageMeter
+				session = usagemeter.Session{Key: m.SessionKey, Clearance: m.Clearance, UserAgent: m.UserAgent,
+					BrowserHeaders: m.BrowserHeaders, BrowserCookies: m.BrowserCookies}
+				if m.FromBrowser {
+					session.Browser = m.Browser
+				}
 			}
-			from := ""
-			if key == "" && d.BrowserCookie != nil {
+			if session.Key == "" && d.BrowserCookie != nil {
 				// The operator is signed in to claude.ai in a browser that
 				// already holds this cookie; macOS asks them to allow the
 				// read. Nothing is typed, and the key never enters the
 				// conversation.
-				k, browser, err := d.BrowserCookie(ctx)
-				if err == nil {
-					key, from = strings.TrimSpace(k), browser
+				if s, err := d.BrowserCookie(ctx); err == nil && strings.TrimSpace(s.Key) != "" {
+					session = s
+					session.Key = strings.TrimSpace(s.Key)
 				}
 			}
-			if key == "" {
+			if session.Key == "" {
 				return jsonString(map[string]any{
 					"error": "session_key_missing",
 					"hint": "no claude.ai session was found in a local browser, and the key is a login that must not go through this chat. " +
@@ -138,28 +143,30 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 						"which reads it without echoing it — or to set " + meterKeyEnv + " for this MCP server and call this tool again",
 				}), nil
 			}
-			client := claudeai.NewClient(key)
-			if d.MeterBaseURL != "" {
-				client.BaseURL = d.MeterBaseURL
-			}
 			ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			defer cancel()
-			conn, err := claudeusagemeter.Connect(ctx, client, in.Org)
+			conn, err := usagemeter.Verify(ctx, session, in.Org, d.MeterBaseURL)
 			if err != nil {
-				if errors.Is(err, claudeusagemeter.ErrUnauthorized) {
+				switch {
+				case errors.Is(err, usagemeter.ErrUnauthorized):
 					return jsonString(map[string]any{
 						"error": "session_key_rejected",
 						"hint":  "Anthropic rejected the session key — cookies rotate every few weeks; the user needs a fresh one. Nothing was written.",
 					}), nil
+				case errors.Is(err, usagemeter.ErrBotCheck):
+					return jsonString(map[string]any{
+						"error": "bot_check",
+						"hint": "claude.ai's bot check refused the request. Ask the user to open claude.ai in their browser once, then call this tool again, " +
+							"or to run `tokenops vendor-usage setup claude-subscription --paste-request` in a terminal. Nothing was written.",
+					}), nil
 				}
 				return "", inputError(err)
 			}
-			cfg.VendorUsage.ClaudeUsageMeter.Enabled = true
-			cfg.VendorUsage.ClaudeUsageMeter.SessionKey = key
-			cfg.VendorUsage.ClaudeUsageMeter.OrgID = conn.Org.UUID
+			usagemeter.Apply(&cfg, session, conn)
 			if err := config.WriteMutable(path, cfg); err != nil {
 				return "", inputError(err)
 			}
+			from := session.Browser
 			orgs := make([]string, 0, len(conn.Orgs))
 			for _, o := range conn.Orgs {
 				orgs = append(orgs, o.Name)

@@ -92,7 +92,6 @@ var directDomainImports = map[string][]string{
 		"go.klarlabs.de/tokenops/internal/contexts/spend/session",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/spend",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic",
-		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode",
 		"go.klarlabs.de/tokenops/internal/contexts/tasks",
 	},
@@ -111,7 +110,6 @@ var directDomainImports = map[string][]string{
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/session",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/spend",
-		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter",
 	},
 	// The proxy is two things in one package: the /api/* read model,
 	// which is an adapter like the CLI and now answers entirely from
