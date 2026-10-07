@@ -49,6 +49,9 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		"commit", version.Commit,
 		"listen", cfg.Listen,
 	)
+	for _, w := range cfg.ListenWarnings() {
+		logger.Warn(w, "listen", cfg.Listen, "tls", cfg.TLS.Enabled)
+	}
 
 	// Composition root constructs the counter + redactor (and other
 	// long-lived collaborators) once. The canonical event bus is wired
@@ -94,6 +97,7 @@ func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		proxy.WithLogger(logger),
 		proxy.WithShutdownTimeout(cfg.Shutdown.Timeout),
 		proxy.WithProviderRoutes(routes),
+		proxy.WithAllowedHosts(proxyAllowedHosts(cfg, hostnameOrEmpty())...),
 		proxy.WithEventCounts(domainEventCounter.Counts),
 		proxy.WithEventSpans(func() map[string]proxy.EventSpan {
 			spans := domainEventCounter.Spans()

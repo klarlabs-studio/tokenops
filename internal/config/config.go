@@ -42,11 +42,17 @@ type Config struct {
 	// observe, store, answer queries) or "active" (passive + live
 	// interventions: routing rules applied to proxied traffic, budget /
 	// unpriced-model watcher emitting alerts). Default passive.
-	Mode      string            `yaml:"mode"`
-	Listen    string            `yaml:"listen"`
-	Log       LogConfig         `yaml:"log"`
-	Shutdown  ShutdownConfig    `yaml:"shutdown"`
-	Providers map[string]string `yaml:"providers"`
+	Mode   string `yaml:"mode"`
+	Listen string `yaml:"listen"`
+	// AllowedHosts are host names (or IPs, port optional) the daemon
+	// answers to beyond loopback, the listen address, tls.hostnames and
+	// the advertised mDNS name — e.g. a name a reverse proxy forwards.
+	// Requests addressed to any other Host are refused with 403, which
+	// is what keeps a DNS-rebinding web page off the provider routes.
+	AllowedHosts []string          `yaml:"allowed_hosts,omitempty"`
+	Log          LogConfig         `yaml:"log"`
+	Shutdown     ShutdownConfig    `yaml:"shutdown"`
+	Providers    map[string]string `yaml:"providers"`
 	// Plans maps provider name → plan catalog identifier (e.g.
 	// "anthropic" → "claude-max-20x"). Requests routed to a provider with
 	// a configured plan are billed as plan_included (CostUSD=0) and
@@ -1278,6 +1284,9 @@ func Load(path string) (Config, error) {
 func (c Config) Validate() error {
 	if c.Listen == "" {
 		return errors.New("listen address must not be empty")
+	}
+	if err := validateAllowedHosts(c.AllowedHosts); err != nil {
+		return err
 	}
 	switch strings.ToLower(c.Log.Level) {
 	case "debug", "info", "warn", "error":
