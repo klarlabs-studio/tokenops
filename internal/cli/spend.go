@@ -109,8 +109,9 @@ spend within the selected window. It surfaces:
 				}
 				f.Since = since
 			} else {
-				// Default window: last 7 days. Forecast still uses the
-				// hourly bucket history regardless of this default.
+				// Default window: last 7 days. --forecast projects its own
+				// daily history (spending.ForecastSpend), as the forecast
+				// tool does, whatever this window.
 				f.Since = time.Now().Add(-7 * 24 * time.Hour)
 			}
 			if untilFlag != "" {
@@ -132,6 +133,7 @@ spend within the selected window. It surfaces:
 			}
 			report, err := spending.SpendReport(ctx, agg, spending.ReportQuery{
 				Filter: f, Group: group, Top: topN, Forecast: showForecast, Horizon: forecastDays,
+				ForecastFrom: f.Until,
 			}, time.Now())
 			if err != nil {
 				return err
@@ -149,6 +151,7 @@ spend within the selected window. It surfaces:
 				BurnSeries:    report.Burn,
 				Forecast:      report.Forecast,
 				ForecastToks:  report.ForecastTokens,
+				ForecastNote:  report.ForecastNote,
 				HideSparkline: hideSparkline,
 			}
 			rate, rateOK, rateWarning := fxrate.Resolve(ctx, cfg.Money, time.Now())
@@ -200,8 +203,10 @@ type spendView struct {
 	Forecast      []spending.Prediction `json:"forecast,omitempty"`
 	// ForecastToks projects the same horizon in tokens — the series that
 	// stays meaningful when spend is plan-covered.
-	ForecastToks  []spending.Prediction `json:"forecast_tokens,omitempty"`
-	HideSparkline bool                  `json:"-"`
+	ForecastToks []spending.Prediction `json:"forecast_tokens,omitempty"`
+	// ForecastNote explains a missing or flat forecast.
+	ForecastNote  string `json:"forecast_note,omitempty"`
+	HideSparkline bool   `json:"-"`
 	// Plans is what the subscriptions in force cost over the window,
 	// prorated across switches: your own prices where you gave them, the
 	// catalog's US list prices otherwise.
@@ -421,6 +426,10 @@ func writeSpendText(w io.Writer, v spendView) error {
 	if len(v.Forecast) > 0 && spending.AllZero(v.Forecast) {
 		fmt.Fprintln(w, "\nNo USD forecast: this window is plan-covered, so every historical point is $0 "+
 			"and a forecast of it would be seven rows of zero with confidence bands. The token forecast below is the real one.")
+	}
+
+	if len(v.Forecast) == 0 && v.ForecastNote != "" {
+		fmt.Fprintf(w, "\nNo forecast: %s.\n", v.ForecastNote)
 	}
 
 	if len(v.ForecastToks) > 0 {

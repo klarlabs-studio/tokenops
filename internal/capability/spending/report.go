@@ -113,6 +113,9 @@ type ReportQuery struct {
 	// positive).
 	Forecast bool
 	Horizon  int
+	// ForecastFrom is the instant the projection starts from; now when
+	// zero. A report bounded by --until forecasts from that bound.
+	ForecastFrom time.Time
 }
 
 // Report is a window's spend: the headline, the top consumers, the
@@ -125,8 +128,12 @@ type Report struct {
 	Burn       []Row
 	BurnCost   float64
 	BurnTokens int64
-	// Forecast and ForecastTokens project the window's daily rows.
+	// Forecast and ForecastTokens are ForecastSpend's projection, the
+	// same series the forecast tool projects: daily totals, whatever the
+	// report is grouped by. ForecastNote says why there is none, or why
+	// the dollar series is flat.
 	Forecast, ForecastTokens []Prediction
+	ForecastNote             string
 }
 
 // burnWindow is the burn rate's fixed look-back.
@@ -155,7 +162,15 @@ func SpendReport(ctx context.Context, src Source, q ReportQuery, now time.Time) 
 		out.BurnTokens += r.TotalTokens
 	}
 	if q.Forecast {
-		out.Forecast, out.ForecastTokens = Project(rows, q.Horizon)
+		from := q.ForecastFrom
+		if from.IsZero() {
+			from = now
+		}
+		fc, err := ForecastSpend(ctx, src, q.Horizon, q.Filter.IncludeSources, "", from)
+		if err != nil {
+			return Report{}, err
+		}
+		out.Forecast, out.ForecastTokens, out.ForecastNote = fc.Forecast, fc.ForecastTokens, fc.Note
 	}
 	return out, nil
 }
