@@ -79,7 +79,6 @@ const domainPrefix = "go.klarlabs.de/tokenops/internal/contexts/"
 var directDomainImports = map[string][]string{
 	"go.klarlabs.de/tokenops/internal/cli": {
 		"go.klarlabs.de/tokenops/internal/contexts/governance/coverdebt",
-		"go.klarlabs.de/tokenops/internal/contexts/governance/story",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/fmtlearn",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/formatter",
 		"go.klarlabs.de/tokenops/internal/contexts/optimization/modeltier",
