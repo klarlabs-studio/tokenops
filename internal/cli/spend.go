@@ -15,8 +15,8 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/money"
 	"go.klarlabs.de/tokenops/internal/capability/planswitch"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast"
 	"go.klarlabs.de/tokenops/internal/infra/fxrate"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/infra/svgchart"
@@ -151,16 +151,9 @@ spend within the selected window. It surfaces:
 				return err
 			}
 
-			var predictions, tokenPredictions []forecast.Prediction
+			var predictions, tokenPredictions []spending.Prediction
 			if showForecast {
-				horizon := forecastDays
-				if horizon <= 0 {
-					horizon = 7
-				}
-				history := forecast.SeriesFromRows(rows, forecast.CostUSD)
-				predictions = forecast.AutoForecast(history, horizon, 24*time.Hour)
-				tokenHistory := forecast.SeriesFromRows(rows, forecast.TotalTokens)
-				tokenPredictions = forecast.AutoForecast(tokenHistory, horizon, 24*time.Hour)
+				predictions, tokenPredictions = spending.Project(rows, forecastDays)
 			}
 
 			view := spendView{
@@ -222,10 +215,10 @@ type spendView struct {
 	// burn figure with signal.
 	BurnTokens24h int64                 `json:"burn_tokens_24h"`
 	BurnSeries    []analytics.Row       `json:"burn_series"`
-	Forecast      []forecast.Prediction `json:"forecast,omitempty"`
+	Forecast      []spending.Prediction `json:"forecast,omitempty"`
 	// ForecastToks projects the same horizon in tokens — the series that
 	// stays meaningful when spend is plan-covered.
-	ForecastToks  []forecast.Prediction `json:"forecast_tokens,omitempty"`
+	ForecastToks  []spending.Prediction `json:"forecast_tokens,omitempty"`
 	HideSparkline bool                  `json:"-"`
 	// Plans is what the subscriptions in force cost over the window,
 	// prorated across switches: your own prices where you gave them, the
@@ -506,7 +499,7 @@ func writeSpendText(w io.Writer, v spendView) error {
 		}
 	}
 
-	if len(v.Forecast) > 0 && !allZeroForecast(v.Forecast) {
+	if len(v.Forecast) > 0 && !spending.AllZero(v.Forecast) {
 		fmt.Fprintf(w, "\nForecast (next %d points):\n", len(v.Forecast))
 		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 		fmt.Fprintln(tw, "WHEN\tEXPECTED\tLOW\tHIGH")
@@ -523,7 +516,7 @@ func writeSpendText(w io.Writer, v spendView) error {
 		}
 	}
 
-	if len(v.Forecast) > 0 && allZeroForecast(v.Forecast) {
+	if len(v.Forecast) > 0 && spending.AllZero(v.Forecast) {
 		fmt.Fprintln(w, "\nNo USD forecast: this window is plan-covered, so every historical point is $0 "+
 			"and a forecast of it would be seven rows of zero with confidence bands. The token forecast below is the real one.")
 	}
@@ -561,22 +554,6 @@ func groupRowsHaveEquivalent(rows []analytics.Row) bool {
 		}
 	}
 	return false
-}
-
-// allZeroForecast reports whether a projection is entirely zero.
-//
-// A flat-rate plan's cost history is zero at every point, so the forecaster
-// dutifully projects zero forward and prints seven rows of $0.0000 with LOW
-// and HIGH bands. That reads as a broken forecaster rather than as the
-// correct answer to a question that does not apply, and it crowds out the
-// token forecast, which is the one that carries information.
-func allZeroForecast(points []forecast.Prediction) bool {
-	for _, p := range points {
-		if p.Value != 0 || p.Lower != 0 || p.Upper != 0 {
-			return false
-		}
-	}
-	return true
 }
 
 // fillPlanCost prices the plans over the window in the operator's
