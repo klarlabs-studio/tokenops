@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -43,9 +44,9 @@ func write(t *testing.T, path, body string, mtime time.Time) string {
 func lines(ls ...string) string { return strings.Join(ls, "\n") + "\n" }
 
 func TestClaudeDir(t *testing.T) {
-	filler := make([]string, claudeHeadLines)
-	for i := range filler {
-		filler[i] = `{"type":"summary"}`
+	filler := make([]string, 0, claudeHeadLines+1)
+	for range claudeHeadLines {
+		filler = append(filler, `{"type":"summary"}`)
 	}
 	tests := []struct {
 		name   string
@@ -85,12 +86,12 @@ func TestClaudeDir(t *testing.T) {
 		{
 			name: "cwd beyond the head is not looked for",
 			file: "deep.jsonl",
-			body: lines(append(filler, `{"sessionId":"s4","cwd":"/w/late"}`)...),
+			body: lines(append(slices.Clone(filler), `{"sessionId":"s4","cwd":"/w/late"}`)...),
 		},
 		{
 			name:   "cwd on the last line of the head is found",
 			file:   "edge.jsonl",
-			body:   lines(append(filler[:claudeHeadLines-1], `{"sessionId":"s5","cwd":"/w/edge"}`)...),
+			body:   lines(append(slices.Clone(filler[:claudeHeadLines-1]), `{"sessionId":"s5","cwd":"/w/edge"}`)...),
 			wantID: "s5", want: Dir{CWD: "/w/edge"}, wantOK: true,
 		},
 	}
