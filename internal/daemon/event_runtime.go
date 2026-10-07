@@ -17,7 +17,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
 	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
-	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/compactlever"
 	"go.klarlabs.de/tokenops/internal/infra/domainmigration"
@@ -163,7 +162,6 @@ func wireCanonicalObservers(bus *events.AsyncBus, counter *observ.EventCounter, 
 }
 
 func wireDomainEventPublishers(bus *events.AsyncBus, logger *slog.Logger) func() {
-	workflow.SetEventBus(bus)
 	optimizer.SetEventBus(bus)
 	rulesfs.SetEventBus(bus)
 	cancelLog := bus.Subscribe(func(env *eventschema.Envelope) {
@@ -176,7 +174,6 @@ func wireDomainEventPublishers(bus *events.AsyncBus, logger *slog.Logger) func()
 	})
 	return func() {
 		cancelLog()
-		workflow.SetEventBus(nil)
 		optimizer.SetEventBus(nil)
 		rulesfs.SetEventBus(nil)
 	}

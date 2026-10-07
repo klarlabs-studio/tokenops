@@ -59,19 +59,6 @@ var ErrNoTrace = errors.New("workflow: no prompts found for workflow_id")
 // Reconstruct loads all prompt events for workflowID, orders them, and
 // computes step deltas + rollups. spendEng may be nil — costs then come
 // purely from the stored CostUSD field.
-// eventPublisher is optional; adapters wire it via SetEventBus so this
-// package remains usable without a canonical event bus in unit tests.
-var eventPublisher DomainEventPublisher
-
-// DomainEventPublisher is the narrow canonical-envelope publication port.
-type DomainEventPublisher interface {
-	Publish(*eventschema.Envelope)
-}
-
-// SetEventBus installs the canonical envelope event bus. nil clears it.
-// Called once from the daemon composition root.
-func SetEventBus(b DomainEventPublisher) { eventPublisher = b }
-
 func Reconstruct(ctx context.Context, store *sqlite.Store, spendEng *spend.Engine, workflowID string) (*Trace, error) {
 	if store == nil {
 		return nil, errors.New("workflow: store is nil")
@@ -148,19 +135,9 @@ func Reconstruct(ctx context.Context, store *sqlite.Store, spendEng *spend.Engin
 	t.StepCount = len(t.Steps)
 	t.Duration = t.EndedAt.Sub(t.StartedAt)
 
-	// Reconstruct is an offline observation, not a live transition —
-	// publish WorkflowObserved rather than Started/Completed so
-	// subscribers can distinguish replay from real progress.
-	if eventPublisher != nil && len(t.Steps) > 0 {
-		env, err := eventschema.NewDomainEnvelope("workflow.observed", struct {
-			WorkflowID string    `json:"WorkflowID"`
-			StepCount  int64     `json:"StepCount"`
-			At         time.Time `json:"At"`
-		}{workflowID, int64(t.StepCount), t.EndedAt}, t.EndedAt, "workflows", eventschema.Association{})
-		if err == nil {
-			eventPublisher.Publish(env)
-		}
-	}
+	// Reconstructing is reading. It used to publish workflow.observed on
+	// every call, so each view of a trace stored a domain event and the
+	// event counters counted views.
 	return t, nil
 }
 
