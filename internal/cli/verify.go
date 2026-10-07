@@ -11,11 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.klarlabs.de/tokenops/internal/capability/reconstruct"
-	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/capability/verify"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
-	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // newVerifyCmd compares outcomes and resource use across real executions.
@@ -175,23 +172,27 @@ type verifyOptions struct {
 // MCP surface gets the same attempts, and the comparison so neither
 // surface can invent its own idea of what a cohort is.
 func runVerify(cmd *cobra.Command, opt verifyOptions) (verify.Report, error) {
-	gap := opt.idleGap
-
-	units, err := sessions.Units(transcriptWindow("", "", opt.days, false), time.Now())
-	if err != nil {
-		// A reader that broke is reported; whatever the others yielded is
-		// still worth comparing.
-		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err)
-	}
-
-	reconstructed := reconstruct.FromUnits(units, reconstruct.Options{IdleGap: gap})
-
-	events, err := readVerifyEvents(cmd, opt)
+	store, closeStore, err := openVerifyStore(cmd, opt)
 	if err != nil {
 		return verify.Report{}, err
 	}
-
-	report := verify.CompareReconstructedExperiment(reconstructed, events, opt.experimentID)
+	defer closeStore()
+	parent := cmd.Context()
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+	defer cancel()
+	report, readErr, err := verify.Run(ctx, store,
+		verify.Window{Days: opt.days, All: opt.days <= 0, IdleGap: opt.idleGap}, opt.experimentID, time.Now())
+	if readErr != nil {
+		// A reader that broke is reported; whatever the others yielded is
+		// still worth comparing.
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", readErr)
+	}
+	if err != nil {
+		return verify.Report{}, err
+	}
 	if !opt.showEach {
 		// The per-attempt detail is the evidence, not the answer. It is
 		// long, and an operator asking "did this help" is not asking for
@@ -201,39 +202,31 @@ func runVerify(cmd *cobra.Command, opt verifyOptions) (verify.Report, error) {
 	return report, nil
 }
 
-// readVerifyEvents loads the events the comparison rests on.
-func readVerifyEvents(cmd *cobra.Command, opt verifyOptions) ([]*eventschema.Envelope, error) {
+// openVerifyStore opens the store the comparison reads its events from.
+func openVerifyStore(cmd *cobra.Command, opt verifyOptions) (*sqlite.Store, func(), error) {
 	path, err := resolvePlanDB(opt.dbPath)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// A fresh install has no store, and verify is a plausible first
 	// command to try. The library's own error is "sqlite: ping: unable to
 	// open database file (14)", which names neither what is missing nor
 	// what to do about it.
 	if _, statErr := os.Stat(path); statErr != nil {
-		return nil, fmt.Errorf(
+		return nil, nil, fmt.Errorf(
 			"no event store at %s — verify compares recorded work, so there has to be some. "+
 				"Run `tokenops init`, enable a source with `tokenops vendor-usage enable "+
 				"claude-code-jsonl`, and let the daemon ingest for a while", path)
 	}
-
 	parent := cmd.Context()
 	if parent == nil {
 		parent = context.Background()
 	}
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
-
 	store, err := sqlite.Open(ctx, path, sqlite.Options{})
 	if err != nil {
-		return nil, fmt.Errorf("open store %s: %w", path, err)
+		return nil, nil, fmt.Errorf("open store %s: %w", path, err)
 	}
-	defer func() { _ = store.Close() }()
-
-	filter := sqlite.Filter{Limit: 200_000}
-	if opt.days > 0 {
-		filter.Since = time.Now().AddDate(0, 0, -opt.days)
-	}
-	return store.Query(ctx, filter)
+	return store, func() { _ = store.Close() }, nil
 }

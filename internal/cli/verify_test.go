@@ -120,7 +120,7 @@ func TestVerifyTextNamesSelectedRandomizedExperiment(t *testing.T) {
 // missing nor what to do about it.
 func TestVerifyExplainsAMissingStore(t *testing.T) {
 	dir := t.TempDir()
-	_, err := readVerifyEvents(newVerifyCmd(), verifyOptions{
+	_, _, err := openVerifyStore(newVerifyCmd(), verifyOptions{
 		dbPath: filepath.Join(dir, "nothing", "events.db"),
 	})
 	if err == nil {
