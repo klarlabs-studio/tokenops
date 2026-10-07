@@ -15,16 +15,8 @@ import (
 	"syscall"
 	"time"
 
-	"go.klarlabs.de/tokenops/internal/bootstrap"
-	"go.klarlabs.de/tokenops/internal/capability/experiments"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/observ"
-	"go.klarlabs.de/tokenops/internal/contexts/security/dashauth"
-	"go.klarlabs.de/tokenops/internal/contexts/security/tlsmint"
-	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
-	"go.klarlabs.de/tokenops/internal/proxy"
-	"go.klarlabs.de/tokenops/internal/version"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -40,279 +32,23 @@ func Run(ctx context.Context, cfg config.Config, logWriter io.Writer) error {
 }
 
 // RunWithLogger is Run with a caller-supplied slog.Logger.
+//
+// It runs the boot steps in order (see startup.steps), serves until ctx
+// is cancelled, then tears down through stopDaemon. A step that fails
+// stops the boot and its error is returned; cleanups registered by the
+// steps that ran are released either way.
 func RunWithLogger(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("config: %w", err)
-	}
-	logger.Info("tokenops daemon starting",
-		"version", version.Version,
-		"commit", version.Commit,
-		"listen", cfg.Listen,
-	)
-	for _, w := range cfg.ListenWarnings() {
-		logger.Warn(w, "listen", cfg.Listen, "tls", cfg.TLS.Enabled)
-	}
-
-	// Composition root constructs the counter + redactor (and other
-	// long-lived collaborators) once. The canonical event bus is wired
-	// once storage mode is known below.
-	earlyComponents, err := bootstrap.New(ctx, bootstrap.Options{
-		Logger:      logger,
-		OpenStore:   false,
-		PricingPath: cfg.Pricing.Path,
-	})
-	if err != nil {
-		return err
-	}
-	domainEventCounter := earlyComponents.EventCounter
-
-	// Keep the former JSONL location only as a migration input. New domain
-	// events are persisted through the canonical envelope bus below.
-	var domainLogPath string
-	if cfg.Storage.Enabled {
-		eventsPath, err := resolveStoragePath(cfg.Storage.Path)
-		if err != nil {
-			return fmt.Errorf("storage path: %w", err)
+	s := &startup{cfg: cfg, logger: logger}
+	defer s.runCleanups()
+	for _, step := range s.steps() {
+		if err := step(ctx); err != nil {
+			return err
 		}
-		domainLogPath = filepath.Join(filepath.Dir(eventsPath), "domain-events.jsonl")
-		logger.Info("legacy domain event import path ready", "path", domainLogPath)
 	}
-
-	routes, err := proxy.BuildProviderRoutes(cfg.Providers)
-	if err != nil {
-		return fmt.Errorf("provider routes: %w", err)
-	}
-
-	// Every reader reports its own success and failure here, so a status
-	// surface can tell a poller being refused apart from a vendor nobody
-	// is using. Both produce no events; only the poll record separates
-	// them.
-	sourceHealth := freshness.NewRegistry()
-
-	// Long-running subsystems run under one supervisor so shutdown waits
-	// for workers to drain and failures remain attributable by task name.
-	sup := lifecycle.New(ctx, logger)
-
-	opts := []proxy.Option{
-		proxy.WithLogger(logger),
-		proxy.WithShutdownTimeout(cfg.Shutdown.Timeout),
-		proxy.WithProviderRoutes(routes),
-		proxy.WithAllowedHosts(proxyAllowedHosts(cfg, hostnameOrEmpty())...),
-		proxy.WithEventCounts(domainEventCounter.Counts),
-		proxy.WithEventSpans(func() map[string]proxy.EventSpan {
-			spans := domainEventCounter.Spans()
-			out := make(map[string]proxy.EventSpan, len(spans))
-			for k, v := range spans {
-				out[k] = proxy.EventSpan{First: v.First, Last: v.Last}
-			}
-			return out
-		}),
-	}
-	if cfg.Resilience.Enabled {
-		opts = append(opts, proxy.WithResilience(proxy.ResilienceConfig{
-			FirstByteTimeout: cfg.Resilience.FirstByteTimeout,
-			IdleTimeout:      cfg.Resilience.IdleTimeout,
-			TotalTimeout:     cfg.Resilience.TotalTimeout,
-			FailureThreshold: cfg.Resilience.FailureThreshold,
-		}))
-		logger.Info("resilience enabled",
-			"first_byte_timeout", cfg.Resilience.FirstByteTimeout,
-			"idle_timeout", cfg.Resilience.IdleTimeout,
-			"total_timeout", cfg.Resilience.TotalTimeout,
-			"failure_threshold", cfg.Resilience.FailureThreshold,
-		)
-	}
-	if cfg.TLS.Enabled {
-		certDir, err := resolveCertDir(cfg.TLS.CertDir)
-		if err != nil {
-			return fmt.Errorf("tls cert dir: %w", err)
-		}
-		bundle, err := tlsmint.EnsureBundle(certDir, tlsmint.Options{
-			Hostnames: cfg.TLS.Hostnames,
-		})
-		if err != nil {
-			return fmt.Errorf("tls bundle: %w", err)
-		}
-		logger.Info("tls bundle ready",
-			"cert_dir", bundle.Dir,
-			"leaf_not_after", bundle.LeafCert.NotAfter,
-		)
-		opts = append(opts, proxy.WithTLS(bundle.TLSConfig()))
-	}
-
-	components := earlyComponents
-	eventRuntime, err := initializeEventRuntime(ctx, cfg, components, domainEventCounter, domainLogPath, sourceHealth, sup, logger)
-	if err != nil {
-		return err
-	}
-	defer eventRuntime.Detach()
-	bus := eventRuntime.Bus
-	dashTok := ""
-	opts = append(opts, eventRuntime.ProxyOptions...)
-
-	if cfg.Storage.Enabled {
-		routes := startRouteHistory(sup, logger)
-		correctGatewayAttribution(ctx, cfg, components.Store, routes, logger)
-		correctCodexAttribution(ctx, cfg, components.Store, logger)
-		correctOpencodeAttribution(ctx, components.Store, logger)
-		correctSpendCoverage(ctx, cfg, components.Store, logger)
-		// Source-specific polling configuration lives in its runtime module.
-		startVendorUsagePollers(cfg, ingestionBus(ctx, bus, components.Store, logger), sourceHealth, routes, sup, logger)
-
-		if err := startRetentionRuntime(cfg.Retention, components.Store, sup, logger); err != nil {
-			return fmt.Errorf("retention: %w", err)
-		}
-
-		analyticsH, err := proxy.NewAnalyticsHandlers(components.Store, components.Aggregator, components.Spend, cfg.Coaching.WasteConfig())
-		if err != nil {
-			return fmt.Errorf("analytics handlers: %w", err)
-		}
-		opts = append(opts, proxy.WithAnalytics(analyticsH))
-		opts = append(opts, proxy.WithAudit(proxy.NewAuditHandlers(components.Store)))
-	}
-
-	// The local API is protected by a shared-secret bearer token whatever
-	// else is configured: with storage disabled /api/* still serves the
-	// rules API, which reads rule files from any ?root= a caller names.
-	// Either the operator sets cfg.Dashboard.AdminToken via env / config,
-	// or the daemon mints and persists one on first start.
-	tok, errTok := loadOrMintDashToken(cfg.Dashboard.AdminToken)
-	if errTok != nil {
-		return fmt.Errorf("API token: %w", errTok)
-	}
-	dashTok = tok
-	auth, err := dashauth.New(dashauth.Config{
-		AdminToken: dashTok,
-	})
-	if err != nil {
-		return fmt.Errorf("dashboard auth: %w", err)
-	}
-	opts = append(opts, proxy.WithDashAuth(auth))
-
-	if cfg.Rules.Enabled {
-		root := cfg.Rules.Root
-		if root == "" {
-			if wd, err := os.Getwd(); err == nil {
-				root = wd
-			} else {
-				root = "."
-			}
-		}
-		rulesH, err := proxy.NewRulesHandlers(root, cfg.Rules.RepoID)
-		if err != nil {
-			return fmt.Errorf("rules handlers: %w", err)
-		}
-		cancelRulesObserver := rulesH.AttachEventBus(bus)
-		defer cancelRulesObserver()
-		opts = append(opts, proxy.WithRules(rulesH))
-		logger.Info("rule intelligence enabled", "root", root, "repo_id", cfg.Rules.RepoID)
-	}
-
-	// Declare plan coverage to the proxy so the billing basis is known at
-	// request time, not just at storage time. planStampSink already
-	// backfills CostSource on the way into SQLite, but the router runs in
-	// the request path — well before that sink — so without this it would
-	// price a flat-rate subscription at API list rates and report dollar
-	// savings the operator can never realise.
-	if len(cfg.Plans) > 0 {
-		opts = append(opts, proxy.WithPlanCoverage(func(p eventschema.Provider) bool {
-			return planCostSource(cfg, p) == eventschema.CostSourcePlanIncluded
-		}))
-		logger.Info("plan-covered providers declared", "count", len(cfg.Plans))
-	}
-
-	// Keep the rate card current. A model released after this binary was
-	// built otherwise prices at zero, and a session that cost real money
-	// reports as free — which is the failure this tool exists to find.
-	startPricingRefreshRuntime(cfg, components.Spend, sup, logger)
-
-	// The findings' session analysis is too slow to run per answer.
-	startSessionFindingsRuntime(sup, logger)
-
-	// The optimizer's own mode governs what it may do with a request.
-	// The daemon-wide active flag still gates the background watcher, but
-	// routing no longer needs it: an operator can leave the daemon in its
-	// default mode and still have the optimizer propose or observe.
-	if rc := cfg.RouterConfig(); rc != nil {
-		// Window pressure is read per request, so it comes from a cache a
-		// background loop refreshes — scanning the event store inline
-		// would put a full window query on the hot path.
-		startWindowPressureRuntime(cfg, rc, components.Store, sup, logger)
-		// Proposals need somewhere to live. Both the preferred-model
-		// ceiling and in_request mode refer decisions to the operator, so
-		// either one requires the approval log — wiring it only for the
-		// ceiling would leave in_request proposing into the void.
-		if len(cfg.PreferredModels) > 0 || cfg.Optimizer.Mode.Proposes() {
-			if store, err := openRoutingApprovals(); err != nil {
-				logger.Warn("routing approvals unavailable; routes will not be referred", "err", err)
-			} else {
-				attachApprovalGate(rc, cfg, store, logger)
-				logger.Info("routing decisions referable",
-					"preferred_models", len(cfg.PreferredModels),
-					"mode", string(cfg.Optimizer.Mode))
-			}
-		}
-		opts = append(opts, proxy.WithActiveRouting(*rc, components.Spend))
-		if components.Store != nil {
-			opts = append(opts, proxy.WithExperiments(experiments.New(components.Store)))
-		}
-		logger.Info("model routing wired",
-			"rules", len(rc.Rules), "mode", string(cfg.Optimizer.Mode))
-	}
-
-	srv := proxy.New(cfg.Listen, opts...)
-	if err := srv.Start(ctx); err != nil {
-		return fmt.Errorf("start proxy: %w", err)
-	}
-
-	// The read guard prevents re-reads inside the client, where the proxy
-	// cannot see them. Ingesting its ledger is what lets those savings
-	// reach TEU — otherwise a client that never proxies scores "not
-	// measured" however much the guard actually reclaims.
-	startReadGuardRuntime(bus, sup, logger)
-
-	// Active-mode spend watcher: periodic budget + unpriced-model
-	// evaluation against the local store. Requires storage (no events,
-	// nothing to watch).
-	startSpendWatcherRuntime(cfg, components.Aggregator, components.Spend, sup, logger)
-	defer publishRuntimeAnnouncement(cfg, srv, dashTok, logger)()
-	// Publish blockers + remediation hints so /readyz exposes the same
-	// signal the MCP tokenops_status tool surfaces. Operators on a fresh
-	// install (storage/rules/providers off) see exactly what to fix
-	// without grepping config.
-	blockers := cfg.Blockers()
-	proxy.SetReadyState(blockers, config.NextActionsFor(blockers))
-	if len(blockers) > 0 {
-		logger.Info("daemon started with blockers", "blockers", blockers)
-	}
-	proxy.MarkReady(true)
 
 	<-ctx.Done()
 	logger.Info("shutdown signal received")
-
-	err = stopDaemon(logger, cfg.Shutdown.Timeout, shutdownSteps{
-		server:         srv,
-		waitSubsystems: sup.Wait,
-		drainEvents: func(d time.Duration) error {
-			err := eventRuntime.Drain(d)
-			var skipped int64
-			if eventRuntime.Store != nil {
-				skipped = eventRuntime.Store.SkippedInvalid()
-			}
-			logger.Info("event bus drained",
-				"published", bus.PublishedCount(),
-				"dropped", bus.DroppedCount(),
-				"skipped_invalid", skipped,
-			)
-			return err
-		},
-		closeComponents: func() {
-			if components != nil {
-				_ = components.Shutdown()
-			}
-		},
-		running: sup.Running,
-	})
+	err := s.shutdown()
 	logger.Info("tokenops daemon stopped")
 	return err
 }
