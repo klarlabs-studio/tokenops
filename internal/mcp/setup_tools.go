@@ -12,6 +12,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
+	claudeai "go.klarlabs.de/tokenops/internal/infra/vendorusage/claudeusagemeter"
 )
 
 // SetupDeps wires the tools that bind a plan and connect the Claude usage
@@ -137,7 +138,7 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 						"which reads it without echoing it — or to set " + meterKeyEnv + " for this MCP server and call this tool again",
 				}), nil
 			}
-			client := claudeusagemeter.NewClient(key)
+			client := claudeai.NewClient(key)
 			if d.MeterBaseURL != "" {
 				client.BaseURL = d.MeterBaseURL
 			}

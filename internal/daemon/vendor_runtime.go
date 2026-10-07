@@ -32,6 +32,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	anthropicapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/anthropic"
+	claudeai "go.klarlabs.de/tokenops/internal/infra/vendorusage/claudeusagemeter"
 	codexappserverproc "go.klarlabs.de/tokenops/internal/infra/vendorusage/codexappserver"
 	copilotapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/copilot"
 	cursorapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/cursor"
@@ -123,6 +124,7 @@ func startVendorUsagePollers(
 			BrowserCookies: cfg.VendorUsage.ClaudeUsageMeter.BrowserCookies,
 			OrgID:          cfg.VendorUsage.ClaudeUsageMeter.OrgID, Interval: cfg.VendorUsage.ClaudeUsageMeter.Interval,
 			Logger: logger, Cookies: browserSessionSource(cfg.VendorUsage.ClaudeUsageMeter),
+			NewClient: claudeai.NewSessionClient,
 		})
 		sup.Go("claude-usage-meter", p.Run)
 		logger.Info("claude-usage-meter usage poller live", "interval", cfg.VendorUsage.ClaudeUsageMeter.Interval)
