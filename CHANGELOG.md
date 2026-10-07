@@ -2,8 +2,17 @@
 
 ## Unreleased
 
+### Security
+
+- **proxy:** the daemon refuses requests a web page could send it. A request whose Host is not this machine (DNS rebinding), whose Origin is not local, or that a browser marks cross-site gets 403, so a page can no longer relay through your provider routes or write spend into your history. A reverse-proxy name goes in the new `allowed_hosts`; the daemon warns at start when `listen` is reachable from the network without TLS
+- **dependencies:** Go 1.26 and golang.org/x/crypto v0.57.0, which fixes GO-2026-6355 and GO-2026-6354
+- **release:** the npm packages are built only after every archive matches the release's `checksums.txt`, and only when all four platforms are present; npm publishes by trusted publishing, with no token
+
 ### Changed
 
+- **spend:** `tokenops spend --forecast` projects the daily totals `tokenops_forecast` projects. It fitted one point per model per day, so its numbers differ, and are right, from this release; with `--until` it projects from that date, and with too little history it says so instead of printing nothing (`forecast_note` in `--json`)
+- **queries:** a capped query returns the newest rows, not the oldest: `tokenops optimizations --limit`, the MCP optimizations tool and verify showed the start of the window instead of its end
+- **building from source:** needs Go 1.26 (the toolchain directive downloads it)
 - **routing:** `tokenops routing proposals` gives the answer `tokenops_routing` gives: the text names what each upgrade adds per million tokens, or why its price could not be checked, and `--json` emits `{pending, note}` with the question to put to you, where it printed the approval log's raw records
 
 ### Fixed
@@ -22,6 +31,19 @@
 - **config:** a leading `~` in `storage.path`, `pricing.path` and the other configured paths is expanded, as the configuration guide writes them; the daemon opened a directory literally named `~`, and a `~` pricing override failed to load
 - **fmt:** the MCP tools `tokenops_fmt_analyze` and `tokenops_fmt_learn` use the formatters your config defines, as the CLI does; a command you had written a formatter for showed as unhandled and came back as the next formatter to write. `tokenops fmt --emit` records into the configured `storage.path`, not always `~/.tokenops/events.db`
 - **usage meter:** connecting claude.ai's usage meter through the MCP tool keeps the browser session it reads, with its bot-check clearance, as `vendor-usage setup claude-subscription` does; it verified without the clearance and stored the session as if pasted
+- **spend:** prompt-cache writes are priced at their own rate, 1.25× input for a five-minute write and 2× for a one-hour one on Anthropic, where they were priced as plain input; the Admin API poller also counted cache reads at the full input price and left cache writes out of input. Reported Anthropic spend and API-equivalent value go up, and historical Claude Code turns re-price with their writes
+- **proxy:** request bodies over 4 MiB are forwarded intact; the proxy forwarded only the first 4 MiB, so the request failed or hung. Anthropic cache reads and writes now count as input, where proxied cache-heavy turns were priced as a few dozen tokens
+- **analytics:** plan-covered value and recomputed costs price each event at the rate card in force when it ran; they used the oldest card, so models a pricing refresh added showed as unpriced and repriced models kept their old price
+- **daemon:** a shutdown that outlasts its timeout (a long stream) still drains queued events and closes the store, instead of losing them
+- **storage:** one malformed event no longer loses the up to 63 good ones in its batch; it is skipped and counted
+- **headroom:** a store read that fails is reported, instead of "no plans configured"
+- **checkup:** a usage source that exists but cannot be read is named in the warnings instead of looking like no usage, and a read cut short says its totals are low
+- **claude code:** the poller's memory of turns it has seen is bounded to seven days and 200,000 entries; it grew for as long as the daemon ran
+- **commits:** cost per commit no longer credits other people's commits to you (`bob@x.com` matched `jimbob@x.com`), and commits on `feat/…` and `fix/…` branches show their branch
+- **opencode:** session directories honour the time window instead of listing every directory opencode ever used
+- **spend:** consumers that tie are ranked by name, not in a different order each run
+- **routing:** the gated-routing hint names `tokenops routing proposals` and the `tokenops_routing` tool; it named a command that does not exist
+- **windows:** the Windows build compiles again
 
 ## 0.101.1 - 2026-10-06
 
