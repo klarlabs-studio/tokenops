@@ -5,13 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"go.klarlabs.de/tokenops/internal/contexts/tasks"
+	"go.klarlabs.de/tokenops/internal/capability/tasklog"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -51,7 +50,7 @@ func newTaskStartCmd() *cobra.Command {
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			desc := strings.Join(args, " ")
-			t, err := tasks.Start(pathFlag, desc, sessionID, nil)
+			t, err := tasklog.Start(pathFlag, desc, sessionID)
 			if err != nil {
 				return err
 			}
@@ -74,7 +73,7 @@ func newTaskDoneCmd() *cobra.Command {
 		Short: "Mark the most recent open task as complete",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			t, err := tasks.Done(pathFlag, nil)
+			t, err := tasklog.Done(pathFlag)
 			if err != nil {
 				return err
 			}
@@ -103,7 +102,7 @@ func newTaskListCmd() *cobra.Command {
 		Short: "List recorded tasks (chronological)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			all, err := tasks.List(pathFlag)
+			all, err := tasklog.List(pathFlag)
 			if err != nil {
 				return err
 			}
@@ -120,7 +119,7 @@ func newTaskListCmd() *cobra.Command {
 				}
 				all = filtered
 			}
-			var metrics map[string]tasks.Metrics
+			var metrics map[string]tasklog.Metrics
 			if withMetrics {
 				m, err := computeTaskMetrics(cmd.Context(), all, dbPath)
 				if err != nil {
@@ -145,20 +144,21 @@ func newTaskListCmd() *cobra.Command {
 	cmd.Flags().StringVar(&pathFlag, "path", "", "tasks.jsonl path (defaults to ~/.tokenops/tasks.jsonl)")
 	cmd.Flags().StringVar(&since, "since", "", "filter tasks started at or after this point (RFC3339 or duration like 7d)")
 	cmd.Flags().BoolVar(&withMetrics, "metrics", false, "enrich each task with cost / turns / TTFUO from the local event store")
-	cmd.Flags().StringVar(&dbPath, "db", "", "events.db path for --metrics (defaults to ~/.tokenops/events.db)")
+	cmd.Flags().StringVar(&dbPath, "db", "", "events.db path for --metrics (defaults to the configured store)")
 	return cmd
 }
 
 // computeTaskMetrics opens the local sqlite events.db once and rolls
 // up per-task metrics in a single pass. The store is opened
 // read-only for the duration of the command; closed before return.
-func computeTaskMetrics(ctx context.Context, all []tasks.Task, dbPath string) (map[string]tasks.Metrics, error) {
-	if dbPath == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, err
-		}
-		dbPath = filepath.Join(home, ".tokenops", "events.db")
+//
+// The store is the one every other command reads (resolvePlanDB); this
+// one always opened ~/.tokenops/events.db, whatever TOKENOPS_STORAGE_PATH
+// said.
+func computeTaskMetrics(ctx context.Context, all []tasklog.Task, dbFlag string) (map[string]tasklog.Metrics, error) {
+	dbPath, err := resolvePlanDB(dbFlag)
+	if err != nil {
+		return nil, err
 	}
 	if _, err := os.Stat(dbPath); err != nil {
 		return nil, fmt.Errorf("events.db not found at %s; run `tokenops init` first", dbPath)
@@ -168,18 +168,10 @@ func computeTaskMetrics(ctx context.Context, all []tasks.Task, dbPath string) (m
 		return nil, fmt.Errorf("open store: %w", err)
 	}
 	defer func() { _ = store.Close() }()
-	out := make(map[string]tasks.Metrics, len(all))
-	for _, t := range all {
-		m, err := tasks.MetricsFor(ctx, store, t, nil)
-		if err != nil {
-			return nil, fmt.Errorf("metrics for %s: %w", t.ID, err)
-		}
-		out[t.ID] = m
-	}
-	return out, nil
+	return tasklog.MetricsFor(ctx, store, all)
 }
 
-func renderTaskList(cmd *cobra.Command, all []tasks.Task, metrics map[string]tasks.Metrics) {
+func renderTaskList(cmd *cobra.Command, all []tasklog.Task, metrics map[string]tasklog.Metrics) {
 	out := cmd.OutOrStdout()
 	if len(all) == 0 {
 		fmt.Fprintln(out, "No tasks recorded. Run `tokenops task start <description>` to begin.")
