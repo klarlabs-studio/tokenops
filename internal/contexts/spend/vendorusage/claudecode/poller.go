@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pollnow"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -78,7 +79,7 @@ func (p *Poller) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	t := time.NewTicker(p.opts.Interval)
+	t := pollnow.NewTicker(ctx, p.opts.Interval)
 	defer t.Stop()
 	// One immediate scan so the first MCP query after `tokenops start`
 	// sees today's traffic instead of waiting for the first tick.

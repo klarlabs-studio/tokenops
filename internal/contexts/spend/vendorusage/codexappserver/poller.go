@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pollnow"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -56,7 +57,7 @@ func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
 
 // Run polls until ctx ends.
 func (p *Poller) Run(ctx context.Context) error {
-	t := time.NewTicker(p.opts.Interval)
+	t := pollnow.NewTicker(ctx, p.opts.Interval)
 	defer t.Stop()
 	p.Scan(ctx)
 	for {

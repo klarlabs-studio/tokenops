@@ -250,7 +250,8 @@ func (s *startup) startStorageSubsystems(ctx context.Context) error {
 	correctSpendCoverage(ctx, s.cfg, store, s.logger)
 	// The composition root builds and starts the vendor-usage pollers.
 	s.ingest = ingestionBus(ctx, s.events.Bus, store, s.logger)
-	bootstrap.StartVendorUsagePollers(s.cfg, s.ingest, s.sourceHealth, claudeCodeBaseURLAt(routes), s.sup, s.logger)
+	refresh := bootstrap.StartVendorUsagePollers(s.cfg, s.ingest, s.sourceHealth, claudeCodeBaseURLAt(routes), s.sup, s.logger)
+	s.opts = append(s.opts, proxy.WithSourcesRefresh(refresh))
 
 	if err := bootstrap.StartRetentionRuntime(s.cfg.Retention, store, s.sup, s.logger); err != nil {
 		return fmt.Errorf("retention: %w", err)
