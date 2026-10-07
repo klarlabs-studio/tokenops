@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/auditlog"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 
 	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/eval"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
-	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
@@ -61,10 +61,9 @@ type evalResult struct {
 	Gate   *eval.GateResult `json:"gate"`
 }
 
-// auditResult is the typed payload for tokenops_records (view=audit).
-type auditResult struct {
-	Entries []audit.Entry `json:"entries"`
-}
+// auditResult is the typed payload for tokenops_records (view=audit), the
+// audit-log capability's answer.
+type auditResult = auditlog.Log
 
 // RegisterParityTools attaches the scorecard and the audit log, which
 // tokenops_records serves as its scorecard and audit views. Read-only.
@@ -104,35 +103,30 @@ func runScorecard(ctx context.Context, d ParityDeps, in scorecardInput) (*scorec
 }
 
 func runAudit(ctx context.Context, d ParityDeps, in auditInput) (*auditResult, error) {
-	rec := audit.NewRecorder(d.Store)
 	limit := in.Limit
 	if limit <= 0 {
 		limit = defaultAuditLimit
 	}
-	f := audit.Filter{
-		Action: audit.Action(in.Action),
-		Actor:  in.Actor,
-		Limit:  limit,
-	}
+	q := auditlog.Query{Action: in.Action, Actor: in.Actor, Limit: limit}
 	if in.Since != "" {
 		t, err := parseTimeOrDuration(in.Since)
 		if err != nil {
 			return nil, inputError(fmt.Errorf("since: %w", err))
 		}
-		f.Since = t
+		q.Since = t
 	}
 	if in.Until != "" {
 		t, err := time.Parse(time.RFC3339, in.Until)
 		if err != nil {
 			return nil, inputError(fmt.Errorf("until: %w", err))
 		}
-		f.Until = t
+		q.Until = t
 	}
-	entries, err := rec.Query(ctx, f)
+	log, err := auditlog.Read(ctx, d.Store, q)
 	if err != nil {
 		return nil, err
 	}
-	return &auditResult{Entries: entries}, nil
+	return &log, nil
 }
 
 // pipeline is the replay pipeline in effect for this call; nil means the
