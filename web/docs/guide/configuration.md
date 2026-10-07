@@ -563,7 +563,10 @@ writes the safe loss-level tuning back to this config locally. The
 the daemon evaluates them every `watch.interval` against actual spend
 plus a Holt forecast for the remainder of the window, logging
 `threshold_reached` and `forecast_breach` alerts (deduplicated per
-window) and publishing `budget.exceeded` domain events. The watcher
+window). A budget whose window reaches its limit also raises one
+`budget.exceeded` domain event for that window, recorded in the audit
+log; warnings and forecasts do not, and a restart does not record it
+again. The watcher
 also flags models missing from the pricing table. In passive mode
 budgets are inert — define them ahead of time and flip the mode when
 you want enforcement-grade visibility.

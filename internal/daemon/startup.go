@@ -396,7 +396,9 @@ func (s *startup) startPostServeSubsystems(context.Context) error {
 	// Active-mode spend watcher: periodic budget + unpriced-model
 	// evaluation against the local store. Requires storage (no events,
 	// nothing to watch).
-	startSpendWatcherRuntime(s.cfg, s.components.Aggregator, s.components.Spend, s.sup, s.logger)
+	if s.components.Aggregator != nil {
+		startSpendWatcherRuntime(s.cfg, s.components.Aggregator, s.events.Bus, s.components.Store, s.components.Spend.Currency(), s.sup, s.logger)
+	}
 	return nil
 }
 

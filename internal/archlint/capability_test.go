@@ -97,7 +97,6 @@ var directDomainImports = map[string][]string{
 		"go.klarlabs.de/tokenops/internal/contexts/tasks",
 	},
 	"go.klarlabs.de/tokenops/internal/daemon": {
-		"go.klarlabs.de/tokenops/internal/contexts/governance/budget",
 		"go.klarlabs.de/tokenops/internal/contexts/observability/analytics",
 		"go.klarlabs.de/tokenops/internal/contexts/observability/freshness",
 		"go.klarlabs.de/tokenops/internal/contexts/observability/observ",
@@ -107,7 +106,6 @@ var directDomainImports = map[string][]string{
 		"go.klarlabs.de/tokenops/internal/contexts/security/audit",
 		"go.klarlabs.de/tokenops/internal/contexts/security/dashauth",
 		"go.klarlabs.de/tokenops/internal/contexts/security/tlsmint",
-		"go.klarlabs.de/tokenops/internal/contexts/spend/forecast",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/plans",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/spend",
 		"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow",

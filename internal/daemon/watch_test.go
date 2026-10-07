@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/budgets"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
@@ -16,15 +17,10 @@ import (
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
-// watchTick must log a budget alert when window spend crosses the warn
+// The watcher must log a budget alert when window spend crosses the warn
 // threshold, an unpriced-model warning for catalog misses, and dedupe
 // repeats across ticks.
 func TestWatchTickAlertsAndDedupes(t *testing.T) {
-	// Earlier daemon tests (RunWithLogger) install a process-global
-	// domain bus in the budget package; after their shutdown publishing
-	// to it blocks forever. Detach so this test stands alone.
-	budget.SetEventBus(nil)
-
 	ctx := context.Background()
 	store, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "events.db"), sqlite.Options{})
 	if err != nil {
@@ -62,9 +58,9 @@ func TestWatchTickAlertsAndDedupes(t *testing.T) {
 
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
-	seen := map[string]bool{}
+	w := &budgets.Watcher{Source: agg, Limits: limits}
 
-	watchTick(ctx, agg, spendEng, limits, seen, logger)
+	logWatch(w.Tick(ctx, time.Now().UTC()), spendEng.Currency(), logger)
 	out := buf.String()
 	if !strings.Contains(out, "budget alert") || !strings.Contains(out, "daily-all") {
 		t.Errorf("missing budget alert in output:\n%s", out)
@@ -75,7 +71,7 @@ func TestWatchTickAlertsAndDedupes(t *testing.T) {
 
 	// Second tick: nothing new, nothing re-logged.
 	buf.Reset()
-	watchTick(ctx, agg, spendEng, limits, seen, logger)
+	logWatch(w.Tick(ctx, time.Now().UTC()), spendEng.Currency(), logger)
 	if got := buf.String(); strings.Contains(got, "budget alert") || strings.Contains(got, "unpriced model") {
 		t.Errorf("alerts re-logged on unchanged state:\n%s", got)
 	}

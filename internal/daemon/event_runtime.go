@@ -12,7 +12,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/observ"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer"
@@ -167,7 +166,6 @@ func wireDomainEventPublishers(bus *events.AsyncBus, logger *slog.Logger) func()
 	workflow.SetEventBus(bus)
 	optimizer.SetEventBus(bus)
 	rulesfs.SetEventBus(bus)
-	budget.SetEventBus(bus)
 	cancelLog := bus.Subscribe(func(env *eventschema.Envelope) {
 		if env == nil || env.Type != eventschema.EventTypeDomain {
 			return
@@ -181,7 +179,6 @@ func wireDomainEventPublishers(bus *events.AsyncBus, logger *slog.Logger) func()
 		workflow.SetEventBus(nil)
 		optimizer.SetEventBus(nil)
 		rulesfs.SetEventBus(nil)
-		budget.SetEventBus(nil)
 	}
 }
 
