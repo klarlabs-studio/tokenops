@@ -1,6 +1,6 @@
 # ADR 0010 — The daemon API serves every surface
 
-- **Status:** Accepted. API implemented 2026-10-03 (slices 1–5, PRs #508–#515). Adapter migration remaining: 31 direct adapter → domain imports in the `internal/archlint/capability_test.go` ratchet as of 2026-10-07 (cli 14, daemon 8, mcp 4, proxy 5), down from 94 (cli 31, daemon 32, mcp 19, proxy 12) earlier the same day. The daemon's remaining eight are composition wiring: the router config, the approval log, the audit subscriber, TLS and API auth, the event counter, the freshness registry and the cost engine it hands to its runtimes. The agent-DX capability this ADR calls `capability/dx` is `internal/capability/sessions`.
+- **Status:** Accepted. API implemented 2026-10-03 (slices 1–5, PRs #508–#515). Adapter migration remaining: 30 direct adapter → domain imports in the `internal/archlint/capability_test.go` ratchet as of 2026-10-07 (cli 14, daemon 8, mcp 3, proxy 5), down from 94 (cli 31, daemon 32, mcp 19, proxy 12) earlier the same day. The daemon's remaining eight are composition wiring: the router config, the approval log, the audit subscriber, TLS and API auth, the event counter, the freshness registry and the cost engine it hands to its runtimes. The agent-DX capability this ADR calls `capability/dx` is `internal/capability/sessions`.
 - **Date:** 2026-10-03
 - **Deciders:** TokenOps maintainers
 - **Related:** ADR 0004 (phase 4 capability layer, phase 9 surface-native insight), ADR 0009 (endpoints, routers, billers), `docs/competitive-landscape.md` (G7, G8)
