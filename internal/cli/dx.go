@@ -63,9 +63,12 @@ proxy-only.`,
 			dx, curve := sessions.ComputeDXWithCurve(transcriptWindow(root, source, days, includeScratch), time.Now())
 			warnRead(cmd, dx.Warnings)
 			if jsonOut {
+				// The whole answer, as tokenops_agent_dx gives it: the text
+				// shows the grades and the recommendation, and the JSON
+				// used to carry the metrics alone.
 				enc := json.NewEncoder(cmd.OutOrStdout())
 				enc.SetIndent("", "  ")
-				return enc.Encode(dx.Metrics)
+				return enc.Encode(dx)
 			}
 			writeDXText(cmd.OutOrStdout(), dx, curve, days)
 			return nil
@@ -94,7 +97,7 @@ func dxFromSnapshot(cmd *cobra.Command, jsonOut bool, days int) (bool, error) {
 	if jsonOut {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
-		return true, enc.Encode(snap.DX.Metrics)
+		return true, enc.Encode(snap.DX)
 	}
 	writeDXText(cmd.OutOrStdout(), snap.DX, snap.Curve, days)
 	fmt.Fprintf(cmd.OutOrStdout(), "\nFrom the daemon's analysis %s ago; --fresh reads the transcripts now.\n", agoWords(age))
