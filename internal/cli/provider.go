@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.klarlabs.de/tokenops/internal/contexts/prompts/providers"
+	"go.klarlabs.de/tokenops/internal/capability/upstreams"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -15,8 +15,8 @@ import (
 // proxy can route, so the CLI can validate `provider set` names up front
 // instead of letting an unknown key hard-fail the daemon at boot.
 func knownProviderNames() []string {
-	names := make([]string, 0, len(providers.All()))
-	for _, p := range providers.All() {
+	names := make([]string, 0, len(upstreams.All()))
+	for _, p := range upstreams.All() {
 		names = append(names, string(p.ID))
 	}
 	sort.Strings(names)
@@ -57,8 +57,8 @@ func newProviderListCmd() *cobra.Command {
 				return err
 			}
 			if jsonOut {
-				presets := make([]map[string]string, 0, len(providers.All()))
-				for _, p := range providers.All() {
+				presets := make([]map[string]string, 0, len(upstreams.All()))
+				for _, p := range upstreams.All() {
 					presets = append(presets, map[string]string{"id": string(p.ID), "default_base_url": p.DefaultBaseURL})
 				}
 				return writeControlJSON(cmd, map[string]any{"overrides": nonNilMap(cfg.Providers), "presets": presets})
@@ -78,7 +78,7 @@ func newProviderListCmd() *cobra.Command {
 				}
 			}
 			fmt.Fprintln(out, "\nAvailable presets (bind with 'tokenops provider set <name>'):")
-			for _, p := range providers.All() {
+			for _, p := range upstreams.All() {
 				marker := ""
 				if _, overridden := cfg.Providers[string(p.ID)]; overridden {
 					marker = "  [override set]"
@@ -109,7 +109,7 @@ OpenAI-compatible endpoint.`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
-			preset, ok := providers.Lookup(eventschema.Provider(name))
+			preset, ok := upstreams.Lookup(eventschema.Provider(name))
 			if !ok {
 				return fmt.Errorf(
 					"unknown provider %q; known providers: %s",
@@ -120,7 +120,7 @@ OpenAI-compatible endpoint.`,
 			if len(args) == 2 {
 				url = args[1]
 			}
-			if _, err := providers.ParseUpstream(url); err != nil {
+			if _, err := upstreams.ParseUpstream(url); err != nil {
 				return err
 			}
 			path, err := resolveMutableConfigPath(configFlag(cmd))

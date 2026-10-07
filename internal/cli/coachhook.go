@@ -12,14 +12,13 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/spending"
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 
 	"github.com/spf13/cobra"
 
-	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
 )
@@ -163,7 +162,7 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, plan fun
 	case in.HookEventName == "session.idle":
 		// opencode. Its own store holds the turns, so only the id is
 		// needed — and "session.idle" is a name no other client sends.
-		dbPath, derr := opencodeDB()
+		dbPath, derr := coachhook.OpencodeDB()
 		if derr != nil {
 			return nil // fail open
 		}
@@ -330,9 +329,6 @@ func coachVerbosity(rf *rootFlags) string {
 	return coachcap.Build(cfg).Verbosity
 }
 
-// opencodeDB resolves opencode's store.
-func opencodeDB() (string, error) { return opencode.DefaultRoot() }
-
 // promotionNudge builds the case for letting the read guard start
 // blocking, or returns empty when nobody should hear it.
 //
@@ -381,7 +377,7 @@ func promotionNudge(rf *rootFlags, guardDir string) string {
 //
 // Nil on any failure, which falls back to the baseline: a coach that
 // cannot price is still better than a hook that refuses to run.
-func datedRates(rf *rootFlags) func(time.Time) spend.Table {
+func datedRates(rf *rootFlags) func(time.Time) spending.Table {
 	path := ""
 	if cfg, err := loadConfig(rf); err == nil {
 		path = cfg.Pricing.Path
@@ -395,7 +391,7 @@ func datedRates(rf *rootFlags) func(time.Time) spend.Table {
 // hookSpendEngine is the cost engine with the negotiated rates at path,
 // nil when none can be built. A malformed override file prices without
 // it: a hook must not refuse to run over the operator's YAML.
-func hookSpendEngine(path string) *spend.Engine {
+func hookSpendEngine(path string) *spending.Engine {
 	eng, err := bootstrap.SpendEngine(path, nil)
 	if err != nil {
 		eng, err = bootstrap.SpendEngine("", nil)
