@@ -11,8 +11,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"syscall"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/infra/filelock"
 
 	ft "go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough"
 )
@@ -53,10 +54,11 @@ func (l Ledger) Append(entries ...ft.Entry) error {
 		return err
 	}
 	defer func() { _ = f.Close() }()
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+	unlock, err := filelock.Lock(f)
+	if err != nil {
 		return err
 	}
-	defer func() { _ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN) }()
+	defer unlock()
 	var buf bytes.Buffer
 	for _, e := range entries {
 		b, err := json.Marshal(e)
