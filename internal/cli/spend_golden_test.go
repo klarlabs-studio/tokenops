@@ -144,16 +144,43 @@ var floatLiterals = regexp.MustCompile(`-?\d+\.\d+(?:[eE][-+]?\d+)?|-?\d+[eE][-+
 // (0.30000000000000004 against 0.30000000000000016, 1e-16 against 2e-16).
 // The goldens pin the answer, not the rounding of the machine that wrote
 // them.
+//
+// Only standalone JSON numbers are rounded. Text inside a string that
+// merely looks like one stays as it is: the escaped key "\u003e200w"
+// contains "003e200", which read as 3e200 printed two hundred zeros.
 func roundFloats(s string) string {
-	return floatLiterals.ReplaceAllStringFunc(s, func(lit string) string {
-		v, err := strconv.ParseFloat(lit, 64)
+	var b strings.Builder
+	last := 0
+	for _, m := range floatLiterals.FindAllStringIndex(s, -1) {
+		if !jsonNumberBoundary(s, m[0]-1, ":[, \n\t") || !jsonNumberBoundary(s, m[1], ",]} \n\t") {
+			continue
+		}
+		v, err := strconv.ParseFloat(s[m[0]:m[1]], 64)
 		if err != nil {
-			return lit
+			continue
 		}
 		r := math.Round(v*1e9) / 1e9
 		if r == 0 {
 			r = 0 // no "-0"
 		}
-		return strconv.FormatFloat(r, 'f', -1, 64)
-	})
+		b.WriteString(s[last:m[0]])
+		b.WriteString(strconv.FormatFloat(r, 'f', -1, 64))
+		last = m[1]
+	}
+	b.WriteString(s[last:])
+	return b.String()
+}
+
+// jsonNumberBoundary reports whether the byte at i, outside s counting as
+// a boundary, is one of the bytes that may sit next to a JSON number.
+func jsonNumberBoundary(s string, i int, allowed string) bool {
+	return i < 0 || i >= len(s) || strings.IndexByte(allowed, s[i]) >= 0
+}
+
+func TestRoundFloatsLeavesStringsAlone(t *testing.T) {
+	in := `{"a": 0.30000000000000016, ">200w": 0, "v": "1.5e3", "xs": [1e-16,2.5]}`
+	want := `{"a": 0.3, ">200w": 0, "v": "1.5e3", "xs": [0,2.5]}`
+	if got := roundFloats(in); got != want {
+		t.Errorf("roundFloats(%s)\n got %s\nwant %s", in, got, want)
+	}
 }
