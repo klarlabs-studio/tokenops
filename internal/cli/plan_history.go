@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
+	"go.klarlabs.de/tokenops/internal/capability/planswitch"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 )
 
@@ -74,7 +74,7 @@ func newPlanHistoryCmd() *cobra.Command {
 			}
 			if jsonOut {
 				if h == nil {
-					h = plans.History{}
+					h = planswitch.Switches{}
 				}
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(h)
 			}

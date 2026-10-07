@@ -92,3 +92,17 @@ func LastReadingAt(ctx context.Context, r AttributeReader, provider eventschema.
 	}
 	return newest, !newest.IsZero()
 }
+
+// MostConstrained is the window with the highest share used: the one that
+// stops work first if nothing changes.
+func MostConstrained(ws []plans.QuotaWindow) (plans.QuotaWindow, bool) {
+	return plans.MostConstrained(ws)
+}
+
+// FlatRate reports whether planName is a known flat-rate subscription: not
+// pay-as-you-go and not billed by spend. Its windows, not dollars, are
+// what runs out.
+func FlatRate(planName string) bool {
+	p, known := plans.Lookup(planName)
+	return known && planName != plans.PayAsYouGo && !p.SpendDenominated
+}

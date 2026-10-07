@@ -9,7 +9,6 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/session"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -42,29 +41,13 @@ func (d PlanDeps) activeConfig() *config.Config {
 	return d.Config
 }
 
-// planStoreReader adapts *sqlite.Store to plans.EventReader without
-// dragging the sqlite dependency into the domain package.
+// planStoreReader adapts *sqlite.Store to headroom.Reader.
 type planStoreReader struct{ store *sqlite.Store }
 
 // CountBySource satisfies headroom.Reader, so the capability can be
 // handed one port instead of a reader plus a loose function value.
 func (r planStoreReader) CountBySource(ctx context.Context, since, until time.Time) (map[string]int64, error) {
 	return r.store.CountBySource(ctx, since, until)
-}
-
-// classifySignalFromStore reads CountBySource over the headroom window
-// and feeds proxy + mcp-session counts into the domain classifier so
-// every response carries an honest trust level. Vendor /usage isn't
-// wired yet so VendorAPIWired stays false.
-func classifySignalFromStore(ctx context.Context, store *sqlite.Store, provider string, since, until time.Time) (plans.SignalInputs, error) {
-	if store == nil {
-		return plans.SignalInputs{}, nil
-	}
-	counts, err := store.CountBySource(ctx, since, until)
-	if err != nil {
-		return plans.SignalInputs{}, err
-	}
-	return plans.SignalFromCounts(counts, provider), nil
 }
 
 func (r planStoreReader) ReadEvents(ctx context.Context, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
