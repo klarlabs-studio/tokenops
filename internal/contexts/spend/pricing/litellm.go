@@ -1,12 +1,9 @@
 package pricing
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math"
-	"net/http"
 	"regexp"
 	"sort"
 	"strconv"
@@ -14,33 +11,11 @@ import (
 	"time"
 )
 
-// DefaultLiteLLMURL is BerriAI/litellm's machine-readable rate card: vendor
-// list prices (not proxy-marked-up), stable raw URL, no API key. This is the
-// ADR 0002 default source.
-const DefaultLiteLLMURL = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
-
-// litellmTimeout bounds the fetch so a hung endpoint can't stall a refresh.
-const litellmTimeout = 10 * time.Second
-
-// LiteLLMSource fetches and normalizes the LiteLLM rate card. The HTTP client
-// is injectable so tests drive it against an httptest.Server (no live network
-// in the suite); the zero-value client gets a bounded default.
-type LiteLLMSource struct {
-	URL    string
-	Client *http.Client
-}
-
-// NewLiteLLMSource returns a source pointed at DefaultLiteLLMURL with a
-// 10-second HTTP client.
-func NewLiteLLMSource() *LiteLLMSource {
-	return &LiteLLMSource{
-		URL:    DefaultLiteLLMURL,
-		Client: &http.Client{Timeout: litellmTimeout},
-	}
-}
-
-// Name implements Source.
-func (s *LiteLLMSource) Name() string { return "litellm" }
+// LiteLLMSourceName is the Source name, and Snapshot.Source, of the LiteLLM
+// rate card (BerriAI/litellm's model_prices_and_context_window.json: vendor
+// list prices, not proxy-marked-up). This is the ADR 0002 default source; the
+// HTTP fetch lives in internal/infra/pricingsource.
+const LiteLLMSourceName = "litellm"
 
 // litellmEntry is the subset of a LiteLLM model record this adapter reads.
 // Costs are per single token; convert to per-million with ×1e6.
@@ -101,50 +76,21 @@ var vendorPrefixes = map[string]bool{
 	"deepseek": true, "xai": true, "perplexity": true, "cerebras": true,
 }
 
-// Fetch implements Source: GET the URL under ctx, parse the LiteLLM map, and
-// map every entry whose litellm_provider resolves to a catalog provider into a
-// Snapshot keyed "<provider>/<model>". Any transport, status, or parse failure
-// is wrapped in ErrFetch so the caller falls back to the baseline without
-// writing a snapshot.
-func (s *LiteLLMSource) Fetch(ctx context.Context) (Snapshot, error) {
-	url := s.URL
-	if url == "" {
-		url = DefaultLiteLLMURL
-	}
-	client := s.Client
-	if client == nil {
-		client = &http.Client{Timeout: litellmTimeout}
-	}
-	// Belt-and-braces deadline even if the injected client has no timeout.
-	ctx, cancel := context.WithTimeout(ctx, litellmTimeout)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return Snapshot{}, fmt.Errorf("%w: build request: %v", ErrFetch, err)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return Snapshot{}, fmt.Errorf("%w: GET %s: %v", ErrFetch, url, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return Snapshot{}, fmt.Errorf("%w: GET %s: status %d", ErrFetch, url, resp.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20)) // 32 MiB cap
-	if err != nil {
-		return Snapshot{}, fmt.Errorf("%w: read body: %v", ErrFetch, err)
-	}
-
+// ParseLiteLLM normalizes a LiteLLM rate-card body into a Snapshot: every
+// entry whose litellm_provider resolves to a catalog provider is keyed
+// "<provider>/<model>". sourceURL and fetchedAt are the fetch's provenance.
+// A body that is not a JSON object is wrapped in ErrFetch so the caller
+// falls back to the baseline without writing a snapshot.
+func ParseLiteLLM(body []byte, sourceURL string, fetchedAt time.Time) (Snapshot, error) {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return Snapshot{}, fmt.Errorf("%w: parse JSON: %v", ErrFetch, err)
 	}
 
 	snap := Snapshot{
-		Source:    s.Name(),
-		SourceURL: url,
-		FetchedAt: time.Now().UTC(),
+		Source:    LiteLLMSourceName,
+		SourceURL: sourceURL,
+		FetchedAt: fetchedAt,
 		Rates:     map[string]Rate{},
 	}
 	catalogKeys := catalogModelKeys()

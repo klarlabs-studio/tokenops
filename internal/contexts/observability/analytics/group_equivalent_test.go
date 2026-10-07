@@ -1,4 +1,4 @@
-package analytics
+package analytics_test
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -50,8 +51,8 @@ func TestAggregateByCarriesAPIEquivalentPerGroup(t *testing.T) {
 	base := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
 	seedPlanCoveredMix(t, store, base)
 
-	agg := New(store, spend.NewEngine(spend.DefaultTable()))
-	rows, err := agg.AggregateBy(ctx, Filter{}, BucketDay, GroupModel)
+	agg := analytics.New(store, spend.NewEngine(spend.DefaultTable()))
+	rows, err := agg.AggregateBy(ctx, analytics.Filter{}, analytics.BucketDay, analytics.GroupModel)
 	if err != nil {
 		t.Fatalf("aggregate: %v", err)
 	}
@@ -76,12 +77,12 @@ func TestGroupEquivalentsSumToTheSummary(t *testing.T) {
 	base := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
 	seedPlanCoveredMix(t, store, base)
 
-	agg := New(store, spend.NewEngine(spend.DefaultTable()))
-	summary, err := agg.Summarize(ctx, Filter{})
+	agg := analytics.New(store, spend.NewEngine(spend.DefaultTable()))
+	summary, err := agg.Summarize(ctx, analytics.Filter{})
 	if err != nil {
 		t.Fatalf("summarize: %v", err)
 	}
-	rows, err := agg.AggregateBy(ctx, Filter{}, BucketDay, GroupModel)
+	rows, err := agg.AggregateBy(ctx, analytics.Filter{}, analytics.BucketDay, analytics.GroupModel)
 	if err != nil {
 		t.Fatalf("aggregate: %v", err)
 	}
@@ -112,8 +113,8 @@ func TestMeteredRowEquivalentEqualsItsCost(t *testing.T) {
 	if err := store.AppendBatch(ctx, envs); err != nil {
 		t.Fatalf("append: %v", err)
 	}
-	agg := New(store, spend.NewEngine(spend.DefaultTable()))
-	rows, err := agg.AggregateBy(ctx, Filter{}, BucketDay, GroupModel)
+	agg := analytics.New(store, spend.NewEngine(spend.DefaultTable()))
+	rows, err := agg.AggregateBy(ctx, analytics.Filter{}, analytics.BucketDay, analytics.GroupModel)
 	if err != nil {
 		t.Fatalf("aggregate: %v", err)
 	}

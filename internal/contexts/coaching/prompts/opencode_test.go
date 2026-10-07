@@ -2,10 +2,13 @@ package prompts
 
 import (
 	"database/sql"
+	"errors"
 	"path/filepath"
 	"testing"
 
 	_ "modernc.org/sqlite"
+
+	opencodestore "go.klarlabs.de/tokenops/internal/infra/opencodedb"
 )
 
 func seedOpencode(t *testing.T, rows [][4]string) string {
@@ -47,7 +50,7 @@ func TestOpencodeExtractsUserPrompts(t *testing.T) {
 		{"m1", "s1", `{"role":"user","time":{"created":1771056604952}}`,
 			`{"type":"text","text":"refactor the retry loop"}`},
 	})
-	got, err := extractOpencode(path, ExtractOptions{})
+	got, err := extractOpencode(path, ExtractOptions{Opencode: opencodestore.Store{}})
 	if err != nil {
 		t.Fatalf("extract: %v", err)
 	}
@@ -66,7 +69,7 @@ func TestOpencodeSkipsSyntheticPrompts(t *testing.T) {
 		{"m2", "s1", `{"role":"user","time":{"created":1771056605952}}`,
 			`{"type":"text","text":"now ship it"}`},
 	})
-	got, _ := extractOpencode(path, ExtractOptions{})
+	got, _ := extractOpencode(path, ExtractOptions{Opencode: opencodestore.Store{}})
 	if len(got) != 1 || got[0].Text != "now ship it" {
 		t.Errorf("got %+v, want only the operator's own prompt", got)
 	}
@@ -78,7 +81,7 @@ func TestOpencodeIgnoresAssistantText(t *testing.T) {
 		{"m1", "s1", `{"role":"assistant","time":{"created":1771056604952}}`,
 			`{"type":"text","text":"here is the change"}`},
 	})
-	got, _ := extractOpencode(path, ExtractOptions{})
+	got, _ := extractOpencode(path, ExtractOptions{Opencode: opencodestore.Store{}})
 	if len(got) != 0 {
 		t.Errorf("got %+v, want nothing — assistant text is a reply", got)
 	}
@@ -86,8 +89,16 @@ func TestOpencodeIgnoresAssistantText(t *testing.T) {
 
 // A missing store is not an error: most operators do not run opencode.
 func TestOpencodeAbsentIsNotAnError(t *testing.T) {
-	got, err := extractOpencode(filepath.Join(t.TempDir(), "nope.db"), ExtractOptions{})
+	got, err := extractOpencode(filepath.Join(t.TempDir(), "nope.db"), ExtractOptions{Opencode: opencodestore.Store{}})
 	if err != nil || len(got) != 0 {
 		t.Errorf("got %+v err=%v, want empty and no error", got, err)
+	}
+}
+
+// Without a reader the store is not read, and an explicit opencode extract
+// says so rather than reporting an operator who wrote nothing.
+func TestOpencodeWithoutReaderFails(t *testing.T) {
+	if _, err := Extract(ExtractOptions{Source: SourceOpencode, Root: filepath.Join(t.TempDir(), "opencode.db")}); !errors.Is(err, ErrNoOpencodeReader) {
+		t.Errorf("err = %v, want ErrNoOpencodeReader", err)
 	}
 }

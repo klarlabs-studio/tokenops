@@ -1,13 +1,17 @@
-// Package dashauth protects the daemon's local HTTP API. The package path
-// and configuration key retain their historical names for compatibility.
+// Package dashauth decides whether a caller of the daemon's local HTTP API
+// presented the API token. The HTTP middleware that applies the decision
+// lives in internal/proxy; this package does no I/O. The package path and
+// configuration key retain their historical names for compatibility.
 package dashauth
 
 import (
 	"crypto/subtle"
 	"errors"
-	"net/http"
 	"strings"
 )
+
+// bearerPrefix is the Authorization scheme the API accepts.
+const bearerPrefix = "Bearer "
 
 // Config contains the shared secret used by local API clients.
 type Config struct {
@@ -28,17 +32,14 @@ func New(cfg Config) (*Authenticator, error) {
 	return &Authenticator{token: cfg.AdminToken}, nil
 }
 
-// Middleware rejects requests without a valid Authorization bearer token.
-func (a *Authenticator) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		auth := r.Header.Get("Authorization")
-		valid := strings.HasPrefix(auth, "Bearer ") &&
-			subtle.ConstantTimeCompare([]byte(strings.TrimPrefix(auth, "Bearer ")), []byte(a.token)) == 1
-		if !valid {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="tokenops"`)
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+// AuthorizeHeader reports whether authorization — the value of an
+// Authorization header — carries the API token as a bearer credential.
+// The comparison is constant-time. Only the header counts: a token
+// passed any other way (a query parameter, a cookie) never authenticates.
+func (a *Authenticator) AuthorizeHeader(authorization string) bool {
+	if !strings.HasPrefix(authorization, bearerPrefix) {
+		return false
+	}
+	presented := strings.TrimPrefix(authorization, bearerPrefix)
+	return subtle.ConstantTimeCompare([]byte(presented), []byte(a.token)) == 1
 }

@@ -3,10 +3,12 @@
 // token usage as TokenOps PromptEvents. Unlike the Claude Code and Codex
 // readers (which parse JSONL files), opencode persists sessions in SQLite;
 // this reader opens that database read-only so it never contends with a
-// running opencode process.
+// running opencode process. The database itself is read through the
+// opencodedb.Reader port; internal/infra/opencodedb implements it.
 package opencode
 
 import (
+	"errors"
 	"path/filepath"
 	"time"
 
@@ -43,22 +45,28 @@ func DefaultRoot() (string, error) { return opencodedb.DefaultPath() }
 // session's turns. Scanning all of them would mean a full pass over a
 // store that reaches 1.2 GB here, on a path that fires every time the
 // operator stops typing.
-func ReadSession(dbPath, sessionID string, visit func(Turn) error) error {
+func ReadSession(store opencodedb.Reader, dbPath, sessionID string, visit func(Turn) error) error {
 	if sessionID == "" {
 		return nil
 	}
-	return readMessages(dbPath, sessionID, visit)
+	return readMessages(store, dbPath, sessionID, visit)
 }
 
-// ReadMessages opens dbPath read-only and invokes visit for every assistant
-// turn that carries token usage, from opencode 1.x and 2.x alike. A missing
-// database is not an error (opencode may not be installed).
-func ReadMessages(dbPath string, visit func(Turn) error) error {
-	return readMessages(dbPath, "", visit)
+// ReadMessages reads dbPath through store and invokes visit for every
+// assistant turn that carries token usage, from opencode 1.x and 2.x alike.
+// A missing database is not an error (opencode may not be installed).
+func ReadMessages(store opencodedb.Reader, dbPath string, visit func(Turn) error) error {
+	return readMessages(store, dbPath, "", visit)
 }
 
-func readMessages(dbPath, sessionID string, visit func(Turn) error) error {
-	return opencodedb.Read(dbPath, opencodedb.Options{SessionID: sessionID}, func(m opencodedb.Message) error {
+// errNoStore reports a read with no opencodedb.Reader to read through.
+var errNoStore = errors.New("opencode: no opencodedb.Reader configured")
+
+func readMessages(store opencodedb.Reader, dbPath, sessionID string, visit func(Turn) error) error {
+	if store == nil {
+		return errNoStore
+	}
+	return store.Read(dbPath, opencodedb.Options{SessionID: sessionID}, func(m opencodedb.Message) error {
 		if m.Role != opencodedb.Assistant {
 			return nil
 		}

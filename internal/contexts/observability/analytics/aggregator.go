@@ -1,21 +1,19 @@
 // Package analytics rolls up the local SQLite event store into the
 // time-bucketed aggregates the dashboard, CLI, and forecasting engines
-// consume. The aggregator is read-only — it never mutates events — and
-// is intentionally a thin layer over the (already-indexed) events table
-// so the same queries can be ported to ClickHouse later.
+// consume. The aggregator is read-only — it never mutates events. It reads
+// through the Store port, which *sqlite.Store implements over the
+// (already-indexed) events table, so the same sums can be ported to
+// ClickHouse later; pricing, provenance and coverage stay here.
 package analytics
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/measurement"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
-	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -51,22 +49,6 @@ const (
 	GroupAgent    Group = "agent"
 )
 
-// column resolves a Group to the events-table column it maps to.
-func (g Group) column() string {
-	switch g {
-	case GroupProvider:
-		return "provider"
-	case GroupModel:
-		return "model"
-	case GroupWorkflow:
-		return "workflow_id"
-	case GroupAgent:
-		return "agent_id"
-	default:
-		return ""
-	}
-}
-
 // Filter narrows the events the aggregator considers. Empty fields are
 // not constrained.
 //
@@ -98,11 +80,11 @@ type Filter struct {
 // `--include-source=` / `include_sources: [...]`.
 var DefaultExcludedSources = []string{"mcp-session"}
 
-// resolveExcludeSources returns the operative exclude list for a
-// Filter: caller-supplied slice when set (including empty for "show
-// everything"), otherwise the package default minus anything the
-// caller re-admitted via IncludeSources.
-func resolveExcludeSources(f Filter) []string {
+// ExcludedSources returns the operative exclude list for a Filter:
+// caller-supplied slice when set (including empty for "show everything"),
+// otherwise the package default minus anything the caller re-admitted via
+// IncludeSources. Store implementations apply it to every query.
+func (f Filter) ExcludedSources() []string {
 	if f.ExcludeSources != nil {
 		return f.ExcludeSources
 	}
@@ -194,91 +176,37 @@ type UnpricedModel struct {
 	Requests int64
 }
 
-// Aggregator answers rollup queries against a sqlite.Store. spend.Engine
-// is consulted when a row's CostUSD is zero (e.g. older events written
-// before the spend engine was wired in).
+// Aggregator answers rollup queries against the event store, through the
+// Store port. spend.Engine is consulted when a row's CostUSD is zero (e.g.
+// older events written before the spend engine was wired in).
 type Aggregator struct {
-	store *sqlite.Store
+	store Store
 	spend *spend.Engine
 }
 
-// New constructs an Aggregator. spendEng may be nil — rows with zero cost
-// then stay zero rather than being recomputed.
-func New(store *sqlite.Store, spendEng *spend.Engine) *Aggregator {
+// New constructs an Aggregator over store (a *sqlite.Store in production).
+// spendEng may be nil — rows with zero cost then stay zero rather than
+// being recomputed.
+func New(store Store, spendEng *spend.Engine) *Aggregator {
 	return &Aggregator{store: store, spend: spendEng}
 }
+
+// ready reports whether a has a store to read.
+func (a *Aggregator) ready() bool { return a != nil && a.store != nil }
 
 // AggregateBy returns time-bucketed aggregates. Setting group to GroupNone
 // produces one row per bucket (across all events in the bucket).
 func (a *Aggregator) AggregateBy(ctx context.Context, f Filter, bucket Bucket, group Group) ([]Row, error) {
-	if a == nil || a.store == nil {
-		return nil, errors.New("analytics: aggregator not initialised")
+	if !a.ready() {
+		return nil, ErrNotInitialised
 	}
 	width := bucket.seconds()
 	if width <= 0 {
 		return nil, fmt.Errorf("analytics: invalid bucket %q", bucket)
 	}
-
-	conds, args := buildConditions(f)
-
-	// SQLite has no native time bucketing, but timestamp_ns is already a
-	// monotonic int. Floor-divide by the bucket width to get a stable key.
-	// Convert ns -> seconds first to keep numbers small (and in int64 range).
-	bucketExpr := fmt.Sprintf("(timestamp_ns / 1000000000 / %d) * %d", width, width)
-	groupCol := group.column()
-
-	selectCols := []string{
-		bucketExpr + " AS bucket_start_sec",
-	}
-	if groupCol != "" {
-		selectCols = append(selectCols, fmt.Sprintf("COALESCE(%s, '') AS group_key", groupCol))
-	} else {
-		selectCols = append(selectCols, "'' AS group_key")
-	}
-	selectCols = append(selectCols,
-		"COUNT(*) AS requests",
-		"COALESCE(SUM(input_tokens), 0)  AS input_tokens",
-		"COALESCE(SUM(output_tokens), 0) AS output_tokens",
-		"COALESCE(SUM(total_tokens), 0)  AS total_tokens",
-		"COALESCE(SUM(cost_usd), 0)      AS cost_usd",
-	)
-
-	q := "SELECT " + strings.Join(selectCols, ", ") +
-		" FROM events"
-	if len(conds) > 0 {
-		q += " WHERE " + strings.Join(conds, " AND ")
-	}
-	q += " GROUP BY bucket_start_sec"
-	if groupCol != "" {
-		q += ", group_key"
-	}
-	q += " ORDER BY bucket_start_sec ASC"
-	if groupCol != "" {
-		q += ", group_key ASC"
-	}
-
-	rows, err := a.store.DB().QueryContext(ctx, q, args...)
+	out, err := a.store.UsageBuckets(ctx, f, width, group)
 	if err != nil {
-		return nil, fmt.Errorf("analytics: query: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	var out []Row
-	for rows.Next() {
-		var (
-			bucketStartSec int64
-			groupKey       string
-			r              Row
-		)
-		if err := rows.Scan(&bucketStartSec, &groupKey, &r.Requests, &r.InputTokens, &r.OutputTokens, &r.TotalTokens, &r.CostUSD); err != nil {
-			return nil, fmt.Errorf("analytics: scan: %w", err)
-		}
-		r.BucketStart = time.Unix(bucketStartSec, 0).UTC()
-		r.GroupKey = groupKey
-		out = append(out, r)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("analytics: iterate: %w", err)
+		return nil, err
 	}
 
 	// Seed provenance from the store. recomputeMissingCosts replaces this
@@ -290,106 +218,75 @@ func (a *Aggregator) AggregateBy(ctx context.Context, f Filter, bucket Bucket, g
 	}
 
 	if a.spend != nil {
-		if err := a.recomputeMissingCosts(ctx, f, bucket, group, out); err != nil {
+		if err := a.recomputeMissingCosts(ctx, f, width, group, out); err != nil {
 			return nil, err
 		}
-		if err := a.addPlanCoveredValue(ctx, f, bucket, group, out); err != nil {
+		if err := a.addPlanCoveredValue(ctx, f, width, group, out); err != nil {
 			return nil, err
 		}
 	}
 	return out, nil
 }
 
+// rowKey identifies an AggregateBy row: its bucket and group key.
+type rowKey struct {
+	bucketSec int64
+	groupKey  string
+}
+
+// promptEvent is the usage of g as a PromptEvent, for the spend engine.
+func (g PricingGroup) promptEvent() *eventschema.PromptEvent {
+	return &eventschema.PromptEvent{
+		Provider:                eventschema.Provider(g.Provider),
+		RequestModel:            g.Model,
+		InputTokens:             g.InputTokens,
+		CachedInputTokens:       g.CacheReadTokens,
+		CacheWriteInputTokens:   g.CacheWriteTokens,
+		CacheWrite1hInputTokens: g.CacheWrite1hTokens,
+		OutputTokens:            g.OutputTokens,
+	}
+}
+
 // addPlanCoveredValue fills Row.APIEquivalentUSD: each row's real cost plus
 // the list price of the plan-covered traffic inside it.
 //
 // It is one query for the whole result set rather than one per row, grouped
-// on the same bucket and key expressions AggregateBy used, so the rows can
-// only sum to the figure Summarize reports for the same window — the two are
-// renderings of one window and disagreeing is the bug this fixes.
-func (a *Aggregator) addPlanCoveredValue(ctx context.Context, f Filter, bucket Bucket, group Group, rows []Row) error {
+// on the same bucket and key AggregateBy used, so the rows can only sum to
+// the figure Summarize reports for the same window — the two are renderings
+// of one window and disagreeing is the bug this fixes.
+func (a *Aggregator) addPlanCoveredValue(ctx context.Context, f Filter, width int64, group Group, rows []Row) error {
 	if len(rows) == 0 {
 		return nil
 	}
 	for i := range rows {
 		rows[i].APIEquivalentUSD = rows[i].CostUSD
 	}
-
-	width := bucket.seconds()
-	bucketExpr := fmt.Sprintf("(timestamp_ns / 1000000000 / %d) * %d", width, width)
-	groupCol := group.column()
-	groupExpr := "''"
-	if groupCol != "" {
-		groupExpr = fmt.Sprintf("COALESCE(%s, '')", groupCol)
-	}
-
-	conds, args := buildConditions(f)
-	conds = append(conds,
-		`COALESCE(json_extract(payload, '$.cost_source'), '') IN ('plan_included', 'trial')`,
-	)
 	// provider+model are carried alongside the grouping because pricing is
 	// keyed by them: grouping by workflow still has to price each model the
 	// workflow ran.
-	q := "SELECT " + bucketExpr + " AS bucket_start_sec, " + groupExpr + " AS group_key," +
-		` provider, model, COUNT(*),
-			COALESCE(SUM(input_tokens), 0),
-			COALESCE(SUM(output_tokens), 0),
-			COALESCE(SUM(` + cacheReadExpr + `), 0),
-			COALESCE(SUM(` + cacheWriteExpr + `), 0),
-			COALESCE(SUM(` + cacheWrite1hExpr + `), 0)
-		FROM events WHERE ` + strings.Join(conds, " AND ") +
-		" GROUP BY bucket_start_sec, group_key, provider, model"
-
-	dbRows, err := a.store.DB().QueryContext(ctx, q, args...)
+	groups, err := a.store.BucketPricingGroups(ctx, f, width, group, PlanCovered)
 	if err != nil {
-		return fmt.Errorf("analytics: plan-covered group value query: %w", err)
+		return err
 	}
-	defer func() { _ = dbRows.Close() }()
-
-	type key struct {
-		bucketSec int64
-		groupKey  string
-	}
-	value := map[key]float64{}
-	gaps := newGapTracker[key]()
-	for dbRows.Next() {
-		var (
-			bucketSec                                        int64
-			groupKey                                         string
-			provider, model                                  sql.NullString
-			events, inTok, outTok, cacheIn, cacheW, cacheW1h sql.NullInt64
-		)
-		if err := dbRows.Scan(&bucketSec, &groupKey, &provider, &model, &events, &inTok, &outTok, &cacheIn, &cacheW, &cacheW1h); err != nil {
-			return fmt.Errorf("analytics: plan-covered group value scan: %w", err)
-		}
-		p := &eventschema.PromptEvent{
-			Provider:                eventschema.Provider(provider.String),
-			RequestModel:            model.String,
-			InputTokens:             inTok.Int64,
-			CachedInputTokens:       cacheIn.Int64,
-			CacheWriteInputTokens:   cacheW.Int64,
-			CacheWrite1hInputTokens: cacheW1h.Int64,
-			OutputTokens:            outTok.Int64,
-		}
-		k := key{bucketSec, groupKey}
+	value := map[rowKey]float64{}
+	gaps := newGapTracker[rowKey]()
+	for _, g := range groups {
+		k := rowKey{g.At.Unix(), g.GroupKey}
 		// An unpriced model contributes nothing rather than failing the
 		// query — failing the whole rollup over one missing rate card would
 		// take the figures that do work with it. The events it could not
 		// price are counted against the row's coverage so the shadow value
 		// stops presenting itself as the whole of the plan-covered traffic.
-		c, cerr := a.spend.ComputeAt(p, time.Unix(bucketSec, 0).UTC())
+		c, cerr := a.spend.ComputeAt(g.promptEvent(), g.At)
 		if cerr != nil {
-			gaps.add(k, events.Int64, unpricedReason(provider.String, model.String))
+			gaps.add(k, g.Events, unpricedReason(g.Provider, g.Model))
 			continue
 		}
 		value[k] += c
 	}
-	if err := dbRows.Err(); err != nil {
-		return fmt.Errorf("analytics: plan-covered group value iterate: %w", err)
-	}
 
 	for i := range rows {
-		k := key{rows[i].BucketStart.Unix(), rows[i].GroupKey}
+		k := rowKey{rows[i].BucketStart.Unix(), rows[i].GroupKey}
 		rows[i].APIEquivalentUSD += value[k]
 		// The equivalent inherits the cost figure's gaps as well as its
 		// own: it is built on top of CostUSD, so an event the metered
@@ -405,90 +302,43 @@ func (a *Aggregator) addPlanCoveredValue(ctx context.Context, f Filter, bucket B
 // adds them to the row they belong to, counting each in CostRecomputed.
 // Stored costs stay authoritative; only the zeros are filled.
 //
-// It groups on the same bucket and key expressions AggregateBy used, in one
-// query — the shape addPlanCoveredValue has — so rows can only sum to what
-// Summarize reports for the window. The per-row version it replaces
-// recomputed over a fixed one-hour window whatever the bucket (a day row was
-// re-priced only for its first hour), ignored the row's group (each unpriced
-// model's row was charged for every model in the bucket), and skipped any
-// row with some stored cost, leaving its zero-cost events out.
-func (a *Aggregator) recomputeMissingCosts(ctx context.Context, f Filter, bucket Bucket, group Group, rows []Row) error {
+// It groups on the same bucket and key AggregateBy used, in one query — the
+// shape addPlanCoveredValue has — so rows can only sum to what Summarize
+// reports for the window. The per-row version it replaces recomputed over a
+// fixed one-hour window whatever the bucket (a day row was re-priced only
+// for its first hour), ignored the row's group (each unpriced model's row
+// was charged for every model in the bucket), and skipped any row with some
+// stored cost, leaving its zero-cost events out.
+func (a *Aggregator) recomputeMissingCosts(ctx context.Context, f Filter, width int64, group Group, rows []Row) error {
 	if len(rows) == 0 {
 		return nil
 	}
-	width := bucket.seconds()
-	bucketExpr := fmt.Sprintf("(timestamp_ns / 1000000000 / %d) * %d", width, width)
-	groupExpr := "''"
-	if col := group.column(); col != "" {
-		groupExpr = fmt.Sprintf("COALESCE(%s, '')", col)
-	}
-	conds, args := buildConditions(f)
-	conds = append(conds, "(cost_usd IS NULL OR cost_usd = 0)", costSourceMetered)
-	// provider+model ride along because pricing is keyed by them: a row
-	// grouped by workflow still has to price each model the workflow ran.
-	q := "SELECT " + bucketExpr + " AS bucket_start_sec, " + groupExpr + " AS group_key," +
-		` provider, model, COUNT(*),
-			COALESCE(SUM(input_tokens), 0),
-			COALESCE(SUM(output_tokens), 0),
-			COALESCE(SUM(` + cacheReadExpr + `), 0),
-			COALESCE(SUM(` + cacheWriteExpr + `), 0),
-			COALESCE(SUM(` + cacheWrite1hExpr + `), 0)
-		FROM events WHERE ` + strings.Join(conds, " AND ") +
-		" GROUP BY bucket_start_sec, group_key, provider, model"
-
-	dbRows, err := a.store.DB().QueryContext(ctx, q, args...)
+	groups, err := a.store.BucketPricingGroups(ctx, f, width, group, UncostedMetered)
 	if err != nil {
-		return fmt.Errorf("analytics: recompute query: %w", err)
+		return err
 	}
-	defer func() { _ = dbRows.Close() }()
-
-	type key struct {
-		bucketSec int64
-		groupKey  string
-	}
-	cost := map[key]float64{}
-	fixed := map[key]int64{}
+	cost := map[rowKey]float64{}
+	fixed := map[rowKey]int64{}
 	// Events whose model has no rate card, per row, with the reasons.
-	gaps := newGapTracker[key]()
-	for dbRows.Next() {
-		var (
-			bucketSec                                        int64
-			groupKey                                         string
-			provider, model                                  sql.NullString
-			events, inTok, outTok, cacheIn, cacheW, cacheW1h sql.NullInt64
-		)
-		if err := dbRows.Scan(&bucketSec, &groupKey, &provider, &model, &events, &inTok, &outTok, &cacheIn, &cacheW, &cacheW1h); err != nil {
-			return fmt.Errorf("analytics: recompute scan: %w", err)
-		}
-		p := &eventschema.PromptEvent{
-			Provider:                eventschema.Provider(provider.String),
-			RequestModel:            model.String,
-			InputTokens:             inTok.Int64,
-			CachedInputTokens:       cacheIn.Int64,
-			CacheWriteInputTokens:   cacheW.Int64,
-			CacheWrite1hInputTokens: cacheW1h.Int64,
-			OutputTokens:            outTok.Int64,
-		}
-		k := key{bucketSec, groupKey}
+	gaps := newGapTracker[rowKey]()
+	for _, g := range groups {
+		k := rowKey{g.At.Unix(), g.GroupKey}
 		// Price at the rate card in effect for this bucket (ADR 0002
 		// Phase 2). An unpriced model still contributes nothing to the
 		// total — failing the whole rollup over one missing rate card
 		// would take the figures that do work with it — but the events
 		// it could not price are now counted against the row's coverage
 		// instead of vanishing.
-		c, cerr := a.spend.ComputeAt(p, time.Unix(bucketSec, 0).UTC())
+		c, cerr := a.spend.ComputeAt(g.promptEvent(), g.At)
 		if cerr != nil {
-			gaps.add(k, events.Int64, unpricedReason(provider.String, model.String))
+			gaps.add(k, g.Events, unpricedReason(g.Provider, g.Model))
 			continue
 		}
 		cost[k] += c
-		fixed[k] += events.Int64
-	}
-	if err := dbRows.Err(); err != nil {
-		return fmt.Errorf("analytics: recompute iterate: %w", err)
+		fixed[k] += g.Events
 	}
 	for i := range rows {
-		k := key{rows[i].BucketStart.Unix(), rows[i].GroupKey}
+		k := rowKey{rows[i].BucketStart.Unix(), rows[i].GroupKey}
 		rows[i].CostUSD += cost[k]
 		rows[i].CostRecomputed += fixed[k]
 		missing, why := gaps.at(k)
@@ -501,24 +351,12 @@ func (a *Aggregator) recomputeMissingCosts(ctx context.Context, f Filter, bucket
 // equivalent to AggregateBy with an unbounded bucket; using a dedicated
 // query keeps the SQL plan simpler.
 func (a *Aggregator) Summarize(ctx context.Context, f Filter) (Summary, error) {
-	if a == nil || a.store == nil {
-		return Summary{}, errors.New("analytics: aggregator not initialised")
+	if !a.ready() {
+		return Summary{}, ErrNotInitialised
 	}
-	conds, args := buildConditions(f)
-	q := `SELECT COUNT(*),
-		COALESCE(SUM(input_tokens), 0),
-		COALESCE(SUM(output_tokens), 0),
-		COALESCE(SUM(total_tokens), 0),
-		COALESCE(SUM(cost_usd), 0)
-		FROM events`
-	if len(conds) > 0 {
-		q += " WHERE " + strings.Join(conds, " AND ")
-	}
-	var s Summary
-	if err := a.store.DB().QueryRowContext(ctx, q, args...).Scan(
-		&s.Requests, &s.InputTokens, &s.OutputTokens, &s.TotalTokens, &s.CostUSD,
-	); err != nil {
-		return Summary{}, fmt.Errorf("analytics: summarize: %w", err)
+	s, err := a.store.UsageTotals(ctx, f)
+	if err != nil {
+		return Summary{}, err
 	}
 	if a.spend != nil {
 		recomputed, unpriced, err := a.summarizeMissingCost(ctx, f)
@@ -540,14 +378,11 @@ func (a *Aggregator) Summarize(ctx context.Context, f Filter) (Summary, error) {
 }
 
 // The summary totals price each (day, provider, model) group at the rate
-// card in effect at the group's latest event. Pricing an all-window
-// aggregate with no timestamp would select the oldest card: a model a
-// later refresh added would read as unpriced, a repriced one at its old
-// price. A day is the finest grain a rate card changes at in practice.
-const (
-	dayBucketExpr  = `timestamp_ns / 86400000000000`
-	pricedAtColumn = `MAX(timestamp_ns)`
-)
+// card in effect at the group's latest event (Store.DailyPricingGroups).
+// Pricing an all-window aggregate with no timestamp would select the
+// oldest card: a model a later refresh added would read as unpriced, a
+// repriced one at its old price. A day is the finest grain a rate card
+// changes at in practice.
 
 // addUnpriced records requests for a model that could not be priced,
 // merging the per-day groups back into one entry per (provider, model).
@@ -562,64 +397,28 @@ func addUnpriced(list []UnpricedModel, provider, model string, requests int64) [
 }
 
 // summarizePlanCoveredValue recomputes plan-included / trial traffic at
-// list prices — the shadow value a flat-rate subscription absorbed.
-// Mirrors summarizeMissingCost with the cost-source filter inverted;
-// unknown models are skipped silently here (they already surface via
-// Unpriced when metered, and pseudo-models like mcp-session would only
-// add noise).
-// summarizePlanCoveredValue returns the list-price value the subscription
-// absorbed, plus any (provider, model) pairs it could not price. The
+// list prices — the shadow value a flat-rate subscription absorbed — and
+// returns it with any (provider, model) pairs it could not price. The
 // second return matters on a flat plan: an unpriced model contributes
 // nothing to the shadow value, and because its real cost is legitimately
-// zero it would otherwise leave no trace at all.
+// zero it would otherwise leave no trace at all. Mirrors
+// summarizeMissingCost with the cost-source selection inverted.
 func (a *Aggregator) summarizePlanCoveredValue(ctx context.Context, f Filter) (float64, []UnpricedModel, error) {
-	conds, args := buildConditions(f)
-	conds = append(conds,
-		`COALESCE(json_extract(payload, '$.cost_source'), '') IN ('plan_included', 'trial')`,
-	)
-	q := `SELECT ` + pricedAtColumn + `, provider, model,
-			COALESCE(SUM(input_tokens), 0),
-			COALESCE(SUM(output_tokens), 0),
-			COALESCE(SUM(` + cacheReadExpr + `), 0),
-			COALESCE(SUM(` + cacheWriteExpr + `), 0),
-			COALESCE(SUM(` + cacheWrite1hExpr + `), 0),
-			COUNT(*)
-		FROM events WHERE ` + strings.Join(conds, " AND ") +
-		` GROUP BY ` + dayBucketExpr + `, provider, model`
-	rows, err := a.store.DB().QueryContext(ctx, q, args...)
+	groups, err := a.store.DailyPricingGroups(ctx, f, PlanCovered)
 	if err != nil {
-		return 0, nil, fmt.Errorf("analytics: plan-covered value query: %w", err)
+		return 0, nil, err
 	}
-	defer func() { _ = rows.Close() }()
 	var (
 		total    float64
 		unpriced []UnpricedModel
 	)
-	for rows.Next() {
-		var (
-			pricedAtNs                               int64
-			provider, model                          sql.NullString
-			inTok, outTok, cacheIn, cacheW, cacheW1h sql.NullInt64
-			requests                                 sql.NullInt64
-		)
-		if err := rows.Scan(&pricedAtNs, &provider, &model, &inTok, &outTok, &cacheIn, &cacheW, &cacheW1h, &requests); err != nil {
-			return 0, nil, fmt.Errorf("analytics: plan-covered value scan: %w", err)
-		}
-		p := &eventschema.PromptEvent{
-			Provider:                eventschema.Provider(provider.String),
-			RequestModel:            model.String,
-			InputTokens:             inTok.Int64,
-			CachedInputTokens:       cacheIn.Int64,
-			CacheWriteInputTokens:   cacheW.Int64,
-			CacheWrite1hInputTokens: cacheW1h.Int64,
-			OutputTokens:            outTok.Int64,
-		}
-		c, err := a.spend.ComputeAt(p, time.Unix(0, pricedAtNs).UTC())
+	for _, g := range groups {
+		c, err := a.spend.ComputeAt(g.promptEvent(), g.At)
 		if err != nil {
 			// tokenops' own telemetry (MCP session pings and friends)
 			// carries a pseudo-model that will never have a rate card.
 			// It is not a model call, so it is not a pricing gap.
-			if isSelfTelemetryModel(model.String) {
+			if isSelfTelemetryModel(g.Model) {
 				continue
 			}
 			// No rate card for a model the operator actually ran.
@@ -627,13 +426,10 @@ func (a *Aggregator) summarizePlanCoveredValue(ctx context.Context, f Filter) (f
 			// dropping the row is how a subscription's dominant model can
 			// be missing from the api-equivalent figure with nothing to
 			// show for it.
-			unpriced = addUnpriced(unpriced, provider.String, model.String, requests.Int64)
+			unpriced = addUnpriced(unpriced, g.Provider, g.Model, g.Events)
 			continue
 		}
 		total += c
-	}
-	if err := rows.Err(); err != nil {
-		return 0, nil, fmt.Errorf("analytics: plan-covered value iterate: %w", err)
 	}
 	return total, unpriced, nil
 }
@@ -650,28 +446,18 @@ type CacheStatsResult struct {
 }
 
 // CacheStats sums cached vs uncached input over the filter window.
-// JSONL events carry the cache split in payload.cached_input_tokens
-// (post-v0.14.2 poller) or attributes.cache_read_input (legacy).
-// COALESCE-over-both so old events still pay the cache discount
-// without a re-ingest.
 func (a *Aggregator) CacheStats(ctx context.Context, f Filter) (CacheStatsResult, error) {
-	if a == nil || a.store == nil {
-		return CacheStatsResult{}, errors.New("analytics: aggregator not initialised")
+	if !a.ready() {
+		return CacheStatsResult{}, ErrNotInitialised
 	}
-	conds, args := buildConditions(f)
-	q := `SELECT
-		COALESCE(SUM(input_tokens), 0),
-		COALESCE(SUM(CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER)), 0),
-		COALESCE(SUM(output_tokens), 0)
-		FROM events`
-	if len(conds) > 0 {
-		q += " WHERE " + strings.Join(conds, " AND ")
+	t, err := a.store.CacheTotals(ctx, f)
+	if err != nil {
+		return CacheStatsResult{}, err
 	}
-	var s CacheStatsResult
-	if err := a.store.DB().QueryRowContext(ctx, q, args...).Scan(
-		&s.TotalInputTokens, &s.CachedInputTokens, &s.OutputTokens,
-	); err != nil {
-		return CacheStatsResult{}, fmt.Errorf("analytics: cache_stats: %w", err)
+	s := CacheStatsResult{
+		TotalInputTokens:  t.InputTokens,
+		CachedInputTokens: t.CachedInputTokens,
+		OutputTokens:      t.OutputTokens,
 	}
 	s.UncachedInputTokens = s.TotalInputTokens - s.CachedInputTokens
 	if s.UncachedInputTokens < 0 {
@@ -686,63 +472,31 @@ func (a *Aggregator) CacheStats(ctx context.Context, f Filter) (CacheStatsResult
 // summarizeMissingCost computes the spend.Engine cost for events whose
 // stored cost_usd is zero — the case for vendor-usage-jsonl sources that
 // ship token counts but not prices. Groups by (provider, model) so one
-// engine.Compute call covers the entire bucket per model, which is
+// engine.Compute call covers the entire group per model, which is
 // linear-in-tokens and matches the per-event sum exactly. Cached input
-// tokens are summed from payload JSON (the schema column carries only
-// the bundled input_tokens) so cache-heavy workloads get the lower
+// tokens are summed separately so cache-heavy workloads get the lower
 // cache rate instead of being billed at the new-input rate.
 //
 // Models the pricing table doesn't know are returned as UnpricedModel
 // entries instead of being silently dropped — their cost stays absent
 // from the total, and callers surface that gap as a warning.
 func (a *Aggregator) summarizeMissingCost(ctx context.Context, f Filter) (float64, []UnpricedModel, error) {
-	conds, args := buildConditions(f)
-	conds = append(conds, "(cost_usd IS NULL OR cost_usd = 0)", costSourceMetered)
-	q := `SELECT ` + pricedAtColumn + `, provider, model, COUNT(*),
-			COALESCE(SUM(input_tokens), 0),
-			COALESCE(SUM(output_tokens), 0),
-			COALESCE(SUM(` + cacheReadExpr + `), 0),
-			COALESCE(SUM(` + cacheWriteExpr + `), 0),
-			COALESCE(SUM(` + cacheWrite1hExpr + `), 0)
-		FROM events WHERE ` + strings.Join(conds, " AND ") +
-		` GROUP BY ` + dayBucketExpr + `, provider, model ORDER BY provider, model`
-	rows, err := a.store.DB().QueryContext(ctx, q, args...)
+	groups, err := a.store.DailyPricingGroups(ctx, f, UncostedMetered)
 	if err != nil {
-		return 0, nil, fmt.Errorf("analytics: summarize recompute query: %w", err)
+		return 0, nil, err
 	}
-	defer func() { _ = rows.Close() }()
 	var (
 		total    float64
 		unpriced []UnpricedModel
 	)
-	for rows.Next() {
-		var (
-			pricedAtNs                                         int64
-			provider, model                                    sql.NullString
-			requests, inTok, outTok, cacheIn, cacheW, cacheW1h sql.NullInt64
-		)
-		if err := rows.Scan(&pricedAtNs, &provider, &model, &requests, &inTok, &outTok, &cacheIn, &cacheW, &cacheW1h); err != nil {
-			return 0, nil, fmt.Errorf("analytics: summarize recompute scan: %w", err)
-		}
-		p := &eventschema.PromptEvent{
-			Provider:                eventschema.Provider(provider.String),
-			RequestModel:            model.String,
-			InputTokens:             inTok.Int64,
-			CachedInputTokens:       cacheIn.Int64,
-			CacheWriteInputTokens:   cacheW.Int64,
-			CacheWrite1hInputTokens: cacheW1h.Int64,
-			OutputTokens:            outTok.Int64,
-		}
-		c, err := a.spend.ComputeAt(p, time.Unix(0, pricedAtNs).UTC())
+	for _, g := range groups {
+		c, err := a.spend.ComputeAt(g.promptEvent(), g.At)
 		switch {
 		case err == nil:
 			total += c
 		case errors.Is(err, spend.ErrUnknownModel):
-			unpriced = addUnpriced(unpriced, provider.String, model.String, requests.Int64)
+			unpriced = addUnpriced(unpriced, g.Provider, g.Model, g.Events)
 		}
-	}
-	if err := rows.Err(); err != nil {
-		return 0, nil, fmt.Errorf("analytics: summarize recompute iterate: %w", err)
 	}
 	return total, unpriced, nil
 }
@@ -753,78 +507,6 @@ func (a *Aggregator) summarizeMissingCost(ctx context.Context, f Filter) (float6
 var selfTelemetryModels = map[string]bool{"mcp-session": true}
 
 func isSelfTelemetryModel(model string) bool { return selfTelemetryModels[model] }
-
-// costSourceMetered keeps cost RECOMPUTE away from flat-rate traffic:
-// plan-included and trial events are zero-cost BY DESIGN (the request is
-// covered by a subscription or vendor credit), so repricing them at list
-// rates would invent spend. Note this governs repricing only — pricing
-// GAPS in plan-covered traffic are reported separately by
-// summarizePlanCoveredValue, because on a subscription that traffic is
-// the majority and an unpriced model there would otherwise leave no
-// trace at all. The schema column carries only the bundled counters, so
-// the source is read from payload JSON.
-const costSourceMetered = `COALESCE(json_extract(payload, '$.cost_source'), '') NOT IN ('plan_included', 'trial')`
-
-// usageOnly keeps prompt events that carry usage. Plan-window readings
-// (the claude.ai usage meter, account readers) are stored as prompt events
-// with no model and no tokens; counted, they inflated requests and were
-// listed as an unpriced model — 2,179 of a month's "requests" here were
-// readings. Usage with tokens but no model still counts, and shows as
-// unpriced, because that is a real gap.
-const usageOnly = `(COALESCE(total_tokens, 0) > 0 OR COALESCE(input_tokens, 0) > 0
-		OR COALESCE(output_tokens, 0) > 0 OR COALESCE(model, '') <> '')`
-
-func buildConditions(f Filter) ([]string, []any) {
-	var (
-		conds []string
-		args  []any
-	)
-	if f.EventType != "" {
-		conds = append(conds, "type = ?")
-		args = append(args, string(f.EventType))
-	} else {
-		// Default to prompts only — workflow/optimization events do not
-		// carry per-request token counts in the indexed columns.
-		conds = append(conds, "type = ?")
-		args = append(args, string(eventschema.EventTypePrompt))
-	}
-	if f.EventType == "" || f.EventType == eventschema.EventTypePrompt {
-		conds = append(conds, usageOnly)
-	}
-	if f.Provider != "" {
-		conds = append(conds, "provider = ?")
-		args = append(args, f.Provider)
-	}
-	if f.Model != "" {
-		conds = append(conds, "model = ?")
-		args = append(args, f.Model)
-	}
-	if f.WorkflowID != "" {
-		conds = append(conds, "workflow_id = ?")
-		args = append(args, f.WorkflowID)
-	}
-	if f.AgentID != "" {
-		conds = append(conds, "agent_id = ?")
-		args = append(args, f.AgentID)
-	}
-	if !f.Since.IsZero() {
-		conds = append(conds, "timestamp_ns >= ?")
-		args = append(args, f.Since.UTC().UnixNano())
-	}
-	if !f.Until.IsZero() {
-		conds = append(conds, "timestamp_ns < ?")
-		args = append(args, f.Until.UTC().UnixNano())
-	}
-	if excludes := resolveExcludeSources(f); len(excludes) > 0 {
-		placeholders := make([]string, len(excludes))
-		for i, s := range excludes {
-			placeholders[i] = "?"
-			args = append(args, s)
-		}
-		conds = append(conds, "(source IS NULL OR source NOT IN ("+strings.Join(placeholders, ", ")+"))")
-	}
-	return conds, args
-}
 
 // mergeUnpriced folds two unpriced lists into one, summing requests for
 // pairs that appear in both (a model can be partly metered and partly

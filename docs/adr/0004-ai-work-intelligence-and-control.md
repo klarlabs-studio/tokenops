@@ -82,7 +82,7 @@ Measured against the current code:
 | **Outcome** | **Zero. `grep -r Outcome` over `internal/` and `pkg/` returns no non-test match.** |
 | Intervention | `OptimizationEvent.Decision`, set at emit time and never revisited; `routingapproval`; read guard. |
 | Experiment | `eval` (synthetic fixtures), `replay` (counterfactual, never writes back). No baseline-vs-intervention over real executions. |
-| Policy | Budgets, rules, routing rules, read-guard config, RBAC — real, but scattered. |
+| Policy | Budgets, rules, routing rules, read-guard config — real, but scattered. (An RBAC scaffold listed here was never enforced and was removed on 2026-10-07.) |
 
 **Outcome is the single largest gap between this intent and the code.** Without
 it TokenOps can only optimize consumption. `Execution` is what makes

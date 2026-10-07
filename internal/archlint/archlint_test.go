@@ -23,8 +23,9 @@ var forbiddenAdapters = []string{
 
 // forbiddenInfra lists infrastructure packages domain packages must
 // not import directly. analytics is the contracted read-side
-// abstraction so packages that depend on analytics.Row (forecast,
-// spend) are still allowed; they must NOT import sqlite themselves.
+// abstraction (its Store port is implemented by *sqlite.Store), so
+// packages that depend on analytics.Row (forecast, spend) are still
+// allowed; they must NOT import sqlite themselves.
 var forbiddenInfra = []string{
 	"go.klarlabs.de/tokenops/internal/storage/sqlite",
 }
@@ -35,13 +36,11 @@ var forbiddenInfra = []string{
 // fails the build if an exemption is stale. Documented in
 // docs/architecture-ddd.md.
 var storageExempt = map[string]bool{
-	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard":    true,
-	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics": true,
-	"go.klarlabs.de/tokenops/internal/contexts/security/audit":          true,
-	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow":      true,
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/replay":     true,
-	"go.klarlabs.de/tokenops/internal/contexts/telemetry/retention":     true,
-	"go.klarlabs.de/tokenops/internal/contexts/tasks":                   true,
+	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard": true,
+	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow":   true,
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/replay":  true,
+	"go.klarlabs.de/tokenops/internal/contexts/telemetry/retention":  true,
+	"go.klarlabs.de/tokenops/internal/contexts/tasks":                true,
 }
 
 // forbiddenOuterPrefixes names the outer layers no domain package may
@@ -106,22 +105,11 @@ var forbiddenIOImports = []string{"net/http", "os/exec", "database/sql"}
 // instead. When a package stops importing one, delete its entry —
 // TestIOImportExemptNotStale fails on a stale one.
 var ioImportExempt = map[string][]string{
-	// sql.Null* scan targets for the event-store queries it runs through
-	// its sqlite adapter (see storageExempt); moves with that adapter.
-	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics": {"database/sql"},
-	// sql.Null* columns of the audit table it writes through its sqlite
-	// adapter (see storageExempt); moves with that adapter.
-	"go.klarlabs.de/tokenops/internal/contexts/security/audit": {"database/sql"},
-	// Authenticator.Middleware is an http.Handler for the daemon's API: a
-	// presentation adapter around the token check.
-	"go.klarlabs.de/tokenops/internal/contexts/security/dashauth": {"net/http"},
-	// HTTPMiddleware is an http.Handler around the permission check.
-	"go.klarlabs.de/tokenops/internal/contexts/security/rbac": {"net/http"},
-	// Fetches the LiteLLM and models.dev price catalogs over HTTP.
-	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing": {"net/http"},
-	// Reads opencode's SQLite store. Four domains call it directly
-	// (coaching/prompts, coaching/replies, governance/agentdx,
-	// spend/vendorusage/opencode), so moving it needs a reader port in each.
+	// Reads opencode's SQLite store. Every reader but one goes through the
+	// opencodedb.Reader port that internal/infra/opencodedb implements;
+	// governance/agentdx (being migrated separately) still calls
+	// opencodedb.Read directly. Once it takes the port, the SQL moves into
+	// internal/infra/opencodedb and this entry goes.
 	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb": {"database/sql"},
 }
 
@@ -130,7 +118,6 @@ var ioImportExempt = map[string][]string{
 // are gated automatically — TestDomainPackagesComplete compares this
 // list to `go list ./internal/contexts/...`.
 var domainPackages = []string{
-	"go.klarlabs.de/tokenops/internal/contexts/coaching/efficiency",
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough",
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts",
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/replies",
@@ -146,7 +133,6 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/learning",
 	"go.klarlabs.de/tokenops/internal/contexts/measurement",
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics",
-	"go.klarlabs.de/tokenops/internal/contexts/observability/anomaly",
 	"go.klarlabs.de/tokenops/internal/contexts/observability/freshness",
 	"go.klarlabs.de/tokenops/internal/contexts/observability/observ",
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/eval",
@@ -170,7 +156,6 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/rules",
 	"go.klarlabs.de/tokenops/internal/contexts/security/audit",
 	"go.klarlabs.de/tokenops/internal/contexts/security/dashauth",
-	"go.klarlabs.de/tokenops/internal/contexts/security/rbac",
 	"go.klarlabs.de/tokenops/internal/contexts/security/redaction",
 	"go.klarlabs.de/tokenops/internal/contexts/security/tlsmint",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/biller",

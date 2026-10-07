@@ -12,6 +12,11 @@ func OpencodeDefaultPath() (string, error) { return opencodedb.DefaultPath() }
 // errLimit stops a read once enough has been collected.
 var errLimit = errors.New("prompts: limit reached")
 
+// ErrNoOpencodeReader reports an opencode extract with no store reader
+// wired in ExtractOptions.Opencode: the store was not read, which is not the
+// same as an operator who wrote nothing there.
+var ErrNoOpencodeReader = errors.New("prompts: no opencode reader configured (ExtractOptions.Opencode)")
+
 // extractOpencode reads operator prompts out of opencode's SQLite store.
 //
 // opencode 1.x keeps the text on part rows and 2.x inline on the message;
@@ -23,6 +28,9 @@ var errLimit = errors.New("prompts: limit reached")
 // prodding itself, and coaching someone on words they never wrote would
 // be worse than not coaching them at all, so they are dropped.
 func extractOpencode(path string, opts ExtractOptions) ([]UserPrompt, error) {
+	if opts.Opencode == nil {
+		return nil, ErrNoOpencodeReader
+	}
 	if path == "" {
 		p, err := OpencodeDefaultPath()
 		if err != nil {
@@ -31,7 +39,7 @@ func extractOpencode(path string, opts ExtractOptions) ([]UserPrompt, error) {
 		path = p
 	}
 	var out []UserPrompt
-	err := opencodedb.Read(path, opencodedb.Options{SessionID: opts.SessionID, Since: opts.Since, Parts: true}, func(m opencodedb.Message) error {
+	err := opts.Opencode.Read(path, opencodedb.Options{SessionID: opts.SessionID, Since: opts.Since, Parts: true}, func(m opencodedb.Message) error {
 		if m.Role != opencodedb.User || m.Created.IsZero() {
 			return nil
 		}

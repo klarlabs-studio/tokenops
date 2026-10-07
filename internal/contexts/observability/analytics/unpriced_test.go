@@ -1,4 +1,4 @@
-package analytics
+package analytics_test
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -49,9 +50,9 @@ func TestUnpricedPlanCoveredModelIsReported(t *testing.T) {
 		planEvent("a", "claude-sonnet-4-6", 1_000_000, 100_000),
 		planEvent("b", "totally-unknown-model", 5_000_000, 500_000),
 	)
-	agg := New(st, spend.NewEngine(spend.DefaultTable()))
+	agg := analytics.New(st, spend.NewEngine(spend.DefaultTable()))
 
-	got, err := agg.Summarize(context.Background(), Filter{Since: time.Now().Add(-24 * time.Hour)})
+	got, err := agg.Summarize(context.Background(), analytics.Filter{Since: time.Now().Add(-24 * time.Hour)})
 	if err != nil {
 		t.Fatalf("summarize: %v", err)
 	}
@@ -75,8 +76,8 @@ func TestUnpricedPlanCoveredModelIsReported(t *testing.T) {
 // A fully priced plan-covered window reports no gaps.
 func TestPricedPlanCoveredModelReportsNoGap(t *testing.T) {
 	st := storeWith(t, planEvent("a", "claude-sonnet-4-6", 1_000_000, 100_000))
-	agg := New(st, spend.NewEngine(spend.DefaultTable()))
-	got, err := agg.Summarize(context.Background(), Filter{Since: time.Now().Add(-24 * time.Hour)})
+	agg := analytics.New(st, spend.NewEngine(spend.DefaultTable()))
+	got, err := agg.Summarize(context.Background(), analytics.Filter{Since: time.Now().Add(-24 * time.Hour)})
 	if err != nil {
 		t.Fatalf("summarize: %v", err)
 	}
