@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **routing:** `tokenops routing proposals` gives the answer `tokenops_routing` gives: the text names what each upgrade adds per million tokens, or why its price could not be checked, and `--json` emits `{pending, note}` with the question to put to you, where it printed the approval log's raw records
+
 ### Fixed
 
 - **scorecard:** the MCP tool and `/api/scorecard` grade the agent KPIs (confirmation-gate, regenerate, tool-success and destructive-action rates) as `tokenops scorecard` always did; they graded the same week on four fewer metrics. `tokenops scorecard` reads the configured `storage.path` instead of always `~/.tokenops/events.db`
