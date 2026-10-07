@@ -87,7 +87,7 @@ func TestClientExpiredSession403MapsToErrUnauthorized(t *testing.T) {
 		if got := errors.Is(err, usage.ErrUnauthorized); got != want {
 			t.Errorf("%s: ErrUnauthorized = %v, want %v (err %v)", body, got, want, err)
 		}
-		if want && !(errors.Is(err, usage.ErrBotCheck) || errors.Is(err, usage.ErrUnauthorized)) {
+		if want && !errors.Is(err, usage.ErrBotCheck) && !errors.Is(err, usage.ErrUnauthorized) {
 			t.Error("an expired session does not trigger a refresh from the browser")
 		}
 	}
