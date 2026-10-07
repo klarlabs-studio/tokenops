@@ -108,31 +108,61 @@ func TestReattributeSession(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	at := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
-	mk := func(id, session string) *eventschema.Envelope {
-		e := mustPromptEnvelope(t, id, at, &eventschema.PromptEvent{Provider: "openai", SessionID: session, CostSource: eventschema.CostSourcePlanIncluded})
+	mk := func(id, session, model string) *eventschema.Envelope {
+		e := mustPromptEnvelope(t, id, at, &eventschema.PromptEvent{Provider: "openai", RequestModel: model, SessionID: session, CostSource: eventschema.CostSourcePlanIncluded})
 		e.Source = "codex-jsonl"
 		return e
 	}
-	if err := s.AppendBatch(ctx, []*eventschema.Envelope{mk("a1", "a"), mk("a2", "a"), mk("b1", "b")}); err != nil {
+	kimi := "accounts/fireworks/models/kimi-k2"
+	if err := s.AppendBatch(ctx, []*eventschema.Envelope{mk("a1", "a", kimi), mk("a2", "a", kimi), mk("a3", "a", "gpt-5"), mk("b1", "b", kimi)}); err != nil {
 		t.Fatal(err)
 	}
-	n, err := s.ReattributeSession(ctx, "codex-jsonl", "a", "openai", "fireworks", "fireworks", true)
+	models, err := s.SessionModels(ctx, "codex-jsonl", "openai", "a")
+	if err != nil || len(models) != 2 || models[0] != kimi || models[1] != "gpt-5" {
+		t.Fatalf("session models %v, err %v", models, err)
+	}
+	n, err := s.ReattributeSession(ctx, "codex-jsonl", "a", kimi, "openai", "fireworks", "fireworks", true)
 	if err != nil || n != 2 {
 		t.Fatalf("moved %d, err %v; want 2", n, err)
 	}
-	if n, _ := s.ReattributeSession(ctx, "codex-jsonl", "a", "openai", "fireworks", "fireworks", true); n != 0 {
+	if n, _ := s.ReattributeSession(ctx, "codex-jsonl", "a", kimi, "openai", "fireworks", "fireworks", true); n != 0 {
 		t.Errorf("second pass moved %d", n)
 	}
 	got, _ := s.Query(ctx, Filter{Type: eventschema.EventTypePrompt})
 	for _, env := range got {
 		p := env.Payload.(*eventschema.PromptEvent)
-		moved := env.ID != "b1"
+		moved := env.ID == "a1" || env.ID == "a2"
 		if (p.Provider == "fireworks") != moved || (p.CostSource == eventschema.CostSourceMetered) != moved {
 			t.Errorf("%s: provider %q cost source %q", env.ID, p.Provider, p.CostSource)
 		}
 		if moved && env.Attributes["endpoint"] != "fireworks" {
 			t.Errorf("%s: endpoint %q", env.ID, env.Attributes["endpoint"])
 		}
+	}
+}
+
+// Moving a turn to the provider it already has records its endpoint and
+// uncovers it, once: an OpenAI model run through a gateway stays OpenAI's
+// but is billed per token. A second pass finds nothing left to change.
+func TestReattributeSessionToTheSameProviderMarksTheEndpointOnce(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	e := mustPromptEnvelope(t, "g", time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC),
+		&eventschema.PromptEvent{Provider: "openai", RequestModel: "gpt-5", SessionID: "a", CostSource: eventschema.CostSourcePlanIncluded})
+	e.Source = "codex-jsonl"
+	if err := s.AppendBatch(ctx, []*eventschema.Envelope{e}); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.ReattributeSession(ctx, "codex-jsonl", "a", "gpt-5", "openai", "openai", "fireworks", true); err != nil || n != 1 {
+		t.Fatalf("first pass %d, err %v; want 1", n, err)
+	}
+	if n, _ := s.ReattributeSession(ctx, "codex-jsonl", "a", "gpt-5", "openai", "openai", "fireworks", true); n != 0 {
+		t.Errorf("second pass changed %d; the daemon runs this at every start", n)
+	}
+	got, _ := s.Query(ctx, Filter{Type: eventschema.EventTypePrompt})
+	p := got[0].Payload.(*eventschema.PromptEvent)
+	if p.Provider != "openai" || p.CostSource != eventschema.CostSourceMetered || got[0].Attributes["endpoint"] != "fireworks" {
+		t.Errorf("provider %q cost source %q endpoint %q", p.Provider, p.CostSource, got[0].Attributes["endpoint"])
 	}
 }
 

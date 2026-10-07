@@ -241,9 +241,7 @@ func (s *startup) startStorageSubsystems(ctx context.Context) error {
 	}
 	store := s.components.Store
 	routes := startRouteHistory(s.sup, s.logger)
-	correctGatewayAttribution(ctx, s.cfg, store, routes, s.logger)
-	correctCodexAttribution(ctx, s.cfg, store, s.logger)
-	correctOpencodeAttribution(ctx, store, s.logger)
+	correctAttribution(ctx, s.cfg, store, routes, s.logger)
 	correctSpendCoverage(ctx, s.cfg, store, s.logger)
 	// The composition root builds and starts the vendor-usage pollers.
 	bootstrap.StartVendorUsagePollers(s.cfg, ingestionBus(ctx, s.events.Bus, store, s.logger), s.sourceHealth, claudeCodeBaseURLAt(routes), s.sup, s.logger)

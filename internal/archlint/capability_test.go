@@ -107,13 +107,9 @@ var directDomainImports = map[string][]string{
 		"go.klarlabs.de/tokenops/internal/contexts/security/audit",
 		"go.klarlabs.de/tokenops/internal/contexts/security/dashauth",
 		"go.klarlabs.de/tokenops/internal/contexts/security/tlsmint",
-		"go.klarlabs.de/tokenops/internal/contexts/spend/biller",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/forecast",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/plans",
 		"go.klarlabs.de/tokenops/internal/contexts/spend/spend",
-		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodejsonl",
-		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/codexjsonl",
-		"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode",
 		"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow",
 	},
 	"go.klarlabs.de/tokenops/internal/mcp": {
