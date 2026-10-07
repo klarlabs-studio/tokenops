@@ -99,7 +99,7 @@ Examples:
 			// Emit an OptimizationEvent so the dashboard/scorecard count
 			// the savings. Opt-in (flag or config), best-effort.
 			if (emitFlag || cfg.Optimizer.CommandFmt.EmitEvents) && res.Compressed {
-				if err := emitFmtEvent(cmd.Context(), dbFlag, args, res); err != nil && !quiet {
+				if err := emitFmtEvent(cmd.Context(), fmtEventDB(dbFlag, cfg), args, res); err != nil && !quiet {
 					fmt.Fprintf(cmd.ErrOrStderr(), "warning: fmt event not recorded: %v\n", err)
 				}
 			}
@@ -127,7 +127,7 @@ Examples:
 	cmd.Flags().BoolVar(&rawOnError, "raw-on-error", true, "forward raw (uncompressed) stdout when the command exits non-zero")
 	cmd.Flags().BoolVar(&statsJSON, "stats-json", false, "emit the stats line as JSON on stderr")
 	cmd.Flags().BoolVar(&emitFlag, "emit", false, "append an OptimizationEvent to the events store (also set via config command_fmt.emit_events)")
-	cmd.Flags().StringVar(&dbFlag, "db", "", "events.db path for --emit (defaults to ~/.tokenops/events.db)")
+	cmd.Flags().StringVar(&dbFlag, "db", "", "events.db path for --emit (defaults to storage.path, else ~/.tokenops/events.db)")
 	cmd.AddCommand(newFmtBenchCmd(rf))
 	cmd.AddCommand(newFmtHookCmd(rf))
 	cmd.AddCommand(newFmtRecoverCmd())
@@ -159,6 +159,17 @@ func commandFmtConfig(rf *rootFlags) config.CommandFmtConfig {
 // warning but never aborts the wrapped command. The workflow/agent id is
 // stamped "fmt:<command>" so `group=agent` can show which commands compress
 // most.
+// fmtEventDB is where --emit writes: --db, else the configured
+// storage.path the daemon reads, else the default "" (~/.tokenops/events.db).
+// It used to skip the config, so an operator who had moved the store got a
+// second events.db that nothing read, and their fmt savings went uncounted.
+func fmtEventDB(flag string, cfg config.Config) string {
+	if flag != "" {
+		return flag
+	}
+	return cfg.Storage.Path
+}
+
 func emitFmtEvent(ctx context.Context, dbPath string, argv []string, res *fmtResult) error {
 	if dbPath == "" {
 		home, err := os.UserHomeDir()
