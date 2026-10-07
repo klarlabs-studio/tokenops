@@ -41,6 +41,10 @@ scan:
     # Classification: Acceptable Pattern
     # Last reviewed: 2026-09-14
     - .nox/
+    # Claude Code's local state, including agent worktrees: full copies of
+    # this repository that a scan counted again as if they were part of it.
+    # Gitignored, so absent from a clean checkout.
+    - .claude/
     - findings.json
     - nox-findings.json
     - ai.inventory.json
@@ -92,6 +96,18 @@ plugins:
     # false positives. Local-first when an Ollama backend is up; falls
     # back gracefully when not.
     - nox/triage-agent@^0.2.0
+    # Whether a vulnerable dependency's code is reachable from TokenOps
+    # (REACH-001 unreachable, REACH-002 reachable): what govulncheck
+    # answered before nox became the only security gate. 0.9.0 answers for
+    # npm; for Go it reports REACH-003, its bundled govulncheck predating
+    # Go 1.26, until the plugin is rebuilt.
+    - nox/reachability@^0.9.0
+    # Untrusted input reaching a sink (command, path, SQL, URL) in our own
+    # code: the daemon takes requests and reads files operators name.
+    - nox/taint-analysis@^0.7.0
+    # Dependency confusion: an internal-looking module name a public
+    # registry could also serve.
+    - nox/depconfusion@^0.2.0
     # Code-fixer remediation plugin (companion to nox-remediate-action,
     # which handles dependency upgrades). Re-enable once a release is
     # published — early-2026 dev builds are unstable.

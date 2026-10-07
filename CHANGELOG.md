@@ -7,6 +7,8 @@
 - **proxy:** the daemon refuses requests a web page could send it. A request whose Host is not this machine (DNS rebinding), whose Origin is not local, or that a browser marks cross-site gets 403, so a page can no longer relay through your provider routes or write spend into your history. A reverse-proxy name goes in the new `allowed_hosts`; the daemon warns at start when `listen` is reachable from the network without TLS
 - **dependencies:** Go 1.26 and golang.org/x/crypto v0.57.0, which fixes GO-2026-6355 and GO-2026-6354
 - **release:** the npm packages are built only after every archive matches the release's `checksums.txt`, and only when all four platforms are present; npm publishes by trusted publishing, with no token
+- **security scanning:** nox is the one security gate, now running its reachability, taint-analysis and dependency-confusion plugins (installed plugins did not run before); the separate govulncheck step is gone, and CI scans with nox 1.48.1
+- **docs site:** vite, vue and source-map-js upgraded past four high-severity advisories (build-time only)
 
 ### Changed
 
