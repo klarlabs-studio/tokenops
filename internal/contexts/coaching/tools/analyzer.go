@@ -118,6 +118,9 @@ func Extract(opts ExtractOptions) ([]ToolEvent, error) {
 				return nil
 			}
 		}
+		if writtenBefore(d, opts.Since) {
+			return nil
+		}
 		f, openErr := os.Open(path)
 		if openErr != nil {
 			return nil
@@ -223,4 +226,15 @@ func Analyze(events []ToolEvent) Stats {
 		s.DestructiveRate = 100.0 * float64(s.DestructiveCalls) / float64(s.TotalToolCalls)
 	}
 	return s
+}
+
+// writtenBefore reports whether the transcript at d was last written
+// before since. Transcripts are append-only, so such a file holds no line
+// in the window and need not be read.
+func writtenBefore(d fs.DirEntry, since time.Time) bool {
+	if since.IsZero() {
+		return false
+	}
+	info, err := d.Info()
+	return err == nil && info.ModTime().Before(since)
 }

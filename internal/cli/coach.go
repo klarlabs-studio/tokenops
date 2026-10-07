@@ -11,9 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts"
-	"go.klarlabs.de/tokenops/internal/contexts/coaching/replies"
-	opencodestore "go.klarlabs.de/tokenops/internal/infra/opencodedb"
+	"go.klarlabs.de/tokenops/internal/capability/sessions"
 )
 
 // newCoachCmd is the tree for prompt + workflow coaching. For now
@@ -78,31 +76,24 @@ session:
 Reply text is read from the JSONLs at scan time — never persisted to
 the TokenOps event store.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			opts := replies.ExtractOptions{
-				Source:    replies.Source(replySource),
-				Root:      root,
-				SessionID: session,
-				Limit:     limit,
-				Opencode:  opencodestore.Store{},
-			}
+			w := sessions.ReplyWindow{Source: replySource, Root: root, SessionID: session, Limit: limit}
 			if sinceFlag != "" {
 				since, err := parseSince(sinceFlag)
 				if err != nil {
 					return fmt.Errorf("--since: %w", err)
 				}
-				opts.Since = since
+				w.Since = since
 			}
-			extracted, err := replies.Extract(opts)
+			findings, err := sessions.ReplyFindings(w)
 			if err != nil {
 				return fmt.Errorf("extract: %w", err)
 			}
-			findings := replies.Analyze(extracted)
 			if jsonOut {
 				enc := json.NewEncoder(cmd.OutOrStdout())
 				enc.SetIndent("", "  ")
 				return enc.Encode(findings)
 			}
-			renderCoachReplies(cmd, findings, opts.Since)
+			renderCoachReplies(cmd, findings, w.Since)
 			return nil
 		},
 	}
@@ -115,7 +106,7 @@ the TokenOps event store.`,
 	return cmd
 }
 
-func renderCoachReplies(cmd *cobra.Command, f replies.Findings, since time.Time) {
+func renderCoachReplies(cmd *cobra.Command, f sessions.Replies, since time.Time) {
 	out := cmd.OutOrStdout()
 	header := "Reply coach"
 	if !since.IsZero() {
@@ -137,7 +128,7 @@ func renderCoachReplies(cmd *cobra.Command, f replies.Findings, since time.Time)
 	fmt.Fprintln(out)
 	// Lead with the recommendation. Densities describe; only this tells
 	// the operator what to change, which is the whole point of a coach.
-	if rec, ok := replies.Recommend(f); ok {
+	if rec, ok := sessions.RecommendReply(f); ok {
 		fmt.Fprintf(out, "\nBIGGEST WIN\n  %s\n", rec.Title)
 		fmt.Fprintf(out, "  %s\n", rec.Evidence)
 		fmt.Fprintf(out, "  Projected: ~%s output tokens across %d replies (%.0f → %.0f words each)\n",
@@ -202,27 +193,26 @@ Prompt text is read at scan time — never persisted to the TokenOps event
 store. --json emits machine-readable findings for
 agents to consume.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			opts := prompts.ExtractOptions{
+			w := sessions.PromptWindow{
 				Root:           root,
-				Source:         prompts.Source(sourceFlag),
+				Source:         sourceFlag,
 				SessionID:      session,
 				Limit:          limit,
 				IncludeScratch: includeScratch,
-				Opencode:       opencodestore.Store{},
 			}
 			if sinceFlag != "" {
 				since, err := parseSince(sinceFlag)
 				if err != nil {
 					return fmt.Errorf("--since: %w", err)
 				}
-				opts.Since = since
+				w.Since = since
 			}
-			extracted, err := prompts.Extract(opts)
+			now := time.Now()
+			findings, err := sessions.PromptFindings(w, true, now)
 			if err != nil {
 				return fmt.Errorf("extract: %w", err)
 			}
-			findings := prompts.Analyze(extracted)
-			stats, statsErr := prompts.ComputeTurnStats(opts)
+			stats, statsErr := sessions.PromptTurnStats(w, now)
 			if statsErr != nil {
 				// Stats are a render enrichment — log + continue.
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: turn-stats unavailable: %v\n", statsErr)
@@ -235,7 +225,7 @@ agents to consume.`,
 					"turn_stats": stats,
 				})
 			}
-			renderCoachPrompts(cmd, findings, stats, opts.Since)
+			renderCoachPrompts(cmd, findings, stats, w.Since)
 			return nil
 		},
 	}
@@ -249,7 +239,7 @@ agents to consume.`,
 	return cmd
 }
 
-func renderCoachPrompts(cmd *cobra.Command, f prompts.Findings, stats prompts.TurnStats, since time.Time) {
+func renderCoachPrompts(cmd *cobra.Command, f sessions.Findings, stats sessions.TurnStats, since time.Time) {
 	out := cmd.OutOrStdout()
 	header := "Prompting coach"
 	if !since.IsZero() {
@@ -312,7 +302,7 @@ func renderCoachPrompts(cmd *cobra.Command, f prompts.Findings, stats prompts.Tu
 // as a numbered list with evidence + before/after templates +
 // tangible savings (tokens / dollars / hours) derived from the
 // operator's own turn averages.
-func renderRecommendations(out fmtWriter, recs []prompts.Recommendation, stats prompts.TurnStats) {
+func renderRecommendations(out fmtWriter, recs []sessions.PromptRecommendation, stats sessions.TurnStats) {
 	if len(recs) == 0 {
 		return
 	}
@@ -362,11 +352,11 @@ func renderRecommendations(out fmtWriter, recs []prompts.Recommendation, stats p
 // per-turn averages from TurnStats. Returns the empty string when
 // stats are unavailable so the renderer doesn't append " (0 tokens
 // / $0 / 0h)" garbage.
-func savingsSuffix(r prompts.Recommendation, stats prompts.TurnStats) string {
+func savingsSuffix(r sessions.PromptRecommendation, stats sessions.TurnStats) string {
 	if stats.TotalTurns == 0 || r.EstimatedMonthlyTurnsSaved == 0 {
 		return "."
 	}
-	s := prompts.ProjectSavings(r, stats)
+	s := sessions.ProjectSavings(r, stats)
 	return fmt.Sprintf(" — ≈ %s tokens, $%.2f, %.1fh of your time.",
 		compactInt(s.Tokens), s.CostUSD, s.HoursSaved)
 }

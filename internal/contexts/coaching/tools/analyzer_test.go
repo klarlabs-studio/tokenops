@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func writeJSONL(t *testing.T, dir, name string, lines ...string) string {
@@ -106,5 +107,25 @@ func TestDestructiveDoesNotFalseFire(t *testing.T) {
 		if destructiveRE.MatchString(cmd) {
 			t.Errorf("safe command falsely flagged destructive: %q", cmd)
 		}
+	}
+}
+
+// A transcript is append-only, so one last written before Since holds
+// nothing in the window and is not read at all.
+func TestExtractSkipsFilesUntouchedSinceTheWindow(t *testing.T) {
+	dir := t.TempDir()
+	path := writeJSONL(t, dir, "stale.jsonl",
+		`{"timestamp":"2026-05-16T10:00:00Z","sessionId":"s","message":{"content":[{"type":"tool_use","name":"Bash","tool_use_id":"tu1","input":{"command":"ls"}}]}}`)
+	since := time.Date(2026, 5, 16, 0, 0, 0, 0, time.UTC)
+	old := since.Add(-time.Hour)
+	if err := os.Chtimes(path, old, old); err != nil {
+		t.Fatal(err)
+	}
+	evs, err := Extract(ExtractOptions{Root: dir, Since: since})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(evs) != 0 {
+		t.Errorf("read %d events from a file last written before the window", len(evs))
 	}
 }

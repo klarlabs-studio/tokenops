@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
-
-	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts"
 )
 
 // CoachDeps wires the coach prompt tool. Reads JSONL directly so it
@@ -37,20 +35,20 @@ func RegisterCoachTools(s *Server, d CoachDeps) error {
 	}
 	s.Tool("tokenops_coach_prompts").
 		Description("Score your Claude Code prompting against rule-based heuristics. Walks ~/.claude/projects/**/*.jsonl, extracts human-typed turns, returns length distribution, vague/ack/repeat counts, and concrete recommendations. Prompt text is read at scan time and is NOT persisted to the event store.").
-		OutputSchema(prompts.Findings{}).
-		Handler(func(ctx context.Context, in coachPromptsInput) (prompts.Findings, error) {
+		OutputSchema(sessions.Findings{}).
+		Handler(func(ctx context.Context, in coachPromptsInput) (sessions.Findings, error) {
 			w := sessions.PromptWindow{Root: d.root(), SessionID: in.SessionID, Limit: in.Limit}
 			if in.Since != "" {
 				since, err := parseCoachWindow(in.Since)
 				if err != nil {
-					return prompts.Findings{}, err
+					return sessions.Findings{}, err
 				}
 				w.Since = since
 			}
 			if in.Until != "" {
 				until, err := parseCoachWindow(in.Until)
 				if err != nil {
-					return prompts.Findings{}, err
+					return sessions.Findings{}, err
 				}
 				w.Until = until
 			}

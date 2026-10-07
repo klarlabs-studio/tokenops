@@ -1,0 +1,17 @@
+Reply coach — since 2026-01-01T00:00:00Z
+  total replies: 2
+
+BASELINE (across all sessions)
+  avg words/reply:  1.0
+  avg word length:  4.50
+  article density:  0.00%   (typical English ~7%)
+  filler density:   0.00%   (typical ~1%)
+  code-block ratio: 0.0% of replies
+
+
+CAVEMAN-LIKELY SESSIONS: 0 / 2  ·  est. saved tokens: 0
+
+PER SESSION
+  session                                      reply   art% filler%    wlen verdict
+  s1                                               1  0.00%   0.00%    4.00      —
+  s2                                               1  0.00%   0.00%    5.00      —

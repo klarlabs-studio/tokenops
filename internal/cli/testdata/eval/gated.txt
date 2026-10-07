@@ -1,0 +1,14 @@
+suites: prompt-compress-eval, semantic-dedupe-eval, context-trim-eval
+cases:  7 (passed=7, success=100.00%)
+
+OPTIMIZER               CASES   PASS AVG_QUAL  SAVED_TOK   APPLY%
+context_trim                1      1    0.870         48     0.00
+prompt_compress             1      1    0.868         37     0.00
+semantic_dedupe             1      1    0.950         76     0.00
+unknown                     4      4    0.000          0     0.00
+
+gate: PASS
+drift:
+  context_trim           +0.00%
+  prompt_compress        +0.00%
+  semantic_dedupe        +0.00%

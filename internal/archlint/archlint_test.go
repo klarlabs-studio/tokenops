@@ -36,11 +36,10 @@ var forbiddenInfra = []string{
 // fails the build if an exemption is stale. Documented in
 // docs/architecture-ddd.md.
 var storageExempt = map[string]bool{
-	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard": true,
-	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow":   true,
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/replay":  true,
-	"go.klarlabs.de/tokenops/internal/contexts/telemetry/retention":  true,
-	"go.klarlabs.de/tokenops/internal/contexts/tasks":                true,
+	"go.klarlabs.de/tokenops/internal/contexts/workflows/workflow":  true,
+	"go.klarlabs.de/tokenops/internal/contexts/optimization/replay": true,
+	"go.klarlabs.de/tokenops/internal/contexts/telemetry/retention": true,
+	"go.klarlabs.de/tokenops/internal/contexts/tasks":               true,
 }
 
 // forbiddenOuterPrefixes names the outer layers no domain package may

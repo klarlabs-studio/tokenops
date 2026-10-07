@@ -1,0 +1,41 @@
+{
+  "total_replies": 2,
+  "baseline": {
+    "replies": 2,
+    "avg_words": 1,
+    "avg_word_len": 4.5,
+    "article_ratio": 0,
+    "filler_ratio": 0,
+    "code_block_ratio": 0
+  },
+  "by_session": [
+    {
+      "session_id": "s1",
+      "stats": {
+        "replies": 1,
+        "avg_words": 1,
+        "avg_word_len": 4,
+        "article_ratio": 0,
+        "filler_ratio": 0,
+        "code_block_ratio": 0
+      },
+      "caveman_likely": false,
+      "estimated_saved_tokens": 0
+    },
+    {
+      "session_id": "s2",
+      "stats": {
+        "replies": 1,
+        "avg_words": 1,
+        "avg_word_len": 5,
+        "article_ratio": 0,
+        "filler_ratio": 0,
+        "code_block_ratio": 0
+      },
+      "caveman_likely": false,
+      "estimated_saved_tokens": 0
+    }
+  ],
+  "caveman_likely_sessions": 0,
+  "estimated_token_savings": 0
+}

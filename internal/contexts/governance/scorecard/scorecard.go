@@ -214,7 +214,7 @@ func gradeDAR(pct float64) Grade {
 // NewWarmingUp returns a Scorecard variant for the empty-data case:
 // every KPI is omitted, OverallGrade is GradeWarmingUp, and the
 // Checklist points the operator at the next-action commands. Used by
-// Build/BuildFromStore when no KPI was computed from real telemetry
+// Build when no KPI was computed from real telemetry
 // — defaulted KPIs are not a verdict.
 func NewWarmingUp(baselineRef string) *Scorecard {
 	cl := make([]ChecklistItem, len(FirstWeekChecklist))

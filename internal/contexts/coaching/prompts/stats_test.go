@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // ComputeTurnStats sums assistant-turn tokens and prices them at
@@ -148,5 +149,50 @@ func TestRateForModelFallsBackOnUnknown(t *testing.T) {
 	}
 	if got := rateForModel("gpt-4o-mini-2024-07-18"); got.InputPerMillion != 0.15 {
 		t.Errorf("gpt-4o-mini rate = %+v; want catalog row", got)
+	}
+}
+
+// A session still running after Until has turns inside the window; its
+// file's modification time is past Until, which says nothing about them.
+func TestComputeTurnStatsReadsFilesWrittenAfterUntil(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sess.jsonl")
+	lines := []string{
+		`{"type":"assistant","sessionId":"s","timestamp":"2026-05-16T10:00:00Z","message":{"id":"m1","usage":{"input_tokens":100,"output_tokens":50}}}`,
+	}
+	if err := os.WriteFile(path, []byte(joinNL(lines)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stats, err := ComputeTurnStats(ExtractOptions{Root: dir, Source: SourceClaudeCode,
+		Until: time.Date(2026, 5, 17, 0, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.TotalTurns != 1 {
+		t.Errorf("turns = %d, want the one before Until", stats.TotalTurns)
+	}
+}
+
+// Turns stamped outside the window are not counted, even in a file that
+// was written inside it.
+func TestComputeTurnStatsFiltersTurnsByTimestamp(t *testing.T) {
+	dir := t.TempDir()
+	lines := []string{
+		`{"type":"assistant","sessionId":"s","timestamp":"2026-05-15T10:00:00Z","message":{"id":"m0","usage":{"input_tokens":100,"output_tokens":50}}}`,
+		`{"type":"assistant","sessionId":"s","timestamp":"2026-05-16T10:00:00Z","message":{"id":"m1","usage":{"input_tokens":100,"output_tokens":50}}}`,
+		`{"type":"assistant","sessionId":"s","timestamp":"2026-05-18T10:00:00Z","message":{"id":"m2","usage":{"input_tokens":100,"output_tokens":50}}}`,
+		`{"type":"assistant","sessionId":"s","message":{"id":"m3","usage":{"input_tokens":100,"output_tokens":50}}}`,
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sess.jsonl"), []byte(joinNL(lines)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stats, err := ComputeTurnStats(ExtractOptions{Root: dir, Source: SourceClaudeCode,
+		Since: time.Date(2026, 5, 16, 0, 0, 0, 0, time.UTC),
+		Until: time.Date(2026, 5, 17, 0, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.TotalTurns != 2 {
+		t.Errorf("turns = %d, want the in-window turn and the unstamped one", stats.TotalTurns)
 	}
 }

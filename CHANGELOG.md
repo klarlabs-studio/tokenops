@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed
+
+- **scorecard:** the MCP tool and `/api/scorecard` grade the agent KPIs (confirmation-gate, regenerate, tool-success and destructive-action rates) as `tokenops scorecard` always did; they graded the same week on four fewer metrics. `tokenops scorecard` reads the configured `storage.path` instead of always `~/.tokenops/events.db`
+- **scorecard, coach:** transcripts last written before the window are no longer read; a seven-day scorecard over 2.1 GB of history went from 14.5s to 7.2s
+- **coach:** `coach prompts`' average turn counts only the turns inside the window; it counted every turn in each file written during the window, and none from a session still running after it
+- **coach, eval:** `coach replies` and `tokenops eval` print their rows in one order; tied sessions and the per-optimizer and drift rows came out in a different order each run
+
 ## 0.101.1 - 2026-10-06
 
 ### Fixed

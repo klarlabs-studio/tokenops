@@ -3,12 +3,12 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
+	"maps"
+	"slices"
 
 	"github.com/spf13/cobra"
 
-	"go.klarlabs.de/tokenops/internal/contexts/optimization/eval"
+	"go.klarlabs.de/tokenops/internal/capability/evals"
 )
 
 func newEvalCmd() *cobra.Command {
@@ -33,39 +33,30 @@ compares the current report against the baseline and (with --enforce)
 exits non-zero on any violation.
 
 The default suite glob covers the bundled fixtures under
-internal/eval/testdata. Use --output to persist the new report as the
+internal/contexts/optimization/eval/testdata. Use --output to persist the new report as the
 next baseline.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			typed := make([]eval.OptimizationType, 0, len(filters))
-			for _, f := range filters {
-				typed = append(typed, eval.OptimizationType(f))
-			}
-			result, err := eval.Run(cmd.Context(), eval.RunParams{
-				Suites:           suitesGlob,
-				BaselinePath:     baselinePath,
-				OptimizerFilters: typed,
-				Gate: eval.Gate{
-					MaxSuccessRateDropPct: maxDrop,
-					MaxQualityDriftPct:    maxDrift,
-					MinTotalCases:         minCases,
-				},
+			result, err := evals.Run(cmd.Context(), evals.Params{
+				Suites:             suitesGlob,
+				Baseline:           baselinePath,
+				Optimizers:         filters,
+				MaxSuccessDropPct:  maxDrop,
+				MaxQualityDriftPct: maxDrift,
+				MinCases:           minCases,
 			})
 			if err != nil {
 				return err
 			}
 			if outputPath != "" {
-				if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
-					return fmt.Errorf("write report: %w", err)
-				}
-				if err := eval.PersistBaseline(outputPath, result.Report); err != nil {
-					return fmt.Errorf("write report: %w", err)
+				if err := evals.SaveBaseline(outputPath, result.Report); err != nil {
+					return err
 				}
 			}
 			if jsonOut {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(struct {
-					Report *eval.Report     `json:"report"`
-					Gate   *eval.GateResult `json:"gate"`
+					Report *evals.Report     `json:"report"`
+					Gate   *evals.GateResult `json:"gate"`
 				}{Report: result.Report, Gate: result.Gate})
 			}
 			renderEvalText(cmd, result.Suites, result.Report, result.Gate)
@@ -88,15 +79,17 @@ next baseline.`,
 	return cmd
 }
 
-func renderEvalText(cmd *cobra.Command, suites []*eval.Suite, r *eval.Report, g *eval.GateResult) {
+func renderEvalText(cmd *cobra.Command, suites []*evals.Suite, r *evals.Report, g *evals.GateResult) {
 	out := cmd.OutOrStdout()
-	fmt.Fprintf(out, "suites: %s\n", eval.SuiteNames(suites))
+	fmt.Fprintf(out, "suites: %s\n", evals.SuiteNames(suites))
 	fmt.Fprintf(out, "cases:  %d (passed=%d, success=%.2f%%)\n",
 		r.TotalCases, r.PassedCases, r.SuccessRate)
 	fmt.Fprintln(out)
 	fmt.Fprintf(out, "%-22s %6s %6s %8s %10s %8s\n",
 		"OPTIMIZER", "CASES", "PASS", "AVG_QUAL", "SAVED_TOK", "APPLY%")
-	for k, s := range r.Optimizers {
+	// Sorted: ranging over the maps printed a different order each run.
+	for _, k := range slices.Sorted(maps.Keys(r.Optimizers)) {
+		s := r.Optimizers[k]
 		fmt.Fprintf(out, "%-22s %6d %6d %8.3f %10d %8.2f\n",
 			k, s.TotalCases, s.PassedCases, s.AvgQuality, s.TotalSaved, s.ApplyRate)
 	}
@@ -114,7 +107,8 @@ func renderEvalText(cmd *cobra.Command, suites []*eval.Suite, r *eval.Report, g 
 	}
 	if len(g.Drift) > 0 {
 		fmt.Fprintln(out, "drift:")
-		for k, d := range g.Drift {
+		for _, k := range slices.Sorted(maps.Keys(g.Drift)) {
+			d := g.Drift[k]
 			sign := "+"
 			if d < 0 {
 				sign = ""
