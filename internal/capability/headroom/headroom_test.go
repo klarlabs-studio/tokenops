@@ -129,6 +129,21 @@ func TestAReadFailureIsReturned(t *testing.T) {
 	}
 }
 
+// With no plan bound, every binding is inferred from stored evidence.
+// A store that cannot be read has said nothing about the operator's
+// plans, so reporting "no plans configured" sends them to fix setup that
+// is fine. The failure must surface as one.
+func TestAReadFailureIsNotReportedAsUnconfigured(t *testing.T) {
+	got, err := headroom.Compute(context.Background(), headroom.Deps{
+		Config: cfgWith(nil),
+		Reader: &fakeReader{err: errors.New("database is locked")},
+	}, time.Now())
+
+	if err == nil {
+		t.Fatalf("a failing store produced a clean result: %+v", got)
+	}
+}
+
 // An unknown plan name is named rather than dropped. Skipping it
 // silently is how an operator's typo becomes a plan that reports
 // nothing forever.

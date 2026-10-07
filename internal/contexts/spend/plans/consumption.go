@@ -171,11 +171,14 @@ func countsAsMessage(env *eventschema.Envelope) bool {
 // (UTC): requests not covered by a plan. Headroom shows each one that has
 // no plan bound as pay-as-you-go, so a gateway or API key in use appears
 // without being set up.
-func MeteredProviders(ctx context.Context, reader EventReader, now time.Time) []string {
+//
+// A read failure is returned, not read as "none": callers infer plan
+// bindings from this, and no evidence is not the same as no plan.
+func MeteredProviders(ctx context.Context, reader EventReader, now time.Time) ([]string, error) {
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 	events, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, monthStart)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	seen := map[string]bool{}
 	var out []string
@@ -195,7 +198,7 @@ func MeteredProviders(ctx context.Context, reader EventReader, now time.Time) []
 		out = append(out, name)
 	}
 	sort.Strings(out)
-	return out
+	return out, nil
 }
 
 // SpendWindowStart returns the start of the period a spend limit covers.
