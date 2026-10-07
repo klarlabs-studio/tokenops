@@ -17,7 +17,6 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/observ"
-	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Run boots the daemon with cfg and blocks until ctx is cancelled (e.g. by
@@ -137,17 +136,4 @@ func resolveStoragePath(configured string) (string, error) {
 		return "", err
 	}
 	return path, nil
-}
-
-// planCostSource returns the CostSource vendor-usage pollers stamp on
-// emitted events: plan_included when the operator bound a flat-rate
-// plan to the provider (config plans:), metered (empty) otherwise.
-// Without the stamp, the analytics recompute would price
-// subscription-covered usage at API list rates and budget alerts would
-// fire on spend that never billed.
-func planCostSource(cfg config.Config, provider eventschema.Provider) eventschema.CostSource {
-	if cfg.PlanCovers(string(provider)) {
-		return eventschema.CostSourcePlanIncluded
-	}
-	return ""
 }

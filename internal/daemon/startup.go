@@ -245,8 +245,8 @@ func (s *startup) startStorageSubsystems(ctx context.Context) error {
 	correctCodexAttribution(ctx, s.cfg, store, s.logger)
 	correctOpencodeAttribution(ctx, store, s.logger)
 	correctSpendCoverage(ctx, s.cfg, store, s.logger)
-	// Source-specific polling configuration lives in its runtime module.
-	startVendorUsagePollers(s.cfg, ingestionBus(ctx, s.events.Bus, store, s.logger), s.sourceHealth, routes, s.sup, s.logger)
+	// The composition root builds and starts the vendor-usage pollers.
+	bootstrap.StartVendorUsagePollers(s.cfg, ingestionBus(ctx, s.events.Bus, store, s.logger), s.sourceHealth, claudeCodeBaseURLAt(routes), s.sup, s.logger)
 
 	if err := startRetentionRuntime(s.cfg.Retention, store, s.sup, s.logger); err != nil {
 		return fmt.Errorf("retention: %w", err)
@@ -318,7 +318,7 @@ func (s *startup) declarePlanCoverage(context.Context) error {
 	}
 	cfg := s.cfg
 	s.opts = append(s.opts, proxy.WithPlanCoverage(func(p eventschema.Provider) bool {
-		return planCostSource(cfg, p) == eventschema.CostSourcePlanIncluded
+		return bootstrap.PlanCostSource(cfg, p) == eventschema.CostSourcePlanIncluded
 	}))
 	s.logger.Info("plan-covered providers declared", "count", len(s.cfg.Plans))
 	return nil
