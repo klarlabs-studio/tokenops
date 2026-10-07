@@ -71,7 +71,7 @@ func runGlance(cmd *cobra.Command, rf *rootFlags, dbPath string, view glanceView
 	if err != nil {
 		return err
 	}
-	resolved, err := resolvePlanDB(dbPath)
+	resolved, err := resolvePlanDBIn(dbPath, cfg.Storage.Path)
 	if err != nil {
 		return err
 	}

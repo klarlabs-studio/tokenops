@@ -262,10 +262,10 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if len(cfg.Plans) == 0 {
-				return errors.New(headroom.UnconfiguredHint)
-			}
-			resolvedPath, err := resolvePlanDB(dbPath)
+			// No early "no plans configured": with no plan bound, the
+			// capability answers from what the vendors report, as the MCP
+			// tool does. It says when there is truly nothing to report.
+			resolvedPath, err := resolvePlanDBIn(dbPath, cfg.Storage.Path)
 			if err != nil {
 				return err
 			}
@@ -288,6 +288,9 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 			res, err := headroom.Compute(ctx, deps, time.Now().UTC())
 			if err != nil {
 				return err
+			}
+			if !res.Answered() && res.Unconfigured != "" {
+				return errors.New(res.Unconfigured)
 			}
 			if jsonOut {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(res.Reports)
@@ -412,18 +415,51 @@ func (s storeReader) ReadEvents(ctx context.Context, t eventschema.EventType, si
 	return s.store.ReadEvents(ctx, t, since)
 }
 
+// resolvePlanDB is the event store a command reads: --db, else the
+// storage.path of the default config file, else ~/.tokenops/events.db.
+// A command that loaded a config of its own passes it to resolvePlanDBIn.
+//
+// It skipped the config: an operator who had moved the store had glance,
+// plan headroom, verify and the rest read (or fail to open) a database the
+// daemon never writes, though glance's --db help says it defaults to the
+// configured one.
 func resolvePlanDB(override string) (string, error) {
+	return resolvePlanDBIn(override, defaultStoragePath())
+}
+
+// resolvePlanDBIn is resolvePlanDB with the configured storage path given.
+func resolvePlanDBIn(override, configured string) (string, error) {
 	if override != "" {
 		return override, nil
 	}
 	if v := os.Getenv("TOKENOPS_STORAGE_PATH"); v != "" {
 		return v, nil
 	}
+	if configured != "" {
+		return configured, nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(home, ".tokenops", "events.db"), nil
+}
+
+// defaultStoragePath is storage.path in the default config file, or ""
+// when there is none to read.
+func defaultStoragePath() string {
+	p, err := config.DefaultPath()
+	if err != nil {
+		return ""
+	}
+	if _, err := os.Stat(p); err != nil {
+		return ""
+	}
+	cfg, err := config.Load(p)
+	if err != nil {
+		return ""
+	}
+	return cfg.Storage.Path
 }
 
 // spendSourceLabel says whose figure the spend line is, so an estimate is
