@@ -139,11 +139,11 @@ jobs:
   # platform packages, and those are unpacked from THIS release's archives,
   # so npm ships byte for byte what GitHub and Homebrew ship.
   #
-  # Auth: the NPM_TOKEN secret until each of the five packages has a
-  # trusted publisher on npmjs (repo klarlabs-studio/tokenops, workflow
-  # release.yml). Then delete the NODE_AUTH_TOKEN lines: setup-node's
-  # registry-url makes npm use OIDC (warden learned the details, see its
-  # release.yml). --provenance needs id-token either way.
+  # Auth: npm trusted publishing (OIDC). Each of the five packages names
+  # this repo and release.yml as its trusted publisher; setup-node's
+  # registry-url is what makes npm take the OIDC path. Do not set
+  # NODE_AUTH_TOKEN, not even to "": an empty token makes npm ENEEDAUTH
+  # instead of using OIDC (warden hit this). id-token signs provenance too.
   npm:
     needs: goreleaser
     runs-on: ubuntu-latest
@@ -177,8 +177,6 @@ jobs:
       # versions it already published. A version already on the registry is
       # skipped; any other failure (auth, network) still fails the step.
       - name: Publish platform packages
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           for d in npm/packages/*/; do
@@ -191,8 +189,6 @@ jobs:
             ( cd "$d" && npm publish --provenance --access public )
           done
       - name: Publish the wrapper
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           name=$(node -p "require('./npm/package.json').name")
