@@ -105,9 +105,9 @@ type ClaudeUsageMeterConfig struct {
 	// keychain read once per installed version.
 	FromBrowser bool `yaml:"from_browser,omitempty"`
 	// Browser limits that read to one browser by name; empty searches,
-	// and BrowserNone never reads one. A pasted session also falls back to
-	// the browser when claude.ai refuses it (ADR 0011); FromBrowser makes
-	// the browser the first choice.
+	// and BrowserNone never reads one. Only a session read from a browser
+	// (FromBrowser) is read from it again; a pasted one never makes the
+	// daemon open a browser's Keychain item.
 	Browser string `yaml:"browser,omitempty"`
 }
 

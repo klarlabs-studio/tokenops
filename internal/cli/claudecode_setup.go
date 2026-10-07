@@ -26,8 +26,10 @@ func runClaudeCodeSetup(cmd *cobra.Command, configPath string, restart, keychain
 	keychain = keychain && runtime.GOOS == "darwin"
 	fmt.Fprintln(out, "Connecting Claude Code's own sign-in as a source of Claude's plan windows.")
 	if keychain {
-		fmt.Fprintln(out, "macOS may ask to allow reading \"Claude Code-credentials\" from your Keychain. Choose Always Allow to let the daemon read it too;")
-		fmt.Fprintln(out, "it may ask again after Claude Code renews its sign-in.")
+		fmt.Fprintln(out, "macOS may ask to let tokenops read \"Claude Code-credentials\" from your Keychain: Claude Code's own sign-in,")
+		fmt.Fprintln(out, "sent only to api.anthropic.com to read your plan's usage. Choose Always Allow to let the daemon read it too;")
+		fmt.Fprintln(out, "macOS may ask again after Claude Code renews its sign-in and after each TokenOps upgrade.")
+		fmt.Fprintln(out, "--no-keychain skips the Keychain and reads ~/.claude/.credentials.json only.")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {

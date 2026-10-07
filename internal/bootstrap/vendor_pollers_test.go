@@ -24,18 +24,19 @@ func TestPlanCostSource(t *testing.T) {
 	}
 }
 
-// The clearance cookie expires within hours, and claude.ai expires the
-// session itself every few weeks: a meter that cannot re-read the browser
-// stops, as a pasted one did for 20 hours on 2026-10-05. Every meter gets
-// the browser as its way back (ADR 0011) unless browser: none says not to.
+// The daemon reads a browser only for a session the operator connected
+// from one. The read opens the browser's "Safe Storage" Keychain item, and
+// a background process raising that prompt for a session that was pasted
+// was a dialog nobody had started. An expired pasted session is reported
+// as a stopped reading instead, with the command that reconnects it.
 func TestBrowserSessionSourceFollowsTheConfig(t *testing.T) {
-	if browserSessionSource(config.ClaudeUsageMeterConfig{}) == nil {
-		t.Error("a pasted session has no way back when claude.ai refuses it")
+	if browserSessionSource(config.ClaudeUsageMeterConfig{}) != nil {
+		t.Error("a pasted session reads the browser, and its Keychain item, in the background")
 	}
 	if browserSessionSource(config.ClaudeUsageMeterConfig{FromBrowser: true}) == nil {
 		t.Error("from_browser set, but the poller got no way to re-read the session")
 	}
-	if browserSessionSource(config.ClaudeUsageMeterConfig{Browser: "None"}) != nil {
+	if browserSessionSource(config.ClaudeUsageMeterConfig{FromBrowser: true, Browser: "None"}) != nil {
 		t.Error("browser: none still reads a browser")
 	}
 }

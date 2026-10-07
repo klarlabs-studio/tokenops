@@ -1,9 +1,6 @@
 package mcp
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -13,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"go.klarlabs.de/tokenops/internal/capability/usagemeter"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 )
@@ -24,7 +20,6 @@ type setupFixture struct {
 	applied int
 	env     map[string]string
 	baseURL string
-	browser func(context.Context) (usagemeter.Session, error)
 	// cookies records the Cookie header of each request the stub saw.
 	cookies []string
 }
@@ -46,11 +41,10 @@ func (f *setupFixture) server() *Server {
 	f.t.Helper()
 	srv := NewServer("tokenops", "test", slog.New(slog.NewTextHandler(io.Discard, nil)))
 	deps := SetupDeps{
-		ConfigPath:    f.path,
-		ApplyConfig:   func() string { f.applied++; return "restarted the daemon; the change is live" },
-		Getenv:        func(k string) string { return f.env[k] },
-		MeterBaseURL:  f.baseURL,
-		BrowserCookie: f.browser,
+		ConfigPath:   f.path,
+		ApplyConfig:  func() string { f.applied++; return "restarted the daemon; the change is live" },
+		Getenv:       func(k string) string { return f.env[k] },
+		MeterBaseURL: f.baseURL,
 	}
 	if err := RegisterSetupTools(srv, deps); err != nil {
 		f.t.Fatal(err)
@@ -207,46 +201,6 @@ func TestMeterSetupToolWritesNothingForARejectedKey(t *testing.T) {
 	}
 }
 
-// An agent should not have to ask the operator to paste a login. When the
-// key is not in the environment or config, the tool reads it from the
-// browser the operator is signed in with — macOS asks them to allow it —
-// and still never returns the key.
-//
-// The bot-check clearance travels with it, into the verification and into
-// the config, and the meter keeps reading that browser: the clearance
-// expires within hours. The tool read the key alone and stored it as if
-// pasted, which `vendor-usage setup` never did.
-func TestMeterSetupToolReadsTheBrowserSession(t *testing.T) {
-	f := newSetupFixture(t, "")
-	f.baseURL = meterStubSeeing(t, http.StatusOK, &f.cookies)
-	f.browser = func(context.Context) (usagemeter.Session, error) {
-		return usagemeter.Session{Key: "sk-ant-sid-from-browser", Clearance: "cf-ok", UserAgent: "Mozilla/5.0 Chrome", Browser: "Chrome"}, nil
-	}
-
-	// One call: a second would find the key in the config it just wrote.
-	raw := execTool(t, f.server(), "tokenops_vendor_usage_setup", map[string]any{})
-	if strings.Contains(raw, "sk-ant-sid-from-browser") {
-		t.Fatalf("the session key was echoed into the transcript: %s", raw)
-	}
-	var got map[string]any
-	if err := json.Unmarshal([]byte(raw), &got); err != nil {
-		t.Fatalf("decode %q: %v", raw, err)
-	}
-	if got["read_from"] != "Chrome" {
-		t.Errorf("read_from = %v, want Chrome", got["read_from"])
-	}
-	m := f.config().VendorUsage.ClaudeUsageMeter
-	if !m.Enabled || m.SessionKey != "sk-ant-sid-from-browser" {
-		t.Errorf("meter config = enabled:%v key set:%v", m.Enabled, m.SessionKey != "")
-	}
-	if !m.FromBrowser || m.Browser != "Chrome" || m.Clearance != "cf-ok" || m.UserAgent != "Mozilla/5.0 Chrome" {
-		t.Errorf("meter config = from_browser:%v browser:%q clearance set:%v ua:%q", m.FromBrowser, m.Browser, m.Clearance != "", m.UserAgent)
-	}
-	if len(f.cookies) == 0 || !strings.Contains(f.cookies[0], "cf_clearance=cf-ok") {
-		t.Errorf("verified without the clearance: cookies %q", f.cookies)
-	}
-}
-
 // Running setup again on a meter connected from a browser keeps it that
 // way: the stored clearance and browser go with the stored key.
 func TestMeterSetupToolRerunKeepsTheBrowserSession(t *testing.T) {
@@ -262,19 +216,18 @@ func TestMeterSetupToolRerunKeepsTheBrowserSession(t *testing.T) {
 	}
 }
 
-// No browser session and nothing configured: say so, and never ask for a
-// paste in the chat.
-func TestMeterSetupToolWithoutABrowserSessionStillRefusesThePaste(t *testing.T) {
+// Without a key in the environment or config the tool does not look in a
+// browser: that opens the browser's Keychain item, a macOS prompt an agent
+// must not raise. It says to ask the user to run the setup command.
+func TestMeterSetupToolNeverReadsABrowser(t *testing.T) {
 	f := newSetupFixture(t, "")
-	f.browser = func(context.Context) (usagemeter.Session, error) {
-		return usagemeter.Session{}, errors.New("no such cookie")
-	}
 	got := callTool(t, f.server(), "tokenops_vendor_usage_setup", map[string]any{})
 	if got["error"] != "session_key_missing" {
 		t.Fatalf("response = %v", got)
 	}
-	if hint, _ := got["hint"].(string); !strings.Contains(hint, "must not go through this chat") {
-		t.Errorf("hint invites a paste: %q", hint)
+	hint, _ := got["hint"].(string)
+	if !strings.Contains(hint, "does not read browsers") || !strings.Contains(hint, "vendor-usage setup claude-subscription") {
+		t.Errorf("hint = %q", hint)
 	}
 }
 

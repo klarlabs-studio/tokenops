@@ -562,9 +562,25 @@ reloads it in-process, so there is no MCP-client restart step. `--no-restart`
 is available only for advanced workflows that deliberately batch several
 configuration writes.
 
-From an agent, `tokenops_configure (setting=usage_meter)` does the same: it reads the
-browser session (you allow the keychain prompt) and never asks for the key
-in the conversation.
+From an agent, `tokenops_configure (setting=usage_meter)` connects the meter
+from a key already in `TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY` or the config.
+It never reads a browser and never asks for the key in the conversation;
+without a key it tells the agent to ask you to run the command above.
+
+#### When TokenOps asks for Keychain access (macOS)
+
+Only these read the Keychain, and each says so before macOS asks:
+
+| What | Keychain item | When |
+|---|---|---|
+| `vendor-usage setup claude-subscription`, run by you | your browser's `… Safe Storage` (for example `Chrome Safe Storage`): the key it encrypts cookies with, used to read two claude.ai cookies, `sessionKey` and `cf_clearance` | when you run it; `--paste` or `--paste-request` skips the Keychain |
+| the daemon, for a meter you connected from the browser | the same `… Safe Storage` item | when claude.ai renews or expires the session, to read the new one; `browser: none` under `vendor_usage.claude_usage_meter` turns it off |
+| `vendor-usage setup claude-code`, run by you | `Claude Code-credentials`: Claude Code's own sign-in, sent only to `api.anthropic.com` | when you run it, and when the daemon reads it later; `--no-keychain` reads `~/.claude/.credentials.json` only |
+
+Nothing else does: not `init`, not an agent through the MCP tools, and not
+the daemon for a session you pasted, which stops when it expires and says
+how to connect it again. macOS ties **Always Allow** to the program it was
+given to, so it may ask again after each TokenOps upgrade.
 
 Prefer this over `vendor-usage enable claude-subscription --session-key`,
 which writes whatever you give it without checking.

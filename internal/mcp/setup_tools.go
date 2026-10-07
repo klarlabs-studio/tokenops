@@ -27,11 +27,6 @@ type SetupDeps struct {
 	Getenv func(string) string
 	// MeterBaseURL overrides claude.ai for tests.
 	MeterBaseURL string
-	// BrowserCookie reads the claude.ai session, with its clearance,
-	// from a local browser. macOS asks the operator to allow the keychain
-	// read, which is the consent this tool cannot ask for itself. nil
-	// skips the browser.
-	BrowserCookie func(ctx context.Context) (usagemeter.Session, error)
 }
 
 func (d SetupDeps) path() (string, error) {
@@ -104,7 +99,7 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 		})
 
 	s.Tool("tokenops_vendor_usage_setup").
-		Description("Connect Claude subscription telemetry (the MCP twin of `tokenops vendor-usage setup claude-subscription`): verifies the claude.ai session key with Anthropic, picks the organization, reports the subscription windows Anthropic shows, or Enterprise spend against your limit, and enables it. The key is read from the " + meterKeyEnv + " environment variable or existing config, never from a tool argument: never ask the user to paste it into the chat.").
+		Description("Connect Claude subscription telemetry (the MCP twin of `tokenops vendor-usage setup claude-subscription`): verifies the claude.ai session key with Anthropic, picks the organization, reports the subscription windows Anthropic shows, or Enterprise spend against your limit, and enables it. The key is read from the " + meterKeyEnv + " environment variable or existing config, never from a tool argument: never ask the user to paste it into the chat. It never reads a browser, which would open a macOS Keychain prompt the user did not start; without a key it says to ask the user to run the setup command.").
 		Handler(func(ctx context.Context, in meterSetupInput) (string, error) {
 			path, err := d.path()
 			if err != nil {
@@ -125,22 +120,13 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 					session.Browser = m.Browser
 				}
 			}
-			if session.Key == "" && d.BrowserCookie != nil {
-				// The operator is signed in to claude.ai in a browser that
-				// already holds this cookie; macOS asks them to allow the
-				// read. Nothing is typed, and the key never enters the
-				// conversation.
-				if s, err := d.BrowserCookie(ctx); err == nil && strings.TrimSpace(s.Key) != "" {
-					session = s
-					session.Key = strings.TrimSpace(s.Key)
-				}
-			}
 			if session.Key == "" {
 				return jsonString(map[string]any{
 					"error": "session_key_missing",
-					"hint": "no claude.ai session was found in a local browser, and the key is a login that must not go through this chat. " +
-						"Ask the user to run `tokenops vendor-usage setup claude-subscription` in a terminal, " +
-						"which reads it without echoing it — or to set " + meterKeyEnv + " for this MCP server and call this tool again",
+					"hint": "the claude.ai session is a login that must not go through this chat, and this tool does not read browsers: " +
+						"that opens the browser's Keychain item, a macOS prompt the user should start themselves. " +
+						"Ask the user to run `tokenops vendor-usage setup claude-subscription` in a terminal, which says what it reads before macOS asks, " +
+						"or to set " + meterKeyEnv + " for this MCP server and call this tool again",
 				}), nil
 			}
 			ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -156,8 +142,8 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 				case errors.Is(err, usagemeter.ErrBotCheck):
 					return jsonString(map[string]any{
 						"error": "bot_check",
-						"hint": "claude.ai's bot check refused the request. Ask the user to open claude.ai in their browser once, then call this tool again, " +
-							"or to run `tokenops vendor-usage setup claude-subscription --paste-request` in a terminal. Nothing was written.",
+						"hint": "claude.ai's bot check refused the request, which needs the browser's clearance cookie this tool does not read. " +
+							"Ask the user to run `tokenops vendor-usage setup claude-subscription` in a terminal, or with --paste-request. Nothing was written.",
 					}), nil
 				}
 				return "", inputError(err)
@@ -166,13 +152,11 @@ func RegisterSetupTools(s *Server, d SetupDeps) error {
 			if err := config.WriteMutable(path, cfg); err != nil {
 				return "", inputError(err)
 			}
-			from := session.Browser
 			orgs := make([]string, 0, len(conn.Orgs))
 			for _, o := range conn.Orgs {
 				orgs = append(orgs, o.Name)
 			}
 			resp := map[string]any{
-				"read_from":     from,
 				"organization":  conn.Org.Name,
 				"organizations": orgs,
 				"reports":       conn.Usage.Summary(),
