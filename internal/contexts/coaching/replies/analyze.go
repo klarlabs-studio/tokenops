@@ -103,11 +103,16 @@ func Analyze(replies []AssistantReply) Findings {
 		f.BySession = append(f.BySession, entry)
 	}
 	sort.Slice(f.BySession, func(i, j int) bool {
-		// Caveman sessions first, then by reply count desc.
-		if f.BySession[i].CavemanLikely != f.BySession[j].CavemanLikely {
-			return f.BySession[i].CavemanLikely
+		// Caveman sessions first, then by reply count desc, then by id
+		// so a tie does not print in map order.
+		a, b := f.BySession[i], f.BySession[j]
+		if a.CavemanLikely != b.CavemanLikely {
+			return a.CavemanLikely
 		}
-		return f.BySession[i].Stats.Replies > f.BySession[j].Stats.Replies
+		if a.Stats.Replies != b.Stats.Replies {
+			return a.Stats.Replies > b.Stats.Replies
+		}
+		return a.SessionID < b.SessionID
 	})
 	return f
 }
