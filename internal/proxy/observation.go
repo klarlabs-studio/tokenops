@@ -194,22 +194,24 @@ func (r *observerRequestMeter) Done(_ int64) {
 	}
 
 	prompt := &eventschema.PromptEvent{
-		PromptHash:        r.obs.PromptHash,
-		Provider:          r.obs.Provider,
-		RequestModel:      r.obs.RequestModel,
-		ResponseModel:     r.obs.ResponseModel,
-		InputTokens:       r.obs.InputTokens,
-		OutputTokens:      outputTokens,
-		TotalTokens:       r.obs.InputTokens + outputTokens,
-		CachedInputTokens: usage.CachedInputTokens,
-		TokenSource:       tokenSource,
-		ContextSize:       r.obs.ContextSize,
-		MaxOutputTokens:   r.obs.MaxOutput,
-		Latency:           latency,
-		TimeToFirstToken:  ttft,
-		Streaming:         r.obs.Streaming,
-		Status:            r.obs.Status,
-		FinishReason:      usage.FinishReason,
+		PromptHash:              r.obs.PromptHash,
+		Provider:                r.obs.Provider,
+		RequestModel:            r.obs.RequestModel,
+		ResponseModel:           r.obs.ResponseModel,
+		InputTokens:             r.obs.InputTokens,
+		OutputTokens:            outputTokens,
+		TotalTokens:             r.obs.InputTokens + outputTokens,
+		CachedInputTokens:       usage.CachedInputTokens,
+		CacheWriteInputTokens:   usage.CacheWriteInputTokens,
+		CacheWrite1hInputTokens: usage.CacheWrite1hInputTokens,
+		TokenSource:             tokenSource,
+		ContextSize:             r.obs.ContextSize,
+		MaxOutputTokens:         r.obs.MaxOutput,
+		Latency:                 latency,
+		TimeToFirstToken:        ttft,
+		Streaming:               r.obs.Streaming,
+		Status:                  r.obs.Status,
+		FinishReason:            usage.FinishReason,
 		ErrorCode: classifyUpstreamError(r.obs.Provider, r.obs.Status, body,
 			r.obs.RoutedModel, r.obs.ManualThinking, r.obs.SamplingParameter),
 		ToolCallCount: usage.ToolCallCount,
@@ -363,8 +365,13 @@ type responseUsage struct {
 	InputTokens       int64
 	OutputTokens      int64
 	CachedInputTokens int64
-	FinishReason      string
-	ToolCallCount     int64
+	// CacheWriteInputTokens and CacheWrite1hInputTokens are the portions of
+	// InputTokens written to the prompt cache, and of those the one-hour
+	// writes (see eventschema.PromptEvent).
+	CacheWriteInputTokens   int64
+	CacheWrite1hInputTokens int64
+	FinishReason            string
+	ToolCallCount           int64
 }
 
 // parseResponseUsage extracts authoritative non-streaming provider usage.
@@ -398,8 +405,10 @@ func parseResponseUsage(body []byte) (responseUsage, bool) {
 		if input != nil && output != nil && *input >= 0 && *output >= 0 {
 			return responseUsage{
 				Model: response.Model, InputTokens: usage.totalInput(*input), OutputTokens: *output,
-				CachedInputTokens: usage.InputDetails.CachedTokens + usage.CacheReadInputTokens,
-				FinishReason:      response.Status, ToolCallCount: countToolItems(response.Output),
+				CachedInputTokens:       usage.InputDetails.CachedTokens + usage.CacheReadInputTokens,
+				CacheWriteInputTokens:   usage.cacheWrites(),
+				CacheWrite1hInputTokens: usage.CacheCreation.Ephemeral1hInputTokens,
+				FinishReason:            response.Status, ToolCallCount: countToolItems(response.Output),
 			}, true
 		}
 	}
@@ -414,7 +423,14 @@ func parseResponseUsage(body []byte) (responseUsage, bool) {
 type anthropicCacheUsage struct {
 	CacheReadInputTokens     int64 `json:"cache_read_input_tokens"`
 	CacheCreationInputTokens int64 `json:"cache_creation_input_tokens"`
+	// CacheCreation splits the writes by lifetime; a one-hour write bills
+	// higher than a five-minute one.
+	CacheCreation struct {
+		Ephemeral1hInputTokens int64 `json:"ephemeral_1h_input_tokens"`
+	} `json:"cache_creation"`
 }
+
+func (u anthropicCacheUsage) cacheWrites() int64 { return max(u.CacheCreationInputTokens, 0) }
 
 func (u anthropicCacheUsage) totalInput(input int64) int64 {
 	return input + max(u.CacheReadInputTokens, 0) + max(u.CacheCreationInputTokens, 0)
@@ -479,6 +495,8 @@ func parseSSEUsage(body []byte) (responseUsage, bool) {
 			usage := event.Message.Usage
 			aggregate.InputTokens = usage.totalInput(usage.InputTokens)
 			aggregate.CachedInputTokens = usage.CacheReadInputTokens
+			aggregate.CacheWriteInputTokens = usage.cacheWrites()
+			aggregate.CacheWrite1hInputTokens = usage.CacheCreation.Ephemeral1hInputTokens
 			inputSeen = true
 		case "message_delta":
 			if event.Usage.OutputTokens != nil && *event.Usage.OutputTokens >= 0 {

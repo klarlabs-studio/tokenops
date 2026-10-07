@@ -58,6 +58,9 @@ func TestReadMessagesParsesAssistantTurn(t *testing.T) {
 	if tn.CachedTokens != 100 {
 		t.Errorf("cached = %d, want 100", tn.CachedTokens)
 	}
+	if tn.CacheWrites != 200 {
+		t.Errorf("cache writes = %d, want 200", tn.CacheWrites)
+	}
 	// output(1013) + reasoning(50) = 1063
 	if tn.OutputTokens != 1063 {
 		t.Errorf("output = %d, want 1063", tn.OutputTokens)

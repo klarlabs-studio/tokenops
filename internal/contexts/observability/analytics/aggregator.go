@@ -334,7 +334,9 @@ func (a *Aggregator) addPlanCoveredValue(ctx context.Context, f Filter, bucket B
 		` provider, model, COUNT(*),
 			COALESCE(SUM(input_tokens), 0),
 			COALESCE(SUM(output_tokens), 0),
-			COALESCE(SUM(CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER)), 0)
+			COALESCE(SUM(` + cacheReadExpr + `), 0),
+			COALESCE(SUM(` + cacheWriteExpr + `), 0),
+			COALESCE(SUM(` + cacheWrite1hExpr + `), 0)
 		FROM events WHERE ` + strings.Join(conds, " AND ") +
 		" GROUP BY bucket_start_sec, group_key, provider, model"
 
@@ -352,20 +354,22 @@ func (a *Aggregator) addPlanCoveredValue(ctx context.Context, f Filter, bucket B
 	gaps := newGapTracker[key]()
 	for dbRows.Next() {
 		var (
-			bucketSec                      int64
-			groupKey                       string
-			provider, model                sql.NullString
-			events, inTok, outTok, cacheIn sql.NullInt64
+			bucketSec                                        int64
+			groupKey                                         string
+			provider, model                                  sql.NullString
+			events, inTok, outTok, cacheIn, cacheW, cacheW1h sql.NullInt64
 		)
-		if err := dbRows.Scan(&bucketSec, &groupKey, &provider, &model, &events, &inTok, &outTok, &cacheIn); err != nil {
+		if err := dbRows.Scan(&bucketSec, &groupKey, &provider, &model, &events, &inTok, &outTok, &cacheIn, &cacheW, &cacheW1h); err != nil {
 			return fmt.Errorf("analytics: plan-covered group value scan: %w", err)
 		}
 		p := &eventschema.PromptEvent{
-			Provider:          eventschema.Provider(provider.String),
-			RequestModel:      model.String,
-			InputTokens:       inTok.Int64,
-			CachedInputTokens: cacheIn.Int64,
-			OutputTokens:      outTok.Int64,
+			Provider:                eventschema.Provider(provider.String),
+			RequestModel:            model.String,
+			InputTokens:             inTok.Int64,
+			CachedInputTokens:       cacheIn.Int64,
+			CacheWriteInputTokens:   cacheW.Int64,
+			CacheWrite1hInputTokens: cacheW1h.Int64,
+			OutputTokens:            outTok.Int64,
 		}
 		k := key{bucketSec, groupKey}
 		// An unpriced model contributes nothing rather than failing the
@@ -426,7 +430,9 @@ func (a *Aggregator) recomputeMissingCosts(ctx context.Context, f Filter, bucket
 		` provider, model, COUNT(*),
 			COALESCE(SUM(input_tokens), 0),
 			COALESCE(SUM(output_tokens), 0),
-			COALESCE(SUM(CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER)), 0)
+			COALESCE(SUM(` + cacheReadExpr + `), 0),
+			COALESCE(SUM(` + cacheWriteExpr + `), 0),
+			COALESCE(SUM(` + cacheWrite1hExpr + `), 0)
 		FROM events WHERE ` + strings.Join(conds, " AND ") +
 		" GROUP BY bucket_start_sec, group_key, provider, model"
 
@@ -446,20 +452,22 @@ func (a *Aggregator) recomputeMissingCosts(ctx context.Context, f Filter, bucket
 	gaps := newGapTracker[key]()
 	for dbRows.Next() {
 		var (
-			bucketSec                      int64
-			groupKey                       string
-			provider, model                sql.NullString
-			events, inTok, outTok, cacheIn sql.NullInt64
+			bucketSec                                        int64
+			groupKey                                         string
+			provider, model                                  sql.NullString
+			events, inTok, outTok, cacheIn, cacheW, cacheW1h sql.NullInt64
 		)
-		if err := dbRows.Scan(&bucketSec, &groupKey, &provider, &model, &events, &inTok, &outTok, &cacheIn); err != nil {
+		if err := dbRows.Scan(&bucketSec, &groupKey, &provider, &model, &events, &inTok, &outTok, &cacheIn, &cacheW, &cacheW1h); err != nil {
 			return fmt.Errorf("analytics: recompute scan: %w", err)
 		}
 		p := &eventschema.PromptEvent{
-			Provider:          eventschema.Provider(provider.String),
-			RequestModel:      model.String,
-			InputTokens:       inTok.Int64,
-			CachedInputTokens: cacheIn.Int64,
-			OutputTokens:      outTok.Int64,
+			Provider:                eventschema.Provider(provider.String),
+			RequestModel:            model.String,
+			InputTokens:             inTok.Int64,
+			CachedInputTokens:       cacheIn.Int64,
+			CacheWriteInputTokens:   cacheW.Int64,
+			CacheWrite1hInputTokens: cacheW1h.Int64,
+			OutputTokens:            outTok.Int64,
 		}
 		k := key{bucketSec, groupKey}
 		// Price at the rate card in effect for this bucket (ADR 0002
@@ -572,7 +580,9 @@ func (a *Aggregator) summarizePlanCoveredValue(ctx context.Context, f Filter) (f
 	q := `SELECT ` + pricedAtColumn + `, provider, model,
 			COALESCE(SUM(input_tokens), 0),
 			COALESCE(SUM(output_tokens), 0),
-			COALESCE(SUM(CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER)), 0),
+			COALESCE(SUM(` + cacheReadExpr + `), 0),
+			COALESCE(SUM(` + cacheWriteExpr + `), 0),
+			COALESCE(SUM(` + cacheWrite1hExpr + `), 0),
 			COUNT(*)
 		FROM events WHERE ` + strings.Join(conds, " AND ") +
 		` GROUP BY ` + dayBucketExpr + `, provider, model`
@@ -587,20 +597,22 @@ func (a *Aggregator) summarizePlanCoveredValue(ctx context.Context, f Filter) (f
 	)
 	for rows.Next() {
 		var (
-			pricedAtNs             int64
-			provider, model        sql.NullString
-			inTok, outTok, cacheIn sql.NullInt64
-			requests               sql.NullInt64
+			pricedAtNs                               int64
+			provider, model                          sql.NullString
+			inTok, outTok, cacheIn, cacheW, cacheW1h sql.NullInt64
+			requests                                 sql.NullInt64
 		)
-		if err := rows.Scan(&pricedAtNs, &provider, &model, &inTok, &outTok, &cacheIn, &requests); err != nil {
+		if err := rows.Scan(&pricedAtNs, &provider, &model, &inTok, &outTok, &cacheIn, &cacheW, &cacheW1h, &requests); err != nil {
 			return 0, nil, fmt.Errorf("analytics: plan-covered value scan: %w", err)
 		}
 		p := &eventschema.PromptEvent{
-			Provider:          eventschema.Provider(provider.String),
-			RequestModel:      model.String,
-			InputTokens:       inTok.Int64,
-			CachedInputTokens: cacheIn.Int64,
-			OutputTokens:      outTok.Int64,
+			Provider:                eventschema.Provider(provider.String),
+			RequestModel:            model.String,
+			InputTokens:             inTok.Int64,
+			CachedInputTokens:       cacheIn.Int64,
+			CacheWriteInputTokens:   cacheW.Int64,
+			CacheWrite1hInputTokens: cacheW1h.Int64,
+			OutputTokens:            outTok.Int64,
 		}
 		c, err := a.spend.ComputeAt(p, time.Unix(0, pricedAtNs).UTC())
 		if err != nil {
@@ -689,7 +701,9 @@ func (a *Aggregator) summarizeMissingCost(ctx context.Context, f Filter) (float6
 	q := `SELECT ` + pricedAtColumn + `, provider, model, COUNT(*),
 			COALESCE(SUM(input_tokens), 0),
 			COALESCE(SUM(output_tokens), 0),
-			COALESCE(SUM(CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER)), 0)
+			COALESCE(SUM(` + cacheReadExpr + `), 0),
+			COALESCE(SUM(` + cacheWriteExpr + `), 0),
+			COALESCE(SUM(` + cacheWrite1hExpr + `), 0)
 		FROM events WHERE ` + strings.Join(conds, " AND ") +
 		` GROUP BY ` + dayBucketExpr + `, provider, model ORDER BY provider, model`
 	rows, err := a.store.DB().QueryContext(ctx, q, args...)
@@ -703,19 +717,21 @@ func (a *Aggregator) summarizeMissingCost(ctx context.Context, f Filter) (float6
 	)
 	for rows.Next() {
 		var (
-			pricedAtNs                       int64
-			provider, model                  sql.NullString
-			requests, inTok, outTok, cacheIn sql.NullInt64
+			pricedAtNs                                         int64
+			provider, model                                    sql.NullString
+			requests, inTok, outTok, cacheIn, cacheW, cacheW1h sql.NullInt64
 		)
-		if err := rows.Scan(&pricedAtNs, &provider, &model, &requests, &inTok, &outTok, &cacheIn); err != nil {
+		if err := rows.Scan(&pricedAtNs, &provider, &model, &requests, &inTok, &outTok, &cacheIn, &cacheW, &cacheW1h); err != nil {
 			return 0, nil, fmt.Errorf("analytics: summarize recompute scan: %w", err)
 		}
 		p := &eventschema.PromptEvent{
-			Provider:          eventschema.Provider(provider.String),
-			RequestModel:      model.String,
-			InputTokens:       inTok.Int64,
-			CachedInputTokens: cacheIn.Int64,
-			OutputTokens:      outTok.Int64,
+			Provider:                eventschema.Provider(provider.String),
+			RequestModel:            model.String,
+			InputTokens:             inTok.Int64,
+			CachedInputTokens:       cacheIn.Int64,
+			CacheWriteInputTokens:   cacheW.Int64,
+			CacheWrite1hInputTokens: cacheW1h.Int64,
+			OutputTokens:            outTok.Int64,
 		}
 		c, err := a.spend.ComputeAt(p, time.Unix(0, pricedAtNs).UTC())
 		switch {

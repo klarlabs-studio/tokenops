@@ -86,14 +86,15 @@ func TestPollerMergesConcurrentSessions(t *testing.T) {
 // signal_quality. Deterministic ID per message — restart-safe.
 func TestNewEnvelopeShape(t *testing.T) {
 	turn := Turn{
-		Timestamp:                time.Date(2026, 5, 14, 9, 22, 45, 0, time.UTC),
-		SessionID:                "s1",
-		MessageID:                "msg_a",
-		Model:                    "claude-opus-4-7",
-		InputTokens:              10,
-		OutputTokens:             20,
-		CacheReadInputTokens:     1000,
-		CacheCreationInputTokens: 50,
+		Timestamp:                  time.Date(2026, 5, 14, 9, 22, 45, 0, time.UTC),
+		SessionID:                  "s1",
+		MessageID:                  "msg_a",
+		Model:                      "claude-opus-4-7",
+		InputTokens:                10,
+		OutputTokens:               20,
+		CacheReadInputTokens:       1000,
+		CacheCreationInputTokens:   50,
+		CacheCreation1hInputTokens: 20,
 	}
 	env := newEnvelope(turn, "", "")
 	if env.Source != SourceTag {
@@ -109,6 +110,12 @@ func TestNewEnvelopeShape(t *testing.T) {
 	}
 	if pe.TotalTokens != 1080 {
 		t.Errorf("total = %d; want 1080", pe.TotalTokens)
+	}
+	// The cache read and the writes are portions of the input, each billed
+	// at its own rate.
+	if pe.CachedInputTokens != 1000 || pe.CacheWriteInputTokens != 50 || pe.CacheWrite1hInputTokens != 20 {
+		t.Errorf("cache split: read=%d write=%d write1h=%d; want 1000/50/20",
+			pe.CachedInputTokens, pe.CacheWriteInputTokens, pe.CacheWrite1hInputTokens)
 	}
 	// Re-mint with identical inputs → identical ID (dedup-safe).
 	env2 := newEnvelope(turn, "", "")

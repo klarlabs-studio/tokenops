@@ -7,7 +7,11 @@
 # Keys ending in "*" are prefix matches (e.g. "claude-fable-5*" covers
 # "claude-fable-5" and suffixed variants like "claude-fable-5[1m]").
 # cached_input_per_million is the cache-read rate; when omitted, cache
-# reads bill at input_per_million.
+# reads bill at input_per_million. cache_write_per_million prices a
+# prompt-cache write (a five-minute entry) and cache_write_1h_per_million a
+# one-hour one; when omitted, writes bill at input_per_million and one-hour
+# writes at the five-minute rate. Anthropic's rows carry its documented
+# multipliers: 1.25x input for a five-minute write, 2x for a one-hour one.
 #
 # Operators on negotiated rates can layer overrides via a file with the
 # same schema referenced from config (pricing.path) — see
@@ -34,12 +38,9 @@ rates:
     # model is reported as unpriced, which is the honest direction to
     # fail in.
     #
-    # Two of Astra's published rules cannot be expressed in this schema,
-    # and both understate:
-    #   - cache writes are $12.50, a 1.25x SURCHARGE on input rather than
-    #     a discount. There is no cache-write field, and callers price
-    #     cache writes at input_per_million — so writes bill at $10, 20%
-    #     under.
+    # Cache writes are $12.50, a 1.25x SURCHARGE on input rather than a
+    # discount (cache_write_per_million below). One published rule cannot
+    # be expressed in this schema, and it understates:
     #   - prompts over 272K input tokens bill at 2x input and cache rates
     #     and 1.5x output for the whole request. With a 1,050,000-token
     #     window, long prompts are the expected case rather than a corner
@@ -50,6 +51,7 @@ rates:
       input_per_million: 10.00
       output_per_million: 50.00
       cached_input_per_million: 1.00
+      cache_write_per_million: 12.50
       verified: true
     # GPT-6 Sol and Luna — exact API model IDs and Standard short-context
     # rates from https://developers.openai.com/api/docs/pricing, verified
@@ -128,11 +130,15 @@ rates:
     "claude-fable-5*":
       input_per_million: 10.00
       output_per_million: 50.00
+      cache_write_per_million: 12.5
+      cache_write_1h_per_million: 20
       cached_input_per_million: 1.00
       verified: true
     "claude-mythos-5*":
       input_per_million: 10.00
       output_per_million: 50.00
+      cache_write_per_million: 12.5
+      cache_write_1h_per_million: 20
       cached_input_per_million: 1.00
       verified: true
     # Opus 5.5 has a distinct lower price and 5% cache-read rate; keep this
@@ -141,44 +147,64 @@ rates:
     "claude-opus-5-5*":
       input_per_million: 4.00
       output_per_million: 20.00
+      cache_write_per_million: 5
+      cache_write_1h_per_million: 8
       cached_input_per_million: 0.20
       verified: true
     "claude-opus-5*":
       input_per_million: 5.00
       output_per_million: 25.00
+      cache_write_per_million: 6.25
+      cache_write_1h_per_million: 10
       cached_input_per_million: 0.50
       verified: true
     "claude-opus-4-8*":
       input_per_million: 5.00
       output_per_million: 25.00
+      cache_write_per_million: 6.25
+      cache_write_1h_per_million: 10
       cached_input_per_million: 0.50
     "claude-opus-4-7*":
       input_per_million: 5.00
       output_per_million: 25.00
+      cache_write_per_million: 6.25
+      cache_write_1h_per_million: 10
       cached_input_per_million: 0.50
     "claude-opus-4-6*":
       input_per_million: 5.00
       output_per_million: 25.00
+      cache_write_per_million: 6.25
+      cache_write_1h_per_million: 10
       cached_input_per_million: 0.50
     "claude-sonnet-5*":
       input_per_million: 2.00
       output_per_million: 10.00
+      cache_write_per_million: 2.5
+      cache_write_1h_per_million: 4
       cached_input_per_million: 0.20
     "claude-sonnet-4-6*":
       input_per_million: 3.00
       output_per_million: 15.00
+      cache_write_per_million: 3.75
+      cache_write_1h_per_million: 6
       cached_input_per_million: 0.30
     "claude-haiku-4-5*":
       input_per_million: 1.00
       output_per_million: 5.00
+      cache_write_per_million: 1.25
+      cache_write_1h_per_million: 2
       cached_input_per_million: 0.10
     "claude-3-5-sonnet*":
       input_per_million: 3.00
       output_per_million: 15.00
+      cache_write_per_million: 3.75
+      cache_write_1h_per_million: 6
       cached_input_per_million: 0.30
     "claude-3-5-haiku*":
       input_per_million: 0.80
       output_per_million: 4.00
+      cache_write_per_million: 1
+      cache_write_1h_per_million: 1.6
       cached_input_per_million: 0.08
 
   # Mistral — large + medium families. Le Chat Pro routes through these
