@@ -68,7 +68,7 @@ var APICatalog = []RouteDoc{
 	{Method: "GET", Path: "/api/config", Summary: "The active configuration, secrets redacted"},
 	{Method: "GET", Path: "/api/data-sources", Summary: "Events per source and each reader's health", Params: []Param{sinceParam, untilParam}, Response: state.DataSources{}},
 	{Method: "GET", Path: "/api/vendor-usage", Summary: "Which usage sources are on and producing", Params: []Param{q("window_hours", "integer", "lookback in hours; 24 when omitted")}, Response: state.VendorUsage{}},
-	{Method: "GET", Path: "/api/sources", Summary: "Each reader's ingestion health", Response: sourcesResponse{}},
+	{Method: "GET", Path: "/api/sources", Summary: "Each reader's ingestion health", Response: state.SourceHealth{}},
 
 	// Sessions (slice 3).
 	{Method: "GET", Path: "/api/dx", Summary: "Agent DX, graded, with the single change worth making", Params: []Param{daysParam, allParam}, Response: sessions.DX{}},
