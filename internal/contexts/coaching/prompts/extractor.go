@@ -197,6 +197,9 @@ func extractFromRoot(root string, src Source, opts ExtractOptions) ([]UserPrompt
 				return nil
 			}
 		}
+		if writtenBefore(d, opts.Since) {
+			return nil
+		}
 		f, err := os.Open(path)
 		if err != nil {
 			return nil
@@ -398,4 +401,15 @@ func parseLine(raw []byte, src Source, fallbackTS time.Time, fallbackSession str
 // loud signal that the build is broken.
 func mustCompileRE(pat string) *regexp.Regexp {
 	return regexp.MustCompile(pat)
+}
+
+// writtenBefore reports whether the transcript at d was last written
+// before since. Transcripts are append-only, so such a file holds no line
+// in the window and need not be read.
+func writtenBefore(d fs.DirEntry, since time.Time) bool {
+	if since.IsZero() {
+		return false
+	}
+	info, err := d.Info()
+	return err == nil && info.ModTime().Before(since)
 }
