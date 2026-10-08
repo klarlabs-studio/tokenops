@@ -16,6 +16,7 @@ var registered = []func() Descriptor{
 	providerClawRouter,
 	providerClinePass,
 	providerCodebuff,
+	providerCodeRabbit,
 	providerCursor,
 	providerDeepgram,
 	providerDeepInfra,

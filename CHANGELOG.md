@@ -33,6 +33,7 @@
 - **providers:** Kiro: monthly plan credits and bonus credits from the operator's signed-in `kiro-cli` (`chat --no-interactive /usage`), which signs its own request; TokenOps reads no credential
 - **providers:** Amp: subscription agent usage and orb hours, Amp Free's daily allowance and individual credits, from the signed-in `amp usage` CLI, or with an access token (`AMP_API_KEY` or `tokenops vendor-usage setup amp`)
 - **providers:** Augment Code: credits used of the month's allowance, from the signed-in `auggie account status` CLI, or from app.augmentcode.com with the browser session `tokenops vendor-usage setup augment` reads (the daemon re-reads it only quietly)
+- **providers:** CodeRabbit: reviews this billing period from the signed-in `coderabbit usage` CLI, stored as a count (`count_<n>_*` attributes): CodeRabbit reports no allowance, so there is no percentage
 
 ### Fixed
 
