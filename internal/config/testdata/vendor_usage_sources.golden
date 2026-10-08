@@ -2,6 +2,8 @@
 # name<TAB>source tag, in VendorUsageSources order.
 aiand_account	aiand-account
 aixy_gateway	aixy-account
+amp_cli	amp-cli
+amp_account	amp-account
 claude_code_statusline	claude-code-statusline
 claude_code_jsonl	claude-code-jsonl
 claude_subscription	claude-usage-meter

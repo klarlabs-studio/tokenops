@@ -9,6 +9,8 @@ import (
 // readers is every reader*() function in this package, by file name.
 var readers = []func() usage.Reader{
 	readerAiAnd,
+	readerAmpCLI,
+	readerAmp,
 	readerAtlasCloud,
 	readerBedrock,
 	readerChutes,

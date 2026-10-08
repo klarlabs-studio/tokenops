@@ -7,6 +7,7 @@ var providerNames = map[string]string{
 	"aiand":        "ai&",
 	"aixy":         "Aixy",
 	"alibaba":      "Alibaba Cloud",
+	"amp":          "Amp",
 	"anthropic":    "Claude",
 	"atlascloud":   "Atlas Cloud",
 	"azure-openai": "Azure OpenAI",

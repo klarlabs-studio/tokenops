@@ -4,6 +4,7 @@ window.TOKENOPS_PROVIDERS = {
   "aiand": {"name":"ai\u0026","logo":false},
   "aixy": {"name":"Aixy","logo":false},
   "alibaba": {"name":"Alibaba Cloud","logo":false},
+  "amp": {"name":"Amp","logo":true},
   "anthropic": {"name":"Claude","logo":true},
   "atlascloud": {"name":"Atlas Cloud","logo":true},
   "azure-openai": {"name":"Azure OpenAI","logo":true},
