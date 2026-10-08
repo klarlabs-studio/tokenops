@@ -70,6 +70,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"codex_jsonl", "codex-jsonl"},
 		{"opencode", "opencode"},
 		{"openrouter_account", "openrouter-account"},
+		{"poe_account", "poe-account"},
 		{"synthetic_account", "synthetic-account"},
 		{"v0_account", "v0-account"},
 		{"vercel_account", "vercel-account"},
