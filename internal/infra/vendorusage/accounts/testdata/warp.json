@@ -12,7 +12,11 @@
         "bonusGrants": [
           {"requestCreditsGranted": 500, "requestCreditsRemaining": 450, "expiration": "2027-01-01T00:00:00Z"}
         ],
-        "workspaces": []
+        "workspaces": [
+          {"bonusGrantsInfo": {"grants": [
+            {"requestCreditsGranted": 200, "requestCreditsRemaining": 50, "expiration": "2026-12-01T00:00:00Z"}
+          ]}}
+        ]
       }
     }
   }

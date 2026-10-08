@@ -11,7 +11,7 @@ func providerPoe() Descriptor {
 			// Poe's Usage API docs; not verified against a live account.
 			{Name: "poe_account", Tag: "poe-account", Kind: Balance, Credential: APIKey,
 				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,
-				Endpoint: "`GET /usage/current_balance`", Shows: "the point balance left (points, not dollars)"},
+				Endpoint: "`GET /usage/current_balance`, `GET /usage/points_history`", Shows: "the point balance left and the points spent over the last 30 days (points, not dollars)"},
 		},
 		Endpoints: []Endpoint{{Host: "api.poe.com", Billing: Reseller, Source: "https://creator.poe.com/docs/resources/usage-api"}},
 		Opencode:  []OpencodeID{{ID: "poe", Endpoint: "poe"}},
