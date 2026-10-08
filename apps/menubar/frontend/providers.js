@@ -40,6 +40,7 @@ window.TOKENOPS_PROVIDERS = {
   "kiro": {"name":"Kiro","logo":true},
   "litellm": {"name":"LiteLLM","logo":false},
   "llm-proxy": {"name":"LLM Proxy","logo":false},
+  "manus": {"name":"Manus","logo":true},
   "mimo": {"name":"Xiaomi MiMo","logo":true},
   "minimax": {"name":"MiniMax","logo":true},
   "mistral": {"name":"Mistral","logo":true},

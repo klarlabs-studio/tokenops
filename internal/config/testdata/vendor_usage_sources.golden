@@ -46,6 +46,7 @@ kimi_account	kimi-account
 kiro_cli	kiro-cli
 litellm_gateway	litellm-account
 llm_proxy_gateway	llm-proxy-account
+manus_account	manus-account
 mimo_web	mimo-web
 minimax_account	minimax-account
 mistral_web	mistral-web

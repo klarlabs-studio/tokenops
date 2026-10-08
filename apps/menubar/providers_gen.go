@@ -43,6 +43,7 @@ var providerNames = map[string]string{
 	"kiro":             "Kiro",
 	"litellm":          "LiteLLM",
 	"llm-proxy":        "LLM Proxy",
+	"manus":            "Manus",
 	"mimo":             "Xiaomi MiMo",
 	"minimax":          "MiniMax",
 	"mistral":          "Mistral",
