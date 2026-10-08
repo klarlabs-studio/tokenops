@@ -720,6 +720,7 @@ vendor's windows, busiest first:
 | Manus | `POST /user.v1.UserService/GetAvailableCredits` | monthly and daily-refresh credits used, and the credit balance |
 | MiniMax Token Plan | `GET /v1/token_plan/remains` | the interval and weekly windows |
 | Mistral | `GET /api/billing/v2/usage`, `/subscription`, `/api/billing/credits` (admin.mistral.ai) | the included-API and Vibe allowances' shares used this month, and the credit balance in its currency |
+| Muse Code | `POST api.meta.ai/muse-code/key` | the 5-hour and weekly quota used |
 | Notion AI | `POST /api/v3/getCreditRateLimitStatus` | the Notion AI allowance used, rolling and this billing period (Business and Enterprise workspaces) |
 | Nous Portal (Hermes Agent) | `GET /api/oauth/account` | the monthly credit grant used this period and the top-up credit left |
 | opencode Go | `GET /zen/go/v1/usage` | the 5-hour, weekly and monthly windows |
@@ -863,6 +864,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | MiniMax | `minimax-account` | the interval and weekly windows | API key | the vendor's client source and fixtures |
 | Mistral | `mistral-web` | the included-API and Vibe allowances' shares used this month, and the credit balance in its currency | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Moonshot | `moonshot-account` | prepaid USD balance left | API key | public docs and fixtures |
+| Muse Code | `muse-account` | the 5-hour and weekly quota used | API key | CodexBar's source, the vendor's docs and fixtures |
 | Neuralwatt | `neuralwatt-account` | prepaid USD credit left, and the subscription's kWh allowance used this period | API key | CodexBar's source, the vendor's docs and fixtures |
 | Notion AI | `notion-account` | the Notion AI allowance used, rolling and this billing period (Business and Enterprise workspaces) | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Nous Portal | `nous-account` | the monthly credit grant used this period and the top-up credit left | API key | CodexBar's source, the vendor's docs and fixtures |

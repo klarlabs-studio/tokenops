@@ -51,6 +51,7 @@ var providerNames = map[string]string{
 	"minimax":          "MiniMax",
 	"mistral":          "Mistral",
 	"moonshot":         "Moonshot",
+	"muse":             "Muse Code",
 	"neuralwatt":       "Neuralwatt",
 	"notion":           "Notion AI",
 	"nous":             "Nous Portal",

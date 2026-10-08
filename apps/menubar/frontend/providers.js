@@ -48,6 +48,7 @@ window.TOKENOPS_PROVIDERS = {
   "minimax": {"name":"MiniMax","logo":true},
   "mistral": {"name":"Mistral","logo":true},
   "moonshot": {"name":"Moonshot","logo":true},
+  "muse": {"name":"Muse Code","logo":false},
   "neuralwatt": {"name":"Neuralwatt","logo":false},
   "notion": {"name":"Notion AI","logo":true},
   "nous": {"name":"Nous Portal","logo":true},
