@@ -223,9 +223,10 @@ type Source struct {
 	// read with, in the order setup offers them. Each is read only once the
 	// operator granted it (ADR 0013).
 	AppLogins []AppLoginItem
-	// LocalStorage names the browser localStorage entries a BrowserCookie
-	// source's session is read from instead of cookies: by the
-	// interactive setup only, never by the daemon.
+	// LocalStorage names the browser localStorage entries a session is
+	// read from, for a site that keeps it there rather than in a cookie:
+	// by the interactive setup only, never by the daemon, which reads what
+	// setup stored (ADR 0013 §8). Paste stays the fallback.
 	LocalStorage *LocalStorage
 	// KeyFormat is what `tokenops vendor-usage setup` asks for when an
 	// APIKey source's credential is more than one key, e.g.
@@ -362,10 +363,14 @@ type Command struct {
 
 // LocalStorage is a site's localStorage entries in a Chromium browser.
 type LocalStorage struct {
-	// Origin is the site, "https://app.devin.ai".
-	Origin string
-	// Keys are the entries read. The reader is given them as a JSON object
-	// keyed by name; entries absent are left out.
+	// Origins are the site's origins, tried in order within each browser
+	// profile ("https://app.devin.ai", then a legacy one); entries of two
+	// origins are never mixed.
+	Origins []string
+	// Keys are the entries read, "*" matching any run of characters
+	// ("*auth1_session"); the first must be present. The reader is
+	// given them as one JSON object keyed by name, a value stored as a
+	// JSON string unquoted; entries absent are left out.
 	Keys []string
 }
 

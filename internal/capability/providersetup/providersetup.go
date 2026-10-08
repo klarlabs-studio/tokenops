@@ -24,6 +24,7 @@ import (
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 	"go.klarlabs.de/tokenops/internal/infra/applogin"
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
+	"go.klarlabs.de/tokenops/internal/infra/browserstorage"
 	"go.klarlabs.de/tokenops/internal/infra/keychain"
 	accountsapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/accounts"
 )
@@ -66,6 +67,9 @@ type Provider struct {
 	// KeychainServer is set for a provider read with another app's
 	// sign-in from the Keychain: the internet password's server.
 	KeychainServer string
+	// LocalStorage is set for a session setup reads from a browser's
+	// localStorage: the site's origins and the keys read.
+	LocalStorage *providers.LocalStorage
 	// AppLogin is true when another application's sign-in can read the
 	// provider, once granted (--use-app-login); AppLoginOnly when nothing
 	// else can.
@@ -114,6 +118,7 @@ func Lookup(id string) (Provider, bool) {
 	p := Provider{ID: string(d.ID), Name: d.DisplayName, KeyFormat: s.KeyFormat,
 		EnvVars: append(append([]string(nil), d.EnvVars...), s.EnvVars...)}
 	p.Chain = s.Credential == providers.CredentialChain
+	p.LocalStorage = s.LocalStorage
 	_, p.AppLogin = d.AppLoginSource()
 	p.AppLoginOnly = s.Credential == providers.AppLogin
 	if s.Reader == providers.GatewayReader {
@@ -201,6 +206,29 @@ func LoginWith(ctx context.Context, readers []usage.Reader, id, username, passwo
 	}
 	return "", fmt.Errorf("%s has no password sign-in", id)
 }
+
+// FromLocalStorage reads p's session from a Chromium browser's
+// localStorage, only from browser when it is set: the descriptor's keys
+// for the first of its origins found, as one JSON object. Setup calls it,
+// never the daemon; no Keychain item is read (Chromium does not encrypt
+// localStorage). It returns the session and the browser's name.
+func FromLocalStorage(p Provider, browser string) (string, string, error) {
+	if p.LocalStorage == nil {
+		return "", "", fmt.Errorf("%s is not read from localStorage", p.Name)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", "", err
+	}
+	f, err := browserstorage.Find(home, p.LocalStorage.Origins, p.LocalStorage.Keys, browser)
+	if err != nil {
+		return "", "", err
+	}
+	return f.JSON(), f.Browser, nil
+}
+
+// ErrNoLocalStorage is no browser holding the site's session.
+var ErrNoLocalStorage = browserstorage.ErrNotFound
 
 // Verify reads p's account once with key and summarises what the vendor
 // reported. Nothing is stored.

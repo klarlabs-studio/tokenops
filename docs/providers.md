@@ -204,6 +204,19 @@ and stores only the token; `--paste` takes a token instead. The password is
 never stored or logged. An expired token makes the reading stale until
 setup is run again.
 
+A site that keeps its session in **localStorage** rather than a cookie
+(Devin, Windsurf) sets `LocalStorage: &LocalStorage{Origins: ..., Keys: ...}`
+on its source (`APIKey` or `BrowserCookie`). Only the interactive setup
+reads it (`internal/infra/browserstorage`): from each Chromium-family
+profile's `Local Storage/leveldb`, copied to a private directory first
+(the browser holds a lock), read-only, exactly the keys named (`*` matches
+any run of characters) for the first origin holding the first key, never
+two origins mixed. Chromium does not encrypt localStorage, so no Keychain
+item is read. The reader is given the entries as one JSON object; setup
+stores it like a pasted session, and the daemon never reads the browser.
+`--paste` skips the browser; a test fails if anything but setup imports
+the package.
+
 ### CLI and local-file providers
 
 A vendor whose own CLI reports its usage, or whose app keeps it in a file,

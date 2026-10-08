@@ -704,6 +704,7 @@ vendor's windows, busiest first:
 | Codebuff | `POST /api/v1/usage` | credits used against the quota until it resets; with the CLI's sign-in, the weekly rate limit too |
 | CodeRabbit | `coderabbit usage` | reviews this billing period, a count with no allowance (no percentage) |
 | Command Code | `GET /internal/billing/credits`, `/internal/billing/subscriptions` (api.commandcode.ai) | 5-hour and weekly limits, the monthly credit grant used, and purchased credits |
+| Devin | `GET /api/<org>/billing/quota/usage` | daily and weekly quota, and the overage balance |
 | DevPass (LLM Gateway) | `GET /v1/key` | the cycle's plan credits and the premium weekly window; on pay-as-you-go, the key's spend against its limit |
 | Doubao | `arkcli usage plan --format json` | the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan), from the signed-in arkcli |
 | Doubao | `POST /?Action=GetCodingPlanUsage` | the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan) |
@@ -819,6 +820,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Deepgram | `deepgram-account` | prepaid USD balance left, across the key's projects | API key | CodexBar's source, the vendor's docs and fixtures |
 | DeepInfra | `deepinfra-account` | spend since the last invoice, the limit, prepaid credit | API key | public docs and fixtures |
 | DeepSeek | `deepseek-account` | prepaid USD balance left | API key | public docs and fixtures |
+| Devin | `devin-web` | daily and weekly quota, and the overage balance | API key | CodexBar's source, the vendor's docs and fixtures |
 | DevPass | `devpass-account` | the cycle's plan credits and the premium weekly window; on pay-as-you-go, the key's spend against its limit | API key | CodexBar's source, the vendor's docs and fixtures |
 | Doubao | `doubao-cli` | the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan), from the signed-in arkcli | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
 |  | `doubao-account` | the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan) | API key | CodexBar's source, the vendor's docs and fixtures |

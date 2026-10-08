@@ -21,6 +21,10 @@ var verifyProvider = providersetup.Verify
 // it so no gateway is called.
 var verifyGateway = providersetup.VerifyGateway
 
+// localStorageSession reads a session from a browser's localStorage.
+// Tests replace it so no real browser profile is read.
+var localStorageSession = providersetup.FromLocalStorage
+
 // chainCredential finds a provider's credential in its vendor's chain on
 // this machine. Tests replace it so no real credential is read.
 var chainCredential = providersetup.FromChain
@@ -101,6 +105,23 @@ var loginProvider = providersetup.Login
 // one, otherwise typed at a prompt that does not echo it.
 func providerCredential(cmd *cobra.Command, p providersetup.Provider, opts providerSetupOptions) (key, browser string, err error) {
 	out := cmd.OutOrStdout()
+	if p.LocalStorage != nil && !opts.paste {
+		fmt.Fprintf(out, "\nLooking for your %s session in a local browser's localStorage.\n", strings.Join(p.LocalStorage.Origins, " or "))
+		fmt.Fprintf(out, "TokenOps reads only %s there, from a copy, and no Keychain item (Chromium does not encrypt localStorage).\n"+
+			"This happens only now: the daemon never reads your browser. --paste skips it.\n", strings.Join(p.LocalStorage.Keys, ", "))
+		key, browser, err := localStorageSession(p, opts.browser)
+		switch {
+		case err == nil:
+			fmt.Fprintf(out, "Found it in %s.\n", browser)
+			// Stored like a pasted session: the daemon never re-reads the
+			// browser for it.
+			return key, "", nil
+		case errors.Is(err, providersetup.ErrNoLocalStorage):
+			fmt.Fprintf(out, "No %s session found in a local browser: sign in there, or paste it below.\n", p.LocalStorage.Origins[0])
+		default:
+			fmt.Fprintf(out, "Could not read it from the browser: %v\n", err)
+		}
+	}
 	if p.Browser && !p.Cookie.PasteOnly && !opts.paste {
 		fmt.Fprintf(out, "\nLooking for your %s session in a local browser.\n", p.CookieHosts())
 		fmt.Fprintf(out, "macOS may ask to let tokenops read your browser's \"Safe Storage\" item from the Keychain:\n"+
