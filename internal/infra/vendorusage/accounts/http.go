@@ -125,6 +125,50 @@ func (e *statusError) Error() string {
 	return fmt.Sprintf("accounts: %s %s: status %d", e.method, e.where, e.status)
 }
 
+// send makes a request with the headers given and returns the body of a
+// 200. 401 and 403 are usage.ErrAuth. The body is never in an error.
+func send(ctx context.Context, hc *http.Client, method, url string, headers map[string]string, body []byte) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	var rd io.Reader
+	if body != nil {
+		rd = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, url, rd)
+	if err != nil {
+		return nil, err
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	if hc == nil {
+		hc = &http.Client{Timeout: 20 * time.Second}
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("accounts: %s %s: %w", method, hostPath(url), err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	out, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+		return nil, fmt.Errorf("%w (%d on %s)", usage.ErrAuth, resp.StatusCode, hostPath(url))
+	case resp.StatusCode != http.StatusOK:
+		return nil, fmt.Errorf("accounts: %s %s: status %d", method, hostPath(url), resp.StatusCode)
+	}
+	return out, nil
+}
+
+// sendJSON is doJSON with the headers as a map; send is for answers that
+// are not JSON (protobuf) or need their raw bytes.
+func sendJSON(ctx context.Context, hc *http.Client, method, url string, headers map[string]string, body []byte, out any) error {
+	h := http.Header{}
+	for k, v := range headers {
+		h.Set(k, v)
+	}
+	return doJSON(ctx, hc, method, url, h, body, out)
+}
+
 func hostPath(url string) string {
 	if i := strings.Index(url, "?"); i >= 0 {
 		return url[:i]

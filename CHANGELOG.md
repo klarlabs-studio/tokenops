@@ -38,6 +38,7 @@
 - **providers:** Amazon Bedrock's spend this month is read from AWS Cost Explorer (`GetCostAndUsage`, signed with SigV4) once `tokenops vendor-usage setup bedrock` opts in with the AWS credentials on the machine (environment or shared credentials file; nothing is stored); Cost Explorer bills each request, so it is asked at most every 8 hours
 - **providers:** Azure OpenAI is in the catalog: turns sent to `*.openai.azure.com` (and opencode's `azure` provider) are billed to it and priced at models.dev's Azure rates, rather than probed as an unknown gateway; its account is not read, since a resource key reads no spend or quota
 - **vendor-usage:** `tokenops vendor-usage setup <gateway>` connects a self-hosted or hosted gateway (LiteLLM, Bifrost, ClawRouter, sub2api, ...) by its address and a key, checked once there before either is stored; plain HTTP only to a local or private-network host
+- **providers:** GitKraken AI: weekly AI credits (and the organization's pool with `GITKRAKEN_ORG_ID`) from api.gitkraken.dev, with the account's bearer token from `GITKRAKEN_API_TOKEN` or `tokenops vendor-usage setup gitkraken`
 
 ### Fixed
 
