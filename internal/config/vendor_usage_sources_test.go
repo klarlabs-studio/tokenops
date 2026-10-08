@@ -95,6 +95,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"xai_account", "xai-account"},
 		{"xkiro_account", "xkiro-account"},
 		{"zai_account", "zai-account"},
+		{"zed_account", "zed-account"},
 		{"zenmux_account", "zenmux-account"},
 	}
 	if len(got) != len(want) {

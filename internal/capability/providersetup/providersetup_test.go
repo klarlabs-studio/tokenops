@@ -5,9 +5,11 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/config"
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
+	"go.klarlabs.de/tokenops/internal/infra/keychain"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -56,6 +58,21 @@ func TestSummaryWordsCreditsInTheirUnit(t *testing.T) {
 	got := Summary(usage.Reading{Credits: 1500, CreditsUnit: "points", HasCredits: true})
 	if len(got) != 1 || got[0] != "balance: 1500 points" {
 		t.Errorf("summary %v", got)
+	}
+}
+
+// Zed is set up from its own Keychain sign-in; keychain.disabled reads
+// nothing at all.
+func TestKeychainProviderHonoursKeychainDisabled(t *testing.T) {
+	p, ok := Lookup("zed")
+	if !ok || p.KeychainServer != "https://zed.dev" || p.Browser {
+		t.Fatalf("zed = %+v %v", p, ok)
+	}
+	if _, err := FromKeychain(context.Background(), p, time.Second, true); !errors.Is(err, keychain.ErrDisabled) {
+		t.Errorf("disabled keychain read: %v", err)
+	}
+	if _, err := FromKeychain(context.Background(), Provider{Name: "Acme"}, time.Second, false); err == nil {
+		t.Error("a provider without a Keychain item was read from the Keychain")
 	}
 }
 

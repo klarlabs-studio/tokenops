@@ -149,6 +149,8 @@ func credential(c providers.Credential) string {
 		return "the vendor's CLI"
 	case providers.LocalFile:
 		return "local files"
+	case providers.AppKeychain:
+		return "another app's sign-in, from the Keychain at setup"
 	case providers.BrowserCookie:
 		return "browser session"
 	}

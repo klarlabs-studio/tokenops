@@ -22,6 +22,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
+	"go.klarlabs.de/tokenops/internal/infra/keychain"
 	accountsapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/accounts"
 )
 
@@ -45,6 +46,27 @@ type Provider struct {
 	// KeyFormat is the credential's shape when it is more than one key
 	// ("TEAM_ID:MANAGEMENT_KEY"); empty for a plain API key.
 	KeyFormat string
+	// KeychainServer is set for a provider read with another app's
+	// sign-in from the Keychain: the internet password's server.
+	KeychainServer string
+}
+
+// FromKeychain reads p's sign-in from the macOS Keychain, letting macOS
+// ask the operator to allow it for at most wait. It returns the credential
+// as the reader takes it, "<account> <secret>". Only setup calls it; a
+// keychainDisabled config reads nothing.
+func FromKeychain(ctx context.Context, p Provider, wait time.Duration, keychainDisabled bool) (string, error) {
+	switch {
+	case p.KeychainServer == "":
+		return "", fmt.Errorf("%s is not read from the Keychain", p.Name)
+	case keychainDisabled:
+		return "", keychain.ErrDisabled
+	}
+	l, err := keychain.PromptingInternet(ctx, p.KeychainServer, wait)
+	if err != nil {
+		return "", err
+	}
+	return l.Account + " " + l.Secret, nil
 }
 
 // Lookup returns the provider setup connects for id.
@@ -58,6 +80,9 @@ func Lookup(id string) (Provider, bool) {
 		return Provider{}, false
 	}
 	p := Provider{ID: string(d.ID), Name: d.DisplayName, EnvVars: d.EnvVars, KeyFormat: s.KeyFormat}
+	if s.Credential == providers.AppKeychain {
+		p.KeychainServer = s.KeychainServer
+	}
 	if s.Credential == providers.BrowserCookie && s.Cookie != nil {
 		p.Browser, p.CookieHost, p.CookieNames = true, s.Cookie.Host, s.Cookie.Names
 	}

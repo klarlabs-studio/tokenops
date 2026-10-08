@@ -63,7 +63,7 @@ func (d Descriptor) Label() string {
 // this provider: an account reader read with a key or a browser session.
 func (d Descriptor) Setupable() (Source, bool) {
 	for _, s := range d.Sources {
-		if s.Reader == AccountReader && (s.Credential == APIKey || s.Credential == BrowserCookie) {
+		if s.Reader == AccountReader && (s.Credential == APIKey || s.Credential == BrowserCookie || s.Credential == AppKeychain) {
 			return s, true
 		}
 	}

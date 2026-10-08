@@ -84,7 +84,9 @@ func providerAcme() Descriptor {
 | `DisplayName`, `PlanPrefix` | plan cards, menu bar, docs |
 | `Sources[].Name`, `.Tag` | `vendor-usage status`, freshness, retention keys, the headroom signal |
 | `Sources[].Kind` | which docs table: `Balance`/`Spend`, `Subscription`, `Gateway`, `LocalLog` |
-| `Sources[].Credential` | `APIKey`, `BrowserCookie` (both set up generically), `AdminKey`, `OAuthFile`, `CLI`, `LocalFile` |
+| `Sources[].Credential` | `APIKey`, `BrowserCookie`, `AppKeychain` (all set up generically), `AdminKey`, `OAuthFile`, `CLI`, `LocalFile` |
+| `Sources[].KeychainServer` | the Keychain item an `AppKeychain` source reads at setup |
+| `Sources[].Reference` | the CodexBar source a `FromCodexBar` reader follows |
 | `Sources[].Switch` | `SwitchAccounts` for account and gateway readers; `SwitchConfig` only for a reader with its own config block (add it to `configSwitches` in `internal/config/vendor_usage_sources.go` and a hint in `vendorusage_hints.go`) |
 | `Sources[].Reader` | `AccountReader`, `GatewayReader`, or `BespokeReader` with `Package` and `Fixture` |
 | `Sources[].Cookie` | the cookies a `BrowserCookie` source reads |

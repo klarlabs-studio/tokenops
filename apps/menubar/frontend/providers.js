@@ -52,6 +52,7 @@ window.TOKENOPS_PROVIDERS = {
   "xai": {"name":"xAI","logo":true},
   "xkiro": {"name":"xKiro","logo":false},
   "zai": {"name":"z.ai","logo":true},
+  "zed": {"name":"Zed","logo":false},
   "zenmux": {"name":"ZenMux","logo":true},
   "zhipuai": {"name":"Zhipu AI","logo":false}
 };
