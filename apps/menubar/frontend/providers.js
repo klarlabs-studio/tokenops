@@ -26,6 +26,7 @@ window.TOKENOPS_PROVIDERS = {
   "kilo": {"name":"Kilo","logo":true},
   "kimi": {"name":"Kimi","logo":true},
   "litellm": {"name":"LiteLLM","logo":false},
+  "longcat": {"name":"LongCat","logo":true},
   "manus": {"name":"Manus","logo":true},
   "minimax": {"name":"MiniMax","logo":true},
   "mistral": {"name":"Mistral","logo":false},
