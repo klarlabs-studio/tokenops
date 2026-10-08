@@ -16,8 +16,11 @@ func fakeVerify(t *testing.T, id, good string) *[]string {
 	t.Helper()
 	var sent []string
 	prev := verifyProvider
-	verifyProvider = func(_ context.Context, got, key string) ([]string, error) {
+	verifyProvider = func(_ context.Context, got, key, scope string) ([]string, error) {
 		sent = append(sent, got+"|"+key)
+		if scope != "" {
+			sent[len(sent)-1] += "|" + scope
+		}
 		if got != id || key != good {
 			return nil, fmt.Errorf("%w (401)", providersetup.ErrRefused)
 		}
@@ -48,6 +51,39 @@ func TestProviderSetupStoresAVerifiedKey(t *testing.T) {
 	}
 	if c := cfg.VendorUsage.Accounts.Credentials["deepseek"]; c.Key != "sk-good" || c.FromBrowser {
 		t.Errorf("stored %+v", c)
+	}
+}
+
+// --scope is verified with the key and stored beside it; a later setup
+// without --scope keeps it, and --scope "" clears it. A provider whose
+// reader takes no scope refuses one.
+func TestProviderSetupStoresAScope(t *testing.T) {
+	sent := fakeVerify(t, "kilo", "kk")
+	path := seedConfig(t)
+	if out, err := runCookieSetupCmd(t, "kk\n", "kilo", "--scope", "org_123", "--config", path, "--no-restart"); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if out, err := runCookieSetupCmd(t, "kk\n", "kilo", "--config", path, "--no-restart"); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if len(*sent) != 2 || (*sent)[0] != "kilo|kk|org_123" || (*sent)[1] != "kilo|kk|org_123" {
+		t.Errorf("verified with %v", *sent)
+	}
+	cfg, _ := config.ReadMutable(path)
+	if got := cfg.VendorUsage.Accounts.Scopes["kilo"]; got != "org_123" {
+		t.Errorf("stored scope %q", got)
+	}
+	if out, err := runCookieSetupCmd(t, "kk\n", "kilo", "--scope", "", "--config", path, "--no-restart"); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	cfg, _ = config.ReadMutable(path)
+	if _, ok := cfg.VendorUsage.Accounts.Scopes["kilo"]; ok || (*sent)[2] != "kilo|kk" {
+		t.Errorf("cleared scope: %v, verified %v", cfg.VendorUsage.Accounts.Scopes, *sent)
+	}
+
+	fakeVerify(t, "deepseek", "sk")
+	if _, err := runCookieSetupCmd(t, "sk\n", "deepseek", "--scope", "x", "--config", path, "--no-restart"); err == nil || !strings.Contains(err.Error(), "takes no scope") {
+		t.Errorf("deepseek --scope = %v", err)
 	}
 }
 

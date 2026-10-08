@@ -222,6 +222,13 @@ type Source struct {
 	// service's address, used when BaseURLEnv is unset.
 	BaseURLEnv     string
 	DefaultBaseURL string
+	// Scope says what an account reader's optional scope is, for one that
+	// can read another than its key's default ("a Kilo organisation ID");
+	// empty for a reader that takes none. The operator sets it with
+	// `tokenops vendor-usage setup <id> --scope <value>`
+	// (vendor_usage.accounts.scopes.<id>), and the reader passes it to the
+	// vendor as is.
+	Scope string
 	// Verified says how far the reader has been checked.
 	Verified Verification
 	// Reference is, for a FromCodexBar reader, the CodexBar source it

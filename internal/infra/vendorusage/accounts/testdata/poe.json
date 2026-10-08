@@ -1,3 +1,21 @@
 {
-  "current_point_balance": 295932027
+  "current_balance": {
+    "current_point_balance": 295932027
+  },
+  "points_history": [
+    {
+      "data": [
+        {"query_id": "q-4", "creation_time": 1791460800000000, "bot_name": "Claude-Sonnet-4.5", "usage_type": "API", "cost_points": 1200, "cost_usd": 0.036},
+        {"query_id": "q-3", "creation_time": 1791374400000000, "bot_name": "GPT-5", "usage_type": "API", "cost_points": 800.5, "cost_usd": 0.024}
+      ],
+      "next_cursor": "q-3"
+    },
+    {
+      "data": [
+        {"query_id": "q-2", "creation_time": 1789732800000000, "bot_name": "fixture-model", "usage_type": "Chat", "cost_points": 300},
+        {"query_id": "q-1", "creation_time": 1786708800000000, "bot_name": "fixture-model", "usage_type": "Chat", "cost_points": 99999}
+      ],
+      "next_cursor": "q-1"
+    }
+  ]
 }

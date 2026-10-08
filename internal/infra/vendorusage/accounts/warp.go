@@ -21,8 +21,9 @@ func readerWarp() usage.Reader { return Warp{} }
 // CodexBar's Warp provider does. The fields are request-named, the figures
 // are credits. Warp's edge refuses requests that do not name its client,
 // so the request carries the client headers Warp's app sends. An
-// unlimited plan has no share to report; add-on credits are a pool with
-// no window and are not read.
+// unlimited plan has no share to report. Add-on (bonus) credits, the
+// user's and each workspace's grants together, are a pool with no window:
+// they are the credits balance left, in credits, never dollars.
 type Warp struct {
 	BaseURL string
 	HTTP    *http.Client
@@ -42,6 +43,20 @@ const warpQuery = `query GetRequestLimitInfo($requestContext: RequestContext!) {
           nextRefreshTime
           requestLimit
           requestsUsedSinceLastRefresh
+        }
+        bonusGrants {
+          requestCreditsGranted
+          requestCreditsRemaining
+          expiration
+        }
+        workspaces {
+          bonusGrantsInfo {
+            grants {
+              requestCreditsGranted
+              requestCreditsRemaining
+              expiration
+            }
+          }
         }
       }
     }
@@ -81,6 +96,12 @@ func (w Warp) Read(ctx context.Context, key string) (usage.Reading, error) {
 						RequestLimit    number `json:"requestLimit"`
 						RequestsUsed    number `json:"requestsUsedSinceLastRefresh"`
 					} `json:"requestLimitInfo"`
+					BonusGrants []warpGrant `json:"bonusGrants"`
+					Workspaces  []struct {
+						BonusGrantsInfo *struct {
+							Grants []warpGrant `json:"grants"`
+						} `json:"bonusGrantsInfo"`
+					} `json:"workspaces"`
 				} `json:"user"`
 			} `json:"user"`
 		} `json:"data"`
@@ -98,8 +119,18 @@ func (w Warp) Read(ctx context.Context, key string) (usage.Reading, error) {
 	if resp.Data == nil || resp.Data.User == nil || resp.Data.User.User == nil || resp.Data.User.User.RequestLimitInfo == nil {
 		return usage.Reading{}, errors.New("accounts: POST app.warp.dev/graphql/v2: no requestLimitInfo in the answer")
 	}
-	info := resp.Data.User.User.RequestLimitInfo
+	user := resp.Data.User.User
+	info := user.RequestLimitInfo
 	r := usage.Reading{Scope: "account"}
+	grants := user.BonusGrants
+	for _, ws := range user.Workspaces {
+		if ws.BonusGrantsInfo != nil {
+			grants = append(grants, ws.BonusGrantsInfo.Grants...)
+		}
+	}
+	if left, ok := warpAddOnCredits(grants); ok {
+		r.Credits, r.CreditsUnit, r.HasCredits = left, "credits", true
+	}
 	if info.IsUnlimited || !info.RequestLimit.ok {
 		return r, nil
 	}
@@ -110,4 +141,24 @@ func (w Warp) Read(ctx context.Context, key string) (usage.Reading, error) {
 	r.Subscription = true
 	r.Windows = []usage.Window{{Name: "credits", UsedPct: used, ResetsAt: parseTime(info.NextRefreshTime)}}
 	return r, nil
+}
+
+// warpGrant is one add-on (bonus) credit grant.
+type warpGrant struct {
+	Granted   number `json:"requestCreditsGranted"`
+	Remaining number `json:"requestCreditsRemaining"`
+}
+
+// warpAddOnCredits is the add-on credits left across every grant, summed
+// as CodexBar sums them; false when the account has no grant at all.
+func warpAddOnCredits(grants []warpGrant) (float64, bool) {
+	left, seen := 0.0, false
+	for _, g := range grants {
+		if !g.Remaining.ok && !g.Granted.ok {
+			continue
+		}
+		seen = true
+		left += max(0, g.Remaining.v)
+	}
+	return left, seen
 }

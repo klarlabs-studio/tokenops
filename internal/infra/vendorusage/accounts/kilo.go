@@ -19,11 +19,22 @@ func readerKilo() usage.Reader { return Kilo{} }
 // Kilo reads two tRPC procedures in one batched GET on app.kilo.ai, as
 // CodexBar's Kilo provider does: user.getCreditBlocks (prepaid credit,
 // in micro-dollars) and kiloPass.getState (the Kilo Pass subscription's
-// credits this billing period, in dollars). It reads the personal account;
-// organisations are not read.
+// credits this billing period, in dollars). It reads the personal account,
+// or, with a scope set (vendor_usage.accounts.scopes.kilo), the
+// organisation of that ID, named in the X-KILOCODE-ORGANIZATIONID header
+// as CodexBar does (Providers/Kilo/KiloUsageFetcher.swift).
 type Kilo struct {
 	BaseURL string
 	HTTP    *http.Client
+	// Organization is the organisation ID read; empty reads the personal
+	// account.
+	Organization string
+}
+
+// WithScope reads the organisation scope names.
+func (k Kilo) WithScope(scope string) usage.Reader {
+	k.Organization = strings.TrimSpace(scope)
+	return k
 }
 
 func (Kilo) Endpoint() string               { return "kilo" }
@@ -52,8 +63,14 @@ type kiloEntry struct {
 func (k Kilo) Read(ctx context.Context, key string) (usage.Reading, error) {
 	input := url.QueryEscape(`{"0":{"json":null},"1":{"json":null}}`)
 	endpoint := base(k.BaseURL, "https://app.kilo.ai") + "/api/trpc/" + kiloProcedures + "?batch=1&input=" + input
+	header := http.Header{"Authorization": {"Bearer " + key}}
+	scope := "account"
+	if k.Organization != "" {
+		header.Set("X-KILOCODE-ORGANIZATIONID", k.Organization)
+		scope = "organisation"
+	}
 	var entries []kiloEntry
-	if err := getJSON(ctx, k.HTTP, endpoint, key, &entries); err != nil {
+	if err := doJSON(ctx, k.HTTP, http.MethodGet, endpoint, header, nil, &entries); err != nil {
 		return usage.Reading{}, err
 	}
 	if len(entries) < 2 {
@@ -64,7 +81,7 @@ func (k Kilo) Read(ctx context.Context, key string) (usage.Reading, error) {
 			return usage.Reading{}, err
 		}
 	}
-	r := usage.Reading{Scope: "account"}
+	r := usage.Reading{Scope: scope}
 	if balance, ok := kiloBalance(entries[0]); ok {
 		r.BalanceUSD, r.HasBalance = balance, true
 	}

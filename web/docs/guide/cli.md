@@ -676,12 +676,12 @@ vendor's own figures every 15 minutes:
 | Neuralwatt | `GET /v1/quota` | prepaid USD credit left, and the subscription's kWh allowance used this period |
 | OpenAI | `GET /v1/organization/costs` | the API organisation's spend this month (Administration API) |
 | OpenRouter | `GET /api/v1/key` | the key's spend, against its credit cap when it has one |
-| Poe | `GET /usage/current_balance` | the point balance left (points, not dollars) |
+| Poe | `GET /usage/current_balance`, `GET /usage/points_history` | the point balance left and the points spent over the last 30 days (points, not dollars) |
 | Replicate | `GET /api/{users|organizations}/{name}/invoices` | spend this month, and the prepaid credit left |
 | TypeSafe | `POST /settings/billing` (getBillingOverview action) | spend this billing cycle and the credit balance left |
 | Venice | `GET /api/v1/billing/balance` | USD balance left, and the DIEM epoch allocation used when staking |
 | Vercel AI Gateway | `GET /v1/credits` | the team's credit balance |
-| xAI | `GET /v1/billing/teams/{team_id}/prepaid/balance` | the team's posted prepaid USD credit |
+| xAI | `GET /v1/billing/teams/{team_id}/prepaid/balance`, `POST /v1/billing/teams/{team_id}/usage` | the team's posted prepaid USD credit, and its spend over the last 30 days |
 <!-- end generated: provider-accounts -->
 
 Coding plans report their usage windows instead. A provider whose reader
@@ -731,7 +731,7 @@ vendor's windows, busiest first:
 | Synthetic | `GET /v2/quotas` | the subscription's request quota |
 | T3 Chat | `GET /api/trpc/getCustomerData` | the 4-hour Base window and the monthly Overage budget used |
 | v0 | `GET /v1/user/billing`, `GET /v1/rate-limits` | the billing cycle's balance used and the request quota used |
-| Warp | `POST /graphql/v2?op=GetRequestLimitInfo` | credits used since the last refresh against the plan's limit |
+| Warp | `POST /graphql/v2?op=GetRequestLimitInfo` | credits used since the last refresh against the plan's limit, and the add-on credits left |
 | Windsurf | Windsurf's `state.vscdb` (`windsurf.settings.cachedPlanInfo`) | daily and weekly quota (or messages and flow actions) as Windsurf last cached them |
 | Windsurf | `POST windsurf.com/_backend/.../GetPlanStatus` | daily and weekly quota, live |
 | xKiro | `GET /v1/usage` | the plan's spend windows, today's free tokens and the wallet balance |
@@ -777,9 +777,26 @@ use read its own spend.
   typed into setup is stored, in your config file.
 - **Calls** go only to vendors whose key is on the machine. Turn them off
   with `tokenops vendor-usage enable vendor-accounts --disable`.
+- **Scopes**: Kilo and v0 read the key's default scope (the personal
+  account, the default project) unless you name another:
+  `tokenops vendor-usage setup kilo --scope <organisation ID>` or
+  `tokenops vendor-usage setup v0 --scope <project ID or slug>`. The scope
+  is checked with the key, stored as
+  `vendor_usage.accounts.scopes.<provider>` in your config, and passed to
+  that vendor as is (Kilo's `X-KILOCODE-ORGANIZATIONID` header, v0's
+  `?scope=`). A later setup without `--scope` keeps it; `--scope ""`
+  clears it. It also applies to a key found in a harness or variable.
+
+  ```yaml
+  vendor_usage:
+    accounts:
+      scopes:
+        kilo: org_123
+        v0: my-project
+  ```
 
 <!-- begin generated: provider-env-vars -->
-The environment variables read for a key: `AIAND_API_KEY`, `AIXY_API_KEY`, `AI_GATEWAY_API_KEY`, `ALIBABA_CODING_PLAN_API_KEY`, `ALIBABA_CODING_PLAN_COOKIE`, `ALIBABA_QWEN_API_KEY`, `AMP_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DASHSCOPE_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FIREWORKS_API_KEY`, `GITKRAKEN_API_TOKEN`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `LONGCAT_MANUAL_COOKIE`, `MANUS_COOKIE`, `MANUS_SESSION_TOKEN`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `PERPLEXITY_COOKIE`, `PERPLEXITY_SESSION_TOKEN`, `POE_API_KEY`, `QWEN_CLOUD_COOKIE`, `SAKANA_COOKIE`, `STEPFUN_TOKEN`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`.
+The environment variables read for a key: `AIAND_API_KEY`, `AIXY_API_KEY`, `AI_GATEWAY_API_KEY`, `ALIBABA_CODING_PLAN_API_KEY`, `ALIBABA_CODING_PLAN_COOKIE`, `ALIBABA_QWEN_API_KEY`, `AMP_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DASHSCOPE_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FIREWORKS_API_KEY`, `GITKRAKEN_API_TOKEN`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `LONGCAT_MANUAL_COOKIE`, `MANUS_COOKIE`, `MANUS_SESSION_TOKEN`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `PERPLEXITY_COOKIE`, `PERPLEXITY_SESSION_TOKEN`, `POE_API_KEY`, `QWEN_CLOUD_COOKIE`, `SAKANA_COOKIE`, `STEPFUN_TOKEN`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`, `ZENMUX_MANAGEMENT_API_KEY`.
 <!-- end generated: provider-env-vars -->
 
 #### Every provider
@@ -855,7 +872,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | OpenRouter | `openrouter-account` | the key's spend, against its credit cap when it has one | API key | public docs and fixtures |
 | Perplexity | `perplexity-account` | the plan's monthly credit grant used, and the credit balance | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Pi | `pi-sessions` | per-turn tokens per provider and model from Pi's and OMP's session transcripts | local files | CodexBar's source, the vendor's docs and fixtures |
-| Poe | `poe-account` | the point balance left (points, not dollars) | API key | CodexBar's source, the vendor's docs and fixtures |
+| Poe | `poe-account` | the point balance left and the points spent over the last 30 days (points, not dollars) | API key | CodexBar's source, the vendor's docs and fixtures |
 | Qoder | `qoder-web` | big-model credits used against the plan's (and the team's shared) total, until the next reset | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Qwen Cloud | `qwencloud-web` | the Individual Token Plan's 5-hour, weekly and monthly windows | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Raycast | `raycast-account` | the month's AI credit allowance used, and the credits left | browser session | CodexBar's source, the vendor's docs and fixtures |
@@ -870,10 +887,10 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | v0 | `v0-account` | the billing cycle's balance used and the request quota used | API key | CodexBar's source, the vendor's docs and fixtures |
 | Venice | `venice-account` | USD balance left, and the DIEM epoch allocation used when staking | API key | CodexBar's source, the vendor's docs and fixtures |
 | Vercel | `vercel-account` | the team's credit balance | API key | public docs and fixtures |
-| Warp | `warp-account` | credits used since the last refresh against the plan's limit | API key | CodexBar's source, the vendor's docs and fixtures |
+| Warp | `warp-account` | credits used since the last refresh against the plan's limit, and the add-on credits left | API key | CodexBar's source, the vendor's docs and fixtures |
 | Windsurf | `windsurf-local` | daily and weekly quota (or messages and flow actions) as Windsurf last cached them | local files | CodexBar's source, the vendor's docs and fixtures |
 |  | `windsurf-web` | daily and weekly quota, live | API key | CodexBar's source, the vendor's docs and fixtures |
-| xAI | `xai-account` | the team's posted prepaid USD credit | API key | CodexBar's source, the vendor's docs and fixtures |
+| xAI | `xai-account` | the team's posted prepaid USD credit, and its spend over the last 30 days | API key | CodexBar's source, the vendor's docs and fixtures |
 | xKiro | `xkiro-account` | the plan's spend windows, today's free tokens and the wallet balance | API key | CodexBar's source, the vendor's docs and fixtures |
 | z.ai | `zai-account` | 5-hour and weekly token windows | API key | the vendor's client source and fixtures |
 | Zed | `zed-account` | edit predictions used of the plan's allowance this billing cycle | another app's sign-in, from the Keychain at setup | CodexBar's source, the vendor's docs and fixtures |

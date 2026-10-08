@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -98,7 +99,7 @@ func aiandReading(total *big.Rat, currency string) (usage.Reading, error) {
 		return usage.Reading{Scope: "account"}, nil
 	case "USD":
 		v, _ := total.Float64()
-		return usage.Reading{Scope: "account", UsedUSD: v, HasUsed: true}, nil
+		return usage.Reading{Scope: "account", UsedUSD: v, HasUsed: true, UsedPeriod: 30 * 24 * time.Hour}, nil
 	}
 	return usage.Reading{}, fmt.Errorf("accounts: aiand bills this organisation in %s; TokenOps reads dollars only", currency)
 }

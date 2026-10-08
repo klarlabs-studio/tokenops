@@ -380,6 +380,9 @@ func computeSpendHeadroom(p Plan, in HeadroomInputs) HeadroomReport {
 		report.SpendUSD, report.SpendLimitUSD, report.SpendSource = v.UsedUSD, v.LimitUSD, "vendor"
 		if v.LimitUSD <= 0 {
 			report.Note = "no spend limit is set on the account, so there is no percentage"
+			if days := int(v.UsedPeriod / (24 * time.Hour)); days > 0 {
+				report.Note = fmt.Sprintf("spend is the vendor's figure for the last %d days; ", days) + report.Note
+			}
 			return report
 		}
 		report.SpendPct = math.Round(v.UsedUSD/v.LimitUSD*10000) / 100

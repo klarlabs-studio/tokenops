@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
+	"strings"
 
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -18,10 +20,20 @@ func readerV0() usage.Reader { return V0{} }
 // as CodexBar's v0 provider does: the share of the billing cycle's
 // balance (or a legacy account's allowance) used, and the share of the
 // request quota used. The balances keep v0's own units, so neither is
-// read as dollars. The default scope is read; a project scope is not.
+// read as dollars. The key's default scope is read, or, with a scope set
+// (vendor_usage.accounts.scopes.v0), that project ID or slug, passed as
+// ?scope= on both requests as CodexBar does.
 type V0 struct {
 	BaseURL string
 	HTTP    *http.Client
+	// Project is the project ID or slug read; empty is the default scope.
+	Project string
+}
+
+// WithScope reads the project scope names.
+func (v V0) WithScope(scope string) usage.Reader {
+	v.Project = strings.TrimSpace(scope)
+	return v
 }
 
 func (V0) Endpoint() string               { return "v0" }
@@ -52,14 +64,18 @@ func v0Used(limit, remaining float64) float64 {
 
 func (v V0) Read(ctx context.Context, key string) (usage.Reading, error) {
 	root := base(v.BaseURL, "https://api.v0.dev") + "/v1"
+	query, scope := "", "account"
+	if v.Project != "" {
+		query, scope = "?scope="+url.QueryEscape(v.Project), "project"
+	}
 	var billing struct {
 		BillingType string          `json:"billingType"`
 		Data        json.RawMessage `json:"data"`
 	}
-	if err := getJSON(ctx, v.HTTP, root+"/user/billing", key, &billing); err != nil {
+	if err := getJSON(ctx, v.HTTP, root+"/user/billing"+query, key, &billing); err != nil {
 		return usage.Reading{}, err
 	}
-	r := usage.Reading{Scope: "account"}
+	r := usage.Reading{Scope: scope}
 	switch billing.BillingType {
 	case "token":
 		var t struct {
@@ -87,7 +103,7 @@ func (v V0) Read(ctx context.Context, key string) (usage.Reading, error) {
 		return usage.Reading{}, errors.New("accounts: GET api.v0.dev/v1/user/billing: unknown billingType")
 	}
 	var rate v0Quota
-	if err := getJSON(ctx, v.HTTP, root+"/rate-limits", key, &rate); err != nil {
+	if err := getJSON(ctx, v.HTTP, root+"/rate-limits"+query, key, &rate); err != nil {
 		return usage.Reading{}, err
 	}
 	if w, ok := rate.window("requests"); ok {

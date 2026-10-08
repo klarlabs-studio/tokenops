@@ -36,13 +36,13 @@ func TestVerifyFindsTheReaderForTheCredential(t *testing.T) {
 		keyReader{fakeReader{id: "acme", good: "sk-1", reading: usage.Reading{HasBalance: true, BalanceUSD: 1}}},
 		sessionReader{fakeReader{id: "acme", good: "sid=2", reading: usage.Reading{HasBalance: true, BalanceUSD: 2}}},
 	}
-	if lines, err := VerifyWith(context.Background(), readers, "acme", "sid=2"); err != nil || lines[0] != "balance: $2.00" {
+	if lines, err := VerifyWith(context.Background(), readers, "acme", "sid=2", ""); err != nil || lines[0] != "balance: $2.00" {
 		t.Errorf("session: %v %v", lines, err)
 	}
-	if lines, err := VerifyWith(context.Background(), readers, "acme", "sk-1"); err != nil || lines[0] != "balance: $1.00" {
+	if lines, err := VerifyWith(context.Background(), readers, "acme", "sk-1", ""); err != nil || lines[0] != "balance: $1.00" {
 		t.Errorf("key: %v %v", lines, err)
 	}
-	if _, err := VerifyWith(context.Background(), readers[:1], "acme", "sid=2"); err == nil || errors.Is(err, ErrRefused) {
+	if _, err := VerifyWith(context.Background(), readers[:1], "acme", "sid=2", ""); err == nil || errors.Is(err, ErrRefused) {
 		t.Errorf("a session no reader reads = %v", err)
 	}
 }

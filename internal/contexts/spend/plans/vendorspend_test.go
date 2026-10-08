@@ -143,3 +143,26 @@ func TestParseResetsInReadsClaudeResetTimes(t *testing.T) {
 		t.Errorf("resets in %s, want %s", got, want)
 	}
 }
+
+// A vendor that reports spend over a trailing period (xAI's last 30 days)
+// keeps the period, and headroom says whose figure, for which days, it is.
+func TestVendorSpendOverATrailingPeriod(t *testing.T) {
+	e := &eventschema.Envelope{
+		Type:      eventschema.EventTypePrompt,
+		Timestamp: vsNow.Add(-time.Hour),
+		Source:    "xai-account",
+		Attributes: map[string]string{
+			"billing": "per_token", "extra_usage_used": "1.76", "extra_usage_limit": "0.00",
+			"extra_usage_currency": "USD", "extra_usage_period_min": "43200", "balance_usd": "10.00",
+		},
+		Payload: &eventschema.PromptEvent{Provider: eventschema.ProviderXAI},
+	}
+	v := LatestVendorSpend(context.Background(), staticReader{e}, eventschema.ProviderXAI, vsNow)
+	if v == nil || v.UsedUSD != 1.76 || v.UsedPeriod != 30*24*time.Hour || !v.HasBalance {
+		t.Fatalf("vendor spend = %+v", v)
+	}
+	report := computeSpendHeadroom(Plan{Name: "payg"}, HeadroomInputs{VendorSpend: v, Now: vsNow})
+	if report.SpendUSD != 1.76 || report.SpendSource != "vendor" || report.Note != "spend is the vendor's figure for the last 30 days; no spend limit is set on the account, so there is no percentage" {
+		t.Errorf("report %+v", report)
+	}
+}
