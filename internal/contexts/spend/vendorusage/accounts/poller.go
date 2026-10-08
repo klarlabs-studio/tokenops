@@ -148,12 +148,8 @@ func (p *Poller) scanGateways(ctx context.Context, creds []Credential, now time.
 		if c.Endpoint != GatewayEndpoint {
 			continue
 		}
-		root, ok := gatewayRoot(c.BaseURL)
-		if !ok || done[root] {
-			continue
-		}
-		g := p.recognise(ctx, root, now)
-		if g == nil {
+		root, g := p.gatewayFor(ctx, c, now)
+		if g == nil || done[root] {
 			continue
 		}
 		reading, err := g.Read(ctx, root, c.Key)
@@ -177,6 +173,29 @@ func (p *Poller) scanGateways(ctx context.Context, creds []Credential, now time.
 
 // recognise returns the gateway at root, asking it at most once per
 // recogniseFor.
+// gatewayFor is the address a gateway credential is read at and the
+// gateway that reads it: the one it was named for, at the base URL given,
+// or the one recognised at the root of the harness's base URL.
+func (p *Poller) gatewayFor(ctx context.Context, c Credential, now time.Time) (string, Gateway) {
+	if c.Gateway != "" {
+		base, ok := NamedGatewayBase(c.BaseURL)
+		if !ok {
+			return "", nil
+		}
+		for _, g := range p.opts.Gateways {
+			if g.Name() == c.Gateway {
+				return base, g
+			}
+		}
+		return "", nil
+	}
+	root, ok := gatewayRoot(c.BaseURL)
+	if !ok {
+		return "", nil
+	}
+	return root, p.recognise(ctx, root, now)
+}
+
 func (p *Poller) recognise(ctx context.Context, root string, now time.Time) Gateway {
 	p.mu.Lock()
 	cached, ok := p.recognised[root]

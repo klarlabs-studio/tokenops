@@ -29,6 +29,7 @@ func TestStoredCredentials(t *testing.T) {
 		"webby":  {Key: "sid=old", FromBrowser: true, Browser: "Firefox"},
 		"nobody": {Key: "sk-orphan"},
 		"off":    {FromBrowser: true, Browser: config.BrowserNone},
+		"gw":     {Key: "vk", BaseURL: "https://gw.example"},
 	}
 	readers := []accounts.Reader{namedReader{"acme"}, namedReader{"webby"}, namedReader{"off"}}
 	cookieOf := func(id string) *providers.Cookie {
@@ -46,10 +47,14 @@ func TestStoredCredentials(t *testing.T) {
 	if len(asked) != 0 {
 		t.Fatalf("the browser was read before it was needed: %v", asked)
 	}
-	if len(got) != 3 || got[0].Key != "sk-acme" || got[1].Key != "sid=old" || got[2].Resolve == nil || got[2].Endpoint != "webby" {
+	if len(got) != 4 || got[0].Key != "sk-acme" || got[2].Key != "sid=old" || got[3].Resolve == nil || got[3].Endpoint != "webby" {
 		t.Fatalf("got %+v", got)
 	}
-	key, err := got[2].Resolve(context.Background())
+	// A gateway's key is read at the address setup stored, by that gateway.
+	if gw := got[1]; gw.Endpoint != accounts.GatewayEndpoint || gw.Gateway != "gw" || gw.BaseURL != "https://gw.example" || gw.Key != "vk" {
+		t.Errorf("gateway credential %+v", gw)
+	}
+	key, err := got[3].Resolve(context.Background())
 	if err != nil || key != "sid=new; cf=clear" || len(asked) != 1 || asked[0] != "webby.example|Firefox" {
 		t.Errorf("resolved %q %v, asked %v", key, err, asked)
 	}

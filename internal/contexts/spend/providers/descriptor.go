@@ -192,6 +192,12 @@ type Source struct {
 	// admin key, OPENAI_ADMIN_KEY). A key found there is sent only to this
 	// source's reader, never to another of the provider's endpoints.
 	EnvVars []string
+	// BaseURLEnv is, for a gateway, the variable naming its address
+	// (SUB2API_BASE_URL); with a key in EnvVars it is read there, named,
+	// without being recognised first. DefaultBaseURL is the hosted
+	// service's address, used when BaseURLEnv is unset.
+	BaseURLEnv     string
+	DefaultBaseURL string
 	// Verified says how far the reader has been checked.
 	Verified Verification
 	// Reference is, for a FromCodexBar reader, the CodexBar source it

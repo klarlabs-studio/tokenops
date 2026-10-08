@@ -96,3 +96,27 @@ func TestStripJSONCKeepsStrings(t *testing.T) {
 		t.Errorf("%v", v)
 	}
 }
+
+// A gateway's own key variable is read with its address variable, and is
+// meant for that gateway only; without an address there is nothing to read.
+func TestFindGatewayVariables(t *testing.T) {
+	none := func() (string, string) { return "", "" }
+	noCodex := func() map[string]codexsettings.Provider { return nil }
+	find := func(env map[string]string) []Credential {
+		var out []Credential
+		for _, c := range Find(Options{Getenv: func(k string) string { return env[k] }, OpencodeData: t.TempDir(),
+			OpencodeConfig: t.TempDir(), Claude: none, Codex: noCodex}) {
+			if c.Gateway != "" {
+				out = append(out, c)
+			}
+		}
+		return out
+	}
+	got := find(map[string]string{"SUB2API_API_KEY": "sk-s2", "SUB2API_BASE_URL": "https://s2.example"})
+	if len(got) != 1 || got[0].Gateway != "sub2api" || got[0].BaseURL != "https://s2.example" || got[0].Key != "sk-s2" || got[0].Origin != "$SUB2API_API_KEY" {
+		t.Fatalf("got %+v", got)
+	}
+	if got := find(map[string]string{"SUB2API_API_KEY": "sk-s2"}); len(got) != 0 {
+		t.Errorf("a gateway key without an address: %+v", got)
+	}
+}

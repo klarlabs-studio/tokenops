@@ -54,6 +54,15 @@ func storedCredentials(cfg config.Config, readers []accounts.Reader, cookieOf fu
 	var out []accounts.Credential
 	for _, id := range ids {
 		c := stored[id]
+		if c.BaseURL != "" {
+			// A gateway: read at the address setup stored, by that
+			// gateway only.
+			if key := strings.TrimSpace(c.Key); key != "" {
+				out = append(out, accounts.Credential{Endpoint: accounts.GatewayEndpoint, Origin: storedOrigin,
+					Key: key, BaseURL: c.BaseURL, Gateway: id})
+			}
+			continue
+		}
 		endpoint := readerEndpoint(readers, id)
 		if endpoint == "" {
 			continue
