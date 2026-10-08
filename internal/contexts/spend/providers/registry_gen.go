@@ -47,6 +47,7 @@ var registered = []func() Descriptor{
 	providerSynthetic,
 	providerT3Chat,
 	providerTogether,
+	providerTypeSafe,
 	providerV0,
 	providerVenice,
 	providerVercel,

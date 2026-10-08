@@ -47,6 +47,7 @@ var providerNames = map[string]string{
 	"synthetic":   "Synthetic",
 	"t3chat":      "T3 Chat",
 	"together":    "Together AI",
+	"typesafe":    "TypeSafe",
 	"v0":          "v0",
 	"venice":      "Venice",
 	"vercel":      "Vercel",

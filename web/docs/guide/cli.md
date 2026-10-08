@@ -674,6 +674,7 @@ vendor's own figures every 15 minutes:
 | Neuralwatt | `GET /v1/quota` | prepaid USD credit left, and the subscription's kWh allowance used this period |
 | OpenRouter | `GET /api/v1/key` | the key's spend, against its credit cap when it has one |
 | Poe | `GET /usage/current_balance` | the point balance left (points, not dollars) |
+| TypeSafe | `POST /settings/billing` (getBillingOverview action) | spend this billing cycle and the credit balance left |
 | Venice | `GET /api/v1/billing/balance` | USD balance left, and the DIEM epoch allocation used when staking |
 | Vercel AI Gateway | `GET /v1/credits` | the team's credit balance |
 | xAI | `GET /v1/billing/teams/{team_id}/prepaid/balance` | the team's posted prepaid USD credit |
@@ -807,6 +808,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Synthetic | `synthetic-account` | the subscription's request quota | API key | public docs and fixtures |
 | T3 Chat | `t3chat-account` | the 4-hour Base window and the monthly Overage budget used | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Together AI | — | in the catalog only: billed per token; its endpoint and models.dev prices are known, its account is not read | — | — |
+| TypeSafe | `typesafe-account` | spend this billing cycle and the credit balance left | browser session | CodexBar's source, the vendor's docs and fixtures |
 | v0 | `v0-account` | the billing cycle's balance used and the request quota used | API key | CodexBar's source, the vendor's docs and fixtures |
 | Venice | `venice-account` | USD balance left, and the DIEM epoch allocation used when staking | API key | CodexBar's source, the vendor's docs and fixtures |
 | Vercel | `vercel-account` | the team's credit balance | API key | public docs and fixtures |

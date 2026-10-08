@@ -44,6 +44,7 @@ window.TOKENOPS_PROVIDERS = {
   "synthetic": {"name":"Synthetic","logo":false},
   "t3chat": {"name":"T3 Chat","logo":false},
   "together": {"name":"Together AI","logo":false},
+  "typesafe": {"name":"TypeSafe","logo":false},
   "v0": {"name":"v0","logo":true},
   "venice": {"name":"Venice","logo":true},
   "vercel": {"name":"Vercel","logo":false},
