@@ -4,6 +4,7 @@ aiand_account	aiand-account
 aixy_gateway	aixy-account
 alibaba_account	alibaba-account
 alibaba_web	alibaba-web
+alibabatokenplan_web	alibabatokenplan-web
 amp_cli	amp-cli
 amp_account	amp-account
 claude_code_statusline	claude-code-statusline

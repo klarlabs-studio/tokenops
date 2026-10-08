@@ -35,7 +35,15 @@ func newWebServer(t *testing.T, session string, refuse int, routes map[string]st
 			rw.WriteHeader(refuse)
 			return
 		}
-		body, ok := routes[r.URL.Path]
+		// A console's gateway names the call in its query: a route may be
+		// keyed "path#api" or "path#action".
+		body, ok := routes[r.URL.Path+"#"+r.URL.Query().Get("api")]
+		if !ok {
+			body, ok = routes[r.URL.Path+"#"+r.URL.Query().Get("action")]
+		}
+		if !ok {
+			body, ok = routes[r.URL.Path]
+		}
 		if !ok {
 			rw.WriteHeader(http.StatusNotFound)
 			return

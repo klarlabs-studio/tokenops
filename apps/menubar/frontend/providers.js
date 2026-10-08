@@ -4,6 +4,7 @@ window.TOKENOPS_PROVIDERS = {
   "aiand": {"name":"ai\u0026","logo":false},
   "aixy": {"name":"Aixy","logo":false},
   "alibaba": {"name":"Alibaba Cloud","logo":true},
+  "alibabatokenplan": {"name":"Alibaba Token Plan","logo":true},
   "amp": {"name":"Amp","logo":true},
   "anthropic": {"name":"Claude","logo":true},
   "antigravity": {"name":"Antigravity","logo":true},

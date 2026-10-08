@@ -11,6 +11,7 @@ var readers = []func() usage.Reader{
 	readerAiAnd,
 	readerAlibaba,
 	readerAlibabaWeb,
+	readerAlibabaTokenPlan,
 	readerAmpCLI,
 	readerAmp,
 	readerAntigravity,
