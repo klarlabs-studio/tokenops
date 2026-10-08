@@ -10,7 +10,18 @@ func providerMistral() Descriptor {
 	return Descriptor{
 		ID:          eventschema.ProviderMistral,
 		DisplayName: "Mistral",
-		CatalogOnly: "Le Chat Pro's plan and daily cap are known; nothing reads its usage yet",
+		Logo:        true,
+		// Ported from CodexBar's Mistral provider
+		// (Sources/CodexBarCore/Providers/Mistral/MistralUsageFetcher.swift,
+		// MistralSubscriptionBudgetParser.swift, MistralCookieImporter.swift).
+		Sources: []Source{
+			{Name: "mistral_web", Tag: "mistral-web", Kind: Subscription, Credential: BrowserCookie,
+				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,
+				Cookie: &Cookie{Host: "admin.mistral.ai", Names: []string{"ory_session_*", "csrftoken"},
+					Proof: []string{"ory_session_*"}},
+				Endpoint: "`GET /api/billing/v2/usage`, `/subscription`, `/api/billing/credits` (admin.mistral.ai)",
+				Shows:    "the included-API and Vibe allowances' shares used this month, and the credit balance when in dollars"},
+		},
 		Plans: []Plan{
 			// Mistral Le Chat Pro — fixed monthly subscription, daily message
 			// cap published in 2025-Q4. Window unit is "messages per day";

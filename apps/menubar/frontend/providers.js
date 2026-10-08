@@ -41,7 +41,7 @@ window.TOKENOPS_PROVIDERS = {
   "llm-proxy": {"name":"LLM Proxy","logo":false},
   "mimo": {"name":"Xiaomi MiMo","logo":true},
   "minimax": {"name":"MiniMax","logo":true},
-  "mistral": {"name":"Mistral","logo":false},
+  "mistral": {"name":"Mistral","logo":true},
   "moonshot": {"name":"Moonshot","logo":true},
   "neuralwatt": {"name":"Neuralwatt","logo":false},
   "nous": {"name":"Nous Portal","logo":true},

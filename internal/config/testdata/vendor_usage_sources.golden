@@ -47,6 +47,7 @@ litellm_gateway	litellm-account
 llm_proxy_gateway	llm-proxy-account
 mimo_web	mimo-web
 minimax_account	minimax-account
+mistral_web	mistral-web
 moonshot_account	moonshot-account
 neuralwatt_account	neuralwatt-account
 nous_account	nous-account

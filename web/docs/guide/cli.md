@@ -712,6 +712,7 @@ vendor's windows, busiest first:
 | Kimi Code | `GET /coding/v1/usages` | 5-hour, weekly and monthly windows |
 | Kiro | `kiro-cli chat --no-interactive /usage` | monthly plan credits used, and bonus credits |
 | MiniMax Token Plan | `GET /v1/token_plan/remains` | the interval and weekly windows |
+| Mistral | `GET /api/billing/v2/usage`, `/subscription`, `/api/billing/credits` (admin.mistral.ai) | the included-API and Vibe allowances' shares used this month, and the credit balance when in dollars |
 | Nous Portal (Hermes Agent) | `GET /api/oauth/account` | the monthly credit grant used this period and the top-up credit left |
 | opencode Go | `GET /zen/go/v1/usage` | the 5-hour, weekly and monthly windows |
 | Qwen Cloud Token Plan | `POST /data/api.json` on cs-data.qwencloud.com (tokenplan/personal/api/v2/usage) | the Individual Token Plan's 5-hour, weekly and monthly windows |
@@ -824,7 +825,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | LLM Proxy | `llm-proxy-account` | the tightest quota group left on the credentials it pools, and when it resets | API key | CodexBar's source, the vendor's docs and fixtures |
 | Xiaomi MiMo | `mimo-web` | the balance (in US dollars) and the Token Plan's monthly credits used | browser session | CodexBar's source, the vendor's docs and fixtures |
 | MiniMax | `minimax-account` | the interval and weekly windows | API key | the vendor's client source and fixtures |
-| Mistral | — | in the catalog only: Le Chat Pro's plan and daily cap are known; nothing reads its usage yet | — | — |
+| Mistral | `mistral-web` | the included-API and Vibe allowances' shares used this month, and the credit balance when in dollars | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Moonshot | `moonshot-account` | prepaid USD balance left | API key | public docs and fixtures |
 | Neuralwatt | `neuralwatt-account` | prepaid USD credit left, and the subscription's kWh allowance used this period | API key | CodexBar's source, the vendor's docs and fixtures |
 | Nous Portal | `nous-account` | the monthly credit grant used this period and the top-up credit left | API key | CodexBar's source, the vendor's docs and fixtures |

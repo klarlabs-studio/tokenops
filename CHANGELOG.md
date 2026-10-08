@@ -54,6 +54,7 @@
 - **providers:** Xiaomi MiMo: the balance (when in US dollars) and the Token Plan's monthly credits used, from the MiMo platform console with its browser session (`vendor-usage setup mimo`)
 - **providers:** Sakana AI: the 5-hour and weekly quota windows and the pay-as-you-go credit balance from the console's billing page, read with a pasted Cookie header (`vendor-usage setup sakana` or `SAKANA_COOKIE`)
 - **providers:** Abacus AI: compute credits used this billing month, resetting at the next billing date, read from apps.abacus.ai with its browser session (`vendor-usage setup abacus`)
+- **providers:** Mistral: the subscription's included-API and Vibe allowances used this month (and the credit balance when in US dollars), read from admin.mistral.ai with its browser session (`vendor-usage setup mistral`); the billing spend, priced in euros, is not stored
 - **vendor-usage:** browser-session providers are read the way the browser sends their cookies (several hosts, prefixed names, the whole host when the names are unknown), with at most one Keychain prompt in setup; a provider can be read with an API key or a session, or signed in to with a password (only the token is stored); a stored session the daemon cannot renew quietly turns its reading stale and the status says to run setup again
 
 ### Fixed
