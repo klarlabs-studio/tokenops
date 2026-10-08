@@ -26,6 +26,7 @@ window.TOKENOPS_PROVIDERS = {
   "kilo": {"name":"Kilo","logo":true},
   "kimi": {"name":"Kimi","logo":true},
   "litellm": {"name":"LiteLLM","logo":false},
+  "llm-proxy": {"name":"LLM Proxy","logo":false},
   "minimax": {"name":"MiniMax","logo":true},
   "mistral": {"name":"Mistral","logo":false},
   "moonshot": {"name":"Moonshot","logo":true},
