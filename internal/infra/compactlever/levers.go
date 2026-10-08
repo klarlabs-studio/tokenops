@@ -27,12 +27,20 @@ type Levers struct {
 	Paths Paths
 	Plan  Plan
 	Now   func() time.Time
+	// opencodeModels lists the opencode models run here, for Apply. It is
+	// resolved only when the levers are applied: listing them scans
+	// opencode's message store (above a gigabyte on a busy machine), and
+	// Check, which every coach report calls, never reads them. Resolving it
+	// in New made each GET /api/coach and /api/findings wait up to two
+	// seconds for a list it threw away. nil keeps Plan.OpencodeModels.
+	opencodeModels func() []string
 }
 
 var _ coachcap.ContextLevers = Levers{}
 
 // New plans the levers from cfg: the compaction lines the compact tip and
-// the compact_earlier finding use, and the opencode models run here.
+// the compact_earlier finding use, and the opencode models run here, which
+// Apply lists when it runs.
 func New(cfg config.Config) (Levers, error) {
 	p, err := DefaultPaths()
 	if err != nil {
@@ -43,17 +51,28 @@ func New(cfg config.Config) (Levers, error) {
 		Plan: Plan{
 			ClaudeCompactAt: coachcap.CompactAt(cfg, "claude-code:"),
 			CodexCompactAt:  coachcap.CompactAt(cfg, "codex:"),
-			OpencodeModels:  opencodeModelsUsed(time.Now().Add(-opencodeLookback)),
 			OpencodeShare:   OpencodeShare,
 		},
 		Now: time.Now,
+		opencodeModels: func() []string {
+			return opencodeModelsUsed(time.Now().Add(-opencodeLookback))
+		},
 	}, nil
 }
 
 // Apply implements coachcap.ContextLevers.
 func (l Levers) Apply() ([]coachcap.LeverResult, error) {
-	rs, err := Apply(l.Paths, l.Plan, l.now())
+	rs, err := Apply(l.Paths, l.plan(), l.now())
 	return results(rs), err
+}
+
+// plan is Plan with the opencode models resolved.
+func (l Levers) plan() Plan {
+	p := l.Plan
+	if l.opencodeModels != nil {
+		p.OpencodeModels = l.opencodeModels()
+	}
+	return p
 }
 
 // Revert implements coachcap.ContextLevers.
