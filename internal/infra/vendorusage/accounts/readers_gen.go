@@ -16,6 +16,7 @@ var readers = []func() usage.Reader{
 	readerDeepSeek,
 	readerDoubao,
 	readerElevenLabs,
+	readerHuggingFace,
 	readerKimi,
 	readerMiniMax,
 	readerMoonshot,
