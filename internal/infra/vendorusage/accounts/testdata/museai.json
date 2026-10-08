@@ -1,0 +1,7 @@
+{
+  "GET /": "<html><head><script src=\"/_next/static/chunks/main-app~1a2b.js\"></script></head><body>muse</body></html>",
+  "GET /_next/static/chunks/main-app~1a2b.js": "(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push([\"static/chunks/main-app~1a2b.js\",434304,e=>{e.v(t=>Promise.all([\"static/chunks/settings.9f8e.js\",\"static/chunks/shared.77aa.js\"].map(t=>e.l(t))).then(()=>t(5)))},2,(e,t,n)=>{e.A(434304).then(({preloadHatchSettingsData:a})=>a())}]);",
+  "GET /_next/static/chunks/settings.9f8e.js": "let s=(0,r.createServerReference)(\"40447f7d32b58c622904d92f8ac01a13f4798568bd\",r.callServer,void 0,r.findSourceMapURL,\"fetchSubscriptionAction\");",
+  "GET /_next/static/chunks/shared.77aa.js": "",
+  "POST /": "0:{\"a\":\"$@1\",\"f\":\"\",\"q\":\"\",\"i\":false}\n1:{\"success\":true,\"subscription\":{\"tier\":{\"name\":\"Maximum\"},\"usage\":{\"percentUsed\":3,\"resetsAt\":1790634838},\"usageRowValueLabel\":\"3% used (2.8B tokens left)\",\"topupBalance\":60000000,\"topupTotal\":80000000,\"topupRowLabel\":\"Additional tokens\",\"topupRowValueLabel\":\"25% used (1.5B tokens left)\",\"agreement\":{\"currentPeriodEndTime\":1790721238}}}\n"
+}

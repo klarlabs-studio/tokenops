@@ -1,0 +1,4 @@
+{
+  "/settings": "<html><body><div><span>Included usage</span\n><span class=\"text-sm capitalize\">pro</span\n></div><h2 id=\"header-email\">user@example.com</h2><div><span class=\"text-sm\">Monthly usage</span><span class=\"text-sm \">$7.50 of $60 used</span></div><div class=\"h-2 rounded-full\" style=\"width: 12.5%; \"></div><div class=\"text-xs local-time\" data-time=\"2026-09-30T15:14:29Z\">Resets in 4 weeks.</div></body></html>",
+  "/settings#legacy": "<html><body><span>Cloud Usage</span><span>free</span><div><span>Session usage</span><span>0.1% used</span><div class=\"local-time\" data-time=\"2026-01-30T18:00:00Z\">Resets in 3 hours.</div></div><div><span>Weekly usage</span><span>0.7% used</span><div class=\"local-time\" data-time=\"2026-02-02T00:00:00Z\">Resets in 3 days.</div></div></body></html>"
+}

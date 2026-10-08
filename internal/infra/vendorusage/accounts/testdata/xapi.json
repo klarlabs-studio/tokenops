@@ -1,0 +1,4 @@
+{
+  "/api/me": {"account": {"id": "fixture-account"}},
+  "/api/accounts/fixture-account/credits": {"credits": {"balance": 10.4}, "freeCredits": {"balance": 2}}
+}

@@ -122,10 +122,13 @@ func doJSON(ctx context.Context, hc *http.Client, method, url string, header htt
 
 // statusError is an answer that is neither 200 nor a refusal. A reader
 // whose vendor gives a status a meaning (ai&'s 402, out of credit) reads
-// it with errors.As.
+// it with errors.As. body is the answer's start, for a vendor whose error
+// body has a meaning (a stale server action, a signed-out error code); it
+// is never part of the message.
 type statusError struct {
 	method, where string
 	status        int
+	body          []byte
 }
 
 func (e *statusError) Error() string {

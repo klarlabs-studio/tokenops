@@ -1,0 +1,9 @@
+{
+  "/api/me": {"user": {"email": "person@example.test"}, "activeOrganization": {"id": "org-fixture", "name": "Synthetic Organization"}},
+  "/api/billing": {"balanceNanos": 4707099860, "hasCard": true, "onHold": false},
+  "/api/billing/spend": {"start": "2027-01-01", "end": "2027-01-21", "days": [
+    {"day": "2027-01-21", "modelId": "fixture-model", "nanos": 260066994},
+    {"day": "2027-01-21", "modelId": "fixture-model-2", "nanos": 100000000},
+    {"day": "2027-01-03", "modelId": "fixture-model", "nanos": 2000000000}
+  ]}
+}

@@ -1,0 +1,7 @@
+{
+  "/sdk/v1/b2b/sessions/authenticate": {"data": {"session_jwt": "JWT"}},
+  "/platform/v1/organizations/org_fixture/activity": {"object":"list","data":[
+    {"organization_name":"Personal","model":"llama-3.1-8b-instant","timestamp":1783900800,"num_requests":3,"n_context_tokens_total":100,"n_non_cached_context_tokens_total":80,"n_generated_tokens_total":40,"cost":0.01},
+    {"organization_name":"Personal","model":"openai/gpt-oss-120b","timestamp":1783901000,"num_requests":2,"n_context_tokens_total":50,"n_non_cached_context_tokens_total":50,"n_generated_tokens_total":10,"cost":0.02},
+    {"organization_name":"Personal","model":"llama-3.1-8b-instant","timestamp":1783987200,"num_requests":1,"n_context_tokens_total":10,"n_non_cached_context_tokens_total":10,"n_generated_tokens_total":5,"cost":0.005}]}
+}

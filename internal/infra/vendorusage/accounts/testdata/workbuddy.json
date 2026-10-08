@@ -1,0 +1,4 @@
+{
+  "/billing/meter/get-user-resource-summary": {"code":0,"msg":"OK","requestId":"fixture-request","data":{"Packages":[{"PackageCode":"FIXTURE_FREE","CycleTotalCapacity":"500","CycleRemainCapacity":"450","CycleUsedCapacity":"50","CycleFrozenCapacity":"0","CapacityUnit":"credits","TotalCount":1}],"SubscriptionPackageCode":"","SubscriptionPackageName":"体验版","IsPaidUser":false,"IsProtectedPriceUser":false}},
+  "/billing/meter/get-user-resource-free-packages": {"code":0,"msg":"OK","data":{"TotalCount":1,"Accounts":[{"CapacityUnit":"credits","CycleStartTime":"2026-10-01 00:00:00","CycleEndTime":"2026-10-31 23:59:59","Status":0}]}}
+}
