@@ -20,3 +20,21 @@ func TestQuietReadOfAMissingItem(t *testing.T) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}
 }
+
+// What `security find-internet-password -g` prints for Zed's sign-in:
+// attributes on stdout, the password on stderr.
+func TestParseSecurityLogin(t *testing.T) {
+	stdout := "keychain: \"/Users/x/Library/Keychains/login.keychain-db\"\nversion: 512\nclass: \"inet\"\nattributes:\n" +
+		"    \"acct\"<blob>=\"4242\"\n    \"srvr\"<blob>=\"https://zed.dev\"\n"
+	got, err := parseSecurityLogin(stdout, "password: \"fixture-token\"\n")
+	if err != nil || got.Account != "4242" || got.Secret != "fixture-token" {
+		t.Errorf("got %+v, %v", got, err)
+	}
+	got, err = parseSecurityLogin(stdout, "password: 0x666978747572652D746F6B656E  \"fixture-token\"\n")
+	if err != nil || got.Secret != "fixture-token" {
+		t.Errorf("hex: %+v, %v", got, err)
+	}
+	if _, err := parseSecurityLogin("    \"acct\"<blob>=<NULL>\n", "password: \"x\"\n"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("no account: %v", err)
+	}
+}

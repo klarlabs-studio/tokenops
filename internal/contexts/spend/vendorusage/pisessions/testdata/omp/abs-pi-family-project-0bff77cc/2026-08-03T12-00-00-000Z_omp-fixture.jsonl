@@ -1,0 +1,3 @@
+{"type":"title","v":1,"title":"OMP fixture","updatedAt":"2026-08-03T12:00:02.000Z"}
+{"type":"session","id":"omp-fixture","timestamp":"2026-08-03T12:00:00.000Z","cwd":"/tmp/pi-family-project"}
+{"type":"message","id":"omp-1","timestamp":"2026-09-30T12:00:00Z","message":{"role":"assistant","provider":"anthropic","model":"claude-sonnet-4-6","usage":{"input":80,"output":20,"cacheRead":4,"cacheWrite":100,"totalTokens":204,"cttl":{"ephemeral1h":40}},"timestamp":"2026-09-30T12:00:00Z"}}

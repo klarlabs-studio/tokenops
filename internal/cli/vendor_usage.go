@@ -57,6 +57,7 @@ var vendorUsageSources = []string{
 	"claude-code-jsonl",
 	"opencode",
 	"gemini-cli",
+	"pi-sessions",
 	"anthropic-admin",
 	"fireworks",
 	"vendor-accounts",
@@ -244,6 +245,14 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 		}
 		if f.interval > 0 {
 			cfg.VendorUsage.GeminiCLI.Interval = f.interval
+		}
+	case "pi-sessions":
+		cfg.VendorUsage.Pi.Enabled = enabled
+		if f.root != "" {
+			cfg.VendorUsage.Pi.Root = f.root
+		}
+		if f.interval > 0 {
+			cfg.VendorUsage.Pi.Interval = f.interval
 		}
 	case "anthropic-admin":
 		key := envSecret(f.adminKey, "TOKENOPS_ANTHROPIC_ADMIN_KEY")

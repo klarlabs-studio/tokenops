@@ -11,6 +11,7 @@ package keychain
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -72,4 +73,67 @@ func Prompting(ctx context.Context, item Item, wait time.Duration) (string, erro
 		return "", fmt.Errorf("keychain: read %s: %w", item, err)
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// Login is an application's sign-in kept as an internet password: the
+// account it is for and its secret.
+type Login struct {
+	Account string
+	Secret  string
+}
+
+// PromptingInternet reads the internet password for server (Zed keeps its
+// sign-in under "https://zed.dev") through /usr/bin/security, which asks
+// the operator to allow it, waiting at most wait. Only setup commands use
+// it, after saying which item they read and why.
+func PromptingInternet(ctx context.Context, server string, wait time.Duration) (Login, error) {
+	ctx, cancel := context.WithTimeout(ctx, wait)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "/usr/bin/security", "find-internet-password", "-g", "-s", server) //nolint:gosec // fixed binary; the server comes from TokenOps' own tables
+	var stdout, stderr strings.Builder
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	err := cmd.Run()
+	if err != nil {
+		var ee *exec.ExitError
+		switch {
+		case ctx.Err() != nil:
+			return Login{}, fmt.Errorf("%w: the prompt for %q went unanswered after %s", ErrDenied, server, wait)
+		case errors.As(err, &ee) && ee.ExitCode() == securityNotFound:
+			return Login{}, ErrNotFound
+		case errors.As(err, &ee):
+			return Login{}, fmt.Errorf("%w: %q (security exit %d)", ErrDenied, server, ee.ExitCode())
+		}
+		return Login{}, fmt.Errorf("keychain: read %q: %w", server, err)
+	}
+	return parseSecurityLogin(stdout.String(), stderr.String())
+}
+
+// parseSecurityLogin reads `security find-internet-password -g`: the
+// attributes on stdout ("acct"<blob>="4242") and the password on stderr
+// (password: "..." or, for bytes that are not text, password: 0x...).
+func parseSecurityLogin(stdout, stderr string) (Login, error) {
+	var l Login
+	for _, line := range strings.Split(stdout, "\n") {
+		line = strings.TrimSpace(line)
+		if rest, ok := strings.CutPrefix(line, `"acct"<blob>=`); ok {
+			l.Account = strings.Trim(rest, `"`)
+		}
+	}
+	for _, line := range strings.Split(stderr, "\n") {
+		rest, ok := strings.CutPrefix(strings.TrimSpace(line), "password: ")
+		if !ok {
+			continue
+		}
+		if s, ok := strings.CutPrefix(rest, `"`); ok {
+			l.Secret = strings.TrimSuffix(s, `"`)
+		} else if h, ok := strings.CutPrefix(rest, "0x"); ok {
+			if b, err := hex.DecodeString(strings.Fields(h)[0]); err == nil {
+				l.Secret = string(b)
+			}
+		}
+	}
+	if l.Account == "" || l.Secret == "" || l.Account == "<NULL>" {
+		return Login{}, ErrNotFound
+	}
+	return l, nil
 }

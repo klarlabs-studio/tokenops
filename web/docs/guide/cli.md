@@ -688,23 +688,35 @@ vendor's windows, busiest first:
 <!-- begin generated: provider-subscriptions -->
 | Vendor | Endpoint | Shows |
 |---|---|---|
+| Amp | `amp usage` | subscription agent usage and orb hours, Amp Free's daily allowance, individual credits |
+| Amp | `POST ampcode.com/api/internal?userDisplayBalanceInfo` | the same figures, with an access token |
+| Antigravity | the running app's local language server (`RetrieveUserQuotaSummary` on 127.0.0.1) | 5-hour and weekly quota for Gemini models and for Claude and GPT models, while the app runs |
+| Augment Code | `auggie account status` | credits used of the month's allowance |
+| Augment Code | `GET app.augmentcode.com/api/credits` | the same credits, with the app.augmentcode.com session |
 | Chutes | `GET /users/me/subscription_usage` | the 4-hour and monthly caps |
 | ClinePass | `GET /api/v1/users/me/plan/usage-limits` | 5-hour, weekly and monthly windows |
 | Codebuff | `POST /api/v1/usage` | credits used against the quota until it resets |
+| CodeRabbit | `coderabbit usage` | reviews this billing period, a count with no allowance (no percentage) |
 | DevPass (LLM Gateway) | `GET /v1/key` | the cycle's plan credits and the premium weekly window; on pay-as-you-go, the key's spend against its limit |
 | Doubao | `POST /?Action=GetCodingPlanUsage` | the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan) |
 | ElevenLabs | `GET /v1/user/subscription` | the subscription's credits used this period |
+| GitKraken AI | `GET api.gitkraken.dev/v1/ai-tasks/usage` | weekly AI credits, and the organization's pool with GITKRAKEN_ORG_ID |
 | IBM Bob | `GET /admin/v1/profile`, `GET /admin/v1/teams/{team}/users/{user}` | Bobcoins used this month against the team budgets |
+| JetBrains AI | the IDE's `options/AIAssistantQuotaManager2.xml` and `idea.log` | monthly AI credits used, from the most recently used IDE |
 | Kilo | `GET /api/trpc/user.getCreditBlocks,kiloPass.getState` | Kilo Pass credits used this billing period, and prepaid credit left |
 | Kimi Code | `GET /coding/v1/usages` | 5-hour, weekly and monthly windows |
+| Kiro | `kiro-cli chat --no-interactive /usage` | monthly plan credits used, and bonus credits |
 | MiniMax Token Plan | `GET /v1/token_plan/remains` | the interval and weekly windows |
 | Nous Portal (Hermes Agent) | `GET /api/oauth/account` | the monthly credit grant used this period and the top-up credit left |
 | opencode Go | `GET /zen/go/v1/usage` | the 5-hour, weekly and monthly windows |
 | Synthetic | `GET /v2/quotas` | the subscription's request quota |
 | v0 | `GET /v1/user/billing`, `GET /v1/rate-limits` | the billing cycle's balance used and the request quota used |
 | Warp | `POST /graphql/v2?op=GetRequestLimitInfo` | credits used since the last refresh against the plan's limit |
+| Windsurf | Windsurf's `state.vscdb` (`windsurf.settings.cachedPlanInfo`) | daily and weekly quota (or messages and flow actions) as Windsurf last cached them |
+| Windsurf | `POST windsurf.com/_backend/.../GetPlanStatus` | daily and weekly quota, live |
 | xKiro | `GET /v1/usage` | the plan's spend windows, today's free tokens and the wallet balance |
 | z.ai GLM Coding Plan | `GET /api/monitor/usage/quota/limit` | 5-hour and weekly token windows |
+| Zed | `GET cloud.zed.dev/client/users/me` | edit predictions used of the plan's allowance this billing cycle |
 | ZenMux | `GET /api/v1/management/subscription/detail` | rolling 5-hour and 7-day quotas, and the pay-as-you-go balance |
 <!-- end generated: provider-subscriptions -->
 
@@ -746,7 +758,7 @@ use read its own spend.
   with `tokenops vendor-usage enable vendor-accounts --disable`.
 
 <!-- begin generated: provider-env-vars -->
-The environment variables read for a key: `AIAND_API_KEY`, `AIXY_API_KEY`, `AI_GATEWAY_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FIREWORKS_API_KEY`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `POE_API_KEY`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`.
+The environment variables read for a key: `AIAND_API_KEY`, `AIXY_API_KEY`, `AI_GATEWAY_API_KEY`, `AMP_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FIREWORKS_API_KEY`, `GITKRAKEN_API_TOKEN`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `POE_API_KEY`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`.
 <!-- end generated: provider-env-vars -->
 
 #### Every provider
@@ -759,13 +771,18 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | ai& | `aiand-account` | the organisation's USD spend in the last 30 days, summed from its request logs | API key | CodexBar's source, the vendor's docs and fixtures |
 | Aixy | `aixy-account` | each budget that applies to the key, spent and reserved against its limit | API key | CodexBar's source, the vendor's docs and fixtures |
 | Alibaba Cloud | — | in the catalog only: the Coding Plan's endpoint, prices and limits are known; nothing reads its usage yet | — | — |
+| Amp | `amp-cli` | subscription agent usage and orb hours, Amp Free's daily allowance, individual credits | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
+|  | `amp-account` | the same figures, with an access token | API key | CodexBar's source, the vendor's docs and fixtures |
 | Claude | `claude-code-statusline` | the 5-hour and 7-day windows Claude Code gives its status line | local files | against a real account |
 |  | `claude-code-jsonl` | per-turn tokens from Claude Code's transcripts | local files | against a real account |
 |  | `claude-usage-meter` | Anthropic's own 5-hour and 7-day utilisation | browser session | against a real account |
 |  | `claude-code-oauth` | the plan windows, with Claude Code's own sign-in (opt-in) | another app's sign-in | public docs and fixtures |
 |  | `vendor-usage-anthropic` | the organisation's token usage from the Admin API | admin key | public docs and fixtures |
 |  | `claude-code-stats-cache` | daily totals from Claude Code's stats cache (deprecated) | local files | against a real account |
+| Antigravity | `antigravity-local` | 5-hour and weekly quota for Gemini models and for Claude and GPT models, while the app runs | local files | CodexBar's source, the vendor's docs and fixtures |
 | Atlas Cloud | `atlascloud-account` | the account's available USD balance | API key | CodexBar's source, the vendor's docs and fixtures |
+| Augment | `augment-cli` | credits used of the month's allowance | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
+|  | `augment-web` | the same credits, with the app.augmentcode.com session | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Azure OpenAI | — | in the catalog only: billed per token by Azure; a resource's key reads no spend, quota or usage (Azure Cost Management needs an Entra ID sign-in), so its turns are attributed and priced but its account is not read | — | — |
 | Amazon Bedrock | `bedrock-cost-explorer` | this month's Bedrock spend, every 8 hours (Cost Explorer bills $0.01 a request) | the vendor's credential chain, after setup | CodexBar's source, the vendor's docs and fixtures |
 | Bifrost | `bifrost-account` | each budget's share used | API key | public docs and fixtures |
@@ -774,6 +791,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | ClawRouter | `clawrouter-account` | the policy's spend against its monthly budget | API key | public docs and fixtures |
 | ClinePass | `clinepass-account` | 5-hour, weekly and monthly windows | API key | CodexBar's source, the vendor's docs and fixtures |
 | Codebuff | `codebuff-account` | credits used against the quota until it resets | API key | CodexBar's source, the vendor's docs and fixtures |
+| CodeRabbit | `coderabbit-cli` | reviews this billing period, a count with no allowance (no percentage) | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
 | Cursor | `cursor-hook` | per-turn consumption Cursor's stop hook records | local files | public docs and fixtures |
 |  | `cursor-web` | requests used against the month's allowance, from cursor.com | browser session | the vendor's client source and fixtures |
 | Deepgram | `deepgram-account` | prepaid USD balance left, across the key's projects | API key | CodexBar's source, the vendor's docs and fixtures |
@@ -785,10 +803,13 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Fireworks | `fireworks-usage` | the month's spend against the account's or the member's cap | API key | against a real account |
 | Gemini | `gemini-cli` | per-turn tokens per model from Gemini CLI's chat recordings | local files | public docs and fixtures |
 | Copilot | `github-copilot` | premium requests used against the month's allowance | another app's sign-in | the vendor's client source and fixtures |
+| GitKraken AI | `gitkraken-account` | weekly AI credits, and the organization's pool with GITKRAKEN_ORG_ID | API key | CodexBar's source, the vendor's docs and fixtures |
 | Hugging Face | `huggingface-account` | Inference Providers charges this month, against the spending limit when set | API key | CodexBar's source, the vendor's docs and fixtures |
 | IBM Bob | `ibmbob-account` | Bobcoins used this month against the team budgets | API key | CodexBar's source, the vendor's docs and fixtures |
+| JetBrains AI | `jetbrains-local` | monthly AI credits used, from the most recently used IDE | local files | CodexBar's source, the vendor's docs and fixtures |
 | Kilo | `kilo-account` | Kilo Pass credits used this billing period, and prepaid credit left | API key | CodexBar's source, the vendor's docs and fixtures |
 | Kimi | `kimi-account` | 5-hour, weekly and monthly windows | API key | the vendor's client source and fixtures |
+| Kiro | `kiro-cli` | monthly plan credits used, and bonus credits | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
 | LiteLLM | `litellm-account` | the key's spend against its budget, and when it resets | API key | the vendor's client source and fixtures |
 | LLM Proxy | `llm-proxy-account` | the tightest quota group left on the credentials it pools, and when it resets | API key | CodexBar's source, the vendor's docs and fixtures |
 | MiniMax | `minimax-account` | the interval and weekly windows | API key | the vendor's client source and fixtures |
@@ -802,6 +823,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | opencode | `opencode` | per-message tokens for every provider, from opencode's SQLite store | local files | against a real account |
 | opencode Go | `opencode-go-account` | the 5-hour, weekly and monthly windows | API key | CodexBar's source, the vendor's docs and fixtures |
 | OpenRouter | `openrouter-account` | the key's spend, against its credit cap when it has one | API key | public docs and fixtures |
+| Pi | `pi-sessions` | per-turn tokens per provider and model from Pi's and OMP's session transcripts | local files | CodexBar's source, the vendor's docs and fixtures |
 | Poe | `poe-account` | the point balance left (points, not dollars) | API key | CodexBar's source, the vendor's docs and fixtures |
 | sub2api | `sub2api-account` | the key's quota and 5-hour, daily and 7-day limits, a subscription group's daily, weekly and monthly limits, or the wallet balance | API key | CodexBar's source, the vendor's docs and fixtures |
 | Synthetic | `synthetic-account` | the subscription's request quota | API key | public docs and fixtures |
@@ -810,9 +832,12 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Venice | `venice-account` | USD balance left, and the DIEM epoch allocation used when staking | API key | CodexBar's source, the vendor's docs and fixtures |
 | Vercel | `vercel-account` | the team's credit balance | API key | public docs and fixtures |
 | Warp | `warp-account` | credits used since the last refresh against the plan's limit | API key | CodexBar's source, the vendor's docs and fixtures |
+| Windsurf | `windsurf-local` | daily and weekly quota (or messages and flow actions) as Windsurf last cached them | local files | CodexBar's source, the vendor's docs and fixtures |
+|  | `windsurf-web` | daily and weekly quota, live | API key | CodexBar's source, the vendor's docs and fixtures |
 | xAI | `xai-account` | the team's posted prepaid USD credit | API key | CodexBar's source, the vendor's docs and fixtures |
 | xKiro | `xkiro-account` | the plan's spend windows, today's free tokens and the wallet balance | API key | CodexBar's source, the vendor's docs and fixtures |
 | z.ai | `zai-account` | 5-hour and weekly token windows | API key | the vendor's client source and fixtures |
+| Zed | `zed-account` | edit predictions used of the plan's allowance this billing cycle | another app's sign-in, from the Keychain at setup | CodexBar's source, the vendor's docs and fixtures |
 | ZenMux | `zenmux-account` | rolling 5-hour and 7-day quotas, and the pay-as-you-go balance | API key | CodexBar's source, the vendor's docs and fixtures |
 | Zhipu AI | — | in the catalog only: z.ai's mainland-China platform: its endpoints, opencode IDs and prices are known; no reader reads its plan yet | — | — |
 <!-- end generated: provider-list -->

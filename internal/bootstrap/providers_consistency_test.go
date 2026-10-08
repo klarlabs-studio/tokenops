@@ -101,6 +101,12 @@ func checkReader(t *testing.T, id string, s providers.Source, readers, gateways 
 	fixture := s.Fixture
 	if s.Reader != providers.BespokeReader {
 		fixture = "internal/infra/vendorusage/accounts/testdata/" + id + ".json"
+		// A CLI's or a local file's fixture is in the vendor's own format:
+		// the CLI's output, the app's XML or database.
+		dir := "internal/infra/vendorusage/accounts/testdata/"
+		if matches, _ := filepath.Glob(filepath.Join(repoRoot, dir, id+".*")); len(matches) > 0 && !repoFileExists(fixture) {
+			fixture = dir + filepath.Base(matches[0])
+		}
 	}
 	if !repoFileExists(fixture) {
 		t.Errorf("%s/%s: no test fixture at %s", id, s.Tag, fixture)

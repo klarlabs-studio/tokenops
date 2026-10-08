@@ -203,3 +203,56 @@ func TestPollerPacesAReaderThatIsBilledPerRequest(t *testing.T) {
 		t.Errorf("not asked again after its interval: %v", r.keys)
 	}
 }
+
+// A count with no allowance is stored as a count, never as a percentage.
+func TestEnvelopeCarriesCounts(t *testing.T) {
+	at := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	r := Reading{Scope: "account", Subscription: true, Counts: []Count{{Name: "reviews", Used: 25, ResetsAt: at}}}
+	if r.Empty() {
+		t.Fatal("a reading with a count is empty")
+	}
+	a := NewEnvelope(at, &fakeLocal{}, r).Attributes
+	if a["count_0_name"] != "reviews" || a["count_0_used"] != "25" || a["count_0_reset_at"] != "2026-09-01T00:00:00Z" {
+		t.Errorf("attributes %v", a)
+	}
+	if _, ok := a["window_0_used_pct"]; ok {
+		t.Error("a count became a window")
+	}
+}
+
+// fakeLocal is a keyless reader: a vendor CLI, installed or not.
+type fakeLocal struct {
+	installed bool
+	keys      []string
+}
+
+func (*fakeLocal) Endpoint() string               { return "acme" }
+func (*fakeLocal) Provider() eventschema.Provider { return "acme" }
+func (*fakeLocal) Source() string                 { return "acme-cli" }
+func (*fakeLocal) Keyless()                       {}
+func (f *fakeLocal) Read(_ context.Context, key string) (Reading, error) {
+	f.keys = append(f.keys, key)
+	if !f.installed {
+		return Reading{}, ErrNotInstalled
+	}
+	return Reading{Scope: "account", Subscription: true, Windows: []Window{{Name: "month", UsedPct: 40}}}, nil
+}
+
+// A keyless reader is read with no credential at all, never handed one
+// found for its vendor, and skipped silently when it is not installed.
+func TestPollerReadsKeylessReadersWithoutAKey(t *testing.T) {
+	absent, present := &fakeLocal{}, &fakeLocal{installed: true}
+	bus := &captureBus{}
+	creds := func() []Credential { return []Credential{{Endpoint: "acme", Key: "secret"}} }
+	NewPoller(bus, PollerOptions{Readers: []Reader{absent}, Credentials: creds}).Scan(context.Background())
+	if len(bus.got) != 0 {
+		t.Fatalf("an uninstalled CLI published %+v", bus.got)
+	}
+	NewPoller(bus, PollerOptions{Readers: []Reader{present}, Credentials: creds}).Scan(context.Background())
+	if len(present.keys) != 1 || present.keys[0] != "" {
+		t.Errorf("keyless reader was sent %q", present.keys)
+	}
+	if len(bus.got) != 1 || bus.got[0].Source != "acme-cli" || bus.got[0].Attributes["window_0_used_pct"] != "40.00" {
+		t.Fatalf("published %+v", bus.got)
+	}
+}

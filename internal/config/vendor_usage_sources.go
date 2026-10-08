@@ -69,6 +69,7 @@ var configSwitches = map[string]func(Config) (enabled, alwaysOn bool){
 	"codex-jsonl":             func(c Config) (bool, bool) { return c.VendorUsage.CodexJSONL.Enabled, false },
 	"opencode":                func(c Config) (bool, bool) { return c.VendorUsage.OpenCode.Enabled, false },
 	"gemini-cli":              func(c Config) (bool, bool) { return c.VendorUsage.GeminiCLI.Enabled, false },
+	"pi-sessions":             func(c Config) (bool, bool) { return c.VendorUsage.Pi.Enabled, false },
 	"claude-code-stats-cache": func(c Config) (bool, bool) { return c.VendorUsage.ClaudeCode.Enabled, false },
 	"vendor-usage-anthropic":  func(c Config) (bool, bool) { return c.VendorUsage.Anthropic.Enabled, false },
 	"github-copilot":          func(c Config) (bool, bool) { return c.VendorUsage.GitHubCopilot.Enabled, false },

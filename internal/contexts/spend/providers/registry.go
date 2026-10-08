@@ -61,11 +61,12 @@ func (d Descriptor) Label() string {
 
 // Setupable is the source `tokenops vendor-usage setup <id>` connects for
 // this provider: an account reader read with a key (an API key or an
-// organisation admin key), a browser session or the vendor's credential
-// chain, or a gateway read with a key at the address the operator gives.
+// organisation admin key), a browser session, another app's Keychain
+// sign-in or the vendor's credential chain, or a gateway read with a key at
+// the address the operator gives.
 func (d Descriptor) Setupable() (Source, bool) {
 	for _, s := range d.Sources {
-		if s.Reader == AccountReader && (s.Credential == APIKey || s.Credential == AdminKey || s.Credential == BrowserCookie || s.Credential == CredentialChain) {
+		if s.Reader == AccountReader && (s.Credential == APIKey || s.Credential == AdminKey || s.Credential == BrowserCookie || s.Credential == CredentialChain || s.Credential == AppKeychain) {
 			return s, true
 		}
 		if s.Reader == GatewayReader && s.Credential == APIKey {

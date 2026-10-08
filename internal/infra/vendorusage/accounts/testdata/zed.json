@@ -1,0 +1,22 @@
+{
+  "user": {
+    "id": 4242,
+    "github_login": "octocat",
+    "name": "The Octocat"
+  },
+  "feature_flags": [],
+  "plan": {
+    "plan_v3": "zed_pro_trial",
+    "subscription_period": {
+      "started_at": "2026-05-13T00:00:00.000Z",
+      "ended_at": "2026-06-13T00:00:00.000Z"
+    },
+    "usage": {
+      "edit_predictions": {
+        "used": 10,
+        "limit": {"limited":20}
+      }
+    },
+    "has_overdue_invoices": true
+  }
+}

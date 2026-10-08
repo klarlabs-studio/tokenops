@@ -125,6 +125,10 @@ func checkSource(t *testing.T, id string, s Source, tags, names map[string]bool)
 	}
 	switch s.Credential {
 	case APIKey, AdminKey, OAuthFile, CLI, LocalFile, BrowserCookie, CredentialChain:
+	case AppKeychain:
+		if s.KeychainServer == "" {
+			t.Errorf("%s/%s: an app-keychain source names the item's server", id, s.Tag)
+		}
 	default:
 		t.Errorf("%s/%s: credential %q", id, s.Tag, s.Credential)
 	}
