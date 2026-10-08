@@ -81,6 +81,7 @@
 - **providers:** Ollama Cloud: the monthly usage (or the older session and weekly windows) from ollama.com/settings, read with the browser session (`vendor-usage setup ollama`)
 - **providers:** WorkBuddy (Tencent): the share of the credit packages' cycle used and when it ends, read with www.workbuddy.cn's browser session (`vendor-usage setup workbuddy`)
 - **providers:** Muse (muse.ai): the weekly token allowance used, from the page's own server action, read with muse.ai's browser session (`vendor-usage setup museai`)
+- **providers:** Charm Hyper: the Hypercredits left (`GET hyper.charm.land/v1/credits`), kept in Hypercredits, read with an API key (`HYPER_API_KEY`) or the browser session (`vendor-usage setup hyper`)
 
 ### Fixed
 

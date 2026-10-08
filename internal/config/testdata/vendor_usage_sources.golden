@@ -41,6 +41,8 @@ github_copilot	github-copilot
 gitkraken_account	gitkraken-account
 helmcode_account	helmcode-account
 huggingface_account	huggingface-account
+hyper_account	hyper-account
+hyper_web	hyper-web
 ibmbob_account	ibmbob-account
 jetbrains_local	jetbrains-local
 kilo_account	kilo-account
