@@ -10,6 +10,7 @@ var providerNames = map[string]string{
 	"cerebras":    "Cerebras",
 	"chutes":      "Chutes",
 	"clawrouter":  "ClawRouter",
+	"clinepass":   "ClinePass",
 	"cursor":      "Cursor",
 	"deepinfra":   "DeepInfra",
 	"deepseek":    "DeepSeek",

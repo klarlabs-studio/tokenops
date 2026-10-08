@@ -7,6 +7,7 @@ window.TOKENOPS_PROVIDERS = {
   "cerebras": {"name":"Cerebras","logo":false},
   "chutes": {"name":"Chutes","logo":false},
   "clawrouter": {"name":"ClawRouter","logo":false},
+  "clinepass": {"name":"ClinePass","logo":true},
   "cursor": {"name":"Cursor","logo":true},
   "deepinfra": {"name":"DeepInfra","logo":false},
   "deepseek": {"name":"DeepSeek","logo":true},

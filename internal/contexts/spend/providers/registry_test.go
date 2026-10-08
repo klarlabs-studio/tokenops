@@ -128,7 +128,7 @@ func checkSource(t *testing.T, id string, s Source, tags, names map[string]bool)
 		t.Errorf("%s/%s: switch %q", id, s.Tag, s.Switch)
 	}
 	switch s.Verified {
-	case VerifiedLive, FromDocs, FromClientSource:
+	case VerifiedLive, FromDocs, FromClientSource, FromCodexBar:
 	default:
 		t.Errorf("%s/%s: verification %q", id, s.Tag, s.Verified)
 	}

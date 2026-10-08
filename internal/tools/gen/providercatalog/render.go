@@ -160,6 +160,8 @@ func verified(v providers.Verification) string {
 		return "public docs and fixtures"
 	case providers.FromClientSource:
 		return "the vendor's client source and fixtures"
+	case providers.FromCodexBar:
+		return "CodexBar's source, the vendor's docs and fixtures"
 	}
 	return string(v)
 }

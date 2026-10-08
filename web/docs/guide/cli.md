@@ -679,6 +679,7 @@ vendor's windows, busiest first:
 | Vendor | Endpoint | Shows |
 |---|---|---|
 | Chutes | `GET /users/me/subscription_usage` | the 4-hour and monthly caps |
+| ClinePass | `GET /api/v1/users/me/plan/usage-limits` | 5-hour, weekly and monthly windows |
 | Kimi Code | `GET /coding/v1/usages` | 5-hour, weekly and monthly windows |
 | MiniMax Token Plan | `GET /v1/token_plan/remains` | the interval and weekly windows |
 | Synthetic | `GET /v2/quotas` | the subscription's request quota |
@@ -720,7 +721,7 @@ use read its own spend.
   with `tokenops vendor-usage enable vendor-accounts --disable`.
 
 <!-- begin generated: provider-env-vars -->
-The environment variables read for a key: `AI_GATEWAY_API_KEY`, `CHUTES_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `FIREWORKS_API_KEY`, `MOONSHOT_API_KEY`, `OPENROUTER_API_KEY`, `SYNTHETIC_API_KEY`.
+The environment variables read for a key: `AI_GATEWAY_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `FIREWORKS_API_KEY`, `MOONSHOT_API_KEY`, `OPENROUTER_API_KEY`, `SYNTHETIC_API_KEY`.
 <!-- end generated: provider-env-vars -->
 
 #### Every provider
@@ -741,6 +742,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Cerebras | — | in the catalog only: Cerebras Code's plans and limits are known; nothing reads its usage yet | — | — |
 | Chutes | `chutes-account` | the 4-hour and monthly caps | API key | the vendor's client source and fixtures |
 | ClawRouter | `clawrouter-account` | the policy's spend against its monthly budget | API key | public docs and fixtures |
+| ClinePass | `clinepass-account` | 5-hour, weekly and monthly windows | API key | CodexBar's source, the vendor's docs and fixtures |
 | Cursor | `cursor-hook` | per-turn consumption Cursor's stop hook records | local files | public docs and fixtures |
 |  | `cursor-web` | requests used against the month's allowance, from cursor.com | browser session | the vendor's client source and fixtures |
 | DeepInfra | `deepinfra-account` | spend since the last invoice, the limit, prepaid credit | API key | public docs and fixtures |

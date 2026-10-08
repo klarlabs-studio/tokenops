@@ -155,6 +155,10 @@ const (
 	// FromClientSource readers were built from the vendor's own client
 	// source, the endpoint being unpublished, and tested against fixtures.
 	FromClientSource Verification = "client-source"
+	// FromCodexBar readers were ported from CodexBar's provider source
+	// (github.com/steipete/CodexBar), with the vendor's docs where it has
+	// them, and tested against fixtures; never against a live account.
+	FromCodexBar Verification = "codexbar"
 )
 
 // Source is one way a provider's usage is read. Its Tag is stamped on every

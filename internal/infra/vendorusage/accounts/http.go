@@ -151,6 +151,11 @@ func pct(used, limit float64) float64 {
 	return used / limit * 100
 }
 
+// clampPct holds a vendor's percentage to 0–100.
+func clampPct(p float64) float64 {
+	return min(100, max(0, p))
+}
+
 // probe GETs url with no key and returns the body of a 200, for
 // recognising a gateway by its health route.
 func probe(ctx context.Context, hc *http.Client, url string) ([]byte, bool) {
