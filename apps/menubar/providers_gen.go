@@ -32,6 +32,7 @@ var providerNames = map[string]string{
 	"devpass":          "DevPass",
 	"doubao":           "Doubao",
 	"elevenlabs":       "ElevenLabs",
+	"factory":          "Factory",
 	"fireworks":        "Fireworks",
 	"gemini":           "Gemini",
 	"github":           "Copilot",

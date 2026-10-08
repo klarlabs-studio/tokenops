@@ -29,6 +29,7 @@ window.TOKENOPS_PROVIDERS = {
   "devpass": {"name":"DevPass","logo":false},
   "doubao": {"name":"Doubao","logo":true},
   "elevenlabs": {"name":"ElevenLabs","logo":true},
+  "factory": {"name":"Factory","logo":false},
   "fireworks": {"name":"Fireworks","logo":true},
   "gemini": {"name":"Gemini","logo":true},
   "github": {"name":"Copilot","logo":true},

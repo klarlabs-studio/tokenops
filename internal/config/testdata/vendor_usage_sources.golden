@@ -35,6 +35,8 @@ devin_web	devin-web
 devpass_account	devpass-account
 doubao_account	doubao-account
 elevenlabs_account	elevenlabs-account
+factory_account	factory-account
+factory_web	factory-web
 fireworks	fireworks-usage
 gemini_cli	gemini-cli
 github_copilot	github-copilot
