@@ -79,7 +79,9 @@ type Config struct {
 	Rules       RulesConfig       `yaml:"rules"`
 	Resilience  ResilienceConfig  `yaml:"resilience"`
 	VendorUsage VendorUsageConfig `yaml:"vendor_usage"`
-	MDNS        MDNSConfig        `yaml:"mdns,omitempty"`
+	// Keychain can switch off every macOS Keychain read.
+	Keychain KeychainConfig `yaml:"keychain,omitempty"`
+	MDNS     MDNSConfig     `yaml:"mdns,omitempty"`
 	// PlanLimits carries the per-provider figures only the operator can
 	// supply, keyed by provider name. Spend-denominated plans
 	// (usage-based Enterprise) have no vendor-published cap, so their

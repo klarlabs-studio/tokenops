@@ -44,6 +44,14 @@ func applyEnvOverrides(cfg *Config) {
 			cfg.Storage.Enabled = false
 		}
 	}
+	if v := os.Getenv("TOKENOPS_KEYCHAIN_DISABLED"); v != "" {
+		switch strings.ToLower(v) {
+		case "1", "true", "yes", "on":
+			cfg.Keychain.Disabled = true
+		case "0", "false", "no", "off":
+			cfg.Keychain.Disabled = false
+		}
+	}
 	if v := os.Getenv("TOKENOPS_STORAGE_PATH"); v != "" {
 		cfg.Storage.Path = v
 	}
