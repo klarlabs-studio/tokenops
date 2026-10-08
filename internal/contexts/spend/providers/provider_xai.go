@@ -15,7 +15,7 @@ func providerXAI() Descriptor {
 			// key and the team ID; an inference key is refused, so none of
 			// the harnesses' xAI keys is sent here.
 			{Name: "xai_account", Tag: "xai-account", Kind: Balance, Credential: APIKey,
-				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromDocs,
+				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,
 				KeyFormat: "TEAM_ID:MANAGEMENT_KEY",
 				Endpoint:  "`GET /v1/billing/teams/{team_id}/prepaid/balance`", Shows: "the team's posted prepaid USD credit"},
 		},

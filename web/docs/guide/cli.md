@@ -798,7 +798,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Venice | `venice-account` | USD balance left, and the DIEM epoch allocation used when staking | API key | CodexBar's source, the vendor's docs and fixtures |
 | Vercel | `vercel-account` | the team's credit balance | API key | public docs and fixtures |
 | Warp | `warp-account` | credits used since the last refresh against the plan's limit | API key | CodexBar's source, the vendor's docs and fixtures |
-| xAI | `xai-account` | the team's posted prepaid USD credit | API key | public docs and fixtures |
+| xAI | `xai-account` | the team's posted prepaid USD credit | API key | CodexBar's source, the vendor's docs and fixtures |
 | xKiro | `xkiro-account` | the plan's spend windows, today's free tokens and the wallet balance | API key | CodexBar's source, the vendor's docs and fixtures |
 | z.ai | `zai-account` | 5-hour and weekly token windows | API key | the vendor's client source and fixtures |
 | ZenMux | `zenmux-account` | rolling 5-hour and 7-day quotas, and the pay-as-you-go balance | API key | CodexBar's source, the vendor's docs and fixtures |
