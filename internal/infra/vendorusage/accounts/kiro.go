@@ -24,9 +24,9 @@ func readerKiro() usage.Reader { return Kiro{} }
 // usage, so nothing starts a sign-in from the background. The output is
 // a terminal report, parsed as CodexBar parses it.
 //
-// Not read: the overage credits, which only Kiro's private
-// GetUsageLimits API reports, with the token kiro-cli keeps in its own
-// database; that token belongs to kiro-cli and is not read (ADR 0011 §1.4).
+// The overage credits, which only Kiro's private GetUsageLimits API
+// reports, are KiroOverage's, with the token kiro-cli keeps in its own
+// database, read only once the operator granted it (ADR 0013).
 type Kiro struct {
 	// Bin overrides finding kiro-cli (KIRO_CLI_PATH, PATH, install
 	// directories); Now the clock. For tests.

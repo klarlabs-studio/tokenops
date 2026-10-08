@@ -215,6 +215,10 @@ type Source struct {
 	// source's sign-in is kept under ("https://zed.dev"). The reader is
 	// given it as "<account> <secret>".
 	KeychainServer string
+	// Command is the vendor CLI a generic CLI source runs (Credential CLI):
+	// the vendor's own CLI signing its own request with the sign-in it
+	// keeps, which TokenOps never sees.
+	Command *Command
 	// AppLogins are other applications' sign-ins this source's reader can
 	// read with, in the order setup offers them. Each is read only once the
 	// operator granted it (ADR 0013).
@@ -332,6 +336,28 @@ type AppLoginItem struct {
 	Markers []string
 	// Host is where the token is sent: the only place it goes.
 	Host string
+}
+
+// Command is a vendor CLI run as a usage source. It is run with fixed
+// arguments, no shell, an empty stdin (so it cannot wait on a prompt), a
+// deadline and its own process group; its output is parsed, never logged.
+// A CLI that is not installed is skipped silently. Only flags that never
+// prompt belong in Args.
+type Command struct {
+	// Binary is the executable's name, found on PATH or where installers
+	// put it; PathEnv names a variable that overrides where it is.
+	Binary  string
+	PathEnv string
+	// Args are the argument lists tried in order, until one answers with
+	// usage (Alibaba's international console, then its mainland one).
+	Args [][]string
+	// Timeout bounds one run.
+	Timeout time.Duration
+	// EnvAllow, when set, is the only environment the CLI is given:
+	// nothing else (keys, cookies, cloud credentials) crosses into it.
+	EnvAllow []string
+	// SignedOut are how the CLI says it is not signed in.
+	SignedOut []string
 }
 
 // LocalStorage is a site's localStorage entries in a Chromium browser.
