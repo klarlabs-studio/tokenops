@@ -129,7 +129,7 @@ func VerifyWith(ctx context.Context, readers []usage.Reader, id, key string) ([]
 		return nil, errors.New("no credential entered")
 	}
 	for _, r := range readers {
-		if string(r.Provider()) != id {
+		if string(r.Provider()) != id || usage.IsKeyless(r) {
 			continue
 		}
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)

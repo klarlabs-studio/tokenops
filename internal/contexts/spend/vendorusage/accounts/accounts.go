@@ -24,6 +24,27 @@ import (
 // ErrAuth reports a key the vendor refused.
 var ErrAuth = errors.New("accounts: the key was refused")
 
+// ErrNotInstalled reports a Keyless reader whose vendor CLI or app is not
+// on this machine: there is nothing to read, and nothing is wrong.
+var ErrNotInstalled = errors.New("accounts: not installed on this machine")
+
+// Keyless is a Reader that needs no key: the vendor's own CLI signs its own
+// request, or the vendor's app keeps its figures in a file on disk (ADR
+// 0011 §1, the vendor's own records). The poller reads it on every scan
+// with an empty key and never hands it a credential; it answers
+// ErrNotInstalled when its CLI or file is absent.
+type Keyless interface {
+	Reader
+	// Keyless marks the reader; it does nothing.
+	Keyless()
+}
+
+// IsKeyless reports whether r reads without a key.
+func IsKeyless(r Reader) bool {
+	_, ok := r.(Keyless)
+	return ok
+}
+
 // Credential is a key and the endpoint it was found for.
 type Credential struct {
 	// Endpoint is the endpoint name (biller's), e.g. "openrouter".
