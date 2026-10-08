@@ -1,10 +1,9 @@
 // Package pgtest gives a test its own migrated team-plane store in a
 // throwaway schema of the Postgres named by TOKENOPS_TEST_POSTGRES, and
 // skips the test when that variable is unset. CI sets it (the test job runs
-// a Postgres service); locally, point it at any disposable database:
-//
-//	docker run -d --rm -p 127.0.0.1:55432:5432 -e POSTGRES_PASSWORD=test postgres:17-alpine
-//	export TOKENOPS_TEST_POSTGRES=postgres://postgres:test@127.0.0.1:55432/postgres?sslmode=disable
+// a Postgres service); locally, start a disposable Postgres container and
+// set the variable to its URL (user, password, 127.0.0.1, the published
+// port, sslmode=disable). Each test works in its own schema, dropped after.
 package pgtest
 
 import (
