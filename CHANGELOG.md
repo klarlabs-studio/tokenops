@@ -73,6 +73,7 @@
 - **providers:** TypeSafe: spend this billing cycle and the credit balance left, in dollars (the console billing page's getBillingOverview action, whose ID is found in the page's own scripts and kept for 12 hours), read with the console.typesafe.ai session's Cookie header pasted at `vendor-usage setup typesafe`
 - **providers:** Raycast: the month's AI credit allowance used, as a plan window resetting when the next credits arrive, and the credits left (`GET /frontend_api/current_user/ai_credits`), read with the www.raycast.com browser session (`vendor-usage setup raycast` or a pasted Cookie header)
 - **providers:** Replicate: spend this month from the current monthly-usage invoice, and the prepaid credit left (`GET /api/{users|organizations}/{name}/invoices` and `/unused-credit`, the account named by the billing page), read with the replicate.com browser session (`vendor-usage setup replicate` or a pasted Cookie header); Replicate's API token is not used
+- **providers:** Devin: the organisation's daily and weekly quota used and the extra-usage balance (`GET app.devin.ai/api/<org>/billing/quota/usage`), read with the web app's bearer token given as `ORG:TOKEN` in `vendor-usage setup devin`
 
 ### Fixed
 

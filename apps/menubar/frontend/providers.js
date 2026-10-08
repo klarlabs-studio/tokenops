@@ -25,6 +25,7 @@ window.TOKENOPS_PROVIDERS = {
   "deepgram": {"name":"Deepgram","logo":false},
   "deepinfra": {"name":"DeepInfra","logo":false},
   "deepseek": {"name":"DeepSeek","logo":true},
+  "devin": {"name":"Devin","logo":true},
   "devpass": {"name":"DevPass","logo":false},
   "doubao": {"name":"Doubao","logo":true},
   "elevenlabs": {"name":"ElevenLabs","logo":true},
