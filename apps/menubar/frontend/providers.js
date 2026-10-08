@@ -44,6 +44,7 @@ window.TOKENOPS_PROVIDERS = {
   "venice": {"name":"Venice","logo":true},
   "vercel": {"name":"Vercel","logo":false},
   "warp": {"name":"Warp","logo":false},
+  "windsurf": {"name":"Windsurf","logo":true},
   "xai": {"name":"xAI","logo":true},
   "xkiro": {"name":"xKiro","logo":false},
   "zai": {"name":"z.ai","logo":true},

@@ -8,6 +8,7 @@ func providerGitKraken() Descriptor {
 			{Name: "gitkraken_account", Tag: "gitkraken-account", Kind: Subscription, Credential: APIKey,
 				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,
 				Reference: "CodexBar Sources/CodexBarCore/Resources/Plugins/gitkraken (docs/gitkraken.md)",
+				KeyFormat: "the token after `Bearer ` in the Authorization header of gitkraken.dev/account's usage request",
 				Endpoint:  "`GET api.gitkraken.dev/v1/ai-tasks/usage`",
 				Shows:     "weekly AI credits, and the organization's pool with GITKRAKEN_ORG_ID"},
 		},

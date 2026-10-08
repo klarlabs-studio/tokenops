@@ -702,6 +702,8 @@ vendor's windows, busiest first:
 | Synthetic | `GET /v2/quotas` | the subscription's request quota |
 | v0 | `GET /v1/user/billing`, `GET /v1/rate-limits` | the billing cycle's balance used and the request quota used |
 | Warp | `POST /graphql/v2?op=GetRequestLimitInfo` | credits used since the last refresh against the plan's limit |
+| Windsurf | Windsurf's `state.vscdb` (`windsurf.settings.cachedPlanInfo`) | daily and weekly quota (or messages and flow actions) as Windsurf last cached them |
+| Windsurf | `POST windsurf.com/_backend/.../GetPlanStatus` | daily and weekly quota, live |
 | xKiro | `GET /v1/usage` | the plan's spend windows, today's free tokens and the wallet balance |
 | z.ai GLM Coding Plan | `GET /api/monitor/usage/quota/limit` | 5-hour and weekly token windows |
 | ZenMux | `GET /api/v1/management/subscription/detail` | rolling 5-hour and 7-day quotas, and the pay-as-you-go balance |
@@ -802,6 +804,8 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Venice | `venice-account` | USD balance left, and the DIEM epoch allocation used when staking | API key | CodexBar's source, the vendor's docs and fixtures |
 | Vercel | `vercel-account` | the team's credit balance | API key | public docs and fixtures |
 | Warp | `warp-account` | credits used since the last refresh against the plan's limit | API key | CodexBar's source, the vendor's docs and fixtures |
+| Windsurf | `windsurf-local` | daily and weekly quota (or messages and flow actions) as Windsurf last cached them | local files | CodexBar's source, the vendor's docs and fixtures |
+|  | `windsurf-web` | daily and weekly quota, live | API key | CodexBar's source, the vendor's docs and fixtures |
 | xAI | `xai-account` | the team's posted prepaid USD credit | API key | CodexBar's source, the vendor's docs and fixtures |
 | xKiro | `xkiro-account` | the plan's spend windows, today's free tokens and the wallet balance | API key | CodexBar's source, the vendor's docs and fixtures |
 | z.ai | `zai-account` | 5-hour and weekly token windows | API key | the vendor's client source and fixtures |
