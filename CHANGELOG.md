@@ -9,6 +9,7 @@
 - **vendor-usage:** `tokenops vendor-usage setup <provider>` connects any vendor account TokenOps reads (OpenRouter, DeepSeek, Moonshot, z.ai, Kimi, MiniMax, Synthetic, Chutes, DeepInfra, Vercel) when no harness or environment variable holds its key: the key is typed without echo, checked with one reading, and only then stored in your config (redacted wherever config is shown) and sent only to that vendor
 - **providers:** Atlas Cloud: the account's available USD balance (`GET /public/v1/balance`), with an API key from setup or `ATLASCLOUD_API_KEY`
 - **providers:** Poe: the point balance left (`GET /usage/current_balance`), kept in points (`balance_credits`), never converted to dollars; API key from setup, `POE_API_KEY` or opencode
+- **providers:** Deepgram: the prepaid USD balance left across the key's projects (`GET /v1/projects/{id}/balances`), with an API key from setup or `DEEPGRAM_API_KEY`
 
 ### Fixed
 

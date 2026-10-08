@@ -51,6 +51,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"clawrouter_gateway", "clawrouter-account"},
 		{"cursor_turns (hook ledger)", "cursor-hook"},
 		{"cursor_web", "cursor-web"},
+		{"deepgram_account", "deepgram-account"},
 		{"deepinfra_account", "deepinfra-account"},
 		{"deepseek_account", "deepseek-account"},
 		{"fireworks", "fireworks-usage"},

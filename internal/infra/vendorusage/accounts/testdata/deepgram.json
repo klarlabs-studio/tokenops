@@ -1,0 +1,42 @@
+{
+  "projects": {
+    "projects": [
+      {
+        "project_id": "123456-7890-1234-5678-901234",
+        "name": "Default Project"
+      },
+      {
+        "project_id": "234567-8901-2345-6789-012345",
+        "name": "Staging"
+      }
+    ]
+  },
+  "balances": {
+    "123456-7890-1234-5678-901234": {
+      "balances": [
+        {
+          "balance_id": "b7f3c9d2-4a1e-4f8b-9c3d-2e5a7f8b9c1d",
+          "amount": 1250.75,
+          "units": "USD",
+          "purchase_order_id": "PO-2024-04567"
+        },
+        {
+          "balance_id": "c8a4d0e3-5b2f-4a9c-8d4e-3f6b8a9c0d2e",
+          "amount": 99,
+          "units": "hour",
+          "purchase_order_id": "PO-2024-04568"
+        }
+      ]
+    },
+    "234567-8901-2345-6789-012345": {
+      "balances": [
+        {
+          "balance_id": "d9b5e1f4-6c3a-4b0d-9e5f-4a7c9b0d1e3f",
+          "amount": 49.25,
+          "units": "usd",
+          "purchase_order_id": "PO-2024-04569"
+        }
+      ]
+    }
+  }
+}

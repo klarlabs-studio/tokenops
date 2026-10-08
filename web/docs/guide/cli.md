@@ -665,6 +665,7 @@ vendor's own figures every 15 minutes:
 | Vendor | Endpoint | Shows |
 |---|---|---|
 | Atlas Cloud | `GET /public/v1/balance` | the account's available USD balance |
+| Deepgram | `GET /v1/projects/{id}/balances` | prepaid USD balance left, across the key's projects |
 | DeepInfra | `GET /payment/checklist` | spend since the last invoice, the limit, prepaid credit |
 | DeepSeek | `GET /user/balance` | prepaid USD balance left |
 | Moonshot (Kimi API) | `GET /v1/users/me/balance` | prepaid USD balance left |
@@ -746,6 +747,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | ClawRouter | `clawrouter-account` | the policy's spend against its monthly budget | API key | public docs and fixtures |
 | Cursor | `cursor-hook` | per-turn consumption Cursor's stop hook records | local files | public docs and fixtures |
 |  | `cursor-web` | requests used against the month's allowance, from cursor.com | browser session | the vendor's client source and fixtures |
+| Deepgram | `deepgram-account` | prepaid USD balance left, across the key's projects | API key | public docs and fixtures |
 | DeepInfra | `deepinfra-account` | spend since the last invoice, the limit, prepaid credit | API key | public docs and fixtures |
 | DeepSeek | `deepseek-account` | prepaid USD balance left | API key | public docs and fixtures |
 | Fireworks | `fireworks-usage` | the month's spend against the account's or the member's cap | API key | against a real account |

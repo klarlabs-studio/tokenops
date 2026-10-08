@@ -12,6 +12,7 @@ var providerNames = map[string]string{
 	"chutes":      "Chutes",
 	"clawrouter":  "ClawRouter",
 	"cursor":      "Cursor",
+	"deepgram":    "Deepgram",
 	"deepinfra":   "DeepInfra",
 	"deepseek":    "DeepSeek",
 	"fireworks":   "Fireworks",

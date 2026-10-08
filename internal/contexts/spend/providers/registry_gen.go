@@ -12,6 +12,7 @@ var registered = []func() Descriptor{
 	providerChutes,
 	providerClawRouter,
 	providerCursor,
+	providerDeepgram,
 	providerDeepInfra,
 	providerDeepSeek,
 	providerFireworks,
