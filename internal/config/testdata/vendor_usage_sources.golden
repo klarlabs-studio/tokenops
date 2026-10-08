@@ -32,6 +32,7 @@ ibmbob_account	ibmbob-account
 jetbrains_local	jetbrains-local
 kilo_account	kilo-account
 kimi_account	kimi-account
+kiro_cli	kiro-cli
 litellm_gateway	litellm-account
 llm_proxy_gateway	llm-proxy-account
 minimax_account	minimax-account

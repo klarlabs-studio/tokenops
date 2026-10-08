@@ -33,6 +33,7 @@ var registered = []func() Descriptor{
 	providerJetBrains,
 	providerKilo,
 	providerKimi,
+	providerKiro,
 	providerLiteLLM,
 	providerLLMProxy,
 	providerMiniMax,

@@ -33,6 +33,7 @@ var providerNames = map[string]string{
 	"jetbrains":    "JetBrains AI",
 	"kilo":         "Kilo",
 	"kimi":         "Kimi",
+	"kiro":         "Kiro",
 	"litellm":      "LiteLLM",
 	"llm-proxy":    "LLM Proxy",
 	"minimax":      "MiniMax",

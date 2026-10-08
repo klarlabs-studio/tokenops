@@ -30,6 +30,7 @@ window.TOKENOPS_PROVIDERS = {
   "jetbrains": {"name":"JetBrains AI","logo":false},
   "kilo": {"name":"Kilo","logo":true},
   "kimi": {"name":"Kimi","logo":true},
+  "kiro": {"name":"Kiro","logo":true},
   "litellm": {"name":"LiteLLM","logo":false},
   "llm-proxy": {"name":"LLM Proxy","logo":false},
   "minimax": {"name":"MiniMax","logo":true},

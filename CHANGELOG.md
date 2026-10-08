@@ -41,6 +41,7 @@
 - **providers:** GitKraken AI: weekly AI credits (and the organization's pool with `GITKRAKEN_ORG_ID`) from api.gitkraken.dev, with the account's bearer token from `GITKRAKEN_API_TOKEN` or `tokenops vendor-usage setup gitkraken`
 - **providers:** JetBrains AI: the monthly AI credits the IDE's AI Assistant records in its own quota file and `idea.log`, read locally from the most recently used IDE with no credential
 - **providers:** Windsurf: the daily and weekly quota Windsurf caches in its own `state.vscdb`, read locally with no credential, and live from windsurf.com with the web session bundle pasted into `tokenops vendor-usage setup windsurf`
+- **providers:** Kiro: monthly plan credits and bonus credits from the operator's signed-in `kiro-cli` (`chat --no-interactive /usage`), which signs its own request; TokenOps reads no credential
 
 ### Fixed
 
