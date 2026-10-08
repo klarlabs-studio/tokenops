@@ -204,10 +204,12 @@ func (a *Aggregator) AggregateBy(ctx context.Context, f Filter, bucket Bucket, g
 	if width <= 0 {
 		return nil, fmt.Errorf("analytics: invalid bucket %q", bucket)
 	}
-	out, err := a.store.UsageBuckets(ctx, f, width, group)
+	// One read of the window answers the rows and both pricing passes.
+	usage, err := a.store.BucketUsage(ctx, f, width, group)
 	if err != nil {
 		return nil, err
 	}
+	out := usage.Rows
 
 	// Seed provenance from the store. recomputeMissingCosts replaces this
 	// for rows it prices; rows it does not reach keep the stored figure,
@@ -218,12 +220,8 @@ func (a *Aggregator) AggregateBy(ctx context.Context, f Filter, bucket Bucket, g
 	}
 
 	if a.spend != nil {
-		if err := a.recomputeMissingCosts(ctx, f, width, group, out); err != nil {
-			return nil, err
-		}
-		if err := a.addPlanCoveredValue(ctx, f, width, group, out); err != nil {
-			return nil, err
-		}
+		a.recomputeMissingCosts(usage.Uncosted, out)
+		a.addPlanCoveredValue(usage.PlanCovered, out)
 	}
 	return out, nil
 }
@@ -250,13 +248,13 @@ func (g PricingGroup) promptEvent() *eventschema.PromptEvent {
 // addPlanCoveredValue fills Row.APIEquivalentUSD: each row's real cost plus
 // the list price of the plan-covered traffic inside it.
 //
-// It is one query for the whole result set rather than one per row, grouped
-// on the same bucket and key AggregateBy used, so the rows can only sum to
-// the figure Summarize reports for the same window — the two are renderings
-// of one window and disagreeing is the bug this fixes.
-func (a *Aggregator) addPlanCoveredValue(ctx context.Context, f Filter, width int64, group Group, rows []Row) error {
+// groups are the window's plan-covered pricing groups, grouped on the same
+// bucket and key as the rows, so the rows can only sum to the figure
+// Summarize reports for the same window — the two are renderings of one
+// window and disagreeing is the bug this fixes.
+func (a *Aggregator) addPlanCoveredValue(groups []PricingGroup, rows []Row) {
 	if len(rows) == 0 {
-		return nil
+		return
 	}
 	for i := range rows {
 		rows[i].APIEquivalentUSD = rows[i].CostUSD
@@ -264,10 +262,6 @@ func (a *Aggregator) addPlanCoveredValue(ctx context.Context, f Filter, width in
 	// provider+model are carried alongside the grouping because pricing is
 	// keyed by them: grouping by workflow still has to price each model the
 	// workflow ran.
-	groups, err := a.store.BucketPricingGroups(ctx, f, width, group, PlanCovered)
-	if err != nil {
-		return err
-	}
 	value := map[rowKey]float64{}
 	gaps := newGapTracker[rowKey]()
 	for _, g := range groups {
@@ -295,27 +289,22 @@ func (a *Aggregator) addPlanCoveredValue(ctx context.Context, f Filter, width in
 		costMissing, costWhy := rows[i].Cost.Coverage().Excluded, rows[i].Cost.Coverage().Reasons
 		rows[i].APIEquivalent = equivalentValue(rows[i], missing+costMissing, mergeReasons(costWhy, why))
 	}
-	return nil
 }
 
 // recomputeMissingCosts prices the metered events stored without a cost and
 // adds them to the row they belong to, counting each in CostRecomputed.
 // Stored costs stay authoritative; only the zeros are filled.
 //
-// It groups on the same bucket and key AggregateBy used, in one query — the
-// shape addPlanCoveredValue has — so rows can only sum to what Summarize
-// reports for the window. The per-row version it replaces recomputed over a
+// groups are the window's uncosted metered pricing groups, grouped on the
+// same bucket and key as the rows — the shape addPlanCoveredValue has — so
+// rows can only sum to what Summarize reports for the window. The per-row version it replaces recomputed over a
 // fixed one-hour window whatever the bucket (a day row was re-priced only
 // for its first hour), ignored the row's group (each unpriced model's row
 // was charged for every model in the bucket), and skipped any row with some
 // stored cost, leaving its zero-cost events out.
-func (a *Aggregator) recomputeMissingCosts(ctx context.Context, f Filter, width int64, group Group, rows []Row) error {
+func (a *Aggregator) recomputeMissingCosts(groups []PricingGroup, rows []Row) {
 	if len(rows) == 0 {
-		return nil
-	}
-	groups, err := a.store.BucketPricingGroups(ctx, f, width, group, UncostedMetered)
-	if err != nil {
-		return err
+		return
 	}
 	cost := map[rowKey]float64{}
 	fixed := map[rowKey]int64{}
@@ -344,31 +333,25 @@ func (a *Aggregator) recomputeMissingCosts(ctx context.Context, f Filter, width 
 		missing, why := gaps.at(k)
 		rows[i].Cost = recomputedCostValue(rows[i], missing, why)
 	}
-	return nil
 }
 
 // Summarize returns a single global rollup over the filter window. It is
-// equivalent to AggregateBy with an unbounded bucket; using a dedicated
-// query keeps the SQL plan simpler.
+// equivalent to AggregateBy with an unbounded bucket, and like it reads
+// the window once.
 func (a *Aggregator) Summarize(ctx context.Context, f Filter) (Summary, error) {
 	if !a.ready() {
 		return Summary{}, ErrNotInitialised
 	}
-	s, err := a.store.UsageTotals(ctx, f)
+	usage, err := a.store.WindowUsage(ctx, f)
 	if err != nil {
 		return Summary{}, err
 	}
+	s := usage.Totals
 	if a.spend != nil {
-		recomputed, unpriced, err := a.summarizeMissingCost(ctx, f)
-		if err != nil {
-			return Summary{}, err
-		}
+		recomputed, unpriced := a.summarizeMissingCost(usage.Uncosted)
 		s.CostUSD += recomputed
 		s.Unpriced = unpriced
-		planValue, planUnpriced, err := a.summarizePlanCoveredValue(ctx, f)
-		if err != nil {
-			return Summary{}, err
-		}
+		planValue, planUnpriced := a.summarizePlanCoveredValue(usage.PlanCovered)
 		s.Unpriced = mergeUnpriced(s.Unpriced, planUnpriced)
 		s.APIEquivalentUSD = s.CostUSD + planValue
 	} else {
@@ -378,7 +361,7 @@ func (a *Aggregator) Summarize(ctx context.Context, f Filter) (Summary, error) {
 }
 
 // The summary totals price each (day, provider, model) group at the rate
-// card in effect at the group's latest event (Store.DailyPricingGroups).
+// card in effect at the group's latest event (WindowUsage's groups).
 // Pricing an all-window aggregate with no timestamp would select the
 // oldest card: a model a later refresh added would read as unpriced, a
 // repriced one at its old price. A day is the finest grain a rate card
@@ -403,11 +386,7 @@ func addUnpriced(list []UnpricedModel, provider, model string, requests int64) [
 // nothing to the shadow value, and because its real cost is legitimately
 // zero it would otherwise leave no trace at all. Mirrors
 // summarizeMissingCost with the cost-source selection inverted.
-func (a *Aggregator) summarizePlanCoveredValue(ctx context.Context, f Filter) (float64, []UnpricedModel, error) {
-	groups, err := a.store.DailyPricingGroups(ctx, f, PlanCovered)
-	if err != nil {
-		return 0, nil, err
-	}
+func (a *Aggregator) summarizePlanCoveredValue(groups []PricingGroup) (float64, []UnpricedModel) {
 	var (
 		total    float64
 		unpriced []UnpricedModel
@@ -431,7 +410,7 @@ func (a *Aggregator) summarizePlanCoveredValue(ctx context.Context, f Filter) (f
 		}
 		total += c
 	}
-	return total, unpriced, nil
+	return total, unpriced
 }
 
 // CacheStatsResult is the per-window cache split. Token counts are
@@ -480,11 +459,7 @@ func (a *Aggregator) CacheStats(ctx context.Context, f Filter) (CacheStatsResult
 // Models the pricing table doesn't know are returned as UnpricedModel
 // entries instead of being silently dropped — their cost stays absent
 // from the total, and callers surface that gap as a warning.
-func (a *Aggregator) summarizeMissingCost(ctx context.Context, f Filter) (float64, []UnpricedModel, error) {
-	groups, err := a.store.DailyPricingGroups(ctx, f, UncostedMetered)
-	if err != nil {
-		return 0, nil, err
-	}
+func (a *Aggregator) summarizeMissingCost(groups []PricingGroup) (float64, []UnpricedModel) {
 	var (
 		total    float64
 		unpriced []UnpricedModel
@@ -498,7 +473,7 @@ func (a *Aggregator) summarizeMissingCost(ctx context.Context, f Filter) (float6
 			unpriced = addUnpriced(unpriced, g.Provider, g.Model, g.Events)
 		}
 	}
-	return total, unpriced, nil
+	return total, unpriced
 }
 
 // selfTelemetryModels are pseudo-models tokenops emits about itself.

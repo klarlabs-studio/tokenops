@@ -18,20 +18,13 @@ var ErrNotInitialised = errors.New("analytics: aggregator not initialised")
 // Every method narrows to the prompt events that carry usage, by the
 // Filter, with Filter.ExcludedSources applied.
 type Store interface {
-	// UsageBuckets returns one Row per (bucket, group key), in that
-	// order, with BucketStart, GroupKey, Requests, the token sums and the
-	// stored CostUSD set. widthSec is the bucket width.
-	UsageBuckets(ctx context.Context, f Filter, widthSec int64, group Group) ([]Row, error)
-	// BucketPricingGroups sums the events sel selects per (bucket, group
-	// key, provider, model). PricingGroup.At is the bucket start.
-	BucketPricingGroups(ctx context.Context, f Filter, widthSec int64, group Group, sel CostSelection) ([]PricingGroup, error)
-	// UsageTotals returns Requests, the token sums and the stored CostUSD
-	// over the whole window.
-	UsageTotals(ctx context.Context, f Filter) (Summary, error)
-	// DailyPricingGroups sums the events sel selects per (UTC day,
-	// provider, model). PricingGroup.At is the group's latest event: the
-	// rate card in effect then prices it.
-	DailyPricingGroups(ctx context.Context, f Filter, sel CostSelection) ([]PricingGroup, error)
+	// BucketUsage reads the window once and returns its usage per
+	// (bucket, group key), with the pricing groups the aggregator prices
+	// those rows from. widthSec is the bucket width.
+	BucketUsage(ctx context.Context, f Filter, widthSec int64, group Group) (BucketUsage, error)
+	// WindowUsage reads the window once and returns its totals, with the
+	// pricing groups the aggregator prices them from.
+	WindowUsage(ctx context.Context, f Filter) (WindowUsage, error)
 	// CacheTotals sums input, cache-read input and output tokens.
 	CacheTotals(ctx context.Context, f Filter) (CacheTotals, error)
 	// SessionUsage lists each event that belongs to a session, oldest
@@ -39,18 +32,40 @@ type Store interface {
 	SessionUsage(ctx context.Context, f Filter) ([]SessionUsage, error)
 }
 
-// CostSelection picks which events a pricing query sums.
-type CostSelection int
+// The pricing groups split a window's events by how their cost is
+// accounted:
+//
+//   - Uncosted is metered traffic stored without a cost: what the
+//     aggregator recomputes from the rate card. Plan-included and trial
+//     events are zero-cost by design and never repriced as spend.
+//   - PlanCovered is plan-included and trial traffic: what the
+//     API-equivalent figure values at list price.
+//
+// Metered events stored with a cost are in neither: their stored cost is
+// authoritative.
 
-const (
-	// UncostedMetered is metered traffic stored without a cost: what the
-	// aggregator recomputes from the rate card. Plan-included and trial
-	// events are zero-cost by design and never repriced as spend.
-	UncostedMetered CostSelection = iota + 1
-	// PlanCovered is plan-included and trial traffic: what the
-	// API-equivalent figure values at list price.
-	PlanCovered
-)
+// BucketUsage is a window's usage per (bucket, group key).
+type BucketUsage struct {
+	// Rows has one Row per (bucket, group key), in that order, with
+	// BucketStart, GroupKey, Requests, the token sums and the stored
+	// CostUSD set.
+	Rows []Row
+	// Uncosted and PlanCovered sum their events per (bucket, group key,
+	// provider, model), in that order. PricingGroup.At is the bucket
+	// start, GroupKey the row's key.
+	Uncosted, PlanCovered []PricingGroup
+}
+
+// WindowUsage is a window's usage in total.
+type WindowUsage struct {
+	// Totals has Requests, the token sums and the stored CostUSD.
+	Totals Summary
+	// Uncosted and PlanCovered sum their events per (UTC day, provider,
+	// model). PricingGroup.At is the group's latest event: the rate card
+	// in effect then prices it. Uncosted is ordered by provider, model and
+	// day; PlanCovered by day, provider and model.
+	Uncosted, PlanCovered []PricingGroup
+}
 
 // PricingGroup is the usage of one provider and model inside a group,
 // summed so a single rate-card lookup prices all of it.

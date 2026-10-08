@@ -2,8 +2,10 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -20,13 +22,24 @@ import (
 // attributes read and decoded, seconds per request, and the menu bar asks
 // every minute. Between two asks a few dozen events arrive. EventCache
 // keeps the decoded events and, on each read, fetches only the rows added
-// since (by rowid), all inside one read transaction so the answer is one
-// snapshot of the store.
+// since (by rowid) and the rows events_changes (migration 7) says were
+// updated or deleted since, all inside one read transaction so the answer
+// is one snapshot of the store. Whichever process changed them, the
+// answer is the one Store.ReadEvents gives.
 //
-// An update or delete of a stored event, by any process, bumps
-// events_generation (migration 6); a VACUUM may renumber rowids, which
-// moves the row the cache last saw. Either makes the next read reload the
-// window in full, so the answer is always the one Store.ReadEvents gives.
+// Rows are found by rowid, which SQLite gives each new row past the
+// largest. Deleting the newest rows lets the next insert reuse their
+// rowids, and a VACUUM may renumber them (without firing a trigger): so
+// the cache remembers the store's newest rows, and treats every row past
+// the newest of them still holding its id as unknown and reads it again.
+// A VACUUM renumbers in rowid order, closing gaps: a row that kept its
+// rowid had no gap below it, so every row below it kept its rowid too.
+//
+// It reads the window in full again only when it cannot tell what
+// changed: the first read, a read reaching further back than it holds, a
+// change log that moved on past it, more changes than events held, or
+// none of the newest rows left under their rowid. Warm does the first
+// read ahead of the first caller.
 //
 // The envelopes it returns are shared between reads and must not be
 // modified. It holds at most maxSpan of events per type (a month of a busy
@@ -44,22 +57,28 @@ type EventCache struct {
 	mu    sync.Mutex
 	types map[eventschema.EventType]*cachedEvents
 	timer *time.Timer
+	// fullReads counts the windows read in full, for tests.
+	fullReads int
 }
 
 // cachedEvents is one event type's window as of a snapshot.
 type cachedEvents struct {
 	// floor is the earliest timestamp held; every stored event of the
-	// type at or after it is in envs.
+	// type at or after it is in events.
 	floor int64
-	// gen is events_generation at the snapshot.
-	gen int64
-	// lastRowid and lastID are the newest row in the store at the
-	// snapshot: rows after it are new, and it must still be there under
-	// the same id.
-	lastRowid int64
-	lastID    string
-	// envs is ordered as ReadEvents orders: by timestamp, then id.
-	envs []*eventschema.Envelope
+	// seq is the last events_changes entry the window reflects.
+	seq int64
+	// tail is the newest rows in the store at the snapshot, newest first:
+	// rows after the newest one still there are new.
+	tail []tailRow
+	// events is ordered as ReadEvents orders: by timestamp, then id.
+	events []cachedEvent
+}
+
+// cachedEvent is one stored event and the row it was read from.
+type cachedEvent struct {
+	rowid int64
+	env   *eventschema.Envelope
 }
 
 // Defaults for NewEventCache: a month and a little covers the glance's
@@ -70,12 +89,19 @@ const (
 	DefaultCacheIdle = 10 * time.Minute
 )
 
+// maxCacheSpan is the longest span a cache may hold. Changes to events
+// older than changeLogHorizon are not logged, so the span stays inside it,
+// with days to spare for a clock set back.
+const maxCacheSpan = changeLogHorizon - 5*24*time.Hour
+
 // NewEventCache caches store's events for windows up to maxSpan back,
-// dropping them after idle without a read. Zero values take the defaults.
+// dropping them after idle without a read. Zero values take the defaults;
+// a span beyond what the store logs changes for is shortened to it.
 func NewEventCache(store *Store, maxSpan, idle time.Duration) *EventCache {
 	if maxSpan <= 0 {
 		maxSpan = DefaultCacheSpan
 	}
+	maxSpan = min(maxSpan, maxCacheSpan)
 	if idle <= 0 {
 		idle = DefaultCacheIdle
 	}
@@ -86,6 +112,14 @@ func NewEventCache(store *Store, maxSpan, idle time.Duration) *EventCache {
 // CountBySource is Store.CountBySource; it is a single indexed query.
 func (c *EventCache) CountBySource(ctx context.Context, since, until time.Time) (map[string]int64, error) {
 	return c.store.CountBySource(ctx, since, until)
+}
+
+// Warm reads t's events from since into the cache, so the first caller
+// does not wait for the full read. Like a read, it starts the idle
+// countdown.
+func (c *EventCache) Warm(ctx context.Context, t eventschema.EventType, since time.Time) error {
+	_, err := c.ReadEvents(ctx, t, since)
+	return err
 }
 
 // ReadEvents returns what Store.ReadEvents returns: every event of type t
@@ -100,16 +134,18 @@ func (c *EventCache) ReadEvents(ctx context.Context, t eventschema.EventType, si
 	defer c.mu.Unlock()
 	c.touch()
 	cached, err := c.refresh(ctx, t, from, oldest)
-	if errors.Is(err, errNoGeneration) {
-		// A store without migration 6 cannot say what changed.
+	if errors.Is(err, errNoChangeLog) {
+		// A store without migration 7 cannot say what changed.
 		return c.store.ReadEvents(ctx, t, since)
 	}
 	if err != nil {
 		return nil, err
 	}
-	i := sort.Search(len(cached.envs), func(i int) bool { return cached.envs[i].Timestamp.UnixNano() >= from })
-	out := make([]*eventschema.Envelope, len(cached.envs)-i)
-	copy(out, cached.envs[i:])
+	i := sort.Search(len(cached.events), func(i int) bool { return cached.events[i].env.Timestamp.UnixNano() >= from })
+	out := make([]*eventschema.Envelope, len(cached.events)-i)
+	for j, e := range cached.events[i:] {
+		out[j] = e.env
+	}
 	return out, nil
 }
 
@@ -126,8 +162,8 @@ func (c *EventCache) touch() {
 	})
 }
 
-// errNoGeneration marks a store without events_generation.
-var errNoGeneration = errors.New("sqlite: store has no events_generation")
+// errNoChangeLog marks a store without events_changes.
+var errNoChangeLog = errors.New("sqlite: store has no events_changes")
 
 // refresh brings t's window up to date with the store and returns it,
 // reaching back to from at least. c.mu is held.
@@ -143,114 +179,259 @@ func (c *EventCache) refresh(ctx context.Context, t eventschema.EventType, from,
 	if err != nil {
 		return nil, err
 	}
-	cur := c.types[t]
-	if cur != nil && cur.floor <= from && cur.gen == snap.gen {
-		same, err := rowStill(ctx, tx, cur.lastRowid, cur.lastID)
+	if cur := c.types[t]; cur != nil && cur.floor <= from {
+		updated, err := cur.update(ctx, tx, t, snap)
 		if err != nil {
 			return nil, err
 		}
-		if same {
-			if err := cur.addSince(ctx, tx, t); err != nil {
-				return nil, err
-			}
-			cur.gen, cur.lastRowid, cur.lastID = snap.gen, snap.lastRowid, snap.lastID
+		if updated {
 			cur.trim(oldest)
 			return cur, nil
 		}
 	}
-	envs, err := readEvents(ctx, tx, t, time.Unix(0, from))
+	events, err := readCachedEvents(ctx, tx, t, from)
 	if err != nil {
 		return nil, err
 	}
-	fresh := &cachedEvents{floor: from, gen: snap.gen, lastRowid: snap.lastRowid, lastID: snap.lastID, envs: envs}
+	c.fullReads++
+	fresh := &cachedEvents{floor: from, seq: snap.seq, tail: snap.tail, events: events}
 	c.types[t] = fresh
 	return fresh, nil
 }
 
 // snapshot is what a read transaction saw of the store's changes.
 type snapshot struct {
-	gen       int64
-	lastRowid int64
-	lastID    string
+	// seq is the latest events_changes entry ever written, and firstSeq
+	// the oldest the log still holds (0 when it holds none).
+	seq, firstSeq int64
+	// tail is the store's newest rows, newest first.
+	tail []tailRow
 }
+
+// tailRow is a row of the store as a snapshot saw it.
+type tailRow struct {
+	rowid int64
+	id    string
+}
+
+// tailRows is how many of the newest rows a snapshot remembers. Deleting
+// all of them before the next read makes the cache read its window again.
+const tailRows = 32
 
 func snapshotOf(ctx context.Context, q querier) (snapshot, error) {
 	var s snapshot
-	rows, err := q.QueryContext(ctx, `SELECT gen FROM events_generation WHERE id = 1`)
+	// Two subqueries: SQLite answers a lone MIN or MAX from the end of
+	// the index, but both in one SELECT by scanning the table. The
+	// sequence, not MAX(seq), is the latest ever written: it holds even
+	// if the log's rows were deleted.
+	rows, err := q.QueryContext(ctx, `SELECT
+		(SELECT COALESCE(MIN(seq), 0) FROM events_changes),
+		COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'events_changes'), 0)`)
 	if err != nil {
-		return s, fmt.Errorf("%w: %w", errNoGeneration, err)
+		if strings.Contains(err.Error(), "no such table") {
+			return s, fmt.Errorf("%w: %w", errNoChangeLog, err)
+		}
+		return s, fmt.Errorf("sqlite: event cache: change log: %w", err)
 	}
-	found := rows.Next()
-	if found {
-		err = rows.Scan(&s.gen)
+	if rows.Next() {
+		err = rows.Scan(&s.firstSeq, &s.seq)
+	}
+	if err == nil {
+		err = rows.Err()
 	}
 	_ = rows.Close()
 	if err != nil {
-		return s, fmt.Errorf("sqlite: event cache: generation: %w", err)
+		return s, fmt.Errorf("sqlite: event cache: change log: %w", err)
 	}
-	if !found {
-		return s, errNoGeneration
-	}
-	rows, err = q.QueryContext(ctx, `SELECT rowid, id FROM events ORDER BY rowid DESC LIMIT 1`)
+	rows, err = q.QueryContext(ctx, `SELECT rowid, id FROM events ORDER BY rowid DESC LIMIT ?`, tailRows)
 	if err != nil {
-		return s, fmt.Errorf("sqlite: event cache: newest row: %w", err)
+		return s, fmt.Errorf("sqlite: event cache: newest rows: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	if rows.Next() {
-		if err := rows.Scan(&s.lastRowid, &s.lastID); err != nil {
-			return s, fmt.Errorf("sqlite: event cache: newest row: %w", err)
+	for rows.Next() {
+		var r tailRow
+		if err := rows.Scan(&r.rowid, &r.id); err != nil {
+			return s, fmt.Errorf("sqlite: event cache: newest rows: %w", err)
 		}
+		s.tail = append(s.tail, r)
 	}
 	return s, rows.Err()
 }
 
-// rowStill reports whether rowid still holds id. An empty store at the
-// last snapshot (rowid 0) has nothing to have moved.
-func rowStill(ctx context.Context, q querier, rowid int64, id string) (bool, error) {
-	if rowid == 0 {
-		return true, nil
+// knownThrough is the rowid of the newest of tail still holding its id:
+// every row at or below it is one the snapshot saw, under the rowid it
+// saw. ok is false when none is, and the snapshot no longer says which
+// rows are new. An empty tail (an empty store) knows of no rows: every
+// row is new.
+func knownThrough(ctx context.Context, q querier, tail []tailRow) (rowid int64, ok bool, err error) {
+	if len(tail) == 0 {
+		return 0, true, nil
 	}
-	rows, err := q.QueryContext(ctx, `SELECT id FROM events WHERE rowid = ?`, rowid)
+	args := make([]any, len(tail))
+	for i, r := range tail {
+		args[i] = r.rowid
+	}
+	rows, err := q.QueryContext(ctx, `SELECT rowid, id FROM events WHERE rowid IN (?`+
+		strings.Repeat(", ?", len(tail)-1)+`)`, args...)
 	if err != nil {
-		return false, fmt.Errorf("sqlite: event cache: check row: %w", err)
+		return 0, false, fmt.Errorf("sqlite: event cache: newest rows: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	if !rows.Next() {
-		return false, rows.Err()
+	now := make(map[int64]string, len(tail))
+	for rows.Next() {
+		var r tailRow
+		if err := rows.Scan(&r.rowid, &r.id); err != nil {
+			return 0, false, fmt.Errorf("sqlite: event cache: newest rows: %w", err)
+		}
+		now[r.rowid] = r.id
 	}
-	var got string
-	if err := rows.Scan(&got); err != nil {
-		return false, fmt.Errorf("sqlite: event cache: check row: %w", err)
+	if err := rows.Err(); err != nil {
+		return 0, false, fmt.Errorf("sqlite: event cache: newest rows: %w", err)
 	}
-	return got == id, nil
+	for _, r := range tail {
+		if id, there := now[r.rowid]; there && id == r.id {
+			return r.rowid, true, nil
+		}
+	}
+	return 0, false, nil
 }
 
-// newEventsSQL reads the rows stored after a rowid. NOT INDEXED keeps
-// SQLite on the rowid seek: left to choose, it walks the (type, timestamp)
-// index across the whole window, the read the cache exists to avoid.
-var newEventsSQL = strings.Replace(selectSQL, "FROM events", "FROM events NOT INDEXED", 1) + `
-WHERE rowid > ? AND type = ? AND timestamp_ns >= ?
-ORDER BY timestamp_ns ASC, id ASC`
+// cachedSelectSQL is selectSQL with each row's rowid first.
+var cachedSelectSQL = strings.Replace(selectSQL, "SELECT", "SELECT rowid,", 1)
 
-// addSince merges the rows of type t stored after the last snapshot.
-// Most arrive newest, so they append; a backfill of older events sorts
-// them in.
-func (ce *cachedEvents) addSince(ctx context.Context, q querier, t eventschema.EventType) error {
-	rs, err := q.QueryContext(ctx, newEventsSQL, ce.lastRowid, string(t), ce.floor)
+// readCachedEvents is readEvents keeping each event's rowid.
+func readCachedEvents(ctx context.Context, q querier, t eventschema.EventType, from int64) ([]cachedEvent, error) {
+	var out []cachedEvent
+	err := readEventPages(ctx, q, cachedSelectSQL, t, time.Unix(0, from), func(rs *sql.Rows) (*eventschema.Envelope, error) {
+		var e cachedEvent
+		var err error
+		if e.env, err = scanEnvelope(rs, &e.rowid); err == nil {
+			out = append(out, e)
+		}
+		return e.env, err
+	})
 	if err != nil {
-		return fmt.Errorf("sqlite: event cache: new events: %w", err)
+		return nil, err
 	}
-	added, err := scanEnvelopes(rs)
+	return out, nil
+}
+
+// scanCachedEvents decodes every row of rs, a cachedSelectSQL.
+func scanCachedEvents(rs *sql.Rows) ([]cachedEvent, error) {
+	var out []cachedEvent
+	for rs.Next() {
+		var e cachedEvent
+		var err error
+		if e.env, err = scanEnvelope(rs, &e.rowid); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	if err := rs.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite: rows: %w", err)
+	}
+	return out, nil
+}
+
+// newEventsSQL reads the rows past a rowid. NOT INDEXED keeps SQLite on
+// the rowid seek: left to choose, it walks the (type, timestamp) index
+// across the whole window, the read the cache exists to avoid.
+var newEventsSQL = strings.Replace(cachedSelectSQL, "FROM events", "FROM events NOT INDEXED", 1) + `
+WHERE rowid > ? AND type = ? AND timestamp_ns >= ?`
+
+// changedRowsSQL lists the rows logged as changed after a log position.
+const changedRowsSQL = `SELECT DISTINCT row FROM events_changes WHERE seq > ?`
+
+// changedEventsSQL re-reads the logged rows at or below a rowid (the rows
+// above it are read again anyway), each by rowid: NOT INDEXED as in
+// newEventsSQL.
+var changedEventsSQL = strings.Replace(cachedSelectSQL, "FROM events", "FROM events NOT INDEXED", 1) + `
+WHERE rowid IN (SELECT row FROM events_changes WHERE seq > ?) AND rowid <= ? AND type = ? AND timestamp_ns >= ?`
+
+// update applies to the window what changed in the store since its
+// snapshot: rows logged as updated or deleted are dropped and read again
+// as they are now, and every row past the newest the snapshot still
+// knows is read again, which takes in the rows stored since. It reports
+// false, changing nothing, when it cannot tell what changed and the
+// window must be read in full.
+func (ce *cachedEvents) update(ctx context.Context, q querier, t eventschema.EventType, snap snapshot) (bool, error) {
+	if snap.seq > ce.seq && (snap.firstSeq == 0 || snap.firstSeq > ce.seq+1) {
+		// The log dropped changes this window has not seen.
+		return false, nil
+	}
+	known, ok, err := knownThrough(ctx, q, ce.tail)
+	if err != nil || !ok {
+		// Rowids were renumbered, or reused past every row the snapshot
+		// remembers: they no longer name the events they did.
+		return false, err
+	}
+	var changed map[int64]struct{}
+	if snap.seq > ce.seq {
+		if changed, err = ce.changedRows(ctx, q); err != nil {
+			return false, err
+		}
+		if len(changed) > len(ce.events) {
+			// Re-reading them one by one costs more than the window.
+			return false, nil
+		}
+	}
+	stale := func(e cachedEvent) bool {
+		_, logged := changed[e.rowid]
+		return logged || e.rowid > known
+	}
+	events := ce.events
+	if slices.ContainsFunc(events, stale) {
+		// On a copy: a failed read below leaves the window as it was.
+		events = slices.DeleteFunc(slices.Clone(events), stale)
+	}
+	if len(changed) > 0 {
+		rs, err := q.QueryContext(ctx, changedEventsSQL, ce.seq, known, string(t), ce.floor)
+		if err != nil {
+			return false, fmt.Errorf("sqlite: event cache: changed events: %w", err)
+		}
+		reread, err := scanCachedEvents(rs)
+		_ = rs.Close()
+		if err != nil {
+			return false, err
+		}
+		events = append(events, reread...)
+	}
+	rs, err := q.QueryContext(ctx, newEventsSQL, known, string(t), ce.floor)
+	if err != nil {
+		return false, fmt.Errorf("sqlite: event cache: new events: %w", err)
+	}
+	added, err := scanCachedEvents(rs)
 	_ = rs.Close()
-	if err != nil || len(added) == 0 {
-		return err
+	if err != nil {
+		return false, err
 	}
-	inOrder := len(ce.envs) == 0 || !before(added[0], ce.envs[len(ce.envs)-1])
-	ce.envs = append(ce.envs, added...)
-	if !inOrder {
-		sort.SliceStable(ce.envs, func(i, j int) bool { return before(ce.envs[i], ce.envs[j]) })
+	events = append(events, added...)
+	if !slices.IsSortedFunc(events, compareCached) {
+		// Most new rows are the newest events and append in order; a
+		// backfill or a re-read row sorts in.
+		slices.SortFunc(events, compareCached)
 	}
-	return nil
+	ce.events = events
+	ce.seq, ce.tail = snap.seq, snap.tail
+	return true, nil
+}
+
+// changedRows is the set of rows logged as changed after ce's position.
+func (ce *cachedEvents) changedRows(ctx context.Context, q querier) (map[int64]struct{}, error) {
+	rs, err := q.QueryContext(ctx, changedRowsSQL, ce.seq)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: event cache: changes: %w", err)
+	}
+	defer func() { _ = rs.Close() }()
+	changed := map[int64]struct{}{}
+	for rs.Next() {
+		var row int64
+		if err := rs.Scan(&row); err != nil {
+			return nil, fmt.Errorf("sqlite: event cache: changes: %w", err)
+		}
+		changed[row] = struct{}{}
+	}
+	return changed, rs.Err()
 }
 
 // trim drops events older than oldest, which no cached read asks for.
@@ -258,16 +439,20 @@ func (ce *cachedEvents) trim(oldest int64) {
 	if ce.floor >= oldest {
 		return
 	}
-	i := sort.Search(len(ce.envs), func(i int) bool { return ce.envs[i].Timestamp.UnixNano() >= oldest })
-	ce.envs = append([]*eventschema.Envelope(nil), ce.envs[i:]...)
+	i := sort.Search(len(ce.events), func(i int) bool { return ce.events[i].env.Timestamp.UnixNano() >= oldest })
+	ce.events = slices.Clone(ce.events[i:])
 	ce.floor = oldest
 }
 
-// before is ReadEvents' order: timestamp, then id.
-func before(a, b *eventschema.Envelope) bool {
-	an, bn := a.Timestamp.UnixNano(), b.Timestamp.UnixNano()
-	if an != bn {
-		return an < bn
+// compareCached is ReadEvents' order: timestamp, then id.
+func compareCached(a, b cachedEvent) int {
+	an, bn := a.env.Timestamp.UnixNano(), b.env.Timestamp.UnixNano()
+	switch {
+	case an < bn:
+		return -1
+	case an > bn:
+		return 1
+	default:
+		return strings.Compare(a.env.ID, b.env.ID)
 	}
-	return a.ID < b.ID
 }
