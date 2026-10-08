@@ -698,6 +698,7 @@ vendor's windows, busiest first:
 | Manus | `POST /user.v1.UserService/GetAvailableCredits` | monthly and daily-refresh credits used, and the credit balance |
 | MiniMax Token Plan | `GET /v1/token_plan/remains` | the interval and weekly windows |
 | Nous Portal (Hermes Agent) | `GET /api/oauth/account` | the monthly credit grant used this period and the top-up credit left |
+| Perplexity | `GET /rest/billing/credits` | the plan's monthly credit grant used, and the credit balance |
 | Synthetic | `GET /v2/quotas` | the subscription's request quota |
 | v0 | `GET /v1/user/billing`, `GET /v1/rate-limits` | the billing cycle's balance used and the request quota used |
 | Warp | `POST /graphql/v2?op=GetRequestLimitInfo` | credits used since the last refresh against the plan's limit |
@@ -741,7 +742,7 @@ use read its own spend.
   with `tokenops vendor-usage enable vendor-accounts --disable`.
 
 <!-- begin generated: provider-env-vars -->
-The environment variables read for a key: `AIAND_API_KEY`, `AI_GATEWAY_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FIREWORKS_API_KEY`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `MANUS_COOKIE`, `MANUS_SESSION_TOKEN`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENROUTER_API_KEY`, `POE_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`.
+The environment variables read for a key: `AIAND_API_KEY`, `AI_GATEWAY_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FIREWORKS_API_KEY`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `MANUS_COOKIE`, `MANUS_SESSION_TOKEN`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENROUTER_API_KEY`, `PERPLEXITY_COOKIE`, `PERPLEXITY_SESSION_TOKEN`, `POE_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`.
 <!-- end generated: provider-env-vars -->
 
 #### Every provider
@@ -793,6 +794,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | opencode | `opencode` | per-message tokens for every provider, from opencode's SQLite store | local files | against a real account |
 | opencode Go | — | in the catalog only: opencode's subscription: its turns are read from opencode's store (the opencode source); no endpoint reports its windows | — | — |
 | OpenRouter | `openrouter-account` | the key's spend, against its credit cap when it has one | API key | public docs and fixtures |
+| Perplexity | `perplexity-account` | the plan's monthly credit grant used, and the credit balance | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Poe | `poe-account` | the point balance left (points, not dollars) | API key | CodexBar's source, the vendor's docs and fixtures |
 | Synthetic | `synthetic-account` | the subscription's request quota | API key | public docs and fixtures |
 | Together AI | — | in the catalog only: billed per token; its endpoint and models.dev prices are known, its account is not read | — | — |

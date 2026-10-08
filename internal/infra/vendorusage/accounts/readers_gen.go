@@ -29,6 +29,7 @@ var readers = []func() usage.Reader{
 	readerNeuralWatt,
 	readerNous,
 	readerOpenRouter,
+	readerPerplexity,
 	readerPoe,
 	readerSynthetic,
 	readerV0,

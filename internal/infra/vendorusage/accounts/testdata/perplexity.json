@@ -1,0 +1,11 @@
+{
+  "balance_cents": 1250,
+  "renewal_date_ts": 1793491200,
+  "current_period_purchased_cents": 1000,
+  "total_usage_cents": 375,
+  "credit_grants": [
+    {"type": "recurring", "amount_cents": 500},
+    {"type": "purchased", "amount_cents": 1000},
+    {"type": "promotional", "amount_cents": 200, "expires_at_ts": 1798761600}
+  ]
+}
