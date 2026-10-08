@@ -10,6 +10,7 @@ import (
 var readers = []func() usage.Reader{
 	readerAiAnd,
 	readerAtlasCloud,
+	readerBedrock,
 	readerChutes,
 	readerClinePass,
 	readerCodebuff,
@@ -27,6 +28,8 @@ var readers = []func() usage.Reader{
 	readerMoonshot,
 	readerNeuralWatt,
 	readerNous,
+	readerOpenAIAdmin,
+	readerOpencodeGo,
 	readerOpenRouter,
 	readerPoe,
 	readerSynthetic,
@@ -42,7 +45,10 @@ var readers = []func() usage.Reader{
 
 // gateways is every gateway*() function in this package, by file name.
 var gateways = []func() usage.Gateway{
+	gatewayAixy,
 	gatewayBifrost,
 	gatewayClawRouter,
 	gatewayLiteLLM,
+	gatewayLLMProxy,
+	gatewaySub2API,
 }

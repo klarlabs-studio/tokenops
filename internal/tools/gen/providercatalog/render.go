@@ -130,6 +130,9 @@ func envVars() string {
 	for v := range own {
 		vars = append(vars, v)
 	}
+	for v := range providers.SourceEnvVars() {
+		vars = append(vars, v)
+	}
 	sort.Strings(vars)
 	for i, v := range vars {
 		vars[i] = "`" + v + "`"
@@ -172,6 +175,8 @@ func credential(c providers.Credential) string {
 		return "local files"
 	case providers.BrowserCookie:
 		return "browser session"
+	case providers.CredentialChain:
+		return "the vendor's credential chain, after setup"
 	}
 	return string(c)
 }

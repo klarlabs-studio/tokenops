@@ -110,6 +110,11 @@ const (
 	// the interactive `tokenops vendor-usage setup <id>`, which may show a
 	// Keychain prompt; the daemon re-reads it quietly and never prompts.
 	BrowserCookie Credential = "browser-cookie"
+	// CredentialChain is the vendor's own standard credential chain on this
+	// machine (AWS's environment variables and shared credentials file). It
+	// is read only once `tokenops vendor-usage setup <id>` opted in, then as
+	// the daemon polls; nothing secret is stored.
+	CredentialChain Credential = "credential-chain"
 )
 
 // Switch is what turns a source on.
@@ -191,8 +196,23 @@ type Source struct {
 	// APIKey source's credential is more than one key, e.g.
 	// "TEAM_ID:MANAGEMENT_KEY". Empty asks for the API key.
 	KeyFormat string
+	// EnvVars are the environment variables holding this source's own
+	// credential when it is not the provider's API key (an organisation
+	// admin key, OPENAI_ADMIN_KEY). A key found there is sent only to this
+	// source's reader, never to another of the provider's endpoints.
+	EnvVars []string
+	// BaseURLEnv is, for a gateway, the variable naming its address
+	// (SUB2API_BASE_URL); with a key in EnvVars it is read there, named,
+	// without being recognised first. DefaultBaseURL is the hosted
+	// service's address, used when BaseURLEnv is unset.
+	BaseURLEnv     string
+	DefaultBaseURL string
 	// Verified says how far the reader has been checked.
 	Verified Verification
+	// Reference is, for a FromCodexBar reader, the CodexBar source it
+	// follows ("CodexBar Sources/.../openai.js"), where a comment would
+	// otherwise name it.
+	Reference string
 	// Endpoint, Shows and RecognisedBy are its row in the docs tables:
 	// "`GET /api/v1/key`", "the key's spend, against its credit cap".
 	// RecognisedBy is a gateway's health route.
