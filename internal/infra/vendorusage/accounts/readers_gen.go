@@ -16,6 +16,7 @@ var readers = []func() usage.Reader{
 	readerMiniMax,
 	readerMoonshot,
 	readerOpenRouter,
+	readerPoe,
 	readerSynthetic,
 	readerVercel,
 	readerZAI,
