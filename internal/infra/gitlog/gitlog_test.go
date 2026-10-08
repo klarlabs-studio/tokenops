@@ -333,3 +333,19 @@ func TestCommitsHonoursCancellation(t *testing.T) {
 		t.Errorf("Commits after cancel = %v (err %v), want nothing", got, err)
 	}
 }
+
+// Only owner/name leaves a remote URL: no host, scheme or credentials.
+func TestOwnerName(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://github.com/klarlabs/tokenops.git":         "klarlabs/tokenops",
+		"https://user:secret@gitlab.example.eu/a/b/c/repo": "c/repo",
+		"git@github.com:klarlabs/tokenops.git":             "klarlabs/tokenops",
+		"ssh://git@host:2222/team/svc/":                    "team/svc",
+		"https://github.com":                               "",
+		"":                                                 "",
+	} {
+		if got := ownerName(in); got != want {
+			t.Errorf("ownerName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

@@ -71,6 +71,9 @@ func (c Config) Validate() error {
 	if err := c.Coach.Validate(); err != nil {
 		return err
 	}
+	if err := c.Team.Validate(); err != nil {
+		return err
+	}
 	for i, l := range c.Coaching.ContextLimits {
 		if l.WorkflowPrefix == "" {
 			return fmt.Errorf("coaching.context_limits[%d]: workflow_prefix is required", i)
