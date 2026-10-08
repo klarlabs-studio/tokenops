@@ -1,0 +1,36 @@
+{
+  "usage": {
+    "code": "200",
+    "data": {
+      "DataV2": {
+        "data": {
+          "success": true,
+          "data": {
+            "per5HourPercentage": 0.25,
+            "per5HourResetTime": 1784813220000,
+            "per1WeekPercentage": 0.4,
+            "per1WeekResetTime": 1785234900000,
+            "per1MonthPercentage": 0.1,
+            "per1MonthResetTime": 1787328000000
+          }
+        },
+        "success": true,
+        "httpStatus": 200
+      }
+    },
+    "successResponse": true
+  },
+  "login_required": {
+    "code": "ConsoleNeedLogin",
+    "message": "You need to log in.",
+    "successResponse": false
+  },
+  "forbidden": {
+    "statusCode": 403,
+    "message": "Forbidden"
+  },
+  "user_info": {
+    "code": "200",
+    "data": "{\"secToken\":\"qwen-sec\"}"
+  }
+}

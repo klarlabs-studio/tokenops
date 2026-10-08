@@ -4,9 +4,11 @@ package providers
 
 // registered is every provider*() function in this package, by file name.
 var registered = []func() Descriptor{
+	providerAbacus,
 	providerAiAnd,
 	providerAixy,
 	providerAlibaba,
+	providerAlibabaTokenPlan,
 	providerAmp,
 	providerAnthropic,
 	providerAntigravity,
@@ -21,6 +23,7 @@ var registered = []func() Descriptor{
 	providerClinePass,
 	providerCodebuff,
 	providerCodeRabbit,
+	providerCommandCode,
 	providerCursor,
 	providerDeepgram,
 	providerDeepInfra,
@@ -40,6 +43,7 @@ var registered = []func() Descriptor{
 	providerKiro,
 	providerLiteLLM,
 	providerLLMProxy,
+	providerMiMo,
 	providerMiniMax,
 	providerMistral,
 	providerMoonshot,
@@ -51,6 +55,10 @@ var registered = []func() Descriptor{
 	providerOpenRouter,
 	providerPi,
 	providerPoe,
+	providerQoder,
+	providerQwenCloud,
+	providerSakana,
+	providerStepFun,
 	providerSub2API,
 	providerSynthetic,
 	providerTogether,

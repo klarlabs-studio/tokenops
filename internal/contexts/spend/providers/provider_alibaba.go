@@ -2,11 +2,35 @@ package providers
 
 import "time"
 
+// aliyunConsoleCookies are the Alibaba Cloud console sign-in cookies, as
+// CodexBar's OneConsole importer recognises a session
+// (Sources/CodexBarCore/Providers/Alibaba/AlibabaCodingPlanCookieImporter.swift):
+// the ticket and an account marker, with the CSRF and anonymous-ID cookies
+// the console's requests carry.
+var aliyunConsoleCookies = []string{
+	"login_aliyunid_ticket", "login_aliyunid_pk", "login_current_pk", "login_aliyunid",
+	"login_aliyunid_csrf", "login_aliyunid_sc", "aliyun_choice", "aliyun_site", "aliyun_lang", "cna", "sec_token",
+}
+
 func providerAlibaba() Descriptor {
 	return Descriptor{
 		ID:          "alibaba",
 		DisplayName: "Alibaba Cloud",
-		CatalogOnly: "the Coding Plan's endpoint, prices and limits are known; nothing reads its usage yet",
+		Logo:        true,
+		// Ported from CodexBar's Alibaba Coding Plan provider
+		// (Sources/CodexBarCore/Providers/Alibaba/AlibabaCodingPlanUsageFetcher.swift).
+		Sources: []Source{
+			{Name: "alibaba_account", Tag: "alibaba-account", Kind: Subscription, Credential: APIKey,
+				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,
+				Endpoint: "`POST /data/api.json` (queryCodingPlanInstanceInfoV2, Model Studio or Bailian console)",
+				Shows:    "Coding Plan 5-hour, weekly and monthly quotas (where the console accepts the plan's API key)"},
+			{Name: "alibaba_web", Tag: "alibaba-web", Kind: Subscription, Credential: BrowserCookie,
+				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,
+				Cookie: &Cookie{Host: "modelstudio.console.alibabacloud.com", Also: []string{"bailian.console.aliyun.com"},
+					Names: aliyunConsoleCookies, Proof: []string{"login_aliyunid_ticket"}},
+				Endpoint: "`POST /data/api.json` (console gateway, with the console's sec_token)",
+				Shows:    "Coding Plan 5-hour, weekly and monthly quotas"},
+		},
 		Endpoints: []Endpoint{{Host: "coding-intl.dashscope.aliyuncs.com", Billing: Reseller,
 			Source: "https://www.alibabacloud.com/help/en/model-studio/coding-plan"}},
 		Opencode: []OpencodeID{
@@ -15,8 +39,9 @@ func providerAlibaba() Descriptor {
 			{ID: "alibaba", Endpoint: "alibaba-api"},
 			{ID: "alibaba-cn", Endpoint: "alibaba-api"},
 		},
+		EnvVars:   []string{"ALIBABA_CODING_PLAN_API_KEY", "ALIBABA_QWEN_API_KEY", "DASHSCOPE_API_KEY", "ALIBABA_CODING_PLAN_COOKIE"},
 		ModelsDev: []string{"alibaba"},
-		Docs:      Docs{CatalogLabel: "Alibaba Coding"},
+		Docs:      Docs{Label: "Alibaba Cloud Coding Plan", CatalogLabel: "Alibaba Coding"},
 		Plans: []Plan{
 			{
 				Name: "alibaba-coding-pro", Display: "Alibaba Cloud Coding Plan Pro",

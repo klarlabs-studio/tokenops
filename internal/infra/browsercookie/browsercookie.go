@@ -120,57 +120,11 @@ func FindMany(ctx context.Context, home, host string, names []string, only strin
 	if len(names) == 0 {
 		return nil, Browser{}, errors.New("browsercookie: no cookie names given")
 	}
-	if secret == nil {
-		secret = QuietSecret()
+	found, err := FindSession(ctx, home, Session{Hosts: []string{host}, Names: names}, only, secret)
+	if err != nil {
+		return nil, Browser{}, err
 	}
-	var firstErr error
-	tried := 0
-	denied := false
-	for _, b := range known {
-		if only != "" && !strings.EqualFold(only, b.Name) {
-			continue
-		}
-		root := filepath.Join(home, b.dir)
-		if _, err := os.Stat(root); err != nil {
-			continue
-		}
-		tried++
-		stores, err := b.stores(root)
-		if err != nil {
-			continue
-		}
-		for _, store := range stores {
-			if denied && !b.firefox {
-				// The operator refused one browser's prompt: asking for
-				// the next one's would be a prompt storm, not a fallback.
-				break
-			}
-			primary, err := b.read(ctx, store, host, names[0], secret)
-			if err != nil {
-				if !errors.Is(err, ErrNotFound) && firstErr == nil {
-					firstErr = fmt.Errorf("%s: %w", b.Name, err)
-				}
-				if errors.Is(err, keychain.ErrDenied) {
-					denied = true
-				}
-				continue
-			}
-			out := map[string]string{names[0]: primary}
-			for _, n := range names[1:] {
-				if v, err := b.read(ctx, store, host, n, secret); err == nil {
-					out[n] = v
-				}
-			}
-			return out, b, nil
-		}
-	}
-	if firstErr != nil {
-		return nil, Browser{}, firstErr
-	}
-	if tried == 0 {
-		return nil, Browser{}, fmt.Errorf("browsercookie: no supported browser found (looked for %s)", strings.Join(Names(), ", "))
-	}
-	return nil, Browser{}, ErrNotFound
+	return found.Map(), found.Browser, nil
 }
 
 // Header renders cookies as one Cookie header value, "name=value; ...", in
@@ -183,14 +137,6 @@ func Header(cookies map[string]string, names []string) string {
 		}
 	}
 	return strings.Join(parts, "; ")
-}
-
-// read returns one cookie from one store.
-func (b Browser) read(ctx context.Context, store, host, name string, secret SecretFunc) (string, error) {
-	if b.firefox {
-		return readFirefox(ctx, store, host, name)
-	}
-	return readChromium(ctx, store, func() (string, error) { return secret(b) }, host, name)
 }
 
 // UserAgent is the User-Agent this browser sends, or "" when it cannot be
@@ -421,11 +367,19 @@ func queryCookie(ctx context.Context, path, q, name, host string, value *string,
 	return ErrNotFound
 }
 
-// hostVariants covers how browsers store a domain versus how an operator
-// names it: a cookie for claude.ai is stored under ".claude.ai".
+// hostVariants are the stored hosts whose cookies a browser sends to host,
+// most specific first: host itself (a host-only cookie), ".host", and the
+// domain cookies of every parent down to the registrable two labels. A
+// cookie for claude.ai is stored under ".claude.ai"; one for
+// admin.mistral.ai may be stored under ".mistral.ai".
 func hostVariants(host string) []string {
-	host = strings.TrimPrefix(host, ".")
-	return []string{host, "." + host}
+	host = strings.ToLower(strings.TrimPrefix(host, "."))
+	out := []string{host, "." + host}
+	labels := strings.Split(host, ".")
+	for i := 1; i+2 <= len(labels); i++ {
+		out = append(out, "."+strings.Join(labels[i:], "."))
+	}
+	return out
 }
 
 // copyStore copies the cookie store and its write-ahead sidecars into a

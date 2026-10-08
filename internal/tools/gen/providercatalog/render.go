@@ -179,6 +179,8 @@ func credential(c providers.Credential) string {
 		return "browser session"
 	case providers.CredentialChain:
 		return "the vendor's credential chain, after setup"
+	case providers.PasswordLogin:
+		return "session from a password sign-in"
 	}
 	return string(c)
 }

@@ -92,22 +92,27 @@ func runProviderSetup(cmd *cobra.Command, p providersetup.Provider, opts provide
 	return nil
 }
 
+// loginProvider signs in with a username and password. Tests replace it
+// so no vendor is called.
+var loginProvider = providersetup.Login
+
 // providerCredential gets the key or session: a session from the browser
-// unless --paste, otherwise typed at a prompt that does not echo it.
+// unless --paste, a session from a password sign-in for a vendor that has
+// one, otherwise typed at a prompt that does not echo it.
 func providerCredential(cmd *cobra.Command, p providersetup.Provider, opts providerSetupOptions) (key, browser string, err error) {
 	out := cmd.OutOrStdout()
-	if p.Browser && !opts.paste {
-		fmt.Fprintf(out, "\nLooking for your %s session in a local browser.\n", p.CookieHost)
+	if p.Browser && !p.Cookie.PasteOnly && !opts.paste {
+		fmt.Fprintf(out, "\nLooking for your %s session in a local browser.\n", p.CookieHosts())
 		fmt.Fprintf(out, "macOS may ask to let tokenops read your browser's \"Safe Storage\" item from the Keychain:\n"+
-			"TokenOps uses it to read %s's %s cookies and nothing else. --paste skips the browser.\n",
-			p.CookieHost, strings.Join(p.CookieNames, ", "))
+			"TokenOps uses it to read %s (%s) and nothing else. --paste skips the browser.\n",
+			p.CookieHosts(), p.CookieNames())
 		key, browser, err := providersetup.FromBrowser(cmd.Context(), p, opts.browser,
 			browsercookie.InteractiveKeychainWait, keychainDisabled(opts.configPath))
 		switch {
 		case err == nil:
 			return key, browser, nil
 		case errors.Is(err, providersetup.ErrNotFound):
-			fmt.Fprintf(out, "No %s session found in a local browser: sign in there, or paste it below.\n", p.CookieHost)
+			fmt.Fprintf(out, "No %s session found in a local browser: sign in there, or paste it below.\n", p.CookieHosts())
 		default:
 			fmt.Fprintf(out, "Could not read it from the browser: %v\n", err)
 		}
@@ -123,13 +128,22 @@ func providerCredential(cmd *cobra.Command, p providersetup.Provider, opts provi
 		}
 		fmt.Fprintf(out, "Could not read it from the Keychain: %v\n", err)
 	}
+	if p.Login && !opts.paste {
+		return loginCredential(cmd, p)
+	}
 	prompt := "\nPaste the API key: "
 	if p.KeyFormat != "" {
 		prompt = fmt.Sprintf("\nPaste it as %s: ", p.KeyFormat)
 	}
-	if p.Browser {
-		prompt = fmt.Sprintf("\nPaste the Cookie header for %s (%s): ", p.CookieHost, strings.Join(p.CookieNames, ", "))
-	} else if len(p.EnvVars) > 0 {
+	switch {
+	case p.Login:
+		prompt = fmt.Sprintf("\nPaste the %s session token: ", p.Name)
+	case p.Browser && p.Key:
+		prompt = fmt.Sprintf("\nPaste the API key, or the Cookie header for %s: ", p.CookieHosts())
+	case p.Browser:
+		prompt = fmt.Sprintf("\nPaste the Cookie header for %s (%s): ", p.CookieHosts(), p.CookieNames())
+	}
+	if !p.Browser && len(p.EnvVars) > 0 {
 		fmt.Fprintf(out, "\n(%s is read without setup, when it is set.)\n", strings.Join(p.EnvVars, " or "))
 	}
 	fmt.Fprintf(out, "It is sent only to %s, and stored in your local config.\n", p.Name)
@@ -268,4 +282,31 @@ func runChainSetup(cmd *cobra.Command, p providersetup.Provider, opts providerSe
 	fmt.Fprintf(out, "\nwrote %s: the daemon reads the credential the same way as it polls, and stores none\n", path)
 	applyRestart(out, opts.restart, false)
 	return nil
+}
+
+// loginCredential signs in with a username (echoed) and a password (never
+// echoed), and returns the session token the vendor issued. Only the token
+// is stored; the password is not kept, written or logged.
+func loginCredential(cmd *cobra.Command, p providersetup.Provider) (string, string, error) {
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "\nSign in to %s. The password is sent only to %s to sign in, and is not stored:\n"+
+		"TokenOps keeps the session token %s issues. --paste types a token instead.\n", p.Name, p.Name, p.Name)
+	user, err := readLine(cmd, "Username (email or phone): ")
+	if err != nil {
+		return "", "", err
+	}
+	password, err := readSecret(cmd, "Password: ")
+	if err != nil {
+		return "", "", err
+	}
+	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
+	defer cancel()
+	token, err := loginProvider(ctx, p.ID, strings.TrimSpace(user), strings.TrimRight(password, "\r\n"))
+	if err != nil {
+		if errors.Is(err, providersetup.ErrRefused) {
+			return "", "", fmt.Errorf("%s did not accept that username and password. Nothing was written", p.Name)
+		}
+		return "", "", fmt.Errorf("could not sign in to %s: %w. Nothing was written", p.Name, err)
+	}
+	return token, "", nil
 }

@@ -66,10 +66,22 @@ func (d Descriptor) Label() string {
 // the address the operator gives.
 func (d Descriptor) Setupable() (Source, bool) {
 	for _, s := range d.Sources {
-		if s.Reader == AccountReader && (s.Credential == APIKey || s.Credential == AdminKey || s.Credential == BrowserCookie || s.Credential == CredentialChain || s.Credential == AppKeychain) {
+		if s.Reader == AccountReader && (s.Credential == APIKey || s.Credential == AdminKey || s.Credential == BrowserCookie || s.Credential == PasswordLogin || s.Credential == CredentialChain || s.Credential == AppKeychain) {
 			return s, true
 		}
 		if s.Reader == GatewayReader && s.Credential == APIKey {
+			return s, true
+		}
+	}
+	return Source{}, false
+}
+
+// SessionSource is the provider's account source read with a browser
+// session, when it has one: setup reads the browser for it, and the daemon
+// re-reads it quietly when the stored session is refused.
+func (d Descriptor) SessionSource() (Source, bool) {
+	for _, s := range d.Sources {
+		if s.Reader == AccountReader && s.Credential == BrowserCookie && s.Cookie != nil {
 			return s, true
 		}
 	}

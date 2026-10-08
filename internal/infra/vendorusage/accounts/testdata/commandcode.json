@@ -1,0 +1,18 @@
+{
+  "/internal/billing/credits": {
+    "credits": {
+      "monthlyCredits": 8.5,
+      "purchasedCredits": 2,
+      "premiumMonthlyCredits": 0,
+      "opensourceMonthlyCredits": 0
+    },
+    "windowLimits": {
+      "fiveHour": {"cap": 3, "used": 0.75, "resetAt": 1780000000000},
+      "weekly": {"cap": 15, "used": 1.5, "resetAt": 1780100000000}
+    }
+  },
+  "/internal/billing/subscriptions": {
+    "success": true,
+    "data": {"planId": "individual-go", "status": "active", "currentPeriodEnd": "2026-11-01T00:00:00Z"}
+  }
+}

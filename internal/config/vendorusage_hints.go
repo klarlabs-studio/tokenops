@@ -92,11 +92,8 @@ func (c Config) registryHint(sourceTag string) string {
 			hint += ", or where " + s.BaseURLEnv + " names one with " + strings.Join(s.EnvVars, " or ")
 		}
 		return hint + "; `tokenops vendor-usage setup " + id + "` connects one by address"
-	case s.Credential == providers.BrowserCookie:
-		if _, stored := c.VendorUsage.Accounts.Credentials[string(s.Provider)]; stored {
-			return "on; reads with the session `tokenops vendor-usage setup " + string(s.Provider) + "` stored"
-		}
-		return "connect it: `tokenops vendor-usage setup " + string(s.Provider) + "` reads the session from your browser"
+	case s.Credential == providers.BrowserCookie, s.Credential == providers.PasswordLogin:
+		return c.sessionHint(s)
 	case s.Credential == providers.CredentialChain:
 		if c, stored := c.VendorUsage.Accounts.Credentials[string(s.Provider)]; stored && c.CredentialChain {
 			return "on; reads with the credentials on this machine, as `tokenops vendor-usage setup " + string(s.Provider) + "` opted in"
@@ -131,6 +128,28 @@ func (c Config) registryHint(sourceTag string) string {
 		return "connect it: " + d.Docs.Setup
 	}
 	return "on; reads only when a harness (Claude Code, Codex, opencode) or the environment has this vendor's key"
+}
+
+// sessionHint is the hint of a source read with a web session: how to
+// connect it, or, once connected, that an expired session needs setup
+// again (the daemon never prompts, so it cannot renew one itself).
+func (c Config) sessionHint(s providers.SourceOf) string {
+	id := string(s.Provider)
+	setup := "`tokenops vendor-usage setup " + id + "`"
+	if _, stored := c.VendorUsage.Accounts.Credentials[id]; stored {
+		return "on; reads with the session " + setup + " stored; when the reading goes stale because the session expired, run " + setup + " again"
+	}
+	how := setup + " reads the session from your browser"
+	switch {
+	case s.Credential == providers.PasswordLogin:
+		how = setup + " signs in once and stores only the session token, never the password"
+	case s.Cookie != nil && s.Cookie.PasteOnly:
+		how = setup + " asks for the Cookie header from your browser's developer tools"
+	}
+	if d, ok := providers.Lookup(id); ok && len(d.EnvVars) > 0 {
+		how += ", or set " + strings.Join(d.EnvVars, " or ")
+	}
+	return "connect it: " + how
 }
 
 func configHintClaudeCode(enabled bool) string {

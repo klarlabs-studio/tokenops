@@ -2,6 +2,8 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	"go.klarlabs.de/tokenops/internal/config"
@@ -40,9 +42,9 @@ func TestStoredCredentials(t *testing.T) {
 		return nil
 	}
 	var asked []string
-	browser := func(_ context.Context, host string, names []string, only string) (map[string]string, error) {
-		asked = append(asked, host+"|"+only)
-		return map[string]string{"sid": "new", "cf": "clear"}, nil
+	browser := func(_ context.Context, c providers.Cookie, only string) (string, error) {
+		asked = append(asked, c.Host+"|"+only)
+		return "sid=new; cf=clear", nil
 	}
 	got := storedCredentials(cfg, readers, cookieOf, browser)
 	if len(asked) != 0 {
@@ -66,6 +68,36 @@ func TestStoredCredentials(t *testing.T) {
 	key, err := got[4].Resolve(context.Background())
 	if err != nil || key != "sid=new; cf=clear" || len(asked) != 1 || asked[0] != "webby.example|Firefox" {
 		t.Errorf("resolved %q %v, asked %v", key, err, asked)
+	}
+	for _, c := range got {
+		if !strings.Contains(c.Remedy, "tokenops vendor-usage setup") {
+			t.Errorf("credential for %s has no remedy", c.Endpoint)
+		}
+	}
+}
+
+// When the daemon cannot re-read the browser quietly (macOS would ask),
+// the refusal says to run setup again.
+func TestStoredSessionThatCannotBeReReadIsARefusal(t *testing.T) {
+	cfg := config.Default()
+	cfg.VendorUsage.Accounts.Credentials = map[string]config.AccountCredential{"webby": {FromBrowser: true}}
+	cookieOf := func(string) *providers.Cookie {
+		return &providers.Cookie{Host: "webby.example", Names: []string{"sid"}}
+	}
+	browser := func(context.Context, providers.Cookie, string) (string, error) {
+		return "", errors.New("keychain: macOS would ask to allow this read")
+	}
+	got := storedCredentials(cfg, []accounts.Reader{namedReader{"webby"}}, cookieOf, browser)
+	if len(got) != 1 {
+		t.Fatalf("got %+v", got)
+	}
+	if _, err := got[0].Resolve(context.Background()); !errors.Is(err, accounts.ErrAuth) {
+		t.Errorf("err = %v, want a refusal", err)
+	}
+	// A paste-only session is never re-read from a browser.
+	paste := func(string) *providers.Cookie { return &providers.Cookie{Host: "webby.example", PasteOnly: true} }
+	if got := storedCredentials(cfg, []accounts.Reader{namedReader{"webby"}}, paste, browser); len(got) != 0 {
+		t.Errorf("a paste-only session was re-read: %+v", got)
 	}
 }
 

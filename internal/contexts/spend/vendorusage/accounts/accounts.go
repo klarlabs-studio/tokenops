@@ -45,6 +45,17 @@ func IsKeyless(r Reader) bool {
 	return ok
 }
 
+// ErrSkip is a reader declining a credential that is not of the kind it
+// reads (a browser session handed to the reader of the vendor's API key,
+// or the other way round) without calling the vendor. The credential does
+// not count as tried.
+var ErrSkip = errors.New("accounts: not a credential this reader reads")
+
+// KeyOnly is implemented by a reader that reads only API keys: a
+// credential that would re-read a browser session is never resolved for
+// it.
+type KeyOnly interface{ KeyOnly() bool }
+
 // Credential is a key and the endpoint it was found for.
 type Credential struct {
 	// Endpoint is the endpoint name (biller's), e.g. "openrouter".
@@ -64,6 +75,10 @@ type Credential struct {
 	// at BaseURL by that gateway's reader without being recognised first,
 	// for a gateway with no route that names it without a key.
 	Gateway string
+	// Remedy is what the operator does when the vendor refuses this
+	// credential ("run `tokenops vendor-usage setup acme` again"); it is
+	// added to the source's health error. Never the key.
+	Remedy string
 }
 
 // Reading is what a vendor reports about the account.

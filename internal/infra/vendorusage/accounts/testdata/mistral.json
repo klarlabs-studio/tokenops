@@ -1,0 +1,16 @@
+{
+  "/api/billing/v2/usage": {
+    "completion": {
+      "models": {}
+    },
+    "currency": "EUR",
+    "prices": []
+  },
+  "/subscription": "<html><body><script>self.__next_f.push([0])</script><script>self.__next_f.push([1, \"1:I[\\\"chunk\\\"]\\n2:Ta,a\\n3:{\\\"x\\\"}\\n4:{\\\"subscription\\\":{\\\"plan\\\":\\\"pro\\\",\\\"budget\\\":{\\\"api_budget\\\":{\\\"usage_percentage\\\":42.5,\\\"initial_budget\\\":10,\\\"currency\\\":\\\"EUR\\\",\\\"reset_at\\\":\\\"2026-11-01T00:00:00Z\\\"},\\\"vibe_budget\\\":{\\\"usage_percentage\\\":12,\\\"initial_budget\\\":5,\\\"currency\\\":\\\"EUR\\\",\\\"reset_at\\\":\\\"2026-11-01T00:00:00Z\\\"}}}}\\n\"])</script></body></html>",
+  "/api/billing/credits": {
+    "walletAmount": 20,
+    "creditNotesAmount": 5,
+    "ongoingUsageBalance": 2.5,
+    "currency": "USD"
+  }
+}
