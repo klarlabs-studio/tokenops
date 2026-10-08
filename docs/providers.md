@@ -151,9 +151,15 @@ endpoint, in order, until one is accepted:
 2. the keys the harnesses already send that vendor (Claude Code's settings,
    Codex's `model_providers`, opencode's `auth.json` and config), found by
    `internal/infra/harnesskeys`;
-3. the descriptor's `EnvVars`.
+3. the descriptor's `EnvVars`, and each source's own `Sources[].EnvVars`.
 
-A key goes only to the reader of the endpoint it was found for.
+A key goes only to the reader of the endpoint it was found for. A reader
+that takes a key the harnesses never hold (ZenMux's Management API key,
+which its Management API requires and its inference endpoint does not
+take) reads on its own endpoint (`zenmux-management`) and lists its
+variable (`ZENMUX_MANAGEMENT_API_KEY`) in `Sources[].EnvVars`, not
+`EnvVars`: a key found there goes only to that reader, and the provider's
+inference keys never do.
 
 A gateway is read at an address: where a harness sends a key to a host
 TokenOps does not know, once the gateway recognises itself on a route it

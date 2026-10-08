@@ -45,6 +45,10 @@ func TestLookupCoversKeyProvidersOnly(t *testing.T) {
 	if p, ok := Lookup("openai"); !ok || p.KeyFormat == "" || len(p.EnvVars) != 1 || p.EnvVars[0] != "OPENAI_ADMIN_KEY" {
 		t.Errorf("openai = %+v %v", p, ok)
 	}
+	// A reader with its own variable names it, not the inference keys'.
+	if z, _ := Lookup("zenmux"); len(z.EnvVars) != 1 || z.EnvVars[0] != "ZENMUX_MANAGEMENT_API_KEY" {
+		t.Errorf("zenmux = %+v", z)
+	}
 	if ids := IDs(); len(ids) < 10 {
 		t.Errorf("IDs = %v", ids)
 	}

@@ -21,12 +21,14 @@ func TestCredentialsForNamesTheEndpoint(t *testing.T) {
 		{Endpoint: "codebuff", Key: "i"},
 		{Provider: "openai", Key: "k"},
 		{Gateway: "sub2api", BaseURL: "https://s2.example", Key: "j"},
+		{Provider: "zenmux", Key: "z"},
+		{ProviderID: "zenmux", Key: "y"},
 	})
 	// An unknown host is a possible gateway, read only at its own address;
 	// Portkey cannot read its own spend, so it is not asked. An admin key
 	// goes to the admin reader only, a named gateway's to that gateway.
 	want := map[string]string{"a": "openrouter", "b": "openrouter", "c": "deepseek", "d": "moonshot", "f": "gateway", "g": "fireworks",
-		"i": "codebuff", "k": "openai-admin", "j": "gateway"}
+		"i": "codebuff", "k": "openai-admin", "j": "gateway", "z": "zenmux-management", "y": "zenmux"}
 	if len(got) != len(want) {
 		t.Fatalf("got %+v", got)
 	}
