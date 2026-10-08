@@ -32,6 +32,7 @@ window.TOKENOPS_PROVIDERS = {
   "gemini": {"name":"Gemini","logo":true},
   "github": {"name":"Copilot","logo":true},
   "gitkraken": {"name":"GitKraken AI","logo":false},
+  "helmcode": {"name":"Helmcode","logo":false},
   "huggingface": {"name":"Hugging Face","logo":true},
   "ibmbob": {"name":"IBM Bob","logo":true},
   "jetbrains": {"name":"JetBrains AI","logo":false},

@@ -707,6 +707,7 @@ vendor's windows, busiest first:
 | Doubao | `POST /?Action=GetCodingPlanUsage` | the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan) |
 | ElevenLabs | `GET /v1/user/subscription` | the subscription's credits used this period |
 | GitKraken AI | `GET api.gitkraken.dev/v1/ai-tasks/usage` | weekly AI credits, and the organization's pool with GITKRAKEN_ORG_ID |
+| Helmcode | `GET /api/usage/quota` | each model's token quota used, and the prepaid balance |
 | IBM Bob | `GET /admin/v1/profile`, `GET /admin/v1/teams/{team}/users/{user}` | Bobcoins used this month against the team budgets |
 | JetBrains AI | the IDE's `options/AIAssistantQuotaManager2.xml` and `idea.log` | monthly AI credits used, from the most recently used IDE |
 | Kilo | `GET /api/trpc/user.getCreditBlocks,kiloPass.getState` | Kilo Pass credits used this billing period, and prepaid credit left |
@@ -825,6 +826,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Gemini | `gemini-cli` | per-turn tokens per model from Gemini CLI's chat recordings | local files | public docs and fixtures |
 | Copilot | `github-copilot` | premium requests used against the month's allowance | another app's sign-in | the vendor's client source and fixtures |
 | GitKraken AI | `gitkraken-account` | weekly AI credits, and the organization's pool with GITKRAKEN_ORG_ID | API key | CodexBar's source, the vendor's docs and fixtures |
+| Helmcode | `helmcode-account` | each model's token quota used, and the prepaid balance | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Hugging Face | `huggingface-account` | Inference Providers charges this month, against the spending limit when set | API key | CodexBar's source, the vendor's docs and fixtures |
 | IBM Bob | `ibmbob-account` | Bobcoins used this month against the team budgets | API key | CodexBar's source, the vendor's docs and fixtures |
 | JetBrains AI | `jetbrains-local` | monthly AI credits used, from the most recently used IDE | local files | CodexBar's source, the vendor's docs and fixtures |

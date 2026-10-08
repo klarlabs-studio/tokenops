@@ -38,6 +38,7 @@ fireworks	fireworks-usage
 gemini_cli	gemini-cli
 github_copilot	github-copilot
 gitkraken_account	gitkraken-account
+helmcode_account	helmcode-account
 huggingface_account	huggingface-account
 ibmbob_account	ibmbob-account
 jetbrains_local	jetbrains-local
