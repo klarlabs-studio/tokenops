@@ -155,6 +155,7 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/spend/fx",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/pricing",
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/session",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic",

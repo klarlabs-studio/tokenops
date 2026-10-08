@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
 	"go.klarlabs.de/tokenops/internal/infra/codexsettings"
 )
@@ -30,17 +31,9 @@ type Credential struct {
 }
 
 // EnvVars maps conventional key variables to the opencode provider ID
-// (models.dev's) of the vendor they belong to.
-var EnvVars = map[string]string{
-	"OPENROUTER_API_KEY": "openrouter",
-	"DEEPSEEK_API_KEY":   "deepseek",
-	"MOONSHOT_API_KEY":   "moonshotai",
-	"FIREWORKS_API_KEY":  "fireworks-ai",
-	"DEEPINFRA_API_KEY":  "deepinfra",
-	"CHUTES_API_KEY":     "chutes",
-	"SYNTHETIC_API_KEY":  "synthetic",
-	"AI_GATEWAY_API_KEY": "vercel",
-}
+// (models.dev's) of the vendor they belong to, from each provider
+// descriptor's EnvVars.
+var EnvVars = providers.EnvVars()
 
 // Options points the finder at its sources; zero values use the real ones.
 type Options struct {

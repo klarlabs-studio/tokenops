@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"strings"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -58,45 +59,27 @@ func (e Endpoint) name() string {
 	return string(e.Provider)
 }
 
-// endpoints are the hosts whose billing is known. A host not listed here
-// is reported as unknown rather than guessed. Sources were read on
-// 2026-10-01.
-var endpoints = []Endpoint{
-	{Host: "api.anthropic.com", Provider: eventschema.ProviderAnthropic, Kind: Direct},
-	{Host: "api.fireworks.ai", Provider: eventschema.ProviderFireworks, Kind: OwnCredential,
-		Source: "https://docs.fireworks.ai/nexus/firerouter: closed models run on your own Anthropic or OpenAI account"},
-	{Host: "openrouter.ai", Provider: eventschema.ProviderOpenRouter, Kind: Reseller},
-	{Host: "api.together.xyz", Provider: eventschema.ProviderTogether, Kind: Reseller},
+// endpoints are the hosts whose billing is known, from the provider
+// registry. A host not listed there is reported as unknown rather than
+// guessed.
+var endpoints = func() []Endpoint {
+	var out []Endpoint
+	for _, e := range providers.Endpoints() {
+		out = append(out, Endpoint{Host: e.Host, Path: e.Path, Provider: e.Provider,
+			Kind: kindOf(e.Billing), Name: e.Name, Source: e.Source})
+	}
+	return out
+}()
 
-	// z.ai: the GLM Coding Plan is served under /api/anthropic and
-	// /api/coding; the pay-as-you-go API under /api/paas.
-	{Host: "api.z.ai", Path: "/api/anthropic", Provider: "zai", Kind: Direct, Source: "https://docs.z.ai/devpack/quick-start"},
-	{Host: "api.z.ai", Path: "/api/coding", Provider: "zai", Kind: Direct, Source: "https://docs.z.ai/devpack/quick-start"},
-	{Host: "api.z.ai", Provider: "zai", Kind: Direct, Name: "zai-api", Source: "https://docs.z.ai/guides/overview/pricing"},
-	{Host: "open.bigmodel.cn", Path: "/api/anthropic", Provider: "zhipuai", Kind: Direct},
-	{Host: "open.bigmodel.cn", Path: "/api/coding", Provider: "zhipuai", Kind: Direct},
-	{Host: "open.bigmodel.cn", Provider: "zhipuai", Kind: Direct, Name: "zhipuai-api"},
-
-	// opencode: Go is a subscription under /zen/go, Zen is pay-per-token
-	// credits; both resell other vendors' models.
-	{Host: "opencode.ai", Path: "/zen/go", Provider: "opencode-go", Kind: Reseller, Source: "https://opencode.ai/docs/go"},
-	{Host: "opencode.ai", Provider: "opencode", Kind: Reseller, Source: "https://opencode.ai/docs/zen"},
-
-	// Moonshot: the Kimi Code membership under /coding, the API elsewhere.
-	{Host: "api.kimi.com", Path: "/coding", Provider: "kimi", Kind: Direct, Source: "https://www.kimi.com/code/docs/en/kimi-code/models"},
-	{Host: "api.kimi.ai", Path: "/coding", Provider: "kimi", Kind: Direct},
-	{Host: "api.moonshot.ai", Provider: "moonshot", Kind: Direct, Source: "https://platform.kimi.ai/docs/guide/claude-code-kimi"},
-
-	// MiniMax serves its Token Plan and pay-as-you-go on one host; the key
-	// decides, which TokenOps does not read. A bound plan is taken to
-	// cover it.
-	{Host: "api.minimax.io", Provider: "minimax", Kind: Direct, Source: "https://platform.minimax.io/docs/token-plan/quickstart"},
-	{Host: "coding-intl.dashscope.aliyuncs.com", Provider: "alibaba", Kind: Reseller, Source: "https://www.alibabacloud.com/help/en/model-studio/coding-plan"},
-	{Host: "api.deepseek.com", Provider: eventschema.ProviderDeepSeek, Kind: Direct, Source: "https://api-docs.deepseek.com/guides/anthropic_api"},
-	{Host: "llm.chutes.ai", Provider: "chutes", Kind: Reseller},
-	{Host: "api.synthetic.new", Provider: "synthetic", Kind: Reseller},
-	{Host: "api.deepinfra.com", Provider: "deepinfra", Kind: Reseller, Source: "https://deepinfra.com/docs/openai_api"},
-	{Host: "ai-gateway.vercel.sh", Provider: "vercel", Kind: Reseller, Source: "https://vercel.com/docs/ai-gateway"},
+// kindOf is the registry's billing as a Kind.
+func kindOf(b providers.Billing) Kind {
+	switch b {
+	case providers.Reseller:
+		return Reseller
+	case providers.OwnCredential:
+		return OwnCredential
+	}
+	return Direct
 }
 
 // EndpointFor returns the known endpoint a base URL points at, the most

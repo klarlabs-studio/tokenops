@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 )
 
 // ModelsDevSourceName is the Source name, and Snapshot.Source, of models.dev's
@@ -13,26 +15,14 @@ import (
 const ModelsDevSourceName = "models.dev"
 
 // modelsDevProviders maps a models.dev provider ID to the TokenOps
-// providers its rates price (ADR 0009 §6). LiteLLM covers the major model
+// providers its rates price (ADR 0009 §6), from each provider descriptor's
+// ModelsDev IDs. LiteLLM covers the major model
 // vendors; models.dev covers gateways and the vendors that sell coding
 // plans. A coding-plan ID (zai-coding-plan, kimi-code-plan-global, …) is
 // listed there at $0, true of the plan and useless as a price, so it is
 // not mapped: plan turns are valued at the vendor's pay-as-you-go rate,
 // which is why moonshotai also prices Kimi Code ("kimi").
-var modelsDevProviders = map[string][]string{
-	"fireworks-ai": {"fireworks"},
-	"openrouter":   {"openrouter"},
-	"togetherai":   {"together"},
-	"zai":          {"zai"},
-	"zhipuai":      {"zhipuai"},
-	"moonshotai":   {"moonshot", "kimi"},
-	"minimax":      {"minimax"},
-	"alibaba":      {"alibaba"},
-	"opencode":     {"opencode"},
-	"opencode-go":  {"opencode-go"},
-	"chutes":       {"chutes"},
-	"synthetic":    {"synthetic"},
-}
+var modelsDevProviders = providers.ModelsDevPricing()
 
 // ParseModelsDev normalizes a models.dev catalog body into a Snapshot of the
 // gateway rates modelsDevProviders maps. sourceURL and fetchedAt are the
