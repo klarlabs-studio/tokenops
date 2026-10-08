@@ -86,14 +86,14 @@ func providerAcme() Descriptor {
 | `DisplayName`, `PlanPrefix` | plan cards, menu bar, docs |
 | `Sources[].Name`, `.Tag` | `vendor-usage status`, freshness, retention keys, the headroom signal |
 | `Sources[].Kind` | which docs table: `Balance`/`Spend`, `Subscription`, `Gateway`, `LocalLog` |
-| `Sources[].Credential` | `APIKey`, `AdminKey`, `BrowserCookie`, `CredentialChain`, `AppKeychain` (all set up generically; a credential chain is the vendor's own credentials on the machine, opted in by setup, never stored), `OAuthFile`, `CLI`, `LocalFile` |
+| `Sources[].Credential` | `APIKey`, `AdminKey`, `BrowserCookie`, `PasswordLogin`, `CredentialChain`, `AppKeychain` (all set up generically; a credential chain is the vendor's own credentials on the machine, opted in by setup, never stored), `OAuthFile`, `CLI`, `LocalFile` |
 | `Sources[].EnvVars` | variables holding the source's own credential when it is not the provider's API key (`OPENAI_ADMIN_KEY`), or a gateway's key (`SUB2API_API_KEY`); sent only to that source's reader |
 | `Sources[].BaseURLEnv`, `.DefaultBaseURL` | a gateway's address variable (`SUB2API_BASE_URL`) and a hosted gateway's own address: with a key in `EnvVars` it is read there, named, without being recognised |
 | `Sources[].KeychainServer` | the Keychain item an `AppKeychain` source reads at setup |
 | `Sources[].Reference` | the CodexBar source a `FromCodexBar` reader follows |
 | `Sources[].Switch` | `SwitchAccounts` for account and gateway readers; `SwitchConfig` only for a reader with its own config block (add it to `configSwitches` in `internal/config/vendor_usage_sources.go` and a hint in `vendorusage_hints.go`) |
 | `Sources[].Reader` | `AccountReader`, `GatewayReader`, or `BespokeReader` with `Package` and `Fixture` |
-| `Sources[].Cookie` | the cookies a `BrowserCookie` source reads |
+| `Sources[].Cookie` | the cookies a `BrowserCookie` source reads: `Host` and `Also` (other regions' hosts, tried in order), `Names` (`"prefix*"` allowed), `Proof` (one must be present), `AllForHost` (every cookie the browser sends to the host, when the names are not known), `PasteOnly` (no browser read) |
 | `Sources[].KeyFormat` | what setup asks for when the credential is more than one key (`TEAM_ID:MANAGEMENT_KEY`) |
 | `Sources[].Verified` | `VerifiedLive` only after a real account was read; else `FromDocs`, `FromClientSource`, or `FromCodexBar` for a reader ported from CodexBar's provider source (name the CodexBar path in a comment) |
 | `Endpoints` | which base URLs bill to it (biller) |
@@ -182,6 +182,26 @@ browser's session cookies, the way the claude.ai meter is
   (`DisabledSecret`), and `browser: none` never reads a browser. A pasted
   session is never re-read from a browser.
 - No agent-facing (MCP) tool reads a browser.
+- The browser read takes the cookies the browser would send to the host
+  (its own and its parent domains'), from one store; a store with no
+  `Proof` cookie is skipped without asking the Keychain, and each
+  browser's Keychain item is asked for at most once per read.
+- A refused stored session, or one the daemon cannot re-read quietly, is a
+  refusal whose health error says to run `tokenops vendor-usage setup <id>`
+  again; the source's hint says the same.
+- A vendor read either way (an API key or a session) has two account
+  readers for one endpoint; each returns `usage.ErrSkip` for the other's
+  credential without calling the vendor, and the key reader implements
+  `KeyOnly` so the browser is never re-read for it.
+
+### Password sign-in providers
+
+`Credential: PasswordLogin`: the reader also implements
+`accounts.PasswordLogin`. Setup asks for the username and the password
+(without echo), signs in once, verifies the returned token with one reading
+and stores only the token; `--paste` takes a token instead. The password is
+never stored or logged. An expired token makes the reading stale until
+setup is run again.
 
 ### CLI and local-file providers
 

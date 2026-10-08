@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -17,11 +18,11 @@ import (
 // stored, for status; never the key.
 const storedOrigin = "tokenops vendor-usage setup"
 
-// browserCookies reads a provider's session cookies from a browser. The
-// daemon's is always quiet (browsercookie.QuietSecret): it never shows a
-// Keychain prompt, and when macOS would ask, the read fails and the
-// source's health says so.
-type browserCookies func(ctx context.Context, host string, names []string, browser string) (map[string]string, error)
+// browserCookies reads a provider's session from a browser and returns it
+// as a Cookie header value. The daemon's is always quiet
+// (browsercookie.QuietSecret): it never shows a Keychain prompt, and when
+// macOS would ask, the read fails and the source's health says so.
+type browserCookies func(ctx context.Context, cookie providers.Cookie, browser string) (string, error)
 
 // quietBrowser is the daemon's browser read: quiet, or none at all with
 // keychain.disabled (only a browser that needs no Keychain, Firefox, can
@@ -31,19 +32,34 @@ func quietBrowser(keychainDisabled bool) browserCookies {
 	if keychainDisabled {
 		secret = browsercookie.DisabledSecret()
 	}
-	return func(ctx context.Context, host string, names []string, browser string) (map[string]string, error) {
+	return func(ctx context.Context, cookie providers.Cookie, browser string) (string, error) {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return nil, err
+			return "", err
 		}
-		cookies, _, err := browsercookie.FindMany(ctx, home, host, names, browser, secret)
-		return cookies, err
+		found, err := browsercookie.FindSession(ctx, home, sessionOf(cookie), browser, secret)
+		if err != nil {
+			return "", err
+		}
+		return found.Header(), nil
 	}
+}
+
+// sessionOf is the browser session a descriptor's cookie spec reads.
+func sessionOf(c providers.Cookie) browsercookie.Session {
+	return browsercookie.Session{Hosts: c.Hosts(), Names: c.Names, Proof: c.Proof, AllForHost: c.AllForHost}
+}
+
+// setupAgain is the remedy for a refused stored credential: only the
+// operator, in setup, may read a browser with a prompt or sign in again.
+func setupAgain(id string) string {
+	return "the stored credential expired or was refused, and TokenOps never prompts in the background: run `tokenops vendor-usage setup " + id + "` again"
 }
 
 // storedCredentials are the credentials setup stored in config, in provider
 // order: each stored key, then, for a session read from a browser, a
 // credential that re-reads the browser only when the stored one is refused.
+// A refusal of either says to run setup again.
 func storedCredentials(cfg config.Config, readers []accounts.Reader, cookieOf func(id string) *providers.Cookie, browser browserCookies) []accounts.Credential {
 	stored := cfg.VendorUsage.Accounts.Credentials
 	ids := make([]string, 0, len(stored))
@@ -59,7 +75,7 @@ func storedCredentials(cfg config.Config, readers []accounts.Reader, cookieOf fu
 			// gateway only.
 			if key := strings.TrimSpace(c.Key); key != "" {
 				out = append(out, accounts.Credential{Endpoint: accounts.GatewayEndpoint, Origin: storedOrigin,
-					Key: key, BaseURL: c.BaseURL, Gateway: id})
+					Key: key, BaseURL: c.BaseURL, Gateway: id, Remedy: setupAgain(id)})
 			}
 			continue
 		}
@@ -70,7 +86,7 @@ func storedCredentials(cfg config.Config, readers []accounts.Reader, cookieOf fu
 		if c.CredentialChain {
 			if chain := chainReader(readers, id); chain != nil {
 				out = append(out, accounts.Credential{Endpoint: endpoint, Origin: storedOrigin + " (credential chain)",
-					Resolve: func(ctx context.Context) (string, error) {
+					Remedy: setupAgain(id), Resolve: func(ctx context.Context) (string, error) {
 						key, _, err := chain.Chain(ctx)
 						return key, err
 					}})
@@ -78,30 +94,30 @@ func storedCredentials(cfg config.Config, readers []accounts.Reader, cookieOf fu
 			continue
 		}
 		if key := strings.TrimSpace(c.Key); key != "" {
-			out = append(out, accounts.Credential{Endpoint: endpoint, Origin: storedOrigin, Key: key})
+			out = append(out, accounts.Credential{Endpoint: endpoint, Origin: storedOrigin, Key: key, Remedy: setupAgain(id)})
 		}
 		spec := cookieOf(id)
-		if !c.FromBrowser || spec == nil || browser == nil || strings.EqualFold(c.Browser, config.BrowserNone) {
+		if !c.FromBrowser || spec == nil || spec.PasteOnly || browser == nil || strings.EqualFold(c.Browser, config.BrowserNone) {
 			continue
 		}
 		cookie, only := *spec, c.Browser
-		out = append(out, accounts.Credential{Endpoint: endpoint, Origin: storedOrigin + " (browser)",
+		out = append(out, accounts.Credential{Endpoint: endpoint, Origin: storedOrigin + " (browser)", Remedy: setupAgain(id),
 			Resolve: func(ctx context.Context) (string, error) {
-				cookies, err := browser(ctx, cookie.Host, cookie.Names, only)
+				header, err := browser(ctx, cookie, only)
 				if err != nil {
-					return "", err
+					return "", fmt.Errorf("%w (re-reading the session quietly: %v)", accounts.ErrAuth, err)
 				}
-				return browsercookie.Header(cookies, cookie.Names), nil
+				return header, nil
 			}})
 	}
 	return out
 }
 
-// registryCookie is the session cookies provider id's setup source reads,
-// nil for a provider read with a key.
+// registryCookie is the session cookies provider id's browser-session
+// source reads, nil for a provider read only with a key.
 func registryCookie(id string) *providers.Cookie {
 	d, _ := providers.Lookup(id)
-	if s, ok := d.Setupable(); ok && s.Credential == providers.BrowserCookie {
+	if s, ok := d.SessionSource(); ok {
 		return s.Cookie
 	}
 	return nil
