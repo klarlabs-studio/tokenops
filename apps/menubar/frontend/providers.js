@@ -55,6 +55,7 @@ window.TOKENOPS_PROVIDERS = {
   "qoder": {"name":"Qoder","logo":true},
   "qwencloud": {"name":"Qwen Cloud","logo":true},
   "sakana": {"name":"Sakana AI","logo":true},
+  "stepfun": {"name":"StepFun","logo":true},
   "sub2api": {"name":"sub2api","logo":false},
   "synthetic": {"name":"Synthetic","logo":false},
   "together": {"name":"Together AI","logo":false},

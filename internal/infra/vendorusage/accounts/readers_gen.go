@@ -51,6 +51,7 @@ var readers = []func() usage.Reader{
 	readerQoder,
 	readerQwenCloud,
 	readerSakana,
+	readerStepFun,
 	readerSynthetic,
 	readerV0,
 	readerVenice,
