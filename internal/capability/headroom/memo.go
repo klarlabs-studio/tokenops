@@ -37,6 +37,10 @@ func memoFloor(now time.Time) time.Time {
 	return month
 }
 
+// EventsFloor is how far back a headroom computation at now reads events:
+// a cache filled from it ahead of time answers the computation.
+func EventsFloor(now time.Time) time.Time { return memoFloor(now) }
+
 // memoize switches the memo off, for a test comparing answers with and
 // without it.
 var memoize = true

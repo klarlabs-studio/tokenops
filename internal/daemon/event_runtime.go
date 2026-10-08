@@ -98,7 +98,12 @@ func initializeEventRuntime(
 		logger.Info("otlp exporter ready", "endpoint", cfg.OTel.Endpoint, "redact", cfg.OTel.RedactEnabled())
 	}
 
-	startOTelMetricsRuntime(cfg, rt.Store, components, sup, logger)
+	// The glance, findings and OTel gauges share one cache of the events
+	// they read, filled in the background so the first glance after a
+	// start does not wait for a month of events to be read.
+	glance := newGlanceEvents(rt.Store)
+	warmGlanceEvents(sup, glance, logger)
+	startOTelMetricsRuntime(cfg, rt.Store, glance, components, sup, logger)
 
 	// Plan stamping ensures all sources inherit the plan_included contract.
 	rt.Bus = events.NewAsync(newPlanStampSink(events.NewMultiSink(sinks...), cfg), events.Options{
@@ -111,7 +116,7 @@ func initializeEventRuntime(
 	rt.ProxyOptions = append(rt.ProxyOptions,
 		proxy.WithEventBus(rt.Bus),
 		proxy.WithSourceFreshness(sourceFreshnessFn(cfg, rt.Store, sourceHealth, sup)),
-		proxy.WithPlans(plansDeps(cfg, rt.Store, components.Spend)),
+		proxy.WithPlans(plansDeps(cfg, glance, components.Spend)),
 		proxy.WithActions(actionDeps(cfg, rt.Store, logger)),
 		proxy.WithSessions(func() proxy.SessionRoots { return proxy.SessionRoots{} }),
 		proxy.WithState(stateDeps(cfg, rt.Store, sourceFreshnessFn(cfg, rt.Store, sourceHealth, sup), rt.Bus.DroppedCount)),
@@ -174,17 +179,42 @@ func wireDomainEventPublishers(bus *events.AsyncBus, logger *slog.Logger) func()
 	}
 }
 
+// newGlanceEvents is the EventCache the plan routes read: the glance reads
+// weeks of events in full, and between two of the menu bar's polls only a
+// few arrive. Nil without a store.
+func newGlanceEvents(store *sqlite.Store) *sqlite.EventCache {
+	if store == nil {
+		return nil
+	}
+	return sqlite.NewEventCache(store, 0, 0)
+}
+
+// warmGlanceEvents reads into events, in the background, the prompt events
+// a glance reads, so the first glance after a start answers from memory.
+// A failure only leaves that read to the first glance.
+func warmGlanceEvents(sup *lifecycle.Supervisor, events *sqlite.EventCache, logger *slog.Logger) {
+	if events == nil || sup == nil {
+		return
+	}
+	sup.Go("glance-cache-warm", func(ctx context.Context) error {
+		// UTC, as the routes compute: the floor is the start of the month.
+		started := time.Now().UTC()
+		if err := events.Warm(ctx, eventschema.EventTypePrompt, headroom.EventsFloor(started)); err != nil {
+			if ctx.Err() == nil {
+				logger.Warn("glance cache warm-up failed; the first glance reads the store", "err", err)
+			}
+			return nil
+		}
+		logger.Debug("glance cache warm", "took", time.Since(started))
+		return nil
+	})
+}
+
 // plansDeps is what the plan routes need. The daemon reads config once, at
 // boot, and a config write restarts it (RestartForConfig), so the snapshot
-// it was started with is current.
-//
-// The routes share one EventCache: the glance reads weeks of events in
-// full, and between two of the menu bar's polls only a few arrive.
-func plansDeps(cfg config.Config, store *sqlite.Store, engine *spending.Engine) func() headroom.Deps {
-	var events *sqlite.EventCache
-	if store != nil {
-		events = sqlite.NewEventCache(store, 0, 0)
-	}
+// it was started with is current. events is the cache they read events
+// through; nil reads nothing.
+func plansDeps(cfg config.Config, events *sqlite.EventCache, engine *spending.Engine) func() headroom.Deps {
 	return func() headroom.Deps {
 		deps := headroom.Deps{Config: &cfg, Accounts: signedInAccounts}
 		if events != nil {

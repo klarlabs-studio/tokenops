@@ -36,7 +36,7 @@ func TestOTelMetricsLive(t *testing.T) {
 	}
 	defer func() { _ = store.Close() }()
 	eng := spend.NewEngine(spend.DefaultTable())
-	g := &telemetry.Gatherer{Glance: plansDeps(cfg, store, eng), Agg: analytics.New(store, eng)}
+	g := &telemetry.Gatherer{Glance: plansDeps(cfg, newGlanceEvents(store), eng), Agg: analytics.New(store, eng)}
 	now := time.Now().UTC()
 	gauges := telemetry.Gauges(g.Gather(ctx, now))
 	points := 0
