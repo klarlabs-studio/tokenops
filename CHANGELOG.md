@@ -9,6 +9,7 @@
 - **vendor-usage:** `tokenops vendor-usage setup <provider>` connects any vendor account TokenOps reads (OpenRouter, DeepSeek, Moonshot, z.ai, Kimi, MiniMax, Synthetic, Chutes, DeepInfra, Vercel) when no harness or environment variable holds its key: the key is typed without echo, checked with one reading, and only then stored in your config (redacted wherever config is shown) and sent only to that vendor
 - **providers:** ClinePass: the subscription's 5-hour, weekly and monthly windows, read with a Cline API key (`CLINE_API_KEY`, `CLINEPASS_API_KEY`, opencode's `cline-pass` key or `vendor-usage setup clinepass`)
 - **providers:** Kilo: Kilo Pass credits used this billing period and the prepaid credit left, read with a Kilo API key (`KILO_API_KEY`, opencode's `kilo` key or `vendor-usage setup kilo`)
+- **providers:** Codebuff: credits used against the quota until it resets, read with a Codebuff API key (`CODEBUFF_API_KEY` or `vendor-usage setup codebuff`); a provider opencode does not know can now name its own key variables
 
 ### Fixed
 

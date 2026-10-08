@@ -10,6 +10,7 @@ import (
 var readers = []func() usage.Reader{
 	readerChutes,
 	readerClinePass,
+	readerCodebuff,
 	readerDeepInfra,
 	readerDeepSeek,
 	readerKilo,

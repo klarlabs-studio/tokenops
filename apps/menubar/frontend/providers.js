@@ -8,6 +8,7 @@ window.TOKENOPS_PROVIDERS = {
   "chutes": {"name":"Chutes","logo":false},
   "clawrouter": {"name":"ClawRouter","logo":false},
   "clinepass": {"name":"ClinePass","logo":true},
+  "codebuff": {"name":"Codebuff","logo":false},
   "cursor": {"name":"Cursor","logo":true},
   "deepinfra": {"name":"DeepInfra","logo":false},
   "deepseek": {"name":"DeepSeek","logo":true},

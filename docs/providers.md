@@ -91,7 +91,7 @@ func providerAcme() Descriptor {
 | `Sources[].Verified` | `VerifiedLive` only after a real account was read; else `FromDocs`, `FromClientSource`, or `FromCodexBar` for a reader ported from CodexBar's provider source (name the CodexBar path in a comment) |
 | `Endpoints` | which base URLs bill to it (biller) |
 | `Opencode` | opencode's provider IDs, with the endpoint each names (`"<id>-api"` for a pay-as-you-go API beside a plan) |
-| `EnvVars` | where a key is found without setup; needs an `Opencode` entry, whose first ID names the vendor |
+| `EnvVars` | where a key is found without setup; it goes to the endpoint of the first `Opencode` ID, or, with none, to the reader of the provider's own ID |
 | `ModelsDev` | models.dev IDs whose per-token prices value its turns |
 | `Plans` | the plan catalog (`tokenops plan list`) |
 | `CatalogOnly` | instead of `Sources`: why nothing reads it yet |

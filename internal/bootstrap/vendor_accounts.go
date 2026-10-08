@@ -22,6 +22,8 @@ func credentialsFor(found []harnesskeys.Credential) []accounts.Credential {
 	for _, c := range found {
 		endpoint := ""
 		switch {
+		case c.Endpoint != "":
+			endpoint = c.Endpoint
 		case c.BaseURL != "":
 			// A base URL decides. An unknown host may be a gateway the
 			// operator runs or subscribes to; the poller recognises it by

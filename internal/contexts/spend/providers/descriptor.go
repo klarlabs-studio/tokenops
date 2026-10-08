@@ -54,7 +54,8 @@ type Descriptor struct {
 	Opencode []OpencodeID
 	// EnvVars are the conventional environment variables a key for this
 	// provider is found in. The key goes to the endpoint of the first
-	// Opencode ID, so a provider with EnvVars needs one.
+	// Opencode ID; a provider opencode does not know (no Opencode ID)
+	// sends it to the endpoint named by its own ID.
 	EnvVars []string
 	// ModelsDev are the models.dev provider IDs whose per-token rates
 	// price this provider's turns (ADR 0009 §6). A coding plan's own ID,

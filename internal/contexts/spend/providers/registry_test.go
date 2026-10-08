@@ -64,8 +64,8 @@ func TestRegistryIsConsistent(t *testing.T) {
 		if (len(d.Sources) == 0) != (d.CatalogOnly != "") {
 			t.Errorf("%s: a provider has sources or says why not (CatalogOnly), not both", id)
 		}
-		if len(d.EnvVars) > 0 && len(d.Opencode) == 0 {
-			t.Errorf("%s: EnvVars name the vendor through its first Opencode ID; add one", id)
+		if len(d.EnvVars) > 0 && len(d.Opencode) == 0 && len(d.Sources) == 0 {
+			t.Errorf("%s: a variable with no Opencode ID goes to the provider's own reader; it has none", id)
 		}
 		for _, s := range d.Sources {
 			checkSource(t, id, s, tags, names)
@@ -165,6 +165,12 @@ func TestDerivedLists(t *testing.T) {
 	}
 	if got := EnvVars()["MOONSHOT_API_KEY"]; got != "moonshotai" {
 		t.Errorf("MOONSHOT_API_KEY is for %q", got)
+	}
+	if got := OwnEnvVars()["CODEBUFF_API_KEY"]; got != "codebuff" {
+		t.Errorf("CODEBUFF_API_KEY is for %q", got)
+	}
+	if _, ok := OwnEnvVars()["MOONSHOT_API_KEY"]; ok {
+		t.Error("a variable of a provider opencode knows goes through its opencode ID")
 	}
 	if got := Opencode()["zai"]; got.Provider != "zai" || got.Endpoint != "zai-api" {
 		t.Errorf("opencode zai = %+v", got)

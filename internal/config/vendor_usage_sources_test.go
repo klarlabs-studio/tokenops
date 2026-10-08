@@ -49,6 +49,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"chutes_account", "chutes-account"},
 		{"clawrouter_gateway", "clawrouter-account"},
 		{"clinepass_account", "clinepass-account"},
+		{"codebuff_account", "codebuff-account"},
 		{"cursor_turns (hook ledger)", "cursor-hook"},
 		{"cursor_web", "cursor-web"},
 		{"deepinfra_account", "deepinfra-account"},
