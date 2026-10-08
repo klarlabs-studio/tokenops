@@ -44,6 +44,7 @@ var readers = []func() usage.Reader{
 
 // gateways is every gateway*() function in this package, by file name.
 var gateways = []func() usage.Gateway{
+	gatewayAixy,
 	gatewayBifrost,
 	gatewayClawRouter,
 	gatewayLiteLLM,
