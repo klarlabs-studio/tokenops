@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 )
 
 // VendorUsageSource pairs a vendor-usage source's display name with the
@@ -33,52 +35,52 @@ type VendorUsageSource struct {
 
 // VendorUsageSources returns every vendor-usage source in a stable
 // order, each carrying its display name, the SourceTag its poller
-// stamps on events, and whether the config block is enabled. Order is
-// fixed so callers (and their tests) can rely on it.
+// stamps on events, and whether the config block is enabled. The list is
+// the provider registry's (internal/contexts/spend/providers), by provider
+// then by each provider's source order, so a provider added there is
+// listed, staleness-checked and named in retention rules with no edit
+// here. Order is fixed so callers (and their tests) can rely on it.
 func (c Config) VendorUsageSources() []VendorUsageSource {
-	return []VendorUsageSource{
-		{Name: "claude_code_jsonl", SourceTag: "claude-code-jsonl", Enabled: c.VendorUsage.ClaudeCodeJSONL.Enabled},
-		{Name: "codex_jsonl", SourceTag: "codex-jsonl", Enabled: c.VendorUsage.CodexJSONL.Enabled},
-		{Name: "opencode", SourceTag: "opencode", Enabled: c.VendorUsage.OpenCode.Enabled},
-		{Name: "gemini_cli", SourceTag: "gemini-cli", Enabled: c.VendorUsage.GeminiCLI.Enabled},
-		{Name: "claude_code_stats_cache (deprecated)", SourceTag: "claude-code-stats-cache", Enabled: c.VendorUsage.ClaudeCode.Enabled},
-		{Name: "vendor_usage_anthropic", SourceTag: "vendor-usage-anthropic", Enabled: c.VendorUsage.Anthropic.Enabled},
-		{Name: "github_copilot", SourceTag: "github-copilot", Enabled: c.VendorUsage.GitHubCopilot.Enabled},
-		{Name: "cursor_web", SourceTag: "cursor-web", Enabled: c.VendorUsage.Cursor.Enabled},
-		{Name: "claude_subscription", SourceTag: "claude-usage-meter", Enabled: c.VendorUsage.ClaudeUsageMeter.Enabled},
-		{Name: "claude_code_oauth", SourceTag: "claude-code-oauth", Enabled: c.VendorUsage.ClaudeCodeOAuth.Enabled},
-		{Name: "codex_app_server", SourceTag: "codex-app-server", AlwaysOn: c.VendorUsage.CodexAppServer.On()},
-		// Fireworks' reader is on unless switched off and reads only when
-		// a Fireworks key is on the machine, so like the hook ledger it is
-		// always on rather than enabled: it is no ingestion source, and a
-		// machine without Fireworks is not a stale one.
-		{Name: "fireworks", SourceTag: "fireworks-usage", AlwaysOn: c.VendorUsage.Fireworks.On()},
-		{Name: "openrouter_account", SourceTag: "openrouter-account", AlwaysOn: c.VendorUsage.Accounts.On()},
-		{Name: "deepseek_account", SourceTag: "deepseek-account", AlwaysOn: c.VendorUsage.Accounts.On()},
-		{Name: "moonshot_account", SourceTag: "moonshot-account", AlwaysOn: c.VendorUsage.Accounts.On()},
-		{Name: "zai_account", SourceTag: "zai-account", AlwaysOn: c.VendorUsage.Accounts.On()},
-		{Name: "kimi_account", SourceTag: "kimi-account", AlwaysOn: c.VendorUsage.Accounts.On()},
-		{Name: "minimax_account", SourceTag: "minimax-account", AlwaysOn: c.VendorUsage.Accounts.On()},
-		{Name: "synthetic_account", SourceTag: "synthetic-account", AlwaysOn: c.VendorUsage.Accounts.On()},
-		{Name: "chutes_account", SourceTag: "chutes-account", AlwaysOn: c.VendorUsage.Accounts.On()},
-		{Name: "deepinfra_account", SourceTag: "deepinfra-account", AlwaysOn: c.VendorUsage.Accounts.On()},
-		{Name: "vercel_account", SourceTag: "vercel-account", AlwaysOn: c.VendorUsage.Accounts.On()},
-		{Name: "litellm_gateway", SourceTag: "litellm-account", AlwaysOn: c.VendorUsage.Accounts.On()},
-		{Name: "bifrost_gateway", SourceTag: "bifrost-account", AlwaysOn: c.VendorUsage.Accounts.On()},
-		{Name: "clawrouter_gateway", SourceTag: "clawrouter-account", AlwaysOn: c.VendorUsage.Accounts.On()},
-		// The cursor turn poller has no config block: it reads a ledger
-		// the coach hook writes, and that ledger is empty until the hook
-		// is installed, so an operator who does not run Cursor pays
-		// nothing for it. Always-on is the right design and was the
-		// reason it appeared in no registry at all — invisible to
-		// `vendor-usage status`, never staleness-checked, and impossible
-		// to name in a retention rule without guessing the tag.
-		{Name: "cursor_turns (hook ledger)", SourceTag: "cursor-hook", AlwaysOn: true},
-		// Claude Code's status line leaves its plan windows in a file the
-		// daemon reads; like the hook ledger it is empty until the status
-		// line is installed.
-		{Name: "claude_code_statusline", SourceTag: "claude-code-statusline", AlwaysOn: true},
+	all := providers.Sources()
+	out := make([]VendorUsageSource, 0, len(all))
+	for _, s := range all {
+		v := VendorUsageSource{Name: s.Name, SourceTag: s.Tag}
+		switch s.Switch {
+		case providers.SwitchAccounts:
+			v.AlwaysOn = c.VendorUsage.Accounts.On()
+		case providers.SwitchAlways:
+			v.AlwaysOn = true
+		case providers.SwitchConfig:
+			if sw, ok := configSwitches[s.Tag]; ok {
+				v.Enabled, v.AlwaysOn = sw(c)
+			}
+		}
+		out = append(out, v)
 	}
+	return out
+}
+
+// configSwitches says, for each source with its own config block, whether
+// the operator enabled it and whether it runs regardless (a reader that is
+// on unless switched off). TestEveryConfigSourceHasASwitch holds it to the
+// registry's SwitchConfig sources.
+var configSwitches = map[string]func(Config) (enabled, alwaysOn bool){
+	"claude-code-jsonl":       func(c Config) (bool, bool) { return c.VendorUsage.ClaudeCodeJSONL.Enabled, false },
+	"codex-jsonl":             func(c Config) (bool, bool) { return c.VendorUsage.CodexJSONL.Enabled, false },
+	"opencode":                func(c Config) (bool, bool) { return c.VendorUsage.OpenCode.Enabled, false },
+	"gemini-cli":              func(c Config) (bool, bool) { return c.VendorUsage.GeminiCLI.Enabled, false },
+	"claude-code-stats-cache": func(c Config) (bool, bool) { return c.VendorUsage.ClaudeCode.Enabled, false },
+	"vendor-usage-anthropic":  func(c Config) (bool, bool) { return c.VendorUsage.Anthropic.Enabled, false },
+	"github-copilot":          func(c Config) (bool, bool) { return c.VendorUsage.GitHubCopilot.Enabled, false },
+	"cursor-web":              func(c Config) (bool, bool) { return c.VendorUsage.Cursor.Enabled, false },
+	"claude-usage-meter":      func(c Config) (bool, bool) { return c.VendorUsage.ClaudeUsageMeter.Enabled, false },
+	"claude-code-oauth":       func(c Config) (bool, bool) { return c.VendorUsage.ClaudeCodeOAuth.Enabled, false },
+	"codex-app-server":        func(c Config) (bool, bool) { return false, c.VendorUsage.CodexAppServer.On() },
+	// Fireworks' reader is on unless switched off and reads only when a
+	// Fireworks key is on the machine, so like the hook ledger it is
+	// always on rather than enabled: it is no ingestion source, and a
+	// machine without Fireworks is not a stale one.
+	"fireworks-usage": func(c Config) (bool, bool) { return false, c.VendorUsage.Fireworks.On() },
 }
 
 // UnmatchedRetentionSources returns the keep_by_source keys that name a
