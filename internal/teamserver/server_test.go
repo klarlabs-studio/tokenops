@@ -100,7 +100,7 @@ func upload(buckets ...teamwire.Bucket) teamwire.Upload {
 
 func TestEndToEnd(t *testing.T) {
 	e := newEnv(t)
-	var members []teamwire.EnrollResponse
+	members := make([]teamwire.EnrollResponse, 0, 3)
 	for _, name := range []string{"Ann", "Ben", "Cem"} {
 		m := e.join("platform", name, team.RoleMember)
 		members = append(members, m)
