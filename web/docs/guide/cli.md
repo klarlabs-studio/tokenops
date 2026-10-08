@@ -695,6 +695,7 @@ vendor's windows, busiest first:
 | Chutes | `GET /users/me/subscription_usage` | the 4-hour and monthly caps |
 | ClinePass | `GET /api/v1/users/me/plan/usage-limits` | 5-hour, weekly and monthly windows |
 | Codebuff | `POST /api/v1/usage` | credits used against the quota until it resets |
+| CodeRabbit | `coderabbit usage` | reviews this billing period, a count with no allowance (no percentage) |
 | DevPass (LLM Gateway) | `GET /v1/key` | the cycle's plan credits and the premium weekly window; on pay-as-you-go, the key's spend against its limit |
 | Doubao | `POST /?Action=GetCodingPlanUsage` | the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan) |
 | ElevenLabs | `GET /v1/user/subscription` | the subscription's credits used this period |
@@ -787,6 +788,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | ClawRouter | `clawrouter-account` | the policy's spend against its monthly budget | API key | public docs and fixtures |
 | ClinePass | `clinepass-account` | 5-hour, weekly and monthly windows | API key | CodexBar's source, the vendor's docs and fixtures |
 | Codebuff | `codebuff-account` | credits used against the quota until it resets | API key | CodexBar's source, the vendor's docs and fixtures |
+| CodeRabbit | `coderabbit-cli` | reviews this billing period, a count with no allowance (no percentage) | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
 | Cursor | `cursor-hook` | per-turn consumption Cursor's stop hook records | local files | public docs and fixtures |
 |  | `cursor-web` | requests used against the month's allowance, from cursor.com | browser session | the vendor's client source and fixtures |
 | Deepgram | `deepgram-account` | prepaid USD balance left, across the key's projects | API key | CodexBar's source, the vendor's docs and fixtures |

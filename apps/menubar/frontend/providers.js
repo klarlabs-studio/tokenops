@@ -16,6 +16,7 @@ window.TOKENOPS_PROVIDERS = {
   "clawrouter": {"name":"ClawRouter","logo":false},
   "clinepass": {"name":"ClinePass","logo":true},
   "codebuff": {"name":"Codebuff","logo":false},
+  "coderabbit": {"name":"CodeRabbit","logo":false},
   "cursor": {"name":"Cursor","logo":true},
   "deepgram": {"name":"Deepgram","logo":false},
   "deepinfra": {"name":"DeepInfra","logo":false},
