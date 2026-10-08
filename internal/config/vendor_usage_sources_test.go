@@ -83,6 +83,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"perplexity_account", "perplexity-account"},
 		{"poe_account", "poe-account"},
 		{"raycast_account", "raycast-account"},
+		{"replicate_account", "replicate-account"},
 		{"synthetic_account", "synthetic-account"},
 		{"t3chat_account", "t3chat-account"},
 		{"typesafe_account", "typesafe-account"},

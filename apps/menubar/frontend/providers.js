@@ -42,6 +42,7 @@ window.TOKENOPS_PROVIDERS = {
   "perplexity": {"name":"Perplexity","logo":true},
   "poe": {"name":"Poe","logo":true},
   "raycast": {"name":"Raycast","logo":false},
+  "replicate": {"name":"Replicate","logo":true},
   "synthetic": {"name":"Synthetic","logo":false},
   "t3chat": {"name":"T3 Chat","logo":false},
   "together": {"name":"Together AI","logo":false},

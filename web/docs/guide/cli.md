@@ -674,6 +674,7 @@ vendor's own figures every 15 minutes:
 | Neuralwatt | `GET /v1/quota` | prepaid USD credit left, and the subscription's kWh allowance used this period |
 | OpenRouter | `GET /api/v1/key` | the key's spend, against its credit cap when it has one |
 | Poe | `GET /usage/current_balance` | the point balance left (points, not dollars) |
+| Replicate | `GET /api/{users|organizations}/{name}/invoices` | spend this month, and the prepaid credit left |
 | TypeSafe | `POST /settings/billing` (getBillingOverview action) | spend this billing cycle and the credit balance left |
 | Venice | `GET /api/v1/billing/balance` | USD balance left, and the DIEM epoch allocation used when staking |
 | Vercel AI Gateway | `GET /v1/credits` | the team's credit balance |
@@ -807,6 +808,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Perplexity | `perplexity-account` | the plan's monthly credit grant used, and the credit balance | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Poe | `poe-account` | the point balance left (points, not dollars) | API key | CodexBar's source, the vendor's docs and fixtures |
 | Raycast | `raycast-account` | the month's AI credit allowance used, and the credits left | browser session | CodexBar's source, the vendor's docs and fixtures |
+| Replicate | `replicate-account` | spend this month, and the prepaid credit left | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Synthetic | `synthetic-account` | the subscription's request quota | API key | public docs and fixtures |
 | T3 Chat | `t3chat-account` | the 4-hour Base window and the monthly Overage budget used | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Together AI | — | in the catalog only: billed per token; its endpoint and models.dev prices are known, its account is not read | — | — |
