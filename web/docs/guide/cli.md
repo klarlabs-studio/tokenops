@@ -687,6 +687,7 @@ vendor's windows, busiest first:
 |---|---|---|
 | Chutes | `GET /users/me/subscription_usage` | the 4-hour and monthly caps |
 | Doubao | `POST /?Action=GetCodingPlanUsage` | the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan) |
+| ElevenLabs | `GET /v1/user/subscription` | the subscription's credits used this period |
 | Kimi Code | `GET /coding/v1/usages` | 5-hour, weekly and monthly windows |
 | MiniMax Token Plan | `GET /v1/token_plan/remains` | the interval and weekly windows |
 | Synthetic | `GET /v2/quotas` | the subscription's request quota |
@@ -757,6 +758,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | DeepInfra | `deepinfra-account` | spend since the last invoice, the limit, prepaid credit | API key | public docs and fixtures |
 | DeepSeek | `deepseek-account` | prepaid USD balance left | API key | public docs and fixtures |
 | Doubao | `doubao-account` | the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan) | API key | the vendor's client source and fixtures |
+| ElevenLabs | `elevenlabs-account` | the subscription's credits used this period | API key | public docs and fixtures |
 | Fireworks | `fireworks-usage` | the month's spend against the account's or the member's cap | API key | against a real account |
 | Gemini | `gemini-cli` | per-turn tokens per model from Gemini CLI's chat recordings | local files | public docs and fixtures |
 | Copilot | `github-copilot` | premium requests used against the month's allowance | another app's sign-in | the vendor's client source and fixtures |
