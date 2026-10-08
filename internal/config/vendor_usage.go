@@ -39,6 +39,12 @@ type AccountsUsageConfig struct {
 	// holds a key for. They are read before the harnesses' keys, sent only
 	// to that vendor, and redacted wherever configuration is shown.
 	Credentials map[string]AccountCredential `yaml:"credentials,omitempty"`
+	// Scopes are, by provider ID, the scope a reader that takes one reads
+	// instead of its key's default: a Kilo organisation ID, a v0 project
+	// ID or slug. `tokenops vendor-usage setup <provider> --scope <value>`
+	// sets it; the reader passes it to that vendor as is. A provider whose
+	// reader takes no scope ignores it.
+	Scopes map[string]string `yaml:"scopes,omitempty"`
 }
 
 // AccountCredential is one stored vendor credential.

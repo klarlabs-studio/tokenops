@@ -8,6 +8,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 	accountsapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/accounts"
 )
 
@@ -35,8 +36,10 @@ func repoFileExists(rel string) bool {
 // lists, so a provider added in its own file cannot be half-wired (#517).
 func TestEveryProviderIsComplete(t *testing.T) {
 	readers := map[string]string{} // source tag -> provider
+	scoped := map[string]bool{}    // source tag -> takes a scope
 	for _, r := range accountsapi.Readers() {
 		readers[r.Source()] = string(r.Provider())
+		_, scoped[r.Source()] = r.(accounts.Scoped)
 	}
 	gateways := map[string]string{}
 	for _, g := range accountsapi.Gateways() {
@@ -57,6 +60,9 @@ func TestEveryProviderIsComplete(t *testing.T) {
 		}
 		for _, s := range d.Sources {
 			checkReader(t, id, s, readers, gateways)
+			if s.Reader == providers.AccountReader && (s.Scope != "") != scoped[s.Tag] {
+				t.Errorf("%s/%s: the descriptor's Scope (%q) and the reader's WithScope disagree", id, s.Tag, s.Scope)
+			}
 			if cfg.VendorUsageConfigHint(s.Tag) == "" {
 				t.Errorf("%s/%s: no hint in `vendor-usage status`", id, s.Tag)
 			}

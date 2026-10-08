@@ -10,7 +10,7 @@ func providerWarp() Descriptor {
 			{Name: "warp_account", Tag: "warp-account", Kind: Subscription, Credential: APIKey,
 				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,
 				Endpoint: "`POST /graphql/v2?op=GetRequestLimitInfo`",
-				Shows:    "credits used since the last refresh against the plan's limit"},
+				Shows:    "credits used since the last refresh against the plan's limit, and the add-on credits left"},
 		},
 		EnvVars: []string{"WARP_API_KEY", "WARP_TOKEN"},
 	}

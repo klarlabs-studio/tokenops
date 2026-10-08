@@ -88,6 +88,10 @@ type Reading struct {
 	// UsedUSD is spend in the period, when the vendor reports it.
 	UsedUSD float64
 	HasUsed bool
+	// UsedPeriod is the trailing period UsedUSD and CreditsUsed cover when
+	// the vendor reports spend over the last N days rather than its
+	// billing period (xAI's last 30 days); 0 is the billing period.
+	UsedPeriod time.Duration
 	// LimitUSD is the cap UsedUSD is spent against, 0 for none.
 	LimitUSD float64
 	// BalanceUSD is prepaid credit left, when the vendor reports it.
@@ -99,6 +103,11 @@ type Reading struct {
 	Credits     float64
 	CreditsUnit string
 	HasCredits  bool
+	// CreditsUsed is spend in the vendor's own unit, CreditsUnit, over
+	// UsedPeriod (Poe's points over the last 30 days), as reported and
+	// never converted to dollars.
+	CreditsUsed    float64
+	HasCreditsUsed bool
 	// LimitReached is the vendor saying requests are blocked.
 	LimitReached bool
 	// Subscription marks an account on a plan rather than billed per
@@ -125,7 +134,7 @@ type Count struct {
 // account with no plan windows, no spend and no balance (a key on a
 // vendor's free tier, say).
 func (r Reading) Empty() bool {
-	return len(r.Windows) == 0 && len(r.Counts) == 0 && !r.HasUsed && !r.HasBalance && !r.HasCredits && r.LimitUSD == 0 && !r.LimitReached
+	return len(r.Windows) == 0 && len(r.Counts) == 0 && !r.HasUsed && !r.HasBalance && !r.HasCredits && !r.HasCreditsUsed && r.LimitUSD == 0 && !r.LimitReached
 }
 
 // Window is one usage window: the share used and when it resets.
@@ -162,6 +171,30 @@ type ChainReader interface {
 // figures only a few times a day.
 type Paced interface {
 	MinInterval() time.Duration
+}
+
+// Scoped is a reader that can read another scope than its key's default:
+// a Kilo organisation, a v0 project. The scope is the operator's setting
+// (vendor_usage.accounts.scopes.<provider>), passed to the vendor as is.
+type Scoped interface {
+	Reader
+	// WithScope returns the reader reading scope; "" is the default.
+	WithScope(scope string) Reader
+}
+
+// WithScopes returns readers with each scoped reader set to the scope
+// scopes names for its provider. A reader with no scope set, or that takes
+// none, is returned as it is.
+func WithScopes(readers []Reader, scopes map[string]string) []Reader {
+	out := make([]Reader, len(readers))
+	for i, r := range readers {
+		out[i] = r
+		scope := strings.TrimSpace(scopes[string(r.Provider())])
+		if s, ok := r.(Scoped); ok && scope != "" {
+			out[i] = s.WithScope(scope)
+		}
+	}
+	return out
 }
 
 // GatewayEndpoint is the endpoint name of a credential whose base URL is a

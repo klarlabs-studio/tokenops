@@ -61,6 +61,9 @@ type Provider struct {
 	// KeyFormat is the credential's shape when it is more than one key
 	// ("TEAM_ID:MANAGEMENT_KEY"); empty for a plain API key.
 	KeyFormat string
+	// Scope says what the reader's optional scope is ("a Kilo
+	// organisation ID"); empty for a reader that takes none.
+	Scope string
 	// KeychainServer is set for a provider read with another app's
 	// sign-in from the Keychain: the internet password's server.
 	KeychainServer string
@@ -108,6 +111,7 @@ func Lookup(id string) (Provider, bool) {
 	p := Provider{ID: string(d.ID), Name: d.DisplayName, KeyFormat: s.KeyFormat,
 		EnvVars: append(append([]string(nil), d.EnvVars...), s.EnvVars...)}
 	p.Chain = s.Credential == providers.CredentialChain
+	p.Scope = s.Scope
 	if s.Reader == providers.GatewayReader {
 		p.Gateway, p.DefaultBaseURL, p.BaseURLEnv = true, s.DefaultBaseURL, s.BaseURLEnv
 	}
@@ -196,12 +200,14 @@ func LoginWith(ctx context.Context, readers []usage.Reader, id, username, passwo
 
 // Verify reads p's account once with key and summarises what the vendor
 // reported. Nothing is stored.
-func Verify(ctx context.Context, id, key string) ([]string, error) {
-	return VerifyWith(ctx, accountsapi.Readers(), id, key)
+// A scope, for a reader that takes one, is read instead of the key's
+// default.
+func Verify(ctx context.Context, id, key, scope string) ([]string, error) {
+	return VerifyWith(ctx, accountsapi.Readers(), id, key, scope)
 }
 
 // VerifyWith is Verify with the readers given.
-func VerifyWith(ctx context.Context, readers []usage.Reader, id, key string) ([]string, error) {
+func VerifyWith(ctx context.Context, readers []usage.Reader, id, key, scope string) ([]string, error) {
 	key = strings.TrimSpace(key)
 	if key == "" {
 		return nil, errors.New("no credential entered")
@@ -209,7 +215,7 @@ func VerifyWith(ctx context.Context, readers []usage.Reader, id, key string) ([]
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	found := false
-	for _, r := range readers {
+	for _, r := range usage.WithScopes(readers, map[string]string{id: scope}) {
 		if string(r.Provider()) != id || usage.IsKeyless(r) {
 			continue
 		}
@@ -303,6 +309,9 @@ func Summary(r usage.Reading) []string {
 		if r.LimitUSD > 0 {
 			line += fmt.Sprintf(" of $%.2f", r.LimitUSD)
 		}
+		if days := int(r.UsedPeriod / (24 * time.Hour)); days > 0 {
+			line += fmt.Sprintf(" over the last %d days", days)
+		}
 		out = append(out, line)
 	}
 	if r.HasBalance {
@@ -311,6 +320,13 @@ func Summary(r usage.Reading) []string {
 	if r.HasCredits {
 		out = append(out, fmt.Sprintf("balance: %s %s", strconv.FormatFloat(r.Credits, 'f', -1, 64), r.CreditsUnit))
 	}
+	if r.HasCreditsUsed {
+		line := fmt.Sprintf("spend: %s %s", strconv.FormatFloat(r.CreditsUsed, 'f', -1, 64), r.CreditsUnit)
+		if days := int(r.UsedPeriod / (24 * time.Hour)); days > 0 {
+			line += fmt.Sprintf(" over the last %d days", days)
+		}
+		out = append(out, line)
+	}
 	if r.LimitReached {
 		out = append(out, "the vendor reports its limit reached")
 	}
@@ -318,6 +334,35 @@ func Summary(r usage.Reading) []string {
 		out = append(out, "the account answered, with no plan, spend or balance to show yet")
 	}
 	return out
+}
+
+// CheckScope reports whether scope can be set for p: only a reader that
+// takes a scope accepts one, and a scope is one line of printable text.
+func CheckScope(p Provider, scope string) error {
+	scope = strings.TrimSpace(scope)
+	switch {
+	case scope == "":
+		return nil
+	case p.Scope == "":
+		return fmt.Errorf("%s takes no scope", p.Name)
+	case len(scope) > 200 || strings.ContainsFunc(scope, func(r rune) bool { return r < 0x20 || r == 0x7f }):
+		return fmt.Errorf("%s's scope must be one line of at most 200 characters", p.Name)
+	}
+	return nil
+}
+
+// ApplyScope stores the scope id's reader reads; "" removes it, so the
+// key's default scope is read.
+func ApplyScope(cfg *config.Config, id, scope string) {
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		delete(cfg.VendorUsage.Accounts.Scopes, id)
+		return
+	}
+	if cfg.VendorUsage.Accounts.Scopes == nil {
+		cfg.VendorUsage.Accounts.Scopes = map[string]string{}
+	}
+	cfg.VendorUsage.Accounts.Scopes[id] = scope
 }
 
 // Apply stores the credential for id in cfg: the key, and for a session

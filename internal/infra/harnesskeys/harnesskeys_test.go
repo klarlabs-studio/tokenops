@@ -85,6 +85,23 @@ func TestFindOwnVariables(t *testing.T) {
 	}
 }
 
+// ZenMux's management key variable names the provider whose reader alone
+// takes it, never an inference endpoint.
+func TestFindZenMuxManagementVariable(t *testing.T) {
+	env := map[string]string{"ZENMUX_MANAGEMENT_API_KEY": "zm-mgmt"}
+	got := Find(Options{
+		Getenv:         func(k string) string { return env[k] },
+		OpencodeData:   t.TempDir(),
+		OpencodeConfig: t.TempDir(),
+		Claude:         func() (string, string) { return "", "" },
+		Codex:          func() map[string]codexsettings.Provider { return nil },
+	})
+	if len(got) != 1 || got[0].Provider != "zenmux" || got[0].Origin != "$ZENMUX_MANAGEMENT_API_KEY" ||
+		got[0].ProviderID != "" || got[0].Endpoint != "" || got[0].BaseURL != "" {
+		t.Errorf("got %+v", got)
+	}
+}
+
 func TestStripJSONCKeepsStrings(t *testing.T) {
 	src := `{"url": "https://a//b", "s": "/* not a comment */", // c
 	"list": [1, 2,], /* block */ "esc": "a\"//b",}`

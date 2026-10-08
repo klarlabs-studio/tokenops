@@ -95,6 +95,7 @@ func providerAcme() Descriptor {
 | `Sources[].Reader` | `AccountReader`, `GatewayReader`, or `BespokeReader` with `Package` and `Fixture` |
 | `Sources[].Cookie` | the cookies a `BrowserCookie` source reads: `Host` and `Also` (other regions' hosts, tried in order), `Names` (`"prefix*"` allowed), `Proof` (one must be present), `AllForHost` (every cookie the browser sends to the host, when the names are not known), `PasteOnly` (no browser read) |
 | `Sources[].KeyFormat` | what setup asks for when the credential is more than one key (`TEAM_ID:MANAGEMENT_KEY`) |
+| `Sources[].Scope` | what the reader's optional scope is (a Kilo organisation ID, a v0 project); the reader then implements `usage.Scoped` (`WithScope`), and `vendor-usage setup <id> --scope` sets `vendor_usage.accounts.scopes.<id>` |
 | `Sources[].Verified` | `VerifiedLive` only after a real account was read; else `FromDocs`, `FromClientSource`, or `FromCodexBar` for a reader ported from CodexBar's provider source (name the CodexBar path in a comment) |
 | `Endpoints` | which base URLs bill to it (biller) |
 | `Opencode` | opencode's provider IDs, with the endpoint each names (`"<id>-api"` for a pay-as-you-go API beside a plan) |
@@ -126,10 +127,27 @@ the helpers in `http.go`, and returns a `usage.Reading`:
 - **Spend against a cap** (`extra_usage_*` attributes): `UsedUSD` with
   `HasUsed`, `LimitUSD` (0 for none), `LimitReached` when the vendor says
   requests are blocked. Headroom binds such a provider as `pay-as-you-go`.
+  Spend over the last N days rather than the billing period (xAI's 30) sets
+  `UsedPeriod` (`extra_usage_period_min`), so it is never read as this
+  month's.
 - **Balance**: `BalanceUSD` with `HasBalance` (`balance_usd`); a balance in
   the vendor's own unit (Poe's points) is `Credits` with `CreditsUnit` and
-  `HasCredits` (`balance_credits`), never converted to dollars.
+  `HasCredits` (`balance_credits`), never converted to dollars. A pool of
+  credits with no window (Warp's add-on credits) is such a balance too.
+- **Spend in the vendor's own unit**: `CreditsUsed` with `HasCreditsUsed`
+  and `CreditsUnit` over `UsedPeriod` (`used_credits`, Poe's points over
+  the last 30 days), never converted to dollars. A history that cannot be
+  read whole is left out rather than summed in part.
 - `Scope` says what the figures cover: `"key"`, `"account"`, `"team"`.
+
+A reader that can read another scope than its key's default (an
+organisation, a project) implements `usage.Scoped`: `WithScope(scope)
+usage.Reader` returns a copy reading that scope, which it passes to the
+vendor as is, and its descriptor's `Sources[].Scope` says what the scope
+is. The daemon applies `vendor_usage.accounts.scopes.<id>` with
+`usage.WithScopes`, and `tokenops vendor-usage setup <id> --scope <value>`
+verifies and stores it; a provider without `Scope` refuses `--scope`.
+Copy `kilo.go` (a header) or `v0.go` (a query parameter).
 
 An empty reading (`Reading.Empty()`) is not stored. A refused key is
 `usage.ErrAuth` (wrap it: `fmt.Errorf("%w (...)", usage.ErrAuth)`), including
@@ -148,9 +166,15 @@ endpoint, in order, until one is accepted:
 2. the keys the harnesses already send that vendor (Claude Code's settings,
    Codex's `model_providers`, opencode's `auth.json` and config), found by
    `internal/infra/harnesskeys`;
-3. the descriptor's `EnvVars`.
+3. the descriptor's `EnvVars`, and each source's own `Sources[].EnvVars`.
 
-A key goes only to the reader of the endpoint it was found for.
+A key goes only to the reader of the endpoint it was found for. A reader
+that takes a key the harnesses never hold (ZenMux's Management API key,
+which its Management API requires and its inference endpoint does not
+take) reads on its own endpoint (`zenmux-management`) and lists its
+variable (`ZENMUX_MANAGEMENT_API_KEY`) in `Sources[].EnvVars`, not
+`EnvVars`: a key found there goes only to that reader, and the provider's
+inference keys never do.
 
 A gateway is read at an address: where a harness sends a key to a host
 TokenOps does not know, once the gateway recognises itself on a route it

@@ -320,6 +320,9 @@ func NewEnvelope(ts time.Time, r Reader, x Reading) *eventschema.Envelope {
 		attrs["extra_usage_limit_reached"] = strconv.FormatBool(x.LimitReached)
 		if x.HasUsed {
 			attrs["extra_usage_used"] = fmt.Sprintf("%.2f", x.UsedUSD)
+			if x.UsedPeriod > 0 {
+				attrs["extra_usage_period_min"] = strconv.Itoa(int(x.UsedPeriod / time.Minute))
+			}
 		}
 	}
 	if x.HasBalance {
@@ -328,6 +331,13 @@ func NewEnvelope(ts time.Time, r Reader, x Reading) *eventschema.Envelope {
 	if x.HasCredits {
 		attrs["balance_credits"] = strconv.FormatFloat(x.Credits, 'f', -1, 64)
 		attrs["balance_credits_unit"] = x.CreditsUnit
+	}
+	if x.HasCreditsUsed {
+		attrs["used_credits"] = strconv.FormatFloat(x.CreditsUsed, 'f', -1, 64)
+		attrs["used_credits_unit"] = x.CreditsUnit
+		if x.UsedPeriod > 0 {
+			attrs["used_credits_period_min"] = strconv.Itoa(int(x.UsedPeriod / time.Minute))
+		}
 	}
 	for i, w := range x.Windows {
 		k := "window_" + strconv.Itoa(i) + "_"

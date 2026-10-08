@@ -17,7 +17,8 @@ func providerXAI() Descriptor {
 			{Name: "xai_account", Tag: "xai-account", Kind: Balance, Credential: APIKey,
 				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,
 				KeyFormat: "TEAM_ID:MANAGEMENT_KEY",
-				Endpoint:  "`GET /v1/billing/teams/{team_id}/prepaid/balance`", Shows: "the team's posted prepaid USD credit"},
+				Endpoint:  "`GET /v1/billing/teams/{team_id}/prepaid/balance`, `POST /v1/billing/teams/{team_id}/usage`",
+				Shows:     "the team's posted prepaid USD credit, and its spend over the last 30 days"},
 		},
 		Docs: Docs{Setup: "`tokenops vendor-usage setup xai` with the team ID and a Management API key (console.x.ai → Settings → Management Keys), as TEAM_ID:MANAGEMENT_KEY"},
 	}
