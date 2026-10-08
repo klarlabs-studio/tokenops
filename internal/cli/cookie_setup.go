@@ -51,6 +51,8 @@ func newVendorUsageSetupCmd() *cobra.Command {
 		scope         string
 		noKeychain    bool
 		keychainFlag  bool
+		useAppLogin   bool
+		revokeLogin   bool
 	)
 	cmd := &cobra.Command{
 		Use:   "setup claude-subscription|claude-code|<provider>",
@@ -88,14 +90,41 @@ For a gateway (sub2api, LiteLLM, Aixy, ...) it asks for the gateway's
 address and then the key, and reads it only there. For a provider read
 with its vendor's own credentials on this machine (bedrock: AWS's
 environment or shared credentials file) it asks nothing: it checks them
-once and stores only that the daemon may read them, never the credential.`,
+once and stores only that the daemon may read them, never the credential.
+
+--use-app-login reads a provider with another application's own sign-in
+on this machine instead (the kilo CLI's auth.json, Hugging Face's token
+file, ...; ADR 0013). Nothing another application owns is read without
+it: setup first prints exactly which file, Keychain item or process is
+read, which field, and the one host the token is sent to, and asks. It
+then reads it once against the vendor and records only the grant
+(vendor_usage.grants.<provider>); the daemon re-reads the item read-only
+as it polls, never writes, refreshes or logs it, and reads a Keychain
+item only without a prompt. --revoke-app-login removes the grant.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 1 && strings.EqualFold(args[0], "claude-code") {
 				return runClaudeCodeSetup(cmd, configFlag(cmd), !noRestartFlag, keychainFlag)
 			}
+			if useAppLogin || revokeLogin {
+				if len(args) != 1 {
+					return errors.New("name the provider: setup <provider> --use-app-login")
+				}
+				opts := providerSetupOptions{configPath: configFlag(cmd), restart: !noRestartFlag}
+				if revokeLogin {
+					return runAppLoginRevoke(cmd, strings.ToLower(strings.TrimSpace(args[0])), opts)
+				}
+				p, ok := providersetup.Lookup(args[0])
+				if !ok {
+					return fmt.Errorf("no provider %q reads another application's sign-in", args[0])
+				}
+				return runAppLoginSetup(cmd, p, opts)
+			}
 			if len(args) == 1 && !isClaudeSubscriptionSource(args[0]) {
 				if p, ok := providersetup.Lookup(args[0]); ok {
+					if p.AppLoginOnly {
+						return fmt.Errorf("%s is read only with another application's sign-in: run setup %s --use-app-login to see exactly what would be read, and grant it", p.Name, p.ID)
+					}
 					return runProviderSetup(cmd, p, providerSetupOptions{
 						configPath: configFlag(cmd), restart: !noRestartFlag, browser: browser, paste: paste,
 						scope: scope, scopeSet: cmd.Flags().Changed("scope"),
@@ -134,6 +163,11 @@ once and stores only that the daemon may read them, never the credential.`,
 	// it is now what happens without --keychain.
 	cmd.Flags().BoolVar(&noKeychain, "no-keychain", false, "")
 	_ = cmd.Flags().MarkDeprecated("no-keychain", "the Keychain is read only with --keychain now")
+	cmd.Flags().BoolVar(&useAppLogin, "use-app-login", false,
+		"<provider>: read it with another application's own sign-in on this machine; shows exactly what is read and asks first")
+	cmd.Flags().BoolVar(&revokeLogin, "revoke-app-login", false,
+		"<provider>: stop reading another application's sign-in for it")
+	cmd.MarkFlagsMutuallyExclusive("use-app-login", "revoke-app-login")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }

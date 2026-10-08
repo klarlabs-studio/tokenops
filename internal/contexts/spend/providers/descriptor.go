@@ -126,6 +126,14 @@ const (
 	// password without echo), signs in once and stores only the session
 	// token; the password is never stored or logged.
 	PasswordLogin Credential = "password-login"
+	// AppLogin is another application's own sign-in on this machine (a
+	// CLI's token file, a desktop app's database, a Keychain item, a local
+	// server's token), named by the source's AppLogins. It is NEVER read
+	// until `tokenops vendor-usage setup <id> --use-app-login` has shown the
+	// operator exactly what is read and where it is sent, and they granted
+	// it (ADR 0013). A source read with another credential may list
+	// AppLogins too: a grant is then one more way to read it, tried last.
+	AppLogin Credential = "app-login"
 )
 
 // Switch is what turns a source on.
@@ -207,6 +215,14 @@ type Source struct {
 	// source's sign-in is kept under ("https://zed.dev"). The reader is
 	// given it as "<account> <secret>".
 	KeychainServer string
+	// AppLogins are other applications' sign-ins this source's reader can
+	// read with, in the order setup offers them. Each is read only once the
+	// operator granted it (ADR 0013).
+	AppLogins []AppLoginItem
+	// LocalStorage names the browser localStorage entries a BrowserCookie
+	// source's session is read from instead of cookies: by the
+	// interactive setup only, never by the daemon.
+	LocalStorage *LocalStorage
 	// KeyFormat is what `tokenops vendor-usage setup` asks for when an
 	// APIKey source's credential is more than one key, e.g.
 	// "TEAM_ID:MANAGEMENT_KEY". Empty asks for the API key.
@@ -270,6 +286,65 @@ type Cookie struct {
 
 // Hosts is Host followed by Also.
 func (c Cookie) Hosts() []string { return append([]string{c.Host}, c.Also...) }
+
+// AppLoginKind is where another application keeps its sign-in.
+type AppLoginKind string
+
+const (
+	// AppLoginJSON is a JSON file; Fields are dotted paths into it.
+	AppLoginJSON AppLoginKind = "json-file"
+	// AppLoginEnvFile is a dotenv file of KEY=value lines; Fields are its
+	// variable names.
+	AppLoginEnvFile AppLoginKind = "env-file"
+	// AppLoginTextFile is a file holding the token alone.
+	AppLoginTextFile AppLoginKind = "text-file"
+	// AppLoginSQLite is a SQLite database read with Query, a SELECT whose
+	// first row's columns are Fields, in that order.
+	AppLoginSQLite AppLoginKind = "sqlite"
+	// AppLoginKeychain is a macOS Keychain generic password, only ever read
+	// quietly: never a prompt, and not at all with keychain.disabled. Its
+	// value is the token, or JSON that Fields are paths into.
+	AppLoginKeychain AppLoginKind = "keychain"
+	// AppLoginProcess is a running local process's command line: Fields
+	// are flags ("--csrf_token") whose values are read.
+	AppLoginProcess AppLoginKind = "process"
+)
+
+// AppLoginItem is one other application's sign-in, exactly as setup shows it to
+// the operator before asking: what is read, which fields, and the one host
+// the token is sent to. Nothing else the application keeps is read.
+type AppLoginItem struct {
+	// App names the application that owns it ("the kilo CLI").
+	App  string
+	Kind AppLoginKind
+	// Paths are where the file or database is, tried in order; "~/" is
+	// the home directory. PathEnv names a variable that, when set, is the
+	// path instead (HF_TOKEN_PATH).
+	Paths   []string
+	PathEnv string
+	// Fields are the values read: JSON paths, dotenv variables, SQLite
+	// columns or command-line flags. One field is the token itself;
+	// several reach the reader as a JSON object keyed by field.
+	Fields []string
+	// Query is a SQLite source's read-only SELECT.
+	Query string
+	// Service and Account name a Keychain item.
+	Service, Account string
+	// Process is a process source's executable name, matched against the
+	// base name of its first argument.
+	Process string
+	// Host is where the token is sent: the only place it goes.
+	Host string
+}
+
+// LocalStorage is a site's localStorage entries in a Chromium browser.
+type LocalStorage struct {
+	// Origin is the site, "https://app.devin.ai".
+	Origin string
+	// Keys are the entries read. The reader is given them as a JSON object
+	// keyed by name; entries absent are left out.
+	Keys []string
+}
 
 // Billing says how an endpoint bills the models it serves (ADR 0009).
 type Billing string

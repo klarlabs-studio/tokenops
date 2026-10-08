@@ -707,7 +707,7 @@ vendor's windows, busiest first:
 | Augment Code | `GET app.augmentcode.com/api/credits` | the same credits, with the app.augmentcode.com session |
 | Chutes | `GET /users/me/subscription_usage` | the 4-hour and monthly caps |
 | ClinePass | `GET /api/v1/users/me/plan/usage-limits` | 5-hour, weekly and monthly windows |
-| Codebuff | `POST /api/v1/usage` | credits used against the quota until it resets |
+| Codebuff | `POST /api/v1/usage` | credits used against the quota until it resets; with the CLI's sign-in, the weekly rate limit too |
 | CodeRabbit | `coderabbit usage` | reviews this billing period, a count with no allowance (no percentage) |
 | Command Code | `GET /internal/billing/credits`, `/internal/billing/subscriptions` (api.commandcode.ai) | 5-hour and weekly limits, the monthly credit grant used, and purchased credits |
 | Devin | `GET app.devin.ai/api/<org>/billing/quota/usage` | the daily and weekly quota used, and the extra-usage balance |
@@ -845,8 +845,8 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Cerebras | — | in the catalog only: Cerebras Code's plans and limits are known; nothing reads its usage yet | — | — |
 | Chutes | `chutes-account` | the 4-hour and monthly caps | API key | the vendor's client source and fixtures |
 | ClawRouter | `clawrouter-account` | the policy's spend against its monthly budget | API key | public docs and fixtures |
-| ClinePass | `clinepass-account` | 5-hour, weekly and monthly windows | API key | CodexBar's source, the vendor's docs and fixtures |
-| Codebuff | `codebuff-account` | credits used against the quota until it resets | API key | CodexBar's source, the vendor's docs and fixtures |
+| ClinePass | `clinepass-account` | 5-hour, weekly and monthly windows | API key, or another app's sign-in once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
+| Codebuff | `codebuff-account` | credits used against the quota until it resets; with the CLI's sign-in, the weekly rate limit too | API key, or another app's sign-in once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
 | CodeRabbit | `coderabbit-cli` | reviews this billing period, a count with no allowance (no percentage) | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
 | Command Code | `commandcode-web` | 5-hour and weekly limits, the monthly credit grant used, and purchased credits | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Cursor | `cursor-hook` | per-turn consumption Cursor's stop hook records | local files | public docs and fixtures |
@@ -858,22 +858,22 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | DevPass | `devpass-account` | the cycle's plan credits and the premium weekly window; on pay-as-you-go, the key's spend against its limit | API key | CodexBar's source, the vendor's docs and fixtures |
 | Doubao | `doubao-account` | the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan) | API key | CodexBar's source, the vendor's docs and fixtures |
 | ElevenLabs | `elevenlabs-account` | the subscription's credits used this period | API key | CodexBar's source, the vendor's docs and fixtures |
-| Factory | `factory-account` | 5-hour, weekly and monthly windows (and the Core fallback's), or the Standard and Premium token allowances; the extra-usage balance | API key | CodexBar's source, the vendor's docs and fixtures |
+| Factory | `factory-account` | 5-hour, weekly and monthly windows (and the Core fallback's), or the Standard and Premium token allowances; the extra-usage balance | API key, or another app's sign-in once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
 |  | `factory-web` | the same windows and balance | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Fireworks | `fireworks-usage` | the month's spend against the account's or the member's cap | API key | against a real account |
 | Gemini | `gemini-cli` | per-turn tokens per model from Gemini CLI's chat recordings | local files | public docs and fixtures |
 | Copilot | `github-copilot` | premium requests used against the month's allowance | another app's sign-in | the vendor's client source and fixtures |
 | GitKraken AI | `gitkraken-account` | weekly AI credits, and the organization's pool with GITKRAKEN_ORG_ID | API key | CodexBar's source, the vendor's docs and fixtures |
-| Grok | `grok-account` | the SuperGrok credit window used, and the prepaid balance | API key | CodexBar's source, the vendor's docs and fixtures |
+| Grok | `grok-account` | the SuperGrok credit window used, and the prepaid balance | API key, or another app's sign-in once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
 |  | `grok-web` | the credit window used | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Groq | `groq-web` | the organisation's GroqCloud spend this UTC month | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Helmcode | `helmcode-account` | each model's token quota used, and the prepaid balance | browser session | CodexBar's source, the vendor's docs and fixtures |
-| Hugging Face | `huggingface-account` | Inference Providers charges this month, against the spending limit when set | API key | CodexBar's source, the vendor's docs and fixtures |
+| Hugging Face | `huggingface-account` | Inference Providers charges this month, against the spending limit when set | API key, or another app's sign-in once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
 | Charm Hyper | `hyper-account` | Hypercredits left | API key | CodexBar's source, the vendor's docs and fixtures |
 |  | `hyper-web` | Hypercredits left | browser session | CodexBar's source, the vendor's docs and fixtures |
 | IBM Bob | `ibmbob-account` | Bobcoins used this month against the team budgets | API key | CodexBar's source, the vendor's docs and fixtures |
 | JetBrains AI | `jetbrains-local` | monthly AI credits used, from the most recently used IDE | local files | CodexBar's source, the vendor's docs and fixtures |
-| Kilo | `kilo-account` | Kilo Pass credits used this billing period, and prepaid credit left | API key | CodexBar's source, the vendor's docs and fixtures |
+| Kilo | `kilo-account` | Kilo Pass credits used this billing period, and prepaid credit left | API key, or another app's sign-in once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
 | Kimi | `kimi-account` | 5-hour, weekly and monthly windows | API key | the vendor's client source and fixtures |
 | Kiro | `kiro-cli` | monthly plan credits used, and bonus credits | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
 | Langdock | `langdock-web` | the included 5-hour session and weekly limits used | browser session | CodexBar's source, the vendor's docs and fixtures |
@@ -886,11 +886,11 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | MiniMax | `minimax-account` | the interval and weekly windows | API key | the vendor's client source and fixtures |
 | Mistral | `mistral-web` | the included-API and Vibe allowances' shares used this month, and the credit balance in its currency | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Moonshot | `moonshot-account` | prepaid USD balance left | API key | public docs and fixtures |
-| Muse Code | `muse-account` | the 5-hour and weekly quota used | API key | CodexBar's source, the vendor's docs and fixtures |
+| Muse Code | `muse-account` | the 5-hour and weekly quota used | API key, or another app's sign-in once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
 | Muse | `museai-web` | the weekly token allowance used | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Neuralwatt | `neuralwatt-account` | prepaid USD credit left, and the subscription's kWh allowance used this period | API key | CodexBar's source, the vendor's docs and fixtures |
 | Notion AI | `notion-account` | the Notion AI allowance used, rolling and this billing period (Business and Enterprise workspaces) | browser session | CodexBar's source, the vendor's docs and fixtures |
-| Nous Portal | `nous-account` | the monthly credit grant used this period and the top-up credit left | API key | CodexBar's source, the vendor's docs and fixtures |
+| Nous Portal | `nous-account` | the monthly credit grant used this period and the top-up credit left | API key, or another app's sign-in once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
 | Ollama | `ollama-web` | Ollama Cloud's monthly usage (or the older session and weekly windows) | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Codex | `codex-app-server` | the 5-hour and weekly windows `codex app-server` reports, Codex signing its own request | the vendor's CLI | against a real account |
 |  | `codex-jsonl` | per-turn tokens and the rate_limits in Codex's rollouts | local files | against a real account |
