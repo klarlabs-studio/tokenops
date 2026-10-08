@@ -21,6 +21,7 @@ var readers = []func() usage.Reader{
 	readerSynthetic,
 	readerVercel,
 	readerZAI,
+	readerZenMux,
 }
 
 // gateways is every gateway*() function in this package, by file name.

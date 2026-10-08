@@ -33,5 +33,6 @@ var providerNames = map[string]string{
 	"vercel":      "Vercel",
 	"xai":         "xAI",
 	"zai":         "z.ai",
+	"zenmux":      "ZenMux",
 	"zhipuai":     "Zhipu AI",
 }

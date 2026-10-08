@@ -686,6 +686,7 @@ vendor's windows, busiest first:
 | MiniMax Token Plan | `GET /v1/token_plan/remains` | the interval and weekly windows |
 | Synthetic | `GET /v2/quotas` | the subscription's request quota |
 | z.ai GLM Coding Plan | `GET /api/monitor/usage/quota/limit` | 5-hour and weekly token windows |
+| ZenMux | `GET /api/v1/management/subscription/detail` | rolling 5-hour and 7-day quotas, and the pay-as-you-go balance |
 <!-- end generated: provider-subscriptions -->
 
 z.ai's and Kimi's endpoints are the ones their own clients call; they are
@@ -769,6 +770,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Vercel | `vercel-account` | the team's credit balance | API key | public docs and fixtures |
 | xAI | — | in the catalog only: metered through the proxy only; neither a plan nor an account is read | — | — |
 | z.ai | `zai-account` | 5-hour and weekly token windows | API key | the vendor's client source and fixtures |
+| ZenMux | `zenmux-account` | rolling 5-hour and 7-day quotas, and the pay-as-you-go balance | API key | CodexBar's source, the vendor's docs and fixtures |
 | Zhipu AI | — | in the catalog only: z.ai's mainland-China platform: its endpoints, opencode IDs and prices are known; no reader reads its plan yet | — | — |
 <!-- end generated: provider-list -->
 

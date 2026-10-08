@@ -30,5 +30,6 @@ window.TOKENOPS_PROVIDERS = {
   "vercel": {"name":"Vercel","logo":false},
   "xai": {"name":"xAI","logo":false},
   "zai": {"name":"z.ai","logo":true},
+  "zenmux": {"name":"ZenMux","logo":true},
   "zhipuai": {"name":"Zhipu AI","logo":false}
 };

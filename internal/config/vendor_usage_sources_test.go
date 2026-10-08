@@ -69,6 +69,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"synthetic_account", "synthetic-account"},
 		{"vercel_account", "vercel-account"},
 		{"zai_account", "zai-account"},
+		{"zenmux_account", "zenmux-account"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d sources, want %d", len(got), len(want))
@@ -392,5 +393,18 @@ func TestBrowserSessionHint(t *testing.T) {
 	}
 	if got := cfg.VendorUsageConfigHint("litellm-account"); !strings.Contains(got, "LiteLLM gateway") {
 		t.Errorf("gateway hint %q", got)
+	}
+}
+
+// A key only setup supplies (ZenMux's Management API key) points at setup
+// until one is stored.
+func TestSetupOnlyKeyHint(t *testing.T) {
+	cfg := Default()
+	if got := cfg.VendorUsageConfigHint("zenmux-account"); !strings.Contains(got, "vendor-usage setup zenmux") || strings.Contains(got, "harness") {
+		t.Errorf("unconnected hint %q", got)
+	}
+	cfg.VendorUsage.Accounts.Credentials = map[string]AccountCredential{"zenmux": {Key: "k"}}
+	if got := cfg.VendorUsageConfigHint("zenmux-account"); !strings.HasPrefix(got, "on;") {
+		t.Errorf("connected hint %q", got)
 	}
 }
