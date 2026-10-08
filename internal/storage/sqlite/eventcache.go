@@ -375,10 +375,15 @@ func (ce *cachedEvents) update(ctx context.Context, q querier, t eventschema.Eve
 			return false, nil
 		}
 	}
-	events := slices.DeleteFunc(slices.Clone(ce.events), func(e cachedEvent) bool {
+	stale := func(e cachedEvent) bool {
 		_, logged := changed[e.rowid]
 		return logged || e.rowid > known
-	})
+	}
+	events := ce.events
+	if slices.ContainsFunc(events, stale) {
+		// On a copy: a failed read below leaves the window as it was.
+		events = slices.DeleteFunc(slices.Clone(events), stale)
+	}
 	if len(changed) > 0 {
 		rs, err := q.QueryContext(ctx, changedEventsSQL, ce.seq, known, string(t), ce.floor)
 		if err != nil {
