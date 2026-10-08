@@ -6,6 +6,7 @@ window.TOKENOPS_PROVIDERS = {
   "alibaba": {"name":"Alibaba Cloud","logo":false},
   "anthropic": {"name":"Claude","logo":true},
   "atlascloud": {"name":"Atlas Cloud","logo":true},
+  "azure-openai": {"name":"Azure OpenAI","logo":true},
   "bedrock": {"name":"Amazon Bedrock","logo":true},
   "bifrost": {"name":"Bifrost","logo":false},
   "cerebras": {"name":"Cerebras","logo":false},

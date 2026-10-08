@@ -36,6 +36,7 @@
 - **providers:** LLM Proxy (LLM-API-Key-Proxy) gateways are read from `GET /v1/quota-stats`: the tightest quota group left on the credentials it pools and when it resets; recognised by its root route, or named with `LLM_PROXY_BASE_URL` and `LLM_PROXY_API_KEY`
 - **providers:** Aixy gateways, hosted or self-hosted, are read from `GET /v1/usage` with a project API key: each budget that applies to the key, spent and reserved against its limit, the binding hard budget as the spend cap; `AIXY_API_KEY` (with `AIXY_BASE_URL` for a self-hosted one) or setup
 - **providers:** Amazon Bedrock's spend this month is read from AWS Cost Explorer (`GetCostAndUsage`, signed with SigV4) once `tokenops vendor-usage setup bedrock` opts in with the AWS credentials on the machine (environment or shared credentials file; nothing is stored); Cost Explorer bills each request, so it is asked at most every 8 hours
+- **providers:** Azure OpenAI is in the catalog: turns sent to `*.openai.azure.com` (and opencode's `azure` provider) are billed to it and priced at models.dev's Azure rates, rather than probed as an unknown gateway; its account is not read, since a resource key reads no spend or quota
 - **vendor-usage:** `tokenops vendor-usage setup <gateway>` connects a self-hosted or hosted gateway (LiteLLM, Bifrost, ClawRouter, sub2api, ...) by its address and a key, checked once there before either is stored; plain HTTP only to a local or private-network host
 
 ### Fixed
