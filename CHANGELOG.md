@@ -33,6 +33,7 @@
 - **providers:** ZoomMate: AI credits used against the budget cap this billing cycle, as a plan window, and the credits left (`GET /ai-computer/api/v1/credits/status`, after exchanging the session for ZoomMate's short-lived token), read with the Cookie header of a request to ai.zoom.us pasted at `vendor-usage setup zoommate`
 - **providers:** Notion AI: the AI usage allowance used, the rolling (6-hour) window and the billing period, as plan windows (`POST /api/v3/getCreditRateLimitStatus` on app.notion.com), read with the notion.com browser session's `token_v2` (`vendor-usage setup notion` or a pasted Cookie header); Business and Enterprise workspaces only
 - **providers:** LongCat: the active token pack's share used (the legacy usage aggregate without one) and the tokens left, pending fuel packs included, in tokens (`POST /api/pay/quota/metering/token-packs/summary`), read with the longcat.chat session's Cookie header pasted at `vendor-usage setup longcat` or `LONGCAT_MANUAL_COOKIE`
+- **providers:** Helmcode: each model's token quota used, as a plan window per model, and the prepaid balance in its own currency (`GET /api/usage/quota` on cloud-api.helmcode.com), read with the Helmcode Cloud dashboard session's Cookie header pasted at `vendor-usage setup helmcode`
 
 ### Fixed
 

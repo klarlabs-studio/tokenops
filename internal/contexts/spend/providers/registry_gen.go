@@ -24,6 +24,7 @@ var registered = []func() Descriptor{
 	providerFireworks,
 	providerGemini,
 	providerGitHub,
+	providerHelmcode,
 	providerHuggingFace,
 	providerIBMBob,
 	providerKilo,

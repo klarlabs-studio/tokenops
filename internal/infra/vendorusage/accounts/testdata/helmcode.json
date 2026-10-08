@@ -1,0 +1,9 @@
+{
+  "periodStart": "2026-10-01T00:00:00Z",
+  "models": [
+    {"model": "glm-5", "cap": 10000000, "tokensUsed": 2500000, "creditTokens": 0, "periodEnd": "2026-11-01T00:00:00Z"},
+    {"model": "kimi-k2", "cap": 4000000, "tokensUsed": 3000000},
+    {"model": "glm-5", "cap": 500000, "tokensUsed": 100000, "windowHours": 5},
+    {"model": "local-unlimited", "cap": 0, "tokensUsed": 42}
+  ]
+}
