@@ -192,6 +192,7 @@ func grantedCredentials(cfg config.Config, readers []accounts.Reader, env applog
 			continue
 		}
 		out = append(out, accounts.Credential{Endpoint: endpoint, Origin: grantOrigin, AppLogin: true,
+			Remedy: "sign in again with " + g.App + "; `tokenops vendor-usage setup " + id + " --revoke-app-login` stops reading it",
 			Resolve: func(ctx context.Context) (string, error) {
 				return applogin.Read(ctx, located, env)
 			}})
