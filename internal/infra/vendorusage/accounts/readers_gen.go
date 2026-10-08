@@ -73,6 +73,7 @@ var readers = []func() usage.Reader{
 	readerWarp,
 	readerWindsurfLocal,
 	readerWindsurf,
+	readerWorkBuddy,
 	readerXAI,
 	readerXAPI,
 	readerXKiro,

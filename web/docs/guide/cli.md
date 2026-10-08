@@ -740,6 +740,7 @@ vendor's windows, busiest first:
 | Warp | `POST /graphql/v2?op=GetRequestLimitInfo` | credits used since the last refresh against the plan's limit, and the add-on credits left |
 | Windsurf | Windsurf's `state.vscdb` (`windsurf.settings.cachedPlanInfo`) | daily and weekly quota (or messages and flow actions) as Windsurf last cached them |
 | Windsurf | `POST windsurf.com/_backend/.../GetPlanStatus` | daily and weekly quota, live |
+| WorkBuddy (Tencent) | `POST /billing/meter/get-user-resource-summary` (www.workbuddy.cn) | the share of the credit packages' cycle used, and when it ends |
 | xKiro | `GET /v1/usage` | the plan's spend windows, today's free tokens and the wallet balance |
 | z.ai GLM Coding Plan | `GET /api/monitor/usage/quota/limit` | 5-hour and weekly token windows |
 | Zed | `GET cloud.zed.dev/client/users/me` | edit predictions used of the plan's allowance this billing cycle |
@@ -901,6 +902,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Warp | `warp-account` | credits used since the last refresh against the plan's limit, and the add-on credits left | API key | CodexBar's source, the vendor's docs and fixtures |
 | Windsurf | `windsurf-local` | daily and weekly quota (or messages and flow actions) as Windsurf last cached them | local files | CodexBar's source, the vendor's docs and fixtures |
 |  | `windsurf-web` | daily and weekly quota, live | API key | CodexBar's source, the vendor's docs and fixtures |
+| WorkBuddy | `workbuddy-web` | the share of the credit packages' cycle used, and when it ends | browser session | CodexBar's source, the vendor's docs and fixtures |
 | xAI | `xai-account` | the team's posted prepaid USD credit, and its spend over the last 30 days | API key | CodexBar's source, the vendor's docs and fixtures |
 | X API | `xapi-web` | prepaid credit left, purchased plus free (below zero when overdrawn) | browser session | CodexBar's source, the vendor's docs and fixtures |
 | xKiro | `xkiro-account` | the plan's spend windows, today's free tokens and the wallet balance | API key | CodexBar's source, the vendor's docs and fixtures |
