@@ -33,6 +33,22 @@ type VendorUsageConfig struct {
 type AccountsUsageConfig struct {
 	Enabled  *bool         `yaml:"enabled,omitempty"`
 	Interval time.Duration `yaml:"interval,omitempty"`
+	// Credentials are the keys and browser sessions `tokenops vendor-usage
+	// setup <provider>` stored, by provider ID, for a vendor no harness
+	// holds a key for. They are read before the harnesses' keys, sent only
+	// to that vendor, and redacted wherever configuration is shown.
+	Credentials map[string]AccountCredential `yaml:"credentials,omitempty"`
+}
+
+// AccountCredential is one stored vendor credential.
+type AccountCredential struct {
+	// Key is the API key, or the session's Cookie header value.
+	Key string `yaml:"key,omitempty"`
+	// FromBrowser re-reads the session from the browser as the daemon
+	// polls, quietly: when macOS would ask, the read is skipped. Browser
+	// limits it to one browser by name.
+	FromBrowser bool   `yaml:"from_browser,omitempty"`
+	Browser     string `yaml:"browser,omitempty"`
 }
 
 // On reports whether the readers run: unless switched off.

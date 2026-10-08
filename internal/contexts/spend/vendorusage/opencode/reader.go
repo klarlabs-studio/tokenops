@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 	"go.klarlabs.de/tokenops/internal/contexts/telemetry/opencodedb"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -105,58 +106,19 @@ func projectFromPath(root, cwd string) string {
 }
 
 // opencodeProviders maps opencode's providerID (models.dev's provider
-// IDs) to the TokenOps provider that bills it and the endpoint it names.
-// A vendor that sells both a coding plan and a pay-as-you-go API has an ID
-// for each: the plan's endpoint is named like the provider, the API's
-// "<provider>-api", so a bound plan covers only the plan's turns.
-var opencodeProviders = map[string]struct {
-	provider eventschema.Provider
-	endpoint string
-}{
-	"anthropic":              {eventschema.ProviderAnthropic, ""},
-	"openai":                 {eventschema.ProviderOpenAI, ""},
-	"github-copilot":         {eventschema.ProviderGitHub, ""},
-	"github":                 {eventschema.ProviderGitHub, ""},
-	"google":                 {eventschema.ProviderGemini, ""},
-	"gemini":                 {eventschema.ProviderGemini, ""},
-	"google-vertex":          {eventschema.ProviderGemini, ""},
-	"openrouter":             {eventschema.ProviderOpenRouter, "openrouter"},
-	"fireworks-ai":           {eventschema.ProviderFireworks, "fireworks"},
-	"fireworks":              {eventschema.ProviderFireworks, "fireworks"},
-	"togetherai":             {eventschema.ProviderTogether, "together"},
-	"together":               {eventschema.ProviderTogether, "together"},
-	"deepseek":               {eventschema.ProviderDeepSeek, "deepseek"},
-	"deepinfra":              {"deepinfra", "deepinfra"},
-	"chutes":                 {"chutes", "chutes"},
-	"synthetic":              {"synthetic", "synthetic"},
-	"vercel":                 {"vercel", "vercel"},
-	"opencode":               {"opencode", "opencode"},
-	"opencode-go":            {"opencode-go", "opencode-go"},
-	"zai-coding-plan":        {"zai", "zai"},
-	"zai":                    {"zai", "zai-api"},
-	"zhipuai-coding-plan":    {"zhipuai", "zhipuai"},
-	"zhipuai":                {"zhipuai", "zhipuai-api"},
-	"kimi-for-coding":        {"kimi", "kimi"},
-	"kimi-code-plan-global":  {"kimi", "kimi"},
-	"kimi-code-plan-cn":      {"kimi", "kimi"},
-	"moonshotai":             {"moonshot", "moonshot"},
-	"moonshotai-cn":          {"moonshot", "moonshot"},
-	"minimax-coding-plan":    {"minimax", "minimax"},
-	"minimax-cn-coding-plan": {"minimax", "minimax"},
-	"minimax":                {"minimax", "minimax-api"},
-	"minimax-cn":             {"minimax", "minimax-api"},
-	"alibaba-coding-plan":    {"alibaba", "alibaba"},
-	"alibaba-coding-plan-cn": {"alibaba", "alibaba"},
-	"alibaba":                {"alibaba", "alibaba-api"},
-	"alibaba-cn":             {"alibaba", "alibaba-api"},
-}
+// IDs) to the TokenOps provider that bills it and the endpoint it names,
+// from the provider registry. A vendor that sells both a coding plan and a
+// pay-as-you-go API has an ID for each: the plan's endpoint is named like
+// the provider, the API's "<provider>-api", so a bound plan covers only the
+// plan's turns.
+var opencodeProviders = providers.Opencode()
 
 // mapProvider normalizes opencode's providerID to a TokenOps provider. The
 // Provider type is an open string, so unknown providers pass through verbatim
 // rather than collapsing to "unknown".
 func mapProvider(providerID string) eventschema.Provider {
 	if m, ok := opencodeProviders[providerID]; ok {
-		return m.provider
+		return m.Provider
 	}
 	if providerID == "" {
 		return eventschema.ProviderUnknown
@@ -167,12 +129,12 @@ func mapProvider(providerID string) eventschema.Provider {
 // endpointFor is the endpoint an opencode providerID names, "" when it
 // names none (the vendor's own, as before endpoints were recorded).
 func endpointFor(providerID string) string {
-	return opencodeProviders[providerID].endpoint
+	return opencodeProviders[providerID].Endpoint
 }
 
 // Provider is the TokenOps provider and endpoint an opencode providerID
 // maps to; ok is false for an ID the mapping does not know.
 func Provider(providerID string) (eventschema.Provider, string, bool) {
 	m, ok := opencodeProviders[providerID]
-	return m.provider, m.endpoint, ok
+	return m.Provider, m.Endpoint, ok
 }

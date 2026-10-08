@@ -1,0 +1,12 @@
+{
+  "subscription": true,
+  "four_hour": {
+    "usage": 1.5,
+    "cap": 6,
+    "remaining": 4.5,
+    "reset_at": "2026-10-03T16:00:00.123456"
+  },
+  "monthly": {
+    "uncapped": true
+  }
+}

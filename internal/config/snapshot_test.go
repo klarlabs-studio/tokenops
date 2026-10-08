@@ -69,8 +69,15 @@ func TestRedactedMasksAllSecrets(t *testing.T) {
 	cfg.VendorUsage.ClaudeUsageMeter.BrowserCookies = map[string]string{"__cf_bm": "cloudflare-bot-secret"}
 	cfg.VendorUsage.Cursor.Cookie = "cookie"
 	cfg.VendorUsage.GitHubCopilot.OAuthToken = "gho_x"
+	cfg.VendorUsage.Accounts.Credentials = map[string]AccountCredential{"acme": {Key: "acme-key", FromBrowser: true}}
 
 	r := cfg.Redacted()
+	if c := r.VendorUsage.Accounts.Credentials["acme"]; c.Key != SensitiveHeaderPlaceholder || !c.FromBrowser {
+		t.Errorf("accounts.credentials not redacted: %+v", c)
+	}
+	if cfg.VendorUsage.Accounts.Credentials["acme"].Key != "acme-key" {
+		t.Error("Redacted mutated the original stored credentials")
+	}
 	for name, got := range map[string]string{
 		"dashboard.admin_token":          r.Dashboard.AdminToken,
 		"anthropic.admin_key":            r.VendorUsage.Anthropic.AdminKey,

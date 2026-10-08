@@ -189,7 +189,7 @@ func StartVendorUsagePollers(
 	}
 	if cfg.VendorUsage.Accounts.On() {
 		p := accounts.NewPoller(bus, accounts.PollerOptions{
-			Credentials: accountCredentials, Health: sourceHealth.For,
+			Credentials: vendorAccountCredentials(cfg), Health: sourceHealth.For,
 			Readers: accountsapi.Readers(), Gateways: accountsapi.Gateways(),
 			Interval: cfg.VendorUsage.Accounts.Interval, Logger: logger,
 		})

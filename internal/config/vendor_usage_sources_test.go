@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 )
 
 // fakeCounter is a hand-rolled SourceCounter so the stale-ingestion
@@ -34,34 +36,36 @@ func (f *fakeCounter) CountBySource(_ context.Context, since, until time.Time) (
 func TestVendorUsageSourcesTags(t *testing.T) {
 	cfg := Default()
 	got := cfg.VendorUsageSources()
+	// The provider registry's order: by provider ID, then each provider's
+	// sources in the order it lists them.
 	want := []struct{ name, tag string }{
+		{"claude_code_statusline", "claude-code-statusline"},
 		{"claude_code_jsonl", "claude-code-jsonl"},
-		{"codex_jsonl", "codex-jsonl"},
-		{"opencode", "opencode"},
-		{"gemini_cli", "gemini-cli"},
-		{"claude_code_stats_cache (deprecated)", "claude-code-stats-cache"},
-		{"vendor_usage_anthropic", "vendor-usage-anthropic"},
-		{"github_copilot", "github-copilot"},
-		{"cursor_web", "cursor-web"},
 		{"claude_subscription", "claude-usage-meter"},
 		{"claude_code_oauth", "claude-code-oauth"},
-		{"codex_app_server", "codex-app-server"},
-		{"fireworks", "fireworks-usage"},
-		{"openrouter_account", "openrouter-account"},
-		{"deepseek_account", "deepseek-account"},
-		{"moonshot_account", "moonshot-account"},
-		{"zai_account", "zai-account"},
-		{"kimi_account", "kimi-account"},
-		{"minimax_account", "minimax-account"},
-		{"synthetic_account", "synthetic-account"},
-		{"chutes_account", "chutes-account"},
-		{"deepinfra_account", "deepinfra-account"},
-		{"vercel_account", "vercel-account"},
-		{"litellm_gateway", "litellm-account"},
+		{"vendor_usage_anthropic", "vendor-usage-anthropic"},
+		{"claude_code_stats_cache (deprecated)", "claude-code-stats-cache"},
 		{"bifrost_gateway", "bifrost-account"},
+		{"chutes_account", "chutes-account"},
 		{"clawrouter_gateway", "clawrouter-account"},
 		{"cursor_turns (hook ledger)", "cursor-hook"},
-		{"claude_code_statusline", "claude-code-statusline"},
+		{"cursor_web", "cursor-web"},
+		{"deepinfra_account", "deepinfra-account"},
+		{"deepseek_account", "deepseek-account"},
+		{"fireworks", "fireworks-usage"},
+		{"gemini_cli", "gemini-cli"},
+		{"github_copilot", "github-copilot"},
+		{"kimi_account", "kimi-account"},
+		{"litellm_gateway", "litellm-account"},
+		{"minimax_account", "minimax-account"},
+		{"moonshot_account", "moonshot-account"},
+		{"codex_app_server", "codex-app-server"},
+		{"codex_jsonl", "codex-jsonl"},
+		{"opencode", "opencode"},
+		{"openrouter_account", "openrouter-account"},
+		{"synthetic_account", "synthetic-account"},
+		{"vercel_account", "vercel-account"},
+		{"zai_account", "zai-account"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d sources, want %d", len(got), len(want))
@@ -350,5 +354,40 @@ func TestStaleRemediesNeverOfferAForegroundStart(t *testing.T) {
 		if !strings.Contains(text, "tokenops daemon restart") || !strings.Contains(text, "tokenops daemon install") {
 			t.Errorf("%s does not name the supervised commands: %s", name, text)
 		}
+	}
+}
+
+// Every source with its own config block says how it is switched on: a
+// SwitchConfig source missing from configSwitches would never run in
+// status or the staleness check.
+func TestEveryConfigSourceHasASwitch(t *testing.T) {
+	for _, s := range providers.Sources() {
+		_, ok := configSwitches[s.Tag]
+		if want := s.Switch == providers.SwitchConfig; ok != want {
+			t.Errorf("%s: in configSwitches = %v, want %v (switch %q)", s.Tag, ok, want, s.Switch)
+		}
+	}
+}
+
+// Every source has a hint on a fresh config, so `vendor-usage status`
+// never leaves an operator with an unexplained row (#517 left seven
+// account sources without one).
+func TestEverySourceHasAHint(t *testing.T) {
+	cfg := Default()
+	for _, s := range cfg.VendorUsageSources() {
+		if cfg.VendorUsageConfigHint(s.SourceTag) == "" {
+			t.Errorf("%s has no hint", s.SourceTag)
+		}
+	}
+}
+
+// A browser-session source points at setup until a session is stored.
+func TestBrowserSessionHint(t *testing.T) {
+	cfg := Default()
+	if got := cfg.VendorUsageConfigHint("openrouter-account"); !strings.Contains(got, "vendor's key") {
+		t.Errorf("api key hint %q", got)
+	}
+	if got := cfg.VendorUsageConfigHint("litellm-account"); !strings.Contains(got, "LiteLLM gateway") {
+		t.Errorf("gateway hint %q", got)
 	}
 }

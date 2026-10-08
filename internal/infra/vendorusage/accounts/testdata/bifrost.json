@@ -1,0 +1,18 @@
+{
+  "virtual_key_name": "me",
+  "is_active": true,
+  "budgets": [
+    {
+      "max_limit": 10,
+      "current_usage": 2,
+      "reset_duration": "1d",
+      "last_reset": "2026-10-03T00:00:00Z"
+    },
+    {
+      "max_limit": 100,
+      "current_usage": 40,
+      "reset_duration": "1M",
+      "last_reset": "2026-10-01T00:00:00Z"
+    }
+  ]
+}

@@ -827,9 +827,11 @@ plan does not cover them, and they do not count against a claude.ai
 Enterprise limit. **A plan covers only turns through its vendor's own
 endpoint.**
 
-Coding plans are in the catalog: z.ai GLM Coding, opencode Go, Alibaba
-Coding, MiniMax Token Plan, Cerebras Code and Synthetic. A provider billed
-per token with an account cap can be measured against it:
+<!-- begin generated: provider-plan-catalog -->
+Coding plans are in the catalog: Alibaba Coding, Cerebras Code, MiniMax Token Plan, opencode Go, Synthetic and z.ai GLM Coding.
+<!-- end generated: provider-plan-catalog -->
+
+A provider billed per token with an account cap can be measured against it:
 
 ```bash
 tokenops plan set fireworks pay-as-you-go --spend-limit 200

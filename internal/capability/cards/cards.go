@@ -19,6 +19,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 )
 
 // Color is how much colour the terminal takes.
@@ -211,29 +212,20 @@ func money(usd float64) string {
 // humanDuration words a duration as humanReset does.
 func humanDuration(d time.Duration) string { return humanReset(d.String()) }
 
-// vendors names each provider as its users do.
-var vendors = map[string]string{
-	"anthropic": "Claude", "openai": "Codex", "gemini": "Gemini", "github": "Copilot", "cursor": "Cursor",
-	"fireworks": "Fireworks", "openrouter": "OpenRouter", "deepseek": "DeepSeek", "moonshot": "Moonshot",
-	"zai": "z.ai", "minimax": "MiniMax", "mistral": "Mistral", "xai": "xAI",
-}
-
-// vendor is the card's title.
+// vendor is the card's title: the provider as its users name it, from the
+// provider registry.
 func vendor(r plans.HeadroomReport) string {
-	if v, ok := vendors[r.Provider]; ok {
-		return v
-	}
 	if r.Provider == "" {
 		return r.Display
 	}
-	return strings.ToUpper(r.Provider[:1]) + r.Provider[1:]
+	return providers.DisplayName(r.Provider)
 }
 
 // planName is the plan without its vendor's name: "Max 20x", "Pro
 // Standard ($100)".
 func planName(r plans.HeadroomReport) string {
 	d := r.Display
-	for _, prefix := range []string{"Claude ", "ChatGPT ", "Gemini ", "GitHub Copilot ", "Cursor "} {
+	for _, prefix := range providers.PlanPrefixes() {
 		d = strings.TrimPrefix(d, prefix)
 	}
 	return d

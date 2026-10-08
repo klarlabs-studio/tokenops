@@ -66,11 +66,8 @@ type status struct {
 	Tooltip      string
 }
 
-// providerNames are short names for the menu bar.
-var providerNames = map[string]string{
-	"anthropic": "Claude", "openai": "Codex", "gemini": "Gemini", "github": "Copilot",
-	"cursor": "Cursor", "fireworks": "Fireworks", "openrouter": "OpenRouter",
-}
+// providerNames (providers_gen.go) are generated from TokenOps' provider
+// registry; this module cannot import it.
 
 func shortName(provider string) string {
 	if n, ok := providerNames[provider]; ok {

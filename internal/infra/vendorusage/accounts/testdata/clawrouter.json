@@ -1,0 +1,9 @@
+{
+  "policyId": "p",
+  "budget": {
+    "configured": true,
+    "ledger": "durable_object",
+    "limitMicros": 50000000,
+    "spentMicros": 12500000
+  }
+}

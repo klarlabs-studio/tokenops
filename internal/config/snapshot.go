@@ -22,6 +22,7 @@ const SensitiveHeaderPlaceholder = "***REDACTED***"
 //   - vendor_usage.claude_usage_meter.browser_cookies values
 //   - vendor_usage.cursor.cookie
 //   - vendor_usage.github_copilot.oauth_token
+//   - vendor_usage.accounts.credentials keys
 func (c Config) Redacted() Config {
 	redacted := c
 	if len(redacted.OTel.Headers) > 0 {
@@ -49,6 +50,14 @@ func (c Config) Redacted() Config {
 	}
 	mask(&redacted.VendorUsage.Cursor.Cookie)
 	mask(&redacted.VendorUsage.GitHubCopilot.OAuthToken)
+	if len(redacted.VendorUsage.Accounts.Credentials) > 0 {
+		masked := make(map[string]AccountCredential, len(redacted.VendorUsage.Accounts.Credentials))
+		for k, v := range redacted.VendorUsage.Accounts.Credentials {
+			mask(&v.Key)
+			masked[k] = v
+		}
+		redacted.VendorUsage.Accounts.Credentials = masked
+	}
 	return redacted
 }
 

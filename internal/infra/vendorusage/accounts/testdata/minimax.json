@@ -1,0 +1,23 @@
+{
+  "model_remains": [
+    {
+      "model_name": "video",
+      "current_interval_remaining_percent": 5,
+      "current_interval_status": 1
+    },
+    {
+      "model_name": "general",
+      "start_time": 1782043200000,
+      "end_time": 1782061200000,
+      "current_interval_remaining_percent": 100,
+      "current_interval_status": 1,
+      "weekly_end_time": 1782604800000,
+      "current_weekly_remaining_percent": 70,
+      "current_weekly_status": 1
+    }
+  ],
+  "base_resp": {
+    "status_code": 0,
+    "status_msg": "success"
+  }
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -28,34 +29,23 @@ type Pricer func(p *eventschema.PromptEvent, at time.Time) (float64, error)
 // headroom report can be trusted; nil reports the lowest grade.
 type SourceCounter func(ctx context.Context, since, until time.Time) (map[string]int64, error)
 
-// sourceProvider names the provider a vendor-usage source reports on.
-// Sources absent here (the proxy, MCP session pings) carry traffic for any
-// provider and count for all of them.
-var sourceProvider = map[string]string{
-	"claude-code-stats-cache": "anthropic",
-	"claude-code-jsonl":       "anthropic",
-	"claude-usage-meter":      "anthropic",
-	"claude-code-statusline":  "anthropic",
-	"vendor-usage-anthropic":  "anthropic",
-	"codex-jsonl":             "openai",
-	"gemini-cli":              "gemini",
-	"github-copilot":          "github",
-	"cursor-web":              "cursor",
-	"fireworks-usage":         "fireworks",
-	"openrouter-account":      "openrouter",
-	"deepseek-account":        "deepseek",
-	"moonshot-account":        "moonshot",
-	"zai-account":             "zai",
-	"kimi-account":            "kimi",
-	"minimax-account":         "minimax",
-	"synthetic-account":       "synthetic",
-	"chutes-account":          "chutes",
-	"deepinfra-account":       "deepinfra",
-	"vercel-account":          "vercel",
-	"litellm-account":         "litellm",
-	"bifrost-account":         "bifrost",
-	"clawrouter-account":      "clawrouter",
-}
+// sourceProvider names the provider a vendor-usage source reports on, from
+// the provider registry. Sources absent here (the proxy, MCP session pings,
+// opencode's store) carry traffic for any provider and count for all of
+// them.
+var sourceProvider = providers.SourceProviders()
+
+// accountSources are the vendor account and gateway readers' tags: their
+// readings all grade as a vendor's own account figures.
+var accountSources = func() []string {
+	var out []string
+	for _, s := range providers.Sources() {
+		if s.Switch == providers.SwitchAccounts {
+			out = append(out, s.Tag)
+		}
+	}
+	return out
+}()
 
 // SignalFromCounts maps per-source event counts onto the observations
 // ClassifySignal grades, keeping only sources that report on provider.
@@ -82,12 +72,18 @@ func SignalFromCounts(counts map[string]int64, provider string) SignalInputs {
 		ClaudeUsageMeterInWindow: c("claude-usage-meter"),
 		ClaudeStatuslineInWindow: c("claude-code-statusline"),
 		FireworksInWindow:        c("fireworks-usage"),
-		VendorAccountInWindow: c("openrouter-account") + c("deepseek-account") + c("moonshot-account") +
-			c("zai-account") + c("kimi-account") + c("minimax-account") + c("synthetic-account") +
-			c("chutes-account") + c("deepinfra-account") + c("vercel-account") +
-			c("litellm-account") + c("bifrost-account") + c("clawrouter-account"),
-		VendorAPIWired: c("vendor-usage-anthropic") > 0,
+		VendorAccountInWindow:    sum(c, accountSources),
+		VendorAPIWired:           c("vendor-usage-anthropic") > 0,
 	}
+}
+
+// sum adds count over tags.
+func sum(count func(string) int64, tags []string) int64 {
+	var n int64
+	for _, t := range tags {
+		n += count(t)
+	}
+	return n
 }
 
 // AssembleHeadroomInputs gathers everything ComputeHeadroom reads for one

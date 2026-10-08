@@ -4,13 +4,10 @@
 (function () {
   "use strict";
 
-  var NAMES = { anthropic: "Claude", openai: "Codex", gemini: "Gemini", github: "Copilot", cursor: "Cursor",
-    fireworks: "Fireworks", openrouter: "OpenRouter", deepseek: "DeepSeek", moonshot: "Moonshot", kimi: "Kimi",
-    zai: "z.ai", minimax: "MiniMax" };
-  // Each vendor's own logo (logos/NOTICE.md); two letters for a vendor
-  // without one.
-  var LOGOS = { anthropic: 1, openai: 1, gemini: 1, github: 1, cursor: 1, openrouter: 1, deepseek: 1,
-    moonshot: 1, kimi: 1, zai: 1, minimax: 1, fireworks: 1 };
+  // Each provider's name, and whether logos/<id>.svg is its own logo
+  // (logos/NOTICE.md), from TokenOps' provider registry (providers.js,
+  // generated). A vendor without a logo shows two letters.
+  var PROVIDERS = window.TOKENOPS_PROVIDERS || {};
   var state = { view: null, selected: null, refreshing: false };
   try { state.selected = localStorage.getItem("tokenops.tab"); } catch (e) { /* a private window */ }
 
@@ -23,11 +20,14 @@
     return e;
   }
 
-  function name(p) { return NAMES[p] || (p ? p.charAt(0).toUpperCase() + p.slice(1) : "?"); }
+  function name(p) {
+    var known = PROVIDERS[p];
+    return known ? known.name : (p ? p.charAt(0).toUpperCase() + p.slice(1) : "?");
+  }
 
   function mark(p, cls) {
     var m = el("span", "mark " + (cls || ""));
-    if (LOGOS[p]) {
+    if (PROVIDERS[p] && PROVIDERS[p].logo) {
       var img = el("img");
       img.src = "logos/" + p + ".svg";
       img.alt = "";
