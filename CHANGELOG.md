@@ -17,6 +17,16 @@
 - **providers:** v0: the share of the billing cycle's balance and of the request quota used, read with a v0 Platform API key (`V0_API_KEY`, opencode's `v0` key or `vendor-usage setup v0`)
 - **providers:** Nous Portal: the monthly credit grant used this period and the top-up credit left, read with a Nous Portal access token from Hermes Agent's sign-in (`NOUS_PORTAL_ACCESS_TOKEN` or `vendor-usage setup nous`); the token expires within the hour and is never refreshed, and an expired one is refused before any request
 - **providers:** Warp: credits used since the last refresh against the plan's limit, read with a Warp API key (`WARP_API_KEY`, `WARP_TOKEN` or `vendor-usage setup warp`)
+- **providers:** Atlas Cloud: the account's available USD balance (`GET /public/v1/balance`), with an API key from setup or `ATLASCLOUD_API_KEY`
+- **providers:** Poe: the point balance left (`GET /usage/current_balance`), kept in points (`balance_credits`), never converted to dollars; API key from setup, `POE_API_KEY` or opencode
+- **providers:** Deepgram: the prepaid USD balance left across the key's projects (`GET /v1/projects/{id}/balances`), with an API key from setup or `DEEPGRAM_API_KEY`
+- **providers:** Neuralwatt: prepaid USD credit left and, for a subscriber, the period's kWh allowance used as a plan window (`GET /v1/quota`); API key from setup, `NEURALWATT_API_KEY` or opencode
+- **providers:** ai&: the organisation's USD spend in the last 30 days, summed exactly from its request logs (`GET /logs`), and out-of-credit (402) as limit reached; API key from setup, `AIAND_API_KEY` or opencode
+- **providers:** xAI: the team's posted prepaid USD credit from the Management API (`GET /v1/billing/teams/{team_id}/prepaid/balance`); `tokenops vendor-usage setup xai` asks for `TEAM_ID:MANAGEMENT_KEY`. xAI was in the catalog only
+- **providers:** Doubao (Volcengine Ark): the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan), from Volcengine's signed OpenAPI; `tokenops vendor-usage setup doubao` asks for an AccessKey pair as `ACCESS_KEY_ID:SECRET_ACCESS_KEY`
+- **providers:** Venice: the USD balance left and, when staking, the share of the DIEM epoch allocation used (`GET /api/v1/billing/balance`); API key from setup, `VENICE_API_KEY` or opencode
+- **providers:** ElevenLabs: the subscription's credits used this period as a plan window, with its reset (`GET /v1/user/subscription`); API key from setup, `ELEVENLABS_API_KEY` or `XI_API_KEY`
+- **providers:** Hugging Face: Inference Providers charges this month (gross less the included amount), against the spending limit when set (`GET /api/settings/billing/usage-v2`); token from setup, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN` or opencode
 
 ### Fixed
 

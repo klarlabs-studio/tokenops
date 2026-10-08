@@ -1,0 +1,86 @@
+{
+  "first_page": {
+    "data": [
+      {
+        "id": "912bf992-0000-4000-8000-000000000001",
+        "model": "fixture-model",
+        "api_key": "masked",
+        "status_code": 200,
+        "ttft_ms": 800,
+        "latency_ms": 2400,
+        "input_tokens": 52000,
+        "output_tokens": 700,
+        "cached_tokens": 0,
+        "cost": "12.00000000",
+        "currency": "usd",
+        "created_at": "2026-07-17 10:24:30.094374+00"
+      },
+      {
+        "id": "912bf992-0000-4000-8000-000000000002",
+        "model": "fixture-model",
+        "api_key": "masked",
+        "status_code": 200,
+        "ttft_ms": 300,
+        "latency_ms": 900,
+        "input_tokens": 2100,
+        "output_tokens": 55,
+        "cached_tokens": 0,
+        "cost": "0.50000000",
+        "currency": "usd",
+        "created_at": "2026-07-17 10:24:30.094374+00"
+      }
+    ],
+    "has_more": true,
+    "next_after": "2026-07-17 10:24:30.094374+00",
+    "next_after_id": "912bf992-0000-4000-8000-000000000002"
+  },
+  "final_page": {
+    "data": [
+      {
+        "id": "cdd2b25d-0000-4000-8000-000000000001",
+        "model": "fixture-model",
+        "api_key": "masked",
+        "status_code": 200,
+        "ttft_ms": 1449,
+        "latency_ms": 3163,
+        "input_tokens": 170569,
+        "output_tokens": 248,
+        "cached_tokens": 170240,
+        "cost": "7.02344000",
+        "currency": "usd",
+        "created_at": "2026-07-17 10:20:30.094374+00"
+      },
+      {
+        "id": "cdd2b25d-0000-4000-8000-000000000002",
+        "model": "fixture-model",
+        "api_key": "masked",
+        "status_code": 200,
+        "ttft_ms": 512,
+        "latency_ms": 1201,
+        "input_tokens": 1200,
+        "output_tokens": 90,
+        "cached_tokens": 0,
+        "cost": "1.10000000",
+        "currency": "usd",
+        "created_at": "2026-07-17 10:20:00.000000+00"
+      },
+      {
+        "id": "cdd2b25d-0000-4000-8000-000000000003",
+        "model": "fixture-model",
+        "api_key": "masked",
+        "status_code": 500,
+        "ttft_ms": 0,
+        "latency_ms": 42,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cached_tokens": null,
+        "cost": null,
+        "currency": "usd",
+        "created_at": "2026-07-17 10:15:00.000000+00"
+      }
+    ],
+    "has_more": false,
+    "next_after": null,
+    "next_after_id": null
+  }
+}

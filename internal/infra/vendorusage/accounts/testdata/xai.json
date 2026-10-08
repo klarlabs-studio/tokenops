@@ -1,0 +1,21 @@
+{
+  "changes": [
+    {
+      "teamId": "65c1e471-205f-4566-9c5a-07198bcdf4ce",
+      "changeOrigin": "PURCHASE",
+      "topupStatus": "SUCCEEDED",
+      "amount": {
+        "val": "-1000"
+      },
+      "invoiceId": "7v7blf6c1G2g34OdI4N5tD1CKCdag4ZYLhn5vTBLIMM=",
+      "invoiceNumber": "062-446-653-166",
+      "createTime": "2025-02-24T15:28:02.308840Z",
+      "paymentProcessor": {
+        "kind": "STRIPE"
+      }
+    }
+  ],
+  "total": {
+    "val": "-1000"
+  }
+}

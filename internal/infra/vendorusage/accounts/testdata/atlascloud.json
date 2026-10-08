@@ -1,0 +1,49 @@
+{
+  "object": "balance",
+  "scope": "account",
+  "account": {
+    "id": "acc_123",
+    "name": "Production",
+    "type": "team"
+  },
+  "available": {
+    "value": "125.500000",
+    "currency": "usd"
+  },
+  "cash": {
+    "value": "100.000000",
+    "currency": "usd"
+  },
+  "bonus": {
+    "value": "25.500000",
+    "currency": "usd"
+  },
+  "subscription_bonus": {
+    "value": "0.000000",
+    "currency": "usd"
+  },
+  "frozen": {
+    "value": "0.000000",
+    "currency": "usd"
+  },
+  "credit_grant": {
+    "status": "active",
+    "granted": {
+      "value": "0.000000",
+      "currency": "usd"
+    },
+    "used": {
+      "value": "0.000000",
+      "currency": "usd"
+    },
+    "remaining_overdraft": {
+      "value": "0.000000",
+      "currency": "usd"
+    },
+    "overdrawn": {
+      "value": "0.000000",
+      "currency": "usd"
+    }
+  },
+  "request_id": "req_123"
+}
