@@ -59,6 +59,7 @@ var readers = []func() usage.Reader{
 	readerStepFun,
 	readerSynthetic,
 	readerT3Chat,
+	readerTypeSafe,
 	readerV0,
 	readerVenice,
 	readerVercel,

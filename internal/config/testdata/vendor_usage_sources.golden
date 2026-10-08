@@ -72,6 +72,7 @@ stepfun_account	stepfun-account
 sub2api_gateway	sub2api-account
 synthetic_account	synthetic-account
 t3chat_account	t3chat-account
+typesafe_account	typesafe-account
 v0_account	v0-account
 venice_account	venice-account
 vercel_account	vercel-account
