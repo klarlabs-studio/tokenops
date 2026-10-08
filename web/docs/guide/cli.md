@@ -697,6 +697,7 @@ vendor's windows, busiest first:
 | Kimi Code | `GET /coding/v1/usages` | 5-hour, weekly and monthly windows |
 | Manus | `POST /user.v1.UserService/GetAvailableCredits` | monthly and daily-refresh credits used, and the credit balance |
 | MiniMax Token Plan | `GET /v1/token_plan/remains` | the interval and weekly windows |
+| Notion AI | `POST /api/v3/getCreditRateLimitStatus` | the Notion AI allowance used, rolling and this billing period (Business and Enterprise workspaces) |
 | Nous Portal (Hermes Agent) | `GET /api/oauth/account` | the monthly credit grant used this period and the top-up credit left |
 | Perplexity | `GET /rest/billing/credits` | the plan's monthly credit grant used, and the credit balance |
 | Synthetic | `GET /v2/quotas` | the subscription's request quota |
@@ -790,6 +791,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Mistral | — | in the catalog only: Le Chat Pro's plan and daily cap are known; nothing reads its usage yet | — | — |
 | Moonshot | `moonshot-account` | prepaid USD balance left | API key | public docs and fixtures |
 | Neuralwatt | `neuralwatt-account` | prepaid USD credit left, and the subscription's kWh allowance used this period | API key | CodexBar's source, the vendor's docs and fixtures |
+| Notion AI | `notion-account` | the Notion AI allowance used, rolling and this billing period (Business and Enterprise workspaces) | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Nous Portal | `nous-account` | the monthly credit grant used this period and the top-up credit left | API key | CodexBar's source, the vendor's docs and fixtures |
 | Codex | `codex-app-server` | the 5-hour and weekly windows `codex app-server` reports, Codex signing its own request | the vendor's CLI | against a real account |
 |  | `codex-jsonl` | per-turn tokens and the rate_limits in Codex's rollouts | local files | against a real account |
