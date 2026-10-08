@@ -18,6 +18,7 @@
 - **providers:** Nous Portal: the monthly credit grant used this period and the top-up credit left, read with a Nous Portal access token from Hermes Agent's sign-in (`NOUS_PORTAL_ACCESS_TOKEN` or `vendor-usage setup nous`); the token expires within the hour and is never refreshed, and an expired one is refused before any request
 - **providers:** Warp: credits used since the last refresh against the plan's limit, read with a Warp API key (`WARP_API_KEY`, `WARP_TOKEN` or `vendor-usage setup warp`)
 - **providers:** GitKraken AI: weekly AI credits (and the organization's pool with `GITKRAKEN_ORG_ID`) from api.gitkraken.dev, with the account's bearer token from `GITKRAKEN_API_TOKEN` or `tokenops vendor-usage setup gitkraken`
+- **providers:** JetBrains AI: the monthly AI credits the IDE's AI Assistant records in its own quota file and `idea.log`, read locally from the most recently used IDE with no credential
 
 ### Fixed
 
