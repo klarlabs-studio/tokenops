@@ -88,6 +88,10 @@ type Reading struct {
 	// UsedUSD is spend in the period, when the vendor reports it.
 	UsedUSD float64
 	HasUsed bool
+	// UsedPeriod is the trailing period UsedUSD covers when the vendor
+	// reports spend over the last N days rather than its billing period
+	// (xAI's last 30 days); 0 is the billing period.
+	UsedPeriod time.Duration
 	// LimitUSD is the cap UsedUSD is spent against, 0 for none.
 	LimitUSD float64
 	// BalanceUSD is prepaid credit left, when the vendor reports it.

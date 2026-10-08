@@ -320,6 +320,9 @@ func NewEnvelope(ts time.Time, r Reader, x Reading) *eventschema.Envelope {
 		attrs["extra_usage_limit_reached"] = strconv.FormatBool(x.LimitReached)
 		if x.HasUsed {
 			attrs["extra_usage_used"] = fmt.Sprintf("%.2f", x.UsedUSD)
+			if x.UsedPeriod > 0 {
+				attrs["extra_usage_period_min"] = strconv.Itoa(int(x.UsedPeriod / time.Minute))
+			}
 		}
 	}
 	if x.HasBalance {

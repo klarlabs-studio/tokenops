@@ -262,6 +262,10 @@ type VendorSpend struct {
 	// UsedUnknown is set for a vendor that reports a balance but not what
 	// was spent (DeepSeek, Moonshot); spend is then estimated from usage.
 	UsedUnknown bool
+	// UsedPeriod is the trailing period UsedUSD covers when the vendor
+	// reports spend over the last N days (xAI's 30) rather than this
+	// month; 0 is the month.
+	UsedPeriod time.Duration
 	// BalanceUSD is prepaid credit left, when HasBalance.
 	BalanceUSD   float64
 	HasBalance   bool
@@ -306,9 +310,14 @@ func LatestVendorSpend(ctx context.Context, reader EventReader, provider eventsc
 	case best.Source != "" && provider != eventschema.ProviderAnthropic:
 		source = best.Source
 	}
+	var period time.Duration
+	if m, err := strconv.Atoi(best.Attributes["extra_usage_period_min"]); err == nil && m > 0 {
+		period = time.Duration(m) * time.Minute
+	}
 	return &VendorSpend{
 		UsedUSD:      used,
 		UsedUnknown:  !hasUsed || err1 != nil,
+		UsedPeriod:   period,
 		BalanceUSD:   balance,
 		HasBalance:   hasBalance,
 		LimitUSD:     limit,
