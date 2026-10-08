@@ -156,12 +156,13 @@ func TestKeychainOnlyQuietlyAndNeverWhenDisabled(t *testing.T) {
 }
 
 func TestProcessFlags(t *testing.T) {
-	spec := providers.AppLoginItem{Kind: providers.AppLoginProcess, Process: "language_server_macos_arm",
-		Fields: []string{"--csrf_token", "--extension_server_port"}}
-	env := Env{Processes: func(context.Context) ([][]string, error) {
-		return [][]string{
-			{"/usr/bin/zsh"},
-			{"/Applications/Antigravity.app/x/language_server_macos_arm", "--csrf_token", secret, "--extension_server_port=4242"},
+	spec := providers.AppLoginItem{Kind: providers.AppLoginProcess, Process: "language_server*|language-server*",
+		Markers: []string{"antigravity"}, Fields: []string{"--csrf_token", "--extension_server_port", "pid"}}
+	env := Env{Processes: func(context.Context) ([]Process, error) {
+		return []Process{
+			{PID: 1, Args: []string{"/usr/bin/zsh"}},
+			{PID: 7, Args: []string{"/Applications/Cursor.app/x/language_server_macos_arm", "--csrf_token", "other"}},
+			{PID: 42, Args: []string{"/Applications/Antigravity.app/x/language_server_macos_arm", "--csrf_token", secret, "--extension_server_port=4242"}},
 		}, nil
 	}}
 	l, err := Locate(context.Background(), []providers.AppLoginItem{spec}, env)
@@ -173,10 +174,10 @@ func TestProcessFlags(t *testing.T) {
 		t.Fatal(err)
 	}
 	var m map[string]string
-	if json.Unmarshal([]byte(got), &m) != nil || m["--csrf_token"] != secret || m["--extension_server_port"] != "4242" {
+	if json.Unmarshal([]byte(got), &m) != nil || m["--csrf_token"] != secret || m["--extension_server_port"] != "4242" || m["pid"] != "42" {
 		t.Errorf("%q", got)
 	}
-	none := Env{Processes: func(context.Context) ([][]string, error) { return nil, nil }}
+	none := Env{Processes: func(context.Context) ([]Process, error) { return nil, nil }}
 	if _, err := Locate(context.Background(), []providers.AppLoginItem{spec}, none); !errors.Is(err, ErrNotFound) {
 		t.Errorf("no process: %v", err)
 	}

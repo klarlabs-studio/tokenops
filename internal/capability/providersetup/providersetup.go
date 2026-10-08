@@ -399,6 +399,8 @@ func ApplyGateway(cfg *config.Config, id, base, key string) {
 // to grant or refuse (ADR 0013). Nothing secret has been read yet.
 type AppLogin struct {
 	located applogin.Located
+	// source is the tag of the source it reads.
+	source string
 	// App is the application that owns it.
 	App string
 	// What says exactly which item and fields are read.
@@ -432,7 +434,7 @@ func FindAppLogin(ctx context.Context, id string, env applogin.Env) (AppLogin, e
 	if err != nil {
 		return AppLogin{}, err
 	}
-	return AppLogin{located: l, App: l.Spec.App, What: l.Describe(), Host: l.Spec.Host}, nil
+	return AppLogin{located: l, source: s.Tag, App: l.Spec.App, What: l.Describe(), Host: l.Spec.Host}, nil
 }
 
 // VerifyAppLogin reads the sign-in once and provider id's account with it,
@@ -449,7 +451,7 @@ func VerifyAppLoginWith(ctx context.Context, readers []usage.Reader, id string, 
 		return nil, err
 	}
 	for _, r := range readers {
-		if string(r.Provider()) != id {
+		if r.Source() != a.source {
 			continue
 		}
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)

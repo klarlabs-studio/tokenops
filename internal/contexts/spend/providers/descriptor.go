@@ -331,8 +331,12 @@ type AppLoginItem struct {
 	// Service and Account name a Keychain item.
 	Service, Account string
 	// Process is a process source's executable name, matched against the
-	// base name of its first argument.
+	// base name of its first argument: "*" matches any run of characters
+	// and "|" separates alternatives. Markers, when given, narrow it to a
+	// command line containing one of them, ignoring case. A process
+	// source's field "pid" is the process's ID.
 	Process string
+	Markers []string
 	// Host is where the token is sent: the only place it goes.
 	Host string
 }
