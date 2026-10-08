@@ -73,6 +73,18 @@
 - **providers:** TypeSafe: spend this billing cycle and the credit balance left, in dollars (the console billing page's getBillingOverview action, whose ID is found in the page's own scripts and kept for 12 hours), read with the console.typesafe.ai session's Cookie header pasted at `vendor-usage setup typesafe`
 - **providers:** Raycast: the month's AI credit allowance used, as a plan window resetting when the next credits arrive, and the credits left (`GET /frontend_api/current_user/ai_credits`), read with the www.raycast.com browser session (`vendor-usage setup raycast` or a pasted Cookie header)
 - **providers:** Replicate: spend this month from the current monthly-usage invoice, and the prepaid credit left (`GET /api/{users|organizations}/{name}/invoices` and `/unused-credit`, the account named by the billing page), read with the replicate.com browser session (`vendor-usage setup replicate` or a pasted Cookie header); Replicate's API token is not used
+- **providers:** Devin: the organisation's daily and weekly quota used and the extra-usage balance (`GET app.devin.ai/api/<org>/billing/quota/usage`), read with the web app's bearer token given as `ORG:TOKEN` in `vendor-usage setup devin`
+- **providers:** Muse Code: the 5-hour and weekly quota used (`POST api.meta.ai/muse-code/key`), read with the `dca:` device token `muse login` issues, given in `vendor-usage setup muse`; the inference key in the answer is never kept
+- **providers:** X API: the prepaid credit left on console.x.com, purchased plus free and below zero when overdrawn (`GET /api/me`, `/api/accounts/{id}/credits`), read with the console's browser session (`vendor-usage setup xapi`)
+- **providers:** LithosAI: the organisation's prepaid balance and its spend this UTC month (`GET /api/billing`, `/api/billing/spend`), read with the console's browser session (`vendor-usage setup lithosai`)
+- **providers:** Langdock: the included 5-hour session and weekly limits used (`usageSettings.getPersonalUsage`), read with app.langdock.com's browser session (`vendor-usage setup langdock`)
+- **providers:** Ollama Cloud: the monthly usage (or the older session and weekly windows) from ollama.com/settings, read with the browser session (`vendor-usage setup ollama`)
+- **providers:** WorkBuddy (Tencent): the share of the credit packages' cycle used and when it ends, read with www.workbuddy.cn's browser session (`vendor-usage setup workbuddy`)
+- **providers:** Muse (muse.ai): the weekly token allowance used, from the page's own server action, read with muse.ai's browser session (`vendor-usage setup museai`)
+- **providers:** Charm Hyper: the Hypercredits left (`GET hyper.charm.land/v1/credits`), kept in Hypercredits, read with an API key (`HYPER_API_KEY`) or the browser session (`vendor-usage setup hyper`)
+- **providers:** Factory (Droid): 5-hour, weekly and monthly windows (and the Core fallback's), or an older plan's Standard and Premium token allowances, and the extra-usage balance, read with a Factory API key (`FACTORY_API_KEY`) or app.factory.ai's browser session (`vendor-usage setup factory`)
+- **providers:** Grok: the SuperGrok credit window used and the prepaid balance, read with the Grok CLI's sign-in token (`GROK_OAUTH_TOKEN` or `vendor-usage setup grok`), or the window from grok.com's billing with its browser session
+- **providers:** GroqCloud: the organisation's spend this UTC month from the console's activity call, read with console.groq.com's browser session (`vendor-usage setup groq`)
 
 ### Fixed
 
