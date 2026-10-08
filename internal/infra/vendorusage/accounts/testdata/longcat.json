@@ -1,0 +1,11 @@
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "currentLot": {
+      "status": "ACTIVE",
+      "totalToken": 5000000,
+      "consumedToken": 1250000
+    }
+  }
+}

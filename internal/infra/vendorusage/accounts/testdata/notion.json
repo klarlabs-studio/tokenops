@@ -1,0 +1,7 @@
+{
+  "status": "ok",
+  "enforcement": "enforced",
+  "resetsInSeconds": 3600,
+  "window": {"creditType": "ai", "scope": "user", "window": "6h", "used": 30, "limit": 120},
+  "billingPeriodWindow": {"creditType": "ai", "scope": "user", "cadence": "monthly", "used": 450, "limit": 1000, "periodEndMs": 1793491200000}
+}
