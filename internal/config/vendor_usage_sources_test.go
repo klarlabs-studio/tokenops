@@ -47,6 +47,8 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"claude_code_oauth", "claude-code-oauth"},
 		{"vendor_usage_anthropic", "vendor-usage-anthropic"},
 		{"claude_code_stats_cache (deprecated)", "claude-code-stats-cache"},
+		{"augment_cli", "augment-cli"},
+		{"augment_web", "augment-web"},
 		{"bifrost_gateway", "bifrost-account"},
 		{"chutes_account", "chutes-account"},
 		{"clawrouter_gateway", "clawrouter-account"},

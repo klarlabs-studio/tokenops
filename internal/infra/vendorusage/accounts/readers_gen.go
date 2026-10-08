@@ -10,6 +10,8 @@ import (
 var readers = []func() usage.Reader{
 	readerAmpCLI,
 	readerAmp,
+	readerAugmentCLI,
+	readerAugment,
 	readerChutes,
 	readerClinePass,
 	readerCodebuff,

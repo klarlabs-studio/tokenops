@@ -680,6 +680,8 @@ vendor's windows, busiest first:
 |---|---|---|
 | Amp | `amp usage` | subscription agent usage and orb hours, Amp Free's daily allowance, individual credits |
 | Amp | `POST ampcode.com/api/internal?userDisplayBalanceInfo` | the same figures, with an access token |
+| Augment Code | `auggie account status` | credits used of the month's allowance |
+| Augment Code | `GET app.augmentcode.com/api/credits` | the same credits, with the app.augmentcode.com session |
 | Chutes | `GET /users/me/subscription_usage` | the 4-hour and monthly caps |
 | ClinePass | `GET /api/v1/users/me/plan/usage-limits` | 5-hour, weekly and monthly windows |
 | Codebuff | `POST /api/v1/usage` | credits used against the quota until it resets |
@@ -756,6 +758,8 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 |  | `claude-code-oauth` | the plan windows, with Claude Code's own sign-in (opt-in) | another app's sign-in | public docs and fixtures |
 |  | `vendor-usage-anthropic` | the organisation's token usage from the Admin API | admin key | public docs and fixtures |
 |  | `claude-code-stats-cache` | daily totals from Claude Code's stats cache (deprecated) | local files | against a real account |
+| Augment | `augment-cli` | credits used of the month's allowance | the vendor's CLI | CodexBar's source, vendor docs and fixtures |
+|  | `augment-web` | the same credits, with the app.augmentcode.com session | browser session | CodexBar's source, vendor docs and fixtures |
 | Bifrost | `bifrost-account` | each budget's share used | API key | public docs and fixtures |
 | Cerebras | — | in the catalog only: Cerebras Code's plans and limits are known; nothing reads its usage yet | — | — |
 | Chutes | `chutes-account` | the 4-hour and monthly caps | API key | the vendor's client source and fixtures |
