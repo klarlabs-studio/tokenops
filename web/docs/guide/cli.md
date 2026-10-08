@@ -688,6 +688,8 @@ vendor's windows, busiest first:
 <!-- begin generated: provider-subscriptions -->
 | Vendor | Endpoint | Shows |
 |---|---|---|
+| Alibaba Cloud Coding Plan | `POST /data/api.json` (queryCodingPlanInstanceInfoV2, Model Studio or Bailian console) | Coding Plan 5-hour, weekly and monthly quotas (where the console accepts the plan's API key) |
+| Alibaba Cloud Coding Plan | `POST /data/api.json` (console gateway, with the console's sec_token) | Coding Plan 5-hour, weekly and monthly quotas |
 | Amp | `amp usage` | subscription agent usage and orb hours, Amp Free's daily allowance, individual credits |
 | Amp | `POST ampcode.com/api/internal?userDisplayBalanceInfo` | the same figures, with an access token |
 | Antigravity | the running app's local language server (`RetrieveUserQuotaSummary` on 127.0.0.1) | 5-hour and weekly quota for Gemini models and for Claude and GPT models, while the app runs |
@@ -758,7 +760,7 @@ use read its own spend.
   with `tokenops vendor-usage enable vendor-accounts --disable`.
 
 <!-- begin generated: provider-env-vars -->
-The environment variables read for a key: `AIAND_API_KEY`, `AIXY_API_KEY`, `AI_GATEWAY_API_KEY`, `AMP_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FIREWORKS_API_KEY`, `GITKRAKEN_API_TOKEN`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `POE_API_KEY`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`.
+The environment variables read for a key: `AIAND_API_KEY`, `AIXY_API_KEY`, `AI_GATEWAY_API_KEY`, `ALIBABA_CODING_PLAN_API_KEY`, `ALIBABA_CODING_PLAN_COOKIE`, `ALIBABA_QWEN_API_KEY`, `AMP_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DASHSCOPE_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FIREWORKS_API_KEY`, `GITKRAKEN_API_TOKEN`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `POE_API_KEY`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`.
 <!-- end generated: provider-env-vars -->
 
 #### Every provider
@@ -770,7 +772,8 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 |---|---|---|---|---|
 | ai& | `aiand-account` | the organisation's USD spend in the last 30 days, summed from its request logs | API key | CodexBar's source, the vendor's docs and fixtures |
 | Aixy | `aixy-account` | each budget that applies to the key, spent and reserved against its limit | API key | CodexBar's source, the vendor's docs and fixtures |
-| Alibaba Cloud | — | in the catalog only: the Coding Plan's endpoint, prices and limits are known; nothing reads its usage yet | — | — |
+| Alibaba Cloud | `alibaba-account` | Coding Plan 5-hour, weekly and monthly quotas (where the console accepts the plan's API key) | API key | CodexBar's source, the vendor's docs and fixtures |
+|  | `alibaba-web` | Coding Plan 5-hour, weekly and monthly quotas | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Amp | `amp-cli` | subscription agent usage and orb hours, Amp Free's daily allowance, individual credits | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
 |  | `amp-account` | the same figures, with an access token | API key | CodexBar's source, the vendor's docs and fixtures |
 | Claude | `claude-code-statusline` | the 5-hour and 7-day windows Claude Code gives its status line | local files | against a real account |

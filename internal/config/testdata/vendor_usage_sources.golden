@@ -2,6 +2,8 @@
 # name<TAB>source tag, in VendorUsageSources order.
 aiand_account	aiand-account
 aixy_gateway	aixy-account
+alibaba_account	alibaba-account
+alibaba_web	alibaba-web
 amp_cli	amp-cli
 amp_account	amp-account
 claude_code_statusline	claude-code-statusline
