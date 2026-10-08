@@ -26,6 +26,7 @@
 - **providers:** Doubao (Volcengine Ark): the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan), from Volcengine's signed OpenAPI; `tokenops vendor-usage setup doubao` asks for an AccessKey pair as `ACCESS_KEY_ID:SECRET_ACCESS_KEY`
 - **providers:** Venice: the USD balance left and, when staking, the share of the DIEM epoch allocation used (`GET /api/v1/billing/balance`); API key from setup, `VENICE_API_KEY` or opencode
 - **providers:** ElevenLabs: the subscription's credits used this period as a plan window, with its reset (`GET /v1/user/subscription`); API key from setup, `ELEVENLABS_API_KEY` or `XI_API_KEY`
+- **providers:** Hugging Face: Inference Providers charges this month (gross less the included amount), against the spending limit when set (`GET /api/settings/billing/usage-v2`); token from setup, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN` or opencode
 
 ### Fixed
 
