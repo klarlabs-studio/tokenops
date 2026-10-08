@@ -10,6 +10,7 @@ var providerNames = map[string]string{
 	"amp":          "Amp",
 	"anthropic":    "Claude",
 	"atlascloud":   "Atlas Cloud",
+	"augment":      "Augment",
 	"azure-openai": "Azure OpenAI",
 	"bedrock":      "Amazon Bedrock",
 	"bifrost":      "Bifrost",

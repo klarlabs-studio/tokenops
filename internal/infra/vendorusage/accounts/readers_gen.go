@@ -12,6 +12,8 @@ var readers = []func() usage.Reader{
 	readerAmpCLI,
 	readerAmp,
 	readerAtlasCloud,
+	readerAugmentCLI,
+	readerAugment,
 	readerBedrock,
 	readerChutes,
 	readerClinePass,

@@ -7,6 +7,7 @@ window.TOKENOPS_PROVIDERS = {
   "amp": {"name":"Amp","logo":true},
   "anthropic": {"name":"Claude","logo":true},
   "atlascloud": {"name":"Atlas Cloud","logo":true},
+  "augment": {"name":"Augment","logo":false},
   "azure-openai": {"name":"Azure OpenAI","logo":true},
   "bedrock": {"name":"Amazon Bedrock","logo":true},
   "bifrost": {"name":"Bifrost","logo":false},

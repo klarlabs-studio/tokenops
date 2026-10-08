@@ -10,6 +10,7 @@ var registered = []func() Descriptor{
 	providerAmp,
 	providerAnthropic,
 	providerAtlasCloud,
+	providerAugment,
 	providerAzureOpenAI,
 	providerBedrock,
 	providerBifrost,
