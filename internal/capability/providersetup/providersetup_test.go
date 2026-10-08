@@ -41,6 +41,24 @@ func TestLookupCoversKeyProvidersOnly(t *testing.T) {
 	}
 }
 
+// A credential that is more than one key says what to paste.
+func TestLookupSaysTheKeyFormat(t *testing.T) {
+	if p, ok := Lookup("xai"); !ok || p.KeyFormat != "TEAM_ID:MANAGEMENT_KEY" {
+		t.Errorf("xai = %+v %v", p, ok)
+	}
+	if p, _ := Lookup("openrouter"); p.KeyFormat != "" {
+		t.Errorf("openrouter asks for %q", p.KeyFormat)
+	}
+}
+
+// A balance in the vendor's own unit is worded in that unit.
+func TestSummaryWordsCreditsInTheirUnit(t *testing.T) {
+	got := Summary(usage.Reading{Credits: 1500, CreditsUnit: "points", HasCredits: true})
+	if len(got) != 1 || got[0] != "balance: 1500 points" {
+		t.Errorf("summary %v", got)
+	}
+}
+
 func TestVerifyReadsOnceAndSummarises(t *testing.T) {
 	readers := []usage.Reader{fakeReader{id: "acme", good: "k", reading: usage.Reading{HasBalance: true, BalanceUSD: 7.5}}}
 	lines, err := VerifyWith(context.Background(), readers, "acme", " k\n")

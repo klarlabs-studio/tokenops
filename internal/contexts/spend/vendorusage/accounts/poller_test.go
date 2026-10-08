@@ -113,3 +113,19 @@ func TestPollerSendsAGatewayKeyOnlyWhereItBelongs(t *testing.T) {
 		t.Errorf("recognition re-probed: %d then %d", asked, g.recognised)
 	}
 }
+
+// A balance in the vendor's own unit is stored as reported, never as
+// dollars, and makes the reading worth storing.
+func TestCreditsAreStoredInTheirOwnUnit(t *testing.T) {
+	x := Reading{Scope: "account", Credits: 1250000, CreditsUnit: "points", HasCredits: true}
+	if x.Empty() {
+		t.Fatal("a points balance is not empty")
+	}
+	a := NewEnvelope(time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC), &fakeReader{endpoint: "poe"}, x).Attributes
+	if a["balance_credits"] != "1250000" || a["balance_credits_unit"] != "points" {
+		t.Errorf("attributes %v", a)
+	}
+	if _, ok := a["balance_usd"]; ok {
+		t.Error("points were stored as dollars")
+	}
+}

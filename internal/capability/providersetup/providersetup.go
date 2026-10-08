@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,6 +42,9 @@ type Provider struct {
 	CookieNames []string
 	// EnvVars are where a key is found without setup.
 	EnvVars []string
+	// KeyFormat is the credential's shape when it is more than one key
+	// ("TEAM_ID:MANAGEMENT_KEY"); empty for a plain API key.
+	KeyFormat string
 }
 
 // Lookup returns the provider setup connects for id.
@@ -53,7 +57,7 @@ func Lookup(id string) (Provider, bool) {
 	if !ok {
 		return Provider{}, false
 	}
-	p := Provider{ID: string(d.ID), Name: d.DisplayName, EnvVars: d.EnvVars}
+	p := Provider{ID: string(d.ID), Name: d.DisplayName, EnvVars: d.EnvVars, KeyFormat: s.KeyFormat}
 	if s.Credential == providers.BrowserCookie && s.Cookie != nil {
 		p.Browser, p.CookieHost, p.CookieNames = true, s.Cookie.Host, s.Cookie.Names
 	}
@@ -143,6 +147,9 @@ func Summary(r usage.Reading) []string {
 	}
 	if r.HasBalance {
 		out = append(out, fmt.Sprintf("balance: $%.2f", r.BalanceUSD))
+	}
+	if r.HasCredits {
+		out = append(out, fmt.Sprintf("balance: %s %s", strconv.FormatFloat(r.Credits, 'f', -1, 64), r.CreditsUnit))
 	}
 	if r.LimitReached {
 		out = append(out, "the vendor reports its limit reached")
