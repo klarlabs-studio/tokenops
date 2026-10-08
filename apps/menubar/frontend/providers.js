@@ -16,6 +16,7 @@ window.TOKENOPS_PROVIDERS = {
   "fireworks": {"name":"Fireworks","logo":true},
   "gemini": {"name":"Gemini","logo":true},
   "github": {"name":"Copilot","logo":true},
+  "ibmbob": {"name":"IBM Bob","logo":true},
   "kilo": {"name":"Kilo","logo":true},
   "kimi": {"name":"Kimi","logo":true},
   "litellm": {"name":"LiteLLM","logo":false},

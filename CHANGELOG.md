@@ -13,6 +13,7 @@
 - **providers:** ZenMux: the rolling 5-hour and 7-day quotas and the pay-as-you-go balance, read with a Management API key that only `vendor-usage setup zenmux` supplies (the inference keys harnesses hold are never sent to the Management API)
 - **providers:** xKiro: the plan's 5-hour and 7-day spend windows, today's free-token allowance and the wallet balance, read with an xKiro API key (`XKIRO_API_KEY` or `vendor-usage setup xkiro`)
 - **providers:** DevPass (LLM Gateway): the billing cycle's plan credits and the premium weekly window, or on pay-as-you-go the key's spend against its limit, read with a gateway API key (`DEVPASS_API_KEY`, `LLMGATEWAY_API_KEY`, opencode's `llmgateway` key or `vendor-usage setup devpass`)
+- **providers:** IBM Bob: Bobcoins used this month against the team budgets, read with an IBM Bob API key or IAM token (`BOBSHELL_API_KEY` or `vendor-usage setup ibmbob`)
 
 ### Fixed
 

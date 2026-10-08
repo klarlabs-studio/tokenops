@@ -58,6 +58,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"fireworks", "fireworks-usage"},
 		{"gemini_cli", "gemini-cli"},
 		{"github_copilot", "github-copilot"},
+		{"ibmbob_account", "ibmbob-account"},
 		{"kilo_account", "kilo-account"},
 		{"kimi_account", "kimi-account"},
 		{"litellm_gateway", "litellm-account"},
