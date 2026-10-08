@@ -52,6 +52,7 @@ var providerNames = map[string]string{
 	"venice":       "Venice",
 	"vercel":       "Vercel",
 	"warp":         "Warp",
+	"windsurf":     "Windsurf",
 	"xai":          "xAI",
 	"xkiro":        "xKiro",
 	"zai":          "z.ai",

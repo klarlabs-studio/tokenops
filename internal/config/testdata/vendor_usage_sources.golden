@@ -51,6 +51,8 @@ v0_account	v0-account
 venice_account	venice-account
 vercel_account	vercel-account
 warp_account	warp-account
+windsurf_local	windsurf-local
+windsurf_web	windsurf-web
 xai_account	xai-account
 xkiro_account	xkiro-account
 zai_account	zai-account
