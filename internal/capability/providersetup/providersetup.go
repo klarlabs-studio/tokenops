@@ -46,6 +46,10 @@ type Provider struct {
 	Gateway        bool
 	DefaultBaseURL string
 	BaseURLEnv     string
+	// Chain is true for a provider read with the vendor's own credential
+	// chain on this machine: setup finds it, proves it and opts in, and
+	// stores nothing secret.
+	Chain bool
 	// EnvVars are where a key is found without setup.
 	EnvVars []string
 	// KeyFormat is the credential's shape when it is more than one key
@@ -65,6 +69,7 @@ func Lookup(id string) (Provider, bool) {
 	}
 	p := Provider{ID: string(d.ID), Name: d.DisplayName, KeyFormat: s.KeyFormat,
 		EnvVars: append(append([]string(nil), d.EnvVars...), s.EnvVars...)}
+	p.Chain = s.Credential == providers.CredentialChain
 	if s.Reader == providers.GatewayReader {
 		p.Gateway, p.DefaultBaseURL, p.BaseURLEnv = true, s.DefaultBaseURL, s.BaseURLEnv
 	}
@@ -167,6 +172,32 @@ func VerifyGatewayWith(ctx context.Context, gateways []usage.Gateway, id, base, 
 		return Summary(reading), nil
 	}
 	return nil, fmt.Errorf("no gateway reader for %q", id)
+}
+
+// FromChain finds provider id's credential in the vendor's own chain on
+// this machine and says where it was found; the credential is for Verify
+// only and is never stored.
+func FromChain(ctx context.Context, id string) (key, origin string, err error) {
+	return FromChainWith(ctx, accountsapi.Readers(), id)
+}
+
+// FromChainWith is FromChain with the readers given.
+func FromChainWith(ctx context.Context, readers []usage.Reader, id string) (string, string, error) {
+	for _, r := range readers {
+		if c, ok := r.(usage.ChainReader); ok && string(r.Provider()) == id {
+			return c.Chain(ctx)
+		}
+	}
+	return "", "", fmt.Errorf("%q is not read with a credential chain", id)
+}
+
+// ApplyChain opts provider id in to being read with its vendor's
+// credential chain as the daemon polls; nothing secret is stored.
+func ApplyChain(cfg *config.Config, id string) {
+	if cfg.VendorUsage.Accounts.Credentials == nil {
+		cfg.VendorUsage.Accounts.Credentials = map[string]config.AccountCredential{}
+	}
+	cfg.VendorUsage.Accounts.Credentials[id] = config.AccountCredential{CredentialChain: true}
 }
 
 // Summary words a reading, one line per figure.

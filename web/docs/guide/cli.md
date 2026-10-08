@@ -666,6 +666,7 @@ vendor's own figures every 15 minutes:
 |---|---|---|
 | ai& | `GET /logs?range=30days` | the organisation's USD spend in the last 30 days, summed from its request logs |
 | Atlas Cloud | `GET /public/v1/balance` | the account's available USD balance |
+| Amazon Bedrock | Cost Explorer `GetCostAndUsage` | this month's Bedrock spend, every 8 hours (Cost Explorer bills $0.01 a request) |
 | Deepgram | `GET /v1/projects/{id}/balances` | prepaid USD balance left, across the key's projects |
 | DeepInfra | `GET /payment/checklist` | spend since the last invoice, the limit, prepaid credit |
 | DeepSeek | `GET /user/balance` | prepaid USD balance left |
@@ -765,6 +766,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 |  | `vendor-usage-anthropic` | the organisation's token usage from the Admin API | admin key | public docs and fixtures |
 |  | `claude-code-stats-cache` | daily totals from Claude Code's stats cache (deprecated) | local files | against a real account |
 | Atlas Cloud | `atlascloud-account` | the account's available USD balance | API key | CodexBar's source, the vendor's docs and fixtures |
+| Amazon Bedrock | `bedrock-cost-explorer` | this month's Bedrock spend, every 8 hours (Cost Explorer bills $0.01 a request) | the vendor's credential chain, after setup | CodexBar's source, the vendor's docs and fixtures |
 | Bifrost | `bifrost-account` | each budget's share used | API key | public docs and fixtures |
 | Cerebras | — | in the catalog only: Cerebras Code's plans and limits are known; nothing reads its usage yet | — | — |
 | Chutes | `chutes-account` | the 4-hour and monthly caps | API key | the vendor's client source and fixtures |

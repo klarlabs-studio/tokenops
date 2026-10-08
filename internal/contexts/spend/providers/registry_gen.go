@@ -9,6 +9,7 @@ var registered = []func() Descriptor{
 	providerAlibaba,
 	providerAnthropic,
 	providerAtlasCloud,
+	providerBedrock,
 	providerBifrost,
 	providerCerebras,
 	providerChutes,

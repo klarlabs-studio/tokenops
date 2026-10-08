@@ -92,6 +92,11 @@ func (c Config) registryHint(sourceTag string) string {
 			return "on; reads with the session `tokenops vendor-usage setup " + string(s.Provider) + "` stored"
 		}
 		return "connect it: `tokenops vendor-usage setup " + string(s.Provider) + "` reads the session from your browser"
+	case s.Credential == providers.CredentialChain:
+		if c, stored := c.VendorUsage.Accounts.Credentials[string(s.Provider)]; stored && c.CredentialChain {
+			return "on; reads with the credentials on this machine, as `tokenops vendor-usage setup " + string(s.Provider) + "` opted in"
+		}
+		return "opt-in: `tokenops vendor-usage setup " + string(s.Provider) + "` reads it with the credentials on this machine"
 	case s.Credential == providers.AdminKey:
 		if _, stored := c.VendorUsage.Accounts.Credentials[string(s.Provider)]; stored {
 			return "on; reads with the admin key `tokenops vendor-usage setup " + string(s.Provider) + "` stored"

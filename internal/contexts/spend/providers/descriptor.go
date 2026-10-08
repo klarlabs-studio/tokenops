@@ -110,6 +110,11 @@ const (
 	// the interactive `tokenops vendor-usage setup <id>`, which may show a
 	// Keychain prompt; the daemon re-reads it quietly and never prompts.
 	BrowserCookie Credential = "browser-cookie"
+	// CredentialChain is the vendor's own standard credential chain on this
+	// machine (AWS's environment variables and shared credentials file). It
+	// is read only once `tokenops vendor-usage setup <id>` opted in, then as
+	// the daemon polls; nothing secret is stored.
+	CredentialChain Credential = "credential-chain"
 )
 
 // Switch is what turns a source on.

@@ -172,3 +172,34 @@ func TestNamedGatewayBase(t *testing.T) {
 		}
 	}
 }
+
+type pacedReader struct {
+	fakeReader
+	every time.Duration
+}
+
+func (p *pacedReader) MinInterval() time.Duration { return p.every }
+
+// A paced reader (a vendor that bills each request) is asked no more often
+// than its interval, refused or not; with no credential it is not asked
+// at all and its interval does not start.
+func TestPollerPacesAReaderThatIsBilledPerRequest(t *testing.T) {
+	r := &pacedReader{fakeReader: fakeReader{endpoint: "aws", good: "k", reading: Reading{HasUsed: true, UsedUSD: 1}}, every: 8 * time.Hour}
+	at := time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC)
+	creds := []Credential{}
+	p := NewPoller(&captureBus{}, PollerOptions{Readers: []Reader{r}, Credentials: func() []Credential { return creds }, Now: func() time.Time { return at }})
+	p.Scan(context.Background())
+	creds = []Credential{{Endpoint: "aws", Key: "bad"}}
+	for _, step := range []time.Duration{0, time.Hour, 6 * time.Hour} {
+		at = at.Add(step)
+		p.Scan(context.Background())
+	}
+	if len(r.keys) != 1 {
+		t.Fatalf("asked %d times within 8 hours: %v", len(r.keys), r.keys)
+	}
+	at = at.Add(time.Hour)
+	p.Scan(context.Background())
+	if len(r.keys) != 2 {
+		t.Errorf("not asked again after its interval: %v", r.keys)
+	}
+}
