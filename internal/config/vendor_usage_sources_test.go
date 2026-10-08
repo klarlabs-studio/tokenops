@@ -69,6 +69,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"jetbrains_local", "jetbrains-local"},
 		{"kilo_account", "kilo-account"},
 		{"kimi_account", "kimi-account"},
+		{"kiro_cli", "kiro-cli"},
 		{"litellm_gateway", "litellm-account"},
 		{"minimax_account", "minimax-account"},
 		{"moonshot_account", "moonshot-account"},

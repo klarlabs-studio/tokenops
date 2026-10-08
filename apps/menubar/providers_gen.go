@@ -30,6 +30,7 @@ var providerNames = map[string]string{
 	"jetbrains":   "JetBrains AI",
 	"kilo":        "Kilo",
 	"kimi":        "Kimi",
+	"kiro":        "Kiro",
 	"litellm":     "LiteLLM",
 	"minimax":     "MiniMax",
 	"mistral":     "Mistral",
