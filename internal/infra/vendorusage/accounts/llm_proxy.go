@@ -79,7 +79,7 @@ func (g LLMProxy) Read(ctx context.Context, root, key string) (usage.Reading, er
 				}
 			}
 			for _, l := range left {
-				if used := min(max(100-l, 0), 100); !found || used > tightest {
+				if used := clampPct(100 - l); !found || used > tightest {
 					tightest, found = used, true
 				}
 			}
