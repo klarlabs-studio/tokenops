@@ -32,6 +32,9 @@ type Config struct {
 	// AuditRetentionDays is how long the audit log is kept.
 	AuditRetentionDays int
 	Logger             *slog.Logger
+	// HTTPClient calls identity providers for single sign-on; nil is a
+	// client with a 15-second timeout.
+	HTTPClient *http.Client
 }
 
 // Server serves the API and the web view.
@@ -44,6 +47,9 @@ type Server struct {
 	byDev   *limiter
 	pages   *pages
 	started time.Time
+	// httpClient and oidc serve single sign-on (sso.go).
+	httpClient *http.Client
+	oidc       providers
 }
 
 // New builds the service.
@@ -59,7 +65,12 @@ func New(store *pgstore.Store, cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	hc := cfg.HTTPClient
+	if hc == nil {
+		hc = &http.Client{Timeout: ssoTimeout}
+	}
 	return &Server{
+		httpClient: hc, oidc: providers{m: map[string]cachedProvider{}},
 		store: store, cfg: cfg, log: cfg.Logger, public: u,
 		// Enrolment and sign-in by address: a burst of 10, then one every
 		// 6 seconds. Uploads by device: a burst of 6, then one a minute;
@@ -86,6 +97,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/members", s.api(s.members))
 	mux.HandleFunc("GET /api/v1/members/{id}/metrics", s.api(s.memberMetrics))
 	mux.HandleFunc("DELETE /api/v1/members/{id}", s.api(s.removeMember))
+	mux.HandleFunc("PUT /api/v1/members/{id}/email", s.api(s.setEmail))
 	mux.HandleFunc("GET /api/v1/teams", s.api(s.teams))
 	mux.HandleFunc("POST /api/v1/teams", s.api(s.createTeam))
 	mux.HandleFunc("POST /api/v1/invites", s.api(s.createInvite))
@@ -99,6 +111,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /login", s.loginPage)
 	mux.HandleFunc("POST /login", s.limitIP(s.loginSubmit))
 	mux.HandleFunc("POST /logout", s.logout)
+	mux.HandleFunc("GET /sso", s.limitIP(s.ssoPage))
+	mux.HandleFunc("GET /sso/start", s.limitIP(s.ssoStart))
+	mux.HandleFunc("GET /sso/callback", s.limitIP(s.ssoCallback))
 	mux.HandleFunc("GET /{$}", s.web(s.overviewPage))
 	mux.HandleFunc("GET /me", s.web(s.mePage))
 	mux.HandleFunc("GET /members", s.web(s.membersPage))
@@ -142,7 +157,8 @@ func (w *statusWriter) WriteHeader(code int) {
 }
 
 // logRequests logs method, path, status and duration. Never the query
-// string, which carries a login token on /login, and never a header.
+// string, which carries a login token on /login and an authorization code
+// on /sso/callback, and never a header.
 func (s *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()

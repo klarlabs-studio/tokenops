@@ -1,0 +1,18 @@
+# The published image of the team plane (ghcr.io/klarlabs-studio/tokenops-team).
+#
+# It compiles nothing: it copies the tokenops-team binary out of the
+# release's own archives, verified against the release's checksums.txt, so
+# the image runs byte for byte what the release ships.
+# scripts/build-team-image.sh lays the build context out as
+# <os>/<arch>/tokenops-team and runs this for linux/amd64 and linux/arm64;
+# CI runs the same script on a snapshot of the release.
+#
+# To build from a checkout instead, use Dockerfile (docker-compose.build.yml).
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+ARG TARGETOS
+ARG TARGETARCH
+COPY ${TARGETOS}/${TARGETARCH}/tokenops-team /usr/local/bin/tokenops-team
+USER nonroot:nonroot
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/tokenops-team"]
+CMD ["serve"]

@@ -57,9 +57,13 @@ staying joined. See [Configuration](/guide/configuration#team-plane-team).
 ## Who sees what
 
 - **Everyone in the organisation** sees totals by team, repository and kind
-  of work. Any row fewer than three people contributed to is withheld — a
-  "team total" of one person is that person's figures. The organisation
-  can raise the threshold.
+  of work, per day or week, for weeks that ended at least three days ago.
+  Any group fewer than three people contributed to is withheld — a "team
+  total" of one person is that person's figures — and so are as many other
+  groups as needed that no sum or difference of what is shown gives a
+  withheld group back. A week is computed once and never changes, so
+  asking again, with another window or after more uploads, shows nothing
+  new. The organisation can raise the threshold.
 - **Your individual figures** are visible to you, and to nobody else unless
   an owner grants it: to a named lead, admin or owner, for one team or for
   everyone, with a reason. Being an owner is not enough by itself.
@@ -81,9 +85,12 @@ audit log 730 days. Leaving erases your machine's figures unless you pass
 ## Running the server
 
 The server is `tokenops-team`: a Go service with Postgres behind Caddy,
-deployed with Docker Compose on one VPS. `deploy/team/README.md` in the
-repository is the runbook — a Hetzner server in Germany, DNS, TLS,
-creating the organisation and invites, grants, backups and upgrades.
+deployed with Docker Compose on one VPS. Each release publishes it as the
+image `ghcr.io/klarlabs-studio/tokenops-team:<version>` (linux/amd64 and
+linux/arm64) and as `tokenops-team_<version>_linux_<arch>.tar.gz` archives.
+`deploy/team/README.md` in the repository is the runbook — a Hetzner
+server in Germany, DNS, TLS, creating the organisation and invites,
+grants, backups and upgrades.
 
 | Variable | Meaning |
 |---|---|
@@ -92,6 +99,17 @@ creating the organisation and invites, grants, backups and upgrades.
 | `TEAMSERVER_LISTEN` | listen address, default `:8080` |
 | `TEAMSERVER_TRUSTED_PROXIES` | CIDRs whose `X-Forwarded-For` is believed, default loopback and private ranges |
 | `TEAMSERVER_AUDIT_RETENTION_DAYS` | audit log retention, default 730 |
+
+### Single sign-on
+
+The web view can sign members in with the organisation's OpenID Connect
+provider — Google Workspace, Microsoft Entra ID, Keycloak, Okta, or Dex in
+front of GitHub — beside the single-use links. It signs in only an
+existing member whose verified address an owner (or the server's console)
+set, in a domain the organisation allows; it never creates anyone. The
+client secret stays in an environment variable or a file on the server.
+Each member's page shows the address that signs them in. Setup is in
+`deploy/team/README.md`.
 
 ### API
 
@@ -105,12 +123,13 @@ admin token goes in `Authorization: Bearer …`.
 | `GET /api/v1/me` | device, admin | what is held about you, grants covering you, views of you |
 | `DELETE /api/v1/devices/self[?keep=true]` | device | leave; erases unless `keep` |
 | `POST /api/v1/login-links` | device, admin | a single-use web sign-in link |
-| `GET /api/v1/aggregates?by=team\|repo\|kind&period=day\|week&since=&until=&team=` | any member | totals and rates, small groups withheld |
+| `GET /api/v1/aggregates?by=team\|repo\|kind&period=day\|week&since=&until=` | any member | released weeks' totals and rates, small groups withheld; `released_through` says how far |
 | `GET /api/v1/members` | any member | the members you may see |
 | `GET /api/v1/members/{id}/metrics` | yourself, or a grantee | individual figures; recorded and shown to the member |
 | `GET, POST /api/v1/teams` | admin to create | teams |
 | `POST /api/v1/invites` | admin | `{team, role, ttl_hours}` |
 | `GET, POST /api/v1/grants`, `DELETE /api/v1/grants/{id}` | owner (admin to list) | individual-view grants, with a reason |
 | `DELETE /api/v1/members/{id}` | admin | remove a member and erase their figures |
+| `PUT /api/v1/members/{id}/email` | owner | `{email}`: the address single sign-on signs this member in by (`""` clears; not another owner's) |
 | `GET /api/v1/audit` | admin | the audit log |
 | `PUT /api/v1/settings` | owner | `{min_group_size, retention_days}` |

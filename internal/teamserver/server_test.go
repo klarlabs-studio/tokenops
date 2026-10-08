@@ -93,9 +93,27 @@ func (e *env) join(teamName, name string, role team.Role) teamwire.EnrollRespons
 
 func today() string { return time.Now().UTC().Format(teamwire.DayLayout) }
 
+// releasedWeek is the newest week the server releases now: aggregates
+// show only released weeks.
+func releasedWeek() time.Time { return team.LatestReleasable(time.Now()) }
+
+// dayOf is a day of the released week, 0 = Monday.
+func dayOf(d int) string { return releasedWeek().AddDate(0, 0, d).Format(teamwire.DayLayout) }
+
 func upload(buckets ...teamwire.Bucket) teamwire.Upload {
+	days := map[string]bool{}
+	var list []string
+	for _, b := range buckets {
+		if !days[b.Day] {
+			days[b.Day] = true
+			list = append(list, b.Day)
+		}
+	}
+	if len(list) == 0 {
+		list = []string{today()}
+	}
 	return teamwire.Upload{Schema: 1, BatchID: uuid.NewString(), ComputedAt: time.Now().UTC(), ClientVersion: "test",
-		Days: []string{today()}, Buckets: buckets}
+		Days: list, Buckets: buckets}
 }
 
 func TestEndToEnd(t *testing.T) {
@@ -105,7 +123,7 @@ func TestEndToEnd(t *testing.T) {
 		m := e.join("platform", name, team.RoleMember)
 		members = append(members, m)
 		code, body := e.do("POST", "/api/v1/ingest", m.DeviceToken, upload(
-			teamwire.Bucket{Day: today(), Repo: "acme/api", Kind: "edit", Instructions: 2, FirstTry: 1, Tokens: 100, APIEquivalentUSD: 1}))
+			teamwire.Bucket{Day: dayOf(0), Repo: "acme/api", Kind: "edit", Instructions: 2, FirstTry: 1, Tokens: 100, APIEquivalentUSD: 1}))
 		if code != http.StatusOK {
 			t.Fatalf("ingest: %d %s", code, body)
 		}
@@ -113,24 +131,19 @@ func TestEndToEnd(t *testing.T) {
 	lead := e.join("platform", "Lars", team.RoleLead)
 
 	// Aggregates: three people, shown; any member may read them.
-	code, body := e.do("GET", "/api/v1/aggregates?by=team&period=day", members[0].DeviceToken, nil)
+	code, body := e.do("GET", "/api/v1/aggregates?by=team&period=week", members[0].DeviceToken, nil)
 	if code != http.StatusOK {
 		t.Fatalf("aggregates: %d %s", code, body)
 	}
 	var agg teamserver.AggregateAnswer
 	_ = json.Unmarshal(body, &agg)
-	if len(agg.Rows) != 1 || agg.Rows[0].Suppressed || agg.Rows[0].People != 3 || agg.Rows[0].Totals.Tokens != 300 {
+	if len(agg.Rows) != 1 || agg.Rows[0].Group != "platform" || agg.Rows[0].Suppressed || agg.Rows[0].People != 3 ||
+		agg.Rows[0].Totals.Tokens != 300 || agg.ReleasedThrough == "" {
 		t.Errorf("aggregate = %s", body)
 	}
-	// A single repository with one contributor is withheld.
-	solo := e.join("data", "Dee", team.RoleMember)
-	e.do("POST", "/api/v1/ingest", solo.DeviceToken, upload(teamwire.Bucket{Day: today(), Repo: "acme/etl", Kind: "deep", Instructions: 9}))
-	_, body = e.do("GET", "/api/v1/aggregates?by=repo&period=week", e.admin, nil)
-	_ = json.Unmarshal(body, &agg)
-	for _, r := range agg.Rows {
-		if r.Group == "acme/etl" && (!r.Suppressed || r.Totals.Instructions != 0) {
-			t.Errorf("one person's repo was shown: %+v", r)
-		}
+	// The team filter, which let one filter be subtracted from another, is gone.
+	if code, _ := e.do("GET", "/api/v1/aggregates?by=repo&team=platform", e.admin, nil); code != http.StatusBadRequest {
+		t.Errorf("team filter: %d", code)
 	}
 
 	// Drill-down: refused without a grant, even for the owner.

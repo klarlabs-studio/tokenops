@@ -11,6 +11,10 @@
 //	TEAMSERVER_TRUSTED_PROXIES       CIDRs whose X-Forwarded-For is believed,
 //	                                 default loopback and private ranges
 //	TEAMSERVER_AUDIT_RETENTION_DAYS  default 730
+//
+// Single sign-on is configured per organisation with `tokenops-team sso
+// set`; its client secret stays in an environment variable or a file the
+// server reads (see deploy/team/README.md).
 package main
 
 import (
@@ -20,6 +24,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -85,7 +90,7 @@ func root() *cobra.Command {
 	}
 	cmd.AddCommand(serveCmd(), migrateCmd(), createOrgCmd(), createTeamCmd(), inviteCmd(), grantCmd(),
 		revokeGrantCmd(), loginLinkCmd(), adminTokenCmd(), setRoleCmd(), removeMemberCmd(), membersCmd(),
-		privacyCmd(), purgeCmd())
+		privacyCmd(), purgeCmd(), ssoCmd(), setEmailCmd())
 	return cmd
 }
 
@@ -443,9 +448,9 @@ func membersCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				fmt.Fprintln(w, "\nMEMBER\tROLE\tTEAMS\tID")
+				fmt.Fprintln(w, "\nMEMBER\tROLE\tTEAMS\tSSO E-MAIL\tID")
 				for _, m := range members {
-					fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", m.DisplayName, m.Role, strings.Join(m.TeamNames, ","), m.ID)
+					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", m.DisplayName, m.Role, strings.Join(m.TeamNames, ","), m.Email, m.ID)
 				}
 				grants, err := s.Grants(ctx, o.ID)
 				if err != nil {
@@ -514,4 +519,141 @@ func purgeCmd() *cobra.Command {
 			})
 		},
 	}
+}
+
+func ssoCmd() *cobra.Command {
+	cmd := &cobra.Command{Use: "sso", Short: "Single sign-on (OpenID Connect) for an organisation's web view"}
+	var org, issuer, clientID, secretEnv, secretFile, domains string
+	var allowUnverified, skipCheck bool
+	set := &cobra.Command{
+		Use:   "set",
+		Short: "Turn single sign-on on, or change it; checks the issuer and the secret first",
+		Long: `Turn single sign-on on for an organisation, or change it.
+
+Register a web application ("confidential client") at the identity
+provider with the redirect URI <TEAMSERVER_PUBLIC_URL>/sso/callback and the
+scopes openid, email and profile. The client secret is never stored: name
+the environment variable (--client-secret-env) or file (--client-secret-file)
+the server reads it from, and give the server that variable or file.
+
+A verified e-mail address in an allowed domain signs in the existing member
+it is set on (set-email); nobody is ever created.`,
+		Args: cobra.NoArgs,
+		RunE: func(*cobra.Command, []string) error {
+			c := team.SSO{Issuer: issuer, ClientID: clientID, AllowUnverifiedEmail: allowUnverified}
+			switch {
+			case secretEnv != "" && secretFile == "":
+				c.SecretRef = "env:" + secretEnv
+			case secretFile != "" && secretEnv == "":
+				c.SecretRef = "file:" + secretFile
+			default:
+				return errors.New("give exactly one of --client-secret-env and --client-secret-file")
+			}
+			for _, d := range strings.Split(domains, ",") {
+				if d = strings.TrimSpace(d); d != "" {
+					c.Domains = append(c.Domains, d)
+				}
+			}
+			if err := c.Validate(); err != nil {
+				return err
+			}
+			if !skipCheck {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				err := teamserver.CheckSSO(ctx, c, nil)
+				cancel()
+				if err != nil {
+					return fmt.Errorf("%w (run where the server runs, with its secret, or pass --skip-check)", err)
+				}
+			}
+			return withStore(func(ctx context.Context, s *pgstore.Store) error {
+				o, err := s.OrgByName(ctx, org)
+				if err != nil {
+					return fmt.Errorf("organisation %q: %w", org, err)
+				}
+				if err := s.SetSSO(ctx, pgstore.Console(o.ID), c); err != nil {
+					return err
+				}
+				fmt.Printf("Single sign-on for %s: %s, client %s, domains %s.\n", o.Name, c.Issuer, c.ClientID, strings.Join(c.Domains, ", "))
+				fmt.Printf("Redirect URI to register: %s/sso/callback\nSign-in page: %s/sso?org=%s\n", publicURL(), publicURL(), url.QueryEscape(o.Name))
+				fmt.Println("Members sign in once their e-mail is set: tokenops-team set-email --org … --member … --email …")
+				return nil
+			})
+		},
+	}
+	orgFlag(set, &org)
+	set.Flags().StringVar(&issuer, "issuer", "", "issuer URL, e.g. https://accounts.google.com, https://login.microsoftonline.com/<tenant>/v2.0, https://keycloak.example.eu/realms/acme")
+	set.Flags().StringVar(&clientID, "client-id", "", "the client ID registered at the issuer")
+	set.Flags().StringVar(&secretEnv, "client-secret-env", "", "environment variable holding the client secret")
+	set.Flags().StringVar(&secretFile, "client-secret-file", "", "file holding the client secret (absolute path)")
+	set.Flags().StringVar(&domains, "domains", "", "comma-separated e-mail domains that may sign in, e.g. example.com,example.de")
+	set.Flags().BoolVar(&allowUnverified, "allow-unverified-email", false,
+		"accept ID tokens without email_verified=true: only for an issuer that owns its users' addresses, such as one Microsoft Entra tenant")
+	set.Flags().BoolVar(&skipCheck, "skip-check", false, "store without fetching the issuer's discovery document or reading the secret")
+	for _, f := range []string{"issuer", "client-id", "domains"} {
+		_ = set.MarkFlagRequired(f)
+	}
+
+	var showOrg string
+	show := &cobra.Command{
+		Use: "show", Short: "Show an organisation's single sign-on", Args: cobra.NoArgs,
+		RunE: func(*cobra.Command, []string) error {
+			return withStore(func(ctx context.Context, s *pgstore.Store) error {
+				o, err := s.OrgByName(ctx, showOrg)
+				if err != nil {
+					return fmt.Errorf("organisation %q: %w", showOrg, err)
+				}
+				c, err := s.SSOConfig(ctx, o.ID)
+				if errors.Is(err, pgstore.ErrNotFound) {
+					fmt.Printf("%s: single sign-on is off.\n", o.Name)
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				fmt.Printf("%s: issuer %s, client %s, secret from %s, domains %s, unverified e-mail %s.\n", o.Name, c.Issuer,
+					c.ClientID, c.SecretRef, strings.Join(c.Domains, ", "), map[bool]string{true: "accepted", false: "refused"}[c.AllowUnverifiedEmail])
+				return nil
+			})
+		},
+	}
+	orgFlag(show, &showOrg)
+
+	var offOrg string
+	disable := &cobra.Command{
+		Use: "disable", Short: "Turn single sign-on off; sign-in links keep working", Args: cobra.NoArgs,
+		RunE: func(*cobra.Command, []string) error {
+			return withStore(func(ctx context.Context, s *pgstore.Store) error {
+				o, err := s.OrgByName(ctx, offOrg)
+				if err != nil {
+					return fmt.Errorf("organisation %q: %w", offOrg, err)
+				}
+				if err := s.DisableSSO(ctx, pgstore.Console(o.ID)); err != nil {
+					return err
+				}
+				fmt.Printf("%s: single sign-on is off.\n", o.Name)
+				return nil
+			})
+		},
+	}
+	orgFlag(disable, &offOrg)
+	cmd.AddCommand(set, show, disable)
+	return cmd
+}
+
+func setEmailCmd() *cobra.Command {
+	var email string
+	return memberCmd("set-email", "Set the e-mail address single sign-on signs a member in by (empty clears it)", func(c *cobra.Command) {
+		c.Flags().StringVar(&email, "email", "", "the member's address at the identity provider")
+		_ = c.MarkFlagRequired("email")
+	}, func(ctx context.Context, s *pgstore.Store, o pgstore.Org, m pgstore.MemberInfo) error {
+		if err := s.SetEmail(ctx, pgstore.Console(o.ID), m.ID, email); err != nil {
+			return err
+		}
+		if email == "" {
+			fmt.Printf("%s has no single sign-on address.\n", m.DisplayName)
+			return nil
+		}
+		fmt.Printf("%s signs in with single sign-on as %s. Their page shows it.\n", m.DisplayName, strings.ToLower(strings.TrimSpace(email)))
+		return nil
+	})
 }
