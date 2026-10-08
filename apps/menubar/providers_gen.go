@@ -5,6 +5,7 @@ package main
 // providerNames are short names for the menu bar.
 var providerNames = map[string]string{
 	"aiand":       "ai&",
+	"aixy":        "Aixy",
 	"alibaba":     "Alibaba Cloud",
 	"anthropic":   "Claude",
 	"atlascloud":  "Atlas Cloud",
