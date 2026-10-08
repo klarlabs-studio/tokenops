@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -60,6 +61,62 @@ func TestProviderSetupWritesNothingForARefusedKey(t *testing.T) {
 	cfg, _ := config.ReadMutable(path)
 	if len(cfg.VendorUsage.Accounts.Credentials) != 0 {
 		t.Errorf("stored %+v", cfg.VendorUsage.Accounts.Credentials)
+	}
+}
+
+// A session no browser is read for (Sakana) is pasted: setup asks for the
+// Cookie header, never reads a browser, and the daemon never re-reads it.
+func TestProviderSetupPastesASessionOnlyProvider(t *testing.T) {
+	sent := fakeVerify(t, "sakana", "session=fixture")
+	path := seedConfig(t)
+	out, err := runCookieSetupCmd(t, "session=fixture\n", "sakana", "--config", path, "--no-restart")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if !strings.Contains(out, "Cookie header for console.sakana.ai") || strings.Contains(out, "Keychain") {
+		t.Errorf("prompt:\n%s", out)
+	}
+	cfg, _ := config.ReadMutable(path)
+	if c := cfg.VendorUsage.Accounts.Credentials["sakana"]; c.Key != "session=fixture" || c.FromBrowser || len(*sent) != 1 {
+		t.Errorf("stored %+v", c)
+	}
+}
+
+// A password provider (StepFun) signs in once: the username is echoed,
+// the password is not, only the token is stored, and neither the password
+// nor the token is printed.
+func TestProviderSetupSignsInAndStoresOnlyTheToken(t *testing.T) {
+	sent := fakeVerify(t, "stepfun", "oasis-token")
+	var got []string
+	prev := loginProvider
+	loginProvider = func(_ context.Context, id, user, password string) (string, error) {
+		got = append(got, id+"|"+user+"|"+password)
+		if password != "pw-secret" {
+			return "", fmt.Errorf("%w (401)", providersetup.ErrRefused)
+		}
+		return "oasis-token", nil
+	}
+	t.Cleanup(func() { loginProvider = prev })
+	path := seedConfig(t)
+	out, err := runCookieSetupCmd(t, "me@example.com\npw-secret\n", "stepfun", "--config", path, "--no-restart")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if len(got) != 1 || got[0] != "stepfun|me@example.com|pw-secret" || len(*sent) != 1 {
+		t.Errorf("signed in with %v, verified %v", got, *sent)
+	}
+	if strings.Contains(out, "pw-secret") || strings.Contains(out, "oasis-token") {
+		t.Errorf("output shows a secret:\n%s", out)
+	}
+	cfg, _ := config.ReadMutable(path)
+	raw, _ := os.ReadFile(path)
+	if c := cfg.VendorUsage.Accounts.Credentials["stepfun"]; c.Key != "oasis-token" || strings.Contains(string(raw), "pw-secret") {
+		t.Errorf("stored %+v", c)
+	}
+	// A refused password writes nothing.
+	path2 := seedConfig(t)
+	if _, err := runCookieSetupCmd(t, "me@example.com\nwrong\n", "stepfun", "--config", path2, "--no-restart"); err == nil || !strings.Contains(err.Error(), "Nothing was written") {
+		t.Errorf("wrong password = %v", err)
 	}
 }
 

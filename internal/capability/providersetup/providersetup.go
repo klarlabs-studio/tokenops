@@ -37,10 +37,15 @@ type Provider struct {
 	ID   string
 	Name string
 	// Browser is true for a provider read with a browser session, whose
-	// cookies are CookieNames on CookieHost; false for an API key.
-	Browser     bool
-	CookieHost  string
-	CookieNames []string
+	// cookies Cookie names. PasteOnly sessions are not read from a browser:
+	// setup asks for the Cookie header.
+	Browser bool
+	Cookie  providers.Cookie
+	// Key is true when the provider is also (or only) read with an API key.
+	Key bool
+	// Login is true for a provider whose session comes from a username and
+	// password sign-in; setup stores only the session token it returns.
+	Login bool
 	// Gateway is true for a gateway read at an address the operator
 	// gives; DefaultBaseURL is the hosted service's, when it has one, and
 	// BaseURLEnv the variable that names it without setup.
@@ -79,6 +84,17 @@ func FromKeychain(ctx context.Context, p Provider, wait time.Duration, keychainD
 	return l.Account + " " + l.Secret, nil
 }
 
+// CookieHosts names the hosts a browser session is read for.
+func (p Provider) CookieHosts() string { return strings.Join(p.Cookie.Hosts(), " or ") }
+
+// CookieNames names the cookies a browser session is read with.
+func (p Provider) CookieNames() string {
+	if p.Cookie.AllForHost && len(p.Cookie.Names) == 0 {
+		return "the cookies your browser sends there"
+	}
+	return strings.Join(p.Cookie.Names, ", ")
+}
+
 // Lookup returns the provider setup connects for id.
 func Lookup(id string) (Provider, bool) {
 	d, ok := providers.Lookup(strings.ToLower(strings.TrimSpace(id)))
@@ -98,8 +114,20 @@ func Lookup(id string) (Provider, bool) {
 	if s.Credential == providers.AppKeychain {
 		p.KeychainServer = s.KeychainServer
 	}
-	if s.Credential == providers.BrowserCookie && s.Cookie != nil {
-		p.Browser, p.CookieHost, p.CookieNames = true, s.Cookie.Host, s.Cookie.Names
+	for _, src := range d.Sources {
+		if src.Reader != providers.AccountReader {
+			continue
+		}
+		switch src.Credential {
+		case providers.APIKey:
+			p.Key = true
+		case providers.PasswordLogin:
+			p.Login = true
+		case providers.BrowserCookie:
+			if src.Cookie != nil && !p.Browser {
+				p.Browser, p.Cookie = true, *src.Cookie
+			}
+		}
 	}
 	return p, true
 }
@@ -120,8 +148,8 @@ func IDs() []string {
 // read, for that long; keychainDisabled reads no Keychain at all. It
 // returns the session as a Cookie header value and the browser's name.
 func FromBrowser(ctx context.Context, p Provider, browser string, keychainWait time.Duration, keychainDisabled bool) (string, string, error) {
-	if !p.Browser {
-		return "", "", fmt.Errorf("%s is read with an API key, not a browser session", p.Name)
+	if !p.Browser || p.Cookie.PasteOnly {
+		return "", "", fmt.Errorf("%s's session is not read from a browser", p.Name)
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -134,11 +162,36 @@ func FromBrowser(ctx context.Context, p Provider, browser string, keychainWait t
 	case keychainWait > 0:
 		secret = browsercookie.KeychainSecret(keychainWait)
 	}
-	cookies, b, err := browsercookie.FindMany(ctx, home, p.CookieHost, p.CookieNames, browser, secret)
+	session := browsercookie.Session{Hosts: p.Cookie.Hosts(), Names: p.Cookie.Names, Proof: p.Cookie.Proof, AllForHost: p.Cookie.AllForHost}
+	found, err := browsercookie.FindSession(ctx, home, session, browser, secret)
 	if err != nil {
 		return "", "", err
 	}
-	return browsercookie.Header(cookies, p.CookieNames), b.Name, nil
+	return found.Header(), found.Browser.Name, nil
+}
+
+// Login signs in to provider id with a username and password and returns
+// the session token the vendor issued. The password is sent only to the
+// vendor's sign-in endpoint and is neither stored nor logged.
+func Login(ctx context.Context, id, username, password string) (string, error) {
+	return LoginWith(ctx, accountsapi.Readers(), id, username, password)
+}
+
+// LoginWith is Login with the readers given.
+func LoginWith(ctx context.Context, readers []usage.Reader, id, username, password string) (string, error) {
+	if strings.TrimSpace(username) == "" || password == "" {
+		return "", errors.New("a username and a password are needed")
+	}
+	for _, r := range readers {
+		l, ok := r.(accountsapi.PasswordLogin)
+		if !ok || string(r.Provider()) != id {
+			continue
+		}
+		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		return l.Login(ctx, strings.TrimSpace(username), password)
+	}
+	return "", fmt.Errorf("%s has no password sign-in", id)
 }
 
 // Verify reads p's account once with key and summarises what the vendor
@@ -153,17 +206,27 @@ func VerifyWith(ctx context.Context, readers []usage.Reader, id, key string) ([]
 	if key == "" {
 		return nil, errors.New("no credential entered")
 	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	found := false
 	for _, r := range readers {
 		if string(r.Provider()) != id || usage.IsKeyless(r) {
 			continue
 		}
-		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		defer cancel()
+		found = true
 		reading, err := r.Read(ctx, key)
+		if errors.Is(err, usage.ErrSkip) {
+			// Another of the provider's readers reads this kind of
+			// credential (an API key, not a session, or the other way).
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
 		return Summary(reading), nil
+	}
+	if found {
+		return nil, fmt.Errorf("%s reads neither an API key nor a session of that form", id)
 	}
 	return nil, fmt.Errorf("no account reader for %q", id)
 }

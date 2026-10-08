@@ -121,6 +121,11 @@ const (
 	// Keychain prompt, and stores the token; the daemon never reads the
 	// Keychain for it and never refreshes it.
 	AppKeychain Credential = "app-keychain"
+	// PasswordLogin is a session the vendor issues for a username and
+	// password. `tokenops vendor-usage setup <id>` asks for both (the
+	// password without echo), signs in once and stores only the session
+	// token; the password is never stored or logged.
+	PasswordLogin Credential = "password-login"
 )
 
 // Switch is what turns a source on.
@@ -231,12 +236,33 @@ type Source struct {
 	RecognisedBy string
 }
 
-// Cookie is the session cookies a web source reads, on Host. The reader is
-// given them as one Cookie header value: "name=value; name2=value2".
+// Cookie is the session cookies a web source reads: the cookies the
+// browser sends to Host (or, when it holds none, to the first of Also that
+// does). The reader is given them as one Cookie header value:
+// "name=value; name2=value2".
 type Cookie struct {
-	Host  string
+	Host string
+	// Also are other hosts the session may be on, tried in order: another
+	// region's console ("bailian.console.aliyun.com" after
+	// "modelstudio.console.alibabacloud.com").
+	Also []string
+	// Names are the cookies read; a name ending in "*" is a prefix
+	// ("ory_session_*").
 	Names []string
+	// Proof are the cookies that show someone is signed in; at least one
+	// must be present. Empty: the first of Names.
+	Proof []string
+	// AllForHost reads every cookie the browser sends to the host, for a
+	// vendor whose session cookie names are not known. Names, if any,
+	// still order the header.
+	AllForHost bool
+	// PasteOnly is a session no browser is read for (the vendor's cookie
+	// names are not known well enough): setup asks for the Cookie header.
+	PasteOnly bool
 }
+
+// Hosts is Host followed by Also.
+func (c Cookie) Hosts() []string { return append([]string{c.Host}, c.Also...) }
 
 // Billing says how an endpoint bills the models it serves (ADR 0009).
 type Billing string

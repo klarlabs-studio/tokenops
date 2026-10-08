@@ -47,6 +47,13 @@ func Gateways() []usage.Gateway {
 	return out
 }
 
+// PasswordLogin is a reader whose session comes from a username and
+// password sign-in (`tokenops vendor-usage setup <id>` signs in once and
+// stores only the token Login returns). Login never logs the password.
+type PasswordLogin interface {
+	Login(ctx context.Context, username, password string) (string, error)
+}
+
 // getJSON GETs url with a bearer key and decodes the body into out.
 func getJSON(ctx context.Context, hc *http.Client, url, key string, out any) error {
 	return getJSONAuth(ctx, hc, url, "Bearer "+key, out)

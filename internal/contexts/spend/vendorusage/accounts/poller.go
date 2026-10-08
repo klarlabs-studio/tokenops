@@ -133,28 +133,52 @@ func (p *Poller) Scan(ctx context.Context) {
 }
 
 // readWithKeys tries each credential found for r's endpoint, in order,
-// until one is accepted. tried is false when none was found.
+// until one is accepted. tried is false when none was found. A credential
+// the reader declines (ErrSkip) does not count as tried, and a KeyOnly
+// reader is never handed a credential that would re-read a browser.
 func readWithKeys(ctx context.Context, r Reader, creds []Credential) (reading Reading, tried bool, err error) {
+	keyOnly := false
+	if k, ok := r.(KeyOnly); ok {
+		keyOnly = k.KeyOnly()
+	}
 	for _, c := range creds {
 		if c.Endpoint != r.Endpoint() {
 			continue
 		}
 		key := c.Key
 		if key == "" && c.Resolve != nil {
-			if key, err = c.Resolve(ctx); err != nil || key == "" {
-				if err == nil {
-					err = ErrAuth
-				}
-				tried = true
+			if keyOnly {
 				continue
 			}
+			resolved, rerr := c.Resolve(ctx)
+			if rerr != nil || resolved == "" {
+				if rerr == nil {
+					rerr = ErrAuth
+				}
+				tried, err = true, withRemedy(rerr, c)
+				continue
+			}
+			key = resolved
 		}
-		tried = true
-		if reading, err = r.Read(ctx, key); err == nil {
+		got, rerr := r.Read(ctx, key)
+		if errors.Is(rerr, ErrSkip) {
+			continue
+		}
+		tried, reading, err = true, got, withRemedy(rerr, c)
+		if err == nil {
 			break
 		}
 	}
 	return reading, tried, err
+}
+
+// withRemedy adds the credential's remedy to a refusal, so the source's
+// health says what to do about it.
+func withRemedy(err error, c Credential) error {
+	if err == nil || c.Remedy == "" || !errors.Is(err, ErrAuth) {
+		return err
+	}
+	return fmt.Errorf("%w; %s", err, c.Remedy)
 }
 
 // scanGateways reads each gateway a key is sent to. A root is recognised

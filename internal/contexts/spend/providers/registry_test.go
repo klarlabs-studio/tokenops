@@ -124,7 +124,7 @@ func checkSource(t *testing.T, id string, s Source, tags, names map[string]bool)
 		t.Errorf("%s/%s: kind %q", id, s.Tag, s.Kind)
 	}
 	switch s.Credential {
-	case APIKey, AdminKey, OAuthFile, CLI, LocalFile, BrowserCookie, CredentialChain:
+	case APIKey, AdminKey, OAuthFile, CLI, LocalFile, BrowserCookie, PasswordLogin, CredentialChain:
 	case AppKeychain:
 		if s.KeychainServer == "" {
 			t.Errorf("%s/%s: an app-keychain source names the item's server", id, s.Tag)
@@ -160,8 +160,9 @@ func checkSource(t *testing.T, id string, s Source, tags, names map[string]bool)
 	default:
 		t.Errorf("%s/%s: reader %q", id, s.Tag, s.Reader)
 	}
-	if s.Credential == BrowserCookie && s.Reader == AccountReader && (s.Cookie == nil || s.Cookie.Host == "" || len(s.Cookie.Names) == 0) {
-		t.Errorf("%s/%s: a browser-session reader names its cookies", id, s.Tag)
+	if s.Credential == BrowserCookie && s.Reader == AccountReader &&
+		(s.Cookie == nil || s.Cookie.Host == "" || (len(s.Cookie.Names) == 0 && !s.Cookie.AllForHost && !s.Cookie.PasteOnly)) {
+		t.Errorf("%s/%s: a browser-session reader names its host and cookies (or reads all the host's, or is pasted)", id, s.Tag)
 	}
 }
 
