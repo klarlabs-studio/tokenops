@@ -177,6 +177,7 @@ var changesThings = map[string]bool{
 	"tokenops preferred-model set": true, "tokenops preferred-model unset": true,
 	"tokenops fmt bench": true, "tokenops fmt hook": true, "tokenops fmt recover": true,
 	"tokenops task start": true, "tokenops task done": true,
+	"tokenops team join": true, "tokenops team sync": true, "tokenops team web": true, "tokenops team leave": true,
 	// These print JSON and nothing else.
 	"tokenops experiment start": true, "tokenops experiment status": true, "tokenops experiment stop": true,
 	"tokenops outcome record": true, "tokenops outcome detect": true, "tokenops outcome check-json": true,

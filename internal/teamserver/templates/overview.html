@@ -1,0 +1,58 @@
+{{define "content"}}
+{{$d := .Data}}
+<h1>Overview</h1>
+<form method="get" action="/" class="filters">
+  <label>By
+    <select name="by">
+      <option value="team" {{if eq $d.By "team"}}selected{{end}}>team</option>
+      <option value="repo" {{if eq $d.By "repo"}}selected{{end}}>repository</option>
+      <option value="kind" {{if eq $d.By "kind"}}selected{{end}}>kind of work</option>
+    </select>
+  </label>
+  <label>Per
+    <select name="period">
+      <option value="week" {{if eq $d.Period "week"}}selected{{end}}>week</option>
+      <option value="day" {{if eq $d.Period "day"}}selected{{end}}>day</option>
+    </select>
+  </label>
+  <label>Team
+    <select name="team">
+      <option value="">all</option>
+      {{range $d.Teams}}<option value="{{.Name}}" {{if eq $d.Team .Name}}selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+  <label>From <input type="date" name="since" value="{{$d.Since}}"></label>
+  <label>Until <input type="date" name="until" value="{{$d.Until}}"></label>
+  <button type="submit">Show</button>
+</form>
+{{if $d.Error}}<p class="error">{{$d.Error}}</p>{{end}}
+<p class="muted">Groups with fewer than {{$d.MinGroupSize}} people are withheld{{if $d.Suppressed}} ({{$d.Suppressed}} here){{end}}. Days are UTC. Cost is what was billed; value is the same work at API list prices.</p>
+{{if not $d.Periods}}<p>No figures in this range yet. Machines upload hourly once they join.</p>{{end}}
+{{range $d.Periods}}
+<section>
+  <h2>{{if eq $d.Period "week"}}Week of {{end}}{{.Start}}</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr>
+      <th>{{$d.By}}</th><th class="n">People</th><th class="n">Instructions</th><th class="n">First try</th><th class="n">Rework</th>
+      <th class="n">Turns / instr.</th><th class="n">Min / instr.</th><th class="n">Tokens</th><th class="n">Cost</th><th class="n">Value</th>
+    </tr></thead>
+    <tbody>
+    {{range .Rows}}
+      {{if .Suppressed}}
+      <tr class="withheld"><td>{{.Group}}</td><td class="n" colspan="9">fewer than {{$d.MinGroupSize}} people — withheld</td></tr>
+      {{else}}
+      <tr>
+        <td>{{.Group}}</td><td class="n">{{.People}}</td><td class="n">{{num .Totals.Instructions}}</td>
+        <td class="n">{{pct .Rates.FirstTryPct}}</td><td class="n">{{pct .Rates.ReworkPct}}</td>
+        <td class="n">{{dec1 .Rates.TurnsPerInstruction}}</td><td class="n">{{dec1 .Rates.MinutesPerInstr}}</td>
+        <td class="n">{{num .Totals.Tokens}}</td><td class="n">{{usd .Totals.CostUSD}}</td><td class="n">{{usd .Totals.APIEquivalentUSD}}</td>
+      </tr>
+      {{end}}
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+</section>
+{{end}}
+{{end}}

@@ -99,6 +99,7 @@ func initializeEventRuntime(
 	}
 
 	startOTelMetricsRuntime(cfg, rt.Store, components, sup, logger)
+	startTeamUploadRuntime(cfg, components, sup, logger)
 
 	// Plan stamping ensures all sources inherit the plan_included contract.
 	rt.Bus = events.NewAsync(newPlanStampSink(events.NewMultiSink(sinks...), cfg), events.Options{

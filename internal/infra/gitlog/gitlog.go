@@ -111,6 +111,39 @@ func (r *Repos) Commits(ctx context.Context, root string, since time.Time) ([]Co
 	return commits, nil
 }
 
+// OriginName is "owner/name" from the repository's origin remote, or ""
+// when it has none or its URL has no such shape. Host, scheme, user and
+// credentials are dropped: only the two path segments are returned.
+func (r *Repos) OriginName(ctx context.Context, root string) string {
+	out, err := git(ctx, root, "config", "--get", "remote.origin.url")
+	if err != nil {
+		return ""
+	}
+	return ownerName(out)
+}
+
+// ownerName takes the last two path segments of a remote URL, either
+// scheme://host/owner/name(.git) or scp-like user@host:owner/name(.git).
+func ownerName(remote string) string {
+	s := strings.TrimSpace(remote)
+	if i := strings.Index(s, "://"); i >= 0 {
+		s = s[i+3:]
+		if j := strings.IndexByte(s, '/'); j >= 0 {
+			s = s[j+1:]
+		} else {
+			return ""
+		}
+	} else if i := strings.IndexByte(s, ':'); i >= 0 {
+		s = s[i+1:]
+	}
+	s = strings.TrimSuffix(strings.TrimSuffix(s, "/"), ".git")
+	parts := strings.Split(s, "/")
+	if len(parts) < 2 || parts[len(parts)-1] == "" || parts[len(parts)-2] == "" {
+		return ""
+	}
+	return parts[len(parts)-2] + "/" + parts[len(parts)-1]
+}
+
 // branchOf is the first branch in a %D decoration already limited to
 // local branches. A detached HEAD or a tag names no branch.
 func branchOf(decoration string) string {

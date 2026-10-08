@@ -30,6 +30,7 @@ var cliOnly = map[string]string{
 	"menubar":          "installs and opens a macOS app on this machine",
 	"checkup":          "a first look on a machine with nothing set up; an agent with TokenOps' MCP tools already has dx, spend and findings",
 	"otel":             "shows what this machine pushes to a collector; the metrics themselves are the export",
+	"team":             "enrols this machine with a team server and withdraws it; consent to share is the operator's act, not an agent's",
 	"serve":            "is the MCP server itself",
 	"anthropic-bridge": "launches a local client process with request attribution",
 	"hooks":            "edits client hook configuration on this machine",
