@@ -21,6 +21,7 @@
 - **providers:** Poe: the point balance left (`GET /usage/current_balance`), kept in points (`balance_credits`), never converted to dollars; API key from setup, `POE_API_KEY` or opencode
 - **providers:** Deepgram: the prepaid USD balance left across the key's projects (`GET /v1/projects/{id}/balances`), with an API key from setup or `DEEPGRAM_API_KEY`
 - **providers:** Neuralwatt: prepaid USD credit left and, for a subscriber, the period's kWh allowance used as a plan window (`GET /v1/quota`); API key from setup, `NEURALWATT_API_KEY` or opencode
+- **providers:** ai&: the organisation's USD spend in the last 30 days, summed exactly from its request logs (`GET /logs`), and out-of-credit (402) as limit reached; API key from setup, `AIAND_API_KEY` or opencode
 
 ### Fixed
 

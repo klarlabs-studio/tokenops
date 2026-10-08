@@ -664,6 +664,7 @@ vendor's own figures every 15 minutes:
 <!-- begin generated: provider-accounts -->
 | Vendor | Endpoint | Shows |
 |---|---|---|
+| ai& | `GET /logs?range=30days` | the organisation's USD spend in the last 30 days, summed from its request logs |
 | Atlas Cloud | `GET /public/v1/balance` | the account's available USD balance |
 | Deepgram | `GET /v1/projects/{id}/balances` | prepaid USD balance left, across the key's projects |
 | DeepInfra | `GET /payment/checklist` | spend since the last invoice, the limit, prepaid credit |
@@ -734,7 +735,7 @@ use read its own spend.
   with `tokenops vendor-usage enable vendor-accounts --disable`.
 
 <!-- begin generated: provider-env-vars -->
-The environment variables read for a key: `AI_GATEWAY_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `FIREWORKS_API_KEY`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENROUTER_API_KEY`, `POE_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XKIRO_API_KEY`.
+The environment variables read for a key: `AIAND_API_KEY`, `AI_GATEWAY_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `FIREWORKS_API_KEY`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENROUTER_API_KEY`, `POE_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XKIRO_API_KEY`.
 <!-- end generated: provider-env-vars -->
 
 #### Every provider
@@ -744,6 +745,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 <!-- begin generated: provider-list -->
 | Provider | Source | Reads | Credential | Checked |
 |---|---|---|---|---|
+| ai& | `aiand-account` | the organisation's USD spend in the last 30 days, summed from its request logs | API key | CodexBar's source, the vendor's docs and fixtures |
 | Alibaba Cloud | — | in the catalog only: the Coding Plan's endpoint, prices and limits are known; nothing reads its usage yet | — | — |
 | Claude | `claude-code-statusline` | the 5-hour and 7-day windows Claude Code gives its status line | local files | against a real account |
 |  | `claude-code-jsonl` | per-turn tokens from Claude Code's transcripts | local files | against a real account |
