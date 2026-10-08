@@ -95,10 +95,10 @@ read a site's browser localStorage, **at setup only**.
 
 ## Consequences
 
-- Providers with no API key of their own (Muse Code, Factory, Grok, Kiro's
-  overage credits, Antigravity) read their usage once granted; providers
-  with one (Kilo, Codebuff, ClinePass, Nous, Hugging Face) gain a second
-  way.
+- Sources with no other credential (Kiro's overage credits, Antigravity)
+  read their usage once granted; providers whose token the operator can
+  also type (Kilo, Codebuff, ClinePass, Nous, Hugging Face, Muse Code,
+  Factory, Grok) gain a second way that needs no copying of tokens.
 - Devin and Windsurf read their web session from localStorage at setup
   instead of asking for a paste; the daemon still never reads a browser.
 - The grant is per provider and per item; a provider with two sign-ins
