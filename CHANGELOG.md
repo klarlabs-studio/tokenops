@@ -64,6 +64,7 @@
 - **providers:** T3 Chat: the 4-hour Base window and the monthly Overage budget used, as plan windows (`GET /api/trpc/getCustomerData`), read with the t3.chat browser session's Cookie header pasted at `vendor-usage setup t3chat`. A browser-session provider whose cookies are not known by name now leaves `Cookie.Names` empty: setup asks for the pasted header and no browser is ever read for it
 - **providers:** ZoomMate: AI credits used against the budget cap this billing cycle, as a plan window, and the credits left (`GET /ai-computer/api/v1/credits/status`, after exchanging the session for ZoomMate's short-lived token), read with the Cookie header of a request to ai.zoom.us pasted at `vendor-usage setup zoommate`
 - **providers:** Notion AI: the AI usage allowance used, the rolling (6-hour) window and the billing period, as plan windows (`POST /api/v3/getCreditRateLimitStatus` on app.notion.com), read with the notion.com browser session's `token_v2` (`vendor-usage setup notion` or a pasted Cookie header); Business and Enterprise workspaces only
+- **providers:** LongCat: the active token pack's share used (the legacy usage aggregate without one) and the tokens left, pending fuel packs included, in tokens (`POST /api/pay/quota/metering/token-packs/summary`), read with the longcat.chat session's Cookie header pasted at `vendor-usage setup longcat` or `LONGCAT_MANUAL_COOKIE`
 
 ### Fixed
 
