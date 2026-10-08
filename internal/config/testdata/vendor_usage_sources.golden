@@ -67,6 +67,7 @@ pi_sessions	pi-sessions
 poe_account	poe-account
 qoder_web	qoder-web
 qwencloud_web	qwencloud-web
+raycast_account	raycast-account
 sakana_web	sakana-web
 stepfun_account	stepfun-account
 sub2api_gateway	sub2api-account

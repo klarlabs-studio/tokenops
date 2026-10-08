@@ -59,6 +59,7 @@ window.TOKENOPS_PROVIDERS = {
   "poe": {"name":"Poe","logo":true},
   "qoder": {"name":"Qoder","logo":true},
   "qwencloud": {"name":"Qwen Cloud","logo":true},
+  "raycast": {"name":"Raycast","logo":false},
   "sakana": {"name":"Sakana AI","logo":true},
   "stepfun": {"name":"StepFun","logo":true},
   "sub2api": {"name":"sub2api","logo":false},
