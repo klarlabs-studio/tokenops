@@ -80,6 +80,10 @@ func (c Config) registryHint(sourceTag string) string {
 			return "on; reads with the session `tokenops vendor-usage setup " + string(s.Provider) + "` stored"
 		}
 		return "connect it: `tokenops vendor-usage setup " + string(s.Provider) + "` reads the session from your browser"
+	case s.Credential == providers.CLI:
+		return "on; runs " + s.Endpoint + " when " + providers.DisplayName(string(s.Provider)) + "'s CLI is installed, the CLI signing its own request"
+	case s.Credential == providers.LocalFile:
+		return "on; reads " + s.Endpoint + " when " + providers.DisplayName(string(s.Provider)) + " is installed"
 	}
 	// A provider whose key only setup supplies (a management key the
 	// harnesses never hold) says so in its descriptor.

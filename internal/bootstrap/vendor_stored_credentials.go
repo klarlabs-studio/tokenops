@@ -92,7 +92,7 @@ func registryCookie(id string) *providers.Cookie {
 // uses.
 func readerEndpoint(readers []accounts.Reader, id string) string {
 	for _, r := range readers {
-		if string(r.Provider()) == id {
+		if string(r.Provider()) == id && !accounts.IsKeyless(r) {
 			return r.Endpoint()
 		}
 	}

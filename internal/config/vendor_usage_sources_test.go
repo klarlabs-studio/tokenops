@@ -66,6 +66,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"gitkraken_account", "gitkraken-account"},
 		{"huggingface_account", "huggingface-account"},
 		{"ibmbob_account", "ibmbob-account"},
+		{"jetbrains_local", "jetbrains-local"},
 		{"kilo_account", "kilo-account"},
 		{"kimi_account", "kimi-account"},
 		{"litellm_gateway", "litellm-account"},

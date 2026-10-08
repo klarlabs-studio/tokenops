@@ -22,6 +22,7 @@ var readers = []func() usage.Reader{
 	readerGitKraken,
 	readerHuggingFace,
 	readerIBMBob,
+	readerJetBrains,
 	readerKilo,
 	readerKimi,
 	readerMiniMax,
