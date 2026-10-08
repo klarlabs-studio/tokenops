@@ -20,8 +20,8 @@ func readerMiMo() usage.Reader { return MiMo{} }
 // console API with its browser session, as CodexBar's MiMo provider does
 // (Sources/CodexBarCore/Providers/MiMo/MiMoUsageFetcher.swift): the
 // balance (required), and the plan's monthly credits used and its period
-// end (best-effort). A balance in a currency other than US dollars is not
-// reported: TokenOps stores balances in dollars and does not convert.
+// end (best-effort). A balance in another currency is stored in that
+// currency (balance_credits), never converted to dollars.
 type MiMo struct {
 	BaseURL string
 	HTTP    *http.Client
@@ -75,8 +75,10 @@ func (m MiMo) Read(ctx context.Context, cookie string) (usage.Reading, error) {
 		return usage.Reading{}, errors.New("accounts: mimo: no balance in the answer")
 	}
 	r := usage.Reading{Scope: "account"}
-	if strings.EqualFold(strings.TrimSpace(bal.Currency), "USD") {
+	if cur := strings.ToUpper(strings.TrimSpace(bal.Currency)); cur == "USD" {
 		r.BalanceUSD, r.HasBalance = bal.Balance.v, true
+	} else {
+		r.Credits, r.CreditsUnit, r.HasCredits = bal.Balance.v, cur, true
 	}
 	// The Token Plan is best-effort, as the console shows it beside the
 	// balance: an account without one, or a failed call, has no window.

@@ -20,7 +20,7 @@ func providerMistral() Descriptor {
 				Cookie: &Cookie{Host: "admin.mistral.ai", Names: []string{"ory_session_*", "csrftoken"},
 					Proof: []string{"ory_session_*"}},
 				Endpoint: "`GET /api/billing/v2/usage`, `/subscription`, `/api/billing/credits` (admin.mistral.ai)",
-				Shows:    "the included-API and Vibe allowances' shares used this month, and the credit balance when in dollars"},
+				Shows:    "the included-API and Vibe allowances' shares used this month, and the credit balance in its currency"},
 		},
 		Plans: []Plan{
 			// Mistral Le Chat Pro — fixed monthly subscription, daily message

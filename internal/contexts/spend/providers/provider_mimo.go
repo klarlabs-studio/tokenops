@@ -15,7 +15,7 @@ func providerMiMo() Descriptor {
 				Cookie: &Cookie{Host: "platform.xiaomimimo.com",
 					Names: []string{"api-platform_serviceToken", "userId", "api-platform_ph", "api-platform_slh"}},
 				Endpoint: "`GET /api/v1/balance`, `/api/v1/tokenPlan/detail`, `/api/v1/tokenPlan/usage`",
-				Shows:    "the balance (in US dollars) and the Token Plan's monthly credits used"},
+				Shows:    "the balance (in its currency) and the Token Plan's monthly credits used"},
 		},
 		Docs: Docs{Label: "Xiaomi MiMo"},
 	}

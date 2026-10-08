@@ -671,7 +671,7 @@ vendor's own figures every 15 minutes:
 | DeepInfra | `GET /payment/checklist` | spend since the last invoice, the limit, prepaid credit |
 | DeepSeek | `GET /user/balance` | prepaid USD balance left |
 | Hugging Face | `GET /api/settings/billing/usage-v2` | Inference Providers charges this month, against the spending limit when set |
-| Xiaomi MiMo | `GET /api/v1/balance`, `/api/v1/tokenPlan/detail`, `/api/v1/tokenPlan/usage` | the balance (in US dollars) and the Token Plan's monthly credits used |
+| Xiaomi MiMo | `GET /api/v1/balance`, `/api/v1/tokenPlan/detail`, `/api/v1/tokenPlan/usage` | the balance (in its currency) and the Token Plan's monthly credits used |
 | Moonshot (Kimi API) | `GET /v1/users/me/balance` | prepaid USD balance left |
 | Neuralwatt | `GET /v1/quota` | prepaid USD credit left, and the subscription's kWh allowance used this period |
 | OpenAI | `GET /v1/organization/costs` | the API organisation's spend this month (Administration API) |
@@ -713,7 +713,7 @@ vendor's windows, busiest first:
 | Kimi Code | `GET /coding/v1/usages` | 5-hour, weekly and monthly windows |
 | Kiro | `kiro-cli chat --no-interactive /usage` | monthly plan credits used, and bonus credits |
 | MiniMax Token Plan | `GET /v1/token_plan/remains` | the interval and weekly windows |
-| Mistral | `GET /api/billing/v2/usage`, `/subscription`, `/api/billing/credits` (admin.mistral.ai) | the included-API and Vibe allowances' shares used this month, and the credit balance when in dollars |
+| Mistral | `GET /api/billing/v2/usage`, `/subscription`, `/api/billing/credits` (admin.mistral.ai) | the included-API and Vibe allowances' shares used this month, and the credit balance in its currency |
 | Nous Portal (Hermes Agent) | `GET /api/oauth/account` | the monthly credit grant used this period and the top-up credit left |
 | opencode Go | `GET /zen/go/v1/usage` | the 5-hour, weekly and monthly windows |
 | Qoder | `GET /api/v2/me/usages/big_model_credits` (qoder.com or qoder.com.cn) | big-model credits used against the plan's (and the team's shared) total, until the next reset |
@@ -827,9 +827,9 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Kiro | `kiro-cli` | monthly plan credits used, and bonus credits | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
 | LiteLLM | `litellm-account` | the key's spend against its budget, and when it resets | API key | the vendor's client source and fixtures |
 | LLM Proxy | `llm-proxy-account` | the tightest quota group left on the credentials it pools, and when it resets | API key | CodexBar's source, the vendor's docs and fixtures |
-| Xiaomi MiMo | `mimo-web` | the balance (in US dollars) and the Token Plan's monthly credits used | browser session | CodexBar's source, the vendor's docs and fixtures |
+| Xiaomi MiMo | `mimo-web` | the balance (in its currency) and the Token Plan's monthly credits used | browser session | CodexBar's source, the vendor's docs and fixtures |
 | MiniMax | `minimax-account` | the interval and weekly windows | API key | the vendor's client source and fixtures |
-| Mistral | `mistral-web` | the included-API and Vibe allowances' shares used this month, and the credit balance when in dollars | browser session | CodexBar's source, the vendor's docs and fixtures |
+| Mistral | `mistral-web` | the included-API and Vibe allowances' shares used this month, and the credit balance in its currency | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Moonshot | `moonshot-account` | prepaid USD balance left | API key | public docs and fixtures |
 | Neuralwatt | `neuralwatt-account` | prepaid USD credit left, and the subscription's kWh allowance used this period | API key | CodexBar's source, the vendor's docs and fixtures |
 | Nous Portal | `nous-account` | the monthly credit grant used this period and the top-up credit left | API key | CodexBar's source, the vendor's docs and fixtures |

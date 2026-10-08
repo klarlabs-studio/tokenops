@@ -23,7 +23,7 @@ func readerMistral() usage.Reader { return Mistral{} }
 // MistralSubscriptionBudgetParser.swift): the month's billing usage
 // proves the session; the included-API and Vibe allowances' shares used
 // come from the subscription page (Vibe from the console's own call when
-// the page has none); the credit balance is read when it is in dollars.
+// the page has none); the credit balance is kept in its currency.
 // The billing usage's spend is priced in euros from Mistral's own price
 // table and is not stored: TokenOps stores spend in dollars and does not
 // convert.
@@ -82,8 +82,13 @@ func (m Mistral) Read(ctx context.Context, cookie string) (usage.Reading, error)
 		Currency string   `json:"currency"`
 	}
 	if body, err := doWeb(ctx, m.HTTP, http.MethodGet, admin+"/api/billing/credits", header, nil); err == nil &&
-		json.Unmarshal(body, &credits) == nil && credits.Wallet != nil && strings.EqualFold(credits.Currency, "USD") {
-		r.BalanceUSD, r.HasBalance = *credits.Wallet+credits.Notes-credits.Ongoing, true
+		json.Unmarshal(body, &credits) == nil && credits.Wallet != nil && strings.TrimSpace(credits.Currency) != "" {
+		left := *credits.Wallet + credits.Notes - credits.Ongoing
+		if cur := strings.ToUpper(strings.TrimSpace(credits.Currency)); cur == "USD" {
+			r.BalanceUSD, r.HasBalance = left, true
+		} else {
+			r.Credits, r.CreditsUnit, r.HasCredits = left, cur, true
+		}
 	}
 	return r, nil
 }
@@ -242,7 +247,8 @@ func sameBudget(a, b *mistralBudget) bool {
 
 func isHex(b []byte) bool {
 	for _, c := range b {
-		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F') {
+		hex := c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F'
+		if !hex {
 			return false
 		}
 	}

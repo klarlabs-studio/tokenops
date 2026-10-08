@@ -37,8 +37,8 @@ func TestMistralReadsTheAllowances(t *testing.T) {
 }
 
 // Without a Vibe allowance on the page, the console's own call supplies
-// it, sent only the CSRF and session cookies; a euro balance is not
-// reported as dollars.
+// it, sent only the CSRF and session cookies; a euro balance is kept in
+// euros, not reported as dollars.
 func TestMistralVibeFallbackAndEuroCredits(t *testing.T) {
 	routes := routesOf(t, "mistral")
 	routes["/subscription"] = `<script>self.__next_f.push([1,"4:{\"budget\":{\"api_budget\":{\"usage_percentage\":5,\"initial_budget\":10,\"currency\":\"EUR\"}}}\n"])</script>`
@@ -46,7 +46,7 @@ func TestMistralVibeFallbackAndEuroCredits(t *testing.T) {
 	routes["/api/billing/credits"] = `{"walletAmount":20,"currency":"EUR"}`
 	srv := newWebServer(t, "ory_session_abc=sess", http.StatusUnauthorized, routes)
 	got, err := Mistral{Admin: srv.URL, Console: srv.URL, Now: mistralNow}.Read(context.Background(), mistralSession+"; other=private")
-	if err != nil || len(got.Windows) != 2 || got.Windows[1].UsedPct != 64 || got.HasBalance {
+	if err != nil || len(got.Windows) != 2 || got.Windows[1].UsedPct != 64 || got.HasBalance || got.CreditsUnit != "EUR" || got.Credits != 20 {
 		t.Fatalf("got %+v, %v", got, err)
 	}
 }

@@ -25,12 +25,12 @@ func TestMiMoReadsBalanceAndTokenPlan(t *testing.T) {
 }
 
 // Without a Token Plan the balance is still read; a balance in another
-// currency is not reported as dollars.
+// currency is kept in it, not reported as dollars.
 func TestMiMoBalanceOnly(t *testing.T) {
 	routes := map[string]string{"/api/v1/balance": `{"code":0,"data":{"balance":"80.00","currency":"CNY"}}`}
 	srv := newWebServer(t, "api-platform_serviceToken=svc", http.StatusUnauthorized, routes)
 	got, err := MiMo{BaseURL: srv.URL}.Read(context.Background(), mimoSession)
-	if err != nil || got.HasBalance || got.Subscription || !got.Empty() {
+	if err != nil || got.HasBalance || got.Subscription || !got.HasCredits || got.Credits != 80 || got.CreditsUnit != "CNY" {
 		t.Errorf("got %+v, %v", got, err)
 	}
 	if _, err := (MiMo{BaseURL: newWebServer(t, "", 0, map[string]string{"/api/v1/balance": `{"code":0,"data":{}}`}).URL}).Read(context.Background(), mimoSession); err == nil {
