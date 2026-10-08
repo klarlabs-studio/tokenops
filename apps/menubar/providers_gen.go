@@ -32,6 +32,7 @@ var providerNames = map[string]string{
 	"openrouter":  "OpenRouter",
 	"synthetic":   "Synthetic",
 	"together":    "Together AI",
+	"v0":          "v0",
 	"vercel":      "Vercel",
 	"xai":         "xAI",
 	"xkiro":       "xKiro",

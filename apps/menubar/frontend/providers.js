@@ -29,6 +29,7 @@ window.TOKENOPS_PROVIDERS = {
   "openrouter": {"name":"OpenRouter","logo":true},
   "synthetic": {"name":"Synthetic","logo":false},
   "together": {"name":"Together AI","logo":false},
+  "v0": {"name":"v0","logo":true},
   "vercel": {"name":"Vercel","logo":false},
   "xai": {"name":"xAI","logo":false},
   "xkiro": {"name":"xKiro","logo":false},

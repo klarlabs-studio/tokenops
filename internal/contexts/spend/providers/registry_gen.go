@@ -32,6 +32,7 @@ var registered = []func() Descriptor{
 	providerOpenRouter,
 	providerSynthetic,
 	providerTogether,
+	providerV0,
 	providerVercel,
 	providerXAI,
 	providerXKiro,
