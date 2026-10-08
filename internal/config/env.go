@@ -69,6 +69,7 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("TOKENOPS_OTEL_SERVICE_NAME"); v != "" {
 		cfg.OTel.ServiceName = v
 	}
+	applyTeamEnv(&cfg.Team)
 	if v := os.Getenv("TOKENOPS_PRICING_PATH"); v != "" {
 		cfg.Pricing.Path = v
 	}
