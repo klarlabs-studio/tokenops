@@ -1,21 +1,38 @@
 {
-  "changes": [
-    {
-      "teamId": "65c1e471-205f-4566-9c5a-07198bcdf4ce",
-      "changeOrigin": "PURCHASE",
-      "topupStatus": "SUCCEEDED",
-      "amount": {
-        "val": "-1000"
-      },
-      "invoiceId": "7v7blf6c1G2g34OdI4N5tD1CKCdag4ZYLhn5vTBLIMM=",
-      "invoiceNumber": "062-446-653-166",
-      "createTime": "2025-02-24T15:28:02.308840Z",
-      "paymentProcessor": {
-        "kind": "STRIPE"
+  "balance": {
+    "changes": [
+      {
+        "teamId": "65c1e471-205f-4566-9c5a-07198bcdf4ce",
+        "changeOrigin": "PURCHASE",
+        "topupStatus": "SUCCEEDED",
+        "amount": {
+          "val": "-1000"
+        },
+        "invoiceId": "7v7blf6c1G2g34OdI4N5tD1CKCdag4ZYLhn5vTBLIMM=",
+        "invoiceNumber": "062-446-653-166",
+        "createTime": "2025-02-24T15:28:02.308840Z",
+        "paymentProcessor": {
+          "kind": "STRIPE"
+        }
       }
+    ],
+    "total": {
+      "val": "-1000"
     }
-  ],
-  "total": {
-    "val": "-1000"
+  },
+  "usage": {
+    "timeSeries": [
+      {"dataPoints": [
+        {"timestamp": "2027-01-13T00:00:00Z", "values": [0.75973725]},
+        {"timestamp": "2027-01-14T00:00:00Z", "values": [0.5]},
+        {"timestamp": "2027-01-15T00:00:00Z", "values": [0]}
+      ]},
+      {"dataPoints": [
+        {"timestamp": "2027-01-13T00:00:00Z", "values": [0.5]},
+        {"timestamp": "2027-01-14T00:00:00Z", "values": [0]},
+        {"timestamp": "2027-01-15T00:00:00Z", "values": [0]}
+      ]}
+    ],
+    "limitReached": false
   }
 }

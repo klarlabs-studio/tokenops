@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 )
@@ -54,7 +55,7 @@ func TestAiAndSumsThirtyDaysOfLogs(t *testing.T) {
 	first, final := aiandPagesFixture(t)
 	srv := aiandServer(t, "sk-aa", first, final, 0)
 	got, err := AiAnd{BaseURL: srv.URL}.Read(context.Background(), "sk-aa")
-	if err != nil || !got.HasUsed || !approx(got.UsedUSD, 20.62344) || got.LimitUSD != 0 || got.HasBalance || got.Subscription {
+	if err != nil || !got.HasUsed || !approx(got.UsedUSD, 20.62344) || got.LimitUSD != 0 || got.HasBalance || got.Subscription || got.UsedPeriod != 30*24*time.Hour {
 		t.Errorf("%+v %v", got, err)
 	}
 }

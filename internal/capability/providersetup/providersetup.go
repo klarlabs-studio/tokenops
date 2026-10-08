@@ -143,6 +143,9 @@ func Summary(r usage.Reading) []string {
 		if r.LimitUSD > 0 {
 			line += fmt.Sprintf(" of $%.2f", r.LimitUSD)
 		}
+		if days := int(r.UsedPeriod / (24 * time.Hour)); days > 0 {
+			line += fmt.Sprintf(" over the last %d days", days)
+		}
 		out = append(out, line)
 	}
 	if r.HasBalance {

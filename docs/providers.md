@@ -122,6 +122,9 @@ the helpers in `http.go`, and returns a `usage.Reading`:
 - **Spend against a cap** (`extra_usage_*` attributes): `UsedUSD` with
   `HasUsed`, `LimitUSD` (0 for none), `LimitReached` when the vendor says
   requests are blocked. Headroom binds such a provider as `pay-as-you-go`.
+  Spend over the last N days rather than the billing period (xAI's 30) sets
+  `UsedPeriod` (`extra_usage_period_min`), so it is never read as this
+  month's.
 - **Balance**: `BalanceUSD` with `HasBalance` (`balance_usd`); a balance in
   the vendor's own unit (Poe's points) is `Credits` with `CreditsUnit` and
   `HasCredits` (`balance_credits`), never converted to dollars.
