@@ -50,7 +50,7 @@ func (l LongCat) Read(ctx context.Context, key string) (usage.Reading, error) {
 		"Cookie":          {cookie},
 	}
 	get := func(path string, out any) error {
-		body, err := getPage(ctx, l.HTTP, host+path, header)
+		body, err := doWeb(ctx, l.HTTP, http.MethodGet, host+path, header, nil)
 		if err != nil {
 			return err
 		}

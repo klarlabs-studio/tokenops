@@ -53,7 +53,7 @@ func (h Helmcode) Read(ctx context.Context, key string) (usage.Reading, error) {
 		"User-Agent": {browserUA},
 	}
 	get := func(path string, out any) error {
-		body, err := getPage(ctx, h.HTTP, api+path, header)
+		body, err := doWeb(ctx, h.HTTP, http.MethodGet, api+path, header, nil)
 		if err != nil {
 			return err
 		}

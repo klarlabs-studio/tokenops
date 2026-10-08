@@ -10,9 +10,10 @@ func providerTypeSafe() Descriptor {
 			// billing; the console's billing action is read with its session,
 			// whose cookie is not known by name, so the Cookie header is
 			// pasted.
+			// PasteOnly: no proof cookie is known to find a signed-in browser by.
 			{Name: "typesafe_account", Tag: "typesafe-account", Kind: Balance, Credential: BrowserCookie,
 				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,
-				Cookie:   &Cookie{Host: "console.typesafe.ai"},
+				Cookie:   &Cookie{Host: "console.typesafe.ai", PasteOnly: true},
 				Endpoint: "`POST /settings/billing` (getBillingOverview action)",
 				Shows:    "spend this billing cycle and the credit balance left"},
 		},

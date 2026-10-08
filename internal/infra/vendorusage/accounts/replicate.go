@@ -62,9 +62,9 @@ func (r Replicate) Read(ctx context.Context, key string) (usage.Reading, error) 
 		cookie += "; csrftoken=" + csrf
 	}
 	site := base(r.BaseURL, "https://replicate.com")
-	page, err := getPage(ctx, r.HTTP, site+"/account/billing", http.Header{
+	page, err := doWeb(ctx, r.HTTP, http.MethodGet, site+"/account/billing", http.Header{
 		"Cookie": {cookie}, "Accept": {"text/html"}, "User-Agent": {browserUA},
-	})
+	}, nil)
 	if err != nil {
 		return usage.Reading{}, err
 	}

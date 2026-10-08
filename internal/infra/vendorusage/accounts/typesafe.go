@@ -99,9 +99,9 @@ func (t TypeSafe) action(ctx context.Context, origin, cookie string, fresh bool)
 	if ok && !fresh && time.Since(cached.found) < typeSafeActionTTL {
 		return cached.id, nil
 	}
-	page, err := getPage(ctx, t.HTTP, origin+"/settings/billing", http.Header{
+	page, err := doWeb(ctx, t.HTTP, http.MethodGet, origin+"/settings/billing", http.Header{
 		"Cookie": {cookie}, "Accept": {"text/html"}, "User-Agent": {browserUA},
-	})
+	}, nil)
 	if err != nil {
 		return "", err
 	}
@@ -125,7 +125,7 @@ func (t TypeSafe) action(ctx context.Context, origin, cookie string, fresh bool)
 	}
 	for _, src := range chunks {
 		// Static chunks are public: they are fetched without the session.
-		js, err := getPage(ctx, t.HTTP, src, http.Header{"User-Agent": {browserUA}})
+		js, err := doWeb(ctx, t.HTTP, http.MethodGet, src, http.Header{"User-Agent": {browserUA}}, nil)
 		if err != nil {
 			continue
 		}
