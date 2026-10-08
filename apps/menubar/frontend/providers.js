@@ -33,7 +33,7 @@ window.TOKENOPS_PROVIDERS = {
   "nous": {"name":"Nous Portal","logo":true},
   "openai": {"name":"Codex","logo":true},
   "opencode": {"name":"opencode","logo":false},
-  "opencode-go": {"name":"opencode Go","logo":false},
+  "opencode-go": {"name":"opencode Go","logo":true},
   "openrouter": {"name":"OpenRouter","logo":true},
   "poe": {"name":"Poe","logo":true},
   "synthetic": {"name":"Synthetic","logo":false},
