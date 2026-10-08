@@ -63,8 +63,9 @@ func (e Endpoint) name() string {
 // registry. A host not listed there is reported as unknown rather than
 // guessed.
 var endpoints = func() []Endpoint {
-	var out []Endpoint
-	for _, e := range providers.Endpoints() {
+	all := providers.Endpoints()
+	out := make([]Endpoint, 0, len(all))
+	for _, e := range all {
 		out = append(out, Endpoint{Host: e.Host, Path: e.Path, Provider: e.Provider,
 			Kind: kindOf(e.Billing), Name: e.Name, Source: e.Source})
 	}

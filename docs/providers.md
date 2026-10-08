@@ -40,7 +40,7 @@ dashes; `<Name>` is its Go name):
    `providers_gen.go`.
 6. **Verify**: `go test ./internal/contexts/spend/providers/
    ./internal/infra/vendorusage/accounts/ ./internal/bootstrap/
-   ./internal/capability/providercatalog/ ./internal/config/` and
+   ./internal/tools/gen/providercatalog/ ./internal/config/` and
    `cd apps/menubar && go test ./...`; before pushing, the repository's full
    checks (`gofmt -l .`, `golangci-lint run ./...`, `go test ./...`,
    `go test -count=1 ./internal/archlint`).

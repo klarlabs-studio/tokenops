@@ -11,8 +11,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"go.klarlabs.de/tokenops/internal/capability/providercatalog"
 	"go.klarlabs.de/tokenops/internal/tools/gen"
+	"go.klarlabs.de/tokenops/internal/tools/gen/providercatalog"
 )
 
 func main() {

@@ -101,8 +101,9 @@ func gatewayTable() string {
 }
 
 func envVars() string {
-	vars := make([]string, 0)
-	for v := range providers.EnvVars() {
+	env := providers.EnvVars()
+	vars := make([]string, 0, len(env))
+	for v := range env {
 		vars = append(vars, v)
 	}
 	sort.Strings(vars)

@@ -10,7 +10,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/tools/gen"
 )
 
-const root = "../../.."
+const root = "../../../.."
 
 const regenerate = "regenerate with: go generate ./internal/contexts/spend/providers"
 
