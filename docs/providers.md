@@ -85,7 +85,8 @@ func providerAcme() Descriptor {
 | `Sources[].Name`, `.Tag` | `vendor-usage status`, freshness, retention keys, the headroom signal |
 | `Sources[].Kind` | which docs table: `Balance`/`Spend`, `Subscription`, `Gateway`, `LocalLog` |
 | `Sources[].Credential` | `APIKey`, `AdminKey`, `BrowserCookie` (all set up generically), `OAuthFile`, `CLI`, `LocalFile` |
-| `Sources[].EnvVars` | variables holding the source's own credential when it is not the provider's API key (`OPENAI_ADMIN_KEY`); sent only to that source's reader |
+| `Sources[].EnvVars` | variables holding the source's own credential when it is not the provider's API key (`OPENAI_ADMIN_KEY`), or a gateway's key (`SUB2API_API_KEY`); sent only to that source's reader |
+| `Sources[].BaseURLEnv`, `.DefaultBaseURL` | a gateway's address variable (`SUB2API_BASE_URL`) and a hosted gateway's own address: with a key in `EnvVars` it is read there, named, without being recognised |
 | `Sources[].Switch` | `SwitchAccounts` for account and gateway readers; `SwitchConfig` only for a reader with its own config block (add it to `configSwitches` in `internal/config/vendor_usage_sources.go` and a hint in `vendorusage_hints.go`) |
 | `Sources[].Reader` | `AccountReader`, `GatewayReader`, or `BespokeReader` with `Package` and `Fixture` |
 | `Sources[].Cookie` | the cookies a `BrowserCookie` source reads |
@@ -146,6 +147,14 @@ endpoint, in order, until one is accepted:
 3. the descriptor's `EnvVars`.
 
 A key goes only to the reader of the endpoint it was found for.
+
+A gateway is read at an address: where a harness sends a key to a host
+TokenOps does not know, once the gateway recognises itself on a route it
+answers without a key; or, named, where the operator says it is, which
+needs no recognition. `tokenops vendor-usage setup <gateway>` asks for the
+address and the key, and the source's `BaseURLEnv` and `EnvVars` name it
+in the environment. Plain HTTP carries the key only to a loopback,
+private-network or `.local` host.
 
 ### Browser-session providers
 

@@ -129,3 +129,46 @@ func TestCreditsAreStoredInTheirOwnUnit(t *testing.T) {
 		t.Error("points were stored as dollars")
 	}
 }
+
+// A gateway the operator named is read at the address given, by that
+// gateway only, without a recognition probe; a public plain-HTTP address
+// is never sent the key.
+func TestPollerReadsANamedGatewayWhereItWasNamed(t *testing.T) {
+	g := &fakeGateway{root: "never recognised"}
+	p := NewPoller(nil, PollerOptions{Gateways: []Gateway{g}, Credentials: func() []Credential {
+		return []Credential{
+			{Endpoint: GatewayEndpoint, BaseURL: "https://gw.example/team/v1/", Key: "vk", Gateway: "litellm"},
+			{Endpoint: GatewayEndpoint, BaseURL: "http://gw.example", Key: "secret", Gateway: "litellm"},
+			{Endpoint: GatewayEndpoint, BaseURL: "https://other.example", Key: "secret", Gateway: "unknown"},
+		}
+	}})
+	p.Scan(context.Background())
+	if g.recognised != 0 {
+		t.Errorf("a named gateway was probed %d times", g.recognised)
+	}
+	if len(g.reads) != 1 || g.reads[0] != "https://gw.example/team|vk" {
+		t.Fatalf("reads %v", g.reads)
+	}
+}
+
+func TestNamedGatewayBase(t *testing.T) {
+	for raw, want := range map[string]string{
+		"https://gw.example/v1":         "https://gw.example",
+		"https://gw.example/prefix/v1/": "https://gw.example/prefix",
+		"http://127.0.0.1:8080":         "http://127.0.0.1:8080",
+		"http://192.168.1.4/v1":         "http://192.168.1.4",
+		"http://sub2api.local:3000":     "http://sub2api.local:3000",
+		"http://[::1]:4000":             "http://[::1]:4000",
+		"http://gw.example":             "",
+		"https://user:pw@gw.example":    "",
+		"https://gw.example/?debug=1":   "",
+		"https://gw.example/#x":         "",
+		"ftp://gw.example":              "",
+		"gw.example":                    "",
+	} {
+		got, ok := NamedGatewayBase(raw)
+		if got != want || ok != (want != "") {
+			t.Errorf("%s: got %q %v, want %q", raw, got, ok, want)
+		}
+	}
+}

@@ -79,6 +79,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"opencode_go_account", "opencode-go-account"},
 		{"openrouter_account", "openrouter-account"},
 		{"poe_account", "poe-account"},
+		{"sub2api_gateway", "sub2api-account"},
 		{"synthetic_account", "synthetic-account"},
 		{"v0_account", "v0-account"},
 		{"venice_account", "venice-account"},

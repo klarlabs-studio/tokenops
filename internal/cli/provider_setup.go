@@ -17,6 +17,10 @@ import (
 // replace it so no vendor is called.
 var verifyProvider = providersetup.Verify
 
+// verifyGateway reads a gateway's budget once at an address. Tests replace
+// it so no gateway is called.
+var verifyGateway = providersetup.VerifyGateway
+
 // providerSetupOptions are the choices `setup <provider>` was given.
 type providerSetupOptions struct {
 	configPath string
@@ -32,6 +36,9 @@ type providerSetupOptions struct {
 func runProviderSetup(cmd *cobra.Command, p providersetup.Provider, opts providerSetupOptions) error {
 	out := cmd.OutOrStdout()
 	fmt.Fprintf(out, "Connecting %s.\n", p.Name)
+	if p.Gateway {
+		return runGatewaySetup(cmd, p, opts)
+	}
 
 	key, browser, err := providerCredential(cmd, p, opts)
 	if err != nil {
@@ -110,4 +117,93 @@ func providerCredential(cmd *cobra.Command, p providersetup.Provider, opts provi
 	fmt.Fprintf(out, "It is sent only to %s, and stored in your local config.\n", p.Name)
 	key, err = readSecret(cmd, prompt)
 	return strings.TrimSpace(key), "", err
+}
+
+// runGatewaySetup connects a gateway the operator runs or subscribes to:
+// its address, then the key, proved with one reading at that address
+// before either is stored.
+func runGatewaySetup(cmd *cobra.Command, p providersetup.Provider, opts providerSetupOptions) error {
+	out := cmd.OutOrStdout()
+	prompt := "\nThe gateway's base URL: "
+	if p.DefaultBaseURL != "" {
+		prompt = fmt.Sprintf("\nThe gateway's base URL (empty for %s): ", p.DefaultBaseURL)
+	}
+	base, err := readLine(cmd, prompt)
+	if err != nil {
+		return err
+	}
+	if base = strings.TrimSpace(base); base == "" {
+		base = p.DefaultBaseURL
+	}
+	if base == "" {
+		return errors.New("no address entered; nothing was written")
+	}
+	if len(p.EnvVars) > 0 && p.BaseURLEnv != "" {
+		fmt.Fprintf(out, "(%s with %s is read without setup, when they are set.)\n", strings.Join(p.EnvVars, " or "), p.BaseURLEnv)
+	}
+	fmt.Fprintf(out, "The key is sent only to %s, and stored in your local config.\n", base)
+	key, err := readSecret(cmd, "\nPaste the API key: ")
+	if err != nil {
+		return err
+	}
+	if key = strings.TrimSpace(key); key == "" {
+		return errors.New("nothing entered; nothing was written")
+	}
+
+	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
+	defer cancel()
+	progress := startActivity(cmd.ErrOrStderr(), "Checking it with "+p.Name)
+	lines, err := verifyGateway(ctx, p.ID, base, key)
+	if err != nil {
+		progress.failure(p.Name + " did not accept it")
+		if errors.Is(err, providersetup.ErrRefused) {
+			return fmt.Errorf("%s refused that key. Nothing was written", p.Name)
+		}
+		return fmt.Errorf("could not read %s at %s: %w. Nothing was written", p.Name, base, err)
+	}
+	progress.success(p.Name + " accepted it")
+	fmt.Fprintf(out, "\n%s reports:\n", p.Name)
+	for _, l := range lines {
+		fmt.Fprintln(out, "  "+l)
+	}
+
+	path, err := resolveMutableConfigPath(opts.configPath)
+	if err != nil {
+		return err
+	}
+	cfg, err := readMutableConfig(path)
+	if err != nil {
+		return err
+	}
+	providersetup.ApplyGateway(&cfg, p.ID, base, key)
+	if err := writeMutableConfig(path, cfg); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "\nwrote %s (the key is stored there and sent only to %s)\n", path, base)
+	applyRestart(out, opts.restart, false)
+	return nil
+}
+
+// readLine reads one line, echoed: an address, not a secret. It reads a
+// byte at a time so the key that follows on a piped stdin is left for
+// readSecret.
+func readLine(cmd *cobra.Command, prompt string) (string, error) {
+	fmt.Fprint(cmd.OutOrStdout(), prompt)
+	var b strings.Builder
+	buf := make([]byte, 1)
+	for {
+		n, err := cmd.InOrStdin().Read(buf)
+		if n == 1 {
+			if buf[0] == '\n' {
+				return b.String(), nil
+			}
+			b.WriteByte(buf[0])
+		}
+		if err != nil {
+			if b.Len() > 0 {
+				return b.String(), nil
+			}
+			return "", fmt.Errorf("read input: %w", err)
+		}
+	}
 }
