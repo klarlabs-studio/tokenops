@@ -77,6 +77,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"poe_account", "poe-account"},
 		{"synthetic_account", "synthetic-account"},
 		{"v0_account", "v0-account"},
+		{"venice_account", "venice-account"},
 		{"vercel_account", "vercel-account"},
 		{"warp_account", "warp-account"},
 		{"xai_account", "xai-account"},

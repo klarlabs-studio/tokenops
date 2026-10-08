@@ -37,6 +37,7 @@ window.TOKENOPS_PROVIDERS = {
   "synthetic": {"name":"Synthetic","logo":false},
   "together": {"name":"Together AI","logo":false},
   "v0": {"name":"v0","logo":true},
+  "venice": {"name":"Venice","logo":true},
   "vercel": {"name":"Vercel","logo":false},
   "warp": {"name":"Warp","logo":false},
   "xai": {"name":"xAI","logo":true},

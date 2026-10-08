@@ -29,6 +29,7 @@ var readers = []func() usage.Reader{
 	readerPoe,
 	readerSynthetic,
 	readerV0,
+	readerVenice,
 	readerVercel,
 	readerWarp,
 	readerXAI,
