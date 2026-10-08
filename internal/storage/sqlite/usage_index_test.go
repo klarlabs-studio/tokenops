@@ -25,28 +25,55 @@ func TestUsageQueriesAreCovered(t *testing.T) {
 		"re-admitted":     {Since: since, IncludeSources: []string{"mcp-session"}},
 	}
 	for name, f := range filters {
-		queries := map[string]func() (string, []any){
-			"usage totals":       func() (string, []any) { return usageTotalsQuery(f) },
-			"buckets":            func() (string, []any) { return usageBucketsQuery(f, 86400, analytics.GroupNone) },
-			"buckets by model":   func() (string, []any) { return usageBucketsQuery(f, 86400, analytics.GroupModel) },
-			"buckets by provid.": func() (string, []any) { return usageBucketsQuery(f, 3600, analytics.GroupProvider) },
-			"bucket recompute": func() (string, []any) {
-				return bucketPricingQuery(f, 86400, analytics.GroupModel, analytics.UncostedMetered)
-			},
-			"bucket plan value": func() (string, []any) {
-				return bucketPricingQuery(f, 86400, analytics.GroupNone, analytics.PlanCovered)
-			},
-			"daily recompute":  func() (string, []any) { return dailyPricingQuery(f, analytics.UncostedMetered) },
-			"daily plan value": func() (string, []any) { return dailyPricingQuery(f, analytics.PlanCovered) },
-		}
-		for qname, build := range queries {
-			q, args := build()
+		for _, g := range []analytics.Group{analytics.GroupNone, analytics.GroupModel, analytics.GroupProvider} {
+			q, args := usageScanQuery(f, g)
 			plan := explain(t, s, q, args)
 			if !strings.Contains(plan, "COVERING INDEX events_usage_idx") {
-				t.Errorf("%s / %s reads the table:\n%s", name, qname, plan)
+				t.Errorf("%s / group %q reads the table:\n%s", name, g, plan)
 			}
 		}
 	}
+}
+
+// TestUsageScanWalksTheIndexTheOldQueriesDid pins the order the single
+// read visits events in. Its cost sums reproduce SQLite's, which depend on
+// the order they add in: for every filter and grouping, the read must walk
+// the index the statement whose cost sums it replaces walked — the bucket
+// rows' for BucketUsage, the totals' for WindowUsage. (The pricing groups
+// sum integers only, so their order of addition does not matter.)
+func TestUsageScanWalksTheIndexTheOldQueriesDid(t *testing.T) {
+	s := newTestStore(t)
+	since := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	filters := map[string]analytics.Filter{
+		"window":   {Since: since},
+		"provider": {Provider: "anthropic", Since: since, Until: since.Add(24 * time.Hour)},
+		"model":    {Provider: "openai", Model: "gpt-5.5", Since: since},
+		"workflow": {WorkflowID: "wf", Since: since},
+		"agent":    {AgentID: "ag", Since: since},
+		"no since": {Provider: "anthropic"},
+	}
+	groups := []analytics.Group{analytics.GroupNone, analytics.GroupModel, analytics.GroupProvider, analytics.GroupWorkflow, analytics.GroupAgent}
+	for name, f := range filters {
+		for _, g := range groups {
+			q, args := usageScanQuery(f, g)
+			bq, bargs := oracleUsageBucketsQuery(f, 3600, g)
+			if got, want := scanStep(explain(t, s, q, args)), scanStep(explain(t, s, bq, bargs)); got != want {
+				t.Errorf("%s / group %q: single read %q, bucket rows %q", name, g, got, want)
+			}
+		}
+		q, args := usageScanQuery(f, analytics.GroupNone)
+		tq, targs := oracleUsageTotalsQuery(f)
+		if got, want := scanStep(explain(t, s, q, args)), scanStep(explain(t, s, tq, targs)); got != want {
+			t.Errorf("%s: single read %q, totals %q", name, got, want)
+		}
+	}
+}
+
+// scanStep is a plan's table access with "COVERING " dropped: which index
+// it walks and how, whatever else it reads.
+func scanStep(plan string) string {
+	first, _, _ := strings.Cut(plan, "\n")
+	return strings.Replace(first, "COVERING ", "", 1)
 }
 
 // explain is SQLite's query plan for q, one detail per line.
