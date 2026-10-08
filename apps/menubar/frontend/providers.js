@@ -20,6 +20,7 @@ window.TOKENOPS_PROVIDERS = {
   "minimax": {"name":"MiniMax","logo":true},
   "mistral": {"name":"Mistral","logo":false},
   "moonshot": {"name":"Moonshot","logo":true},
+  "neuralwatt": {"name":"Neuralwatt","logo":false},
   "openai": {"name":"Codex","logo":true},
   "opencode": {"name":"opencode","logo":false},
   "opencode-go": {"name":"opencode Go","logo":false},

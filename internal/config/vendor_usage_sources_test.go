@@ -61,6 +61,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"litellm_gateway", "litellm-account"},
 		{"minimax_account", "minimax-account"},
 		{"moonshot_account", "moonshot-account"},
+		{"neuralwatt_account", "neuralwatt-account"},
 		{"codex_app_server", "codex-app-server"},
 		{"codex_jsonl", "codex-jsonl"},
 		{"opencode", "opencode"},

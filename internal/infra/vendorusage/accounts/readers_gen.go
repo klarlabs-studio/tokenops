@@ -16,6 +16,7 @@ var readers = []func() usage.Reader{
 	readerKimi,
 	readerMiniMax,
 	readerMoonshot,
+	readerNeuralWatt,
 	readerOpenRouter,
 	readerPoe,
 	readerSynthetic,
