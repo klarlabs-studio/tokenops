@@ -134,9 +134,10 @@ func (c CodexAppServerConfig) On() bool { return c.Enabled == nil || *c.Enabled 
 // never refreshed. Interval defaults to 10 minutes.
 type ClaudeCodeOAuthConfig struct {
 	Enabled bool `yaml:"enabled"`
-	// Keychain allows reading Claude Code's Keychain item on macOS. macOS
-	// asks the operator to allow it, and may ask again after Claude Code
-	// renews its token.
+	// Keychain allows reading Claude Code's Keychain item on macOS, set by
+	// `setup claude-code --keychain`. The daemon reads it quietly: when
+	// macOS would ask (after Claude Code renews its token, or an upgrade),
+	// it skips the read rather than prompt.
 	Keychain bool          `yaml:"keychain,omitempty"`
 	Interval time.Duration `yaml:"interval,omitempty"`
 }

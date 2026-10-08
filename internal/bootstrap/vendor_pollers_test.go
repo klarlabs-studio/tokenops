@@ -30,13 +30,13 @@ func TestPlanCostSource(t *testing.T) {
 // was a dialog nobody had started. An expired pasted session is reported
 // as a stopped reading instead, with the command that reconnects it.
 func TestBrowserSessionSourceFollowsTheConfig(t *testing.T) {
-	if browserSessionSource(config.ClaudeUsageMeterConfig{}) != nil {
+	if browserSessionSource(config.ClaudeUsageMeterConfig{}, false) != nil {
 		t.Error("a pasted session reads the browser, and its Keychain item, in the background")
 	}
-	if browserSessionSource(config.ClaudeUsageMeterConfig{FromBrowser: true}) == nil {
+	if browserSessionSource(config.ClaudeUsageMeterConfig{FromBrowser: true}, false) == nil {
 		t.Error("from_browser set, but the poller got no way to re-read the session")
 	}
-	if browserSessionSource(config.ClaudeUsageMeterConfig{FromBrowser: true, Browser: "None"}) != nil {
+	if browserSessionSource(config.ClaudeUsageMeterConfig{FromBrowser: true, Browser: "None"}, false) != nil {
 		t.Error("browser: none still reads a browser")
 	}
 }
