@@ -5,6 +5,7 @@ package providers
 // registered is every provider*() function in this package, by file name.
 var registered = []func() Descriptor{
 	providerAlibaba,
+	providerAmp,
 	providerAnthropic,
 	providerBifrost,
 	providerCerebras,

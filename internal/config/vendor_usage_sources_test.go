@@ -39,6 +39,8 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 	// The provider registry's order: by provider ID, then each provider's
 	// sources in the order it lists them.
 	want := []struct{ name, tag string }{
+		{"amp_cli", "amp-cli"},
+		{"amp_account", "amp-account"},
 		{"claude_code_statusline", "claude-code-statusline"},
 		{"claude_code_jsonl", "claude-code-jsonl"},
 		{"claude_subscription", "claude-usage-meter"},

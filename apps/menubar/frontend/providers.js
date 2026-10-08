@@ -2,6 +2,7 @@
 // Each provider's name and whether logos/<id>.svg is its logo.
 window.TOKENOPS_PROVIDERS = {
   "alibaba": {"name":"Alibaba Cloud","logo":false},
+  "amp": {"name":"Amp","logo":true},
   "anthropic": {"name":"Claude","logo":true},
   "bifrost": {"name":"Bifrost","logo":false},
   "cerebras": {"name":"Cerebras","logo":false},
