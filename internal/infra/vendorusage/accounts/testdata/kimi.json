@@ -1,0 +1,16 @@
+{
+  "usages": {
+    "limit_5h": {
+      "used_ratio": 0.3,
+      "reset_time": "2026-09-11T18:00:00Z"
+    },
+    "limit_7d": {
+      "used_ratio": "0.2",
+      "reset_time": "2026-09-14T00:00:00Z"
+    },
+    "limit_month_total": {
+      "used_ratio": 0.4,
+      "reset_time": "2026-10-01T00:00:00Z"
+    }
+  }
+}

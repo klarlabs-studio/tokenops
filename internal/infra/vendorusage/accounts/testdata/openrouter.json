@@ -1,0 +1,9 @@
+{
+  "data": {
+    "limit": 50,
+    "limit_reset": "monthly",
+    "limit_remaining": 37.5,
+    "usage": 90,
+    "usage_monthly": 12.5
+  }
+}
