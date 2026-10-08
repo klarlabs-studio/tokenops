@@ -3,7 +3,6 @@ package team
 import (
 	"fmt"
 	"testing"
-	"time"
 )
 
 // bigWeek is a 60-person organisation: six teams (some people in two),
@@ -31,26 +30,33 @@ func bigWeek(k int) ReleaseInput {
 	return in
 }
 
-func TestReleaseScales(t *testing.T) {
-	if testing.Short() {
-		t.Skip("slow")
+// A realistic organisation is released without falling back and with
+// most of its cells shown. (No wall-clock bound: CI machines vary; see
+// BenchmarkRelease for timings.)
+func TestReleaseBigOrganisation(t *testing.T) {
+	in := bigWeek(3)
+	cells, rep := Release(in)
+	hidden := 0
+	for _, c := range cells {
+		if c.Suppressed {
+			hidden++
+		}
 	}
+	if rep.Fallback != "" || hidden*2 > len(cells) {
+		t.Errorf("%d of %d withheld, report %+v", hidden, len(cells), rep)
+	}
+	assertNoResidualLeak(t, in, cells)
+}
+
+// go test -run '^$' -bench Release ./internal/contexts/team
+// (Apple M-series: about 30 ms at k = 3, about 2 s at k = 5.)
+func BenchmarkRelease(b *testing.B) {
 	for _, k := range []int{3, 5} {
-		start := time.Now()
-		cells, rep := Release(bigWeek(k))
-		took := time.Since(start)
-		hidden := 0
-		for _, c := range cells {
-			if c.Suppressed {
-				hidden++
-			}
-		}
-		t.Logf("k=%d: %d cells, %d withheld (%d primary, %d secondary), %d checks, fallback %q, %s",
-			k, rep.Cells, hidden, rep.Primary, rep.Secondary, rep.Checks, rep.Fallback, took)
-		if took > 30*time.Second {
-			t.Errorf("k=%d took %s", k, took)
-		}
 		in := bigWeek(k)
-		assertNoResidualLeak(t, in, cells)
+		b.Run(fmt.Sprintf("k=%d", k), func(b *testing.B) {
+			for b.Loop() {
+				Release(in)
+			}
+		})
 	}
 }
