@@ -47,5 +47,6 @@ var gateways = []func() usage.Gateway{
 	gatewayBifrost,
 	gatewayClawRouter,
 	gatewayLiteLLM,
+	gatewayLLMProxy,
 	gatewaySub2API,
 }
