@@ -52,6 +52,7 @@ window.TOKENOPS_PROVIDERS = {
   "openrouter": {"name":"OpenRouter","logo":true},
   "pi": {"name":"Pi","logo":false},
   "poe": {"name":"Poe","logo":true},
+  "qoder": {"name":"Qoder","logo":true},
   "qwencloud": {"name":"Qwen Cloud","logo":true},
   "sakana": {"name":"Sakana AI","logo":true},
   "sub2api": {"name":"sub2api","logo":false},

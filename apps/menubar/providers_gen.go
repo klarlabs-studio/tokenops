@@ -55,6 +55,7 @@ var providerNames = map[string]string{
 	"openrouter":       "OpenRouter",
 	"pi":               "Pi",
 	"poe":              "Poe",
+	"qoder":            "Qoder",
 	"qwencloud":        "Qwen Cloud",
 	"sakana":           "Sakana AI",
 	"sub2api":          "sub2api",

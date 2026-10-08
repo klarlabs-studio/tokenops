@@ -56,6 +56,7 @@
 - **providers:** Abacus AI: compute credits used this billing month, resetting at the next billing date, read from apps.abacus.ai with its browser session (`vendor-usage setup abacus`)
 - **providers:** Mistral: the subscription's included-API and Vibe allowances used this month (and the credit balance when in US dollars), read from admin.mistral.ai with its browser session (`vendor-usage setup mistral`); the billing spend, priced in euros, is not stored
 - **providers:** Command Code: the 5-hour and weekly limits, the monthly credit grant used and the purchased credits, read from api.commandcode.ai with the web session (`vendor-usage setup commandcode`; a pasted bare session token works too)
+- **providers:** Qoder: big-model credits used against the plan's (and the team's shared) total until the next reset, from qoder.com or qoder.com.cn with the dashboard's browser session (`vendor-usage setup qoder`)
 - **vendor-usage:** browser-session providers are read the way the browser sends their cookies (several hosts, prefixed names, the whole host when the names are unknown), with at most one Keychain prompt in setup; a provider can be read with an API key or a session, or signed in to with a password (only the token is stored); a stored session the daemon cannot renew quietly turns its reading stale and the status says to run setup again
 
 ### Fixed

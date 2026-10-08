@@ -60,6 +60,7 @@ opencode_go_account	opencode-go-account
 openrouter_account	openrouter-account
 pi_sessions	pi-sessions
 poe_account	poe-account
+qoder_web	qoder-web
 qwencloud_web	qwencloud-web
 sakana_web	sakana-web
 sub2api_gateway	sub2api-account
