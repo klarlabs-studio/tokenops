@@ -690,6 +690,7 @@ vendor's windows, busiest first:
 | Codebuff | `POST /api/v1/usage` | credits used against the quota until it resets |
 | DevPass (LLM Gateway) | `GET /v1/key` | the cycle's plan credits and the premium weekly window; on pay-as-you-go, the key's spend against its limit |
 | Doubao | `POST /?Action=GetCodingPlanUsage` | the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan) |
+| ElevenLabs | `GET /v1/user/subscription` | the subscription's credits used this period |
 | IBM Bob | `GET /admin/v1/profile`, `GET /admin/v1/teams/{team}/users/{user}` | Bobcoins used this month against the team budgets |
 | Kilo | `GET /api/trpc/user.getCreditBlocks,kiloPass.getState` | Kilo Pass credits used this billing period, and prepaid credit left |
 | Kimi Code | `GET /coding/v1/usages` | 5-hour, weekly and monthly windows |
@@ -738,7 +739,7 @@ use read its own spend.
   with `tokenops vendor-usage enable vendor-accounts --disable`.
 
 <!-- begin generated: provider-env-vars -->
-The environment variables read for a key: `AIAND_API_KEY`, `AI_GATEWAY_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `FIREWORKS_API_KEY`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENROUTER_API_KEY`, `POE_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XKIRO_API_KEY`.
+The environment variables read for a key: `AIAND_API_KEY`, `AI_GATEWAY_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FIREWORKS_API_KEY`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENROUTER_API_KEY`, `POE_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`.
 <!-- end generated: provider-env-vars -->
 
 #### Every provider
@@ -770,6 +771,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | DeepSeek | `deepseek-account` | prepaid USD balance left | API key | public docs and fixtures |
 | DevPass | `devpass-account` | the cycle's plan credits and the premium weekly window; on pay-as-you-go, the key's spend against its limit | API key | CodexBar's source, the vendor's docs and fixtures |
 | Doubao | `doubao-account` | the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan) | API key | CodexBar's source, the vendor's docs and fixtures |
+| ElevenLabs | `elevenlabs-account` | the subscription's credits used this period | API key | CodexBar's source, the vendor's docs and fixtures |
 | Fireworks | `fireworks-usage` | the month's spend against the account's or the member's cap | API key | against a real account |
 | Gemini | `gemini-cli` | per-turn tokens per model from Gemini CLI's chat recordings | local files | public docs and fixtures |
 | Copilot | `github-copilot` | premium requests used against the month's allowance | another app's sign-in | the vendor's client source and fixtures |

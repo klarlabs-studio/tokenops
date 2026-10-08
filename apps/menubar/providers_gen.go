@@ -20,6 +20,7 @@ var providerNames = map[string]string{
 	"deepseek":    "DeepSeek",
 	"devpass":     "DevPass",
 	"doubao":      "Doubao",
+	"elevenlabs":  "ElevenLabs",
 	"fireworks":   "Fireworks",
 	"gemini":      "Gemini",
 	"github":      "Copilot",
