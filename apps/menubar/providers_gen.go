@@ -29,6 +29,7 @@ var providerNames = map[string]string{
 	"kilo":        "Kilo",
 	"kimi":        "Kimi",
 	"litellm":     "LiteLLM",
+	"manus":       "Manus",
 	"minimax":     "MiniMax",
 	"mistral":     "Mistral",
 	"moonshot":    "Moonshot",
