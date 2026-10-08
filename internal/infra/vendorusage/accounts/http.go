@@ -57,6 +57,11 @@ func getJSONAuth(ctx context.Context, hc *http.Client, url, auth string, out any
 	return doJSON(ctx, hc, http.MethodGet, url, http.Header{"Authorization": {auth}}, nil, out)
 }
 
+// getJSONHeader GETs url with the key in header (ElevenLabs' xi-api-key).
+func getJSONHeader(ctx context.Context, hc *http.Client, url, header, value string, out any) error {
+	return doJSON(ctx, hc, http.MethodGet, url, http.Header{header: {value}}, nil, out)
+}
+
 // postJSON POSTs payload as JSON to url with a bearer key and decodes the
 // answer into out.
 func postJSON(ctx context.Context, hc *http.Client, url string, header http.Header, payload, out any) error {
@@ -100,12 +105,24 @@ func doJSON(ctx context.Context, hc *http.Client, method, url string, header htt
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
 		return fmt.Errorf("%w (%d on %s)", usage.ErrAuth, resp.StatusCode, hostPath(url))
 	case resp.StatusCode != http.StatusOK:
-		return fmt.Errorf("accounts: %s %s: status %d", method, hostPath(url), resp.StatusCode)
+		return &statusError{method: method, where: hostPath(url), status: resp.StatusCode}
 	}
 	if err := json.Unmarshal(data, out); err != nil {
 		return fmt.Errorf("accounts: %s %s: %w", method, hostPath(url), err)
 	}
 	return nil
+}
+
+// statusError is an answer that is neither 200 nor a refusal. A reader
+// whose vendor gives a status a meaning (ai&'s 402, out of credit) reads
+// it with errors.As.
+type statusError struct {
+	method, where string
+	status        int
+}
+
+func (e *statusError) Error() string {
+	return fmt.Sprintf("accounts: %s %s: status %d", e.method, e.where, e.status)
 }
 
 func hostPath(url string) string {
