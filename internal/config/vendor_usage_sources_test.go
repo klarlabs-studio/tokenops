@@ -3,6 +3,8 @@ package config
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -31,64 +33,33 @@ func (f *fakeCounter) CountBySource(_ context.Context, since, until time.Time) (
 }
 
 // VendorUsageSources is the single source of truth for the enabled-
-// source↔tag mapping. This pins the exact tags so a rename in config
-// that diverges from what the pollers stamp is caught here.
+// source↔tag mapping. This pins the exact names and tags, in order, to a
+// golden list generated from the provider registry, so a rename that
+// diverges from what the pollers stamp shows in review as a diff to the
+// golden file. Regenerate with: go generate ./internal/contexts/spend/providers
 func TestVendorUsageSourcesTags(t *testing.T) {
-	cfg := Default()
-	got := cfg.VendorUsageSources()
-	// The provider registry's order: by provider ID, then each provider's
-	// sources in the order it lists them.
-	want := []struct{ name, tag string }{
-		{"aiand_account", "aiand-account"},
-		{"claude_code_statusline", "claude-code-statusline"},
-		{"claude_code_jsonl", "claude-code-jsonl"},
-		{"claude_subscription", "claude-usage-meter"},
-		{"claude_code_oauth", "claude-code-oauth"},
-		{"vendor_usage_anthropic", "vendor-usage-anthropic"},
-		{"claude_code_stats_cache (deprecated)", "claude-code-stats-cache"},
-		{"atlascloud_account", "atlascloud-account"},
-		{"bifrost_gateway", "bifrost-account"},
-		{"chutes_account", "chutes-account"},
-		{"clawrouter_gateway", "clawrouter-account"},
-		{"clinepass_account", "clinepass-account"},
-		{"codebuff_account", "codebuff-account"},
-		{"cursor_turns (hook ledger)", "cursor-hook"},
-		{"cursor_web", "cursor-web"},
-		{"deepgram_account", "deepgram-account"},
-		{"deepinfra_account", "deepinfra-account"},
-		{"deepseek_account", "deepseek-account"},
-		{"devpass_account", "devpass-account"},
-		{"doubao_account", "doubao-account"},
-		{"elevenlabs_account", "elevenlabs-account"},
-		{"fireworks", "fireworks-usage"},
-		{"gemini_cli", "gemini-cli"},
-		{"github_copilot", "github-copilot"},
-		{"huggingface_account", "huggingface-account"},
-		{"ibmbob_account", "ibmbob-account"},
-		{"kilo_account", "kilo-account"},
-		{"kimi_account", "kimi-account"},
-		{"litellm_gateway", "litellm-account"},
-		{"minimax_account", "minimax-account"},
-		{"moonshot_account", "moonshot-account"},
-		{"neuralwatt_account", "neuralwatt-account"},
-		{"nous_account", "nous-account"},
-		{"codex_app_server", "codex-app-server"},
-		{"codex_jsonl", "codex-jsonl"},
-		{"opencode", "opencode"},
-		{"openrouter_account", "openrouter-account"},
-		{"poe_account", "poe-account"},
-		{"synthetic_account", "synthetic-account"},
-		{"v0_account", "v0-account"},
-		{"venice_account", "venice-account"},
-		{"vercel_account", "vercel-account"},
-		{"warp_account", "warp-account"},
-		{"xai_account", "xai-account"},
-		{"xkiro_account", "xkiro-account"},
-		{"zai_account", "zai-account"},
-		{"zenmux_account", "zenmux-account"},
+	golden, err := os.ReadFile(filepath.Join("testdata", "vendor_usage_sources.golden"))
+	if err != nil {
+		t.Fatal(err)
 	}
+	type entry struct{ name, tag string }
+	var want []entry
+	for _, line := range strings.Split(string(golden), "\n") {
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		name, tag, ok := strings.Cut(line, "\t")
+		if !ok {
+			t.Fatalf("golden line %q: want name<TAB>tag", line)
+		}
+		want = append(want, entry{name, tag})
+	}
+	if len(want) == 0 {
+		t.Fatal("golden source list is empty")
+	}
+	got := Default().VendorUsageSources()
 	if len(got) != len(want) {
-		t.Fatalf("got %d sources, want %d", len(got), len(want))
+		t.Fatalf("got %d sources, want %d; regenerate with: go generate ./internal/contexts/spend/providers", len(got), len(want))
 	}
 	for i, w := range want {
 		if got[i].Name != w.name || got[i].SourceTag != w.tag {
