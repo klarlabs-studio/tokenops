@@ -9,6 +9,7 @@
 ### Security
 
 - **keychain:** TokenOps asks for Keychain access only when you start it. The MCP usage-meter setup no longer reads a browser, which opened its "Safe Storage" Keychain item so an agent could raise the macOS prompt unasked; the daemon re-reads the browser only for a claude.ai meter you connected from it, not for a pasted session, which stops when it expires and says how to reconnect. The setup commands name the item before macOS asks, and the CLI guide lists every case
+- **keychain:** the daemon never shows a Keychain prompt. Its reads of the browser's "Safe Storage" key and of Claude Code's sign-in are quiet (Security.framework, with interaction forbidden): when macOS would ask, after an upgrade or when Claude Code renews its sign-in, the read is skipped and the stale-reading finding says to run the setup again. Only a setup command you run prompts, and one refusal stops it asking for other browsers. `keychain.disabled` (or `TOKENOPS_KEYCHAIN_DISABLED=1`) turns every Keychain read off
 - **proxy:** the daemon refuses requests a web page could send it. A request whose Host is not this machine (DNS rebinding), whose Origin is not local, or that a browser marks cross-site gets 403, so a page can no longer relay through your provider routes or write spend into your history. A reverse-proxy name goes in the new `allowed_hosts`; the daemon warns at start when `listen` is reachable from the network without TLS
 - **dependencies:** Go 1.26 and golang.org/x/crypto v0.57.0, which fixes GO-2026-6355 and GO-2026-6354
 - **release:** the npm packages are built only after every archive matches the release's `checksums.txt`, and only when all four platforms are present; npm publishes by trusted publishing, with no token
@@ -17,6 +18,7 @@
 
 ### Changed
 
+- **claude code sign-in:** `tokenops vendor-usage setup claude-code` reads Claude Code's Keychain item only with `--keychain`; without it, only `~/.claude/.credentials.json`. `--no-keychain` is deprecated: it is now the default
 - **spend:** `tokenops spend --forecast` projects the daily totals `tokenops_forecast` projects. It fitted one point per model per day, so its numbers differ, and are right, from this release; with `--until` it projects from that date, and with too little history it says so instead of printing nothing (`forecast_note` in `--json`)
 - **queries:** a capped query returns the newest rows, not the oldest: `tokenops optimizations --limit`, the MCP optimizations tool and verify showed the start of the window instead of its end
 - **building from source:** needs Go 1.26 (the toolchain directive downloads it)
