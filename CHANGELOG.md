@@ -12,6 +12,7 @@
 - **providers:** Deepgram: the prepaid USD balance left across the key's projects (`GET /v1/projects/{id}/balances`), with an API key from setup or `DEEPGRAM_API_KEY`
 - **providers:** Neuralwatt: prepaid USD credit left and, for a subscriber, the period's kWh allowance used as a plan window (`GET /v1/quota`); API key from setup, `NEURALWATT_API_KEY` or opencode
 - **providers:** ai&: the organisation's USD spend in the last 30 days, summed exactly from its request logs (`GET /logs`), and out-of-credit (402) as limit reached; API key from setup, `AIAND_API_KEY` or opencode
+- **providers:** xAI: the team's posted prepaid USD credit from the Management API (`GET /v1/billing/teams/{team_id}/prepaid/balance`); `tokenops vendor-usage setup xai` asks for `TEAM_ID:MANAGEMENT_KEY`. xAI was in the catalog only
 
 ### Fixed
 

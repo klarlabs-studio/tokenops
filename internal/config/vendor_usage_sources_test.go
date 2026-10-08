@@ -70,6 +70,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"poe_account", "poe-account"},
 		{"synthetic_account", "synthetic-account"},
 		{"vercel_account", "vercel-account"},
+		{"xai_account", "xai-account"},
 		{"zai_account", "zai-account"},
 	}
 	if len(got) != len(want) {

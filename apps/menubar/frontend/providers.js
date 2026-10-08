@@ -30,7 +30,7 @@ window.TOKENOPS_PROVIDERS = {
   "synthetic": {"name":"Synthetic","logo":false},
   "together": {"name":"Together AI","logo":false},
   "vercel": {"name":"Vercel","logo":false},
-  "xai": {"name":"xAI","logo":false},
+  "xai": {"name":"xAI","logo":true},
   "zai": {"name":"z.ai","logo":true},
   "zhipuai": {"name":"Zhipu AI","logo":false}
 };

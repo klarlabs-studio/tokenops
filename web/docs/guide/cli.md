@@ -674,6 +674,7 @@ vendor's own figures every 15 minutes:
 | OpenRouter | `GET /api/v1/key` | the key's spend, against its credit cap when it has one |
 | Poe | `GET /usage/current_balance` | the point balance left (points, not dollars) |
 | Vercel AI Gateway | `GET /v1/credits` | the team's credit balance |
+| xAI | `GET /v1/billing/teams/{team_id}/prepaid/balance` | the team's posted prepaid USD credit |
 <!-- end generated: provider-accounts -->
 
 Coding plans report their usage windows instead. A provider whose reader
@@ -771,7 +772,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Synthetic | `synthetic-account` | the subscription's request quota | API key | public docs and fixtures |
 | Together AI | — | in the catalog only: billed per token; its endpoint and models.dev prices are known, its account is not read | — | — |
 | Vercel | `vercel-account` | the team's credit balance | API key | public docs and fixtures |
-| xAI | — | in the catalog only: metered through the proxy only; neither a plan nor an account is read | — | — |
+| xAI | `xai-account` | the team's posted prepaid USD credit | API key | public docs and fixtures |
 | z.ai | `zai-account` | 5-hour and weekly token windows | API key | the vendor's client source and fixtures |
 | Zhipu AI | — | in the catalog only: z.ai's mainland-China platform: its endpoints, opencode IDs and prices are known; no reader reads its plan yet | — | — |
 <!-- end generated: provider-list -->
