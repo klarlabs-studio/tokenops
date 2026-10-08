@@ -208,7 +208,7 @@ func checkAppLogin(t *testing.T, id string, s Source, a AppLoginItem) {
 			t.Errorf("%s/%s: a process app login names its process", id, s.Tag)
 		}
 		for _, f := range a.Fields {
-			if !strings.HasPrefix(f, "--") {
+			if !strings.HasPrefix(f, "--") && f != "pid" {
 				t.Errorf("%s/%s: a process app login reads flags (--name), not %q", id, s.Tag, f)
 			}
 		}

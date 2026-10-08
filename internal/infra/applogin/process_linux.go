@@ -13,18 +13,19 @@ import (
 
 // listProcesses lists the command lines of this user's processes from
 // /proc; another user's are not read.
-func listProcesses(ctx context.Context) ([][]string, error) {
+func listProcesses(ctx context.Context) ([]Process, error) {
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
 		return nil, err
 	}
 	uid := os.Getuid()
-	var out [][]string
+	var out []Process
 	for _, e := range entries {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		if _, err := strconv.Atoi(e.Name()); err != nil || !e.IsDir() {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil || !e.IsDir() {
 			continue
 		}
 		dir := filepath.Join("/proc", e.Name())
@@ -43,7 +44,7 @@ func listProcesses(ctx context.Context) ([][]string, error) {
 		for _, a := range bytes.Split(bytes.TrimRight(raw, "\x00"), []byte{0}) {
 			args = append(args, string(a))
 		}
-		out = append(out, args)
+		out = append(out, Process{PID: pid, Args: args})
 	}
 	return out, nil
 }

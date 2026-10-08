@@ -60,9 +60,9 @@ type Env struct {
 	Keychain func(keychain.Item) (string, error)
 	// KeychainDisabled is keychain.disabled: no Keychain item is read.
 	KeychainDisabled bool
-	// Processes lists the command lines of this user's processes; nil
-	// lists them from the system.
-	Processes func(ctx context.Context) ([][]string, error)
+	// Processes lists this user's processes; nil lists them from the
+	// system.
+	Processes func(ctx context.Context) ([]Process, error)
 }
 
 func (e Env) home() (string, error) {
@@ -77,6 +77,12 @@ func (e Env) getenv(k string) string {
 		return e.Getenv(k)
 	}
 	return os.Getenv(k)
+}
+
+// Process is one of this user's running processes.
+type Process struct {
+	PID  int
+	Args []string
 }
 
 // Located is one sign-in found on this machine: the item exactly as the
@@ -105,7 +111,7 @@ func (l Located) Describe() string {
 		}
 		return item + ", field " + fields
 	case providers.AppLoginProcess:
-		return fmt.Sprintf("the command line of the running %s process, flag %s", l.Spec.Process, fields)
+		return fmt.Sprintf("the command line of %s's running %s process: %s", l.Spec.App, l.Spec.Process, fields)
 	case providers.AppLoginSQLite:
 		return fmt.Sprintf("the database %s, column %s (%s)", l.Item, fields, l.Spec.Query)
 	case providers.AppLoginEnvFile:
@@ -128,7 +134,7 @@ func Locate(ctx context.Context, specs []providers.AppLoginItem, env Env) (Locat
 			return Located{Spec: s, Item: s.Service}, nil
 		}
 		if s.Kind == providers.AppLoginProcess {
-			if _, err := processArgs(ctx, s.Process, env); err == nil {
+			if _, err := findProcess(ctx, s, env); err == nil {
 				return Located{Spec: s, Item: s.Process}, nil
 			}
 			continue
@@ -246,11 +252,15 @@ func read(ctx context.Context, l Located, env Env) (map[string]string, error) {
 	case providers.AppLoginKeychain:
 		return readKeychain(s, env)
 	case providers.AppLoginProcess:
-		args, err := processArgs(ctx, s.Process, env)
+		proc, err := findProcess(ctx, s, env)
 		if err != nil {
 			return nil, err
 		}
-		return flagValues(args, s.Fields), nil
+		values := flagValues(proc.Args, s.Fields)
+		if slices.Contains(s.Fields, "pid") {
+			values["pid"] = strconv.Itoa(proc.PID)
+		}
+		return values, nil
 	case providers.AppLoginSQLite:
 		return readSQLite(ctx, l.Item, s)
 	}
@@ -556,23 +566,49 @@ func copyFile(from, to string) error {
 	return dst.Close()
 }
 
-// processArgs is the command line of the first of this user's processes
-// whose executable's base name is name.
-func processArgs(ctx context.Context, name string, env Env) ([]string, error) {
+// findProcess is the first of this user's processes that spec names: its
+// executable's base name matches spec.Process (a "*" pattern; "|" separates
+// alternatives) and, when spec.Markers are given, its command line contains
+// one of them, ignoring case.
+func findProcess(ctx context.Context, spec providers.AppLoginItem, env Env) (Process, error) {
 	list := env.Processes
 	if list == nil {
 		list = listProcesses
 	}
 	all, err := list(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("applogin: list processes: %w", err)
+		return Process{}, fmt.Errorf("applogin: list processes: %w", err)
 	}
-	for _, args := range all {
-		if len(args) > 0 && filepath.Base(args[0]) == name {
-			return args, nil
+	for _, p := range all {
+		if len(p.Args) > 0 && processMatches(spec, p.Args) {
+			return p, nil
 		}
 	}
-	return nil, fmt.Errorf("%w: no %s process is running", ErrNotFound, name)
+	return Process{}, fmt.Errorf("%w: no %s process is running", ErrNotFound, spec.Process)
+}
+
+func processMatches(spec providers.AppLoginItem, args []string) bool {
+	name := strings.ToLower(filepath.Base(args[0]))
+	named := false
+	for _, alt := range strings.Split(spec.Process, "|") {
+		if globMatch(strings.ToLower(alt), name) {
+			named = true
+			break
+		}
+	}
+	if !named {
+		return false
+	}
+	if len(spec.Markers) == 0 {
+		return true
+	}
+	line := strings.ToLower(strings.Join(args, " "))
+	for _, m := range spec.Markers {
+		if strings.Contains(line, strings.ToLower(m)) {
+			return true
+		}
+	}
+	return false
 }
 
 // flagValues reads --flag=value and --flag value out of a command line.

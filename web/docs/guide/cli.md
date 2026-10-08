@@ -714,6 +714,7 @@ vendor's windows, busiest first:
 | Kilo | `GET /api/trpc/user.getCreditBlocks,kiloPass.getState` | Kilo Pass credits used this billing period, and prepaid credit left |
 | Kimi Code | `GET /coding/v1/usages` | 5-hour, weekly and monthly windows |
 | Kiro | `kiro-cli chat --no-interactive /usage` | monthly plan credits used, and bonus credits |
+| Kiro | `POST GetUsageLimits` (CodeWhisperer) | plan credits used this month, and overage credits against their cap |
 | MiniMax Token Plan | `GET /v1/token_plan/remains` | the interval and weekly windows |
 | Mistral | `GET /api/billing/v2/usage`, `/subscription`, `/api/billing/credits` (admin.mistral.ai) | the included-API and Vibe allowances' shares used this month, and the credit balance in its currency |
 | Muse Code | `POST /muse-code/key` | the subscription's 5-hour and weekly windows |
@@ -796,7 +797,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 |  | `claude-code-oauth` | the plan windows, with Claude Code's own sign-in (opt-in) | another app's sign-in | public docs and fixtures |
 |  | `vendor-usage-anthropic` | the organisation's token usage from the Admin API | admin key | public docs and fixtures |
 |  | `claude-code-stats-cache` | daily totals from Claude Code's stats cache (deprecated) | local files | against a real account |
-| Antigravity | `antigravity-local` | 5-hour and weekly quota for Gemini models and for Claude and GPT models, while the app runs | local files | CodexBar's source, the vendor's docs and fixtures |
+| Antigravity | `antigravity-local` | 5-hour and weekly quota for Gemini models and for Claude and GPT models, while the app runs | another app's sign-in, once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
 | Atlas Cloud | `atlascloud-account` | the account's available USD balance | API key | CodexBar's source, the vendor's docs and fixtures |
 | Augment | `augment-cli` | credits used of the month's allowance | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
 |  | `augment-web` | the same credits, with the app.augmentcode.com session | browser session | CodexBar's source, the vendor's docs and fixtures |
@@ -830,6 +831,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Kilo | `kilo-account` | Kilo Pass credits used this billing period, and prepaid credit left | API key, or another app's sign-in once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
 | Kimi | `kimi-account` | 5-hour, weekly and monthly windows | API key | the vendor's client source and fixtures |
 | Kiro | `kiro-cli` | monthly plan credits used, and bonus credits | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
+|  | `kiro-overage` | plan credits used this month, and overage credits against their cap | another app's sign-in, once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
 | LiteLLM | `litellm-account` | the key's spend against its budget, and when it resets | API key | the vendor's client source and fixtures |
 | LLM Proxy | `llm-proxy-account` | the tightest quota group left on the credentials it pools, and when it resets | API key | CodexBar's source, the vendor's docs and fixtures |
 | Xiaomi MiMo | `mimo-web` | the balance (in its currency) and the Token Plan's monthly credits used | browser session | CodexBar's source, the vendor's docs and fixtures |

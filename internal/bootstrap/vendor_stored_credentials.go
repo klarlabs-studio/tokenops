@@ -135,6 +135,17 @@ func chainReader(readers []accounts.Reader, id string) accounts.ChainReader {
 	return nil
 }
 
+// sourceEndpoint is the endpoint of the account reader that writes source
+// tag: a provider may have several readers (Kiro's CLI and its overage).
+func sourceEndpoint(readers []accounts.Reader, tag string) string {
+	for _, r := range readers {
+		if r.Source() == tag {
+			return r.Endpoint()
+		}
+	}
+	return ""
+}
+
 // readerEndpoint is the endpoint whose keys provider id's account reader
 // uses.
 func readerEndpoint(readers []accounts.Reader, id string) string {
@@ -172,7 +183,7 @@ func grantedCredentials(cfg config.Config, readers []accounts.Reader, env applog
 		if !ok {
 			continue
 		}
-		endpoint := readerEndpoint(readers, id)
+		endpoint := sourceEndpoint(readers, s.Tag)
 		if endpoint == "" {
 			continue
 		}

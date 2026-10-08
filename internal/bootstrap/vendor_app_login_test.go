@@ -52,7 +52,7 @@ func sealedEnv(t *testing.T) applogin.Env {
 			t.Errorf("read the Keychain item %s", i)
 			return "", keychain.ErrNotFound
 		},
-		Processes: func(context.Context) ([][]string, error) {
+		Processes: func(context.Context) ([]applogin.Process, error) {
 			t.Error("listed processes")
 			return nil, nil
 		},

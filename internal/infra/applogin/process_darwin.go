@@ -14,13 +14,13 @@ import (
 // listProcesses lists the command lines of this user's processes through
 // sysctl (kern.proc.all, kern.procargs2): no subprocess, and another
 // user's processes are not read.
-func listProcesses(ctx context.Context) ([][]string, error) {
+func listProcesses(ctx context.Context) ([]Process, error) {
 	procs, err := unix.SysctlKinfoProcSlice("kern.proc.all")
 	if err != nil {
 		return nil, err
 	}
 	uid := uint32(os.Getuid()) //nolint:gosec // a uid is never negative
-	var out [][]string
+	var out []Process
 	for _, p := range procs {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -33,7 +33,7 @@ func listProcesses(ctx context.Context) ([][]string, error) {
 			continue
 		}
 		if args := procArgs(raw); len(args) > 0 {
-			out = append(out, args)
+			out = append(out, Process{PID: int(p.Proc.P_pid), Args: args})
 		}
 	}
 	return out, nil

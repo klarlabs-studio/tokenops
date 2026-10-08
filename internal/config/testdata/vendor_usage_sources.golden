@@ -46,6 +46,7 @@ jetbrains_local	jetbrains-local
 kilo_account	kilo-account
 kimi_account	kimi-account
 kiro_cli	kiro-cli
+kiro_overage	kiro-overage
 litellm_gateway	litellm-account
 llm_proxy_gateway	llm-proxy-account
 mimo_web	mimo-web
