@@ -139,7 +139,7 @@ func StartVendorUsagePollers(
 			BrowserHeaders: cfg.VendorUsage.ClaudeUsageMeter.BrowserHeaders,
 			BrowserCookies: cfg.VendorUsage.ClaudeUsageMeter.BrowserCookies,
 			OrgID:          cfg.VendorUsage.ClaudeUsageMeter.OrgID, Interval: cfg.VendorUsage.ClaudeUsageMeter.Interval,
-			Logger: logger, Cookies: browserSessionSource(cfg.VendorUsage.ClaudeUsageMeter),
+			Logger: logger, Cookies: browserSessionSource(cfg.VendorUsage.ClaudeUsageMeter, cfg.Keychain.Disabled),
 			NewClient: claudeai.NewSessionClient,
 		})
 		sup.Go("claude-usage-meter", refreshable(sig, p.Run))
@@ -163,7 +163,7 @@ func StartVendorUsagePollers(
 	if oc := cfg.VendorUsage.ClaudeCodeOAuth; oc.Enabled {
 		home, _ := os.UserHomeDir()
 		p := claudecodeoauth.NewPoller(bus, claudecodeoauth.PollerOptions{
-			Stores:   claudeoauthapi.Stores(home, oc.Keychain),
+			Stores:   claudeoauthapi.Stores(home, oc.Keychain && !cfg.Keychain.Disabled, false),
 			Client:   claudeoauthapi.Client{UserAgent: "tokenops/" + version.Version},
 			Interval: oc.Interval, Health: sourceHealth.For(claudecodeoauth.SourceTag), Logger: logger,
 		})
@@ -216,16 +216,25 @@ func StartVendorUsagePollers(
 // a session nobody had read from a browser, was a dialog the operator had
 // not started. An expired pasted session stops, and the stale-reading
 // finding says how to reconnect it.
-func browserSessionSource(cfg config.ClaudeUsageMeterConfig) func(context.Context) (claudeusagemeter.Session, error) {
+//
+// The read is quiet: the daemon never shows a Keychain prompt. When macOS
+// would ask, the read fails, and the stale-reading finding says how to
+// reconnect. keychain.disabled reads no Keychain, so only a browser that
+// does not need it (Firefox) can be read.
+func browserSessionSource(cfg config.ClaudeUsageMeterConfig, keychainDisabled bool) func(context.Context) (claudeusagemeter.Session, error) {
 	if !cfg.FromBrowser || strings.EqualFold(cfg.Browser, config.BrowserNone) {
 		return nil
+	}
+	secret := browsercookie.QuietSecret()
+	if keychainDisabled {
+		secret = browsercookie.DisabledSecret()
 	}
 	return func(ctx context.Context) (claudeusagemeter.Session, error) {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return claudeusagemeter.Session{}, err
 		}
-		cookies, browser, err := browsercookie.FindMany(ctx, home, "claude.ai", []string{"sessionKey", "cf_clearance"}, cfg.Browser, nil)
+		cookies, browser, err := browsercookie.FindMany(ctx, home, "claude.ai", []string{"sessionKey", "cf_clearance"}, cfg.Browser, secret)
 		if err != nil {
 			return claudeusagemeter.Session{}, err
 		}

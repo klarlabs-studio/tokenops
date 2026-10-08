@@ -6,6 +6,7 @@ import (
 	"crypto/cipher"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,8 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+
+	"go.klarlabs.de/tokenops/internal/infra/keychain"
 )
 
 // chromiumFixture writes a Chrome-shaped cookie store holding one encrypted
@@ -330,17 +333,50 @@ func TestUserAgentNamesTheBrowser(t *testing.T) {
 	}
 }
 
-// The wait is not one number: unattended the daemon must not stall, but an
-// operator who just typed the command needs time to find the dialog —
-// fifteen seconds sent a working setup down the paste path.
-func TestKeychainWaitsDifferPerCaller(t *testing.T) {
-	if DaemonKeychainWait >= InteractiveKeychainWait {
-		t.Errorf("daemon wait %s is not shorter than the interactive %s", DaemonKeychainWait, InteractiveKeychainWait)
-	}
+// An operator who just typed the setup command needs time to find the
+// dialog: fifteen seconds sent a working setup down the paste path.
+// Nothing unattended waits at all; it reads quietly.
+func TestInteractiveKeychainWaitIsLongEnough(t *testing.T) {
 	if InteractiveKeychainWait < time.Minute {
 		t.Errorf("interactive wait %s is too short to find a dialog in", InteractiveKeychainWait)
 	}
-	if KeychainSecret(time.Second) == nil {
-		t.Error("KeychainSecret returned nothing to call")
+	if KeychainSecret(time.Second) == nil || QuietSecret() == nil || DisabledSecret() == nil {
+		t.Error("a SecretFunc constructor returned nothing to call")
+	}
+}
+
+// One refused prompt is an answer for every browser: asking for the next
+// browser's Keychain item would be a prompt storm, not a fallback.
+func TestFindManyStopsPromptingAfterADenial(t *testing.T) {
+	const secret = "keychain-secret"
+	home := filepath.Join(t.TempDir(), "home")
+	for _, dir := range []string{"Library/Application Support/Google/Chrome/Default", "Library/Application Support/Arc/User Data/Default"} {
+		profile := filepath.Join(home, dir)
+		if err := os.MkdirAll(profile, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		store := chromiumFixture(t, secret, ".claude.ai", "sessionKey", "sk-ant-sid", false)
+		if err := os.Rename(store, filepath.Join(profile, "Cookies")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var asked []string
+	_, _, err := FindMany(context.Background(), home, "claude.ai", []string{"sessionKey"}, "", func(b Browser) (string, error) {
+		asked = append(asked, b.Name)
+		return "", fmt.Errorf("%w: %s", keychain.ErrDenied, b.Name)
+	})
+	if !errors.Is(err, keychain.ErrDenied) {
+		t.Errorf("err = %v, want the denial", err)
+	}
+	if len(asked) != 1 || asked[0] != "Chrome" {
+		t.Errorf("asked %v, want Chrome only", asked)
+	}
+}
+
+// keychain.disabled reads no Keychain: a Chromium store cannot be read,
+// and the answer says why.
+func TestDisabledSecretRefuses(t *testing.T) {
+	if _, err := DisabledSecret()(Browser{Name: "Chrome"}); !errors.Is(err, keychain.ErrDisabled) {
+		t.Errorf("err = %v, want keychain.ErrDisabled", err)
 	}
 }
