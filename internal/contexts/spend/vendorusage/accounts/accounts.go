@@ -30,6 +30,10 @@ type Credential struct {
 	// Origin says where it was found, for status; never the key.
 	Origin string
 	Key    string
+	// Resolve finds the key when it is needed, for a credential that is
+	// costly or intrusive to read (a browser session): it is called only
+	// when Key is empty and no credential before it was accepted.
+	Resolve func(context.Context) (string, error)
 	// BaseURL is where the harness sends the key. A gateway credential
 	// is read there and nowhere else.
 	BaseURL string
