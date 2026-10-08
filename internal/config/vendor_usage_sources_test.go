@@ -63,6 +63,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"fireworks", "fireworks-usage"},
 		{"gemini_cli", "gemini-cli"},
 		{"github_copilot", "github-copilot"},
+		{"gitkraken_account", "gitkraken-account"},
 		{"huggingface_account", "huggingface-account"},
 		{"ibmbob_account", "ibmbob-account"},
 		{"kilo_account", "kilo-account"},

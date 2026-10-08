@@ -193,6 +193,9 @@ type Source struct {
 	KeyFormat string
 	// Verified says how far the reader has been checked.
 	Verified Verification
+	// Reference is what a FromCodexBar reader was ported from: the path
+	// of the CodexBar source it follows.
+	Reference string
 	// Endpoint, Shows and RecognisedBy are its row in the docs tables:
 	// "`GET /api/v1/key`", "the key's spend, against its credit cap".
 	// RecognisedBy is a gateway's health route.
