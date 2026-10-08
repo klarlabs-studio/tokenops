@@ -93,6 +93,22 @@ type Reader interface {
 	Read(ctx context.Context, key string) (Reading, error)
 }
 
+// ChainReader is a Reader whose credential is the vendor's own standard
+// credential chain on this machine (AWS's environment and shared
+// credentials file), not a key: Chain finds it, and says where, as the key
+// Read takes. It is read only for a provider the operator set up.
+type ChainReader interface {
+	Reader
+	Chain(ctx context.Context) (key, origin string, err error)
+}
+
+// Paced is a Reader the poller asks no more often than MinInterval: one
+// whose vendor bills each request (AWS Cost Explorer) or refreshes its
+// figures only a few times a day.
+type Paced interface {
+	MinInterval() time.Duration
+}
+
 // GatewayEndpoint is the endpoint name of a credential whose base URL is a
 // host TokenOps does not know: possibly a gateway the operator runs or
 // subscribes to. A gateway reader recognises it before reading.

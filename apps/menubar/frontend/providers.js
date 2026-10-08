@@ -4,6 +4,7 @@ window.TOKENOPS_PROVIDERS = {
   "aixy": {"name":"Aixy","logo":false},
   "alibaba": {"name":"Alibaba Cloud","logo":false},
   "anthropic": {"name":"Claude","logo":true},
+  "bedrock": {"name":"Amazon Bedrock","logo":true},
   "bifrost": {"name":"Bifrost","logo":false},
   "cerebras": {"name":"Cerebras","logo":false},
   "chutes": {"name":"Chutes","logo":false},

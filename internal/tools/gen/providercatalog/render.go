@@ -154,6 +154,8 @@ func credential(c providers.Credential) string {
 		return "local files"
 	case providers.BrowserCookie:
 		return "browser session"
+	case providers.CredentialChain:
+		return "the vendor's credential chain, after setup"
 	}
 	return string(c)
 }

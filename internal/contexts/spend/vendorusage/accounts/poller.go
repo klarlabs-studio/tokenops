@@ -42,6 +42,8 @@ type Poller struct {
 	opts PollerOptions
 	mu   sync.Mutex
 	last map[string]string
+	// asked is when each paced reader was last sent a credential.
+	asked map[string]time.Time
 	// recognised caches which gateway each root is, nil for none.
 	recognised map[string]recognition
 }
@@ -70,7 +72,7 @@ func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
 	if opts.Health == nil {
 		opts.Health = func(string) *freshness.Recorder { return nil }
 	}
-	return &Poller{bus: bus, opts: opts, last: map[string]string{}, recognised: map[string]recognition{}}
+	return &Poller{bus: bus, opts: opts, last: map[string]string{}, asked: map[string]time.Time{}, recognised: map[string]recognition{}}
 }
 
 // Run polls until ctx ends.
@@ -95,6 +97,9 @@ func (p *Poller) Scan(ctx context.Context) {
 	creds := p.opts.Credentials()
 	now := p.opts.Now().UTC()
 	for _, r := range p.opts.Readers {
+		if !p.due(r, creds, now) {
+			continue
+		}
 		var (
 			reading Reading
 			err     error
@@ -173,6 +178,29 @@ func (p *Poller) scanGateways(ctx context.Context, creds []Credential, now time.
 
 // recognise returns the gateway at root, asking it at most once per
 // recogniseFor.
+// due reports whether r is to be read on this scan: always, unless it is
+// paced and was asked within its interval. A paced reader with a
+// credential to try counts as asked, read or refused, so a vendor that
+// bills each request is billed no more often than that.
+func (p *Poller) due(r Reader, creds []Credential, now time.Time) bool {
+	paced, ok := r.(Paced)
+	if !ok {
+		return true
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if last, ok := p.asked[r.Source()]; ok && now.Sub(last) < paced.MinInterval() {
+		return false
+	}
+	for _, c := range creds {
+		if c.Endpoint == r.Endpoint() {
+			p.asked[r.Source()] = now
+			break
+		}
+	}
+	return true
+}
+
 // gatewayFor is the address a gateway credential is read at and the
 // gateway that reads it: the one it was named for, at the base URL given,
 // or the one recognised at the root of the harness's base URL.
