@@ -25,6 +25,7 @@
 - **providers:** Augment Code: credits used of the month's allowance, from the signed-in `auggie account status` CLI, or from app.augmentcode.com with the browser session `tokenops vendor-usage setup augment` reads (the daemon re-reads it only quietly)
 - **providers:** CodeRabbit: reviews this billing period from the signed-in `coderabbit usage` CLI, stored as a count (`count_<n>_*` attributes): CodeRabbit reports no allowance, so there is no percentage
 - **providers:** Zed: edit predictions used of the plan's allowance this billing cycle, from cloud.zed.dev with the Zed editor's own sign-in, which only `tokenops vendor-usage setup zed` reads from the Keychain (opt-in; the daemon never reads the Keychain for it)
+- **providers:** Antigravity: 5-hour and weekly quota for Gemini models and for Claude and GPT models, asked of the running Antigravity app's own local language server on 127.0.0.1; nothing leaves the machine
 
 ### Fixed
 
