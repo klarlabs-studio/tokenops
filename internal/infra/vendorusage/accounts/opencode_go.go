@@ -78,7 +78,7 @@ func opencodeGoWindow(raw json.RawMessage, now time.Time) (usage.Window, bool) {
 		}
 		pct = used / limit * 100
 	}
-	w := usage.Window{UsedPct: min(max(pct, 0), 100)}
+	w := usage.Window{UsedPct: clampPct(pct)}
 	if sec, ok := firstJSONNumber(m, "resetInSec", "resetInSeconds", "resetSeconds", "reset_in_sec", "resetsInSec"); ok && sec > 0 {
 		w.ResetsAt = now.Add(time.Duration(sec) * time.Second).Truncate(time.Second)
 	} else {
