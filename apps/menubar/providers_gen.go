@@ -44,6 +44,7 @@ var providerNames = map[string]string{
 	"openrouter":  "OpenRouter",
 	"perplexity":  "Perplexity",
 	"poe":         "Poe",
+	"raycast":     "Raycast",
 	"synthetic":   "Synthetic",
 	"t3chat":      "T3 Chat",
 	"together":    "Together AI",

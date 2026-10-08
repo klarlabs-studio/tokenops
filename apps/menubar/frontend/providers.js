@@ -41,6 +41,7 @@ window.TOKENOPS_PROVIDERS = {
   "openrouter": {"name":"OpenRouter","logo":true},
   "perplexity": {"name":"Perplexity","logo":true},
   "poe": {"name":"Poe","logo":true},
+  "raycast": {"name":"Raycast","logo":false},
   "synthetic": {"name":"Synthetic","logo":false},
   "t3chat": {"name":"T3 Chat","logo":false},
   "together": {"name":"Together AI","logo":false},

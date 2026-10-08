@@ -34,6 +34,7 @@ var readers = []func() usage.Reader{
 	readerOpenRouter,
 	readerPerplexity,
 	readerPoe,
+	readerRaycast,
 	readerSynthetic,
 	readerT3Chat,
 	readerTypeSafe,
