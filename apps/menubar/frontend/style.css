@@ -85,19 +85,21 @@ html, body {
 .tab:hover { background: var(--surface); color: var(--fg); }
 .tab.active { background: var(--accent); color: var(--accent-fg); box-shadow: 0 4px 14px rgba(39, 66, 245, 0.35); }
 .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The vendor's logo on a white tile, so every mark keeps its own colours
+   on either theme and on the selected tab. */
 .mark {
-  width: 20px; height: 20px;
+  width: 22px; height: 22px; flex: none;
   display: grid; place-items: center;
   border-radius: 6px;
-  font-size: 10px; font-weight: 700; letter-spacing: -.02em;
-  color: #FFFFFF;
-  background: #555A64;
+  background: #FFFFFF;
+  box-shadow: 0 0 0 1px rgba(22, 24, 29, 0.10);
+  color: #16181D;
 }
-.mark-anthropic { background: #5468F8; }
-.mark-openai { background: #15803D; }
-.mark-gemini { background: #F59E0B; }
-.mark-github, .mark-cursor { background: #3F434D; }
-.tab.active .mark { background: rgba(255, 255, 255, 0.22); }
+.mark img { width: 15px; height: 15px; display: block; }
+.mark.letters { font-size: 10px; font-weight: 700; letter-spacing: -.02em; color: #FFFFFF; background: #555A64; }
+.mark-large { width: 26px; height: 26px; border-radius: 7px; }
+.mark-large img { width: 18px; height: 18px; }
+.head h2 { display: flex; align-items: center; gap: 8px; }
 .mini { width: 70%; height: 3px; border-radius: 2px; background: var(--track); overflow: hidden; }
 .tab.active .mini { background: rgba(255, 255, 255, 0.25); }
 .mini-fill { display: block; height: 100%; border-radius: 2px; background: var(--low); }
@@ -160,7 +162,24 @@ html, body {
 .plain { margin: 8px 0; color: var(--muted); }
 .refresh-note { margin: 6px 0; font-size: 11.5px; color: var(--faint); }
 .row:disabled { opacity: 0.5; cursor: default; }
+/* A read in progress: a spinner and how long it has taken. */
+.loading { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 12px; color: var(--muted); }
+.loading[hidden] { display: none; }
+.spinner {
+  width: 12px; height: 12px; flex: none;
+  border: 2px solid var(--track); border-top-color: var(--low);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+.row.busy { cursor: default; }
+.row.busy .refresh-icon { display: inline-block; animation: spin .8s linear infinite; color: var(--low); }
+.row.busy:hover { background: transparent; color: var(--fg); }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .spinner, .row.busy .refresh-icon { animation-duration: 2.4s; }
+}
 .error { margin: 6px 0; padding: 8px 10px; border-radius: 8px; background: var(--surface); color: var(--error); }
+.error.waiting { color: var(--muted); }
 
 /* Menu rows, as the system draws them. */
 .menu { border-top: 1px solid var(--hair); padding-top: 4px; }

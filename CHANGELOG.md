@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Changed
+
+- **menubar:** each plan shows its vendor's own logo (Claude, Codex, Gemini, Copilot, Cursor and the API providers) where it showed two letters
+- **menubar:** while the panel fetches your usage it says so, with a spinner and how long it has taken, and keeps what it showed; Refresh spins and reads "Refreshing…" until the new readings are in
+- **menubar:** messages say what happened in plain words and what happens next ("Fetching your usage is taking longer than usual. Showing your usage as of 08:50."), where they said "the TokenOps daemon is slow to answer" or showed a raw status line
+
 ## 0.101.2 - 2026-10-08
 
 ### Added

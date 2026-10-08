@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/http"
 	"os"
 	"runtime"
 	"sync"
@@ -76,12 +77,20 @@ type view struct {
 	Findings json.RawMessage `json:"findings,omitempty"`
 	// Costs is each provider's usage today and over the last 30 days.
 	Costs map[string]costs `json:"costs,omitempty"`
-	// Error says why there is nothing to show, in the operator's terms.
+	// Error says why there is nothing new to show, in the operator's terms.
 	Error string `json:"error,omitempty"`
+	// Waiting marks Error as a read that took too long: nothing is broken,
+	// so the panel does not show it as a failure.
+	Waiting bool `json:"waiting,omitempty"`
 	// Note says what the last refresh did.
-	Note    string    `json:"note,omitempty"`
-	Updated time.Time `json:"updated"`
-	err     error
+	Note string `json:"note,omitempty"`
+	// LoadingSince is when the read in progress started; zero when none
+	// is. The panel says how long it has been fetching.
+	LoadingSince time.Time `json:"loading_since,omitzero"`
+	// Refreshing is a refresh the operator asked for, still coming in.
+	Refreshing bool      `json:"refreshing,omitempty"`
+	Updated    time.Time `json:"updated"`
+	err        error
 }
 
 // costs is one provider's usage over two windows, its last 30 days day by
@@ -119,6 +128,13 @@ type menubar struct {
 	// note says what the last refresh did, shown until noteUntil.
 	note      string
 	noteUntil time.Time
+	// reads counts the reads in progress; loadingSince is when the first
+	// of them started.
+	reads        int
+	loadingSince time.Time
+	// refreshing is a refresh the operator asked for whose readings are
+	// still coming in.
+	refreshing bool
 }
 
 // newMenubar wires the runtime, the panel's grant and commands, and the
@@ -240,16 +256,30 @@ func (m *menubar) poll(ctx context.Context) {
 // panel. A daemon that is not running is shown, not returned as an error:
 // the menu bar is where an operator would notice it.
 func (m *menubar) refresh(ctx context.Context) view {
+	m.startRead(ctx)
 	v := m.read(ctx)
 	m.mu.Lock()
-	if v.Error != "" && m.last.Glance != nil && !errors.Is(v.err, errNoDaemon) {
-		// A slow or failed read keeps the last good reading, marked.
-		stale := m.last
-		stale.Error = v.Error + " — showing the reading from " + m.last.Updated.Format("15:04")
-		v = stale
+	m.reads--
+	if m.reads > 0 {
+		v.LoadingSince = m.loadingSince
+	}
+	if v.err != nil {
+		fmt.Fprintln(os.Stderr, "tokenops-menubar: read:", v.err)
+		var shown time.Time
+		if m.last.Glance != nil && !errors.Is(v.err, errNoDaemon) {
+			shown = m.last.Updated
+		}
+		v.Error, v.Waiting = explain(v.err, shown), errors.Is(v.err, errSlow)
+		if !shown.IsZero() {
+			// A slow or failed read keeps the last good reading, marked.
+			stale := m.last
+			stale.Error, stale.Waiting, stale.LoadingSince = v.Error, v.Waiting, v.LoadingSince
+			v = stale
+		}
 	} else {
 		m.last = v
 	}
+	v.Refreshing = m.refreshing
 	var notes []note
 	if v.Error == "" && v.Glance != nil {
 		notes = m.alerts.observe(v.Glance)
@@ -271,6 +301,26 @@ func (m *menubar) refresh(ctx context.Context) view {
 	return v
 }
 
+// startRead marks a read as started and, for the first one in progress,
+// tells the panel, which shows how long it has been fetching while it
+// keeps the last reading on screen.
+func (m *menubar) startRead(ctx context.Context) {
+	m.mu.Lock()
+	m.reads++
+	if m.reads > 1 {
+		m.mu.Unlock()
+		return
+	}
+	m.loadingSince = time.Now()
+	v := m.last
+	v.LoadingSince, v.Refreshing = m.loadingSince, m.refreshing
+	if time.Now().Before(m.noteUntil) {
+		v.Note = m.note
+	}
+	m.mu.Unlock()
+	_ = m.app.Emit(ctx, viewEvent, v)
+}
+
 // refreshAgain is when the panel reads again after asking for a refresh:
 // most readers answer within seconds, the slowest within half a minute.
 var refreshAgain = []time.Duration{4 * time.Second, 15 * time.Second, 35 * time.Second}
@@ -286,6 +336,7 @@ func (m *menubar) refreshNow(ctx context.Context) view {
 		// what is happening while the readings come in.
 		m.mu.Lock()
 		m.note, m.noteUntil = r.note(time.Now()), time.Now().Add(refreshAgain[len(refreshAgain)-1]+time.Second)
+		m.refreshing = r.Requested
 		m.mu.Unlock()
 	}
 	v := m.refresh(ctx)
@@ -295,8 +346,14 @@ func (m *menubar) refreshNow(ctx context.Context) view {
 		bg := context.WithoutCancel(ctx)
 		go func() {
 			start := time.Now()
-			for _, d := range refreshAgain {
+			for i, d := range refreshAgain {
 				time.Sleep(time.Until(start.Add(d)))
+				if i == len(refreshAgain)-1 {
+					// The last read ends the refresh, and its note.
+					m.mu.Lock()
+					m.refreshing, m.noteUntil = false, time.Now()
+					m.mu.Unlock()
+				}
 				m.refresh(bg)
 			}
 		}()
@@ -338,7 +395,7 @@ func (m *menubar) read(ctx context.Context) view {
 	v := view{Updated: time.Now()}
 	g, err := m.daemon.glance(ctx)
 	if err != nil {
-		v.Error, v.err = explain(err), err
+		v.err = err
 		return v
 	}
 	v.Glance = g
@@ -396,22 +453,37 @@ func (m *menubar) costs(ctx context.Context, g json.RawMessage) map[string]costs
 	return out
 }
 
-// explain words an error for the operator.
-func explain(err error) string {
+// explain says what a failed read means for the person reading the
+// panel, and what happens next. shown is when the reading still on screen
+// was taken; zero when there is none. The error itself goes to the log.
+func explain(err error, shown time.Time) string {
+	kept := ""
+	if !shown.IsZero() {
+		kept = " Showing your usage as of " + shown.Format("15:04") + "."
+	}
+	var se *statusError
 	switch {
 	case errors.Is(err, errNoDaemon):
-		return "the TokenOps daemon is not running — run `tokenops daemon install`"
+		return "TokenOps isn't running, so there is nothing new to show. Start it with `tokenops daemon install`; it then starts at login."
 	case errors.Is(err, errSlow):
-		return "the TokenOps daemon is slow to answer"
+		return "Fetching your usage is taking longer than usual." + kept + " TokenOps will try again in a minute."
+	case errors.As(err, &se) && (se.code == http.StatusUnauthorized || se.code == http.StatusForbidden):
+		return "TokenOps didn't accept the menu bar's key." + kept + " `tokenops daemon restart` issues a new one."
 	}
-	return err.Error()
+	return "Your usage couldn't be fetched just now." + kept + " TokenOps will try again in a minute."
 }
 
 // menu is the tray menu.
 func (m *menubar) menu() []platform.MenuItem {
 	login, err := m.app.LoginItemEnabled()
+	refresh := platform.MenuItem{ID: actionRefresh, Label: "Refresh"}
+	m.mu.Lock()
+	if m.refreshing {
+		refresh.Label, refresh.Disabled = "Refreshing…", true
+	}
+	m.mu.Unlock()
 	return []platform.MenuItem{
-		{ID: actionRefresh, Label: "Refresh"},
+		refresh,
 		{Separator: true},
 		{ID: actionLogin, Label: "Launch at Login", Checked: login, Disabled: err != nil},
 		{ID: actionAlerts, Label: "Alerts", Checked: m.alertsOn(), Disabled: m.notify == nil},
