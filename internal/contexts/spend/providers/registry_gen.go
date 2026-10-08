@@ -6,6 +6,7 @@ package providers
 var registered = []func() Descriptor{
 	providerAlibaba,
 	providerAnthropic,
+	providerAtlasCloud,
 	providerBifrost,
 	providerCerebras,
 	providerChutes,

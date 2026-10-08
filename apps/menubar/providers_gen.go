@@ -6,6 +6,7 @@ package main
 var providerNames = map[string]string{
 	"alibaba":     "Alibaba Cloud",
 	"anthropic":   "Claude",
+	"atlascloud":  "Atlas Cloud",
 	"bifrost":     "Bifrost",
 	"cerebras":    "Cerebras",
 	"chutes":      "Chutes",

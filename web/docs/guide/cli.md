@@ -664,6 +664,7 @@ vendor's own figures every 15 minutes:
 <!-- begin generated: provider-accounts -->
 | Vendor | Endpoint | Shows |
 |---|---|---|
+| Atlas Cloud | `GET /public/v1/balance` | the account's available USD balance |
 | DeepInfra | `GET /payment/checklist` | spend since the last invoice, the limit, prepaid credit |
 | DeepSeek | `GET /user/balance` | prepaid USD balance left |
 | Moonshot (Kimi API) | `GET /v1/users/me/balance` | prepaid USD balance left |
@@ -737,6 +738,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 |  | `claude-code-oauth` | the plan windows, with Claude Code's own sign-in (opt-in) | another app's sign-in | public docs and fixtures |
 |  | `vendor-usage-anthropic` | the organisation's token usage from the Admin API | admin key | public docs and fixtures |
 |  | `claude-code-stats-cache` | daily totals from Claude Code's stats cache (deprecated) | local files | against a real account |
+| Atlas Cloud | `atlascloud-account` | the account's available USD balance | API key | public docs and fixtures |
 | Bifrost | `bifrost-account` | each budget's share used | API key | public docs and fixtures |
 | Cerebras | — | in the catalog only: Cerebras Code's plans and limits are known; nothing reads its usage yet | — | — |
 | Chutes | `chutes-account` | the 4-hour and monthly caps | API key | the vendor's client source and fixtures |

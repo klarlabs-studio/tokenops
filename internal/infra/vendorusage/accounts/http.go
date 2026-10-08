@@ -54,31 +54,62 @@ func getJSON(ctx context.Context, hc *http.Client, url, key string, out any) err
 
 // getJSONAuth GETs url with the Authorization header set to auth.
 func getJSONAuth(ctx context.Context, hc *http.Client, url, auth string, out any) error {
+	return getJSONHeader(ctx, hc, url, "Authorization", auth, out)
+}
+
+// getJSONHeader GETs url with the key in header (ElevenLabs' xi-api-key).
+func getJSONHeader(ctx context.Context, hc *http.Client, url, header, value string, out any) error {
+	return sendJSON(ctx, hc, http.MethodGet, url, nil, func(h http.Header) { h.Set(header, value) }, out)
+}
+
+// statusError is an answer that is neither 200 nor a refusal. A reader
+// whose vendor gives a status a meaning (ai&'s 402, out of credit) reads
+// it with errors.As.
+type statusError struct {
+	method, where string
+	status        int
+}
+
+func (e *statusError) Error() string {
+	return fmt.Sprintf("accounts: %s %s: status %d", e.method, e.where, e.status)
+}
+
+// sendJSON sends a request with body (nil for none), the headers auth
+// sets, and decodes a 200's body into out. 401 and 403 are usage.ErrAuth;
+// errors name the host and path, never the query string.
+func sendJSON(ctx context.Context, hc *http.Client, method, url string, body []byte, auth func(http.Header), out any) error {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	var rd io.Reader
+	if body != nil {
+		rd = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, url, rd)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", auth)
 	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	auth(req.Header)
 	if hc == nil {
 		hc = &http.Client{Timeout: 20 * time.Second}
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
-		return fmt.Errorf("accounts: GET %s: %w", hostPath(url), err)
+		return fmt.Errorf("accounts: %s %s: %w", method, hostPath(url), err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
 		return fmt.Errorf("%w (%d on %s)", usage.ErrAuth, resp.StatusCode, hostPath(url))
 	case resp.StatusCode != http.StatusOK:
-		return fmt.Errorf("accounts: GET %s: status %d", hostPath(url), resp.StatusCode)
+		return &statusError{method: method, where: hostPath(url), status: resp.StatusCode}
 	}
-	if err := json.Unmarshal(body, out); err != nil {
-		return fmt.Errorf("accounts: GET %s: %w", hostPath(url), err)
+	if err := json.Unmarshal(b, out); err != nil {
+		return fmt.Errorf("accounts: %s %s: %w", method, hostPath(url), err)
 	}
 	return nil
 }
