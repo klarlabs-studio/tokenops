@@ -1,0 +1,18 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$TEAM_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	# No access log: request URLs on /login carry a single-use sign-in
+	# token, and the service logs requests itself without query strings.
+	reverse_proxy team:8080 {
+		header_up X-Forwarded-For {remote_host}
+	}
+}
