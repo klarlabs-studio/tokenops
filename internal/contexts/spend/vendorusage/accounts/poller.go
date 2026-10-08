@@ -219,7 +219,8 @@ func (p *Poller) publish(ctx context.Context, r Reader, env *eventschema.Envelop
 // billing=per_token, which lets headroom bind pay-as-you-go unasked; a
 // subscription carries billing=subscription and its windows as
 // window_<n>_{name,used_pct,duration_min,reset_at}. Prepaid credit is
-// balance_usd either way.
+// balance_usd either way; credit in a unit that is not dollars is
+// balance_credits with balance_credits_unit.
 func NewEnvelope(ts time.Time, r Reader, x Reading) *eventschema.Envelope {
 	h := sha256.Sum256([]byte(r.Source() + "|" + strconv.FormatInt(ts.UnixNano(), 10)))
 	attrs := map[string]string{
@@ -239,6 +240,10 @@ func NewEnvelope(ts time.Time, r Reader, x Reading) *eventschema.Envelope {
 	}
 	if x.HasBalance {
 		attrs["balance_usd"] = fmt.Sprintf("%.2f", x.BalanceUSD)
+	}
+	if x.HasCredits {
+		attrs["balance_credits"] = strconv.FormatFloat(x.Credits, 'f', -1, 64)
+		attrs["balance_credits_unit"] = x.CreditsUnit
 	}
 	for i, w := range x.Windows {
 		k := "window_" + strconv.Itoa(i) + "_"

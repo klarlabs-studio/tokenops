@@ -88,6 +88,7 @@ func providerAcme() Descriptor {
 | `Sources[].Switch` | `SwitchAccounts` for account and gateway readers; `SwitchConfig` only for a reader with its own config block (add it to `configSwitches` in `internal/config/vendor_usage_sources.go` and a hint in `vendorusage_hints.go`) |
 | `Sources[].Reader` | `AccountReader`, `GatewayReader`, or `BespokeReader` with `Package` and `Fixture` |
 | `Sources[].Cookie` | the cookies a `BrowserCookie` source reads |
+| `Sources[].KeyFormat` | what setup asks for when the credential is more than one key (`TEAM_ID:MANAGEMENT_KEY`) |
 | `Sources[].Verified` | `VerifiedLive` only after a real account was read; else `FromDocs`, `FromClientSource`, or `FromCodexBar` for a reader ported from CodexBar's provider source (name the CodexBar path in a comment) |
 | `Endpoints` | which base URLs bill to it (biller) |
 | `Opencode` | opencode's provider IDs, with the endpoint each names (`"<id>-api"` for a pay-as-you-go API beside a plan) |
@@ -119,7 +120,9 @@ the helpers in `http.go`, and returns a `usage.Reading`:
 - **Spend against a cap** (`extra_usage_*` attributes): `UsedUSD` with
   `HasUsed`, `LimitUSD` (0 for none), `LimitReached` when the vendor says
   requests are blocked. Headroom binds such a provider as `pay-as-you-go`.
-- **Balance**: `BalanceUSD` with `HasBalance` (`balance_usd`).
+- **Balance**: `BalanceUSD` with `HasBalance` (`balance_usd`); a balance in
+  the vendor's own unit (Poe's points) is `Credits` with `CreditsUnit` and
+  `HasCredits` (`balance_credits`), never converted to dollars.
 - `Scope` says what the figures cover: `"key"`, `"account"`, `"team"`.
 
 An empty reading (`Reading.Empty()`) is not stored. A refused key is

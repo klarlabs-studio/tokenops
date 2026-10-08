@@ -51,6 +51,12 @@ type Reading struct {
 	// BalanceUSD is prepaid credit left, when the vendor reports it.
 	BalanceUSD float64
 	HasBalance bool
+	// Credits is prepaid credit left in the vendor's own unit, CreditsUnit
+	// ("points"), when the vendor reports no dollar figure. It is stored
+	// as reported and never converted to dollars.
+	Credits     float64
+	CreditsUnit string
+	HasCredits  bool
 	// LimitReached is the vendor saying requests are blocked.
 	LimitReached bool
 	// Subscription marks an account on a plan rather than billed per
@@ -64,7 +70,7 @@ type Reading struct {
 // account with no plan windows, no spend and no balance (a key on a
 // vendor's free tier, say).
 func (r Reading) Empty() bool {
-	return len(r.Windows) == 0 && !r.HasUsed && !r.HasBalance && r.LimitUSD == 0 && !r.LimitReached
+	return len(r.Windows) == 0 && !r.HasUsed && !r.HasBalance && !r.HasCredits && r.LimitUSD == 0 && !r.LimitReached
 }
 
 // Window is one usage window: the share used and when it resets.
