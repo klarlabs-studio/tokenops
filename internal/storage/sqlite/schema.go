@@ -1,5 +1,10 @@
 package sqlite
 
+import (
+	"fmt"
+	"time"
+)
+
 // migrations are applied sequentially; once committed, a row is recorded in
 // schema_migrations and the migration is skipped on subsequent boots. New
 // migrations append to this slice — never reorder or rewrite existing entries.
@@ -151,7 +156,69 @@ BEGIN
 END;
 `,
 	},
+	{
+		Version: 7,
+		Name:    "events_changes",
+		SQL:     eventsChangesMigration,
+	},
 }
+
+// eventsChangesMigration replaces events_generation (migration 6) with a
+// log of which events changed, so a reader keeping events in memory
+// (EventCache) re-reads those rows instead of everything.
+//
+// A count said only that something changed: every plan restamp, start-up
+// re-attribution and retention pass made the next glance reload a month of
+// events, about a second on a busy store. The log names each changed row
+// by rowid; new rows are still found by rowid alone, so inserts — nearly
+// every write — log nothing.
+//
+// Only changes to events younger than changeLogHorizon are logged: no
+// cached read reaches that far back (maxCacheSpan), so an older row is one
+// no cache answers with. Retention deletes old rows, so its passes log
+// nothing, and a large delete costs a comparison per row rather than a
+// second write. The log keeps its latest changeLogKeep entries; a reader
+// further behind reloads. Triggers rather than application code because
+// every process on the machine writes this store, older releases too.
+var eventsChangesMigration = fmt.Sprintf(`
+DROP TRIGGER events_generation_on_update;
+DROP TRIGGER events_generation_on_delete;
+DROP TABLE events_generation;
+
+-- seq orders the changes; AUTOINCREMENT keeps it from ever going back,
+-- so a reader's position in the log stays meaningful. row is the rowid of
+-- the event that changed.
+CREATE TABLE events_changes (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    row INTEGER NOT NULL
+) STRICT;
+
+CREATE TRIGGER events_changes_on_update AFTER UPDATE ON events
+WHEN max(old.timestamp_ns, new.timestamp_ns) >= %[1]s
+BEGIN
+    INSERT INTO events_changes (row) VALUES (new.rowid);
+    INSERT INTO events_changes (row) SELECT old.rowid WHERE old.rowid <> new.rowid;
+    DELETE FROM events_changes WHERE seq <= last_insert_rowid() - %[2]d;
+END;
+
+CREATE TRIGGER events_changes_on_delete AFTER DELETE ON events
+WHEN old.timestamp_ns >= %[1]s
+BEGIN
+    INSERT INTO events_changes (row) VALUES (old.rowid);
+    DELETE FROM events_changes WHERE seq <= last_insert_rowid() - %[2]d;
+END;
+`, changeLogHorizonSQL, changeLogKeep)
+
+// changeLogHorizon is how far back a change to an event is logged; see
+// eventsChangesMigration. The cache's span stays well inside it.
+const changeLogHorizon = 45 * 24 * time.Hour
+
+// changeLogHorizonSQL is changeLogHorizon before now, in timestamp_ns.
+var changeLogHorizonSQL = fmt.Sprintf("(CAST(strftime('%%s', 'now') AS INTEGER) - %d) * 1000000000",
+	int64(changeLogHorizon/time.Second))
+
+// changeLogKeep is how many changes the log keeps.
+const changeLogKeep = 65536
 
 type migration struct {
 	Version int
