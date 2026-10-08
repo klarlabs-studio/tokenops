@@ -77,6 +77,7 @@
 - **providers:** Muse Code: the 5-hour and weekly quota used (`POST api.meta.ai/muse-code/key`), read with the `dca:` device token `muse login` issues, given in `vendor-usage setup muse`; the inference key in the answer is never kept
 - **providers:** X API: the prepaid credit left on console.x.com, purchased plus free and below zero when overdrawn (`GET /api/me`, `/api/accounts/{id}/credits`), read with the console's browser session (`vendor-usage setup xapi`)
 - **providers:** LithosAI: the organisation's prepaid balance and its spend this UTC month (`GET /api/billing`, `/api/billing/spend`), read with the console's browser session (`vendor-usage setup lithosai`)
+- **providers:** Langdock: the included 5-hour session and weekly limits used (`usageSettings.getPersonalUsage`), read with app.langdock.com's browser session (`vendor-usage setup langdock`)
 
 ### Fixed
 

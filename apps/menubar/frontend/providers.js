@@ -40,6 +40,7 @@ window.TOKENOPS_PROVIDERS = {
   "kilo": {"name":"Kilo","logo":true},
   "kimi": {"name":"Kimi","logo":true},
   "kiro": {"name":"Kiro","logo":true},
+  "langdock": {"name":"Langdock","logo":false},
   "litellm": {"name":"LiteLLM","logo":false},
   "lithosai": {"name":"LithosAI","logo":false},
   "llm-proxy": {"name":"LLM Proxy","logo":false},
