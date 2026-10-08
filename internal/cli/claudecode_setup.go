@@ -2,15 +2,18 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/capability/claudesignin"
+	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/version"
 )
 
@@ -24,12 +27,15 @@ var claudeCodeBaseURL string
 func runClaudeCodeSetup(cmd *cobra.Command, configPath string, restart, keychain bool) error {
 	out := cmd.OutOrStdout()
 	keychain = keychain && runtime.GOOS == "darwin"
+	if keychain && keychainDisabled(configPath) {
+		return errors.New("keychain.disabled is set, so TokenOps does not read the Keychain; unset it to use --keychain. nothing was written")
+	}
 	fmt.Fprintln(out, "Connecting Claude Code's own sign-in as a source of Claude's plan windows.")
 	if keychain {
 		fmt.Fprintln(out, "macOS may ask to let tokenops read \"Claude Code-credentials\" from your Keychain: Claude Code's own sign-in,")
-		fmt.Fprintln(out, "sent only to api.anthropic.com to read your plan's usage. Choose Always Allow to let the daemon read it too;")
-		fmt.Fprintln(out, "macOS may ask again after Claude Code renews its sign-in and after each TokenOps upgrade.")
-		fmt.Fprintln(out, "--no-keychain skips the Keychain and reads ~/.claude/.credentials.json only.")
+		fmt.Fprintln(out, "sent only to api.anthropic.com to read your plan's usage. Choose Always Allow to let the daemon read it too:")
+		fmt.Fprintln(out, "the daemon reads it without ever asking, and skips it when macOS would ask (after Claude Code renews its")
+		fmt.Fprintln(out, "sign-in, or a TokenOps upgrade), until you run this again.")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -43,6 +49,9 @@ func runClaudeCodeSetup(cmd *cobra.Command, configPath string, restart, keychain
 	})
 	if err != nil {
 		progress.failure("not connected")
+		if !keychain && runtime.GOOS == "darwin" && errors.Is(err, claudesignin.ErrNotSignedIn) {
+			return fmt.Errorf("%w: on macOS Claude Code keeps its sign-in in the Keychain. Run again with --keychain to let TokenOps read it (macOS asks first); nothing was written", err)
+		}
 		return fmt.Errorf("%w; nothing was written", err)
 	}
 	progress.success("connected")
@@ -78,4 +87,20 @@ func enableClaudeCodeSource(out io.Writer, configPath string, restart, keychain 
 	fmt.Fprintln(out, "The daemon reads it every 10 minutes alongside the status line and the claude.ai meter; the newest reading of each window wins.")
 	applyRestart(out, restart, false)
 	return nil
+}
+
+// keychainDisabled reports whether the operator turned the Keychain off
+// (keychain.disabled, or TOKENOPS_KEYCHAIN_DISABLED), in the config at
+// configPath.
+func keychainDisabled(configPath string) bool {
+	if path, err := resolveMutableConfigPath(configPath); err == nil {
+		if cfg, err := config.Load(path); err == nil {
+			return cfg.Keychain.Disabled
+		}
+	}
+	switch strings.ToLower(os.Getenv("TOKENOPS_KEYCHAIN_DISABLED")) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
 }

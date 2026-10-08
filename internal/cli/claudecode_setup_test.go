@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -14,14 +15,14 @@ import (
 )
 
 // setup claude-code reads Claude Code's sign-in, proves it reads usage,
-// and writes only the switch: never the token. --no-keychain keeps this
-// test away from the real Keychain.
+// and writes only the switch: never the token. Without --keychain it never
+// touches the Keychain, which also keeps this test away from the real one.
 func TestClaudeCodeSetup(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	path := seedConfig(t)
 
-	out, err := runCookieSetupCmd(t, "", "claude-code", "--config", path, "--no-keychain", "--no-restart")
+	out, err := runCookieSetupCmd(t, "", "claude-code", "--config", path, "--no-restart")
 	if err == nil || !strings.Contains(err.Error(), "not signed in") || !strings.Contains(err.Error(), "nothing was written") {
 		t.Fatalf("no sign-in: %v\n%s", err, out)
 	}
@@ -45,7 +46,7 @@ func TestClaudeCodeSetup(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, err = runCookieSetupCmd(t, "", "claude-code", "--config", path, "--no-keychain", "--no-restart")
+	out, err = runCookieSetupCmd(t, "", "claude-code", "--config", path, "--no-restart")
 	if err != nil {
 		t.Fatalf("setup: %v\n%s", err, out)
 	}
@@ -62,5 +63,19 @@ func TestClaudeCodeSetup(t *testing.T) {
 	raw, _ := os.ReadFile(path)
 	if strings.Contains(string(raw), "fake-token") {
 		t.Error("the token was written to the config")
+	}
+}
+
+// keychain.disabled refuses --keychain before anything is read or written.
+func TestClaudeCodeSetupRefusesTheKeychainWhenDisabled(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("--keychain applies on macOS only")
+	}
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("TOKENOPS_KEYCHAIN_DISABLED", "1")
+	path := seedConfig(t)
+	_, err := runCookieSetupCmd(t, "", "claude-code", "--config", path, "--keychain", "--no-restart")
+	if err == nil || !strings.Contains(err.Error(), "keychain.disabled") {
+		t.Fatalf("err = %v, want a refusal naming keychain.disabled", err)
 	}
 }

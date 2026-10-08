@@ -35,6 +35,8 @@ import (
 
 	"golang.org/x/crypto/pbkdf2"
 
+	"go.klarlabs.de/tokenops/internal/infra/keychain"
+
 	// Registers the sqlite driver used to read the cookie stores.
 	_ "modernc.org/sqlite"
 )
@@ -80,19 +82,28 @@ func Names() []string {
 	return out
 }
 
-// SecretFunc returns a browser's value-encryption secret. Production passes
-// keychainSecret; tests pass their own.
+// SecretFunc returns a browser's value-encryption secret. A nil SecretFunc
+// reads it quietly, never prompting; setup commands pass KeychainSecret;
+// tests pass their own.
 type SecretFunc func(Browser) (string, error)
 
-// DaemonKeychainWait bounds the keychain read where nobody is watching:
-// the daemon polls unattended, and an unanswered prompt must not stall
-// ingestion. InteractiveKeychainWait is for a command an operator just
-// typed — they need time to find the dialog and read it, and cutting them
-// off at fifteen seconds sends a working setup down the paste path.
-const (
-	DaemonKeychainWait      = 15 * time.Second
-	InteractiveKeychainWait = 3 * time.Minute
-)
+// QuietSecret reads the browser's secret without any UI: when macOS would
+// ask to allow the read, it fails with keychain.ErrInteractionRequired
+// instead. Everything unattended reads this way.
+func QuietSecret() SecretFunc {
+	return func(b Browser) (string, error) { return b.keychainSecret() }
+}
+
+// DisabledSecret refuses every keychain read (keychain.disabled): Chromium
+// browsers cannot be read, and Firefox, which needs no keychain, still can.
+func DisabledSecret() SecretFunc {
+	return func(Browser) (string, error) { return "", keychain.ErrDisabled }
+}
+
+// InteractiveKeychainWait is how long a command an operator just typed
+// waits for them to answer the Keychain prompt: time to find the dialog
+// and read it. Nothing unattended prompts at all; it reads quietly.
+const InteractiveKeychainWait = 3 * time.Minute
 
 // KeychainSecret returns a SecretFunc that reads the browser's secret from
 // the login keychain, waiting at most wait for the operator to allow it.
@@ -110,10 +121,11 @@ func FindMany(ctx context.Context, home, host string, names []string, only strin
 		return nil, Browser{}, errors.New("browsercookie: no cookie names given")
 	}
 	if secret == nil {
-		secret = func(b Browser) (string, error) { return b.keychainSecret() }
+		secret = QuietSecret()
 	}
 	var firstErr error
 	tried := 0
+	denied := false
 	for _, b := range known {
 		if only != "" && !strings.EqualFold(only, b.Name) {
 			continue
@@ -128,10 +140,18 @@ func FindMany(ctx context.Context, home, host string, names []string, only strin
 			continue
 		}
 		for _, store := range stores {
+			if denied && !b.firefox {
+				// The operator refused one browser's prompt: asking for
+				// the next one's would be a prompt storm, not a fallback.
+				break
+			}
 			primary, err := b.read(ctx, store, host, names[0], secret)
 			if err != nil {
 				if !errors.Is(err, ErrNotFound) && firstErr == nil {
 					firstErr = fmt.Errorf("%s: %w", b.Name, err)
+				}
+				if errors.Is(err, keychain.ErrDenied) {
+					denied = true
 				}
 				continue
 			}
@@ -300,25 +320,21 @@ func contains(list []string, s string) bool {
 	return false
 }
 
-// keychainSecret asks the login keychain for this browser's value-encryption
-// secret. macOS prompts the operator to allow it; that prompt is the consent
-// step, and a refusal must read as a refusal rather than a missing cookie.
+// keychainSecret reads this browser's value-encryption secret quietly:
+// never a prompt, keychain.ErrInteractionRequired when macOS would ask.
 func (b Browser) keychainSecret() (string, error) {
-	return b.keychainSecretWithin(DaemonKeychainWait)
+	return keychain.Quiet(b.item())
 }
 
+// keychainSecretWithin asks the operator to allow the read, waiting at
+// most wait; a refusal reads as keychain.ErrDenied, not a missing cookie.
 func (b Browser) keychainSecretWithin(wait time.Duration) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), wait)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "security", "find-generic-password", //nolint:gosec // fixed argv, service/account from the table above
-		"-w", "-s", b.keychainService, "-a", b.keychainAccount).Output()
-	if err != nil {
-		if ctx.Err() != nil {
-			return "", fmt.Errorf("keychain prompt for %q went unanswered after %s — allow it (or 'Always Allow') and try again", b.keychainService, wait)
-		}
-		return "", fmt.Errorf("could not read %q (%w) — allow access when macOS asks, or fall back to the paste prompt", b.keychainService, err)
-	}
-	return strings.TrimSpace(string(out)), nil
+	return keychain.Prompting(context.Background(), b.item(), wait)
+}
+
+// item is the browser's "Safe Storage" keychain entry.
+func (b Browser) item() keychain.Item {
+	return keychain.Item{Service: b.keychainService, Account: b.keychainAccount}
 }
 
 // readChromium returns one cookie value from a Chromium-family store.

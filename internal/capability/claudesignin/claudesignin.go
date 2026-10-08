@@ -40,11 +40,14 @@ type Result struct {
 var ErrNoWindows = errors.New("signed in to Claude Code, but Anthropic reports no plan windows for it")
 
 // Check reads Claude Code's sign-in and asks Anthropic for its windows.
+// ErrNotSignedIn is a sign-in found in none of the places read.
+var ErrNotSignedIn = claudecodeoauth.ErrNotSignedIn
+
 func Check(ctx context.Context, o Options) (Result, error) {
 	if o.Now.IsZero() {
 		o.Now = time.Now()
 	}
-	creds, err := claudecodeoauth.ReadFirst(ctx, claudeoauthapi.Stores(o.Home, o.Keychain))
+	creds, err := claudecodeoauth.ReadFirst(ctx, claudeoauthapi.Stores(o.Home, o.Keychain, true))
 	if err != nil {
 		return Result{}, err
 	}

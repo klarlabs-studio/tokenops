@@ -569,18 +569,22 @@ without a key it tells the agent to ask you to run the command above.
 
 #### When TokenOps asks for Keychain access (macOS)
 
-Only these read the Keychain, and each says so before macOS asks:
+Only a setup command you run can make macOS ask, and each says which item
+it reads before it does:
 
-| What | Keychain item | When |
+| What | Keychain item | Prompts? |
 |---|---|---|
-| `vendor-usage setup claude-subscription`, run by you | your browser's `… Safe Storage` (for example `Chrome Safe Storage`): the key it encrypts cookies with, used to read two claude.ai cookies, `sessionKey` and `cf_clearance` | when you run it; `--paste` or `--paste-request` skips the Keychain |
-| the daemon, for a meter you connected from the browser | the same `… Safe Storage` item | when claude.ai renews or expires the session, to read the new one; `browser: none` under `vendor_usage.claude_usage_meter` turns it off |
-| `vendor-usage setup claude-code`, run by you | `Claude Code-credentials`: Claude Code's own sign-in, sent only to `api.anthropic.com` | when you run it, and when the daemon reads it later; `--no-keychain` reads `~/.claude/.credentials.json` only |
+| `vendor-usage setup claude-subscription` | your browser's `… Safe Storage` (for example `Chrome Safe Storage`): the key it encrypts cookies with, used to read two claude.ai cookies, `sessionKey` and `cf_clearance` | yes, when you run it; one refusal stops it asking for other browsers; `--paste` or `--paste-request` skips the Keychain |
+| `vendor-usage setup claude-code --keychain` | `Claude Code-credentials`: Claude Code's own sign-in, sent only to `api.anthropic.com` | yes, when you run it; without `--keychain` only `~/.claude/.credentials.json` is read |
+| the daemon, for a meter connected from the browser or Claude Code connected with `--keychain` | the same items | **never**: it reads quietly, and when macOS would ask (after an upgrade, or when Claude Code renews its sign-in) it skips the read and the stale-reading finding says to run the setup again |
 
-Nothing else does: not `init`, not an agent through the MCP tools, and not
-the daemon for a session you pasted, which stops when it expires and says
-how to connect it again. macOS ties **Always Allow** to the program it was
-given to, so it may ask again after each TokenOps upgrade.
+Nothing else reads the Keychain: not `init`, not an agent through the MCP
+tools, and not the daemon for a session you pasted. `keychain: {disabled:
+true}` in the config, or `TOKENOPS_KEYCHAIN_DISABLED=1`, turns every
+Keychain read off; Firefox, which keeps its cookies outside the Keychain,
+and the credentials file still work. macOS ties **Always Allow** to the
+program it was given to, so after a TokenOps upgrade the setup may ask
+again.
 
 Prefer this over `vendor-usage enable claude-subscription --session-key`,
 which writes whatever you give it without checking.

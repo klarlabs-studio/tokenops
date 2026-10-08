@@ -48,6 +48,7 @@ func newVendorUsageSetupCmd() *cobra.Command {
 		pasteRequest  bool
 		org           string
 		noKeychain    bool
+		keychainFlag  bool
 	)
 	cmd := &cobra.Command{
 		Use:   "setup claude-subscription|claude-code",
@@ -66,15 +67,15 @@ no data. After setup, TokenOps restarts its supervised daemon automatically;
 the MCP server observes the updated config without a client restart.
 
 setup claude-code reads the windows with Claude Code's own sign-in instead
-(opt-in, ADR 0011): the token Claude Code keeps in ~/.claude/.credentials.json
-or, on macOS, the Keychain, which asks you to allow it. The token is held
+(opt-in, ADR 0011): the token Claude Code keeps in ~/.claude/.credentials.json,
+or, with --keychain on macOS, in the Keychain, which asks you to allow it. The token is held
 in memory only, sent only to api.anthropic.com, and never refreshed by
 TokenOps; Claude Code renews it when it runs. Nothing is written to your
 config but the switch.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 1 && strings.EqualFold(args[0], "claude-code") {
-				return runClaudeCodeSetup(cmd, configFlag(cmd), !noRestartFlag, !noKeychain)
+				return runClaudeCodeSetup(cmd, configFlag(cmd), !noRestartFlag, keychainFlag)
 			}
 			if len(args) == 1 && !isClaudeSubscriptionSource(args[0]) {
 				return fmt.Errorf("setup covers claude-subscription and claude-code; got %q", args[0])
@@ -98,8 +99,12 @@ config but the switch.`,
 	cmd.MarkFlagsMutuallyExclusive("paste", "paste-request")
 	cmd.Flags().StringVar(&org, "org", "",
 		"organization to meter, by name or id (default: the one reporting usage)")
-	cmd.Flags().BoolVar(&noKeychain, "no-keychain", false,
-		"claude-code: read only ~/.claude/.credentials.json, never the macOS Keychain")
+	cmd.Flags().BoolVar(&keychainFlag, "keychain", false,
+		"claude-code: also read Claude Code's sign-in from the macOS Keychain (macOS asks first)")
+	// --no-keychain was the opt-out while the Keychain was read by default;
+	// it is now what happens without --keychain.
+	cmd.Flags().BoolVar(&noKeychain, "no-keychain", false, "")
+	_ = cmd.Flags().MarkDeprecated("no-keychain", "the Keychain is read only with --keychain now")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }
@@ -258,8 +263,9 @@ func (s browserSession) meterSession() usagemeter.Session {
 const keychainNotice = `macOS may ask to let tokenops read your browser's "Safe Storage" item from the Keychain
 ("Chrome Safe Storage", "Arc Safe Storage", ...): it is the key the browser encrypts its cookies
 with. TokenOps uses it to read two claude.ai cookies, sessionKey and cf_clearance, and nothing else.
-The daemon reads them again when claude.ai renews the session, and macOS may ask again after each
-TokenOps upgrade. --paste skips the browser and the Keychain.`
+Choose Always Allow to let the daemon read them again when claude.ai renews the session: it reads
+without ever asking, and when macOS would ask (after a TokenOps upgrade) it skips the read and
+TokenOps tells you to run this again. --paste skips the browser and the Keychain.`
 
 type browserSession struct {
 	key            string
@@ -293,7 +299,7 @@ func cookieSetupKey(cmd *cobra.Command, opts cookieSetupOptions) (browserSession
 			// An operator is watching this one: give them time to find the
 			// dialog macOS puts up, rather than falling to the paste path
 			// while they are still looking for it.
-			s, err := usagemeter.FromBrowser(cmd.Context(), opts.browser, browsercookie.InteractiveKeychainWait)
+			s, err := usagemeter.FromBrowser(cmd.Context(), opts.browser, browsercookie.InteractiveKeychainWait, keychainDisabled(opts.configPath))
 			switch {
 			case err == nil:
 				return browserSession{key: s.Key, clearance: s.Clearance, userAgent: s.UserAgent, browser: s.Browser}, nil

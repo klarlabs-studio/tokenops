@@ -51,15 +51,20 @@ var (
 
 // FromBrowser reads the claude.ai session, with its clearance and the
 // browser's user agent, from a local browser: only, when set, or the
-// first that holds one. keychainWait bounds the macOS keychain prompt; 0
-// takes the default.
-func FromBrowser(ctx context.Context, only string, keychainWait time.Duration) (Session, error) {
+// first that holds one. A positive keychainWait lets macOS ask the
+// operator to allow the browser's Keychain item, waiting that long; zero
+// reads quietly, never asking. keychainDisabled reads no Keychain at all,
+// so only a browser that does not need it (Firefox) can answer.
+func FromBrowser(ctx context.Context, only string, keychainWait time.Duration, keychainDisabled bool) (Session, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return Session{}, err
 	}
-	var secret browsercookie.SecretFunc
-	if keychainWait > 0 {
+	secret := browsercookie.QuietSecret()
+	switch {
+	case keychainDisabled:
+		secret = browsercookie.DisabledSecret()
+	case keychainWait > 0:
 		secret = browsercookie.KeychainSecret(keychainWait)
 	}
 	cookies, b, err := browsercookie.FindMany(ctx, home, "claude.ai", []string{"sessionKey", "cf_clearance"}, only, secret)

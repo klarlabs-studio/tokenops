@@ -746,6 +746,23 @@ mdns:
 `instance_name` is for operators who want `tokenops.local` without
 publishing what their laptop is called.
 
+## Keychain (`keychain`)
+
+On macOS TokenOps can read two kinds of Keychain item: a browser's
+`… Safe Storage` key, to read claude.ai's session cookies, and Claude
+Code's `Claude Code-credentials`. Only a setup command you run can make
+macOS ask; the daemon reads quietly and skips a read macOS would ask about.
+To turn every Keychain read off:
+
+```yaml
+keychain:
+  disabled: true
+```
+
+Firefox, which keeps its cookies outside the Keychain, and Claude Code's
+`~/.claude/.credentials.json` still work. The [CLI guide](./cli.md) lists
+when each item is read.
+
 ## Plan limits (`plan_limits`)
 
 Figures only you can supply, for plans whose limit this tool cannot know.
@@ -906,6 +923,7 @@ system in Germany is billed in euros. See
 | `TOKENOPS_PROVIDER_ANTHROPIC_URL` | `providers.anthropic`         |
 | `TOKENOPS_PROVIDER_GEMINI_URL`    | `providers.gemini`            |
 | `TOKENOPS_PRICING_PATH`           | `pricing.path`                |
+| `TOKENOPS_KEYCHAIN_DISABLED`      | `keychain.disabled`           |
 
 ## OpenTelemetry export
 

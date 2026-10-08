@@ -13,6 +13,7 @@ import (
 	"time"
 
 	oauth "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodeoauth"
+	"go.klarlabs.de/tokenops/internal/infra/keychain"
 )
 
 var now = time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
@@ -66,7 +67,7 @@ func TestKeychainStore(t *testing.T) {
 // a denial is reported, not hidden behind "not signed in".
 func TestStoresAndReadFirst(t *testing.T) {
 	home := t.TempDir()
-	if s := Stores(home, false); len(s) != 1 {
+	if s := Stores(home, false, false); len(s) != 1 {
 		t.Errorf("keychain listed without being allowed: %v", s)
 	}
 	denied := KeychainStore{Run: func(context.Context, string, ...string) ([]byte, error) { return nil, exitErr(t, 51) }}
@@ -80,7 +81,7 @@ func TestStoresAndReadFirst(t *testing.T) {
 	if err := os.WriteFile(path, credsJSON("from-file", now.Add(time.Hour), `["user:profile"]`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if c, err := oauth.ReadFirst(context.Background(), Stores(home, true)); err != nil || c.AccessToken != "from-file" {
+	if c, err := oauth.ReadFirst(context.Background(), Stores(home, true, false)); err != nil || c.AccessToken != "from-file" {
 		t.Errorf("file first: %+v, %v", c, err)
 	}
 }
@@ -119,5 +120,24 @@ func TestClient(t *testing.T) {
 	var limited *oauth.RateLimitedError
 	if !errors.As(err, &limited) || !limited.Until.Equal(now.Add(2*time.Minute)) {
 		t.Errorf("429: %v", err)
+	}
+}
+
+// The daemon's store reads quietly: when macOS would ask, it is a denial
+// for now, never a prompt; a missing item is "not signed in".
+func TestQuietKeychainStore(t *testing.T) {
+	if s := Stores(t.TempDir(), true, false); len(s) != 2 || s[1].(KeychainStore).Prompts() {
+		t.Fatalf("stores %v: want the file and a quiet keychain store", s)
+	}
+	ask := KeychainStore{Quiet: true, QuietRead: func(keychain.Item) (string, error) { return "", keychain.ErrInteractionRequired }}
+	if _, err := ask.Read(context.Background()); !errors.Is(err, oauth.ErrKeychainDenied) {
+		t.Errorf("would ask: %v, want ErrKeychainDenied", err)
+	}
+	missing := KeychainStore{Quiet: true, QuietRead: func(keychain.Item) (string, error) { return "", keychain.ErrNotFound }}
+	if _, err := missing.Read(context.Background()); !errors.Is(err, oauth.ErrNotSignedIn) {
+		t.Errorf("missing: %v, want ErrNotSignedIn", err)
+	}
+	if !(KeychainStore{}).Prompts() {
+		t.Error("a prompting store says it does not prompt")
 	}
 }
