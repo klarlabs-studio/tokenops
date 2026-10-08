@@ -268,7 +268,7 @@ func readLine(cmd *cobra.Command, prompt string) (string, error) {
 }
 
 // runChainSetup opts in a provider read with its vendor's own credential
-// chain (AWS's environment and shared credentials file): it finds the
+// chain (AWS's environment and profiles): it finds the
 // credential, proves it with one reading, and stores only that the daemon
 // may read it, never the credential.
 func runChainSetup(cmd *cobra.Command, p providersetup.Provider, opts providerSetupOptions) error {
