@@ -1,0 +1,5 @@
+{
+  "/v1/billing": {"subscriptionTier":"SUPERGROK","config":{"creditUsagePercent":12.5,"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","start":"2026-08-06T00:00:00Z","end":"2026-08-13T00:00:00Z"},"billingPeriodEnd":"2026-08-13T00:00:00Z","onDemandCap":{"val":1000},"onDemandUsed":{"val":250},"subscriptionTier":"SuperGrok Heavy","productUsage":[{"product":"GrokBuild","usagePercent":12.5}],"prepaidBalance":{"val":1446}}},
+  "grpc-web": "0a3f0d7f6a9c3f12001a002206088097f3d0062a060880b191d2063a07080215a9389b3f3a07080115d6ea183c421208011206088097f3d0061a060880b191d206",
+  "grpc-web-unused": "00000000370a3512001a0022060880dacfcf062a06088097f3d00632090a0508ea0f1004120032090a0508ea0f1003120032090a0508ea0f10021200800000000f677270632d7374617475733a300d0a"
+}

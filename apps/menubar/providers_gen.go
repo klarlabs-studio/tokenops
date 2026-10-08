@@ -37,6 +37,7 @@ var providerNames = map[string]string{
 	"gemini":           "Gemini",
 	"github":           "Copilot",
 	"gitkraken":        "GitKraken AI",
+	"grok":             "Grok",
 	"helmcode":         "Helmcode",
 	"huggingface":      "Hugging Face",
 	"hyper":            "Charm Hyper",

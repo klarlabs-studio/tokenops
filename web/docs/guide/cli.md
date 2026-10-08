@@ -716,6 +716,8 @@ vendor's windows, busiest first:
 | Factory (Droid) | `GET /api/billing/limits`, `/api/organization/subscription/usage` (api.factory.ai) | 5-hour, weekly and monthly windows (and the Core fallback's), or the Standard and Premium token allowances; the extra-usage balance |
 | Factory (Droid) | the same, with app.factory.ai's session | the same windows and balance |
 | GitKraken AI | `GET api.gitkraken.dev/v1/ai-tasks/usage` | weekly AI credits, and the organization's pool with GITKRAKEN_ORG_ID |
+| Grok (SuperGrok) | `GET cli-chat-proxy.grok.com/v1/billing?format=credits` | the SuperGrok credit window used, and the prepaid balance |
+| Grok (SuperGrok) | `POST grok.com/grok_api_v2.GrokBuildBilling/GetGrokCreditsConfig` (gRPC-web) | the credit window used |
 | Helmcode | `GET /api/usage/quota` | each model's token quota used, and the prepaid balance |
 | IBM Bob | `GET /admin/v1/profile`, `GET /admin/v1/teams/{team}/users/{user}` | Bobcoins used this month against the team budgets |
 | JetBrains AI | the IDE's `options/AIAssistantQuotaManager2.xml` and `idea.log` | monthly AI credits used, from the most recently used IDE |
@@ -808,7 +810,7 @@ use read its own spend.
   ```
 
 <!-- begin generated: provider-env-vars -->
-The environment variables read for a key: `AIAND_API_KEY`, `AIXY_API_KEY`, `AI_GATEWAY_API_KEY`, `ALIBABA_CODING_PLAN_API_KEY`, `ALIBABA_CODING_PLAN_COOKIE`, `ALIBABA_QWEN_API_KEY`, `AMP_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DASHSCOPE_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FACTORY_API_KEY`, `FIREWORKS_API_KEY`, `GITKRAKEN_API_TOKEN`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `HYPER_API_KEY`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `LONGCAT_MANUAL_COOKIE`, `MANUS_COOKIE`, `MANUS_SESSION_TOKEN`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `PERPLEXITY_COOKIE`, `PERPLEXITY_SESSION_TOKEN`, `POE_API_KEY`, `QWEN_CLOUD_COOKIE`, `SAKANA_COOKIE`, `STEPFUN_TOKEN`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`, `ZENMUX_MANAGEMENT_API_KEY`.
+The environment variables read for a key: `AIAND_API_KEY`, `AIXY_API_KEY`, `AI_GATEWAY_API_KEY`, `ALIBABA_CODING_PLAN_API_KEY`, `ALIBABA_CODING_PLAN_COOKIE`, `ALIBABA_QWEN_API_KEY`, `AMP_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DASHSCOPE_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FACTORY_API_KEY`, `FIREWORKS_API_KEY`, `GITKRAKEN_API_TOKEN`, `GROK_OAUTH_TOKEN`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `HYPER_API_KEY`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `LONGCAT_MANUAL_COOKIE`, `MANUS_COOKIE`, `MANUS_SESSION_TOKEN`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `PERPLEXITY_COOKIE`, `PERPLEXITY_SESSION_TOKEN`, `POE_API_KEY`, `QWEN_CLOUD_COOKIE`, `SAKANA_COOKIE`, `STEPFUN_TOKEN`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`, `ZENMUX_MANAGEMENT_API_KEY`.
 <!-- end generated: provider-env-vars -->
 
 #### Every provider
@@ -861,6 +863,8 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Gemini | `gemini-cli` | per-turn tokens per model from Gemini CLI's chat recordings | local files | public docs and fixtures |
 | Copilot | `github-copilot` | premium requests used against the month's allowance | another app's sign-in | the vendor's client source and fixtures |
 | GitKraken AI | `gitkraken-account` | weekly AI credits, and the organization's pool with GITKRAKEN_ORG_ID | API key | CodexBar's source, the vendor's docs and fixtures |
+| Grok | `grok-account` | the SuperGrok credit window used, and the prepaid balance | API key | CodexBar's source, the vendor's docs and fixtures |
+|  | `grok-web` | the credit window used | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Helmcode | `helmcode-account` | each model's token quota used, and the prepaid balance | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Hugging Face | `huggingface-account` | Inference Providers charges this month, against the spending limit when set | API key | CodexBar's source, the vendor's docs and fixtures |
 | Charm Hyper | `hyper-account` | Hypercredits left | API key | CodexBar's source, the vendor's docs and fixtures |

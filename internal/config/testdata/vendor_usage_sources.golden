@@ -41,6 +41,8 @@ fireworks	fireworks-usage
 gemini_cli	gemini-cli
 github_copilot	github-copilot
 gitkraken_account	gitkraken-account
+grok_account	grok-account
+grok_web	grok-web
 helmcode_account	helmcode-account
 huggingface_account	huggingface-account
 hyper_account	hyper-account

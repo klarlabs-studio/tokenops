@@ -37,6 +37,7 @@ var registered = []func() Descriptor{
 	providerGemini,
 	providerGitHub,
 	providerGitKraken,
+	providerGrok,
 	providerHelmcode,
 	providerHuggingFace,
 	providerHyper,
