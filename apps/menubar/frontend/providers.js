@@ -20,6 +20,7 @@ window.TOKENOPS_PROVIDERS = {
   "clinepass": {"name":"ClinePass","logo":true},
   "codebuff": {"name":"Codebuff","logo":false},
   "coderabbit": {"name":"CodeRabbit","logo":false},
+  "commandcode": {"name":"Command Code","logo":true},
   "cursor": {"name":"Cursor","logo":true},
   "deepgram": {"name":"Deepgram","logo":false},
   "deepinfra": {"name":"DeepInfra","logo":false},

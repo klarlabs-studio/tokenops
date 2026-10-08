@@ -23,6 +23,7 @@ var providerNames = map[string]string{
 	"clinepass":        "ClinePass",
 	"codebuff":         "Codebuff",
 	"coderabbit":       "CodeRabbit",
+	"commandcode":      "Command Code",
 	"cursor":           "Cursor",
 	"deepgram":         "Deepgram",
 	"deepinfra":        "DeepInfra",
