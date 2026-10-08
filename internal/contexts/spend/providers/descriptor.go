@@ -191,8 +191,17 @@ type Source struct {
 	// APIKey source's credential is more than one key, e.g.
 	// "TEAM_ID:MANAGEMENT_KEY". Empty asks for the API key.
 	KeyFormat string
+	// EnvVars are the environment variables holding this source's own
+	// credential when it is not the provider's API key (an organisation
+	// admin key, OPENAI_ADMIN_KEY). A key found there is sent only to this
+	// source's reader, never to another of the provider's endpoints.
+	EnvVars []string
 	// Verified says how far the reader has been checked.
 	Verified Verification
+	// Reference is, for a FromCodexBar reader, the CodexBar source it
+	// follows ("CodexBar Sources/.../openai.js"), where a comment would
+	// otherwise name it.
+	Reference string
 	// Endpoint, Shows and RecognisedBy are its row in the docs tables:
 	// "`GET /api/v1/key`", "the key's spend, against its credit cap".
 	// RecognisedBy is a gateway's health route.

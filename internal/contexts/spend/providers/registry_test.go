@@ -69,6 +69,12 @@ func TestRegistryIsConsistent(t *testing.T) {
 		}
 		for _, s := range d.Sources {
 			checkSource(t, id, s, tags, names)
+			for _, v := range s.EnvVars {
+				if env[v] {
+					t.Errorf("%s/%s: %s claimed twice", id, s.Tag, v)
+				}
+				env[v] = true
+			}
 		}
 		for _, p := range d.Plans {
 			if p.Name == "" || plans[p.Name] {

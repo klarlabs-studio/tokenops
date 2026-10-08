@@ -60,10 +60,11 @@ func (d Descriptor) Label() string {
 }
 
 // Setupable is the source `tokenops vendor-usage setup <id>` connects for
-// this provider: an account reader read with a key or a browser session.
+// this provider: an account reader read with a key (an API key or an
+// organisation admin key) or a browser session.
 func (d Descriptor) Setupable() (Source, bool) {
 	for _, s := range d.Sources {
-		if s.Reader == AccountReader && (s.Credential == APIKey || s.Credential == BrowserCookie) {
+		if s.Reader == AccountReader && (s.Credential == APIKey || s.Credential == AdminKey || s.Credential == BrowserCookie) {
 			return s, true
 		}
 	}
@@ -170,6 +171,20 @@ func OwnEnvVars() map[string]string {
 		}
 		for _, v := range d.EnvVars {
 			out[v] = string(d.ID)
+		}
+	}
+	return out
+}
+
+// SourceEnvVars maps each variable holding one source's own credential
+// (Source.EnvVars) to the provider whose source it is.
+func SourceEnvVars() map[string]string {
+	out := map[string]string{}
+	for _, d := range all {
+		for _, s := range d.Sources {
+			for _, v := range s.EnvVars {
+				out[v] = string(d.ID)
+			}
 		}
 	}
 	return out
