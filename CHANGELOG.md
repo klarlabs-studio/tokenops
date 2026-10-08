@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.101.2 - 2026-10-08
+
 ### Added
 
 - **menubar:** Refresh, in the panel (⌘R) and the right-click menu, asks the daemon's usage readers to poll now instead of re-reading readings up to 15 minutes old, then reads again as the new ones arrive; the panel says what it asked. Behind it, `POST /api/sources/refresh`, accepted once every 30 seconds
