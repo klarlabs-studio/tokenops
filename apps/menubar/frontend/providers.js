@@ -13,6 +13,7 @@ window.TOKENOPS_PROVIDERS = {
   "deepgram": {"name":"Deepgram","logo":false},
   "deepinfra": {"name":"DeepInfra","logo":false},
   "deepseek": {"name":"DeepSeek","logo":true},
+  "doubao": {"name":"Doubao","logo":true},
   "fireworks": {"name":"Fireworks","logo":true},
   "gemini": {"name":"Gemini","logo":true},
   "github": {"name":"Copilot","logo":true},

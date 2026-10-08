@@ -16,6 +16,7 @@ var registered = []func() Descriptor{
 	providerDeepgram,
 	providerDeepInfra,
 	providerDeepSeek,
+	providerDoubao,
 	providerFireworks,
 	providerGemini,
 	providerGitHub,

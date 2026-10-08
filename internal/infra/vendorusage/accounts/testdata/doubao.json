@@ -1,0 +1,11 @@
+{
+  "Result": {
+    "Status": "Running",
+    "UpdateTimestamp": 1782226444,
+    "QuotaUsage": [
+      {"Level": "session", "Percent": 0.116, "ResetTimestamp": 1782226478},
+      {"Level": "weekly", "Percent": 3.182143, "ResetTimestamp": 1782662400},
+      {"Level": "monthly", "Percent": 7.5730535, "ResetTimestamp": 1782403199}
+    ]
+  }
+}
