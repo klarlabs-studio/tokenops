@@ -51,6 +51,7 @@ window.TOKENOPS_PROVIDERS = {
   "opencode": {"name":"opencode","logo":false},
   "opencode-go": {"name":"opencode Go","logo":true},
   "openrouter": {"name":"OpenRouter","logo":true},
+  "perplexity": {"name":"Perplexity","logo":true},
   "pi": {"name":"Pi","logo":false},
   "poe": {"name":"Poe","logo":true},
   "qoder": {"name":"Qoder","logo":true},

@@ -59,6 +59,7 @@ openai_admin	openai-admin
 opencode	opencode
 opencode_go_account	opencode-go-account
 openrouter_account	openrouter-account
+perplexity_account	perplexity-account
 pi_sessions	pi-sessions
 poe_account	poe-account
 qoder_web	qoder-web

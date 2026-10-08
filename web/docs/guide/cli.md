@@ -717,6 +717,7 @@ vendor's windows, busiest first:
 | Mistral | `GET /api/billing/v2/usage`, `/subscription`, `/api/billing/credits` (admin.mistral.ai) | the included-API and Vibe allowances' shares used this month, and the credit balance in its currency |
 | Nous Portal (Hermes Agent) | `GET /api/oauth/account` | the monthly credit grant used this period and the top-up credit left |
 | opencode Go | `GET /zen/go/v1/usage` | the 5-hour, weekly and monthly windows |
+| Perplexity | `GET /rest/billing/credits` | the plan's monthly credit grant used, and the credit balance |
 | Qoder | `GET /api/v2/me/usages/big_model_credits` (qoder.com or qoder.com.cn) | big-model credits used against the plan's (and the team's shared) total, until the next reset |
 | Qwen Cloud Token Plan | `POST /data/api.json` on cs-data.qwencloud.com (tokenplan/personal/api/v2/usage) | the Individual Token Plan's 5-hour, weekly and monthly windows |
 | Sakana AI | `GET /billing` and `/billing?tab=payAsYouGo` (server-rendered pages) | 5-hour and weekly quota windows, and the pay-as-you-go credit balance |
@@ -770,7 +771,7 @@ use read its own spend.
   with `tokenops vendor-usage enable vendor-accounts --disable`.
 
 <!-- begin generated: provider-env-vars -->
-The environment variables read for a key: `AIAND_API_KEY`, `AIXY_API_KEY`, `AI_GATEWAY_API_KEY`, `ALIBABA_CODING_PLAN_API_KEY`, `ALIBABA_CODING_PLAN_COOKIE`, `ALIBABA_QWEN_API_KEY`, `AMP_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DASHSCOPE_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FIREWORKS_API_KEY`, `GITKRAKEN_API_TOKEN`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `MANUS_COOKIE`, `MANUS_SESSION_TOKEN`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `POE_API_KEY`, `QWEN_CLOUD_COOKIE`, `SAKANA_COOKIE`, `STEPFUN_TOKEN`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`.
+The environment variables read for a key: `AIAND_API_KEY`, `AIXY_API_KEY`, `AI_GATEWAY_API_KEY`, `ALIBABA_CODING_PLAN_API_KEY`, `ALIBABA_CODING_PLAN_COOKIE`, `ALIBABA_QWEN_API_KEY`, `AMP_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DASHSCOPE_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FIREWORKS_API_KEY`, `GITKRAKEN_API_TOKEN`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `MANUS_COOKIE`, `MANUS_SESSION_TOKEN`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `PERPLEXITY_COOKIE`, `PERPLEXITY_SESSION_TOKEN`, `POE_API_KEY`, `QWEN_CLOUD_COOKIE`, `SAKANA_COOKIE`, `STEPFUN_TOKEN`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`.
 <!-- end generated: provider-env-vars -->
 
 #### Every provider
@@ -841,6 +842,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | opencode | `opencode` | per-message tokens for every provider, from opencode's SQLite store | local files | against a real account |
 | opencode Go | `opencode-go-account` | the 5-hour, weekly and monthly windows | API key | CodexBar's source, the vendor's docs and fixtures |
 | OpenRouter | `openrouter-account` | the key's spend, against its credit cap when it has one | API key | public docs and fixtures |
+| Perplexity | `perplexity-account` | the plan's monthly credit grant used, and the credit balance | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Pi | `pi-sessions` | per-turn tokens per provider and model from Pi's and OMP's session transcripts | local files | CodexBar's source, the vendor's docs and fixtures |
 | Poe | `poe-account` | the point balance left (points, not dollars) | API key | CodexBar's source, the vendor's docs and fixtures |
 | Qoder | `qoder-web` | big-model credits used against the plan's (and the team's shared) total, until the next reset | browser session | CodexBar's source, the vendor's docs and fixtures |

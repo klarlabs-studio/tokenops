@@ -48,6 +48,7 @@ var readers = []func() usage.Reader{
 	readerOpenAIAdmin,
 	readerOpencodeGo,
 	readerOpenRouter,
+	readerPerplexity,
 	readerPoe,
 	readerQoder,
 	readerQwenCloud,
