@@ -79,13 +79,26 @@ type Reading struct {
 	Subscription bool
 	// Windows are usage windows as the vendor reports them.
 	Windows []Window
+	// Counts are usage the vendor reports as a count with no allowance to
+	// measure it against (CodeRabbit's reviews this billing period), so no
+	// percentage, and no window.
+	Counts []Count
+}
+
+// Count is a count of use in a period, with no allowance.
+type Count struct {
+	// Name is what is counted: "reviews".
+	Name string
+	Used float64
+	// ResetsAt is when the period's count starts again, when known.
+	ResetsAt time.Time
 }
 
 // Empty reports whether the reading says nothing worth storing: an
 // account with no plan windows, no spend and no balance (a key on a
 // vendor's free tier, say).
 func (r Reading) Empty() bool {
-	return len(r.Windows) == 0 && !r.HasUsed && !r.HasBalance && r.LimitUSD == 0 && !r.LimitReached
+	return len(r.Windows) == 0 && len(r.Counts) == 0 && !r.HasUsed && !r.HasBalance && r.LimitUSD == 0 && !r.LimitReached
 }
 
 // Window is one usage window: the share used and when it resets.

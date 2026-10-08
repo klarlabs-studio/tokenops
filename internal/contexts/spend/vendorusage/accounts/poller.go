@@ -264,6 +264,14 @@ func NewEnvelope(ts time.Time, r Reader, x Reading) *eventschema.Envelope {
 			attrs[k+"reset_at"] = w.ResetsAt.UTC().Format(time.RFC3339)
 		}
 	}
+	for i, c := range x.Counts {
+		k := "count_" + strconv.Itoa(i) + "_"
+		attrs[k+"name"] = c.Name
+		attrs[k+"used"] = strconv.FormatFloat(c.Used, 'f', -1, 64)
+		if !c.ResetsAt.IsZero() {
+			attrs[k+"reset_at"] = c.ResetsAt.UTC().Format(time.RFC3339)
+		}
+	}
 	return &eventschema.Envelope{
 		ID:            "acct-" + hex.EncodeToString(h[:8]),
 		SchemaVersion: eventschema.SchemaVersion,

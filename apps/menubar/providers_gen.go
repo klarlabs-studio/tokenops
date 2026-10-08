@@ -14,6 +14,7 @@ var providerNames = map[string]string{
 	"clawrouter":  "ClawRouter",
 	"clinepass":   "ClinePass",
 	"codebuff":    "Codebuff",
+	"coderabbit":  "CodeRabbit",
 	"cursor":      "Cursor",
 	"deepinfra":   "DeepInfra",
 	"deepseek":    "DeepSeek",

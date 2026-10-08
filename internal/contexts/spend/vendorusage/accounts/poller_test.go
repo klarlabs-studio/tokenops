@@ -114,6 +114,22 @@ func TestPollerSendsAGatewayKeyOnlyWhereItBelongs(t *testing.T) {
 	}
 }
 
+// A count with no allowance is stored as a count, never as a percentage.
+func TestEnvelopeCarriesCounts(t *testing.T) {
+	at := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	r := Reading{Scope: "account", Subscription: true, Counts: []Count{{Name: "reviews", Used: 25, ResetsAt: at}}}
+	if r.Empty() {
+		t.Fatal("a reading with a count is empty")
+	}
+	a := NewEnvelope(at, &fakeLocal{}, r).Attributes
+	if a["count_0_name"] != "reviews" || a["count_0_used"] != "25" || a["count_0_reset_at"] != "2026-09-01T00:00:00Z" {
+		t.Errorf("attributes %v", a)
+	}
+	if _, ok := a["window_0_used_pct"]; ok {
+		t.Error("a count became a window")
+	}
+}
+
 // fakeLocal is a keyless reader: a vendor CLI, installed or not.
 type fakeLocal struct {
 	installed bool
