@@ -63,6 +63,7 @@ var providerNames = map[string]string{
 	"qoder":            "Qoder",
 	"qwencloud":        "Qwen Cloud",
 	"raycast":          "Raycast",
+	"replicate":        "Replicate",
 	"sakana":           "Sakana AI",
 	"stepfun":          "StepFun",
 	"sub2api":          "sub2api",

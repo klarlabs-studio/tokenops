@@ -60,6 +60,7 @@ window.TOKENOPS_PROVIDERS = {
   "qoder": {"name":"Qoder","logo":true},
   "qwencloud": {"name":"Qwen Cloud","logo":true},
   "raycast": {"name":"Raycast","logo":false},
+  "replicate": {"name":"Replicate","logo":true},
   "sakana": {"name":"Sakana AI","logo":true},
   "stepfun": {"name":"StepFun","logo":true},
   "sub2api": {"name":"sub2api","logo":false},

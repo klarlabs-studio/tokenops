@@ -677,6 +677,7 @@ vendor's own figures every 15 minutes:
 | OpenAI | `GET /v1/organization/costs` | the API organisation's spend this month (Administration API) |
 | OpenRouter | `GET /api/v1/key` | the key's spend, against its credit cap when it has one |
 | Poe | `GET /usage/current_balance` | the point balance left (points, not dollars) |
+| Replicate | `GET /api/{users|organizations}/{name}/invoices` | spend this month, and the prepaid credit left |
 | TypeSafe | `POST /settings/billing` (getBillingOverview action) | spend this billing cycle and the credit balance left |
 | Venice | `GET /api/v1/billing/balance` | USD balance left, and the DIEM epoch allocation used when staking |
 | Vercel AI Gateway | `GET /v1/credits` | the team's credit balance |
@@ -858,6 +859,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Qoder | `qoder-web` | big-model credits used against the plan's (and the team's shared) total, until the next reset | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Qwen Cloud | `qwencloud-web` | the Individual Token Plan's 5-hour, weekly and monthly windows | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Raycast | `raycast-account` | the month's AI credit allowance used, and the credits left | browser session | CodexBar's source, the vendor's docs and fixtures |
+| Replicate | `replicate-account` | spend this month, and the prepaid credit left | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Sakana AI | `sakana-web` | 5-hour and weekly quota windows, and the pay-as-you-go credit balance | browser session | CodexBar's source, the vendor's docs and fixtures |
 | StepFun | `stepfun-account` | a Coding Plan's 5-hour and weekly windows, or a Token Plan's credit pool | session from a password sign-in | CodexBar's source, the vendor's docs and fixtures |
 | sub2api | `sub2api-account` | the key's quota and 5-hour, daily and 7-day limits, a subscription group's daily, weekly and monthly limits, or the wallet balance | API key | CodexBar's source, the vendor's docs and fixtures |

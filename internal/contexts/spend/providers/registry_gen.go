@@ -63,6 +63,7 @@ var registered = []func() Descriptor{
 	providerQoder,
 	providerQwenCloud,
 	providerRaycast,
+	providerReplicate,
 	providerSakana,
 	providerStepFun,
 	providerSub2API,
