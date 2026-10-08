@@ -28,6 +28,7 @@ func expandHomePaths(cfg *Config) {
 		&cfg.VendorUsage.CodexJSONL.Root,
 		&cfg.VendorUsage.OpenCode.Root,
 		&cfg.VendorUsage.GeminiCLI.Root,
+		&cfg.VendorUsage.Pi.Root,
 		&cfg.VendorUsage.CodexAppServer.Path,
 	} {
 		*p = expandHome(*p, home)

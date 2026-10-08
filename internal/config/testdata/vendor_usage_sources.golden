@@ -2,19 +2,25 @@
 # name<TAB>source tag, in VendorUsageSources order.
 aiand_account	aiand-account
 aixy_gateway	aixy-account
+amp_cli	amp-cli
+amp_account	amp-account
 claude_code_statusline	claude-code-statusline
 claude_code_jsonl	claude-code-jsonl
 claude_subscription	claude-usage-meter
 claude_code_oauth	claude-code-oauth
 vendor_usage_anthropic	vendor-usage-anthropic
 claude_code_stats_cache (deprecated)	claude-code-stats-cache
+antigravity_local	antigravity-local
 atlascloud_account	atlascloud-account
+augment_cli	augment-cli
+augment_web	augment-web
 bedrock_cost_explorer	bedrock-cost-explorer
 bifrost_gateway	bifrost-account
 chutes_account	chutes-account
 clawrouter_gateway	clawrouter-account
 clinepass_account	clinepass-account
 codebuff_account	codebuff-account
+coderabbit_cli	coderabbit-cli
 cursor_turns (hook ledger)	cursor-hook
 cursor_web	cursor-web
 deepgram_account	deepgram-account
@@ -26,10 +32,13 @@ elevenlabs_account	elevenlabs-account
 fireworks	fireworks-usage
 gemini_cli	gemini-cli
 github_copilot	github-copilot
+gitkraken_account	gitkraken-account
 huggingface_account	huggingface-account
 ibmbob_account	ibmbob-account
+jetbrains_local	jetbrains-local
 kilo_account	kilo-account
 kimi_account	kimi-account
+kiro_cli	kiro-cli
 litellm_gateway	litellm-account
 llm_proxy_gateway	llm-proxy-account
 minimax_account	minimax-account
@@ -42,6 +51,7 @@ openai_admin	openai-admin
 opencode	opencode
 opencode_go_account	opencode-go-account
 openrouter_account	openrouter-account
+pi_sessions	pi-sessions
 poe_account	poe-account
 sub2api_gateway	sub2api-account
 synthetic_account	synthetic-account
@@ -49,7 +59,10 @@ v0_account	v0-account
 venice_account	venice-account
 vercel_account	vercel-account
 warp_account	warp-account
+windsurf_local	windsurf-local
+windsurf_web	windsurf-web
 xai_account	xai-account
 xkiro_account	xkiro-account
 zai_account	zai-account
+zed_account	zed-account
 zenmux_account	zenmux-account

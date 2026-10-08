@@ -92,7 +92,8 @@ func (p *Poller) Run(ctx context.Context) error {
 
 // Scan reads each vendor whose key is on the machine. Several keys for
 // one vendor are tried in order until one is accepted; a vendor with no
-// key is not in use here and is skipped silently.
+// key is not in use here and is skipped silently. A Keyless reader is read
+// without a key, and skipped silently when its CLI or app is not installed.
 func (p *Poller) Scan(ctx context.Context) {
 	creds := p.opts.Credentials()
 	now := p.opts.Now().UTC()
@@ -105,24 +106,11 @@ func (p *Poller) Scan(ctx context.Context) {
 			err     error
 			tried   bool
 		)
-		for _, c := range creds {
-			if c.Endpoint != r.Endpoint() {
-				continue
-			}
-			key := c.Key
-			if key == "" && c.Resolve != nil {
-				if key, err = c.Resolve(ctx); err != nil || key == "" {
-					if err == nil {
-						err = ErrAuth
-					}
-					tried = true
-					continue
-				}
-			}
-			tried = true
-			if reading, err = r.Read(ctx, key); err == nil {
-				break
-			}
+		if IsKeyless(r) {
+			reading, err = r.Read(ctx, "")
+			tried = !errors.Is(err, ErrNotInstalled)
+		} else {
+			reading, tried, err = readWithKeys(ctx, r, creds)
 		}
 		if !tried {
 			continue
@@ -142,6 +130,31 @@ func (p *Poller) Scan(ctx context.Context) {
 		p.publish(ctx, r, NewEnvelope(now, r, reading))
 	}
 	p.scanGateways(ctx, creds, now)
+}
+
+// readWithKeys tries each credential found for r's endpoint, in order,
+// until one is accepted. tried is false when none was found.
+func readWithKeys(ctx context.Context, r Reader, creds []Credential) (reading Reading, tried bool, err error) {
+	for _, c := range creds {
+		if c.Endpoint != r.Endpoint() {
+			continue
+		}
+		key := c.Key
+		if key == "" && c.Resolve != nil {
+			if key, err = c.Resolve(ctx); err != nil || key == "" {
+				if err == nil {
+					err = ErrAuth
+				}
+				tried = true
+				continue
+			}
+		}
+		tried = true
+		if reading, err = r.Read(ctx, key); err == nil {
+			break
+		}
+	}
+	return reading, tried, err
 }
 
 // scanGateways reads each gateway a key is sent to. A root is recognised
@@ -301,6 +314,14 @@ func NewEnvelope(ts time.Time, r Reader, x Reading) *eventschema.Envelope {
 		}
 		if !w.ResetsAt.IsZero() {
 			attrs[k+"reset_at"] = w.ResetsAt.UTC().Format(time.RFC3339)
+		}
+	}
+	for i, c := range x.Counts {
+		k := "count_" + strconv.Itoa(i) + "_"
+		attrs[k+"name"] = c.Name
+		attrs[k+"used"] = strconv.FormatFloat(c.Used, 'f', -1, 64)
+		if !c.ResetsAt.IsZero() {
+			attrs[k+"reset_at"] = c.ResetsAt.UTC().Format(time.RFC3339)
 		}
 	}
 	return &eventschema.Envelope{

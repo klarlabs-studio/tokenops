@@ -15,6 +15,7 @@ type VendorUsageConfig struct {
 	CodexJSONL       CodexJSONLUsageConfig      `yaml:"codex_jsonl"`
 	OpenCode         OpenCodeUsageConfig        `yaml:"opencode"`
 	GeminiCLI        GeminiCLIUsageConfig       `yaml:"gemini_cli"`
+	Pi               PiUsageConfig              `yaml:"pi"`
 	Anthropic        AnthropicUsageConfig       `yaml:"anthropic"`
 	GitHubCopilot    GitHubCopilotUsageConfig   `yaml:"github_copilot"`
 	Cursor           CursorUsageConfig          `yaml:"cursor"`
@@ -188,6 +189,17 @@ type OpenCodeUsageConfig struct {
 // chat recordings under ~/.gemini/tmp/*/chats for each model turn's
 // tokens. Empty Root defaults to that directory (GEMINI_CLI_HOME honoured).
 type GeminiCLIUsageConfig struct {
+	Enabled  bool          `yaml:"enabled"`
+	Root     string        `yaml:"root"`
+	Interval time.Duration `yaml:"interval"`
+}
+
+// PiUsageConfig enables the Pi transcript reader, which parses the
+// sessions Pi keeps under ~/.pi/agent/sessions (and its fork OMP under
+// ~/.omp/agent/sessions) for each assistant turn's tokens, under the
+// provider that served it. Empty Root reads both (PI_CODING_AGENT_DIR
+// and PI_CODING_AGENT_SESSION_DIR honoured).
+type PiUsageConfig struct {
 	Enabled  bool          `yaml:"enabled"`
 	Root     string        `yaml:"root"`
 	Interval time.Duration `yaml:"interval"`

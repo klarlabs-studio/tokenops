@@ -460,7 +460,12 @@ var localTranscriptSources = func() []string {
 		{"codex-jsonl", filepath.Join(codexDir, "sessions")},
 		{"opencode", filepath.Join(dataHome, "opencode", "opencode.db")},
 		{"gemini-cli", filepath.Join(geminiDir, "tmp")},
+		{"pi-sessions", filepath.Join(home, ".pi", "agent", "sessions")},
+		{"pi-sessions", filepath.Join(home, ".omp", "agent", "sessions")},
 	} {
+		if len(out) > 0 && out[len(out)-1] == c.name {
+			continue
+		}
 		if _, err := os.Stat(c.path); err == nil {
 			out = append(out, c.name)
 		}
@@ -479,6 +484,8 @@ func setLocalSource(cfg *config.Config, source string, on bool) {
 		cfg.VendorUsage.OpenCode.Enabled = on
 	case "gemini-cli":
 		cfg.VendorUsage.GeminiCLI.Enabled = on
+	case "pi-sessions":
+		cfg.VendorUsage.Pi.Enabled = on
 	}
 }
 

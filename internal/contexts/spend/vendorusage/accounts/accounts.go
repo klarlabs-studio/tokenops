@@ -24,6 +24,27 @@ import (
 // ErrAuth reports a key the vendor refused.
 var ErrAuth = errors.New("accounts: the key was refused")
 
+// ErrNotInstalled reports a Keyless reader whose vendor CLI or app is not
+// on this machine: there is nothing to read, and nothing is wrong.
+var ErrNotInstalled = errors.New("accounts: not installed on this machine")
+
+// Keyless is a Reader that needs no key: the vendor's own CLI signs its own
+// request, or the vendor's app keeps its figures in a file on disk (ADR
+// 0011 §1, the vendor's own records). The poller reads it on every scan
+// with an empty key and never hands it a credential; it answers
+// ErrNotInstalled when its CLI or file is absent.
+type Keyless interface {
+	Reader
+	// Keyless marks the reader; it does nothing.
+	Keyless()
+}
+
+// IsKeyless reports whether r reads without a key.
+func IsKeyless(r Reader) bool {
+	_, ok := r.(Keyless)
+	return ok
+}
+
 // Credential is a key and the endpoint it was found for.
 type Credential struct {
 	// Endpoint is the endpoint name (biller's), e.g. "openrouter".
@@ -70,13 +91,26 @@ type Reading struct {
 	Subscription bool
 	// Windows are usage windows as the vendor reports them.
 	Windows []Window
+	// Counts are usage the vendor reports as a count with no allowance to
+	// measure it against (CodeRabbit's reviews this billing period), so no
+	// percentage, and no window.
+	Counts []Count
+}
+
+// Count is a count of use in a period, with no allowance.
+type Count struct {
+	// Name is what is counted: "reviews".
+	Name string
+	Used float64
+	// ResetsAt is when the period's count starts again, when known.
+	ResetsAt time.Time
 }
 
 // Empty reports whether the reading says nothing worth storing: an
 // account with no plan windows, no spend and no balance (a key on a
 // vendor's free tier, say).
 func (r Reading) Empty() bool {
-	return len(r.Windows) == 0 && !r.HasUsed && !r.HasBalance && !r.HasCredits && r.LimitUSD == 0 && !r.LimitReached
+	return len(r.Windows) == 0 && len(r.Counts) == 0 && !r.HasUsed && !r.HasBalance && !r.HasCredits && r.LimitUSD == 0 && !r.LimitReached
 }
 
 // Window is one usage window: the share used and when it resets.

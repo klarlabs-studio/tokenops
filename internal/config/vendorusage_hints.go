@@ -31,6 +31,11 @@ func (c Config) VendorUsageConfigHint(sourceTag string) string {
 			return "set vendor_usage.gemini_cli.enabled: true (reads Gemini CLI's chat recordings under ~/.gemini/tmp — per-turn tokens per model)"
 		}
 		return ""
+	case "pi-sessions":
+		if !c.VendorUsage.Pi.Enabled {
+			return "set vendor_usage.pi.enabled: true (reads Pi's and OMP's session transcripts under ~/.pi/agent/sessions and ~/.omp/agent/sessions — per-turn tokens per provider and model)"
+		}
+		return ""
 	case "claude-code-stats-cache":
 		return configHintClaudeCode(c.VendorUsage.ClaudeCode.Enabled)
 	case "vendor-usage-anthropic":
@@ -106,6 +111,16 @@ func (c Config) registryHint(sourceTag string) string {
 			hint += ", or set " + strings.Join(s.EnvVars, " or ")
 		}
 		return hint
+	case s.Credential == providers.AppKeychain:
+		if _, stored := c.VendorUsage.Accounts.Credentials[string(s.Provider)]; stored {
+			return "on; reads with the sign-in `tokenops vendor-usage setup " + string(s.Provider) + "` stored; run it again when it is refused"
+		}
+		return "opt-in: `tokenops vendor-usage setup " + string(s.Provider) + "` reads " + providers.DisplayName(string(s.Provider)) +
+			"'s own sign-in from the Keychain (macOS asks first)"
+	case s.Credential == providers.CLI:
+		return "on; runs " + s.Endpoint + " when " + providers.DisplayName(string(s.Provider)) + "'s CLI is installed, the CLI signing its own request"
+	case s.Credential == providers.LocalFile:
+		return "on; reads " + s.Endpoint + " when " + providers.DisplayName(string(s.Provider)) + " is installed"
 	}
 	// A provider whose key only setup supplies (a management key the
 	// harnesses never hold) says so in its descriptor.

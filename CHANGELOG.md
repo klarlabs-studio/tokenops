@@ -38,6 +38,16 @@
 - **providers:** Amazon Bedrock's spend this month is read from AWS Cost Explorer (`GetCostAndUsage`, signed with SigV4) once `tokenops vendor-usage setup bedrock` opts in with the AWS credentials on the machine (environment or shared credentials file; nothing is stored); Cost Explorer bills each request, so it is asked at most every 8 hours
 - **providers:** Azure OpenAI is in the catalog: turns sent to `*.openai.azure.com` (and opencode's `azure` provider) are billed to it and priced at models.dev's Azure rates, rather than probed as an unknown gateway; its account is not read, since a resource key reads no spend or quota
 - **vendor-usage:** `tokenops vendor-usage setup <gateway>` connects a self-hosted or hosted gateway (LiteLLM, Bifrost, ClawRouter, sub2api, ...) by its address and a key, checked once there before either is stored; plain HTTP only to a local or private-network host
+- **providers:** GitKraken AI: weekly AI credits (and the organization's pool with `GITKRAKEN_ORG_ID`) from api.gitkraken.dev, with the account's bearer token from `GITKRAKEN_API_TOKEN` or `tokenops vendor-usage setup gitkraken`
+- **providers:** JetBrains AI: the monthly AI credits the IDE's AI Assistant records in its own quota file and `idea.log`, read locally from the most recently used IDE with no credential
+- **providers:** Windsurf: the daily and weekly quota Windsurf caches in its own `state.vscdb`, read locally with no credential, and live from windsurf.com with the web session bundle pasted into `tokenops vendor-usage setup windsurf`
+- **providers:** Kiro: monthly plan credits and bonus credits from the operator's signed-in `kiro-cli` (`chat --no-interactive /usage`), which signs its own request; TokenOps reads no credential
+- **providers:** Amp: subscription agent usage and orb hours, Amp Free's daily allowance and individual credits, from the signed-in `amp usage` CLI, or with an access token (`AMP_API_KEY` or `tokenops vendor-usage setup amp`)
+- **providers:** Augment Code: credits used of the month's allowance, from the signed-in `auggie account status` CLI, or from app.augmentcode.com with the browser session `tokenops vendor-usage setup augment` reads (the daemon re-reads it only quietly)
+- **providers:** CodeRabbit: reviews this billing period from the signed-in `coderabbit usage` CLI, stored as a count (`count_<n>_*` attributes): CodeRabbit reports no allowance, so there is no percentage
+- **providers:** Zed: edit predictions used of the plan's allowance this billing cycle, from cloud.zed.dev with the Zed editor's own sign-in, which only `tokenops vendor-usage setup zed` reads from the Keychain (opt-in; the daemon never reads the Keychain for it)
+- **providers:** Antigravity: 5-hour and weekly quota for Gemini models and for Claude and GPT models, asked of the running Antigravity app's own local language server on 127.0.0.1; nothing leaves the machine
+- **providers:** Pi coding agent: per-turn tokens from Pi's and OMP's local session transcripts (`~/.pi/agent/sessions`, `~/.omp/agent/sessions`), under the provider each turn was served by (`vendor_usage.pi`, `tokenops vendor-usage enable pi-sessions`; `tokenops init` turns it on when Pi's sessions are on the machine)
 
 ### Fixed
 

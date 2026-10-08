@@ -1,0 +1,7 @@
+CodeRabbit Usage — current billing period
+
+Organization  : Example Org
+Usage billing : inactive
+User          : example-user
+Your reviews  : 25
+Period resets : 2026-09-30
