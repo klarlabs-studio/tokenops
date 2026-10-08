@@ -81,6 +81,15 @@ tokenops vendor-usage setup claude-subscription --paste`,
 	"config show":     `tokenops config show`,
 	"otel": `tokenops otel                    # every figure the daemon pushes, computed now
 tokenops otel --json`,
+	"team join": `tokenops team join https://team.example.eu tot_inv_… --name "Ada Lovelace"`,
+	"team status": `tokenops team status             # who may see your figures, and who looked
+tokenops team status --json`,
+	"team preview": `tokenops team preview            # the next upload, computed now; nothing is sent
+tokenops team preview --json`,
+	"team sync": `tokenops team sync`,
+	"team web":  `tokenops team web                # a single-use sign-in link to the web view`,
+	"team leave": `tokenops team leave               # revoke this machine, erase its figures
+tokenops team leave --keep-history`,
 	"version": `tokenops version --json`,
 	"coach": `tokenops coach                   # the dials, what the coach did, what came of it
 tokenops coach preset advise`,

@@ -1,0 +1,96 @@
+# TokenOps team plane on one VPS: Caddy (TLS) -> tokenops-team -> Postgres,
+# plus a nightly pg_dump. Only Caddy publishes ports. See README.md.
+name: tokenops-team
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      TEAM_DOMAIN: ${TEAM_DOMAIN:?set TEAM_DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      team:
+        condition: service_started
+    networks: [edge]
+
+  team:
+    build:
+      context: ../..
+      dockerfile: deploy/team/Dockerfile
+      args:
+        VERSION: ${TEAM_VERSION:-dev}
+    image: tokenops-team:${TEAM_VERSION:-dev}
+    restart: unless-stopped
+    environment:
+      TEAMSERVER_DATABASE_URL: postgres://tokenops:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/tokenops?sslmode=disable
+      TEAMSERVER_PUBLIC_URL: https://${TEAM_DOMAIN}
+      TEAMSERVER_LISTEN: ":8080"
+      # Only Caddy reaches the service, over the edge network.
+      TEAMSERVER_TRUSTED_PROXIES: 172.16.0.0/12,10.0.0.0/8,192.168.0.0/16
+      TEAMSERVER_AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-730}
+    depends_on:
+      db:
+        condition: service_healthy
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 256M }
+    networks: [edge, data]
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tokenops
+      POSTGRES_USER: tokenops
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tokenops -d tokenops"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
+    networks: [data]
+
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGUSER: tokenops
+      PGDATABASE: tokenops
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./backup.sh:/usr/local/bin/backup.sh:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+    entrypoint: ["/bin/sh", "/usr/local/bin/backup.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [data]
+
+networks:
+  edge: {}
+  data:
+    internal: true
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}
+  pg_data: {}

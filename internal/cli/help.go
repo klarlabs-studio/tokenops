@@ -21,7 +21,7 @@ var helpGroups = []*cobra.Group{
 var helpOrder = []string{
 	"glance", "checkup", "spend", "story", "dx", "status", "explain",
 	"init", "detect", "daemon", "hooks", "statusline", "menubar", "plan", "budget", "provider",
-	"vendor-usage", "pricing", "otel", "config", "version",
+	"vendor-usage", "pricing", "otel", "team", "config", "version",
 	"coach", "mode", "routing", "preferred-model", "experiment", "rules", "fmt", "task", "outcome",
 	"scorecard", "optimizations", "verify", "audit", "events",
 }
@@ -33,7 +33,7 @@ var commandGroup = map[string]string{
 
 	"init": "setup", "detect": "setup", "daemon": "setup", "hooks": "setup", "statusline": "setup",
 	"menubar": "setup", "plan": "setup", "budget": "setup", "provider": "setup",
-	"vendor-usage": "setup", "config": "setup", "pricing": "setup", "version": "setup", "otel": "setup",
+	"vendor-usage": "setup", "config": "setup", "pricing": "setup", "version": "setup", "otel": "setup", "team": "setup",
 
 	"coach": "control", "mode": "control", "preferred-model": "control", "routing": "control",
 	"experiment": "control", "task": "control", "outcome": "control", "rules": "control", "fmt": "control",

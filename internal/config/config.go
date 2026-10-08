@@ -71,11 +71,13 @@ type Config struct {
 	// status line. init installs it by default; an uninstall sets
 	// enabled to false, so a later init leaves it out until the operator
 	// installs it again.
-	Statusline  StatuslineConfig  `yaml:"statusline,omitempty"`
-	TLS         TLSConfig         `yaml:"tls"`
-	Storage     StorageConfig     `yaml:"storage"`
-	Retention   RetentionConfig   `yaml:"retention,omitempty"`
-	OTel        OTelConfig        `yaml:"otel"`
+	Statusline StatuslineConfig `yaml:"statusline,omitempty"`
+	TLS        TLSConfig        `yaml:"tls"`
+	Storage    StorageConfig    `yaml:"storage"`
+	Retention  RetentionConfig  `yaml:"retention,omitempty"`
+	OTel       OTelConfig       `yaml:"otel"`
+	// Team shapes uploads to a team plane once this machine joined one.
+	Team        TeamConfig        `yaml:"team,omitempty"`
 	Rules       RulesConfig       `yaml:"rules"`
 	Resilience  ResilienceConfig  `yaml:"resilience"`
 	VendorUsage VendorUsageConfig `yaml:"vendor_usage"`

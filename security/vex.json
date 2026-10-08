@@ -146,6 +146,19 @@
         "last_reviewed": "2026-10-07",
         "reviewed_by": "tokenops-maintainers"
       }
+    },
+    {
+      "vulnerability": "TAINT-002",
+      "status": "not_affected",
+      "justification": "inline_mitigations_already_exist",
+      "impact_statement": "The same subprocess.Popen call in scripts/config-matrix.py as the waiver above, reported a second time as \"proc flows from env_var\" (nox 1.48.1 finds both paths locally; CI reports the first). It passes an argument LIST, never shell=True, with the harness's own isolated environment: no shell parses anything, so nothing can be injected.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "7617baa7555a578ea43d4ae582128936c9f0e46216a75368ea5ab37c89350954",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-08",
+        "reviewed_by": "tokenops-maintainers"
+      }
     }
   ]
 }

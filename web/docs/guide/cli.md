@@ -109,6 +109,29 @@ tokenops otel
 tokenops otel --json
 ```
 
+### `tokenops team`
+
+Shares this machine's derived figures with a [team plane](/guide/team):
+per UTC day, repository and kind of work, counts, time, tokens and cost.
+Nothing is sent until you join, and never a prompt, file, transcript,
+path, commit message or model output.
+
+```bash
+tokenops team join https://team.example.eu tot_inv_…   # enrol with an invite
+tokenops team preview          # exactly what the next upload holds; sends nothing
+tokenops team preview --json   # the upload byte for byte
+tokenops team sync             # upload now (the daemon does it hourly)
+tokenops team status           # who may see your individual figures, and who looked
+tokenops team web              # single-use sign-in link to the web view
+tokenops team leave            # revoke this machine and erase its figures
+tokenops team leave --keep-history
+```
+
+`join` takes `--name` (how people granted to see individual figures see
+you) and `--device`. The enrolment is kept in `~/.tokenops/team.json`
+(mode 0600), not in `config.yaml`; `leave --force` forgets it locally when
+the server cannot be reached.
+
 ### `tokenops menubar`
 
 On macOS, installs the menu bar app that ships with the Homebrew install

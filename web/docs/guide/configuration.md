@@ -926,6 +926,30 @@ system in Germany is billed in euros. See
 | `TOKENOPS_PROVIDER_GEMINI_URL`    | `providers.gemini`            |
 | `TOKENOPS_PRICING_PATH`           | `pricing.path`                |
 | `TOKENOPS_KEYCHAIN_DISABLED`      | `keychain.disabled`           |
+| `TOKENOPS_TEAM_ENABLED`           | `team.enabled`                |
+| `TOKENOPS_TEAM_INTERVAL`          | `team.interval`               |
+| `TOKENOPS_TEAM_DAYS`              | `team.days`                   |
+| `TOKENOPS_TEAM_REPO_NAMES`        | `team.repo_names`             |
+| `TOKENOPS_TEAM_STATE`             | `team.state_path`             |
+
+## Team plane (`team`)
+
+Nothing is uploaded until `tokenops team join` enrols this machine with a
+[team plane](/guide/team). These keys only shape what is sent and how
+often; the enrolment (server URL, device token) is kept in
+`~/.tokenops/team.json`, mode 0600, not here.
+
+```yaml
+team:
+  enabled: true        # false pauses uploads while staying joined
+  interval: 1h         # how often the daemon uploads; at least 5m
+  days: 14             # UTC days each upload recomputes and replaces (max 62)
+  repo_names: remote   # remote (owner/name from origin) | directory | hidden
+  state_path: ""       # default ~/.tokenops/team.json
+```
+
+`repo_names: hidden` files every repository's work under `hidden`; work
+outside a git repository is always filed under `none`.
 
 ## OpenTelemetry export
 
