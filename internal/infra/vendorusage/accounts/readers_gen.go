@@ -50,6 +50,7 @@ var readers = []func() usage.Reader{
 	readerXAI,
 	readerXKiro,
 	readerZAI,
+	readerZed,
 	readerZenMux,
 }
 

@@ -60,6 +60,7 @@ var providerNames = map[string]string{
 	"xai":          "xAI",
 	"xkiro":        "xKiro",
 	"zai":          "z.ai",
+	"zed":          "Zed",
 	"zenmux":       "ZenMux",
 	"zhipuai":      "Zhipu AI",
 }

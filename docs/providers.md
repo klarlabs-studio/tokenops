@@ -86,9 +86,11 @@ func providerAcme() Descriptor {
 | `DisplayName`, `PlanPrefix` | plan cards, menu bar, docs |
 | `Sources[].Name`, `.Tag` | `vendor-usage status`, freshness, retention keys, the headroom signal |
 | `Sources[].Kind` | which docs table: `Balance`/`Spend`, `Subscription`, `Gateway`, `LocalLog` |
-| `Sources[].Credential` | `APIKey`, `AdminKey`, `BrowserCookie`, `CredentialChain` (all set up generically; a credential chain is the vendor's own credentials on the machine, opted in by setup, never stored), `OAuthFile`, `CLI`, `LocalFile` |
+| `Sources[].Credential` | `APIKey`, `AdminKey`, `BrowserCookie`, `CredentialChain`, `AppKeychain` (all set up generically; a credential chain is the vendor's own credentials on the machine, opted in by setup, never stored), `OAuthFile`, `CLI`, `LocalFile` |
 | `Sources[].EnvVars` | variables holding the source's own credential when it is not the provider's API key (`OPENAI_ADMIN_KEY`), or a gateway's key (`SUB2API_API_KEY`); sent only to that source's reader |
 | `Sources[].BaseURLEnv`, `.DefaultBaseURL` | a gateway's address variable (`SUB2API_BASE_URL`) and a hosted gateway's own address: with a key in `EnvVars` it is read there, named, without being recognised |
+| `Sources[].KeychainServer` | the Keychain item an `AppKeychain` source reads at setup |
+| `Sources[].Reference` | the CodexBar source a `FromCodexBar` reader follows |
 | `Sources[].Switch` | `SwitchAccounts` for account and gateway readers; `SwitchConfig` only for a reader with its own config block (add it to `configSwitches` in `internal/config/vendor_usage_sources.go` and a hint in `vendorusage_hints.go`) |
 | `Sources[].Reader` | `AccountReader`, `GatewayReader`, or `BespokeReader` with `Package` and `Fixture` |
 | `Sources[].Cookie` | the cookies a `BrowserCookie` source reads |

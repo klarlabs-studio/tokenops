@@ -60,6 +60,7 @@ var registered = []func() Descriptor{
 	providerXAI,
 	providerXKiro,
 	providerZAI,
+	providerZed,
 	providerZenMux,
 	providerZhipuAI,
 }

@@ -115,6 +115,12 @@ const (
 	// is read only once `tokenops vendor-usage setup <id>` opted in, then as
 	// the daemon polls; nothing secret is stored.
 	CredentialChain Credential = "credential-chain"
+	// AppKeychain is another application's sign-in kept in the macOS
+	// Keychain (Zed's). Opt-in (ADR 0011 §1.4): only the interactive
+	// `tokenops vendor-usage setup <id>` reads it, which may show a
+	// Keychain prompt, and stores the token; the daemon never reads the
+	// Keychain for it and never refreshes it.
+	AppKeychain Credential = "app-keychain"
 )
 
 // Switch is what turns a source on.
@@ -192,6 +198,10 @@ type Source struct {
 	AnyProvider bool
 	// Cookie names the browser cookies a BrowserCookie source reads.
 	Cookie *Cookie
+	// KeychainServer is the internet-password server an AppKeychain
+	// source's sign-in is kept under ("https://zed.dev"). The reader is
+	// given it as "<account> <secret>".
+	KeychainServer string
 	// KeyFormat is what `tokenops vendor-usage setup` asks for when an
 	// APIKey source's credential is more than one key, e.g.
 	// "TEAM_ID:MANAGEMENT_KEY". Empty asks for the API key.

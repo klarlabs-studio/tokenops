@@ -112,6 +112,17 @@ func providerCredential(cmd *cobra.Command, p providersetup.Provider, opts provi
 			fmt.Fprintf(out, "Could not read it from the browser: %v\n", err)
 		}
 	}
+	if p.KeychainServer != "" && !opts.paste {
+		fmt.Fprintf(out, "\nReading %s's own sign-in from the Keychain (the internet password for %s).\n", p.Name, p.KeychainServer)
+		fmt.Fprintf(out, "macOS may ask to let tokenops read it. TokenOps stores the token in your config, sends it only to %s,\n"+
+			"never reads the Keychain for it again in the background and never refreshes it: when %s stops accepting it,\n"+
+			"run this again. --paste types it instead.\n", p.Name, p.Name)
+		key, err := providersetup.FromKeychain(cmd.Context(), p, browsercookie.InteractiveKeychainWait, keychainDisabled(opts.configPath))
+		if err == nil {
+			return key, "", nil
+		}
+		fmt.Fprintf(out, "Could not read it from the Keychain: %v\n", err)
+	}
 	prompt := "\nPaste the API key: "
 	if p.KeyFormat != "" {
 		prompt = fmt.Sprintf("\nPaste it as %s: ", p.KeyFormat)
