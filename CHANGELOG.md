@@ -80,6 +80,7 @@
 - **providers:** Langdock: the included 5-hour session and weekly limits used (`usageSettings.getPersonalUsage`), read with app.langdock.com's browser session (`vendor-usage setup langdock`)
 - **providers:** Ollama Cloud: the monthly usage (or the older session and weekly windows) from ollama.com/settings, read with the browser session (`vendor-usage setup ollama`)
 - **providers:** WorkBuddy (Tencent): the share of the credit packages' cycle used and when it ends, read with www.workbuddy.cn's browser session (`vendor-usage setup workbuddy`)
+- **providers:** Muse (muse.ai): the weekly token allowance used, from the page's own server action, read with muse.ai's browser session (`vendor-usage setup museai`)
 
 ### Fixed
 

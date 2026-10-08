@@ -51,6 +51,7 @@ window.TOKENOPS_PROVIDERS = {
   "mistral": {"name":"Mistral","logo":true},
   "moonshot": {"name":"Moonshot","logo":true},
   "muse": {"name":"Muse Code","logo":false},
+  "museai": {"name":"Muse","logo":false},
   "neuralwatt": {"name":"Neuralwatt","logo":false},
   "notion": {"name":"Notion AI","logo":true},
   "nous": {"name":"Nous Portal","logo":true},
