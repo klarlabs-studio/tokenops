@@ -187,6 +187,11 @@ type Source struct {
 	AnyProvider bool
 	// Cookie names the browser cookies a BrowserCookie source reads.
 	Cookie *Cookie
+	// Prompt is what `tokenops vendor-usage setup` asks the operator to
+	// paste for an APIKey source whose credential is not an API key (a
+	// web session bundle, a token copied from a request); empty asks for
+	// the API key.
+	Prompt string
 	// Verified says how far the reader has been checked.
 	Verified Verification
 	// Reference is what a FromCodexBar reader was ported from: the path

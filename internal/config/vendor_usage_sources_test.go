@@ -75,6 +75,8 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"v0_account", "v0-account"},
 		{"vercel_account", "vercel-account"},
 		{"warp_account", "warp-account"},
+		{"windsurf_local", "windsurf-local"},
+		{"windsurf_web", "windsurf-web"},
 		{"xkiro_account", "xkiro-account"},
 		{"zai_account", "zai-account"},
 		{"zenmux_account", "zenmux-account"},

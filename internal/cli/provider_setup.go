@@ -101,8 +101,13 @@ func providerCredential(cmd *cobra.Command, p providersetup.Provider, opts provi
 	prompt := "\nPaste the API key: "
 	if p.Browser {
 		prompt = fmt.Sprintf("\nPaste the Cookie header for %s (%s): ", p.CookieHost, strings.Join(p.CookieNames, ", "))
-	} else if len(p.EnvVars) > 0 {
-		fmt.Fprintf(out, "\n(%s is read without setup, when it is set.)\n", strings.Join(p.EnvVars, " or "))
+	} else {
+		if p.Prompt != "" {
+			prompt = "\nPaste " + p.Prompt + ": "
+		}
+		if len(p.EnvVars) > 0 {
+			fmt.Fprintf(out, "\n(%s is read without setup, when it is set.)\n", strings.Join(p.EnvVars, " or "))
+		}
 	}
 	fmt.Fprintf(out, "It is sent only to %s, and stored in your local config.\n", p.Name)
 	key, err = readSecret(cmd, prompt)

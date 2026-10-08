@@ -41,6 +41,8 @@ type Provider struct {
 	CookieNames []string
 	// EnvVars are where a key is found without setup.
 	EnvVars []string
+	// Prompt is what to paste when the credential is not an API key.
+	Prompt string
 }
 
 // Lookup returns the provider setup connects for id.
@@ -53,7 +55,7 @@ func Lookup(id string) (Provider, bool) {
 	if !ok {
 		return Provider{}, false
 	}
-	p := Provider{ID: string(d.ID), Name: d.DisplayName, EnvVars: d.EnvVars}
+	p := Provider{ID: string(d.ID), Name: d.DisplayName, EnvVars: d.EnvVars, Prompt: s.Prompt}
 	if s.Credential == providers.BrowserCookie && s.Cookie != nil {
 		p.Browser, p.CookieHost, p.CookieNames = true, s.Cookie.Host, s.Cookie.Names
 	}
