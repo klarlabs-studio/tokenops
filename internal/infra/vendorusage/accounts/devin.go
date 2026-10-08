@@ -90,6 +90,9 @@ func (o devinOrg) paths() []string {
 // given as its URL has one of its own) and normalises both halves.
 func devinCredential(credential string) (devinOrg, string, bool) {
 	credential = strings.TrimSpace(credential)
+	if strings.HasPrefix(credential, "{") {
+		return devinLocalStorage(credential)
+	}
 	i := strings.LastIndex(credential, ":")
 	if i <= 0 {
 		return devinOrg{}, "", false
@@ -103,6 +106,48 @@ func devinCredential(credential string) (devinOrg, string, bool) {
 		return devinOrg{}, "", false
 	}
 	return org, token, true
+}
+
+// devinOrgKey is app.devin.ai's localStorage key naming the internal ID of
+// the organisation last used; the key ends in the organisation's slug.
+const devinOrgKey = "last-internal-org-for-external-org-v1-"
+
+// devinLocalStorage reads the session setup read from app.devin.ai's
+// localStorage (ADR 0013 §8): the auth1 session's token ({"token":
+// "auth1_…"} under a key ending in auth1_session) and the organisation
+// last used, as CodexBar's DevinSessionImporter does.
+func devinLocalStorage(bundle string) (devinOrg, string, bool) {
+	var entries map[string]string
+	if json.Unmarshal([]byte(bundle), &entries) != nil {
+		return devinOrg{}, "", false
+	}
+	keys := make([]string, 0, len(entries))
+	for k := range entries {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var (
+		org   devinOrg
+		token string
+	)
+	for _, k := range keys {
+		v := entries[k]
+		switch {
+		case strings.HasSuffix(k, "auth1_session") && token == "":
+			var s struct {
+				Token string `json:"token"`
+			}
+			if json.Unmarshal([]byte(v), &s) == nil && strings.HasPrefix(s.Token, "auth1_") {
+				token = s.Token
+			}
+		case strings.HasPrefix(k, devinOrgKey) && org.internal == "":
+			slug := strings.TrimPrefix(k, devinOrgKey)
+			if id := strings.Trim(strings.TrimSpace(v), `"`); id != "" && slug != "" && slug != "null" {
+				org = devinOrg{slug: slug, internal: id}
+			}
+		}
+	}
+	return org, token, token != "" && org.internal != ""
 }
 
 // devinOrganization reads an organisation given as a slug, an internal

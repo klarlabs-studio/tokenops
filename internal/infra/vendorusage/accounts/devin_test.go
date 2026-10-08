@@ -113,3 +113,18 @@ func TestDevinUnknownShape(t *testing.T) {
 		}
 	}
 }
+
+// The session setup reads from app.devin.ai's localStorage: the auth1
+// token and the organisation last used.
+func TestDevinCredentialFromLocalStorage(t *testing.T) {
+	bundle := `{"@@devin@@::auth1_session":"{\"token\":\"auth1_0123456789abcdefghij\"}","last-internal-org-for-external-org-v1-acme":"\"org_abc123\"","last-internal-org-for-external-org-v1-null":"x"}`
+	org, token, ok := devinCredential(bundle)
+	if !ok || token != "auth1_0123456789abcdefghij" || org.internal != "org_abc123" || org.slug != "acme" {
+		t.Errorf("%+v %q %v", org, token, ok)
+	}
+	for _, bad := range []string{`{}`, `{"x_auth1_session":"{\"token\":\"auth1_t\"}"}`, `{"x_auth1_session":"{\"token\":\"not-auth1\"}","last-internal-org-for-external-org-v1-a":"org_1"}`, `{not json`} {
+		if _, _, ok := devinCredential(bad); ok {
+			t.Errorf("%s accepted", bad)
+		}
+	}
+}

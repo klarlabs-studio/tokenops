@@ -24,6 +24,36 @@ type VendorUsageConfig struct {
 	CodexAppServer   CodexAppServerConfig       `yaml:"codex_app_server"`
 	Fireworks        FireworksUsageConfig       `yaml:"fireworks"`
 	Accounts         AccountsUsageConfig        `yaml:"accounts"`
+	// Grants are other applications' sign-ins the operator let TokenOps
+	// read, by provider ID (`tokenops vendor-usage setup <id>
+	// --use-app-login`, ADR 0013). Nothing another application owns is
+	// read without one; `--revoke-app-login` removes it.
+	Grants map[string]AppLoginGrant `yaml:"grants,omitempty"`
+}
+
+// AppLoginGrant is the operator's consent to read one other application's
+// sign-in: exactly the item, fields and host setup showed them. A grant
+// holds no secret. The daemon reads the item afresh on each poll, read-only,
+// and only while it still names what the provider's descriptor reads: a
+// descriptor that would read something else, or send it elsewhere, is not
+// covered and is not read until granted again.
+type AppLoginGrant struct {
+	// App is the application that owns the sign-in ("the kilo CLI").
+	App string `yaml:"app"`
+	// Kind is where it is kept: json-file, env-file, text-file, sqlite,
+	// keychain or process.
+	Kind string `yaml:"kind"`
+	// Item is the file or database's path, the Keychain service, or the
+	// process name.
+	Item string `yaml:"item"`
+	// FromEnv marks a path the application's own path variable named.
+	FromEnv bool `yaml:"from_env,omitempty"`
+	// Fields are the fields read from it.
+	Fields []string `yaml:"fields"`
+	// Host is the one host the token is sent to.
+	Host string `yaml:"host"`
+	// GrantedAt is when the operator granted it.
+	GrantedAt time.Time `yaml:"granted_at"`
 }
 
 // AccountsUsageConfig wires the vendor account readers (ADR 0009 §7):
@@ -60,7 +90,7 @@ type AccountCredential struct {
 	// it for a gateway the operator runs or subscribes to.
 	BaseURL string `yaml:"base_url,omitempty"`
 	// CredentialChain reads the vendor's own credential chain on this
-	// machine (AWS's environment and shared credentials file) as the
+	// machine (AWS's environment and profiles) as the
 	// daemon polls: setup opted in; nothing secret is stored.
 	CredentialChain bool `yaml:"credential_chain,omitempty"`
 }

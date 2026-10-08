@@ -86,7 +86,7 @@ func providerAcme() Descriptor {
 | `DisplayName`, `PlanPrefix` | plan cards, menu bar, docs |
 | `Sources[].Name`, `.Tag` | `vendor-usage status`, freshness, retention keys, the headroom signal |
 | `Sources[].Kind` | which docs table: `Balance`/`Spend`, `Subscription`, `Gateway`, `LocalLog` |
-| `Sources[].Credential` | `APIKey`, `AdminKey`, `BrowserCookie`, `PasswordLogin`, `CredentialChain`, `AppKeychain` (all set up generically; a credential chain is the vendor's own credentials on the machine, opted in by setup, never stored), `OAuthFile`, `CLI`, `LocalFile` |
+| `Sources[].Credential` | `APIKey`, `AdminKey`, `BrowserCookie`, `PasswordLogin`, `CredentialChain`, `AppKeychain` (all set up generically; a credential chain is the vendor's own credentials on the machine, opted in by setup, never stored), `AppLogin` (another app's sign-in only, granted with `--use-app-login`), `OAuthFile`, `CLI`, `LocalFile` |
 | `Sources[].EnvVars` | variables holding the source's own credential when it is not the provider's API key (`OPENAI_ADMIN_KEY`), or a gateway's key (`SUB2API_API_KEY`); sent only to that source's reader |
 | `Sources[].BaseURLEnv`, `.DefaultBaseURL` | a gateway's address variable (`SUB2API_BASE_URL`) and a hosted gateway's own address: with a key in `EnvVars` it is read there, named, without being recognised |
 | `Sources[].KeychainServer` | the Keychain item an `AppKeychain` source reads at setup |
@@ -94,6 +94,7 @@ func providerAcme() Descriptor {
 | `Sources[].Switch` | `SwitchAccounts` for account and gateway readers; `SwitchConfig` only for a reader with its own config block (add it to `configSwitches` in `internal/config/vendor_usage_sources.go` and a hint in `vendorusage_hints.go`) |
 | `Sources[].Reader` | `AccountReader`, `GatewayReader`, or `BespokeReader` with `Package` and `Fixture` |
 | `Sources[].Cookie` | the cookies a `BrowserCookie` source reads: `Host` and `Also` (other regions' hosts, tried in order), `Names` (`"prefix*"` allowed), `Proof` (one must be present), `AllForHost` (every cookie the browser sends to the host, when the names are not known), `PasteOnly` (no browser read) |
+| `Sources[].AppLogins` | other applications' sign-ins the source can be read with, once granted (`--use-app-login`, ADR 0013) |
 | `Sources[].KeyFormat` | what setup asks for when the credential is more than one key (`TEAM_ID:MANAGEMENT_KEY`) |
 | `Sources[].Scope` | what the reader's optional scope is (a Kilo organisation ID, a v0 project); the reader then implements `usage.Scoped` (`WithScope`), and `vendor-usage setup <id> --scope` sets `vendor_usage.accounts.scopes.<id>` |
 | `Sources[].Verified` | `VerifiedLive` only after a real account was read; else `FromDocs`, `FromClientSource`, or `FromCodexBar` for a reader ported from CodexBar's provider source (name the CodexBar path in a comment) |
@@ -227,6 +228,19 @@ and stores only the token; `--paste` takes a token instead. The password is
 never stored or logged. An expired token makes the reading stale until
 setup is run again.
 
+A site that keeps its session in **localStorage** rather than a cookie
+(Devin, Windsurf) sets `LocalStorage: &LocalStorage{Origins: ..., Keys: ...}`
+on its source (`APIKey` or `BrowserCookie`). Only the interactive setup
+reads it (`internal/infra/browserstorage`): from each Chromium-family
+profile's `Local Storage/leveldb`, copied to a private directory first
+(the browser holds a lock), read-only, exactly the keys named (`*` matches
+any run of characters) for the first origin holding the first key, never
+two origins mixed. Chromium does not encrypt localStorage, so no Keychain
+item is read. The reader is given the entries as one JSON object; setup
+stores it like a pasted session, and the daemon never reads the browser.
+`--paste` skips the browser; a test fails if anything but setup imports
+the package.
+
 ### CLI and local-file providers
 
 A vendor whose own CLI reports its usage, or whose app keeps it in a file,
@@ -241,6 +255,52 @@ never logged. A CLI that could prompt is not run from the daemon. Its
 fixture is the CLI's output or the app's file, `testdata/<id>.<ext>`,
 run through a fake binary or a temporary home.
 
+A CLI that answers in one run needs no reader of its own: give the source a
+`Command` (`Binary`, an optional `PathEnv` override, the `Args` lists tried
+in order, a `Timeout` of at most 30 seconds, `SignedOut` phrases, and
+`EnvAllow` when the CLI must see nothing of TokenOps' environment but those
+variables), and register `cliSource{provider, tag, parse}` with only a
+parser (`doubao_cli.go`, `alibabatokenplan_cli.go`). The generic poller finds the
+binary, runs it as above, treats a `SignedOut` phrase as a refusal, and
+skips it silently when it is not installed. List only flags that never
+prompt.
+
+### Another application's sign-in
+
+Many vendors' usage can be read with the sign-in their own CLI or app keeps
+on the machine (a token file, a database, a Keychain item, a local server's
+token). TokenOps reads one **only after the operator granted it** (ADR 0013):
+
+- List it on the source as `AppLogins: []AppLoginItem{...}`: the
+  application (`App`), where it is (`Kind` with `Paths` under `~/`, an
+  optional `PathEnv`, a SQLite `Query`, a Keychain `Service`/`Account`, or a
+  `Process` name), exactly the `Fields` read, and the one `Host` the token
+  is sent to. A field is a dotted JSON path; `{key.with.dots}` is a literal
+  key, `*` in braces matches any run of characters, and `a|b` reads the
+  first present. One field reaches the reader as the token; several as a
+  JSON object keyed by field.
+- A provider with no API key of its own uses `Credential: AppLogin`; one
+  with a key lists `AppLogins` beside its `APIKey` source, and the grant is
+  tried after every key.
+- If the token is used differently from the API key (a `workos:` prefix, an
+  extra endpoint only the session may read), implement
+  `ReadAppLogin(ctx, token)` (`usage.AppLoginReader`) beside `Read`.
+- `tokenops vendor-usage setup <id> --use-app-login` finds the item without
+  reading it, prints what is read and where it goes, asks y/N, reads it once
+  against the vendor, and records `vendor_usage.grants.<id>` (no secret).
+  `--revoke-app-login` removes it; `vendor-usage status` lists grants.
+- The daemon re-reads a granted item read-only on each poll that needs it
+  (`internal/infra/applogin`): never written, never refreshed or rotated,
+  never logged; a Keychain item only quietly, never with
+  `keychain.disabled`. A grant covers exactly the kind, item, fields and
+  host it recorded: changing any of them in a descriptor means every
+  operator grants again, so do it only on purpose.
+- Not read: WorkBuddy's desktop token under `~/.workbuddy`. It is encrypted
+  with key material the app does not document (and, in older versions, with
+  Electron's safeStorage key in the Keychain, which prompts); there is no
+  way to decrypt it without a prompt or reverse-engineering the app, so
+  CodexBar does not read it either.
+
 ## Checklist
 
 - [ ] `provider_<id>.go` with one `provider<Name>()`; `Verified` honest
@@ -249,5 +309,6 @@ run through a fake binary or a temporary home.
 - [ ] logo SVG and `Logo: true`, or neither
 - [ ] `go generate ./...` run; generated files committed
 - [ ] the tests above pass, including `TestEveryProviderIsComplete` (`internal/bootstrap`) and `TestRegistryIsConsistent`
-- [ ] no live call with a real key in any test
+- [ ] no live call with a real key in any test, and no real file, Keychain item or browser profile read: fixtures in a temporary home
+- [ ] an `AppLogins` entry names exactly the field read and the one host it goes to
 - [ ] CHANGELOG line under `## Unreleased`

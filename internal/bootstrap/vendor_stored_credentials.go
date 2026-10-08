@@ -10,6 +10,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
+	"go.klarlabs.de/tokenops/internal/infra/applogin"
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
 	accountsapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/accounts"
 )
@@ -134,6 +135,17 @@ func chainReader(readers []accounts.Reader, id string) accounts.ChainReader {
 	return nil
 }
 
+// sourceEndpoint is the endpoint of the account reader that writes source
+// tag: a provider may have several readers (Kiro's CLI and its overage).
+func sourceEndpoint(readers []accounts.Reader, tag string) string {
+	for _, r := range readers {
+		if r.Source() == tag {
+			return r.Endpoint()
+		}
+	}
+	return ""
+}
+
 // readerEndpoint is the endpoint whose keys provider id's account reader
 // uses.
 func readerEndpoint(readers []accounts.Reader, id string) string {
@@ -145,12 +157,58 @@ func readerEndpoint(readers []accounts.Reader, id string) string {
 	return ""
 }
 
+// grantOrigin names a granted sign-in for status; never the token.
+const grantOrigin = "another app's sign-in, granted with --use-app-login"
+
+// grantedCredentials are the other applications' sign-ins the operator
+// granted (ADR 0013), in provider order. Each is read only when every
+// credential before it was refused or absent, afresh each time (so the
+// owning application's refreshed token is picked up), read-only, and only
+// while the grant still names what the provider's descriptor reads. A
+// provider with no grant has nothing here: nothing it owns is read.
+func grantedCredentials(cfg config.Config, readers []accounts.Reader, env applogin.Env) []accounts.Credential {
+	ids := make([]string, 0, len(cfg.VendorUsage.Grants))
+	for id := range cfg.VendorUsage.Grants {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	var out []accounts.Credential
+	for _, id := range ids {
+		g := cfg.VendorUsage.Grants[id]
+		d, ok := providers.Lookup(id)
+		if !ok {
+			continue
+		}
+		s, ok := d.AppLoginSource()
+		if !ok {
+			continue
+		}
+		endpoint := sourceEndpoint(readers, s.Tag)
+		if endpoint == "" {
+			continue
+		}
+		located, ok := applogin.Granted(s.AppLogins, g.Kind, g.Item, g.Fields, g.Host, g.FromEnv, env)
+		if !ok {
+			continue
+		}
+		out = append(out, accounts.Credential{Endpoint: endpoint, Origin: grantOrigin, AppLogin: true,
+			Remedy: "sign in again with " + g.App + "; `tokenops vendor-usage setup " + id + " --revoke-app-login` stops reading it",
+			Resolve: func(ctx context.Context) (string, error) {
+				return applogin.Read(ctx, located, env)
+			}})
+	}
+	return out
+}
+
 // vendorAccountCredentials is every credential the account poller tries on
-// a scan: those setup stored first, then the keys the harnesses use.
+// a scan: those setup stored first, then the keys the harnesses use, then,
+// last, the other applications' sign-ins the operator granted.
 func vendorAccountCredentials(cfg config.Config) func() []accounts.Credential {
 	readers := accountsapi.Readers()
 	browser := quietBrowser(cfg.Keychain.Disabled)
+	env := applogin.Env{KeychainDisabled: cfg.Keychain.Disabled}
 	return func() []accounts.Credential {
-		return append(storedCredentials(cfg, readers, registryCookie, browser), accountCredentials()...)
+		out := append(storedCredentials(cfg, readers, registryCookie, browser), accountCredentials()...)
+		return append(out, grantedCredentials(cfg, readers, env)...)
 	}
 }
