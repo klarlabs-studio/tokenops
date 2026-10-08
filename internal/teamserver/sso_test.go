@@ -50,16 +50,29 @@ type issued struct {
 	nonce, challenge, redirect, clientID string
 }
 
+var (
+	keysOnce      sync.Once
+	keyA, keyB    *rsa.PrivateKey
+	errIssuerKeys error
+)
+
+// issuerKeys are generated once: RSA key generation dominates otherwise.
+func issuerKeys(t *testing.T) (*rsa.PrivateKey, *rsa.PrivateKey) {
+	t.Helper()
+	keysOnce.Do(func() {
+		if keyA, errIssuerKeys = rsa.GenerateKey(rand.Reader, 2048); errIssuerKeys == nil {
+			keyB, errIssuerKeys = rsa.GenerateKey(rand.Reader, 2048)
+		}
+	})
+	if errIssuerKeys != nil {
+		t.Fatal(errIssuerKeys)
+	}
+	return keyA, keyB
+}
+
 func newFakeIssuer(t *testing.T, secret string) *fakeIssuer {
 	t.Helper()
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatal(err)
-	}
-	other, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatal(err)
-	}
+	key, other := issuerKeys(t)
 	f := &fakeIssuer{t: t, key: key, other: other, secret: secret, codes: map[string]issued{}, verified: true}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
