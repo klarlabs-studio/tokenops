@@ -53,4 +53,5 @@ var providerNames = map[string]string{
 	"zai":         "z.ai",
 	"zenmux":      "ZenMux",
 	"zhipuai":     "Zhipu AI",
+	"zoommate":    "ZoomMate",
 }

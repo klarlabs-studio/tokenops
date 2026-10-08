@@ -53,4 +53,5 @@ var registered = []func() Descriptor{
 	providerZAI,
 	providerZenMux,
 	providerZhipuAI,
+	providerZoomMate,
 }

@@ -89,6 +89,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"xkiro_account", "xkiro-account"},
 		{"zai_account", "zai-account"},
 		{"zenmux_account", "zenmux-account"},
+		{"zoommate_account", "zoommate-account"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d sources, want %d", len(got), len(want))
