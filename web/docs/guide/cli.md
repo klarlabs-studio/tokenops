@@ -712,6 +712,7 @@ own budget:
 <!-- begin generated: provider-gateways -->
 | Gateway | Recognised by | Shows |
 |---|---|---|
+| Aixy | the hosted host, or its name (`AIXY_API_KEY`, setup) | `GET /v1/usage`: each budget that applies to the key, spent and reserved against its limit |
 | Bifrost | `GET /health` | `GET /api/governance/virtual-keys/quota`: each budget's share used |
 | ClawRouter | its host, or `GET /v1/health` | `GET /v1/usage`: the policy's spend against its monthly budget |
 | LiteLLM proxy | `GET /health/liveliness` | `GET /key/info`: the key's spend against its budget, and when it resets |
@@ -734,7 +735,7 @@ use read its own spend.
   with `tokenops vendor-usage enable vendor-accounts --disable`.
 
 <!-- begin generated: provider-env-vars -->
-The environment variables read for a key: `AI_GATEWAY_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `FIREWORKS_API_KEY`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `MOONSHOT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XKIRO_API_KEY`.
+The environment variables read for a key: `AIXY_API_KEY`, `AI_GATEWAY_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `FIREWORKS_API_KEY`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `MOONSHOT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XKIRO_API_KEY`.
 <!-- end generated: provider-env-vars -->
 
 #### Every provider
@@ -744,6 +745,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 <!-- begin generated: provider-list -->
 | Provider | Source | Reads | Credential | Checked |
 |---|---|---|---|---|
+| Aixy | `aixy-account` | each budget that applies to the key, spent and reserved against its limit | API key | CodexBar's source, the vendor's docs and fixtures |
 | Alibaba Cloud | — | in the catalog only: the Coding Plan's endpoint, prices and limits are known; nothing reads its usage yet | — | — |
 | Claude | `claude-code-statusline` | the 5-hour and 7-day windows Claude Code gives its status line | local files | against a real account |
 |  | `claude-code-jsonl` | per-turn tokens from Claude Code's transcripts | local files | against a real account |
