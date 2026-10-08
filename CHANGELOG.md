@@ -17,6 +17,7 @@
 - **providers:** v0: the share of the billing cycle's balance and of the request quota used, read with a v0 Platform API key (`V0_API_KEY`, opencode's `v0` key or `vendor-usage setup v0`)
 - **providers:** Nous Portal: the monthly credit grant used this period and the top-up credit left, read with a Nous Portal access token from Hermes Agent's sign-in (`NOUS_PORTAL_ACCESS_TOKEN` or `vendor-usage setup nous`); the token expires within the hour and is never refreshed, and an expired one is refused before any request
 - **providers:** Warp: credits used since the last refresh against the plan's limit, read with a Warp API key (`WARP_API_KEY`, `WARP_TOKEN` or `vendor-usage setup warp`)
+- **providers:** opencode Go's 5-hour, weekly and monthly windows are read from `GET /zen/go/v1/usage` with the opencode API key (`OPENCODE_API_KEY`, opencode's auth.json, or `tokenops vendor-usage setup opencode-go`); it was in the catalog only
 
 ### Fixed
 
