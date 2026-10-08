@@ -2,7 +2,18 @@
 
 ## Unreleased
 
+### Added
+
+- **vendor-usage:** `tokenops vendor-usage setup <provider>` connects any vendor account TokenOps reads (OpenRouter, DeepSeek, Moonshot, z.ai, Kimi, MiniMax, Synthetic, Chutes, DeepInfra, Vercel) when no harness or environment variable holds its key: the key is typed without echo, checked with one reading, and only then stored in your config (redacted wherever config is shown) and sent only to that vendor
+
+### Fixed
+
+- **vendor-usage:** z.ai, Kimi, MiniMax, Synthetic, Chutes, DeepInfra, Vercel and the LiteLLM, Bifrost and ClawRouter gateways have a hint in `vendor-usage status`, as do the Cursor hook ledger and the Claude Code status line feed; they showed none
+- **menubar, cards:** every provider is named as its users know it in the menu bar and on plan cards (z.ai, Kimi, MiniMax, Vercel, Zhipu AI, Together AI, opencode Go, ...), where several showed a capitalised ID
+
 ### Changed
+
+- **vendor-usage:** `vendor-usage status` lists sources by provider (alphabetically by provider ID), each provider's sources together
 
 - **menubar:** each plan shows its vendor's own logo (Claude, Codex, Gemini, Copilot, Cursor and the API providers) where it showed two letters
 - **menubar:** while the panel fetches your usage it says so, with a spinner and how long it has taken, and keeps what it showed; Refresh spins and reads "Refreshing…" until the new readings are in
