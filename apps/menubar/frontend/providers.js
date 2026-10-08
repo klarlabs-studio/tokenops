@@ -12,6 +12,7 @@ window.TOKENOPS_PROVIDERS = {
   "cursor": {"name":"Cursor","logo":true},
   "deepinfra": {"name":"DeepInfra","logo":false},
   "deepseek": {"name":"DeepSeek","logo":true},
+  "devpass": {"name":"DevPass","logo":false},
   "fireworks": {"name":"Fireworks","logo":true},
   "gemini": {"name":"Gemini","logo":true},
   "github": {"name":"Copilot","logo":true},

@@ -15,6 +15,7 @@ var registered = []func() Descriptor{
 	providerCursor,
 	providerDeepInfra,
 	providerDeepSeek,
+	providerDevPass,
 	providerFireworks,
 	providerGemini,
 	providerGitHub,
