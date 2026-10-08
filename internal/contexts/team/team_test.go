@@ -63,19 +63,6 @@ func TestPeriodStart(t *testing.T) {
 	}
 }
 
-func TestSuppress(t *testing.T) {
-	rows := []Row{
-		{Group: "a", People: 2, Totals: Totals{Tokens: 5}},
-		{Group: "b", People: 3, Totals: Totals{Tokens: 7}},
-	}
-	if n := Suppress(rows, 3); n != 1 {
-		t.Fatalf("suppressed %d", n)
-	}
-	if !rows[0].Suppressed || rows[0].Totals.Tokens != 0 || rows[1].Suppressed || rows[1].Totals.Tokens != 7 {
-		t.Errorf("rows = %+v", rows)
-	}
-}
-
 func TestRates(t *testing.T) {
 	var tot Totals
 	tot.Add(Totals{Instructions: 2, FirstTry: 1, Turns: 6, APIEquivalentUSD: 1, ActiveSeconds: 120})

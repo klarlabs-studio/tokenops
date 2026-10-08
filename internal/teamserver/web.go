@@ -202,12 +202,14 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 type periodGroup struct {
 	Start string
 	Rows  []AggregateRow
+	// Withheld names the period's withheld groups, listed once below its
+	// table rather than as rows of dashes.
+	Withheld []string
 }
 
 type overviewData struct {
 	AggregateAnswer
 	Periods []periodGroup
-	Teams   []pgstore.Team
 	Error   string
 }
 
@@ -217,7 +219,12 @@ func groupByPeriod(rows []AggregateRow) []periodGroup {
 		if len(out) == 0 || out[len(out)-1].Start != r.PeriodStart {
 			out = append(out, periodGroup{Start: r.PeriodStart})
 		}
-		out[len(out)-1].Rows = append(out[len(out)-1].Rows, r)
+		g := &out[len(out)-1]
+		if r.Suppressed {
+			g.Withheld = append(g.Withheld, r.Group)
+			continue
+		}
+		g.Rows = append(g.Rows, r)
 	}
 	// Newest period first: the week being asked about is the last one.
 	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
@@ -237,7 +244,6 @@ func (s *Server) overviewPage(w http.ResponseWriter, r *http.Request, c caller) 
 		data.Error = err.Error()
 	}
 	data.Periods = groupByPeriod(ans.Rows)
-	data.Teams, _ = s.store.Teams(r.Context(), c.OrgID)
 	s.render(w, http.StatusOK, "overview", view{Title: "Team overview", User: &c.Principal, Admin: c.Role.CanAdminister(), Data: data})
 }
 

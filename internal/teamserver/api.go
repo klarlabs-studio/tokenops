@@ -1,6 +1,7 @@
 package teamserver
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -148,16 +149,21 @@ type AggregateRow struct {
 	Rates       team.Rates  `json:"rates"`
 }
 
-// AggregateAnswer is GET /api/v1/aggregates.
+// AggregateAnswer is GET /api/v1/aggregates: released cells (ADR 0012
+// §3), never figures computed for the request.
 type AggregateAnswer struct {
-	By           string         `json:"by"`
-	Period       string         `json:"period"`
-	Since        string         `json:"since"`
-	Until        string         `json:"until"`
-	Team         string         `json:"team,omitempty"`
-	MinGroupSize int            `json:"min_group_size"`
-	Suppressed   int            `json:"suppressed"`
-	Rows         []AggregateRow `json:"rows"`
+	By           string `json:"by"`
+	Period       string `json:"period"`
+	Since        string `json:"since"`
+	Until        string `json:"until"`
+	MinGroupSize int    `json:"min_group_size"`
+	// Suppressed counts the withheld rows: fewer than MinGroupSize people,
+	// or withheld so that another row cannot be worked out from the rest.
+	Suppressed int `json:"suppressed"`
+	// ReleasedThrough is the end (exclusive) of the newest released week;
+	// later days are not shown yet. Empty before the first release.
+	ReleasedThrough string         `json:"released_through,omitempty"`
+	Rows            []AggregateRow `json:"rows"`
 }
 
 // maxRangeDays bounds a query's span.
@@ -189,10 +195,20 @@ func span(r *http.Request, now time.Time) (time.Time, time.Time, error) {
 	return since, until, nil
 }
 
-// aggregate answers an aggregate query for c's organisation, suppressing
-// groups below its minimum size.
+// errTeamFilter answers the removed team filter. Narrowing a repository
+// or kind breakdown to one team let a reader subtract one filter from
+// another and isolate a person (ADR 0012 §3).
+var errTeamFilter = errors.New("team: aggregates no longer take a team filter; query by=team, or by=repo or by=kind for everyone")
+
+// aggregate answers an aggregate query for c's organisation from its
+// released weeks, releasing any that have settled first. Every cell is a
+// fixed one — a dimension's group on a UTC day or in an ISO week — so the
+// window only chooses which released cells to show.
 func (s *Server) aggregate(r *http.Request, c caller) (AggregateAnswer, int, error) {
 	q := r.URL.Query()
+	if q.Has("team") {
+		return AggregateAnswer{}, http.StatusBadRequest, errTeamFilter
+	}
 	by, err := team.ParseDimension(q.Get("by"))
 	if err != nil {
 		return AggregateAnswer{}, http.StatusBadRequest, err
@@ -205,30 +221,46 @@ func (s *Server) aggregate(r *http.Request, c caller) (AggregateAnswer, int, err
 	if err != nil {
 		return AggregateAnswer{}, http.StatusBadRequest, err
 	}
+	since = period.Start(since)
 	org, err := s.store.OrgByID(r.Context(), c.OrgID)
 	if err != nil {
 		return AggregateAnswer{}, http.StatusInternalServerError, err
 	}
-	query := pgstore.Query{OrgID: c.OrgID, By: by, Period: period, Since: since, Until: until}
+	if err := s.release(r.Context(), c.OrgID); err != nil {
+		return AggregateAnswer{}, http.StatusInternalServerError, err
+	}
 	ans := AggregateAnswer{By: string(by), Period: string(period), Since: since.Format(teamwire.DayLayout),
 		Until: until.Format(teamwire.DayLayout), MinGroupSize: org.MinGroupSize, Rows: []AggregateRow{}}
-	if ref := q.Get("team"); ref != "" {
-		t, err := s.store.TeamByRef(r.Context(), c.OrgID, ref)
-		if err != nil {
-			return ans, http.StatusNotFound, fmt.Errorf("team %q not found", ref)
-		}
-		query.TeamID, ans.Team = t.ID, t.Name
-	}
-	rows, err := s.store.Aggregate(r.Context(), query)
+	through, err := s.store.ReleasedThrough(r.Context(), c.OrgID)
 	if err != nil {
 		return ans, http.StatusInternalServerError, err
 	}
-	ans.Suppressed = team.Suppress(rows, org.MinGroupSize)
-	for _, row := range rows {
-		ans.Rows = append(ans.Rows, AggregateRow{PeriodStart: row.PeriodStart.Format(teamwire.DayLayout), Group: row.Group,
-			People: row.People, Suppressed: row.Suppressed, Totals: row.Totals, Rates: row.Totals.Rates()})
+	if !through.IsZero() {
+		ans.ReleasedThrough = through.Format(teamwire.DayLayout)
+	}
+	cells, err := s.store.ReleasedCells(r.Context(), pgstore.ReleasedQuery{OrgID: c.OrgID, By: by, Period: period, Since: since, Until: until})
+	if err != nil {
+		return ans, http.StatusInternalServerError, err
+	}
+	for _, cell := range cells {
+		if cell.Suppressed {
+			ans.Suppressed++
+		}
+		ans.Rows = append(ans.Rows, AggregateRow{PeriodStart: cell.PeriodStart.Format(teamwire.DayLayout), Group: cell.Group,
+			People: cell.People, Suppressed: cell.Suppressed, Totals: cell.Totals, Rates: cell.Totals.Rates()})
 	}
 	return ans, http.StatusOK, nil
+}
+
+// release releases an organisation's settled weeks and logs what it did.
+func (s *Server) release(ctx context.Context, orgID string) error {
+	rel, err := s.store.EnsureReleased(ctx, orgID)
+	for _, w := range rel {
+		s.log.Info("week released", "org", w.OrgID, "week", w.WeekStart.Format(teamwire.DayLayout),
+			"cells", w.Report.Cells, "primary", w.Report.Primary, "secondary", w.Report.Secondary,
+			"checks", w.Report.Checks, "fallback", w.Report.Fallback)
+	}
+	return err
 }
 
 func (s *Server) aggregates(w http.ResponseWriter, r *http.Request, c caller) {

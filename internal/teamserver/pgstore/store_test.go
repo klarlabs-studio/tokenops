@@ -141,11 +141,15 @@ func TestIngestIsIdempotentAndReplacesDays(t *testing.T) {
 	}
 }
 
-func TestAggregateCountsPeople(t *testing.T) {
+func TestReleasedWeeksCountPeopleAndNeverChange(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
+	var ann teamwire.EnrollResponse
 	for i, name := range []string{"Ann", "Ben", "Cem"} {
 		m := f.join(t, "platform", name, team.RoleMember)
+		if i == 0 {
+			ann = m
+		}
 		u := upload(monday, []string{"2026-10-05", "2026-10-06"},
 			teamwire.Bucket{Day: "2026-10-05", Repo: "acme/api", Kind: "edit", Instructions: 2, FirstTry: 1, Tokens: int64(100 * (i + 1))},
 			teamwire.Bucket{Day: "2026-10-06", Repo: "acme/api", Kind: "lookup", Instructions: 1, Tokens: 10})
@@ -153,41 +157,82 @@ func TestAggregateCountsPeople(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	solo := f.join(t, "data", "Dee", team.RoleMember)
-	if _, err := f.s.Ingest(ctx, dev(solo), upload(monday, []string{"2026-10-05"},
-		teamwire.Bucket{Day: "2026-10-05", Repo: "acme/etl", Kind: "deep", Instructions: 7})); err != nil {
+	// Dee works the week after: the release of this week has nothing of hers.
+	solo := f.join(t, "platform", "Dee", team.RoleMember)
+	if _, err := f.s.Ingest(ctx, dev(solo), upload(monday, []string{"2026-10-12"},
+		teamwire.Bucket{Day: "2026-10-12", Repo: "acme/etl", Kind: "deep", Instructions: 7})); err != nil {
 		t.Fatal(err)
 	}
-	q := pgstore.Query{OrgID: f.org.ID, By: team.ByTeam, Period: team.Week, Since: monday.AddDate(0, 0, -7), Until: monday.AddDate(0, 0, 7)}
-	rows, err := f.s.Aggregate(ctx, q)
-	if err != nil {
-		t.Fatal(err)
+	week := time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC)
+	q := pgstore.ReleasedQuery{OrgID: f.org.ID, By: team.ByTeam, Period: team.Week, Since: week, Until: week.AddDate(0, 0, 7)}
+
+	// Not before the week has settled.
+	f.s.SetClock(func() time.Time { return time.Date(2026, 10, 14, 23, 0, 0, 0, time.UTC) })
+	if rel, err := f.s.EnsureReleased(ctx, f.org.ID); err != nil || len(rel) != 0 {
+		t.Fatalf("released early: %+v %v", rel, err)
 	}
-	if len(rows) != 2 {
-		t.Fatalf("rows = %+v", rows)
+	f.s.SetClock(func() time.Time { return time.Date(2026, 10, 15, 1, 0, 0, 0, time.UTC) })
+	rel, err := f.s.EnsureReleased(ctx, f.org.ID)
+	if err != nil || len(rel) != 1 || !rel[0].WeekStart.Equal(week) {
+		t.Fatalf("release: %+v %v", rel, err)
 	}
-	data, platform := rows[0], rows[1]
-	if platform.Group != "platform" || platform.People != 3 || platform.Totals.Tokens != 630 || platform.Totals.Instructions != 9 {
-		t.Errorf("platform = %+v", platform)
-	}
-	if data.People != 1 || team.Suppress(rows, f.org.MinGroupSize) != 1 || !rows[0].Suppressed {
-		t.Errorf("a one-person team was not suppressed: %+v", rows)
-	}
-	q.By, q.Period = team.ByKind, team.Day
-	rows, err = f.s.Aggregate(ctx, q)
-	if err != nil || len(rows) != 3 {
-		t.Fatalf("by kind = %+v, %v", rows, err)
-	}
-	platformTeam, _ := f.s.TeamByRef(ctx, f.org.ID, "platform")
-	q.By, q.TeamID = team.ByRepo, platformTeam.ID
-	rows, err = f.s.Aggregate(ctx, q)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, r := range rows {
-		if r.Group != "acme/api" {
-			t.Errorf("team filter leaked %s", r.Group)
+	read := func() map[string]team.Cell {
+		cells, err := f.s.ReleasedCells(ctx, q)
+		if err != nil {
+			t.Fatal(err)
 		}
+		out := map[string]team.Cell{}
+		for _, c := range cells {
+			out[c.Group] = c
+		}
+		return out
+	}
+	before := read()
+	if p := before["platform"]; p.Suppressed || p.People != 3 || p.Totals.Tokens != 630 || p.Totals.Instructions != 9 {
+		t.Errorf("platform = %+v", p)
+	}
+
+	// A late upload changes the member's own figures, not the release.
+	late := upload(monday.Add(time.Hour), []string{"2026-10-05"},
+		teamwire.Bucket{Day: "2026-10-05", Repo: "acme/api", Kind: "edit", Instructions: 50, Tokens: 99999})
+	if _, err := f.s.Ingest(ctx, dev(ann), late); err != nil {
+		t.Fatal(err)
+	}
+	if rel, err := f.s.EnsureReleased(ctx, f.org.ID); err != nil || len(rel) != 0 {
+		t.Fatalf("released again: %+v %v", rel, err)
+	}
+	if after := read(); after["platform"] != before["platform"] {
+		t.Errorf("a released cell changed: %+v -> %+v", before["platform"], after["platform"])
+	}
+	// Nor does removing a member: the difference would be their figures.
+	if err := f.s.RemoveMember(ctx, f.owner, solo.MemberID); err != nil {
+		t.Fatal(err)
+	}
+	if after := read(); len(after) != len(before) || after["platform"] != before["platform"] {
+		t.Errorf("removal changed the release: %+v", after)
+	}
+
+	// Raising the floor withdraws the release; it comes back under the
+	// new floor.
+	if err := f.s.SetPrivacy(ctx, f.owner, 4, team.DefaultRetentionDays); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); len(got) != 0 {
+		t.Errorf("release kept after raising the floor: %+v", got)
+	}
+	if _, err := f.s.EnsureReleased(ctx, f.org.ID); err != nil {
+		t.Fatal(err)
+	}
+	if p := read()["platform"]; !p.Suppressed {
+		t.Errorf("three people shown under a floor of four: %+v", p)
+	}
+	// Retention takes released weeks with it.
+	f.s.SetClock(func() time.Time { return week.AddDate(0, 0, team.DefaultRetentionDays+10) })
+	if _, err := f.s.Purge(ctx, team.DefaultAuditRetentionDays); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); len(got) != 0 {
+		t.Errorf("release outlived retention: %+v", got)
 	}
 }
 

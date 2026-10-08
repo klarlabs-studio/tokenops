@@ -105,7 +105,10 @@ team privacy --org Acme --min-group 3 --retention-days 400
 ```
 
 `--min-group` withholds any team, repository or kind-of-work row fewer
-people contributed to (default 3). Figures older than `--retention-days`
+people contributed to (default 3), and as many others as needed that no
+sum or difference of the rows shown gives a withheld one back. Each week
+is computed once, three days after it ends, and never changes; raising
+`--min-group` recomputes every week under the new floor (ADR 0012 §3a). Figures older than `--retention-days`
 are deleted every six hours (default 400); the audit log is kept
 `AUDIT_RETENTION_DAYS` (default 730).
 
