@@ -48,24 +48,34 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"bifrost_gateway", "bifrost-account"},
 		{"chutes_account", "chutes-account"},
 		{"clawrouter_gateway", "clawrouter-account"},
+		{"clinepass_account", "clinepass-account"},
+		{"codebuff_account", "codebuff-account"},
 		{"cursor_turns (hook ledger)", "cursor-hook"},
 		{"cursor_web", "cursor-web"},
 		{"deepinfra_account", "deepinfra-account"},
 		{"deepseek_account", "deepseek-account"},
+		{"devpass_account", "devpass-account"},
 		{"fireworks", "fireworks-usage"},
 		{"gemini_cli", "gemini-cli"},
 		{"github_copilot", "github-copilot"},
+		{"ibmbob_account", "ibmbob-account"},
+		{"kilo_account", "kilo-account"},
 		{"kimi_account", "kimi-account"},
 		{"litellm_gateway", "litellm-account"},
 		{"minimax_account", "minimax-account"},
 		{"moonshot_account", "moonshot-account"},
+		{"nous_account", "nous-account"},
 		{"codex_app_server", "codex-app-server"},
 		{"codex_jsonl", "codex-jsonl"},
 		{"opencode", "opencode"},
 		{"openrouter_account", "openrouter-account"},
 		{"synthetic_account", "synthetic-account"},
+		{"v0_account", "v0-account"},
 		{"vercel_account", "vercel-account"},
+		{"warp_account", "warp-account"},
+		{"xkiro_account", "xkiro-account"},
 		{"zai_account", "zai-account"},
+		{"zenmux_account", "zenmux-account"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d sources, want %d", len(got), len(want))
@@ -389,5 +399,18 @@ func TestBrowserSessionHint(t *testing.T) {
 	}
 	if got := cfg.VendorUsageConfigHint("litellm-account"); !strings.Contains(got, "LiteLLM gateway") {
 		t.Errorf("gateway hint %q", got)
+	}
+}
+
+// A key only setup supplies (ZenMux's Management API key) points at setup
+// until one is stored.
+func TestSetupOnlyKeyHint(t *testing.T) {
+	cfg := Default()
+	if got := cfg.VendorUsageConfigHint("zenmux-account"); !strings.Contains(got, "vendor-usage setup zenmux") || strings.Contains(got, "harness") {
+		t.Errorf("unconnected hint %q", got)
+	}
+	cfg.VendorUsage.Accounts.Credentials = map[string]AccountCredential{"zenmux": {Key: "k"}}
+	if got := cfg.VendorUsageConfigHint("zenmux-account"); !strings.HasPrefix(got, "on;") {
+		t.Errorf("connected hint %q", got)
 	}
 }

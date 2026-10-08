@@ -1,0 +1,18 @@
+{
+  "user": {"email": "user@example.com"},
+  "organisation": {"name": "Example Org"},
+  "subscription": {
+    "plan": "Ultra",
+    "monthly_credits": "200.00",
+    "credits_remaining": 150,
+    "rollover_credits": 0,
+    "current_period_end": "2026-11-01T00:00:00Z"
+  },
+  "purchased_credits_remaining": "12.5",
+  "paid_service_access": {
+    "has_active_subscription": true,
+    "subscription_credits_remaining": 150,
+    "purchased_credits_remaining": 12.5,
+    "total_usable_credits": 162.5
+  }
+}

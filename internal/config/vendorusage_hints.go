@@ -81,6 +81,14 @@ func (c Config) registryHint(sourceTag string) string {
 		}
 		return "connect it: `tokenops vendor-usage setup " + string(s.Provider) + "` reads the session from your browser"
 	}
+	// A provider whose key only setup supplies (a management key the
+	// harnesses never hold) says so in its descriptor.
+	if d, _ := providers.Lookup(string(s.Provider)); d.Docs.Setup != "" {
+		if _, stored := c.VendorUsage.Accounts.Credentials[string(s.Provider)]; stored {
+			return "on; reads with the key `tokenops vendor-usage setup " + string(s.Provider) + "` stored"
+		}
+		return "connect it: " + d.Docs.Setup
+	}
 	return "on; reads only when a harness (Claude Code, Codex, opencode) or the environment has this vendor's key"
 }
 

@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "data": {
+    "plan": {"tier": "pro", "expires_at": "2026-12-01T00:00:00Z"},
+    "account_status": "healthy",
+    "quota_5_hour": {"usage_percentage": 0.35, "max_flows": 200, "used_flows": 70, "remaining_flows": 130, "resets_at": "2026-10-08T14:00:00Z"},
+    "quota_7_day": {"usage_percentage": 0.125, "max_flows": 2000, "used_flows": 250, "remaining_flows": 1750, "resets_at": "2026-10-12T09:30:00Z"}
+  }
+}

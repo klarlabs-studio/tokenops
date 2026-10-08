@@ -68,6 +68,22 @@ func TestFindEveryHarness(t *testing.T) {
 	}
 }
 
+// A provider opencode does not know names its reader's endpoint for a key
+// in its own variable.
+func TestFindOwnVariables(t *testing.T) {
+	env := map[string]string{"CODEBUFF_API_KEY": "cb-key"}
+	got := Find(Options{
+		Getenv:         func(k string) string { return env[k] },
+		OpencodeData:   t.TempDir(),
+		OpencodeConfig: t.TempDir(),
+		Claude:         func() (string, string) { return "", "" },
+		Codex:          func() map[string]codexsettings.Provider { return nil },
+	})
+	if len(got) != 1 || got[0].Endpoint != "codebuff" || got[0].Origin != "$CODEBUFF_API_KEY" || got[0].ProviderID != "" {
+		t.Errorf("got %+v", got)
+	}
+}
+
 func TestStripJSONCKeepsStrings(t *testing.T) {
 	src := `{"url": "https://a//b", "s": "/* not a comment */", // c
 	"list": [1, 2,], /* block */ "esc": "a\"//b",}`

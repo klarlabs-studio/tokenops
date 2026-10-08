@@ -1,0 +1,19 @@
+{
+  "data": {
+    "user": {
+      "__typename": "UserOutput",
+      "user": {
+        "requestLimitInfo": {
+          "isUnlimited": false,
+          "nextRefreshTime": "2026-11-01T00:00:00Z",
+          "requestLimit": 1500,
+          "requestsUsedSinceLastRefresh": 600
+        },
+        "bonusGrants": [
+          {"requestCreditsGranted": 500, "requestCreditsRemaining": 450, "expiration": "2027-01-01T00:00:00Z"}
+        ],
+        "workspaces": []
+      }
+    }
+  }
+}

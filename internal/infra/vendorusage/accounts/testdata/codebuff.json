@@ -1,0 +1,9 @@
+{
+  "type": "usage-response",
+  "usage": 250,
+  "quota": 1000,
+  "remainingBalance": 750,
+  "balanceBreakdown": {"free": 500, "purchase": 250},
+  "next_quota_reset": "2026-11-01T00:00:00.000Z",
+  "autoTopupEnabled": false
+}

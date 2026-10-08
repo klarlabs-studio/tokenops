@@ -9,15 +9,25 @@ import (
 // readers is every reader*() function in this package, by file name.
 var readers = []func() usage.Reader{
 	readerChutes,
+	readerClinePass,
+	readerCodebuff,
 	readerDeepInfra,
 	readerDeepSeek,
+	readerDevPass,
+	readerIBMBob,
+	readerKilo,
 	readerKimi,
 	readerMiniMax,
 	readerMoonshot,
+	readerNous,
 	readerOpenRouter,
 	readerSynthetic,
+	readerV0,
 	readerVercel,
+	readerWarp,
+	readerXKiro,
 	readerZAI,
+	readerZenMux,
 }
 
 // gateways is every gateway*() function in this package, by file name.

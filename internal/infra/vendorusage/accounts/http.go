@@ -54,31 +54,56 @@ func getJSON(ctx context.Context, hc *http.Client, url, key string, out any) err
 
 // getJSONAuth GETs url with the Authorization header set to auth.
 func getJSONAuth(ctx context.Context, hc *http.Client, url, auth string, out any) error {
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	return doJSON(ctx, hc, http.MethodGet, url, http.Header{"Authorization": {auth}}, nil, out)
+}
+
+// postJSON POSTs payload as JSON to url with a bearer key and decodes the
+// answer into out.
+func postJSON(ctx context.Context, hc *http.Client, url string, header http.Header, payload, out any) error {
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", auth)
+	h := header.Clone()
+	h.Set("Content-Type", "application/json")
+	return doJSON(ctx, hc, http.MethodPost, url, h, body, out)
+}
+
+// doJSON sends one request with header (and Accept: application/json) and
+// decodes a 200's body into out. 401 and 403 are usage.ErrAuth; errors
+// name the method, host and path, never the query or a header.
+func doJSON(ctx context.Context, hc *http.Client, method, url string, header http.Header, body []byte, out any) error {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	var reqBody io.Reader
+	if body != nil {
+		reqBody = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
+	if err != nil {
+		return err
+	}
+	for k, v := range header {
+		req.Header[http.CanonicalHeaderKey(k)] = v
+	}
 	req.Header.Set("Accept", "application/json")
 	if hc == nil {
 		hc = &http.Client{Timeout: 20 * time.Second}
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
-		return fmt.Errorf("accounts: GET %s: %w", hostPath(url), err)
+		return fmt.Errorf("accounts: %s %s: %w", method, hostPath(url), err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
 		return fmt.Errorf("%w (%d on %s)", usage.ErrAuth, resp.StatusCode, hostPath(url))
 	case resp.StatusCode != http.StatusOK:
-		return fmt.Errorf("accounts: GET %s: status %d", hostPath(url), resp.StatusCode)
+		return fmt.Errorf("accounts: %s %s: status %d", method, hostPath(url), resp.StatusCode)
 	}
-	if err := json.Unmarshal(body, out); err != nil {
-		return fmt.Errorf("accounts: GET %s: %w", hostPath(url), err)
+	if err := json.Unmarshal(data, out); err != nil {
+		return fmt.Errorf("accounts: %s %s: %w", method, hostPath(url), err)
 	}
 	return nil
 }
@@ -116,6 +141,30 @@ func (n *number) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// stamp decodes a time given as an ISO string, or as Unix seconds or
+// milliseconds (a number or a numeric string).
+type stamp struct{ t time.Time }
+
+func (s *stamp) UnmarshalJSON(b []byte) error {
+	raw := strings.TrimSpace(string(bytes.Trim(b, `"`)))
+	if raw == "" || raw == "null" {
+		return nil
+	}
+	if v, err := strconv.ParseFloat(raw, 64); err == nil {
+		if v <= 0 {
+			return nil
+		}
+		if v > 1e10 {
+			s.t = time.UnixMilli(int64(v)).UTC()
+		} else {
+			s.t = time.Unix(int64(v), 0).UTC()
+		}
+		return nil
+	}
+	s.t = parseTime(raw) // an unreadable time is absent, not an error
+	return nil
+}
+
 // windowName names a window by its length: "5h", "week", "month".
 func windowName(d time.Duration) string {
 	switch {
@@ -149,6 +198,11 @@ func pct(used, limit float64) float64 {
 		return 0
 	}
 	return used / limit * 100
+}
+
+// clampPct holds a vendor's percentage to 0–100.
+func clampPct(p float64) float64 {
+	return min(100, max(0, p))
 }
 
 // probe GETs url with no key and returns the body of a 200, for
