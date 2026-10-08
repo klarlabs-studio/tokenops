@@ -53,6 +53,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"codebuff_account", "codebuff-account"},
 		{"cursor_turns (hook ledger)", "cursor-hook"},
 		{"cursor_web", "cursor-web"},
+		{"deepgram_account", "deepgram-account"},
 		{"deepinfra_account", "deepinfra-account"},
 		{"deepseek_account", "deepseek-account"},
 		{"devpass_account", "devpass-account"},

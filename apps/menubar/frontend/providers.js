@@ -11,6 +11,7 @@ window.TOKENOPS_PROVIDERS = {
   "clinepass": {"name":"ClinePass","logo":true},
   "codebuff": {"name":"Codebuff","logo":false},
   "cursor": {"name":"Cursor","logo":true},
+  "deepgram": {"name":"Deepgram","logo":false},
   "deepinfra": {"name":"DeepInfra","logo":false},
   "deepseek": {"name":"DeepSeek","logo":true},
   "devpass": {"name":"DevPass","logo":false},
