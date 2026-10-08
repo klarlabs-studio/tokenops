@@ -7,6 +7,7 @@
 <p>Per UTC day, repository and kind of work, sums only:</p>
 <ul>{{range .Data.Fields}}<li>{{.}}</li>{{end}}</ul>
 <p>Never prompts, file contents, transcripts, paths, commit messages or model outputs. Run <code>tokenops team preview</code> to see an upload before it is sent.</p>
+{{if $me.SSOEmail}}<p>Single sign-on signs you in as <strong>{{$me.SSOEmail}}</strong>. If that is not your address, tell an owner: whoever controls it can sign in as you.</p>{{end}}
 <p>Held now: {{$me.Buckets}} rows over {{$me.Days}} days, kept {{$me.RetentionDays}} days. Team, repository and kind-of-work views withhold any group of fewer than {{$me.MinGroupSize}} people.</p>
 
 <h2>Your machines</h2>

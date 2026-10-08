@@ -114,6 +114,52 @@ To remove someone and erase their figures: `team remove-member --org Acme
 (`tokenops team leave`) erases that machine's figures unless they pass
 `--keep-history`.
 
+### Single sign-on (optional)
+
+Members can sign in to the web view with your identity provider instead
+of a single-use link (links keep working). Any OpenID Connect issuer
+works: Google Workspace, Microsoft Entra ID, Keycloak, Okta, Authentik,
+or Dex in front of GitHub. SSO signs in the **existing** member whose
+address you set; it never creates a member or changes a role.
+
+1. Register a web application (a confidential client) at the issuer:
+   redirect URI `https://team.example.eu/sso/callback`, scopes `openid
+   email profile`, authorization code flow (PKCE is used).
+2. Put the client secret in `.env` as `OIDC_CLIENT_SECRET=…`, then
+   `docker compose up -d team`. The secret never enters the database or
+   its dumps.
+3. Turn it on (the command fetches the issuer's discovery document and
+   reads the secret first):
+
+   ```bash
+   team sso set --org Acme --issuer https://accounts.google.com \
+     --client-id 1234.apps.googleusercontent.com \
+     --client-secret-env TEAMSERVER_OIDC_CLIENT_SECRET --domains acme.example
+   team set-email --org Acme --member "Ann" --email ann@acme.example
+   ```
+
+   Owners can also set addresses with `PUT /api/v1/members/{id}/email`.
+4. Members sign in at `https://team.example.eu/sso?org=Acme`, or from the
+   sign-in page.
+
+| Issuer | `--issuer` | Notes |
+|---|---|---|
+| Google Workspace | `https://accounts.google.com` | `--domains` your Workspace domains |
+| Microsoft Entra ID | `https://login.microsoftonline.com/<tenant-id>/v2.0` | one tenant, never `common`/`organizations`. Entra sends no `email_verified`: add `--allow-unverified-email`, which is safe only for a single tenant whose addresses you own. Add the optional `email` claim to the ID token |
+| Keycloak | `https://keycloak.example.eu/realms/<realm>` | users need a verified e-mail |
+| GitHub | your Dex (or other OIDC proxy) issuer URL | GitHub is OAuth 2.0, not OpenID Connect; Dex's GitHub connector makes it one |
+
+The address must be verified by the issuer (unless
+`--allow-unverified-email`) and its domain listed exactly — a subdomain is
+another domain. Whoever controls an address can sign in as the member it
+is set on, so only owners and this console set addresses; each change is
+in the audit log and on the member's own page. `team sso show --org Acme`
+prints the settings, `team sso disable --org Acme` turns SSO off.
+
+Several organisations on one server: add a variable per organisation to
+the `team` service's `environment` in `docker-compose.yml`, or mount a
+directory of secret files and use `--client-secret-file /path`.
+
 ## 4. Backups
 
 The `backup` service writes `pg_dump` custom-format dumps to
@@ -181,4 +227,4 @@ caddy db backup && docker compose up -d` for the other images.
   credential. Lost an owner API token? `team admin-token --org Acme
   --member "Your Name"` mints another.
 - Sign in as an owner without a joined machine: `team login-link --org
-  Acme --member "Your Name"`.
+  Acme --member "Your Name"`, or single sign-on once your address is set.

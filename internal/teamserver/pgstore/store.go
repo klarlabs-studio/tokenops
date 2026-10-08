@@ -555,7 +555,7 @@ func (s *Store) RemoveMember(ctx context.Context, actor Principal, memberID stri
 			`DELETE FROM tokens WHERE member_id = $1`,
 			`DELETE FROM grants WHERE grantee_id = $1`,
 			`DELETE FROM team_members WHERE member_id = $1`,
-			`UPDATE members SET removed_at = now() WHERE id = $1`,
+			`UPDATE members SET removed_at = now(), email = NULL WHERE id = $1`,
 		} {
 			if _, err := tx.Exec(ctx, q, memberID); err != nil {
 				return err
@@ -640,13 +640,15 @@ type MemberInfo struct {
 	Role        team.Role
 	TeamIDs     []string
 	TeamNames   []string
+	// Email is the address single sign-on signs this member in by, or "".
+	Email string
 }
 
 // Members lists an organisation's current members with their teams.
 func (s *Store) Members(ctx context.Context, orgID string) ([]MemberInfo, error) {
 	rows, err := s.pool.Query(ctx, `SELECT m.id, m.display_name, m.role,
 		COALESCE(array_agg(t.id::text ORDER BY t.name) FILTER (WHERE t.id IS NOT NULL), '{}'),
-		COALESCE(array_agg(t.name ORDER BY t.name) FILTER (WHERE t.id IS NOT NULL), '{}')
+		COALESCE(array_agg(t.name ORDER BY t.name) FILTER (WHERE t.id IS NOT NULL), '{}'), COALESCE(m.email, '')
 		FROM members m LEFT JOIN team_members tm ON tm.member_id = m.id LEFT JOIN teams t ON t.id = tm.team_id
 		WHERE m.org_id = $1 AND m.removed_at IS NULL GROUP BY m.id ORDER BY m.display_name`, orgID)
 	if err != nil {
@@ -655,7 +657,7 @@ func (s *Store) Members(ctx context.Context, orgID string) ([]MemberInfo, error)
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (MemberInfo, error) {
 		var m MemberInfo
 		var role string
-		err := r.Scan(&m.ID, &m.DisplayName, &role, &m.TeamIDs, &m.TeamNames)
+		err := r.Scan(&m.ID, &m.DisplayName, &role, &m.TeamIDs, &m.TeamNames, &m.Email)
 		m.Role = team.Role(role)
 		return m, err
 	})
@@ -855,6 +857,7 @@ func (s *Store) Me(ctx context.Context, memberID string) (teamwire.Me, error) {
 		return me, err
 	}
 	me.Teams = append([]string{}, info.TeamNames...)
+	me.SSOEmail = info.Email
 	rows, err := s.pool.Query(ctx, `SELECT id, name, created_at, last_seen_at, revoked_at FROM devices WHERE member_id = $1 ORDER BY created_at`, memberID)
 	if err != nil {
 		return me, err
@@ -951,6 +954,7 @@ func (s *Store) Purge(ctx context.Context, auditDays int) (PurgeResult, error) {
 		{&r.Tokens, `DELETE FROM tokens WHERE (expires_at IS NOT NULL AND expires_at < $1) OR revoked_at < $1 OR (kind = 'login' AND used_at IS NOT NULL)`, now},
 		{&r.Invites, `DELETE FROM invites WHERE expires_at < $1`, now.AddDate(0, 0, -30)},
 		{&r.Batches, `DELETE FROM ingest_batches WHERE received_at < $1`, now.AddDate(0, 0, -30)},
+		{new(int64), `DELETE FROM sso_logins WHERE expires_at < $1`, now},
 	}
 	for _, st := range steps {
 		tag, err := s.pool.Exec(ctx, st.sql, st.arg)

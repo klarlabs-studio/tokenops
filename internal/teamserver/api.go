@@ -383,6 +383,49 @@ func (s *Server) requireOwner(w http.ResponseWriter, c caller) bool {
 	return true
 }
 
+// setEmail sets the address single sign-on signs a member in by. Whoever
+// controls that address can sign in as the member, so only an owner sets
+// one, never another owner's (that is for the server's console), every
+// change is audited, and the member's own page shows the address.
+func (s *Server) setEmail(w http.ResponseWriter, r *http.Request, c caller) {
+	if !s.requireOwner(w, c) {
+		return
+	}
+	var req struct {
+		Email string `json:"email"`
+	}
+	if !decode(w, r, smallBody, &req) {
+		return
+	}
+	id := r.PathValue("id")
+	target, err := s.store.MemberInOrg(r.Context(), c.OrgID, id)
+	if errors.Is(err, pgstore.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "member not found", "")
+		return
+	}
+	if err != nil {
+		s.internal(w, err)
+		return
+	}
+	if target.Role == team.RoleOwner && target.ID != c.MemberID {
+		writeError(w, http.StatusForbidden, "cannot set another owner's e-mail", "run tokenops-team set-email on the server")
+		return
+	}
+	err = s.store.SetEmail(r.Context(), c.Principal, id, req.Email)
+	switch {
+	case errors.Is(err, pgstore.ErrConflict):
+		writeError(w, http.StatusConflict, err.Error(), "")
+		return
+	case err != nil && !errors.Is(err, pgstore.ErrNotFound):
+		writeError(w, http.StatusBadRequest, err.Error(), "")
+		return
+	case err != nil:
+		writeError(w, http.StatusNotFound, "member not found", "")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"email": strings.ToLower(strings.TrimSpace(req.Email))})
+}
+
 func (s *Server) removeMember(w http.ResponseWriter, r *http.Request, c caller) {
 	if !s.requireAdmin(w, c) {
 		return

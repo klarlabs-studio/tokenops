@@ -38,6 +38,9 @@ services:
       # Only Caddy reaches the service, over the edge network.
       TEAMSERVER_TRUSTED_PROXIES: 172.16.0.0/12,10.0.0.0/8,192.168.0.0/16
       TEAMSERVER_AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-730}
+      # Single sign-on's client secret, read when someone signs in; name it
+      # with `tokenops-team sso set --client-secret-env TEAMSERVER_OIDC_CLIENT_SECRET`.
+      TEAMSERVER_OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
     depends_on:
       db:
         condition: service_healthy

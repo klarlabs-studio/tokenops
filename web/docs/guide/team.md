@@ -96,6 +96,17 @@ grants, backups and upgrades.
 | `TEAMSERVER_TRUSTED_PROXIES` | CIDRs whose `X-Forwarded-For` is believed, default loopback and private ranges |
 | `TEAMSERVER_AUDIT_RETENTION_DAYS` | audit log retention, default 730 |
 
+### Single sign-on
+
+The web view can sign members in with the organisation's OpenID Connect
+provider — Google Workspace, Microsoft Entra ID, Keycloak, Okta, or Dex in
+front of GitHub — beside the single-use links. It signs in only an
+existing member whose verified address an owner (or the server's console)
+set, in a domain the organisation allows; it never creates anyone. The
+client secret stays in an environment variable or a file on the server.
+Each member's page shows the address that signs them in. Setup is in
+`deploy/team/README.md`.
+
 ### API
 
 All JSON; errors are `{error, hint}`. A device token (from `join`) or an
@@ -115,5 +126,6 @@ admin token goes in `Authorization: Bearer …`.
 | `POST /api/v1/invites` | admin | `{team, role, ttl_hours}` |
 | `GET, POST /api/v1/grants`, `DELETE /api/v1/grants/{id}` | owner (admin to list) | individual-view grants, with a reason |
 | `DELETE /api/v1/members/{id}` | admin | remove a member and erase their figures |
+| `PUT /api/v1/members/{id}/email` | owner | `{email}`: the address single sign-on signs this member in by (`""` clears; not another owner's) |
 | `GET /api/v1/audit` | admin | the audit log |
 | `PUT /api/v1/settings` | owner | `{min_group_size, retention_days}` |

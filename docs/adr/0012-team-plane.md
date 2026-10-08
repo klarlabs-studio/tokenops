@@ -75,7 +75,8 @@ Postgres, schema in `internal/teamserver/pgstore/migrations`:
 |---|---|
 | `orgs` | name, `min_group_size` (default 3), `retention_days` (default 400) |
 | `teams`, `team_members` | teams and membership; a member may be in several |
-| `members` | display name and role: `member`, `lead`, `admin`, `owner` |
+| `members` | display name, role (`member`, `lead`, `admin`, `owner`) and, optionally, the e-mail address single sign-on signs them in by |
+| `org_sso`, `sso_logins` | an organisation's OpenID Connect issuer, client and allowed domains (not its secret); sign-ins in flight (state hash, nonce, PKCE verifier) |
 | `devices` | one per enrolled machine; token hash, last upload, revocation |
 | `invites` | single-use, expiring enrolment tokens (hash) for a team and role |
 | `tokens` | web sessions, single-use sign-in links, admin API tokens (hash) |
@@ -138,7 +139,31 @@ nothing at this entropy; a leaked database holds no usable credential.
   audit, settings). Session cookies are not accepted on `/api/*`, so a page
   on another site cannot drive the API.
 
-SSO (OIDC/SAML) is not in this version; see Consequences.
+- **Single sign-on (OpenID Connect)** → per organisation, configured on
+  the server's console (`tokenops-team sso set`): issuer, client ID,
+  allowed e-mail domains, and where the client secret is (`env:NAME` or
+  `file:/path`; the secret is never in the database or a dump). Discovery,
+  authorization code with PKCE (S256), a random `state` stored server side
+  as its hash and bound to the browser by a `SameSite=Lax` cookie (Lax
+  because the issuer returns the browser cross-site), a `nonce` the ID
+  token must carry, and the ID token verified by `coreos/go-oidc` against
+  the issuer's JWKS: signature, issuer, audience, expiry. Each state is used
+  once and lives ten minutes. The token's e-mail must be verified
+  (`email_verified`, unless the organisation opted out for an issuer that
+  owns its addresses, such as one Entra tenant) and in an allowed domain
+  (exact match: a subdomain is another domain); it then signs in **the
+  existing member that address is set on, or nobody**. SSO never creates a
+  member and never changes a role, so it can never create an owner.
+  The callback answers with a page that refreshes to `/`, because a
+  redirect after a cross-site arrival would not carry the Strict session
+  cookie. Single-use links keep working beside it.
+- **The address on a member** is set by the console (`set-email`) or an
+  owner (`PUT /api/v1/members/{id}/email`), never by an admin and never on
+  another owner by API: whoever controls the address can sign in as that
+  member, which would let an administrator act, and view figures, under a
+  grantee's name. Every change is audited, removal clears it, and the
+  member's page and `tokenops team status` show the address that signs
+  them in.
 
 ### 5. Retention and erasure
 
@@ -175,6 +200,10 @@ which is right for one instance and documented as such.
 | Stolen device token | Uploads only for that device; revocable by `leave` or `remove-member`; rate limited | Thief can upload false figures for that device until revoked |
 | Stolen database or backup | No credential is usable (hashes only); no content is present | Names and per-person figures are exposed: treat dumps as personal data |
 | Brute-forcing tokens | 256-bit tokens; per-address rate limits on enrolment and sign-in | — |
+| SSO login CSRF (an attacker's sign-in completed in a victim's browser) | `state` must equal the browser's own Lax cookie, set when that browser started; stored server side, single use, ten minutes | — |
+| Forged, replayed or substituted ID token | go-oidc verifies signature against the issuer's JWKS, issuer, audience and expiry; the nonce stored for this state must match; the code is exchanged with the PKCE verifier and the client secret | A compromised issuer signs in whoever it likes among the addresses set on members |
+| Unverified or foreign e-mail claim (e.g. multi-tenant Entra) | `email_verified` required unless opted out per organisation; allowed domains matched exactly; only an address already set on a member signs anyone in; nobody is created | An opted-out issuer must own its addresses; documented as single-tenant only |
+| An owner binds a colleague's member to an address they control, to act under the colleague's name | Only owners and the console set addresses, never an admin, never another owner's by API; audited; shown to the member on their page and in `team status` | An owner can still do it, and the colleague has to notice |
 | Login token leaks via logs or Referer | Request log omits query strings; Caddy access log off; `Referrer-Policy: no-referrer` | — |
 | CSRF / clickjacking on the web view | SameSite=Strict, Origin check, CSP `frame-ancestors 'none'`, `X-Frame-Options: DENY` | — |
 | XSS | `html/template` escaping; CSP `default-src 'none'`, no scripts at all | — |
@@ -200,6 +229,6 @@ which is right for one instance and documented as such.
   the same script without pushing, so the image never builds for the first
   time on a tag. The Compose file runs the image by version; a build
   override (`docker-compose.build.yml`) builds from source.
-- Not in this version: SSO, multi-region, a hosted multi-tenant signup flow
+- Not in this version: SAML, multi-region, a hosted multi-tenant signup flow
   and billing, per-team minimum group sizes, and export to BI tools (ADR
   0004 still rules out becoming a BI product).

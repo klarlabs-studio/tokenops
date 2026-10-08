@@ -49,7 +49,7 @@ func loadPages() (*pages, error) {
 		return nil, err
 	}
 	p := &pages{sets: map[string]*template.Template{}, css: css}
-	for _, name := range []string{"signin", "login", "overview", "me", "members", "member", "audit", "error"} {
+	for _, name := range []string{"signin", "login", "sso", "signedin", "overview", "me", "members", "member", "audit", "error"} {
 		t, err := template.New("layout.html").Funcs(funcs).ParseFS(assets, "templates/layout.html", "templates/"+name+".html")
 		if err != nil {
 			return nil, fmt.Errorf("template %s: %w", name, err)
@@ -65,6 +65,25 @@ type view struct {
 	User  *pgstore.Principal
 	Admin bool
 	Data  any
+	// Refresh, when set, sends the browser on to this path at once.
+	Refresh string
+}
+
+// signinData is the sign-in page's: whether single sign-on is offered, and
+// why the last attempt did not work.
+type signinData struct {
+	SSO   bool
+	Error string
+}
+
+// signin renders the sign-in page, offering single sign-on when any
+// organisation here has it.
+func (s *Server) signin(w http.ResponseWriter, r *http.Request, status int, title string) {
+	sso, err := s.store.SSOEnabled(r.Context())
+	if err != nil {
+		s.log.Error("sso lookup", "err", err)
+	}
+	s.render(w, status, "signin", view{Title: title, Data: signinData{SSO: sso}})
 }
 
 func (s *Server) render(w http.ResponseWriter, status int, page string, v view) {
@@ -121,14 +140,14 @@ func (s *Server) web(h func(http.ResponseWriter, *http.Request, caller)) http.Ha
 				}
 			}
 		}
-		s.render(w, http.StatusUnauthorized, "signin", view{Title: "Sign in"})
+		s.signin(w, r, http.StatusUnauthorized, "Sign in")
 	}
 }
 
 func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {
 	tok := r.URL.Query().Get("t")
 	if k, err := team.KindOf(tok); err != nil || k != team.TokenLogin {
-		s.render(w, http.StatusBadRequest, "signin", view{Title: "Sign in"})
+		s.signin(w, r, http.StatusBadRequest, "Sign in")
 		return
 	}
 	// A link opened by a mail scanner or a preview must not use it up, so
@@ -156,9 +175,14 @@ func (s *Server) loginSubmit(w http.ResponseWriter, r *http.Request) {
 		s.internal(w, err)
 		return
 	}
+	s.setSession(w, session)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// setSession hands the browser its session cookie.
+func (s *Server) setSession(w http.ResponseWriter, session string) {
 	http.SetCookie(w, &http.Cookie{Name: s.cookieName(), Value: session, Path: "/", HttpOnly: true,
 		Secure: s.public.Scheme == "https", SameSite: http.SameSiteStrictMode, MaxAge: int(team.SessionTTL.Seconds())})
-	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
@@ -171,7 +195,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{Name: s.cookieName(), Value: "", Path: "/", HttpOnly: true,
 		Secure: s.public.Scheme == "https", SameSite: http.SameSiteStrictMode, MaxAge: -1})
-	s.render(w, http.StatusOK, "signin", view{Title: "Signed out"})
+	s.signin(w, r, http.StatusOK, "Signed out")
 }
 
 // periodGroup is one period's rows on the overview.
