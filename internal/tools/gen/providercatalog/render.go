@@ -122,13 +122,11 @@ func gatewayTable() string {
 }
 
 func envVars() string {
-	env, own := providers.EnvVars(), providers.OwnEnvVars()
-	vars := make([]string, 0, len(env)+len(own))
-	for v := range env {
-		vars = append(vars, v)
-	}
-	for v := range own {
-		vars = append(vars, v)
+	var vars []string
+	for _, m := range []map[string]string{providers.EnvVars(), providers.OwnEnvVars(), providers.ReaderEnvVars()} {
+		for v := range m {
+			vars = append(vars, v)
+		}
 	}
 	sort.Strings(vars)
 	for i, v := range vars {

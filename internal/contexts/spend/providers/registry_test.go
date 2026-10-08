@@ -69,6 +69,15 @@ func TestRegistryIsConsistent(t *testing.T) {
 		}
 		for _, s := range d.Sources {
 			checkSource(t, id, s, tags, names)
+			if len(s.EnvVars) > 0 && (s.Reader != AccountReader || s.Credential != APIKey) {
+				t.Errorf("%s/%s: a source's own variables hold a key for its account reader", id, s.Tag)
+			}
+			for _, v := range s.EnvVars {
+				if env[v] {
+					t.Errorf("%s/%s: %s claimed twice", id, s.Tag, v)
+				}
+				env[v] = true
+			}
 		}
 		for _, p := range d.Plans {
 			if p.Name == "" || plans[p.Name] {
@@ -168,6 +177,12 @@ func TestDerivedLists(t *testing.T) {
 	}
 	if got := OwnEnvVars()["CODEBUFF_API_KEY"]; got != "codebuff" {
 		t.Errorf("CODEBUFF_API_KEY is for %q", got)
+	}
+	if got := ReaderEnvVars()["ZENMUX_MANAGEMENT_API_KEY"]; got != "zenmux" {
+		t.Errorf("ZENMUX_MANAGEMENT_API_KEY is for %q", got)
+	}
+	if _, ok := EnvVars()["ZENMUX_MANAGEMENT_API_KEY"]; ok {
+		t.Error("a management key is not an inference key")
 	}
 	if _, ok := OwnEnvVars()["MOONSHOT_API_KEY"]; ok {
 		t.Error("a variable of a provider opencode knows goes through its opencode ID")

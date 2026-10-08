@@ -8,6 +8,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
 	"go.klarlabs.de/tokenops/internal/infra/harnesskeys"
+	accountsapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/accounts"
 )
 
 // accountCredentials finds the keys the harnesses use and names the
@@ -19,9 +20,14 @@ func accountCredentials() []accounts.Credential {
 
 func credentialsFor(found []harnesskeys.Credential) []accounts.Credential {
 	out := make([]accounts.Credential, 0, len(found))
+	readers := accountsapi.Readers()
 	for _, c := range found {
 		endpoint := ""
 		switch {
+		case c.Reader != "":
+			// A source's own variable (a management key) goes to that
+			// provider's account reader and nowhere else.
+			endpoint = readerEndpoint(readers, c.Reader)
 		case c.Endpoint != "":
 			endpoint = c.Endpoint
 		case c.BaseURL != "":

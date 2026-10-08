@@ -30,7 +30,10 @@ type Credential struct {
 	// Endpoint is the account-reader endpoint a key from the variable of a
 	// provider opencode does not know is for.
 	Endpoint string
-	Key      string
+	// Reader is the provider whose account reader alone a key from one of
+	// its sources' own variables is for (a management key).
+	Reader string
+	Key    string
 }
 
 // EnvVars maps conventional key variables to the opencode provider ID
@@ -41,6 +44,10 @@ var EnvVars = providers.EnvVars()
 // OwnEnvVars maps the key variables of providers opencode does not know to
 // the endpoint their account reader takes keys for.
 var OwnEnvVars = providers.OwnEnvVars()
+
+// ReaderEnvVars maps the variables holding a source's own credential (a
+// management key no harness sends) to the provider whose reader takes it.
+var ReaderEnvVars = providers.ReaderEnvVars()
 
 // Options points the finder at its sources; zero values use the real ones.
 type Options struct {
@@ -88,6 +95,9 @@ func Find(o Options) []Credential {
 	}
 	for name, endpoint := range OwnEnvVars {
 		add(Credential{Origin: "$" + name, Endpoint: endpoint, Key: o.Getenv(name)})
+	}
+	for name, id := range ReaderEnvVars {
+		add(Credential{Origin: "$" + name, Reader: id, Key: o.Getenv(name)})
 	}
 	return out
 }

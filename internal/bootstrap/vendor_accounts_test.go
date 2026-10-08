@@ -19,10 +19,16 @@ func TestCredentialsForNamesTheEndpoint(t *testing.T) {
 		{ProviderID: "fireworks-ai", Key: "g"},
 		{BaseURL: "https://api.portkey.ai/v1", Key: "h"},
 		{Endpoint: "codebuff", Key: "i"},
+		{Reader: "zenmux", Key: "j"},
+		{ProviderID: "zenmux", Key: "k"},
+		{Reader: "acme", Key: "l"},
 	})
 	// An unknown host is a possible gateway, read only at its own address;
-	// Portkey cannot read its own spend, so it is not asked.
-	want := map[string]string{"a": "openrouter", "b": "openrouter", "c": "deepseek", "d": "moonshot", "f": "gateway", "g": "fireworks", "i": "codebuff"}
+	// Portkey cannot read its own spend, so it is not asked. A management
+	// key from a source's own variable goes to that reader's endpoint, and
+	// an inference key never does.
+	want := map[string]string{"a": "openrouter", "b": "openrouter", "c": "deepseek", "d": "moonshot", "f": "gateway", "g": "fireworks", "i": "codebuff",
+		"j": "zenmux-management", "k": "zenmux"}
 	if len(got) != len(want) {
 		t.Fatalf("got %+v", got)
 	}

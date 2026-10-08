@@ -20,7 +20,8 @@ func readerZenMux() usage.Reader { return ZenMux{} }
 // (https://docs.zenmux.ai/api/platform/subscription-detail), as CodexBar's
 // ZenMux provider does. Both take a Management API key; the inference keys
 // harnesses send ZenMux are refused there, so this reader takes keys for
-// its own endpoint, "zenmux-management", and never the harnesses'.
+// its own endpoint, "zenmux-management" (from setup or
+// ZENMUX_MANAGEMENT_API_KEY), and never the harnesses'.
 type ZenMux struct {
 	BaseURL string
 	HTTP    *http.Client

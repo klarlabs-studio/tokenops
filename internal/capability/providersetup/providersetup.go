@@ -57,7 +57,13 @@ func Lookup(id string) (Provider, bool) {
 	if !ok {
 		return Provider{}, false
 	}
-	p := Provider{ID: string(d.ID), Name: d.DisplayName, EnvVars: d.EnvVars, KeyFormat: s.KeyFormat}
+	env := d.EnvVars
+	if len(s.EnvVars) > 0 {
+		// The source's own variables: the provider's inference keys are
+		// not what its reader takes.
+		env = s.EnvVars
+	}
+	p := Provider{ID: string(d.ID), Name: d.DisplayName, EnvVars: env, KeyFormat: s.KeyFormat}
 	if s.Credential == providers.BrowserCookie && s.Cookie != nil {
 		p.Browser, p.CookieHost, p.CookieNames = true, s.Cookie.Host, s.Cookie.Names
 	}

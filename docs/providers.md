@@ -91,6 +91,7 @@ func providerAcme() Descriptor {
 | `Sources[].Reader` | `AccountReader`, `GatewayReader`, or `BespokeReader` with `Package` and `Fixture` |
 | `Sources[].Cookie` | the cookies a `BrowserCookie` source reads |
 | `Sources[].KeyFormat` | what setup asks for when the credential is more than one key (`TEAM_ID:MANAGEMENT_KEY`) |
+| `Sources[].EnvVars` | variables holding the source's own credential, one no harness sends (a management key); a key found there goes only to this source's reader |
 | `Sources[].Verified` | `VerifiedLive` only after a real account was read; else `FromDocs`, `FromClientSource`, or `FromCodexBar` for a reader ported from CodexBar's provider source (name the CodexBar path in a comment) |
 | `Endpoints` | which base URLs bill to it (biller) |
 | `Opencode` | opencode's provider IDs, with the endpoint each names (`"<id>-api"` for a pay-as-you-go API beside a plan) |
@@ -147,9 +148,14 @@ endpoint, in order, until one is accepted:
 2. the keys the harnesses already send that vendor (Claude Code's settings,
    Codex's `model_providers`, opencode's `auth.json` and config), found by
    `internal/infra/harnesskeys`;
-3. the descriptor's `EnvVars`.
+3. the descriptor's `EnvVars`, and each source's own `Sources[].EnvVars`.
 
-A key goes only to the reader of the endpoint it was found for.
+A key goes only to the reader of the endpoint it was found for. A reader
+that takes a key the harnesses never hold (ZenMux's Management API key,
+which its Management API requires and its inference endpoint does not
+take) reads on its own endpoint (`zenmux-management`) and lists its
+variable in `Sources[].EnvVars`, not `EnvVars`: a key found there goes only
+to that reader, and the provider's inference keys never do.
 
 ### Browser-session providers
 

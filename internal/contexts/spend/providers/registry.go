@@ -175,6 +175,20 @@ func OwnEnvVars() map[string]string {
 	return out
 }
 
+// ReaderEnvVars maps each variable that holds a source's own credential
+// (Source.EnvVars) to the provider whose account reader alone takes it.
+func ReaderEnvVars() map[string]string {
+	out := map[string]string{}
+	for _, d := range all {
+		for _, s := range d.Sources {
+			for _, v := range s.EnvVars {
+				out[v] = string(d.ID)
+			}
+		}
+	}
+	return out
+}
+
 // ModelsDevPricing maps a models.dev provider ID to the providers its
 // rates price.
 func ModelsDevPricing() map[string][]string {

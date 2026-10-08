@@ -191,6 +191,11 @@ type Source struct {
 	// APIKey source's credential is more than one key, e.g.
 	// "TEAM_ID:MANAGEMENT_KEY". Empty asks for the API key.
 	KeyFormat string
+	// EnvVars are variables that hold this source's own credential, one
+	// the harnesses never send the vendor (ZenMux's Management API key):
+	// a key found there goes only to this source's reader, never to the
+	// provider's inference endpoint. Descriptor.EnvVars are inference keys.
+	EnvVars []string
 	// Verified says how far the reader has been checked.
 	Verified Verification
 	// Endpoint, Shows and RecognisedBy are its row in the docs tables:

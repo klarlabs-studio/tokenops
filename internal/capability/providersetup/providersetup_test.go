@@ -36,6 +36,10 @@ func TestLookupCoversKeyProvidersOnly(t *testing.T) {
 			t.Errorf("%s: setup does not connect it generically", id)
 		}
 	}
+	// A reader with its own variable names it, not the inference keys'.
+	if z, _ := Lookup("zenmux"); len(z.EnvVars) != 1 || z.EnvVars[0] != "ZENMUX_MANAGEMENT_API_KEY" {
+		t.Errorf("zenmux = %+v", z)
+	}
 	if ids := IDs(); len(ids) < 10 {
 		t.Errorf("IDs = %v", ids)
 	}
