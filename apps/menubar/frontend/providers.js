@@ -32,6 +32,7 @@ window.TOKENOPS_PROVIDERS = {
   "together": {"name":"Together AI","logo":false},
   "v0": {"name":"v0","logo":true},
   "vercel": {"name":"Vercel","logo":false},
+  "warp": {"name":"Warp","logo":false},
   "xai": {"name":"xAI","logo":false},
   "xkiro": {"name":"xKiro","logo":false},
   "zai": {"name":"z.ai","logo":true},

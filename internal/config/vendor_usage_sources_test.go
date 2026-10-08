@@ -72,6 +72,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"synthetic_account", "synthetic-account"},
 		{"v0_account", "v0-account"},
 		{"vercel_account", "vercel-account"},
+		{"warp_account", "warp-account"},
 		{"xkiro_account", "xkiro-account"},
 		{"zai_account", "zai-account"},
 		{"zenmux_account", "zenmux-account"},

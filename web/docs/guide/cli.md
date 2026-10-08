@@ -689,6 +689,7 @@ vendor's windows, busiest first:
 | Nous Portal (Hermes Agent) | `GET /api/oauth/account` | the monthly credit grant used this period and the top-up credit left |
 | Synthetic | `GET /v2/quotas` | the subscription's request quota |
 | v0 | `GET /v1/user/billing`, `GET /v1/rate-limits` | the billing cycle's balance used and the request quota used |
+| Warp | `POST /graphql/v2?op=GetRequestLimitInfo` | credits used since the last refresh against the plan's limit |
 | xKiro | `GET /v1/usage` | the plan's spend windows, today's free tokens and the wallet balance |
 | z.ai GLM Coding Plan | `GET /api/monitor/usage/quota/limit` | 5-hour and weekly token windows |
 | ZenMux | `GET /api/v1/management/subscription/detail` | rolling 5-hour and 7-day quotas, and the pay-as-you-go balance |
@@ -729,7 +730,7 @@ use read its own spend.
   with `tokenops vendor-usage enable vendor-accounts --disable`.
 
 <!-- begin generated: provider-env-vars -->
-The environment variables read for a key: `AI_GATEWAY_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `FIREWORKS_API_KEY`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `MOONSHOT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENROUTER_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `XKIRO_API_KEY`.
+The environment variables read for a key: `AI_GATEWAY_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `FIREWORKS_API_KEY`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `MOONSHOT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENROUTER_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XKIRO_API_KEY`.
 <!-- end generated: provider-env-vars -->
 
 #### Every provider
@@ -777,6 +778,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Together AI | — | in the catalog only: billed per token; its endpoint and models.dev prices are known, its account is not read | — | — |
 | v0 | `v0-account` | the billing cycle's balance used and the request quota used | API key | CodexBar's source, the vendor's docs and fixtures |
 | Vercel | `vercel-account` | the team's credit balance | API key | public docs and fixtures |
+| Warp | `warp-account` | credits used since the last refresh against the plan's limit | API key | CodexBar's source, the vendor's docs and fixtures |
 | xAI | — | in the catalog only: metered through the proxy only; neither a plan nor an account is read | — | — |
 | xKiro | `xkiro-account` | the plan's spend windows, today's free tokens and the wallet balance | API key | CodexBar's source, the vendor's docs and fixtures |
 | z.ai | `zai-account` | 5-hour and weekly token windows | API key | the vendor's client source and fixtures |

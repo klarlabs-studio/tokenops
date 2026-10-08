@@ -35,6 +35,7 @@ var registered = []func() Descriptor{
 	providerTogether,
 	providerV0,
 	providerVercel,
+	providerWarp,
 	providerXAI,
 	providerXKiro,
 	providerZAI,
