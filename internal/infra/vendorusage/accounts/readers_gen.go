@@ -20,6 +20,7 @@ var readers = []func() usage.Reader{
 	readerOpenRouter,
 	readerSynthetic,
 	readerVercel,
+	readerXKiro,
 	readerZAI,
 	readerZenMux,
 }

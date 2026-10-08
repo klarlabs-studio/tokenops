@@ -68,6 +68,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"openrouter_account", "openrouter-account"},
 		{"synthetic_account", "synthetic-account"},
 		{"vercel_account", "vercel-account"},
+		{"xkiro_account", "xkiro-account"},
 		{"zai_account", "zai-account"},
 		{"zenmux_account", "zenmux-account"},
 	}
