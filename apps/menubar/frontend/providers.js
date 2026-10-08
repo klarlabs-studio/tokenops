@@ -76,6 +76,7 @@ window.TOKENOPS_PROVIDERS = {
   "warp": {"name":"Warp","logo":false},
   "windsurf": {"name":"Windsurf","logo":true},
   "xai": {"name":"xAI","logo":true},
+  "xapi": {"name":"X API","logo":false},
   "xkiro": {"name":"xKiro","logo":false},
   "zai": {"name":"z.ai","logo":true},
   "zed": {"name":"Zed","logo":false},

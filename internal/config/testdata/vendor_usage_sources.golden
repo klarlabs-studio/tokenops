@@ -84,6 +84,7 @@ warp_account	warp-account
 windsurf_local	windsurf-local
 windsurf_web	windsurf-web
 xai_account	xai-account
+xapi_web	xapi-web
 xkiro_account	xkiro-account
 zai_account	zai-account
 zed_account	zed-account

@@ -79,6 +79,7 @@ var registered = []func() Descriptor{
 	providerWarp,
 	providerWindsurf,
 	providerXAI,
+	providerXAPI,
 	providerXKiro,
 	providerZAI,
 	providerZed,

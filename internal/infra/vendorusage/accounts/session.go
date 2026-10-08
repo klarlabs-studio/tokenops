@@ -51,6 +51,19 @@ var errRedirect = errors.New("redirected")
 // usage.ErrAuth; any other status is a *statusError. Errors name the
 // method, host and path, never the query, a header or the body.
 func doWeb(ctx context.Context, hc *http.Client, method, rawURL string, header http.Header, body []byte) ([]byte, error) {
+	resp, err := doWebResponse(ctx, hc, method, rawURL, header, body)
+	return resp.body, err
+}
+
+// webResponse is a 200's headers and body.
+type webResponse struct {
+	header http.Header
+	body   []byte
+}
+
+// doWebResponse is doWeb returning the answer's headers too (a gRPC-web
+// status travels in them).
+func doWebResponse(ctx context.Context, hc *http.Client, method, rawURL string, header http.Header, body []byte) (webResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	var rd io.Reader
@@ -59,7 +72,7 @@ func doWeb(ctx context.Context, hc *http.Client, method, rawURL string, header h
 	}
 	req, err := http.NewRequestWithContext(ctx, method, rawURL, rd)
 	if err != nil {
-		return nil, err
+		return webResponse{}, err
 	}
 	for k, v := range header {
 		req.Header[http.CanonicalHeaderKey(k)] = v
@@ -69,19 +82,19 @@ func doWeb(ctx context.Context, hc *http.Client, method, rawURL string, header h
 	}
 	resp, err := noRedirect(hc).Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("accounts: %s %s: %w", method, hostPath(rawURL), err)
+		return webResponse{}, fmt.Errorf("accounts: %s %s: %w", method, hostPath(rawURL), err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	switch {
 	case resp.StatusCode >= 300 && resp.StatusCode < 400:
-		return nil, fmt.Errorf("%w (%w to a sign-in page from %s)", usage.ErrAuth, errRedirect, hostPath(rawURL))
+		return webResponse{}, fmt.Errorf("%w (%w to a sign-in page from %s)", usage.ErrAuth, errRedirect, hostPath(rawURL))
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-		return nil, fmt.Errorf("%w (%d on %s)", usage.ErrAuth, resp.StatusCode, hostPath(rawURL))
+		return webResponse{}, fmt.Errorf("%w (%d on %s)", usage.ErrAuth, resp.StatusCode, hostPath(rawURL))
 	case resp.StatusCode != http.StatusOK:
-		return nil, &statusError{method: method, where: hostPath(rawURL), status: resp.StatusCode}
+		return webResponse{}, &statusError{method: method, where: hostPath(rawURL), status: resp.StatusCode, body: data[:min(len(data), 64<<10)]}
 	}
-	return data, nil
+	return webResponse{header: resp.Header, body: data}, nil
 }
 
 // noRedirect is hc (or a default client) that returns a redirect instead

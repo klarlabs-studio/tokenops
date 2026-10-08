@@ -71,6 +71,7 @@ var readers = []func() usage.Reader{
 	readerWindsurfLocal,
 	readerWindsurf,
 	readerXAI,
+	readerXAPI,
 	readerXKiro,
 	readerZAI,
 	readerZed,
