@@ -78,7 +78,15 @@ func (c Config) registryHint(sourceTag string) string {
 	}
 	switch {
 	case s.Reader == providers.GatewayReader:
-		return "on; reads the key's own budget when a harness sends a key to a " + providers.DisplayName(string(s.Provider)) + " gateway"
+		id := string(s.Provider)
+		if c, stored := c.VendorUsage.Accounts.Credentials[id]; stored && c.BaseURL != "" {
+			return "on; reads at " + c.BaseURL + " with the key `tokenops vendor-usage setup " + id + "` stored"
+		}
+		hint := "on; reads the key's own budget when a harness sends a key to a " + providers.DisplayName(id) + " gateway"
+		if len(s.EnvVars) > 0 && s.BaseURLEnv != "" {
+			hint += ", or where " + s.BaseURLEnv + " names one with " + strings.Join(s.EnvVars, " or ")
+		}
+		return hint + "; `tokenops vendor-usage setup " + id + "` connects one by address"
 	case s.Credential == providers.BrowserCookie:
 		if _, stored := c.VendorUsage.Accounts.Credentials[string(s.Provider)]; stored {
 			return "on; reads with the session `tokenops vendor-usage setup " + string(s.Provider) + "` stored"

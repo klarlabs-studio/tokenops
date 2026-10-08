@@ -25,6 +25,12 @@ func credentialsFor(found []harnesskeys.Credential) []accounts.Credential {
 		switch {
 		case c.Endpoint != "":
 			endpoint = c.Endpoint
+		case c.Gateway != "":
+			// The operator named the gateway (its own variables): it is
+			// read at that address by that gateway only.
+			out = append(out, accounts.Credential{Endpoint: accounts.GatewayEndpoint, Origin: c.Origin, Key: c.Key,
+				BaseURL: c.BaseURL, Gateway: c.Gateway})
+			continue
 		case c.BaseURL != "":
 			// A base URL decides. An unknown host may be a gateway the
 			// operator runs or subscribes to; the poller recognises it by

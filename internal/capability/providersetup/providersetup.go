@@ -40,6 +40,12 @@ type Provider struct {
 	Browser     bool
 	CookieHost  string
 	CookieNames []string
+	// Gateway is true for a gateway read at an address the operator
+	// gives; DefaultBaseURL is the hosted service's, when it has one, and
+	// BaseURLEnv the variable that names it without setup.
+	Gateway        bool
+	DefaultBaseURL string
+	BaseURLEnv     string
 	// EnvVars are where a key is found without setup.
 	EnvVars []string
 	// KeyFormat is the credential's shape when it is more than one key
@@ -59,6 +65,9 @@ func Lookup(id string) (Provider, bool) {
 	}
 	p := Provider{ID: string(d.ID), Name: d.DisplayName, KeyFormat: s.KeyFormat,
 		EnvVars: append(append([]string(nil), d.EnvVars...), s.EnvVars...)}
+	if s.Reader == providers.GatewayReader {
+		p.Gateway, p.DefaultBaseURL, p.BaseURLEnv = true, s.DefaultBaseURL, s.BaseURLEnv
+	}
 	if s.Credential == providers.BrowserCookie && s.Cookie != nil {
 		p.Browser, p.CookieHost, p.CookieNames = true, s.Cookie.Host, s.Cookie.Names
 	}
@@ -129,6 +138,37 @@ func VerifyWith(ctx context.Context, readers []usage.Reader, id, key string) ([]
 	return nil, fmt.Errorf("no account reader for %q", id)
 }
 
+// VerifyGateway reads gateway id's budget once with key at base, the
+// address the operator gave, and summarises it. Nothing is stored.
+func VerifyGateway(ctx context.Context, id, base, key string) ([]string, error) {
+	return VerifyGatewayWith(ctx, accountsapi.Gateways(), id, base, key)
+}
+
+// VerifyGatewayWith is VerifyGateway with the gateways given.
+func VerifyGatewayWith(ctx context.Context, gateways []usage.Gateway, id, base, key string) ([]string, error) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return nil, errors.New("no credential entered")
+	}
+	root, ok := usage.NamedGatewayBase(base)
+	if !ok {
+		return nil, fmt.Errorf("%q is not an address a key may be sent to: use https, or http only for a local or private-network host", base)
+	}
+	for _, g := range gateways {
+		if g.Name() != id {
+			continue
+		}
+		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		reading, err := g.Read(ctx, root, key)
+		if err != nil {
+			return nil, err
+		}
+		return Summary(reading), nil
+	}
+	return nil, fmt.Errorf("no gateway reader for %q", id)
+}
+
 // Summary words a reading, one line per figure.
 func Summary(r usage.Reading) []string {
 	var out []string
@@ -169,5 +209,15 @@ func Apply(cfg *config.Config, id, key string, fromBrowser bool, browser string)
 	}
 	cfg.VendorUsage.Accounts.Credentials[id] = config.AccountCredential{
 		Key: strings.TrimSpace(key), FromBrowser: fromBrowser, Browser: browser,
+	}
+}
+
+// ApplyGateway stores gateway id's key and the address it is read at.
+func ApplyGateway(cfg *config.Config, id, base, key string) {
+	if cfg.VendorUsage.Accounts.Credentials == nil {
+		cfg.VendorUsage.Accounts.Credentials = map[string]config.AccountCredential{}
+	}
+	cfg.VendorUsage.Accounts.Credentials[id] = config.AccountCredential{
+		Key: strings.TrimSpace(key), BaseURL: strings.TrimSpace(base),
 	}
 }
