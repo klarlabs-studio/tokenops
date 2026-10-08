@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>{{.Title}} · TokenOps team</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header>
+  <a class="brand" href="/">TokenOps team</a>
+  {{if .User}}
+  <nav>
+    <a href="/">Overview</a>
+    <a href="/members">Members</a>
+    <a href="/me">What you share</a>
+    {{if .Admin}}<a href="/audit">Audit log</a>{{end}}
+    <form method="post" action="/logout"><button type="submit">Sign out {{.User.DisplayName}}</button></form>
+  </nav>
+  {{end}}
+</header>
+<main>
+{{template "content" .}}
+</main>
+<footer>Derived figures only. Prompts, files, transcripts, paths, commit messages and model outputs never leave members' machines.</footer>
+</body>
+</html>
