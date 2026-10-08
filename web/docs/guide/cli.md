@@ -699,6 +699,7 @@ vendor's windows, busiest first:
 | Abacus AI (ChatLLM) | `GET /api/_getOrganizationComputePoints`, `POST /api/_getBillingInfo` | compute credits used this billing month, resetting at the next billing date |
 | Alibaba Cloud Coding Plan | `POST /data/api.json` (queryCodingPlanInstanceInfoV2, Model Studio or Bailian console) | Coding Plan 5-hour, weekly and monthly quotas (where the console accepts the plan's API key) |
 | Alibaba Cloud Coding Plan | `POST /data/api.json` (console gateway, with the console's sec_token) | Coding Plan 5-hour, weekly and monthly quotas |
+| Alibaba Cloud Token Plan | `bl usage token-plan --output json` | the 5-hour, weekly and monthly windows, from the signed-in Bailian CLI |
 | Alibaba Cloud Token Plan | `POST /data/api.json` (tokenplan/personal/api/v2/usage, or GetSubscriptionSummary for a Team plan) | Personal/Solo 5-hour, weekly and monthly windows, or a Team plan's credit pool |
 | Amp | `amp usage` | subscription agent usage and orb hours, Amp Free's daily allowance, individual credits |
 | Amp | `POST ampcode.com/api/internal?userDisplayBalanceInfo` | the same figures, with an access token |
@@ -712,6 +713,7 @@ vendor's windows, busiest first:
 | Command Code | `GET /internal/billing/credits`, `/internal/billing/subscriptions` (api.commandcode.ai) | 5-hour and weekly limits, the monthly credit grant used, and purchased credits |
 | Devin | `GET app.devin.ai/api/<org>/billing/quota/usage` | the daily and weekly quota used, and the extra-usage balance |
 | DevPass (LLM Gateway) | `GET /v1/key` | the cycle's plan credits and the premium weekly window; on pay-as-you-go, the key's spend against its limit |
+| Doubao | `arkcli usage plan --format json` | the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan), from the signed-in arkcli |
 | Doubao | `POST /?Action=GetCodingPlanUsage` | the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan) |
 | ElevenLabs | `GET /v1/user/subscription` | the subscription's credits used this period |
 | Factory (Droid) | `GET /api/billing/limits`, `/api/organization/subscription/usage` (api.factory.ai) | 5-hour, weekly and monthly windows (and the Core fallback's), or the Standard and Premium token allowances; the extra-usage balance |
@@ -827,7 +829,8 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Aixy | `aixy-account` | each budget that applies to the key, spent and reserved against its limit | API key | CodexBar's source, the vendor's docs and fixtures |
 | Alibaba Cloud | `alibaba-account` | Coding Plan 5-hour, weekly and monthly quotas (where the console accepts the plan's API key) | API key | CodexBar's source, the vendor's docs and fixtures |
 |  | `alibaba-web` | Coding Plan 5-hour, weekly and monthly quotas | browser session | CodexBar's source, the vendor's docs and fixtures |
-| Alibaba Token Plan | `alibabatokenplan-web` | Personal/Solo 5-hour, weekly and monthly windows, or a Team plan's credit pool | browser session | CodexBar's source, the vendor's docs and fixtures |
+| Alibaba Token Plan | `alibabatokenplan-cli` | the 5-hour, weekly and monthly windows, from the signed-in Bailian CLI | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
+|  | `alibabatokenplan-web` | Personal/Solo 5-hour, weekly and monthly windows, or a Team plan's credit pool | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Amp | `amp-cli` | subscription agent usage and orb hours, Amp Free's daily allowance, individual credits | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
 |  | `amp-account` | the same figures, with an access token | API key | CodexBar's source, the vendor's docs and fixtures |
 | Claude | `claude-code-statusline` | the 5-hour and 7-day windows Claude Code gives its status line | local files | against a real account |
@@ -857,7 +860,8 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | DeepSeek | `deepseek-account` | prepaid USD balance left | API key | public docs and fixtures |
 | Devin | `devin-web` | the daily and weekly quota used, and the extra-usage balance | API key | CodexBar's source, the vendor's docs and fixtures |
 | DevPass | `devpass-account` | the cycle's plan credits and the premium weekly window; on pay-as-you-go, the key's spend against its limit | API key | CodexBar's source, the vendor's docs and fixtures |
-| Doubao | `doubao-account` | the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan) | API key | CodexBar's source, the vendor's docs and fixtures |
+| Doubao | `doubao-cli` | the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan), from the signed-in arkcli | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
+|  | `doubao-account` | the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan) | API key | CodexBar's source, the vendor's docs and fixtures |
 | ElevenLabs | `elevenlabs-account` | the subscription's credits used this period | API key | CodexBar's source, the vendor's docs and fixtures |
 | Factory | `factory-account` | 5-hour, weekly and monthly windows (and the Core fallback's), or the Standard and Premium token allowances; the extra-usage balance | API key, or another app's sign-in once granted (`--use-app-login`) | CodexBar's source, the vendor's docs and fixtures |
 |  | `factory-web` | the same windows and balance | browser session | CodexBar's source, the vendor's docs and fixtures |

@@ -5,6 +5,7 @@ aiand_account	aiand-account
 aixy_gateway	aixy-account
 alibaba_account	alibaba-account
 alibaba_web	alibaba-web
+alibabatokenplan_cli	alibabatokenplan-cli
 alibabatokenplan_web	alibabatokenplan-web
 amp_cli	amp-cli
 amp_account	amp-account
@@ -33,6 +34,7 @@ deepinfra_account	deepinfra-account
 deepseek_account	deepseek-account
 devin_web	devin-web
 devpass_account	devpass-account
+doubao_cli	doubao-cli
 doubao_account	doubao-account
 elevenlabs_account	elevenlabs-account
 factory_account	factory-account

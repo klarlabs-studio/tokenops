@@ -242,6 +242,16 @@ never logged. A CLI that could prompt is not run from the daemon. Its
 fixture is the CLI's output or the app's file, `testdata/<id>.<ext>`,
 run through a fake binary or a temporary home.
 
+A CLI that answers in one run needs no reader of its own: give the source a
+`Command` (`Binary`, an optional `PathEnv` override, the `Args` lists tried
+in order, a `Timeout` of at most 30 seconds, `SignedOut` phrases, and
+`EnvAllow` when the CLI must see nothing of TokenOps' environment but those
+variables), and register `cliSource{provider, tag, parse}` with only a
+parser (`doubao_cli.go`, `alibabatokenplan_cli.go`). The generic poller finds the
+binary, runs it as above, treats a `SignedOut` phrase as a refusal, and
+skips it silently when it is not installed. List only flags that never
+prompt.
+
 ### Another application's sign-in
 
 Many vendors' usage can be read with the sign-in their own CLI or app keeps

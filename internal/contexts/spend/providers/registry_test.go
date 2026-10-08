@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/tools/gen"
 )
@@ -140,6 +141,19 @@ func checkSource(t *testing.T, id string, s Source, tags, names map[string]bool)
 	}
 	for _, a := range s.AppLogins {
 		checkAppLogin(t, id, s, a)
+	}
+	if c := s.Command; c != nil {
+		if s.Credential != CLI || c.Binary == "" || strings.ContainsAny(c.Binary, "/ ") || len(c.Args) == 0 ||
+			c.Timeout <= 0 || c.Timeout > 30*time.Second {
+			t.Errorf("%s/%s: a CLI command names its binary, its arguments and a deadline of at most 30s", id, s.Tag)
+		}
+		for _, args := range c.Args {
+			for _, a := range args {
+				if strings.ContainsAny(a, "|;&$`<>\n") {
+					t.Errorf("%s/%s: argument %q looks like shell; a command runs without one", id, s.Tag, a)
+				}
+			}
+		}
 	}
 	if s.LocalStorage != nil && (s.Credential != BrowserCookie || s.LocalStorage.Origin == "" || len(s.LocalStorage.Keys) == 0) {
 		t.Errorf("%s/%s: localStorage is a browser session's, with an origin and keys", id, s.Tag)
