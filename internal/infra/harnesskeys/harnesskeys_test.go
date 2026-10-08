@@ -30,7 +30,7 @@ func TestFindEveryHarness(t *testing.T) {
 			"moonshotai": {"options": {"apiKey": "{env:MOONSHOT_KEY}", "baseURL": "https://api.moonshot.ai/v1"}}, /* trailing */
 		},
 	}`)
-	env := map[string]string{"MOONSHOT_KEY": "sk-ms-env", "CODEX_OR": "sk-or-codex", "DEEPSEEK_API_KEY": "sk-ds-env"}
+	env := map[string]string{"MOONSHOT_KEY": "sk-ms-env", "CODEX_OR": "sk-or-codex", "DEEPSEEK_API_KEY": "sk-ds-env", "OPENAI_ADMIN_KEY": "sk-admin-env"}
 	got := Find(Options{
 		Getenv:         func(k string) string { return env[k] },
 		OpencodeData:   data,
@@ -46,11 +46,12 @@ func TestFindEveryHarness(t *testing.T) {
 	})
 	keys := make([]string, 0, len(got))
 	for _, c := range got {
-		keys = append(keys, c.Origin+"|"+c.BaseURL+"|"+c.ProviderID+"|"+c.Key)
+		keys = append(keys, c.Origin+"|"+c.BaseURL+"|"+c.ProviderID+c.Provider+"|"+c.Key)
 	}
 	sort.Strings(keys)
 	want := []string{
 		"$DEEPSEEK_API_KEY||deepseek|sk-ds-env",
+		"$OPENAI_ADMIN_KEY||openai|sk-admin-env",
 		"Claude Code settings|https://openrouter.ai/api||sk-or-claude",
 		"Codex config|https://api.fireworks.ai/inference/v1||fw_codex",
 		"Codex config|https://openrouter.ai/api/v1||sk-or-codex",

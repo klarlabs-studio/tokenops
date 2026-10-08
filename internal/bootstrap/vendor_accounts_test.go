@@ -19,10 +19,11 @@ func TestCredentialsForNamesTheEndpoint(t *testing.T) {
 		{ProviderID: "fireworks-ai", Key: "g"},
 		{BaseURL: "https://api.portkey.ai/v1", Key: "h"},
 		{Endpoint: "codebuff", Key: "i"},
+		{Provider: "openai", Key: "k"},
 	})
 	// An unknown host is a possible gateway, read only at its own address;
 	// Portkey cannot read its own spend, so it is not asked.
-	want := map[string]string{"a": "openrouter", "b": "openrouter", "c": "deepseek", "d": "moonshot", "f": "gateway", "g": "fireworks", "i": "codebuff"}
+	want := map[string]string{"a": "openrouter", "b": "openrouter", "c": "deepseek", "d": "moonshot", "f": "gateway", "g": "fireworks", "i": "codebuff", "k": "openai-admin"}
 	if len(got) != len(want) {
 		t.Fatalf("got %+v", got)
 	}

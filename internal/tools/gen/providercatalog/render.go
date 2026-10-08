@@ -109,6 +109,9 @@ func envVars() string {
 	for v := range own {
 		vars = append(vars, v)
 	}
+	for v := range providers.SourceEnvVars() {
+		vars = append(vars, v)
+	}
 	sort.Strings(vars)
 	for i, v := range vars {
 		vars[i] = "`" + v + "`"

@@ -23,10 +23,20 @@ func providerOpenAI() Descriptor {
 				Package: "internal/contexts/spend/vendorusage/codexjsonl",
 				Fixture: "internal/contexts/spend/vendorusage/codexjsonl/reader_test.go",
 				Shows:   "per-turn tokens and the rate_limits in Codex's rollouts"},
+			// The API Platform organisation's spend, with an admin key the
+			// operator mints; API keys the harnesses use are never sent here.
+			{Name: "openai_admin", Tag: "openai-admin", Kind: Spend, Credential: AdminKey,
+				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,
+				Reference: "CodexBar Sources/CodexBarCore/Resources/Plugins/openai.js (docs/openai.md)",
+				EnvVars:   []string{"OPENAI_ADMIN_KEY"},
+				KeyFormat: "an organisation admin key (sk-admin-...)",
+				Endpoint:  "`GET /v1/organization/costs`", Shows: "the API organisation's spend this month (Administration API)"},
 		},
 		Opencode: []OpencodeID{{ID: "openai"}},
 		Docs: Docs{
-			Setup: "nothing: the app server is asked when `codex` is installed; `vendor_usage.codex_jsonl.enabled: true` reads the rollouts",
+			Label: "OpenAI",
+			Setup: "nothing: the app server is asked when `codex` is installed; `vendor_usage.codex_jsonl.enabled: true` reads the rollouts; " +
+				"`tokenops vendor-usage setup openai` (or `OPENAI_ADMIN_KEY`) reads the API organisation's spend with an admin key",
 		},
 		Plans: []Plan{
 			{

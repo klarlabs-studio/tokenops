@@ -1,6 +1,10 @@
 package config
 
-import "go.klarlabs.de/tokenops/internal/contexts/spend/providers"
+import (
+	"strings"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
+)
 
 // Per-source configuration hints.
 //
@@ -80,6 +84,15 @@ func (c Config) registryHint(sourceTag string) string {
 			return "on; reads with the session `tokenops vendor-usage setup " + string(s.Provider) + "` stored"
 		}
 		return "connect it: `tokenops vendor-usage setup " + string(s.Provider) + "` reads the session from your browser"
+	case s.Credential == providers.AdminKey:
+		if _, stored := c.VendorUsage.Accounts.Credentials[string(s.Provider)]; stored {
+			return "on; reads with the admin key `tokenops vendor-usage setup " + string(s.Provider) + "` stored"
+		}
+		hint := "connect it: `tokenops vendor-usage setup " + string(s.Provider) + "` with an organisation admin key"
+		if len(s.EnvVars) > 0 {
+			hint += ", or set " + strings.Join(s.EnvVars, " or ")
+		}
+		return hint
 	}
 	// A provider whose key only setup supplies (a management key the
 	// harnesses never hold) says so in its descriptor.

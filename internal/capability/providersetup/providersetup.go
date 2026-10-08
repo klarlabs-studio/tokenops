@@ -57,7 +57,8 @@ func Lookup(id string) (Provider, bool) {
 	if !ok {
 		return Provider{}, false
 	}
-	p := Provider{ID: string(d.ID), Name: d.DisplayName, EnvVars: d.EnvVars, KeyFormat: s.KeyFormat}
+	p := Provider{ID: string(d.ID), Name: d.DisplayName, KeyFormat: s.KeyFormat,
+		EnvVars: append(append([]string(nil), d.EnvVars...), s.EnvVars...)}
 	if s.Credential == providers.BrowserCookie && s.Cookie != nil {
 		p.Browser, p.CookieHost, p.CookieNames = true, s.Cookie.Host, s.Cookie.Names
 	}
