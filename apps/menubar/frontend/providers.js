@@ -6,6 +6,7 @@ window.TOKENOPS_PROVIDERS = {
   "amp": {"name":"Amp","logo":true},
   "anthropic": {"name":"Claude","logo":true},
   "atlascloud": {"name":"Atlas Cloud","logo":true},
+  "augment": {"name":"Augment","logo":false},
   "bifrost": {"name":"Bifrost","logo":false},
   "cerebras": {"name":"Cerebras","logo":false},
   "chutes": {"name":"Chutes","logo":false},

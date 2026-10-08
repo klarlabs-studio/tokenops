@@ -9,6 +9,7 @@ var providerNames = map[string]string{
 	"amp":         "Amp",
 	"anthropic":   "Claude",
 	"atlascloud":  "Atlas Cloud",
+	"augment":     "Augment",
 	"bifrost":     "Bifrost",
 	"cerebras":    "Cerebras",
 	"chutes":      "Chutes",
