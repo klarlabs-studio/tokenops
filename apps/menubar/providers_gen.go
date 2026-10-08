@@ -63,6 +63,7 @@ var providerNames = map[string]string{
 	"stepfun":          "StepFun",
 	"sub2api":          "sub2api",
 	"synthetic":        "Synthetic",
+	"t3chat":           "T3 Chat",
 	"together":         "Together AI",
 	"v0":               "v0",
 	"venice":           "Venice",

@@ -63,6 +63,7 @@ var registered = []func() Descriptor{
 	providerStepFun,
 	providerSub2API,
 	providerSynthetic,
+	providerT3Chat,
 	providerTogether,
 	providerV0,
 	providerVenice,

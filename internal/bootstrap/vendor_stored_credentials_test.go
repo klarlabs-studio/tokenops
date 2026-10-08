@@ -106,3 +106,19 @@ type chainReaderFake struct{ namedReader }
 func (chainReaderFake) Chain(context.Context) (string, string, error) {
 	return "chain-key", "the environment", nil
 }
+
+// A session read with named cookies may be re-read from a browser; a
+// pasted one is marked PasteOnly, which storedCredentials never re-reads.
+func TestRegistryCookie(t *testing.T) {
+	if c := registryCookie("manus"); c == nil || c.Host != "manus.im" || c.PasteOnly {
+		t.Errorf("manus = %+v", c)
+	}
+	if c := registryCookie("t3chat"); c == nil || !c.PasteOnly {
+		t.Errorf("t3chat = %+v", c)
+	}
+	for _, id := range []string{"openrouter", "nope"} {
+		if c := registryCookie(id); c != nil {
+			t.Errorf("%s = %+v", id, c)
+		}
+	}
+}

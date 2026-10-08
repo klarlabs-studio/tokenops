@@ -61,6 +61,7 @@
 - **vendor-usage:** browser-session providers are read the way the browser sends their cookies (several hosts, prefixed names, the whole host when the names are unknown), with at most one Keychain prompt in setup; a provider can be read with an API key or a session, or signed in to with a password (only the token is stored); a stored session the daemon cannot renew quietly turns its reading stale and the status says to run setup again
 - **providers:** Manus: the Pro plan's monthly credits and the daily refresh credits used, as plan windows, and the credit balance in credits (`POST /user.v1.UserService/GetAvailableCredits`), read with the manus.im browser session (`vendor-usage setup manus`, a pasted Cookie header, `MANUS_SESSION_TOKEN` or `MANUS_COOKIE`)
 - **providers:** Perplexity: the share of the plan's monthly credit grant used, as a plan window resetting at renewal, and the credit balance in dollars (`GET /rest/billing/credits`), read with the perplexity.ai browser session (`vendor-usage setup perplexity`, a pasted Cookie header, `PERPLEXITY_SESSION_TOKEN` or `PERPLEXITY_COOKIE`); a Perplexity API key is never sent there
+- **providers:** T3 Chat: the 4-hour Base window and the monthly Overage budget used, as plan windows (`GET /api/trpc/getCustomerData`), read with the t3.chat browser session's Cookie header pasted at `vendor-usage setup t3chat`. A browser-session provider whose cookies are not known by name now leaves `Cookie.Names` empty: setup asks for the pasted header and no browser is ever read for it
 
 ### Fixed
 
