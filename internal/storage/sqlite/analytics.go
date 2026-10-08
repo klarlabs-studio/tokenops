@@ -1,9 +1,12 @@
 package sqlite
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -12,9 +15,9 @@ import (
 )
 
 // *Store is the analytics aggregator's read side: it implements
-// analytics.Store over the events table. The sums and groupings are SQL;
-// pricing them, and accounting for what could not be priced, is the
-// aggregator's.
+// analytics.Store over the events table. The sums and groupings are the
+// store's; pricing them, and accounting for what could not be priced, is
+// the aggregator's.
 var _ analytics.Store = (*Store)(nil)
 
 // Stored events carry the cache portions of their input in the payload.
@@ -24,7 +27,7 @@ var _ analytics.Store = (*Store)(nil)
 // No other source recorded writes inside InputTokens before the payload
 // field existed, so no other attribute is a safe fallback.
 //
-// These expressions, and the cost-source ones below, are indexed verbatim
+// These expressions, and the cost-source one below, are indexed verbatim
 // by events_usage_idx (migration 5) so the rollups never read the table.
 // Change one and the index stops covering it: change both together.
 const (
@@ -33,24 +36,16 @@ const (
 	cacheWrite1hExpr = `CAST(json_extract(payload, '$.cache_write_1h_input_tokens') AS INTEGER)`
 )
 
-// The daily pricing groups are priced at their latest event: a day is the
-// finest grain a rate card changes at in practice.
-const (
-	dayBucketExpr  = `timestamp_ns / 86400000000000`
-	pricedAtColumn = `MAX(timestamp_ns)`
-)
-
-// costSourceMetered keeps cost RECOMPUTE away from flat-rate traffic:
-// plan-included and trial events are zero-cost BY DESIGN (the request is
-// covered by a subscription or vendor credit), so repricing them at list
-// rates would invent spend. Note this governs repricing only — pricing
-// GAPS in plan-covered traffic are reported separately, because on a
-// subscription that traffic is the majority and an unpriced model there
-// would otherwise leave no trace at all. The schema column carries only
-// the bundled counters, so the source is read from payload JSON.
-const costSourceMetered = `COALESCE(json_extract(payload, '$.cost_source'), '') NOT IN ('plan_included', 'trial')`
-
-// costSourcePlanCovered selects the plan-included and trial traffic.
+// costSourcePlanCovered selects the plan-included and trial traffic: what
+// the API-equivalent figure values at list price. Everything else is
+// metered. Plan-included and trial events are zero-cost BY DESIGN (the
+// request is covered by a subscription or vendor credit), so cost
+// RECOMPUTE stays away from them: repricing them at list rates would
+// invent spend. Pricing GAPS in plan-covered traffic are still reported,
+// because on a subscription that traffic is the majority and an unpriced
+// model there would otherwise leave no trace at all. The schema column
+// carries only the bundled counters, so the source is read from payload
+// JSON.
 const costSourcePlanCovered = `COALESCE(json_extract(payload, '$.cost_source'), '') IN ('plan_included', 'trial')`
 
 // usageOnly keeps prompt events that carry usage. Plan-window readings
@@ -79,242 +74,331 @@ func groupColumn(g analytics.Group) string {
 	}
 }
 
-// groupKeyExpr is the SELECT expression for a group's key.
-func groupKeyExpr(g analytics.Group) string {
-	if col := groupColumn(g); col != "" {
-		return fmt.Sprintf("COALESCE(%s, '')", col)
+// How an event's cost is accounted, as usageScanQuery classifies it.
+const (
+	// accountedStored is metered traffic stored with a cost: authoritative.
+	accountedStored int64 = iota
+	// accountedUncosted is metered traffic stored without one, which the
+	// aggregator prices from the rate card.
+	accountedUncosted
+	// accountedPlanCovered is plan-included and trial traffic.
+	accountedPlanCovered
+)
+
+// usageScanQuery is the one statement BucketUsage and WindowUsage read:
+// each matching event's usage, straight off events_usage_idx.
+//
+// The rollups used to ask SQLite for three GROUP BYs of the same window —
+// the usage sums and the two kinds of pricing group — and each sorted
+// every row it grouped in a temporary b-tree: the sort, not the index
+// read, was most of a request. Hashing the rows in Go reads the index
+// once and sorts only the groups. The group-by key for workflow and agent
+// is read here; provider and model already are.
+func usageScanQuery(f analytics.Filter, group analytics.Group) (string, []any) {
+	conds, args := analyticsConditions(f)
+	key := "''"
+	if group == analytics.GroupWorkflow || group == analytics.GroupAgent {
+		key = "COALESCE(" + groupColumn(group) + ", '')"
 	}
-	return "''"
+	q := `SELECT timestamp_ns, provider, model, ` + key + `,
+		CASE WHEN ` + costSourcePlanCovered + ` THEN ` + fmt.Sprint(accountedPlanCovered) + `
+			WHEN cost_usd IS NULL OR cost_usd = 0 THEN ` + fmt.Sprint(accountedUncosted) + `
+			ELSE ` + fmt.Sprint(accountedStored) + ` END,
+		COALESCE(input_tokens, 0), COALESCE(output_tokens, 0), COALESCE(total_tokens, 0), cost_usd,
+		COALESCE(` + cacheReadExpr + `, 0),
+		COALESCE(` + cacheWriteExpr + `, 0),
+		COALESCE(` + cacheWrite1hExpr + `, 0)
+		FROM events WHERE ` + strings.Join(conds, " AND ")
+	return q, args
 }
 
-// bucketExpr floor-divides timestamp_ns into width-second buckets. SQLite
-// has no native time bucketing, but timestamp_ns is already a monotonic
-// int; converting ns to seconds first keeps the numbers small.
-func bucketExpr(widthSec int64) string {
-	return fmt.Sprintf("(timestamp_ns / 1000000000 / %d) * %d", widthSec, widthSec)
+// usageRow is one event as usageScanQuery reads it.
+type usageRow struct {
+	ts              int64
+	provider, model sql.NullString
+	key             string
+	accounted       int64
+	in, out, total  int64
+	cost            sql.NullFloat64
+	cacheRead       int64
+	cacheWrite      int64
+	cacheWrite1h    int64
 }
 
-// costSelection is the WHERE conditions for a pricing query's selection.
-func costSelection(sel analytics.CostSelection) []string {
-	if sel == analytics.PlanCovered {
-		return []string{costSourcePlanCovered}
-	}
-	return []string{"(cost_usd IS NULL OR cost_usd = 0)", costSourceMetered}
-}
-
-// UsageBuckets implements analytics.Store.
-func (s *Store) UsageBuckets(ctx context.Context, f analytics.Filter, widthSec int64, group analytics.Group) ([]analytics.Row, error) {
-	if s == nil {
-		return nil, analytics.ErrNotInitialised
-	}
-	q, args := usageBucketsQuery(f, widthSec, group)
+// scanUsage reads every event usageScanQuery selects, in index order, and
+// hands each to visit. The row is reused between calls.
+func (s *Store) scanUsage(ctx context.Context, f analytics.Filter, group analytics.Group, visit func(*usageRow)) error {
+	q, args := usageScanQuery(f, group)
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
-		return nil, fmt.Errorf("analytics: query: %w", err)
+		return fmt.Errorf("analytics: query: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-
-	var out []analytics.Row
+	var r usageRow
 	for rows.Next() {
-		var (
-			bucketStartSec int64
-			groupKey       string
-			r              analytics.Row
-		)
-		if err := rows.Scan(&bucketStartSec, &groupKey, &r.Requests, &r.InputTokens, &r.OutputTokens, &r.TotalTokens, &r.CostUSD); err != nil {
-			return nil, fmt.Errorf("analytics: scan: %w", err)
+		if err := rows.Scan(&r.ts, &r.provider, &r.model, &r.key, &r.accounted,
+			&r.in, &r.out, &r.total, &r.cost, &r.cacheRead, &r.cacheWrite, &r.cacheWrite1h); err != nil {
+			return fmt.Errorf("analytics: scan: %w", err)
 		}
-		r.BucketStart = time.Unix(bucketStartSec, 0).UTC()
-		r.GroupKey = groupKey
-		out = append(out, r)
+		switch group {
+		case analytics.GroupProvider:
+			r.key = r.provider.String
+		case analytics.GroupModel:
+			r.key = r.model.String
+		}
+		visit(&r)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("analytics: iterate: %w", err)
+		return fmt.Errorf("analytics: iterate: %w", err)
 	}
-	return out, nil
+	return nil
 }
 
-// usageBucketsQuery is UsageBuckets' statement.
-func usageBucketsQuery(f analytics.Filter, widthSec int64, group analytics.Group) (string, []any) {
-	conds, args := analyticsConditions(f)
-	groupCol := groupColumn(group)
-	selectCols := []string{
-		bucketExpr(widthSec) + " AS bucket_start_sec",
-	}
-	if groupCol != "" {
-		selectCols = append(selectCols, fmt.Sprintf("COALESCE(%s, '') AS group_key", groupCol))
+// sqlSum is SQLite's SUM() over REAL values, reproduced bit for bit: the
+// rollups' costs were SQLite sums, and an answer that moved in its last
+// digit would be a different answer. SQLite (3.43 on) sums floats with
+// Kahan-Babuska-Neumaier compensation and returns the sum plus the
+// compensation, or the bare sum when the compensation overflowed.
+type sqlSum struct {
+	sum, err float64
+	n        int64
+}
+
+func (s *sqlSum) add(r float64) {
+	s.n++
+	t := s.sum + r
+	if math.Abs(s.sum) > math.Abs(r) {
+		s.err += (s.sum - t) + r
 	} else {
-		selectCols = append(selectCols, "'' AS group_key")
+		s.err += (r - t) + s.sum
 	}
-	selectCols = append(selectCols,
-		"COUNT(*) AS requests",
-		"COALESCE(SUM(input_tokens), 0)  AS input_tokens",
-		"COALESCE(SUM(output_tokens), 0) AS output_tokens",
-		"COALESCE(SUM(total_tokens), 0)  AS total_tokens",
-		"COALESCE(SUM(cost_usd), 0)      AS cost_usd",
+	s.sum = t
+}
+
+// value is COALESCE(SUM(x), 0).
+func (s *sqlSum) value() float64 {
+	if s.n == 0 {
+		return 0
+	}
+	if math.IsInf(s.err, 0) || math.IsNaN(s.err) {
+		return s.sum
+	}
+	return s.sum + s.err
+}
+
+// pricingKey identifies a pricing group. provider and model keep NULL
+// apart from the empty string: SQLite grouped them separately, and each group is priced
+// on its own.
+type pricingKey struct {
+	at              int64
+	key             string
+	provider, model sql.NullString
+}
+
+// pricingSums accumulates one pricing group.
+type pricingSums struct {
+	g      analytics.PricingGroup
+	latest int64
+}
+
+func (p *pricingSums) add(r *usageRow) {
+	if p.g.Events == 0 || r.ts > p.latest {
+		p.latest = r.ts
+	}
+	p.g.Events++
+	p.g.InputTokens += r.in
+	p.g.OutputTokens += r.out
+	p.g.CacheReadTokens += r.cacheRead
+	p.g.CacheWriteTokens += r.cacheWrite
+	p.g.CacheWrite1hTokens += r.cacheWrite1h
+}
+
+// pricingGroups accumulates the two kinds of pricing group.
+type pricingGroups struct {
+	uncosted, planCovered map[pricingKey]*pricingSums
+}
+
+func newPricingGroups() pricingGroups {
+	return pricingGroups{uncosted: map[pricingKey]*pricingSums{}, planCovered: map[pricingKey]*pricingSums{}}
+}
+
+// add counts r in its group at k, if it is priced from the rate card.
+func (pg pricingGroups) add(k pricingKey, r *usageRow) {
+	var m map[pricingKey]*pricingSums
+	switch r.accounted {
+	case accountedUncosted:
+		m = pg.uncosted
+	case accountedPlanCovered:
+		m = pg.planCovered
+	default:
+		return
+	}
+	k.provider, k.model = r.provider, r.model
+	p := m[k]
+	if p == nil {
+		p = &pricingSums{}
+		m[k] = p
+	}
+	p.add(r)
+}
+
+// compareNullText orders as SQLite does: NULL first, then text bytewise.
+func compareNullText(a, b sql.NullString) int {
+	switch {
+	case a.Valid != b.Valid:
+		if a.Valid {
+			return 1
+		}
+		return -1
+	default:
+		return strings.Compare(a.String, b.String)
+	}
+}
+
+// sortedGroups lists m's groups in the order cmp gives their keys, each
+// finished by done. An empty map lists nil, as an empty query did.
+func sortedGroups(m map[pricingKey]*pricingSums, cmp func(a, b pricingKey) int, done func(pricingKey, *pricingSums) analytics.PricingGroup) []analytics.PricingGroup {
+	if len(m) == 0 {
+		return nil
+	}
+	keys := make([]pricingKey, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	slices.SortFunc(keys, cmp)
+	out := make([]analytics.PricingGroup, len(keys))
+	for i, k := range keys {
+		out[i] = done(k, m[k])
+	}
+	return out
+}
+
+// bucketKey identifies a BucketUsage row.
+type bucketKey struct {
+	bucket int64
+	key    string
+}
+
+// bucketSums accumulates one BucketUsage row.
+type bucketSums struct {
+	row  analytics.Row
+	cost sqlSum
+}
+
+// BucketUsage implements analytics.Store: one read of the window, grouped
+// as GROUP BY (timestamp_ns / 1e9 / width) * width, group key — and for
+// the pricing groups provider and model too — would group it.
+func (s *Store) BucketUsage(ctx context.Context, f analytics.Filter, widthSec int64, group analytics.Group) (analytics.BucketUsage, error) {
+	if s == nil {
+		return analytics.BucketUsage{}, analytics.ErrNotInitialised
+	}
+	if widthSec <= 0 {
+		return analytics.BucketUsage{}, fmt.Errorf("analytics: invalid bucket width %d", widthSec)
+	}
+	buckets := map[bucketKey]*bucketSums{}
+	pricing := newPricingGroups()
+	err := s.scanUsage(ctx, f, group, func(r *usageRow) {
+		bk := bucketKey{bucket: r.ts / 1_000_000_000 / widthSec * widthSec, key: r.key}
+		b := buckets[bk]
+		if b == nil {
+			b = &bucketSums{}
+			buckets[bk] = b
+		}
+		b.row.Requests++
+		b.row.InputTokens += r.in
+		b.row.OutputTokens += r.out
+		b.row.TotalTokens += r.total
+		if r.cost.Valid {
+			b.cost.add(r.cost.Float64)
+		}
+		pricing.add(pricingKey{at: bk.bucket, key: bk.key}, r)
+	})
+	if err != nil {
+		return analytics.BucketUsage{}, err
+	}
+
+	var out analytics.BucketUsage
+	if len(buckets) > 0 {
+		keys := make([]bucketKey, 0, len(buckets))
+		for k := range buckets {
+			keys = append(keys, k)
+		}
+		slices.SortFunc(keys, func(a, b bucketKey) int {
+			return cmp.Or(cmp.Compare(a.bucket, b.bucket), strings.Compare(a.key, b.key))
+		})
+		out.Rows = make([]analytics.Row, len(keys))
+		for i, k := range keys {
+			b := buckets[k]
+			row := b.row
+			row.BucketStart = time.Unix(k.bucket, 0).UTC()
+			row.GroupKey = k.key
+			row.CostUSD = b.cost.value()
+			out.Rows[i] = row
+		}
+	}
+	byBucket := func(a, b pricingKey) int {
+		return cmp.Or(cmp.Compare(a.at, b.at), strings.Compare(a.key, b.key),
+			compareNullText(a.provider, b.provider), compareNullText(a.model, b.model))
+	}
+	done := func(k pricingKey, p *pricingSums) analytics.PricingGroup {
+		g := p.g
+		g.At = time.Unix(k.at, 0).UTC()
+		g.GroupKey = k.key
+		g.Provider, g.Model = k.provider.String, k.model.String
+		return g
+	}
+	out.Uncosted = sortedGroups(pricing.uncosted, byBucket, done)
+	out.PlanCovered = sortedGroups(pricing.planCovered, byBucket, done)
+	return out, nil
+}
+
+// nsPerDay is a UTC day in nanoseconds: the daily pricing groups' grain,
+// the finest a rate card changes at in practice.
+const nsPerDay = 86_400 * 1_000_000_000
+
+// WindowUsage implements analytics.Store: one read of the window, its
+// pricing groups grouped per (UTC day, provider, model).
+func (s *Store) WindowUsage(ctx context.Context, f analytics.Filter) (analytics.WindowUsage, error) {
+	if s == nil {
+		return analytics.WindowUsage{}, analytics.ErrNotInitialised
+	}
+	var (
+		totals analytics.Summary
+		cost   sqlSum
 	)
-
-	q := "SELECT " + strings.Join(selectCols, ", ") +
-		" FROM events"
-	if len(conds) > 0 {
-		q += " WHERE " + strings.Join(conds, " AND ")
-	}
-	q += " GROUP BY bucket_start_sec"
-	if groupCol != "" {
-		q += ", group_key"
-	}
-	q += " ORDER BY bucket_start_sec ASC"
-	if groupCol != "" {
-		q += ", group_key ASC"
-	}
-	return q, args
-}
-
-// BucketPricingGroups implements analytics.Store. It groups on the same
-// bucket and key expressions UsageBuckets does, so its groups land on
-// UsageBuckets' rows exactly.
-func (s *Store) BucketPricingGroups(ctx context.Context, f analytics.Filter, widthSec int64, group analytics.Group, sel analytics.CostSelection) ([]analytics.PricingGroup, error) {
-	if s == nil {
-		return nil, analytics.ErrNotInitialised
-	}
-	what := "recompute"
-	if sel == analytics.PlanCovered {
-		what = "plan-covered group value"
-	}
-	q, args := bucketPricingQuery(f, widthSec, group, sel)
-	rows, err := s.db.QueryContext(ctx, q, args...)
-	if err != nil {
-		return nil, fmt.Errorf("analytics: %s query: %w", what, err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	var out []analytics.PricingGroup
-	for rows.Next() {
-		var (
-			bucketSec                                        int64
-			g                                                analytics.PricingGroup
-			provider, model                                  sql.NullString
-			events, inTok, outTok, cacheIn, cacheW, cacheW1h sql.NullInt64
-		)
-		if err := rows.Scan(&bucketSec, &g.GroupKey, &provider, &model, &events, &inTok, &outTok, &cacheIn, &cacheW, &cacheW1h); err != nil {
-			return nil, fmt.Errorf("analytics: %s scan: %w", what, err)
+	pricing := newPricingGroups()
+	err := s.scanUsage(ctx, f, analytics.GroupNone, func(r *usageRow) {
+		totals.Requests++
+		totals.InputTokens += r.in
+		totals.OutputTokens += r.out
+		totals.TotalTokens += r.total
+		if r.cost.Valid {
+			cost.add(r.cost.Float64)
 		}
-		g.At = time.Unix(bucketSec, 0).UTC()
-		g.Provider, g.Model = provider.String, model.String
-		g.Events, g.InputTokens, g.OutputTokens = events.Int64, inTok.Int64, outTok.Int64
-		g.CacheReadTokens, g.CacheWriteTokens, g.CacheWrite1hTokens = cacheIn.Int64, cacheW.Int64, cacheW1h.Int64
-		out = append(out, g)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("analytics: %s iterate: %w", what, err)
-	}
-	return out, nil
-}
-
-// bucketPricingQuery is BucketPricingGroups' statement.
-func bucketPricingQuery(f analytics.Filter, widthSec int64, group analytics.Group, sel analytics.CostSelection) (string, []any) {
-	conds, args := analyticsConditions(f)
-	conds = append(conds, costSelection(sel)...)
-	q := "SELECT " + bucketExpr(widthSec) + " AS bucket_start_sec, " + groupKeyExpr(group) + " AS group_key," +
-		` provider, model, COUNT(*),
-			COALESCE(SUM(input_tokens), 0),
-			COALESCE(SUM(output_tokens), 0),
-			COALESCE(SUM(` + cacheReadExpr + `), 0),
-			COALESCE(SUM(` + cacheWriteExpr + `), 0),
-			COALESCE(SUM(` + cacheWrite1hExpr + `), 0)
-		FROM events WHERE ` + strings.Join(conds, " AND ") +
-		" GROUP BY bucket_start_sec, group_key, provider, model"
-	return q, args
-}
-
-// UsageTotals implements analytics.Store.
-func (s *Store) UsageTotals(ctx context.Context, f analytics.Filter) (analytics.Summary, error) {
-	if s == nil {
-		return analytics.Summary{}, analytics.ErrNotInitialised
-	}
-	q, args := usageTotalsQuery(f)
-	var sum analytics.Summary
-	if err := s.db.QueryRowContext(ctx, q, args...).Scan(
-		&sum.Requests, &sum.InputTokens, &sum.OutputTokens, &sum.TotalTokens, &sum.CostUSD,
-	); err != nil {
-		return analytics.Summary{}, fmt.Errorf("analytics: summarize: %w", err)
-	}
-	return sum, nil
-}
-
-// usageTotalsQuery is UsageTotals' statement.
-func usageTotalsQuery(f analytics.Filter) (string, []any) {
-	conds, args := analyticsConditions(f)
-	q := `SELECT COUNT(*),
-		COALESCE(SUM(input_tokens), 0),
-		COALESCE(SUM(output_tokens), 0),
-		COALESCE(SUM(total_tokens), 0),
-		COALESCE(SUM(cost_usd), 0)
-		FROM events`
-	if len(conds) > 0 {
-		q += " WHERE " + strings.Join(conds, " AND ")
-	}
-	return q, args
-}
-
-// DailyPricingGroups implements analytics.Store. The uncosted-metered
-// groups come back ordered by provider and model; the plan-covered ones in
-// SQLite's grouping order.
-func (s *Store) DailyPricingGroups(ctx context.Context, f analytics.Filter, sel analytics.CostSelection) ([]analytics.PricingGroup, error) {
-	if s == nil {
-		return nil, analytics.ErrNotInitialised
-	}
-	what := "summarize recompute"
-	if sel == analytics.PlanCovered {
-		what = "plan-covered value"
-	}
-	q, args := dailyPricingQuery(f, sel)
-	rows, err := s.db.QueryContext(ctx, q, args...)
+		pricing.add(pricingKey{at: r.ts / nsPerDay}, r)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("analytics: %s query: %w", what, err)
+		return analytics.WindowUsage{}, err
 	}
-	defer func() { _ = rows.Close() }()
+	totals.CostUSD = cost.value()
 
-	var out []analytics.PricingGroup
-	for rows.Next() {
-		var (
-			pricedAtNs                                         int64
-			g                                                  analytics.PricingGroup
-			provider, model                                    sql.NullString
-			requests, inTok, outTok, cacheIn, cacheW, cacheW1h sql.NullInt64
-		)
-		if err := rows.Scan(&pricedAtNs, &provider, &model, &requests, &inTok, &outTok, &cacheIn, &cacheW, &cacheW1h); err != nil {
-			return nil, fmt.Errorf("analytics: %s scan: %w", what, err)
-		}
-		g.At = time.Unix(0, pricedAtNs).UTC()
-		g.Provider, g.Model = provider.String, model.String
-		g.Events, g.InputTokens, g.OutputTokens = requests.Int64, inTok.Int64, outTok.Int64
-		g.CacheReadTokens, g.CacheWriteTokens, g.CacheWrite1hTokens = cacheIn.Int64, cacheW.Int64, cacheW1h.Int64
-		out = append(out, g)
+	done := func(k pricingKey, p *pricingSums) analytics.PricingGroup {
+		g := p.g
+		g.At = time.Unix(0, p.latest).UTC()
+		g.Provider, g.Model = k.provider.String, k.model.String
+		return g
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("analytics: %s iterate: %w", what, err)
-	}
-	return out, nil
-}
-
-// dailyPricingQuery is DailyPricingGroups' statement.
-func dailyPricingQuery(f analytics.Filter, sel analytics.CostSelection) (string, []any) {
-	order := ` ORDER BY provider, model`
-	if sel == analytics.PlanCovered {
-		order = ""
-	}
-	conds, args := analyticsConditions(f)
-	conds = append(conds, costSelection(sel)...)
-	q := `SELECT ` + pricedAtColumn + `, provider, model, COUNT(*),
-			COALESCE(SUM(input_tokens), 0),
-			COALESCE(SUM(output_tokens), 0),
-			COALESCE(SUM(` + cacheReadExpr + `), 0),
-			COALESCE(SUM(` + cacheWriteExpr + `), 0),
-			COALESCE(SUM(` + cacheWrite1hExpr + `), 0)
-		FROM events WHERE ` + strings.Join(conds, " AND ") +
-		` GROUP BY ` + dayBucketExpr + `, provider, model` + order
-	return q, args
+	return analytics.WindowUsage{
+		Totals: totals,
+		// The uncosted groups were ordered by provider and model, each
+		// one's days in grouping order.
+		Uncosted: sortedGroups(pricing.uncosted, func(a, b pricingKey) int {
+			return cmp.Or(compareNullText(a.provider, b.provider), compareNullText(a.model, b.model), cmp.Compare(a.at, b.at))
+		}, done),
+		PlanCovered: sortedGroups(pricing.planCovered, func(a, b pricingKey) int {
+			return cmp.Or(cmp.Compare(a.at, b.at), compareNullText(a.provider, b.provider), compareNullText(a.model, b.model))
+		}, done),
+	}, nil
 }
 
 // CacheTotals implements analytics.Store. JSONL events carry the cache

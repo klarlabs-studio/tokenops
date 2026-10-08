@@ -12,7 +12,9 @@ import (
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
-var cacheNow = time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
+// cacheNow is the real time: the change log's triggers log changes to
+// events by how old they are now.
+var cacheNow = time.Now().UTC().Truncate(time.Second)
 
 func newTestCache(t *testing.T, s *Store) *EventCache {
 	t.Helper()
@@ -125,8 +127,8 @@ func TestEventCacheAnswersAsTheStore(t *testing.T) {
 	check("vacuum")
 }
 
-// Without the generation trigger, a row moved under the one the cache last
-// saw (as a VACUUM may renumber rowids) still forces a reload.
+// Without the change log, a row moved under the one the cache last saw (as
+// a VACUUM may renumber rowids) still forces a reload.
 func TestEventCacheReloadsWhenItsLastRowMoved(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
@@ -140,8 +142,8 @@ func TestEventCacheReloadsWhenItsLastRowMoved(t *testing.T) {
 	}
 	sameAsStore(t, s, c, eventschema.EventTypePrompt, since, "first read")
 	for _, q := range []string{
-		`DROP TRIGGER events_generation_on_update`,
-		`DROP TRIGGER events_generation_on_delete`,
+		`DROP TRIGGER events_changes_on_update`,
+		`DROP TRIGGER events_changes_on_delete`,
 		// Renumber: b takes a rowid past every other, a moves into its old one.
 		`UPDATE events SET rowid = 1000 WHERE id = 'b'`,
 		`UPDATE events SET rowid = 2 WHERE id = 'a'`,
@@ -199,5 +201,11 @@ func TestEventCacheReadsNewEventsByRowid(t *testing.T) {
 		[]any{int64(1), "prompt", int64(0)})
 	if !strings.Contains(plan, "INTEGER PRIMARY KEY (rowid>?)") {
 		t.Fatalf("new events are not read by rowid:\n%s", plan)
+	}
+	// Changed events too: each logged row is looked up by rowid, and the
+	// log is read from the cache's position on.
+	plan = explain(t, s, changedEventsSQL, []any{int64(1), int64(100), "prompt", int64(0)})
+	if !strings.Contains(plan, "INTEGER PRIMARY KEY (rowid=?)") || !strings.Contains(plan, "SEARCH events_changes USING INTEGER PRIMARY KEY (rowid>?)") {
+		t.Fatalf("changed events are not read by rowid:\n%s", plan)
 	}
 }

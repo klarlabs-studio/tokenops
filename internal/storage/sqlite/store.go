@@ -477,30 +477,57 @@ type querier interface {
 
 // readEvents is ReadEvents on q.
 func readEvents(ctx context.Context, q querier, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
+	var out []*eventschema.Envelope
+	err := readEventPages(ctx, q, selectSQL, t, since, func(rs *sql.Rows) (*eventschema.Envelope, error) {
+		env, err := scanEnvelope(rs)
+		if err == nil {
+			out = append(out, env)
+		}
+		return env, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// readEventPages runs ReadEvents' paged read of sel, a selectSQL with
+// any leading columns of the caller's, handing each row to scan, which
+// returns the envelope the row decoded to.
+func readEventPages(ctx context.Context, q querier, sel string, t eventschema.EventType, since time.Time,
+	scan func(*sql.Rows) (*eventschema.Envelope, error)) error {
 	var (
-		out    []*eventschema.Envelope
 		lastTS = since.UTC().UnixNano() - 1
 		lastID = ""
 	)
 	// The plain range bound lets SQLite seek on (type, timestamp_ns); the
 	// OR alone made every page a scan.
 	for {
-		rs, err := q.QueryContext(ctx, selectSQL+`
+		rs, err := q.QueryContext(ctx, sel+`
 WHERE type = ? AND timestamp_ns >= ? AND (timestamp_ns > ? OR id > ?)
 ORDER BY timestamp_ns ASC, id ASC LIMIT ?`, string(t), lastTS, lastTS, lastID, readPage)
 		if err != nil {
-			return nil, fmt.Errorf("sqlite: read events: %w", err)
+			return fmt.Errorf("sqlite: read events: %w", err)
 		}
-		page, err := scanEnvelopes(rs)
+		var (
+			n    int
+			last *eventschema.Envelope
+		)
+		for rs.Next() {
+			if last, err = scan(rs); err != nil {
+				_ = rs.Close()
+				return err
+			}
+			n++
+		}
+		err = rs.Err()
 		_ = rs.Close()
 		if err != nil {
-			return nil, err
+			return fmt.Errorf("sqlite: rows: %w", err)
 		}
-		out = append(out, page...)
-		if len(page) < readPage {
-			return out, nil
+		if n < readPage {
+			return nil
 		}
-		last := page[len(page)-1]
 		lastTS, lastID = last.Timestamp.UTC().UnixNano(), last.ID
 	}
 }
@@ -509,26 +536,9 @@ ORDER BY timestamp_ns ASC, id ASC LIMIT ?`, string(t), lastTS, lastTS, lastID, r
 func scanEnvelopes(rs *sql.Rows) ([]*eventschema.Envelope, error) {
 	var out []*eventschema.Envelope
 	for rs.Next() {
-		var (
-			r       row
-			typeStr string
-		)
-		if err := rs.Scan(
-			&r.ID, &r.SchemaVersion, &typeStr, &r.TimestampNS, &r.Day,
-			&r.TraceID, &r.SpanID, &r.Source,
-			&r.Provider, &r.Model,
-			&r.WorkflowID, &r.AgentID, &r.SessionID, &r.UserID,
-			&r.WorkID, &r.ExecutionID, &r.ActorID,
-			&r.DecisionID, &r.InterventionID, &r.ExperimentID,
-			&r.InputTokens, &r.OutputTokens, &r.TotalTokens, &r.CostUSD,
-			&r.Payload, &r.Attributes,
-		); err != nil {
-			return nil, fmt.Errorf("sqlite: scan: %w", err)
-		}
-		r.Type = eventschema.EventType(typeStr)
-		env, err := rowToEnvelope(r)
+		env, err := scanEnvelope(rs)
 		if err != nil {
-			return nil, fmt.Errorf("sqlite: decode %s: %w", r.ID, err)
+			return nil, err
 		}
 		out = append(out, env)
 	}
@@ -536,6 +546,33 @@ func scanEnvelopes(rs *sql.Rows) ([]*eventschema.Envelope, error) {
 		return nil, fmt.Errorf("sqlite: rows: %w", err)
 	}
 	return out, nil
+}
+
+// scanEnvelope decodes rs's current row, a selectSQL row after any
+// leading columns, which are scanned into lead.
+func scanEnvelope(rs *sql.Rows, lead ...any) (*eventschema.Envelope, error) {
+	var (
+		r       row
+		typeStr string
+	)
+	if err := rs.Scan(append(lead,
+		&r.ID, &r.SchemaVersion, &typeStr, &r.TimestampNS, &r.Day,
+		&r.TraceID, &r.SpanID, &r.Source,
+		&r.Provider, &r.Model,
+		&r.WorkflowID, &r.AgentID, &r.SessionID, &r.UserID,
+		&r.WorkID, &r.ExecutionID, &r.ActorID,
+		&r.DecisionID, &r.InterventionID, &r.ExperimentID,
+		&r.InputTokens, &r.OutputTokens, &r.TotalTokens, &r.CostUSD,
+		&r.Payload, &r.Attributes,
+	)...); err != nil {
+		return nil, fmt.Errorf("sqlite: scan: %w", err)
+	}
+	r.Type = eventschema.EventType(typeStr)
+	env, err := rowToEnvelope(r)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: decode %s: %w", r.ID, err)
+	}
+	return env, nil
 }
 
 // Count returns the number of rows matching the filter. It uses the same

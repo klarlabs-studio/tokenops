@@ -18,7 +18,7 @@ import (
 // startOTelMetricsRuntime pushes TokenOps' derived metrics to the
 // configured collector every interval: the figures the glance, the coach
 // and cost per commit show, and nothing they are derived from.
-func startOTelMetricsRuntime(cfg config.Config, store *sqlite.Store, components *bootstrap.Components, sup *lifecycle.Supervisor, logger *slog.Logger) {
+func startOTelMetricsRuntime(cfg config.Config, store *sqlite.Store, glance *sqlite.EventCache, components *bootstrap.Components, sup *lifecycle.Supervisor, logger *slog.Logger) {
 	eng := components.Spend
 	if !cfg.OTel.MetricsEnabled() || store == nil || eng == nil || components.Aggregator == nil {
 		return
@@ -36,7 +36,7 @@ func startOTelMetricsRuntime(cfg config.Config, store *sqlite.Store, components 
 	if every <= 0 {
 		every = telemetry.Every
 	}
-	g := &telemetry.Gatherer{Glance: plansDeps(cfg, store, eng), Agg: components.Aggregator, Coach: func(now time.Time) *coachcap.Report {
+	g := &telemetry.Gatherer{Glance: plansDeps(cfg, glance, eng), Agg: components.Aggregator, Coach: func(now time.Time) *coachcap.Report {
 		ledger, levers := coachEnv(cfg)
 		r := coachcap.Status(cfg, ledger, levers, now)
 		return &r
