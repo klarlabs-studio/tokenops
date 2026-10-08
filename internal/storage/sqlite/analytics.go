@@ -23,6 +23,10 @@ var _ analytics.Store = (*Store)(nil)
 // InputTokens that already included them, so they are read as writes too.
 // No other source recorded writes inside InputTokens before the payload
 // field existed, so no other attribute is a safe fallback.
+//
+// These expressions, and the cost-source ones below, are indexed verbatim
+// by events_usage_idx (migration 5) so the rollups never read the table.
+// Change one and the index stops covering it: change both together.
 const (
 	cacheReadExpr    = `CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER)`
 	cacheWriteExpr   = `CAST(COALESCE(json_extract(payload, '$.cache_write_input_tokens'), json_extract(attributes, '$.cache_creation_input')) AS INTEGER)`
@@ -103,6 +107,35 @@ func (s *Store) UsageBuckets(ctx context.Context, f analytics.Filter, widthSec i
 	if s == nil {
 		return nil, analytics.ErrNotInitialised
 	}
+	q, args := usageBucketsQuery(f, widthSec, group)
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("analytics: query: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []analytics.Row
+	for rows.Next() {
+		var (
+			bucketStartSec int64
+			groupKey       string
+			r              analytics.Row
+		)
+		if err := rows.Scan(&bucketStartSec, &groupKey, &r.Requests, &r.InputTokens, &r.OutputTokens, &r.TotalTokens, &r.CostUSD); err != nil {
+			return nil, fmt.Errorf("analytics: scan: %w", err)
+		}
+		r.BucketStart = time.Unix(bucketStartSec, 0).UTC()
+		r.GroupKey = groupKey
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("analytics: iterate: %w", err)
+	}
+	return out, nil
+}
+
+// usageBucketsQuery is UsageBuckets' statement.
+func usageBucketsQuery(f analytics.Filter, widthSec int64, group analytics.Group) (string, []any) {
 	conds, args := analyticsConditions(f)
 	groupCol := groupColumn(group)
 	selectCols := []string{
@@ -134,31 +167,7 @@ func (s *Store) UsageBuckets(ctx context.Context, f analytics.Filter, widthSec i
 	if groupCol != "" {
 		q += ", group_key ASC"
 	}
-
-	rows, err := s.db.QueryContext(ctx, q, args...)
-	if err != nil {
-		return nil, fmt.Errorf("analytics: query: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	var out []analytics.Row
-	for rows.Next() {
-		var (
-			bucketStartSec int64
-			groupKey       string
-			r              analytics.Row
-		)
-		if err := rows.Scan(&bucketStartSec, &groupKey, &r.Requests, &r.InputTokens, &r.OutputTokens, &r.TotalTokens, &r.CostUSD); err != nil {
-			return nil, fmt.Errorf("analytics: scan: %w", err)
-		}
-		r.BucketStart = time.Unix(bucketStartSec, 0).UTC()
-		r.GroupKey = groupKey
-		out = append(out, r)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("analytics: iterate: %w", err)
-	}
-	return out, nil
+	return q, args
 }
 
 // BucketPricingGroups implements analytics.Store. It groups on the same
@@ -172,18 +181,7 @@ func (s *Store) BucketPricingGroups(ctx context.Context, f analytics.Filter, wid
 	if sel == analytics.PlanCovered {
 		what = "plan-covered group value"
 	}
-	conds, args := analyticsConditions(f)
-	conds = append(conds, costSelection(sel)...)
-	q := "SELECT " + bucketExpr(widthSec) + " AS bucket_start_sec, " + groupKeyExpr(group) + " AS group_key," +
-		` provider, model, COUNT(*),
-			COALESCE(SUM(input_tokens), 0),
-			COALESCE(SUM(output_tokens), 0),
-			COALESCE(SUM(` + cacheReadExpr + `), 0),
-			COALESCE(SUM(` + cacheWriteExpr + `), 0),
-			COALESCE(SUM(` + cacheWrite1hExpr + `), 0)
-		FROM events WHERE ` + strings.Join(conds, " AND ") +
-		" GROUP BY bucket_start_sec, group_key, provider, model"
-
+	q, args := bucketPricingQuery(f, widthSec, group, sel)
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("analytics: %s query: %w", what, err)
@@ -213,11 +211,39 @@ func (s *Store) BucketPricingGroups(ctx context.Context, f analytics.Filter, wid
 	return out, nil
 }
 
+// bucketPricingQuery is BucketPricingGroups' statement.
+func bucketPricingQuery(f analytics.Filter, widthSec int64, group analytics.Group, sel analytics.CostSelection) (string, []any) {
+	conds, args := analyticsConditions(f)
+	conds = append(conds, costSelection(sel)...)
+	q := "SELECT " + bucketExpr(widthSec) + " AS bucket_start_sec, " + groupKeyExpr(group) + " AS group_key," +
+		` provider, model, COUNT(*),
+			COALESCE(SUM(input_tokens), 0),
+			COALESCE(SUM(output_tokens), 0),
+			COALESCE(SUM(` + cacheReadExpr + `), 0),
+			COALESCE(SUM(` + cacheWriteExpr + `), 0),
+			COALESCE(SUM(` + cacheWrite1hExpr + `), 0)
+		FROM events WHERE ` + strings.Join(conds, " AND ") +
+		" GROUP BY bucket_start_sec, group_key, provider, model"
+	return q, args
+}
+
 // UsageTotals implements analytics.Store.
 func (s *Store) UsageTotals(ctx context.Context, f analytics.Filter) (analytics.Summary, error) {
 	if s == nil {
 		return analytics.Summary{}, analytics.ErrNotInitialised
 	}
+	q, args := usageTotalsQuery(f)
+	var sum analytics.Summary
+	if err := s.db.QueryRowContext(ctx, q, args...).Scan(
+		&sum.Requests, &sum.InputTokens, &sum.OutputTokens, &sum.TotalTokens, &sum.CostUSD,
+	); err != nil {
+		return analytics.Summary{}, fmt.Errorf("analytics: summarize: %w", err)
+	}
+	return sum, nil
+}
+
+// usageTotalsQuery is UsageTotals' statement.
+func usageTotalsQuery(f analytics.Filter) (string, []any) {
 	conds, args := analyticsConditions(f)
 	q := `SELECT COUNT(*),
 		COALESCE(SUM(input_tokens), 0),
@@ -228,13 +254,7 @@ func (s *Store) UsageTotals(ctx context.Context, f analytics.Filter) (analytics.
 	if len(conds) > 0 {
 		q += " WHERE " + strings.Join(conds, " AND ")
 	}
-	var sum analytics.Summary
-	if err := s.db.QueryRowContext(ctx, q, args...).Scan(
-		&sum.Requests, &sum.InputTokens, &sum.OutputTokens, &sum.TotalTokens, &sum.CostUSD,
-	); err != nil {
-		return analytics.Summary{}, fmt.Errorf("analytics: summarize: %w", err)
-	}
-	return sum, nil
+	return q, args
 }
 
 // DailyPricingGroups implements analytics.Store. The uncosted-metered
@@ -244,20 +264,11 @@ func (s *Store) DailyPricingGroups(ctx context.Context, f analytics.Filter, sel 
 	if s == nil {
 		return nil, analytics.ErrNotInitialised
 	}
-	what, order := "summarize recompute", ` ORDER BY provider, model`
+	what := "summarize recompute"
 	if sel == analytics.PlanCovered {
-		what, order = "plan-covered value", ""
+		what = "plan-covered value"
 	}
-	conds, args := analyticsConditions(f)
-	conds = append(conds, costSelection(sel)...)
-	q := `SELECT ` + pricedAtColumn + `, provider, model, COUNT(*),
-			COALESCE(SUM(input_tokens), 0),
-			COALESCE(SUM(output_tokens), 0),
-			COALESCE(SUM(` + cacheReadExpr + `), 0),
-			COALESCE(SUM(` + cacheWriteExpr + `), 0),
-			COALESCE(SUM(` + cacheWrite1hExpr + `), 0)
-		FROM events WHERE ` + strings.Join(conds, " AND ") +
-		` GROUP BY ` + dayBucketExpr + `, provider, model` + order
+	q, args := dailyPricingQuery(f, sel)
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("analytics: %s query: %w", what, err)
@@ -285,6 +296,25 @@ func (s *Store) DailyPricingGroups(ctx context.Context, f analytics.Filter, sel 
 		return nil, fmt.Errorf("analytics: %s iterate: %w", what, err)
 	}
 	return out, nil
+}
+
+// dailyPricingQuery is DailyPricingGroups' statement.
+func dailyPricingQuery(f analytics.Filter, sel analytics.CostSelection) (string, []any) {
+	order := ` ORDER BY provider, model`
+	if sel == analytics.PlanCovered {
+		order = ""
+	}
+	conds, args := analyticsConditions(f)
+	conds = append(conds, costSelection(sel)...)
+	q := `SELECT ` + pricedAtColumn + `, provider, model, COUNT(*),
+			COALESCE(SUM(input_tokens), 0),
+			COALESCE(SUM(output_tokens), 0),
+			COALESCE(SUM(` + cacheReadExpr + `), 0),
+			COALESCE(SUM(` + cacheWriteExpr + `), 0),
+			COALESCE(SUM(` + cacheWrite1hExpr + `), 0)
+		FROM events WHERE ` + strings.Join(conds, " AND ") +
+		` GROUP BY ` + dayBucketExpr + `, provider, model` + order
+	return q, args
 }
 
 // CacheTotals implements analytics.Store. JSONL events carry the cache
