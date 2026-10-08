@@ -18,7 +18,7 @@ func providerBedrock() Descriptor {
 		Opencode:  []OpencodeID{{ID: "amazon-bedrock", Endpoint: "bedrock"}},
 		ModelsDev: []string{"amazon-bedrock"},
 		Docs: Docs{
-			Setup: "`tokenops vendor-usage setup bedrock` opts in with the AWS credentials on this machine (`AWS_ACCESS_KEY_ID` or the shared credentials file's `AWS_PROFILE`/default profile; needs `ce:GetCostAndUsage`)",
+			Setup: "`tokenops vendor-usage setup bedrock` opts in with the AWS credentials on this machine (`AWS_ACCESS_KEY_ID`, or the `AWS_PROFILE`/default profile: its keys, an SSO profile signed in with `aws sso login`, or an assume-role profile; never the AWS CLI, never a prompt; needs `ce:GetCostAndUsage`)",
 		},
 	}
 }

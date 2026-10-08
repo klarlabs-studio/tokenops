@@ -79,6 +79,19 @@ type Credential struct {
 	// credential ("run `tokenops vendor-usage setup acme` again"); it is
 	// added to the source's health error. Never the key.
 	Remedy string
+	// AppLogin marks another application's sign-in the operator granted
+	// (ADR 0013): Resolve reads it afresh, and a reader that reads such a
+	// token differently from an API key (AppLoginReader) is given it
+	// through ReadAppLogin.
+	AppLogin bool
+}
+
+// AppLoginReader is a Reader that reads with another application's
+// sign-in in a different form from its API key: a session token sent as a
+// cookie, several fields as a JSON object. A reader without it is given the
+// token through Read, as a key.
+type AppLoginReader interface {
+	ReadAppLogin(ctx context.Context, token string) (Reading, error)
 }
 
 // Reading is what a vendor reports about the account.

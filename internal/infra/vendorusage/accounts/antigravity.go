@@ -25,109 +25,74 @@ func readerAntigravity() usage.Reader { return Antigravity{} }
 // server the running Antigravity app (or IDE) starts on this machine: the
 // same local RetrieveUserQuotaSummary call its Model Quota view makes,
 // over HTTPS on 127.0.0.1, with the CSRF token the app passes the server
-// on its command line. Nothing leaves the machine; the token is read from
-// the process list, used for that one local call and never stored or
-// logged. With the app closed there is nothing to read. This follows
+// on its command line. Nothing leaves the machine. That token is the app's
+// own credential: it is read from the process only once the operator
+// granted it (`setup antigravity --use-app-login`, ADR 0013), by
+// internal/infra/applogin, which hands this reader the token and the
+// server's process ID; it is used for that one local call and never stored
+// or logged. With the app closed there is nothing to read. This follows
 // CodexBar's local probe; the protocol is Antigravity's own, unpublished.
 //
 // Not read: the agy CLI's server (agy 1.2.2 and later refuse a request
 // without a CSRF token it does not expose) and Google's OAuth quota API,
 // which would need Antigravity's Google sign-in.
 type Antigravity struct {
-	// Processes and Ports replace the process and socket listing, and
-	// HTTP the loopback client, for tests.
-	Processes func(ctx context.Context) ([]antigravityProcess, error)
-	Ports     func(ctx context.Context, pid int) ([]int, error)
-	HTTP      *http.Client
+	// Ports replaces the socket listing, and HTTP the loopback client, for
+	// tests.
+	Ports func(ctx context.Context, pid int) ([]int, error)
+	HTTP  *http.Client
 }
 
 func (Antigravity) Endpoint() string               { return "antigravity" }
 func (Antigravity) Provider() eventschema.Provider { return "antigravity" }
 func (Antigravity) Source() string                 { return "antigravity-local" }
-func (Antigravity) Keyless()                       {}
-
-// antigravityProcess is a process and its command line.
-type antigravityProcess struct {
-	pid     int
-	command string
-}
-
-var (
-	agLanguageServer = regexp.MustCompile(`(^|[/\\])language(?:_|-)server(?:[_-][a-z0-9]+)*(?:\.exe)?(\s|$)`)
-	agCSRF           = regexp.MustCompile(`(?i)--csrf_token[=\s]+([^\s]+)`)
-)
-
-// antigravityServer is a running Antigravity language server: its pid and
-// the CSRF token it requires.
-type antigravityServer struct {
-	pid  int
-	csrf string
-}
-
-// antigravityServers picks the Antigravity app's and IDE's language
-// servers out of the process list; a server without a CSRF token cannot
-// be asked anything and is skipped.
-func antigravityServers(procs []antigravityProcess) []antigravityServer {
-	var out []antigravityServer
-	for _, p := range procs {
-		lower := strings.ToLower(p.command)
-		if !agLanguageServer.MatchString(lower) || !isAntigravity(lower) {
-			continue
-		}
-		if m := agCSRF.FindStringSubmatch(p.command); m != nil {
-			out = append(out, antigravityServer{pid: p.pid, csrf: m[1]})
-		}
-	}
-	return out
-}
-
-func isAntigravity(lower string) bool {
-	return (strings.Contains(lower, "--app_data_dir") && strings.Contains(lower, "antigravity")) ||
-		strings.Contains(lower, "antigravity.app/") || strings.Contains(lower, "/gemini.app/") ||
-		strings.Contains(lower, "antigravity ide.app/") || strings.Contains(lower, "/antigravity/")
-}
 
 const (
 	agService      = "/exa.language_server_pb.LanguageServerService/"
 	agProbeTimeout = 8 * time.Second
 )
 
-func (a Antigravity) Read(ctx context.Context, _ string) (usage.Reading, error) {
+// Read reads with the granted sign-in; Antigravity has no other credential.
+func (a Antigravity) Read(ctx context.Context, token string) (usage.Reading, error) {
+	return a.ReadAppLogin(ctx, token)
+}
+
+// ReadAppLogin asks the language server the grant found: token is the
+// process's CSRF token and ID, as applogin reads them
+// ({"--csrf_token": ..., "pid": ...}).
+func (a Antigravity) ReadAppLogin(ctx context.Context, token string) (usage.Reading, error) {
+	var server struct {
+		CSRF string `json:"--csrf_token"`
+		PID  string `json:"pid"`
+	}
+	if json.Unmarshal([]byte(token), &server) != nil || server.CSRF == "" {
+		return usage.Reading{}, fmt.Errorf("%w (not Antigravity's language-server token)", usage.ErrAuth)
+	}
+	pid, err := strconv.Atoi(server.PID)
+	if err != nil || pid <= 0 {
+		return usage.Reading{}, fmt.Errorf("%w (no language-server process)", usage.ErrAuth)
+	}
 	ctx, cancel := context.WithTimeout(ctx, agProbeTimeout)
 	defer cancel()
-	list, ports := a.Processes, a.Ports
-	if list == nil {
-		list = listProcesses
-	}
+	ports := a.Ports
 	if ports == nil {
 		ports = listeningPorts
-	}
-	procs, err := list(ctx)
-	if err != nil {
-		return usage.Reading{}, err
-	}
-	servers := antigravityServers(procs)
-	if len(servers) == 0 {
-		return usage.Reading{}, usage.ErrNotInstalled
 	}
 	hc := a.HTTP
 	if hc == nil {
 		hc = loopbackClient()
 	}
+	pp, err := ports(ctx, pid)
+	if err != nil {
+		return usage.Reading{}, err
+	}
 	var lastErr error
-	for _, s := range servers {
-		pp, err := ports(ctx, s.pid)
-		if err != nil {
-			lastErr = err
-			continue
+	for _, port := range pp {
+		r, err := a.readServer(ctx, hc, port, server.CSRF)
+		if err == nil {
+			return r, nil
 		}
-		for _, port := range pp {
-			r, err := a.readServer(ctx, hc, port, s.csrf)
-			if err == nil {
-				return r, nil
-			}
-			lastErr = err
-		}
+		lastErr = err
 	}
 	if lastErr == nil {
 		lastErr = errors.New("accounts: Antigravity is running but not listening yet")
@@ -390,25 +355,6 @@ func loopbackClient() *http.Client {
 			Proxy:           nil,
 		},
 	}
-}
-
-// listProcesses is `ps -ax -o pid=,command=`.
-func listProcesses(ctx context.Context) ([]antigravityProcess, error) {
-	out, err := runCLI(ctx, 5*time.Second, "/bin/ps", nil, "-ax", "-o", "pid=,command=")
-	if err != nil {
-		return nil, err
-	}
-	var procs []antigravityProcess
-	for _, line := range strings.Split(out, "\n") {
-		pid, cmd, ok := strings.Cut(strings.TrimSpace(line), " ")
-		if !ok {
-			continue
-		}
-		if n, err := strconv.Atoi(pid); err == nil {
-			procs = append(procs, antigravityProcess{pid: n, command: strings.TrimSpace(cmd)})
-		}
-	}
-	return procs, nil
 }
 
 var lsofListen = regexp.MustCompile(`:(\d+)\s+\(LISTEN\)`)

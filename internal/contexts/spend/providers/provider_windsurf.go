@@ -16,9 +16,14 @@ func providerWindsurf() Descriptor {
 				Reference: "CodexBar Sources/CodexBarCore/Providers/Windsurf/WindsurfWebFetcher.swift (docs/windsurf.md)",
 				KeyFormat: "one line of JSON with devin_session_token, devin_auth1_token, devin_account_id and " +
 					"devin_primary_org_id (windsurf.com's localStorage)",
+				// Setup reads the bundle from a Chromium browser's localStorage
+				// (app.devin.ai, else the legacy windsurf.com), never the daemon;
+				// --paste types it instead.
+				LocalStorage: &LocalStorage{Origins: []string{"https://app.devin.ai", "https://windsurf.com"},
+					Keys: []string{"devin_session_token", "devin_auth1_token", "devin_account_id", "devin_primary_org_id"}},
 				Endpoint: "`POST windsurf.com/_backend/.../GetPlanStatus`",
 				Shows:    "daily and weekly quota, live"},
 		},
-		Docs: Docs{Setup: "the cached plan is read with nothing to do; `tokenops vendor-usage setup windsurf` takes the web session for live figures"},
+		Docs: Docs{Setup: "the cached plan is read with nothing to do; `tokenops vendor-usage setup windsurf` reads the web session from your browser's localStorage (or `--paste`) for live figures"},
 	}
 }

@@ -160,7 +160,7 @@ func readWithKeys(ctx context.Context, r Reader, creds []Credential) (reading Re
 			}
 			key = resolved
 		}
-		got, rerr := r.Read(ctx, key)
+		got, rerr := ReadWith(ctx, r, c, key)
 		if errors.Is(rerr, ErrSkip) {
 			continue
 		}
@@ -179,6 +179,15 @@ func withRemedy(err error, c Credential) error {
 		return err
 	}
 	return fmt.Errorf("%w; %s", err, c.Remedy)
+}
+
+// ReadWith reads r with credential c's key: through ReadAppLogin for a
+// granted sign-in whose reader reads one differently, else through Read.
+func ReadWith(ctx context.Context, r Reader, c Credential, key string) (Reading, error) {
+	if a, ok := r.(AppLoginReader); ok && c.AppLogin {
+		return a.ReadAppLogin(ctx, key)
+	}
+	return r.Read(ctx, key)
 }
 
 // scanGateways reads each gateway a key is sent to. A root is recognised

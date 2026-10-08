@@ -1,7 +1,6 @@
 package accounts
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -10,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -30,9 +28,10 @@ func readerBedrock() usage.Reader { return Bedrock{} }
 // `tokenops vendor-usage setup bedrock`.
 //
 // The credentials are AWS's standard environment variables, else the
-// shared credentials file's profile (AWS_PROFILE, or default). SSO,
-// assume-role and credential_process profiles need the AWS CLI, which can
-// prompt, and are not read.
+// profile AWS_PROFILE names (or default): its static keys, an SSO profile's
+// cached sign-in, or an assume-role profile through STS, all without the
+// AWS CLI and without a prompt. credential_process and MFA profiles are
+// not read (awsProfiles says why).
 type Bedrock struct {
 	BaseURL string
 	HTTP    *http.Client
@@ -41,6 +40,9 @@ type Bedrock struct {
 	Now    func() time.Time
 	Getenv func(string) string
 	Home   string
+	// SSOBaseURL and STSBaseURL override the SSO portal's and STS's
+	// addresses, for tests.
+	SSOBaseURL, STSBaseURL string
 }
 
 // Endpoint is its own: only the credential chain setup opted in to is
@@ -56,13 +58,16 @@ const bedrockInterval = 8 * time.Hour
 // MinInterval paces the poller (usage.Paced).
 func (Bedrock) MinInterval() time.Duration { return bedrockInterval }
 
-// errNoAWSCredentials is no static AWS credential on this machine.
-var errNoAWSCredentials = errors.New("accounts: no AWS access key in the environment or the shared credentials file")
+// errNoAWSCredentials is no AWS credential on this machine.
+var errNoAWSCredentials = errors.New("accounts: no AWS credentials in the environment or the AWS profile")
 
-// Chain finds AWS credentials the way the AWS SDKs start: the environment,
-// then the shared credentials file (usage.ChainReader). The key it returns
-// is for Read only, never stored or shown.
-func (b Bedrock) Chain(context.Context) (string, string, error) {
+// Chain finds AWS credentials the way the AWS SDKs start, without the AWS
+// CLI and without a prompt (usage.ChainReader): the environment's keys, else
+// the profile AWS_PROFILE names (or default) in the shared config and
+// credentials files: an assume-role profile through STS, an SSO profile
+// through the sign-in `aws sso login` cached, or its static keys
+// (awsProfiles). The key it returns is for Read only, never stored or shown.
+func (b Bedrock) Chain(ctx context.Context) (string, string, error) {
 	getenv := b.Getenv
 	if getenv == nil {
 		getenv = os.Getenv
@@ -74,78 +79,32 @@ func (b Bedrock) Chain(context.Context) (string, string, error) {
 	}
 	origin := "$AWS_ACCESS_KEY_ID"
 	if c.AccessKeyID == "" || c.SecretAccessKey == "" {
-		path := getenv("AWS_SHARED_CREDENTIALS_FILE")
-		if path == "" {
-			home := b.Home
-			if home == "" {
-				var err error
-				if home, err = os.UserHomeDir(); err != nil {
-					return "", "", err
-				}
+		home := b.Home
+		if home == "" {
+			var err error
+			if home, err = os.UserHomeDir(); err != nil {
+				return "", "", err
 			}
-			path = filepath.Join(home, ".aws", "credentials")
 		}
 		profile := strings.TrimSpace(getenv("AWS_PROFILE"))
 		if profile == "" {
 			profile = "default"
 		}
+		now := time.Now
+		if b.Now != nil {
+			now = b.Now
+		}
 		var err error
-		if c, err = sharedCredentials(path, profile); err != nil {
+		c, origin, err = awsProfiles{home: home, getenv: getenv, hc: b.HTTP, ssoBase: b.SSOBaseURL, stsBase: b.STSBaseURL, now: now}.credentials(ctx, profile)
+		if err != nil {
 			return "", "", err
 		}
-		origin = "the shared credentials file's [" + profile + "] profile"
 	}
 	b2, err := json.Marshal(c)
 	if err != nil {
 		return "", "", err
 	}
 	return string(b2), origin, nil
-}
-
-// sharedCredentials reads one profile's static keys from AWS's shared
-// credentials file (an INI file).
-func sharedCredentials(path, profile string) (awsCredentials, error) {
-	f, err := os.Open(path) // #nosec G304 -- AWS's own credentials file, chosen as the AWS SDKs choose it
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return awsCredentials{}, errNoAWSCredentials
-		}
-		return awsCredentials{}, err
-	}
-	defer func() { _ = f.Close() }()
-	var c awsCredentials
-	in := false
-	sc := bufio.NewScanner(io.LimitReader(f, 1<<20))
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" || line[0] == '#' || line[0] == ';' {
-			continue
-		}
-		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			in = strings.TrimSpace(line[1:len(line)-1]) == profile
-			continue
-		}
-		k, v, ok := strings.Cut(line, "=")
-		if !in || !ok {
-			continue
-		}
-		v = strings.TrimSpace(v)
-		switch strings.ToLower(strings.TrimSpace(k)) {
-		case "aws_access_key_id":
-			c.AccessKeyID = v
-		case "aws_secret_access_key":
-			c.SecretAccessKey = v
-		case "aws_session_token":
-			c.SessionToken = v
-		}
-	}
-	if err := sc.Err(); err != nil {
-		return awsCredentials{}, err
-	}
-	if c.AccessKeyID == "" || c.SecretAccessKey == "" {
-		return awsCredentials{}, errNoAWSCredentials
-	}
-	return c, nil
 }
 
 // bedrockPages bounds the pages followed, as CodexBar stops on a repeated

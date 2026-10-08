@@ -81,9 +81,14 @@ func (c Config) registryHint(sourceTag string) string {
 	if !c.VendorUsage.Accounts.On() {
 		return "switched off: `tokenops vendor-usage enable vendor-accounts` turns it back on"
 	}
+	id := string(s.Provider)
+	_, granted := c.VendorUsage.Grants[id]
 	switch {
+	case s.Credential == providers.AppLogin && granted:
+		return "on; reads " + c.VendorUsage.Grants[id].App + "'s own sign-in, as you granted (`tokenops vendor-usage setup " + id + " --revoke-app-login` stops it)"
+	case s.Credential == providers.AppLogin:
+		return "connect it: `tokenops vendor-usage setup " + id + " --use-app-login` shows exactly what it reads from your sign-in, and asks first"
 	case s.Reader == providers.GatewayReader:
-		id := string(s.Provider)
 		if c, stored := c.VendorUsage.Accounts.Credentials[id]; stored && c.BaseURL != "" {
 			return "on; reads at " + c.BaseURL + " with the key `tokenops vendor-usage setup " + id + "` stored"
 		}
@@ -127,7 +132,14 @@ func (c Config) registryHint(sourceTag string) string {
 		}
 		return "connect it: " + d.Docs.Setup
 	}
-	return "on; reads only when a harness (Claude Code, Codex, opencode) or the environment has this vendor's key"
+	hint := "on; reads only when a harness (Claude Code, Codex, opencode) or the environment has this vendor's key"
+	switch {
+	case granted:
+		hint += ", else " + c.VendorUsage.Grants[id].App + "'s own sign-in, as you granted"
+	case len(s.AppLogins) > 0:
+		hint += "; `tokenops vendor-usage setup " + id + " --use-app-login` can read " + s.AppLogins[0].App + "'s own sign-in instead, after asking"
+	}
+	return hint
 }
 
 // sessionHint is the hint of a source read with a web session: how to

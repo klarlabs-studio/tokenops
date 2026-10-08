@@ -7,10 +7,13 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
+	"go.klarlabs.de/tokenops/internal/infra/applogin"
 )
 
 // antigravityServer stands in for the app's language server: HTTPS on
@@ -41,14 +44,10 @@ func antigravityLS(t *testing.T, summary, status string) (port int) {
 	return port
 }
 
-func antigravityReader(port int, command string) Antigravity {
+// antigravityReader reads the language server on port as process 77; the
+// grant's token is the process's CSRF token and ID, as applogin reads them.
+func antigravityReader(port int) Antigravity {
 	return Antigravity{
-		Processes: func(context.Context) ([]antigravityProcess, error) {
-			return []antigravityProcess{
-				{pid: 1, command: "/sbin/launchd"},
-				{pid: 77, command: command},
-			}, nil
-		},
 		Ports: func(_ context.Context, pid int) ([]int, error) {
 			if pid != 77 {
 				return nil, nil
@@ -58,11 +57,43 @@ func antigravityReader(port int, command string) Antigravity {
 	}
 }
 
+func agToken(csrf string) string { return `{"--csrf_token":"` + csrf + `","pid":"77"}` }
+
 const agApp = "/Applications/Antigravity.app/Contents/Resources/bin/language_server_macos_arm --csrf_token token --app_data_dir antigravity --extension_server_port 54977"
+
+// The grant's process sign-in, read from the app's command line by
+// applogin exactly as the descriptor names it, is what the reader takes;
+// other language servers and helpers are not matched.
+func TestAntigravityGrantFindsTheAppsServer(t *testing.T) {
+	d, _ := providers.Lookup("antigravity")
+	s, ok := d.AppLoginSource()
+	if !ok || s.Credential != providers.AppLogin {
+		t.Fatal("Antigravity is read only by grant")
+	}
+	env := applogin.Env{Processes: func(context.Context) ([]applogin.Process, error) {
+		return []applogin.Process{
+			{PID: 5, Args: strings.Fields("/Applications/Antigravity.app/Contents/Frameworks/Antigravity Helper.app/Contents/MacOS/Antigravity Helper --type=renderer")},
+			{PID: 6, Args: strings.Fields("/Applications/Cursor.app/bin/language_server --csrf_token cursor-token")},
+			{PID: 77, Args: strings.Fields(agApp)},
+		}, nil
+	}}
+	l, err := applogin.Locate(context.Background(), s.AppLogins, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tok, err := applogin.Read(context.Background(), l, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := antigravityLS(t, fixture(t, "antigravity"), "")
+	if got, err := antigravityReader(port).ReadAppLogin(context.Background(), tok); err != nil || len(got.Windows) != 4 {
+		t.Fatalf("%+v %v", got, err)
+	}
+}
 
 func TestAntigravityReadsTheQuotaSummary(t *testing.T) {
 	port := antigravityLS(t, fixture(t, "antigravity"), "")
-	got, err := antigravityReader(port, agApp).Read(context.Background(), "")
+	got, err := antigravityReader(port).ReadAppLogin(context.Background(), agToken("token"))
 	if err != nil || len(got.Windows) != 4 {
 		t.Fatalf("got %+v, %v", got, err)
 	}
@@ -86,7 +117,7 @@ func TestAntigravityFallsBackToUserStatus(t *testing.T) {
     {"label":"Gemini Pro Low","modelOrAlias":{"model":"gemini-pro-low"},"quotaInfo":{"remainingFraction":0.8,"resetTime":"2025-12-24T11:00:00Z"}},
     {"label":"Gemini Flash","modelOrAlias":{"model":"gemini-flash"},"quotaInfo":{"remainingFraction":0.2,"resetTime":"2025-12-24T12:00:00Z"}}]}}}`
 	port := antigravityLS(t, "", status)
-	got, err := antigravityReader(port, agApp).Read(context.Background(), "")
+	got, err := antigravityReader(port).ReadAppLogin(context.Background(), agToken("token"))
 	if err != nil || len(got.Windows) != 2 {
 		t.Fatalf("got %+v, %v", got, err)
 	}
@@ -98,23 +129,18 @@ func TestAntigravityFallsBackToUserStatus(t *testing.T) {
 	}
 }
 
-func TestAntigravityNotRunning(t *testing.T) {
-	for _, cmd := range []string{
-		"/Applications/Antigravity.app/Contents/Frameworks/Antigravity Helper.app/Contents/MacOS/Antigravity Helper --type=renderer",
-		"/usr/bin/legacy --run",
-		"/Applications/Antigravity.app/Contents/Resources/bin/language_server --app_data_dir antigravity", // no token
-		"/usr/local/bin/language_server --csrf_token token",                                               // not Antigravity's
-	} {
-		if _, err := antigravityReader(1, cmd).Read(context.Background(), ""); !errors.Is(err, usage.ErrNotInstalled) {
-			t.Errorf("%q: %v", cmd, err)
+// A token that is not the grant's shape is refused before any call.
+func TestAntigravityRefusesWhatIsNotItsToken(t *testing.T) {
+	for _, tok := range []string{"", "token", `{"pid":"77"}`, `{"--csrf_token":"token"}`, `{"--csrf_token":"token","pid":"x"}`} {
+		if _, err := antigravityReader(1).Read(context.Background(), tok); !errors.Is(err, usage.ErrAuth) {
+			t.Errorf("%q: %v", tok, err)
 		}
 	}
 }
 
 func TestAntigravityRefusedTokenAndShapes(t *testing.T) {
 	port := antigravityLS(t, fixture(t, "antigravity"), "")
-	wrong := "/Applications/Antigravity.app/Contents/Resources/bin/language_server --csrf_token other --app_data_dir antigravity"
-	if _, err := antigravityReader(port, wrong).Read(context.Background(), ""); !errors.Is(err, usage.ErrAuth) {
+	if _, err := antigravityReader(port).ReadAppLogin(context.Background(), agToken("other")); !errors.Is(err, usage.ErrAuth) {
 		t.Errorf("wrong token: %v", err)
 	}
 	oneof := `{"groups":[{"displayName":"Gemini Models","buckets":[{"bucketId":"gemini-weekly","displayName":"Weekly Limit","remaining":{"case":"remainingFraction","value":0.5}}]}]}`

@@ -72,6 +72,28 @@ var errCLIFailed = errors.New("the CLI exited with an error")
 // exits non-zero returns its output and errCLIFailed, so the caller can
 // tell a sign-in refusal from a failure.
 func runCLI(ctx context.Context, timeout time.Duration, bin string, env []string, args ...string) (string, error) {
+	return runCommand(ctx, timeout, bin, append(append(os.Environ(), "NO_COLOR=1"), env...), args...)
+}
+
+// allowedEnv is this process's environment narrowed to the variables
+// allow names, with NO_COLOR: a CLI given it sees nothing else (no keys,
+// cookies or cloud credentials).
+func allowedEnv(allow []string) []string {
+	out := []string{"NO_COLOR=1"}
+	for _, kv := range os.Environ() {
+		k, _, _ := strings.Cut(kv, "=")
+		for _, a := range allow {
+			if k == a {
+				out = append(out, kv)
+				break
+			}
+		}
+	}
+	return out
+}
+
+// runCommand is runCLI with the child's whole environment given.
+func runCommand(ctx context.Context, timeout time.Duration, bin string, env []string, args ...string) (string, error) {
 	if timeout <= 0 {
 		timeout = cliTimeout
 	}
@@ -79,7 +101,7 @@ func runCLI(ctx context.Context, timeout time.Duration, bin string, env []string
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, args...) //nolint:gosec // the operator's own vendor CLI, fixed arguments, no shell
 	cmd.Stdin = nil
-	cmd.Env = append(append(os.Environ(), "NO_COLOR=1"), env...)
+	cmd.Env = env
 	ownProcessGroup(cmd)
 	cmd.WaitDelay = time.Second
 	if dir, err := os.MkdirTemp("", "tokenops-cli-"); err == nil {

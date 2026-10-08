@@ -3,6 +3,7 @@ package accounts
 import (
 	"context"
 	"net/http"
+	"time"
 
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -15,8 +16,8 @@ func readerCodebuff() usage.Reader { return Codebuff{} }
 // www.codebuff.com, the endpoint the codebuff CLI and CodexBar's Codebuff
 // provider call. Figures are Codebuff credits, not dollars: credits used
 // against the quota until the next quota reset. The weekly rate limit
-// (/api/user/subscription) answers only the CLI's session token, which is
-// another application's sign-in and is not read.
+// (/api/user/subscription) answers only the CLI's session token, read
+// only once the operator granted it (ReadAppLogin, ADR 0013).
 type Codebuff struct {
 	BaseURL string
 	HTTP    *http.Client
@@ -58,6 +59,37 @@ func (c Codebuff) Read(ctx context.Context, key string) (usage.Reading, error) {
 		r.Windows = []usage.Window{{Name: "credits", UsedPct: 100, ResetsAt: resp.NextQuotaReset.t}}
 	}
 	r.Subscription = len(r.Windows) > 0
+	return r, nil
+}
+
+// ReadAppLogin reads with the codebuff CLI's own session, granted by the
+// operator: the credits as Read does, and the weekly rate limit from GET
+// /api/user/subscription, which only that session may read. As in
+// CodexBar, a subscription that cannot be read leaves the credits.
+func (c Codebuff) ReadAppLogin(ctx context.Context, token string) (usage.Reading, error) {
+	r, err := c.Read(ctx, token)
+	if err != nil {
+		return usage.Reading{}, err
+	}
+	var sub struct {
+		RateLimit *struct {
+			WeeklyUsed     number `json:"weeklyUsed"`
+			Used           number `json:"used"`
+			WeeklyLimit    number `json:"weeklyLimit"`
+			Limit          number `json:"limit"`
+			WeeklyResetsAt stamp  `json:"weeklyResetsAt"`
+		} `json:"rateLimit"`
+	}
+	if err := getJSON(ctx, c.HTTP, base(c.BaseURL, "https://www.codebuff.com")+"/api/user/subscription", token, &sub); err != nil || sub.RateLimit == nil {
+		return r, nil //nolint:nilerr // the weekly limit is extra: the credits stand without it
+	}
+	used, limit := firstNumber(sub.RateLimit.WeeklyUsed, sub.RateLimit.Used), firstNumber(sub.RateLimit.WeeklyLimit, sub.RateLimit.Limit)
+	if used.ok && limit.ok && limit.v > 0 {
+		week := 7 * 24 * time.Hour
+		r.Windows = append(r.Windows, usage.Window{Name: windowName(week), UsedPct: clampPct(pct(used.v, limit.v)),
+			Duration: week, ResetsAt: sub.RateLimit.WeeklyResetsAt.t})
+		r.Subscription = true
+	}
 	return r, nil
 }
 

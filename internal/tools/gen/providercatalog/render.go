@@ -155,10 +155,20 @@ func providerList() string {
 			if i > 0 {
 				name = ""
 			}
-			fmt.Fprintf(&b, "| %s | `%s` | %s | %s | %s |\n", name, s.Tag, s.Shows, credential(s.Credential), verified(s.Verified))
+			fmt.Fprintf(&b, "| %s | `%s` | %s | %s | %s |\n", name, s.Tag, s.Shows, sourceCredential(s), verified(s.Verified))
 		}
 	}
 	return b.String()
+}
+
+// sourceCredential is what a source reads with, and, when another app's
+// sign-in can read it too once granted, says so.
+func sourceCredential(s providers.Source) string {
+	c := credential(s.Credential)
+	if len(s.AppLogins) > 0 && s.Credential != providers.AppLogin {
+		c += ", or another app's sign-in once granted (`--use-app-login`)"
+	}
+	return c
 }
 
 func credential(c providers.Credential) string {
@@ -181,6 +191,8 @@ func credential(c providers.Credential) string {
 		return "the vendor's credential chain, after setup"
 	case providers.PasswordLogin:
 		return "session from a password sign-in"
+	case providers.AppLogin:
+		return "another app's sign-in, once granted (`--use-app-login`)"
 	}
 	return string(c)
 }

@@ -139,8 +139,8 @@ func TestBedrockCredentialChain(t *testing.T) {
 	if c, origin, err := chain(map[string]string{"AWS_PROFILE": "work"}); err != nil || c.AccessKeyID != "AKIDWORK" || c.SessionToken != "t2" || !strings.Contains(origin, "[work]") {
 		t.Errorf("named profile: %+v %q %v", c, origin, err)
 	}
-	if _, _, err := chain(map[string]string{"AWS_PROFILE": "sso"}); !errors.Is(err, errNoAWSCredentials) {
-		t.Errorf("an SSO profile is not read: %v", err)
+	if _, _, err := chain(map[string]string{"AWS_PROFILE": "sso"}); err == nil || !strings.Contains(err.Error(), "sso-session") {
+		t.Errorf("an SSO profile without its session is not read: %v", err)
 	}
 	if _, _, err := (Bedrock{Home: t.TempDir(), Getenv: func(string) string { return "" }}).Chain(context.Background()); !errors.Is(err, errNoAWSCredentials) {
 		t.Errorf("no credentials: %v", err)

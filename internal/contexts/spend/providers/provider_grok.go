@@ -7,14 +7,18 @@ func providerGrok() Descriptor {
 		Logo:        true,
 		// Ported from CodexBar's Grok provider
 		// (Sources/CodexBarCore/Providers/Grok/GrokCreditsProxyFetcher.swift,
-		// GrokWebBillingFetcher.swift, docs/grok.md). Not read: the Grok
-		// CLI's ~/.grok/auth.json (another application's sign-in, ADR 0011
-		// §1.4: its token is taken from GROK_OAUTH_TOKEN or setup instead),
-		// and `grok agent stdio`'s x.ai/billing, which the current CLI
-		// answers "method not found" outside its own TUI.
+		// GrokWebBillingFetcher.swift, docs/grok.md). The Grok CLI's
+		// ~/.grok/auth.json is read only once granted (`setup grok
+		// --use-app-login`, ADR 0013): the OIDC entry's access token, else
+		// the sign-in entry's; its refresh token never. Not read: `grok
+		// agent stdio`'s x.ai/billing, which the current CLI answers
+		// "method not found" outside its own TUI.
 		Sources: []Source{
 			{Name: "grok_account", Tag: "grok-account", Kind: Subscription, Credential: APIKey,
 				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,
+				AppLogins: []AppLoginItem{{App: "the grok CLI", Kind: AppLoginJSON,
+					Paths:  []string{"~/.grok/auth.json"},
+					Fields: []string{"{https://auth.x.ai::*}.key|{*/sign-in*}.key"}, Host: "cli-chat-proxy.grok.com"}},
 				KeyFormat: "the Grok CLI's sign-in token (GROK_OAUTH_TOKEN)",
 				Endpoint:  "`GET cli-chat-proxy.grok.com/v1/billing?format=credits`",
 				Shows:     "the SuperGrok credit window used, and the prepaid balance"},

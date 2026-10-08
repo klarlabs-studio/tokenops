@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/capability/backfill"
+	"go.klarlabs.de/tokenops/internal/capability/providersetup"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -459,6 +461,12 @@ machine-readable output.`,
 					ConfigHint:  cfg.VendorUsageConfigHint(src.SourceTag),
 				})
 			}
+			for _, g := range providersetup.Grants(cfg, providersetup.AppLoginEnv(cfg.Keychain.Disabled)) {
+				report.Grants = append(report.Grants, vendorUsageGrant{
+					Provider: g.Provider, App: g.App, Reads: g.What, SentTo: g.Host,
+					GrantedAt: g.GrantedAt, Current: g.Current,
+				})
+			}
 			if jsonOut {
 				enc := json.NewEncoder(os.Stdout)
 				enc.SetIndent("", "  ")
@@ -477,6 +485,20 @@ machine-readable output.`,
 type vendorUsageReport struct {
 	Window  string              `json:"window"`
 	Sources []vendorUsageSource `json:"sources"`
+	// Grants are the other applications' sign-ins the operator let
+	// TokenOps read (ADR 0013): what and where, never a token.
+	Grants []vendorUsageGrant `json:"grants,omitempty"`
+}
+
+type vendorUsageGrant struct {
+	Provider  string    `json:"provider"`
+	App       string    `json:"app"`
+	Reads     string    `json:"reads"`
+	SentTo    string    `json:"sent_to"`
+	GrantedAt time.Time `json:"granted_at"`
+	// Current is false when the provider no longer reads what was granted;
+	// the grant is then not used until it is granted again.
+	Current bool `json:"current"`
 }
 
 type vendorUsageSource struct {
@@ -503,9 +525,29 @@ func renderVendorUsageText(cmd *cobra.Command, r vendorUsageReport) {
 			s.Name, s.SourceTag, enabled, s.EventsInWin, s.ConfigHint)
 	}
 	fmt.Fprintln(out)
+	renderGrants(out, r.Grants)
 	fmt.Fprintln(out, "Signal_quality classifier consumes these counts:")
 	fmt.Fprintln(out, "  events_in_window > 0 for vendor-usage-anthropic     -> high")
 	fmt.Fprintln(out, "  events_in_window > 0 for claude-code-jsonl          -> high (real per-turn)")
 	fmt.Fprintln(out, "  events_in_window > 0 for claude-code-stats-cache    -> medium (deprecated)")
 	fmt.Fprintln(out, "  otherwise                                           -> low (mcp pings only)")
+}
+
+// renderGrants lists the other applications' sign-ins TokenOps may read.
+func renderGrants(out io.Writer, grants []vendorUsageGrant) {
+	if len(grants) == 0 {
+		fmt.Fprintln(out, "Other apps' sign-ins: none granted (setup <provider> --use-app-login)")
+		fmt.Fprintln(out)
+		return
+	}
+	fmt.Fprintln(out, "Other apps' sign-ins TokenOps may read (setup <provider> --revoke-app-login to stop):")
+	for _, g := range grants {
+		note := ""
+		if !g.Current {
+			note = " [not read: the provider now reads something else; grant it again]"
+		}
+		fmt.Fprintf(out, "  %-14s %s: %s, sent only to %s, granted %s%s\n",
+			g.Provider, g.App, g.Reads, g.SentTo, g.GrantedAt.Local().Format("2006-01-02"), note)
+	}
+	fmt.Fprintln(out)
 }

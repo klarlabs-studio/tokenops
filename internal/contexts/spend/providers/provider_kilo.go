@@ -7,10 +7,12 @@ func providerKilo() Descriptor {
 		Logo:        true,
 		Sources: []Source{
 			// CodexBar: Sources/CodexBarCore/Providers/Kilo (KiloUsageFetcher.swift),
-			// docs/kilo.md. The kilo CLI's sign-in (~/.local/share/kilo/auth.json)
-			// is another application's credential and is not read.
+			// docs/kilo.md. The kilo CLI's own sign-in is read only once
+			// granted (`setup kilo --use-app-login`, ADR 0013).
 			{Name: "kilo_account", Tag: "kilo-account", Kind: Subscription, Credential: APIKey,
 				Switch: SwitchAccounts, Reader: AccountReader, Verified: FromCodexBar,
+				AppLogins: []AppLoginItem{{App: "the kilo CLI", Kind: AppLoginJSON,
+					Paths: []string{"~/.local/share/kilo/auth.json"}, Fields: []string{"kilo.access"}, Host: "app.kilo.ai"}},
 				Endpoint: "`GET /api/trpc/user.getCreditBlocks,kiloPass.getState`",
 				Shows:    "Kilo Pass credits used this billing period, and prepaid credit left",
 				Scope:    "a Kilo organisation ID, read instead of the personal account (sent as `X-KILOCODE-ORGANIZATIONID`)"},

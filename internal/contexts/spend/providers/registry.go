@@ -66,7 +66,7 @@ func (d Descriptor) Label() string {
 // the address the operator gives.
 func (d Descriptor) Setupable() (Source, bool) {
 	for _, s := range d.Sources {
-		if s.Reader == AccountReader && (s.Credential == APIKey || s.Credential == AdminKey || s.Credential == BrowserCookie || s.Credential == PasswordLogin || s.Credential == CredentialChain || s.Credential == AppKeychain) {
+		if s.Reader == AccountReader && (s.Credential == APIKey || s.Credential == AdminKey || s.Credential == BrowserCookie || s.Credential == PasswordLogin || s.Credential == CredentialChain || s.Credential == AppKeychain || s.Credential == AppLogin) {
 			return s, true
 		}
 		if s.Reader == GatewayReader && s.Credential == APIKey {
@@ -82,6 +82,17 @@ func (d Descriptor) Setupable() (Source, bool) {
 func (d Descriptor) SessionSource() (Source, bool) {
 	for _, s := range d.Sources {
 		if s.Reader == AccountReader && s.Credential == BrowserCookie && s.Cookie != nil {
+			return s, true
+		}
+	}
+	return Source{}, false
+}
+
+// AppLoginSource is the account source that can be read with another
+// application's sign-in, once the operator granted it (ADR 0013).
+func (d Descriptor) AppLoginSource() (Source, bool) {
+	for _, s := range d.Sources {
+		if s.Reader == AccountReader && len(s.AppLogins) > 0 {
 			return s, true
 		}
 	}
