@@ -823,6 +823,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | opencode | `opencode` | per-message tokens for every provider, from opencode's SQLite store | local files | against a real account |
 | opencode Go | `opencode-go-account` | the 5-hour, weekly and monthly windows | API key | CodexBar's source, the vendor's docs and fixtures |
 | OpenRouter | `openrouter-account` | the key's spend, against its credit cap when it has one | API key | public docs and fixtures |
+| Pi | `pi-sessions` | per-turn tokens per provider and model from Pi's and OMP's session transcripts | local files | CodexBar's source, the vendor's docs and fixtures |
 | Poe | `poe-account` | the point balance left (points, not dollars) | API key | CodexBar's source, the vendor's docs and fixtures |
 | sub2api | `sub2api-account` | the key's quota and 5-hour, daily and 7-day limits, a subscription group's daily, weekly and monthly limits, or the wallet balance | API key | CodexBar's source, the vendor's docs and fixtures |
 | Synthetic | `synthetic-account` | the subscription's request quota | API key | public docs and fixtures |

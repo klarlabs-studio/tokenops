@@ -51,6 +51,7 @@ openai_admin	openai-admin
 opencode	opencode
 opencode_go_account	opencode-go-account
 openrouter_account	openrouter-account
+pi_sessions	pi-sessions
 poe_account	poe-account
 sub2api_gateway	sub2api-account
 synthetic_account	synthetic-account

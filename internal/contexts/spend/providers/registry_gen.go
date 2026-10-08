@@ -49,6 +49,7 @@ var registered = []func() Descriptor{
 	providerOpencode,
 	providerOpencodeGo,
 	providerOpenRouter,
+	providerPi,
 	providerPoe,
 	providerSub2API,
 	providerSynthetic,

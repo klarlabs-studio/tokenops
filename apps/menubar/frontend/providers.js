@@ -46,6 +46,7 @@ window.TOKENOPS_PROVIDERS = {
   "opencode": {"name":"opencode","logo":false},
   "opencode-go": {"name":"opencode Go","logo":true},
   "openrouter": {"name":"OpenRouter","logo":true},
+  "pi": {"name":"Pi","logo":false},
   "poe": {"name":"Poe","logo":true},
   "sub2api": {"name":"sub2api","logo":false},
   "synthetic": {"name":"Synthetic","logo":false},
