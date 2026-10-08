@@ -97,6 +97,60 @@ CREATE INDEX events_intervention_idx ON events (intervention_id, timestamp_ns) W
 CREATE INDEX events_experiment_idx   ON events (experiment_id, timestamp_ns)   WHERE experiment_id   IS NOT NULL;
 `,
 	},
+	{
+		Version: 5,
+		Name:    "events_usage_covering_index",
+		SQL: `
+-- Every spend rollup (summary, series, burn rate, forecast, top) reads a
+-- window of prompt events and sums their usage. Through (type,
+-- timestamp_ns) alone each matching row was fetched from the table, whose
+-- rows carry the payload and attributes: a month of one provider's events
+-- read ~90 MB of pages and parsed four JSON fields per row, five times per
+-- request. GET /api/spend/summary?since=720h took over five seconds.
+--
+-- This index holds every column and payload expression those queries read,
+-- so they never touch the table. The expressions must stay identical to
+-- the ones in analytics.go (costSourceMetered, costSourcePlanCovered,
+-- cacheReadExpr, cacheWriteExpr, cacheWrite1hExpr): SQLite only answers
+-- from an index expression it can match, and TestUsageQueriesAreCovered
+-- fails if one drifts. Building it reads the table once.
+CREATE INDEX events_usage_idx ON events (
+    type, timestamp_ns, provider, model, source,
+    input_tokens, output_tokens, total_tokens, cost_usd,
+    COALESCE(json_extract(payload, '$.cost_source'), ''),
+    CAST(COALESCE(json_extract(payload, '$.cached_input_tokens'), json_extract(attributes, '$.cache_read_input')) AS INTEGER),
+    CAST(COALESCE(json_extract(payload, '$.cache_write_input_tokens'), json_extract(attributes, '$.cache_creation_input')) AS INTEGER),
+    CAST(json_extract(payload, '$.cache_write_1h_input_tokens') AS INTEGER)
+);
+`,
+	},
+	{
+		Version: 6,
+		Name:    "events_generation",
+		SQL: `
+-- Counts every change to a stored event other than an insert: an update
+-- (re-attribution, a plan restamp) or a delete (retention). New events
+-- are found by rowid; this is how a reader keeping events in memory
+-- (EventCache) learns that ones it already holds changed, whichever
+-- process or release changed them. A trigger rather than application code
+-- because every process on the machine writes this store.
+CREATE TABLE events_generation (
+    id  INTEGER PRIMARY KEY CHECK (id = 1),
+    gen INTEGER NOT NULL
+) STRICT;
+INSERT INTO events_generation (id, gen) VALUES (1, 0);
+
+CREATE TRIGGER events_generation_on_update AFTER UPDATE ON events
+BEGIN
+    UPDATE events_generation SET gen = gen + 1 WHERE id = 1;
+END;
+
+CREATE TRIGGER events_generation_on_delete AFTER DELETE ON events
+BEGIN
+    UPDATE events_generation SET gen = gen + 1 WHERE id = 1;
+END;
+`,
+	},
 }
 
 type migration struct {

@@ -466,6 +466,17 @@ const readPage = 5000
 // (timestamp, id). A capped read dropped the newest rows of a busy month,
 // which are the ones a "latest reading" or a month's spend most needs.
 func (s *Store) ReadEvents(ctx context.Context, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
+	return readEvents(ctx, s.db, t, since)
+}
+
+// querier is what a read runs on: the pool, or one transaction when
+// several reads must see the same snapshot.
+type querier interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
+// readEvents is ReadEvents on q.
+func readEvents(ctx context.Context, q querier, t eventschema.EventType, since time.Time) ([]*eventschema.Envelope, error) {
 	var (
 		out    []*eventschema.Envelope
 		lastTS = since.UTC().UnixNano() - 1
@@ -474,7 +485,7 @@ func (s *Store) ReadEvents(ctx context.Context, t eventschema.EventType, since t
 	// The plain range bound lets SQLite seek on (type, timestamp_ns); the
 	// OR alone made every page a scan.
 	for {
-		rs, err := s.db.QueryContext(ctx, selectSQL+`
+		rs, err := q.QueryContext(ctx, selectSQL+`
 WHERE type = ? AND timestamp_ns >= ? AND (timestamp_ns > ? OR id > ?)
 ORDER BY timestamp_ns ASC, id ASC LIMIT ?`, string(t), lastTS, lastTS, lastID, readPage)
 		if err != nil {

@@ -7,6 +7,8 @@
 - **menubar:** each plan shows its vendor's own logo (Claude, Codex, Gemini, Copilot, Cursor and the API providers) where it showed two letters
 - **menubar:** while the panel fetches your usage it says so, with a spinner and how long it has taken, and keeps what it showed; Refresh spins and reads "Refreshing…" until the new readings are in
 - **menubar:** messages say what happened in plain words and what happens next ("Fetching your usage is taking longer than usual. Showing your usage as of 08:50."), where they said "the TokenOps daemon is slow to answer" or showed a raw status line
+- **daemon API:** the answers the menu bar polls for every minute come back in a fraction of the time, with the same content. Measured on a copy of a 460 MB store: a month of one provider's spend (`/api/spend/summary?since=720h`) 0.85s → 0.14s, its daily series 1.0s → 0.16s and by model 0.95s → 0.20s; `/api/glance` 0.7s → 0.06s and `/api/findings` 0.75s → 0.08s once the daemon has read the window once; `/api/coach` 2.0s → under 1ms. One full menu-bar refresh went from 3.4–4.8s to 0.45–0.7s. On a busy machine the old figures were several times higher
+- **storage:** the first start after upgrading builds an index of the usage the spend rollups read, so they never read the event payloads again (7s on a 460 MB store; other tokenops processes wait for it), and adds a counter of changed events that lets the daemon keep the glance's events in memory, reading only new ones between polls. It keeps at most a month of events and lets them go after 10 minutes without a request
 
 ## 0.101.2 - 2026-10-08
 

@@ -177,11 +177,18 @@ func wireDomainEventPublishers(bus *events.AsyncBus, logger *slog.Logger) func()
 // plansDeps is what the plan routes need. The daemon reads config once, at
 // boot, and a config write restarts it (RestartForConfig), so the snapshot
 // it was started with is current.
+//
+// The routes share one EventCache: the glance reads weeks of events in
+// full, and between two of the menu bar's polls only a few arrive.
 func plansDeps(cfg config.Config, store *sqlite.Store, engine *spending.Engine) func() headroom.Deps {
+	var events *sqlite.EventCache
+	if store != nil {
+		events = sqlite.NewEventCache(store, 0, 0)
+	}
 	return func() headroom.Deps {
 		deps := headroom.Deps{Config: &cfg, Accounts: signedInAccounts}
-		if store != nil {
-			deps.Reader = store
+		if events != nil {
+			deps.Reader = events
 		}
 		if engine != nil {
 			deps.Price = engine.ComputeAt
