@@ -5,6 +5,7 @@ window.TOKENOPS_PROVIDERS = {
   "alibaba": {"name":"Alibaba Cloud","logo":false},
   "amp": {"name":"Amp","logo":true},
   "anthropic": {"name":"Claude","logo":true},
+  "antigravity": {"name":"Antigravity","logo":true},
   "atlascloud": {"name":"Atlas Cloud","logo":true},
   "augment": {"name":"Augment","logo":false},
   "bifrost": {"name":"Bifrost","logo":false},
