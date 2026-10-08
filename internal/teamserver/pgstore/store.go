@@ -85,12 +85,27 @@ type DeviceAuth struct {
 	OrgID    string
 }
 
+// Console is the actor for commands run with tokenops-team on the server:
+// an owner's authority, recorded as "server console", tied to no member.
+func Console(orgID string) Principal {
+	return Principal{OrgID: orgID, DisplayName: "server console", Role: team.RoleOwner}
+}
+
+// ref is the member an action is recorded against, or NULL for the
+// console.
+func ref(p Principal) *string {
+	if p.MemberID == "" {
+		return nil
+	}
+	return &p.MemberID
+}
+
 // audit appends one entry inside tx.
 func audit(ctx context.Context, tx pgx.Tx, orgID string, actor *Principal, action, subjectID, detail string) error {
 	var actorID *string
 	actorName := ""
 	if actor != nil {
-		actorID, actorName = &actor.MemberID, actor.DisplayName
+		actorID, actorName = ref(*actor), actor.DisplayName
 	}
 	var subject *string
 	if subjectID != "" {
@@ -255,7 +270,7 @@ func (s *Store) CreateInvite(ctx context.Context, actor Principal, teamRef strin
 			return err
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO invites (id, org_id, team_id, role, token_hash, created_by, expires_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)`, newID(), actor.OrgID, t.ID, string(role), hash, actor.MemberID, expires); err != nil {
+			VALUES ($1, $2, $3, $4, $5, $6, $7)`, newID(), actor.OrgID, t.ID, string(role), hash, ref(actor), expires); err != nil {
 			return err
 		}
 		return audit(ctx, tx, actor.OrgID, &actor, "invite.created", "", fmt.Sprintf("team=%s role=%s", t.Name, role))
@@ -764,7 +779,7 @@ func (s *Store) CreateGrant(ctx context.Context, actor Principal, granteeID, tea
 			teamID, scope = &t.ID, "team "+t.Name
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO grants (id, org_id, grantee_id, team_id, reason, granted_by) VALUES ($1, $2, $3, $4, $5, $6)`,
-			id, actor.OrgID, granteeID, teamID, reason, actor.MemberID); err != nil {
+			id, actor.OrgID, granteeID, teamID, reason, ref(actor)); err != nil {
 			return err
 		}
 		return audit(ctx, tx, actor.OrgID, &actor, "grant.created", granteeID, scope+": "+reason)
@@ -777,7 +792,7 @@ func (s *Store) RevokeGrant(ctx context.Context, actor Principal, grantID string
 	return s.inTx(ctx, func(tx pgx.Tx) error {
 		var grantee string
 		err := tx.QueryRow(ctx, `UPDATE grants SET revoked_at = $3, revoked_by = $4 WHERE id = $1 AND org_id = $2 AND revoked_at IS NULL
-			RETURNING grantee_id`, grantID, actor.OrgID, s.now(), actor.MemberID).Scan(&grantee)
+			RETURNING grantee_id`, grantID, actor.OrgID, s.now(), ref(actor)).Scan(&grantee)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}

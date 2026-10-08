@@ -1,0 +1,13 @@
+{{define "content"}}
+<h1>Members</h1>
+<p class="muted">Individual figures open only for yourself, or under a grant an owner made, which the member sees with every view recorded.</p>
+<table>
+  <thead><tr><th>Name</th><th>Role</th><th>Teams</th><th></th></tr></thead>
+  <tbody>
+  {{range .Data}}
+  <tr><td>{{.Name}}{{if .IsCaller}} (you){{end}}</td><td>{{.Role}}</td><td>{{join .Teams ", "}}</td>
+    <td>{{if .CanView}}<a href="/members/{{.ID}}">figures</a>{{else}}<span class="muted">no grant</span>{{end}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
