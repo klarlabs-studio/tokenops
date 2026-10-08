@@ -88,7 +88,8 @@ sent only to that vendor. The daemon never reads a browser with a prompt.
 For a gateway (sub2api, LiteLLM, Aixy, ...) it asks for the gateway's
 address and then the key, and reads it only there. For a provider read
 with its vendor's own credentials on this machine (bedrock: AWS's
-environment or shared credentials file) it asks nothing: it checks them
+environment, or its profile: keys, an SSO sign-in cached by aws sso login,
+or an assume-role profile; never the AWS CLI, never a prompt) it asks nothing: it checks them
 once and stores only that the daemon may read them, never the credential.
 
 --use-app-login reads a provider with another application's own sign-in
