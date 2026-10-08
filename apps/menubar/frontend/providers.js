@@ -38,7 +38,7 @@ window.TOKENOPS_PROVIDERS = {
   "v0": {"name":"v0","logo":true},
   "vercel": {"name":"Vercel","logo":false},
   "warp": {"name":"Warp","logo":false},
-  "xai": {"name":"xAI","logo":false},
+  "xai": {"name":"xAI","logo":true},
   "xkiro": {"name":"xKiro","logo":false},
   "zai": {"name":"z.ai","logo":true},
   "zenmux": {"name":"ZenMux","logo":true},

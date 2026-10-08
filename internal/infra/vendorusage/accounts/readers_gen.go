@@ -30,6 +30,7 @@ var readers = []func() usage.Reader{
 	readerV0,
 	readerVercel,
 	readerWarp,
+	readerXAI,
 	readerXKiro,
 	readerZAI,
 	readerZenMux,

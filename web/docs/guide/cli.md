@@ -674,6 +674,7 @@ vendor's own figures every 15 minutes:
 | OpenRouter | `GET /api/v1/key` | the key's spend, against its credit cap when it has one |
 | Poe | `GET /usage/current_balance` | the point balance left (points, not dollars) |
 | Vercel AI Gateway | `GET /v1/credits` | the team's credit balance |
+| xAI | `GET /v1/billing/teams/{team_id}/prepaid/balance` | the team's posted prepaid USD credit |
 <!-- end generated: provider-accounts -->
 
 Coding plans report their usage windows instead. A provider whose reader
@@ -789,7 +790,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | v0 | `v0-account` | the billing cycle's balance used and the request quota used | API key | CodexBar's source, the vendor's docs and fixtures |
 | Vercel | `vercel-account` | the team's credit balance | API key | public docs and fixtures |
 | Warp | `warp-account` | credits used since the last refresh against the plan's limit | API key | CodexBar's source, the vendor's docs and fixtures |
-| xAI | — | in the catalog only: metered through the proxy only; neither a plan nor an account is read | — | — |
+| xAI | `xai-account` | the team's posted prepaid USD credit | API key | public docs and fixtures |
 | xKiro | `xkiro-account` | the plan's spend windows, today's free tokens and the wallet balance | API key | CodexBar's source, the vendor's docs and fixtures |
 | z.ai | `zai-account` | 5-hour and weekly token windows | API key | the vendor's client source and fixtures |
 | ZenMux | `zenmux-account` | rolling 5-hour and 7-day quotas, and the pay-as-you-go balance | API key | CodexBar's source, the vendor's docs and fixtures |
