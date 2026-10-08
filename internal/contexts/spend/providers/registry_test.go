@@ -155,8 +155,15 @@ func checkSource(t *testing.T, id string, s Source, tags, names map[string]bool)
 			}
 		}
 	}
-	if s.LocalStorage != nil && (s.Credential != BrowserCookie || s.LocalStorage.Origin == "" || len(s.LocalStorage.Keys) == 0) {
-		t.Errorf("%s/%s: localStorage is a browser session's, with an origin and keys", id, s.Tag)
+	if ls := s.LocalStorage; ls != nil {
+		if (s.Credential != BrowserCookie && s.Credential != APIKey) || len(ls.Origins) == 0 || len(ls.Keys) == 0 {
+			t.Errorf("%s/%s: localStorage is a session setup reads, with origins and keys", id, s.Tag)
+		}
+		for _, o := range ls.Origins {
+			if !strings.HasPrefix(o, "https://") || strings.Count(o, "/") != 2 {
+				t.Errorf("%s/%s: localStorage origin %q is scheme and host only", id, s.Tag, o)
+			}
+		}
 	}
 	switch s.Switch {
 	case SwitchAccounts, SwitchConfig, SwitchAlways:

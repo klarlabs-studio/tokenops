@@ -99,6 +99,8 @@ read a site's browser localStorage, **at setup only**.
   overage credits, Antigravity) read their usage once granted; providers
   with one (Kilo, Codebuff, ClinePass, Nous, Hugging Face) gain a second
   way.
+- Devin and Windsurf read their web session from localStorage at setup
+  instead of asking for a paste; the daemon still never reads a browser.
 - The grant is per provider and per item; a provider with two sign-ins
   (Muse Code's file and Keychain item) grants the one setup found first.
 - Antigravity's language-server token, read from its command line, was read

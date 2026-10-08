@@ -82,6 +82,24 @@ func Names() []string {
 	return out
 }
 
+// ChromiumRoot is one Chromium-family browser's directory of profiles.
+type ChromiumRoot struct {
+	Name string
+	Dir  string
+}
+
+// ChromiumRoots lists the Chromium-family browsers' profile directories
+// under home, in the order browsers are tried. Firefox is not one.
+func ChromiumRoots(home string) []ChromiumRoot {
+	var out []ChromiumRoot
+	for _, b := range known {
+		if !b.firefox {
+			out = append(out, ChromiumRoot{Name: b.Name, Dir: filepath.Join(home, b.dir)})
+		}
+	}
+	return out
+}
+
 // SecretFunc returns a browser's value-encryption secret. A nil SecretFunc
 // reads it quietly, never prompting; setup commands pass KeychainSecret;
 // tests pass their own.
