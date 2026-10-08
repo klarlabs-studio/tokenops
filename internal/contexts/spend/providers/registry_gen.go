@@ -44,6 +44,7 @@ var registered = []func() Descriptor{
 	providerKimi,
 	providerKiro,
 	providerLiteLLM,
+	providerLithosAI,
 	providerLLMProxy,
 	providerLongCat,
 	providerManus,

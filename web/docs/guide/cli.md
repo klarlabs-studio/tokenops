@@ -671,6 +671,7 @@ vendor's own figures every 15 minutes:
 | DeepInfra | `GET /payment/checklist` | spend since the last invoice, the limit, prepaid credit |
 | DeepSeek | `GET /user/balance` | prepaid USD balance left |
 | Hugging Face | `GET /api/settings/billing/usage-v2` | Inference Providers charges this month, against the spending limit when set |
+| LithosAI | `GET /api/me`, `/api/billing`, `/api/billing/spend` (console.lithosai.cloud) | the organisation's prepaid balance and its spend this UTC month |
 | Xiaomi MiMo | `GET /api/v1/balance`, `/api/v1/tokenPlan/detail`, `/api/v1/tokenPlan/usage` | the balance (in its currency) and the Token Plan's monthly credits used |
 | Moonshot (Kimi API) | `GET /v1/users/me/balance` | prepaid USD balance left |
 | Neuralwatt | `GET /v1/quota` | prepaid USD credit left, and the subscription's kWh allowance used this period |
@@ -858,6 +859,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Kimi | `kimi-account` | 5-hour, weekly and monthly windows | API key | the vendor's client source and fixtures |
 | Kiro | `kiro-cli` | monthly plan credits used, and bonus credits | the vendor's CLI | CodexBar's source, the vendor's docs and fixtures |
 | LiteLLM | `litellm-account` | the key's spend against its budget, and when it resets | API key | the vendor's client source and fixtures |
+| LithosAI | `lithosai-web` | the organisation's prepaid balance and its spend this UTC month | browser session | CodexBar's source, the vendor's docs and fixtures |
 | LLM Proxy | `llm-proxy-account` | the tightest quota group left on the credentials it pools, and when it resets | API key | CodexBar's source, the vendor's docs and fixtures |
 | LongCat | `longcat-account` | the token pack's share used, and the tokens left with pending fuel packs | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Manus | `manus-account` | monthly and daily-refresh credits used, and the credit balance | browser session | CodexBar's source, the vendor's docs and fixtures |

@@ -41,6 +41,7 @@ window.TOKENOPS_PROVIDERS = {
   "kimi": {"name":"Kimi","logo":true},
   "kiro": {"name":"Kiro","logo":true},
   "litellm": {"name":"LiteLLM","logo":false},
+  "lithosai": {"name":"LithosAI","logo":false},
   "llm-proxy": {"name":"LLM Proxy","logo":false},
   "longcat": {"name":"LongCat","logo":true},
   "manus": {"name":"Manus","logo":true},

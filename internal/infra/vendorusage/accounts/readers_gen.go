@@ -40,6 +40,7 @@ var readers = []func() usage.Reader{
 	readerKilo,
 	readerKimi,
 	readerKiro,
+	readerLithosAI,
 	readerLongCat,
 	readerManus,
 	readerMiMo,

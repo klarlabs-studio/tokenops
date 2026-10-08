@@ -44,6 +44,7 @@ var providerNames = map[string]string{
 	"kimi":             "Kimi",
 	"kiro":             "Kiro",
 	"litellm":          "LiteLLM",
+	"lithosai":         "LithosAI",
 	"llm-proxy":        "LLM Proxy",
 	"longcat":          "LongCat",
 	"manus":            "Manus",

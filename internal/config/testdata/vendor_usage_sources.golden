@@ -47,6 +47,7 @@ kilo_account	kilo-account
 kimi_account	kimi-account
 kiro_cli	kiro-cli
 litellm_gateway	litellm-account
+lithosai_web	lithosai-web
 llm_proxy_gateway	llm-proxy-account
 longcat_account	longcat-account
 manus_account	manus-account
