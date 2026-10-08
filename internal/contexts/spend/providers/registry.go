@@ -1,6 +1,7 @@
 package providers
 
 //go:generate go run go.klarlabs.de/tokenops/internal/tools/gen/listgen -out registry_gen.go -list registered=provider:Descriptor
+//go:generate go run go.klarlabs.de/tokenops/internal/tools/gen/providerdocs -root ../../../..
 
 import (
 	"slices"

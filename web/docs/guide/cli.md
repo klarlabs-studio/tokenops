@@ -638,25 +638,29 @@ Every provider you pay per token for and used this month shows in
 Where the vendor documents an account endpoint, TokenOps also reads the
 vendor's own figures every 15 minutes:
 
+<!-- begin generated: provider-accounts -->
 | Vendor | Endpoint | Shows |
 |---|---|---|
-| OpenRouter | `GET /api/v1/key` | the key's spend, against its credit cap when it has one |
+| DeepInfra | `GET /payment/checklist` | spend since the last invoice, the limit, prepaid credit |
 | DeepSeek | `GET /user/balance` | prepaid USD balance left |
 | Moonshot (Kimi API) | `GET /v1/users/me/balance` | prepaid USD balance left |
-| DeepInfra | `GET /payment/checklist` | spend since the last invoice, the limit, prepaid credit |
+| OpenRouter | `GET /api/v1/key` | the key's spend, against its credit cap when it has one |
 | Vercel AI Gateway | `GET /v1/credits` | the team's credit balance |
+<!-- end generated: provider-accounts -->
 
 Coding plans report their usage windows instead. A provider whose reader
 reports one, with no plan bound, shows as `subscription` with the
 vendor's windows, busiest first:
 
+<!-- begin generated: provider-subscriptions -->
 | Vendor | Endpoint | Shows |
 |---|---|---|
-| z.ai GLM Coding Plan | `GET /api/monitor/usage/quota/limit` | 5-hour and weekly token windows |
+| Chutes | `GET /users/me/subscription_usage` | the 4-hour and monthly caps |
 | Kimi Code | `GET /coding/v1/usages` | 5-hour, weekly and monthly windows |
 | MiniMax Token Plan | `GET /v1/token_plan/remains` | the interval and weekly windows |
 | Synthetic | `GET /v2/quotas` | the subscription's request quota |
-| Chutes | `GET /users/me/subscription_usage` | the 4-hour and monthly caps |
+| z.ai GLM Coding Plan | `GET /api/monitor/usage/quota/limit` | 5-hour and weekly token windows |
+<!-- end generated: provider-subscriptions -->
 
 z.ai's and Kimi's endpoints are the ones their own clients call; they are
 not in their published API docs. MiniMax documents its endpoint but not
@@ -670,11 +674,13 @@ address's health route, without the key, what it is; only a recognised
 gateway is then sent the key, at that same address, to read the key's
 own budget:
 
+<!-- begin generated: provider-gateways -->
 | Gateway | Recognised by | Shows |
 |---|---|---|
-| LiteLLM proxy | `GET /health/liveliness` | `GET /key/info`: the key's spend against its budget, and when it resets |
 | Bifrost | `GET /health` | `GET /api/governance/virtual-keys/quota`: each budget's share used |
 | ClawRouter | its host, or `GET /v1/health` | `GET /v1/usage`: the policy's spend against its monthly budget |
+| LiteLLM proxy | `GET /health/liveliness` | `GET /key/info`: the key's spend against its budget, and when it resets |
+<!-- end generated: provider-gateways -->
 
 Portkey and Cloudflare AI Gateway are not asked: neither lets the key in
 use read its own spend.
@@ -682,14 +688,60 @@ use read its own spend.
 - **The key** is the one your harnesses already send that vendor: the key
   next to a gateway in Claude Code's settings, Codex's
   `[model_providers]` (`experimental_bearer_token` or `env_key`),
-  opencode's `auth.json` and `provider.*.options.apiKey`, or
-  `OPENROUTER_API_KEY`, `DEEPSEEK_API_KEY`, `MOONSHOT_API_KEY`,
-  `DEEPINFRA_API_KEY`, `CHUTES_API_KEY`, `SYNTHETIC_API_KEY` and
-  `AI_GATEWAY_API_KEY`. A key is
-  sent only to the vendor whose endpoint it was found for. It is never
-  stored or logged.
+  opencode's `auth.json` and `provider.*.options.apiKey`, a conventional
+  environment variable (below), or one you typed into
+  `tokenops vendor-usage setup <provider>`. A key is sent only to the
+  vendor whose endpoint it was found for, and is never logged; only a key
+  typed into setup is stored, in your config file.
 - **Calls** go only to vendors whose key is on the machine. Turn them off
   with `tokenops vendor-usage enable vendor-accounts --disable`.
+
+<!-- begin generated: provider-env-vars -->
+The environment variables read for a key: `AI_GATEWAY_API_KEY`, `CHUTES_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `FIREWORKS_API_KEY`, `MOONSHOT_API_KEY`, `OPENROUTER_API_KEY`, `SYNTHETIC_API_KEY`.
+<!-- end generated: provider-env-vars -->
+
+#### Every provider
+
+Generated from the provider registry (`docs/providers.md` says how to add one):
+
+<!-- begin generated: provider-list -->
+| Provider | Source | Reads | Credential | Checked |
+|---|---|---|---|---|
+| Alibaba Cloud | — | in the catalog only: the Coding Plan's endpoint, prices and limits are known; nothing reads its usage yet | — | — |
+| Claude | `claude-code-statusline` | the 5-hour and 7-day windows Claude Code gives its status line | local files | against a real account |
+|  | `claude-code-jsonl` | per-turn tokens from Claude Code's transcripts | local files | against a real account |
+|  | `claude-usage-meter` | Anthropic's own 5-hour and 7-day utilisation | browser session | against a real account |
+|  | `claude-code-oauth` | the plan windows, with Claude Code's own sign-in (opt-in) | another app's sign-in | public docs and fixtures |
+|  | `vendor-usage-anthropic` | the organisation's token usage from the Admin API | admin key | public docs and fixtures |
+|  | `claude-code-stats-cache` | daily totals from Claude Code's stats cache (deprecated) | local files | against a real account |
+| Bifrost | `bifrost-account` | each budget's share used | API key | public docs and fixtures |
+| Cerebras | — | in the catalog only: Cerebras Code's plans and limits are known; nothing reads its usage yet | — | — |
+| Chutes | `chutes-account` | the 4-hour and monthly caps | API key | the vendor's client source and fixtures |
+| ClawRouter | `clawrouter-account` | the policy's spend against its monthly budget | API key | public docs and fixtures |
+| Cursor | `cursor-hook` | per-turn consumption Cursor's stop hook records | local files | public docs and fixtures |
+|  | `cursor-web` | requests used against the month's allowance, from cursor.com | browser session | the vendor's client source and fixtures |
+| DeepInfra | `deepinfra-account` | spend since the last invoice, the limit, prepaid credit | API key | public docs and fixtures |
+| DeepSeek | `deepseek-account` | prepaid USD balance left | API key | public docs and fixtures |
+| Fireworks | `fireworks-usage` | the month's spend against the account's or the member's cap | API key | against a real account |
+| Gemini | `gemini-cli` | per-turn tokens per model from Gemini CLI's chat recordings | local files | public docs and fixtures |
+| Copilot | `github-copilot` | premium requests used against the month's allowance | another app's sign-in | the vendor's client source and fixtures |
+| Kimi | `kimi-account` | 5-hour, weekly and monthly windows | API key | the vendor's client source and fixtures |
+| LiteLLM | `litellm-account` | the key's spend against its budget, and when it resets | API key | the vendor's client source and fixtures |
+| MiniMax | `minimax-account` | the interval and weekly windows | API key | the vendor's client source and fixtures |
+| Mistral | — | in the catalog only: Le Chat Pro's plan and daily cap are known; nothing reads its usage yet | — | — |
+| Moonshot | `moonshot-account` | prepaid USD balance left | API key | public docs and fixtures |
+| Codex | `codex-app-server` | the 5-hour and weekly windows `codex app-server` reports, Codex signing its own request | the vendor's CLI | against a real account |
+|  | `codex-jsonl` | per-turn tokens and the rate_limits in Codex's rollouts | local files | against a real account |
+| opencode | `opencode` | per-message tokens for every provider, from opencode's SQLite store | local files | against a real account |
+| opencode Go | — | in the catalog only: opencode's subscription: its turns are read from opencode's store (the opencode source); no endpoint reports its windows | — | — |
+| OpenRouter | `openrouter-account` | the key's spend, against its credit cap when it has one | API key | public docs and fixtures |
+| Synthetic | `synthetic-account` | the subscription's request quota | API key | public docs and fixtures |
+| Together AI | — | in the catalog only: billed per token; its endpoint and models.dev prices are known, its account is not read | — | — |
+| Vercel | `vercel-account` | the team's credit balance | API key | public docs and fixtures |
+| xAI | — | in the catalog only: metered through the proxy only; neither a plan nor an account is read | — | — |
+| z.ai | `zai-account` | 5-hour and weekly token windows | API key | the vendor's client source and fixtures |
+| Zhipu AI | — | in the catalog only: z.ai's mainland-China platform: its endpoints, opencode IDs and prices are known; no reader reads its plan yet | — | — |
+<!-- end generated: provider-list -->
 
 ### `tokenops vendor-usage enable <source>`
 
