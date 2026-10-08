@@ -51,6 +51,21 @@ func TestLookupSaysTheKeyFormat(t *testing.T) {
 	}
 }
 
+// A browser session is read from the browser when its cookies are known
+// by name, and pasted when they are not.
+func TestLookupBrowserSessions(t *testing.T) {
+	if p, ok := Lookup("manus"); !ok || !p.Browser || p.PasteCookie || p.CookieHost != "manus.im" || len(p.CookieNames) != 1 {
+		t.Errorf("manus = %+v %v", p, ok)
+	}
+	p, ok := Lookup("t3chat")
+	if !ok || p.Browser || !p.PasteCookie || p.CookieHost != "t3.chat" {
+		t.Errorf("t3chat = %+v %v", p, ok)
+	}
+	if _, _, err := FromBrowser(context.Background(), p, "", 0, true); err == nil {
+		t.Error("a pasted session was read from a browser")
+	}
+}
+
 // A balance in the vendor's own unit is worded in that unit.
 func TestSummaryWordsCreditsInTheirUnit(t *testing.T) {
 	got := Summary(usage.Reading{Credits: 1500, CreditsUnit: "points", HasCredits: true})

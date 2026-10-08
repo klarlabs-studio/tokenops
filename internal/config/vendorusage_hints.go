@@ -79,6 +79,9 @@ func (c Config) registryHint(sourceTag string) string {
 		if _, stored := c.VendorUsage.Accounts.Credentials[string(s.Provider)]; stored {
 			return "on; reads with the session `tokenops vendor-usage setup " + string(s.Provider) + "` stored"
 		}
+		if s.Cookie != nil && len(s.Cookie.Names) == 0 {
+			return "connect it: `tokenops vendor-usage setup " + string(s.Provider) + "` takes the Cookie header pasted from your browser's " + s.Cookie.Host + " session"
+		}
 		return "connect it: `tokenops vendor-usage setup " + string(s.Provider) + "` reads the session from your browser"
 	}
 	// A provider whose key only setup supplies (a management key the

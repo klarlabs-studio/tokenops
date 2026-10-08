@@ -29,6 +29,7 @@
 - **providers:** Hugging Face: Inference Providers charges this month (gross less the included amount), against the spending limit when set (`GET /api/settings/billing/usage-v2`); token from setup, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN` or opencode
 - **providers:** Manus: the Pro plan's monthly credits and the daily refresh credits used, as plan windows, and the credit balance in credits (`POST /user.v1.UserService/GetAvailableCredits`), read with the manus.im browser session (`vendor-usage setup manus`, a pasted Cookie header, `MANUS_SESSION_TOKEN` or `MANUS_COOKIE`)
 - **providers:** Perplexity: the share of the plan's monthly credit grant used, as a plan window resetting at renewal, and the credit balance in dollars (`GET /rest/billing/credits`), read with the perplexity.ai browser session (`vendor-usage setup perplexity`, a pasted Cookie header, `PERPLEXITY_SESSION_TOKEN` or `PERPLEXITY_COOKIE`); a Perplexity API key is never sent there
+- **providers:** T3 Chat: the 4-hour Base window and the monthly Overage budget used, as plan windows (`GET /api/trpc/getCustomerData`), read with the t3.chat browser session's Cookie header pasted at `vendor-usage setup t3chat`. A browser-session provider whose cookies are not known by name now leaves `Cookie.Names` empty: setup asks for the pasted header and no browser is ever read for it
 
 ### Fixed
 

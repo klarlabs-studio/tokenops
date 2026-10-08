@@ -54,3 +54,16 @@ func TestStoredCredentials(t *testing.T) {
 		t.Errorf("resolved %q %v, asked %v", key, err, asked)
 	}
 }
+
+// A session whose cookies are not known by name was pasted, and is never
+// re-read from a browser; one read with named cookies may be.
+func TestRegistryCookie(t *testing.T) {
+	if c := registryCookie("manus"); c == nil || c.Host != "manus.im" {
+		t.Errorf("manus = %+v", c)
+	}
+	for _, id := range []string{"t3chat", "openrouter", "nope"} {
+		if c := registryCookie(id); c != nil {
+			t.Errorf("%s = %+v", id, c)
+		}
+	}
+}

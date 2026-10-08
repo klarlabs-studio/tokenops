@@ -168,6 +168,12 @@ browser's session cookies, the way the claude.ai meter is
   (`DisabledSecret`), and `browser: none` never reads a browser. A pasted
   session is never re-read from a browser.
 - No agent-facing (MCP) tool reads a browser.
+- When the vendor's session cookie is not known by name (its web client
+  sends every cookie of the host, as T3 Chat's and TypeSafe's do), leave
+  `Cookie.Names` empty: setup asks for the whole Cookie header pasted from
+  the browser's developer tools, no browser is read, and the daemon never
+  re-reads one. An expired paste goes stale and its hint says to paste a
+  fresh one.
 
 ## Checklist
 

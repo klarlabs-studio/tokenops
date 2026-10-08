@@ -42,6 +42,7 @@ var registered = []func() Descriptor{
 	providerPerplexity,
 	providerPoe,
 	providerSynthetic,
+	providerT3Chat,
 	providerTogether,
 	providerV0,
 	providerVenice,

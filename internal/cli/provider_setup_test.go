@@ -63,6 +63,27 @@ func TestProviderSetupWritesNothingForARefusedKey(t *testing.T) {
 	}
 }
 
+// A session whose cookies are not known by name is pasted: no browser is
+// read, and the daemon is not told to re-read one.
+func TestProviderSetupStoresAPastedSession(t *testing.T) {
+	sent := fakeVerify(t, "t3chat", "sid=ok; x=1")
+	path := seedConfig(t)
+	out, err := runCookieSetupCmd(t, "Cookie: sid=ok; x=1\n", "t3chat", "--config", path, "--no-restart")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if len(*sent) != 1 || !strings.Contains(out, "Cookie header for t3.chat") || strings.Contains(out, "Keychain") {
+		t.Errorf("sent %v, output:\n%s", *sent, out)
+	}
+	cfg, err := config.ReadMutable(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := cfg.VendorUsage.Accounts.Credentials["t3chat"]; c.Key != "sid=ok; x=1" || c.FromBrowser || c.Browser != "" {
+		t.Errorf("stored %+v", c)
+	}
+}
+
 func TestProviderSetupNamesWhatItCovers(t *testing.T) {
 	_, err := runCookieSetupCmd(t, "", "acme")
 	if err == nil || !strings.Contains(err.Error(), "openrouter") {

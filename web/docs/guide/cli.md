@@ -700,6 +700,7 @@ vendor's windows, busiest first:
 | Nous Portal (Hermes Agent) | `GET /api/oauth/account` | the monthly credit grant used this period and the top-up credit left |
 | Perplexity | `GET /rest/billing/credits` | the plan's monthly credit grant used, and the credit balance |
 | Synthetic | `GET /v2/quotas` | the subscription's request quota |
+| T3 Chat | `GET /api/trpc/getCustomerData` | the 4-hour Base window and the monthly Overage budget used |
 | v0 | `GET /v1/user/billing`, `GET /v1/rate-limits` | the billing cycle's balance used and the request quota used |
 | Warp | `POST /graphql/v2?op=GetRequestLimitInfo` | credits used since the last refresh against the plan's limit |
 | xKiro | `GET /v1/usage` | the plan's spend windows, today's free tokens and the wallet balance |
@@ -797,6 +798,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Perplexity | `perplexity-account` | the plan's monthly credit grant used, and the credit balance | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Poe | `poe-account` | the point balance left (points, not dollars) | API key | CodexBar's source, the vendor's docs and fixtures |
 | Synthetic | `synthetic-account` | the subscription's request quota | API key | public docs and fixtures |
+| T3 Chat | `t3chat-account` | the 4-hour Base window and the monthly Overage budget used | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Together AI | — | in the catalog only: billed per token; its endpoint and models.dev prices are known, its account is not read | — | — |
 | v0 | `v0-account` | the billing cycle's balance used and the request quota used | API key | CodexBar's source, the vendor's docs and fixtures |
 | Venice | `venice-account` | USD balance left, and the DIEM epoch allocation used when staking | API key | CodexBar's source, the vendor's docs and fixtures |

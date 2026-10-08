@@ -102,12 +102,22 @@ func providerCredential(cmd *cobra.Command, p providersetup.Provider, opts provi
 	if p.KeyFormat != "" {
 		prompt = fmt.Sprintf("\nPaste it as %s: ", p.KeyFormat)
 	}
-	if p.Browser {
+	switch {
+	case p.Browser:
 		prompt = fmt.Sprintf("\nPaste the Cookie header for %s (%s): ", p.CookieHost, strings.Join(p.CookieNames, ", "))
-	} else if len(p.EnvVars) > 0 {
+	case p.PasteCookie:
+		fmt.Fprintf(out, "\n%s is read with your browser session, whose cookies TokenOps does not read itself:\n"+
+			"in the browser's developer tools, copy the Cookie request header of a request to %s.\n", p.Name, p.CookieHost)
+		prompt = fmt.Sprintf("\nPaste the Cookie header for %s: ", p.CookieHost)
+	case len(p.EnvVars) > 0:
 		fmt.Fprintf(out, "\n(%s is read without setup, when it is set.)\n", strings.Join(p.EnvVars, " or "))
 	}
 	fmt.Fprintf(out, "It is sent only to %s, and stored in your local config.\n", p.Name)
 	key, err = readSecret(cmd, prompt)
-	return strings.TrimSpace(key), "", err
+	key = strings.TrimSpace(key)
+	if (p.Browser || p.PasteCookie) && len(key) > 7 && strings.EqualFold(key[:7], "cookie:") {
+		// The header as devtools copies it, name and all.
+		key = strings.TrimSpace(key[7:])
+	}
+	return key, "", err
 }

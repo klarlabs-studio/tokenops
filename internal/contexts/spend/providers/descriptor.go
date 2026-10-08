@@ -203,6 +203,12 @@ type Source struct {
 
 // Cookie is the session cookies a web source reads, on Host. The reader is
 // given them as one Cookie header value: "name=value; name2=value2".
+//
+// Names empty means the vendor's session cookie is not known by name (its
+// own web client sends every cookie of the host): setup then asks for the
+// Cookie header pasted from the browser and never reads a browser, and the
+// daemon never re-reads one. An expired paste goes stale, and the hint
+// says to paste a fresh one.
 type Cookie struct {
 	Host  string
 	Names []string

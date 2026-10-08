@@ -80,6 +80,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"perplexity_account", "perplexity-account"},
 		{"poe_account", "poe-account"},
 		{"synthetic_account", "synthetic-account"},
+		{"t3chat_account", "t3chat-account"},
 		{"v0_account", "v0-account"},
 		{"venice_account", "venice-account"},
 		{"vercel_account", "vercel-account"},
@@ -411,6 +412,17 @@ func TestBrowserSessionHint(t *testing.T) {
 	}
 	if got := cfg.VendorUsageConfigHint("litellm-account"); !strings.Contains(got, "LiteLLM gateway") {
 		t.Errorf("gateway hint %q", got)
+	}
+	if got := cfg.VendorUsageConfigHint("manus-account"); !strings.Contains(got, "reads the session from your browser") {
+		t.Errorf("browser session hint %q", got)
+	}
+	// A session whose cookies are not known by name is pasted.
+	if got := cfg.VendorUsageConfigHint("t3chat-account"); !strings.Contains(got, "Cookie header pasted") || !strings.Contains(got, "t3.chat") {
+		t.Errorf("pasted session hint %q", got)
+	}
+	cfg.VendorUsage.Accounts.Credentials = map[string]AccountCredential{"t3chat": {Key: "sid=x"}}
+	if got := cfg.VendorUsageConfigHint("t3chat-account"); !strings.HasPrefix(got, "on;") {
+		t.Errorf("connected hint %q", got)
 	}
 }
 

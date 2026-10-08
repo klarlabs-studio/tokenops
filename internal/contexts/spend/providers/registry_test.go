@@ -150,8 +150,8 @@ func checkSource(t *testing.T, id string, s Source, tags, names map[string]bool)
 	default:
 		t.Errorf("%s/%s: reader %q", id, s.Tag, s.Reader)
 	}
-	if s.Credential == BrowserCookie && s.Reader == AccountReader && (s.Cookie == nil || s.Cookie.Host == "" || len(s.Cookie.Names) == 0) {
-		t.Errorf("%s/%s: a browser-session reader names its cookies", id, s.Tag)
+	if s.Credential == BrowserCookie && s.Reader == AccountReader && (s.Cookie == nil || s.Cookie.Host == "") {
+		t.Errorf("%s/%s: a browser-session reader names its cookies' host", id, s.Tag)
 	}
 }
 

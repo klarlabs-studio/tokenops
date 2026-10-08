@@ -79,10 +79,11 @@ func storedCredentials(cfg config.Config, readers []accounts.Reader, cookieOf fu
 }
 
 // registryCookie is the session cookies provider id's setup source reads,
-// nil for a provider read with a key.
+// nil for a provider read with a key or with a pasted session whose
+// cookies are not known by name (never re-read from a browser).
 func registryCookie(id string) *providers.Cookie {
 	d, _ := providers.Lookup(id)
-	if s, ok := d.Setupable(); ok && s.Credential == providers.BrowserCookie {
+	if s, ok := d.Setupable(); ok && s.Credential == providers.BrowserCookie && s.Cookie != nil && len(s.Cookie.Names) > 0 {
 		return s.Cookie
 	}
 	return nil

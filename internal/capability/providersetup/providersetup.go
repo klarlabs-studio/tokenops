@@ -40,6 +40,10 @@ type Provider struct {
 	Browser     bool
 	CookieHost  string
 	CookieNames []string
+	// PasteCookie is true for a browser session whose cookies are not
+	// known by name: the whole Cookie header of a request to CookieHost is
+	// pasted, and no browser is read.
+	PasteCookie bool
 	// EnvVars are where a key is found without setup.
 	EnvVars []string
 	// KeyFormat is the credential's shape when it is more than one key
@@ -59,7 +63,9 @@ func Lookup(id string) (Provider, bool) {
 	}
 	p := Provider{ID: string(d.ID), Name: d.DisplayName, EnvVars: d.EnvVars, KeyFormat: s.KeyFormat}
 	if s.Credential == providers.BrowserCookie && s.Cookie != nil {
-		p.Browser, p.CookieHost, p.CookieNames = true, s.Cookie.Host, s.Cookie.Names
+		p.CookieHost, p.CookieNames = s.Cookie.Host, s.Cookie.Names
+		p.Browser = len(s.Cookie.Names) > 0
+		p.PasteCookie = !p.Browser
 	}
 	return p, true
 }

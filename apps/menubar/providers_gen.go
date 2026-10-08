@@ -42,6 +42,7 @@ var providerNames = map[string]string{
 	"perplexity":  "Perplexity",
 	"poe":         "Poe",
 	"synthetic":   "Synthetic",
+	"t3chat":      "T3 Chat",
 	"together":    "Together AI",
 	"v0":          "v0",
 	"venice":      "Venice",
