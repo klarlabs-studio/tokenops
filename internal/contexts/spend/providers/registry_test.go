@@ -69,6 +69,9 @@ func TestRegistryIsConsistent(t *testing.T) {
 		}
 		for _, s := range d.Sources {
 			checkSource(t, id, s, tags, names)
+			if s.Scope != "" && s.Reader != AccountReader {
+				t.Errorf("%s/%s: only an account reader takes a scope", id, s.Tag)
+			}
 			for _, v := range s.EnvVars {
 				if env[v] {
 					t.Errorf("%s/%s: %s claimed twice", id, s.Tag, v)

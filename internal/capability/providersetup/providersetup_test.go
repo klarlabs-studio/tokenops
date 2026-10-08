@@ -49,6 +49,12 @@ func TestLookupCoversKeyProvidersOnly(t *testing.T) {
 	if z, _ := Lookup("zenmux"); len(z.EnvVars) != 1 || z.EnvVars[0] != "ZENMUX_MANAGEMENT_API_KEY" {
 		t.Errorf("zenmux = %+v", z)
 	}
+	if k, _ := Lookup("kilo"); k.Scope == "" || CheckScope(k, "org_1") != nil || CheckScope(k, "a\nb") == nil {
+		t.Errorf("kilo scope = %+v", k)
+	}
+	if d, _ := Lookup("deepseek"); CheckScope(d, "x") == nil || CheckScope(d, "") != nil {
+		t.Error("deepseek takes no scope")
+	}
 	if ids := IDs(); len(ids) < 10 {
 		t.Errorf("IDs = %v", ids)
 	}
@@ -104,14 +110,14 @@ func TestKeychainProviderHonoursKeychainDisabled(t *testing.T) {
 
 func TestVerifyReadsOnceAndSummarises(t *testing.T) {
 	readers := []usage.Reader{fakeReader{id: "acme", good: "k", reading: usage.Reading{HasBalance: true, BalanceUSD: 7.5}}}
-	lines, err := VerifyWith(context.Background(), readers, "acme", " k\n")
+	lines, err := VerifyWith(context.Background(), readers, "acme", " k\n", "")
 	if err != nil || len(lines) != 1 || lines[0] != "balance: $7.50" {
 		t.Fatalf("%v %v", lines, err)
 	}
-	if _, err := VerifyWith(context.Background(), readers, "acme", "bad"); !errors.Is(err, ErrRefused) {
+	if _, err := VerifyWith(context.Background(), readers, "acme", "bad", ""); !errors.Is(err, ErrRefused) {
 		t.Errorf("refused key = %v", err)
 	}
-	if _, err := VerifyWith(context.Background(), readers, "other", "k"); err == nil {
+	if _, err := VerifyWith(context.Background(), readers, "other", "k", ""); err == nil {
 		t.Error("a provider with no reader verified")
 	}
 }

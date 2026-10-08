@@ -114,6 +114,31 @@ func TestPollerSendsAGatewayKeyOnlyWhereItBelongs(t *testing.T) {
 	}
 }
 
+// scopedReader takes a scope.
+type scopedReader struct {
+	*fakeReader
+	scope string
+}
+
+func (s scopedReader) WithScope(scope string) Reader { s.scope = scope; return s }
+
+// Only a reader that takes a scope gets the one set for its provider.
+func TestWithScopes(t *testing.T) {
+	kilo := scopedReader{fakeReader: &fakeReader{endpoint: "kilo"}}
+	plain := &fakeReader{endpoint: "deepseek"}
+	got := WithScopes([]Reader{kilo, plain, scopedReader{fakeReader: &fakeReader{endpoint: "v0"}}},
+		map[string]string{"kilo": " org_1 ", "deepseek": "x", "v0": "  "})
+	if s := got[0].(scopedReader).scope; s != "org_1" {
+		t.Errorf("kilo scope %q", s)
+	}
+	if got[1] != Reader(plain) {
+		t.Error("a reader without scopes was replaced")
+	}
+	if s := got[2].(scopedReader).scope; s != "" {
+		t.Errorf("a blank scope was set: %q", s)
+	}
+}
+
 // A balance in the vendor's own unit is stored as reported, never as
 // dollars, and makes the reading worth storing.
 func TestCreditsAreStoredInTheirOwnUnit(t *testing.T) {

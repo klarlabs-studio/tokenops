@@ -173,6 +173,30 @@ type Paced interface {
 	MinInterval() time.Duration
 }
 
+// Scoped is a reader that can read another scope than its key's default:
+// a Kilo organisation, a v0 project. The scope is the operator's setting
+// (vendor_usage.accounts.scopes.<provider>), passed to the vendor as is.
+type Scoped interface {
+	Reader
+	// WithScope returns the reader reading scope; "" is the default.
+	WithScope(scope string) Reader
+}
+
+// WithScopes returns readers with each scoped reader set to the scope
+// scopes names for its provider. A reader with no scope set, or that takes
+// none, is returned as it is.
+func WithScopes(readers []Reader, scopes map[string]string) []Reader {
+	out := make([]Reader, len(readers))
+	for i, r := range readers {
+		out[i] = r
+		scope := strings.TrimSpace(scopes[string(r.Provider())])
+		if s, ok := r.(Scoped); ok && scope != "" {
+			out[i] = s.WithScope(scope)
+		}
+	}
+	return out
+}
+
 // GatewayEndpoint is the endpoint name of a credential whose base URL is a
 // host TokenOps does not know: possibly a gateway the operator runs or
 // subscribes to. A gateway reader recognises it before reading.

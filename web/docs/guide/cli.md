@@ -777,6 +777,23 @@ use read its own spend.
   typed into setup is stored, in your config file.
 - **Calls** go only to vendors whose key is on the machine. Turn them off
   with `tokenops vendor-usage enable vendor-accounts --disable`.
+- **Scopes**: Kilo and v0 read the key's default scope (the personal
+  account, the default project) unless you name another:
+  `tokenops vendor-usage setup kilo --scope <organisation ID>` or
+  `tokenops vendor-usage setup v0 --scope <project ID or slug>`. The scope
+  is checked with the key, stored as
+  `vendor_usage.accounts.scopes.<provider>` in your config, and passed to
+  that vendor as is (Kilo's `X-KILOCODE-ORGANIZATIONID` header, v0's
+  `?scope=`). A later setup without `--scope` keeps it; `--scope ""`
+  clears it. It also applies to a key found in a harness or variable.
+
+  ```yaml
+  vendor_usage:
+    accounts:
+      scopes:
+        kilo: org_123
+        v0: my-project
+  ```
 
 <!-- begin generated: provider-env-vars -->
 The environment variables read for a key: `AIAND_API_KEY`, `AIXY_API_KEY`, `AI_GATEWAY_API_KEY`, `ALIBABA_CODING_PLAN_API_KEY`, `ALIBABA_CODING_PLAN_COOKIE`, `ALIBABA_QWEN_API_KEY`, `AMP_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DASHSCOPE_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FIREWORKS_API_KEY`, `GITKRAKEN_API_TOKEN`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `LONGCAT_MANUAL_COOKIE`, `MANUS_COOKIE`, `MANUS_SESSION_TOKEN`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `PERPLEXITY_COOKIE`, `PERPLEXITY_SESSION_TOKEN`, `POE_API_KEY`, `QWEN_CLOUD_COOKIE`, `SAKANA_COOKIE`, `STEPFUN_TOKEN`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`, `ZENMUX_MANAGEMENT_API_KEY`.

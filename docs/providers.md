@@ -95,6 +95,7 @@ func providerAcme() Descriptor {
 | `Sources[].Reader` | `AccountReader`, `GatewayReader`, or `BespokeReader` with `Package` and `Fixture` |
 | `Sources[].Cookie` | the cookies a `BrowserCookie` source reads: `Host` and `Also` (other regions' hosts, tried in order), `Names` (`"prefix*"` allowed), `Proof` (one must be present), `AllForHost` (every cookie the browser sends to the host, when the names are not known), `PasteOnly` (no browser read) |
 | `Sources[].KeyFormat` | what setup asks for when the credential is more than one key (`TEAM_ID:MANAGEMENT_KEY`) |
+| `Sources[].Scope` | what the reader's optional scope is (a Kilo organisation ID, a v0 project); the reader then implements `usage.Scoped` (`WithScope`), and `vendor-usage setup <id> --scope` sets `vendor_usage.accounts.scopes.<id>` |
 | `Sources[].Verified` | `VerifiedLive` only after a real account was read; else `FromDocs`, `FromClientSource`, or `FromCodexBar` for a reader ported from CodexBar's provider source (name the CodexBar path in a comment) |
 | `Endpoints` | which base URLs bill to it (biller) |
 | `Opencode` | opencode's provider IDs, with the endpoint each names (`"<id>-api"` for a pay-as-you-go API beside a plan) |
@@ -138,6 +139,15 @@ the helpers in `http.go`, and returns a `usage.Reading`:
   the last 30 days), never converted to dollars. A history that cannot be
   read whole is left out rather than summed in part.
 - `Scope` says what the figures cover: `"key"`, `"account"`, `"team"`.
+
+A reader that can read another scope than its key's default (an
+organisation, a project) implements `usage.Scoped`: `WithScope(scope)
+usage.Reader` returns a copy reading that scope, which it passes to the
+vendor as is, and its descriptor's `Sources[].Scope` says what the scope
+is. The daemon applies `vendor_usage.accounts.scopes.<id>` with
+`usage.WithScopes`, and `tokenops vendor-usage setup <id> --scope <value>`
+verifies and stores it; a provider without `Scope` refuses `--scope`.
+Copy `kilo.go` (a header) or `v0.go` (a query parameter).
 
 An empty reading (`Reading.Empty()`) is not stored. A refused key is
 `usage.ErrAuth` (wrap it: `fmt.Errorf("%w (...)", usage.ErrAuth)`), including
