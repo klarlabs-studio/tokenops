@@ -52,6 +52,7 @@ var registered = []func() Descriptor{
 	providerOpenRouter,
 	providerPi,
 	providerPoe,
+	providerQwenCloud,
 	providerSub2API,
 	providerSynthetic,
 	providerTogether,

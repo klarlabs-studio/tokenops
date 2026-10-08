@@ -56,6 +56,7 @@ opencode_go_account	opencode-go-account
 openrouter_account	openrouter-account
 pi_sessions	pi-sessions
 poe_account	poe-account
+qwencloud_web	qwencloud-web
 sub2api_gateway	sub2api-account
 synthetic_account	synthetic-account
 v0_account	v0-account
