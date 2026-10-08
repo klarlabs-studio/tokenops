@@ -686,6 +686,7 @@ vendor's windows, busiest first:
 | Kilo | `GET /api/trpc/user.getCreditBlocks,kiloPass.getState` | Kilo Pass credits used this billing period, and prepaid credit left |
 | Kimi Code | `GET /coding/v1/usages` | 5-hour, weekly and monthly windows |
 | MiniMax Token Plan | `GET /v1/token_plan/remains` | the interval and weekly windows |
+| Nous Portal (Hermes Agent) | `GET /api/oauth/account` | the monthly credit grant used this period and the top-up credit left |
 | Synthetic | `GET /v2/quotas` | the subscription's request quota |
 | v0 | `GET /v1/user/billing`, `GET /v1/rate-limits` | the billing cycle's balance used and the request quota used |
 | xKiro | `GET /v1/usage` | the plan's spend windows, today's free tokens and the wallet balance |
@@ -728,7 +729,7 @@ use read its own spend.
   with `tokenops vendor-usage enable vendor-accounts --disable`.
 
 <!-- begin generated: provider-env-vars -->
-The environment variables read for a key: `AI_GATEWAY_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `FIREWORKS_API_KEY`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `MOONSHOT_API_KEY`, `OPENROUTER_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `XKIRO_API_KEY`.
+The environment variables read for a key: `AI_GATEWAY_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `FIREWORKS_API_KEY`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `MOONSHOT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENROUTER_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `XKIRO_API_KEY`.
 <!-- end generated: provider-env-vars -->
 
 #### Every provider
@@ -766,6 +767,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | MiniMax | `minimax-account` | the interval and weekly windows | API key | the vendor's client source and fixtures |
 | Mistral | — | in the catalog only: Le Chat Pro's plan and daily cap are known; nothing reads its usage yet | — | — |
 | Moonshot | `moonshot-account` | prepaid USD balance left | API key | public docs and fixtures |
+| Nous Portal | `nous-account` | the monthly credit grant used this period and the top-up credit left | API key | CodexBar's source, the vendor's docs and fixtures |
 | Codex | `codex-app-server` | the 5-hour and weekly windows `codex app-server` reports, Codex signing its own request | the vendor's CLI | against a real account |
 |  | `codex-jsonl` | per-turn tokens and the rate_limits in Codex's rollouts | local files | against a real account |
 | opencode | `opencode` | per-message tokens for every provider, from opencode's SQLite store | local files | against a real account |

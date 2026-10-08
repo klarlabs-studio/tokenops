@@ -15,6 +15,7 @@
 - **providers:** DevPass (LLM Gateway): the billing cycle's plan credits and the premium weekly window, or on pay-as-you-go the key's spend against its limit, read with a gateway API key (`DEVPASS_API_KEY`, `LLMGATEWAY_API_KEY`, opencode's `llmgateway` key or `vendor-usage setup devpass`)
 - **providers:** IBM Bob: Bobcoins used this month against the team budgets, read with an IBM Bob API key or IAM token (`BOBSHELL_API_KEY` or `vendor-usage setup ibmbob`)
 - **providers:** v0: the share of the billing cycle's balance and of the request quota used, read with a v0 Platform API key (`V0_API_KEY`, opencode's `v0` key or `vendor-usage setup v0`)
+- **providers:** Nous Portal: the monthly credit grant used this period and the top-up credit left, read with a Nous Portal access token from Hermes Agent's sign-in (`NOUS_PORTAL_ACCESS_TOKEN` or `vendor-usage setup nous`); the token expires within the hour and is never refreshed, and an expired one is refused before any request
 
 ### Fixed
 
