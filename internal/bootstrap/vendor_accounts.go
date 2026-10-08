@@ -8,6 +8,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/opencode"
 	"go.klarlabs.de/tokenops/internal/infra/harnesskeys"
+	accountsapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/accounts"
 )
 
 // accountCredentials finds the keys the harnesses use and names the
@@ -24,6 +25,12 @@ func credentialsFor(found []harnesskeys.Credential) []accounts.Credential {
 		switch {
 		case c.Endpoint != "":
 			endpoint = c.Endpoint
+		case c.Gateway != "":
+			// The operator named the gateway (its own variables): it is
+			// read at that address by that gateway only.
+			out = append(out, accounts.Credential{Endpoint: accounts.GatewayEndpoint, Origin: c.Origin, Key: c.Key,
+				BaseURL: c.BaseURL, Gateway: c.Gateway})
+			continue
 		case c.BaseURL != "":
 			// A base URL decides. An unknown host may be a gateway the
 			// operator runs or subscribes to; the poller recognises it by
@@ -35,6 +42,10 @@ func credentialsFor(found []harnesskeys.Credential) []accounts.Credential {
 				out = append(out, accounts.Credential{Endpoint: accounts.GatewayEndpoint, Origin: c.Origin, Key: c.Key, BaseURL: c.BaseURL})
 				continue
 			}
+		case c.Provider != "":
+			// A source's own credential (an admin key) goes to that
+			// source's reader and to no other of the vendor's endpoints.
+			endpoint = readerEndpoint(accountsapi.Readers(), c.Provider)
 		case c.ProviderID != "":
 			// Mainland-China platforms issue keys their international
 			// counterparts refuse.

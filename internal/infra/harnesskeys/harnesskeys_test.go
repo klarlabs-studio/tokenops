@@ -30,7 +30,7 @@ func TestFindEveryHarness(t *testing.T) {
 			"moonshotai": {"options": {"apiKey": "{env:MOONSHOT_KEY}", "baseURL": "https://api.moonshot.ai/v1"}}, /* trailing */
 		},
 	}`)
-	env := map[string]string{"MOONSHOT_KEY": "sk-ms-env", "CODEX_OR": "sk-or-codex", "DEEPSEEK_API_KEY": "sk-ds-env"}
+	env := map[string]string{"MOONSHOT_KEY": "sk-ms-env", "CODEX_OR": "sk-or-codex", "DEEPSEEK_API_KEY": "sk-ds-env", "OPENAI_ADMIN_KEY": "sk-admin-env"}
 	got := Find(Options{
 		Getenv:         func(k string) string { return env[k] },
 		OpencodeData:   data,
@@ -46,11 +46,12 @@ func TestFindEveryHarness(t *testing.T) {
 	})
 	keys := make([]string, 0, len(got))
 	for _, c := range got {
-		keys = append(keys, c.Origin+"|"+c.BaseURL+"|"+c.ProviderID+"|"+c.Key)
+		keys = append(keys, c.Origin+"|"+c.BaseURL+"|"+c.ProviderID+c.Provider+"|"+c.Key)
 	}
 	sort.Strings(keys)
 	want := []string{
 		"$DEEPSEEK_API_KEY||deepseek|sk-ds-env",
+		"$OPENAI_ADMIN_KEY||openai|sk-admin-env",
 		"Claude Code settings|https://openrouter.ai/api||sk-or-claude",
 		"Codex config|https://api.fireworks.ai/inference/v1||fw_codex",
 		"Codex config|https://openrouter.ai/api/v1||sk-or-codex",
@@ -93,5 +94,29 @@ func TestStripJSONCKeepsStrings(t *testing.T) {
 	}
 	if v["url"] != "https://a//b" || v["s"] != "/* not a comment */" || v["esc"] != `a"//b` {
 		t.Errorf("%v", v)
+	}
+}
+
+// A gateway's own key variable is read with its address variable, and is
+// meant for that gateway only; without an address there is nothing to read.
+func TestFindGatewayVariables(t *testing.T) {
+	none := func() (string, string) { return "", "" }
+	noCodex := func() map[string]codexsettings.Provider { return nil }
+	find := func(env map[string]string) []Credential {
+		var out []Credential
+		for _, c := range Find(Options{Getenv: func(k string) string { return env[k] }, OpencodeData: t.TempDir(),
+			OpencodeConfig: t.TempDir(), Claude: none, Codex: noCodex}) {
+			if c.Gateway != "" {
+				out = append(out, c)
+			}
+		}
+		return out
+	}
+	got := find(map[string]string{"SUB2API_API_KEY": "sk-s2", "SUB2API_BASE_URL": "https://s2.example"})
+	if len(got) != 1 || got[0].Gateway != "sub2api" || got[0].BaseURL != "https://s2.example" || got[0].Key != "sk-s2" || got[0].Origin != "$SUB2API_API_KEY" {
+		t.Fatalf("got %+v", got)
+	}
+	if got := find(map[string]string{"SUB2API_API_KEY": "sk-s2"}); len(got) != 0 {
+		t.Errorf("a gateway key without an address: %+v", got)
 	}
 }

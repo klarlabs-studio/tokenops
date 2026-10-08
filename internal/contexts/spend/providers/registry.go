@@ -60,10 +60,15 @@ func (d Descriptor) Label() string {
 }
 
 // Setupable is the source `tokenops vendor-usage setup <id>` connects for
-// this provider: an account reader read with a key or a browser session.
+// this provider: an account reader read with a key (an API key or an
+// organisation admin key), a browser session or the vendor's credential
+// chain, or a gateway read with a key at the address the operator gives.
 func (d Descriptor) Setupable() (Source, bool) {
 	for _, s := range d.Sources {
-		if s.Reader == AccountReader && (s.Credential == APIKey || s.Credential == BrowserCookie) {
+		if s.Reader == AccountReader && (s.Credential == APIKey || s.Credential == AdminKey || s.Credential == BrowserCookie || s.Credential == CredentialChain) {
+			return s, true
+		}
+		if s.Reader == GatewayReader && s.Credential == APIKey {
 			return s, true
 		}
 	}
@@ -170,6 +175,46 @@ func OwnEnvVars() map[string]string {
 		}
 		for _, v := range d.EnvVars {
 			out[v] = string(d.ID)
+		}
+	}
+	return out
+}
+
+// SourceEnv is where one source's own credential is found in the
+// environment: the key in the first of Vars that is set and, for a
+// gateway, its address.
+type SourceEnv struct {
+	Provider string
+	Vars     []string
+	// Gateway marks a gateway's source, read at BaseURLEnv's address or
+	// DefaultBaseURL.
+	Gateway        bool
+	BaseURLEnv     string
+	DefaultBaseURL string
+}
+
+// SourceEnvs lists every source with variables of its own (Source.EnvVars).
+func SourceEnvs() []SourceEnv {
+	var out []SourceEnv
+	for _, d := range all {
+		for _, s := range d.Sources {
+			if len(s.EnvVars) == 0 {
+				continue
+			}
+			out = append(out, SourceEnv{Provider: string(d.ID), Vars: s.EnvVars,
+				Gateway: s.Reader == GatewayReader, BaseURLEnv: s.BaseURLEnv, DefaultBaseURL: s.DefaultBaseURL})
+		}
+	}
+	return out
+}
+
+// SourceEnvVars maps each variable holding one source's own credential
+// (Source.EnvVars) to the provider whose source it is.
+func SourceEnvVars() map[string]string {
+	out := map[string]string{}
+	for _, e := range SourceEnvs() {
+		for _, v := range e.Vars {
+			out[v] = e.Provider
 		}
 	}
 	return out

@@ -1,0 +1,58 @@
+{
+  "object": "key.usage",
+  "as_of": "2026-10-08T12:00:00Z",
+  "currency": "USD",
+  "key": {"id": "key_123", "name": "ci", "project_id": "prj_1", "project_name": "Agents"},
+  "budgets": [
+    {
+      "id": "bud_monitor",
+      "scope": "organization",
+      "interval": "monthly",
+      "enforcement": "monitor",
+      "shared": true,
+      "limit_usd": "1000",
+      "applies_to": [{"api_key_id": "key_123", "project_id": "prj_1"}],
+      "availability": {"status": "not_enforced"},
+      "spend_status": "available",
+      "spend_usd": 900,
+      "remaining_usd": 100,
+      "starts_at": "2026-10-01T00:00:00Z",
+      "resets_at": "2026-11-01T00:00:00Z"
+    },
+    {
+      "id": "bud_hard",
+      "scope": "project",
+      "interval": "monthly",
+      "enforcement": "hard",
+      "shared": false,
+      "limit_usd": 200,
+      "applies_to": [{"api_key_id": "key_123", "project_id": "prj_1"}],
+      "availability": {"status": "available", "spent_usd": 40, "reserved_usd": 10, "remaining_usd": 150},
+      "spend_status": "available",
+      "spend_usd": 40,
+      "remaining_usd": 160,
+      "starts_at": "2026-10-01T00:00:00Z",
+      "resets_at": "2026-11-01T00:00:00Z"
+    },
+    {
+      "id": "bud_unknown",
+      "scope": "api_key",
+      "interval": "daily",
+      "enforcement": "hard",
+      "shared": false,
+      "limit_usd": 20,
+      "applies_to": [{"api_key_id": "key_123", "project_id": "prj_1"}],
+      "availability": {"status": "unavailable"},
+      "spend_status": "unavailable",
+      "resets_at": "2026-10-09T00:00:00Z"
+    }
+  ],
+  "usage": {
+    "window": "7d",
+    "requests": 120,
+    "total_tokens": 450000,
+    "attributed_requests": 118,
+    "partial_requests": 2,
+    "spend_usd": 31.2
+  }
+}

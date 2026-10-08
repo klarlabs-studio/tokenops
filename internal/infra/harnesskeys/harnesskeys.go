@@ -30,7 +30,15 @@ type Credential struct {
 	// Endpoint is the account-reader endpoint a key from the variable of a
 	// provider opencode does not know is for.
 	Endpoint string
-	Key      string
+	// Provider is set for a key found in a variable that holds one
+	// source's own credential (an admin key): it goes to that provider's
+	// account reader only.
+	Provider string
+	// Gateway is set for a key and address found in a gateway's own
+	// variables (SUB2API_API_KEY, SUB2API_BASE_URL): it is read there by
+	// that gateway, without being recognised first.
+	Gateway string
+	Key     string
 }
 
 // EnvVars maps conventional key variables to the opencode provider ID
@@ -41,6 +49,10 @@ var EnvVars = providers.EnvVars()
 // OwnEnvVars maps the key variables of providers opencode does not know to
 // the endpoint their account reader takes keys for.
 var OwnEnvVars = providers.OwnEnvVars()
+
+// SourceEnvs are the variables holding one source's own credential (an
+// organisation admin key, a gateway's key and address).
+var SourceEnvs = providers.SourceEnvs()
 
 // Options points the finder at its sources; zero values use the real ones.
 type Options struct {
@@ -89,7 +101,37 @@ func Find(o Options) []Credential {
 	for name, endpoint := range OwnEnvVars {
 		add(Credential{Origin: "$" + name, Endpoint: endpoint, Key: o.Getenv(name)})
 	}
+	for _, e := range SourceEnvs {
+		if c, ok := sourceEnvCredential(e, o.Getenv); ok {
+			add(c)
+		}
+	}
 	return out
+}
+
+// sourceEnvCredential is the key in the first of e's variables that is
+// set, for that source only; a gateway's needs an address too.
+func sourceEnvCredential(e providers.SourceEnv, getenv func(string) string) (Credential, bool) {
+	for _, name := range e.Vars {
+		key := strings.TrimSpace(getenv(name))
+		if key == "" {
+			continue
+		}
+		if !e.Gateway {
+			return Credential{Origin: "$" + name, Provider: e.Provider, Key: key}, true
+		}
+		base := e.DefaultBaseURL
+		if e.BaseURLEnv != "" {
+			if v := strings.TrimSpace(getenv(e.BaseURLEnv)); v != "" {
+				base = v
+			}
+		}
+		if base == "" {
+			return Credential{}, false
+		}
+		return Credential{Origin: "$" + name, BaseURL: base, Gateway: e.Provider, Key: key}, true
+	}
+	return Credential{}, false
 }
 
 func (o Options) withDefaults() Options {

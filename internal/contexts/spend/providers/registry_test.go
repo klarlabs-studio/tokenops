@@ -69,6 +69,12 @@ func TestRegistryIsConsistent(t *testing.T) {
 		}
 		for _, s := range d.Sources {
 			checkSource(t, id, s, tags, names)
+			for _, v := range s.EnvVars {
+				if env[v] {
+					t.Errorf("%s/%s: %s claimed twice", id, s.Tag, v)
+				}
+				env[v] = true
+			}
 		}
 		for _, p := range d.Plans {
 			if p.Name == "" || plans[p.Name] {
@@ -118,7 +124,7 @@ func checkSource(t *testing.T, id string, s Source, tags, names map[string]bool)
 		t.Errorf("%s/%s: kind %q", id, s.Tag, s.Kind)
 	}
 	switch s.Credential {
-	case APIKey, AdminKey, OAuthFile, CLI, LocalFile, BrowserCookie:
+	case APIKey, AdminKey, OAuthFile, CLI, LocalFile, BrowserCookie, CredentialChain:
 	default:
 		t.Errorf("%s/%s: credential %q", id, s.Tag, s.Credential)
 	}

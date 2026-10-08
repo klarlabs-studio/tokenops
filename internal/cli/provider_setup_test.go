@@ -69,3 +69,71 @@ func TestProviderSetupNamesWhatItCovers(t *testing.T) {
 		t.Fatalf("unknown provider: %v", err)
 	}
 }
+
+// A gateway is set up with its address and a key, checked once there, and
+// only then stored.
+func TestProviderSetupStoresAGatewayAddress(t *testing.T) {
+	var sent []string
+	prev := verifyGateway
+	verifyGateway = func(_ context.Context, id, base, key string) ([]string, error) {
+		sent = append(sent, id+"|"+base+"|"+key)
+		if key != "vk" {
+			return nil, fmt.Errorf("%w (401)", providersetup.ErrRefused)
+		}
+		return []string{"spend: $2.00 of $10.00"}, nil
+	}
+	t.Cleanup(func() { verifyGateway = prev })
+	path := seedConfig(t)
+	out, err := runCookieSetupCmd(t, "https://s2.example\nvk\n", "sub2api", "--config", path, "--no-restart")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if len(sent) != 1 || sent[0] != "sub2api|https://s2.example|vk" {
+		t.Errorf("verified with %v", sent)
+	}
+	if !strings.Contains(out, "spend: $2.00") || strings.Contains(out, "vk\n") {
+		t.Errorf("output:\n%s", out)
+	}
+	cfg, err := config.ReadMutable(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := cfg.VendorUsage.Accounts.Credentials["sub2api"]; c.Key != "vk" || c.BaseURL != "https://s2.example" {
+		t.Errorf("stored %+v", c)
+	}
+
+	path = seedConfig(t)
+	if _, err := runCookieSetupCmd(t, "https://s2.example\nbad\n", "sub2api", "--config", path, "--no-restart"); err == nil || !strings.Contains(err.Error(), "Nothing was written") {
+		t.Fatalf("refused key: %v", err)
+	}
+	if cfg, _ := config.ReadMutable(path); len(cfg.VendorUsage.Accounts.Credentials) != 0 {
+		t.Errorf("stored %+v", cfg.VendorUsage.Accounts.Credentials)
+	}
+}
+
+// A provider read with its vendor's credential chain is set up without a
+// prompt: the credential found on the machine is checked once, and only
+// the opt-in is stored, never the credential.
+func TestProviderSetupOptsInToACredentialChain(t *testing.T) {
+	sent := fakeVerify(t, "bedrock", "chain-key")
+	prev := chainCredential
+	chainCredential = func(_ context.Context, id string) (string, string, error) {
+		return "chain-key", "the shared credentials file's [default] profile", nil
+	}
+	t.Cleanup(func() { chainCredential = prev })
+	path := seedConfig(t)
+	out, err := runCookieSetupCmd(t, "", "bedrock", "--config", path, "--no-restart")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if len(*sent) != 1 || (*sent)[0] != "bedrock|chain-key" || strings.Contains(out, "chain-key") || !strings.Contains(out, "[default] profile") {
+		t.Errorf("verified with %v; output:\n%s", *sent, out)
+	}
+	cfg, err := config.ReadMutable(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := cfg.VendorUsage.Accounts.Credentials["bedrock"]; !c.CredentialChain || c.Key != "" {
+		t.Errorf("stored %+v", c)
+	}
+}

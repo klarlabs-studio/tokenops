@@ -1,6 +1,10 @@
 package config
 
-import "go.klarlabs.de/tokenops/internal/contexts/spend/providers"
+import (
+	"strings"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
+)
 
 // Per-source configuration hints.
 //
@@ -74,12 +78,34 @@ func (c Config) registryHint(sourceTag string) string {
 	}
 	switch {
 	case s.Reader == providers.GatewayReader:
-		return "on; reads the key's own budget when a harness sends a key to a " + providers.DisplayName(string(s.Provider)) + " gateway"
+		id := string(s.Provider)
+		if c, stored := c.VendorUsage.Accounts.Credentials[id]; stored && c.BaseURL != "" {
+			return "on; reads at " + c.BaseURL + " with the key `tokenops vendor-usage setup " + id + "` stored"
+		}
+		hint := "on; reads the key's own budget when a harness sends a key to a " + providers.DisplayName(id) + " gateway"
+		if len(s.EnvVars) > 0 && s.BaseURLEnv != "" {
+			hint += ", or where " + s.BaseURLEnv + " names one with " + strings.Join(s.EnvVars, " or ")
+		}
+		return hint + "; `tokenops vendor-usage setup " + id + "` connects one by address"
 	case s.Credential == providers.BrowserCookie:
 		if _, stored := c.VendorUsage.Accounts.Credentials[string(s.Provider)]; stored {
 			return "on; reads with the session `tokenops vendor-usage setup " + string(s.Provider) + "` stored"
 		}
 		return "connect it: `tokenops vendor-usage setup " + string(s.Provider) + "` reads the session from your browser"
+	case s.Credential == providers.CredentialChain:
+		if c, stored := c.VendorUsage.Accounts.Credentials[string(s.Provider)]; stored && c.CredentialChain {
+			return "on; reads with the credentials on this machine, as `tokenops vendor-usage setup " + string(s.Provider) + "` opted in"
+		}
+		return "opt-in: `tokenops vendor-usage setup " + string(s.Provider) + "` reads it with the credentials on this machine"
+	case s.Credential == providers.AdminKey:
+		if _, stored := c.VendorUsage.Accounts.Credentials[string(s.Provider)]; stored {
+			return "on; reads with the admin key `tokenops vendor-usage setup " + string(s.Provider) + "` stored"
+		}
+		hint := "connect it: `tokenops vendor-usage setup " + string(s.Provider) + "` with an organisation admin key"
+		if len(s.EnvVars) > 0 {
+			hint += ", or set " + strings.Join(s.EnvVars, " or ")
+		}
+		return hint
 	}
 	// A provider whose key only setup supplies (a management key the
 	// harnesses never hold) says so in its descriptor.

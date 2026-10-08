@@ -1,0 +1,17 @@
+{
+  "GroupDefinitions": [{"Type": "DIMENSION", "Key": "SERVICE"}],
+  "ResultsByTime": [
+    {
+      "TimePeriod": {"Start": "2026-10-01", "End": "2026-10-09"},
+      "Total": {},
+      "Groups": [
+        {"Keys": ["Amazon Bedrock"], "Metrics": {"UnblendedCost": {"Amount": "41.2034", "Unit": "USD"}}},
+        {"Keys": ["Claude Sonnet 4.5 (Amazon Bedrock Edition)"], "Metrics": {"UnblendedCost": {"Amount": "8.7966", "Unit": "USD"}}},
+        {"Keys": ["Amazon Elastic Compute Cloud - Compute"], "Metrics": {"UnblendedCost": {"Amount": "120.55", "Unit": "USD"}}},
+        {"Keys": ["AWS Cost Explorer"], "Metrics": {"UnblendedCost": {"Amount": "0.24", "Unit": "USD"}}}
+      ],
+      "Estimated": true
+    }
+  ],
+  "DimensionValueAttributes": []
+}

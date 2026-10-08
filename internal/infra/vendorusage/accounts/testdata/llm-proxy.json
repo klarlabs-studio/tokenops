@@ -1,0 +1,28 @@
+{
+  "providers": {
+    "gemini_cli": {
+      "credential_count": 3,
+      "active_count": 2,
+      "exhausted_count": 1,
+      "total_requests": 412,
+      "tokens": {"input_cached": 1200, "input_uncached": 88000, "output": 15000},
+      "approx_cost": 1.42,
+      "quota_groups": {
+        "pro": {"remaining_percent": 35, "reset_time": "2026-10-08T18:00:00Z"},
+        "flash": {"remaining_percent": 80, "reset_time": "2026-10-08T16:00:00Z"}
+      }
+    },
+    "openai": {
+      "credential_count": 1,
+      "active_count": 1,
+      "total_requests": 20,
+      "approx_cost": 0.3,
+      "quota_groups": [
+        {"remaining_percent": 90, "reset_time": "2026-10-01T00:00:00Z"}
+      ]
+    }
+  },
+  "summary": {"total_requests": 432, "total_tokens": 104200, "approx_cost": 1.72},
+  "data_source": "cache",
+  "timestamp": 1791471600.0
+}

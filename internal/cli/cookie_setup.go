@@ -81,7 +81,13 @@ API key without echoing it, or, for a vendor read with a browser session,
 reads the session from your browser (macOS may ask to allow the Keychain
 read; --paste types it instead). The credential is read once against the
 vendor before anything is written, then stored in your config file and
-sent only to that vendor. The daemon never reads a browser with a prompt.`,
+sent only to that vendor. The daemon never reads a browser with a prompt.
+
+For a gateway (sub2api, LiteLLM, Aixy, ...) it asks for the gateway's
+address and then the key, and reads it only there. For a provider read
+with its vendor's own credentials on this machine (bedrock: AWS's
+environment or shared credentials file) it asks nothing: it checks them
+once and stores only that the daemon may read them, never the credential.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 1 && strings.EqualFold(args[0], "claude-code") {

@@ -666,12 +666,14 @@ vendor's own figures every 15 minutes:
 |---|---|---|
 | ai& | `GET /logs?range=30days` | the organisation's USD spend in the last 30 days, summed from its request logs |
 | Atlas Cloud | `GET /public/v1/balance` | the account's available USD balance |
+| Amazon Bedrock | Cost Explorer `GetCostAndUsage` | this month's Bedrock spend, every 8 hours (Cost Explorer bills $0.01 a request) |
 | Deepgram | `GET /v1/projects/{id}/balances` | prepaid USD balance left, across the key's projects |
 | DeepInfra | `GET /payment/checklist` | spend since the last invoice, the limit, prepaid credit |
 | DeepSeek | `GET /user/balance` | prepaid USD balance left |
 | Hugging Face | `GET /api/settings/billing/usage-v2` | Inference Providers charges this month, against the spending limit when set |
 | Moonshot (Kimi API) | `GET /v1/users/me/balance` | prepaid USD balance left |
 | Neuralwatt | `GET /v1/quota` | prepaid USD credit left, and the subscription's kWh allowance used this period |
+| OpenAI | `GET /v1/organization/costs` | the API organisation's spend this month (Administration API) |
 | OpenRouter | `GET /api/v1/key` | the key's spend, against its credit cap when it has one |
 | Poe | `GET /usage/current_balance` | the point balance left (points, not dollars) |
 | Venice | `GET /api/v1/billing/balance` | USD balance left, and the DIEM epoch allocation used when staking |
@@ -697,6 +699,7 @@ vendor's windows, busiest first:
 | Kimi Code | `GET /coding/v1/usages` | 5-hour, weekly and monthly windows |
 | MiniMax Token Plan | `GET /v1/token_plan/remains` | the interval and weekly windows |
 | Nous Portal (Hermes Agent) | `GET /api/oauth/account` | the monthly credit grant used this period and the top-up credit left |
+| opencode Go | `GET /zen/go/v1/usage` | the 5-hour, weekly and monthly windows |
 | Synthetic | `GET /v2/quotas` | the subscription's request quota |
 | v0 | `GET /v1/user/billing`, `GET /v1/rate-limits` | the billing cycle's balance used and the request quota used |
 | Warp | `POST /graphql/v2?op=GetRequestLimitInfo` | credits used since the last refresh against the plan's limit |
@@ -720,9 +723,12 @@ own budget:
 <!-- begin generated: provider-gateways -->
 | Gateway | Recognised by | Shows |
 |---|---|---|
+| Aixy | the hosted host, or its name (`AIXY_API_KEY`, setup) | `GET /v1/usage`: each budget that applies to the key, spent and reserved against its limit |
 | Bifrost | `GET /health` | `GET /api/governance/virtual-keys/quota`: each budget's share used |
 | ClawRouter | its host, or `GET /v1/health` | `GET /v1/usage`: the policy's spend against its monthly budget |
 | LiteLLM proxy | `GET /health/liveliness` | `GET /key/info`: the key's spend against its budget, and when it resets |
+| LLM Proxy (LLM-API-Key-Proxy) | `GET /`, or its name (`LLM_PROXY_BASE_URL`, setup) | `GET /v1/quota-stats`: the tightest quota group left on the credentials it pools, and when it resets |
+| sub2api | `GET /setup/status`, or its name (`SUB2API_BASE_URL`, setup) | `GET /v1/usage`: the key's quota and 5-hour, daily and 7-day limits, a subscription group's daily, weekly and monthly limits, or the wallet balance |
 <!-- end generated: provider-gateways -->
 
 Portkey and Cloudflare AI Gateway are not asked: neither lets the key in
@@ -740,7 +746,7 @@ use read its own spend.
   with `tokenops vendor-usage enable vendor-accounts --disable`.
 
 <!-- begin generated: provider-env-vars -->
-The environment variables read for a key: `AIAND_API_KEY`, `AI_GATEWAY_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FIREWORKS_API_KEY`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENROUTER_API_KEY`, `POE_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`.
+The environment variables read for a key: `AIAND_API_KEY`, `AIXY_API_KEY`, `AI_GATEWAY_API_KEY`, `ATLASCLOUD_API_KEY`, `BOBSHELL_API_KEY`, `CHUTES_API_KEY`, `CLINEPASS_API_KEY`, `CLINE_API_KEY`, `CODEBUFF_API_KEY`, `DEEPGRAM_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `DEVPASS_API_KEY`, `ELEVENLABS_API_KEY`, `FIREWORKS_API_KEY`, `HF_TOKEN`, `HUGGING_FACE_HUB_TOKEN`, `KILO_API_KEY`, `LLMGATEWAY_API_KEY`, `LLM_PROXY_API_KEY`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `NOUS_PORTAL_ACCESS_TOKEN`, `OPENAI_ADMIN_KEY`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `POE_API_KEY`, `SUB2API_API_KEY`, `SYNTHETIC_API_KEY`, `V0_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`, `WARP_API_KEY`, `WARP_TOKEN`, `XI_API_KEY`, `XKIRO_API_KEY`.
 <!-- end generated: provider-env-vars -->
 
 #### Every provider
@@ -751,6 +757,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Provider | Source | Reads | Credential | Checked |
 |---|---|---|---|---|
 | ai& | `aiand-account` | the organisation's USD spend in the last 30 days, summed from its request logs | API key | CodexBar's source, the vendor's docs and fixtures |
+| Aixy | `aixy-account` | each budget that applies to the key, spent and reserved against its limit | API key | CodexBar's source, the vendor's docs and fixtures |
 | Alibaba Cloud | — | in the catalog only: the Coding Plan's endpoint, prices and limits are known; nothing reads its usage yet | — | — |
 | Claude | `claude-code-statusline` | the 5-hour and 7-day windows Claude Code gives its status line | local files | against a real account |
 |  | `claude-code-jsonl` | per-turn tokens from Claude Code's transcripts | local files | against a real account |
@@ -759,6 +766,8 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 |  | `vendor-usage-anthropic` | the organisation's token usage from the Admin API | admin key | public docs and fixtures |
 |  | `claude-code-stats-cache` | daily totals from Claude Code's stats cache (deprecated) | local files | against a real account |
 | Atlas Cloud | `atlascloud-account` | the account's available USD balance | API key | CodexBar's source, the vendor's docs and fixtures |
+| Azure OpenAI | — | in the catalog only: billed per token by Azure; a resource's key reads no spend, quota or usage (Azure Cost Management needs an Entra ID sign-in), so its turns are attributed and priced but its account is not read | — | — |
+| Amazon Bedrock | `bedrock-cost-explorer` | this month's Bedrock spend, every 8 hours (Cost Explorer bills $0.01 a request) | the vendor's credential chain, after setup | CodexBar's source, the vendor's docs and fixtures |
 | Bifrost | `bifrost-account` | each budget's share used | API key | public docs and fixtures |
 | Cerebras | — | in the catalog only: Cerebras Code's plans and limits are known; nothing reads its usage yet | — | — |
 | Chutes | `chutes-account` | the 4-hour and monthly caps | API key | the vendor's client source and fixtures |
@@ -781,6 +790,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Kilo | `kilo-account` | Kilo Pass credits used this billing period, and prepaid credit left | API key | CodexBar's source, the vendor's docs and fixtures |
 | Kimi | `kimi-account` | 5-hour, weekly and monthly windows | API key | the vendor's client source and fixtures |
 | LiteLLM | `litellm-account` | the key's spend against its budget, and when it resets | API key | the vendor's client source and fixtures |
+| LLM Proxy | `llm-proxy-account` | the tightest quota group left on the credentials it pools, and when it resets | API key | CodexBar's source, the vendor's docs and fixtures |
 | MiniMax | `minimax-account` | the interval and weekly windows | API key | the vendor's client source and fixtures |
 | Mistral | — | in the catalog only: Le Chat Pro's plan and daily cap are known; nothing reads its usage yet | — | — |
 | Moonshot | `moonshot-account` | prepaid USD balance left | API key | public docs and fixtures |
@@ -788,10 +798,12 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Nous Portal | `nous-account` | the monthly credit grant used this period and the top-up credit left | API key | CodexBar's source, the vendor's docs and fixtures |
 | Codex | `codex-app-server` | the 5-hour and weekly windows `codex app-server` reports, Codex signing its own request | the vendor's CLI | against a real account |
 |  | `codex-jsonl` | per-turn tokens and the rate_limits in Codex's rollouts | local files | against a real account |
+|  | `openai-admin` | the API organisation's spend this month (Administration API) | admin key | CodexBar's source, the vendor's docs and fixtures |
 | opencode | `opencode` | per-message tokens for every provider, from opencode's SQLite store | local files | against a real account |
-| opencode Go | — | in the catalog only: opencode's subscription: its turns are read from opencode's store (the opencode source); no endpoint reports its windows | — | — |
+| opencode Go | `opencode-go-account` | the 5-hour, weekly and monthly windows | API key | CodexBar's source, the vendor's docs and fixtures |
 | OpenRouter | `openrouter-account` | the key's spend, against its credit cap when it has one | API key | public docs and fixtures |
 | Poe | `poe-account` | the point balance left (points, not dollars) | API key | CodexBar's source, the vendor's docs and fixtures |
+| sub2api | `sub2api-account` | the key's quota and 5-hour, daily and 7-day limits, a subscription group's daily, weekly and monthly limits, or the wallet balance | API key | CodexBar's source, the vendor's docs and fixtures |
 | Synthetic | `synthetic-account` | the subscription's request quota | API key | public docs and fixtures |
 | Together AI | — | in the catalog only: billed per token; its endpoint and models.dev prices are known, its account is not read | — | — |
 | v0 | `v0-account` | the billing cycle's balance used and the request quota used | API key | CodexBar's source, the vendor's docs and fixtures |

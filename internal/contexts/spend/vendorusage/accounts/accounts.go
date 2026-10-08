@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 	"time"
@@ -37,6 +38,11 @@ type Credential struct {
 	// BaseURL is where the harness sends the key. A gateway credential
 	// is read there and nowhere else.
 	BaseURL string
+	// Gateway names the gateway a credential was set up or configured for
+	// (`tokenops vendor-usage setup sub2api`, SUB2API_BASE_URL): it is read
+	// at BaseURL by that gateway's reader without being recognised first,
+	// for a gateway with no route that names it without a key.
+	Gateway string
 }
 
 // Reading is what a vendor reports about the account.
@@ -93,6 +99,22 @@ type Reader interface {
 	Read(ctx context.Context, key string) (Reading, error)
 }
 
+// ChainReader is a Reader whose credential is the vendor's own standard
+// credential chain on this machine (AWS's environment and shared
+// credentials file), not a key: Chain finds it, and says where, as the key
+// Read takes. It is read only for a provider the operator set up.
+type ChainReader interface {
+	Reader
+	Chain(ctx context.Context) (key, origin string, err error)
+}
+
+// Paced is a Reader the poller asks no more often than MinInterval: one
+// whose vendor bills each request (AWS Cost Explorer) or refreshes its
+// figures only a few times a day.
+type Paced interface {
+	MinInterval() time.Duration
+}
+
 // GatewayEndpoint is the endpoint name of a credential whose base URL is a
 // host TokenOps does not know: possibly a gateway the operator runs or
 // subscribes to. A gateway reader recognises it before reading.
@@ -121,6 +143,41 @@ func gatewayRoot(baseURL string) (string, bool) {
 		return "", false
 	}
 	return u.Scheme + "://" + u.Host, true
+}
+
+// NamedGatewayBase is the address a named gateway is read at: the base URL
+// the operator gave, without a trailing slash or "/v1", since the gateway's
+// own routes hang off it. The key is sent there, so it must be HTTPS, or
+// plain HTTP only to a loopback, private-network or .local host, and carry
+// no credentials, query or fragment.
+func NamedGatewayBase(raw string) (string, bool) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
+		return "", false
+	}
+	switch u.Scheme {
+	case "https":
+	case "http":
+		if !privateHost(u.Hostname()) {
+			return "", false
+		}
+	default:
+		return "", false
+	}
+	path := strings.TrimRight(u.EscapedPath(), "/")
+	path = strings.TrimSuffix(path, "/v1")
+	return u.Scheme + "://" + u.Host + strings.TrimRight(path, "/"), true
+}
+
+// privateHost reports a host plain HTTP may carry a key to: loopback, a
+// private or link-local address, or an mDNS .local name.
+func privateHost(host string) bool {
+	h := strings.ToLower(strings.TrimSuffix(host, "."))
+	if h == "localhost" || strings.HasSuffix(h, ".localhost") || strings.HasSuffix(h, ".local") {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast())
 }
 
 // gatewayReader adapts a recognised gateway to Reader, for NewEnvelope.
