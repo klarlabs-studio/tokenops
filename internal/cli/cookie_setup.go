@@ -48,6 +48,7 @@ func newVendorUsageSetupCmd() *cobra.Command {
 		paste         bool
 		pasteRequest  bool
 		org           string
+		scope         string
 		noKeychain    bool
 		keychainFlag  bool
 	)
@@ -91,7 +92,11 @@ sent only to that vendor. The daemon never reads a browser with a prompt.`,
 				if p, ok := providersetup.Lookup(args[0]); ok {
 					return runProviderSetup(cmd, p, providerSetupOptions{
 						configPath: configFlag(cmd), restart: !noRestartFlag, browser: browser, paste: paste,
+						scope: scope, scopeSet: cmd.Flags().Changed("scope"),
 					})
+				}
+				if cmd.Flags().Changed("scope") {
+					return fmt.Errorf("--scope is for a provider whose reader takes one (kilo, v0); got %q", args[0])
 				}
 				return fmt.Errorf("setup covers claude-subscription, claude-code and %s; got %q",
 					strings.Join(providersetup.IDs(), ", "), args[0])
@@ -115,6 +120,8 @@ sent only to that vendor. The daemon never reads a browser with a prompt.`,
 	cmd.MarkFlagsMutuallyExclusive("paste", "paste-request")
 	cmd.Flags().StringVar(&org, "org", "",
 		"organization to meter, by name or id (default: the one reporting usage)")
+	cmd.Flags().StringVar(&scope, "scope", "",
+		"<provider>: read this scope instead of the key's default (kilo: an organisation ID; v0: a project ID or slug); \"\" clears it")
 	cmd.Flags().BoolVar(&keychainFlag, "keychain", false,
 		"claude-code: also read Claude Code's sign-in from the macOS Keychain (macOS asks first)")
 	// --no-keychain was the opt-out while the Keychain was read by default;

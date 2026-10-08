@@ -196,6 +196,13 @@ type Source struct {
 	// a key found there goes only to this source's reader, never to the
 	// provider's inference endpoint. Descriptor.EnvVars are inference keys.
 	EnvVars []string
+	// Scope says what an account reader's optional scope is, for one that
+	// can read another than its key's default ("a Kilo organisation ID");
+	// empty for a reader that takes none. The operator sets it with
+	// `tokenops vendor-usage setup <id> --scope <value>`
+	// (vendor_usage.accounts.scopes.<id>), and the reader passes it to the
+	// vendor as is.
+	Scope string
 	// Verified says how far the reader has been checked.
 	Verified Verification
 	// Endpoint, Shows and RecognisedBy are its row in the docs tables:

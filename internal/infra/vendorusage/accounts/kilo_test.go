@@ -3,6 +3,8 @@ package accounts
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -21,6 +23,32 @@ func TestKiloReadsCreditAndPass(t *testing.T) {
 	// $27.50 of $49 base + $6 bonus.
 	if w := got.Windows[0]; w.Name != "month" || !approx(w.UsedPct, 50) || !w.ResetsAt.Equal(time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)) {
 		t.Errorf("pass window %+v", w)
+	}
+}
+
+// A scope reads that organisation: its ID goes in the header CodexBar
+// sends, and the personal account sends none.
+func TestKiloReadsAnOrganisationScope(t *testing.T) {
+	var orgs []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		orgs = append(orgs, r.Header.Get("X-KILOCODE-ORGANIZATIONID"))
+		if r.Header.Get("Authorization") != "Bearer kk" || r.URL.Path != kiloPath {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(fixture(t, "kilo")))
+	}))
+	defer srv.Close()
+	scoped := usage.WithScopes([]usage.Reader{Kilo{BaseURL: srv.URL}}, map[string]string{"kilo": " org_123 "})[0]
+	got, err := scoped.Read(context.Background(), "kk")
+	if err != nil || got.Scope != "organisation" || !got.HasBalance {
+		t.Fatalf("organisation = %+v, %v", got, err)
+	}
+	if got, err := (Kilo{BaseURL: srv.URL}).Read(context.Background(), "kk"); err != nil || got.Scope != "account" {
+		t.Fatalf("personal = %+v, %v", got, err)
+	}
+	if len(orgs) != 2 || orgs[0] != "org_123" || orgs[1] != "" {
+		t.Errorf("organisation headers %q", orgs)
 	}
 }
 

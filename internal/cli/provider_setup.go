@@ -23,6 +23,10 @@ type providerSetupOptions struct {
 	restart    bool
 	browser    string
 	paste      bool
+	// scope is --scope; scopeSet is whether it was given at all, so a
+	// setup run without it keeps the scope already stored.
+	scope    string
+	scopeSet bool
 }
 
 // runProviderSetup connects any registry provider read with an API key or
@@ -31,7 +35,23 @@ type providerSetupOptions struct {
 // provider's descriptor says what to ask for.
 func runProviderSetup(cmd *cobra.Command, p providersetup.Provider, opts providerSetupOptions) error {
 	out := cmd.OutOrStdout()
+	if err := providersetup.CheckScope(p, opts.scope); err != nil {
+		return fmt.Errorf("%w. Nothing was written", err)
+	}
+	path, err := resolveMutableConfigPath(opts.configPath)
+	if err != nil {
+		return err
+	}
+	scope := strings.TrimSpace(opts.scope)
+	if !opts.scopeSet && p.Scope != "" {
+		if cfg, err := readMutableConfig(path); err == nil {
+			scope = cfg.VendorUsage.Accounts.Scopes[p.ID]
+		}
+	}
 	fmt.Fprintf(out, "Connecting %s.\n", p.Name)
+	if scope != "" {
+		fmt.Fprintf(out, "Reading the scope %q.\n", scope)
+	}
 
 	key, browser, err := providerCredential(cmd, p, opts)
 	if err != nil {
@@ -44,7 +64,7 @@ func runProviderSetup(cmd *cobra.Command, p providersetup.Provider, opts provide
 	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
 	defer cancel()
 	progress := startActivity(cmd.ErrOrStderr(), "Checking it with "+p.Name)
-	lines, err := verifyProvider(ctx, p.ID, key)
+	lines, err := verifyProvider(ctx, p.ID, key, scope)
 	if err != nil {
 		progress.failure(p.Name + " did not accept it")
 		if errors.Is(err, providersetup.ErrRefused) {
@@ -58,15 +78,14 @@ func runProviderSetup(cmd *cobra.Command, p providersetup.Provider, opts provide
 		fmt.Fprintln(out, "  "+l)
 	}
 
-	path, err := resolveMutableConfigPath(opts.configPath)
-	if err != nil {
-		return err
-	}
 	cfg, err := readMutableConfig(path)
 	if err != nil {
 		return err
 	}
 	providersetup.Apply(&cfg, p.ID, key, browser != "", browser)
+	if p.Scope != "" {
+		providersetup.ApplyScope(&cfg, p.ID, scope)
+	}
 	if err := writeMutableConfig(path, cfg); err != nil {
 		return err
 	}

@@ -69,6 +69,9 @@ func TestRegistryIsConsistent(t *testing.T) {
 		}
 		for _, s := range d.Sources {
 			checkSource(t, id, s, tags, names)
+			if s.Scope != "" && s.Reader != AccountReader {
+				t.Errorf("%s/%s: only an account reader takes a scope", id, s.Tag)
+			}
 			if len(s.EnvVars) > 0 && (s.Reader != AccountReader || s.Credential != APIKey) {
 				t.Errorf("%s/%s: a source's own variables hold a key for its account reader", id, s.Tag)
 			}

@@ -45,6 +45,9 @@ type Provider struct {
 	// KeyFormat is the credential's shape when it is more than one key
 	// ("TEAM_ID:MANAGEMENT_KEY"); empty for a plain API key.
 	KeyFormat string
+	// Scope says what the reader's optional scope is ("a Kilo
+	// organisation ID"); empty for a reader that takes none.
+	Scope string
 }
 
 // Lookup returns the provider setup connects for id.
@@ -63,7 +66,7 @@ func Lookup(id string) (Provider, bool) {
 		// not what its reader takes.
 		env = s.EnvVars
 	}
-	p := Provider{ID: string(d.ID), Name: d.DisplayName, EnvVars: env, KeyFormat: s.KeyFormat}
+	p := Provider{ID: string(d.ID), Name: d.DisplayName, EnvVars: env, KeyFormat: s.KeyFormat, Scope: s.Scope}
 	if s.Credential == providers.BrowserCookie && s.Cookie != nil {
 		p.Browser, p.CookieHost, p.CookieNames = true, s.Cookie.Host, s.Cookie.Names
 	}
@@ -109,17 +112,19 @@ func FromBrowser(ctx context.Context, p Provider, browser string, keychainWait t
 
 // Verify reads p's account once with key and summarises what the vendor
 // reported. Nothing is stored.
-func Verify(ctx context.Context, id, key string) ([]string, error) {
-	return VerifyWith(ctx, accountsapi.Readers(), id, key)
+// A scope, for a reader that takes one, is read instead of the key's
+// default.
+func Verify(ctx context.Context, id, key, scope string) ([]string, error) {
+	return VerifyWith(ctx, accountsapi.Readers(), id, key, scope)
 }
 
 // VerifyWith is Verify with the readers given.
-func VerifyWith(ctx context.Context, readers []usage.Reader, id, key string) ([]string, error) {
+func VerifyWith(ctx context.Context, readers []usage.Reader, id, key, scope string) ([]string, error) {
 	key = strings.TrimSpace(key)
 	if key == "" {
 		return nil, errors.New("no credential entered")
 	}
-	for _, r := range readers {
+	for _, r := range usage.WithScopes(readers, map[string]string{id: scope}) {
 		if string(r.Provider()) != id {
 			continue
 		}
@@ -174,6 +179,35 @@ func Summary(r usage.Reading) []string {
 		out = append(out, "the account answered, with no plan, spend or balance to show yet")
 	}
 	return out
+}
+
+// CheckScope reports whether scope can be set for p: only a reader that
+// takes a scope accepts one, and a scope is one line of printable text.
+func CheckScope(p Provider, scope string) error {
+	scope = strings.TrimSpace(scope)
+	switch {
+	case scope == "":
+		return nil
+	case p.Scope == "":
+		return fmt.Errorf("%s takes no scope", p.Name)
+	case len(scope) > 200 || strings.ContainsFunc(scope, func(r rune) bool { return r < 0x20 || r == 0x7f }):
+		return fmt.Errorf("%s's scope must be one line of at most 200 characters", p.Name)
+	}
+	return nil
+}
+
+// ApplyScope stores the scope id's reader reads; "" removes it, so the
+// key's default scope is read.
+func ApplyScope(cfg *config.Config, id, scope string) {
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		delete(cfg.VendorUsage.Accounts.Scopes, id)
+		return
+	}
+	if cfg.VendorUsage.Accounts.Scopes == nil {
+		cfg.VendorUsage.Accounts.Scopes = map[string]string{}
+	}
+	cfg.VendorUsage.Accounts.Scopes[id] = scope
 }
 
 // Apply stores the credential for id in cfg: the key, and for a session
