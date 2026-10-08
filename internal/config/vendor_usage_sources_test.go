@@ -40,6 +40,8 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 	// sources in the order it lists them.
 	want := []struct{ name, tag string }{
 		{"aiand_account", "aiand-account"},
+		{"amp_cli", "amp-cli"},
+		{"amp_account", "amp-account"},
 		{"claude_code_statusline", "claude-code-statusline"},
 		{"claude_code_jsonl", "claude-code-jsonl"},
 		{"claude_subscription", "claude-usage-meter"},

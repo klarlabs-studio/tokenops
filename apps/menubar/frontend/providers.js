@@ -3,6 +3,7 @@
 window.TOKENOPS_PROVIDERS = {
   "aiand": {"name":"ai\u0026","logo":false},
   "alibaba": {"name":"Alibaba Cloud","logo":false},
+  "amp": {"name":"Amp","logo":true},
   "anthropic": {"name":"Claude","logo":true},
   "atlascloud": {"name":"Atlas Cloud","logo":true},
   "bifrost": {"name":"Bifrost","logo":false},
