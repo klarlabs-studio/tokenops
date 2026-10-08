@@ -58,6 +58,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"deepinfra_account", "deepinfra-account"},
 		{"deepseek_account", "deepseek-account"},
 		{"devpass_account", "devpass-account"},
+		{"doubao_account", "doubao-account"},
 		{"fireworks", "fireworks-usage"},
 		{"gemini_cli", "gemini-cli"},
 		{"github_copilot", "github-copilot"},

@@ -17,6 +17,7 @@ var readers = []func() usage.Reader{
 	readerDeepInfra,
 	readerDeepSeek,
 	readerDevPass,
+	readerDoubao,
 	readerIBMBob,
 	readerKilo,
 	readerKimi,

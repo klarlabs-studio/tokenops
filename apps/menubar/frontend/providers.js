@@ -16,6 +16,7 @@ window.TOKENOPS_PROVIDERS = {
   "deepinfra": {"name":"DeepInfra","logo":false},
   "deepseek": {"name":"DeepSeek","logo":true},
   "devpass": {"name":"DevPass","logo":false},
+  "doubao": {"name":"Doubao","logo":true},
   "fireworks": {"name":"Fireworks","logo":true},
   "gemini": {"name":"Gemini","logo":true},
   "github": {"name":"Copilot","logo":true},
