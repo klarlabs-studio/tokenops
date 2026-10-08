@@ -80,6 +80,12 @@ func (c Config) registryHint(sourceTag string) string {
 			return "on; reads with the session `tokenops vendor-usage setup " + string(s.Provider) + "` stored"
 		}
 		return "connect it: `tokenops vendor-usage setup " + string(s.Provider) + "` reads the session from your browser"
+	case s.Credential == providers.AppKeychain:
+		if _, stored := c.VendorUsage.Accounts.Credentials[string(s.Provider)]; stored {
+			return "on; reads with the sign-in `tokenops vendor-usage setup " + string(s.Provider) + "` stored; run it again when it is refused"
+		}
+		return "opt-in: `tokenops vendor-usage setup " + string(s.Provider) + "` reads " + providers.DisplayName(string(s.Provider)) +
+			"'s own sign-in from the Keychain (macOS asks first)"
 	case s.Credential == providers.CLI:
 		return "on; runs " + s.Endpoint + " when " + providers.DisplayName(string(s.Provider)) + "'s CLI is installed, the CLI signing its own request"
 	case s.Credential == providers.LocalFile:

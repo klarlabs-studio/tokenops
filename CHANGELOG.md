@@ -24,6 +24,7 @@
 - **providers:** Amp: subscription agent usage and orb hours, Amp Free's daily allowance and individual credits, from the signed-in `amp usage` CLI, or with an access token (`AMP_API_KEY` or `tokenops vendor-usage setup amp`)
 - **providers:** Augment Code: credits used of the month's allowance, from the signed-in `auggie account status` CLI, or from app.augmentcode.com with the browser session `tokenops vendor-usage setup augment` reads (the daemon re-reads it only quietly)
 - **providers:** CodeRabbit: reviews this billing period from the signed-in `coderabbit usage` CLI, stored as a count (`count_<n>_*` attributes): CodeRabbit reports no allowance, so there is no percentage
+- **providers:** Zed: edit predictions used of the plan's allowance this billing cycle, from cloud.zed.dev with the Zed editor's own sign-in, which only `tokenops vendor-usage setup zed` reads from the Keychain (opt-in; the daemon never reads the Keychain for it)
 
 ### Fixed
 

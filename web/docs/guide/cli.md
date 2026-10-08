@@ -702,6 +702,7 @@ vendor's windows, busiest first:
 | Windsurf | `POST windsurf.com/_backend/.../GetPlanStatus` | daily and weekly quota, live |
 | xKiro | `GET /v1/usage` | the plan's spend windows, today's free tokens and the wallet balance |
 | z.ai GLM Coding Plan | `GET /api/monitor/usage/quota/limit` | 5-hour and weekly token windows |
+| Zed | `GET cloud.zed.dev/client/users/me` | edit predictions used of the plan's allowance this billing cycle |
 | ZenMux | `GET /api/v1/management/subscription/detail` | rolling 5-hour and 7-day quotas, and the pay-as-you-go balance |
 <!-- end generated: provider-subscriptions -->
 
@@ -802,6 +803,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | xAI | — | in the catalog only: metered through the proxy only; neither a plan nor an account is read | — | — |
 | xKiro | `xkiro-account` | the plan's spend windows, today's free tokens and the wallet balance | API key | CodexBar's source, the vendor's docs and fixtures |
 | z.ai | `zai-account` | 5-hour and weekly token windows | API key | the vendor's client source and fixtures |
+| Zed | `zed-account` | edit predictions used of the plan's allowance this billing cycle | another app's sign-in, from the Keychain at setup | CodexBar's source, the vendor's docs and fixtures |
 | ZenMux | `zenmux-account` | rolling 5-hour and 7-day quotas, and the pay-as-you-go balance | API key | CodexBar's source, the vendor's docs and fixtures |
 | Zhipu AI | — | in the catalog only: z.ai's mainland-China platform: its endpoints, opencode IDs and prices are known; no reader reads its plan yet | — | — |
 <!-- end generated: provider-list -->
