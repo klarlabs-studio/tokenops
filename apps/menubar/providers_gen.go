@@ -23,6 +23,7 @@ var providerNames = map[string]string{
 	"kilo":        "Kilo",
 	"kimi":        "Kimi",
 	"litellm":     "LiteLLM",
+	"llm-proxy":   "LLM Proxy",
 	"minimax":     "MiniMax",
 	"mistral":     "Mistral",
 	"moonshot":    "Moonshot",

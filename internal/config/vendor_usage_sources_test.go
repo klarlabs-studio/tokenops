@@ -62,6 +62,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"kilo_account", "kilo-account"},
 		{"kimi_account", "kimi-account"},
 		{"litellm_gateway", "litellm-account"},
+		{"llm_proxy_gateway", "llm-proxy-account"},
 		{"minimax_account", "minimax-account"},
 		{"moonshot_account", "moonshot-account"},
 		{"nous_account", "nous-account"},

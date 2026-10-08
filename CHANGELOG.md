@@ -20,6 +20,7 @@
 - **providers:** opencode Go's 5-hour, weekly and monthly windows are read from `GET /zen/go/v1/usage` with the opencode API key (`OPENCODE_API_KEY`, opencode's auth.json, or `tokenops vendor-usage setup opencode-go`); it was in the catalog only
 - **providers:** OpenAI's API organisation spend this month is read from the Administration API (`GET /v1/organization/costs`) with an organisation admin key from `OPENAI_ADMIN_KEY` or `tokenops vendor-usage setup openai`; the API keys the harnesses use are never sent there
 - **providers:** sub2api gateways are read from `GET /v1/usage` with a group API key: a key's quota and 5-hour, daily and 7-day limits, a subscription group's daily, weekly and monthly limits, or the wallet balance; recognised where a harness sends a key to one, or named with `SUB2API_BASE_URL` and `SUB2API_API_KEY`
+- **providers:** LLM Proxy (LLM-API-Key-Proxy) gateways are read from `GET /v1/quota-stats`: the tightest quota group left on the credentials it pools and when it resets; recognised by its root route, or named with `LLM_PROXY_BASE_URL` and `LLM_PROXY_API_KEY`
 - **vendor-usage:** `tokenops vendor-usage setup <gateway>` connects a self-hosted or hosted gateway (LiteLLM, Bifrost, ClawRouter, sub2api, ...) by its address and a key, checked once there before either is stored; plain HTTP only to a local or private-network host
 
 ### Fixed
