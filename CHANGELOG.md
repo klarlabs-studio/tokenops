@@ -8,6 +8,7 @@
 - **team plane server:** `tokenops-team`, a Go service with Postgres, behind Caddy. Single-use invites, per-device tokens stored only as hashes, idempotent and rate-limited ingestion, totals that withhold any group of fewer than three people, individual figures only under an owner's grant that the member sees with every view recorded in an audit log, retention (400 days for figures, 730 for the audit log), and a small server-rendered web view. `deploy/team` runs it with Docker Compose on a Hetzner VPS in Germany, with nightly Postgres dumps; its README covers setup, backups and upgrades
 - **vendor-usage:** `tokenops vendor-usage setup <provider>` connects any vendor account TokenOps reads (OpenRouter, DeepSeek, Moonshot, z.ai, Kimi, MiniMax, Synthetic, Chutes, DeepInfra, Vercel) when no harness or environment variable holds its key: the key is typed without echo, checked with one reading, and only then stored in your config (redacted wherever config is shown) and sent only to that vendor
 - **providers:** ClinePass: the subscription's 5-hour, weekly and monthly windows, read with a Cline API key (`CLINE_API_KEY`, `CLINEPASS_API_KEY`, opencode's `cline-pass` key or `vendor-usage setup clinepass`)
+- **providers:** Kilo: Kilo Pass credits used this billing period and the prepaid credit left, read with a Kilo API key (`KILO_API_KEY`, opencode's `kilo` key or `vendor-usage setup kilo`)
 
 ### Fixed
 

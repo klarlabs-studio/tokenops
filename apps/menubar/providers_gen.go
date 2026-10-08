@@ -17,6 +17,7 @@ var providerNames = map[string]string{
 	"fireworks":   "Fireworks",
 	"gemini":      "Gemini",
 	"github":      "Copilot",
+	"kilo":        "Kilo",
 	"kimi":        "Kimi",
 	"litellm":     "LiteLLM",
 	"minimax":     "MiniMax",
