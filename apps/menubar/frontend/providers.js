@@ -51,6 +51,7 @@ window.TOKENOPS_PROVIDERS = {
   "pi": {"name":"Pi","logo":false},
   "poe": {"name":"Poe","logo":true},
   "qwencloud": {"name":"Qwen Cloud","logo":true},
+  "sakana": {"name":"Sakana AI","logo":true},
   "sub2api": {"name":"sub2api","logo":false},
   "synthetic": {"name":"Synthetic","logo":false},
   "together": {"name":"Together AI","logo":false},

@@ -63,6 +63,24 @@ func TestProviderSetupWritesNothingForARefusedKey(t *testing.T) {
 	}
 }
 
+// A session no browser is read for (Sakana) is pasted: setup asks for the
+// Cookie header, never reads a browser, and the daemon never re-reads it.
+func TestProviderSetupPastesASessionOnlyProvider(t *testing.T) {
+	sent := fakeVerify(t, "sakana", "session=fixture")
+	path := seedConfig(t)
+	out, err := runCookieSetupCmd(t, "session=fixture\n", "sakana", "--config", path, "--no-restart")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if !strings.Contains(out, "Cookie header for console.sakana.ai") || strings.Contains(out, "Keychain") {
+		t.Errorf("prompt:\n%s", out)
+	}
+	cfg, _ := config.ReadMutable(path)
+	if c := cfg.VendorUsage.Accounts.Credentials["sakana"]; c.Key != "session=fixture" || c.FromBrowser || len(*sent) != 1 {
+		t.Errorf("stored %+v", c)
+	}
+}
+
 func TestProviderSetupNamesWhatItCovers(t *testing.T) {
 	_, err := runCookieSetupCmd(t, "", "acme")
 	if err == nil || !strings.Contains(err.Error(), "openrouter") {

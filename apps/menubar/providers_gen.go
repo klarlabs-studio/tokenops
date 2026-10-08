@@ -54,6 +54,7 @@ var providerNames = map[string]string{
 	"pi":               "Pi",
 	"poe":              "Poe",
 	"qwencloud":        "Qwen Cloud",
+	"sakana":           "Sakana AI",
 	"sub2api":          "sub2api",
 	"synthetic":        "Synthetic",
 	"together":         "Together AI",

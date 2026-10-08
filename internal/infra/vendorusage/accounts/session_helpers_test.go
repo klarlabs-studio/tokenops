@@ -38,7 +38,10 @@ func newWebServer(t *testing.T, session string, refuse int, routes map[string]st
 		}
 		// A console's gateway names the call in its query: a route may be
 		// keyed "path#api" or "path#action".
-		body, ok := routes[r.URL.Path+"#"+r.URL.Query().Get("api")]
+		body, ok := routes[r.URL.Path+"?"+r.URL.RawQuery]
+		if !ok {
+			body, ok = routes[r.URL.Path+"#"+r.URL.Query().Get("api")]
+		}
 		if !ok {
 			body, ok = routes[r.URL.Path+"#"+r.URL.Query().Get("action")]
 		}

@@ -46,6 +46,7 @@ var readers = []func() usage.Reader{
 	readerOpenRouter,
 	readerPoe,
 	readerQwenCloud,
+	readerSakana,
 	readerSynthetic,
 	readerV0,
 	readerVenice,
