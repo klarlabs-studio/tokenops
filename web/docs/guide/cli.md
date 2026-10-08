@@ -673,6 +673,7 @@ vendor's own figures every 15 minutes:
 | Neuralwatt | `GET /v1/quota` | prepaid USD credit left, and the subscription's kWh allowance used this period |
 | OpenRouter | `GET /api/v1/key` | the key's spend, against its credit cap when it has one |
 | Poe | `GET /usage/current_balance` | the point balance left (points, not dollars) |
+| Venice | `GET /api/v1/billing/balance` | USD balance left, and the DIEM epoch allocation used when staking |
 | Vercel AI Gateway | `GET /v1/credits` | the team's credit balance |
 | xAI | `GET /v1/billing/teams/{team_id}/prepaid/balance` | the team's posted prepaid USD credit |
 <!-- end generated: provider-accounts -->
@@ -727,7 +728,7 @@ use read its own spend.
   with `tokenops vendor-usage enable vendor-accounts --disable`.
 
 <!-- begin generated: provider-env-vars -->
-The environment variables read for a key: `AIAND_API_KEY`, `AI_GATEWAY_API_KEY`, `CHUTES_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `FIREWORKS_API_KEY`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `OPENROUTER_API_KEY`, `POE_API_KEY`, `SYNTHETIC_API_KEY`.
+The environment variables read for a key: `AIAND_API_KEY`, `AI_GATEWAY_API_KEY`, `CHUTES_API_KEY`, `DEEPINFRA_API_KEY`, `DEEPSEEK_API_KEY`, `FIREWORKS_API_KEY`, `MOONSHOT_API_KEY`, `NEURALWATT_API_KEY`, `OPENROUTER_API_KEY`, `POE_API_KEY`, `SYNTHETIC_API_KEY`, `VENICE_API_KEY`, `VENICE_KEY`.
 <!-- end generated: provider-env-vars -->
 
 #### Every provider
@@ -773,6 +774,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | Poe | `poe-account` | the point balance left (points, not dollars) | API key | public docs and fixtures |
 | Synthetic | `synthetic-account` | the subscription's request quota | API key | public docs and fixtures |
 | Together AI | — | in the catalog only: billed per token; its endpoint and models.dev prices are known, its account is not read | — | — |
+| Venice | `venice-account` | USD balance left, and the DIEM epoch allocation used when staking | API key | public docs and fixtures |
 | Vercel | `vercel-account` | the team's credit balance | API key | public docs and fixtures |
 | xAI | `xai-account` | the team's posted prepaid USD credit | API key | public docs and fixtures |
 | z.ai | `zai-account` | 5-hour and weekly token windows | API key | the vendor's client source and fixtures |

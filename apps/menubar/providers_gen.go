@@ -33,6 +33,7 @@ var providerNames = map[string]string{
 	"poe":         "Poe",
 	"synthetic":   "Synthetic",
 	"together":    "Together AI",
+	"venice":      "Venice",
 	"vercel":      "Vercel",
 	"xai":         "xAI",
 	"zai":         "z.ai",

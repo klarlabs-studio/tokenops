@@ -70,6 +70,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"openrouter_account", "openrouter-account"},
 		{"poe_account", "poe-account"},
 		{"synthetic_account", "synthetic-account"},
+		{"venice_account", "venice-account"},
 		{"vercel_account", "vercel-account"},
 		{"xai_account", "xai-account"},
 		{"zai_account", "zai-account"},

@@ -30,6 +30,7 @@ window.TOKENOPS_PROVIDERS = {
   "poe": {"name":"Poe","logo":true},
   "synthetic": {"name":"Synthetic","logo":false},
   "together": {"name":"Together AI","logo":false},
+  "venice": {"name":"Venice","logo":true},
   "vercel": {"name":"Vercel","logo":false},
   "xai": {"name":"xAI","logo":true},
   "zai": {"name":"z.ai","logo":true},

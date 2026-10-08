@@ -14,6 +14,7 @@
 - **providers:** ai&: the organisation's USD spend in the last 30 days, summed exactly from its request logs (`GET /logs`), and out-of-credit (402) as limit reached; API key from setup, `AIAND_API_KEY` or opencode
 - **providers:** xAI: the team's posted prepaid USD credit from the Management API (`GET /v1/billing/teams/{team_id}/prepaid/balance`); `tokenops vendor-usage setup xai` asks for `TEAM_ID:MANAGEMENT_KEY`. xAI was in the catalog only
 - **providers:** Doubao (Volcengine Ark): the Coding Plan's 5-hour, weekly and monthly windows (the Agent Plan's when there is no Coding Plan), from Volcengine's signed OpenAPI; `tokenops vendor-usage setup doubao` asks for an AccessKey pair as `ACCESS_KEY_ID:SECRET_ACCESS_KEY`
+- **providers:** Venice: the USD balance left and, when staking, the share of the DIEM epoch allocation used (`GET /api/v1/billing/balance`); API key from setup, `VENICE_API_KEY` or opencode
 
 ### Fixed
 

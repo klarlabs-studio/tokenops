@@ -33,6 +33,7 @@ var registered = []func() Descriptor{
 	providerPoe,
 	providerSynthetic,
 	providerTogether,
+	providerVenice,
 	providerVercel,
 	providerXAI,
 	providerZAI,
