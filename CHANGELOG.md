@@ -51,6 +51,7 @@
 - **providers:** Alibaba Cloud Coding Plan: the 5-hour, weekly and monthly quotas from the Model Studio or Bailian console, read with the Coding Plan API key (`ALIBABA_CODING_PLAN_API_KEY`, `DASHSCOPE_API_KEY`, opencode's `alibaba-coding-plan` key) or the console's browser session (`vendor-usage setup alibaba`, `ALIBABA_CODING_PLAN_COOKIE`)
 - **providers:** Alibaba Cloud Token Plan: the Personal/Solo plan's 5-hour, weekly and monthly windows, or a Team plan's credit pool, from the Model Studio or Bailian console with its browser session (`vendor-usage setup alibabatokenplan`)
 - **providers:** Qwen Cloud: the Individual Token Plan's 5-hour, weekly and monthly windows from the Qwen Cloud console, read with its browser session (`vendor-usage setup qwencloud` or `QWEN_CLOUD_COOKIE`)
+- **providers:** Xiaomi MiMo: the balance (when in US dollars) and the Token Plan's monthly credits used, from the MiMo platform console with its browser session (`vendor-usage setup mimo`)
 - **vendor-usage:** browser-session providers are read the way the browser sends their cookies (several hosts, prefixed names, the whole host when the names are unknown), with at most one Keychain prompt in setup; a provider can be read with an API key or a session, or signed in to with a password (only the token is stored); a stored session the daemon cannot renew quietly turns its reading stale and the status says to run setup again
 
 ### Fixed

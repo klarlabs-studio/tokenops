@@ -41,6 +41,7 @@ var providerNames = map[string]string{
 	"kiro":             "Kiro",
 	"litellm":          "LiteLLM",
 	"llm-proxy":        "LLM Proxy",
+	"mimo":             "Xiaomi MiMo",
 	"minimax":          "MiniMax",
 	"mistral":          "Mistral",
 	"moonshot":         "Moonshot",

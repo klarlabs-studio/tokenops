@@ -36,6 +36,7 @@ var readers = []func() usage.Reader{
 	readerKilo,
 	readerKimi,
 	readerKiro,
+	readerMiMo,
 	readerMiniMax,
 	readerMoonshot,
 	readerNeuralWatt,

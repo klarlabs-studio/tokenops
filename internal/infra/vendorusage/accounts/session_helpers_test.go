@@ -1,6 +1,7 @@
 package accounts
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -52,6 +53,26 @@ func newWebServer(t *testing.T, session string, refuse int, routes map[string]st
 	}))
 	t.Cleanup(w.Close)
 	return w
+}
+
+// routesOf reads a fixture whose keys are request paths and whose values
+// are the answers, as webServer routes.
+func routesOf(t *testing.T, id string) map[string]string {
+	t.Helper()
+	var parts map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(fixture(t, id)), &parts); err != nil {
+		t.Fatal(err)
+	}
+	out := make(map[string]string, len(parts))
+	for k, v := range parts {
+		var s string
+		if json.Unmarshal(v, &s) == nil {
+			out[k] = s
+			continue
+		}
+		out[k] = string(v)
+	}
+	return out
 }
 
 // requests is how many requests reached the server.
