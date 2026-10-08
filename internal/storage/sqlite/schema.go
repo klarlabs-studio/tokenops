@@ -124,6 +124,33 @@ CREATE INDEX events_usage_idx ON events (
 );
 `,
 	},
+	{
+		Version: 6,
+		Name:    "events_generation",
+		SQL: `
+-- Counts every change to a stored event other than an insert: an update
+-- (re-attribution, a plan restamp) or a delete (retention). New events
+-- are found by rowid; this is how a reader keeping events in memory
+-- (EventCache) learns that ones it already holds changed, whichever
+-- process or release changed them. A trigger rather than application code
+-- because every process on the machine writes this store.
+CREATE TABLE events_generation (
+    id  INTEGER PRIMARY KEY CHECK (id = 1),
+    gen INTEGER NOT NULL
+) STRICT;
+INSERT INTO events_generation (id, gen) VALUES (1, 0);
+
+CREATE TRIGGER events_generation_on_update AFTER UPDATE ON events
+BEGIN
+    UPDATE events_generation SET gen = gen + 1 WHERE id = 1;
+END;
+
+CREATE TRIGGER events_generation_on_delete AFTER DELETE ON events
+BEGIN
+    UPDATE events_generation SET gen = gen + 1 WHERE id = 1;
+END;
+`,
+	},
 }
 
 type migration struct {
