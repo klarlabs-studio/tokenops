@@ -57,6 +57,7 @@ var registered = []func() Descriptor{
 	providerNeuralWatt,
 	providerNotion,
 	providerNous,
+	providerOllama,
 	providerOpenAI,
 	providerOpencode,
 	providerOpencodeGo,

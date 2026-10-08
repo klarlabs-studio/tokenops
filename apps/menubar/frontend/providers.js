@@ -54,6 +54,7 @@ window.TOKENOPS_PROVIDERS = {
   "neuralwatt": {"name":"Neuralwatt","logo":false},
   "notion": {"name":"Notion AI","logo":true},
   "nous": {"name":"Nous Portal","logo":true},
+  "ollama": {"name":"Ollama","logo":true},
   "openai": {"name":"Codex","logo":true},
   "opencode": {"name":"opencode","logo":false},
   "opencode-go": {"name":"opencode Go","logo":true},

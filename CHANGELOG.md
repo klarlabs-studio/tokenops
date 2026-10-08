@@ -78,6 +78,7 @@
 - **providers:** X API: the prepaid credit left on console.x.com, purchased plus free and below zero when overdrawn (`GET /api/me`, `/api/accounts/{id}/credits`), read with the console's browser session (`vendor-usage setup xapi`)
 - **providers:** LithosAI: the organisation's prepaid balance and its spend this UTC month (`GET /api/billing`, `/api/billing/spend`), read with the console's browser session (`vendor-usage setup lithosai`)
 - **providers:** Langdock: the included 5-hour session and weekly limits used (`usageSettings.getPersonalUsage`), read with app.langdock.com's browser session (`vendor-usage setup langdock`)
+- **providers:** Ollama Cloud: the monthly usage (or the older session and weekly windows) from ollama.com/settings, read with the browser session (`vendor-usage setup ollama`)
 
 ### Fixed
 

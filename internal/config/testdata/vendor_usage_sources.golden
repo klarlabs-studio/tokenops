@@ -60,6 +60,7 @@ muse_account	muse-account
 neuralwatt_account	neuralwatt-account
 notion_account	notion-account
 nous_account	nous-account
+ollama_web	ollama-web
 codex_app_server	codex-app-server
 codex_jsonl	codex-jsonl
 openai_admin	openai-admin

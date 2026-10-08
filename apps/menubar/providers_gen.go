@@ -57,6 +57,7 @@ var providerNames = map[string]string{
 	"neuralwatt":       "Neuralwatt",
 	"notion":           "Notion AI",
 	"nous":             "Nous Portal",
+	"ollama":           "Ollama",
 	"openai":           "Codex",
 	"opencode":         "opencode",
 	"opencode-go":      "opencode Go",
