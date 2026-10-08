@@ -54,7 +54,8 @@ type Descriptor struct {
 	Opencode []OpencodeID
 	// EnvVars are the conventional environment variables a key for this
 	// provider is found in. The key goes to the endpoint of the first
-	// Opencode ID, so a provider with EnvVars needs one.
+	// Opencode ID; a provider opencode does not know (no Opencode ID)
+	// sends it to the endpoint named by its own ID.
 	EnvVars []string
 	// ModelsDev are the models.dev provider IDs whose per-token rates
 	// price this provider's turns (ADR 0009 §6). A coding plan's own ID,
@@ -155,6 +156,10 @@ const (
 	// FromClientSource readers were built from the vendor's own client
 	// source, the endpoint being unpublished, and tested against fixtures.
 	FromClientSource Verification = "client-source"
+	// FromCodexBar readers were ported from CodexBar's provider source
+	// (github.com/steipete/CodexBar), with the vendor's docs where it has
+	// them, and tested against fixtures; never against a live account.
+	FromCodexBar Verification = "codexbar"
 )
 
 // Source is one way a provider's usage is read. Its Tag is stamped on every

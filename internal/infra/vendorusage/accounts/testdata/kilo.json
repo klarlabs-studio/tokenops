@@ -1,0 +1,30 @@
+[
+  {
+    "result": {
+      "data": {
+        "json": {
+          "creditBlocks": [
+            {"id": "blk_1", "amount_mUsd": 20000000, "balance_mUsd": 12500000},
+            {"id": "blk_2", "amount_mUsd": 5000000, "balance_mUsd": 2500000}
+          ],
+          "autoTopUpEnabled": false
+        }
+      }
+    }
+  },
+  {
+    "result": {
+      "data": {
+        "json": {
+          "subscription": {
+            "tier": "tier_49",
+            "currentPeriodUsageUsd": 27.5,
+            "currentPeriodBaseCreditsUsd": 49,
+            "currentPeriodBonusCreditsUsd": 6,
+            "nextBillingAt": "2026-11-01T00:00:00.000Z"
+          }
+        }
+      }
+    }
+  }
+]

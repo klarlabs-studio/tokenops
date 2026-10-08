@@ -1,0 +1,22 @@
+{
+  "profile": {
+    "instances": [
+      {
+        "instance_id": "inst-1",
+        "instance_name": "Example Org",
+        "user_id": "user-1",
+        "plan_name": "Pro",
+        "refresh_at": 1793491200,
+        "region_domain": "us-east.bob.ibm.com",
+        "teams": [
+          {"id": "team-a", "name": "Platform", "budget_limit": 1000, "usage": 200},
+          {"id": "team-b", "name": "Data", "budget_limit": 500, "usage": 100}
+        ]
+      }
+    ]
+  },
+  "budgets": {
+    "team-a": {"usage": 300, "budget_limit": 1000},
+    "team-b": {"usage": 150, "budget_limit": null}
+  }
+}
