@@ -46,9 +46,9 @@ type Reading struct {
 	// UsedUSD is spend in the period, when the vendor reports it.
 	UsedUSD float64
 	HasUsed bool
-	// UsedPeriod is the trailing period UsedUSD covers when the vendor
-	// reports spend over the last N days rather than its billing period
-	// (xAI's last 30 days); 0 is the billing period.
+	// UsedPeriod is the trailing period UsedUSD and CreditsUsed cover when
+	// the vendor reports spend over the last N days rather than its
+	// billing period (xAI's last 30 days); 0 is the billing period.
 	UsedPeriod time.Duration
 	// LimitUSD is the cap UsedUSD is spent against, 0 for none.
 	LimitUSD float64
@@ -61,6 +61,11 @@ type Reading struct {
 	Credits     float64
 	CreditsUnit string
 	HasCredits  bool
+	// CreditsUsed is spend in the vendor's own unit, CreditsUnit, over
+	// UsedPeriod (Poe's points over the last 30 days), as reported and
+	// never converted to dollars.
+	CreditsUsed    float64
+	HasCreditsUsed bool
 	// LimitReached is the vendor saying requests are blocked.
 	LimitReached bool
 	// Subscription marks an account on a plan rather than billed per
@@ -74,7 +79,7 @@ type Reading struct {
 // account with no plan windows, no spend and no balance (a key on a
 // vendor's free tier, say).
 func (r Reading) Empty() bool {
-	return len(r.Windows) == 0 && !r.HasUsed && !r.HasBalance && !r.HasCredits && r.LimitUSD == 0 && !r.LimitReached
+	return len(r.Windows) == 0 && !r.HasUsed && !r.HasBalance && !r.HasCredits && !r.HasCreditsUsed && r.LimitUSD == 0 && !r.LimitReached
 }
 
 // Window is one usage window: the share used and when it resets.

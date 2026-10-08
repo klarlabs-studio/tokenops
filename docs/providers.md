@@ -128,7 +128,12 @@ the helpers in `http.go`, and returns a `usage.Reading`:
   month's.
 - **Balance**: `BalanceUSD` with `HasBalance` (`balance_usd`); a balance in
   the vendor's own unit (Poe's points) is `Credits` with `CreditsUnit` and
-  `HasCredits` (`balance_credits`), never converted to dollars.
+  `HasCredits` (`balance_credits`), never converted to dollars. A pool of
+  credits with no window (Warp's add-on credits) is such a balance too.
+- **Spend in the vendor's own unit**: `CreditsUsed` with `HasCreditsUsed`
+  and `CreditsUnit` over `UsedPeriod` (`used_credits`, Poe's points over
+  the last 30 days), never converted to dollars. A history that cannot be
+  read whole is left out rather than summed in part.
 - `Scope` says what the figures cover: `"key"`, `"account"`, `"team"`.
 
 An empty reading (`Reading.Empty()`) is not stored. A refused key is

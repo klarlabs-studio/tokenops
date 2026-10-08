@@ -45,12 +45,26 @@ func TestWarpReadsTheCredits(t *testing.T) {
 	if w := got.Windows[0]; w.Name != "credits" || !approx(w.UsedPct, 40) || !w.ResetsAt.Equal(time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)) {
 		t.Errorf("credits %+v", w)
 	}
+	// The add-on pool, the user's and the workspace's grants together, is
+	// a credits balance with no window, never dollars.
+	if !got.HasCredits || got.Credits != 500 || got.CreditsUnit != "credits" || got.HasBalance {
+		t.Errorf("add-on credits %+v", got)
+	}
+	a := usage.NewEnvelope(time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC), Warp{}, got).Attributes
+	if a["balance_credits"] != "500" || a["balance_credits_unit"] != "credits" || a["window_0_name"] != "credits" {
+		t.Errorf("attributes %v", a)
+	}
 }
 
 func TestWarpUnlimitedAndUnknown(t *testing.T) {
 	srv := warpServer(t, `{"data":{"user":{"__typename":"UserOutput","user":{"requestLimitInfo":{"isUnlimited":true,"requestLimit":0,"requestsUsedSinceLastRefresh":12}}}}}`)
 	if got, err := (Warp{BaseURL: srv.URL}).Read(context.Background(), "wk"); err != nil || !got.Empty() {
 		t.Errorf("unlimited = %+v, %v", got, err)
+	}
+	// An unlimited plan's add-on pool is still read.
+	pool := warpServer(t, `{"data":{"user":{"__typename":"UserOutput","user":{"requestLimitInfo":{"isUnlimited":true},"bonusGrants":[{"requestCreditsGranted":"100","requestCreditsRemaining":"0"}],"workspaces":[{"bonusGrantsInfo":null}]}}}}`)
+	if got, err := (Warp{BaseURL: pool.URL}).Read(context.Background(), "wk"); err != nil || got.Subscription || !got.HasCredits || got.Credits != 0 || got.Empty() {
+		t.Errorf("unlimited with a spent pool = %+v, %v", got, err)
 	}
 	unknown := warpServer(t, `{"data":{"user":{"__typename":"UserFacingError"}}}`)
 	if _, err := (Warp{BaseURL: unknown.URL}).Read(context.Background(), "wk"); err == nil || errors.Is(err, usage.ErrAuth) {

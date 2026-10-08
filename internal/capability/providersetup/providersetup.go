@@ -160,6 +160,13 @@ func Summary(r usage.Reading) []string {
 	if r.HasCredits {
 		out = append(out, fmt.Sprintf("balance: %s %s", strconv.FormatFloat(r.Credits, 'f', -1, 64), r.CreditsUnit))
 	}
+	if r.HasCreditsUsed {
+		line := fmt.Sprintf("spend: %s %s", strconv.FormatFloat(r.CreditsUsed, 'f', -1, 64), r.CreditsUnit)
+		if days := int(r.UsedPeriod / (24 * time.Hour)); days > 0 {
+			line += fmt.Sprintf(" over the last %d days", days)
+		}
+		out = append(out, line)
+	}
 	if r.LimitReached {
 		out = append(out, "the vendor reports its limit reached")
 	}
