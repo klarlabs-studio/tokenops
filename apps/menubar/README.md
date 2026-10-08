@@ -57,9 +57,15 @@ make menubar-test   # tests, no window needed
   route shows its latest readings and says it cannot poll on demand.
 - Each coach finding has a mark for its level, with its words on hover:
   ▲ needs attention, ● worth a look, ○ for your information.
+- Each plan shows its vendor's own logo (`frontend/logos`, see its
+  NOTICE.md for the source and the trademarks).
 - The icon appears at once and fills in when the first read returns; the
-  tray refreshes every minute. A daemon that is slow keeps the last
-  reading on screen, marked; one that is not running says how to start it.
+  tray refreshes every minute. While a read runs for more than a second,
+  the panel says so with a spinner and how long it has taken, and keeps
+  what it showed. Refresh spins and reads "Refreshing…" until the new
+  readings are in. A read that takes too long, or fails, says in plain
+  words what is still shown and what happens next; the cause goes to the
+  log. A daemon that is not running says how to start it.
 - A click opens the panel; a right click opens the menu: Refresh, Launch at
   Login (macOS 13+, packaged app), Alerts and Quit.
 - Alerts are desktop notifications, on until you untick them (remembered

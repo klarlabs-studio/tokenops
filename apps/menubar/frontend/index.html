@@ -11,6 +11,7 @@
 <div class="panel">
   <nav id="tabs" class="tabs" role="tablist" aria-label="Plans"></nav>
   <main id="detail" class="detail" aria-live="polite"></main>
+  <p id="loading" class="loading" role="status" hidden><span class="spinner" aria-hidden="true"></span><span id="loading-text"></span></p>
   <p id="error" class="error" hidden></p>
   <p id="note" class="refresh-note" role="status" hidden></p>
   <footer class="menu">
@@ -25,8 +26,8 @@
       </select>
     </label>
     <button id="refresh" type="button" class="row">
-      <span class="row-icon" aria-hidden="true">↻</span>
-      <span class="row-label">Refresh</span>
+      <span class="row-icon refresh-icon" aria-hidden="true">↻</span>
+      <span class="row-label" id="refresh-label">Refresh</span>
       <kbd>⌘R</kbd>
     </button>
     <button id="close" type="button" class="row">

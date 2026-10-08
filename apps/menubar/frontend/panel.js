@@ -7,10 +7,11 @@
   var NAMES = { anthropic: "Claude", openai: "Codex", gemini: "Gemini", github: "Copilot", cursor: "Cursor",
     fireworks: "Fireworks", openrouter: "OpenRouter", deepseek: "DeepSeek", moonshot: "Moonshot", kimi: "Kimi",
     zai: "z.ai", minimax: "MiniMax" };
-  // Two letters tell vendors apart where one would not (Claude, Codex,
-  // Copilot, Cursor).
-  var MARKS = { anthropic: "Cl", openai: "Cx", gemini: "Ge", github: "Co", cursor: "Cu" };
-  var state = { view: null, selected: null };
+  // Each vendor's own logo (logos/NOTICE.md); two letters for a vendor
+  // without one.
+  var LOGOS = { anthropic: 1, openai: 1, gemini: 1, github: 1, cursor: 1, openrouter: 1, deepseek: 1,
+    moonshot: 1, kimi: 1, zai: 1, minimax: 1, fireworks: 1 };
+  var state = { view: null, selected: null, refreshing: false };
   try { state.selected = localStorage.getItem("tokenops.tab"); } catch (e) { /* a private window */ }
 
   function invoke(command, args) { return window.vitra.invoke(command, args || {}, ""); }
@@ -23,6 +24,20 @@
   }
 
   function name(p) { return NAMES[p] || (p ? p.charAt(0).toUpperCase() + p.slice(1) : "?"); }
+
+  function mark(p, cls) {
+    var m = el("span", "mark " + (cls || ""));
+    if (LOGOS[p]) {
+      var img = el("img");
+      img.src = "logos/" + p + ".svg";
+      img.alt = "";
+      m.appendChild(img);
+    } else {
+      m.classList.add("letters");
+      m.textContent = name(p).slice(0, 2);
+    }
+    return m;
+  }
 
   function level(pct) { return pct >= 80 ? "high" : pct >= 60 ? "medium" : "low"; }
 
@@ -128,7 +143,7 @@
       b.type = "button";
       b.setAttribute("role", "tab");
       b.setAttribute("aria-selected", r.provider === state.selected ? "true" : "false");
-      b.appendChild(el("span", "mark mark-" + r.provider, MARKS[r.provider] || name(r.provider).slice(0, 2)));
+      b.appendChild(mark(r.provider));
       b.appendChild(el("span", "tab-name", name(r.provider)));
       var mini = el("span", "mini");
       var f = el("span", "mini-fill " + level(busiest(r)));
@@ -215,7 +230,10 @@
     main.textContent = "";
     var head = el("header", "head");
     var left = el("div");
-    left.appendChild(el("h2", null, name(r.provider)));
+    var h = el("h2");
+    h.appendChild(mark(r.provider, "mark-large"));
+    h.appendChild(document.createTextNode(name(r.provider)));
+    left.appendChild(h);
     var age = v.updated ? Math.round((Date.now() - new Date(v.updated)) / 60000) : 0;
     left.appendChild(el("div", "muted", age < 1 ? "Updated just now" : "Updated " + age + "m ago"));
     head.appendChild(left);
@@ -288,13 +306,40 @@
     main.appendChild(box);
   }
 
+  // While a read is in progress the panel keeps what it shows and says,
+  // after a second, how long it has been fetching.
+  function loading() {
+    var v = state.view, box = document.getElementById("loading");
+    var since = v ? (v.loading_since ? Date.parse(v.loading_since) : 0) : Date.now() - 1000;
+    var secs = since ? Math.floor((Date.now() - since) / 1000) : 0;
+    box.hidden = !since || secs < 1;
+    if (box.hidden) return;
+    var text = "Fetching your usage…";
+    if (secs >= 3) text = "Fetching your usage… " + secs + "s";
+    if (secs >= 15) text = "This is taking a while: " + secs + "s so far." +
+      (v && v.glance ? " What you see is from before." : "");
+    document.getElementById("loading-text").textContent = text;
+  }
+  setInterval(loading, 1000);
+
+  function refreshButton() {
+    var busy = state.refreshing || !!(state.view && state.view.refreshing);
+    var b = document.getElementById("refresh");
+    b.classList.toggle("busy", busy);
+    b.setAttribute("aria-busy", busy ? "true" : "false");
+    document.getElementById("refresh-label").textContent = busy ? "Refreshing…" : "Refresh";
+  }
+
   function render() {
     var v = state.view || {};
+    loading();
+    refreshButton();
     var error = document.getElementById("error");
     var head = (v.glance && v.glance.plan_headroom) || {};
     var msg = v.error || (head.error ? (head.hint || head.error) : "");
     error.hidden = !msg;
     error.textContent = msg;
+    error.classList.toggle("waiting", !!(v.error && v.waiting));
     var note = document.getElementById("note");
     note.hidden = !v.note;
     note.textContent = v.note || "";
@@ -325,33 +370,41 @@
   function show(v) { state.view = v; render(); }
 
   window.vitra.on("glance.update", show);
+  // Rejections are logged; the panel says what happened in words.
+  function failed(what, err) {
+    if (window.console) console.error(what, err);
+  }
+  render();
   invoke("glance.follow").then(show, function (err) {
-    show({ error: (err && err.message) || "the daemon could not be read" });
+    failed("glance.follow", err);
+    show({ error: "Your usage couldn't be fetched just now. TokenOps will try again in a minute." });
   });
   document.getElementById("preset").addEventListener("change", function (e) {
     invoke("coach.preset", { preset: e.target.value }).then(show, function (err) {
+      failed("coach.preset", err);
       state.view = state.view || {};
-      state.view.error = "Coach not changed: " + ((err && err.message) || "refused");
+      state.view.error = "The coach setting wasn't changed. Try again in a moment.";
       render();
     });
   });
   // Refresh asks the daemon's readers to poll now; re-reading alone would
   // return the readings the daemon already had.
-  var refreshButton = document.getElementById("refresh");
   function refresh() {
-    if (refreshButton.disabled) return;
-    refreshButton.disabled = true;
+    if (state.refreshing || (state.view && state.view.refreshing)) return;
+    state.refreshing = true;
+    refreshButton();
     invoke("sources.refresh").then(function (v) {
-      refreshButton.disabled = false;
+      state.refreshing = false;
       show(v);
     }, function (err) {
-      refreshButton.disabled = false;
+      failed("sources.refresh", err);
+      state.refreshing = false;
       state.view = state.view || {};
-      state.view.error = "Not refreshed: " + ((err && err.message) || "refused");
+      state.view.error = "Refresh didn't go through. TokenOps refreshes on its own every minute.";
       render();
     });
   }
-  refreshButton.addEventListener("click", refresh);
+  document.getElementById("refresh").addEventListener("click", refresh);
   document.getElementById("close").addEventListener("click", function () { invoke("panel.close"); });
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape") invoke("panel.close");
