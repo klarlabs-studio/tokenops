@@ -186,14 +186,29 @@ func (s *Store) OrgByID(ctx context.Context, id string) (Org, error) {
 }
 
 // SetPrivacy changes an organisation's minimum group size and retention.
+//
+// Raising the minimum group size withdraws every released week, to be
+// released again under the new size: weeks released under the old one
+// show groups the organisation has now decided are too small. Lowering it
+// keeps them (they are stricter than needed); new weeks use the new size.
 func (s *Store) SetPrivacy(ctx context.Context, actor Principal, minGroup, retentionDays int) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
+		var old int
+		if err := tx.QueryRow(ctx, `SELECT min_group_size FROM orgs WHERE id = $1 FOR UPDATE`, actor.OrgID).Scan(&old); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `UPDATE orgs SET min_group_size = $2, retention_days = $3 WHERE id = $1`,
 			actor.OrgID, minGroup, retentionDays); err != nil {
 			return err
 		}
-		return audit(ctx, tx, actor.OrgID, &actor, "settings.changed", "",
-			fmt.Sprintf("min_group_size=%d retention_days=%d", minGroup, retentionDays))
+		detail := fmt.Sprintf("min_group_size=%d retention_days=%d", minGroup, retentionDays)
+		if minGroup > old {
+			if _, err := tx.Exec(ctx, `DELETE FROM released_weeks WHERE org_id = $1`, actor.OrgID); err != nil {
+				return err
+			}
+			detail += " (released weeks withdrawn, to be released again)"
+		}
+		return audit(ctx, tx, actor.OrgID, &actor, "settings.changed", "", detail)
 	})
 }
 
@@ -555,7 +570,7 @@ func (s *Store) RemoveMember(ctx context.Context, actor Principal, memberID stri
 			`DELETE FROM tokens WHERE member_id = $1`,
 			`DELETE FROM grants WHERE grantee_id = $1`,
 			`DELETE FROM team_members WHERE member_id = $1`,
-			`UPDATE members SET removed_at = now() WHERE id = $1`,
+			`UPDATE members SET removed_at = now(), email = NULL WHERE id = $1`,
 		} {
 			if _, err := tx.Exec(ctx, q, memberID); err != nil {
 				return err
@@ -579,49 +594,6 @@ func scanRow(r pgx.CollectableRow) (team.Row, error) {
 	return row, err
 }
 
-// Query selects figures to aggregate.
-type Query struct {
-	OrgID  string
-	By     team.Dimension
-	Period team.Period
-	// Since and Until bound the days, Until exclusive.
-	Since, Until time.Time
-	// TeamID narrows a repo or kind breakdown to one team's members.
-	TeamID string
-}
-
-// Aggregate sums the figures by period and dimension, with how many
-// people contributed to each row. It does not suppress: the caller applies
-// team.Suppress with the organisation's minimum group size.
-func (s *Store) Aggregate(ctx context.Context, q Query) ([]team.Row, error) {
-	var teamFilter *string
-	if q.TeamID != "" {
-		teamFilter = &q.TeamID
-	}
-	var sql string
-	switch q.By {
-	case team.ByTeam:
-		sql = `SELECT date_trunc($4::text, b.day::timestamp)::date, t.name, ` + sums + `
-			FROM metric_buckets b JOIN team_members tm ON tm.member_id = b.member_id JOIN teams t ON t.id = tm.team_id
-			WHERE b.org_id = $1 AND b.day >= $2 AND b.day < $3 AND ($5::uuid IS NULL OR t.id = $5)
-			GROUP BY 1, 2 ORDER BY 1, 2`
-	case team.ByRepo, team.ByKind:
-		col := map[team.Dimension]string{team.ByRepo: "b.repo", team.ByKind: "b.kind"}[q.By]
-		sql = `SELECT date_trunc($4::text, b.day::timestamp)::date, ` + col + `, ` + sums + `
-			FROM metric_buckets b
-			WHERE b.org_id = $1 AND b.day >= $2 AND b.day < $3
-			AND ($5::uuid IS NULL OR b.member_id IN (SELECT member_id FROM team_members WHERE team_id = $5))
-			GROUP BY 1, 2 ORDER BY 1, 2`
-	default:
-		return nil, fmt.Errorf("dimension %q", q.By)
-	}
-	rows, err := s.pool.Query(ctx, sql, q.OrgID, q.Since, q.Until, string(q.Period), teamFilter)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, scanRow)
-}
-
 // MemberSeries sums one member's figures by period and kind of work.
 func (s *Store) MemberSeries(ctx context.Context, memberID string, period team.Period, since, until time.Time) ([]team.Row, error) {
 	rows, err := s.pool.Query(ctx, `SELECT date_trunc($4::text, b.day::timestamp)::date, b.kind, `+sums+`
@@ -640,13 +612,15 @@ type MemberInfo struct {
 	Role        team.Role
 	TeamIDs     []string
 	TeamNames   []string
+	// Email is the address single sign-on signs this member in by, or "".
+	Email string
 }
 
 // Members lists an organisation's current members with their teams.
 func (s *Store) Members(ctx context.Context, orgID string) ([]MemberInfo, error) {
 	rows, err := s.pool.Query(ctx, `SELECT m.id, m.display_name, m.role,
 		COALESCE(array_agg(t.id::text ORDER BY t.name) FILTER (WHERE t.id IS NOT NULL), '{}'),
-		COALESCE(array_agg(t.name ORDER BY t.name) FILTER (WHERE t.id IS NOT NULL), '{}')
+		COALESCE(array_agg(t.name ORDER BY t.name) FILTER (WHERE t.id IS NOT NULL), '{}'), COALESCE(m.email, '')
 		FROM members m LEFT JOIN team_members tm ON tm.member_id = m.id LEFT JOIN teams t ON t.id = tm.team_id
 		WHERE m.org_id = $1 AND m.removed_at IS NULL GROUP BY m.id ORDER BY m.display_name`, orgID)
 	if err != nil {
@@ -655,7 +629,7 @@ func (s *Store) Members(ctx context.Context, orgID string) ([]MemberInfo, error)
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (MemberInfo, error) {
 		var m MemberInfo
 		var role string
-		err := r.Scan(&m.ID, &m.DisplayName, &role, &m.TeamIDs, &m.TeamNames)
+		err := r.Scan(&m.ID, &m.DisplayName, &role, &m.TeamIDs, &m.TeamNames, &m.Email)
 		m.Role = team.Role(role)
 		return m, err
 	})
@@ -855,6 +829,7 @@ func (s *Store) Me(ctx context.Context, memberID string) (teamwire.Me, error) {
 		return me, err
 	}
 	me.Teams = append([]string{}, info.TeamNames...)
+	me.SSOEmail = info.Email
 	rows, err := s.pool.Query(ctx, `SELECT id, name, created_at, last_seen_at, revoked_at FROM devices WHERE member_id = $1 ORDER BY created_at`, memberID)
 	if err != nil {
 		return me, err
@@ -941,6 +916,10 @@ func (s *Store) Purge(ctx context.Context, auditDays int) (PurgeResult, error) {
 		if _, err := s.pool.Exec(ctx, `DELETE FROM device_days dd USING devices d WHERE dd.device_id = d.id AND d.org_id = $1 AND dd.day < $2`, o.id, cutoff); err != nil {
 			return r, err
 		}
+		// A released week goes once any of its days is past retention.
+		if _, err := s.pool.Exec(ctx, `DELETE FROM released_weeks WHERE org_id = $1 AND week_start < $2`, o.id, cutoff); err != nil {
+			return r, err
+		}
 	}
 	steps := []struct {
 		n   *int64
@@ -951,6 +930,7 @@ func (s *Store) Purge(ctx context.Context, auditDays int) (PurgeResult, error) {
 		{&r.Tokens, `DELETE FROM tokens WHERE (expires_at IS NOT NULL AND expires_at < $1) OR revoked_at < $1 OR (kind = 'login' AND used_at IS NOT NULL)`, now},
 		{&r.Invites, `DELETE FROM invites WHERE expires_at < $1`, now.AddDate(0, 0, -30)},
 		{&r.Batches, `DELETE FROM ingest_batches WHERE received_at < $1`, now.AddDate(0, 0, -30)},
+		{new(int64), `DELETE FROM sso_logins WHERE expires_at < $1`, now},
 	}
 	for _, st := range steps {
 		tag, err := s.pool.Exec(ctx, st.sql, st.arg)

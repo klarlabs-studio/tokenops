@@ -1,5 +1,6 @@
 # The TokenOps team plane (cmd/tokenops-team), built from this repository.
-# Build context is the repository root: see docker-compose.yml.
+# Build context is the repository root: see docker-compose.build.yml. The
+# release publishes an image built from its archives instead (Dockerfile.release).
 FROM golang:1.26-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./

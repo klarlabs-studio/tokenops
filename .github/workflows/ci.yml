@@ -148,6 +148,63 @@ jobs:
         working-directory: .
         # A relative output path, as the release passes it.
         run: scripts/build-menubar-app.sh v0.0.0-ci menubar-dist && test -d menubar-dist/TokenOps.app
+      # Handed to "Release dry run", as release.yml hands it to goreleaser.
+      - name: Pack
+        working-directory: .
+        run: tar -czf menubar-app.tar.gz -C menubar-dist TokenOps.app
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: menubar-app
+          path: menubar-app.tar.gz
+          retention-days: 1
+
+  release-dry-run:
+    name: Release dry run
+    # A release publishes nothing unless the menu bar build, goreleaser and
+    # the team image all succeed, so none of them may build for the first
+    # time on a tag. This runs goreleaser exactly as release.yml does, as a
+    # snapshot that publishes nothing, then builds the team image from the
+    # snapshot's archives with the script the release uses, without pushing.
+    needs: [menubar]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v5.4.0
+        with:
+          go-version: "1.26"
+          cache: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: menubar-app
+      - name: Unpack the menu bar app
+        run: mkdir -p menubar-dist && tar -xzf menubar-app.tar.gz -C menubar-dist && rm menubar-app.tar.gz
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
+        with:
+          version: "v2.18.2"
+          args: release --snapshot --clean
+        env:
+          # A snapshot never pushes the cask; the template only needs a value.
+          HOMEBREW_TAP_TOKEN: snapshot
+      # release.yml's npm job unpacks every tokenops_<version>_*.tar.gz it
+      # finds in the release and verifies them against checksums.txt. The
+      # team archives must not be among them: exactly the four CLI archives.
+      - name: The npm job still selects only the CLI archives
+        run: |
+          set -euo pipefail
+          version=$(jq -r .version dist/metadata.json)
+          cd dist
+          grep -F "  tokenops_${version}_" checksums.txt | grep -E '\.tar\.gz$' > archives.sha256
+          sha256sum --check --strict archives.sha256
+          printf '%s\n' tokenops_"${version}"_*.tar.gz | tee npm-archives.txt
+          test "$(wc -l < npm-archives.txt)" -eq 4
+          test "$(wc -l < archives.sha256)" -eq 4
+          if grep -q tokenops-team npm-archives.txt archives.sha256; then
+            echo "::error::a team archive matches the npm job's selection"; exit 1
+          fi
+      - name: Build the team image (not pushed)
+        run: scripts/build-team-image.sh "$(jq -r .version dist/metadata.json)" dist
 
   bench-gate:
     name: Bench gate

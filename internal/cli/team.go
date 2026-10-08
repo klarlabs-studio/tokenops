@@ -219,6 +219,9 @@ func writeMe(out io.Writer, me teamwire.Me) {
 	fmt.Fprintf(out, "\nThe server holds %d rows over %d days about you (%s, %s), kept %d days.\n",
 		me.Buckets, me.Days, me.DisplayName, me.Role, me.RetentionDays)
 	fmt.Fprintf(out, "Team, repository and kind-of-work totals withhold groups under %d people.\n", me.MinGroupSize)
+	if me.SSOEmail != "" {
+		fmt.Fprintf(out, "Single sign-on signs you in to the web view as %s.\n", me.SSOEmail)
+	}
 	fmt.Fprintln(out, "\nWho may see your individual figures:")
 	if len(me.Viewers) == 0 {
 		fmt.Fprintln(out, "  nobody but you")

@@ -64,5 +64,6 @@ select, input, button {
 }
 button { cursor: pointer; }
 button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); padding: 8px 16px; }
+a.button { display: inline-block; background: var(--accent); color: var(--bg); border-radius: 6px; padding: 8px 16px; text-decoration: none; }
 pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
 pre { background: var(--withheld); padding: 8px 12px; border-radius: 6px; overflow-x: auto; }

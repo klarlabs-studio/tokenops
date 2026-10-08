@@ -15,19 +15,13 @@
       <option value="day" {{if eq $d.Period "day"}}selected{{end}}>day</option>
     </select>
   </label>
-  <label>Team
-    <select name="team">
-      <option value="">all</option>
-      {{range $d.Teams}}<option value="{{.Name}}" {{if eq $d.Team .Name}}selected{{end}}>{{.Name}}</option>{{end}}
-    </select>
-  </label>
   <label>From <input type="date" name="since" value="{{$d.Since}}"></label>
   <label>Until <input type="date" name="until" value="{{$d.Until}}"></label>
   <button type="submit">Show</button>
 </form>
 {{if $d.Error}}<p class="error">{{$d.Error}}</p>{{end}}
-<p class="muted">Groups with fewer than {{$d.MinGroupSize}} people are withheld{{if $d.Suppressed}} ({{$d.Suppressed}} here){{end}}. Days are UTC. Cost is what was billed; value is the same work at API list prices.</p>
-{{if not $d.Periods}}<p>No figures in this range yet. Machines upload hourly once they join.</p>{{end}}
+<p class="muted">Groups with fewer than {{$d.MinGroupSize}} people are withheld, and so are a few more where needed so that no withheld group can be worked out from the others{{if $d.Suppressed}} ({{$d.Suppressed}} here){{end}}. A week is shown once it has ended and three days have passed{{if $d.ReleasedThrough}} (shown through {{$d.ReleasedThrough}}, exclusive){{end}}, and does not change afterwards. Days are UTC. Cost is what was billed; value is the same work at API list prices.</p>
+{{if not $d.Periods}}<p>No figures in this range yet. A week appears three days after it ends; machines upload hourly once they join.</p>{{end}}
 {{range $d.Periods}}
 <section>
   <h2>{{if eq $d.Period "week"}}Week of {{end}}{{.Start}}</h2>
@@ -39,20 +33,17 @@
     </tr></thead>
     <tbody>
     {{range .Rows}}
-      {{if .Suppressed}}
-      <tr class="withheld"><td>{{.Group}}</td><td class="n" colspan="9">fewer than {{$d.MinGroupSize}} people — withheld</td></tr>
-      {{else}}
       <tr>
         <td>{{.Group}}</td><td class="n">{{.People}}</td><td class="n">{{num .Totals.Instructions}}</td>
         <td class="n">{{pct .Rates.FirstTryPct}}</td><td class="n">{{pct .Rates.ReworkPct}}</td>
         <td class="n">{{dec1 .Rates.TurnsPerInstruction}}</td><td class="n">{{dec1 .Rates.MinutesPerInstr}}</td>
         <td class="n">{{num .Totals.Tokens}}</td><td class="n">{{usd .Totals.CostUSD}}</td><td class="n">{{usd .Totals.APIEquivalentUSD}}</td>
       </tr>
-      {{end}}
     {{end}}
     </tbody>
   </table>
   </div>
+  {{if .Withheld}}<p class="muted withheld">Withheld: {{join .Withheld ", "}}.</p>{{end}}
 </section>
 {{end}}
 {{end}}

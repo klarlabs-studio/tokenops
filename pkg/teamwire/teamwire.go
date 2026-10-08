@@ -288,6 +288,9 @@ type Me struct {
 	Viewers []Viewer `json:"viewers"`
 	// Views are the recorded views of this member's individual figures.
 	Views []View `json:"views"`
+	// SSOEmail is the address single sign-on signs this member in by, if an
+	// owner set one: whoever controls it can sign in as this member.
+	SSOEmail string `json:"sso_email,omitempty"`
 }
 
 // Device is one of a member's enrolled machines.

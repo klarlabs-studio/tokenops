@@ -143,26 +143,6 @@ type Row struct {
 	// People is how many distinct members contributed.
 	People int
 	Totals Totals
-	// Suppressed is set when fewer than the organisation's minimum group
-	// size contributed; Totals is then zero.
-	Suppressed bool
-}
-
-// Suppress withholds the figures of every row fewer than minGroup people
-// contributed to. It returns how many rows it withheld.
-func Suppress(rows []Row, minGroup int) int {
-	if minGroup < 1 {
-		minGroup = 1
-	}
-	n := 0
-	for i := range rows {
-		if rows[i].People < minGroup {
-			rows[i].Totals = Totals{}
-			rows[i].Suppressed = true
-			n++
-		}
-	}
-	return n
 }
 
 // Retention bounds, in days.
