@@ -4,7 +4,25 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.101.1**.
+Current release: **v0.101.2**.
+
+## v0.101.2 — Keychain prompts only when you ask for one
+
+A colleague saw macOS ask for Keychain access with nothing running in
+front of them: the daemon, and an agent through the MCP setup, could
+raise the prompt unasked. Now the daemon never prompts. It reads the
+browser's "Safe Storage" key and Claude Code's sign-in quietly, with
+interaction forbidden, and when macOS would ask it skips the read and the
+stale-reading finding tells you which setup to run again. Only a setup
+command you run can prompt, and Claude Code's Keychain item is read only
+with `--keychain`. `keychain.disabled` turns every Keychain read off.
+
+The daemon also refuses requests a web page could send it (DNS
+rebinding, cross-site origins), the menu bar's Refresh polls the usage
+readers instead of re-reading old readings, and the CLI and MCP server
+now give the same answers for forecast, routing proposals, dx, verify,
+story, scorecard and plan headroom. Behind that, the CLI, daemon and MCP
+server reach domains only through capability packages (ADR 0010).
 
 ## v0.101.1 — The npm launcher, under its scope
 
