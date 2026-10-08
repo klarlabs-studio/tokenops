@@ -38,6 +38,7 @@ var providerNames = map[string]string{
 	"opencode":    "opencode",
 	"opencode-go": "opencode Go",
 	"openrouter":  "OpenRouter",
+	"pi":          "Pi",
 	"synthetic":   "Synthetic",
 	"together":    "Together AI",
 	"v0":          "v0",

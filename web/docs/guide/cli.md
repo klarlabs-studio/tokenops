@@ -795,6 +795,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | opencode | `opencode` | per-message tokens for every provider, from opencode's SQLite store | local files | against a real account |
 | opencode Go | — | in the catalog only: opencode's subscription: its turns are read from opencode's store (the opencode source); no endpoint reports its windows | — | — |
 | OpenRouter | `openrouter-account` | the key's spend, against its credit cap when it has one | API key | public docs and fixtures |
+| Pi | `pi-sessions` | per-turn tokens per provider and model from Pi's and OMP's session transcripts | local files | CodexBar's source, the vendor's docs and fixtures |
 | Synthetic | `synthetic-account` | the subscription's request quota | API key | public docs and fixtures |
 | Together AI | — | in the catalog only: billed per token; its endpoint and models.dev prices are known, its account is not read | — | — |
 | v0 | `v0-account` | the billing cycle's balance used and the request quota used | API key | CodexBar's source, the vendor's docs and fixtures |
