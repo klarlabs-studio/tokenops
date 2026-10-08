@@ -38,6 +38,7 @@ var providerNames = map[string]string{
 	"github":           "Copilot",
 	"gitkraken":        "GitKraken AI",
 	"grok":             "Grok",
+	"groq":             "Groq",
 	"helmcode":         "Helmcode",
 	"huggingface":      "Hugging Face",
 	"hyper":            "Charm Hyper",

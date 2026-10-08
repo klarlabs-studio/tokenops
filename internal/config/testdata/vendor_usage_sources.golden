@@ -43,6 +43,7 @@ github_copilot	github-copilot
 gitkraken_account	gitkraken-account
 grok_account	grok-account
 grok_web	grok-web
+groq_web	groq-web
 helmcode_account	helmcode-account
 huggingface_account	huggingface-account
 hyper_account	hyper-account

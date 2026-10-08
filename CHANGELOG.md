@@ -84,6 +84,7 @@
 - **providers:** Charm Hyper: the Hypercredits left (`GET hyper.charm.land/v1/credits`), kept in Hypercredits, read with an API key (`HYPER_API_KEY`) or the browser session (`vendor-usage setup hyper`)
 - **providers:** Factory (Droid): 5-hour, weekly and monthly windows (and the Core fallback's), or an older plan's Standard and Premium token allowances, and the extra-usage balance, read with a Factory API key (`FACTORY_API_KEY`) or app.factory.ai's browser session (`vendor-usage setup factory`)
 - **providers:** Grok: the SuperGrok credit window used and the prepaid balance, read with the Grok CLI's sign-in token (`GROK_OAUTH_TOKEN` or `vendor-usage setup grok`), or the window from grok.com's billing with its browser session
+- **providers:** GroqCloud: the organisation's spend this UTC month from the console's activity call, read with console.groq.com's browser session (`vendor-usage setup groq`)
 
 ### Fixed
 

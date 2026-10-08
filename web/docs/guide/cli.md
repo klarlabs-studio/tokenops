@@ -670,6 +670,7 @@ vendor's own figures every 15 minutes:
 | Deepgram | `GET /v1/projects/{id}/balances` | prepaid USD balance left, across the key's projects |
 | DeepInfra | `GET /payment/checklist` | spend since the last invoice, the limit, prepaid credit |
 | DeepSeek | `GET /user/balance` | prepaid USD balance left |
+| GroqCloud | `GET api.groq.com/platform/v1/organizations/{org}/activity` | the organisation's GroqCloud spend this UTC month |
 | Hugging Face | `GET /api/settings/billing/usage-v2` | Inference Providers charges this month, against the spending limit when set |
 | Charm Hyper | `GET hyper.charm.land/v1/credits` | Hypercredits left |
 | Charm Hyper | the same, with hyper.charm.land's session | Hypercredits left |
@@ -865,6 +866,7 @@ Generated from the provider registry (`docs/providers.md` says how to add one):
 | GitKraken AI | `gitkraken-account` | weekly AI credits, and the organization's pool with GITKRAKEN_ORG_ID | API key | CodexBar's source, the vendor's docs and fixtures |
 | Grok | `grok-account` | the SuperGrok credit window used, and the prepaid balance | API key | CodexBar's source, the vendor's docs and fixtures |
 |  | `grok-web` | the credit window used | browser session | CodexBar's source, the vendor's docs and fixtures |
+| Groq | `groq-web` | the organisation's GroqCloud spend this UTC month | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Helmcode | `helmcode-account` | each model's token quota used, and the prepaid balance | browser session | CodexBar's source, the vendor's docs and fixtures |
 | Hugging Face | `huggingface-account` | Inference Providers charges this month, against the spending limit when set | API key | CodexBar's source, the vendor's docs and fixtures |
 | Charm Hyper | `hyper-account` | Hypercredits left | API key | CodexBar's source, the vendor's docs and fixtures |

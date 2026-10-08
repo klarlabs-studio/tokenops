@@ -38,6 +38,7 @@ var registered = []func() Descriptor{
 	providerGitHub,
 	providerGitKraken,
 	providerGrok,
+	providerGroq,
 	providerHelmcode,
 	providerHuggingFace,
 	providerHyper,

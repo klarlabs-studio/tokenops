@@ -37,6 +37,7 @@ var readers = []func() usage.Reader{
 	readerGitKraken,
 	readerGrok,
 	readerGrokWeb,
+	readerGroq,
 	readerHelmcode,
 	readerHuggingFace,
 	readerHyper,
