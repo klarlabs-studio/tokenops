@@ -173,6 +173,18 @@ func FindMany(ctx context.Context, home, host string, names []string, only strin
 	return nil, Browser{}, ErrNotFound
 }
 
+// Header renders cookies as one Cookie header value, "name=value; ...", in
+// the order of names, leaving out the ones not found.
+func Header(cookies map[string]string, names []string) string {
+	parts := make([]string, 0, len(names))
+	for _, n := range names {
+		if v, ok := cookies[n]; ok && v != "" {
+			parts = append(parts, n+"="+v)
+		}
+	}
+	return strings.Join(parts, "; ")
+}
+
 // read returns one cookie from one store.
 func (b Browser) read(ctx context.Context, store, host, name string, secret SecretFunc) (string, error) {
 	if b.firefox {

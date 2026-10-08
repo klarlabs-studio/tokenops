@@ -1,0 +1,77 @@
+package providersetup
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+
+	"go.klarlabs.de/tokenops/internal/config"
+	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
+)
+
+type fakeReader struct {
+	id, good string
+	reading  usage.Reading
+}
+
+func (f fakeReader) Endpoint() string               { return f.id }
+func (f fakeReader) Provider() eventschema.Provider { return eventschema.Provider(f.id) }
+func (f fakeReader) Source() string                 { return f.id + "-account" }
+func (f fakeReader) Read(_ context.Context, key string) (usage.Reading, error) {
+	if key != f.good {
+		return usage.Reading{}, usage.ErrAuth
+	}
+	return f.reading, nil
+}
+
+func TestLookupCoversKeyProvidersOnly(t *testing.T) {
+	p, ok := Lookup("OpenRouter")
+	if !ok || p.ID != "openrouter" || p.Browser || len(p.EnvVars) == 0 {
+		t.Errorf("openrouter = %+v %v", p, ok)
+	}
+	for _, id := range []string{"anthropic", "litellm", "cerebras", "nope"} {
+		if _, ok := Lookup(id); ok {
+			t.Errorf("%s: setup does not connect it generically", id)
+		}
+	}
+	if ids := IDs(); len(ids) < 10 {
+		t.Errorf("IDs = %v", ids)
+	}
+}
+
+func TestVerifyReadsOnceAndSummarises(t *testing.T) {
+	readers := []usage.Reader{fakeReader{id: "acme", good: "k", reading: usage.Reading{HasBalance: true, BalanceUSD: 7.5}}}
+	lines, err := VerifyWith(context.Background(), readers, "acme", " k\n")
+	if err != nil || len(lines) != 1 || lines[0] != "balance: $7.50" {
+		t.Fatalf("%v %v", lines, err)
+	}
+	if _, err := VerifyWith(context.Background(), readers, "acme", "bad"); !errors.Is(err, ErrRefused) {
+		t.Errorf("refused key = %v", err)
+	}
+	if _, err := VerifyWith(context.Background(), readers, "other", "k"); err == nil {
+		t.Error("a provider with no reader verified")
+	}
+}
+
+func TestApplyStoresTheCredential(t *testing.T) {
+	cfg := config.Default()
+	Apply(&cfg, "acme", " sk \n", true, "Firefox")
+	c := cfg.VendorUsage.Accounts.Credentials["acme"]
+	if c.Key != "sk" || !c.FromBrowser || c.Browser != "Firefox" {
+		t.Errorf("stored %+v", c)
+	}
+	if strings.Contains(string(mustSnapshot(t, cfg)), "\"sk\"") {
+		t.Error("the stored key shows in the config snapshot")
+	}
+}
+
+func mustSnapshot(t *testing.T, cfg config.Config) []byte {
+	t.Helper()
+	b, err := cfg.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}

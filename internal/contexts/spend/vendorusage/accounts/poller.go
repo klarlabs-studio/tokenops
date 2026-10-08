@@ -104,8 +104,18 @@ func (p *Poller) Scan(ctx context.Context) {
 			if c.Endpoint != r.Endpoint() {
 				continue
 			}
+			key := c.Key
+			if key == "" && c.Resolve != nil {
+				if key, err = c.Resolve(ctx); err != nil || key == "" {
+					if err == nil {
+						err = ErrAuth
+					}
+					tried = true
+					continue
+				}
+			}
 			tried = true
-			if reading, err = r.Read(ctx, c.Key); err == nil {
+			if reading, err = r.Read(ctx, key); err == nil {
 				break
 			}
 		}

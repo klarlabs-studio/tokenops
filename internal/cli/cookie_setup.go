@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"go.klarlabs.de/tokenops/internal/capability/providersetup"
 	"go.klarlabs.de/tokenops/internal/capability/usagemeter"
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
 )
@@ -51,8 +52,8 @@ func newVendorUsageSetupCmd() *cobra.Command {
 		keychainFlag  bool
 	)
 	cmd := &cobra.Command{
-		Use:   "setup claude-subscription|claude-code",
-		Short: "Connect a source of Claude's plan windows, and verify it",
+		Use:   "setup claude-subscription|claude-code|<provider>",
+		Short: "Connect a usage source (Claude's plan windows, a vendor account), and verify it",
 		Long: `setup connects the claude.ai session cookie that carries Anthropic's own
 utilisation percentages — the 5-hour and 7-day windows shown in the app.
 
@@ -71,14 +72,29 @@ setup claude-code reads the windows with Claude Code's own sign-in instead
 or, with --keychain on macOS, in the Keychain, which asks you to allow it. The token is held
 in memory only, sent only to api.anthropic.com, and never refreshed by
 TokenOps; Claude Code renews it when it runs. Nothing is written to your
-config but the switch.`,
+config but the switch.
+
+setup <provider> connects any other vendor account TokenOps reads
+(openrouter, zai, kimi, ...: see the provider list in the docs) for which
+no harness or environment variable already holds a key. It asks for the
+API key without echoing it, or, for a vendor read with a browser session,
+reads the session from your browser (macOS may ask to allow the Keychain
+read; --paste types it instead). The credential is read once against the
+vendor before anything is written, then stored in your config file and
+sent only to that vendor. The daemon never reads a browser with a prompt.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 1 && strings.EqualFold(args[0], "claude-code") {
 				return runClaudeCodeSetup(cmd, configFlag(cmd), !noRestartFlag, keychainFlag)
 			}
 			if len(args) == 1 && !isClaudeSubscriptionSource(args[0]) {
-				return fmt.Errorf("setup covers claude-subscription and claude-code; got %q", args[0])
+				if p, ok := providersetup.Lookup(args[0]); ok {
+					return runProviderSetup(cmd, p, providerSetupOptions{
+						configPath: configFlag(cmd), restart: !noRestartFlag, browser: browser, paste: paste,
+					})
+				}
+				return fmt.Errorf("setup covers claude-subscription, claude-code and %s; got %q",
+					strings.Join(providersetup.IDs(), ", "), args[0])
 			}
 			return runCookieSetup(cmd, cookieSetupOptions{
 				configPath:   configFlag(cmd),

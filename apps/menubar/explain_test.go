@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"strings"
@@ -41,11 +42,30 @@ func TestExplainSpeaksPlainly(t *testing.T) {
 	}
 }
 
-// Every provider the panel names a logo for ships one, and every shipped
-// logo is a plain SVG: no script, no external reference.
+// Every provider providers.js (generated from TokenOps' provider registry)
+// gives a logo ships one, every shipped logo belongs to such a provider, and
+// every logo is a plain SVG: no script, no external reference.
 func TestLogosShip(t *testing.T) {
-	for _, p := range []string{"anthropic", "openai", "gemini", "github", "cursor", "openrouter", "deepseek",
-		"moonshot", "kimi", "zai", "minimax", "fireworks"} {
+	js, err := fs.ReadFile(frontendFS, "frontend/providers.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(js)
+	start, end := strings.Index(body, "{"), strings.LastIndex(body, "}")
+	var providers map[string]struct {
+		Name string `json:"name"`
+		Logo bool   `json:"logo"`
+	}
+	if start < 0 || end < start || json.Unmarshal([]byte(body[start:end+1]), &providers) != nil {
+		t.Fatal("providers.js is not window.TOKENOPS_PROVIDERS = {JSON};")
+	}
+	for p, v := range providers {
+		if providerNames[p] != v.Name {
+			t.Errorf("%s: providers.js says %q, providers_gen.go %q", p, v.Name, providerNames[p])
+		}
+		if !v.Logo {
+			continue
+		}
 		b, err := fs.ReadFile(frontendFS, "frontend/logos/"+p+".svg")
 		if err != nil {
 			t.Errorf("%s: %v", p, err)
@@ -56,11 +76,17 @@ func TestLogosShip(t *testing.T) {
 			t.Errorf("%s: not a plain SVG", p)
 		}
 	}
-	js, err := fs.ReadFile(frontendFS, "frontend/panel.js")
+	shipped, err := fs.Glob(frontendFS, "frontend/logos/*.svg")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(js), `moonshot: 1, kimi: 1, zai: 1, minimax: 1, fireworks: 1`) {
-		t.Error("panel.js LOGOS no longer matches the shipped logos")
+	for _, f := range shipped {
+		p := strings.TrimSuffix(strings.TrimPrefix(f, "frontend/logos/"), ".svg")
+		if !providers[p].Logo {
+			t.Errorf("%s ships but no provider shows it", f)
+		}
+	}
+	if len(providerNames) != len(providers) {
+		t.Errorf("providers.js has %d providers, providers_gen.go %d", len(providers), len(providerNames))
 	}
 }

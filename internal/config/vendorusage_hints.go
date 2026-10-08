@@ -1,5 +1,7 @@
 package config
 
+import "go.klarlabs.de/tokenops/internal/contexts/spend/providers"
+
 // Per-source configuration hints.
 //
 // These moved out of the CLI so the MCP surface can answer the same
@@ -40,11 +42,6 @@ func (c Config) VendorUsageConfigHint(sourceTag string) string {
 			return "opt-in: `tokenops vendor-usage setup claude-code` reads the windows with Claude Code's own sign-in from ~/.claude/.credentials.json; on macOS add --keychain to read it from the Keychain (macOS asks first)"
 		}
 		return ""
-	case "openrouter-account", "deepseek-account", "moonshot-account":
-		if !c.VendorUsage.Accounts.On() {
-			return "switched off: `tokenops vendor-usage enable vendor-accounts` turns it back on"
-		}
-		return "on; reads only when a harness (Claude Code, Codex, opencode) or the environment has this vendor's key"
 	case "codex-app-server":
 		if !c.VendorUsage.CodexAppServer.On() {
 			return "switched off: set vendor_usage.codex_app_server.enabled: true to ask Codex for its windows"
@@ -55,9 +52,36 @@ func (c Config) VendorUsageConfigHint(sourceTag string) string {
 			return "switched off: `tokenops vendor-usage enable fireworks` turns it back on"
 		}
 		return "on; reads only when FireConnect or FIREWORKS_API_KEY provides a Fireworks key on this machine"
+	case "cursor-hook":
+		return "always on; reads the ledger Cursor's stop hook writes — `tokenops hooks install --client cursor --coach` installs the hook"
+	case "claude-code-statusline":
+		return "always on; reads the plan windows Claude Code gives its status line — `tokenops statusline install` installs it"
 	default:
+		return c.registryHint(sourceTag)
+	}
+}
+
+// registryHint is the hint of a source with no config block of its own:
+// the vendor account and gateway readers, which every provider added to
+// the registry is, so a new provider has a hint without an edit here.
+func (c Config) registryHint(sourceTag string) string {
+	s, ok := providers.ForSource(sourceTag)
+	if !ok || s.Switch != providers.SwitchAccounts {
 		return ""
 	}
+	if !c.VendorUsage.Accounts.On() {
+		return "switched off: `tokenops vendor-usage enable vendor-accounts` turns it back on"
+	}
+	switch {
+	case s.Reader == providers.GatewayReader:
+		return "on; reads the key's own budget when a harness sends a key to a " + providers.DisplayName(string(s.Provider)) + " gateway"
+	case s.Credential == providers.BrowserCookie:
+		if _, stored := c.VendorUsage.Accounts.Credentials[string(s.Provider)]; stored {
+			return "on; reads with the session `tokenops vendor-usage setup " + string(s.Provider) + "` stored"
+		}
+		return "connect it: `tokenops vendor-usage setup " + string(s.Provider) + "` reads the session from your browser"
+	}
+	return "on; reads only when a harness (Claude Code, Codex, opencode) or the environment has this vendor's key"
 }
 
 func configHintClaudeCode(enabled bool) string {
