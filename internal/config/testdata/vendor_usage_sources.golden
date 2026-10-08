@@ -38,6 +38,7 @@ fireworks	fireworks-usage
 gemini_cli	gemini-cli
 github_copilot	github-copilot
 gitkraken_account	gitkraken-account
+helmcode_account	helmcode-account
 huggingface_account	huggingface-account
 ibmbob_account	ibmbob-account
 jetbrains_local	jetbrains-local
@@ -46,11 +47,14 @@ kimi_account	kimi-account
 kiro_cli	kiro-cli
 litellm_gateway	litellm-account
 llm_proxy_gateway	llm-proxy-account
+longcat_account	longcat-account
+manus_account	manus-account
 mimo_web	mimo-web
 minimax_account	minimax-account
 mistral_web	mistral-web
 moonshot_account	moonshot-account
 neuralwatt_account	neuralwatt-account
+notion_account	notion-account
 nous_account	nous-account
 codex_app_server	codex-app-server
 codex_jsonl	codex-jsonl
@@ -58,14 +62,19 @@ openai_admin	openai-admin
 opencode	opencode
 opencode_go_account	opencode-go-account
 openrouter_account	openrouter-account
+perplexity_account	perplexity-account
 pi_sessions	pi-sessions
 poe_account	poe-account
 qoder_web	qoder-web
 qwencloud_web	qwencloud-web
+raycast_account	raycast-account
+replicate_account	replicate-account
 sakana_web	sakana-web
 stepfun_account	stepfun-account
 sub2api_gateway	sub2api-account
 synthetic_account	synthetic-account
+t3chat_account	t3chat-account
+typesafe_account	typesafe-account
 v0_account	v0-account
 venice_account	venice-account
 vercel_account	vercel-account
@@ -77,3 +86,4 @@ xkiro_account	xkiro-account
 zai_account	zai-account
 zed_account	zed-account
 zenmux_account	zenmux-account
+zoommate_account	zoommate-account

@@ -1,0 +1,7 @@
+{
+  "invoices": [
+    {"type": "monthly-usage", "started_at": "2026-10-01T00:00:00Z", "ended_before": "2026-11-01T00:00:00Z", "total_cost_before_adjustments": "14.27"},
+    {"type": "monthly-usage", "started_at": "2026-09-01T00:00:00Z", "ended_before": "2026-10-01T00:00:00Z", "total_cost_before_adjustments": "31.90"},
+    {"type": "credit-purchase", "ended_before": null, "total_cost_before_adjustments": "50.00"}
+  ]
+}

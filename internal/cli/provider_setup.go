@@ -140,6 +140,9 @@ func providerCredential(cmd *cobra.Command, p providersetup.Provider, opts provi
 		prompt = fmt.Sprintf("\nPaste the %s session token: ", p.Name)
 	case p.Browser && p.Key:
 		prompt = fmt.Sprintf("\nPaste the API key, or the Cookie header for %s: ", p.CookieHosts())
+	case p.Browser && p.Cookie.PasteOnly && len(p.Cookie.Names) == 0:
+		fmt.Fprintf(out, "\nIn your browser's developer tools, copy the Cookie request header of a request to %s.\n", p.CookieHosts())
+		prompt = fmt.Sprintf("\nPaste the Cookie header for %s: ", p.CookieHosts())
 	case p.Browser:
 		prompt = fmt.Sprintf("\nPaste the Cookie header for %s (%s): ", p.CookieHosts(), p.CookieNames())
 	}
@@ -148,7 +151,12 @@ func providerCredential(cmd *cobra.Command, p providersetup.Provider, opts provi
 	}
 	fmt.Fprintf(out, "It is sent only to %s, and stored in your local config.\n", p.Name)
 	key, err = readSecret(cmd, prompt)
-	return strings.TrimSpace(key), "", err
+	key = strings.TrimSpace(key)
+	if p.Browser && len(key) > 7 && strings.EqualFold(key[:7], "cookie:") {
+		// The header as devtools copies it, name and all.
+		key = strings.TrimSpace(key[7:])
+	}
+	return key, "", err
 }
 
 // runGatewaySetup connects a gateway the operator runs or subscribes to:

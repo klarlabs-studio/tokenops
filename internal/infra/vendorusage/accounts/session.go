@@ -28,11 +28,13 @@ func isSession(key string) bool {
 	return strings.Contains(key, "=")
 }
 
-// cookieValue is the named cookie in a Cookie header, "" when absent.
+// cookieValue is the named cookie in a Cookie header, "" when absent. A
+// leading "Cookie:" is ignored; names match without regard to case.
 func cookieValue(header, name string) string {
-	for _, part := range strings.Split(header, ";") {
+	header = cookieHeader(header)
+	for part := range strings.SplitSeq(header, ";") {
 		k, v, ok := strings.Cut(strings.TrimSpace(part), "=")
-		if ok && strings.TrimSpace(k) == name {
+		if ok && strings.EqualFold(strings.TrimSpace(k), name) {
 			return strings.TrimSpace(v)
 		}
 	}
@@ -46,8 +48,8 @@ var errRedirect = errors.New("redirected")
 // doWeb sends one request carrying a session and returns the body of a
 // 200. It never follows a redirect, so the session is never sent to
 // another host: a redirect (to a sign-in page), 401 and 403 are
-// usage.ErrAuth. Errors name the method, host and path, never the query,
-// a header or the body.
+// usage.ErrAuth; any other status is a *statusError. Errors name the
+// method, host and path, never the query, a header or the body.
 func doWeb(ctx context.Context, hc *http.Client, method, rawURL string, header http.Header, body []byte) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
@@ -77,7 +79,7 @@ func doWeb(ctx context.Context, hc *http.Client, method, rawURL string, header h
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
 		return nil, fmt.Errorf("%w (%d on %s)", usage.ErrAuth, resp.StatusCode, hostPath(rawURL))
 	case resp.StatusCode != http.StatusOK:
-		return nil, fmt.Errorf("accounts: %s %s: status %d", method, hostPath(rawURL), resp.StatusCode)
+		return nil, &statusError{method: method, where: hostPath(rawURL), status: resp.StatusCode}
 	}
 	return data, nil
 }
