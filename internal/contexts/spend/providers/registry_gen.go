@@ -76,4 +76,5 @@ var registered = []func() Descriptor{
 	providerZed,
 	providerZenMux,
 	providerZhipuAI,
+	providerZoomMate,
 }

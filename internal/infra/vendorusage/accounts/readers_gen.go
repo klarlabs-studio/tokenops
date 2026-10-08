@@ -67,6 +67,7 @@ var readers = []func() usage.Reader{
 	readerZAI,
 	readerZed,
 	readerZenMux,
+	readerZoomMate,
 }
 
 // gateways is every gateway*() function in this package, by file name.

@@ -72,5 +72,6 @@ window.TOKENOPS_PROVIDERS = {
   "zai": {"name":"z.ai","logo":true},
   "zed": {"name":"Zed","logo":false},
   "zenmux": {"name":"ZenMux","logo":true},
-  "zhipuai": {"name":"Zhipu AI","logo":false}
+  "zhipuai": {"name":"Zhipu AI","logo":false},
+  "zoommate": {"name":"ZoomMate","logo":false}
 };

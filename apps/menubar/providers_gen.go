@@ -76,4 +76,5 @@ var providerNames = map[string]string{
 	"zed":              "Zed",
 	"zenmux":           "ZenMux",
 	"zhipuai":          "Zhipu AI",
+	"zoommate":         "ZoomMate",
 }
