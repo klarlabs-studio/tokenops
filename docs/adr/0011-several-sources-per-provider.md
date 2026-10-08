@@ -54,7 +54,9 @@ Claude Code's own documentation (checked 2026-10-06, v2.1.289):
    4. a credential owned by another application (Claude Code's OAuth
       token). This is opt-in only, never read in the background without a
       grant, and never refreshed by TokenOps: refreshing would rotate the
-      owner's token and sign it out.
+      owner's token and sign it out. ADR 0013 makes this one generic
+      grant: `setup <id> --use-app-login` shows exactly what is read and
+      where it goes, asks, and records `vendor_usage.grants.<id>`.
 
 2. **Readings merge by freshness, per window.** The newest reading of each
    window wins, whichever source wrote it (`plans.MergeReadings`). A

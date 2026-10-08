@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
+	"go.klarlabs.de/tokenops/internal/infra/applogin"
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
 	"go.klarlabs.de/tokenops/internal/infra/keychain"
 	accountsapi "go.klarlabs.de/tokenops/internal/infra/vendorusage/accounts"
@@ -64,6 +66,10 @@ type Provider struct {
 	// KeychainServer is set for a provider read with another app's
 	// sign-in from the Keychain: the internet password's server.
 	KeychainServer string
+	// AppLogin is true when another application's sign-in can read the
+	// provider, once granted (--use-app-login); AppLoginOnly when nothing
+	// else can.
+	AppLogin, AppLoginOnly bool
 }
 
 // FromKeychain reads p's sign-in from the macOS Keychain, letting macOS
@@ -108,6 +114,8 @@ func Lookup(id string) (Provider, bool) {
 	p := Provider{ID: string(d.ID), Name: d.DisplayName, KeyFormat: s.KeyFormat,
 		EnvVars: append(append([]string(nil), d.EnvVars...), s.EnvVars...)}
 	p.Chain = s.Credential == providers.CredentialChain
+	_, p.AppLogin = d.AppLoginSource()
+	p.AppLoginOnly = s.Credential == providers.AppLogin
 	if s.Reader == providers.GatewayReader {
 		p.Gateway, p.DefaultBaseURL, p.BaseURLEnv = true, s.DefaultBaseURL, s.BaseURLEnv
 	}
@@ -339,4 +347,131 @@ func ApplyGateway(cfg *config.Config, id, base, key string) {
 	cfg.VendorUsage.Accounts.Credentials[id] = config.AccountCredential{
 		Key: strings.TrimSpace(key), BaseURL: strings.TrimSpace(base),
 	}
+}
+
+// AppLogin is another application's sign-in found for a provider: exactly
+// what would be read, and where the token would be sent, for the operator
+// to grant or refuse (ADR 0013). Nothing secret has been read yet.
+type AppLogin struct {
+	located applogin.Located
+	// App is the application that owns it.
+	App string
+	// What says exactly which item and fields are read.
+	What string
+	// Host is the one host the token is sent to.
+	Host string
+}
+
+// AppLoginEnv is where setup looks for another application's sign-in:
+// this machine, with the Keychain read only quietly and not at all when
+// keychainDisabled.
+func AppLoginEnv(keychainDisabled bool) applogin.Env {
+	return applogin.Env{KeychainDisabled: keychainDisabled}
+}
+
+// ErrNoAppLogin is a provider no other application's sign-in reads.
+var ErrNoAppLogin = errors.New("no other application's sign-in reads this provider")
+
+// FindAppLogin finds provider id's first other-application sign-in on this
+// machine without reading anything secret.
+func FindAppLogin(ctx context.Context, id string, env applogin.Env) (AppLogin, error) {
+	d, ok := providers.Lookup(id)
+	if !ok {
+		return AppLogin{}, ErrNoAppLogin
+	}
+	s, ok := d.AppLoginSource()
+	if !ok {
+		return AppLogin{}, ErrNoAppLogin
+	}
+	l, err := applogin.Locate(ctx, s.AppLogins, env)
+	if err != nil {
+		return AppLogin{}, err
+	}
+	return AppLogin{located: l, App: l.Spec.App, What: l.Describe(), Host: l.Spec.Host}, nil
+}
+
+// VerifyAppLogin reads the sign-in once and provider id's account with it,
+// and summarises what the vendor reported. Nothing is stored, and the token
+// is held in memory only for this one reading.
+func VerifyAppLogin(ctx context.Context, id string, a AppLogin, env applogin.Env) ([]string, error) {
+	return VerifyAppLoginWith(ctx, accountsapi.Readers(), id, a, env)
+}
+
+// VerifyAppLoginWith is VerifyAppLogin with the readers given.
+func VerifyAppLoginWith(ctx context.Context, readers []usage.Reader, id string, a AppLogin, env applogin.Env) ([]string, error) {
+	token, err := applogin.Read(ctx, a.located, env)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range readers {
+		if string(r.Provider()) != id {
+			continue
+		}
+		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		reading, err := usage.ReadWith(ctx, r, usage.Credential{AppLogin: true}, token)
+		if err != nil {
+			return nil, err
+		}
+		return Summary(reading), nil
+	}
+	return nil, fmt.Errorf("no account reader for %q", id)
+}
+
+// ApplyGrant records the operator's grant to read a: the item, fields and
+// host they were shown, and when. No secret is stored.
+func ApplyGrant(cfg *config.Config, id string, a AppLogin, now time.Time) {
+	if cfg.VendorUsage.Grants == nil {
+		cfg.VendorUsage.Grants = map[string]config.AppLoginGrant{}
+	}
+	l := a.located
+	cfg.VendorUsage.Grants[id] = config.AppLoginGrant{
+		App: l.Spec.App, Kind: string(l.Spec.Kind), Item: l.Item, FromEnv: l.FromEnv,
+		Fields: append([]string(nil), l.Spec.Fields...), Host: l.Spec.Host, GrantedAt: now.UTC(),
+	}
+}
+
+// RevokeGrant removes provider id's grant, reporting whether there was one.
+// The daemon stops reading the sign-in on its next configuration load.
+func RevokeGrant(cfg *config.Config, id string) bool {
+	if _, ok := cfg.VendorUsage.Grants[id]; !ok {
+		return false
+	}
+	delete(cfg.VendorUsage.Grants, id)
+	if len(cfg.VendorUsage.Grants) == 0 {
+		cfg.VendorUsage.Grants = nil
+	}
+	return true
+}
+
+// Grant is one recorded grant, for status: never a token.
+type Grant struct {
+	Provider, App, What, Host string
+	GrantedAt                 time.Time
+	// Current is false when the provider's descriptor no longer reads what
+	// was granted: the grant is then not read.
+	Current bool
+}
+
+// Grants lists cfg's grants by provider; env is where the items are.
+func Grants(cfg config.Config, env applogin.Env) []Grant {
+	ids := make([]string, 0, len(cfg.VendorUsage.Grants))
+	for id := range cfg.VendorUsage.Grants {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	out := make([]Grant, 0, len(ids))
+	for _, id := range ids {
+		g := cfg.VendorUsage.Grants[id]
+		row := Grant{Provider: id, App: g.App, Host: g.Host, GrantedAt: g.GrantedAt}
+		row.What = applogin.Located{Spec: providers.AppLoginItem{Kind: providers.AppLoginKind(g.Kind), Fields: g.Fields,
+			Service: g.Item, Process: g.Item}, Item: g.Item}.Describe()
+		if d, ok := providers.Lookup(id); ok {
+			if s, ok := d.AppLoginSource(); ok {
+				_, row.Current = applogin.Granted(s.AppLogins, g.Kind, g.Item, g.Fields, g.Host, g.FromEnv, env)
+			}
+		}
+		out = append(out, row)
+	}
+	return out
 }

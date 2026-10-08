@@ -1,0 +1,1 @@
+{"usesTokenRateLimitsBilling":true,"limits":{"standard":{"fiveHour":{"usedPercent":40,"windowEnd":"2026-10-08T20:00:00Z","secondsRemaining":3600},"weekly":{"usedPercent":22.5,"windowEnd":"2026-10-12T00:00:00Z"},"monthly":{"usedPercent":8,"windowEnd":"2026-10-01T00:00:00Z"}}},"extraUsageBalanceCents":1250,"overagePreference":"stop","extraUsageAllowed":true}

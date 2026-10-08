@@ -124,13 +124,22 @@ func checkSource(t *testing.T, id string, s Source, tags, names map[string]bool)
 		t.Errorf("%s/%s: kind %q", id, s.Tag, s.Kind)
 	}
 	switch s.Credential {
-	case APIKey, AdminKey, OAuthFile, CLI, LocalFile, BrowserCookie, PasswordLogin, CredentialChain:
+	case APIKey, AdminKey, OAuthFile, CLI, LocalFile, BrowserCookie, PasswordLogin, CredentialChain, AppLogin:
 	case AppKeychain:
 		if s.KeychainServer == "" {
 			t.Errorf("%s/%s: an app-keychain source names the item's server", id, s.Tag)
 		}
 	default:
 		t.Errorf("%s/%s: credential %q", id, s.Tag, s.Credential)
+	}
+	if s.Credential == AppLogin && len(s.AppLogins) == 0 {
+		t.Errorf("%s/%s: an app-login source names the sign-ins it reads", id, s.Tag)
+	}
+	for _, a := range s.AppLogins {
+		checkAppLogin(t, id, s, a)
+	}
+	if s.LocalStorage != nil && (s.Credential != BrowserCookie || s.LocalStorage.Origin == "" || len(s.LocalStorage.Keys) == 0) {
+		t.Errorf("%s/%s: localStorage is a browser session's, with an origin and keys", id, s.Tag)
 	}
 	switch s.Switch {
 	case SwitchAccounts, SwitchConfig, SwitchAlways:
@@ -163,6 +172,48 @@ func checkSource(t *testing.T, id string, s Source, tags, names map[string]bool)
 	if s.Credential == BrowserCookie && s.Reader == AccountReader &&
 		(s.Cookie == nil || s.Cookie.Host == "" || (len(s.Cookie.Names) == 0 && !s.Cookie.AllForHost && !s.Cookie.PasteOnly)) {
 		t.Errorf("%s/%s: a browser-session reader names its host and cookies (or reads all the host's, or is pasted)", id, s.Tag)
+	}
+}
+
+// checkAppLogin holds an app login to what setup must be able to show the
+// operator: the application, exactly what is read, and the one host the
+// token goes to.
+func checkAppLogin(t *testing.T, id string, s Source, a AppLoginItem) {
+	t.Helper()
+	if s.Reader != AccountReader {
+		t.Errorf("%s/%s: an app login is read by an account reader", id, s.Tag)
+	}
+	if a.App == "" || a.Host == "" || strings.Contains(a.Host, "/") || len(a.Fields) == 0 {
+		t.Errorf("%s/%s: an app login names its application, a bare host and the fields read", id, s.Tag)
+	}
+	switch a.Kind {
+	case AppLoginJSON, AppLoginEnvFile, AppLoginTextFile, AppLoginSQLite:
+		if len(a.Paths) == 0 {
+			t.Errorf("%s/%s: a file app login names its paths", id, s.Tag)
+		}
+		for _, p := range a.Paths {
+			if !strings.HasPrefix(p, "~/") {
+				t.Errorf("%s/%s: app-login path %q is under the home directory (~/)", id, s.Tag, p)
+			}
+		}
+		if a.Kind == AppLoginSQLite && !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(a.Query)), "SELECT ") {
+			t.Errorf("%s/%s: a SQLite app login reads with one SELECT", id, s.Tag)
+		}
+	case AppLoginKeychain:
+		if a.Service == "" {
+			t.Errorf("%s/%s: a Keychain app login names its service", id, s.Tag)
+		}
+	case AppLoginProcess:
+		if a.Process == "" {
+			t.Errorf("%s/%s: a process app login names its process", id, s.Tag)
+		}
+		for _, f := range a.Fields {
+			if !strings.HasPrefix(f, "--") {
+				t.Errorf("%s/%s: a process app login reads flags (--name), not %q", id, s.Tag, f)
+			}
+		}
+	default:
+		t.Errorf("%s/%s: app-login kind %q", id, s.Tag, a.Kind)
 	}
 }
 

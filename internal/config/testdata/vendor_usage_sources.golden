@@ -34,10 +34,12 @@ deepseek_account	deepseek-account
 devpass_account	devpass-account
 doubao_account	doubao-account
 elevenlabs_account	elevenlabs-account
+factory_account	factory-account
 fireworks	fireworks-usage
 gemini_cli	gemini-cli
 github_copilot	github-copilot
 gitkraken_account	gitkraken-account
+grok_account	grok-account
 huggingface_account	huggingface-account
 ibmbob_account	ibmbob-account
 jetbrains_local	jetbrains-local
@@ -50,6 +52,7 @@ mimo_web	mimo-web
 minimax_account	minimax-account
 mistral_web	mistral-web
 moonshot_account	moonshot-account
+muse_account	muse-account
 neuralwatt_account	neuralwatt-account
 nous_account	nous-account
 codex_app_server	codex-app-server

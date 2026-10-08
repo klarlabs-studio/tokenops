@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
@@ -25,6 +26,16 @@ type ClinePass struct {
 func (ClinePass) Endpoint() string               { return "clinepass" }
 func (ClinePass) Provider() eventschema.Provider { return "clinepass" }
 func (ClinePass) Source() string                 { return "clinepass-account" }
+
+// ReadAppLogin reads with the Cline extension's own sign-in, granted by the
+// operator: its WorkOS access token, which Cline's API takes as
+// "workos:<token>", as CodexBar sends it.
+func (c ClinePass) ReadAppLogin(ctx context.Context, token string) (usage.Reading, error) {
+	if !strings.HasPrefix(token, "workos:") {
+		token = "workos:" + token
+	}
+	return c.Read(ctx, token)
+}
 
 func (c ClinePass) Read(ctx context.Context, key string) (usage.Reading, error) {
 	var resp struct {
