@@ -67,6 +67,7 @@ func TestVendorUsageSourcesTags(t *testing.T) {
 		{"nous_account", "nous-account"},
 		{"codex_app_server", "codex-app-server"},
 		{"codex_jsonl", "codex-jsonl"},
+		{"openai_admin", "openai-admin"},
 		{"opencode", "opencode"},
 		{"opencode_go_account", "opencode-go-account"},
 		{"openrouter_account", "openrouter-account"},

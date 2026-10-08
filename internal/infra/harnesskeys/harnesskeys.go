@@ -30,6 +30,10 @@ type Credential struct {
 	// Endpoint is the account-reader endpoint a key from the variable of a
 	// provider opencode does not know is for.
 	Endpoint string
+	// Provider is set for a key found in a variable that holds one
+	// source's own credential (an admin key): it goes to that provider's
+	// account reader only.
+	Provider string
 	Key      string
 }
 
@@ -41,6 +45,10 @@ var EnvVars = providers.EnvVars()
 // OwnEnvVars maps the key variables of providers opencode does not know to
 // the endpoint their account reader takes keys for.
 var OwnEnvVars = providers.OwnEnvVars()
+
+// SourceEnvVars maps the variables holding one source's own credential (an
+// organisation admin key) to the provider whose source it is.
+var SourceEnvVars = providers.SourceEnvVars()
 
 // Options points the finder at its sources; zero values use the real ones.
 type Options struct {
@@ -88,6 +96,9 @@ func Find(o Options) []Credential {
 	}
 	for name, endpoint := range OwnEnvVars {
 		add(Credential{Origin: "$" + name, Endpoint: endpoint, Key: o.Getenv(name)})
+	}
+	for name, id := range SourceEnvVars {
+		add(Credential{Origin: "$" + name, Provider: id, Key: o.Getenv(name)})
 	}
 	return out
 }
