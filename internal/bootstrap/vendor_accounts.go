@@ -40,6 +40,10 @@ func credentialsFor(found []harnesskeys.Credential) []accounts.Credential {
 				continue
 			}
 			_, endpoint, _ = opencode.Provider(c.ProviderID)
+		case c.Endpoint != "":
+			// A provider opencode does not know, found by its own
+			// environment variable: the key is for its reader only.
+			endpoint = c.Endpoint
 		}
 		if endpoint == "" {
 			continue

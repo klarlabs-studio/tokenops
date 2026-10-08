@@ -65,7 +65,9 @@ func TestRegistryIsConsistent(t *testing.T) {
 			t.Errorf("%s: a provider has sources or says why not (CatalogOnly), not both", id)
 		}
 		if len(d.EnvVars) > 0 && len(d.Opencode) == 0 {
-			t.Errorf("%s: EnvVars name the vendor through its first Opencode ID; add one", id)
+			if _, ok := d.Setupable(); !ok {
+				t.Errorf("%s: EnvVars go to its first Opencode ID's endpoint or to its own account reader; it has neither", id)
+			}
 		}
 		for _, s := range d.Sources {
 			checkSource(t, id, s, tags, names)

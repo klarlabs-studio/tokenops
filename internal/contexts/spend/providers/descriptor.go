@@ -54,7 +54,8 @@ type Descriptor struct {
 	Opencode []OpencodeID
 	// EnvVars are the conventional environment variables a key for this
 	// provider is found in. The key goes to the endpoint of the first
-	// Opencode ID, so a provider with EnvVars needs one.
+	// Opencode ID; a provider opencode does not know sends it to its own
+	// account reader (the endpoint named like its ID).
 	EnvVars []string
 	// ModelsDev are the models.dev provider IDs whose per-token rates
 	// price this provider's turns (ADR 0009 §6). A coding plan's own ID,
@@ -182,6 +183,10 @@ type Source struct {
 	AnyProvider bool
 	// Cookie names the browser cookies a BrowserCookie source reads.
 	Cookie *Cookie
+	// KeyFormat is what `tokenops vendor-usage setup` asks for when an
+	// APIKey source's credential is more than one key, e.g.
+	// "TEAM_ID:MANAGEMENT_KEY". Empty asks for the API key.
+	KeyFormat string
 	// Verified says how far the reader has been checked.
 	Verified Verification
 	// Endpoint, Shows and RecognisedBy are its row in the docs tables:

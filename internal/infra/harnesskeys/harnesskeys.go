@@ -27,13 +27,21 @@ type Credential struct {
 	Origin     string
 	BaseURL    string
 	ProviderID string
-	Key        string
+	// Endpoint is the account endpoint the key is for, set when neither a
+	// base URL nor an opencode provider ID names it: a provider opencode
+	// does not know, found by its environment variable.
+	Endpoint string
+	Key      string
 }
 
 // EnvVars maps conventional key variables to the opencode provider ID
 // (models.dev's) of the vendor they belong to, from each provider
 // descriptor's EnvVars.
 var EnvVars = providers.EnvVars()
+
+// EnvEndpoints maps the key variables of providers opencode does not know
+// to their own account endpoint.
+var EnvEndpoints = providers.EnvEndpoints()
 
 // Options points the finder at its sources; zero values use the real ones.
 type Options struct {
@@ -78,6 +86,9 @@ func Find(o Options) []Credential {
 	}
 	for name, id := range EnvVars {
 		add(Credential{Origin: "$" + name, ProviderID: id, Key: o.Getenv(name)})
+	}
+	for name, endpoint := range EnvEndpoints {
+		add(Credential{Origin: "$" + name, Endpoint: endpoint, Key: o.Getenv(name)})
 	}
 	return out
 }

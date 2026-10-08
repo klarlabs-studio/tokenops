@@ -99,6 +99,9 @@ func providerCredential(cmd *cobra.Command, p providersetup.Provider, opts provi
 		}
 	}
 	prompt := "\nPaste the API key: "
+	if p.KeyFormat != "" {
+		prompt = fmt.Sprintf("\nPaste it as %s: ", p.KeyFormat)
+	}
 	if p.Browser {
 		prompt = fmt.Sprintf("\nPaste the Cookie header for %s (%s): ", p.CookieHost, strings.Join(p.CookieNames, ", "))
 	} else if len(p.EnvVars) > 0 {

@@ -159,6 +159,22 @@ func EnvVars() map[string]string {
 	return out
 }
 
+// EnvEndpoints maps each conventional key variable of a provider opencode
+// does not know (no Opencode entry) to that provider's own account
+// endpoint, which is its ID: the key goes to its reader and nowhere else.
+func EnvEndpoints() map[string]string {
+	out := map[string]string{}
+	for _, d := range all {
+		if len(d.Opencode) > 0 {
+			continue
+		}
+		for _, v := range d.EnvVars {
+			out[v] = string(d.ID)
+		}
+	}
+	return out
+}
+
 // ModelsDevPricing maps a models.dev provider ID to the providers its
 // rates price.
 func ModelsDevPricing() map[string][]string {
