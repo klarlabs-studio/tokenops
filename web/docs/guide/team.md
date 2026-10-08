@@ -81,9 +81,12 @@ audit log 730 days. Leaving erases your machine's figures unless you pass
 ## Running the server
 
 The server is `tokenops-team`: a Go service with Postgres behind Caddy,
-deployed with Docker Compose on one VPS. `deploy/team/README.md` in the
-repository is the runbook — a Hetzner server in Germany, DNS, TLS,
-creating the organisation and invites, grants, backups and upgrades.
+deployed with Docker Compose on one VPS. Each release publishes it as the
+image `ghcr.io/klarlabs-studio/tokenops-team:<version>` (linux/amd64 and
+linux/arm64) and as `tokenops-team_<version>_linux_<arch>.tar.gz` archives.
+`deploy/team/README.md` in the repository is the runbook — a Hetzner
+server in Germany, DNS, TLS, creating the organisation and invites,
+grants, backups and upgrades.
 
 | Variable | Meaning |
 |---|---|

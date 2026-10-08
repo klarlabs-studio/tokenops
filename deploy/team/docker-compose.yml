@@ -1,5 +1,8 @@
 # TokenOps team plane on one VPS: Caddy (TLS) -> tokenops-team -> Postgres,
 # plus a nightly pg_dump. Only Caddy publishes ports. See README.md.
+#
+#   docker compose up -d                                            # the published image
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build   # from source
 name: tokenops-team
 
 services:
@@ -23,12 +26,10 @@ services:
     networks: [edge]
 
   team:
-    build:
-      context: ../..
-      dockerfile: deploy/team/Dockerfile
-      args:
-        VERSION: ${TEAM_VERSION:-dev}
-    image: tokenops-team:${TEAM_VERSION:-dev}
+    # The release's image, by version: set TEAM_VERSION in .env to the
+    # release you run (without the leading v). To build from this checkout
+    # instead, add -f docker-compose.build.yml (see README.md).
+    image: ${TEAM_IMAGE:-ghcr.io/klarlabs-studio/tokenops-team}:${TEAM_VERSION:?set TEAM_VERSION in .env}
     restart: unless-stopped
     environment:
       TEAMSERVER_DATABASE_URL: postgres://tokenops:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/tokenops?sslmode=disable

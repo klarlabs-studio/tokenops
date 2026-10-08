@@ -56,6 +56,27 @@ builds:
     goos:
       - darwin
 
+  # The team plane's server (ADR 0012). Linux only: it runs in a container
+  # on a VPS. Its own build and archive, so the tokenops archives above —
+  # and the cask and npm packages unpacked from them — are unchanged.
+  - id: tokenops-team
+    binary: tokenops-team
+    main: ./cmd/tokenops-team
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X go.klarlabs.de/tokenops/internal/version.Version={{ .Version }}
+      - -X go.klarlabs.de/tokenops/internal/version.Commit={{ .Commit }}
+      - -X go.klarlabs.de/tokenops/internal/version.Date={{ .Date }}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
 archives:
   - id: linux
     ids: [tokenops-linux, tokenopsd-linux]
@@ -74,6 +95,18 @@ archives:
       - README.md
       - src: menubar-dist/TokenOps.app
         dst: TokenOps.app
+  # tokenops-team_<version>_linux_<arch>.tar.gz. The name must not start
+  # with "tokenops_": release.yml's npm job unpacks every
+  # tokenops_<version>_*.tar.gz, and the container image job
+  # (scripts/build-team-image.sh) unpacks these.
+  - id: team
+    ids: [tokenops-team]
+    name_template: "tokenops-team_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: ["tar.gz"]
+    files:
+      - LICENSE
+      - src: deploy/team/README.md
+        dst: README.md
 
 checksum:
   name_template: "checksums.txt"
@@ -114,6 +147,8 @@ release:
 # pretended to build from source.
 homebrew_casks:
   - name: tokenops
+    # Only the CLI and daemon archives: the team server is not for laptops.
+    ids: [linux, darwin]
     repository:
       owner: klarlabs-studio
       name: homebrew-tap

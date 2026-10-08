@@ -38,14 +38,35 @@ git clone https://github.com/klarlabs-studio/tokenops.git
 cd tokenops && git checkout vX.Y.Z             # the release to run
 cd deploy/team
 cp .env.example .env && chmod 600 .env
-$EDITOR .env                                   # TEAM_DOMAIN, ACME_EMAIL, POSTGRES_PASSWORD, TEAM_VERSION
-docker compose up -d --build
+$EDITOR .env                                   # TEAM_DOMAIN, ACME_EMAIL, POSTGRES_PASSWORD, TEAM_VERSION=X.Y.Z
+docker compose pull
+docker compose up -d
 docker compose ps                              # caddy, team, db, backup: running
 curl -fsS https://team.example.eu/healthz      # ok
 ```
 
+The checkout supplies the Compose file, Caddyfile and backup script for
+that release; the server itself is the published image
+`ghcr.io/klarlabs-studio/tokenops-team:X.Y.Z` (linux/amd64 and
+linux/arm64), which runs the `tokenops-team` binary from the release's
+archives byte for byte. `TEAM_VERSION` is the release without its leading
+`v`. The same binary is attached to every release as
+`tokenops-team_X.Y.Z_linux_<arch>.tar.gz`, listed in its `checksums.txt`,
+for running without Docker.
+
 Caddy obtains the certificate on first request; ports 80 and 443 must be
 reachable and the DNS record in place.
+
+**Building from source instead** (a fork, a patch, a commit between
+releases): add the build override, which builds `deploy/team/Dockerfile`
+from this checkout and tags it locally as `tokenops-team:$TEAM_VERSION`:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
+
+Use the same `-f … -f …` pair for every later `docker compose` command, or
+`export COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml` once.
 
 ## 3. Create the organisation and invite people
 
@@ -120,21 +141,32 @@ docker compose up -d
 ## 5. Upgrade
 
 ```bash
-cd ~/tokenops && git fetch --tags && git checkout vX.Y.Z
+cd ~/tokenops && git fetch --tags && git checkout vX.Y.Z    # Compose file, Caddyfile, backup script
 cd deploy/team
 docker compose exec backup sh /usr/local/bin/backup.sh once   # dump first
-sed -i 's/^TEAM_VERSION=.*/TEAM_VERSION=vX.Y.Z/' .env
-docker compose up -d --build team
+sed -i 's/^TEAM_VERSION=.*/TEAM_VERSION=X.Y.Z/' .env         # no leading v
+docker compose pull team
+docker compose up -d                   # recreates what changed
 docker compose logs --tail=50 team     # "migrations applied" when the schema moved
+docker compose exec team tokenops-team --version
 ```
+
+Read the release's CHANGELOG entry first: it names new settings (for
+example `TEAMSERVER_*` variables or a `.env` line) and anything to do
+before or after.
 
 `serve` applies pending migrations at start under an advisory lock;
 `docker compose exec team tokenops-team migrate` does it by hand. To roll
-back, check out the previous tag and rebuild; if a migration ran,
-restore the dump taken before the upgrade.
+back, check out the previous tag, set `TEAM_VERSION` back and run
+`docker compose up -d`; if a migration ran, restore the dump taken before
+the upgrade (§4) first, because an older server does not undo a newer
+schema.
+
+Built from source? `git checkout vX.Y.Z`, set `TEAM_VERSION`, then
+`docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build`.
 
 Keep the host patched: `apt-get upgrade` monthly, and `docker compose pull
-caddy db backup && docker compose up -d` for the base images.
+caddy db backup && docker compose up -d` for the other images.
 
 ## 6. Operating notes
 

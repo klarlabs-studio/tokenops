@@ -190,9 +190,16 @@ which is right for one instance and documented as such.
   with the same counts the local coach uses.
 - New surface to operate: one VPS. Backups and upgrades are documented;
   nothing is automated beyond Docker's restart policy and the nightly dump.
-- The `tokenops-team` binary is not yet in the release archives; the
-  Compose file builds it from the checked-out tag. Publishing an image is
-  follow-up work.
+- Every release ships the server: `tokenops-team_<version>_linux_<arch>.tar.gz`
+  (amd64, arm64) in its own goreleaser build and archive, so the CLI
+  archives, the cask and the npm packages are unchanged, and the image
+  `ghcr.io/klarlabs-studio/tokenops-team:<version>`, built by a job that
+  runs only after the release published, from those archives verified
+  against `checksums.txt` (`scripts/build-team-image.sh`). It is the only
+  release job that may write packages. CI runs goreleaser as a snapshot and
+  the same script without pushing, so the image never builds for the first
+  time on a tag. The Compose file runs the image by version; a build
+  override (`docker-compose.build.yml`) builds from source.
 - Not in this version: SSO, multi-region, a hosted multi-tenant signup flow
   and billing, per-team minimum group sizes, and export to BI tools (ADR
   0004 still rules out becoming a BI product).
