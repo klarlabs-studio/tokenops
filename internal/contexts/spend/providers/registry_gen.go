@@ -28,6 +28,7 @@ var registered = []func() Descriptor{
 	providerMiniMax,
 	providerMistral,
 	providerMoonshot,
+	providerNeuralWatt,
 	providerNous,
 	providerOpenAI,
 	providerOpencode,
