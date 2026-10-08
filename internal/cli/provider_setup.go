@@ -21,6 +21,10 @@ var verifyProvider = providersetup.Verify
 // it so no gateway is called.
 var verifyGateway = providersetup.VerifyGateway
 
+// chainCredential finds a provider's credential in its vendor's chain on
+// this machine. Tests replace it so no real credential is read.
+var chainCredential = providersetup.FromChain
+
 // providerSetupOptions are the choices `setup <provider>` was given.
 type providerSetupOptions struct {
 	configPath string
@@ -38,6 +42,9 @@ func runProviderSetup(cmd *cobra.Command, p providersetup.Provider, opts provide
 	fmt.Fprintf(out, "Connecting %s.\n", p.Name)
 	if p.Gateway {
 		return runGatewaySetup(cmd, p, opts)
+	}
+	if p.Chain {
+		return runChainSetup(cmd, p, opts)
 	}
 
 	key, browser, err := providerCredential(cmd, p, opts)
@@ -206,4 +213,48 @@ func readLine(cmd *cobra.Command, prompt string) (string, error) {
 			return "", fmt.Errorf("read input: %w", err)
 		}
 	}
+}
+
+// runChainSetup opts in a provider read with its vendor's own credential
+// chain (AWS's environment and shared credentials file): it finds the
+// credential, proves it with one reading, and stores only that the daemon
+// may read it, never the credential.
+func runChainSetup(cmd *cobra.Command, p providersetup.Provider, opts providerSetupOptions) error {
+	out := cmd.OutOrStdout()
+	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
+	defer cancel()
+	key, origin, err := chainCredential(ctx, p.ID)
+	if err != nil {
+		return fmt.Errorf("no credential for %s found on this machine: %w. Nothing was written", p.Name, err)
+	}
+	fmt.Fprintf(out, "Found a credential in %s. It is sent only to %s and not stored.\n", origin, p.Name)
+	progress := startActivity(cmd.ErrOrStderr(), "Checking it with "+p.Name)
+	lines, err := verifyProvider(ctx, p.ID, key)
+	if err != nil {
+		progress.failure(p.Name + " did not accept it")
+		if errors.Is(err, providersetup.ErrRefused) {
+			return fmt.Errorf("%s refused that credential. Nothing was written", p.Name)
+		}
+		return fmt.Errorf("could not read %s: %w. Nothing was written", p.Name, err)
+	}
+	progress.success(p.Name + " accepted it")
+	fmt.Fprintf(out, "\n%s reports:\n", p.Name)
+	for _, l := range lines {
+		fmt.Fprintln(out, "  "+l)
+	}
+	path, err := resolveMutableConfigPath(opts.configPath)
+	if err != nil {
+		return err
+	}
+	cfg, err := readMutableConfig(path)
+	if err != nil {
+		return err
+	}
+	providersetup.ApplyChain(&cfg, p.ID)
+	if err := writeMutableConfig(path, cfg); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "\nwrote %s: the daemon reads the credential the same way as it polls, and stores none\n", path)
+	applyRestart(out, opts.restart, false)
+	return nil
 }

@@ -110,3 +110,30 @@ func TestProviderSetupStoresAGatewayAddress(t *testing.T) {
 		t.Errorf("stored %+v", cfg.VendorUsage.Accounts.Credentials)
 	}
 }
+
+// A provider read with its vendor's credential chain is set up without a
+// prompt: the credential found on the machine is checked once, and only
+// the opt-in is stored, never the credential.
+func TestProviderSetupOptsInToACredentialChain(t *testing.T) {
+	sent := fakeVerify(t, "bedrock", "chain-key")
+	prev := chainCredential
+	chainCredential = func(_ context.Context, id string) (string, string, error) {
+		return "chain-key", "the shared credentials file's [default] profile", nil
+	}
+	t.Cleanup(func() { chainCredential = prev })
+	path := seedConfig(t)
+	out, err := runCookieSetupCmd(t, "", "bedrock", "--config", path, "--no-restart")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if len(*sent) != 1 || (*sent)[0] != "bedrock|chain-key" || strings.Contains(out, "chain-key") || !strings.Contains(out, "[default] profile") {
+		t.Errorf("verified with %v; output:\n%s", *sent, out)
+	}
+	cfg, err := config.ReadMutable(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := cfg.VendorUsage.Accounts.Credentials["bedrock"]; !c.CredentialChain || c.Key != "" {
+		t.Errorf("stored %+v", c)
+	}
+}

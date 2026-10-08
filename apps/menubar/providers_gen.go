@@ -9,6 +9,7 @@ var providerNames = map[string]string{
 	"alibaba":     "Alibaba Cloud",
 	"anthropic":   "Claude",
 	"atlascloud":  "Atlas Cloud",
+	"bedrock":     "Amazon Bedrock",
 	"bifrost":     "Bifrost",
 	"cerebras":    "Cerebras",
 	"chutes":      "Chutes",

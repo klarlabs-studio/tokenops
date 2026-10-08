@@ -67,6 +67,16 @@ func storedCredentials(cfg config.Config, readers []accounts.Reader, cookieOf fu
 		if endpoint == "" {
 			continue
 		}
+		if c.CredentialChain {
+			if chain := chainReader(readers, id); chain != nil {
+				out = append(out, accounts.Credential{Endpoint: endpoint, Origin: storedOrigin + " (credential chain)",
+					Resolve: func(ctx context.Context) (string, error) {
+						key, _, err := chain.Chain(ctx)
+						return key, err
+					}})
+			}
+			continue
+		}
 		if key := strings.TrimSpace(c.Key); key != "" {
 			out = append(out, accounts.Credential{Endpoint: endpoint, Origin: storedOrigin, Key: key})
 		}
@@ -93,6 +103,17 @@ func registryCookie(id string) *providers.Cookie {
 	d, _ := providers.Lookup(id)
 	if s, ok := d.Setupable(); ok && s.Credential == providers.BrowserCookie {
 		return s.Cookie
+	}
+	return nil
+}
+
+// chainReader is provider id's reader when it reads with the vendor's
+// credential chain.
+func chainReader(readers []accounts.Reader, id string) accounts.ChainReader {
+	for _, r := range readers {
+		if c, ok := r.(accounts.ChainReader); ok && string(r.Provider()) == id {
+			return c
+		}
 	}
 	return nil
 }

@@ -52,6 +52,10 @@ type AccountCredential struct {
 	// BaseURL is a gateway's address, where the key is read: setup stores
 	// it for a gateway the operator runs or subscribes to.
 	BaseURL string `yaml:"base_url,omitempty"`
+	// CredentialChain reads the vendor's own credential chain on this
+	// machine (AWS's environment and shared credentials file) as the
+	// daemon polls: setup opted in; nothing secret is stored.
+	CredentialChain bool `yaml:"credential_chain,omitempty"`
 }
 
 // On reports whether the readers run: unless switched off.

@@ -35,6 +35,7 @@
 - **providers:** sub2api gateways are read from `GET /v1/usage` with a group API key: a key's quota and 5-hour, daily and 7-day limits, a subscription group's daily, weekly and monthly limits, or the wallet balance; recognised where a harness sends a key to one, or named with `SUB2API_BASE_URL` and `SUB2API_API_KEY`
 - **providers:** LLM Proxy (LLM-API-Key-Proxy) gateways are read from `GET /v1/quota-stats`: the tightest quota group left on the credentials it pools and when it resets; recognised by its root route, or named with `LLM_PROXY_BASE_URL` and `LLM_PROXY_API_KEY`
 - **providers:** Aixy gateways, hosted or self-hosted, are read from `GET /v1/usage` with a project API key: each budget that applies to the key, spent and reserved against its limit, the binding hard budget as the spend cap; `AIXY_API_KEY` (with `AIXY_BASE_URL` for a self-hosted one) or setup
+- **providers:** Amazon Bedrock's spend this month is read from AWS Cost Explorer (`GetCostAndUsage`, signed with SigV4) once `tokenops vendor-usage setup bedrock` opts in with the AWS credentials on the machine (environment or shared credentials file; nothing is stored); Cost Explorer bills each request, so it is asked at most every 8 hours
 - **vendor-usage:** `tokenops vendor-usage setup <gateway>` connects a self-hosted or hosted gateway (LiteLLM, Bifrost, ClawRouter, sub2api, ...) by its address and a key, checked once there before either is stored; plain HTTP only to a local or private-network host
 
 ### Fixed
