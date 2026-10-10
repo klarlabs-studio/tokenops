@@ -934,8 +934,9 @@ system in Germany is billed in euros. See
 
 ## Team plane (`team`)
 
-Nothing is uploaded until `tokenops team join` enrols this machine with a
-[team plane](/guide/team). These keys only shape what is sent and how
+Nothing is uploaded until `tokenops team join` enrols this machine with the
+hosted [team plane](/guide/team); there is no default server, the invite
+names it. These keys only shape what is sent and how
 often; the enrolment (server URL, device token) is kept in
 `~/.tokenops/team.json`, mode 0600, not here.
 
