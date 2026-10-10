@@ -4,7 +4,30 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.101.2**.
+Current release: **v0.102.0**.
+
+## v0.102.0 — Every plan you pay for, in one place
+
+TokenOps now reads about 90 providers: every one CodexBar knows. That
+covers the coding plans of Claude, Codex, Cursor, Copilot and Gemini;
+z.ai, Kimi, MiniMax, Alibaba, Qwen and StepFun; the API accounts of
+OpenAI, xAI and Amazon Bedrock and the gateways in between; and the
+tools that keep their own quota, such as Kiro, Amp, JetBrains, Windsurf
+and Zed. `tokenops vendor-usage setup <provider>` connects any of them
+the same way: a key you type, a browser session read once while you
+watch, or, only after you say yes for that provider, the sign-in another
+app already keeps. The daemon never shows a prompt. When a session
+expires, the reading goes stale and says which setup to run again.
+
+Joining a team is new too. `tokenops team join` connects this machine to
+a klarlabs-hosted team plane with an invite. It sends derived figures
+only, never a prompt, file or path, and `tokenops team preview` shows
+exactly what it sends.
+
+The menu bar shows each vendor's own logo, says when it is still
+fetching and how long it has taken, and words its messages for people.
+Behind it the daemon answers in a fraction of the time: a refresh that
+took 3–5 seconds on a busy store now takes about half a second.
 
 ## v0.101.2 — Keychain prompts only when you ask for one
 
