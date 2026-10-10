@@ -67,9 +67,9 @@ An organisation is started and run without klarlabs' involvement:
 - **Personal data** the server now also stores: members' e-mail
   addresses and names from sign-up, password hashes and encrypted
   two-factor secrets for password accounts, billing identifiers, and the audit
-  log of administration. Transactional e-mail (trial and billing notices)
-  (address confirmation, password reset, trial and billing notices) is
-  sent through a processor under the same Art. 28 terms.
+  log of administration. Transactional e-mail (address confirmation,
+  password reset, trial and billing notices) is sent through a processor
+  under the same Art. 28 terms.
 
 ## Context
 
