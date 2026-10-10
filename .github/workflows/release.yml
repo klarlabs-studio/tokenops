@@ -136,34 +136,6 @@ jobs:
           # and authenticates before goreleaser publishes anything.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
-  # The team plane's container image, ghcr.io/klarlabs-studio/tokenops-team,
-  # for linux/amd64 and linux/arm64. It runs only after goreleaser published
-  # the release, and copies the tokenops-team binary out of that release's
-  # archives (verified against checksums.txt) rather than compiling again,
-  # so the image runs what the release ships. The only job that can write
-  # packages. CI's "Release dry run" runs the same script on a snapshot.
-  team-image:
-    needs: goreleaser
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Download the release's team archives
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          gh release download "$GITHUB_REF_NAME" -p "tokenops-team_${version}_linux_*.tar.gz" -p checksums.txt -D team-archives
-      - name: Log in to ghcr.io
-        env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-      - name: Build, check and push the image
-        run: scripts/build-team-image.sh "${GITHUB_REF_NAME#v}" team-archives --push
-
   # npm is a delivery channel only: `npx @klarlabs-studio/tokenops checkup`
   # with no other install. The wrapper launches the binary from one of four
   # platform packages, and those are unpacked from THIS release's archives,

@@ -111,13 +111,14 @@ tokenops otel --json
 
 ### `tokenops team`
 
-Shares this machine's derived figures with a [team plane](/guide/team):
+Shares this machine's derived figures with the [team plane](/guide/team),
+the service klarlabs hosts (the client is open source; the server is not):
 per UTC day, repository and kind of work, counts, time, tokens and cost.
 Nothing is sent until you join, and never a prompt, file, transcript,
 path, commit message or model output.
 
 ```bash
-tokenops team join https://team.example.eu tot_inv_…   # enrol with an invite
+tokenops team join <url> <invite>   # enrol with an invite; the URL comes with it
 tokenops team preview          # exactly what the next upload holds; sends nothing
 tokenops team preview --json   # the upload byte for byte
 tokenops team sync             # upload now (the daemon does it hourly)

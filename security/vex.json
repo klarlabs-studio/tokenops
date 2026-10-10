@@ -159,6 +159,19 @@
         "last_reviewed": "2026-10-08",
         "reviewed_by": "tokenops-maintainers"
       }
+    },
+    {
+      "vulnerability": "IAC-351",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "HOMEBREW_TAP_TOKEN: snapshot in CI's \"Release dry run\" is a placeholder, not a credential: goreleaser runs with --snapshot, which never pushes the cask, and its template only needs the variable to exist. The real token comes from secrets.HOMEBREW_TAP_TOKEN in release.yml only. nox reports it as critical once the team-image steps were removed from the job; same line, same fingerprint as before.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "3ac93799419386f42b439da076de33a7fc078035370e36f4a4da1d062cd0ee38",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-10",
+        "reviewed_by": "tokenops-maintainers"
+      }
     }
   ]
 }
