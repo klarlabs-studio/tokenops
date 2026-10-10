@@ -139,6 +139,9 @@ type InviteRequest struct {
 	Role string `json:"role,omitempty"`
 	// TTLHours defaults to seven days.
 	TTLHours int `json:"ttl_hours,omitempty"`
+	// Email, when set, is sent the invite: the join line and a page that
+	// explains installing TokenOps. The invite stays single-use.
+	Email string `json:"email,omitempty"`
 }
 
 // Invite is a created invite, shown once.
@@ -147,6 +150,8 @@ type Invite struct {
 	ExpiresAt time.Time `json:"expires_at"`
 	// Join is the command the invited person runs.
 	Join string `json:"join"`
+	// Emailed is set when the invite was sent to InviteRequest.Email.
+	Emailed bool `json:"emailed,omitempty"`
 }
 
 // RoleRequest changes a member's role.

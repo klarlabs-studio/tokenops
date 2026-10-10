@@ -99,7 +99,7 @@ func (st *selfServeStub) handler(t *testing.T, base func() string) http.HandlerF
 		case "POST /api/v1/invites":
 			_ = json.NewDecoder(r.Body).Decode(&st.invite)
 			_ = json.NewEncoder(w).Encode(teamwire.Invite{Invite: "tot_inv_x", ExpiresAt: time.Now().Add(time.Hour),
-				Join: "tokenops team join " + base() + " tot_inv_x"})
+				Join: "tokenops team join " + base() + " tot_inv_x", Emailed: st.invite.Email != ""})
 		case "GET /api/v1/members":
 			_ = json.NewEncoder(w).Encode([]teamwire.Member{
 				{ID: "m1", Name: "Ada", Role: teamwire.RoleOwner, Teams: []string{"core"}, IsYou: true},
@@ -207,7 +207,7 @@ func TestTeamCreateLinksInBrowserAndAdministers(t *testing.T) {
 	}{
 		{[]string{"admin", "teams"}, "core"},
 		{[]string{"admin", "create-team", "platform"}, "Created team platform"},
-		{[]string{"admin", "invite", "--team", "core", "--role", "lead"}, "tokenops team join " + srv.URL + " tot_inv_x"},
+		{[]string{"admin", "invite", "--team", "core", "--role", "lead", "--email", "lars@acme.example"}, "E-mailed the invite to lars@acme.example"},
 		{[]string{"admin", "members"}, "Ada (you)"},
 		{[]string{"admin", "role", "lars", "lead"}, "Lars is now lead"},
 		{[]string{"admin", "grants"}, "1:1s"},
@@ -223,7 +223,7 @@ func TestTeamCreateLinksInBrowserAndAdministers(t *testing.T) {
 			t.Errorf("%v: %v\n%s", s.args, err, out)
 		}
 	}
-	if st.invite.Role != "lead" || st.invite.Team != "core" {
+	if st.invite.Role != "lead" || st.invite.Team != "core" || st.invite.Email != "lars@acme.example" {
 		t.Errorf("invite %+v", st.invite)
 	}
 	if st.role != [2]string{"m2", "lead"} || st.removed != "m2" || st.grant.GranteeID != "m2" || st.grant.Reason != "coaching" {

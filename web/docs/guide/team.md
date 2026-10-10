@@ -139,13 +139,15 @@ tokenops team admin logout                                 # revoke it
 
 ```bash
 tokenops team admin create-team platform
-tokenops team admin invite --team platform                # member role; prints the join line
+tokenops team admin invite --team platform --email ada@example.com   # e-mailed; also prints the join line
 tokenops team admin invite --team platform --role lead
 ```
 
 Each invite is single-use and valid for seven days (`--ttl` to change).
-Nobody invites above their own role. Send each person their own line;
-they run the printed `tokenops team join <url> <invite>` on their machine.
+Nobody invites above their own role. With `--email` (or the address field
+in the web view) the person gets a mail with the join line and a page that
+explains installing TokenOps; otherwise send each person their own line.
+They run `tokenops team join <url> <invite>` on their machine.
 
 ## Manage it
 

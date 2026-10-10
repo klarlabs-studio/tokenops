@@ -252,11 +252,11 @@ func newTeamAdminCreateTeamCmd(rf *rootFlags, af *adminFlags) *cobra.Command {
 }
 
 func newTeamAdminInviteCmd(rf *rootFlags, af *adminFlags) *cobra.Command {
-	var teamName, role string
+	var teamName, role, email string
 	var ttl time.Duration
 	cmd := &cobra.Command{
 		Use:   "invite --team <team>",
-		Short: "Create a single-use invite with a role; prints the line the new member runs",
+		Short: "Create a single-use invite with a role, optionally e-mailed; prints the line the new member runs",
 		Args:  cobra.NoArgs,
 		RunE: adminRun(rf, af, func(ctx context.Context, cmd *cobra.Command, a adminCtx, _ []string) error {
 			if teamName == "" {
@@ -268,20 +268,26 @@ func newTeamAdminInviteCmd(rf *rootFlags, af *adminFlags) *cobra.Command {
 			if ttl < 0 || (ttl > 0 && ttl < time.Hour) {
 				return errors.New("--ttl: at least 1h")
 			}
-			inv, err := a.client.Invite(ctx, teamwire.InviteRequest{Team: teamName, Role: role, TTLHours: int(ttl / time.Hour)})
+			inv, err := a.client.Invite(ctx, teamwire.InviteRequest{Team: teamName, Role: role, TTLHours: int(ttl / time.Hour),
+				Email: strings.TrimSpace(email)})
 			if err != nil {
 				return err
 			}
 			if af.json {
 				return writeControlJSON(cmd, inv)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Single-use invite as %s to team %s, valid until %s. On the new member's machine:\n\n  %s\n",
+			out := cmd.OutOrStdout()
+			if inv.Emailed {
+				fmt.Fprintf(out, "E-mailed the invite to %s.\n", strings.TrimSpace(email))
+			}
+			fmt.Fprintf(out, "Single-use invite as %s to team %s, valid until %s. On the new member's machine:\n\n  %s\n",
 				role, teamName, inv.ExpiresAt.Local().Format("2006-01-02 15:04"), inv.Join)
 			return nil
 		}),
 	}
 	cmd.Flags().StringVar(&teamName, "team", "", "the team to join (name or ID)")
 	cmd.Flags().StringVar(&role, "role", teamwire.RoleMember, "member, lead, admin or owner (never above your own)")
+	cmd.Flags().StringVar(&email, "email", "", "e-mail the invite to this address (the line below still works)")
 	cmd.Flags().DurationVar(&ttl, "ttl", 0, "how long the invite is valid (default 7 days)")
 	return cmd
 }
