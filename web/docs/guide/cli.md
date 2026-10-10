@@ -118,6 +118,7 @@ Nothing is sent until you join, and never a prompt, file, transcript,
 path, commit message or model output.
 
 ```bash
+tokenops team create --server <url>  # sign up with GitHub, start an organisation (14-day trial), join this machine
 tokenops team join <url> <invite>   # enrol with an invite; the URL comes with it
 tokenops team preview          # exactly what the next upload holds; sends nothing
 tokenops team preview --json   # the upload byte for byte
@@ -126,7 +127,13 @@ tokenops team status           # who may see your individual figures, and who lo
 tokenops team web              # single-use sign-in link to the web view
 tokenops team leave            # revoke this machine and erase its figures
 tokenops team leave --keep-history
+tokenops team admin login           # owners and admins: approve this machine in the browser with a code
+tokenops team admin teams|create-team|invite|members|remove|role|grants|grant|revoke|billing|audit
 ```
+
+`create` and `admin login` show a short code to type into the server's
+page; the code is never part of a link. `admin` commands take `--server`, the listing ones `--json`
+(see [Team plane](/guide/team#manage-it)).
 
 `join` takes `--name` (how people granted to see individual figures see
 you) and `--device`. The enrolment is kept in `~/.tokenops/team.json`
