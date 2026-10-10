@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.102.0 - 2026-10-10
+
 ### Added
 
 - **vendor-usage:** browser localStorage, at setup only (ADR 0013). For a site that keeps its session in localStorage, `tokenops vendor-usage setup <id>` reads exactly the named keys of one origin from a Chromium-family browser's profile (a private copy of its LevelDB, read with pure-Go goleveldb; no Keychain item, since Chromium does not encrypt localStorage) and stores the session like a pasted one; the daemon never reads a browser, and `--paste` remains. Windsurf's live web figures and Devin (its auth1 session and the organisation last used) now read their session this way, with the typed `ORG:TOKEN` or bundle as the fallback
