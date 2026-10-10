@@ -63,6 +63,10 @@ func uploadTeamOnce(ctx context.Context, deps teamshare.Deps, opts teamshare.Opt
 	switch {
 	case errors.Is(err, teamclient.ErrNotJoined):
 		return
+	case errors.As(err, new(*teamshare.PausedError)):
+		// Billing, not a fault: say so plainly, and keep trying hourly so
+		// uploads resume on their own once a subscription starts.
+		logger.Info("team uploads paused by the organisation's billing", "detail", err.Error())
 	case err != nil:
 		// The error names the server's refusal; it never carries the
 		// device token or any figure.

@@ -291,6 +291,10 @@ type Me struct {
 	// SSOEmail is the address single sign-on signs this member in by, if an
 	// owner set one: whoever controls it can sign in as this member.
 	SSOEmail string `json:"sso_email,omitempty"`
+	// Plan is the organisation's billing state: whether uploads are
+	// accepted, when the trial ends and when the first week appears.
+	// Absent from servers that predate self-serve billing.
+	Plan *Plan `json:"plan,omitempty"`
 }
 
 // Device is one of a member's enrolled machines.
@@ -328,4 +332,7 @@ type LoginLink struct {
 type Error struct {
 	Error string `json:"error"`
 	Hint  string `json:"hint,omitempty"`
+	// Code, when set, is one of the Code constants: a refusal the client
+	// acts on rather than only shows.
+	Code string `json:"code,omitempty"`
 }

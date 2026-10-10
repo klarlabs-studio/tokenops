@@ -96,13 +96,115 @@ Figures are kept 400 days by default (30 to 3650, per organisation); the
 audit log 730 days. Leaving erases your machine's figures unless you pass
 `--keep-history`; an admin removing you erases all of them.
 
-## Getting the team plane for your organisation
+## Start a team
 
-The team plane is offered by klarlabs as a hosted service; it is not
-available to self-host. klarlabs sets up your organisation, its owner and
-your teams, and the owner invites members. Hosting is in Germany, under a
-GDPR Art. 28 data-processing agreement. Single sign-on to the web view
-with your OpenID Connect provider (Google Workspace, Microsoft Entra ID,
-Keycloak, Okta, or Dex in front of GitHub) is available beside single-use
-sign-in links; it signs in only existing members whose verified address an
-owner set, and never creates anyone.
+The team plane is a hosted service klarlabs runs; it is not available to
+self-host. Hosting is in Germany, under a GDPR Art. 28 data-processing
+agreement, and payment runs through Paddle as merchant of record.
+
+Anyone can start a team for their organisation, with a **14-day free
+trial** and no card:
+
+```bash
+tokenops team create --server https://<team server>
+```
+
+This opens the server's sign-up page in your browser. Either sign in with
+GitHub — the server reads your verified primary e-mail address and your
+name, nothing else from your account — or sign up with an e-mail address
+and a password of at least 12 characters; the address must be confirmed
+with the link sent to it before you can continue. Then name your
+organisation; you become its owner.
+
+Password accounts can turn on two-factor authentication (an authenticator
+app) in the account settings, and reset a forgotten password by e-mail,
+which signs out every other session. An e-mail address belongs to one
+account: if you signed up with GitHub and later want a password for the
+same address (or the other way round), sign in to the existing account
+first and add it there — accounts are never merged automatically. The terminal shows a short code: type it into the page
+to approve this machine. The code is never part of a link, so only
+someone who can see your terminal can approve it. This machine then joins
+the organisation and receives an administrator's credential for
+`tokenops team admin`, kept beside the enrolment (mode 0600) and valid
+for a limited time.
+
+On another machine, or when the credential expired:
+
+```bash
+tokenops team admin login --server https://<team server>   # the same code-in-the-browser step
+tokenops team admin logout                                 # revoke it
+```
+
+## Invite your team
+
+```bash
+tokenops team admin create-team platform
+tokenops team admin invite --team platform                # member role; prints the join line
+tokenops team admin invite --team platform --role lead
+```
+
+Each invite is single-use and valid for seven days (`--ttl` to change).
+Nobody invites above their own role. Send each person their own line;
+they run the printed `tokenops team join <url> <invite>` on their machine.
+
+## Manage it
+
+Owners and admins run their organisation themselves, in the web view (a
+**Manage** section) or from the CLI, on the same API. Every change is in
+the audit log.
+
+```bash
+tokenops team admin teams                 # teams and how many members each has
+tokenops team admin members               # names, roles, teams, sign-in addresses
+tokenops team admin role "Ada" lead       # member, lead, admin or owner
+tokenops team admin remove "Ada" --yes    # revoke their machines and erase their figures
+tokenops team admin grants                # who may see individual figures, and why (--all: revoked too)
+tokenops team admin grant "Lars" --team platform --reason "1:1 coaching, agreed with the works council"
+tokenops team admin revoke <grant-id>
+tokenops team admin audit                 # newest first
+tokenops team admin billing               # trial, subscription, seats
+```
+
+Members are named by ID, sign-in address or exact name. The listing commands
+take `--json`. Granting is an owner's; the member covered sees the grant
+and its reason on their page. `TOKENOPS_TEAM_ADMIN_TOKEN` with `--server`
+uses an administrator's token you were given instead of `admin login`.
+
+## Billing
+
+The price is per seat per month, a seat being an active member; the
+subscription's quantity follows members joining and leaving.
+
+```bash
+tokenops team admin billing --checkout    # subscribe (opens the server's billing page)
+tokenops team admin billing --portal      # invoices, payment details, cancel (Paddle's customer portal)
+```
+
+The web view's billing page does the same. Owners get an e-mail, at the
+verified address they signed up with, three days
+before the trial ends, when it ended, when a payment failed and when the
+subscription is active.
+
+**When the trial ends without a subscription**, or a subscription ends,
+uploads are paused: the server refuses them, and `tokenops team status`,
+`tokenops team sync` and the daemon's log say so plainly, with what to do.
+Nothing is lost on members' machines: each upload resends the last 14
+days, so the first one after subscribing fills the gap up to that. The
+figures already held stay viewable, read-only, for 30 days and are then
+deleted.
+
+## When figures appear
+
+Totals are released per week, **three days after the week ends** (Monday
+to Sunday, UTC), and only for groups at least three people contributed
+to, so a new organisation's first week appears up to ten days after it
+starts. The web view and `tokenops team status` name the date; until then the overview says what will appear and when, and each
+member's own page shows their figures as soon as they are uploaded.
+
+## Single sign-on
+
+Single sign-on to the web view with your OpenID Connect provider (Google
+Workspace, Microsoft Entra ID, Keycloak, Okta, or Dex in front of GitHub)
+is available beside GitHub sign-in and single-use sign-in links; it signs
+in only existing members whose verified address an owner set, and never
+creates anyone.

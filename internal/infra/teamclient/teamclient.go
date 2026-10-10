@@ -77,10 +77,16 @@ func Load(path string) (State, error) {
 
 // Save writes the enrolment readable by this user only, atomically.
 func Save(path string, s State) error {
+	return writePrivateJSON(path, s)
+}
+
+// writePrivateJSON writes v to path readable by this user only, through a
+// temporary file renamed into place.
+func writePrivateJSON(path string, v any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	raw, err := json.MarshalIndent(s, "", "  ")
+	raw, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -153,6 +159,8 @@ type ServerError struct {
 	Status  int
 	Message string
 	Hint    string
+	// Code is the server's teamwire Code constant, when it set one.
+	Code string
 }
 
 func (e *ServerError) Error() string {
@@ -196,7 +204,7 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 		var body teamwire.Error
 		se := &ServerError{Status: resp.StatusCode, Message: http.StatusText(resp.StatusCode)}
 		if json.Unmarshal(raw, &body) == nil && body.Error != "" {
-			se.Message, se.Hint = body.Error, body.Hint
+			se.Message, se.Hint, se.Code = body.Error, body.Hint, body.Code
 		}
 		return se
 	}

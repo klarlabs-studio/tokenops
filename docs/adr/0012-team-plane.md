@@ -1,6 +1,6 @@
 # ADR 0012 — The team plane: hosted, derived figures only, aggregate by default
 
-- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts.
+- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing.
 - **Date:** 2026-10-08
 - **Deciders:** TokenOps maintainers
 - **Related:** issue #250, ADR 0004 (local-first; no BI product), ADR 0010 §5 (the API's privacy line)
@@ -15,7 +15,7 @@ no binaries, no image. The full ADR 0012 lives there. None of it was ever
 in a release; this repository's history is not rewritten.
 
 What stays here, open source, is everything that runs on a member's
-machine: `tokenops team join|status|preview|sync|web|leave`, the daemon's
+machine: `tokenops team create|join|status|preview|sync|web|leave|admin`, the daemon's
 uploader, `internal/capability/teamshare` (which builds an upload),
 `internal/infra/teamclient` (which sends it), the `team` configuration —
 and `pkg/teamwire`, the upload contract the server is built against. That
@@ -24,7 +24,52 @@ machine without trusting the server, so the boundary below is documented
 and enforced here, in public.
 
 There is no default server: `tokenops team join <url> <invite>` takes the
-address from the invite. Nothing is sent until a machine joins.
+address from the invite, and `tokenops team create --server <url>` takes
+it from the person starting a team. Nothing is sent until a machine joins.
+
+## Self-serve (amended 2026-10-10)
+
+An organisation is started and run without klarlabs' involvement:
+
+- **Sign-up** is "Sign in with GitHub" in the browser — the server reads
+  the account's verified primary e-mail address and its display name,
+  nothing else — or an e-mail address and a password (argon2id at rest,
+  at least 12 characters, optionally checked against breached passwords
+  by k-anonymity prefix only), usable only once the address is confirmed
+  by a single-use link; optional two-factor (TOTP) for password accounts.
+  An address belongs to one account; a second way to sign in is added
+  only from inside the signed-in account, never merged automatically.
+  Someone with no organisation creates one and becomes its owner.
+- **Linking a machine** (`tokenops team create`, `tokenops team admin
+  login`) is a device authorization grant (RFC 8628): the CLI shows a
+  short code, the person types it into a page they are signed in to, and
+  the CLI polls until they approve. The code is never part of a link, so a
+  link someone else sends cannot approve their machine. The machine's
+  polling secret, the device token and the administrator's credential are
+  random and stored by the server only as hashes; the administrator's
+  credential expires and is kept in `team-admin.json` beside the
+  enrolment, mode 0600.
+- **Administration** — teams, invites with a role, members, roles,
+  grants, billing and the audit log — is the owners' and admins' own, in
+  the web view and with `tokenops team admin …` on the same API; every
+  change is audited. The administration messages (`pkg/teamwire`, admin
+  half) carry names, e-mail addresses and a grant's reason, never
+  figures: `TestAdminMessagesCarryNoFigures` fails if one reaches an
+  upload's types.
+- **Billing.** A new organisation gets a 14-day free trial, then a
+  subscription per active member per month through Paddle, the merchant of
+  record (it holds payment details; the server holds Paddle's customer and
+  subscription IDs). Without an active trial or subscription, uploads are
+  refused with `402` and `code: uploads_paused`, which the client explains;
+  the figures held stay viewable, read-only, for 30 days and are then
+  deleted. Weekly totals appear three days after a week ends, and the web
+  view and `tokenops team status` say when the first one will.
+- **Personal data** the server now also stores: members' e-mail
+  addresses and names from sign-up, password hashes and encrypted
+  two-factor secrets for password accounts, billing identifiers, and the audit
+  log of administration. Transactional e-mail (address confirmation,
+  password reset, trial and billing notices) is sent through a processor
+  under the same Art. 28 terms.
 
 ## Context
 
@@ -100,7 +145,7 @@ private ADR has the construction.
   3650 per organisation), the audit log 730. `tokenops team leave` revokes
   the device and erases its figures unless `--keep-history`; removing a
   member erases theirs.
-- **Credentials.** Device, invite and sign-in tokens are random and stored
+- **Credentials.** Device, invite, sign-in, device-link and administrator tokens are random and stored
   by the server only as hashes. The client sends only over HTTPS (or to
   loopback) and keeps its enrolment in `~/.tokenops/team.json`, mode 0600.
 - **Hosting.** In the EU (Germany), under a GDPR Art. 28 data-processing
