@@ -1,10 +1,16 @@
 # Team plane
 
-The team plane rolls up what TokenOps measures on each member's machine —
-by team, by repository and by kind of work, per day or week — on a server
-your organisation runs or has hosted in the EU. It is the shared view a
-team lead or a platform group asks for, without anyone's prompts, code or
-transcripts leaving their laptop.
+The team plane is a service klarlabs hosts in the EU. It rolls up what
+TokenOps measures on each member's machine — by team, by repository and
+by kind of work, per day or week — into the shared view a team lead or a
+platform group asks for, without anyone's prompts, code or transcripts
+leaving their laptop.
+
+The part that runs on your machine is open source, in this repository:
+the `tokenops team` commands, the daemon's uploader, and the upload format
+itself (`pkg/teamwire`). The server is klarlabs' and is not published, so
+you never have to trust it about what it receives: what leaves your
+machine is decided, and checkable, here.
 
 ## What leaves a machine
 
@@ -41,10 +47,14 @@ tokenops team preview --json   # byte for byte as it is sent
 
 ## Joining and leaving
 
-An owner or admin sends you an invite. Then:
+Your organisation's owner or an admin sends you an invite: a server
+address and a single-use code, valid for seven days unless they chose otherwise. There is no default
+server; `join` takes the address from the invite. Before joining, see what
+would be sent:
 
 ```bash
-tokenops team join https://team.example.eu tot_inv_… --name "Ada Lovelace"
+tokenops team preview          # computed now from this machine; sends nothing
+tokenops team join <url> <invite> --name "Ada Lovelace"
 tokenops team status           # what the server holds, who may see it, who looked
 tokenops team sync             # upload now instead of within the hour
 tokenops team web              # a single-use link to the web view
@@ -72,6 +82,10 @@ staying joined. See [Configuration](/guide/configuration#team-plane-team).
   someone looked at your figures. Owners and admins see the whole audit
   log.
 
+The server enforces these; they are recorded publicly in
+[ADR 0012](https://github.com/klarlabs-studio/tokenops/blob/main/docs/adr/0012-team-plane.md),
+so a works council can hold the service to them.
+
 This is built for EU workplaces with a works council: the threshold, who
 may hold grants and why, and how long figures are kept are the points a
 works agreement settles, and each is visible to the people it concerns.
@@ -82,54 +96,13 @@ Figures are kept 400 days by default (30 to 3650, per organisation); the
 audit log 730 days. Leaving erases your machine's figures unless you pass
 `--keep-history`; an admin removing you erases all of them.
 
-## Running the server
+## Getting the team plane for your organisation
 
-The server is `tokenops-team`: a Go service with Postgres behind Caddy,
-deployed with Docker Compose on one VPS. Each release publishes it as the
-image `ghcr.io/klarlabs-studio/tokenops-team:<version>` (linux/amd64 and
-linux/arm64) and as `tokenops-team_<version>_linux_<arch>.tar.gz` archives.
-`deploy/team/README.md` in the repository is the runbook — a Hetzner
-server in Germany, DNS, TLS, creating the organisation and invites,
-grants, backups and upgrades.
-
-| Variable | Meaning |
-|---|---|
-| `TEAMSERVER_DATABASE_URL` | Postgres connection URL (required) |
-| `TEAMSERVER_PUBLIC_URL` | the address members use, e.g. `https://team.example.eu` (required) |
-| `TEAMSERVER_LISTEN` | listen address, default `:8080` |
-| `TEAMSERVER_TRUSTED_PROXIES` | CIDRs whose `X-Forwarded-For` is believed, default loopback and private ranges |
-| `TEAMSERVER_AUDIT_RETENTION_DAYS` | audit log retention, default 730 |
-
-### Single sign-on
-
-The web view can sign members in with the organisation's OpenID Connect
-provider — Google Workspace, Microsoft Entra ID, Keycloak, Okta, or Dex in
-front of GitHub — beside the single-use links. It signs in only an
-existing member whose verified address an owner (or the server's console)
-set, in a domain the organisation allows; it never creates anyone. The
-client secret stays in an environment variable or a file on the server.
-Each member's page shows the address that signs them in. Setup is in
-`deploy/team/README.md`.
-
-### API
-
-All JSON; errors are `{error, hint}`. A device token (from `join`) or an
-admin token goes in `Authorization: Bearer …`.
-
-| Method and path | Who | What |
-|---|---|---|
-| `POST /api/v1/enroll` | invite holder | join; returns the device token once |
-| `POST /api/v1/ingest` | device | an upload; idempotent per batch and per day |
-| `GET /api/v1/me` | device, admin | what is held about you, grants covering you, views of you |
-| `DELETE /api/v1/devices/self[?keep=true]` | device | leave; erases unless `keep` |
-| `POST /api/v1/login-links` | device, admin | a single-use web sign-in link |
-| `GET /api/v1/aggregates?by=team\|repo\|kind&period=day\|week&since=&until=` | any member | released weeks' totals and rates, small groups withheld; `released_through` says how far |
-| `GET /api/v1/members` | any member | the members you may see |
-| `GET /api/v1/members/{id}/metrics` | yourself, or a grantee | individual figures; recorded and shown to the member |
-| `GET, POST /api/v1/teams` | admin to create | teams |
-| `POST /api/v1/invites` | admin | `{team, role, ttl_hours}` |
-| `GET, POST /api/v1/grants`, `DELETE /api/v1/grants/{id}` | owner (admin to list) | individual-view grants, with a reason |
-| `DELETE /api/v1/members/{id}` | admin | remove a member and erase their figures |
-| `PUT /api/v1/members/{id}/email` | owner | `{email}`: the address single sign-on signs this member in by (`""` clears; not another owner's) |
-| `GET /api/v1/audit` | admin | the audit log |
-| `PUT /api/v1/settings` | owner | `{min_group_size, retention_days}` |
+The team plane is offered by klarlabs as a hosted service; it is not
+available to self-host. klarlabs sets up your organisation, its owner and
+your teams, and the owner invites members. Hosting is in Germany, under a
+GDPR Art. 28 data-processing agreement. Single sign-on to the web view
+with your OpenID Connect provider (Google Workspace, Microsoft Entra ID,
+Keycloak, Okta, or Dex in front of GitHub) is available beside single-use
+sign-in links; it signs in only existing members whose verified address an
+owner set, and never creates anyone.
