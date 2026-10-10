@@ -27,7 +27,7 @@ import (
 func newTeamCmd(rf *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "team",
-		Short: "Share derived figures with a team: join, preview, status, leave",
+		Short: "Share derived figures with a team: create, join, preview, status, admin, leave",
 		Long: `team connects this machine to a TokenOps team plane. Nothing is sent
 until you join. Once joined, the daemon uploads every hour, per UTC day,
 repository and kind of work: instruction, turn and outcome counts, time
@@ -38,9 +38,13 @@ prints exactly what an upload holds.
 Your team sees totals by team, repository and kind of work, with groups
 under three people withheld. Your individual figures are visible only to
 people an owner explicitly granted, and you see who, why, and every view
-(` + "`tokenops team status`" + `).`,
+(` + "`tokenops team status`" + `).
+
+Starting a team for your organisation: ` + "`tokenops team create --server <url>`" + `
+signs you up in the browser with a 14-day free trial; ` + "`tokenops team admin`" + `
+then invites people and manages teams, roles, grants and billing.`,
 	}
-	cmd.AddCommand(newTeamJoinCmd(rf), newTeamStatusCmd(rf), newTeamPreviewCmd(rf), newTeamSyncCmd(rf),
+	cmd.AddCommand(newTeamCreateCmd(rf), newTeamAdminCmd(rf), newTeamJoinCmd(rf), newTeamStatusCmd(rf), newTeamPreviewCmd(rf), newTeamSyncCmd(rf),
 		newTeamWebCmd(rf), newTeamLeaveCmd(rf))
 	return cmd
 }
@@ -206,6 +210,10 @@ func newTeamStatusCmd(rf *rootFlags) *cobra.Command {
 			}
 			if meErr != nil {
 				return fmt.Errorf("could not read your page on the server: %w", meErr)
+			}
+			if me.Plan != nil {
+				fmt.Fprintln(out)
+				writePlan(out, me.Plan, time.Now())
 			}
 			writeMe(out, me)
 			return nil
