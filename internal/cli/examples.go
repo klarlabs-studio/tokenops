@@ -90,7 +90,24 @@ tokenops team preview --json`,
 	"team web":  `tokenops team web                # a single-use sign-in link to the web view`,
 	"team leave": `tokenops team leave               # revoke this machine, erase its figures
 tokenops team leave --keep-history`,
-	"version": `tokenops version --json`,
+	"team create":            `tokenops team create --server https://team.example.eu --name "Ada Lovelace"`,
+	"team admin login":       `tokenops team admin login --server https://team.example.eu`,
+	"team admin logout":      `tokenops team admin logout`,
+	"team admin teams":       `tokenops team admin teams --json`,
+	"team admin create-team": `tokenops team admin create-team platform`,
+	"team admin invite": `tokenops team admin invite --team platform              # a member
+tokenops team admin invite --team platform --role lead --ttl 48h`,
+	"team admin members": `tokenops team admin members`,
+	"team admin remove":  `tokenops team admin remove "Ada Lovelace" --yes`,
+	"team admin role":    `tokenops team admin role "Ada Lovelace" lead`,
+	"team admin grants":  `tokenops team admin grants --all`,
+	"team admin grant":   `tokenops team admin grant "Lars" --team platform --reason "1:1 coaching, agreed with the works council"`,
+	"team admin revoke":  `tokenops team admin revoke 7d1c…`,
+	"team admin billing": `tokenops team admin billing              # trial, subscription, seats
+tokenops team admin billing --checkout   # subscribe
+tokenops team admin billing --portal     # invoices, payment details, cancel`,
+	"team admin audit": `tokenops team admin audit --limit 20`,
+	"version":          `tokenops version --json`,
 	"coach": `tokenops coach                   # the dials, what the coach did, what came of it
 tokenops coach preset advise`,
 	"coach stats":     `tokenops coach stats --json`,

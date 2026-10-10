@@ -2,6 +2,7 @@ package teamshare
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -35,9 +36,15 @@ func Sync(ctx context.Context, d Deps, opts Options, statePath string, now time.
 	res.Response = resp
 	at := now.UTC()
 	st.LastUpload = &at
-	if sendErr != nil {
+	switch {
+	case teamclient.IsCode(sendErr, teamwire.CodeUploadsPaused):
+		paused := &PausedError{Days: opts.Days}
+		errors.As(sendErr, &paused.Server)
+		sendErr = paused
+		st.LastResult = "paused: the organisation has no active trial or subscription"
+	case sendErr != nil:
 		st.LastResult = "failed: " + sendErr.Error()
-	} else {
+	default:
 		st.LastResult = fmt.Sprintf("sent %d rows for %d days", resp.Accepted, len(u.Days))
 		if resp.Stale {
 			st.LastResult += " (some days already held a newer computation)"
@@ -49,4 +56,29 @@ func Sync(ctx context.Context, d Deps, opts Options, statePath string, now time.
 		_ = teamclient.Save(statePath, st)
 	}
 	return res, sendErr
+}
+
+// PausedError is an upload the server refused because the organisation has
+// no active trial or subscription. Nothing is lost here: each upload
+// resends the last Days days whole, so the first one after a subscription
+// starts fills the gap up to that many days.
+type PausedError struct {
+	Server *teamclient.ServerError
+	Days   int
+}
+
+func (e *PausedError) Error() string {
+	msg := "team uploads are paused: the organisation's trial ended or its subscription lapsed"
+	if e.Server != nil && e.Server.Message != "" {
+		msg = "team uploads are paused: " + e.Server.Message
+	}
+	msg += ". The figures already sent stay viewable, read-only, until they are deleted"
+	if e.Server != nil && e.Server.Hint != "" {
+		msg += " (" + e.Server.Hint + ")"
+	}
+	msg += ". An owner or admin can subscribe in the web view or with `tokenops team admin billing --checkout`"
+	if e.Days > 0 {
+		msg += fmt.Sprintf("; the next upload after that resends the last %d days", e.Days)
+	}
+	return msg + "."
 }
