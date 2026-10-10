@@ -109,10 +109,19 @@ trial** and no card:
 tokenops team create --server https://<team server>
 ```
 
-This opens the server's sign-up page in your browser. Sign in with
+This opens the server's sign-up page in your browser. Either sign in with
 GitHub — the server reads your verified primary e-mail address and your
-name, nothing else from your account — and name your organisation; you
-become its owner. The terminal shows a short code: type it into the page
+name, nothing else from your account — or sign up with an e-mail address
+and a password of at least 12 characters; the address must be confirmed
+with the link sent to it before you can continue. Then name your
+organisation; you become its owner.
+
+Password accounts can turn on two-factor authentication (an authenticator
+app) in the account settings, and reset a forgotten password by e-mail,
+which signs out every other session. An e-mail address belongs to one
+account: if you signed up with GitHub and later want a password for the
+same address (or the other way round), sign in to the existing account
+first and add it there — accounts are never merged automatically. The terminal shows a short code: type it into the page
 to approve this machine. The code is never part of a link, so only
 someone who can see your terminal can approve it. This machine then joins
 the organisation and receives an administrator's credential for
@@ -172,7 +181,7 @@ tokenops team admin billing --portal      # invoices, payment details, cancel (P
 ```
 
 The web view's billing page does the same. Owners get an e-mail, at the
-verified GitHub address they signed up with, three days
+verified address they signed up with, three days
 before the trial ends, when it ended, when a payment failed and when the
 subscription is active.
 

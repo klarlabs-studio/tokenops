@@ -31,9 +31,15 @@ it from the person starting a team. Nothing is sent until a machine joins.
 
 An organisation is started and run without klarlabs' involvement:
 
-- **Sign-up** is "Sign in with GitHub" in the browser. The server reads the
-  account's verified primary e-mail address and its display name, nothing
-  else. Someone with no organisation creates one and becomes its owner.
+- **Sign-up** is "Sign in with GitHub" in the browser — the server reads
+  the account's verified primary e-mail address and its display name,
+  nothing else — or an e-mail address and a password (argon2id at rest,
+  at least 12 characters, optionally checked against breached passwords
+  by k-anonymity prefix only), usable only once the address is confirmed
+  by a single-use link; optional two-factor (TOTP) for password accounts.
+  An address belongs to one account; a second way to sign in is added
+  only from inside the signed-in account, never merged automatically.
+  Someone with no organisation creates one and becomes its owner.
 - **Linking a machine** (`tokenops team create`, `tokenops team admin
   login`) is a device authorization grant (RFC 8628): the CLI shows a
   short code, the person types it into a page they are signed in to, and
@@ -59,9 +65,11 @@ An organisation is started and run without klarlabs' involvement:
   deleted. Weekly totals appear three days after a week ends, and the web
   view and `tokenops team status` say when the first one will.
 - **Personal data** the server now also stores: members' e-mail
-  addresses and names from sign-up, billing identifiers, and the audit
+  addresses and names from sign-up, password hashes and encrypted
+  two-factor secrets for password accounts, billing identifiers, and the audit
   log of administration. Transactional e-mail (trial and billing notices)
-  is sent through a processor under the same Art. 28 terms.
+  (address confirmation, password reset, trial and billing notices) is
+  sent through a processor under the same Art. 28 terms.
 
 ## Context
 

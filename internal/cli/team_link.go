@@ -151,11 +151,13 @@ func newTeamCreateCmd(rf *rootFlags) *cobra.Command {
 	var noBrowser bool
 	cmd := &cobra.Command{
 		Use:   "create --server <url>",
-		Short: "Start a team: sign up with GitHub in the browser, create an organisation with a free trial, and join this machine",
+		Short: "Start a team: sign up in the browser, create an organisation with a free trial, and join this machine",
 		Long: `create opens the team server's sign-up page in your browser. Sign in with
-GitHub (the server reads your verified primary e-mail address, nothing
-else from your account); if you have no organisation yet, name one and
-you become its owner, with a 14-day free trial. Then type the code this command shows into the page:
+GitHub (the server reads your verified primary e-mail address and name,
+nothing else from your account), or sign up with an e-mail address and a
+password (the address is verified by a link before anything else); if
+you have no organisation yet, name one and you become its owner, with a
+14-day free trial. Then type the code this command shows into the page:
 that approves this machine, which joins the organisation and receives an
 administrator's credential for ` + "`tokenops team admin`" + `.
 
