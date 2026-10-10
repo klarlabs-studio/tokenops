@@ -29,10 +29,15 @@ func TestWatchTickAlertsAndDedupes(t *testing.T) {
 	defer func() { _ = store.Close() }()
 
 	now := time.Now().UTC()
+	// The daily budget counts from UTC midnight, so the events must fall in
+	// today: an hour back crosses into yesterday between 00:00 and 01:00.
+	ago := func(d time.Duration) time.Time {
+		return now.Add(-min(d, now.Sub(now.Truncate(24*time.Hour))/2))
+	}
 	envs := []*eventschema.Envelope{
 		{
 			ID: "costly", SchemaVersion: eventschema.SchemaVersion,
-			Type: eventschema.EventTypePrompt, Timestamp: now.Add(-time.Hour), Source: "proxy",
+			Type: eventschema.EventTypePrompt, Timestamp: ago(time.Hour), Source: "proxy",
 			Payload: &eventschema.PromptEvent{
 				Provider: eventschema.ProviderAnthropic, RequestModel: "claude-fable-5",
 				InputTokens: 1000, OutputTokens: 100, TotalTokens: 1100,
@@ -41,7 +46,7 @@ func TestWatchTickAlertsAndDedupes(t *testing.T) {
 		},
 		{
 			ID: "mystery", SchemaVersion: eventschema.SchemaVersion,
-			Type: eventschema.EventTypePrompt, Timestamp: now.Add(-30 * time.Minute), Source: "claude-code-jsonl",
+			Type: eventschema.EventTypePrompt, Timestamp: ago(30 * time.Minute), Source: "claude-code-jsonl",
 			Payload: &eventschema.PromptEvent{
 				Provider: eventschema.ProviderAnthropic, RequestModel: "claude-unreleased-9",
 				InputTokens: 500, OutputTokens: 50, TotalTokens: 550,
