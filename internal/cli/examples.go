@@ -96,6 +96,7 @@ tokenops team leave --keep-history`,
 	"team admin teams":       `tokenops team admin teams --json`,
 	"team admin create-team": `tokenops team admin create-team platform`,
 	"team admin invite": `tokenops team admin invite --team platform              # a member
+tokenops team admin invite --team platform --email ada@example.com
 tokenops team admin invite --team platform --role lead --ttl 48h`,
 	"team admin members": `tokenops team admin members`,
 	"team admin remove":  `tokenops team admin remove "Ada Lovelace" --yes`,
