@@ -19,15 +19,21 @@ watch, or, only after you say yes for that provider, the sign-in another
 app already keeps. The daemon never shows a prompt. When a session
 expires, the reading goes stale and says which setup to run again.
 
-Joining a team is new too. `tokenops team join` connects this machine to
-a klarlabs-hosted team plane with an invite. It sends derived figures
-only, never a prompt, file or path, and `tokenops team preview` shows
-exactly what it sends.
+Teams are new too. `tokenops team create --server <url>` signs you up
+on a klarlabs-hosted team plane (with GitHub, or an e-mail address and a
+password), starts a 14-day trial and joins this machine; teammates join
+from an e-mailed invite, and `tokenops team admin` manages members,
+grants and billing from the terminal as the web view does. It sends
+derived figures only, never a prompt, file or path, and
+`tokenops team preview` shows exactly what it sends.
 
 The menu bar shows each vendor's own logo, says when it is still
 fetching and how long it has taken, and words its messages for people.
 Behind it the daemon answers in a fraction of the time: a refresh that
 took 3–5 seconds on a busy store now takes about half a second.
+
+And TokenOps has a logo: tokenops, with the o drawn as the headroom ring
+the menu bar shows.
 
 ## v0.101.2 — Keychain prompts only when you ask for one
 
