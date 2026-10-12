@@ -179,8 +179,8 @@ func (r Require) strictness() int {
 }
 
 // LocalAsk reports whether the requirement is answered on this machine.
-// In phase 1 a named approver is treated as ask: the team plane that
-// would route the request to the role does not exist yet.
+// A named approver is treated as ask until the team plane routes the
+// request to the role (ADR 0014 phase 3).
 func (r Require) LocalAsk() bool { return r.Kind == RequireAsk || r.Kind == RequireApprover }
 
 // Stage is whether a rule binds.
