@@ -94,7 +94,7 @@ func newTeamAdminCmd(rf *rootFlags) *cobra.Command {
 	af := &adminFlags{}
 	cmd := &cobra.Command{
 		Use:   "admin",
-		Short: "Administer your organisation: teams, invites, members, roles, grants, billing, audit",
+		Short: "Administer your organisation: teams, invites, members, roles, grants, boundaries, approvals, billing, audit",
 		Long: `admin manages the organisation you own or administer, through the same API
 as the web view. Every change is recorded in the organisation's audit log.
 
@@ -110,7 +110,8 @@ and expires. ` + adminTokenEnv + ` with --server uses a token you were given ins
 	// on request.
 	for _, c := range []*cobra.Command{newTeamAdminTeamsCmd(rf, af), newTeamAdminCreateTeamCmd(rf, af),
 		newTeamAdminInviteCmd(rf, af), newTeamAdminMembersCmd(rf, af), newTeamAdminGrantsCmd(rf, af),
-		newTeamAdminBillingCmd(rf, af), newTeamAdminAuditCmd(rf, af)} {
+		newTeamAdminBillingCmd(rf, af), newTeamAdminAuditCmd(rf, af), newTeamAdminBoundariesCmd(rf, af),
+		newTeamAdminApprovalsCmd(rf, af), newTeamAdminAnswerCmd(rf, af, "approve"), newTeamAdminAnswerCmd(rf, af, "deny")} {
 		c.Flags().BoolVar(&af.json, "json", false, "emit JSON")
 		cmd.AddCommand(c)
 	}

@@ -56,7 +56,8 @@ make menubar-test   # tests, no window needed
   `tokenops approve <id> --confirm`, which shows what is waiting and answers
   only when you type yes: the daemon's API only denies, because the agent a
   boundary stopped can reach it too, so an approval needs a person at a
-  terminal.
+  terminal. A decision under an organisation rule that names an approver shows
+  who answers it (that role, in the team plane) and offers Deny only.
 - Refresh, in the panel (⌘R) or the right-click menu, asks the daemon's
   usage readers to poll now (`POST /api/sources/refresh`), shows what the
   daemon has at once, and reads again as the new readings arrive. The

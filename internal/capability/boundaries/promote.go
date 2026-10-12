@@ -32,6 +32,9 @@ func Demote(path, name string) (Promoted, error) { return setStage(path, name, d
 // observe on another, with nothing in the file to say so.
 func setStage(path, name string, stage domain.Stage) (Promoted, error) {
 	name = strings.TrimSpace(name)
+	if strings.HasPrefix(name, domain.OrgPrefix) {
+		return Promoted{}, actions.InputError{Err: fmt.Errorf("%s is your organisation's rule: its stage is set in the team plane, by an owner or admin", name)}
+	}
 	cfg, err := config.ReadMutable(path)
 	if err != nil {
 		return Promoted{}, actions.InputError{Err: err}

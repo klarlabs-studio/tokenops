@@ -23,13 +23,11 @@ func putFigures(t *testing.T, env Env, f boundaryledger.Figures) {
 
 func TestRouteCheckHoldsUntilApproved(t *testing.T) {
 	env := testEnv(t, false)
-	check := RouteCheck(rules(t, domain.RuleSpec{
+	r := rules(t, domain.RuleSpec{
 		Name: "no-opus-routes", Action: "model_route", Require: "ask", Stage: "enforce",
 		When: map[string]string{"model_tier": ">= opus"},
-	}), env)
-	if check == nil {
-		t.Fatal("no check for a model_route rule")
-	}
+	})
+	check := RouteCheck(func() []Rule { return r }, env)
 	if held, _ := check(eventschema.ProviderAnthropic, "claude-sonnet-4-5", "claude-haiku-4-5", "", ""); held {
 		t.Fatal("a route down to haiku was held by an opus rule")
 	}
@@ -57,9 +55,14 @@ func TestRouteCheckHoldsUntilApproved(t *testing.T) {
 	}
 }
 
-func TestRouteCheckIsNilWithoutRouteRules(t *testing.T) {
-	if RouteCheck(rules(t, spendRule("ask", "enforce")), testEnv(t, false)) != nil {
-		t.Fatal("the router would ask a boundary with no model_route rule")
+func TestRouteCheckHoldsNothingWithoutRouteRules(t *testing.T) {
+	env := testEnv(t, false)
+	r := rules(t, spendRule("ask", "enforce"))
+	if held, _ := RouteCheck(func() []Rule { return r }, env)(eventschema.ProviderAnthropic, "a", "b", "", ""); held {
+		t.Fatal("a route was held with no model_route rule")
+	}
+	if s, _ := env.Dir.Sessions(); len(s) != 0 {
+		t.Fatal("a route with no rule wrote state")
 	}
 }
 

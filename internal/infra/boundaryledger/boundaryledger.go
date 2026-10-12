@@ -20,6 +20,7 @@
 //	answers/<id>.json    the operator's answer
 //	sessions/<id>.json   per-session counters for status
 //	figures.json         the daemon's plan and budget readings
+//	org.json             the organisation's signed rules, as fetched
 package boundaryledger
 
 import (
@@ -35,6 +36,7 @@ import (
 	"sync"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/boundaries"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -185,6 +187,12 @@ type Pending struct {
 	// ToolUseID is the call an attended ask was raised on, so the next
 	// call can read the answer the operator gave at the prompt.
 	ToolUseID string `json:"tool_use_id,omitempty"`
+	// Crossings are the figures that crossed the rule, kept for an
+	// approval routed to the organisation.
+	Crossings []boundaries.Crossing `json:"crossings,omitempty"`
+	// RoutedAt is when an organisation rule's approval request reached
+	// the team plane.
+	RoutedAt *time.Time `json:"routed_at,omitempty"`
 }
 
 // Answer is the operator's answer to a pending decision.
@@ -226,6 +234,20 @@ func (d Dir) GetPending(id string) (Pending, bool, error) {
 	var p Pending
 	ok, err := d.getJSON("pending", id, &p)
 	return p, ok, err
+}
+
+// DeletePending removes a pending decision once its answer is recorded,
+// so the next time the rule holds it is asked afresh.
+func (d Dir) DeletePending(id string) error {
+	path, err := d.idPath("pending", id)
+	if err != nil {
+		return err
+	}
+	err = os.Remove(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 // ListPending returns every pending decision, newest first.
@@ -414,6 +436,46 @@ func (d Dir) GetFigures() (Figures, bool, error) {
 		return Figures{}, false, err
 	}
 	return f, true, nil
+}
+
+const orgFile = "org.json"
+
+// PutOrg replaces the cached organisation rules: the signed document as
+// the server sent it, verified again every time it is read.
+func (d Dir) PutOrg(signed []byte) error {
+	if err := os.MkdirAll(d.root(), 0o700); err != nil {
+		return err
+	}
+	return writeAtomic(filepath.Join(d.root(), orgFile), signed)
+}
+
+// GetOrg reads the cached organisation rules; a missing file is not an
+// error.
+func (d Dir) GetOrg() ([]byte, bool, error) {
+	b, err := os.ReadFile(filepath.Join(d.root(), orgFile)) //nolint:gosec // TokenOps' own state
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, false, nil
+	}
+	return b, err == nil, err
+}
+
+// OrgModTime is when the cached rules last changed, for callers that
+// keep them in memory; zero when there are none.
+func (d Dir) OrgModTime() time.Time {
+	info, err := os.Stat(filepath.Join(d.root(), orgFile))
+	if err != nil {
+		return time.Time{}
+	}
+	return info.ModTime()
+}
+
+// RemoveOrg forgets the organisation's rules, as leaving a team does.
+func (d Dir) RemoveOrg() error {
+	err := os.Remove(filepath.Join(d.root(), orgFile))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 func writeAtomic(path string, b []byte) error {

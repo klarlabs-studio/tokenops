@@ -368,10 +368,7 @@ func (s *startup) configureRouting(context.Context) error {
 	}
 	// model_route boundaries (ADR 0014) hold a route the router would
 	// otherwise apply; the request stays on the model it asked for.
-	if check := bcap.RouteCheck(s.cfg.BoundaryRules(), bcap.Env{}); check != nil {
-		rc.Boundary = check
-		s.logger.Info("model_route boundaries wired")
-	}
+	rc.Boundary = bcap.RouteCheck(bcap.LiveRules(s.cfg), bcap.Env{})
 	s.opts = append(s.opts, proxy.WithActiveRouting(*rc, s.components.Spend))
 	if s.components.Store != nil {
 		s.opts = append(s.opts, proxy.WithExperiments(experiments.New(s.components.Store)))

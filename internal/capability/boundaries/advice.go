@@ -67,7 +67,7 @@ func GlanceAdvice(cfg *config.Config, reports []plans.HeadroomReport) []Advice {
 	if cfg == nil {
 		return nil
 	}
-	return AdviceNow(cfg.BoundaryRules(), Env{}, reports)
+	return AdviceNow(AllRules(*cfg), Env{}, reports)
 }
 
 func sessionFree(r domain.Rule) bool {

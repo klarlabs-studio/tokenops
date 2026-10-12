@@ -63,11 +63,8 @@ func startTeamUploadRuntime(cfg config.Config, components *bootstrap.Components,
 // shareAllowed is the share boundary for destination, asked before
 // figures leave. Nil when no rule concerns sharing.
 func shareAllowed(cfg config.Config, destination string) func() error {
-	rules := cfg.BoundaryRules()
-	if len(rules) == 0 {
-		return nil
-	}
-	return func() error { return bcap.CheckShare(rules, destination, bcap.Env{}) }
+	rules := bcap.LiveRules(cfg)
+	return func() error { return bcap.CheckShare(rules(), destination, bcap.Env{}) }
 }
 
 func uploadTeamOnce(ctx context.Context, deps teamshare.Deps, opts teamshare.Options, path string, logger *slog.Logger) {

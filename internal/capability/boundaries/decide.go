@@ -69,6 +69,12 @@ func Decide(env Env, req DecideRequest) (Decided, error) {
 	if !ok {
 		return Decided{}, actions.InputError{Err: fmt.Errorf("no boundary decision %s is waiting on an answer", id)}
 	}
+	if approved && teamRouted(p) {
+		role := strings.TrimPrefix(p.Require, "approver:")
+		return Decided{}, actions.InputError{Err: fmt.Errorf("%s is your organisation's rule and needs approval from %s there: "+
+			"it was sent to them, and they answer in the team plane's web view or with `tokenops team admin approve`; "+
+			"you can still deny it here", p.Rule, role)}
+	}
 	scope := boundaryledger.ScopeOnce
 	if req.Session {
 		scope = boundaryledger.ScopeSession

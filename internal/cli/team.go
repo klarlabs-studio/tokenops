@@ -17,6 +17,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/teamshare"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/internal/infra/teamclient"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
@@ -209,6 +210,7 @@ func newTeamStatusCmd(rf *rootFlags) *cobra.Command {
 			default:
 				fmt.Fprintf(out, "No upload yet; the daemon uploads every %s.\n", cfg.Team.EffectiveInterval())
 			}
+			fmt.Fprintln(out, orgBoundariesLine(bcap.LoadOrg(boundaryledger.DefaultDir(), path)))
 			if meErr != nil {
 				return fmt.Errorf("could not read your page on the server: %w", meErr)
 			}
@@ -303,6 +305,20 @@ func writeUpload(out io.Writer, u teamwire.Upload) {
 	_ = w.Flush()
 }
 
+// orgBoundariesLine says which of the organisation's rules this machine
+// holds, or why it holds none it can use.
+func orgBoundariesLine(set bcap.OrgSet) string {
+	switch {
+	case set.Problem != "":
+		return "Organisation boundaries: " + set.Problem + "."
+	case set.Version == 0 && len(set.Rules) == 0:
+		return "Organisation boundaries: none yet (the daemon fetches them every five minutes)."
+	case len(set.Rules) == 0:
+		return fmt.Sprintf("Organisation boundaries: version %d, no rules.", set.Version)
+	}
+	return fmt.Sprintf("Organisation boundaries: version %d, %d rules (`tokenops boundaries status` shows them).", set.Version, len(set.Rules))
+}
+
 func newTeamSyncCmd(rf *rootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "sync",
@@ -321,9 +337,7 @@ func newTeamSyncCmd(rf *rootFlags) *cobra.Command {
 			defer cancel()
 			return withTeamDeps(ctx, cfg, func(d teamshare.Deps) error {
 				opts := teamOptions(cfg)
-				if rules := cfg.BoundaryRules(); len(rules) > 0 {
-					opts.Allow = func() error { return bcap.CheckShare(rules, bcap.DestinationTeam, bcap.Env{}) }
-				}
+				opts.Allow = func() error { return bcap.CheckShare(bcap.AllRules(cfg), bcap.DestinationTeam, bcap.Env{}) }
 				res, err := teamshare.Sync(ctx, d, opts, path, time.Now())
 				if err != nil {
 					return err
@@ -408,6 +422,8 @@ func newTeamLeaveCmd(rf *rootFlags) *cobra.Command {
 			if err := teamclient.Remove(path); err != nil {
 				return err
 			}
+			// The organisation's rules end with membership.
+			_ = boundaryledger.DefaultDir().RemoveOrg()
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "Left %s. This machine sends nothing more.\n", st.TeamName)
 			if keep {

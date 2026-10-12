@@ -8,6 +8,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/config"
 	domain "go.klarlabs.de/tokenops/internal/contexts/boundaries"
+	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/internal/infra/opencodeplugin"
 	"go.klarlabs.de/tokenops/internal/infra/teamclient"
 )
@@ -77,6 +78,8 @@ type RuleStatus struct {
 	LastMatched *time.Time      `json:"last_matched,omitempty"`
 	Harnesses   []HarnessStatus `json:"harnesses"`
 	Note        string          `json:"note,omitempty"`
+	// Source is local (config.yaml) or organisation (the team plane).
+	Source string `json:"source"`
 }
 
 // PendingView is a decision waiting on an answer.
@@ -89,6 +92,8 @@ type PendingView struct {
 	SessionID string    `json:"session_id"`
 	At        time.Time `json:"at"`
 	Approve   string    `json:"approve"`
+	// Routed is a decision the organisation answers, not this machine.
+	Routed bool `json:"routed,omitempty"`
 }
 
 // Status is every rule and every decision waiting on the operator.
@@ -133,7 +138,7 @@ func RuleStatuses(rules []domain.Rule, env Env, installed map[string]bool) (Stat
 	for _, r := range rules {
 		rs := RuleStatus{
 			Name: r.Name, Action: string(r.Action), Require: r.Require.String(), Stage: string(r.Stage),
-			Harnesses: harnesses(r, installed),
+			Harnesses: harnesses(r, installed), Source: sourceName(r.Source),
 		}
 		for _, s := range sessions {
 			n := s.Matches[r.Name]
@@ -159,10 +164,7 @@ func RuleStatuses(rules []domain.Rule, env Env, installed map[string]bool) (Stat
 		if _, answered, _ := env.Dir.GetAnswer(p.ID, now); answered || now.Sub(p.At) > 24*time.Hour {
 			continue
 		}
-		out.Pending = append(out.Pending, PendingView{
-			ID: p.ID, Rule: p.Rule, Require: p.Require, Crossed: p.Crossed, Harness: p.Harness,
-			SessionID: p.SessionID, At: p.At, Approve: "tokenops approve " + p.ID,
-		})
+		out.Pending = append(out.Pending, pendingView(p))
 	}
 	switch {
 	case len(rules) == 0:
@@ -250,6 +252,30 @@ func shareConcerns(r domain.Rule, destination string) bool {
 }
 
 // needsHook reports whether any rule is decided at the pause point.
+func sourceName(s domain.Source) string {
+	if s == domain.SourceOrg {
+		return "organisation"
+	}
+	return "local"
+}
+
+// pendingView is a waiting decision as status shows it, with how it is
+// answered: here, or by the organisation.
+func pendingView(p boundaryledger.Pending) PendingView {
+	v := PendingView{
+		ID: p.ID, Rule: p.Rule, Require: p.Require, Crossed: p.Crossed, Harness: p.Harness,
+		SessionID: p.SessionID, At: p.At, Approve: "tokenops approve " + p.ID,
+	}
+	if teamRouted(p) {
+		v.Approve = "answered by " + strings.TrimPrefix(p.Require, "approver:") + " in your organisation"
+		if p.RoutedAt == nil {
+			v.Approve += " (not sent yet: the daemon sends it when it reaches the team plane)"
+		}
+		v.Routed = true
+	}
+	return v
+}
+
 func needsHook(rules []domain.Rule) bool {
 	for _, r := range rules {
 		if r.Action == domain.ActionContinue || r.Action == domain.ActionSpend {
@@ -268,10 +294,17 @@ func hookKey(r domain.Rule, harness string) string {
 
 func ruleNote(r domain.Rule, rs RuleStatus) string {
 	var notes []string
-	if r.Require.Kind == domain.RequireApprover {
-		notes = append(notes, "approver:"+r.Require.Role+" is answered on this machine for now (as ask); routing it to the role needs the team plane")
+	switch {
+	case r.TeamRouted():
+		notes = append(notes, "set by your organisation; approval goes to its "+r.Require.Role+" role")
+	case r.Require.Kind == domain.RequireApprover:
+		notes = append(notes, "approver:"+r.Require.Role+" is answered on this machine (as ask): only organisation rules are routed to a role")
+	case r.Source == domain.SourceOrg:
+		notes = append(notes, "set by your organisation")
 	}
-	if !r.Enforced() {
+	if !r.Enforced() && r.Source == domain.SourceOrg {
+		notes = append(notes, "in shadow until your organisation enforces it")
+	} else if !r.Enforced() {
 		if rs.Matches == 0 {
 			notes = append(notes, "in shadow and has not matched yet")
 		} else {

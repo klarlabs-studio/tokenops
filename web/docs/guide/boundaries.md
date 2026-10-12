@@ -106,8 +106,9 @@ The refusal is written for the agent to act on: it says what was crossed,
 tells it to stop rather than retry, and names the command you run to let
 it go on.
 
-`approver:<role>` is stored and shown, but answered on this machine like
-`ask`. Routing the request to someone holding the role needs
+`approver:<role>` in your own config is answered on this machine, like
+`ask`. In your organisation's rules it goes to that role: see
+[Organisation boundaries](#organisation-boundaries). Routing the request to someone holding the role needs
 the team plane, which comes later; `boundaries status` says so on the rule.
 
 ### Inside TokenOps: routes and figures
@@ -208,6 +209,42 @@ budget is listed on the glance — `tokenops_glance` and `GET /api/glance`,
 under `boundaries` — with what the agent should do: stop and tell you, or
 stop and ask. A rule that needs a session's cost, or a workflow or agent,
 cannot be judged there and is left out rather than guessed.
+
+## Organisation boundaries
+
+When this machine has [joined a team](/guide/team), its owners and admins
+can set boundaries for every member, in the web view (*Boundaries*) or with
+`tokenops team admin boundaries --set org.yaml`, written exactly as
+`config.yaml`'s section is. The daemon fetches them every five minutes.
+
+- **They only tighten.** Organisation rules sit beside yours, named
+  `org:<name>`, and the strictest matching rule wins. You can add
+  boundaries but not loosen theirs; their stage (shadow or enforce) is the
+  organisation's to set, so `boundaries promote` and `demote` refuse them.
+- **They are signed.** The server signs the document; this machine pins the
+  key on the first fetch and checks the signature every time it reads the
+  rules, the copy on disk included. Rules edited on disk are not rules, and a
+  document under another key is refused (`tokenops team status` says so).
+  Leaving the team forgets them.
+- **`approver:<role>` goes to the role.** When an organisation rule naming
+  an approver holds an action, the agent is refused (even with someone at
+  the keyboard, who may not hold the role) and the daemon sends an approval
+  request to the team plane: the rule, the action, the client and the
+  figures that crossed it — numbers and names from fixed lists, never a
+  prompt, a path or a name you typed (a test fails the build if one could
+  be added). Everyone in the organisation with that role or above is
+  e-mailed and answers in the web view (*Approvals*), or, as an owner or
+  admin, with `tokenops team admin approve <id>`; the answer reaches this machine within a minute and
+  is recorded with who gave it. Until then the action stays refused. You can
+  deny it here; you cannot approve it here.
+- **Nobody approves themselves through a token.** `team admin approve`
+  refuses a request you made: an agent on your machine could hold your
+  administrator credential. Another member with the role answers it, or
+  you do, in the web view signed in with your account (a session opened
+  from a sign-in link does not count: a machine's token can make one).
+
+Local rules naming an approver are not sent anywhere: only your
+organisation's rules leave this machine as requests.
 
 ## What a boundary is not
 
