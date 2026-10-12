@@ -6,6 +6,7 @@
   "publisher": "tokenops",
   "private": true,
   "license": "Apache-2.0",
+  "icon": "resources/logo.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/klarlabs-studio/tokenops.git",

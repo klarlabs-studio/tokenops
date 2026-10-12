@@ -38,3 +38,11 @@ Source: https://github.com/steipete/CodexBar
 The provider logos in `apps/menubar/frontend/logos/` are from Lobe Icons
 (`@lobehub/icons-static-svg`), MIT licence; see that directory's
 NOTICE.md. The marks themselves are their owners' trademarks.
+
+## Geist
+
+The letters of the tokenops wordmark (`assets/brand/wordmark*.svg` and the
+copies under `web/docs/public/`) are outlines of Geist SemiBold, © 2024 The
+Geist Project Authors (https://github.com/vercel/geist-font), SIL Open Font
+License 1.1. No font file is distributed; `assets/brand/make.py` draws the
+outlines from the font.

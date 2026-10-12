@@ -11,9 +11,13 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
   head: [
-    ["meta", { name: "theme-color", content: "#4159d6" }],
+    ["meta", { name: "theme-color", content: "#2742F5" }],
+    // head entries are not prefixed with base, unlike themeConfig.logo.
+    ["link", { rel: "icon", type: "image/svg+xml", href: `${process.env.DOCS_BASE || "/"}favicon.svg` }],
   ],
   themeConfig: {
+    logo: { light: "/wordmark.svg", dark: "/wordmark-dark.svg", alt: "tokenops" },
+    siteTitle: false,
     nav: [
       { text: "Guide", link: "/guide/quickstart" },
       { text: "Integrations", link: "/integrations/sdk-overview" },

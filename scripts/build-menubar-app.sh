@@ -33,7 +33,8 @@ vitra_version=$(go list -m -f '{{.Version}}' go.klarlabs.de/vitra)
 go run "go.klarlabs.de/vitra/cmd/vitra@$vitra_version" package \
   --out "$work/pkg" --format app-dir --accessory \
   --bin "$work/tokenops-menubar" \
-  --app-id de.klarlabs.tokenops.menubar --name TokenOps --version "${version#v}" \
+  --app-id de.klarlabs.tokenops.menubar --name TokenOps \
+  --icon "$here/apps/menubar/AppIcon.icns" --version "${version#v}" \
   --description "TokenOps in the menu bar: every plan's windows, pace, cost and the coach's findings" \
   --homepage https://github.com/klarlabs-studio/tokenops --license Apache-2.0
 
