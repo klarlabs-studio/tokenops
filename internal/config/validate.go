@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"go.klarlabs.de/tokenops/internal/contexts/boundaries"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 )
 
@@ -63,6 +64,9 @@ func (c Config) Validate() error {
 		return err
 	}
 	if err := c.ModelPolicy.Policy().Validate(); err != nil {
+		return err
+	}
+	if _, err := boundaries.Parse(c.Boundaries); err != nil {
 		return err
 	}
 	if err := c.Money.Validate(); err != nil {

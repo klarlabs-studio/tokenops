@@ -35,6 +35,27 @@ type EvidenceRef struct {
 	Caveat     string    `json:"caveat,omitempty"`
 }
 
+// DecisionActor is who or what asked for the action a decision is about:
+// the harness, its session, the agent attribution, and the local user the
+// process ran as. It names a machine-local account, never a credential.
+type DecisionActor struct {
+	Harness   string `json:"harness,omitempty"`
+	SessionID string `json:"session_id,omitempty"`
+	AgentID   string `json:"agent_id,omitempty"`
+	User      string `json:"user,omitempty"`
+}
+
+// DecisionApproval is who answered a decision that needed approval, how,
+// when, and under which rule. Method is how the answer arrived (cli, mcp,
+// api, prompt); Scope is once or session.
+type DecisionApproval struct {
+	Approver string    `json:"approver"`
+	Method   string    `json:"method"`
+	At       time.Time `json:"at"`
+	Rule     string    `json:"rule,omitempty"`
+	Scope    string    `json:"scope,omitempty"`
+}
+
 // DecisionEvent preserves what TokenOps knew and why it selected an action.
 // Multiple events with one Correlation.Decision form its append-only history.
 type DecisionEvent struct {
@@ -50,6 +71,12 @@ type DecisionEvent struct {
 	Executable   bool             `json:"executable"`
 	Adapter      string           `json:"adapter,omitempty"`
 	Fingerprint  string           `json:"fingerprint,omitempty"`
+	// Actor is who asked for the action; zero when the decision was not
+	// prompted by one (the router's own advice).
+	Actor DecisionActor `json:"actor,omitzero"`
+	// Approval is who answered, set on the accepted or rejected stage of
+	// a decision that asked.
+	Approval DecisionApproval `json:"approval,omitzero"`
 }
 
 // Type identifies this payload as a DecisionEvent.

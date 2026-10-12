@@ -38,6 +38,7 @@ var subToMCP = map[string][]string{
 	"preferred-model unset": {"tokenops_configure"},
 	"pricing show":          {"tokenops_pricing"},
 	"routing proposals":     {"tokenops_routing"},
+	"boundaries status":     {"tokenops_boundaries"},
 	"routing rule":          {"tokenops_routing"},
 	"rules analyze":         {"tokenops_rules"},
 
@@ -52,6 +53,8 @@ var subToMCP = map[string][]string{
 // starting "GAP:" are not deliberate — they are recorded so the asymmetry
 // is visible, and closing one means moving it to subToMCP.
 var subCLIOnly = map[string]string{
+	"boundaries promote":    "making a rule bind is the operator's act; an agent must not be able to change the limits set on it",
+	"boundaries demote":     "loosening a rule is the operator's act; an agent must not be able to change the limits set on it",
 	"statusline install":    "edits the operator's Claude Code settings; init runs it",
 	"coach stats":           "reads the hooks' local ledgers on this machine; GET /api/findings serves what they show",
 	"statusline uninstall":  "restores the operator's own status line",

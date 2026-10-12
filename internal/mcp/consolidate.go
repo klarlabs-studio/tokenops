@@ -11,6 +11,7 @@ import (
 	mcpgo "go.klarlabs.de/mcp"
 	mcpserver "go.klarlabs.de/mcp/server"
 
+	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
@@ -24,7 +25,7 @@ import (
 // to choose between near neighbours — spend_summary, top_consumers,
 // burn_rate and forecast — that answer one question in four slices. So
 // the server registers each tool as before and then Consolidate moves them
-// behind sixteen public ones: each answers one question, picks its slice
+// behind seventeen public ones: each answers one question, picks its slice
 // with a view, action or setting, and carries a title and annotations a
 // client can decide approval on. The handlers, their validation and their
 // tests are unchanged; the public layer only routes.
@@ -394,6 +395,13 @@ type routingIn struct {
 	Delete      bool     `json:"delete,omitempty" jsonschema:"description=set_rule: remove the rule for provider and from_model"`
 }
 
+type boundariesIn struct {
+	Action   string `json:"action,omitempty" jsonschema:"enum=status,enum=decide,description=status (default): each boundary rule, how often it matched, where it is enforced, and what waits on the operator. decide: record the operator's answer to one waiting decision."`
+	ID       string `json:"id,omitempty" jsonschema:"description=decide: the boundary decision id (bnd-…)"`
+	Decision string `json:"decision,omitempty" jsonschema:"enum=approve,enum=deny,description=decide: approve lets the agent past the boundary; deny refuses"`
+	Session  bool   `json:"session,omitempty" jsonschema:"description=decide: answer for the rest of the session, not only the next step"`
+}
+
 type configureIn struct {
 	Setting       string  `json:"setting" jsonschema:"required,enum=plan,enum=budget,enum=mode,enum=preferred_model,enum=usage_meter,description=plan: bind a subscription plan to a provider (omit provider to list them). budget: set or remove a spend budget. mode: passive or active. preferred_model: the most expensive model a provider may be routed to. usage_meter: connect claude.ai's own usage meter."`
 	Provider      string  `json:"provider,omitempty" jsonschema:"description=plan and preferred_model: the provider, e.g. anthropic"`
@@ -500,6 +508,12 @@ type routingOut struct {
 	SetRule   map[string]any       `json:"set_rule,omitempty"`
 }
 
+type boundariesOut struct {
+	Action string        `json:"action"`
+	Status *bcap.Status  `json:"status,omitempty"`
+	Decide *bcap.Decided `json:"decide,omitempty"`
+}
+
 type configureOut struct {
 	Setting        string         `json:"setting"`
 	Plan           map[string]any `json:"plan,omitempty"`
@@ -511,7 +525,7 @@ type configureOut struct {
 
 func params(names ...string) []string { return names }
 
-// publicTools are the sixteen tools the server lists.
+// publicTools are the seventeen tools the server lists.
 func publicTools() []publicTool {
 	window := params("since", "until")
 	return []publicTool{
@@ -657,6 +671,15 @@ func publicTools() []publicTool {
 				"mode":            {inner: "tokenops_mode", params: params("mode"), rename: map[string]string{"mode": "set"}},
 				"preferred_model": {inner: "tokenops_preferred_model", params: params("provider", "model", "clear")},
 				"usage_meter":     {inner: "tokenops_vendor_usage_setup", params: params("org")},
+			},
+		},
+		{
+			name: "tokenops_boundaries", title: "Action boundaries", kind: changes,
+			description: "Limits the operator set before work starts (config.yaml boundaries): each rule's stage, how often it matched, where it is enforced, and the decisions waiting on the operator; or record the operator's answer to one. Only answer on the operator's word: never approve a boundary that stopped you.",
+			selector:    "action", def: "status", input: boundariesIn{}, output: boundariesOut{},
+			routes: map[string]route{
+				"status": {inner: "tokenops_boundaries_status"},
+				"decide": {inner: "tokenops_boundary_decide", params: params("id", "decision", "session")},
 			},
 		},
 		{

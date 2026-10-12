@@ -42,7 +42,7 @@ type hookSpec struct {
 // reported it absent, and no flag could take it out again. Adding a fourth
 // guard must not be able to reintroduce that, so the three commands read
 // the set from here rather than each spelling it out.
-var hookMarkers = []string{"coach-hook", "read-guard", "route-guard"}
+var hookMarkers = []string{"coach-hook", "read-guard", "route-guard", "boundary-guard"}
 
 // newHooksCmd is the top-level installer/manager for tokenops Claude Code
 // hooks. It merges our entries into ~/.claude/settings.json idempotently,
@@ -89,15 +89,15 @@ func specsFor(coach, readGuard bool, budget float64) []hookSpec {
 // of requiring the hook to be re-registered. Pass a mode only to pin one
 // against config — the installed flag wins, by design.
 func specsForMode(coach, readGuard bool, budget float64, guardMode readguard.Mode) []hookSpec {
-	return specsForModeWithRoute(coach, readGuard, false, budget, guardMode, "")
+	return specsForModeWithRoute(coach, readGuard, false, false, budget, guardMode, "")
 }
 
 // specsForModeWithRoute adds the per-turn route guard, which needs to
 // know whose models the client runs: the tier catalog is keyed by
 // provider, and a client that reports "gpt-5.3-codex" priced against
 // Anthropic's card would be placed against the wrong menu entirely.
-func specsForModeWithRoute(coach, readGuard, routeGuard bool, budget float64, guardMode readguard.Mode, provider string) []hookSpec {
-	if !coach && !readGuard && !routeGuard {
+func specsForModeWithRoute(coach, readGuard, routeGuard, boundary bool, budget float64, guardMode readguard.Mode, provider string) []hookSpec {
+	if !coach && !readGuard && !routeGuard && !boundary {
 		coach, readGuard = true, true
 	}
 	var out []hookSpec
@@ -141,6 +141,17 @@ func specsForModeWithRoute(coach, readGuard, routeGuard bool, budget float64, gu
 				args:    args,
 			})
 		}
+	}
+	if boundary {
+		// The pause point (ADR 0014): every tool call, so the matcher is
+		// "*". It reads ids only and answers from two small files.
+		out = append(out, hookSpec{
+			name:    "boundary-guard (action boundaries)",
+			event:   "PreToolUse",
+			matcher: "*",
+			marker:  "boundary-guard",
+			args:    []string{"boundary-guard"},
+		})
 	}
 	return out
 }
@@ -234,7 +245,12 @@ func resolveHookConfigPath(client, override string) (string, error) {
 // Writing the hook anyway and reporting success is the defect this
 // codebase keeps finding in other people's tools; declining out loud is
 // the only honest option until Codex grows a read tool.
-func refuseUnsupportedHook(client string, readGuard bool) error {
+func refuseUnsupportedHook(client string, readGuard, boundary bool) error {
+	if boundary && (strings.EqualFold(client, hookClientCursor) || strings.EqualFold(client, hookClientCodex)) {
+		return fmt.Errorf(
+			"boundary-guard is not installed on %s: its hooks cannot refuse every tool call, so a boundary there "+
+				"would claim enforcement it lacks. `tokenops boundaries status` reports its rules as advice only", client)
+	}
 	if readGuard && strings.EqualFold(client, hookClientCursor) {
 		return errors.New(
 			"read-guard cannot work on cursor: its beforeReadFile hook is observe-only — only " +
@@ -251,23 +267,26 @@ func refuseUnsupportedHook(client string, readGuard bool) error {
 
 func newHooksInstallCmd() *cobra.Command {
 	var (
-		coach, readGuard, routeGuard bool
-		settingsPath                 string
-		dryRun                       bool
-		budget                       float64
-		client                       string
+		coach, readGuard, routeGuard, boundary bool
+		settingsPath                           string
+		dryRun                                 bool
+		budget                                 float64
+		client                                 string
 	)
 	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "Merge tokenops hooks into the client's hook config",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return installClientHooks(cmd.OutOrStdout(), client, settingsPath, coach, readGuard, routeGuard, dryRun, budget)
+			return installClientHooks(cmd.OutOrStdout(), client, settingsPath, hookSelection{
+				coach: coach, readGuard: readGuard, routeGuard: routeGuard, boundary: boundary,
+			}, dryRun, budget)
 		},
 	}
 	cmd.Flags().BoolVar(&coach, "coach", false, "install the Stop coaching nudge")
 	cmd.Flags().BoolVar(&readGuard, "read-guard", false, "install the Read dedup guard")
 	cmd.Flags().BoolVar(&routeGuard, "route-guard", false, "install the per-turn model-fit guard")
+	cmd.Flags().BoolVar(&boundary, "boundary", false, "install the action-boundary pause point (every tool call)")
 	cmd.Flags().StringVar(&client, "client", hookClientClaudeCode, hookClientFlagUsage)
 	cmd.Flags().StringVar(&settingsPath, "settings", "", "hook config path (defaults per client)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the result without writing")
@@ -275,14 +294,20 @@ func newHooksInstallCmd() *cobra.Command {
 	return cmd
 }
 
+// hookSelection is which of TokenOps' hooks an install wires.
+type hookSelection struct {
+	coach, readGuard, routeGuard, boundary bool
+}
+
 // installClientHooks merges the selected tokenops hooks into one client's
 // hook config. `hooks install` and the coach presets both install through
 // it, so the two cannot wire a client differently.
-func installClientHooks(out io.Writer, client, settingsPath string, coach, readGuard, routeGuard, dryRun bool, budget float64) error {
+func installClientHooks(out io.Writer, client, settingsPath string, sel hookSelection, dryRun bool, budget float64) error {
+	coach, readGuard, routeGuard := sel.coach, sel.readGuard, sel.routeGuard
 	if err := validateHookClient(client); err != nil {
 		return err
 	}
-	if err := refuseUnsupportedHook(client, readGuard); err != nil {
+	if err := refuseUnsupportedHook(client, readGuard, sel.boundary); err != nil {
 		return err
 	}
 	exe := selfExe()
@@ -296,14 +321,14 @@ func installClientHooks(out io.Writer, client, settingsPath string, coach, readG
 		if derr != nil {
 			return derr
 		}
-		return installOpencodePlugin(out, pdir, exe, readGuard, coach, routeGuard, dryRun, budget)
+		return installOpencodePlugin(out, pdir, exe, sel, dryRun, budget)
 	}
 
 	path, err := resolveHookConfigPath(client, settingsPath)
 	if err != nil {
 		return err
 	}
-	specs := specsForModeWithRoute(coach, readGuard, routeGuard, budget, "", providerForClient(client))
+	specs := specsForModeWithRoute(coach, readGuard, routeGuard, sel.boundary, budget, "", providerForClient(client))
 	if strings.EqualFold(client, hookClientCursor) {
 		return installCursorHooks(out, path, exe, specs, dryRun)
 	}

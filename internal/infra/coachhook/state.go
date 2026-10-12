@@ -126,3 +126,22 @@ func itoa(n int64) string {
 	}
 	return string(b[i:])
 }
+
+// SessionCostUSD is the session's running API-equivalent cost as the
+// coach hook last summed it, at its last Stop. It is one small file read,
+// cheap enough for a hook that runs before every tool call. ok is false
+// when the coach hook has not seen the session; dir "" is the default.
+func SessionCostUSD(dir, sessionID string) (usd float64, ok bool) {
+	if sessionID == "" {
+		return 0, false
+	}
+	b, err := os.ReadFile(sessionFile(resolveDir(dir), sessionID)) //nolint:gosec // TokenOps' own state
+	if err != nil {
+		return 0, false
+	}
+	var st sessionState
+	if json.Unmarshal(b, &st) != nil {
+		return 0, false
+	}
+	return st.CumulativeUSD, true
+}
