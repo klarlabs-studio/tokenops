@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.102.0 - 2026-10-12
 
 ### Added
 
@@ -9,11 +9,7 @@
 - **team plane:** `tokenops team admin teams|create-team|invite|members|remove|role|grants|grant|revoke|billing|audit` on the same API as the web view, each with `--json`: invites with a role, role changes, removal (`--yes`, erases the member's figures), grants with a reason, billing status with `--checkout` (the server's billing page) and `--portal` (Paddle's customer portal; links to any other site are refused), and the audit log
 - **team plane:** paused uploads are explained. When an organisation has no active trial or subscription the server refuses uploads with `402` and `code: uploads_paused`; `team sync`, `team status` and the daemon's log say so plainly, that the figures held stay viewable read-only until they are deleted, how an owner subscribes, and that the next upload resends the missed days. `team status` also shows the trial's end and when the first week of totals appears
 - **teamwire:** the administration, device-link and billing messages (`DeviceLink*`, `AdminCredential`, `Team`, `Member`, `Invite*`, `RoleRequest`, `Grant*`, `AuditEntry`, `Plan`, `Billing`, `BillingLink`), `Me.Plan`, and `Error.Code`. The upload contract is unchanged; `TestAdminMessagesCarryNoFigures` fails if an administration message reaches an upload's types
-
-## 0.102.0 - 2026-10-10
-
-### Added
-
+- **brand:** a logo. The lowercase wordmark tokenops, whose o is the headroom ring the menu bar draws, on the docs site (with a favicon and its colours), the README, the menu bar app (its first app icon) and the VS Code extension; the files and the script that draws them are in `assets/brand/`
 - **vendor-usage:** browser localStorage, at setup only (ADR 0013). For a site that keeps its session in localStorage, `tokenops vendor-usage setup <id>` reads exactly the named keys of one origin from a Chromium-family browser's profile (a private copy of its LevelDB, read with pure-Go goleveldb; no Keychain item, since Chromium does not encrypt localStorage) and stores the session like a pasted one; the daemon never reads a browser, and `--paste` remains. Windsurf's live web figures and Devin (its auth1 session and the organisation last used) now read their session this way, with the typed `ORG:TOKEN` or bundle as the fallback
 - **providers:** a generic CLI source in the provider descriptor (`Command`: binary, argument lists, deadline, environment allowlist, signed-out phrases), run with no shell, an empty stdin, its own process group and bounded output that is never logged, and skipped silently when the CLI is not installed. Doubao reads the signed-in `arkcli usage plan --format json` (Coding Plan windows, else the Agent Plan's) and Alibaba Token Plan reads `bl usage token-plan --output json` before the browser session (5-hour, weekly and monthly windows; the international console, then the mainland one), with `bl` given only PATH, HOME, locale, time zone and proxy variables
 - **Kiro:** overage credits. Once granted (`setup kiro --use-app-login`), kiro-cli's own sign-in and profile are read from its database (a private copy, two values by one `SELECT`) and CodeWhisperer's `GetUsageLimits` reports the plan's credits this month and the overage credits used against their cap (`kiro-overage`); kiro-cli renews the token, never TokenOps
