@@ -151,6 +151,25 @@ message DecisionEvent {
   bool executable = 10;
   string adapter = 11;
   string fingerprint = 12;
+  DecisionActor actor = 13;
+  DecisionApproval approval = 14;
+}
+
+// DecisionActor is who asked for the action a decision is about.
+message DecisionActor {
+  string harness = 1;
+  string session_id = 2;
+  string agent_id = 3;
+  string user = 4;
+}
+
+// DecisionApproval is who answered a decision that needed approval.
+message DecisionApproval {
+  string approver = 1;
+  string method = 2;
+  google.protobuf.Timestamp at = 3;
+  string rule = 4;
+  string scope = 5;
 }
 
 message OutcomeMetric {

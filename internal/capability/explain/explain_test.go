@@ -22,3 +22,19 @@ func TestBuildUsesRecordedRationaleAndStrongestOutcome(t *testing.T) {
 		t.Fatalf("history/outcome = %+v", got)
 	}
 }
+
+func TestBuildShowsTheRuleAndTheApprover(t *testing.T) {
+	now := time.Unix(100, 0).UTC()
+	actor := eventschema.DecisionActor{Harness: "claude-code", SessionID: "s1", User: "felix"}
+	events := []*eventschema.Envelope{
+		{ID: "d1", Timestamp: now, Correlation: eventschema.Correlation{Decision: "bnd-1"}, Payload: &eventschema.DecisionEvent{
+			Kind: "boundary", Stage: eventschema.DecisionStageProposed, Policy: "boundary:session-spend", Actor: actor}},
+		{ID: "d2", Timestamp: now.Add(time.Second), Correlation: eventschema.Correlation{Decision: "bnd-1"}, Payload: &eventschema.DecisionEvent{
+			Kind: "boundary", Stage: eventschema.DecisionStageAccepted, Policy: "boundary:session-spend",
+			Approval: eventschema.DecisionApproval{Approver: "felix", Method: "cli", At: now, Rule: "session-spend", Scope: "session"}}},
+	}
+	got, ok := Build("bnd-1", events)
+	if !ok || got.Rule != "session-spend" || got.Actor != actor || got.Approval.Approver != "felix" || got.Stage != eventschema.DecisionStageAccepted {
+		t.Fatalf("report = %+v", got)
+	}
+}
