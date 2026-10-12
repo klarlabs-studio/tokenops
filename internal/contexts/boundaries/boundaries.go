@@ -1,0 +1,608 @@
+// Package boundaries decides, before an agent acts, whether the action is
+// within the limits its owner set, and who may let it go further
+// (ADR 0014).
+//
+// A boundary is a rule: an action the agent is about to take, the figures
+// that must hold for the rule to apply, and what is then required — allow,
+// ask, a named approver, or deny. The requirement maps onto the one
+// authority ladder (internal/contexts/policy), and rules combine the way
+// policy.Effective combines rungs: the strictest matching rule wins. A
+// boundary only ever tightens.
+//
+// Conditions read figures TokenOps already holds — session cost, plan
+// headroom, model tier, workflow and agent — and never prompt text. The
+// package is pure: callers supply the figures, and nothing here reads a
+// file or a store, so the evaluation that runs before every tool call
+// stays in memory.
+//
+// Every rule starts in shadow (ADR 0004: explain before automating). A
+// shadow rule is evaluated and recorded as "would have asked/refused", and
+// binds nothing until it is promoted.
+package boundaries
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"math"
+	"path"
+	"regexp"
+	"slices"
+	"strconv"
+	"strings"
+
+	"go.klarlabs.de/tokenops/internal/contexts/policy"
+)
+
+// Action is what the agent is about to do. Only resource actions: what
+// tools an agent may run is the harness's business, not TokenOps'.
+type Action string
+
+// The actions phase 1 evaluates. model_route, spend and share follow in
+// phase 2; a rule naming them is refused rather than silently ignored.
+const (
+	// ActionContinue is the agent's next tool call.
+	ActionContinue Action = "continue"
+	// ActionSubagentModel is the model a subagent is about to run on.
+	ActionSubagentModel Action = "subagent_model"
+)
+
+var actions = []Action{ActionContinue, ActionSubagentModel}
+
+// Field is a figure a condition reads.
+type Field string
+
+// The figures.
+const (
+	FieldSessionCost Field = "session_cost_usd"
+	FieldPlanLeft    Field = "plan_left_pct"
+	FieldModelTier   Field = "model_tier"
+	FieldWorkflow    Field = "workflow_id"
+	FieldAgent       Field = "agent_id"
+)
+
+// fieldOrder fixes the order conditions are checked and reported in, so
+// an error or a reason reads the same on every run.
+var fieldOrder = []Field{FieldSessionCost, FieldPlanLeft, FieldModelTier, FieldWorkflow, FieldAgent}
+
+// windowKey qualifies plan_left_pct; it is not a condition of its own.
+const windowKey = "window"
+
+// Op is a comparator.
+type Op string
+
+// The comparators.
+const (
+	OpLT Op = "<"
+	OpLE Op = "<="
+	OpGT Op = ">"
+	OpGE Op = ">="
+	OpEQ Op = "=="
+)
+
+// Window is the plan window plan_left_pct reads.
+type Window string
+
+// The windows. WindowAny takes the tightest window known.
+const (
+	WindowAny  Window = ""
+	Window5h   Window = "5h"
+	WindowWeek Window = "week"
+)
+
+// RequireKind is what a matching rule requires.
+type RequireKind string
+
+// The requirements, loosest first.
+const (
+	RequireAllow    RequireKind = "allow"
+	RequireAsk      RequireKind = "ask"
+	RequireApprover RequireKind = "approver"
+	RequireDeny     RequireKind = "deny"
+)
+
+// Require is a rule's requirement. Role is set for RequireApprover.
+type Require struct {
+	Kind RequireKind
+	Role string
+}
+
+// String renders the requirement as it is written in config.
+func (r Require) String() string {
+	if r.Kind == RequireApprover {
+		return "approver:" + r.Role
+	}
+	return string(r.Kind)
+}
+
+// Authority places the requirement on the ladder: allow is Automatic,
+// ask and approver are RequireApproval, and deny is ObserveOnly — the
+// rung at which nothing may change, which for an agent's action is a
+// refusal.
+func (r Require) Authority() policy.Authority {
+	switch r.Kind {
+	case RequireAllow:
+		return policy.Automatic
+	case RequireAsk, RequireApprover:
+		return policy.RequireApproval
+	default:
+		return policy.ObserveOnly
+	}
+}
+
+// strictness orders requirements. It follows the ladder and breaks the
+// RequireApproval tie: a named approver is stricter than anyone at the
+// keyboard.
+func (r Require) strictness() int {
+	switch r.Kind {
+	case RequireAllow:
+		return 0
+	case RequireAsk:
+		return 1
+	case RequireApprover:
+		return 2
+	default:
+		return 3
+	}
+}
+
+// LocalAsk reports whether the requirement is answered on this machine.
+// In phase 1 a named approver is treated as ask: the team plane that
+// would route the request to the role does not exist yet.
+func (r Require) LocalAsk() bool { return r.Kind == RequireAsk || r.Kind == RequireApprover }
+
+// Stage is whether a rule binds.
+type Stage string
+
+// The stages.
+const (
+	// StageShadow records what the rule would have done and binds nothing.
+	StageShadow Stage = "shadow"
+	// StageEnforce binds.
+	StageEnforce Stage = "enforce"
+)
+
+// Condition is one figure compared against a value.
+type Condition struct {
+	Field  Field
+	Op     Op
+	Number float64
+	Text   string
+	// Window qualifies FieldPlanLeft.
+	Window Window
+}
+
+// Rule is one boundary.
+type Rule struct {
+	Name    string
+	Action  Action
+	When    []Condition
+	Require Require
+	Stage   Stage
+}
+
+// Enforced reports whether the rule binds.
+func (r Rule) Enforced() bool { return r.Stage == StageEnforce }
+
+// RuleSpec is a rule as written in config.yaml.
+type RuleSpec struct {
+	Name    string            `yaml:"name" json:"name"`
+	Action  string            `yaml:"action" json:"action"`
+	When    map[string]string `yaml:"when,omitempty" json:"when,omitempty"`
+	Require string            `yaml:"require" json:"require"`
+	// Stage is shadow (the default) or enforce. `tokenops boundaries
+	// promote` sets it.
+	Stage string `yaml:"stage,omitempty" json:"stage,omitempty"`
+}
+
+var namePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
+
+// Parse validates rules as written in config. Every error names the rule
+// it is about.
+func Parse(specs []RuleSpec) ([]Rule, error) {
+	out := make([]Rule, 0, len(specs))
+	seen := map[string]bool{}
+	for i, s := range specs {
+		r, err := parseRule(s)
+		if err != nil {
+			if s.Name == "" {
+				return nil, fmt.Errorf("boundaries[%d]: %w", i, err)
+			}
+			return nil, fmt.Errorf("boundaries[%d] %q: %w", i, s.Name, err)
+		}
+		if seen[r.Name] {
+			return nil, fmt.Errorf("boundaries[%d]: rule %q is defined twice", i, r.Name)
+		}
+		seen[r.Name] = true
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+func parseRule(s RuleSpec) (Rule, error) {
+	name := strings.TrimSpace(s.Name)
+	if name == "" {
+		return Rule{}, fmt.Errorf("name is required")
+	}
+	if !namePattern.MatchString(name) {
+		return Rule{}, fmt.Errorf("name %q: use lower-case letters, digits, - and _ (at most 64)", name)
+	}
+	action := Action(strings.ToLower(strings.TrimSpace(s.Action)))
+	if !slices.Contains(actions, action) {
+		return Rule{}, fmt.Errorf("action %q is not one of %s", s.Action, joinActions())
+	}
+	req, err := ParseRequire(s.Require)
+	if err != nil {
+		return Rule{}, err
+	}
+	stage, err := parseStage(s.Stage)
+	if err != nil {
+		return Rule{}, err
+	}
+	when, err := parseWhen(action, s.When)
+	if err != nil {
+		return Rule{}, err
+	}
+	return Rule{Name: name, Action: action, When: when, Require: req, Stage: stage}, nil
+}
+
+func joinActions() string {
+	names := make([]string, len(actions))
+	for i, a := range actions {
+		names[i] = string(a)
+	}
+	return strings.Join(names, ", ")
+}
+
+// ParseRequire reads allow | ask | approver:<role> | deny.
+func ParseRequire(s string) (Require, error) {
+	v := strings.ToLower(strings.TrimSpace(s))
+	switch v {
+	case string(RequireAllow), string(RequireAsk), string(RequireDeny):
+		return Require{Kind: RequireKind(v)}, nil
+	}
+	if role, ok := strings.CutPrefix(v, "approver:"); ok {
+		role = strings.TrimSpace(role)
+		if role == "" {
+			return Require{}, fmt.Errorf("require %q names no role", s)
+		}
+		if !namePattern.MatchString(role) {
+			return Require{}, fmt.Errorf("require %q: role must be lower-case letters, digits, - and _", s)
+		}
+		return Require{Kind: RequireApprover, Role: role}, nil
+	}
+	return Require{}, fmt.Errorf("require %q is not one of allow, ask, approver:<role>, deny", s)
+}
+
+func parseStage(s string) (Stage, error) {
+	switch v := strings.ToLower(strings.TrimSpace(s)); v {
+	case "", string(StageShadow):
+		return StageShadow, nil
+	case string(StageEnforce):
+		return StageEnforce, nil
+	default:
+		return "", fmt.Errorf("stage %q is not shadow or enforce", s)
+	}
+}
+
+func parseWhen(action Action, when map[string]string) ([]Condition, error) {
+	for k := range when {
+		if k == windowKey {
+			continue
+		}
+		if !slices.Contains(fieldOrder, Field(k)) {
+			return nil, fmt.Errorf("when.%s is not a condition (use %s)", k, joinFields())
+		}
+	}
+	window, hasWindow := when[windowKey]
+	if _, ok := when[string(FieldPlanLeft)]; hasWindow && !ok {
+		return nil, fmt.Errorf("when.window qualifies plan_left_pct, which the rule does not set")
+	}
+	var out []Condition
+	for _, f := range fieldOrder {
+		raw, ok := when[string(f)]
+		if !ok {
+			continue
+		}
+		c, err := parseCondition(action, f, raw)
+		if err != nil {
+			return nil, fmt.Errorf("when.%s: %w", f, err)
+		}
+		if f == FieldPlanLeft {
+			w, err := parseWindow(window)
+			if err != nil {
+				return nil, fmt.Errorf("when.window: %w", err)
+			}
+			c.Window = w
+		}
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+func joinFields() string {
+	names := make([]string, len(fieldOrder))
+	for i, f := range fieldOrder {
+		names[i] = string(f)
+	}
+	return strings.Join(names, ", ")
+}
+
+func parseWindow(s string) (Window, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", "any":
+		return WindowAny, nil
+	case "5h", "five_hour", "session":
+		return Window5h, nil
+	case "week", "weekly", "seven_day", "7d":
+		return WindowWeek, nil
+	default:
+		return "", fmt.Errorf("window %q is not 5h or week", s)
+	}
+}
+
+// splitOp cuts the comparator off a condition's value.
+func splitOp(raw string) (Op, string, bool) {
+	v := strings.TrimSpace(raw)
+	for _, op := range []Op{OpLE, OpGE, OpEQ, OpLT, OpGT} {
+		if rest, ok := strings.CutPrefix(v, string(op)); ok {
+			return op, strings.TrimSpace(rest), true
+		}
+	}
+	return "", v, false
+}
+
+func parseCondition(action Action, f Field, raw string) (Condition, error) {
+	op, value, ok := splitOp(raw)
+	if !ok {
+		return Condition{}, fmt.Errorf("%q needs a comparator (<, <=, >, >=, ==), e.g. \">= 20\"", raw)
+	}
+	c := Condition{Field: f, Op: op}
+	switch f {
+	case FieldSessionCost, FieldPlanLeft:
+		n, err := strconv.ParseFloat(value, 64)
+		if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
+			return Condition{}, fmt.Errorf("%q is not a number", value)
+		}
+		if n < 0 {
+			return Condition{}, fmt.Errorf("%v must not be negative", n)
+		}
+		if f == FieldPlanLeft && n > 100 {
+			return Condition{}, fmt.Errorf("%v must be between 0 and 100", n)
+		}
+		c.Number = n
+	case FieldModelTier:
+		if action != ActionSubagentModel {
+			return Condition{}, fmt.Errorf("model_tier applies only to subagent_model rules")
+		}
+		tier := TierOf(value)
+		if tier == "" {
+			return Condition{}, fmt.Errorf("tier %q is not haiku, sonnet or opus", value)
+		}
+		c.Text = tier
+	case FieldWorkflow, FieldAgent:
+		if op != OpEQ {
+			return Condition{}, fmt.Errorf("%s only takes ==", f)
+		}
+		if value == "" {
+			return Condition{}, fmt.Errorf("%q names nothing", raw)
+		}
+		if _, err := path.Match(value, ""); err != nil {
+			return Condition{}, fmt.Errorf("%q is not a valid pattern", value)
+		}
+		c.Text = value
+	}
+	return c, nil
+}
+
+// tierRank orders the tiers a model_tier condition compares.
+var tierRank = map[string]int{"haiku": 1, "sonnet": 2, "opus": 3}
+
+// TierOf places a model or tier name on haiku < sonnet < opus. The
+// catalog's tier names map on too: lookup is haiku; balanced and default
+// are sonnet; deep is opus. Anything else is "".
+func TierOf(name string) string {
+	n := strings.ToLower(strings.TrimSpace(name))
+	switch {
+	case strings.Contains(n, "opus"), n == "deep":
+		return "opus"
+	case strings.Contains(n, "sonnet"), n == "balanced", n == "default":
+		return "sonnet"
+	case strings.Contains(n, "haiku"), n == "lookup":
+		return "haiku"
+	default:
+		return ""
+	}
+}
+
+// Figure is a number that may not be known. An unknown figure never
+// satisfies a condition: a boundary that cannot read its figure lets the
+// action through rather than guess.
+type Figure struct {
+	Value float64
+	Known bool
+}
+
+// Known is a known figure.
+func Known(v float64) Figure { return Figure{Value: v, Known: true} }
+
+// Facts are the figures one evaluation reads.
+type Facts struct {
+	SessionCostUSD Figure
+	// PlanLeftPct is the share of each plan window left, by window. A
+	// window absent from the map is unknown.
+	PlanLeftPct map[Window]float64
+	// ModelTier is haiku, sonnet or opus; empty is unknown.
+	ModelTier  string
+	WorkflowID string
+	AgentID    string
+}
+
+// Match is a rule that matched, with the figures that crossed it.
+type Match struct {
+	Rule    Rule
+	crossed []string
+}
+
+// Crossed says what was crossed, in a sentence fragment a person and an
+// agent can act on.
+func (m Match) Crossed() string {
+	if len(m.crossed) == 0 {
+		return "rule " + m.Rule.Name + " applies to every " + string(m.Rule.Action)
+	}
+	return strings.Join(m.crossed, ", ")
+}
+
+// Match reports whether the rule applies to action given facts.
+func (r Rule) Match(action Action, f Facts) (Match, bool) {
+	if r.Action != action {
+		return Match{}, false
+	}
+	m := Match{Rule: r}
+	for _, c := range r.When {
+		text, ok := c.holds(f)
+		if !ok {
+			return Match{}, false
+		}
+		if text != "" {
+			m.crossed = append(m.crossed, text)
+		}
+	}
+	return m, true
+}
+
+func (c Condition) holds(f Facts) (string, bool) {
+	switch c.Field {
+	case FieldSessionCost:
+		if !f.SessionCostUSD.Known || !compare(f.SessionCostUSD.Value, c.Op, c.Number) {
+			return "", false
+		}
+		return fmt.Sprintf("session cost $%.2f %s $%.2f", f.SessionCostUSD.Value, c.Op, c.Number), true
+	case FieldPlanLeft:
+		left, window, ok := planLeft(f.PlanLeftPct, c.Window)
+		if !ok || !compare(left, c.Op, c.Number) {
+			return "", false
+		}
+		return fmt.Sprintf("plan left %.1f%% %s %g%% (%s)", left, c.Op, c.Number, window), true
+	case FieldModelTier:
+		got, ok := tierRank[f.ModelTier]
+		if !ok || !compare(float64(got), c.Op, float64(tierRank[c.Text])) {
+			return "", false
+		}
+		return fmt.Sprintf("subagent model %s %s %s", f.ModelTier, c.Op, c.Text), true
+	case FieldWorkflow:
+		ok, _ := path.Match(c.Text, f.WorkflowID)
+		return "", ok && f.WorkflowID != ""
+	case FieldAgent:
+		ok, _ := path.Match(c.Text, f.AgentID)
+		return "", ok && f.AgentID != ""
+	}
+	return "", false
+}
+
+// planLeft reads the named window, or the tightest one known.
+func planLeft(left map[Window]float64, w Window) (float64, Window, bool) {
+	if w != WindowAny {
+		v, ok := left[w]
+		return v, w, ok
+	}
+	best, bestW, found := 0.0, WindowAny, false
+	for _, cand := range []Window{Window5h, WindowWeek} {
+		if v, ok := left[cand]; ok && (!found || v < best) {
+			best, bestW, found = v, cand, true
+		}
+	}
+	return best, bestW, found
+}
+
+func compare(a float64, op Op, b float64) bool {
+	switch op {
+	case OpLT:
+		return a < b
+	case OpLE:
+		return a <= b
+	case OpGT:
+		return a > b
+	case OpGE:
+		return a >= b
+	case OpEQ:
+		return a == b
+	}
+	return false
+}
+
+// Verdict is every rule that matched one action, and the one that binds.
+type Verdict struct {
+	// Matches are every matching rule, shadow and enforced, in config
+	// order.
+	Matches []Match
+	// Binding is the strictest enforced match; nil when no enforced rule
+	// matched.
+	Binding *Match
+}
+
+// Shadow are the matches that bind nothing.
+func (v Verdict) Shadow() []Match {
+	var out []Match
+	for _, m := range v.Matches {
+		if !m.Rule.Enforced() {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// Refuses reports whether the binding rule denies the action.
+func (v Verdict) Refuses() bool {
+	return v.Binding != nil && v.Binding.Rule.Require.Kind == RequireDeny
+}
+
+// Asks reports whether the binding rule needs someone's approval.
+func (v Verdict) Asks() bool { return v.Binding != nil && v.Binding.Rule.Require.LocalAsk() }
+
+// Evaluate matches every rule for action against facts. The strictest
+// enforced match binds, as policy.Effective takes the lesser rung.
+func Evaluate(rules []Rule, action Action, f Facts) Verdict {
+	var v Verdict
+	for _, r := range rules {
+		m, ok := r.Match(action, f)
+		if !ok {
+			continue
+		}
+		v.Matches = append(v.Matches, m)
+		if !r.Enforced() {
+			continue
+		}
+		if v.Binding == nil || r.Require.strictness() > v.Binding.Rule.Require.strictness() {
+			bound := m
+			v.Binding = &bound
+		}
+	}
+	return v
+}
+
+// Promote returns rules with the named one enforced. The input is not
+// changed.
+func Promote(rules []Rule, name string) []Rule {
+	out := slices.Clone(rules)
+	for i := range out {
+		if out[i].Name == name {
+			out[i].Stage = StageEnforce
+		}
+	}
+	return out
+}
+
+// DecisionID names the decision a rule makes in one session. It is stable,
+// so an agent that retries a refused call is refused under the same id
+// the operator was told to approve.
+func DecisionID(rule, session string) string {
+	sum := sha256.Sum256([]byte(rule + "\x00" + session))
+	return "bnd-" + hex.EncodeToString(sum[:6])
+}
+
+var decisionIDPattern = regexp.MustCompile(`^bnd-[0-9a-f]{12}$`)
+
+// ValidDecisionID reports whether id has DecisionID's shape. Callers use
+// it before an id names a file.
+func ValidDecisionID(id string) bool { return decisionIDPattern.MatchString(id) }
