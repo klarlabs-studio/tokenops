@@ -408,15 +408,26 @@ func (g *guard) bind(v domain.Verdict) (Result, error) {
 	if res, done, err := g.answered(m, id); done || err != nil {
 		return res, err
 	}
-	if done, err := g.settlePrompt(m, id); done || err != nil {
-		return Result{}, err
+	routed := m.Rule.TeamRouted()
+	if !routed {
+		if done, err := g.settlePrompt(m, id); done || err != nil {
+			return Result{}, err
+		}
 	}
 	pending := boundaryledger.Pending{
 		ID: id, Rule: m.Rule.Name, Require: m.Rule.Require.String(), Crossed: m.Crossed(),
 		Action: string(g.call.Action), Harness: g.call.Harness, SessionID: g.call.SessionID,
-		AgentID: g.call.AgentID, At: g.now,
+		AgentID: g.call.AgentID, At: g.now, Crossings: m.Crossings(),
 	}
-	if g.env.Attended {
+	if prev, ok, _ := g.env.Dir.GetPending(id); ok {
+		// Keep when the request first went to the organisation, so it is
+		// sent once, not on every call while it waits.
+		pending.RoutedAt = prev.RoutedAt
+		if routed {
+			pending.At = prev.At
+		}
+	}
+	if g.env.Attended && !routed {
 		pending.ToolUseID = g.call.ToolUseID
 	}
 	if err := g.env.Dir.PutPending(pending); err != nil {
@@ -424,6 +435,11 @@ func (g *guard) bind(v domain.Verdict) (Result, error) {
 	}
 	if err := g.recordOnce(m, eventschema.DecisionStageProposed, eventschema.DecisionApproval{}); err != nil {
 		return Result{}, err
+	}
+	if routed {
+		// Whoever is at the keyboard is not necessarily the role the
+		// organisation named, so the prompt does not answer it.
+		return Result{Verdict: VerdictDeny, DecisionID: id, Reason: routedReason(m, id)}, nil
 	}
 	if g.env.Attended && agentFacing(m.Rule.Action) {
 		return Result{Verdict: VerdictAsk, DecisionID: id, Reason: askReason(m, id)}, nil
@@ -498,6 +514,17 @@ func approverPhrase(r domain.Require) string {
 // inside TokenOps, and their reasons are for the operator.
 func agentFacing(a domain.Action) bool {
 	return a == domain.ActionContinue || a == domain.ActionSpend || a == domain.ActionSubagentModel
+}
+
+func routedReason(m domain.Match, id string) string {
+	if !agentFacing(m.Rule.Action) {
+		return fmt.Sprintf("tokenops boundary %q (your organisation's): %s, and this needs approval from %s in your organisation. "+
+			"The request has gone to them (%s). %s until they answer.",
+			m.Rule.Name, m.Crossed(), m.Rule.Require.Role, id, heldUntil(m.Rule.Action))
+	}
+	return fmt.Sprintf("tokenops boundary %q (your organisation's): %s, and this needs approval from %s in your organisation. "+
+		"The request has gone to them (%s). Do not retry: stop and tell the operator; the step is allowed once they approve it.",
+		m.Rule.Name, m.Crossed(), m.Rule.Require.Role, id)
 }
 
 func askReason(m domain.Match, id string) string {

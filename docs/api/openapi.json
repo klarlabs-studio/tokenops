@@ -126,6 +126,9 @@
                           "require": {
                             "type": "string"
                           },
+                          "routed": {
+                            "type": "boolean"
+                          },
                           "rule": {
                             "type": "string"
                           },
@@ -180,6 +183,9 @@
                           },
                           "sessions": {
                             "type": "integer"
+                          },
+                          "source": {
+                            "type": "string"
                           },
                           "stage": {
                             "type": "string"

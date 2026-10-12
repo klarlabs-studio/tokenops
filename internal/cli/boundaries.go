@@ -110,7 +110,7 @@ func guardWithTimeout(ctx context.Context, cfg config.Config, call bcap.Call, en
 	}
 	done := make(chan answer, 1)
 	go func() {
-		res, err := eval(cfg.BoundaryRules(), call, env)
+		res, err := eval(bcap.AllRules(cfg), call, env)
 		done <- answer{res, err}
 	}()
 	select {
@@ -177,7 +177,7 @@ func newBoundariesStatusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			st, err := bcap.RuleStatuses(cfg.BoundaryRules(), bcap.Env{}, bcap.Wired(cfg))
+			st, err := bcap.RuleStatuses(bcap.AllRules(cfg), bcap.Env{}, bcap.Wired(cfg))
 			if err != nil {
 				return err
 			}

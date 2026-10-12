@@ -37,19 +37,20 @@ func scope(parts ...string) string {
 }
 
 // RouteCheck is the router's model_route boundary: asked before a route
-// is applied, it reports whether the route is held and why. It returns
-// nil when no rule concerns model_route, so the router asks nothing.
+// is applied, it reports whether the route is held and why. rules is
+// read on every call, so organisation rules fetched since apply; with no
+// model_route rule the answer costs a loop over the rules.
 //
 // A route is its own decision, per provider and model pair, so an
 // approval lets that route through: once, or for 24 hours with
 // --session. An evaluation that fails lets the route through and is
 // recorded (fail open).
-func RouteCheck(rules []domain.Rule, env Env) func(provider eventschema.Provider, from, to, workflowID, agentID string) (bool, string) {
-	relevant := forAction(rules, domain.ActionModelRoute)
-	if len(relevant) == 0 {
-		return nil
-	}
+func RouteCheck(rules func() []Rule, env Env) func(provider eventschema.Provider, from, to, workflowID, agentID string) (bool, string) {
 	return func(provider eventschema.Provider, from, to, workflowID, agentID string) (bool, string) {
+		relevant := forAction(rules(), domain.ActionModelRoute)
+		if len(relevant) == 0 {
+			return false, ""
+		}
 		call := Call{
 			Harness: PointRouter, SessionID: scope("route", string(provider), from, to),
 			Action: domain.ActionModelRoute, Model: to, Provider: string(provider),

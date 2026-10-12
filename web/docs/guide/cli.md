@@ -1604,6 +1604,9 @@ who answered how. `approve` runs only at a terminal: the agent a boundary
 stopped can run commands too. The MCP tool `tokenops_boundaries`
 (`action=decide`) and `POST /api/boundaries/decisions` can only deny.
 
+Decisions an organisation rule sent to a role cannot be approved here;
+`approve` says who answers them. `deny` still works.
+
 ### `tokenops deny <id>`
 
 Refuse what a boundary asked about: the agent's next step, or with

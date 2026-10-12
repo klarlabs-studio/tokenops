@@ -22,16 +22,19 @@ const boundaryFiguresEvery = time.Minute
 
 // startBoundaryFiguresRuntime writes, every minute, the plan headroom and
 // budget figures boundary rules compare (ADR 0014), so the pause point
-// reads one small file instead of the event store. It runs only when a
-// rule compares one of them.
+// reads one small file instead of the event store. It measures only while
+// a rule, local or the organisation's, compares one of them.
 func startBoundaryFiguresRuntime(cfg config.Config, glance func() headroom.Deps, source budgets.Source, sup *lifecycle.Supervisor, logger *slog.Logger) {
-	rules := cfg.BoundaryRules()
-	if !bcap.NeedsFigures(rules) || sup == nil {
+	if sup == nil {
 		return
 	}
+	rules := bcap.LiveRules(cfg)
 	limits := cfg.BudgetLimits()
 	dir := boundaryledger.DefaultDir()
 	measure := func(ctx context.Context) {
+		if !bcap.NeedsFigures(rules()) {
+			return
+		}
 		now := time.Now().UTC()
 		var used map[string]float64
 		if source != nil && len(limits) > 0 {
