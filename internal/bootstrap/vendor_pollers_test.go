@@ -42,8 +42,9 @@ func TestBrowserSessionSourceFollowsTheConfig(t *testing.T) {
 }
 
 // With every configurable reader off, only the always-on readers run:
-// the Cursor hook ledger and the Claude Code status-line file, both of
-// which cost nothing when their file does not exist.
+// the Cursor hook ledger, the Claude Code status-line file and the
+// boundary decision ledger, all of which cost nothing when their file
+// does not exist.
 func TestStartVendorUsagePollersStartsOnlyAlwaysOnReaders(t *testing.T) {
 	sandbox := t.TempDir()
 	for _, k := range []string{"HOME", "USERPROFILE", "XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_STATE_HOME"} {
@@ -64,7 +65,7 @@ func TestStartVendorUsagePollersStartsOnlyAlwaysOnReaders(t *testing.T) {
 
 	got := sup.Running()
 	slices.Sort(got)
-	if want := []string{"claude-code-statusline", "cursor-hook"}; !slices.Equal(got, want) {
+	if want := []string{"boundary-ledger", "claude-code-statusline", "cursor-hook"}; !slices.Equal(got, want) {
 		t.Errorf("running = %v, want %v", got, want)
 	}
 	cancel()

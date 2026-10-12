@@ -1303,13 +1303,14 @@ rebuilt from transcripts on every run.
 
 ## Hooks
 
-TokenOps wires three hooks into a client, each independent:
+TokenOps wires four hooks into a client, each independent:
 
 | Hook | Fires | What it does |
 |---|---|---|
 | `--coach` | end of turn | the coaching nudge, against a per-session budget |
 | `--read-guard` | before a file read | refuses a redundant re-read of an unchanged file |
 | `--route-guard` | when you submit a prompt | states the case for a cheaper model when the one in use is over-spec |
+| `--boundary` | before every tool call | checks your [action boundaries](/guide/boundaries); Claude Code and opencode only |
 
 `--client` selects which client to act on, and **install, status and
 uninstall all take it**:
@@ -1329,7 +1330,7 @@ tokenops hooks uninstall --route-guard      # remove one hook
 tokenops hooks uninstall                    # remove every tokenops hook
 ```
 
-`uninstall` with no hook named removes all three. Naming one removes only
+`uninstall` with no hook named removes all four. Naming one removes only
 that one, on every client — including opencode, where the generated plugin
 is rewritten with the remaining halves rather than deleted, and deleted
 only once nothing is left in it.
@@ -1555,6 +1556,50 @@ a real choice waiting on you — take the proposed model, or stay on the
 preferred one — and nothing applies until you answer. Proposals are
 answered through the `tokenops_routing_decide` MCP tool or
 `POST /api/routing/decisions`.
+
+### `tokenops boundaries {status|promote|demote}`
+
+[Action boundaries](/guide/boundaries) are limits you set in
+`config.yaml` before work starts: past $20 in a session, ask me; no
+subagents above Sonnet without an admin; no new work once the week's plan
+is under 5%.
+
+```bash
+tokenops boundaries status          # each rule, how often it matched, where it binds
+tokenops boundaries status --json   # the daemon API's GET /api/boundaries
+tokenops boundaries promote session-spend
+tokenops boundaries demote session-spend
+```
+
+Every rule starts in **shadow**: it records what it would have done and
+changes nothing. `status` shows how often each rule matched — for a
+shadow rule, how often it would have fired — and, per client, whether it
+is enforced, in shadow, advice only (Codex and Cursor, whose hooks cannot
+refuse a call), or waiting on its hook. `promote` writes `stage: enforce`
+to the rule in `config.yaml`; `demote` puts it back in shadow. Neither
+has an MCP equivalent: an agent must not change the limits set on it.
+
+### `tokenops approve <id>`
+
+Answer a boundary that asked or refused. The id is the `bnd-…` one in the
+refusal, or listed under "Waiting on you" in `boundaries status`.
+
+```bash
+tokenops approve bnd-1a2b3c4d5e6f            # the agent's next step
+tokenops approve bnd-1a2b3c4d5e6f --session  # the rest of the session
+tokenops deny bnd-1a2b3c4d5e6f --session
+```
+
+Without `--session` the answer covers one step, and the boundary asks
+again after it. The answer is recorded on the decision with your user
+name, so `tokenops explain bnd-…` shows the rule, what was crossed, and
+who answered how. The MCP tool `tokenops_boundaries` (`action=decide`)
+and `POST /api/boundaries/decisions` record the same answer.
+
+### `tokenops deny <id>`
+
+Refuse what a boundary asked about: the agent's next step, or with
+`--session` the rest of the session. It is recorded like an approval.
 
 ### `tokenops preferred-model {list|set|unset}`
 

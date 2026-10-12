@@ -52,6 +52,8 @@ var apiRoute = map[string]string{
 	"tokenops_pricing":             "/api/pricing",
 	"tokenops_routing_proposals":   "/api/routing/proposals",
 	"tokenops_explain_decision":    "/api/decisions/example",
+	"tokenops_boundaries_status":   "/api/boundaries",
+	"tokenops_boundary_decide":     "POST /api/boundaries/decisions",
 	"tokenops_plan_set":            "POST /api/plans",
 	"tokenops_budget_set":          "POST /api/budgets",
 	"tokenops_routing_rule_set":    "POST /api/routing/rules",

@@ -148,7 +148,7 @@ func wirePresetHooks() []coachcap.HookInstall {
 			continue
 		}
 		var buf bytes.Buffer
-		err := installClientHooks(&buf, c.client, "", true, c.readGuard, true, false, coachhook.DefaultBudgetUSD)
+		err := installClientHooks(&buf, c.client, "", hookSelection{coach: true, readGuard: c.readGuard, routeGuard: true}, false, coachhook.DefaultBudgetUSD)
 		h := coachcap.HookInstall{Client: c.client, Status: "installed"}
 		switch {
 		case err != nil:

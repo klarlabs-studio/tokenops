@@ -19,13 +19,20 @@ const opencodePluginName = opencodeplugin.FileName
 // installOpencodePlugin writes the generated plugin. It replaces the
 // separate opencode 2 file earlier versions wrote, which would otherwise
 // load as a second plugin with the same id.
-func installOpencodePlugin(out io.Writer, dir, exe string, readGuard, coach, routeGuard, dryRun bool, budget float64) error {
-	if !readGuard && !coach && !routeGuard {
-		return fmt.Errorf("nothing selected: pass --read-guard, --coach, --route-guard, or a combination")
+func installOpencodePlugin(out io.Writer, dir, exe string, sel hookSelection, dryRun bool, budget float64) error {
+	readGuard, coach, routeGuard := sel.readGuard, sel.coach, sel.routeGuard
+	if !readGuard && !coach && !routeGuard && !sel.boundary {
+		return fmt.Errorf("nothing selected: pass --read-guard, --coach, --route-guard, --boundary, or a combination")
 	}
 	path := filepath.Join(dir, opencodePluginName)
+	// The pause point is installed on its own; reinstalling the coaching
+	// halves (a coach preset does) must not quietly drop it.
+	boundary := sel.boundary
+	if existing, err := os.ReadFile(path); err == nil && opencodeplugin.Generated(string(existing)) { //nolint:gosec // our own plugin file
+		boundary = boundary || opencodeplugin.Has(string(existing), "boundary-guard")
+	}
 	body := opencodeplugin.Render(opencodeplugin.Plugin{
-		Exe: exe, ReadGuard: readGuard, Coach: coach, RouteGuard: routeGuard, Budget: budget,
+		Exe: exe, ReadGuard: readGuard, Coach: coach, RouteGuard: routeGuard, Boundary: boundary, Budget: budget,
 	}, version.String())
 	_, legacy, err := opencodeplugin.ReadLegacy(dir)
 	if err != nil {
@@ -36,7 +43,8 @@ func installOpencodePlugin(out io.Writer, dir, exe string, readGuard, coach, rou
 		return nil
 	}
 	for _, verb := range hookMarkers {
-		if (verb == "read-guard" && readGuard) || (verb == "coach-hook" && coach) || (verb == "route-guard" && routeGuard) {
+		if (verb == "read-guard" && readGuard) || (verb == "coach-hook" && coach) || (verb == "route-guard" && routeGuard) ||
+			(verb == "boundary-guard" && boundary) {
 			fmt.Fprintf(out, "  + %s (opencode %s) -> %s\n", verb, opencodeplugin.Events[verb], opencodePluginName)
 		}
 	}
@@ -142,6 +150,8 @@ func uninstallOpencodePlugin(out io.Writer, dir string, markers []string, dryRun
 			p.Coach = false
 		case "route-guard":
 			p.RouteGuard = false
+		case "boundary-guard":
+			p.Boundary = false
 		}
 	}
 	if len(removed) == 0 {

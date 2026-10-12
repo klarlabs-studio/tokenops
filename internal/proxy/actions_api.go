@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/actions"
+	"go.klarlabs.de/tokenops/internal/capability/boundaries"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
@@ -43,6 +44,7 @@ type ActionDeps struct {
 //	POST /api/plans            a plan binding
 //	POST /api/preferred-models {"provider", "model"} or {"provider", "clear": true}
 //	POST /api/routing/decisions {"key", "decision": "approve" | "deny"}
+//	POST /api/boundaries/decisions {"id", "decision": "approve" | "deny", "session"}
 //	POST /api/outcomes         the operator's judgement of an execution
 //	POST /api/coach            a preset, or the coach's dials
 //
@@ -109,6 +111,13 @@ type PreferredModelRequest struct {
 type RoutingDecisionRequest struct {
 	Key      string `json:"key"`
 	Decision string `json:"decision"`
+}
+
+// BoundaryDecisionRequest answers a boundary that asked or refused: approve or deny, for the next step or the session.
+type BoundaryDecisionRequest struct {
+	ID       string `json:"id"`
+	Decision string `json:"decision"`
+	Session  bool   `json:"session"`
 }
 
 // OutcomeRequest records the operator's judgement of an execution: achieved, partial or not_achieved.
@@ -180,6 +189,15 @@ func (s *Server) registerActionRoutes(mux RouteMux) {
 			return nil, err
 		}
 		return actions.DecideRouting("", in.Key, in.Decision)
+	}))
+	mux.HandleFunc("POST /api/boundaries/decisions", s.action("boundary_decision", noRestart, func(r *http.Request, _ string) (any, error) {
+		var in BoundaryDecisionRequest
+		if err := decodeAction(r, &in); err != nil {
+			return nil, err
+		}
+		return boundaries.Decide(boundaries.Env{}, boundaries.DecideRequest{
+			ID: in.ID, Decision: in.Decision, Session: in.Session, Method: boundaries.MethodAPI,
+		})
 	}))
 	mux.HandleFunc("POST /api/outcomes", s.action("outcome", noRestart, func(r *http.Request, _ string) (any, error) {
 		var in OutcomeRequest

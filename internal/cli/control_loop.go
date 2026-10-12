@@ -25,15 +25,19 @@ import (
 // explainDecision answers `tokenops explain <decision-id>` from the
 // decision's recorded evidence; found is false when no decision has that ID.
 func explainDecision(cmd *cobra.Command, dbPath, id string) (found bool, err error) {
+	var events []*eventschema.Envelope
 	store, closeStore, err := openControlStore(cmd, dbPath)
-	if err != nil {
+	switch {
+	case err == nil:
+		defer closeStore()
+		if events, err = store.Query(cmd.Context(), sqlite.Filter{Decision: id, Limit: 10_000}); err != nil {
+			return false, err
+		}
+	case !strings.HasPrefix(id, "bnd-"):
 		return false, err
 	}
-	defer closeStore()
-	events, err := store.Query(cmd.Context(), sqlite.Filter{Decision: id, Limit: 10_000})
-	if err != nil {
-		return false, err
-	}
+	// A boundary decision is also in the pause point's ledger, so it is
+	// explained even before the daemon has stored it, or with no store.
 	report, ok := explain.Build(id, decisions.WithBoundaryLedger(id, events))
 	if !ok {
 		return false, nil

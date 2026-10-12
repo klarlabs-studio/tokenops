@@ -120,10 +120,17 @@ tokenops coach preset advise`,
 	"coach replies":   `tokenops coach replies --since 24h --json`,
 	"mode": `tokenops mode                    # print the mode
 tokenops mode active`,
-	"routing proposals":     `tokenops routing proposals --json`,
-	"routing rule list":     `tokenops routing rule list`,
-	"routing rule unset":    `tokenops routing rule unset anthropic claude-opus-5`,
-	"preferred-model list":  `tokenops preferred-model list`,
+	"routing proposals":    `tokenops routing proposals --json`,
+	"routing rule list":    `tokenops routing rule list`,
+	"routing rule unset":   `tokenops routing rule unset anthropic claude-opus-5`,
+	"preferred-model list": `tokenops preferred-model list`,
+	"boundaries status": `tokenops boundaries status        # each rule, how often it matched, where it binds
+tokenops boundaries status --json`,
+	"boundaries promote": `tokenops boundaries promote session-spend`,
+	"boundaries demote":  `tokenops boundaries demote session-spend`,
+	"approve": `tokenops approve bnd-1a2b3c4d5e6f            # the agent's next step
+tokenops approve bnd-1a2b3c4d5e6f --session  # the rest of the session`,
+	"deny":                  `tokenops deny bnd-1a2b3c4d5e6f --session`,
 	"preferred-model set":   `tokenops preferred-model set anthropic claude-sonnet-5`,
 	"preferred-model unset": `tokenops preferred-model unset anthropic`,
 	"experiment start": `tokenops experiment start anthropic claude-opus-5 claude-sonnet-5 \

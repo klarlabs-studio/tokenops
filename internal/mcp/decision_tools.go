@@ -6,11 +6,29 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/decisions"
 
+	"go.klarlabs.de/tokenops/internal/capability/actions"
+	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
+	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
-// DecisionDeps wires explain-on-demand to the canonical event store.
-type DecisionDeps struct{ Store *sqlite.Store }
+// DecisionDeps wires explain-on-demand to the canonical event store, and
+// the boundary tools to the config and the pause point's files.
+type DecisionDeps struct {
+	Store *sqlite.Store
+	// ConfigPath is the config the boundaries are read from; empty takes
+	// the default.
+	ConfigPath string
+	// Boundaries is where the pause point keeps its decisions; the zero
+	// value is the default under ~/.tokenops.
+	Boundaries bcap.Env
+}
+
+type boundaryDecideInput struct {
+	ID       string `json:"id" jsonschema:"description=The boundary decision id (bnd-…) the agent was refused with, or one tokenops_boundaries (action=status) lists as pending"`
+	Decision string `json:"decision" jsonschema:"enum=approve,enum=deny,description=approve lets the agent past the boundary; deny refuses"`
+	Session  bool   `json:"session,omitempty" jsonschema:"description=Answer for the rest of the session rather than for the next step only"`
+}
 
 type explainDecisionInput struct {
 	DecisionID string `json:"decision_id" jsonschema:"description=Decision identifier returned by a TokenOps recommendation."`
@@ -31,6 +49,42 @@ func RegisterDecisionTools(s *Server, d DecisionDeps) error {
 		Handler(func(ctx context.Context, in explainDecisionInput) (*explainDecisionResult, error) {
 			res, err := decisions.Explain(ctx, d.Store, in.DecisionID)
 			if errors.Is(err, decisions.ErrMissingID) {
+				return nil, inputError(err)
+			}
+			if err != nil {
+				return nil, err
+			}
+			return &res, nil
+		})
+	s.Tool("tokenops_boundaries_status").
+		Description("Each action boundary in config.yaml: its stage (shadow or enforced), how often it matched or would have fired, and, per client, whether it is enforced or advice only; and the boundary decisions waiting on the operator.").
+		OutputSchema(bcap.Status{}).
+		Handler(func(_ context.Context, _ emptyInput) (*bcap.Status, error) {
+			path := d.ConfigPath
+			if path == "" {
+				p, err := config.DefaultPath()
+				if err != nil {
+					return nil, err
+				}
+				path = p
+			}
+			cfg, err := config.Load(path)
+			if err != nil {
+				return nil, inputError(err)
+			}
+			st, err := bcap.RuleStatuses(cfg.BoundaryRules(), d.Boundaries, bcap.Installed("", ""))
+			if err != nil {
+				return nil, err
+			}
+			return &st, nil
+		})
+	s.Tool("tokenops_boundary_decide").
+		Description("Record the operator's answer to a boundary that asked or refused: approve lets the agent take its next step (or, with session, the rest of the session); deny refuses. The answer is recorded with the local user and method mcp, so explain shows who answered. Only call this when the operator has said so in this conversation: an agent must never approve its own boundary.").
+		OutputSchema(bcap.Decided{}).
+		Handler(func(_ context.Context, in boundaryDecideInput) (*bcap.Decided, error) {
+			res, err := bcap.Decide(d.Boundaries, bcap.DecideRequest{ID: in.ID, Decision: in.Decision, Session: in.Session, Method: bcap.MethodMCP})
+			var ie actions.InputError
+			if errors.As(err, &ie) {
 				return nil, inputError(err)
 			}
 			if err != nil {

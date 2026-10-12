@@ -22,7 +22,7 @@ var helpOrder = []string{
 	"glance", "checkup", "spend", "story", "dx", "status", "explain",
 	"init", "detect", "daemon", "hooks", "statusline", "menubar", "plan", "budget", "provider",
 	"vendor-usage", "pricing", "otel", "team", "config", "version",
-	"coach", "mode", "routing", "preferred-model", "experiment", "rules", "fmt", "task", "outcome",
+	"coach", "boundaries", "approve", "deny", "mode", "routing", "preferred-model", "experiment", "rules", "fmt", "task", "outcome",
 	"scorecard", "optimizations", "verify", "audit", "events",
 }
 
@@ -35,7 +35,7 @@ var commandGroup = map[string]string{
 	"menubar": "setup", "plan": "setup", "budget": "setup", "provider": "setup",
 	"vendor-usage": "setup", "config": "setup", "pricing": "setup", "version": "setup", "otel": "setup", "team": "setup",
 
-	"coach": "control", "mode": "control", "preferred-model": "control", "routing": "control",
+	"coach": "control", "boundaries": "control", "approve": "control", "deny": "control", "mode": "control", "preferred-model": "control", "routing": "control",
 	"experiment": "control", "task": "control", "outcome": "control", "rules": "control", "fmt": "control",
 
 	"scorecard": "analysis", "optimizations": "analysis", "audit": "analysis",
@@ -48,6 +48,7 @@ var hiddenCommands = map[string]string{
 	"coach-hook":       "Claude Code's Stop hook",
 	"read-guard":       "Claude Code's PreToolUse hook",
 	"route-guard":      "Claude Code's UserPromptSubmit hook",
+	"boundary-guard":   "the boundary pause point, Claude Code's and opencode's PreToolUse hook",
 	"anthropic-bridge": "launched by `hooks install`",
 	"serve":            "the MCP server, started by the client",
 	"start":            "the daemon's foreground process, started by `daemon install`",

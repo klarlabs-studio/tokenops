@@ -90,6 +90,189 @@
         "summary": "The audit log, newest first"
       }
     },
+    "/api/boundaries": {
+      "get": {
+        "operationId": "getBoundaries",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "note": {
+                      "type": "string"
+                    },
+                    "pending": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "approve": {
+                            "type": "string"
+                          },
+                          "at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "crossed": {
+                            "type": "string"
+                          },
+                          "harness": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "require": {
+                            "type": "string"
+                          },
+                          "rule": {
+                            "type": "string"
+                          },
+                          "session_id": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "rules": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "action": {
+                            "type": "string"
+                          },
+                          "harnesses": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "enforcement": {
+                                  "type": "string"
+                                },
+                                "harness": {
+                                  "type": "string"
+                                },
+                                "note": {
+                                  "type": "string"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "last_matched": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "matches": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "note": {
+                            "type": "string"
+                          },
+                          "require": {
+                            "type": "string"
+                          },
+                          "sessions": {
+                            "type": "integer"
+                          },
+                          "stage": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Each action boundary, how often it matched, where it is enforced, and what waits on the operator"
+      }
+    },
+    "/api/boundaries/decisions": {
+      "post": {
+        "operationId": "postBoundariesDecisions",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "decision": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "session": {
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "approver": {
+                      "type": "string"
+                    },
+                    "decision": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "note": {
+                      "type": "string"
+                    },
+                    "rule": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Answer a boundary that asked or refused"
+      }
+    },
     "/api/budgets": {
       "post": {
         "operationId": "postBudgets",
@@ -974,6 +1157,24 @@
                     "report": {
                       "additionalProperties": false,
                       "properties": {
+                        "actor": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "agent_id": {
+                              "type": "string"
+                            },
+                            "harness": {
+                              "type": "string"
+                            },
+                            "session_id": {
+                              "type": "string"
+                            },
+                            "user": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
                         "adapter": {
                           "type": "string"
                         },
@@ -994,6 +1195,28 @@
                             "type": "object"
                           },
                           "type": "array"
+                        },
+                        "approval": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "approver": {
+                              "type": "string"
+                            },
+                            "at": {
+                              "format": "date-time",
+                              "type": "string"
+                            },
+                            "method": {
+                              "type": "string"
+                            },
+                            "rule": {
+                              "type": "string"
+                            },
+                            "scope": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
                         },
                         "authority": {
                           "type": "string"
@@ -1151,6 +1374,9 @@
                           "type": "string"
                         },
                         "rationale": {
+                          "type": "string"
+                        },
+                        "rule": {
                           "type": "string"
                         },
                         "selected": {

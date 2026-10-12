@@ -192,3 +192,32 @@ func read(t *testing.T, dir, name string) string {
 	}
 	return string(b)
 }
+
+func TestBoundaryHalf(t *testing.T) {
+	with := Render(Plugin{Exe: "/bin/tokenops", ReadGuard: true, Boundary: true}, "v1")
+	without := Render(Plugin{Exe: "/bin/tokenops", ReadGuard: true}, "v1")
+	if !Has(with, "boundary-guard") || Has(without, "boundary-guard") {
+		t.Fatal("the boundary half is not marked by its verb")
+	}
+	if p := Parse(with, 50); !p.Boundary || !p.ReadGuard {
+		t.Fatalf("Parse = %+v", p)
+	}
+	// opencode 1.x reads one hooks object: two tool.execute.before keys
+	// would silently keep only the last.
+	if n := strings.Count(with, `"tool.execute.before"`); n != 1 {
+		t.Fatalf("tool.execute.before appears %d times", n)
+	}
+	if !strings.Contains(with, `await ctx.tool.hook("execute.before", async (event) => {
+      const denyReason = await boundary(`) {
+		t.Fatal("opencode 2 has no boundary hook")
+	}
+	if !strings.Contains(with, "async function boundary(") || strings.Contains(without, "async function boundary(") {
+		t.Fatal("the helper is not tied to the half")
+	}
+	if strings.Contains(with, "output?.args,") || strings.Contains(with, "args: output") {
+		t.Fatal("the boundary call forwards the tool's arguments")
+	}
+	if !Generated(with) || Parse(Render(Plugin{Exe: "/bin/tokenops", Boundary: true}, "v1"), 50).Empty() {
+		t.Fatal("a boundary-only plugin reads as empty")
+	}
+}
