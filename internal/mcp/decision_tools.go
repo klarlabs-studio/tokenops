@@ -26,7 +26,7 @@ type DecisionDeps struct {
 
 type boundaryDecideInput struct {
 	ID       string `json:"id" jsonschema:"description=The boundary decision id (bnd-…) the agent was refused with, or one tokenops_boundaries (action=status) lists as pending"`
-	Decision string `json:"decision" jsonschema:"enum=approve,enum=deny,description=approve lets the agent past the boundary; deny refuses"`
+	Decision string `json:"decision" jsonschema:"enum=deny,description=deny refuses; approving is only possible from a terminal or the harness's prompt"`
 	Session  bool   `json:"session,omitempty" jsonschema:"description=Answer for the rest of the session rather than for the next step only"`
 }
 
@@ -79,7 +79,7 @@ func RegisterDecisionTools(s *Server, d DecisionDeps) error {
 			return &st, nil
 		})
 	s.Tool("tokenops_boundary_decide").
-		Description("Record the operator's answer to a boundary that asked or refused: approve lets the agent take its next step (or, with session, the rest of the session); deny refuses. The answer is recorded with the local user and method mcp, so explain shows who answered. Only call this when the operator has said so in this conversation: an agent must never approve its own boundary.").
+		Description("Refuse what a boundary asked about: deny refuses the agent's next step (or, with session, the rest of the session). Approving is not possible here: an approval must come from a person, with `tokenops approve <id>` in their own terminal or at Claude Code's permission prompt. The answer is recorded with the local user and method mcp, so explain shows who answered.").
 		OutputSchema(bcap.Decided{}).
 		Handler(func(_ context.Context, in boundaryDecideInput) (*bcap.Decided, error) {
 			res, err := bcap.Decide(d.Boundaries, bcap.DecideRequest{ID: in.ID, Decision: in.Decision, Session: in.Session, Method: bcap.MethodMCP})

@@ -119,6 +119,11 @@ tokenops approve bnd-1a2b3c4d5e6f --session  # the rest of the session
 tokenops deny bnd-1a2b3c4d5e6f
 ```
 
+Only a person can approve: `tokenops approve` refuses to run without a
+terminal, and the MCP tool and the daemon API can only deny. The agent a
+boundary stopped can call tools and run commands, so an approval through
+any of those would be the agent approving itself.
+
 An answer applies to the session it was asked in, and is honoured for at
 most a day. Answering at Claude Code's prompt counts too: TokenOps reads
 the answer back and records it.

@@ -1593,8 +1593,9 @@ tokenops deny bnd-1a2b3c4d5e6f --session
 Without `--session` the answer covers one step, and the boundary asks
 again after it. The answer is recorded on the decision with your user
 name, so `tokenops explain bnd-…` shows the rule, what was crossed, and
-who answered how. The MCP tool `tokenops_boundaries` (`action=decide`)
-and `POST /api/boundaries/decisions` record the same answer.
+who answered how. `approve` runs only at a terminal: the agent a boundary
+stopped can run commands too. The MCP tool `tokenops_boundaries`
+(`action=decide`) and `POST /api/boundaries/decisions` can only deny.
 
 ### `tokenops deny <id>`
 

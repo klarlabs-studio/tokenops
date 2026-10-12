@@ -254,6 +254,10 @@ func newBoundariesStageCmd(verb string) *cobra.Command {
 	return cmd
 }
 
+// approverAtTerminal reports whether an approval comes from a person: its
+// stdin is a terminal. A variable so tests can stand in for one.
+var approverAtTerminal = func(in io.Reader) bool { return interactiveInput(in, false) }
+
 func newBoundaryAnswerCmd(verb string) *cobra.Command {
 	var session, jsonOut bool
 	short := "Let an agent past a boundary that asked: its next step, or the rest of the session"
@@ -270,6 +274,11 @@ The id is the bnd-… one the agent was refused with, or that
 decision with your user name, so 'tokenops explain <id>' shows who answered.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// An agent can run commands too: an approval needs a person at a
+			// terminal, so it is refused when stdin is not one.
+			if verb == "approve" && !approverAtTerminal(cmd.InOrStdin()) {
+				return fmt.Errorf("tokenops approve needs a terminal: run it yourself, not through an agent (an agent can only deny)")
+			}
 			res, err := bcap.Decide(bcap.Env{}, bcap.DecideRequest{ID: args[0], Decision: verb, Session: session, Method: bcap.MethodCLI})
 			if err != nil {
 				return err

@@ -230,6 +230,19 @@ func TestDecideRefusesWhatIsNotWaiting(t *testing.T) {
 	}
 }
 
+// The agent a boundary stopped can call MCP tools and reach the local API:
+// those may deny, never approve. An approval comes from a terminal or the
+// harness's own prompt.
+func TestOnlyAPersonCanApprove(t *testing.T) {
+	for _, method := range []string{MethodMCP, MethodAPI, "something-else"} {
+		env := testEnv(t, false)
+		id := domain.DecisionID("r", "s")
+		if _, err := Decide(env, DecideRequest{ID: id, Decision: "approve", Method: method}); err == nil || !strings.Contains(err.Error(), "must come from a person") {
+			t.Errorf("approve by %s = %v, want refused", method, err)
+		}
+	}
+}
+
 func TestAnAttendedAskIsSettledFromThePrompt(t *testing.T) {
 	env := testEnv(t, true)
 	setCost(t, env, "s1", 25)

@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,6 +117,14 @@ func TestBoundaryHookUnattendedRefusesUntilApproved(t *testing.T) {
 	if !strings.Contains(status, id) || !strings.Contains(status, `"stage": "enforce"`) {
 		t.Fatalf("status does not list the waiting decision:\n%s", status)
 	}
+	// An agent's shell has no terminal: its approval is refused.
+	if _, err := runCLI(t, nil, "approve", id, "--session"); err == nil || !strings.Contains(err.Error(), "needs a terminal") {
+		t.Fatalf("approve without a terminal = %v, want refused", err)
+	}
+	if out, err := runCLI(t, nil, "deny", id); err != nil || !strings.Contains(out, "denied") {
+		t.Fatalf("deny without a terminal = %q, %v; denying needs no person", out, err)
+	}
+	atTerminal(t)
 	if out, err := runCLI(t, nil, "approve", id, "--session"); err != nil || !strings.Contains(out, "approved") {
 		t.Fatalf("approve = %q, %v", out, err)
 	}
@@ -255,4 +264,12 @@ func TestHooksInstallBoundaryOpencodeKeepsIt(t *testing.T) {
 	if strings.Count(string(b), `"tool.execute.before"`) != 1 {
 		t.Fatal("opencode 1.x hooks object has the event key twice; one would be lost")
 	}
+}
+
+// atTerminal stands in for a person at a terminal for the rest of the test.
+func atTerminal(t *testing.T) {
+	t.Helper()
+	prev := approverAtTerminal
+	approverAtTerminal = func(io.Reader) bool { return true }
+	t.Cleanup(func() { approverAtTerminal = prev })
 }

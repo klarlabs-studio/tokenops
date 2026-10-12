@@ -211,4 +211,10 @@ option:
   the public tools, `tokenops_boundary_decide` being its inner tool;
   promote and demote have no MCP equivalent, so an agent cannot change the
   limits set on it.
+- **Only a person approves.** The MCP tool and `POST /api/boundaries/decisions`
+  can only deny, and `tokenops approve` refuses without a terminal: the
+  agent a boundary stops can call tools and run commands, so an approval
+  through them would be the agent approving itself (a `subagent_model`
+  rule leaves its other tools working). An approval comes from a terminal
+  or from Claude Code's own permission prompt.
 

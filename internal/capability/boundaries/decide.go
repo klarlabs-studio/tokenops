@@ -55,6 +55,13 @@ func Decide(env Env, req DecideRequest) (Decided, error) {
 	default:
 		return Decided{}, actions.InputError{Err: fmt.Errorf("decision %q is not approve or deny", req.Decision)}
 	}
+	method := req.Method
+	if method == "" {
+		method = MethodCLI
+	}
+	if approved && !approvesInPerson(method) {
+		return Decided{}, actions.InputError{Err: fmt.Errorf("an approval must come from a person: run `tokenops approve %s` in your own terminal, or answer Claude Code's prompt; this surface can only deny", id)}
+	}
 	p, ok, err := env.Dir.GetPending(id)
 	if err != nil {
 		return Decided{}, err
@@ -65,10 +72,6 @@ func Decide(env Env, req DecideRequest) (Decided, error) {
 	scope := boundaryledger.ScopeOnce
 	if req.Session {
 		scope = boundaryledger.ScopeSession
-	}
-	method := req.Method
-	if method == "" {
-		method = MethodCLI
 	}
 	now := env.now()
 	a := boundaryledger.Answer{
@@ -91,6 +94,14 @@ func Decide(env Env, req DecideRequest) (Decided, error) {
 	}
 	out.Note = decidedNote(approved, scope)
 	return out, nil
+}
+
+// approvesInPerson reports whether an answer by this method can approve.
+// The agent a boundary stopped can call MCP tools and reach the local API,
+// so those may only deny; an approval comes from a terminal (the CLI
+// refuses one without a TTY) or from the harness's own permission prompt.
+func approvesInPerson(method string) bool {
+	return method == MethodCLI || method == MethodPrompt
 }
 
 func decidedNote(approved bool, scope string) string {

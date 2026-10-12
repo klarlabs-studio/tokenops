@@ -100,7 +100,7 @@ instead of an empty screen.
 | `POST /api/plans` | Binds a provider to a plan, or clears it |
 | `POST /api/preferred-models` | Sets or clears a provider's preferred model |
 | `POST /api/routing/decisions` | Answers a routing proposal |
-| `POST /api/boundaries/decisions` | Answers a boundary that asked or refused (`{"id", "decision", "session"}`) |
+| `POST /api/boundaries/decisions` | Denies what a boundary asked about (`{"id", "decision": "deny", "session"}`); an approval only comes from `tokenops approve` at a terminal or Claude Code's prompt |
 | `POST /api/outcomes` | Records your judgement of an execution |
 | `POST /api/coach` | Applies a coach preset, or changes its dials |
 
