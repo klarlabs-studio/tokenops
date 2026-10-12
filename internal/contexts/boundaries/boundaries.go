@@ -178,9 +178,9 @@ func (r Require) strictness() int {
 	}
 }
 
-// LocalAsk reports whether the requirement is answered on this machine.
-// A named approver is treated as ask until the team plane routes the
-// request to the role (ADR 0014 phase 3).
+// LocalAsk reports whether the requirement is answered by someone: ask,
+// or a named approver. Whether a named approver is answered here or by the
+// organisation is the rule's to say (Rule.TeamRouted).
 func (r Require) LocalAsk() bool { return r.Kind == RequireAsk || r.Kind == RequireApprover }
 
 // Stage is whether a rule binds.
@@ -206,6 +206,22 @@ type Condition struct {
 	Budget string
 }
 
+// Source is where a rule was set.
+type Source string
+
+// The sources.
+const (
+	// SourceLocal is this machine's config.yaml.
+	SourceLocal Source = ""
+	// SourceOrg is the organisation's rules, delivered by the team plane
+	// (ADR 0014 §5).
+	SourceOrg Source = "org"
+)
+
+// OrgPrefix marks an organisation rule's name wherever it is shown or
+// keyed, so it never collides with a local rule of the same name.
+const OrgPrefix = "org:"
+
 // Rule is one boundary.
 type Rule struct {
 	Name    string
@@ -213,10 +229,28 @@ type Rule struct {
 	When    []Condition
 	Require Require
 	Stage   Stage
+	Source  Source
 }
 
 // Enforced reports whether the rule binds.
 func (r Rule) Enforced() bool { return r.Stage == StageEnforce }
+
+// TeamRouted reports whether the rule's approval is routed to a role in
+// the organisation rather than answered on this machine: an organisation
+// rule that names an approver. A member cannot approve past their
+// organisation's rule themselves.
+func (r Rule) TeamRouted() bool { return r.Source == SourceOrg && r.Require.Kind == RequireApprover }
+
+// FromOrg marks rules as the organisation's: their names gain OrgPrefix
+// and their source is SourceOrg. The input is not changed.
+func FromOrg(rules []Rule) []Rule {
+	out := slices.Clone(rules)
+	for i := range out {
+		out[i].Name = OrgPrefix + out[i].Name
+		out[i].Source = SourceOrg
+	}
+	return out
+}
 
 // RuleSpec is a rule as written in config.yaml.
 type RuleSpec struct {
@@ -230,6 +264,10 @@ type RuleSpec struct {
 }
 
 var namePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
+
+// ValidName reports whether s is a rule or role name: lower-case letters,
+// digits, - and _, at most 64.
+func ValidName(s string) bool { return namePattern.MatchString(s) }
 
 // Parse validates rules as written in config. Every error names the rule
 // it is about.
@@ -499,11 +537,31 @@ type Facts struct {
 	AgentID     string
 }
 
+// Crossing is one figure that crossed a condition, as numbers and
+// enumerations only: it is what an approval request carries off the
+// machine (ADR 0014 §4), so it holds no name a member typed.
+type Crossing struct {
+	Field Field
+	Op    Op
+	// Value is the figure; Threshold, what the condition compares it to.
+	// A model tier is its rank: haiku 1, sonnet 2, opus 3.
+	Value     float64
+	Threshold float64
+	// Window qualifies plan_left_pct; Destination is set for destination.
+	Window      Window
+	Destination string
+}
+
 // Match is a rule that matched, with the figures that crossed it.
 type Match struct {
-	Rule    Rule
-	crossed []string
+	Rule      Rule
+	crossed   []string
+	crossings []Crossing
 }
+
+// Crossings are the figures that crossed the rule. A budget's name is
+// left out: it is the member's own label.
+func (m Match) Crossings() []Crossing { return m.crossings }
 
 // Crossed says what was crossed, in a sentence fragment a person and an
 // agent can act on.
@@ -537,6 +595,9 @@ func (r Rule) Match(action Action, f Facts) (Match, bool) {
 		}
 		if text != "" {
 			m.crossed = append(m.crossed, text)
+		}
+		if x, ok := c.crossing(f); ok {
+			m.crossings = append(m.crossings, x)
 		}
 	}
 	return m, true
@@ -580,6 +641,28 @@ func (c Condition) holds(f Facts) (string, bool) {
 		return "", ok && f.AgentID != ""
 	}
 	return "", false
+}
+
+// crossing is the figure that held c, for conditions on figures; ids and
+// patterns cross nothing.
+func (c Condition) crossing(f Facts) (Crossing, bool) {
+	x := Crossing{Field: c.Field, Op: c.Op, Threshold: c.Number}
+	switch c.Field {
+	case FieldSessionCost:
+		x.Value = f.SessionCostUSD.Value
+	case FieldPlanLeft:
+		left, window, _ := planLeft(f.PlanLeftPct, c.Window)
+		x.Value, x.Window = left, window
+	case FieldBudgetUsed:
+		x.Value, _, _ = budgetUsed(f.BudgetUsedPct, c.Budget)
+	case FieldModelTier:
+		x.Value, x.Threshold = float64(tierRank[f.ModelTier]), float64(tierRank[c.Text])
+	case FieldDestination:
+		x.Destination = f.Destination
+	default:
+		return Crossing{}, false
+	}
+	return x, true
 }
 
 // planLeft reads the named window, or the tightest one known.

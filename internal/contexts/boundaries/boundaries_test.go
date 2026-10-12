@@ -301,3 +301,36 @@ func TestEveryActionNamesItsFields(t *testing.T) {
 		}
 	}
 }
+
+func TestCrossingsAreFiguresOnly(t *testing.T) {
+	rules, err := Parse([]RuleSpec{{Name: "r", Action: "spend", Require: "ask", Stage: "enforce",
+		When: map[string]string{"budget_used_pct": ">= 90", "budget": "secret-project", "session_cost_usd": ">= 5", "agent_id": "== claude-code:*"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, ok := rules[0].Match(ActionSpend, Facts{
+		SessionCostUSD: Known(7), BudgetUsedPct: map[string]float64{"secret-project": 95}, AgentID: "claude-code:repo",
+	})
+	if !ok {
+		t.Fatal("no match")
+	}
+	got := m.Crossings()
+	if len(got) != 2 || got[0].Field != FieldSessionCost || got[0].Value != 7 || got[0].Threshold != 5 ||
+		got[1].Field != FieldBudgetUsed || got[1].Value != 95 || got[1].Threshold != 90 {
+		t.Fatalf("crossings = %+v", got)
+	}
+}
+
+func TestFromOrgPrefixesAndRoutes(t *testing.T) {
+	rules, _ := Parse([]RuleSpec{
+		{Name: "big", Action: "subagent_model", Require: "approver:admin", When: map[string]string{"model_tier": "> sonnet"}},
+		{Name: "floor", Action: "continue", Require: "ask"},
+	})
+	org := FromOrg(rules)
+	if org[0].Name != "org:big" || org[0].Source != SourceOrg || !org[0].TeamRouted() || org[1].TeamRouted() {
+		t.Fatalf("org = %+v", org)
+	}
+	if rules[0].Name != "big" || rules[0].TeamRouted() {
+		t.Fatal("FromOrg changed its input, or a local approver rule is routed")
+	}
+}
