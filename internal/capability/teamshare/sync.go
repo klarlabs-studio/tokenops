@@ -26,6 +26,11 @@ func Sync(ctx context.Context, d Deps, opts Options, statePath string, now time.
 	if err != nil {
 		return Result{}, err
 	}
+	if opts.Allow != nil {
+		if err := opts.Allow(); err != nil {
+			return Result{}, err
+		}
+	}
 	u, warnings := Build(ctx, d, opts, now)
 	res := Result{Upload: u, Warnings: warnings}
 	if err := u.Validate(); err != nil {

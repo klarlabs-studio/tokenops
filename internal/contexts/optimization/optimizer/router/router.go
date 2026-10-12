@@ -114,6 +114,13 @@ type Config struct {
 	// wire it to a cached reading refreshed in the background, never to
 	// a live query.
 	WindowPressure func(eventschema.Provider) (pct float64, ok bool)
+	// Boundary is the operator's model_route boundaries (ADR 0014): asked
+	// just before a route would be applied, it reports whether the route
+	// is refused and why. A refused route leaves the request on the model
+	// it asked for; the request itself is never failed (ADR 0007). Nil
+	// lets every route through. It runs in the request path, so it must
+	// answer from memory or a few small files.
+	Boundary func(provider eventschema.Provider, from, to, workflowID, agentID string) (refuse bool, reason string)
 }
 
 // Router is the Optimizer implementation.
@@ -266,6 +273,16 @@ func (r *Router) Run(_ context.Context, req *optimizer.Request) ([]optimizer.Rec
 			Reason:       "router: route awaiting operator approval",
 			QualityScore: rule.Quality,
 		}}, nil
+	}
+
+	if r.cfg.Boundary != nil {
+		if refuse, reason := r.cfg.Boundary(req.Provider, req.Model, target, req.WorkflowID, req.AgentID); refuse {
+			return []optimizer.Recommendation{{
+				Kind:         eventschema.OptimizationTypeRouter,
+				Reason:       "router: route held by a boundary — " + reason,
+				QualityScore: rule.Quality,
+			}}, nil
+		}
 	}
 
 	newBody, err := rewriteModel(req.Body, target)

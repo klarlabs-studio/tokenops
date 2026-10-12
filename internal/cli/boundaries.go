@@ -34,15 +34,15 @@ type boundaryHookInput struct {
 }
 
 // newBoundaryGuardCmd is the pause point (ADR 0014): a PreToolUse hook on
-// every tool call that checks the continue boundaries.
+// every tool call that checks the continue and spend boundaries.
 func newBoundaryGuardCmd(rf *rootFlags) *cobra.Command {
 	var client string
 	cmd := &cobra.Command{
 		Use:   bcap.HookVerb,
 		Short: "PreToolUse hook that checks action boundaries before every tool call",
 		Long: `boundary-guard is the pause point for action boundaries (ADR 0014).
-Wired as a PreToolUse hook on every tool, it evaluates the continue rules in
-config.yaml's boundaries section. A rule in shadow is recorded and changes
+Wired as a PreToolUse hook on every tool, it evaluates the continue and spend
+rules in config.yaml's boundaries section. A rule in shadow is recorded and changes
 nothing. An enforced ask rule asks when someone is at the keyboard and
 otherwise refuses with the rule and the tokenops approve command; an
 enforced deny rule refuses.
@@ -75,7 +75,7 @@ func runBoundaryGuard(cmd *cobra.Command, rf *rootFlags, client string) error {
 	}
 	call := bcap.Call{
 		Harness: harness, SessionID: in.SessionID, TranscriptPath: in.TranscriptPath,
-		ToolUseID: in.ToolUseID, Action: "continue",
+		ToolUseID: in.ToolUseID,
 	}
 	project := bcap.TranscriptProject(in.TranscriptPath)
 	if in.Directory != "" {
@@ -90,13 +90,14 @@ func runBoundaryGuard(cmd *cobra.Command, rf *rootFlags, client string) error {
 		bcap.RecordFailure(call, env, fmt.Errorf("config unreadable: %w", err))
 		return nil
 	}
-	res := guardWithTimeout(cmd.Context(), cfg, call, env)
+	res := guardWithTimeout(cmd.Context(), cfg, call, env, bcap.Pause)
 	return writeBoundaryVerdict(cmd.OutOrStdout(), res)
 }
 
 // guardWithTimeout runs the evaluation, letting the call through when it
 // fails or overruns. Both are recorded.
-func guardWithTimeout(ctx context.Context, cfg config.Config, call bcap.Call, env bcap.Env) bcap.Result {
+func guardWithTimeout(ctx context.Context, cfg config.Config, call bcap.Call, env bcap.Env,
+	eval func([]bcap.Rule, bcap.Call, bcap.Env) (bcap.Result, error)) bcap.Result {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -108,7 +109,7 @@ func guardWithTimeout(ctx context.Context, cfg config.Config, call bcap.Call, en
 	}
 	done := make(chan answer, 1)
 	go func() {
-		res, err := bcap.Guard(cfg.BoundaryRules(), call, env)
+		res, err := eval(cfg.BoundaryRules(), call, env)
 		done <- answer{res, err}
 	}()
 	select {
@@ -175,7 +176,7 @@ func newBoundariesStatusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			st, err := bcap.RuleStatuses(cfg.BoundaryRules(), bcap.Env{}, bcap.Installed("", ""))
+			st, err := bcap.RuleStatuses(cfg.BoundaryRules(), bcap.Env{}, bcap.Wired(cfg))
 			if err != nil {
 				return err
 			}
@@ -200,7 +201,7 @@ func writeBoundariesStatus(w io.Writer, st bcap.Status) {
 		if r.Stage == "shadow" {
 			verb = "would have fired"
 		}
-		fmt.Fprintf(w, "  %s %d times in %d sessions", verb, r.Matches, r.Sessions)
+		fmt.Fprintf(w, "  %s %d times in %d %s", verb, r.Matches, r.Sessions, scopeNoun(r.Action))
 		if r.LastMatched != nil {
 			fmt.Fprintf(w, ", last %s", r.LastMatched.Local().Format("2006-01-02 15:04"))
 		}
@@ -221,6 +222,19 @@ func writeBoundariesStatus(w io.Writer, st bcap.Status) {
 		for _, p := range st.Pending {
 			fmt.Fprintf(w, "  %s  %s (%s): %s — %s\n", p.ID, p.Rule, p.Require, p.Crossed, p.Approve)
 		}
+	}
+}
+
+// scopeNoun names what a rule's matches are counted across: sessions for
+// the agent's actions, routes for the router, destinations for sharing.
+func scopeNoun(action string) string {
+	switch action {
+	case "model_route":
+		return "routes"
+	case "share":
+		return "destinations"
+	default:
+		return "sessions"
 	}
 }
 

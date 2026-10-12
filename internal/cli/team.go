@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/teamshare"
 	"go.klarlabs.de/tokenops/internal/config"
@@ -319,7 +320,11 @@ func newTeamSyncCmd(rf *rootFlags) *cobra.Command {
 			ctx, cancel := context.WithTimeout(cmd.Context(), 5*time.Minute)
 			defer cancel()
 			return withTeamDeps(ctx, cfg, func(d teamshare.Deps) error {
-				res, err := teamshare.Sync(ctx, d, teamOptions(cfg), path, time.Now())
+				opts := teamOptions(cfg)
+				if rules := cfg.BoundaryRules(); len(rules) > 0 {
+					opts.Allow = func() error { return bcap.CheckShare(rules, bcap.DestinationTeam, bcap.Env{}) }
+				}
+				res, err := teamshare.Sync(ctx, d, opts, path, time.Now())
 				if err != nil {
 					return err
 				}
