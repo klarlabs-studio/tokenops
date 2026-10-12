@@ -46,6 +46,11 @@ const (
 	CodeExpiredToken = "expired_token"
 	// CodeAccessDenied: the device link was declined in the browser.
 	CodeAccessDenied = "access_denied"
+	// CodeApprovalsPaused: the organisation has no active trial or
+	// subscription, so approval requests are refused (402). Organisation
+	// rules are still served and still bind; an approval they require
+	// cannot be routed until billing resumes.
+	CodeApprovalsPaused = "approvals_paused"
 )
 
 // DeviceLinkRequest starts linking this machine to an account in the
