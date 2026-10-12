@@ -233,14 +233,15 @@ can set boundaries for every member, in the web view (*Boundaries*) or with
   figures that crossed it — numbers and names from fixed lists, never a
   prompt, a path or a name you typed (a test fails the build if one could
   be added). Everyone in the organisation with that role or above is
-  e-mailed and answers in the web view (*Approvals*) or with `tokenops team
-  admin approve <id>`; the answer reaches this machine within a minute and
+  e-mailed and answers in the web view (*Approvals*), or, as an owner or
+  admin, with `tokenops team admin approve <id>`; the answer reaches this machine within a minute and
   is recorded with who gave it. Until then the action stays refused. You can
   deny it here; you cannot approve it here.
 - **Nobody approves themselves through a token.** `team admin approve`
   refuses a request you made: an agent on your machine could hold your
   administrator credential. Another member with the role answers it, or
-  you do, signed in to the web view.
+  you do, in the web view signed in with your account (a session opened
+  from a sign-in link does not count: a machine's token can make one).
 
 Local rules naming an approver are not sent anywhere: only your
 organisation's rules leave this machine as requests.

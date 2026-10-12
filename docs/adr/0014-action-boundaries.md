@@ -275,7 +275,11 @@ option:
 - **Nobody approves themselves through a token.** The team plane refuses
   an answer, through an administrator token, from the member who asked: an
   agent on that member's machine could hold the token. The same person
-  may answer in the web view, signed in.
+  may answer in the web view, in a session signed in with their account;
+  one opened from a sign-in link does not count, since a device token can
+  mint those. Leads, who hold no administrator token, answer in the web
+  view only. Rotating the server's secret changes the signing key, and
+  members then join again.
 - **A one-step approval is spent.** The server returns an existing request
   only while it is pending or was answered for the session; after a
   one-step answer the next step is a new request.

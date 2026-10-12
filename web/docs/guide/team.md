@@ -175,8 +175,8 @@ tokenops team admin deny <id>
 [Boundaries](/guide/boundaries#organisation-boundaries) set here apply on every
 member's machine, beside their own, and only tighten. A rule naming
 `approver:<role>` sends its request to everyone with that role or above, by
-e-mail; they answer in the web view (*Approvals*) or with `approve`. Through
-the CLI nobody answers their own request.
+e-mail; they answer in the web view (*Approvals*), and owners and admins
+also with `approve`. Through the CLI nobody answers their own request.
 
 Members are named by ID, sign-in address or exact name. The listing commands
 take `--json`. Granting is an owner's; the member covered sees the grant
