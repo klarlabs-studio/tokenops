@@ -322,14 +322,19 @@
       item.appendChild(el("div", "note", p.crossed));
       item.appendChild(el("div", "note", (p.harness || "tokenops") + " · needs " + p.require));
       var actions = el("div", "wait-actions");
-      var approve = el("button", "wait-approve", "Approve…");
-      approve.type = "button";
-      approve.title = "Opens a terminal that shows this and asks you to confirm";
-      approve.addEventListener("click", function () { answer("boundary.approve", p.id); });
+      if (p.routed) {
+        // An organisation rule: its role answers in the team plane, not here.
+        item.appendChild(el("div", "note", p.approve));
+      } else {
+        var approve = el("button", "wait-approve", "Approve…");
+        approve.type = "button";
+        approve.title = "Opens a terminal that shows this and asks you to confirm";
+        approve.addEventListener("click", function () { answer("boundary.approve", p.id); });
+        actions.appendChild(approve);
+      }
       var deny = el("button", "wait-deny", "Deny");
       deny.type = "button";
       deny.addEventListener("click", function () { answer("boundary.deny", p.id); });
-      actions.appendChild(approve);
       actions.appendChild(deny);
       item.appendChild(actions);
       box.appendChild(item);
