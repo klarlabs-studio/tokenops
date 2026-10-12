@@ -34,6 +34,10 @@ type State struct {
 	// LastUpload and LastResult record the uploader's latest attempt.
 	LastUpload *time.Time `json:"last_upload,omitempty"`
 	LastResult string     `json:"last_result,omitempty"`
+	// BoundaryKey is the key the organisation's rules are signed with,
+	// pinned at the first fetch (ADR 0014 §5). A document signed with
+	// another is refused until this machine joins again.
+	BoundaryKey []byte `json:"boundary_key,omitempty"`
 }
 
 // DefaultStatePath is ~/.tokenops/team.json.
