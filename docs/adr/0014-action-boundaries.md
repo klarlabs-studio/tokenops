@@ -179,3 +179,36 @@ does.
 2. `spend`, `model_route` and `share` rules; status per harness;
    approvals from the menu bar.
 3. Team plane: organisation rules (tighten-only), approval by role, audit.
+
+## Phase 1 as built (amended 2026-10-12)
+
+Where the code met the decision, phase 1 took the closest faithful
+option:
+
+- **Figures on the hot path.** The pause point reads no store. Session
+  cost is the coach hook's running total (updated at each turn's end, so
+  it lags the turn in flight, and needs the coach hook); plan headroom is
+  the window reading Claude Code hands TokenOps' status line, used only
+  while fresher than 30 minutes. opencode has neither cheaply, so
+  `plan_left_pct` never matches there yet. A figure that cannot be read
+  never satisfies a condition.
+- **Promotion is explicit.** A rule stays in shadow until `tokenops
+  boundaries promote`; nothing promotes it after a week. The stage is
+  written beside the rule in `config.yaml` rather than kept in state, so
+  a config shipped to several machines carries whether its rules bind.
+- **Decision ids are per rule and session** (`bnd-…`), so an agent that
+  retries is refused under the id the operator was told to approve. A
+  shadow match is recorded once per session and counted on every call.
+- **Decisions reach the store through a ledger.** The hook appends to
+  `~/.tokenops/boundaries/decisions.jsonl` and the daemon ingests it every
+  minute; explain reads the ledger too.
+- **opencode cannot ask.** Its hook refuses by throwing, so an `ask` rule
+  refuses there with the way out. `subagent_model` is advice only in
+  opencode.
+- **The hook is opt-in** (`hooks install --boundary`): it runs before
+  every tool call, and its cost is the operator's to accept.
+- **One MCP tool.** `tokenops_boundaries` (`action=status|decide`) joins
+  the public tools, `tokenops_boundary_decide` being its inner tool;
+  promote and demote have no MCP equivalent, so an agent cannot change the
+  limits set on it.
+
