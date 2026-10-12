@@ -75,6 +75,9 @@ type view struct {
 	Coach  json.RawMessage `json:"coach,omitempty"`
 	// Findings is GET /api/findings; absent from a daemon without it.
 	Findings json.RawMessage `json:"findings,omitempty"`
+	// Boundaries is GET /api/boundaries: the rules and what waits on the
+	// operator. Absent from a daemon without it.
+	Boundaries json.RawMessage `json:"boundaries,omitempty"`
 	// Costs is each provider's usage today and over the last 30 days.
 	Costs map[string]costs `json:"costs,omitempty"`
 	// Error says why there is nothing new to show, in the operator's terms.
@@ -101,6 +104,13 @@ type costs struct {
 	Daily  []day `json:"daily,omitempty"`
 	// TopModel is the model with the most tokens over the 30 days.
 	TopModel string `json:"top_model,omitempty"`
+}
+
+// answerInput is the boundary commands' argument: a waiting decision and
+// whether the answer is for the rest of its session.
+type answerInput struct {
+	ID      string `json:"id"`
+	Session bool   `json:"session"`
 }
 
 // presetInput is the coach.preset command's argument.
@@ -174,10 +184,13 @@ func newMenubar(host app.DesktopHost, d *daemon, sink audit.Sink) (*menubar, err
 // register grants the panel what it needs and registers its commands.
 func (m *menubar) register() error {
 	grant, err := domain.NewCapabilityGrant(
-		"panel", "read the glance, ask the daemon to poll now, change the coach preset, close the panel",
+		"panel", "read the glance, ask the daemon to poll now, change the coach preset, answer boundaries, close the panel",
 		[]domain.WindowID{panelWindow},
 		[]domain.Origin{domain.OriginPackagedLocal},
-		[]domain.PermissionSpec{{Name: "glance.read"}, {Name: "glance.refresh"}, {Name: "coach.change"}, {Name: "panel.close"}},
+		[]domain.PermissionSpec{
+			{Name: "glance.read"}, {Name: "glance.refresh"}, {Name: "coach.change"},
+			{Name: "boundaries.deny"}, {Name: "boundaries.approve"}, {Name: "panel.close"},
+		},
 	)
 	if err != nil {
 		return err
@@ -212,6 +225,32 @@ func (m *menubar) register() error {
 				if _, err := m.daemon.setPreset(ctx, in.Preset); err != nil {
 					return view{}, err
 				}
+				return m.refresh(ctx), nil
+			},
+		}),
+		vitra.Register(m.rt, vitra.Command[answerInput, view]{
+			Name:        "boundary.deny",
+			Description: "Refuse a decision a boundary is waiting on, through the daemon",
+			Permission:  "boundaries.deny",
+			Handler: func(ctx context.Context, _ domain.Invocation, in answerInput) (view, error) {
+				if !validDecisionID(in.ID) {
+					return view{}, errBadDecision
+				}
+				if err := m.daemon.denyBoundary(ctx, in.ID, in.Session); err != nil {
+					return view{}, err
+				}
+				return m.refresh(ctx), nil
+			},
+		}),
+		vitra.Register(m.rt, vitra.Command[answerInput, view]{
+			Name:        "boundary.approve",
+			Description: "Open a terminal that asks the operator to approve a waiting decision",
+			Permission:  "boundaries.approve",
+			Handler: func(ctx context.Context, _ domain.Invocation, in answerInput) (view, error) {
+				if err := openApproval(in.ID, in.Session); err != nil {
+					return view{}, err
+				}
+				m.setNote("Approve " + in.ID + " in the terminal that opened.")
 				return m.refresh(ctx), nil
 			},
 		}),
@@ -400,7 +439,7 @@ func (m *menubar) read(ctx context.Context) view {
 	}
 	v.Glance = g
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(3)
 	go func() {
 		defer wg.Done()
 		if c, err := m.daemon.coach(ctx); err == nil {
@@ -411,6 +450,12 @@ func (m *menubar) read(ctx context.Context) view {
 		defer wg.Done()
 		if f, err := m.daemon.findings(ctx); err == nil {
 			v.Findings = f
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if b, err := m.daemon.boundaries(ctx); err == nil {
+			v.Boundaries = b
 		}
 	}()
 	v.Costs = m.costs(ctx, g)
@@ -551,4 +596,11 @@ func newHost() app.DesktopHost {
 		h.SetProgramName("tokenops-menubar")
 		return h
 	}
+}
+
+// setNote shows a note in the panel for the next half minute.
+func (m *menubar) setNote(text string) {
+	m.mu.Lock()
+	m.note, m.noteUntil = text, time.Now().Add(30*time.Second)
+	m.mu.Unlock()
 }

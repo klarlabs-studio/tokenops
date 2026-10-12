@@ -46,10 +46,17 @@ make menubar-test   # tests, no window needed
 - It reads only the local daemon's API (ADR 0010), with the token the
   daemon writes to `~/.tokenops/daemon.url`. The token stays in the Go
   process; the panel never sees it.
-- The panel's grant names four permissions: `glance.read`
+- The panel's grant names six permissions: `glance.read`
   (`glance.follow`), `glance.refresh` (`sources.refresh`), `coach.change`
-  (`coach.preset`, which the daemon writes to its audit log) and
-  `panel.close`.
+  (`coach.preset`, which the daemon writes to its audit log),
+  `boundaries.deny` (`boundary.deny`), `boundaries.approve`
+  (`boundary.approve`) and `panel.close`.
+- Decisions a boundary is waiting on (ADR 0014) are listed under *Waiting on
+  you*. Deny answers through the daemon. Approve opens a terminal running
+  `tokenops approve <id> --confirm`, which shows what is waiting and answers
+  only when you type yes: the daemon's API only denies, because the agent a
+  boundary stopped can reach it too, so an approval needs a person at a
+  terminal.
 - Refresh, in the panel (⌘R) or the right-click menu, asks the daemon's
   usage readers to poll now (`POST /api/sources/refresh`), shows what the
   daemon has at once, and reads again as the new readings arrive. The
