@@ -1,4 +1,9 @@
-# TokenOps
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/wordmark-dark.svg">
+    <img src="assets/brand/wordmark.svg" alt="TokenOps" height="56">
+  </picture>
+</h1>
 
 [![CI](https://github.com/klarlabs-studio/tokenops/actions/workflows/ci.yml/badge.svg)](https://github.com/klarlabs-studio/tokenops/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/klarlabs-studio/tokenops?sort=semver)](https://github.com/klarlabs-studio/tokenops/releases)
