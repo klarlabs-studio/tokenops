@@ -10,7 +10,9 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/explain"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/routingapproval"
+	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // Proposal is a model upgrade the proxy refused because it exceeds the
@@ -96,15 +98,43 @@ func Explain(ctx context.Context, store *sqlite.Store, id string) (Explanation, 
 		return Explanation{}, ErrMissingID
 	}
 	if store == nil {
+		if report, ok := explain.Build(id, WithBoundaryLedger(id, nil)); ok {
+			return Explanation{Report: &report}, nil
+		}
 		return Explanation{Error: "storage_disabled", Hint: "run `tokenops init` then restart the daemon"}, nil
 	}
 	events, err := store.Query(ctx, sqlite.Filter{Decision: id, Limit: 10_000})
 	if err != nil {
 		return Explanation{}, err
 	}
-	report, ok := explain.Build(id, events)
+	report, ok := explain.Build(id, WithBoundaryLedger(id, events))
 	if !ok {
-		return Explanation{Error: "decision_not_found", Hint: "use the decision_id returned by tokenops_routing (action=advise) or a proxy intervention"}, nil
+		return Explanation{Error: "decision_not_found", Hint: "use the decision_id returned by tokenops_routing (action=advise), a proxy intervention, or a boundary (bnd-…)"}, nil
 	}
 	return Explanation{Report: &report}, nil
+}
+
+// WithBoundaryLedger adds the boundary ledger's records of a boundary
+// decision (bnd-…) to what the store holds. The pause point writes the
+// ledger and the daemon ingests it every minute, so a decision made a
+// moment ago, or while the daemon was down, is explained all the same.
+// A record already in the store is not counted twice.
+func WithBoundaryLedger(id string, events []*eventschema.Envelope) []*eventschema.Envelope {
+	if !strings.HasPrefix(id, "bnd-") {
+		return events
+	}
+	ledger, err := boundaryledger.DefaultDir().Decision(id)
+	if err != nil || len(ledger) == 0 {
+		return events
+	}
+	seen := make(map[string]bool, len(events))
+	for _, e := range events {
+		seen[e.ID] = true
+	}
+	for _, e := range ledger {
+		if !seen[e.ID] {
+			events = append(events, e)
+		}
+	}
+	return events
 }

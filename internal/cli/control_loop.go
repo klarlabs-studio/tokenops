@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/capability/decide"
+	"go.klarlabs.de/tokenops/internal/capability/decisions"
 	"go.klarlabs.de/tokenops/internal/capability/experiments"
 	"go.klarlabs.de/tokenops/internal/capability/explain"
 	"go.klarlabs.de/tokenops/internal/capability/learn"
@@ -33,7 +34,7 @@ func explainDecision(cmd *cobra.Command, dbPath, id string) (found bool, err err
 	if err != nil {
 		return false, err
 	}
-	report, ok := explain.Build(id, events)
+	report, ok := explain.Build(id, decisions.WithBoundaryLedger(id, events))
 	if !ok {
 		return false, nil
 	}

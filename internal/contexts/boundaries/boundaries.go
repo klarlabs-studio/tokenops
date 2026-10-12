@@ -453,6 +453,16 @@ func (m Match) Crossed() string {
 	return strings.Join(m.crossed, ", ")
 }
 
+// RecordedMatch rebuilds a match from what a decision recorded, for the
+// record of an answer given later.
+func RecordedMatch(r Rule, crossed string) Match {
+	m := Match{Rule: r}
+	if crossed != "" {
+		m.crossed = []string{crossed}
+	}
+	return m
+}
+
 // Match reports whether the rule applies to action given facts.
 func (r Rule) Match(action Action, f Facts) (Match, bool) {
 	if r.Action != action {
