@@ -92,7 +92,7 @@ func Decide(env Env, req DecideRequest) (Decided, error) {
 	if !approved {
 		out.Decision = "denied"
 	}
-	out.Note = decidedNote(approved, scope)
+	out.Note = decidedNote(domain.Action(p.Action), approved, scope)
 	return out, nil
 }
 
@@ -104,7 +104,23 @@ func approvesInPerson(method string) bool {
 	return method == MethodCLI || method == MethodPrompt
 }
 
-func decidedNote(approved bool, scope string) string {
+func decidedNote(action domain.Action, approved bool, scope string) string {
+	if !agentFacing(action) {
+		what := "the next upload or export"
+		if action == domain.ActionModelRoute {
+			what = "the route"
+		}
+		switch {
+		case approved && scope == boundaryledger.ScopeSession:
+			return what + " goes through for the next 24 hours"
+		case approved:
+			return what + " goes through once, and is asked about again after that"
+		case scope == boundaryledger.ScopeSession:
+			return what + " stays held for the next 24 hours"
+		default:
+			return what + " stays held"
+		}
+	}
 	switch {
 	case approved && scope == boundaryledger.ScopeSession:
 		return "the agent may go on for the rest of this session; tell it to continue"

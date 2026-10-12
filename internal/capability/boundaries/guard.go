@@ -23,6 +23,10 @@ import (
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
+// Rule is a boundary rule, for adapters that pass rules through without
+// reaching into the domain.
+type Rule = domain.Rule
+
 // Harnesses that can refuse a call, and the ones that cannot.
 const (
 	HarnessClaudeCode = "claude-code"
@@ -31,10 +35,21 @@ const (
 	HarnessCursor     = "cursor"
 )
 
+// Decision points inside TokenOps: the router, which decides model_route,
+// and TokenOps itself, which decides share before figures leave.
+const (
+	PointRouter   = "router"
+	PointTokenOps = "tokenops"
+)
+
 // limitsFreshFor is how old the status line's plan reading may be and
 // still count. Claude Code refreshes it every turn; an older one belongs
 // to a session that stopped, and a stale figure must not refuse anything.
 const limitsFreshFor = 30 * time.Minute
+
+// figuresFreshFor is how old the daemon's figures may be. It writes them
+// every minute; older ones mean it stopped, and its readings with it.
+const figuresFreshFor = 5 * time.Minute
 
 // Env is where the pause point reads and writes. The zero value uses the
 // defaults under ~/.tokenops.
@@ -89,8 +104,14 @@ type Call struct {
 	AgentID    string
 	WorkflowID string
 	Action     domain.Action
-	// Model is the subagent's model, for subagent_model.
+	// Model is the subagent's model, for subagent_model, or the model the
+	// router would move a request to, for model_route.
 	Model string
+	// Provider is the provider whose plan headroom applies; empty takes
+	// the tightest plan known. Claude Code's is always anthropic.
+	Provider string
+	// Destination is where shared figures go, for share.
+	Destination string
 }
 
 // Attribution derives the agent and workflow ids every other surface
@@ -127,6 +148,42 @@ type Result struct {
 	Verdict    string
 	Reason     string
 	DecisionID string
+}
+
+// Pause is what the pause point checks before every tool call: the
+// continue and spend rules.
+func Pause(rules []domain.Rule, call Call, env Env) (Result, error) {
+	return GuardActions(rules, call, env, domain.ActionContinue, domain.ActionSpend)
+}
+
+// GuardActions evaluates call against each action in turn — the pause
+// point checks continue and spend before the same tool call — and returns
+// the strictest result: a refusal over a question over nothing.
+func GuardActions(rules []domain.Rule, call Call, env Env, actions ...domain.Action) (Result, error) {
+	var out Result
+	for _, a := range actions {
+		c := call
+		c.Action = a
+		res, err := Guard(rules, c, env)
+		if err != nil {
+			return Result{}, err
+		}
+		if verdictRank(res.Verdict) > verdictRank(out.Verdict) {
+			out = res
+		}
+	}
+	return out, nil
+}
+
+func verdictRank(v string) int {
+	switch v {
+	case VerdictDeny:
+		return 2
+	case VerdictAsk:
+		return 1
+	default:
+		return 0
+	}
 }
 
 // Guard evaluates the rules for call. Shadow matches are recorded and
@@ -187,8 +244,12 @@ func needs(rules []domain.Rule, f domain.Field) bool {
 // readFacts reads only the figures the rules compare.
 func readFacts(rules []domain.Rule, call Call, env Env) (domain.Facts, []eventschema.EvidenceRef) {
 	now := env.now()
-	f := domain.Facts{AgentID: call.AgentID, WorkflowID: call.WorkflowID, ModelTier: domain.TierOf(call.Model)}
+	f := domain.Facts{
+		AgentID: call.AgentID, WorkflowID: call.WorkflowID, ModelTier: domain.TierOf(call.Model),
+		Destination: call.Destination,
+	}
 	var ev []eventschema.EvidenceRef
+	figs := lazyFigures{dir: env.Dir, now: now}
 	if needs(rules, domain.FieldSessionCost) {
 		if usd, ok := coachhook.SessionCostUSD(env.CoachDir, call.SessionID); ok {
 			f.SessionCostUSD = domain.Known(usd)
@@ -198,16 +259,90 @@ func readFacts(rules []domain.Rule, call Call, env Env) (domain.Facts, []eventsc
 			})
 		}
 	}
-	if needs(rules, domain.FieldPlanLeft) && call.Harness == HarnessClaudeCode {
-		if left, observed, ok := planLeft(env.LimitsPath, now); ok {
-			f.PlanLeftPct = left
+	if needs(rules, domain.FieldPlanLeft) {
+		provider := call.Provider
+		if call.Harness == HarnessClaudeCode {
+			provider = "anthropic"
+			if left, observed, ok := planLeft(env.LimitsPath, now); ok {
+				f.PlanLeftPct = left
+				ev = append(ev, eventschema.EvidenceRef{
+					Kind: "plan_headroom", Source: "claude_code_statusline", ObservedAt: observed,
+					FreshUntil: observed.Add(limitsFreshFor), Confidence: 1, Scope: "anthropic",
+				})
+			}
+		}
+		if f.PlanLeftPct == nil {
+			if fig, ok := figs.get(); ok {
+				if left := figuresPlanLeft(fig, provider); len(left) > 0 {
+					f.PlanLeftPct = left
+					scope, caveat := provider, ""
+					if scope == "" {
+						scope, caveat = "any", "the tightest plan TokenOps watches, whichever provider"
+					}
+					ev = append(ev, eventschema.EvidenceRef{
+						Kind: "plan_headroom", Source: "daemon_glance", ObservedAt: fig.ObservedAt,
+						FreshUntil: fig.ObservedAt.Add(figuresFreshFor), Confidence: 1, Scope: scope, Caveat: caveat,
+					})
+				}
+			}
+		}
+	}
+	if needs(rules, domain.FieldBudgetUsed) {
+		if fig, ok := figs.get(); ok && len(fig.BudgetUsedPct) > 0 {
+			f.BudgetUsedPct = fig.BudgetUsedPct
 			ev = append(ev, eventschema.EvidenceRef{
-				Kind: "plan_headroom", Source: "claude_code_statusline", ObservedAt: observed,
-				FreshUntil: observed.Add(limitsFreshFor), Confidence: 1, Scope: "anthropic",
+				Kind: "budget_used", Source: "daemon_budgets", ObservedAt: fig.ObservedAt,
+				FreshUntil: fig.ObservedAt.Add(figuresFreshFor), Confidence: 1, Scope: "budgets",
 			})
 		}
 	}
 	return f, ev
+}
+
+// lazyFigures reads the daemon's figures at most once per evaluation, and
+// only when a rule needs them.
+type lazyFigures struct {
+	dir  boundaryledger.Dir
+	now  time.Time
+	read bool
+	fig  boundaryledger.Figures
+	ok   bool
+}
+
+// get returns the figures when the daemon wrote them recently enough to
+// count; stale ones say nothing.
+func (l *lazyFigures) get() (boundaryledger.Figures, bool) {
+	if !l.read {
+		l.read = true
+		fig, ok, err := l.dir.GetFigures()
+		l.fig, l.ok = fig, ok && err == nil && l.now.Sub(fig.ObservedAt) <= figuresFreshFor
+	}
+	return l.fig, l.ok
+}
+
+// figuresPlanLeft is the provider's share left by window, or, with no
+// provider, the tightest share each window has across every plan.
+func figuresPlanLeft(fig boundaryledger.Figures, provider string) map[domain.Window]float64 {
+	out := map[domain.Window]float64{}
+	add := func(windows map[string]float64) {
+		for name, left := range windows {
+			w := domain.Window(name)
+			if w != domain.Window5h && w != domain.WindowWeek {
+				continue
+			}
+			if cur, ok := out[w]; !ok || left < cur {
+				out[w] = left
+			}
+		}
+	}
+	if provider != "" {
+		add(fig.PlanLeftPct[provider])
+		return out
+	}
+	for _, windows := range fig.PlanLeftPct {
+		add(windows)
+	}
+	return out
 }
 
 // planLeft is the share of each Claude plan window left, from the
@@ -290,7 +425,7 @@ func (g *guard) bind(v domain.Verdict) (Result, error) {
 	if err := g.recordOnce(m, eventschema.DecisionStageProposed, eventschema.DecisionApproval{}); err != nil {
 		return Result{}, err
 	}
-	if g.env.Attended {
+	if g.env.Attended && agentFacing(m.Rule.Action) {
 		return Result{Verdict: VerdictAsk, DecisionID: id, Reason: askReason(m, id)}, nil
 	}
 	return Result{Verdict: VerdictDeny, DecisionID: id, Reason: unattendedReason(m, id)}, nil
@@ -309,9 +444,7 @@ func (g *guard) answered(m domain.Match, id string) (Result, bool, error) {
 				return Result{}, false, err
 			}
 		}
-		return Result{Verdict: VerdictDeny, DecisionID: id, Reason: fmt.Sprintf(
-			"tokenops boundary %q: %s declined this (%s). Stop and ask the operator how to proceed.",
-			m.Rule.Name, a.Approver, m.Crossed())}, true, nil
+		return Result{Verdict: VerdictDeny, DecisionID: id, Reason: declinedReason(m, a.Approver)}, true, nil
 	}
 	if a.Scope == boundaryledger.ScopeOnce {
 		won, err := g.env.Dir.ConsumeAnswer(id)
@@ -360,27 +493,63 @@ func approverPhrase(r domain.Require) string {
 	return "needs the operator's approval"
 }
 
+// agentFacing reports whether an agent reads the refusal: the actions the
+// pause point and route-guard decide. model_route and share are decided
+// inside TokenOps, and their reasons are for the operator.
+func agentFacing(a domain.Action) bool {
+	return a == domain.ActionContinue || a == domain.ActionSpend || a == domain.ActionSubagentModel
+}
+
 func askReason(m domain.Match, id string) string {
 	return fmt.Sprintf("tokenops boundary %q: %s. Continue? Yes lets the agent go on for the rest of this session (%s).",
 		m.Rule.Name, m.Crossed(), id)
 }
 
 func unattendedReason(m domain.Match, id string) string {
+	if !agentFacing(m.Rule.Action) {
+		return fmt.Sprintf("tokenops boundary %q: %s, and this %s. %s until then: "+
+			"`tokenops approve %s` allows the next one, `tokenops approve %s --session` the next 24 hours.",
+			m.Rule.Name, m.Crossed(), approverPhrase(m.Rule.Require), heldUntil(m.Rule.Action), id, id)
+	}
 	return fmt.Sprintf("tokenops boundary %q: %s, and this %s. Do not retry: stop and tell the operator. "+
 		"They can allow this one step with `tokenops approve %s`, or the rest of the session with `tokenops approve %s --session`.",
 		m.Rule.Name, m.Crossed(), approverPhrase(m.Rule.Require), id, id)
 }
 
 func denyReason(m domain.Match) string {
+	if !agentFacing(m.Rule.Action) {
+		return fmt.Sprintf("tokenops boundary %q: %s, and the rule refuses it. %s; only changing the rule in TokenOps' config.yaml lifts it.",
+			m.Rule.Name, m.Crossed(), heldUntil(m.Rule.Action))
+	}
 	return fmt.Sprintf("tokenops boundary %q: %s, and the rule refuses any further %s. Do not retry: stop and tell the operator; "+
 		"only changing the rule in TokenOps' config.yaml lifts it.", m.Rule.Name, m.Crossed(), actionNoun(m.Rule.Action))
 }
 
-func actionNoun(a domain.Action) string {
-	if a == domain.ActionSubagentModel {
-		return "subagent on this model"
+func declinedReason(m domain.Match, approver string) string {
+	if !agentFacing(m.Rule.Action) {
+		return fmt.Sprintf("tokenops boundary %q: %s declined this (%s). %s.", m.Rule.Name, approver, m.Crossed(), heldUntil(m.Rule.Action))
 	}
-	return "steps in this session"
+	return fmt.Sprintf("tokenops boundary %q: %s declined this (%s). Stop and ask the operator how to proceed.",
+		m.Rule.Name, approver, m.Crossed())
+}
+
+// heldUntil says what a refused TokenOps-side action does instead.
+func heldUntil(a domain.Action) string {
+	if a == domain.ActionModelRoute {
+		return "The request stays on the model it asked for"
+	}
+	return "The figures are not sent"
+}
+
+func actionNoun(a domain.Action) string {
+	switch a {
+	case domain.ActionSubagentModel:
+		return "subagent on this model"
+	case domain.ActionSpend:
+		return "steps while it holds"
+	default:
+		return "steps in this session"
+	}
 }
 
 // recordOnce records a stage for the rule's decision once per session.
@@ -444,9 +613,14 @@ func wouldHave(r domain.Require) string {
 	}
 }
 
-// CanRefuse reports whether a harness has a hook that can stop a call.
+// CanRefuse reports whether a harness, or a decision point inside
+// TokenOps, can stop the action.
 func CanRefuse(harness string) bool {
-	return harness == HarnessClaudeCode || harness == HarnessOpencode
+	switch harness {
+	case HarnessClaudeCode, HarnessOpencode, PointRouter, PointTokenOps:
+		return true
+	}
+	return false
 }
 
 // RecordFailure records that the pause point could not decide and let

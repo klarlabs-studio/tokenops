@@ -180,3 +180,26 @@ func TestLedgerIsPrunedPastItsCap(t *testing.T) {
 		t.Fatalf("after prune: %d lines, last %q", len(got), got[len(got)-1].ID)
 	}
 }
+
+func TestFiguresRoundTrip(t *testing.T) {
+	d := Dir(t.TempDir())
+	if _, ok, err := d.GetFigures(); ok || err != nil {
+		t.Fatalf("missing figures = ok %v, err %v", ok, err)
+	}
+	at := time.Date(2026, 10, 12, 9, 0, 0, 0, time.UTC)
+	in := Figures{
+		ObservedAt:    at,
+		PlanLeftPct:   map[string]map[string]float64{"anthropic": {"5h": 40, "week": 7}},
+		BudgetUsedPct: map[string]float64{"monthly": 91.5},
+	}
+	if err := d.PutFigures(in); err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err := d.GetFigures()
+	if err != nil || !ok {
+		t.Fatalf("GetFigures = ok %v, err %v", ok, err)
+	}
+	if !got.ObservedAt.Equal(at) || got.PlanLeftPct["anthropic"]["week"] != 7 || got.BudgetUsedPct["monthly"] != 91.5 {
+		t.Fatalf("round trip lost data: %+v", got)
+	}
+}
