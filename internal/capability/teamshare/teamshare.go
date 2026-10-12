@@ -43,6 +43,10 @@ type Options struct {
 	RepoNames string
 	// ClientVersion is this TokenOps' version.
 	ClientVersion string
+	// Allow, when set, is asked before anything is built or sent, once
+	// this machine is known to have joined; an error holds the upload
+	// (ADR 0014's share boundary) and is returned as is.
+	Allow func() error
 }
 
 // Repos resolves directories to repositories; *gitlog.Repos satisfies it.

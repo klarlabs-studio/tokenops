@@ -218,3 +218,37 @@ option:
   rule leaves its other tools working). An approval comes from a terminal
   or from Claude Code's own permission prompt.
 
+
+## Phase 2 as built (amended 2026-10-12)
+
+- **Each action takes only the figures known where it is decided.**
+  `spend` reads `budget_used_pct` (with `budget: <name>`) and the session's
+  cost; `model_route` reads the target's `model_tier` and `plan_left_pct`;
+  `share` reads `destination` (team or otel). A condition its decision
+  point cannot read is refused when the config loads, rather than never
+  matching.
+- **`spend` is decided at the pause point**, beside `continue`, before
+  every tool call. The proxy still never fails a request (ADR 0007), so
+  "a request whose priced cost crosses a budget" is judged on the step
+  that would spend, not on the request in flight.
+- **The daemon writes the figures the hook cannot compute.** When a rule
+  compares plan headroom or a budget, the daemon measures them every
+  minute into `~/.tokenops/boundaries/figures.json`; the pause point reads
+  it while under five minutes old. This is how opencode gets
+  `plan_left_pct`: it does not say which provider a session uses, so it
+  reads the tightest plan TokenOps watches. Claude Code still prefers its
+  own status-line reading.
+- **Routes and destinations are decisions of their own.** A route is one
+  decision per provider and model pair, a share one per destination, so an
+  approval lets exactly that through: once, or for 24 hours. The router
+  asks only when it would apply a route; a held route leaves the request
+  on its model. Held OTel events are dropped, not queued.
+- **Advice is the glance.** Codex and Cursor read enforced `continue` and
+  `spend` rules that hold on plan headroom or a budget from
+  `tokenops_glance` (and `/api/glance`). A rule needing the session's cost
+  is not judged there.
+- **The menu bar cannot approve over the API.** The daemon's token is
+  readable by any of the user's processes, the agent included, so the API
+  stays deny-only. The menu bar denies through it and, for an approval,
+  opens a terminal running `tokenops approve <id> --confirm`, which shows
+  what waits and answers only on a typed yes.

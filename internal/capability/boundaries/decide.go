@@ -92,8 +92,28 @@ func Decide(env Env, req DecideRequest) (Decided, error) {
 	if !approved {
 		out.Decision = "denied"
 	}
-	out.Note = decidedNote(approved, scope)
+	out.Note = decidedNote(domain.Action(p.Action), approved, scope)
 	return out, nil
+}
+
+// Waiting reads one decision waiting on an answer, for a person about to
+// give it: `tokenops approve --confirm` shows it before asking.
+func Waiting(env Env, id string) (PendingView, error) {
+	id = strings.TrimSpace(id)
+	if !domain.ValidDecisionID(id) {
+		return PendingView{}, actions.InputError{Err: fmt.Errorf("%q is not a boundary decision id (bnd-…)", id)}
+	}
+	p, ok, err := env.Dir.GetPending(id)
+	if err != nil {
+		return PendingView{}, err
+	}
+	if !ok {
+		return PendingView{}, actions.InputError{Err: fmt.Errorf("no boundary decision %s is waiting on an answer", id)}
+	}
+	return PendingView{
+		ID: p.ID, Rule: p.Rule, Require: p.Require, Crossed: p.Crossed, Harness: p.Harness,
+		SessionID: p.SessionID, At: p.At, Approve: "tokenops approve " + p.ID,
+	}, nil
 }
 
 // approvesInPerson reports whether an answer by this method can approve.
@@ -104,7 +124,23 @@ func approvesInPerson(method string) bool {
 	return method == MethodCLI || method == MethodPrompt
 }
 
-func decidedNote(approved bool, scope string) string {
+func decidedNote(action domain.Action, approved bool, scope string) string {
+	if !agentFacing(action) {
+		what := "the next upload or export"
+		if action == domain.ActionModelRoute {
+			what = "the route"
+		}
+		switch {
+		case approved && scope == boundaryledger.ScopeSession:
+			return what + " goes through for the next 24 hours"
+		case approved:
+			return what + " goes through once, and is asked about again after that"
+		case scope == boundaryledger.ScopeSession:
+			return what + " stays held for the next 24 hours"
+		default:
+			return what + " stays held"
+		}
+	}
 	switch {
 	case approved && scope == boundaryledger.ScopeSession:
 		return "the agent may go on for the rest of this session; tell it to continue"

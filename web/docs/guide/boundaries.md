@@ -20,6 +20,18 @@ boundaries:
     action: continue
     when: { plan_left_pct: "< 5", window: week }
     require: deny
+  - name: budget-floor
+    action: spend             # the next tool call, judged by money
+    when: { budget_used_pct: ">= 90", budget: monthly }
+    require: ask
+  - name: no-opus-routes
+    action: model_route       # the router moving a request to another model
+    when: { model_tier: ">= opus" }
+    require: ask
+  - name: team-upload
+    action: share             # figures leaving the machine
+    when: { destination: "== team" }
+    require: ask
 ```
 
 Then wire the pause point and watch what the rules would do:
@@ -35,26 +47,44 @@ tokenops boundaries status
 | Key | Takes |
 |---|---|
 | `name` | lower-case letters, digits, `-` and `_`; unique |
-| `action` | `continue` or `subagent_model` |
+| `action` | `continue`, `spend`, `subagent_model`, `model_route` or `share` (below) |
 | `when` | conditions, all of which must hold (below) |
 | `require` | `allow`, `ask`, `approver:<role>` or `deny` |
 | `stage` | `shadow` (the default) or `enforce` |
 
+| Action | What it is about to do | Decided by |
+|---|---|---|
+| `continue` | the agent's next tool call | the pause point |
+| `spend` | the agent's next tool call, judged by money | the pause point |
+| `subagent_model` | the model a subagent is about to run on | route-guard's Agent hook |
+| `model_route` | the router moving a request to another model | the router, in the proxy |
+| `share` | figures leaving the machine: a team upload, an OTel export | the uploader and the exporter |
+
 Conditions read only figures TokenOps already holds; no prompt text is read
 to evaluate a rule. Each needs a comparator: `<`, `<=`, `>`, `>=` or `==`.
+An action takes only the conditions it can be judged by where it is
+decided:
 
-| Condition | Compares | Read from |
-|---|---|---|
-| `session_cost_usd` | the session's API-equivalent cost so far | the coach hook's running total, updated at each turn's end |
-| `plan_left_pct` with `window: 5h \| week` | the share of the plan window left; with no window, the tightest | the plan windows Claude Code reports to TokenOps' status line, if fresher than 30 minutes |
-| `model_tier` | haiku < sonnet < opus (`subagent_model` only) | the subagent's model, or the session's when it inherits |
-| `workflow_id`, `agent_id` | `==` with `*` wildcards, e.g. `"== claude-code:*my-repo*"` | the session's attribution |
+| Condition | Compares | Actions | Read from |
+|---|---|---|---|
+| `session_cost_usd` | the session's API-equivalent cost so far | `continue`, `spend`, `subagent_model` | the coach hook's running total, updated at each turn's end |
+| `plan_left_pct` with `window: 5h \| week` | the share of the plan window left; with no window, the tightest | `continue`, `subagent_model`, `model_route` | in Claude Code, the windows it reports to TokenOps' status line (if fresher than 30 minutes); otherwise the daemon's figures |
+| `budget_used_pct` with `budget: <name>` | the share of a configured budget used in its window; with no name, the fullest | `spend` | the daemon's figures |
+| `model_tier` | haiku < sonnet < opus | `subagent_model`, `model_route` | the subagent's model (or the session's when it inherits); the model the router would move to |
+| `destination` | `== team` or `== otel` | `share` | where the figures are going |
+| `workflow_id`, `agent_id` | `==` with `*` wildcards, e.g. `"== claude-code:*my-repo*"` | all but `share` | the session's attribution, or the request's |
 
 A figure TokenOps cannot read never satisfies a condition: a boundary that
 cannot see its figure lets the action through. In particular,
-`session_cost_usd` needs the coach hook (`tokenops hooks install --coach`),
-and `plan_left_pct` needs TokenOps' status line in Claude Code; neither
-figure is available to opencode yet.
+`session_cost_usd` needs the coach hook (`tokenops hooks install --coach`).
+
+**The daemon's figures.** Plan headroom outside Claude Code and budget use
+need the event store, which the pause point never opens. So when a rule
+compares one of them, the daemon measures them every minute into
+`~/.tokenops/boundaries/figures.json`, and the pause point reads that one
+file while it is under five minutes old. With the daemon stopped, those
+rules see no figure. In opencode, which does not say which provider a
+session uses, `plan_left_pct` reads the tightest plan TokenOps watches.
 
 A config with an unknown action, condition or requirement is refused when
 it loads, with the rule named.
@@ -76,9 +106,26 @@ The refusal is written for the agent to act on: it says what was crossed,
 tells it to stop rather than retry, and names the command you run to let
 it go on.
 
-**Phase 1:** `approver:<role>` is stored and shown, but answered on this
-machine like `ask`. Routing the request to someone holding the role needs
+`approver:<role>` is stored and shown, but answered on this machine like
+`ask`. Routing the request to someone holding the role needs
 the team plane, which comes later; `boundaries status` says so on the rule.
+
+### Inside TokenOps: routes and figures
+
+`model_route` and `share` are decided inside TokenOps, so no agent reads
+their refusal, and nobody is at a prompt. `ask` holds the action until you
+approve it; `deny` holds it until the rule changes.
+
+- **A held route** leaves the request on the model it asked for. The
+  request itself is never failed or delayed. Each route (provider, from
+  and to model) is its own decision, so an approval lets that route
+  through: once, or for 24 hours with `--session`. The router asks only
+  when it would actually apply a route, never while observing.
+- **Held figures** are not sent: the hourly team upload (and `tokenops
+  team sync`), the OTel metric push, and the OTel event stream, whose
+  events are dropped while held, not queued; the event store keeps every
+  one. Each destination is its own decision. Uploads resend their last
+  days whole, so an upload held for a while fills the gap once it goes.
 
 ## Shadow first
 
@@ -116,8 +163,13 @@ Nothing promotes a rule for you.
 ```bash
 tokenops approve bnd-1a2b3c4d5e6f            # the next step
 tokenops approve bnd-1a2b3c4d5e6f --session  # the rest of the session
+tokenops approve bnd-1a2b3c4d5e6f --confirm  # show what waits, then ask y/N
 tokenops deny bnd-1a2b3c4d5e6f
 ```
+
+The menu bar lists what waits under *Waiting on you*. **Deny** answers
+there. **Approve…** opens a terminal running `tokenops approve <id>
+--confirm`, so the approval is still you, at a terminal, typing yes.
 
 Only a person can approve: `tokenops approve` refuses to run without a
 terminal, and the MCP tool and the daemon API can only deny. The agent a
@@ -138,28 +190,38 @@ tokenops explain bnd-1a2b3c4d5e6f
 
 ## Where a boundary is enforced
 
-| Client | `continue` | `subagent_model` |
+| Client | `continue`, `spend` | `subagent_model` |
 |---|---|---|
 | Claude Code | enforced (`--boundary` hook, every tool) | enforced (route-guard's Agent hook) |
 | opencode | enforced (plugin, `tool.execute.before`) | advice only |
-| Codex, Cursor | advice only | advice only |
+| Codex, Cursor | advice, through the glance | advice only |
 
-`boundaries status` reports this per rule, so nothing claims enforcement
-it lacks.
+`model_route` is enforced by the router for every request through the
+TokenOps proxy, and `share` by the uploader and the exporter; each is idle
+where it is not in use (no routing configured, no team joined, no
+collector). `boundaries status` reports all of this per rule, so nothing
+claims enforcement it lacks.
+
+**Advice.** Codex's and Cursor's hooks cannot refuse a call. Instead, an
+enforced `continue` or `spend` rule that holds on plan headroom or a
+budget is listed on the glance — `tokenops_glance` and `GET /api/glance`,
+under `boundaries` — with what the agent should do: stop and tell you, or
+stop and ask. A rule that needs a session's cost, or a workflow or agent,
+cannot be judged there and is left out rather than guessed.
 
 ## What a boundary is not
 
 - **Not a hard control.** Removing the hook removes the boundary. A hard
   guarantee belongs at the vendor's organisation controls or a gateway.
 - **Not a tool permission system.** Boundaries cover resource actions —
-  continuing, which model a subagent runs on — not which commands an agent
-  may run. That is the harness's and CI's job.
+  continuing, spending, which model runs, whether figures leave — not
+  which commands an agent may run. That is the harness's and CI's job.
 - **Never in the agent's way when broken.** An evaluation that fails or
   takes over two seconds lets the call through, and the failure is
   recorded as a decision you can see.
 
-The pause point answers from two small files, never the event store: about
-0.06 ms per call when nothing is crossed and 0.4 ms when a rule is, against
+The pause point answers from a few small files, never the event store:
+about 0.1 ms per call when nothing is crossed and 0.7 ms when a rule is, against
 a 5 ms budget the test suite enforces. Its decisions are written to
 `~/.tokenops/boundaries/decisions.jsonl`, which the daemon ingests into
 the event store every minute.

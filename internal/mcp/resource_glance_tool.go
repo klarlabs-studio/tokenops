@@ -8,6 +8,7 @@ import (
 
 	mcpgo "go.klarlabs.de/mcp"
 
+	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/presentation"
 )
@@ -34,7 +35,7 @@ func registerResourceGlanceTool(s *Server, d PlanDeps) {
 				return mcpgo.StructuredResult{}, err
 			}
 			return mcpgo.StructuredResult{
-				Content:           []mcpgo.Content{mcpgo.NewTextContent(markdownPayload(renderResourceGlance(result.Insight), result))},
+				Content:           []mcpgo.Content{mcpgo.NewTextContent(markdownPayload(renderResourceGlance(result.Insight)+renderBoundaryAdvice(result.Boundaries), result))},
 				StructuredContent: structured,
 			}, nil
 		})
@@ -55,11 +56,27 @@ func renderResourceGlance(insight presentation.ResourceInsight) string {
 	return summary
 }
 
+// renderBoundaryAdvice lists the operator's boundaries that hold now. An
+// agent in a harness TokenOps cannot refuse reads them here.
+func renderBoundaryAdvice(advice []bcap.Advice) string {
+	if len(advice) == 0 {
+		return ""
+	}
+	out := "\n\n### Boundaries the operator set\n"
+	for _, a := range advice {
+		out += fmt.Sprintf("\n- `%s` (%s, %s): %s. %s", a.Rule, a.Action, a.Require, a.Crossed, a.Advice)
+	}
+	return out
+}
+
 // resourceGlance is the glance capability in the tool's shape.
 func resourceGlance(ctx context.Context, d PlanDeps) (*resourceGlanceResult, error) {
-	g, err := headroom.ComputeGlance(ctx, d.headroomDeps(), time.Now().UTC())
+	deps := d.headroomDeps()
+	g, err := headroom.ComputeGlance(ctx, deps, time.Now().UTC())
 	if err != nil {
 		return nil, err
 	}
-	return g.Payload(), nil
+	p := g.Payload()
+	p.Boundaries = bcap.GlanceAdvice(deps.Config, g.Headroom.Reports)
+	return p, nil
 }

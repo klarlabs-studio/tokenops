@@ -835,3 +835,51 @@ func TestAutomaticModeApplies(t *testing.T) {
 		t.Fatalf("automatic mode should apply: %+v", recs)
 	}
 }
+
+func TestABoundaryHoldsTheRouteAndKeepsTheRequest(t *testing.T) {
+	var asked []string
+	cfg := Config{
+		Rules: []Rule{{Provider: eventschema.ProviderOpenAI, FromModel: "gpt-4o", ToModel: "gpt-4o-mini", Quality: 0.9}},
+		Boundary: func(_ eventschema.Provider, from, to, workflow, agent string) (bool, string) {
+			asked = append(asked, from+">"+to+"|"+workflow+"|"+agent)
+			return true, `tokenops boundary "no-mini"`
+		},
+	}
+	recs, err := New(cfg, nil).Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderOpenAI, Model: "gpt-4o", Body: bodyWithModel(t, "gpt-4o", nil),
+		WorkflowID: "wf", AgentID: "ag",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recs) != 1 || recs[0].ApplyBody != nil || !strings.Contains(recs[0].Reason, "held by a boundary") {
+		t.Fatalf("recs = %+v", recs)
+	}
+	if len(asked) != 1 || asked[0] != "gpt-4o>gpt-4o-mini|wf|ag" {
+		t.Fatalf("boundary asked %v", asked)
+	}
+
+	cfg.Boundary = func(eventschema.Provider, string, string, string, string) (bool, string) { return false, "" }
+	recs, _ = New(cfg, nil).Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderOpenAI, Model: "gpt-4o", Body: bodyWithModel(t, "gpt-4o", nil),
+	})
+	if len(recs) != 1 || recs[0].ApplyBody == nil {
+		t.Fatalf("an allowed route was not applied: %+v", recs)
+	}
+}
+
+func TestABoundaryIsNotAskedWhileObserving(t *testing.T) {
+	cfg := Config{
+		Rules:       []Rule{{Provider: eventschema.ProviderOpenAI, FromModel: "gpt-4o", ToModel: "gpt-4o-mini", Quality: 0.9}},
+		ObserveOnly: true,
+		Boundary: func(eventschema.Provider, string, string, string, string) (bool, string) {
+			t.Fatal("an observing router asked a boundary about a route it will not apply")
+			return false, ""
+		},
+	}
+	if _, err := New(cfg, nil).Run(context.Background(), &optimizer.Request{
+		Provider: eventschema.ProviderOpenAI, Model: "gpt-4o", Body: bodyWithModel(t, "gpt-4o", nil),
+	}); err != nil {
+		t.Fatal(err)
+	}
+}

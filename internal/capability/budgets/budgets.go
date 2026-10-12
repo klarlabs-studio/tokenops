@@ -78,22 +78,11 @@ func (w *Watcher) Tick(ctx context.Context, now time.Time) Report {
 	var r Report
 	alerts := budget.EvaluateAll(w.Limits,
 		func(l Limit) float64 {
-			s, err := w.Source.Summarize(ctx, analytics.Filter{
-				Since: budget.WindowStart(l.Window, now), Until: now,
-				WorkflowID: l.WorkflowID, AgentID: l.AgentID,
-			})
+			v, err := Measure(ctx, w.Source, l, now)
 			if err != nil {
-				r.Errors = append(r.Errors, fmt.Errorf("budget %s: %w", l.Name, err))
-				return 0
+				r.Errors = append(r.Errors, err)
 			}
-			switch l.Basis {
-			case budget.BasisTokens:
-				return float64(s.TotalTokens)
-			case budget.BasisEquivalent:
-				return s.APIEquivalentUSD
-			default:
-				return s.CostUSD
-			}
+			return v
 		},
 		func(l Limit) []forecast.Prediction { return w.forecast(ctx, l, now) },
 	)
@@ -123,6 +112,44 @@ func (w *Watcher) Tick(ctx context.Context, now time.Time) Report {
 		r.Unpriced = append(r.Unpriced, u)
 	}
 	return r
+}
+
+// Measure is what l's metric reached in its current window at now.
+func Measure(ctx context.Context, src Source, l Limit, now time.Time) (float64, error) {
+	s, err := src.Summarize(ctx, analytics.Filter{
+		Since: budget.WindowStart(l.Window, now), Until: now,
+		WorkflowID: l.WorkflowID, AgentID: l.AgentID,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("budget %s: %w", l.Name, err)
+	}
+	switch l.Basis {
+	case budget.BasisTokens:
+		return float64(s.TotalTokens), nil
+	case budget.BasisEquivalent:
+		return s.APIEquivalentUSD, nil
+	default:
+		return s.CostUSD, nil
+	}
+}
+
+// UsedPct is the share of each budget used in its current window, by
+// name. A budget that cannot be measured, or has no limit, is left out:
+// a missing figure never satisfies a boundary.
+func UsedPct(ctx context.Context, src Source, limits []Limit, now time.Time) map[string]float64 {
+	out := map[string]float64{}
+	for _, l := range limits {
+		limit := l.Threshold()
+		if limit <= 0 {
+			continue
+		}
+		v, err := Measure(ctx, src, l, now)
+		if err != nil {
+			continue
+		}
+		out[l.Name] = v / limit * 100
+	}
+	return out
 }
 
 // forecast projects l's metric over the rest of its window. An

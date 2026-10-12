@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/boundaries"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
@@ -43,7 +44,9 @@ func (s *Server) registerPlanRoutes(mux RouteMux) {
 		if err != nil {
 			return nil, err
 		}
-		return g.Payload(), nil
+		p := g.Payload()
+		p.Boundaries = boundaries.GlanceAdvice(d.Config, g.Headroom.Reports)
+		return p, nil
 	}))
 	// The findings rank what the coach and the session analysis observed
 	// around the same glance; the coach's report comes from the state

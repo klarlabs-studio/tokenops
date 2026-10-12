@@ -531,7 +531,7 @@ func publicTools() []publicTool {
 	return []publicTool{
 		{
 			name: "tokenops_glance", title: "Plans at a glance", kind: reads,
-			description: "Every subscription plan's pressure in one call: the vendor's windows with their pace (whether each lasts to its reset or when it runs out), spend against limits, the session budget, and the coach's findings. Call it before a long task. It never changes a model or applies anything; it says uncertain when the evidence is thin.",
+			description: "Every subscription plan's pressure in one call: the vendor's windows with their pace (whether each lasts to its reset or when it runs out), spend against limits, the session budget, the coach's findings, and any boundary the operator set that holds now. Call it before a long task, and stop to ask when a boundary says so. It never changes a model or applies anything; it says uncertain when the evidence is thin.",
 			selector:    "view", def: "all", input: glanceIn{}, output: glanceOut{},
 			routes: map[string]route{
 				"all":            {inner: "tokenops_resource_glance"},
