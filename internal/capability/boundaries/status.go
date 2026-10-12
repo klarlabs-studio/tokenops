@@ -6,8 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/config"
 	domain "go.klarlabs.de/tokenops/internal/contexts/boundaries"
 	"go.klarlabs.de/tokenops/internal/infra/opencodeplugin"
+	"go.klarlabs.de/tokenops/internal/infra/teamclient"
 )
 
 // HookVerb is the command every refusing hook runs; it is also the marker
@@ -18,12 +20,40 @@ const HookVerb = "boundary-guard"
 // hook, which evaluates subagent_model rules in Claude Code.
 const claudeSubagentHook = "claude-code/subagent"
 
+// Rows for the decision points inside TokenOps, keyed in Installed's
+// answer by whether each is wired.
+const (
+	rowRouter    = "router"
+	rowShareTeam = "team upload"
+	rowShareOTel = "otel export"
+)
+
+// Wired is Installed's answer for the default client paths, plus whether
+// each decision point inside TokenOps is wired in cfg: the router (routing
+// configured), the team upload (this machine joined a team) and the OTel
+// export (configured).
+func Wired(cfg config.Config) map[string]bool {
+	out := Installed("", "")
+	out[rowRouter] = cfg.RouterConfig() != nil
+	if cfg.Team.UploadsEnabled() {
+		if path, err := teamclient.ResolveStatePath(cfg.Team.StatePath); err == nil {
+			_, err := teamclient.Load(path)
+			out[rowShareTeam] = err == nil
+		}
+	}
+	out[rowShareOTel] = cfg.OTel.MetricsEnabled() || cfg.OTel.EventsEnabled()
+	return out
+}
+
 // Enforcement is what a rule does in one harness.
 const (
 	EnforcementEnforced     = "enforced"
 	EnforcementShadow       = "shadow"
 	EnforcementAdviceOnly   = "advice only"
 	EnforcementNotInstalled = "hook not installed"
+	// EnforcementIdle is a decision point inside TokenOps that is not in
+	// use, so the rule has nothing to decide there.
+	EnforcementIdle = "idle"
 )
 
 // HarnessStatus is how one harness treats a rule.
@@ -137,13 +167,31 @@ func RuleStatuses(rules []domain.Rule, env Env, installed map[string]bool) (Stat
 	switch {
 	case len(rules) == 0:
 		out.Note = "no boundaries configured; add a boundaries: section to config.yaml"
-	case !installed[HarnessClaudeCode] && !installed[HarnessOpencode]:
-		out.Note = "no boundary hook is installed, so no rule is evaluated: run `tokenops hooks install --boundary`"
+	case needsHook(rules) && !installed[HarnessClaudeCode] && !installed[HarnessOpencode]:
+		out.Note = "no boundary hook is installed, so continue and spend rules are not evaluated: run `tokenops hooks install --boundary`"
 	}
 	return out, nil
 }
 
 func harnesses(r domain.Rule, installed map[string]bool) []HarnessStatus {
+	switch r.Action {
+	case domain.ActionModelRoute:
+		return []HarnessStatus{point(r, rowRouter, installed,
+			"routing is not configured, so no request is routed and the rule has nothing to hold",
+			"requests through the TokenOps proxy; a held route leaves the request on its model")}
+	case domain.ActionShare:
+		var out []HarnessStatus
+		for _, row := range []struct{ name, dest, off string }{
+			{rowShareTeam, domain.DestinationTeam, "this machine has not joined a team, so nothing is uploaded"},
+			{rowShareOTel, domain.DestinationOTel, "no OTel collector is configured, so nothing is exported"},
+		} {
+			if !shareConcerns(r, row.dest) {
+				continue
+			}
+			out = append(out, point(r, row.name, installed, row.off, "held figures are not sent"))
+		}
+		return out
+	}
 	out := make([]HarnessStatus, 0, 4)
 	for _, h := range []string{HarnessClaudeCode, HarnessOpencode} {
 		hs := HarnessStatus{Harness: h}
@@ -168,10 +216,47 @@ func harnesses(r domain.Rule, installed map[string]bool) []HarnessStatus {
 	for _, h := range []string{HarnessCodex, HarnessCursor} {
 		out = append(out, HarnessStatus{
 			Harness: h, Enforcement: EnforcementAdviceOnly,
-			Note: "its hooks cannot refuse a call, so the rule is not enforced there",
+			Note: "its hooks cannot refuse a call; the rule reaches the agent as advice through tokenops_glance",
 		})
 	}
 	return out
+}
+
+// point is a decision point inside TokenOps: enforced or in shadow when
+// wired, and otherwise idle, with why.
+func point(r domain.Rule, name string, wired map[string]bool, off, on string) HarnessStatus {
+	hs := HarnessStatus{Harness: name, Note: on}
+	switch {
+	case !wired[name]:
+		hs.Enforcement, hs.Note = EnforcementIdle, off
+	case r.Enforced():
+		hs.Enforcement = EnforcementEnforced
+	default:
+		hs.Enforcement = EnforcementShadow
+		hs.Note = "records what it would have done; promote to enforce"
+	}
+	return hs
+}
+
+// shareConcerns reports whether a share rule applies to destination: a
+// rule naming none applies to both.
+func shareConcerns(r domain.Rule, destination string) bool {
+	for _, c := range r.When {
+		if c.Field == domain.FieldDestination {
+			return c.Text == destination
+		}
+	}
+	return true
+}
+
+// needsHook reports whether any rule is decided at the pause point.
+func needsHook(rules []domain.Rule) bool {
+	for _, r := range rules {
+		if r.Action == domain.ActionContinue || r.Action == domain.ActionSpend {
+			return true
+		}
+	}
+	return false
 }
 
 func hookKey(r domain.Rule, harness string) string {

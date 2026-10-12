@@ -40,7 +40,6 @@ func TestParseRefusesWithTheRuleNamed(t *testing.T) {
 		want string
 	}{
 		{"unknown action", RuleSpec{Name: "r", Action: "deploy", Require: "ask"}, `"r": action "deploy" is not one of`},
-		{"phase-2 action", RuleSpec{Name: "r", Action: "spend", Require: "ask"}, `"r": action "spend" is not one of`},
 		{"missing name", RuleSpec{Action: "continue", Require: "ask"}, "name is required"},
 		{"bad name", RuleSpec{Name: "Has Spaces", Action: "continue", Require: "ask"}, "name"},
 		{"bad require", RuleSpec{Name: "r", Action: "continue", Require: "maybe"}, `"r": require "maybe"`},
@@ -53,7 +52,14 @@ func TestParseRefusesWithTheRuleNamed(t *testing.T) {
 		{"pct out of range", RuleSpec{Name: "r", Action: "continue", Require: "ask", When: map[string]string{"plan_left_pct": "< 120"}}, "between 0 and 100"},
 		{"window alone", RuleSpec{Name: "r", Action: "continue", Require: "ask", When: map[string]string{"window": "week"}}, "window qualifies plan_left_pct"},
 		{"bad window", RuleSpec{Name: "r", Action: "continue", Require: "ask", When: map[string]string{"plan_left_pct": "< 5", "window": "month"}}, `window "month"`},
-		{"tier on continue", RuleSpec{Name: "r", Action: "continue", Require: "ask", When: map[string]string{"model_tier": "> sonnet"}}, "model_tier applies only to subagent_model"},
+		{"tier on continue", RuleSpec{Name: "r", Action: "continue", Require: "ask", When: map[string]string{"model_tier": "> sonnet"}}, "when.model_tier does not apply to continue rules"},
+		{"budget on continue", RuleSpec{Name: "r", Action: "continue", Require: "ask", When: map[string]string{"budget_used_pct": ">= 90"}}, "when.budget_used_pct does not apply to continue"},
+		{"cost on share", RuleSpec{Name: "r", Action: "share", Require: "ask", When: map[string]string{"session_cost_usd": ">= 1"}}, "does not apply to share rules (they take destination)"},
+		{"budget alone", RuleSpec{Name: "r", Action: "spend", Require: "ask", When: map[string]string{"budget": "monthly"}}, "budget qualifies budget_used_pct"},
+		{"empty budget", RuleSpec{Name: "r", Action: "spend", Require: "ask", When: map[string]string{"budget_used_pct": ">= 90", "budget": " "}}, "names no budget"},
+		{"budget pct out of range", RuleSpec{Name: "r", Action: "spend", Require: "ask", When: map[string]string{"budget_used_pct": ">= 150"}}, "between 0 and 100"},
+		{"bad destination", RuleSpec{Name: "r", Action: "share", Require: "ask", When: map[string]string{"destination": "== slack"}}, `destination "slack"`},
+		{"destination order", RuleSpec{Name: "r", Action: "share", Require: "ask", When: map[string]string{"destination": "> team"}}, "only takes =="},
 		{"bad tier", RuleSpec{Name: "r", Action: "subagent_model", Require: "ask", When: map[string]string{"model_tier": "> gpt"}}, `tier "gpt"`},
 		{"id with order", RuleSpec{Name: "r", Action: "continue", Require: "ask", When: map[string]string{"agent_id": "> x"}}, "only takes =="},
 		{"empty id", RuleSpec{Name: "r", Action: "continue", Require: "ask", When: map[string]string{"workflow_id": "=="}}, "names nothing"},
@@ -237,6 +243,61 @@ func TestTierOf(t *testing.T) {
 	} {
 		if got := TierOf(in); got != want {
 			t.Errorf("TierOf(%q) = %q; want %q", in, got, want)
+		}
+	}
+}
+
+func TestPhaseTwoActionsParse(t *testing.T) {
+	rules, err := Parse([]RuleSpec{
+		{Name: "budget-floor", Action: "spend", When: map[string]string{"budget_used_pct": ">= 90", "budget": "monthly"}, Require: "ask"},
+		{Name: "no-opus-routes", Action: "model_route", When: map[string]string{"model_tier": ">= opus"}, Require: "deny"},
+		{Name: "team-upload", Action: "share", When: map[string]string{"destination": "== team"}, Require: "ask"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := rules[0].When[0]; c.Field != FieldBudgetUsed || c.Budget != "monthly" || c.Number != 90 {
+		t.Errorf("budget condition = %+v", c)
+	}
+	if c := rules[2].When[0]; c.Field != FieldDestination || c.Text != DestinationTeam {
+		t.Errorf("destination condition = %+v", c)
+	}
+}
+
+func TestBudgetUsedReadsTheNamedOrTheFullestBudget(t *testing.T) {
+	used := map[string]float64{"monthly": 92, "daily": 40}
+	named := Condition{Field: FieldBudgetUsed, Op: OpGE, Number: 90, Budget: "daily"}
+	if _, ok := named.holds(Facts{BudgetUsedPct: used}); ok {
+		t.Error("daily at 40% matched >= 90")
+	}
+	fullest := Condition{Field: FieldBudgetUsed, Op: OpGE, Number: 90}
+	text, ok := fullest.holds(Facts{BudgetUsedPct: used})
+	if !ok || !strings.Contains(text, "budget monthly 92.0% used") {
+		t.Errorf("fullest = %q, %v", text, ok)
+	}
+	if _, ok := fullest.holds(Facts{}); ok {
+		t.Error("an unknown budget matched")
+	}
+	missing := Condition{Field: FieldBudgetUsed, Op: OpGE, Number: 0, Budget: "weekly"}
+	if _, ok := missing.holds(Facts{BudgetUsedPct: used}); ok {
+		t.Error("a budget that is not measured matched")
+	}
+}
+
+func TestDestinationMatchesOnlyItsOwn(t *testing.T) {
+	c := Condition{Field: FieldDestination, Op: OpEQ, Text: DestinationTeam}
+	if text, ok := c.holds(Facts{Destination: DestinationTeam}); !ok || text != "figures leaving for the team plane" {
+		t.Errorf("team = %q, %v", text, ok)
+	}
+	if _, ok := c.holds(Facts{Destination: DestinationOTel}); ok {
+		t.Error("otel matched a team rule")
+	}
+}
+
+func TestEveryActionNamesItsFields(t *testing.T) {
+	for _, a := range actions {
+		if len(fieldsFor[a]) == 0 {
+			t.Errorf("action %s takes no condition", a)
 		}
 	}
 }

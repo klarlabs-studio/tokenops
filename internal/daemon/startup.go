@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
+	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/experiments"
 	"go.klarlabs.de/tokenops/internal/capability/routers"
 	"go.klarlabs.de/tokenops/internal/capability/state"
@@ -364,6 +365,12 @@ func (s *startup) configureRouting(context.Context) error {
 				"preferred_models", len(s.cfg.PreferredModels),
 				"mode", string(s.cfg.Optimizer.Mode))
 		}
+	}
+	// model_route boundaries (ADR 0014) hold a route the router would
+	// otherwise apply; the request stays on the model it asked for.
+	if check := bcap.RouteCheck(s.cfg.BoundaryRules(), bcap.Env{}); check != nil {
+		rc.Boundary = check
+		s.logger.Info("model_route boundaries wired")
 	}
 	s.opts = append(s.opts, proxy.WithActiveRouting(*rc, s.components.Spend))
 	if s.components.Store != nil {

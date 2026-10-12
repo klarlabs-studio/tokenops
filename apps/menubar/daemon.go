@@ -182,6 +182,22 @@ func (d *daemon) findings(ctx context.Context) (json.RawMessage, error) {
 	return out, err
 }
 
+// boundaries reads GET /api/boundaries: each boundary rule and the
+// decisions waiting on the operator (ADR 0014).
+func (d *daemon) boundaries(ctx context.Context) (json.RawMessage, error) {
+	var out json.RawMessage
+	err := d.do(ctx, http.MethodGet, "/api/boundaries", nil, &out)
+	return out, err
+}
+
+// denyBoundary refuses a waiting decision. The API takes denials only: an
+// approval needs a person at a terminal (see approve.go).
+func (d *daemon) denyBoundary(ctx context.Context, id string, session bool) error {
+	var out json.RawMessage
+	return d.do(ctx, http.MethodPost, "/api/boundaries/decisions",
+		map[string]any{"id": id, "decision": "deny", "session": session}, &out)
+}
+
 // setPreset applies a coach preset through the API, which audits it.
 func (d *daemon) setPreset(ctx context.Context, preset string) (json.RawMessage, error) {
 	var out json.RawMessage

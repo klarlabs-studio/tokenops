@@ -248,5 +248,5 @@ func subagentBoundary(cmd *cobra.Command, cfg config.Config, in agentToolInput, 
 		ToolUseID: in.ToolUseID, Action: "subagent_model", Model: model,
 	}
 	call.AgentID, call.WorkflowID = bcap.Attribution(bcap.HarnessClaudeCode, in.SessionID, bcap.TranscriptProject(in.TranscriptPath))
-	return guardWithTimeout(cmd.Context(), cfg, call, bcap.Env{Attended: sessionAttended()})
+	return guardWithTimeout(cmd.Context(), cfg, call, bcap.Env{Attended: sessionAttended()}, bcap.Guard)
 }

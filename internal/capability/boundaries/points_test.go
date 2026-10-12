@@ -1,0 +1,218 @@
+package boundaries
+
+import (
+	"strings"
+	"testing"
+	"time"
+
+	domain "go.klarlabs.de/tokenops/internal/contexts/boundaries"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
+	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
+	"go.klarlabs.de/tokenops/pkg/eventschema"
+)
+
+func putFigures(t *testing.T, env Env, f boundaryledger.Figures) {
+	t.Helper()
+	if f.ObservedAt.IsZero() {
+		f.ObservedAt = testNow.Add(-time.Minute)
+	}
+	if err := env.Dir.PutFigures(f); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRouteCheckHoldsUntilApproved(t *testing.T) {
+	env := testEnv(t, false)
+	check := RouteCheck(rules(t, domain.RuleSpec{
+		Name: "no-opus-routes", Action: "model_route", Require: "ask", Stage: "enforce",
+		When: map[string]string{"model_tier": ">= opus"},
+	}), env)
+	if check == nil {
+		t.Fatal("no check for a model_route rule")
+	}
+	if held, _ := check(eventschema.ProviderAnthropic, "claude-sonnet-4-5", "claude-haiku-4-5", "", ""); held {
+		t.Fatal("a route down to haiku was held by an opus rule")
+	}
+	held, reason := check(eventschema.ProviderAnthropic, "claude-sonnet-4-5", "claude-opus-4-1", "", "")
+	if !held || !strings.Contains(reason, "model opus >= opus") || !strings.Contains(reason, "stays on the model it asked for") ||
+		strings.Contains(reason, "Do not retry") {
+		t.Fatalf("held %v, reason %q", held, reason)
+	}
+	st, _ := RuleStatuses(rules(t, domain.RuleSpec{Name: "no-opus-routes", Action: "model_route", Require: "ask"}), env, nil)
+	if len(st.Pending) != 1 {
+		t.Fatalf("pending = %+v", st.Pending)
+	}
+	d, err := Decide(env, DecideRequest{ID: st.Pending[0].ID, Decision: "approve"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(d.Note, "the route goes through once") {
+		t.Errorf("note = %q", d.Note)
+	}
+	if held, _ := check(eventschema.ProviderAnthropic, "claude-sonnet-4-5", "claude-opus-4-1", "", ""); held {
+		t.Fatal("an approved route was held")
+	}
+	if held, _ := check(eventschema.ProviderAnthropic, "claude-sonnet-4-5", "claude-opus-4-1", "", ""); !held {
+		t.Fatal("a one-off approval let a second route through")
+	}
+}
+
+func TestRouteCheckIsNilWithoutRouteRules(t *testing.T) {
+	if RouteCheck(rules(t, spendRule("ask", "enforce")), testEnv(t, false)) != nil {
+		t.Fatal("the router would ask a boundary with no model_route rule")
+	}
+}
+
+func TestCheckShareHoldsOnlyItsDestination(t *testing.T) {
+	env := testEnv(t, false)
+	r := rules(t, domain.RuleSpec{Name: "team-upload", Action: "share", Require: "deny", Stage: "enforce",
+		When: map[string]string{"destination": "== team"}})
+	err := CheckShare(r, domain.DestinationTeam, env)
+	if !IsShareRefused(err) || !strings.Contains(err.Error(), "figures leaving for the team plane") ||
+		!strings.Contains(err.Error(), "The figures are not sent") {
+		t.Fatalf("team = %v", err)
+	}
+	if err := CheckShare(r, domain.DestinationOTel, env); err != nil {
+		t.Fatalf("otel = %v", err)
+	}
+	got := stages(t, env, domain.DecisionID("team-upload", scope("share", "team")))
+	if len(got) != 1 || got[0] != eventschema.DecisionStageApplied {
+		t.Fatalf("recorded %v", got)
+	}
+}
+
+func TestCheckShareInShadowSendsAndRecords(t *testing.T) {
+	env := testEnv(t, false)
+	r := rules(t, domain.RuleSpec{Name: "otel", Action: "share", Require: "deny", When: map[string]string{"destination": "== otel"}})
+	if err := CheckShare(r, domain.DestinationOTel, env); err != nil {
+		t.Fatalf("a shadow rule held figures: %v", err)
+	}
+	if got := stages(t, env, domain.DecisionID("otel", scope("share", "otel"))); len(got) != 1 || got[0] != eventschema.DecisionStageShadow {
+		t.Fatalf("recorded %v", got)
+	}
+}
+
+func TestSpendRulesReadTheDaemonsBudgets(t *testing.T) {
+	env := testEnv(t, false)
+	r := rules(t, domain.RuleSpec{Name: "budget-floor", Action: "spend", Require: "deny", Stage: "enforce",
+		When: map[string]string{"budget_used_pct": ">= 90", "budget": "monthly"}})
+	c := call("s1")
+	if res, _ := GuardActions(r, c, env, domain.ActionContinue, domain.ActionSpend); res.Verdict != VerdictNone {
+		t.Fatalf("no figures yet, verdict = %q", res.Verdict)
+	}
+	putFigures(t, env, boundaryledger.Figures{BudgetUsedPct: map[string]float64{"monthly": 93}})
+	res, err := GuardActions(r, c, env, domain.ActionContinue, domain.ActionSpend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Verdict != VerdictDeny || !strings.Contains(res.Reason, "budget monthly 93.0% used >= 90%") ||
+		!strings.Contains(res.Reason, "steps while it holds") {
+		t.Fatalf("verdict %q, reason %q", res.Verdict, res.Reason)
+	}
+}
+
+func TestStaleFiguresSayNothing(t *testing.T) {
+	env := testEnv(t, false)
+	r := rules(t, domain.RuleSpec{Name: "budget-floor", Action: "spend", Require: "deny", Stage: "enforce",
+		When: map[string]string{"budget_used_pct": ">= 90"}})
+	putFigures(t, env, boundaryledger.Figures{ObservedAt: testNow.Add(-time.Hour), BudgetUsedPct: map[string]float64{"monthly": 99}})
+	if res, _ := GuardActions(r, call("s1"), env, domain.ActionSpend); res.Verdict != VerdictNone {
+		t.Fatalf("an hour-old reading refused: %q", res.Reason)
+	}
+}
+
+func TestOpencodeReadsPlanHeadroomFromTheDaemon(t *testing.T) {
+	env := testEnv(t, false)
+	r := rules(t, domain.RuleSpec{Name: "plan-floor", Action: "continue", Require: "deny", Stage: "enforce",
+		When: map[string]string{"plan_left_pct": "< 5", "window": "week"}})
+	putFigures(t, env, boundaryledger.Figures{PlanLeftPct: map[string]map[string]float64{
+		"anthropic": {"week": 30}, "openai": {"week": 3, "5h": 80},
+	}})
+	c := Call{Harness: HarnessOpencode, SessionID: "oc1", Action: domain.ActionContinue}
+	res, err := Guard(r, c, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Verdict != VerdictDeny || !strings.Contains(res.Reason, "plan left 3.0% < 5% (week)") {
+		t.Fatalf("verdict %q, reason %q", res.Verdict, res.Reason)
+	}
+	// Claude Code is held to its own plan, not the tightest one.
+	cc := call("cc1")
+	if res, _ := Guard(r, cc, env); res.Verdict != VerdictNone {
+		t.Fatalf("claude code refused on another provider's plan: %q", res.Reason)
+	}
+}
+
+func TestFiguresFromTheGlance(t *testing.T) {
+	now := testNow
+	reports := []plans.HeadroomReport{
+		{Provider: "anthropic", Windows: []plans.VendorWindow{
+			{Name: "5h", UsedPct: 60, ResetsAt: now.Add(time.Hour)},
+			{Name: "week", UsedPct: 96},
+			{Name: "week (Fable)", UsedPct: 99},
+		}},
+		{Provider: "anthropic", Windows: []plans.VendorWindow{{Name: "week", UsedPct: 80}}},
+		{Provider: "openai", Windows: []plans.VendorWindow{
+			{Name: "5h", UsedPct: 10, ResetsAt: now.Add(-time.Minute)},
+			{Name: "week", UsedPct: 50, Stale: true},
+		}},
+	}
+	f := Figures(reports, map[string]float64{"monthly": 42}, now)
+	if got := f.PlanLeftPct["anthropic"]; got["5h"] != 40 || got["week"] != 4 || len(got) != 2 {
+		t.Errorf("anthropic = %v", got)
+	}
+	if _, ok := f.PlanLeftPct["openai"]; ok {
+		t.Errorf("stale and reset windows were kept: %v", f.PlanLeftPct["openai"])
+	}
+	if f.BudgetUsedPct["monthly"] != 42 || !f.ObservedAt.Equal(now) {
+		t.Errorf("figures = %+v", f)
+	}
+}
+
+func TestNeedsFigures(t *testing.T) {
+	if NeedsFigures(rules(t, spendRule("ask", "enforce"))) {
+		t.Error("a session-cost rule needs no daemon figures")
+	}
+	if !NeedsFigures(rules(t, domain.RuleSpec{Name: "b", Action: "spend", Require: "ask", When: map[string]string{"budget_used_pct": ">= 90"}})) {
+		t.Error("a budget rule needs them")
+	}
+}
+
+func TestStatusShowsTokenOpsSidePoints(t *testing.T) {
+	env := testEnv(t, false)
+	r := rules(t,
+		domain.RuleSpec{Name: "route", Action: "model_route", Require: "ask", Stage: "enforce", When: map[string]string{"model_tier": ">= opus"}},
+		domain.RuleSpec{Name: "team", Action: "share", Require: "deny", When: map[string]string{"destination": "== team"}},
+		domain.RuleSpec{Name: "all-sharing", Action: "share", Require: "ask"},
+	)
+	st, err := RuleStatuses(r, env, map[string]bool{rowRouter: true, rowShareOTel: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, rs := range st.Rules {
+		for _, h := range rs.Harnesses {
+			got[rs.Name+"/"+h.Harness] = h.Enforcement
+		}
+	}
+	want := map[string]string{
+		"route/router":            EnforcementEnforced,
+		"team/team upload":        EnforcementIdle,
+		"all-sharing/team upload": EnforcementIdle,
+		"all-sharing/otel export": EnforcementShadow,
+	}
+	for k, w := range want {
+		if got[k] != w {
+			t.Errorf("%s = %q; want %q", k, got[k], w)
+		}
+	}
+	if _, ok := got["team/otel export"]; ok {
+		t.Error("a team-only rule was listed for the OTel export")
+	}
+	if _, ok := got["route/codex"]; ok {
+		t.Error("a route rule was listed per harness")
+	}
+	if st.Note != "" {
+		t.Errorf("note = %q; no rule here needs the hook", st.Note)
+	}
+}

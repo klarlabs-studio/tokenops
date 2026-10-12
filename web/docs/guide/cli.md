@@ -1562,7 +1562,7 @@ answered through the `tokenops_routing_decide` MCP tool or
 [Action boundaries](/guide/boundaries) are limits you set in
 `config.yaml` before work starts: past $20 in a session, ask me; no
 subagents above Sonnet without an admin; no new work once the week's plan
-is under 5%.
+is under 5%; hold routes to Opus; ask before figures go to the team.
 
 ```bash
 tokenops boundaries status          # each rule, how often it matched, where it binds
@@ -1575,7 +1575,9 @@ Every rule starts in **shadow**: it records what it would have done and
 changes nothing. `status` shows how often each rule matched — for a
 shadow rule, how often it would have fired — and, per client, whether it
 is enforced, in shadow, advice only (Codex and Cursor, whose hooks cannot
-refuse a call), or waiting on its hook. `promote` writes `stage: enforce`
+refuse a call), or waiting on its hook; for `model_route` and `share`
+rules, whether the router, the team upload and the OTel export enforce
+them or are idle. `promote` writes `stage: enforce`
 to the rule in `config.yaml`; `demote` puts it back in shadow. Neither
 has an MCP equivalent: an agent must not change the limits set on it.
 
@@ -1587,8 +1589,13 @@ refusal, or listed under "Waiting on you" in `boundaries status`.
 ```bash
 tokenops approve bnd-1a2b3c4d5e6f            # the agent's next step
 tokenops approve bnd-1a2b3c4d5e6f --session  # the rest of the session
+tokenops approve bnd-1a2b3c4d5e6f --confirm  # show what waits, then ask y/N
 tokenops deny bnd-1a2b3c4d5e6f --session
 ```
+
+`--confirm` shows the rule, what was crossed and where, and answers only
+on `y`; the menu bar's *Approve…* opens a terminal running it. For a
+route or a share, `--session` covers the next 24 hours.
 
 Without `--session` the answer covers one step, and the boundary asks
 again after it. The answer is recorded on the decision with your user

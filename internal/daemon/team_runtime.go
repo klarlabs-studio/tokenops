@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
+	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/teamshare"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
@@ -33,7 +34,10 @@ func startTeamUploadRuntime(cfg config.Config, components *bootstrap.Components,
 		return
 	}
 	every := cfg.Team.EffectiveInterval()
-	opts := teamshare.Options{Days: cfg.Team.EffectiveDays(), RepoNames: cfg.Team.EffectiveRepoNames(), ClientVersion: version.Version}
+	opts := teamshare.Options{
+		Days: cfg.Team.EffectiveDays(), RepoNames: cfg.Team.EffectiveRepoNames(), ClientVersion: version.Version,
+		Allow: shareAllowed(cfg, bcap.DestinationTeam),
+	}
 	deps := teamshare.DepsFor(components.Aggregator)
 	sup.Go("team-upload", func(ctx context.Context) error {
 		wait := time.NewTimer(teamFirstUpload)
@@ -56,6 +60,16 @@ func startTeamUploadRuntime(cfg config.Config, components *bootstrap.Components,
 	})
 }
 
+// shareAllowed is the share boundary for destination, asked before
+// figures leave. Nil when no rule concerns sharing.
+func shareAllowed(cfg config.Config, destination string) func() error {
+	rules := cfg.BoundaryRules()
+	if len(rules) == 0 {
+		return nil
+	}
+	return func() error { return bcap.CheckShare(rules, destination, bcap.Env{}) }
+}
+
 func uploadTeamOnce(ctx context.Context, deps teamshare.Deps, opts teamshare.Options, path string, logger *slog.Logger) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
@@ -63,6 +77,8 @@ func uploadTeamOnce(ctx context.Context, deps teamshare.Deps, opts teamshare.Opt
 	switch {
 	case errors.Is(err, teamclient.ErrNotJoined):
 		return
+	case bcap.IsShareRefused(err):
+		logger.Info("team upload held by a boundary", "detail", err.Error())
 	case errors.As(err, new(*teamshare.PausedError)):
 		// Billing, not a fault: say so plainly, and keep trying hourly so
 		// uploads resume on their own once a subscription starts.

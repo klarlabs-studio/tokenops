@@ -273,3 +273,28 @@ func atTerminal(t *testing.T) {
 	approverAtTerminal = func(io.Reader) bool { return true }
 	t.Cleanup(func() { approverAtTerminal = prev })
 }
+
+func TestApproveConfirmShowsWhatWaitsAndNeedsAYes(t *testing.T) {
+	t.Setenv("CLAUDE_CODE_SESSION_ATTENDED", "0")
+	boundaryHome(t, spendBoundary+"    stage: enforce\n", 25)
+	h := runBoundaryHook(t).HookSpecificOutput
+	id := strings.Fields(h.PermissionDecisionReason[strings.Index(h.PermissionDecisionReason, "tokenops approve ")+len("tokenops approve "):])[0]
+	id = strings.Trim(id, "`,.")
+	atTerminal(t)
+
+	out, err := runCLI(t, []byte("\n"), "approve", id, "--confirm")
+	if err != nil || !strings.Contains(out, `Boundary "session-spend"`) || !strings.Contains(out, "session cost $25.00") ||
+		!strings.Contains(out, "Left waiting") {
+		t.Fatalf("no answer = %q, %v", out, err)
+	}
+	if d := runBoundaryHook(t); d.HookSpecificOutput.PermissionDecision != "deny" {
+		t.Fatalf("an unconfirmed approval let the agent on: %+v", d)
+	}
+	out, err = runCLI(t, []byte("y\n"), "approve", id, "--confirm", "--session")
+	if err != nil || !strings.Contains(out, "the rest of the session") || !strings.Contains(out, "approved") {
+		t.Fatalf("yes = %q, %v", out, err)
+	}
+	if d := runBoundaryHook(t); d.HookSpecificOutput.PermissionDecision != "" {
+		t.Fatalf("after a confirmed approval: %+v", d)
+	}
+}

@@ -19,6 +19,7 @@
 //	pending/<id>.json    a decision waiting on an answer
 //	answers/<id>.json    the operator's answer
 //	sessions/<id>.json   per-session counters for status
+//	figures.json         the daemon's plan and budget readings
 package boundaryledger
 
 import (
@@ -370,6 +371,49 @@ func sessionKey(id string) string {
 		return "default"
 	}
 	return safe
+}
+
+// Figures are the readings the pause point compares but cannot compute
+// without the event store: each plan window's headroom and each budget's
+// share used. The daemon writes them every minute; the pause point reads
+// the one file.
+type Figures struct {
+	ObservedAt time.Time `json:"observed_at"`
+	// PlanLeftPct is each provider's share left, by window ("5h", "week").
+	PlanLeftPct map[string]map[string]float64 `json:"plan_left_pct,omitempty"`
+	// BudgetUsedPct is each configured budget's share used in its current
+	// window, by budget name.
+	BudgetUsedPct map[string]float64 `json:"budget_used_pct,omitempty"`
+}
+
+const figuresFile = "figures.json"
+
+// PutFigures replaces the readings.
+func (d Dir) PutFigures(f Figures) error {
+	b, err := json.Marshal(f)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(d.root(), 0o700); err != nil {
+		return err
+	}
+	return writeAtomic(filepath.Join(d.root(), figuresFile), b)
+}
+
+// GetFigures reads the readings; a missing file is not an error.
+func (d Dir) GetFigures() (Figures, bool, error) {
+	b, err := os.ReadFile(filepath.Join(d.root(), figuresFile)) //nolint:gosec // TokenOps' own state
+	if errors.Is(err, os.ErrNotExist) {
+		return Figures{}, false, nil
+	}
+	if err != nil {
+		return Figures{}, false, err
+	}
+	var f Figures
+	if err := json.Unmarshal(b, &f); err != nil {
+		return Figures{}, false, err
+	}
+	return f, true, nil
 }
 
 func writeAtomic(path string, b []byte) error {

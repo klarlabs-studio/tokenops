@@ -306,6 +306,48 @@
     main.appendChild(box);
   }
 
+  // Decisions a boundary is waiting on (ADR 0014). Deny goes through the
+  // daemon; Approve opens a terminal that asks, because an approval needs
+  // a person there and the daemon's API only denies.
+  function boundaryWaits(main, v) {
+    var pending = (v.boundaries && v.boundaries.pending) || [];
+    if (!pending.length) return;
+    var box = el("section", "metric waits");
+    var head = el("h3", null, "Waiting on you");
+    head.appendChild(el("span", "count", String(pending.length)));
+    box.appendChild(head);
+    pending.forEach(function (p) {
+      var item = el("div", "wait");
+      item.appendChild(el("div", "finding-title", p.rule));
+      item.appendChild(el("div", "note", p.crossed));
+      item.appendChild(el("div", "note", (p.harness || "tokenops") + " · needs " + p.require));
+      var actions = el("div", "wait-actions");
+      var approve = el("button", "wait-approve", "Approve…");
+      approve.type = "button";
+      approve.title = "Opens a terminal that shows this and asks you to confirm";
+      approve.addEventListener("click", function () { answer("boundary.approve", p.id); });
+      var deny = el("button", "wait-deny", "Deny");
+      deny.type = "button";
+      deny.addEventListener("click", function () { answer("boundary.deny", p.id); });
+      actions.appendChild(approve);
+      actions.appendChild(deny);
+      item.appendChild(actions);
+      box.appendChild(item);
+    });
+    main.insertBefore(box, main.firstChild);
+  }
+
+  function answer(command, id) {
+    invoke(command, { id: id }).then(show, function (err) {
+      failed(command, err);
+      state.view = state.view || {};
+      state.view.error = command === "boundary.approve"
+        ? "No terminal opened. Approve it yourself: tokenops approve " + id + " --confirm"
+        : "The denial didn't go through. Try again in a moment.";
+      render();
+    });
+  }
+
   // While a read is in progress the panel keeps what it shows and says,
   // after a second, how long it has been fetching.
   function loading() {
@@ -351,6 +393,7 @@
     var sel = reports.filter(function (r) { return r.provider === state.selected; })[0];
     if (sel) detail(sel, v); else document.getElementById("detail").textContent = "";
     coachFindings(document.getElementById("detail"), v);
+    boundaryWaits(document.getElementById("detail"), v);
     var select = document.getElementById("preset");
     if (v.coach) {
       var custom = document.getElementById("preset-custom");

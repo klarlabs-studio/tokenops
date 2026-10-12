@@ -38,16 +38,24 @@ import (
 // tools an agent may run is the harness's business, not TokenOps'.
 type Action string
 
-// The actions phase 1 evaluates. model_route, spend and share follow in
-// phase 2; a rule naming them is refused rather than silently ignored.
+// The actions. A rule naming anything else is refused rather than
+// silently ignored.
 const (
 	// ActionContinue is the agent's next tool call.
 	ActionContinue Action = "continue"
 	// ActionSubagentModel is the model a subagent is about to run on.
 	ActionSubagentModel Action = "subagent_model"
+	// ActionSpend is the agent's next tool call, judged by money: the
+	// configured budgets and the session's cost.
+	ActionSpend Action = "spend"
+	// ActionModelRoute is the router moving a request to another model.
+	ActionModelRoute Action = "model_route"
+	// ActionShare is figures leaving the machine: a team upload or an
+	// OTel export.
+	ActionShare Action = "share"
 )
 
-var actions = []Action{ActionContinue, ActionSubagentModel}
+var actions = []Action{ActionContinue, ActionSubagentModel, ActionSpend, ActionModelRoute, ActionShare}
 
 // Field is a figure a condition reads.
 type Field string
@@ -56,17 +64,41 @@ type Field string
 const (
 	FieldSessionCost Field = "session_cost_usd"
 	FieldPlanLeft    Field = "plan_left_pct"
+	FieldBudgetUsed  Field = "budget_used_pct"
 	FieldModelTier   Field = "model_tier"
+	FieldDestination Field = "destination"
 	FieldWorkflow    Field = "workflow_id"
 	FieldAgent       Field = "agent_id"
 )
 
 // fieldOrder fixes the order conditions are checked and reported in, so
 // an error or a reason reads the same on every run.
-var fieldOrder = []Field{FieldSessionCost, FieldPlanLeft, FieldModelTier, FieldWorkflow, FieldAgent}
+var fieldOrder = []Field{FieldSessionCost, FieldPlanLeft, FieldBudgetUsed, FieldModelTier, FieldDestination, FieldWorkflow, FieldAgent}
 
-// windowKey qualifies plan_left_pct; it is not a condition of its own.
-const windowKey = "window"
+// fieldsFor are the figures each action can be judged by: the ones known
+// where the action is decided. A condition the decision point cannot read
+// is refused at load rather than never matching in silence.
+var fieldsFor = map[Action][]Field{
+	ActionContinue:      {FieldSessionCost, FieldPlanLeft, FieldWorkflow, FieldAgent},
+	ActionSubagentModel: {FieldSessionCost, FieldPlanLeft, FieldModelTier, FieldWorkflow, FieldAgent},
+	ActionSpend:         {FieldSessionCost, FieldBudgetUsed, FieldWorkflow, FieldAgent},
+	ActionModelRoute:    {FieldPlanLeft, FieldModelTier, FieldWorkflow, FieldAgent},
+	ActionShare:         {FieldDestination},
+}
+
+// Qualifiers narrow a condition; they are not conditions of their own.
+const (
+	// windowKey qualifies plan_left_pct.
+	windowKey = "window"
+	// budgetKey qualifies budget_used_pct with a budget's name.
+	budgetKey = "budget"
+)
+
+// Destinations figures can leave for.
+const (
+	DestinationTeam = "team"
+	DestinationOTel = "otel"
+)
 
 // Op is a comparator.
 type Op string
@@ -147,8 +179,8 @@ func (r Require) strictness() int {
 }
 
 // LocalAsk reports whether the requirement is answered on this machine.
-// In phase 1 a named approver is treated as ask: the team plane that
-// would route the request to the role does not exist yet.
+// A named approver is treated as ask until the team plane routes the
+// request to the role (ADR 0014 phase 3).
 func (r Require) LocalAsk() bool { return r.Kind == RequireAsk || r.Kind == RequireApprover }
 
 // Stage is whether a rule binds.
@@ -170,6 +202,8 @@ type Condition struct {
 	Text   string
 	// Window qualifies FieldPlanLeft.
 	Window Window
+	// Budget qualifies FieldBudgetUsed; empty takes the fullest budget.
+	Budget string
 }
 
 // Rule is one boundary.
@@ -287,16 +321,23 @@ func parseStage(s string) (Stage, error) {
 
 func parseWhen(action Action, when map[string]string) ([]Condition, error) {
 	for k := range when {
-		if k == windowKey {
+		if k == windowKey || k == budgetKey {
 			continue
 		}
 		if !slices.Contains(fieldOrder, Field(k)) {
 			return nil, fmt.Errorf("when.%s is not a condition (use %s)", k, joinFields())
 		}
+		if !slices.Contains(fieldsFor[action], Field(k)) {
+			return nil, fmt.Errorf("when.%s does not apply to %s rules (they take %s)", k, action, joinFieldList(fieldsFor[action]))
+		}
 	}
 	window, hasWindow := when[windowKey]
 	if _, ok := when[string(FieldPlanLeft)]; hasWindow && !ok {
 		return nil, fmt.Errorf("when.window qualifies plan_left_pct, which the rule does not set")
+	}
+	budget, hasBudget := when[budgetKey]
+	if _, ok := when[string(FieldBudgetUsed)]; hasBudget && !ok {
+		return nil, fmt.Errorf("when.budget qualifies budget_used_pct, which the rule does not set")
 	}
 	var out []Condition
 	for _, f := range fieldOrder {
@@ -304,25 +345,33 @@ func parseWhen(action Action, when map[string]string) ([]Condition, error) {
 		if !ok {
 			continue
 		}
-		c, err := parseCondition(action, f, raw)
+		c, err := parseCondition(f, raw)
 		if err != nil {
 			return nil, fmt.Errorf("when.%s: %w", f, err)
 		}
-		if f == FieldPlanLeft {
+		switch f {
+		case FieldPlanLeft:
 			w, err := parseWindow(window)
 			if err != nil {
 				return nil, fmt.Errorf("when.window: %w", err)
 			}
 			c.Window = w
+		case FieldBudgetUsed:
+			c.Budget = strings.TrimSpace(budget)
+			if hasBudget && c.Budget == "" {
+				return nil, fmt.Errorf("when.budget names no budget")
+			}
 		}
 		out = append(out, c)
 	}
 	return out, nil
 }
 
-func joinFields() string {
-	names := make([]string, len(fieldOrder))
-	for i, f := range fieldOrder {
+func joinFields() string { return joinFieldList(fieldOrder) }
+
+func joinFieldList(fields []Field) string {
+	names := make([]string, len(fields))
+	for i, f := range fields {
 		names[i] = string(f)
 	}
 	return strings.Join(names, ", ")
@@ -352,14 +401,14 @@ func splitOp(raw string) (Op, string, bool) {
 	return "", v, false
 }
 
-func parseCondition(action Action, f Field, raw string) (Condition, error) {
+func parseCondition(f Field, raw string) (Condition, error) {
 	op, value, ok := splitOp(raw)
 	if !ok {
 		return Condition{}, fmt.Errorf("%q needs a comparator (<, <=, >, >=, ==), e.g. \">= 20\"", raw)
 	}
 	c := Condition{Field: f, Op: op}
 	switch f {
-	case FieldSessionCost, FieldPlanLeft:
+	case FieldSessionCost, FieldPlanLeft, FieldBudgetUsed:
 		n, err := strconv.ParseFloat(value, 64)
 		if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
 			return Condition{}, fmt.Errorf("%q is not a number", value)
@@ -367,19 +416,25 @@ func parseCondition(action Action, f Field, raw string) (Condition, error) {
 		if n < 0 {
 			return Condition{}, fmt.Errorf("%v must not be negative", n)
 		}
-		if f == FieldPlanLeft && n > 100 {
+		if f != FieldSessionCost && n > 100 {
 			return Condition{}, fmt.Errorf("%v must be between 0 and 100", n)
 		}
 		c.Number = n
 	case FieldModelTier:
-		if action != ActionSubagentModel {
-			return Condition{}, fmt.Errorf("model_tier applies only to subagent_model rules")
-		}
 		tier := TierOf(value)
 		if tier == "" {
 			return Condition{}, fmt.Errorf("tier %q is not haiku, sonnet or opus", value)
 		}
 		c.Text = tier
+	case FieldDestination:
+		if op != OpEQ {
+			return Condition{}, fmt.Errorf("destination only takes ==")
+		}
+		d := strings.ToLower(value)
+		if d != DestinationTeam && d != DestinationOTel {
+			return Condition{}, fmt.Errorf("destination %q is not team or otel", value)
+		}
+		c.Text = d
 	case FieldWorkflow, FieldAgent:
 		if op != OpEQ {
 			return Condition{}, fmt.Errorf("%s only takes ==", f)
@@ -432,10 +487,16 @@ type Facts struct {
 	// PlanLeftPct is the share of each plan window left, by window. A
 	// window absent from the map is unknown.
 	PlanLeftPct map[Window]float64
-	// ModelTier is haiku, sonnet or opus; empty is unknown.
-	ModelTier  string
-	WorkflowID string
-	AgentID    string
+	// BudgetUsedPct is the share of each configured budget used in its
+	// current window, by budget name. A budget absent is unknown.
+	BudgetUsedPct map[string]float64
+	// ModelTier is haiku, sonnet or opus; empty is unknown. For
+	// model_route it is the tier the router would move the request to.
+	ModelTier string
+	// Destination is where shared figures go: team or otel.
+	Destination string
+	WorkflowID  string
+	AgentID     string
 }
 
 // Match is a rule that matched, with the figures that crossed it.
@@ -494,12 +555,23 @@ func (c Condition) holds(f Facts) (string, bool) {
 			return "", false
 		}
 		return fmt.Sprintf("plan left %.1f%% %s %g%% (%s)", left, c.Op, c.Number, window), true
+	case FieldBudgetUsed:
+		used, name, ok := budgetUsed(f.BudgetUsedPct, c.Budget)
+		if !ok || !compare(used, c.Op, c.Number) {
+			return "", false
+		}
+		return fmt.Sprintf("budget %s %.1f%% used %s %g%%", name, used, c.Op, c.Number), true
 	case FieldModelTier:
 		got, ok := tierRank[f.ModelTier]
 		if !ok || !compare(float64(got), c.Op, float64(tierRank[c.Text])) {
 			return "", false
 		}
-		return fmt.Sprintf("subagent model %s %s %s", f.ModelTier, c.Op, c.Text), true
+		return fmt.Sprintf("model %s %s %s", f.ModelTier, c.Op, c.Text), true
+	case FieldDestination:
+		if f.Destination != c.Text {
+			return "", false
+		}
+		return "figures leaving for " + destinationName(f.Destination), true
 	case FieldWorkflow:
 		ok, _ := path.Match(c.Text, f.WorkflowID)
 		return "", ok && f.WorkflowID != ""
@@ -523,6 +595,29 @@ func planLeft(left map[Window]float64, w Window) (float64, Window, bool) {
 		}
 	}
 	return best, bestW, found
+}
+
+// budgetUsed reads the named budget, or the fullest one known. Ties go
+// to the name that sorts first, so the reason reads the same every run.
+func budgetUsed(used map[string]float64, name string) (float64, string, bool) {
+	if name != "" {
+		v, ok := used[name]
+		return v, name, ok
+	}
+	best, bestName, found := 0.0, "", false
+	for n, v := range used {
+		if !found || v > best || (v == best && n < bestName) {
+			best, bestName, found = v, n, true
+		}
+	}
+	return best, bestName, found
+}
+
+func destinationName(d string) string {
+	if d == DestinationOTel {
+		return "the OTel collector"
+	}
+	return "the team plane"
 }
 
 func compare(a float64, op Op, b float64) bool {

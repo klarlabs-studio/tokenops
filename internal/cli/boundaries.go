@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -34,15 +35,15 @@ type boundaryHookInput struct {
 }
 
 // newBoundaryGuardCmd is the pause point (ADR 0014): a PreToolUse hook on
-// every tool call that checks the continue boundaries.
+// every tool call that checks the continue and spend boundaries.
 func newBoundaryGuardCmd(rf *rootFlags) *cobra.Command {
 	var client string
 	cmd := &cobra.Command{
 		Use:   bcap.HookVerb,
 		Short: "PreToolUse hook that checks action boundaries before every tool call",
 		Long: `boundary-guard is the pause point for action boundaries (ADR 0014).
-Wired as a PreToolUse hook on every tool, it evaluates the continue rules in
-config.yaml's boundaries section. A rule in shadow is recorded and changes
+Wired as a PreToolUse hook on every tool, it evaluates the continue and spend
+rules in config.yaml's boundaries section. A rule in shadow is recorded and changes
 nothing. An enforced ask rule asks when someone is at the keyboard and
 otherwise refuses with the rule and the tokenops approve command; an
 enforced deny rule refuses.
@@ -75,7 +76,7 @@ func runBoundaryGuard(cmd *cobra.Command, rf *rootFlags, client string) error {
 	}
 	call := bcap.Call{
 		Harness: harness, SessionID: in.SessionID, TranscriptPath: in.TranscriptPath,
-		ToolUseID: in.ToolUseID, Action: "continue",
+		ToolUseID: in.ToolUseID,
 	}
 	project := bcap.TranscriptProject(in.TranscriptPath)
 	if in.Directory != "" {
@@ -90,13 +91,14 @@ func runBoundaryGuard(cmd *cobra.Command, rf *rootFlags, client string) error {
 		bcap.RecordFailure(call, env, fmt.Errorf("config unreadable: %w", err))
 		return nil
 	}
-	res := guardWithTimeout(cmd.Context(), cfg, call, env)
+	res := guardWithTimeout(cmd.Context(), cfg, call, env, bcap.Pause)
 	return writeBoundaryVerdict(cmd.OutOrStdout(), res)
 }
 
 // guardWithTimeout runs the evaluation, letting the call through when it
 // fails or overruns. Both are recorded.
-func guardWithTimeout(ctx context.Context, cfg config.Config, call bcap.Call, env bcap.Env) bcap.Result {
+func guardWithTimeout(ctx context.Context, cfg config.Config, call bcap.Call, env bcap.Env,
+	eval func([]bcap.Rule, bcap.Call, bcap.Env) (bcap.Result, error)) bcap.Result {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -108,7 +110,7 @@ func guardWithTimeout(ctx context.Context, cfg config.Config, call bcap.Call, en
 	}
 	done := make(chan answer, 1)
 	go func() {
-		res, err := bcap.Guard(cfg.BoundaryRules(), call, env)
+		res, err := eval(cfg.BoundaryRules(), call, env)
 		done <- answer{res, err}
 	}()
 	select {
@@ -175,7 +177,7 @@ func newBoundariesStatusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			st, err := bcap.RuleStatuses(cfg.BoundaryRules(), bcap.Env{}, bcap.Installed("", ""))
+			st, err := bcap.RuleStatuses(cfg.BoundaryRules(), bcap.Env{}, bcap.Wired(cfg))
 			if err != nil {
 				return err
 			}
@@ -200,7 +202,7 @@ func writeBoundariesStatus(w io.Writer, st bcap.Status) {
 		if r.Stage == "shadow" {
 			verb = "would have fired"
 		}
-		fmt.Fprintf(w, "  %s %d times in %d sessions", verb, r.Matches, r.Sessions)
+		fmt.Fprintf(w, "  %s %d times in %d %s", verb, r.Matches, r.Sessions, scopeNoun(r.Action))
 		if r.LastMatched != nil {
 			fmt.Fprintf(w, ", last %s", r.LastMatched.Local().Format("2006-01-02 15:04"))
 		}
@@ -221,6 +223,19 @@ func writeBoundariesStatus(w io.Writer, st bcap.Status) {
 		for _, p := range st.Pending {
 			fmt.Fprintf(w, "  %s  %s (%s): %s — %s\n", p.ID, p.Rule, p.Require, p.Crossed, p.Approve)
 		}
+	}
+}
+
+// scopeNoun names what a rule's matches are counted across: sessions for
+// the agent's actions, routes for the router, destinations for sharing.
+func scopeNoun(action string) string {
+	switch action {
+	case "model_route":
+		return "routes"
+	case "share":
+		return "destinations"
+	default:
+		return "sessions"
 	}
 }
 
@@ -258,8 +273,32 @@ func newBoundariesStageCmd(verb string) *cobra.Command {
 // stdin is a terminal. A variable so tests can stand in for one.
 var approverAtTerminal = func(in io.Reader) bool { return interactiveInput(in, false) }
 
+// confirmAnswer shows the decision waiting on id and asks for a yes. Only
+// y or yes answers; anything else, or no answer, leaves it waiting.
+func confirmAnswer(cmd *cobra.Command, verb, id string, session bool) (bool, error) {
+	p, err := bcap.Waiting(bcap.Env{}, id)
+	if err != nil {
+		return false, err
+	}
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "Boundary %q (%s) asked at %s:\n  %s\n  from %s, session %s\n",
+		p.Rule, p.Require, p.At.Local().Format("15:04"), p.Crossed, p.Harness, p.SessionID)
+	scope := "the next step only"
+	if session {
+		scope = "the rest of the session (at most 24 hours)"
+	}
+	fmt.Fprintf(out, "%s it for %s? [y/N] ", strings.ToUpper(verb[:1])+verb[1:], scope)
+	line, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true, nil
+	}
+	fmt.Fprintln(out, "Left waiting; nothing was answered.")
+	return false, nil
+}
+
 func newBoundaryAnswerCmd(verb string) *cobra.Command {
-	var session, jsonOut bool
+	var session, jsonOut, confirm bool
 	short := "Let an agent past a boundary that asked: its next step, or the rest of the session"
 	if verb == "deny" {
 		short = "Refuse what a boundary asked about: the next step, or the rest of the session"
@@ -279,6 +318,12 @@ decision with your user name, so 'tokenops explain <id>' shows who answered.`,
 			if verb == "approve" && !approverAtTerminal(cmd.InOrStdin()) {
 				return fmt.Errorf("tokenops approve needs a terminal: run it yourself, not through an agent (an agent can only deny)")
 			}
+			if confirm {
+				ok, err := confirmAnswer(cmd, verb, args[0], session)
+				if err != nil || !ok {
+					return err
+				}
+			}
 			res, err := bcap.Decide(bcap.Env{}, bcap.DecideRequest{ID: args[0], Decision: verb, Session: session, Method: bcap.MethodCLI})
 			if err != nil {
 				return err
@@ -291,6 +336,7 @@ decision with your user name, so 'tokenops explain <id>' shows who answered.`,
 		},
 	}
 	cmd.Flags().BoolVar(&session, "session", false, "answer for the rest of the session, not only the next step")
+	cmd.Flags().BoolVar(&confirm, "confirm", false, "show what is waiting and ask before answering (the menu bar opens a terminal with this)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
 }

@@ -1717,6 +1717,30 @@
                       "properties": {},
                       "type": "object"
                     },
+                    "boundaries": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "action": {
+                            "type": "string"
+                          },
+                          "advice": {
+                            "type": "string"
+                          },
+                          "crossed": {
+                            "type": "string"
+                          },
+                          "require": {
+                            "type": "string"
+                          },
+                          "rule": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "insight": {
                       "additionalProperties": false,
                       "properties": {

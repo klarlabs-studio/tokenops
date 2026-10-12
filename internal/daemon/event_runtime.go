@@ -9,6 +9,8 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	"go.klarlabs.de/tokenops/internal/capability/auditlog"
+	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
+	"go.klarlabs.de/tokenops/internal/capability/budgets"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
@@ -94,7 +96,7 @@ func initializeEventRuntime(
 			_ = components.Shutdown()
 			return nil, fmt.Errorf("otlp exporter: %w", err)
 		}
-		sinks = append(sinks, exporter)
+		sinks = append(sinks, gateShare(cfg, bcap.DestinationOTel, exporter, logger))
 		logger.Info("otlp exporter ready", "endpoint", cfg.OTel.Endpoint, "redact", cfg.OTel.RedactEnabled())
 	}
 
@@ -105,6 +107,13 @@ func initializeEventRuntime(
 	warmGlanceEvents(sup, glance, logger)
 	startOTelMetricsRuntime(cfg, rt.Store, glance, components, sup, logger)
 	startTeamUploadRuntime(cfg, components, sup, logger)
+	// A nil aggregator must reach the runtime as a nil Source, not a
+	// typed nil it would call.
+	var budgetSource budgets.Source
+	if components.Aggregator != nil {
+		budgetSource = components.Aggregator
+	}
+	startBoundaryFiguresRuntime(cfg, plansDeps(cfg, glance, components.Spend), budgetSource, sup, logger)
 
 	// Plan stamping ensures all sources inherit the plan_included contract.
 	rt.Bus = events.NewAsync(newPlanStampSink(events.NewMultiSink(sinks...), cfg), events.Options{

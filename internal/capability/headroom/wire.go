@@ -1,6 +1,7 @@
 package headroom
 
 import (
+	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/presentation"
 )
@@ -44,6 +45,10 @@ type GlancePayload struct {
 	// for the operator's own view. It never leaves the machine: the
 	// telemetry export reads figures only.
 	Accounts map[string]string `json:"accounts,omitempty"`
+	// Boundaries are the operator's boundaries that hold now, as advice
+	// for an agent whose harness cannot be refused (ADR 0014). The caller
+	// sets them; Payload leaves them empty.
+	Boundaries []bcap.Advice `json:"boundaries,omitempty"`
 }
 
 // Payload is r on the wire.
