@@ -3,6 +3,10 @@ layout: home
 hero:
   name: TokenOps
   text: Analytics tells you about last week's retry loop. TokenOps ends this one.
+  image:
+    light: /mark.svg
+    dark: /mark-dark.svg
+    alt: ""
   tagline: Your coding agents already write down everything they do. TokenOps reads those files on your machine — Claude Code, Codex, opencode, Cursor, Gemini CLI — watches every plan's limits, and hands the agent back something it can act on mid-task. Your prompts and your code never leave this machine. No account. Apache 2.0.
   actions:
     - theme: brand
