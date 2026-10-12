@@ -252,3 +252,30 @@ option:
   stays deny-only. The menu bar denies through it and, for an approval,
   opens a terminal running `tokenops approve <id> --confirm`, which shows
   what waits and answers only on a typed yes.
+
+## Phase 3 as built (amended 2026-10-13)
+
+- **The document is signed and pinned.** The server signs the exact bytes
+  of the organisation's rules with an Ed25519 key derived from its secret.
+  A machine pins the key on its first fetch and verifies on every read,
+  including the cached copy the pause point reads, so the rules cannot be
+  loosened by editing a file. A document under another key is refused
+  until the machine joins again. Leaving forgets the rules.
+- **Organisation rules keep their own names and stage.** They are shown and
+  keyed as `org:<name>`, so they never collide with a local rule, and their
+  stage is the organisation's: a member can neither promote nor demote one.
+- **Only organisation rules are routed.** A local `approver:<role>` is still
+  answered on the machine; only an organisation rule's request leaves it,
+  and it carries the rule's name (the organisation's own), the action, the
+  client and structured crossings. A budget's name is a member's label and
+  is left out.
+- **The keyboard does not answer a routed rule.** Whoever is at Claude
+  Code's prompt need not hold the role, so a routed rule refuses instead of
+  asking, and `tokenops approve` refuses it. Deny still works locally.
+- **Nobody approves themselves through a token.** The team plane refuses
+  an answer, through an administrator token, from the member who asked: an
+  agent on that member's machine could hold the token. The same person
+  may answer in the web view, signed in.
+- **A one-step approval is spent.** The server returns an existing request
+  only while it is pending or was answered for the session; after a
+  one-step answer the next step is a new request.

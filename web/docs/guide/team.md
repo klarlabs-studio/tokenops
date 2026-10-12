@@ -165,7 +165,18 @@ tokenops team admin grant "Lars" --team platform --reason "1:1 coaching, agreed 
 tokenops team admin revoke <grant-id>
 tokenops team admin audit                 # newest first
 tokenops team admin billing               # trial, subscription, seats
+tokenops team admin boundaries            # the organisation's boundaries
+tokenops team admin boundaries --set org.yaml   # replace them (owners and admins)
+tokenops team admin approvals             # requests waiting on your role (--all: answered too)
+tokenops team admin approve <id> [--session]
+tokenops team admin deny <id>
 ```
+
+[Boundaries](/guide/boundaries#organisation-boundaries) set here apply on every
+member's machine, beside their own, and only tighten. A rule naming
+`approver:<role>` sends its request to everyone with that role or above, by
+e-mail; they answer in the web view (*Approvals*) or with `approve`. Through
+the CLI nobody answers their own request.
 
 Members are named by ID, sign-in address or exact name. The listing commands
 take `--json`. Granting is an owner's; the member covered sees the grant
