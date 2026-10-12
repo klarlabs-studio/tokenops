@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"go.klarlabs.de/tokenops/internal/contexts/boundaries"
 )
 
 // Mode values. Passive collects + analyzes on demand (default); Active
@@ -64,6 +66,11 @@ type Config struct {
 	// it names. A company can ship it through device management like any
 	// other setting.
 	ModelPolicy ModelPolicyConfig `yaml:"model_policy,omitempty"`
+	// Boundaries are limits set before work starts (ADR 0014): an action
+	// the agent is about to take, the figures that must hold, and what
+	// is then required — allow, ask, approver:<role> or deny. Each rule
+	// starts in shadow and binds once its stage is enforce.
+	Boundaries []boundaries.RuleSpec `yaml:"boundaries,omitempty"`
 	// Money is the currency you pay your plans in, for showing plan cost
 	// and value per plan unit in it.
 	Money MoneyConfig `yaml:"money,omitempty"`

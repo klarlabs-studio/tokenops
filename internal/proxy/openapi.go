@@ -9,6 +9,7 @@ import (
 	"go.klarlabs.de/mcp/schema"
 
 	"go.klarlabs.de/tokenops/internal/capability/actions"
+	"go.klarlabs.de/tokenops/internal/capability/boundaries"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/decisions"
@@ -92,6 +93,7 @@ var APICatalog = []RouteDoc{
 	{Method: "GET", Path: "/api/workflows/{id}", Summary: "One workflow's trace and the waste found in it", Params: []Param{{Name: "id", In: "path", Type: "string", Description: "workflow id"}}},
 	{Method: "GET", Path: "/api/optimizations", Summary: "Optimization recommendations recorded"},
 	{Method: "GET", Path: "/api/routing/proposals", Summary: "Model upgrades waiting on the operator", Response: decisions.Proposals{}},
+	{Method: "GET", Path: "/api/boundaries", Summary: "Each action boundary, how often it matched, where it is enforced, and what waits on the operator", Response: boundaries.Status{}},
 	{Method: "GET", Path: "/api/decisions/{id}", Summary: "Why a decision was made", Params: []Param{{Name: "id", In: "path", Type: "string", Description: "decision id"}}, Response: decisions.Explanation{}},
 
 	// Rules, audit, events.
@@ -109,6 +111,7 @@ var APICatalog = []RouteDoc{
 	{Method: "POST", Path: "/api/plans", Summary: "Bind a provider to a plan, or clear it", Request: PlanRequest{}, Response: actions.PlanChange{}},
 	{Method: "POST", Path: "/api/preferred-models", Summary: "Set or clear a provider's preferred model", Request: PreferredModelRequest{}, Response: actions.PreferredModels{}},
 	{Method: "POST", Path: "/api/routing/decisions", Summary: "Answer a routing proposal", Request: RoutingDecisionRequest{}, Response: actions.RoutingDecision{}},
+	{Method: "POST", Path: "/api/boundaries/decisions", Summary: "Answer a boundary that asked or refused", Request: BoundaryDecisionRequest{}, Response: boundaries.Decided{}},
 	{Method: "POST", Path: "/api/outcomes", Summary: "Record the operator's judgement of an execution", Request: OutcomeRequest{}, Response: actions.Outcome{}},
 	{Method: "POST", Path: "/api/coach", Summary: "Apply a coach preset, or change its dials", Request: coachcap.ChangeRequest{}, Response: coachcap.Report{}},
 }

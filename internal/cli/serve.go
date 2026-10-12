@@ -293,7 +293,7 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 		return fmt.Errorf("register coach tools: %w", err)
 	}
 
-	// Agents see sixteen tools, each answering one question; the tools
+	// Agents see seventeen tools, each answering one question; the tools
 	// registered above answer behind them.
 	if err := mcp.Consolidate(srv); err != nil {
 		return fmt.Errorf("consolidate tools: %w", err)

@@ -20,7 +20,7 @@ func TestInstallOpencodeReplacesTheLegacyV2File(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := installOpencodePlugin(&out, dir, "/bin/tokenops", true, false, false, false, 50); err != nil {
+	if err := installOpencodePlugin(&out, dir, "/bin/tokenops", hookSelection{readGuard: true}, false, 50); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(legacy); !os.IsNotExist(err) {
@@ -43,7 +43,7 @@ func TestInstallOpencodeLeavesAForeignV2FileAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := installOpencodePlugin(&out, dir, "/bin/tokenops", true, false, false, false, 50); err != nil {
+	if err := installOpencodePlugin(&out, dir, "/bin/tokenops", hookSelection{readGuard: true}, false, 50); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(foreign); err != nil {

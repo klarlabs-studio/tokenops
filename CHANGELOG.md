@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **boundaries:** action boundaries, phase 1 (ADR 0014). A `boundaries:` section in `config.yaml` sets limits before work starts: an action (`continue`, the agent's next tool call; `subagent_model`), conditions on figures TokenOps already holds (`session_cost_usd`, `plan_left_pct` with `window: 5h|week`, `model_tier`, `workflow_id`, `agent_id`) and what is then required (`allow`, `ask`, `approver:<role>`, `deny`). The strictest enforced rule wins; a config with an unknown action or condition is refused with the rule named. Every rule starts in shadow, recording what it would have done; `tokenops boundaries promote <name>` writes `stage: enforce` beside it (`demote` undoes it)
+- **boundaries:** the pause point. `tokenops hooks install --boundary` wires a PreToolUse hook on every tool in Claude Code, and the opencode plugin's `tool.execute.before`; route-guard's Agent hook checks `subagent_model` rules. An enforced `ask` asks at Claude Code's prompt when someone is there and otherwise refuses with the rule, what was crossed and `tokenops approve <id>`; `deny` refuses. It reads ids only, answers from two small files in about 0.4 ms (a 5 ms budget, gated in `make bench-gate`), and fails open, recording the failure. Codex and Cursor are reported as advice only
+- **boundaries:** local answers. `tokenops approve <id> [--session]` (at a terminal only) and `tokenops deny <id>`; the MCP tool `tokenops_boundaries` (`action=decide`) and `POST /api/boundaries/decisions` can only deny, so the agent a boundary stopped cannot approve itself; a yes at Claude Code's prompt is read back and holds for the session. `tokenops boundaries status [--json]`, `tokenops_boundaries` (`action=status`) and `GET /api/boundaries` show each rule's stage, how often it matched or would have fired, per client whether it is enforced or advice only, and what waits on you. `approver:<role>` is answered locally, as `ask`, until the team plane routes it
+- **events:** `DecisionEvent` names its `actor` (harness, session, agent, local user) and its `approval` (approver, method, time, rule, scope); schema 1.6.0. `tokenops explain <bnd-…>` and `tokenops_explain` show the rule and who answered
+
 ## 0.102.0 - 2026-10-12
 
 ### Added

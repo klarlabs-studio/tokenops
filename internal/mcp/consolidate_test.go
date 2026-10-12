@@ -84,13 +84,13 @@ func TestEveryViewReachesARegisteredTool(t *testing.T) {
 }
 
 var wantPublic = []string{
-	"tokenops_coach", "tokenops_configure", "tokenops_experiment", "tokenops_explain", "tokenops_fmt",
+	"tokenops_boundaries", "tokenops_coach", "tokenops_configure", "tokenops_experiment", "tokenops_explain", "tokenops_fmt",
 	"tokenops_glance", "tokenops_outcome", "tokenops_prepare_work", "tokenops_pricing", "tokenops_records",
 	"tokenops_review_work", "tokenops_routing", "tokenops_rules", "tokenops_sessions", "tokenops_spend",
 	"tokenops_status",
 }
 
-// Agents see sixteen tools, each titled, annotated by what it may do,
+// Agents see seventeen tools, each titled, annotated by what it may do,
 // with an output schema, and every parameter described.
 func TestConsolidatedToolsAreDescribed(t *testing.T) {
 	srv := fullServer(t)

@@ -27,6 +27,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pisessions"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/pollnow"
 	"go.klarlabs.de/tokenops/internal/events"
+	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/internal/infra/browsercookie"
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
 	"go.klarlabs.de/tokenops/internal/infra/codexsettings"
@@ -140,6 +141,12 @@ func StartVendorUsagePollers(
 	// them in a file; reading a file that does not exist costs nothing.
 	sl := claudestatusline.NewPoller(bus, claudestatusline.PollerOptions{Logger: logger})
 	sup.Go("claude-code-statusline", refreshable(sig, sl.Run))
+
+	// The boundary pause point records its decisions in a ledger beside
+	// the hooks' other state; reading one that does not exist costs
+	// nothing.
+	bl := boundaryledger.NewPoller(bus, "", time.Minute, logger)
+	sup.Go("boundary-ledger", refreshable(sig, bl.Run))
 
 	if cfg.VendorUsage.ClaudeUsageMeter.Enabled {
 		p := claudeusagemeter.NewPoller(bus, claudeusagemeter.PollerOptions{

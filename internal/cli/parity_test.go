@@ -40,6 +40,7 @@ var cliOnly = map[string]string{
 	"replay":           "is a tool for working on TokenOps itself",
 	"coverage-debt":    "is a tool for working on TokenOps itself",
 	"route-guard":      "is a hook entry point invoked by a client, not a user",
+	"boundary-guard":   "is a hook entry point invoked by a client, not a user",
 	"statusline":       "is a status line Claude Code runs on every turn, not a query an agent makes",
 	"completion":       "is cobra's shell completion generator",
 	"help":             "is cobra's help command",
@@ -81,6 +82,9 @@ var cliToMCP = map[string][]string{
 	"budget":          {"tokenops_configure"},
 	"optimizations":   {"tokenops_records"},
 	"routing":         {"tokenops_routing"},
+	"boundaries":      {"tokenops_boundaries"},
+	"approve":         {"tokenops_boundaries"},
+	"deny":            {"tokenops_boundaries"},
 }
 
 // mcpOnly are tools with no CLI equivalent, each with the reason. Several

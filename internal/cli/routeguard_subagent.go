@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/routers"
 
 	"github.com/spf13/cobra"
 
+	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/routeguard"
@@ -19,6 +21,7 @@ import (
 
 type agentToolInput struct {
 	SessionID      string         `json:"session_id"`
+	AgentID        string         `json:"agent_id"`
 	TranscriptPath string         `json:"transcript_path"`
 	ToolUseID      string         `json:"tool_use_id"`
 	ToolInput      map[string]any `json:"tool_input"`
@@ -53,6 +56,11 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 	}
 	report := coachcap.Build(cfg)
 	requested, _ := in.ToolInput["model"].(string)
+	// A boundary is the owner's limit set before work starts (ADR 0014):
+	// it is checked before anything here may move the call.
+	if res := subagentBoundary(cmd, cfg, in, requested); res.Verdict != bcap.VerdictNone {
+		return writeBoundaryVerdict(cmd.OutOrStdout(), res)
+	}
 	catalog := routeCatalog(cfg)
 	// The model policy is the operator's rule, not the coach's advice, so
 	// it holds whatever the coach's dials say.
@@ -225,4 +233,20 @@ func proposalResolutions(outcomes []routeguard.ProposalOutcome) []coachcap.Resol
 		out = append(out, coachcap.Resolution{ID: o.ID, Kind: o.Kind, Followed: o.Approved, Evidence: evidence})
 	}
 	return out
+}
+
+// subagentBoundary evaluates the subagent_model boundaries for the model
+// the subagent would run on: the one it names, or the session's own when
+// it inherits.
+func subagentBoundary(cmd *cobra.Command, cfg config.Config, in agentToolInput, requested string) bcap.Result {
+	model := requested
+	if model == "" || strings.EqualFold(model, "inherit") {
+		model = latestTranscriptModel(in.TranscriptPath)
+	}
+	call := bcap.Call{
+		Harness: bcap.HarnessClaudeCode, SessionID: in.SessionID, TranscriptPath: in.TranscriptPath,
+		ToolUseID: in.ToolUseID, Action: "subagent_model", Model: model,
+	}
+	call.AgentID, call.WorkflowID = bcap.Attribution(bcap.HarnessClaudeCode, in.SessionID, bcap.TranscriptProject(in.TranscriptPath))
+	return guardWithTimeout(cmd.Context(), cfg, call, bcap.Env{Attended: sessionAttended()})
 }

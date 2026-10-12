@@ -47,7 +47,7 @@ Before a long task, call tokenops_glance: each plan's windows with their pace, a
 
 For questions: tokenops_spend (what was spent), tokenops_sessions (how sessions go), tokenops_records (what TokenOps recorded), tokenops_status (whether TokenOps is working), tokenops_explain (what a figure means, or why a decision was made). Most tools pick their slice with a view.
 
-tokenops_routing, tokenops_configure, tokenops_coach and tokenops_experiment change settings: confirm with the operator first.`
+tokenops_routing, tokenops_configure, tokenops_coach and tokenops_experiment change settings: confirm with the operator first. tokenops_boundaries answers a boundary that stopped you only on the operator's word: never approve your own.`
 
 // ServeStdio runs srv over the JSON-RPC/stdio transport from mcp-go.
 // It blocks until ctx is cancelled or the input stream closes.

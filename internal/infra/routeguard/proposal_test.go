@@ -48,3 +48,19 @@ func TestSettleProposalsKeepsDeclinesAndDropsApprovals(t *testing.T) {
 		t.Errorf("settled twice: %+v", again)
 	}
 }
+
+func TestToolAnsweredReadsThePrompt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "t.jsonl")
+	body := `{"message":{"content":[{"type":"tool_result","tool_use_id":"ok","content":"done"}]}}
+{"message":{"content":[{"type":"tool_result","tool_use_id":"no","is_error":true,"content":"The user doesn't want to proceed with this tool use."}]}}
+`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[string][2]bool{"ok": {true, true}, "no": {false, true}, "later": {false, false}} {
+		approved, seen := ToolAnswered(path, id)
+		if approved != want[0] || seen != want[1] {
+			t.Errorf("%s: approved=%v seen=%v; want %v", id, approved, seen, want)
+		}
+	}
+}

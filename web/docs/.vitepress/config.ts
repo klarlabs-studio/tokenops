@@ -35,6 +35,7 @@ export default defineConfig({
             { text: "Configuration", link: "/guide/configuration" },
             { text: "CLI", link: "/guide/cli" },
             { text: "Daemon API", link: "/guide/api" },
+            { text: "Action boundaries", link: "/guide/boundaries" },
             { text: "Team plane", link: "/guide/team" },
           ],
         },

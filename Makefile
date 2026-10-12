@@ -40,9 +40,11 @@ bench:
 
 # bench-gate runs the proxy p99-overhead gate (TestProxyP99OverheadGate).
 # This is the CI regression gate for proxy-bench: it asserts proxy p99
-# overhead stays below 50ms (override via TOKENOPS_BENCH_P99_MS).
+# overhead stays below 50ms (override via TOKENOPS_BENCH_P99_MS), and the
+# boundary pause point under its 5ms per-call budget (ADR 0014).
 bench-gate:
 	$(GO) test -run TestProxyP99OverheadGate -count=1 ./internal/proxy/
+	$(GO) test -run TestGuardIsWithinItsBudget -count=1 ./internal/capability/boundaries/
 
 # eval runs the full optimizer quality eval suite against offline
 # fixtures. Reports per-optimizer quality scores, compression ratios,

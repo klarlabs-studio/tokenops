@@ -341,3 +341,14 @@ func approx(a, b float64) bool {
 	}
 	return d < 0.005
 }
+
+func TestSessionCostUSDReadsTheRunningTotal(t *testing.T) {
+	dir := t.TempDir()
+	if _, ok := SessionCostUSD(dir, "s1"); ok {
+		t.Fatal("unknown session reported a cost")
+	}
+	saveSession(dir, "s1", sessionState{CumulativeUSD: 23.5})
+	if got, ok := SessionCostUSD(dir, "s1"); !ok || got != 23.5 {
+		t.Fatalf("SessionCostUSD = %v, %v", got, ok)
+	}
+}

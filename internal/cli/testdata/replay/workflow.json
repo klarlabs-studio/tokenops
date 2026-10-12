@@ -12,7 +12,7 @@
       {
         "OriginalEnvelope": {
           "id": "wt-0",
-          "schema_version": "1.5.0",
+          "schema_version": "1.6.0",
           "type": "prompt",
           "timestamp": "2026-01-05T10:00:00Z",
           "source": "test",
@@ -43,7 +43,7 @@
       {
         "OriginalEnvelope": {
           "id": "wt-1",
-          "schema_version": "1.5.0",
+          "schema_version": "1.6.0",
           "type": "prompt",
           "timestamp": "2026-01-05T10:01:00Z",
           "source": "test",
@@ -74,7 +74,7 @@
       {
         "OriginalEnvelope": {
           "id": "wt-2",
-          "schema_version": "1.5.0",
+          "schema_version": "1.6.0",
           "type": "prompt",
           "timestamp": "2026-01-05T10:02:00Z",
           "source": "test",
@@ -105,7 +105,7 @@
       {
         "OriginalEnvelope": {
           "id": "wt-3",
-          "schema_version": "1.5.0",
+          "schema_version": "1.6.0",
           "type": "prompt",
           "timestamp": "2026-01-05T10:03:00Z",
           "source": "test",
@@ -136,7 +136,7 @@
       {
         "OriginalEnvelope": {
           "id": "wt-4",
-          "schema_version": "1.5.0",
+          "schema_version": "1.6.0",
           "type": "prompt",
           "timestamp": "2026-01-05T10:04:00Z",
           "source": "test",

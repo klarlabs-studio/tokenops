@@ -8,10 +8,10 @@ import (
 
 func newHooksUninstallCmd() *cobra.Command {
 	var (
-		coach, readGuard, routeGuard bool
-		settingsPath                 string
-		dryRun                       bool
-		client                       string
+		coach, readGuard, routeGuard, boundary bool
+		settingsPath                           string
+		dryRun                                 bool
+		client                                 string
 	)
 	cmd := &cobra.Command{
 		Use:   "uninstall",
@@ -22,7 +22,7 @@ func newHooksUninstallCmd() *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			markers := selectedMarkers(coach, readGuard, routeGuard)
+			markers := selectedMarkers(coach, readGuard, routeGuard, boundary)
 
 			if opencodeClient(client) {
 				pdir, derr := opencodePluginDir(settingsPath)
@@ -80,6 +80,7 @@ func newHooksUninstallCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&coach, "coach", false, "remove the coaching nudge")
 	cmd.Flags().BoolVar(&readGuard, "read-guard", false, "remove the read guard")
 	cmd.Flags().BoolVar(&routeGuard, "route-guard", false, "remove the per-turn model-fit guard")
+	cmd.Flags().BoolVar(&boundary, "boundary", false, "remove the action-boundary pause point")
 	cmd.Flags().StringVar(&client, "client", hookClientClaudeCode, hookClientFlagUsage)
 	cmd.Flags().StringVar(&settingsPath, "settings", "", "hook config path (defaults per client)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would change without writing")
@@ -92,8 +93,8 @@ func newHooksUninstallCmd() *cobra.Command {
 // Naming none means all of them: an uninstall with no argument reads as
 // "leave nothing of yours behind", and defaulting to a subset is what let a
 // full uninstall silently keep route-guard wired.
-func selectedMarkers(coach, readGuard, routeGuard bool) []string {
-	if !coach && !readGuard && !routeGuard {
+func selectedMarkers(coach, readGuard, routeGuard, boundary bool) []string {
+	if !coach && !readGuard && !routeGuard && !boundary {
 		return hookMarkers
 	}
 	var out []string
@@ -105,6 +106,9 @@ func selectedMarkers(coach, readGuard, routeGuard bool) []string {
 	}
 	if routeGuard {
 		out = append(out, "route-guard")
+	}
+	if boundary {
+		out = append(out, "boundary-guard")
 	}
 	return out
 }

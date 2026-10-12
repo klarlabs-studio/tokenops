@@ -104,6 +104,10 @@ func NewRoot() *cobra.Command {
 		newExplainCmd(),
 		newCoachHookCmd(rf),
 		newHooksCmd(),
+		newBoundariesCmd(),
+		newBoundaryAnswerCmd("approve"),
+		newBoundaryAnswerCmd("deny"),
+		newBoundaryGuardCmd(rf),
 	)
 	organize(cmd)
 	return cmd

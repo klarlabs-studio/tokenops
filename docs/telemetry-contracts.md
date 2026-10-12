@@ -146,6 +146,13 @@ provenance-bearing measurements separate from consumption. `ExperimentEvent`
 records explicit enrollment, bounds, assignments, and termination. Prompt and
 tool bodies are never copied into these payloads.
 
+Since schema 1.6.0 a `DecisionEvent` may also name its `actor` (`harness`,
+`session_id`, `agent_id`, and the local `user` the process ran as) and, once
+someone answered a decision that asked, its `approval` (`approver`, `method`
+— cli, mcp, api or prompt — `at`, `rule`, and `scope` — once or session).
+Both are optional and omitted when empty. Boundary decisions (ADR 0014) set
+`kind: boundary` and `policy: boundary:<rule name>`.
+
 ---
 
 ## 1. Envelope Contract

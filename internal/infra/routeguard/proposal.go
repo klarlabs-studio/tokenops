@@ -150,3 +150,15 @@ func toolResults(path string) map[string]bool {
 	}
 	return out
 }
+
+// ToolAnswered reports how the operator answered the permission prompt
+// raised on toolUseID: seen is false while the transcript holds no result
+// for the call, and approved is true when it ran rather than being
+// declined. The boundary pause point reads its own asks back with it.
+func ToolAnswered(transcript, toolUseID string) (approved, seen bool) {
+	if toolUseID == "" {
+		return false, false
+	}
+	rejected, ok := toolResults(transcript)[toolUseID]
+	return ok && !rejected, ok
+}

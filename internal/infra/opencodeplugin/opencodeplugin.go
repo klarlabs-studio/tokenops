@@ -59,12 +59,15 @@ type Plugin struct {
 	ReadGuard  bool
 	Coach      bool
 	RouteGuard bool
+	// Boundary is the action-boundary pause point (ADR 0014), on every
+	// tool call.
+	Boundary bool
 	// Budget is baked into the coach call; it matters only with Coach.
 	Budget float64
 }
 
 // Empty reports whether no half is wired.
-func (p Plugin) Empty() bool { return !p.ReadGuard && !p.Coach && !p.RouteGuard }
+func (p Plugin) Empty() bool { return !p.ReadGuard && !p.Coach && !p.RouteGuard && !p.Boundary }
 
 // Has reports whether the generated source still calls the given verb.
 //
@@ -123,6 +126,7 @@ func Parse(src string, defaultBudget float64) Plugin {
 		ReadGuard:  Has(src, "read-guard"),
 		Coach:      Has(src, "coach-hook"),
 		RouteGuard: Has(src, "route-guard"),
+		Boundary:   Has(src, "boundary-guard"),
 	}
 	if p.Coach {
 		if b, ok := Budget(src); ok {
@@ -170,6 +174,7 @@ func Refresh(dir, version string, defaultBudget float64) (RefreshResult, error) 
 		old := Parse(legacy, defaultBudget)
 		merged.ReadGuard = merged.ReadGuard || old.ReadGuard
 		merged.RouteGuard = merged.RouteGuard || old.RouteGuard
+		merged.Boundary = merged.Boundary || old.Boundary
 		if merged.Exe == "" {
 			merged.Exe = old.Exe
 		}
@@ -230,9 +235,13 @@ func readGenerated(path string) (string, bool, error) {
 
 // Render is the plugin with the chosen halves.
 func Render(p Plugin, version string) string {
-	v1 := readGuardV1(p.ReadGuard) + coachV1(p.Coach, p.Budget) + routeV1(p.RouteGuard)
-	v2 := readGuardV2(p.ReadGuard) + routeV2(p.RouteGuard)
-	return fmt.Sprintf(template, version, p.Exe, v1, v2)
+	v1 := toolBeforeV1(p.ReadGuard, p.Boundary) + coachV1(p.Coach, p.Budget) + routeV1(p.RouteGuard)
+	v2 := readGuardV2(p.ReadGuard) + routeV2(p.RouteGuard) + boundaryV2(p.Boundary)
+	body := fmt.Sprintf(template, version, p.Exe, v1, v2)
+	if p.Boundary {
+		body = strings.Replace(body, "\nexport default {", boundaryHelper+"\nexport default {", 1)
+	}
+	return body
 }
 
 // template is the shim. The first %s is the version, %q the binary, then
@@ -325,6 +334,88 @@ func readGuardV1(on bool) string {
       }
       if (denyReason) throw new Error(denyReason)
     },
+`
+}
+
+// toolBeforeV1 is opencode 1.x's one tool.execute.before member. A hooks
+// object has one key per event, so read-guard and the boundary pause
+// point share it: read-guard runs first, on reads only, and the boundary
+// runs on every tool unless read-guard already refused.
+func toolBeforeV1(readGuard, boundary bool) string {
+	if !boundary {
+		return readGuardV1(readGuard)
+	}
+	read := ""
+	if readGuard {
+		read = `      if (input?.tool === "read" && output?.args?.filePath) {
+        try {
+          const toolInput = { file_path: output.args.filePath }
+          if (output.args.offset !== undefined && output.args.offset !== null) {
+            toolInput.offset = output.args.offset
+          }
+          if (output.args.limit !== undefined && output.args.limit !== null) {
+            toolInput.limit = output.args.limit
+          }
+          const out = await run(["read-guard"], {
+            session_id: input.sessionID ?? "",
+            tool_name: "Read",
+            tool_input: toolInput,
+          })
+          if (out) {
+            const d = JSON.parse(out)?.hookSpecificOutput
+            if (d?.permissionDecision === "deny") {
+              denyReason = d.permissionDecisionReason || "tokenops read-guard: redundant re-read"
+            }
+          }
+        } catch {
+          // fail open
+        }
+      }
+`
+	}
+	return `    "tool.execute.before": async (input, output) => {
+      let denyReason = null
+` + read + `      if (!denyReason) denyReason = await boundary(input?.sessionID, input?.tool)
+      if (denyReason) throw new Error(denyReason)
+    },
+`
+}
+
+// boundaryHelper asks the pause point about one tool call. It sends ids
+// and the tool's name only, never its arguments, and fails open.
+const boundaryHelper = `
+// boundary asks tokenops' action boundaries about one tool call and
+// returns the refusal reason, or null. opencode has no permission prompt
+// a plugin can raise, so a boundary that asks refuses with the way out.
+async function boundary(sessionID, tool) {
+  try {
+    const out = await run(["boundary-guard", "--client", "opencode"], {
+      session_id: sessionID ?? "",
+      tool_name: tool ?? "",
+      directory: process.cwd(),
+    })
+    if (!out) return null
+    const d = JSON.parse(out)?.hookSpecificOutput
+    if (d?.permissionDecision === "deny" || d?.permissionDecision === "ask") {
+      return d.permissionDecisionReason || "tokenops: an action boundary refused this step"
+    }
+  } catch {
+    // fail open
+  }
+  return null
+}
+`
+
+// boundaryV2 is the pause point for opencode 2: a second execute.before
+// registration, on every tool.
+func boundaryV2(on bool) string {
+	if !on {
+		return ""
+	}
+	return `    await ctx.tool.hook("execute.before", async (event) => {
+      const denyReason = await boundary(event?.sessionID, event?.tool)
+      if (denyReason) throw new Error(denyReason)
+    })
 `
 }
 
@@ -465,7 +556,8 @@ func routeV2(on bool) string {
 
 // Events names the extension point each verb hooks, per opencode version.
 var Events = map[string]string{
-	"read-guard":  "tool.execute.before",
-	"coach-hook":  "session.idle (opencode 1.x)",
-	"route-guard": "chat.message / session prompt",
+	"read-guard":     "tool.execute.before",
+	"coach-hook":     "session.idle (opencode 1.x)",
+	"route-guard":    "chat.message / session prompt",
+	"boundary-guard": "tool.execute.before (every tool)",
 }
