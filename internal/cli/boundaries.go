@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -272,8 +273,32 @@ func newBoundariesStageCmd(verb string) *cobra.Command {
 // stdin is a terminal. A variable so tests can stand in for one.
 var approverAtTerminal = func(in io.Reader) bool { return interactiveInput(in, false) }
 
+// confirmAnswer shows the decision waiting on id and asks for a yes. Only
+// y or yes answers; anything else, or no answer, leaves it waiting.
+func confirmAnswer(cmd *cobra.Command, verb, id string, session bool) (bool, error) {
+	p, err := bcap.Waiting(bcap.Env{}, id)
+	if err != nil {
+		return false, err
+	}
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "Boundary %q (%s) asked at %s:\n  %s\n  from %s, session %s\n",
+		p.Rule, p.Require, p.At.Local().Format("15:04"), p.Crossed, p.Harness, p.SessionID)
+	scope := "the next step only"
+	if session {
+		scope = "the rest of the session (at most 24 hours)"
+	}
+	fmt.Fprintf(out, "%s it for %s? [y/N] ", strings.ToUpper(verb[:1])+verb[1:], scope)
+	line, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true, nil
+	}
+	fmt.Fprintln(out, "Left waiting; nothing was answered.")
+	return false, nil
+}
+
 func newBoundaryAnswerCmd(verb string) *cobra.Command {
-	var session, jsonOut bool
+	var session, jsonOut, confirm bool
 	short := "Let an agent past a boundary that asked: its next step, or the rest of the session"
 	if verb == "deny" {
 		short = "Refuse what a boundary asked about: the next step, or the rest of the session"
@@ -293,6 +318,12 @@ decision with your user name, so 'tokenops explain <id>' shows who answered.`,
 			if verb == "approve" && !approverAtTerminal(cmd.InOrStdin()) {
 				return fmt.Errorf("tokenops approve needs a terminal: run it yourself, not through an agent (an agent can only deny)")
 			}
+			if confirm {
+				ok, err := confirmAnswer(cmd, verb, args[0], session)
+				if err != nil || !ok {
+					return err
+				}
+			}
 			res, err := bcap.Decide(bcap.Env{}, bcap.DecideRequest{ID: args[0], Decision: verb, Session: session, Method: bcap.MethodCLI})
 			if err != nil {
 				return err
@@ -305,6 +336,7 @@ decision with your user name, so 'tokenops explain <id>' shows who answered.`,
 		},
 	}
 	cmd.Flags().BoolVar(&session, "session", false, "answer for the rest of the session, not only the next step")
+	cmd.Flags().BoolVar(&confirm, "confirm", false, "show what is waiting and ask before answering (the menu bar opens a terminal with this)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
 }

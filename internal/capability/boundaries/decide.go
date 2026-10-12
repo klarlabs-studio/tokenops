@@ -96,6 +96,26 @@ func Decide(env Env, req DecideRequest) (Decided, error) {
 	return out, nil
 }
 
+// Waiting reads one decision waiting on an answer, for a person about to
+// give it: `tokenops approve --confirm` shows it before asking.
+func Waiting(env Env, id string) (PendingView, error) {
+	id = strings.TrimSpace(id)
+	if !domain.ValidDecisionID(id) {
+		return PendingView{}, actions.InputError{Err: fmt.Errorf("%q is not a boundary decision id (bnd-…)", id)}
+	}
+	p, ok, err := env.Dir.GetPending(id)
+	if err != nil {
+		return PendingView{}, err
+	}
+	if !ok {
+		return PendingView{}, actions.InputError{Err: fmt.Errorf("no boundary decision %s is waiting on an answer", id)}
+	}
+	return PendingView{
+		ID: p.ID, Rule: p.Rule, Require: p.Require, Crossed: p.Crossed, Harness: p.Harness,
+		SessionID: p.SessionID, At: p.At, Approve: "tokenops approve " + p.ID,
+	}, nil
+}
+
 // approvesInPerson reports whether an answer by this method can approve.
 // The agent a boundary stopped can call MCP tools and reach the local API,
 // so those may only deny; an approval comes from a terminal (the CLI
