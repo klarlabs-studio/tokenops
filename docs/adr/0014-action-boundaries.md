@@ -1,6 +1,6 @@
 # ADR 0014 — Action boundaries: who may authorize what, decided before the agent acts
 
-- **Status:** Proposed 2026-10-12
+- **Status:** Accepted 2026-10-12
 - **Date:** 2026-10-12
 - **Deciders:** TokenOps maintainers
 - **Related:** ADR 0004 (one authority concept; explain before automating), ADR 0007 (one model policy; not a hard control), ADR 0012 (team plane), ADR 0013 (grants for other apps' sign-ins)
