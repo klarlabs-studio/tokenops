@@ -91,6 +91,20 @@ type Store struct {
 	slowLock time.Duration
 	// skippedInvalid counts envelopes AppendBatch refused to store.
 	skippedInvalid atomic.Int64
+	// stopCheckpoints ends the background checkpoint loop, and
+	// checkpointsDone closes when it has; both nil without one.
+	stopCheckpoints chan struct{}
+	checkpointsDone chan struct{}
+	// checkpoints counts the loop's runs, and lastCheckpoint holds what
+	// the latest one found.
+	checkpoints    atomic.Int64
+	lastCheckpoint atomic.Pointer[Checkpoint]
+}
+
+// Checkpoint is what one WAL checkpoint found: the frames the WAL held
+// and how many of them are now copied into the database.
+type Checkpoint struct {
+	Frames, Backfilled int64
 }
 
 // Options tunes the connection. Zero values fall back to sensible defaults.
@@ -106,6 +120,17 @@ type Options struct {
 	// SlowLockWarn is how long a write may wait for, or hold, the lock
 	// before it is logged. Zero uses defaultSlowLockWarn.
 	SlowLockWarn time.Duration
+	// BackgroundCheckpoint, when positive, takes WAL checkpoints out of
+	// the commits: SQLite's auto-checkpoint is turned off on this
+	// handle's connections, and a loop checkpoints (PASSIVE, so it never
+	// takes the write lock) at this interval until Close. For the
+	// long-running main writer, the daemon. A commit that crosses the
+	// auto-checkpoint threshold otherwise runs the checkpoint and its
+	// sync while it holds the write lock, and while readers keep the WAL
+	// from being reset every commit retries it: on a 451 MB store with
+	// month-long reads running, 64-row appends held the lock for up to
+	// 1.3s. Short-lived processes keep the default.
+	BackgroundCheckpoint time.Duration
 }
 
 // defaultSlowLockWarn flags lock waits and holds far outside the normal
@@ -134,6 +159,10 @@ func Open(ctx context.Context, path string, opts Options) (*Store, error) {
 	dsn, err := buildDSN(path, opts.BusyTimeout)
 	if err != nil {
 		return nil, err
+	}
+	background := opts.BackgroundCheckpoint > 0 && path != ":memory:"
+	if background {
+		dsn += "&" + url.Values{"_pragma": {"wal_autocheckpoint(0)"}}.Encode()
 	}
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -164,7 +193,45 @@ func Open(ctx context.Context, path string, opts Options) (*Store, error) {
 			return nil, err
 		}
 	}
+	if background {
+		s.stopCheckpoints = make(chan struct{})
+		s.checkpointsDone = make(chan struct{})
+		go s.checkpointLoop(opts.BackgroundCheckpoint)
+	}
 	return s, nil
+}
+
+// checkpointLoop checkpoints the WAL every interval until Close.
+func (s *Store) checkpointLoop(every time.Duration) {
+	defer close(s.checkpointsDone)
+	tick := time.NewTicker(every)
+	defer tick.Stop()
+	for {
+		select {
+		case <-s.stopCheckpoints:
+			return
+		case <-tick.C:
+			ctx, cancel := context.WithTimeout(context.Background(), every)
+			if _, err := s.CheckpointWAL(ctx); err != nil {
+				s.logger.Debug("sqlite: background checkpoint failed", "err", err)
+			}
+			cancel()
+		}
+	}
+}
+
+// CheckpointWAL copies what it can of the WAL into the database without
+// waiting on readers or writers (a PASSIVE checkpoint), and reports what
+// it found.
+func (s *Store) CheckpointWAL(ctx context.Context) (Checkpoint, error) {
+	var busy int64
+	var c Checkpoint
+	if err := s.db.QueryRowContext(ctx, "PRAGMA wal_checkpoint(PASSIVE)").Scan(&busy, &c.Frames, &c.Backfilled); err != nil {
+		return Checkpoint{}, fmt.Errorf("sqlite: checkpoint: %w", err)
+	}
+	s.checkpoints.Add(1)
+	s.lastCheckpoint.Store(&c)
+	return c, nil
 }
 
 // OpenReadOnly opens an existing store for reads only: no migration, no
@@ -226,6 +293,18 @@ ORDER BY timestamp_ns DESC LIMIT 1`, source, since.UnixNano(), "$."+key).Scan(&r
 func (s *Store) Close() error {
 	if s == nil || s.db == nil {
 		return nil
+	}
+	if s.stopCheckpoints != nil {
+		select {
+		case <-s.stopCheckpoints:
+		default:
+			close(s.stopCheckpoints)
+		}
+		<-s.checkpointsDone
+		// Leave the WAL backfilled for whichever process opens it next.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_, _ = s.CheckpointWAL(ctx)
+		cancel()
 	}
 	return s.db.Close()
 }
