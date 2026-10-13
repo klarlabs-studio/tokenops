@@ -16,8 +16,25 @@
   --vp-home-hero-name-color: #8c9cff;
 }
 
-/* The hero ring: the mark at a size that balances the headline. */
+/* The hero ring: the mark at a size that balances the headline. On a
+   phone the theme's image box is smaller than the ring at full size, which
+   then overlapped the headline; keep it inside the box until the hero
+   goes side by side. */
 .VPHero .image-src {
-  max-width: 280px;
-  max-height: 280px;
+  max-width: 140px;
+  max-height: 140px;
+}
+
+@media (min-width: 640px) {
+  .VPHero .image-src {
+    max-width: 200px;
+    max-height: 200px;
+  }
+}
+
+@media (min-width: 960px) {
+  .VPHero .image-src {
+    max-width: 280px;
+    max-height: 280px;
+  }
 }
