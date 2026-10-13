@@ -1,34 +1,68 @@
 ---
 layout: home
 hero:
-  name: TokenOps
-  text: Analytics tells you about last week's retry loop. TokenOps ends this one.
+  text: Know what's left. Set what's allowed. Let your agents work.
   image:
     light: /mark.svg
     dark: /mark-dark.svg
     alt: ""
-  tagline: Your coding agents already write down everything they do. TokenOps reads those files on your machine — Claude Code, Codex, opencode, Cursor, Gemini CLI — watches every plan's limits, and hands the agent back something it can act on mid-task. Your prompts and your code never leave this machine. No account. Apache 2.0.
+  tagline: Guardrails for coding agents. TokenOps watches every AI plan and account your agents draw on (Claude, Codex, Cursor, Copilot and about 90 more) and steps in during the session, before a limit, a budget or a rule you set is crossed. On your machine; your prompts and your code never leave it. Free and open source; teams add shared rules and approvals.
   actions:
     - theme: brand
       text: 90-second quickstart
       link: /guide/quickstart
     - theme: alt
-      text: What it can read
-      link: /integrations/coverage
+      text: Set a boundary
+      link: /guide/boundaries
 features:
-  - title: It acts, it doesn't just report
-    details: 'read-guard refuses the third redundant read of the same file. fmt compresses a 40k-token command output before it reaches the context window. coach-hook nudges as session cost crosses a budget fraction — on Claude Code, Codex, Cursor and opencode. session_budget returns a closed action enum the agent branches on: continue, slow_down, switch_model, wait_for_reset.'
-  - title: Every plan's limits, from more than one source
-    details: 'Claude Max, ChatGPT Pro, Copilot, Cursor and pay-as-you-go accounts in one view: what is left in each window, the pace, when it resets. Each window is read several ways, and the newest wins. A reading from a source that stopped is shown with its age, never as current. In the terminal, the status line and the macOS menu bar, with alerts at 20% left, 5% and used up.'
-  - title: It reads what is already there
-    details: 'Passive readers for every client that keeps a local record — Claude Code, Codex CLI, opencode, Cursor, Gemini CLI. What each of your commits cost. An optional proxy for ground truth. No change to how you or your agents work.'
-  - title: Your prompts and your code never leave this machine
-    details: 'Prompt text and file contents are read at scan time and never persisted — only derived numbers are. Local SQLite, no cloud account, no telemetry. Every outbound call is named below, and the one that can send figures (an OpenTelemetry export to your own collector) is off until you turn it on.'
-  - title: Honest about what it cannot see
-    details: 'Every prediction carries signal_quality (low / medium / high) plus a one-line caveat and an upgrade path. The capability matrix marks what a client can never support — not "coming soon" — with the reason. Time-to-first-token is reported only under the proxy, because no transcript records it.'
+  - title: Know what's left, on every plan
+    details: 'Claude Max, ChatGPT Pro, Copilot, Cursor, z.ai, Kimi, API keys and routers: about 90 providers in one view of what is left in each window, the pace and when it resets. Each window is read several ways and the newest wins; a reading that stopped is shown with its age, never as current. In the terminal, the status line and the macOS menu bar.'
+  - title: Steer the session it's in
+    details: 'read-guard refuses the third redundant read of a file. fmt compresses a 40k-token command output before it reaches the context window. The coach nudges as session cost crosses a budget fraction. session_budget hands the agent a closed action it branches on: continue, slow_down, switch_model, wait_for_reset.'
+  - title: Set what's allowed, before it starts
+    details: 'Action boundaries put limits on what an agent may do without asking: keep going past a session cost, spend into the last of a window or a budget, start a subagent on a bigger model, send figures off the machine. Every rule starts in shadow, recording what it would have done, until you enforce it. Only a person at a terminal can approve; the agent that was stopped cannot approve itself.'
+  - title: For teams, the same guardrails, shared
+    details: 'Owners set rules every member gets as a signed document they can tighten but never loosen. A rule that needs a role asks the people who hold it, who answer in the web view or the CLI, and every answer records who gave it. The team view rolls up derived figures only, by team, repository and kind of work, never prompts, files or paths.'
 ---
 
-## Analytics stops at a report. This doesn't.
+## What you use today, and what it leaves out
+
+| | Each vendor's own meter | Usage meters such as CodexBar | Gateways and admin caps | TokenOps |
+|---|:--:|:--:|:--:|:--:|
+| Every plan and account in one view | one vendor | ✅ | API keys only | ✅ |
+| Subscription windows (Max, Pro, Copilot, Cursor) | its own | ✅ | 🚫 | ✅ |
+| Acts inside the session, before the limit | 🚫 | 🚫 | fails the request at the cap | ✅ |
+| Limits you set, with approval by role | 🚫 | 🚫 | dollar caps | ✅ |
+| Which account paid, through routers | 🚫 | 🚫 | its own traffic | ✅ |
+| Prompts stay on your machine | ✅ | ✅ | 🚫 they pass through it | ✅ |
+
+The meters tell you where you stand. A gateway stops a request when the
+money runs out. TokenOps does what neither does: it tells the agent, while
+it is working, and holds it at the line you drew.
+
+## Know what's left
+
+Every major vendor publishes *rate-limit windows*, not monthly token caps, for
+flat-rate plans. The vendor dashboard tells you you've hit the cap **after**
+the cap hits, and nothing tells the agent anything at all. When Claude returns
+"limit reached, resets in 4h" mid-refactor, your options are another browser
+tab or eating the wait.
+
+TokenOps puts the headroom check inside the agent's loop, for every provider it
+tracks, and in front of you before the cutoff: the status line, the menu bar
+and an alert at 20% left. `tokenops init` binds your plans from what your
+clients report about themselves, and asks only for what it cannot tell:
+
+```
+PLAN                       WINDOW            LEFT  RESETS    PACE
+Codex Pro Standard ($100)  Weekly              0%  3d 10h    used up
+Claude Max 20x             Session            75%  1h 57m    -36% · lasts
+                           Weekly             76%  3d 5h     -30% · lasts
+```
+
+That is `tokenops glance --brief` on this machine, the day it shipped.
+
+## Steer the session it's in
 
 Reading your agents' session files is the easy half. Every finding below is
 one TokenOps computes *and* acts on, inside the session it found it in — not
@@ -41,6 +75,95 @@ in a report you open the following week.
 | The plan window minutes from a cutoff | `tokenops_glance (view=session_budget)` returns `wait_for_reset`; the agent parks the work |
 | A frontier model closing work a cheap one would close | `tokenops_routing (action=advise)` decides per turn from task class and window pressure — no rules table, and it recommends rather than rewrites |
 | Cumulative session cost crossing a budget fraction | `coach-hook` nudges mid-session — a Stop hook on Claude Code, Codex and Cursor, a TUI toast on opencode |
+
+## Set what's allowed
+
+Agents run for long stretches now, and the moment where you would have
+asked "should this continue?" is gone. An action boundary puts it back:
+a limit you set before work starts, at the points that can actually stop
+an agent, and a record of who let it go further.
+
+```yaml
+# ~/.tokenops/config.yaml
+boundaries:
+  - name: session-spend
+    action: continue          # the agent's next tool call
+    when: { session_cost_usd: ">= 20" }
+    require: ask              # allow | ask | approver:<role> | deny
+  - name: plan-floor
+    action: continue
+    when: { plan_left_pct: "< 5", window: week }
+    require: deny
+  - name: big-subagents
+    action: subagent_model    # the model a subagent is about to run on
+    when: { model_tier: "> sonnet" }
+    require: approver:admin
+```
+
+Every rule starts in shadow and only records what it would have done;
+`tokenops boundaries status` shows how often, and `tokenops boundaries
+promote <name>` enforces it. In Claude Code and opencode the check runs
+before each tool call in under half a millisecond, and fails open. An
+enforced rule asks at the prompt when you are there; when you are not, it
+stops the agent with the one command that lets it go on,
+`tokenops approve <id>`, which only a person at a terminal can run. The
+menu bar lists what waits on you. Codex and Cursor get the same rules as
+advice the agent reads on the glance.
+
+Boundaries also hold the router (a held route leaves the request on its
+model, it never fails it) and anything that would send figures off the
+machine. [The guide](/guide/boundaries) has every action and condition.
+
+## For teams
+
+The same guardrails, set once for everyone. Owners and admins write rules
+in the team plane's web view or with `tokenops team admin boundaries`;
+every machine fetches them as a document the server signs and the machine
+verifies, so a member can tighten them but never loosen them. A rule that
+needs a role sends the people who hold it a request carrying the rule, the
+action and the figures that crossed it, nothing else, and they answer in
+the web view or with `tokenops team admin approve`.
+
+The team view rolls up what each machine measures, by team, repository and
+kind of work: counts, time waiting on the agent, tokens and cost. Never
+prompts, files, paths or commit messages; the upload format has no field
+that could hold them, and `tokenops team preview` prints an upload byte for
+byte. Groups of fewer than three people are withheld, and individual
+figures need a grant the member sees. klarlabs hosts it in the EU, with a
+14-day trial; see [the team plane](/guide/team).
+
+## 90 seconds, three commands
+
+Want to see what a week of your agents' work cost and where it leaked
+first? One command, nothing to install first:
+
+```bash
+npx @klarlabs-studio/tokenops checkup
+```
+
+It reads the week straight from the transcripts, with no setup and nothing
+sent anywhere. Then:
+
+```bash
+brew trust klarlabs-studio/tap              # first time only
+brew install --cask klarlabs-studio/tap/tokenops
+tokenops init                               # config, MCP registration, hooks
+```
+
+`init` finds the MCP hosts you actually have, registers `tokenops serve` with
+each — pinned to the absolute binary path, so a host can never silently run a
+stale build — installs the Claude Code hooks, and prints what still needs you:
+
+```
+Wiring tokenops into this machine:
+  ✓ MCP: Claude Code       registered — restart Claude Code to load the tools
+  ✓ hooks                  installed coach-hook + read-guard (Claude Code)
+  · plan binding           detected anthropic but not which tier you pay for
+```
+
+Re-run it any time to repair drift. It is idempotent, backs up every file it
+touches, and refuses to overwrite a host config it cannot parse. Two things
+stay yours: picking your plan tier, and pointing a client at the proxy.
 
 ## What your sessions actually look like
 
@@ -132,39 +255,6 @@ account of work into an apology for it. None of the four claims the work
 is *correct*; a transcript records what was attempted, and only the tests
 know the rest.
 
-## 90 seconds, three commands
-
-Want to see what a week of your agents' work cost and where it leaked
-first? One command, nothing to install first:
-
-```bash
-npx @klarlabs-studio/tokenops checkup
-```
-
-It reads the week straight from the transcripts, with no setup and nothing
-sent anywhere. Then:
-
-```bash
-brew trust klarlabs-studio/tap              # first time only
-brew install --cask klarlabs-studio/tap/tokenops
-tokenops init                               # config, MCP registration, hooks
-```
-
-`init` finds the MCP hosts you actually have, registers `tokenops serve` with
-each — pinned to the absolute binary path, so a host can never silently run a
-stale build — installs the Claude Code hooks, and prints what still needs you:
-
-```
-Wiring tokenops into this machine:
-  ✓ MCP: Claude Code       registered — restart Claude Code to load the tools
-  ✓ hooks                  installed coach-hook + read-guard (Claude Code)
-  · plan binding           detected anthropic but not which tier you pay for
-```
-
-Re-run it any time to repair drift. It is idempotent, backs up every file it
-touches, and refuses to overwrite a host config it cannot parse. Two things
-stay yours: picking your plan tier, and pointing a client at the proxy.
-
 ## For agents
 
 The MCP surface is a deterministic guardrail, not vibes-in-the-loop. Closed
@@ -198,7 +288,8 @@ derived numbers. Your files are read where they already sit and are never
 copied anywhere.
 
 There is nowhere for them to go: the event store is a SQLite file under
-`~/.tokenops`, there is no cloud account to create, and no telemetry to opt out
+`~/.tokenops`, there is no cloud account to create (unless you join a team),
+and no telemetry to opt out
 of. The daemon API is local by default and protected by a shared secret.
 
 The guarantee is about the content, not the address. Everything TokenOps
@@ -273,38 +364,19 @@ Every other prediction carries `signal_quality` (low / medium / high) with a
 one-line caveat and an upgrade path. Where no vendor figure exists, the
 estimate says it is one.
 
-## Why TokenOps exists
-
-Every major vendor publishes *rate-limit windows*, not monthly token caps, for
-flat-rate plans. The vendor dashboard tells you you've hit the cap **after**
-the cap hits, and nothing tells the agent anything at all. When Claude returns
-"limit reached, resets in 4h" mid-refactor, your options are another browser
-tab or eating the wait.
-
-TokenOps puts the headroom check inside the agent's loop, for every provider it
-tracks, and in front of you before the cutoff: the status line, the menu bar
-and an alert at 20% left. `tokenops init` binds your plans from what your
-clients report about themselves, and asks only for what it cannot tell:
-
-```
-PLAN                       WINDOW            LEFT  RESETS    PACE
-Codex Pro Standard ($100)  Weekly              0%  3d 10h    used up
-Claude Max 20x             Session            75%  1h 57m    -36% · lasts
-                           Weekly             76%  3d 5h     -30% · lasts
-```
-
-That is `tokenops glance --brief` on this machine, the day it shipped.
-
 ## Who this is for
 
-- Solo founders and small teams running coding agents 6+ hours a day across
-  multiple AI subscriptions
-- Staff engineers billing client time against AI sessions, juggling Claude +
-  GPT + Copilot stacks
-- Anyone who has lost focus to a mid-task rate-limit cutoff on any provider
+- Developers running coding agents for hours a day across more than one
+  plan (Claude Max and Codex, Cursor and an API key) who lose work to a
+  mid-task cutoff or find out about a bill after the fact
+- Engineering leads on usage-based contracts (Claude Enterprise, API
+  accounts) who want limits and approvals for agents without putting a
+  gateway in front of every prompt
+- Anyone who lets an agent run unattended and wants to decide in advance
+  how far it may go
 
-If you don't recognise that moment, this isn't for you — and that is a fine
-outcome. It was built to solve it, not to be adopted.
+If you don't recognise any of those, this isn't for you — and that is a
+fine outcome. It was built to solve them, not to be adopted.
 
 ## Contributing
 

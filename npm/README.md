@@ -1,7 +1,10 @@
+<img src="https://raw.githubusercontent.com/klarlabs-studio/tokenops/main/assets/brand/wordmark.png" alt="tokenops" height="56">
+
 # @klarlabs-studio/tokenops
 
-What your coding agents cost, where they leak, and every plan's limits —
-read on your machine. Your prompts and your code never leave it.
+Guardrails for coding agents: what is left on every AI plan, what your
+agents cost and where they leak, and limits they respect, read on your
+machine. Your prompts and your code never leave it.
 
 ```bash
 npx @klarlabs-studio/tokenops checkup
