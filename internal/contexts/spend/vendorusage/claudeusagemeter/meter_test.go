@@ -244,10 +244,13 @@ func (b *captureBus) Close(_ time.Duration) error { return nil }
 // set, refuses with the bot check until the session carries want as its
 // clearance — claude.ai's own behaviour.
 type fakeMeter struct {
-	mu      sync.Mutex
-	orgs    string
-	usage   map[string]string
-	want    string
+	mu    sync.Mutex
+	orgs  string
+	usage map[string]string
+	want  string
+	// dead, when set, is a session key claude.ai no longer accepts: a
+	// request carrying it is refused as unauthorized.
+	dead    string
 	session Session
 	config  ClientConfig
 }
@@ -261,6 +264,9 @@ func (m *fakeMeter) set(org, body string) {
 func (m *fakeMeter) refuse(path string) error {
 	if m.session.Key == "" {
 		return ErrMissingCookie
+	}
+	if m.dead != "" && m.session.Key == m.dead {
+		return fmt.Errorf("%w (%s)", ErrUnauthorized, path)
 	}
 	if m.want != "" && m.session.Clearance != m.want {
 		return fmt.Errorf("%w (%s)", ErrBotCheck, path)
