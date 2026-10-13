@@ -4,7 +4,35 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.102.0**.
+Current release: **v0.103.0**.
+
+## v0.103.0 — Limits set before the agent acts
+
+Action boundaries (ADR 0014) let you say, before work starts, what an
+agent may do without asking: keep going past a session cost, spend into
+the last of a plan's window or a budget, start a subagent on a pricier
+model, let the router move a request to another tier, or send figures to
+the team plane or an OpenTelemetry collector. A `boundaries:` section in
+`config.yaml` names the action, the figures that trigger it and what is
+then needed: nothing, a yes, a yes from a role, or a no. Every rule
+starts in shadow, recording what it would have done, until
+`tokenops boundaries promote` enforces it.
+
+In Claude Code and opencode the check runs before each tool call, in
+under half a millisecond, and fails open. An enforced rule asks at the
+prompt when someone is there and otherwise stops the agent with
+`tokenops approve <id>`; only a person at a terminal can approve, so the
+agent that was stopped cannot approve itself. The menu bar lists what
+waits on you. Codex and Cursor get the same rules as advice on the
+glance. A held route leaves the request on its model; a held upload is
+simply not sent.
+
+On a team, owners and admins set rules for everyone. Machines fetch them
+as a signed document they pin and verify, so a member can tighten but
+never loosen them. A rule that needs a role sends an approval request
+(the rule, the action and the figures, nothing else) to the people who
+hold it, who answer in the web view or with `tokenops team admin approve`,
+and every decision records who answered.
 
 ## v0.102.0 — Every plan you pay for, in one place
 

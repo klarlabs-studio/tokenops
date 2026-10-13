@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.103.0 - 2026-10-13
+
 ### Added
 
 - **boundaries:** action boundaries, phase 1 (ADR 0014). A `boundaries:` section in `config.yaml` sets limits before work starts: an action (`continue`, the agent's next tool call; `subagent_model`), conditions on figures TokenOps already holds (`session_cost_usd`, `plan_left_pct` with `window: 5h|week`, `model_tier`, `workflow_id`, `agent_id`) and what is then required (`allow`, `ask`, `approver:<role>`, `deny`). The strictest enforced rule wins; a config with an unknown action or condition is refused with the rule named. Every rule starts in shadow, recording what it would have done; `tokenops boundaries promote <name>` writes `stage: enforce` beside it (`demote` undoes it)
@@ -14,6 +16,10 @@
 - **boundaries:** advice for Codex and Cursor. Enforced `continue` and `spend` rules that hold on plan headroom or a budget are listed on the glance (`tokenops_glance`, `GET /api/glance` under `boundaries`) with what the agent should do. `tokenops boundaries status` shows the router, the team upload and the OTel export as rows of their own, enforced, in shadow or idle
 - **boundaries:** `tokenops approve <id> --confirm` shows what waits and answers only on `y`. The menu bar lists waiting decisions under *Waiting on you*: Deny answers through the daemon, Approve opens a terminal running `approve --confirm`, so an approval is still a person at a terminal
 - **events:** `DecisionEvent` names its `actor` (harness, session, agent, local user) and its `approval` (approver, method, time, rule, scope); schema 1.6.0. `tokenops explain <bnd-…>` and `tokenops_explain` show the rule and who answered
+
+### Security
+
+- **dependencies:** golang.org/x/net v0.60.0; the release workflow's artifact actions pinned to v7.0.2 and v8.0.2 (#634)
 
 ## 0.102.0 - 2026-10-12
 
