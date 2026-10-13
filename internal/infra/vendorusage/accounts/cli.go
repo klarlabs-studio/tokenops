@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -140,11 +139,11 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]`)
+var ansiEscape = lazyRegexp(`\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]`)
 
 // stripANSI removes terminal escape sequences and carriage returns.
 func stripANSI(s string) string {
-	s = ansiEscape.ReplaceAllString(s, "")
+	s = ansiEscape().ReplaceAllString(s, "")
 	return strings.ReplaceAll(s, "\r", "")
 }
 

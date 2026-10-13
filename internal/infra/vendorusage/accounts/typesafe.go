@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -56,9 +55,9 @@ type typeSafeAction struct {
 }
 
 var (
-	typeSafeScript   = regexp.MustCompile(`(?i)<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>`)
-	typeSafeActionID = regexp.MustCompile(`(?i)"([0-9a-f]{40,})"[^)]{0,150}"getBillingOverviewResult"`)
-	typeSafeLogin    = regexp.MustCompile(`\\?"\(auth\)\\?",\{\\?"children\\?":\[\\?"login\\?"`)
+	typeSafeScript   = lazyRegexp(`(?i)<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>`)
+	typeSafeActionID = lazyRegexp(`(?i)"([0-9a-f]{40,})"[^)]{0,150}"getBillingOverviewResult"`)
+	typeSafeLogin    = lazyRegexp(`\\?"\(auth\)\\?",\{\\?"children\\?":\[\\?"login\\?"`)
 )
 
 func (t TypeSafe) Read(ctx context.Context, key string) (usage.Reading, error) {
@@ -80,7 +79,7 @@ func (t TypeSafe) Read(ctx context.Context, key string) (usage.Reading, error) {
 	if err != nil {
 		return usage.Reading{}, err
 	}
-	if typeSafeLogin.Match(body) {
+	if typeSafeLogin().Match(body) {
 		return usage.Reading{}, fmt.Errorf("%w (TypeSafe answered with its sign-in page)", usage.ErrAuth)
 	}
 	billing, err := typeSafeBilling(body)
@@ -105,11 +104,11 @@ func (t TypeSafe) action(ctx context.Context, origin, cookie string, fresh bool)
 	if err != nil {
 		return "", err
 	}
-	if typeSafeLogin.Match(page) {
+	if typeSafeLogin().Match(page) {
 		return "", fmt.Errorf("%w (TypeSafe answered with its sign-in page)", usage.ErrAuth)
 	}
 	var chunks []string
-	for _, m := range typeSafeScript.FindAllSubmatch(page, -1) {
+	for _, m := range typeSafeScript().FindAllSubmatch(page, -1) {
 		src := string(m[1])
 		if strings.HasPrefix(src, "/") {
 			src = origin + src
@@ -129,7 +128,7 @@ func (t TypeSafe) action(ctx context.Context, origin, cookie string, fresh bool)
 		if err != nil {
 			continue
 		}
-		if m := typeSafeActionID.FindSubmatch(js); m != nil {
+		if m := typeSafeActionID().FindSubmatch(js); m != nil {
 			id := string(m[1])
 			typeSafeActions.Lock()
 			typeSafeActions.id[origin] = typeSafeAction{id: id, found: time.Now()}

@@ -12,7 +12,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -275,8 +274,8 @@ func isoDuration(s string) time.Duration {
 const jetbrainsLogTail = 4 << 20
 
 var (
-	jetbrainsLogState  = regexp.MustCompile(`QuotaManager2Impl - New quota state is: Available\(current=[0-9.]+, maximum=[0-9.]+, until=[^,]*, tariffQuota=QuotaDetails\(current=([0-9.]+), maximum=([0-9.]+), available=[0-9.]+\)`)
-	jetbrainsLogRefill = regexp.MustCompile(`QuotaManager2Impl - New quota refill state is: Known\(next=([^,]+), tariff=QuotaRefillInfoTariff\(amount=[0-9.]+, duration=([^)]+)\)\)`)
+	jetbrainsLogState  = lazyRegexp(`QuotaManager2Impl - New quota state is: Available\(current=[0-9.]+, maximum=[0-9.]+, until=[^,]*, tariffQuota=QuotaDetails\(current=([0-9.]+), maximum=([0-9.]+), available=[0-9.]+\)`)
+	jetbrainsLogRefill = lazyRegexp(`QuotaManager2Impl - New quota refill state is: Known\(next=([^,]+), tariff=QuotaRefillInfoTariff\(amount=[0-9.]+, duration=([^)]+)\)\)`)
 )
 
 // loggedQuota is the newest quota state ide's own idea.log records, and
@@ -300,7 +299,7 @@ func (j JetBrains) loggedQuota(ide jetbrainsIDE) (jetbrainsQuota, time.Time, boo
 		switch {
 		case !haveState && strings.Contains(line, "New quota state is:"):
 			haveState = true
-			m := jetbrainsLogState.FindStringSubmatch(line)
+			m := jetbrainsLogState().FindStringSubmatch(line)
 			if m == nil {
 				return jetbrainsQuota{}, time.Time{}, false
 			}
@@ -311,7 +310,7 @@ func (j JetBrains) loggedQuota(ide jetbrainsIDE) (jetbrainsQuota, time.Time, boo
 			}
 		case !haveRefill && strings.Contains(line, "New quota refill state is:"):
 			haveRefill = true
-			if m := jetbrainsLogRefill.FindStringSubmatch(line); m != nil {
+			if m := jetbrainsLogRefill().FindStringSubmatch(line); m != nil {
 				q.next, q.period = parseTime(m[1]), isoDuration(m[2])
 			}
 		}

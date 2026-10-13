@@ -7,7 +7,6 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -108,19 +107,19 @@ func clock(now func() time.Time) time.Time {
 const ampNum = `([0-9][0-9,]*(?:\.[0-9]+)?)`
 
 var (
-	ampIdentity    = regexp.MustCompile(`(?im)^\s*Signed in as\s+([^\s(]+)`)
-	ampFreeDollars = regexp.MustCompile(`(?im)^\s*Amp Free:\s*\$?` + ampNum + `\s*/\s*\$?` + ampNum + `\s+remaining(?:\s*\(replenishes\s*\+\$?` + ampNum + `\s*/\s*hour\))?`)
-	ampFreePercent = regexp.MustCompile(`(?im)^\s*Amp Free:\s*` + ampNum + `\s*%\s+remaining(?:\s+today)?(?:\s*(\(resets\s+daily\)))?`)
-	ampTier        = regexp.MustCompile(`(?im)^\s*Amp\s+([^\r\n]+?)\s+Tier:\s*agent\s+usage\s+\$` + ampNum + `\s+of\s+\$` + ampNum + `\s+remaining\b([^\r\n]*?)resets\s+upon\s+renewal\s+in\s+([0-9][0-9,]*)\s+(days?|months?)\b`)
-	ampPeriod      = regexp.MustCompile(`\bperiod\s+(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})\b`)
-	ampOrb         = regexp.MustCompile(`(?i)\borb\s+usage\s+` + ampNum + `h\s+of\s+` + ampNum + `h\s+a1\.small\s+orb\s+hours\s+remaining\b`)
-	ampLegacySub   = regexp.MustCompile(`(?im)^\s*(?:Subscription\s+(?:.+?):|Amp\s+(?:.+?)\s+Subscription:)\s*` + ampNum + `\s*%\s+other\s+usage\s+and\s+` + ampNum + `\s*%\s+orb\s+usage\s+remaining\s*-\s*resets\s+upon\s+renewal\s+in\s+([0-9][0-9,]*)\s+(days?|months?)(?:\s+-\s+https?://\S+)?\s*$`)
-	ampIndividual  = regexp.MustCompile(`(?im)^\s*Individual credits:\s*\$?` + ampNum + `\s+remaining`)
-	ampWorkspace   = regexp.MustCompile(`(?im)^\s*Workspace\s+(.+?):\s*\$?` + ampNum + `\s+remaining`)
+	ampIdentity    = lazyRegexp(`(?im)^\s*Signed in as\s+([^\s(]+)`)
+	ampFreeDollars = lazyRegexp(`(?im)^\s*Amp Free:\s*\$?` + ampNum + `\s*/\s*\$?` + ampNum + `\s+remaining(?:\s*\(replenishes\s*\+\$?` + ampNum + `\s*/\s*hour\))?`)
+	ampFreePercent = lazyRegexp(`(?im)^\s*Amp Free:\s*` + ampNum + `\s*%\s+remaining(?:\s+today)?(?:\s*(\(resets\s+daily\)))?`)
+	ampTier        = lazyRegexp(`(?im)^\s*Amp\s+([^\r\n]+?)\s+Tier:\s*agent\s+usage\s+\$` + ampNum + `\s+of\s+\$` + ampNum + `\s+remaining\b([^\r\n]*?)resets\s+upon\s+renewal\s+in\s+([0-9][0-9,]*)\s+(days?|months?)\b`)
+	ampPeriod      = lazyRegexp(`\bperiod\s+(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})\b`)
+	ampOrb         = lazyRegexp(`(?i)\borb\s+usage\s+` + ampNum + `h\s+of\s+` + ampNum + `h\s+a1\.small\s+orb\s+hours\s+remaining\b`)
+	ampLegacySub   = lazyRegexp(`(?im)^\s*(?:Subscription\s+(?:.+?):|Amp\s+(?:.+?)\s+Subscription:)\s*` + ampNum + `\s*%\s+other\s+usage\s+and\s+` + ampNum + `\s*%\s+orb\s+usage\s+remaining\s*-\s*resets\s+upon\s+renewal\s+in\s+([0-9][0-9,]*)\s+(days?|months?)(?:\s+-\s+https?://\S+)?\s*$`)
+	ampIndividual  = lazyRegexp(`(?im)^\s*Individual credits:\s*\$?` + ampNum + `\s+remaining`)
+	ampWorkspace   = lazyRegexp(`(?im)^\s*Workspace\s+(.+?):\s*\$?` + ampNum + `\s+remaining`)
 )
 
 func ampSignedOut(text string) bool {
-	return !ampIdentity.MatchString(text) && mentions(text, "sign in", "log in", "login")
+	return !ampIdentity().MatchString(text) && mentions(text, "sign in", "log in", "login")
 }
 
 func ampFloat(s string) float64 {
@@ -138,7 +137,7 @@ func parseAmpDisplay(text string, now time.Time) (usage.Reading, error) {
 		return usage.Reading{}, cliAuthError("amp")
 	}
 	r := usage.Reading{Scope: "account", Subscription: true}
-	if m := ampTier.FindStringSubmatch(text); m != nil && ampFloat(m[3]) > 0 {
+	if m := ampTier().FindStringSubmatch(text); m != nil && ampFloat(m[3]) > 0 {
 		limit := ampFloat(m[3])
 		w := usage.Window{Name: "month", UsedPct: clampPct((limit - ampFloat(m[2])) / limit * 100)}
 		if start, end, ok := ampBillingPeriod(m[4]); ok {
@@ -147,12 +146,12 @@ func parseAmpDisplay(text string, now time.Time) (usage.Reading, error) {
 			w.ResetsAt = ampRenewal(now, m[5], m[6])
 		}
 		r.Windows = append(r.Windows, w)
-		if o := ampOrb.FindStringSubmatch(m[4]); o != nil && ampFloat(o[2]) > 0 {
+		if o := ampOrb().FindStringSubmatch(m[4]); o != nil && ampFloat(o[2]) > 0 {
 			orbLimit := ampFloat(o[2])
 			r.Windows = append(r.Windows, usage.Window{Name: "month (orb hours)", UsedPct: clampPct((orbLimit - ampFloat(o[1])) / orbLimit * 100),
 				Duration: w.Duration, ResetsAt: w.ResetsAt})
 		}
-	} else if m := ampLegacySub.FindStringSubmatch(text); m != nil {
+	} else if m := ampLegacySub().FindStringSubmatch(text); m != nil {
 		resets := ampRenewal(now, m[3], m[4])
 		r.Windows = append(r.Windows,
 			usage.Window{Name: "month", UsedPct: 100 - clampPct(ampFloat(m[1])), ResetsAt: resets},
@@ -161,10 +160,10 @@ func parseAmpDisplay(text string, now time.Time) (usage.Reading, error) {
 	if w, ok := ampFree(text, now); ok {
 		r.Windows = append(r.Windows, w)
 	}
-	if m := ampIndividual.FindStringSubmatch(text); m != nil {
+	if m := ampIndividual().FindStringSubmatch(text); m != nil {
 		r.BalanceUSD, r.HasBalance = ampFloat(m[1]), true
 	}
-	if len(r.Windows) == 0 && !r.HasBalance && !ampWorkspace.MatchString(text) {
+	if len(r.Windows) == 0 && !r.HasBalance && !ampWorkspace().MatchString(text) {
 		return usage.Reading{}, fmt.Errorf("accounts: Amp usage in a shape this version cannot read")
 	}
 	return r, nil
@@ -174,7 +173,7 @@ func parseAmpDisplay(text string, now time.Time) (usage.Reading, error) {
 // York time, or (older output) dollars left of a quota that replenishes
 // hourly, full again after used/hourly hours.
 func ampFree(text string, now time.Time) (usage.Window, bool) {
-	if m := ampFreeDollars.FindStringSubmatch(text); m != nil && ampFloat(m[2]) > 0 {
+	if m := ampFreeDollars().FindStringSubmatch(text); m != nil && ampFloat(m[2]) > 0 {
 		quota := ampFloat(m[2])
 		used := math.Max(0, quota-ampFloat(m[1]))
 		w := usage.Window{Name: "day", UsedPct: clampPct(used / quota * 100)}
@@ -186,7 +185,7 @@ func ampFree(text string, now time.Time) (usage.Window, bool) {
 		}
 		return w, true
 	}
-	if m := ampFreePercent.FindStringSubmatch(text); m != nil {
+	if m := ampFreePercent().FindStringSubmatch(text); m != nil {
 		w := usage.Window{Name: "day", UsedPct: 100 - clampPct(ampFloat(m[1])), Duration: 24 * time.Hour}
 		if m[2] != "" {
 			w.ResetsAt = ampNextDailyReset(now)
@@ -212,7 +211,7 @@ func ampNextDailyReset(now time.Time) time.Time {
 
 // ampBillingPeriod reads "period 2026-09-13 to 2026-10-13" as UTC days.
 func ampBillingPeriod(s string) (time.Time, time.Time, bool) {
-	m := ampPeriod.FindStringSubmatch(s)
+	m := ampPeriod().FindStringSubmatch(s)
 	if m == nil {
 		return time.Time{}, time.Time{}, false
 	}

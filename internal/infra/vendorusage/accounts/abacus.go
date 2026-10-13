@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strings"
 
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/accounts"
@@ -30,7 +29,7 @@ func (Abacus) Endpoint() string               { return "abacus" }
 func (Abacus) Provider() eventschema.Provider { return "abacus" }
 func (Abacus) Source() string                 { return "abacus-web" }
 
-var abacusRefusal = regexp.MustCompile(`expired|session|login|authenticate|unauthorized|unauthenticated|forbidden`)
+var abacusRefusal = lazyRegexp(`expired|session|login|authenticate|unauthorized|unauthenticated|forbidden`)
 
 func (a Abacus) Read(ctx context.Context, cookie string) (usage.Reading, error) {
 	if !isSession(cookie) {
@@ -52,7 +51,7 @@ func (a Abacus) Read(ctx context.Context, cookie string) (usage.Reading, error) 
 			return nil, fmt.Errorf("accounts: %s %s: %w", method, hostPath(root+path), err)
 		}
 		if !resp.Success || resp.Result == nil {
-			if abacusRefusal.MatchString(strings.ToLower(resp.Error)) {
+			if abacusRefusal().MatchString(strings.ToLower(resp.Error)) {
 				return nil, fmt.Errorf("%w (%s refused the session)", usage.ErrAuth, hostPath(root+path))
 			}
 			return nil, fmt.Errorf("accounts: %s %s: not successful", method, hostPath(root+path))

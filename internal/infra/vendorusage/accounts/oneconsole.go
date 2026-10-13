@@ -213,18 +213,18 @@ func mustJSON(v any) string {
 
 // secTokenPatterns find the console's security token in its HTML shell,
 // as CodexBar scrapes it (window.ALIYUN_CONSOLE_CONFIG.SEC_TOKEN).
-var secTokenPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`"secToken"\s*:\s*"([^"]+)"`),
-	regexp.MustCompile(`"sec_token"\s*:\s*"([^"]+)"`),
-	regexp.MustCompile(`secToken['"]?\s*[:=]\s*['"]([^'"]+)['"]`),
-	regexp.MustCompile(`sec_token['"]?\s*[:=]\s*['"]([^'"]+)['"]`),
-	regexp.MustCompile(`SEC_TOKEN['"]?\s*[:=]\s*['"]([^'"]+)['"]`),
+var secTokenPatterns = []func() *regexp.Regexp{
+	lazyRegexp(`"secToken"\s*:\s*"([^"]+)"`),
+	lazyRegexp(`"sec_token"\s*:\s*"([^"]+)"`),
+	lazyRegexp(`secToken['"]?\s*[:=]\s*['"]([^'"]+)['"]`),
+	lazyRegexp(`sec_token['"]?\s*[:=]\s*['"]([^'"]+)['"]`),
+	lazyRegexp(`SEC_TOKEN['"]?\s*[:=]\s*['"]([^'"]+)['"]`),
 }
 
 // secTokenIn is the security token in a console page, "" for none.
 func secTokenIn(html []byte) string {
 	for _, re := range secTokenPatterns {
-		if m := re.FindSubmatch(html); m != nil && len(m[1]) > 0 {
+		if m := re().FindSubmatch(html); m != nil && len(m[1]) > 0 {
 			return string(m[1])
 		}
 	}

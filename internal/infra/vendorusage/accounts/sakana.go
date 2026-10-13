@@ -33,10 +33,10 @@ func (Sakana) Provider() eventschema.Provider { return "sakana" }
 func (Sakana) Source() string                 { return "sakana-web" }
 
 var (
-	sakanaBoundary = regexp.MustCompile(`(?i)<p[^>]*>\s*(?:5-hour|Weekly)\s*</p>|<div[^>]*data-slot=(?:"card"|'card'|"card-title"|'card-title')[^>]*>`)
-	sakanaUsed     = regexp.MustCompile(`(?i)<p[^>]*>\s*([0-9]+(?:\.[0-9]+)?)% used\s*</p>`)
-	sakanaResets   = regexp.MustCompile(`(?i)<p[^>]*>\s*Resets on ([^<]+?)\s*</p>`)
-	sakanaBalance  = regexp.MustCompile(`(?i)<h2[^>]*>\s*Credit balance\s*</h2>[\s\S]{0,900}?<p[^>]*tabular-nums[^"]*"[^>]*>\$?([0-9][0-9,]*(?:\.[0-9]+)?)</p>`)
+	sakanaBoundary = lazyRegexp(`(?i)<p[^>]*>\s*(?:5-hour|Weekly)\s*</p>|<div[^>]*data-slot=(?:"card"|'card'|"card-title"|'card-title')[^>]*>`)
+	sakanaUsed     = lazyRegexp(`(?i)<p[^>]*>\s*([0-9]+(?:\.[0-9]+)?)% used\s*</p>`)
+	sakanaResets   = lazyRegexp(`(?i)<p[^>]*>\s*Resets on ([^<]+?)\s*</p>`)
+	sakanaBalance  = lazyRegexp(`(?i)<h2[^>]*>\s*Credit balance\s*</h2>[\s\S]{0,900}?<p[^>]*tabular-nums[^"]*"[^>]*>\$?([0-9][0-9,]*(?:\.[0-9]+)?)</p>`)
 )
 
 func (s Sakana) Read(ctx context.Context, cookie string) (usage.Reading, error) {
@@ -74,7 +74,7 @@ func (s Sakana) Read(ctx context.Context, cookie string) (usage.Reading, error) 
 	}
 	// The pay-as-you-go balance is best-effort: its failure keeps the windows.
 	if payg, err := doWeb(ctx, s.HTTP, http.MethodGet, page+"?tab=payAsYouGo", header, nil); err == nil {
-		if m := sakanaBalance.FindSubmatch(payg); m != nil {
+		if m := sakanaBalance().FindSubmatch(payg); m != nil {
 			if v, err := strconv.ParseFloat(strings.ReplaceAll(string(m[1]), ",", ""), 64); err == nil {
 				r.BalanceUSD, r.HasBalance = v, true
 			}
@@ -90,13 +90,13 @@ func sakanaWindow(html, label string) (usage.Window, bool, error) {
 		return usage.Window{}, false, nil
 	}
 	rest := html[head[1]:]
-	if b := sakanaBoundary.FindStringIndex(rest); b != nil {
+	if b := sakanaBoundary().FindStringIndex(rest); b != nil {
 		rest = rest[:b[0]]
 	}
 	if strings.TrimSpace(rest) == "" {
 		return usage.Window{}, false, nil
 	}
-	m := sakanaUsed.FindStringSubmatch(rest)
+	m := sakanaUsed().FindStringSubmatch(rest)
 	if m == nil {
 		return usage.Window{}, false, fmt.Errorf("accounts: sakana: no %s usage percentage", label)
 	}
@@ -105,7 +105,7 @@ func sakanaWindow(html, label string) (usage.Window, bool, error) {
 		return usage.Window{}, false, fmt.Errorf("accounts: sakana: invalid %s usage percentage", label)
 	}
 	w := usage.Window{UsedPct: used}
-	if rm := sakanaResets.FindStringSubmatch(rest); rm != nil {
+	if rm := sakanaResets().FindStringSubmatch(rest); rm != nil {
 		if t, err := time.Parse("January 2, 2006 at 3:04 PM", strings.TrimSpace(rm[1])); err == nil {
 			w.ResetsAt = t.UTC()
 		}

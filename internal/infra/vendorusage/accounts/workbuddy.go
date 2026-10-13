@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"time"
 
@@ -49,8 +48,8 @@ var (
 	workBuddyFree = []string{"TCACA_code_001_PqouKr6QWV", "TCACA_code_008_cfWoLwvjU4", "TCACA_code_035_ArVxJcGDsm",
 		"TCACA_code_006_DbXS0lrypC", "TCACA_code_039_KRcQj7wUat", "TCACA_code_040_mi9rCYg46x", "TCACA_code_007_nzdH5h4Nl0",
 		"TCACA_code_028_NtpWi0jzXs", "TCACA_code_037_WxOD3MpI2o", "TCACA_code_029_6wCGEWquYy", "TCACA_code_030_BjSt89qTvr"}
-	workBuddyAmount = regexp.MustCompile(`^\d+(?:\.\d+)?$`)
-	workBuddyEnd    = regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$`)
+	workBuddyAmount = lazyRegexp(`^\d+(?:\.\d+)?$`)
+	workBuddyEnd    = lazyRegexp(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$`)
 	workBuddyCST    = time.FixedZone("CST", 8*3600)
 )
 
@@ -152,7 +151,7 @@ func (wb WorkBuddy) cycleEnd(ctx context.Context, root, agent, cookie string) ti
 			continue
 		}
 		for _, a := range resp.Data.Accounts {
-			if a.Unit != "credits" || !workBuddyEnd.MatchString(a.End) {
+			if a.Unit != "credits" || !workBuddyEnd().MatchString(a.End) {
 				continue
 			}
 			end, err := time.ParseInLocation("2006-01-02 15:04:05", a.End, workBuddyCST)
@@ -187,7 +186,7 @@ func (wb WorkBuddy) post(ctx context.Context, u, agent, cookie string, payload a
 func workBuddyNumber(raw json.RawMessage) (float64, bool) {
 	var s string
 	if json.Unmarshal(raw, &s) == nil {
-		if !workBuddyAmount.MatchString(s) {
+		if !workBuddyAmount().MatchString(s) {
 			return 0, false
 		}
 		v, err := strconv.ParseFloat(s, 64)
@@ -202,7 +201,7 @@ func chromeUA(major int) string {
 		strconv.Itoa(major) + ".0.0.0 Safari/537.36"
 }
 
-var chromeVersion = regexp.MustCompile(`<key>CFBundleShortVersionString</key>\s*<string>(\d+)\.`)
+var chromeVersion = lazyRegexp(`<key>CFBundleShortVersionString</key>\s*<string>(\d+)\.`)
 
 // installedChromeMajor is Google Chrome's major version from its
 // Info.plist (no secret), 0 when Chrome is not installed there.
@@ -214,7 +213,7 @@ func installedChromeMajor() int {
 		if err != nil {
 			continue
 		}
-		if m := chromeVersion.FindSubmatch(b); m != nil {
+		if m := chromeVersion().FindSubmatch(b); m != nil {
 			if v, err := strconv.Atoi(string(m[1])); err == nil && v > 1 {
 				return v
 			}

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -357,7 +356,7 @@ func loopbackClient() *http.Client {
 	}
 }
 
-var lsofListen = regexp.MustCompile(`:(\d+)\s+\(LISTEN\)`)
+var lsofListen = lazyRegexp(`:(\d+)\s+\(LISTEN\)`)
 
 // listeningPorts is the TCP ports pid listens on, from lsof.
 func listeningPorts(ctx context.Context, pid int) ([]int, error) {
@@ -372,7 +371,7 @@ func listeningPorts(ctx context.Context, pid int) ([]int, error) {
 	}
 	seen := map[int]bool{}
 	var ports []int
-	for _, m := range lsofListen.FindAllStringSubmatch(out, -1) {
+	for _, m := range lsofListen().FindAllStringSubmatch(out, -1) {
 		if n, err := strconv.Atoi(m[1]); err == nil && !seen[n] {
 			seen[n] = true
 			ports = append(ports, n)

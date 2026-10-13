@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
@@ -41,23 +42,25 @@ type TurnStats struct {
 // (~120s).
 const AssumedSecondsPerTurn = 45.0
 
-// pricingTable is the shared spend catalog turn costs are priced from.
-var pricingTable = spend.DefaultTable()
+// pricingTable is the shared spend catalog turn costs are priced from,
+// built on first use: every hook process links this package, and most
+// never price a turn.
+var pricingTable = sync.OnceValue(spend.DefaultTable)
 
 // defaultTurnRate prices turns whose JSONL lines carry no model field
 // (older Claude Code formats, Codex variants). claude-opus-4-7 is the
 // model TokenOps most often sees in such files; resolved from the
 // shared catalog so price updates land here automatically instead of
 // drifting in duplicated constants.
-var defaultTurnRate = func() spend.Rate {
-	r, err := pricingTable.Lookup(eventschema.ProviderAnthropic, "claude-opus-4-7")
+var defaultTurnRate = sync.OnceValue(func() spend.Rate {
+	r, err := pricingTable().Lookup(eventschema.ProviderAnthropic, "claude-opus-4-7")
 	if err != nil {
 		// The catalog ships with the binary; a missing row is a build
 		// defect surfaced by the spend package's catalog tests.
 		panic(err)
 	}
 	return r
-}()
+})
 
 // turnRateProviders is the lookup order for rateForModel. Model IDs are
 // distinct across vendors, so first match wins.
@@ -73,14 +76,14 @@ var turnRateProviders = []eventschema.Provider{
 // savings projections stay populated rather than silently zeroing.
 func rateForModel(model string) spend.Rate {
 	if model == "" {
-		return defaultTurnRate
+		return defaultTurnRate()
 	}
 	for _, p := range turnRateProviders {
-		if r, err := pricingTable.Lookup(p, model); err == nil {
+		if r, err := pricingTable().Lookup(p, model); err == nil {
 			return r
 		}
 	}
-	return defaultTurnRate
+	return defaultTurnRate()
 }
 
 // turnLine is the minimum JSONL shape ComputeTurnStats reads. Only

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
@@ -43,8 +42,8 @@ const (
 )
 
 var (
-	lithosOrgID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
-	lithosDay   = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+	lithosOrgID = lazyRegexp(`^[A-Za-z0-9_-]{1,128}$`)
+	lithosDay   = lazyRegexp(`^\d{4}-\d{2}-\d{2}$`)
 )
 
 func (l LithosAI) Read(ctx context.Context, cookie string) (usage.Reading, error) {
@@ -63,7 +62,7 @@ func (l LithosAI) Read(ctx context.Context, cookie string) (usage.Reading, error
 	if err := webJSON(ctx, l.HTTP, root+"/api/me", header, &me); err != nil {
 		return usage.Reading{}, err
 	}
-	if me.Org == nil || !lithosOrgID.MatchString(strings.TrimSpace(me.Org.ID)) {
+	if me.Org == nil || !lithosOrgID().MatchString(strings.TrimSpace(me.Org.ID)) {
 		return usage.Reading{}, errors.New("accounts: GET console.lithosai.cloud/api/me: no active organisation")
 	}
 	header = header.Clone()
@@ -116,7 +115,7 @@ func (l LithosAI) monthSpend(ctx context.Context, root string, header http.Heade
 	total := 0.0
 	for _, d := range *spend.Days {
 		n, ok := lithosNanos(d.Nanos, false)
-		if !ok || !lithosDay.MatchString(d.Day) || d.Day < start || d.Day > end {
+		if !ok || !lithosDay().MatchString(d.Day) || d.Day < start || d.Day > end {
 			return 0, errors.New("accounts: lithosai spend: unreadable row")
 		}
 		total += n
