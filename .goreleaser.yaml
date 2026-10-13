@@ -119,7 +119,7 @@ homebrew_casks:
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: "https://github.com/klarlabs-studio/tokenops"
-    description: "Open-source operational intelligence layer for AI systems"
+    description: "Guardrails for coding agents: what is left on every AI plan, and limits your agents respect"
     license: "Apache-2.0"
     commit_author:
       name: github-actions

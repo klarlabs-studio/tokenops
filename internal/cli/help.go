@@ -85,8 +85,10 @@ func organize(root *cobra.Command) {
 }
 
 // rootLong is the top of `tokenops --help`.
-const rootLong = `TokenOps watches your AI coding plans, sessions and spend, and coaches
-how you use them. On its own, ` + "`tokenops`" + ` shows every plan at a glance.
+const rootLong = `TokenOps is guardrails for coding agents: it watches every AI plan and
+account your agents draw on, steps in during the session before a limit,
+a budget or a rule you set is crossed, and coaches how you use them. On
+its own, ` + "`tokenops`" + ` shows every plan at a glance.
 
 Start here:
   tokenops init            set up this machine (plans, hooks, the daemon)
@@ -94,6 +96,7 @@ Start here:
   tokenops spend           what you spent and where it went
   tokenops story           what you asked for and what the agent did
   tokenops coach           how much the coach says and does
+  tokenops boundaries      the limits you set, and what waits on you
 
 Every command also takes the daemon's overrides, left out of the lists
 below: --listen, --tls, --cert-dir, --log-level, --log-format.`

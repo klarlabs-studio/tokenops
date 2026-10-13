@@ -31,7 +31,7 @@ func NewRoot() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:           "tokenops",
-		Short:         "Every AI coding plan at a glance, and a coach for using them",
+		Short:         "Guardrails for coding agents: what is left on every plan, and limits they respect",
 		Long:          rootLong,
 		SilenceUsage:  true,
 		SilenceErrors: true,
