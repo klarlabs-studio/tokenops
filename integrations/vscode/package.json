@@ -1,7 +1,7 @@
 {
   "name": "tokenops-vscode",
   "displayName": "TokenOps",
-  "description": "Spend, burn graph, and optimization suggestions for your local TokenOps daemon — surfaced inside VS Code.",
+  "description": "Guardrails for coding agents in VS Code: spend, what is left on every plan, and suggestions from your local TokenOps daemon.",
   "version": "0.1.0",
   "publisher": "tokenops",
   "private": true,
