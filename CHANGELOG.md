@@ -10,6 +10,7 @@
 ### Fixed
 
 - **docs:** on a phone the hero ring overlapped the headline; it now sizes to the screen
+- **claude.ai usage meter:** once a session has expired and the browser holds no newer one, the daemon reads the browser again only after the browser has written its cookies, where it copied the cookie store on every poll (every five minutes, for days) and logged two warnings each time. The expiry is logged once until a reading succeeds or the cookies change; the stale-reading finding still says how to reconnect
 
 ## 0.103.0 - 2026-10-13
 

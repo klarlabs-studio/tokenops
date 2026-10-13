@@ -156,7 +156,8 @@ func StartVendorUsagePollers(
 			BrowserCookies: cfg.VendorUsage.ClaudeUsageMeter.BrowserCookies,
 			OrgID:          cfg.VendorUsage.ClaudeUsageMeter.OrgID, Interval: cfg.VendorUsage.ClaudeUsageMeter.Interval,
 			Logger: logger, Cookies: browserSessionSource(cfg.VendorUsage.ClaudeUsageMeter, cfg.Keychain.Disabled),
-			NewClient: claudeai.NewSessionClient,
+			CookieStamp: browserCookieStamp(cfg.VendorUsage.ClaudeUsageMeter),
+			NewClient:   claudeai.NewSessionClient,
 		})
 		sup.Go("claude-usage-meter", refreshable(sig, p.Run))
 		logger.Info("claude-usage-meter usage poller live", "interval", cfg.VendorUsage.ClaudeUsageMeter.Interval)
@@ -259,6 +260,24 @@ func browserSessionSource(cfg config.ClaudeUsageMeterConfig, keychainDisabled bo
 			Key: cookies["sessionKey"], Clearance: cookies["cf_clearance"],
 			UserAgent: browser.UserAgent(), Browser: browser.Name,
 		}, nil
+	}
+}
+
+// browserCookieStamp fingerprints the cookie stores browserSessionSource
+// reads, so the meter reads the browser again only once it has written
+// its cookies: an expired session with no newer one in the browser
+// otherwise meant a copy of the store on every poll. nil when there is no
+// browser to read.
+func browserCookieStamp(cfg config.ClaudeUsageMeterConfig) func() string {
+	if !cfg.FromBrowser || strings.EqualFold(cfg.Browser, config.BrowserNone) {
+		return nil
+	}
+	return func() string {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		return browsercookie.Stamp(home, cfg.Browser)
 	}
 }
 
