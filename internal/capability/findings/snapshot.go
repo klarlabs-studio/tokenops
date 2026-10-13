@@ -89,12 +89,14 @@ func WriteSnapshot(dir string, s SessionsSnapshot) error {
 }
 
 // AnalyzeSessions runs the week's session analysis and stores it. The
-// analysis reads transcripts but stores only derived figures.
-func AnalyzeSessions(ctx context.Context, dir string, now time.Time) (SessionsSnapshot, error) {
+// analysis reads transcripts but stores only derived figures. A non-nil
+// cache, kept between runs, makes each run read only the transcripts
+// that changed since the last.
+func AnalyzeSessions(ctx context.Context, dir string, now time.Time, cache *sessions.TranscriptCache) (SessionsSnapshot, error) {
 	if err := ctx.Err(); err != nil {
 		return SessionsSnapshot{}, err
 	}
-	dx, curve := sessions.ComputeDXWithCurve(sessions.Window{Days: 7}, now)
+	dx, curve := sessions.ComputeDXWithCurve(sessions.Window{Days: 7, Cache: cache}, now)
 	s := SessionsSnapshot{ComputedAt: now.UTC(), DX: dx, Curve: curve}
 	return s, WriteSnapshot(dir, s)
 }

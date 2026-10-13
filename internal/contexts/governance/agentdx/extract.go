@@ -52,6 +52,20 @@ type ExtractOptions struct {
 	// window synthetic and graded it: 2 turns per instruction against
 	// the operator's real 20, and every dimension an A.
 	IncludeScratch bool
+
+	// Cache, when set, keeps what each Claude Code and Codex transcript
+	// yielded between scans, so a repeated scan reads only what changed.
+	// It is not used when WithPromptText is set.
+	Cache *TranscriptCache
+}
+
+// cache returns the cache this scan may use: none when it carries prompt
+// text, which must not outlive the scan.
+func (o ExtractOptions) cache() *TranscriptCache {
+	if o.WithPromptText {
+		return nil
+	}
+	return o.Cache
 }
 
 // DefaultRoot returns the conventional Claude Code projects directory.
@@ -85,13 +99,27 @@ func Extract(opts ExtractOptions) ([]Record, error) {
 		files = scanscope.Keep(files)
 	}
 	var out []Record
+	cache := opts.cache()
+	kept := make(map[string]bool, len(files))
 	for _, path := range files {
+		info, fresh := writtenSince(path, opts.Since)
+		if !fresh {
+			continue
+		}
+		if cache != nil {
+			kept[path] = true
+			out = append(out, cache.claudeCode(path, info, opts.Since)...)
+			continue
+		}
 		f, err := os.Open(path) //nolint:gosec // operator's own transcript dir
 		if err != nil {
 			continue
 		}
 		out = append(out, readTranscript(f, opts.Since, opts.WithPromptText)...)
 		_ = f.Close()
+	}
+	if cache != nil {
+		cache.retain(sourceClaudeCode, kept)
 	}
 	return out, nil
 }
@@ -157,78 +185,86 @@ func callSignature(name string, input json.RawMessage) string {
 // operator stops a turn.
 const interruptMarker = "[request interrupted"
 
+// maxTranscriptLine is the longest transcript line read. A longer one
+// ends the file's scan, as bufio.Scanner's limit does.
+const maxTranscriptLine = 8 << 20
+
 func readTranscript(r io.Reader, since time.Time, withText bool) []Record {
 	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 0, 1<<20), 8<<20)
+	sc.Buffer(make([]byte, 0, 1<<20), maxTranscriptLine)
 	var out []Record
 	for sc.Scan() {
-		var e rawEntry
-		if json.Unmarshal(sc.Bytes(), &e) != nil {
-			continue
-		}
-		at, err := time.Parse(time.RFC3339Nano, e.Timestamp)
-		if err != nil {
-			continue
-		}
-		at = at.UTC()
-		if !since.IsZero() && at.Before(since) {
-			continue
-		}
-		base := Record{At: at, SessionID: e.SessionID}
+		out = appendTranscriptLine(out, sc.Bytes(), since, withText)
+	}
+	return out
+}
 
-		switch strings.ToLower(e.Type) {
-		case "user":
-			// The client writes the compaction summary as a user entry.
-			// It is not an instruction the operator typed, so it must be
-			// classified before the prompt check or it both under-counts
-			// compactions and inflates the per-instruction denominator.
-			if e.IsCompact {
-				base.Kind = KindCompaction
-				out = append(out, base)
+// appendTranscriptLine appends what one transcript line yields. Each line
+// stands alone, so a file read in pieces yields what it yields read whole.
+func appendTranscriptLine(out []Record, line []byte, since time.Time, withText bool) []Record {
+	var e rawEntry
+	if json.Unmarshal(line, &e) != nil {
+		return out
+	}
+	at, err := time.Parse(time.RFC3339Nano, e.Timestamp)
+	if err != nil {
+		return out
+	}
+	at = at.UTC()
+	if !since.IsZero() && at.Before(since) {
+		return out
+	}
+	base := Record{At: at, SessionID: e.SessionID}
+	switch strings.ToLower(e.Type) {
+	case "user":
+		// The client writes the compaction summary as a user entry.
+		// It is not an instruction the operator typed, so it must be
+		// classified before the prompt check or it both under-counts
+		// compactions and inflates the per-instruction denominator.
+		if e.IsCompact {
+			base.Kind = KindCompaction
+			return append(out, base)
+		}
+		parts, text := decodeContent(e.Message.Content)
+		if strings.Contains(strings.ToLower(text), interruptMarker) {
+			base.Kind = KindInterrupt
+			return append(out, base)
+		}
+		// Most user rows are tool results the agent fed back to
+		// itself. Only a typed instruction opens a unit of work.
+		if isOperatorPrompt(parts, text) {
+			if withText {
+				base.Text = text
+			}
+			base.Kind = KindPrompt
+			base.Rejects = IsRejection(text)
+			out = append(out, base)
+		}
+	case "assistant":
+		turn := base
+		turn.Kind = KindAssistantTurn
+		turn.Model = e.Message.Model
+		turn.Effort = normEffort(e.Effort)
+		turn.InputTokens = e.Message.Usage.InputTokens +
+			e.Message.Usage.CacheReadInputTokens +
+			e.Message.Usage.CacheCreationTokens
+		out = append(out, turn)
+
+		parts, _ := decodeContent(e.Message.Content)
+		var raws []rawToolUse
+		_ = json.Unmarshal(e.Message.Content, &raws)
+		for i, p := range parts {
+			if p.Type != "tool_use" {
 				continue
 			}
-			parts, text := decodeContent(e.Message.Content)
-			if strings.Contains(strings.ToLower(text), interruptMarker) {
-				base.Kind = KindInterrupt
-				out = append(out, base)
-				continue
+			tu := base
+			tu.Kind = KindToolUse
+			tu.ToolName = p.Name
+			tu.FilePath = firstNonEmpty(p.Input.FilePath, p.Input.Path)
+			if i < len(raws) {
+				tu.CallSignature = callSignature(p.Name, raws[i].Input)
 			}
-			// Most user rows are tool results the agent fed back to
-			// itself. Only a typed instruction opens a unit of work.
-			if isOperatorPrompt(parts, text) {
-				if withText {
-					base.Text = text
-				}
-				base.Kind = KindPrompt
-				base.Rejects = IsRejection(text)
-				out = append(out, base)
-			}
-		case "assistant":
-			turn := base
-			turn.Kind = KindAssistantTurn
-			turn.Model = e.Message.Model
-			turn.Effort = normEffort(e.Effort)
-			turn.InputTokens = e.Message.Usage.InputTokens +
-				e.Message.Usage.CacheReadInputTokens +
-				e.Message.Usage.CacheCreationTokens
-			out = append(out, turn)
-
-			parts, _ := decodeContent(e.Message.Content)
-			var raws []rawToolUse
-			_ = json.Unmarshal(e.Message.Content, &raws)
-			for i, p := range parts {
-				if p.Type != "tool_use" {
-					continue
-				}
-				tu := base
-				tu.Kind = KindToolUse
-				tu.ToolName = p.Name
-				tu.FilePath = firstNonEmpty(p.Input.FilePath, p.Input.Path)
-				if i < len(raws) {
-					tu.CallSignature = callSignature(p.Name, raws[i].Input)
-				}
-				out = append(out, tu)
-			}
+			out = append(out, tu)
 		}
 	}
 	return out

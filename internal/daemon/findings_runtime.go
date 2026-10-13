@@ -6,13 +6,16 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/findings"
+	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 )
 
 // The session analysis reads a week of transcripts and takes minutes on a
 // busy machine, so the glance cannot run it per answer. The daemon runs
 // it a few minutes after start, once ingestion has caught up, and every
-// three hours after, and the findings read the stored answer.
+// three hours after, and the findings read the stored answer. It keeps
+// what each transcript yielded between runs, so only the first run reads
+// the whole week; later ones read what was written since.
 const (
 	sessionFindingsDelay = 5 * time.Minute
 	sessionFindingsEvery = 3 * time.Hour
@@ -33,15 +36,17 @@ func runSessionFindings(ctx context.Context, dir string, delay, every time.Durat
 		return
 	case <-wait.C:
 	}
+	cache := sessions.NewTranscriptCache()
 	analyze := func() {
 		start := time.Now()
-		s, err := findings.AnalyzeSessions(ctx, dir, start)
+		s, err := findings.AnalyzeSessions(ctx, dir, start, cache)
 		if err != nil {
 			logger.Warn("session analysis not stored", "err", err)
 			return
 		}
 		logger.Info("session analysis stored", "took", time.Since(start).Round(time.Second),
-			"instructions", s.DX.Metrics.Prompts, "warnings", len(s.DX.Warnings))
+			"instructions", s.DX.Metrics.Prompts, "warnings", len(s.DX.Warnings),
+			"transcripts_cached", cache.Len())
 	}
 	analyze()
 	tick := time.NewTicker(every)
