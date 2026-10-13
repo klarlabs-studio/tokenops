@@ -27,7 +27,17 @@ type Window struct {
 	// IncludeScratch keeps sessions run in throwaway directories, which
 	// are left out by default because they have no operator.
 	IncludeScratch bool
+	// Cache keeps what each transcript yielded between reads of the
+	// window, so a caller reading it repeatedly (the daemon) reads only
+	// what changed. Nil reads every transcript.
+	Cache *TranscriptCache
 }
+
+// TranscriptCache is the agent-DX domain's per-file transcript cache.
+type TranscriptCache = agentdx.TranscriptCache
+
+// NewTranscriptCache returns an empty transcript cache for Window.Cache.
+func NewTranscriptCache() *TranscriptCache { return agentdx.NewTranscriptCache() }
 
 // days resolves the window: a positive day count, or -1 for all history.
 //
@@ -48,6 +58,7 @@ func (w Window) options(now time.Time, withPromptText bool) (agentdx.ExtractOpti
 	opts := agentdx.ExtractOptions{
 		Root: w.Root, Source: agentdx.Source(w.Source),
 		WithPromptText: withPromptText, IncludeScratch: w.IncludeScratch,
+		Cache: w.Cache,
 	}
 	days := w.days()
 	if days <= 0 {
