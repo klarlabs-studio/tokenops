@@ -141,10 +141,10 @@ func TestComputeTurnStatsPricesPerObservedModel(t *testing.T) {
 // Unknown model strings fall back to the opus-4-7 default rate instead
 // of dropping the turn's cost to zero.
 func TestRateForModelFallsBackOnUnknown(t *testing.T) {
-	if got := rateForModel("totally-unknown-model"); got != defaultTurnRate {
+	if got := rateForModel("totally-unknown-model"); got != defaultTurnRate() {
 		t.Errorf("unknown model rate = %+v; want defaultTurnRate", got)
 	}
-	if got := rateForModel(""); got != defaultTurnRate {
+	if got := rateForModel(""); got != defaultTurnRate() {
 		t.Errorf("empty model rate = %+v; want defaultTurnRate", got)
 	}
 	if got := rateForModel("gpt-4o-mini-2024-07-18"); got.InputPerMillion != 0.15 {
