@@ -10,6 +10,7 @@
 ### Fixed
 
 - **docs:** on a phone the hero ring overlapped the headline; it now sizes to the screen
+- **storage:** the daemon copies the event store's write-ahead log into the database from a background loop every 10 seconds, instead of inside whichever write crossed SQLite's threshold. That write ran the checkpoint and its disk sync while holding the lock every tokenops process shares, and while long reads were open it retried on every write: the source of "sqlite: slow write lock" warnings and of retried event batches. On a copy-sized test store (451 MB) with three month-long reads running, appends of 64 events over 100 ms fell from 78 to 50 in 2,400 and the slowest from 2.1s to 0.4s. Other tokenops processes keep SQLite's default
 
 ## 0.103.0 - 2026-10-13
 
