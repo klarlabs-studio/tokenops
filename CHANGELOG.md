@@ -6,6 +6,7 @@
 
 - **docs, README, npm:** TokenOps is described as guardrails for coding agents: "Know what's left. Set what's allowed. Let your agents work." The landing page leads with a comparison against vendor meters, usage meters and gateways, and gives action boundaries and the team plane their own sections
 - **brand:** a 1200×630 link preview (`assets/brand/social.png`, drawn by `make.py`) with Open Graph and Twitter card tags on the docs site, and the wordmark on the npm page
+- **hooks:** every `tokenops` process starts about 5 ms sooner, which the hooks Claude Code runs on each tool call pay every time. The vendor-account parsers compile their patterns and the coach builds its price table on first use, not at start; package init went from about 13 ms to 6 ms, most of what is left being the SQLite library's
 
 ### Fixed
 
