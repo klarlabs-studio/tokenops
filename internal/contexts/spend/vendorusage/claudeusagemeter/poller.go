@@ -49,6 +49,13 @@ type PollerOptions struct {
 	// only ever read it once works today and is refused tomorrow. Called
 	// at startup and again whenever a request is refused.
 	Cookies func(ctx context.Context) (Session, error)
+	// CookieStamp, when set, fingerprints the browser's cookie store (its
+	// files' sizes and modification times). After a read finds no newer
+	// session, the browser is not read again until the fingerprint
+	// changes: an expired session otherwise meant a private copy of the
+	// store, and two warnings, on every poll for as long as nobody signed
+	// in again. nil reads on every refusal.
+	CookieStamp func() string
 }
 
 // Session is what a browser holds for claude.ai: the login, the proof it
@@ -80,6 +87,12 @@ type Poller struct {
 	// lastUnrecognised is the last set of unreadable blocks reported, so
 	// the warning is logged when it changes rather than every poll.
 	lastUnrecognised string
+	// staleStamp is the cookie store's fingerprint when the browser was
+	// last read and had no newer session; empty when that is not known.
+	staleStamp string
+	// expiredLogged holds the expiry warning to one line until a reading
+	// succeeds or the browser's cookie store changes.
+	expiredLogged bool
 }
 
 func NewPoller(bus events.Bus, opts PollerOptions) *Poller {
@@ -147,20 +160,49 @@ func (p *Poller) refreshCookies(ctx context.Context) bool {
 	if p.opts.Cookies == nil || p.client == nil {
 		return false
 	}
+	stamp := p.cookieStamp()
+	if stamp != "" && stamp == p.staleStamp {
+		return false // nothing in the browser has changed since it had none
+	}
+	p.staleStamp = ""
+	p.expiredLogged = false
 	s, err := p.opts.Cookies(ctx)
 	if err != nil || s.Key == "" {
 		if err != nil {
 			p.opts.Logger.Warn("claude-usage-meter: could not re-read the browser session", "err", err)
 		}
+		p.staleStamp = stamp
 		return false
 	}
 	cur := p.client.Session()
 	changed := s.Key != cur.Key || s.Clearance != cur.Clearance
 	p.client.SetSession(s)
-	if changed {
-		p.opts.Logger.Info("claude-usage-meter: refreshed the session from the browser", "browser", s.Browser)
+	if !changed {
+		p.staleStamp = stamp
+		return false
 	}
-	return changed
+	p.opts.Logger.Info("claude-usage-meter: refreshed the session from the browser", "browser", s.Browser)
+	return true
+}
+
+func (p *Poller) cookieStamp() string {
+	if p.opts.CookieStamp == nil {
+		return ""
+	}
+	return p.opts.CookieStamp()
+}
+
+// logExpired warns that the session has expired once, then quietly until a
+// reading succeeds or the browser's cookies change. Every refused poll is
+// still recorded, so the stale-reading finding keeps saying how to
+// reconnect.
+func (p *Poller) logExpired(err error) {
+	if p.expiredLogged {
+		p.opts.Logger.Debug(p.expiredMessage(), "err", err)
+		return
+	}
+	p.expiredLogged = true
+	p.opts.Logger.Warn(p.expiredMessage(), "err", err)
 }
 
 // expiredMessage says what an expired session means for this meter: one
@@ -201,7 +243,7 @@ func (p *Poller) scan(ctx context.Context) {
 		if err != nil {
 			p.recordErr(err)
 			if errors.Is(err, ErrUnauthorized) {
-				p.opts.Logger.Warn(p.expiredMessage(), "err", err)
+				p.logExpired(err)
 				return
 			}
 			p.opts.Logger.Warn("claude-usage-meter: organizations lookup failed", "err", err)
@@ -222,12 +264,13 @@ func (p *Poller) scan(ctx context.Context) {
 			return
 		}
 		if errors.Is(err, ErrUnauthorized) {
-			p.opts.Logger.Warn(p.expiredMessage(), "err", err)
+			p.logExpired(err)
 			return
 		}
 		p.opts.Logger.Warn("claude-usage-meter: Usage() failed", "err", err)
 		return
 	}
+	p.expiredLogged = false
 	p.recordSuccess()
 	p.reportUnrecognised(usage.Unrecognised)
 	if !usage.HasSignal() {
