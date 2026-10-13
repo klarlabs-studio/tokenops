@@ -42,10 +42,10 @@ var museAIAction = struct {
 }{id: map[string]string{}}
 
 var (
-	museAIFlightRow  = regexp.MustCompile(`^[0-9a-f]+:(\{.*\})\s*$`)
-	museAIChunk      = regexp.MustCompile(`static/chunks/[\w~.-]+\.js`)
-	museAISettings   = regexp.MustCompile(`\.A\((\d+)\)\.then\(\(\{[^}]*Settings`)
-	museAIActionID   = regexp.MustCompile(`"([0-9a-f]{40,})",[^"]{0,200}"fetchSubscriptionAction"`)
+	museAIFlightRow  = lazyRegexp(`^[0-9a-f]+:(\{.*\})\s*$`)
+	museAIChunk      = lazyRegexp(`static/chunks/[\w~.-]+\.js`)
+	museAISettings   = lazyRegexp(`\.A\((\d+)\)\.then\(\(\{[^}]*Settings`)
+	museAIActionID   = lazyRegexp(`"([0-9a-f]{40,})",[^"]{0,200}"fetchSubscriptionAction"`)
 	errMuseAIStale   = errors.New("server action not found")
 	museAIMaxScripts = 8 << 20
 )
@@ -99,7 +99,7 @@ func (m MuseAI) fetch(ctx context.Context, root, cookie, id string) (usage.Readi
 		return usage.Reading{}, err
 	}
 	for _, line := range strings.Split(string(body), "\n") {
-		m := museAIFlightRow.FindStringSubmatch(strings.TrimRight(line, "\r"))
+		m := museAIFlightRow().FindStringSubmatch(strings.TrimRight(line, "\r"))
 		if m == nil {
 			continue
 		}
@@ -137,11 +137,11 @@ func (m MuseAI) discover(ctx context.Context, root, cookie string) (string, erro
 	if !strings.Contains(string(page), "static/chunks/") && looksLikeSignIn(page) {
 		return "", fmt.Errorf("%w (muse.ai shows the sign-in page)", usage.ErrAuth)
 	}
-	scripts, err := m.scripts(ctx, root, museAIChunk.FindAllString(string(page), -1), 96)
+	scripts, err := m.scripts(ctx, root, museAIChunk().FindAllString(string(page), -1), 96)
 	if err != nil {
 		return "", err
 	}
-	mod := museAISettings.FindStringSubmatch(scripts)
+	mod := museAISettings().FindStringSubmatch(scripts)
 	if mod == nil {
 		return "", errors.New("accounts: muse.ai: no settings module in the page's scripts")
 	}
@@ -149,11 +149,11 @@ func (m MuseAI) discover(ctx context.Context, root, cookie string) (string, erro
 	if loader == nil {
 		return "", errors.New("accounts: muse.ai: no loader for the settings module")
 	}
-	settings, err := m.scripts(ctx, root, museAIChunk.FindAllString(loader[1], -1), 32)
+	settings, err := m.scripts(ctx, root, museAIChunk().FindAllString(loader[1], -1), 32)
 	if err != nil {
 		return "", err
 	}
-	id := museAIActionID.FindStringSubmatch(settings)
+	id := museAIActionID().FindStringSubmatch(settings)
 	if id == nil {
 		return "", errors.New("accounts: muse.ai: no subscription action in the settings chunks")
 	}

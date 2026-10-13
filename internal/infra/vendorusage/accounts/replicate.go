@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -42,10 +41,10 @@ func (Replicate) Provider() eventschema.Provider { return "replicate" }
 func (Replicate) Source() string                 { return "replicate-account" }
 
 var (
-	replicateProps     = regexp.MustCompile(`(?is)<script\b([^>]*)>(.*?)</script\s*>`)
-	replicatePropsID   = regexp.MustCompile(`(?i)\bid\s*=\s*["']react-component-props`)
-	replicatePropsType = regexp.MustCompile(`(?i)\btype\s*=\s*["']application/json["']`)
-	replicateSignIn    = regexp.MustCompile(`(?i)<title>\s*Sign in\s*\|\s*Replicate\s*</title>`)
+	replicateProps     = lazyRegexp(`(?is)<script\b([^>]*)>(.*?)</script\s*>`)
+	replicatePropsID   = lazyRegexp(`(?i)\bid\s*=\s*["']react-component-props`)
+	replicatePropsType = lazyRegexp(`(?i)\btype\s*=\s*["']application/json["']`)
+	replicateSignIn    = lazyRegexp(`(?i)<title>\s*Sign in\s*\|\s*Replicate\s*</title>`)
 )
 
 type replicateAccount struct {
@@ -70,7 +69,7 @@ func (r Replicate) Read(ctx context.Context, key string) (usage.Reading, error) 
 	}
 	acct, ok := replicateBillingAccount(page)
 	if !ok {
-		if replicateSignIn.Match(page) {
+		if replicateSignIn().Match(page) {
 			return usage.Reading{}, fmt.Errorf("%w (Replicate answered with its sign-in page)", usage.ErrAuth)
 		}
 		return usage.Reading{}, errors.New("accounts: replicate billing page: no account in its props")
@@ -134,8 +133,8 @@ func (r Replicate) Read(ctx context.Context, key string) (usage.Reading, error) 
 // replicateBillingAccount finds the user or organisation the billing page
 // is for, in its JSON React props.
 func replicateBillingAccount(page []byte) (replicateAccount, bool) {
-	for _, m := range replicateProps.FindAllSubmatch(page, 200) {
-		if !replicatePropsID.Match(m[1]) || !replicatePropsType.Match(m[1]) {
+	for _, m := range replicateProps().FindAllSubmatch(page, 200) {
+		if !replicatePropsID().Match(m[1]) || !replicatePropsType().Match(m[1]) {
 			continue
 		}
 		var v any
@@ -177,12 +176,12 @@ func replicateFindAccount(v any, depth int) (replicateAccount, bool) {
 	return replicateAccount{}, false
 }
 
-var replicateAmount = regexp.MustCompile(`^\d+(?:\.\d+)?$`)
+var replicateAmount = lazyRegexp(`^\d+(?:\.\d+)?$`)
 
 // replicateMoney reads Replicate's decimal-string dollar amounts.
 func replicateMoney(s string) (float64, bool) {
 	s = strings.TrimSpace(s)
-	if !replicateAmount.MatchString(s) {
+	if !replicateAmount().MatchString(s) {
 		return 0, false
 	}
 	v, err := strconv.ParseFloat(s, 64)

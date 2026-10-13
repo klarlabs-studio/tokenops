@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -75,13 +74,13 @@ func (k Kiro) Read(ctx context.Context, _ string) (usage.Reading, error) {
 }
 
 var (
-	kiroSummaryPlan = regexp.MustCompile(`(?m)^[ \t]*Plan:[ \t]*([^|\r\n]+?)[ \t]*\|[ \t]*[0-9]+[ \t]+usage breakdowns?[ \t]*$`)
-	kiroPlanLine    = regexp.MustCompile(`Plan:[ \t]*(.+)`)
-	kiroPercent     = regexp.MustCompile(`█+\s*(\d+)%`)
-	kiroCredits     = regexp.MustCompile(`\((\d+\.?\d*)\s+of\s+(\d+)\s+covered`)
-	kiroBonus       = regexp.MustCompile(`Bonus credits:\s*(\d+\.?\d*)/(\d+)`)
-	kiroBonusExpiry = regexp.MustCompile(`expires in (\d+) days?`)
-	kiroReset       = regexp.MustCompile(`resets on (\d{4}-\d{2}-\d{2}|\d{2}/\d{2})`)
+	kiroSummaryPlan = lazyRegexp(`(?m)^[ \t]*Plan:[ \t]*([^|\r\n]+?)[ \t]*\|[ \t]*[0-9]+[ \t]+usage breakdowns?[ \t]*$`)
+	kiroPlanLine    = lazyRegexp(`Plan:[ \t]*(.+)`)
+	kiroPercent     = lazyRegexp(`█+\s*(\d+)%`)
+	kiroCredits     = lazyRegexp(`\((\d+\.?\d*)\s+of\s+(\d+)\s+covered`)
+	kiroBonus       = lazyRegexp(`Bonus credits:\s*(\d+\.?\d*)/(\d+)`)
+	kiroBonusExpiry = lazyRegexp(`expires in (\d+) days?`)
+	kiroReset       = lazyRegexp(`resets on (\d{4}-\d{2}-\d{2}|\d{2}/\d{2})`)
 )
 
 // parseKiroUsage maps the /usage report: the plan's monthly credits (the
@@ -94,17 +93,17 @@ func parseKiroUsage(text string, now time.Time) (usage.Reading, error) {
 		return usage.Reading{}, fmt.Errorf("accounts: kiro-cli reported no usage")
 	}
 	lower := strings.ToLower(text)
-	summary := kiroSummaryPlan.MatchString(text)
-	newFormat := summary || kiroPlanLine.MatchString(text)
+	summary := kiroSummaryPlan().MatchString(text)
+	newFormat := summary || kiroPlanLine().MatchString(text)
 	managed := strings.Contains(lower, "managed by admin") || strings.Contains(lower, "managed by organization")
 
 	used, havePct := 0.0, false
-	if m := kiroPercent.FindStringSubmatch(text); m != nil {
+	if m := kiroPercent().FindStringSubmatch(text); m != nil {
 		used, _ = strconv.ParseFloat(m[1], 64)
 		havePct = true
 	}
 	haveCredits := false
-	if m := kiroCredits.FindStringSubmatch(text); m != nil {
+	if m := kiroCredits().FindStringSubmatch(text); m != nil {
 		haveCredits = true
 		if !havePct {
 			u, _ := strconv.ParseFloat(m[1], 64)
@@ -122,12 +121,12 @@ func parseKiroUsage(text string, now time.Time) (usage.Reading, error) {
 	r.Windows = append(r.Windows, usage.Window{
 		Name: "month", UsedPct: used, Duration: 30 * 24 * time.Hour, ResetsAt: kiroResetDate(text, now),
 	})
-	if m := kiroBonus.FindStringSubmatch(text); m != nil {
+	if m := kiroBonus().FindStringSubmatch(text); m != nil {
 		u, _ := strconv.ParseFloat(m[1], 64)
 		total, _ := strconv.ParseFloat(m[2], 64)
 		if total > 0 {
 			w := usage.Window{Name: "bonus credits", UsedPct: pct(u, total)}
-			if e := kiroBonusExpiry.FindStringSubmatch(text); e != nil {
+			if e := kiroBonusExpiry().FindStringSubmatch(text); e != nil {
 				days, _ := strconv.Atoi(e[1])
 				w.ResetsAt = now.Add(time.Duration(days) * 24 * time.Hour).UTC()
 			}
@@ -140,7 +139,7 @@ func parseKiroUsage(text string, now time.Time) (usage.Reading, error) {
 // kiroResetDate is the printed reset, at local midnight: a full date, or
 // MM/DD in the current year if still ahead, else the next.
 func kiroResetDate(text string, now time.Time) time.Time {
-	m := kiroReset.FindStringSubmatch(text)
+	m := kiroReset().FindStringSubmatch(text)
 	if m == nil {
 		return time.Time{}
 	}
