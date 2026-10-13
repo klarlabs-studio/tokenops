@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
@@ -53,12 +52,12 @@ func (a AugmentCLI) Read(ctx context.Context, _ string) (usage.Reading, error) {
 }
 
 var (
-	auggieMonthly    = regexp.MustCompile(`([\d,]+)\s+credits\s*/\s*month`)
-	auggieMaxPlan    = regexp.MustCompile(`([\d,]+)\s+credits`)
-	auggieRemaining  = regexp.MustCompile(`([\d,]+)\s+credits\s+remaining`)
-	auggieLegacyLeft = regexp.MustCompile(`([\d,]+)\s+remaining`)
-	auggieLegacyUsed = regexp.MustCompile(`([\d,]+)\s*/\s*([\d,]+)\s+credits used`)
-	auggieCycleEnd   = regexp.MustCompile(`ends\s+([\d/]+)`)
+	auggieMonthly    = lazyRegexp(`([\d,]+)\s+credits\s*/\s*month`)
+	auggieMaxPlan    = lazyRegexp(`([\d,]+)\s+credits`)
+	auggieRemaining  = lazyRegexp(`([\d,]+)\s+credits\s+remaining`)
+	auggieLegacyLeft = lazyRegexp(`([\d,]+)\s+remaining`)
+	auggieLegacyUsed = lazyRegexp(`([\d,]+)\s*/\s*([\d,]+)\s+credits used`)
+	auggieCycleEnd   = lazyRegexp(`ends\s+([\d/]+)`)
 )
 
 // parseAuggieStatus maps the account box: credits remaining of the
@@ -73,29 +72,29 @@ func parseAuggieStatus(text string) (usage.Reading, error) {
 		line = strings.TrimSpace(line)
 		switch {
 		case strings.Contains(line, "credits / month"):
-			if m := auggieMonthly.FindStringSubmatch(line); m != nil {
+			if m := auggieMonthly().FindStringSubmatch(line); m != nil {
 				monthly = val(m[1])
 			}
 		case strings.Contains(line, "Max Plan") && strings.Contains(line, "credits") && !strings.Contains(line, "remaining"):
-			if m := auggieMaxPlan.FindStringSubmatch(line); m != nil {
+			if m := auggieMaxPlan().FindStringSubmatch(line); m != nil {
 				monthly = val(m[1])
 			}
 		}
 		if strings.Contains(line, "credits remaining") && !strings.Contains(line, "billing cycle") {
-			if m := auggieRemaining.FindStringSubmatch(line); m != nil {
+			if m := auggieRemaining().FindStringSubmatch(line); m != nil {
 				remaining = val(m[1])
 			}
 		}
 		if strings.Contains(line, "remaining") && strings.Contains(line, "credits used") {
-			if m := auggieLegacyLeft.FindStringSubmatch(line); m != nil {
+			if m := auggieLegacyLeft().FindStringSubmatch(line); m != nil {
 				remaining = val(m[1])
 			}
-			if m := auggieLegacyUsed.FindStringSubmatch(line); m != nil {
+			if m := auggieLegacyUsed().FindStringSubmatch(line); m != nil {
 				used, total = val(m[1]), val(m[2])
 			}
 		}
 		if strings.Contains(line, "billing cycle") && strings.Contains(line, "ends") {
-			if m := auggieCycleEnd.FindStringSubmatch(line); m != nil {
+			if m := auggieCycleEnd().FindStringSubmatch(line); m != nil {
 				if t, err := time.ParseInLocation("1/2/2006", m[1], time.Local); err == nil {
 					ends = t.UTC()
 				}

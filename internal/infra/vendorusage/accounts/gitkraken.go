@@ -7,7 +7,6 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
@@ -36,7 +35,7 @@ func (GitKraken) Provider() eventschema.Provider { return "gitkraken" }
 func (GitKraken) Source() string                 { return "gitkraken-account" }
 
 // gitkrakenReset is the reset time the API reports: always with a zone.
-var gitkrakenReset = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$`)
+var gitkrakenReset = lazyRegexp(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$`)
 
 type gitkrakenQuota struct {
 	Used  *float64 `json:"used"`
@@ -85,7 +84,7 @@ func (g GitKraken) Read(ctx context.Context, key string) (usage.Reading, error) 
 		return usage.Reading{}, fmt.Errorf("accounts: GitKraken usage in a shape this version cannot read")
 	}
 	var resets time.Time
-	if gitkrakenReset.MatchString(resp.Data.ResetsOn) {
+	if gitkrakenReset().MatchString(resp.Data.ResetsOn) {
 		resets = parseTime(resp.Data.ResetsOn)
 	}
 	r := usage.Reading{Scope: "account", Subscription: true}

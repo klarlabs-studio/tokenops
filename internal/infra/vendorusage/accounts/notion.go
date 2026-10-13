@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -111,12 +110,12 @@ func (n Notion) Read(ctx context.Context, key string) (usage.Reading, error) {
 	return r, nil
 }
 
-var notionWindowToken = regexp.MustCompile(`^([1-9][0-9]*)([mhdw])$`)
+var notionWindowToken = lazyRegexp(`^([1-9][0-9]*)([mhdw])$`)
 
 // notionDuration reads Notion's window token ("6h", "1d"); 0 when it is
 // not one.
 func notionDuration(token string) time.Duration {
-	m := notionWindowToken.FindStringSubmatch(strings.ToLower(strings.TrimSpace(token)))
+	m := notionWindowToken().FindStringSubmatch(strings.ToLower(strings.TrimSpace(token)))
 	if m == nil {
 		return 0
 	}

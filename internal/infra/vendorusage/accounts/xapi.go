@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -33,7 +32,7 @@ func (XAPI) Endpoint() string               { return "xapi" }
 func (XAPI) Provider() eventschema.Provider { return "xapi" }
 func (XAPI) Source() string                 { return "xapi-web" }
 
-var xapiAccountID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+var xapiAccountID = lazyRegexp(`^[A-Za-z0-9_-]{1,128}$`)
 
 func (x XAPI) Read(ctx context.Context, cookie string) (usage.Reading, error) {
 	cookie = cookieHeader(cookie)
@@ -131,7 +130,7 @@ func xapiID(raw json.RawMessage) string {
 		}
 		s = strconv.FormatInt(int64(n), 10)
 	}
-	if !xapiAccountID.MatchString(s) {
+	if !xapiAccountID().MatchString(s) {
 		return ""
 	}
 	return s

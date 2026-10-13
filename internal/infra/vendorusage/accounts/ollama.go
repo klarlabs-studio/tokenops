@@ -37,11 +37,11 @@ func (Ollama) Source() string                 { return "ollama-web" }
 var ollamaLabels = []string{"Monthly usage", "Free usage", "Session usage", "Hourly usage", "Weekly usage"}
 
 var (
-	ollamaPctUsed  = regexp.MustCompile(`(?i)([0-9]+(?:\.[0-9]+)?)\s*%\s*used`)
+	ollamaPctUsed  = lazyRegexp(`(?i)([0-9]+(?:\.[0-9]+)?)\s*%\s*used`)
 	ollamaAmount   = `((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?)`
-	ollamaDollars  = regexp.MustCompile(`\$` + ollamaAmount + `\s+of\s+\$` + ollamaAmount + `\s+used`)
-	ollamaWidth    = regexp.MustCompile(`width:\s*([0-9]+(?:\.[0-9]+)?)%`)
-	ollamaDataTime = regexp.MustCompile(`data-time="([^"]+)"`)
+	ollamaDollars  = lazyRegexp(`\$` + ollamaAmount + `\s+of\s+\$` + ollamaAmount + `\s+used`)
+	ollamaWidth    = lazyRegexp(`width:\s*([0-9]+(?:\.[0-9]+)?)%`)
+	ollamaDataTime = lazyRegexp(`data-time="([^"]+)"`)
 )
 
 func (o Ollama) Read(ctx context.Context, cookie string) (usage.Reading, error) {
@@ -69,7 +69,7 @@ func ollamaReading(html string) (usage.Reading, error) {
 			if block, ok := ollamaBlock(html, label); ok {
 				if used, ok := ollamaPercent(block); ok {
 					w := usage.Window{Name: name, UsedPct: clampPct(used), Duration: d}
-					if m := ollamaDataTime.FindStringSubmatch(block); m != nil {
+					if m := ollamaDataTime().FindStringSubmatch(block); m != nil {
 						w.ResetsAt = parseTime(m[1])
 					}
 					r.Windows = append(r.Windows, w)
@@ -117,18 +117,18 @@ func ollamaBlock(html, label string) (string, bool) {
 }
 
 func ollamaPercent(block string) (float64, bool) {
-	if m := ollamaPctUsed.FindStringSubmatch(block); m != nil {
+	if m := ollamaPctUsed().FindStringSubmatch(block); m != nil {
 		v, err := strconv.ParseFloat(m[1], 64)
 		return v, err == nil
 	}
-	if m := ollamaDollars.FindStringSubmatch(block); m != nil {
+	if m := ollamaDollars().FindStringSubmatch(block); m != nil {
 		used, err1 := strconv.ParseFloat(strings.ReplaceAll(m[1], ",", ""), 64)
 		limit, err2 := strconv.ParseFloat(strings.ReplaceAll(m[2], ",", ""), 64)
 		if err1 == nil && err2 == nil && limit > 0 {
 			return pct(used, limit), true
 		}
 	}
-	if m := ollamaWidth.FindStringSubmatch(block); m != nil {
+	if m := ollamaWidth().FindStringSubmatch(block); m != nil {
 		v, err := strconv.ParseFloat(m[1], 64)
 		return v, err == nil
 	}
