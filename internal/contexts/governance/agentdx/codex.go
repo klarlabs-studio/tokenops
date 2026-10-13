@@ -51,13 +51,27 @@ func ExtractCodex(opts ExtractOptions) ([]Record, error) {
 	})
 
 	var out []Record
+	cache := opts.cache()
+	kept := make(map[string]bool, len(files))
 	for _, path := range files {
+		info, fresh := writtenSince(path, opts.Since)
+		if !fresh {
+			continue
+		}
+		if cache != nil {
+			kept[path] = true
+			out = append(out, cache.codex(path, info, opts.Since)...)
+			continue
+		}
 		f, err := os.Open(path) //nolint:gosec // operator's own transcript dir
 		if err != nil {
 			continue
 		}
 		out = append(out, readCodexTranscript(f, sessionIDFromPath(path), opts.Since, opts.WithPromptText)...)
 		_ = f.Close()
+	}
+	if cache != nil {
+		cache.retain(sourceCodex, kept)
 	}
 	return out, nil
 }
@@ -118,8 +132,18 @@ type codexLine struct {
 // both counts the response_item, which is also the only one with the
 // instruction's text on it.
 func readCodexTranscript(r io.Reader, sessionID string, since time.Time, withText bool) []Record {
+	out, _ := readCodexTranscriptFrom(r, sessionID, since, withText)
+	return out
+}
+
+// readCodexTranscriptFrom is readCodexTranscript, plus the earliest time
+// any line of the file carries (zero when none has one). A line before
+// since still sets nothing, so a file whose every line is at or after two
+// cut-offs reads the same under either.
+func readCodexTranscriptFrom(r io.Reader, sessionID string, since time.Time, withText bool) ([]Record, time.Time) {
 	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 0, 1<<20), 8<<20)
+	sc.Buffer(make([]byte, 0, 1<<20), maxTranscriptLine)
+	var first time.Time
 	var (
 		out []Record
 		// Prompts from each channel are kept apart until the whole file
@@ -144,6 +168,9 @@ func readCodexTranscript(r io.Reader, sessionID string, since time.Time, withTex
 			continue
 		}
 		at = at.UTC()
+		if first.IsZero() || at.Before(first) {
+			first = at
+		}
 		if !since.IsZero() && at.Before(since) {
 			continue
 		}
@@ -208,7 +235,7 @@ func readCodexTranscript(r io.Reader, sessionID string, since time.Time, withTex
 	// Everything downstream — unit grouping, idle gaps, the story's
 	// boundaries — reads these in sequence.
 	sort.SliceStable(out, func(i, j int) bool { return out[i].At.Before(out[j].At) })
-	return out
+	return out, first
 }
 
 // codexMessageText joins a message's text parts. Codex carries content as
