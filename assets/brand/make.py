@@ -96,3 +96,30 @@ open(f"{out}/app-icon-macos.svg", "w").write(mark("#FFFFFF", "#FFFFFF", "0.25", 
 # Monochrome in the text colour, for icon slots that tint (VS Code).
 open(f"{out}/mark-currentcolor.svg", "w").write(mark("currentColor", "currentColor", "0.3", "currentColor", pad=3, weight=1.3))
 print("ratio", ratio)
+
+# Social card (1200x630, og:image and the GitHub social preview): the
+# wordmark on ink with the headline, every letter outlined from Geist so the
+# PNG does not depend on the fonts installed where it is rendered.
+regular = instantiateVariableFont(TTFont(font_path), {"wght": 400})
+
+def text_path(f, text, x, y, size, tracking=-0.02):
+    fgs, fcmap, fhmtx = f.getGlyphSet(), f.getBestCmap(), f["hmtx"]
+    s = size / upm
+    sp = SVGPathPen(fgs)
+    for ch in text:
+        name = fcmap[ord(ch)]
+        fgs[name].draw(TransformPen(sp, (s, 0, 0, -s, x, y)))
+        x += (fhmtx[name][0] + tracking * upm) * s
+    return sp.getCommands()
+
+wm = wordmark("#FFFFFF", COBALT_DARK, "#FFFFFF", "0.14", AMBER)[0]
+vb = wm.split('viewBox="')[1].split('"')[0]
+inner = wm.split('aria-label="tokenops">')[1].rsplit("</svg>", 1)[0]
+lines = ["Know what’s left.", "Set what’s allowed.", "Let your agents work."]
+head = "".join(f'<path fill="#FFFFFF" d="{text_path(font, t, 80, 270 + i * 92, 78)}"/>' for i, t in enumerate(lines))
+sub = text_path(regular, "Guardrails for coding agents · local-first · ~90 AI plans and providers", 80, 560, 32, 0)
+open(f"{out}/social.svg", "w").write(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-label="tokenops">'
+    f'<rect width="1200" height="630" fill="{INK}"/>'
+    f'<svg x="80" y="64" width="420" height="84" viewBox="{vb}" preserveAspectRatio="xMinYMid meet">{inner}</svg>'
+    f'{head}<path fill="#8C9CFF" d="{sub}"/></svg>\n')

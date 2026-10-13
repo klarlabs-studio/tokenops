@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Changed
+
+- **docs, README, npm:** TokenOps is described as guardrails for coding agents: "Know what's left. Set what's allowed. Let your agents work." The landing page leads with a comparison against vendor meters, usage meters and gateways, and gives action boundaries and the team plane their own sections
+- **brand:** a 1200×630 link preview (`assets/brand/social.png`, drawn by `make.py`) with Open Graph and Twitter card tags on the docs site, and the wordmark on the npm page
+
+### Fixed
+
+- **docs:** on a phone the hero ring overlapped the headline; it now sizes to the screen
+
 ## 0.103.0 - 2026-10-13
 
 ### Added

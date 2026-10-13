@@ -1,7 +1,7 @@
 <h1>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/brand/wordmark-dark.svg">
-    <img src="assets/brand/wordmark.svg" alt="TokenOps" height="56">
+    <img src="assets/brand/wordmark.svg" alt="tokenops" height="56">
   </picture>
 </h1>
 
@@ -10,11 +10,13 @@
 [![License](https://img.shields.io/github/license/klarlabs-studio/tokenops)](LICENSE)
 [![Go Report](https://goreportcard.com/badge/go.klarlabs.de/tokenops)](https://goreportcard.com/report/go.klarlabs.de/tokenops)
 
-> **A local-first adaptive control plane for AI-assisted work.** TokenOps
-> understands work, resource pressure, policy, decisions, and observed outcomes
-> so it can recommend—or, where an adapter is capable and authorized, apply—
-> better use of models and subscription capacity. It keeps the evidence and
-> decision history local and explains why each intervention was chosen.
+> **Know what's left. Set what's allowed. Let your agents work.**
+> Guardrails for coding agents: TokenOps watches every AI plan and account
+> your agents draw on (Claude, Codex, Cursor, Copilot and about 90 more),
+> steps in during the session before a limit, a budget or a rule you set is
+> crossed, and records who let an agent go further. It runs on your machine;
+> your prompts and your code never leave it. Free and open source; teams add
+> shared rules and approvals.
 
 Docs: <https://klarlabs-studio.github.io/tokenops/> · Releases: <https://github.com/klarlabs-studio/tokenops/releases>
 
