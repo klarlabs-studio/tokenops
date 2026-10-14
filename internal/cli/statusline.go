@@ -8,8 +8,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +18,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
 	"go.klarlabs.de/tokenops/internal/infra/claudesettings"
+	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/infra/fxrate"
 )
 
@@ -177,60 +176,38 @@ func statusLines(raw []byte) []string {
 	if r, ok := fxrate.Cached(cfg.Money); ok {
 		in.Rate = r
 	}
-	in.Tip = openTipText(cfg, s.SessionID)
+	if tip, text, ok := statusTip(cfg, s.SessionID, in.Now); ok {
+		in.Tip, in.TipUrgent = text, tip.Urgent()
+		recordTipSeen(s.SessionID, tip.ID, in.Now)
+	}
 	return statusline.Render(in)
 }
 
-// openTipText words the coach's open tip for this session, when the
-// coach is set to speak.
-func openTipText(cfg config.Config, sessionID string) string {
-	if sessionID == "" {
-		return ""
-	}
-	if v, _ := cfg.CoachVerbosity(); v == config.VerbosityQuiet {
-		return ""
-	}
+// statusTip is the coach's open tip for this session as the line shows
+// it, or false when the coach is off, the tip is not current, or quiet
+// verbosity holds it back (quiet shows only tips about work about to
+// stop, the same ones the Stop hook still speaks at quiet).
+func statusTip(cfg config.Config, sessionID string, now time.Time) (coachhook.Tip, string, bool) {
 	if coachcap.Build(cfg).Effective(config.PowerInform) == config.AutonomyOff {
-		return ""
+		return coachhook.Tip{}, "", false
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
+	tip, ok := coachhook.OpenTip("", sessionID)
+	if !ok {
+		return coachhook.Tip{}, "", false
 	}
-	safe := strings.NewReplacer("/", "_", "\\", "_", "..", "_").Replace(sessionID)
-	b, err := os.ReadFile(filepath.Join(home, ".tokenops", "coach-hook", "session-"+safe+".json")) //nolint:gosec // TokenOps' own state
-	if err != nil {
-		return ""
+	if v, _ := cfg.CoachVerbosity(); v == config.VerbosityQuiet && !tip.Urgent() {
+		return coachhook.Tip{}, "", false
 	}
-	var st struct {
-		OpenTip *struct {
-			Kind string `json:"kind"`
-		} `json:"open_tip"`
-	}
-	if json.Unmarshal(b, &st) != nil || st.OpenTip == nil {
-		return ""
-	}
-	return tipText(st.OpenTip.Kind)
+	text := tip.Short(now)
+	return tip, text, text != ""
 }
 
-// tipText is a tip kind in a few words.
-func tipText(kind string) string {
-	switch {
-	case kind == "compact_now":
-		return "compact before the next task (/compact)"
-	case kind == "budget_over":
-		return "this session is past its budget"
-	case strings.HasPrefix(kind, "budget_"):
-		return "this session is past " + strings.TrimPrefix(kind, "budget_") + "% of its budget"
-	case strings.HasPrefix(kind, "quota_"):
-		if used, err := strconv.Atoi(strings.TrimPrefix(kind, "quota_")); err == nil {
-			return fmt.Sprintf("%d%% of your plan window is left", max(0, 100-used))
-		}
-		return strings.ReplaceAll(kind, "_", " ")
-	case kind == "":
-		return ""
-	default:
-		return strings.ReplaceAll(kind, "_", " ")
+// recordTipSeen records, once per tip, that the status line showed it:
+// the evidence that lets follow-through count a tip let pass as ignored
+// rather than unseen.
+func recordTipSeen(sessionID, id string, now time.Time) {
+	if coachhook.MarkSeen("", sessionID, id) {
+		coachcap.RecordSeen(coachLedger(), now, id, coachcap.ViaStatusLine)
 	}
 }
 
