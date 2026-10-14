@@ -56,7 +56,7 @@ func wasteWeek(s *avoidable.Snapshot, now time.Time) []Finding {
 		case n.Ready:
 			action = fmt.Sprintf("Next guardrail: the %s, ready to %s: %s.", n.Name, n.Next, n.Promote)
 		default:
-			action = fmt.Sprintf("Next guardrail: the %s, still gathering evidence (%s). `tokenops spend waste` shows each class.", n.Name, n.Bar)
+			action = fmt.Sprintf("Next guardrail: the %s, still gathering evidence. `tokenops spend waste` shows each class and what the %s still needs.", n.Name, n.Name)
 		}
 	}
 	return []Finding{{Kind: KindWaste, Level: LevelInfo, Title: title, Evidence: strings.Join(parts, " · "), Action: action}}

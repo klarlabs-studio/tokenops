@@ -54,7 +54,7 @@ func TestWasteWeekFinding(t *testing.T) {
 		if ready && !strings.Contains(got.Action, "`tokenops coach set waste advise`") {
 			t.Errorf("ready action = %q", got.Action)
 		}
-		if !ready && (!strings.Contains(got.Action, "needs 50") || !strings.Contains(got.Action, "tokenops spend waste")) {
+		if !ready && (!strings.Contains(got.Action, "still gathering evidence") || !strings.Contains(got.Action, "tokenops spend waste")) {
 			t.Errorf("not-ready action = %q", got.Action)
 		}
 	}

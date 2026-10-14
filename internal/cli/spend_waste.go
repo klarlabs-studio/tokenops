@@ -146,11 +146,10 @@ func writeWasteReport(out io.Writer, r avoidable.Report) {
 			} else {
 				stage += " (acting)"
 			}
-			fmt.Fprintf(out, "  %-16s %-18s %9s", g.Name, stage, usd(g.APIEquivalentUSD))
+			fmt.Fprintf(out, "  %-16s %-18s %9s\n", g.Name, stage, usd(g.APIEquivalentUSD))
 			if g.Bar != "" {
-				fmt.Fprintf(out, "  %s", g.Bar)
+				fmt.Fprintf(out, "      %s\n", g.Bar)
 			}
-			fmt.Fprintln(out)
 		}
 	}
 
