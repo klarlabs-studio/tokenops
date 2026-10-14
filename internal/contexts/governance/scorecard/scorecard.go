@@ -10,6 +10,8 @@ import (
 	"math"
 	"strings"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 )
 
 type Grade string
@@ -66,6 +68,12 @@ type Scorecard struct {
 	// load inside its deadline produced fewer numbers with no
 	// explanation at all.
 	Degraded string `json:"degraded,omitempty"`
+	// PlanUse is each provider's plan utilization (mean peak of its
+	// longest window kind that reset in the period) and coverage (share
+	// of its tokens a plan covered), over PlanUseDays. Reported, not
+	// graded: a plan used at 40% is a fact about the seat, not a fault.
+	PlanUse     *plans.PlanUseReport `json:"plan_use,omitempty"`
+	PlanUseDays int                  `json:"-"`
 	// Checklist is populated only when no KPI was computed from real
 	// data. Renderers should show the checklist instead of an F grade
 	// — defaulted KPIs are not a verdict on the operator.
@@ -391,21 +399,23 @@ func (s *Scorecard) MarshalJSON() ([]byte, error) {
 	// (i.e. the computation actually ran). Hand-build the wire shape
 	// rather than introduce *KPIResult pointers across the API.
 	out := struct {
-		GeneratedAt          time.Time  `json:"generated_at"`
-		FirstValueTime       *KPIResult `json:"first_value_time,omitempty"`
-		TokenEfficiency      *KPIResult `json:"token_efficiency_uplift,omitempty"`
-		SpendAttribution     *KPIResult `json:"spend_attribution_completeness,omitempty"`
-		CacheHitRatio        *KPIResult `json:"cache_hit_ratio,omitempty"`
-		ConfirmationGateRate *KPIResult `json:"confirmation_gate_rate,omitempty"`
-		RegenerateRate       *KPIResult `json:"regenerate_rate,omitempty"`
-		ToolSuccessRate      *KPIResult `json:"tool_success_rate,omitempty"`
-		DestructiveRate      *KPIResult `json:"destructive_rate,omitempty"`
-		OverallGrade         Grade      `json:"overall_grade"`
-		BaselineRef          string     `json:"baseline_ref,omitempty"`
+		GeneratedAt          time.Time            `json:"generated_at"`
+		FirstValueTime       *KPIResult           `json:"first_value_time,omitempty"`
+		TokenEfficiency      *KPIResult           `json:"token_efficiency_uplift,omitempty"`
+		SpendAttribution     *KPIResult           `json:"spend_attribution_completeness,omitempty"`
+		CacheHitRatio        *KPIResult           `json:"cache_hit_ratio,omitempty"`
+		ConfirmationGateRate *KPIResult           `json:"confirmation_gate_rate,omitempty"`
+		RegenerateRate       *KPIResult           `json:"regenerate_rate,omitempty"`
+		ToolSuccessRate      *KPIResult           `json:"tool_success_rate,omitempty"`
+		DestructiveRate      *KPIResult           `json:"destructive_rate,omitempty"`
+		OverallGrade         Grade                `json:"overall_grade"`
+		BaselineRef          string               `json:"baseline_ref,omitempty"`
+		PlanUse              *plans.PlanUseReport `json:"plan_use,omitempty"`
 	}{
 		GeneratedAt:  s.GeneratedAt,
 		OverallGrade: s.OverallGrade,
 		BaselineRef:  s.BaselineRef,
+		PlanUse:      s.PlanUse,
 	}
 	// An unmeasured KPI carries a NaN Value, which encoding/json refuses
 	// outright. Omitting the block is also the honest wire shape: a
@@ -490,6 +500,7 @@ func (s *Scorecard) String() string {
 		fmt.Fprintf(&b, "DAR — Destructive Action Rate (%%):          %.2f [%s]\n",
 			s.DestructiveRate.Value, s.DestructiveRate.Grade)
 	}
+	writePlanUse(&b, s.PlanUse, s.PlanUseDays)
 	fmt.Fprintf(&b, "\nOverall Grade: %s\nBaseline: %s\n", s.OverallGrade, baselineOrMissing(s.BaselineRef))
 	if s.Degraded != "" {
 		fmt.Fprintf(&b, "\n⚠ some KPIs could not be computed: %s\n", s.Degraded)
@@ -522,6 +533,41 @@ func (s *Scorecard) String() string {
 			s.DestructiveRate.Threshold.Green, s.DestructiveRate.Threshold.Yellow, s.DestructiveRate.Threshold.Red)
 	}
 	return b.String()
+}
+
+// writePlanUse renders each provider's plan utilization and coverage.
+func writePlanUse(b *strings.Builder, u *plans.PlanUseReport, days int) {
+	if u == nil || len(u.Providers) == 0 {
+		return
+	}
+	if days <= 0 {
+		days = 7
+	}
+	fmt.Fprintf(b, "\nPlan use (last %d days):\n", days)
+	for _, p := range u.Providers {
+		util := "utilization n/a (no plan window reset yet)"
+		if p.UtilizationPct != nil {
+			n := 0
+			for _, w := range p.Windows {
+				if w.Label == p.UtilizationWindow {
+					n = w.Windows
+				}
+			}
+			unit := "windows"
+			if n == 1 {
+				unit = "window"
+			}
+			util = fmt.Sprintf("utilization %.0f%% (%s, %d %s)", *p.UtilizationPct, p.UtilizationWindow, n, unit)
+		}
+		cov := "coverage n/a"
+		if p.CoveragePct != nil {
+			cov = fmt.Sprintf("coverage %.0f%% of tokens on a plan", *p.CoveragePct)
+		}
+		fmt.Fprintf(b, "  %-12s %s · %s\n", p.Provider, util, cov)
+	}
+	if u.CoveragePct != nil && len(u.Providers) > 1 {
+		fmt.Fprintf(b, "  %-12s coverage %.0f%% of tokens on a plan\n", "all", *u.CoveragePct)
+	}
 }
 
 // renderKPI formats "<value> [<grade>]", or "N/A" for a metric that was

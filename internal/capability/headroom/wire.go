@@ -45,6 +45,10 @@ type GlancePayload struct {
 	// for the operator's own view. It never leaves the machine: the
 	// telemetry export reads figures only.
 	Accounts map[string]string `json:"accounts,omitempty"`
+	// PlanUse is each provider's plan utilization (mean peak of its
+	// longest window kind) and coverage (share of tokens a plan covered)
+	// over the last week. Figures only, never prompts.
+	PlanUse *plans.PlanUseReport `json:"plan_use,omitempty"`
 	// Boundaries are the operator's boundaries that hold now, as advice
 	// for an agent whose harness cannot be refused (ADR 0014). The caller
 	// sets them; Payload leaves them empty.
@@ -80,6 +84,7 @@ func (g Glance) Payload() *GlancePayload {
 		SessionBudget: *g.Budgets.Payload(),
 		PlanHeadroom:  g.Headroom.Payload(),
 		Accounts:      g.Accounts,
+		PlanUse:       g.PlanUse,
 	}
 }
 
