@@ -49,9 +49,11 @@ type Input struct {
 	Windows []Window
 	// Rate converts dollars into the operator's currency.
 	Rate fx.Rate
-	// Tip is the coach's open tip, already worded.
-	Tip string
-	Now time.Time
+	// Tip is the coach's open tip, already worded and short: it ends
+	// the line. TipUrgent marks one about work about to stop.
+	Tip       string
+	TipUrgent bool
+	Now       time.Time
 	// Color is false for NO_COLOR and dumb terminals.
 	Color bool
 }
@@ -111,7 +113,8 @@ func (p painter) leftBar(pct float64, width int) string {
 	return p.paint(level(pct), strings.Repeat("▰", filled)) + p.paint(line, strings.Repeat("▱", width-filled))
 }
 
-// Render returns the line, and a second one when the coach has a tip.
+// Render returns the line, ending with the coach's open tip when there
+// is one.
 func Render(in Input) []string {
 	p := painter(in.Color)
 	sep := p.paint(line, " · ")
@@ -153,11 +156,16 @@ func Render(in Input) []string {
 		}
 		parts = append(parts, p.paint(porcelain, cost)+label)
 	}
-	out := []string{strings.Join(parts, sep)}
 	if in.Tip != "" {
-		out = append(out, p.paint(cobalt, "●")+" "+p.paint(porcelain, in.Tip))
+		// On the line itself, not under it: the line is what the
+		// operator reads every turn.
+		if in.TipUrgent {
+			parts = append(parts, p.paint(warnFg, "● "+in.Tip))
+		} else {
+			parts = append(parts, p.paint(cobalt, "●")+" "+p.paint(porcelain, in.Tip))
+		}
 	}
-	return out
+	return []string{strings.Join(parts, sep)}
 }
 
 // contextLevel is the context fill measured against where the session

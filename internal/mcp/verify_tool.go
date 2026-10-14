@@ -50,24 +50,44 @@ type verifyResult struct {
 	// Caveat says why the reading is what it is.
 	Caveat string `json:"caveat,omitempty"`
 
-	BaselineCount              int                   `json:"baseline_count"`
-	InterventionCount          int                   `json:"intervention_count"`
-	BaselineOutcomes           verify.OutcomeSummary `json:"baseline_outcomes"`
-	InterventionOutcomes       verify.OutcomeSummary `json:"intervention_outcomes"`
-	BaselineLatency            any                   `json:"baseline_latency_ms,omitzero"`
-	InterventionLatency        any                   `json:"intervention_latency_ms,omitzero"`
-	BaselineMeteredCost        any                   `json:"baseline_metered_cost_usd,omitzero"`
-	InterventionMeteredCost    any                   `json:"intervention_metered_cost_usd,omitzero"`
-	BaselineHumanAttention     any                   `json:"baseline_human_attention_minutes,omitzero"`
-	InterventionHumanAttention any                   `json:"intervention_human_attention_minutes,omitzero"`
-	BaselinePlanQuota          verify.QuotaSummary   `json:"baseline_plan_quota_tokens,omitempty"`
-	InterventionPlanQuota      verify.QuotaSummary   `json:"intervention_plan_quota_tokens,omitempty"`
-	RandomizedExperimentID     string                `json:"randomized_experiment_id,omitempty"`
-	RandomizedPairs            int                   `json:"randomized_pairs,omitempty"`
-	RandomizedFallback         string                `json:"randomized_fallback_reason,omitempty"`
+	BaselineCount              int                 `json:"baseline_count"`
+	InterventionCount          int                 `json:"intervention_count"`
+	BaselineOutcomes           outcomeSummary      `json:"baseline_outcomes"`
+	InterventionOutcomes       outcomeSummary      `json:"intervention_outcomes"`
+	BaselineLatency            any                 `json:"baseline_latency_ms,omitzero"`
+	InterventionLatency        any                 `json:"intervention_latency_ms,omitzero"`
+	BaselineMeteredCost        any                 `json:"baseline_metered_cost_usd,omitzero"`
+	InterventionMeteredCost    any                 `json:"intervention_metered_cost_usd,omitzero"`
+	BaselineHumanAttention     any                 `json:"baseline_human_attention_minutes,omitzero"`
+	InterventionHumanAttention any                 `json:"intervention_human_attention_minutes,omitzero"`
+	BaselinePlanQuota          verify.QuotaSummary `json:"baseline_plan_quota_tokens,omitempty"`
+	InterventionPlanQuota      verify.QuotaSummary `json:"intervention_plan_quota_tokens,omitempty"`
+	RandomizedExperimentID     string              `json:"randomized_experiment_id,omitempty"`
+	RandomizedPairs            int                 `json:"randomized_pairs,omitempty"`
+	RandomizedFallback         string              `json:"randomized_fallback_reason,omitempty"`
 
 	Error string `json:"error,omitempty"`
 	Hint  string `json:"hint,omitempty"`
+}
+
+// outcomeSummary is verify.OutcomeSummary on the wire. The success rate
+// is a measurement, whose fields are unexported: as a typed field the
+// output schema declared it a closed, empty object, and strict clients
+// rejected every call that carried a rate. It is typed any, like the
+// other measurements here, so the schema leaves it open.
+type outcomeSummary struct {
+	Achieved    int `json:"achieved"`
+	Partial     int `json:"partial"`
+	NotAchieved int `json:"not_achieved"`
+	Unknown     int `json:"unknown"`
+	SuccessRate any `json:"success_rate,omitempty"`
+}
+
+func outcomesPayload(s verify.OutcomeSummary) outcomeSummary {
+	return outcomeSummary{
+		Achieved: s.Achieved, Partial: s.Partial, NotAchieved: s.NotAchieved, Unknown: s.Unknown,
+		SuccessRate: s.SuccessRate,
+	}
 }
 
 // verifyPayload renders a report for an agent.
@@ -79,8 +99,8 @@ func verifyPayload(r verify.Report) verifyResult {
 		Caveat:                     r.Verdict.Caveat,
 		BaselineCount:              r.BaselineCount,
 		InterventionCount:          r.InterventionCount,
-		BaselineOutcomes:           r.BaselineOutcomes,
-		InterventionOutcomes:       r.InterventionOutcomes,
+		BaselineOutcomes:           outcomesPayload(r.BaselineOutcomes),
+		InterventionOutcomes:       outcomesPayload(r.InterventionOutcomes),
 		BaselineLatency:            r.BaselineLatency,
 		InterventionLatency:        r.InterventionLatency,
 		BaselineMeteredCost:        r.BaselineMeteredCostUSD,

@@ -20,14 +20,14 @@ func full() Input {
 			{Label: "wk", UsedPct: 41, ResetsAt: now.Add(72 * time.Hour)},
 		},
 		Rate: fx.Rate{Currency: "EUR", PerUSD: 0.885, Source: fx.SourceECB},
-		Tip:  "compact before the next task (/compact)",
+		Tip:  "compact now (/compact)",
 		Now:  now,
 	}
 }
 
 func TestRenderPlain(t *testing.T) {
 	got := Render(full())
-	if len(got) != 2 {
+	if len(got) != 1 {
 		t.Fatalf("lines %q", got)
 	}
 	for _, part := range []string{"Opus 5.5 high", "▰▰▱▱▱▱ 5h 38% left ↻14:10", "wk 59% left ↻Mon", "ctx 71% → 80%", "cache 95%", "€3.12 value"} {
@@ -38,8 +38,28 @@ func TestRenderPlain(t *testing.T) {
 	if strings.Contains(got[0], "\x1b[") {
 		t.Error("colour codes without Color")
 	}
-	if got[1] != "● compact before the next task (/compact)" {
-		t.Errorf("tip line %q", got[1])
+	if !strings.HasSuffix(got[0], " · ● compact now (/compact)") {
+		t.Errorf("the open tip does not end the line: %q", got[0])
+	}
+}
+
+// The tip shares the one line the operator sees every turn, and an
+// urgent one (work about to stop) is coloured as a warning.
+func TestRenderTipOnTheLine(t *testing.T) {
+	in := full()
+	in.Color = true
+	got := Render(in)
+	if len(got) != 1 || !strings.Contains(got[0], cobalt+"●") {
+		t.Fatalf("plain tip %q", got)
+	}
+	in.Tip, in.TipUrgent = "Claude weekly 90% used → /compact, smaller model", true
+	got = Render(in)
+	if !strings.Contains(got[0], warnFg+"● Claude weekly 90% used") {
+		t.Errorf("urgent tip is not a warning: %q", got[0])
+	}
+	in.Tip = ""
+	if got := Render(in); strings.Contains(got[0], "●") {
+		t.Errorf("no tip, yet a marker: %q", got[0])
 	}
 }
 

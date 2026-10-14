@@ -25,7 +25,8 @@ func TestFoldOutcomes(t *testing.T) {
 	}{
 		{"recorded outcome wins", []Entry{offer("a", ChannelAdvice, "lookup", t0), resolve("a", OutcomeFollowed, t0.Add(time.Minute))}, t0.Add(time.Hour), OutcomeFollowed},
 		{"advice inside its window is open", []Entry{offer("a", ChannelAdvice, "lookup", t0)}, t0.Add(time.Hour), OutcomeOpen},
-		{"a tip whose session ended was followed", []Entry{offer("a", ChannelTip, "quota_75", t0)}, t0.Add(OpenFor), OutcomeFollowed},
+		{"a seen tip whose session ended was followed", []Entry{offer("a", ChannelTip, "quota_75", t0), seen("a", t0)}, t0.Add(OpenFor), OutcomeFollowed},
+		{"an unseen tip whose session ended is unseen, not followed", []Entry{offer("a", ChannelTip, "quota_75", t0)}, t0.Add(OpenFor), OutcomeUnseen},
 		{"advice whose session ended is unknown, not ignored", []Entry{offer("a", ChannelAdvice, "lookup", t0)}, t0.Add(OpenFor), OutcomeUnknown},
 		{"a move inside the undo window is open", []Entry{offer("a", ChannelMove, "lookup", t0)}, t0.Add(time.Hour), OutcomeOpen},
 		{"a move that outlives the undo window stood", []Entry{offer("a", ChannelMove, "lookup", t0)}, t0.Add(UndoWindow), OutcomeStood},
@@ -53,6 +54,69 @@ func TestFoldOutcomes(t *testing.T) {
 				t.Fatalf("Fold = %+v; want one record %s", got, c.want)
 			}
 		})
+	}
+}
+
+func seen(id string, at time.Time) Entry {
+	return Entry{Type: EntrySeen, ID: id, At: at, Via: ViaStatusLine}
+}
+
+// A tip delivered only as the Stop hook's systemMessage may never have
+// been read: the line is dim, easy to miss, and absent when the session
+// is driven remotely. Nothing happening after it is no evidence it was
+// turned down, so it must not count as ignored, and must not quiet the
+// coach.
+func TestTipOutcomesNeedEvidenceTheTipWasSeen(t *testing.T) {
+	at := t0.Add(time.Minute)
+	cases := []struct {
+		name    string
+		entries []Entry
+		want    Outcome
+	}{
+		{"unseen tip left alone is unseen", []Entry{offer("a", ChannelTip, "quota_75", t0), resolve("a", OutcomeIgnored, at)}, OutcomeUnseen},
+		{"tip seen in the status line and left alone is ignored", []Entry{offer("a", ChannelTip, "quota_75", t0), seen("a", t0), resolve("a", OutcomeIgnored, at)}, OutcomeIgnored},
+		{"the seen mark may land after the resolve", []Entry{offer("a", ChannelTip, "quota_75", t0), resolve("a", OutcomeIgnored, at), seen("a", t0)}, OutcomeIgnored},
+		{"an unseen tip acted on is still followed", []Entry{offer("a", ChannelTip, "quota_75", t0), resolve("a", OutcomeFollowed, at)}, OutcomeFollowed},
+		{"advice is not a tip", []Entry{offer("a", ChannelAdvice, "lookup", t0), resolve("a", OutcomeIgnored, at)}, OutcomeIgnored},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := Fold(c.entries, t0.Add(time.Hour))
+			if len(got) != 1 || got[0].Outcome != c.want {
+				t.Fatalf("Fold = %+v; want one record %s", got, c.want)
+			}
+		})
+	}
+}
+
+func TestUnseenTipsNeitherQuietNorCountAsResolved(t *testing.T) {
+	es := make([]Entry, 0, 2*(QuietAfter+2))
+	for i := range QuietAfter + 2 {
+		id := fmt.Sprintf("t-%d", i)
+		at := t0.Add(time.Duration(i) * time.Hour)
+		es = append(es, Entry{Type: EntryOffer, ID: id, At: at, Power: "inform", Channel: ChannelTip, Kind: "quota_75", Via: ViaStopHook},
+			resolve(id, OutcomeIgnored, at.Add(time.Minute)))
+	}
+	now := t0.Add(10 * time.Hour)
+	records := Fold(es, now)
+	if Quieted(records, "inform", "quota_75", now) {
+		t.Fatal("tips nobody saw quieted the coach")
+	}
+	s := Summarize(records, now)
+	if len(s) != 1 || s[0].Unseen != QuietAfter+2 || s[0].Ignored != 0 || s[0].Resolved() != 0 || s[0].Quiet {
+		t.Fatalf("summary = %+v; want every tip unseen", s)
+	}
+}
+
+func TestPruneKeepsSeenMarksWithTheirOffers(t *testing.T) {
+	now := t0.Add(100 * 24 * time.Hour)
+	es := []Entry{
+		offer("old", ChannelTip, "quota_75", t0), seen("old", t0),
+		offer("new", ChannelTip, "quota_75", now.Add(-time.Hour)), seen("new", now),
+	}
+	got := Prune(es, now, 90*24*time.Hour)
+	if len(got) != 2 || got[1].Type != EntrySeen || got[1].ID != "new" {
+		t.Fatalf("Prune = %+v", got)
 	}
 }
 

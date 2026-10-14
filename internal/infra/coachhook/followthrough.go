@@ -28,6 +28,10 @@ type openTip struct {
 	Model   string `json:"model,omitempty"`
 	Context int64  `json:"context,omitempty"`
 	Turns   int    `json:"turns,omitempty"`
+	// Window and ResetsAt name a quota tip's window, so the status line
+	// can say which one and when it is back.
+	Window   string    `json:"window,omitempty"`
+	ResetsAt time.Time `json:"resets_at,omitzero"`
 }
 
 // budgetKind names a dollar-tier tip for the follow-through ledger.
@@ -107,6 +111,10 @@ func offerTip(st *sessionState, dec *Decision, cfg Config, kind, model string, c
 		dec.Resolved = append(dec.Resolved, TipResolution{ID: o.ID, Kind: o.Kind, Evidence: "a later tip arrived first"})
 	}
 	st.OpenTip = &openTip{ID: cfg.NewID(), Kind: kind, Model: model, Context: contextTokens}
+	if q := cfg.Quota; q != nil && dec.QuotaTier > 0 {
+		st.OpenTip.Window = providerName(q.Provider) + " " + q.Window.Label
+		st.OpenTip.ResetsAt = q.Window.ResetsAt.UTC()
+	}
 	dec.OfferID, dec.TipKind = st.OpenTip.ID, kind
 }
 
