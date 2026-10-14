@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/infra/compactlever"
@@ -91,6 +92,7 @@ func renderCoachStatus(out io.Writer, r coachcap.Report, quota []string) {
 		fmt.Fprintf(out, "\n  lately: %s\n", strings.Join(activity, " · "))
 	}
 	renderFollowThrough(out, r)
+	renderGraduation(out, r)
 	if r.HoldoutPercent > 0 {
 		fmt.Fprintf(out, "\n  holdout: %d%% of sessions do not get cost and drift tips, so their saving can be measured (`tokenops verify`)\n", r.HoldoutPercent)
 	} else {
@@ -98,6 +100,27 @@ func renderCoachStatus(out io.Writer, r coachcap.Report, quota []string) {
 	}
 	fmt.Fprintln(out, "\n  change: tokenops coach preset <observe|advise|guided|autopilot> · autonomy <off|advise|ask|autonomous> · verbosity <quiet|normal|verbose>")
 	fmt.Fprintln(out, "          tokenops coach set <inform|waste|models|context> <rung> · tokenops coach off · tokenops coach holdout <off|on|percent>")
+}
+
+// renderGraduation prints each capability's stage and the published bar
+// for its next one, with where the evidence stands. It never promotes:
+// a ready step names the command.
+func renderGraduation(out io.Writer, r coachcap.Report) {
+	if len(r.Graduation) == 0 {
+		return
+	}
+	fmt.Fprintln(out, "\n  graduation (shadow → advise → act; you take each step):")
+	for _, s := range r.Graduation {
+		name := savings.CapabilityName(s.Capability)
+		if s.Next == "" {
+			fmt.Fprintf(out, "    %-15s acts\n", name)
+			continue
+		}
+		fmt.Fprintf(out, "    %-15s %s → %s · %s\n", name, s.Stage, s.Next, savings.Bar(s))
+		if s.Ready {
+			fmt.Fprintf(out, "    %-15s ready: %s\n", "", s.Promote)
+		}
+	}
 }
 
 // renderModelPolicy states which models no route may land on.

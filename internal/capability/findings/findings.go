@@ -19,6 +19,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
@@ -331,6 +332,7 @@ func coaching(c *coach.Report, s *coachhook.Stats) []Finding {
 				Action:   "`tokenops coach tip ack`, `expected` or `snooze` settles the newest one."})
 		}
 	}
+	out = append(out, graduations(c.Graduation)...)
 	for _, sum := range c.FollowThrough {
 		if f, ok := snoozedMostly(sum); ok {
 			out = append(out, f)
@@ -344,6 +346,26 @@ func coaching(c *coach.Report, s *coachhook.Stats) []Finding {
 			Title:    fmt.Sprintf("The coach went quiet on %s", kindWords(sum.Kind)),
 			Evidence: fmt.Sprintf("%d of %d followed", sum.Followed, sum.Resolved()),
 		})
+	}
+	return out
+}
+
+// graduations are the capabilities whose evidence meets the published
+// bar for their next stage. They are suggestions, said ambiently: the
+// operator takes the step, or not.
+func graduations(steps []savings.Step) []Finding {
+	var out []Finding
+	for _, s := range steps {
+		title := savings.Headline(s)
+		if title == "" {
+			continue
+		}
+		action := s.Promote
+		if strings.HasPrefix(action, "tokenops ") {
+			action = "`" + action + "` takes the step; nothing changes until you do."
+		}
+		out = append(out, Finding{Kind: KindCoach, Level: LevelInfo, Title: strings.ToUpper(title[:1]) + title[1:],
+			Evidence: savings.Bar(s), Action: action})
 	}
 	return out
 }

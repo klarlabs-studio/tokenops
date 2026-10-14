@@ -412,7 +412,10 @@ func recordSavings(l savings.Ledger, now time.Time, session string, dec coachhoo
 		savings.RecordTip(l, now, tip)
 	}
 	if dec.ShadowID != "" {
-		tip.ID, tip.Kind, tip.Cohort = dec.ShadowID, dec.ShadowKind, savings.Holdout
+		tip.ID, tip.Kind, tip.Cohort = dec.ShadowID, dec.ShadowKind, savings.Shadow
+		if dec.Holdout {
+			tip.Cohort = savings.Holdout
+		}
 		savings.RecordTip(l, now, tip)
 	}
 	resolved := make([]savings.Resolution, 0, len(dec.Resolved)+len(dec.ShadowResolved))

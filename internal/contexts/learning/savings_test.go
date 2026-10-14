@@ -143,7 +143,7 @@ func TestSummarizeActionsWithoutHoldout(t *testing.T) {
 		{Type: SavingsIntervention, ID: "r2", At: s0, Session: "s", Capability: CapabilityReadGuard, Kind: "reread", Cohort: CohortShadow, ExpectedTokens: 1000},
 	}
 	k := SummarizeSavings(entries, Implicit{}, s0)[0]
-	if k.Treated.Count != 1 || k.Shadow != 1 || k.ExpectedTokens != 4000 || k.Holdout.Count != 0 {
+	if k.Treated.Count != 1 || k.Shadow.Count != 1 || k.ShadowTokens != 1000 || k.ExpectedTokens != 4000 || k.Holdout.Count != 0 {
 		t.Fatalf("read guard = %+v", k)
 	}
 }
