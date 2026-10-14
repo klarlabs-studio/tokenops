@@ -27,16 +27,10 @@ import (
 // this figure is a counterfactual: what the session would have cost at
 // list price, which is the only way to see context drift compounding when
 // the actual bill is flat and identical either way.
-func nudgeMessage(frac, cumulative, budget float64, configured bool) string {
+func nudgeMessage(frac, cumulative float64, basis budgetBasis) string {
 	pct := int(math.Round(frac * 100))
-	budgetStr := formatUSD(budget)
 	cumStr := fmt.Sprintf("$%.2f", cumulative)
-
-	// Only a budget the operator set is theirs.
-	ceiling := "the default " + budgetStr + " session ceiling"
-	if configured {
-		ceiling = "your " + budgetStr + " session budget"
-	}
+	ceiling := basis.ceiling()
 
 	switch {
 	case frac > 1.0+fracEpsilon:

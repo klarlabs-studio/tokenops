@@ -36,6 +36,11 @@ type sessionState struct {
 	LastContext int64 `json:"last_context,omitempty"`
 	// CompactTipped latches compact_now until the next compaction.
 	CompactTipped bool `json:"compact_tipped,omitempty"`
+	// BudgetUSD and BudgetProvenance pin a budget derived from history
+	// for the life of the session, so a weekly refresh never moves the
+	// bar mid-session. Zero when the budget is configured or default.
+	BudgetUSD        float64 `json:"budget_usd,omitempty"`
+	BudgetProvenance string  `json:"budget_provenance,omitempty"`
 	// compaction is how the newest compaction this Stop saw was
 	// triggered, "" when none; dropFrom is the context just before the
 	// newest drop to half or less. Both only live for one Evaluate.

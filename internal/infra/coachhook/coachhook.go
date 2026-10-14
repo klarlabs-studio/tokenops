@@ -56,13 +56,11 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 	model, contextTokens, unpriced := accumulate(transcriptPath, &st, cfg, now)
 	resolved := observeTip(&st, model, contextTokens)
 
-	// A budget the operator set is theirs; the shipping default is not,
-	// and the wording depends on which this is.
-	budget := cfg.BudgetUSD
-	configured := budget > 0 && budget != DefaultBudgetUSD
-	if budget <= 0 {
-		budget = DefaultBudgetUSD
-	}
+	// A budget the operator set is theirs; one read off their history is
+	// theirs in a different sense; the shipping default is neither, and
+	// the wording depends on which this is.
+	basis := pinnedBudget(dir, &st, cfg, now)
+	budget := basis.USD
 	frac := st.CumulativeUSD / budget
 
 	dec := Decision{CumulativeUSD: st.CumulativeUSD, BudgetUSD: budget, UnpricedModel: unpriced}
@@ -86,7 +84,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		case reason == "":
 			dec.Nudge = true
 			dec.FiredFraction = fired
-			dec.Message = nudgeMessage(fired, st.CumulativeUSD, budget, configured)
+			dec.Message = nudgeMessage(fired, st.CumulativeUSD, basis)
 			// Context is the number that actually constrains the session;
 			// lead the dollar figure with it wherever it is known.
 			if note := contextNote(contextTokens, model); note != "" {
