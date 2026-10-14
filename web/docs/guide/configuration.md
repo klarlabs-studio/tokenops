@@ -65,7 +65,7 @@ cheaper model that fits it), and **context** (when the agent compacts).
 
 | | `quiet` | `normal` (default) | `verbose` |
 |---|---|---|---|
-| Quota tips | at 90–100% of a window, or earlier when the pace runs out before the reset | each tier (50/75/90/100%) once per window | each tier, plus the pace line always and every window listed |
+| Quota tips | a run-out warning and a used-up window, once per window | the same | the same, plus each look-back's pace and every window listed |
 | Dollar tips (pay-per-token) | only past the budget | each tier once per session | each tier once per session |
 | The read-guard case | never | once per session | once per session |
 | Model advice | only when the model is two tiers or more above the work | once per kind of work per session | every applicable turn |
@@ -119,11 +119,26 @@ ended) or ignored (only when the status line showed it; a tip given only
 as the Stop hook's message counts as unseen, neither followed nor
 ignored), and whether each subagent move stood or was undone (you
 lowered `models` within 24 hours). Advice for a kind of work, or an early
-tip (50% or 75% of a quota window or the session budget), that you ignore
+tip (50% or 75% of the session budget), that you ignore
 five times in a row within 14 days goes quiet for that kind; it is offered
-again once that evidence ages out, and `verbose` always shows it. Tips at
-90% of a window or past the budget never go quiet. `tokenops coach` lists
+again once that evidence ages out, and `verbose` always shows it. Quota
+tips and tips past the budget never go quiet. `tokenops coach` lists
 the record per kind.
+
+**Quota tips** on a flat-rate plan come from the window's burn rate, not
+from how much of it is used. The coach measures how fast each window has
+been used over the last hour and over the last 15 minutes, and warns only
+when both would use it up before it resets: "at this pace your 5-hour
+Claude limit runs out in ~1h 20m, 40m before it resets (60% used)". 90%
+used ten minutes before the reset lasts and says nothing; 50% used half an
+hour into a five-hour window does not last and is said. A burst that has
+stopped (a quiet last 15 minutes) or a short spike in a slow hour says
+nothing either. A reading more than 15 minutes old forecasts nothing,
+since vendor meters lag. A window younger than the hour is measured from
+its own start. Each window gets one warning, and one note when it is used
+up. Once a window resets, the coach records whether it was forecast to run
+out and whether it did; `tokenops coach stats` shows how many forecasts
+came true (their precision) and how many windows ran out unforecast.
 
 A rung the coach cannot deliver yet is shown one rung lower, with the
 reason. `tokenops coach` (or the `tokenops_coach` MCP tool) shows each

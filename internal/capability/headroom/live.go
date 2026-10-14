@@ -106,3 +106,58 @@ func FlatRate(planName string) bool {
 	p, known := plans.Lookup(planName)
 	return known && planName != plans.PayAsYouGo && !p.SpendDenominated
 }
+
+// HistoryReader also reads a source's reading as it stood at an earlier
+// moment, for the burn-rate look-backs.
+type HistoryReader interface {
+	AttributeReader
+	AttributesBySourceBetween(ctx context.Context, source, key string, since, until time.Time) (map[string]string, time.Time, bool, error)
+}
+
+// Burn reads the newest fresh reading of the plan bound to provider and
+// its burn-rate verdict: each window measured over the last hour and the
+// last quarter hour (plans.AssessBurn). The look-backs are taken from the
+// newest reading's time, not now, so a lagging meter is judged on its own
+// clock and then refused as stale. An empty reading means none is fresh.
+func Burn(ctx context.Context, cfg config.Config, r HistoryReader, provider eventschema.Provider, now time.Time) (plans.QuotaReading, plans.BurnVerdict) {
+	if r == nil {
+		return plans.QuotaReading{}, plans.BurnVerdict{}
+	}
+	if _, ok := plans.Lookup(cfg.Plans[string(provider)]); !ok {
+		return plans.QuotaReading{}, plans.BurnVerdict{}
+	}
+	cur, ok := readingBetween(ctx, r, provider, now.Add(-LiveFreshness), now)
+	if !ok {
+		return plans.QuotaReading{}, plans.BurnVerdict{}
+	}
+	lookback := func(d time.Duration) *plans.QuotaReading {
+		past, ok := readingBetween(ctx, r, provider, cur.At.Add(-2*d), cur.At.Add(-d))
+		if !ok {
+			return nil
+		}
+		return &past
+	}
+	return cur, plans.AssessBurn(cur, lookback(plans.BurnLongLookback), lookback(plans.BurnShortLookback), now)
+}
+
+// readingBetween merges each source's newest reading in [since, until];
+// its time is the newest of them.
+func readingBetween(ctx context.Context, r HistoryReader, provider eventschema.Provider, since, until time.Time) (plans.QuotaReading, bool) {
+	newest := map[string]*eventschema.Envelope{}
+	var at time.Time
+	for _, s := range liveSources[provider] {
+		attrs, ts, ok, err := r.AttributesBySourceBetween(ctx, s.source, s.key, since, until)
+		if err != nil || !ok {
+			continue
+		}
+		newest[s.source] = &eventschema.Envelope{Source: s.source, Timestamp: ts, Attributes: attrs}
+		if ts.After(at) {
+			at = ts
+		}
+	}
+	if len(newest) == 0 {
+		return plans.QuotaReading{}, false
+	}
+	ws := plans.QuotaWindowsFromAttributes(provider, plans.MergeReadings(newest))
+	return plans.QuotaReading{At: at, Windows: ws}, len(ws) > 0
+}

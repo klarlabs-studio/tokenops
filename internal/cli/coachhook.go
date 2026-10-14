@@ -240,14 +240,16 @@ func writeCoachHookStats(out io.Writer, s coachhook.Stats) {
 		}
 		fmt.Fprintln(out, "    their spend reads as $0 above. Add rates via `pricing.path` to count them.")
 	}
-	if n := totalOf(s.QuotaNudges); n > 0 {
-		fmt.Fprintf(out, "  quota nudges (flat plan, live window): %d\n", n)
-		for _, tier := range []string{"50%", "75%", "90%", "100%"} {
-			if c := s.QuotaNudges[tier]; c > 0 {
-				fmt.Fprintf(out, "    %-5s %d\n", tier, c)
-			}
-		}
+	if s.BurnWarnings > 0 {
+		fmt.Fprintf(out, "  run-out warnings (flat plan, both look-backs): %d\n", s.BurnWarnings)
 	}
+	if c := s.QuotaNudges["100%"]; c > 0 {
+		fmt.Fprintf(out, "  used-up windows said: %d\n", c)
+	}
+	if n := totalOf(s.QuotaNudges) - s.QuotaNudges["100%"]; n > 0 {
+		fmt.Fprintf(out, "  share tips from earlier versions (50/75/90%%): %d\n", n)
+	}
+	writeRunOutScore(out, s.RunOut)
 	if s.CompactTips > 0 {
 		fmt.Fprintf(out, "  compact-now tips: %d\n", s.CompactTips)
 	}
@@ -273,6 +275,21 @@ func writeCoachHookStats(out io.Writer, s coachhook.Stats) {
 		fmt.Fprintln(out, "so this is not evidence that your spend is lean. Price those models first.")
 	case s.Alerts == 0:
 		fmt.Fprintln(out, "\nNo session has crossed a budget fraction yet — your spend stays lean. Keep observing.")
+	}
+}
+
+// writeRunOutScore prints how the run-out forecasts fared once their
+// windows reset: precision is forecasts that came true.
+func writeRunOutScore(out io.Writer, r coachhook.RunOutScore) {
+	if r.Windows == 0 {
+		return
+	}
+	fmt.Fprintf(out, "  windows settled: %d\n", r.Windows)
+	if p, ok := r.Precision(); ok {
+		fmt.Fprintf(out, "    forecast to run out: %d, of which ran out: %d (precision %.0f%%)\n", r.Forecast, r.ForecastRanOut, p*100)
+	}
+	if r.RanOutUnforecast > 0 {
+		fmt.Fprintf(out, "    ran out without a forecast: %d\n", r.RanOutUnforecast)
 	}
 }
 

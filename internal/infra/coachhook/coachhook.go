@@ -147,7 +147,8 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		Fraction: frac, TierFired: dec.FiredFraction, Model: model,
 		Suppressed: dec.Suppressed, Promotion: dec.Promotion, Compact: dec.CompactTip,
 		Unpriced:    dec.UnpricedModel,
-		QuotaWindow: quotaLabel(cfg.Quota), QuotaUsedPct: quotaUsed(cfg.Quota), QuotaTier: dec.QuotaTier,
+		QuotaWindow: quotaLabel(cfg.Quota, dec.quotaWindow), QuotaUsedPct: quotaUsed(cfg.Quota, dec.quotaWindow),
+		QuotaTier: dec.QuotaTier, QuotaBurn: dec.QuotaBurn,
 		ReadingLost: dec.ReadingLost,
 	})
 	return dec
