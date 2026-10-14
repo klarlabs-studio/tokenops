@@ -54,9 +54,7 @@ func (m *TagMeter) SummarizeTag(ctx context.Context, f analytics.Filter, tag str
 		s.OutputTokens += t.OutputTokens
 		s.TotalTokens += t.Tokens
 		s.APIEquivalentUSD += t.APIEquivalentUSD
-		if !t.PlanCovered {
-			s.CostUSD += t.APIEquivalentUSD
-		}
+		s.CostUSD += t.BilledUSD()
 	}
 	return s, nil
 }
