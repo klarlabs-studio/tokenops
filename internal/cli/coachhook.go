@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
+	"go.klarlabs.de/tokenops/internal/capability/budgets"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
@@ -156,6 +157,8 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, plan fun
 	}
 	cfg.Held = coachcap.Holder(ledger, now)
 	cfg.BudgetAnswers = func() (int, int) { return coachcap.BudgetAnswers(ledger, now) }
+	// The spend budgets' windows, as the daemon last measured them.
+	cfg.Budgets = budgets.Current("", now)
 	provider, known := hookProvider(in, in.isCursorPayload(), in.HookEventName == "session.idle")
 	if known && plan != nil {
 		r := plan(cmd.Context(), provider, now)

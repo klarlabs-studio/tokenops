@@ -432,9 +432,11 @@ type BudgetReading struct {
 	WindowStart time.Time `json:"window_start"`
 	ResetsAt    time.Time `json:"resets_at"`
 	// Rule is the boundary a hard window is enforced by, and Enforced
-	// whether it binds or is still in shadow.
+	// whether it binds or is still in shadow, and Require what it requires
+	// at the limit (ask or deny).
 	Rule     string `json:"rule,omitempty"`
 	Enforced bool   `json:"enforced,omitempty"`
+	Require  string `json:"require,omitempty"`
 }
 
 const figuresFile = "figures.json"

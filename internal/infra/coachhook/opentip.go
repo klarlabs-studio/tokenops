@@ -55,6 +55,8 @@ func (t Tip) Short(now time.Time) string {
 		return strings.TrimPrefix(t.Kind, "budget_") + "% of the session budget used"
 	case t.Kind == burnKind:
 		return t.shortBurn(now)
+	case strings.HasPrefix(t.Kind, spendFamily+"_"):
+		return t.shortSpend(now)
 	case strings.HasPrefix(t.Kind, "quota_"):
 		return t.shortQuota(now)
 	}

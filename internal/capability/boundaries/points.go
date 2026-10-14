@@ -157,7 +157,7 @@ func WithBudgets(fig boundaryledger.Figures, readings []boundaryledger.BudgetRea
 	for i, b := range readings {
 		if b.Mode == budget.ModeHard {
 			if r, ok := byName[config.BudgetRuleName(b.Budget, b.Window)]; ok {
-				b.Rule, b.Enforced = r.Name, r.Enforced()
+				b.Rule, b.Enforced, b.Require = r.Name, r.Enforced(), r.Require.String()
 			}
 		}
 		out[i] = b
