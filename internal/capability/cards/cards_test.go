@@ -211,3 +211,22 @@ func TestLateCostSaysSo(t *testing.T) {
 		t.Error("a cost never asked for is reported late")
 	}
 }
+
+// Each plan's card says how much of the plan the week used and how much of
+// the usage the plan carried.
+func TestCardShowsPlanUse(t *testing.T) {
+	g := sample()
+	util, cov := 62.0, 90.0
+	g.PlanUse = &plans.PlanUseReport{Providers: []plans.PlanUse{
+		{Provider: "anthropic", UtilizationPct: &util, UtilizationWindow: "weekly", CoveragePct: &cov},
+	}}
+	out := Render(g, Options{Width: 130})
+	for _, want := range []string{"Plan used, 7d:", "62% of weekly", "On the plan:", "90% of tokens"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("cards lack %q:\n%s", want, out)
+		}
+	}
+	if strings.Count(out, "On the plan:") != 1 {
+		t.Errorf("plan use shown on a plan it is not about:\n%s", out)
+	}
+}

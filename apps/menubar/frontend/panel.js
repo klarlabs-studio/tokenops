@@ -225,6 +225,23 @@
     main.appendChild(box);
   }
 
+  // Over the last week: how full the plan's longest window got on average
+  // (are the seats used?) and how much of the usage the plan carried
+  // rather than an API key or a gateway.
+  function planUse(main, r, v) {
+    var all = (v.glance && v.glance.plan_use && v.glance.plan_use.providers) || [];
+    var u = all.filter(function (p) { return p.provider === r.provider; })[0];
+    if (!u || (u.utilization_pct == null && u.coverage_pct == null)) return;
+    var box = el("section", "metric usage");
+    var grid = el("div", "stats");
+    if (u.utilization_pct != null) {
+      grid.appendChild(stat("Plan used, 7 days", Math.round(u.utilization_pct) + "% of " + u.utilization_window));
+    }
+    if (u.coverage_pct != null) grid.appendChild(stat("On the plan, 7 days", Math.round(u.coverage_pct) + "% of tokens"));
+    box.appendChild(grid);
+    main.appendChild(box);
+  }
+
   function detail(r, v) {
     var main = document.getElementById("detail");
     main.textContent = "";
@@ -257,6 +274,7 @@
     if (r.balance_usd !== undefined && r.balance_usd !== null) {
       main.appendChild(el("p", "plain", money(r.balance_usd) + " credit left"));
     }
+    planUse(main, r, v);
     var c = v.costs && v.costs[r.provider];
     if (c) usage(main, r, c);
   }
