@@ -44,13 +44,27 @@ func BenchmarkGuardNothingCrossed(b *testing.B) { benchGuard(b, 5) }
 func BenchmarkGuardRuleCrossed(b *testing.B) { benchGuard(b, 25) }
 
 // TestGuardIsWithinItsBudget is the gate: a regression past 5 ms per
-// evaluation fails the suite, not just a benchmark nobody reads.
+// evaluation fails the suite, not just a benchmark nobody reads. It
+// keeps the best of a few runs: a regression slows every run, while a
+// machine busy with the rest of the suite slows some (one run measured
+// 5.8 ms beside a cold full-suite build, against about 0.4 ms alone).
 func TestGuardIsWithinItsBudget(t *testing.T) {
 	if testing.Short() {
 		t.Skip("timing gate")
 	}
-	res := testing.Benchmark(BenchmarkGuardRuleCrossed)
-	if per := time.Duration(res.NsPerOp()); per > 5*time.Millisecond {
-		t.Fatalf("boundary evaluation takes %s per call; the budget is 5ms", per)
+	const runs = 3
+	best := time.Duration(-1)
+	for range runs {
+		per := time.Duration(testing.Benchmark(BenchmarkGuardRuleCrossed).NsPerOp())
+		if best < 0 || per < best {
+			best = per
+		}
+		if best <= guardBudget {
+			return
+		}
 	}
+	t.Fatalf("boundary evaluation takes %s per call at best of %d runs; the budget is %s", best, runs, guardBudget)
 }
+
+// guardBudget is ADR 0014's limit for one evaluation at the pause point.
+const guardBudget = 5 * time.Millisecond
