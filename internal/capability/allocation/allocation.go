@@ -30,6 +30,8 @@ type (
 	Tags = dom.Tags
 	// Key is project, client or cost_center.
 	Key = dom.Key
+	// Match is what a rule matches work by.
+	Match = dom.Match
 	// Scope is one key=value.
 	Scope = dom.Scope
 )

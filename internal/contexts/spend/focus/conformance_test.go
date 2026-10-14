@@ -218,6 +218,9 @@ func sampleDataset() ([]focus.Usage, []focus.Purchase) {
 			Requests: 40, Tokens: 3_250_000, ListUSD: 48.75},
 		{Day: day, Provider: "anthropic", Model: "claude-opus-5", Requests: 2, Tokens: 1_100,
 			BilledUSD: 1.25, ListUSD: 1.25},
+		// The same charge's part an allocation rule tagged.
+		{Day: day, Provider: "anthropic", Model: "claude-opus-5", Requests: 1, Tokens: 900,
+			BilledUSD: 0.5, ListUSD: 0.5, Tags: map[string]string{"project": "storefront", "client": "Acme Corp"}},
 		{Day: day.Add(24 * time.Hour), Provider: "openai", Model: "gpt-5.5", Requests: 3, Tokens: 12_000,
 			BilledUSD: 0.06, ListUSD: 0.06},
 		{Day: day.Add(24 * time.Hour), Provider: "anthropic", Model: "", PlanCovered: true,
