@@ -28,20 +28,49 @@ chosen view is refused with a message saying which ones do.
 | `tokenops_rules` | The repository's agent rules files | `analyze`, `conflicts`, `compress`, `inject` |
 | `tokenops_fmt` | Command-output compression | `learn`, `analyze` |
 | `tokenops_pricing` | Model prices from the rate card | — |
-| `tokenops_prepare_work` | Headroom and a model recommendation before a task | — |
-| `tokenops_review_work` | One workflow reviewed after a task | — |
+| `tokenops_prepare_work` | Headroom, a model recommendation and the task's expected share of the plan window before a task | — |
+| `tokenops_review_work` | One workflow reviewed after a task, with the window share it took against the estimate | — |
 | `tokenops_outcome` | How a piece of work turned out | `record`, `detect` |
 | `tokenops_routing` | Which model a turn should run on, and routing governance | `advise`, `proposals`, `decide`, `set_rule` |
 | `tokenops_configure` | Change a setting | `plan`, `budget`, `mode`, `preferred_model`, `usage_meter` |
 | `tokenops_coach` | How much the coach says and does | — |
 | `tokenops_experiment` | A bounded routing trial | `start`, `status`, `stop` (as `action`) |
 
-The read tools are marked read-only; `tokenops_prepare_work` and
-`tokenops_outcome` record evidence without changing settings;
+The read tools are marked read-only; `tokenops_prepare_work`,
+`tokenops_review_work` and `tokenops_outcome` record evidence without
+changing settings;
 `tokenops_routing`, `tokenops_configure`, `tokenops_coach` and
 `tokenops_experiment` change settings and are marked so a client asks
 first. The developer tools (`eval`, `replay`, `coverage-debt`, `rules
 bench`) are CLI commands only.
+
+### How much of the window a task takes
+
+`tokenops_prepare_work` classifies the instruction (lookup, research,
+edit, deep) and estimates the task's share of the plan's rate-limit
+window from earlier tasks of the same kind, in the same `repository`
+when you pass one and across repositories otherwise:
+
+```text
+typically 15–25% of your 5h window; 38% left, resets in 1h10
+```
+
+The range is the middle half of past measurements. It is not shown until
+five tasks of that kind have been measured; until then the answer says
+how many have been (`no estimate yet: 2 of 5 past tasks like this
+measured`). When only the low end of the range fits in what is left,
+`window_share.suggestion` proposes a lighter model tier (and the model
+routing advice picked, if it picked one); when not even the low end fits,
+it proposes deferring until the window resets. It never changes the
+model.
+
+`tokenops_review_work` with the same `workflow_id` reads the window again,
+records the share the task took against the estimate (`within`, `over`
+or `under`), and that measurement becomes history for the next estimate.
+The share is read from the plan's usage meter at the start and the end,
+so other work in the same window counts toward it, and a window that
+resets during the task leaves the share unmeasured. Only the task class,
+the repository label and percentages are stored, never the instruction.
 
 ## Claude Desktop setup
 

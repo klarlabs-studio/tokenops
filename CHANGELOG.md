@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **MCP:** `tokenops_prepare_work` now says how much of the plan window a task like this usually takes: "typically 15–25% of your 5h window; 38% left, resets in 1h10". The range comes from earlier tasks of the same kind (lookup, research, edit, deep) in the same repository (pass `repository`), or of the same kind anywhere when that repository has too few, and it stays hidden until five have been measured. When only the low end fits in what is left it suggests a lighter model tier, and when not even that fits it suggests waiting for the reset; it never changes the model. `tokenops_review_work` then records the share the task actually took against the estimate, which feeds the next one. Only the task kind, the repository label and percentages are stored, never the instruction
+
 ### Fixed
 
 - **plans:** when you change plans and your client says so, TokenOps now follows it. Before, `init` saw Claude Code report Max 5x against a Max 20x binding and only pointed it out, so every Claude window limit stayed 4× too high until you noticed. Now, whenever Claude Code's account tier or Codex's `plan_type` names a different plan, TokenOps switches to it from when the client first reported it: `init` does, and the daemon checks every 15 minutes, so nobody has to re-run `init`. The switch is recorded in `tokenops plan history` and in `tokenops audit` (actor `claude_code` or `codex`, with the account type and tier it reported), and said once in `init`'s output and the daemon log and for a week on `tokenops glance`, each with the command that undoes it (`tokenops plan set <provider> <plan>`). A plan you set after the client started reporting its plan is kept until the client reports a different one, and a report that fits two plans or none changes nothing
