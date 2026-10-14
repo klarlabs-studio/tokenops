@@ -49,7 +49,13 @@ type Report struct {
 	// the models power stands down there (ADR 0009 §5). Only Status
 	// fills it.
 	Routers []routers.InPath `json:"routers,omitempty"`
+	// Answered is the tip the operator just answered, when the call
+	// answered one.
+	Answered *TipAnswer `json:"answered,omitempty"`
 }
+
+// FollowThroughSummary is the follow-through evidence for one kind.
+type FollowThroughSummary = ft.Summary
 
 // HookInstall is one client's hooks after applying a preset.
 type HookInstall struct {

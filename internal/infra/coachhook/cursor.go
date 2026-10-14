@@ -114,6 +114,7 @@ func cursorContextTokens(c cursorTurn) int64 { return deref(c.InputTokens) }
 // Summing any of those twice would inflate the session by a whole turn.
 func evaluateCursor(dir string, c cursorTurn, cfg Config, now time.Time) Decision {
 	st := loadSession(dir, c.ConversationID)
+	before, prevMax := spoken{st.Nudges, st.LastNudgeAt}, st.MaxFiredFraction
 
 	basis := pinnedBudget(dir, &st, cfg, now)
 	budget := basis.USD
@@ -168,13 +169,14 @@ func evaluateCursor(dir string, c cursorTurn, cfg Config, now time.Time) Decisio
 		}
 	}
 
+	cfg.deliver(dir, &dec, &st, before, prevMax, now)
 	offerTip(&st, &dec, cfg, tipKind(dec), c.modelName(), cursorContextTokens(c))
 	saveSession(dir, c.ConversationID, st)
 	appendLedger(dir, ledgerEvent{
 		TS: now.UTC(), Session: c.ConversationID,
 		CumulativeUSD: st.CumulativeUSD, BudgetUSD: budget,
 		Fraction: frac, TierFired: dec.FiredFraction, Model: c.modelName(),
-		Suppressed: dec.Suppressed, Unpriced: dec.UnpricedModel,
+		Suppressed: dec.Suppressed, Unpriced: dec.UnpricedModel, Ambient: dec.Ambient,
 	})
 	return dec
 }

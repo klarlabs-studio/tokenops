@@ -398,6 +398,28 @@
                 "schema": {
                   "additionalProperties": false,
                   "properties": {
+                    "answered": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "answer": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "session": {
+                          "type": "string"
+                        },
+                        "snoozed_until": {
+                          "format": "date-time",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
                     "compaction": {
                       "items": {
                         "additionalProperties": false,
@@ -426,8 +448,14 @@
                       "items": {
                         "additionalProperties": false,
                         "properties": {
+                          "acknowledged": {
+                            "type": "integer"
+                          },
                           "channel": {
                             "type": "string"
+                          },
+                          "expected": {
+                            "type": "integer"
                           },
                           "followed": {
                             "type": "integer"
@@ -446,6 +474,9 @@
                           },
                           "quiet": {
                             "type": "boolean"
+                          },
+                          "snoozed": {
+                            "type": "integer"
                           },
                           "stood": {
                             "type": "integer"
@@ -625,6 +656,28 @@
                 "schema": {
                   "additionalProperties": false,
                   "properties": {
+                    "answered": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "answer": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "session": {
+                          "type": "string"
+                        },
+                        "snoozed_until": {
+                          "format": "date-time",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
                     "compaction": {
                       "items": {
                         "additionalProperties": false,
@@ -653,8 +706,14 @@
                       "items": {
                         "additionalProperties": false,
                         "properties": {
+                          "acknowledged": {
+                            "type": "integer"
+                          },
                           "channel": {
                             "type": "string"
+                          },
+                          "expected": {
+                            "type": "integer"
                           },
                           "followed": {
                             "type": "integer"
@@ -673,6 +732,9 @@
                           },
                           "quiet": {
                             "type": "boolean"
+                          },
+                          "snoozed": {
+                            "type": "integer"
                           },
                           "stood": {
                             "type": "integer"

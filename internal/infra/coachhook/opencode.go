@@ -45,6 +45,7 @@ func EvaluateOpencode(dir, dbPath, sessionID string, cfg Config, now time.Time) 
 	// idle every time the operator stops typing.
 	_ = os.MkdirAll(dir, 0o755)
 	st := loadSession(dir, sessionID)
+	before, prevMax := spoken{st.Nudges, st.LastNudgeAt}, st.MaxFiredFraction
 
 	basis := pinnedBudget(dir, &st, cfg, now)
 	budget := basis.USD
@@ -86,13 +87,14 @@ func EvaluateOpencode(dir, dbPath, sessionID string, cfg Config, now time.Time) 
 		}
 	}
 
+	cfg.deliver(dir, &dec, &st, before, prevMax, now)
 	offerTip(&st, &dec, cfg, tipKind(dec), model, contextTokens)
 	saveSession(dir, sessionID, st)
 	appendLedger(dir, ledgerEvent{
 		TS: now.UTC(), Session: sessionID,
 		CumulativeUSD: total, BudgetUSD: budget,
 		Fraction: frac, TierFired: dec.FiredFraction, Model: model,
-		Suppressed: dec.Suppressed, Unpriced: dec.UnpricedModel,
+		Suppressed: dec.Suppressed, Unpriced: dec.UnpricedModel, Ambient: dec.Ambient,
 	})
 	return dec
 }

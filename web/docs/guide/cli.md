@@ -1202,6 +1202,32 @@ The derivation is kept, with the figures it was read from, in
 `~/.tokenops/coach-hook/session-budget.json` and in `--json` as
 `budget.session_budget`.
 
+### `tokenops coach tip ack|expected|snooze`
+
+Answers a tip, by default the newest one you have not answered (`--id`
+names another). A tip moves through new (given), seen (shown on the
+status line), then your answer:
+
+| Answer | What it does |
+|---|---|
+| `ack` | You have seen it. Nothing more of that kind is said in that session: the 50%, 75% and 100% budget tips are one episode. |
+| `expected` | It is normal for you. It closes the episode the same way and is recorded as an outcome: once you have answered at least 3 budget tips in 30 days and at least half of those answers were `expected`, the session budget is read off your p95 session instead of your p90. |
+| `snooze` | Not now. Tips of that kind wait `--for` (default 4h), in every session. A warning that a plan window will run out, or is used up, still speaks. |
+
+```bash
+tokenops coach tip snooze --for 2h
+# Snoozed the tip at 50% of the session budget: tips like it wait until Tue 16:40.
+```
+
+An answered tip counts as neither followed nor ignored, so it never quiets
+the coach. `tokenops coach` shows the answers per kind of tip with the share
+snoozed, and `tokenops glance` flags a kind you snooze most of the time,
+because a tip snoozed that often fires when it is not wanted. The
+`tokenops_coach` MCP tool takes the same answer as `tip`, on your word.
+
+Each day the coach interrupts at most `coaching.quiet.max_per_day` times
+(default 6) across sessions. Past that, tips wait on the status line.
+
 ### `tokenops coach delivery`
 
 The older setting the coach replaced; it still works.

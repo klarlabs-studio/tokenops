@@ -239,9 +239,11 @@ be just as true next turn.
 |---|---|
 | `min_interval` | A floor between two proactive nudges in one session. A nudge held back by the floor is **deferred, not dropped**: its finding stays unlatched and speaks at the next opportunity past the floor. |
 | `max_per_session` | A cap on how many proactive nudges one session may carry. Unlike the floor this **drops** — a cap that queues what it refused is not a cap. Zero means no cap. |
+| `max_per_day` | The daily interruption budget: how many tips may interrupt a session in one day, across all sessions. Past it, a tip is not dropped; it waits on the status line as the session's open tip, and `tokenops glance` says how many waited. Tips about work about to stop (the session budget spent, a plan window about to run out or used up) still speak. Zero means the default of 6; `-1` turns the budget off. |
 
-Both default to zero, which means the per-finding latches are the whole
-policy — exactly what the hooks did before the key existed. It only bites
+`min_interval` and `max_per_session` default to zero, which means the
+per-finding latches are the whole policy, exactly what the hooks did
+before the key existed. It only bites
 at `delivery: advise` and `intervene`, where something speaks at all;
 neither knob touches anything you ask for, because a direct question is
 never an interruption.
@@ -256,6 +258,12 @@ never an interruption.
 
 That line is the point. A rate limit you cannot see working is
 indistinguishable from one that does nothing.
+
+Two more things keep a tip from being said twice. Past the session budget
+the coach speaks once; each further step over it (200%, 300%, …) only
+updates the status line. And a tip you answer with `tokenops coach tip`
+(`ack`, `expected`, `snooze`) closes its episode: see
+[`tokenops coach tip`](/guide/cli#tokenops-coach-tip-ack-expected-snooze).
 
 Mode, budgets, and routing rules are also editable through the MCP
 server — `tokenops_configure` with `setting` mode, budget, and
@@ -357,6 +365,7 @@ coaching:
   quiet:                      # rate-limits the *proactive* channel only
     min_interval: 30m         # floor between two nudges in one session
     max_per_session: 3        # cap; 0 defers to the per-finding latches
+    max_per_day: 6            # daily interruption budget; past it tips wait on the status line; -1 = off
   context_limits:             # waste-detector threshold overrides
     - workflow_prefix: "claude-code:"
       max_context_tokens: 500000

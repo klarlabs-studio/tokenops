@@ -92,3 +92,11 @@ func TestCoachValidation(t *testing.T) {
 		t.Errorf("autonomy not normalised: %q", got)
 	}
 }
+
+func TestInterruptionsPerDay(t *testing.T) {
+	for _, tc := range []struct{ set, want int }{{0, DefaultInterruptionsPerDay}, {-1, 0}, {3, 3}} {
+		if got := (QuietConfig{MaxPerDay: tc.set}).InterruptionsPerDay(); got != tc.want {
+			t.Errorf("max_per_day %d = %d, want %d", tc.set, got, tc.want)
+		}
+	}
+}

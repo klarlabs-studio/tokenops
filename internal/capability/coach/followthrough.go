@@ -54,6 +54,7 @@ func RecordApproval(l Ledger, now time.Time, id, session, power, kind, from, to 
 const (
 	ViaStopHook   = ft.ViaStopHook
 	ViaStatusLine = ft.ViaStatusLine
+	ViaAmbient    = ft.ViaAmbient
 )
 
 // RecordTip records a tip the coach gave about the session, under the ID
