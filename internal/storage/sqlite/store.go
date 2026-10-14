@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -266,14 +267,24 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 // source, no older than since, that carries key. ok is false when there is
 // none: an older reading is not reported as current.
 func (s *Store) LatestAttributesBySource(ctx context.Context, source, key string, since time.Time) (map[string]string, time.Time, bool, error) {
+	return s.attributesBySource(ctx, source, key, since.UnixNano(), math.MaxInt64)
+}
+
+// AttributesBySourceBetween returns the attributes of the newest event from
+// source in [since, until] that carries key: a reading as it stood at until.
+func (s *Store) AttributesBySourceBetween(ctx context.Context, source, key string, since, until time.Time) (map[string]string, time.Time, bool, error) {
+	return s.attributesBySource(ctx, source, key, since.UnixNano(), until.UnixNano())
+}
+
+func (s *Store) attributesBySource(ctx context.Context, source, key string, since, until int64) (map[string]string, time.Time, bool, error) {
 	var (
 		raw sql.NullString
 		ts  int64
 	)
 	err := s.db.QueryRowContext(ctx, `
 SELECT attributes, timestamp_ns FROM events
-WHERE source = ? AND timestamp_ns >= ? AND json_extract(attributes, ?) IS NOT NULL
-ORDER BY timestamp_ns DESC LIMIT 1`, source, since.UnixNano(), "$."+key).Scan(&raw, &ts)
+WHERE source = ? AND timestamp_ns >= ? AND timestamp_ns <= ? AND json_extract(attributes, ?) IS NOT NULL
+ORDER BY timestamp_ns DESC LIMIT 1`, source, since, until, "$."+key).Scan(&raw, &ts)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, time.Time{}, false, nil
 	}

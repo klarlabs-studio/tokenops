@@ -49,9 +49,9 @@ func readPlan(ctx context.Context, cfg config.Config, provider eventschema.Provi
 		return out
 	}
 	defer func() { _ = store.Close() }()
-	all := headroom.LiveWindows(ctx, cfg, store, provider, now)
-	if w, ok := headroom.MostConstrained(all); ok {
-		out.Quota = &coachhook.Quota{Provider: string(provider), Window: w, All: all}
+	cur, burn := headroom.Burn(ctx, cfg, store, provider, now)
+	if w, ok := headroom.MostConstrained(cur.Windows); ok {
+		out.Quota = &coachhook.Quota{Provider: string(provider), Window: w, All: cur.Windows, Burn: burn}
 		return out
 	}
 	if at, ok := headroom.LastReadingAt(ctx, store, provider); ok && out.Flat {

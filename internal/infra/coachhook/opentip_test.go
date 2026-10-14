@@ -11,7 +11,7 @@ import (
 func TestOpenTipCarriesTheQuotaWindow(t *testing.T) {
 	dir := t.TempDir()
 	cfg := tipConfig()
-	cfg.Quota = weeklyQuota(76, 2*24*time.Hour)
+	cfg.Quota = burningQuota(60, 2*time.Hour, 80*time.Minute)
 	tp := writeTranscript(t, dir, turnLine(ts(1), 60_000_000, opus))
 	d := Evaluate(dir, "s1", tp, cfg, fixedNow)
 	if d.OfferID == "" {
@@ -21,7 +21,8 @@ func TestOpenTipCarriesTheQuotaWindow(t *testing.T) {
 	if !ok {
 		t.Fatal("no open tip read back")
 	}
-	if tip.ID != d.OfferID || tip.Kind != "quota_75" || tip.Window != "Claude weekly" || !tip.ResetsAt.Equal(fixedNow.Add(2*24*time.Hour)) {
+	if tip.ID != d.OfferID || tip.Kind != "quota_burn" || tip.Window != "Claude 5-hour" ||
+		!tip.ResetsAt.Equal(fixedNow.Add(2*time.Hour)) || !tip.RunsOutAt.Equal(fixedNow.Add(80*time.Minute)) {
 		t.Fatalf("open tip = %+v", tip)
 	}
 	if _, ok := OpenTip(dir, "other"); ok {
@@ -44,6 +45,10 @@ func TestOpenTipWordsShortly(t *testing.T) {
 		{Tip{Kind: "quota_75", Window: "Claude weekly", ResetsAt: now.Add(94 * time.Hour)}, "Claude weekly 75% used → /compact, smaller model"},
 		{Tip{Kind: "quota_100", Window: "OpenAI weekly", ResetsAt: now.Add(94 * time.Hour)}, "OpenAI weekly out for 3d22h → use another plan"},
 		{Tip{Kind: "quota_90"}, "plan window 90% used → /compact, smaller model"},
+		{Tip{Kind: "quota_burn", Window: "Claude 5-hour", ResetsAt: now.Add(2 * time.Hour), RunsOutAt: now.Add(80 * time.Minute)}, "Claude 5-hour out in ~1h20m → smaller model"},
+		{Tip{Kind: "quota_burn", Window: "Claude weekly Fable", ResetsAt: now.Add(30 * time.Hour), RunsOutAt: now.Add(28 * time.Hour)}, "Claude weekly Fable out in ~1d4h → smaller model"},
+		{Tip{Kind: "quota_burn", Window: "Claude 5-hour", ResetsAt: now.Add(time.Hour), RunsOutAt: now.Add(-time.Minute)}, "Claude 5-hour about to run out → smaller model"},
+		{Tip{Kind: "quota_burn", Window: "Claude 5-hour", ResetsAt: now.Add(-time.Minute), RunsOutAt: now.Add(-time.Hour)}, ""},
 		{Tip{Kind: "quota_75", Window: "Claude weekly", ResetsAt: now.Add(-time.Minute)}, ""},
 		{Tip{}, ""},
 	}
@@ -59,10 +64,10 @@ func TestOpenTipWordsShortly(t *testing.T) {
 }
 
 // Quiet only speaks when work is about to stop, so only those tips are
-// urgent: the spent budget and a window at 90% or more.
+// urgent: the spent budget and a window running out or used up.
 func TestOpenTipUrgency(t *testing.T) {
 	for kind, want := range map[string]bool{
-		"budget_over": true, "quota_90": true, "quota_100": true,
+		"budget_over": true, "quota_90": true, "quota_100": true, "quota_burn": true,
 		"budget_50": false, "budget_75": false, "quota_50": false, "quota_75": false, "compact_now": false, "": false,
 	} {
 		if got := (Tip{Kind: kind}).Urgent(); got != want {
