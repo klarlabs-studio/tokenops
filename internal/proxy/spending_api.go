@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
@@ -105,6 +106,27 @@ func (a *AnalyticsHandlers) spendUnits(w http.ResponseWriter, r *http.Request) {
 	res, err := uniteconomics.Compute(r.Context(), uniteconomics.Deps{
 		Turns: commits.TurnsIn(a.aggregator, spending.Window{}), Events: a.store,
 	}, since, time.Now())
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeAPIJSON(w, http.StatusOK, res)
+}
+
+// spendWaste is the period's avoidable usage by class, in dollars and
+// plan-window share, beside what was realized and the guardrail to switch
+// on next. Derived figures only.
+func (a *AnalyticsHandlers) spendWaste(w http.ResponseWriter, r *http.Request) {
+	since := time.Now().AddDate(0, 0, -avoidable.DefaultDays)
+	if r.URL.Query().Get("since") != "" {
+		s, _, err := sinceUntil(r)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		since = s
+	}
+	res, err := avoidable.Compute(r.Context(), a.avoidable, since, time.Now())
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return

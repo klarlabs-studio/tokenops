@@ -5905,6 +5905,366 @@
         "summary": "Cost per commit, merged pull request, recorded and achieved outcome and change class, against the 4 weeks before; plan-window shares on a flat-rate plan; work no unit took, by why"
       }
     },
+    "/api/spend/waste": {
+      "get": {
+        "operationId": "getSpendWaste",
+        "parameters": [
+          {
+            "description": "RFC 3339 time or a duration such as 24h",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "attribution": {
+                      "type": "string"
+                    },
+                    "avoidable": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "api_equivalent_usd": {
+                          "type": "number"
+                        },
+                        "tokens": {
+                          "type": "integer"
+                        },
+                        "window_share": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "pct": {
+                                "type": "number"
+                              },
+                              "provider": {
+                                "type": "string"
+                              },
+                              "window": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "calibrations": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "provider": {
+                            "type": "string"
+                          },
+                          "tokens_per_pct": {
+                            "type": "number"
+                          },
+                          "window": {
+                            "type": "string"
+                          },
+                          "windows": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "classes": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "Amount": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "api_equivalent_usd": {
+                                "type": "number"
+                              },
+                              "tokens": {
+                                "type": "integer"
+                              },
+                              "window_share": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "pct": {
+                                      "type": "number"
+                                    },
+                                    "provider": {
+                                      "type": "string"
+                                    },
+                                    "window": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "class": {
+                            "type": "string"
+                          },
+                          "guardrail": {
+                            "type": "string"
+                          },
+                          "method": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "sessions": {
+                            "type": "integer"
+                          },
+                          "turns": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "guardrails": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "Amount": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "api_equivalent_usd": {
+                                "type": "number"
+                              },
+                              "tokens": {
+                                "type": "integer"
+                              },
+                              "window_share": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "pct": {
+                                      "type": "number"
+                                    },
+                                    "provider": {
+                                      "type": "string"
+                                    },
+                                    "window": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "bar": {
+                            "type": "string"
+                          },
+                          "capability": {
+                            "type": "string"
+                          },
+                          "classes": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "next": {
+                            "type": "string"
+                          },
+                          "power": {
+                            "type": "string"
+                          },
+                          "promote": {
+                            "type": "string"
+                          },
+                          "ready": {
+                            "type": "boolean"
+                          },
+                          "stage": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "headline": {
+                      "type": "string"
+                    },
+                    "next": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "Amount": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "api_equivalent_usd": {
+                              "type": "number"
+                            },
+                            "tokens": {
+                              "type": "integer"
+                            },
+                            "window_share": {
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "pct": {
+                                    "type": "number"
+                                  },
+                                  "provider": {
+                                    "type": "string"
+                                  },
+                                  "window": {
+                                    "type": "string"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "type": "array"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "bar": {
+                          "type": "string"
+                        },
+                        "capability": {
+                          "type": "string"
+                        },
+                        "classes": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "next": {
+                          "type": "string"
+                        },
+                        "power": {
+                          "type": "string"
+                        },
+                        "promote": {
+                          "type": "string"
+                        },
+                        "ready": {
+                          "type": "boolean"
+                        },
+                        "stage": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "notes": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "realized": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "holdout_usd": {
+                          "additionalProperties": false,
+                          "properties": {},
+                          "type": "object"
+                        },
+                        "refused_rereads": {
+                          "type": "integer"
+                        },
+                        "refused_tokens": {
+                          "type": "integer"
+                        },
+                        "refused_usd": {
+                          "type": "number"
+                        },
+                        "share": {
+                          "type": "number"
+                        },
+                        "usd": {
+                          "type": "number"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "share_method": {
+                      "type": "string"
+                    },
+                    "since": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "until": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "usage": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "api_equivalent_usd": {
+                          "type": "number"
+                        },
+                        "tokens": {
+                          "type": "integer"
+                        },
+                        "window_share": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "pct": {
+                                "type": "number"
+                              },
+                              "provider": {
+                                "type": "string"
+                              },
+                              "window": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Avoidable usage by waste class (redundant re-reads, cache-miss rebuilds, over-tiered model, retry loops, oversized context, abandoned sessions), each token in one class, in API-equivalent dollars and plan-window share; what was realized beside it; the guardrail to switch on next"
+      }
+    },
     "/api/status": {
       "get": {
         "operationId": "getStatus",

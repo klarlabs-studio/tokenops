@@ -26,6 +26,7 @@ var apiRoute = map[string]string{
 	"tokenops_findings":            "/api/findings",
 	"tokenops_cost_per_commit":     "/api/spend/commits",
 	"tokenops_unit_costs":          "/api/spend/units",
+	"tokenops_waste":               "/api/spend/waste",
 	"tokenops_plan_headroom":       "/api/plans/headroom",
 	"tokenops_session_budget":      "/api/plans/session-budget",
 	"tokenops_plan_advice":         "/api/plans/advice",

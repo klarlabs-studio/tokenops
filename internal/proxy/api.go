@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
+	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
@@ -22,6 +24,9 @@ type AnalyticsHandlers struct {
 	aggregator *spending.EventAggregator
 	spend      *spend.Engine
 	workflows  *workflowtrace.Reader
+	// avoidable reads the waste taxonomy's sources; WithConfig binds it
+	// to the daemon's coach configuration.
+	avoidable avoidable.Deps
 }
 
 // NewAnalyticsHandlers builds the handlers. Store, aggregator, and
@@ -31,12 +36,22 @@ func NewAnalyticsHandlers(store *sqlite.Store, agg *spending.EventAggregator, sp
 	if store == nil || agg == nil || spendEng == nil {
 		return nil, errors.New("proxy: AnalyticsHandlers requires store + aggregator + spend engine")
 	}
-	return &AnalyticsHandlers{
+	a := &AnalyticsHandlers{
 		store:      store,
 		aggregator: agg,
 		spend:      spendEng,
 		workflows:  workflowtrace.NewReader(store, spendEng, wasteCfg),
-	}, nil
+		avoidable:  avoidable.DepsFor(config.Config{}, agg, store, spendEng),
+	}
+	a.avoidable.Waste = wasteCfg
+	return a, nil
+}
+
+// WithConfig reads each guardrail's stage and the waste detector's limits
+// from cfg, the daemon's configuration.
+func (a *AnalyticsHandlers) WithConfig(cfg config.Config) *AnalyticsHandlers {
+	a.avoidable = avoidable.DepsFor(cfg, a.aggregator, a.store, a.spend)
+	return a
 }
 
 // Register installs every endpoint on mux. Endpoints are read-only;
@@ -53,6 +68,7 @@ func (a *AnalyticsHandlers) Register(mux RouteMux) {
 	mux.HandleFunc("GET /api/spend/top", a.spendTop)
 	mux.HandleFunc("GET /api/spend/commits", a.spendCommits)
 	mux.HandleFunc("GET /api/spend/units", a.spendUnits)
+	mux.HandleFunc("GET /api/spend/waste", a.spendWaste)
 	mux.HandleFunc("GET /api/spend/burn-rate", a.spendBurnRate)
 	mux.HandleFunc("GET /api/scorecard", a.scorecard)
 	mux.HandleFunc("GET /api/decisions/{id}", a.decision)

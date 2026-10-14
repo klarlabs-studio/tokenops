@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
@@ -43,6 +44,11 @@ type Deps struct {
 	// Money returns the rate into the operator's currency, and whether
 	// there is one. Optional: nil reports in US dollars only.
 	Money func(ctx context.Context) (money.Rate, bool)
+
+	// Config is the configuration in effect, read at call time for each
+	// guardrail's stage in the waste report. Optional: nil reads the
+	// defaults.
+	Config func() config.Config
 }
 
 // --- input structs --------------------------------------------------------
@@ -66,6 +72,10 @@ type topConsumersInput struct {
 type costPerCommitInput struct {
 	Since string `json:"since,omitempty" jsonschema:"description=RFC3339 timestamp or duration like '7d'; default 7d"`
 	Limit int    `json:"limit,omitempty" jsonschema:"description=Most recent commits to list (default 20); the totals cover them all"`
+}
+
+type wasteInput struct {
+	Since string `json:"since,omitempty" jsonschema:"description=Start of the period: RFC3339 timestamp or duration like '7d'; default 7d."`
 }
 
 type unitCostsInput struct {
@@ -238,6 +248,27 @@ func RegisterTools(s *Server, d Deps) error {
 			r, err := uniteconomics.Compute(ctx, uniteconomics.Deps{
 				Turns: commits.TurnsIn(d.Aggregator, spending.Window{}), Events: d.Store,
 			}, since, time.Now())
+			if err != nil {
+				return nil, err
+			}
+			return &r, nil
+		})
+
+	s.Tool("tokenops_waste").
+		Description("Avoidable usage over a period by waste class — redundant re-reads, cache-miss rebuilds, over-tiered model, retry loops and runaway growth, oversized context, abandoned sessions — each token counted in at most one class, in API-equivalent dollars and as a share of each plan window. Beside it, what the coach's interventions realized, and the guardrails ranked by graduation readiness with the one to switch on next. Derived figures only.").
+		OutputSchema(avoidable.Report{}).
+		Handler(func(ctx context.Context, in wasteInput) (*avoidable.Report, error) {
+			since, err := sinceOrDefault(in.Since, avoidable.DefaultDays*24*time.Hour)
+			if err != nil {
+				return nil, inputError(err)
+			}
+			cfg := config.Config{}
+			if d.Config != nil {
+				cfg = d.Config()
+			}
+			deps := avoidable.DepsFor(cfg, d.Aggregator, d.Store, d.Spend)
+			deps.Waste = d.wasteConfig()
+			r, err := avoidable.Compute(ctx, deps, since, time.Now())
 			if err != nil {
 				return nil, err
 			}
