@@ -437,7 +437,9 @@ func (s *Store) logSlowLock(op string, wait, held time.Duration, rows int) {
 // 0 is rewritten to a default ceiling so unbounded scans are never trivially
 // triggered.
 type Filter struct {
-	Type       eventschema.EventType
+	Type eventschema.EventType
+	// Source is the reader that recorded the event ("claude-usage-meter").
+	Source     string
 	WorkflowID string
 	AgentID    string
 	SessionID  string
@@ -475,6 +477,10 @@ func (s *Store) Query(ctx context.Context, f Filter) ([]*eventschema.Envelope, e
 	if f.Type != "" {
 		conds = append(conds, "type = ?")
 		args = append(args, string(f.Type))
+	}
+	if f.Source != "" {
+		conds = append(conds, "source = ?")
+		args = append(args, f.Source)
 	}
 	if f.WorkflowID != "" {
 		conds = append(conds, "workflow_id = ?")
@@ -675,6 +681,10 @@ func (s *Store) Count(ctx context.Context, f Filter) (int64, error) {
 	if f.Type != "" {
 		conds = append(conds, "type = ?")
 		args = append(args, string(f.Type))
+	}
+	if f.Source != "" {
+		conds = append(conds, "source = ?")
+		args = append(args, f.Source)
 	}
 	if f.WorkflowID != "" {
 		conds = append(conds, "workflow_id = ?")
