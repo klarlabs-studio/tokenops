@@ -73,6 +73,7 @@ operator's own.
 | `GET /api/spend/commits` | What each commit cost: the agent work that led to it, priced; subjects withheld |
 | `GET /api/spend/units` | Cost per commit, merged pull request, recorded and achieved outcome and change class against the 4 weeks before (`?since=`; the last 7 days when omitted), with plan-window shares on a flat-rate plan and the work no unit took |
 | `GET /api/spend/burn-rate` | Usage over the last hours |
+| `GET /api/spend/tags` | Spend per project, client or cost centre, tagged on the daemon by your allocation rules (`?by=project\|client\|cost_center&since=&until=`; project over the last 30 days when omitted), with the untagged work kept apart |
 | `GET /api/spend/export` | Spend and usage as FOCUS 1.2 CSV for FinOps tools (`?since=&until=`; the month so far when omitted) |
 | `GET /api/scorecard` | The wedge KPI scorecard |
 | `GET /api/pricing` | The rate card TokenOps costs with |

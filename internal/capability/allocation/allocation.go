@@ -229,13 +229,20 @@ func ByKey(key Key, turns []TaggedTurn) Report {
 	groups := map[string]*Group{}
 	sessions := map[string]map[string]bool{}
 	var total, tagged float64
-	for _, t := range turns {
+	for _, tt := range turns {
+		t := tt.SessionTurn
+		// Billed is nothing where a plan covered the turn, and its cost
+		// otherwise, priced when none was stored.
+		t.CostUSD = 0
+		if !t.PlanCovered {
+			t.CostUSD = t.APIEquivalentUSD
+		}
 		total += t.APIEquivalentUSD
-		v := t.Tags.Get(key)
+		v := tt.Tags.Get(key)
 		if v == "" {
-			r.Untagged.Add(t.SessionTurn)
-			if !t.DirKnown {
-				r.UnknownDirectory.Add(t.SessionTurn)
+			r.Untagged.Add(t)
+			if !tt.DirKnown {
+				r.UnknownDirectory.Add(t)
 			}
 			continue
 		}
@@ -245,7 +252,7 @@ func ByKey(key Key, turns []TaggedTurn) Report {
 			groups[v] = g
 			sessions[v] = map[string]bool{}
 		}
-		g.Add(t.SessionTurn)
+		g.Add(t)
 		sessions[v][t.SessionID] = true
 		tagged += t.APIEquivalentUSD
 	}

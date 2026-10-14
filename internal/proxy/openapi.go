@@ -9,6 +9,7 @@ import (
 	"go.klarlabs.de/mcp/schema"
 
 	"go.klarlabs.de/tokenops/internal/capability/actions"
+	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/boundaries"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
@@ -94,6 +95,7 @@ var APICatalog = []RouteDoc{
 	{Method: "GET", Path: "/api/spend/export", Summary: "Spend and usage as a FOCUS 1.2 dataset (CSV) for FinOps tools: plan fees as purchases, plan-covered usage billed 0 at its API list price",
 		Params:      []Param{q("format", "string", "focus, the only format; focus when omitted"), q("since", "string", "RFC 3339 time or a duration such as 720h, floored to its UTC day; the start of this month when omitted"), untilParam, includeParam},
 		ContentType: "text/csv"},
+	{Method: "GET", Path: "/api/spend/tags", Summary: "Spend per project, client or cost centre, tagged on the daemon by the allocation rules; untagged work kept apart", Params: []Param{q("by", "string", "project, client or cost_center; project when omitted"), q("since", "string", "RFC 3339 time or a duration such as 720h; 30 days ago when omitted"), untilParam, includeParam}, Response: allocation.Report{}},
 	{Method: "GET", Path: "/api/spend/burn-rate", Summary: "Usage over the last hours, hour by hour", Params: []Param{q("hours", "integer", "24 when omitted"), includeParam}, Response: spending.Burn{}},
 	{Method: "GET", Path: "/api/scorecard", Summary: "The wedge KPI scorecard", Params: []Param{q("since_days", "integer", "7 when omitted")}, Response: spending.ScorecardReport{}},
 	{Method: "GET", Path: "/api/pricing", Summary: "The rate card TokenOps costs with", Params: []Param{q("provider", "string", "one provider"), q("model", "string", "models containing this"), q("limit", "integer", "20 when omitted")}, Response: spending.Rates{}},

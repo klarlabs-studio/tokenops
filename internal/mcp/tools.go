@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
@@ -43,6 +44,10 @@ type Deps struct {
 	// Money returns the rate into the operator's currency, and whether
 	// there is one. Optional: nil reports in US dollars only.
 	Money func(ctx context.Context) (money.Rate, bool)
+
+	// Allocation returns the allocation rules at call time. Optional: nil
+	// tags nothing.
+	Allocation func() []allocation.Rule
 }
 
 // --- input structs --------------------------------------------------------
@@ -66,6 +71,13 @@ type topConsumersInput struct {
 type costPerCommitInput struct {
 	Since string `json:"since,omitempty" jsonschema:"description=RFC3339 timestamp or duration like '7d'; default 7d"`
 	Limit int    `json:"limit,omitempty" jsonschema:"description=Most recent commits to list (default 20); the totals cover them all"`
+}
+
+type spendTagsInput struct {
+	By             string   `json:"by,omitempty" jsonschema:"enum=project,enum=client,enum=cost_center,description=The allocation key to group by (default project)"`
+	Since          string   `json:"since,omitempty" jsonschema:"description=Start of the window: RFC3339 timestamp or duration like '30d'; default 30d"`
+	Until          string   `json:"until,omitempty" jsonschema:"description=End of the window: RFC3339 timestamp; open when omitted"`
+	IncludeSources []string `json:"include_sources,omitempty"`
 }
 
 type unitCostsInput struct {
@@ -224,6 +236,41 @@ func RegisterTools(s *Server, d Deps) error {
 				limit = 20
 			}
 			r = r.Newest(limit)
+			return &r, nil
+		})
+
+	s.Tool("tokenops_spend_tags").
+		Description("Spend per project, client or cost centre: each session tagged by the operator's allocation rules (repository, directory, branch prefix or harness), summed per value of the key, with the untagged work kept apart. The rules and tags stay on this machine.").
+		OutputSchema(allocation.Report{}).
+		Handler(func(ctx context.Context, in spendTagsInput) (*allocation.Report, error) {
+			key := allocation.Project
+			if in.By != "" {
+				k, err := allocation.ParseKey(in.By)
+				if err != nil {
+					return nil, inputError(err)
+				}
+				key = k
+			}
+			since, err := sinceOrDefault(in.Since, allocation.DefaultDays*24*time.Hour)
+			if err != nil {
+				return nil, inputError(err)
+			}
+			var until time.Time
+			if in.Until != "" {
+				if until, err = time.Parse(time.RFC3339, in.Until); err != nil {
+					return nil, inputError(err)
+				}
+			}
+			var rules []allocation.Rule
+			if d.Allocation != nil {
+				rules = d.Allocation()
+			}
+			r, err := allocation.Compute(ctx, allocation.Deps{
+				Turns: commits.TurnsIn(d.Aggregator, spending.Window{IncludeSources: in.IncludeSources}), Rules: rules,
+			}, key, since, until)
+			if err != nil {
+				return nil, err
+			}
 			return &r, nil
 		})
 
