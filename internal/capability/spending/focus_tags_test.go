@@ -45,7 +45,6 @@ func TestFocusExportSplitsChargesByAllocationTag(t *testing.T) {
 		t.Fatal(err)
 	}
 	type cell struct {
-		requests      int64
 		billed, list  float64
 		consumedTotal int64
 	}
