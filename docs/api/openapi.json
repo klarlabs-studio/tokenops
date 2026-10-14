@@ -4114,6 +4114,68 @@
         "summary": "What each of the operator's commits cost: the agent work that led to it, priced; subjects withheld"
       }
     },
+    "/api/spend/export": {
+      "get": {
+        "operationId": "getSpendExport",
+        "parameters": [
+          {
+            "description": "focus, the only format; focus when omitted",
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "RFC 3339 time or a duration such as 720h, floored to its UTC day; the start of this month when omitted",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "RFC 3339 time; open when omitted",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "comma-separated sources to include beyond the defaults",
+            "in": "query",
+            "name": "include_sources",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Spend and usage as a FOCUS 1.2 dataset (CSV) for FinOps tools: plan fees as purchases, plan-covered usage billed 0 at its API list price"
+      }
+    },
     "/api/spend/forecast": {
       "get": {
         "operationId": "getSpendForecast",

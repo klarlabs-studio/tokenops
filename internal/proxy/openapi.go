@@ -35,6 +35,9 @@ type RouteDoc struct {
 	Method, Path, Summary string
 	Params                []Param
 	Request, Response     any
+	// ContentType is the response's media type when it is not JSON; the
+	// body is then documented as a string.
+	ContentType string
 }
 
 // Pattern is the route as the mux registers it.
@@ -84,6 +87,9 @@ var APICatalog = []RouteDoc{
 	{Method: "GET", Path: "/api/spend/cache_stats", Summary: "Prompt cache hits and savings"},
 	{Method: "GET", Path: "/api/spend/commits", Summary: "What each of the operator's commits cost: the agent work that led to it, priced; subjects withheld", Params: []Param{sinceParam, q("limit", "integer", "most recent commits to list; 50 when omitted")}, Response: commits.Report{}},
 	{Method: "GET", Path: "/api/spend/top", Summary: "Top consumers, ranked on the API equivalent", Params: []Param{q("by", "string", "model, provider, workflow or agent"), q("top", "integer", "how many; 5 when omitted"), sinceParam, untilParam, includeParam}, Response: spending.TopConsumers{}},
+	{Method: "GET", Path: "/api/spend/export", Summary: "Spend and usage as a FOCUS 1.2 dataset (CSV) for FinOps tools: plan fees as purchases, plan-covered usage billed 0 at its API list price",
+		Params:      []Param{q("format", "string", "focus, the only format; focus when omitted"), q("since", "string", "RFC 3339 time or a duration such as 720h, floored to its UTC day; the start of this month when omitted"), untilParam, includeParam},
+		ContentType: "text/csv"},
 	{Method: "GET", Path: "/api/spend/burn-rate", Summary: "Usage over the last hours, hour by hour", Params: []Param{q("hours", "integer", "24 when omitted"), includeParam}, Response: spending.Burn{}},
 	{Method: "GET", Path: "/api/scorecard", Summary: "The wedge KPI scorecard", Params: []Param{q("since_days", "integer", "7 when omitted")}, Response: spending.ScorecardReport{}},
 	{Method: "GET", Path: "/api/pricing", Summary: "The rate card TokenOps costs with", Params: []Param{q("provider", "string", "one provider"), q("model", "string", "models containing this"), q("limit", "integer", "20 when omitted")}, Response: spending.Rates{}},
@@ -131,7 +137,7 @@ func OpenAPI(version string) ([]byte, error) {
 			"summary":     r.Summary,
 			"operationId": operationID(r),
 			"responses": map[string]any{
-				"200": map[string]any{"description": "OK", "content": jsonContent(resp)},
+				"200": map[string]any{"description": "OK", "content": responseContent(r, resp)},
 				"400": map[string]any{"description": "The request was refused; the body says why"},
 				"401": map[string]any{"description": "Missing or wrong API token"},
 			},
@@ -205,6 +211,15 @@ func schemaOf(v any, components map[string]any) (any, error) {
 	var out any
 	err = json.Unmarshal([]byte(strings.ReplaceAll(string(raw), `"#/$defs/`, `"#/components/schemas/`)), &out)
 	return out, err
+}
+
+// responseContent is the route's 200 body: JSON with schema, or the
+// route's own media type as a string.
+func responseContent(r RouteDoc, schema any) map[string]any {
+	if r.ContentType != "" {
+		return map[string]any{r.ContentType: map[string]any{"schema": map[string]any{"type": "string"}}}
+	}
+	return jsonContent(schema)
 }
 
 func jsonContent(schema any) map[string]any {
