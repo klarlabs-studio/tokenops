@@ -375,6 +375,9 @@
                           "Stage": {
                             "type": "string"
                           },
+                          "Tag": {
+                            "type": "string"
+                          },
                           "WarnAt": {
                             "type": "number"
                           },
@@ -5283,6 +5286,169 @@
           }
         },
         "summary": "Spend and tokens over a window"
+      }
+    },
+    "/api/spend/tags": {
+      "get": {
+        "operationId": "getSpendTags",
+        "parameters": [
+          {
+            "description": "project, client or cost_center; project when omitted",
+            "in": "query",
+            "name": "by",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "RFC 3339 time or a duration such as 720h; 30 days ago when omitted",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "RFC 3339 time; open when omitted",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "comma-separated sources to include beyond the defaults",
+            "in": "query",
+            "name": "include_sources",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "groups": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "Cost": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "api_equivalent_usd": {
+                                "type": "number"
+                              },
+                              "cost_usd": {
+                                "type": "number"
+                              },
+                              "tokens": {
+                                "type": "integer"
+                              },
+                              "turns": {
+                                "type": "integer"
+                              },
+                              "unpriced_turns": {
+                                "type": "integer"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "sessions": {
+                            "type": "integer"
+                          },
+                          "value": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "method": {
+                      "type": "string"
+                    },
+                    "rules": {
+                      "type": "integer"
+                    },
+                    "since": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "tagged_share": {
+                      "type": "number"
+                    },
+                    "unknown_directory": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "api_equivalent_usd": {
+                          "type": "number"
+                        },
+                        "cost_usd": {
+                          "type": "number"
+                        },
+                        "tokens": {
+                          "type": "integer"
+                        },
+                        "turns": {
+                          "type": "integer"
+                        },
+                        "unpriced_turns": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "untagged": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "api_equivalent_usd": {
+                          "type": "number"
+                        },
+                        "cost_usd": {
+                          "type": "number"
+                        },
+                        "tokens": {
+                          "type": "integer"
+                        },
+                        "turns": {
+                          "type": "integer"
+                        },
+                        "unpriced_turns": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "until": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Spend per project, client or cost centre, tagged on the daemon by the allocation rules; untagged work kept apart"
       }
     },
     "/api/spend/top": {

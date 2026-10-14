@@ -382,6 +382,7 @@ func (s *Server) buildAPIMux() *recordingMux {
 	if s.analytics != nil {
 		s.analytics.Register(protected)
 		protected.HandleFunc("GET /api/spend/export", s.spendExport)
+		protected.HandleFunc("GET /api/spend/tags", s.spendTags)
 	} else {
 		stub := subsystemDisabledHandler("storage_disabled",
 			"run `tokenops init` to enable the sqlite event store, then restart the daemon")
