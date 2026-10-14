@@ -1,6 +1,7 @@
 package coach
 
 import (
+	"context"
 	"strings"
 
 	"crypto/rand"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/routers"
+	"go.klarlabs.de/tokenops/internal/capability/savings"
 
 	"go.klarlabs.de/tokenops/internal/config"
 	ft "go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough"
@@ -216,6 +218,7 @@ func Status(cfg config.Config, l Ledger, levers ContextLevers, now time.Time) Re
 		r.Compaction = levers.Check()
 	}
 	r.Routers = DetectRouters()
+	r.Graduation = savings.Graduations(savings.Build(context.Background(), SavingsDeps(), now), r.Effective, r.FollowThrough)
 	for i, p := range r.Powers {
 		if p.Name != config.PowerModels || len(r.Routers) == 0 {
 			continue
@@ -227,6 +230,16 @@ func Status(cfg config.Config, l Ledger, levers ContextLevers, now time.Time) Re
 		r.Powers[i].Note = strings.TrimSpace(p.Note + " Stands down where an external router decides: " + strings.Join(where, "; ") + ".")
 	}
 	return r
+}
+
+// SavingsDeps reads the savings ledger for the graduation; a variable so
+// tests do not read the machine's ledgers. It leaves git out: Status
+// serves the glance, which is asked often, and `tokenops verify` is where
+// commits are read.
+var SavingsDeps = func() savings.Deps {
+	d := savings.DefaultDeps()
+	d.Commits = nil
+	return d
 }
 
 // DetectRouters finds the external routers in each harness's path; a

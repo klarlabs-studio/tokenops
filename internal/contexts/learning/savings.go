@@ -182,11 +182,13 @@ type CohortStats struct {
 type KindSavings struct {
 	Capability string `json:"capability"`
 	Kind       string `json:"kind"`
-	// Treated, Holdout: the randomized cohorts. Shadow counts the
-	// observe-only records, which are not compared.
-	Treated CohortStats `json:"treated"`
-	Holdout CohortStats `json:"holdout"`
-	Shadow  int         `json:"shadow,omitempty"`
+	// Treated, Holdout: the randomized cohorts. Shadow is the
+	// observe-only records, which are not compared; ShadowTokens their
+	// expected tokens.
+	Treated      CohortStats `json:"treated"`
+	Holdout      CohortStats `json:"holdout"`
+	Shadow       CohortStats `json:"shadow"`
+	ShadowTokens int64       `json:"shadow_tokens,omitempty"`
 	// ExpectedPerTipUSD is the mean expected saving per delivered
 	// intervention, per ExpectedBasis; ExpectedTokens the sum of the
 	// expected tokens.
@@ -220,9 +222,8 @@ func SummarizeSavings(entries []SavingsEntry, implicit Implicit, now time.Time) 
 			}
 		}
 	}
-	type cohortRows struct{ treated, holdout []SavingsEntry }
+	type cohortRows struct{ treated, holdout, shadow []SavingsEntry }
 	groups := map[savingsKey]*cohortRows{}
-	shadow := map[savingsKey]int{}
 	var order []savingsKey
 	for _, e := range entries {
 		if e.Type != SavingsIntervention || e.At.After(now) {
@@ -239,7 +240,7 @@ func SummarizeSavings(entries []SavingsEntry, implicit Implicit, now time.Time) 
 		case CohortHoldout:
 			g.holdout = append(g.holdout, e)
 		case CohortShadow:
-			shadow[k]++
+			g.shadow = append(g.shadow, e)
 		default:
 			g.treated = append(g.treated, e)
 		}
@@ -253,7 +254,11 @@ func SummarizeSavings(entries []SavingsEntry, implicit Implicit, now time.Time) 
 	out := make([]KindSavings, 0, len(order))
 	for _, k := range order {
 		g := groups[k]
-		ks := KindSavings{Capability: k.capability, Kind: k.kind, Shadow: shadow[k]}
+		ks := KindSavings{Capability: k.capability, Kind: k.kind}
+		ks.Shadow, _ = cohortStats(g.shadow, outcomes, Implicit{})
+		for _, r := range g.shadow {
+			ks.ShadowTokens += r.ExpectedTokens
+		}
 		var treatedOutcomes, holdoutOutcomes intervention.Outcomes
 		ks.Treated, treatedOutcomes = cohortStats(g.treated, outcomes, implicit)
 		ks.Holdout, holdoutOutcomes = cohortStats(g.holdout, outcomes, implicit)

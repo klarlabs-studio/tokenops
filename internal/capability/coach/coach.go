@@ -7,6 +7,7 @@ package coach
 
 import (
 	"go.klarlabs.de/tokenops/internal/capability/routers"
+	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/config"
 	ft "go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough"
 )
@@ -56,6 +57,10 @@ type Report struct {
 	// are held back and logged as shadow, so their realized saving can be
 	// measured (#656). 0 means the operator opted out.
 	HoldoutPercent int `json:"holdout_percent"`
+	// Graduation is, per capability, its stage on the shadow → advise →
+	// act ladder and the published evidence bar for the next one (#662).
+	// It suggests; nothing is promoted on it. Only Status fills it.
+	Graduation []savings.Step `json:"graduation,omitempty"`
 }
 
 // FollowThroughSummary is the follow-through evidence for one kind.

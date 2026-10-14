@@ -1143,6 +1143,34 @@ With no subcommand, shows the coach: its verbosity, and for each power
 actually do on this machine, why those differ, and the live quota window.
 See ADR 0006.
 
+#### Graduation: shadow → advise → act
+
+Each capability moves up a ladder: **shadow** (it records what it would do),
+**advise** (it tells you), **act** (it does it, on its own or after you
+approve). `tokenops coach` publishes the bar for each capability's next step
+and where your evidence stands against it, from the savings ledger and the
+follow-through record:
+
+| Next step | Criteria |
+|---|---|
+| shadow → advise | at least 50 shadow calls, at least 90% of them right (a held or observed tip whose session did not fix the problem on its own) |
+| advise → act (read guard) | at least 50 re-reads it would have refused, at least 90% right, and the tokens they cost above zero |
+| advise → act (tips, routing) | at least 50 pieces of advice with an outcome, at least 90% acted on, a saving the [holdout](#tokenops-coach-holdout-off-on-percent) realized above zero, and no harm found |
+
+```text
+  graduation (shadow → advise → act; you take each step):
+    read guard      advise → act · ✓ shadow calls: 55 (needs at least 50) · ✓ shadow precision: 100% (55 of 55) (needs at least 90%) · ✓ realized saving: ~220k tokens (needs above zero)
+                    ready: tokenops coach set waste autonomous
+    compact tip     advise → act · ✗ advice with an outcome: 12 (needs at least 50) · …
+```
+
+Nothing is promoted on its own. When a step is ready, `tokenops glance` says
+so ambiently ("Read guard is ready to enforce") with the command, and the
+step is yours to take. The 90% bar is ADR 0005's: a kind of advice above about
+a 10% effective false-positive rate is not worth more autonomy. While the
+coach only observes, the session-budget tips it would have given are recorded
+as shadow calls, which is the evidence for letting it speak.
+
 ### `tokenops coach preset [observe|advise|guided|autopilot]`
 
 Sets every power and the verbosity in one choice, then makes the machine

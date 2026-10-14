@@ -28,6 +28,7 @@ type Ledger interface {
 const (
 	Treated = learning.CohortTreated
 	Holdout = learning.CohortHoldout
+	Shadow  = learning.CohortShadow
 )
 
 // Tip is a coach tip as the ledger records it.
@@ -173,7 +174,7 @@ func Build(ctx context.Context, d Deps, now time.Time) Report {
 	for _, k := range r.Kinds {
 		r.Interventions += k.Treated.Count
 		r.Held += k.Holdout.Count
-		r.Shadow += k.Shadow
+		r.Shadow += k.Shadow.Count
 		if k.RealizedUSD.Known() {
 			realized = append(realized, k.RealizedUSD)
 		}
@@ -223,8 +224,8 @@ func Describe(k learning.KindSavings) string {
 	if k.Holdout.Count > 0 {
 		fmt.Fprintf(&b, ", %d held back", k.Holdout.Count)
 	}
-	if k.Shadow > 0 {
-		fmt.Fprintf(&b, ", %d observed only", k.Shadow)
+	if k.Shadow.Count > 0 {
+		fmt.Fprintf(&b, ", %d observed only", k.Shadow.Count)
 	}
 	switch {
 	case k.ExpectedPerTipUSD > 0:
