@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **plans:** two figures per provider answer "is this seat used?": **plan utilization**, the average peak of the plan's longest window (usually the weekly one) across the windows that reset in the period, and **plan coverage**, the share of that provider's tokens a plan covered rather than an API key, a gateway or overflow billed per token. `tokenops scorecard` lists them under the grades for its window ("anthropic utilization 64% (weekly, 1 window) · coverage 93% of tokens on a plan"). The glance cards, the menu bar and `/api/glance` (`plan_use`) show them for the last 7 days. They are reported, not graded, and a figure that cannot be measured yet is left out rather than shown as 0
+
 ### Changed
 
 - **coach:** quota tips on a flat-rate plan now warn about running out, not about how much is used. The coach measures each plan window's pace over the last hour and over the last 15 minutes and warns only when both would use the window up before it resets: "at this pace your 5-hour Claude limit runs out in ~1h 20m, 40m before it resets (60% used)". The tips at 50%, 75% and 90% are gone: 90% used ten minutes before the reset lasts and is not worth a word, while 50% half an hour into a five-hour window is. A burst that has stopped, a short spike in an otherwise slow hour, and a meter reading more than 15 minutes old say nothing. Each window gets one warning, and the used-up note stays. The status line shows it short ("Claude 5-hour out in ~1h20m → smaller model"), and `tokenops coach` says what the forecast is for each plan. Once a window resets, the coach records whether it was forecast to run out and whether it did, and `tokenops coach stats` shows the share of forecasts that came true

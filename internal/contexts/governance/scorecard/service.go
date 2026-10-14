@@ -4,6 +4,8 @@ import (
 	"context"
 	"math"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 )
 
 // Reference values for the wedge KPIs, retained for documentation and
@@ -58,9 +60,13 @@ func Build(ctx context.Context, reader EventReader, params BuildParams) *Scoreca
 	fvt, teu, sac := math.NaN(), math.NaN(), math.NaN()
 	agent := params.AgentKPIs
 	var anyComputed bool
+	var planUse *plans.PlanUseReport
 	if reader != nil {
 		since := params.ClockNow().Add(-time.Duration(params.SinceDays) * 24 * time.Hour)
-		if kpis, err := Compute(ctx, reader, since); err == nil {
+		if kpis, err := ComputeAt(ctx, reader, since, params.ClockNow()); err == nil {
+			if len(kpis.PlanUse.Providers) > 0 {
+				planUse = &kpis.PlanUse
+			}
 			if kpis.FVTComputed {
 				fvt = kpis.FVTSeconds
 				anyComputed = true
@@ -99,5 +105,7 @@ func Build(ctx context.Context, reader EventReader, params BuildParams) *Scoreca
 	if !anyComputed {
 		return NewWarmingUp(params.BaselineRef)
 	}
-	return NewWithAgentKPIs(fvt, teu, sac, agent, params.BaselineRef)
+	sc := NewWithAgentKPIs(fvt, teu, sac, agent, params.BaselineRef)
+	sc.PlanUse, sc.PlanUseDays = planUse, params.SinceDays
+	return sc
 }

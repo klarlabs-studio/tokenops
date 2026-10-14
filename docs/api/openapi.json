@@ -1967,6 +1967,68 @@
                       },
                       "type": "object"
                     },
+                    "plan_use": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "coverage_pct": {
+                          "type": "number"
+                        },
+                        "providers": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "billed_tokens": {
+                                "type": "integer"
+                              },
+                              "coverage_pct": {
+                                "type": "number"
+                              },
+                              "plan_tokens": {
+                                "type": "integer"
+                              },
+                              "provider": {
+                                "type": "string"
+                              },
+                              "utilization_pct": {
+                                "type": "number"
+                              },
+                              "utilization_window": {
+                                "type": "string"
+                              },
+                              "windows": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "avg_peak_pct": {
+                                      "type": "number"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "windows": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "since": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "until": {
+                          "format": "date-time",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
                     "session_budget": {
                       "additionalProperties": false,
                       "properties": {
@@ -3489,6 +3551,68 @@
                     },
                     "overall_grade": {
                       "type": "string"
+                    },
+                    "plan_use": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "coverage_pct": {
+                          "type": "number"
+                        },
+                        "providers": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "billed_tokens": {
+                                "type": "integer"
+                              },
+                              "coverage_pct": {
+                                "type": "number"
+                              },
+                              "plan_tokens": {
+                                "type": "integer"
+                              },
+                              "provider": {
+                                "type": "string"
+                              },
+                              "utilization_pct": {
+                                "type": "number"
+                              },
+                              "utilization_window": {
+                                "type": "string"
+                              },
+                              "windows": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "avg_peak_pct": {
+                                      "type": "number"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "windows": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "since": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "until": {
+                          "format": "date-time",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
                     },
                     "regenerate_rate": {
                       "additionalProperties": false,

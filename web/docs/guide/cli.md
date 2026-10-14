@@ -43,6 +43,15 @@ read the same way.
 behind lasts to the reset; ahead says when the window runs out at the
 rate so far. The daemon API, the menu bar and MCP report the same pace.
 
+**Plan use** is two figures per plan over the last 7 days. *Plan used* is
+the average peak of the plan's longest window (usually the weekly one)
+across the windows that reset in that week. It answers "is this seat
+used?", and idle days count against it. *On the plan* is the share of that
+provider's tokens a plan covered rather than an API key, a gateway or
+overflow billed per token. The menu bar and `/api/glance` (`plan_use`)
+carry the same figures, and `tokenops scorecard` reports them over its own
+window.
+
 **Cost** is at API list prices where a plan covers the usage. Requests on
 models without a list price yet are left out of the money: a `+` marks a
 figure that leaves some out, and where most have no price only tokens are
@@ -516,6 +525,20 @@ All grade A–F against tuneable thresholds. CHR is computed from
 events.db; CGR + RGR from JSONL prompt extracts; TCS + DAR from
 JSONL `tool_use` + `tool_result` blocks. Returns `warming_up`
 with a 3-step activation checklist when no real data backs the KPIs.
+
+Below the grades, **Plan use** lists each provider's plan utilization
+(the average peak of its longest plan window that reset in the period)
+and coverage (the share of its tokens a plan covered). They are reported,
+not graded: a seat used at 40% is a fact for whoever pays for it, not a
+fault.
+
+```
+Plan use (last 7 days):
+  anthropic    utilization 64% (weekly, 1 window) · coverage 93% of tokens on a plan
+  openai       utilization 41% (weekly, 1 window) · coverage 100% of tokens on a plan
+  openrouter   utilization n/a (no plan window reset yet) · coverage 0% of tokens on a plan
+  all          coverage 81% of tokens on a plan
+```
 
 ```bash
 tokenops scorecard --days 30        # text table
