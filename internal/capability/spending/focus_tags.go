@@ -72,9 +72,7 @@ func splitByTags(charges []analytics.Charge, turns []allocation.TaggedTurn) []ta
 		p.InputTokens += t.InputTokens
 		p.OutputTokens += t.OutputTokens
 		p.ListUSD += t.APIEquivalentUSD
-		if !t.PlanCovered {
-			p.CostUSD += t.APIEquivalentUSD
-		}
+		p.CostUSD += t.BilledUSD()
 		p.Unpriced = p.Unpriced || !t.Priced
 	}
 	out := make([]taggedCharge, 0, len(charges))
