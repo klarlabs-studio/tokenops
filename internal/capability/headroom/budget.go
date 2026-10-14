@@ -110,6 +110,9 @@ type Glance struct {
 	// PlanUse is each provider's plan utilization and coverage over the
 	// last plans.PlanUseDays; nil when the events could not be read.
 	PlanUse *plans.PlanUseReport
+	// PlanAdvice is each bound plan replayed against its other tiers over
+	// the last plans.AdviceDays; nil when it could not be computed.
+	PlanAdvice []plans.Advice
 }
 
 // ComputeGlance composes the session budgets and plan headroom.
@@ -129,6 +132,7 @@ func ComputeGlance(ctx context.Context, d Deps, now time.Time) (Glance, error) {
 		g.Accounts = d.Accounts()
 	}
 	g.PlanUse = planUse(ctx, d.Reader, now)
+	g.PlanAdvice = glanceAdvice(ctx, d, now)
 	return g, nil
 }
 

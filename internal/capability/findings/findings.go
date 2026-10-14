@@ -42,6 +42,7 @@ const (
 	KindWaste    = "waste"
 	KindBudget   = "budget"
 	KindCoach    = "coach"
+	KindPlan     = "plan"
 )
 
 // Finding is one observation: what was seen, the figures behind it, and
@@ -77,6 +78,7 @@ func Compute(in Inputs) Report {
 	var out []Finding
 	if in.Glance != nil {
 		out = append(out, quota(in.Glance.Headroom.Reports)...)
+		out = append(out, planAdvice(in.Glance.PlanAdvice)...)
 	}
 	if in.Sessions != nil {
 		out = append(out, sessionFindings(in.Sessions.DX.Warnings, in.Sessions.DX.Recommendation)...)
@@ -454,4 +456,26 @@ func money(usd float64) string {
 		b.WriteRune(d)
 	}
 	return "$" + b.String()
+}
+
+// planAdvice says when a bound plan would have cost materially less over
+// the last month with no more than a lockout. It is advice: TokenOps never
+// switches a plan.
+func planAdvice(advice []plans.Advice) []Finding {
+	var out []Finding
+	for _, a := range advice {
+		if !a.WorthSaying() {
+			continue
+		}
+		r := a.Recommendation
+		out = append(out, Finding{
+			Kind:  KindPlan,
+			Level: LevelInfo,
+			Title: fmt.Sprintf("%s would have cost $%.0f/mo less", r.Display, r.SavingsUSD),
+			Evidence: fmt.Sprintf("%s Replayed over %.0f days with %s confidence: the tiers' allowances are the vendor's "+
+				"multiples of an unverified baseline.", r.Summary, a.Days, a.Confidence),
+			Action: "See `tokenops plan advise`. Switching is yours to do with the vendor; TokenOps never changes a plan.",
+		})
+	}
+	return out
 }
