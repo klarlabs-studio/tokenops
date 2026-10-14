@@ -212,6 +212,38 @@ type ProviderCost struct {
 	Complete bool `json:"complete"`
 }
 
+// Price is what a plan costs a month, and where that price came from.
+type Price struct {
+	// Monthly is the price per month in Currency; zero when unknown.
+	Monthly  float64
+	Currency string
+	// Source is "yours" (what the operator said they pay) or "list" (the
+	// catalog's US list price).
+	Source string
+	// Display is the catalog's name for the plan, empty when unknown.
+	Display string
+}
+
+// PriceOf is the monthly price of the plan in force over period: the
+// operator's own price wins, the catalog's US list price is the fallback.
+// fee is false for a plan billed at API rates with no price given, which
+// has no flat fee: what it costs is the usage itself, already counted as
+// billed spend.
+func PriceOf(period plans.Period) (price Price, fee bool) {
+	price = Price{Monthly: period.Price, Currency: period.Currency, Source: "yours"}
+	p, known := plans.Lookup(period.Plan)
+	if known && p.SpendDenominated && period.Price <= 0 {
+		return Price{}, false
+	}
+	if known {
+		price.Display = p.Display
+		if price.Monthly <= 0 && p.MonthlyUSD > 0 {
+			price.Monthly, price.Currency, price.Source = p.MonthlyUSD, "USD", "list"
+		}
+	}
+	return price, true
+}
+
 // Cost prices every provider's plans over [since, until), prorated by
 // day across switches, in fx's currency. The operator's own price wins;
 // the catalog's US list price is the fallback. Per-seat plans are priced
@@ -235,22 +267,13 @@ func Cost(h plans.History, current map[string]string, since, until time.Time, fx
 	for _, provider := range names {
 		pc := ProviderCost{Provider: provider, Complete: true}
 		for _, period := range h.Periods(provider, since, until, current[provider]) {
-			// A plan billed at API rates has no flat fee: what it costs
-			// is the usage itself, already counted as billed spend.
-			if p, ok := plans.Lookup(period.Plan); ok && p.SpendDenominated && period.Price <= 0 {
+			price, fee := PriceOf(period)
+			if !fee {
 				continue
 			}
-			c := PeriodCost{Period: period}
-			monthly, currency := period.Price, period.Currency
-			c.Source = "yours"
-			if p, ok := plans.Lookup(period.Plan); ok {
-				c.Display = p.Display
-				if monthly <= 0 && p.MonthlyUSD > 0 {
-					monthly, currency, c.Source = p.MonthlyUSD, "USD", "list"
-				}
-			}
-			if monthly > 0 {
-				if amount, ok := fx.convert(plans.PeriodCost(monthly, period), currency); ok {
+			c := PeriodCost{Period: period, Display: price.Display, Source: price.Source}
+			if price.Monthly > 0 {
+				if amount, ok := fx.convert(plans.PeriodCost(price.Monthly, period), price.Currency); ok {
 					c.Amount, c.Priced = amount, true
 				}
 			}
