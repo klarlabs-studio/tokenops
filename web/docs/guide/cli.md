@@ -488,6 +488,37 @@ apart, never dropped. A `+` marks a cost that leaves out turns on models
 without a list price. `GET /api/spend/commits` serves the same report with
 commit subjects withheld.
 
+#### Export to FinOps tools (FOCUS)
+
+`tokenops spend export` writes spend and usage as
+[FOCUS](https://focus.finops.org/) 1.2 CSV, the billing format FinOps tools
+such as Vantage, CloudZero and Cloudability ingest:
+
+```bash
+tokenops spend export --format focus > september.csv          # this month so far
+tokenops spend export --since 2026-09-01T00:00:00Z --until 2026-10-01T00:00:00Z -o september.csv
+```
+
+Each row is one charge:
+
+| What | FOCUS row |
+|---|---|
+| A plan's fee | `Purchase`, `Recurring`, prorated over the days it was in force and split at calendar months; your price where you gave one, the US list price otherwise |
+| Usage a plan covered | `Usage` with `BilledCost` and `EffectiveCost` 0 and `ListCost` at the API price, so ListCost against EffectiveCost is what the plan was worth |
+| Usage billed per token | `Usage` at what it cost |
+
+Usage is one row per UTC day, provider and model. Tokens are the
+`ConsumedQuantity` (`Tokens`); `PricingQuantity` counts millions of tokens,
+the unit API prices are published in. `ServiceCategory` is
+`AI and Machine Learning`, `ServiceSubcategory` `Generative AI`, `SkuId`
+the model or plan. A plan's charges and per-token charges are separate
+billing accounts (`anthropic/subscription`, `anthropic/pay-as-you-go`).
+Calendar months stand in for billing periods. `Tags` is empty for now.
+
+Only derived figures are written: providers, models, plans, counts and
+money. No session title, path or prompt is in it. `GET /api/spend/export`
+serves the same CSV from the daemon.
+
 ### `tokenops budget {list|set|unset}`
 
 A budget is a calendar window (`daily`, `weekly` or `monthly`; new

@@ -152,6 +152,7 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/security/redaction",
 	"go.klarlabs.de/tokenops/internal/contexts/security/tlsmint",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/biller",
+	"go.klarlabs.de/tokenops/internal/contexts/spend/focus",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/fx",
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans",

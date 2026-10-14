@@ -5,6 +5,7 @@
 ### Added
 
 - **plans:** two figures per provider answer "is this seat used?": **plan utilization**, the average peak of the plan's longest window (usually the weekly one) across the windows that reset in the period, and **plan coverage**, the share of that provider's tokens a plan covered rather than an API key, a gateway or overflow billed per token. `tokenops scorecard` lists them under the grades for its window ("anthropic utilization 64% (weekly, 1 window) · coverage 93% of tokens on a plan"). The glance cards, the menu bar and `/api/glance` (`plan_use`) show them for the last 7 days. They are reported, not graded, and a figure that cannot be measured yet is left out rather than shown as 0
+- **spend:** `tokenops spend export --format focus` writes your spend and usage as FOCUS 1.2 CSV, the billing format FinOps tools such as Vantage, CloudZero and Cloudability ingest. Plan fees are purchases; usage a plan covered is billed 0 with its API price as the list cost, so the tool sees what each plan was worth; usage billed per token costs what it cost. The daemon serves the same file at `GET /api/spend/export`. Only derived figures go in it: providers, models, plans, counts and money, never session titles, paths or prompts (#659)
 
 ### Changed
 

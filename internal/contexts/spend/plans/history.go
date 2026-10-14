@@ -153,8 +153,12 @@ const averageMonthDays = 365.2425 / 12
 
 // PeriodCost is a period's share of a monthly price.
 func PeriodCost(monthlyUSD float64, p Period) float64 {
-	return monthlyUSD * p.Days() / averageMonthDays
+	return monthlyUSD * p.Months()
 }
+
+// Months is the period's length in average months, the unit plans are
+// priced in.
+func (p Period) Months() float64 { return p.Days() / averageMonthDays }
 
 // SpendLimitAt is the spend limit recorded for provider's plan at t, and
 // whether one was.
