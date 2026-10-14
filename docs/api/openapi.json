@@ -288,6 +288,9 @@
               "schema": {
                 "additionalProperties": false,
                 "properties": {
+                  "add_window": {
+                    "type": "boolean"
+                  },
                   "agent_id": {
                     "type": "string"
                   },
@@ -306,7 +309,16 @@
                   "limit_usd": {
                     "type": "number"
                   },
+                  "mode": {
+                    "type": "string"
+                  },
                   "name": {
+                    "type": "string"
+                  },
+                  "remove_window": {
+                    "type": "string"
+                  },
+                  "require": {
                     "type": "string"
                   },
                   "warn_at": {
@@ -351,7 +363,16 @@
                           "LimitUSD": {
                             "type": "number"
                           },
+                          "Mode": {
+                            "type": "string"
+                          },
                           "Name": {
+                            "type": "string"
+                          },
+                          "Require": {
+                            "type": "string"
+                          },
+                          "Stage": {
                             "type": "string"
                           },
                           "WarnAt": {
@@ -359,6 +380,33 @@
                           },
                           "Window": {
                             "type": "string"
+                          },
+                          "Windows": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "LimitTokens": {
+                                  "type": "integer"
+                                },
+                                "LimitUSD": {
+                                  "type": "number"
+                                },
+                                "Mode": {
+                                  "type": "string"
+                                },
+                                "Require": {
+                                  "type": "string"
+                                },
+                                "Stage": {
+                                  "type": "string"
+                                },
+                                "Window": {
+                                  "type": "string"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
                           },
                           "WorkflowID": {
                             "type": "string"
@@ -2536,6 +2584,62 @@
                         }
                       },
                       "type": "object"
+                    },
+                    "spend_budgets": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "basis": {
+                            "type": "string"
+                          },
+                          "budget": {
+                            "type": "string"
+                          },
+                          "crit_pct": {
+                            "type": "number"
+                          },
+                          "enforced": {
+                            "type": "boolean"
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "limit": {
+                            "type": "number"
+                          },
+                          "mode": {
+                            "type": "string"
+                          },
+                          "require": {
+                            "type": "string"
+                          },
+                          "resets_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "rule": {
+                            "type": "string"
+                          },
+                          "used": {
+                            "type": "number"
+                          },
+                          "used_pct": {
+                            "type": "number"
+                          },
+                          "warn_pct": {
+                            "type": "number"
+                          },
+                          "window": {
+                            "type": "string"
+                          },
+                          "window_start": {
+                            "format": "date-time",
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
                     }
                   },
                   "type": "object"

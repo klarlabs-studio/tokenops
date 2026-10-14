@@ -60,6 +60,51 @@ func TestBudgetSetNewBudgetNeedsACeiling(t *testing.T) {
 	}
 }
 
+func runBudgetCmd(t *testing.T, args ...string) (string, error) {
+	t.Helper()
+	cmd := withConfigFlag(newBudgetCmd())
+	out := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(out)
+	cmd.SetArgs(args)
+	err := cmd.Execute()
+	return out.String(), err
+}
+
+// $10 a day hard and $100 a month soft, from the terminal: added, listed
+// with each window's mode, and one window removed again.
+func TestBudgetWindowsFromTheTerminal(t *testing.T) {
+	path := seedConfig(t)
+	steps := [][]string{
+		{"set", "team", "--limit-usd", "100", "--config", path, "--no-restart"},
+		{"set", "team", "--add-window", "--window", "daily", "--limit-usd", "10", "--mode", "hard", "--config", path, "--no-restart"},
+	}
+	for _, args := range steps {
+		if out, err := runBudgetCmd(t, args...); err != nil {
+			t.Fatalf("budget %v: %v\n%s", args, err, out)
+		}
+	}
+	out, err := runBudgetCmd(t, "list", "--config", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"team", "monthly", "100.00 USD", "soft",
+		"daily", "10.00 USD", "hard (shadow: tokenops boundaries promote budget-team-daily)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("list lacks %q:\n%s", want, out)
+		}
+	}
+	if out, err := runBudgetCmd(t, "unset", "team", "--window", "daily", "--config", path, "--no-restart"); err != nil || !strings.Contains(out, "removed the daily window") {
+		t.Fatalf("unset window: %v\n%s", err, out)
+	}
+	cfg, _ := config.ReadMutable(path)
+	if len(cfg.Budgets) != 1 || cfg.Budgets[0].Window != "monthly" || len(cfg.Budgets[0].Windows) != 0 {
+		t.Errorf("budgets = %+v; want the monthly window alone", cfg.Budgets)
+	}
+}
+
 func TestBudgetSetNewBudgetDefaultsToMonthly(t *testing.T) {
 	path := seedConfig(t)
 	if out, err := runBudgetSet(t, "--config", path, "m", "--limit-usd", "50"); err != nil {

@@ -3,6 +3,7 @@ package headroom
 import (
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
+	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/internal/presentation"
 )
 
@@ -57,6 +58,11 @@ type GlancePayload struct {
 	// for an agent whose harness cannot be refused (ADR 0014). The caller
 	// sets them; Payload leaves them empty.
 	Boundaries []bcap.Advice `json:"boundaries,omitempty"`
+	// SpendBudgets are the operator's spend budgets, one entry per
+	// window, as the daemon last measured them: share used, mode, and for
+	// a hard window the boundary that enforces it. The caller sets them;
+	// Payload leaves them empty.
+	SpendBudgets []boundaryledger.BudgetReading `json:"spend_budgets,omitempty"`
 }
 
 // Payload is r on the wire.
