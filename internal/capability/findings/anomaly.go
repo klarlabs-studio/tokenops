@@ -51,7 +51,7 @@ func anomalyEvidence(a anomalies.Anomaly) string {
 	if c := causeWords(a); c != "" {
 		parts = append(parts, "Likely cause: "+c)
 	}
-	var ranked []string
+	ranked := make([]string, 0, min(len(a.Contributors), shownContributors))
 	for _, c := range a.Contributors[:min(len(a.Contributors), shownContributors)] {
 		ranked = append(ranked, fmt.Sprintf("%s %s +%s (%.0f%%)", c.Dimension, c.Value, money(c.DeltaUSD), 100*c.Share))
 	}

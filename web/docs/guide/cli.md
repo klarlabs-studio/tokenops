@@ -85,7 +85,7 @@ old it is. `tokenops glance --findings` lists every finding, and
 never prompt or file text.
 
 **Unusual spend.** Every hour the daemon forecasts today and yesterday from
-the four weeks before (the same Holt forecast `tokenops spend` uses) and
+the four weeks before (Holt's method, as the spend forecast) and
 flags a day whose spend, or usage at API prices, is above the forecast's
 95% band by at least $5 and 25%. Nothing is flagged until there are 10
 days of history, and at most one day's finding shows per day, spend before
