@@ -28,6 +28,9 @@ type SessionTurn struct {
 	Source, Endpoint string
 	// PlanCovered is usage a plan covered, billed nothing at the margin.
 	PlanCovered bool
+	// InputTokens (cache reads and writes included) and OutputTokens are
+	// the turn's split, as a billing charge counts them.
+	InputTokens, OutputTokens int64
 }
 
 // BilledUSD is what the turn was billed: nothing when a plan covered it,
@@ -58,7 +61,8 @@ func (a *Aggregator) SessionTurns(ctx context.Context, f Filter) ([]SessionTurn,
 	for _, u := range usage {
 		t := SessionTurn{SessionID: u.SessionID, At: u.At, Provider: u.Provider, Model: u.Model,
 			WorkflowID: u.WorkflowID, ExecutionID: u.ExecutionID,
-			Source: u.Source, Endpoint: u.Endpoint, PlanCovered: u.PlanCovered}
+			Source: u.Source, Endpoint: u.Endpoint, PlanCovered: u.PlanCovered,
+			InputTokens: u.InputTokens, OutputTokens: u.OutputTokens}
 		t.Tokens = u.TotalTokens
 		if t.Tokens == 0 {
 			t.Tokens = u.InputTokens + u.OutputTokens
