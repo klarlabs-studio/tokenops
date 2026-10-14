@@ -69,6 +69,11 @@ past period use the plan in force then. --since backdates a switch and
 re-marks the provider's usage recorded as billed per token since that
 date as covered by the plan.
 
+When Claude Code or Codex reports a plan (its account tier, its
+plan_type), TokenOps binds that plan on its own and tells you. A plan you
+set after the client started reporting its plan is kept until the client
+reports a different one, so this command is also how you correct it.
+
 Example:
   tokenops plan set anthropic claude-max-20x
   tokenops plan set openai gpt-pro-5x --since 2026-09-01

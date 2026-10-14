@@ -56,8 +56,12 @@ then wires tokenops into the clients already installed:
     spawn time, so a host can silently run a stale build)
   - installs the Claude Code hooks (coaching nudge + read dedup guard)
   - binds the plan each client reports (Claude Code's account tier,
-    Codex's plan_type), recorded in the plan history and never over a
-    plan you bound yourself
+    Codex's plan_type), recorded in the plan history and the audit log.
+    When you change plans and the client says so, TokenOps follows it
+    (the running daemon too, without re-running init) and tells you;
+    ` + "`tokenops plan set <provider> <plan>`" + ` undoes it, and a plan you
+    set after the client's report stays until the client reports a
+    different one
 
 In a terminal it then asks only what nothing on the machine could answer,
 each with a default Enter accepts: a plan the evidence fits two of, what
