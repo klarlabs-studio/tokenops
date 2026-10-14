@@ -126,6 +126,8 @@ func tipKind(dec Decision) string {
 		return ""
 	case dec.CompactTip:
 		return compactKind
+	case dec.QuotaBurn:
+		return burnKind
 	case dec.QuotaTier > 0:
 		return quotaKind(dec.QuotaTier)
 	case dec.FiredFraction > 0:

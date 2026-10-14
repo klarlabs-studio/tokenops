@@ -63,3 +63,30 @@ func TestLatestAttributesBySource(t *testing.T) {
 		t.Error("a reading older than since was returned; a stale quota must not read as current")
 	}
 }
+
+// A burn-rate look-back needs the reading as it stood a while ago: the
+// newest one at or before a moment, not older than a bound.
+func TestAttributesBySourceBetween(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	add := func(id string, at time.Time, used string) {
+		env := mustPromptEnvelope(t, id, at, &eventschema.PromptEvent{Provider: eventschema.ProviderAnthropic})
+		env.Source, env.Attributes = "claude-usage-meter", map[string]string{"five_hour_used_pct": used}
+		if err := s.Append(ctx, env); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add("h2", now.Add(-2*time.Hour), "5.00")
+	add("h1", now.Add(-65*time.Minute), "20.00")
+	add("m10", now.Add(-10*time.Minute), "50.00")
+	add("m1", now.Add(-time.Minute), "60.00")
+
+	attrs, at, ok, err := s.AttributesBySourceBetween(ctx, "claude-usage-meter", "five_hour_used_pct", now.Add(-2*time.Hour+time.Minute), now.Add(-time.Hour))
+	if err != nil || !ok || attrs["five_hour_used_pct"] != "20.00" || at.Sub(now.Add(-65*time.Minute)).Abs() > time.Second {
+		t.Fatalf("got %v at %v (%v, %v); want the reading 65 minutes back", attrs, at, ok, err)
+	}
+	if _, _, ok, _ := s.AttributesBySourceBetween(ctx, "claude-usage-meter", "five_hour_used_pct", now.Add(-50*time.Minute), now.Add(-20*time.Minute)); ok {
+		t.Error("found a reading where there is none")
+	}
+}
