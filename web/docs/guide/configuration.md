@@ -865,6 +865,34 @@ other providers are left alone, and the change is written to the audit
 log. `plan unset` is never backdated, because that would turn covered
 usage into charges the vendor may never have made.
 
+### When your client reports a new plan
+
+Claude Code records the plan you are signed in with (its account type
+and rate-limit tier, in `~/.claude.json`) and Codex records its
+`plan_type` in every session. When either names a plan other than the
+one bound, TokenOps switches to it on its own, so the limits it derives
+are right without you noticing first. `tokenops init` does this, and so
+does the daemon: it reads those two files at start and every 15 minutes,
+then restarts itself (when supervised) so the new limits apply.
+
+- The switch takes effect from when the client first reported the new
+  plan, never earlier.
+- It is recorded in `tokenops plan history` and in `tokenops audit` as a
+  `plan_change` whose actor is the client (`claude_code`, `codex`), with
+  what the client reported (account type, rate-limit tier, `plan_type`).
+- It is said once, in `init`'s output and the daemon log, and noted on
+  `tokenops glance` for a week, each time with the command that undoes
+  it, for example `tokenops plan set anthropic claude-max-20x`.
+- If you set a plan yourself after the client started reporting its
+  plan, yours is kept until the client reports a different plan. TokenOps
+  does not switch back and forth.
+- A report that fits two plans (a Max account without its tier, a Team
+  seat without its tier) or names none TokenOps knows changes nothing.
+  Nothing else (spend, message counts, estimates) ever switches a plan.
+
+`~/.tokenops/plan-reports.json` keeps the plan each client last reported
+and since when.
+
 `tokenops spend` prices the plans in force over its window, prorated by
 day across switches, and shows the list-price value of your usage per
 unit of plan cost. It uses what you told it you pay, and the catalog's

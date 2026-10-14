@@ -213,50 +213,53 @@ func bindPlan(cfgPath string) setupStep {
 	return bindPlans(cfgPath, "")[0]
 }
 
-// bindPlans binds each provider whose plan a client on this machine
+// bindPlans binds each provider to the plan a client on this machine
 // reports unambiguously (Claude Code's account tier, Codex's plan_type):
-// autonomous by default, recorded in the plan history, and shown with its
-// evidence so the operator can correct it. A plan already bound is never
-// changed; a disagreeing report is pointed out instead. Where the
-// evidence names several plans, or there is none, the step is left to the
-// operator.
+// autonomous by default, recorded in the plan history and the audit log,
+// and shown with its evidence and the command that undoes it. A plan
+// already bound follows the client too, unless the operator set it after
+// the client started reporting what it reports (see
+// actions.FollowClientPlans). Where the evidence names several plans, or
+// there is none, the step is left to the operator.
 func bindPlans(cfgPath, home string) []setupStep {
 	const name = "plan binding"
+	var evidence []planevidence.Evidence
+	if home != "" {
+		evidence = planevidence.All(home)
+	}
+	followed, err := actions.FollowClientPlans(context.Background(), cfgPath, evidence, nil, time.Now().UTC())
+	if err != nil {
+		return []setupStep{{Name: name, Err: err}}
+	}
 	cfg, err := config.ReadMutable(cfgPath)
 	if err != nil {
 		return []setupStep{{Name: name, Err: err}}
 	}
-	var evidence []planevidence.Evidence
-	if home != "" {
-		evidence = planevidence.All(home)
+	notes := map[string]setupStep{}
+	for _, c := range followed.Followed {
+		notes[c.Provider] = setupStep{Name: name, Changed: true, Detail: c.Note()}
+	}
+	for _, c := range followed.Kept {
+		notes[c.Provider] = setupStep{Name: name, Detail: c.Note()}
 	}
 	var steps []setupStep
 	seen := map[string]bool{}
 	for _, e := range evidence {
 		seen[e.Provider] = true
 		bound := cfg.Plans[e.Provider]
-		switch {
-		case bound != "" && (e.Plan == "" || e.Plan == bound):
-			steps = append(steps, setupStep{Name: name, Detail: fmt.Sprintf("%s already bound to %s", e.Provider, bound)})
+		switch step, ok := notes[e.Provider]; {
+		case ok:
+			steps = append(steps, step)
 		case bound != "":
+			steps = append(steps, setupStep{Name: name, Detail: fmt.Sprintf("%s already bound to %s", e.Provider, bound)})
+		case len(e.Candidates) == 0:
 			steps = append(steps, setupStep{Name: name, Manual: true, Detail: fmt.Sprintf(
-				"%s is bound to %s, but %s reports %s (%s) — `tokenops plan set %s %s` if you changed plans",
-				e.Provider, bound, e.From, e.Plan, e.Detail, e.Provider, e.Plan)})
-		case e.Plan == "":
+				"%s reports %s, which names no plan TokenOps knows — `tokenops plan set %s <plan>`",
+				e.From, e.Detail, e.Provider)})
+		default:
 			steps = append(steps, setupStep{Name: name, Manual: true, Detail: fmt.Sprintf(
 				"%s reports %s, which could be %s — `tokenops plan set %s <plan>`",
 				e.From, e.Detail, strings.Join(e.Candidates, " or "), e.Provider)})
-		default:
-			change, err := actions.SetPlan(context.Background(), cfgPath, actions.PlanRequest{
-				Provider: e.Provider, Plan: e.Plan, Actor: "init",
-			}, time.Now().UTC())
-			if err != nil {
-				steps = append(steps, setupStep{Name: name, Err: err})
-				continue
-			}
-			steps = append(steps, setupStep{Name: name, Changed: true, Detail: fmt.Sprintf(
-				"bound %s to %s, as %s reports (%s); `tokenops plan set` changes it",
-				change.Provider, change.Plan, e.From, e.Detail)})
 		}
 	}
 	for provider, plan := range cfg.Plans {

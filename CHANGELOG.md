@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+
+- **plans:** when you change plans and your client says so, TokenOps now follows it. Before, `init` saw Claude Code report Max 5x against a Max 20x binding and only pointed it out, so every Claude window limit stayed 4× too high until you noticed. Now, whenever Claude Code's account tier or Codex's `plan_type` names a different plan, TokenOps switches to it from when the client first reported it: `init` does, and the daemon checks every 15 minutes, so nobody has to re-run `init`. The switch is recorded in `tokenops plan history` and in `tokenops audit` (actor `claude_code` or `codex`, with the account type and tier it reported), and said once in `init`'s output and the daemon log and for a week on `tokenops glance`, each with the command that undoes it (`tokenops plan set <provider> <plan>`). A plan you set after the client started reporting its plan is kept until the client reports a different one, and a report that fits two plans or none changes nothing
+- **audit:** a plan change made now (`tokenops plan set` without `--since`, the `tokenops_configure` tool, the API) is written to the audit log. Only a backdated one was, although the change promised both
+
 ## 0.104.0 - 2026-10-14
 
 ### Changed

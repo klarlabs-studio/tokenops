@@ -2,12 +2,15 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/actions"
 	"go.klarlabs.de/tokenops/internal/config"
 )
 
@@ -201,6 +204,7 @@ func writeHomeWithEvidence(t *testing.T) string {
 // What the clients report is bound without asking, and says where it came
 // from; a second run changes nothing.
 func TestBindPlansFromWhatTheClientsReport(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
 	if err := os.WriteFile(cfgPath, []byte("listen: 127.0.0.1:7878\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -226,24 +230,64 @@ func TestBindPlansFromWhatTheClientsReport(t *testing.T) {
 	}
 }
 
-// A plan the operator bound is theirs: a client reporting another one is
-// pointed out, not applied.
-func TestBindPlansNeverOverridesTheOperator(t *testing.T) {
+// The operator changed plans and the client says so: init follows the
+// client, says so once, and names the command that undoes it. A second
+// run leaves it alone.
+func TestBindPlansFollowsAPlanTheClientReports(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
 	if err := os.WriteFile(cfgPath, []byte("listen: 127.0.0.1:7878\nplans:\n    anthropic: claude-pro\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	var disagree *setupStep
-	for _, s := range bindPlans(cfgPath, writeHomeWithEvidence(t)) {
-		if strings.HasPrefix(s.Detail, "anthropic is bound") {
+	home := writeHomeWithEvidence(t)
+	var followed *setupStep
+	for _, s := range bindPlans(cfgPath, home) {
+		if strings.HasPrefix(s.Detail, "anthropic now on") {
 			s := s
-			disagree = &s
+			followed = &s
 		}
 	}
-	if disagree == nil || !disagree.Manual || !strings.Contains(disagree.Detail, "claude-max-20x") {
-		t.Fatalf("disagreement not pointed out: %+v", disagree)
+	if followed == nil || !followed.Changed || followed.Manual ||
+		!strings.Contains(followed.Detail, "claude-max-20x") ||
+		!strings.Contains(followed.Detail, "`tokenops plan set anthropic claude-pro`") {
+		t.Fatalf("follow not reported: %+v", followed)
 	}
-	if cfg, _ := config.ReadMutable(cfgPath); cfg.Plans["anthropic"] != "claude-pro" {
+	if cfg, _ := config.ReadMutable(cfgPath); cfg.Plans["anthropic"] != "claude-max-20x" {
+		t.Errorf("the reported plan was not bound: %v", cfg.Plans)
+	}
+	for _, s := range bindPlans(cfgPath, home) {
+		if s.Changed || s.Manual {
+			t.Errorf("second run changed something: %+v", s)
+		}
+	}
+}
+
+// An operator who sets a plan after the client's report keeps it: init
+// says what the client reports and leaves the binding alone.
+func TestBindPlansKeepsTheOperatorsLaterChoice(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(cfgPath, []byte("listen: 127.0.0.1:7878\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	home := writeHomeWithEvidence(t)
+	_ = bindPlans(cfgPath, home)
+	if _, err := actions.SetPlan(context.Background(), cfgPath, actions.PlanRequest{
+		Provider: "anthropic", Plan: "claude-max-5x", Actor: "cli",
+	}, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	var kept *setupStep
+	for _, s := range bindPlans(cfgPath, home) {
+		if strings.HasPrefix(s.Detail, "anthropic stays on") {
+			s := s
+			kept = &s
+		}
+	}
+	if kept == nil || kept.Changed || kept.Manual || !strings.Contains(kept.Detail, "claude-max-20x") {
+		t.Fatalf("kept choice not reported: %+v", kept)
+	}
+	if cfg, _ := config.ReadMutable(cfgPath); cfg.Plans["anthropic"] != "claude-max-5x" {
 		t.Errorf("the operator's plan was replaced: %v", cfg.Plans)
 	}
 }

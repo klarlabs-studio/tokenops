@@ -13,10 +13,17 @@ import (
 type Switch struct {
 	Provider, Previous, Plan string
 	From, Now                time.Time
-	// DBPath is the event store; empty skips re-marking.
+	// DBPath is the event store; empty skips re-marking and the audit
+	// entry unless Store is set.
 	DBPath string
+	// Store is an event store already open, used instead of opening
+	// DBPath: the daemon audits through the store it holds.
+	Store *sqlite.Store
 	// Actor names who made the change in the audit log.
 	Actor string
+	// Evidence is what prompted a change TokenOps made on its own (a
+	// client's reported account type and tier), kept in the audit entry.
+	Evidence map[string]any
 	// Price and Currency are what the operator pays per month, when they
 	// said.
 	Price    float64
@@ -34,28 +41,24 @@ type Outcome struct {
 	StoreErr error
 }
 
-// Record writes the switch to the default history and, for a backdated
-// one, re-marks earlier billed usage in the event store and audits it.
+// Record writes the switch to the default history, re-marks earlier
+// billed usage for a backdated one, and audits every switch when an event
+// store is at hand.
 func Record(ctx context.Context, s Switch) (Outcome, error) {
 	file, err := Default()
 	if err != nil {
 		return Outcome{}, err
 	}
-	var (
-		out       Outcome
-		restamper planswitch.Restamper
-		store     *sqlite.Store
-	)
-	if s.From.Before(s.Now) && s.Plan != "" && s.DBPath != "" {
-		openCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		defer cancel()
-		st, err := sqlite.Open(openCtx, s.DBPath, sqlite.Options{})
-		if err != nil {
-			out.StoreErr = err
-		} else {
-			store, restamper = st, st
-			defer func() { _ = st.Close() }()
-		}
+	var out Outcome
+	backdated := s.From.Before(s.Now) && s.Plan != ""
+	store, closeStore, err := s.store(ctx)
+	if err != nil && backdated {
+		out.StoreErr = err
+	}
+	defer closeStore()
+	var restamper planswitch.Restamper
+	if store != nil && backdated {
+		restamper = store
 	}
 	res, err := planswitch.Record(ctx, file, restamper, planswitch.Change{
 		Provider: s.Provider, Previous: s.Previous, Plan: s.Plan, From: s.From, Now: s.Now,
@@ -66,20 +69,46 @@ func Record(ctx context.Context, s Switch) (Outcome, error) {
 		return out, err
 	}
 	if store != nil {
-		actor := s.Actor
-		if actor == "" {
-			actor = "cli"
-		}
-		_, _ = audit.NewRecorder(store).Record(ctx, audit.Entry{
-			Action: audit.ActionPlanChange, Actor: actor, Target: s.Provider,
-			Details: map[string]any{
-				"previous": s.Previous, "plan": s.Plan, "from": s.From.Format(time.RFC3339),
-				"restamped": res.Restamped, "restamped_to": res.RestampedTo, "price": s.Price, "currency": s.Currency,
-				"spend_limit_usd": s.SpendLimitUSD,
-			},
-		})
+		s.audit(ctx, store, res)
 	}
 	return out, nil
+}
+
+// store is the event store to restamp and audit through: the one given,
+// else DBPath opened for this switch, else none.
+func (s Switch) store(ctx context.Context) (*sqlite.Store, func(), error) {
+	if s.Store != nil {
+		return s.Store, func() {}, nil
+	}
+	if s.DBPath == "" {
+		return nil, func() {}, nil
+	}
+	openCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	st, err := sqlite.Open(openCtx, s.DBPath, sqlite.Options{})
+	if err != nil {
+		return nil, func() {}, err
+	}
+	return st, func() { _ = st.Close() }, nil
+}
+
+// audit records the switch as a plan_change entry.
+func (s Switch) audit(ctx context.Context, store *sqlite.Store, res planswitch.Result) {
+	actor := s.Actor
+	if actor == "" {
+		actor = "cli"
+	}
+	details := map[string]any{
+		"previous": s.Previous, "plan": s.Plan, "from": s.From.Format(time.RFC3339),
+		"restamped": res.Restamped, "restamped_to": res.RestampedTo, "price": s.Price, "currency": s.Currency,
+		"spend_limit_usd": s.SpendLimitUSD,
+	}
+	if len(s.Evidence) > 0 {
+		details["evidence"] = s.Evidence
+	}
+	_, _ = audit.NewRecorder(store).Record(ctx, audit.Entry{
+		Action: audit.ActionPlanChange, Actor: actor, Target: s.Provider, Details: details,
+	})
 }
 
 // CorrectSpendCoverage runs planswitch.CorrectSpendCoverage against the

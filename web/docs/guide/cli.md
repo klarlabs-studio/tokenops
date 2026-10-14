@@ -216,8 +216,18 @@ tokenops init --yes             # ask nothing; take every default
 **Plans come from your clients.** Claude Code records the plan you are
 signed in with (its account type and rate-limit tier) and Codex records
 its `plan_type` in every session; `init` binds the plan they name and
-says which client reported it. A plan you bound yourself is never
-changed: if a client reports a different one, `init` points it out.
+says which client reported it. When you change plans and the client
+reports the new one, TokenOps follows it: `init` does, and so does the
+running daemon, which checks every 15 minutes without anyone re-running
+`init`. The switch takes effect from when the client first reported the
+new plan, is recorded in `tokenops plan history` and `tokenops audit`
+(with the client as actor and what it reported), and is said once in
+`init`'s output, the daemon log and, for a week, `tokenops glance`,
+each with the command that undoes it:
+`tokenops plan set <provider> <plan>`. A plan you set after the client
+started reporting its plan is kept until the client reports a different
+one. A report that fits two plans, or none TokenOps knows, changes
+nothing.
 
 **In a terminal it asks only what nothing on the machine could answer**,
 each with a default Enter accepts:

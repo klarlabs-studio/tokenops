@@ -402,6 +402,10 @@ func (s *startup) startPostServeSubsystems(context.Context) error {
 	}
 	startReadGuardRuntime(ingest, s.sup, s.logger)
 
+	// Follow a plan change the clients report (Claude Code's account
+	// tier, Codex's plan_type) without anyone re-running init.
+	startPlanFollowRuntime(s.cfg, s.components.Store, s.sup, s.logger)
+
 	// Active-mode spend watcher: periodic budget + unpriced-model
 	// evaluation against the local store. Requires storage (no events,
 	// nothing to watch).

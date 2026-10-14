@@ -30,6 +30,12 @@ type Evidence struct {
 	// From names the client and Detail what it reported, for the
 	// operator to check.
 	From, Detail string
+	// Client is the reporting client as the audit log names an actor:
+	// claude_code, codex.
+	Client string
+	// Facts is what the client reported, field by field (account_type,
+	// rate_limit_tier, seat_tier; plan_type), for the audit log.
+	Facts map[string]string
 }
 
 // All reads every client's evidence under home.
@@ -88,8 +94,9 @@ func Claude(home string) (Evidence, bool) {
 		return Evidence{}, false
 	}
 	tier := firstNonEmpty(oa.UserRateLimitTier, oa.OrganizationRateLimitTier)
-	e := Evidence{Provider: "anthropic", From: "Claude Code",
-		Detail: "account type " + oa.OrganizationType + joinIf(", rate-limit tier ", tier) + joinIf(", seat ", oa.SeatTier)}
+	e := Evidence{Provider: "anthropic", From: "Claude Code", Client: "claude_code",
+		Detail: "account type " + oa.OrganizationType + joinIf(", rate-limit tier ", tier) + joinIf(", seat ", oa.SeatTier),
+		Facts:  facts("account_type", oa.OrganizationType, "rate_limit_tier", tier, "seat_tier", oa.SeatTier)}
 	switch oa.OrganizationType {
 	case "claude_max":
 		switch {
@@ -138,7 +145,8 @@ func Codex(root string) (Evidence, bool) {
 		if planType == "" {
 			continue
 		}
-		e := Evidence{Provider: "openai", From: "Codex", Detail: "plan_type " + planType}
+		e := Evidence{Provider: "openai", From: "Codex", Client: "codex", Detail: "plan_type " + planType,
+			Facts: facts("plan_type", planType)}
 		if name, ok := plans.ForVendorPlanType("openai", planType); ok {
 			e.Plan = name
 		}
@@ -165,6 +173,17 @@ func modTime(path string) int64 {
 		return 0
 	}
 	return info.ModTime().UnixNano()
+}
+
+// facts pairs keys with values, leaving out the empty ones.
+func facts(kv ...string) map[string]string {
+	out := map[string]string{}
+	for i := 0; i+1 < len(kv); i += 2 {
+		if kv[i+1] != "" {
+			out[kv[i]] = kv[i+1]
+		}
+	}
+	return out
 }
 
 func firstNonEmpty(vs ...string) string {

@@ -60,6 +60,10 @@ type Deps struct {
 	// Accounts names the account each provider's client is signed in
 	// with, for the glance. nil names none.
 	Accounts func() map[string]string
+	// PlanFollows names, one line each, plans TokenOps recently bound on
+	// a client's word that are still bound, with the command that undoes
+	// each. nil names none.
+	PlanFollows func(bound map[string]string, now time.Time) []string
 }
 
 // Result is the capability's answer.
@@ -74,7 +78,8 @@ type Result struct {
 	// Notes names plans that could not be reported on, one per cause.
 	// An unknown plan is named rather than dropped: skipping it silently
 	// is how an operator's typo becomes a plan that reports nothing
-	// forever.
+	// forever. A plan TokenOps recently bound on a client's word is noted
+	// here too, with the command that undoes it.
 	Notes []string
 	// Unconfigured, when set, explains that no plan is bound.
 	Unconfigured string
@@ -180,6 +185,9 @@ func Compute(ctx context.Context, d Deps, now time.Time) (Result, error) {
 	}
 	if len(out.Reports) == 0 && len(out.Notes) == 0 {
 		out.Unconfigured = UnconfiguredHint
+	}
+	if d.PlanFollows != nil {
+		out.Notes = append(out.Notes, d.PlanFollows(d.Config.Plans, now)...)
 	}
 	return out, nil
 }
