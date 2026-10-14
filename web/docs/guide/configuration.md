@@ -115,7 +115,9 @@ was followed (a later turn, or a subagent the agent launched, ran below the
 tier it was given on) or ignored (four turns later, still on the same
 tier), whether each quota or budget tip was followed (within three turns
 the context shrank to half or less, the model changed, or the session
-ended) or ignored, and whether each subagent move stood or was undone (you
+ended) or ignored (only when the status line showed it; a tip given only
+as the Stop hook's message counts as unseen, neither followed nor
+ignored), and whether each subagent move stood or was undone (you
 lowered `models` within 24 hours). Advice for a kind of work, or an early
 tip (50% or 75% of a quota window or the session budget), that you ignore
 five times in a row within 14 days goes quiet for that kind; it is offered

@@ -23,6 +23,8 @@ const claudeStatusSample = `{
 }`
 
 func TestStatuslineRendersClaudeCodesInput(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("NO_COLOR", "1")
 	lines := statusLines([]byte(claudeStatusSample))
 	if len(lines) == 0 {
@@ -62,6 +64,8 @@ func TestStatuslineKeepsTheVendorReading(t *testing.T) {
 }
 
 func TestStatuslineWrapsAnotherCommand(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("NO_COLOR", "1")
 	var out bytes.Buffer
 	root := NewRoot()

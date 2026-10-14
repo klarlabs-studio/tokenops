@@ -231,3 +231,45 @@ func TestApplyPresetReplacesTheCoachAndReconciles(t *testing.T) {
 		t.Errorf("a preset left earlier overrides behind: %v", cfg.Coach.Powers)
 	}
 }
+
+// A tip the Stop hook gave and the operator let pass is unseen unless
+// the status line showed it; shown there, letting it pass is ignoring
+// it, and only that evidence may quiet the coach.
+func TestTipsCountAsIgnoredOnlyWhenSeen(t *testing.T) {
+	l := &memLedger{}
+	for i := range ft.QuietAfter {
+		id := fmt.Sprintf("tip-%d", i)
+		at := now.Add(time.Duration(i) * time.Hour)
+		RecordTip(l, at, id, "s", "quota_75", ft.ViaStopHook)
+		RecordResolutions(l, at.Add(time.Minute), []Resolution{{ID: id, Kind: "quota_75"}})
+	}
+	later := now.Add(10 * time.Hour)
+	if Quieter(l, later)(config.PowerInform, "quota_75") {
+		t.Fatal("unseen tips quieted the coach")
+	}
+	if h := History(l, later); len(h) != 1 || h[0].Unseen != ft.QuietAfter || h[0].Ignored != 0 {
+		t.Fatalf("history = %+v; want every tip unseen", h)
+	}
+	if l.entries[0].Via != ft.ViaStopHook {
+		t.Errorf("tip offer via = %q; want %q", l.entries[0].Via, ft.ViaStopHook)
+	}
+
+	for i := range ft.QuietAfter {
+		RecordSeen(l, later, fmt.Sprintf("tip-%d", i), ft.ViaStatusLine)
+	}
+	if !Quieter(l, later)(config.PowerInform, "quota_75") {
+		t.Fatal("tips seen and ignored did not quiet the coach")
+	}
+	if h := History(l, later); h[0].Ignored != ft.QuietAfter || h[0].Unseen != 0 {
+		t.Fatalf("history = %+v; want every tip ignored", h)
+	}
+}
+
+func TestRecordSeenNeedsAnID(t *testing.T) {
+	l := &memLedger{}
+	RecordSeen(l, now, "", ft.ViaStatusLine)
+	RecordSeen(nil, now, "x", ft.ViaStatusLine)
+	if len(l.entries) != 0 {
+		t.Fatalf("entries = %+v", l.entries)
+	}
+}

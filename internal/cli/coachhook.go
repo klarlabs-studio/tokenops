@@ -173,7 +173,7 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, plan fun
 		dec = coachhook.Evaluate(dir, in.SessionID, in.TranscriptPath, cfg, now)
 	}
 	coachcap.RecordResolutions(ledger, now, tipResolutions(dec.Resolved))
-	coachcap.RecordTip(ledger, now, dec.OfferID, in.SessionID, dec.TipKind)
+	coachcap.RecordTip(ledger, now, dec.OfferID, in.SessionID, dec.TipKind, coachcap.ViaStopHook)
 	if !dec.Nudge {
 		return nil // no nudge: exit 0 with no stdout
 	}

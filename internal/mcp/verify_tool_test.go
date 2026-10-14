@@ -61,10 +61,12 @@ func TestVerifyToolCarriesOutcomeCohortRates(t *testing.T) {
 			"anthropic": measurement.Measured(1200, "sqlite_events"),
 		},
 	})
-	if got, ok := payload.BaselineOutcomes.SuccessRate.Amount(); !ok || got != 70 {
+	baseRate, baseRateOK := payload.BaselineOutcomes.SuccessRate.(interface{ Amount() (float64, bool) })
+	if got, ok := baseRate.Amount(); !baseRateOK || !ok || got != 70 {
 		t.Fatalf("baseline success rate = %v, known=%v", got, ok)
 	}
-	if got, ok := payload.InterventionOutcomes.SuccessRate.Amount(); !ok || got != 75 {
+	withRate, withRateOK := payload.InterventionOutcomes.SuccessRate.(interface{ Amount() (float64, bool) })
+	if got, ok := withRate.Amount(); !withRateOK || !ok || got != 75 {
 		t.Fatalf("intervention success rate = %v, known=%v", got, ok)
 	}
 	baseLatency, baseOK := payload.BaselineLatency.(interface{ Amount() (float64, bool) })
@@ -94,4 +96,24 @@ func TestVerifyToolAndCLIShareOneReading(t *testing.T) {
 	if verifyPayload(report).Reading != report.Reading() {
 		t.Error("the tool reworded the capability's reading")
 	}
+}
+
+// A strict MCP client checks structured content against the declared
+// output schema and fails the call on any mismatch. Measurements carry
+// unexported fields, so a struct field of that type generated a closed,
+// empty object and every success rate broke view=verify.
+func TestVerifyOutputMatchesItsSchema(t *testing.T) {
+	rate := measurement.Measured(70, "outcome_events").Covering(10, 2)
+	payload := verifyPayload(verify.Report{
+		BaselineCount: 12, InterventionCount: 10,
+		BaselineOutcomes:       verify.OutcomeSummary{Achieved: 7, NotAchieved: 3, Unknown: 2, SuccessRate: rate},
+		InterventionOutcomes:   verify.OutcomeSummary{Unknown: 10, SuccessRate: measurement.Unknown("no outcomes were assessed")},
+		BaselineLatency:        measurement.Measured(250, "sqlite_events"),
+		BaselineMeteredCostUSD: measurement.Measured(0.002, "sqlite_events"),
+		BaselinePlanQuota:      verify.QuotaSummary{"anthropic": measurement.Measured(1200, "sqlite_events")},
+		Comparison:             intervention.Comparison{Assignment: intervention.Observational},
+		Verdict:                intervention.Verdict{Observed: measurement.Measured(1800, "sqlite_events"), Samples: 10},
+	})
+	assertMatchesOutputSchema(t, verifyResult{}, payload)
+	assertMatchesOutputSchema(t, recordsOut{}, recordsOut{View: "verify", Verify: &payload})
 }
