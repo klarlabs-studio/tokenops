@@ -64,6 +64,13 @@ type Deps struct {
 	// a client's word that are still bound, with the command that undoes
 	// each. nil names none.
 	PlanFollows func(bound map[string]string, now time.Time) []string
+	// PlanHistory reads the recorded plan changes (ADR 0008), so the plan
+	// advice scales each reading by the plan in force when it was taken.
+	// nil treats the bound plan as in force throughout.
+	PlanHistory func() (plans.History, error)
+	// AdviceCache keeps the glance's plan advice between asks; nil
+	// replays it on every glance.
+	AdviceCache *AdviceCache
 }
 
 // Result is the capability's answer.
