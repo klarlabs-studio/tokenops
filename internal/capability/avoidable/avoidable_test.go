@@ -215,7 +215,7 @@ func TestGuardrailsRankByReadinessThenAvoidable(t *testing.T) {
 	if !strings.Contains(r.Next.Promote, "coach set waste") {
 		t.Errorf("promote = %q", r.Next.Promote)
 	}
-	var order []string
+	order := make([]string, 0, len(r.Guardrails))
 	for _, g := range r.Guardrails {
 		order = append(order, g.Capability)
 	}
