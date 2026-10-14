@@ -631,13 +631,13 @@ func publicTools() []publicTool {
 		},
 		{
 			name: "tokenops_prepare_work", title: "Prepare work", kind: records,
-			description: "Before starting a task: plan headroom and a model recommendation for the instruction, and a workflow_id to pass to tokenops_review_work afterwards (and as X-Tokenops-Workflow-Id where requests carry headers). It records the advice; it never changes the caller's model.",
-			input:       routingAdviceInput{}, output: prepareWorkResult{},
-			routes: map[string]route{"": {inner: "tokenops_prepare_work", params: params("instruction", "provider", "model", "tool_density", "work_id", "execution_id", "actor_id", "workflow_id")}},
+			description: "Before starting a task: plan headroom, a model recommendation for the instruction, the task's expected share of the plan window (a range from earlier tasks of the same kind in the same repository, shown once there are enough of them, with a suggestion to proceed, use a lighter tier, or defer), and a workflow_id to pass to tokenops_review_work afterwards (and as X-Tokenops-Workflow-Id where requests carry headers). It records the advice and where the window stood; it never changes the caller's model.",
+			input:       prepareWorkInput{}, output: prepareWorkResult{},
+			routes: map[string]route{"": {inner: "tokenops_prepare_work", params: params("instruction", "provider", "model", "tool_density", "repository", "work_id", "execution_id", "actor_id", "workflow_id")}},
 		},
 		{
-			name: "tokenops_review_work", title: "Review work", kind: reads,
-			description: "After a task: one workflow's steps, context growth, token and cost totals and coaching findings, keeping measured evidence apart from no evidence. Pass the workflow_id from tokenops_prepare_work. Aggregates only, never prompt content.",
+			name: "tokenops_review_work", title: "Review work", kind: records,
+			description: "After a task: one workflow's steps, context growth, token and cost totals and coaching findings, keeping measured evidence apart from no evidence, and, for a task prepared with tokenops_prepare_work, the share of the plan window it took against the estimate, which it records as history for the next estimate. Pass the workflow_id from tokenops_prepare_work. Aggregates only, never prompt content.",
 			input:       reviewWorkInput{}, output: reviewWorkResult{},
 			routes: map[string]route{"": {inner: "tokenops_review_work", params: params("workflow_id")}},
 		},
