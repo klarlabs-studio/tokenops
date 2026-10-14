@@ -381,6 +381,15 @@ budgets:                      # evaluated by the active-mode watcher
                               # equivalent (API list-price value incl.
                               # plan-covered usage — use on flat plans)
     # workflow_id / agent_id optionally scope the limit
+  - name: team                # several windows at once
+    windows:
+      - window: daily
+        limit_usd: 10
+        mode: hard            # soft (notify, default) | hard (enforced)
+        require: ask          # ask (default) | deny, at the limit
+        # stage: enforce      # set by `tokenops boundaries promote`
+      - window: monthly
+        limit_usd: 100        # soft: the coach tells you as it fills
 
 watch:
   interval: 15m               # watcher cadence (default 15m, min 1m)

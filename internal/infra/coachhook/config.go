@@ -5,6 +5,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 )
 
 // Config tunes the coach. Enabled=false makes Evaluate observe-only (it still
@@ -91,6 +92,11 @@ type Config struct {
 	// to learning.MaxHoldoutPercent, and tips about work about to stop
 	// are never held.
 	HoldoutPercent int
+	// Budgets are the operator's spend budget windows as the daemon last
+	// measured them. Each window's warning, critical and spent tiers are
+	// said once per window as tips of the "spend" family. Nil says
+	// nothing about budgets.
+	Budgets []boundaryledger.BudgetReading
 }
 
 // Quiet is the rate limit on the coach's proactive channel.
@@ -176,6 +182,10 @@ type Decision struct {
 	// a run-out warning said it runs out.
 	quotaWindow plans.QuotaWindow
 	runsOutAt   time.Time
+	// SpendKind names the budget window tip this Stop gave (spend_75,
+	// spend_over), and spend the window it was about.
+	SpendKind string
+	spend     boundaryledger.BudgetReading
 	// ReadingLost is true when this Stop said the plan's window cannot be
 	// read.
 	ReadingLost bool

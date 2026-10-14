@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -60,6 +61,49 @@ func TestSetBudgetUpsertsAndDeletes(t *testing.T) {
 	}
 	if got, err := SetBudget(path, BudgetRequest{BudgetUpdate: config.BudgetUpdate{Name: "monthly"}, Delete: true}); err != nil || len(got.Budgets) != 0 {
 		t.Errorf("delete = %+v, %v", got, err)
+	}
+}
+
+func TestSetBudgetAddsAndRemovesWindows(t *testing.T) {
+	path := sandbox(t, "log:\n  level: info\n")
+	if _, err := SetBudget(path, BudgetRequest{BudgetUpdate: config.BudgetUpdate{Name: "team", LimitUSD: 100}}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := SetBudget(path, BudgetRequest{BudgetUpdate: config.BudgetUpdate{Name: "team", Window: "daily", LimitUSD: 10, AddWindow: true}})
+	if err != nil || len(got.Budgets) != 1 || len(got.Budgets[0].Windows) != 2 {
+		t.Fatalf("add window = %+v, %v", got, err)
+	}
+	if _, err := SetBudget(path, BudgetRequest{BudgetUpdate: config.BudgetUpdate{Name: "team"}, RemoveWindow: "weekly"}); !IsInput(err) {
+		t.Errorf("removing a missing window err = %v", err)
+	}
+	got, err = SetBudget(path, BudgetRequest{BudgetUpdate: config.BudgetUpdate{Name: "team"}, RemoveWindow: "daily"})
+	if err != nil || got.Budgets[0].Window != "monthly" || len(got.Budgets[0].Windows) != 0 {
+		t.Fatalf("remove window = %+v, %v", got, err)
+	}
+}
+
+// The API and MCP tool are reachable by the agent a hard window limits:
+// they may make a budget hard (it starts in shadow), but not loosen or
+// remove one that is.
+func TestSetBudgetLeavesHardWindowsToTheTerminal(t *testing.T) {
+	path := sandbox(t, "log:\n  level: info\n")
+	got, err := SetBudget(path, BudgetRequest{BudgetUpdate: config.BudgetUpdate{Name: "team", Window: "daily", LimitUSD: 10, Mode: "hard"}})
+	if err != nil || got.Budgets[0].Mode != "hard" {
+		t.Fatalf("making a budget hard = %+v, %v", got, err)
+	}
+	for name, req := range map[string]BudgetRequest{
+		"soften":        {BudgetUpdate: config.BudgetUpdate{Name: "team", Mode: "soft"}},
+		"raise":         {BudgetUpdate: config.BudgetUpdate{Name: "team", LimitUSD: 1000}},
+		"delete":        {BudgetUpdate: config.BudgetUpdate{Name: "team"}, Delete: true},
+		"rescope":       {BudgetUpdate: config.BudgetUpdate{Name: "team", WorkflowID: "elsewhere"}},
+		"remove window": {BudgetUpdate: config.BudgetUpdate{Name: "team"}, RemoveWindow: "daily"},
+	} {
+		if _, err := SetBudget(path, req); !IsInput(err) || !strings.Contains(err.Error(), "terminal") {
+			t.Errorf("%s: err = %v; want it refused, pointing at the terminal", name, err)
+		}
+	}
+	if b := reload(t, path).Budgets[0]; b.Mode != "hard" || b.LimitUSD != 10 {
+		t.Errorf("budget changed: %+v", b)
 	}
 }
 

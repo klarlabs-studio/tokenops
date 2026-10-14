@@ -66,7 +66,7 @@ func (c Config) Validate() error {
 	if err := c.ModelPolicy.Policy().Validate(); err != nil {
 		return err
 	}
-	if _, err := boundaries.Parse(c.Boundaries); err != nil {
+	if _, err := boundaries.Parse(c.boundarySpecs()); err != nil {
 		return err
 	}
 	if err := c.Money.Validate(); err != nil {
