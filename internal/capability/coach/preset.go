@@ -103,12 +103,14 @@ func samePowers(a, b config.Config) bool {
 }
 
 // ApplyPreset writes a preset's coach block through Apply, so lowering a
-// power records it and the context power's agent settings follow.
+// power records it and the context power's agent settings follow. The
+// holdout is kept: opting out of it is the operator's consent, not an
+// autonomy setting a preset decides.
 func ApplyPreset(path string, l Ledger, levers ContextLevers, p Preset, now time.Time) (Report, error) {
 	return Apply(path, l, levers, now, func(c *config.Config) {
 		c.Coach = config.CoachConfig{
 			Autonomy: p.Coach.Autonomy, Verbosity: p.Coach.Verbosity,
-			Powers: maps.Clone(p.Coach.Powers),
+			Powers: maps.Clone(p.Coach.Powers), Holdout: c.Coach.Holdout,
 		}
 	})
 }

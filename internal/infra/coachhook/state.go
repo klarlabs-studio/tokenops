@@ -30,6 +30,9 @@ type sessionState struct {
 	PromotionNudged bool `json:"promotion_nudged,omitempty"`
 	// OpenTip is the last tip, while it waits to be acted on.
 	OpenTip *openTip `json:"open_tip,omitempty"`
+	// ShadowTip is the last tip held back for the holdout, settled the
+	// same way so the two cohorts are measured alike.
+	ShadowTip *openTip `json:"shadow_tip,omitempty"`
 	// AboveTurns counts turns at or above CompactAtTokens since the last
 	// compaction; LastContext is the newest turn's context, to see one.
 	AboveTurns  int   `json:"above_turns,omitempty"`
@@ -46,6 +49,8 @@ type sessionState struct {
 	// newest drop to half or less. Both only live for one Evaluate.
 	compaction string
 	dropFrom   int64
+	// shadowResolved are held tips this Evaluate settled.
+	shadowResolved []TipResolution
 	// id is the session the state belongs to; not stored.
 	id string
 }

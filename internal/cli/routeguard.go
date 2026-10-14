@@ -13,6 +13,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/savings"
 
 	"github.com/spf13/cobra"
 
@@ -169,6 +170,7 @@ func runRouteGuardHook(cmd *cobra.Command, mode routeguard.Mode, dir, provider s
 		return nil
 	}
 	coachcap.RecordAdvice(ledger, now, dec.OfferID, in.SessionID, config.PowerModels, string(dec.Kind), dec.From, dec.To)
+	savings.RecordRoute(savings.DefaultLedger(), now, dec.OfferID, in.SessionID, string(dec.Kind), dec.From, dec.To)
 	out := promptHookOutput{}
 	out.HookSpecificOutput.HookEventName = "UserPromptSubmit"
 	out.HookSpecificOutput.AdditionalContext = fmt.Sprintf(

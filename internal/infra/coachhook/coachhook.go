@@ -137,6 +137,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		}
 	}
 
+	cfg.applyHoldout(&dec, &st, before, model, contextTokens, now)
 	cfg.deliver(dir, &dec, &st, before, prevMax, now)
 	dec.Resolved = resolved
 	offerTip(&st, &dec, cfg, tipKind(dec), model, contextTokens)
@@ -149,7 +150,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		Unpriced:    dec.UnpricedModel,
 		QuotaWindow: quotaLabel(cfg.Quota, dec.quotaWindow), QuotaUsedPct: quotaUsed(cfg.Quota, dec.quotaWindow),
 		QuotaTier: dec.QuotaTier, QuotaBurn: dec.QuotaBurn,
-		ReadingLost: dec.ReadingLost, Ambient: dec.Ambient,
+		ReadingLost: dec.ReadingLost, Ambient: dec.Ambient, Holdout: dec.Holdout,
 	})
 	return dec
 }

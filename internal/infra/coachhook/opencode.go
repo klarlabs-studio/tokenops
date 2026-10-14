@@ -87,6 +87,7 @@ func EvaluateOpencode(dir, dbPath, sessionID string, cfg Config, now time.Time) 
 		}
 	}
 
+	cfg.applyHoldout(&dec, &st, before, model, contextTokens, now)
 	cfg.deliver(dir, &dec, &st, before, prevMax, now)
 	offerTip(&st, &dec, cfg, tipKind(dec), model, contextTokens)
 	saveSession(dir, sessionID, st)
@@ -94,7 +95,7 @@ func EvaluateOpencode(dir, dbPath, sessionID string, cfg Config, now time.Time) 
 		TS: now.UTC(), Session: sessionID,
 		CumulativeUSD: total, BudgetUSD: budget,
 		Fraction: frac, TierFired: dec.FiredFraction, Model: model,
-		Suppressed: dec.Suppressed, Unpriced: dec.UnpricedModel, Ambient: dec.Ambient,
+		Suppressed: dec.Suppressed, Unpriced: dec.UnpricedModel, Ambient: dec.Ambient, Holdout: dec.Holdout,
 	})
 	return dec
 }
