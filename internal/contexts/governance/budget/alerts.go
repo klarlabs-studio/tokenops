@@ -56,6 +56,9 @@ type Limit struct {
 	// metric-agnostic — callers resolve the actual figure; this field
 	// rides along so they know which one to fetch.
 	Basis string
+	// Tag scopes the limit to work carrying one allocation tag,
+	// "key=value"; empty is all spend. Like Basis, the caller resolves it.
+	Tag string
 }
 
 // Basis values for Limit.Basis.

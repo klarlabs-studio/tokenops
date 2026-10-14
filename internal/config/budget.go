@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/allocation"
 )
 
 // BudgetConfig is one spend limit the watcher (active mode) and
@@ -34,6 +35,9 @@ type BudgetConfig struct {
 	// ceiling, or "equivalent" for a list-price counterfactual — their
 	// billed spend is always ~0.
 	Basis string `yaml:"basis"`
+	// Tag scopes the limit to work carrying one allocation tag,
+	// "key=value" such as "client=acme"; empty applies to all spend.
+	Tag string `yaml:"tag,omitempty"`
 }
 
 // Validate checks one budget on its own. Config.Validate runs it over every
@@ -69,6 +73,11 @@ func (b BudgetConfig) Validate() error {
 	if b.WarnAt < 0 || b.WarnAt > 1 || b.CritAt < 0 || b.CritAt > 1 {
 		return errors.New("warn_at and crit_at must be in [0,1]")
 	}
+	if b.Tag != "" {
+		if _, err := allocation.ParseScope(b.Tag); err != nil {
+			return fmt.Errorf("tag: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -90,9 +99,19 @@ func (c Config) BudgetLimits() []budget.Limit {
 			WorkflowID:  b.WorkflowID,
 			AgentID:     b.AgentID,
 			Basis:       strings.ToLower(b.Basis),
+			Tag:         normalizedTag(b.Tag),
 		})
 	}
 	return out
+}
+
+// normalizedTag is a budget's tag scope as the watcher reads it: the key
+// spelled canonically. A malformed scope is kept, and refused by Validate.
+func normalizedTag(tag string) string {
+	if s, err := allocation.ParseScope(tag); err == nil {
+		return s.String()
+	}
+	return tag
 }
 
 // WatchConfig tunes the active-mode background watcher.
