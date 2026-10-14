@@ -93,3 +93,18 @@ func TestAccountsNamesTheClaudeSignIn(t *testing.T) {
 		t.Errorf("got %v", got)
 	}
 }
+
+// Evidence names the client that reported it, as the audit log's actor,
+// and what it reported field by field, so a plan TokenOps follows can be
+// traced back to the exact account type and tier.
+func TestEvidenceNamesItsClientAndFacts(t *testing.T) {
+	e, ok := Claude(Home(t, `{"organizationType":"claude_max","organizationRateLimitTier":"default_claude_max_5x"}`, ""))
+	if !ok || e.Client != "claude_code" || e.Facts["account_type"] != "claude_max" ||
+		e.Facts["rate_limit_tier"] != "default_claude_max_5x" {
+		t.Errorf("claude evidence %+v", e)
+	}
+	c, ok := Codex(filepath.Join(Home(t, "", "pro"), ".codex", "sessions"))
+	if !ok || c.Client != "codex" || c.Facts["plan_type"] != "pro" {
+		t.Errorf("codex evidence %+v", c)
+	}
+}

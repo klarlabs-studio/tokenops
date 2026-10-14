@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
+	"go.klarlabs.de/tokenops/internal/capability/actions"
 	"go.klarlabs.de/tokenops/internal/capability/auditlog"
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/budgets"
@@ -227,7 +228,7 @@ func warmGlanceEvents(sup *lifecycle.Supervisor, events *sqlite.EventCache, logg
 // through; nil reads nothing.
 func plansDeps(cfg config.Config, events *sqlite.EventCache, engine *spending.Engine) func() headroom.Deps {
 	return func() headroom.Deps {
-		deps := headroom.Deps{Config: &cfg, Accounts: signedInAccounts}
+		deps := headroom.Deps{Config: &cfg, Accounts: signedInAccounts, PlanFollows: actions.RecentPlanFollows}
 		if events != nil {
 			deps.Reader = events
 		}

@@ -10,6 +10,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
 // PlanRequest binds a provider to a plan, or clears its binding.
@@ -27,8 +28,15 @@ type PlanRequest struct {
 	// Since is the date the plan took effect, when before today. Usage
 	// recorded as billed since then is re-marked as plan-covered.
 	Since string
-	// Actor names who made the change in the audit log: mcp, api, cli.
+	// Actor names who made the change in the audit log: mcp, api, cli,
+	// or the client whose report TokenOps followed (claude_code, codex).
 	Actor string
+	// Evidence is what prompted a change TokenOps made on its own, kept
+	// in the audit entry.
+	Evidence map[string]any
+	// Store is an open event store to audit through; nil opens the
+	// configured one.
+	Store *sqlite.Store
 }
 
 // PlanChange is the binding after a change.
@@ -98,7 +106,8 @@ func SetPlan(ctx context.Context, path string, req PlanRequest, now time.Time) (
 	}
 	res, err := planhistory.Record(ctx, planhistory.Switch{
 		Provider: provider, Previous: previous, Plan: next, From: from, Now: now,
-		DBPath: StorePath(cfg.Storage.Path), Actor: firstNonEmpty(req.Actor, "tokenops"),
+		DBPath: StorePath(cfg.Storage.Path), Store: req.Store, Evidence: req.Evidence,
+		Actor: firstNonEmpty(req.Actor, "tokenops"),
 		Price: price, Currency: currency, SpendLimitUSD: req.SpendLimitUSD,
 	})
 	switch {

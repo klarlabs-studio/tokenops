@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/actions"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/config"
@@ -129,7 +130,7 @@ func sessionBudgetData(ctx context.Context, d PlanDeps) (*sessionBudgetResult, e
 // nil store stays a nil reader, which the capability answers as storage
 // disabled.
 func (d PlanDeps) headroomDeps() headroom.Deps {
-	deps := headroom.Deps{Config: d.activeConfig()}
+	deps := headroom.Deps{Config: d.activeConfig(), PlanFollows: actions.RecentPlanFollows}
 	if d.Store != nil {
 		deps.Reader = planStoreReader{store: d.Store}
 	}

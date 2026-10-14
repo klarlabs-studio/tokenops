@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"go.klarlabs.de/tokenops/internal/capability/actions"
 	"go.klarlabs.de/tokenops/internal/capability/cards"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
@@ -88,7 +89,7 @@ func runGlance(cmd *cobra.Command, rf *rootFlags, dbPath string, view glanceView
 			return nil
 		}
 		return planevidence.Accounts(home)
-	}}
+	}, PlanFollows: actions.RecentPlanFollows}
 	eng, engErr := buildSpendEngine(cfg)
 	if engErr == nil {
 		deps.Price = eng.ComputeAt
