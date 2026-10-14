@@ -145,6 +145,8 @@ func (s *Store) scanUsage(ctx context.Context, f analytics.Filter, group analyti
 			r.key = r.provider.String
 		case analytics.GroupModel:
 			r.key = r.model.String
+		case analytics.GroupProviderModel:
+			r.key = analytics.ProviderModelKey(r.provider.String, r.model.String)
 		}
 		visit(&r)
 	}
