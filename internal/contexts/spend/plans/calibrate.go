@@ -32,6 +32,16 @@ func (c WindowCalibration) Share(tokens int64) float64 {
 	return float64(tokens) / c.TokensPerPct
 }
 
+// WindowSources are the readers whose events report plan windows, sorted.
+func WindowSources() []string {
+	out := make([]string, 0, len(windowSourceProvider))
+	for s := range windowSourceProvider {
+		out = append(out, s)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // WindowReadings collects every window reading in envs, by the provider
 // whose plan it is.
 func WindowReadings(envs []*eventschema.Envelope) map[string][]QuotaWindow {
