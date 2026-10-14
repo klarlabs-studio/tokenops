@@ -28,6 +28,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/outcomes"
 	"go.klarlabs.de/tokenops/internal/capability/reconstruct"
 	"go.klarlabs.de/tokenops/internal/contexts/intervention"
+	"go.klarlabs.de/tokenops/internal/contexts/learning"
 	"go.klarlabs.de/tokenops/internal/contexts/measurement"
 	"go.klarlabs.de/tokenops/internal/contexts/work"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -282,13 +283,22 @@ type Report struct {
 	RandomizedExperimentID            string            `json:"randomized_experiment_id,omitempty"`
 	RandomizedPairs                   int               `json:"randomized_pairs,omitempty"`
 	RandomizedFallbackReason          string            `json:"randomized_fallback_reason,omitempty"`
+	// RandomizedSelection says which experiment was compared and why when
+	// several were present and none was named.
+	RandomizedSelection string `json:"randomized_selection,omitempty"`
+	// Holdout is the coach's randomized holdout (#656): per kind of tip,
+	// the sessions that got it against the sessions it was held back from.
+	// Filled when Run is given the savings ledger.
+	Holdout []learning.KindSavings `json:"holdout,omitempty"`
 	// Attributed is the per-execution detail the comparison rests on.
 	Attributed []Attributed `json:"attributed,omitempty"`
 }
 
 // CompareExperiment prefers an execution-linked randomized comparison for
-// experimentID. With an empty ID it auto-selects only when a single
-// experiment is represented; otherwise it preserves the observational view.
+// experimentID. With an empty ID it compares the one experiment that can
+// be compared, or the most recent of several, and says which in
+// RandomizedSelection; with none comparable it keeps the observational
+// view and says why for each.
 func CompareExperiment(execs []work.Execution, events []*eventschema.Envelope, experimentID string) Report {
 	attributed := Attribute(execs, events)
 
@@ -302,7 +312,7 @@ func CompareExperiment(execs []work.Execution, events []*eventschema.Envelope, e
 	}
 
 	assignment := intervention.Observational
-	randomizedID, randomBaseline, randomVariant, randomizedPairs, fallback := randomizedCohorts(attributed, events, experimentID)
+	randomizedID, randomBaseline, randomVariant, randomizedPairs, fallback, selection := selectRandomized(attributed, events, experimentID)
 	if randomizedID != "" {
 		baseline, intervened = randomBaseline, randomVariant
 		assignment = intervention.Randomised
@@ -328,6 +338,7 @@ func CompareExperiment(execs []work.Execution, events []*eventschema.Envelope, e
 		RandomizedExperimentID:   randomizedID,
 		RandomizedPairs:          randomizedPairs,
 		RandomizedFallbackReason: fallback,
+		RandomizedSelection:      selection,
 	}
 
 	report.Comparison = intervention.Comparison{
@@ -417,6 +428,81 @@ func meanAttention(as []Attributed) measurement.Value {
 		return total
 	}
 	return measurement.Measured(amount/float64(len(as)), total.Source()).WithCaveat(total.Caveat())
+}
+
+// selectRandomized picks the experiment to compare. A named one is
+// compared or refused as is. With none named, each experiment present is
+// tried: the only comparable one is taken, or the most recent of several,
+// and selection says which and what else was present.
+func selectRandomized(as []Attributed, events []*eventschema.Envelope, requested string) (string, []Attributed, []Attributed, int, string, string) {
+	if requested != "" {
+		id, b, v, n, reason := randomizedCohorts(as, events, requested)
+		return id, b, v, n, reason, ""
+	}
+	ids, latest := experimentsPresent(events)
+	if len(ids) <= 1 {
+		id, b, v, n, reason := randomizedCohorts(as, events, "")
+		return id, b, v, n, reason, ""
+	}
+	type candidate struct {
+		id                string
+		baseline, variant []Attributed
+		pairs             int
+	}
+	var comparable []candidate
+	var refused []string
+	for _, id := range ids {
+		got, b, v, n, reason := randomizedCohorts(as, events, id)
+		if got == "" {
+			refused = append(refused, id+": "+strings.TrimSuffix(reason, "; using observational cohorts"))
+			continue
+		}
+		comparable = append(comparable, candidate{got, b, v, n})
+	}
+	if len(comparable) == 0 {
+		return "", nil, nil, 0, fmt.Sprintf("none of the %d experiments present can be compared (%s); using observational cohorts",
+			len(ids), strings.Join(refused, "; ")), ""
+	}
+	sort.SliceStable(comparable, func(i, j int) bool { return latest[comparable[i].id].After(latest[comparable[j].id]) })
+	pick := comparable[0]
+	var selection string
+	if len(comparable) == 1 {
+		selection = fmt.Sprintf("compared %s, the only one of %d experiments with complete pairs", pick.id, len(ids))
+	} else {
+		others := make([]string, 0, len(comparable)-1)
+		for _, c := range comparable[1:] {
+			others = append(others, c.id)
+		}
+		selection = fmt.Sprintf("compared %s, the most recent of %d comparable experiments; select %s with --experiment-id",
+			pick.id, len(comparable), strings.Join(others, ", "))
+	}
+	if len(refused) > 0 {
+		selection += " (not comparable: " + strings.Join(refused, "; ") + ")"
+	}
+	return pick.id, pick.baseline, pick.variant, pick.pairs, "", selection
+}
+
+// experimentsPresent lists the experiments with assignments, sorted, and
+// when each was last assigned.
+func experimentsPresent(events []*eventschema.Envelope) ([]string, map[string]time.Time) {
+	latest := map[string]time.Time{}
+	for _, env := range events {
+		if env == nil || env.Correlation.Experiment == "" {
+			continue
+		}
+		if p, ok := env.Payload.(*eventschema.ExperimentEvent); !ok || p.Stage != eventschema.ExperimentAssigned {
+			continue
+		}
+		if at, seen := latest[env.Correlation.Experiment]; !seen || env.Timestamp.After(at) {
+			latest[env.Correlation.Experiment] = env.Timestamp
+		}
+	}
+	ids := make([]string, 0, len(latest))
+	for id := range latest {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids, latest
 }
 
 // randomizedCohorts accepts only complete randomized pairs whose every
@@ -741,7 +827,7 @@ func appendMissingAssignedExecutions(execs []work.Execution, events []*eventsche
 		assigned[id] = env.Correlation.Experiment
 		starts[id] = env.Timestamp
 	}
-	if requested == "" && len(seenExperiments) != 1 {
+	if len(seenExperiments) == 0 {
 		return execs
 	}
 	// Proxy observation starts before routing assigns the experiment arm.

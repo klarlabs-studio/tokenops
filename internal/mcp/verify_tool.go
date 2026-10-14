@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/capability/verify"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
@@ -23,7 +24,7 @@ type VerifyDeps struct {
 type verifyInput struct {
 	Days         int    `json:"days,omitempty" jsonschema:"description=Window in days (default 30)."`
 	All          bool   `json:"all,omitempty" jsonschema:"description=Read every transcript and event on disk. Overrides days."`
-	ExperimentID string `json:"experiment_id,omitempty" jsonschema:"description=Optional execution-linked experiment to compare; required if multiple trials are present."`
+	ExperimentID string `json:"experiment_id,omitempty" jsonschema:"description=Optional execution-linked experiment to compare; defaults to the only comparable trial, or the most recent."`
 }
 
 // verifyResult is what the agent gets back.
@@ -65,6 +66,13 @@ type verifyResult struct {
 	RandomizedExperimentID     string              `json:"randomized_experiment_id,omitempty"`
 	RandomizedPairs            int                 `json:"randomized_pairs,omitempty"`
 	RandomizedFallback         string              `json:"randomized_fallback_reason,omitempty"`
+	// RandomizedSelection says which experiment was compared when several
+	// were present and none was named.
+	RandomizedSelection string `json:"randomized_selection,omitempty"`
+	// Holdout is the coach's randomized holdout, one line per kind of tip:
+	// how many were shown and held back, the expected saving, and the
+	// saving the holdout realized or why it is not established yet.
+	Holdout []string `json:"holdout,omitempty"`
 
 	Error string `json:"error,omitempty"`
 	Hint  string `json:"hint,omitempty"`
@@ -112,6 +120,10 @@ func verifyPayload(r verify.Report) verifyResult {
 		RandomizedExperimentID:     r.RandomizedExperimentID,
 		RandomizedPairs:            r.RandomizedPairs,
 		RandomizedFallback:         r.RandomizedFallbackReason,
+		RandomizedSelection:        r.RandomizedSelection,
+	}
+	for _, k := range r.Holdout {
+		out.Holdout = append(out.Holdout, savings.Describe(k))
 	}
 	// Proven requires both an assigned comparison and a conclusion. An
 	// observational split can never reach it.
@@ -134,7 +146,7 @@ func RegisterVerifyTool(s *Server, d VerifyDeps) error {
 		return errors.New("mcp: nil server")
 	}
 	s.Tool("tokenops_verify").
-		Description("Compare resource use and explicit outcomes across real work. When execution-linked experiment assignments form complete, measured pairs and outcomes are present, returns a randomized comparison; otherwise remains observational and explains why. Pass experiment_id when multiple trials are in the window. Returns token difference, event-time priced metered cost, mean proxy latency, assessed success, operator-reported attention, and provider-scoped plan quota. Attention remains unknown unless the operator reports it. Read observational and proven; missing assignment or outcome evidence never becomes a causal claim.").
+		Description("Compare resource use and explicit outcomes across real work. When execution-linked experiment assignments form complete, measured pairs and outcomes are present, returns a randomized comparison; otherwise remains observational and explains why. Pass experiment_id to pick one trial; without it the only comparable trial is compared, or the most recent of several, and randomized_selection says which. holdout lists the coach's randomized holdout per kind of tip (shown vs held back, expected and realized saving). Returns token difference, event-time priced metered cost, mean proxy latency, assessed success, operator-reported attention, and provider-scoped plan quota. Attention remains unknown unless the operator reports it. Read observational and proven; missing assignment or outcome evidence never becomes a causal claim.").
 		OutputSchema(verifyResult{}).
 		Handler(func(ctx context.Context, in verifyInput) (*verifyResult, error) {
 			if d.Store == nil {
@@ -150,7 +162,8 @@ func RegisterVerifyTool(s *Server, d VerifyDeps) error {
 			// A reader that broke is not fatal: whatever the other
 			// clients yielded is still worth comparing, and failing the
 			// call would hide the comparison entirely.
-			report, _, err := verify.Run(ctx, d.Store, verify.Window{Root: d.Root, Days: days, All: in.All}, in.ExperimentID, time.Now())
+			deps := savings.DefaultDeps()
+			report, _, err := verify.Run(ctx, d.Store, verify.Window{Root: d.Root, Days: days, All: in.All, Savings: &deps}, in.ExperimentID, time.Now())
 			if err != nil {
 				return nil, err
 			}
