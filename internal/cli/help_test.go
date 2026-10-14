@@ -181,6 +181,8 @@ var changesThings = map[string]bool{
 	"tokenops team create": true, "tokenops team admin login": true, "tokenops team admin logout": true,
 	"tokenops team admin remove": true, "tokenops team admin role": true, "tokenops team admin grant": true,
 	"tokenops team admin revoke": true,
+	// This prints a FOCUS CSV dataset and nothing else.
+	"tokenops spend export": true,
 	// These print JSON and nothing else.
 	"tokenops experiment start": true, "tokenops experiment status": true, "tokenops experiment stop": true,
 	"tokenops outcome record": true, "tokenops outcome detect": true, "tokenops outcome check-json": true,

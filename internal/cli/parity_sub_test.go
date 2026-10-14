@@ -56,6 +56,7 @@ var subCLIOnly = map[string]string{
 	"boundaries promote":    "making a rule bind is the operator's act; an agent must not be able to change the limits set on it",
 	"boundaries demote":     "loosening a rule is the operator's act; an agent must not be able to change the limits set on it",
 	"statusline install":    "edits the operator's Claude Code settings; init runs it",
+	"spend export":          "writes a billing file for FinOps tools, not an answer an agent reasons over; GET /api/spend/export serves it",
 	"coach stats":           "reads the hooks' local ledgers on this machine; GET /api/findings serves what they show",
 	"statusline uninstall":  "restores the operator's own status line",
 	"fmt hook":              "is a hook entry point invoked by a client, not a user",

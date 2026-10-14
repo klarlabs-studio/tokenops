@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/measurement"
@@ -47,7 +48,24 @@ const (
 	GroupModel    Group = "model"
 	GroupWorkflow Group = "workflow"
 	GroupAgent    Group = "agent"
+	// GroupProviderModel groups by provider and model together, keyed by
+	// ProviderModelKey. It is not a user-facing grouping: DailyCharges
+	// reads through it.
+	GroupProviderModel Group = "provider+model"
 )
+
+// providerModelSep joins a provider and a model in a GroupProviderModel
+// key. Neither can contain it.
+const providerModelSep = "\x1f"
+
+// ProviderModelKey is the GroupProviderModel key of provider and model.
+func ProviderModelKey(provider, model string) string { return provider + providerModelSep + model }
+
+// SplitProviderModelKey reverses ProviderModelKey.
+func SplitProviderModelKey(key string) (provider, model string) {
+	provider, model, _ = strings.Cut(key, providerModelSep)
+	return provider, model
+}
 
 // Filter narrows the events the aggregator considers. Empty fields are
 // not constrained.
