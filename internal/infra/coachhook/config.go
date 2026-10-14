@@ -3,6 +3,7 @@ package coachhook
 import (
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 )
 
@@ -17,12 +18,10 @@ type Config struct {
 	// nudge. Each fires at most once per session (latched).
 	Tiers []float64
 	// Quota is the live window reading for a flat-rate plan the session
-	// runs on. When set it replaces the dollar ladder: the coach speaks at
-	// QuotaTiers of the window, each once per window across sessions.
+	// runs on. When set it replaces the dollar ladder: the coach warns
+	// when both burn-rate look-backs run a window out before its reset,
+	// and says when one is used up, each once per window across sessions.
 	Quota *Quota
-	// QuotaTiers are the window shares to speak at. Empty uses
-	// DefaultQuotaTiers.
-	QuotaTiers []float64
 	// FlatPlan says the session's provider is on a flat-rate plan. Its
 	// dollar figure is then a counterfactual nobody pays, so the coach
 	// never speaks the dollar ladder there, with or without a Quota.
@@ -150,9 +149,15 @@ type Decision struct {
 	// Promotion is true when the nudge is the read-guard case rather than
 	// a budget tier.
 	Promotion bool
-	// QuotaTier is the share of the plan's quota window this Stop spoke
-	// at (0.75 = 75%). Zero when no quota tier fired.
+	// QuotaTier is 1.0 when this Stop said a plan window is used up.
 	QuotaTier float64
+	// QuotaBurn is true when this Stop warned that a plan window runs out
+	// before its reset at the pace of both look-backs.
+	QuotaBurn bool
+	// quotaWindow is the window a quota tip was about, and runsOutAt when
+	// a run-out warning said it runs out.
+	quotaWindow plans.QuotaWindow
+	runsOutAt   time.Time
 	// ReadingLost is true when this Stop said the plan's window cannot be
 	// read.
 	ReadingLost bool
