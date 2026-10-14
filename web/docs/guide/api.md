@@ -71,6 +71,7 @@ operator's own.
 | `GET /api/spend/top` | Top consumers, ranked on the API equivalent |
 | `GET /api/spend/commits` | What each commit cost: the agent work that led to it, priced; subjects withheld |
 | `GET /api/spend/burn-rate` | Usage over the last hours |
+| `GET /api/spend/export` | Spend and usage as FOCUS 1.2 CSV for FinOps tools (`?since=&until=`; the month so far when omitted) |
 | `GET /api/scorecard` | The wedge KPI scorecard |
 | `GET /api/pricing` | The rate card TokenOps costs with |
 | `GET /api/workflows` | Recorded workflows |

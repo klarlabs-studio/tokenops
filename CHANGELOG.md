@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **spend:** `tokenops spend export --format focus` writes your spend and usage as FOCUS 1.2 CSV, the billing format FinOps tools such as Vantage, CloudZero and Cloudability ingest. Plan fees are purchases; usage a plan covered is billed 0 with its API price as the list cost, so the tool sees what each plan was worth; usage billed per token costs what it cost. The daemon serves the same file at `GET /api/spend/export`. Only derived figures go in it: providers, models, plans, counts and money, never session titles, paths or prompts (#659)
+
 ### Fixed
 
 - **plans:** when you change plans and your client says so, TokenOps now follows it. Before, `init` saw Claude Code report Max 5x against a Max 20x binding and only pointed it out, so every Claude window limit stayed 4× too high until you noticed. Now, whenever Claude Code's account tier or Codex's `plan_type` names a different plan, TokenOps switches to it from when the client first reported it: `init` does, and the daemon checks every 15 minutes, so nobody has to re-run `init`. The switch is recorded in `tokenops plan history` and in `tokenops audit` (actor `claude_code` or `codex`, with the account type and tier it reported), and said once in `init`'s output and the daemon log and for a week on `tokenops glance`, each with the command that undoes it (`tokenops plan set <provider> <plan>`). A plan you set after the client started reporting its plan is kept until the client reports a different one, and a report that fits two plans or none changes nothing
