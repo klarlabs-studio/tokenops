@@ -18,6 +18,12 @@ func TestSpendingRoutesAnswer(t *testing.T) {
 	if burn["hours"] != float64(6) || burn["tokens"] != float64(3600) {
 		t.Errorf("burn = %v", burn)
 	}
+	units := getJSON(t, base+"/api/spend/units?since=168h")
+	for _, k := range []string{"commits", "merged_prs", "outcomes", "achieved_outcomes", "classes", "baseline_since"} {
+		if _, ok := units[k]; !ok {
+			t.Errorf("units has no %q: %v", k, units)
+		}
+	}
 	if card := getJSON(t, base+"/api/scorecard?since_days=7"); card == nil {
 		t.Error("no scorecard")
 	}
@@ -25,7 +31,7 @@ func TestSpendingRoutesAnswer(t *testing.T) {
 	if rates, _ := pricing["rates"].([]any); len(rates) == 0 || len(rates) > 2 {
 		t.Errorf("pricing = %v", pricing)
 	}
-	for _, bad := range []string{"/api/spend/top?by=colour", "/api/spend/burn-rate?hours=x", "/api/pricing?limit=x"} {
+	for _, bad := range []string{"/api/spend/top?by=colour", "/api/spend/units?since=yesterday", "/api/spend/burn-rate?hours=x", "/api/pricing?limit=x"} {
 		resp, err := http.Get(base + bad)
 		if err != nil {
 			t.Fatal(err)
