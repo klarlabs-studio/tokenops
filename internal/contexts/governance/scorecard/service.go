@@ -38,6 +38,9 @@ type BuildParams struct {
 	// BaselineRef is the operator-supplied baseline identifier carried
 	// through to Scorecard.BaselineRef.
 	BaselineRef string
+	// UnitCosts are the period's unit costs, measured by the caller (they
+	// join agent work to git history, which this domain does not read).
+	UnitCosts []UnitCost
 	// ClockNow allows tests to inject a deterministic clock. Defaults to
 	// time.Now when nil.
 	ClockNow func() time.Time
@@ -107,5 +110,6 @@ func Build(ctx context.Context, reader EventReader, params BuildParams) *Scoreca
 	}
 	sc := NewWithAgentKPIs(fvt, teu, sac, agent, params.BaselineRef)
 	sc.PlanUse, sc.PlanUseDays = planUse, params.SinceDays
+	sc.UnitCosts = params.UnitCosts
 	return sc
 }

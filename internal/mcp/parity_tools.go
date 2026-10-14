@@ -78,6 +78,7 @@ func runScorecard(ctx context.Context, d ParityDeps, in scorecardInput) (*spendi
 		TEUPct:      in.TEUPct,
 		SACPct:      in.SACPct,
 		BaselineRef: in.BaselineRef,
+		Spend:       d.Spend,
 	})
 	return s, nil
 }
