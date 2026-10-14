@@ -84,6 +84,33 @@ old it is. `tokenops glance --findings` lists every finding, and
 `GET /api/findings` serves the same list. Findings carry figures only,
 never prompt or file text.
 
+**Unusual spend.** Every hour the daemon forecasts today and yesterday from
+the four weeks before (the same Holt forecast `tokenops spend` uses) and
+flags a day whose spend, or usage at API prices, is above the forecast's
+95% band by at least $5 and 25%. Nothing is flagged until there are 10
+days of history, and at most one day's finding shows per day, spend before
+usage. The finding ranks what drove the rise, by the dollars each model,
+biller (with the route it went through), billing basis, repository, tool
+and session added against its own daily mean, and names the likely cause
+when it recognises one: a pricier model that took over, usage billed per
+token while a plan should cover it (with the plan coverage against
+before), or one session carrying the rise, as a runaway loop does (with
+what the waste detector found in it).
+
+```
+  ● Spend on Wed 14 Oct was $24.00, $24.00 over the usual $0.00
+    Likely cause: Claude usage was billed per token while its plan should cover it, through anthropic-api; plan coverage 20% against 99% before; ranked by what each added: model claude-sonnet-5 +$24.00 (100%), biller anthropic via anthropic-api +$24.00 (100%), …
+    → Check the API key or base URL your client uses: Claude's plan covers only its own endpoint. If this is normal for you, `tokenops coach tip expected --id anomaly-spend-2026-10-14` stops flagging it; `ack` or `snooze` answer it too.
+```
+
+It sits with the other findings on glance, the menu bar and
+`GET /api/findings` (its `id` is the anomaly's), and never interrupts a
+session. Answer it like a tip (`tokenops coach tip`): `ack` takes it off,
+`snooze` holds every spend finding for a while, and `expected` also stops
+flagging the same pattern (the same model, the same provider billed per
+token, a loop in the same repository) for 90 days. Only derived figures
+are kept, in `~/.tokenops/cache/spend-anomalies.json`.
+
 In a true-colour terminal the bars are solid cells running green, amber,
 red along their length, in the Klarlabs palette; 16 colours elsewhere,
 plain text for a pipe.
@@ -1377,6 +1404,10 @@ status line), then your answer:
 tokenops coach tip snooze --for 2h
 # Snoozed the tip at 50% of the session budget: tips like it wait until Tue 16:40.
 ```
+
+An unusual-spend finding (`--id anomaly-…`, shown on glance) is answered
+the same way: `ack` takes it off the findings, `expected` also stops
+flagging the same pattern, and `snooze` holds every spend finding.
 
 An answered tip counts as neither followed nor ignored, so it never quiets
 the coach. `tokenops coach` shows the answers per kind of tip with the share
