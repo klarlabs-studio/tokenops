@@ -18,6 +18,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/ruleintel"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
+	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 )
 
 // Agents read every tool definition before their first call. Fifty tools
@@ -286,8 +287,8 @@ type glanceIn struct {
 }
 
 type spendIn struct {
-	View           string   `json:"view,omitempty" jsonschema:"enum=summary,enum=top,enum=burn,enum=forecast,enum=commits,description=summary (default): spend and tokens over a window. top: the largest consumers. burn: the last hours, hour by hour. forecast: daily spend projected forward. commits: what each of the operator's commits cost, from the agent work that led to it."`
-	Since          string   `json:"since,omitempty" jsonschema:"description=summary, top and commits: RFC3339 time or a duration such as 24h or 7d"`
+	View           string   `json:"view,omitempty" jsonschema:"enum=summary,enum=top,enum=burn,enum=forecast,enum=commits,enum=units,description=summary (default): spend and tokens over a window. top: the largest consumers. burn: the last hours, hour by hour. forecast: daily spend projected forward. commits: what each of the operator's commits cost, from the agent work that led to it. units: cost per commit, merged pull request, outcome and change class against the 4 weeks before, with plan-window shares on a flat-rate plan."`
+	Since          string   `json:"since,omitempty" jsonschema:"description=summary, top, commits and units: RFC3339 time or a duration such as 24h or 7d"`
 	Until          string   `json:"until,omitempty" jsonschema:"description=summary and top: RFC3339 time; open when omitted"`
 	WorkflowID     string   `json:"workflow_id,omitempty" jsonschema:"description=summary: one workflow"`
 	AgentID        string   `json:"agent_id,omitempty" jsonschema:"description=summary: one agent"`
@@ -439,12 +440,13 @@ type glanceOut struct {
 }
 
 type spendOut struct {
-	View     string              `json:"view"`
-	Summary  *spendSummaryResult `json:"summary,omitempty"`
-	Top      *topConsumersResult `json:"top,omitempty"`
-	Burn     map[string]any      `json:"burn,omitempty"`
-	Forecast *forecastResult     `json:"forecast,omitempty"`
-	Commits  *commits.Report     `json:"commits,omitempty"`
+	View     string                `json:"view"`
+	Summary  *spendSummaryResult   `json:"summary,omitempty"`
+	Top      *topConsumersResult   `json:"top,omitempty"`
+	Burn     map[string]any        `json:"burn,omitempty"`
+	Forecast *forecastResult       `json:"forecast,omitempty"`
+	Commits  *commits.Report       `json:"commits,omitempty"`
+	Units    *uniteconomics.Report `json:"units,omitempty"`
 }
 
 type sessionsOut struct {
@@ -550,6 +552,7 @@ func publicTools() []publicTool {
 				"burn":     {inner: "tokenops_burn_rate", params: params("hours", "include_sources")},
 				"forecast": {inner: "tokenops_forecast", params: params("horizon_days", "include_sources")},
 				"commits":  {inner: "tokenops_cost_per_commit", params: params("since", "limit")},
+				"units":    {inner: "tokenops_unit_costs", params: params("since")},
 			},
 		},
 		{

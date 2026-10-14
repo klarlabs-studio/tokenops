@@ -151,10 +151,46 @@ func share(plan, billed int64) *float64 {
 	return &pct
 }
 
-// windowUse groups readings into window instances, one per kind and
-// reset, and averages the peak of each instance that reset in the period.
-// A window still open has not peaked yet, so it is left out.
+// windowUse averages, per window kind, the peak of each instance that
+// reset in the period.
 func windowUse(ws []QuotaWindow, since, now time.Time) []WindowUse {
+	type acc struct {
+		sum float64
+		n   int
+	}
+	byLabel := map[string]*acc{}
+	for _, in := range WindowInstances(ws, since, now) {
+		a := byLabel[in.Label]
+		if a == nil {
+			a = &acc{}
+			byLabel[in.Label] = a
+		}
+		a.sum += in.PeakPct
+		a.n++
+	}
+	out := make([]WindowUse, 0, len(byLabel))
+	for label, a := range byLabel {
+		out = append(out, WindowUse{Label: label, Windows: a.n, AvgPeakPct: math.Round(a.sum/float64(a.n)*10) / 10})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Label < out[j].Label })
+	return out
+}
+
+// WindowInstance is one window of a kind, from when it opened to its
+// reset, and the highest share of it any reading saw.
+type WindowInstance struct {
+	Label    string
+	Start    time.Time
+	End      time.Time
+	Duration time.Duration
+	PeakPct  float64
+}
+
+// WindowInstances groups readings into window instances, one per kind and
+// reset, and returns those that reset in [since, now], oldest first per
+// kind. A window still open has not peaked yet, so it is left out, as are
+// spend limits, which are money rather than a window.
+func WindowInstances(ws []QuotaWindow, since, now time.Time) []WindowInstance {
 	byLabel := map[string][]QuotaWindow{}
 	for _, w := range ws {
 		if w.Label == "" || w.ResetsAt.IsZero() || strings.Contains(w.Label, "spend limit") {
@@ -162,37 +198,32 @@ func windowUse(ws []QuotaWindow, since, now time.Time) []WindowUse {
 		}
 		byLabel[w.Label] = append(byLabel[w.Label], w)
 	}
-	var out []WindowUse
-	for label, rs := range byLabel {
-		sort.Slice(rs, func(i, j int) bool { return rs[i].ResetsAt.Before(rs[j].ResetsAt) })
-		var peaks []float64
-		var first time.Time
-		for _, r := range rs {
-			if len(peaks) == 0 || r.ResetsAt.Sub(first) >= instanceResetGranularity {
-				first = r.ResetsAt
-				peaks = append(peaks, 0)
-				if r.ResetsAt.Before(since) || r.ResetsAt.After(now) {
-					peaks[len(peaks)-1] = math.NaN()
-				}
-			}
-			if last := &peaks[len(peaks)-1]; !math.IsNaN(*last) && r.UsedPct > *last {
-				*last = math.Min(r.UsedPct, 100)
-			}
-		}
-		var sum float64
-		n := 0
-		for _, p := range peaks {
-			if !math.IsNaN(p) {
-				sum += p
-				n++
-			}
-		}
-		if n == 0 {
-			continue
-		}
-		out = append(out, WindowUse{Label: label, Windows: n, AvgPeakPct: math.Round(sum/float64(n)*10) / 10})
+	labels := make([]string, 0, len(byLabel))
+	for label := range byLabel {
+		labels = append(labels, label)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Label < out[j].Label })
+	sort.Strings(labels)
+	var out []WindowInstance
+	for _, label := range labels {
+		rs := byLabel[label]
+		sort.Slice(rs, func(i, j int) bool { return rs[i].ResetsAt.Before(rs[j].ResetsAt) })
+		var cur *WindowInstance
+		flush := func() {
+			if cur != nil && !cur.End.Before(since) && !cur.End.After(now) {
+				out = append(out, *cur)
+			}
+		}
+		for _, r := range rs {
+			if cur == nil || r.ResetsAt.Sub(cur.End) >= instanceResetGranularity {
+				flush()
+				cur = &WindowInstance{Label: label, End: r.ResetsAt, Duration: r.Duration, Start: r.ResetsAt.Add(-r.Duration)}
+			}
+			if r.UsedPct > cur.PeakPct {
+				cur.PeakPct = math.Min(r.UsedPct, 100)
+			}
+		}
+		flush()
+	}
 	return out
 }
 

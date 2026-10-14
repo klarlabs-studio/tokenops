@@ -488,6 +488,65 @@ apart, never dropped. A `+` marks a cost that leaves out turns on models
 without a list price. `GET /api/spend/commits` serves the same report with
 commit subjects withheld.
 
+#### Unit costs: per commit, merged PR, outcome and change class
+
+`tokenops spend units` prices finished work rather than tokens, and sets
+each figure against your own four weeks before the period (the last 7
+days unless you pass `--since`):
+
+```
+Unit costs since 8 Oct 00:05, against the 4 weeks before
+
+                      PER UNIT  UNITS   4-WEEK BASELINE   CHANGE
+  commit                 $9.00      3   $24.00 (2)          -62%
+  merged PR             $13.50      2   $24.00 (2)          -44%
+  recorded outcome      $10.50      2   —
+  achieved outcome      $21.00      1   —
+
+  By change class, per commit
+  feature               $12.00      1   $30.00 (1)          -60%
+  bugfix                 $9.00      1   $18.00 (1)          -50%
+  refactor               $6.00      1   —
+
+  Share of a plan window, per unit (estimated)
+  merged PR          11.2% of the anthropic weekly window  (baseline 20.0%)
+  achieved outcome   17.5% of the anthropic weekly window
+
+  Not placed on a unit this period
+  commit             84% placed · not yet committed $5.00
+  merged PR          84% placed · no pull request merged yet $5.00
+  recorded outcome   66% placed · no recorded outcome $11.00
+```
+
+- **Merged PR**: a pull request of yours that landed on the default branch,
+  read from git alone: a squash commit whose subject ends `(#N)` or a
+  `Merge pull request #N` commit, on `main` or `origin/main` (whatever
+  `origin/HEAD` names). A turn goes to the next one merged in its
+  repository within 7 days. No forge is asked, so fetch to see the latest
+  merges. Only pull requests with agent work on them are units; the others
+  are counted apart.
+- **Outcome**: an outcome recorded with `tokenops outcome record` or the
+  `tokenops_outcome` tool. A turn goes to it when it ran under the
+  execution, the workflow (`tokenops_prepare_work`'s `workflow_id`) or the
+  session the outcome names. The cost per achieved outcome carries the
+  work on every judged execution, including the ones that failed.
+- **Change class**: from the Conventional Commits type of each commit's
+  subject: `feat` is feature, `fix` bugfix, `refactor` and `perf`
+  refactor, `test`, `docs`, and `chore`, `ci`, `build`, `style`, `revert`
+  chore. A subject with no type is *other*.
+- **Share of a plan window**: on a flat-rate plan the vendor reports
+  windows as percentages, never tokens, so TokenOps measures how many
+  tokens one percent of your longest window held from your own windows
+  that reset in the last five weeks (each at least 5% full; the median).
+  It is an estimate, and says so.
+
+Every join is a heuristic, so the work no unit took is listed by why.
+`--json`, `GET /api/spend/units` and `tokenops_spend` with `view: units`
+return the same report; it holds derived figures only, never subjects,
+paths or session ids. The team plane does not receive these figures yet:
+its upload carries per-day buckets, which have no field for a count of
+pull requests or outcomes.
+
 #### Export to FinOps tools (FOCUS)
 
 `tokenops spend export` writes spend and usage as
@@ -569,6 +628,18 @@ Plan use (last 7 days):
   openai       utilization 41% (weekly, 1 window) · coverage 100% of tokens on a plan
   openrouter   utilization n/a (no plan window reset yet) · coverage 0% of tokens on a plan
   all          coverage 81% of tokens on a plan
+```
+
+Under it, **Unit costs** gives the cost per commit, per merged pull
+request and per achieved outcome over the same days, against the four
+weeks before (see [`tokenops spend units`](#unit-costs-per-commit-merged-pr-outcome-and-change-class)).
+Reported, not graded: a dearer pull request may be a harder one.
+
+```
+Unit costs (last 7 days, against the 4 weeks before; API prices):
+  commit             $9.00 each · 3 units · baseline $24.00 (-62%)
+  merged PR          $13.50 each · 2 units · baseline $24.00 (-44%)
+  achieved outcome   $21.00 each · 1 unit
 ```
 
 ```bash

@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/commits"
+	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/tools"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard"
@@ -24,6 +26,9 @@ type ScorecardParams struct {
 	TranscriptRoot string
 	// Now anchors the window; the current time when zero.
 	Now time.Time
+	// Spend prices the turns the unit costs are measured from; nil leaves
+	// unit costs off the scorecard.
+	Spend *Engine
 }
 
 // ScorecardReport is the scorecard answer, named here so adapters can
@@ -47,10 +52,20 @@ func Scorecard(ctx context.Context, store *sqlite.Store, p ScorecardParams) *Sco
 		days = 7
 	}
 	var reader scorecard.EventReader
+	var units []scorecard.UnitCost
 	if store != nil {
 		reader = store
+		if p.Spend != nil {
+			agg := NewAggregator(store, p.Spend)
+			r, err := uniteconomics.Compute(ctx, uniteconomics.Deps{Turns: commits.TurnsIn(agg, Window{}), Events: store},
+				now.Add(-time.Duration(days)*24*time.Hour), now)
+			if err == nil {
+				units = scorecardUnitCosts(r)
+			}
+		}
 	}
 	return scorecard.Build(ctx, reader, scorecard.BuildParams{
+		UnitCosts:          units,
 		SinceDays:          days,
 		FVTSecondsOverride: p.FVTSeconds,
 		TEUPctOverride:     p.TEUPct,
@@ -59,6 +74,24 @@ func Scorecard(ctx context.Context, store *sqlite.Store, p ScorecardParams) *Sco
 		BaselineRef:        p.BaselineRef,
 		ClockNow:           func() time.Time { return now },
 	})
+}
+
+// scorecardUnitCosts are the headline unit costs the scorecard shows: per
+// commit, per merged pull request and per achieved outcome.
+func scorecardUnitCosts(r uniteconomics.Report) []scorecard.UnitCost {
+	out := make([]scorecard.UnitCost, 0, 3)
+	for _, u := range []struct {
+		label string
+		unit  uniteconomics.Unit
+	}{{"commit", r.Commits}, {"merged PR", r.PRs}, {"achieved outcome", r.Achieved}} {
+		c := scorecard.UnitCost{Unit: u.label, Units: u.unit.Current.Units, ChangePct: u.unit.ChangePct,
+			BaselinePerUnitUSD: u.unit.Baseline.PerUnitUSD}
+		if v := u.unit.Current.PerUnitUSD; v != nil {
+			c.PerUnitUSD = *v
+		}
+		out = append(out, c)
+	}
+	return out
 }
 
 // agentKPIs derives the KPIs the event store cannot: CGR and RGR need

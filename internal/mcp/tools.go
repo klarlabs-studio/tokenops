@@ -9,6 +9,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
+	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
 
 	"go.klarlabs.de/tokenops/internal/capability/money"
@@ -65,6 +66,10 @@ type topConsumersInput struct {
 type costPerCommitInput struct {
 	Since string `json:"since,omitempty" jsonschema:"description=RFC3339 timestamp or duration like '7d'; default 7d"`
 	Limit int    `json:"limit,omitempty" jsonschema:"description=Most recent commits to list (default 20); the totals cover them all"`
+}
+
+type unitCostsInput struct {
+	Since string `json:"since,omitempty" jsonschema:"description=Start of the period: RFC3339 timestamp or duration like '7d'; default 7d. The baseline is the 4 weeks before it."`
 }
 
 // sinceOrDefault is since parsed, or def before now when it is empty.
@@ -219,6 +224,23 @@ func RegisterTools(s *Server, d Deps) error {
 				limit = 20
 			}
 			r = r.Newest(limit)
+			return &r, nil
+		})
+
+	s.Tool("tokenops_unit_costs").
+		Description("What a unit of finished work cost, against the operator's four weeks before: per commit, per merged pull request, per recorded and per achieved outcome, per commit of each change class (feature, bugfix, refactor, test, docs, chore), and on a flat-rate plan each pull request and outcome as an estimated share of a plan window. Work no unit took is listed by why. Derived figures only.").
+		OutputSchema(uniteconomics.Report{}).
+		Handler(func(ctx context.Context, in unitCostsInput) (*uniteconomics.Report, error) {
+			since, err := sinceOrDefault(in.Since, uniteconomics.DefaultDays*24*time.Hour)
+			if err != nil {
+				return nil, inputError(err)
+			}
+			r, err := uniteconomics.Compute(ctx, uniteconomics.Deps{
+				Turns: commits.TurnsIn(d.Aggregator, spending.Window{}), Events: d.Store,
+			}, since, time.Now())
+			if err != nil {
+				return nil, err
+			}
 			return &r, nil
 		})
 

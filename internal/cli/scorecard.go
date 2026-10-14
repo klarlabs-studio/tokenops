@@ -52,12 +52,19 @@ values and --compare to diff against a stored baseline.`,
 				return err
 			}
 			defer closeStore()
+			// Unit costs price the turns; without a readable config the
+			// scorecard is graded as before and they are left off.
+			var eng *spending.Engine
+			if cfg, err := loadConfig(rf); err == nil {
+				eng, _ = buildSpendEngine(cfg)
+			}
 			s := spending.Scorecard(cmd.Context(), store, spending.ScorecardParams{
 				SinceDays:   sinceDays,
 				FVTSeconds:  fvtOverride,
 				TEUPct:      teuOverride,
 				SACPct:      sacOverride,
 				BaselineRef: baselineRef,
+				Spend:       eng,
 			})
 
 			if jsonOut {

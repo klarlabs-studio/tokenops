@@ -184,6 +184,7 @@ spend within the selected window. It surfaces:
 	cmd.Flags().StringSliceVar(&includeSrcs, "include-source", nil,
 		"re-admit an excluded event source (repeatable, comma-separated): mcp-session")
 	cmd.AddCommand(newSpendExportCmd(rf))
+	cmd.AddCommand(newSpendUnitsCmd(rf))
 	return cmd
 }
 
