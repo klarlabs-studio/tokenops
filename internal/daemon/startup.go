@@ -337,6 +337,9 @@ func (s *startup) startBackgroundRefreshers(context.Context) error {
 
 	// So is spend anomaly detection, which reads four weeks of turns.
 	startAnomalyRuntime(s.cfg, s.components, s.sup, s.logger)
+
+	// And the week's waste report, whose headline the glance shows.
+	startAvoidableRuntime(s.cfg, s.components, s.sup, s.logger)
 	return nil
 }
 
