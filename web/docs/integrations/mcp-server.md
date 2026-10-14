@@ -20,7 +20,7 @@ chosen view is refused with a message saying which ones do.
 | Tool | Answers | Views, actions or settings |
 |---|---|---|
 | `tokenops_glance` | Every plan's windows with pace, spend against limits, the session budget, the coach's findings | `all`, `headroom`, `session_budget`, `findings` |
-| `tokenops_spend` | What was spent and where | `summary`, `top`, `burn`, `forecast`, `commits`, `units` |
+| `tokenops_spend` | What was spent and where | `summary`, `top`, `burn`, `forecast`, `commits`, `units`, `tags` |
 | `tokenops_sessions` | How agent sessions go | `dx`, `story`, `prompts` |
 | `tokenops_status` | Whether TokenOps is working and how it is set up | `status`, `mode`, `config`, `data_sources`, `vendor_usage`, `version` |
 | `tokenops_explain` | What a figure means, or why a decision was made | `term` or `decision_id` |

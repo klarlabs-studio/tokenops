@@ -380,11 +380,51 @@ budgets:                      # evaluated by the active-mode watcher
     basis: spend              # spend (real billed cost, default) |
                               # equivalent (API list-price value incl.
                               # plan-covered usage — use on flat plans)
-    # workflow_id / agent_id optionally scope the limit
+    # workflow_id / agent_id optionally scope the limit;
+    # tag: client=acme scopes it to one allocation tag
+
+allocation:                   # file work under a project, client, cost centre
+  rules:
+    - dir: ~/clients/acme     # this directory and everything under it
+      tags: {client: Acme Corp, project: storefront}
+    - repo: "globex/*"        # origin owner/name, or the directory's name
+      tags: {client: globex}
+    - branch_prefix: spike/
+      tags: {project: research}
+    - harness: codex          # claude-code, codex, opencode, cursor, ...
+      tags: {cost_center: cc-42}
 
 watch:
   interval: 15m               # watcher cadence (default 15m, min 1m)
 ```
+
+## Allocation rules (`allocation`)
+
+Allocation rules file your work under a `project`, a `client` and a
+`cost_center` — virtual tags, in FinOps terms: nothing is tagged where the
+work happens, the daemon derives the tags afterwards, so editing a rule
+re-files past work too.
+
+A rule matches by any of:
+
+| Key | Matches |
+|---|---|
+| `repo` | a glob over the repository's names: `owner/name` from its origin remote, and its top-level directory's name (`acme/*`, `storefront`); case-insensitive |
+| `dir` | an absolute directory glob (`~` is your home); work in a directory under one it matches matches too (`~/clients/acme`, `~/src/*/infra`) |
+| `branch_prefix` | the start of the branch the client recorded for the session |
+| `harness` | the client the work ran in: `claude-code`, `codex`, `opencode`, `cursor`, ... |
+
+Every key a rule names must hold. Each tag is decided on its own: the
+first rule, top to bottom, that matches and sets it gives its value, so a
+broad rule further down fills what a narrow one left unset. Values are at
+most 64 characters.
+
+Sessions are placed from Claude Code's and Codex's transcripts and
+opencode's sessions; a session whose directory no client recorded can only
+be matched by `harness`. The tags show in `tokenops spend --by project`
+(or `client`, `cost_center`), the FOCUS export's `Tags` column, a budget's
+`tag` scope and the scorecard. They stay on this machine: the team plane's
+upload has no field for them, so `tokenops team preview` never shows them.
 
 ## Model routing rules
 
@@ -1004,7 +1044,8 @@ team:
 ```
 
 `repo_names: hidden` files every repository's work under `hidden`; work
-outside a git repository is always filed under `none`.
+outside a git repository is always filed under `none`. Allocation tags are
+never uploaded.
 
 ## OpenTelemetry export
 

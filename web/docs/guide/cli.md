@@ -619,6 +619,31 @@ paths or session ids. The team plane does not receive these figures yet:
 its upload carries per-day buckets, which have no field for a count of
 pull requests or outcomes.
 
+#### Spend by project, client or cost centre
+
+`tokenops spend --by project` (or `client`, `cost_center`) sums the
+window's spend per value of an allocation tag, from the
+[allocation rules](/guide/configuration#allocation-rules-allocation) in
+your config:
+
+```
+Spend by client since 8 Oct 09:00
+  81% of the window's work carries a client
+
+  VALUE                    API EQUIV    BILLED  SESSIONS  TURNS    TOKENS
+  Acme Corp                   $41.20     $0.00         6    212      3.1M
+  globex                      $12.75     $2.10         2     58      880k
+  (untagged)                  $12.40     $0.00              97      1.2M
+    $3.80 of it from sessions whose directory no client recorded
+```
+
+Each session is matched by the directory and branch its client recorded,
+the repository that directory is in and the harness it ran in; work no
+rule tags stays visible as untagged. `--json` gives the report, which
+`GET /api/spend/tags` and the `tokenops_spend` MCP tool (`view: tags`)
+serve too. The rules are evaluated on this machine, and the tags never
+leave it: no team upload carries them.
+
 #### Export to FinOps tools (FOCUS)
 
 `tokenops spend export` writes spend and usage as
@@ -644,10 +669,17 @@ the unit API prices are published in. `ServiceCategory` is
 `AI and Machine Learning`, `ServiceSubcategory` `Generative AI`, `SkuId`
 the model or plan. A plan's charges and per-token charges are separate
 billing accounts (`anthropic/subscription`, `anthropic/pay-as-you-go`).
-Calendar months stand in for billing periods. `Tags` is empty for now.
+Calendar months stand in for billing periods.
 
-Only derived figures are written: providers, models, plans, counts and
-money. No session title, path or prompt is in it. `GET /api/spend/export`
+With [allocation rules](/guide/configuration#allocation-rules-allocation)
+configured, the part of a day's charge that tagged work took is its own
+row, its tags in `Tags` as a JSON object (`{"client":"Acme Corp","project":"storefront"}`);
+the rest stays a row with `Tags` empty, and the rows still add up to the
+charge. The keys are not prefixed: FOCUS asks for no prefix when a
+dataset has one user-defined tag scheme.
+
+Only derived figures are written: providers, models, plans, counts, money
+and your own allocation tags. No session title, path or prompt is in it. `GET /api/spend/export`
 serves the same CSV from the daemon.
 
 ### `tokenops budget {list|set|unset}`
@@ -663,6 +695,7 @@ tokenops budget list --json
 tokenops budget set monthly --limit-usd 200
 tokenops budget set weekly-tokens --basis tokens --limit-tokens 50000000 --window weekly
 tokenops budget set planner --limit-usd 50 --agent-id planner   # one agent only
+tokenops budget set acme --basis equivalent --limit-usd 300 --tag client=acme   # one client's work
 tokenops budget unset monthly
 ```
 
@@ -670,7 +703,10 @@ On a flat-rate plan real spend is $0 at the margin, so a USD limit can
 never trip: use `--basis tokens` with `--limit-tokens`, or
 `--basis equivalent` to watch the API list-price value the subscription
 absorbed. `--workflow-id` and `--agent-id` scope a budget to one workflow
-or agent.
+or agent, and `--tag key=value` to the work an
+[allocation rule](/guide/configuration#allocation-rules-allocation) tags
+(project, client or cost_center). A tagged budget gets threshold alerts,
+not forecasts.
 
 ### `tokenops scorecard`
 
@@ -687,6 +723,12 @@ All grade A–F against tuneable thresholds. CHR is computed from
 events.db; CGR + RGR from JSONL prompt extracts; TCS + DAR from
 JSONL `tool_use` + `tool_result` blocks. Returns `warming_up`
 with a 3-step activation checklist when no real data backs the KPIs.
+
+With [allocation rules](/guide/configuration#allocation-rules-allocation)
+configured, a line under SAC says how much of the period's spend (at API
+prices) they tag: `allocation tags on 81.0% of spend (project 81%, client 64%)`.
+It is reported, not graded. SAC itself counts calls traceable to a
+session, workflow or agent, which every tagged call already is.
 
 Below the grades, **Plan use** lists each provider's plan utilization
 (the average peak of its longest plan window that reset in the period)
