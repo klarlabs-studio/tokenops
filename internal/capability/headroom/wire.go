@@ -49,6 +49,10 @@ type GlancePayload struct {
 	// longest window kind) and coverage (share of tokens a plan covered)
 	// over the last week. Figures only, never prompts.
 	PlanUse *plans.PlanUseReport `json:"plan_use,omitempty"`
+	// PlanAdvice is each bound plan replayed against its other tiers over
+	// the last 30 days: lockouts, cost and peak window share per option,
+	// and a recommendation. Advice only; nothing is switched.
+	PlanAdvice []plans.Advice `json:"plan_advice,omitempty"`
 	// Boundaries are the operator's boundaries that hold now, as advice
 	// for an agent whose harness cannot be refused (ADR 0014). The caller
 	// sets them; Payload leaves them empty.
@@ -85,6 +89,7 @@ func (g Glance) Payload() *GlancePayload {
 		PlanHeadroom:  g.Headroom.Payload(),
 		Accounts:      g.Accounts,
 		PlanUse:       g.PlanUse,
+		PlanAdvice:    g.PlanAdvice,
 	}
 }
 
