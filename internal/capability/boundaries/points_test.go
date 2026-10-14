@@ -268,3 +268,19 @@ func TestHardBudgetWindowAsksAtThePausePoint(t *testing.T) {
 		t.Fatalf("the soft monthly window was enforced: %q", res.Reason)
 	}
 }
+
+func TestWithBudgetsNamesTheRuleOfAHardWindow(t *testing.T) {
+	cfg := config.Default()
+	cfg.Budgets = []config.BudgetConfig{{Name: "team", Windows: []config.BudgetWindowConfig{
+		{Window: "daily", LimitUSD: 10, Mode: "hard", Stage: "enforce"},
+		{Window: "monthly", LimitUSD: 100},
+	}}}
+	readings := []boundaryledger.BudgetReading{
+		{Key: "team:daily", Budget: "team", Window: "daily", Mode: "hard", UsedPct: 50},
+		{Key: "team:monthly", Budget: "team", Window: "monthly", Mode: "soft", UsedPct: 20},
+	}
+	f := WithBudgets(boundaryledger.Figures{}, readings, cfg.BoundaryRules())
+	if len(f.Budgets) != 2 || f.Budgets[0].Rule != "budget-team-daily" || !f.Budgets[0].Enforced || f.Budgets[1].Rule != "" {
+		t.Errorf("budgets = %+v", f.Budgets)
+	}
+}
