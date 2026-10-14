@@ -684,9 +684,9 @@ func publicTools() []publicTool {
 		},
 		{
 			name: "tokenops_coach", title: "Coach", kind: changes,
-			description: "Show or change how much the coach says and does: a preset (observe, advise, guided, autopilot), each power's autonomy, and its verbosity. With no arguments it reports the current settings and what became of its advice.",
+			description: "Show or change how much the coach says and does: a preset (observe, advise, guided, autopilot), each power's autonomy, and its verbosity; or answer its newest tip on the operator's word (tip: acknowledged, expected, snoozed). With no arguments it reports the current settings and what became of its advice.",
 			input:       coachInput{}, output: coachcap.Report{},
-			routes: map[string]route{"": {inner: "tokenops_coach", params: params("preset", "autonomy", "power", "rung", "verbosity")}},
+			routes: map[string]route{"": {inner: "tokenops_coach", params: params("preset", "autonomy", "power", "rung", "verbosity", "tip", "tip_id", "snooze_minutes")}},
 		},
 		{
 			name: "tokenops_experiment", title: "Routing experiment", kind: changes,

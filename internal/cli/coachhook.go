@@ -96,7 +96,9 @@ across sessions, with how to get it back, and never falls back to dollars.
 Unlike a flat per-turn threshold, a cumulative budget catches the long, flat
 sessions where no single turn looks extreme but thousands of turns compound into
 real money. Each budget-fraction alert (50%, 75%, 100%, then every additional
-budget over) fires once, so the coach never nags every turn.
+budget over) fires once, so the coach never nags every turn; past 100% the further
+steps only update the status line. Past coaching.quiet.max_per_day interruptions
+a day, tips wait on the status line too; 'tokenops coach tip' answers them.
 
 Bare invocation is the hook handler (reads Stop JSON on stdin). Use
 'tokenops coach-hook hook' to print the settings.json block (or prefer
@@ -150,6 +152,8 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, plan fun
 		}
 		return quieted(config.PowerInform, kind)
 	}
+	cfg.Held = coachcap.Holder(ledger, now)
+	cfg.BudgetAnswers = func() (int, int) { return coachcap.BudgetAnswers(ledger, now) }
 	provider, known := hookProvider(in, in.isCursorPayload(), in.HookEventName == "session.idle")
 	if known && plan != nil {
 		r := plan(cmd.Context(), provider, now)
@@ -174,7 +178,11 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, plan fun
 		dec = coachhook.Evaluate(dir, in.SessionID, in.TranscriptPath, cfg, now)
 	}
 	coachcap.RecordResolutions(ledger, now, tipResolutions(dec.Resolved))
-	coachcap.RecordTip(ledger, now, dec.OfferID, in.SessionID, dec.TipKind, coachcap.ViaStopHook)
+	via := coachcap.ViaStopHook
+	if dec.Ambient {
+		via = coachcap.ViaAmbient
+	}
+	coachcap.RecordTip(ledger, now, dec.OfferID, in.SessionID, dec.TipKind, via)
 	if !dec.Nudge {
 		return nil // no nudge: exit 0 with no stdout
 	}
@@ -260,6 +268,19 @@ func writeCoachHookStats(out io.Writer, s coachhook.Stats) {
 	}
 	if n := s.Suppressed["ignored_before"]; n > 0 {
 		fmt.Fprintf(out, "  held back because earlier tips like them were ignored: %d\n", n)
+	}
+	if n := s.Suppressed[coachhook.SuppressedEpisode] + s.Suppressed[coachhook.SuppressedDailyBudget]; n > 0 {
+		fmt.Fprintf(out, "  shown on the status line instead of interrupting: %d\n", n)
+		if c := s.Suppressed[coachhook.SuppressedEpisode]; c > 0 {
+			fmt.Fprintf(out, "    %-22s %d\n", "already told (episode)", c)
+		}
+		if c := s.Suppressed[coachhook.SuppressedDailyBudget]; c > 0 {
+			fmt.Fprintf(out, "    %-22s %d\n", "daily budget spent", c)
+		}
+	}
+	if n := s.Suppressed[coachhook.SuppressedSnoozed] + s.Suppressed[coachhook.SuppressedAnswered]; n > 0 {
+		fmt.Fprintf(out, "  held by your answers: %d snoozed, %d already answered\n",
+			s.Suppressed[coachhook.SuppressedSnoozed], s.Suppressed[coachhook.SuppressedAnswered])
 	}
 	if n := s.Suppressed["min_interval"] + s.Suppressed["max_per_session"]; n > 0 {
 		fmt.Fprintf(out, "  held back by coaching.quiet: %d\n", n)
@@ -464,6 +485,7 @@ func quietPolicy(rf *rootFlags) coachhook.Quiet {
 	return coachhook.Quiet{
 		MinInterval:   cfg.Coaching.Quiet.MinInterval,
 		MaxPerSession: cfg.Coaching.Quiet.MaxPerSession,
+		MaxPerDay:     cfg.Coaching.Quiet.InterruptionsPerDay(),
 	}
 }
 

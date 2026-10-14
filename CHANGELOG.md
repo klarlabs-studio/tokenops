@@ -2,9 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- **coach:** you can answer a tip. `tokenops coach tip ack` (seen it), `expected` (normal for me) or `snooze --for 2h` (not now) answers the newest one, and the `tokenops_coach` MCP tool takes the same answer. An acknowledged or expected tip closes its episode, so nothing more of that kind is said in the session. A snooze holds that kind of tip in every session until it ends; a warning that a plan window will run out, or is used up, still speaks. Once most of your answered budget tips are "expected", the session budget is read off your p95 session instead of your p90. `tokenops coach` shows the answers per kind of tip with the share snoozed, and glance flags a kind you snooze most of the time
+- **coach:** a daily interruption budget, `coaching.quiet.max_per_day` (default 6, `-1` for none). Past it, tips do not interrupt the session; each waits on the status line as the session's open tip, and glance says how many waited. Tips about work about to stop still speak
+
 ### Changed
 
 - **coach:** quota tips on a flat-rate plan now warn about running out, not about how much is used. The coach measures each plan window's pace over the last hour and over the last 15 minutes and warns only when both would use the window up before it resets: "at this pace your 5-hour Claude limit runs out in ~1h 20m, 40m before it resets (60% used)". The tips at 50%, 75% and 90% are gone: 90% used ten minutes before the reset lasts and is not worth a word, while 50% half an hour into a five-hour window is. A burst that has stopped, a short spike in an otherwise slow hour, and a meter reading more than 15 minutes old say nothing. Each window gets one warning, and the used-up note stays. The status line shows it short ("Claude 5-hour out in ~1h20m → smaller model"), and `tokenops coach` says what the forecast is for each plan. Once a window resets, the coach records whether it was forecast to run out and whether it did, and `tokenops coach stats` shows the share of forecasts that came true
+- **coach:** past the session budget the coach speaks once. Each further step over it (200%, 300%, …) updates the status line instead of interrupting again
 - **coach:** the session budget the coach's tips measure against is now read off your own sessions instead of a flat $50. Unless you set a budget, it is the p90 of what your sessions cost (API-equivalent) over the last 30 days, once at least 20 are known; until then the $50 default stands. It is re-derived weekly, moves at most 25% a week, and stays between $10 and $500, and a session keeps the budget it started with. The tip says where the figure came from ("62% of $38, your p90 session, from 113 sessions"), and `tokenops coach stats` shows the budget, its evidence and any clamp that held it back. On a machine where 44 of 113 sessions passed $50, the tips now mean "unusual for you" rather than firing in four sessions of ten
 
 ### Fixed
