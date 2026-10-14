@@ -77,6 +77,9 @@ type Scorecard struct {
 	// UnitCosts is what a unit of finished work cost over the period,
 	// against the four weeks before. Reported, not graded.
 	UnitCosts []UnitCost `json:"unit_costs,omitempty"`
+	// Allocation is how much of the period's spend the allocation rules
+	// tag, shown with SAC. Reported, not graded; nil without rules.
+	Allocation *AllocationCoverage `json:"allocation,omitempty"`
 	// Checklist is populated only when no KPI was computed from real
 	// data. Renderers should show the checklist instead of an F grade
 	// — defaulted KPIs are not a verdict on the operator.
@@ -415,12 +418,14 @@ func (s *Scorecard) MarshalJSON() ([]byte, error) {
 		BaselineRef          string               `json:"baseline_ref,omitempty"`
 		PlanUse              *plans.PlanUseReport `json:"plan_use,omitempty"`
 		UnitCosts            []UnitCost           `json:"unit_costs,omitempty"`
+		Allocation           *AllocationCoverage  `json:"allocation,omitempty"`
 	}{
 		GeneratedAt:  s.GeneratedAt,
 		OverallGrade: s.OverallGrade,
 		BaselineRef:  s.BaselineRef,
 		PlanUse:      s.PlanUse,
 		UnitCosts:    s.UnitCosts,
+		Allocation:   s.Allocation,
 	}
 	// An unmeasured KPI carries a NaN Value, which encoding/json refuses
 	// outright. Omitting the block is also the honest wire shape: a
@@ -485,6 +490,7 @@ func (s *Scorecard) String() string {
 		renderKPI(s.TokenEfficiency, 1))
 	fmt.Fprintf(&b, "SAC — Spend Attribution Completeness (%%):   %s\n",
 		renderKPI(s.SpendAttribution, 1))
+	writeAllocation(&b, s.Allocation)
 	if s.CacheHitRatio.Grade != "" {
 		fmt.Fprintf(&b, "CHR — Cache Hit Ratio (%%):                  %.1f [%s]\n",
 			s.CacheHitRatio.Value, s.CacheHitRatio.Grade)

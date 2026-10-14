@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
@@ -64,7 +65,7 @@ func (a *AnalyticsHandlers) scorecard(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
-	writeAPIJSON(w, http.StatusOK, spending.Scorecard(r.Context(), a.store, spending.ScorecardParams{SinceDays: days, Spend: a.spend}))
+	writeAPIJSON(w, http.StatusOK, spending.Scorecard(r.Context(), a.store, spending.ScorecardParams{SinceDays: days, Spend: a.spend, Allocation: a.allocationRules()}))
 }
 
 // pricingHandler serves the rate card. It needs no event store, so it is
@@ -139,4 +140,12 @@ func (a *AnalyticsHandlers) spendCommits(w http.ResponseWriter, r *http.Request)
 		limit = 50
 	}
 	writeAPIJSON(w, http.StatusOK, res.Newest(limit).WithoutSubjects())
+}
+
+// allocationRules are the configured allocation rules, none when unset.
+func (a *AnalyticsHandlers) allocationRules() []allocation.Rule {
+	if a.allocation == nil {
+		return nil
+	}
+	return a.allocation()
 }

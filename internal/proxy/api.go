@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
@@ -22,6 +23,16 @@ type AnalyticsHandlers struct {
 	aggregator *spending.EventAggregator
 	spend      *spend.Engine
 	workflows  *workflowtrace.Reader
+	// allocation returns the allocation rules the scorecard measures
+	// tagged spend with; nil tags nothing.
+	allocation func() []allocation.Rule
+}
+
+// WithAllocationRules has the scorecard show how much spend the rules
+// return tag.
+func (a *AnalyticsHandlers) WithAllocationRules(rules func() []allocation.Rule) *AnalyticsHandlers {
+	a.allocation = rules
+	return a
 }
 
 // NewAnalyticsHandlers builds the handlers. Store, aggregator, and

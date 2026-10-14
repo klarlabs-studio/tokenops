@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts"
@@ -29,6 +30,9 @@ type ScorecardParams struct {
 	// Spend prices the turns the unit costs are measured from; nil leaves
 	// unit costs off the scorecard.
 	Spend *Engine
+	// Allocation are the allocation rules; with Spend, the scorecard
+	// shows how much of the period's spend they tag.
+	Allocation []allocation.Rule
 }
 
 // ScorecardReport is the scorecard answer, named here so adapters can
@@ -52,20 +56,26 @@ func Scorecard(ctx context.Context, store *sqlite.Store, p ScorecardParams) *Sco
 		days = 7
 	}
 	var reader scorecard.EventReader
-	var units []scorecard.UnitCost
+	var (
+		units []scorecard.UnitCost
+		alloc *scorecard.AllocationCoverage
+	)
 	if store != nil {
 		reader = store
 		if p.Spend != nil {
 			agg := NewAggregator(store, p.Spend)
+			since := now.Add(-time.Duration(days) * 24 * time.Hour)
 			r, err := uniteconomics.Compute(ctx, uniteconomics.Deps{Turns: commits.TurnsIn(agg, Window{}), Events: store},
-				now.Add(-time.Duration(days)*24*time.Hour), now)
+				since, now)
 			if err == nil {
 				units = scorecardUnitCosts(r)
 			}
+			alloc = allocationCoverage(ctx, agg, p.Allocation, since, now)
 		}
 	}
 	return scorecard.Build(ctx, reader, scorecard.BuildParams{
 		UnitCosts:          units,
+		Allocation:         alloc,
 		SinceDays:          days,
 		FVTSecondsOverride: p.FVTSeconds,
 		TEUPctOverride:     p.TEUPct,
@@ -151,4 +161,18 @@ func withoutLoopSentinels(in []prompts.UserPrompt) []prompts.UserPrompt {
 		out = append(out, p)
 	}
 	return out
+}
+
+// allocationCoverage is how much of [since, now)'s spend the rules tag;
+// nil without rules or when the turns cannot be read.
+func allocationCoverage(ctx context.Context, agg *EventAggregator, rules []allocation.Rule, since, now time.Time) *scorecard.AllocationCoverage {
+	if len(rules) == 0 {
+		return nil
+	}
+	turns, err := allocation.Tagged(ctx, allocation.Deps{Turns: commits.TurnsIn(agg, Window{}), Rules: rules}, since, now)
+	if err != nil {
+		return nil
+	}
+	c := allocation.CoverageOf(len(rules), turns)
+	return &scorecard.AllocationCoverage{Rules: c.Rules, TaggedPct: c.TaggedPct, ByKeyPct: c.ByKeyPct}
 }
