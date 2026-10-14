@@ -93,6 +93,31 @@ func TestCoachValidation(t *testing.T) {
 	}
 }
 
+// The holdout is on at 10% unless the operator opts out, and never more.
+func TestCoachHoldoutPercent(t *testing.T) {
+	pct := func(n int) *int { return &n }
+	for _, tc := range []struct {
+		set  *int
+		want int
+	}{{nil, DefaultHoldoutPercent}, {pct(0), 0}, {pct(5), 5}, {pct(10), 10}} {
+		c := Default()
+		c.Coach.Holdout = tc.set
+		if got := c.CoachHoldoutPercent(); got != tc.want {
+			t.Errorf("holdout %v = %d, want %d", tc.set, got, tc.want)
+		}
+		if err := c.Validate(); err != nil {
+			t.Errorf("holdout %v rejected: %v", tc.set, err)
+		}
+	}
+	for _, bad := range []int{-1, 11, 50} {
+		c := Default()
+		c.Coach.Holdout = pct(bad)
+		if err := c.Validate(); err == nil {
+			t.Errorf("holdout %d accepted", bad)
+		}
+	}
+}
+
 func TestInterruptionsPerDay(t *testing.T) {
 	for _, tc := range []struct{ set, want int }{{0, DefaultInterruptionsPerDay}, {-1, 0}, {3, 3}} {
 		if got := (QuietConfig{MaxPerDay: tc.set}).InterruptionsPerDay(); got != tc.want {

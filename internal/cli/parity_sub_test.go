@@ -20,6 +20,7 @@ var subToMCP = map[string][]string{
 	"coach set":             {"tokenops_coach"},
 	"coach off":             {"tokenops_coach"},
 	"coach tip":             {"tokenops_coach"},
+	"coach holdout":         {"tokenops_coach"},
 	"coach preset":          {"tokenops_coach"},
 	"config show":           {"tokenops_status"},
 	"experiment start":      {"tokenops_experiment"},

@@ -1181,7 +1181,22 @@ held back, and how the run-out forecasts fared once their windows reset
 (forecasts that came true, and windows that ran out unforecast); and files
 read again, which re-reads were waste, and which the read guard refused. Both ledgers fill while the coach only observes, so
 this shows what you would hear before you let it speak. `--json` gives
-`budget` and `read_guard`.
+`budget`, `read_guard` and `savings`.
+
+The savings ledger lists every intervention by kind with what it was
+expected to save and what it is shown to have saved. Each tip shown, each
+re-read refused and each model move suggested writes a row with its expected
+saving, the figures it rested on, and its decision ID (no prompt, path or
+file content). Expected is the coach's estimate when it acted: for a compact
+or budget tip, the context a compaction would remove, re-read at the model's
+cache-read rate on every later turn. Realized comes only from the holdout
+below, so a potential saving is never shown as a delivered one.
+
+```text
+Savings ledger — expected when acting, realized as the holdout measured it
+  compact tips: 41 shown, 5 held back · expected ~$0.31 per later turn, if acted on · realized $3.80 per tip (spend after: $6.10 shown vs $9.90 held back)
+  re-reads refused: 212 · expected ~1.9M tokens · realized not established: no intervention of this kind was held back, so there is nothing to compare against
+```
 
 It also shows the session budget the tips are measured against and where
 it came from. Unless you set one (`tokenops hooks install --coach --budget
@@ -1227,6 +1242,28 @@ because a tip snoozed that often fires when it is not wanted. The
 
 Each day the coach interrupts at most `coaching.quiet.max_per_day` times
 (default 6) across sessions. Past that, tips wait on the status line.
+
+### `tokenops coach holdout [off|on|<percent>]`
+
+To learn whether a tip pays, the coach holds a few sessions' cost and drift
+tips back: the 50% and 75% session-budget tips and the compact tip. A held
+tip is not said, not put on the status line, and not counted against the
+quiet policy; it is logged as shadow, with the same expected saving and
+evidence, and settled the same way (a compaction, a model switch, nothing).
+Which sessions are held is random but fixed per session, so a held session
+stays held for the episode.
+
+It is on at 10% and never more. Tips about work about to stop are never
+held: a plan window forecast to run out or used up, and the session budget
+spent. `tokenops coach holdout off` opts out, `on` restores 10%, and a
+number from 0 to 10 sets the share; a preset keeps your choice. The
+`tokenops_coach` MCP tool takes the same setting.
+
+`tokenops verify` and `tokenops coach stats` compare the sessions that got a
+tip with the ones it was held from: the spend after the tip, whether the
+context was compacted, and whether a commit landed in the session's
+repository within a day. The difference in spend is the tip's realized
+saving. Until each side has at least 5 sessions it is "not established".
 
 ### `tokenops coach delivery`
 
@@ -1858,8 +1895,11 @@ tokenops verify --experiment-id experiment:6f1c… --json
 ```
 
 When execution-linked randomized assignments exist, it compares a complete
-[experiment](#tokenops-experiment-start-status-stop)'s paired arms instead;
-`--experiment-id` picks one when the window holds several. A randomized
+[experiment](#tokenops-experiment-start-status-stop)'s paired arms instead.
+With several in the window it compares the only one that can be compared,
+or the most recent of several, and says which ("compared experiment:b, the
+most recent of 2 comparable experiments; select experiment:a with
+--experiment-id"); `--experiment-id` picks another. A randomized
 comparison needs complete pairs, measured tokens and explicit outcomes;
 otherwise `verify` falls back to the observational view and says why.
 
@@ -1867,6 +1907,11 @@ Explicit human and verifier outcomes count toward each cohort's assessed
 success rate, so a quality drop can flag harm even when the token count
 fell; missing outcomes stay unknown. Randomized results are evidence about
 that experiment, not a guarantee for other work.
+
+It also lists the [coach holdout](#tokenops-coach-holdout-off-on-percent):
+per kind of tip, how many were shown and held back, the expected saving, and
+the realized one or why it is not established yet. `--json` gives it as
+`holdout`.
 
 ### `tokenops optimizations`
 

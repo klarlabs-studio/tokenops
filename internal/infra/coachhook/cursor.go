@@ -169,6 +169,7 @@ func evaluateCursor(dir string, c cursorTurn, cfg Config, now time.Time) Decisio
 		}
 	}
 
+	cfg.applyHoldout(&dec, &st, before, c.modelName(), cursorContextTokens(c), now)
 	cfg.deliver(dir, &dec, &st, before, prevMax, now)
 	offerTip(&st, &dec, cfg, tipKind(dec), c.modelName(), cursorContextTokens(c))
 	saveSession(dir, c.ConversationID, st)
@@ -176,7 +177,7 @@ func evaluateCursor(dir string, c cursorTurn, cfg Config, now time.Time) Decisio
 		TS: now.UTC(), Session: c.ConversationID,
 		CumulativeUSD: st.CumulativeUSD, BudgetUSD: budget,
 		Fraction: frac, TierFired: dec.FiredFraction, Model: c.modelName(),
-		Suppressed: dec.Suppressed, Unpriced: dec.UnpricedModel, Ambient: dec.Ambient,
+		Suppressed: dec.Suppressed, Unpriced: dec.UnpricedModel, Ambient: dec.Ambient, Holdout: dec.Holdout,
 	})
 	return dec
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/config"
 
 	"github.com/spf13/cobra"
@@ -94,7 +95,14 @@ func runReadGuardHook(cmd *cobra.Command, mode readguard.Mode, dir string) error
 		return nil // not a Read we handle -> no-op (allow normal flow)
 	}
 	ranged := len(in.ToolInput.Offset) > 0 || len(in.ToolInput.Limit) > 0
-	dec := readguard.Evaluate(dir, in.SessionID, in.AgentID, in.ToolInput.FilePath, ranged, mode, time.Now())
+	now := time.Now()
+	dec := readguard.Evaluate(dir, in.SessionID, in.AgentID, in.ToolInput.FilePath, ranged, mode, now)
+	if dec.Action == readguard.ActionBlocked || dec.Action == readguard.ActionWouldBlock {
+		// A refusal is an action boundary: recorded with its expected
+		// saving, never held back. Observe mode's would-block is shadow.
+		savings.RecordReadGuard(savings.DefaultLedger(), now, coachcap.NewID(), in.SessionID,
+			dec.Action == readguard.ActionWouldBlock, dec.EstTokens)
+	}
 	if !dec.Block {
 		return nil // allow: exit 0 with no stdout
 	}

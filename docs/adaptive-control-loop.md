@@ -78,8 +78,9 @@ cohorts remain observational. When execution-linked randomized assignments
 exist, verification can compare one selected trial's complete pairs; every
 assigned execution must be reconstructed and have measured tokens and an
 explicit outcome. Incomplete or mixed evidence falls back to observational
-reporting. Use `tokenops verify --experiment-id <id>` when multiple trials are
-present. The randomized result applies to that trial's executions, not to all
+reporting. With several trials present, `tokenops verify` compares the only one
+that can be compared, or the most recent of several, and says which; use
+`--experiment-id <id>` to pick another. The randomized result applies to that trial's executions, not to all
 work or future routing. Plan-included token use is
 reported separately by provider as quota consumption, never converted to
 synthetic dollar savings. Metered spend remains unreported by this comparison
