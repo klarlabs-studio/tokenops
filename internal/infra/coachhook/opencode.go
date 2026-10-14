@@ -87,6 +87,7 @@ func EvaluateOpencode(dir, dbPath, sessionID string, cfg Config, now time.Time) 
 		}
 	}
 
+	evaluateSpendBudgets(dir, &dec, &st, cfg, now)
 	cfg.applyHoldout(&dec, &st, before, model, contextTokens, now)
 	cfg.deliver(dir, &dec, &st, before, prevMax, now)
 	offerTip(&st, &dec, cfg, tipKind(dec), model, contextTokens)

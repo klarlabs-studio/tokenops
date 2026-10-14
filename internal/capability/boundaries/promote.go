@@ -46,10 +46,15 @@ func setStage(path, name string, stage domain.Stage) (Promoted, error) {
 			found = true
 		}
 	}
+	// A hard budget window is enforced by a rule of its own, whose stage
+	// is written beside the window.
+	if !found {
+		found = cfg.SetBudgetRuleStage(name, string(stage))
+	}
 	if !found {
 		return Promoted{}, actions.InputError{Err: fmt.Errorf("no boundary named %q in %s", name, path)}
 	}
-	if _, err := domain.Parse(cfg.Boundaries); err != nil {
+	if err := cfg.Validate(); err != nil {
 		return Promoted{}, actions.InputError{Err: err}
 	}
 	if err := config.WriteMutable(path, cfg); err != nil {

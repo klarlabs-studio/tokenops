@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -98,7 +99,7 @@ func TestBudgetSetKeepsTokenCeilingOnEdit(t *testing.T) {
 	want := config.BudgetConfig{
 		Name: "weekly-tokens", Window: "weekly", LimitTokens: 15_000_000_000, Basis: "tokens", WarnAt: 0.6,
 	}
-	if len(cfg.Budgets) != 1 || cfg.Budgets[0] != want {
+	if len(cfg.Budgets) != 1 || !reflect.DeepEqual(cfg.Budgets[0], want) {
 		t.Errorf("budgets = %+v; want [%+v]", cfg.Budgets, want)
 	}
 }

@@ -283,3 +283,21 @@ option:
 - **A one-step approval is spent.** The server returns an existing request
   only while it is pending or was answered for the session; after a
   one-step answer the next step is a new request.
+
+## Hard budget windows (amended 2026-10-15)
+
+- **A hard budget window is a boundary, not a second enforcement path.** A
+  budget may hold several windows (#661), each soft (the coach notifies) or
+  hard. A hard window is read as a `spend` rule named
+  `budget-<budget>-<window>`, holding when that window's `budget_used_pct`
+  is `>= 100`, requiring `ask` (default) or `deny`. It is evaluated, shown,
+  promoted and demoted like any local rule; its stage is written beside the
+  window in `config.yaml`, and it starts in shadow.
+- **Each window has its own figure.** With several windows the daemon
+  writes `budget_used_pct` per window as `<budget>:<window>`, and under the
+  budget's name its fullest window, so a rule naming the budget keeps
+  meaning "any of its windows". A single-window budget keeps its name as
+  its key.
+- **Agents cannot loosen a hard window.** The daemon API and the MCP tool
+  may make a window hard, but change or remove a budget holding one only
+  from a terminal, for the same reason they cannot promote or approve.

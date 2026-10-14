@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/boundaries"
+	"go.klarlabs.de/tokenops/internal/capability/budgets"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
@@ -49,6 +50,7 @@ func (s *Server) registerPlanRoutes(mux RouteMux) {
 		}
 		p := g.Payload()
 		p.Boundaries = boundaries.GlanceAdvice(d.Config, g.Headroom.Reports)
+		p.SpendBudgets = budgets.Current("", now)
 		return p, nil
 	}))
 	// The findings rank what the coach and the session analysis observed

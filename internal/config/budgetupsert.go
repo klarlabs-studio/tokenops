@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
 )
 
 // DefaultBudgetWindow is the window a new budget gets when the caller
@@ -16,6 +18,11 @@ var ErrBudgetNoCeiling = errors.New("a budget needs a ceiling: limit_usd, or lim
 // BudgetUpdate is a caller's edit to one budget. A zero field means "not
 // supplied": the upsert keeps what the stored budget already has, so an
 // edit names only what it changes.
+//
+// Window, the limits, Mode and Require belong to one window of the
+// budget. On a budget with one window they edit it, and naming another
+// window moves it there. On a budget with several, Window names the one
+// to edit. AddWindow adds Window as a further window.
 type BudgetUpdate struct {
 	Name        string
 	Window      string
@@ -26,6 +33,12 @@ type BudgetUpdate struct {
 	WorkflowID  string
 	AgentID     string
 	Basis       string
+	// Mode is soft (notify) or hard (enforced through a spend boundary).
+	Mode string
+	// Require is what a hard window requires at its limit: ask or deny.
+	Require string
+	// AddWindow adds Window to the budget rather than editing one.
+	AddWindow bool
 }
 
 // BudgetUpsert is what an upsert wrote.
@@ -56,8 +69,22 @@ func (c *Config) UpsertBudget(u BudgetUpdate) (BudgetUpsert, error) {
 		b = c.Budgets[idx]
 	}
 	u.mergeInto(&b)
-	if b.LimitUSD <= 0 && b.LimitTokens <= 0 {
-		return BudgetUpsert{}, ErrBudgetNoCeiling
+	ws := b.EffectiveWindows()
+	i, err := u.target(name, ws, idx < 0)
+	if err != nil {
+		return BudgetUpsert{}, err
+	}
+	if i == len(ws) {
+		ws = append(ws, BudgetWindowConfig{})
+	}
+	if i >= 0 {
+		u.mergeWindowInto(&ws[i])
+	}
+	b.setWindows(ws)
+	for _, w := range ws {
+		if w.LimitUSD <= 0 && w.LimitTokens <= 0 {
+			return BudgetUpsert{}, ErrBudgetNoCeiling
+		}
 	}
 	if err := b.Validate(); err != nil {
 		return BudgetUpsert{}, fmt.Errorf("budget %q: %w", name, err)
@@ -68,6 +95,40 @@ func (c *Config) UpsertBudget(u BudgetUpdate) (BudgetUpsert, error) {
 	}
 	c.Budgets = append(c.Budgets, b)
 	return BudgetUpsert{Budget: b, Created: true}, nil
+}
+
+// target is the index in ws of the window u edits: len(ws) for a window
+// to add, and -1 when u changes only the budget-wide fields.
+func (u BudgetUpdate) target(name string, ws []BudgetWindowConfig, created bool) (int, error) {
+	window := strings.ToLower(strings.TrimSpace(u.Window))
+	if u.AddWindow && !created {
+		if window == "" {
+			return 0, fmt.Errorf("budget %q: name the window to add", name)
+		}
+		if windowIndex(ws, window) >= 0 {
+			return 0, fmt.Errorf("budget %q already has a %s window", name, window)
+		}
+		return len(ws), nil
+	}
+	if window != "" {
+		if j := windowIndex(ws, window); j >= 0 {
+			return j, nil
+		}
+	}
+	if len(ws) == 1 {
+		return 0, nil
+	}
+	if window != "" {
+		return 0, fmt.Errorf("budget %q has no %s window (it has %s); add it as a further window", name, window, windowNames(ws))
+	}
+	if u.windowFields() {
+		return 0, fmt.Errorf("budget %q has several windows (%s): %w", name, windowNames(ws), errNoWindowNamed)
+	}
+	return -1, nil
+}
+
+func (u BudgetUpdate) windowFields() bool {
+	return u.LimitUSD != 0 || u.LimitTokens != 0 || strings.TrimSpace(u.Mode) != "" || strings.TrimSpace(u.Require) != ""
 }
 
 // RemoveBudget deletes the budget with name and reports whether one existed.
@@ -89,19 +150,10 @@ func (c *Config) budgetIndex(name string) int {
 	return -1
 }
 
-// mergeInto overwrites only the fields u supplies. Non-zero rather than
-// positive counts as supplied, so a negative limit reaches validation and
-// is refused instead of being mistaken for "leave it alone".
+// mergeInto overwrites only the budget-wide fields u supplies. Non-zero
+// rather than positive counts as supplied, so a negative threshold reaches
+// validation and is refused instead of being mistaken for "leave it alone".
 func (u BudgetUpdate) mergeInto(b *BudgetConfig) {
-	if w := strings.TrimSpace(u.Window); w != "" {
-		b.Window = strings.ToLower(w)
-	}
-	if u.LimitUSD != 0 {
-		b.LimitUSD = u.LimitUSD
-	}
-	if u.LimitTokens != 0 {
-		b.LimitTokens = u.LimitTokens
-	}
 	if u.WarnAt != 0 {
 		b.WarnAt = u.WarnAt
 	}
@@ -116,5 +168,30 @@ func (u BudgetUpdate) mergeInto(b *BudgetConfig) {
 	}
 	if basis := strings.TrimSpace(u.Basis); basis != "" {
 		b.Basis = strings.ToLower(basis)
+	}
+}
+
+// mergeWindowInto overwrites only the window fields u supplies. A window
+// that turns soft drops its require and stage, so turning it hard again
+// starts over in shadow, as every new boundary does.
+func (u BudgetUpdate) mergeWindowInto(w *BudgetWindowConfig) {
+	if v := strings.TrimSpace(u.Window); v != "" {
+		w.Window = strings.ToLower(v)
+	}
+	if u.LimitUSD != 0 {
+		w.LimitUSD = u.LimitUSD
+	}
+	if u.LimitTokens != 0 {
+		w.LimitTokens = u.LimitTokens
+	}
+	switch mode := strings.ToLower(strings.TrimSpace(u.Mode)); mode {
+	case "":
+	case budget.ModeSoft:
+		w.Mode, w.Require, w.Stage = "", "", ""
+	default:
+		w.Mode = mode
+	}
+	if r := strings.TrimSpace(u.Require); r != "" {
+		w.Require = strings.ToLower(r)
 	}
 }

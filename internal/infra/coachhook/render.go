@@ -124,6 +124,8 @@ func tipKind(dec Decision) string {
 		return burnKind
 	case dec.QuotaTier > 0:
 		return quotaKind(dec.QuotaTier)
+	case dec.SpendKind != "":
+		return dec.SpendKind
 	case dec.FiredFraction > 0:
 		return budgetKind(dec.FiredFraction)
 	}

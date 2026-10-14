@@ -404,8 +404,39 @@ type Figures struct {
 	// PlanLeftPct is each provider's share left, by window ("5h", "week").
 	PlanLeftPct map[string]map[string]float64 `json:"plan_left_pct,omitempty"`
 	// BudgetUsedPct is each configured budget's share used in its current
-	// window, by budget name.
+	// window, by budget name. A budget with several windows has one entry
+	// per window ("name:daily") and one by its name, its fullest window.
 	BudgetUsedPct map[string]float64 `json:"budget_used_pct,omitempty"`
+	// Budgets are the same windows in full, for the surfaces that show
+	// them: the coach's tips and the glance.
+	Budgets []BudgetReading `json:"budgets,omitempty"`
+}
+
+// BudgetReading is one budget window as the daemon measured it. Figures
+// only: a name the operator gave, amounts and shares.
+type BudgetReading struct {
+	// Key is the window's figure key in BudgetUsedPct.
+	Key    string `json:"key"`
+	Budget string `json:"budget"`
+	Window string `json:"window"`
+	// Mode is soft (notify) or hard (enforced by Rule).
+	Mode string `json:"mode"`
+	// Basis is spend, equivalent or tokens; Used and Limit are in its unit.
+	Basis   string  `json:"basis,omitempty"`
+	Used    float64 `json:"used"`
+	Limit   float64 `json:"limit"`
+	UsedPct float64 `json:"used_pct"`
+	// WarnPct and CritPct are the window's alert thresholds, in percent.
+	WarnPct     float64   `json:"warn_pct"`
+	CritPct     float64   `json:"crit_pct"`
+	WindowStart time.Time `json:"window_start"`
+	ResetsAt    time.Time `json:"resets_at"`
+	// Rule is the boundary a hard window is enforced by, and Enforced
+	// whether it binds or is still in shadow, and Require what it requires
+	// at the limit (ask or deny).
+	Rule     string `json:"rule,omitempty"`
+	Enforced bool   `json:"enforced,omitempty"`
+	Require  string `json:"require,omitempty"`
 }
 
 const figuresFile = "figures.json"

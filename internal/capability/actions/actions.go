@@ -77,10 +77,13 @@ func SetMode(path, mode string) (ModeChange, error) {
 	return ModeChange{Mode: cfg.Mode, Config: path, Active: cfg.ActiveMode()}, nil
 }
 
-// BudgetRequest creates, updates or deletes a budget.
+// BudgetRequest creates, updates or deletes a budget, or removes one of
+// its windows.
 type BudgetRequest struct {
 	config.BudgetUpdate
 	Delete bool
+	// RemoveWindow removes the budget's window of that name.
+	RemoveWindow string
 }
 
 // BudgetChange is every budget after a change.
@@ -89,13 +92,34 @@ type BudgetChange struct {
 	Config  string                `json:"config"`
 }
 
-// SetBudget upserts a budget by name, or deletes it. An update changes only
-// the fields given.
+// SetBudget upserts a budget by name, deletes it, or removes one of its
+// windows. An update changes only the fields given.
+//
+// It serves the daemon API and the MCP tool, which the agent a hard
+// window limits can reach. So, as with a boundary's stage (ADR 0014), a
+// budget that holds a hard window is changed or removed only from a
+// terminal; here a budget can be made hard, which starts in shadow, but
+// not loosened.
 func SetBudget(path string, req BudgetRequest) (BudgetChange, error) {
 	cfg, err := edit(path, func(c *config.Config) error {
-		if req.Delete {
+		for _, b := range c.Budgets {
+			if b.Name == req.Name && b.HasHardWindow() {
+				return inputErr(fmt.Errorf("budget %q has a hard window, enforced by a boundary: change or remove it from a terminal with `tokenops budget set|unset`", req.Name))
+			}
+		}
+		switch {
+		case req.Delete:
 			if !c.RemoveBudget(req.Name) {
 				return inputErr(errors.New("no budget named " + req.Name))
+			}
+			return nil
+		case req.RemoveWindow != "":
+			removed, err := c.RemoveBudgetWindow(req.Name, req.RemoveWindow)
+			if err != nil {
+				return inputErr(err)
+			}
+			if !removed {
+				return inputErr(fmt.Errorf("budget %q has no %s window", req.Name, req.RemoveWindow))
 			}
 			return nil
 		}

@@ -2,6 +2,7 @@ package coachhook
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/learning"
@@ -60,7 +61,8 @@ func quietable(kind string) bool {
 	case "budget_50", "budget_75", "quota_50", "quota_75", compactKind:
 		return true
 	}
-	return false
+	// A budget window's thresholds can wait; that it is spent cannot.
+	return strings.HasPrefix(kind, spendFamily+"_") && kind != spendOverKind
 }
 
 // hold decides whether a tip of kind must not be spoken now: the quiet
@@ -142,6 +144,10 @@ func offerTip(st *sessionState, dec *Decision, cfg Config, kind, model string, c
 		if !dec.runsOutAt.IsZero() {
 			st.OpenTip.RunsOutAt = dec.runsOutAt.UTC()
 		}
+	}
+	if dec.SpendKind != "" {
+		st.OpenTip.Window = spendLabel(dec.spend)
+		st.OpenTip.ResetsAt = dec.spend.ResetsAt.UTC()
 	}
 	dec.OfferID, dec.TipKind = st.OpenTip.ID, kind
 }

@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -29,10 +30,10 @@ func TestUpsertBudgetMergesOntoExisting(t *testing.T) {
 		Name: "weekly-tokens", Window: "weekly",
 		LimitTokens: 15_000_000_000, Basis: "tokens", WarnAt: 0.6,
 	}
-	if len(c.Budgets) != 1 || c.Budgets[0] != want {
+	if len(c.Budgets) != 1 || !reflect.DeepEqual(c.Budgets[0], want) {
 		t.Errorf("budgets = %+v; want [%+v]", c.Budgets, want)
 	}
-	if got.Budget != want {
+	if !reflect.DeepEqual(got.Budget, want) {
 		t.Errorf("returned budget = %+v; want %+v", got.Budget, want)
 	}
 }
@@ -109,7 +110,7 @@ func TestUpsertBudgetLeavesExistingOnRejection(t *testing.T) {
 	if _, err := c.UpsertBudget(BudgetUpdate{Name: "m", Basis: "tokens"}); err == nil {
 		t.Fatal("switching to basis tokens without limit_tokens was accepted")
 	}
-	if c.Budgets[0] != orig {
+	if !reflect.DeepEqual(c.Budgets[0], orig) {
 		t.Errorf("budget mutated by a rejected edit: %+v", c.Budgets[0])
 	}
 }

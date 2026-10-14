@@ -6,6 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
+
 	domain "go.klarlabs.de/tokenops/internal/contexts/boundaries"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
@@ -139,6 +142,28 @@ func Figures(reports []plans.HeadroomReport, budgetUsed map[string]float64, now 
 		}
 	}
 	return out
+}
+
+// WithBudgets adds the measured budget windows to fig, each hard window
+// named with the rule that enforces it and whether that rule binds yet.
+func WithBudgets(fig boundaryledger.Figures, readings []boundaryledger.BudgetReading, rules []domain.Rule) boundaryledger.Figures {
+	byName := map[string]domain.Rule{}
+	for _, r := range rules {
+		if r.Source == domain.SourceLocal {
+			byName[r.Name] = r
+		}
+	}
+	out := make([]boundaryledger.BudgetReading, len(readings))
+	for i, b := range readings {
+		if b.Mode == budget.ModeHard {
+			if r, ok := byName[config.BudgetRuleName(b.Budget, b.Window)]; ok {
+				b.Rule, b.Enforced, b.Require = r.Name, r.Enforced(), r.Require.String()
+			}
+		}
+		out[i] = b
+	}
+	fig.Budgets = out
+	return fig
 }
 
 // windowName maps a vendor window onto the two a rule can name. A window

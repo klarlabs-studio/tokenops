@@ -74,7 +74,15 @@ type BudgetRequest struct {
 	WorkflowID  string  `json:"workflow_id"`
 	AgentID     string  `json:"agent_id"`
 	Basis       string  `json:"basis"`
-	Delete      bool    `json:"delete"`
+	// Mode is soft (notify, the default) or hard (enforced by a spend boundary, starting in shadow).
+	Mode string `json:"mode"`
+	// Require is what a hard window requires at its limit: ask (default) or deny.
+	Require string `json:"require"`
+	// AddWindow adds window as a further window of the budget, e.g. $10 a day beside $100 a month.
+	AddWindow bool `json:"add_window"`
+	// RemoveWindow removes the budget's window of that name.
+	RemoveWindow string `json:"remove_window"`
+	Delete       bool   `json:"delete"`
 }
 
 // RoutingRuleRequest creates or updates the routing rule for a provider and source model, or deletes it.
@@ -150,9 +158,10 @@ func (s *Server) registerActionRoutes(mux RouteMux) {
 		if err := decodeAction(r, &in); err != nil {
 			return nil, err
 		}
-		return actions.SetBudget(path, actions.BudgetRequest{Delete: in.Delete, BudgetUpdate: config.BudgetUpdate{
+		return actions.SetBudget(path, actions.BudgetRequest{Delete: in.Delete, RemoveWindow: in.RemoveWindow, BudgetUpdate: config.BudgetUpdate{
 			Name: in.Name, Window: in.Window, LimitUSD: in.LimitUSD, LimitTokens: in.LimitTokens,
 			WarnAt: in.WarnAt, CritAt: in.CritAt, WorkflowID: in.WorkflowID, AgentID: in.AgentID, Basis: in.Basis,
+			Mode: in.Mode, Require: in.Require, AddWindow: in.AddWindow,
 		}})
 	}))
 	mux.HandleFunc("POST /api/routing/rules", s.action("routing_rule", restart, func(r *http.Request, path string) (any, error) {
