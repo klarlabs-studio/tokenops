@@ -5,6 +5,7 @@ import (
 	"sort"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -34,6 +35,9 @@ type LiveKPIs struct {
 	// CacheStats endpoint uses. Computed when input_tokens > 0.
 	CacheHitRatio float64
 	CHRComputed   bool
+	// PlanUse is each provider's plan utilization and coverage over the
+	// window. It is reported, not graded.
+	PlanUse plans.PlanUseReport
 }
 
 // Compute walks the local event store over [since, now] and derives the
@@ -56,6 +60,11 @@ type LiveKPIs struct {
 // *Computed flag stays false so the caller can substitute a manual or
 // historical value.
 func Compute(ctx context.Context, reader EventReader, since time.Time) (*LiveKPIs, error) {
+	return ComputeAt(ctx, reader, since, time.Now())
+}
+
+// ComputeAt is Compute with the window's end pinned to now.
+func ComputeAt(ctx context.Context, reader EventReader, since, now time.Time) (*LiveKPIs, error) {
 	out := &LiveKPIs{}
 	if reader == nil {
 		return out, nil
@@ -70,6 +79,8 @@ func Compute(ctx context.Context, reader EventReader, since time.Time) (*LiveKPI
 	}
 	// Strip activity-proxy and attribution-less aggregate events so KPIs
 	// reflect real per-session operator activity.
+	// Plan use reads the window readings the exclusions below drop.
+	out.PlanUse = plans.PlanUseFrom(prompts, since, now)
 	prompts = filterExcludedSources(prompts)
 	opts = filterExcludedSources(opts)
 	computeFVT(out, prompts)
