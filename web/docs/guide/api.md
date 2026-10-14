@@ -53,6 +53,7 @@ operator's own.
 | `GET /api/findings` | What the coach and the session analysis observed, ranked, with what to do |
 | `GET /api/plans/headroom` | Each plan: usage, the vendor's windows, spend against the limit, risk |
 | `GET /api/plans/session-budget` | Each plan window: share used, pace, what to do |
+| `GET /api/plans/advice` | Plan right-sizing over `days` (30 by default, up to 90): each plan's windows replayed against its other tiers, metered overflow and the API at list price. Advice only |
 | `GET /api/status` | Readiness, blockers, warnings, next actions |
 | `GET /api/mode` | Operating mode and what each subsystem may do |
 | `GET /api/coach` | The coach's dials and each power's autonomy |

@@ -3,12 +3,14 @@ package mcp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/actions"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -28,6 +30,9 @@ type PlanDeps struct {
 	// Spend prices requests for spend-denominated plans; nil counts only
 	// measured cost.
 	Spend *spending.Engine
+	// AdviceCache keeps the glance's plan advice between calls; nil
+	// replays it on every glance.
+	AdviceCache *headroom.AdviceCache
 }
 
 // activeConfig returns the live Config snapshot: prefers ConfigGetter
@@ -83,8 +88,33 @@ func RegisterPlanTools(s *Server, d PlanDeps) error {
 		Handler(func(ctx context.Context, _ emptyInput) (*planHeadroomResult, error) {
 			return planHeadroom(ctx, d)
 		})
+	s.Tool("tokenops_plan_advice").
+		Description("Plan right-sizing: replay the last days (30 by default, up to 90) of each bound plan's windows against its other tiers, the tiers with metered overflow, and the API at list price. Per option: simulated lockouts and minutes blocked, monthly cost, and the peak window share; then a recommendation with a confidence label. Claude tiers derive from an unverified Pro baseline, which the caveats say. Advice only: it never switches or binds a plan.").
+		OutputSchema(planAdviceResult{}).
+		Handler(func(ctx context.Context, in planAdviceInput) (*planAdviceResult, error) {
+			return planAdvice(ctx, d, in)
+		})
 	registerResourceGlanceTool(s, d)
 	return nil
+}
+
+// planAdviceResult is the capability's wire payload, shared with GET
+// /api/plans/advice and `tokenops plan advise --json`.
+type planAdviceResult = headroom.AdvicePayload
+
+type planAdviceInput struct {
+	Days int `json:"days,omitempty" jsonschema:"minimum=1,maximum=90,description=how far back to replay (default 30)"`
+}
+
+func planAdvice(ctx context.Context, d PlanDeps, in planAdviceInput) (*planAdviceResult, error) {
+	if in.Days < 0 || in.Days > headroom.MaxAdviceDays {
+		return nil, inputError(fmt.Errorf("days must be from 1 to %d", headroom.MaxAdviceDays))
+	}
+	res, err := headroom.Advise(ctx, d.headroomDeps(), headroom.AdviceQuery{Days: in.Days}, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	return res.Payload(), nil
 }
 
 func sessionBudget(ctx context.Context, d PlanDeps) (string, error) {
@@ -130,7 +160,8 @@ func sessionBudgetData(ctx context.Context, d PlanDeps) (*sessionBudgetResult, e
 // nil store stays a nil reader, which the capability answers as storage
 // disabled.
 func (d PlanDeps) headroomDeps() headroom.Deps {
-	deps := headroom.Deps{Config: d.activeConfig(), PlanFollows: actions.RecentPlanFollows}
+	deps := headroom.Deps{Config: d.activeConfig(), PlanFollows: actions.RecentPlanFollows,
+		PlanHistory: planhistory.LoadDefault, AdviceCache: d.AdviceCache}
 	if d.Store != nil {
 		deps.Reader = planStoreReader{store: d.Store}
 	}
