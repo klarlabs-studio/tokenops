@@ -74,6 +74,9 @@ type Scorecard struct {
 	// graded: a plan used at 40% is a fact about the seat, not a fault.
 	PlanUse     *plans.PlanUseReport `json:"plan_use,omitempty"`
 	PlanUseDays int                  `json:"-"`
+	// UnitCosts is what a unit of finished work cost over the period,
+	// against the four weeks before. Reported, not graded.
+	UnitCosts []UnitCost `json:"unit_costs,omitempty"`
 	// Checklist is populated only when no KPI was computed from real
 	// data. Renderers should show the checklist instead of an F grade
 	// — defaulted KPIs are not a verdict on the operator.
@@ -411,11 +414,13 @@ func (s *Scorecard) MarshalJSON() ([]byte, error) {
 		OverallGrade         Grade                `json:"overall_grade"`
 		BaselineRef          string               `json:"baseline_ref,omitempty"`
 		PlanUse              *plans.PlanUseReport `json:"plan_use,omitempty"`
+		UnitCosts            []UnitCost           `json:"unit_costs,omitempty"`
 	}{
 		GeneratedAt:  s.GeneratedAt,
 		OverallGrade: s.OverallGrade,
 		BaselineRef:  s.BaselineRef,
 		PlanUse:      s.PlanUse,
+		UnitCosts:    s.UnitCosts,
 	}
 	// An unmeasured KPI carries a NaN Value, which encoding/json refuses
 	// outright. Omitting the block is also the honest wire shape: a
@@ -501,6 +506,7 @@ func (s *Scorecard) String() string {
 			s.DestructiveRate.Value, s.DestructiveRate.Grade)
 	}
 	writePlanUse(&b, s.PlanUse, s.PlanUseDays)
+	writeUnitCosts(&b, s.UnitCosts, s.PlanUseDays)
 	fmt.Fprintf(&b, "\nOverall Grade: %s\nBaseline: %s\n", s.OverallGrade, baselineOrMissing(s.BaselineRef))
 	if s.Degraded != "" {
 		fmt.Fprintf(&b, "\n⚠ some KPIs could not be computed: %s\n", s.Degraded)

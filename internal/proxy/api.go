@@ -52,6 +52,7 @@ func (a *AnalyticsHandlers) Register(mux RouteMux) {
 	mux.HandleFunc("GET /api/optimizations", a.listOptimizations)
 	mux.HandleFunc("GET /api/spend/top", a.spendTop)
 	mux.HandleFunc("GET /api/spend/commits", a.spendCommits)
+	mux.HandleFunc("GET /api/spend/units", a.spendUnits)
 	mux.HandleFunc("GET /api/spend/burn-rate", a.spendBurnRate)
 	mux.HandleFunc("GET /api/scorecard", a.scorecard)
 	mux.HandleFunc("GET /api/decisions/{id}", a.decision)
