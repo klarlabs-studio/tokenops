@@ -645,6 +645,34 @@ never trip: use `--basis tokens` with `--limit-tokens`, or
 absorbed. `--workflow-id` and `--agent-id` scope a budget to one workflow
 or agent.
 
+A budget can hold several windows at once, say $10 a day and $100 a
+month. `--add-window` adds one; on a budget with several windows,
+`--window` names the one an edit changes, and `unset --window` removes
+one. Each window is **soft** or **hard**:
+
+- **Soft** (the default) notifies. The coach says, once per window, when
+  it reaches its warning and critical thresholds and when it is spent,
+  through the same tips you can snooze or answer and within the daily
+  interruption budget. `tokenops budget list` and the glance show each
+  window's share used.
+- **Hard** (`--mode hard`) is enforced by a spend
+  [boundary](#tokenops-boundaries-status-promote-demote) named `budget-<name>-<window>`, which
+  asks (`--require ask`, the default) or refuses (`--require deny`) before
+  further steps once the window is spent. Like every boundary it starts
+  in shadow, recording what it would have done, until you promote it.
+
+```bash
+tokenops budget set team --limit-usd 100                      # $100 a month, soft
+tokenops budget set team --add-window --window daily --limit-usd 10 --mode hard
+tokenops boundaries promote budget-team-daily                 # now it binds
+tokenops budget unset team --window daily
+```
+
+The daemon API (`POST /api/budgets`) and the `tokenops_budget_set` tool take
+the same fields (`add_window`, `remove_window`, `mode`, `require`), but a
+budget that holds a hard window is changed or removed only from a terminal:
+the agent a hard window limits can reach both.
+
 ### `tokenops scorecard`
 
 Operator wedge KPI scorecard. Three classic KPIs (FVT, TEU, SAC)
