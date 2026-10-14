@@ -204,7 +204,8 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	sessionProvider := inferSessionProvider(cfg.Plans)
 	tracker := headroom.NewSessionTracker(sessionBus, sessionProvider)
 
-	planDeps := mcp.PlanDeps{Store: components.Store, Tracker: tracker, Provider: sessionProvider, Spend: components.Spend}
+	planDeps := mcp.PlanDeps{Store: components.Store, Tracker: tracker, Provider: sessionProvider, Spend: components.Spend,
+		AdviceCache: headroom.NewAdviceCache()}
 	if cfgErr == nil {
 		planDeps.Config = &cfg
 		planDeps.ConfigGetter = currentConfig

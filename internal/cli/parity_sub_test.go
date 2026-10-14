@@ -28,6 +28,7 @@ var subToMCP = map[string][]string{
 	"fmt analyze":           {"tokenops_fmt"},
 	"fmt learn":             {"tokenops_fmt"},
 	"plan headroom":         {"tokenops_glance"},
+	"plan advise":           {"tokenops_glance"},
 	"plan list":             {"tokenops_configure"},
 	"plan set":              {"tokenops_configure"},
 	"plan unset":            {"tokenops_configure"},

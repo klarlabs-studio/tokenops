@@ -64,6 +64,8 @@ var APICatalog = []RouteDoc{
 	{Method: "GET", Path: "/api/findings", Summary: "What the coach and the session analysis observed, ranked, with what to do", Response: findings.Report{}},
 	{Method: "GET", Path: "/api/plans/headroom", Summary: "Every bound plan: usage, the vendor's windows, spend against the limit, risk", Response: headroom.HeadroomPayload{}},
 	{Method: "GET", Path: "/api/plans/session-budget", Summary: "Per plan window: share used, pace, and what to do", Response: headroom.BudgetPayload{}},
+	{Method: "GET", Path: "/api/plans/advice", Summary: "Plan right-sizing: each bound plan's windows replayed against its other tiers, metered overflow and the API at list price; advice only, nothing is switched",
+		Params: []Param{q("days", "integer", "how far back to replay, 1 to 90; 30 when omitted")}, Response: headroom.AdvicePayload{}},
 
 	// Control-plane state (slice 2).
 	{Method: "GET", Path: "/api/status", Summary: "Readiness, blockers, warnings and next actions", Response: state.Status{}},
