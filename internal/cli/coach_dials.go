@@ -158,7 +158,8 @@ func mutateCoach(cmd *cobra.Command, change func(*config.Config)) error {
 func renderFollowThrough(out io.Writer, r coachcap.Report) {
 	var lines []string
 	for _, s := range r.FollowThrough {
-		if s.Resolved() == 0 && s.Unseen == 0 {
+		answered := s.Acknowledged + s.Expected + s.Snoozed
+		if s.Resolved() == 0 && s.Unseen == 0 && answered == 0 {
 			continue
 		}
 		line := fmt.Sprintf("%s %s on %s work: ", s.Power, s.Channel, s.Kind)
@@ -178,6 +179,10 @@ func renderFollowThrough(out io.Writer, r coachcap.Report) {
 			// shown in the status line: no evidence it was read, so it is
 			// neither followed nor ignored.
 			line += fmt.Sprintf(", %d unseen", s.Unseen)
+		}
+		if answered > 0 {
+			line += fmt.Sprintf(", %d acknowledged, %d expected, %d snoozed (%d%% snoozed)",
+				s.Acknowledged, s.Expected, s.Snoozed, int(s.SnoozeRate()*100+0.5))
 		}
 		if s.Quiet {
 			line += " · quiet now (turned down repeatedly; `verbosity verbose` still shows it)"

@@ -65,7 +65,11 @@ func sessionBudget(dir string, cfg Config, now time.Time) budgetBasis {
 		if ok {
 			prev = &b
 		}
-		b = learning.DeriveSessionBudget(sessionCosts(dir), prev, p, now)
+		var answers learning.AlertAnswers
+		if cfg.BudgetAnswers != nil {
+			answers.Expected, answers.Answered = cfg.BudgetAnswers()
+		}
+		b = learning.DeriveSessionBudgetAnswered(sessionCosts(dir), answers, prev, p, now)
 		writeSessionBudget(dir, b)
 	}
 	if b.Source == learning.SourceHistory && b.BudgetUSD > 0 {

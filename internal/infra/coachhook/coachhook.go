@@ -55,6 +55,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 
 	model, contextTokens, unpriced := accumulate(transcriptPath, &st, cfg, now)
 	resolved := observeTip(&st, model, contextTokens)
+	before, prevMax := spoken{st.Nudges, st.LastNudgeAt}, st.MaxFiredFraction
 
 	// A budget the operator set is theirs; one read off their history is
 	// theirs in a different sense; the shipping default is neither, and
@@ -136,6 +137,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		}
 	}
 
+	cfg.deliver(dir, &dec, &st, before, prevMax, now)
 	dec.Resolved = resolved
 	offerTip(&st, &dec, cfg, tipKind(dec), model, contextTokens)
 	saveSession(dir, sessionID, st)
@@ -147,7 +149,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		Unpriced:    dec.UnpricedModel,
 		QuotaWindow: quotaLabel(cfg.Quota, dec.quotaWindow), QuotaUsedPct: quotaUsed(cfg.Quota, dec.quotaWindow),
 		QuotaTier: dec.QuotaTier, QuotaBurn: dec.QuotaBurn,
-		ReadingLost: dec.ReadingLost,
+		ReadingLost: dec.ReadingLost, Ambient: dec.Ambient,
 	})
 	return dec
 }

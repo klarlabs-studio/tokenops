@@ -125,3 +125,15 @@ func TestEvaluate_PinsTheBudgetForTheSession(t *testing.T) {
 		t.Fatalf("the session's budget moved under it: %v", d.BudgetUSD)
 	}
 }
+
+// Budget tips the operator mostly called expected move the derived
+// budget from their p90 session to their p95.
+func TestSessionBudget_ExpectedAnswersTuneIt(t *testing.T) {
+	dir := t.TempDir()
+	seedHistory(t, dir, fixedNow.Add(-time.Hour), dollars(40)...)
+	cfg := DefaultConfig()
+	cfg.BudgetAnswers = func() (int, int) { return 3, 4 }
+	if got := sessionBudget(dir, cfg, fixedNow); got.USD != 38 || got.Provenance != "your p95 session, from 40 sessions" {
+		t.Fatalf("budget = %+v, want the p95 ($38)", got)
+	}
+}

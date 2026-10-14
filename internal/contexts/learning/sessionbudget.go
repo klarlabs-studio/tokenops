@@ -51,6 +51,19 @@ type BudgetPolicy struct {
 	MaxDrift float64
 	// DefaultUSD is the budget used while evidence is short.
 	DefaultUSD float64
+	// ExpectedPercentile replaces Percentile once at least MinAnswers
+	// budget tips were answered and at least ExpectedShare of those
+	// answers were "expected": the operator saying the bar sits too low.
+	ExpectedPercentile float64
+	MinAnswers         int
+	ExpectedShare      float64
+}
+
+// AlertAnswers is the operator's answers to budget tips: how many they
+// answered, and how many of those they called expected.
+type AlertAnswers struct {
+	Expected int
+	Answered int
 }
 
 // DefaultBudgetPolicy is the shipping policy: the p90 of the last 30
@@ -66,6 +79,10 @@ func DefaultBudgetPolicy(defaultUSD float64) BudgetPolicy {
 		CeilingUSD:  500,
 		MaxDrift:    0.25,
 		DefaultUSD:  defaultUSD,
+
+		ExpectedPercentile: 0.95,
+		MinAnswers:         3,
+		ExpectedShare:      0.5,
 	}
 }
 
@@ -93,6 +110,10 @@ type SessionBudgetBelief struct {
 	MinSessions int       `json:"min_sessions,omitempty"`
 	WindowDays  int       `json:"window_days"`
 	DerivedAt   time.Time `json:"derived_at"`
+	// ExpectedAnswers and Answered are the operator's answers to budget
+	// tips the derivation read: an outcome, not a setting.
+	ExpectedAnswers int `json:"expected_answers,omitempty"`
+	Answered        int `json:"answered,omitempty"`
 }
 
 // DeriveSessionBudget reads a session budget off the operator's own
@@ -101,6 +122,13 @@ type SessionBudgetBelief struct {
 // replaces, nil when there is none; only a history-derived prev anchors
 // the drift clamp.
 func DeriveSessionBudget(costs []SessionCost, prev *SessionBudgetBelief, p BudgetPolicy, now time.Time) SessionBudgetBelief {
+	return DeriveSessionBudgetAnswered(costs, AlertAnswers{}, prev, p, now)
+}
+
+// DeriveSessionBudgetAnswered is DeriveSessionBudget that also reads the
+// operator's answers to budget tips: when most were "expected", the
+// budget sits at ExpectedPercentile instead.
+func DeriveSessionBudgetAnswered(costs []SessionCost, answers AlertAnswers, prev *SessionBudgetBelief, p BudgetPolicy, now time.Time) SessionBudgetBelief {
 	cutoff := now.Add(-p.Window)
 	var usd []float64
 	for _, c := range costs {
@@ -111,13 +139,18 @@ func DeriveSessionBudget(costs []SessionCost, prev *SessionBudgetBelief, p Budge
 	b := SessionBudgetBelief{
 		Sessions: len(usd), MinSessions: p.MinSessions,
 		WindowDays: int(p.Window / (24 * time.Hour)), DerivedAt: now,
+		ExpectedAnswers: answers.Expected, Answered: answers.Answered,
 	}
 	if len(usd) < p.MinSessions || len(usd) == 0 {
 		b.Source, b.BudgetUSD = SourceDefault, p.DefaultUSD
 		return b
 	}
 	b.Source, b.Percentile = SourceHistory, p.Percentile
-	b.ObservedUSD = nearestRank(usd, p.Percentile)
+	if p.ExpectedPercentile > 0 && p.MinAnswers > 0 && answers.Answered >= p.MinAnswers &&
+		float64(answers.Expected) >= p.ExpectedShare*float64(answers.Answered) {
+		b.Percentile = p.ExpectedPercentile
+	}
+	b.ObservedUSD = nearestRank(usd, b.Percentile)
 	budget := math.Round(b.ObservedUSD)
 	if prev != nil && prev.Source == SourceHistory && prev.BudgetUSD > 0 && p.MaxDrift > 0 {
 		b.PreviousUSD, b.MaxDrift = prev.BudgetUSD, p.MaxDrift
