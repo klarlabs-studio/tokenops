@@ -114,7 +114,7 @@ func initializeEventRuntime(
 	// typed nil it would call.
 	var budgetSource budgets.Source
 	if components.Aggregator != nil {
-		budgetSource = components.Aggregator
+		budgetSource = taggedBudgetSource(cfg, components.Aggregator)
 	}
 	startBoundaryFiguresRuntime(cfg, plansDeps(cfg, glance, components.Spend), budgetSource, sup, logger)
 
