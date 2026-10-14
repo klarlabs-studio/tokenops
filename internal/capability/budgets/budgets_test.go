@@ -8,6 +8,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
+	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -135,5 +136,22 @@ func TestWindowsOfOneBudgetAreRecordedApart(t *testing.T) {
 	}
 	if !ids["team:daily"] || !ids["team:monthly"] {
 		t.Errorf("budget ids = %v; want both windows' keys", ids)
+	}
+}
+
+func TestCurrentReadsOnlyAFreshMeasurement(t *testing.T) {
+	dir := boundaryledger.Dir(t.TempDir())
+	if got := Current(dir, windowsNow); got != nil {
+		t.Fatalf("nothing measured, got %+v", got)
+	}
+	r := Reading{Key: "team:daily", Budget: "team", Window: "daily", UsedPct: 50}
+	if err := dir.PutFigures(boundaryledger.Figures{ObservedAt: windowsNow, Budgets: []Reading{r}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := Current(dir, windowsNow.Add(5*time.Minute)); len(got) != 1 || got[0].Key != "team:daily" {
+		t.Errorf("fresh reading = %+v", got)
+	}
+	if got := Current(dir, windowsNow.Add(time.Hour)); got != nil {
+		t.Errorf("an hour-old reading was shown: %+v", got)
 	}
 }

@@ -171,6 +171,22 @@ func Read(ctx context.Context, src Source, limits []Limit, now time.Time) []Read
 	return out
 }
 
+// FreshFor is how long the daemon's last reading of the budget windows
+// counts for the coach and the glance. The daemon measures them at least
+// every five minutes while it runs.
+const FreshFor = 15 * time.Minute
+
+// Current is the budget windows the daemon last measured into dir (empty
+// for the default), or nil when it has not measured them lately: a stale
+// figure is not shown as the present one.
+func Current(dir boundaryledger.Dir, now time.Time) []Reading {
+	fig, ok, err := dir.GetFigures()
+	if err != nil || !ok || now.Sub(fig.ObservedAt) > FreshFor {
+		return nil
+	}
+	return fig.Budgets
+}
+
 // UsedPctOf is the share of each budget window used, by key.
 // A budget with several windows also gets an entry under its own name:
 // its fullest window, so a rule naming the budget holds on any of them.
