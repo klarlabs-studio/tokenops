@@ -3,6 +3,8 @@ package actions
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/config"
@@ -91,7 +93,7 @@ func FollowClientPlans(ctx context.Context, path string, evidence []planevidence
 		}
 		r, ok := seen[e.Provider]
 		if !ok || r.Plan != e.Plan {
-			r = planhistory.Report{Plan: e.Plan, Client: e.Client, Detail: e.Detail, FirstSeen: now}
+			r = planhistory.Report{Plan: e.Plan, Client: e.From, Detail: e.Detail, FirstSeen: now}
 			seen[e.Provider], dirty = r, true
 		}
 		bound := cfg.Plans[e.Provider]
@@ -118,6 +120,33 @@ func FollowClientPlans(ctx context.Context, path string, evidence []planevidence
 		}
 	}
 	return out, nil
+}
+
+// planFollowNoted is how long the glance notes a plan TokenOps followed.
+const planFollowNoted = 7 * 24 * time.Hour
+
+// RecentPlanFollows is one note per plan TokenOps bound on a client's
+// word in the last week that is still bound, with the command that
+// undoes it. An unreadable record notes nothing.
+func RecentPlanFollows(bound map[string]string, now time.Time) []string {
+	reports, err := planhistory.DefaultReports()
+	if err != nil {
+		return nil
+	}
+	seen, err := reports.Load()
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, provider := range slices.Sorted(maps.Keys(seen)) {
+		r := seen[provider]
+		if r.FollowedAt.IsZero() || bound[provider] != r.Plan || r.FollowedAt.After(now) || now.Sub(r.FollowedAt) > planFollowNoted {
+			continue
+		}
+		out = append(out, ClientPlan{Provider: provider, Plan: r.Plan, Previous: r.FollowedFrom, Reported: r.Plan,
+			Client: r.Client, Detail: r.Detail, Since: r.FirstSeen}.Note())
+	}
+	return out
 }
 
 // follow binds the reported plan from since on.

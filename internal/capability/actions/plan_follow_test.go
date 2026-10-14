@@ -180,3 +180,25 @@ func TestFollowBindsAnUnboundProvider(t *testing.T) {
 		t.Errorf("note = %q", got.Followed[0].Note())
 	}
 }
+
+// The glance says what TokenOps followed for a week, while it is still
+// the binding; an operator's correction ends it at once.
+func TestRecentPlanFollowsAreNotedForAWeek(t *testing.T) {
+	path := sandbox(t, "plans:\n  anthropic: claude-max-20x\n")
+	now := time.Date(2026, 10, 14, 9, 0, 0, 0, time.UTC)
+	if _, err := FollowClientPlans(context.Background(), path, claudeReports("claude-max-5x", "default_claude_max_5x"), followStore(t), now); err != nil {
+		t.Fatal(err)
+	}
+	bound := map[string]string{"anthropic": "claude-max-5x"}
+	notes := RecentPlanFollows(bound, now.Add(24*time.Hour))
+	if len(notes) != 1 || !strings.Contains(notes[0], "Claude Code") ||
+		!strings.Contains(notes[0], "`tokenops plan set anthropic claude-max-20x`") {
+		t.Fatalf("notes = %q", notes)
+	}
+	if got := RecentPlanFollows(bound, now.Add(8*24*time.Hour)); len(got) != 0 {
+		t.Errorf("a week later still noted: %q", got)
+	}
+	if got := RecentPlanFollows(map[string]string{"anthropic": "claude-max-20x"}, now.Add(time.Hour)); len(got) != 0 {
+		t.Errorf("noted after the operator's correction: %q", got)
+	}
+}

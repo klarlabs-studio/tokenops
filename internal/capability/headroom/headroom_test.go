@@ -181,3 +181,26 @@ func TestConfiguredLimitsReachTheComputation(t *testing.T) {
 		t.Fatalf("want 1 report, got %+v", got.Reports)
 	}
 }
+
+// A plan TokenOps followed on a client's word is said on the glance, with
+// the command that undoes it, so the operator sees it where they look.
+func TestPlanFollowsAreNotedOnTheGlance(t *testing.T) {
+	note := "anthropic now on claude-max-5x from 2026-10-14 09:00 UTC, as Claude Code reports (…) — `tokenops plan set anthropic claude-max-20x` if that is wrong"
+	deps := headroom.Deps{
+		Config: cfgWith(map[string]string{"anthropic": "claude-max-5x"}),
+		Reader: &fakeReader{},
+		PlanFollows: func(plans map[string]string, _ time.Time) []string {
+			if plans["anthropic"] != "claude-max-5x" {
+				return nil
+			}
+			return []string{note}
+		},
+	}
+	got, err := headroom.Compute(context.Background(), deps, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Notes) != 1 || got.Notes[0] != note {
+		t.Errorf("notes = %q", got.Notes)
+	}
+}
