@@ -2027,6 +2027,125 @@
                       },
                       "type": "object"
                     },
+                    "plan_advice": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "caveats": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "confidence": {
+                            "type": "string"
+                          },
+                          "days": {
+                            "type": "number"
+                          },
+                          "display": {
+                            "type": "string"
+                          },
+                          "list_value_usd": {
+                            "type": "number"
+                          },
+                          "options": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "blocked_minutes": {
+                                  "type": "integer"
+                                },
+                                "current": {
+                                  "type": "boolean"
+                                },
+                                "display": {
+                                  "type": "string"
+                                },
+                                "fee_usd": {
+                                  "type": "number"
+                                },
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "lockouts": {
+                                  "type": "integer"
+                                },
+                                "metered_usd": {
+                                  "type": "number"
+                                },
+                                "monthly_usd": {
+                                  "type": "number"
+                                },
+                                "peak_pct": {
+                                  "type": "number"
+                                },
+                                "peak_window": {
+                                  "type": "string"
+                                },
+                                "plan": {
+                                  "type": "string"
+                                },
+                                "price_source": {
+                                  "type": "string"
+                                },
+                                "savings_usd": {
+                                  "type": "number"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "plan": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "recommendation": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "display": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string"
+                              },
+                              "material": {
+                                "type": "boolean"
+                              },
+                              "plan": {
+                                "type": "string"
+                              },
+                              "savings_usd": {
+                                "type": "number"
+                              },
+                              "summary": {
+                                "type": "string"
+                              },
+                              "verdict": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "since": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "until": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "windows_measured": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "plan_headroom": {
                       "additionalProperties": false,
                       "properties": {
@@ -2752,6 +2871,186 @@
           }
         },
         "summary": "Bind a provider to a plan, or clear it"
+      }
+    },
+    "/api/plans/advice": {
+      "get": {
+        "operationId": "getPlansAdvice",
+        "parameters": [
+          {
+            "description": "how far back to replay, 1 to 90; 30 when omitted",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "days": {
+                      "type": "integer"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "hint": {
+                      "type": "string"
+                    },
+                    "notes": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "providers": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "caveats": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "confidence": {
+                            "type": "string"
+                          },
+                          "days": {
+                            "type": "number"
+                          },
+                          "display": {
+                            "type": "string"
+                          },
+                          "list_value_usd": {
+                            "type": "number"
+                          },
+                          "options": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "blocked_minutes": {
+                                  "type": "integer"
+                                },
+                                "current": {
+                                  "type": "boolean"
+                                },
+                                "display": {
+                                  "type": "string"
+                                },
+                                "fee_usd": {
+                                  "type": "number"
+                                },
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "lockouts": {
+                                  "type": "integer"
+                                },
+                                "metered_usd": {
+                                  "type": "number"
+                                },
+                                "monthly_usd": {
+                                  "type": "number"
+                                },
+                                "peak_pct": {
+                                  "type": "number"
+                                },
+                                "peak_window": {
+                                  "type": "string"
+                                },
+                                "plan": {
+                                  "type": "string"
+                                },
+                                "price_source": {
+                                  "type": "string"
+                                },
+                                "savings_usd": {
+                                  "type": "number"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "plan": {
+                            "type": "string"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "recommendation": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "display": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string"
+                              },
+                              "material": {
+                                "type": "boolean"
+                              },
+                              "plan": {
+                                "type": "string"
+                              },
+                              "savings_usd": {
+                                "type": "number"
+                              },
+                              "summary": {
+                                "type": "string"
+                              },
+                              "verdict": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "since": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "until": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "windows_measured": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "since": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "until": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Plan right-sizing: each bound plan's windows replayed against its other tiers, metered overflow and the API at list price; advice only, nothing is switched"
       }
     },
     "/api/plans/headroom": {

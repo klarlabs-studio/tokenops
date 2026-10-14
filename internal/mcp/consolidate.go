@@ -283,7 +283,8 @@ func payloadOf(res any) (json.RawMessage, error) {
 // Inputs. Every parameter a route takes is here, described once.
 
 type glanceIn struct {
-	View string `json:"view,omitempty" jsonschema:"enum=all,enum=headroom,enum=session_budget,enum=findings,description=all (default): budgets, headroom and one ranked insight. headroom: each plan's usage, the vendor's windows with pace, spend against the limit, risk. session_budget: the current window's share used and what to do. findings: what the coach and the session analysis observed, ranked, with what to do."`
+	View string `json:"view,omitempty" jsonschema:"enum=all,enum=headroom,enum=session_budget,enum=findings,enum=plan_advice,description=all (default): budgets, headroom and one ranked insight. headroom: each plan's usage, the vendor's windows with pace, spend against the limit, risk. session_budget: the current window's share used and what to do. findings: what the coach and the session analysis observed, ranked, with what to do. plan_advice: each plan's last days replayed against its other tiers, metered overflow and the API at list price, with a recommendation; advice only."`
+	Days int    `json:"days,omitempty" jsonschema:"minimum=1,maximum=90,description=plan_advice: how far back to replay (default 30)"`
 }
 
 type spendIn struct {
@@ -437,6 +438,7 @@ type glanceOut struct {
 	Headroom      *planHeadroomResult   `json:"headroom,omitempty"`
 	SessionBudget map[string]any        `json:"session_budget,omitempty"`
 	Findings      *findings.Report      `json:"findings,omitempty"`
+	PlanAdvice    *planAdviceResult     `json:"plan_advice,omitempty"`
 }
 
 type spendOut struct {
@@ -540,6 +542,7 @@ func publicTools() []publicTool {
 				"headroom":       {inner: "tokenops_plan_headroom"},
 				"session_budget": {inner: "tokenops_session_budget"},
 				"findings":       {inner: "tokenops_findings"},
+				"plan_advice":    {inner: "tokenops_plan_advice", params: params("days")},
 			},
 		},
 		{

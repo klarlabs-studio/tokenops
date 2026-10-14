@@ -274,7 +274,7 @@ A bare API key is reported as metered usage with no plan to bind — binding
 a subscription against metered traffic would make every headroom figure
 wrong in a way that looks authoritative.
 
-### `tokenops plan {list|set|unset|catalog|headroom}`
+### `tokenops plan {list|set|unset|catalog|headroom|advise}`
 
 ```bash
 tokenops plan list              # configured bindings + headroom
@@ -283,7 +283,52 @@ tokenops plan set anthropic claude-max-20x
 tokenops plan unset cursor
 tokenops plan headroom          # live consumption + overage risk
 tokenops plan history           # every recorded switch, oldest first
+tokenops plan advise            # which tier would have fit the last 30 days
 ```
+
+#### Which tier fits: `plan advise`
+
+`plan advise` replays the last 30 days (`--days 60`, up to 90) of your
+plan's windows against the plan's other tiers, each tier with its overflow
+billed at API list price, and no subscription at all. For each option it
+shows how often you would have run out and for how long, the fullest window,
+and the monthly cost, then recommends one:
+
+```text
+anthropic: Claude Max 20x, replayed over the last 27 days (4 windows), confidence medium
+
+  OPTION                               LOCKOUTS  BLOCKED  PEAK            PER MONTH  SAVES
+  Claude Pro                           4         24.0d    400% of weekly  $20.00     $180.00
+  Claude Max 5x                        0         -        80% of weekly   $100.00    $100.00
+  Claude Max 20x (now)                 0         -        20% of weekly   $200.00    -
+  Claude Pro + metered overflow        0         -        400% of weekly  $233.06    -$33.06
+  API at list price (no subscription)  0         -        -               $284.08    -$84.08
+
+  Recommendation: switch. Claude Max 5x would have cost $100/mo less than Claude Max 20x, with no lockouts; on Claude Max 20x you peaked at 20% of the weekly window.
+```
+
+How it works: a reading of 20% on Max 20x is four Pro windows of demand,
+which is 80% of Max 5x. Each reading is scaled by the plan in force when
+it was taken (`plan history`), so a switch inside the period is handled.
+Blocked time runs from the moment a window would have run out to its
+reset, with overlapping windows counted once. Overflow and API prices
+come from the rate card applied to the usage your plan covered.
+
+Read it with its confidence label. Max 5x and 20x are Anthropic's stated
+multiples of Pro's allowance, Pro's own allowance is unverified (Anthropic
+no longer publishes it), and whether the weekly limits scale by the same
+multiples is not published either. So Claude advice is at best `medium`,
+and `low` with less than two weeks or two weekly windows of readings. If
+you ran out on your current plan, the work you could not do left no
+readings, and the larger tiers' figures are a floor.
+
+It is advice: TokenOps never switches a plan. When a cheaper option would
+have saved at least $10 and a tenth of the bill with no more than one
+lockout a month, the glance, the menu bar and `/api/findings` say so once
+as an info finding. `--json`, `GET /api/plans/advice?days=` and
+`tokenops_glance (view=plan_advice)` give the same answer. Only Claude's
+tiers are replayed so far; ChatGPT's tiers are not modelled as multiples
+of each other, and `plan advise` says so.
 
 #### Switching plans
 
