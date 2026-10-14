@@ -42,6 +42,7 @@ var subToMCP = map[string][]string{
 	"boundaries status":     {"tokenops_boundaries"},
 	"routing rule":          {"tokenops_routing"},
 	"rules analyze":         {"tokenops_rules"},
+	"spend units":           {"tokenops_spend"},
 
 	"rules compress":      {"tokenops_rules"},
 	"rules conflicts":     {"tokenops_rules"},
