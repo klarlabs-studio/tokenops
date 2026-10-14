@@ -4023,6 +4023,22 @@
                 "schema": {
                   "additionalProperties": false,
                   "properties": {
+                    "allocation": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "by_key_pct": {
+                          "properties": {},
+                          "type": "object"
+                        },
+                        "rules": {
+                          "type": "integer"
+                        },
+                        "tagged_pct": {
+                          "type": "number"
+                        }
+                      },
+                      "type": "object"
+                    },
                     "baseline_ref": {
                       "type": "string"
                     },

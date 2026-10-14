@@ -258,6 +258,7 @@ func (s *startup) startStorageSubsystems(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("analytics handlers: %w", err)
 	}
+	analyticsH.WithAllocationRules(s.cfg.AllocationRules)
 	s.opts = append(s.opts, proxy.WithAnalytics(analyticsH))
 	s.opts = append(s.opts, proxy.WithAudit(proxy.NewAuditHandlers(store)))
 	return nil

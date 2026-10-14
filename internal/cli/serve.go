@@ -181,6 +181,14 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if err := mcp.RegisterParityTools(srv, mcp.ParityDeps{
 		Store: components.Store,
 		Spend: components.Spend,
+		Allocation: func() []allocation.Rule {
+			if currentConfig != nil {
+				if live := currentConfig(); live != nil {
+					return live.AllocationRules()
+				}
+			}
+			return cfg.AllocationRules()
+		},
 	}); err != nil {
 		return fmt.Errorf("register parity tools: %w", err)
 	}

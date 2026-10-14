@@ -41,6 +41,9 @@ type BuildParams struct {
 	// UnitCosts are the period's unit costs, measured by the caller (they
 	// join agent work to git history, which this domain does not read).
 	UnitCosts []UnitCost
+	// Allocation is the share of spend the allocation rules tag, measured
+	// by the caller (it joins sessions to where they ran).
+	Allocation *AllocationCoverage
 	// ClockNow allows tests to inject a deterministic clock. Defaults to
 	// time.Now when nil.
 	ClockNow func() time.Time
@@ -111,5 +114,6 @@ func Build(ctx context.Context, reader EventReader, params BuildParams) *Scoreca
 	sc := NewWithAgentKPIs(fvt, teu, sac, agent, params.BaselineRef)
 	sc.PlanUse, sc.PlanUseDays = planUse, params.SinceDays
 	sc.UnitCosts = params.UnitCosts
+	sc.Allocation = params.Allocation
 	return sc
 }
