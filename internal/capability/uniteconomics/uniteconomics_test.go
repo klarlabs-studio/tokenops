@@ -178,3 +178,23 @@ func TestReportCarriesNoFreeText(t *testing.T) {
 		}
 	}
 }
+
+// OutcomeJoin reads a turn's outcome as the outcome units do: execution,
+// then workflow, then session.
+func TestOutcomeJoin(t *testing.T) {
+	join := OutcomeJoin([]*eventschema.Envelope{
+		outcome("exec-1", 0, eventschema.OutcomeAchieved),
+		outcome("sess-2", 0, eventschema.OutcomeNotAchieved),
+	})
+	byExec := turn("sess-9", 0, 1)
+	byExec.ExecutionID = "exec-1"
+	if r, ok := join(byExec); !ok || r != eventschema.OutcomeAchieved {
+		t.Errorf("by execution: %v %v", r, ok)
+	}
+	if r, ok := join(turn("sess-2", 0, 1)); !ok || r != eventschema.OutcomeNotAchieved {
+		t.Errorf("by session: %v %v", r, ok)
+	}
+	if _, ok := join(turn("sess-3", 0, 1)); ok {
+		t.Error("a turn with no outcome was joined")
+	}
+}
