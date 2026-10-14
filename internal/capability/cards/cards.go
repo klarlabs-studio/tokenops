@@ -53,6 +53,9 @@ type Options struct {
 	CostsLate bool
 	// OnlyFindings prints the coach section alone, every finding in it.
 	OnlyFindings bool
+
+	// planUse is the glance's plan use, set by Render.
+	planUse *plans.PlanUseReport
 }
 
 // maxFindings is how many findings the cards show; the rest are counted.
@@ -308,8 +311,16 @@ func metrics(r plans.HeadroomReport) []metric {
 }
 
 // details lists a plan's spend, credit and cost lines.
-func details(r plans.HeadroomReport, cost *spending.ProviderCost, late bool) []detail {
+func details(r plans.HeadroomReport, cost *spending.ProviderCost, late bool, use *plans.PlanUseReport) []detail {
 	var out []detail
+	if u, ok := use.For(r.Provider); ok {
+		if u.UtilizationPct != nil {
+			out = append(out, detail{"Plan used, 7d", fmt.Sprintf("%.0f%% of %s", *u.UtilizationPct, u.UtilizationWindow), porcelain})
+		}
+		if u.CoveragePct != nil {
+			out = append(out, detail{"On the plan", fmt.Sprintf("%.0f%% of tokens", *u.CoveragePct), porcelain})
+		}
+	}
 	switch {
 	case r.SpendLimitUSD > 0:
 		out = append(out, detail{"This month", money(r.SpendUSD) + " / " + money(r.SpendLimitUSD), porcelain})
@@ -389,7 +400,7 @@ func paceLine(pc *plans.WindowPace) (string, rgb) {
 }
 
 // card draws one plan width columns wide.
-func (p painter) card(r plans.HeadroomReport, cost *spending.ProviderCost, late bool, width int) []string {
+func (p painter) card(r plans.HeadroomReport, cost *spending.ProviderCost, late bool, use *plans.PlanUseReport, width int) []string {
 	inner := width - 4
 	side := func(body string) string {
 		return p.paint(line, "│ ") + pad(body, inner) + p.paint(line, " │")
@@ -430,7 +441,7 @@ func (p painter) card(r plans.HeadroomReport, cost *spending.ProviderCost, late 
 			out = append(out, side(p.paint(tone, clip(text, inner))))
 		}
 	}
-	ds := details(r, cost, late)
+	ds := details(r, cost, late, use)
 	if len(ds) > 0 && len(out) > 3 {
 		out = append(out, side(""))
 	}
@@ -490,6 +501,7 @@ func Render(g headroom.Glance, opt Options) string {
 	if opt.OnlyFindings && opt.Findings != nil {
 		return b.String() + strings.TrimPrefix(coachSection(*opt.Findings, opt, p), "\n")
 	}
+	opt.planUse = g.PlanUse
 	reports := sorted(g.Headroom.Reports)
 	if opt.Brief {
 		b.WriteString(brief(reports, opt, p))
@@ -514,7 +526,7 @@ func grid(reports []plans.HeadroomReport, opt Options, p painter) string {
 		drawn := make([][]string, len(group))
 		height := 0
 		for j, r := range group {
-			drawn[j] = p.card(r, costFor(opt, r), opt.CostsLate, width)
+			drawn[j] = p.card(r, costFor(opt, r), opt.CostsLate, opt.planUse, width)
 			height = max(height, len(drawn[j]))
 		}
 		for at := range height {
@@ -569,7 +581,7 @@ func brief(reports []plans.HeadroomReport, opt Options, p painter) string {
 		name := clip(vendor(r)+" "+planName(r), planW)
 		ms := metrics(r)
 		if len(ms) == 0 {
-			if ds := details(r, costFor(opt, r), false); len(ds) > 0 {
+			if ds := details(r, costFor(opt, r), false, nil); len(ds) > 0 {
 				fmt.Fprintf(&b, "%-*s  %s\n", planW, name, p.paint(muted, ds[0].label+": "+ds[0].value))
 			}
 			continue

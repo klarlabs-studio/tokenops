@@ -43,6 +43,15 @@ read the same way.
 behind lasts to the reset; ahead says when the window runs out at the
 rate so far. The daemon API, the menu bar and MCP report the same pace.
 
+**Plan use** is two figures per plan over the last 7 days. *Plan used* is
+the average peak of the plan's longest window (usually the weekly one)
+across the windows that reset in that week. It answers "is this seat
+used?", and idle days count against it. *On the plan* is the share of that
+provider's tokens a plan covered rather than an API key, a gateway or
+overflow billed per token. The menu bar and `/api/glance` (`plan_use`)
+carry the same figures, and `tokenops scorecard` reports them over its own
+window.
+
 **Cost** is at API list prices where a plan covers the usage. Requests on
 models without a list price yet are left out of the money: a `+` marks a
 figure that leaves some out, and where most have no price only tokens are
@@ -547,6 +556,20 @@ All grade A–F against tuneable thresholds. CHR is computed from
 events.db; CGR + RGR from JSONL prompt extracts; TCS + DAR from
 JSONL `tool_use` + `tool_result` blocks. Returns `warming_up`
 with a 3-step activation checklist when no real data backs the KPIs.
+
+Below the grades, **Plan use** lists each provider's plan utilization
+(the average peak of its longest plan window that reset in the period)
+and coverage (the share of its tokens a plan covered). They are reported,
+not graded: a seat used at 40% is a fact for whoever pays for it, not a
+fault.
+
+```
+Plan use (last 7 days):
+  anthropic    utilization 64% (weekly, 1 window) · coverage 93% of tokens on a plan
+  openai       utilization 41% (weekly, 1 window) · coverage 100% of tokens on a plan
+  openrouter   utilization n/a (no plan window reset yet) · coverage 0% of tokens on a plan
+  all          coverage 81% of tokens on a plan
+```
 
 ```bash
 tokenops scorecard --days 30        # text table
@@ -1159,6 +1182,25 @@ held back, and how the run-out forecasts fared once their windows reset
 read again, which re-reads were waste, and which the read guard refused. Both ledgers fill while the coach only observes, so
 this shows what you would hear before you let it speak. `--json` gives
 `budget` and `read_guard`.
+
+It also shows the session budget the tips are measured against and where
+it came from. Unless you set one (`tokenops hooks install --coach --budget
+80`; any figure but the $50 default counts as yours), the budget is read
+off your own sessions: the p90 of the API-equivalent cost of the sessions
+you ran in the last 30 days, once at least 20 are known, rounded to whole
+dollars and kept between $10 and $500. It is re-derived once a week and
+moves at most 25% each time, so a run of expensive weeks does not quietly
+become the new normal. A session keeps the budget it started with. With
+fewer than 20 sessions the $50 default stands.
+
+```text
+  session budget: $45 — your p90 session, from 113 sessions in 30 days (derived 2026-10-14)
+    held from $72: moves at most 25% a week (was $36)
+```
+
+The derivation is kept, with the figures it was read from, in
+`~/.tokenops/coach-hook/session-budget.json` and in `--json` as
+`budget.session_budget`.
 
 ### `tokenops coach delivery`
 

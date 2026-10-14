@@ -46,11 +46,8 @@ func EvaluateOpencode(dir, dbPath, sessionID string, cfg Config, now time.Time) 
 	_ = os.MkdirAll(dir, 0o755)
 	st := loadSession(dir, sessionID)
 
-	budget := cfg.BudgetUSD
-	configured := budget > 0 && budget != DefaultBudgetUSD
-	if budget <= 0 {
-		budget = DefaultBudgetUSD
-	}
+	basis := pinnedBudget(dir, &st, cfg, now)
+	budget := basis.USD
 
 	total, model, contextTokens, unpriced := sumOpencodeSession(dbPath, sessionID, cfg, now)
 	// session.idle fires again without a new turn; only a turn that moved
@@ -70,7 +67,7 @@ func EvaluateOpencode(dir, dbPath, sessionID string, cfg Config, now time.Time) 
 		case reason == "":
 			dec.Nudge = true
 			dec.FiredFraction = fired
-			dec.Message = nudgeMessage(fired, total, budget, configured)
+			dec.Message = nudgeMessage(fired, total, basis)
 			if note := contextNote(contextTokens, model); note != "" {
 				dec.Message = note + " " + dec.Message
 			}
