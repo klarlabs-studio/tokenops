@@ -250,6 +250,13 @@ func EvaluateAll(limits []Limit, actualBy func(Limit) float64, forecastBy func(L
 	return out
 }
 
+// Thresholds are the fractions of the limit at which the limit warns and
+// turns critical, with the defaults applied.
+func (l Limit) Thresholds() (warn, crit float64) {
+	l = applyLimitDefaults(l)
+	return l.WarnAt, l.CritAt
+}
+
 func applyLimitDefaults(l Limit) Limit {
 	if l.WarnAt <= 0 {
 		l.WarnAt = 0.75

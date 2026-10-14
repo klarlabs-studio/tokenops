@@ -30,7 +30,7 @@ func ExceededEvent(a Alert, at time.Time) (*eventschema.Envelope, bool) {
 	if a.Kind != AlertThresholdReached || a.Limit.Threshold() <= 0 || a.Fraction < 1 {
 		return nil, false
 	}
-	e := Exceeded{BudgetID: a.Limit.Name, Basis: a.Limit.Basis, At: at}
+	e := Exceeded{BudgetID: a.Limit.Key(), Basis: a.Limit.Basis, At: at}
 	if a.Limit.TokenBased() {
 		e.SpentTokens, e.LimitTokens = int64(a.ActualUSD), a.Limit.LimitTokens
 	} else {
