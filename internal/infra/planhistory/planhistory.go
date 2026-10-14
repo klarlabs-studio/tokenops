@@ -32,6 +32,15 @@ func Default() (File, error) {
 	return File{Path: filepath.Join(home, ".tokenops", "plan-history.jsonl")}, nil
 }
 
+// LoadDefault reads the history under the operator's home directory.
+func LoadDefault() (plans.History, error) {
+	f, err := Default()
+	if err != nil {
+		return nil, err
+	}
+	return f.Load()
+}
+
 // Load reads every recorded change. A missing file is an empty history.
 func (f File) Load() (plans.History, error) {
 	data, err := os.ReadFile(f.Path)
