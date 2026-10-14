@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.104.0 - 2026-10-14
+
 ### Changed
 
 - **docs, README, npm:** TokenOps is described as guardrails for coding agents: "Know what's left. Set what's allowed. Let your agents work." The landing page leads with a comparison against vendor meters, usage meters and gateways, and gives action boundaries and the team plane their own sections

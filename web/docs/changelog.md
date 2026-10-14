@@ -4,7 +4,28 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.103.0**.
+Current release: **v0.104.0**.
+
+## v0.104.0 — Tips you see, a lighter daemon
+
+The coach's open tip now ends the status line itself, in a few words
+that name the window and what to do ("Claude weekly 75% used → /compact,
+smaller model"), until it is settled. Before, it was a second row or the
+dim note Claude Code prints after a turn, easy to miss and absent when a
+session is driven remotely. A tip now counts as seen only once the status
+line has shown it; one never shown and not acted on is listed as unseen,
+and it never makes the coach go quiet.
+
+The daemon does less work. Its three-hourly session analysis reads only
+the transcripts that changed (a repeat run went from 1.5 s to about
+55 ms on a synthetic week), the claude.ai meter reads the browser again
+only when its cookies change, and the event store's write-ahead log is
+checkpointed in the background instead of inside a write holding the
+shared lock, the source of "slow write lock" warnings. Every `tokenops`
+process, so every hook, starts about 5 ms sooner.
+
+TokenOps now describes itself as guardrails for coding agents: know
+what's left, set what's allowed, let your agents work.
 
 ## v0.103.0 — Limits set before the agent acts
 
