@@ -20,6 +20,9 @@ type SessionTurn struct {
 	CostUSD          float64
 	APIEquivalentUSD float64
 	Priced           bool
+	// WorkflowID and ExecutionID are what the turn was recorded under:
+	// the workflow prepare_work issued, the execution an outcome judges.
+	WorkflowID, ExecutionID string
 }
 
 // SessionTurns lists every usage-carrying prompt event in f that belongs
@@ -35,7 +38,8 @@ func (a *Aggregator) SessionTurns(ctx context.Context, f Filter) ([]SessionTurn,
 	}
 	var out []SessionTurn
 	for _, u := range usage {
-		t := SessionTurn{SessionID: u.SessionID, At: u.At, Provider: u.Provider, Model: u.Model}
+		t := SessionTurn{SessionID: u.SessionID, At: u.At, Provider: u.Provider, Model: u.Model,
+			WorkflowID: u.WorkflowID, ExecutionID: u.ExecutionID}
 		t.Tokens = u.TotalTokens
 		if t.Tokens == 0 {
 			t.Tokens = u.InputTokens + u.OutputTokens

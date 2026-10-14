@@ -47,6 +47,28 @@ func TestSessionTurnsPriceCacheWrites(t *testing.T) {
 	}
 }
 
+// A turn carries the workflow and execution it was recorded under, so
+// work can be joined to the outcome recorded for it.
+func TestSessionTurnsCarryWorkflowAndExecution(t *testing.T) {
+	env := &eventschema.Envelope{
+		ID: "linked", SchemaVersion: eventschema.SchemaVersion, Type: eventschema.EventTypePrompt,
+		Timestamp:   time.Now().UTC().Add(-time.Hour),
+		Association: eventschema.Association{Execution: "exec-1"},
+		Payload: &eventschema.PromptEvent{
+			Provider: eventschema.ProviderAnthropic, RequestModel: "claude-sonnet-5", SessionID: "s-1",
+			WorkflowID: "wf-1", InputTokens: 10, TotalTokens: 10,
+		},
+	}
+	turns, err := analytics.New(storeWith(t, env), nil).SessionTurns(context.Background(),
+		analytics.Filter{Since: time.Now().Add(-24 * time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(turns) != 1 || turns[0].WorkflowID != "wf-1" || turns[0].ExecutionID != "exec-1" {
+		t.Fatalf("turns = %+v", turns)
+	}
+}
+
 // The summary's API-equivalent value prices plan-covered cache writes at
 // the write rate.
 func TestSummarizePricesCacheWrites(t *testing.T) {
