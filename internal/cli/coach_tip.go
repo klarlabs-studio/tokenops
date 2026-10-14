@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/anomalies"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 )
 
@@ -41,6 +43,11 @@ answered (--id names another; the ids are in 'tokenops coach --json').
             every session. A warning that a plan window will run out, or is
             used up, still speaks.
 
+An unusual-spend finding (its id starts with anomaly-) is answered the
+same way: ack takes it off the findings, expected also stops flagging the
+same pattern (the same pricier model, the same plan billed per token, a
+loop in the same repository), and snooze holds every spend anomaly.
+
 An answered tip counts as neither followed nor ignored. ` + "`tokenops coach`" + ` shows
 how many tips of each kind were answered and how many were snoozed.`,
 		Args:      cobra.ExactArgs(1),
@@ -68,6 +75,10 @@ how many tips of each kind were answered and how many were snoozed.`,
 }
 
 func writeTipAnswer(out io.Writer, r coachcap.TipAnswer) {
+	if cause, ok := strings.CutPrefix(r.Kind, anomalies.KindPrefix); ok {
+		writeAnomalyAnswer(out, r, cause)
+		return
+	}
 	what := tipLabel(r.Kind)
 	switch {
 	case r.Answer == coachcap.AnswerSnoozed && r.SnoozedUntil != nil:
@@ -76,5 +87,29 @@ func writeTipAnswer(out io.Writer, r coachcap.TipAnswer) {
 		fmt.Fprintf(out, "Recorded the tip %s as expected: nothing more like it this session, and it counts toward how your session budget is set.\n", what)
 	default:
 		fmt.Fprintf(out, "Acknowledged the tip %s: nothing more like it this session.\n", what)
+	}
+}
+
+// anomalyCauses words an anomaly's cause for an answer.
+var anomalyCauses = map[string]string{
+	"pricier_model":   "a pricier model",
+	"metered_on_plan": "usage billed per token under a plan",
+	"runaway_loop":    "a likely runaway loop",
+	"spike":           "a spike",
+}
+
+// writeAnomalyAnswer confirms an answer to an unusual-spend finding.
+func writeAnomalyAnswer(out io.Writer, r coachcap.TipAnswer, cause string) {
+	what := "the unusual spend"
+	if c, ok := anomalyCauses[cause]; ok {
+		what += " (" + c + ")"
+	}
+	switch {
+	case r.Answer == coachcap.AnswerSnoozed && r.SnoozedUntil != nil:
+		fmt.Fprintf(out, "Snoozed %s: unusual spend is not flagged until %s.\n", what, r.SnoozedUntil.Local().Format("Mon 15:04"))
+	case r.Answer == coachcap.AnswerExpected:
+		fmt.Fprintf(out, "Recorded %s as expected: the same pattern is no longer flagged.\n", what)
+	default:
+		fmt.Fprintf(out, "Acknowledged %s: it leaves the findings.\n", what)
 	}
 }
