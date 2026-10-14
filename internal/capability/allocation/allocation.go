@@ -235,10 +235,7 @@ func ByKey(key Key, turns []TaggedTurn) Report {
 		t := tt.SessionTurn
 		// Billed is nothing where a plan covered the turn, and its cost
 		// otherwise, priced when none was stored.
-		t.CostUSD = 0
-		if !t.PlanCovered {
-			t.CostUSD = t.APIEquivalentUSD
-		}
+		t.CostUSD = t.BilledUSD()
 		total += t.APIEquivalentUSD
 		v := tt.Tags.Get(key)
 		if v == "" {
