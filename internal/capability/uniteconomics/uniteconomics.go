@@ -53,7 +53,7 @@ type Rate struct {
 }
 
 func (r *Rate) add(t analytics.SessionTurn) {
-	r.Cost.Add(t)
+	r.Add(t)
 	if r.tokens == nil {
 		r.tokens = map[string]int64{}
 	}
@@ -205,8 +205,8 @@ func Build(in Inputs) Report {
 
 	var classes map[taskclass.ChangeClass]*ClassCost
 	r.Commits, classes = in.commitUnit(current, total)
-	r.PRs = in.prUnit(current, total)
-	r.Outcomes, r.Achieved = in.outcomeUnits(current, total)
+	r.PRs = in.prUnit(total)
+	r.Outcomes, r.Achieved = in.outcomeUnits(total)
 	for _, c := range taskclass.ChangeClasses() {
 		if cc := classes[c]; cc != nil {
 			cc.Current.finish()
@@ -304,7 +304,7 @@ func nonEmpty(bs []Bucket) []Bucket {
 
 // prUnit places each turn on the next pull request of the operator's
 // merged in its repository within PRMaxGap.
-func (in Inputs) prUnit(current []analytics.SessionTurn, total float64) Unit {
+func (in Inputs) prUnit(total float64) Unit {
 	u := Unit{Name: "merged_pr", Method: PRMethod}
 	type key struct {
 		root string

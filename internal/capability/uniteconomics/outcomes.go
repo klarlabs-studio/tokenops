@@ -51,7 +51,7 @@ func judgedExecutions(envs []*eventschema.Envelope) map[string]*judged {
 // outcomeUnits are the cost per recorded outcome and per achieved
 // outcome. A turn goes to the outcome recorded for the execution it ran
 // under, else its workflow's, else its session's.
-func (in Inputs) outcomeUnits(current []analytics.SessionTurn, total float64) (Unit, Unit) {
+func (in Inputs) outcomeUnits(total float64) (Unit, Unit) {
 	all := Unit{Name: "outcome", Method: OutcomeMethod}
 	achieved := Unit{Name: "achieved_outcome", Method: OutcomeMethod}
 	execs := judgedExecutions(in.Outcomes)
