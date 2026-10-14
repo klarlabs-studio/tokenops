@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/money"
 	"go.klarlabs.de/tokenops/internal/capability/state"
@@ -162,6 +163,14 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 			}
 			r, ok, _ := fxrate.Resolve(ctx, c.Money, time.Now())
 			return r, ok
+		},
+		Allocation: func() []allocation.Rule {
+			if currentConfig != nil {
+				if live := currentConfig(); live != nil {
+					return live.AllocationRules()
+				}
+			}
+			return cfg.AllocationRules()
 		},
 	}); err != nil {
 		return fmt.Errorf("register tools: %w", err)
