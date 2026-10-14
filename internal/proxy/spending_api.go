@@ -8,6 +8,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
+	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 )
 
 // Spending routes answer from the same capability the MCP tools call
@@ -86,6 +87,29 @@ func includeSources(r *http.Request) []string {
 		out = append(out, strings.Split(v, ",")...)
 	}
 	return out
+}
+
+// spendUnits is the cost per commit, merged pull request, outcome and
+// change class over a period, against the four weeks before it. The
+// report holds derived figures only.
+func (a *AnalyticsHandlers) spendUnits(w http.ResponseWriter, r *http.Request) {
+	since := time.Now().AddDate(0, 0, -uniteconomics.DefaultDays)
+	if r.URL.Query().Get("since") != "" {
+		s, _, err := sinceUntil(r)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		since = s
+	}
+	res, err := uniteconomics.Compute(r.Context(), uniteconomics.Deps{
+		Turns: commits.TurnsIn(a.aggregator, spending.Window{}), Events: a.store,
+	}, since, time.Now())
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeAPIJSON(w, http.StatusOK, res)
 }
 
 // spendCommits is what each of the operator's commits in a window cost:
