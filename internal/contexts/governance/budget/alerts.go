@@ -63,6 +63,9 @@ type Limit struct {
 	// Mode is ModeSoft (notify) or ModeHard (a spend boundary asks or
 	// refuses at the limit). Empty reads as soft.
 	Mode string
+	// Tag scopes the limit to work carrying one allocation tag,
+	// "key=value"; empty is all spend. Like Basis, the caller resolves it.
+	Tag string
 }
 
 // Window modes for Limit.Mode.
