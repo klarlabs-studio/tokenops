@@ -69,6 +69,7 @@ type budgetSetInput struct {
 	WorkflowID  string  `json:"workflow_id,omitempty"`
 	AgentID     string  `json:"agent_id,omitempty"`
 	Basis       string  `json:"basis,omitempty" jsonschema:"enum=spend,enum=equivalent,enum=tokens,description=What the limit watches: spend (real billed cost, default), equivalent (API list-price value incl. plan-covered usage), or tokens (raw token volume against limit_tokens). On flat plans real spend is ~0, so use tokens or equivalent."`
+	Tag         string  `json:"tag,omitempty" jsonschema:"description=Limit the budget to work carrying one allocation tag, key=value (project, client or cost_center)"`
 	Delete      bool    `json:"delete,omitempty" jsonschema:"description=Remove the budget with this name"`
 }
 
@@ -78,7 +79,7 @@ func (in budgetSetInput) update() config.BudgetUpdate {
 		LimitUSD: in.LimitUSD, LimitTokens: in.LimitTokens,
 		WarnAt: in.WarnAt, CritAt: in.CritAt,
 		WorkflowID: in.WorkflowID, AgentID: in.AgentID,
-		Basis: in.Basis,
+		Basis: in.Basis, Tag: in.Tag,
 	}
 }
 
