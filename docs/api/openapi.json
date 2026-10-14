@@ -3819,6 +3819,30 @@
                         }
                       },
                       "type": "object"
+                    },
+                    "unit_costs": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "baseline_per_unit_usd": {
+                            "type": "number"
+                          },
+                          "change_pct": {
+                            "type": "number"
+                          },
+                          "per_unit_usd": {
+                            "type": "number"
+                          },
+                          "unit": {
+                            "type": "string"
+                          },
+                          "units": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
                     }
                   },
                   "type": "object"
