@@ -334,6 +334,9 @@ func (s *startup) startBackgroundRefreshers(context.Context) error {
 
 	// The findings' session analysis is too slow to run per answer.
 	startSessionFindingsRuntime(s.sup, s.logger)
+
+	// So is spend anomaly detection, which reads four weeks of turns.
+	startAnomalyRuntime(s.cfg, s.components, s.sup, s.logger)
 	return nil
 }
 

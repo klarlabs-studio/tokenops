@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/anomalies"
 	"go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
@@ -43,11 +44,16 @@ const (
 	KindBudget   = "budget"
 	KindCoach    = "coach"
 	KindPlan     = "plan"
+	// KindSpend is a day whose spend or usage is unusual.
+	KindSpend = "spend"
 )
 
 // Finding is one observation: what was seen, the figures behind it, and
 // what to do about it, when there is something to do.
 type Finding struct {
+	// ID names a finding that can be answered like a tip (`tokenops
+	// coach tip ack|expected|snooze --id`); absent otherwise.
+	ID       string `json:"id,omitempty"`
 	Kind     string `json:"kind"`
 	Level    string `json:"level"`
 	Title    string `json:"title"`
@@ -71,6 +77,8 @@ type Inputs struct {
 	CoachHook *coachhook.Stats
 	ReadGuard *readguard.Stats
 	Sessions  *SessionsSnapshot
+	// Anomalies are the unusual days still open.
+	Anomalies []anomalies.Anomaly
 }
 
 // Compute ranks every finding in, most urgent first.
@@ -83,6 +91,7 @@ func Compute(in Inputs) Report {
 	if in.Sessions != nil {
 		out = append(out, sessionFindings(in.Sessions.DX.Warnings, in.Sessions.DX.Recommendation)...)
 	}
+	out = append(out, anomalyFindings(in.Anomalies)...)
 	out = append(out, waste(in.ReadGuard, in.Coach)...)
 	out = append(out, budget(in.CoachHook)...)
 	out = append(out, coaching(in.Coach, in.CoachHook)...)
@@ -394,6 +403,8 @@ func kindWords(kind string) string {
 		return "quota tips"
 	case strings.HasPrefix(kind, "budget_"):
 		return "session budget tips"
+	case strings.HasPrefix(kind, anomalies.KindPrefix):
+		return "unusual spend findings"
 	}
 	return strings.ReplaceAll(kind, "_", " ") + " advice"
 }

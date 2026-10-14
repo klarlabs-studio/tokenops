@@ -23,6 +23,24 @@ type SessionTurn struct {
 	// WorkflowID and ExecutionID are what the turn was recorded under:
 	// the workflow prepare_work issued, the execution an outcome judges.
 	WorkflowID, ExecutionID string
+	// Source is the client or reader that recorded the turn; Endpoint the
+	// route it went through, empty when none is recorded.
+	Source, Endpoint string
+	// PlanCovered is usage a plan covered, billed nothing at the margin.
+	PlanCovered bool
+}
+
+// BilledUSD is what the turn was billed: nothing when a plan covered it,
+// its stored cost, or for metered usage stored without one its list
+// price, as DailyCharges bills it.
+func (t SessionTurn) BilledUSD() float64 {
+	switch {
+	case t.PlanCovered:
+		return 0
+	case t.CostUSD > 0:
+		return t.CostUSD
+	}
+	return t.APIEquivalentUSD
 }
 
 // SessionTurns lists every usage-carrying prompt event in f that belongs
@@ -39,7 +57,8 @@ func (a *Aggregator) SessionTurns(ctx context.Context, f Filter) ([]SessionTurn,
 	var out []SessionTurn
 	for _, u := range usage {
 		t := SessionTurn{SessionID: u.SessionID, At: u.At, Provider: u.Provider, Model: u.Model,
-			WorkflowID: u.WorkflowID, ExecutionID: u.ExecutionID}
+			WorkflowID: u.WorkflowID, ExecutionID: u.ExecutionID,
+			Source: u.Source, Endpoint: u.Endpoint, PlanCovered: u.PlanCovered}
 		t.Tokens = u.TotalTokens
 		if t.Tokens == 0 {
 			t.Tokens = u.InputTokens + u.OutputTokens
