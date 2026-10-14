@@ -79,6 +79,26 @@ func TestOpenStoreAtUpgradesEarlyComponents(t *testing.T) {
 	}
 }
 
+// The daemon is the store's main writer: its commits must not run WAL
+// checkpoints under the write lock every tokenops process shares.
+func TestOpenStoreAtCheckpointsInTheBackground(t *testing.T) {
+	c, err := New(context.Background(), Options{OpenStore: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.OpenStoreAt(context.Background(), filepath.Join(t.TempDir(), "events.db")); err != nil {
+		t.Fatalf("OpenStoreAt: %v", err)
+	}
+	t.Cleanup(func() { _ = c.Shutdown() })
+	var auto int
+	if err := c.Store.DB().QueryRow("PRAGMA wal_autocheckpoint").Scan(&auto); err != nil {
+		t.Fatalf("read wal_autocheckpoint: %v", err)
+	}
+	if auto != 0 {
+		t.Fatalf("daemon store wal_autocheckpoint = %d, want 0 (checkpoints in the background)", auto)
+	}
+}
+
 func TestNilComponentsShutdownSafe(t *testing.T) {
 	var c *Components
 	if err := c.Shutdown(); err != nil {

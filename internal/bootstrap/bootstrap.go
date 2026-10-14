@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/observ"
@@ -63,6 +64,8 @@ func (c *Components) Close() error { return c.Shutdown() }
 // the dependent Aggregator without re-allocating bus/counter/redactor.
 // Daemon flow: New(OpenStore:false) → optionally OpenStoreAt(path).
 // Caller adapters that don't need persistence skip the second call.
+// The daemon is the store's main writer, so this handle checkpoints the
+// WAL in the background rather than inside its commits.
 func (c *Components) OpenStoreAt(ctx context.Context, path string) error {
 	if c == nil {
 		return errors.New("bootstrap: nil Components")
@@ -80,7 +83,7 @@ func (c *Components) OpenStoreAt(ctx context.Context, path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("bootstrap: create db dir: %w", err)
 	}
-	store, err := sqlite.Open(ctx, path, sqlite.Options{})
+	store, err := sqlite.Open(ctx, path, sqlite.Options{BackgroundCheckpoint: daemonCheckpointEvery})
 	if err != nil {
 		return fmt.Errorf("bootstrap: open events.db at %s: %w", path, err)
 	}
@@ -88,6 +91,11 @@ func (c *Components) OpenStoreAt(ctx context.Context, path string) error {
 	c.Aggregator = analytics.New(store, c.Spend)
 	return nil
 }
+
+// daemonCheckpointEvery is how often the daemon copies the WAL into the
+// database. A PASSIVE checkpoint with nothing to copy costs next to
+// nothing, so this keeps the WAL small without any commit paying for it.
+const daemonCheckpointEvery = 10 * time.Second
 
 // Shutdown orchestrates ordered teardown. Callers should prefer this
 // over Close so future collaborators (event bus drain, OTLP flush) plug

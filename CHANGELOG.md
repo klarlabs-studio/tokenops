@@ -13,6 +13,7 @@
 
 - **docs:** on a phone the hero ring overlapped the headline; it now sizes to the screen
 - **claude.ai usage meter:** once a session has expired and the browser holds no newer one, the daemon reads the browser again only after the browser has written its cookies, where it copied the cookie store on every poll (every five minutes, for days) and logged two warnings each time. The expiry is logged once until a reading succeeds or the cookies change; the stale-reading finding still says how to reconnect
+- **storage:** the daemon copies the event store's write-ahead log into the database from a background loop every 10 seconds, instead of inside whichever write crossed SQLite's threshold. That write ran the checkpoint and its disk sync while holding the lock every tokenops process shares, and while long reads were open it retried on every write: the source of "sqlite: slow write lock" warnings and of retried event batches. On a copy-sized test store (451 MB) with three month-long reads running, appends of 64 events over 100 ms fell from 78 to 50 in 2,400 and the slowest from 2.1s to 0.4s. Other tokenops processes keep SQLite's default
 
 ## 0.103.0 - 2026-10-13
 
