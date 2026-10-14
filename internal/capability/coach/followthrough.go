@@ -50,16 +50,33 @@ func RecordApproval(l Ledger, now time.Time, id, session, power, kind, from, to 
 	})
 }
 
+// Where a tip reached the operator, for RecordTip and RecordSeen.
+const (
+	ViaStopHook   = ft.ViaStopHook
+	ViaStatusLine = ft.ViaStatusLine
+)
+
 // RecordTip records a tip the coach gave about the session, under the ID
-// it was given. Tips belong to the inform power.
-func RecordTip(l Ledger, now time.Time, id, session, kind string) {
+// it was given, and where it was delivered (ft.ViaStopHook). Tips belong
+// to the inform power.
+func RecordTip(l Ledger, now time.Time, id, session, kind, via string) {
 	if l == nil || id == "" {
 		return
 	}
 	_ = l.Append(ft.Entry{
 		Type: ft.EntryOffer, ID: id, At: now.UTC(), Session: session,
-		Power: config.PowerInform, Channel: ft.ChannelTip, Kind: kind,
+		Power: config.PowerInform, Channel: ft.ChannelTip, Kind: kind, Via: via,
 	})
+}
+
+// RecordSeen records that the offer id was shown where the operator sees
+// it (ft.ViaStatusLine). Without it a tip that was let pass is unseen,
+// not ignored, and cannot quiet the coach.
+func RecordSeen(l Ledger, now time.Time, id, via string) {
+	if l == nil || id == "" {
+		return
+	}
+	_ = l.Append(ft.Entry{Type: ft.EntrySeen, ID: id, At: now.UTC(), Via: via})
 }
 
 // RecordResolutions records what became of earlier advice.

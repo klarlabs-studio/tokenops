@@ -455,6 +455,9 @@
                           },
                           "unknown": {
                             "type": "integer"
+                          },
+                          "unseen": {
+                            "type": "integer"
                           }
                         },
                         "type": "object"
@@ -678,6 +681,9 @@
                             "type": "integer"
                           },
                           "unknown": {
+                            "type": "integer"
+                          },
+                          "unseen": {
                             "type": "integer"
                           }
                         },

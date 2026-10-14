@@ -146,7 +146,11 @@ counts as following it.
 Each tip is recorded in `~/.tokenops/coach/followthrough.jsonl` and settled
 over the next three turns: **followed** when the context shrinks to half or
 less (a `/compact` or a fresh start), the model changes, or the session
-ends; **ignored** when none of that happens. An early tier (50% or 75%)
+ends; **ignored** when none of that happens and the tip was shown in the
+status line (`tokenops statusline`), which you see every turn. A tip given
+only as this hook's one-line message may never have been read, so when
+nothing happens after it, it counts as **unseen**: neither followed nor
+ignored, and it never holds a tip back. An early tier (50% or 75%)
 ignored five times in a row within 14 days is held back from then on
 (`coach stats` counts it as "held back because earlier tips like them
 were ignored"), until that evidence ages out. `verbose` still gives it, and

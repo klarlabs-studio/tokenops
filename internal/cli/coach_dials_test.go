@@ -9,6 +9,7 @@ import (
 
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/config"
+	ft "go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough"
 )
 
 func runCoachCmd(t *testing.T, args ...string) (string, error) {
@@ -121,5 +122,24 @@ func TestCoachStatusShowsTheModelPolicy(t *testing.T) {
 	renderCoachStatus(&out, coachcap.Build(cfg), nil)
 	if !strings.Contains(out.String(), "model policy: only anthropic/*; never *opus*") {
 		t.Errorf("model policy line missing:\n%s", out.String())
+	}
+}
+
+// Tips nobody saw are reported as unseen, never folded into ignored, and
+// a kind whose tips were all unseen still gets its line.
+func TestRenderFollowThroughReportsUnseenTips(t *testing.T) {
+	var out bytes.Buffer
+	renderFollowThrough(&out, coachcap.Report{FollowThrough: []ft.Summary{
+		{Power: "inform", Channel: ft.ChannelTip, Kind: "quota_75", Followed: 1, Unseen: 5},
+		{Power: "inform", Channel: ft.ChannelTip, Kind: "compact_now", Unseen: 2},
+	}})
+	got := out.String()
+	for _, want := range []string{
+		"inform tips at 75% of a quota window: 1 followed, 0 ignored, 5 unseen",
+		"inform tips to compact after a long stretch near the context ceiling: 0 followed, 0 ignored, 2 unseen",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("follow-through missing %q:\n%s", want, got)
+		}
 	}
 }
