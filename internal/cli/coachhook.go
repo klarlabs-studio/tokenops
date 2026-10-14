@@ -12,6 +12,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 
 	"go.klarlabs.de/tokenops/internal/config"
@@ -113,6 +114,7 @@ much your sessions have spent and which budget alerts fired.`,
 			cfg.Promotion = promotionNudge(rf, guardDir)
 			cfg.Rates = datedRates(rf)
 			cfg.Verbosity = coachVerbosity(rf)
+			cfg.HoldoutPercent = coachHoldout(rf)
 			plan := func(context.Context, eventschema.Provider, time.Time) planReading { return planReading{} }
 			if loaded, err := loadConfig(rf); err == nil {
 				plan = func(ctx context.Context, p eventschema.Provider, now time.Time) planReading {
@@ -183,6 +185,7 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, plan fun
 		via = coachcap.ViaAmbient
 	}
 	coachcap.RecordTip(ledger, now, dec.OfferID, in.SessionID, dec.TipKind, via)
+	recordSavings(savings.DefaultLedger(), now, in.SessionID, dec)
 	if !dec.Nudge {
 		return nil // no nudge: exit 0 with no stdout
 	}
@@ -388,6 +391,37 @@ func advisoryCoaching(rf *rootFlags) bool {
 
 // coachVerbosity is how much the coach says (ADR 0006). An unreadable
 // config reads as normal: today's behaviour, never silence.
+// coachHoldout is the share of sessions whose cost and drift tips are
+// held back to measure their saving; an unreadable config holds nothing.
+func coachHoldout(rf *rootFlags) int {
+	cfg, err := loadConfig(rf)
+	if err != nil {
+		return 0
+	}
+	return coachcap.Build(cfg).HoldoutPercent
+}
+
+// recordSavings writes this Stop's tip, shown or held back, to the
+// realized-savings ledger with its expected saving and evidence, and the
+// implicit outcomes of earlier ones.
+func recordSavings(l savings.Ledger, now time.Time, session string, dec coachhook.Decision) {
+	tip := savings.Tip{Session: session, ExpectedUSD: dec.ExpectedUSD, ExpectedTokens: dec.ExpectedTokens,
+		Evidence: dec.Evidence, SessionUSD: dec.CumulativeUSD}
+	if dec.OfferID != "" {
+		tip.ID, tip.Kind, tip.Cohort = dec.OfferID, dec.TipKind, savings.Treated
+		savings.RecordTip(l, now, tip)
+	}
+	if dec.ShadowID != "" {
+		tip.ID, tip.Kind, tip.Cohort = dec.ShadowID, dec.ShadowKind, savings.Holdout
+		savings.RecordTip(l, now, tip)
+	}
+	resolved := make([]savings.Resolution, 0, len(dec.Resolved)+len(dec.ShadowResolved))
+	for _, r := range append(append([]coachhook.TipResolution{}, dec.Resolved...), dec.ShadowResolved...) {
+		resolved = append(resolved, savings.Resolution{ID: r.ID, Signal: r.Signal, Followed: r.Followed, Evidence: r.Evidence})
+	}
+	savings.RecordOutcomes(l, now, resolved)
+}
+
 func coachVerbosity(rf *rootFlags) string {
 	cfg, err := loadConfig(rf)
 	if err != nil {

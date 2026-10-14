@@ -85,6 +85,12 @@ type Config struct {
 	// and how many they called expected: the outcome that tunes the
 	// derived session budget. Nil counts none.
 	BudgetAnswers func() (expected, answered int)
+	// HoldoutPercent is the share of sessions whose cost and drift tips
+	// are held back and logged as shadow (#656): the randomized cohort a
+	// realized saving is measured against. Zero opts out; it is clamped
+	// to learning.MaxHoldoutPercent, and tips about work about to stop
+	// are never held.
+	HoldoutPercent int
 }
 
 // Quiet is the rate limit on the coach's proactive channel.
@@ -193,6 +199,19 @@ type Decision struct {
 	// Ambient is true when a tip was due but goes to the status line as
 	// the open tip instead of interrupting (Suppressed says why).
 	Ambient bool
+	// Holdout is true when a due tip was held back for the session's
+	// holdout cohort. ShadowID and ShadowKind name it in the savings
+	// ledger; ShadowResolved are earlier held tips this Stop settled.
+	Holdout        bool
+	ShadowID       string
+	ShadowKind     string
+	ShadowResolved []TipResolution
+	// ExpectedUSD and ExpectedTokens are what acting on the tip given
+	// (or held) this Stop is expected to save per later turn, and
+	// Evidence the figures it rests on. Zero when no tip was due.
+	ExpectedUSD    float64
+	ExpectedTokens int64
+	Evidence       string
 }
 
 // ratesAt resolves the card for a turn, falling back to the embedded

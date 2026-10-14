@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/learning"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 )
 
@@ -17,6 +18,8 @@ type TipResolution struct {
 	Kind     string
 	Followed bool
 	Evidence string
+	// Signal names the implicit outcome (learning.Signal*).
+	Signal string
 }
 
 // openTip is a tip still waiting to be acted on. Its levers are /compact,
@@ -87,7 +90,13 @@ func (c Config) hold(kind string, st *sessionState, now time.Time) (reason strin
 // ignoring it.
 func observeTip(st *sessionState, model string, contextTokens int64) []TipResolution {
 	defer func() { st.compaction, st.dropFrom = "", 0 }()
-	o := st.OpenTip
+	st.shadowResolved = append(st.shadowResolved, settleTip(&st.ShadowTip, st, model, contextTokens)...)
+	return settleTip(&st.OpenTip, st, model, contextTokens)
+}
+
+// settleTip settles one open tip, shown or held, against a new turn.
+func settleTip(slot **openTip, st *sessionState, model string, contextTokens int64) []TipResolution {
+	o := *slot
 	if o == nil || contextTokens <= 0 {
 		return nil
 	}
@@ -97,19 +106,23 @@ func observeTip(st *sessionState, model string, contextTokens int64) []TipResolu
 		// The client compacted on its own at its ceiling: the context
 		// shrank, but because nothing was done until it had to.
 		r.Evidence = "the client compacted automatically at its ceiling"
+		r.Signal = learning.SignalAutoCompacted
 	case o.Context > 0 && contextTokens*2 <= o.Context:
 		r.Followed = true
 		r.Evidence = fmt.Sprintf("context went from %s to %s", formatTokens(o.Context), formatTokens(contextTokens))
+		r.Signal = learning.SignalCompacted
 	case o.Model != "" && model != "" && model != o.Model:
 		r.Followed = true
 		r.Evidence = "the session moved to " + model
+		r.Signal = learning.SignalModelSwitched
 	case o.Turns+1 >= TipWindow:
 		r.Evidence = fmt.Sprintf("nothing changed in %d turns", TipWindow)
+		r.Signal = learning.SignalUnchanged
 	default:
 		o.Turns++
 		return nil
 	}
-	st.OpenTip = nil
+	*slot = nil
 	return []TipResolution{r}
 }
 
@@ -120,7 +133,7 @@ func offerTip(st *sessionState, dec *Decision, cfg Config, kind, model string, c
 		return
 	}
 	if o := st.OpenTip; o != nil {
-		dec.Resolved = append(dec.Resolved, TipResolution{ID: o.ID, Kind: o.Kind, Evidence: "a later tip arrived first"})
+		dec.Resolved = append(dec.Resolved, TipResolution{ID: o.ID, Kind: o.Kind, Evidence: "a later tip arrived first", Signal: learning.SignalSuperseded})
 	}
 	st.OpenTip = &openTip{ID: cfg.NewID(), Kind: kind, Model: model, Context: contextTokens}
 	if q := cfg.Quota; q != nil && dec.quotaWindow.Label != "" {

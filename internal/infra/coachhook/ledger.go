@@ -44,6 +44,9 @@ type ledgerEvent struct {
 	// Ambient records that a due tip went to the status line instead of
 	// interrupting; Suppressed says why.
 	Ambient bool `json:"ambient,omitempty"`
+	// Holdout records that a due tip was held back for the holdout and
+	// logged as shadow.
+	Holdout bool `json:"holdout,omitempty"`
 }
 
 func appendLedger(dir string, e ledgerEvent) {

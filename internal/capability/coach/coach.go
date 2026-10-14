@@ -52,6 +52,10 @@ type Report struct {
 	// Answered is the tip the operator just answered, when the call
 	// answered one.
 	Answered *TipAnswer `json:"answered,omitempty"`
+	// HoldoutPercent is the share of sessions whose cost and drift tips
+	// are held back and logged as shadow, so their realized saving can be
+	// measured (#656). 0 means the operator opted out.
+	HoldoutPercent int `json:"holdout_percent"`
 }
 
 // FollowThroughSummary is the follow-through evidence for one kind.
@@ -97,6 +101,7 @@ var describes = map[string]string{
 func Build(cfg config.Config) Report {
 	r := Report{}
 	r.Verbosity, r.VerbositySource = cfg.CoachVerbosity()
+	r.HoldoutPercent = cfg.CoachHoldoutPercent()
 	for _, name := range config.Powers() {
 		set := cfg.CoachPower(name)
 		eff, why := effective(name, set.Rung)

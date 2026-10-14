@@ -3,9 +3,12 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"time"
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
 )
@@ -18,6 +21,24 @@ type coachStats struct {
 	// ReadGuard is the read guard's ledger: repeat reads, reclaimable and
 	// refused.
 	ReadGuard readguard.Stats `json:"read_guard"`
+	// Savings is the realized-savings ledger: every intervention with
+	// what it was expected to save, and what the holdout showed it saved.
+	Savings savings.Report `json:"savings"`
+}
+
+// writeSavings prints the realized-savings ledger: expected next to
+// realized, so a potential saving is never read as a delivered one.
+func writeSavings(out io.Writer, r savings.Report) {
+	if len(r.Kinds) == 0 {
+		return
+	}
+	fmt.Fprintln(out, "\nSavings ledger — expected when acting, realized as the holdout measured it")
+	for _, k := range r.Kinds {
+		fmt.Fprintf(out, "  %s\n", savings.Describe(k))
+	}
+	if total, ok := r.RealizedUSD.Amount(); ok {
+		fmt.Fprintf(out, "  realized in total: $%.2f API-equivalent\n", total)
+	}
 }
 
 // newCoachStatsCmd is what the coach saw and did, from the hooks' ledgers.
@@ -41,15 +62,17 @@ this shows what you would hear before you let it speak.`,
 			if err != nil {
 				return err
 			}
+			saved := savings.Build(cmd.Context(), savings.DefaultDeps(), time.Now())
 			out := cmd.OutOrStdout()
 			if jsonOut {
 				enc := json.NewEncoder(out)
 				enc.SetIndent("", "  ")
-				return enc.Encode(coachStats{Budget: hook, ReadGuard: guard})
+				return enc.Encode(coachStats{Budget: hook, ReadGuard: guard, Savings: saved})
 			}
 			writeCoachHookStats(out, hook)
 			fmt.Fprintln(out)
 			writeReadGuardStats(out, guard)
+			writeSavings(out, saved)
 			return nil
 		},
 	}

@@ -91,8 +91,13 @@ func renderCoachStatus(out io.Writer, r coachcap.Report, quota []string) {
 		fmt.Fprintf(out, "\n  lately: %s\n", strings.Join(activity, " · "))
 	}
 	renderFollowThrough(out, r)
+	if r.HoldoutPercent > 0 {
+		fmt.Fprintf(out, "\n  holdout: %d%% of sessions do not get cost and drift tips, so their saving can be measured (`tokenops verify`)\n", r.HoldoutPercent)
+	} else {
+		fmt.Fprintln(out, "\n  holdout: off; no tip's saving can be measured against sessions without it")
+	}
 	fmt.Fprintln(out, "\n  change: tokenops coach preset <observe|advise|guided|autopilot> · autonomy <off|advise|ask|autonomous> · verbosity <quiet|normal|verbose>")
-	fmt.Fprintln(out, "          tokenops coach set <inform|waste|models|context> <rung> · tokenops coach off")
+	fmt.Fprintln(out, "          tokenops coach set <inform|waste|models|context> <rung> · tokenops coach off · tokenops coach holdout <off|on|percent>")
 }
 
 // renderModelPolicy states which models no route may land on.
@@ -239,6 +244,32 @@ Approval requests are always shown.`,
 				return coachStatus(cmd, false)
 			}
 			return mutateCoach(cmd, func(c *config.Config) { c.Coach.Verbosity = args[0] })
+		},
+	}
+}
+
+func newCoachHoldoutCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "holdout [off|on|<percent>]",
+		Short: "Show or set the share of sessions that do not get cost and drift tips",
+		Long: `holdout holds a few sessions' cost and drift tips back (the 50% and 75%
+session-budget tips and the compact tip), logged as shadow, so the saving
+each tip realizes can be measured against sessions that did not get it.
+'tokenops verify' compares the two groups.
+
+It is on at 10% by default and never more. Tips about work about to stop
+(a plan window running out or used up, the session budget spent) are never
+held back. 'off' opts out; a preset keeps your choice.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return coachStatus(cmd, false)
+			}
+			n, err := coachcap.ParseHoldout(args[0])
+			if err != nil {
+				return err
+			}
+			return mutateCoach(cmd, func(c *config.Config) { c.Coach.Holdout = &n })
 		},
 	}
 }
