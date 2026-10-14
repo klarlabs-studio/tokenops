@@ -97,6 +97,28 @@ func TestHoldoutNeverHoldsTheSpentBudget(t *testing.T) {
 	}
 }
 
+// While the coach only observes, the budget tier it would have spoken is
+// recorded as a shadow tip, once, and nothing is said or latched.
+func TestObservingRecordsShadowBudgetTips(t *testing.T) {
+	dir := t.TempDir()
+	cfg := tipConfig()
+	cfg.Enabled = false
+	cfg.BudgetUSD = 0.40
+	// 500k of cache-read on opus is $0.25: 62% of the budget.
+	tp := writeTranscript(t, dir, turnLine(ts(1), 500_000, opus))
+	d := Evaluate(dir, "s", tp, cfg, fixedNow)
+	if d.Nudge || d.Holdout || d.ShadowID == "" || d.ShadowKind != "budget_50" || d.Evidence == "" {
+		t.Fatalf("observed tier = %+v", d)
+	}
+	if st := loadSession(dir, "s"); st.MaxFiredFraction != 0 {
+		t.Fatalf("observing latched the spoken tier: %+v", st)
+	}
+	rewrite(t, tp, turnLine(ts(1), 500_000, opus), turnLine(ts(2), 10_000, opus))
+	if d := Evaluate(dir, "s", tp, cfg, fixedNow); d.ShadowID != "" {
+		t.Fatalf("the same tier recorded twice: %+v", d)
+	}
+}
+
 // SessionPeaks is each session's highest spend in the ledger.
 func TestSessionPeaks(t *testing.T) {
 	dir := t.TempDir()

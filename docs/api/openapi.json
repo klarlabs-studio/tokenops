@@ -495,6 +495,89 @@
                       },
                       "type": "array"
                     },
+                    "graduation": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "Graduation": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "capability": {
+                                "type": "string"
+                              },
+                              "criteria": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "have": {
+                                      "type": "string"
+                                    },
+                                    "met": {
+                                      "type": "boolean"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "want": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              },
+                              "next": {
+                                "type": "string"
+                              },
+                              "ready": {
+                                "type": "boolean"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "evidence": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "accepted": {
+                                "type": "integer"
+                              },
+                              "advised": {
+                                "type": "integer"
+                              },
+                              "harmed": {
+                                "type": "boolean"
+                              },
+                              "realized": {
+                                "additionalProperties": false,
+                                "properties": {},
+                                "type": "object"
+                              },
+                              "realized_unit": {
+                                "type": "string"
+                              },
+                              "shadow": {
+                                "type": "integer"
+                              },
+                              "shadow_confirmed": {
+                                "type": "integer"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "power": {
+                            "type": "string"
+                          },
+                          "promote": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "holdout_percent": {
                       "type": "integer"
                     },
@@ -753,6 +836,89 @@
                           },
                           "unseen": {
                             "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "graduation": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "Graduation": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "capability": {
+                                "type": "string"
+                              },
+                              "criteria": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "have": {
+                                      "type": "string"
+                                    },
+                                    "met": {
+                                      "type": "boolean"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "want": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              },
+                              "next": {
+                                "type": "string"
+                              },
+                              "ready": {
+                                "type": "boolean"
+                              },
+                              "stage": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "evidence": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "accepted": {
+                                "type": "integer"
+                              },
+                              "advised": {
+                                "type": "integer"
+                              },
+                              "harmed": {
+                                "type": "boolean"
+                              },
+                              "realized": {
+                                "additionalProperties": false,
+                                "properties": {},
+                                "type": "object"
+                              },
+                              "realized_unit": {
+                                "type": "string"
+                              },
+                              "shadow": {
+                                "type": "integer"
+                              },
+                              "shadow_confirmed": {
+                                "type": "integer"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "power": {
+                            "type": "string"
+                          },
+                          "promote": {
+                            "type": "string"
                           }
                         },
                         "type": "object"

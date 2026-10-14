@@ -72,6 +72,9 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 	case cfg.FlatPlan:
 		evaluateReadingLost(dir, &dec, &st, cfg, now)
 	default:
+		if !cfg.Enabled {
+			cfg.recordShadow(&dec, &st, frac, model, contextTokens, now)
+		}
 		fired = highestBoundary(frac, st.MaxFiredFraction, cfg)
 		if cfg.Verbosity == verbosityQuiet && fired < 1.0-fracEpsilon {
 			// Quiet speaks about money only once the budget is spent.

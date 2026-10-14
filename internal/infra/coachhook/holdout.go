@@ -49,6 +49,26 @@ func (c Config) applyHoldout(dec *Decision, st *sessionState, before spoken, mod
 	dec.ShadowID, dec.ShadowKind = st.ShadowTip.ID, kind
 }
 
+// recordShadow records, while the coach only observes, the budget tier it
+// would have spoken: a shadow tip, settled like a spoken one, which is
+// the evidence for letting it speak (#662). Each tier once a session.
+func (c Config) recordShadow(dec *Decision, st *sessionState, frac float64, model string, contextTokens int64, now time.Time) {
+	fired := highestBoundary(frac, st.ShadowFired, c)
+	if fired <= 0 || c.NewID == nil {
+		return
+	}
+	st.ShadowFired = fired
+	kind := budgetKind(fired)
+	if o := st.ShadowTip; o != nil {
+		st.shadowResolved = append(st.shadowResolved, TipResolution{ID: o.ID, Kind: o.Kind,
+			Evidence: "a later tip arrived first", Signal: learning.SignalSuperseded})
+	}
+	st.ShadowTip = &openTip{ID: c.NewID(), Kind: kind, Model: model, Context: contextTokens}
+	dec.ShadowID, dec.ShadowKind = st.ShadowTip.ID, kind
+	dec.ExpectedUSD, dec.ExpectedTokens = c.expectedSaving(model, contextTokens, now)
+	dec.Evidence = tipEvidence(dec, model, contextTokens)
+}
+
 // expectedSaving is what compacting now would save on each later turn:
 // the context it removes, re-read at the model's cache-read rate. Zero
 // when the context or the model's price is unknown.

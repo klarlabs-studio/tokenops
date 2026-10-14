@@ -33,6 +33,10 @@ type sessionState struct {
 	// ShadowTip is the last tip held back for the holdout, settled the
 	// same way so the two cohorts are measured alike.
 	ShadowTip *openTip `json:"shadow_tip,omitempty"`
+	// ShadowFired latches the budget tiers recorded as shadow while the
+	// coach only observes, apart from MaxFiredFraction so letting the
+	// coach speak later still hears each tier.
+	ShadowFired float64 `json:"shadow_fired,omitempty"`
 	// AboveTurns counts turns at or above CompactAtTokens since the last
 	// compaction; LastContext is the newest turn's context, to see one.
 	AboveTurns  int   `json:"above_turns,omitempty"`
