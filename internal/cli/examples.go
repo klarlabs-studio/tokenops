@@ -22,6 +22,8 @@ tokenops init --yes              # take every default`,
 	"statusline": `tokenops statusline install      # Claude Code runs it on every turn`,
 	"plan set": `tokenops plan set anthropic claude-max-20x
 tokenops plan set openai gpt-pro-5x --price 229 --currency EUR`,
+	"spend export": `tokenops spend export --format focus -o month.csv   # this month so far
+tokenops spend export --since 2026-09-01T00:00:00Z --until 2026-10-01T00:00:00Z -o september.csv`,
 	"provider set":        `tokenops provider set openai https://api.openai.com`,
 	"vendor-usage enable": `tokenops vendor-usage enable codex-jsonl`,
 	"coach preset":        `tokenops coach preset advise`,
