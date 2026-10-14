@@ -425,6 +425,7 @@ type configureIn struct {
 	WorkflowID    string  `json:"workflow_id,omitempty" jsonschema:"description=budget: limit it to one workflow"`
 	AgentID       string  `json:"agent_id,omitempty" jsonschema:"description=budget: limit it to one agent"`
 	Basis         string  `json:"basis,omitempty" jsonschema:"enum=spend,enum=equivalent,enum=tokens,description=budget: what the limit watches: billed spend (default), API-price equivalent, or tokens. On a flat plan billed spend is about 0, so use tokens or equivalent."`
+	Tag           string  `json:"tag,omitempty" jsonschema:"description=budget: limit it to work carrying one allocation tag, key=value (project, client or cost_center)"`
 	Delete        bool    `json:"delete,omitempty" jsonschema:"description=budget: remove the budget with this name"`
 	Mode          string  `json:"mode,omitempty" jsonschema:"enum=passive,enum=active,description=mode: passive analyses on demand; active adds live routing and a budget watcher"`
 	Model         string  `json:"model,omitempty" jsonschema:"description=preferred_model: the model to stay on"`
@@ -676,7 +677,7 @@ func publicTools() []publicTool {
 			selector:    "setting", input: configureIn{}, output: configureOut{},
 			routes: map[string]route{
 				"plan":            {inner: "tokenops_plan_set", params: params("provider", "plan", "spend_limit_usd", "limit_window", "rate_factor", "clear", "price", "currency", "since")},
-				"budget":          {inner: "tokenops_budget_set", params: params("name", "window", "limit_usd", "limit_tokens", "warn_at", "crit_at", "workflow_id", "agent_id", "basis", "delete")},
+				"budget":          {inner: "tokenops_budget_set", params: params("name", "window", "limit_usd", "limit_tokens", "warn_at", "crit_at", "workflow_id", "agent_id", "basis", "tag", "delete")},
 				"mode":            {inner: "tokenops_mode", params: params("mode"), rename: map[string]string{"mode": "set"}},
 				"preferred_model": {inner: "tokenops_preferred_model", params: params("provider", "model", "clear")},
 				"usage_meter":     {inner: "tokenops_vendor_usage_setup", params: params("org")},

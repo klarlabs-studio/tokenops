@@ -115,12 +115,31 @@ func (w *Watcher) Tick(ctx context.Context, now time.Time) Report {
 	return r
 }
 
+// TagSource measures the work carrying one allocation tag ("key=value").
+// A Source that is one can measure a budget scoped to a tag.
+type TagSource interface {
+	SummarizeTag(ctx context.Context, f analytics.Filter, tag string) (analytics.Summary, error)
+}
+
 // Measure is what l's metric reached in its current window at now.
 func Measure(ctx context.Context, src Source, l Limit, now time.Time) (float64, error) {
-	s, err := src.Summarize(ctx, analytics.Filter{
+	f := analytics.Filter{
 		Since: budget.WindowStart(l.Window, now), Until: now,
 		WorkflowID: l.WorkflowID, AgentID: l.AgentID,
-	})
+	}
+	var (
+		s   analytics.Summary
+		err error
+	)
+	if l.Tag != "" {
+		ts, ok := src.(TagSource)
+		if !ok {
+			return 0, fmt.Errorf("budget %s: scoped to %s, which only allocation rules can measure", l.Name, l.Tag)
+		}
+		s, err = ts.SummarizeTag(ctx, f, l.Tag)
+	} else {
+		s, err = src.Summarize(ctx, f)
+	}
 	if err != nil {
 		return 0, fmt.Errorf("budget %s: %w", l.Name, err)
 	}
@@ -211,9 +230,10 @@ func UsedPct(ctx context.Context, src Source, limits []Limit, now time.Time) map
 
 // forecast projects l's metric over the rest of its window. An
 // equivalent-basis budget is not forecast: the daily rows carry real
-// spend only, and its threshold alerts still fire.
+// spend only, and its threshold alerts still fire. Nor is a budget scoped
+// to a tag: the daily rows are all spend, not the tag's.
 func (w *Watcher) forecast(ctx context.Context, l Limit, now time.Time) []forecast.Prediction {
-	if l.Basis == budget.BasisEquivalent {
+	if l.Basis == budget.BasisEquivalent || l.Tag != "" {
 		return nil
 	}
 	metric := forecast.CostUSD
