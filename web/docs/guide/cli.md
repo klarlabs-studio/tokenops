@@ -1128,6 +1128,25 @@ read guard refused. Both ledgers fill while the coach only observes, so
 this shows what you would hear before you let it speak. `--json` gives
 `budget` and `read_guard`.
 
+It also shows the session budget the tips are measured against and where
+it came from. Unless you set one (`tokenops hooks install --coach --budget
+80`; any figure but the $50 default counts as yours), the budget is read
+off your own sessions: the p90 of the API-equivalent cost of the sessions
+you ran in the last 30 days, once at least 20 are known, rounded to whole
+dollars and kept between $10 and $500. It is re-derived once a week and
+moves at most 25% each time, so a run of expensive weeks does not quietly
+become the new normal. A session keeps the budget it started with. With
+fewer than 20 sessions the $50 default stands.
+
+```text
+  session budget: $45 — your p90 session, from 113 sessions in 30 days (derived 2026-10-14)
+    held from $72: moves at most 25% a week (was $36)
+```
+
+The derivation is kept, with the figures it was read from, in
+`~/.tokenops/coach-hook/session-budget.json` and in `--json` as
+`budget.session_budget`.
+
 ### `tokenops coach delivery`
 
 The older setting the coach replaced; it still works.

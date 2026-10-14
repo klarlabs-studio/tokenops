@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/learning"
 )
 
 // ledgerEvent is one appended coaching record.
@@ -73,6 +75,10 @@ type Stats struct {
 	QuotaWindows map[string]int `json:"quota_windows,omitempty"`
 	// CompactTips counts the compact_now tips given.
 	CompactTips int `json:"compact_tips,omitempty"`
+	// SessionBudget is the budget belief last derived from the
+	// operator's own sessions, with its evidence. Nil before the first
+	// derivation.
+	SessionBudget *learning.SessionBudgetBelief `json:"session_budget,omitempty"`
 }
 
 // ReadStats reads the ledger and aggregates it. Cumulative spend is a
@@ -132,6 +138,9 @@ func ReadStats(dir string) (Stats, error) {
 		}
 	}
 	s.DistinctSessions = len(peak)
+	if b, ok := ReadSessionBudget(dir); ok {
+		s.SessionBudget = &b
+	}
 	for _, p := range peak {
 		s.TotalEstSpendUSD += p
 		if p > s.MaxCumulativeUSD {

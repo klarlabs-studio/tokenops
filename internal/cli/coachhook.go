@@ -81,7 +81,8 @@ func newCoachHookCmd(rf *rootFlags) *cobra.Command {
 tail of the session transcript after each turn, sums the full API-equivalent
 cost of the new turns — cache-read is the dominant, most reclaimable part, and
 it compounds every turn you carry a large context — and, as the session's
-cumulative spend crosses fractions of a per-session budget (default $50),
+cumulative spend crosses fractions of a per-session budget (your own p90
+session over the last 30 days once 20 are known, $50 until then),
 surfaces graduated, non-blocking nudges to /compact or start a fresh session. It
 works for clients that never route through the tokenops proxy, because it acts
 inside the client.
@@ -119,7 +120,7 @@ much your sessions have spent and which budget alerts fired.`,
 			return runCoachHook(cmd, dir, cfg, plan)
 		},
 	}
-	cmd.Flags().Float64Var(&budget, "budget", coachhook.DefaultBudgetUSD, "per-session API-equivalent USD budget the alert fractions measure against")
+	cmd.Flags().Float64Var(&budget, "budget", coachhook.DefaultBudgetUSD, "per-session API-equivalent USD budget the alert fractions measure against; the $50 default defers to one derived from your own sessions")
 	cmd.Flags().StringVar(&dir, "dir", "", "state/ledger dir (defaults to ~/.tokenops/coach-hook)")
 	cmd.Flags().StringVar(&guardDir, "guard-dir", "", "read-guard ledger dir to read the promotion case from (defaults to ~/.tokenops/read-guard)")
 	cmd.AddCommand(newCoachHookHookCmd())
@@ -227,6 +228,7 @@ func writeCoachHookStats(out io.Writer, s coachhook.Stats) {
 	}
 	fmt.Fprintf(out, "Budget and quota tips — %d turns across %d sessions\n", s.Events, s.DistinctSessions)
 	fmt.Fprintf(out, "  est. API-equiv spend: max session ~$%.2f · total ~$%.2f\n", s.MaxCumulativeUSD, s.TotalEstSpendUSD)
+	writeSessionBudget(out, s.SessionBudget)
 	fmt.Fprintf(out, "  budget alerts fired: %d\n", s.Alerts)
 	for _, tier := range []string{"50%", "75%", "100%", "200%", "300%"} {
 		if n := s.AlertsByTier[tier]; n > 0 {
@@ -274,6 +276,33 @@ func writeCoachHookStats(out io.Writer, s coachhook.Stats) {
 	case s.Alerts == 0:
 		fmt.Fprintln(out, "\nNo session has crossed a budget fraction yet — your spend stays lean. Keep observing.")
 	}
+}
+
+// writeSessionBudget says what budget sessions are judged against and
+// where it came from, so a derived figure is never a mystery number.
+func writeSessionBudget(out io.Writer, b *coachhook.SessionBudget) {
+	if b == nil {
+		return
+	}
+	fmt.Fprintf(out, "  session budget: %s — %s", wholeUSD(b.BudgetUSD), b.Provenance())
+	if b.FromHistory() {
+		fmt.Fprintf(out, " in %d days (derived %s)", b.WindowDays, b.DerivedAt.Format("2006-01-02"))
+	}
+	fmt.Fprintln(out)
+	switch {
+	case b.DriftClamped():
+		fmt.Fprintf(out, "    held from %s: moves at most %d%% a week (was %s)\n", wholeUSD(b.ObservedUSD), int(b.MaxDrift*100+0.5), wholeUSD(b.PreviousUSD))
+	case b.BoundClamped():
+		fmt.Fprintf(out, "    held from %s at the %s\n", wholeUSD(b.ObservedUSD), b.Clamp)
+	}
+}
+
+// wholeUSD renders whole dollars without cents ("$45"), cents otherwise.
+func wholeUSD(v float64) string {
+	if v == float64(int64(v)) {
+		return fmt.Sprintf("$%d", int64(v))
+	}
+	return fmt.Sprintf("$%.2f", v)
 }
 
 func sortedKeys(m map[string]int) []string {

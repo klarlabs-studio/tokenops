@@ -115,11 +115,8 @@ func cursorContextTokens(c cursorTurn) int64 { return deref(c.InputTokens) }
 func evaluateCursor(dir string, c cursorTurn, cfg Config, now time.Time) Decision {
 	st := loadSession(dir, c.ConversationID)
 
-	budget := cfg.BudgetUSD
-	configured := budget > 0 && budget != DefaultBudgetUSD
-	if budget <= 0 {
-		budget = DefaultBudgetUSD
-	}
+	basis := pinnedBudget(dir, &st, cfg, now)
+	budget := basis.USD
 
 	// Record the turn for ingestion before deciding anything. Cursor
 	// keeps no per-turn record of its own, so this payload is the only
@@ -158,7 +155,7 @@ func evaluateCursor(dir string, c cursorTurn, cfg Config, now time.Time) Decisio
 		case reason == "":
 			dec.Nudge = true
 			dec.FiredFraction = fired
-			dec.Message = nudgeMessage(fired, st.CumulativeUSD, budget, configured)
+			dec.Message = nudgeMessage(fired, st.CumulativeUSD, basis)
 			dec.ContextTokens = cursorContextTokens(c)
 			st.MaxFiredFraction = fired
 			st.LastNudgeAt = now.UTC().Format(time.RFC3339Nano)
