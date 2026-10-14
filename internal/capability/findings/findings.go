@@ -323,7 +323,18 @@ func coaching(c *coach.Report, s *coachhook.Stats) []Finding {
 		}
 		out = append(out, f)
 	}
+	if s != nil {
+		if n := s.Suppressed[coachhook.SuppressedDailyBudget]; n > 0 {
+			out = append(out, Finding{Kind: KindCoach, Level: LevelInfo,
+				Title:    fmt.Sprintf("%d tips waited on the status line instead of interrupting", n),
+				Evidence: "the day's interruption budget (coaching.quiet.max_per_day) was spent",
+				Action:   "`tokenops coach tip ack`, `expected` or `snooze` settles the newest one."})
+		}
+	}
 	for _, sum := range c.FollowThrough {
+		if f, ok := snoozedMostly(sum); ok {
+			out = append(out, f)
+		}
 		if !sum.Quiet {
 			continue
 		}
@@ -337,12 +348,28 @@ func coaching(c *coach.Report, s *coachhook.Stats) []Finding {
 	return out
 }
 
+// snoozedMostly reports a kind of tip the operator snoozes more often
+// than not: the coach's snooze rate, which says a tip fires when it is
+// not wanted.
+func snoozedMostly(s coach.FollowThroughSummary) (Finding, bool) {
+	if s.Channel != "tip" || s.Snoozed < 3 || s.SnoozeRate() < 0.5 {
+		return Finding{}, false
+	}
+	f := Finding{Kind: KindCoach, Level: LevelNotice,
+		Title:    fmt.Sprintf("You snooze most %s", kindWords(s.Kind)),
+		Evidence: fmt.Sprintf("%d of them snoozed, %d%%", s.Snoozed, int(s.SnoozeRate()*100+0.5)),
+		Action:   "If they come too early, answer `tokenops coach tip expected` instead: enough of those move the session budget up."}
+	return f, true
+}
+
 func kindWords(kind string) string {
 	switch {
 	case kind == "compact_now":
 		return "compact tips"
 	case strings.HasPrefix(kind, "quota_"):
 		return "quota tips"
+	case strings.HasPrefix(kind, "budget_"):
+		return "session budget tips"
 	}
 	return strings.ReplaceAll(kind, "_", " ") + " advice"
 }

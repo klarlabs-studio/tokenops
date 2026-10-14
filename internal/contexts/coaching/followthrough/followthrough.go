@@ -39,7 +39,8 @@ const (
 type Outcome string
 
 // The outcomes. Followed and Ignored are recorded; Stood, Undone, Open,
-// Unknown, and Unseen are derived when the ledger is folded.
+// Unknown, and Unseen are derived when the ledger is folded; the
+// operator's answers (lifecycle.go) are given.
 const (
 	OutcomeFollowed Outcome = "followed"
 	OutcomeIgnored  Outcome = "ignored"
@@ -67,6 +68,10 @@ const (
 	// ViaStatusLine is the agent's status line, which the operator sees
 	// on every turn. A tip shown there counts as seen.
 	ViaStatusLine = "statusline"
+	// ViaAmbient is a tip that was due but went only to the status line,
+	// not interrupting: past the day's interruption budget, or a further
+	// step in an episode already told.
+	ViaAmbient = "ambient"
 )
 
 // EntryType is what one ledger line records.
@@ -108,6 +113,8 @@ type Entry struct {
 	// Via is, on an offer, where it was delivered (ViaStopHook) and, on
 	// a seen entry, where it was seen (ViaStatusLine).
 	Via string `json:"via,omitempty"`
+	// Until is, on a snooze, when the snooze ends.
+	Until time.Time `json:"until,omitzero"`
 }
 
 // UndoWindow is how long after an autonomous move lowering the power
@@ -128,12 +135,18 @@ type Record struct {
 	// Seen reports evidence the operator saw the offer. Only tips need
 	// it; advice and approvals are answered in the agent's own turn.
 	Seen bool `json:"seen,omitempty"`
+	// Answer is the operator's newest answer to a tip (acknowledged,
+	// expected, snoozed), empty when they gave none; SnoozedUntil is
+	// when a snooze ends.
+	Answer       Outcome   `json:"answer,omitempty"`
+	SnoozedUntil time.Time `json:"snoozed_until,omitzero"`
 }
 
 // Fold turns the ledger into one record per offer, oldest first.
 func Fold(entries []Entry, now time.Time) []Record {
 	resolved := map[string]Entry{}
 	seen := map[string]bool{}
+	answers := map[string]Entry{}
 	var lowered []Entry
 	for _, e := range entries {
 		switch e.Type {
@@ -145,6 +158,12 @@ func Fold(entries []Entry, now time.Time) []Record {
 			lowered = append(lowered, e)
 		case EntrySeen:
 			seen[e.ID] = true
+		case EntryFeedback:
+			if Answerable(e.Outcome) {
+				if a, ok := answers[e.ID]; !ok || !e.At.Before(a.At) {
+					answers[e.ID] = e
+				}
+			}
 		}
 	}
 	var out []Record
@@ -174,6 +193,17 @@ func Fold(entries []Entry, now time.Time) []Record {
 			// turning it down, and a session that simply ended did not
 			// follow it either.
 			r.Outcome = OutcomeUnseen
+		}
+		if a, ok := answers[e.ID]; ok {
+			r.Answer = a.Outcome
+			if a.Outcome == OutcomeSnoozed {
+				r.SnoozedUntil = a.Until
+			}
+			if r.Outcome != OutcomeFollowed {
+				// The operator answered: whatever was inferred from their
+				// silence, that is what became of the tip.
+				r.Outcome, r.ResolvedAt = a.Outcome, a.At
+			}
 		}
 		out = append(out, r)
 	}
@@ -210,6 +240,10 @@ type Summary struct {
 	// Unseen counts tips nothing shows the operator saw and that were
 	// not acted on: neither followed nor ignored.
 	Unseen int `json:"unseen"`
+	// Acknowledged, Expected and Snoozed count the operator's answers.
+	Acknowledged int `json:"acknowledged,omitempty"`
+	Expected     int `json:"expected,omitempty"`
+	Snoozed      int `json:"snoozed,omitempty"`
 	// Quiet reports that the coach has stopped offering this kind because
 	// it keeps being ignored (see Quieted).
 	Quiet bool `json:"quiet,omitempty"`
@@ -251,6 +285,12 @@ func Summarize(records []Record, now time.Time) []Summary {
 			s.Unknown++
 		case OutcomeUnseen:
 			s.Unseen++
+		case OutcomeAcknowledged:
+			s.Acknowledged++
+		case OutcomeExpected:
+			s.Expected++
+		case OutcomeSnoozed:
+			s.Snoozed++
 		}
 	}
 	for i := range out {
@@ -321,6 +361,7 @@ func Prune(entries []Entry, now time.Time, keep time.Duration) []Entry {
 		case e.Type == EntryOffer && kept[e.ID]:
 		case e.Type == EntryResolve && kept[e.ID]:
 		case e.Type == EntrySeen && kept[e.ID]:
+		case e.Type == EntryFeedback && kept[e.ID]:
 		case e.Type == EntryLowered && now.Sub(e.At) <= keep:
 		default:
 			continue

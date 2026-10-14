@@ -41,6 +41,9 @@ type ledgerEvent struct {
 	QuotaBurn bool `json:"quota_burn,omitempty"`
 	// ReadingLost records that this Stop said the plan reading is lost.
 	ReadingLost bool `json:"reading_lost,omitempty"`
+	// Ambient records that a due tip went to the status line instead of
+	// interrupting; Suppressed says why.
+	Ambient bool `json:"ambient,omitempty"`
 }
 
 func appendLedger(dir string, e ledgerEvent) {

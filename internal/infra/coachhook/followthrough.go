@@ -70,6 +70,14 @@ func (c Config) hold(kind string, st *sessionState, now time.Time) (reason strin
 	if c.Verbosity != verbosityVerbose && quietable(kind) && c.Quieted != nil && c.Quieted(kind) {
 		return "ignored_before", false
 	}
+	if c.Held != nil && kind != "" {
+		switch c.Held(st.id, kind) {
+		case SuppressedSnoozed:
+			return SuppressedSnoozed, true
+		case SuppressedAnswered:
+			return SuppressedAnswered, false
+		}
+	}
 	return "", false
 }
 
@@ -108,7 +116,7 @@ func observeTip(st *sessionState, model string, contextTokens int64) []TipResolu
 // offerTip opens the tip this Stop spoke. A tip still open is closed as
 // ignored: the next tier arrived before anything changed.
 func offerTip(st *sessionState, dec *Decision, cfg Config, kind, model string, contextTokens int64) {
-	if cfg.NewID == nil || !dec.Nudge || dec.Promotion || kind == "" {
+	if cfg.NewID == nil || (!dec.Nudge && !dec.Ambient) || dec.Promotion || kind == "" {
 		return
 	}
 	if o := st.OpenTip; o != nil {

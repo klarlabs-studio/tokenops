@@ -46,17 +46,17 @@ type sessionState struct {
 	// newest drop to half or less. Both only live for one Evaluate.
 	compaction string
 	dropFrom   int64
+	// id is the session the state belongs to; not stored.
+	id string
 }
 
 func loadSession(dir, sessionID string) sessionState {
 	var st sessionState
 	b, err := os.ReadFile(sessionFile(dir, sessionID))
-	if err != nil {
-		return sessionState{}
+	if err != nil || json.Unmarshal(b, &st) != nil {
+		return sessionState{id: sessionID}
 	}
-	if json.Unmarshal(b, &st) != nil {
-		return sessionState{}
-	}
+	st.id = sessionID
 	return st
 }
 

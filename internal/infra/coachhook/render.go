@@ -116,7 +116,7 @@ func formatTokens(n int64) string {
 // read-guard case, which is not a tip about the session.
 func tipKind(dec Decision) string {
 	switch {
-	case !dec.Nudge || dec.Promotion:
+	case (!dec.Nudge && !dec.Ambient) || dec.Promotion:
 		return ""
 	case dec.CompactTip:
 		return compactKind

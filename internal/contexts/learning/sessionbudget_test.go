@@ -129,3 +129,35 @@ func TestSessionBudgetStale(t *testing.T) {
 		t.Error("a belief from the future (clock moved back) is stale")
 	}
 }
+
+// Tips the operator calls "expected" say the bar sits too low for them:
+// enough of them move it from p90 to p95.
+func TestDeriveSessionBudget_ExpectedAnswersRaiseThePercentile(t *testing.T) {
+	p := DefaultBudgetPolicy(50)
+	in := costs(spread(100, 1, 1)...)
+	tests := []struct {
+		name    string
+		answers AlertAnswers
+		want    float64
+	}{
+		{"no answers keep p90", AlertAnswers{}, 90},
+		{"too few answers keep p90", AlertAnswers{Expected: 2, Answered: 2}, 90},
+		{"mostly not expected keeps p90", AlertAnswers{Expected: 1, Answered: 4}, 90},
+		{"mostly expected moves to p95", AlertAnswers{Expected: 3, Answered: 4}, 95},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			b := DeriveSessionBudgetAnswered(in, tc.answers, nil, p, budgetNow)
+			if b.BudgetUSD != tc.want {
+				t.Fatalf("budget = %v, want %v", b.BudgetUSD, tc.want)
+			}
+			if b.ExpectedAnswers != tc.answers.Expected || b.Answered != tc.answers.Answered {
+				t.Errorf("answers not kept as evidence: %+v", b)
+			}
+		})
+	}
+	b := DeriveSessionBudgetAnswered(in, AlertAnswers{Expected: 3, Answered: 4}, nil, p, budgetNow)
+	if got := b.Provenance(); got != "your p95 session, from 100 sessions" {
+		t.Errorf("Provenance = %q", got)
+	}
+}

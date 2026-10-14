@@ -77,6 +77,14 @@ type Config struct {
 	// that the coach stops giving them. Only early tiers can be quieted,
 	// and verbose still gives them. Nil quiets nothing.
 	Quieted func(kind string) bool
+	// Held reports why a tip of kind must not be said in session because
+	// the operator answered an earlier one: "snoozed" defers it,
+	// "answered" closes the episode. Nil holds nothing.
+	Held func(session, kind string) string
+	// BudgetAnswers counts the budget tips the operator answered lately
+	// and how many they called expected: the outcome that tunes the
+	// derived session budget. Nil counts none.
+	BudgetAnswers func() (expected, answered int)
 }
 
 // Quiet is the rate limit on the coach's proactive channel.
@@ -93,6 +101,10 @@ type Quiet struct {
 	// MaxPerSession caps the nudges one session may carry. Zero means no
 	// cap.
 	MaxPerSession int
+	// MaxPerDay is the daily interruption budget across sessions. Past
+	// it, tips wait on the status line instead of interrupting, except
+	// tips about work about to stop. Zero means no budget.
+	MaxPerDay int
 }
 
 // silence reports why a nudge must not be spoken now, and whether the
@@ -178,6 +190,9 @@ type Decision struct {
 	Resolved []TipResolution
 	// CompactTip is true when the nudge is the compact_now tip.
 	CompactTip bool
+	// Ambient is true when a tip was due but goes to the status line as
+	// the open tip instead of interrupting (Suppressed says why).
+	Ambient bool
 }
 
 // ratesAt resolves the card for a turn, falling back to the embedded

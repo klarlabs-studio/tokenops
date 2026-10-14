@@ -145,7 +145,9 @@ func TestEvaluate_BurstFiresHighestTierOnly(t *testing.T) {
 	}
 }
 
-// TestEvaluate_OverBudgetEscalation: reaching 200% fires the over tier.
+// TestEvaluate_OverBudgetEscalation: reaching 200% fires the over tier,
+// on the status line rather than as a second interruption (the episode
+// was already told at 100%).
 func TestEvaluate_OverBudgetEscalation(t *testing.T) {
 	dir := t.TempDir()
 	cfg := DefaultConfig() // OverBudgetStep 1.0
@@ -158,8 +160,8 @@ func TestEvaluate_OverBudgetEscalation(t *testing.T) {
 	// Append 100M -> $100 (200%) -> fire the 200% over tier.
 	rewrite(t, tp, turnLine(ts(1), 100_000_000, opus), turnLine(ts(2), 100_000_000, opus))
 	d := Evaluate(dir, "s", tp, cfg, fixedNow)
-	if !d.Nudge || !approx(d.FiredFraction, 2.00) {
-		t.Fatalf("expected 200%% over tier, got nudge=%v frac=%.3f", d.Nudge, d.FiredFraction)
+	if d.Nudge || !d.Ambient || !approx(d.FiredFraction, 2.00) {
+		t.Fatalf("expected 200%% over tier on the status line, got nudge=%v ambient=%v frac=%.3f", d.Nudge, d.Ambient, d.FiredFraction)
 	}
 	// The cumulative figure is more use than the boundary it crossed:
 	// "$100.00 API-equivalent" is what actually accrued, where "$100+"
