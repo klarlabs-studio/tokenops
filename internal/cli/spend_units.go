@@ -103,7 +103,7 @@ func writeUnitReport(out io.Writer, r uniteconomics.Report) {
 	var shares []string
 	for _, u := range units {
 		for _, s := range u.PlanShare {
-			line := fmt.Sprintf("  %-18s %.1f%% of a %s %s window", unitLabels[u.Name], s.Pct, s.Provider, s.Window)
+			line := fmt.Sprintf("  %-18s %.1f%% of the %s %s window", unitLabels[u.Name], s.Pct, s.Provider, s.Window)
 			if s.BaselinePct != nil {
 				line += fmt.Sprintf("  (baseline %.1f%%)", *s.BaselinePct)
 			}
