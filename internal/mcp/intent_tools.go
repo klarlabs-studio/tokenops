@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	mcpgo "go.klarlabs.de/mcp"
 
+	"go.klarlabs.de/tokenops/internal/capability/workestimate"
 	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
 	"go.klarlabs.de/tokenops/internal/presentation"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -39,6 +41,10 @@ type reviewWorkResult struct {
 	Trace          reviewWorkTrace              `json:"trace"`
 	Usage          *spendSummaryResult          `json:"usage"`
 	Findings       []*eventschema.CoachingEvent `json:"findings"`
+	// WindowShare sets the share of the plan window the task took against
+	// the estimate made at prepare. Absent for a workflow that was never
+	// prepared, since there is no starting point to measure from.
+	WindowShare *workestimate.ReviewResult `json:"window_share,omitempty"`
 }
 
 func registerIntentTools(s *Server, d Deps) error {
@@ -84,6 +90,13 @@ func registerIntentTools(s *Server, d Deps) error {
 					Models:            trace.Trace.Models,
 				}
 			}
+			if d.Store != nil {
+				share, err := workestimate.Review(ctx, d.Store, in.WorkflowID, time.Now().UTC())
+				if err != nil {
+					return mcpgo.StructuredResult{}, err
+				}
+				result.WindowShare = share
+			}
 			encoded, err := json.Marshal(result)
 			if err != nil {
 				return mcpgo.StructuredResult{}, err
@@ -111,6 +124,14 @@ func workInsight(stepCount int, findings []*eventschema.CoachingEvent) presentat
 }
 
 func renderWorkInsight(result *reviewWorkResult) string {
+	body := renderWorkEvidence(result)
+	if result.WindowShare != nil {
+		body += "\n\nPlan window: " + result.WindowShare.Summary + "."
+	}
+	return body
+}
+
+func renderWorkEvidence(result *reviewWorkResult) string {
 	if result.EvidenceStatus == "no_evidence" {
 		return fmt.Sprintf("## Work insight — `%s`\n\n%s\n\nEvidence: no_evidence. No matching execution measurements were observed for `%s`; zero-valued fields are placeholders, not measured zero usage. No changes were applied.",
 			result.Insight.Level, result.Insight.Summary, result.WorkflowID)
