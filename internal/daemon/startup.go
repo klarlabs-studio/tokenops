@@ -258,7 +258,7 @@ func (s *startup) startStorageSubsystems(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("analytics handlers: %w", err)
 	}
-	s.opts = append(s.opts, proxy.WithAnalytics(analyticsH))
+	s.opts = append(s.opts, proxy.WithAnalytics(analyticsH.WithConfig(s.cfg)))
 	s.opts = append(s.opts, proxy.WithAudit(proxy.NewAuditHandlers(store)))
 	return nil
 }
@@ -337,6 +337,9 @@ func (s *startup) startBackgroundRefreshers(context.Context) error {
 
 	// So is spend anomaly detection, which reads four weeks of turns.
 	startAnomalyRuntime(s.cfg, s.components, s.sup, s.logger)
+
+	// And the week's waste report, whose headline the glance shows.
+	startAvoidableRuntime(s.cfg, s.components, s.sup, s.logger)
 	return nil
 }
 

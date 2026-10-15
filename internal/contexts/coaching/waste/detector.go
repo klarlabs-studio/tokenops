@@ -70,6 +70,16 @@ type Profile struct {
 	CompactAtTokens            int64
 }
 
+// The summaries the detector's findings carry, one per pattern, so a
+// reader can tell the patterns apart without parsing their prose.
+const (
+	SummaryOversized       = "Oversized context window"
+	SummaryRunawayGrowth   = "Runaway context growth"
+	SummaryAgentLoop       = "Repeated agent loop detected"
+	SummaryIdenticalPrompt = "Identical prompt repeated consecutively"
+	SummaryLateCompaction  = "Long stretches near the context ceiling without compacting"
+)
+
 // minPerStepGrowthSteps is the fewest steps a per-step growth rate is
 // judged on; over a handful of steps one large paste dominates the mean.
 const minPerStepGrowthSteps = 10
@@ -239,7 +249,7 @@ func (d *Detector) checkOversizedContext(t *workflow.Trace) *eventschema.Coachin
 	return &eventschema.CoachingEvent{
 		WorkflowID: t.WorkflowID,
 		Kind:       eventschema.CoachingKindTrimContext,
-		Summary:    "Oversized context window",
+		Summary:    SummaryOversized,
 		Details: fmt.Sprintf(
 			"Workflow peak context = %d tokens (limit %d). Consider trimming older turns or summarising.",
 			t.MaxContextSize, d.cfg.MaxContextTokens),
@@ -260,7 +270,7 @@ func (d *Detector) checkContextGrowth(t *workflow.Trace) *eventschema.CoachingEv
 		return &eventschema.CoachingEvent{
 			WorkflowID: t.WorkflowID,
 			Kind:       eventschema.CoachingKindTrimContext,
-			Summary:    "Runaway context growth",
+			Summary:    SummaryRunawayGrowth,
 			Details: fmt.Sprintf(
 				"Context grew %d tokens per step on average across %d steps (limit %d). Each step is appending more than it should.",
 				perStep, t.StepCount, limit),
@@ -273,7 +283,7 @@ func (d *Detector) checkContextGrowth(t *workflow.Trace) *eventschema.CoachingEv
 	return &eventschema.CoachingEvent{
 		WorkflowID: t.WorkflowID,
 		Kind:       eventschema.CoachingKindTrimContext,
-		Summary:    "Runaway context growth",
+		Summary:    SummaryRunawayGrowth,
 		Details: fmt.Sprintf(
 			"Cumulative context growth = %d tokens across %d steps (limit %d). Each step is appending more than it should.",
 			t.ContextGrowthTotal, t.StepCount, d.cfg.ContextGrowthLimitTokens),
@@ -289,7 +299,7 @@ func (d *Detector) checkAgentLoops(t *workflow.Trace) *eventschema.CoachingEvent
 	if distinctAgents(t) < 2 {
 		return nil
 	}
-	runLen, agent := longestAgentRun(t)
+	runLen, agent, start := longestAgentRun(t)
 	if runLen < d.cfg.MaxConsecutiveAgentLoops {
 		return nil
 	}
@@ -297,10 +307,15 @@ func (d *Detector) checkAgentLoops(t *workflow.Trace) *eventschema.CoachingEvent
 		WorkflowID: t.WorkflowID,
 		AgentID:    agent,
 		Kind:       eventschema.CoachingKindBreakRecursion,
-		Summary:    "Repeated agent loop detected",
+		Summary:    SummaryAgentLoop,
 		Details: fmt.Sprintf(
 			"Agent %q invoked %d times consecutively (limit %d). Likely an unbounded retry or re-plan loop.",
 			agent, runLen, d.cfg.MaxConsecutiveAgentLoops),
+		ReplayMetadata: map[string]string{
+			"run_start":  fmt.Sprint(start),
+			"run_length": fmt.Sprint(runLen),
+			"limit":      fmt.Sprint(d.cfg.MaxConsecutiveAgentLoops),
+		},
 	}
 }
 
@@ -315,14 +330,17 @@ func distinctAgents(t *workflow.Trace) int {
 	return len(seen)
 }
 
-func longestAgentRun(t *workflow.Trace) (int, string) {
+// longestAgentRun is the longest run of one agent's consecutive steps:
+// its length, the agent, and the index in t.Steps it starts at.
+func longestAgentRun(t *workflow.Trace) (int, string, int) {
 	var (
 		longest   int
 		longestAg string
+		start     int
 		curRun    int
 		curAg     string
 	)
-	for _, step := range t.Steps {
+	for i, step := range t.Steps {
 		ag := step.Prompt.AgentID
 		if ag == "" {
 			curRun = 0
@@ -338,9 +356,10 @@ func longestAgentRun(t *workflow.Trace) (int, string) {
 		if curRun > longest {
 			longest = curRun
 			longestAg = curAg
+			start = i - curRun + 1
 		}
 	}
-	return longest, longestAg
+	return longest, longestAg, start
 }
 
 func (d *Detector) checkRecursion(t *workflow.Trace) *eventschema.CoachingEvent {
@@ -358,7 +377,7 @@ func (d *Detector) checkRecursion(t *workflow.Trace) *eventschema.CoachingEvent 
 				WorkflowID: t.WorkflowID,
 				AgentID:    cur.AgentID,
 				Kind:       eventschema.CoachingKindReuseCache,
-				Summary:    "Identical prompt repeated consecutively",
+				Summary:    SummaryIdenticalPrompt,
 				Details: fmt.Sprintf(
 					"Steps %d and %d share prompt hash %s. Cache the response or break the loop.",
 					i-1, i, cur.PromptHash),
@@ -428,7 +447,7 @@ func (d *Detector) checkLateCompaction(t *workflow.Trace) *eventschema.CoachingE
 	return &eventschema.CoachingEvent{
 		WorkflowID: t.WorkflowID,
 		Kind:       eventschema.CoachingKindCompactEarlier,
-		Summary:    "Long stretches near the context ceiling without compacting",
+		Summary:    SummaryLateCompaction,
 		Details: fmt.Sprintf(
 			"%d steps ran above %s context (longest stretch %d steps without a compaction). "+
 				"Compacting at that line would have kept context near %s on average; these steps re-read about %s more%s. "+

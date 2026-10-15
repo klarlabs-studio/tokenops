@@ -57,6 +57,27 @@ func TestReclamationsExcludesWouldBlock(t *testing.T) {
 	}
 }
 
+// A would_block is waste the guard watched happen: a redundant re-read
+// that went ahead because it only observes. The waste taxonomy prices it.
+func TestRedundantReadsAreTheWouldBlocks(t *testing.T) {
+	dir := seedLedger(t,
+		`{"ts":"2026-08-23T10:00:00Z","mode":"observe","session":"s","path":"/a.go","action":"would_block","est_tokens":5000,"repeat":true}`,
+		`{"ts":"2026-08-23T10:00:01Z","mode":"active","session":"s","path":"/b.go","action":"blocked","est_tokens":700,"repeat":true}`,
+		`{"ts":"2026-08-23T10:00:02Z","mode":"observe","session":"s","path":"/c.go","action":"allow","est_tokens":300}`,
+		`not json`,
+	)
+	got, err := RedundantReads(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Tokens != 5000 || got[0].Path != "/a.go" || got[0].SessionID != "s" {
+		t.Errorf("redundant reads = %+v", got)
+	}
+	if got, err := RedundantReads(t.TempDir()); err != nil || len(got) != 0 {
+		t.Errorf("no ledger: %v, %v", got, err)
+	}
+}
+
 // Each reclamation needs a stable identity so re-scanning the ledger does
 // not double-count the same saving on every poll.
 func TestReclamationIDIsStableAndDistinct(t *testing.T) {

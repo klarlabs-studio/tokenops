@@ -127,3 +127,30 @@ func TestSessionTurnsCarryToolRouteAndBilling(t *testing.T) {
 		}
 	}
 }
+
+// A turn carries its token breakdown, so a cache rebuild can be told from
+// an ordinary turn and a turn repriced on another model.
+func TestSessionTurnsCarryTheirTokenBreakdown(t *testing.T) {
+	env := &eventschema.Envelope{
+		ID: "split", SchemaVersion: eventschema.SchemaVersion, Type: eventschema.EventTypePrompt,
+		Timestamp: time.Now().UTC().Add(-time.Hour),
+		Payload: &eventschema.PromptEvent{
+			Provider: eventschema.ProviderAnthropic, RequestModel: "claude-sonnet-5", SessionID: "s-1",
+			InputTokens: 1_000, CachedInputTokens: 600, CacheWriteInputTokens: 300, CacheWrite1hInputTokens: 100,
+			OutputTokens: 50, TotalTokens: 1_050,
+		},
+	}
+	turns, err := analytics.New(storeWith(t, env), nil).SessionTurns(context.Background(),
+		analytics.Filter{Since: time.Now().Add(-24 * time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(turns) != 1 {
+		t.Fatalf("turns = %+v", turns)
+	}
+	got := turns[0]
+	if got.InputTokens != 1_000 || got.OutputTokens != 50 || got.CacheReadTokens != 600 ||
+		got.CacheWriteTokens != 300 || got.CacheWrite1hTokens != 100 {
+		t.Errorf("breakdown = %+v", got)
+	}
+}

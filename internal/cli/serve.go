@@ -153,6 +153,14 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 			return cfg.Coaching.WasteConfig()
 		},
 		StaleSources: staleSources,
+		Config: func() config.Config {
+			if currentConfig != nil {
+				if c := currentConfig(); c != nil {
+					return *c
+				}
+			}
+			return cfg
+		},
 		Money: func(ctx context.Context) (money.Rate, bool) {
 			c := cfg
 			if currentConfig != nil {
