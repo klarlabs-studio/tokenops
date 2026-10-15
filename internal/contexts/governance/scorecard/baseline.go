@@ -64,8 +64,9 @@ type PlanUseComparison struct {
 // compare sets current against baseline. A move smaller than tolerance,
 // in the figure's unit, is unchanged: noise is not a trend.
 func compare(current, baseline float64, p Polarity, tolerance float64) Comparison {
-	delta := current - baseline
-	c := Comparison{Baseline: baseline, Delta: math.Round(delta*100) / 100}
+	// Read the rounded delta, so the direction agrees with the printed one.
+	delta := math.Round((current-baseline)*100) / 100
+	c := Comparison{Baseline: baseline, Delta: delta}
 	switch {
 	case math.Abs(delta) < tolerance:
 		c.Direction = DirectionUnchanged

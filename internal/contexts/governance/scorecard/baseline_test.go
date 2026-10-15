@@ -108,6 +108,9 @@ func TestBuildComparesKPIsWithOwnBaseline(t *testing.T) {
 			t.Errorf("text missing %q:\n%s", want, text)
 		}
 	}
+	if strings.Contains(text, "no baseline captured") {
+		t.Errorf("the --baseline-ref label must not deny the baseline shown:\n%s", text)
+	}
 	b, err := sc.MarshalJSON()
 	if err != nil {
 		t.Fatal(err)

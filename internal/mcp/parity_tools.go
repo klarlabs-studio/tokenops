@@ -52,7 +52,7 @@ func RegisterParityTools(s *Server, d ParityDeps) error {
 		return errors.New("mcp: server must not be nil")
 	}
 	s.Tool("tokenops_scorecard").
-		Description("Operator wedge KPI scorecard (FVT, TEU, SAC) computed from the local event store. Mirrors `tokenops scorecard`.").
+		Description("Operator wedge KPI scorecard (FVT, TEU, SAC and the agent KPIs) computed from the local event store, each KPI set against your own trailing baseline (vs_baseline). Mirrors `tokenops scorecard`.").
 		OutputSchema(spending.ScorecardReport{}).
 		Handler(func(ctx context.Context, in scorecardInput) (*spending.ScorecardReport, error) {
 			return runScorecard(ctx, d, in)

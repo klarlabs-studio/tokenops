@@ -506,7 +506,7 @@ func (s *Scorecard) String() string {
 		s.GeneratedAt.Format(time.RFC3339))
 	if sb := s.SelfBaseline; sb != nil {
 		fmt.Fprintf(&b, "Against your own baseline: the %d days before (%s – %s)\n",
-			sb.Days, sb.Since.Format(baselineHeaderDate), sb.Until.AddDate(0, 0, -1).Format(baselineHeaderDate))
+			sb.Days, sb.Since.Format(baselineHeaderDate), sb.Until.Format(baselineHeaderDate))
 	}
 	b.WriteString("\n")
 	fmt.Fprintf(&b, "FVT — First-Value Time (seconds):           %s\n",
@@ -532,7 +532,13 @@ func (s *Scorecard) String() string {
 	}
 	writePlanUse(&b, s.PlanUse, s.PlanUseVsBaseline, s.PlanUseDays)
 	writeUnitCosts(&b, s.UnitCosts, s.PlanUseDays)
-	fmt.Fprintf(&b, "\nOverall Grade: %s\nBaseline: %s\n", s.OverallGrade, baselineOrMissing(s.BaselineRef))
+	fmt.Fprintf(&b, "\nOverall Grade: %s\n", s.OverallGrade)
+	// The operator's label for this run (--baseline-ref), not the
+	// trailing baseline the KPIs are compared with: "no baseline
+	// captured" under a line of comparisons read as a contradiction.
+	if s.BaselineRef != "" {
+		fmt.Fprintf(&b, "Baseline ref: %s\n", s.BaselineRef)
+	}
 	if s.Degraded != "" {
 		fmt.Fprintf(&b, "\n⚠ some KPIs could not be computed: %s\n", s.Degraded)
 	}
