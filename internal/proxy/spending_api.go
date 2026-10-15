@@ -65,7 +65,7 @@ func (a *AnalyticsHandlers) scorecard(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
-	writeAPIJSON(w, http.StatusOK, spending.Scorecard(r.Context(), a.store, spending.ScorecardParams{SinceDays: days, Spend: a.spend}))
+	writeAPIJSON(w, http.StatusOK, spending.Scorecard(r.Context(), a.store, spending.ScorecardParams{SinceDays: days, Spend: a.spend, Allocation: a.allocation}))
 }
 
 // pricingHandler serves the rate card. It needs no event store, so it is

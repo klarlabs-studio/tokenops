@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 )
@@ -40,6 +41,7 @@ func (s *Server) spendExport(w http.ResponseWriter, r *http.Request) {
 	if s.plans != nil {
 		if cfg := s.plans().Config; cfg != nil {
 			q.Plans = cfg.Plans
+			q.Allocation = &allocation.Deps{Rules: cfg.AllocationRules()}
 		}
 	}
 	if file, err := planhistory.Default(); err == nil {

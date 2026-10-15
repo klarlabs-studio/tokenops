@@ -11,19 +11,26 @@
 //     in force and split at calendar months, which stand in for billing
 //     periods. A subscription is not a commitment discount, so its
 //     EffectiveCost is what it costs.
+//
 //   - Usage a plan covered is a Usage row billed 0, with ListCost at the
 //     API price: ListCost against EffectiveCost is the value the plan gave.
+//
 //   - Usage billed per token is a Usage row that costs what it cost.
+//
 //   - Tokens are ConsumedQuantity in "Tokens"; PricingQuantity counts
 //     millions of tokens, the unit API prices are published in.
 //
-// Only derived fields leave: providers, models, plans, counts and money.
-// No session title, path or prompt has a column to go in.
+//   - Usage an allocation rule tagged is its own row, its tags in Tags.
+//
+// Only derived fields leave: providers, models, plans, counts, money and
+// the operator's own allocation tags. No session title, path or prompt has
+// a column to go in.
 package focus
 
 import (
 	"cmp"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -113,6 +120,9 @@ type Usage struct {
 	// Unpriced is true when some of the usage has no rate card, so ListUSD
 	// understates it.
 	Unpriced bool
+	// Tags are the allocation tags the usage carries (project, client,
+	// cost_center), nil when it carries none.
+	Tags map[string]string
 }
 
 // Purchase is a plan's fee for the time it was in force.
@@ -161,8 +171,8 @@ type Row struct {
 	ServiceName        string
 	ServiceSubcategory string
 	SkuID              string
-	// Tags is a JSON object, or empty for null. Nothing fills it yet:
-	// user-defined tags come with allocation tags.
+	// Tags is a JSON object, or empty for null: the operator's allocation
+	// tags, the one user-defined tag scheme, so its keys are unprefixed.
 	Tags string
 }
 
@@ -218,7 +228,8 @@ func Build(usage []Usage, purchases []Purchase) []Row {
 			cmp.Compare(a.ChargeCategory, b.ChargeCategory),
 			cmp.Compare(a.ProviderName, b.ProviderName),
 			cmp.Compare(a.SkuID, b.SkuID),
-			cmp.Compare(a.BillingAccountID, b.BillingAccountID))
+			cmp.Compare(a.BillingAccountID, b.BillingAccountID),
+			cmp.Compare(a.Tags, b.Tags))
 	})
 	return out
 }
@@ -273,7 +284,20 @@ func usageRow(u Usage) Row {
 	if u.Unpriced {
 		r.ChargeDescription += "; no API rate is known for some of it, so ListCost understates it"
 	}
+	r.Tags = tagsJSON(u.Tags)
 	return r
+}
+
+// tagsJSON writes tags as a JSON object, keys sorted; empty for none.
+func tagsJSON(tags map[string]string) string {
+	if len(tags) == 0 {
+		return ""
+	}
+	b, err := json.Marshal(tags)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 func purchaseRows(p Purchase) []Row {

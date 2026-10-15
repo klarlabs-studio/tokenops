@@ -65,12 +65,16 @@ func newBudgetListCmd() *cobra.Command {
 				if basis == "" {
 					basis = "spend"
 				}
+				scope := ""
+				if b.Tag != "" {
+					scope = "  for " + b.Tag
+				}
 				for _, w := range b.EffectiveWindows() {
 					limit := fmt.Sprintf("%.2f USD", w.LimitUSD)
 					if strings.EqualFold(basis, "tokens") {
 						limit = fmt.Sprintf("%d tokens", w.LimitTokens)
 					}
-					fmt.Fprintf(out, "  %-18s %-8s %-10s limit %-16s %s\n", b.Name, w.Window, basis, limit, windowMode(b.Name, w))
+					fmt.Fprintf(out, "  %-18s %-8s %-10s limit %-16s %s%s\n", b.Name, w.Window, basis, limit, windowMode(b.Name, w), scope)
 				}
 			}
 			return nil
@@ -110,6 +114,7 @@ func newBudgetSetCmd() *cobra.Command {
 		mode           string
 		require        string
 		addWindow      bool
+		tag            string
 	)
 	cmd := &cobra.Command{
 		Use:   "set <name>",
@@ -153,6 +158,7 @@ recording what it would have done, until 'tokenops boundaries promote'.`,
 				Mode:        mode,
 				Require:     require,
 				AddWindow:   addWindow,
+				Tag:         tag,
 			})
 			if errors.Is(err, config.ErrBudgetNoCeiling) {
 				return fmt.Errorf("a budget needs a ceiling: pass --limit-usd, or --limit-tokens with --basis tokens")
@@ -201,6 +207,7 @@ recording what it would have done, until 'tokenops boundaries promote'.`,
 	cmd.Flags().StringVar(&basis, "basis", "", "what the limit watches: spend | equivalent | tokens")
 	cmd.Flags().StringVar(&workflowID, "workflow-id", "", "scope the budget to one workflow")
 	cmd.Flags().StringVar(&agentID, "agent-id", "", "scope the budget to one agent")
+	cmd.Flags().StringVar(&tag, "tag", "", "scope the budget to work carrying one allocation tag, key=value (project, client or cost_center)")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }

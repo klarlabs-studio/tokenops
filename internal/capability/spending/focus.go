@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/planswitch"
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/focus"
@@ -31,6 +32,10 @@ type FocusQuery struct {
 	History plans.History
 	Plans   map[string]string
 	Now     time.Time
+	// Allocation, when it holds rules, splits each charge by the
+	// allocation tags its turns carry and fills the Tags column. Its
+	// Turns may be nil: they are read from the charge reader.
+	Allocation *allocation.Deps
 }
 
 // FocusDataset is spend and usage as FOCUS rows.
@@ -69,8 +74,12 @@ func FocusExport(ctx context.Context, src ChargeReader, q FocusQuery) (FocusData
 	if err != nil {
 		return FocusDataset{}, err
 	}
+	turns, err := allocate(ctx, src, q, since, until)
+	if err != nil {
+		return FocusDataset{}, err
+	}
 	d := FocusDataset{Version: focus.Version, Since: since, Until: until}
-	usage, unpriced := focusUsage(charges, q.History, q.Plans)
+	usage, unpriced := focusUsage(splitByTags(charges, turns), q.History, q.Plans)
 	purchases, notes := focusPurchases(q.History, q.Plans, since, until)
 	d.Rows = focus.Build(usage, purchases)
 	if unpriced > 0 {
@@ -83,13 +92,14 @@ func FocusExport(ctx context.Context, src ChargeReader, q FocusQuery) (FocusData
 
 // focusUsage maps charges to FOCUS usage, naming the plan in force on
 // each plan-covered charge's day.
-func focusUsage(charges []analytics.Charge, h plans.History, bound map[string]string) ([]focus.Usage, int) {
+func focusUsage(charges []taggedCharge, h plans.History, bound map[string]string) ([]focus.Usage, int) {
 	out := make([]focus.Usage, 0, len(charges))
 	unpriced := 0
 	for _, c := range charges {
 		u := focus.Usage{
 			Day: c.Day, Provider: c.Provider, Model: c.Model, PlanCovered: c.PlanCovered,
 			Requests: c.Requests, Tokens: c.Tokens(), BilledUSD: c.CostUSD, ListUSD: c.ListUSD, Unpriced: c.Unpriced,
+			Tags: c.Tags,
 		}
 		if c.PlanCovered {
 			if periods := h.Periods(c.Provider, c.Day, c.Day.Add(24*time.Hour), bound[c.Provider]); len(periods) > 0 {
