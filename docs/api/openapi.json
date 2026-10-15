@@ -4035,6 +4035,9 @@
                         "name": {
                           "type": "string"
                         },
+                        "polarity": {
+                          "type": "string"
+                        },
                         "thresholds": {
                           "additionalProperties": false,
                           "properties": {
@@ -4055,6 +4058,21 @@
                         },
                         "value": {
                           "type": "number"
+                        },
+                        "vs_baseline": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "baseline": {
+                              "type": "number"
+                            },
+                            "delta": {
+                              "type": "number"
+                            },
+                            "direction": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
                         }
                       },
                       "type": "object"
@@ -4089,6 +4107,9 @@
                         "name": {
                           "type": "string"
                         },
+                        "polarity": {
+                          "type": "string"
+                        },
                         "thresholds": {
                           "additionalProperties": false,
                           "properties": {
@@ -4109,6 +4130,21 @@
                         },
                         "value": {
                           "type": "number"
+                        },
+                        "vs_baseline": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "baseline": {
+                              "type": "number"
+                            },
+                            "delta": {
+                              "type": "number"
+                            },
+                            "direction": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
                         }
                       },
                       "type": "object"
@@ -4128,6 +4164,9 @@
                         "name": {
                           "type": "string"
                         },
+                        "polarity": {
+                          "type": "string"
+                        },
                         "thresholds": {
                           "additionalProperties": false,
                           "properties": {
@@ -4148,6 +4187,21 @@
                         },
                         "value": {
                           "type": "number"
+                        },
+                        "vs_baseline": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "baseline": {
+                              "type": "number"
+                            },
+                            "delta": {
+                              "type": "number"
+                            },
+                            "direction": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
                         }
                       },
                       "type": "object"
@@ -4164,6 +4218,9 @@
                         "name": {
                           "type": "string"
                         },
+                        "polarity": {
+                          "type": "string"
+                        },
                         "thresholds": {
                           "additionalProperties": false,
                           "properties": {
@@ -4184,6 +4241,21 @@
                         },
                         "value": {
                           "type": "number"
+                        },
+                        "vs_baseline": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "baseline": {
+                              "type": "number"
+                            },
+                            "delta": {
+                              "type": "number"
+                            },
+                            "direction": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
                         }
                       },
                       "type": "object"
@@ -4257,6 +4329,48 @@
                       },
                       "type": "object"
                     },
+                    "plan_use_vs_baseline": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "coverage": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "baseline": {
+                                "type": "number"
+                              },
+                              "delta": {
+                                "type": "number"
+                              },
+                              "direction": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "utilization": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "baseline": {
+                                "type": "number"
+                              },
+                              "delta": {
+                                "type": "number"
+                              },
+                              "direction": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "regenerate_rate": {
                       "additionalProperties": false,
                       "properties": {
@@ -4267,6 +4381,9 @@
                           "type": "string"
                         },
                         "name": {
+                          "type": "string"
+                        },
+                        "polarity": {
                           "type": "string"
                         },
                         "thresholds": {
@@ -4289,6 +4406,38 @@
                         },
                         "value": {
                           "type": "number"
+                        },
+                        "vs_baseline": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "baseline": {
+                              "type": "number"
+                            },
+                            "delta": {
+                              "type": "number"
+                            },
+                            "direction": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "self_baseline": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "days": {
+                          "type": "integer"
+                        },
+                        "since": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "until": {
+                          "format": "date-time",
+                          "type": "string"
                         }
                       },
                       "type": "object"
@@ -4305,6 +4454,9 @@
                         "name": {
                           "type": "string"
                         },
+                        "polarity": {
+                          "type": "string"
+                        },
                         "thresholds": {
                           "additionalProperties": false,
                           "properties": {
@@ -4325,6 +4477,21 @@
                         },
                         "value": {
                           "type": "number"
+                        },
+                        "vs_baseline": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "baseline": {
+                              "type": "number"
+                            },
+                            "delta": {
+                              "type": "number"
+                            },
+                            "direction": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
                         }
                       },
                       "type": "object"
@@ -4341,6 +4508,9 @@
                         "name": {
                           "type": "string"
                         },
+                        "polarity": {
+                          "type": "string"
+                        },
                         "thresholds": {
                           "additionalProperties": false,
                           "properties": {
@@ -4361,6 +4531,21 @@
                         },
                         "value": {
                           "type": "number"
+                        },
+                        "vs_baseline": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "baseline": {
+                              "type": "number"
+                            },
+                            "delta": {
+                              "type": "number"
+                            },
+                            "direction": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
                         }
                       },
                       "type": "object"
@@ -4377,6 +4562,9 @@
                         "name": {
                           "type": "string"
                         },
+                        "polarity": {
+                          "type": "string"
+                        },
                         "thresholds": {
                           "additionalProperties": false,
                           "properties": {
@@ -4397,6 +4585,21 @@
                         },
                         "value": {
                           "type": "number"
+                        },
+                        "vs_baseline": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "baseline": {
+                              "type": "number"
+                            },
+                            "delta": {
+                              "type": "number"
+                            },
+                            "direction": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
                         }
                       },
                       "type": "object"
@@ -4410,6 +4613,9 @@
                           },
                           "change_pct": {
                             "type": "number"
+                          },
+                          "direction": {
+                            "type": "string"
                           },
                           "per_unit_usd": {
                             "type": "number"

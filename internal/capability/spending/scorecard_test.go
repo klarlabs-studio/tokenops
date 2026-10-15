@@ -79,3 +79,34 @@ func TestWithoutLoopSentinelsKeepsOccasionalAcks(t *testing.T) {
 		t.Errorf("kept %d prompts, want the %d from the session under the threshold", got, loopSentinelRepeats)
 	}
 }
+
+// The agent KPIs are set against the operator's own four weeks before
+// the period, read from the same transcripts.
+func TestScorecardComparesAgentKPIsWithOwnBaseline(t *testing.T) {
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	root := t.TempDir()
+	at, earlier := now.Add(-time.Hour), now.AddDate(0, 0, -10)
+	writeTranscript(t, root, "now", []string{
+		userTurn("now", at, "refactor the retry path to use the shared backoff"),
+		userTurn("now", at.Add(time.Minute), "ok"),
+		userTurn("now", at.Add(2*time.Minute), "add a test for the jitter bound"),
+		userTurn("now", at.Add(3*time.Minute), "now document the new option"),
+	})
+	writeTranscript(t, root, "before", []string{
+		userTurn("before", earlier, "split the parser into two passes"),
+		userTurn("before", earlier.Add(time.Minute), "yes"),
+		userTurn("before", earlier.Add(2*time.Minute), "ok"),
+		userTurn("before", earlier.Add(3*time.Minute), "add the golden files"),
+	})
+	s := Scorecard(context.Background(), nil, ScorecardParams{TranscriptRoot: root, Now: now})
+	if got := s.ConfirmationGateRate.Value; got != 25 {
+		t.Fatalf("CGR %.1f%%, want 25%% (the period alone)", got)
+	}
+	c := s.ConfirmationGateRate.VsBaseline
+	if c == nil || c.Baseline != 50 || c.Direction != scorecard.DirectionBetter {
+		t.Fatalf("CGR vs baseline = %+v, want 50%% and better", c)
+	}
+	if s.SelfBaseline == nil || !s.SelfBaseline.Until.Equal(now.AddDate(0, 0, -7)) {
+		t.Errorf("self baseline = %+v", s.SelfBaseline)
+	}
+}

@@ -96,9 +96,16 @@ tokenops scorecard --baseline-ref v1.0.0 --json > .scorecard-baseline.json
      --json > .scorecard-baseline.json
    ```
 
-2. **Compare** subsequent scorecards against the baseline (planned):
-   - Each KPI shows its current value vs. the baseline value
-   - Drift is flagged when a KPI drops by one or more letter grades
+2. **Compare**: every scorecard already sets each measured KPI against
+   your own trailing baseline, the 28 days before the period (the same
+   window unit costs use). Each line shows the baseline value, the
+   change and its direction given which way the KPI is healthy
+   (`better`, `worse`, or `unchanged` for a move under a percentage
+   point; first-value time under a second or 5%). Plan utilization and
+   coverage are compared without a verdict (`up`, `down`). A KPI you
+   override, or one not measured in either window, has no comparison.
+   The comparison is you against yourself only: there is no team or
+   peer figure.
 
 3. **Iterate** on optimizations (config changes, pipeline tuning,
    instrumentation improvements) and re-run the scorecard to measure

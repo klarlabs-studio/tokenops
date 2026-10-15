@@ -64,13 +64,16 @@ func Scorecard(ctx context.Context, store *sqlite.Store, p ScorecardParams) *Sco
 			}
 		}
 	}
+	since := now.Add(-time.Duration(days) * 24 * time.Hour)
+	agent, agentBase := agentKPIs(p.TranscriptRoot, since.AddDate(0, 0, -scorecard.BaselineDays), since)
 	return scorecard.Build(ctx, reader, scorecard.BuildParams{
 		UnitCosts:          units,
 		SinceDays:          days,
 		FVTSecondsOverride: p.FVTSeconds,
 		TEUPctOverride:     p.TEUPct,
 		SACPctOverride:     p.SACPct,
-		AgentKPIs:          agentKPIs(p.TranscriptRoot, now.Add(-time.Duration(days)*24*time.Hour)),
+		AgentKPIs:          agent,
+		AgentKPIBaseline:   agentBase,
 		BaselineRef:        p.BaselineRef,
 		ClockNow:           func() time.Time { return now },
 	})
@@ -95,14 +98,42 @@ func scorecardUnitCosts(r uniteconomics.Report) []scorecard.UnitCost {
 }
 
 // agentKPIs derives the KPIs the event store cannot: CGR and RGR need
-// prompt text, TCS and DAR need tool results. It returns a zero value,
-// with no *Computed flag set, when there are no prompts since then.
-func agentKPIs(root string, since time.Time) scorecard.AgentKPIInputs {
-	extracted, err := prompts.Extract(prompts.ExtractOptions{Root: root, Since: since, Opencode: opencodestore.Store{}})
+// prompt text, TCS and DAR need tool results. It reads the transcripts
+// once from baselineSince and returns the KPIs for the period (from
+// since) and for the operator's own baseline before it. Either is a zero
+// value, with no *Computed flag set, when it holds no prompts.
+func agentKPIs(root string, baselineSince, since time.Time) (period, baseline scorecard.AgentKPIInputs) {
+	extracted, err := prompts.Extract(prompts.ExtractOptions{Root: root, Since: baselineSince, Opencode: opencodestore.Store{}})
 	if err != nil || len(extracted) == 0 {
+		return period, baseline
+	}
+	var nowPrompts, basePrompts []prompts.UserPrompt
+	for _, p := range extracted {
+		if p.Timestamp.Before(since) {
+			basePrompts = append(basePrompts, p)
+		} else {
+			nowPrompts = append(nowPrompts, p)
+		}
+	}
+	var nowTools, baseTools []tools.ToolEvent
+	if toolEvs, err := tools.Extract(tools.ExtractOptions{Root: root, Since: baselineSince}); err == nil {
+		for _, e := range toolEvs {
+			if e.Timestamp.Before(since) {
+				baseTools = append(baseTools, e)
+			} else {
+				nowTools = append(nowTools, e)
+			}
+		}
+	}
+	return agentKPIsFrom(nowPrompts, nowTools), agentKPIsFrom(basePrompts, baseTools)
+}
+
+// agentKPIsFrom is the agent KPIs of one window's prompts and tool calls.
+func agentKPIsFrom(ps []prompts.UserPrompt, toolEvs []tools.ToolEvent) scorecard.AgentKPIInputs {
+	if len(ps) == 0 {
 		return scorecard.AgentKPIInputs{}
 	}
-	f := prompts.Analyze(withoutLoopSentinels(extracted))
+	f := prompts.Analyze(withoutLoopSentinels(ps))
 	if f.TotalPrompts == 0 {
 		return scorecard.AgentKPIInputs{}
 	}
@@ -112,7 +143,7 @@ func agentKPIs(root string, since time.Time) scorecard.AgentKPIInputs {
 		RegenerateRatePct:        100.0 * float64(f.Regenerates) / float64(f.TotalPrompts),
 		RegenerateComputed:       true,
 	}
-	if toolEvs, err := tools.Extract(tools.ExtractOptions{Root: root, Since: since}); err == nil && len(toolEvs) > 0 {
+	if len(toolEvs) > 0 {
 		ts := tools.Analyze(toolEvs)
 		if ts.TotalToolCalls > 0 {
 			out.ToolSuccessRatePct = ts.SuccessRate
