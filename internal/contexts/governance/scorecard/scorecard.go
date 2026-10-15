@@ -38,6 +38,12 @@ type KPIResult struct {
 	Unit        string     `json:"unit"`
 	Grade       Grade      `json:"grade"`
 	Threshold   Thresholds `json:"thresholds"`
+	// Polarity is which way the KPI is healthy.
+	Polarity Polarity `json:"polarity,omitempty"`
+	// VsBaseline sets the KPI against the operator's own trailing
+	// baseline (SelfBaseline); nil when either side was not measured or
+	// the operator overrode the figure.
+	VsBaseline *Comparison `json:"vs_baseline,omitempty"`
 }
 
 type Thresholds struct {
@@ -77,6 +83,13 @@ type Scorecard struct {
 	// UnitCosts is what a unit of finished work cost over the period,
 	// against the four weeks before. Reported, not graded.
 	UnitCosts []UnitCost `json:"unit_costs,omitempty"`
+	// SelfBaseline is the operator's own trailing window the comparisons
+	// read against; nil when there was no history before the period.
+	// Comparisons are self against self only: there is no peer figure.
+	SelfBaseline *SelfBaseline `json:"self_baseline,omitempty"`
+	// PlanUseVsBaseline is each provider's plan use against the same
+	// baseline, without a verdict.
+	PlanUseVsBaseline []PlanUseComparison `json:"plan_use_vs_baseline,omitempty"`
 	// Checklist is populated only when no KPI was computed from real
 	// data. Renderers should show the checklist instead of an F grade
 	// — defaulted KPIs are not a verdict on the operator.
@@ -282,18 +295,21 @@ func kpiOrNA(base KPIResult, value float64, grade func(float64) Grade) KPIResult
 func NewWithAgentKPIs(fvtSeconds, teuPct, sacPct float64, agent AgentKPIInputs, baselineRef string) *Scorecard {
 	fvt := kpiOrNA(KPIResult{
 		Name:        "First Value Time (FVT)",
+		Polarity:    LowerIsBetter,
 		Description: "Seconds from install to first measurable insight. Lower is better.",
 		Unit:        "seconds",
 		Threshold:   DefaultThresholds.FirstValueTime,
 	}, fvtSeconds, gradeFVT)
 	teu := kpiOrNA(KPIResult{
 		Name:        "Token Efficiency Uplift (TEU)",
+		Polarity:    HigherIsBetter,
 		Description: "Percent of input tokens saved by the optimizer (saved / input). Higher is better.",
 		Unit:        "%",
 		Threshold:   DefaultThresholds.TokenEfficiency,
 	}, teuPct, gradeTEU)
 	sac := kpiOrNA(KPIResult{
 		Name:        "Spend Attribution Completeness (SAC)",
+		Polarity:    HigherIsBetter,
 		Description: "Percent of spend with workflow or agent attribution. Higher is better.",
 		Unit:        "%",
 		Threshold:   DefaultThresholds.SpendAttribution,
@@ -317,6 +333,7 @@ func NewWithAgentKPIs(fvtSeconds, teuPct, sacPct float64, agent AgentKPIInputs, 
 	if agent.CacheHitRatioComputed {
 		k := KPIResult{
 			Name:        "Cache Hit Ratio (CHR)",
+			Polarity:    HigherIsBetter,
 			Description: "Percent of input tokens served from cache reads. Higher is better.",
 			Value:       math.Round(agent.CacheHitRatioPct*10) / 10,
 			Unit:        "%",
@@ -329,6 +346,7 @@ func NewWithAgentKPIs(fvtSeconds, teuPct, sacPct float64, agent AgentKPIInputs, 
 	if agent.ConfirmationGateComputed {
 		k := KPIResult{
 			Name:        "Confirmation Gate Rate (CGR)",
+			Polarity:    LowerIsBetter,
 			Description: "Percent of user prompts that are pure acks (yes/no/continue). Lower is better.",
 			Value:       math.Round(agent.ConfirmationGateRatePct*10) / 10,
 			Unit:        "%",
@@ -341,6 +359,7 @@ func NewWithAgentKPIs(fvtSeconds, teuPct, sacPct float64, agent AgentKPIInputs, 
 	if agent.RegenerateComputed {
 		k := KPIResult{
 			Name:        "Regenerate Rate (RGR)",
+			Polarity:    LowerIsBetter,
 			Description: "Percent of user prompts that reject the prior agent output. Lower is better.",
 			Value:       math.Round(agent.RegenerateRatePct*10) / 10,
 			Unit:        "%",
@@ -353,6 +372,7 @@ func NewWithAgentKPIs(fvtSeconds, teuPct, sacPct float64, agent AgentKPIInputs, 
 	if agent.ToolSuccessComputed {
 		k := KPIResult{
 			Name:        "Tool Success Rate (TCS)",
+			Polarity:    HigherIsBetter,
 			Description: "Percent of tool calls returning without is_error=true. Higher is better.",
 			Value:       math.Round(agent.ToolSuccessRatePct*10) / 10,
 			Unit:        "%",
@@ -365,6 +385,7 @@ func NewWithAgentKPIs(fvtSeconds, teuPct, sacPct float64, agent AgentKPIInputs, 
 	if agent.DestructiveComputed {
 		k := KPIResult{
 			Name:        "Destructive Action Rate (DAR)",
+			Polarity:    LowerIsBetter,
 			Description: "Percent of bash invocations matching destructive patterns (rm -rf, force-push, drop table). Lower is better; healthy = 0.",
 			Value:       math.Round(agent.DestructiveRatePct*100) / 100,
 			Unit:        "%",
@@ -415,12 +436,16 @@ func (s *Scorecard) MarshalJSON() ([]byte, error) {
 		BaselineRef          string               `json:"baseline_ref,omitempty"`
 		PlanUse              *plans.PlanUseReport `json:"plan_use,omitempty"`
 		UnitCosts            []UnitCost           `json:"unit_costs,omitempty"`
+		SelfBaseline         *SelfBaseline        `json:"self_baseline,omitempty"`
+		PlanUseVsBaseline    []PlanUseComparison  `json:"plan_use_vs_baseline,omitempty"`
 	}{
-		GeneratedAt:  s.GeneratedAt,
-		OverallGrade: s.OverallGrade,
-		BaselineRef:  s.BaselineRef,
-		PlanUse:      s.PlanUse,
-		UnitCosts:    s.UnitCosts,
+		GeneratedAt:       s.GeneratedAt,
+		OverallGrade:      s.OverallGrade,
+		BaselineRef:       s.BaselineRef,
+		PlanUse:           s.PlanUse,
+		UnitCosts:         s.UnitCosts,
+		SelfBaseline:      s.SelfBaseline,
+		PlanUseVsBaseline: s.PlanUseVsBaseline,
 	}
 	// An unmeasured KPI carries a NaN Value, which encoding/json refuses
 	// outright. Omitting the block is also the honest wire shape: a
@@ -477,37 +502,43 @@ func (s *Scorecard) String() string {
 		return b.String()
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Operator Wedge KPI Scorecard\nGenerated: %s\n\n",
+	fmt.Fprintf(&b, "Operator Wedge KPI Scorecard\nGenerated: %s\n",
 		s.GeneratedAt.Format(time.RFC3339))
+	if sb := s.SelfBaseline; sb != nil {
+		fmt.Fprintf(&b, "Against your own baseline: the %d days before (%s – %s)\n",
+			sb.Days, sb.Since.Format(baselineHeaderDate), sb.Until.Format(baselineHeaderDate))
+	}
+	b.WriteString("\n")
 	fmt.Fprintf(&b, "FVT — First-Value Time (seconds):           %s\n",
 		renderKPI(s.FirstValueTime, 1))
 	fmt.Fprintf(&b, "TEU — Token Efficiency Uplift (%%):          %s\n",
 		renderKPI(s.TokenEfficiency, 1))
 	fmt.Fprintf(&b, "SAC — Spend Attribution Completeness (%%):   %s\n",
 		renderKPI(s.SpendAttribution, 1))
-	if s.CacheHitRatio.Grade != "" {
-		fmt.Fprintf(&b, "CHR — Cache Hit Ratio (%%):                  %.1f [%s]\n",
-			s.CacheHitRatio.Value, s.CacheHitRatio.Grade)
+	for _, row := range []struct {
+		label    string
+		k        KPIResult
+		decimals int
+	}{
+		{"CHR — Cache Hit Ratio (%):                  ", s.CacheHitRatio, kpiValueDecimals},
+		{"CGR — Confirmation Gate Rate (%):           ", s.ConfirmationGateRate, kpiValueDecimals},
+		{"RGR — Regenerate Rate (%):                  ", s.RegenerateRate, kpiValueDecimals},
+		{"TCS — Tool Success Rate (%):                ", s.ToolSuccessRate, kpiValueDecimals},
+		{"DAR — Destructive Action Rate (%):          ", s.DestructiveRate, darValueDecimals},
+	} {
+		if row.k.Grade != "" {
+			fmt.Fprintf(&b, "%s%s\n", row.label, renderKPI(row.k, row.decimals))
+		}
 	}
-	if s.ConfirmationGateRate.Grade != "" {
-		fmt.Fprintf(&b, "CGR — Confirmation Gate Rate (%%):           %.1f [%s]\n",
-			s.ConfirmationGateRate.Value, s.ConfirmationGateRate.Grade)
-	}
-	if s.RegenerateRate.Grade != "" {
-		fmt.Fprintf(&b, "RGR — Regenerate Rate (%%):                  %.1f [%s]\n",
-			s.RegenerateRate.Value, s.RegenerateRate.Grade)
-	}
-	if s.ToolSuccessRate.Grade != "" {
-		fmt.Fprintf(&b, "TCS — Tool Success Rate (%%):                %.1f [%s]\n",
-			s.ToolSuccessRate.Value, s.ToolSuccessRate.Grade)
-	}
-	if s.DestructiveRate.Grade != "" {
-		fmt.Fprintf(&b, "DAR — Destructive Action Rate (%%):          %.2f [%s]\n",
-			s.DestructiveRate.Value, s.DestructiveRate.Grade)
-	}
-	writePlanUse(&b, s.PlanUse, s.PlanUseDays)
+	writePlanUse(&b, s.PlanUse, s.PlanUseVsBaseline, s.PlanUseDays)
 	writeUnitCosts(&b, s.UnitCosts, s.PlanUseDays)
-	fmt.Fprintf(&b, "\nOverall Grade: %s\nBaseline: %s\n", s.OverallGrade, baselineOrMissing(s.BaselineRef))
+	fmt.Fprintf(&b, "\nOverall Grade: %s\n", s.OverallGrade)
+	// The operator's label for this run (--baseline-ref), not the
+	// trailing baseline the KPIs are compared with: "no baseline
+	// captured" under a line of comparisons read as a contradiction.
+	if s.BaselineRef != "" {
+		fmt.Fprintf(&b, "Baseline ref: %s\n", s.BaselineRef)
+	}
 	if s.Degraded != "" {
 		fmt.Fprintf(&b, "\n⚠ some KPIs could not be computed: %s\n", s.Degraded)
 	}
@@ -542,7 +573,7 @@ func (s *Scorecard) String() string {
 }
 
 // writePlanUse renders each provider's plan utilization and coverage.
-func writePlanUse(b *strings.Builder, u *plans.PlanUseReport, days int) {
+func writePlanUse(b *strings.Builder, u *plans.PlanUseReport, vs []PlanUseComparison, days int) {
 	if u == nil || len(u.Providers) == 0 {
 		return
 	}
@@ -550,7 +581,12 @@ func writePlanUse(b *strings.Builder, u *plans.PlanUseReport, days int) {
 		days = 7
 	}
 	fmt.Fprintf(b, "\nPlan use (last %d days):\n", days)
+	byProvider := make(map[string]PlanUseComparison, len(vs))
+	for _, c := range vs {
+		byProvider[c.Provider] = c
+	}
 	for _, p := range u.Providers {
+		cmp := byProvider[p.Provider]
 		util := "utilization n/a (no plan window reset yet)"
 		if p.UtilizationPct != nil {
 			n := 0
@@ -563,11 +599,12 @@ func writePlanUse(b *strings.Builder, u *plans.PlanUseReport, days int) {
 			if n == 1 {
 				unit = "window"
 			}
-			util = fmt.Sprintf("utilization %.0f%% (%s, %d %s)", *p.UtilizationPct, p.UtilizationWindow, n, unit)
+			util = fmt.Sprintf("utilization %.0f%% (%s, %d %s)", *p.UtilizationPct, p.UtilizationWindow, n, unit) +
+				renderPlanVs(cmp.Utilization)
 		}
 		cov := "coverage n/a"
 		if p.CoveragePct != nil {
-			cov = fmt.Sprintf("coverage %.0f%% of tokens on a plan", *p.CoveragePct)
+			cov = fmt.Sprintf("coverage %.0f%% of tokens on a plan", *p.CoveragePct) + renderPlanVs(cmp.Coverage)
 		}
 		fmt.Fprintf(b, "  %-12s %s · %s\n", p.Provider, util, cov)
 	}
@@ -583,7 +620,7 @@ func renderKPI(k KPIResult, decimals int) string {
 	if k.Grade == "" {
 		return "N/A (not measured)"
 	}
-	return fmt.Sprintf("%.*f [%s]", decimals, k.Value, k.Grade)
+	return fmt.Sprintf("%.*f [%s]", decimals, k.Value, k.Grade) + renderVsBaseline(k, decimals)
 }
 
 func baselineOrMissing(ref string) string {

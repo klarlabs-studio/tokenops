@@ -16,6 +16,8 @@ type UnitCost struct {
 	PerUnitUSD         float64  `json:"per_unit_usd"`
 	BaselinePerUnitUSD *float64 `json:"baseline_per_unit_usd,omitempty"`
 	ChangePct          *float64 `json:"change_pct,omitempty"`
+	// Direction reads ChangePct: cheaper finished work is better.
+	Direction Direction `json:"direction,omitempty"`
 }
 
 // writeUnitCosts renders the unit costs with any in the period.
@@ -43,7 +45,11 @@ func writeUnitCosts(b *strings.Builder, us []UnitCost, days int) {
 			line += fmt.Sprintf(" · baseline $%.2f", *u.BaselinePerUnitUSD)
 		}
 		if u.ChangePct != nil {
-			line += fmt.Sprintf(" (%+.0f%%)", *u.ChangePct)
+			if u.Direction != "" {
+				line += fmt.Sprintf(" (%+.0f%%, %s)", *u.ChangePct, u.Direction)
+			} else {
+				line += fmt.Sprintf(" (%+.0f%%)", *u.ChangePct)
+			}
 		}
 		fmt.Fprintln(b, line)
 	}

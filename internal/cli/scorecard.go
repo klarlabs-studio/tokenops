@@ -43,8 +43,10 @@ which measures three key outcomes:
 
 The scorecard aggregates these three into an overall grade (A–F).
 
-Use --capture-baseline (not yet implemented) to persist the current
-values and --compare to diff against a stored baseline.`,
+Each measured KPI is set against your own trailing baseline, the 28
+days before the window, with whether it moved better or worse given
+which way the KPI is healthy. Plan use and unit costs are compared
+against the same baseline. It is you against yourself only.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			store, closeStore, err := openScorecardStore(cmd.Context(), rf, dbPath)

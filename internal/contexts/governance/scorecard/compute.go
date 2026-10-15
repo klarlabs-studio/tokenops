@@ -65,29 +65,80 @@ func Compute(ctx context.Context, reader EventReader, since time.Time) (*LiveKPI
 
 // ComputeAt is Compute with the window's end pinned to now.
 func ComputeAt(ctx context.Context, reader EventReader, since, now time.Time) (*LiveKPIs, error) {
-	out := &LiveKPIs{}
 	if reader == nil {
-		return out, nil
+		return &LiveKPIs{}, nil
 	}
-	prompts, err := reader.ReadEvents(ctx, eventschema.EventTypePrompt, since)
+	prompts, opts, err := readSince(ctx, reader, since)
 	if err != nil {
 		return nil, err
 	}
-	opts, err := reader.ReadEvents(ctx, eventschema.EventTypeOptimization, since)
-	if err != nil {
-		return nil, err
+	return kpisOver(prompts, opts, since, now), nil
+}
+
+// ComputeWithBaseline is ComputeAt for the period [since, now] plus the
+// same KPIs over the operator's own baseline [baselineSince, since), from
+// one read of the store.
+func ComputeWithBaseline(ctx context.Context, reader EventReader, baselineSince, since, now time.Time) (period, baseline *LiveKPIs, err error) {
+	if reader == nil {
+		return &LiveKPIs{}, &LiveKPIs{}, nil
 	}
+	prompts, opts, err := readSince(ctx, reader, baselineSince)
+	if err != nil {
+		return nil, nil, err
+	}
+	period = kpisOver(atOrAfter(prompts, since), atOrAfter(opts, since), since, now)
+	baseline = kpisOver(before(prompts, since), before(opts, since), baselineSince, since)
+	return period, baseline, nil
+}
+
+func readSince(ctx context.Context, reader EventReader, since time.Time) (prompts, opts []*eventschema.Envelope, err error) {
+	prompts, err = reader.ReadEvents(ctx, eventschema.EventTypePrompt, since)
+	if err != nil {
+		return nil, nil, err
+	}
+	opts, err = reader.ReadEvents(ctx, eventschema.EventTypeOptimization, since)
+	if err != nil {
+		return nil, nil, err
+	}
+	return prompts, opts, nil
+}
+
+// kpisOver derives the KPIs from one window's events.
+func kpisOver(prompts, opts []*eventschema.Envelope, since, until time.Time) *LiveKPIs {
+	out := &LiveKPIs{}
 	// Strip activity-proxy and attribution-less aggregate events so KPIs
 	// reflect real per-session operator activity.
 	// Plan use reads the window readings the exclusions below drop.
-	out.PlanUse = plans.PlanUseFrom(prompts, since, now)
+	out.PlanUse = plans.PlanUseFrom(prompts, since, until)
 	prompts = filterExcludedSources(prompts)
 	opts = filterExcludedSources(opts)
 	computeFVT(out, prompts)
 	computeTEU(out, prompts, opts)
 	computeSAC(out, prompts)
 	computeCHR(out, prompts)
-	return out, nil
+	return out
+}
+
+// atOrAfter is the events at or after t, in a new slice.
+func atOrAfter(envs []*eventschema.Envelope, t time.Time) []*eventschema.Envelope {
+	out := make([]*eventschema.Envelope, 0, len(envs))
+	for _, e := range envs {
+		if e != nil && !e.Timestamp.Before(t) {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// before is the events before t, in a new slice.
+func before(envs []*eventschema.Envelope, t time.Time) []*eventschema.Envelope {
+	out := make([]*eventschema.Envelope, 0, len(envs))
+	for _, e := range envs {
+		if e != nil && e.Timestamp.Before(t) {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 // computeCHR sums input vs cached_input across the prompt window
