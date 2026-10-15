@@ -18,6 +18,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/infra/planevidence"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
+	"go.klarlabs.de/tokenops/internal/infra/sourceprobe"
 )
 
 // setupStep is one thing init did (or deliberately did not do), so the
@@ -375,14 +376,17 @@ func deliveryDetail(recommendation string) string {
 // That is the silent-success shape, sitting in the first command of the
 // journey.
 //
-// On a fresh install it turns on the local transcript readers whose data
-// is on this machine, and says so: TokenOps works out of the box, and
-// the operator can switch any reader off (ADR 0009, autonomous by
-// default). These readers only read files on disk; the ones that call a
-// vendor with a login stay a choice the operator makes. Once any reader
-// is enabled the operator has chosen, and init only names the readers
-// whose data is present but which are off, rather than overriding a
-// reader they switched off.
+// It turns on every local transcript reader whose data is on this
+// machine, unless the operator switched that reader off, and says so once:
+// TokenOps works out of the box and the operator corrects after (ADR 0009,
+// autonomous by default). These readers only read files on disk; the ones
+// that call a vendor with a login stay a choice the operator makes.
+//
+// It used to do this only when no reader was enabled at all, because an
+// `enabled: false` could not be told apart from an operator's "off". A
+// machine with one reader on and a second client's sessions beside it
+// therefore never read the second client. The operator's "off" is now
+// recorded on its own (config.LocalReader), so the rest can be turned on.
 func ingestionStep(cfgPath string) setupStep {
 	const name = "ingestion source"
 	cfg, err := config.ReadMutable(cfgPath)
@@ -391,44 +395,45 @@ func ingestionStep(cfgPath string) setupStep {
 	}
 
 	present := localTranscriptSources()
-	enabled := cfg.EnabledVendorUsageSources()
-	if len(enabled) == 0 {
-		if len(present) == 0 {
-			return setupStep{
-				Name: name,
-				Detail: "nothing is enabled, so nothing will be ingested — " +
-					"run `tokenops vendor-usage enable claude-code-jsonl` " +
-					"(or `tokenops vendor-usage enable --help` for the other readers)",
-				Manual: true,
-			}
-		}
-		for _, src := range present {
-			setLocalSource(&cfg, src, true)
-		}
+	turned := cfg.TurnOnLocalReaders(present)
+	if len(turned) > 0 {
 		if err := writeMutableConfig(cfgPath, cfg); err != nil {
 			return setupStep{Name: name, Err: err}
 		}
-		return setupStep{Name: name, Detail: "turned on " + strings.Join(present, ", ") +
-			" (their sessions are on this machine) — `tokenops vendor-usage enable <source> --disable` to stop one"}
 	}
-
-	names := make([]string, 0, len(enabled))
-	on := map[string]bool{}
-	for _, s := range enabled {
-		names = append(names, s.Name)
-		on[s.SourceTag] = true
-	}
-	sort.Strings(names)
-	detail := "ingesting from " + strings.Join(names, ", ")
 	var off []string
 	for _, src := range present {
-		if !on[src] {
+		if cfg.LocalReaderSwitchedOff(src) {
 			off = append(off, src)
 		}
 	}
+	enabled := cfg.EnabledVendorUsageSources()
+	if len(enabled) == 0 {
+		detail := "nothing is enabled, so nothing will be ingested — " +
+			"run `tokenops vendor-usage enable claude-code-jsonl` " +
+			"(or `tokenops vendor-usage enable --help` for the other readers)"
+		if len(off) > 0 {
+			detail = "nothing is enabled, so nothing will be ingested; you switched off " +
+				strings.Join(off, ", ") + " — `tokenops vendor-usage enable <source>` to read them"
+		}
+		return setupStep{Name: name, Detail: detail, Manual: true}
+	}
+
+	var detail string
+	if len(turned) > 0 {
+		detail = "turned on " + strings.Join(turned, ", ") +
+			" (their sessions are on this machine) — `tokenops vendor-usage enable <source> --disable` to stop one"
+	} else {
+		names := make([]string, 0, len(enabled))
+		for _, s := range enabled {
+			names = append(names, s.Name)
+		}
+		sort.Strings(names)
+		detail = "ingesting from " + strings.Join(names, ", ")
+	}
 	if len(off) > 0 {
-		detail += "; sessions found but not read: " + strings.Join(off, ", ") +
-			" — `tokenops vendor-usage enable <source>`"
+		detail += "; sessions found but switched off: " + strings.Join(off, ", ") +
+			" — `tokenops vendor-usage enable <source>` to read them"
 	}
 	return setupStep{Name: name, Detail: detail}
 }
@@ -436,61 +441,7 @@ func ingestionStep(cfgPath string) setupStep {
 // localTranscriptSources lists the local transcript readers whose data is
 // on this machine, by their source names. A variable so tests can stub
 // the filesystem.
-var localTranscriptSources = func() []string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil
-	}
-	claudeDir := os.Getenv("CLAUDE_CONFIG_DIR")
-	if claudeDir == "" {
-		claudeDir = filepath.Join(home, ".claude")
-	}
-	codexDir := os.Getenv("CODEX_HOME")
-	if codexDir == "" {
-		codexDir = filepath.Join(home, ".codex")
-	}
-	geminiDir := filepath.Join(home, ".gemini")
-	if h := os.Getenv("GEMINI_CLI_HOME"); h != "" {
-		geminiDir = filepath.Join(h, ".gemini")
-	}
-	dataHome := os.Getenv("XDG_DATA_HOME")
-	if dataHome == "" {
-		dataHome = filepath.Join(home, ".local", "share")
-	}
-	var out []string
-	for _, c := range []struct{ name, path string }{
-		{"claude-code-jsonl", filepath.Join(claudeDir, "projects")},
-		{"codex-jsonl", filepath.Join(codexDir, "sessions")},
-		{"opencode", filepath.Join(dataHome, "opencode", "opencode.db")},
-		{"gemini-cli", filepath.Join(geminiDir, "tmp")},
-		{"pi-sessions", filepath.Join(home, ".pi", "agent", "sessions")},
-		{"pi-sessions", filepath.Join(home, ".omp", "agent", "sessions")},
-	} {
-		if len(out) > 0 && out[len(out)-1] == c.name {
-			continue
-		}
-		if _, err := os.Stat(c.path); err == nil {
-			out = append(out, c.name)
-		}
-	}
-	return out
-}
-
-// setLocalSource switches a local transcript reader on or off.
-func setLocalSource(cfg *config.Config, source string, on bool) {
-	switch source {
-	case "claude-code-jsonl":
-		cfg.VendorUsage.ClaudeCodeJSONL.Enabled = on
-	case "codex-jsonl":
-		cfg.VendorUsage.CodexJSONL.Enabled = on
-	case "opencode":
-		cfg.VendorUsage.OpenCode.Enabled = on
-	case "gemini-cli":
-		cfg.VendorUsage.GeminiCLI.Enabled = on
-	case "pi-sessions":
-		cfg.VendorUsage.Pi.Enabled = on
-	}
-}
+var localTranscriptSources = sourceprobe.PresentLocalReaders
 
 // statuslineStep shows TokenOps' line in Claude Code's status line,
 // keeping a status line the operator already has under it. It is on by
