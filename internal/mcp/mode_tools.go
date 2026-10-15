@@ -60,16 +60,21 @@ type modeInput struct {
 // budgetSetInput edits one budget. Omitted fields keep the stored budget's
 // values, so an edit names only what it changes.
 type budgetSetInput struct {
-	Name        string  `json:"name" jsonschema:"description=Budget identifier; set upserts by name"`
-	Window      string  `json:"window,omitempty" jsonschema:"enum=daily,enum=weekly,enum=monthly,description=Calendar window (UTC); a new budget defaults to monthly"`
-	LimitUSD    float64 `json:"limit_usd,omitempty" jsonschema:"description=Ceiling in USD, for basis spend or equivalent"`
-	LimitTokens int64   `json:"limit_tokens,omitempty" jsonschema:"description=Ceiling in tokens, for basis tokens"`
-	WarnAt      float64 `json:"warn_at,omitempty" jsonschema:"description=Fraction of the limit for warn alerts (default 0.75)"`
-	CritAt      float64 `json:"crit_at,omitempty" jsonschema:"description=Fraction of the limit for critical alerts (default 0.95)"`
-	WorkflowID  string  `json:"workflow_id,omitempty"`
-	AgentID     string  `json:"agent_id,omitempty"`
-	Basis       string  `json:"basis,omitempty" jsonschema:"enum=spend,enum=equivalent,enum=tokens,description=What the limit watches: spend (real billed cost, default), equivalent (API list-price value incl. plan-covered usage), or tokens (raw token volume against limit_tokens). On flat plans real spend is ~0, so use tokens or equivalent."`
-	Delete      bool    `json:"delete,omitempty" jsonschema:"description=Remove the budget with this name"`
+	Name         string  `json:"name" jsonschema:"description=Budget identifier; set upserts by name"`
+	Window       string  `json:"window,omitempty" jsonschema:"enum=daily,enum=weekly,enum=monthly,description=Calendar window (UTC); a new budget defaults to monthly"`
+	LimitUSD     float64 `json:"limit_usd,omitempty" jsonschema:"description=Ceiling in USD, for basis spend or equivalent"`
+	LimitTokens  int64   `json:"limit_tokens,omitempty" jsonschema:"description=Ceiling in tokens, for basis tokens"`
+	WarnAt       float64 `json:"warn_at,omitempty" jsonschema:"description=Fraction of the limit for warn alerts (default 0.75)"`
+	CritAt       float64 `json:"crit_at,omitempty" jsonschema:"description=Fraction of the limit for critical alerts (default 0.95)"`
+	WorkflowID   string  `json:"workflow_id,omitempty"`
+	AgentID      string  `json:"agent_id,omitempty"`
+	Basis        string  `json:"basis,omitempty" jsonschema:"enum=spend,enum=equivalent,enum=tokens,description=What the limit watches: spend (real billed cost, default), equivalent (API list-price value incl. plan-covered usage), or tokens (raw token volume against limit_tokens). On flat plans real spend is ~0, so use tokens or equivalent."`
+	Mode         string  `json:"mode,omitempty" jsonschema:"enum=soft,enum=hard,description=soft (default) notifies through the coach; hard is enforced by a spend boundary that asks or refuses at the limit. A hard window starts in shadow until the operator promotes it from a terminal."`
+	Require      string  `json:"require,omitempty" jsonschema:"enum=ask,enum=deny,description=What a hard window requires at its limit (default ask)"`
+	AddWindow    bool    `json:"add_window,omitempty" jsonschema:"description=Add window as a further window of the budget (e.g. daily beside monthly) instead of editing its window"`
+	RemoveWindow string  `json:"remove_window,omitempty" jsonschema:"enum=daily,enum=weekly,enum=monthly,description=Remove this window of the budget"`
+	Tag          string  `json:"tag,omitempty" jsonschema:"description=Limit the budget to work carrying one allocation tag, key=value (project, client or cost_center)"`
+	Delete       bool    `json:"delete,omitempty" jsonschema:"description=Remove the budget with this name"`
 }
 
 func (in budgetSetInput) update() config.BudgetUpdate {
@@ -78,7 +83,8 @@ func (in budgetSetInput) update() config.BudgetUpdate {
 		LimitUSD: in.LimitUSD, LimitTokens: in.LimitTokens,
 		WarnAt: in.WarnAt, CritAt: in.CritAt,
 		WorkflowID: in.WorkflowID, AgentID: in.AgentID,
-		Basis: in.Basis,
+		Basis: in.Basis, Tag: in.Tag,
+		Mode: in.Mode, Require: in.Require, AddWindow: in.AddWindow,
 	}
 }
 
@@ -142,13 +148,13 @@ func RegisterModeTools(s *Server, d ModeDeps) error {
 		})
 
 	s.Tool("tokenops_budget_set").
-		Description("Create, update (upsert by name), or delete a budget: a calendar window plus a ceiling — limit_usd for basis spend/equivalent, limit_tokens for basis tokens. An update changes only the fields given; the rest of the stored budget is kept. A budget without a ceiling is refused. In active mode the daemon watcher evaluates budgets every watch.interval and logs threshold/forecast breaches. Persists to config.yaml and restarts a supervised daemon so it takes effect.").
+		Description("Create, update (upsert by name), or delete a budget: one or more calendar windows (e.g. $10 daily and $100 monthly; add_window adds one, remove_window removes one), each with a ceiling — limit_usd for basis spend/equivalent, limit_tokens for basis tokens — and a mode: soft notifies, hard is enforced by a spend boundary that starts in shadow. A budget with a hard window can only be changed from a terminal. An update changes only the fields given; the rest of the stored budget is kept. A budget without a ceiling is refused. In active mode the daemon watcher evaluates budgets every watch.interval and logs threshold/forecast breaches. Persists to config.yaml and restarts a supervised daemon so it takes effect.").
 		Handler(func(_ context.Context, in budgetSetInput) (string, error) {
 			path, err := d.path()
 			if err != nil {
 				return "", inputError(err)
 			}
-			change, err := actions.SetBudget(path, actions.BudgetRequest{BudgetUpdate: in.update(), Delete: in.Delete})
+			change, err := actions.SetBudget(path, actions.BudgetRequest{BudgetUpdate: in.update(), Delete: in.Delete, RemoveWindow: in.RemoveWindow})
 			if err != nil {
 				return "", actionError(err)
 			}

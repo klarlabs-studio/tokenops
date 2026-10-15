@@ -103,3 +103,35 @@ func TestHookProvider(t *testing.T) {
 		}
 	}
 }
+
+// The coach reads the meter's history, so a window burning through both
+// look-backs comes with its run-out forecast.
+func TestReadPlanForecastsTheRunOut(t *testing.T) {
+	now := time.Now()
+	reset := now.Add(2 * time.Hour).Format(time.RFC3339Nano)
+	path := filepath.Join(t.TempDir(), "events.db")
+	s, err := sqlite.Open(context.Background(), path, sqlite.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, r := range []struct {
+		ago  time.Duration
+		used string
+	}{{65 * time.Minute, "30.00"}, {20 * time.Minute, "50.00"}, {2 * time.Minute, "60.00"}} {
+		env := &eventschema.Envelope{
+			ID: "m" + strings.Repeat("x", i+1), SchemaVersion: eventschema.SchemaVersion, Type: eventschema.EventTypePrompt,
+			Timestamp: now.Add(-r.ago), Source: "claude-usage-meter",
+			Attributes: map[string]string{"five_hour_kind": "session", "five_hour_used_pct": r.used, "five_hour_reset_at": reset},
+			Payload:    &eventschema.PromptEvent{Provider: eventschema.ProviderAnthropic},
+		}
+		if err := s.Append(context.Background(), env); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = s.Close()
+	cfg := config.Config{Plans: map[string]string{"anthropic": "claude-max-20x"}, Storage: config.StorageConfig{Enabled: true, Path: path}}
+	q := readPlan(context.Background(), cfg, eventschema.ProviderAnthropic, now).Quota
+	if q == nil || len(q.Burn.Warnings) != 1 || q.Burn.Warnings[0].Window.Label != "5-hour" {
+		t.Fatalf("quota = %+v, want a 5-hour run-out forecast", q)
+	}
+}

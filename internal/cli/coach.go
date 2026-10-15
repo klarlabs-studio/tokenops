@@ -42,6 +42,8 @@ coach is set to.`,
 	cmd.AddCommand(newCoachPromptsCmd())
 	cmd.AddCommand(newCoachDeliveryCmd())
 	cmd.AddCommand(newCoachRepliesCmd())
+	cmd.AddCommand(newCoachTipCmd())
+	cmd.AddCommand(newCoachHoldoutCmd())
 	return cmd
 }
 

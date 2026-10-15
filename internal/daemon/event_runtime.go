@@ -23,6 +23,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/infra/followthrough"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
 	"go.klarlabs.de/tokenops/internal/infra/planevidence"
+	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/infra/rulesfs"
 	"go.klarlabs.de/tokenops/internal/infra/sourceprobe"
 	"go.klarlabs.de/tokenops/internal/otlp"
@@ -113,7 +114,7 @@ func initializeEventRuntime(
 	// typed nil it would call.
 	var budgetSource budgets.Source
 	if components.Aggregator != nil {
-		budgetSource = components.Aggregator
+		budgetSource = taggedBudgetSource(cfg, components.Aggregator)
 	}
 	startBoundaryFiguresRuntime(cfg, plansDeps(cfg, glance, components.Spend), budgetSource, sup, logger)
 
@@ -227,8 +228,11 @@ func warmGlanceEvents(sup *lifecycle.Supervisor, events *sqlite.EventCache, logg
 // it was started with is current. events is the cache they read events
 // through; nil reads nothing.
 func plansDeps(cfg config.Config, events *sqlite.EventCache, engine *spending.Engine) func() headroom.Deps {
+	// One replay of the plan advice serves an hour of glances.
+	advice := headroom.NewAdviceCache()
 	return func() headroom.Deps {
-		deps := headroom.Deps{Config: &cfg, Accounts: signedInAccounts, PlanFollows: actions.RecentPlanFollows}
+		deps := headroom.Deps{Config: &cfg, Accounts: signedInAccounts, PlanFollows: actions.RecentPlanFollows,
+			PlanHistory: planhistory.LoadDefault, AdviceCache: advice}
 		if events != nil {
 			deps.Reader = events
 		}

@@ -19,6 +19,27 @@ type CoachConfig struct {
 	// Powers overrides Autonomy for one power: inform, waste, models, or
 	// context.
 	Powers map[string]string `yaml:"powers,omitempty"`
+	// Holdout is the percent of sessions whose cost and drift tips are
+	// held back and logged as shadow, so the realized saving of a tip can
+	// be measured against sessions that did not get it (#656). Unset is
+	// DefaultHoldoutPercent; 0 opts out; at most MaxHoldoutPercent. Tips
+	// about work about to stop are never held. A preset keeps it.
+	Holdout *int `yaml:"holdout,omitempty"`
+}
+
+// The holdout's bounds: on by default, and small, because it withholds
+// help.
+const (
+	DefaultHoldoutPercent = 10
+	MaxHoldoutPercent     = 10
+)
+
+// CoachHoldoutPercent is the holdout share in effect.
+func (c Config) CoachHoldoutPercent() int {
+	if c.Coach.Holdout == nil {
+		return DefaultHoldoutPercent
+	}
+	return min(max(*c.Coach.Holdout, 0), MaxHoldoutPercent)
 }
 
 // Autonomy rungs, least to most autonomous. Each is a rung of the ADR 0004
@@ -76,6 +97,9 @@ func (c CoachConfig) Validate() error {
 	case "", VerbosityQuiet, VerbosityNormal, VerbosityVerbose:
 	default:
 		return fmt.Errorf("coach.verbosity must be quiet, normal, or verbose, got %q", c.Verbosity)
+	}
+	if c.Holdout != nil && (*c.Holdout < 0 || *c.Holdout > MaxHoldoutPercent) {
+		return fmt.Errorf("coach.holdout must be 0 (off) to %d percent, got %d", MaxHoldoutPercent, *c.Holdout)
 	}
 	keys := make([]string, 0, len(c.Powers))
 	for k := range c.Powers {

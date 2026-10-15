@@ -166,7 +166,7 @@ var changesThings = map[string]bool{
 	"tokenops daemon install": true, "tokenops daemon uninstall": true, "tokenops daemon restart": true,
 	"tokenops hooks install": true, "tokenops hooks uninstall": true,
 	"tokenops statusline install": true, "tokenops statusline uninstall": true, "tokenops statusline subagents": true,
-	"tokenops plan set": true, "tokenops plan unset": true,
+	"tokenops plan set": true, "tokenops plan unset": true, "tokenops coach tip": true, "tokenops coach holdout": true,
 	"tokenops budget set": true, "tokenops budget unset": true,
 	"tokenops provider set": true, "tokenops provider unset": true,
 	"tokenops vendor-usage enable": true, "tokenops vendor-usage setup": true,
@@ -181,6 +181,8 @@ var changesThings = map[string]bool{
 	"tokenops team create": true, "tokenops team admin login": true, "tokenops team admin logout": true,
 	"tokenops team admin remove": true, "tokenops team admin role": true, "tokenops team admin grant": true,
 	"tokenops team admin revoke": true,
+	// This prints a FOCUS CSV dataset and nothing else.
+	"tokenops spend export": true,
 	// These print JSON and nothing else.
 	"tokenops experiment start": true, "tokenops experiment status": true, "tokenops experiment stop": true,
 	"tokenops outcome record": true, "tokenops outcome detect": true, "tokenops outcome check-json": true,

@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
@@ -43,8 +44,10 @@ which measures three key outcomes:
 
 The scorecard aggregates these three into an overall grade (A–F).
 
-Use --capture-baseline (not yet implemented) to persist the current
-values and --compare to diff against a stored baseline.`,
+Each measured KPI is set against your own trailing baseline, the 28
+days before the window, with whether it moved better or worse given
+which way the KPI is healthy. Plan use and unit costs are compared
+against the same baseline. It is you against yourself only.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			store, closeStore, err := openScorecardStore(cmd.Context(), rf, dbPath)
@@ -52,12 +55,24 @@ values and --compare to diff against a stored baseline.`,
 				return err
 			}
 			defer closeStore()
+			// Unit costs price the turns; without a readable config the
+			// scorecard is graded as before and they are left off.
+			var (
+				eng   *spending.Engine
+				rules []allocation.Rule
+			)
+			if cfg, err := loadConfig(rf); err == nil {
+				eng, _ = buildSpendEngine(cfg)
+				rules = cfg.AllocationRules()
+			}
 			s := spending.Scorecard(cmd.Context(), store, spending.ScorecardParams{
 				SinceDays:   sinceDays,
 				FVTSeconds:  fvtOverride,
 				TEUPct:      teuOverride,
 				SACPct:      sacOverride,
 				BaselineRef: baselineRef,
+				Spend:       eng,
+				Allocation:  rules,
 			})
 
 			if jsonOut {

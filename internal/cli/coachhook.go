@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/bootstrap"
+	"go.klarlabs.de/tokenops/internal/capability/budgets"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 
 	"go.klarlabs.de/tokenops/internal/config"
@@ -81,7 +83,8 @@ func newCoachHookCmd(rf *rootFlags) *cobra.Command {
 tail of the session transcript after each turn, sums the full API-equivalent
 cost of the new turns — cache-read is the dominant, most reclaimable part, and
 it compounds every turn you carry a large context — and, as the session's
-cumulative spend crosses fractions of a per-session budget (default $50),
+cumulative spend crosses fractions of a per-session budget (your own p90
+session over the last 30 days once 20 are known, $50 until then),
 surfaces graduated, non-blocking nudges to /compact or start a fresh session. It
 works for clients that never route through the tokenops proxy, because it acts
 inside the client.
@@ -95,7 +98,9 @@ across sessions, with how to get it back, and never falls back to dollars.
 Unlike a flat per-turn threshold, a cumulative budget catches the long, flat
 sessions where no single turn looks extreme but thousands of turns compound into
 real money. Each budget-fraction alert (50%, 75%, 100%, then every additional
-budget over) fires once, so the coach never nags every turn.
+budget over) fires once, so the coach never nags every turn; past 100% the further
+steps only update the status line. Past coaching.quiet.max_per_day interruptions
+a day, tips wait on the status line too; 'tokenops coach tip' answers them.
 
 Bare invocation is the hook handler (reads Stop JSON on stdin). Use
 'tokenops coach-hook hook' to print the settings.json block (or prefer
@@ -110,6 +115,7 @@ much your sessions have spent and which budget alerts fired.`,
 			cfg.Promotion = promotionNudge(rf, guardDir)
 			cfg.Rates = datedRates(rf)
 			cfg.Verbosity = coachVerbosity(rf)
+			cfg.HoldoutPercent = coachHoldout(rf)
 			plan := func(context.Context, eventschema.Provider, time.Time) planReading { return planReading{} }
 			if loaded, err := loadConfig(rf); err == nil {
 				plan = func(ctx context.Context, p eventschema.Provider, now time.Time) planReading {
@@ -119,7 +125,7 @@ much your sessions have spent and which budget alerts fired.`,
 			return runCoachHook(cmd, dir, cfg, plan)
 		},
 	}
-	cmd.Flags().Float64Var(&budget, "budget", coachhook.DefaultBudgetUSD, "per-session API-equivalent USD budget the alert fractions measure against")
+	cmd.Flags().Float64Var(&budget, "budget", coachhook.DefaultBudgetUSD, "per-session API-equivalent USD budget the alert fractions measure against; the $50 default defers to one derived from your own sessions")
 	cmd.Flags().StringVar(&dir, "dir", "", "state/ledger dir (defaults to ~/.tokenops/coach-hook)")
 	cmd.Flags().StringVar(&guardDir, "guard-dir", "", "read-guard ledger dir to read the promotion case from (defaults to ~/.tokenops/read-guard)")
 	cmd.AddCommand(newCoachHookHookCmd())
@@ -149,6 +155,10 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, plan fun
 		}
 		return quieted(config.PowerInform, kind)
 	}
+	cfg.Held = coachcap.Holder(ledger, now)
+	cfg.BudgetAnswers = func() (int, int) { return coachcap.BudgetAnswers(ledger, now) }
+	// The spend budgets' windows, as the daemon last measured them.
+	cfg.Budgets = budgets.Current("", now)
 	provider, known := hookProvider(in, in.isCursorPayload(), in.HookEventName == "session.idle")
 	if known && plan != nil {
 		r := plan(cmd.Context(), provider, now)
@@ -173,7 +183,12 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, plan fun
 		dec = coachhook.Evaluate(dir, in.SessionID, in.TranscriptPath, cfg, now)
 	}
 	coachcap.RecordResolutions(ledger, now, tipResolutions(dec.Resolved))
-	coachcap.RecordTip(ledger, now, dec.OfferID, in.SessionID, dec.TipKind, coachcap.ViaStopHook)
+	via := coachcap.ViaStopHook
+	if dec.Ambient {
+		via = coachcap.ViaAmbient
+	}
+	coachcap.RecordTip(ledger, now, dec.OfferID, in.SessionID, dec.TipKind, via)
+	recordSavings(savings.DefaultLedger(), now, in.SessionID, dec)
 	if !dec.Nudge {
 		return nil // no nudge: exit 0 with no stdout
 	}
@@ -227,6 +242,7 @@ func writeCoachHookStats(out io.Writer, s coachhook.Stats) {
 	}
 	fmt.Fprintf(out, "Budget and quota tips — %d turns across %d sessions\n", s.Events, s.DistinctSessions)
 	fmt.Fprintf(out, "  est. API-equiv spend: max session ~$%.2f · total ~$%.2f\n", s.MaxCumulativeUSD, s.TotalEstSpendUSD)
+	writeSessionBudget(out, s.SessionBudget)
 	fmt.Fprintf(out, "  budget alerts fired: %d\n", s.Alerts)
 	for _, tier := range []string{"50%", "75%", "100%", "200%", "300%"} {
 		if n := s.AlertsByTier[tier]; n > 0 {
@@ -240,14 +256,16 @@ func writeCoachHookStats(out io.Writer, s coachhook.Stats) {
 		}
 		fmt.Fprintln(out, "    their spend reads as $0 above. Add rates via `pricing.path` to count them.")
 	}
-	if n := totalOf(s.QuotaNudges); n > 0 {
-		fmt.Fprintf(out, "  quota nudges (flat plan, live window): %d\n", n)
-		for _, tier := range []string{"50%", "75%", "90%", "100%"} {
-			if c := s.QuotaNudges[tier]; c > 0 {
-				fmt.Fprintf(out, "    %-5s %d\n", tier, c)
-			}
-		}
+	if s.BurnWarnings > 0 {
+		fmt.Fprintf(out, "  run-out warnings (flat plan, both look-backs): %d\n", s.BurnWarnings)
 	}
+	if c := s.QuotaNudges["100%"]; c > 0 {
+		fmt.Fprintf(out, "  used-up windows said: %d\n", c)
+	}
+	if n := totalOf(s.QuotaNudges) - s.QuotaNudges["100%"]; n > 0 {
+		fmt.Fprintf(out, "  share tips from earlier versions (50/75/90%%): %d\n", n)
+	}
+	writeRunOutScore(out, s.RunOut)
 	if s.CompactTips > 0 {
 		fmt.Fprintf(out, "  compact-now tips: %d\n", s.CompactTips)
 	}
@@ -256,6 +274,19 @@ func writeCoachHookStats(out io.Writer, s coachhook.Stats) {
 	}
 	if n := s.Suppressed["ignored_before"]; n > 0 {
 		fmt.Fprintf(out, "  held back because earlier tips like them were ignored: %d\n", n)
+	}
+	if n := s.Suppressed[coachhook.SuppressedEpisode] + s.Suppressed[coachhook.SuppressedDailyBudget]; n > 0 {
+		fmt.Fprintf(out, "  shown on the status line instead of interrupting: %d\n", n)
+		if c := s.Suppressed[coachhook.SuppressedEpisode]; c > 0 {
+			fmt.Fprintf(out, "    %-22s %d\n", "already told (episode)", c)
+		}
+		if c := s.Suppressed[coachhook.SuppressedDailyBudget]; c > 0 {
+			fmt.Fprintf(out, "    %-22s %d\n", "daily budget spent", c)
+		}
+	}
+	if n := s.Suppressed[coachhook.SuppressedSnoozed] + s.Suppressed[coachhook.SuppressedAnswered]; n > 0 {
+		fmt.Fprintf(out, "  held by your answers: %d snoozed, %d already answered\n",
+			s.Suppressed[coachhook.SuppressedSnoozed], s.Suppressed[coachhook.SuppressedAnswered])
 	}
 	if n := s.Suppressed["min_interval"] + s.Suppressed["max_per_session"]; n > 0 {
 		fmt.Fprintf(out, "  held back by coaching.quiet: %d\n", n)
@@ -274,6 +305,48 @@ func writeCoachHookStats(out io.Writer, s coachhook.Stats) {
 	case s.Alerts == 0:
 		fmt.Fprintln(out, "\nNo session has crossed a budget fraction yet — your spend stays lean. Keep observing.")
 	}
+}
+
+// writeRunOutScore prints how the run-out forecasts fared once their
+// windows reset: precision is forecasts that came true.
+func writeRunOutScore(out io.Writer, r coachhook.RunOutScore) {
+	if r.Windows == 0 {
+		return
+	}
+	fmt.Fprintf(out, "  windows settled: %d\n", r.Windows)
+	if p, ok := r.Precision(); ok {
+		fmt.Fprintf(out, "    forecast to run out: %d, of which ran out: %d (precision %.0f%%)\n", r.Forecast, r.ForecastRanOut, p*100)
+	}
+	if r.RanOutUnforecast > 0 {
+		fmt.Fprintf(out, "    ran out without a forecast: %d\n", r.RanOutUnforecast)
+	}
+}
+
+// writeSessionBudget says what budget sessions are judged against and
+// where it came from, so a derived figure is never a mystery number.
+func writeSessionBudget(out io.Writer, b *coachhook.SessionBudget) {
+	if b == nil {
+		return
+	}
+	fmt.Fprintf(out, "  session budget: %s — %s", wholeUSD(b.BudgetUSD), b.Provenance())
+	if b.FromHistory() {
+		fmt.Fprintf(out, " in %d days (derived %s)", b.WindowDays, b.DerivedAt.Format("2006-01-02"))
+	}
+	fmt.Fprintln(out)
+	switch {
+	case b.DriftClamped():
+		fmt.Fprintf(out, "    held from %s: moves at most %d%% a week (was %s)\n", wholeUSD(b.ObservedUSD), int(b.MaxDrift*100+0.5), wholeUSD(b.PreviousUSD))
+	case b.BoundClamped():
+		fmt.Fprintf(out, "    held from %s at the %s\n", wholeUSD(b.ObservedUSD), b.Clamp)
+	}
+}
+
+// wholeUSD renders whole dollars without cents ("$45"), cents otherwise.
+func wholeUSD(v float64) string {
+	if v == float64(int64(v)) {
+		return fmt.Sprintf("$%d", int64(v))
+	}
+	return fmt.Sprintf("$%.2f", v)
 }
 
 func sortedKeys(m map[string]int) []string {
@@ -321,6 +394,40 @@ func advisoryCoaching(rf *rootFlags) bool {
 
 // coachVerbosity is how much the coach says (ADR 0006). An unreadable
 // config reads as normal: today's behaviour, never silence.
+// coachHoldout is the share of sessions whose cost and drift tips are
+// held back to measure their saving; an unreadable config holds nothing.
+func coachHoldout(rf *rootFlags) int {
+	cfg, err := loadConfig(rf)
+	if err != nil {
+		return 0
+	}
+	return coachcap.Build(cfg).HoldoutPercent
+}
+
+// recordSavings writes this Stop's tip, shown or held back, to the
+// realized-savings ledger with its expected saving and evidence, and the
+// implicit outcomes of earlier ones.
+func recordSavings(l savings.Ledger, now time.Time, session string, dec coachhook.Decision) {
+	tip := savings.Tip{Session: session, ExpectedUSD: dec.ExpectedUSD, ExpectedTokens: dec.ExpectedTokens,
+		Evidence: dec.Evidence, SessionUSD: dec.CumulativeUSD}
+	if dec.OfferID != "" {
+		tip.ID, tip.Kind, tip.Cohort = dec.OfferID, dec.TipKind, savings.Treated
+		savings.RecordTip(l, now, tip)
+	}
+	if dec.ShadowID != "" {
+		tip.ID, tip.Kind, tip.Cohort = dec.ShadowID, dec.ShadowKind, savings.Shadow
+		if dec.Holdout {
+			tip.Cohort = savings.Holdout
+		}
+		savings.RecordTip(l, now, tip)
+	}
+	resolved := make([]savings.Resolution, 0, len(dec.Resolved)+len(dec.ShadowResolved))
+	for _, r := range append(append([]coachhook.TipResolution{}, dec.Resolved...), dec.ShadowResolved...) {
+		resolved = append(resolved, savings.Resolution{ID: r.ID, Signal: r.Signal, Followed: r.Followed, Evidence: r.Evidence})
+	}
+	savings.RecordOutcomes(l, now, resolved)
+}
+
 func coachVerbosity(rf *rootFlags) string {
 	cfg, err := loadConfig(rf)
 	if err != nil {
@@ -418,6 +525,7 @@ func quietPolicy(rf *rootFlags) coachhook.Quiet {
 	return coachhook.Quiet{
 		MinInterval:   cfg.Coaching.Quiet.MinInterval,
 		MaxPerSession: cfg.Coaching.Quiet.MaxPerSession,
+		MaxPerDay:     cfg.Coaching.Quiet.InterruptionsPerDay(),
 	}
 }
 

@@ -3,7 +3,9 @@ package coachhook
 import (
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
+	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 )
 
 // Config tunes the coach. Enabled=false makes Evaluate observe-only (it still
@@ -17,12 +19,10 @@ type Config struct {
 	// nudge. Each fires at most once per session (latched).
 	Tiers []float64
 	// Quota is the live window reading for a flat-rate plan the session
-	// runs on. When set it replaces the dollar ladder: the coach speaks at
-	// QuotaTiers of the window, each once per window across sessions.
+	// runs on. When set it replaces the dollar ladder: the coach warns
+	// when both burn-rate look-backs run a window out before its reset,
+	// and says when one is used up, each once per window across sessions.
 	Quota *Quota
-	// QuotaTiers are the window shares to speak at. Empty uses
-	// DefaultQuotaTiers.
-	QuotaTiers []float64
 	// FlatPlan says the session's provider is on a flat-rate plan. Its
 	// dollar figure is then a counterfactual nobody pays, so the coach
 	// never speaks the dollar ladder there, with or without a Quota.
@@ -78,6 +78,25 @@ type Config struct {
 	// that the coach stops giving them. Only early tiers can be quieted,
 	// and verbose still gives them. Nil quiets nothing.
 	Quieted func(kind string) bool
+	// Held reports why a tip of kind must not be said in session because
+	// the operator answered an earlier one: "snoozed" defers it,
+	// "answered" closes the episode. Nil holds nothing.
+	Held func(session, kind string) string
+	// BudgetAnswers counts the budget tips the operator answered lately
+	// and how many they called expected: the outcome that tunes the
+	// derived session budget. Nil counts none.
+	BudgetAnswers func() (expected, answered int)
+	// HoldoutPercent is the share of sessions whose cost and drift tips
+	// are held back and logged as shadow (#656): the randomized cohort a
+	// realized saving is measured against. Zero opts out; it is clamped
+	// to learning.MaxHoldoutPercent, and tips about work about to stop
+	// are never held.
+	HoldoutPercent int
+	// Budgets are the operator's spend budget windows as the daemon last
+	// measured them. Each window's warning, critical and spent tiers are
+	// said once per window as tips of the "spend" family. Nil says
+	// nothing about budgets.
+	Budgets []boundaryledger.BudgetReading
 }
 
 // Quiet is the rate limit on the coach's proactive channel.
@@ -94,6 +113,10 @@ type Quiet struct {
 	// MaxPerSession caps the nudges one session may carry. Zero means no
 	// cap.
 	MaxPerSession int
+	// MaxPerDay is the daily interruption budget across sessions. Past
+	// it, tips wait on the status line instead of interrupting, except
+	// tips about work about to stop. Zero means no budget.
+	MaxPerDay int
 }
 
 // silence reports why a nudge must not be spoken now, and whether the
@@ -150,9 +173,19 @@ type Decision struct {
 	// Promotion is true when the nudge is the read-guard case rather than
 	// a budget tier.
 	Promotion bool
-	// QuotaTier is the share of the plan's quota window this Stop spoke
-	// at (0.75 = 75%). Zero when no quota tier fired.
+	// QuotaTier is 1.0 when this Stop said a plan window is used up.
 	QuotaTier float64
+	// QuotaBurn is true when this Stop warned that a plan window runs out
+	// before its reset at the pace of both look-backs.
+	QuotaBurn bool
+	// quotaWindow is the window a quota tip was about, and runsOutAt when
+	// a run-out warning said it runs out.
+	quotaWindow plans.QuotaWindow
+	runsOutAt   time.Time
+	// SpendKind names the budget window tip this Stop gave (spend_75,
+	// spend_over), and spend the window it was about.
+	SpendKind string
+	spend     boundaryledger.BudgetReading
 	// ReadingLost is true when this Stop said the plan's window cannot be
 	// read.
 	ReadingLost bool
@@ -173,6 +206,22 @@ type Decision struct {
 	Resolved []TipResolution
 	// CompactTip is true when the nudge is the compact_now tip.
 	CompactTip bool
+	// Ambient is true when a tip was due but goes to the status line as
+	// the open tip instead of interrupting (Suppressed says why).
+	Ambient bool
+	// Holdout is true when a due tip was held back for the session's
+	// holdout cohort. ShadowID and ShadowKind name it in the savings
+	// ledger; ShadowResolved are earlier held tips this Stop settled.
+	Holdout        bool
+	ShadowID       string
+	ShadowKind     string
+	ShadowResolved []TipResolution
+	// ExpectedUSD and ExpectedTokens are what acting on the tip given
+	// (or held) this Stop is expected to save per later turn, and
+	// Evidence the figures it rests on. Zero when no tip was due.
+	ExpectedUSD    float64
+	ExpectedTokens int64
+	Evidence       string
 }
 
 // ratesAt resolves the card for a turn, falling back to the embedded

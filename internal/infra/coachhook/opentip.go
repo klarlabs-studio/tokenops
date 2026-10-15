@@ -20,6 +20,8 @@ type Tip struct {
 	// tips; ResetsAt is when it resets.
 	Window   string
 	ResetsAt time.Time
+	// RunsOutAt is when a run-out warning said the window runs out.
+	RunsOutAt time.Time
 }
 
 // OpenTip reads the session's open tip from the hook's state in dir
@@ -32,11 +34,11 @@ func OpenTip(dir, sessionID string) (Tip, bool) {
 	if o == nil || o.ID == "" || o.Kind == "" {
 		return Tip{}, false
 	}
-	return Tip{ID: o.ID, Kind: o.Kind, Window: o.Window, ResetsAt: o.ResetsAt}, true
+	return Tip{ID: o.ID, Kind: o.Kind, Window: o.Window, ResetsAt: o.ResetsAt, RunsOutAt: o.RunsOutAt}, true
 }
 
 // Urgent reports a tip about work about to stop: the session budget
-// spent, or a quota window at 90% or more. They are the tips that never
+// spent, or a quota window running out or used up. They are the tips that never
 // go quiet, and the only ones `quiet` verbosity shows.
 func (t Tip) Urgent() bool { return t.Kind != "" && !quietable(t.Kind) }
 
@@ -51,10 +53,28 @@ func (t Tip) Short(now time.Time) string {
 		return "past the session budget → fresh session"
 	case strings.HasPrefix(t.Kind, "budget_"):
 		return strings.TrimPrefix(t.Kind, "budget_") + "% of the session budget used"
+	case t.Kind == burnKind:
+		return t.shortBurn(now)
+	case strings.HasPrefix(t.Kind, spendFamily+"_"):
+		return t.shortSpend(now)
 	case strings.HasPrefix(t.Kind, "quota_"):
 		return t.shortQuota(now)
 	}
 	return ""
+}
+
+func (t Tip) shortBurn(now time.Time) string {
+	if !t.ResetsAt.IsZero() && !t.ResetsAt.After(now) {
+		return ""
+	}
+	window := t.Window
+	if window == "" {
+		window = "plan window"
+	}
+	if !t.RunsOutAt.After(now) {
+		return window + " about to run out → smaller model"
+	}
+	return fmt.Sprintf("%s out in ~%s → smaller model", window, strings.ReplaceAll(formatSpan(t.RunsOutAt.Sub(now)), " ", ""))
 }
 
 func (t Tip) shortQuota(now time.Time) string {

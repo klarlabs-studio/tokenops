@@ -258,7 +258,7 @@ func (s *startup) startStorageSubsystems(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("analytics handlers: %w", err)
 	}
-	s.opts = append(s.opts, proxy.WithAnalytics(analyticsH))
+	s.opts = append(s.opts, proxy.WithAnalytics(analyticsH.WithConfig(s.cfg)))
 	s.opts = append(s.opts, proxy.WithAudit(proxy.NewAuditHandlers(store)))
 	return nil
 }
@@ -334,6 +334,12 @@ func (s *startup) startBackgroundRefreshers(context.Context) error {
 
 	// The findings' session analysis is too slow to run per answer.
 	startSessionFindingsRuntime(s.sup, s.logger)
+
+	// So is spend anomaly detection, which reads four weeks of turns.
+	startAnomalyRuntime(s.cfg, s.components, s.sup, s.logger)
+
+	// And the week's waste report, whose headline the glance shows.
+	startAvoidableRuntime(s.cfg, s.components, s.sup, s.logger)
 	return nil
 }
 
@@ -410,7 +416,7 @@ func (s *startup) startPostServeSubsystems(context.Context) error {
 	// evaluation against the local store. Requires storage (no events,
 	// nothing to watch).
 	if s.components.Aggregator != nil {
-		startSpendWatcherRuntime(s.cfg, s.components.Aggregator, s.events.Bus, s.components.Store, s.components.Spend.Currency(), s.sup, s.logger)
+		startSpendWatcherRuntime(s.cfg, taggedBudgetSource(s.cfg, s.components.Aggregator), s.events.Bus, s.components.Store, s.components.Spend.Currency(), s.sup, s.logger)
 	}
 	return nil
 }

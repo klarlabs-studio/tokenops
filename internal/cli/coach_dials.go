@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/infra/compactlever"
@@ -91,8 +92,35 @@ func renderCoachStatus(out io.Writer, r coachcap.Report, quota []string) {
 		fmt.Fprintf(out, "\n  lately: %s\n", strings.Join(activity, " · "))
 	}
 	renderFollowThrough(out, r)
+	renderGraduation(out, r)
+	if r.HoldoutPercent > 0 {
+		fmt.Fprintf(out, "\n  holdout: %d%% of sessions do not get cost and drift tips, so their saving can be measured (`tokenops verify`)\n", r.HoldoutPercent)
+	} else {
+		fmt.Fprintln(out, "\n  holdout: off; no tip's saving can be measured against sessions without it")
+	}
 	fmt.Fprintln(out, "\n  change: tokenops coach preset <observe|advise|guided|autopilot> · autonomy <off|advise|ask|autonomous> · verbosity <quiet|normal|verbose>")
-	fmt.Fprintln(out, "          tokenops coach set <inform|waste|models|context> <rung> · tokenops coach off")
+	fmt.Fprintln(out, "          tokenops coach set <inform|waste|models|context> <rung> · tokenops coach off · tokenops coach holdout <off|on|percent>")
+}
+
+// renderGraduation prints each capability's stage and the published bar
+// for its next one, with where the evidence stands. It never promotes:
+// a ready step names the command.
+func renderGraduation(out io.Writer, r coachcap.Report) {
+	if len(r.Graduation) == 0 {
+		return
+	}
+	fmt.Fprintln(out, "\n  graduation (shadow → advise → act; you take each step):")
+	for _, s := range r.Graduation {
+		name := savings.CapabilityName(s.Capability)
+		if s.Next == "" {
+			fmt.Fprintf(out, "    %-15s acts\n", name)
+			continue
+		}
+		fmt.Fprintf(out, "    %-15s %s → %s · %s\n", name, s.Stage, s.Next, savings.Bar(s))
+		if s.Ready {
+			fmt.Fprintf(out, "    %-15s ready: %s\n", "", s.Promote)
+		}
+	}
 }
 
 // renderModelPolicy states which models no route may land on.
@@ -158,7 +186,8 @@ func mutateCoach(cmd *cobra.Command, change func(*config.Config)) error {
 func renderFollowThrough(out io.Writer, r coachcap.Report) {
 	var lines []string
 	for _, s := range r.FollowThrough {
-		if s.Resolved() == 0 && s.Unseen == 0 {
+		answered := s.Acknowledged + s.Expected + s.Snoozed
+		if s.Resolved() == 0 && s.Unseen == 0 && answered == 0 {
 			continue
 		}
 		line := fmt.Sprintf("%s %s on %s work: ", s.Power, s.Channel, s.Kind)
@@ -178,6 +207,10 @@ func renderFollowThrough(out io.Writer, r coachcap.Report) {
 			// shown in the status line: no evidence it was read, so it is
 			// neither followed nor ignored.
 			line += fmt.Sprintf(", %d unseen", s.Unseen)
+		}
+		if answered > 0 {
+			line += fmt.Sprintf(", %d acknowledged, %d expected, %d snoozed (%d%% snoozed)",
+				s.Acknowledged, s.Expected, s.Snoozed, int(s.SnoozeRate()*100+0.5))
 		}
 		if s.Quiet {
 			line += " · quiet now (turned down repeatedly; `verbosity verbose` still shows it)"
@@ -234,6 +267,32 @@ Approval requests are always shown.`,
 				return coachStatus(cmd, false)
 			}
 			return mutateCoach(cmd, func(c *config.Config) { c.Coach.Verbosity = args[0] })
+		},
+	}
+}
+
+func newCoachHoldoutCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "holdout [off|on|<percent>]",
+		Short: "Show or set the share of sessions that do not get cost and drift tips",
+		Long: `holdout holds a few sessions' cost and drift tips back (the 50% and 75%
+session-budget tips and the compact tip), logged as shadow, so the saving
+each tip realizes can be measured against sessions that did not get it.
+'tokenops verify' compares the two groups.
+
+It is on at 10% by default and never more. Tips about work about to stop
+(a plan window running out or used up, the session budget spent) are never
+held back. 'off' opts out; a preset keeps your choice.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return coachStatus(cmd, false)
+			}
+			n, err := coachcap.ParseHoldout(args[0])
+			if err != nil {
+				return err
+			}
+			return mutateCoach(cmd, func(c *config.Config) { c.Coach.Holdout = &n })
 		},
 	}
 }
@@ -317,8 +376,8 @@ func tipLabel(kind string) string {
 }
 
 // quotaStatusLines reads the live plan window for each provider with a
-// plan configured, as the coach hook would, and says when the coach will
-// next speak about it. Without it "0 tips on a quota window" cannot be
+// plan configured, as the coach hook would, and says what the coach
+// forecasts for it. Without it "0 tips on a quota window" cannot be
 // told apart from a coach that is not reading the quota at all.
 func quotaStatusLines(ctx context.Context, r coachcap.Report) []string {
 	if r.Effective(config.PowerInform) == config.AutonomyOff {
@@ -335,7 +394,7 @@ func quotaStatusLines(ctx context.Context, r coachcap.Report) []string {
 	now := time.Now()
 	var out []string
 	for _, p := range []eventschema.Provider{eventschema.ProviderAnthropic, eventschema.ProviderOpenAI} {
-		if line := coachhook.QuotaStatus("", readPlan(ctx, cfg, p, now).Quota, r.Verbosity, now); line != "" {
+		if line := coachhook.QuotaStatus("", readPlan(ctx, cfg, p, now).Quota, now); line != "" {
 			out = append(out, line)
 		}
 	}

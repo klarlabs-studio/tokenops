@@ -192,10 +192,14 @@ func routeOptimizationEvent(executionID, reason string, decision eventschema.Opt
 }
 
 func randomizedFixture(pairCount int, experimentID, prefix string) ([]work.Execution, []*eventschema.Envelope) {
+	return randomizedFixtureAt(t0, pairCount, experimentID, prefix)
+}
+
+func randomizedFixtureAt(start time.Time, pairCount int, experimentID, prefix string) ([]work.Execution, []*eventschema.Envelope) {
 	var execs []work.Execution
 	var events []*eventschema.Envelope
 	for pair := 1; pair <= pairCount; pair++ {
-		at := t0.Add(time.Duration(pair) * time.Hour)
+		at := start.Add(time.Duration(pair) * time.Hour)
 		baseID, variantID := fmt.Sprintf("%s-base-%d", prefix, pair), fmt.Sprintf("%s-variant-%d", prefix, pair)
 		execs = append(execs,
 			execution(baseID, "session:base", at, 20*time.Minute),
@@ -342,18 +346,64 @@ func TestRandomizedComparisonFallsBackForLegacyUnlinkedAssignments(t *testing.T)
 	}
 }
 
-func TestRandomizedComparisonRequiresSelectionWhenTrialsAreMixed(t *testing.T) {
-	firstExecs, firstEvents := randomizedFixture(5, "experiment:first", "first")
-	secondExecs, secondEvents := randomizedFixture(5, "experiment:second", "second")
+// With several trials and no selection, verify compares the one that
+// can be compared, and says which and why, instead of refusing.
+func TestMixedTrialsPickTheOnlyComparableOne(t *testing.T) {
+	firstExecs, firstEvents := randomizedFixtureAt(t0, 5, "experiment:first", "first")
+	secondExecs, secondEvents := randomizedFixtureAt(t0.Add(48*time.Hour), 5, "experiment:second", "second")
+	// The second trial is missing an outcome, so it cannot be compared.
+	for i, event := range secondEvents {
+		if _, ok := event.Payload.(*eventschema.OutcomeEvent); ok && event.Association.Execution == "second-variant-2" {
+			secondEvents = append(secondEvents[:i], secondEvents[i+1:]...)
+			break
+		}
+	}
 	execs := append(firstExecs, secondExecs...)
 	events := append(firstEvents, secondEvents...)
 	got := verify.CompareExperiment(execs, events, "")
-	if !got.Observational() || !strings.Contains(got.RandomizedFallbackReason, "multiple experiments") {
-		t.Fatalf("mixed trials were not refused: %+v", got)
+	if got.Observational() || got.RandomizedExperimentID != "experiment:first" || got.RandomizedPairs != 5 {
+		t.Fatalf("auto selection = %+v", got)
+	}
+	if !strings.Contains(got.RandomizedSelection, "experiment:first") || !strings.Contains(got.RandomizedSelection, "experiment:second") ||
+		!strings.Contains(got.RandomizedSelection, "only") {
+		t.Fatalf("selection not explained: %q", got.RandomizedSelection)
 	}
 	selected := verify.CompareExperiment(execs, events, "experiment:first")
-	if selected.Observational() || selected.RandomizedExperimentID != "experiment:first" || selected.RandomizedPairs != 5 {
+	if selected.Observational() || selected.RandomizedExperimentID != "experiment:first" || selected.RandomizedSelection != "" {
 		t.Fatalf("explicit selection failed: %+v", selected)
+	}
+}
+
+// Several comparable trials: the most recent is compared, and the others
+// are named so another can be chosen.
+func TestMixedComparableTrialsPickTheMostRecent(t *testing.T) {
+	firstExecs, firstEvents := randomizedFixtureAt(t0, 5, "experiment:first", "first")
+	secondExecs, secondEvents := randomizedFixtureAt(t0.Add(48*time.Hour), 5, "experiment:second", "second")
+	got := verify.CompareExperiment(append(firstExecs, secondExecs...), append(firstEvents, secondEvents...), "")
+	if got.Observational() || got.RandomizedExperimentID != "experiment:second" {
+		t.Fatalf("auto selection = %+v", got)
+	}
+	if !strings.Contains(got.RandomizedSelection, "most recent") || !strings.Contains(got.RandomizedSelection, "experiment:first") ||
+		!strings.Contains(got.RandomizedSelection, "--experiment-id") {
+		t.Fatalf("selection not explained: %q", got.RandomizedSelection)
+	}
+}
+
+// When none of several trials can be compared, the fallback says why for
+// each, rather than asking for a selection that would not help.
+func TestMixedTrialsNoneComparable(t *testing.T) {
+	firstExecs, firstEvents := randomizedFixtureAt(t0, 5, "experiment:first", "first")
+	secondExecs, secondEvents := randomizedFixtureAt(t0.Add(48*time.Hour), 5, "experiment:second", "second")
+	var events []*eventschema.Envelope
+	for _, e := range append(firstEvents, secondEvents...) {
+		if _, ok := e.Payload.(*eventschema.OutcomeEvent); !ok {
+			events = append(events, e)
+		}
+	}
+	got := verify.CompareExperiment(append(firstExecs, secondExecs...), events, "")
+	if !got.Observational() || strings.Contains(got.RandomizedFallbackReason, "multiple experiments are present") ||
+		!strings.Contains(got.RandomizedFallbackReason, "none of the 2 experiments") {
+		t.Fatalf("fallback = %q", got.RandomizedFallbackReason)
 	}
 }
 

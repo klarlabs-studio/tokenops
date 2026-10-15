@@ -9,6 +9,8 @@ import (
 	"go.klarlabs.de/mcp/schema"
 
 	"go.klarlabs.de/tokenops/internal/capability/actions"
+	"go.klarlabs.de/tokenops/internal/capability/allocation"
+	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/boundaries"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
@@ -18,6 +20,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/state"
+	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 )
 
 // Param is one query or path parameter.
@@ -35,6 +38,9 @@ type RouteDoc struct {
 	Method, Path, Summary string
 	Params                []Param
 	Request, Response     any
+	// ContentType is the response's media type when it is not JSON; the
+	// body is then documented as a string.
+	ContentType string
 }
 
 // Pattern is the route as the mux registers it.
@@ -61,6 +67,8 @@ var APICatalog = []RouteDoc{
 	{Method: "GET", Path: "/api/findings", Summary: "What the coach and the session analysis observed, ranked, with what to do", Response: findings.Report{}},
 	{Method: "GET", Path: "/api/plans/headroom", Summary: "Every bound plan: usage, the vendor's windows, spend against the limit, risk", Response: headroom.HeadroomPayload{}},
 	{Method: "GET", Path: "/api/plans/session-budget", Summary: "Per plan window: share used, pace, and what to do", Response: headroom.BudgetPayload{}},
+	{Method: "GET", Path: "/api/plans/advice", Summary: "Plan right-sizing: each bound plan's windows replayed against its other tiers, metered overflow and the API at list price; advice only, nothing is switched",
+		Params: []Param{q("days", "integer", "how far back to replay, 1 to 90; 30 when omitted")}, Response: headroom.AdvicePayload{}},
 
 	// Control-plane state (slice 2).
 	{Method: "GET", Path: "/api/status", Summary: "Readiness, blockers, warnings and next actions", Response: state.Status{}},
@@ -82,8 +90,14 @@ var APICatalog = []RouteDoc{
 	{Method: "GET", Path: "/api/spend/series", Summary: "Spend and tokens bucketed over time", Params: []Param{sinceParam, untilParam}},
 	{Method: "GET", Path: "/api/spend/forecast", Summary: "Daily spend projected forward"},
 	{Method: "GET", Path: "/api/spend/cache_stats", Summary: "Prompt cache hits and savings"},
+	{Method: "GET", Path: "/api/spend/units", Summary: "Cost per commit, merged pull request, recorded and achieved outcome and change class, against the 4 weeks before; plan-window shares on a flat-rate plan; work no unit took, by why", Params: []Param{sinceParam}, Response: uniteconomics.Report{}},
+	{Method: "GET", Path: "/api/spend/waste", Summary: "Avoidable usage by waste class (redundant re-reads, cache-miss rebuilds, over-tiered model, retry loops, oversized context, abandoned sessions), each token in one class, in API-equivalent dollars and plan-window share; what was realized beside it; the guardrail to switch on next", Params: []Param{sinceParam}, Response: avoidable.Report{}},
 	{Method: "GET", Path: "/api/spend/commits", Summary: "What each of the operator's commits cost: the agent work that led to it, priced; subjects withheld", Params: []Param{sinceParam, q("limit", "integer", "most recent commits to list; 50 when omitted")}, Response: commits.Report{}},
 	{Method: "GET", Path: "/api/spend/top", Summary: "Top consumers, ranked on the API equivalent", Params: []Param{q("by", "string", "model, provider, workflow or agent"), q("top", "integer", "how many; 5 when omitted"), sinceParam, untilParam, includeParam}, Response: spending.TopConsumers{}},
+	{Method: "GET", Path: "/api/spend/export", Summary: "Spend and usage as a FOCUS 1.2 dataset (CSV) for FinOps tools: plan fees as purchases, plan-covered usage billed 0 at its API list price",
+		Params:      []Param{q("format", "string", "focus, the only format; focus when omitted"), q("since", "string", "RFC 3339 time or a duration such as 720h, floored to its UTC day; the start of this month when omitted"), untilParam, includeParam},
+		ContentType: "text/csv"},
+	{Method: "GET", Path: "/api/spend/tags", Summary: "Spend per project, client or cost centre, tagged on the daemon by the allocation rules; untagged work kept apart", Params: []Param{q("by", "string", "project, client or cost_center; project when omitted"), q("since", "string", "RFC 3339 time or a duration such as 720h; 30 days ago when omitted"), untilParam, includeParam}, Response: allocation.Report{}},
 	{Method: "GET", Path: "/api/spend/burn-rate", Summary: "Usage over the last hours, hour by hour", Params: []Param{q("hours", "integer", "24 when omitted"), includeParam}, Response: spending.Burn{}},
 	{Method: "GET", Path: "/api/scorecard", Summary: "The wedge KPI scorecard", Params: []Param{q("since_days", "integer", "7 when omitted")}, Response: spending.ScorecardReport{}},
 	{Method: "GET", Path: "/api/pricing", Summary: "The rate card TokenOps costs with", Params: []Param{q("provider", "string", "one provider"), q("model", "string", "models containing this"), q("limit", "integer", "20 when omitted")}, Response: spending.Rates{}},
@@ -131,7 +145,7 @@ func OpenAPI(version string) ([]byte, error) {
 			"summary":     r.Summary,
 			"operationId": operationID(r),
 			"responses": map[string]any{
-				"200": map[string]any{"description": "OK", "content": jsonContent(resp)},
+				"200": map[string]any{"description": "OK", "content": responseContent(r, resp)},
 				"400": map[string]any{"description": "The request was refused; the body says why"},
 				"401": map[string]any{"description": "Missing or wrong API token"},
 			},
@@ -205,6 +219,15 @@ func schemaOf(v any, components map[string]any) (any, error) {
 	var out any
 	err = json.Unmarshal([]byte(strings.ReplaceAll(string(raw), `"#/$defs/`, `"#/components/schemas/`)), &out)
 	return out, err
+}
+
+// responseContent is the route's 200 body: JSON with schema, or the
+// route's own media type as a string.
+func responseContent(r RouteDoc, schema any) map[string]any {
+	if r.ContentType != "" {
+		return map[string]any{r.ContentType: map[string]any{"schema": map[string]any{"type": "string"}}}
+	}
+	return jsonContent(schema)
 }
 
 func jsonContent(schema any) map[string]any {

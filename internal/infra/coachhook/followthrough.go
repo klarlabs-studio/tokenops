@@ -2,8 +2,10 @@ package coachhook
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/contexts/learning"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/spend"
 )
 
@@ -17,6 +19,8 @@ type TipResolution struct {
 	Kind     string
 	Followed bool
 	Evidence string
+	// Signal names the implicit outcome (learning.Signal*).
+	Signal string
 }
 
 // openTip is a tip still waiting to be acted on. Its levers are /compact,
@@ -32,6 +36,8 @@ type openTip struct {
 	// can say which one and when it is back.
 	Window   string    `json:"window,omitempty"`
 	ResetsAt time.Time `json:"resets_at,omitzero"`
+	// RunsOutAt is when a run-out warning said the window runs out.
+	RunsOutAt time.Time `json:"runs_out_at,omitzero"`
 }
 
 // budgetKind names a dollar-tier tip for the follow-through ledger.
@@ -42,18 +48,21 @@ func budgetKind(fired float64) string {
 	return fmt.Sprintf("budget_%d", int(fired*100+0.5))
 }
 
-// quotaKind names a quota-tier tip.
+// quotaKind names a quota-tier tip. Only quota_100 (used up) is given
+// now; the lower shares are kinds earlier versions gave and the record
+// still holds.
 func quotaKind(tier float64) string { return fmt.Sprintf("quota_%d", int(tier*100+0.5)) }
 
 // quietable reports whether a tip kind may go quiet when it keeps being
 // ignored. Tips about work about to stop never do: the budget spent, or a
-// quota window at 90% or more.
+// quota window running out or used up.
 func quietable(kind string) bool {
 	switch kind {
 	case "budget_50", "budget_75", "quota_50", "quota_75", compactKind:
 		return true
 	}
-	return false
+	// A budget window's thresholds can wait; that it is spent cannot.
+	return strings.HasPrefix(kind, spendFamily+"_") && kind != spendOverKind
 }
 
 // hold decides whether a tip of kind must not be spoken now: the quiet
@@ -66,6 +75,14 @@ func (c Config) hold(kind string, st *sessionState, now time.Time) (reason strin
 	if c.Verbosity != verbosityVerbose && quietable(kind) && c.Quieted != nil && c.Quieted(kind) {
 		return "ignored_before", false
 	}
+	if c.Held != nil && kind != "" {
+		switch c.Held(st.id, kind) {
+		case SuppressedSnoozed:
+			return SuppressedSnoozed, true
+		case SuppressedAnswered:
+			return SuppressedAnswered, false
+		}
+	}
 	return "", false
 }
 
@@ -75,7 +92,13 @@ func (c Config) hold(kind string, st *sessionState, now time.Time) (reason strin
 // ignoring it.
 func observeTip(st *sessionState, model string, contextTokens int64) []TipResolution {
 	defer func() { st.compaction, st.dropFrom = "", 0 }()
-	o := st.OpenTip
+	st.shadowResolved = append(st.shadowResolved, settleTip(&st.ShadowTip, st, model, contextTokens)...)
+	return settleTip(&st.OpenTip, st, model, contextTokens)
+}
+
+// settleTip settles one open tip, shown or held, against a new turn.
+func settleTip(slot **openTip, st *sessionState, model string, contextTokens int64) []TipResolution {
+	o := *slot
 	if o == nil || contextTokens <= 0 {
 		return nil
 	}
@@ -85,35 +108,46 @@ func observeTip(st *sessionState, model string, contextTokens int64) []TipResolu
 		// The client compacted on its own at its ceiling: the context
 		// shrank, but because nothing was done until it had to.
 		r.Evidence = "the client compacted automatically at its ceiling"
+		r.Signal = learning.SignalAutoCompacted
 	case o.Context > 0 && contextTokens*2 <= o.Context:
 		r.Followed = true
 		r.Evidence = fmt.Sprintf("context went from %s to %s", formatTokens(o.Context), formatTokens(contextTokens))
+		r.Signal = learning.SignalCompacted
 	case o.Model != "" && model != "" && model != o.Model:
 		r.Followed = true
 		r.Evidence = "the session moved to " + model
+		r.Signal = learning.SignalModelSwitched
 	case o.Turns+1 >= TipWindow:
 		r.Evidence = fmt.Sprintf("nothing changed in %d turns", TipWindow)
+		r.Signal = learning.SignalUnchanged
 	default:
 		o.Turns++
 		return nil
 	}
-	st.OpenTip = nil
+	*slot = nil
 	return []TipResolution{r}
 }
 
 // offerTip opens the tip this Stop spoke. A tip still open is closed as
 // ignored: the next tier arrived before anything changed.
 func offerTip(st *sessionState, dec *Decision, cfg Config, kind, model string, contextTokens int64) {
-	if cfg.NewID == nil || !dec.Nudge || dec.Promotion || kind == "" {
+	if cfg.NewID == nil || (!dec.Nudge && !dec.Ambient) || dec.Promotion || kind == "" {
 		return
 	}
 	if o := st.OpenTip; o != nil {
-		dec.Resolved = append(dec.Resolved, TipResolution{ID: o.ID, Kind: o.Kind, Evidence: "a later tip arrived first"})
+		dec.Resolved = append(dec.Resolved, TipResolution{ID: o.ID, Kind: o.Kind, Evidence: "a later tip arrived first", Signal: learning.SignalSuperseded})
 	}
 	st.OpenTip = &openTip{ID: cfg.NewID(), Kind: kind, Model: model, Context: contextTokens}
-	if q := cfg.Quota; q != nil && dec.QuotaTier > 0 {
-		st.OpenTip.Window = providerName(q.Provider) + " " + q.Window.Label
-		st.OpenTip.ResetsAt = q.Window.ResetsAt.UTC()
+	if q := cfg.Quota; q != nil && dec.quotaWindow.Label != "" {
+		st.OpenTip.Window = providerName(q.Provider) + " " + dec.quotaWindow.Label
+		st.OpenTip.ResetsAt = dec.quotaWindow.ResetsAt.UTC()
+		if !dec.runsOutAt.IsZero() {
+			st.OpenTip.RunsOutAt = dec.runsOutAt.UTC()
+		}
+	}
+	if dec.SpendKind != "" {
+		st.OpenTip.Window = spendLabel(dec.spend)
+		st.OpenTip.ResetsAt = dec.spend.ResetsAt.UTC()
 	}
 	dec.OfferID, dec.TipKind = st.OpenTip.ID, kind
 }

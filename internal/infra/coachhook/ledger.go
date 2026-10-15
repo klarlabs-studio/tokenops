@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/learning"
 )
 
 // ledgerEvent is one appended coaching record.
@@ -34,8 +36,17 @@ type ledgerEvent struct {
 	QuotaWindow  string  `json:"quota_window,omitempty"`
 	QuotaUsedPct float64 `json:"quota_used_pct,omitempty"`
 	QuotaTier    float64 `json:"quota_tier,omitempty"`
+	// QuotaBurn records that this Stop warned the window runs out before
+	// its reset.
+	QuotaBurn bool `json:"quota_burn,omitempty"`
 	// ReadingLost records that this Stop said the plan reading is lost.
 	ReadingLost bool `json:"reading_lost,omitempty"`
+	// Ambient records that a due tip went to the status line instead of
+	// interrupting; Suppressed says why.
+	Ambient bool `json:"ambient,omitempty"`
+	// Holdout records that a due tip was held back for the holdout and
+	// logged as shadow.
+	Holdout bool `json:"holdout,omitempty"`
 }
 
 func appendLedger(dir string, e ledgerEvent) {
@@ -71,8 +82,17 @@ type Stats struct {
 	// and QuotaWindows the windows they were said about.
 	QuotaNudges  map[string]int `json:"quota_nudges,omitempty"`
 	QuotaWindows map[string]int `json:"quota_windows,omitempty"`
+	// BurnWarnings counts run-out warnings given.
+	BurnWarnings int `json:"burn_warnings,omitempty"`
+	// RunOut scores the run-out forecasts against what became of each
+	// window once it reset.
+	RunOut RunOutScore `json:"run_out"`
 	// CompactTips counts the compact_now tips given.
 	CompactTips int `json:"compact_tips,omitempty"`
+	// SessionBudget is the budget belief last derived from the
+	// operator's own sessions, with its evidence. Nil before the first
+	// derivation.
+	SessionBudget *learning.SessionBudgetBelief `json:"session_budget,omitempty"`
 }
 
 // ReadStats reads the ledger and aggregates it. Cumulative spend is a
@@ -83,13 +103,13 @@ func ReadStats(dir string) (Stats, error) {
 	f, err := os.Open(filepath.Join(dir, "events.jsonl"))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return Stats{AlertsByTier: map[string]int{}}, nil
+			return Stats{AlertsByTier: map[string]int{}, RunOut: readRunOuts(dir)}, nil
 		}
 		return Stats{}, err
 	}
 	defer func() { _ = f.Close() }()
 
-	s := Stats{AlertsByTier: map[string]int{}}
+	s := Stats{AlertsByTier: map[string]int{}, RunOut: readRunOuts(dir)}
 	peak := map[string]float64{}
 	dec := json.NewDecoder(f)
 	for {
@@ -105,11 +125,15 @@ func ReadStats(dir string) (Stats, error) {
 			s.Alerts++
 			s.AlertsByTier[tierLabel(e.TierFired)]++
 		}
-		if e.QuotaTier > 0 {
+		if e.QuotaTier > 0 || e.QuotaBurn {
 			if s.QuotaNudges == nil {
 				s.QuotaNudges, s.QuotaWindows = map[string]int{}, map[string]int{}
 			}
-			s.QuotaNudges[tierLabel(e.QuotaTier)]++
+			if e.QuotaBurn {
+				s.BurnWarnings++
+			} else {
+				s.QuotaNudges[tierLabel(e.QuotaTier)]++
+			}
 			s.QuotaWindows[e.QuotaWindow]++
 		}
 		if e.Compact {
@@ -132,6 +156,9 @@ func ReadStats(dir string) (Stats, error) {
 		}
 	}
 	s.DistinctSessions = len(peak)
+	if b, ok := ReadSessionBudget(dir); ok {
+		s.SessionBudget = &b
+	}
 	for _, p := range peak {
 		s.TotalEstSpendUSD += p
 		if p > s.MaxCumulativeUSD {

@@ -45,12 +45,10 @@ func EvaluateOpencode(dir, dbPath, sessionID string, cfg Config, now time.Time) 
 	// idle every time the operator stops typing.
 	_ = os.MkdirAll(dir, 0o755)
 	st := loadSession(dir, sessionID)
+	before, prevMax := spoken{st.Nudges, st.LastNudgeAt}, st.MaxFiredFraction
 
-	budget := cfg.BudgetUSD
-	configured := budget > 0 && budget != DefaultBudgetUSD
-	if budget <= 0 {
-		budget = DefaultBudgetUSD
-	}
+	basis := pinnedBudget(dir, &st, cfg, now)
+	budget := basis.USD
 
 	total, model, contextTokens, unpriced := sumOpencodeSession(dbPath, sessionID, cfg, now)
 	// session.idle fires again without a new turn; only a turn that moved
@@ -70,7 +68,7 @@ func EvaluateOpencode(dir, dbPath, sessionID string, cfg Config, now time.Time) 
 		case reason == "":
 			dec.Nudge = true
 			dec.FiredFraction = fired
-			dec.Message = nudgeMessage(fired, total, budget, configured)
+			dec.Message = nudgeMessage(fired, total, basis)
 			if note := contextNote(contextTokens, model); note != "" {
 				dec.Message = note + " " + dec.Message
 			}
@@ -89,13 +87,16 @@ func EvaluateOpencode(dir, dbPath, sessionID string, cfg Config, now time.Time) 
 		}
 	}
 
+	evaluateSpendBudgets(dir, &dec, &st, cfg, now)
+	cfg.applyHoldout(&dec, &st, before, model, contextTokens, now)
+	cfg.deliver(dir, &dec, &st, before, prevMax, now)
 	offerTip(&st, &dec, cfg, tipKind(dec), model, contextTokens)
 	saveSession(dir, sessionID, st)
 	appendLedger(dir, ledgerEvent{
 		TS: now.UTC(), Session: sessionID,
 		CumulativeUSD: total, BudgetUSD: budget,
 		Fraction: frac, TierFired: dec.FiredFraction, Model: model,
-		Suppressed: dec.Suppressed, Unpriced: dec.UnpricedModel,
+		Suppressed: dec.Suppressed, Unpriced: dec.UnpricedModel, Ambient: dec.Ambient, Holdout: dec.Holdout,
 	})
 	return dec
 }

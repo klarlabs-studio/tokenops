@@ -1,10 +1,13 @@
 package boundaries
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/config"
 	domain "go.klarlabs.de/tokenops/internal/contexts/boundaries"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
@@ -217,5 +220,67 @@ func TestStatusShowsTokenOpsSidePoints(t *testing.T) {
 	}
 	if st.Note != "" {
 		t.Errorf("note = %q; no rule here needs the hook", st.Note)
+	}
+}
+
+// A hard budget window is enforced by the boundary engine, not a second
+// path: it starts in shadow, is promoted by its rule's name, and then
+// asks at the pause point once that window, and only that window, is at
+// its limit.
+func TestHardBudgetWindowAsksAtThePausePoint(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	body := `budgets:
+  - name: team
+    windows:
+      - window: daily
+        limit_usd: 10
+        mode: hard
+      - window: monthly
+        limit_usd: 100
+`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	load := func() []domain.Rule {
+		cfg, err := config.ReadMutable(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg.BoundaryRules()
+	}
+	env := testEnv(t, true)
+	putFigures(t, env, boundaryledger.Figures{BudgetUsedPct: map[string]float64{"team": 100, "team:daily": 100, "team:monthly": 40}})
+	if res, _ := GuardActions(load(), call("s1"), env, domain.ActionSpend); res.Verdict != VerdictNone {
+		t.Fatalf("a shadow hard window bound: %q", res.Reason)
+	}
+	if _, err := Promote(path, "budget-team-daily"); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+	res, err := GuardActions(load(), call("s2"), env, domain.ActionSpend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Verdict != VerdictAsk || !strings.Contains(res.Reason, "budget team:daily 100.0% used >= 100%") {
+		t.Fatalf("verdict %q, reason %q", res.Verdict, res.Reason)
+	}
+	putFigures(t, env, boundaryledger.Figures{BudgetUsedPct: map[string]float64{"team": 100, "team:daily": 60, "team:monthly": 100}})
+	if res, _ := GuardActions(load(), call("s3"), env, domain.ActionSpend); res.Verdict != VerdictNone {
+		t.Fatalf("the soft monthly window was enforced: %q", res.Reason)
+	}
+}
+
+func TestWithBudgetsNamesTheRuleOfAHardWindow(t *testing.T) {
+	cfg := config.Default()
+	cfg.Budgets = []config.BudgetConfig{{Name: "team", Windows: []config.BudgetWindowConfig{
+		{Window: "daily", LimitUSD: 10, Mode: "hard", Stage: "enforce"},
+		{Window: "monthly", LimitUSD: 100},
+	}}}
+	readings := []boundaryledger.BudgetReading{
+		{Key: "team:daily", Budget: "team", Window: "daily", Mode: "hard", UsedPct: 50},
+		{Key: "team:monthly", Budget: "team", Window: "monthly", Mode: "soft", UsedPct: 20},
+	}
+	f := WithBudgets(boundaryledger.Figures{}, readings, cfg.BoundaryRules())
+	if len(f.Budgets) != 2 || f.Budgets[0].Rule != "budget-team-daily" || !f.Budgets[0].Enforced || f.Budgets[1].Rule != "" {
+		t.Errorf("budgets = %+v", f.Budgets)
 	}
 }

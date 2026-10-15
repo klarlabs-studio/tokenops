@@ -17,8 +17,11 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/anomalies"
+	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
+	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
@@ -41,11 +44,17 @@ const (
 	KindWaste    = "waste"
 	KindBudget   = "budget"
 	KindCoach    = "coach"
+	KindPlan     = "plan"
+	// KindSpend is a day whose spend or usage is unusual.
+	KindSpend = "spend"
 )
 
 // Finding is one observation: what was seen, the figures behind it, and
 // what to do about it, when there is something to do.
 type Finding struct {
+	// ID names a finding that can be answered like a tip (`tokenops
+	// coach tip ack|expected|snooze --id`); absent otherwise.
+	ID       string `json:"id,omitempty"`
 	Kind     string `json:"kind"`
 	Level    string `json:"level"`
 	Title    string `json:"title"`
@@ -69,6 +78,10 @@ type Inputs struct {
 	CoachHook *coachhook.Stats
 	ReadGuard *readguard.Stats
 	Sessions  *SessionsSnapshot
+	// Anomalies are the unusual days still open.
+	Anomalies []anomalies.Anomaly
+	// Waste is the daemon's last weekly waste report.
+	Waste *avoidable.Snapshot
 }
 
 // Compute ranks every finding in, most urgent first.
@@ -76,11 +89,14 @@ func Compute(in Inputs) Report {
 	var out []Finding
 	if in.Glance != nil {
 		out = append(out, quota(in.Glance.Headroom.Reports)...)
+		out = append(out, planAdvice(in.Glance.PlanAdvice)...)
 	}
 	if in.Sessions != nil {
 		out = append(out, sessionFindings(in.Sessions.DX.Warnings, in.Sessions.DX.Recommendation)...)
 	}
+	out = append(out, anomalyFindings(in.Anomalies)...)
 	out = append(out, waste(in.ReadGuard, in.Coach)...)
+	out = append(out, wasteWeek(in.Waste, time.Now())...)
 	out = append(out, budget(in.CoachHook)...)
 	out = append(out, coaching(in.Coach, in.CoachHook)...)
 	rank := map[string]int{LevelWarn: 0, LevelNotice: 1, LevelInfo: 2}
@@ -323,7 +339,19 @@ func coaching(c *coach.Report, s *coachhook.Stats) []Finding {
 		}
 		out = append(out, f)
 	}
+	if s != nil {
+		if n := s.Suppressed[coachhook.SuppressedDailyBudget]; n > 0 {
+			out = append(out, Finding{Kind: KindCoach, Level: LevelInfo,
+				Title:    fmt.Sprintf("%d tips waited on the status line instead of interrupting", n),
+				Evidence: "the day's interruption budget (coaching.quiet.max_per_day) was spent",
+				Action:   "`tokenops coach tip ack`, `expected` or `snooze` settles the newest one."})
+		}
+	}
+	out = append(out, graduations(c.Graduation)...)
 	for _, sum := range c.FollowThrough {
+		if f, ok := snoozedMostly(sum); ok {
+			out = append(out, f)
+		}
 		if !sum.Quiet {
 			continue
 		}
@@ -337,12 +365,50 @@ func coaching(c *coach.Report, s *coachhook.Stats) []Finding {
 	return out
 }
 
+// graduations are the capabilities whose evidence meets the published
+// bar for their next stage. They are suggestions, said ambiently: the
+// operator takes the step, or not.
+func graduations(steps []savings.Step) []Finding {
+	var out []Finding
+	for _, s := range steps {
+		title := savings.Headline(s)
+		if title == "" {
+			continue
+		}
+		action := s.Promote
+		if strings.HasPrefix(action, "tokenops ") {
+			action = "`" + action + "` takes the step; nothing changes until you do."
+		}
+		out = append(out, Finding{Kind: KindCoach, Level: LevelInfo, Title: strings.ToUpper(title[:1]) + title[1:],
+			Evidence: savings.Bar(s), Action: action})
+	}
+	return out
+}
+
+// snoozedMostly reports a kind of tip the operator snoozes more often
+// than not: the coach's snooze rate, which says a tip fires when it is
+// not wanted.
+func snoozedMostly(s coach.FollowThroughSummary) (Finding, bool) {
+	if s.Channel != "tip" || s.Snoozed < 3 || s.SnoozeRate() < 0.5 {
+		return Finding{}, false
+	}
+	f := Finding{Kind: KindCoach, Level: LevelNotice,
+		Title:    fmt.Sprintf("You snooze most %s", kindWords(s.Kind)),
+		Evidence: fmt.Sprintf("%d of them snoozed, %d%%", s.Snoozed, int(s.SnoozeRate()*100+0.5)),
+		Action:   "If they come too early, answer `tokenops coach tip expected` instead: enough of those move the session budget up."}
+	return f, true
+}
+
 func kindWords(kind string) string {
 	switch {
 	case kind == "compact_now":
 		return "compact tips"
 	case strings.HasPrefix(kind, "quota_"):
 		return "quota tips"
+	case strings.HasPrefix(kind, "budget_"):
+		return "session budget tips"
+	case strings.HasPrefix(kind, anomalies.KindPrefix):
+		return "unusual spend findings"
 	}
 	return strings.ReplaceAll(kind, "_", " ") + " advice"
 }
@@ -405,4 +471,26 @@ func money(usd float64) string {
 		b.WriteRune(d)
 	}
 	return "$" + b.String()
+}
+
+// planAdvice says when a bound plan would have cost materially less over
+// the last month with no more than a lockout. It is advice: TokenOps never
+// switches a plan.
+func planAdvice(advice []plans.Advice) []Finding {
+	var out []Finding
+	for _, a := range advice {
+		if !a.WorthSaying() {
+			continue
+		}
+		r := a.Recommendation
+		out = append(out, Finding{
+			Kind:  KindPlan,
+			Level: LevelInfo,
+			Title: fmt.Sprintf("%s would have cost $%.0f/mo less", r.Display, r.SavingsUSD),
+			Evidence: fmt.Sprintf("%s Replayed over %.0f days with %s confidence: the tiers' allowances are the vendor's "+
+				"multiples of an unverified baseline.", r.Summary, a.Days, a.Confidence),
+			Action: "See `tokenops plan advise`. Switching is yours to do with the vendor; TokenOps never changes a plan.",
+		})
+	}
+	return out
 }

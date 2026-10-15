@@ -114,12 +114,10 @@ func cursorContextTokens(c cursorTurn) int64 { return deref(c.InputTokens) }
 // Summing any of those twice would inflate the session by a whole turn.
 func evaluateCursor(dir string, c cursorTurn, cfg Config, now time.Time) Decision {
 	st := loadSession(dir, c.ConversationID)
+	before, prevMax := spoken{st.Nudges, st.LastNudgeAt}, st.MaxFiredFraction
 
-	budget := cfg.BudgetUSD
-	configured := budget > 0 && budget != DefaultBudgetUSD
-	if budget <= 0 {
-		budget = DefaultBudgetUSD
-	}
+	basis := pinnedBudget(dir, &st, cfg, now)
+	budget := basis.USD
 
 	// Record the turn for ingestion before deciding anything. Cursor
 	// keeps no per-turn record of its own, so this payload is the only
@@ -158,7 +156,7 @@ func evaluateCursor(dir string, c cursorTurn, cfg Config, now time.Time) Decisio
 		case reason == "":
 			dec.Nudge = true
 			dec.FiredFraction = fired
-			dec.Message = nudgeMessage(fired, st.CumulativeUSD, budget, configured)
+			dec.Message = nudgeMessage(fired, st.CumulativeUSD, basis)
 			dec.ContextTokens = cursorContextTokens(c)
 			st.MaxFiredFraction = fired
 			st.LastNudgeAt = now.UTC().Format(time.RFC3339Nano)
@@ -171,13 +169,16 @@ func evaluateCursor(dir string, c cursorTurn, cfg Config, now time.Time) Decisio
 		}
 	}
 
+	evaluateSpendBudgets(dir, &dec, &st, cfg, now)
+	cfg.applyHoldout(&dec, &st, before, c.modelName(), cursorContextTokens(c), now)
+	cfg.deliver(dir, &dec, &st, before, prevMax, now)
 	offerTip(&st, &dec, cfg, tipKind(dec), c.modelName(), cursorContextTokens(c))
 	saveSession(dir, c.ConversationID, st)
 	appendLedger(dir, ledgerEvent{
 		TS: now.UTC(), Session: c.ConversationID,
 		CumulativeUSD: st.CumulativeUSD, BudgetUSD: budget,
 		Fraction: frac, TierFired: dec.FiredFraction, Model: c.modelName(),
-		Suppressed: dec.Suppressed, Unpriced: dec.UnpricedModel,
+		Suppressed: dec.Suppressed, Unpriced: dec.UnpricedModel, Ambient: dec.Ambient, Holdout: dec.Holdout,
 	})
 	return dec
 }

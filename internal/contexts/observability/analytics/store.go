@@ -100,4 +100,11 @@ type SessionUsage struct {
 	CacheWrite1hTokens                     int64
 	// CostUSD is the stored cost, 0 when none was stored.
 	CostUSD float64
+	// WorkflowID and ExecutionID are what the turn was recorded under,
+	// empty when nothing named them.
+	WorkflowID, ExecutionID string // Source is the reader or client that recorded the turn; Endpoint
+	// the route it went through (ADR 0009), empty when none is recorded.
+	Source, Endpoint string
+	// PlanCovered is plan-included or trial usage, billed nothing.
+	PlanCovered bool
 }

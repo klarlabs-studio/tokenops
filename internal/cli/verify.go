@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/capability/verify"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
@@ -35,7 +36,8 @@ func newVerifyCmd() *cobra.Command {
 it compares attempts an optimization touched against those it did not; this is
 observational and does not establish causality. When execution-linked randomized
 assignments are available, it can instead compare a complete experiment's paired
-arms. Use --experiment-id when more than one trial is present. A randomized
+arms. Without --experiment-id it compares the only trial that can be compared, or the
+most recent of several, and says which. A randomized
 comparison requires complete pairs, measured tokens, and explicit outcomes;
 otherwise verify falls back to the observational view and explains why.
 
@@ -67,7 +69,7 @@ for other work.`,
 	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db (defaults to ~/.tokenops/events.db)")
 	cmd.Flags().DurationVar(&idleGap, "idle-gap", 0, "pause that starts a new attempt (default 10m)")
 	cmd.Flags().BoolVar(&showEach, "each", false, "list every attempt, not only the comparison")
-	cmd.Flags().StringVar(&experimentID, "experiment-id", "", "compare one execution-linked randomized experiment; required when multiple trials are in the window")
+	cmd.Flags().StringVar(&experimentID, "experiment-id", "", "compare one execution-linked randomized experiment; defaults to the only comparable trial, or the most recent")
 	return cmd
 }
 
@@ -75,6 +77,9 @@ for other work.`,
 func writeVerifyText(out io.Writer, r verify.Report) {
 	if r.RandomizedExperimentID != "" {
 		fmt.Fprintf(out, "randomized experiment %s · %d complete pair(s)\n", r.RandomizedExperimentID, r.RandomizedPairs)
+	}
+	if r.RandomizedSelection != "" {
+		fmt.Fprintf(out, "  %s\n", r.RandomizedSelection)
 	}
 	fmt.Fprintf(out, "attempts compared: %d baseline, %d intervention\n\n",
 		r.BaselineCount, r.InterventionCount)
@@ -155,6 +160,20 @@ func writeVerifyText(out io.Writer, r verify.Report) {
 		fmt.Fprintln(out, "\nCohorts were assigned by the selected randomized experiment.")
 		fmt.Fprintln(out, "This is evidence about that experiment, not a guarantee for other work.")
 	}
+	writeHoldout(out, r)
+}
+
+// writeHoldout prints the coach's randomized holdout: per kind of tip,
+// the sessions that got it against the few it was held back from.
+func writeHoldout(out io.Writer, r verify.Report) {
+	if len(r.Holdout) == 0 {
+		return
+	}
+	fmt.Fprintln(out, "\nCoach holdout (randomized: a few sessions do not get cost and drift tips):")
+	for _, k := range r.Holdout {
+		fmt.Fprintf(out, "  %s\n", savings.Describe(k))
+	}
+	fmt.Fprintln(out, "  `tokenops coach holdout off` opts out.")
 }
 
 // verifyOptions are the switches runVerify was given.
@@ -183,8 +202,9 @@ func runVerify(cmd *cobra.Command, opt verifyOptions) (verify.Report, error) {
 	}
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
+	deps := savings.DefaultDeps()
 	report, readErr, err := verify.Run(ctx, store,
-		verify.Window{Days: opt.days, All: opt.days <= 0, IdleGap: opt.idleGap}, opt.experimentID, time.Now())
+		verify.Window{Days: opt.days, All: opt.days <= 0, IdleGap: opt.idleGap, Savings: &deps}, opt.experimentID, time.Now())
 	if readErr != nil {
 		// A reader that broke is reported; whatever the others yielded is
 		// still worth comparing.

@@ -79,6 +79,29 @@ type QuietConfig struct {
 	// is not a cap. Zero means no cap, deferring entirely to the
 	// per-finding latches.
 	MaxPerSession int `yaml:"max_per_session,omitempty"`
+
+	// MaxPerDay is the daily interruption budget: how many tips may
+	// interrupt a session in one day, across sessions. Past it, tips wait
+	// on the status line (and in glance) instead; tips about work about
+	// to stop still speak. Zero means DefaultInterruptionsPerDay; a
+	// negative value turns the budget off.
+	MaxPerDay int `yaml:"max_per_day,omitempty"`
+}
+
+// DefaultInterruptionsPerDay is the daily interruption budget when
+// coaching.quiet.max_per_day is not set.
+const DefaultInterruptionsPerDay = 6
+
+// InterruptionsPerDay is the daily interruption budget in effect; zero
+// means none.
+func (q QuietConfig) InterruptionsPerDay() int {
+	switch {
+	case q.MaxPerDay < 0:
+		return 0
+	case q.MaxPerDay == 0:
+		return DefaultInterruptionsPerDay
+	}
+	return q.MaxPerDay
 }
 
 // Validate rejects a quiet policy that cannot mean anything.

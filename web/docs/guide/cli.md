@@ -43,6 +43,15 @@ read the same way.
 behind lasts to the reset; ahead says when the window runs out at the
 rate so far. The daemon API, the menu bar and MCP report the same pace.
 
+**Plan use** is two figures per plan over the last 7 days. *Plan used* is
+the average peak of the plan's longest window (usually the weekly one)
+across the windows that reset in that week. It answers "is this seat
+used?", and idle days count against it. *On the plan* is the share of that
+provider's tokens a plan covered rather than an API key, a gateway or
+overflow billed per token. The menu bar and `/api/glance` (`plan_use`)
+carry the same figures, and `tokenops scorecard` reports them over its own
+window.
+
 **Cost** is at API list prices where a plan covers the usage. Requests on
 models without a list price yet are left out of the money: a `+` marks a
 figure that leaves some out, and where most have no price only tokens are
@@ -74,6 +83,33 @@ daemon runs it in the background every three hours; the section says how
 old it is. `tokenops glance --findings` lists every finding, and
 `GET /api/findings` serves the same list. Findings carry figures only,
 never prompt or file text.
+
+**Unusual spend.** Every hour the daemon forecasts today and yesterday from
+the four weeks before (Holt's method, as the spend forecast) and
+flags a day whose spend, or usage at API prices, is above the forecast's
+95% band by at least $5 and 25%. Nothing is flagged until there are 10
+days of history, and at most one day's finding shows per day, spend before
+usage. The finding ranks what drove the rise, by the dollars each model,
+biller (with the route it went through), billing basis, repository, tool
+and session added against its own daily mean, and names the likely cause
+when it recognises one: a pricier model that took over, usage billed per
+token while a plan should cover it (with the plan coverage against
+before), or one session carrying the rise, as a runaway loop does (with
+what the waste detector found in it).
+
+```
+  ● Spend on Wed 14 Oct was $24.00, $24.00 over the usual $0.00
+    Likely cause: Claude usage was billed per token while its plan should cover it, through anthropic-api; plan coverage 20% against 99% before; ranked by what each added: model claude-sonnet-5 +$24.00 (100%), biller anthropic via anthropic-api +$24.00 (100%), …
+    → Check the API key or base URL your client uses: Claude's plan covers only its own endpoint. If this is normal for you, `tokenops coach tip expected --id anomaly-spend-2026-10-14` stops flagging it; `ack` or `snooze` answer it too.
+```
+
+It sits with the other findings on glance, the menu bar and
+`GET /api/findings` (its `id` is the anomaly's), and never interrupts a
+session. Answer it like a tip (`tokenops coach tip`): `ack` takes it off,
+`snooze` holds every spend finding for a while, and `expected` also stops
+flagging the same pattern (the same model, the same provider billed per
+token, a loop in the same repository) for 90 days. Only derived figures
+are kept, in `~/.tokenops/cache/spend-anomalies.json`.
 
 In a true-colour terminal the bars are solid cells running green, amber,
 red along their length, in the Klarlabs palette; 16 colours elsewhere,
@@ -265,7 +301,7 @@ A bare API key is reported as metered usage with no plan to bind — binding
 a subscription against metered traffic would make every headroom figure
 wrong in a way that looks authoritative.
 
-### `tokenops plan {list|set|unset|catalog|headroom}`
+### `tokenops plan {list|set|unset|catalog|headroom|advise}`
 
 ```bash
 tokenops plan list              # configured bindings + headroom
@@ -274,7 +310,52 @@ tokenops plan set anthropic claude-max-20x
 tokenops plan unset cursor
 tokenops plan headroom          # live consumption + overage risk
 tokenops plan history           # every recorded switch, oldest first
+tokenops plan advise            # which tier would have fit the last 30 days
 ```
+
+#### Which tier fits: `plan advise`
+
+`plan advise` replays the last 30 days (`--days 60`, up to 90) of your
+plan's windows against the plan's other tiers, each tier with its overflow
+billed at API list price, and no subscription at all. For each option it
+shows how often you would have run out and for how long, the fullest window,
+and the monthly cost, then recommends one:
+
+```text
+anthropic: Claude Max 20x, replayed over the last 27 days (4 windows), confidence medium
+
+  OPTION                               LOCKOUTS  BLOCKED  PEAK            PER MONTH  SAVES
+  Claude Pro                           4         24.0d    400% of weekly  $20.00     $180.00
+  Claude Max 5x                        0         -        80% of weekly   $100.00    $100.00
+  Claude Max 20x (now)                 0         -        20% of weekly   $200.00    -
+  Claude Pro + metered overflow        0         -        400% of weekly  $233.06    -$33.06
+  API at list price (no subscription)  0         -        -               $284.08    -$84.08
+
+  Recommendation: switch. Claude Max 5x would have cost $100/mo less than Claude Max 20x, with no lockouts; on Claude Max 20x you peaked at 20% of the weekly window.
+```
+
+How it works: a reading of 20% on Max 20x is four Pro windows of demand,
+which is 80% of Max 5x. Each reading is scaled by the plan in force when
+it was taken (`plan history`), so a switch inside the period is handled.
+Blocked time runs from the moment a window would have run out to its
+reset, with overlapping windows counted once. Overflow and API prices
+come from the rate card applied to the usage your plan covered.
+
+Read it with its confidence label. Max 5x and 20x are Anthropic's stated
+multiples of Pro's allowance, Pro's own allowance is unverified (Anthropic
+no longer publishes it), and whether the weekly limits scale by the same
+multiples is not published either. So Claude advice is at best `medium`,
+and `low` with less than two weeks or two weekly windows of readings. If
+you ran out on your current plan, the work you could not do left no
+readings, and the larger tiers' figures are a floor.
+
+It is advice: TokenOps never switches a plan. When a cheaper option would
+have saved at least $10 and a tenth of the bill with no more than one
+lockout a month, the glance, the menu bar and `/api/findings` say so once
+as an info finding. `--json`, `GET /api/plans/advice?days=` and
+`tokenops_glance (view=plan_advice)` give the same answer. Only Claude's
+tiers are replayed so far; ChatGPT's tiers are not modelled as multiples
+of each other, and `plan advise` says so.
 
 #### Switching plans
 
@@ -479,6 +560,189 @@ apart, never dropped. A `+` marks a cost that leaves out turns on models
 without a list price. `GET /api/spend/commits` serves the same report with
 commit subjects withheld.
 
+#### Unit costs: per commit, merged PR, outcome and change class
+
+`tokenops spend units` prices finished work rather than tokens, and sets
+each figure against your own four weeks before the period (the last 7
+days unless you pass `--since`):
+
+```
+Unit costs since 8 Oct 00:05, against the 4 weeks before
+
+                      PER UNIT  UNITS   4-WEEK BASELINE   CHANGE
+  commit                 $9.00      3   $24.00 (2)          -62%
+  merged PR             $13.50      2   $24.00 (2)          -44%
+  recorded outcome      $10.50      2   —
+  achieved outcome      $21.00      1   —
+
+  By change class, per commit
+  feature               $12.00      1   $30.00 (1)          -60%
+  bugfix                 $9.00      1   $18.00 (1)          -50%
+  refactor               $6.00      1   —
+
+  Share of a plan window, per unit (estimated)
+  merged PR          11.2% of the anthropic weekly window  (baseline 20.0%)
+  achieved outcome   17.5% of the anthropic weekly window
+
+  Not placed on a unit this period
+  commit             84% placed · not yet committed $5.00
+  merged PR          84% placed · no pull request merged yet $5.00
+  recorded outcome   66% placed · no recorded outcome $11.00
+```
+
+- **Merged PR**: a pull request of yours that landed on the default branch,
+  read from git alone: a squash commit whose subject ends `(#N)` or a
+  `Merge pull request #N` commit, on `main` or `origin/main` (whatever
+  `origin/HEAD` names). A turn goes to the next one merged in its
+  repository within 7 days. No forge is asked, so fetch to see the latest
+  merges. Only pull requests with agent work on them are units; the others
+  are counted apart.
+- **Outcome**: an outcome recorded with `tokenops outcome record` or the
+  `tokenops_outcome` tool. A turn goes to it when it ran under the
+  execution, the workflow (`tokenops_prepare_work`'s `workflow_id`) or the
+  session the outcome names. The cost per achieved outcome carries the
+  work on every judged execution, including the ones that failed.
+- **Change class**: from the Conventional Commits type of each commit's
+  subject: `feat` is feature, `fix` bugfix, `refactor` and `perf`
+  refactor, `test`, `docs`, and `chore`, `ci`, `build`, `style`, `revert`
+  chore. A subject with no type is *other*.
+- **Share of a plan window**: on a flat-rate plan the vendor reports
+  windows as percentages, never tokens, so TokenOps measures how many
+  tokens one percent of your longest window held from your own windows
+  that reset in the last five weeks (each at least 5% full; the median).
+  It is an estimate, and says so.
+
+Every join is a heuristic, so the work no unit took is listed by why.
+`--json`, `GET /api/spend/units` and `tokenops_spend` with `view: units`
+return the same report; it holds derived figures only, never subjects,
+paths or session ids. The team plane does not receive these figures yet:
+its upload carries per-day buckets, which have no field for a count of
+pull requests or outcomes.
+
+#### Avoidable usage: one waste taxonomy in dollars and window share
+
+`tokenops spend waste` says how much of the period's usage was avoidable,
+class by class, in API-equivalent dollars and, on a flat-rate plan, as a
+share of the plan's window (the last 7 days unless you pass `--since`):
+
+```
+Avoidable usage since 8 Oct 01:52
+
+  used           4.5M tokens     $5.31   19.6% of the anthropic weekly window
+  avoidable      873k tokens     $1.38   3.8% of the anthropic weekly window  (19% of usage)
+
+  CLASS                              TOKENS     API $  WINDOW  TURNS  GUARDRAIL
+  redundant re-reads                    18k     $0.02    0.1%      2  read guard
+  cache-miss rebuilds                   70k     $0.44    0.3%      1  none yet
+  over-tiered model                    259k     $0.28    1.1%      4  model routing
+  retry loops and runaway growth       122k     $0.15    0.5%      2  none yet
+  oversized context                       0     $0.00       —      0  compact tip
+  abandoned sessions                   403k     $0.49    1.8%      6  session budget
+
+  Realized $0.00 (holdout: no holdout comparison has concluded yet): 0% of what could be saved
+
+  Next guardrail: session budget, still gathering evidence, addresses $0.49
+```
+
+Each class reads a source TokenOps already keeps:
+
+- **Redundant re-reads**: files the read guard saw read again, in full and
+  unchanged, and let through because it only observes.
+- **Cache-miss rebuilds**: a turn that wrote to the prompt cache more than
+  half of what the turn before had cached, on the same model and without a
+  compaction (the cache expired or was invalidated). Priced as writing that
+  part instead of reading it.
+- **Over-tiered model**: turns that stayed on a model after the coach
+  advised a cheaper one for that kind of work, priced as the difference to
+  the advised model.
+- **Retry loops and runaway growth**: what the waste detector finds in each
+  workflow: an identical prompt sent again, one agent's steps past the loop
+  limit, context growing faster than the per-step limit.
+- **Oversized context**: context carried above the line a session should
+  compact at, or above the context ceiling.
+- **Abandoned sessions**: sessions over for a day with no commit of yours
+  within a day of any turn and no recorded outcome, the same joins as
+  `tokenops spend units`. A session outside a repository is not judged.
+
+The classes overlap in what they look at, so each token is counted in at
+most one, in the order listed. Dollars are each turn's API-equivalent value
+in proportion to its tokens; the window share is measured as unit costs
+measure it. Beside the avoidable total, **realized** is what the coach's
+interventions saved over the same period: what the holdout measured, plus
+the re-reads the guard refused. The guardrails are ranked by their
+graduation (see `tokenops coach`): one whose evidence is ready comes first,
+then by the avoidable dollars it addresses, and the next one is named with
+the command that takes the step. Nothing is switched on for you.
+
+The daemon runs the week's report once a day, and the glance, the menu bar
+and `GET /api/findings` show it as one line: "Last 7 days: ~$1.38 avoidable
+(3.8% of a weekly window), $0.00 realized". `--json`,
+`GET /api/spend/waste` and `tokenops_spend` with `view: waste` return the
+same report; it holds derived figures only.
+
+#### Spend by project, client or cost centre
+
+`tokenops spend --by project` (or `client`, `cost_center`) sums the
+window's spend per value of an allocation tag, from the
+[allocation rules](/guide/configuration#allocation-rules-allocation) in
+your config:
+
+```
+Spend by client since 8 Oct 09:00
+  81% of the window's work carries a client
+
+  VALUE                    API EQUIV    BILLED  SESSIONS  TURNS    TOKENS
+  Acme Corp                   $41.20     $0.00         6    212      3.1M
+  globex                      $12.75     $2.10         2     58      880k
+  (untagged)                  $12.40     $0.00              97      1.2M
+    $3.80 of it from sessions whose directory no client recorded
+```
+
+Each session is matched by the directory and branch its client recorded,
+the repository that directory is in and the harness it ran in; work no
+rule tags stays visible as untagged. `--json` gives the report, which
+`GET /api/spend/tags` and the `tokenops_spend` MCP tool (`view: tags`)
+serve too. The rules are evaluated on this machine, and the tags never
+leave it: no team upload carries them.
+
+#### Export to FinOps tools (FOCUS)
+
+`tokenops spend export` writes spend and usage as
+[FOCUS](https://focus.finops.org/) 1.2 CSV, the billing format FinOps tools
+such as Vantage, CloudZero and Cloudability ingest:
+
+```bash
+tokenops spend export --format focus > september.csv          # this month so far
+tokenops spend export --since 2026-09-01T00:00:00Z --until 2026-10-01T00:00:00Z -o september.csv
+```
+
+Each row is one charge:
+
+| What | FOCUS row |
+|---|---|
+| A plan's fee | `Purchase`, `Recurring`, prorated over the days it was in force and split at calendar months; your price where you gave one, the US list price otherwise |
+| Usage a plan covered | `Usage` with `BilledCost` and `EffectiveCost` 0 and `ListCost` at the API price, so ListCost against EffectiveCost is what the plan was worth |
+| Usage billed per token | `Usage` at what it cost |
+
+Usage is one row per UTC day, provider and model. Tokens are the
+`ConsumedQuantity` (`Tokens`); `PricingQuantity` counts millions of tokens,
+the unit API prices are published in. `ServiceCategory` is
+`AI and Machine Learning`, `ServiceSubcategory` `Generative AI`, `SkuId`
+the model or plan. A plan's charges and per-token charges are separate
+billing accounts (`anthropic/subscription`, `anthropic/pay-as-you-go`).
+Calendar months stand in for billing periods.
+
+With [allocation rules](/guide/configuration#allocation-rules-allocation)
+configured, the part of a day's charge that tagged work took is its own
+row, its tags in `Tags` as a JSON object (`{"client":"Acme Corp","project":"storefront"}`);
+the rest stays a row with `Tags` empty, and the rows still add up to the
+charge. The keys are not prefixed: FOCUS asks for no prefix when a
+dataset has one user-defined tag scheme.
+
+Only derived figures are written: providers, models, plans, counts, money
+and your own allocation tags. No session title, path or prompt is in it. `GET /api/spend/export`
+serves the same CSV from the daemon.
+
 ### `tokenops budget {list|set|unset}`
 
 A budget is a calendar window (`daily`, `weekly` or `monthly`; new
@@ -492,6 +756,7 @@ tokenops budget list --json
 tokenops budget set monthly --limit-usd 200
 tokenops budget set weekly-tokens --basis tokens --limit-tokens 50000000 --window weekly
 tokenops budget set planner --limit-usd 50 --agent-id planner   # one agent only
+tokenops budget set acme --basis equivalent --limit-usd 300 --tag client=acme   # one client's work
 tokenops budget unset monthly
 ```
 
@@ -499,7 +764,38 @@ On a flat-rate plan real spend is $0 at the margin, so a USD limit can
 never trip: use `--basis tokens` with `--limit-tokens`, or
 `--basis equivalent` to watch the API list-price value the subscription
 absorbed. `--workflow-id` and `--agent-id` scope a budget to one workflow
-or agent.
+or agent, and `--tag key=value` to the work an
+[allocation rule](/guide/configuration#allocation-rules-allocation) tags
+(project, client or cost_center). A tagged budget gets threshold alerts,
+not forecasts.
+
+A budget can hold several windows at once, say $10 a day and $100 a
+month. `--add-window` adds one; on a budget with several windows,
+`--window` names the one an edit changes, and `unset --window` removes
+one. Each window is **soft** or **hard**:
+
+- **Soft** (the default) notifies. The coach says, once per window, when
+  it reaches its warning and critical thresholds and when it is spent,
+  through the same tips you can snooze or answer and within the daily
+  interruption budget. `tokenops budget list` and the glance show each
+  window's share used.
+- **Hard** (`--mode hard`) is enforced by a spend
+  [boundary](#tokenops-boundaries-status-promote-demote) named `budget-<name>-<window>`, which
+  asks (`--require ask`, the default) or refuses (`--require deny`) before
+  further steps once the window is spent. Like every boundary it starts
+  in shadow, recording what it would have done, until you promote it.
+
+```bash
+tokenops budget set team --limit-usd 100                      # $100 a month, soft
+tokenops budget set team --add-window --window daily --limit-usd 10 --mode hard
+tokenops boundaries promote budget-team-daily                 # now it binds
+tokenops budget unset team --window daily
+```
+
+The daemon API (`POST /api/budgets`) and the `tokenops_budget_set` tool take
+the same fields (`add_window`, `remove_window`, `mode`, `require`), but a
+budget that holds a hard window is changed or removed only from a terminal:
+the agent a hard window limits can reach both.
 
 ### `tokenops scorecard`
 
@@ -516,6 +812,62 @@ All grade A–F against tuneable thresholds. CHR is computed from
 events.db; CGR + RGR from JSONL prompt extracts; TCS + DAR from
 JSONL `tool_use` + `tool_result` blocks. Returns `warming_up`
 with a 3-step activation checklist when no real data backs the KPIs.
+
+Each measured KPI is set against **your own trailing baseline**: the 28
+days before the window, the same stretch unit costs use. The line shows
+the baseline, the change and its direction given which way the KPI is
+healthy, so a falling regenerate rate reads `better` and a falling cache
+hit ratio `worse`; a move under a percentage point (for first-value time,
+a second or 5%) is `unchanged`. A KPI you override with `--fvt-seconds`,
+`--teu-pct` or `--sac-pct`, or one not measured in both windows, has no
+comparison. It is you against yourself only: the scorecard shows no team
+or peer figure and ranks nobody.
+
+```
+Against your own baseline: the 28 days before (Sep 10 – Oct 8)
+
+FVT — First-Value Time (seconds):           5.4 [A] · baseline 140.1 (-134.7, better)
+SAC — Spend Attribution Completeness (%):   84.2 [B] · baseline 96.2 (-12.0, worse)
+CHR — Cache Hit Ratio (%):                  97.5 [A] · baseline 98.5 (-1.0, worse)
+```
+
+`--json`, `GET /api/scorecard` and the `tokenops_scorecard` MCP tool carry
+the same: `self_baseline` (the window), and on each KPI `polarity` and
+`vs_baseline` (`baseline`, `delta`, `direction`).
+
+With [allocation rules](/guide/configuration#allocation-rules-allocation)
+configured, a line under SAC says how much of the period's spend (at API
+prices) they tag: `allocation tags on 81.0% of spend (project 81%, client 64%)`.
+It is reported, not graded. SAC itself counts calls traceable to a
+session, workflow or agent, which every tagged call already is.
+
+Below the grades, **Plan use** lists each provider's plan utilization
+(the average peak of its longest plan window that reset in the period)
+and coverage (the share of its tokens a plan covered). They are reported,
+not graded: a seat used at 40% is a fact for whoever pays for it, not a
+fault. Against the baseline they move `up` or `down`, never better or
+worse.
+
+```
+Plan use (last 7 days):
+  anthropic    utilization 64% (weekly, 1 window) (baseline 52%, up) · coverage 93% of tokens on a plan (baseline 93%, unchanged)
+  openai       utilization 41% (weekly, 1 window) · coverage 100% of tokens on a plan
+  openrouter   utilization n/a (no plan window reset yet) · coverage 0% of tokens on a plan
+  all          coverage 81% of tokens on a plan
+```
+
+Under it, **Unit costs** gives the cost per commit, per merged pull
+request and per achieved outcome over the same days, against the four
+weeks before (see [`tokenops spend units`](#unit-costs-per-commit-merged-pr-outcome-and-change-class)).
+Reported, not graded: a dearer pull request may be a harder one. The
+direction reads cheaper as `better` and a change under 5% as `unchanged`.
+
+```
+Unit costs (last 7 days, against the 4 weeks before; API prices):
+  commit             $9.00 each · 3 units · baseline $24.00 (-62%, better)
+  merged PR          $13.50 each · 2 units · baseline $24.00 (-44%, better)
+  achieved outcome   $21.00 each · 1 unit
+```
 
 ```bash
 tokenops scorecard --days 30        # text table
@@ -1089,6 +1441,34 @@ With no subcommand, shows the coach: its verbosity, and for each power
 actually do on this machine, why those differ, and the live quota window.
 See ADR 0006.
 
+#### Graduation: shadow → advise → act
+
+Each capability moves up a ladder: **shadow** (it records what it would do),
+**advise** (it tells you), **act** (it does it, on its own or after you
+approve). `tokenops coach` publishes the bar for each capability's next step
+and where your evidence stands against it, from the savings ledger and the
+follow-through record:
+
+| Next step | Criteria |
+|---|---|
+| shadow → advise | at least 50 shadow calls, at least 90% of them right (a held or observed tip whose session did not fix the problem on its own) |
+| advise → act (read guard) | at least 50 re-reads it would have refused, at least 90% right, and the tokens they cost above zero |
+| advise → act (tips, routing) | at least 50 pieces of advice with an outcome, at least 90% acted on, a saving the [holdout](#tokenops-coach-holdout-off-on-percent) realized above zero, and no harm found |
+
+```text
+  graduation (shadow → advise → act; you take each step):
+    read guard      advise → act · ✓ shadow calls: 55 (needs at least 50) · ✓ shadow precision: 100% (55 of 55) (needs at least 90%) · ✓ realized saving: ~220k tokens (needs above zero)
+                    ready: tokenops coach set waste autonomous
+    compact tip     advise → act · ✗ advice with an outcome: 12 (needs at least 50) · …
+```
+
+Nothing is promoted on its own. When a step is ready, `tokenops glance` says
+so ambiently ("Read guard is ready to enforce") with the command, and the
+step is yours to take. The 90% bar is ADR 0005's: a kind of advice above about
+a 10% effective false-positive rate is not worth more autonomy. While the
+coach only observes, the session-budget tips it would have given are recorded
+as shadow calls, which is the evidence for letting it speak.
+
 ### `tokenops coach preset [observe|advise|guided|autopilot]`
 
 Sets every power and the verbosity in one choice, then makes the machine
@@ -1123,10 +1503,97 @@ applies whatever the coach is set to.
 
 What the coach saw and did, from its two ledgers: each session's spend
 against budget fractions, the quota and compact tips it gave and what it
-held back; and files read again, which re-reads were waste, and which the
-read guard refused. Both ledgers fill while the coach only observes, so
+held back, and how the run-out forecasts fared once their windows reset
+(forecasts that came true, and windows that ran out unforecast); and files
+read again, which re-reads were waste, and which the read guard refused. Both ledgers fill while the coach only observes, so
 this shows what you would hear before you let it speak. `--json` gives
-`budget` and `read_guard`.
+`budget`, `read_guard` and `savings`.
+
+The savings ledger lists every intervention by kind with what it was
+expected to save and what it is shown to have saved. Each tip shown, each
+re-read refused and each model move suggested writes a row with its expected
+saving, the figures it rested on, and its decision ID (no prompt, path or
+file content). Expected is the coach's estimate when it acted: for a compact
+or budget tip, the context a compaction would remove, re-read at the model's
+cache-read rate on every later turn. Realized comes only from the holdout
+below, so a potential saving is never shown as a delivered one.
+
+```text
+Savings ledger — expected when acting, realized as the holdout measured it
+  compact tips: 41 shown, 5 held back · expected ~$0.31 per later turn, if acted on · realized $3.80 per tip (spend after: $6.10 shown vs $9.90 held back)
+  re-reads refused: 212 · expected ~1.9M tokens · realized not established: no intervention of this kind was held back, so there is nothing to compare against
+```
+
+It also shows the session budget the tips are measured against and where
+it came from. Unless you set one (`tokenops hooks install --coach --budget
+80`; any figure but the $50 default counts as yours), the budget is read
+off your own sessions: the p90 of the API-equivalent cost of the sessions
+you ran in the last 30 days, once at least 20 are known, rounded to whole
+dollars and kept between $10 and $500. It is re-derived once a week and
+moves at most 25% each time, so a run of expensive weeks does not quietly
+become the new normal. A session keeps the budget it started with. With
+fewer than 20 sessions the $50 default stands.
+
+```text
+  session budget: $45 — your p90 session, from 113 sessions in 30 days (derived 2026-10-14)
+    held from $72: moves at most 25% a week (was $36)
+```
+
+The derivation is kept, with the figures it was read from, in
+`~/.tokenops/coach-hook/session-budget.json` and in `--json` as
+`budget.session_budget`.
+
+### `tokenops coach tip ack|expected|snooze`
+
+Answers a tip, by default the newest one you have not answered (`--id`
+names another). A tip moves through new (given), seen (shown on the
+status line), then your answer:
+
+| Answer | What it does |
+|---|---|
+| `ack` | You have seen it. Nothing more of that kind is said in that session: the 50%, 75% and 100% budget tips are one episode. |
+| `expected` | It is normal for you. It closes the episode the same way and is recorded as an outcome: once you have answered at least 3 budget tips in 30 days and at least half of those answers were `expected`, the session budget is read off your p95 session instead of your p90. |
+| `snooze` | Not now. Tips of that kind wait `--for` (default 4h), in every session. A warning that a plan window will run out, or is used up, still speaks. |
+
+```bash
+tokenops coach tip snooze --for 2h
+# Snoozed the tip at 50% of the session budget: tips like it wait until Tue 16:40.
+```
+
+An unusual-spend finding (`--id anomaly-…`, shown on glance) is answered
+the same way: `ack` takes it off the findings, `expected` also stops
+flagging the same pattern, and `snooze` holds every spend finding.
+
+An answered tip counts as neither followed nor ignored, so it never quiets
+the coach. `tokenops coach` shows the answers per kind of tip with the share
+snoozed, and `tokenops glance` flags a kind you snooze most of the time,
+because a tip snoozed that often fires when it is not wanted. The
+`tokenops_coach` MCP tool takes the same answer as `tip`, on your word.
+
+Each day the coach interrupts at most `coaching.quiet.max_per_day` times
+(default 6) across sessions. Past that, tips wait on the status line.
+
+### `tokenops coach holdout [off|on|<percent>]`
+
+To learn whether a tip pays, the coach holds a few sessions' cost and drift
+tips back: the 50% and 75% session-budget tips and the compact tip. A held
+tip is not said, not put on the status line, and not counted against the
+quiet policy; it is logged as shadow, with the same expected saving and
+evidence, and settled the same way (a compaction, a model switch, nothing).
+Which sessions are held is random but fixed per session, so a held session
+stays held for the episode.
+
+It is on at 10% and never more. Tips about work about to stop are never
+held: a plan window forecast to run out or used up, and the session budget
+spent. `tokenops coach holdout off` opts out, `on` restores 10%, and a
+number from 0 to 10 sets the share; a preset keeps your choice. The
+`tokenops_coach` MCP tool takes the same setting.
+
+`tokenops verify` and `tokenops coach stats` compare the sessions that got a
+tip with the ones it was held from: the spend after the tip, whether the
+context was compacted, and whether a commit landed in the session's
+repository within a day. The difference in spend is the tip's realized
+saving. Until each side has at least 5 sessions it is "not established".
 
 ### `tokenops coach delivery`
 
@@ -1758,8 +2225,11 @@ tokenops verify --experiment-id experiment:6f1c… --json
 ```
 
 When execution-linked randomized assignments exist, it compares a complete
-[experiment](#tokenops-experiment-start-status-stop)'s paired arms instead;
-`--experiment-id` picks one when the window holds several. A randomized
+[experiment](#tokenops-experiment-start-status-stop)'s paired arms instead.
+With several in the window it compares the only one that can be compared,
+or the most recent of several, and says which ("compared experiment:b, the
+most recent of 2 comparable experiments; select experiment:a with
+--experiment-id"); `--experiment-id` picks another. A randomized
 comparison needs complete pairs, measured tokens and explicit outcomes;
 otherwise `verify` falls back to the observational view and says why.
 
@@ -1767,6 +2237,11 @@ Explicit human and verifier outcomes count toward each cohort's assessed
 success rate, so a quality drop can flag harm even when the token count
 fell; missing outcomes stay unknown. Randomized results are evidence about
 that experiment, not a guarantee for other work.
+
+It also lists the [coach holdout](#tokenops-coach-holdout-off-on-percent):
+per kind of tip, how many were shown and held back, the expected saving, and
+the realized one or why it is not established yet. `--json` gives it as
+`holdout`.
 
 ### `tokenops optimizations`
 

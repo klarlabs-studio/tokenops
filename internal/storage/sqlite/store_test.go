@@ -232,6 +232,16 @@ func TestQueryFilters(t *testing.T) {
 		}
 	})
 
+	t.Run("by source", func(t *testing.T) {
+		got, err := s.Query(ctx, Filter{Source: "proxy", Type: eventschema.EventTypePrompt})
+		if err != nil || len(got) != 3 {
+			t.Fatalf("proxy prompts = %d, err %v; want 3", len(got), err)
+		}
+		if n, err := s.Count(ctx, Filter{Source: "claude-usage-meter"}); err != nil || n != 0 {
+			t.Fatalf("count other source = %d, err %v; want 0", n, err)
+		}
+	})
+
 	t.Run("by provider+model", func(t *testing.T) {
 		got, err := s.Query(ctx, Filter{Provider: "openai", Model: "gpt-4o-mini"})
 		if err != nil {

@@ -6,8 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
+	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 )
 
 // Spending routes answer from the same capability the MCP tools call
@@ -63,7 +65,7 @@ func (a *AnalyticsHandlers) scorecard(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, err)
 		return
 	}
-	writeAPIJSON(w, http.StatusOK, spending.Scorecard(r.Context(), a.store, spending.ScorecardParams{SinceDays: days}))
+	writeAPIJSON(w, http.StatusOK, spending.Scorecard(r.Context(), a.store, spending.ScorecardParams{SinceDays: days, Spend: a.spend, Allocation: a.allocation}))
 }
 
 // pricingHandler serves the rate card. It needs no event store, so it is
@@ -86,6 +88,50 @@ func includeSources(r *http.Request) []string {
 		out = append(out, strings.Split(v, ",")...)
 	}
 	return out
+}
+
+// spendUnits is the cost per commit, merged pull request, outcome and
+// change class over a period, against the four weeks before it. The
+// report holds derived figures only.
+func (a *AnalyticsHandlers) spendUnits(w http.ResponseWriter, r *http.Request) {
+	since := time.Now().AddDate(0, 0, -uniteconomics.DefaultDays)
+	if r.URL.Query().Get("since") != "" {
+		s, _, err := sinceUntil(r)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		since = s
+	}
+	res, err := uniteconomics.Compute(r.Context(), uniteconomics.Deps{
+		Turns: commits.TurnsIn(a.aggregator, spending.Window{}), Events: a.store,
+	}, since, time.Now())
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeAPIJSON(w, http.StatusOK, res)
+}
+
+// spendWaste is the period's avoidable usage by class, in dollars and
+// plan-window share, beside what was realized and the guardrail to switch
+// on next. Derived figures only.
+func (a *AnalyticsHandlers) spendWaste(w http.ResponseWriter, r *http.Request) {
+	since := time.Now().AddDate(0, 0, -avoidable.DefaultDays)
+	if r.URL.Query().Get("since") != "" {
+		s, _, err := sinceUntil(r)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		since = s
+	}
+	res, err := avoidable.Compute(r.Context(), a.avoidable, since, time.Now())
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeAPIJSON(w, http.StatusOK, res)
 }
 
 // spendCommits is what each of the operator's commits in a window cost:

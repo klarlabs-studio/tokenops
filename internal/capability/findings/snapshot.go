@@ -9,11 +9,13 @@ import (
 	"path/filepath"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
+	"go.klarlabs.de/tokenops/internal/infra/followthrough"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
 )
 
@@ -114,6 +116,14 @@ func Gather(g *headroom.Glance, c *coach.Report, cacheDir string) Inputs {
 	}
 	if s, err := ReadSnapshot(cacheDir); err == nil {
 		in.Sessions = s
+	}
+	var ledger coach.Ledger
+	if l, err := followthrough.Default(); err == nil {
+		ledger = l
+	}
+	in.Anomalies = openAnomalies(cacheDir, ledger, time.Now())
+	if s, err := avoidable.ReadSnapshot(cacheDir); err == nil {
+		in.Waste = s
 	}
 	return in
 }

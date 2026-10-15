@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/money"
 	"go.klarlabs.de/tokenops/internal/capability/state"
@@ -153,6 +154,14 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 			return cfg.Coaching.WasteConfig()
 		},
 		StaleSources: staleSources,
+		Config: func() config.Config {
+			if currentConfig != nil {
+				if c := currentConfig(); c != nil {
+					return *c
+				}
+			}
+			return cfg
+		},
 		Money: func(ctx context.Context) (money.Rate, bool) {
 			c := cfg
 			if currentConfig != nil {
@@ -163,6 +172,14 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 			r, ok, _ := fxrate.Resolve(ctx, c.Money, time.Now())
 			return r, ok
 		},
+		Allocation: func() []allocation.Rule {
+			if currentConfig != nil {
+				if live := currentConfig(); live != nil {
+					return live.AllocationRules()
+				}
+			}
+			return cfg.AllocationRules()
+		},
 	}); err != nil {
 		return fmt.Errorf("register tools: %w", err)
 	}
@@ -172,6 +189,14 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	if err := mcp.RegisterParityTools(srv, mcp.ParityDeps{
 		Store: components.Store,
 		Spend: components.Spend,
+		Allocation: func() []allocation.Rule {
+			if currentConfig != nil {
+				if live := currentConfig(); live != nil {
+					return live.AllocationRules()
+				}
+			}
+			return cfg.AllocationRules()
+		},
 	}); err != nil {
 		return fmt.Errorf("register parity tools: %w", err)
 	}
@@ -204,7 +229,8 @@ func serveMCP(ctx context.Context, cmd *cobra.Command) error {
 	sessionProvider := inferSessionProvider(cfg.Plans)
 	tracker := headroom.NewSessionTracker(sessionBus, sessionProvider)
 
-	planDeps := mcp.PlanDeps{Store: components.Store, Tracker: tracker, Provider: sessionProvider, Spend: components.Spend}
+	planDeps := mcp.PlanDeps{Store: components.Store, Tracker: tracker, Provider: sessionProvider, Spend: components.Spend,
+		AdviceCache: headroom.NewAdviceCache()}
 	if cfgErr == nil {
 		planDeps.Config = &cfg
 		planDeps.ConfigGetter = currentConfig

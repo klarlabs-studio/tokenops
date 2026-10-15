@@ -49,10 +49,11 @@ operator's own.
 
 | Route | Answers |
 |---|---|
-| `GET /api/glance` | Session budgets, plan headroom and one ranked insight; `boundaries` lists the [boundaries](/guide/boundaries) that hold now, as advice |
+| `GET /api/glance` | Session budgets, plan headroom and one ranked insight; `boundaries` lists the [boundaries](/guide/boundaries) that hold now, as advice; `plan_use` gives each provider's plan utilization and coverage over the last 7 days |
 | `GET /api/findings` | What the coach and the session analysis observed, ranked, with what to do |
 | `GET /api/plans/headroom` | Each plan: usage, the vendor's windows, spend against the limit, risk |
 | `GET /api/plans/session-budget` | Each plan window: share used, pace, what to do |
+| `GET /api/plans/advice` | Plan right-sizing over `days` (30 by default, up to 90): each plan's windows replayed against its other tiers, metered overflow and the API at list price. Advice only |
 | `GET /api/status` | Readiness, blockers, warnings, next actions |
 | `GET /api/mode` | Operating mode and what each subsystem may do |
 | `GET /api/coach` | The coach's dials and each power's autonomy |
@@ -70,7 +71,11 @@ operator's own.
 | `GET /api/spend/cache_stats` | Prompt cache hits and savings |
 | `GET /api/spend/top` | Top consumers, ranked on the API equivalent |
 | `GET /api/spend/commits` | What each commit cost: the agent work that led to it, priced; subjects withheld |
+| `GET /api/spend/units` | Cost per commit, merged pull request, recorded and achieved outcome and change class against the 4 weeks before (`?since=`; the last 7 days when omitted), with plan-window shares on a flat-rate plan and the work no unit took |
+| `GET /api/spend/waste` | Avoidable usage by waste class, each token in one class, in API-equivalent dollars and plan-window share (`?since=`; the last 7 days when omitted), what was realized beside it, and the guardrail to switch on next |
 | `GET /api/spend/burn-rate` | Usage over the last hours |
+| `GET /api/spend/tags` | Spend per project, client or cost centre, tagged on the daemon by your allocation rules (`?by=project\|client\|cost_center&since=&until=`; project over the last 30 days when omitted), with the untagged work kept apart |
+| `GET /api/spend/export` | Spend and usage as FOCUS 1.2 CSV for FinOps tools (`?since=&until=`; the month so far when omitted) |
 | `GET /api/scorecard` | The wedge KPI scorecard |
 | `GET /api/pricing` | The rate card TokenOps costs with |
 | `GET /api/workflows` | Recorded workflows |

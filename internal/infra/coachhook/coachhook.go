@@ -55,14 +55,13 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 
 	model, contextTokens, unpriced := accumulate(transcriptPath, &st, cfg, now)
 	resolved := observeTip(&st, model, contextTokens)
+	before, prevMax := spoken{st.Nudges, st.LastNudgeAt}, st.MaxFiredFraction
 
-	// A budget the operator set is theirs; the shipping default is not,
-	// and the wording depends on which this is.
-	budget := cfg.BudgetUSD
-	configured := budget > 0 && budget != DefaultBudgetUSD
-	if budget <= 0 {
-		budget = DefaultBudgetUSD
-	}
+	// A budget the operator set is theirs; one read off their history is
+	// theirs in a different sense; the shipping default is neither, and
+	// the wording depends on which this is.
+	basis := pinnedBudget(dir, &st, cfg, now)
+	budget := basis.USD
 	frac := st.CumulativeUSD / budget
 
 	dec := Decision{CumulativeUSD: st.CumulativeUSD, BudgetUSD: budget, UnpricedModel: unpriced}
@@ -73,6 +72,9 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 	case cfg.FlatPlan:
 		evaluateReadingLost(dir, &dec, &st, cfg, now)
 	default:
+		if !cfg.Enabled {
+			cfg.recordShadow(&dec, &st, frac, model, contextTokens, now)
+		}
 		fired = highestBoundary(frac, st.MaxFiredFraction, cfg)
 		if cfg.Verbosity == verbosityQuiet && fired < 1.0-fracEpsilon {
 			// Quiet speaks about money only once the budget is spent.
@@ -86,7 +88,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		case reason == "":
 			dec.Nudge = true
 			dec.FiredFraction = fired
-			dec.Message = nudgeMessage(fired, st.CumulativeUSD, budget, configured)
+			dec.Message = nudgeMessage(fired, st.CumulativeUSD, basis)
 			// Context is the number that actually constrains the session;
 			// lead the dollar figure with it wherever it is known.
 			if note := contextNote(contextTokens, model); note != "" {
@@ -114,6 +116,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 	}
 
 	evaluateCompactTip(&dec, &st, cfg, contextTokens, now)
+	evaluateSpendBudgets(dir, &dec, &st, cfg, now)
 
 	// The budget tier is about the session in flight; the read-guard case
 	// is a standing recommendation that will be just as true next turn.
@@ -138,6 +141,8 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		}
 	}
 
+	cfg.applyHoldout(&dec, &st, before, model, contextTokens, now)
+	cfg.deliver(dir, &dec, &st, before, prevMax, now)
 	dec.Resolved = resolved
 	offerTip(&st, &dec, cfg, tipKind(dec), model, contextTokens)
 	saveSession(dir, sessionID, st)
@@ -147,8 +152,9 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		Fraction: frac, TierFired: dec.FiredFraction, Model: model,
 		Suppressed: dec.Suppressed, Promotion: dec.Promotion, Compact: dec.CompactTip,
 		Unpriced:    dec.UnpricedModel,
-		QuotaWindow: quotaLabel(cfg.Quota), QuotaUsedPct: quotaUsed(cfg.Quota), QuotaTier: dec.QuotaTier,
-		ReadingLost: dec.ReadingLost,
+		QuotaWindow: quotaLabel(cfg.Quota, dec.quotaWindow), QuotaUsedPct: quotaUsed(cfg.Quota, dec.quotaWindow),
+		QuotaTier: dec.QuotaTier, QuotaBurn: dec.QuotaBurn,
+		ReadingLost: dec.ReadingLost, Ambient: dec.Ambient, Holdout: dec.Holdout,
 	})
 	return dec
 }

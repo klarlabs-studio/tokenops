@@ -30,28 +30,42 @@ type sessionState struct {
 	PromotionNudged bool `json:"promotion_nudged,omitempty"`
 	// OpenTip is the last tip, while it waits to be acted on.
 	OpenTip *openTip `json:"open_tip,omitempty"`
+	// ShadowTip is the last tip held back for the holdout, settled the
+	// same way so the two cohorts are measured alike.
+	ShadowTip *openTip `json:"shadow_tip,omitempty"`
+	// ShadowFired latches the budget tiers recorded as shadow while the
+	// coach only observes, apart from MaxFiredFraction so letting the
+	// coach speak later still hears each tier.
+	ShadowFired float64 `json:"shadow_fired,omitempty"`
 	// AboveTurns counts turns at or above CompactAtTokens since the last
 	// compaction; LastContext is the newest turn's context, to see one.
 	AboveTurns  int   `json:"above_turns,omitempty"`
 	LastContext int64 `json:"last_context,omitempty"`
 	// CompactTipped latches compact_now until the next compaction.
 	CompactTipped bool `json:"compact_tipped,omitempty"`
+	// BudgetUSD and BudgetProvenance pin a budget derived from history
+	// for the life of the session, so a weekly refresh never moves the
+	// bar mid-session. Zero when the budget is configured or default.
+	BudgetUSD        float64 `json:"budget_usd,omitempty"`
+	BudgetProvenance string  `json:"budget_provenance,omitempty"`
 	// compaction is how the newest compaction this Stop saw was
 	// triggered, "" when none; dropFrom is the context just before the
 	// newest drop to half or less. Both only live for one Evaluate.
 	compaction string
 	dropFrom   int64
+	// shadowResolved are held tips this Evaluate settled.
+	shadowResolved []TipResolution
+	// id is the session the state belongs to; not stored.
+	id string
 }
 
 func loadSession(dir, sessionID string) sessionState {
 	var st sessionState
 	b, err := os.ReadFile(sessionFile(dir, sessionID))
-	if err != nil {
-		return sessionState{}
+	if err != nil || json.Unmarshal(b, &st) != nil {
+		return sessionState{id: sessionID}
 	}
-	if json.Unmarshal(b, &st) != nil {
-		return sessionState{}
-	}
+	st.id = sessionID
 	return st
 }
 

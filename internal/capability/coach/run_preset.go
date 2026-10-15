@@ -60,11 +60,14 @@ type ChangeRequest struct {
 	// Power and Rung override one power's autonomy; they go together.
 	Power string `json:"power,omitempty"`
 	Rung  string `json:"rung,omitempty"`
+	// Holdout sets the percent of sessions whose cost and drift tips are
+	// held back to measure their saving: 0 opts out, at most 10.
+	Holdout *int `json:"holdout,omitempty"`
 }
 
 // Empty reports whether the request changes nothing.
 func (r ChangeRequest) Empty() bool {
-	return r.Preset == "" && r.Autonomy == "" && r.Verbosity == "" && r.Power == "" && r.Rung == ""
+	return r.Preset == "" && r.Autonomy == "" && r.Verbosity == "" && r.Power == "" && r.Rung == "" && r.Holdout == nil
 }
 
 // ErrPowerRung is a power without a rung or a rung without a power.
@@ -84,6 +87,10 @@ func Change(ctx context.Context, path string, l Ledger, levers ContextLevers, no
 		}
 		if req.Verbosity != "" {
 			cfg.Coach.Verbosity = req.Verbosity
+		}
+		if req.Holdout != nil {
+			n := *req.Holdout
+			cfg.Coach.Holdout = &n
 		}
 		if req.Power != "" {
 			if cfg.Coach.Powers == nil {

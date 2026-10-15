@@ -56,7 +56,35 @@ type Limit struct {
 	// metric-agnostic — callers resolve the actual figure; this field
 	// rides along so they know which one to fetch.
 	Basis string
+	// ID tells a budget's windows apart when it holds several: the
+	// budget's name for a single window, "name:window" otherwise. Empty
+	// reads as Name.
+	ID string
+	// Mode is ModeSoft (notify) or ModeHard (a spend boundary asks or
+	// refuses at the limit). Empty reads as soft.
+	Mode string
+	// Tag scopes the limit to work carrying one allocation tag,
+	// "key=value"; empty is all spend. Like Basis, the caller resolves it.
+	Tag string
 }
+
+// Window modes for Limit.Mode.
+const (
+	ModeSoft = "soft"
+	ModeHard = "hard"
+)
+
+// Key identifies the limit's window: the figure a boundary compares and
+// the key its alerts are remembered under.
+func (l Limit) Key() string {
+	if l.ID != "" {
+		return l.ID
+	}
+	return l.Name
+}
+
+// WindowKey is the key of one window of a budget that holds several.
+func WindowKey(name string, w Window) string { return name + ":" + string(w) }
 
 // Basis values for Limit.Basis.
 const (
@@ -223,6 +251,13 @@ func EvaluateAll(limits []Limit, actualBy func(Limit) float64, forecastBy func(L
 		return out[i].Limit.Name < out[j].Limit.Name
 	})
 	return out
+}
+
+// Thresholds are the fractions of the limit at which the limit warns and
+// turns critical, with the defaults applied.
+func (l Limit) Thresholds() (warn, crit float64) {
+	l = applyLimitDefaults(l)
+	return l.WarnAt, l.CritAt
 }
 
 func applyLimitDefaults(l Limit) Limit {

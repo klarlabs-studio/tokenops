@@ -16,6 +16,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast"
+	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -48,7 +49,7 @@ type Watcher struct {
 	// Publish, when set, takes a budget.exceeded event the first time a
 	// budget's window reaches its limit.
 	Publish Publisher
-	// Recorded reports whether budget name was already recorded as
+	// Recorded reports whether budget window key (Limit.Key) was already recorded as
 	// exceeded since the start of its window. The watcher's own memory
 	// ends with the process, and every config write restarts the daemon;
 	// without this each restart recorded the same exceedance again. Nil
@@ -91,7 +92,7 @@ func (w *Watcher) Tick(ctx context.Context, now time.Time) Report {
 		// Before the alert's own dedupe: a budget critical at 96% keeps
 		// that alert's key when it reaches 100%, and is exceeded then.
 		w.publishExceeded(ctx, a, start, now)
-		key := fmt.Sprintf("%s|%s|%s|%s", a.Limit.Name, a.Kind, a.Severity, start.Format(time.RFC3339))
+		key := fmt.Sprintf("%s|%s|%s|%s", a.Limit.Key(), a.Kind, a.Severity, start.Format(time.RFC3339))
 		if w.seen[key] {
 			continue
 		}
@@ -114,12 +115,31 @@ func (w *Watcher) Tick(ctx context.Context, now time.Time) Report {
 	return r
 }
 
+// TagSource measures the work carrying one allocation tag ("key=value").
+// A Source that is one can measure a budget scoped to a tag.
+type TagSource interface {
+	SummarizeTag(ctx context.Context, f analytics.Filter, tag string) (analytics.Summary, error)
+}
+
 // Measure is what l's metric reached in its current window at now.
 func Measure(ctx context.Context, src Source, l Limit, now time.Time) (float64, error) {
-	s, err := src.Summarize(ctx, analytics.Filter{
+	f := analytics.Filter{
 		Since: budget.WindowStart(l.Window, now), Until: now,
 		WorkflowID: l.WorkflowID, AgentID: l.AgentID,
-	})
+	}
+	var (
+		s   analytics.Summary
+		err error
+	)
+	if l.Tag != "" {
+		ts, ok := src.(TagSource)
+		if !ok {
+			return 0, fmt.Errorf("budget %s: scoped to %s, which only allocation rules can measure", l.Name, l.Tag)
+		}
+		s, err = ts.SummarizeTag(ctx, f, l.Tag)
+	} else {
+		s, err = src.Summarize(ctx, f)
+	}
 	if err != nil {
 		return 0, fmt.Errorf("budget %s: %w", l.Name, err)
 	}
@@ -133,11 +153,14 @@ func Measure(ctx context.Context, src Source, l Limit, now time.Time) (float64, 
 	}
 }
 
-// UsedPct is the share of each budget used in its current window, by
-// name. A budget that cannot be measured, or has no limit, is left out:
-// a missing figure never satisfies a boundary.
-func UsedPct(ctx context.Context, src Source, limits []Limit, now time.Time) map[string]float64 {
-	out := map[string]float64{}
+// Reading is one budget window measured.
+type Reading = boundaryledger.BudgetReading
+
+// Read measures each budget window at now. A window that cannot be
+// measured, or has no limit, is left out: a missing figure never
+// satisfies a boundary, and a surface shows nothing rather than zero.
+func Read(ctx context.Context, src Source, limits []Limit, now time.Time) []Reading {
+	var out []Reading
 	for _, l := range limits {
 		limit := l.Threshold()
 		if limit <= 0 {
@@ -147,16 +170,70 @@ func UsedPct(ctx context.Context, src Source, limits []Limit, now time.Time) map
 		if err != nil {
 			continue
 		}
-		out[l.Name] = v / limit * 100
+		warn, crit := l.Thresholds()
+		start := budget.WindowStart(l.Window, now)
+		mode := l.Mode
+		if mode == "" {
+			mode = budget.ModeSoft
+		}
+		basis := l.Basis
+		if basis == "" {
+			basis = budget.BasisSpend
+		}
+		out = append(out, Reading{
+			Key: l.Key(), Budget: l.Name, Window: string(l.Window), Mode: mode, Basis: basis,
+			Used: v, Limit: limit, UsedPct: v / limit * 100,
+			WarnPct: warn * 100, CritPct: crit * 100,
+			WindowStart: start, ResetsAt: budget.WindowEnd(l.Window, start),
+		})
 	}
 	return out
 }
 
+// FreshFor is how long the daemon's last reading of the budget windows
+// counts for the coach and the glance. The daemon measures them at least
+// every five minutes while it runs.
+const FreshFor = 15 * time.Minute
+
+// Current is the budget windows the daemon last measured into dir (empty
+// for the default), or nil when it has not measured them lately: a stale
+// figure is not shown as the present one.
+func Current(dir boundaryledger.Dir, now time.Time) []Reading {
+	fig, ok, err := dir.GetFigures()
+	if err != nil || !ok || now.Sub(fig.ObservedAt) > FreshFor {
+		return nil
+	}
+	return fig.Budgets
+}
+
+// UsedPctOf is the share of each budget window used, by key.
+// A budget with several windows also gets an entry under its own name:
+// its fullest window, so a rule naming the budget holds on any of them.
+func UsedPctOf(readings []Reading) map[string]float64 {
+	out := map[string]float64{}
+	for _, r := range readings {
+		out[r.Key] = r.UsedPct
+		if r.Key != r.Budget {
+			if cur, ok := out[r.Budget]; !ok || r.UsedPct > cur {
+				out[r.Budget] = r.UsedPct
+			}
+		}
+	}
+	return out
+}
+
+// UsedPct is the share of each budget window used in its current window,
+// by key (see UsedPctOf).
+func UsedPct(ctx context.Context, src Source, limits []Limit, now time.Time) map[string]float64 {
+	return UsedPctOf(Read(ctx, src, limits, now))
+}
+
 // forecast projects l's metric over the rest of its window. An
 // equivalent-basis budget is not forecast: the daily rows carry real
-// spend only, and its threshold alerts still fire.
+// spend only, and its threshold alerts still fire. Nor is a budget scoped
+// to a tag: the daily rows are all spend, not the tag's.
 func (w *Watcher) forecast(ctx context.Context, l Limit, now time.Time) []forecast.Prediction {
-	if l.Basis == budget.BasisEquivalent {
+	if l.Basis == budget.BasisEquivalent || l.Tag != "" {
 		return nil
 	}
 	metric := forecast.CostUSD
@@ -185,12 +262,12 @@ func (w *Watcher) publishExceeded(ctx context.Context, a Alert, windowStart, now
 	if !ok {
 		return
 	}
-	key := "exceeded|" + a.Limit.Name + "|" + windowStart.Format(time.RFC3339)
+	key := "exceeded|" + a.Limit.Key() + "|" + windowStart.Format(time.RFC3339)
 	if w.seen[key] {
 		return
 	}
 	w.seen[key] = true
-	if w.Recorded != nil && w.Recorded(ctx, a.Limit.Name, windowStart) {
+	if w.Recorded != nil && w.Recorded(ctx, a.Limit.Key(), windowStart) {
 		return
 	}
 	w.Publish.Publish(env)

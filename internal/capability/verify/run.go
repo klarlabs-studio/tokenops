@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/reconstruct"
+	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -27,6 +28,9 @@ type Window struct {
 	// IdleGap is the pause that starts a new attempt; zero takes the
 	// default.
 	IdleGap time.Duration
+	// Savings, when set, adds the coach's holdout cohorts from the
+	// realized-savings ledger to the report.
+	Savings *savings.Deps
 }
 
 // maxEvents bounds the events one comparison reads.
@@ -51,5 +55,9 @@ func Run(ctx context.Context, events EventReader, w Window, experimentID string,
 	if err != nil {
 		return Report{}, readErr, err
 	}
-	return CompareReconstructedExperiment(reconstructed, envs, experimentID), readErr, nil
+	report = CompareReconstructedExperiment(reconstructed, envs, experimentID)
+	if w.Savings != nil {
+		report.Holdout = savings.Build(ctx, *w.Savings, now).Holdouts()
+	}
+	return report, readErr, nil
 }

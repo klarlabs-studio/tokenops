@@ -27,16 +27,10 @@ import (
 // this figure is a counterfactual: what the session would have cost at
 // list price, which is the only way to see context drift compounding when
 // the actual bill is flat and identical either way.
-func nudgeMessage(frac, cumulative, budget float64, configured bool) string {
+func nudgeMessage(frac, cumulative float64, basis budgetBasis) string {
 	pct := int(math.Round(frac * 100))
-	budgetStr := formatUSD(budget)
 	cumStr := fmt.Sprintf("$%.2f", cumulative)
-
-	// Only a budget the operator set is theirs.
-	ceiling := "the default " + budgetStr + " session ceiling"
-	if configured {
-		ceiling = "your " + budgetStr + " session budget"
-	}
+	ceiling := basis.ceiling()
 
 	switch {
 	case frac > 1.0+fracEpsilon:
@@ -122,12 +116,16 @@ func formatTokens(n int64) string {
 // read-guard case, which is not a tip about the session.
 func tipKind(dec Decision) string {
 	switch {
-	case !dec.Nudge || dec.Promotion:
+	case (!dec.Nudge && !dec.Ambient) || dec.Promotion:
 		return ""
 	case dec.CompactTip:
 		return compactKind
+	case dec.QuotaBurn:
+		return burnKind
 	case dec.QuotaTier > 0:
 		return quotaKind(dec.QuotaTier)
+	case dec.SpendKind != "":
+		return dec.SpendKind
 	case dec.FiredFraction > 0:
 		return budgetKind(dec.FiredFraction)
 	}

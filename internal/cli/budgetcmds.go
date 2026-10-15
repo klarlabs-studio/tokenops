@@ -18,8 +18,10 @@ func newBudgetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "budget",
 		Short: "Spend budgets: list, set or remove",
-		Long: `A budget is a calendar window and a ceiling. In active mode the daemon
-evaluates them and reports breaches.
+		Long: `A budget is one or more calendar windows, each with a ceiling: $10 a day
+and $100 a month at once, say. A soft window (the default) is told to you by
+the coach as it fills; a hard window is enforced by a spend boundary that asks
+or refuses once it is spent, after it leaves shadow.
 
 On a flat-rate plan real spend is $0 at the margin, so a USD limit can
 never trip: use --basis tokens with --limit-tokens, or --basis equivalent
@@ -63,17 +65,40 @@ func newBudgetListCmd() *cobra.Command {
 				if basis == "" {
 					basis = "spend"
 				}
-				limit := fmt.Sprintf("%.2f USD", b.LimitUSD)
-				if strings.EqualFold(basis, "tokens") {
-					limit = fmt.Sprintf("%d tokens", b.LimitTokens)
+				scope := ""
+				if b.Tag != "" {
+					scope = "  for " + b.Tag
 				}
-				fmt.Fprintf(out, "  %-18s %-8s %-10s limit %s\n", b.Name, b.Window, basis, limit)
+				for _, w := range b.EffectiveWindows() {
+					limit := fmt.Sprintf("%.2f USD", w.LimitUSD)
+					if strings.EqualFold(basis, "tokens") {
+						limit = fmt.Sprintf("%d tokens", w.LimitTokens)
+					}
+					fmt.Fprintf(out, "  %-18s %-8s %-10s limit %-16s %s%s\n", b.Name, w.Window, basis, limit, windowMode(b.Name, w), scope)
+				}
 			}
 			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
+}
+
+// windowMode says what reaching a window does: soft notifies; hard asks or
+// refuses through its boundary, once that is promoted out of shadow.
+func windowMode(budgetName string, w config.BudgetWindowConfig) string {
+	if !strings.EqualFold(w.Mode, "hard") {
+		return "soft"
+	}
+	rule := config.BudgetRuleName(budgetName, w.Window)
+	require := w.Require
+	if require == "" {
+		require = "ask"
+	}
+	if !strings.EqualFold(w.Stage, "enforce") {
+		return fmt.Sprintf("hard (shadow: tokenops boundaries promote %s)", rule)
+	}
+	return fmt.Sprintf("hard (%s, boundary %s)", require, rule)
 }
 
 func newBudgetSetCmd() *cobra.Command {
@@ -86,11 +111,28 @@ func newBudgetSetCmd() *cobra.Command {
 		basis          string
 		workflowID     string
 		agentID        string
+		mode           string
+		require        string
+		addWindow      bool
+		tag            string
 	)
 	cmd := &cobra.Command{
 		Use:   "set <name>",
 		Short: "Create or update a budget (upsert by name)",
-		Args:  cobra.ExactArgs(1),
+		Long: `Create or update a budget. Flags left out keep the stored values.
+
+A budget can hold several windows at once, e.g. $10 a day and $100 a month:
+add one with --add-window --window daily --limit-usd 10. On a budget with
+several windows, --window names the one an edit changes.
+
+Each window is soft (the default: the coach tells you as it fills) or hard
+(--mode hard: a spend boundary asks, or with --require deny refuses, before
+further steps once the window is spent). A hard window starts in shadow,
+recording what it would have done, until 'tokenops boundaries promote'.`,
+		Example: `  tokenops budget set team --limit-usd 100
+  tokenops budget set team --add-window --window daily --limit-usd 10 --mode hard
+  tokenops boundaries promote budget-team-daily`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := resolveMutableConfigPath(configFlag(cmd))
 			if err != nil {
@@ -113,6 +155,10 @@ func newBudgetSetCmd() *cobra.Command {
 				Basis:       basis,
 				WorkflowID:  workflowID,
 				AgentID:     agentID,
+				Mode:        mode,
+				Require:     require,
+				AddWindow:   addWindow,
+				Tag:         tag,
 			})
 			if errors.Is(err, config.ErrBudgetNoCeiling) {
 				return fmt.Errorf("a budget needs a ceiling: pass --limit-usd, or --limit-tokens with --basis tokens")
@@ -127,11 +173,30 @@ func newBudgetSetCmd() *cobra.Command {
 			if res.Created {
 				verb = "added"
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "%s budget %q (%s)\nwrote %s\n", verb, res.Budget.Name, res.Budget.Window, path)
+			windows := make([]string, 0, len(res.Budget.EffectiveWindows()))
+			var shadow []string
+			for _, w := range res.Budget.EffectiveWindows() {
+				switch {
+				case !strings.EqualFold(w.Mode, "hard"):
+					windows = append(windows, w.Window+" soft")
+				case strings.EqualFold(w.Stage, "enforce"):
+					windows = append(windows, w.Window+" hard")
+				default:
+					windows = append(windows, w.Window+" hard, in shadow")
+					shadow = append(shadow, config.BudgetRuleName(res.Budget.Name, w.Window))
+				}
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "%s budget %q (%s)\nwrote %s\n", verb, res.Budget.Name, strings.Join(windows, "; "), path)
+			for _, rule := range shadow {
+				fmt.Fprintf(cmd.OutOrStdout(), "the hard window is boundary %s, in shadow: it records what it would do and stops nothing until `tokenops boundaries promote %s`\n", rule, rule)
+			}
 			applyRestart(cmd.OutOrStdout(), !noRestartFlag, false)
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&mode, "mode", "", "soft (notify; default) | hard (a spend boundary asks or refuses at the limit; starts in shadow)")
+	cmd.Flags().StringVar(&require, "require", "", "what a hard window requires at its limit: ask (default) | deny")
+	cmd.Flags().BoolVar(&addWindow, "add-window", false, "add --window as a further window of the budget rather than editing its window")
 	// No flag default: a default would overwrite the window of every
 	// budget an edit touches. The upsert gives a new budget monthly.
 	cmd.Flags().StringVar(&window, "window", "", "calendar window: daily | weekly | monthly (new budgets default to "+config.DefaultBudgetWindow+")")
@@ -142,6 +207,7 @@ func newBudgetSetCmd() *cobra.Command {
 	cmd.Flags().StringVar(&basis, "basis", "", "what the limit watches: spend | equivalent | tokens")
 	cmd.Flags().StringVar(&workflowID, "workflow-id", "", "scope the budget to one workflow")
 	cmd.Flags().StringVar(&agentID, "agent-id", "", "scope the budget to one agent")
+	cmd.Flags().StringVar(&tag, "tag", "", "scope the budget to work carrying one allocation tag, key=value (project, client or cost_center)")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }
@@ -149,10 +215,11 @@ func newBudgetSetCmd() *cobra.Command {
 func newBudgetUnsetCmd() *cobra.Command {
 	var (
 		noRestartFlag bool
+		window        string
 	)
 	cmd := &cobra.Command{
 		Use:   "unset <name>",
-		Short: "Remove a budget by name",
+		Short: "Remove a budget by name, or one of its windows",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := resolveMutableConfigPath(configFlag(cmd))
@@ -162,6 +229,22 @@ func newBudgetUnsetCmd() *cobra.Command {
 			cfg, err := readMutableConfig(path)
 			if err != nil {
 				return err
+			}
+			if window != "" {
+				removed, err := cfg.RemoveBudgetWindow(args[0], window)
+				if err != nil {
+					return err
+				}
+				if !removed {
+					fmt.Fprintf(cmd.OutOrStdout(), "budget %q has no %s window; nothing to do\n", args[0], window)
+					return nil
+				}
+				if err := writeMutableConfig(path, cfg); err != nil {
+					return err
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "removed the %s window of budget %q\nwrote %s\n", strings.ToLower(window), args[0], path)
+				applyRestart(cmd.OutOrStdout(), !noRestartFlag, false)
+				return nil
 			}
 			if !cfg.RemoveBudget(args[0]) {
 				fmt.Fprintf(cmd.OutOrStdout(), "no budget named %q; nothing to do\n", args[0])
@@ -175,6 +258,7 @@ func newBudgetUnsetCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&window, "window", "", "remove only this window of the budget: daily | weekly | monthly")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }

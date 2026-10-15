@@ -61,6 +61,31 @@ func TestAttribute(t *testing.T) {
 	}
 }
 
+// Place answers, for one turn, the join Attribute makes: so another
+// report (the waste taxonomy's abandoned sessions) reads the same join.
+func TestPlace(t *testing.T) {
+	dirs := map[string]sessiondirs.Dir{"a": {CWD: "/w/app"}, "c": {CWD: "/tmp"}}
+	rootOf := map[string]string{"/w/app": "/w/app", "/tmp": ""}
+	commitsOf := map[string][]gitlog.Commit{"/w/app": {{SHA: "1", At: t0.Add(time.Hour)}, {SHA: "2", At: t0.Add(80 * time.Hour)}}}
+	for _, c := range []struct {
+		turn analytics.SessionTurn
+		want Placement
+	}{
+		{turn("a", 0, 1), OnCommit},
+		{turn("a", 2*time.Hour, 1), NoCommitWithinADay},
+		{turn("a", 90*time.Hour, 1), Uncommitted},
+		{turn("c", 0, 1), OutsideARepository},
+		{turn("z", 0, 1), UnknownDirectory},
+	} {
+		if got, _ := Place(c.turn, dirs, rootOf, commitsOf); got != c.want {
+			t.Errorf("%s at %s: %v, want %v", c.turn.SessionID, c.turn.At, got, c.want)
+		}
+	}
+	if _, c := Place(turn("a", 0, 1), dirs, rootOf, commitsOf); c.SHA != "1" {
+		t.Errorf("commit = %+v", c)
+	}
+}
+
 // Unpriced turns count as turns and are flagged; the money leaves them out.
 func TestUnpricedTurnsAreFlagged(t *testing.T) {
 	u := turn("a", 0, 0)

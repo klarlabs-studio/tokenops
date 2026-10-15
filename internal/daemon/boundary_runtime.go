@@ -20,10 +20,17 @@ import (
 // pause point compares. The pause point counts them for five minutes.
 const boundaryFiguresEvery = time.Minute
 
+// budgetFiguresEvery is how often the budget windows are measured when no
+// rule compares a figure: often enough for the coach's tips and the
+// glance, which count them for fifteen minutes.
+const budgetFiguresEvery = 5
+
 // startBoundaryFiguresRuntime writes, every minute, the plan headroom and
 // budget figures boundary rules compare (ADR 0014), so the pause point
-// reads one small file instead of the event store. It measures only while
-// a rule, local or the organisation's, compares one of them.
+// reads one small file instead of the event store. It measures every
+// minute while a rule, local or the organisation's, compares one of them;
+// otherwise, with budgets configured, it measures the budget windows every
+// five minutes for the coach and the glance.
 func startBoundaryFiguresRuntime(cfg config.Config, glance func() headroom.Deps, source budgets.Source, sup *lifecycle.Supervisor, logger *slog.Logger) {
 	if sup == nil {
 		return
@@ -31,21 +38,31 @@ func startBoundaryFiguresRuntime(cfg config.Config, glance func() headroom.Deps,
 	rules := bcap.LiveRules(cfg)
 	limits := cfg.BudgetLimits()
 	dir := boundaryledger.DefaultDir()
+	ticks := 0
 	measure := func(ctx context.Context) {
-		if !bcap.NeedsFigures(rules()) {
+		live := rules()
+		needs := bcap.NeedsFigures(live)
+		ticks++
+		hasBudgets := source != nil && len(limits) > 0
+		if !needs && (!hasBudgets || (ticks-1)%budgetFiguresEvery != 0) {
 			return
 		}
 		now := time.Now().UTC()
-		var used map[string]float64
-		if source != nil && len(limits) > 0 {
-			used = budgets.UsedPct(ctx, source, limits, now)
+		var readings []budgets.Reading
+		if hasBudgets {
+			readings = budgets.Read(ctx, source, limits, now)
 		}
+		used := budgets.UsedPctOf(readings)
 		fig := bcap.Figures(nil, used, now)
-		if g, err := headroom.ComputeGlance(ctx, glance(), now); err == nil {
-			fig = bcap.Figures(g.Headroom.Reports, used, now)
-		} else if ctx.Err() == nil {
-			logger.Warn("boundary figures: plan headroom unreadable; plan rules see no figure", "err", err)
+		// Plan headroom is read only when a rule compares it.
+		if needs {
+			if g, err := headroom.ComputeGlance(ctx, glance(), now); err == nil {
+				fig = bcap.Figures(g.Headroom.Reports, used, now)
+			} else if ctx.Err() == nil {
+				logger.Warn("boundary figures: plan headroom unreadable; plan rules see no figure", "err", err)
+			}
 		}
+		fig = bcap.WithBudgets(fig, readings, live)
 		if err := dir.PutFigures(fig); err != nil {
 			logger.Warn("boundary figures not written; plan and budget rules see no figure", "err", err)
 		}

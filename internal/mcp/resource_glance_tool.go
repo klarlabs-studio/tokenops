@@ -9,6 +9,7 @@ import (
 	mcpgo "go.klarlabs.de/mcp"
 
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
+	"go.klarlabs.de/tokenops/internal/capability/budgets"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/presentation"
 )
@@ -35,7 +36,7 @@ func registerResourceGlanceTool(s *Server, d PlanDeps) {
 				return mcpgo.StructuredResult{}, err
 			}
 			return mcpgo.StructuredResult{
-				Content:           []mcpgo.Content{mcpgo.NewTextContent(markdownPayload(renderResourceGlance(result.Insight)+renderBoundaryAdvice(result.Boundaries), result))},
+				Content:           []mcpgo.Content{mcpgo.NewTextContent(markdownPayload(renderResourceGlance(result.Insight)+renderBoundaryAdvice(result.Boundaries)+renderSpendBudgets(result.SpendBudgets), result))},
 				StructuredContent: structured,
 			}, nil
 		})
@@ -72,11 +73,35 @@ func renderBoundaryAdvice(advice []bcap.Advice) string {
 // resourceGlance is the glance capability in the tool's shape.
 func resourceGlance(ctx context.Context, d PlanDeps) (*resourceGlanceResult, error) {
 	deps := d.headroomDeps()
-	g, err := headroom.ComputeGlance(ctx, deps, time.Now().UTC())
+	now := time.Now().UTC()
+	g, err := headroom.ComputeGlance(ctx, deps, now)
 	if err != nil {
 		return nil, err
 	}
 	p := g.Payload()
 	p.Boundaries = bcap.GlanceAdvice(deps.Config, g.Headroom.Reports)
+	p.SpendBudgets = budgets.Current("", now)
 	return p, nil
+}
+
+// renderSpendBudgets lists the operator's budget windows: how much of
+// each is used, and whether reaching it notifies or is enforced.
+func renderSpendBudgets(rs []budgets.Reading) string {
+	if len(rs) == 0 {
+		return ""
+	}
+	out := "\n\n### Spend budgets\n"
+	for _, r := range rs {
+		mode := "soft: notifies"
+		switch {
+		case r.Rule != "" && r.Enforced && r.Require == "deny":
+			mode = fmt.Sprintf("hard: `%s` refuses at the limit", r.Rule)
+		case r.Rule != "" && r.Enforced:
+			mode = fmt.Sprintf("hard: `%s` asks at the limit", r.Rule)
+		case r.Rule != "":
+			mode = fmt.Sprintf("hard, in shadow: `%s` binds nothing yet", r.Rule)
+		}
+		out += fmt.Sprintf("\n- %s %s: %.0f%% used (%s)", r.Budget, r.Window, r.UsedPct, mode)
+	}
+	return out
 }

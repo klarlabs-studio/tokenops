@@ -145,6 +145,8 @@ func (s *Store) scanUsage(ctx context.Context, f analytics.Filter, group analyti
 			r.key = r.provider.String
 		case analytics.GroupModel:
 			r.key = r.model.String
+		case analytics.GroupProviderModel:
+			r.key = analytics.ProviderModelKey(r.provider.String, r.model.String)
 		}
 		visit(&r)
 	}
@@ -439,7 +441,9 @@ func (s *Store) SessionUsage(ctx context.Context, f analytics.Filter) ([]analyti
 			COALESCE(` + cacheReadExpr + `, 0),
 			COALESCE(` + cacheWriteExpr + `, 0),
 			COALESCE(` + cacheWrite1hExpr + `, 0),
-			COALESCE(cost_usd, 0)
+			COALESCE(cost_usd, 0), COALESCE(workflow_id, ''), COALESCE(execution_id, ''),
+			COALESCE(source, ''), COALESCE(json_extract(attributes, '$.endpoint'), ''),
+			` + costSourcePlanCovered + `
 		FROM events WHERE ` + strings.Join(conds, " AND ") + ` ORDER BY timestamp_ns`
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -454,7 +458,8 @@ func (s *Store) SessionUsage(ctx context.Context, f analytics.Filter) ([]analyti
 			cost sql.NullFloat64
 		)
 		if err := rows.Scan(&u.SessionID, &ns, &u.Provider, &u.Model, &u.InputTokens, &u.OutputTokens, &u.TotalTokens,
-			&u.CacheReadTokens, &u.CacheWriteTokens, &u.CacheWrite1hTokens, &cost); err != nil {
+			&u.CacheReadTokens, &u.CacheWriteTokens, &u.CacheWrite1hTokens, &cost, &u.WorkflowID, &u.ExecutionID,
+			&u.Source, &u.Endpoint, &u.PlanCovered); err != nil {
 			return nil, fmt.Errorf("analytics: session turns scan: %w", err)
 		}
 		u.At = time.Unix(0, ns).UTC()

@@ -11,6 +11,8 @@ import (
 	mcpgo "go.klarlabs.de/mcp"
 	mcpserver "go.klarlabs.de/mcp/server"
 
+	"go.klarlabs.de/tokenops/internal/capability/allocation"
+	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
@@ -18,6 +20,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/ruleintel"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
+	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 )
 
 // Agents read every tool definition before their first call. Fifty tools
@@ -282,16 +285,17 @@ func payloadOf(res any) (json.RawMessage, error) {
 // Inputs. Every parameter a route takes is here, described once.
 
 type glanceIn struct {
-	View string `json:"view,omitempty" jsonschema:"enum=all,enum=headroom,enum=session_budget,enum=findings,description=all (default): budgets, headroom and one ranked insight. headroom: each plan's usage, the vendor's windows with pace, spend against the limit, risk. session_budget: the current window's share used and what to do. findings: what the coach and the session analysis observed, ranked, with what to do."`
+	View string `json:"view,omitempty" jsonschema:"enum=all,enum=headroom,enum=session_budget,enum=findings,enum=plan_advice,description=all (default): budgets, headroom and one ranked insight. headroom: each plan's usage, the vendor's windows with pace, spend against the limit, risk. session_budget: the current window's share used and what to do. findings: what the coach and the session analysis observed, ranked, with what to do. plan_advice: each plan's last days replayed against its other tiers, metered overflow and the API at list price, with a recommendation; advice only."`
+	Days int    `json:"days,omitempty" jsonschema:"minimum=1,maximum=90,description=plan_advice: how far back to replay (default 30)"`
 }
 
 type spendIn struct {
-	View           string   `json:"view,omitempty" jsonschema:"enum=summary,enum=top,enum=burn,enum=forecast,enum=commits,description=summary (default): spend and tokens over a window. top: the largest consumers. burn: the last hours, hour by hour. forecast: daily spend projected forward. commits: what each of the operator's commits cost, from the agent work that led to it."`
-	Since          string   `json:"since,omitempty" jsonschema:"description=summary, top and commits: RFC3339 time or a duration such as 24h or 7d"`
-	Until          string   `json:"until,omitempty" jsonschema:"description=summary and top: RFC3339 time; open when omitted"`
+	View           string   `json:"view,omitempty" jsonschema:"enum=summary,enum=top,enum=burn,enum=forecast,enum=commits,enum=units,enum=waste,enum=tags,description=summary (default): spend and tokens over a window. top: the largest consumers. burn: the last hours, hour by hour. forecast: daily spend projected forward. commits: what each of the operator's commits cost, from the agent work that led to it. units: cost per commit, merged pull request, outcome and change class against the 4 weeks before, with plan-window shares on a flat-rate plan. waste: avoidable usage by waste class in dollars and plan-window share, what was realized, and the guardrail to switch on next. tags: spend per project, client or cost centre, by the operator's allocation rules."`
+	Since          string   `json:"since,omitempty" jsonschema:"description=summary, top, commits, units, waste and tags: RFC3339 time or a duration such as 24h or 7d"`
+	Until          string   `json:"until,omitempty" jsonschema:"description=summary, top and tags: RFC3339 time; open when omitted"`
 	WorkflowID     string   `json:"workflow_id,omitempty" jsonschema:"description=summary: one workflow"`
 	AgentID        string   `json:"agent_id,omitempty" jsonschema:"description=summary: one agent"`
-	By             string   `json:"by,omitempty" jsonschema:"enum=model,enum=provider,enum=workflow,enum=agent,description=top: what to rank (default model)"`
+	By             string   `json:"by,omitempty" jsonschema:"enum=model,enum=provider,enum=workflow,enum=agent,enum=project,enum=client,enum=cost_center,description=top: what to rank: model (default), provider, workflow or agent. tags: the allocation key: project (default), client or cost_center"`
 	Top            int      `json:"top,omitempty" jsonschema:"minimum=1,maximum=50,description=top: how many (default 5)"`
 	Hours          int      `json:"hours,omitempty" jsonschema:"minimum=1,maximum=168,description=burn: lookback in hours (default 24)"`
 	HorizonDays    int      `json:"horizon_days,omitempty" jsonschema:"minimum=1,maximum=30,description=forecast: days ahead (default 7)"`
@@ -422,6 +426,7 @@ type configureIn struct {
 	WorkflowID    string  `json:"workflow_id,omitempty" jsonschema:"description=budget: limit it to one workflow"`
 	AgentID       string  `json:"agent_id,omitempty" jsonschema:"description=budget: limit it to one agent"`
 	Basis         string  `json:"basis,omitempty" jsonschema:"enum=spend,enum=equivalent,enum=tokens,description=budget: what the limit watches: billed spend (default), API-price equivalent, or tokens. On a flat plan billed spend is about 0, so use tokens or equivalent."`
+	Tag           string  `json:"tag,omitempty" jsonschema:"description=budget: limit it to work carrying one allocation tag, key=value (project, client or cost_center)"`
 	Delete        bool    `json:"delete,omitempty" jsonschema:"description=budget: remove the budget with this name"`
 	Mode          string  `json:"mode,omitempty" jsonschema:"enum=passive,enum=active,description=mode: passive analyses on demand; active adds live routing and a budget watcher"`
 	Model         string  `json:"model,omitempty" jsonschema:"description=preferred_model: the model to stay on"`
@@ -436,15 +441,19 @@ type glanceOut struct {
 	Headroom      *planHeadroomResult   `json:"headroom,omitempty"`
 	SessionBudget map[string]any        `json:"session_budget,omitempty"`
 	Findings      *findings.Report      `json:"findings,omitempty"`
+	PlanAdvice    *planAdviceResult     `json:"plan_advice,omitempty"`
 }
 
 type spendOut struct {
-	View     string              `json:"view"`
-	Summary  *spendSummaryResult `json:"summary,omitempty"`
-	Top      *topConsumersResult `json:"top,omitempty"`
-	Burn     map[string]any      `json:"burn,omitempty"`
-	Forecast *forecastResult     `json:"forecast,omitempty"`
-	Commits  *commits.Report     `json:"commits,omitempty"`
+	View     string                `json:"view"`
+	Summary  *spendSummaryResult   `json:"summary,omitempty"`
+	Top      *topConsumersResult   `json:"top,omitempty"`
+	Burn     map[string]any        `json:"burn,omitempty"`
+	Forecast *forecastResult       `json:"forecast,omitempty"`
+	Commits  *commits.Report       `json:"commits,omitempty"`
+	Units    *uniteconomics.Report `json:"units,omitempty"`
+	Waste    *avoidable.Report     `json:"waste,omitempty"`
+	Tags     *allocation.Report    `json:"tags,omitempty"`
 }
 
 type sessionsOut struct {
@@ -538,6 +547,7 @@ func publicTools() []publicTool {
 				"headroom":       {inner: "tokenops_plan_headroom"},
 				"session_budget": {inner: "tokenops_session_budget"},
 				"findings":       {inner: "tokenops_findings"},
+				"plan_advice":    {inner: "tokenops_plan_advice", params: params("days")},
 			},
 		},
 		{
@@ -550,6 +560,9 @@ func publicTools() []publicTool {
 				"burn":     {inner: "tokenops_burn_rate", params: params("hours", "include_sources")},
 				"forecast": {inner: "tokenops_forecast", params: params("horizon_days", "include_sources")},
 				"commits":  {inner: "tokenops_cost_per_commit", params: params("since", "limit")},
+				"units":    {inner: "tokenops_unit_costs", params: params("since")},
+				"waste":    {inner: "tokenops_waste", params: params("since")},
+				"tags":     {inner: "tokenops_spend_tags", params: params("by", "since", "until", "include_sources")},
 			},
 		},
 		{
@@ -667,7 +680,7 @@ func publicTools() []publicTool {
 			selector:    "setting", input: configureIn{}, output: configureOut{},
 			routes: map[string]route{
 				"plan":            {inner: "tokenops_plan_set", params: params("provider", "plan", "spend_limit_usd", "limit_window", "rate_factor", "clear", "price", "currency", "since")},
-				"budget":          {inner: "tokenops_budget_set", params: params("name", "window", "limit_usd", "limit_tokens", "warn_at", "crit_at", "workflow_id", "agent_id", "basis", "delete")},
+				"budget":          {inner: "tokenops_budget_set", params: params("name", "window", "limit_usd", "limit_tokens", "warn_at", "crit_at", "workflow_id", "agent_id", "basis", "tag", "delete")},
 				"mode":            {inner: "tokenops_mode", params: params("mode"), rename: map[string]string{"mode": "set"}},
 				"preferred_model": {inner: "tokenops_preferred_model", params: params("provider", "model", "clear")},
 				"usage_meter":     {inner: "tokenops_vendor_usage_setup", params: params("org")},
@@ -684,9 +697,9 @@ func publicTools() []publicTool {
 		},
 		{
 			name: "tokenops_coach", title: "Coach", kind: changes,
-			description: "Show or change how much the coach says and does: a preset (observe, advise, guided, autopilot), each power's autonomy, and its verbosity. With no arguments it reports the current settings and what became of its advice.",
+			description: "Show or change how much the coach says and does: a preset (observe, advise, guided, autopilot), each power's autonomy, and its verbosity; or answer its newest tip on the operator's word (tip: acknowledged, expected, snoozed). With no arguments it reports the current settings and what became of its advice.",
 			input:       coachInput{}, output: coachcap.Report{},
-			routes: map[string]route{"": {inner: "tokenops_coach", params: params("preset", "autonomy", "power", "rung", "verbosity")}},
+			routes: map[string]route{"": {inner: "tokenops_coach", params: params("preset", "autonomy", "power", "rung", "verbosity", "tip", "tip_id", "snooze_minutes")}},
 		},
 		{
 			name: "tokenops_experiment", title: "Routing experiment", kind: changes,

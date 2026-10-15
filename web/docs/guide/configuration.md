@@ -65,7 +65,7 @@ cheaper model that fits it), and **context** (when the agent compacts).
 
 | | `quiet` | `normal` (default) | `verbose` |
 |---|---|---|---|
-| Quota tips | at 90–100% of a window, or earlier when the pace runs out before the reset | each tier (50/75/90/100%) once per window | each tier, plus the pace line always and every window listed |
+| Quota tips | a run-out warning and a used-up window, once per window | the same | the same, plus each look-back's pace and every window listed |
 | Dollar tips (pay-per-token) | only past the budget | each tier once per session | each tier once per session |
 | The read-guard case | never | once per session | once per session |
 | Model advice | only when the model is two tiers or more above the work | once per kind of work per session | every applicable turn |
@@ -119,11 +119,26 @@ ended) or ignored (only when the status line showed it; a tip given only
 as the Stop hook's message counts as unseen, neither followed nor
 ignored), and whether each subagent move stood or was undone (you
 lowered `models` within 24 hours). Advice for a kind of work, or an early
-tip (50% or 75% of a quota window or the session budget), that you ignore
+tip (50% or 75% of the session budget), that you ignore
 five times in a row within 14 days goes quiet for that kind; it is offered
-again once that evidence ages out, and `verbose` always shows it. Tips at
-90% of a window or past the budget never go quiet. `tokenops coach` lists
+again once that evidence ages out, and `verbose` always shows it. Quota
+tips and tips past the budget never go quiet. `tokenops coach` lists
 the record per kind.
+
+**Quota tips** on a flat-rate plan come from the window's burn rate, not
+from how much of it is used. The coach measures how fast each window has
+been used over the last hour and over the last 15 minutes, and warns only
+when both would use it up before it resets: "at this pace your 5-hour
+Claude limit runs out in ~1h 20m, 40m before it resets (60% used)". 90%
+used ten minutes before the reset lasts and says nothing; 50% used half an
+hour into a five-hour window does not last and is said. A burst that has
+stopped (a quiet last 15 minutes) or a short spike in a slow hour says
+nothing either. A reading more than 15 minutes old forecasts nothing,
+since vendor meters lag. A window younger than the hour is measured from
+its own start. Each window gets one warning, and one note when it is used
+up. Once a window resets, the coach records whether it was forecast to run
+out and whether it did; `tokenops coach stats` shows how many forecasts
+came true (their precision) and how many windows ran out unforecast.
 
 A rung the coach cannot deliver yet is shown one rung lower, with the
 reason. `tokenops coach` (or the `tokenops_coach` MCP tool) shows each
@@ -224,9 +239,11 @@ be just as true next turn.
 |---|---|
 | `min_interval` | A floor between two proactive nudges in one session. A nudge held back by the floor is **deferred, not dropped**: its finding stays unlatched and speaks at the next opportunity past the floor. |
 | `max_per_session` | A cap on how many proactive nudges one session may carry. Unlike the floor this **drops** — a cap that queues what it refused is not a cap. Zero means no cap. |
+| `max_per_day` | The daily interruption budget: how many tips may interrupt a session in one day, across all sessions. Past it, a tip is not dropped; it waits on the status line as the session's open tip, and `tokenops glance` says how many waited. Tips about work about to stop (the session budget spent, a plan window about to run out or used up) still speak. Zero means the default of 6; `-1` turns the budget off. |
 
-Both default to zero, which means the per-finding latches are the whole
-policy — exactly what the hooks did before the key existed. It only bites
+`min_interval` and `max_per_session` default to zero, which means the
+per-finding latches are the whole policy, exactly what the hooks did
+before the key existed. It only bites
 at `delivery: advise` and `intervene`, where something speaks at all;
 neither knob touches anything you ask for, because a direct question is
 never an interruption.
@@ -241,6 +258,12 @@ never an interruption.
 
 That line is the point. A rate limit you cannot see working is
 indistinguishable from one that does nothing.
+
+Two more things keep a tip from being said twice. Past the session budget
+the coach speaks once; each further step over it (200%, 300%, …) only
+updates the status line. And a tip you answer with `tokenops coach tip`
+(`ack`, `expected`, `snooze`) closes its episode: see
+[`tokenops coach tip`](/guide/cli#tokenops-coach-tip-ack-expected-snooze).
 
 Mode, budgets, and routing rules are also editable through the MCP
 server — `tokenops_configure` with `setting` mode, budget, and
@@ -342,6 +365,7 @@ coaching:
   quiet:                      # rate-limits the *proactive* channel only
     min_interval: 30m         # floor between two nudges in one session
     max_per_session: 3        # cap; 0 defers to the per-finding latches
+    max_per_day: 6            # daily interruption budget; past it tips wait on the status line; -1 = off
   context_limits:             # waste-detector threshold overrides
     - workflow_prefix: "claude-code:"
       max_context_tokens: 500000
@@ -356,11 +380,60 @@ budgets:                      # evaluated by the active-mode watcher
     basis: spend              # spend (real billed cost, default) |
                               # equivalent (API list-price value incl.
                               # plan-covered usage — use on flat plans)
-    # workflow_id / agent_id optionally scope the limit
+    # workflow_id / agent_id optionally scope the limit;
+    # tag: client=acme scopes it to one allocation tag
+  - name: team                # several windows at once
+    windows:
+      - window: daily
+        limit_usd: 10
+        mode: hard            # soft (notify, default) | hard (enforced)
+        require: ask          # ask (default) | deny, at the limit
+        # stage: enforce      # set by `tokenops boundaries promote`
+      - window: monthly
+        limit_usd: 100        # soft: the coach tells you as it fills
+
+allocation:                   # file work under a project, client, cost centre
+  rules:
+    - dir: ~/clients/acme     # this directory and everything under it
+      tags: {client: Acme Corp, project: storefront}
+    - repo: "globex/*"        # origin owner/name, or the directory's name
+      tags: {client: globex}
+    - branch_prefix: spike/
+      tags: {project: research}
+    - harness: codex          # claude-code, codex, opencode, cursor, ...
+      tags: {cost_center: cc-42}
 
 watch:
   interval: 15m               # watcher cadence (default 15m, min 1m)
 ```
+
+## Allocation rules (`allocation`)
+
+Allocation rules file your work under a `project`, a `client` and a
+`cost_center` — virtual tags, in FinOps terms: nothing is tagged where the
+work happens, the daemon derives the tags afterwards, so editing a rule
+re-files past work too.
+
+A rule matches by any of:
+
+| Key | Matches |
+|---|---|
+| `repo` | a glob over the repository's names: `owner/name` from its origin remote, and its top-level directory's name (`acme/*`, `storefront`); case-insensitive |
+| `dir` | an absolute directory glob (`~` is your home); work in a directory under one it matches matches too (`~/clients/acme`, `~/src/*/infra`) |
+| `branch_prefix` | the start of the branch the client recorded for the session |
+| `harness` | the client the work ran in: `claude-code`, `codex`, `opencode`, `cursor`, ... |
+
+Every key a rule names must hold. Each tag is decided on its own: the
+first rule, top to bottom, that matches and sets it gives its value, so a
+broad rule further down fills what a narrow one left unset. Values are at
+most 64 characters.
+
+Sessions are placed from Claude Code's and Codex's transcripts and
+opencode's sessions; a session whose directory no client recorded can only
+be matched by `harness`. The tags show in `tokenops spend --by project`
+(or `client`, `cost_center`), the FOCUS export's `Tags` column, a budget's
+`tag` scope and the scorecard. They stay on this machine: the team plane's
+upload has no field for them, so `tokenops team preview` never shows them.
 
 ## Model routing rules
 
@@ -980,7 +1053,8 @@ team:
 ```
 
 `repo_names: hidden` files every repository's work under `hidden`; work
-outside a git repository is always filed under `none`.
+outside a git repository is always filed under `none`. Allocation tags are
+never uploaded.
 
 ## OpenTelemetry export
 

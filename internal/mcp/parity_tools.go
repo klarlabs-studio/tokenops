@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/auditlog"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 
@@ -19,6 +20,9 @@ import (
 type ParityDeps struct {
 	Store *sqlite.Store
 	Spend *spending.Engine
+	// Allocation returns the allocation rules at call time; nil tags
+	// nothing.
+	Allocation func() []allocation.Rule
 }
 
 // --- input structs --------------------------------------------------------
@@ -52,7 +56,7 @@ func RegisterParityTools(s *Server, d ParityDeps) error {
 		return errors.New("mcp: server must not be nil")
 	}
 	s.Tool("tokenops_scorecard").
-		Description("Operator wedge KPI scorecard (FVT, TEU, SAC) computed from the local event store. Mirrors `tokenops scorecard`.").
+		Description("Operator wedge KPI scorecard (FVT, TEU, SAC and the agent KPIs) computed from the local event store, each KPI set against your own trailing baseline (vs_baseline). Mirrors `tokenops scorecard`.").
 		OutputSchema(spending.ScorecardReport{}).
 		Handler(func(ctx context.Context, in scorecardInput) (*spending.ScorecardReport, error) {
 			return runScorecard(ctx, d, in)
@@ -78,6 +82,8 @@ func runScorecard(ctx context.Context, d ParityDeps, in scorecardInput) (*spendi
 		TEUPct:      in.TEUPct,
 		SACPct:      in.SACPct,
 		BaselineRef: in.BaselineRef,
+		Spend:       d.Spend,
+		Allocation:  rulesOf(d.Allocation),
 	})
 	return s, nil
 }
@@ -112,3 +118,11 @@ func runAudit(ctx context.Context, d ParityDeps, in auditInput) (*auditResult, e
 // defaultAuditLimit bounds an unfiltered audit query: the whole log ran
 // past what a client accepts from one tool call.
 const defaultAuditLimit = 50
+
+// rulesOf reads the allocation rules, none when there is no reader.
+func rulesOf(f func() []allocation.Rule) []allocation.Rule {
+	if f == nil {
+		return nil
+	}
+	return f()
+}

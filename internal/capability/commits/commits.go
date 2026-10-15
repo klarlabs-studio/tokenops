@@ -37,7 +37,8 @@ type Cost struct {
 	UnpricedTurns int `json:"unpriced_turns,omitempty"`
 }
 
-func (c *Cost) add(t analytics.SessionTurn) {
+// Add counts one turn into c.
+func (c *Cost) Add(t analytics.SessionTurn) {
 	c.Turns++
 	c.Tokens += t.Tokens
 	c.APIEquivalentUSD += t.APIEquivalentUSD
@@ -100,9 +101,31 @@ type Deps struct {
 
 // Compute builds the report for the work since since.
 func Compute(ctx context.Context, d Deps, since time.Time) (Report, error) {
-	turns, err := d.Turns(ctx, since)
+	w, err := Gather(ctx, d, since)
 	if err != nil {
 		return Report{}, err
+	}
+	return Attribute(since, w.Turns, w.Dirs, w.RootOf, w.CommitsOf), nil
+}
+
+// Work is what the join reads: the turns since a time, where each
+// session ran, each directory's repository, and each repository's
+// commits.
+type Work struct {
+	Turns     []analytics.SessionTurn
+	Dirs      map[string]sessiondirs.Dir
+	RootOf    map[string]string
+	CommitsOf map[string][]gitlog.Commit
+	// Repos is the cache the roots were resolved through, for a caller
+	// that reads more of each repository.
+	Repos *gitlog.Repos
+}
+
+// Gather reads the work since since: the impure half of Compute.
+func Gather(ctx context.Context, d Deps, since time.Time) (Work, error) {
+	turns, err := d.Turns(ctx, since)
+	if err != nil {
+		return Work{}, err
 	}
 	dirsOf := d.Dirs
 	if dirsOf == nil {
@@ -112,20 +135,76 @@ func Compute(ctx context.Context, d Deps, since time.Time) (Report, error) {
 	if repos == nil {
 		repos = gitlog.NewRepos()
 	}
-	dirs := dirsOf(since)
-	rootOf := map[string]string{}
-	commitsOf := map[string][]gitlog.Commit{}
-	for _, dir := range dirs {
-		if _, seen := rootOf[dir.CWD]; seen {
+	w := Work{Turns: turns, Dirs: dirsOf(since), RootOf: map[string]string{}, CommitsOf: map[string][]gitlog.Commit{}, Repos: repos}
+	for _, dir := range w.Dirs {
+		if _, seen := w.RootOf[dir.CWD]; seen {
 			continue
 		}
 		root := repos.Root(ctx, dir.CWD)
-		rootOf[dir.CWD] = root
-		if _, listed := commitsOf[root]; root != "" && !listed {
-			commitsOf[root], _ = repos.Commits(ctx, root, since)
+		w.RootOf[dir.CWD] = root
+		if _, listed := w.CommitsOf[root]; root != "" && !listed {
+			w.CommitsOf[root], _ = repos.Commits(ctx, root, since)
 		}
 	}
-	return Attribute(since, turns, dirs, rootOf, commitsOf), nil
+	return w, nil
+}
+
+// Roots are the repositories the work ran in, sorted.
+func (w Work) Roots() []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, root := range w.RootOf {
+		if root != "" && !seen[root] {
+			seen[root] = true
+			out = append(out, root)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Placement is where the join put one turn.
+type Placement int
+
+// The placements: on a commit, or apart, by why.
+const (
+	// OnCommit is a turn its author's next commit in the repository
+	// followed within MaxGap.
+	OnCommit Placement = iota
+	// Uncommitted is a turn after the repository's last commit: in
+	// progress or abandoned.
+	Uncommitted
+	// NoCommitWithinADay is a turn no commit followed within MaxGap.
+	NoCommitWithinADay
+	// OutsideARepository ran in a directory that is not a repository.
+	OutsideARepository
+	// UnknownDirectory is from a session whose directory no client
+	// recorded.
+	UnknownDirectory
+)
+
+// Place joins one turn to a commit: the repository its session ran in,
+// and the first commit there at or after it, within MaxGap. The commit is
+// set only when the placement is OnCommit.
+func Place(t analytics.SessionTurn, dirs map[string]sessiondirs.Dir, rootOf map[string]string,
+	commitsOf map[string][]gitlog.Commit) (Placement, gitlog.Commit) {
+	dir, ok := dirs[t.SessionID]
+	if !ok {
+		return UnknownDirectory, gitlog.Commit{}
+	}
+	root := rootOf[dir.CWD]
+	if root == "" {
+		return OutsideARepository, gitlog.Commit{}
+	}
+	commits := commitsOf[root]
+	i := sort.Search(len(commits), func(i int) bool { return !commits[i].At.Before(t.At) })
+	switch {
+	case i == len(commits):
+		return Uncommitted, gitlog.Commit{}
+	case commits[i].At.Sub(t.At) > MaxGap:
+		return NoCommitWithinADay, gitlog.Commit{}
+	}
+	return OnCommit, commits[i]
 }
 
 // Attribute places each turn on a commit: the pure half of Compute.
@@ -139,27 +218,22 @@ func Attribute(since time.Time, turns []analytics.SessionTurn, dirs map[string]s
 	var total float64
 	for _, t := range turns {
 		total += t.APIEquivalentUSD
-		dir, ok := dirs[t.SessionID]
-		if !ok {
-			r.UnknownDirectory.add(t)
+		placed, c := Place(t, dirs, rootOf, commitsOf)
+		switch placed {
+		case UnknownDirectory:
+			r.UnknownDirectory.Add(t)
+			continue
+		case OutsideARepository:
+			r.OutsideARepository.Add(t)
+			continue
+		case Uncommitted:
+			r.Uncommitted.Add(t)
+			continue
+		case NoCommitWithinADay:
+			r.NoCommitWithinADay.Add(t)
 			continue
 		}
-		root := rootOf[dir.CWD]
-		if root == "" {
-			r.OutsideARepository.add(t)
-			continue
-		}
-		commits := commitsOf[root]
-		i := sort.Search(len(commits), func(i int) bool { return !commits[i].At.Before(t.At) })
-		switch {
-		case i == len(commits):
-			r.Uncommitted.add(t)
-			continue
-		case commits[i].At.Sub(t.At) > MaxGap:
-			r.NoCommitWithinADay.add(t)
-			continue
-		}
-		c := commits[i]
+		root := rootOf[dirs[t.SessionID].CWD]
 		k := key{root, c.SHA}
 		cc := byCommit[k]
 		if cc == nil {
@@ -168,7 +242,7 @@ func Attribute(since time.Time, turns []analytics.SessionTurn, dirs map[string]s
 			sessions[k] = map[string]bool{}
 			first[k] = t.At
 		}
-		cc.add(t)
+		cc.Add(t)
 		sessions[k][t.SessionID] = true
 		if t.At.Before(first[k]) {
 			first[k] = t.At

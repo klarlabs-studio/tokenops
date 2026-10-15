@@ -2,10 +2,13 @@ package proxy
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/boundaries"
+	"go.klarlabs.de/tokenops/internal/capability/budgets"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/findings"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
@@ -19,6 +22,7 @@ import (
 //	GET /api/findings
 //	GET /api/plans/headroom
 //	GET /api/plans/session-budget
+//	GET /api/plans/advice?days=
 //
 // deps is called per request. nil leaves the routes unmounted.
 func WithPlans(deps func() headroom.Deps) Option {
@@ -46,6 +50,7 @@ func (s *Server) registerPlanRoutes(mux RouteMux) {
 		}
 		p := g.Payload()
 		p.Boundaries = boundaries.GlanceAdvice(d.Config, g.Headroom.Reports)
+		p.SpendBudgets = budgets.Current("", now)
 		return p, nil
 	}))
 	// The findings rank what the coach and the session analysis observed
@@ -72,6 +77,24 @@ func (s *Server) registerPlanRoutes(mux RouteMux) {
 		}
 		return res.Payload(), nil
 	}))
+	// Plan right-sizing: advice only, it binds nothing.
+	mux.HandleFunc("GET /api/plans/advice", func(w http.ResponseWriter, r *http.Request) {
+		var q headroom.AdviceQuery
+		if raw := r.URL.Query().Get("days"); raw != "" {
+			days, err := strconv.Atoi(raw)
+			if err != nil || days < 1 || days > headroom.MaxAdviceDays {
+				writeAPIError(w, http.StatusBadRequest, fmt.Errorf("days must be a whole number from 1 to %d", headroom.MaxAdviceDays))
+				return
+			}
+			q.Days = days
+		}
+		res, err := headroom.Advise(r.Context(), s.plans(), q, time.Now().UTC())
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeAPIJSON(w, http.StatusOK, res.Payload())
+	})
 	mux.HandleFunc("GET /api/plans/session-budget", serve(func(ctx context.Context, d headroom.Deps, now time.Time) (any, error) {
 		res, err := headroom.SessionBudgets(ctx, d, now)
 		if err != nil {

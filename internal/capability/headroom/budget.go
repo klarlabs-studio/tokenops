@@ -107,6 +107,12 @@ type Glance struct {
 	Headroom Result
 	// Accounts is the signed-in account per provider, when known.
 	Accounts map[string]string
+	// PlanUse is each provider's plan utilization and coverage over the
+	// last plans.PlanUseDays; nil when the events could not be read.
+	PlanUse *plans.PlanUseReport
+	// PlanAdvice is each bound plan replayed against its other tiers over
+	// the last plans.AdviceDays; nil when it could not be computed.
+	PlanAdvice []plans.Advice
 }
 
 // ComputeGlance composes the session budgets and plan headroom.
@@ -125,7 +131,24 @@ func ComputeGlance(ctx context.Context, d Deps, now time.Time) (Glance, error) {
 	if d.Accounts != nil {
 		g.Accounts = d.Accounts()
 	}
+	g.PlanUse = planUse(ctx, d.Reader, now)
+	g.PlanAdvice = glanceAdvice(ctx, d, now)
 	return g, nil
+}
+
+// planUse measures plan use over the last plans.PlanUseDays from the same
+// events the rest of the glance reads.
+func planUse(ctx context.Context, r Reader, now time.Time) *plans.PlanUseReport {
+	if r == nil {
+		return nil
+	}
+	since := now.Add(-plans.PlanUseDays * 24 * time.Hour)
+	envs, err := r.ReadEvents(ctx, eventschema.EventTypePrompt, since)
+	if err != nil {
+		return nil
+	}
+	u := plans.PlanUseFrom(envs, since, now)
+	return &u
 }
 
 // Insight ranks the signals in budgets and headroom into one orientation.

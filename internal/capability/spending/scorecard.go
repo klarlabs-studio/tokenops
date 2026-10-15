@@ -5,6 +5,9 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/allocation"
+	"go.klarlabs.de/tokenops/internal/capability/commits"
+	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts"
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/tools"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard"
@@ -24,6 +27,12 @@ type ScorecardParams struct {
 	TranscriptRoot string
 	// Now anchors the window; the current time when zero.
 	Now time.Time
+	// Spend prices the turns the unit costs are measured from; nil leaves
+	// unit costs off the scorecard.
+	Spend *Engine
+	// Allocation are the allocation rules; with Spend, the scorecard
+	// shows how much of the period's spend they tag.
+	Allocation []allocation.Rule
 }
 
 // ScorecardReport is the scorecard answer, named here so adapters can
@@ -47,29 +56,94 @@ func Scorecard(ctx context.Context, store *sqlite.Store, p ScorecardParams) *Sco
 		days = 7
 	}
 	var reader scorecard.EventReader
+	var (
+		units []scorecard.UnitCost
+		alloc *scorecard.AllocationCoverage
+	)
 	if store != nil {
 		reader = store
+		if p.Spend != nil {
+			agg := NewAggregator(store, p.Spend)
+			since := now.Add(-time.Duration(days) * 24 * time.Hour)
+			r, err := uniteconomics.Compute(ctx, uniteconomics.Deps{Turns: commits.TurnsIn(agg, Window{}), Events: store},
+				since, now)
+			if err == nil {
+				units = scorecardUnitCosts(r)
+			}
+			alloc = allocationCoverage(ctx, agg, p.Allocation, since, now)
+		}
 	}
+	since := now.Add(-time.Duration(days) * 24 * time.Hour)
+	agent, agentBase := agentKPIs(p.TranscriptRoot, since.AddDate(0, 0, -scorecard.BaselineDays), since)
 	return scorecard.Build(ctx, reader, scorecard.BuildParams{
+		UnitCosts:          units,
+		Allocation:         alloc,
 		SinceDays:          days,
 		FVTSecondsOverride: p.FVTSeconds,
 		TEUPctOverride:     p.TEUPct,
 		SACPctOverride:     p.SACPct,
-		AgentKPIs:          agentKPIs(p.TranscriptRoot, now.Add(-time.Duration(days)*24*time.Hour)),
+		AgentKPIs:          agent,
+		AgentKPIBaseline:   agentBase,
 		BaselineRef:        p.BaselineRef,
 		ClockNow:           func() time.Time { return now },
 	})
 }
 
+// scorecardUnitCosts are the headline unit costs the scorecard shows: per
+// commit, per merged pull request and per achieved outcome.
+func scorecardUnitCosts(r uniteconomics.Report) []scorecard.UnitCost {
+	out := make([]scorecard.UnitCost, 0, 3)
+	for _, u := range []struct {
+		label string
+		unit  uniteconomics.Unit
+	}{{"commit", r.Commits}, {"merged PR", r.PRs}, {"achieved outcome", r.Achieved}} {
+		c := scorecard.UnitCost{Unit: u.label, Units: u.unit.Current.Units, ChangePct: u.unit.ChangePct,
+			BaselinePerUnitUSD: u.unit.Baseline.PerUnitUSD}
+		if v := u.unit.Current.PerUnitUSD; v != nil {
+			c.PerUnitUSD = *v
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
 // agentKPIs derives the KPIs the event store cannot: CGR and RGR need
-// prompt text, TCS and DAR need tool results. It returns a zero value,
-// with no *Computed flag set, when there are no prompts since then.
-func agentKPIs(root string, since time.Time) scorecard.AgentKPIInputs {
-	extracted, err := prompts.Extract(prompts.ExtractOptions{Root: root, Since: since, Opencode: opencodestore.Store{}})
+// prompt text, TCS and DAR need tool results. It reads the transcripts
+// once from baselineSince and returns the KPIs for the period (from
+// since) and for the operator's own baseline before it. Either is a zero
+// value, with no *Computed flag set, when it holds no prompts.
+func agentKPIs(root string, baselineSince, since time.Time) (period, baseline scorecard.AgentKPIInputs) {
+	extracted, err := prompts.Extract(prompts.ExtractOptions{Root: root, Since: baselineSince, Opencode: opencodestore.Store{}})
 	if err != nil || len(extracted) == 0 {
+		return period, baseline
+	}
+	var nowPrompts, basePrompts []prompts.UserPrompt
+	for _, p := range extracted {
+		if p.Timestamp.Before(since) {
+			basePrompts = append(basePrompts, p)
+		} else {
+			nowPrompts = append(nowPrompts, p)
+		}
+	}
+	var nowTools, baseTools []tools.ToolEvent
+	if toolEvs, err := tools.Extract(tools.ExtractOptions{Root: root, Since: baselineSince}); err == nil {
+		for _, e := range toolEvs {
+			if e.Timestamp.Before(since) {
+				baseTools = append(baseTools, e)
+			} else {
+				nowTools = append(nowTools, e)
+			}
+		}
+	}
+	return agentKPIsFrom(nowPrompts, nowTools), agentKPIsFrom(basePrompts, baseTools)
+}
+
+// agentKPIsFrom is the agent KPIs of one window's prompts and tool calls.
+func agentKPIsFrom(ps []prompts.UserPrompt, toolEvs []tools.ToolEvent) scorecard.AgentKPIInputs {
+	if len(ps) == 0 {
 		return scorecard.AgentKPIInputs{}
 	}
-	f := prompts.Analyze(withoutLoopSentinels(extracted))
+	f := prompts.Analyze(withoutLoopSentinels(ps))
 	if f.TotalPrompts == 0 {
 		return scorecard.AgentKPIInputs{}
 	}
@@ -79,7 +153,7 @@ func agentKPIs(root string, since time.Time) scorecard.AgentKPIInputs {
 		RegenerateRatePct:        100.0 * float64(f.Regenerates) / float64(f.TotalPrompts),
 		RegenerateComputed:       true,
 	}
-	if toolEvs, err := tools.Extract(tools.ExtractOptions{Root: root, Since: since}); err == nil && len(toolEvs) > 0 {
+	if len(toolEvs) > 0 {
 		ts := tools.Analyze(toolEvs)
 		if ts.TotalToolCalls > 0 {
 			out.ToolSuccessRatePct = ts.SuccessRate
@@ -118,4 +192,18 @@ func withoutLoopSentinels(in []prompts.UserPrompt) []prompts.UserPrompt {
 		out = append(out, p)
 	}
 	return out
+}
+
+// allocationCoverage is how much of [since, now)'s spend the rules tag;
+// nil without rules or when the turns cannot be read.
+func allocationCoverage(ctx context.Context, agg *EventAggregator, rules []allocation.Rule, since, now time.Time) *scorecard.AllocationCoverage {
+	if len(rules) == 0 {
+		return nil
+	}
+	turns, err := allocation.Tagged(ctx, allocation.Deps{Turns: commits.TurnsIn(agg, Window{}), Rules: rules}, since, now)
+	if err != nil {
+		return nil
+	}
+	c := allocation.CoverageOf(len(rules), turns)
+	return &scorecard.AllocationCoverage{Rules: c.Rules, TaggedPct: c.TaggedPct, ByKeyPct: c.ByKeyPct}
 }

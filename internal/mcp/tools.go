@@ -7,8 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/allocation"
+	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
+	"go.klarlabs.de/tokenops/internal/capability/uniteconomics"
 	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
 
 	"go.klarlabs.de/tokenops/internal/capability/money"
@@ -42,6 +45,15 @@ type Deps struct {
 	// Money returns the rate into the operator's currency, and whether
 	// there is one. Optional: nil reports in US dollars only.
 	Money func(ctx context.Context) (money.Rate, bool)
+
+	// Config is the configuration in effect, read at call time for each
+	// guardrail's stage in the waste report. Optional: nil reads the
+	// defaults.
+	Config func() config.Config
+
+	// Allocation returns the allocation rules at call time. Optional: nil
+	// tags nothing.
+	Allocation func() []allocation.Rule
 }
 
 // --- input structs --------------------------------------------------------
@@ -65,6 +77,21 @@ type topConsumersInput struct {
 type costPerCommitInput struct {
 	Since string `json:"since,omitempty" jsonschema:"description=RFC3339 timestamp or duration like '7d'; default 7d"`
 	Limit int    `json:"limit,omitempty" jsonschema:"description=Most recent commits to list (default 20); the totals cover them all"`
+}
+
+type wasteInput struct {
+	Since string `json:"since,omitempty" jsonschema:"description=Start of the period: RFC3339 timestamp or duration like '7d'; default 7d."`
+}
+
+type spendTagsInput struct {
+	By             string   `json:"by,omitempty" jsonschema:"enum=project,enum=client,enum=cost_center,description=The allocation key to group by (default project)"`
+	Since          string   `json:"since,omitempty" jsonschema:"description=Start of the window: RFC3339 timestamp or duration like '30d'; default 30d"`
+	Until          string   `json:"until,omitempty" jsonschema:"description=End of the window: RFC3339 timestamp; open when omitted"`
+	IncludeSources []string `json:"include_sources,omitempty"`
+}
+
+type unitCostsInput struct {
+	Since string `json:"since,omitempty" jsonschema:"description=Start of the period: RFC3339 timestamp or duration like '7d'; default 7d. The baseline is the 4 weeks before it."`
 }
 
 // sinceOrDefault is since parsed, or def before now when it is empty.
@@ -219,6 +246,79 @@ func RegisterTools(s *Server, d Deps) error {
 				limit = 20
 			}
 			r = r.Newest(limit)
+			return &r, nil
+		})
+
+	s.Tool("tokenops_spend_tags").
+		Description("Spend per project, client or cost centre: each session tagged by the operator's allocation rules (repository, directory, branch prefix or harness), summed per value of the key, with the untagged work kept apart. The rules and tags stay on this machine.").
+		OutputSchema(allocation.Report{}).
+		Handler(func(ctx context.Context, in spendTagsInput) (*allocation.Report, error) {
+			key := allocation.Project
+			if in.By != "" {
+				k, err := allocation.ParseKey(in.By)
+				if err != nil {
+					return nil, inputError(err)
+				}
+				key = k
+			}
+			since, err := sinceOrDefault(in.Since, allocation.DefaultDays*24*time.Hour)
+			if err != nil {
+				return nil, inputError(err)
+			}
+			var until time.Time
+			if in.Until != "" {
+				if until, err = time.Parse(time.RFC3339, in.Until); err != nil {
+					return nil, inputError(err)
+				}
+			}
+			var rules []allocation.Rule
+			if d.Allocation != nil {
+				rules = d.Allocation()
+			}
+			r, err := allocation.Compute(ctx, allocation.Deps{
+				Turns: commits.TurnsIn(d.Aggregator, spending.Window{IncludeSources: in.IncludeSources}), Rules: rules,
+			}, key, since, until)
+			if err != nil {
+				return nil, err
+			}
+			return &r, nil
+		})
+
+	s.Tool("tokenops_unit_costs").
+		Description("What a unit of finished work cost, against the operator's four weeks before: per commit, per merged pull request, per recorded and per achieved outcome, per commit of each change class (feature, bugfix, refactor, test, docs, chore), and on a flat-rate plan each pull request and outcome as an estimated share of a plan window. Work no unit took is listed by why. Derived figures only.").
+		OutputSchema(uniteconomics.Report{}).
+		Handler(func(ctx context.Context, in unitCostsInput) (*uniteconomics.Report, error) {
+			since, err := sinceOrDefault(in.Since, uniteconomics.DefaultDays*24*time.Hour)
+			if err != nil {
+				return nil, inputError(err)
+			}
+			r, err := uniteconomics.Compute(ctx, uniteconomics.Deps{
+				Turns: commits.TurnsIn(d.Aggregator, spending.Window{}), Events: d.Store,
+			}, since, time.Now())
+			if err != nil {
+				return nil, err
+			}
+			return &r, nil
+		})
+
+	s.Tool("tokenops_waste").
+		Description("Avoidable usage over a period by waste class — redundant re-reads, cache-miss rebuilds, over-tiered model, retry loops and runaway growth, oversized context, abandoned sessions — each token counted in at most one class, in API-equivalent dollars and as a share of each plan window. Beside it, what the coach's interventions realized, and the guardrails ranked by graduation readiness with the one to switch on next. Derived figures only.").
+		OutputSchema(avoidable.Report{}).
+		Handler(func(ctx context.Context, in wasteInput) (*avoidable.Report, error) {
+			since, err := sinceOrDefault(in.Since, avoidable.DefaultDays*24*time.Hour)
+			if err != nil {
+				return nil, inputError(err)
+			}
+			cfg := config.Config{}
+			if d.Config != nil {
+				cfg = d.Config()
+			}
+			deps := avoidable.DepsFor(cfg, d.Aggregator, d.Store, d.Spend)
+			deps.Waste = d.wasteConfig()
+			r, err := avoidable.Compute(ctx, deps, since, time.Now())
+			if err != nil {
+				return nil, err
+			}
 			return &r, nil
 		})
 

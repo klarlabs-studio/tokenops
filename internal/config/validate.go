@@ -66,7 +66,7 @@ func (c Config) Validate() error {
 	if err := c.ModelPolicy.Policy().Validate(); err != nil {
 		return err
 	}
-	if _, err := boundaries.Parse(c.Boundaries); err != nil {
+	if _, err := boundaries.Parse(c.boundarySpecs()); err != nil {
 		return err
 	}
 	if err := c.Money.Validate(); err != nil {
@@ -96,6 +96,9 @@ func (c Config) Validate() error {
 		if err := b.Validate(); err != nil {
 			return fmt.Errorf("budgets[%d]: %w", i, err)
 		}
+	}
+	if err := c.Allocation.Validate(); err != nil {
+		return err
 	}
 	if !c.Optimizer.Mode.Valid() {
 		return fmt.Errorf("optimizer.mode must be %q, %q, or %q, got %q",
