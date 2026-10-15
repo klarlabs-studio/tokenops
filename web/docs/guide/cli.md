@@ -777,15 +777,38 @@ events.db; CGR + RGR from JSONL prompt extracts; TCS + DAR from
 JSONL `tool_use` + `tool_result` blocks. Returns `warming_up`
 with a 3-step activation checklist when no real data backs the KPIs.
 
+Each measured KPI is set against **your own trailing baseline**: the 28
+days before the window, the same stretch unit costs use. The line shows
+the baseline, the change and its direction given which way the KPI is
+healthy, so a falling regenerate rate reads `better` and a falling cache
+hit ratio `worse`; a move under a percentage point (for first-value time,
+a second or 5%) is `unchanged`. A KPI you override with `--fvt-seconds`,
+`--teu-pct` or `--sac-pct`, or one not measured in both windows, has no
+comparison. It is you against yourself only: the scorecard shows no team
+or peer figure and ranks nobody.
+
+```
+Against your own baseline: the 28 days before (Sep 10 – Oct 8)
+
+FVT — First-Value Time (seconds):           5.4 [A] · baseline 140.1 (-134.7, better)
+SAC — Spend Attribution Completeness (%):   84.2 [B] · baseline 96.2 (-12.0, worse)
+CHR — Cache Hit Ratio (%):                  97.5 [A] · baseline 98.5 (-1.0, worse)
+```
+
+`--json`, `GET /api/scorecard` and the `tokenops_scorecard` MCP tool carry
+the same: `self_baseline` (the window), and on each KPI `polarity` and
+`vs_baseline` (`baseline`, `delta`, `direction`).
+
 Below the grades, **Plan use** lists each provider's plan utilization
 (the average peak of its longest plan window that reset in the period)
 and coverage (the share of its tokens a plan covered). They are reported,
 not graded: a seat used at 40% is a fact for whoever pays for it, not a
-fault.
+fault. Against the baseline they move `up` or `down`, never better or
+worse.
 
 ```
 Plan use (last 7 days):
-  anthropic    utilization 64% (weekly, 1 window) · coverage 93% of tokens on a plan
+  anthropic    utilization 64% (weekly, 1 window) (baseline 52%, up) · coverage 93% of tokens on a plan (baseline 93%, unchanged)
   openai       utilization 41% (weekly, 1 window) · coverage 100% of tokens on a plan
   openrouter   utilization n/a (no plan window reset yet) · coverage 0% of tokens on a plan
   all          coverage 81% of tokens on a plan
@@ -794,12 +817,13 @@ Plan use (last 7 days):
 Under it, **Unit costs** gives the cost per commit, per merged pull
 request and per achieved outcome over the same days, against the four
 weeks before (see [`tokenops spend units`](#unit-costs-per-commit-merged-pr-outcome-and-change-class)).
-Reported, not graded: a dearer pull request may be a harder one.
+Reported, not graded: a dearer pull request may be a harder one. The
+direction reads cheaper as `better` and a change under 5% as `unchanged`.
 
 ```
 Unit costs (last 7 days, against the 4 weeks before; API prices):
-  commit             $9.00 each · 3 units · baseline $24.00 (-62%)
-  merged PR          $13.50 each · 2 units · baseline $24.00 (-44%)
+  commit             $9.00 each · 3 units · baseline $24.00 (-62%, better)
+  merged PR          $13.50 each · 2 units · baseline $24.00 (-44%, better)
   achieved outcome   $21.00 each · 1 unit
 ```
 
