@@ -315,10 +315,16 @@
                   "name": {
                     "type": "string"
                   },
+                  "provider": {
+                    "type": "string"
+                  },
                   "remove_window": {
                     "type": "string"
                   },
                   "require": {
+                    "type": "string"
+                  },
+                  "tag": {
                     "type": "string"
                   },
                   "warn_at": {
@@ -367,6 +373,9 @@
                             "type": "string"
                           },
                           "Name": {
+                            "type": "string"
+                          },
+                          "Provider": {
                             "type": "string"
                           },
                           "Require": {
@@ -2620,6 +2629,9 @@
                             "type": "number"
                           },
                           "mode": {
+                            "type": "string"
+                          },
+                          "provider": {
                             "type": "string"
                           },
                           "require": {
