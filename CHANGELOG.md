@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.105.0 - 2026-10-15
+
 ### Added
 
 - **MCP:** `tokenops_prepare_work` now says how much of the plan window a task like this usually takes: "typically 15–25% of your 5h window; 38% left, resets in 1h10". The range comes from earlier tasks of the same kind (lookup, research, edit, deep) in the same repository (pass `repository`), or of the same kind anywhere when that repository has too few, and it stays hidden until five have been measured. When only the low end fits in what is left it suggests a lighter model tier, and when not even that fits it suggests waiting for the reset; it never changes the model. `tokenops_review_work` then records the share the task actually took against the estimate, which feeds the next one. Only the task kind, the repository label and percentages are stored, never the instruction

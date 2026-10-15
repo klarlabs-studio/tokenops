@@ -4,7 +4,34 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.104.0**.
+Current release: **v0.105.0**.
+
+## v0.105.0 — Budgets that fit you, and savings you can prove
+
+TokenOps borrows from FinOps. The session budget is now your own: the
+p90 of your last 30 days of sessions, not a flat $50. Quota tips warn
+when a plan window will run out before it resets, judged by your pace
+over the last hour and the last 15 minutes, instead of at fixed
+percentages. You can answer a tip (seen it, expected, snooze), and past
+a daily limit tips wait on the status line instead of interrupting.
+
+Budgets can hold several windows at once, each a warning or a hard stop
+through action boundaries, and can count one provider's bill or work
+filed under a project, client or cost centre by allocation rules.
+`tokenops plan advise` replays your last 30 days against every tier and
+says which would have fit; unusual spend is flagged with its likely
+cause; `tokenops spend units` and `spend waste` put a price on finished
+work and on avoidable usage; `spend export --format focus` writes FOCUS
+CSV for FinOps tools.
+
+The coach now proves what it saves. A small held-back share of tips gives
+a comparison, so realized savings are measured, and each coach power
+shows the evidence it needs before it should step up. The scorecard
+compares every figure with your own previous four weeks.
+
+Local readers whose data is on the machine now switch on by themselves
+unless you turned them off, so an opencode 2 install is read without a
+manual step.
 
 ## v0.104.0 — Tips you see, a lighter daemon
 
