@@ -90,7 +90,10 @@ func newVendorUsageEnableCmd() *cobra.Command {
 		Short: "Enable a vendor-usage source and write its config block",
 		Long: `enable flips vendor_usage.<source>.enabled to true (or false with
 --disable) and persists any provided secrets/paths to the active config
-file. Restart the daemon to pick up the change.
+file, then restarts the supervised daemon so the change is live (--no-restart
+skips that). For a local transcript reader, --disable is remembered: TokenOps
+turns a reader on by itself when its sessions appear on this machine, unless
+you switched it off.
 
 Sources:
 
@@ -217,7 +220,7 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 			cfg.VendorUsage.GitHubCopilot.Interval = f.interval
 		}
 	case "codex-jsonl":
-		cfg.VendorUsage.CodexJSONL.Enabled = enabled
+		cfg.SetLocalReader(source, enabled)
 		if f.root != "" {
 			cfg.VendorUsage.CodexJSONL.Root = f.root
 		}
@@ -225,7 +228,7 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 			cfg.VendorUsage.CodexJSONL.Interval = f.interval
 		}
 	case "claude-code-jsonl":
-		cfg.VendorUsage.ClaudeCodeJSONL.Enabled = enabled
+		cfg.SetLocalReader(source, enabled)
 		if f.root != "" {
 			cfg.VendorUsage.ClaudeCodeJSONL.Root = f.root
 		}
@@ -233,7 +236,7 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 			cfg.VendorUsage.ClaudeCodeJSONL.Interval = f.interval
 		}
 	case "opencode":
-		cfg.VendorUsage.OpenCode.Enabled = enabled
+		cfg.SetLocalReader(source, enabled)
 		if f.root != "" {
 			cfg.VendorUsage.OpenCode.Root = f.root
 		}
@@ -241,7 +244,7 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 			cfg.VendorUsage.OpenCode.Interval = f.interval
 		}
 	case "gemini-cli":
-		cfg.VendorUsage.GeminiCLI.Enabled = enabled
+		cfg.SetLocalReader(source, enabled)
 		if f.root != "" {
 			cfg.VendorUsage.GeminiCLI.Root = f.root
 		}
@@ -249,7 +252,7 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 			cfg.VendorUsage.GeminiCLI.Interval = f.interval
 		}
 	case "pi-sessions":
-		cfg.VendorUsage.Pi.Enabled = enabled
+		cfg.SetLocalReader(source, enabled)
 		if f.root != "" {
 			cfg.VendorUsage.Pi.Root = f.root
 		}

@@ -8,10 +8,16 @@ opencode stores sessions in a local SQLite database. TokenOps reads it
 read-only and attributes every assistant turn per project and per session —
 no proxy, no keys, no change to how you run opencode.
 
+There is nothing to switch on: when `~/.local/share/opencode/opencode.db`
+exists, `tokenops init` turns the reader on, and a running daemon does the
+same within 15 minutes of the database appearing (it restarts itself so the
+reader runs). Both opencode 1.x and opencode 2 stores are read. To switch
+it on by hand, or off for good:
+
 ```bash
-tokenops vendor-usage enable opencode      # reads ~/.local/share/opencode/opencode.db
-tokenops start                             # restart to pick up the poller
-tokenops vendor-usage status               # confirm the source is emitting
+tokenops vendor-usage enable opencode            # restarts the daemon itself
+tokenops vendor-usage enable opencode --disable  # stays off; nothing turns it back on
+tokenops vendor-usage status                     # confirm the source is emitting
 ```
 
 The reader is multi-provider: whichever model/provider a session used

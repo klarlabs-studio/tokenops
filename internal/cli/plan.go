@@ -353,11 +353,11 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 				// own limit; it has no window and renders none.
 				if r.SpendLimitUSD > 0 {
 					fmt.Fprintf(cmd.OutOrStdout(),
-						"  spend:   %.2f / %.2f USD (%.1f%%) — %s\n",
-						r.SpendUSD, r.SpendLimitUSD, r.SpendPct, spendSourceLabel(r.SpendSource),
+						"  spend:   %.2f / %.2f USD (%.1f%%) — %s%s\n",
+						r.SpendUSD, r.SpendLimitUSD, r.SpendPct, spendSourceLabel(r.SpendSource), spendWhose(r.SpendScopeLabel),
 					)
 				} else if r.SpendUSD > 0 {
-					fmt.Fprintf(cmd.OutOrStdout(), "  spend:   %.2f USD (no limit configured)\n", r.SpendUSD)
+					fmt.Fprintf(cmd.OutOrStdout(), "  spend:   %.2f USD (no limit configured)%s\n", r.SpendUSD, spendWhose(r.SpendScopeLabel))
 				}
 				if r.BalanceUSD != nil {
 					fmt.Fprintf(cmd.OutOrStdout(), "  balance: %.2f USD prepaid credit left — vendor\n", *r.BalanceUSD)
@@ -476,6 +476,15 @@ func spendSourceLabel(source string) string {
 		return "reported by the vendor"
 	}
 	return "estimated from token counts"
+}
+
+// spendWhose names an account-wide spend (every member of an organisation
+// together), so it is not read as the operator's own. Empty otherwise.
+func spendWhose(label string) string {
+	if label == "" {
+		return ""
+	}
+	return " — " + label
 }
 
 // sortedPlanProviders keeps `plan list` in a stable order.
