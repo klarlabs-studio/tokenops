@@ -24,6 +24,8 @@ tokenops init --yes              # take every default`,
 tokenops plan set openai gpt-pro-5x --price 229 --currency EUR`,
 	"spend units": `tokenops spend units                # the last 7 days against the 4 weeks before
 tokenops spend units --since 30d --json`,
+	"spend waste": `tokenops spend waste                # the last 7 days
+tokenops spend waste --since 30d --json`,
 	"spend export": `tokenops spend export --format focus -o month.csv   # this month so far
 tokenops spend export --since 2026-09-01T00:00:00Z --until 2026-10-01T00:00:00Z -o september.csv`,
 	"provider set":        `tokenops provider set openai https://api.openai.com`,

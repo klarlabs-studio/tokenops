@@ -185,6 +185,7 @@ spend within the selected window. It surfaces:
 		"re-admit an excluded event source (repeatable, comma-separated): mcp-session")
 	cmd.AddCommand(newSpendExportCmd(rf))
 	cmd.AddCommand(newSpendUnitsCmd(rf))
+	cmd.AddCommand(newSpendWasteCmd(rf))
 	return cmd
 }
 

@@ -98,6 +98,10 @@ func TestDetectsAgentLoop(t *testing.T) {
 			if ev.AgentID != "agent-A" {
 				t.Errorf("agent attribution wrong: %s", ev.AgentID)
 			}
+			// The run is located so the waste taxonomy can price it.
+			if m := ev.ReplayMetadata; m["run_start"] != "1" || m["run_length"] != "5" || m["limit"] != "3" {
+				t.Errorf("run metadata = %v", m)
+			}
 		}
 	}
 	if !found {

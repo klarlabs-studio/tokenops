@@ -619,6 +619,67 @@ paths or session ids. The team plane does not receive these figures yet:
 its upload carries per-day buckets, which have no field for a count of
 pull requests or outcomes.
 
+#### Avoidable usage: one waste taxonomy in dollars and window share
+
+`tokenops spend waste` says how much of the period's usage was avoidable,
+class by class, in API-equivalent dollars and, on a flat-rate plan, as a
+share of the plan's window (the last 7 days unless you pass `--since`):
+
+```
+Avoidable usage since 8 Oct 01:52
+
+  used           4.5M tokens     $5.31   19.6% of the anthropic weekly window
+  avoidable      873k tokens     $1.38   3.8% of the anthropic weekly window  (19% of usage)
+
+  CLASS                              TOKENS     API $  WINDOW  TURNS  GUARDRAIL
+  redundant re-reads                    18k     $0.02    0.1%      2  read guard
+  cache-miss rebuilds                   70k     $0.44    0.3%      1  none yet
+  over-tiered model                    259k     $0.28    1.1%      4  model routing
+  retry loops and runaway growth       122k     $0.15    0.5%      2  none yet
+  oversized context                       0     $0.00       —      0  compact tip
+  abandoned sessions                   403k     $0.49    1.8%      6  session budget
+
+  Realized $0.00 (holdout: no holdout comparison has concluded yet): 0% of what could be saved
+
+  Next guardrail: session budget, still gathering evidence, addresses $0.49
+```
+
+Each class reads a source TokenOps already keeps:
+
+- **Redundant re-reads**: files the read guard saw read again, in full and
+  unchanged, and let through because it only observes.
+- **Cache-miss rebuilds**: a turn that wrote to the prompt cache more than
+  half of what the turn before had cached, on the same model and without a
+  compaction (the cache expired or was invalidated). Priced as writing that
+  part instead of reading it.
+- **Over-tiered model**: turns that stayed on a model after the coach
+  advised a cheaper one for that kind of work, priced as the difference to
+  the advised model.
+- **Retry loops and runaway growth**: what the waste detector finds in each
+  workflow: an identical prompt sent again, one agent's steps past the loop
+  limit, context growing faster than the per-step limit.
+- **Oversized context**: context carried above the line a session should
+  compact at, or above the context ceiling.
+- **Abandoned sessions**: sessions over for a day with no commit of yours
+  within a day of any turn and no recorded outcome, the same joins as
+  `tokenops spend units`. A session outside a repository is not judged.
+
+The classes overlap in what they look at, so each token is counted in at
+most one, in the order listed. Dollars are each turn's API-equivalent value
+in proportion to its tokens; the window share is measured as unit costs
+measure it. Beside the avoidable total, **realized** is what the coach's
+interventions saved over the same period: what the holdout measured, plus
+the re-reads the guard refused. The guardrails are ranked by their
+graduation (see `tokenops coach`): one whose evidence is ready comes first,
+then by the avoidable dollars it addresses, and the next one is named with
+the command that takes the step. Nothing is switched on for you.
+
+The daemon runs the week's report once a day, and the glance, the menu bar
+and `GET /api/findings` show it as one line: "Last 7 days: ~$1.38 avoidable
+(3.8% of a weekly window), $0.00 realized". `--json`,
+`GET /api/spend/waste` and `tokenops_spend` with `view: waste` return the
+same report; it holds derived figures only.
+
 #### Export to FinOps tools (FOCUS)
 
 `tokenops spend export` writes spend and usage as

@@ -48,6 +48,30 @@ func judgedExecutions(envs []*eventschema.Envelope) map[string]*judged {
 	return out
 }
 
+// judgedFor is the judged execution a turn ran under: its execution's,
+// else its workflow's, else its session's; nil when none was judged.
+func judgedFor(execs map[string]*judged, t analytics.SessionTurn) *judged {
+	for _, id := range []string{t.ExecutionID, t.WorkflowID, t.SessionID} {
+		if j := execs[id]; id != "" && j != nil {
+			return j
+		}
+	}
+	return nil
+}
+
+// OutcomeJoin is the join the outcome units use, for another report to
+// read the same way: for a turn, the result recorded for the execution,
+// workflow or session it ran under, and false when none was.
+func OutcomeJoin(outcomes []*eventschema.Envelope) func(analytics.SessionTurn) (eventschema.OutcomeResult, bool) {
+	execs := judgedExecutions(outcomes)
+	return func(t analytics.SessionTurn) (eventschema.OutcomeResult, bool) {
+		if j := judgedFor(execs, t); j != nil {
+			return j.result, true
+		}
+		return "", false
+	}
+}
+
 // outcomeUnits are the cost per recorded outcome and per achieved
 // outcome. A turn goes to the outcome recorded for the execution it ran
 // under, else its workflow's, else its session's.
@@ -57,12 +81,7 @@ func (in Inputs) outcomeUnits(total float64) (Unit, Unit) {
 	execs := judgedExecutions(in.Outcomes)
 	var none commits.Cost
 	for _, t := range in.Turns {
-		var j *judged
-		for _, id := range []string{t.ExecutionID, t.WorkflowID, t.SessionID} {
-			if j = execs[id]; id != "" && j != nil {
-				break
-			}
-		}
+		j := judgedFor(execs, t)
 		if j == nil {
 			if in.period(t.At) == 1 {
 				none.Add(t)

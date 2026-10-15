@@ -163,6 +163,50 @@ func (w Work) Roots() []string {
 	return out
 }
 
+// Placement is where the join put one turn.
+type Placement int
+
+// The placements: on a commit, or apart, by why.
+const (
+	// OnCommit is a turn its author's next commit in the repository
+	// followed within MaxGap.
+	OnCommit Placement = iota
+	// Uncommitted is a turn after the repository's last commit: in
+	// progress or abandoned.
+	Uncommitted
+	// NoCommitWithinADay is a turn no commit followed within MaxGap.
+	NoCommitWithinADay
+	// OutsideARepository ran in a directory that is not a repository.
+	OutsideARepository
+	// UnknownDirectory is from a session whose directory no client
+	// recorded.
+	UnknownDirectory
+)
+
+// Place joins one turn to a commit: the repository its session ran in,
+// and the first commit there at or after it, within MaxGap. The commit is
+// set only when the placement is OnCommit.
+func Place(t analytics.SessionTurn, dirs map[string]sessiondirs.Dir, rootOf map[string]string,
+	commitsOf map[string][]gitlog.Commit) (Placement, gitlog.Commit) {
+	dir, ok := dirs[t.SessionID]
+	if !ok {
+		return UnknownDirectory, gitlog.Commit{}
+	}
+	root := rootOf[dir.CWD]
+	if root == "" {
+		return OutsideARepository, gitlog.Commit{}
+	}
+	commits := commitsOf[root]
+	i := sort.Search(len(commits), func(i int) bool { return !commits[i].At.Before(t.At) })
+	switch {
+	case i == len(commits):
+		return Uncommitted, gitlog.Commit{}
+	case commits[i].At.Sub(t.At) > MaxGap:
+		return NoCommitWithinADay, gitlog.Commit{}
+	}
+	return OnCommit, commits[i]
+}
+
 // Attribute places each turn on a commit: the pure half of Compute.
 func Attribute(since time.Time, turns []analytics.SessionTurn, dirs map[string]sessiondirs.Dir,
 	rootOf map[string]string, commitsOf map[string][]gitlog.Commit) Report {
@@ -174,27 +218,22 @@ func Attribute(since time.Time, turns []analytics.SessionTurn, dirs map[string]s
 	var total float64
 	for _, t := range turns {
 		total += t.APIEquivalentUSD
-		dir, ok := dirs[t.SessionID]
-		if !ok {
+		placed, c := Place(t, dirs, rootOf, commitsOf)
+		switch placed {
+		case UnknownDirectory:
 			r.UnknownDirectory.Add(t)
 			continue
-		}
-		root := rootOf[dir.CWD]
-		if root == "" {
+		case OutsideARepository:
 			r.OutsideARepository.Add(t)
 			continue
-		}
-		commits := commitsOf[root]
-		i := sort.Search(len(commits), func(i int) bool { return !commits[i].At.Before(t.At) })
-		switch {
-		case i == len(commits):
+		case Uncommitted:
 			r.Uncommitted.Add(t)
 			continue
-		case commits[i].At.Sub(t.At) > MaxGap:
+		case NoCommitWithinADay:
 			r.NoCommitWithinADay.Add(t)
 			continue
 		}
-		c := commits[i]
+		root := rootOf[dirs[t.SessionID].CWD]
 		k := key{root, c.SHA}
 		cc := byCommit[k]
 		if cc == nil {

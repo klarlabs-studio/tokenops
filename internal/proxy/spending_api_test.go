@@ -24,6 +24,12 @@ func TestSpendingRoutesAnswer(t *testing.T) {
 			t.Errorf("units has no %q: %v", k, units)
 		}
 	}
+	wasted := getJSON(t, base+"/api/spend/waste?since=168h")
+	for _, k := range []string{"usage", "avoidable", "classes", "realized", "guardrails", "attribution"} {
+		if _, ok := wasted[k]; !ok {
+			t.Errorf("waste has no %q: %v", k, wasted)
+		}
+	}
 	if card := getJSON(t, base+"/api/scorecard?since_days=7"); card == nil {
 		t.Error("no scorecard")
 	}
@@ -31,7 +37,7 @@ func TestSpendingRoutesAnswer(t *testing.T) {
 	if rates, _ := pricing["rates"].([]any); len(rates) == 0 || len(rates) > 2 {
 		t.Errorf("pricing = %v", pricing)
 	}
-	for _, bad := range []string{"/api/spend/top?by=colour", "/api/spend/units?since=yesterday", "/api/spend/burn-rate?hours=x", "/api/pricing?limit=x"} {
+	for _, bad := range []string{"/api/spend/top?by=colour", "/api/spend/units?since=yesterday", "/api/spend/waste?since=yesterday", "/api/spend/burn-rate?hours=x", "/api/pricing?limit=x"} {
 		resp, err := http.Get(base + bad)
 		if err != nil {
 			t.Fatal(err)

@@ -14,6 +14,12 @@ type SessionTurn struct {
 	Provider  string
 	Model     string
 	Tokens    int64
+	// InputTokens includes the cache portions: CacheReadTokens read from
+	// the prompt cache, CacheWriteTokens written to it (CacheWrite1hTokens
+	// of them at the one-hour rate).
+	InputTokens, OutputTokens         int64
+	CacheReadTokens, CacheWriteTokens int64
+	CacheWrite1hTokens                int64
 	// CostUSD is what was billed; APIEquivalentUSD what it costs at list
 	// prices, its value where a plan covers it. Priced is false when the
 	// model has no list price, so neither figure is complete.
@@ -58,7 +64,9 @@ func (a *Aggregator) SessionTurns(ctx context.Context, f Filter) ([]SessionTurn,
 	for _, u := range usage {
 		t := SessionTurn{SessionID: u.SessionID, At: u.At, Provider: u.Provider, Model: u.Model,
 			WorkflowID: u.WorkflowID, ExecutionID: u.ExecutionID,
-			Source: u.Source, Endpoint: u.Endpoint, PlanCovered: u.PlanCovered}
+			Source: u.Source, Endpoint: u.Endpoint, PlanCovered: u.PlanCovered,
+			InputTokens: u.InputTokens, OutputTokens: u.OutputTokens, CacheReadTokens: u.CacheReadTokens,
+			CacheWriteTokens: u.CacheWriteTokens, CacheWrite1hTokens: u.CacheWrite1hTokens}
 		t.Tokens = u.TotalTokens
 		if t.Tokens == 0 {
 			t.Tokens = u.InputTokens + u.OutputTokens

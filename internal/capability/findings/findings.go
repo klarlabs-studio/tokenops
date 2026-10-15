@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/anomalies"
+	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
@@ -79,6 +80,8 @@ type Inputs struct {
 	Sessions  *SessionsSnapshot
 	// Anomalies are the unusual days still open.
 	Anomalies []anomalies.Anomaly
+	// Waste is the daemon's last weekly waste report.
+	Waste *avoidable.Snapshot
 }
 
 // Compute ranks every finding in, most urgent first.
@@ -93,6 +96,7 @@ func Compute(in Inputs) Report {
 	}
 	out = append(out, anomalyFindings(in.Anomalies)...)
 	out = append(out, waste(in.ReadGuard, in.Coach)...)
+	out = append(out, wasteWeek(in.Waste, time.Now())...)
 	out = append(out, budget(in.CoachHook)...)
 	out = append(out, coaching(in.Coach, in.CoachHook)...)
 	rank := map[string]int{LevelWarn: 0, LevelNotice: 1, LevelInfo: 2}

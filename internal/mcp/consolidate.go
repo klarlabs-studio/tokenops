@@ -11,6 +11,7 @@ import (
 	mcpgo "go.klarlabs.de/mcp"
 	mcpserver "go.klarlabs.de/mcp/server"
 
+	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/commits"
@@ -288,8 +289,8 @@ type glanceIn struct {
 }
 
 type spendIn struct {
-	View           string   `json:"view,omitempty" jsonschema:"enum=summary,enum=top,enum=burn,enum=forecast,enum=commits,enum=units,description=summary (default): spend and tokens over a window. top: the largest consumers. burn: the last hours, hour by hour. forecast: daily spend projected forward. commits: what each of the operator's commits cost, from the agent work that led to it. units: cost per commit, merged pull request, outcome and change class against the 4 weeks before, with plan-window shares on a flat-rate plan."`
-	Since          string   `json:"since,omitempty" jsonschema:"description=summary, top, commits and units: RFC3339 time or a duration such as 24h or 7d"`
+	View           string   `json:"view,omitempty" jsonschema:"enum=summary,enum=top,enum=burn,enum=forecast,enum=commits,enum=units,enum=waste,description=summary (default): spend and tokens over a window. top: the largest consumers. burn: the last hours, hour by hour. forecast: daily spend projected forward. commits: what each of the operator's commits cost, from the agent work that led to it. units: cost per commit, merged pull request, outcome and change class against the 4 weeks before, with plan-window shares on a flat-rate plan. waste: avoidable usage by waste class in dollars and plan-window share, what was realized, and the guardrail to switch on next."`
+	Since          string   `json:"since,omitempty" jsonschema:"description=summary, top, commits, units and waste: RFC3339 time or a duration such as 24h or 7d"`
 	Until          string   `json:"until,omitempty" jsonschema:"description=summary and top: RFC3339 time; open when omitted"`
 	WorkflowID     string   `json:"workflow_id,omitempty" jsonschema:"description=summary: one workflow"`
 	AgentID        string   `json:"agent_id,omitempty" jsonschema:"description=summary: one agent"`
@@ -449,6 +450,7 @@ type spendOut struct {
 	Forecast *forecastResult       `json:"forecast,omitempty"`
 	Commits  *commits.Report       `json:"commits,omitempty"`
 	Units    *uniteconomics.Report `json:"units,omitempty"`
+	Waste    *avoidable.Report     `json:"waste,omitempty"`
 }
 
 type sessionsOut struct {
@@ -556,6 +558,7 @@ func publicTools() []publicTool {
 				"forecast": {inner: "tokenops_forecast", params: params("horizon_days", "include_sources")},
 				"commits":  {inner: "tokenops_cost_per_commit", params: params("since", "limit")},
 				"units":    {inner: "tokenops_unit_costs", params: params("since")},
+				"waste":    {inner: "tokenops_waste", params: params("since")},
 			},
 		},
 		{

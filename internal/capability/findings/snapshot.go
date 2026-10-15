@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
@@ -121,6 +122,9 @@ func Gather(g *headroom.Glance, c *coach.Report, cacheDir string) Inputs {
 		ledger = l
 	}
 	in.Anomalies = openAnomalies(cacheDir, ledger, time.Now())
+	if s, err := avoidable.ReadSnapshot(cacheDir); err == nil {
+		in.Waste = s
+	}
 	return in
 }
 

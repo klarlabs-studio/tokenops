@@ -47,6 +47,18 @@ func (r Reclamation) ID() string {
 // guard has ever run. Malformed lines are skipped so a truncated final
 // write cannot hide every saving before it.
 func Reclamations(dir string) ([]Reclamation, error) {
+	return readsWith(dir, ActionBlocked)
+}
+
+// RedundantReads returns every redundant re-read the guard watched go
+// ahead (would_block, in observe mode), in ledger order: the waste it
+// would have prevented. Same tolerance as Reclamations.
+func RedundantReads(dir string) ([]Reclamation, error) {
+	return readsWith(dir, ActionWouldBlock)
+}
+
+// readsWith returns the ledger's reads the guard decided action on.
+func readsWith(dir string, action Action) ([]Reclamation, error) {
 	dir = resolveDir(dir)
 	f, err := os.Open(filepath.Join(dir, "events.jsonl"))
 	if err != nil {
@@ -65,7 +77,7 @@ func Reclamations(dir string) ([]Reclamation, error) {
 		if json.Unmarshal(sc.Bytes(), &e) != nil {
 			continue
 		}
-		if e.Action != ActionBlocked || e.EstTokens <= 0 {
+		if e.Action != action || e.EstTokens <= 0 {
 			continue
 		}
 		out = append(out, Reclamation{
