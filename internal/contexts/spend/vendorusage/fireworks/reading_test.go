@@ -47,3 +47,16 @@ func TestEnvelopeCarriesNoKey(t *testing.T) {
 		t.Errorf("attrs %v", env.Attributes)
 	}
 }
+
+// The billing summary is the whole account's month, every member together.
+// The envelope keeps that scope and the account, which is what headroom,
+// the cards and the menu bar label the figure with.
+func TestAccountReadingKeepsItsScope(t *testing.T) {
+	env := NewEnvelope(now, Reading{Scope: ScopeAccount, AccountID: "acme-test", UsedUSD: 1000, LimitUSD: 4000})
+	if env.Attributes["scope"] != "account" || env.Attributes["account_id"] != "acme-test" {
+		t.Errorf("attrs %v", env.Attributes)
+	}
+	if env.Attributes["extra_usage_used"] != "1000.00" || env.Attributes["extra_usage_limit"] != "4000.00" {
+		t.Errorf("the figures changed: %v", env.Attributes)
+	}
+}

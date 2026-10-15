@@ -1019,7 +1019,10 @@ until you bind another plan.
 - **The figures** on a company account are your own spend against your
   per-user cap (`/users/{you}/usageLimits`). On your own account they are
   the month's spend (`/billing/summary`) against the `monthly-spend-usd`
-  quota. Your user and account come from FireConnect's
+  quota. That figure is the whole account's, every member together, so
+  where it is shown it is labelled "Account spend" with "account <id>, all
+  members" (`spend_scope: account` and `spend_scope_label` in the API), not
+  as your own extra usage. Your user and account come from FireConnect's
   `~/.fireconnect/minted-key.json`, or from the key itself.
 - **Calls** go to `api.fireworks.ai` only. Turn them off with
   `tokenops vendor-usage enable fireworks --disable`.
@@ -1312,7 +1315,14 @@ file so operators don't hand-edit YAML. Nine sources covered:
 `claude-subscription`, `cursor`, `github-copilot`, `codex-jsonl`,
 `claude-code-jsonl`, `opencode`, `anthropic-admin`, `fireworks`,
 `vendor-accounts`. Secrets accept env-var fallback so they don't leak
-through shell history.
+through shell history. It restarts the supervised daemon so the change is
+live; `--no-restart` skips that.
+
+The local transcript readers (`claude-code-jsonl`, `codex-jsonl`,
+`opencode`, `gemini-cli`, `pi-sessions`) need no command: `tokenops init`
+and the daemon turn on each one whose sessions are on this machine.
+`--disable` on one of them is remembered (`switched_off: true` in the
+config), and nothing turns it back on until you enable it again.
 
 ```bash
 # Auto-discovers OAuth token from ~/.config/github-copilot

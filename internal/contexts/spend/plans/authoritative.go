@@ -272,7 +272,13 @@ type VendorSpend struct {
 	LimitUSD     float64
 	LimitReached bool
 	Source       string
-	At           time.Time
+	// Scope says whose spend UsedUSD is, when the reader says: "account"
+	// is the whole account's (every member of an organisation together),
+	// "user" a member's own. Empty is the reader not saying.
+	Scope string
+	// AccountID names the account an "account" figure covers.
+	AccountID string
+	At        time.Time
 }
 
 // LatestVendorSpend returns the newest vendor-reported spend for provider
@@ -322,6 +328,8 @@ func LatestVendorSpend(ctx context.Context, reader EventReader, provider eventsc
 		HasBalance:   hasBalance,
 		LimitUSD:     limit,
 		LimitReached: best.Attributes["extra_usage_limit_reached"] == "true",
+		Scope:        best.Attributes["scope"],
+		AccountID:    best.Attributes["account_id"],
 		Source:       source,
 		At:           best.Timestamp,
 	}

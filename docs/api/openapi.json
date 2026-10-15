@@ -2276,6 +2276,12 @@
                               "spend_pct": {
                                 "type": "number"
                               },
+                              "spend_scope": {
+                                "type": "string"
+                              },
+                              "spend_scope_label": {
+                                "type": "string"
+                              },
                               "spend_source": {
                                 "type": "string"
                               },
@@ -3245,6 +3251,12 @@
                           },
                           "spend_pct": {
                             "type": "number"
+                          },
+                          "spend_scope": {
+                            "type": "string"
+                          },
+                          "spend_scope_label": {
+                            "type": "string"
                           },
                           "spend_source": {
                             "type": "string"

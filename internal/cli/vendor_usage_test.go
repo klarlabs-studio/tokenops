@@ -272,3 +272,42 @@ func TestSourceConfigKey(t *testing.T) {
 		}
 	}
 }
+
+// --disable on a local reader is the operator's explicit "off": it is
+// recorded, so neither init nor the daemon turns the reader back on when
+// its data is found. Enabling it again clears the record.
+func TestVendorUsageDisableRecordsTheOperatorsOff(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	writeSeedConfig(t, path)
+
+	cfg, _, err := runEnable(t, path, "opencode", "--disable", "--no-restart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.VendorUsage.OpenCode.Enabled || !cfg.VendorUsage.OpenCode.SwitchedOff {
+		t.Errorf("after --disable: %+v", cfg.VendorUsage.OpenCode)
+	}
+	if got := cfg.TurnOnLocalReaders([]string{"opencode"}); len(got) != 0 {
+		t.Errorf("a switched-off reader was turned back on: %v", got)
+	}
+
+	cfg, _, err = runEnable(t, path, "opencode", "--no-restart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.VendorUsage.OpenCode.Enabled || cfg.VendorUsage.OpenCode.SwitchedOff {
+		t.Errorf("after enable: %+v", cfg.VendorUsage.OpenCode)
+	}
+}
+
+// enable restarts the supervised daemon itself, so its help must not tell
+// the operator to do it by hand.
+func TestVendorUsageEnableHelpDoesNotAskForARestart(t *testing.T) {
+	long := newVendorUsageEnableCmd().Long
+	if strings.Contains(long, "Restart the daemon to pick up") {
+		t.Errorf("help still asks for a manual restart:\n%s", long)
+	}
+	if !strings.Contains(long, "--no-restart") {
+		t.Error("help does not say how to skip the restart")
+	}
+}
