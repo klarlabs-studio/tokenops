@@ -73,7 +73,9 @@ func newSpendCmd(rf *rootFlags) *cobra.Command {
 spend within the selected window. It surfaces:
 
   - headline tokens / cost
-  - top consumers grouped by --by (model, provider, workflow, agent)
+  - top consumers grouped by --by (model, provider, workflow, agent); or
+    --by commit, or --by project | client | cost_center for the spend each
+    allocation tag carries (allocation.rules in config.yaml)
   - 24h burn rate, with an hourly sparkline
   - optional 7-day spend forecast (--forecast)`,
 		Args: cobra.NoArgs,
@@ -94,8 +96,9 @@ spend within the selected window. It surfaces:
 			defer func() { _ = store.Close() }()
 
 			byCommit := groupBy == "commit"
+			tagKey, byTag := allocationKey(groupBy)
 			var group spending.Group
-			if !byCommit {
+			if !byCommit && !byTag {
 				group, err = parseGroup(groupBy)
 				if err != nil {
 					return err
@@ -130,6 +133,9 @@ spend within the selected window. It surfaces:
 			agg := spending.NewAggregator(store, spendEng)
 			if byCommit {
 				return runSpendByCommit(cmd, agg, f, jsonOut)
+			}
+			if byTag {
+				return runSpendByTag(cmd, agg, f, tagKey, cfg.AllocationRules(), jsonOut)
 			}
 			report, err := spending.SpendReport(ctx, agg, spending.ReportQuery{
 				Filter: f, Group: group, Top: topN, Forecast: showForecast, Horizon: forecastDays,
@@ -173,7 +179,7 @@ spend within the selected window. It surfaces:
 	}
 	cmd.Flags().StringVar(&svgFile, "svg", "", "also write an input-vs-output ratio chart (ratio.svg) to this file")
 	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db (defaults to config.storage.path)")
-	cmd.Flags().StringVar(&groupBy, "by", "model", "group top consumers by: model | provider | workflow | agent | commit (the work that led to each of your commits)")
+	cmd.Flags().StringVar(&groupBy, "by", "model", "group top consumers by: model | provider | workflow | agent | commit (the work that led to each of your commits) | project | client | cost_center (your allocation rules)")
 	cmd.Flags().IntVar(&topN, "top", 5, "number of top consumers to print")
 	cmd.Flags().StringVar(&sinceFlag, "since", "", "lower bound (RFC3339 or duration; default 7d)")
 	cmd.Flags().StringVar(&untilFlag, "until", "", "upper bound (RFC3339 timestamp)")

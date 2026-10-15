@@ -73,6 +73,7 @@ type budgetSetInput struct {
 	Require      string  `json:"require,omitempty" jsonschema:"enum=ask,enum=deny,description=What a hard window requires at its limit (default ask)"`
 	AddWindow    bool    `json:"add_window,omitempty" jsonschema:"description=Add window as a further window of the budget (e.g. daily beside monthly) instead of editing its window"`
 	RemoveWindow string  `json:"remove_window,omitempty" jsonschema:"enum=daily,enum=weekly,enum=monthly,description=Remove this window of the budget"`
+	Tag          string  `json:"tag,omitempty" jsonschema:"description=Limit the budget to work carrying one allocation tag, key=value (project, client or cost_center)"`
 	Delete       bool    `json:"delete,omitempty" jsonschema:"description=Remove the budget with this name"`
 }
 
@@ -82,8 +83,8 @@ func (in budgetSetInput) update() config.BudgetUpdate {
 		LimitUSD: in.LimitUSD, LimitTokens: in.LimitTokens,
 		WarnAt: in.WarnAt, CritAt: in.CritAt,
 		WorkflowID: in.WorkflowID, AgentID: in.AgentID,
-		Basis: in.Basis,
-		Mode:  in.Mode, Require: in.Require, AddWindow: in.AddWindow,
+		Basis: in.Basis, Tag: in.Tag,
+		Mode: in.Mode, Require: in.Require, AddWindow: in.AddWindow,
 	}
 }
 

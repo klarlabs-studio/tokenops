@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/infra/planhistory"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
@@ -36,9 +37,11 @@ ingest.
     API price, so ListCost against EffectiveCost is what the plan saved
   - usage billed per token is a Usage row at what it cost
   - tokens are the ConsumedQuantity
+  - with allocation rules configured, the usage they tag is its own row,
+    its project, client and cost_center in the Tags column
 
-Only derived figures are written: providers, models, plans, counts and
-money. No session title, path or prompt is in it.
+Only derived figures are written: providers, models, plans, counts, money
+and your own allocation tags. No session title, path or prompt is in it.
 
 The window defaults to the current month so far, in UTC days.`,
 		Args: cobra.NoArgs,
@@ -54,7 +57,7 @@ The window defaults to the current month so far, in UTC days.`,
 			if err != nil {
 				return err
 			}
-			q := spending.FocusQuery{Plans: cfg.Plans, Now: time.Now()}
+			q := spending.FocusQuery{Plans: cfg.Plans, Now: time.Now(), Allocation: &allocation.Deps{Rules: cfg.AllocationRules()}}
 			if sinceFlag != "" {
 				if q.Since, err = parseSince(sinceFlag); err != nil {
 					return fmt.Errorf("--since: %w", err)

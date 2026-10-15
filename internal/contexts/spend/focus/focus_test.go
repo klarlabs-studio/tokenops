@@ -37,6 +37,23 @@ func TestExportGolden(t *testing.T) {
 	}
 }
 
+// Allocation tags are the operator's own, one user-defined tag scheme, so
+// their keys go unprefixed (FOCUS 1.2, Tags); untagged usage is null.
+func TestAllocationTagsFillTheTagsColumn(t *testing.T) {
+	day := time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC)
+	rows := focus.Build([]focus.Usage{
+		{Day: day, Provider: "openai", Model: "gpt-5", Requests: 1, Tokens: 10, BilledUSD: 1, ListUSD: 1,
+			Tags: map[string]string{"cost_center": "cc-42", "client": "Acme Corp"}},
+		{Day: day, Provider: "openai", Model: "gpt-5", Requests: 2, Tokens: 20, BilledUSD: 2, ListUSD: 2},
+	}, nil)
+	if len(rows) != 2 {
+		t.Fatalf("rows: %+v", rows)
+	}
+	if rows[0].Tags != "" || rows[1].Tags != `{"client":"Acme Corp","cost_center":"cc-42"}` {
+		t.Errorf("tags = %q, %q", rows[0].Tags, rows[1].Tags)
+	}
+}
+
 func byCategory(rows []focus.Row, category string) []focus.Row {
 	var out []focus.Row
 	for _, r := range rows {

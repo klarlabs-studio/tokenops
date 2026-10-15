@@ -416,7 +416,7 @@ func (s *startup) startPostServeSubsystems(context.Context) error {
 	// evaluation against the local store. Requires storage (no events,
 	// nothing to watch).
 	if s.components.Aggregator != nil {
-		startSpendWatcherRuntime(s.cfg, s.components.Aggregator, s.events.Bus, s.components.Store, s.components.Spend.Currency(), s.sup, s.logger)
+		startSpendWatcherRuntime(s.cfg, taggedBudgetSource(s.cfg, s.components.Aggregator), s.events.Bus, s.components.Store, s.components.Spend.Currency(), s.sup, s.logger)
 	}
 	return nil
 }

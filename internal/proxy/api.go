@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/avoidable"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/capability/workflowtrace"
@@ -27,6 +28,9 @@ type AnalyticsHandlers struct {
 	// avoidable reads the waste taxonomy's sources; WithConfig binds it
 	// to the daemon's coach configuration.
 	avoidable avoidable.Deps
+	// allocation are the allocation rules the scorecard measures tagged
+	// spend with; WithConfig sets them.
+	allocation []allocation.Rule
 }
 
 // NewAnalyticsHandlers builds the handlers. Store, aggregator, and
@@ -47,10 +51,11 @@ func NewAnalyticsHandlers(store *sqlite.Store, agg *spending.EventAggregator, sp
 	return a, nil
 }
 
-// WithConfig reads each guardrail's stage and the waste detector's limits
-// from cfg, the daemon's configuration.
+// WithConfig reads each guardrail's stage, the waste detector's limits
+// and the allocation rules from cfg, the daemon's configuration.
 func (a *AnalyticsHandlers) WithConfig(cfg config.Config) *AnalyticsHandlers {
 	a.avoidable = avoidable.DepsFor(cfg, a.aggregator, a.store, a.spend)
+	a.allocation = cfg.AllocationRules()
 	return a
 }
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/allocation"
 	"go.klarlabs.de/tokenops/internal/capability/spending"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
@@ -56,9 +57,13 @@ against the same baseline. It is you against yourself only.`,
 			defer closeStore()
 			// Unit costs price the turns; without a readable config the
 			// scorecard is graded as before and they are left off.
-			var eng *spending.Engine
+			var (
+				eng   *spending.Engine
+				rules []allocation.Rule
+			)
 			if cfg, err := loadConfig(rf); err == nil {
 				eng, _ = buildSpendEngine(cfg)
+				rules = cfg.AllocationRules()
 			}
 			s := spending.Scorecard(cmd.Context(), store, spending.ScorecardParams{
 				SinceDays:   sinceDays,
@@ -67,6 +72,7 @@ against the same baseline. It is you against yourself only.`,
 				SACPct:      sacOverride,
 				BaselineRef: baselineRef,
 				Spend:       eng,
+				Allocation:  rules,
 			})
 
 			if jsonOut {

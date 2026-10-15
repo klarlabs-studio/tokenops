@@ -39,6 +39,8 @@ type BudgetUpdate struct {
 	Require string
 	// AddWindow adds Window to the budget rather than editing one.
 	AddWindow bool
+	// Tag scopes the budget to one allocation tag, "key=value".
+	Tag string
 }
 
 // BudgetUpsert is what an upsert wrote.
@@ -168,6 +170,9 @@ func (u BudgetUpdate) mergeInto(b *BudgetConfig) {
 	}
 	if basis := strings.TrimSpace(u.Basis); basis != "" {
 		b.Basis = strings.ToLower(basis)
+	}
+	if tag := strings.TrimSpace(u.Tag); tag != "" {
+		b.Tag = tag
 	}
 }
 

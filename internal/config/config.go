@@ -104,7 +104,10 @@ type Config struct {
 	// the behaviour of the coaching and smart-routing keys.
 	Coach   CoachConfig    `yaml:"coach,omitempty"`
 	Budgets []BudgetConfig `yaml:"budgets"`
-	Watch   WatchConfig    `yaml:"watch"`
+	// Allocation files work under a project, client or cost centre by
+	// rules evaluated on this machine.
+	Allocation AllocationConfig `yaml:"allocation,omitempty"`
+	Watch      WatchConfig      `yaml:"watch"`
 }
 
 // ActiveMode reports whether interventions (live routing, spend

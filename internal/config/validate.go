@@ -97,6 +97,9 @@ func (c Config) Validate() error {
 			return fmt.Errorf("budgets[%d]: %w", i, err)
 		}
 	}
+	if err := c.Allocation.Validate(); err != nil {
+		return err
+	}
 	if !c.Optimizer.Mode.Valid() {
 		return fmt.Errorf("optimizer.mode must be %q, %q, or %q, got %q",
 			OptimizerAutomatic, OptimizerInRequest, OptimizerOff, c.Optimizer.Mode)
