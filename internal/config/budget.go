@@ -9,6 +9,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/boundaries"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/allocation"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 )
 
 // BudgetConfig is one spend limit the watcher (active mode) and
@@ -48,6 +49,13 @@ type BudgetConfig struct {
 	// Tag scopes the limit to work carrying one allocation tag,
 	// "key=value" such as "client=acme"; empty applies to all spend.
 	Tag string `yaml:"tag,omitempty"`
+	// Provider scopes the limit to one provider's bill: the biller that
+	// charged each request (ADR 0009), so a request sent through a gateway
+	// counts for the gateway, not the model's vendor. It is a provider
+	// registry id; empty applies to every provider. Like every scope it
+	// narrows the others: with a tag too, the budget counts that tag's
+	// work billed by this provider.
+	Provider string `yaml:"provider,omitempty"`
 	// Windows are the budget's windows when it holds several. Basis,
 	// thresholds and scope above apply to each.
 	Windows []BudgetWindowConfig `yaml:"windows,omitempty"`
@@ -90,6 +98,11 @@ func (b BudgetConfig) Validate() error {
 	if b.Tag != "" {
 		if _, err := allocation.ParseScope(b.Tag); err != nil {
 			return fmt.Errorf("tag: %w", err)
+		}
+	}
+	if b.Provider != "" {
+		if err := validateProvider(b.Provider); err != nil {
+			return err
 		}
 	}
 	if len(b.Windows) == 0 {
@@ -179,10 +192,28 @@ func (c Config) BudgetLimits() []budget.Limit {
 				Basis:       strings.ToLower(b.Basis),
 				Mode:        w.mode(),
 				Tag:         normalizedTag(b.Tag),
+				Provider:    b.Provider,
 			})
 		}
 	}
 	return out
+}
+
+// validateProvider refuses a provider id the registry does not know, naming
+// the ids it was likely meant to be. A budget scoped to a misspelt provider
+// would measure nothing and never trip.
+func validateProvider(id string) error {
+	got, ok, near := providers.Resolve(id)
+	switch {
+	case ok && got == id:
+		return nil
+	case ok:
+		return fmt.Errorf("provider %q is spelt %q", id, got)
+	case len(near) == 0:
+		return fmt.Errorf("unknown provider %q; `tokenops provider list` lists them", id)
+	default:
+		return fmt.Errorf("unknown provider %q; did you mean %s?", id, strings.Join(near, ", "))
+	}
 }
 
 // normalizedTag is a budget's tag scope as the watcher reads it: the key

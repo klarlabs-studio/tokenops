@@ -381,7 +381,10 @@ budgets:                      # evaluated by the active-mode watcher
                               # equivalent (API list-price value incl.
                               # plan-covered usage — use on flat plans)
     # workflow_id / agent_id optionally scope the limit;
-    # tag: client=acme scopes it to one allocation tag
+    # tag: client=acme scopes it to one allocation tag;
+    # provider: fireworks to what one provider billed.
+    # Scopes narrow together (a tag and a provider: that tag's
+    # work the provider billed).
   - name: team                # several windows at once
     windows:
       - window: daily

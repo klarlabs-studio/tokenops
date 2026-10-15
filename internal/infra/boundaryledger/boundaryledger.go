@@ -422,10 +422,13 @@ type BudgetReading struct {
 	// Mode is soft (notify) or hard (enforced by Rule).
 	Mode string `json:"mode"`
 	// Basis is spend, equivalent or tokens; Used and Limit are in its unit.
-	Basis   string  `json:"basis,omitempty"`
-	Used    float64 `json:"used"`
-	Limit   float64 `json:"limit"`
-	UsedPct float64 `json:"used_pct"`
+	Basis string `json:"basis,omitempty"`
+	// Provider is the provider whose bill the window counts (a registry
+	// id), empty for every provider's.
+	Provider string  `json:"provider,omitempty"`
+	Used     float64 `json:"used"`
+	Limit    float64 `json:"limit"`
+	UsedPct  float64 `json:"used_pct"`
 	// WarnPct and CritPct are the window's alert thresholds, in percent.
 	WarnPct     float64   `json:"warn_pct"`
 	CritPct     float64   `json:"crit_pct"`

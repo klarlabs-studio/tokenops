@@ -66,6 +66,11 @@ type Limit struct {
 	// Tag scopes the limit to work carrying one allocation tag,
 	// "key=value"; empty is all spend. Like Basis, the caller resolves it.
 	Tag string
+	// Provider scopes the limit to one biller (ADR 0009): the provider
+	// whose bill a request counts against, not the model's vendor. Empty
+	// is every provider. Scopes narrow together: a limit with several
+	// counts only the spend that matches all of them.
+	Provider string
 }
 
 // Window modes for Limit.Mode.

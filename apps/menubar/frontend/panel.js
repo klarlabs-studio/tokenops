@@ -225,6 +225,24 @@
     main.appendChild(box);
   }
 
+  // The operator's own budgets on this provider's bill (budget set
+  // --provider), each window as a meter: their limit, apart from any cap
+  // the provider sets on the account.
+  function providerBudgets(main, r, v) {
+    var all = (v.glance && v.glance.spend_budgets) || [];
+    all.filter(function (b) { return b.provider === r.provider && b.limit > 0; }).forEach(function (b) {
+      var amt = b.basis === "tokens"
+        ? tokens(b.used) + " of " + tokens(b.limit) + " tokens"
+        : money(b.used) + " of " + money(b.limit);
+      var s = windowSection("Budget " + b.budget + " · " + b.window, b.used_pct, amt);
+      var mode = "Soft: notifies";
+      if (b.rule && b.enforced) mode = "Hard: " + (b.require === "deny" ? "refuses" : "asks") + " at the limit";
+      else if (b.rule) mode = "Hard, in shadow: stops nothing yet";
+      s.appendChild(pair("metric-line", mode, ""));
+      main.appendChild(s);
+    });
+  }
+
   // Over the last week: how full the plan's longest window got on average
   // (are the seats used?) and how much of the usage the plan carried
   // rather than an API key or a gateway.
@@ -279,6 +297,7 @@
     if (r.balance_usd !== undefined && r.balance_usd !== null) {
       main.appendChild(el("p", "plain", money(r.balance_usd) + " credit left"));
     }
+    providerBudgets(main, r, v);
     planUse(main, r, v);
     var c = v.costs && v.costs[r.provider];
     if (c) usage(main, r, c);

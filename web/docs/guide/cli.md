@@ -757,6 +757,7 @@ tokenops budget set monthly --limit-usd 200
 tokenops budget set weekly-tokens --basis tokens --limit-tokens 50000000 --window weekly
 tokenops budget set planner --limit-usd 50 --agent-id planner   # one agent only
 tokenops budget set acme --basis equivalent --limit-usd 300 --tag client=acme   # one client's work
+tokenops budget set mine --provider fireworks --limit-usd 50 --mode hard   # one provider's bill
 tokenops budget unset monthly
 ```
 
@@ -768,6 +769,19 @@ or agent, and `--tag key=value` to the work an
 [allocation rule](/guide/configuration#allocation-rules-allocation) tags
 (project, client or cost_center). A tagged budget gets threshold alerts,
 not forecasts.
+
+`--provider <id>` limits a budget to what one provider billed: the
+provider whose bill each request counts against, not the vendor of the
+model that answered. A request Claude Code sends through a gateway counts
+for the gateway that billed it. Use it when a provider account is shared
+with others and you want a limit of your own on it, whether or not the
+provider sets a per-member cap; the budget is yours and independent of any
+cap the provider reports. The id is one from the provider registry
+(`tokenops provider list`); an unknown one is refused with the ids it was
+likely meant to be. Scopes narrow together: `--provider` with `--tag`
+counts that tag's work the provider billed, and the same holds with
+`--workflow-id` and `--agent-id`. `budget list`, the glance and the menu
+bar's tab for that provider say whose bill a budget counts.
 
 A budget can hold several windows at once, say $10 a day and $100 a
 month. `--add-window` adds one; on a budget with several windows,

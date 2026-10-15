@@ -65,10 +65,7 @@ func newBudgetListCmd() *cobra.Command {
 				if basis == "" {
 					basis = "spend"
 				}
-				scope := ""
-				if b.Tag != "" {
-					scope = "  for " + b.Tag
-				}
+				scope := budgetScope(b)
 				for _, w := range b.EffectiveWindows() {
 					limit := fmt.Sprintf("%.2f USD", w.LimitUSD)
 					if strings.EqualFold(basis, "tokens") {
@@ -82,6 +79,22 @@ func newBudgetListCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	return cmd
+}
+
+// budgetScope says what a budget counts beyond its workflow and agent: the
+// work carrying a tag, what one provider billed, or both.
+func budgetScope(b config.BudgetConfig) string {
+	var parts []string
+	if b.Tag != "" {
+		parts = append(parts, "for "+b.Tag)
+	}
+	if b.Provider != "" {
+		parts = append(parts, "billed by "+b.Provider)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "  " + strings.Join(parts, ", ")
 }
 
 // windowMode says what reaching a window does: soft notifies; hard asks or
@@ -115,6 +128,7 @@ func newBudgetSetCmd() *cobra.Command {
 		require        string
 		addWindow      bool
 		tag            string
+		provider       string
 	)
 	cmd := &cobra.Command{
 		Use:   "set <name>",
@@ -128,8 +142,15 @@ several windows, --window names the one an edit changes.
 Each window is soft (the default: the coach tells you as it fills) or hard
 (--mode hard: a spend boundary asks, or with --require deny refuses, before
 further steps once the window is spent). A hard window starts in shadow,
-recording what it would have done, until 'tokenops boundaries promote'.`,
+recording what it would have done, until 'tokenops boundaries promote'.
+
+--provider limits the budget to one provider's bill: what that provider
+charged, whatever model answered. A request sent through a gateway counts
+for the gateway that billed it. Scopes narrow together: with --tag too,
+the budget counts that tag's work the provider billed. It is your own
+limit, apart from any cap the provider sets on your account.`,
 		Example: `  tokenops budget set team --limit-usd 100
+  tokenops budget set mine --provider fireworks --limit-usd 50 --mode hard
   tokenops budget set team --add-window --window daily --limit-usd 10 --mode hard
   tokenops boundaries promote budget-team-daily`,
 		Args: cobra.ExactArgs(1),
@@ -159,6 +180,7 @@ recording what it would have done, until 'tokenops boundaries promote'.`,
 				Require:     require,
 				AddWindow:   addWindow,
 				Tag:         tag,
+				Provider:    provider,
 			})
 			if errors.Is(err, config.ErrBudgetNoCeiling) {
 				return fmt.Errorf("a budget needs a ceiling: pass --limit-usd, or --limit-tokens with --basis tokens")
@@ -208,6 +230,7 @@ recording what it would have done, until 'tokenops boundaries promote'.`,
 	cmd.Flags().StringVar(&workflowID, "workflow-id", "", "scope the budget to one workflow")
 	cmd.Flags().StringVar(&agentID, "agent-id", "", "scope the budget to one agent")
 	cmd.Flags().StringVar(&tag, "tag", "", "scope the budget to work carrying one allocation tag, key=value (project, client or cost_center)")
+	cmd.Flags().StringVar(&provider, "provider", "", "scope the budget to what one provider billed (a provider id, e.g. fireworks)")
 	addNoRestartFlag(cmd, &noRestartFlag)
 	return cmd
 }

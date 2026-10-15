@@ -15,7 +15,9 @@ inside its sign-in token, which is not read) and the plan. Every window the
 vendor reports (session, weekly, per model) has a bar filled to the share
 left, a tick where an even pace would leave it, its reset, and its pace:
 reserve lasts to the reset, over pace says when it runs out. Below come
-extra usage against its limit, credit left, four figures (today, the last
+extra usage against its limit, credit left, each window of your own budgets
+on that provider's bill (`tokenops budget set --provider`) with whether it
+notifies or is enforced, four figures (today, the last
 30 days' cost and tokens, today's tokens) at API prices where a plan
 covers it, the last 30 days as a chart, the top model, and the coach's
 findings. Usage on models with no list

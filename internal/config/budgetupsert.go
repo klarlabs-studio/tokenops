@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"go.klarlabs.de/tokenops/internal/contexts/governance/budget"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 )
 
 // DefaultBudgetWindow is the window a new budget gets when the caller
@@ -41,6 +42,9 @@ type BudgetUpdate struct {
 	AddWindow bool
 	// Tag scopes the budget to one allocation tag, "key=value".
 	Tag string
+	// Provider scopes the budget to one provider's bill, by registry id or
+	// name; it is stored as the id.
+	Provider string
 }
 
 // BudgetUpsert is what an upsert wrote.
@@ -173,6 +177,14 @@ func (u BudgetUpdate) mergeInto(b *BudgetConfig) {
 	}
 	if tag := strings.TrimSpace(u.Tag); tag != "" {
 		b.Tag = tag
+	}
+	if p := strings.TrimSpace(u.Provider); p != "" {
+		// A name the registry knows is stored as its id; anything else is
+		// kept as given and refused by Validate with suggestions.
+		if id, ok, _ := providers.Resolve(p); ok {
+			p = id
+		}
+		b.Provider = p
 	}
 }
 

@@ -183,3 +183,22 @@ func TestCoachActionChangesDials(t *testing.T) {
 		}
 	}
 }
+
+// POST /api/budgets scopes a budget to a provider and a tag, like the CLI.
+func TestBudgetActionScopesToAProviderAndTag(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	s, f := newActionServer(t, allowAll{})
+	rec := post(s, "/api/budgets", "application/json", `{"name":"mine","limit_usd":50,"provider":"fireworks","tag":"client=acme-test"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST = %d %s", rec.Code, rec.Body)
+	}
+	<-f.applied
+	cfg, err := config.ReadMutable(f.path)
+	if err != nil || len(cfg.Budgets) != 1 || cfg.Budgets[0].Provider != "fireworks" || cfg.Budgets[0].Tag != "client=acme-test" {
+		t.Fatalf("budgets = %+v, %v", cfg.Budgets, err)
+	}
+	rec = post(s, "/api/budgets", "application/json", `{"name":"typo","limit_usd":5,"provider":"fireworx"}`)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "fireworks") {
+		t.Errorf("unknown provider = %d %s", rec.Code, rec.Body)
+	}
+}

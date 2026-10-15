@@ -82,7 +82,12 @@ type BudgetRequest struct {
 	AddWindow bool `json:"add_window"`
 	// RemoveWindow removes the budget's window of that name.
 	RemoveWindow string `json:"remove_window"`
-	Delete       bool   `json:"delete"`
+	// Tag scopes the budget to work carrying one allocation tag, key=value.
+	Tag string `json:"tag"`
+	// Provider scopes the budget to what one provider billed (a provider
+	// registry id). Scopes narrow together.
+	Provider string `json:"provider"`
+	Delete   bool   `json:"delete"`
 }
 
 // RoutingRuleRequest creates or updates the routing rule for a provider and source model, or deletes it.
@@ -161,7 +166,7 @@ func (s *Server) registerActionRoutes(mux RouteMux) {
 		return actions.SetBudget(path, actions.BudgetRequest{Delete: in.Delete, RemoveWindow: in.RemoveWindow, BudgetUpdate: config.BudgetUpdate{
 			Name: in.Name, Window: in.Window, LimitUSD: in.LimitUSD, LimitTokens: in.LimitTokens,
 			WarnAt: in.WarnAt, CritAt: in.CritAt, WorkflowID: in.WorkflowID, AgentID: in.AgentID, Basis: in.Basis,
-			Mode: in.Mode, Require: in.Require, AddWindow: in.AddWindow,
+			Mode: in.Mode, Require: in.Require, AddWindow: in.AddWindow, Tag: in.Tag, Provider: in.Provider,
 		}})
 	}))
 	mux.HandleFunc("POST /api/routing/rules", s.action("routing_rule", restart, func(r *http.Request, path string) (any, error) {

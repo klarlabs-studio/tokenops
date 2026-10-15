@@ -26,3 +26,13 @@ func TestGlanceListsEachBudgetWindowAndItsMode(t *testing.T) {
 		t.Error("no budgets rendered a section")
 	}
 }
+
+// A provider budget says whose bill it counts.
+func TestGlanceNamesTheProviderABudgetCounts(t *testing.T) {
+	got := renderSpendBudgets([]budgets.Reading{
+		{Budget: "mine", Window: "monthly", UsedPct: 60, Mode: "soft", Provider: "fireworks"},
+	})
+	if want := "- mine monthly, billed by Fireworks: 60% used (soft: notifies)"; !strings.Contains(got, want) {
+		t.Errorf("glance lacks %q:\n%s", want, got)
+	}
+}
