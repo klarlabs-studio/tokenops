@@ -98,8 +98,11 @@ func TestSetupTurnsOnLocalReadersWhoseDataIsPresent(t *testing.T) {
 	}
 }
 
-// A reader the operator switched off stays off; init only names it.
-func TestSetupDoesNotOverrideAReaderLeftOff(t *testing.T) {
+// The reported bug: one reader on, and a second client's sessions on the
+// machine (an opencode store) stayed unread forever, because init only
+// turned readers on when none was enabled. A reader the operator never
+// switched off is turned on whenever its data is present.
+func TestSetupTurnsOnAPresentReaderBesideAnEnabledOne(t *testing.T) {
 	path := seedConfig(t)
 	cfg, err := readMutableConfig(path)
 	if err != nil {
@@ -109,14 +112,41 @@ func TestSetupDoesNotOverrideAReaderLeftOff(t *testing.T) {
 	if err := writeMutableConfig(path, cfg); err != nil {
 		t.Fatal(err)
 	}
+	stubLocalSources(t, "claude-code-jsonl", "opencode")
+
+	step := ingestionStep(path)
+	if step.Err != nil || !strings.Contains(step.Detail, "turned on opencode") || !strings.Contains(step.Detail, "--disable") {
+		t.Errorf("step %+v; want opencode turned on and the way to stop it named", step)
+	}
+	if cfg, _ := readMutableConfig(path); !cfg.VendorUsage.OpenCode.Enabled {
+		t.Error("opencode's data is present and nobody switched it off, yet it stayed off")
+	}
+	if again := ingestionStep(path); strings.Contains(again.Detail, "turned on") {
+		t.Errorf("a second init said it again: %q", again.Detail)
+	}
+}
+
+// A reader the operator switched off with `vendor-usage enable --disable`
+// stays off; init only names it.
+func TestSetupDoesNotOverrideAReaderSwitchedOff(t *testing.T) {
+	path := seedConfig(t)
+	cfg, err := readMutableConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.VendorUsage.ClaudeCodeJSONL.Enabled = true
+	cfg.SetLocalReader("codex-jsonl", false)
+	if err := writeMutableConfig(path, cfg); err != nil {
+		t.Fatal(err)
+	}
 	stubLocalSources(t, "claude-code-jsonl", "codex-jsonl")
 
 	step := ingestionStep(path)
-	if !strings.Contains(step.Detail, "sessions found but not read: codex-jsonl") {
+	if !strings.Contains(step.Detail, "switched off: codex-jsonl") {
 		t.Errorf("detail %q", step.Detail)
 	}
 	if cfg, _ := readMutableConfig(path); cfg.VendorUsage.CodexJSONL.Enabled {
-		t.Error("init turned on a reader the operator had left off")
+		t.Error("init turned on a reader the operator had switched off")
 	}
 }
 

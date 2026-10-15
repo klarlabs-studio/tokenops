@@ -100,7 +100,7 @@ instead of an empty screen.
 | Route | Does |
 |---|---|
 | `POST /api/mode` | Sets the operating mode |
-| `POST /api/budgets` | Creates, updates or deletes a budget |
+| `POST /api/budgets` | Creates, updates or deletes a budget; `provider` and `tag` scope it, as on the CLI |
 | `POST /api/routing/rules` | Creates, updates or deletes a routing rule |
 | `POST /api/plans` | Binds a provider to a plan, or clears it |
 | `POST /api/preferred-models` | Sets or clears a provider's preferred model |

@@ -60,6 +60,18 @@ func TestAlertsOnEachStepDown(t *testing.T) {
 	}
 }
 
+// An account-wide spend (every member of an organisation together) is
+// named as the account's, not the operator's.
+func TestAccountWideSpendIsNamedAsTheAccounts(t *testing.T) {
+	g := glanceView{}
+	g.PlanHeadroom.Reports = []report{{Provider: "fireworks", SpendUSD: 1000, SpendLimitUSD: 4000, SpendPct: 25,
+		SpendScope: "account", SpendScopeLabel: "account acme-test, all members"}}
+	ms := measures(g)
+	if len(ms) != 1 || ms[0].words != "Fireworks account spend limit (account acme-test, all members)" {
+		t.Errorf("measures %+v", ms)
+	}
+}
+
 // The body says when the window comes back, and, while it is still
 // running, when it runs out at this pace.
 func TestAlertBodies(t *testing.T) {

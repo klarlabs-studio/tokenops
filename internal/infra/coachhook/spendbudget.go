@@ -135,8 +135,12 @@ func spendAmount(r boundaryledger.BudgetReading, v float64) string {
 }
 
 func spendMessage(r boundaryledger.BudgetReading, now time.Time) string {
+	scope := r.Window
+	if r.Provider != "" {
+		scope += ", billed by " + r.Provider
+	}
 	msg := fmt.Sprintf("tokenops: budget %s (%s) is %d%% used — %s of %s, resets in %s.",
-		r.Budget, r.Window, int(math.Floor(r.UsedPct)), spendAmount(r, r.Used), spendAmount(r, r.Limit),
+		r.Budget, scope, int(math.Floor(r.UsedPct)), spendAmount(r, r.Used), spendAmount(r, r.Limit),
 		formatSpan(r.ResetsAt.Sub(now)))
 	switch {
 	case r.Rule != "" && r.Enforced && r.Require == "deny":

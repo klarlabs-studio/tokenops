@@ -34,6 +34,10 @@ type report struct {
 	SpendUSD      float64  `json:"spend_usd"`
 	SpendLimitUSD float64  `json:"spend_limit_usd"`
 	SpendPct      float64  `json:"spend_pct"`
+	// SpendScope is "account" when the spend is the whole account's
+	// (every member together); SpendScopeLabel names it for display.
+	SpendScope      string `json:"spend_scope"`
+	SpendScopeLabel string `json:"spend_scope_label"`
 }
 
 type window struct {

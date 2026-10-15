@@ -206,9 +206,12 @@ type ClaudeCodeOAuthConfig struct {
 // Parses ~/.codex/sessions/<yyyy>/<mm>/<dd>/rollout-*.jsonl. Empty
 // Root defaults to ~/.codex/sessions.
 type CodexJSONLUsageConfig struct {
-	Enabled  bool          `yaml:"enabled"`
-	Root     string        `yaml:"root"`
-	Interval time.Duration `yaml:"interval"`
+	Enabled bool `yaml:"enabled"`
+	// SwitchedOff records that the operator switched the reader off, so
+	// it is not turned back on when its data is found (see LocalReader).
+	SwitchedOff bool          `yaml:"switched_off,omitempty"`
+	Root        string        `yaml:"root"`
+	Interval    time.Duration `yaml:"interval"`
 }
 
 // OpenCodeUsageConfig enables the opencode session reader, which opens
@@ -216,18 +219,24 @@ type CodexJSONLUsageConfig struct {
 // usage. Empty Root defaults to ~/.local/share/opencode/opencode.db
 // (honouring XDG_DATA_HOME).
 type OpenCodeUsageConfig struct {
-	Enabled  bool          `yaml:"enabled"`
-	Root     string        `yaml:"root"`
-	Interval time.Duration `yaml:"interval"`
+	Enabled bool `yaml:"enabled"`
+	// SwitchedOff records that the operator switched the reader off, so
+	// it is not turned back on when its data is found (see LocalReader).
+	SwitchedOff bool          `yaml:"switched_off,omitempty"`
+	Root        string        `yaml:"root"`
+	Interval    time.Duration `yaml:"interval"`
 }
 
 // GeminiCLIUsageConfig enables the Gemini CLI reader, which parses the
 // chat recordings under ~/.gemini/tmp/*/chats for each model turn's
 // tokens. Empty Root defaults to that directory (GEMINI_CLI_HOME honoured).
 type GeminiCLIUsageConfig struct {
-	Enabled  bool          `yaml:"enabled"`
-	Root     string        `yaml:"root"`
-	Interval time.Duration `yaml:"interval"`
+	Enabled bool `yaml:"enabled"`
+	// SwitchedOff records that the operator switched the reader off, so
+	// it is not turned back on when its data is found (see LocalReader).
+	SwitchedOff bool          `yaml:"switched_off,omitempty"`
+	Root        string        `yaml:"root"`
+	Interval    time.Duration `yaml:"interval"`
 }
 
 // PiUsageConfig enables the Pi transcript reader, which parses the
@@ -236,9 +245,12 @@ type GeminiCLIUsageConfig struct {
 // provider that served it. Empty Root reads both (PI_CODING_AGENT_DIR
 // and PI_CODING_AGENT_SESSION_DIR honoured).
 type PiUsageConfig struct {
-	Enabled  bool          `yaml:"enabled"`
-	Root     string        `yaml:"root"`
-	Interval time.Duration `yaml:"interval"`
+	Enabled bool `yaml:"enabled"`
+	// SwitchedOff records that the operator switched the reader off, so
+	// it is not turned back on when its data is found (see LocalReader).
+	SwitchedOff bool          `yaml:"switched_off,omitempty"`
+	Root        string        `yaml:"root"`
+	Interval    time.Duration `yaml:"interval"`
 }
 
 // ClaudeCodeJSONLUsageConfig enables the per-turn JSONL reader that
@@ -246,9 +258,12 @@ type PiUsageConfig struct {
 // successor to the v0.10.2 stats-cache reader (which lags by days on
 // active users). Empty Root defaults to ~/.claude/projects.
 type ClaudeCodeJSONLUsageConfig struct {
-	Enabled  bool          `yaml:"enabled"`
-	Root     string        `yaml:"root"`
-	Interval time.Duration `yaml:"interval"`
+	Enabled bool `yaml:"enabled"`
+	// SwitchedOff records that the operator switched the reader off, so
+	// it is not turned back on when its data is found (see LocalReader).
+	SwitchedOff bool          `yaml:"switched_off,omitempty"`
+	Root        string        `yaml:"root"`
+	Interval    time.Duration `yaml:"interval"`
 }
 
 // AnthropicUsageConfig wires the Anthropic Admin API poller. AdminKey

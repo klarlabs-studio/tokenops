@@ -101,7 +101,11 @@ func renderSpendBudgets(rs []budgets.Reading) string {
 		case r.Rule != "":
 			mode = fmt.Sprintf("hard, in shadow: `%s` binds nothing yet", r.Rule)
 		}
-		out += fmt.Sprintf("\n- %s %s: %.0f%% used (%s)", r.Budget, r.Window, r.UsedPct, mode)
+		whose := ""
+		if r.Provider != "" {
+			whose = ", billed by " + budgets.ProviderName(r.Provider)
+		}
+		out += fmt.Sprintf("\n- %s %s%s: %.0f%% used (%s)", r.Budget, r.Window, whose, r.UsedPct, mode)
 	}
 	return out
 }
