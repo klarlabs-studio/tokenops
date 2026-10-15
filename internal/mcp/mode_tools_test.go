@@ -247,3 +247,20 @@ func TestModeActiveSkipsSpawnWhenDaemonAlive(t *testing.T) {
 		t.Errorf("response should point at the restart, never `tokenops start`: %s", out)
 	}
 }
+
+// The agent surface scopes a budget to one provider through the same
+// upsert as the terminal, and refuses a provider the registry lacks.
+func TestBudgetSetScopesToAProvider(t *testing.T) {
+	srv, path := newModeServer(t)
+	execTool(t, srv, "tokenops_budget_set", map[string]any{
+		"name": "mine", "provider": "fireworks", "limit_usd": 50,
+	})
+	cfg, _ := config.ReadMutable(path)
+	if len(cfg.Budgets) != 1 || cfg.Budgets[0].Provider != "fireworks" {
+		t.Fatalf("budgets = %+v", cfg.Budgets)
+	}
+	err := execToolErr(t, srv, "tokenops_budget_set", map[string]any{"name": "typo", "provider": "fireworx", "limit_usd": 5})
+	if err == nil || !strings.Contains(err.Error(), "fireworks") {
+		t.Errorf("err = %v; want an unknown-provider refusal naming fireworks", err)
+	}
+}

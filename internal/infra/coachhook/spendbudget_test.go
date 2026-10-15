@@ -118,6 +118,18 @@ func TestHardWindowTipNamesItsBoundary(t *testing.T) {
 	}
 }
 
+// A provider budget's tip says whose bill it counts, so it is not read as
+// all spend.
+func TestProviderBudgetTipNamesTheProvider(t *testing.T) {
+	dir := t.TempDir()
+	r := teamDaily(80)
+	r.Provider = "fireworks"
+	dec := Evaluate(dir, "s1", cheapTurn(t, dir), spendCfg(r), fixedNow)
+	if !dec.Nudge || !strings.Contains(dec.Message, "budget team (daily, billed by fireworks) is 80% used") {
+		t.Fatalf("provider budget tip: %q", dec.Message)
+	}
+}
+
 func TestQuietVerbositySpeaksOnlyAtTheLimit(t *testing.T) {
 	dir := t.TempDir()
 	cfg := spendCfg(teamDaily(96))
