@@ -121,11 +121,13 @@ type TagSource interface {
 	SummarizeTag(ctx context.Context, f analytics.Filter, tag string) (analytics.Summary, error)
 }
 
-// Measure is what l's metric reached in its current window at now.
+// Measure is what l's metric reached in its current window at now. Its
+// scopes narrow together: a budget with a provider and a tag counts the
+// tag's work that provider billed.
 func Measure(ctx context.Context, src Source, l Limit, now time.Time) (float64, error) {
 	f := analytics.Filter{
 		Since: budget.WindowStart(l.Window, now), Until: now,
-		WorkflowID: l.WorkflowID, AgentID: l.AgentID,
+		WorkflowID: l.WorkflowID, AgentID: l.AgentID, Provider: l.Provider,
 	}
 	var (
 		s   analytics.Summary
@@ -181,7 +183,7 @@ func Read(ctx context.Context, src Source, limits []Limit, now time.Time) []Read
 			basis = budget.BasisSpend
 		}
 		out = append(out, Reading{
-			Key: l.Key(), Budget: l.Name, Window: string(l.Window), Mode: mode, Basis: basis,
+			Key: l.Key(), Budget: l.Name, Window: string(l.Window), Mode: mode, Basis: basis, Provider: l.Provider,
 			Used: v, Limit: limit, UsedPct: v / limit * 100,
 			WarnPct: warn * 100, CritPct: crit * 100,
 			WindowStart: start, ResetsAt: budget.WindowEnd(l.Window, start),
@@ -243,7 +245,7 @@ func (w *Watcher) forecast(ctx context.Context, l Limit, now time.Time) []foreca
 	start := budget.WindowStart(l.Window, now)
 	daysLeft := int(budget.WindowEnd(l.Window, start).Sub(now).Hours()/24) + 1
 	rows, err := w.Source.AggregateBy(ctx, analytics.Filter{
-		Since: now.Add(-forecastHistory), WorkflowID: l.WorkflowID, AgentID: l.AgentID,
+		Since: now.Add(-forecastHistory), WorkflowID: l.WorkflowID, AgentID: l.AgentID, Provider: l.Provider,
 	}, analytics.BucketDay, analytics.GroupNone)
 	if err != nil {
 		return nil
