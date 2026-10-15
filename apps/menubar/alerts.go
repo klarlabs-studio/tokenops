@@ -117,7 +117,11 @@ func measures(g glanceView) []measure {
 			})
 		}
 		if len(r.Windows) == 0 && r.SpendLimitUSD > 0 {
-			out = append(out, measure{key: r.Provider + "/spend", words: name + " spend limit", used: r.SpendPct})
+			words := name + " spend limit"
+			if r.SpendScope == "account" {
+				words = name + " account spend limit (" + r.SpendScopeLabel + ")"
+			}
+			out = append(out, measure{key: r.Provider + "/spend", words: words, used: r.SpendPct})
 		}
 	}
 	return out

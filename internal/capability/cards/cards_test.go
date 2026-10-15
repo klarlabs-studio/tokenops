@@ -63,6 +63,25 @@ func TestCardsKeepTheirWidth(t *testing.T) {
 	}
 }
 
+// A Fireworks billing summary is the whole account's month, every member
+// together. The card says so, rather than calling it the operator's extra
+// usage; the figures are unchanged.
+func TestCardNamesAnAccountWideSpend(t *testing.T) {
+	var g headroom.Glance
+	g.Headroom.Reports = []plans.HeadroomReport{{Provider: "fireworks", Display: "Pay as you go",
+		SpendUSD: 1000, SpendLimitUSD: 4000, SpendPct: 25, SpendScope: "account",
+		SpendScopeLabel: "account acme-test, all members"}}
+	out := Render(g, Options{Width: 130})
+	for _, want := range []string{"Account spend", "$1,000 / $4,000", "account acme-test, all members"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("card lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "Extra usage") {
+		t.Errorf("an account-wide figure is still called extra usage:\n%s", out)
+	}
+}
+
 // A card reads as CodexBar's: source and plan, then each window's share,
 // bar, reset and pace, then the money.
 func TestCardContents(t *testing.T) {

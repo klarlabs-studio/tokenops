@@ -49,6 +49,14 @@ type HeadroomReport struct {
 	// the vendor reported both spend and limit, "estimate" when spend was
 	// recomputed from token counts against the configured limit.
 	SpendSource string `json:"spend_source,omitempty"`
+	// SpendScope says whose spend the vendor figures are: "account" for
+	// the whole account (every member of an organisation together),
+	// "user" for the operator's own. Empty when the vendor does not say.
+	SpendScope string `json:"spend_scope,omitempty"`
+	// SpendScopeLabel names an account-wide figure for display ("account
+	// <id>, all members"), so it is not read as the operator's own spend.
+	// Empty for the operator's own figures.
+	SpendScopeLabel string `json:"spend_scope_label,omitempty"`
 
 	// SignalQuality types the trust the operator can place in this
 	// report. When the report is built from MCP-ping activity only,
@@ -356,6 +364,19 @@ func daysRemainingInMonth(now time.Time) float64 {
 	return firstOfNext.Sub(now).Hours() / 24
 }
 
+// AccountScopeLabel names an account-wide spend figure for display, so the
+// whole account's month (every member of an organisation together) is not
+// read as the operator's own spend. It is empty for any other scope.
+func AccountScopeLabel(scope, accountID string) string {
+	if scope != "account" {
+		return ""
+	}
+	if accountID == "" {
+		return "whole account, all members"
+	}
+	return "account " + accountID + ", all members"
+}
+
 // computeSpendHeadroom reports money against the org's own limit, for plans
 // that are billed rather than rate-limited.
 //
@@ -378,6 +399,7 @@ func computeSpendHeadroom(p Plan, in HeadroomInputs) HeadroomReport {
 		// The vendor's own figures: the amount it will bill against the
 		// limit it enforces. No rate factor — they are already the rate.
 		report.SpendUSD, report.SpendLimitUSD, report.SpendSource = v.UsedUSD, v.LimitUSD, "vendor"
+		report.SpendScope, report.SpendScopeLabel = v.Scope, AccountScopeLabel(v.Scope, v.AccountID)
 		if v.LimitUSD <= 0 {
 			report.Note = "no spend limit is set on the account, so there is no percentage"
 			if days := int(v.UsedPeriod / (24 * time.Hour)); days > 0 {
