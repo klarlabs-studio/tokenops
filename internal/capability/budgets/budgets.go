@@ -16,6 +16,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/observability/analytics"
 	"go.klarlabs.de/tokenops/internal/contexts/security/audit"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/forecast"
+	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -153,6 +154,15 @@ func Measure(ctx context.Context, src Source, l Limit, now time.Time) (float64, 
 	default:
 		return s.CostUSD, nil
 	}
+}
+
+// ProviderName names the provider a budget counts the bill of, as the
+// docs do; an id the registry does not know is shown as it is.
+func ProviderName(id string) string {
+	if d, ok := providers.Lookup(id); ok {
+		return d.Label()
+	}
+	return id
 }
 
 // Reading is one budget window measured.

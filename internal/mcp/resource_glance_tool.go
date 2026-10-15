@@ -11,7 +11,6 @@ import (
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/capability/budgets"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
-	"go.klarlabs.de/tokenops/internal/contexts/spend/providers"
 	"go.klarlabs.de/tokenops/internal/presentation"
 )
 
@@ -104,18 +103,9 @@ func renderSpendBudgets(rs []budgets.Reading) string {
 		}
 		whose := ""
 		if r.Provider != "" {
-			whose = ", billed by " + providerLabel(r.Provider)
+			whose = ", billed by " + budgets.ProviderName(r.Provider)
 		}
 		out += fmt.Sprintf("\n- %s %s%s: %.0f%% used (%s)", r.Budget, r.Window, whose, r.UsedPct, mode)
 	}
 	return out
-}
-
-// providerLabel names a provider as its docs do; an id the registry does
-// not know is shown as it is.
-func providerLabel(id string) string {
-	if d, ok := providers.Lookup(id); ok {
-		return d.Label()
-	}
-	return id
 }
