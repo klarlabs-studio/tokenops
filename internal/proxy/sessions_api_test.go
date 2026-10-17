@@ -47,6 +47,10 @@ func TestStoryRouteWithholdsTheInstruction(t *testing.T) {
 	if code := getAPI(t, s, "/api/story?all=true", &st); code != http.StatusOK || len(st.Tasks) != 1 || !st.TitlesWithheld || st.Tasks[0].ToolCalls != 2 {
 		t.Fatalf("story = %+v", st)
 	}
+	// Nor the local paths: the files are counted, not named.
+	if strings.Contains(rec.Body.String(), "/a.go") || !st.PathsWithheld || st.Tasks[0].FilesEdited != 2 {
+		t.Fatalf("the API named the edited files: %s", rec.Body)
+	}
 }
 
 func TestDXAndPromptRoutesAnswer(t *testing.T) {

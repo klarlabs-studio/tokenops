@@ -141,11 +141,26 @@ func TestReadWarnings(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := readWarnings(tt.err)
+			got := readWarnings(tt.err, false)
 			if strings.Join(got, "|") != strings.Join(tt.want, "|") || (tt.want == nil) != (got == nil) {
 				t.Errorf("readWarnings = %#v, want %#v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestReadWarningsWithholdTheHomeDirectory keeps a derived-only answer's
+// warnings from naming whose machine the transcript is on.
+func TestReadWarningsWithholdTheHomeDirectory(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	err := fmt.Errorf("claude-code: open %s/.claude/projects/x.jsonl: permission denied", home)
+	got := readWarnings(err, true)
+	if len(got) != 1 || strings.Contains(got[0], home) || !strings.Contains(got[0], "~/.claude/projects/x.jsonl") {
+		t.Fatalf("withheld = %q", got)
+	}
+	if quoted := readWarnings(err, false); !strings.Contains(quoted[0], home) {
+		t.Fatalf("quoted = %q, want the path whole", quoted)
 	}
 }
 

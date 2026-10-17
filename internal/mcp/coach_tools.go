@@ -24,6 +24,7 @@ type coachPromptsInput struct {
 	Until     string `json:"until,omitempty"`
 	SessionID string `json:"session_id,omitempty" jsonschema:"description=Restrict to one Claude Code session id"`
 	Limit     int    `json:"limit,omitempty"`
+	Quote     bool   `json:"quote,omitempty" jsonschema:"description=Off by default. true returns the operator's instruction text as typed: sample instructions, repeated instructions and each recommendation's evidence. Off, only counts and recommendations come back."`
 }
 
 // RegisterCoachTools mounts tokenops_sessions (view=prompts) on s. The tool
@@ -34,7 +35,7 @@ func RegisterCoachTools(s *Server, d CoachDeps) error {
 		return errors.New("mcp: server must not be nil")
 	}
 	s.Tool("tokenops_coach_prompts").
-		Description("Score your Claude Code prompting against rule-based heuristics. Walks ~/.claude/projects/**/*.jsonl, extracts human-typed turns, returns length distribution, vague/ack/repeat counts, and concrete recommendations. Prompt text is read at scan time and is NOT persisted to the event store.").
+		Description("Score your Claude Code prompting against rule-based heuristics. Walks ~/.claude/projects/**/*.jsonl, extracts human-typed turns, returns length distribution, vague/ack/repeat counts, and concrete recommendations. By default no instruction text is returned; with quote: true the samples, repeats and evidence quote the operator's instructions. Prompt text is read at scan time and is NOT persisted to the event store.").
 		OutputSchema(sessions.Findings{}).
 		Handler(func(ctx context.Context, in coachPromptsInput) (sessions.Findings, error) {
 			w := sessions.PromptWindow{Root: d.root(), SessionID: in.SessionID, Limit: in.Limit}
@@ -52,9 +53,8 @@ func RegisterCoachTools(s *Server, d CoachDeps) error {
 				}
 				w.Until = until
 			}
-			// The agent reading these is the operator's own, so the
-			// quoted instructions stay in.
-			return sessions.PromptFindings(w, true, time.Now())
+			// Derived figures unless the caller opted in to the quotes.
+			return sessions.PromptFindings(w, in.Quote, time.Now())
 		})
 	return nil
 }

@@ -18,11 +18,12 @@ type storyInput struct {
 	Days  int  `json:"days,omitempty" jsonschema:"description=Window in days (default 7 when omitted or 0). Use all for every transcript on disk."`
 	All   bool `json:"all,omitempty" jsonschema:"description=Read all history instead of a days window. Overrides days."`
 	Limit int  `json:"limit,omitempty" jsonschema:"description=Most recent tasks to return (default 10). -1 returns every task in the window."`
+	Quote bool `json:"quote,omitempty" jsonschema:"description=Off by default. true returns the narrative: each task titled with the operator's instruction text as typed, the absolute local file paths it edited, and each friction as a sentence. Off, tasks carry derived figures only: no title, a count of files edited and each friction's kind."`
 }
 
 // storyResult is the sessions capability's payload, shared with the
-// daemon API (ADR 0010 §4). Here, unlike the API, tasks carry their
-// titles: the agent reading them is the operator's own.
+// daemon API (ADR 0010 §4). By default it is the API's derived-only form;
+// quote is the explicit opt-in to titles, paths and friction sentences.
 type storyResult = sessions.Story
 
 // RegisterStoryTools hands the agent its own history back.
@@ -43,10 +44,10 @@ func RegisterStoryTools(s *Server, d StoryDeps) error {
 		return errors.New("mcp: nil server")
 	}
 	s.Tool("tokenops_story").
-		Description("Read back an account of recent work, one task at a time: the instruction the operator typed, how many turns and tool calls answering it took, which files it touched, and where it went sideways — an answer rejected, a file edited twice, a turn interrupted. A task is a run of consecutive instructions on one piece of work, inferred from the local transcripts. Call this to see the shape of the work in flight, to check what was already attempted before retrying something, or when the operator asks what happened in a session. Titles are the operator's own instructions, quoted rather than summarised. Nothing here says whether the work is correct — only the tests know that.").
+		Description("Read back an account of recent work, one task at a time: how many instructions, turns and tool calls it took, how many files it edited, and where it went sideways — an answer rejected, a file edited twice, a turn interrupted. A task is a run of consecutive instructions on one piece of work, inferred from the local transcripts. Call this to see the shape of the work in flight, to check what was already attempted before retrying something, or when the operator asks what happened in a session. By default it returns derived figures only. With quote: true it also returns each task's title (the operator's instruction text, quoted rather than summarised), the absolute local paths of the files it edited, and each friction as a sentence. Nothing here says whether the work is correct — only the tests know that.").
 		OutputSchema(storyResult{}).
 		Handler(func(_ context.Context, in storyInput) (*storyResult, error) {
-			res := sessions.ComputeStory(sessions.Window{Root: d.Root, Days: in.Days, All: in.All}, in.Limit, true, time.Now())
+			res := sessions.ComputeStory(sessions.Window{Root: d.Root, Days: in.Days, All: in.All}, in.Limit, in.Quote, time.Now())
 			return &res, nil
 		})
 	return nil
