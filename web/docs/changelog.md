@@ -4,7 +4,30 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.105.0**.
+Current release: **v0.106.0**.
+
+## v0.106.0 — Honest answers, a faster guard
+
+Three reports from running TokenOps inside coding agents shaped this
+release. The `tokenops_sessions` MCP tool now keeps its word: by default
+it returns derived figures only — no instruction text, no file paths,
+frictions by kind — and `quote: true` is the explicit opt-in to the
+narrative, said plainly before the call. `tokenops status` no longer
+calls a healthy daemon "not running" when a sandbox blocked the
+connection: it names why the client could not reach it (permission,
+refused, timeout, address, an error answer), says readiness is unknown
+from there, and only suggests a restart when nothing is listening.
+`tokenops story --runtime` says where each task's time went as far as the
+transcripts record it — model requests, tools, approval waits, idle and
+unattributed — with what is unknown left unknown, and `--role` keeps
+automatic reviews apart from your own work.
+
+Machines in a team can now send plan use, avoidable usage by class,
+realized savings and plan advice to a team server that accepts them;
+older servers keep receiving exactly what they did. The pause point
+before every tool call counts a matched rule with one appended line
+instead of rewriting a file, about a fifth of the time, and a daemon
+restart answers within seconds again.
 
 ## v0.105.0 — Budgets that fit you, and savings you can prove
 
