@@ -8,6 +8,7 @@
 
 ### Fixed
 
+- **boundaries:** the pause point before every tool call takes about a fifth of the time when a rule matches (0.3 ms instead of 1.4 ms, and no longer several milliseconds when the disk is busy). It counted each match by rewriting the session's counter file; it now appends one line to a match log beside it and rewrites the file only when a decision stage is recorded. Parallel tool calls in one session no longer drop each other's counts, a long session's log is folded into its totals past 64 KiB, and counts recorded before are kept (#686)
 - **daemon:** a restart answers again in seconds instead of close to a minute. Before opening its port the daemon lists the models Claude Code turns were recorded under, and that lookup read every prompt event's full row; on a store of a few hundred thousand events it took most of a minute, longer than `tokenops daemon restart` waits, so a restart reported the daemon unhealthy although it came up shortly after. The lookup now reads only the usage index (13 s to 0.6 s on such a store), and a test pins its query plan
 
 ## 0.105.0 - 2026-10-15

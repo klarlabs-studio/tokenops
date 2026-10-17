@@ -406,3 +406,44 @@ func TestSetStagePromotesInConfig(t *testing.T) {
 		t.Fatal("promoted a rule that does not exist")
 	}
 }
+
+// TestARepeatMatchCountsWithoutRewritingTheSession pins the pause point's
+// cost: once a shadow rule's decision is recorded, a call that matches it
+// again only counts, by appending to the match log. The session's file is
+// left alone, which is what kept a matched call to one cheap write.
+func TestARepeatMatchCountsWithoutRewritingTheSession(t *testing.T) {
+	env := testEnv(t, false)
+	setCost(t, env, "s1", 25)
+	r, err := domain.Parse([]domain.RuleSpec{
+		{Name: "session-spend", Action: "continue", Require: "ask", Stage: "shadow", When: map[string]string{"session_cost_usd": ">= 20"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Guard(r, call("s1"), env); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(string(env.Dir), "sessions", "s1.json")
+	if _, err := os.Stat(file); err != nil {
+		t.Fatalf("the first match records its stage in the session file: %v", err)
+	}
+	past := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(file, past, past); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if _, err := Guard(r, call("s1"), env); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if fi, err := os.Stat(file); err != nil || !fi.ModTime().Equal(past) {
+		t.Fatalf("a repeat match rewrote the session file (%v, %v)", fi.ModTime(), err)
+	}
+	st, err := RuleStatuses(r, env, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := st.Rules[0].Matches; got != 3 {
+		t.Fatalf("matches = %d, want 3", got)
+	}
+}
