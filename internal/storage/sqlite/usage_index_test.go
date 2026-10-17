@@ -95,3 +95,16 @@ func explain(t *testing.T, s *Store, q string, args []any) string {
 	}
 	return strings.Join(lines, "\n")
 }
+
+// TestModelsForIsCovered pins ModelsFor, which every daemon start runs, to
+// events_usage_idx as a covering index. Without statistics the planner
+// prefers the provider index and reads every prompt event's row to check
+// its type and source, which took the better part of a minute on a real
+// store and kept the daemon from answering after a restart.
+func TestModelsForIsCovered(t *testing.T) {
+	s := newTestStore(t)
+	plan := explain(t, s, modelsForQuery, []any{"claude-code-jsonl", "anthropic"})
+	if !strings.Contains(plan, "COVERING INDEX events_usage_idx") {
+		t.Errorf("ModelsFor reads the table:\n%s", plan)
+	}
+}
