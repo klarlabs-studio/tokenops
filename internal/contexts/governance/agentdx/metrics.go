@@ -37,6 +37,13 @@ const (
 	KindInterrupt RecordKind = "interrupt"
 	// KindCompaction is a context compaction.
 	KindCompaction RecordKind = "compaction"
+	// KindToolResult is a tool call's result arriving back, matched to
+	// its call by CallID. Only Claude Code and Codex record one.
+	KindToolResult RecordKind = "tool_result"
+	// KindTurnEnd is the harness recording that a turn finished: Claude
+	// Code's turn_duration entry, Codex's task_complete event. It is the
+	// only explicit completion evidence a transcript carries.
+	KindTurnEnd RecordKind = "turn_end"
 )
 
 // Record is one transcript entry, flattened to what the metrics need.
@@ -78,6 +85,28 @@ type Record struct {
 	// lives in memory for the length of a scan and is not written to the
 	// event store — the rule every coaching surface here follows.
 	Text string
+
+	// Harness is the client that wrote the record (claude-code, codex,
+	// cursor, opencode), stamped by ExtractAll.
+	Harness Source
+	// Role is set on a prompt the harness, not the operator, sent on the
+	// operator's behalf: RoleAutoReview for an automatic review session,
+	// RoleSubagent for a delegated one. Empty is the operator's own.
+	Role string
+	// CallID pairs a KindToolUse with its KindToolResult.
+	CallID string
+	// RequestID groups the assistant entries one model request wrote
+	// (Claude Code's requestId). Empty when the client records none.
+	RequestID string
+	// DurationMs is the turn's duration as the harness measured it, for
+	// KindTurnEnd. Zero when it was not recorded.
+	DurationMs int64
+	// TTFTMs is the time to first token the harness recorded for the
+	// turn, for KindTurnEnd; meaningful only when TTFTRecorded. No reader
+	// infers it from timestamps: a transcript line is written when a
+	// block finishes, never when it started streaming.
+	TTFTMs       int64
+	TTFTRecorded bool
 }
 
 // sortedByTime returns records in chronological order without mutating

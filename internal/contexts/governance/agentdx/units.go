@@ -1,6 +1,9 @@
 package agentdx
 
-import "time"
+import (
+	"sort"
+	"time"
+)
 
 // Unit is one operator instruction and everything the agent did before
 // the next one. It is the atom both the metrics and the narrative are
@@ -72,7 +75,68 @@ type Unit struct {
 	// definition about the work already in flight, so it can never be
 	// the start of something new.
 	PromptRejects bool
+
+	// Harness is the client the unit was read from; Role is what the
+	// instruction was (RolePrimary, RoleAutoReview, RoleSubagent).
+	Harness string
+	Role    string
+
+	// LastActivity is the unit's last recorded entry of any kind: its
+	// last turn, or a tool result that arrived after it.
+	LastActivity time.Time
+	// Spans are the timed intervals the transcript records for the unit:
+	// tool calls with their results, operator questions, and model
+	// requests where the client groups entries by request.
+	Spans []Span
+	// MatchedToolCalls counts tool calls whose result was recorded;
+	// ToolCalls - MatchedToolCalls had no recorded end.
+	MatchedToolCalls int
+	// ModelRequests counts distinct request ids among the unit's turns;
+	// TimedModelRequests the subset with a recorded input before them.
+	ModelRequests      int
+	TimedModelRequests int
+	// Completed is set when the harness recorded the end of the unit's
+	// last turn (KindTurnEnd at or after it): the only explicit
+	// completion evidence a transcript carries. It says the turn ended,
+	// not that the work was right.
+	Completed bool
+	// HarnessTurnMs sums the turn durations the harness recorded;
+	// HarnessTurns counts the turn ends that carried one.
+	HarnessTurnMs int64
+	HarnessTurns  int
+	// TTFTMs is the first turn's time to first token, as the harness
+	// recorded it; meaningful only when TTFTRecorded.
+	TTFTMs       int64
+	TTFTRecorded bool
 }
+
+// SpanKind names what a recorded interval was spent on.
+type SpanKind string
+
+// Span kinds.
+const (
+	// SpanTool is a tool call, from the call entry to its result entry.
+	SpanTool SpanKind = "tool"
+	// SpanOperatorWait is a tool that asks the operator something and
+	// waits for the answer (AskUserQuestion, ExitPlanMode).
+	SpanOperatorWait SpanKind = "operator_wait"
+	// SpanModel is a model request, from the input written before it to
+	// the last entry the request wrote. It includes queueing and
+	// streaming; it is not time to first token.
+	SpanModel SpanKind = "model"
+)
+
+// Span is one recorded interval.
+type Span struct {
+	Kind  SpanKind
+	Start time.Time
+	End   time.Time
+}
+
+// operatorWaitTools are the tools whose call blocks on the operator's
+// answer, so their span is time spent waiting for a person rather than
+// for a machine.
+var operatorWaitTools = map[string]bool{"askuserquestion": true, "exitplanmode": true}
 
 // Duration is how long the operator waited, or zero when the unit
 // produced no turns — a prompt typed at the end of a session would
@@ -98,13 +162,47 @@ func (u Unit) FirstTry() bool {
 // opens mid-conversation, and charging that work to a prompt nobody
 // typed would put the cost of a resumed session on its first
 // instruction.
+//
+// Units are built per session. Concurrent sessions interleave in
+// wall-clock time, and walking them in one time order handed one
+// session's turns and tool calls to whichever session's instruction was
+// typed last.
 func Units(records []Record) []Unit {
 	if len(records) == 0 {
 		return nil
 	}
+	var out []Unit
+	for _, recs := range bySession(records) {
+		out = append(out, sessionUnits(recs)...)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Start.Before(out[j].Start) })
+	return out
+}
+
+// bySession partitions records per session, in the order sessions first
+// appear.
+func bySession(records []Record) [][]Record {
+	idx := map[string]int{}
+	var out [][]Record
+	for _, r := range records {
+		i, ok := idx[r.SessionID]
+		if !ok {
+			i = len(out)
+			idx[r.SessionID] = i
+			out = append(out, nil)
+		}
+		out[i] = append(out[i], r)
+	}
+	return out
+}
+
+// sessionUnits groups one session's records into units.
+func sessionUnits(records []Record) []Unit {
 	sorted := sortedByTime(records)
 
 	var (
+		// timing tracks the current unit's open spans.
+		timing *unitTiming
 		out    []Unit
 		cur    Unit
 		inUnit bool
@@ -122,13 +220,26 @@ func Units(records []Record) []Unit {
 	closeUnit := func() {
 		if inUnit {
 			cur.Model, cur.Effort = mostCommon(models), mostCommon(efforts)
+			cur.Role = RoleOf(cur.Role, cur.Model)
+			timing.finish(&cur)
 			out = append(out, cur)
 		}
 		inUnit = false
 	}
 
 	for _, r := range sorted {
+		if inUnit && r.Kind != KindPrompt && r.At.After(cur.LastActivity) {
+			cur.LastActivity = r.At
+		}
 		switch r.Kind {
+		case KindToolResult:
+			if inUnit {
+				timing.result(r)
+			}
+		case KindTurnEnd:
+			if inUnit {
+				timing.turnEnd(r)
+			}
 		case KindPrompt:
 			// A prompt that rejects what preceded it is a verdict on the
 			// unit that just closed, not on itself.
@@ -142,7 +253,11 @@ func Units(records []Record) []Unit {
 				Start:         r.At,
 				Provider:      r.Provider,
 				PromptRejects: r.Rejects,
+				Harness:       string(r.Harness),
+				Role:          r.Role,
+				LastActivity:  r.At,
 			}
+			timing = newUnitTiming(r.At)
 			edited = map[string]bool{}
 			lastEdited = ""
 			seenTool = map[string]bool{}
@@ -156,6 +271,7 @@ func Units(records []Record) []Unit {
 			}
 			cur.Turns++
 			cur.End = r.At
+			timing.turn(r)
 			if r.Model != "" {
 				models[r.Model]++
 			}
@@ -180,6 +296,7 @@ func Units(records []Record) []Unit {
 				continue
 			}
 			cur.ToolCalls++
+			timing.call(r)
 			if r.ToolName != "" && !seenTool[r.ToolName] {
 				seenTool[r.ToolName] = true
 				cur.Tools = append(cur.Tools, r.ToolName)

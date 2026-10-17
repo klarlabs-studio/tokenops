@@ -127,9 +127,16 @@ func Extract(opts ExtractOptions) ([]Record, error) {
 // rawEntry is the subset of a transcript line these metrics need.
 type rawEntry struct {
 	Type      string `json:"type"`
+	Subtype   string `json:"subtype"`
 	Timestamp string `json:"timestamp"`
 	SessionID string `json:"sessionId"`
 	IsCompact bool   `json:"isCompactSummary"`
+	// IsSidechain marks an entry a subagent wrote.
+	IsSidechain bool   `json:"isSidechain"`
+	RequestID   string `json:"requestId"`
+	// DurationMs is set on a system turn_duration entry: the harness's
+	// own measure of the turn that just ended.
+	DurationMs int64 `json:"durationMs"`
 	// Effort is the session's effort level when this entry was written;
 	// Claude Code stamps it on assistant entries.
 	Effort  string `json:"effort"`
@@ -147,10 +154,14 @@ type rawEntry struct {
 
 // contentPart is one block of a structured message content array.
 type contentPart struct {
-	Type  string `json:"type"`
-	Name  string `json:"name"`
-	Text  string `json:"text"`
-	Input struct {
+	Type string `json:"type"`
+	Name string `json:"name"`
+	Text string `json:"text"`
+	// ID is a tool_use block's id; ToolUseID is the tool_result's
+	// reference back to it.
+	ID        string `json:"id"`
+	ToolUseID string `json:"tool_use_id"`
+	Input     struct {
 		FilePath string `json:"file_path"`
 		Path     string `json:"path"`
 	} `json:"input"`
@@ -238,11 +249,32 @@ func appendTranscriptLine(out []Record, line []byte, since time.Time, withText b
 			}
 			base.Kind = KindPrompt
 			base.Rejects = IsRejection(text)
-			out = append(out, base)
+			if e.IsSidechain {
+				base.Role = RoleSubagent
+			}
+			return append(out, base)
+		}
+		// A result's arrival closes the span its call opened; the
+		// pairing is by id, so parallel calls each get their own span.
+		for _, p := range parts {
+			if p.Type == "tool_result" && p.ToolUseID != "" {
+				res := base
+				res.Kind = KindToolResult
+				res.CallID = p.ToolUseID
+				out = append(out, res)
+			}
+		}
+	case "system":
+		if e.Subtype == "turn_duration" {
+			end := base
+			end.Kind = KindTurnEnd
+			end.DurationMs = e.DurationMs
+			out = append(out, end)
 		}
 	case "assistant":
 		turn := base
 		turn.Kind = KindAssistantTurn
+		turn.RequestID = e.RequestID
 		turn.Model = e.Message.Model
 		turn.Effort = normEffort(e.Effort)
 		turn.InputTokens = e.Message.Usage.InputTokens +
@@ -260,6 +292,7 @@ func appendTranscriptLine(out []Record, line []byte, since time.Time, withText b
 			tu := base
 			tu.Kind = KindToolUse
 			tu.ToolName = p.Name
+			tu.CallID = p.ID
 			tu.FilePath = firstNonEmpty(p.Input.FilePath, p.Input.Path)
 			if i < len(raws) {
 				tu.CallSignature = callSignature(p.Name, raws[i].Input)
@@ -368,24 +401,24 @@ func firstNonEmpty(vs ...string) string {
 func ExtractAll(opts ExtractOptions) ([]Record, error) {
 	switch {
 	case opts.Source == SourceClaudeCode:
-		return Extract(opts)
+		return stamped(SourceClaudeCode)(Extract(opts))
 	case opts.Source == SourceCodex:
-		return ExtractCodex(opts)
+		return stamped(SourceCodex)(ExtractCodex(opts))
 	case opts.Source == SourceCursor:
-		return ExtractCursor(opts)
+		return stamped(SourceCursor)(ExtractCursor(opts))
 	case opts.Source == SourceOpencode:
-		return ExtractOpencode(opts)
+		return stamped(SourceOpencode)(ExtractOpencode(opts))
 	case opts.Root != "":
 		// Pinned tree, unnamed source: read it as Claude Code, the
 		// historical meaning of Root.
-		return Extract(opts)
+		return stamped(SourceClaudeCode)(Extract(opts))
 	}
 
 	var out []Record
-	if cc, err := Extract(opts); err == nil {
+	if cc, err := stamped(SourceClaudeCode)(Extract(opts)); err == nil {
 		out = append(out, cc...)
 	}
-	if cx, err := ExtractCodex(opts); err == nil {
+	if cx, err := stamped(SourceCodex)(ExtractCodex(opts)); err == nil {
 		out = append(out, cx...)
 	}
 	// A schema failure is not a silent skip. Auto mode swallowing it would
@@ -394,14 +427,14 @@ func ExtractAll(opts ExtractOptions) ([]Record, error) {
 	// the others: every source that can be read still is, and the error
 	// names each one that could not.
 	var errs []error
-	cu, err := ExtractCursor(opts)
+	cu, err := stamped(SourceCursor)(ExtractCursor(opts))
 	switch {
 	case err == nil:
 		out = append(out, cu...)
 	case errors.Is(err, ErrCursorSchema), errors.Is(err, ErrNoCursorStore):
 		errs = append(errs, err)
 	}
-	oc, err := ExtractOpencode(opts)
+	oc, err := stamped(SourceOpencode)(ExtractOpencode(opts))
 	switch {
 	case err == nil:
 		out = append(out, oc...)
@@ -409,6 +442,19 @@ func ExtractAll(opts ExtractOptions) ([]Record, error) {
 		errs = append(errs, err)
 	}
 	return out, errors.Join(errs...)
+}
+
+// stamped marks every record a reader returned with the harness that
+// wrote it, so a unit can say which client it came from. The records are
+// the reader's own (a cached read hands out a copy), so stamping them in
+// place changes nothing another scan holds.
+func stamped(h Source) func([]Record, error) ([]Record, error) {
+	return func(recs []Record, err error) ([]Record, error) {
+		for i := range recs {
+			recs[i].Harness = h
+		}
+		return recs, err
+	}
 }
 
 // rejectionMarkers are short, unambiguous ways an operator says the last
