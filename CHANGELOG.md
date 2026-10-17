@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **team:** a team server that accepts them now receives, beside the work figures, the plan and waste figures a team lead asks for: per day and plan, how full the plan's windows got, how much of the usage it covered and how often it ran out; per day, repository and kind of work, the avoidable usage in each of the six waste classes of `tokenops spend waste`; per day, what the guardrails saved beside what stayed avoidable; and per provider, the plan advice's verdict and recommended tier with its monthly difference and confidence. They are the figures `tokenops scorecard`, `spend waste`, `coach stats` and `plan advise` already show, computed by the same code. Every name in them is from TokenOps' own catalogs (providers, plans, waste classes, verdicts); the advice's wording, model names, sessions and your allocation tags stay on the machine. The server says which upload format it reads (`max_schema` on its member page, asked once a day); one that does not say gets exactly the upload it got before, byte for byte. `tokenops team status` says which the server reads, and `tokenops team preview` shows the new sections either way, marked "Withheld" while the server does not accept them yet. ADR 0012 is amended with the new fields (#685)
+
 ### Fixed
 
 - **daemon:** a restart answers again in seconds instead of close to a minute. Before opening its port the daemon lists the models Claude Code turns were recorded under, and that lookup read every prompt event's full row; on a store of a few hundred thousand events it took most of a minute, longer than `tokenops daemon restart` waits, so a restart reported the daemon unhealthy although it came up shortly after. The lookup now reads only the usage index (13 s to 0.6 s on such a store), and a test pins its query plan

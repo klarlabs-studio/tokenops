@@ -1,6 +1,6 @@
 # ADR 0012 — The team plane: hosted, derived figures only, aggregate by default
 
-- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing.
+- **Status:** Accepted 2026-10-08; amended 2026-10-10: the server is a private service klarlabs hosts; amended again 2026-10-10: self-serve sign-up, administration and billing; amended 2026-10-17: upload schema 2 (plan use, waste, savings, plan advice) and its negotiation.
 - **Date:** 2026-10-08
 - **Deciders:** TokenOps maintainers
 - **Related:** issue #250, ADR 0004 (local-first; no BI product), ADR 0010 §5 (the API's privacy line)
@@ -89,7 +89,8 @@ by repository, by kind of work. Three decisions were taken on 2026-09-15:
 
 ## The boundary: a type that cannot carry content
 
-What crosses is `pkg/teamwire.Upload`: per **UTC day × repository label ×
+What crosses is `pkg/teamwire.Upload` (schema 2 adds the sections listed
+under *Upload schema 2* below): per **UTC day × repository label ×
 kind of work**, sums only — sessions, instructions, turns, tool calls,
 seconds spent waiting on the agent, first-try / reworked / interrupted /
 escalated / rejected counts, tokens, billed cost, API-equivalent value and
@@ -124,6 +125,55 @@ it.
 Model names, session IDs, branch names and commit SHAs are deliberately not
 in the upload: they add identification power without adding a team-level
 question the counts cannot answer.
+
+## Upload schema 2 (amended 2026-10-17)
+
+Schema 2 (#685) adds four sections beside the buckets, each a set of
+figures the machine already computes for its own surfaces, filed under
+the same keys and validated the same way:
+
+- **`plan_days`** — per UTC day × provider × plan: utilization (the mean
+  peak of the plan's longest window kind among the windows that reset that
+  day) and the number of those windows; coverage (the share of the
+  provider's tokens the plan carried) with plan and billed tokens; the
+  windows that ran out that day and the minutes blocked within it (#657).
+- **`waste`** — per UTC day × repository label × kind of work × waste
+  class: turns, tokens and API-equivalent value attributed to one of the
+  six classes of the waste taxonomy, each token to at most one (#655).
+- **`savings`** — per UTC day: interventions and holdout tips, re-reads
+  refused with their tokens and estimated value, the holdout's measured
+  saving (absent until a comparison concludes), the realized total and
+  what stayed avoidable, so the share saved is taken after adding (#656).
+- **`plan_advice`** — per provider: the plan in force, the verdict, the
+  option kind and recommended tier, the monthly difference, lockouts and
+  blocked minutes on the current and recommended tier, the confidence,
+  the days replayed and the windows measured (#653). Not per day: each
+  schema 2 upload replaces the device's advice whole.
+
+Every new string is an enumeration: a provider in the provider registry,
+a plan in its catalog (a provider's own plan, or `pay-as-you-go` or
+`subscription`), a waste class, a verdict, an option kind or a
+confidence. The advice's summary and caveats are prose and stay on the
+machine; so do allocation tags (#658), which no field can hold. Every
+figure is a non-negative sum, a share between 0 and 100, or a bounded
+amount (the realized saving and the monthly difference may be negative).
+`TestUploadHasNoFreeText` covers the new types; an optional figure is a
+pointer to a number, and a flag is a boolean.
+
+Day replacement is unchanged: an upload replaces each day in `days`
+whole, the new sections included. A covered day with no row in a section
+had none.
+
+**Negotiation.** `Me` gains `max_schema`, the newest upload format a
+server accepts. A server that omits it reads schema 1. The client asks
+`Me` at most once a day (the answer is kept in the enrolment file, and
+`tokenops team status` refreshes it), and again after a schema 2 upload
+is refused with a 4xx. Below 2 it sends schema 1 exactly as before — the
+new sections are omitted when empty, so a schema 1 upload has no key an
+older server, decoding with unknown fields refused, does not know — and
+does not compute the new sections at all. A server on this package's
+`Validate` accepts both schemas and refuses a schema 1 upload that
+carries any of the new sections.
 
 ## What the service promises about what crosses
 
