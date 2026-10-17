@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **daemon:** a restart answers within a few seconds even on a busy machine. The corrections a start applies to recorded usage (moving gateway and custom-provider turns to the provider that bills them, re-marking plan coverage) ran before the daemon opened its port, and on a large store under load they took most of the restart's wait. They now run beside the start, under the daemon's supervisor, and the log says when they are done; live ingestion records new usage correctly on its own in the meantime, and a correction cut short by shutdown runs again at the next start
+
 ## 0.106.0 - 2026-10-17
 
 ### Added

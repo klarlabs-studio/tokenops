@@ -16,7 +16,9 @@ import (
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/events"
 	"go.klarlabs.de/tokenops/internal/infra/lifecycle"
+	"go.klarlabs.de/tokenops/internal/infra/routehistory"
 	"go.klarlabs.de/tokenops/internal/proxy"
+	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -234,6 +236,32 @@ func (s *startup) startEventRuntime(ctx context.Context) error {
 	return nil
 }
 
+// runStartupCorrections is the corrections a start applies to recorded
+// usage: the ADR 0009 attribution moves and the plan-coverage re-marks.
+// Tests replace it.
+var runStartupCorrections = func(ctx context.Context, cfg config.Config, store *sqlite.Store, routes *routehistory.Tracker, logger *slog.Logger) {
+	correctAttribution(ctx, cfg, store, routes, logger)
+	correctSpendCoverage(ctx, cfg, store, logger)
+}
+
+// startCorrections runs the start-up corrections beside the boot rather
+// than before it. They rewrite recorded history, and on a large store
+// under load they took long enough that a restart outlasted the wait
+// `daemon restart` gives it; nothing that serves needs them first, and
+// live ingestion records new usage correctly on its own. A correction
+// cut short by shutdown is logged and runs again at the next start.
+func (s *startup) startCorrections(store *sqlite.Store, routes *routehistory.Tracker) {
+	if store == nil {
+		return
+	}
+	s.sup.Go("startup-corrections", func(ctx context.Context) error {
+		t0 := time.Now()
+		runStartupCorrections(ctx, s.cfg, store, routes, s.logger)
+		s.logger.Info("start-up corrections done", "took", time.Since(t0).Round(time.Millisecond))
+		return nil
+	})
+}
+
 // startStorageSubsystems runs what needs the event store: route history,
 // the attribution corrections, the vendor-usage pollers, retention, and
 // the analytics and audit API.
@@ -243,8 +271,7 @@ func (s *startup) startStorageSubsystems(ctx context.Context) error {
 	}
 	store := s.components.Store
 	routes := startRouteHistory(s.sup, s.logger)
-	correctAttribution(ctx, s.cfg, store, routes, s.logger)
-	correctSpendCoverage(ctx, s.cfg, store, s.logger)
+	s.startCorrections(store, routes)
 	// The composition root builds and starts the vendor-usage pollers.
 	s.ingest = ingestionBus(ctx, s.events.Bus, store, s.logger)
 	refresh := bootstrap.StartVendorUsagePollers(s.cfg, s.ingest, s.sourceHealth, claudeCodeBaseURLAt(routes), s.sup, s.logger)
