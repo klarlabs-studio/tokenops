@@ -33,8 +33,31 @@ repository is `none`. The kind of work — lookup, research, edit, deep or
 unknown — is classified on your machine from the instruction's opening
 words, and only the kind is sent.
 
+### Plan use, waste, savings and plan advice
+
+When the team server accepts them (upload schema 2), each upload also
+carries what a team lead asks of the plans everyone pays for, computed by
+the same code as `tokenops scorecard`, `tokenops spend waste`,
+`tokenops coach stats` and `tokenops plan advise`:
+
+| Section | One row per | Figures |
+|---|---|---|
+| plan use | UTC day × provider × plan | utilization (mean peak of the plan's longest window that reset that day) and how many windows; coverage (share of the provider's tokens the plan carried) with the plan and billed tokens; lockouts and minutes blocked |
+| waste | UTC day × repository × kind of work × waste class | turns, tokens and API-equivalent value that were avoidable, in one of the six classes of `spend waste` (each token in at most one) |
+| savings | UTC day | interventions and tips held back for the holdout, re-reads refused with their tokens and value, the holdout's measured saving, the total realized and what stayed avoidable |
+| plan advice | provider | the plan in force, the verdict (stay, switch, upgrade), the recommended tier, its monthly difference, lockouts on each, confidence and the days replayed |
+
+Providers, plans, waste classes, verdicts and confidences are names from
+TokenOps' own catalogs, checked on both ends; the advice's summary and
+caveats are sentences and stay on your machine. A server that does not say
+it accepts schema 2 gets exactly the upload above and nothing more:
+`tokenops team status` says which the server reads (asked once a day), and
+`tokenops team preview` shows these sections either way, marked as
+withheld when the server does not accept them yet.
+
 **Never sent:** prompts, file contents, file names or paths, transcripts,
-commit messages, branch names, model outputs, model names or session IDs.
+commit messages, branch names, model outputs, model names or session IDs,
+and the project, client and cost-centre tags of your allocation rules.
 The upload format has no field that could carry them, a test fails the
 build if one is added, and the server refuses anything else
 ([ADR 0012](https://github.com/klarlabs-studio/tokenops/blob/main/docs/adr/0012-team-plane.md)).

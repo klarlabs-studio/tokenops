@@ -392,24 +392,9 @@ func simulate(ws []windowInstance, factor float64, until time.Time) simulation {
 
 // unionLength is how long the spans cover together.
 func unionLength(spans [][2]time.Time) time.Duration {
-	sort.Slice(spans, func(i, j int) bool { return spans[i][0].Before(spans[j][0]) })
 	var total time.Duration
-	var cur [2]time.Time
-	for i, s := range spans {
-		switch {
-		case i == 0:
-			cur = s
-		case !s[0].After(cur[1]):
-			if s[1].After(cur[1]) {
-				cur[1] = s[1]
-			}
-		default:
-			total += cur[1].Sub(cur[0])
-			cur = s
-		}
-	}
-	if len(spans) > 0 {
-		total += cur[1].Sub(cur[0])
+	for _, s := range unionSpans(spans) {
+		total += s[1].Sub(s[0])
 	}
 	return total
 }
