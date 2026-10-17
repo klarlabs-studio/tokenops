@@ -967,11 +967,17 @@ func (s *Store) RestampMetered(ctx context.Context, provider string, from, to ti
 	return res.RowsAffected()
 }
 
+// modelsForQuery reads events_usage_idx alone: it holds type, provider,
+// model and source. Left to choose, the planner walks the provider index
+// instead and reads each prompt event's row for its type and source, which
+// on a real store took most of a minute at every daemon start.
+const modelsForQuery = `SELECT DISTINCT model FROM events INDEXED BY events_usage_idx
+		WHERE type = 'prompt' AND source = ? AND provider = ? AND model IS NOT NULL AND model != ''`
+
 // ModelsFor lists the distinct models of a source's prompt events recorded
 // under provider.
 func (s *Store) ModelsFor(ctx context.Context, source, provider string) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT model FROM events
-		WHERE type = 'prompt' AND source = ? AND provider = ? AND model IS NOT NULL AND model != ''`, source, provider)
+	rows, err := s.db.QueryContext(ctx, modelsForQuery, source, provider)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: models for: %w", contended(ctx, err))
 	}
