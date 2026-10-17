@@ -80,7 +80,7 @@ func ComputeRuntime(w Window, opts RuntimeOptions, now time.Time) Runtime {
 		Unmeasured: unmeasured,
 		Caution: "Intervals are descriptive, not model runtime. Never add task durations up as time spent " +
 			"waiting: concurrent tasks overlap, and idle and unattributed time is nobody's work.",
-		Warnings: readWarnings(readErr),
+		Warnings: readWarnings(readErr, true),
 	}
 	if len(analysed) == 0 {
 		out.Note = "no tasks in this window — widen with days or all, or check the transcript root and filters"

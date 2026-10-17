@@ -37,15 +37,18 @@ Derived figures only: windows, spend, grades, counts, tips. Never
 prompt text, file contents or transcripts. Where a question is built on
 the operator's own words, the API answers without them:
 
-- `/api/story` returns each task's shape (turns, files, frictions,
-  timing) with its title withheld, and says `titles_withheld: true`.
+- `/api/story` returns each task's shape (turns, tool calls, timing, how
+  many files it edited, and each friction by kind: `interrupted`,
+  `rejected`, `rework`, `delegated`) with its title and file paths
+  withheld, and says `titles_withheld: true` and `paths_withheld: true`.
 - `/api/story/runtime` identifies tasks by hashed keys and carries no
   instruction text, file paths or session ids.
 - `/api/coach/prompts` returns counts and recommendations, with every
   quoted instruction left out.
 
-The MCP tools keep the words, because the agent reading them is the
-operator's own.
+The MCP tool `tokenops_sessions` answers the same way by default. Only an
+explicit `quote: true` on its `story` or `prompts` view returns the
+operator's instruction text and local file paths.
 
 ## Reading
 

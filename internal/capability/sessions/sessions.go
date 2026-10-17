@@ -6,6 +6,7 @@
 package sessions
 
 import (
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -126,18 +127,34 @@ func (w Window) options(now time.Time, withPromptText bool) (agentdx.ExtractOpti
 }
 
 // readWarnings turns a partial read's error into one warning per source.
-func readWarnings(err error) []string {
+func readWarnings(err error, withholdPaths bool) []string {
 	if err == nil {
 		return nil
 	}
+	errs := []error{err}
 	if j, ok := err.(interface{ Unwrap() []error }); ok {
-		out := make([]string, 0, len(j.Unwrap()))
-		for _, e := range j.Unwrap() {
-			out = append(out, e.Error())
-		}
-		return out
+		errs = j.Unwrap()
 	}
-	return []string{err.Error()}
+	out := make([]string, 0, len(errs))
+	for _, e := range errs {
+		msg := e.Error()
+		if withholdPaths {
+			msg = homeRelative(msg)
+		}
+		out = append(out, msg)
+	}
+	return out
+}
+
+// homeRelative writes the home directory in msg as "~": a reader's error
+// names the transcript it could not read, and in a derived-only answer
+// that says where, not whose machine it is.
+func homeRelative(msg string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || len(home) < 2 {
+		return msg
+	}
+	return strings.ReplaceAll(msg, home, "~")
 }
 
 // The agent-DX domain's types, aliased so it stays their single
@@ -223,7 +240,7 @@ func DXFromRecords(records []agentdx.Record, err error, window string) DX {
 
 func dxOf(records []agentdx.Record, err error, window string) DX {
 	m := agentdx.ComputeByProvider(records)
-	out := DX{Window: window, Metrics: m, Grades: agentdx.Grade(m), Warnings: readWarnings(err)}
+	out := DX{Window: window, Metrics: m, Grades: agentdx.Grade(m), Warnings: readWarnings(err, true)}
 	if m.Prompts == 0 {
 		out.Note = "no instructions in this window — widen with days or all: true, or check the transcript root"
 		return out
@@ -252,11 +269,19 @@ type Task struct {
 	ToolCalls    int     `json:"tool_calls"`
 	// ContextCarried is the context tokens every turn of the task carried,
 	// summed: what it cost, where PeakContext is how large it grew.
-	ContextCarried int64    `json:"context_carried_tokens"`
-	PeakContext    int64    `json:"peak_context_tokens"`
-	Files          []string `json:"files,omitempty"`
-	Frictions      []string `json:"frictions"`
-	Clean          bool     `json:"clean"`
+	ContextCarried int64 `json:"context_carried_tokens"`
+	PeakContext    int64 `json:"peak_context_tokens"`
+	// Files are the absolute local paths the task edited, present only in
+	// the narrative. Derived-only, FilesEdited counts them instead: the
+	// transcripts carry no repository-relative form, so the paths are
+	// withheld rather than reduced.
+	Files       []string `json:"files,omitempty"`
+	FilesEdited int      `json:"files_edited,omitempty"`
+	// Frictions are where the task went sideways. In the narrative each
+	// is a sentence naming the instruction; derived-only each is its
+	// enumerated kind: interrupted, rejected, rework or delegated.
+	Frictions []string `json:"frictions"`
+	Clean     bool     `json:"clean"`
 }
 
 // Story is an account of recent work, newest task first.
@@ -267,6 +292,9 @@ type Story struct {
 	// out, as the daemon API does: it serves derived figures, never
 	// prompt text (ADR 0010 §5).
 	TitlesWithheld bool `json:"titles_withheld,omitempty"`
+	// PathsWithheld is set with it: the edited files are counted, not
+	// named, and each friction is reduced to its kind.
+	PathsWithheld bool `json:"paths_withheld,omitempty"`
 	// Cohort is which instructions the tasks were built from.
 	Cohort *CohortInfo `json:"cohort,omitempty"`
 	Note   string      `json:"note,omitempty"`
@@ -275,14 +303,19 @@ type Story struct {
 }
 
 // ComputeStory groups recent instructions into tasks, newest first, at
-// most limit of them (limit zero means ten; negative means all). With
-// titles, each task is titled with the operator's own instruction; the
-// text is read at scan time and never persisted.
-func ComputeStory(w Window, limit int, titles bool, now time.Time) Story {
+// most limit of them (limit zero means ten; negative means all).
+//
+// With quote, the story is the narrative: each task is titled with the
+// operator's own instruction, names the absolute paths it edited and says
+// in a sentence where it went sideways; the text is read at scan time and
+// never persisted. Without it, the story is derived figures only, as the
+// daemon API and the MCP tool serve it by default: no title, a count of
+// files instead of their paths, and each friction as its kind.
+func ComputeStory(w Window, limit int, quote bool, now time.Time) Story {
 	if limit == 0 {
 		limit = 10
 	}
-	records, window, info, readErr := w.read(now, titles)
+	records, window, info, readErr := w.read(now, quote)
 	tasks := story.Group(agentdx.Units(records), story.Options{})
 	// Newest first: the work being asked about is the work just done.
 	for i, j := 0, len(tasks)-1; i < j; i, j = i+1, j-1 {
@@ -291,14 +324,9 @@ func ComputeStory(w Window, limit int, titles bool, now time.Time) Story {
 	if limit > 0 && len(tasks) > limit {
 		tasks = tasks[:limit]
 	}
-	out := Story{Window: window, Tasks: make([]Task, 0, len(tasks)), TitlesWithheld: !titles,
-		Cohort: &info, Warnings: readWarnings(readErr)}
+	out := Story{Window: window, Tasks: make([]Task, 0, len(tasks)),
+		TitlesWithheld: !quote, PathsWithheld: !quote, Cohort: &info, Warnings: readWarnings(readErr, !quote)}
 	for _, t := range tasks {
-		found := t.Frictions()
-		frictions := make([]string, 0, len(found))
-		for _, f := range found {
-			frictions = append(frictions, f.Detail)
-		}
 		task := Task{
 			SessionID:      t.SessionID,
 			Provider:       t.Provider,
@@ -311,17 +339,32 @@ func ComputeStory(w Window, limit int, titles bool, now time.Time) Story {
 			ToolCalls:      t.ToolCalls(),
 			ContextCarried: t.ContextCarried(),
 			PeakContext:    t.PeakContext(),
-			Files:          t.Files(),
-			Frictions:      frictions,
+			Frictions:      storyFrictions(t.Frictions(), quote),
 			Clean:          t.Clean(),
 		}
-		if titles {
+		if quote {
 			task.Title = t.Title
+			task.Files = t.Files()
+		} else {
+			task.FilesEdited = len(t.Files())
 		}
 		out.Tasks = append(out.Tasks, task)
 	}
 	if len(out.Tasks) == 0 {
 		out.Note = "no tasks in this window — widen with days or all: true, or check the transcript root"
+	}
+	return out
+}
+
+// storyFrictions renders found as sentences with quote, or as their kinds.
+func storyFrictions(found []story.Friction, quote bool) []string {
+	out := make([]string, 0, len(found))
+	for _, f := range found {
+		if quote {
+			out = append(out, f.Detail)
+		} else {
+			out = append(out, f.Kind)
+		}
 	}
 	return out
 }

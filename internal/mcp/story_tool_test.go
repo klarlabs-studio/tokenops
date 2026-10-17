@@ -47,7 +47,7 @@ func TestStoryToolReturnsTheAccount(t *testing.T) {
 		`{"type":"assistant","timestamp":"2099-01-01T10:00:03Z","sessionId":"s","message":{"usage":{"input_tokens":200},"content":[{"type":"tool_use","name":"Edit","input":{"file_path":"/a.go"}}]}}`,
 	}
 	res := decodeStory(t, execTool(t, storyServer(t, strings.Join(lines, "\n")), "tokenops_story",
-		map[string]any{"days": 0}))
+		map[string]any{"days": 0, "quote": true}))
 
 	if len(res.Tasks) != 1 {
 		t.Fatalf("got %d tasks, want 1: %+v", len(res.Tasks), res.Tasks)
@@ -100,7 +100,7 @@ func TestStoryToolReturnsNewestFirst(t *testing.T) {
 		`{"type":"assistant","timestamp":"2099-01-02T10:00:01Z","sessionId":"b","message":{"usage":{"input_tokens":100}}}`,
 	}
 	res := decodeStory(t, execTool(t, storyServer(t, strings.Join(lines, "\n")), "tokenops_story",
-		map[string]any{"days": 0}))
+		map[string]any{"days": 0, "quote": true}))
 	if len(res.Tasks) != 2 {
 		t.Fatalf("got %d tasks, want 2", len(res.Tasks))
 	}

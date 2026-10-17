@@ -304,7 +304,7 @@ type spendIn struct {
 }
 
 type sessionsIn struct {
-	View      string `json:"view,omitempty" jsonschema:"enum=dx,enum=story,enum=runtime,enum=prompts,description=dx (default): how sessions go, graded, with the one change worth making. story: recent work task by task. runtime: where tasks' time went as far as transcripts record it (model request, tool, approval wait, idle, unattributed) with status, coverage and per-cohort median and p90; derived figures only. prompts: the operator's instructions scored against prompting heuristics (quotes withheld)."`
+	View      string `json:"view,omitempty" jsonschema:"enum=dx,enum=story,enum=runtime,enum=prompts,description=dx (default): how sessions go, graded, with the one change worth making. story: recent work task by task. runtime: where tasks' time went as far as transcripts record it (model request, tool, approval wait, idle, unattributed) with status, coverage and per-cohort median and p90; derived figures only. prompts: the operator's instructions scored against prompting heuristics."`
 	Days      int    `json:"days,omitempty" jsonschema:"description=dx, story and runtime: window in days (default 7)"`
 	All       bool   `json:"all,omitempty" jsonschema:"description=dx, story and runtime: read all history; overrides days"`
 	Limit     int    `json:"limit,omitempty" jsonschema:"description=story and runtime: most recent tasks (default 10, -1 for all). prompts: most recent instructions"`
@@ -314,6 +314,7 @@ type sessionsIn struct {
 	Since     string `json:"since,omitempty" jsonschema:"description=prompts: RFC3339 time or a duration such as 24h (default 7d)"`
 	Until     string `json:"until,omitempty" jsonschema:"description=prompts: RFC3339 time"`
 	SessionID string `json:"session_id,omitempty" jsonschema:"description=prompts: one Claude Code session"`
+	Quote     bool   `json:"quote,omitempty" jsonschema:"description=story and prompts: off by default. true returns the operator's instruction text as typed (story titles, prompt samples, repeats and evidence), the absolute local file paths each task edited and each friction as a sentence. Leave it off unless the operator asked to see them."`
 }
 
 type statusIn struct {
@@ -571,13 +572,13 @@ func publicTools() []publicTool {
 		},
 		{
 			name: "tokenops_sessions", title: "How sessions go", kind: reads,
-			description: "What agent sessions are like to work with, from the transcripts the clients write: graded turns, rework, interrupts and the one change worth making; the recent work task by task; where tasks' time went, as far as the transcripts record it; or the operator's prompting scored. Filter by source, model and role to keep automatic reviews apart from the operator's own work. Derived figures only; quoted instructions are withheld.",
+			description: "What agent sessions are like to work with, from the transcripts the clients write: graded turns, rework, interrupts and the one change worth making; the recent work task by task; where tasks' time went, as far as the transcripts record it; or the operator's prompting scored. Filter by source, model and role to keep automatic reviews apart from the operator's own work. By default derived figures only: no instruction text, no file paths, frictions by kind. quote: true (story and prompts) opts in to the operator's instruction text and local file paths.",
 			selector:    "view", def: "dx", input: sessionsIn{}, output: sessionsOut{},
 			routes: map[string]route{
 				"dx":      {inner: "tokenops_agent_dx", params: params("days", "all", "source", "model", "role")},
-				"story":   {inner: "tokenops_story", params: params("days", "all", "limit", "source", "model", "role")},
+				"story":   {inner: "tokenops_story", params: params("days", "all", "limit", "source", "model", "role", "quote")},
 				"runtime": {inner: "tokenops_task_runtime", params: params("days", "all", "limit", "source", "model", "role")},
-				"prompts": {inner: "tokenops_coach_prompts", params: params("since", "until", "session_id", "limit")},
+				"prompts": {inner: "tokenops_coach_prompts", params: params("since", "until", "session_id", "limit", "quote")},
 			},
 		},
 		{

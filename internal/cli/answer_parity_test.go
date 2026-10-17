@@ -236,7 +236,9 @@ func TestCLIAndMCPGiveTheSameAnswer(t *testing.T) {
 		}
 		f.cli(t, &c, "coach", "prompts", "--root", f.root, "--source", "claude-code", "--since", "2026-01-01T00:00:00Z", "--json")
 		var m map[string]any
-		f.tool(t, &m, "tokenops_coach_prompts", map[string]any{"since": "2026-01-01T00:00:00Z"})
+		// The CLI is the operator's local narrative; the tool matches it
+		// only when asked to quote.
+		f.tool(t, &m, "tokenops_coach_prompts", map[string]any{"since": "2026-01-01T00:00:00Z", "quote": true})
 		sameAnswer(t, "coach prompts", c.Findings, m)
 	})
 
@@ -247,7 +249,7 @@ func TestCLIAndMCPGiveTheSameAnswer(t *testing.T) {
 			Tasks []map[string]any `json:"tasks"`
 		}
 		f.cli(t, &c, "story", "--root", f.root, "--source", "claude-code", "--days", "0", "--limit", "0", "--json")
-		f.tool(t, &m, "tokenops_story", map[string]any{"all": true, "limit": -1})
+		f.tool(t, &m, "tokenops_story", map[string]any{"all": true, "limit": -1, "quote": true})
 		sameAnswer(t, "story", c.Tasks, m.Tasks)
 	})
 

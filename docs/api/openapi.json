@@ -6888,6 +6888,9 @@
                     "note": {
                       "type": "string"
                     },
+                    "paths_withheld": {
+                      "type": "boolean"
+                    },
                     "tasks": {
                       "items": {
                         "additionalProperties": false,
@@ -6912,6 +6915,9 @@
                               "type": "string"
                             },
                             "type": "array"
+                          },
+                          "files_edited": {
+                            "type": "integer"
                           },
                           "frictions": {
                             "items": {

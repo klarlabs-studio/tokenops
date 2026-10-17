@@ -44,6 +44,23 @@ changing settings;
 first. The developer tools (`eval`, `replay`, `coverage-debt`, `rules
 bench`) are CLI commands only.
 
+### What `tokenops_sessions` returns
+
+By default every view returns derived figures only, the same as the
+daemon API: `story` gives each task's instruction count, turns, tool calls,
+timing, `files_edited` (a count) and its frictions by kind
+(`interrupted`, `rejected`, `rework`, `delegated`), and says
+`titles_withheld: true` and `paths_withheld: true`; `prompts` gives
+counts and recommendations with no instruction quoted.
+
+Pass `quote: true` on `story` or `prompts` to get the narrative instead:
+each task titled with the operator's instruction as typed, the absolute
+local paths of the files it edited, each friction as a sentence, and the
+prompt samples, repeats and evidence quoted. The parameter's description
+says so before the call, so a client can ask the operator first. `dx`
+has nothing to quote and refuses it. `tokenops story` on the command line
+is unchanged: it is the operator's own local narrative.
+
 ### How much of the window a task takes
 
 `tokenops_prepare_work` classifies the instruction (lookup, research,
