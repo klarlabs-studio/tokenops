@@ -6,7 +6,9 @@
 package sessions
 
 import (
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
@@ -69,18 +71,34 @@ func (w Window) options(now time.Time, withPromptText bool) (agentdx.ExtractOpti
 }
 
 // readWarnings turns a partial read's error into one warning per source.
-func readWarnings(err error) []string {
+func readWarnings(err error, withholdPaths bool) []string {
 	if err == nil {
 		return nil
 	}
+	errs := []error{err}
 	if j, ok := err.(interface{ Unwrap() []error }); ok {
-		out := make([]string, 0, len(j.Unwrap()))
-		for _, e := range j.Unwrap() {
-			out = append(out, e.Error())
-		}
-		return out
+		errs = j.Unwrap()
 	}
-	return []string{err.Error()}
+	out := make([]string, 0, len(errs))
+	for _, e := range errs {
+		msg := e.Error()
+		if withholdPaths {
+			msg = homeRelative(msg)
+		}
+		out = append(out, msg)
+	}
+	return out
+}
+
+// homeRelative writes the home directory in msg as "~": a reader's error
+// names the transcript it could not read, and in a derived-only answer
+// that says where, not whose machine it is.
+func homeRelative(msg string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || len(home) < 2 {
+		return msg
+	}
+	return strings.ReplaceAll(msg, home, "~")
 }
 
 // The agent-DX domain's types, aliased so it stays their single
@@ -163,7 +181,7 @@ func DXFromRecords(records []agentdx.Record, err error, window string) DX {
 
 func dxOf(records []agentdx.Record, err error, window string) DX {
 	m := agentdx.ComputeByProvider(records)
-	out := DX{Window: window, Metrics: m, Grades: agentdx.Grade(m), Warnings: readWarnings(err)}
+	out := DX{Window: window, Metrics: m, Grades: agentdx.Grade(m), Warnings: readWarnings(err, true)}
 	if m.Prompts == 0 {
 		out.Note = "no instructions in this window — widen with days or all: true, or check the transcript root"
 		return out
@@ -247,7 +265,7 @@ func ComputeStory(w Window, limit int, quote bool, now time.Time) Story {
 		tasks = tasks[:limit]
 	}
 	out := Story{Window: window, Tasks: make([]Task, 0, len(tasks)),
-		TitlesWithheld: !quote, PathsWithheld: !quote, Warnings: readWarnings(readErr)}
+		TitlesWithheld: !quote, PathsWithheld: !quote, Warnings: readWarnings(readErr, !quote)}
 	for _, t := range tasks {
 		task := Task{
 			SessionID:      t.SessionID,
