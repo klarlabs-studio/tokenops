@@ -503,8 +503,12 @@ claiming a restart that did not happen.
 ### `tokenops status`
 
 Daemon health + `blockers[]` / `next_actions[]`. Falls back to a
-self-report when the daemon isn't running so MCP-only deployments
-don't hit a dead end.
+self-report when the daemon cannot be reached so MCP-only deployments
+don't hit a dead end. The self-report says why the connection failed
+(`reachability.class`: `permission_denied`, `refused`, `timeout` or
+`discovery`) and only calls the daemon "not running" when the
+connection was refused; see
+[Health and readiness](../runbook/health.md#when-tokenops-status-cannot-reach-the-daemon).
 
 ## Spend + plan headroom
 
