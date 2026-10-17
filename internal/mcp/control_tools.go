@@ -8,6 +8,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/infra/daemonreach"
 	"go.klarlabs.de/tokenops/internal/presentation"
 	"go.klarlabs.de/tokenops/internal/version"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
@@ -123,6 +124,9 @@ type statusResult struct {
 	// call an agent makes first says whether it is talking to old code.
 	DaemonVersion   string `json:"daemon_version,omitempty" jsonschema:"description=version of the ingestion daemon when one is reachable"`
 	ServerOutOfDate bool   `json:"server_out_of_date,omitempty" jsonschema:"description=true when a newer tokenops has been installed since this MCP server started"`
+	// DaemonReachability is whether this server reached the ingestion
+	// daemon, kept apart from the warnings so a client can branch on it.
+	DaemonReachability *daemonReachability `json:"daemon_reachability,omitempty" jsonschema:"description=whether this MCP server reached the ingestion daemon and, if not, why"`
 }
 
 // domainEventsResult is the typed payload for tokenops_records (view=events).
@@ -221,10 +225,11 @@ func statusInfo(d ControlDeps) statusResult {
 		report = d.DaemonProbe()
 	}
 	in.Dropped = report.Dropped
-	// serve is the MCP server and does not ingest; a missing daemon means
-	// nothing is writing to the store.
+	// serve is the MCP server and does not ingest; a refused daemon means
+	// nothing is writing to the store. Any other failure to reach it is
+	// reported as this server's view, with its class.
 	if w := daemonPresenceWarning(report, probed); w != "" {
-		in.DaemonMissing = &state.Problem{Warning: w, NextAction: DaemonPresenceNextAction}
+		in.DaemonMissing = &state.Problem{Warning: w, NextAction: daemonPresenceNextAction(report)}
 	}
 	drift := binaryDrift(d)
 	if drift.OutOfDate {
@@ -242,9 +247,31 @@ func statusInfo(d ControlDeps) statusResult {
 		NextActions:   st.NextActions,
 		Warnings:      st.Warnings,
 
-		DaemonVersion:   daemonVersion(d, report),
-		ServerOutOfDate: drift.OutOfDate,
+		DaemonVersion:      daemonVersion(d, report),
+		ServerOutOfDate:    drift.OutOfDate,
+		DaemonReachability: reachabilityOf(report, probed),
 	}
+}
+
+// daemonReachability is whether this MCP server reached the ingestion
+// daemon and, when it did not, why. It describes this process's view: a
+// failure other than "refused" leaves the daemon's own state unknown.
+type daemonReachability struct {
+	Reachable  bool              `json:"reachable"`
+	Class      daemonreach.Class `json:"class" jsonschema:"description=reachable, http_status, permission_denied, refused, timeout, discovery or unknown; only refused is evidence the daemon is down"`
+	Detail     string            `json:"detail,omitempty"`
+	HTTPStatus int               `json:"http_status,omitempty"`
+}
+
+// reachabilityOf is nil when no probe was wired: nothing was observed.
+func reachabilityOf(r DaemonReport, probed bool) *daemonReachability {
+	if !probed {
+		return nil
+	}
+	if r.Alive {
+		return &daemonReachability{Reachable: true, Class: daemonreach.Reachable}
+	}
+	return &daemonReachability{Class: reportClass(r), Detail: r.Detail, HTTPStatus: r.HTTPStatus}
 }
 
 // configInfo marshals the live config through Snapshot, which redacts every
@@ -299,6 +326,13 @@ func domainEventsInfo(d ControlDeps) domainEventsResult {
 	}
 	report := d.DaemonProbe()
 	if !report.Alive {
+		if class := reportClass(report); class != daemonreach.Refused {
+			return domainEventsResult{
+				Error: domainEventsUnavailable,
+				Hint: "domain events are counted inside the ingestion daemon, which this MCP server could not reach (" + string(class) + "): " +
+					class.Remedy(config.DaemonRunRemedy) + " ('tokenops events' can tally the persisted domain-event log meanwhile)",
+			}
+		}
 		return domainEventsResult{
 			Error: domainEventsUnavailable,
 			Hint:  "domain events are counted inside the ingestion daemon and none is reachable; get it running — " + config.DaemonRunRemedy + " ('tokenops events' can tally the persisted domain-event log meanwhile)",

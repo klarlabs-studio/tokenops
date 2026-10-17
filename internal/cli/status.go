@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,7 +14,9 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/state"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/daemon"
 	"go.klarlabs.de/tokenops/internal/events"
+	"go.klarlabs.de/tokenops/internal/infra/daemonreach"
 	"go.klarlabs.de/tokenops/internal/presentation"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/internal/version"
@@ -61,13 +64,15 @@ func newStatusCmd(rf *rootFlags) *cobra.Command {
 
 			res, err := fetchStatus(cmd.Context(), base)
 			if err != nil {
-				// Daemon unreachable. Fall back to the same self-report
-				// the MCP tokenops_status tool emits — config + blockers
-				// + next_actions — so operators see something actionable
-				// instead of an opaque "connection refused". The offline
-				// path can't open the store, so it omits warnings.
-				return writeOfflineStatus(cmd.OutOrStdout(), base, cfg, cfgErr, jsonOut)
+				// Daemon unreachable from here. Fall back to the same
+				// self-report the MCP tokenops_status tool emits — config +
+				// blockers + next_actions — with why the probe failed, so
+				// a sandboxed client is not told to restart a healthy
+				// daemon. The offline path can't open the store, so it
+				// omits warnings.
+				return writeOfflineStatus(cmd.OutOrStdout(), base, cfg, cfgErr, jsonOut, classifyProbe(res))
 			}
+			res.Reachability = &reachability{Reachable: true, Class: daemonreach.Reachable}
 			// Runtime ingestion staleness mirrors the MCP tokenops_status
 			// warning. Best-effort: reads the local event store directly
 			// (like `vendor-usage status`); any failure degrades to "no
@@ -103,6 +108,32 @@ type daemonProbe struct {
 	Version  endpointResult             `json:"version"`
 	Insight  presentation.StatusInsight `json:"insight"`
 	Warnings []string                   `json:"warnings,omitempty"`
+	// Reachability is whether this client got an answer, kept apart from
+	// what the answer said about the daemon.
+	Reachability *reachability `json:"reachability,omitempty"`
+}
+
+// reachability is whether this client could reach the daemon and, when it
+// could not, why. It is evidence about the client's vantage, not about the
+// daemon: a sandboxed agent denied the loopback dial sees a healthy daemon
+// as unreachable.
+type reachability struct {
+	Reachable bool              `json:"reachable"`
+	Class     daemonreach.Class `json:"class"`
+	// Detail is the failing call and errno, without the request URL.
+	Detail  string `json:"detail,omitempty"`
+	Summary string `json:"summary,omitempty"`
+	Remedy  string `json:"remedy,omitempty"`
+}
+
+// supervisorEvidence is what this machine's supervisor setup says, read
+// without asking the supervisor anything: whether a unit file is installed.
+type supervisorEvidence struct {
+	Kind          daemon.UnitKind `json:"kind"`
+	UnitInstalled bool            `json:"unit_installed"`
+	// Evidence labels the source, so a reader does not mistake an
+	// installed unit for a running job.
+	Evidence string `json:"evidence"`
 }
 
 // statusState grades the daemon the way every surface does: its explicit
@@ -117,6 +148,8 @@ type endpointResult struct {
 	Status int            `json:"status"`
 	Body   map[string]any `json:"body,omitempty"`
 	Error  string         `json:"error,omitempty"`
+	// err is the transport error behind Error, kept for classification.
+	err error
 }
 
 func fetchStatus(ctx context.Context, base string) (daemonProbe, error) {
@@ -136,11 +169,13 @@ func fetchEndpoint(ctx context.Context, url string) endpointResult {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		out.Error = err.Error()
+		out.err = err
 		return out
 	}
 	resp, err := statusClient.Do(req)
 	if err != nil {
 		out.Error = err.Error()
+		out.err = err
 		return out
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -163,19 +198,77 @@ func fetchEndpoint(ctx context.Context, url string) endpointResult {
 	return out
 }
 
-// writeOfflineStatus renders the same shape the MCP tokenops_status
-// tool emits when no daemon is reachable. Operators get blockers +
-// next_actions and an explanation that the daemon is not running —
-// not a connection-refused string they have to interpret.
-func writeOfflineStatus(w io.Writer, base string, cfg config.Config, cfgErr error, jsonOut bool) error {
+// classifyProbe says why none of the endpoints answered, from /healthz's
+// failure: all three share one address, so they fail the same way.
+func classifyProbe(res daemonProbe) reachability {
+	err := res.Health.err
+	if err == nil && res.Health.Error != "" {
+		err = errors.New(res.Health.Error)
+	}
+	class := daemonreach.Classify(err)
+	if class == daemonreach.Reachable {
+		class = daemonreach.Unknown
+	}
+	return reachability{Class: class, Detail: daemonreach.Detail(err), Summary: class.Summary()}
+}
+
+// readSupervisorEvidence reports the unit file, or nil on a platform with
+// no supervisor we know. The job's state is not queried: that would mean
+// running launchctl or systemctl from a status read.
+func readSupervisorEvidence(supervised bool) *supervisorEvidence {
+	kind, err := daemon.DetectUnitKind()
+	if err != nil {
+		return nil
+	}
+	return &supervisorEvidence{
+		Kind:          kind,
+		UnitInstalled: supervised,
+		Evidence:      "unit file on disk; the supervisor's job state was not queried",
+	}
+}
+
+func (s *supervisorEvidence) String() string {
+	if s == nil {
+		return "no supervisor detected on this platform"
+	}
+	if s.UnitInstalled {
+		return fmt.Sprintf("a %s unit is installed (unit file; job state not queried)", s.Kind)
+	}
+	return fmt.Sprintf("no %s unit is installed (unit file)", s.Kind)
+}
+
+// writeOfflineStatus renders the same shape the MCP tokenops_status tool
+// emits when this client reaches no daemon, with why. Only a refused
+// connection is reported as "not running"; every other failure leaves the
+// daemon's state unknown from here, because the client's own access — a
+// sandbox denying loopback, a wrong address — may be what failed.
+func writeOfflineStatus(w io.Writer, base string, cfg config.Config, cfgErr error, jsonOut bool, reach reachability) error {
+	supervised := daemonSupervised()
+	down := reach.Class.ImpliesDown()
+	stateName, health := "unknown", "unknown"
+	remedy := reach.Class.Remedy(restartCommand(supervised))
+	hint := reach.Summary + "; " + remedy
+	if down {
+		stateName, health = "not_running", "likely_not_running"
+		remedy = offlineRemedy(supervised)
+		hint = "daemon not running; " + remedy
+	}
+	reach.Remedy = remedy
+	insight := presentation.ForStatus(stateName)
+	sup := readSupervisorEvidence(supervised)
 	payload := map[string]any{
-		"status":  "daemon_unreachable",
-		"daemon":  base,
-		"ready":   false,
-		"state":   "not_running",
-		"insight": presentation.ForStatus("not_running"),
-		"hint":    "daemon not running; " + offlineRemedy(daemonSupervised()) + ". MCP-only deployments can ignore this and call `tokenops_status` via the MCP host instead.",
-		"version": version.String(),
+		"status":        "daemon_unreachable",
+		"daemon":        base,
+		"ready":         false,
+		"state":         stateName,
+		"insight":       insight,
+		"hint":          hint + ". MCP-only deployments can ignore this and call `tokenops_status` via the MCP host instead.",
+		"version":       version.String(),
+		"reachability":  reach,
+		"daemon_health": health,
+	}
+	if sup != nil {
+		payload["supervisor"] = sup
 	}
 	if cfgErr == nil {
 		blockers := cfg.Blockers()
@@ -187,13 +280,33 @@ func writeOfflineStatus(w io.Writer, base string, cfg config.Config, cfgErr erro
 	if jsonOut {
 		return json.NewEncoder(w).Encode(payload)
 	}
-	fmt.Fprintf(w, "daemon: %s (not running)\n", base)
-	insight := presentation.ForStatus("not_running")
+	writeOfflineText(w, base, insight, reach, sup, cfg, cfgErr)
+	return nil
+}
+
+func writeOfflineText(w io.Writer, base string, insight presentation.StatusInsight, reach reachability,
+	sup *supervisorEvidence, cfg config.Config, cfgErr error) {
+	down := reach.Class.ImpliesDown()
+	if down {
+		fmt.Fprintf(w, "daemon: %s (not running)\n", base)
+	} else {
+		fmt.Fprintf(w, "daemon: %s (not reachable from this client: %s)\n", base, reach.Class)
+	}
 	fmt.Fprintf(w, "status: %s — %s\n", insight.Level, insight.Summary)
+	fmt.Fprintf(w, "  reachability: %s — %s", reach.Class, reach.Summary)
+	if reach.Detail != "" {
+		fmt.Fprintf(w, " (%s)", reach.Detail)
+	}
+	fmt.Fprintln(w)
+	health := "unknown from this client"
+	if down {
+		health = "likely not running"
+	}
+	fmt.Fprintf(w, "  daemon health: %s; %s\n", health, sup)
 	if cfgErr == nil {
 		blockers := cfg.Blockers()
 		if len(blockers) == 0 {
-			fmt.Fprintln(w, "  blockers: none — "+offlineRemedy(daemonSupervised()))
+			fmt.Fprintln(w, "  blockers: none — "+reach.Remedy)
 		} else {
 			fmt.Fprintf(w, "  blockers: %s\n", strings.Join(blockers, ", "))
 			for _, action := range config.NextActionsFor(blockers) {
@@ -204,8 +317,11 @@ func writeOfflineStatus(w io.Writer, base string, cfg config.Config, cfgErr erro
 		fmt.Fprintf(w, "  config error: %v\n", cfgErr)
 	}
 	fmt.Fprintf(w, "  version: %s\n", version.String())
-	fmt.Fprintln(w, "  hint: "+offlineRemedy(daemonSupervised())+", or query `tokenops_status` via your MCP host for the serve-side view.")
-	return nil
+	if down {
+		fmt.Fprintln(w, "  hint: "+reach.Remedy+", or query `tokenops_status` via your MCP host for the serve-side view.")
+		return
+	}
+	fmt.Fprintln(w, "  hint: "+reach.Remedy+". For the serve-side view, query `tokenops_status` via your MCP host.")
 }
 
 // statusStaleWarnings is the store's ingestion warnings, read directly
@@ -282,6 +398,16 @@ func compactBody(body map[string]any) string {
 		return ""
 	}
 	return string(b)
+}
+
+// restartCommand is the bare command that restarts or starts the daemon on
+// this machine, for remedies where a restart is the fallback rather than
+// the first step.
+func restartCommand(supervised bool) string {
+	if supervised {
+		return "run `tokenops daemon restart`"
+	}
+	return "run `tokenops daemon install` (or `tokenops start` in a terminal you keep open)"
 }
 
 // offlineRemedy says how to get a stopped daemon running on this machine.
