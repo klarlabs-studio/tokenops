@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **daemon:** a restart answers again in seconds instead of close to a minute. Before opening its port the daemon lists the models Claude Code turns were recorded under, and that lookup read every prompt event's full row; on a store of a few hundred thousand events it took most of a minute, longer than `tokenops daemon restart` waits, so a restart reported the daemon unhealthy although it came up shortly after. The lookup now reads only the usage index (13 s to 0.6 s on such a store), and a test pins its query plan
+
 ## 0.105.0 - 2026-10-15
 
 ### Added
