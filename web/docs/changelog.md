@@ -4,7 +4,13 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.106.0**.
+Current release: **v0.106.1**.
+
+## v0.106.1 — Restarts that answer at once
+
+The corrections a start applies to recorded usage now run beside the
+start instead of before it, so a daemon restart answers within a few
+seconds even on a busy machine. Nothing else changes.
 
 ## v0.106.0 — Honest answers, a faster guard
 
