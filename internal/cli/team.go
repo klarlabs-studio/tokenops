@@ -33,7 +33,9 @@ func newTeamCmd(rf *rootFlags) *cobra.Command {
 		Long: `team connects this machine to a TokenOps team plane. Nothing is sent
 until you join. Once joined, the daemon uploads every hour, per UTC day,
 repository and kind of work: instruction, turn and outcome counts, time
-waiting on the agent, tokens and cost. Never prompts, file contents,
+waiting on the agent, tokens and cost; to a server that accepts them, also
+plan use and lockouts, avoidable usage by waste class, realized savings and
+the plan advice's verdict. Never prompts, file contents,
 transcripts, paths, commit messages or model outputs — ` + "`tokenops team preview`" + `
 prints exactly what an upload holds.
 
@@ -64,15 +66,19 @@ func teamOptions(cfg config.Config) teamshare.Options {
 // transcripts' figures.
 func withTeamDeps(ctx context.Context, cfg config.Config, fn func(teamshare.Deps) error) error {
 	var agg *spending.EventAggregator
+	var finops teamshare.FinOps
 	if resolved, err := resolvePlanDBIn("", cfg.Storage.Path); err == nil {
 		if store, err := sqlite.OpenReadOnly(ctx, resolved); err == nil {
 			defer func() { _ = store.Close() }()
 			if eng, err := buildSpendEngine(cfg); err == nil {
 				agg = spending.NewAggregator(store, eng)
+				finops = teamshare.FinOpsFor(cfg, agg, store, eng)
 			}
 		}
 	}
-	return fn(teamshare.DepsFor(agg))
+	d := teamshare.DepsFor(agg)
+	d.FinOps = finops
+	return fn(d)
 }
 
 func defaultDisplayName() string {
@@ -154,7 +160,9 @@ func writeSharePolicy(out io.Writer, cfg config.Config) {
 	fmt.Fprintf(out, "Every %s the daemon sends the last %d days, per UTC day, repository (%s) and kind of work:\n",
 		cfg.Team.EffectiveInterval(), cfg.Team.EffectiveDays(), cfg.Team.EffectiveRepoNames())
 	fmt.Fprintln(out, "  sessions, instructions, turns, tool calls, time waiting on the agent,")
-	fmt.Fprintln(out, "  first-try / reworked / interrupted / escalated / rejected counts, tokens, cost and value.")
+	fmt.Fprintln(out, "  first-try / reworked / interrupted / escalated / rejected counts, tokens, cost and value;")
+	fmt.Fprintln(out, "  and, to a server that accepts them, plan use and lockouts per plan, avoidable usage per")
+	fmt.Fprintln(out, "  waste class, realized savings per day and the plan advice's verdict.")
 	fmt.Fprintln(out, "Never prompts, file contents, transcripts, paths, commit messages or model outputs.")
 	fmt.Fprintln(out, "\n  tokenops team preview   exactly what the next upload holds")
 	fmt.Fprintln(out, "  tokenops team sync      upload now")
@@ -214,6 +222,11 @@ func newTeamStatusCmd(rf *rootFlags) *cobra.Command {
 			if meErr != nil {
 				return fmt.Errorf("could not read your page on the server: %w", meErr)
 			}
+			// The uploader trusts this answer for a day; refresh it now.
+			st.NoteSchema(me.MaxSchema, time.Now())
+			if _, err := teamclient.Load(path); err == nil {
+				_ = teamclient.Save(path, st)
+			}
 			if me.Plan != nil {
 				fmt.Fprintln(out)
 				writePlan(out, me.Plan, time.Now())
@@ -230,6 +243,11 @@ func writeMe(out io.Writer, me teamwire.Me) {
 	fmt.Fprintf(out, "\nThe server holds %d rows over %d days about you (%s, %s), kept %d days.\n",
 		me.Buckets, me.Days, me.DisplayName, me.Role, me.RetentionDays)
 	fmt.Fprintf(out, "Team, repository and kind-of-work totals withhold groups under %d people.\n", me.MinGroupSize)
+	if me.MaxSchema >= teamwire.SchemaFinOps {
+		fmt.Fprintln(out, "The server accepts upload schema 2: plan use, waste, realized savings and plan advice are sent with the work figures.")
+	} else {
+		fmt.Fprintln(out, "The server reads upload schema 1 only: plan use, waste, realized savings and plan advice stay on this machine.")
+	}
 	if me.SSOEmail != "" {
 		fmt.Fprintf(out, "Single sign-on signs you in to the web view as %s.\n", me.SSOEmail)
 	}
@@ -265,19 +283,36 @@ func newTeamPreviewCmd(rf *rootFlags) *cobra.Command {
 			ctx, cancel := context.WithTimeout(cmd.Context(), 5*time.Minute)
 			defer cancel()
 			return withTeamDeps(ctx, cfg, func(d teamshare.Deps) error {
-				u, warnings := teamshare.Build(ctx, d, teamOptions(cfg), time.Now())
+				now := time.Now()
+				path, _ := teamStatePath(cfg)
+				st, stErr := teamclient.Load(path)
+				joined := stErr == nil
+				// Not joined, the server's format is unknown: show everything
+				// a machine can send. Joined, ask the server (cached a day).
+				schema := teamwire.SchemaVersion
+				if joined {
+					checked := st.SchemaCheckedAt
+					schema = teamshare.ServerSchema(ctx, teamclient.New(st.URL, st.DeviceToken), &st, now)
+					if st.SchemaCheckedAt != checked {
+						_ = teamclient.Save(path, st)
+					}
+				}
+				opts := teamOptions(cfg)
+				opts.Schema = teamwire.SchemaVersion
+				full, warnings := teamshare.Build(ctx, d, opts, now)
+				sent := full.ForServer(schema)
 				if jsonOut {
-					return writeControlJSON(cmd, u)
+					return writeControlJSON(cmd, sent)
 				}
 				out := cmd.OutOrStdout()
-				path, _ := teamStatePath(cfg)
-				if st, err := teamclient.Load(path); err == nil {
+				if joined {
 					fmt.Fprintf(out, "Sent every %s to %s (team %s). Nothing else leaves this machine.\n\n", cfg.Team.EffectiveInterval(), st.URL, st.TeamName)
 				} else {
 					fmt.Fprintln(out, "Not joined: this is what would be sent after `tokenops team join`. Nothing is sent now.")
 					fmt.Fprintln(out)
 				}
-				writeUpload(out, u)
+				writeUpload(out, sent)
+				writeFinOps(out, full, finOpsNote(joined, sent.Schema))
 				for _, w := range warnings {
 					fmt.Fprintln(out, "warning:", w)
 				}
