@@ -256,7 +256,7 @@ func TestCLIAndMCPGiveTheSameAnswer(t *testing.T) {
 	t.Run("agent dx", func(t *testing.T) {
 		var c, m map[string]any
 		f.cli(t, &c, "dx", "--root", f.root, "--source", "claude-code", "--days", "0", "--fresh", "--json")
-		f.tool(t, &m, "tokenops_agent_dx", map[string]any{"all": true})
+		f.tool(t, &m, "tokenops_agent_dx", map[string]any{"all": true, "source": "claude-code"})
 		sameAnswer(t, "agent dx", c, m)
 	})
 

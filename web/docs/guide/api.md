@@ -41,6 +41,8 @@ the operator's own words, the API answers without them:
   many files it edited, and each friction by kind: `interrupted`,
   `rejected`, `rework`, `delegated`) with its title and file paths
   withheld, and says `titles_withheld: true` and `paths_withheld: true`.
+- `/api/story/runtime` identifies tasks by hashed keys and carries no
+  instruction text, file paths or session ids.
 - `/api/coach/prompts` returns counts and recommendations, with every
   quoted instruction left out.
 
@@ -65,8 +67,9 @@ operator's instruction text and local file paths.
 | `GET /api/vendor-usage` | Which usage sources are on and producing |
 | `GET /api/sources` | Each reader's ingestion health |
 | `POST /api/sources/refresh` | Ask the usage readers to poll now, at most every 30 seconds: `202` with how many were asked, or `429` with `Retry-After` |
-| `GET /api/dx` | Agent DX, graded, with the single change worth making |
-| `GET /api/story` | Recent work, task by task, titles withheld |
+| `GET /api/dx` | Agent DX, graded, with the single change worth making; `source`, `model` and `role` (`primary`, `auto_review`, `subagent`) choose the instructions |
+| `GET /api/story` | Recent work, task by task, titles withheld; takes the same `source`, `model` and `role` |
+| `GET /api/story/runtime` | Where tasks' time went as far as the transcripts record it: status, model request, tool, approval wait, idle and unattributed time with origin and coverage, and nearest-rank median and p90 per harness, model and role. Unknown is `null`, never `0`. Same filters, plus `limit` |
 | `GET /api/coach/prompts` | Prompt scoring, quotes withheld |
 | `GET /api/spend/summary` | Spend and tokens over a window |
 | `GET /api/spend/series` | Spend and tokens over time |

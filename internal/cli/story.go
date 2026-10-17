@@ -28,6 +28,8 @@ func newStoryCmd() *cobra.Command {
 		idleGap  time.Duration
 		jsonOut  bool
 		audience string
+		runtime  bool
+		cohort   cohortFlags
 
 		includeScratch bool
 	)
@@ -62,14 +64,30 @@ is correct — transcripts record what was attempted, and only the tests
 know the rest.
 
 Prompt text is read at scan time and never persisted. Nothing here is
-stored; the account is rebuilt from transcripts on every run.`,
+stored; the account is rebuilt from transcripts on every run.
+
+--runtime reports where each task's time went instead, as far as the
+transcripts record it: model requests, tool execution, approval waiting,
+idle and unattributed time, each with its origin and coverage, and a
+status per task (completed, last_observed, or open while it may still be
+running). A category a client does not record is unknown, not zero.
+--runtime --json is the derived-only export: no instruction text, file
+paths or session ids. --model and --role choose the instructions, the
+same filters tokenops_sessions takes.`,
 		Args: cobra.NoArgs,
 		PreRunE: func(_ *cobra.Command, _ []string) error {
+			if err := cohort.validate(); err != nil {
+				return err
+			}
 			return validateAudience(audience)
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			win := cohort.apply(transcriptWindow(root, source, days, includeScratch))
+			if runtime {
+				return writeRuntime(cmd, win, limit, idleGap, jsonOut)
+			}
 			// The narrative needs the words; Units reads them.
-			units, err := sessions.Units(transcriptWindow(root, source, days, includeScratch), time.Now())
+			units, err := sessions.Units(win, time.Now())
 			if err != nil {
 				// A reader that broke is reported, but whatever the other
 				// clients yielded is still worth showing.
@@ -98,6 +116,8 @@ stored; the account is rebuilt from transcripts on every run.`,
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON (the same as --for agent)")
 	cmd.Flags().StringVar(&audience, "for", audienceMe, "who the account is written for: me | agent | report | handoff")
 	cmd.Flags().BoolVar(&includeScratch, "include-scratch", false, scratchFlagHelp)
+	cmd.Flags().BoolVar(&runtime, "runtime", false, "where each task's time went, with coverage; with --json, the derived-only export")
+	cohort.register(cmd)
 	return cmd
 }
 

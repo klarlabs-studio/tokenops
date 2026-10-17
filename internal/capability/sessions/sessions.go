@@ -33,6 +33,62 @@ type Window struct {
 	// window, so a caller reading it repeatedly (the daemon) reads only
 	// what changed. Nil reads every transcript.
 	Cache *TranscriptCache
+	// Model keeps instructions mostly served by one model (compared
+	// without regard to case); empty keeps every model.
+	Model string
+	// Role keeps instructions of one role: primary (the operator's own),
+	// auto_review (a review the harness ran by itself) or subagent.
+	// Empty or "all" keeps every role.
+	Role string
+}
+
+// Cohort is the instruction filter the window applies after reading.
+func (w Window) Cohort() (agentdx.Cohort, error) {
+	role, err := agentdx.ParseRole(w.Role)
+	if err != nil {
+		return agentdx.Cohort{}, err
+	}
+	return agentdx.Cohort{Model: strings.TrimSpace(w.Model), Role: role}, nil
+}
+
+// Filtered reports whether the window selects a subset of instructions,
+// which a precomputed whole-window answer cannot serve.
+func (w Window) Filtered() bool {
+	c, err := w.Cohort()
+	return err != nil || !c.IsZero() || (w.Source != "" && w.Source != string(agentdx.SourceAuto))
+}
+
+// CohortInfo says which instructions a measurement covers and what the
+// window held before the filter, so a pooled figure can be read for what
+// it pools.
+type CohortInfo struct {
+	Source string `json:"source,omitempty"`
+	Model  string `json:"model,omitempty"`
+	Role   string `json:"role,omitempty"`
+	// InWindow counts the window's instructions before the model and role
+	// filter; ByRole splits them; Selected is how many the filter kept.
+	InWindow int            `json:"instructions_in_window"`
+	ByRole   map[string]int `json:"instructions_by_role"`
+	Selected int            `json:"instructions_selected"`
+}
+
+// read extracts the window, applies the cohort, and says what it pooled.
+// An invalid role is an error before anything is read.
+func (w Window) read(now time.Time, withText bool) ([]agentdx.Record, string, CohortInfo, error) {
+	opts, window := w.options(now, withText)
+	cohort, err := w.Cohort()
+	if err != nil {
+		return nil, window, CohortInfo{}, err
+	}
+	records, readErr := agentdx.ExtractAll(opts)
+	all := agentdx.Units(records)
+	info := CohortInfo{Model: cohort.Model, Role: cohort.Role, InWindow: len(all), ByRole: agentdx.RoleCounts(all)}
+	if w.Source != string(agentdx.SourceAuto) {
+		info.Source = w.Source
+	}
+	records = agentdx.FilterRecords(records, cohort)
+	info.Selected = len(agentdx.FilterUnits(all, cohort))
+	return records, window, info, readErr
 }
 
 // TranscriptCache is the agent-DX domain's per-file transcript cache.
@@ -132,8 +188,7 @@ func DegradationNote(bands []ContextBand) string { return agentdx.DegradationNot
 // be read is reported in the error, which joins one per client; whatever
 // the others yielded is still returned.
 func Units(w Window, now time.Time) ([]Unit, error) {
-	opts, _ := w.options(now, true)
-	records, err := agentdx.ExtractAll(opts)
+	records, _, _, err := w.read(now, true)
 	return agentdx.Units(records), err
 }
 
@@ -150,7 +205,10 @@ type DX struct {
 	Metrics        Metrics         `json:"metrics"`
 	Grades         Grades          `json:"grades"`
 	Recommendation *Recommendation `json:"recommendation,omitempty"`
-	Note           string          `json:"note,omitempty"`
+	// Cohort is which instructions the metrics cover, and the role mix
+	// of the window they were taken from.
+	Cohort *CohortInfo `json:"cohort,omitempty"`
+	Note   string      `json:"note,omitempty"`
 	// Warnings names each client whose transcripts could not be read.
 	// The metrics cover the others; failing the whole call instead hid
 	// the cause behind "internal error".
@@ -168,9 +226,10 @@ func ComputeDX(w Window, now time.Time) DX {
 // ComputeDXWithCurve is ComputeDX, plus how first-try success changes as
 // context grows, from the same read of the transcripts.
 func ComputeDXWithCurve(w Window, now time.Time) (DX, []agentdx.ContextBand) {
-	opts, window := w.options(now, false)
-	records, err := agentdx.ExtractAll(opts)
-	return dxOf(records, err, window), agentdx.ComputeContextCurve(records)
+	records, window, info, err := w.read(now, false)
+	dx := dxOf(records, err, window)
+	dx.Cohort = &info
+	return dx, agentdx.ComputeContextCurve(records)
 }
 
 // DXFromRecords grades records already read, for a caller that needed
@@ -235,8 +294,10 @@ type Story struct {
 	TitlesWithheld bool `json:"titles_withheld,omitempty"`
 	// PathsWithheld is set with it: the edited files are counted, not
 	// named, and each friction is reduced to its kind.
-	PathsWithheld bool   `json:"paths_withheld,omitempty"`
-	Note          string `json:"note,omitempty"`
+	PathsWithheld bool `json:"paths_withheld,omitempty"`
+	// Cohort is which instructions the tasks were built from.
+	Cohort *CohortInfo `json:"cohort,omitempty"`
+	Note   string      `json:"note,omitempty"`
 	// Warnings names each client whose transcripts could not be read.
 	Warnings []string `json:"warnings,omitempty"`
 }
@@ -254,8 +315,7 @@ func ComputeStory(w Window, limit int, quote bool, now time.Time) Story {
 	if limit == 0 {
 		limit = 10
 	}
-	opts, window := w.options(now, quote)
-	records, readErr := agentdx.ExtractAll(opts)
+	records, window, info, readErr := w.read(now, quote)
 	tasks := story.Group(agentdx.Units(records), story.Options{})
 	// Newest first: the work being asked about is the work just done.
 	for i, j := 0, len(tasks)-1; i < j; i, j = i+1, j-1 {
@@ -265,7 +325,7 @@ func ComputeStory(w Window, limit int, quote bool, now time.Time) Story {
 		tasks = tasks[:limit]
 	}
 	out := Story{Window: window, Tasks: make([]Task, 0, len(tasks)),
-		TitlesWithheld: !quote, PathsWithheld: !quote, Warnings: readWarnings(readErr, !quote)}
+		TitlesWithheld: !quote, PathsWithheld: !quote, Cohort: &info, Warnings: readWarnings(readErr, !quote)}
 	for _, t := range tasks {
 		task := Task{
 			SessionID:      t.SessionID,

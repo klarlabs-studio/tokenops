@@ -15,16 +15,22 @@ type StoryDeps struct {
 }
 
 type storyInput struct {
-	Days  int  `json:"days,omitempty" jsonschema:"description=Window in days (default 7 when omitted or 0). Use all for every transcript on disk."`
-	All   bool `json:"all,omitempty" jsonschema:"description=Read all history instead of a days window. Overrides days."`
-	Limit int  `json:"limit,omitempty" jsonschema:"description=Most recent tasks to return (default 10). -1 returns every task in the window."`
-	Quote bool `json:"quote,omitempty" jsonschema:"description=Off by default. true returns the narrative: each task titled with the operator's instruction text as typed, the absolute local file paths it edited, and each friction as a sentence. Off, tasks carry derived figures only: no title, a count of files edited and each friction's kind."`
+	Days   int    `json:"days,omitempty" jsonschema:"description=Window in days (default 7 when omitted or 0). Use all for every transcript on disk."`
+	All    bool   `json:"all,omitempty" jsonschema:"description=Read all history instead of a days window. Overrides days."`
+	Limit  int    `json:"limit,omitempty" jsonschema:"description=Most recent tasks to return (default 10). -1 returns every task in the window."`
+	Source string `json:"source,omitempty" jsonschema:"description=One client: claude-code, codex, cursor or opencode (default: every client present)"`
+	Model  string `json:"model,omitempty" jsonschema:"description=Only instructions mostly served by this model id (case-insensitive exact match)"`
+	Role   string `json:"role,omitempty" jsonschema:"enum=all,enum=primary,enum=auto_review,enum=subagent,description=all (default), primary (the operator's own instructions), auto_review (reviews the harness ran by itself, such as Codex's), or subagent"`
+	Quote  bool   `json:"quote,omitempty" jsonschema:"description=Off by default. true returns the narrative: each task titled with the operator's instruction text as typed, the absolute local file paths it edited, and each friction as a sentence. Off, tasks carry derived figures only: no title, a count of files edited and each friction's kind."`
 }
 
 // storyResult is the sessions capability's payload, shared with the
 // daemon API (ADR 0010 §4). By default it is the API's derived-only form;
 // quote is the explicit opt-in to titles, paths and friction sentences.
 type storyResult = sessions.Story
+
+// runtimeResult is the runtime coverage report, derived figures only.
+type runtimeResult = sessions.Runtime
 
 // RegisterStoryTools hands the agent its own history back.
 //
@@ -47,7 +53,25 @@ func RegisterStoryTools(s *Server, d StoryDeps) error {
 		Description("Read back an account of recent work, one task at a time: how many instructions, turns and tool calls it took, how many files it edited, and where it went sideways — an answer rejected, a file edited twice, a turn interrupted. A task is a run of consecutive instructions on one piece of work, inferred from the local transcripts. Call this to see the shape of the work in flight, to check what was already attempted before retrying something, or when the operator asks what happened in a session. By default it returns derived figures only. With quote: true it also returns each task's title (the operator's instruction text, quoted rather than summarised), the absolute local paths of the files it edited, and each friction as a sentence. Nothing here says whether the work is correct — only the tests know that.").
 		OutputSchema(storyResult{}).
 		Handler(func(_ context.Context, in storyInput) (*storyResult, error) {
-			res := sessions.ComputeStory(sessions.Window{Root: d.Root, Days: in.Days, All: in.All}, in.Limit, in.Quote, time.Now())
+			w, err := cohortWindow(d.Root, in.Days, in.All, in.Source, in.Model, in.Role)
+			if err != nil {
+				return nil, err
+			}
+			res := sessions.ComputeStory(w, in.Limit, in.Quote, time.Now())
+			return &res, nil
+		})
+	s.Tool("tokenops_task_runtime").
+		Description("Where recent tasks' time went, as far as the transcripts record it: each task's status (completed when the harness recorded its last turn ending, open when it may still be running, last_observed otherwise), its observed interval, and that interval split into model_request, tool_execution, approval_wait, idle and unattributed time, each with its origin and coverage. A category a harness does not record is null, never zero. Tool time is given as critical path and as summed resource time. Summaries are per harness, model and role with nearest-rank median and p90 and their denominators. Derived figures only: no instruction text, paths or session ids. Never add task durations up as waiting time.").
+		OutputSchema(runtimeResult{}).
+		Handler(func(_ context.Context, in storyInput) (*runtimeResult, error) {
+			if in.Quote {
+				return nil, errors.New("quote does not apply to the runtime report: it is derived figures only")
+			}
+			w, err := cohortWindow(d.Root, in.Days, in.All, in.Source, in.Model, in.Role)
+			if err != nil {
+				return nil, err
+			}
+			res := sessions.ComputeRuntime(w, sessions.RuntimeOptions{Limit: in.Limit}, time.Now())
 			return &res, nil
 		})
 	return nil

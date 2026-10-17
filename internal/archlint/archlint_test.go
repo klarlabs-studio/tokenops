@@ -120,6 +120,7 @@ var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/governance/modelpolicy",
 	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx",
 	"go.klarlabs.de/tokenops/internal/contexts/governance/story",
+	"go.klarlabs.de/tokenops/internal/contexts/governance/taskruntime",
 	"go.klarlabs.de/tokenops/internal/contexts/governance/coverdebt",
 	"go.klarlabs.de/tokenops/internal/contexts/governance/scorecard",
 	"go.klarlabs.de/tokenops/internal/contexts/intervention",

@@ -94,11 +94,19 @@ type codexLine struct {
 	Timestamp string `json:"timestamp"`
 	Type      string `json:"type"`
 	Payload   struct {
-		Type    string          `json:"type"`
-		Role    string          `json:"role"`
-		Name    string          `json:"name"`
-		Message string          `json:"message"`
-		Content json.RawMessage `json:"content"`
+		Type    string `json:"type"`
+		Role    string `json:"role"`
+		Name    string `json:"name"`
+		CallID  string `json:"call_id"`
+		Message string `json:"message"`
+		// Source is set on session_meta: "vscode", "cli", or an object
+		// naming the subagent the session runs as.
+		Source json.RawMessage `json:"source"`
+		// DurationMs and TTFTMs are set on task_complete: the harness's
+		// own measure of the turn it closes.
+		DurationMs int64           `json:"duration_ms"`
+		TTFTMs     *int64          `json:"time_to_first_token_ms"`
+		Content    json.RawMessage `json:"content"`
 		// Model and Effort are set on turn_context lines, which open each
 		// turn with the settings it runs under.
 		Model  string `json:"model"`
@@ -157,6 +165,8 @@ func readCodexTranscriptFrom(r io.Reader, sessionID string, since time.Time, wit
 		// The model and effort the current turn runs under, from its
 		// turn_context line.
 		model, effort string
+		// role is what the session runs as, from its session_meta line.
+		role string
 	)
 	for sc.Scan() {
 		var e codexLine
@@ -177,12 +187,15 @@ func readCodexTranscriptFrom(r io.Reader, sessionID string, since time.Time, wit
 		base := Record{At: at, SessionID: sessionID}
 
 		switch e.Type {
+		case "session_meta":
+			role = codexSessionRole(e.Payload.Source)
 		case "turn_context":
 			model, effort = e.Payload.Model, normEffort(e.Payload.Effort)
 		case "event_msg":
 			switch e.Payload.Type {
 			case "user_message":
 				base.Kind = KindPrompt
+				base.Role = role
 				if withText {
 					base.Text = e.Payload.Message
 				}
@@ -190,17 +203,34 @@ func readCodexTranscriptFrom(r io.Reader, sessionID string, since time.Time, wit
 			case "turn_aborted":
 				base.Kind = KindInterrupt
 				out = append(out, base)
+			case "task_complete":
+				base.Kind = KindTurnEnd
+				base.DurationMs = e.Payload.DurationMs
+				if e.Payload.TTFTMs != nil {
+					base.TTFTMs, base.TTFTRecorded = *e.Payload.TTFTMs, true
+				}
+				out = append(out, base)
 			case "token_count":
 				u := e.Payload.Info.LastTokenUsage
 				pendingContext = u.InputTokens + u.CachedInputTokens + u.CacheWriteTokens
 			}
 		case "response_item":
 			switch e.Payload.Type {
-			case "function_call":
+			case "function_call", "custom_tool_call":
+				// custom_tool_call is how current Codex issues its own
+				// tools (apply_patch among them); reading function_call
+				// alone missed most of a session's calls.
 				base.Kind = KindToolUse
 				base.ToolName = e.Payload.Name
+				base.CallID = e.Payload.CallID
 				base.FilePath = codexFilePath(e.Payload.Content)
 				out = append(out, base)
+			case "function_call_output", "custom_tool_call_output":
+				if e.Payload.CallID != "" {
+					base.Kind = KindToolResult
+					base.CallID = e.Payload.CallID
+					out = append(out, base)
+				}
 			case "message":
 				switch {
 				case strings.EqualFold(e.Payload.Role, "assistant"):
@@ -217,6 +247,7 @@ func readCodexTranscriptFrom(r io.Reader, sessionID string, since time.Time, wit
 						continue
 					}
 					base.Kind = KindPrompt
+					base.Role = role
 					if withText {
 						base.Text = text
 					}
@@ -236,6 +267,26 @@ func readCodexTranscriptFrom(r io.Reader, sessionID string, since time.Time, wit
 	// boundaries — reads these in sequence.
 	sort.SliceStable(out, func(i, j int) bool { return out[i].At.Before(out[j].At) })
 	return out, first
+}
+
+// codexSessionRole reads what a session runs as from session_meta's
+// source. Codex writes a plain string for a session the operator opened
+// ("vscode", "cli") and an object for one it spawned: the automatic
+// reviewer ("guardian") or a delegated thread.
+func codexSessionRole(raw json.RawMessage) string {
+	var src struct {
+		Subagent json.RawMessage `json:"subagent"`
+	}
+	if len(raw) == 0 || json.Unmarshal(raw, &src) != nil || len(src.Subagent) == 0 {
+		return ""
+	}
+	var named struct {
+		Other string `json:"other"`
+	}
+	if json.Unmarshal(src.Subagent, &named) == nil && strings.EqualFold(named.Other, "guardian") {
+		return RoleAutoReview
+	}
+	return RoleSubagent
 }
 
 // codexMessageText joins a message's text parts. Codex carries content as

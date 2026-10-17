@@ -1690,8 +1690,31 @@ typed, and everything the agent did before the next one.
 ```bash
 tokenops dx                       # last 7 days, every client found
 tokenops dx --days 30 --source codex
-tokenops dx --json                # {window, metrics, grades, recommendation}, as tokenops_agent_dx
+tokenops dx --json                # {window, metrics, grades, recommendation, cohort}, as tokenops_agent_dx
+tokenops dx --role primary        # your own instructions only
+tokenops dx --source codex --role auto_review   # Codex's automatic reviews only
+tokenops dx --model gpt-6.1-sol   # instructions mostly served by one model
 ```
+
+**Choose the cohort.** `--model` keeps instructions mostly served by one
+model (case-insensitive exact id). `--role` keeps one kind of instruction:
+`primary` is what you typed, `auto_review` is a review the harness ran by
+itself (Codex's reviewer, or any turn served by `codex-auto-review`), and
+`subagent` is work a harness delegated. The default, `all`, pools them,
+and the header says when it did:
+
+```
+Agent DX — last 7d
+  640 instructions across 38 sessions
+  410 of these are automatic reviews; --role primary measures your own instructions alone
+```
+
+An automatic review is a couple of seconds of a small model reading a
+diff. Pooled with your own work it sets the median, so the median then
+describes neither. The same filters exist on `tokenops story`, on the
+`tokenops_sessions` MCP tool (`source`, `model`, `role`) and on the
+daemon's `/api/dx`, `/api/story` and `/api/story/runtime`; one selection
+gives the same answer on each.
 
 The **by model and effort** table splits instructions by the model and
 the reasoning effort that handled them (Claude Code, Codex and opencode
@@ -1715,6 +1738,9 @@ tokenops story --json               # same account, for an agent to read back
 tokenops story --idle-gap 30m       # coarser task boundaries
 tokenops story --for report         # for someone you bill or report to
 tokenops story --for handoff        # for a teammate picking the work up
+tokenops story --runtime            # where each task's time went, with coverage
+tokenops story --runtime --json     # the same, as a derived-only export
+tokenops story --runtime --role primary --source codex
 ```
 
 ```
@@ -1766,6 +1792,78 @@ summed figure (`context_carried_tokens` in JSON) double-counts by
 construction, because every turn re-sends the accumulated context; that is
 the number that reads as $94k when cache-aware pricing says $10k. It is
 there for comparing tasks against each other, never as spend.
+
+#### `--runtime` — where the time went, and what is not known
+
+A task's interval, from its first instruction to the last thing the
+transcript recorded, is easy to reconstruct and easy to misread. It holds
+model requests, tools running, you answering a question, you not having
+typed yet, and stretches nothing recorded at all. `--runtime` splits it
+into what the transcripts actually carry. It is a coverage report, not a
+tracer:
+
+```
+Task runtime — last 7d
+  20 tasks: 18 completed, 1 last observed, 1 open
+  runtime samples: 19 of 20 (1 open, 0 never answered, left out)
+
+BY COHORT  (observed interval: first instruction to last activity)
+  HARNESS      MODEL                    ROLE          TASKS  SAMPLES    MEDIAN       P90
+  claude-code  claude-opus-5-5          primary          20       19     35.4m      1.7h
+
+WHERE THE TIME WENT  (median share of the observed interval, over the samples that record it;
+  each task's shares add up to its interval, but medians of them need not add up to 100%)
+  model_request        10%   recorded in 19 of 19 samples
+  tool_execution       23%   recorded in 19 of 19 samples
+  approval_wait         0%   recorded in 19 of 19 samples
+  idle                  3%   recorded in 19 of 19 samples
+  unattributed          1%   recorded in 19 of 19 samples
+```
+
+**Status.** `completed` means the harness recorded the end of the task's
+last turn (Claude Code's `turn_duration`, Codex's `task_complete`): the
+turn ended, not that the work was right. `open` means no end was recorded
+and the session was active within the idle gap, so the task may still be
+running; its interval is right-censored and it is no runtime sample.
+`last_observed` is everything else: the interval runs to the last activity
+seen. A task no turn answered has no interval at all. Summaries say how
+many tasks they cover and why the rest were left out.
+
+**Categories.** Every instant of a task's interval is assigned to exactly
+one category, in this order when recorded intervals overlap: approval
+wait, tool execution, model request, idle. What none covers is
+unattributed. So a task's categories always add up to its interval, and
+nothing is counted twice.
+
+| Category | Where it comes from | Recorded by |
+|---|---|---|
+| `model_request` | the input written before a request (your instruction or a tool result) to the last entry the request wrote, grouped by request id. Includes queueing and streaming; it is **not** time to first token. A span longer than the idle gap (a machine asleep mid-request) is left unattributed | Claude Code. Codex, Cursor and opencode record no request boundaries: **unknown** |
+| `tool_execution` | each tool call's entry to its result's entry, paired by call id | Claude Code, Codex. Cursor and opencode record calls without results: **unknown** |
+| `approval_wait` | tools that ask you something (`AskUserQuestion`, `ExitPlanMode`). A **lower bound**: no client records a permission prompt, so waiting on one sits inside its tool's span | Claude Code. Codex rollouts record no approval requests: **unknown** |
+| `idle` | from the agent's last activity on one instruction to your next instruction in the same task | every client |
+| `unattributed` | the rest, including any time a client does not record | every client |
+
+An unknown category is `null` in the JSON, never `0`, and its time sits
+visibly in `unattributed`. Tool time comes two ways: the **critical
+path**, the wall time at least one tool was running, which is what the
+task waited on, and the **summed resource time** of every call, which
+counts concurrent calls once each. Time to first token appears only where
+the harness records it (Codex's `task_complete`); it is never inferred
+from transcript timestamps, which are written when a block finishes.
+
+**Reading it.** Medians and p90 are nearest-rank, over the runtime
+samples, per harness, model and role. Never add task durations up as
+time spent waiting: concurrent tasks overlap, and idle and unattributed
+time is nobody's work. The friction count is a heuristic read from the
+transcript, labelled as one, and `verified_success` is always unknown:
+transcripts record what was attempted, not whether it was right.
+
+`--runtime --json` is the derived-only export, the same document as the
+`tokenops_sessions` tool's `runtime` view and `GET /api/story/runtime`:
+per task a stable hashed `task_key` and `attempt_keys`, harness, model,
+role, status with its evidence, the categories with `quality`, `origin`,
+`complete` and their coverage (`timed` of `seen`), the tool figures, and
+the summaries. It carries no instruction text, file paths or session ids.
 
 #### `--for` — one account, four readings
 
