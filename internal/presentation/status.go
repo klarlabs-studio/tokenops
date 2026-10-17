@@ -19,6 +19,10 @@ func ForStatus(state string) StatusInsight {
 		return StatusInsight{Level: "attention", Summary: "TokenOps is running with reduced coverage; inspect blockers, warnings, and next_actions."}
 	case "not_configured":
 		return StatusInsight{Level: "action_required", Summary: "Setup is incomplete; resolve the listed blockers using next_actions."}
+	case "unknown":
+		// The caller could not observe the service; that is not evidence
+		// it is down.
+		return StatusInsight{Level: "unavailable", Summary: "Readiness is unknown from this client: it could not reach the daemon; see reachability for why."}
 	default:
 		return StatusInsight{Level: "unavailable", Summary: "Readiness is not established; inspect blockers and next_actions."}
 	}

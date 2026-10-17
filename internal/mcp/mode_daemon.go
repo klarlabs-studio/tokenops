@@ -12,6 +12,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/daemonhint"
+	"go.klarlabs.de/tokenops/internal/infra/daemonreach"
 )
 
 // ensureDaemon makes "mode: active" actually do something: the live
@@ -85,6 +86,14 @@ type DaemonReport struct {
 	// Absent from an older daemon's payload, which reads as zero — an
 	// unknown that stays silent rather than inventing an alarm.
 	Dropped int64
+	// Class is why the probe did or did not get an answer. Only Refused is
+	// evidence the daemon is down; the rest describe this process's view.
+	// Empty means the prober did not say, which reads as Unknown.
+	Class daemonreach.Class
+	// Detail is the failing call and errno, without the URL.
+	Detail string
+	// HTTPStatus is the status /healthz answered with when it was not 200.
+	HTTPStatus int
 }
 
 // probeDaemonAt asks the daemon how it is doing: first where its URL hint
@@ -95,37 +104,71 @@ type DaemonReport struct {
 // is reachable" for a healthy one. A missing or stale hint is a reason to
 // ask the configured address, not evidence of absence. An empty
 // fallbackURL skips that second probe.
+//
+// When neither answers, the report carries the most telling failure: an
+// HTTP answer, then a denial or timeout (the daemon may well be up), then a
+// refusal. A stale hint port that refuses must not hide a configured
+// address this process was denied, or the warning would claim an outage.
 func probeDaemonAt(fallbackURL string) DaemonReport {
-	var out DaemonReport
 	hintURL := ""
 	if hint, err := daemonhint.Read(); err == nil && hint != nil {
 		hintURL = hint.URL
 	}
+	out := DaemonReport{Class: daemonreach.Discovery,
+		Detail: "no daemon URL hint and no configured listen address"}
 	if hintURL != "" {
 		if out = probeHealthz(hintURL, 2*time.Second); out.Alive {
 			return out
 		}
 	}
 	if fallbackURL != "" && fallbackURL != hintURL {
-		if r := probeHealthz(fallbackURL, fallbackProbeTimeout); r.Alive {
+		r := probeHealthz(fallbackURL, fallbackProbeTimeout)
+		if r.Alive {
 			return r
+		}
+		if hintURL == "" || failureRank(r.Class) < failureRank(out.Class) {
+			out = r
 		}
 	}
 	return out
 }
 
+// failureRank orders failures by how much they say about the daemon; lower
+// says more.
+func failureRank(c daemonreach.Class) int {
+	switch c {
+	case daemonreach.HTTPStatus:
+		return 0
+	case daemonreach.PermissionDenied:
+		return 1
+	case daemonreach.Timeout:
+		return 2
+	case daemonreach.Refused:
+		return 3
+	case daemonreach.Discovery:
+		return 4
+	default:
+		return 5
+	}
+}
+
+// probeTransport is the probe's HTTP transport; nil is the default one.
+// Tests replace it to simulate dial failures without a socket.
+var probeTransport http.RoundTripper
+
 // probeHealthz asks one address for /healthz.
 func probeHealthz(url string, timeout time.Duration) DaemonReport {
-	client := http.Client{Timeout: timeout}
+	client := http.Client{Timeout: timeout, Transport: probeTransport}
 	resp, err := client.Get(url + "/healthz")
 	if err != nil {
-		return DaemonReport{}
+		return DaemonReport{Class: daemonreach.Classify(err), Detail: daemonreach.Detail(err)}
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return DaemonReport{URL: url}
+		return DaemonReport{URL: url, Class: daemonreach.HTTPStatus, HTTPStatus: resp.StatusCode,
+			Detail: fmt.Sprintf("HTTP %d", resp.StatusCode)}
 	}
-	out := DaemonReport{URL: url, Alive: true}
+	out := DaemonReport{URL: url, Alive: true, Class: daemonreach.Reachable}
 	var body struct {
 		DroppedEvents int64 `json:"dropped_events"`
 	}

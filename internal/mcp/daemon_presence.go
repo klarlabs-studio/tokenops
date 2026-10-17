@@ -1,5 +1,11 @@
 package mcp
 
+import (
+	"fmt"
+
+	"go.klarlabs.de/tokenops/internal/infra/daemonreach"
+)
+
 // daemonRemedyEitherWay names the command that brings the daemon back when
 // the caller cannot tell whether a supervisor unit is installed. It gives
 // both, with the condition that picks between them, and never a foreground
@@ -45,10 +51,17 @@ func ProbeDaemonAt(fallbackURL string) DaemonReport { return probeDaemonAt(fallb
 //
 // The staleness check catches the consequence, but only after its window has
 // elapsed, and a quiet source is genuinely ambiguous: an operator who has not
-// used a vendor recently looks identical to one whose poller died. A missing
-// daemon is not ambiguous, so this fires immediately and says which of the two
-// programs is missing — the pair are one word apart and only one of them
-// ingests.
+// used a vendor recently looks identical to one whose poller died. A refused
+// connection is not ambiguous, so this fires immediately and says which of
+// the two programs is missing — the pair are one word apart and only one of
+// them ingests.
+//
+// Only a refusal supports "nothing is writing". This process failing to
+// reach the daemon for any other reason — a sandbox denying the loopback
+// dial, a timeout, no usable address — is a fact about this process's view,
+// and the daemon may be ingesting normally; asserting an outage from it sent
+// operators to restart healthy daemons. Those cases say they could not
+// reach it, and why.
 //
 // It names `tokenops start` as the program that ingests, not as the fix: the
 // warning cannot tell whether a supervisor unit is installed, and where one
@@ -64,8 +77,42 @@ func daemonPresenceWarning(r DaemonReport, probed bool) string {
 	if !probed || r.Alive {
 		return ""
 	}
-	return "no ingestion daemon is reachable: nothing is writing to the event store, " +
-		"so spend and usage answers will go stale without further warning — " +
-		"`tokenops serve` is the MCP server and does not ingest; the daemon (`tokenops start`) does. " +
-		"To bring it back, " + daemonRemedyEitherWay
+	switch class := reportClass(r); class {
+	case daemonreach.Refused:
+		return "no ingestion daemon is reachable (connection refused): nothing is writing to the event store, " +
+			"so spend and usage answers will go stale without further warning — " +
+			"`tokenops serve` is the MCP server and does not ingest; the daemon (`tokenops start`) does. " +
+			"To bring it back, " + daemonRemedyEitherWay
+	case daemonreach.HTTPStatus:
+		return fmt.Sprintf("the ingestion daemon answered /healthz with HTTP %d: it is running but not healthy, "+
+			"so ingestion may be impaired — %s", r.HTTPStatus, class.Remedy(daemonRemedyEitherWay))
+	default:
+		cause := string(class)
+		if r.Detail != "" {
+			cause += ": " + r.Detail
+		}
+		return "this MCP server could not reach the ingestion daemon (" + cause + "). " +
+			"That says nothing about whether it is running or ingesting — " + class.Summary() + ". " +
+			"Next: " + class.Remedy(daemonRemedyEitherWay)
+	}
+}
+
+// reportClass reads an unset class as Unknown: a prober that did not say
+// why is not evidence of a refusal.
+func reportClass(r DaemonReport) daemonreach.Class {
+	if r.Class == "" || r.Class == daemonreach.Reachable {
+		return daemonreach.Unknown
+	}
+	return r.Class
+}
+
+// daemonPresenceNextAction is the next_actions entry for an unreachable
+// daemon. Only a refusal leads with bringing the daemon back.
+func daemonPresenceNextAction(r DaemonReport) string {
+	class := reportClass(r)
+	if class == daemonreach.Refused {
+		return DaemonPresenceNextAction
+	}
+	return "this MCP server could not reach the ingestion daemon (" + string(class) + "): " +
+		class.Remedy(daemonRemedyEitherWay)
 }

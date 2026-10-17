@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"go.klarlabs.de/tokenops/internal/events"
+	"go.klarlabs.de/tokenops/internal/infra/daemonreach"
 )
 
 // serve and start share nothing but events.db, so when the ingestion daemon
@@ -16,7 +17,7 @@ import (
 // The staleness check catches the consequence but needs 48 hours and can be
 // explained away as "I haven't used it lately". A missing daemon cannot.
 func TestDaemonPresenceWarningWhenAbsent(t *testing.T) {
-	warn := daemonPresenceWarning(DaemonReport{}, true)
+	warn := daemonPresenceWarning(DaemonReport{Class: daemonreach.Refused}, true)
 
 	if warn == "" {
 		t.Fatal("no warning when the ingestion daemon is unreachable")
@@ -36,7 +37,7 @@ func TestDaemonPresenceWarningWhenAbsent(t *testing.T) {
 // the condition that picks between them.
 func TestDaemonPresenceRemedyNeverOffersAForegroundStart(t *testing.T) {
 	for name, text := range map[string]string{
-		"warning":     daemonPresenceWarning(DaemonReport{}, true),
+		"warning":     daemonPresenceWarning(DaemonReport{Class: daemonreach.Refused}, true),
 		"next action": DaemonPresenceNextAction,
 	} {
 		for _, bad := range []string{"run 'tokenops start'", "run `tokenops start`", "with 'tokenops start'"} {
