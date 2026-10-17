@@ -82,14 +82,30 @@ var windowSourceProvider = map[string]eventschema.Provider{
 // [since, now]: the window readings among them for utilization, the
 // per-request turns for coverage.
 func PlanUseFrom(envs []*eventschema.Envelope, since, now time.Time) PlanUseReport {
+	return planUse(envs, since, since, now)
+}
+
+// PlanUseOn is plan use on one day, [start, end]: the windows that reset in
+// it, read from every reading in envs however early (a weekly window
+// filled up over the days before it reset), and the turns made in it.
+func PlanUseOn(envs []*eventschema.Envelope, start, end time.Time) PlanUseReport {
+	return planUse(envs, time.Time{}, start, end)
+}
+
+// planUse measures plan use in [since, now] from the window readings
+// taken in [readFrom, now] and the turns made in [since, now].
+func planUse(envs []*eventschema.Envelope, readFrom, since, now time.Time) PlanUseReport {
 	readings := map[string][]QuotaWindow{}
 	plan, billed := map[string]int64{}, map[string]int64{}
 	for _, e := range envs {
-		if e == nil || e.Timestamp.Before(since) || e.Timestamp.After(now) {
+		if e == nil || e.Timestamp.Before(readFrom) || e.Timestamp.After(now) {
 			continue
 		}
 		if p, ok := windowSourceProvider[e.Source]; ok && e.Attributes != nil {
 			readings[string(p)] = append(readings[string(p)], QuotaWindowsFromAttributes(p, e.Attributes)...)
+		}
+		if e.Timestamp.Before(since) {
+			continue
 		}
 		pe, ok := e.Payload.(*eventschema.PromptEvent)
 		if !ok || !perRequest(e) {

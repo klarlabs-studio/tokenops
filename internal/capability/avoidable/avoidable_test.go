@@ -252,3 +252,25 @@ func TestReportCarriesNoIdentifiers(t *testing.T) {
 		}
 	}
 }
+
+// BuildTurns hands out the attribution the report sums: per class, the
+// turns' tokens and dollars add up to the class's.
+func TestBuildTurnsSumToTheClasses(t *testing.T) {
+	r, turns := BuildTurns(fixture())
+	if len(turns) == 0 {
+		t.Fatal("no attributed turns")
+	}
+	tokens, usd := map[waste.Class]int64{}, map[waste.Class]float64{}
+	for i, tw := range turns {
+		if i > 0 && tw.Turn.At.Before(turns[i-1].Turn.At) {
+			t.Errorf("turns out of order at %d", i)
+		}
+		tokens[tw.Class] += tw.Tokens
+		usd[tw.Class] += tw.APIEquivalentUSD
+	}
+	for _, cc := range r.Classes {
+		if tokens[cc.Class] != cc.Tokens || math.Abs(usd[cc.Class]-cc.APIEquivalentUSD) > 1e-9 {
+			t.Errorf("%s: turns hold %d tokens $%.4f, class %d $%.4f", cc.Class, tokens[cc.Class], usd[cc.Class], cc.Tokens, cc.APIEquivalentUSD)
+		}
+	}
+}

@@ -221,8 +221,26 @@ var guardrailOf = map[waste.Class]string{
 	waste.ClassAbandoned:  learning.CapabilitySessionBudget,
 }
 
+// TurnWaste is the part of one turn given to one class.
+type TurnWaste struct {
+	Turn             analytics.SessionTurn
+	Class            waste.Class
+	Tokens           int64
+	APIEquivalentUSD float64
+}
+
 // Build computes the report from in.
 func Build(in Inputs) Report {
+	r, _ := BuildTurns(in)
+	return r
+}
+
+// BuildTurns is Build with the attribution it sums: each period turn's
+// avoidable tokens per class, oldest turn first, for a caller that files
+// them under its own keys (the team upload files them by day, repository
+// and kind of work).
+func BuildTurns(in Inputs) (Report, []TurnWaste) {
+	var turns []TurnWaste
 	r := Report{Since: in.Since, Until: in.Until, Attribution: Attribution, Classes: []ClassCost{}, Guardrails: []Guardrail{}}
 	b := newBook(in)
 	b.claimRereads(in.Rereads)
@@ -246,13 +264,16 @@ func Build(in Inputs) Report {
 		r.Usage.Tokens += t.Tokens
 		r.Usage.APIEquivalentUSD += t.APIEquivalentUSD
 		usageTokens[t.Provider] += t.Tokens
-		for c, n := range attributed[p] {
+		for _, c := range waste.Classes() {
+			n := attributed[p][c]
 			if n <= 0 {
 				continue
 			}
 			cc := byClass[c]
+			v := valueOf(t, n)
+			turns = append(turns, TurnWaste{Turn: t, Class: c, Tokens: n, APIEquivalentUSD: v})
 			cc.Tokens += n
-			cc.APIEquivalentUSD += valueOf(t, n)
+			cc.APIEquivalentUSD += v
 			cc.Turns++
 			sessionsOf[c][t.SessionID] = true
 			tokensOf[c][t.Provider] += n
@@ -277,7 +298,7 @@ func Build(in Inputs) Report {
 	r.Guardrails, r.Next = rank(in.Steps, r.Classes)
 	r.Notes = b.notes()
 	r.Headline = headline(r)
-	return r
+	return r, turns
 }
 
 // valueOf is n of a turn's tokens at its API-equivalent rate.
