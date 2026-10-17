@@ -21,7 +21,7 @@ chosen view is refused with a message saying which ones do.
 |---|---|---|
 | `tokenops_glance` | Every plan's windows with pace, spend against limits, the session budget, the coach's findings | `all`, `headroom`, `session_budget`, `findings` |
 | `tokenops_spend` | What was spent and where | `summary`, `top`, `burn`, `forecast`, `commits`, `units`, `waste`, `tags` |
-| `tokenops_sessions` | How agent sessions go | `dx`, `story`, `prompts` |
+| `tokenops_sessions` | How agent sessions go, by source, model and role | `dx`, `story`, `runtime`, `prompts` |
 | `tokenops_status` | Whether TokenOps is working and how it is set up | `status`, `mode`, `config`, `data_sources`, `vendor_usage`, `version` |
 | `tokenops_explain` | What a figure means, or why a decision was made | `term` or `decision_id` |
 | `tokenops_records` | What TokenOps recorded | `optimizations`, `audit`, `events`, `workflow`, `scorecard`, `verify` |
@@ -88,6 +88,37 @@ The share is read from the plan's usage meter at the start and the end,
 so other work in the same window counts toward it, and a window that
 resets during the task leaves the share unmeasured. Only the task class,
 the repository label and percentages are stored, never the instruction.
+
+### Sessions by cohort, and where tasks' time went
+
+`tokenops_sessions` takes `source` (`claude-code`, `codex`, `cursor`,
+`opencode`), `model` (a model id, case-insensitive) and `role` (`all`,
+`primary`, `auto_review`, `subagent`) on its `dx`, `story` and `runtime`
+views. `primary` is what the operator typed; `auto_review` is a review the
+harness ran by itself, such as Codex's reviewer. Pooled, those reviews can
+outnumber the operator's own instructions many times over and set the
+median, so compare them apart. Each answer carries a `cohort` block: what
+was selected, and the window's instructions by role before the filter. An
+unknown role is an error, not a silent "all". The CLI's `--source`,
+`--model` and `--role` select the same instructions and give the same
+answer.
+
+```json
+{"view": "runtime", "days": 7, "source": "codex", "role": "primary"}
+```
+
+The `runtime` view is the coverage report `tokenops story --runtime --json`
+exports (see [`tokenops story --runtime`](/guide/cli#runtime-where-the-time-went-and-what-is-not-known)):
+per task a status (`completed`, `last_observed`, `open`), the observed
+interval, and that interval split into `model_request`, `tool_execution`,
+`approval_wait`, `idle` and `unattributed`, each with its `quality`,
+`origin`, whether it is `complete`, and its coverage. A category the
+harness does not record is `null`, never `0`; the `unmeasured` list names
+each such gap. Tool time comes as `critical_path_seconds` and
+`resource_seconds`, and the summaries give nearest-rank median and p90
+per harness, model and role with their denominators. It carries derived
+figures only: no instruction text, paths or session ids. Never add task
+durations up as waiting time.
 
 ## Claude Desktop setup
 

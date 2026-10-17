@@ -55,6 +55,9 @@ var (
 	untilParam   = q("until", "string", "RFC 3339 time; open when omitted")
 	daysParam    = q("days", "integer", "window in days; 7 when omitted")
 	allParam     = q("all", "boolean", "read all history; overrides days")
+	sourceParam  = q("source", "string", "one client: claude-code, codex, cursor or opencode; every client present when omitted")
+	modelParam   = q("model", "string", "only instructions mostly served by this model id (case-insensitive)")
+	roleParam    = q("role", "string", "all (default), primary, auto_review or subagent")
 	includeParam = q("include_sources", "string", "comma-separated sources to include beyond the defaults")
 )
 
@@ -81,8 +84,9 @@ var APICatalog = []RouteDoc{
 	{Method: "POST", Path: "/api/sources/refresh", Summary: "Ask the usage readers to poll now (at most every 30s)", Response: SourcesRefreshResult{}},
 
 	// Sessions (slice 3).
-	{Method: "GET", Path: "/api/dx", Summary: "Agent DX, graded, with the single change worth making", Params: []Param{daysParam, allParam}, Response: sessions.DX{}},
-	{Method: "GET", Path: "/api/story", Summary: "Recent work task by task; the operator's instructions are withheld", Params: []Param{daysParam, allParam, q("limit", "integer", "most recent tasks; 10 when omitted")}, Response: sessions.Story{}},
+	{Method: "GET", Path: "/api/dx", Summary: "Agent DX, graded, with the single change worth making", Params: []Param{daysParam, allParam, sourceParam, modelParam, roleParam}, Response: sessions.DX{}},
+	{Method: "GET", Path: "/api/story", Summary: "Recent work task by task; the operator's instructions are withheld", Params: []Param{daysParam, allParam, q("limit", "integer", "most recent tasks; 10 when omitted"), sourceParam, modelParam, roleParam}, Response: sessions.Story{}},
+	{Method: "GET", Path: "/api/story/runtime", Summary: "Where tasks' time went as far as transcripts record it, with status, coverage and per-cohort percentiles; derived figures only", Params: []Param{daysParam, allParam, q("limit", "integer", "most recent tasks; 10 when omitted, -1 for all"), sourceParam, modelParam, roleParam}, Response: sessions.Runtime{}},
 	{Method: "GET", Path: "/api/coach/prompts", Summary: "Prompt scoring; quoted instructions are withheld", Params: []Param{sinceParam, untilParam, q("session_id", "string", "one Claude Code session"), q("limit", "integer", "most recent instructions")}, Response: sessions.Findings{}},
 
 	// Spending (slice 3).

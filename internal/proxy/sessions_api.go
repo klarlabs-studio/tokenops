@@ -24,7 +24,11 @@ type SessionRoots struct {
 //
 //	GET /api/dx?days=&all=              graded agent DX
 //	GET /api/story?days=&all=&limit=    recent work, task by task
+//	GET /api/story/runtime?days=&all=&limit=  where tasks' time went
 //	GET /api/coach/prompts?since=&until=&session_id=&limit=
+//
+// dx, story and story/runtime also take ?source=, ?model= and ?role=,
+// the cohort filters the CLI and the MCP tool take.
 //
 // Both carry derived figures only: story titles and quoted instructions
 // are withheld (ADR 0010 §5). roots is called per request; nil leaves the
@@ -58,6 +62,19 @@ func (s *Server) registerSessionRoutes(mux RouteMux) {
 		}
 		writeAPIJSON(w, http.StatusOK, sessions.ComputeStory(win, limit, false, time.Now()))
 	})
+	mux.HandleFunc("GET /api/story/runtime", func(w http.ResponseWriter, r *http.Request) {
+		win, err := sessionWindow(r, s.sessions().Transcripts)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		limit, err := intParam(r, "limit")
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err)
+			return
+		}
+		writeAPIJSON(w, http.StatusOK, sessions.ComputeRuntime(win, sessions.RuntimeOptions{Limit: limit}, time.Now()))
+	})
 	mux.HandleFunc("GET /api/coach/prompts", func(w http.ResponseWriter, r *http.Request) {
 		limit, err := intParam(r, "limit")
 		if err != nil {
@@ -83,7 +100,8 @@ func (s *Server) registerSessionRoutes(mux RouteMux) {
 	})
 }
 
-// sessionWindow reads ?days= and ?all=.
+// sessionWindow reads ?days=, ?all= and the cohort filters ?source=,
+// ?model= and ?role=.
 func sessionWindow(r *http.Request, root string) (sessions.Window, error) {
 	days, err := intParam(r, "days")
 	if err != nil {
@@ -95,7 +113,13 @@ func sessionWindow(r *http.Request, root string) (sessions.Window, error) {
 			return sessions.Window{}, errors.New("all must be true or false")
 		}
 	}
-	return sessions.Window{Root: root, Days: days, All: all}, nil
+	q := r.URL.Query()
+	win := sessions.Window{Root: root, Days: days, All: all,
+		Source: q.Get("source"), Model: q.Get("model"), Role: q.Get("role")}
+	if _, err := win.Cohort(); err != nil {
+		return sessions.Window{}, err
+	}
+	return win, nil
 }
 
 // intParam reads an optional integer query parameter.

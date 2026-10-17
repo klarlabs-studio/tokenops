@@ -33,5 +33,13 @@
     "title": "The agent is redoing its own edits",
     "evidence": "20.0% of edits revisit a file already edited answering the same instruction, across 5 edits",
     "action": "state the whole change up front — which files, which cases — so the first attempt has what the second one needed"
+  },
+  "cohort": {
+    "source": "claude-code",
+    "instructions_in_window": 3,
+    "instructions_by_role": {
+      "primary": 3
+    },
+    "instructions_selected": 3
   }
 }
