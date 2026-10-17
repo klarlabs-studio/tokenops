@@ -49,6 +49,7 @@ var apiRoute = map[string]string{
 	"tokenops_vendor_usage_status": "/api/vendor-usage",
 	"tokenops_agent_dx":            "/api/dx",
 	"tokenops_story":               "/api/story",
+	"tokenops_task_runtime":        "/api/story/runtime",
 	"tokenops_coach_prompts":       "/api/coach/prompts",
 	"tokenops_top_consumers":       "/api/spend/top",
 	"tokenops_burn_rate":           "/api/spend/burn-rate",

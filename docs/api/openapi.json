@@ -1771,6 +1771,33 @@
             "schema": {
               "type": "boolean"
             }
+          },
+          {
+            "description": "one client: claude-code, codex, cursor or opencode; every client present when omitted",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "only instructions mostly served by this model id (case-insensitive)",
+            "in": "query",
+            "name": "model",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "all (default), primary, auto_review or subagent",
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1780,6 +1807,31 @@
                 "schema": {
                   "additionalProperties": false,
                   "properties": {
+                    "cohort": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "instructions_by_role": {
+                          "properties": {},
+                          "type": "object"
+                        },
+                        "instructions_in_window": {
+                          "type": "integer"
+                        },
+                        "instructions_selected": {
+                          "type": "integer"
+                        },
+                        "model": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
                     "grades": {
                       "additionalProperties": false,
                       "properties": {
@@ -6772,6 +6824,33 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "description": "one client: claude-code, codex, cursor or opencode; every client present when omitted",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "only instructions mostly served by this model id (case-insensitive)",
+            "in": "query",
+            "name": "model",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "all (default), primary, auto_review or subagent",
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -6781,6 +6860,31 @@
                 "schema": {
                   "additionalProperties": false,
                   "properties": {
+                    "cohort": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "instructions_by_role": {
+                          "properties": {},
+                          "type": "object"
+                        },
+                        "instructions_in_window": {
+                          "type": "integer"
+                        },
+                        "instructions_selected": {
+                          "type": "integer"
+                        },
+                        "model": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
                     "note": {
                       "type": "string"
                     },
@@ -6871,6 +6975,672 @@
           }
         },
         "summary": "Recent work task by task; the operator's instructions are withheld"
+      }
+    },
+    "/api/story/runtime": {
+      "get": {
+        "operationId": "getStoryRuntime",
+        "parameters": [
+          {
+            "description": "window in days; 7 when omitted",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "read all history; overrides days",
+            "in": "query",
+            "name": "all",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "most recent tasks; 10 when omitted, -1 for all",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "one client: claude-code, codex, cursor or opencode; every client present when omitted",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "only instructions mostly served by this model id (case-insensitive)",
+            "in": "query",
+            "name": "model",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "all (default), primary, auto_review or subagent",
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "caution": {
+                      "type": "string"
+                    },
+                    "cohort": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "instructions_by_role": {
+                          "properties": {},
+                          "type": "object"
+                        },
+                        "instructions_in_window": {
+                          "type": "integer"
+                        },
+                        "instructions_selected": {
+                          "type": "integer"
+                        },
+                        "model": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "groups": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "categories": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "category": {
+                                  "type": "string"
+                                },
+                                "known": {
+                                  "type": "integer"
+                                },
+                                "seconds": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "median": {
+                                      "type": "number"
+                                    },
+                                    "method": {
+                                      "type": "string"
+                                    },
+                                    "n": {
+                                      "type": "integer"
+                                    },
+                                    "p90": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "share_of_observed": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "median": {
+                                      "type": "number"
+                                    },
+                                    "method": {
+                                      "type": "string"
+                                    },
+                                    "n": {
+                                      "type": "integer"
+                                    },
+                                    "p90": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "unknown": {
+                                  "type": "integer"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "completed_seconds": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "median": {
+                                "type": "number"
+                              },
+                              "method": {
+                                "type": "string"
+                              },
+                              "n": {
+                                "type": "integer"
+                              },
+                              "p90": {
+                                "type": "number"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "excluded_no_turns": {
+                            "type": "integer"
+                          },
+                          "excluded_open": {
+                            "type": "integer"
+                          },
+                          "harness": {
+                            "type": "string"
+                          },
+                          "harness_ttft_seconds": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "median": {
+                                "type": "number"
+                              },
+                              "method": {
+                                "type": "string"
+                              },
+                              "n": {
+                                "type": "integer"
+                              },
+                              "p90": {
+                                "type": "number"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "heuristic_clean": {
+                            "type": "integer"
+                          },
+                          "heuristic_label": {
+                            "type": "string"
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "observed_seconds": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "median": {
+                                "type": "number"
+                              },
+                              "method": {
+                                "type": "string"
+                              },
+                              "n": {
+                                "type": "integer"
+                              },
+                              "p90": {
+                                "type": "number"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "role": {
+                            "type": "string"
+                          },
+                          "runtime_samples": {
+                            "type": "integer"
+                          },
+                          "status": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "completed": {
+                                "type": "integer"
+                              },
+                              "last_observed": {
+                                "type": "integer"
+                              },
+                              "open": {
+                                "type": "integer"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "tasks": {
+                            "type": "integer"
+                          },
+                          "tool_critical_path_seconds": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "median": {
+                                "type": "number"
+                              },
+                              "method": {
+                                "type": "string"
+                              },
+                              "n": {
+                                "type": "integer"
+                              },
+                              "p90": {
+                                "type": "number"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "tool_resource_seconds": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "median": {
+                                "type": "number"
+                              },
+                              "method": {
+                                "type": "string"
+                              },
+                              "n": {
+                                "type": "integer"
+                              },
+                              "p90": {
+                                "type": "number"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "verified_success": {
+                            "type": "integer"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "note": {
+                      "type": "string"
+                    },
+                    "summary": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "categories": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "category": {
+                                "type": "string"
+                              },
+                              "known": {
+                                "type": "integer"
+                              },
+                              "seconds": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "median": {
+                                    "type": "number"
+                                  },
+                                  "method": {
+                                    "type": "string"
+                                  },
+                                  "n": {
+                                    "type": "integer"
+                                  },
+                                  "p90": {
+                                    "type": "number"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "share_of_observed": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "median": {
+                                    "type": "number"
+                                  },
+                                  "method": {
+                                    "type": "string"
+                                  },
+                                  "n": {
+                                    "type": "integer"
+                                  },
+                                  "p90": {
+                                    "type": "number"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "unknown": {
+                                "type": "integer"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "completed_seconds": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "median": {
+                              "type": "number"
+                            },
+                            "method": {
+                              "type": "string"
+                            },
+                            "n": {
+                              "type": "integer"
+                            },
+                            "p90": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "excluded_no_turns": {
+                          "type": "integer"
+                        },
+                        "excluded_open": {
+                          "type": "integer"
+                        },
+                        "harness": {
+                          "type": "string"
+                        },
+                        "harness_ttft_seconds": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "median": {
+                              "type": "number"
+                            },
+                            "method": {
+                              "type": "string"
+                            },
+                            "n": {
+                              "type": "integer"
+                            },
+                            "p90": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "heuristic_clean": {
+                          "type": "integer"
+                        },
+                        "heuristic_label": {
+                          "type": "string"
+                        },
+                        "model": {
+                          "type": "string"
+                        },
+                        "observed_seconds": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "median": {
+                              "type": "number"
+                            },
+                            "method": {
+                              "type": "string"
+                            },
+                            "n": {
+                              "type": "integer"
+                            },
+                            "p90": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "role": {
+                          "type": "string"
+                        },
+                        "runtime_samples": {
+                          "type": "integer"
+                        },
+                        "status": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "completed": {
+                              "type": "integer"
+                            },
+                            "last_observed": {
+                              "type": "integer"
+                            },
+                            "open": {
+                              "type": "integer"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "tasks": {
+                          "type": "integer"
+                        },
+                        "tool_critical_path_seconds": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "median": {
+                              "type": "number"
+                            },
+                            "method": {
+                              "type": "string"
+                            },
+                            "n": {
+                              "type": "integer"
+                            },
+                            "p90": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "tool_resource_seconds": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "median": {
+                              "type": "number"
+                            },
+                            "method": {
+                              "type": "string"
+                            },
+                            "n": {
+                              "type": "integer"
+                            },
+                            "p90": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "verified_success": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "tasks": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "attempt_keys": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "boundary": {
+                            "type": "string"
+                          },
+                          "boundary_origin": {
+                            "type": "string"
+                          },
+                          "categories": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "category": {
+                                  "type": "string"
+                                },
+                                "caveat": {
+                                  "type": "string"
+                                },
+                                "complete": {
+                                  "type": "boolean"
+                                },
+                                "origin": {
+                                  "type": "string"
+                                },
+                                "quality": {
+                                  "type": "string"
+                                },
+                                "seconds": {
+                                  "type": "number"
+                                },
+                                "seen": {
+                                  "type": "integer"
+                                },
+                                "share_of_observed": {
+                                  "type": "number"
+                                },
+                                "timed": {
+                                  "type": "integer"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "harness": {
+                            "type": "string"
+                          },
+                          "harness_ttft_seconds": {
+                            "type": "number"
+                          },
+                          "harness_turn_seconds": {
+                            "type": "number"
+                          },
+                          "harness_turns_recorded": {
+                            "type": "integer"
+                          },
+                          "heuristic": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "clean": {
+                                "type": "boolean"
+                              },
+                              "frictions": {
+                                "type": "integer"
+                              },
+                              "label": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "instructions": {
+                            "type": "integer"
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "observed_note": {
+                            "type": "string"
+                          },
+                          "observed_seconds": {
+                            "type": "number"
+                          },
+                          "role": {
+                            "type": "string"
+                          },
+                          "start": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "status_evidence": {
+                            "type": "string"
+                          },
+                          "task_key": {
+                            "type": "string"
+                          },
+                          "tools": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "calls": {
+                                "type": "integer"
+                              },
+                              "critical_path_seconds": {
+                                "type": "number"
+                              },
+                              "matched": {
+                                "type": "integer"
+                              },
+                              "max_concurrent": {
+                                "type": "integer"
+                              },
+                              "resource_seconds": {
+                                "type": "number"
+                              },
+                              "unmatched": {
+                                "type": "integer"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "turns": {
+                            "type": "integer"
+                          },
+                          "unanswered": {
+                            "type": "integer"
+                          },
+                          "verified_success": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "unmeasured": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "warnings": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "window": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "Where tasks' time went as far as transcripts record it, with status, coverage and per-cohort percentiles; derived figures only"
       }
     },
     "/api/vendor-usage": {

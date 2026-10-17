@@ -28,6 +28,7 @@ func newDXCmd() *cobra.Command {
 		days    int
 		jsonOut bool
 		fresh   bool
+		cohort  cohortFlags
 
 		includeScratch bool
 	)
@@ -50,17 +51,24 @@ how you work, and a simulated session has no operator. Pass
 Time-to-first-token is deliberately absent. The field exists on
 PromptEvent, but a transcript records when a turn finished, never when it
 started streaming, so no passive reader can populate it honestly. It stays
-proxy-only.`,
-		Args: cobra.NoArgs,
+proxy-only.
+
+--model and --role choose which instructions are measured. Automatic
+reviews (Codex's reviewer, codex-auto-review) are short and frequent, and
+pooled with your own work they set the median: --role primary measures
+your instructions alone, --role auto_review the reviews alone. The cohort
+line says what the window held either way.`,
+		Args:    cobra.NoArgs,
+		PreRunE: func(_ *cobra.Command, _ []string) error { return cohort.validate() },
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// The default week is what the daemon analyses in the
 			// background; reading every transcript again takes minutes.
-			if !fresh && root == "" && source == "auto" && days == 7 && !includeScratch {
+			if !fresh && root == "" && source == "auto" && days == 7 && !includeScratch && cohort.empty() {
 				if done, err := dxFromSnapshot(cmd, jsonOut, days); done || err != nil {
 					return err
 				}
 			}
-			dx, curve := sessions.ComputeDXWithCurve(transcriptWindow(root, source, days, includeScratch), time.Now())
+			dx, curve := sessions.ComputeDXWithCurve(cohort.apply(transcriptWindow(root, source, days, includeScratch)), time.Now())
 			warnRead(cmd, dx.Warnings)
 			if jsonOut {
 				// The whole answer, as tokenops_agent_dx gives it: the text
@@ -80,7 +88,36 @@ proxy-only.`,
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
 	cmd.Flags().BoolVar(&fresh, "fresh", false, "read the transcripts now instead of the daemon's recent analysis (takes minutes on a busy machine)")
 	cmd.Flags().BoolVar(&includeScratch, "include-scratch", false, scratchFlagHelp)
+	cohort.register(cmd)
 	return cmd
+}
+
+// cohortFlags are the instruction filters dx and story share with the
+// tokenops_sessions tool's model and role.
+type cohortFlags struct {
+	model, role string
+}
+
+func (c *cohortFlags) register(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&c.model, "model", "", "only instructions mostly served by this model id (case-insensitive)")
+	cmd.Flags().StringVar(&c.role, "role", "all", "instructions to measure: all | primary (yours) | auto_review (reviews the harness ran) | subagent")
+}
+
+func (c cohortFlags) validate() error {
+	_, err := c.apply(sessions.Window{}).Cohort()
+	if err != nil {
+		return fmt.Errorf("--%v", err)
+	}
+	return nil
+}
+
+func (c cohortFlags) empty() bool {
+	return c.model == "" && (c.role == "" || c.role == "all")
+}
+
+func (c cohortFlags) apply(w sessions.Window) sessions.Window {
+	w.Model, w.Role = c.model, c.role
+	return w
 }
 
 // dxFromSnapshot answers from the daemon's last analysis when it is
@@ -137,7 +174,9 @@ func writeDXText(w io.Writer, dx sessions.DX, bands []sessions.ContextBand, days
 		window = fmt.Sprintf("last %dd", days)
 	}
 	fmt.Fprintf(w, "Agent DX — %s\n", window)
-	fmt.Fprintf(w, "  %d instructions across %d sessions\n\n", m.Prompts, m.Sessions)
+	fmt.Fprintf(w, "  %d instructions across %d sessions\n", m.Prompts, m.Sessions)
+	writeCohortLine(w, dx.Cohort)
+	fmt.Fprintln(w)
 
 	if m.Prompts == 0 {
 		fmt.Fprintln(w, "  no instructions in this window — widen with --days 0")
@@ -300,4 +339,29 @@ func agoWords(d time.Duration) string {
 		return fmt.Sprintf("%dm", m)
 	}
 	return "under a minute"
+}
+
+// writeCohortLine says what a window pooled, and how to separate it, when
+// it pooled more than one role or a filter left some instructions out.
+func writeCohortLine(w io.Writer, c *sessions.CohortInfo) {
+	if c == nil || c.InWindow == 0 {
+		return
+	}
+	if c.Selected < c.InWindow {
+		fmt.Fprintf(w, "  cohort: %d of the window's %d instructions (%s)\n", c.Selected, c.InWindow, cohortFilter(c))
+	}
+	if reviews := c.ByRole["auto_review"]; reviews > 0 && c.Role == "" {
+		fmt.Fprintf(w, "  %d of these are automatic reviews; --role primary measures your own instructions alone\n", reviews)
+	}
+}
+
+func cohortFilter(c *sessions.CohortInfo) string {
+	var parts []string
+	if c.Model != "" {
+		parts = append(parts, "model "+c.Model)
+	}
+	if c.Role != "" {
+		parts = append(parts, "role "+c.Role)
+	}
+	return strings.Join(parts, ", ")
 }

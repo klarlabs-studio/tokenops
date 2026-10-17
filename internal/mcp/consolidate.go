@@ -304,10 +304,13 @@ type spendIn struct {
 }
 
 type sessionsIn struct {
-	View      string `json:"view,omitempty" jsonschema:"enum=dx,enum=story,enum=prompts,description=dx (default): how sessions go, graded, with the one change worth making. story: recent work task by task. prompts: the operator's instructions scored against prompting heuristics (quotes withheld)."`
-	Days      int    `json:"days,omitempty" jsonschema:"description=dx and story: window in days (default 7)"`
-	All       bool   `json:"all,omitempty" jsonschema:"description=dx and story: read all history; overrides days"`
-	Limit     int    `json:"limit,omitempty" jsonschema:"description=story: most recent tasks (default 10, -1 for all). prompts: most recent instructions"`
+	View      string `json:"view,omitempty" jsonschema:"enum=dx,enum=story,enum=runtime,enum=prompts,description=dx (default): how sessions go, graded, with the one change worth making. story: recent work task by task. runtime: where tasks' time went as far as transcripts record it (model request, tool, approval wait, idle, unattributed) with status, coverage and per-cohort median and p90; derived figures only. prompts: the operator's instructions scored against prompting heuristics (quotes withheld)."`
+	Days      int    `json:"days,omitempty" jsonschema:"description=dx, story and runtime: window in days (default 7)"`
+	All       bool   `json:"all,omitempty" jsonschema:"description=dx, story and runtime: read all history; overrides days"`
+	Limit     int    `json:"limit,omitempty" jsonschema:"description=story and runtime: most recent tasks (default 10, -1 for all). prompts: most recent instructions"`
+	Source    string `json:"source,omitempty" jsonschema:"description=dx, story and runtime: one client (claude-code, codex, cursor, opencode); default every client present"`
+	Model     string `json:"model,omitempty" jsonschema:"description=dx, story and runtime: only instructions mostly served by this model id (case-insensitive exact match)"`
+	Role      string `json:"role,omitempty" jsonschema:"enum=all,enum=primary,enum=auto_review,enum=subagent,description=dx, story and runtime: all (default), primary (the operator's own instructions), auto_review (reviews the harness ran by itself), or subagent"`
 	Since     string `json:"since,omitempty" jsonschema:"description=prompts: RFC3339 time or a duration such as 24h (default 7d)"`
 	Until     string `json:"until,omitempty" jsonschema:"description=prompts: RFC3339 time"`
 	SessionID string `json:"session_id,omitempty" jsonschema:"description=prompts: one Claude Code session"`
@@ -460,6 +463,7 @@ type sessionsOut struct {
 	View    string             `json:"view"`
 	DX      *agentDXResult     `json:"dx,omitempty"`
 	Story   *storyResult       `json:"story,omitempty"`
+	Runtime *runtimeResult     `json:"runtime,omitempty"`
 	Prompts *sessions.Findings `json:"prompts,omitempty"`
 }
 
@@ -567,11 +571,12 @@ func publicTools() []publicTool {
 		},
 		{
 			name: "tokenops_sessions", title: "How sessions go", kind: reads,
-			description: "What agent sessions are like to work with, from the transcripts the clients write: graded turns, rework, interrupts and the one change worth making; the recent work task by task; or the operator's prompting scored. Derived figures only; quoted instructions are withheld.",
+			description: "What agent sessions are like to work with, from the transcripts the clients write: graded turns, rework, interrupts and the one change worth making; the recent work task by task; where tasks' time went, as far as the transcripts record it; or the operator's prompting scored. Filter by source, model and role to keep automatic reviews apart from the operator's own work. Derived figures only; quoted instructions are withheld.",
 			selector:    "view", def: "dx", input: sessionsIn{}, output: sessionsOut{},
 			routes: map[string]route{
-				"dx":      {inner: "tokenops_agent_dx", params: params("days", "all")},
-				"story":   {inner: "tokenops_story", params: params("days", "all", "limit")},
+				"dx":      {inner: "tokenops_agent_dx", params: params("days", "all", "source", "model", "role")},
+				"story":   {inner: "tokenops_story", params: params("days", "all", "limit", "source", "model", "role")},
+				"runtime": {inner: "tokenops_task_runtime", params: params("days", "all", "limit", "source", "model", "role")},
 				"prompts": {inner: "tokenops_coach_prompts", params: params("since", "until", "session_id", "limit")},
 			},
 		},
