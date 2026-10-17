@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/infra/daemonreach"
 	"go.klarlabs.de/tokenops/internal/presentation"
 )
 
@@ -75,7 +76,8 @@ func TestStatusStateUsesReadinessAndWarnings(t *testing.T) {
 
 func TestOfflineStatusRendersUnavailableInsight(t *testing.T) {
 	var out bytes.Buffer
-	if err := writeOfflineStatus(&out, "http://127.0.0.1:7878", config.Config{}, errors.New("missing config"), false); err != nil {
+	if err := writeOfflineStatus(&out, "http://127.0.0.1:7878", config.Config{}, errors.New("missing config"), false,
+		reachability{Class: daemonreach.Refused, Summary: daemonreach.Refused.Summary()}); err != nil {
 		t.Fatalf("writeOfflineStatus: %v", err)
 	}
 	if !strings.Contains(out.String(), "status: unavailable — Readiness is not established") {
