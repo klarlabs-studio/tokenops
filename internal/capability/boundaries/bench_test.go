@@ -46,8 +46,10 @@ func BenchmarkGuardRuleCrossed(b *testing.B) { benchGuard(b, 25) }
 // TestGuardIsWithinItsBudget is the gate: a regression past 5 ms per
 // evaluation fails the suite, not just a benchmark nobody reads. It
 // keeps the best of a few runs: a regression slows every run, while a
-// machine busy with the rest of the suite slows some (one run measured
-// 5.8 ms beside a cold full-suite build, against about 0.4 ms alone).
+// machine busy with the rest of the suite slows some. A crossed rule
+// costs one append to the session's match log, about 0.3 ms with the
+// machine loaded; it rewrote the session's file before, 1.4 ms and more
+// than 5 ms when the disk was busy (#686).
 func TestGuardIsWithinItsBudget(t *testing.T) {
 	if testing.Short() {
 		t.Skip("timing gate")
