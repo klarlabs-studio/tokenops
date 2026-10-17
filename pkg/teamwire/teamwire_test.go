@@ -19,11 +19,26 @@ var constrainedStrings = map[string]string{
 	"Bucket.Day":           "DayLayout date",
 	"Bucket.Repo":          "ValidRepo: name or owner/name, no whitespace, no path",
 	"Bucket.Kind":          "ValidKind: enumeration",
+	// Schema 2 (#685).
+	"PlanDay.Day":                "DayLayout date",
+	"PlanDay.Provider":           "ValidProvider: the provider registry",
+	"PlanDay.Plan":               "ValidPlan: the plan catalog",
+	"Waste.Day":                  "DayLayout date",
+	"Waste.Repo":                 "ValidRepo",
+	"Waste.Kind":                 "ValidKind: enumeration",
+	"Waste.Class":                "ValidWasteClass: enumeration",
+	"SavingsDay.Day":             "DayLayout date",
+	"PlanAdvice.Provider":        "ValidProvider: the provider registry",
+	"PlanAdvice.Plan":            "ValidPlan: the plan catalog",
+	"PlanAdvice.Verdict":         "AdviceVerdicts: enumeration",
+	"PlanAdvice.Kind":            "AdviceKinds: enumeration",
+	"PlanAdvice.RecommendedPlan": "ValidPlan: the plan catalog, or empty for the API",
+	"PlanAdvice.Confidence":      "AdviceConfidences: enumeration",
 }
 
 // numericKinds are the field kinds that hold figures, not text.
 var numericKinds = map[reflect.Kind]bool{
-	reflect.Int: true, reflect.Int64: true, reflect.Float64: true,
+	reflect.Int: true, reflect.Int64: true, reflect.Float64: true, reflect.Bool: true,
 }
 
 // TestUploadHasNoFreeText walks the upload's type and fails on any field
@@ -42,6 +57,8 @@ func TestUploadHasNoFreeText(t *testing.T) {
 			switch {
 			case ft == reflect.TypeOf(time.Time{}):
 			case numericKinds[ft.Kind()]:
+			case ft.Kind() == reflect.Pointer && numericKinds[ft.Elem().Kind()]:
+				// An optional figure: absent when it could not be measured.
 			case ft.Kind() == reflect.String, ft.Kind() == reflect.Slice && ft.Elem().Kind() == reflect.String:
 				if _, ok := constrainedStrings[name]; !ok {
 					t.Errorf("%s is a string with no rule against free text; prompts, paths, "+
@@ -81,7 +98,7 @@ func TestValidate(t *testing.T) {
 		t.Fatalf("valid upload rejected: %v", err)
 	}
 	cases := map[string]func(u *Upload){
-		"schema":           func(u *Upload) { u.Schema = 2 },
+		"schema":           func(u *Upload) { u.Schema = 3 },
 		"batch id":         func(u *Upload) { u.BatchID = "batch 1" },
 		"no days":          func(u *Upload) { u.Days = nil },
 		"bad day":          func(u *Upload) { u.Days[0] = "yesterday" },
