@@ -205,8 +205,9 @@ func Guard(rules []domain.Rule, call Call, env Env) (Result, error) {
 	}
 	g := &guard{call: call, env: env, evidence: evidence, now: env.now()}
 	g.load()
+	matched := make([]string, 0, len(v.Matches))
 	for _, m := range v.Matches {
-		g.session.Matches[m.Rule.Name]++
+		matched = append(matched, m.Rule.Name)
 		if !m.Rule.Enforced() {
 			if err := g.recordOnce(m, eventschema.DecisionStageShadow, eventschema.DecisionApproval{}); err != nil {
 				return Result{}, err
@@ -215,6 +216,9 @@ func Guard(rules []domain.Rule, call Call, env Env) (Result, error) {
 	}
 	res, err := g.bind(v)
 	if err != nil {
+		return Result{}, err
+	}
+	if err := env.Dir.AddMatches(call.SessionID, matched, g.now); err != nil {
 		return Result{}, err
 	}
 	return res, g.save()
@@ -369,6 +373,9 @@ type guard struct {
 	evidence []eventschema.EvidenceRef
 	now      time.Time
 	session  boundaryledger.Session
+	// changed is set when a decision stage was recorded: only then is the
+	// session's file written again. The matches go to its log.
+	changed bool
 }
 
 func (g *guard) load() {
@@ -378,9 +385,6 @@ func (g *guard) load() {
 		// call after it: start the counters again.
 		s = boundaryledger.Session{}
 	}
-	if s.Matches == nil {
-		s.Matches = map[string]int{}
-	}
 	if s.Recorded == nil {
 		s.Recorded = map[string]string{}
 	}
@@ -388,6 +392,9 @@ func (g *guard) load() {
 }
 
 func (g *guard) save() error {
+	if !g.changed {
+		return nil
+	}
 	g.session.LastAt = g.now
 	return g.env.Dir.PutSession(g.call.SessionID, g.session)
 }
@@ -499,6 +506,7 @@ func (g *guard) settlePrompt(m domain.Match, id string) (bool, error) {
 		return false, err
 	}
 	g.session.Recorded[id] = string(eventschema.DecisionStageAccepted)
+	g.changed = true
 	return true, nil
 }
 
@@ -586,6 +594,7 @@ func (g *guard) recordOnce(m domain.Match, stage eventschema.DecisionStage, appr
 		return nil
 	}
 	g.session.Recorded[id] = string(stage)
+	g.changed = true
 	return g.record(m, stage, approval)
 }
 

@@ -203,3 +203,108 @@ func TestFiguresRoundTrip(t *testing.T) {
 		t.Fatalf("round trip lost data: %+v", got)
 	}
 }
+
+// TestAddMatchesCountsEveryParallelCall pins what the match log is for:
+// parallel tool calls in one session each count, where rewriting one
+// counter file let the last writer drop the others' counts.
+func TestAddMatchesCountsEveryParallelCall(t *testing.T) {
+	d := Dir(t.TempDir())
+	at := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
+	var wg sync.WaitGroup
+	for i := range 50 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := d.AddMatches("s1", []string{"spend", "floor"}, at.Add(time.Duration(i)*time.Second)); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	s := mustSessions(t, d)["s1"]
+	if s.Matches["spend"] != 50 || s.Matches["floor"] != 50 {
+		t.Fatalf("matches = %v, want 50 each", s.Matches)
+	}
+	if want := at.Add(49 * time.Second); !s.LastAt.Equal(want) {
+		t.Fatalf("last at = %s, want %s", s.LastAt, want)
+	}
+}
+
+// TestSessionsAddLegacyCountsToTheLog keeps the counts a session file
+// holds from before the log, and its decision stages.
+func TestSessionsAddLegacyCountsToTheLog(t *testing.T) {
+	d := Dir(t.TempDir())
+	old := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	if err := d.PutSession("s1", Session{Matches: map[string]int{"spend": 3}, Recorded: map[string]string{"bnd-x": "shadow"}, LastAt: old}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddMatches("s1", []string{"spend"}, old.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AddMatches("s2", []string{"floor"}, old); err != nil {
+		t.Fatal(err)
+	}
+	got := mustSessions(t, d)
+	if s := got["s1"]; s.Matches["spend"] != 4 || s.Recorded["bnd-x"] != "shadow" || !s.LastAt.Equal(old.Add(time.Hour)) {
+		t.Fatalf("s1 = %+v", s)
+	}
+	if s := got["s2"]; s.Matches["floor"] != 1 {
+		t.Fatalf("s2 = %+v", s)
+	}
+}
+
+// TestSessionsSkipATornMatchLine counts the whole lines around one a crash
+// cut short.
+func TestSessionsSkipATornMatchLine(t *testing.T) {
+	d := Dir(t.TempDir())
+	at := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
+	if err := d.AddMatches("s1", []string{"spend"}, at); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(string(d), "sessions", "s1.matches")
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = f.WriteString(`{"at":"2026-10-17T12:00:01Z","rules":["spe`)
+	_ = f.Close()
+	if err := d.AddMatches("s1", []string{"spend"}, at.Add(2*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if n := mustSessions(t, d)["s1"].Matches["spend"]; n < 1 {
+		t.Fatalf("spend = %d, want the whole lines counted", n)
+	}
+}
+
+func mustSessions(t *testing.T, d Dir) map[string]Session {
+	t.Helper()
+	got, err := d.Sessions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+// TestAMatchLogIsFoldedPastItsCap keeps a long session's log small: past
+// its cap the lines fold into one line of totals, and nothing is lost.
+func TestAMatchLogIsFoldedPastItsCap(t *testing.T) {
+	d := Dir(t.TempDir())
+	at := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
+	const n = 3000
+	for i := range n {
+		if err := d.AddMatches("s1", []string{"spend"}, at.Add(time.Duration(i)*time.Second)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fi, err := os.Stat(filepath.Join(string(d), "sessions", "s1.matches"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Size() > matchLogCap {
+		t.Fatalf("log is %d bytes, cap %d", fi.Size(), matchLogCap)
+	}
+	s := mustSessions(t, d)["s1"]
+	if s.Matches["spend"] != n || !s.LastAt.Equal(at.Add((n-1)*time.Second)) {
+		t.Fatalf("after folding: %+v", s)
+	}
+}

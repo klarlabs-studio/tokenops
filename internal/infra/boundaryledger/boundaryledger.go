@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -343,13 +344,18 @@ func (d Dir) getJSON(kind, id string, v any) (bool, error) {
 // Session is the per-session counters status reads: how often each rule
 // matched, and which decision stages were already recorded, so a rule
 // that matches every call records its decision once, not once per call.
+//
+// The session's file holds the decision stages; the matches are counted
+// in a log beside it (AddMatches), and Sessions adds the two. Matches in
+// the file are counts written before the log existed.
 type Session struct {
 	Matches  map[string]int    `json:"matches,omitempty"`
 	Recorded map[string]string `json:"recorded,omitempty"`
 	LastAt   time.Time         `json:"last_at"`
 }
 
-// GetSession reads a session's counters; a missing file is empty.
+// GetSession reads a session's file — its decision stages; a missing file
+// is empty. Its match counts are Sessions'.
 func (d Dir) GetSession(id string) (Session, error) {
 	var s Session
 	if _, err := d.getJSON("sessions", sessionKey(id), &s); err != nil {
@@ -358,13 +364,81 @@ func (d Dir) GetSession(id string) (Session, error) {
 	return s, nil
 }
 
-// PutSession writes a session's counters. A lost update under a race
-// costs one count, never a decision.
+// PutSession writes a session's file. A lost update under a race costs a
+// decision stage being recorded twice, never a decision.
 func (d Dir) PutSession(id string, s Session) error {
 	return d.putJSON("sessions", sessionKey(id), s)
 }
 
-// Sessions returns every session's counters.
+// matchLine is one evaluation's matches in a session's match log, or,
+// once the log was folded, the totals of the lines before it.
+type matchLine struct {
+	At     time.Time      `json:"at"`
+	Rules  []string       `json:"rules,omitempty"`
+	Counts map[string]int `json:"counts,omitempty"`
+}
+
+// matchLogExt names a session's match log beside its file.
+const matchLogExt = ".matches"
+
+// matchLogCap is the size past which a match log is folded into one line
+// of totals: about a thousand matched calls.
+const matchLogCap = 64 << 10
+
+// AddMatches counts one evaluation's matched rules for a session. The
+// pause point runs before every tool call, and rewriting the session's
+// file for each match (a temporary file and a rename) cost it a
+// millisecond or more, several when the disk was busy. One appended line
+// is one write: a short write to a file opened for appending lands whole,
+// so parallel tool calls each count, where rewriting the file let the
+// last writer drop the others' counts.
+func (d Dir) AddMatches(id string, rules []string, at time.Time) error {
+	if len(rules) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(matchLine{At: at.UTC(), Rules: rules})
+	if err != nil {
+		return err
+	}
+	b = append(b, '\n')
+	path := filepath.Join(d.root(), "sessions", sessionKey(id)+matchLogExt)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) //nolint:gosec // TokenOps' own state, key sanitised
+	if errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			return err
+		}
+		f, err = os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) //nolint:gosec // as above
+	}
+	if err != nil {
+		return err
+	}
+	_, werr := f.Write(b)
+	st, serr := f.Stat()
+	if cerr := f.Close(); werr == nil {
+		werr = cerr
+	}
+	if werr != nil {
+		return werr
+	}
+	if serr == nil && st.Size() > matchLogCap {
+		return d.foldMatchLog(sessionKey(id))
+	}
+	return nil
+}
+
+// foldMatchLog rewrites a session's match log as one line of its totals.
+// A match appended while it folds can be lost: a count, never a decision.
+func (d Dir) foldMatchLog(key string) error {
+	s := d.readMatchLog(key)
+	b, err := json.Marshal(matchLine{At: s.LastAt, Counts: s.Matches})
+	if err != nil {
+		return err
+	}
+	return writeAtomic(filepath.Join(d.root(), "sessions", key+matchLogExt), append(b, '\n'))
+}
+
+// Sessions returns every session's counters: its file's decision stages
+// and earlier counts, plus the matches its log counts.
 func (d Dir) Sessions() (map[string]Session, error) {
 	entries, err := os.ReadDir(filepath.Join(d.root(), "sessions"))
 	if errors.Is(err, os.ErrNotExist) {
@@ -375,16 +449,67 @@ func (d Dir) Sessions() (map[string]Session, error) {
 	}
 	out := map[string]Session{}
 	for _, e := range entries {
-		key, ok := strings.CutSuffix(e.Name(), ".json")
-		if !ok {
+		if key, ok := strings.CutSuffix(e.Name(), ".json"); ok {
+			var s Session
+			if found, err := d.getJSON("sessions", key, &s); err == nil && found {
+				out[key] = mergeSession(out[key], s)
+			}
 			continue
 		}
-		var s Session
-		if found, err := d.getJSON("sessions", key, &s); err == nil && found {
-			out[key] = s
+		if key, ok := strings.CutSuffix(e.Name(), matchLogExt); ok {
+			out[key] = mergeSession(out[key], d.readMatchLog(key))
 		}
 	}
 	return out, nil
+}
+
+// readMatchLog counts a session's match log. A line that does not parse —
+// one a crash cut short — is skipped.
+func (d Dir) readMatchLog(key string) Session {
+	s := Session{Matches: map[string]int{}}
+	f, err := os.Open(filepath.Join(d.root(), "sessions", key+matchLogExt)) //nolint:gosec // TokenOps' own state
+	if err != nil {
+		return s
+	}
+	defer func() { _ = f.Close() }()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		var l matchLine
+		if json.Unmarshal(sc.Bytes(), &l) != nil {
+			continue
+		}
+		for _, r := range l.Rules {
+			s.Matches[r]++
+		}
+		for r, n := range l.Counts {
+			s.Matches[r] += n
+		}
+		if l.At.After(s.LastAt) {
+			s.LastAt = l.At
+		}
+	}
+	return s
+}
+
+// mergeSession adds b's counts to a's and keeps the later LastAt and
+// every recorded stage.
+func mergeSession(a, b Session) Session {
+	if a.Matches == nil {
+		a.Matches = map[string]int{}
+	}
+	for r, n := range b.Matches {
+		a.Matches[r] += n
+	}
+	if len(b.Recorded) > 0 {
+		if a.Recorded == nil {
+			a.Recorded = map[string]string{}
+		}
+		maps.Copy(a.Recorded, b.Recorded)
+	}
+	if b.LastAt.After(a.LastAt) {
+		a.LastAt = b.LastAt
+	}
+	return a
 }
 
 func sessionKey(id string) string {
