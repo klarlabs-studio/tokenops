@@ -1701,8 +1701,8 @@ and the header says when it did:
 
 ```
 Agent DX — last 7d
-  2104 instructions across 107 sessions
-  1845 of these are automatic reviews; --role primary measures your own instructions alone
+  640 instructions across 38 sessions
+  410 of these are automatic reviews; --role primary measures your own instructions alone
 ```
 
 An automatic review is a couple of seconds of a small model reading a
