@@ -43,6 +43,10 @@ type Options struct {
 	RepoNames string
 	// ClientVersion is this TokenOps' version.
 	ClientVersion string
+	// Schema is the newest upload format the server accepts (Me's
+	// max_schema). Below teamwire.SchemaFinOps the upload is schema 1 and
+	// the FinOps sections are not even computed.
+	Schema int
 	// Allow, when set, is asked before anything is built or sent, once
 	// this machine is known to have joined; an error holds the upload
 	// (ADR 0014's share boundary) and is returned as is.
@@ -64,6 +68,8 @@ type Deps struct {
 	// Dirs maps sessions to where they ran.
 	Dirs  func(since time.Time) map[string]sessiondirs.Dir
 	Repos Repos
+	// FinOps are the readers of a schema 2 upload's sections.
+	FinOps FinOps
 }
 
 // DepsFor reads this machine's transcripts, its event store through agg,
@@ -133,7 +139,11 @@ func Build(ctx context.Context, d Deps, opts Options, now time.Time) (teamwire.U
 			repoOf[id] = label
 		}
 	}
-	return Aggregate(units, turns, repoOf, days, opts.ClientVersion, now), warnings
+	u, kindOf := aggregate(units, turns, repoOf, days, opts.ClientVersion, now)
+	if opts.Schema >= teamwire.SchemaFinOps {
+		warnings = append(warnings, addFinOps(ctx, d.FinOps, &u, repoOf, kindOf, now)...)
+	}
+	return u, warnings
 }
 
 var unsafeLabel = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
@@ -183,9 +193,33 @@ type acc struct {
 	sessions map[string]bool
 }
 
+// span is an instruction's start and its kind of work.
+type span struct {
+	start time.Time
+	kind  taskclass.Kind
+}
+
+// kinds are each session's instructions classified, oldest first.
+type kinds map[string][]span
+
+// at is the kind of the work a turn of session at t answers: the last
+// instruction typed before it.
+func (k kinds) at(session string, t time.Time) taskclass.Kind {
+	ss := k[session]
+	if i := sort.Search(len(ss), func(i int) bool { return ss[i].start.After(t) }); i > 0 {
+		return ss[i-1].kind
+	}
+	return taskclass.KindUnknown
+}
+
 // Aggregate is the pure half of Build: it files each instruction and each
 // turn under its day, repository and kind of work, and sums.
 func Aggregate(units []sessions.Unit, turns []analytics.SessionTurn, repoOf map[string]string, days []string, version string, now time.Time) teamwire.Upload {
+	u, _ := aggregate(units, turns, repoOf, days, version, now)
+	return u
+}
+
+func aggregate(units []sessions.Unit, turns []analytics.SessionTurn, repoOf map[string]string, days []string, version string, now time.Time) (teamwire.Upload, kinds) {
 	covered := map[string]bool{}
 	for _, d := range days {
 		covered[d] = true
@@ -212,11 +246,7 @@ func Aggregate(units []sessions.Unit, turns []analytics.SessionTurn, repoOf map[
 	for _, u := range units {
 		bySession[u.SessionID] = append(bySession[u.SessionID], u)
 	}
-	type span struct {
-		start time.Time
-		kind  taskclass.Kind
-	}
-	spans := map[string][]span{}
+	spans := kinds{}
 	for id, us := range bySession {
 		sort.SliceStable(us, func(i, j int) bool { return us[i].Start.Before(us[j].Start) })
 		prev := taskclass.KindUnknown
@@ -255,13 +285,7 @@ func Aggregate(units []sessions.Unit, turns []analytics.SessionTurn, repoOf map[
 		if !covered[day] {
 			continue
 		}
-		kind := taskclass.KindUnknown
-		ss := spans[t.SessionID]
-		// The instruction a turn answers is the last one typed before it.
-		if i := sort.Search(len(ss), func(i int) bool { return ss[i].start.After(t.At) }); i > 0 {
-			kind = ss[i-1].kind
-		}
-		a := get(day, t.SessionID, kind)
+		a := get(day, t.SessionID, spans.at(t.SessionID, t.At))
 		a.b.Tokens += t.Tokens
 		if t.Priced {
 			a.b.CostUSD += t.CostUSD
@@ -271,7 +295,7 @@ func Aggregate(units []sessions.Unit, turns []analytics.SessionTurn, repoOf map[
 		}
 	}
 
-	out := teamwire.Upload{Schema: teamwire.SchemaVersion, BatchID: uuid.NewString(), ComputedAt: now.UTC(),
+	out := teamwire.Upload{Schema: teamwire.SchemaBuckets, BatchID: uuid.NewString(), ComputedAt: now.UTC(),
 		Days: days, Buckets: make([]teamwire.Bucket, 0, len(buckets))}
 	if teamwire.ValidLabel(version) {
 		out.ClientVersion = version
@@ -290,5 +314,5 @@ func Aggregate(units []sessions.Unit, turns []analytics.SessionTurn, repoOf map[
 		}
 		return x.Kind < y.Kind
 	})
-	return out
+	return out, spans
 }

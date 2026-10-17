@@ -52,10 +52,62 @@ func Compute(ctx context.Context, d Deps, since, until time.Time) (Report, error
 	if until.IsZero() {
 		until = time.Now()
 	}
+	in, err := gather(ctx, d, since, until)
+	if err != nil {
+		return Report{}, err
+	}
+	if d.Savings != nil {
+		in.Savings = d.Savings(ctx, since, until)
+	}
+	if d.Steps != nil {
+		in.Steps = d.Steps(ctx, until)
+	}
+	return Build(in), nil
+}
+
+// Day is one UTC day's report and the attribution it sums.
+type Day struct {
+	Start  time.Time
+	Report Report
+	Turns  []TurnWaste
+	// Savings is the ledger read back over the day's interventions.
+	Savings savings.Report
+}
+
+// Days builds the report for each UTC day from the day starting at since
+// to until, reading the sources once: each day's classes and realized
+// savings are the day's own, sized against the same history. The
+// guardrails' graduation is left out; it is not a day's figure.
+func Days(ctx context.Context, d Deps, since, until time.Time) ([]Day, error) {
+	since = time.Date(since.UTC().Year(), since.UTC().Month(), since.UTC().Day(), 0, 0, 0, 0, time.UTC)
+	in, err := gather(ctx, d, since, until)
+	if err != nil {
+		return nil, err
+	}
+	var out []Day
+	for start := since; start.Before(until); start = start.AddDate(0, 0, 1) {
+		end := start.AddDate(0, 0, 1)
+		if end.After(until) {
+			end = until
+		}
+		day := in
+		day.Since, day.Until = start, end
+		if d.Savings != nil {
+			day.Savings = d.Savings(ctx, start, end)
+		}
+		r, turns := BuildTurns(day)
+		out = append(out, Day{Start: start, Report: r, Turns: turns, Savings: day.Savings})
+	}
+	return out, nil
+}
+
+// gather reads everything the report for [since, until) is built from,
+// but the savings ledger and the graduations, which are read per period.
+func gather(ctx context.Context, d Deps, since, until time.Time) (Inputs, error) {
 	start := since.AddDate(0, 0, -CalibrationDays)
 	w, err := commits.Gather(ctx, commits.Deps{Turns: d.Turns, Dirs: d.Dirs, Repos: d.Repos}, start)
 	if err != nil {
-		return Report{}, err
+		return Inputs{}, err
 	}
 	in := Inputs{Since: since, Until: until, Dirs: w.Dirs, RootOf: w.RootOf, CommitsOf: w.CommitsOf,
 		Waste: d.Waste, Price: d.Price, Traces: map[string]*workflow.Trace{}, Windows: map[string][]plans.QuotaWindow{},
@@ -67,13 +119,13 @@ func Compute(ctx context.Context, d Deps, since, until time.Time) (Report, error
 	}
 	if d.Events != nil {
 		if in.Outcomes, err = d.Events.Query(ctx, sqlite.Filter{Type: eventschema.EventTypeOutcome, Since: start, Until: until, Limit: maxEvents}); err != nil {
-			return Report{}, err
+			return Inputs{}, err
 		}
 		var readings []*eventschema.Envelope
 		for _, src := range plans.WindowSources() {
 			envs, err := d.Events.Query(ctx, sqlite.Filter{Source: src, Since: start, Until: until, Limit: maxEvents})
 			if err != nil {
-				return Report{}, err
+				return Inputs{}, err
 			}
 			readings = append(readings, envs...)
 		}
@@ -82,7 +134,7 @@ func Compute(ctx context.Context, d Deps, since, until time.Time) (Report, error
 	if d.Trace != nil {
 		for _, id := range workflowsIn(in) {
 			if err := ctx.Err(); err != nil {
-				return Report{}, err
+				return Inputs{}, err
 			}
 			if tr, err := d.Trace(ctx, id); err == nil {
 				in.Traces[id] = tr
@@ -95,13 +147,7 @@ func Compute(ctx context.Context, d Deps, since, until time.Time) (Report, error
 	if d.Routes != nil {
 		in.Routes = d.Routes()
 	}
-	if d.Savings != nil {
-		in.Savings = d.Savings(ctx, since, until)
-	}
-	if d.Steps != nil {
-		in.Steps = d.Steps(ctx, until)
-	}
-	return Build(in), nil
+	return in, nil
 }
 
 // workflowsIn are the workflows with at least two turns in the period:

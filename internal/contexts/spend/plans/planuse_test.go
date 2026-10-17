@@ -71,6 +71,34 @@ func TestPlanUseFromNothing(t *testing.T) {
 	}
 }
 
+// A day's plan use counts the windows that reset that day at the peak
+// read days before, and only the day's own turns.
+func TestPlanUseOn(t *testing.T) {
+	day := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)
+	end := day.Add(24*time.Hour - time.Nanosecond)
+	reset := day.Add(10 * time.Hour)
+	reading := &eventschema.Envelope{Source: "claude-usage-meter", Timestamp: day.Add(-3 * 24 * time.Hour), Attributes: map[string]string{
+		"granularity": "quota_snapshot", "seven_day_kind": "weekly_all", "seven_day_used_pct": "70.00",
+		"seven_day_reset_at": reset.Format(time.RFC3339),
+	}, Payload: &eventschema.PromptEvent{Provider: eventschema.ProviderAnthropic}}
+	turn := func(at time.Time, cs eventschema.CostSource) *eventschema.Envelope {
+		return &eventschema.Envelope{Source: "claude-code-jsonl", Timestamp: at,
+			Attributes: map[string]string{"granularity": "assistant_turn"},
+			Payload:    &eventschema.PromptEvent{Provider: eventschema.ProviderAnthropic, CostSource: cs, TotalTokens: 100}}
+	}
+	envs := []*eventschema.Envelope{reading, turn(day.Add(time.Hour), eventschema.CostSourcePlanIncluded),
+		turn(day.Add(-time.Hour), eventschema.CostSourceMetered)}
+	on := PlanUseOn(envs, day, end)
+	a, ok := on.For("anthropic")
+	if !ok || a.UtilizationPct == nil || *a.UtilizationPct != 70 || a.CoveragePct == nil || *a.CoveragePct != 100 {
+		t.Fatalf("day = %+v", a)
+	}
+	from := PlanUseFrom(envs, day, end)
+	if b, _ := from.For("anthropic"); b.UtilizationPct != nil {
+		t.Errorf("PlanUseFrom read a reading from before the period: %+v", b)
+	}
+}
+
 func deref(p *float64) any {
 	if p == nil {
 		return nil

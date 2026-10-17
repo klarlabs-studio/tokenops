@@ -38,6 +38,16 @@ type State struct {
 	// pinned at the first fetch (ADR 0014 §5). A document signed with
 	// another is refused until this machine joins again.
 	BoundaryKey []byte `json:"boundary_key,omitempty"`
+	// MaxSchema is the newest upload format the server said it accepts
+	// (Me's max_schema), as of SchemaCheckedAt; zero is schema 1.
+	MaxSchema       int        `json:"max_schema,omitempty"`
+	SchemaCheckedAt *time.Time `json:"schema_checked_at,omitempty"`
+}
+
+// NoteSchema records the server's max_schema, read at at.
+func (s *State) NoteSchema(maxSchema int, at time.Time) {
+	at = at.UTC()
+	s.MaxSchema, s.SchemaCheckedAt = maxSchema, &at
 }
 
 // DefaultStatePath is ~/.tokenops/team.json.

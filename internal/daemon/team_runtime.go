@@ -39,6 +39,8 @@ func startTeamUploadRuntime(cfg config.Config, components *bootstrap.Components,
 		Allow: shareAllowed(cfg, bcap.DestinationTeam),
 	}
 	deps := teamshare.DepsFor(components.Aggregator)
+	// Read only when the server accepts schema 2 (teamshare.ServerSchema).
+	deps.FinOps = teamshare.FinOpsFor(cfg, components.Aggregator, components.Store, components.Spend)
 	sup.Go("team-upload", func(ctx context.Context) error {
 		wait := time.NewTimer(teamFirstUpload)
 		defer wait.Stop()

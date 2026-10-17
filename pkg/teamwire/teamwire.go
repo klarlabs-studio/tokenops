@@ -4,7 +4,9 @@
 //
 // The upload is the privacy boundary. It carries derived figures only —
 // counts, token totals, costs, durations — keyed by a UTC day, a repository
-// label and a kind of work. It has no field that can hold a prompt, a file
+// label and a kind of work; schema 2 adds plan use, waste, savings and plan
+// advice keyed by the same and by catalog names (finops.go). It has no
+// field that can hold a prompt, a file
 // path, a transcript, a commit message or a model output: every string in
 // it is either an enumeration or a label matched against a pattern that
 // admits no whitespace and no path, and TestUploadHasNoFreeText fails the
@@ -21,8 +23,18 @@ import (
 	"time"
 )
 
-// SchemaVersion is the upload format this package describes.
-const SchemaVersion = 1
+// Upload formats. Schema 1 is the work buckets alone; schema 2 adds the
+// FinOps sections (plan days, waste, savings, plan advice). A client sends
+// schema 2 only to a server whose Me advertises MaxSchema >= 2, and
+// otherwise sends schema 1 byte for byte as before: the new sections are
+// omitted when empty, so a schema 1 upload has no key an older server,
+// decoding with unknown fields refused, does not know.
+const (
+	SchemaBuckets = 1
+	SchemaFinOps  = 2
+	// SchemaVersion is the newest upload format this package describes.
+	SchemaVersion = SchemaFinOps
+)
 
 // Limits a server enforces on an upload.
 const (
@@ -110,6 +122,36 @@ type Upload struct {
 	Days []string `json:"days"`
 	// Buckets are the figures, one per day, repository and kind of work.
 	Buckets []Bucket `json:"buckets"`
+
+	// Schema 2 only; absent from a schema 1 upload. Each is complete for
+	// every day in Days, so a day is replaced whole, these sections
+	// included: a covered day with no rows in a section had none.
+
+	// PlanDays are plan utilization, coverage and lockouts per day,
+	// provider and plan.
+	PlanDays []PlanDay `json:"plan_days,omitempty"`
+	// Waste is avoidable usage per day, repository, kind of work and
+	// waste class.
+	Waste []Waste `json:"waste,omitempty"`
+	// Savings are the guardrails' realized savings per day.
+	Savings []SavingsDay `json:"savings,omitempty"`
+	// PlanAdvice is the replayed tier fit per provider, as of ComputedAt.
+	// It is not per day: each schema 2 upload replaces the device's
+	// advice whole.
+	PlanAdvice []PlanAdvice `json:"plan_advice,omitempty"`
+}
+
+// ForServer is u as a server that reads formats up to maxSchema accepts
+// it: schema 1, without the FinOps sections, when maxSchema is below 2
+// (an older server, or one that does not say). The buckets are shared,
+// not copied.
+func (u Upload) ForServer(maxSchema int) Upload {
+	if maxSchema >= SchemaFinOps {
+		return u
+	}
+	u.Schema = SchemaBuckets
+	u.PlanDays, u.Waste, u.Savings, u.PlanAdvice = nil, nil, nil, nil
+	return u
 }
 
 // Bucket is the work one machine did on one UTC day, in one repository, of
@@ -151,8 +193,8 @@ type Bucket struct {
 // Validate reports the first reason the upload may not cross the
 // boundary, or nil.
 func (u Upload) Validate() error {
-	if u.Schema != SchemaVersion {
-		return fmt.Errorf("schema %d: this server reads schema %d", u.Schema, SchemaVersion)
+	if u.Schema != SchemaBuckets && u.Schema != SchemaFinOps {
+		return fmt.Errorf("schema %d: this server reads schemas %d to %d", u.Schema, SchemaBuckets, SchemaVersion)
 	}
 	if !ValidUUID(u.BatchID) {
 		return errors.New("batch_id: not a lower-case UUID")
@@ -194,7 +236,7 @@ func (u Upload) Validate() error {
 		}
 		seen[k] = true
 	}
-	return nil
+	return u.validateFinOps(covered)
 }
 
 // Validate reports the first reason the bucket is malformed, or nil.
@@ -295,6 +337,10 @@ type Me struct {
 	// accepted, when the trial ends and when the first week appears.
 	// Absent from servers that predate self-serve billing.
 	Plan *Plan `json:"plan,omitempty"`
+	// MaxSchema is the newest upload format the server accepts. Absent
+	// (zero) from servers that read schema 1 only; a client sends the
+	// FinOps sections only when it is at least SchemaFinOps.
+	MaxSchema int `json:"max_schema,omitempty"`
 }
 
 // Device is one of a member's enrolled machines.
