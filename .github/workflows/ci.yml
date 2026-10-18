@@ -231,4 +231,8 @@ jobs:
         with:
           name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/
-          retention-days: 7
+          # Nothing downstream downloads these; they are for grabbing a build
+          # by hand. ~25 MB per platform per run, kept a week, came to 4.5 GB
+          # and filled the org's shared artifact quota, which fails uploads
+          # in every other repository. Releases ship from release.yml.
+          retention-days: 1
