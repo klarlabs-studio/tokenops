@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilot"
@@ -77,5 +78,31 @@ func TestClientUserNon2xx(t *testing.T) {
 	_, err := c.User(context.Background())
 	if err == nil {
 		t.Fatal("want error")
+	}
+}
+
+// An upstream that echoes the request's Authorization header in its
+// 401 body must not put the token into the error: that error reaches
+// GET /api/sources, the MCP data_sources view and the log.
+func TestClientUserRefusalDoesNotEchoTheToken(t *testing.T) {
+	const token = "gho_SecretTokenValue0123456789abcdefABCDEF"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"message":"Bad credentials","request_headers":{"Authorization":"` + r.Header.Get("Authorization") + `"}}`))
+	}))
+	defer srv.Close()
+	c := NewClient(token)
+	c.BaseURL = srv.URL
+	_, err := c.User(context.Background())
+	if err == nil {
+		t.Fatal("want error")
+	}
+	for _, leak := range []string{token, "SecretTokenValue", "Authorization", "Bad credentials"} {
+		if strings.Contains(err.Error(), leak) {
+			t.Errorf("error %q carries %q from the refusal body", err, leak)
+		}
+	}
+	if !strings.Contains(err.Error(), "401") {
+		t.Errorf("error %q lost the status", err)
 	}
 }

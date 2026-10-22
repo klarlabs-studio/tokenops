@@ -20,6 +20,7 @@ import (
 
 	oauth "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudecodeoauth"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
+	"go.klarlabs.de/tokenops/internal/infra/vendorusage/errbody"
 )
 
 // DefaultBaseURL is Anthropic's API, the only host the token is sent to.
@@ -76,9 +77,9 @@ func (c Client) Usage(ctx context.Context, token string, now time.Time) (*claude
 	case http.StatusTooManyRequests:
 		return nil, &oauth.RateLimitedError{Until: retryAfter(resp.Header.Get("Retry-After"), now)}
 	}
-	// The body is an API error, never a credential; a short one is kept
-	// so the reason reaches the log.
-	return nil, fmt.Errorf("claude-code-oauth: usage: status %d: %.200s", resp.StatusCode, body)
+	// A short, redacted start of the body is kept so the reason reaches
+	// the log; a refusal's body is dropped.
+	return nil, fmt.Errorf("claude-code-oauth: usage: %s", errbody.Status(resp.StatusCode, body))
 }
 
 func retryAfter(v string, now time.Time) time.Time {
