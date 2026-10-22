@@ -97,6 +97,27 @@ scanner is worth doing on a schedule. It just prompts instead of blocking.
 
 ## Review log
 
+**2026-10-22 — findings made visible; every open finding triaged.**
+The workflow said non-critical findings went "to the Security tab", but
+it uploaded no SARIF: code scanning had no analysis at all, and 28
+medium and high findings sat untriaged in a 7-day artifact. The scan now
+writes SARIF, `scripts/sarif-apply-vex.py` drops the waived results by
+fingerprint, and the rest go to code scanning under category `nox`.
+
+All 41 findings from the main-branch run on nox 1.48.1 were reviewed.
+28 statements were added to `vex.json` (one fingerprint covers both
+`cookie_setup.go` sites). Two AI-006 findings in `internal/cli/coach.go`
+are left open on purpose: that one is being fixed in code, not waived.
+
+Found on the way: nox's own `--vex` matches statements by rule ID, not
+fingerprint (verified: one AI-006 statement marked all ten AI-006 sites
+`vex_not_affected`), so the README's suggested `nox scan --vex …
+--fail-on-unwaived` would have hidden every future finding of any rule
+with a waiver. The README no longer suggests it. Also: CI's nox refuses
+to install all four `plugins.required` (trust level "unverified" below
+the default policy's "community"), so the TAINT-002 waivers match
+nothing in CI — the advisory step has been saying so.
+
 **2026-09-14 — reviewed every entry against what it suppresses today.**
 Prompted by the 120-day timer expiring, which had been failing `main` for a
 week. Each of the 27 excluded paths was copied into a bare tree and
