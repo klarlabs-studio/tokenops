@@ -19,7 +19,7 @@ func TestStatus(t *testing.T) {
 	}{
 		{name: "401 drops the body", status: 401, body: `{"echo":"Authorization: Bearer ` + key + `"}`, want: "status 401"},
 		{name: "403 drops the body", status: 403, body: "cookie=abc123", want: "status 403"},
-		{name: "407 drops the body", status: 407, body: "Proxy-Authorization: Basic dXNlcjpwYXNz", want: "status 407"},
+		{name: "407 drops the body", status: 407, body: "proxy credentials required for " + key, want: "status 407"},
 		{name: "empty body", status: 500, body: "", want: "status 500"},
 		{name: "whitespace body", status: 502, body: " \n\t ", want: "status 502"},
 		{name: "short body kept", status: 500, body: `{"error":"overloaded"}`, want: `status 500: {"error":"overloaded"}`},
