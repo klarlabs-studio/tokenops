@@ -13,7 +13,7 @@ require (
 	github.com/tiktoken-go/tokenizer v0.7.0
 	go.klarlabs.de/bolt v1.6.0
 	go.klarlabs.de/fortify v1.10.0
-	go.klarlabs.de/mcp v1.27.0
+	go.klarlabs.de/mcp v1.30.0
 	golang.org/x/crypto v0.57.0
 	golang.org/x/sys v0.48.0
 	golang.org/x/term v0.46.0
@@ -40,8 +40,6 @@ require (
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel v1.45.0 // indirect
 	go.opentelemetry.io/otel/metric v1.45.0 // indirect
-	go.opentelemetry.io/otel/sdk v1.45.0 // indirect
-	go.opentelemetry.io/otel/sdk/metric v1.45.0 // indirect
 	go.opentelemetry.io/otel/trace v1.45.0 // indirect
 	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/text v0.42.0 // indirect

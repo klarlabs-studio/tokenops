@@ -135,6 +135,7 @@ tokenops coach preset advise`,
 	"mode": `tokenops mode                    # print the mode
 tokenops mode active`,
 	"routing proposals":    `tokenops routing proposals --json`,
+	"routing decide":       `tokenops routing decide "anthropic|claude-sonnet-5|claude-opus-5" approve`,
 	"routing rule list":    `tokenops routing rule list`,
 	"routing rule unset":   `tokenops routing rule unset anthropic claude-opus-5`,
 	"preferred-model list": `tokenops preferred-model list`,

@@ -41,6 +41,7 @@ var subToMCP = map[string][]string{
 	"preferred-model unset": {"tokenops_configure"},
 	"pricing show":          {"tokenops_pricing"},
 	"routing proposals":     {"tokenops_routing"},
+	"routing decide":        {"tokenops_routing"},
 	"boundaries status":     {"tokenops_boundaries"},
 	"routing rule":          {"tokenops_routing"},
 	"rules analyze":         {"tokenops_rules"},
