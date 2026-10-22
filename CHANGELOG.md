@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **MCP:** the `tokenops` command a settings confirmation shows is now exactly the change the tool applies. `tokenops_configure` (`plan` with a spend limit, window, rate factor, price, currency or `since`), `tokenops_routing set_rule` (with `quality` or `fallbacks`) and a `tokenops_coach` tip answer with `tip_id` or `snooze_minutes` showed the base command followed by "with flags for the other values (see --help)", so you approved, or were asked to run, a command that did not say what would change. `usage_meter` left out `--org`. They now show every flag (`tokenops plan set anthropic claude-enterprise --spend-limit 5000 --limit-window weekly`, `tokenops routing rule set … --quality 0.9 --fallback …`, `tokenops coach tip snooze --id … --for 30m`). A value that starts with a dash, such as a model named `-foo`, would have been read as a flag if you pasted the command; such a command now puts its flags first and `--` before the positional values, and a flag value that starts with a dash is written `--flag=value`. A routing rule the tool would refuse (no target, quality outside (0,1]) is now refused before you are asked. A test pastes every shown command into bash and parses it with tokenops' own command tree, checking that it reaches the same subcommand with the same values, including values with spaces, quotes, `$` and backticks
+
 ## 0.107.0 - 2026-10-22
 
 ### Added
