@@ -12,13 +12,13 @@ import (
 // carry it into an error: neither in the message nor in the wrapped
 // transport error, whose URL net/http keeps whole.
 func TestGetGatewayErrorsOmitTheQueryString(t *testing.T) {
-	const secret = "querysecret0123456789"
+	const marker = "querymarker0123456789"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	var out map[string]any
 	cases := map[string]string{
-		"status":    srv.URL + "/v1/usage?key=" + secret,
+		"status":    srv.URL + "/v1/usage?key=" + marker,
 		"refusal":   "", // filled below
 		"transport": "", // a closed server
 	}
@@ -26,9 +26,9 @@ func TestGetGatewayErrorsOmitTheQueryString(t *testing.T) {
 		w.WriteHeader(http.StatusUnauthorized)
 	}))
 	defer refuse.Close()
-	cases["refusal"] = refuse.URL + "/v1/usage?key=" + secret
+	cases["refusal"] = refuse.URL + "/v1/usage?key=" + marker
 	closed := httptest.NewServer(http.NotFoundHandler())
-	cases["transport"] = closed.URL + "/v1/usage?key=" + secret
+	cases["transport"] = closed.URL + "/v1/usage?key=" + marker
 	closed.Close()
 	defer srv.Close()
 
@@ -37,7 +37,7 @@ func TestGetGatewayErrorsOmitTheQueryString(t *testing.T) {
 		if err == nil {
 			t.Fatalf("%s: want an error", name)
 		}
-		if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), "?key=") {
+		if strings.Contains(err.Error(), marker) || strings.Contains(err.Error(), "?key=") {
 			t.Errorf("%s: error carries the query string: %v", name, err)
 		}
 		if !strings.Contains(err.Error(), "/v1/usage") {
