@@ -1038,8 +1038,8 @@ until you bind another plan.
   per-user cap (`/users/{you}/usageLimits`). On your own account they are
   the month's spend (`/billing/summary`) against the `monthly-spend-usd`
   quota. That figure is the whole account's, every member together, so
-  where it is shown it is labelled "Account spend" with "account <id>, all
-  members" (`spend_scope: account` and `spend_scope_label` in the API), not
+  where it is shown it is labelled "Account spend" with
+  `account <id>, all members` (`spend_scope: account` and `spend_scope_label` in the API), not
   as your own extra usage. Your user and account come from FireConnect's
   `~/.fireconnect/minted-key.json`, or from the key itself.
 - **Calls** go to `api.fireworks.ai` only. Turn them off with
