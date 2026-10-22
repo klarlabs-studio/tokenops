@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.107.0 - 2026-10-22
+
 ### Added
 
 - **routing:** `tokenops routing decide <key> approve|deny` answers a routing proposal from the terminal, as the menu bar and `POST /api/routing/decisions` do; it is the command a refused `tokenops_routing decide` names
