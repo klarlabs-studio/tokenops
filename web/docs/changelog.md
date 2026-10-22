@@ -4,7 +4,24 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.106.1**.
+Current release: **v0.107.0**.
+
+## v0.107.0 — Hardened, and agents ask first
+
+A security review shaped this release. When an agent changes a TokenOps
+setting over MCP (the mode, a routing rule, a budget, the coach, an
+experiment), TokenOps now asks you through the client's own confirmation
+prompt and shows the exact change and the equivalent terminal command; a
+client that cannot ask is refused and told which command to run. The
+proxy no longer passes TokenOps' own `X-Tokenops-*` identifiers on to the
+provider. `tokenops coach prompts` shows no prompt text unless you pass
+`--quote`, and then redacted. A provider's error answer can no longer
+carry a credential into TokenOps' errors, and `vendor-usage` reads
+secrets from stdin instead of the command line. The daemon bounds slow
+requests and keeps its token and event store owner-only. MCP tools now
+forward every argument they advertise, so `tokenops_experiment start`
+works. The boundaries guide now says plainly what approval guarantees and
+what it does not.
 
 ## v0.106.1 — Restarts that answer at once
 
