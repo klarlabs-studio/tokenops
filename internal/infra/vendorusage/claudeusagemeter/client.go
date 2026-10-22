@@ -15,6 +15,7 @@ import (
 	"time"
 
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/claudeusagemeter"
+	"go.klarlabs.de/tokenops/internal/infra/vendorusage/errbody"
 )
 
 // Client wraps the claude.ai cookie-authenticated endpoints.
@@ -128,14 +129,14 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, error) {
 		return nil, usage.ErrUnauthorized
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		snippet := errbody.Read(resp.Body)
 		if resp.StatusCode == http.StatusForbidden && isBotCheck(snippet) {
 			return nil, fmt.Errorf("%w (%s)", usage.ErrBotCheck, path)
 		}
 		if resp.StatusCode == http.StatusForbidden && isExpiredSession(snippet) {
 			return nil, usage.ErrUnauthorized
 		}
-		return nil, fmt.Errorf("claude-usage-meter: %s: status %d: %s", path, resp.StatusCode, snippet)
+		return nil, fmt.Errorf("claude-usage-meter: %s: %s", path, errbody.Status(resp.StatusCode, snippet))
 	}
 	return io.ReadAll(resp.Body)
 }
