@@ -25,6 +25,7 @@
 
 - **coach:** `tokenops coach prompts` quotes no prompt text unless you pass `--quote`, the same opt-in the MCP tool has; the counts and recommendations are unchanged, and the report says how to see the examples
 - **vendor usage:** a secret typed on the command line (`--cookie <value>` and the other secret flags) still works but prints a deprecation warning: every user on the machine can see it in `ps` output and it stays in shell history. The help's examples use stdin and env vars instead
+- **boundaries:** the docs and `tokenops approve --help` say what approval guarantees and what it does not. It guarantees that an agent cannot approve through TokenOps' MCP tools or the daemon's decision endpoint, which can only deny, that `tokenops approve` refuses a stdin that is not a terminal, and that every answer is recorded with how it was given. It does not guarantee the approval came from you: a process running as your user can get a pseudo-terminal (`script -q /dev/null tokenops approve <id>`), read the daemon's token and call its API (`POST /api/mode`, `POST /api/routing/rules`), or write the boundary ledger. The guide recommends harness permission rules that ask before `tokenops approve`, `tokenops mode`, `tokenops routing`, `script` and `curl` to the daemon. TokenOps does not try to detect a "real" terminal: nothing it can read (a controlling terminal, its session, the parent processes) tells a pseudo-terminal an agent opened from yours
 
 ## 0.106.1 - 2026-10-17
 
