@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Security
+
+- **coach:** `tokenops coach prompts` no longer prints your prompts back unredacted. Its examples (vague and rejecting prompts, repeated prompts, a recommendation's evidence) were your typed text verbatim and uncut, in the text report and in `--json`, so a key or token pasted into a prompt was echoed to the terminal or to whatever read the JSON. Every example now passes through TokenOps' secret redactor (`<redacted:anthropic_api_key>`), is folded onto one line and cut to 120 characters, and that holds for the MCP tool's `quote: true` too
+- **vendor usage:** an upstream's error answer no longer carries a credential into TokenOps' errors. The Copilot, Cursor, claude.ai, Anthropic Admin and Claude Code readers quoted up to 4 KB of a failed answer in the error that `GET /api/sources`, the MCP `data_sources` view and the daemon log show, so a vendor echoing the request back (an Authorization header, a cookie) would pass it on. A refusal (401, 403, 407) is now reported by its status alone, and any other answer by at most 200 bytes, redacted and on one line. The gateway readers no longer put a URL's query string into an error, including the transport error that repeats the URL
+- **vendor usage:** `tokenops vendor-usage enable` reads a secret from stdin: `--session-key -`, `--cookie -`, `--admin-key -` and `--oauth-token -` prompt without echo on a terminal, or read one line from a pipe (`pbpaste | tokenops vendor-usage enable cursor --cookie - --user-id …`). The env vars work as before
+
+### Changed
+
+- **coach:** `tokenops coach prompts` quotes no prompt text unless you pass `--quote`, the same opt-in the MCP tool has; the counts and recommendations are unchanged, and the report says how to see the examples
+- **vendor usage:** a secret typed on the command line (`--cookie <value>` and the other secret flags) still works but prints a deprecation warning: every user on the machine can see it in `ps` output and it stays in shell history. The help's examples use stdin and env vars instead
+
 ## 0.106.1 - 2026-10-17
 
 ### Fixed
