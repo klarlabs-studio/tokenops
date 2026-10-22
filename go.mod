@@ -13,7 +13,7 @@ require (
 	github.com/tiktoken-go/tokenizer v0.7.0
 	go.klarlabs.de/bolt v1.6.0
 	go.klarlabs.de/fortify v1.10.0
-	go.klarlabs.de/mcp v1.30.0
+	go.klarlabs.de/mcp v1.30.1
 	golang.org/x/crypto v0.57.0
 	golang.org/x/sys v0.48.0
 	golang.org/x/term v0.46.0
