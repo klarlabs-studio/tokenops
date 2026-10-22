@@ -71,3 +71,7 @@ type LogConfig struct {
 type ShutdownConfig struct {
 	Timeout time.Duration `yaml:"timeout"`
 }
+
+// MinAdminTokenLength is the shortest dashboard admin token accepted,
+// in bytes. A minted token is 43 characters (32 random bytes, base64).
+const MinAdminTokenLength = 32
