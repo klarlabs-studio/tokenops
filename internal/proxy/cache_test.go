@@ -226,3 +226,48 @@ func waitForCacheEntries(t *testing.T, c *cache.Cache, want int) {
 	}
 	t.Fatalf("cache never reached %d entries: %+v", want, c.Metrics())
 }
+
+// TestProxyCacheIsolatesCredentials pins that a cached reply is only ever
+// replayed to a caller presenting the same credential: the cache key
+// includes every credential the providers accept.
+func TestProxyCacheIsolatesCredentials(t *testing.T) {
+	upstream, calls := counterUpstream(t, `{"ok":true}`, "application/json")
+	c := cache.New(cache.Options{})
+	addr := startCacheProxy(t, upstream.URL, c)
+
+	base := "http://" + addr + "/openai/v1/chat/completions"
+	body := `{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}`
+
+	steps := []struct {
+		name    string
+		url     string
+		headers map[string]string
+	}{
+		{"bearer A", base, map[string]string{"Authorization": "Bearer key-a"}},
+		{"bearer B", base, map[string]string{"Authorization": "Bearer key-b"}},
+		{"no credential", base, nil},
+		{"x-api-key", base, map[string]string{"x-api-key": "key-a"}},
+		{"x-goog-api-key", base, map[string]string{"x-goog-api-key": "key-a"}},
+		{"azure api-key", base, map[string]string{"api-key": "key-a"}},
+		{"query key", base + "?key=key-a", nil},
+		{"other query key", base + "?key=key-b", nil},
+	}
+	for i, step := range steps {
+		resp := mustPost(t, step.url, body, step.headers)
+		if got := resp.Header.Get("X-Tokenops-Cache-Status"); got == "hit" {
+			t.Errorf("%s: served another credential's cached reply", step.name)
+		}
+		resp.Body.Close()
+		if calls.Load() != int64(i+1) {
+			t.Fatalf("%s: upstream calls = %d, want %d", step.name, calls.Load(), i+1)
+		}
+		waitForCacheEntries(t, c, i+1)
+	}
+
+	// The same credential still hits its own entry.
+	resp := mustPost(t, base, body, map[string]string{"Authorization": "Bearer key-a"})
+	if got := resp.Header.Get("X-Tokenops-Cache-Status"); got != "hit" {
+		t.Errorf("same credential: cache-status = %q, want hit", got)
+	}
+	resp.Body.Close()
+}

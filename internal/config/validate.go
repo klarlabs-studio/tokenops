@@ -17,6 +17,9 @@ func (c Config) Validate() error {
 	if err := validateAllowedHosts(c.AllowedHosts); err != nil {
 		return err
 	}
+	if t := c.Dashboard.AdminToken; t != "" && len(t) < MinAdminTokenLength {
+		return fmt.Errorf("dashboard.admin_token (or TOKENOPS_DASHBOARD_ADMIN_TOKEN) must be at least %d characters, got %d; leave it unset and the daemon mints one", MinAdminTokenLength, len(t))
+	}
 	switch strings.ToLower(c.Log.Level) {
 	case "debug", "info", "warn", "error":
 	default:

@@ -4,7 +4,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
+
+	"go.klarlabs.de/tokenops/internal/config"
 )
 
 // loadOrMintDashToken honours an explicit configured token over the
@@ -72,5 +75,89 @@ func TestDashTokenPath(t *testing.T) {
 	want := filepath.Join("tokenops", "dashboard.token")
 	if filepath.Base(filepath.Dir(p)) != "tokenops" || filepath.Base(p) != "dashboard.token" {
 		t.Errorf("path %q should end with %s", p, want)
+	}
+}
+
+// The token's directory is created owner-only, like the URL hint and
+// storage directory beside it.
+func TestLoadOrMintDashTokenCreatesOwnerOnlyDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix permission bits")
+	}
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	if _, err := loadOrMintDashToken(""); err != nil {
+		t.Fatal(err)
+	}
+	p, _ := dashTokenPath()
+	info, err := os.Stat(filepath.Dir(p))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o700 {
+		t.Errorf("token directory mode = %v; want 0700", info.Mode().Perm())
+	}
+}
+
+// A token file left readable by others (an older build, a restore from
+// backup, a manual edit) is tightened to 0600 and kept.
+func TestLoadOrMintDashTokenTightensExistingFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix permission bits")
+	}
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	p, _ := dashTokenPath()
+	want := strings.Repeat("a", 43)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(want), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(p, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := loadOrMintDashToken("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Errorf("an adequate persisted token must be kept; got %q", got)
+	}
+	for path, mode := range map[string]os.FileMode{p: 0o600, filepath.Dir(p): 0o700} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != mode {
+			t.Errorf("%s mode = %v; want %v", path, info.Mode().Perm(), mode)
+		}
+	}
+}
+
+// A persisted token shorter than the minimum is replaced, not trusted:
+// it is guessable, and clients learn the new token from the URL hint the
+// daemon rewrites at start.
+func TestLoadOrMintDashTokenReplacesShortToken(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	p, _ := dashTokenPath()
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("short"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := loadOrMintDashToken("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == "short" || len(got) < config.MinAdminTokenLength {
+		t.Fatalf("short persisted token was kept: %q", got)
+	}
+	data, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != got {
+		t.Error("replacement token was not persisted")
 	}
 }

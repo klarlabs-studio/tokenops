@@ -49,7 +49,8 @@ and assumes the host is trusted. Notable surfaces:
   loopback-only listener publishes `127.0.0.1`; a wildcard / LAN-bound
   listener publishes every non-loopback interface and is reachable from the
   LAN. Operators binding beyond loopback should configure a strong
-  `TOKENOPS_DASHBOARD_ADMIN_TOKEN` before sharing the host.
+  `TOKENOPS_DASHBOARD_ADMIN_TOKEN` before sharing the host. A configured
+  token shorter than 32 characters is refused at start.
 - **Vendor admin credentials** (v0.10.2+). `vendor_usage.anthropic.admin_key`
   carries a `sk-ant-admin-*` key, and four other fields carry vendor
   session credentials. When written to `config.yaml` they are stored in

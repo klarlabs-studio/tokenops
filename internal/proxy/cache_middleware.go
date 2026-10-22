@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -35,9 +36,26 @@ const (
 	cacheStatusStore   = "store"
 )
 
+// credentialHeaders lists every request header a supported provider
+// accepts as a credential or account scope: Authorization (OpenAI and the
+// OpenAI-compatible fleet, Anthropic OAuth), x-api-key (Anthropic),
+// x-goog-api-key (Gemini), api-key (Azure OpenAI) and the OpenAI
+// organization/project selectors, which change whose account answers.
+var credentialHeaders = []string{
+	"Authorization",
+	"X-Api-Key",
+	"X-Goog-Api-Key",
+	"Api-Key",
+	"Openai-Organization",
+	"Openai-Project",
+}
+
 // cacheKey hashes the dimensions that identify a cacheable request:
-// provider id + method + canonical path + body. Using SHA-256 keeps key
-// collisions astronomically rare while staying cheap (~µs per request).
+// provider id + method + canonical path + query + credentials + body.
+// The query and credential headers are part of the key so a reply is only
+// replayed to a caller presenting the same credential (Gemini also accepts
+// its key as ?key=). Credentials are hashed first, never stored. SHA-256
+// keeps key collisions astronomically rare while staying cheap.
 func cacheKey(provider providers.Provider, r *http.Request, body []byte) string {
 	h := sha256.New()
 	h.Write([]byte(provider.ID))
@@ -46,8 +64,25 @@ func cacheKey(provider providers.Provider, r *http.Request, body []byte) string 
 	h.Write([]byte{0})
 	h.Write([]byte(r.URL.Path))
 	h.Write([]byte{0})
+	h.Write([]byte(r.URL.RawQuery))
+	h.Write([]byte{0})
+	h.Write(credentialDigest(r.Header))
+	h.Write([]byte{0})
 	h.Write(body)
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+// credentialDigest returns a SHA-256 over the request's credential headers,
+// each length-prefixed so values cannot run into one another. A request
+// without any credential yields a digest distinct from every keyed one.
+func credentialDigest(header http.Header) []byte {
+	h := sha256.New()
+	for _, name := range credentialHeaders {
+		for _, v := range header.Values(name) {
+			_, _ = fmt.Fprintf(h, "%s:%d:%s\n", name, len(v), v)
+		}
+	}
+	return h.Sum(nil)
 }
 
 // cacheMiddleware wraps next so cacheable requests can short-circuit on
