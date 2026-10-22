@@ -13,6 +13,8 @@ at the repository level — nox is the single source of security signal.
 | `.github/workflows/security.yml`      | Push / PR / nightly nox scan job (the build gate)        |
 | `.github/workflows/nox-remediate.yml` | Nightly + manual `nox fix` → opens a remediation PR      |
 | `findings.json` (artifact)            | Latest scan output, uploaded by every CI run            |
+| `scripts/sec-gate.py`                 | Critical-only gate, waivers matched by fingerprint       |
+| `scripts/sarif-apply-vex.py`          | Drops waived results from the SARIF before upload        |
 
 ## Gates
 
@@ -22,14 +24,22 @@ The CI gate fails the build on **any critical finding** not waived in
 `security/vex.json`:
 
 ```bash
-nox scan . \
-  -severity-threshold critical \
-  -vex security/vex.json \
-  -fail-on-unwaived
+nox scan . --format json,sarif
+python3 scripts/sec-gate.py
 ```
 
-Below `critical` is informational — the full `findings.json` is
-uploaded as a CI artifact and inspected via the Security tab.
+Below `critical` is informational, but not hidden: every finding that
+`security/vex.json` does not waive is uploaded as SARIF to code
+scanning (category `nox`), so it shows in the repository's Security tab
+and as an annotation on the pull request that introduces it. The upload
+never fails the build. `findings.json` is also kept as a 7-day artifact.
+
+**Do not use `nox scan --vex security/vex.json` to decide what is
+waived.** nox 1.48.1 matches an OpenVEX statement by its
+`vulnerability` (the rule ID) and ignores `_nox_fingerprint`, so one
+AI-006 waiver there hides every AI-006 finding, including new ones.
+`sec-gate.py` and `sarif-apply-vex.py` match on the fingerprint, so a
+waiver covers exactly the finding it was written for.
 
 ### Governance gate
 
@@ -65,7 +75,10 @@ nox scan .
 Re-run the same gate the CI does:
 
 ```bash
-nox scan . -severity-threshold critical -vex security/vex.json -fail-on-unwaived
+nox scan . --format json,sarif
+python3 scripts/sec-gate.py
+python3 scripts/sarif-apply-vex.py results.sarif security/vex.json nox.sarif  # what CI uploads
+python3 -m unittest discover -s scripts -p 'test_*.py'
 ```
 
 Pre-commit hook (optional, blocks `git commit` on critical findings):

@@ -2,19 +2,22 @@
   "@context": "https://openvex.dev/ns/v0.2.0",
   "@id": "https://github.com/klarlabs-studio/tokenops/security/vex.json",
   "author": "tokenops-maintainers",
-  "timestamp": "2026-09-14T00:00:00Z",
-  "version": 1,
+  "timestamp": "2026-10-22T00:00:00Z",
+  "version": 2,
   "_note": [
     "Fingerprints are taken from CI's scan (nox 1.48.1, pinned in",
     ".github/workflows/security.yml), not from a local scan. A local nox",
     "is a different scanner: 1.35.0 does not report the release.yml:95",
     "statement below at all, and a fingerprint minted by the wrong",
     "version waives nothing in the run that gates the build.",
-    "Every statement here covers a GitHub Actions configuration finding",
-    "surfaced when .github/workflows/*.yml stopped being excluded in",
-    "the 2026-09-14 suppression review. None are critical, so none of",
-    "them change the sec-gate outcome; they are recorded so the report",
-    "distinguishes reviewed from new."
+    "The workflow statements date from the 2026-09-14 suppression",
+    "review, when .github/workflows/*.yml stopped being excluded; the",
+    "rest from the 2026-10-22 triage that started uploading SARIF to",
+    "code scanning. Each binds to one finding by _nox_fingerprint:",
+    "scripts/sec-gate.py and scripts/sarif-apply-vex.py both match on",
+    "it. Do not pass this file to `nox scan --vex` and read the result",
+    "as the triage: nox 1.48.1 matches statements by rule ID alone, so",
+    "one AI-006 waiver there hides every AI-006 finding."
   ],
   "statements": [
     {
@@ -170,6 +173,383 @@
       "_governance": {
         "classification": "False Positive",
         "last_reviewed": "2026-10-10",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "HARDEN-001",
+      "status": "not_affected",
+      "justification": "inline_mitigations_already_exist",
+      "impact_statement": "antigravity.go:353 — the http.Transport that sets InsecureSkipVerify talks only to the Antigravity language server on this machine. Its DialContext refuses every address that is not 127.0.0.1, so the skipped verification can only ever apply to a loopback connection; the local server presents a self-signed certificate that has no CA to chain to. No remote peer is reachable through this client.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "023ae8935485a685ffd4b7b886b097fe80bf7744cdf85cf4f9302948c9289e1a",
+      "_governance": {
+        "classification": "Acceptable Pattern",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "SEC-041",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "fmt_recovery_test.go:51 — the constant is 'sk-ant-api03-' followed by repeated 'A's: a synthetic fixture shaped like an Anthropic key so the test can assert that fmt recovery files redact it. It is not, and never was, a credential.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "98030806fc57c17585c3d9026a5ab850ad169e858545fe0fc372194c2b544a79",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "SEC-041",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "fmt_recovery_test.go:76 — 'sk-ant-api03-' followed by repeated 'B's, the synthetic key the command-line redaction test passes as a flag. Not a credential.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "5824c8cde0d2be89dabd3abfac54106e002e04627a3d67d1fb0f466f587e3214",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "SEC-240",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "descriptor.go:128 — `PasswordLogin Credential = \"password-login\"` is an enum value naming a sign-in method, not a password. The detector reads the identifier as a Terraform password field.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "bd7b677429357b838d2802f6ec1df25554d59aa02742ea3718d70ff5a7ca2a4e",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "SEC-855",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "groq.go:43 — groqStytchPublicToken is the Groq console's Stytch *public* token ('public-token-live-…'). Stytch public tokens are designed to ship in browser JavaScript and are served in the console's own page; they authorise nothing on their own. It is not a Groq API key.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "982dc5690cd3f7335c2acacfe59feb75a416005f8a395a1a08fecf8ae078d4a3",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "VULN-001",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "GO-2026-5932 is the deprecation of golang.org/x/crypto/openpgp itself, so there is no fixed version to move to. No package in this module imports openpgp or its subpackages (git grep finds none), and nox's own applicability check reports the affected package is not linked by this build.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "2a4c4c15fd8e43707ce675a47573ef6e1359b4ba1331cb6480eb39f3cfe0375a",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "DATA-001",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": ".goreleaser.yaml:126 — github-actions@github.com is the public commit identity of the GitHub Actions bot, used as the Homebrew tap commit author. It is not personal data.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "b62e4d25147e032b19ca0c5bbeb64378ec8b4495af213379941709c895c45040",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "SLOP-001",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "integrations/python/examples/langchain_workflow.py imports langchain_openai, the real PyPI package langchain-openai published by the LangChain project. It is a runnable example, not part of the tokenops_langchain package, which deliberately does not depend on any one model provider; the example's reader installs it alongside an OPENAI_API_KEY. Not a hallucinated package.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "c7738dc0cbd8668896c360fa0806f71109bb0221bd3a60778c7eb06ced9ec653",
+      "_governance": {
+        "classification": "Acceptable Pattern",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "SLOP-001",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "assets/brand/make.py is a maintainer-run script that regenerates the logo files; nothing builds, ships or imports it. fontTools is the established fonttools package on PyPI (github.com/fonttools/fonttools), and the script's docstring names it as the requirement. Not a hallucinated package.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "6c18a52592bda0e1c9c87439a7975a47f60dde0d3ecf499443d19d98837af79a",
+      "_governance": {
+        "classification": "Acceptable Pattern",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "AI-006",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "verify.go:631 — returns a fixed sentence naming an HTTP status code from a PromptEvent ('upstream HTTP %d failure'). The rule matches the variable name `prompt`; no prompt or response text is read or logged.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "7b81b79fb6a2e42a8d771645c1efb702529260895c1ed961c70e405c24655aeb",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "AI-006",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "checkup.go:98 — fmt.Fprint* writes to the command's own stdout; the rule matches the identifier 'prompt' or the word 'instructions'. It prints a grade and a count of instructions (an integer). No prompt text is logged.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "db5d5a38272e2118e4a1a4750cf5062e59c93cd37862e1191528074abc79e4ae",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "AI-006",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "cookie_setup.go:292 and :398 (one line-independent fingerprint) — readSecret/readCopiedRequest print the interactive question shown to the operator (the `prompt` parameter is UI text such as 'Paste the cookie: '), then read the answer without echo. No LLM prompt or response is involved.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "74aa509518f1f19b03642ceb6ac563605a15b2e872d3dccb035133ce5b813958",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "AI-006",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "dx.go:177 — fmt.Fprint* writes to the command's own stdout; the rule matches the identifier 'prompt' or the word 'instructions'. It prints counts of instructions and sessions. No prompt text is logged.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "ad3d3b44be7131d7243d0354a51a6f02e1e660e2e64018234654369513b4380d",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "AI-006",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "provider_setup.go:112 — prints a fixed sentence that the daemon re-reads a browser session 'without ever showing a prompt' (a UI prompt). No LLM prompt or response is involved.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "2137ce49e7b70b1dba13a0671db9dd20b9f3a0e2cd54a410c386b8aadcca3a35",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "AI-006",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "provider_setup.go:271 — readLine prints the interactive setup question (the `prompt` parameter is UI text) before reading a line from stdin. No LLM prompt or response is involved.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "ea640517d23fb1a34487c2de8f3b6812a11900421cf91437ec02067bda2ccb3f",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "AI-006",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "replay.go:169 — prints the replay selector and the number of prompts replayed (len of a slice). No prompt or response text is logged.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "f39507b6bcddc6456cd61639a700f2f16352e4926b650ea0c5c3ecca5b1b2a17",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "CRYPTO-001",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "aws_profiles.go:299 — SHA-1 here is a file-naming function, not a security control: the AWS CLI names each SSO cache file ~/.aws/sso/cache/<sha1(session name or start URL)>.json, and tokenops must compute the same name to find the token the CLI cached. No integrity or authenticity decision rests on the hash; changing the algorithm would only stop tokenops finding the file.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "61f9f809501ed271e85303b88591cffa3fc09cdbeae498b34eece75596bdd47d",
+      "_governance": {
+        "classification": "Acceptable Pattern",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "DATA-005",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "formatter/testdata/corpus/terraform.plan.txt:26 — a captured `terraform plan` output used as a formatter fixture; 54.1.2.3 is an example public_ip inside that sample text, not configuration anything connects to.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "d498ba970010dc7dd5b2c50277898cef1a49d906d20ac63330f5b70181d95106",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "IAC-153",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "release.yml:31 uploads menubar-app.tar.gz with 1-day retention purely to hand the built bundle from the menubar-app job to the goreleaser job of the same run. The artifact is never published; what users install is the release asset goreleaser uploads, verified by the release's checksums.txt. Attesting an intra-run handoff adds no claim anyone verifies.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "97ad188e0785ddce4eefe6d2d1e10de2c1c850dcab14aa15399d987f5cb53c29",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "IAC-155",
+      "status": "not_affected",
+      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
+      "impact_statement": "nox-remediate.yml:28 — workflow_dispatch lets a maintainer run remediation off-schedule. Dispatch requires repository write access, and the job only opens a pull request that must pass the required checks and review before it reaches main, so an approval environment would gate nothing an attacker could reach. GitHub also does not allow `environment:` on a job that calls a reusable workflow, which is what this job is.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "efffd45e45bdf218052ebd23a0a2fc2295219290f6341d868fed455c871b6993",
+      "_governance": {
+        "classification": "Acceptable Pattern",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "IAC-306",
+      "status": "not_affected",
+      "justification": "inline_mitigations_already_exist",
+      "impact_statement": "release.yml:154 — id-token: write is mandatory for npm trusted publishing: the npm job authenticates to the registry over OIDC and signs provenance with it, instead of holding a long-lived NODE_AUTH_TOKEN. The grant is scoped to that one job, beside contents: read.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "be245a4499fe01a73e9664baf0ed8c855e243ef4da2b278bd541e113a9dfae2e",
+      "_governance": {
+        "classification": "Acceptable Pattern",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "SEC-161",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "redaction/fuzz_test.go:40 — the fuzz test's list of strings the redactor must never emit: obviously synthetic key-shaped values ('sk-secretsecret…', 'AIzaSyDxxxx…'). Not credentials.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "b6816b52a1e24ffa98212c8acb9bc40029ae8eac7c5438bf365ff96b521e05d1",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "SEC-161",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "harnesskeys_test.go:54 — expected output rows such as 'sk-ds-env' and 'sk-or-claude': short placeholder values the test plants in fake harness configs. Not credentials.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "86cc42a56baad913b6123191a892b29926781f846a42a5ac9160c1ca309eca9e",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "SEC-161",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "scanscope_test.go:13 — a macOS temporary-directory path ('-private-var-folders-wz-…-T-worksim-…') used to test scratch-directory detection. The high-entropy segment is the OS's per-user folder hash, not a secret.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "649be99134e73d092531b45facadcc4c73b16743346617528154ae71a6d44508",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "SEC-161",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "bedrock_test.go:23 — AKIDEXAMPLE / wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY are the example credentials from AWS's published SigV4 test suite, used to check the signer against AWS's known answer.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "49e9362f2c2438c920dadbccbb97911afd34f70ad928e3170121ef016c1b27be",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "SEC-162",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "bedrock_test.go:23 — the same AWS SigV4 test-suite example secret, read by the base64 detector. Published by AWS for exactly this purpose.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "14a50ae6fe0fd51963eab251653ad1152ff9e0ffc61bbdd7a30e7c1159cd5380",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "SEC-162",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "bedrock_test.go:25 — the expected SigV4 signature from AWS's published test suite (a hex digest of the example request), not a secret.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "ef8124b7b8b0b86a211dbdd622d6bfde40d71bc290d0586a53b7ae733ab1755d",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "VULN-002",
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "web/docs/package-lock.json — mitt is the widely used ~200-byte event emitter (github.com/developit/mitt), pulled in by the VitePress docs toolchain. Its name resembling mqtt is a coincidence of short names, not a typosquat; the locked version resolves from the npm registry with an integrity hash.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "7d6269372c8973535db917ce175da054e45d9f0064f7d1b55f3882bad8c2819c",
+      "_governance": {
+        "classification": "False Positive",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
+    },
+    {
+      "vulnerability": "IAC-018",
+      "status": "not_affected",
+      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
+      "impact_statement": "security.yml:98 and :103 (one line-independent fingerprint) — continue-on-error is set on the two reporting steps only: applying waivers to the SARIF and uploading it to code scanning. Reporting must never gate the build (an upload from a fork PR has no security-events: write and always fails). The blocking decision is the Critical gate step, which has no continue-on-error, so no security outcome is masked.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "6af577d33d72dfa77c0cdd6c9e3f71b213c2805f61dd9dfa518d74bf4c1a7c9f",
+      "_governance": {
+        "classification": "Acceptable Pattern",
+        "last_reviewed": "2026-10-22",
         "reviewed_by": "tokenops-maintainers"
       }
     }

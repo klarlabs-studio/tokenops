@@ -1,12 +1,14 @@
 name: Security
 
-# Replaces Dependabot. nox runs on every push + PR + nightly so
+# Replaces Dependabot. nox runs on every push + PR + weekly so
 # vulnerability discovery happens on a tight loop. The job fails the
-# build only on critical findings; everything below critical is
-# uploaded as an artifact for triage in the Security tab.
+# build only on unwaived critical findings. Every unwaived finding, of
+# any severity, is uploaded as SARIF to code scanning (the Security tab,
+# and inline on pull requests); findings.json is also kept as a 7-day
+# artifact for the suppression review.
 #
-# Waivers for false positives live in security/vex.json (OpenVEX),
-# which is absent while there is nothing to waive.
+# Waivers live in security/vex.json (OpenVEX), one statement per
+# finding, bound by fingerprint. See security/SUPPRESSION-GOVERNANCE.md.
 on:
   push:
     branches: [main]
@@ -65,7 +67,10 @@ jobs:
         # nox exits non-zero whenever findings exist; we always treat
         # the scan itself as informational and let the gate step decide
         # whether to fail the build.
-        run: nox scan . || true
+        # --format json,sarif writes findings.json and results.sarif.
+        # No --vex here: nox 1.48.1 matches VEX statements by rule ID,
+        # not fingerprint, so waivers are applied by the steps below.
+        run: nox scan . --format json,sarif || true
 
       - name: Suppression review
         # Advisory, never blocking: reports suppressions past the review
@@ -81,6 +86,25 @@ jobs:
         # and exits non-zero only when at least one critical finding
         # is not waived in OpenVEX.
         run: python3 scripts/sec-gate.py
+
+      - name: Test the security scripts
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+
+      - name: Apply waivers to SARIF
+        # Drops results whose fingerprint security/vex.json waives, so a
+        # waiver covers exactly its finding and a new finding of the same
+        # rule still opens an alert. Reporting must never gate the build.
+        if: always()
+        continue-on-error: true
+        run: python3 scripts/sarif-apply-vex.py results.sarif security/vex.json nox.sarif
+
+      - name: Upload SARIF to code scanning
+        if: always() && hashFiles('nox.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: nox.sarif
+          category: nox
 
       - name: Upload findings
         if: always()
