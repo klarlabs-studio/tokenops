@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **routing:** `tokenops routing decide <key> approve|deny` answers a routing proposal from the terminal, as the menu bar and `POST /api/routing/decisions` do; it is the command a refused `tokenops_routing decide` names
+
 ### Security
 
 - **proxy:** the TokenOps correlation headers no longer reach the provider. The proxy read `X-Tokenops-Workflow-Id`, `-Agent-Id`, `-Session-Id` and `-User-Id` (which can be an email address) and the `X-Tokenops-Cache` directive, but removed only `X-Tokenops-Execution-Id`, and only while the observer ran; everything else was forwarded to Anthropic, OpenAI and the other providers, and with the observer off the execution id was too. `tokenops anthropic-bridge` said they were stripped. The proxy now removes every `X-Tokenops-*` header from each request it forwards, on every provider route and whatever middleware is on, and a test checks what a real upstream receives with the observer on and off and through the bridge
