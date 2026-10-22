@@ -106,7 +106,8 @@ fingerprint, and the rest go to code scanning under category `nox`.
 
 All 41 findings from the main-branch run on nox 1.48.1 were reviewed.
 28 statements were added to `vex.json` (one fingerprint covers both
-`cookie_setup.go` sites). Two AI-006 findings in `internal/cli/coach.go`
+`cookie_setup.go` sites), plus one for the IAC-018 `continue-on-error`
+that the new reporting steps carry by design. Two AI-006 findings in `internal/cli/coach.go`
 are left open on purpose: that one is being fixed in code, not waived.
 
 Found on the way: nox's own `--vex` matches statements by rule ID, not

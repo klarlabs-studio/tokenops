@@ -539,6 +539,19 @@
         "last_reviewed": "2026-10-22",
         "reviewed_by": "tokenops-maintainers"
       }
+    },
+    {
+      "vulnerability": "IAC-018",
+      "status": "not_affected",
+      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
+      "impact_statement": "security.yml:98 and :103 (one line-independent fingerprint) — continue-on-error is set on the two reporting steps only: applying waivers to the SARIF and uploading it to code scanning. Reporting must never gate the build (an upload from a fork PR has no security-events: write and always fails). The blocking decision is the Critical gate step, which has no continue-on-error, so no security outcome is masked.",
+      "products": ["github.com/klarlabs-studio/tokenops"],
+      "_nox_fingerprint": "6af577d33d72dfa77c0cdd6c9e3f71b213c2805f61dd9dfa518d74bf4c1a7c9f",
+      "_governance": {
+        "classification": "Acceptable Pattern",
+        "last_reviewed": "2026-10-22",
+        "reviewed_by": "tokenops-maintainers"
+      }
     }
   ]
 }
