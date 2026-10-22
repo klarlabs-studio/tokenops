@@ -141,7 +141,7 @@ func newExperimentCmd() *cobra.Command {
 
 func newExperimentStartCmd() *cobra.Command {
 	var pairs, days int
-	var objective string
+	var objective, reason string
 	var minImprovement float64
 	var guardrailArgs []string
 	var dbPath string
@@ -162,6 +162,7 @@ func newExperimentStartCmd() *cobra.Command {
 				Duration:        time.Duration(days) * 24 * time.Hour,
 				Fingerprint:     decide.RouteFingerprint(eventschema.Provider(args[0]), args[1], args[2], "proxy"),
 				ObjectiveMetric: objective, MinImprovementPct: minImprovement, Guardrails: guardrails,
+				Reason: strings.TrimSpace(reason),
 			})
 			if err != nil {
 				return err
@@ -174,6 +175,7 @@ func newExperimentStartCmd() *cobra.Command {
 	cmd.Flags().StringVar(&objective, "objective", "", "primary metric: tokens, plan_quota_tokens, metered_cost_usd, latency_ms, attention_minutes")
 	cmd.Flags().Float64Var(&minImprovement, "min-improvement-pct", 0, "required per-pair objective improvement percentage")
 	cmd.Flags().StringArrayVar(&guardrailArgs, "guardrail", nil, "guardrail as quality or metric:max-regression-pct (repeatable; include quality)")
+	cmd.Flags().StringVar(&reason, "reason", "", "why the trial is started, for the record")
 	cmd.Flags().StringVar(&dbPath, "db", "", "path to events.db")
 	return cmd
 }
