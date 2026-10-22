@@ -1,116 +1,183 @@
 # Competitive landscape, gaps, and plan
 
-Checked 2026-10-03 against each product's own site or repository. Items
+Checked 2026-10-22 against each product's own site, repository, changelog or
+release notes (previous full check 2026-10-03, partial 2026-10-06). Items
 marked **[U]** came from a third-party page or search snippet and are
 unverified. Re-check before quoting any of it externally; this field moves
-monthly.
+weekly now, not monthly.
 
 ## Summary
 
-The field splits in two, and TokenOps sits in neither half:
+The field still splits in two, but both halves moved toward TokenOps in
+October:
 
 - **Individual tools** (ccusage, tokscale, CodexBar, Claude-Code-Usage-Monitor,
   agentsview) read local transcripts or vendor meters and **report**. They win
-  on harness breadth and zero setup.
+  on harness breadth and zero setup. CodexBar now displays provider-reported
+  spend budgets and per-session performance; agentsview sets commits and PRs
+  beside a date range. None of them acts.
 - **Team and enterprise tools** (Anthropic's own analytics, Datadog, Faros, DX,
-  Jellyfish, Swarmia, Quesma, gateways like LiteLLM, Portkey, Cloudflare)
-  sell to leadership. Some **act**, but centrally: a 429 at a dollar cap, a hook
-  rolled out by PR, a routing policy at the gateway.
+  Jellyfish, Swarmia, Quesma, gateways like LiteLLM, Portkey, Cloudflare) sell
+  to leadership. In October, **hard budgets with approval flows** arrived for
+  teams (Harness AI Budgets, GitLab per-user credit caps, OpenAI Business
+  per-seat limits), and several leaders now say "local, derived only" (Quesma,
+  PointFive, Faros).
+- **The vendors themselves** are the fastest-moving rival. Claude Code's
+  `/usage` now names waste and applies the fix, warns before a resume eats the
+  5-hour window, and auto mode is the default permission mode on every plan.
+  OpenAI shipped a personal Codex usage dashboard with per-chat cost, headroom
+  widgets and banked resets.
+- **A small acting tier appeared**: Pushary stops a session at a daily budget
+  and routes approvals to a phone; Peras [U] pauses Claude Code and Codex at
+  90% of the weekly limit; a dozen tiny hook repos warn or block on budget.
 
-Five positions are unoccupied, and TokenOps holds all five:
+Of the five positions this doc called unoccupied on 2026-10-03, two still are,
+two are contested, and one is contested only in wording:
 
-1. **Headroom on subscription plans.** Gateways see dollars through an API; a
-   Claude Max or ChatGPT Pro user is invisible to them. Only CodexBar and the
-   long tail of menu-bar meters show windows, and they only display them.
-2. **Action inside the live session, per developer.** Datadog's fixes are
-   static hooks shipped by PR; nobody else adapts budget advice, output
-   compression, read-guard or coaching mid-session.
-3. **Local-only, no proxy.** The most private alternatives keep data in the
-   customer's S3 (Quesma) or server (LiteLLM). Nothing else stays on the
-   laptop.
-4. **Which account paid, through routers.** No competitor attributes a request
-   to the account that billed it (FireRouter, OpenRouter, a direct
-   pay-as-you-go key, or the plan) alongside the plan's own windows.
-5. **Agent DX graded for the developer.** Everyone else reports to managers.
-   Claude Code's `/insights` is the nearest, and it covers one harness.
+1. **Headroom on subscription plans, acted on.** *Contested.* Showing windows
+   is now table stakes: CodexBar (106 providers), each vendor's own meter, and
+   OpenAI's widgets. Acting on them is contested by Claude Code (resume
+   warning, retry watchdog, Claude only) and Peras [U] (pause at 90% weekly).
+   Still nobody else acts on headroom across harnesses.
+2. **Action inside the live session, per developer.** *Contested.* Claude
+   Code's `/usage` fixes (2.1.305) and Pushary's cost guard now act for one
+   developer; Tokenade compresses agent input on the laptop across 10+ agents,
+   which overlaps fmt. Nobody else combines read-guard, compression, budget
+   advice and boundaries in one place.
+3. **Local-only, no proxy.** *Contested in wording.* Quesma now says
+   "Encrypted on the laptop", PointFive TokenShift analyses locally and ships
+   derived metadata, Faros writes about on-device classification. All three
+   still feed a hosted product; TokenOps' claim that the core works with no
+   upload at all still holds, but "nothing else stays on the laptop" no longer
+   reads as true.
+4. **Which account paid, through routers.** *Still unoccupied.* CodexBar reads
+   the Vercel AI Gateway's budget (0.78) but does not attribute a request to
+   the account that billed it.
+5. **Agent DX graded for the developer.** *Still unoccupied across harnesses*,
+   but narrower: Claude Code's `/usage` warnings and OpenAI's "Top consuming
+   chats" each cover their own harness; Braintrust Coding Agent Insights does
+   it for teams.
 
-The risk is not one competitor. It is that each strength is matched by
-someone on one axis: CodexBar on headroom, Claude Code itself on Claude
-attribution, governor on in-session compression, Datadog and Faros on
-"spend to outcomes, then act". TokenOps' defensible claim is the combination,
-across harnesses, on the developer's machine.
+The October positioning, **guardrails for coding agents** ("Know what's left.
+Set what's allowed. Let your agents work."), lands in a field that got busy the
+same month: vendor classifiers (Claude Code auto mode, Codex Guardian) now own
+the default per-tool approval, admins get model and budget policy from each
+vendor, and team buyers get approval flows from Harness and GitLab. TokenOps'
+defensible claim is narrower and still real: **limits on plan headroom, budget
+and session cost, set by the developer or signed down by a team, enforced
+locally and the same way across harnesses.**
 
 ## The field
 
 ### Individual and local
 
-| Tool | What it does | Acts? | Harnesses | Maturity | Beats TokenOps on |
+| Tool | What it does | Acts? | Harnesses | Maturity (2026-10-22) | Beats TokenOps on |
 |---|---|---|---|---|---|
-| [ccusage](https://github.com/ccusage/ccusage) | Tokens and cost by day/session/5h block, statusline | No | ~18 | 18.9k★, v20.0.26 (2026-09-27) | Mindshare (`npx ccusage`), breadth, zero setup |
-| [CodexBar](https://github.com/steipete/CodexBar) | Menu bar: session/weekly/monthly windows, credits, spend, incidents | No | 89 providers | 22.2k★, v0.71.1 (2026-10-03) | **Closest headroom rival.** Ambient GUI, provider breadth |
-| [tokscale](https://github.com/junhoyeo/tokscale) | Token and cost CLI, opt-in global leaderboard | No | 50+ incl. Cursor | 5.6k★, v4.17.0 | Breadth, virality |
-| [agentsview](https://github.com/kenn-io/agentsview) | Session search (full-text, semantic), cost dashboards; optional Postgres/ClickHouse sync | No | 50+ | 6.0k★, v0.44.0 | Session archive; a cheap self-hosted team view |
-| [Claude-Code-Usage-Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor) | Live TUI, burn rate, P90 limit forecast | No | Claude Code | 8.7k★, v4.0.0 (2026-06) | Pace forecasting UX |
-| [governor](https://github.com/0xhimanshu/governor) | Compacts tool output, compresses memory files, scope-drift contracts; rules files for non-hook harnesses | **Yes** | CC (hooks) + rules files | 134★, v0.2.5 | Direct overlap with fmt and coaching; rules-file fallback everywhere |
-| [ccflare](https://github.com/snipeship/ccflare) | Proxy that load-balances accounts, fails over on rate limits | **Yes** | Anthropic, OpenAI APIs | 1.0k★, stalled since 2026-04 | Routes around limits |
-| Claude Code `/usage`, `/insights` | Plan bars; attribution to skills/subagents/MCP; cache-miss cause; friction report | Partly (auto-continue, spend prompts) | Claude Code | First party | Authoritative, built in; erodes our Claude-only story |
-| Cursor and Codex dashboards | Allowance per pool, windows, credits | No | Own harness | First party | Authoritative for their own plan. [U] Cursor self-serve shows tokens only since 2026-07-31 |
+| [ccusage](https://github.com/ccusage/ccusage) | Tokens and cost by day/session/5h block, statusline | No | 18 sources | 19.1k★, v20.0.40 (10-21), patch releases only | Mindshare (`npx ccusage`), zero setup |
+| [CodexBar](https://github.com/steipete/CodexBar) | Menu bar: windows, credits, spend, provider spend budgets, session throughput and tool errors, threshold shell hooks | Small: shell hooks, Stay Awake | 106 providers | 22.7k★, v0.79.0 (10-20), eight releases since 10-04 | **Closest headroom rival.** Ambient GUI, provider breadth, release pace |
+| [tokscale](https://github.com/junhoyeo/tokscale) | Token and cost CLI, leaderboard, groups with members and calendar periods | No | 50+ incl. Claude Desktop | 5.7k★, v4.20.0 (10-17) | Breadth, virality, a social team angle |
+| [agentsview](https://github.com/kenn-io/agentsview) | Session search, cost dashboards, commits and PRs per date range, tool-sequence panel, conversation memory plugins; hosted sync | No | 50+ | 6.2k★, v0.45.0 (10-09) | Session archive; memory; a cheap team view |
+| [Claude-Code-Usage-Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor) | Live TUI, burn rate, P90 limit forecast | No | Claude Code | 8.8k★, v4.0.0 (06-27), dormant since 07-05 | Pace forecasting UX |
+| [governor](https://github.com/0xhimanshu/governor) | Compacts tool output, compresses memory files, scope-drift contracts | **Yes** | CC (hooks) + rules files | 131★, v0.2.5 (09-06), no pushes since | Rules-file fallback everywhere |
+| [ccflare](https://github.com/snipeship/ccflare) | Proxy that load-balances accounts | **Yes** | Anthropic, OpenAI APIs | 1.05k★, stalled since 2026-04 | Routes around limits |
+| [Pushary](https://pushary.com/blog/limit-ai-agent-token-usage) (new here) | Cost guard reads session cost from the transcript and kills the session at a daily budget; approval gate routed to phone or Mac, audit log | **Yes** | Claude Code, Qwen Code, Droid, Devin CLI; says Codex, Gemini CLI, Cursor "work the same way" | Paid; post updated 10-04; local vs hosted not stated | **Nearest to "set what's allowed"** for a solo developer; phone approvals |
+| Peras (new) [U] | Pauses Claude Code and Codex at 90% of the weekly limit, notifies at 75% | **Yes** [U] | CC, Codex [U] | Launched 2026-10-21 [U] | Headroom-triggered pause, one feature, one line |
+| [Tokenade](https://tokenade.net/en/solutions/software-teams/engineering-managers) (new) | Compresses agent input on each machine; claims 39% lower cost on its own benchmark | **Yes** | 10+ agents | Team page 10-15; no team console | Direct overlap with fmt |
+| Hook-sized enforcers (cc-cost, agentwatchdog, terse, claudepace, coding-agent-guardrails) | Per-project budgets with warn/block hooks, budget circuit breakers, destructive-command blocks | **Yes** | Mostly CC | 0–2★ each, 09–10 | Signal, not threat: the idea is obvious |
+| Menu-bar long tail (ai-usagebar, brow, codex-usage-badge, Developer-Island, Usagebar, TokenBar [U]) | 5h and weekly bars, per-account notch, Windows and Linux widgets | No | 1–4 vendors | ai-usagebar 715★ v1.41.0 (10-18); brow 57★ v0.5.0 (10-21) | Linux and Windows presence we lack |
+| Claude Code `/usage`, `/insights`, `/cost` | Plan bars; waste warnings with one-key fixes (2.1.299, 2.1.305); resume warning on 5h share (2.1.304); retry watchdog on limits; gateway spend limit in dollars | **Yes** (fixes on request; auto mode default) | Claude Code | First party | Authoritative, built in, now *acts* on Claude waste |
+| OpenAI Codex usage | Personal dashboard (Enterprise/Edu, 10-04): 7D/30D history, top consuming chats, per-chat credits and estimated cost; widgets (10-02); banked resets (10-21) | Partly (apply a saved reset) | Codex, ChatGPT | First party | Per-chat cost and headroom for Codex users, no setup |
+| Cursor dashboard | Allowance per pool | No | Cursor | First party | Authoritative for its own plan. [U] New weekly pool shared with Grok (10-12) |
 
 ### Team and enterprise
 
 | Product | Buyer | Acts? | Data | Beats TokenOps on |
 |---|---|---|---|---|
-| Anthropic analytics, OTel, Analytics API | Admins | **Yes**: spend caps, alerts, per-group model entitlements | Anthropic | PR attribution via GitHub app; enforced caps. Statusline gained gateway `spend_limit` in CC 2.1.284 [U] |
-| Datadog Agent Console (preview) | Eng leadership | **Yes**: Fix Library ships PreToolUse hooks as PRs | SaaS | Waste detection plus fleet-wide fixes, five harnesses |
-| Faros AI Token Engineering | VP Eng, CFO | **Yes**: quota, routing, model policy at the gateway | SaaS | Task → PR → CI → outcome per dollar; closest to our thesis, org-level |
-| Quesma (early access) | Leadership, finance | No ("No proxy, no rerouting") | Customer's S3; Quesma decrypts a copy unless Enterprise BYOC | Team pattern mining; buyer clarity |
-| DX, Jellyfish, LinearB, Swarmia | Eng management | No (LinearB automations) | SaaS | Cost per PR, surveys, benchmarks, unused-seat reclamation |
-| LiteLLM, Portkey, Cloudflare AI Gateway, OpenRouter | Platform teams | **Yes**: hard dollar caps, model allow-lists, failover; Portkey pushes MCP and skills to every developer | Self-host or SaaS | Central enforcement; fleet config |
-| Langfuse | Platform teams | No | Cloud or self-host | Full traces in a shared store, nine harnesses |
-| CloudWatch Coding Agent Insights | Cloud teams | No | AWS | Cost-center chargeback |
-| Promptster (new) | AI enablement | Coaches, not in-session | Its cloud | **Markets itself as "the TokenOps platform"** |
-| Codensics (new) | Spend governance | **Yes**: team budgets in the API path [U] | [U] | Prompt-to-commit provenance |
+| Anthropic analytics, OTel, managed settings | Admins | **Yes**: spend caps, alerts, `deniedModels`/`allowedProviders` (2.1.283/285), approval `ceiling` (2.1.290), `safety_event` OTel (2.1.307) | Anthropic | Enforced caps and model policy; every stopped tool call as telemetry |
+| OpenAI Business and Enterprise | Admins | **Yes**: monthly credit limits per seat type, per-user overrides (help page updated 10-19) | OpenAI | Per-seat limits on the plan itself |
+| GitHub Copilot | Admins | **Yes**: budgets, model-policy REST API (10-19), enforced managed settings (10-13), review billed to a cost center (10-08) | GitHub | Fleet policy on the biggest seat base |
+| Datadog Agent Console (preview) | Eng leadership | **Yes**: Fix Library ships PreToolUse hooks as PRs | SaaS | Fleet-wide fixes. *Correction:* the docs list three coding agents (Claude Code, Cursor, Copilot), not five |
+| Faros AI Token Engineering | VP Eng, CFO | **Yes**: quota, routing, model policy at the gateway | SaaS | Task → PR → CI → outcome per dollar; now writing about on-device classification |
+| Harness AI Budgets (new, 10-20) | FinOps, platform | **Yes**: budgets per team, developer, model or project; warn at 90%, block past 100%, tiered approval for raises; weekly reset | SaaS | **Budget with approval, the team half of our boundaries**, inside an existing FinOps buyer |
+| GitLab Duo Agent Platform (10-13) | Admins | **Yes**: per-user credit caps that auto-pause, alerts at 50/80/100% | GitLab | Same, for GitLab shops |
+| Milestone Budget Alerts (new, 10-20) | Eng management | Alerts only | SaaS | One per-developer budget across Cursor, Claude, Copilot with cost per merged PR |
+| DarkControl (new) | Security | **Yes**: allow/ask/deny policy console with audit, now records tokens per decision (10-06) | SaaS | Policy plus spend on one decision record |
+| Braintrust Coding Agent Insights (new, preview 10-07) | Platform | Suggests fixes | SaaS | Team traces from CC, Codex, OpenCode |
+| PointFive TokenShift (new) | FinOps | No | Local analysis, derived metadata uploaded | Our "derived only" pitch, sold to FinOps |
+| Quesma (early access "soon") | Leadership, finance | No ("No proxy") | Encrypted on the laptop, stored "in your cloud" | Seat cut/upgrade advice; now lists Copilot |
+| Jellyfish, Swarmia, DX, LinearB | Eng management | No | SaaS | Jellyfish "AI spend-to-work attribution" (10-07); Swarmia token use by investment (10-09), Claude Code backfill (10-14) |
+| LiteLLM, Portkey, Cloudflare AI Gateway, OpenRouter | Platform teams | **Yes**: dollar caps, allow-lists; LiteLLM `agent_access_default_deny` (rc, 10-18); Portkey MCP guardrails | Self-host or SaaS | Central enforcement, now extending to agent and MCP access |
+| Langfuse, CloudWatch Coding Agent Insights | Platform, cloud | No | Cloud or self-host / AWS | No change since 10-03 |
+| Promptster | Hiring, then AI enablement | Coaches | Its cloud | **Changed:** homepage leads with hiring again; "the TokenOps platform" wording is gone from homepage and /teams; blog still tags posts TokenOps; `cc-audit` last released 0.9.0 (08-18) |
+| Codensics | Spend governance | **Yes**: credit-pool budgets [U] | [U] | No product change found |
 
 Helicone is in maintenance mode after Mintlify acquired it (2026-03).
 
 ## Gaps
 
 Ranked by how much each costs TokenOps with its own audience, solo developers
-first, then the team they will one day bring.
+first, then the team they will one day bring. Status as of 2026-10-22.
 
-| # | Gap | Who has it | Severity | Fit with TokenOps |
+| # | Gap | Who has it | Severity | Status |
 |---|---|---|---|---|
-| G1 | **Harness breadth.** Four harnesses plus a handful of pay-as-you-go accounts, against 18 (ccusage), 50+ (tokscale, agentsview), 89 providers (CodexBar) | Individual tools | High: a user whose harness is missing never starts | Core. Passive readers are cheap where a token log exists |
-| G2 | **Setup friction.** `npx ccusage` and a menu-bar download need nothing; TokenOps needs `init`, a daemon, choices | ccusage, CodexBar | High: first-run loss | Core. The agreed setup wizard |
-| G3 | **Gateway and admin caps in the statusline.** Claude Code now passes `rate_limits.spend_limit` [U]; we read the Enterprise limit from claude.ai instead | Anthropic | Medium, cheap | Core. One more vendor-reported reading |
-| G4 | **Outcome linkage: cost per commit and PR** | Anthropic, Faros, DX, Datadog, Codensics | Medium-high: the question finance asks | Core. Work model and outcomes exist; git linkage is local |
-| G5 | **In-session effect on harnesses without hooks.** governor ships rules files for Cursor, Codex, Gemini, Windsurf | governor | Medium | Partly there: `tokenops_rules (view=inject)` exists but is not installed by default |
-| G6 | **Local per-account budgets and router policy** | LiteLLM, Portkey, Cloudflare, Faros | Medium | Core. ADR 0009 phase 2 |
-| G7 | **Team view.** Rollups by team and repo, RBAC, SSO | All team products | High for the team buyer; low for solo users today | Decided: derived metrics only, hosted (2026-09-15). OTel export is a cheaper first bridge into stacks companies already run |
-| G8 | **Ambient GUI.** Menu bar, tray | CodexBar, ccseva, long tail | Low-medium: the statusline covers users inside a harness | Optional. The local API makes a thin client cheap |
-| G9 | **Positioning and name.** Competitors name a buyer; Promptster uses "TokenOps" | Quesma, Promptster | Medium | Landing page; name protection is a business decision |
-| G10 | Session search and archive | agentsview | Low | Non-goal: ADR 0004 rules out becoming a BI product |
-| G11 | Multi-account failover | ccflare, Portkey, OpenRouter | Low | Non-goal: the harness or router routes. TokenOps stands down when an external router decides (ADR 0009) |
-| G12 | Benchmarks across companies, surveys, seat reclamation | Jellyfish, DX, Swarmia | Low | Non-goal |
+| G1 | **Harness breadth.** CodexBar at 106 providers; tokscale and agentsview at 50+ | Individual tools | High | About 90 providers read for windows (0.102); transcript readers still fewer |
+| G2 | **Setup friction** | ccusage, CodexBar | High | `npx tokenops checkup` (0.101) and `init` binding plans from evidence; wizard open |
+| G16 | **Vendor coach overlap on Claude.** `/usage` names waste and applies the fix; our Claude-only tips now duplicate it | Anthropic | **High, new** | Coach must defer to, or read, the vendor's own warnings |
+| G17 | **Vendor approvals.** Auto mode is the default; Codex has Guardian; both emit decision telemetry | Anthropic, OpenAI | **High, new** | Boundaries pause *around* the classifier; nothing reads its verdicts yet |
+| G18 | **Headroom pause as a one-liner.** Peras [U] and Pushary sell "stop before the limit" as the whole product | Peras, Pushary | Medium-high | Shipped as a boundary (0.103) but not a default or a headline |
+| G19 | **New window shapes.** Banked resets (OpenAI), per-model weekly quotas (Antigravity [U]), shared pools (Cursor with Grok [U]) | Vendors | Medium | Forecasts assume one window that resets on schedule |
+| G4 | Outcome linkage: cost per commit and PR | Faros, Jellyfish, Milestone, agentsview (by date) | Medium | Shipped: `spend --by commit` (0.99), `spend units` (0.105) |
+| G7 | Team view with budgets and approvals | Harness, GitLab, Copilot, Anthropic | High for teams | Team plane, org boundaries and role approval shipped (0.102–0.103); needs to speak to vendor org caps |
+| G8 | Ambient GUI on Linux and Windows | ai-usagebar, codex-usage-badge, Developer-Island, CodexBar Linux | Low-medium | macOS menu bar only |
+| G9 | Positioning and name | Promptster (receding), Pushary, Harness | Medium (lowered) | Guardrails positioning shipped (10-13); see "stop claiming" below |
+| G5 | In-session effect on harnesses without hooks | governor, Tokenade | Medium | `rules` inject exists; boundaries give Codex and Cursor advice only |
+| G10–G12 | Session search, failover, benchmarks and seats | agentsview, ccflare, Jellyfish/DX | Low | Non-goals (ADR 0004, ADR 0009) |
 
 ## Plan
 
-This extends the order agreed on 2026-10-01 (setup wizard, then router
-governance) rather than replacing it. Each step names the gap it closes.
+The 2026-10-03 plan is mostly done: gateway caps (#507), router governance
+(#518, #521), cost per commit (#550, 0.105), OTel export (#551), the menu bar
+and alerts, the team plane (0.102) and action boundaries (0.103) all shipped,
+and the landing page now leads with guardrails. What the October field changes
+is what TokenOps should build next, and what it should stop saying.
+
+**Build, in order:**
 
 | Step | Work | Closes | Done when |
 |---|---|---|---|
-| 1 | **Gateway caps.** Verify the `rate_limits.spend_limit` statusline fields against a real payload; if they exist, store them as vendor readings and show them in headroom | G3 | Headroom shows the admin cap from Claude Code's own data |
-| 2 | **Landing page.** Lead with the five unoccupied positions, show real headroom output, say "acts, not just reports". Decide on the name question | G9 | Page shipped; decision recorded |
-| 3 | **Setup wizard** (agreed). Plans from vendor evidence, Enterprise limit, routers, preset, statusline, and rules files for harnesses without hooks | G2, G5 | A new user reaches correct headroom without editing config |
-| 4 | **Harness breadth, wave 1.** Survey which harnesses keep a local token log (Copilot CLI, Gemini CLI, Amp, Goose, Qwen Code, Kimi CLI, Cline/Roo); add readers in order of reach | G1 | Each reader verified against a real transcript; coverage matrix updated |
-| 5 | **Router governance** (ADR 0009 phase 2). Budget per billing account, policy on route IDs, quality by served model | G6 | A per-account budget warns before the cap, from local evidence |
-| 6 | **Cost per commit and PR.** Link work to commits and branches locally; report cost and DX per merged change | G4 | `story` and `scorecard` show cost per commit |
-| 7 | **OTel export of derived metrics.** dx grades, spend by account, headroom; never prompts or transcripts | G7 (first step) | Metrics land in a stock OTel collector |
-| 8 | **Team plane proof.** Hosted rollup of the same derived metrics | G7 | Two machines roll up in one view |
+| 1 | **Headroom pause as a default.** Ship a `continue` boundary at a share of the tightest window (say 90% used) in shadow on every new install, promoted to recommend after a week; one line in the README and quickstart | G18 | A fresh `init` records what the pause would have done, on every harness with a pause point |
+| 2 | **Read the vendor's verdicts.** Ingest Claude Code's `safety_event` and `tool_decision` (`classifier_verdict`, `permission_mode`) and Codex approval outcomes as evidence; record them on the boundary decision instead of asking twice | G17 | `explain` shows the vendor's verdict beside ours; a tool call is never put to the person twice |
+| 3 | **Coach stands down where the vendor coaches.** As with routers (ADR 0009): when Claude Code's `/usage` already raises a warning class, drop or link our tip; keep cross-harness and cross-session findings | G16 | No Claude tip duplicates a `/usage` warning; the realized-savings ledger counts only ours |
+| 4 | **New window shapes.** Model banked resets, per-model quotas and shared pools in the plan catalog; forecasts treat an unused banked reset as headroom | G19 | `glance` shows a banked reset and a per-model quota correctly |
+| 5 | **Org caps as vendor readings.** Read OpenAI Business per-seat limits, Copilot budgets and the Claude apps gateway cap into boundaries, so a team rule can sit under the vendor's cap, not beside it | G7 | A boundary can name the vendor's own org limit as its ceiling |
+| 6 | **Transcript readers, wave 2**, in order of reach (Claude Desktop, Junie, Droid, Qwen Code), each verified against a real transcript | G1 | Coverage matrix updated |
 
-Deliberately not planned: session search (G10), failover routing (G11), and
-benchmarks or seat management (G12).
+**Stop claiming** (landing page and README):
+
+- "Each vendor's own meter: 🚫 acts inside the session" and "🚫 limits you set".
+  Claude Code acts on waste and on resume, and every vendor now sells admin
+  limits. Reword to "one harness, its own plan".
+- That nothing else stays on the laptop. Say the core needs no upload at all,
+  and that team figures are derived only (ADR 0012).
+- That only meters show subscription windows. Every vendor does now.
+- That approvals need TokenOps. Auto mode and Guardian decide per tool call;
+  TokenOps decides on money, headroom and team rules around them.
+
+**Positioning risks:**
+
+- **Anthropic absorbs the Claude-only solo case.** A Claude-only user now gets
+  headroom, waste fixes and approvals without us. Lead with cross-harness and
+  with limits that span accounts.
+- **Harness and GitLab own "budget with approval" for teams** inside budgets
+  FinOps already pays for. The team plane should integrate (OTel, FOCUS
+  export) rather than compete as a FinOps tool.
+- **"Guardrails" is crowded** (DarkControl, Pushary, Portkey MCP guardrails,
+  hook repos), mostly meaning "block dangerous commands". Ours are about
+  money, headroom and authority; say so in the first line.
+
+Deliberately not planned: session search and memory (agentsview), failover
+routing, benchmarks or seat management, Linux and Windows GUIs (until the
+macOS menu bar has users), and matching provider counts one by one.
 
 ## Update 2026-10-06
 
@@ -169,14 +236,120 @@ Linux GUI, and matching provider counts one by one.
 reader, then a one-shot `audit`, then the team plane once its three
 decisions are made.
 
+## Update 2026-10-22
+
+What moved since 2026-10-03, with the date of each change and its source.
+The tables above already carry these; this is the log.
+
+**Vendors (primary sources).**
+
+- **Claude Code**
+  ([releases](https://github.com/anthropics/claude-code/releases)):
+  - 2.1.283 (09-25): `deniedModels`.
+  - 2.1.284 (09-28): sessions start in auto mode "on every plan and provider"
+    unless `permissions.defaultMode` is set.
+  - 2.1.285 (09-29): `allowedProviders`.
+  - 2.1.290 (10-05): an approval `ceiling` on the `tool.check` hook.
+  - 2.1.299 (10-14): `/usage` warns on max effort, workflows, always-on
+    context and large tool results.
+  - 2.1.304 (10-19): a warning before a resume takes "a noticeable share" of
+    the 5-hour limit.
+  - 2.1.305 (10-20): each `/usage` warning is a one-line fix, and `f` applies
+    it.
+  - 2.1.307 (10-21): `claude_code.safety_event` OTel for every tool call
+    stopped or prompted.
+- **OpenAI**:
+  - A personal Codex usage dashboard for Enterprise and Edu, with per-chat
+    credits and estimated cost (help article published 10-04).
+  - Home Screen and Lock Screen widgets for remaining usage and resets (iOS,
+    10-02).
+  - Banked resets for the 5-hour and weekly windows (help article updated
+    10-21). [U] The desktop app may offer one automatically at ≤10% left.
+  - Business per-seat monthly credit limits (help article updated 10-19).
+  - Codex CLI 0.159–0.163: windows kept in turn analytics, USD in thread
+    usage, approvals bound to the turn, managed policy kept on resume.
+- **GitHub Copilot**:
+  - Model-policy REST API (10-19).
+  - Managed settings enforced at startup (10-13).
+  - User identity on telemetry, opt-in (10-12).
+  - Code review billed to a cost center with a budget (10-08).
+- **Google**:
+  - Gemini CLI v0.64 (10-13) emits ACP `usage_update`.
+  - [U] Antigravity added a separate weekly quota per model (10-13/15).
+- **Cursor**:
+  - Nothing on usage in its changelog.
+  - [U] A weekly pool shared with Grok (10-12).
+
+**Individual tools (GitHub, 10-22).**
+
+- **CodexBar**:
+  - Eight releases, 0.73.0 to 0.79.0 (10-07 to 10-20), and 106 providers.
+  - Per-session throughput and tool errors for Codex (0.74).
+  - An OpenAI live rate-limit window (0.75).
+  - Provider spend budgets with display rules (0.77–0.79: Claude Enterprise,
+    Vercel AI Gateway, Cursor additional spend).
+  - An opt-in HTTP usage server (0.77).
+  - The 10-03 note still holds: no per-task cost, no budgets you set
+    yourself, no guardrails.
+- **agentsview** v0.45.0 (10-09): commits and PRs for the selected dates,
+  memory plugins for Claude Code and Codex, hosted sync.
+- **tokscale** v4.19–4.20 (10-14 to 10-17): Claude Desktop, groups with
+  members and calendar periods.
+- **ccusage** v20.0.27–20.0.40: patch releases only.
+- **Dormant**: Claude-Code-Usage-Monitor, governor and ccflare had no releases
+  or pushes.
+
+**Team tools.**
+
+- **Budgets with approval and alerts**:
+  - Harness AI Budgets ([10-20](https://www.harness.io/blog/introducing-ai-budgets)).
+  - GitLab per-user credit caps
+    ([10-13](https://about.gitlab.com/blog/make-every-ai-credit-count/)).
+  - Milestone Budget Alerts
+    ([10-20](https://mstone.ai/blog/introducing-budget-alerts/)).
+- **Attribution and spend views**:
+  - Jellyfish "AI spend-to-work attribution"
+    ([10-07](https://jellyfish.co/newsroom/)).
+  - Swarmia token use by investment (10-09) and Claude Code backfill (10-14)
+    ([changelog](https://www.swarmia.com/changelog/)).
+- **Policy and governance**:
+  - DarkControl adds token use per policy decision (10-06).
+  - LiteLLM v1.106.0 (10-18) disables stdio MCP servers by default;
+    v1.107.0-rc adds `agent_access_default_deny`.
+- **Team traces**: Braintrust Coding Agent Insights, preview (10-07).
+- **Quesma**: still "Early access opens soon", with no pricing. It now lists
+  Copilot and says "Encrypted on the laptop".
+- **Faros**: blog posts only ("Cost per outcome", 10-21).
+- **Datadog**: still in preview. Its docs list three coding agents.
+- **Promptster**: its homepage leads with hiring again, and the "TokenOps
+  platform" wording is gone. Its blog still tags posts TokenOps (10-06,
+  10-07).
+
+**Claims in this doc that no longer hold.**
+
+| Claim (from) | Now |
+|---|---|
+| "Five positions are unoccupied" (10-03) | Two of the five are still unoccupied, two are contested, and one is contested in wording (Summary). |
+| Datadog covers "five harnesses" (10-03) | Its docs list three. |
+| Promptster "Markets itself as 'the TokenOps platform'" (10-03) | That wording is gone from its homepage and /teams. |
+| Claude Code `/usage` is "plan bars" and reports (10-03) | It applies fixes on request and auto mode is the default. |
+| Gap G4, cost per commit (10-03) | Shipped in TokenOps; others now have it by date range or org. |
+
 ## Watch list
 
-- **CodexBar:** if it adds attribution or acting, it becomes the main rival.
-- **Claude Code `/usage` and `/insights`:** each release narrows what is
-  distinctive on Claude alone; our edge must stay cross-harness and acting.
-- **Datadog Agent Console and Faros:** the org-level version of our thesis.
+- **Claude Code `/usage` and auto mode:** the biggest erosion of the
+  Claude-only case. Each release decides what our coach should stop doing.
+- **OpenAI usage dashboard:** whether per-chat cost reaches Plus and Pro, and
+  whether banked resets get applied automatically.
+- **CodexBar:** if its spend-budget rules start acting, or it adds per-task
+  cost, it becomes the main rival. It ships every few days.
+- **Pushary and Peras:** the only solo tools that stop a session on money or
+  headroom. Watch their harness reach and whether they run locally.
+- **Harness AI Budgets and GitLab:** budget-with-approval for teams, sold to
+  buyers who already pay.
+- **Datadog Agent Console and Faros:** the org-level version of our thesis;
+  Faros is heading on-device.
 - **Quesma:** when early access opens and what it charges.
-- **governor:** the only other in-session optimizer.
-- **Promptster:** its solo audit is the nearest thing to our solo pitch.
-- **CodexBar hooks:** threshold hooks are the first step from reporting to
-  acting.
+- **Tokenade:** local input compression across 10+ agents, against fmt.
+- **Promptster:** check whether the coding-cost line survives the move back
+  to hiring.
