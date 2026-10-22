@@ -1,0 +1,19 @@
+Prompting coach — since 2026-01-01T00:00:00Z
+  total prompts: 4  |  avg 32 chars / 6 words  |  min 29, max 37 chars
+  avg assistant turn: 16438 input tokens (0 cached) + 375 output  |  $0.0866  |  45s of your attention
+
+LENGTH DISTRIBUTION
+  <5w          1  ( 25.0%) ████████████
+  5-15w        3  ( 75.0%) █████████████████████████████████████
+  15-50w       0  (  0.0%) 
+  50-200w      0  (  0.0%) 
+  >200w        0  (  0.0%) 
+
+FINDINGS
+  vague/short (<15 chars, ≤3 words):  0 (0.0%)
+  pure acknowledgements:              0 (0.0%)
+  short questions (<60 chars + '?'):  0 (0.0%)
+  single-sentence no-context:         1 (25.0%)
+
+RECOMMENDATIONS
+  • Prompting balance looks healthy. No anti-pattern flagged.
