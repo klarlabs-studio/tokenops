@@ -298,3 +298,24 @@ func TestApproveConfirmShowsWhatWaitsAndNeedsAYes(t *testing.T) {
 		t.Fatalf("after a confirmed approval: %+v", d)
 	}
 }
+
+// approve's help says what it guarantees and what it does not, so an
+// operator does not read the terminal check as a security boundary.
+func TestApproveHelpStatesItsLimits(t *testing.T) {
+	out, err := executeRoot(t, "approve", "--help")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"What this guarantees", "What it does not", "script -q /dev/null", "Recommended"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("approve --help lacks %q", want)
+		}
+	}
+	out, err = executeRoot(t, "deny", "--help")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "What this guarantees") {
+		t.Error("deny --help carries approve's limits")
+	}
+}

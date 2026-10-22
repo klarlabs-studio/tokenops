@@ -172,10 +172,11 @@ The menu bar lists what waits under *Waiting on you*. **Deny** answers
 there. **Approve…** opens a terminal running `tokenops approve <id>
 --confirm`, so the approval is still you, at a terminal, typing yes.
 
-Only a person can approve: `tokenops approve` refuses to run without a
+Only a person should approve: `tokenops approve` refuses to run without a
 terminal, and the MCP tool and the daemon API can only deny. The agent a
 boundary stopped can call tools and run commands, so an approval through
-any of those would be the agent approving itself.
+any of those would be the agent approving itself. How far that holds is
+below.
 
 An answer applies to the session it was asked in, and is honoured for at
 most a day. Answering at Claude Code's prompt counts too: TokenOps reads
@@ -188,6 +189,56 @@ user — and, once answered, its **approval**: who, how (`cli`, `mcp`,
 ```bash
 tokenops explain bnd-1a2b3c4d5e6f
 ```
+
+### What approval guarantees
+
+Approval is a guardrail against an agent that is wrong or misled, not a
+security boundary against a process that wants to get through. It holds
+against the agent's own tools; it does not hold against everything that
+runs as your user.
+
+**It guarantees:**
+
+- An agent cannot approve through TokenOps' MCP tools: `tokenops_boundaries`
+  can only deny, and the settings tools (`tokenops_configure`,
+  `tokenops_routing`, `tokenops_coach`, `tokenops_experiment`) apply a
+  change only after you confirm it at your client
+  ([MCP server](/integrations/mcp-server#changing-settings-asks-you)).
+- The daemon's decision endpoint (`POST /api/boundaries/decisions`) can
+  only deny.
+- `tokenops approve` refuses to run when its standard input is not a
+  terminal, so an agent's plain shell call fails.
+- Every answer is recorded with who gave it and how (`cli`, `mcp`, `api`,
+  `prompt` or `team`), and `tokenops explain <id>` shows it.
+
+**It does not guarantee** that the approval came from you. Anything running
+as your user can act as you:
+
+- The terminal check is that standard input is a terminal, nothing more.
+  A command can get one for itself: `script -q /dev/null tokenops approve
+  <id>` passes it, and so would `expect`, `tmux` or any pseudo-terminal.
+- The daemon's API token is a file in `~/.tokenops` that your user can
+  read. With it, a process can call the settings endpoints directly, such
+  as `POST /api/mode` or `POST /api/routing/rules`.
+- The boundary ledger and `config.yaml` are files your user can write.
+
+TokenOps does not try to tell those apart from you. A check that looks for
+a "real" terminal (a controlling terminal, its session, the parent
+processes) cannot separate a pseudo-terminal an agent opened from the one
+you typed into, and a check that seems to would promise more than it
+delivers.
+
+**Recommended setup:**
+
+- Do not give agents an unrestricted shell for TokenOps. In Claude Code,
+  add permission rules that ask before `Bash(tokenops approve:*)`,
+  `Bash(tokenops mode:*)`, `Bash(tokenops routing:*)`,
+  `Bash(tokenops boundaries:*)` and `Bash(script:*)`, and before any
+  `curl` to the daemon's address; other harnesses have equivalents.
+- Answer boundaries yourself: at Claude Code's prompt, in the menu bar, or
+  with `tokenops approve <id> --confirm` in your own terminal.
+- For a guarantee that holds against a determined process, use the
+  vendor's organisation controls or a gateway (see below).
 
 ## Where a boundary is enforced
 

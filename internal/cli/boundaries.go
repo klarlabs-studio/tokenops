@@ -269,6 +269,27 @@ func newBoundariesStageCmd(verb string) *cobra.Command {
 	return cmd
 }
 
+// approveLimits is what approval guarantees, said where it is used: a
+// guardrail against an agent's own tools, not a boundary against a process
+// running as the operator.
+const approveLimits = `
+
+What this guarantees: an agent cannot approve through TokenOps' MCP tools
+or the daemon's decision endpoint (both can only deny), this command
+refuses to run when stdin is not a terminal, and every answer is recorded
+with how it was given (cli, mcp, api, prompt).
+
+What it does not: the terminal check only asks whether stdin is a
+terminal. A process running as you can get one (script -q /dev/null
+tokenops approve <id>), read the daemon's token in ~/.tokenops and call
+its API, or write the boundary ledger. Approval stops an agent that is
+wrong or misled, not one set on getting through.
+
+Recommended: do not give agents an unrestricted shell for tokenops. Have
+your harness ask before 'tokenops approve', 'tokenops mode', 'tokenops
+routing', 'script' and curl to the daemon (in Claude Code, permission
+rules such as Bash(tokenops approve:*) set to ask).`
+
 // approverAtTerminal reports whether an approval comes from a person: its
 // stdin is a terminal. A variable so tests can stand in for one.
 var approverAtTerminal = func(in io.Reader) bool { return interactiveInput(in, false) }
@@ -303,15 +324,19 @@ func newBoundaryAnswerCmd(verb string) *cobra.Command {
 	if verb == "deny" {
 		short = "Refuse what a boundary asked about: the next step, or the rest of the session"
 	}
-	cmd := &cobra.Command{
-		Use:   verb + " <id>",
-		Short: short,
-		Long: short + `.
+	long := short + `.
 
 The id is the bnd-… one the agent was refused with, or that
 'tokenops boundaries status' lists as waiting. The answer is recorded on the
-decision with your user name, so 'tokenops explain <id>' shows who answered.`,
-		Args: cobra.ExactArgs(1),
+decision with your user name, so 'tokenops explain <id>' shows who answered.`
+	if verb == "approve" {
+		long += approveLimits
+	}
+	cmd := &cobra.Command{
+		Use:   verb + " <id>",
+		Short: short,
+		Long:  long,
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// An agent can run commands too: an approval needs a person at a
 			// terminal, so it is refused when stdin is not one.

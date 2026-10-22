@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/actions"
 	"go.klarlabs.de/tokenops/internal/capability/decisions"
 	"go.klarlabs.de/tokenops/internal/capability/state"
 
@@ -206,7 +207,7 @@ func newRoutingCmd() *cobra.Command {
 		Use:   "routing",
 		Short: "Routing proposals and the rules that route work to models",
 	}
-	cmd.AddCommand(newRoutingProposalsCmd(), newRoutingRuleCmd())
+	cmd.AddCommand(newRoutingProposalsCmd(), newRoutingDecideCmd(), newRoutingRuleCmd())
 	return cmd
 }
 
@@ -247,6 +248,38 @@ model, or stay on the preferred one. Nothing applies until you answer.`,
 					fmt.Fprintf(out, "    price: %s\n", p.Pricing)
 				}
 			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&storePath, "store", "", "override the approvals store path")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
+	return cmd
+}
+
+// newRoutingDecideCmd answers a routing proposal from the terminal: what an
+// agent's tokenops_routing decide refusal tells the operator to run.
+func newRoutingDecideCmd() *cobra.Command {
+	var (
+		storePath string
+		jsonOut   bool
+	)
+	cmd := &cobra.Command{
+		Use:   "decide <key> approve|deny",
+		Short: "Answer a routing proposal: approve the proposed model or keep the requested one",
+		Long: `The key is the one 'tokenops routing proposals' lists. approve routes
+matching requests to the proposed model from the next request; deny keeps
+them on the model they asked for. No restart is needed.`,
+		Args:      cobra.ExactArgs(2),
+		ValidArgs: []string{"approve", "deny"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			res, err := actions.DecideRouting(storePath, args[0], args[1])
+			if err != nil {
+				return err
+			}
+			if jsonOut {
+				return writeControlJSON(cmd, res)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s: %s\n%s\n", res.Decision, res.Key, res.Model, res.Note)
 			return nil
 		},
 	}

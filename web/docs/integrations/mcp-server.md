@@ -40,9 +40,43 @@ The read tools are marked read-only; `tokenops_prepare_work`,
 `tokenops_review_work` and `tokenops_outcome` record evidence without
 changing settings;
 `tokenops_routing`, `tokenops_configure`, `tokenops_coach` and
-`tokenops_experiment` change settings and are marked so a client asks
-first. The developer tools (`eval`, `replay`, `coverage-debt`, `rules
-bench`) are CLI commands only.
+`tokenops_experiment` change settings and are marked destructive. The
+developer tools (`eval`, `replay`, `coverage-debt`, `rules bench`) are CLI
+commands only.
+
+### Changing settings asks you
+
+A client's own permission prompt is not enough to guard a setting: if you
+allowlisted `mcp__tokenops__*`, nothing stood between text the agent read
+(a web page, a file, a quoted transcript) and a new operating mode, a
+routing rule or an approved model upgrade. So TokenOps asks you itself.
+Every call that changes a setting sends an MCP elicitation, a question your
+client shows you outside the agent's turn, with the exact change: the
+values the agent passed, quoted, and the `tokenops` command that does the
+same from a terminal. The change applies only if you tick **Apply this
+change** and accept. Declining, dismissing or accepting without the tick
+changes nothing, and the agent is told not to retry.
+
+| Tool | Asks before | Answers without asking |
+|---|---|---|
+| `tokenops_routing` | `decide`, `set_rule` | `advise`, `proposals` |
+| `tokenops_configure` | every setting that writes (`plan` and `preferred_model` with a provider, `mode` with a mode, `budget`, `usage_meter`) | listing plans or ceilings, reading the mode |
+| `tokenops_coach` | a preset, an autonomy, a verbosity, a tip answer | the report (no arguments) |
+| `tokenops_experiment` | `start`, `stop` | `status` |
+
+A client that cannot ask is refused, and the refusal names the command to
+run yourself, such as `tokenops mode active`, `tokenops routing rule set
+<provider> <from> <to>` or `tokenops routing decide <key> approve`. That
+includes clients that offer elicitation but reach `tokenops serve` over a
+connection that cannot carry a request from the server: over stdio that
+works for clients on the stateless `2026-07-28` protocol revision, and
+older ones are refused for now. There is no setting that turns the
+question off: a switch an agent could reach would reopen the gap, and the
+terminal command is always there.
+
+`tokenops_boundaries` asks no one: its `decide` can only deny, which is
+the safe direction, and approving a boundary needs `tokenops approve` (see
+[Boundaries](/guide/boundaries#what-approval-guarantees)).
 
 ### What `tokenops_sessions` returns
 

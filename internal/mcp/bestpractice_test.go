@@ -12,7 +12,7 @@ import (
 // will reach for first and the ones that need the operator's say.
 func TestServerInstructions(t *testing.T) {
 	got := NewServer("tokenops", "test", nil).Instructions()
-	for _, want := range []string{"tokenops_glance", "tokenops_prepare_work", "tokenops_configure", "confirm with the operator"} {
+	for _, want := range []string{"tokenops_glance", "tokenops_prepare_work", "tokenops_configure", "asks the operator to confirm each change"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("instructions lack %q", want)
 		}

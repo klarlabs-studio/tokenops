@@ -41,6 +41,13 @@ type route struct {
 	params []string
 	// rename maps a public parameter to the inner tool's name for it.
 	rename map[string]string
+	// change says what a call with these public arguments would change, or
+	// nil when it only reads. A call it describes runs only once the
+	// operator confirms it (confirm.go).
+	change func(args map[string]any) (*change, error)
+	// unguarded says why a route of a settings-changing tool needs no
+	// confirmation. Such a route sets exactly one of change and unguarded.
+	unguarded string
 }
 
 // kind is what a public tool may do, for its annotations.
@@ -126,6 +133,9 @@ func Consolidate(s *Server) error {
 			continue
 		}
 		p.routes = available
+		if err := p.checkGuards(); err != nil {
+			return err
+		}
 		if _, ok := available[p.def]; !ok && p.selector != "" {
 			p.def = p.routeNames()[0]
 		}
@@ -215,6 +225,17 @@ func (p publicTool) call(ctx context.Context, in any, inner map[string]*mcpserve
 			what = p.selector + " " + name
 		}
 		return nil, &mcpgo.ToolInputError{Message: fmt.Sprintf("%s does not apply to %s, which takes %s", strings.Join(stray, ", "), what, takes)}
+	}
+	if r.change != nil {
+		c, err := r.change(args)
+		if err != nil {
+			return nil, err
+		}
+		if c != nil {
+			if err := confirm(ctx, *c); err != nil {
+				return nil, err
+			}
+		}
 	}
 	body, err := json.Marshal(innerArgs)
 	if err != nil {
@@ -674,10 +695,10 @@ func publicTools() []publicTool {
 			description: "Which model a turn should run on, and the routing the operator governs: advice from measured signal (it only suggests, and only routes down for mechanical work while a window is tight), upgrades waiting on the operator, approving or denying one, and setting or removing a routing rule.",
 			selector:    "action", def: "advise", input: routingIn{}, output: routingOut{},
 			routes: map[string]route{
-				"advise":    {inner: "tokenops_routing_advise", params: params("instruction", "provider", "model", "tool_density", "work_id", "execution_id", "actor_id", "workflow_id")},
-				"proposals": {inner: "tokenops_routing_proposals"},
-				"decide":    {inner: "tokenops_routing_decide", params: params("key", "decision")},
-				"set_rule":  {inner: "tokenops_routing_rule_set", params: params("provider", "from_model", "to_model", "quality", "fallbacks", "delete")},
+				"advise":    {inner: "tokenops_routing_advise", params: params("instruction", "provider", "model", "tool_density", "work_id", "execution_id", "actor_id", "workflow_id"), unguarded: "only suggests; it records the advice as evidence and changes no setting"},
+				"proposals": {inner: "tokenops_routing_proposals", unguarded: "reads"},
+				"decide":    {inner: "tokenops_routing_decide", params: params("key", "decision"), change: routingDecideChange},
+				"set_rule":  {inner: "tokenops_routing_rule_set", params: params("provider", "from_model", "to_model", "quality", "fallbacks", "delete"), change: routingRuleChange},
 			},
 		},
 		{
@@ -685,11 +706,11 @@ func publicTools() []publicTool {
 			description: "Change TokenOps' settings: bind a subscription plan, set or remove a budget, switch the operating mode, cap the model a provider may be routed to, or connect claude.ai's usage meter. Each change is written to the config and the audit log, and the daemon reloads it.",
 			selector:    "setting", input: configureIn{}, output: configureOut{},
 			routes: map[string]route{
-				"plan":            {inner: "tokenops_plan_set", params: params("provider", "plan", "spend_limit_usd", "limit_window", "rate_factor", "clear", "price", "currency", "since")},
-				"budget":          {inner: "tokenops_budget_set", params: params("name", "window", "limit_usd", "limit_tokens", "warn_at", "crit_at", "workflow_id", "agent_id", "basis", "tag", "delete")},
-				"mode":            {inner: "tokenops_mode", params: params("mode"), rename: map[string]string{"mode": "set"}},
-				"preferred_model": {inner: "tokenops_preferred_model", params: params("provider", "model", "clear")},
-				"usage_meter":     {inner: "tokenops_vendor_usage_setup", params: params("org")},
+				"plan":            {inner: "tokenops_plan_set", params: params("provider", "plan", "spend_limit_usd", "limit_window", "rate_factor", "clear", "price", "currency", "since"), change: planChange},
+				"budget":          {inner: "tokenops_budget_set", params: params("name", "window", "limit_usd", "limit_tokens", "warn_at", "crit_at", "workflow_id", "agent_id", "basis", "tag", "delete"), change: budgetChange},
+				"mode":            {inner: "tokenops_mode", params: params("mode"), rename: map[string]string{"mode": "set"}, change: modeChange},
+				"preferred_model": {inner: "tokenops_preferred_model", params: params("provider", "model", "clear"), change: preferredModelChange},
+				"usage_meter":     {inner: "tokenops_vendor_usage_setup", params: params("org"), change: usageMeterChange},
 			},
 		},
 		{
@@ -697,21 +718,21 @@ func publicTools() []publicTool {
 			description: "Limits the operator set before work starts (config.yaml boundaries): each rule's stage, how often it matched, where it is enforced, and the decisions waiting on the operator; or record the operator's answer to one. Only answer on the operator's word: never approve a boundary that stopped you.",
 			selector:    "action", def: "status", input: boundariesIn{}, output: boundariesOut{},
 			routes: map[string]route{
-				"status": {inner: "tokenops_boundaries_status"},
-				"decide": {inner: "tokenops_boundary_decide", params: params("id", "decision", "session")},
+				"status": {inner: "tokenops_boundaries_status", unguarded: "reads"},
+				"decide": {inner: "tokenops_boundary_decide", params: params("id", "decision", "session"), unguarded: "an agent can only deny here: the tool refuses approve, so the worst it records is a refusal"},
 			},
 		},
 		{
 			name: "tokenops_coach", title: "Coach", kind: changes,
 			description: "Show or change how much the coach says and does: a preset (observe, advise, guided, autopilot), each power's autonomy, and its verbosity; or answer its newest tip on the operator's word (tip: acknowledged, expected, snoozed). With no arguments it reports the current settings and what became of its advice.",
 			input:       coachInput{}, output: coachcap.Report{},
-			routes: map[string]route{"": {inner: "tokenops_coach", params: params("preset", "autonomy", "power", "rung", "verbosity", "tip", "tip_id", "snooze_minutes")}},
+			routes: map[string]route{"": {inner: "tokenops_coach", params: params("preset", "autonomy", "power", "rung", "verbosity", "tip", "tip_id", "snooze_minutes"), change: coachChange}},
 		},
 		{
 			name: "tokenops_experiment", title: "Routing experiment", kind: changes,
 			description: "Run a bounded, opt-in trial of a routing change: start it with its guardrails, check its state, or stop it. Evidence is kept when it stops.",
 			input:       experimentInput{}, output: experimentResult{},
-			routes: map[string]route{"": {inner: "tokenops_experiment", params: params("action", "baseline_model", "duration_days", "experiment_id", "guardrails", "max_pairs", "min_improvement_pct")}},
+			routes: map[string]route{"": {inner: "tokenops_experiment", params: params("action", "baseline_model", "duration_days", "experiment_id", "guardrails", "max_pairs", "min_improvement_pct"), change: experimentChange}},
 		},
 	}
 }
