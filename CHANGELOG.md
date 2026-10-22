@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Security
+
+- **MCP:** the settings tools ask you before they change anything. `tokenops_configure`, `tokenops_routing` (`decide`, `set_rule`), `tokenops_coach` and `tokenops_experiment` carried only a destructive hint, so the client's permission prompt was the only guard, and an operator who allowlisted `mcp__tokenops__*` had none: text the agent read, such as a quoted transcript, a web page or a file, could have it switch TokenOps to active mode, add a routing rule or approve a model upgrade. Every call that changes a setting now sends an MCP elicitation that shows you the exact change, with the agent's values quoted and the equivalent `tokenops` command, and applies it only when you tick *Apply this change* and accept. Declining, dismissing or accepting unticked changes nothing. A client that cannot ask is refused with the command to run yourself (`tokenops mode active`, `tokenops routing rule set …`, `tokenops routing decide <key> approve`). Over stdio a client must speak the stateless `2026-07-28` protocol revision for TokenOps to ask, because the MCP library's stdio transport cannot yet send a request from the server; older clients, which may include yours, are refused for every change until it can. Reading through these tools (listing plans, reading the mode, routing advice, proposals, an experiment's status, the coach's report) asks no one. There is no switch to turn the question off. A route added to a settings tool without a confirmation or a stated reason fails at registration and in a test that enumerates every route
+
 ### Added
 
 - **routing:** `tokenops routing decide <key> approve|deny` answers a routing proposal from the terminal, as the menu bar and `POST /api/routing/decisions` do; it is the command a refused `tokenops_routing decide` names
