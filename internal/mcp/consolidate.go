@@ -433,7 +433,7 @@ type boundariesIn struct {
 
 type configureIn struct {
 	Setting       string  `json:"setting" jsonschema:"required,enum=plan,enum=budget,enum=mode,enum=preferred_model,enum=usage_meter,description=plan: bind a subscription plan to a provider (omit provider to list them). budget: set or remove a spend budget. mode: passive or active. preferred_model: the most expensive model a provider may be routed to. usage_meter: connect claude.ai's own usage meter."`
-	Provider      string  `json:"provider,omitempty" jsonschema:"description=plan and preferred_model: the provider, e.g. anthropic"`
+	Provider      string  `json:"provider,omitempty" jsonschema:"description=plan and preferred_model: the provider, e.g. anthropic. budget: limit it to what one provider billed, e.g. fireworks"`
 	Plan          string  `json:"plan,omitempty" jsonschema:"description=plan: a plan name from the catalog, e.g. claude-max-20x"`
 	SpendLimitUSD float64 `json:"spend_limit_usd,omitempty" jsonschema:"description=plan: spend limit in USD for a plan billed at API rates"`
 	LimitWindow   string  `json:"limit_window,omitempty" jsonschema:"enum=monthly,enum=weekly,enum=daily,description=plan: period the spend limit covers (default monthly)"`
@@ -452,6 +452,10 @@ type configureIn struct {
 	AgentID       string  `json:"agent_id,omitempty" jsonschema:"description=budget: limit it to one agent"`
 	Basis         string  `json:"basis,omitempty" jsonschema:"enum=spend,enum=equivalent,enum=tokens,description=budget: what the limit watches: billed spend (default), API-price equivalent, or tokens. On a flat plan billed spend is about 0, so use tokens or equivalent."`
 	Tag           string  `json:"tag,omitempty" jsonschema:"description=budget: limit it to work carrying one allocation tag, key=value (project, client or cost_center)"`
+	BudgetMode    string  `json:"budget_mode,omitempty" jsonschema:"enum=soft,enum=hard,description=budget: soft (default) is told through the coach; hard is a spend boundary that asks or refuses at the limit. A hard window starts in shadow until the operator promotes it from a terminal, and a budget with one is then changed only from a terminal."`
+	Require       string  `json:"require,omitempty" jsonschema:"enum=ask,enum=deny,description=budget: what a hard window requires at its limit (default ask)"`
+	AddWindow     bool    `json:"add_window,omitempty" jsonschema:"description=budget: add window as a further window of the budget (e.g. daily beside monthly) instead of editing its window"`
+	RemoveWindow  string  `json:"remove_window,omitempty" jsonschema:"enum=daily,enum=weekly,enum=monthly,description=budget: remove this window of the budget"`
 	Delete        bool    `json:"delete,omitempty" jsonschema:"description=budget: remove the budget with this name"`
 	Mode          string  `json:"mode,omitempty" jsonschema:"enum=passive,enum=active,description=mode: passive analyses on demand; active adds live routing and a budget watcher"`
 	Model         string  `json:"model,omitempty" jsonschema:"description=preferred_model: the model to stay on"`
@@ -707,7 +711,7 @@ func publicTools() []publicTool {
 			selector:    "setting", input: configureIn{}, output: configureOut{},
 			routes: map[string]route{
 				"plan":            {inner: "tokenops_plan_set", params: params("provider", "plan", "spend_limit_usd", "limit_window", "rate_factor", "clear", "price", "currency", "since"), change: planChange},
-				"budget":          {inner: "tokenops_budget_set", params: params("name", "window", "limit_usd", "limit_tokens", "warn_at", "crit_at", "workflow_id", "agent_id", "basis", "tag", "delete"), change: budgetChange},
+				"budget":          {inner: "tokenops_budget_set", params: params("name", "window", "limit_usd", "limit_tokens", "warn_at", "crit_at", "workflow_id", "agent_id", "basis", "tag", "provider", "budget_mode", "require", "add_window", "remove_window", "delete"), rename: map[string]string{"budget_mode": "mode"}, change: budgetChange},
 				"mode":            {inner: "tokenops_mode", params: params("mode"), rename: map[string]string{"mode": "set"}, change: modeChange},
 				"preferred_model": {inner: "tokenops_preferred_model", params: params("provider", "model", "clear"), change: preferredModelChange},
 				"usage_meter":     {inner: "tokenops_vendor_usage_setup", params: params("org"), change: usageMeterChange},
@@ -724,15 +728,15 @@ func publicTools() []publicTool {
 		},
 		{
 			name: "tokenops_coach", title: "Coach", kind: changes,
-			description: "Show or change how much the coach says and does: a preset (observe, advise, guided, autopilot), each power's autonomy, and its verbosity; or answer its newest tip on the operator's word (tip: acknowledged, expected, snoozed). With no arguments it reports the current settings and what became of its advice.",
+			description: "Show or change how much the coach says and does: a preset (observe, advise, guided, autopilot), each power's autonomy, its verbosity, and the holdout (the share of sessions whose cost and drift tips are held back to measure their saving); or answer its newest tip on the operator's word (tip: acknowledged, expected, snoozed). With no arguments it reports the current settings and what became of its advice.",
 			input:       coachInput{}, output: coachcap.Report{},
-			routes: map[string]route{"": {inner: "tokenops_coach", params: params("preset", "autonomy", "power", "rung", "verbosity", "tip", "tip_id", "snooze_minutes"), change: coachChange}},
+			routes: map[string]route{"": {inner: "tokenops_coach", params: params("preset", "autonomy", "power", "rung", "verbosity", "holdout", "tip", "tip_id", "snooze_minutes"), change: coachChange}},
 		},
 		{
 			name: "tokenops_experiment", title: "Routing experiment", kind: changes,
 			description: "Run a bounded, opt-in trial of a routing change: start it with its guardrails, check its state, or stop it. Evidence is kept when it stops.",
 			input:       experimentInput{}, output: experimentResult{},
-			routes: map[string]route{"": {inner: "tokenops_experiment", params: params("action", "baseline_model", "duration_days", "experiment_id", "guardrails", "max_pairs", "min_improvement_pct"), change: experimentChange}},
+			routes: map[string]route{"": {inner: "tokenops_experiment", params: params("action", "provider", "baseline_model", "variant_model", "duration_days", "experiment_id", "guardrails", "max_pairs", "objective_metric", "min_improvement_pct", "reason"), change: experimentChange}},
 		},
 	}
 }

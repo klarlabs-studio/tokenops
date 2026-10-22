@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -12,6 +13,8 @@ import (
 
 	mcpgo "go.klarlabs.de/mcp"
 	mcpserver "go.klarlabs.de/mcp/server"
+
+	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
 // The tools that change settings used to carry only a destructive hint, so
@@ -121,6 +124,13 @@ func notApplied(c change, why string) error {
 func argString(args map[string]any, k string) string {
 	s, _ := args[k].(string)
 	return strings.TrimSpace(s)
+}
+
+// argRaw is a string argument as the inner tool receives it, untrimmed, for
+// a command that must match what the tool applies.
+func argRaw(args map[string]any, k string) string {
+	s, _ := args[k].(string)
+	return s
 }
 
 func argBool(args map[string]any, k string) bool {
@@ -255,13 +265,63 @@ func planChange(args map[string]any) (*change, error) {
 func budgetChange(args map[string]any) (*change, error) {
 	name := argString(args, "name")
 	if argBool(args, "delete") {
-		return &change{summary: fmt.Sprintf("Delete the budget %s.", quoted(name)), command: cli("budget unset", name)}, nil
+		return &change{summary: fmt.Sprintf("Delete the budget %s.", quoted(name)), command: cli("budget unset", argRaw(args, "name"))}, nil
 	}
-	return &change{
-		summary: fmt.Sprintf("Set the budget %s%s.", quoted(name),
-			details(args, "window", "limit_usd", "limit_tokens", "warn_at", "crit_at", "workflow_id", "agent_id", "basis", "tag")),
-		command: cli("budget set", name) + moreFlags,
-	}, nil
+	if w := argString(args, "remove_window"); w != "" {
+		return &change{
+			summary: fmt.Sprintf("Remove the %s window of the budget %s.", quoted(w), quoted(name)),
+			command: cli("budget unset", argRaw(args, "name")) + " " + flags(args, cliFlag{"remove_window", "--window"}),
+		}, nil
+	}
+	cmd := cli("budget set", argRaw(args, "name"))
+	if f := flags(args, budgetFlags...); f != "" {
+		cmd += " " + f
+	}
+	summary := fmt.Sprintf("Set the budget %s%s.", quoted(name),
+		details(args, "window", "limit_usd", "limit_tokens", "warn_at", "crit_at", "workflow_id", "agent_id", "basis", "tag", "provider", "budget_mode", "require", "add_window"))
+	if strings.EqualFold(argString(args, "budget_mode"), "hard") {
+		summary += " A hard window is a spend boundary; it starts in shadow, and once it holds it can be changed only from a terminal."
+	}
+	return &change{summary: summary, command: cmd}, nil
+}
+
+// cliFlag maps a public argument to the terminal flag that sets the same
+// value.
+type cliFlag struct{ arg, name string }
+
+// budgetFlags are budget set's flags, in the order the command shows them.
+var budgetFlags = []cliFlag{
+	{"window", "--window"}, {"limit_usd", "--limit-usd"}, {"limit_tokens", "--limit-tokens"},
+	{"warn_at", "--warn-at"}, {"crit_at", "--crit-at"}, {"basis", "--basis"},
+	{"workflow_id", "--workflow-id"}, {"agent_id", "--agent-id"}, {"tag", "--tag"},
+	{"provider", "--provider"}, {"budget_mode", "--mode"}, {"require", "--require"},
+	{"add_window", "--add-window"},
+}
+
+// flags writes the passed arguments as terminal flags: a true bool as the
+// bare flag, a number in its shortest exact form, anything else as one
+// quoted shell word, as passed: the tool gets it untrimmed too. Arguments
+// left out or zero are left out, as the terminal's own defaults then apply
+// to both.
+func flags(args map[string]any, fs ...cliFlag) string {
+	var out []string
+	for _, f := range fs {
+		switch v := args[f.arg].(type) {
+		case bool:
+			if v {
+				out = append(out, f.name)
+			}
+		case float64:
+			if v != 0 {
+				out = append(out, f.name+" "+strconv.FormatFloat(v, 'f', -1, 64))
+			}
+		case string:
+			if v != "" {
+				out = append(out, f.name+" "+shellArg(v))
+			}
+		}
+	}
+	return strings.Join(out, " ")
 }
 
 func modeChange(args map[string]any) (*change, error) {
@@ -338,23 +398,90 @@ func coachChange(args map[string]any) (*change, error) {
 		parts = append(parts, "the coach's verbosity to "+quoted(v))
 		cmds = append(cmds, cli("coach verbosity", v))
 	}
+	if h := argString(args, "holdout"); h != "" {
+		parts = append(parts, "the share of sessions whose cost and drift tips are held back to "+quoted(h))
+		cmds = append(cmds, cli("coach holdout", argRaw(args, "holdout")))
+	}
 	if len(parts) == 0 {
 		return nil, nil // reports the settings
 	}
 	return &change{summary: "Set " + strings.Join(parts, ", and ") + ".", command: strings.Join(cmds, " && ")}, nil
 }
 
+// experimentStartFlags are experiment start's flags, in the order the
+// command shows them.
+var experimentStartFlags = []cliFlag{
+	{"max_pairs", "--pairs"}, {"duration_days", "--days"}, {"objective_metric", "--objective"},
+	{"min_improvement_pct", "--min-improvement-pct"},
+}
+
 func experimentChange(args map[string]any) (*change, error) {
-	switch argString(args, "action") {
+	switch strings.ToLower(argString(args, "action")) {
 	case "start":
+		provider, baseline, variant := argRaw(args, "provider"), argRaw(args, "baseline_model"), argRaw(args, "variant_model")
+		guardrails, err := experimentGuardrails(args)
+		if err != nil {
+			return nil, err
+		}
+		words := []string{cli("experiment start", provider, baseline, variant)}
+		if f := flags(args, experimentStartFlags...); f != "" {
+			words = append(words, f)
+		}
+		shown := map[string]any{}
+		for k, v := range args {
+			shown[k] = v
+		}
+		delete(shown, "guardrails")
+		for _, g := range guardrails {
+			words = append(words, "--guardrail "+shellArg(g))
+		}
+		if len(guardrails) > 0 {
+			shown["guardrails"] = strings.Join(guardrails, " ")
+		}
+		// The tool trims the reason it records, as stop does.
+		if r := argString(args, "reason"); r != "" {
+			words = append(words, "--reason "+shellArg(r))
+		}
+		extra := details(shown, "duration_days", "max_pairs", "objective_metric", "min_improvement_pct", "guardrails", "reason")
 		return &change{
-			summary: fmt.Sprintf("Start a routing experiment%s: part of the matching live traffic runs on a variant model until it ends.",
-				details(args, "baseline_model", "duration_days", "max_pairs", "min_improvement_pct", "guardrails")),
-			command: "tokenops experiment start <provider> <baseline-model> <variant-model>" + moreFlags,
+			summary: fmt.Sprintf("Start a routing experiment on %s traffic: %s against the variant %s%s. Part of the matching live traffic runs on the variant until it ends.",
+				quoted(provider), quoted(baseline), quoted(variant), extra),
+			command: strings.Join(words, " "),
 		}, nil
 	case "stop":
-		id := argString(args, "experiment_id")
-		return &change{summary: fmt.Sprintf("Stop the routing experiment %s; its evidence is kept.", quoted(id)), command: cli("experiment stop", id)}, nil
+		id, reason := argRaw(args, "experiment_id"), argString(args, "reason")
+		// The terminal's --reason has a default the tool does not, so the
+		// command always names the reason the tool will record.
+		return &change{
+			summary: fmt.Sprintf("Stop the routing experiment %s%s; its evidence is kept.", quoted(id), details(args, "reason")),
+			command: cli("experiment stop", id) + " --reason " + shellArg(reason),
+		}, nil
 	}
 	return nil, nil // status
+}
+
+// experimentGuardrails is each guardrail as the terminal's --guardrail
+// takes it: quality, or metric:max-regression-pct.
+func experimentGuardrails(args map[string]any) ([]string, error) {
+	raw, ok := args["guardrails"]
+	if !ok || raw == nil {
+		return nil, nil
+	}
+	b, err := json.Marshal(raw)
+	if err != nil {
+		return nil, err
+	}
+	var gs []eventschema.ExperimentGuardrail
+	if err := json.Unmarshal(b, &gs); err != nil {
+		return nil, &mcpgo.ToolInputError{Message: "guardrails must be a list of {metric, max_regression_pct}: " + err.Error()}
+	}
+	out := make([]string, 0, len(gs))
+	for _, g := range gs {
+		if g.Metric == "quality" && g.MaxRegressionPct == 0 {
+			out = append(out, "quality")
+			continue
+		}
+		out = append(out, g.Metric+":"+strconv.FormatFloat(g.MaxRegressionPct, 'f', -1, 64))
+	}
+	return out, nil
 }

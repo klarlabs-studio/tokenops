@@ -48,6 +48,8 @@ type StartInput struct {
 	At                                    time.Time
 	Duration                              time.Duration
 	MaxPairs                              int
+	// Reason is why the trial was started, for the record.
+	Reason string
 }
 
 // Start explicitly enrolls a bounded trial.
@@ -87,6 +89,7 @@ func (m *Manager) Start(ctx context.Context, in StartInput) (State, error) {
 		MaxPairs: pairs, EndsAt: at.Add(duration), Fingerprint: in.Fingerprint,
 		ObjectiveMetric: in.ObjectiveMetric, MinImprovementPct: in.MinImprovementPct,
 		Guardrails: append([]eventschema.ExperimentGuardrail(nil), in.Guardrails...),
+		Reason:     in.Reason,
 	})
 	if err := m.ledger.Append(ctx, ev); err != nil {
 		return State{}, err
@@ -98,6 +101,7 @@ func (m *Manager) Start(ctx context.Context, in StartInput) (State, error) {
 		MaxPairs: pairs, EndsAt: at.Add(duration), Fingerprint: in.Fingerprint,
 		ObjectiveMetric: in.ObjectiveMetric, MinImprovementPct: in.MinImprovementPct,
 		Guardrails: append([]eventschema.ExperimentGuardrail(nil), in.Guardrails...),
+		Reason:     in.Reason,
 	}, nil
 }
 
@@ -368,7 +372,11 @@ func Fold(events []*eventschema.Envelope, at time.Time) map[string]State {
 		if p.Stage == eventschema.ExperimentAssigned {
 			s.Assignments++
 		}
-		s.Reason = p.Reason
+		// An assignment carries no reason; the latest one given (a stop's,
+		// else the start's) stands.
+		if p.Reason != "" {
+			s.Reason = p.Reason
+		}
 		out[s.ID] = s
 	}
 	for id, s := range out {

@@ -61,7 +61,7 @@ changes nothing, and the agent is told not to retry.
 |---|---|---|
 | `tokenops_routing` | `decide`, `set_rule` | `advise`, `proposals` |
 | `tokenops_configure` | every setting that writes (`plan` and `preferred_model` with a provider, `mode` with a mode, `budget`, `usage_meter`) | listing plans or ceilings, reading the mode |
-| `tokenops_coach` | a preset, an autonomy, a verbosity, a tip answer | the report (no arguments) |
+| `tokenops_coach` | a preset, an autonomy, a verbosity, the holdout, a tip answer | the report (no arguments) |
 | `tokenops_experiment` | `start`, `stop` | `status` |
 
 A client that cannot ask is refused, and the refusal names the command to

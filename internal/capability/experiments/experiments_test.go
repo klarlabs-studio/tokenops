@@ -117,3 +117,30 @@ func TestTrialRequiresExplicitUtilityPolicy(t *testing.T) {
 		t.Fatal("trial without objective and guardrails was accepted")
 	}
 }
+
+// A start's reason is recorded and survives assignments; a stop's replaces it.
+func TestStartReasonIsRecorded(t *testing.T) {
+	ctx := context.Background()
+	m := New(&memoryLedger{})
+	now := time.Unix(100, 0).UTC()
+	state, err := m.Start(ctx, StartInput{
+		Provider: "anthropic", BaselineModel: "opus", VariantModel: "sonnet", MaxPairs: 2, At: now,
+		ObjectiveMetric: "tokens", MinImprovementPct: 10, Reason: "try sonnet on refactors",
+		Guardrails: []eventschema.ExperimentGuardrail{{Metric: "quality"}, {Metric: "latency_ms", MaxRegressionPct: 10}},
+	})
+	if err != nil || state.Reason != "try sonnet on refactors" {
+		t.Fatalf("start = %+v, %v", state, err)
+	}
+	if _, ok, err := m.Assign(ctx, AssignmentInput{Provider: "anthropic", BaselineModel: "opus", VariantModel: "sonnet", ExecutionID: "e1", At: now}); err != nil || !ok {
+		t.Fatalf("assign: %v %v", ok, err)
+	}
+	if got, _, _ := m.Status(ctx, state.ID, now); got.Reason != "try sonnet on refactors" {
+		t.Errorf("after an assignment reason = %q", got.Reason)
+	}
+	if err := m.Stop(ctx, state.ID, "variant regressed", now); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, _ := m.Status(ctx, state.ID, now); got.Reason != "variant regressed" {
+		t.Errorf("after stop reason = %q", got.Reason)
+	}
+}

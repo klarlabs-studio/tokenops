@@ -57,7 +57,7 @@ func RegisterExperimentTools(s *Server, d ExperimentDeps) error {
 					Fingerprint: decide.RouteFingerprint(eventschema.Provider(in.Provider), in.BaselineModel, in.VariantModel, "proxy"),
 					MaxPairs:    in.MaxPairs, Duration: time.Duration(days) * 24 * time.Hour,
 					ObjectiveMetric: in.ObjectiveMetric, MinImprovementPct: in.MinImprovementPct,
-					Guardrails: in.Guardrails,
+					Guardrails: in.Guardrails, Reason: strings.TrimSpace(in.Reason),
 				})
 				if err != nil {
 					return nil, err
