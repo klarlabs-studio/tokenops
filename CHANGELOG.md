@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **docs, README:** the landing page's comparison no longer says the vendors' own tools never act and offer no limits, or that only meters show plan windows: Claude Code acts on its own harness, and Claude, OpenAI and GitHub give admins limits on their own seats. The table is dated (checked 2026-10-22) and leads with what no single vendor covers: one set of headroom, budget and session-cost rules across every plan, account and harness, which account paid through a router, agent DX graded across harnesses, and a core that needs no upload at all
+
 ## 0.107.0 - 2026-10-22
 
 ### Added
