@@ -10,6 +10,10 @@
 
 - **routing:** `tokenops routing decide <key> approve|deny` answers a routing proposal from the terminal, as the menu bar and `POST /api/routing/decisions` do; it is the command a refused `tokenops_routing decide` names
 
+### Changed
+
+- **boundaries:** the docs and `tokenops approve --help` say what approval guarantees and what it does not. It guarantees that an agent cannot approve through TokenOps' MCP tools or the daemon's decision endpoint, which can only deny, that `tokenops approve` refuses a stdin that is not a terminal, and that every answer is recorded with how it was given. It does not guarantee the approval came from you: a process running as your user can get a pseudo-terminal (`script -q /dev/null tokenops approve <id>`), read the daemon's token and call its API (`POST /api/mode`, `POST /api/routing/rules`), or write the boundary ledger. The guide recommends harness permission rules that ask before `tokenops approve`, `tokenops mode`, `tokenops routing`, `script` and `curl` to the daemon. TokenOps does not try to detect a "real" terminal: nothing it can read (a controlling terminal, its session, the parent processes) tells a pseudo-terminal an agent opened from yours
+
 ## 0.106.1 - 2026-10-17
 
 ### Fixed
