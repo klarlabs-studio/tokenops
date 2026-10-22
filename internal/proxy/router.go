@@ -57,6 +57,23 @@ func (s *Server) registerProviderRoutes(mux *http.ServeMux) error {
 	return nil
 }
 
+// tokenopsHeaderPrefix namespaces every header TokenOps reads from its
+// clients (correlation ids, cache directives). They are TokenOps-local
+// metadata and may carry personal data (a user id can be an email).
+const tokenopsHeaderPrefix = "X-Tokenops-"
+
+// stripTokenopsHeaders removes every TokenOps-namespaced header from an
+// outbound request. It runs in the reverse proxy's Rewrite, so it applies
+// to every provider route whether or not the observer, routing or cache
+// middleware is mounted, and covers headers added later under the prefix.
+func stripTokenopsHeaders(h http.Header) {
+	for name := range h {
+		if strings.HasPrefix(http.CanonicalHeaderKey(name), tokenopsHeaderPrefix) {
+			delete(h, name)
+		}
+	}
+}
+
 func (s *Server) mountReverseProxy(mux *http.ServeMux, route ProviderRoute) error {
 	upstream := route.Upstream
 	prefix := route.Provider.Prefix
@@ -72,6 +89,7 @@ func (s *Server) mountReverseProxy(mux *http.ServeMux, route ProviderRoute) erro
 			rest := strings.TrimPrefix(pr.In.URL.Path, strings.TrimSuffix(prefix, "/"))
 			pr.Out.URL.Path = singleJoin(upstream.Path, rest)
 			pr.Out.URL.RawPath = ""
+			stripTokenopsHeaders(pr.Out.Header)
 		},
 		// FlushInterval = -1 forces an immediate flush after every Write,
 		// which is what SSE clients expect. Go's ReverseProxy auto-detects

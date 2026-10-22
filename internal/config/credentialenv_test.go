@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -30,14 +31,16 @@ func TestCredentialsCanComeFromTheEnvironment(t *testing.T) {
 		{"TOKENOPS_COPILOT_OAUTH_TOKEN", func(c Config) string { return c.VendorUsage.GitHubCopilot.OAuthToken }},
 	}
 
+	// Long enough for the admin token's minimum length.
+	const value = "from-environment-0123456789abcdef0123456789"
 	for _, tc := range cases {
 		t.Run(tc.env, func(t *testing.T) {
-			t.Setenv(tc.env, "from-environment")
+			t.Setenv(tc.env, value)
 			cfg, err := Load("")
 			if err != nil {
 				t.Fatalf("Load: %v", err)
 			}
-			if got := tc.want(cfg); got != "from-environment" {
+			if got := tc.want(cfg); got != value {
 				t.Errorf("%s was ignored; field = %q", tc.env, got)
 			}
 		})
@@ -137,5 +140,31 @@ func TestCredentialEnvVarsAreDistinct(t *testing.T) {
 			t.Errorf("%s and %s point at the same field", prev, v.Name)
 		}
 		fields[p] = v.Name
+	}
+}
+
+// An admin token short enough to guess is refused at load with an error
+// that names the setting and the minimum, whether it came from the file
+// or the environment. Unset still means "mint one".
+func TestAdminTokenMinimumLength(t *testing.T) {
+	short := strings.Repeat("x", MinAdminTokenLength-1)
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("dashboard:\n  admin_token: "+short+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load(path)
+	if err == nil || !strings.Contains(err.Error(), "dashboard.admin_token") || !strings.Contains(err.Error(), "32") {
+		t.Fatalf("short file token: err = %v; want a dashboard.admin_token minimum-length error", err)
+	}
+	t.Setenv("TOKENOPS_DASHBOARD_ADMIN_TOKEN", short)
+	if _, err := Load(""); err == nil {
+		t.Fatal("short environment token accepted")
+	}
+	t.Setenv("TOKENOPS_DASHBOARD_ADMIN_TOKEN", strings.Repeat("x", MinAdminTokenLength))
+	if _, err := Load(""); err != nil {
+		t.Fatalf("token at the minimum refused: %v", err)
+	}
+	if strings.Contains(err.Error(), short) {
+		t.Error("the error must not echo the token")
 	}
 }

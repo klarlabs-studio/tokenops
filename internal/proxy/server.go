@@ -32,22 +32,25 @@ import (
 type Server struct {
 	addr            string
 	shutdownTimeout time.Duration
-	logger          *slog.Logger
-	routes          []ProviderRoute
-	tlsConfig       *tls.Config
-	streamMeter     StreamMeter
-	bus             events.Bus
-	tokenizer       *tokenizer.Registry
-	source          string
-	observerActive  bool
-	cache           *cache.Cache
-	analytics       *AnalyticsHandlers
-	rulesAPI        *RulesHandlers
-	auditAPI        *AuditHandlers
-	eventCounts     func() map[string]int64
-	auditDrops      func() int64
-	eventSpans      func() map[string]EventSpan
-	eventDrops      func() int64
+	// readTimeout bounds how long a client may take to send a request
+	// (headers and body); see defaultReadTimeout.
+	readTimeout    time.Duration
+	logger         *slog.Logger
+	routes         []ProviderRoute
+	tlsConfig      *tls.Config
+	streamMeter    StreamMeter
+	bus            events.Bus
+	tokenizer      *tokenizer.Registry
+	source         string
+	observerActive bool
+	cache          *cache.Cache
+	analytics      *AnalyticsHandlers
+	rulesAPI       *RulesHandlers
+	auditAPI       *AuditHandlers
+	eventCounts    func() map[string]int64
+	auditDrops     func() int64
+	eventSpans     func() map[string]EventSpan
+	eventDrops     func() int64
 	// sourceFreshness reports per-source ingestion health. nil leaves
 	// GET /api/sources unmounted.
 	sourceFreshness func() []state.SourceReport
@@ -217,12 +220,23 @@ func (s *Server) TLSEnabled() bool {
 	return s.tlsConfig != nil
 }
 
+const (
+	// defaultReadTimeout bounds the time to receive a request. Clients
+	// are local, so even a multi-megabyte prompt arrives in far less; a
+	// trickling client is cut off instead of holding the connection and
+	// a handler goroutine.
+	defaultReadTimeout = 60 * time.Second
+	// defaultIdleTimeout closes keep-alive connections left idle.
+	defaultIdleTimeout = 120 * time.Second
+)
+
 // New constructs a Server bound to addr (host:port). The Server does not
 // listen until Start is called.
 func New(addr string, opts ...Option) *Server {
 	s := &Server{
 		addr:            addr,
 		shutdownTimeout: 15 * time.Second,
+		readTimeout:     defaultReadTimeout,
 		logger:          slog.Default(),
 		streamMeter:     noopMeter{},
 		source:          "proxy",
@@ -298,7 +312,14 @@ func (s *Server) Start(ctx context.Context) error {
 	s.httpSrv = &http.Server{
 		Handler:           newHostGuard(s.addr, s.allowedHosts).middleware(s.logger, mux),
 		ReadHeaderTimeout: 10 * time.Second,
-		TLSConfig:         s.tlsConfig,
+		// ReadTimeout bounds receiving the request; net/http clears the
+		// connection's read deadline once the body has been read to the
+		// end, so it never limits how long a reply streams. WriteTimeout
+		// stays unset on purpose: it is connection-wide and would cut
+		// long streaming replies.
+		ReadTimeout: s.readTimeout,
+		IdleTimeout: defaultIdleTimeout,
+		TLSConfig:   s.tlsConfig,
 	}
 	srv := s.httpSrv
 	tlsCfg := s.tlsConfig
