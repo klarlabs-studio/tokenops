@@ -78,11 +78,55 @@ func envSecret(flag, envKey string) string {
 	return os.Getenv(envKey)
 }
 
+// secretFlag is one enable flag that carries a credential.
+type secretFlag struct {
+	name, env, label string
+	value            *string
+}
+
+// secretFlags lists f's credential flags.
+func (f *vendorUsageEnableFlags) secretFlags() []secretFlag {
+	return []secretFlag{
+		{"session-key", "TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY", "claude.ai sessionKey", &f.sessionKey},
+		{"cookie", "TOKENOPS_CURSOR_COOKIE", "WorkosCursorSessionToken cookie", &f.cookie},
+		{"admin-key", "TOKENOPS_ANTHROPIC_ADMIN_KEY", "Anthropic admin key", &f.adminKey},
+		{"oauth-token", "TOKENOPS_COPILOT_OAUTH_TOKEN", "GitHub Copilot OAuth token", &f.oauthToken},
+	}
+}
+
+// resolveSecretFlags reads every credential flag set to "-" from stdin —
+// a hidden prompt on a terminal, a line from a pipe — and warns on
+// stderr about one given literally: an argument is visible to every user
+// in ps output and is kept in shell history. The warning never repeats
+// the value.
+func resolveSecretFlags(cmd *cobra.Command, f *vendorUsageEnableFlags) error {
+	for _, s := range f.secretFlags() {
+		switch *s.value {
+		case "":
+		case "-":
+			v, err := readSecret(cmd, s.label+": ")
+			if err != nil {
+				return fmt.Errorf("--%s -: %w", s.name, err)
+			}
+			v = strings.TrimSpace(v)
+			if v == "" {
+				return fmt.Errorf("--%s -: nothing was read from stdin", s.name)
+			}
+			*s.value = v
+		default:
+			fmt.Fprintf(cmd.ErrOrStderr(),
+				"warning: passing a secret as --%s <value> is deprecated: the value is visible in ps output and kept in shell history; use --%s - (read from stdin) or %s\n",
+				s.name, s.name, s.env)
+		}
+	}
+	return nil
+}
+
 // newVendorUsageEnableCmd writes a vendor-usage source's config block to
 // the active config file so the operator does not hand-edit YAML. Secrets
-// (session keys, cookies, admin keys, OAuth tokens) accept either a flag
-// or an env-var fallback — env-var is the recommended path for CI / shared
-// shell history.
+// (session keys, cookies, admin keys, OAuth tokens) come from stdin when
+// their flag is "-" or from an env var; a literal flag value still works
+// but warns, since it shows in ps output and shell history.
 func newVendorUsageEnableCmd() *cobra.Command {
 	f := &vendorUsageEnableFlags{}
 	cmd := &cobra.Command{
@@ -115,11 +159,17 @@ Sources:
   anthropic-admin     Anthropic Admin API usage report poller. Required:
                       --admin-key (or env TOKENOPS_ANTHROPIC_ADMIN_KEY).
 
+Secret flags (--session-key, --cookie, --admin-key, --oauth-token) take
+"-" to read the value from stdin: a hidden prompt on a terminal, or one
+line from a pipe. A value typed on the command line still works but is
+deprecated — every user can see it in ps output and it stays in shell
+history.
+
 Examples:
 
-  TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY=sk-ant-... \
-    tokenops vendor-usage enable claude-subscription
-  tokenops vendor-usage enable cursor --cookie ey... --user-id 123abc
+  tokenops vendor-usage enable claude-subscription --session-key -
+  pbpaste | tokenops vendor-usage enable cursor --cookie - --user-id 123abc
+  TOKENOPS_ANTHROPIC_ADMIN_KEY=... tokenops vendor-usage enable anthropic-admin
   tokenops vendor-usage enable github-copilot
   tokenops vendor-usage enable codex-jsonl --interval 1m
   tokenops vendor-usage enable claude-subscription --disable
@@ -144,13 +194,13 @@ Where secrets end up:
 			return runVendorUsageEnable(cmd, args[0], f)
 		},
 	}
-	cmd.Flags().StringVar(&f.sessionKey, "session-key", "", "claude.ai sessionKey cookie (claude-subscription); env TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY")
+	cmd.Flags().StringVar(&f.sessionKey, "session-key", "", "claude.ai sessionKey cookie (claude-subscription); \"-\" reads stdin; env TOKENOPS_CLAUDE_USAGE_METER_SESSION_KEY")
 	cmd.Flags().StringVar(&f.orgID, "org-id", "", "Anthropic org_id (claude-subscription); auto-resolved on first scan when empty")
-	cmd.Flags().StringVar(&f.cookie, "cookie", "", "WorkosCursorSessionToken cookie (cursor); env TOKENOPS_CURSOR_COOKIE")
+	cmd.Flags().StringVar(&f.cookie, "cookie", "", "WorkosCursorSessionToken cookie (cursor); \"-\" reads stdin; env TOKENOPS_CURSOR_COOKIE")
 	cmd.Flags().StringVar(&f.userID, "user-id", "", "Cursor user_id (cursor)")
-	cmd.Flags().StringVar(&f.adminKey, "admin-key", "", "Anthropic admin key (anthropic-admin); env TOKENOPS_ANTHROPIC_ADMIN_KEY")
+	cmd.Flags().StringVar(&f.adminKey, "admin-key", "", "Anthropic admin key (anthropic-admin); \"-\" reads stdin; env TOKENOPS_ANTHROPIC_ADMIN_KEY")
 	cmd.Flags().StringVar(&f.bucketWidth, "bucket-width", "", "anthropic-admin bucket width (1m|1h|1d); empty keeps current")
-	cmd.Flags().StringVar(&f.oauthToken, "oauth-token", "", "GitHub Copilot OAuth token (github-copilot); env TOKENOPS_COPILOT_OAUTH_TOKEN. Empty = auto-discover")
+	cmd.Flags().StringVar(&f.oauthToken, "oauth-token", "", "GitHub Copilot OAuth token (github-copilot); \"-\" reads stdin; env TOKENOPS_COPILOT_OAUTH_TOKEN. Empty = auto-discover")
 	cmd.Flags().StringVar(&f.root, "root", "", "filesystem root for jsonl readers (codex-jsonl, claude-code-jsonl); empty = default")
 	cmd.Flags().DurationVar(&f.interval, "interval", 0, "poll interval; zero keeps the existing or default")
 	cmd.Flags().BoolVar(&f.disable, "disable", false, "set enabled=false instead of true; clears no secrets")
@@ -168,6 +218,9 @@ func runVendorUsageEnable(cmd *cobra.Command, source string, f *vendorUsageEnabl
 		return err
 	}
 	enabled := !f.disable
+	if err := resolveSecretFlags(cmd, f); err != nil {
+		return err
+	}
 
 	switch source {
 	case "claude-subscription", "claude-usage-meter":
