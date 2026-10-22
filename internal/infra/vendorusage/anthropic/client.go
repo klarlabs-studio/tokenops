@@ -18,6 +18,7 @@ import (
 	"time"
 
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/anthropic"
+	"go.klarlabs.de/tokenops/internal/infra/vendorusage/errbody"
 )
 
 // AdminClient is the typed wrapper around the Anthropic Admin API. The
@@ -104,8 +105,7 @@ func (c *AdminClient) MessagesUsage(ctx context.Context, req usage.MessagesUsage
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := readAll(resp.Body, 4096)
-		return nil, fmt.Errorf("anthropic admin: usage_report/messages: status %d: %s", resp.StatusCode, body)
+		return nil, fmt.Errorf("anthropic admin: usage_report/messages: %s", errbody.Status(resp.StatusCode, errbody.Read(resp.Body)))
 	}
 	var decoded usage.MessagesUsageResponse
 	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {

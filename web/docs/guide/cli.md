@@ -1656,12 +1656,15 @@ read at scan time and is never persisted to the event store.**
 tokenops coach prompts --since 7d            # both Claude Code + Codex
 tokenops coach prompts --since 30d --json    # JSON for agent hosts
 tokenops coach prompts --session-id <id>        # restrict to one session
+tokenops coach prompts --quote               # add example prompts (redacted)
 ```
 
 Output leads with a **BIGGEST WIN** panel — the highest-impact
-recommendation with evidence quotes pulled from your data, plus
-projected savings (turns / tokens / dollars / hours) computed
-from your per-turn averages.
+recommendation, plus projected savings (turns / tokens / dollars /
+hours) computed from your per-turn averages. By default the report
+quotes none of your prompts, in text or `--json`; `--quote` adds
+examples from your data, each passed through the secret redactor and
+cut to 120 characters.
 
 ### `tokenops coach replies`
 

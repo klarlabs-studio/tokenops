@@ -173,6 +173,7 @@ func newCoachPromptsCmd() *cobra.Command {
 		session    string
 		limit      int
 		jsonOut    bool
+		quote      bool
 
 		includeScratch bool
 	)
@@ -192,8 +193,10 @@ for themselves are filtered out), and reports:
   - Concrete recommendations
 
 Prompt text is read at scan time — never persisted to the TokenOps event
-store. --json emits machine-readable findings for
-agents to consume.`,
+store. By default the report carries counts and recommendations only;
+--quote adds example prompts, with secrets redacted and each one cut to
+a short sample. --json emits machine-readable findings for agents to
+consume.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			w := sessions.PromptWindow{
 				Root:           root,
@@ -210,7 +213,7 @@ agents to consume.`,
 				w.Since = since
 			}
 			now := time.Now()
-			findings, err := sessions.PromptFindings(w, true, now)
+			findings, err := sessions.PromptFindings(w, quote, now)
 			if err != nil {
 				return fmt.Errorf("extract: %w", err)
 			}
@@ -227,7 +230,7 @@ agents to consume.`,
 					"turn_stats": stats,
 				})
 			}
-			renderCoachPrompts(cmd, findings, stats, w.Since)
+			renderCoachPrompts(cmd, findings, stats, w.Since, quote)
 			return nil
 		},
 	}
@@ -237,11 +240,12 @@ agents to consume.`,
 	cmd.Flags().StringVar(&session, "session-id", "", "restrict to a single session id (filename stem)")
 	cmd.Flags().IntVar(&limit, "limit", 0, "max prompts to extract (0 = unbounded)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON instead of text")
+	cmd.Flags().BoolVar(&quote, "quote", false, "include example prompts (secrets redacted, each cut to a short sample)")
 	cmd.Flags().BoolVar(&includeScratch, "include-scratch", false, scratchFlagHelp)
 	return cmd
 }
 
-func renderCoachPrompts(cmd *cobra.Command, f sessions.Findings, stats sessions.TurnStats, since time.Time) {
+func renderCoachPrompts(cmd *cobra.Command, f sessions.Findings, stats sessions.TurnStats, since time.Time, quoted bool) {
 	out := cmd.OutOrStdout()
 	header := "Prompting coach"
 	if !since.IsZero() {
@@ -288,12 +292,16 @@ func renderCoachPrompts(cmd *cobra.Command, f sessions.Findings, stats sessions.
 			return f.RepeatedPrompts[i].Count > f.RepeatedPrompts[j].Count
 		})
 		for _, r := range f.RepeatedPrompts {
-			t := r.Text
-			if len(t) > 60 {
-				t = t[:60] + "…"
+			if !quoted {
+				fmt.Fprintf(out, "  %3dx\n", r.Count)
+				continue
 			}
-			fmt.Fprintf(out, "  %3dx  %q\n", r.Count, t)
+			fmt.Fprintf(out, "  %3dx  %q\n", r.Count, truncateForRec(r.Text, 60))
 		}
+	}
+	if !quoted && f.TotalPrompts > 0 {
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "  (prompt text hidden — pass --quote for redacted examples)")
 	}
 	fmt.Fprintln(out)
 	renderRecommendations(out, f.Recommendations, stats)
@@ -375,11 +383,14 @@ func compactInt(n int64) string {
 	return fmt.Sprintf("%d", n)
 }
 
+// truncateForRec cuts s to n runes, never inside a multi-byte
+// character.
 func truncateForRec(s string, n int) string {
-	if len(s) <= n {
+	r := []rune(s)
+	if len(r) <= n {
 		return s
 	}
-	return s[:n] + "…"
+	return string(r[:n]) + "…"
 }
 
 func pctOf(n, total int) float64 {

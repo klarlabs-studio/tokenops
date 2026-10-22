@@ -8,11 +8,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
 	usage "go.klarlabs.de/tokenops/internal/contexts/spend/vendorusage/copilot"
+	"go.klarlabs.de/tokenops/internal/infra/vendorusage/errbody"
 )
 
 // Client wraps the Copilot internal-user endpoint. HTTPClient is
@@ -59,8 +59,7 @@ func (c *Client) User(ctx context.Context) (*usage.UserResponse, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return nil, fmt.Errorf("copilot user: status %d: %s", resp.StatusCode, snippet)
+		return nil, fmt.Errorf("copilot user: %s", errbody.Status(resp.StatusCode, errbody.Read(resp.Body)))
 	}
 	var u usage.UserResponse
 	if err := json.NewDecoder(resp.Body).Decode(&u); err != nil {

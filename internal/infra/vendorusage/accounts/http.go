@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -104,7 +105,7 @@ func doJSON(ctx context.Context, hc *http.Client, method, url string, header htt
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
-		return fmt.Errorf("accounts: %s %s: %w", method, hostPath(url), err)
+		return fmt.Errorf("accounts: %s %s: %w", method, hostPath(url), withoutQuery(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
@@ -156,7 +157,7 @@ func send(ctx context.Context, hc *http.Client, method, url string, headers map[
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("accounts: %s %s: %w", method, hostPath(url), err)
+		return nil, fmt.Errorf("accounts: %s %s: %w", method, hostPath(url), withoutQuery(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	out, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
@@ -184,6 +185,20 @@ func hostPath(url string) string {
 		return url[:i]
 	}
 	return url
+}
+
+// withoutQuery strips the query string from the URL net/http keeps in a
+// transport error (*url.Error), so a key passed as ?key= never reaches
+// a log line or the sources API through the wrapped error. The error's
+// behaviour (Timeout, Unwrap) is kept.
+func withoutQuery(err error) error {
+	ue, ok := err.(*neturl.Error) // http.Client.Do returns it unwrapped
+	if !ok {
+		return err
+	}
+	scrubbed := *ue
+	scrubbed.URL = hostPath(ue.URL)
+	return &scrubbed
 }
 
 func base(override, def string) string {
@@ -313,20 +328,21 @@ func getGateway(ctx context.Context, hc *http.Client, url, header, value string,
 	if hc == nil {
 		hc = &http.Client{Timeout: 20 * time.Second}
 	}
+	where := hostPath(url)
 	resp, err := hc.Do(req)
 	if err != nil {
-		return fmt.Errorf("accounts: GET %s: %w", url, err)
+		return fmt.Errorf("accounts: GET %s: %w", where, withoutQuery(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-		return fmt.Errorf("%w (%d on %s)", usage.ErrAuth, resp.StatusCode, url)
+		return fmt.Errorf("%w (%d on %s)", usage.ErrAuth, resp.StatusCode, where)
 	case resp.StatusCode != http.StatusOK:
-		return fmt.Errorf("accounts: GET %s: status %d", url, resp.StatusCode)
+		return fmt.Errorf("accounts: GET %s: status %d", where, resp.StatusCode)
 	}
 	if err := json.Unmarshal(body, out); err != nil {
-		return fmt.Errorf("accounts: GET %s: %w", url, err)
+		return fmt.Errorf("accounts: GET %s: %w", where, err)
 	}
 	return nil
 }
