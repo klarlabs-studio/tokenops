@@ -99,7 +99,7 @@ func (s StepFun) send(ctx context.Context, method, path, cookie, webID string, b
 	}
 	resp, err := noRedirect(s.HTTP).Do(req)
 	if err != nil {
-		return 0, nil, nil, fmt.Errorf("accounts: %s %s: %w", method, hostPath(s.root()+path), err)
+		return 0, nil, nil, fmt.Errorf("accounts: %s %s: %w", method, hostPath(s.root()+path), withoutQuery(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
