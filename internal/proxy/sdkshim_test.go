@@ -127,8 +127,10 @@ func TestSDKShimOpenAI(t *testing.T) {
 	if gotHdr.Get("Authorization") != "Bearer sk-shim-test" {
 		t.Errorf("Authorization passthrough failed: %q", gotHdr.Get("Authorization"))
 	}
-	if gotHdr.Get("X-Tokenops-Workflow-Id") != "wf-1" {
-		t.Errorf("attribution header lost: %q", gotHdr.Get("X-Tokenops-Workflow-Id"))
+	// Attribution is TokenOps-local: the proxy reads it and never
+	// forwards it to the provider.
+	if got := gotHdr.Get("X-Tokenops-Workflow-Id"); got != "" {
+		t.Errorf("attribution header leaked upstream: %q", got)
 	}
 }
 
