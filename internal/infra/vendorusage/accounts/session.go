@@ -82,7 +82,7 @@ func doWebResponse(ctx context.Context, hc *http.Client, method, rawURL string, 
 	}
 	resp, err := noRedirect(hc).Do(req)
 	if err != nil {
-		return webResponse{}, fmt.Errorf("accounts: %s %s: %w", method, hostPath(rawURL), err)
+		return webResponse{}, fmt.Errorf("accounts: %s %s: %w", method, hostPath(rawURL), withoutQuery(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
