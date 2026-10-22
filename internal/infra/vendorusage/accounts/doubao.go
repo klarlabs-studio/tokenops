@@ -129,7 +129,7 @@ func (d Doubao) call(ctx context.Context, root, action, ak, sk, region string, o
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
-		return fmt.Errorf("accounts: POST %s %s: %w", hostPath(u), action, err)
+		return fmt.Errorf("accounts: POST %s %s: %w", hostPath(u), action, withoutQuery(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
