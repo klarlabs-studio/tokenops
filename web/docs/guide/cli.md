@@ -2134,7 +2134,7 @@ Active mode does its work inside the daemon, so it is a no-op without one
 running. See [Configuration](/guide/configuration) for what each mode
 does and how it differs from the coach's autonomy.
 
-### `tokenops routing {proposals|rule}`
+### `tokenops routing {proposals|decide|rule}`
 
 Model-routing rules and the proposals they raise.
 
@@ -2144,6 +2144,7 @@ tokenops routing rule set anthropic claude-opus-5 claude-sonnet-5 --quality 0.9
 tokenops routing rule set anthropic 'claude-fable-5*' claude-sonnet-5 --quality 0.9
 tokenops routing rule unset anthropic claude-opus-5
 tokenops routing proposals --json
+tokenops routing decide "anthropic|claude-sonnet-5|claude-opus-5" approve
 ```
 
 `rule set` adds or updates a rule, upserted by provider and from-model; a
@@ -2156,9 +2157,12 @@ with `mode active` the proxy rewrites matching live requests.
 `proposals` lists model upgrades a rule wanted but your
 [preferred model](#tokenops-preferred-model-list-set-unset) refused. Each is
 a real choice waiting on you — take the proposed model, or stay on the
-preferred one — and nothing applies until you answer. Proposals are
-answered through the `tokenops_routing_decide` MCP tool or
-`POST /api/routing/decisions`.
+preferred one — and nothing applies until you answer. `decide` answers one
+by its key: `approve` routes matching requests to the proposed model from
+the next request, `deny` keeps the requested one. The menu bar and
+`POST /api/routing/decisions` answer the same way; an agent's
+`tokenops_routing` `decide` applies only once you confirm it at your MCP
+client.
 
 ### `tokenops boundaries {status|promote|demote}`
 
