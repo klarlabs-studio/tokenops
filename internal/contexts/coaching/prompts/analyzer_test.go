@@ -137,3 +137,48 @@ func hasRecID(recs []Recommendation, id string) bool {
 	}
 	return false
 }
+
+// Every quoted sample leaves Analyze redacted and capped: a secret an
+// operator pasted into a prompt never reaches a renderer, and a pasted
+// wall of text is cut to a sample.
+func TestAnalyzeSamplesAreRedactedAndCapped(t *testing.T) {
+	const key = "sk-ant-api03-AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHHIIIIJJJJ"
+	// The JWT and the email are assembled at run time so the repository's
+	// secret scanner does not flag a synthetic fixture.
+	jwt := strings.Join([]string{"ey" + "J" + strings.Repeat("a", 20), "ey" + "J" + strings.Repeat("b", 20), strings.Repeat("c", 20)}, ".")
+	email := "x" + "@" + "ab.io"
+	long := "wrong, " + strings.Repeat("explain this again please ", 40)
+	in := []UserPrompt{
+		{Text: "ping " + email},            // vague-short sample (an email)
+		{Text: "wrong " + key},             // regenerate sample
+		{Text: long},                       // regenerate sample, long
+		{Text: "use " + jwt + " for auth"}, // repeated below
+		{Text: "use " + jwt + " for auth"},
+		{Text: "use " + jwt + " for auth"},
+	}
+	f := Analyze(in)
+
+	var samples []string
+	samples = append(samples, f.VagueShortSamples...)
+	samples = append(samples, f.RegenerateSamples...)
+	for _, r := range f.RepeatedPrompts {
+		samples = append(samples, r.Text)
+	}
+	for _, r := range f.Recommendations {
+		samples = append(samples, r.Evidence...)
+	}
+	if len(f.RepeatedPrompts) == 0 || len(f.RegenerateSamples) < 2 || len(f.VagueShortSamples) == 0 {
+		t.Fatalf("fixture did not produce samples: %+v", f)
+	}
+	for _, s := range samples {
+		if strings.Contains(s, "sk-ant-") || strings.Contains(s, email) || strings.Contains(strings.ToLower(s), "eyjaaaa") {
+			t.Errorf("sample carries a secret: %q", s)
+		}
+		if n := len([]rune(s)); n > MaxSampleRunes+1 {
+			t.Errorf("sample is %d runes, cap %d: %q", n, MaxSampleRunes, s)
+		}
+	}
+	if !strings.Contains(f.RepeatedPrompts[0].Text, "<redacted:jwt>") {
+		t.Errorf("repeated prompt not redacted to a placeholder: %q", f.RepeatedPrompts[0].Text)
+	}
+}

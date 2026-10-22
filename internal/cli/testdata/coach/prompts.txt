@@ -15,5 +15,7 @@ FINDINGS
   short questions (<60 chars + '?'):  0 (0.0%)
   single-sentence no-context:         1 (25.0%)
 
+  (prompt text hidden — pass --quote for redacted examples)
+
 RECOMMENDATIONS
   • Prompting balance looks healthy. No anti-pattern flagged.

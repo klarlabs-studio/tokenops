@@ -112,3 +112,28 @@ func TestMessagesUsageNon2xx(t *testing.T) {
 		t.Fatalf("want 401 error; got %v", err)
 	}
 }
+
+// A non-refusal error body is quoted only redacted, on one line and
+// short: an upstream echoing the admin key back must not leak it.
+func TestMessagesUsageErrorBodyIsRedactedAndShort(t *testing.T) {
+	// Assembled at run time so the secret scanner does not flag the fixture.
+	key := "sk-ant-" + "admin01-" + strings.Repeat("K", 40)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte("bad request\nx-api-key: " + r.Header.Get("x-api-key") + "\n" + strings.Repeat("detail ", 500)))
+	}))
+	defer srv.Close()
+	c := NewAdminClient(key)
+	c.BaseURL = srv.URL
+	_, err := c.MessagesUsage(context.Background(), usage.MessagesUsageRequest{StartingAt: time.Now()})
+	if err == nil {
+		t.Fatal("want error")
+	}
+	msg := err.Error()
+	if strings.Contains(msg, strings.Repeat("K", 12)) || strings.Contains(msg, "\n") || len(msg) > 400 {
+		t.Errorf("error is unredacted, multi-line or long (%d bytes): %q", len(msg), msg)
+	}
+	if !strings.Contains(msg, "400") || !strings.Contains(msg, "bad request") {
+		t.Errorf("error %q lost the status or reason", msg)
+	}
+}
