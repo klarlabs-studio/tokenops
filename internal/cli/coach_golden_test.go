@@ -23,6 +23,8 @@ func TestCoachOutputCharacterization(t *testing.T) {
 	}{
 		{"coach/prompts.txt", append([]string{"coach", "prompts"}, pinned...)},
 		{"coach/prompts.json", append([]string{"coach", "prompts", "--json"}, pinned...)},
+		{"coach/prompts_quote.txt", append([]string{"coach", "prompts", "--quote"}, pinned...)},
+		{"coach/prompts_quote.json", append([]string{"coach", "prompts", "--quote", "--json"}, pinned...)},
 		{"coach/replies.txt", append([]string{"coach", "replies"}, pinned...)},
 		{"coach/replies.json", append([]string{"coach", "replies", "--json"}, pinned...)},
 	}

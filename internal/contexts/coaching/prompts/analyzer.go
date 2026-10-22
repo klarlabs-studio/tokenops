@@ -4,7 +4,32 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"go.klarlabs.de/tokenops/internal/contexts/security/redaction"
 )
+
+// MaxSampleRunes caps every prompt sample Analyze quotes. A sample
+// illustrates a pattern; a pasted log or document does not need to be
+// repeated back whole.
+const MaxSampleRunes = 120
+
+// sampleRedactor scrubs secrets from quoted samples. Redactor is safe
+// for concurrent use.
+var sampleRedactor = redaction.Default()
+
+// sample is txt as Analyze may quote it: secrets replaced by typed
+// placeholders, folded onto one line, and capped at MaxSampleRunes
+// (with a trailing ellipsis when cut). Redaction runs before the cap so
+// a secret straddling the cut is still caught whole.
+func sample(txt string) string {
+	red, _ := sampleRedactor.Redact(txt)
+	red = strings.Join(strings.Fields(red), " ")
+	r := []rune(red)
+	if len(r) <= MaxSampleRunes {
+		return red
+	}
+	return string(r[:MaxSampleRunes]) + "…"
+}
 
 // mustCompileRegen is a panic-at-init helper for the regenerate
 // pattern. The regex is a constant in package source so a compile
@@ -109,6 +134,10 @@ func Analyze(prompts []UserPrompt) Findings {
 	var charSum, wordSum int
 	f.MinChars = len(prompts[0].Text)
 	repeatCounts := map[string]int{}
+	// repeatFirst keeps the first original-case spelling of each
+	// repeated prompt: redaction patterns (JWT, AWS keys) are
+	// case-sensitive, so the lowercased key must never be what's quoted.
+	repeatFirst := map[string]string{}
 
 	var (
 		vagueSamples       []string
@@ -150,19 +179,19 @@ func Analyze(prompts []UserPrompt) Findings {
 		if _, ok := ackSet[lc]; ok {
 			acks++
 			if len(ackSamples) < 3 {
-				ackSamples = append(ackSamples, txt)
+				ackSamples = append(ackSamples, sample(txt))
 			}
 		}
 		if _, ok := vagueDirectiveSet[lc]; ok {
 			vagueDirectiveHits++
 			if len(vagueDirectives) < 3 {
-				vagueDirectives = append(vagueDirectives, txt)
+				vagueDirectives = append(vagueDirectives, sample(txt))
 			}
 		}
 		if nc < 15 && nw <= 3 {
 			f.VagueShort++
 			if len(vagueSamples) < 3 {
-				vagueSamples = append(vagueSamples, txt)
+				vagueSamples = append(vagueSamples, sample(txt))
 			}
 		}
 		if nc < 60 && strings.Contains(txt, "?") {
@@ -171,7 +200,7 @@ func Analyze(prompts []UserPrompt) Findings {
 		if regenerateRE.MatchString(txt) {
 			f.Regenerates++
 			if len(f.RegenerateSamples) < 3 {
-				f.RegenerateSamples = append(f.RegenerateSamples, txt)
+				f.RegenerateSamples = append(f.RegenerateSamples, sample(txt))
 			}
 		}
 		if nc > 5 && nc < 30 && !strings.ContainsAny(txt, ".,:;()") {
@@ -182,6 +211,9 @@ func Analyze(prompts []UserPrompt) Findings {
 		}
 		if nc > 5 {
 			repeatCounts[lc]++
+			if _, seen := repeatFirst[lc]; !seen {
+				repeatFirst[lc] = txt
+			}
 		}
 	}
 	f.AvgChars = float64(charSum) / float64(len(prompts))
@@ -191,19 +223,27 @@ func Analyze(prompts []UserPrompt) Findings {
 	f.ShortQuestions = shortQs
 	f.NoContextSingles = noCtx
 
+	type repeat struct {
+		key   string
+		count int
+	}
+	var repeats []repeat
 	for t, c := range repeatCounts {
 		if c >= 3 {
-			f.RepeatedPrompts = append(f.RepeatedPrompts, RepeatedItem{Text: t, Count: c})
+			repeats = append(repeats, repeat{key: t, count: c})
 		}
 	}
-	sort.Slice(f.RepeatedPrompts, func(i, j int) bool {
-		if f.RepeatedPrompts[i].Count != f.RepeatedPrompts[j].Count {
-			return f.RepeatedPrompts[i].Count > f.RepeatedPrompts[j].Count
+	sort.Slice(repeats, func(i, j int) bool {
+		if repeats[i].count != repeats[j].count {
+			return repeats[i].count > repeats[j].count
 		}
-		return f.RepeatedPrompts[i].Text < f.RepeatedPrompts[j].Text
+		return repeats[i].key < repeats[j].key
 	})
-	if len(f.RepeatedPrompts) > 10 {
-		f.RepeatedPrompts = f.RepeatedPrompts[:10]
+	if len(repeats) > 10 {
+		repeats = repeats[:10]
+	}
+	for _, r := range repeats {
+		f.RepeatedPrompts = append(f.RepeatedPrompts, RepeatedItem{Text: sample(repeatFirst[r.key]), Count: r.count})
 	}
 
 	f.Recommendations = buildRecommendations(f, ackSamples, vagueDirectives, vagueDirectiveHits, shortNoFileRef)

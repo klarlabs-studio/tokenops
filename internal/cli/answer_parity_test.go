@@ -234,10 +234,9 @@ func TestCLIAndMCPGiveTheSameAnswer(t *testing.T) {
 		var c struct {
 			Findings map[string]any `json:"findings"`
 		}
-		f.cli(t, &c, "coach", "prompts", "--root", f.root, "--source", "claude-code", "--since", "2026-01-01T00:00:00Z", "--json")
+		f.cli(t, &c, "coach", "prompts", "--root", f.root, "--source", "claude-code", "--since", "2026-01-01T00:00:00Z", "--quote", "--json")
 		var m map[string]any
-		// The CLI is the operator's local narrative; the tool matches it
-		// only when asked to quote.
+		// Both quote only when asked, so the answers match with quoting on.
 		f.tool(t, &m, "tokenops_coach_prompts", map[string]any{"since": "2026-01-01T00:00:00Z", "quote": true})
 		sameAnswer(t, "coach prompts", c.Findings, m)
 	})

@@ -17,9 +17,6 @@
     "short_question_count": 0,
     "no_context_singles_count": 1,
     "regenerate_count": 1,
-    "regenerate_samples": [
-      "no, that's wrong — keep the backoff"
-    ],
     "recommendations": [
       {
         "id": "healthy",
