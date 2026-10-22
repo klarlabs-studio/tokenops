@@ -82,6 +82,30 @@ func restrictToOwner(path string) error {
 	return nil
 }
 
+// testHookBeforeRestrict, when set by a test, runs in Open after the
+// schema is written and before restrictToOwner, to observe the modes the
+// store's files were created with.
+var testHookBeforeRestrict func(path string)
+
+// prepareOwnerOnly makes the store owner-only before SQLite opens it. A
+// missing database file is created empty at ownerOnly (O_EXCL, so a file
+// another process creates meanwhile is left to it); an existing one and
+// its sidecars are narrowed. SQLite creates the WAL and shared-memory
+// files with the database file's mode, so they never exist with the
+// umask default either.
+func prepareOwnerOnly(path string) error {
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, ownerOnly)
+	switch {
+	case err == nil:
+		if err := f.Close(); err != nil {
+			return fmt.Errorf("sqlite: create %s: %w", filepath.Base(path), err)
+		}
+	case !errors.Is(err, os.ErrExist):
+		return fmt.Errorf("sqlite: create %s: %w", filepath.Base(path), err)
+	}
+	return restrictToOwner(path)
+}
+
 // Store is a handle to the SQLite-backed event store. It is safe for
 // concurrent use; the underlying database/sql connection pool serialises
 // writes when SQLite locks for write.
@@ -161,6 +185,15 @@ func Open(ctx context.Context, path string, opts Options) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	if path != ":memory:" {
+		abs, err := filepath.Abs(path)
+		if err != nil {
+			return nil, fmt.Errorf("sqlite: resolve path %q: %w", path, err)
+		}
+		if err := prepareOwnerOnly(abs); err != nil {
+			return nil, err
+		}
+	}
 	background := opts.BackgroundCheckpoint > 0 && path != ":memory:"
 	if background {
 		dsn += "&" + url.Values{"_pragma": {"wal_autocheckpoint(0)"}}.Encode()
@@ -189,6 +222,11 @@ func Open(ctx context.Context, path string, opts Options) (*Store, error) {
 		s.logSlowLock("open", took, 0, 0)
 	}
 	if path != ":memory:" {
+		if testHookBeforeRestrict != nil {
+			testHookBeforeRestrict(path)
+		}
+		// Narrow again: another process may have created a sidecar
+		// between prepareOwnerOnly and here.
 		if err := restrictToOwner(path); err != nil {
 			_ = db.Close()
 			return nil, err
