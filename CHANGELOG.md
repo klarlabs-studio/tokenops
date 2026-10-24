@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.109.1 - 2026-10-25
+
 ### Fixed
 
 - **daemon:** a restart answers its health check within moments again, however large the store, and `tokenops daemon restart` no longer calls a normal start a failure. 0.106.1 moved the start-up corrections beside the boot, but the boot still read every stored event id (so the pollers skip history they already recorded) before it opened its port, and that read now competed with the corrections, the glance's warm-up and the other start-up readers for the store's connections. On a 317k-event store on a busy machine the port opened 45 seconds after the start, once 5½ minutes after, while `daemon restart` waits 20 seconds: it reported "Daemon restarted but did not become healthy" for a daemon that was starting normally, and nothing answered in the meantime. The daemon now binds its address first, within milliseconds of reading its config: until it serves everything, `/healthz` answers 200 with `"state": "starting"`, `/readyz` 503 `starting`, `/version` the build, the API 503 `starting` with `Retry-After` instead of waiting, and a provider request waits for the proxy (up to 30 seconds) on the same connection rather than being refused. The stored-id snapshot is read beside the boot over a read-only connection of its own, so it no longer queues behind the store's other readers; pollers that replay history wait for it, so nothing already stored is re-published. Reading the ids also allocates a third less (about 130 ms of CPU for 320k ids). `daemon restart` and `daemon install` say "warming up" when the daemon answered while still starting
