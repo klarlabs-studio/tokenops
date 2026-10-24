@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.109.0 - 2026-10-24
+
 ### Added
 
 - **menu bar, boundaries:** the menu bar approves a boundary in place, with the presence dialog (ADR 0015 §3). *Approve…* opened a Terminal window running `tokenops approve <id> --confirm`, so approving from the panel meant a second window, a typed yes and then the Touch ID dialog. With a presence key enrolled, **Approve** now shows the dialog straight from the panel and answers with the signed approval; the panel's note says what happened: approved and which key signed, or why nothing was answered (the dialog was cancelled, Touch ID or the password did not match, the screen is locked, nobody could be asked, the key is from another Mac). The daemon builds what is signed, never the app: the new `POST /api/boundaries/statements` (and `POST /api/routing/statements` for a model upgrade) returns the exact statement bytes, the dialog's text naming the rule, action and session, and the unsigned proof, which the app posts back to `POST /api/boundaries/decisions` with only the helper's signature added. Both routes are behind the API token; a machine where no key can sign answers `409 presence_unavailable`. With no key enrolled, a held key, no helper inside `TokenOps.app` or an older daemon, *Approve…* opens the terminal as before. Deny stays one click and never signs. `tokenops menubar --refresh` (the Homebrew upgrade hook) stopped every process under `TokenOps.app/Contents/MacOS/`, which now includes the presence helper: an upgrade during an approval would have killed the dialog. It now stops only the app's own binary
