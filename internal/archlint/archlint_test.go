@@ -111,6 +111,7 @@ var ioImportExempt = map[string][]string{}
 // list to `go list ./internal/contexts/...`.
 var domainPackages = []string{
 	"go.klarlabs.de/tokenops/internal/contexts/boundaries",
+	"go.klarlabs.de/tokenops/internal/contexts/boundaries/presence",
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough",
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/prompts",
 	"go.klarlabs.de/tokenops/internal/contexts/coaching/replies",
