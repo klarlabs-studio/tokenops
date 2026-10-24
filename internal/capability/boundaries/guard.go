@@ -282,7 +282,7 @@ func readFacts(rules []domain.Rule, call Call, env Env) (domain.Facts, []eventsc
 		if call.Harness == HarnessClaudeCode {
 			provider = "anthropic"
 			if left, observed, ok := planLeft(env.LimitsPath, now); ok {
-				f.PlanLeftPct = left
+				f.PlanLeftPct, f.PlanVendor = left, planVendor(provider)
 				ev = append(ev, eventschema.EvidenceRef{
 					Kind: "plan_headroom", Source: "claude_code_statusline", ObservedAt: observed,
 					FreshUntil: observed.Add(limitsFreshFor), Confidence: 1, Scope: "anthropic",
@@ -292,7 +292,7 @@ func readFacts(rules []domain.Rule, call Call, env Env) (domain.Facts, []eventsc
 		if f.PlanLeftPct == nil {
 			if fig, ok := figs.get(); ok {
 				if left := figuresPlanLeft(fig, provider); len(left) > 0 {
-					f.PlanLeftPct = left
+					f.PlanLeftPct, f.PlanVendor = left, planVendor(provider)
 					scope, caveat := provider, ""
 					if scope == "" {
 						scope, caveat = "any", "the tightest plan TokenOps watches, whichever provider"
@@ -336,6 +336,18 @@ func (l *lazyFigures) get() (boundaryledger.Figures, bool) {
 		l.fig, l.ok = fig, ok && err == nil && l.now.Sub(fig.ObservedAt) <= figuresFreshFor
 	}
 	return l.fig, l.ok
+}
+
+// vendorNames names each provider as its users do.
+var vendorNames = map[string]string{"anthropic": "Claude", "openai": "Codex", "gemini": "Gemini", "github": "Copilot", "cursor": "Cursor"}
+
+// planVendor names the plan a reason reads, so "plan left 6%" says whose;
+// with no provider the figure is the tightest across every plan.
+func planVendor(provider string) string {
+	if v, ok := vendorNames[provider]; ok {
+		return v
+	}
+	return provider
 }
 
 // figuresPlanLeft is the provider's share left by window, or, with no
