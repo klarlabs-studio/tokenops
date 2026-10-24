@@ -482,6 +482,13 @@ func (g *guard) answered(m domain.Match, id string) (Result, bool, error) {
 // settlePrompt reads back an ask raised at the permission prompt: a call
 // that ran was approved, and the approval holds for the rest of the
 // session so the operator is not asked again on every call.
+//
+// A call Claude Code stopped itself (its auto mode classifier, a
+// permission rule, a plugin or a PreToolUse hook) never reached the
+// prompt, because Claude Code settles the strictest answer first: the
+// person was not asked, so it is no approval. Its verdict is kept as
+// evidence on the decision and the ask moves to the next call, which is
+// then the first time the person is asked, not the second.
 func (g *guard) settlePrompt(m domain.Match, id string) (bool, error) {
 	if !g.env.Attended || g.call.TranscriptPath == "" {
 		return false, nil
@@ -490,9 +497,12 @@ func (g *guard) settlePrompt(m domain.Match, id string) (bool, error) {
 	if err != nil || !ok || p.ToolUseID == "" || p.ToolUseID == g.call.ToolUseID {
 		return false, err
 	}
-	approved, seen := routeguard.ToolAnswered(g.call.TranscriptPath, p.ToolUseID)
-	if !seen || !approved {
+	v, seen := routeguard.ToolVerdict(g.call.TranscriptPath, p.ToolUseID)
+	switch {
+	case !seen || v.Outcome == routeguard.OutcomeDeclined:
 		return false, nil
+	case v.Outcome == routeguard.OutcomeVendorStopped:
+		return false, g.recordVendorStop(m, p.ToolUseID, v)
 	}
 	a := boundaryledger.Answer{
 		ID: id, Rule: m.Rule.Name, SessionID: g.call.SessionID, Approved: true,
@@ -508,6 +518,26 @@ func (g *guard) settlePrompt(m domain.Match, id string) (bool, error) {
 	g.session.Recorded[id] = string(eventschema.DecisionStageAccepted)
 	g.changed = true
 	return true, nil
+}
+
+// recordVendorStop records, on the boundary's decision, that Claude Code
+// stopped the call the ask was attached to: the vendor's verdict as
+// evidence beside TokenOps' own, with the ask still open.
+func (g *guard) recordVendorStop(m domain.Match, toolUseID string, v routeguard.Verdict) error {
+	observed := v.At.UTC()
+	if v.At.IsZero() {
+		observed = g.now
+	}
+	evidence := append(append([]eventschema.EvidenceRef(nil), g.evidence...), eventschema.EvidenceRef{
+		Kind: "vendor_verdict", Source: "claude_code_transcript", ObservedAt: observed, Confidence: 1,
+		Scope:  g.call.SessionID + "/" + toolUseID,
+		Caveat: "Claude Code stopped the call before any prompt (" + v.Stopper + "); read from the tool result's wording",
+	})
+	env := decisionEnvelope(m, eventschema.DecisionStageProposed, g.call, g.env, g.now, evidence, eventschema.DecisionApproval{})
+	if d, ok := env.Payload.(*eventschema.DecisionEvent); ok {
+		d.Rationale += "; Claude Code stopped the asked call itself (" + v.Stopper + "), so nobody answered and the ask moves to the next call"
+	}
+	return g.env.Dir.Append(env)
 }
 
 func approverPhrase(r domain.Require) string {

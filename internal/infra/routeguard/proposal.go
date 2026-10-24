@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+	"time"
 )
 
 // Proposal is a subagent move the coach asked the operator to approve
@@ -84,13 +85,18 @@ func SettleProposals(dir, session, transcript string) []ProposalOutcome {
 	}
 	results := toolResults(transcript)
 	var out []ProposalOutcome
+	changed := false
 	kept := st.Proposals[:0]
 	for _, p := range st.Proposals {
-		rejected, seen := results[p.ToolUseID]
+		v, seen := results[p.ToolUseID]
 		switch {
 		case p.Declined || !seen:
 			kept = append(kept, p)
-		case rejected:
+		case v.Outcome == OutcomeVendorStopped:
+			// Claude Code refused the call before any prompt: the move was
+			// neither approved nor declined, so it is dropped unscored.
+			changed = true
+		case v.Outcome == OutcomeDeclined:
 			p.Declined = true
 			kept = append(kept, p)
 			out = append(out, ProposalOutcome{Proposal: p})
@@ -98,7 +104,7 @@ func SettleProposals(dir, session, transcript string) []ProposalOutcome {
 			out = append(out, ProposalOutcome{Proposal: p, Approved: true})
 		}
 	}
-	if len(out) > 0 {
+	if len(out) > 0 || changed {
 		st.Proposals = kept
 		saveState(dir, session, st)
 	}
@@ -106,13 +112,104 @@ func SettleProposals(dir, session, transcript string) []ProposalOutcome {
 }
 
 // rejectedPrefix is how Claude Code words a tool call the operator
-// declined at the permission prompt (verified in 2.1.284).
+// declined at the permission prompt (verified in 2.1.284 and 2.1.307).
 const rejectedPrefix = "The user doesn't want to proceed with this tool use"
 
-// toolResults maps each tool_use_id in the transcript to whether the
-// operator rejected it.
-func toolResults(path string) map[string]bool {
-	out := map[string]bool{}
+// subagentDeclined is how Claude Code words a call a person declined at
+// a subagent's permission prompt (verified in 2.1.307).
+const subagentDeclined = "Permission for this tool use was denied."
+
+// Outcome is what became of a tool call, as its result in the
+// transcript says.
+type Outcome int
+
+const (
+	// OutcomeRan is a call that ran, whether it then succeeded or failed.
+	OutcomeRan Outcome = iota
+	// OutcomeDeclined is a call the person declined at the prompt.
+	OutcomeDeclined
+	// OutcomeVendorStopped is a call Claude Code stopped itself before
+	// any prompt: it settles the strictest answer of its rules, auto mode
+	// classifier and hooks first, so the person was not asked.
+	OutcomeVendorStopped
+)
+
+// The guardrails inside Claude Code that stop a call on their own, as
+// Verdict.Stopper names them.
+const (
+	StopperAutoMode       = "auto_mode_classifier"
+	StopperPermissionRule = "permission_rule"
+	StopperPermission     = "permission_check"
+	StopperPlugin         = "plugin"
+	StopperHook           = "pre_tool_use_hook"
+)
+
+// vendorStops are the result wordings Claude Code gives a call it
+// stopped itself, read from 2.1.307 (the auto mode wording also seen in
+// a live session). A hook's own permissionDecisionReason is free text and
+// cannot be told from a call that ran and failed, so it is not here: it
+// still reads as ran.
+var vendorStops = []struct {
+	prefix, contains, stopper string
+}{
+	{"Permission for this action was denied by the Claude Code auto mode classifier.", "", StopperAutoMode},
+	{"Permission for this action has been denied.", "", StopperPermission},
+	{"Permission to use ", " has been denied", StopperPermissionRule},
+	{"Permission to use ", " denied by plugin", StopperPlugin},
+	{"PreToolUse:", " hook error: ", StopperHook},
+}
+
+// Verdict is the outcome of one call, what stopped it when Claude Code
+// did, and when its result was written.
+type Verdict struct {
+	Outcome Outcome
+	Stopper string
+	At      time.Time
+}
+
+// classify reads one tool result.
+func classify(isError bool, text string) (Outcome, string) {
+	if !isError {
+		return OutcomeRan, ""
+	}
+	t := strings.TrimSpace(text)
+	if strings.Contains(t, rejectedPrefix) || strings.HasPrefix(t, subagentDeclined) {
+		return OutcomeDeclined, ""
+	}
+	for _, s := range vendorStops {
+		if strings.HasPrefix(t, s.prefix) && strings.Contains(t, s.contains) {
+			return OutcomeVendorStopped, s.stopper
+		}
+	}
+	return OutcomeRan, ""
+}
+
+// resultText is a tool result's content as text: a string, or the text
+// blocks of a list.
+func resultText(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var blocks []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(raw, &blocks) != nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, x := range blocks {
+		if x.Type == "text" {
+			b.WriteString(x.Text)
+		}
+	}
+	return b.String()
+}
+
+// toolResults maps each tool_use_id in the transcript to its verdict.
+func toolResults(path string) map[string]Verdict {
+	out := map[string]Verdict{}
 	if path == "" {
 		return out
 	}
@@ -129,7 +226,8 @@ func toolResults(path string) map[string]bool {
 			continue
 		}
 		var tl struct {
-			Message struct {
+			Timestamp time.Time `json:"timestamp"`
+			Message   struct {
 				Content []struct {
 					Type      string          `json:"type"`
 					ToolUseID string          `json:"tool_use_id"`
@@ -145,20 +243,22 @@ func toolResults(path string) map[string]bool {
 			if c.Type != "tool_result" || c.ToolUseID == "" {
 				continue
 			}
-			out[c.ToolUseID] = c.IsError && strings.Contains(string(c.Content), rejectedPrefix)
+			o, stopper := classify(c.IsError, resultText(c.Content))
+			out[c.ToolUseID] = Verdict{Outcome: o, Stopper: stopper, At: tl.Timestamp}
 		}
 	}
 	return out
 }
 
-// ToolAnswered reports how the operator answered the permission prompt
-// raised on toolUseID: seen is false while the transcript holds no result
-// for the call, and approved is true when it ran rather than being
-// declined. The boundary pause point reads its own asks back with it.
-func ToolAnswered(transcript, toolUseID string) (approved, seen bool) {
+// ToolVerdict reports what became of the call toolUseID; seen is false
+// while the transcript holds no result for it. The boundary pause point
+// reads its own asks back with it: a call that ran was approved at the
+// prompt, a declined one was refused there, and one Claude Code stopped
+// itself was never put to the person.
+func ToolVerdict(transcript, toolUseID string) (Verdict, bool) {
 	if toolUseID == "" {
-		return false, false
+		return Verdict{}, false
 	}
-	rejected, ok := toolResults(transcript)[toolUseID]
-	return ok && !rejected, ok
+	v, ok := toolResults(transcript)[toolUseID]
+	return v, ok
 }
