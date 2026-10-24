@@ -232,7 +232,7 @@ func settle(env Env, p boundaryledger.Pending, a teamwire.Approval) error {
 	if !approved {
 		stage = eventschema.DecisionStageRejected
 	}
-	if err := env.Dir.Append(answerEnvelope(p, stage, env, answer)); err != nil {
+	if err := env.Dir.Append(answerEnvelope(p, stage, env, answer, presenceCheck{})); err != nil {
 		return err
 	}
 	return env.Dir.DeletePending(p.ID)

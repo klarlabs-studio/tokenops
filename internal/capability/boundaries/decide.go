@@ -6,6 +6,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/actions"
 	domain "go.klarlabs.de/tokenops/internal/contexts/boundaries"
+	"go.klarlabs.de/tokenops/internal/contexts/boundaries/presence"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -25,8 +26,12 @@ type DecideRequest struct {
 	Decision string `json:"decision"`
 	// Session makes the answer hold for the rest of the session rather
 	// than for the next step only.
-	Session bool   `json:"session,omitempty"`
-	Method  string `json:"-"`
+	Session bool `json:"session,omitempty"`
+	// Proof is the presence-key signature over this approval (ADR 0015):
+	// SignApproval makes it. With it, an approval can come over the API;
+	// with boundary_approval: presence, no approval counts without it.
+	Proof  *presence.Proof `json:"presence_proof,omitempty"`
+	Method string          `json:"-"`
 }
 
 // Decided is what an answer did.
@@ -36,7 +41,11 @@ type Decided struct {
 	Decision string `json:"decision"`
 	Scope    string `json:"scope"`
 	Approver string `json:"approver"`
-	Note     string `json:"note"`
+	// Presence is signed when the approval carried a valid presence proof,
+	// with the key it was signed by.
+	Presence    string `json:"presence,omitempty"`
+	PresenceKey string `json:"presence_key,omitempty"`
+	Note        string `json:"note"`
 }
 
 // Decide records the operator's answer to a pending boundary decision.
@@ -59,7 +68,9 @@ func Decide(env Env, req DecideRequest) (Decided, error) {
 	if method == "" {
 		method = MethodCLI
 	}
-	if approved && !approvesInPerson(method) {
+	// The API approves only with a proof, which is checked below; MCP
+	// never approves.
+	if approved && !approvesInPerson(method) && (method != MethodAPI || req.Proof == nil) {
 		return Decided{}, actions.InputError{Err: fmt.Errorf("an approval must come from a person: run `tokenops approve %s` in your own terminal, or answer Claude Code's prompt; this surface can only deny", id)}
 	}
 	p, ok, err := env.Dir.GetPending(id)
@@ -79,10 +90,19 @@ func Decide(env Env, req DecideRequest) (Decided, error) {
 	if req.Session {
 		scope = boundaryledger.ScopeSession
 	}
+	var check presenceCheck
+	if approved {
+		if check, err = checkAnswerProof(env, p, scope, req.Proof, method); err != nil {
+			return Decided{}, err
+		}
+	}
 	now := env.now()
 	a := boundaryledger.Answer{
 		ID: id, Rule: p.Rule, SessionID: p.SessionID, Approved: approved, Scope: scope,
 		Approver: env.user(), Method: method, At: now, Crossings: p.Crossings,
+	}
+	if check.presence == PresenceSigned {
+		a.Proof = req.Proof
 	}
 	if err := env.Dir.PutAnswer(a); err != nil {
 		return Decided{}, err
@@ -91,7 +111,7 @@ func Decide(env Env, req DecideRequest) (Decided, error) {
 	if !approved {
 		stage = eventschema.DecisionStageRejected
 	}
-	if err := env.Dir.Append(answerEnvelope(p, stage, env, a)); err != nil {
+	if err := env.Dir.Append(answerEnvelope(p, stage, env, a, check)); err != nil {
 		return Decided{}, err
 	}
 	out := Decided{ID: id, Rule: p.Rule, Decision: "approved", Scope: scope, Approver: a.Approver}
@@ -99,7 +119,42 @@ func Decide(env Env, req DecideRequest) (Decided, error) {
 		out.Decision = "denied"
 	}
 	out.Note = decidedNote(domain.Action(p.Action), approved, scope)
+	if check.presence == PresenceSigned {
+		out.Presence, out.PresenceKey = PresenceSigned, check.key
+		out.Note += "; signed with presence key " + check.key + " (if you did not approve that dialog, `tokenops deny " + id + "`)"
+	}
 	return out, nil
+}
+
+// checkAnswerProof checks the proof an approval carries. A valid proof is
+// recorded as signed. Without one, or with one that does not verify, the
+// approval is refused when presence is enforced or it came over the API,
+// with the reason and the way to give a signed one; under channel a CLI
+// approval goes on as before, and the pause point records what the check
+// would have said.
+func checkAnswerProof(env Env, p boundaryledger.Pending, scope string, proof *presence.Proof, method string) (presenceCheck, error) {
+	mode := env.approval()
+	if proof == nil && !mode.Enforced() {
+		return presenceCheck{}, nil
+	}
+	res := verifyAnswerProof(env, p, scope, proof)
+	if res.OK() {
+		return presenceCheck{presence: PresenceSigned, key: res.KeyID}, nil
+	}
+	if !mode.Enforced() && method != MethodAPI {
+		return presenceCheck{presence: PresenceUnverified, key: res.KeyID, wouldRefuse: string(res.Reason)}, nil
+	}
+	why := "boundary_approval is " + string(mode)
+	if !mode.Enforced() {
+		why = "an approval over the API needs a valid presence proof"
+	}
+	if res.Reason == presence.ReasonNotEnrolled {
+		return presenceCheck{}, actions.InputError{Err: fmt.Errorf("%s, and no presence key is enrolled on this machine: "+
+			"enrol one with `%s`, or deny; `tokenops boundaries status` says what is set", why, EnrolCommand)}
+	}
+	return presenceCheck{}, actions.InputError{Err: fmt.Errorf("%s, and this approval is not honoured: %s. "+
+		"`tokenops approve %s` in your own terminal asks for Touch ID, a paired Apple Watch or your password and signs it; "+
+		"denying needs no signature", why, res.Reason.Phrase(), p.ID)}
 }
 
 // Waiting reads one decision waiting on an answer, for a person about to
@@ -159,8 +214,9 @@ func decidedNote(action domain.Action, approved bool, scope string) string {
 	}
 }
 
-// answerEnvelope records an answer on the decision it answers.
-func answerEnvelope(p boundaryledger.Pending, stage eventschema.DecisionStage, env Env, a boundaryledger.Answer) *eventschema.Envelope {
+// answerEnvelope records an answer on the decision it answers, with what
+// the presence check found for an approval.
+func answerEnvelope(p boundaryledger.Pending, stage eventschema.DecisionStage, env Env, a boundaryledger.Answer, check presenceCheck) *eventschema.Envelope {
 	rule := domain.Rule{Name: p.Rule, Action: domain.Action(p.Action)}
 	if req, err := domain.ParseRequire(p.Require); err == nil {
 		rule.Require = req
@@ -168,7 +224,7 @@ func answerEnvelope(p boundaryledger.Pending, stage eventschema.DecisionStage, e
 	rule.Stage = domain.StageEnforce
 	call := Call{Harness: p.Harness, SessionID: p.SessionID, AgentID: p.AgentID, Action: domain.Action(p.Action)}
 	m := domain.RecordedMatch(rule, p.Crossed)
-	return decisionEnvelope(m, stage, call, env, a.At, nil, eventschema.DecisionApproval{
+	return decisionEnvelope(m, stage, call, env, a.At, nil, check.stamp(eventschema.DecisionApproval{
 		Approver: a.Approver, Method: a.Method, At: a.At, Rule: a.Rule, Scope: a.Scope,
-	})
+	}))
 }
