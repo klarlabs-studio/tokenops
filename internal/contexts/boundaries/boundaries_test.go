@@ -223,6 +223,17 @@ func TestCrossedSaysWhatWasCrossed(t *testing.T) {
 	}
 }
 
+func TestCrossedNamesThePlanItRead(t *testing.T) {
+	rules, _ := Parse([]RuleSpec{{Name: "r", Action: "continue", Require: "ask", When: map[string]string{"plan_left_pct": "<= 10"}}})
+	m, ok := rules[0].Match(ActionContinue, Facts{PlanLeftPct: map[Window]float64{Window5h: 6, WindowWeek: 70}, PlanVendor: "Claude"})
+	if !ok {
+		t.Fatal("no match")
+	}
+	if got, want := m.Crossed(), "Claude plan left 6.0% <= 10% (5h)"; !strings.Contains(got, want) {
+		t.Errorf("crossed = %q; want %q", got, want)
+	}
+}
+
 func TestDecisionIDIsStablePerRuleAndSession(t *testing.T) {
 	a, b := DecisionID("r", "s1"), DecisionID("r", "s1")
 	if a != b || !strings.HasPrefix(a, "bnd-") {
