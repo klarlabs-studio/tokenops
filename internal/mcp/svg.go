@@ -66,8 +66,9 @@ func Sparkline(series []float64, opts SparklineOptions) string {
 	return b.String()
 }
 
-// HeadroomGauge renders a horizontal bar showing window_consumed vs.
-// window_cap, coloured by overage risk band. Used in session_budget
+// HeadroomGauge renders a horizontal bar showing the share of window_cap
+// left after window_consumed, a fuel gauge that empties as the window is
+// used, coloured by overage risk band. Used in session_budget
 // to give operators a one-glance sense of how close they are to the
 // cap.
 func HeadroomGauge(consumed, cap int64, opts SparklineOptions) string {
@@ -94,7 +95,7 @@ func HeadroomGauge(consumed, cap int64, opts SparklineOptions) string {
 	case pct >= 0.6:
 		fill = "#d09a40" // amber
 	}
-	filledWidth := pct * float64(opts.Width)
+	filledWidth := (1 - pct) * float64(opts.Width)
 	label := opts.Label
 	if label == "" {
 		label = fmt.Sprintf("%d of %d", consumed, cap)
@@ -104,8 +105,8 @@ func HeadroomGauge(consumed, cap int64, opts SparklineOptions) string {
 		opts.Width, opts.Height, opts.Width, opts.Height, escapeAttr(label))
 	fmt.Fprintf(&b, `<rect x="0" y="0" width="%d" height="%d" fill="#e6e6e6" rx="3"/>`, opts.Width, opts.Height)
 	fmt.Fprintf(&b, `<rect x="0" y="0" width="%.1f" height="%d" fill="%s" rx="3"/>`, filledWidth, opts.Height, fill)
-	fmt.Fprintf(&b, `<text x="6" y="%d" font-family="ui-monospace,monospace" font-size="11" fill="#222">%s (%.1f%%)</text>`,
-		opts.Height-5, escapeText(label), pct*100)
+	fmt.Fprintf(&b, `<text x="6" y="%d" font-family="ui-monospace,monospace" font-size="11" fill="#222">%s (%.1f%% left)</text>`,
+		opts.Height-5, escapeText(label), (1-pct)*100)
 	b.WriteString(`</svg>`)
 	return b.String()
 }

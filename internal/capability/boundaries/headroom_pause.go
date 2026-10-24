@@ -116,6 +116,6 @@ func AddHeadroomPause(path string) (PauseAdded, error) {
 		return PauseAdded{}, err
 	}
 	return PauseAdded{Added: true, Rule: config.HeadroomPauseName, Stage: string(domain.StageShadow), Config: path,
-		Note: "in shadow at 90% of the tightest plan window: it records each session it would have paused and binds nothing; " +
+		Note: "in shadow at 10% left in the tightest plan window: it records each session it would have paused and binds nothing; " +
 			"`tokenops boundaries promote " + config.HeadroomPauseName + "` makes it pause"}, nil
 }

@@ -324,30 +324,8 @@ func newPlanHeadroomCmd(rf *rootFlags) *cobra.Command {
 						"  tokens this month: %d (no monthly cap)\n", r.ConsumedTokens,
 					)
 				}
-				switch {
-				case len(r.Windows) > 0:
-					// What the vendor reported, as it reported it: shares
-					// used, not a count derived from a published cap.
-					for _, w := range r.Windows {
-						line := fmt.Sprintf("  window:  %.0f%% of the %s used", w.UsedPct, w.Name)
-						if w.ResetsIn != "" {
-							line += " — resets in " + friendlyDuration(w.ResetsIn)
-						}
-						fmt.Fprintln(cmd.OutOrStdout(), line)
-					}
-				case r.WindowCap > 0:
-					fmt.Fprintf(cmd.OutOrStdout(),
-						"  window:  %d / %d %s per %s (%.1f%%) — resets in %s\n",
-						r.WindowConsumed, r.WindowCap, r.WindowUnit,
-						windowName(r.WindowDuration), r.WindowPct, friendlyDuration(r.WindowResetsIn),
-					)
-				case r.WindowResetsIn != "":
-					// The vendor reports a percentage and no cap (Codex's
-					// rate limits): show what it said.
-					fmt.Fprintf(cmd.OutOrStdout(),
-						"  window:  %.1f%% of the %s used — resets in %s\n",
-						r.WindowPct, windowName(r.WindowDuration), friendlyDuration(r.WindowResetsIn),
-					)
+				for _, line := range planWindowLines(r) {
+					fmt.Fprintln(cmd.OutOrStdout(), line)
 				}
 				// A spend-denominated plan reports money against the org's
 				// own limit; it has no window and renders none.
@@ -495,6 +473,50 @@ func sortedPlanProviders(bindings map[string]string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// planWindowLines words a plan's rate-limit windows as shares left, the
+// way a fuel gauge reads: what the vendor reported when it reported
+// shares, else the count against the cap.
+func planWindowLines(r headroom.Report) []string {
+	var out []string
+	switch {
+	case len(r.Windows) > 0:
+		for _, w := range r.Windows {
+			line := "  window:  " + shareLeftOf(w.UsedPct, "%.0f", w.Name)
+			if w.ResetsIn != "" {
+				line += " — resets in " + friendlyDuration(w.ResetsIn)
+			}
+			out = append(out, line)
+		}
+	case r.WindowCap > 0:
+		out = append(out, fmt.Sprintf("  window:  %d / %d %s per %s (%s) — resets in %s",
+			r.WindowConsumed, r.WindowCap, r.WindowUnit,
+			windowName(r.WindowDuration), leftWords(r.WindowPct, "%.1f"), friendlyDuration(r.WindowResetsIn)))
+	case r.WindowResetsIn != "":
+		// The vendor reports a percentage and no cap (Codex's rate limits).
+		out = append(out, fmt.Sprintf("  window:  %s — resets in %s",
+			shareLeftOf(r.WindowPct, "%.1f", windowName(r.WindowDuration)), friendlyDuration(r.WindowResetsIn)))
+	}
+	return out
+}
+
+// leftWords words a share used as the share left ("70% left"), or "used
+// up" once nothing is.
+func leftWords(usedPct float64, verb string) string {
+	if usedPct >= 100 {
+		return "used up"
+	}
+	return fmt.Sprintf(verb+"%% left", max(0, 100-usedPct))
+}
+
+// shareLeftOf words a window's share left ("70% of the week left"), or
+// "the week used up".
+func shareLeftOf(usedPct float64, verb, window string) string {
+	if usedPct >= 100 {
+		return "the " + window + " used up"
+	}
+	return fmt.Sprintf(verb+"%% of the %s left", max(0, 100-usedPct), window)
 }
 
 // windowName words a window length: "week", "day", or the length.

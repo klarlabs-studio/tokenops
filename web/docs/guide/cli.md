@@ -123,10 +123,10 @@ tokenops glance --color always | less -R
 ```
 
 ```
-PLAN                       WINDOW            USED  RESETS    PACE
-Codex Pro Standard ($100)  Weekly             91%  30m       +37% · out in 23h 47m
-Claude Max 20x             Session             4%  4h 37m    -3% · lasts
-                           Weekly · Fable      0%  5d 17h
+PLAN                       WINDOW            LEFT  RESETS    PACE
+Codex Pro Standard ($100)  Weekly              9%  30m       +37% · out in 23h 47m
+Claude Max 20x             Session            96%  4h 37m    -3% · lasts
+                           Weekly · Fable    100%  5d 17h
 ```
 
 Colour follows the terminal and `NO_COLOR`; `--no-color` (or `--color
@@ -233,8 +233,8 @@ Scaffolds the config (sqlite + rules on, idempotent) **and wires this
 machine**: it registers the MCP server with every installed host and
 installs the Claude Code hooks. A new config also gets the
 [headroom pause](/guide/boundaries#the-headroom-pause), in shadow: it
-records each session it would have paused at 90% of the tightest plan
-window and binds nothing until you promote it; init installs the pause
+records each session it would have paused once the tightest plan window
+is down to 10% left and binds nothing until you promote it; init installs the pause
 point (the boundary hook) to evaluate it. Re-running init on an existing
 config does not add it. `--detect` adds a report of the clients it
 found; it does not make the command read-only. Use `tokenops detect` to
@@ -2198,7 +2198,7 @@ to the rule in `config.yaml`; `demote` puts it back in shadow. Neither
 has an MCP equivalent: an agent must not change the limits set on it.
 
 **The headroom pause** is the boundary `tokenops init` writes on a new
-config: once the tightest plan window TokenOps knows is 90% used, the
+config: once the tightest plan window TokenOps knows is down to 10% left, the
 agent's next tool call asks first (`action: continue`, `when: {
 plan_left_pct: "<= 10" }`, `require: ask`). It starts in shadow, and the
 glance's findings say how many sessions it would have paused this week;

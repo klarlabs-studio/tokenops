@@ -164,5 +164,5 @@ func RouteFingerprint(provider eventschema.Provider, current, selected, adapter 
 func percentCaveat(pct float64) string {
 	// Keep the measured amount explainable without creating a second
 	// unproven numeric field on the decision wire contract.
-	return fmt.Sprintf("window pressure was %.1f%% before this decision", pct)
+	return fmt.Sprintf("the plan window had %.1f%% left before this decision", max(0, 100-pct))
 }
