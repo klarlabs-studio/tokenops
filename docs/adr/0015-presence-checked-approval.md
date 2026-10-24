@@ -389,3 +389,29 @@ The maintainer accepted the proposed default for each:
    on enrolled Macs only, after a shadow period that shows what would have
    been refused.
 4. **Linux.** Documented as channel-only until someone asks for FIDO2.
+
+## Spike results (2026-10-24, partial)
+
+Validation step 1, run on the maintainer's Mac (macOS 27.0.1, Touch ID
+enrolled) with an ad hoc signed Swift helper (no entitlements, no Developer
+ID) and a verifier built with `CGO_ENABLED=0`:
+
+| Check | Result |
+|---|---|
+| Enrol a Secure Enclave P-256 key with `.privateKeyUsage` + `.userPresence`, `AfterFirstUnlockThisDeviceOnly` | works |
+| Same with `WhenUnlockedThisDeviceOnly`, from a non-GUI shell | fails, `-25308` (keep `AfterFirstUnlock…`) |
+| A forged key blob | refused in 3 ms by CryptoTokenKit ("corrupted objectID"), no dialog |
+| Signing while the console is locked | fails in 8–54 ms with LocalAuthentication `-4` ("System authentication is running"); no dialog is queued for later |
+| Signature verified in pure Go (`ecdsa.VerifyASN1` over SHA-256, key from the raw X9.63 public key) | builds with `CGO_ENABLED=0`; end-to-end check pending a signature |
+
+Still open, to run from an unlocked GUI session: Touch ID, password and
+Apple Watch each succeed; Cancel fails; a second signature raises a second
+dialog; a re-signed helper still signs with the old blob; timing of one
+signature; an altered message fails the Go check. Over SSH: pending (Remote
+Login is off on the maintainer's Mac, and the standalone Tailscale app
+cannot be a Tailscale SSH server). Under launchd: not run on the
+maintainer's machine; to be covered on a macOS CI runner, which has no GUI
+session.
+
+The locked-console result already answers part of section 6: an approval
+asked while nobody is at the Mac fails at once instead of waiting.
