@@ -42,6 +42,45 @@ tokenops hooks install --boundary --client opencode
 tokenops boundaries status
 ```
 
+## The headroom pause
+
+`tokenops init` writes one boundary on every new config, so the pause
+before a plan runs out is there from the first session:
+
+```yaml
+boundaries:
+  - name: headroom-pause
+    action: continue                     # the agent's next tool call
+    when: { plan_left_pct: "<= 10" }     # the tightest plan window, 90% used
+    require: ask
+    stage: shadow
+```
+
+With no `window`, `plan_left_pct` reads the tightest window TokenOps knows
+— the 5-hour or the weekly one, whichever has less left. 90% leaves the
+agent room to finish its step, commit and hand over. In shadow it asks
+nothing: it records each session it would have paused, and the glance's
+findings (`tokenops glance`, `GET /api/findings`, the menu bar) say
+"The headroom pause would have paused 3 sessions this week". When that
+looks right:
+
+```bash
+tokenops boundaries promote headroom-pause
+```
+
+From then on it asks at Claude Code's prompt when someone is there, and
+otherwise refuses with the id `tokenops approve` takes; Codex and Cursor
+are told through the glance. Init also installs the pause point (the
+boundary hook) in Claude Code and opencode, because a rule without one
+records nothing, and the findings say so if it is missing.
+
+A config written before init did this is not changed behind your back.
+The findings suggest the pause when a plan is watched and none is set;
+`tokenops boundaries headroom-pause` adds it in shadow and installs the
+pause point. A `continue` rule of your own on `plan_left_pct`, whatever
+its name, counts as a headroom pause and is left alone. Change the
+threshold by editing `plan_left_pct` in `config.yaml`.
+
 ## Rules
 
 | Key | Takes |
@@ -229,8 +268,9 @@ runs as your user.
 as your user can act as you:
 
 - The terminal check is that standard input is a terminal, nothing more.
-  A command can get one for itself: `script -q /dev/null tokenops approve
-  <id>` passes it, and so would `expect`, `tmux` or any pseudo-terminal.
+  A command can get one for itself:
+  `script -q /dev/null tokenops approve <id>` passes it, and so would
+  `expect`, `tmux` or any pseudo-terminal.
 - The daemon's API token is a file in `~/.tokenops` that your user can
   read. With it, a process can call the settings endpoints directly, such
   as `POST /api/mode` or `POST /api/routing/rules`.

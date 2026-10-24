@@ -68,7 +68,7 @@ func (s *Server) registerPlanRoutes(mux RouteMux) {
 				c = &r
 			}
 		}
-		return findings.Compute(findings.Gather(&g, c, findings.DefaultDir())), nil
+		return findings.Compute(findings.Gather(&g, c, d.Config, findings.DefaultDir())), nil
 	}))
 	mux.HandleFunc("GET /api/plans/headroom", serve(func(ctx context.Context, d headroom.Deps, now time.Time) (any, error) {
 		res, err := headroom.Compute(ctx, d, now)

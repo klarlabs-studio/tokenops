@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+
+- **boundaries:** the headroom pause is on by default. A new `tokenops init` writes a `headroom-pause` boundary: once the tightest plan window TokenOps knows is 90% used (`plan_left_pct: "<= 10"`, the 5-hour or weekly window, whichever has less left), the agent's next tool call asks first. It starts in shadow, so it asks nothing and records each session it would have paused, and init installs the pause point (the boundary hook) in Claude Code and opencode so there is something to record; before, a fresh install had no boundary and no pause point, and the pause that shipped in 0.103 did nothing until you wrote a rule yourself. `tokenops boundaries promote headroom-pause` makes it pause
+- **boundaries:** the glance's findings (`tokenops glance`, `GET /api/findings`, `tokenops_findings`, the menu bar) say what the headroom pause did: "would have paused 3 sessions this week" in shadow, "paused 2 sessions this week" once promoted, and that it sees no tool calls when no agent has the pause point
+- **boundaries:** `tokenops boundaries headroom-pause` adds the pause, in shadow, to a config written before init did, and installs the pause point. An existing config is never changed on its own: re-running init leaves it alone, and the findings suggest the command only when a plan is watched and no `continue` rule on `plan_left_pct` is set
+
 ### Changed
 
 - **docs, README:** the landing page's comparison no longer says the vendors' own tools never act and offer no limits, or that only meters show plan windows: Claude Code acts on its own harness, and Claude, OpenAI and GitHub give admins limits on their own seats. The table is dated (checked 2026-10-22) and leads with what no single vendor covers: one set of headroom, budget and session-cost rules across every plan, account and harness, which account paid through a router, agent DX graded across harnesses, and a core that needs no upload at all

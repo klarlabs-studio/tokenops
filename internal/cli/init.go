@@ -48,6 +48,10 @@ enabling:
   - sqlite event storage at $XDG_DATA_HOME/tokenops/events.db
   - the rules subsystem rooted at the current working directory
   - audit on the security domain bus
+  - the headroom pause: a boundary that asks before the agent's next tool
+    call once the tightest plan window is 90% used, in shadow, so it only
+    records the sessions it would have paused until
+    ` + "`tokenops boundaries promote headroom-pause`" + `
 
 then wires tokenops into the clients already installed:
 
@@ -116,6 +120,9 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 	cfg.Rules.RepoID = rules.RepoID
 	currency, currencyFrom := initCurrencyChoice(f.currency)
 	cfg.Money.Currency = currency
+	// The headroom pause, in shadow: inferred and set without asking, as
+	// every boundary starts by recording what it would have done.
+	cfg.Boundaries = append(cfg.Boundaries, config.HeadroomPauseRule())
 
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
@@ -183,6 +190,7 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 
 	fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\nstorage: %s\n", configPath, storagePath)
 	fmt.Fprintf(cmd.OutOrStdout(), "currency: %s (%s; change with --currency)\n", currency, currencyFrom)
+	fmt.Fprintf(cmd.OutOrStdout(), "headroom pause: in shadow at 90%% of the tightest plan window — records each session it would have paused, binds nothing; `tokenops boundaries promote %s` makes it pause\n", config.HeadroomPauseName)
 	if rules.Enabled {
 		fmt.Fprintf(cmd.OutOrStdout(), "rules root: %s (repo_id=%s)\n", rules.Root, rules.RepoID)
 	} else {

@@ -169,13 +169,14 @@ type Gatherer struct {
 // Gather reads every figure the gauges are made of.
 func (g *Gatherer) Gather(ctx context.Context, now time.Time) Inputs {
 	var in Inputs
-	if glance, err := headroom.ComputeGlance(ctx, g.Glance(), now); err == nil {
+	deps := g.Glance()
+	if glance, err := headroom.ComputeGlance(ctx, deps, now); err == nil {
 		in.Glance = &glance
 		var report *coachcap.Report
 		if g.Coach != nil {
 			report = g.Coach(now)
 		}
-		f := findings.Compute(findings.Gather(&glance, report, findings.DefaultDir()))
+		f := findings.Compute(findings.Gather(&glance, report, deps.Config, findings.DefaultDir()))
 		in.Findings = &f
 		in.Costs = map[string]spending.ProviderCost{}
 		for _, r := range glance.Headroom.Reports {

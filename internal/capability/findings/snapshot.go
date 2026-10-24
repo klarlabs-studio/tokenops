@@ -13,6 +13,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/headroom"
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
+	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/infra/followthrough"
@@ -103,11 +104,12 @@ func AnalyzeSessions(ctx context.Context, dir string, now time.Time, cache *sess
 	return s, WriteSnapshot(dir, s)
 }
 
-// Gather reads the coach's ledgers and the last session analysis around
-// a glance and the coach's report, either of which may be nil. A ledger
-// that cannot be read leaves its findings out.
-func Gather(g *headroom.Glance, c *coach.Report, cacheDir string) Inputs {
-	in := Inputs{Glance: g, Coach: c}
+// Gather reads the coach's ledgers, the last session analysis and the
+// headroom pause around a glance, the coach's report and the config, any
+// of which may be nil. A ledger that cannot be read leaves its findings
+// out.
+func Gather(g *headroom.Glance, c *coach.Report, cfg *config.Config, cacheDir string) Inputs {
+	in := Inputs{Glance: g, Coach: c, Pause: pauseSummary(cfg)}
 	if s, err := coachhook.ReadStats(""); err == nil && s.Events > 0 {
 		in.CoachHook = &s
 	}

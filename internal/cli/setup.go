@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/actions"
+	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/cli/detect"
 	"go.klarlabs.de/tokenops/internal/cli/wire"
 	"go.klarlabs.de/tokenops/internal/config"
@@ -74,7 +75,7 @@ func realSetupTarget() (setupTarget, error) {
 // of running init.
 func runSetup(out io.Writer, cfgPath string, target setupTarget) []setupStep {
 	steps := wireMCPHosts(target.Home, target.Exe)
-	steps = append(steps, wireHooks(target.SettingsPath, target.Exe))
+	steps = append(steps, wireHooks(target.SettingsPath, target.Exe, needsPausePoint(cfgPath)))
 	steps = append(steps, statuslineStep(cfgPath, target.SettingsPath, target.Exe))
 	steps = append(steps, bindPlans(cfgPath, target.Home)...)
 	steps = append(steps, ingestionStep(cfgPath))
@@ -171,7 +172,17 @@ func wireMCPHosts(home, exe string) []setupStep {
 // observing to refusing the agent's reads is precisely the decision
 // `delivery: proactive` exists to gate, and doing it silently on the
 // operator's behalf is the interruption they did not ask for.
-func wireHooks(path, exe string) setupStep {
+// needsPausePoint reports whether the config at path has a rule the
+// boundary hook evaluates before a tool call. An unreadable config has
+// none: the hook is wired for rules, not in case of them.
+func needsPausePoint(path string) bool {
+	cfg, err := config.ReadMutable(path)
+	return err == nil && bcap.NeedsPausePoint(cfg.BoundaryRules())
+}
+
+// wireHooks installs the Claude Code hooks init sets up; boundary adds
+// the pause point (every tool call) when the config has a rule for it.
+func wireHooks(path, exe string, boundary bool) setupStep {
 	settings, _, err := loadSettings(path)
 	if err != nil {
 		return setupStep{Name: "Claude Code hooks", Err: err}
@@ -183,7 +194,7 @@ func wireHooks(path, exe string) setupStep {
 	guardWhy := deliveryDetail(readGuardRecommendation())
 
 	var changed []string
-	for _, sp := range specsFor(true, true, coachhook.DefaultBudgetUSD) {
+	for _, sp := range specsForModeWithRoute(true, true, false, boundary, coachhook.DefaultBudgetUSD, "", "") {
 		if ok, _ := mergeHook(hooks, sp.event, sp.matcher, commandEntry(exe, sp.args), sp.marker); ok {
 			changed = append(changed, sp.name)
 		}
