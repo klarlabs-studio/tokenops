@@ -254,8 +254,9 @@ runs as your user.
 as your user can act as you:
 
 - The terminal check is that standard input is a terminal, nothing more.
-  A command can get one for itself: `script -q /dev/null tokenops approve
-  <id>` passes it, and so would `expect`, `tmux` or any pseudo-terminal.
+  A command can get one for itself:
+  `script -q /dev/null tokenops approve <id>` passes it, and so would
+  `expect`, `tmux` or any pseudo-terminal.
 - The daemon's API token is a file in `~/.tokenops` that your user can
   read. With it, a process can call the settings endpoints directly, such
   as `POST /api/mode` or `POST /api/routing/rules`.
