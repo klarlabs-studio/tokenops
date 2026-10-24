@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **boundaries:** the checking half of presence-checked approval (ADR 0015, phase 3), in shadow. Approval rests on the channel an answer arrives on, and #702 documented that a process running as you can pass that check (`script -q /dev/null tokenops approve <id>`, or writing the answer file). ADR 0015 closes it with an approval signed by a Secure Enclave key that needs Touch ID or your password for every signature. This release adds the pure-Go verifier: a signed statement names the decision, rule, session, scope, a fresh challenge for that raising of the decision, a hash of the crossings you were shown, and when it was signed (`tokenops.approval/v1`, length-prefixed fields); a one-step approval is honoured for 10 minutes and spent once used, a session approval for 24 hours; a key replaced without the old key's signature holds approvals for 15 minutes and is announced, a rotation the old key signed does not. Nothing is refused and nothing enrols a key yet. Each approval the pause point honours is recorded with what the check would have said (`presence`: `signed`, `harness` for Claude Code's prompt, `team`, `unverified` with `would_refuse` and the reason, or `not_enrolled`), the decision's rationale says when enforcement would not have honoured it, and `tokenops boundaries status` (`GET /api/boundaries`, `tokenops_boundaries`) reports the machine's presence state: on every machine today, *presence approval not enrolled*, once rather than on every approval. With a key enrolled, the glance's findings count approvals that would not have been honoured and announce a replaced key. Pending decisions now carry their challenge; `DecisionEvent.approval` gains `presence`, `presence_key` and `would_refuse` (schema 1.6.1). The pause point's 5 ms budget gate now also covers a signed answer (about 0.3 ms)
+
 ## 0.108.0 - 2026-10-24
 
 ### Added

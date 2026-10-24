@@ -38,6 +38,7 @@ import (
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/contexts/boundaries"
+	"go.klarlabs.de/tokenops/internal/contexts/boundaries/presence"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -59,6 +60,9 @@ func (d Dir) root() string {
 	}
 	return string(d)
 }
+
+// Root is the directory the ledger resolves to.
+func (d Dir) Root() string { return d.root() }
 
 const ledgerFile = "decisions.jsonl"
 
@@ -194,6 +198,15 @@ type Pending struct {
 	// RoutedAt is when an organisation rule's approval request reached
 	// the team plane.
 	RoutedAt *time.Time `json:"routed_at,omitempty"`
+	// Challenge is this raising's nonce, which a presence-signed approval
+	// must name (ADR 0015 §2). It is minted when the decision is raised,
+	// kept while it waits, and replaced once a one-step approval of it is
+	// used, so a signature answers one raising only.
+	Challenge string `json:"challenge,omitempty"`
+	// Spent are the fingerprints of one-step signed approvals already
+	// used on this decision, newest last, so one presented again is
+	// recognised.
+	Spent []string `json:"spent,omitempty"`
 }
 
 // Answer is the operator's answer to a pending decision.
@@ -206,6 +219,12 @@ type Answer struct {
 	Approver  string    `json:"approver"`
 	Method    string    `json:"method"`
 	At        time.Time `json:"at"`
+	// Crossings are the figures the approver was shown, which a presence
+	// proof binds by hash.
+	Crossings []boundaries.Crossing `json:"crossings,omitempty"`
+	// Proof is the presence-key signature over this approval (ADR 0015),
+	// absent on answers given without one.
+	Proof *presence.Proof `json:"presence_proof,omitempty"`
 }
 
 // Scopes an answer can have.

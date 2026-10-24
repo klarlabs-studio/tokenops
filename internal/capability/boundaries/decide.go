@@ -82,7 +82,7 @@ func Decide(env Env, req DecideRequest) (Decided, error) {
 	now := env.now()
 	a := boundaryledger.Answer{
 		ID: id, Rule: p.Rule, SessionID: p.SessionID, Approved: approved, Scope: scope,
-		Approver: env.user(), Method: method, At: now,
+		Approver: env.user(), Method: method, At: now, Crossings: p.Crossings,
 	}
 	if err := env.Dir.PutAnswer(a); err != nil {
 		return Decided{}, err

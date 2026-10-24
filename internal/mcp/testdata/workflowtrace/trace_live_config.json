@@ -6,7 +6,7 @@
         "Index": 0,
         "Envelope": {
           "id": "wt-0",
-          "schema_version": "1.6.0",
+          "schema_version": "1.6.1",
           "type": "prompt",
           "timestamp": "<T>",
           "source": "test",
@@ -53,7 +53,7 @@
         "Index": 1,
         "Envelope": {
           "id": "wt-1",
-          "schema_version": "1.6.0",
+          "schema_version": "1.6.1",
           "type": "prompt",
           "timestamp": "<T>",
           "source": "test",
@@ -100,7 +100,7 @@
         "Index": 2,
         "Envelope": {
           "id": "wt-2",
-          "schema_version": "1.6.0",
+          "schema_version": "1.6.1",
           "type": "prompt",
           "timestamp": "<T>",
           "source": "test",
@@ -147,7 +147,7 @@
         "Index": 3,
         "Envelope": {
           "id": "wt-3",
-          "schema_version": "1.6.0",
+          "schema_version": "1.6.1",
           "type": "prompt",
           "timestamp": "<T>",
           "source": "test",
@@ -194,7 +194,7 @@
         "Index": 4,
         "Envelope": {
           "id": "wt-4",
-          "schema_version": "1.6.0",
+          "schema_version": "1.6.1",
           "type": "prompt",
           "timestamp": "<T>",
           "source": "test",

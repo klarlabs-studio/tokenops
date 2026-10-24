@@ -65,6 +65,9 @@ type Env struct {
 	User string
 	// Attended is whether someone can answer a permission prompt.
 	Attended bool
+	// PresenceDir is the presence key store (ADR 0015); empty is
+	// presence/ beside Dir.
+	PresenceDir string
 }
 
 func (e Env) now() time.Time {
@@ -433,6 +436,12 @@ func (g *guard) bind(v domain.Verdict) (Result, error) {
 		if routed {
 			pending.At = prev.At
 		}
+		// The raising goes on while it waits: keep its challenge, so an
+		// approval signed for it still names it.
+		pending.Challenge, pending.Spent = prev.Challenge, prev.Spent
+	}
+	if pending.Challenge == "" {
+		pending.Challenge = newChallenge()
 	}
 	if g.env.Attended && !routed {
 		pending.ToolUseID = g.call.ToolUseID
@@ -469,9 +478,16 @@ func (g *guard) answered(m domain.Match, id string) (Result, bool, error) {
 		}
 		return Result{Verdict: VerdictDeny, DecisionID: id, Reason: declinedReason(m, a.Approver)}, true, nil
 	}
+	// Presence is in shadow (ADR 0015 §5): the approval is honoured as
+	// before, and the decision records what the verifier would have said.
+	check := checkPresence(g.env, a, id, m.Rule.Name, g.call.SessionID, g.now)
+	approval = check.stamp(approval)
 	if a.Scope == boundaryledger.ScopeOnce {
 		won, err := g.env.Dir.ConsumeAnswer(id)
 		if err != nil || !won {
+			return Result{}, false, err
+		}
+		if err := retireChallenge(g.env, id, check.spent); err != nil {
 			return Result{}, false, err
 		}
 		return Result{}, true, g.record(m, eventschema.DecisionStageApplied, approval)
@@ -511,7 +527,9 @@ func (g *guard) settlePrompt(m domain.Match, id string) (bool, error) {
 	if err := g.env.Dir.PutAnswer(a); err != nil {
 		return false, err
 	}
-	approval := eventschema.DecisionApproval{Approver: a.Approver, Method: a.Method, At: a.At, Rule: a.Rule, Scope: a.Scope}
+	approval := eventschema.DecisionApproval{
+		Approver: a.Approver, Method: a.Method, At: a.At, Rule: a.Rule, Scope: a.Scope, Presence: PresenceHarness,
+	}
 	if err := g.record(m, eventschema.DecisionStageAccepted, approval); err != nil {
 		return false, err
 	}
@@ -648,6 +666,7 @@ func decisionEnvelope(m domain.Match, stage eventschema.DecisionStage, call Call
 	if stage == eventschema.DecisionStageShadow {
 		rationale += "; in shadow, so it would have " + wouldHave(m.Rule.Require) + " and changed nothing"
 	}
+	rationale += presenceRationale(approval)
 	return &eventschema.Envelope{
 		ID: uuid.NewString(), SchemaVersion: eventschema.SchemaVersion, Type: eventschema.EventTypeDecision,
 		Timestamp: at, Source: "boundary",

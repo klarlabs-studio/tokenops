@@ -109,7 +109,7 @@ func AnalyzeSessions(ctx context.Context, dir string, now time.Time, cache *sess
 // of which may be nil. A ledger that cannot be read leaves its findings
 // out.
 func Gather(g *headroom.Glance, c *coach.Report, cfg *config.Config, cacheDir string) Inputs {
-	in := Inputs{Glance: g, Coach: c, Pause: pauseSummary(cfg)}
+	in := Inputs{Glance: g, Coach: c, Pause: pauseSummary(cfg), Presence: presenceStatus(cfg)}
 	if s, err := coachhook.ReadStats(""); err == nil && s.Events > 0 {
 		in.CoachHook = &s
 	}

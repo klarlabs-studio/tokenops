@@ -153,6 +153,17 @@ someone answered a decision that asked, its `approval` (`approver`, `method`
 Both are optional and omitted when empty. Boundary decisions (ADR 0014) set
 `kind: boundary` and `policy: boundary:<rule name>`.
 
+Since schema 1.6.1 an `approval` may also say what the presence check
+(ADR 0015) found: `presence` — `signed` (a presence-key signature
+verified; `presence_key` names the key), `harness` (the harness's own
+permission prompt vouched for the person), `team` (the team plane
+answered), `unverified` (enforcement would not honour it; `would_refuse`
+gives the verifier's reason, such as `unsigned`, `wrong_challenge` or
+`expired`) or `not_enrolled` (the machine has no presence key). All three
+are optional and omitted when empty: answers recorded before presence
+checks, and denials, carry none. While presence is in shadow nothing is
+refused for them.
+
 ---
 
 ## 1. Envelope Contract

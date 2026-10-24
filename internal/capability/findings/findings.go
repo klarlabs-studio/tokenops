@@ -86,6 +86,8 @@ type Inputs struct {
 	// Pause is the headroom pause: whether one is set and what it did,
 	// or in shadow would have done, this week.
 	Pause *boundaries.PauseSummary
+	// Presence is the presence check on approvals (ADR 0015), in shadow.
+	Presence *boundaries.PresenceStatus
 }
 
 // Compute ranks every finding in, most urgent first.
@@ -104,6 +106,7 @@ func Compute(in Inputs) Report {
 	out = append(out, budget(in.CoachHook)...)
 	out = append(out, coaching(in.Coach, in.CoachHook)...)
 	out = append(out, headroomPause(in.Pause, in.Glance)...)
+	out = append(out, presenceFindings(in.Presence)...)
 	rank := map[string]int{LevelWarn: 0, LevelNotice: 1, LevelInfo: 2}
 	sort.SliceStable(out, func(i, j int) bool { return rank[out[i].Level] < rank[out[j].Level] })
 	r := Report{Findings: out}

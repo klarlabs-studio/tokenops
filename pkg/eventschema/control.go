@@ -47,13 +47,25 @@ type DecisionActor struct {
 
 // DecisionApproval is who answered a decision that needed approval, how,
 // when, and under which rule. Method is how the answer arrived (cli, mcp,
-// api, prompt); Scope is once or session.
+// api, prompt, team); Scope is once or session.
+//
+// Presence is what the presence check (ADR 0015) found for an approval:
+// signed (a presence-key signature verified, PresenceKey names the key),
+// harness (the harness's own permission prompt vouched for the person),
+// team (the team plane answered), unverified (it would not be honoured
+// with presence enforced; WouldRefuse says why), or not_enrolled (the
+// machine has no presence key). Empty for answers before presence checks
+// and for denials, which need no proof. While presence is in shadow,
+// nothing is refused for it.
 type DecisionApproval struct {
-	Approver string    `json:"approver"`
-	Method   string    `json:"method"`
-	At       time.Time `json:"at"`
-	Rule     string    `json:"rule,omitempty"`
-	Scope    string    `json:"scope,omitempty"`
+	Approver    string    `json:"approver"`
+	Method      string    `json:"method"`
+	At          time.Time `json:"at"`
+	Rule        string    `json:"rule,omitempty"`
+	Scope       string    `json:"scope,omitempty"`
+	Presence    string    `json:"presence,omitempty"`
+	PresenceKey string    `json:"presence_key,omitempty"`
+	WouldRefuse string    `json:"would_refuse,omitempty"`
 }
 
 // DecisionEvent preserves what TokenOps knew and why it selected an action.

@@ -69,6 +69,45 @@ func watchesAPlan(g *headroom.Glance) bool {
 	return false
 }
 
+// presenceFindings say what presence-checked approval (ADR 0015) found
+// while in shadow: a key replaced without the old key's signature, and
+// approvals enforcement would not have honoured. A machine with no key
+// enrolled, every one until enrolment ships, gets none: boundaries status
+// says that once.
+func presenceFindings(p *boundaries.PresenceStatus) []Finding {
+	if p == nil || p.State == boundaries.PresenceStateNotEnrolled {
+		return nil
+	}
+	var out []Finding
+	if p.State == boundaries.PresenceStateHeld {
+		out = append(out, Finding{Kind: KindBoundary, Level: LevelWarn,
+			Title:    "The approval key was replaced",
+			Evidence: p.Note,
+			Action:   "If you did not replace it, something running as your user did: check ~/.tokenops/presence."})
+	}
+	if p.WouldBeIgnored > 0 {
+		word := "approvals"
+		if p.WouldBeIgnored == 1 {
+			word = "approval"
+		}
+		out = append(out, Finding{Kind: KindBoundary, Level: LevelNotice,
+			Title: fmt.Sprintf("%d %s would not have been honoured with presence enforced", p.WouldBeIgnored, word),
+			Evidence: "presence-checked approval is in shadow: they went through, and each decision says why " +
+				"it would not have (`tokenops explain <id>`)"})
+	}
+	return out
+}
+
+// presenceStatus reads the presence check; nil without a config, as
+// there are no boundaries to approve.
+func presenceStatus(cfg *config.Config) *boundaries.PresenceStatus {
+	if cfg == nil {
+		return nil
+	}
+	p := boundaries.Presence(boundaries.Env{})
+	return &p
+}
+
 // pauseSummary reads the headroom pause for cfg; nil when there is no
 // config or the boundary ledger cannot be read.
 func pauseSummary(cfg *config.Config) *boundaries.PauseSummary {

@@ -101,6 +101,10 @@ type Status struct {
 	Rules   []RuleStatus  `json:"rules"`
 	Pending []PendingView `json:"pending"`
 	Note    string        `json:"note,omitempty"`
+	// Presence is whether approvals on this machine can be proven to come
+	// from a person present (ADR 0015), and what the shadow check found.
+	// Absent when no rule is configured, since nothing asks for approval.
+	Presence *PresenceStatus `json:"presence,omitempty"`
 }
 
 // Installed reports, per harness that can refuse, whether its boundary
@@ -165,6 +169,10 @@ func RuleStatuses(rules []domain.Rule, env Env, installed map[string]bool) (Stat
 			continue
 		}
 		out.Pending = append(out.Pending, pendingView(p))
+	}
+	if len(rules) > 0 {
+		ps := Presence(env)
+		out.Presence = &ps
 	}
 	switch {
 	case len(rules) == 0:

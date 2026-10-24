@@ -27,7 +27,7 @@ func TestGoldenBoundaryDecisionCarriesActorAndApproval(t *testing.T) {
 	}
 	want := `{
   "id": "01HABCDEF0123456789KLMNOPQRS",
-  "schema_version": "1.6.0",
+  "schema_version": "1.6.1",
   "type": "decision",
   "timestamp": "2026-05-11T12:00:00Z",
   "source": "boundary",
@@ -104,5 +104,27 @@ func TestDecisionProtoMatchesGo(t *testing.T) {
 		if !reflect.DeepEqual(goNames, protoNames) {
 			t.Errorf("%s: Go fields %v; proto fields %v", tc.goType.Name(), goNames, protoNames)
 		}
+	}
+}
+
+// ADR 0015: an approval says what the presence check found. The fields
+// are optional and absent on approvals recorded before it.
+func TestGoldenApprovalCarriesPresence(t *testing.T) {
+	a := DecisionApproval{
+		Approver: "felix", Method: "cli", At: fixedTime, Rule: "session-spend", Scope: "once",
+		Presence: "unverified", PresenceKey: "pk-0123456789abcdef", WouldRefuse: "unsigned",
+	}
+	b, err := json.Marshal(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"approver":"felix","method":"cli","at":"2026-05-11T12:00:00Z","rule":"session-spend","scope":"once",` +
+		`"presence":"unverified","presence_key":"pk-0123456789abcdef","would_refuse":"unsigned"}`
+	if string(b) != want {
+		t.Fatalf("got  %s\nwant %s", b, want)
+	}
+	b, _ = json.Marshal(DecisionApproval{Approver: "felix", Method: "cli", At: fixedTime})
+	if strings.Contains(string(b), "presence") || strings.Contains(string(b), "would_refuse") {
+		t.Fatalf("empty presence serialised: %s", b)
 	}
 }

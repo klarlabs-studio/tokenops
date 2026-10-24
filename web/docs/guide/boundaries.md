@@ -294,6 +294,20 @@ delivers.
 - For a guarantee that holds against a determined process, use the
   vendor's organisation controls or a gateway (see below).
 
+### Presence-checked approval (coming)
+
+A later release lets a Mac with a Secure Enclave prove that a person at the
+machine gave an approval: each approval is signed by a key that asks for
+Touch ID or your password every time it signs, and TokenOps checks the
+signature ([ADR 0015](https://github.com/klarlabs-studio/tokenops/blob/main/docs/adr/0015-presence-checked-approval.md)).
+Nothing enrols that key yet, and nothing is refused for lacking a signature.
+What runs today is the checking half, in shadow: each approval the pause
+point honours is recorded with what the check would have said (`presence`
+in `tokenops explain <id>`), and `tokenops boundaries status` says whether
+this machine has a presence key. On every machine today it says
+*presence approval not enrolled*, once, and approvals work as described
+above.
+
 ## Where a boundary is enforced
 
 | Client | `continue`, `spend` | `subagent_model` |
