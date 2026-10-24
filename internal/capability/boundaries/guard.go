@@ -16,6 +16,7 @@ import (
 
 	"go.klarlabs.de/tokenops/internal/capability/explain"
 	domain "go.klarlabs.de/tokenops/internal/contexts/boundaries"
+	"go.klarlabs.de/tokenops/internal/contexts/boundaries/presence"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
@@ -68,6 +69,16 @@ type Env struct {
 	// PresenceDir is the presence key store (ADR 0015); empty is
 	// presence/ beside Dir.
 	PresenceDir string
+	// Approval is how approvals are checked (boundary_approval); zero is
+	// channel, where the presence check is in shadow.
+	Approval presence.Mode
+}
+
+func (e Env) approval() presence.Mode {
+	if e.Approval == "" {
+		return presence.ModeChannel
+	}
+	return e.Approval
 }
 
 func (e Env) now() time.Time {
@@ -379,6 +390,15 @@ type guard struct {
 	// changed is set when a decision stage was recorded: only then is the
 	// session's file written again. The matches go to its log.
 	changed bool
+	// refused is an approval enforcement did not honour on this call, said
+	// in the refusal the agent reads.
+	refused *refusedApproval
+}
+
+// refusedApproval is an answer the presence check did not honour.
+type refusedApproval struct {
+	method string
+	reason presence.Reason
 }
 
 func (g *guard) load() {
@@ -419,7 +439,10 @@ func (g *guard) bind(v domain.Verdict) (Result, error) {
 		return res, err
 	}
 	routed := m.Rule.TeamRouted()
-	if !routed {
+	// Under presence-strict the harness's prompt does not approve, so it
+	// is not asked: the refusal names `tokenops approve`, which signs.
+	prompt := g.env.Attended && !routed && !g.env.approval().Strict()
+	if prompt {
 		if done, err := g.settlePrompt(m, id); done || err != nil {
 			return Result{}, err
 		}
@@ -443,7 +466,7 @@ func (g *guard) bind(v domain.Verdict) (Result, error) {
 	if pending.Challenge == "" {
 		pending.Challenge = newChallenge()
 	}
-	if g.env.Attended && !routed {
+	if prompt {
 		pending.ToolUseID = g.call.ToolUseID
 	}
 	if err := g.env.Dir.PutPending(pending); err != nil {
@@ -457,10 +480,53 @@ func (g *guard) bind(v domain.Verdict) (Result, error) {
 		// organisation named, so the prompt does not answer it.
 		return Result{Verdict: VerdictDeny, DecisionID: id, Reason: routedReason(m, id)}, nil
 	}
-	if g.env.Attended && agentFacing(m.Rule.Action) {
-		return Result{Verdict: VerdictAsk, DecisionID: id, Reason: askReason(m, id)}, nil
+	if prompt && agentFacing(m.Rule.Action) {
+		return Result{Verdict: VerdictAsk, DecisionID: id, Reason: askReason(m, id) + g.refusedNote()}, nil
 	}
-	return Result{Verdict: VerdictDeny, DecisionID: id, Reason: unattendedReason(m, id)}, nil
+	return Result{Verdict: VerdictDeny, DecisionID: id, Reason: g.unattendedReason(m, id)}, nil
+}
+
+// refusedNote says, after a refusal, that an approval was given but not
+// honoured, so the operator who approved sees why it did not count.
+func (g *guard) refusedNote() string {
+	if g.refused == nil {
+		return ""
+	}
+	return fmt.Sprintf(" An approval (%s) was given but not honoured: %s.", g.refused.method, reasonPhrase(g.refused.reason))
+}
+
+// unattendedReason is the refusal with the way out. Under presence
+// enforcement the way out depends on the key: approve (with the dialog),
+// enrol one first, or wait out a replaced key's hold.
+func (g *guard) unattendedReason(m domain.Match, id string) string {
+	mode := g.env.approval()
+	if !mode.Enforced() {
+		return unattendedReason(m, id) + g.refusedNote()
+	}
+	head := fmt.Sprintf("tokenops boundary %q: %s, and this %s.", m.Rule.Name, m.Crossed(), approverPhrase(m.Rule.Require))
+	if agentFacing(m.Rule.Action) {
+		head += " Do not retry: stop and tell the operator."
+	} else {
+		head += " " + heldUntil(m.Rule.Action) + " until then."
+	}
+	trust, err := g.env.presenceDir().Trust(g.now)
+	var way string
+	switch {
+	case err != nil:
+		way = fmt.Sprintf(" Approval needs this Mac's presence key, and its key store could not be read; demote the rule with `tokenops boundaries demote %s` to let it through.", m.Rule.Name)
+	case trust.State == presence.TrustNotEnrolled:
+		way = fmt.Sprintf(" Approval needs this Mac's presence key (boundary_approval: %s) and none is enrolled: "+
+			"enrol one with `%s`, then approve with `tokenops approve %s`; or demote the rule with `tokenops boundaries demote %s`.",
+			mode, EnrolCommand, id, m.Rule.Name)
+	case trust.State == presence.TrustHeld:
+		way = fmt.Sprintf(" Approvals are held until %s: the presence key was replaced without the old key's signature. "+
+			"After that, `tokenops approve %s` asks for Touch ID, a paired Apple Watch or the password.",
+			trust.Pin.HoldUntil.Local().Format("15:04"), id)
+	default:
+		way = fmt.Sprintf(" They can allow this one step with `tokenops approve %s`, or the rest of the session with "+
+			"`tokenops approve %s --session`; either asks for Touch ID, a paired Apple Watch or the password.", id, id)
+	}
+	return head + way + g.refusedNote()
 }
 
 // answered applies an answer the operator already gave.
@@ -478,9 +544,15 @@ func (g *guard) answered(m domain.Match, id string) (Result, bool, error) {
 		}
 		return Result{Verdict: VerdictDeny, DecisionID: id, Reason: declinedReason(m, a.Approver)}, true, nil
 	}
-	// Presence is in shadow (ADR 0015 §5): the approval is honoured as
-	// before, and the decision records what the verifier would have said.
+	// Under boundary_approval: channel the presence check is in shadow
+	// (ADR 0015 §5): the approval is honoured as before, and the decision
+	// records what the verifier would have said. Enforced, an approval the
+	// check does not honour is spent unused and recorded, and the
+	// decision goes on waiting.
 	check := checkPresence(g.env, a, id, m.Rule.Name, g.call.SessionID, g.now)
+	if mode := g.env.approval(); !check.honoured(mode) {
+		return Result{}, false, g.refuse(m, id, a, check, mode)
+	}
 	approval = check.stamp(approval)
 	if a.Scope == boundaryledger.ScopeOnce {
 		won, err := g.env.Dir.ConsumeAnswer(id)
@@ -493,6 +565,21 @@ func (g *guard) answered(m domain.Match, id string) (Result, bool, error) {
 		return Result{}, true, g.record(m, eventschema.DecisionStageApplied, approval)
 	}
 	return Result{}, true, g.recordOnce(m, eventschema.DecisionStageApplied, approval)
+}
+
+// refuse records an approval enforcement did not honour and removes it, so
+// it is recorded once and the decision is raised again with the reason.
+func (g *guard) refuse(m domain.Match, id string, a boundaryledger.Answer, check presenceCheck, mode presence.Mode) error {
+	if _, err := g.env.Dir.ConsumeAnswer(id); err != nil {
+		return err
+	}
+	reason := check.refusal(mode)
+	g.refused = &refusedApproval{method: a.Method, reason: reason}
+	approval := eventschema.DecisionApproval{
+		Approver: a.Approver, Method: a.Method, At: a.At, Rule: a.Rule, Scope: a.Scope,
+		Presence: PresenceRefused, PresenceKey: check.key, WouldRefuse: string(reason),
+	}
+	return g.record(m, eventschema.DecisionStageProposed, approval)
 }
 
 // settlePrompt reads back an ask raised at the permission prompt: a call

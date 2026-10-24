@@ -93,6 +93,7 @@ func runBoundaryGuard(cmd *cobra.Command, rf *rootFlags, client string) error {
 		bcap.RecordFailure(call, env, fmt.Errorf("config unreadable: %w", err))
 		return nil
 	}
+	env.Approval = cfg.ApprovalMode()
 	res := guardWithTimeout(cmd.Context(), cfg, call, env, bcap.Pause)
 	return writeBoundaryVerdict(cmd.OutOrStdout(), res)
 }
@@ -163,7 +164,8 @@ it is enforced or advice only; 'promote' makes a rule bind.
 older one, 'headroom-pause' adds it.`,
 		Args: cobra.NoArgs,
 	}
-	cmd.AddCommand(newBoundariesStatusCmd(), newBoundariesStageCmd("promote"), newBoundariesStageCmd("demote"), newBoundariesHeadroomPauseCmd())
+	cmd.AddCommand(newBoundariesStatusCmd(), newBoundariesStageCmd("promote"), newBoundariesStageCmd("demote"), newBoundariesHeadroomPauseCmd(),
+		newBoundariesPresenceCmd())
 	return cmd
 }
 
@@ -182,7 +184,7 @@ func newBoundariesStatusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			st, err := bcap.RuleStatuses(bcap.AllRules(cfg), bcap.Env{}, bcap.Wired(cfg))
+			st, err := bcap.RuleStatuses(bcap.AllRules(cfg), bcap.Env{Approval: cfg.ApprovalMode()}, bcap.Wired(cfg))
 			if err != nil {
 				return err
 			}
@@ -348,15 +350,25 @@ func newBoundariesStageCmd(verb string) *cobra.Command {
 const approveLimits = `
 
 What this guarantees: an agent cannot approve through TokenOps' MCP tools
-or the daemon's decision endpoint (both can only deny), this command
-refuses to run when stdin is not a terminal, and every answer is recorded
-with how it was given (cli, mcp, api, prompt).
+(they can only deny), the daemon's decision endpoint approves only with a
+presence signature, this command refuses to run when stdin is not a
+terminal, and every answer is recorded with how it was given (cli, mcp,
+api, prompt) and, when signed, with which presence key.
 
-What it does not: the terminal check only asks whether stdin is a
-terminal. A process running as you can get one (script -q /dev/null
-tokenops approve <id>), read the daemon's token in ~/.tokenops and call
-its API, or write the boundary ledger. Approval stops an agent that is
-wrong or misled, not one set on getting through.
+With a presence key enrolled ('tokenops boundaries presence enroll'), this
+command asks for Touch ID, a paired Apple Watch or your password and signs
+the approval; with boundary_approval: presence, an approval without that
+signature is not honoured, so 'script -q /dev/null tokenops approve <id>'
+or a hand-written answer file gets an agent nowhere. A paired Watch is
+offered every dialog: approve only a dialog you started, and read what it
+names (rule, action, session).
+
+What it does not: without presence enforced, the terminal check only asks
+whether stdin is a terminal. A process running as you can get one (script
+-q /dev/null tokenops approve <id>), read the daemon's token in ~/.tokenops
+and call its API, or write the boundary ledger. Even with it, a process
+running as you can edit config.yaml (until rules are sealed) or replace
+TokenOps' binaries; a replaced key is held 15 minutes and announced.
 
 Recommended: do not give agents an unrestricted shell for tokenops. Have
 your harness ask before 'tokenops approve', 'tokenops mode', 'tokenops
@@ -422,7 +434,18 @@ decision with your user name, so 'tokenops explain <id>' shows who answered.`
 					return err
 				}
 			}
-			res, err := bcap.Decide(bcap.Env{}, bcap.DecideRequest{ID: args[0], Decision: verb, Session: session, Method: bcap.MethodCLI})
+			env, err := presenceEnv(cmd)
+			if err != nil {
+				return err
+			}
+			req := bcap.DecideRequest{ID: args[0], Decision: verb, Session: session, Method: bcap.MethodCLI}
+			// A deny only tightens and is never asked to be signed.
+			if verb == "approve" {
+				if req.Proof, err = presenceProofFor(cmd, env, args[0], session); err != nil {
+					return err
+				}
+			}
+			res, err := bcap.Decide(env, req)
 			if err != nil {
 				return err
 			}

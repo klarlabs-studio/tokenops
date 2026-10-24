@@ -71,6 +71,15 @@ type Config struct {
 	// is then required — allow, ask, approver:<role> or deny. Each rule
 	// starts in shadow and binds once its stage is enforce.
 	Boundaries []boundaries.RuleSpec `yaml:"boundaries,omitempty"`
+	// BoundaryApproval is how an approval of a boundary or a routing
+	// upgrade is checked (ADR 0015): "channel" (the default) trusts the
+	// channel it arrives on; "presence" honours only an approval signed
+	// by this Mac's presence key (Touch ID, Apple Watch or the login
+	// password), or given at the harness's own permission prompt;
+	// "presence-strict" drops the harness's prompt too. It sits beside
+	// the boundaries list rather than in it because that section is the
+	// list of rules.
+	BoundaryApproval string `yaml:"boundary_approval,omitempty"`
 	// Money is the currency you pay your plans in, for showing plan cost
 	// and value per plan unit in it.
 	Money MoneyConfig `yaml:"money,omitempty"`

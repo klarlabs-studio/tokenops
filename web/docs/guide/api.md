@@ -110,8 +110,8 @@ instead of an empty screen.
 | `POST /api/routing/rules` | Creates, updates or deletes a routing rule |
 | `POST /api/plans` | Binds a provider to a plan, or clears it |
 | `POST /api/preferred-models` | Sets or clears a provider's preferred model |
-| `POST /api/routing/decisions` | Answers a routing proposal |
-| `POST /api/boundaries/decisions` | Denies what a boundary asked about (`{"id", "decision": "deny", "session"}`); an approval only comes from `tokenops approve` at a terminal or Claude Code's prompt |
+| `POST /api/routing/decisions` | Answers a routing proposal; with `boundary_approval: presence` an approval needs `presence_proof`, as below |
+| `POST /api/boundaries/decisions` | Denies what a boundary asked about (`{"id", "decision": "deny", "session"}`). It approves only with `presence_proof`, the signature `tokenops approve` makes with this Mac's [presence key](/guide/boundaries#presence-checked-approval) (the statement's fields, and `sig` in base64); without one an approval comes from `tokenops approve` at a terminal or Claude Code's prompt |
 | `POST /api/outcomes` | Records your judgement of an execution |
 | `POST /api/coach` | Applies a coach preset, or changes its dials |
 

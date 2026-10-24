@@ -22,6 +22,8 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
+
+	"go.klarlabs.de/tokenops/internal/contexts/boundaries/presence"
 )
 
 // Kind distinguishes the two record types in the log.
@@ -58,12 +60,20 @@ type Record struct {
 	// Seen counts how many times the route was proposed before an answer
 	// arrived, so a stale proposal can be told from a hot one.
 	Seen int64 `json:"seen,omitempty"`
+	// Proof is the presence-key signature over an approval (ADR 0015),
+	// on a KindDecided record; with boundary_approval: presence the router
+	// honours an approval only with one.
+	Proof *presence.Proof `json:"presence_proof,omitempty"`
 }
 
 // State is the current status of one route, folded from the log.
 type State struct {
 	Record
 	Decided bool
+	// RaisedAt is when the route was first proposed: the raising a signed
+	// approval names (presence.RoutingChallenge). The proposal's own At
+	// moves with every repeat, so it cannot be what a signature binds.
+	RaisedAt time.Time
 }
 
 // Store is an append-only proposal log at Path.
@@ -105,14 +115,24 @@ func (s *Store) Propose(r Record) error {
 
 // Decide records the operator's answer.
 func (s *Store) Decide(key, decision, chosenModel string) error {
+	return s.DecideSigned(key, decision, chosenModel, nil)
+}
+
+// DecideSigned records the operator's answer with the presence proof an
+// approval carried (nil for none).
+func (s *Store) DecideSigned(key, decision, chosenModel string, proof *presence.Proof) error {
 	return s.append(Record{
 		Kind:        KindDecided,
 		At:          time.Now().UTC(),
 		Key:         key,
 		Decision:    decision,
 		ChosenModel: chosenModel,
+		Proof:       proof,
 	})
 }
+
+// Path is the log's file; the presence key store sits beside it.
+func (s *Store) Path() string { return s.path }
 
 func (s *Store) append(r Record) error {
 	line, err := json.Marshal(r)
@@ -155,6 +175,9 @@ func (s *Store) Load() (map[string]State, error) {
 		switch r.Kind {
 		case KindProposed:
 			seen := cur.Seen + 1
+			if cur.RaisedAt.IsZero() {
+				cur.RaisedAt = r.At
+			}
 			if !cur.Decided {
 				cur.Record = r
 			}
@@ -162,6 +185,7 @@ func (s *Store) Load() (map[string]State, error) {
 		case KindDecided:
 			cur.Decision = r.Decision
 			cur.ChosenModel = r.ChosenModel
+			cur.Proof = r.Proof
 			cur.Key = r.Key
 			cur.At = r.At
 			cur.Decided = true

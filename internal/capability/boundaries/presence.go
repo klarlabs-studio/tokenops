@@ -15,15 +15,18 @@ import (
 )
 
 // What the presence check (ADR 0015) found for an approval, recorded on the
-// decision as DecisionApproval.Presence. Presence is in shadow: the pause
-// point honours approvals as before and records what the verifier would
-// have said.
+// decision as DecisionApproval.Presence. With boundary_approval: channel the
+// check is in shadow: the pause point honours approvals as before and
+// records what the verifier would have said. With presence enforced an
+// approval the check does not honour is recorded as refused, with the
+// reason in WouldRefuse, and the decision goes on waiting.
 const (
 	PresenceSigned      = "signed"
 	PresenceHarness     = "harness"
 	PresenceTeam        = "team"
 	PresenceUnverified  = "unverified"
 	PresenceNotEnrolled = "not_enrolled"
+	PresenceRefused     = "refused"
 )
 
 // spentKept bounds how many used one-step proofs a pending decision
@@ -53,6 +56,49 @@ type presenceCheck struct {
 	// spent is a valid one-step proof's fingerprint, remembered once the
 	// approval is used.
 	spent string
+}
+
+// honoured reports whether an approval with this check counts under mode:
+// always under channel; under presence when it is signed, attested by the
+// harness's prompt or the team plane's; under presence-strict, not the
+// prompt.
+func (c presenceCheck) honoured(mode presence.Mode) bool {
+	if !mode.Enforced() {
+		return true
+	}
+	switch c.presence {
+	case PresenceSigned, PresenceTeam:
+		return true
+	case PresenceHarness:
+		return !mode.Strict()
+	}
+	return false
+}
+
+// refusal is the reason an approval was not honoured under mode, for the
+// record and for the refusal the agent reads.
+func (c presenceCheck) refusal(mode presence.Mode) presence.Reason {
+	switch {
+	case c.presence == PresenceHarness && mode.Strict():
+		return reasonHarnessStrict
+	case c.presence == PresenceNotEnrolled:
+		return presence.ReasonNotEnrolled
+	case c.wouldRefuse != "":
+		return presence.Reason(c.wouldRefuse)
+	}
+	return presence.ReasonUnsigned
+}
+
+// reasonHarnessStrict: a prompt approval under presence-strict.
+const reasonHarnessStrict presence.Reason = "harness_not_accepted"
+
+// reasonPhrase is a reason in words, including the ones only enforcement
+// gives.
+func reasonPhrase(r presence.Reason) string {
+	if r == reasonHarnessStrict {
+		return "boundary_approval is presence-strict, so Claude Code's prompt does not approve; only a signed approval does"
+	}
+	return r.Phrase()
 }
 
 func (c presenceCheck) stamp(a eventschema.DecisionApproval) eventschema.DecisionApproval {
@@ -123,7 +169,14 @@ func retireChallenge(env Env, id, spent string) error {
 // the verifier would not have honoured, in the words other shadow
 // outcomes use.
 func presenceRationale(a eventschema.DecisionApproval) string {
-	if a.WouldRefuse == "" {
+	switch {
+	case a.Presence == PresenceRefused:
+		return "; presence enforced: this " + a.Method + " approval was not honoured (" +
+			reasonPhrase(presence.Reason(a.WouldRefuse)) + "), so the decision still waits (unsigned_answer_ignored)"
+	case a.Presence == PresenceSigned:
+		return "; approved in person: signed with presence key " + a.PresenceKey +
+			" (Touch ID, a paired Apple Watch or the login password); if you did not approve that dialog, deny this decision"
+	case a.WouldRefuse == "":
 		return ""
 	}
 	return "; presence check in shadow: with presence enforced this " + a.Method + " approval would not be honoured (" +
@@ -135,72 +188,129 @@ const (
 	PresenceStateNotEnrolled = "not_enrolled"
 	PresenceStateShadow      = "shadow"
 	PresenceStateHeld        = "held"
+	// PresenceStateEnforced: boundary_approval is presence or
+	// presence-strict and a key is enrolled.
+	PresenceStateEnforced = "enforced"
+	// PresenceStateUnavailable: presence is enforced and no key is
+	// enrolled, so nothing can approve but the harness's prompt (and, with
+	// presence-strict, nothing at all).
+	PresenceStateUnavailable = "unavailable"
 )
 
 // PresenceStatus is whether this machine can prove an approver present,
-// and what the shadow check found.
+// and what the check found.
 type PresenceStatus struct {
 	State string `json:"state"`
-	KeyID string `json:"key_id,omitempty"`
+	// Approval is the boundary_approval setting: channel, presence or
+	// presence-strict.
+	Approval string `json:"approval"`
+	KeyID    string `json:"key_id,omitempty"`
 	// Since is when the key was pinned; HoldUntil, when an unsigned
 	// replacement's hold ends.
 	Since     *time.Time `json:"since,omitempty"`
 	HoldUntil *time.Time `json:"hold_until,omitempty"`
-	// WouldBeIgnored counts approvals honoured that enforcement would not
-	// have honoured; HarnessAttested, approvals given at the harness's
-	// prompt, which keep counting under enforcement.
+	// WouldBeIgnored counts approvals honoured in shadow that enforcement
+	// would not have honoured; Refused, approvals enforcement did not
+	// honour; HarnessAttested, approvals given at the harness's prompt.
 	WouldBeIgnored  int    `json:"would_be_ignored"`
+	Refused         int    `json:"refused"`
 	HarnessAttested int    `json:"harness_attested"`
 	Note            string `json:"note"`
+	// Enrol is the command that enrols a key, when none is.
+	Enrol string `json:"enrol,omitempty"`
 }
 
+// EnrolCommand enrols this Mac's presence key.
+const EnrolCommand = "tokenops boundaries presence enroll"
+
 // Presence reads the key store and, when a key is enrolled, counts what
-// the shadow check recorded in the ledger. With no key it reads one
-// missing file and says so once. A replaced key's hold starts when it is
-// first read, here or at the pause point.
+// the check recorded in the ledger. With no key it reads one missing file
+// and says so once. A replaced key's hold starts when it is first read,
+// here or at the pause point.
 func Presence(env Env) PresenceStatus {
 	now := env.now()
+	mode := env.approval()
 	trust, err := env.presenceDir().Trust(now)
 	if err != nil {
-		return PresenceStatus{State: PresenceStateShadow, Note: "the presence key store could not be read: " + failureClass(err)}
+		state := PresenceStateShadow
+		if mode.Enforced() {
+			state = PresenceStateUnavailable
+		}
+		return PresenceStatus{State: state, Approval: string(mode), Note: "the presence key store could not be read: " + failureClass(err)}
 	}
 	if trust.State == presence.TrustNotEnrolled {
-		return PresenceStatus{
-			State: PresenceStateNotEnrolled,
-			Note: "presence approval not enrolled: approvals are trusted by the channel they arrive on " +
-				"(your terminal, Claude Code's prompt), not proven to come from a person at this machine",
-		}
+		return notEnrolledStatus(mode)
 	}
 	since := trust.Pin.Since
-	out := PresenceStatus{State: PresenceStateShadow, KeyID: trust.Key.ID, Since: &since}
+	out := PresenceStatus{State: PresenceStateShadow, Approval: string(mode), KeyID: trust.Key.ID, Since: &since}
+	if mode.Enforced() {
+		out.State = PresenceStateEnforced
+	}
 	if trust.State == presence.TrustHeld {
 		hold := trust.Pin.HoldUntil
 		out.State, out.HoldUntil = PresenceStateHeld, &hold
 	}
-	out.WouldBeIgnored, out.HarnessAttested = countPresence(env.Dir)
-	out.Note = presenceNote(out, trust)
+	out.WouldBeIgnored, out.Refused, out.HarnessAttested = countPresence(env.Dir)
+	out.Note = presenceNote(out, trust, mode)
 	return out
 }
 
-func presenceNote(s PresenceStatus, t presence.Trust) string {
-	if s.State == PresenceStateHeld {
-		return "approval key replaced at " + t.Pin.Since.Format(time.RFC3339) +
-			" without the old key's signature; signed approvals are held until " + s.HoldUntil.Format(time.RFC3339) +
-			" (in shadow, nothing is refused)"
+func notEnrolledStatus(mode presence.Mode) PresenceStatus {
+	if mode.Enforced() {
+		note := "boundary_approval is " + string(mode) + " but no presence key is enrolled on this machine: " +
+			"`tokenops approve` and the API cannot approve anything (deny still works"
+		if !mode.Strict() {
+			note += ", and so does Claude Code's prompt"
+		}
+		return PresenceStatus{
+			State: PresenceStateUnavailable, Approval: string(mode), Enrol: EnrolCommand,
+			Note: note + "); enrol a key with `" + EnrolCommand + "`, or set boundary_approval: channel",
+		}
 	}
-	note := "presence key " + s.KeyID + " enrolled; in shadow, approvals are checked and nothing is refused"
+	return PresenceStatus{
+		State: PresenceStateNotEnrolled, Approval: string(mode), Enrol: EnrolCommand,
+		Note: "presence approval not enrolled: approvals are trusted by the channel they arrive on " +
+			"(your terminal, Claude Code's prompt), not proven to come from a person at this machine",
+	}
+}
+
+func presenceNote(s PresenceStatus, t presence.Trust, mode presence.Mode) string {
+	if s.State == PresenceStateHeld {
+		effect := "(in shadow, nothing is refused)"
+		if mode.Enforced() {
+			effect = "(approvals are refused until then)"
+		}
+		return "approval key replaced at " + t.Pin.Since.Format(time.RFC3339) +
+			" without the old key's signature; signed approvals are held until " + s.HoldUntil.Format(time.RFC3339) + " " + effect
+	}
+	var note string
+	switch mode {
+	case presence.ModePresence:
+		note = "presence key " + s.KeyID + " enrolled and enforced: an approval counts only when signed with it " +
+			"(Touch ID, a paired Apple Watch or your password) or given at Claude Code's prompt"
+	case presence.ModeStrict:
+		note = "presence key " + s.KeyID + " enrolled and enforced (strict): an approval counts only when signed with it " +
+			"(Touch ID, a paired Apple Watch or your password); Claude Code's prompt does not approve"
+	default:
+		note = "presence key " + s.KeyID + " enrolled; in shadow, approvals are checked and nothing is refused " +
+			"(boundary_approval: presence enforces it)"
+	}
 	if s.WouldBeIgnored > 0 {
 		note += "; " + strconv.Itoa(s.WouldBeIgnored) + " approval(s) would not have been honoured with presence enforced (`tokenops explain <id>` says why)"
+	}
+	if s.Refused > 0 {
+		note += "; " + strconv.Itoa(s.Refused) + " approval(s) were not honoured (`tokenops explain <id>` says why)"
 	}
 	return note
 }
 
-// countPresence counts distinct approvals the shadow check recorded as
-// unverified, and those the harness attested.
-func countPresence(dir boundaryledger.Dir) (wouldBeIgnored, harness int) {
+// countPresence counts distinct approvals the check recorded as
+// unverified in shadow, refused under enforcement, and attested by the
+// harness.
+func countPresence(dir boundaryledger.Dir) (wouldBeIgnored, refused, harness int) {
 	envs, err := dir.Read()
 	if err != nil {
-		return 0, 0
+		return 0, 0, 0
 	}
 	seen := map[string]bool{}
 	for _, env := range envs {
@@ -216,9 +326,11 @@ func countPresence(dir boundaryledger.Dir) (wouldBeIgnored, harness int) {
 		switch d.Approval.Presence {
 		case PresenceUnverified:
 			wouldBeIgnored++
+		case PresenceRefused:
+			refused++
 		case PresenceHarness:
 			harness++
 		}
 	}
-	return wouldBeIgnored, harness
+	return wouldBeIgnored, refused, harness
 }

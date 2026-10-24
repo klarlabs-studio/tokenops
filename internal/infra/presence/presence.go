@@ -5,11 +5,16 @@
 // Layout under ~/.tokenops/presence:
 //
 //	public.key      the enrolled key, raw X9.63 uncompressed P-256 (65 bytes)
+//	key.blob        the Secure Enclave's wrapped private key, which only
+//	                this Mac's Secure Enclave can use, and only with the
+//	                dialog approved
+//	enrolment.json  the key's signature over its enrolment statement
 //	rotation.json   the old key's signature over the new key, after a rotation
 //	pin.json        the key approvals are checked against, and since when
 //
-// It only reads keys; enrolment (phase 4) writes public.key. It never
-// touches the private key blob, and never asks for a signature.
+// Reading never touches the blob and never asks for a signature;
+// Install writes a newly enrolled key. The helper (helper.go) is what
+// signs.
 package presence
 
 import (
@@ -28,6 +33,8 @@ const (
 	PublicKeyFile = "public.key"
 	RotationFile  = "rotation.json"
 	PinFile       = "pin.json"
+	BlobFile      = "key.blob"
+	EnrolmentFile = "enrolment.json"
 )
 
 // maxFile bounds what is read from the store: a raw P-256 point is 65
@@ -111,10 +118,15 @@ func (d Dir) putPin(p domain.Pin) error {
 	if err != nil {
 		return err
 	}
+	return d.put(PinFile, b)
+}
+
+// put writes one file of the store atomically, owner-only.
+func (d Dir) put(name string, b []byte) error {
 	if err := os.MkdirAll(string(d), 0o700); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(string(d), PinFile+".*")
+	tmp, err := os.CreateTemp(string(d), name+".*")
 	if err != nil {
 		return err
 	}
@@ -126,8 +138,69 @@ func (d Dir) putPin(p domain.Pin) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), filepath.Join(string(d), PinFile))
+	return os.Rename(tmp.Name(), filepath.Join(string(d), name))
 }
+
+// Enrolment is a key's signature over its enrolment statement
+// (domain.EnrolmentMessage), kept as the record that the key could sign
+// when it was enrolled.
+type Enrolment struct {
+	Key     string    `json:"key"`
+	Machine string    `json:"machine"`
+	User    string    `json:"user"`
+	At      time.Time `json:"at"`
+	Sig     []byte    `json:"sig"`
+}
+
+// BlobPath is where the enrolled key's blob is kept.
+func (d Dir) BlobPath() string { return filepath.Join(string(d), BlobFile) }
+
+// NewBlobPath is where a key being enrolled waits until it is installed.
+func (d Dir) NewBlobPath() string { return filepath.Join(string(d), BlobFile+".new") }
+
+// Prepare makes the store's directory, owner-only, so the helper can
+// write a new key's blob into it.
+func (d Dir) Prepare() error { return os.MkdirAll(string(d), 0o700) }
+
+// HasBlob reports whether a key blob is kept here.
+func (d Dir) HasBlob() bool {
+	st, err := os.Stat(d.BlobPath())
+	return err == nil && st.Mode().IsRegular()
+}
+
+// Install makes the key waiting at NewBlobPath the enrolled one: its blob,
+// its enrolment record, the rotation that vouches for it (nil for a first
+// enrolment or an unsigned replacement, which removes any earlier one),
+// and last its public key, which is what Trust reads. Trust, run after,
+// pins it: a first key at once, a rotated one without a hold, a replaced
+// one with the 15-minute hold.
+func (d Dir) Install(pub []byte, e Enrolment, rot *domain.Rotation) error {
+	eb, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+	if rot != nil {
+		rb, err := json.Marshal(rot)
+		if err != nil {
+			return err
+		}
+		if err := d.put(RotationFile, rb); err != nil {
+			return err
+		}
+	} else if err := os.Remove(filepath.Join(string(d), RotationFile)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := os.Rename(d.NewBlobPath(), d.BlobPath()); err != nil {
+		return err
+	}
+	if err := d.put(EnrolmentFile, eb); err != nil {
+		return err
+	}
+	return d.put(PublicKeyFile, pub)
+}
+
+// Discard removes a key that was created but not installed.
+func (d Dir) Discard() { _ = os.Remove(d.NewBlobPath()) }
 
 func readSmall(path string) ([]byte, error) {
 	f, err := os.Open(path) //nolint:gosec // TokenOps' own key store

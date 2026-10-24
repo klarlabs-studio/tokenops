@@ -212,7 +212,8 @@ there. **Approve…** opens a terminal running `tokenops approve <id>
 --confirm`, so the approval is still you, at a terminal, typing yes.
 
 Only a person should approve: `tokenops approve` refuses to run without a
-terminal, and the MCP tool and the daemon API can only deny. The agent a
+terminal, the MCP tool can only deny, and the daemon API approves only with
+a presence signature (below). The agent a
 boundary stopped can call tools and run commands, so an approval through
 any of those would be the agent approving itself. How far that holds is
 below.
@@ -257,8 +258,9 @@ runs as your user.
   `tokenops_routing`, `tokenops_coach`, `tokenops_experiment`) apply a
   change only after you confirm it at your client
   ([MCP server](/integrations/mcp-server#changing-settings-asks-you)).
-- The daemon's decision endpoint (`POST /api/boundaries/decisions`) can
-  only deny.
+- The daemon's decision endpoint (`POST /api/boundaries/decisions`)
+  approves only with a valid presence signature, which takes a person at
+  the Mac; without one it can only deny.
 - `tokenops approve` refuses to run when its standard input is not a
   terminal, so an agent's plain shell call fails.
 - Every answer is recorded with who gave it and how (`cli`, `mcp`, `api`,
@@ -294,19 +296,89 @@ delivers.
 - For a guarantee that holds against a determined process, use the
   vendor's organisation controls or a gateway (see below).
 
-### Presence-checked approval (coming)
+### Presence-checked approval
 
-A later release lets a Mac with a Secure Enclave prove that a person at the
-machine gave an approval: each approval is signed by a key that asks for
-Touch ID or your password every time it signs, and TokenOps checks the
-signature ([ADR 0015](https://github.com/klarlabs-studio/tokenops/blob/main/docs/adr/0015-presence-checked-approval.md)).
-Nothing enrols that key yet, and nothing is refused for lacking a signature.
-What runs today is the checking half, in shadow: each approval the pause
-point honours is recorded with what the check would have said (`presence`
-in `tokenops explain <id>`), and `tokenops boundaries status` says whether
-this machine has a presence key. On every machine today it says
-*presence approval not enrolled*, once, and approvals work as described
-above.
+On a Mac with a Secure Enclave you can make an approval prove that a person
+at the machine gave it
+([ADR 0015](https://github.com/klarlabs-studio/tokenops/blob/main/docs/adr/0015-presence-checked-approval.md)).
+It is opt-in.
+
+```bash
+tokenops boundaries presence enroll    # create this Mac's key: one dialog
+tokenops boundaries presence enforce   # boundary_approval: presence
+tokenops boundaries presence status
+```
+
+`enroll` creates a key in the Secure Enclave that signs only after Touch ID,
+a paired Apple Watch or your login password, and has it sign once to prove
+it works. From then on `tokenops approve` (and `tokenops routing decide
+<key> approve`) shows the dialog and signs the approval: the decision, its
+rule and session, the scope, a fresh challenge for that raising of the
+decision and the figures you were shown. The pause point checks the
+signature against the enrolled key. A deny is never signed and never asks.
+
+`enforce` writes the setting to `config.yaml`:
+
+```yaml
+boundary_approval: presence   # or presence-strict, or channel (the default)
+```
+
+| Setting | What approves |
+|---|---|
+| `channel` (default) | your terminal and Claude Code's prompt, as above. With a key enrolled, approvals are signed and checked in shadow: nothing is refused, and `tokenops explain <id>` says what enforcement would have done |
+| `presence` | only an approval signed with the key, or one given at Claude Code's own permission prompt (labelled harness-attested) |
+| `presence-strict` | only a signed approval. Claude Code's prompt does not approve, so the pause point no longer asks there: it refuses with the `tokenops approve` command |
+
+With presence enforced:
+
+- `script -q /dev/null tokenops approve <id>` still gets a terminal, but
+  not a signature: nobody touched the sensor, so the approval is refused.
+- An answer file written by hand is not honoured. It is removed, recorded
+  on the decision as refused (`unsigned_answer_ignored`, `presence:
+  refused` with the reason in `tokenops explain <id>`), counted in
+  `tokenops boundaries status` and on the glance, and the agent's refusal
+  says why.
+- `POST /api/boundaries/decisions` and `POST /api/routing/decisions` take an
+  approval only with a valid `presence_proof`; the router honours a model
+  upgrade approval only when its signature verifies. The MCP tools still
+  only deny, and can no longer approve a model upgrade.
+- A replaced key file (not signed by the old key) holds every approval for
+  15 minutes and is announced on the glance, in the menu bar and in
+  `boundaries status` ("approval key replaced at …"). `tokenops boundaries
+  presence rotate` moves to a new key with the old key's signature (two
+  dialogs) and holds nothing; `enroll --replace` is for a new Mac or a lost
+  key.
+- With no key enrolled, approvals are refused with the enrol command; deny,
+  shadow rules and the team plane work as before.
+
+**The dialog names what you approve.** It reads "tokenops-presence is
+trying to approve TokenOps boundary "session-spend" (continue) in
+claude-code session 1a2b3c4d: …, for the next step only". A paired Apple
+Watch is offered every dialog and shows the same text: a double press on
+the wrist approves even while you reach for *Cancel* on screen. Approve
+only a dialog you started, and read what it names. Every signed approval
+is recorded with the key that signed it ("approved in person: signed with
+presence key pk-…"), so one you did not intend shows up in `tokenops
+explain <id>`; `tokenops deny <id>` takes it back for the rest of the
+step or session.
+
+**Where it cannot ask.** The dialog needs the logged-in user's screen.
+Over SSH, from a launchd job or in CI, and while the screen is locked, the
+helper refuses at once instead of waiting, and the approval is refused.
+Headless approval is exactly what this removes.
+
+**What it still does not guarantee.** A process running as you can edit
+`config.yaml` (set `boundary_approval: channel`, demote or delete the rule)
+until rules can be sealed in a later release, and can replace TokenOps'
+binaries or the key file; a replaced key is held and announced, not
+prevented. The settings endpoints (`/api/mode`, `/api/routing/rules`,
+`/api/budgets`, `/api/coach`) are not behind presence. Linux and Macs
+without a Secure Enclave keep the channel guarantees above.
+
+The helper, `tokenops-presence`, ships beside `tokenops` in the macOS
+release and inside `TokenOps.app`; the CLI and daemon stay pure Go. The
+menu bar's **Approve…** still opens a terminal running `tokenops approve
+<id> --confirm`, which now shows the dialog.
 
 ## Where a boundary is enforced
 

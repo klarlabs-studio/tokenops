@@ -72,7 +72,9 @@ func RegisterDecisionTools(s *Server, d DecisionDeps) error {
 			if err != nil {
 				return nil, inputError(err)
 			}
-			st, err := bcap.RuleStatuses(bcap.AllRules(cfg), d.Boundaries, bcap.Wired(cfg))
+			env := d.Boundaries
+			env.Approval = cfg.ApprovalMode()
+			st, err := bcap.RuleStatuses(bcap.AllRules(cfg), env, bcap.Wired(cfg))
 			if err != nil {
 				return nil, err
 			}

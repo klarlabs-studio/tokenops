@@ -3,6 +3,7 @@ package routers
 import (
 	"log/slog"
 
+	"go.klarlabs.de/tokenops/internal/capability/actions"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/optimizer/router"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/routingapproval"
@@ -37,6 +38,7 @@ func OpenApprovals() (*Approvals, error) {
 // after a daemon restart would be worse than useless.
 func AttachApprovalGate(rc *Config, cfg config.Config, store *Approvals, logger *slog.Logger) {
 	rc.PreferredModel = cfg.PreferredModel
+	mode := cfg.ApprovalMode()
 
 	rc.UpgradeDecision = func(provider eventschema.Provider, from, to string) router.Decision {
 		state, err := store.Load()
@@ -54,6 +56,17 @@ func AttachApprovalGate(rc *Config, cfg config.Config, store *Approvals, logger 
 		}
 		switch st.Decision {
 		case string(router.DecisionApproved):
+			// With boundary_approval: presence an approval counts only with
+			// the presence key's signature (ADR 0015 §3): one appended to the
+			// log by hand, or before enforcement, leaves the upgrade
+			// waiting on a signed answer.
+			if mode.Enforced() {
+				if res := actions.VerifyRoutingProof(store, st, st.Proof, st.At); !res.OK() {
+					logger.Warn("routing approval not honoured: boundary_approval is "+string(mode),
+						"route", key, "reason", string(res.Reason))
+					return router.DecisionPending
+				}
+			}
 			return router.DecisionApproved
 		case string(router.DecisionDenied):
 			return router.DecisionDenied

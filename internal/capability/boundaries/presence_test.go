@@ -178,8 +178,11 @@ func TestPresenceShadowVerifiesASignedApproval(t *testing.T) {
 		}
 		a, rationale := appliedApproval(t, env, id)
 		raw, _ := priv.PublicKey.Bytes()
+		// The decision says the approval was given in person, with the key,
+		// so one given by a paired Watch the operator did not intend is
+		// visible afterwards (ADR 0015, spike results).
 		if a.Presence != PresenceSigned || a.PresenceKey != presence.KeyID(raw) || a.WouldRefuse != "" ||
-			strings.Contains(rationale, "presence") {
+			strings.Contains(rationale, "shadow") || !strings.Contains(rationale, "approved in person: signed with presence key "+a.PresenceKey) {
 			t.Fatalf("session=%v: approval = %+v; rationale %q", session, a, rationale)
 		}
 	}

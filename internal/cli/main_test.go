@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"go.klarlabs.de/tokenops/internal/infra/presence/presencetest"
 )
 
 // TestMain pins $HOME to a throwaway directory for every test in this
@@ -21,6 +23,9 @@ import (
 // Setting it here makes the isolation structural rather than a convention
 // a future test can forget.
 func TestMain(m *testing.M) {
+	// A run of this binary as the fake presence helper answers and exits
+	// before anything else (presencetest).
+	presencetest.MaybeRunHelper()
 	sandbox, err := os.MkdirTemp("", "tokenops-cli-test-home")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "create sandbox home: %v\n", err)

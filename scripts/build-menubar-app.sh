@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Builds TokenOps.app, the menu bar app (apps/menubar), for the release.
+# Builds TokenOps.app, the menu bar app (apps/menubar), for the release,
+# with the presence helper (scripts/build-presence-helper.sh) inside it and
+# beside it in <out-dir>.
 #
 # macOS only: Vitra's native tray needs cgo against AppKit. The app is one
 # universal binary (arm64 + x86_64) so both darwin archives carry the same
@@ -40,10 +42,18 @@ go run "go.klarlabs.de/vitra/cmd/vitra@$vitra_version" package \
 
 app=$(find "$work/pkg" -maxdepth 2 -name '*.app' -type d | head -1)
 [ -n "$app" ] || { echo "vitra package produced no .app" >&2; exit 1; }
+# The presence helper (ADR 0015) goes inside the bundle, before the bundle
+# is signed, and beside it in the output for the darwin archives' top level.
+"$here/scripts/build-presence-helper.sh" "$work/presence"
+cp "$work/presence/tokenops-presence" "$app/Contents/MacOS/tokenops-presence"
 codesign --force --deep --sign - "$app"
 codesign --verify --deep --strict "$app"
 
 mkdir -p "$out"
 rm -rf "$out/TokenOps.app"
 cp -R "$app" "$out/TokenOps.app"
-echo "built $out/TokenOps.app ($(lipo -archs "$out/TokenOps.app/Contents/MacOS/"* | head -1))"
+cp "$work/presence/tokenops-presence" "$out/tokenops-presence"
+echo "built $out/TokenOps.app:"
+for f in "$out/TokenOps.app/Contents/MacOS/"*; do
+  echo "  $(basename "$f") ($(lipo -archs "$f"))"
+done
