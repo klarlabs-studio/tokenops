@@ -1205,12 +1205,17 @@ func (x *DecisionActor) GetUser() string {
 
 // DecisionApproval is who answered a decision that needed approval.
 type DecisionApproval struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Approver      string                 `protobuf:"bytes,1,opt,name=approver,proto3" json:"approver,omitempty"`
-	Method        string                 `protobuf:"bytes,2,opt,name=method,proto3" json:"method,omitempty"`
-	At            *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=at,proto3" json:"at,omitempty"`
-	Rule          string                 `protobuf:"bytes,4,opt,name=rule,proto3" json:"rule,omitempty"`
-	Scope         string                 `protobuf:"bytes,5,opt,name=scope,proto3" json:"scope,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Approver string                 `protobuf:"bytes,1,opt,name=approver,proto3" json:"approver,omitempty"`
+	Method   string                 `protobuf:"bytes,2,opt,name=method,proto3" json:"method,omitempty"`
+	At       *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=at,proto3" json:"at,omitempty"`
+	Rule     string                 `protobuf:"bytes,4,opt,name=rule,proto3" json:"rule,omitempty"`
+	Scope    string                 `protobuf:"bytes,5,opt,name=scope,proto3" json:"scope,omitempty"`
+	// presence: signed, harness, team, unverified or not_enrolled (ADR 0015).
+	Presence    string `protobuf:"bytes,6,opt,name=presence,proto3" json:"presence,omitempty"`
+	PresenceKey string `protobuf:"bytes,7,opt,name=presence_key,json=presenceKey,proto3" json:"presence_key,omitempty"`
+	// would_refuse: in shadow, why enforcement would not honour the approval.
+	WouldRefuse   string `protobuf:"bytes,8,opt,name=would_refuse,json=wouldRefuse,proto3" json:"would_refuse,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1276,6 +1281,27 @@ func (x *DecisionApproval) GetRule() string {
 func (x *DecisionApproval) GetScope() string {
 	if x != nil {
 		return x.Scope
+	}
+	return ""
+}
+
+func (x *DecisionApproval) GetPresence() string {
+	if x != nil {
+		return x.Presence
+	}
+	return ""
+}
+
+func (x *DecisionApproval) GetPresenceKey() string {
+	if x != nil {
+		return x.PresenceKey
+	}
+	return ""
+}
+
+func (x *DecisionApproval) GetWouldRefuse() string {
+	if x != nil {
+		return x.WouldRefuse
 	}
 	return ""
 }
@@ -2410,13 +2436,16 @@ const file_pkg_eventschema_proto_v1_events_proto_rawDesc = "" +
 	"\n" +
 	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x19\n" +
 	"\bagent_id\x18\x03 \x01(\tR\aagentId\x12\x12\n" +
-	"\x04user\x18\x04 \x01(\tR\x04user\"\x9c\x01\n" +
+	"\x04user\x18\x04 \x01(\tR\x04user\"\xfe\x01\n" +
 	"\x10DecisionApproval\x12\x1a\n" +
 	"\bapprover\x18\x01 \x01(\tR\bapprover\x12\x16\n" +
 	"\x06method\x18\x02 \x01(\tR\x06method\x12*\n" +
 	"\x02at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\x12\x12\n" +
 	"\x04rule\x18\x04 \x01(\tR\x04rule\x12\x14\n" +
-	"\x05scope\x18\x05 \x01(\tR\x05scope\"\xda\x01\n" +
+	"\x05scope\x18\x05 \x01(\tR\x05scope\x12\x1a\n" +
+	"\bpresence\x18\x06 \x01(\tR\bpresence\x12!\n" +
+	"\fpresence_key\x18\a \x01(\tR\vpresenceKey\x12!\n" +
+	"\fwould_refuse\x18\b \x01(\tR\vwouldRefuse\"\xda\x01\n" +
 	"\rOutcomeMetric\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04unit\x18\x02 \x01(\tR\x04unit\x12\x14\n" +

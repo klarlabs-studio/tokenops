@@ -140,6 +140,35 @@
                       },
                       "type": "array"
                     },
+                    "presence": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "harness_attested": {
+                          "type": "integer"
+                        },
+                        "hold_until": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "key_id": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        },
+                        "since": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "would_be_ignored": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
                     "rules": {
                       "items": {
                         "additionalProperties": false,
@@ -1518,10 +1547,19 @@
                             "method": {
                               "type": "string"
                             },
+                            "presence": {
+                              "type": "string"
+                            },
+                            "presence_key": {
+                              "type": "string"
+                            },
                             "rule": {
                               "type": "string"
                             },
                             "scope": {
+                              "type": "string"
+                            },
+                            "would_refuse": {
                               "type": "string"
                             }
                           },
