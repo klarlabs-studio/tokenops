@@ -2170,7 +2170,10 @@ by its key: `approve` routes matching requests to the proposed model from
 the next request, `deny` keeps the requested one. The menu bar and
 `POST /api/routing/decisions` answer the same way; an agent's
 `tokenops_routing` `decide` applies only once you confirm it at your MCP
-client.
+client. With a [presence key](#tokenops-boundaries-presence-enroll-enforce-status-rotate)
+enrolled, `decide … approve` shows the Touch ID dialog and signs the
+approval; with `boundary_approval: presence` an upgrade approval counts only
+when signed, and an agent cannot approve one at all.
 
 ### `tokenops boundaries {status|promote|demote|headroom-pause}`
 
@@ -2209,6 +2212,31 @@ installs the pause point in Claude Code and opencode. A config that already
 has a `continue` rule on `plan_left_pct` is left as it is. Like `promote`,
 it has no MCP equivalent.
 
+### `tokenops boundaries presence {enroll|enforce|status|rotate}`
+
+[Presence-checked approval](/guide/boundaries#presence-checked-approval) on
+a Mac with a Secure Enclave: an approval signed by a key that asks for
+Touch ID, a paired Apple Watch or your password every time.
+
+```bash
+tokenops boundaries presence enroll             # create and enrol the key: one dialog
+tokenops boundaries presence enroll --replace   # new Mac or lost key: approvals held 15 minutes
+tokenops boundaries presence enforce            # boundary_approval: presence
+tokenops boundaries presence enforce --strict   # presence-strict: Claude Code's prompt no longer approves
+tokenops boundaries presence enforce --off      # back to channel
+tokenops boundaries presence status [--json]
+tokenops boundaries presence rotate             # new key, signed by the old one: two dialogs, no hold
+```
+
+`enroll` writes the key to `~/.tokenops/presence` (the public key, the
+Secure Enclave's wrapped private key, which only this Mac can use, and the
+key's signature over its enrolment). `enforce` refuses while no key is
+enrolled. `status` says what is set and enrolled, how many approvals were
+not honoured, and whether the `tokenops-presence` helper was found. The
+helper ships beside `tokenops` in the macOS release and inside
+`TokenOps.app`. None of these has an MCP equivalent: enrolling raises the
+dialog, and requiring it is the operator's act, as `promote` is.
+
 ### `tokenops approve <id>`
 
 Answer a boundary that asked or refused. The id is the `bnd-…` one in the
@@ -2230,7 +2258,17 @@ again after it. The answer is recorded on the decision with your user
 name, so `tokenops explain bnd-…` shows the rule, what was crossed, and
 who answered how. `approve` runs only at a terminal: the agent a boundary
 stopped can run commands too. The MCP tool `tokenops_boundaries`
-(`action=decide`) and `POST /api/boundaries/decisions` can only deny.
+(`action=decide`) can only deny; `POST /api/boundaries/decisions` approves
+only with a `presence_proof`.
+
+With a presence key enrolled, `approve` shows the Touch ID dialog, which
+names the rule, the action and the session, and signs the approval; the
+answer is recorded with the key that signed it. With `boundary_approval:
+presence` an approval that cannot be signed (no helper, nobody at the
+screen, a locked screen, a cancelled dialog) is refused, and so is the
+same command run through `script` or another pseudo-terminal without you at
+the sensor. Under `channel` it goes on unsigned with a note, unless you
+cancelled the dialog. `deny` is never signed.
 
 Decisions an organisation rule sent to a role cannot be approved here;
 `approve` says who answers them. `deny` still works.

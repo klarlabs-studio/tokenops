@@ -120,11 +120,35 @@ jobs:
       - name: Package TokenOps.app
         working-directory: .
         # A relative output path, as the release passes it.
-        run: scripts/build-menubar-app.sh v0.0.0-ci menubar-dist && test -d menubar-dist/TokenOps.app
+        run: |
+          scripts/build-menubar-app.sh v0.0.0-ci menubar-dist
+          test -d menubar-dist/TokenOps.app
+          test -x menubar-dist/tokenops-presence
+          test -x menubar-dist/TokenOps.app/Contents/MacOS/tokenops-presence
+      # Without a key or a person the helper must refuse at once, never wait
+      # on a dialog: exit 4 (no screen) or 5 (locked) where the runner has
+      # no unlocked user session, 8 (no key blob) where it has one, 3 on a
+      # runner without a Secure Enclave. ADR 0015's validation step 1 asks
+      # for the no-screen case here; the log says which one this runner hit.
+      - name: The presence helper fails fast without a screen
+        working-directory: .
+        run: |
+          set +e
+          start=$(date +%s)
+          echo probe | menubar-dist/tokenops-presence sign --blob /nonexistent --reason "ci probe"
+          code=$?
+          elapsed=$(( $(date +%s) - start ))
+          echo "exit $code after ${elapsed}s"
+          test "$elapsed" -lt 10 || { echo "::error::the helper waited ${elapsed}s"; exit 1; }
+          case "$code" in
+            3|4|5) echo "refused as expected" ;;
+            8) echo "::notice::this runner has an unlocked user session; the helper refused for want of a key (the no-screen path was not exercised)" ;;
+            *) echo "::error::unexpected exit $code (want 3, 4, 5 or 8)"; exit 1 ;;
+          esac
       # Handed to "Release dry run", as release.yml hands it to goreleaser.
       - name: Pack
         working-directory: .
-        run: tar -czf menubar-app.tar.gz -C menubar-dist TokenOps.app
+        run: tar -czf menubar-app.tar.gz -C menubar-dist TokenOps.app tokenops-presence
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: menubar-app
@@ -162,6 +186,21 @@ jobs:
       # release.yml's npm job unpacks every tokenops_<version>_*.tar.gz it
       # finds in the release and verifies them against checksums.txt:
       # exactly the four CLI archives.
+      # Only the darwin archives carry the presence helper, at the top level
+      # and inside TokenOps.app; the linux ones are unchanged.
+      - name: The darwin archives carry the presence helper
+        run: |
+          set -euo pipefail
+          cd dist
+          for f in tokenops_*_darwin_*.tar.gz; do
+            tar -tzf "$f" > contents.txt
+            grep -qx 'tokenops-presence' contents.txt || { echo "::error::$f lacks tokenops-presence"; exit 1; }
+            grep -q 'TokenOps.app/Contents/MacOS/tokenops-presence$' contents.txt || { echo "::error::$f: TokenOps.app lacks the helper"; exit 1; }
+            tar -tvzf "$f" tokenops-presence | grep -q '^-rwx' || { echo "::error::$f: tokenops-presence is not executable"; exit 1; }
+          done
+          for f in tokenops_*_linux_*.tar.gz; do
+            if tar -tzf "$f" | grep -q 'presence'; then echo "::error::$f carries the presence helper"; exit 1; fi
+          done
       - name: The npm job still selects only the CLI archives
         run: |
           set -euo pipefail

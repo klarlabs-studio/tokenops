@@ -69,9 +69,10 @@ func watchesAPlan(g *headroom.Glance) bool {
 	return false
 }
 
-// presenceFindings say what presence-checked approval (ADR 0015) found
-// while in shadow: a key replaced without the old key's signature, and
-// approvals enforcement would not have honoured. A machine with no key
+// presenceFindings say what presence-checked approval (ADR 0015) found: a
+// key replaced without the old key's signature, approvals enforcement would
+// not have honoured (in shadow) or did not honour, and enforcement turned
+// on with no key to approve with. A machine with no key
 // enrolled, every one until enrolment ships, gets none: boundaries status
 // says that once.
 func presenceFindings(p *boundaries.PresenceStatus) []Finding {
@@ -79,6 +80,22 @@ func presenceFindings(p *boundaries.PresenceStatus) []Finding {
 		return nil
 	}
 	var out []Finding
+	if p.State == boundaries.PresenceStateUnavailable {
+		out = append(out, Finding{Kind: KindBoundary, Level: LevelWarn,
+			Title:    "Presence approval is on, and no key is enrolled",
+			Evidence: p.Note,
+			Action:   "Enrol this Mac's key: " + boundaries.EnrolCommand})
+	}
+	if p.Refused > 0 {
+		word := "approvals were"
+		if p.Refused == 1 {
+			word = "approval was"
+		}
+		out = append(out, Finding{Kind: KindBoundary, Level: LevelNotice,
+			Title: fmt.Sprintf("%d %s not honoured: not signed by this Mac's presence key", p.Refused, word),
+			Evidence: "each decision says why (`tokenops explain <id>`); an approval written by something other than you " +
+				"shows up here"})
+	}
 	if p.State == boundaries.PresenceStateHeld {
 		out = append(out, Finding{Kind: KindBoundary, Level: LevelWarn,
 			Title:    "The approval key was replaced",
@@ -104,7 +121,7 @@ func presenceStatus(cfg *config.Config) *boundaries.PresenceStatus {
 	if cfg == nil {
 		return nil
 	}
-	p := boundaries.Presence(boundaries.Env{})
+	p := boundaries.Presence(boundaries.Env{Approval: cfg.ApprovalMode()})
 	return &p
 }
 

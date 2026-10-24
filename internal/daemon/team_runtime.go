@@ -66,7 +66,7 @@ func startTeamUploadRuntime(cfg config.Config, components *bootstrap.Components,
 // figures leave. Nil when no rule concerns sharing.
 func shareAllowed(cfg config.Config, destination string) func() error {
 	rules := bcap.LiveRules(cfg)
-	return func() error { return bcap.CheckShare(rules(), destination, bcap.Env{}) }
+	return func() error { return bcap.CheckShare(rules(), destination, bcap.Env{Approval: cfg.ApprovalMode()}) }
 }
 
 func uploadTeamOnce(ctx context.Context, deps teamshare.Deps, opts teamshare.Options, path string, logger *slog.Logger) {

@@ -145,6 +145,14 @@ tokenops boundaries status --json`,
 	"boundaries headroom-pause": `tokenops boundaries headroom-pause
 tokenops boundaries promote headroom-pause`,
 	"boundaries demote": `tokenops boundaries demote session-spend`,
+	"boundaries presence enroll": `tokenops boundaries presence enroll             # one Touch ID or password dialog
+tokenops boundaries presence enroll --replace   # new Mac or lost key: approvals held 15 minutes`,
+	"boundaries presence enforce": `tokenops boundaries presence enforce            # boundary_approval: presence
+tokenops boundaries presence enforce --strict   # Claude Code's prompt no longer approves
+tokenops boundaries presence enforce --off`,
+	"boundaries presence status": `tokenops boundaries presence status
+tokenops boundaries presence status --json`,
+	"boundaries presence rotate": `tokenops boundaries presence rotate`,
 	"approve": `tokenops approve bnd-1a2b3c4d5e6f            # the agent's next step
 tokenops approve bnd-1a2b3c4d5e6f --session  # the rest of the session`,
 	"deny":                  `tokenops deny bnd-1a2b3c4d5e6f --session`,

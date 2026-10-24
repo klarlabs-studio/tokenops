@@ -1,6 +1,9 @@
 package config
 
-import "go.klarlabs.de/tokenops/internal/contexts/boundaries"
+import (
+	"go.klarlabs.de/tokenops/internal/contexts/boundaries"
+	"go.klarlabs.de/tokenops/internal/contexts/boundaries/presence"
+)
 
 // BoundaryRules are the boundaries section and the hard budget windows'
 // rules, in the domain's form (ADR
@@ -12,4 +15,15 @@ func (c Config) BoundaryRules() []boundaries.Rule {
 		return nil
 	}
 	return rules
+}
+
+// ApprovalMode is how approvals are checked (boundary_approval). Load has
+// already validated it; a value that does not parse is the default,
+// channel, which is what a Config built without Load had before.
+func (c Config) ApprovalMode() presence.Mode {
+	m, err := presence.ParseMode(c.BoundaryApproval)
+	if err != nil {
+		return presence.ModeChannel
+	}
+	return m
 }

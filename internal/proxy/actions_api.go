@@ -2,12 +2,14 @@ package proxy
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"mime"
 	"net/http"
+	"os"
 	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/actions"
@@ -120,17 +122,70 @@ type PreferredModelRequest struct {
 	Clear    bool   `json:"clear"`
 }
 
-// RoutingDecisionRequest answers a pending routing proposal: approve or deny.
+// RoutingDecisionRequest answers a pending routing proposal: approve or deny. With boundary_approval: presence an approval needs presence_proof, the presence key's signature over it.
 type RoutingDecisionRequest struct {
-	Key      string `json:"key"`
-	Decision string `json:"decision"`
+	Key           string         `json:"key"`
+	Decision      string         `json:"decision"`
+	PresenceProof *PresenceProof `json:"presence_proof,omitempty"`
 }
 
-// BoundaryDecisionRequest answers a boundary that asked or refused: approve or deny, for the next step or the session.
+// PresenceProof is the presence key's signature over an approval (ADR 0015): the signed statement's fields, and sig, the base64 ASN.1 DER ECDSA P-256 signature over SHA-256 of its canonical encoding (tokenops.approval/v1). `tokenops approve` makes one; it is checked against this machine's enrolled key.
+type PresenceProof struct {
+	V         int       `json:"v"`
+	Key       string    `json:"key"`
+	Decision  string    `json:"decision"`
+	Rule      string    `json:"rule"`
+	Session   string    `json:"session"`
+	Scope     string    `json:"scope"`
+	Challenge string    `json:"challenge"`
+	Crossed   string    `json:"crossed"`
+	Issued    time.Time `json:"issued"`
+	Sig       string    `json:"sig" jsonschema:"description=base64 ASN.1 DER ECDSA P-256 signature"`
+}
+
+// proof is the request's proof in the domain's form; nil when absent.
+func (p *PresenceProof) proof() (*boundaries.Proof, error) {
+	if p == nil {
+		return nil, nil
+	}
+	sig, err := base64.StdEncoding.DecodeString(p.Sig)
+	if err != nil {
+		return nil, actions.InputError{Err: errors.New("presence_proof.sig is not base64")}
+	}
+	return &boundaries.Proof{
+		V: p.V, Key: p.Key, Decision: p.Decision, Rule: p.Rule, Session: p.Session, Scope: p.Scope,
+		Challenge: p.Challenge, Crossed: p.Crossed, Issued: p.Issued, Sig: sig,
+	}, nil
+}
+
+// BoundaryDecisionRequest answers a boundary that asked or refused: approve or deny, for the next step or the session. An approval needs presence_proof, the presence key's signature over it; a deny needs nothing.
 type BoundaryDecisionRequest struct {
-	ID       string `json:"id"`
-	Decision string `json:"decision"`
-	Session  bool   `json:"session"`
+	ID            string         `json:"id"`
+	Decision      string         `json:"decision"`
+	Session       bool           `json:"session"`
+	PresenceProof *PresenceProof `json:"presence_proof,omitempty"`
+}
+
+// approvalMode reads boundary_approval from the config the daemon runs
+// with. It is read per answer, so a change takes effect without a
+// restart; a config that cannot be read fails the answer rather than
+// guessing.
+func approvalMode(path string) (boundaries.ApprovalMode, error) {
+	if path == "" {
+		p, err := config.DefaultPath()
+		if err != nil {
+			return "", err
+		}
+		path = p
+	}
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return boundaries.ApprovalChannel, nil
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		return "", err
+	}
+	return cfg.ApprovalMode(), nil
 }
 
 // OutcomeRequest records the operator's judgement of an execution: achieved, partial or not_achieved.
@@ -197,20 +252,38 @@ func (s *Server) registerActionRoutes(mux RouteMux) {
 		}
 		return actions.SetPreferredModel(path, in.Provider, in.Model, in.Clear)
 	}))
-	mux.HandleFunc("POST /api/routing/decisions", s.action("routing_decision", noRestart, func(r *http.Request, _ string) (any, error) {
+	mux.HandleFunc("POST /api/routing/decisions", s.action("routing_decision", noRestart, func(r *http.Request, path string) (any, error) {
 		var in RoutingDecisionRequest
 		if err := decodeAction(r, &in); err != nil {
 			return nil, err
 		}
-		return actions.DecideRouting("", in.Key, in.Decision)
+		mode, err := approvalMode(path)
+		if err != nil {
+			return nil, err
+		}
+		proof, err := in.PresenceProof.proof()
+		if err != nil {
+			return nil, err
+		}
+		return actions.AnswerRouting(actions.RoutingAnswer{
+			Key: in.Key, Decision: in.Decision, Approval: mode, Proof: proof, Method: actions.RoutingMethodAPI,
+		})
 	}))
-	mux.HandleFunc("POST /api/boundaries/decisions", s.action("boundary_decision", noRestart, func(r *http.Request, _ string) (any, error) {
+	mux.HandleFunc("POST /api/boundaries/decisions", s.action("boundary_decision", noRestart, func(r *http.Request, path string) (any, error) {
 		var in BoundaryDecisionRequest
 		if err := decodeAction(r, &in); err != nil {
 			return nil, err
 		}
-		return boundaries.Decide(boundaries.Env{}, boundaries.DecideRequest{
-			ID: in.ID, Decision: in.Decision, Session: in.Session, Method: boundaries.MethodAPI,
+		mode, err := approvalMode(path)
+		if err != nil {
+			return nil, err
+		}
+		proof, err := in.PresenceProof.proof()
+		if err != nil {
+			return nil, err
+		}
+		return boundaries.Decide(boundaries.Env{Approval: mode}, boundaries.DecideRequest{
+			ID: in.ID, Decision: in.Decision, Session: in.Session, Proof: proof, Method: boundaries.MethodAPI,
 		})
 	}))
 	mux.HandleFunc("POST /api/outcomes", s.action("outcome", noRestart, func(r *http.Request, _ string) (any, error) {
