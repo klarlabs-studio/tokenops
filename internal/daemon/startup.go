@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log/slog"
 	"os"
@@ -44,7 +45,12 @@ type startup struct {
 	ingest    events.Bus
 	opts      []proxy.Option
 	dashToken string
-	server    *proxy.Server
+	// tlsConfig is the certificate bundle's config when TLS is on.
+	tlsConfig *tls.Config
+	// early holds the address from the start of the boot (listenEarly);
+	// serve hands it to the proxy server.
+	early  *proxy.EarlyListener
+	server *proxy.Server
 
 	// cleanups run in reverse order when the run ends, as the deferred
 	// calls they replace did.
@@ -58,12 +64,13 @@ type startupStep func(ctx context.Context) error
 func (s *startup) steps() []startupStep {
 	return []startupStep{
 		s.announce,
+		s.configureTLS,
+		s.listenEarly,
 		s.buildComponents,
 		s.resolveLegacyEventLog,
 		s.buildProviderRoutes,
 		s.startSupervision,
 		s.buildTransportOptions,
-		s.configureTLS,
 		s.startEventRuntime,
 		s.startStorageSubsystems,
 		s.configureAPIAuth,
@@ -218,7 +225,26 @@ func (s *startup) configureTLS(context.Context) error {
 		"cert_dir", bundle.Dir,
 		"leaf_not_after", bundle.LeafCert.NotAfter,
 	)
-	s.opts = append(s.opts, proxy.WithTLS(bundle.TLSConfig()))
+	s.tlsConfig = bundle.TLSConfig()
+	s.opts = append(s.opts, proxy.WithTLS(s.tlsConfig))
+	return nil
+}
+
+// listenEarly binds the listen address before anything slow runs, so
+// the probes answer within moments of a start however large the store
+// is or however long the rest of the boot takes. Until serve hands the
+// listener to the proxy server, /healthz answers with state "starting"
+// and the API with 503 "starting" (see proxy.EarlyListener). The boot
+// used to bind only once the store was open, migrated and read, which on
+// a large store under load took 45s: `daemon restart` gave up at 20s.
+func (s *startup) listenEarly(context.Context) error {
+	early, err := proxy.ListenEarly(s.cfg.Listen, s.tlsConfig, proxyAllowedHosts(s.cfg, hostnameOrEmpty()), s.logger)
+	if err != nil {
+		return fmt.Errorf("start proxy: %w", err)
+	}
+	s.early = early
+	s.deferCleanup(func() { _ = early.Close() })
+	s.opts = append(s.opts, proxy.WithEarlyListener(early))
 	return nil
 }
 
@@ -273,7 +299,7 @@ func (s *startup) startStorageSubsystems(ctx context.Context) error {
 	routes := startRouteHistory(s.sup, s.logger)
 	s.startCorrections(store, routes)
 	// The composition root builds and starts the vendor-usage pollers.
-	s.ingest = ingestionBus(ctx, s.events.Bus, store, s.logger)
+	s.ingest = ingestionBus(ctx, s.events.Bus, store, s.sup, s.logger)
 	refresh := bootstrap.StartVendorUsagePollers(s.cfg, s.ingest, s.sourceHealth, claudeCodeBaseURLAt(routes), s.sup, s.logger)
 	s.opts = append(s.opts, proxy.WithSourcesRefresh(refresh))
 

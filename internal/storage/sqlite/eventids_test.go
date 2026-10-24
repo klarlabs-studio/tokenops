@@ -19,7 +19,7 @@ func TestEachEventIDStreamsEveryStoredID(t *testing.T) {
 		}
 	}
 	var got []string
-	if err := s.EachEventID(ctx, func(id string) { got = append(got, id) }); err != nil {
+	if err := s.EachEventID(ctx, func(id []byte) { got = append(got, string(id)) }); err != nil {
 		t.Fatalf("EachEventID: %v", err)
 	}
 	slices.Sort(got)

@@ -161,7 +161,7 @@ func TestDaemonInstallPassesWhetherTheUnitChanged(t *testing.T) {
 		seen = append(seen, changed)
 		return nil
 	}
-	awaitDaemonHealth = func(context.Context, string, time.Duration) error { return nil }
+	awaitDaemonHealth = func(context.Context, string, time.Duration) (bool, error) { return false, nil }
 	t.Cleanup(func() {
 		applyUnit = prev
 		awaitDaemonHealth = prevAwait
@@ -187,8 +187,8 @@ func TestDaemonInstallPassesWhetherTheUnitChanged(t *testing.T) {
 func TestDaemonInstallDoesNotClaimRunningBeforeHealthAnswers(t *testing.T) {
 	prevApply, prevAwait := applyUnit, awaitDaemonHealth
 	applyUnit = func(daemon.UnitKind, string, bool) error { return nil }
-	awaitDaemonHealth = func(context.Context, string, time.Duration) error {
-		return errors.New("connection refused")
+	awaitDaemonHealth = func(context.Context, string, time.Duration) (bool, error) {
+		return false, errors.New("connection refused")
 	}
 	t.Cleanup(func() {
 		applyUnit = prevApply
