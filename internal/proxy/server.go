@@ -86,6 +86,10 @@ type Server struct {
 	planCovered func(eventschema.Provider) bool
 	costEngine  *spend.Engine
 
+	// early, when set, is the listener the boot bound before the server
+	// was built (WithEarlyListener); Start takes it over.
+	early *EarlyListener
+
 	mu       sync.Mutex
 	httpSrv  *http.Server
 	listener net.Listener
@@ -285,10 +289,16 @@ func (s *Server) Start(ctx context.Context) error {
 		return errors.New("proxy: server already started")
 	}
 
-	ln, err := net.Listen("tcp", s.addr)
-	if err != nil {
-		s.mu.Unlock()
-		return err
+	var ln net.Listener
+	if s.early != nil {
+		ln = s.early.ln
+	} else {
+		l, err := net.Listen("tcp", s.addr)
+		if err != nil {
+			s.mu.Unlock()
+			return err
+		}
+		ln = l
 	}
 	s.listener = ln
 	s.listenAt = ln.Addr().String()
@@ -305,24 +315,37 @@ func (s *Server) Start(ctx context.Context) error {
 
 	if err := s.registerProviderRoutes(mux); err != nil {
 		s.mu.Unlock()
-		_ = ln.Close()
+		if s.early == nil {
+			_ = ln.Close()
+		}
 		return fmt.Errorf("provider routes: %w", err)
 	}
 
-	s.httpSrv = &http.Server{
-		Handler:           newHostGuard(s.addr, s.allowedHosts).middleware(s.logger, mux),
-		ReadHeaderTimeout: 10 * time.Second,
-		// ReadTimeout bounds receiving the request; net/http clears the
-		// connection's read deadline once the body has been read to the
-		// end, so it never limits how long a reply streams. WriteTimeout
-		// stays unset on purpose: it is connection-wide and would cut
-		// long streaming replies.
-		ReadTimeout: s.readTimeout,
-		IdleTimeout: defaultIdleTimeout,
-		TLSConfig:   s.tlsConfig,
+	handler := newHostGuard(s.addr, s.allowedHosts).middleware(s.logger, mux)
+	early := s.early
+	if early != nil {
+		// The early listener's server keeps every connection it has
+		// accepted; from here on it serves them with the full handler.
+		s.httpSrv, _ = early.handOver(handler)
+	} else {
+		s.httpSrv = &http.Server{
+			Handler:           handler,
+			ReadHeaderTimeout: 10 * time.Second,
+			// ReadTimeout bounds receiving the request; net/http clears the
+			// connection's read deadline once the body has been read to the
+			// end, so it never limits how long a reply streams. WriteTimeout
+			// stays unset on purpose: it is connection-wide and would cut
+			// long streaming replies.
+			ReadTimeout: s.readTimeout,
+			IdleTimeout: defaultIdleTimeout,
+			TLSConfig:   s.tlsConfig,
+		}
 	}
 	srv := s.httpSrv
 	tlsCfg := s.tlsConfig
+	if early != nil {
+		tlsCfg = early.tlsCfg
+	}
 	s.mu.Unlock()
 
 	s.logger.Info("proxy listening",
@@ -339,6 +362,11 @@ func (s *Server) Start(ctx context.Context) error {
 			s.logger.Error("proxy shutdown", "err", err)
 		}
 	}()
+
+	if early != nil {
+		// Already serving: ListenEarly owns the Serve goroutine.
+		return nil
+	}
 
 	go func() {
 		var serveErr error
