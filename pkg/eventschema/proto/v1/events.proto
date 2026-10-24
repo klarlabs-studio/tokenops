@@ -170,6 +170,11 @@ message DecisionApproval {
   google.protobuf.Timestamp at = 3;
   string rule = 4;
   string scope = 5;
+  // presence: signed, harness, team, unverified or not_enrolled (ADR 0015).
+  string presence = 6;
+  string presence_key = 7;
+  // would_refuse: in shadow, why enforcement would not honour the approval.
+  string would_refuse = 8;
 }
 
 message OutcomeMetric {

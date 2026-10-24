@@ -65,3 +65,33 @@ func TestHeadroomPauseFindings(t *testing.T) {
 		})
 	}
 }
+
+func TestPresenceFindings(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		presence *boundaries.PresenceStatus
+		want     []string
+	}{
+		{name: "unknown says nothing"},
+		{name: "not enrolled says nothing", presence: &boundaries.PresenceStatus{State: boundaries.PresenceStateNotEnrolled}},
+		{name: "enrolled with nothing to show says nothing", presence: &boundaries.PresenceStatus{State: boundaries.PresenceStateShadow}},
+		{name: "approvals that would not have been honoured", presence: &boundaries.PresenceStatus{State: boundaries.PresenceStateShadow, WouldBeIgnored: 2},
+			want: []string{"2 approvals would not have been honoured"}},
+		{name: "one reads as one", presence: &boundaries.PresenceStatus{State: boundaries.PresenceStateShadow, WouldBeIgnored: 1},
+			want: []string{"1 approval would not"}},
+		{name: "a replaced key is announced first", presence: &boundaries.PresenceStatus{State: boundaries.PresenceStateHeld, WouldBeIgnored: 1, Note: "approval key replaced at …"},
+			want: []string{"The approval key was replaced", "1 approval would not"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := pauseFindings(Compute(Inputs{Presence: tc.presence}))
+			if len(got) != len(tc.want) {
+				t.Fatalf("findings = %+v, want %d", got, len(tc.want))
+			}
+			for i, w := range tc.want {
+				if !strings.Contains(got[i].Title, w) {
+					t.Errorf("finding %d = %q, want %q in it", i, got[i].Title, w)
+				}
+			}
+		})
+	}
+}
