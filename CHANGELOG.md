@@ -1878,7 +1878,7 @@ what happened in them. Both were reachable only by reading code before.
 
 - **Summed per-turn tokens are not a cost.** Every turn re-sends the
   accumulated context, so the sum double-counts — the figure that reads
-  as $94k where cache-aware pricing says $10k. `story` reports peak
+  about nine times what cache-aware pricing says. `story` reports peak
   context, and the JSON field is named `context_carried_tokens`.
 
 - **Nine GitHub Actions findings were hidden behind a suppression written
@@ -3322,8 +3322,7 @@ surfaces coach findings (oversized context, runaway growth).
   recompute reads it back from the payload JSON, with a fallback
   to `attributes.cache_read_input` so existing events re-cost
   correctly without a re-ingest. Verified end-to-end on a
-  6.27B-input-token / 7.55M-output 7-day window: $94,253 →
-  $10,457.
+  cache-heavy 7-day window: the figure dropped about ninefold.
 
 ## 0.14.1 - 2026-05-16
 

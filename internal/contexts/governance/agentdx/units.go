@@ -37,7 +37,7 @@ type Unit struct {
 	//
 	// It is NOT what the unit cost. Every turn re-sends the accumulated
 	// context, so this double-counts by design — it is the figure that
-	// reads as $94k when cache-aware pricing says $10k. Use it for
+	// reads about nine times what cache-aware pricing says. Use it for
 	// comparing units against each other, never as a spend number.
 	Tokens int64
 	// PeakContext is the largest single turn's input: how big the working

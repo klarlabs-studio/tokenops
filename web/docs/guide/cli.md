@@ -1798,7 +1798,7 @@ see the session change at nearly every instruction.
 turn carried — how heavy the work got, counting the context once. The
 summed figure (`context_carried_tokens` in JSON) double-counts by
 construction, because every turn re-sends the accumulated context; that is
-the number that reads as $94k when cache-aware pricing says $10k. It is
+the number that reads about nine times what cache-aware pricing says. It is
 there for comparing tasks against each other, never as spend.
 
 #### `--runtime` — where the time went, and what is not known

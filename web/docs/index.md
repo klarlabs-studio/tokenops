@@ -70,12 +70,12 @@ themselves, and asks only for what it cannot tell:
 
 ```
 PLAN                       WINDOW            LEFT  RESETS    PACE
-Codex Pro Standard ($100)  Weekly              0%  3d 10h    used up
-Claude Max 20x             Session            75%  1h 57m    -36% · lasts
-                           Weekly             76%  3d 5h     -30% · lasts
+Codex Pro                  Weekly             12%  2d 4h     +18% · runs out
+Claude Max 5x              Session            62%  2h 10m    -20% · lasts
+                           Weekly             70%  4d 1h     -12% · lasts
 ```
 
-That is `tokenops glance --brief` on this machine, the day it shipped.
+An example of `tokenops glance --brief`; the plans and figures are illustrative.
 
 ## Steer the session it's in
 
@@ -188,29 +188,29 @@ client already writes. No proxy, no extra instrumentation:
 
 ```
 Agent DX — last 7d
-  478 instructions across 14 sessions
+  312 instructions across 11 sessions
 
 EFFORT PER INSTRUCTION
-  turns (median):        17.0       [C]
-  turns (p90):           105.6        ← heavy tail: a minority of instructions cost far more than typical
-  wall-clock (median):   1.6m       [A]
-  tool calls (median):   8.0
-  context growth/turn:   2445       [A]
+  turns (median):        15.0       [C]
+  turns (p90):           92.0         ← heavy tail: a minority of instructions cost far more than typical
+  wall-clock (median):   1.8m       [A]
+  tool calls (median):   7.0
+  context growth/turn:   2300       [A]
 
 FRICTION
-  first-try rate:        86.6%      [A]  (no rework, no interrupt, no delegation)
-  rework rate:           20.7%      [C]  (edits revisiting a file within one instruction)
-  interrupt rate:        0.2%       [A]  (instructions you had to stop)
-  escalation rate:       1.9%       [A]  (instructions delegated to a subagent)
+  first-try rate:        84.0%      [A]  (no rework, no interrupt, no delegation)
+  rework rate:           21.5%      [C]  (edits revisiting a file within one instruction)
+  interrupt rate:        0.6%       [A]  (instructions you had to stop)
+  escalation rate:       2.2%       [A]  (instructions delegated to a subagent)
   compactions/session:   1.0        [B]
 
 Overall: C  (the worst grade, not the average — an experience is
          only as good as its sharpest friction)
 ```
 
-That is this project's own last seven days, printed unedited. A `C` on the
-maintainer's machine is the point: a tool that grades your sessions and always
-returns `A` is not measuring anything.
+An illustrative report; the figures are examples. Grades like that `C` are
+the point: a tool that grades your sessions and always returns `A` is not
+measuring anything.
 
 
 It also answers the question everyone assumes they know: *does quality degrade
@@ -353,8 +353,8 @@ talking to the network without saying so has spent trust it cannot buy back.
 On agent workloads, cache reads routinely exceed 95% of input tokens — and
 they bill at roughly a tenth of the new-input rate. Price them as fresh input
 and the number is not slightly wrong, it is an order of magnitude wrong. On
-one real seven-day window, correcting the cache split moved the reported
-figure from **$94k to $10k**.
+a cache-heavy agent week, pricing cache reads as fresh input overstates the
+cost roughly **ninefold**.
 
 Rates are pinned per model with dated vendor source URLs, and
 `tokenops pricing` can research, snapshot, diff, and lint them — now on a
@@ -401,8 +401,7 @@ fine outcome. It was built to solve them, not to be adopted.
 
 ## Contributing
 
-Apache 2.0, and built for its maintainer's own daily use: every number on this
-page came off this machine, including the `C`.
+Apache 2.0, and built for its maintainer's own daily use.
 
 Issues and pull requests are the front door. Two kinds of contribution are
 worth more than the rest:
