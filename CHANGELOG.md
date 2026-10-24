@@ -12,6 +12,10 @@
 
 - **plans, coach, budgets:** plan windows and budgets now read one way everywhere: what is left, counting down to "used up" like a fuel gauge. The glance, the status line, the cards and the menu bar already said "% left", but other places counted up, so the same window read 30% in one place and 70% in another: `tokenops plan` ("window: 70% of the week left", was "30% of the week used"), `tokenops coach` ("Claude weekly 55% left", was a bare "45%"), the coach's run-out warning ("(40% left)", was "(60% used)"), the status line's quota tip ("Claude weekly 25% left → /compact", was "75% used"), the session budget tip, provider setup, the usage meter check and the MCP session budget (whose gauge now fills to what is left). Spend budgets lead with money: "budget team (daily): $1.80 of $10.00 left, 82% spent", on the coach's tip and the glance; a boundary on a budget gives what is left beside its own rule ("budget monthly 8.0% left (92.0% spent >= 90%)"), and the menu bar's budget meter says "$8.20 of $10.00 spent". The headroom pause is worded by its rule, `plan_left_pct <= 10`: "once the tightest plan window is down to 10% left". Only the wording changed: config keys, stored figures and the JSON, API and MCP fields (`used_pct` and the rest) are as they were
 
+### Fixed
+
+- **proxy:** a streaming reply to a request with a body is no longer cut after its first event. When the proxy forwarded the body itself (observer, cache and routing off, or a body over the 4 MiB capture limit), it read the body once more after its last byte to confirm the end, from another goroutine, while Go's HTTP server closes the request body as soon as the reply's first bytes go out. When the provider answered before that last read, the read failed and the proxy closed its connection to the provider: the client got one event and then `unexpected EOF`, and the daemon logged `ReverseProxy read error during body copy: ... use of closed network connection`. It happened under load. Once a request body has reached its end, the proxy now answers further reads with the end itself instead of reading the closed body
+
 ## 0.108.0 - 2026-10-24
 
 ### Added
