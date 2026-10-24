@@ -1,6 +1,6 @@
 # ADR 0015 — Presence-checked boundary approval: an approval is signed by a key only a person present can use
 
-- **Status:** Proposed 2026-10-22
+- **Status:** Accepted 2026-10-24 (proposed 2026-10-22)
 - **Date:** 2026-10-22
 - **Deciders:** TokenOps maintainers
 - **Related:** ADR 0014 (action boundaries; "Only a person approves"),
@@ -203,7 +203,7 @@ With presence enforced on a machine (§5):
 | Menu bar | yes, **inline**: Approve raises the dialog and posts the signed answer; it no longer opens Terminal | yes |
 | `POST /api/boundaries/decisions` | **yes, if the body carries a valid proof**; unsigned approvals are refused as today | yes |
 | MCP `tokenops_boundaries` | no (unchanged: an agent has no reason to carry a proof) | yes |
-| Claude Code's permission prompt (`prompt`) | yes, labelled `prompt` (harness-attested); see open question 2 | yes |
+| Claude Code's permission prompt (`prompt`) | yes, labelled `prompt` (harness-attested); see decision 2 | yes |
 | An answer file without a valid proof | **not honoured**; recorded as `unsigned_answer_ignored` | honoured |
 | Team-plane routed rules | unchanged (ADR 0014 phase 3: answered by the role in the team plane) | yes |
 
@@ -374,20 +374,18 @@ told to run.
 6. (Demand-driven) FIDO2 provider through `ssh-keygen -Y sign`, for Linux
    and for Macs without a Secure Enclave.
 
-## Open questions
+## Decisions on the open questions (2026-10-24)
 
-1. **Trust anchor for the public key.** Proposed: the key file plus the
-   daemon's record, a 15-minute announced hold on an unsigned replacement,
-   rotation signed by the old key. Alternatives: no hold (simpler, quieter),
-   or refuse all approvals until the operator confirms the change from the
-   menu bar (stricter, worse on a new Mac).
-2. **Claude Code's prompt under enforcement.** Proposed: keep honouring
-   `prompt` approvals, labelled harness-attested, since the harness's own
-   dialog is a person's answer and a second dialog per ask would be noise.
-   The cost: it is inferred from a transcript the user can write.
-   `boundaries.approval: presence-strict` would drop it.
-3. **When enforcement becomes the default.** Proposed: one release after
-   the opt-in, on enrolled Macs only. Alternative: stay opt-in, so no
-   existing operator meets a dialog they did not ask for.
-4. **Linux.** Proposed: documented as channel-only until someone asks for
-   FIDO2.
+The maintainer accepted the proposed default for each:
+
+1. **Trust anchor for the public key.** The key file plus the daemon's
+   record. An unsigned replacement starts a 15-minute hold on approvals,
+   announced on the glance, menu bar and status. A rotation signed by the
+   old key has no hold.
+2. **Claude Code's prompt under enforcement.** `prompt` approvals keep
+   counting, labelled harness-attested.
+   `boundaries.approval: presence-strict` drops them.
+3. **When enforcement becomes the default.** One release after the opt-in,
+   on enrolled Macs only, after a shadow period that shows what would have
+   been refused.
+4. **Linux.** Documented as channel-only until someone asks for FIDO2.
