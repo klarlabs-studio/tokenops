@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -135,8 +136,45 @@ func (s *Server) mountReverseProxy(mux *http.ServeMux, route ProviderRoute) erro
 		}
 		handler = mw(handler)
 	}
-	mux.Handle(prefix, handler)
+	mux.Handle(prefix, latchRequestEOF(handler))
 	return nil
+}
+
+// latchRequestEOF keeps the reverse proxy's transport off the request
+// body once it has read to the end. The transport forwards the body from
+// its own goroutine and, after the last byte, reads once more to confirm
+// EOF. An HTTP/1 server closes the body when the reply's header is
+// written, so when the provider answered before that confirming read, the
+// read failed with ErrBodyReadAfterClose, the transport took it for a
+// write error and closed the upstream connection, cutting a streaming
+// reply after its first event. Full duplex would avoid the close, but on
+// Go 1.26 it also leaves a connection whose body read failed open for
+// reuse.
+func latchRequestEOF(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Body != nil && r.Body != http.NoBody {
+			r.Body = &eofLatchBody{ReadCloser: r.Body}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// eofLatchBody answers io.EOF without reading again once its body has
+// returned io.EOF.
+type eofLatchBody struct {
+	io.ReadCloser
+	eof bool
+}
+
+func (b *eofLatchBody) Read(p []byte) (int, error) {
+	if b.eof {
+		return 0, io.EOF
+	}
+	n, err := b.ReadCloser.Read(p)
+	if err == io.EOF {
+		b.eof = true
+	}
+	return n, err
 }
 
 // singleJoin merges base and tail with exactly one separating "/" while

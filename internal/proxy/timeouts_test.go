@@ -3,6 +3,7 @@ package proxy
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -126,6 +127,51 @@ func TestProxyStreamsPastBodyDeadline(t *testing.T) {
 		_ = resp.Body.Close()
 		if got != events {
 			t.Errorf("%s: received %d of %d events (scan err %v): the stream was cut", method, got, events, sc.Err())
+		}
+	}
+}
+
+// TestProviderRouteBodyStaysAtEOFAfterReply pins the cause of a CI flake
+// in TestProxyStreamsPastBodyDeadline ("POST: received 1 of 6 events").
+// The reverse proxy's transport reads the request body once more after
+// its last byte to confirm EOF, from its own goroutine. An HTTP/1 server
+// closes that body when the reply's header is written, so a confirming
+// read that came after the provider's first event failed, and the
+// transport closed the upstream connection. Here the handler forces that
+// order: it reads the body to the end, writes the header, then reads
+// again, as the transport would have. The order is fixed by the handler,
+// so the test does not depend on scheduling.
+func TestProviderRouteBodyStaysAtEOFAfterReply(t *testing.T) {
+	const payload = `{"model":"gpt-4o-mini","stream":true}`
+	for _, latched := range []bool{false, true} {
+		var lateErr error
+		var h http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if b, err := io.ReadAll(io.LimitReader(r.Body, int64(len(payload)))); err != nil || string(b) != payload {
+				t.Errorf("body %q, err %v", b, err)
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			fmt.Fprint(w, "data: 0\n\n")
+			w.(http.Flusher).Flush() // the server closes the request body here
+			_, lateErr = r.Body.Read(make([]byte, 1))
+		})
+		if latched {
+			h = latchRequestEOF(h)
+		}
+		srv := httptest.NewServer(h)
+		resp, err := http.Post(srv.URL, "application/json", strings.NewReader(payload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+		srv.Close()
+		switch {
+		case latched && lateErr != io.EOF:
+			t.Errorf("latched: the confirming read after the reply got %v, want io.EOF: the transport would close the upstream connection", lateErr)
+		case !latched && !errors.Is(lateErr, http.ErrBodyReadAfterClose):
+			// Guards the premise: if net/http stops closing the body at the
+			// reply, this test no longer exercises the race.
+			t.Errorf("unlatched: the confirming read got %v, want http.ErrBodyReadAfterClose", lateErr)
 		}
 	}
 }
