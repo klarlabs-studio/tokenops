@@ -102,7 +102,7 @@ func runGlance(cmd *cobra.Command, rf *rootFlags, dbPath string, view glanceView
 	}
 	out := cmd.OutOrStdout()
 	report := coachcap.Status(cfg, coachLedger(), contextLevers(), now)
-	found := findings.Compute(findings.Gather(&g, &report, findings.DefaultDir()))
+	found := findings.Compute(findings.Gather(&g, &report, &cfg, findings.DefaultDir()))
 	if view.json {
 		enc := json.NewEncoder(out)
 		enc.SetIndent("", "  ")

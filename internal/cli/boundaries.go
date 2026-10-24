@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,6 +16,7 @@ import (
 
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 )
 
 // boundaryTimeout bounds one evaluation. The work is a few file reads;
@@ -155,10 +157,13 @@ then required — allow, ask, approver:<role> or deny.
 
 Every rule starts in shadow: it records what it would have done and binds
 nothing. 'status' shows how often each rule matched and, per client, whether
-it is enforced or advice only; 'promote' makes a rule bind.`,
+it is enforced or advice only; 'promote' makes a rule bind.
+
+'tokenops init' writes the headroom pause on a new config, in shadow; on an
+older one, 'headroom-pause' adds it.`,
 		Args: cobra.NoArgs,
 	}
-	cmd.AddCommand(newBoundariesStatusCmd(), newBoundariesStageCmd("promote"), newBoundariesStageCmd("demote"))
+	cmd.AddCommand(newBoundariesStatusCmd(), newBoundariesStageCmd("promote"), newBoundariesStageCmd("demote"), newBoundariesHeadroomPauseCmd())
 	return cmd
 }
 
@@ -237,6 +242,71 @@ func scopeNoun(action string) string {
 	default:
 		return "sessions"
 	}
+}
+
+// newBoundariesHeadroomPauseCmd adds the headroom pause to a config made
+// before init wrote it: asked for, never added on its own.
+func newBoundariesHeadroomPauseCmd() *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:   "headroom-pause",
+		Short: "Add the headroom pause: ask before the next tool call at 90% of the tightest plan window, in shadow",
+		Long: `headroom-pause adds the boundary a new 'tokenops init' writes:
+
+  - name: headroom-pause
+    action: continue
+    when: { plan_left_pct: "<= 10" }
+    require: ask
+    stage: shadow
+
+Once the tightest plan window TokenOps knows is 90% used, the agent's next
+tool call asks first. It starts in shadow: it records each session it would
+have paused and binds nothing until 'tokenops boundaries promote
+headroom-pause'. It also installs the pause point (the boundary hook) in
+Claude Code and opencode where they are installed. A config that already
+has a continue rule on plan_left_pct is left as it is.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			path, err := resolveMutableConfigPath(configFlag(cmd))
+			if err != nil {
+				return err
+			}
+			res, err := bcap.AddHeadroomPause(path)
+			if err != nil {
+				return err
+			}
+			var hooks []string
+			for _, client := range []string{hookClientClaudeCode, hookClientOpencode} {
+				if !clientInstalled(client) {
+					continue
+				}
+				var buf bytes.Buffer
+				if err := installClientHooks(&buf, client, "", hookSelection{boundary: true}, false, coachhook.DefaultBudgetUSD); err != nil {
+					hooks = append(hooks, client+": "+err.Error())
+					continue
+				}
+				hooks = append(hooks, client+": pause point installed")
+			}
+			if jsonOut {
+				return writeControlJSON(cmd, struct {
+					bcap.PauseAdded
+					Hooks []string `json:"hooks"`
+				}{res, hooks})
+			}
+			out := cmd.OutOrStdout()
+			if res.Added {
+				fmt.Fprintf(out, "%s is set, in shadow (wrote %s)\n%s\n", res.Rule, res.Config, res.Note)
+			} else {
+				fmt.Fprintf(out, "%s [%s]: %s\n", res.Rule, res.Stage, res.Note)
+			}
+			for _, h := range hooks {
+				fmt.Fprintf(out, "  %s\n", h)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON")
+	return cmd
 }
 
 func newBoundariesStageCmd(verb string) *cobra.Command {

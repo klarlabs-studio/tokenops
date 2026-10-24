@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
@@ -121,7 +122,7 @@ func applyPresetAt(path, name string) (coachcap.Report, error) {
 	if len(applied.Compaction) > 0 {
 		r.Compaction = applied.Compaction
 	}
-	r.Hooks = wirePresetHooks()
+	r.Hooks = wirePresetHooks(bcap.NeedsPausePoint(cfg.BoundaryRules()))
 	return r, nil
 }
 
@@ -141,14 +142,16 @@ var presetClients = []struct {
 // wirePresetHooks installs every hook the coach needs on each agent
 // installed here. Hooks follow the coach block at run time, so the same
 // set serves every preset: observe records through them without speaking.
-func wirePresetHooks() []coachcap.HookInstall {
+// boundary adds the pause point where a harness can refuse a call
+// (Claude Code, opencode), for a config whose boundaries need it.
+func wirePresetHooks(boundary bool) []coachcap.HookInstall {
 	var out []coachcap.HookInstall
 	for _, c := range presetClients {
 		if !clientInstalled(c.client) {
 			continue
 		}
 		var buf bytes.Buffer
-		err := installClientHooks(&buf, c.client, "", hookSelection{coach: true, readGuard: c.readGuard, routeGuard: true}, false, coachhook.DefaultBudgetUSD)
+		err := installClientHooks(&buf, c.client, "", hookSelection{coach: true, readGuard: c.readGuard, routeGuard: true, boundary: boundary && pausesCalls(c.client)}, false, coachhook.DefaultBudgetUSD)
 		h := coachcap.HookInstall{Client: c.client, Status: "installed"}
 		switch {
 		case err != nil:
@@ -159,6 +162,12 @@ func wirePresetHooks() []coachcap.HookInstall {
 		out = append(out, h)
 	}
 	return out
+}
+
+// pausesCalls reports whether a client's hooks can refuse a tool call,
+// which the boundary pause point needs.
+func pausesCalls(client string) bool {
+	return client == hookClientClaudeCode || client == hookClientOpencode
 }
 
 // clientInstalled reports whether an agent has its configuration
