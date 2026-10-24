@@ -343,7 +343,7 @@ func TestPlanLeftReadsTheStatusLineReading(t *testing.T) {
 		}
 	}
 	write(testNow.Add(-time.Minute), 97)
-	if res, _ := Guard(r, call("s1"), env); res.Verdict != VerdictDeny || !strings.Contains(res.Reason, "plan left 3.0% < 5% (week)") {
+	if res, _ := Guard(r, call("s1"), env); res.Verdict != VerdictDeny || !strings.Contains(res.Reason, "Claude plan left 3.0% < 5% (week)") {
 		t.Fatalf("fresh reading = %+v", res)
 	}
 	write(testNow.Add(-2*time.Hour), 97)
