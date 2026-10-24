@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"go.klarlabs.de/tokenops/internal/contexts/boundaries"
+	"go.klarlabs.de/tokenops/internal/contexts/boundaries/presence"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 )
 
@@ -70,6 +71,9 @@ func (c Config) Validate() error {
 		return err
 	}
 	if _, err := boundaries.Parse(c.boundarySpecs()); err != nil {
+		return err
+	}
+	if _, err := presence.ParseMode(c.BoundaryApproval); err != nil {
 		return err
 	}
 	if err := c.Money.Validate(); err != nil {
