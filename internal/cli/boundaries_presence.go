@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -69,8 +70,7 @@ announced on the glance and in 'tokenops boundaries status'.`,
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.ErrOrStderr(), "Creating the key; confirm with Touch ID, your Apple Watch or your password when asked…")
-			res, err := bcap.EnrollPresence(cmd.Context(), env, helper, bcap.EnrollOptions{Replace: replace})
+			res, err := bcap.EnrollPresence(cmd.Context(), env, prompting(cmd, helper), bcap.EnrollOptions{Replace: replace})
 			if err != nil {
 				return err
 			}
@@ -97,8 +97,7 @@ func newPresenceRotateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.ErrOrStderr(), "Two dialogs follow: the new key's enrolment, then the old key signing the move…")
-			res, err := bcap.RotatePresence(cmd.Context(), env, helper, "")
+			res, err := bcap.RotatePresence(cmd.Context(), env, prompting(cmd, helper), "")
 			if err != nil {
 				return err
 			}
@@ -232,8 +231,7 @@ func presenceProofFor(cmd *cobra.Command, env bcap.Env, id string, session bool)
 	if err != nil {
 		return nil, shadowOrFail(cmd.ErrOrStderr(), enforced, err)
 	}
-	fmt.Fprintln(cmd.ErrOrStderr(), "Confirm with Touch ID, your Apple Watch or your password…")
-	proof, err := bcap.SignApproval(cmd.Context(), env, helper, id, session)
+	proof, err := bcap.SignApproval(cmd.Context(), env, prompting(cmd, helper), id, session)
 	switch {
 	case err == nil:
 		return proof, nil
@@ -272,8 +270,7 @@ func routingProofFor(cmd *cobra.Command, storePath, key string, mode bcap.Approv
 	if err != nil {
 		return nil, shadowOrFail(cmd.ErrOrStderr(), mode.Enforced(), err)
 	}
-	fmt.Fprintln(cmd.ErrOrStderr(), "Confirm with Touch ID, your Apple Watch or your password…")
-	proof, err := actions.SignRoutingApproval(cmd.Context(), storePath, key, helper)
+	proof, err := actions.SignRoutingApproval(cmd.Context(), storePath, key, prompting(cmd, helper))
 	switch {
 	case err == nil:
 		return proof, nil
@@ -281,4 +278,20 @@ func routingProofFor(cmd *cobra.Command, storePath, key string, mode bcap.Approv
 		return nil, fmt.Errorf("%w: nothing was answered", err)
 	}
 	return nil, shadowOrFail(cmd.ErrOrStderr(), mode.Enforced(), err)
+}
+
+// promptingSigner says a dialog is coming just before each one, so the
+// person is not left looking at a silent terminal, and only when it is.
+type promptingSigner struct {
+	infrapresence.Helper
+	w io.Writer
+}
+
+func prompting(cmd *cobra.Command, h infrapresence.Helper) promptingSigner {
+	return promptingSigner{Helper: h, w: cmd.ErrOrStderr()}
+}
+
+func (p promptingSigner) Sign(ctx context.Context, blobPath string, msg []byte, reason string) ([]byte, error) {
+	fmt.Fprintf(p.w, "Confirm with Touch ID, your Apple Watch or your password: %s\n", infrapresence.DialogText(reason))
+	return p.Helper.Sign(ctx, blobPath, msg, reason)
 }
