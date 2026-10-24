@@ -4,7 +4,16 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.109.0**.
+Current release: **v0.109.1**.
+
+## v0.109.1 — Restarts that answer at once, again
+
+The daemon opens its port within moments of starting, however large its
+store: until it is fully up, its health check says it is starting and
+the API asks you to retry, instead of nothing answering for up to
+minutes on a busy machine. `tokenops daemon restart` says "warming up"
+rather than calling a normal start a failure. A plan-headroom reason now
+names whose plan ran low ("Claude plan left 6.0% <= 10% (5h)").
 
 ## v0.109.0 — Approvals only you can give
 
