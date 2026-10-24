@@ -231,7 +231,12 @@ Instruction text is read in memory to classify it, and never written.
 
 Scaffolds the config (sqlite + rules on, idempotent) **and wires this
 machine**: it registers the MCP server with every installed host and
-installs the Claude Code hooks. `--detect` adds a report of the clients it
+installs the Claude Code hooks. A new config also gets the
+[headroom pause](/guide/boundaries#the-headroom-pause), in shadow: it
+records each session it would have paused at 90% of the tightest plan
+window and binds nothing until you promote it; init installs the pause
+point (the boundary hook) to evaluate it. Re-running init on an existing
+config does not add it. `--detect` adds a report of the clients it
 found; it does not make the command read-only. Use `tokenops detect` to
 only look, or `--print-only` / `--no-wire` for a dry run.
 
@@ -798,7 +803,7 @@ one. Each window is **soft** or **hard**:
   interruption budget. `tokenops budget list` and the glance show each
   window's share used.
 - **Hard** (`--mode hard`) is enforced by a spend
-  [boundary](#tokenops-boundaries-status-promote-demote) named `budget-<name>-<window>`, which
+  [boundary](#tokenops-boundaries-status-promote-demote-headroom-pause) named `budget-<name>-<window>`, which
   asks (`--require ask`, the default) or refuses (`--require deny`) before
   further steps once the window is spent. Like every boundary it starts
   in shadow, recording what it would have done, until you promote it.
@@ -2167,7 +2172,7 @@ the next request, `deny` keeps the requested one. The menu bar and
 `tokenops_routing` `decide` applies only once you confirm it at your MCP
 client.
 
-### `tokenops boundaries {status|promote|demote}`
+### `tokenops boundaries {status|promote|demote|headroom-pause}`
 
 [Action boundaries](/guide/boundaries) are limits you set in
 `config.yaml` before work starts: past $20 in a session, ask me; no
@@ -2179,6 +2184,7 @@ tokenops boundaries status          # each rule, how often it matched, where it 
 tokenops boundaries status --json   # the daemon API's GET /api/boundaries
 tokenops boundaries promote session-spend
 tokenops boundaries demote session-spend
+tokenops boundaries headroom-pause  # add the headroom pause to an older config, in shadow
 ```
 
 Every rule starts in **shadow**: it records what it would have done and
@@ -2190,6 +2196,18 @@ rules, whether the router, the team upload and the OTel export enforce
 them or are idle. `promote` writes `stage: enforce`
 to the rule in `config.yaml`; `demote` puts it back in shadow. Neither
 has an MCP equivalent: an agent must not change the limits set on it.
+
+**The headroom pause** is the boundary `tokenops init` writes on a new
+config: once the tightest plan window TokenOps knows is 90% used, the
+agent's next tool call asks first (`action: continue`, `when: {
+plan_left_pct: "<= 10" }`, `require: ask`). It starts in shadow, and the
+glance's findings say how many sessions it would have paused this week;
+`tokenops boundaries promote headroom-pause` makes it pause. A config
+written before init did this is not changed: the findings suggest
+`tokenops boundaries headroom-pause`, which adds the rule in shadow and
+installs the pause point in Claude Code and opencode. A config that already
+has a `continue` rule on `plan_left_pct` is left as it is. Like `promote`,
+it has no MCP equivalent.
 
 ### `tokenops approve <id>`
 
