@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.108.0 - 2026-10-24
+
 ### Added
 
 - **boundaries:** the headroom pause is on by default. A new `tokenops init` writes a `headroom-pause` boundary: once the tightest plan window TokenOps knows is 90% used (`plan_left_pct: "<= 10"`, the 5-hour or weekly window, whichever has less left), the agent's next tool call asks first. It starts in shadow, so it asks nothing and records each session it would have paused, and init installs the pause point (the boundary hook) in Claude Code and opencode so there is something to record; before, a fresh install had no boundary and no pause point, and the pause that shipped in 0.103 did nothing until you wrote a rule yourself. `tokenops boundaries promote headroom-pause` makes it pause
