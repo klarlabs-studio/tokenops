@@ -8,8 +8,8 @@ before:
 
 builds:
   # Each binary is built twice, Linux and macOS apart, so that only the
-  # macOS archives carry the menu bar app (scripts/build-menubar-app.sh,
-  # built on a macOS runner before this runs).
+  # macOS archives carry the menu bar app and the presence helper
+  # (scripts/build-menubar-app.sh, built on a macOS runner before this runs).
   - &tokenops
     id: tokenops-linux
     binary: tokenops
@@ -66,6 +66,10 @@ archives:
   # The menu bar app is ad hoc signed, not notarized (there is no Developer
   # ID); the cask's post-install hook clears its quarantine flag along with
   # the binaries', and `tokenops menubar` installs it to ~/Applications.
+  # tokenops-presence is the presence helper (ADR 0015), built with the app
+  # on the macOS runner (scripts/build-presence-helper.sh), ad hoc signed,
+  # and also inside TokenOps.app. tokenops finds it beside itself (through
+  # the cask's bin/ link), so the cask needs no binaries entry for it.
   - id: darwin
     ids: [tokenops-darwin, tokenopsd-darwin]
     formats: ["tar.gz"]
@@ -74,6 +78,10 @@ archives:
       - README.md
       - src: menubar-dist/TokenOps.app
         dst: TokenOps.app
+      - src: menubar-dist/tokenops-presence
+        dst: tokenops-presence
+        info:
+          mode: 0755
 
 checksum:
   name_template: "checksums.txt"

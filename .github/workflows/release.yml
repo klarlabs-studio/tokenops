@@ -10,6 +10,8 @@ permissions:
 jobs:
   # The menu bar app needs cgo against AppKit, so it is built here, on
   # macOS, and handed to goreleaser, which puts it in the darwin archives.
+  # The presence helper (tokenops-presence, Swift, ADR 0015) is built with
+  # it, inside the bundle and beside it.
   # It is ad hoc signed: there is no Developer ID to notarize it with, and
   # the cask's post-install hook clears its quarantine flag.
   menubar-app:
@@ -27,7 +29,7 @@ jobs:
       # An artifact upload drops file modes; a tarball keeps the bundle's
       # executable bit and its signature intact.
       - name: Pack
-        run: tar -czf menubar-app.tar.gz -C menubar-dist TokenOps.app
+        run: tar -czf menubar-app.tar.gz -C menubar-dist TokenOps.app tokenops-presence
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: menubar-app
