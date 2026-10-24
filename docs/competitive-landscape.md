@@ -145,7 +145,7 @@ is what TokenOps should build next, and what it should stop saying.
 
 | Step | Work | Closes | Done when |
 |---|---|---|---|
-| 1 | **Headroom pause as a default.** Ship a `continue` boundary at a share of the tightest window (say 90% used) in shadow on every new install, promoted to recommend after a week; one line in the README and quickstart | G18 | A fresh `init` records what the pause would have done, on every harness with a pause point |
+| 1 | **Headroom pause as a default.** Ship a `continue` boundary at a share of the tightest window (say 10% left) in shadow on every new install, promoted to recommend after a week; one line in the README and quickstart | G18 | A fresh `init` records what the pause would have done, on every harness with a pause point |
 | 2 | **Read the vendor's verdicts.** Ingest Claude Code's `safety_event` and `tool_decision` (`classifier_verdict`, `permission_mode`) and Codex approval outcomes as evidence; record them on the boundary decision instead of asking twice | G17 | `explain` shows the vendor's verdict beside ours; a tool call is never put to the person twice |
 | 3 | **Coach stands down where the vendor coaches.** As with routers (ADR 0009): when Claude Code's `/usage` already raises a warning class, drop or link our tip; keep cross-harness and cross-session findings | G16 | No Claude tip duplicates a `/usage` warning; the realized-savings ledger counts only ours |
 | 4 | **New window shapes.** Model banked resets, per-model quotas and shared pools in the plan catalog; forecasts treat an unused banked reset as headroom | G19 | `glance` shows a banked reset and a per-model quota correctly |

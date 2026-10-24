@@ -129,8 +129,8 @@ the record per kind.
 from how much of it is used. The coach measures how fast each window has
 been used over the last hour and over the last 15 minutes, and warns only
 when both would use it up before it resets: "at this pace your 5-hour
-Claude limit runs out in ~1h 20m, 40m before it resets (60% used)". 90%
-used ten minutes before the reset lasts and says nothing; 50% used half an
+Claude limit runs out in ~1h 20m, 40m before it resets (40% left)". 10%
+left ten minutes before the reset lasts and says nothing; 50% left half an
 hour into a five-hour window does not last and is said. A burst that has
 stopped (a quiet last 15 minutes) or a short spike in a slow hour says
 nothing either. A reading more than 15 minutes old forecasts nothing,
