@@ -16,7 +16,6 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/boundaries"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/config"
-	"go.klarlabs.de/tokenops/internal/contexts/boundaries/presence"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 )
 
@@ -145,7 +144,7 @@ type PresenceProof struct {
 }
 
 // proof is the request's proof in the domain's form; nil when absent.
-func (p *PresenceProof) proof() (*presence.Proof, error) {
+func (p *PresenceProof) proof() (*boundaries.Proof, error) {
 	if p == nil {
 		return nil, nil
 	}
@@ -153,7 +152,7 @@ func (p *PresenceProof) proof() (*presence.Proof, error) {
 	if err != nil {
 		return nil, actions.InputError{Err: errors.New("presence_proof.sig is not base64")}
 	}
-	return &presence.Proof{
+	return &boundaries.Proof{
 		V: p.V, Key: p.Key, Decision: p.Decision, Rule: p.Rule, Session: p.Session, Scope: p.Scope,
 		Challenge: p.Challenge, Crossed: p.Crossed, Issued: p.Issued, Sig: sig,
 	}, nil
@@ -171,7 +170,7 @@ type BoundaryDecisionRequest struct {
 // with. It is read per answer, so a change takes effect without a
 // restart; a config that cannot be read fails the answer rather than
 // guessing.
-func approvalMode(path string) (presence.Mode, error) {
+func approvalMode(path string) (boundaries.ApprovalMode, error) {
 	if path == "" {
 		p, err := config.DefaultPath()
 		if err != nil {
@@ -180,7 +179,7 @@ func approvalMode(path string) (presence.Mode, error) {
 		path = p
 	}
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		return presence.ModeChannel, nil
+		return boundaries.ApprovalChannel, nil
 	}
 	cfg, err := config.Load(path)
 	if err != nil {

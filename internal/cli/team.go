@@ -372,7 +372,9 @@ func newTeamSyncCmd(rf *rootFlags) *cobra.Command {
 			defer cancel()
 			return withTeamDeps(ctx, cfg, func(d teamshare.Deps) error {
 				opts := teamOptions(cfg)
-				opts.Allow = func() error { return bcap.CheckShare(bcap.AllRules(cfg), bcap.DestinationTeam, bcap.Env{}) }
+				opts.Allow = func() error {
+					return bcap.CheckShare(bcap.AllRules(cfg), bcap.DestinationTeam, bcap.Env{Approval: cfg.ApprovalMode()})
+				}
 				res, err := teamshare.Sync(ctx, d, opts, path, time.Now())
 				if err != nil {
 					return err

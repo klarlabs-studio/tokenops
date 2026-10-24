@@ -272,7 +272,17 @@ them on the model they asked for. No restart is needed.`,
 		Args:      cobra.ExactArgs(2),
 		ValidArgs: []string{"approve", "deny"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			res, err := actions.DecideRouting(storePath, args[0], args[1])
+			mode, err := approvalModeOf(cmd)
+			if err != nil {
+				return err
+			}
+			req := actions.RoutingAnswer{StorePath: storePath, Key: args[0], Decision: args[1], Approval: mode, Method: actions.RoutingMethodCLI}
+			if isApprove(args[1]) {
+				if req.Proof, err = routingProofFor(cmd, storePath, args[0], mode); err != nil {
+					return err
+				}
+			}
+			res, err := actions.AnswerRouting(req)
 			if err != nil {
 				return err
 			}

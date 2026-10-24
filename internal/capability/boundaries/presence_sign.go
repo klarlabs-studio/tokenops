@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"go.klarlabs.de/tokenops/internal/capability/actions"
+	"go.klarlabs.de/tokenops/internal/config"
 	domain "go.klarlabs.de/tokenops/internal/contexts/boundaries"
 	"go.klarlabs.de/tokenops/internal/contexts/boundaries/presence"
 	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
@@ -311,3 +312,61 @@ func presenceEnvelope(env Env, e Enrolled) *eventschema.Envelope {
 		},
 	}
 }
+
+// ApprovalSet is what changing boundary_approval did.
+type ApprovalSet struct {
+	Approval string `json:"approval"`
+	Config   string `json:"config"`
+	Note     string `json:"note"`
+}
+
+// SetApproval writes boundary_approval to the config at path. Turning
+// enforcement on with no key enrolled is refused: it would leave nothing
+// that can approve.
+func SetApproval(path string, env Env, mode presence.Mode) (ApprovalSet, error) {
+	if mode.Enforced() {
+		if st := Presence(env); st.State == PresenceStateNotEnrolled || st.State == PresenceStateUnavailable {
+			return ApprovalSet{}, actions.InputError{Err: fmt.Errorf("no presence key is enrolled on this machine, "+
+				"so nothing could approve with boundary_approval: %s; enrol one first with `%s`", mode, EnrolCommand)}
+		}
+	}
+	cfg, err := config.ReadMutable(path)
+	if err != nil {
+		return ApprovalSet{}, actions.InputError{Err: err}
+	}
+	cfg.BoundaryApproval = string(mode)
+	if mode == presence.ModeChannel {
+		cfg.BoundaryApproval = ""
+	}
+	if err := cfg.Validate(); err != nil {
+		return ApprovalSet{}, actions.InputError{Err: err}
+	}
+	if err := config.WriteMutable(path, cfg); err != nil {
+		return ApprovalSet{}, err
+	}
+	out := ApprovalSet{Approval: string(mode), Config: path}
+	switch mode {
+	case presence.ModePresence:
+		out.Note = "an approval now counts only when signed with this Mac's presence key, or given at Claude Code's prompt"
+	case presence.ModeStrict:
+		out.Note = "an approval now counts only when signed with this Mac's presence key; Claude Code's prompt no longer approves"
+	default:
+		out.Note = "approvals are trusted by the channel they arrive on again; the presence check runs in shadow"
+	}
+	out.Note += ". The pause point reads it at the next tool call; the daemon's router and uploads at its next restart (`tokenops daemon restart`)"
+	return out, nil
+}
+
+// ApprovalMode is boundary_approval, and Proof a presence-signed approval,
+// for adapters, which reach the domain only through this package.
+type (
+	ApprovalMode = presence.Mode
+	Proof        = presence.Proof
+)
+
+// The boundary_approval values.
+const (
+	ApprovalChannel  = presence.ModeChannel
+	ApprovalPresence = presence.ModePresence
+	ApprovalStrict   = presence.ModeStrict
+)

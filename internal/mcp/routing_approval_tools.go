@@ -6,9 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"go.klarlabs.de/tokenops/internal/contexts/boundaries/presence"
-
 	"go.klarlabs.de/tokenops/internal/capability/actions"
+	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 
 	"go.klarlabs.de/tokenops/internal/capability/decisions"
 
@@ -68,7 +67,7 @@ func RegisterApprovalTools(s *Server, d ApprovalDeps) error {
 	s.Tool("tokenops_routing_decide").
 		Description("Record the operator's answer to a pending routing proposal. approve = future matching requests route to the proposed model; deny = they stay on the model already requested. Only call this once the operator has actually chosen — it changes which model their requests run on.").
 		Handler(func(_ context.Context, in routingDecideInput) (string, error) {
-			mode := presence.ModeChannel
+			mode := bcap.ApprovalChannel
 			if path, err := d.configPath(); err == nil {
 				if cfg, err := config.Load(path); err == nil {
 					mode = cfg.ApprovalMode()
