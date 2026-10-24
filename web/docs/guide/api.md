@@ -112,6 +112,8 @@ instead of an empty screen.
 | `POST /api/preferred-models` | Sets or clears a provider's preferred model |
 | `POST /api/routing/decisions` | Answers a routing proposal; with `boundary_approval: presence` an approval needs `presence_proof`, as below |
 | `POST /api/boundaries/decisions` | Denies what a boundary asked about (`{"id", "decision": "deny", "session"}`). It approves only with `presence_proof`, the signature `tokenops approve` makes with this Mac's [presence key](/guide/boundaries#presence-checked-approval) (the statement's fields, and `sig` in base64); without one an approval comes from `tokenops approve` at a terminal or Claude Code's prompt |
+| `POST /api/boundaries/statements` | The statement that approves a waiting boundary decision (`{"id", "session"}`), for a surface that signs it with the presence helper: `proof` (the statement's fields, unsigned; post it back as `presence_proof` with `sig` added), `statement` (the bytes to sign, base64), `reason` (the dialog's text, naming the rule, action and session) and `blob` (the key the helper signs with). `409` with `"code": "presence_unavailable"` when no key can sign here (none enrolled, a held key, no key blob), so the surface falls back to the terminal. The menu bar's inline *Approve* uses it |
+| `POST /api/routing/statements` | The same for a routing upgrade (`{"key"}`) |
 | `POST /api/outcomes` | Records your judgement of an execution |
 | `POST /api/coach` | Applies a coach preset, or changes its dials |
 

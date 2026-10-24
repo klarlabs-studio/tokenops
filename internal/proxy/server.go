@@ -432,6 +432,7 @@ func (s *Server) buildAPIMux() *recordingMux {
 	protected.HandleFunc("GET /api/routing/proposals", proposalsHandler)
 	protected.HandleFunc("GET /api/boundaries", s.boundariesHandler)
 	s.registerActionRoutes(protected)
+	s.registerStatementRoutes(protected)
 	return protected
 }
 
