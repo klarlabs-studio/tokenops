@@ -621,7 +621,7 @@ func (c Condition) holds(f Facts) (string, bool) {
 		if !ok || !compare(used, c.Op, c.Number) {
 			return "", false
 		}
-		return fmt.Sprintf("budget %s %.1f%% used %s %g%%", name, used, c.Op, c.Number), true
+		return budgetLeftWords(name, used, c), true
 	case FieldModelTier:
 		got, ok := tierRank[f.ModelTier]
 		if !ok || !compare(float64(got), c.Op, float64(tierRank[c.Text])) {
@@ -682,6 +682,18 @@ func planLeft(left map[Window]float64, w Window) (float64, Window, bool) {
 
 // budgetUsed reads the named budget, or the fullest one known. Ties go
 // to the name that sorts first, so the reason reads the same every run.
+// budgetLeftWords words a budget condition that holds by what is left,
+// the way every plan window and budget reads, and keeps the rule's own
+// comparison on the share spent readable beside it: "budget monthly 8.0%
+// left (92.0% spent >= 90%)".
+func budgetLeftWords(name string, used float64, c Condition) string {
+	left := fmt.Sprintf("%.1f%% left", max(0, 100-used))
+	if used >= 100 {
+		left = "used up"
+	}
+	return fmt.Sprintf("budget %s %s (%.1f%% spent %s %g%%)", name, left, used, c.Op, c.Number)
+}
+
 func budgetUsed(used map[string]float64, name string) (float64, string, bool) {
 	if name != "" {
 		v, ok := used[name]

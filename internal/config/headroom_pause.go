@@ -11,14 +11,14 @@ import (
 const HeadroomPauseName = "headroom-pause"
 
 // headroomPauseAt is the share of the tightest plan window left at which
-// the headroom pause applies: 90% used. It leaves room for an agent to
+// the headroom pause applies: 10% left. It leaves room for an agent to
 // finish the step it is on, commit and hand over, and it is where the
 // one-feature tools that sell this pause put it.
 const headroomPauseAt = "<= 10"
 
 // HeadroomPauseRule is the headroom pause as init writes it: the agent's
-// next tool call, once the tightest plan window TokenOps knows is 90%
-// used, asks first. It starts in shadow, as every boundary does (ADR
+// next tool call, once the tightest plan window TokenOps knows is down to
+// 10% left, asks first. It starts in shadow, as every boundary does (ADR
 // 0014): it records each session it would have paused and binds nothing
 // until `tokenops boundaries promote headroom-pause`.
 func HeadroomPauseRule() boundaries.RuleSpec {

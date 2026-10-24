@@ -41,10 +41,10 @@ func TestOpenTipWordsShortly(t *testing.T) {
 	}{
 		{Tip{Kind: "compact_now"}, "compact now (/compact)"},
 		{Tip{Kind: "budget_over"}, "past the session budget → fresh session"},
-		{Tip{Kind: "budget_50"}, "50% of the session budget used"},
-		{Tip{Kind: "quota_75", Window: "Claude weekly", ResetsAt: now.Add(94 * time.Hour)}, "Claude weekly 75% used → /compact, smaller model"},
+		{Tip{Kind: "budget_50"}, "session budget 50% left"},
+		{Tip{Kind: "quota_75", Window: "Claude weekly", ResetsAt: now.Add(94 * time.Hour)}, "Claude weekly 25% left → /compact, smaller model"},
 		{Tip{Kind: "quota_100", Window: "OpenAI weekly", ResetsAt: now.Add(94 * time.Hour)}, "OpenAI weekly out for 3d22h → use another plan"},
-		{Tip{Kind: "quota_90"}, "plan window 90% used → /compact, smaller model"},
+		{Tip{Kind: "quota_90"}, "plan window 10% left → /compact, smaller model"},
 		{Tip{Kind: "quota_burn", Window: "Claude 5-hour", ResetsAt: now.Add(2 * time.Hour), RunsOutAt: now.Add(80 * time.Minute)}, "Claude 5-hour out in ~1h20m → smaller model"},
 		{Tip{Kind: "quota_burn", Window: "Claude weekly Fable", ResetsAt: now.Add(30 * time.Hour), RunsOutAt: now.Add(28 * time.Hour)}, "Claude weekly Fable out in ~1d4h → smaller model"},
 		{Tip{Kind: "quota_burn", Window: "Claude 5-hour", ResetsAt: now.Add(time.Hour), RunsOutAt: now.Add(-time.Minute)}, "Claude 5-hour about to run out → smaller model"},

@@ -48,7 +48,7 @@ func TestBurnWarningSaysWhenItRunsOut(t *testing.T) {
 	if !d.Nudge || !d.QuotaBurn || d.TipKind != burnKind {
 		t.Fatalf("want a run-out warning, got %+v", d)
 	}
-	for _, want := range []string{"5-hour Claude limit", "runs out in ~1h 20m", "40m before it resets", "60% used"} {
+	for _, want := range []string{"5-hour Claude limit", "runs out in ~1h 20m", "40m before it resets", "40% left"} {
 		if !strings.Contains(d.Message, want) {
 			t.Errorf("message %q missing %q", d.Message, want)
 		}
@@ -197,7 +197,7 @@ func TestVerboseExplainsTheWarning(t *testing.T) {
 	cfg.Quota.All = append(cfg.Quota.All, plans.QuotaWindow{Label: "weekly", UsedPct: 31, ResetsAt: fixedNow.Add(72 * time.Hour), Duration: 7 * 24 * time.Hour})
 	tp := writeTranscript(t, dir, turnLine(ts(1), 1_000, opus))
 	d := Evaluate(dir, "s", tp, cfg, fixedNow)
-	for _, want := range []string{"1.5× the even pace over the last hour", "1.6× over the last 15 minutes", "5-hour 60%", "weekly 31%"} {
+	for _, want := range []string{"1.5× the even pace over the last hour", "1.6× over the last 15 minutes", "5-hour 40% left", "weekly 69% left"} {
 		if !strings.Contains(d.Message, want) {
 			t.Errorf("verbose message missing %q: %q", want, d.Message)
 		}
@@ -219,7 +219,7 @@ func TestQuotaStatusSaysWhatTheCoachWatches(t *testing.T) {
 	dir := t.TempDir()
 	q := weeklyQuota(45, 74*time.Hour)
 	got := QuotaStatus(dir, q, fixedNow)
-	if !strings.Contains(got, "weekly 45%") || !strings.Contains(got, "resets in 3d 2h") || !strings.Contains(got, "not on course to run out") {
+	if !strings.Contains(got, "weekly 55% left") || !strings.Contains(got, "resets in 3d 2h") || !strings.Contains(got, "not on course to run out") {
 		t.Errorf("status = %q", got)
 	}
 	q = burningQuota(60, 2*time.Hour, 80*time.Minute)

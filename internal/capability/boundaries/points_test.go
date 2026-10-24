@@ -111,7 +111,7 @@ func TestSpendRulesReadTheDaemonsBudgets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Verdict != VerdictDeny || !strings.Contains(res.Reason, "budget monthly 93.0% used >= 90%") ||
+	if res.Verdict != VerdictDeny || !strings.Contains(res.Reason, "budget monthly 7.0% left (93.0% spent >= 90%)") ||
 		!strings.Contains(res.Reason, "steps while it holds") {
 		t.Fatalf("verdict %q, reason %q", res.Verdict, res.Reason)
 	}
@@ -260,7 +260,7 @@ func TestHardBudgetWindowAsksAtThePausePoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Verdict != VerdictAsk || !strings.Contains(res.Reason, "budget team:daily 100.0% used >= 100%") {
+	if res.Verdict != VerdictAsk || !strings.Contains(res.Reason, "budget team:daily used up (100.0% spent >= 100%)") {
 		t.Fatalf("verdict %q, reason %q", res.Verdict, res.Reason)
 	}
 	putFigures(t, env, boundaryledger.Figures{BudgetUsedPct: map[string]float64{"team": 100, "team:daily": 60, "team:monthly": 100}})

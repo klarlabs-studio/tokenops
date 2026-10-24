@@ -72,7 +72,7 @@ func TestStatuslineShowsTheOpenTipAndRecordsItSeen(t *testing.T) {
 	for range 3 {
 		lines = statusLines([]byte(claudeStatusSample))
 	}
-	if len(lines) != 1 || !strings.Contains(lines[0], "● Claude weekly 75% used → /compact, smaller model") {
+	if len(lines) != 1 || !strings.Contains(lines[0], "● Claude weekly 25% left → /compact, smaller model") {
 		t.Fatalf("lines %q", lines)
 	}
 	seen := seenEntries(t, home)
