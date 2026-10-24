@@ -5,6 +5,7 @@ import (
 	"time"
 
 	domain "go.klarlabs.de/tokenops/internal/contexts/boundaries"
+	"go.klarlabs.de/tokenops/internal/contexts/boundaries/presence"
 	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
 )
 
@@ -67,6 +68,9 @@ func BenchmarkGuardSignedAnswer(b *testing.B) {
 		b.Fatal(err)
 	}
 	signAnswer(b, env, priv, first.DecisionID)
+	// Measured with presence enforced (boundary_approval: presence), the
+	// path where the check decides whether the answer counts.
+	env.Approval = presence.ModePresence
 	if _, err := Guard(r, c, env); err != nil {
 		b.Fatal(err)
 	}
