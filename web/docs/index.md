@@ -27,31 +27,46 @@ features:
 
 ## What you use today, and what it leaves out
 
-| | Each vendor's own meter | Usage meters such as CodexBar | Gateways and admin caps | TokenOps |
-|---|:--:|:--:|:--:|:--:|
-| Every plan and account in one view | one vendor | ✅ | API keys only | ✅ |
-| Subscription windows (Max, Pro, Copilot, Cursor) | its own | ✅ | 🚫 | ✅ |
-| Acts inside the session, before the limit | 🚫 | 🚫 | fails the request at the cap | ✅ |
-| Limits you set, with approval by role | 🚫 | 🚫 | dollar caps | ✅ |
-| Which account paid, through routers | 🚫 | 🚫 | its own traffic | ✅ |
-| Prompts stay on your machine | ✅ | ✅ | 🚫 they pass through it | ✅ |
+Checked 22 October 2026 against each vendor's release notes and help
+pages. This field changes weekly; the vendors' own tools most of all.
 
-The meters tell you where you stand. A gateway stops a request when the
-money runs out. TokenOps does what neither does: it tells the agent, while
-it is working, and holds it at the line you drew.
+| | Each vendor's own tools | Usage meters such as CodexBar | Gateways and team budget tools | TokenOps |
+|---|:--:|:--:|:--:|:--:|
+| Every plan and account in one view | its own plan | ✅ | the traffic or seats it manages | ✅ |
+| Subscription windows (5-hour, weekly) | ✅ its own | ✅ | 🚫 | ✅ |
+| Acts before a window or a budget runs out | Claude Code, for Claude | alerts and hooks | at the cap, for its own traffic or seats | the same rule in every harness |
+| Limits, with approval | admin limits on its own seats | 🚫 | team budgets, approvals, dollar caps | yours or your team's, across every account |
+| Which account paid, through routers | 🚫 | 🚫 | its own traffic | ✅ |
+| Agent DX, graded across harnesses | warnings for its own harness | 🚫 | 🚫 | every harness it reads |
+| Prompts stay on your machine | ✅ | ✅ | 🚫 a gateway sees them | ✅ |
+
+Each vendor now does a lot for its own harness: Claude Code's `/usage`
+names waste and applies the fix on request, and warns before a resumed
+session takes a noticeable share of the 5-hour limit. Claude, OpenAI and
+GitHub each give admins limits on their own seats. What no single vendor
+can do is hold one line across all of them: TokenOps applies one set of
+rules on headroom, budget and session cost to every plan and account your
+agents draw on, in every harness. Where the harness can pause a tool call
+(Claude Code, opencode), the rule is enforced; where it cannot (Codex,
+Cursor), the agent gets it as advice.
 
 ## Know what's left
 
 Every major vendor publishes *rate-limit windows*, not monthly token caps, for
-flat-rate plans. The vendor dashboard tells you you've hit the cap **after**
-the cap hits, and nothing tells the agent anything at all. When Claude returns
-"limit reached, resets in 4h" mid-refactor, your options are another browser
-tab or eating the wait.
+flat-rate plans, and each now shows you its own. Run Claude Max, a Codex plan
+and an API key side by side, though, and the windows sit in three places, each
+read on its own schedule. When Claude returns "limit reached, resets in 4h"
+mid-refactor, the other plans' headroom is somewhere else.
 
-TokenOps puts the headroom check inside the agent's loop, for every provider it
-tracks, and in front of you before the cutoff: the status line, the menu bar
-and an alert at 20% left. `tokenops init` binds your plans from what your
-clients report about themselves, and asks only for what it cannot tell:
+TokenOps puts every window in one view, and the headroom check inside the
+agent's loop, for every provider it tracks and in every harness. You see it
+before the cutoff: the status line, the menu bar and an alert at 20% left.
+And a boundary on `plan_left_pct` can pause the agent before the window runs
+out, rather than at the vendor's limit; it starts in shadow, like every rule
+(see [Set what's allowed](#set-what-s-allowed)).
+
+`tokenops init` binds your plans from what your clients report about
+themselves, and asks only for what it cannot tell:
 
 ```
 PLAN                       WINDOW            LEFT  RESETS    PACE
@@ -291,6 +306,12 @@ There is nowhere for them to go: the event store is a SQLite file under
 `~/.tokenops`, there is no cloud account to create (unless you join a team),
 and no telemetry to opt out
 of. The daemon API is local by default and protected by a shared secret.
+
+Analysing on the laptop is no longer rare: several team tools now do it,
+then send the results to a hosted product. TokenOps' core needs no hosted
+product and no upload at all; nothing leaves but the calls listed below. If
+you join a team, only derived figures go, in an upload format with no field
+for anything else.
 
 The guarantee is about the content, not the address. Everything TokenOps
 derives — a rate, a grade, a token count, a headroom percentage — is computed

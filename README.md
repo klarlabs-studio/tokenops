@@ -18,6 +18,16 @@
 > your prompts and your code never leave it. Free and open source; teams add
 > shared rules and approvals.
 
+Each vendor now shows its own windows, acts on its own harness and gives
+admins limits on its own seats. TokenOps holds one set of rules across all
+of them: headroom, budget and session-cost limits that apply to every plan
+and account your agents draw on, in every harness (enforced where the
+harness can pause a tool call, advice where it cannot). It also shows which
+account actually paid when a request went through a router, grades agent
+DX the same way across harnesses, and pauses an agent before a plan window
+runs out when you set a boundary on `plan_left_pct`. The core needs no
+upload at all; a team gets derived figures only, never prompts or code.
+
 Docs: <https://klarlabs-studio.github.io/tokenops/> · Releases: <https://github.com/klarlabs-studio/tokenops/releases>
 
 ## Install

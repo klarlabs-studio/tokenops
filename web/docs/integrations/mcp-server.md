@@ -65,8 +65,9 @@ changes nothing, and the agent is told not to retry.
 | `tokenops_experiment` | `start`, `stop` | `status` |
 
 A client that cannot ask is refused, and the refusal names the command to
-run yourself, such as `tokenops mode active`, `tokenops routing rule set
-<provider> <from> <to>` or `tokenops routing decide <key> approve`. That
+run yourself, such as `tokenops mode active`,
+`tokenops routing rule set <provider> <from> <to>` or
+`tokenops routing decide <key> approve`. That
 includes clients that offer elicitation but reach `tokenops serve` over a
 connection that cannot carry a request from the server: over stdio that
 works for clients on the stateless `2026-07-28` protocol revision, and
