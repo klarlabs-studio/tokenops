@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	mcpgo "go.klarlabs.de/mcp"
 	mcpserver "go.klarlabs.de/mcp/server"
 
+	"go.klarlabs.de/tokenops/internal/config"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
 
@@ -184,15 +186,32 @@ func shellArg(v string) string {
 	return b.String()
 }
 
-// cli builds a tokenops command line from words, quoting the agent's.
-func cli(fixed string, words ...string) string {
-	parts := make([]string, 0, 1+len(words))
-	parts = append(parts, "tokenops "+fixed)
-	for _, w := range words {
-		parts = append(parts, shellArg(w))
+// cli builds a tokenops command line: the command's path, its positional
+// words and its flags, quoting the agent's values. A word that starts with
+// a dash would be read as a flag if pasted, so when one does the flags go
+// first and -- ends them: everything after it is a positional word.
+func cli(path string, args []string, flags ...string) string {
+	parts := make([]string, 0, 2+len(args)+len(flags))
+	parts = append(parts, "tokenops "+path)
+	dashed := false
+	for _, a := range args {
+		dashed = dashed || strings.HasPrefix(a, "-")
+	}
+	if dashed {
+		parts = append(parts, flags...)
+		parts = append(parts, "--")
+	}
+	for _, a := range args {
+		parts = append(parts, shellArg(a))
+	}
+	if !dashed {
+		parts = append(parts, flags...)
 	}
 	return strings.Join(parts, " ")
 }
+
+// words is its arguments as a slice, for cli.
+func words(w ...string) []string { return w }
 
 // details lists the given arguments that were passed, quoted.
 func details(args map[string]any, keys ...string) string {
@@ -210,79 +229,134 @@ func details(args map[string]any, keys ...string) string {
 	return " (" + strings.Join(out, ", ") + ")"
 }
 
-const moreFlags = ", with flags for the other values (see --help)"
-
 func routingDecideChange(args map[string]any) (*change, error) {
 	key, decision := argString(args, "key"), argString(args, "decision")
 	summary := fmt.Sprintf("Approve the routing proposal %s: requests that match it will run on the proposed, pricier model.", quoted(key))
 	if decision != "approve" {
 		summary = fmt.Sprintf("Deny the routing proposal %s: matching requests stay on the model they asked for.", quoted(key))
 	}
-	return &change{summary: summary, command: cli("routing decide", key, decision)}, nil
+	// The tool and the terminal both hand the key and decision to the
+	// same decision, untrimmed.
+	return &change{summary: summary, command: cli("routing decide", words(argRaw(args, "key"), argRaw(args, "decision")))}, nil
 }
 
 func routingRuleChange(args map[string]any) (*change, error) {
-	provider, from := argString(args, "provider"), argString(args, "from_model")
+	// The tool and the terminal store the rule's values as given, so the
+	// command carries them untrimmed.
+	provider, from := argRaw(args, "provider"), argRaw(args, "from_model")
 	if argBool(args, "delete") {
 		return &change{
 			summary: fmt.Sprintf("Remove the routing rule for %s requests to %s.", quoted(provider), quoted(from)),
-			command: cli("routing rule unset", provider, from),
+			command: cli("routing rule unset", words(provider, from)),
 		}, nil
 	}
-	to := argString(args, "to_model")
-	cmd := cli("routing rule set", provider, from, to)
-	if _, ok := args["quality"]; ok || args["fallbacks"] != nil {
-		cmd += moreFlags
+	to := argRaw(args, "to_model")
+	quality, _ := args["quality"].(float64)
+	fallbacks, err := stringList(args, "fallbacks")
+	if err != nil {
+		return nil, err
+	}
+	// Refused before anyone is asked, with the check the tool and the
+	// terminal run: an operator is not asked to approve a rule that would
+	// not be written.
+	for _, f := range fallbacks {
+		if f == "" {
+			// --fallback '' sets no fallback at all, so the command could
+			// not say what the tool would store.
+			return nil, &mcpgo.ToolInputError{Message: "routing rule: a fallback must not be empty"}
+		}
+	}
+	rule := config.RoutingRuleConfig{Provider: provider, FromModel: from, ToModel: to, Quality: quality, Fallbacks: fallbacks}
+	if err := rule.Validate(); err != nil {
+		return nil, &mcpgo.ToolInputError{Message: "routing rule: " + err.Error()}
+	}
+	fl := flagWords(args, cliFlag{"quality", "--quality"})
+	for _, f := range fallbacks {
+		// --fallback reads its value as comma-separated values, so a
+		// fallback with a comma or a quote is written as one CSV field.
+		fl = append(fl, flagValue("--fallback", csvField(f)))
 	}
 	return &change{
 		summary: fmt.Sprintf("Route %s requests for %s to %s%s. In active mode the proxy rewrites matching live requests.",
 			quoted(provider), quoted(from), quoted(to), details(args, "quality", "fallbacks")),
-		command: cmd,
+		command: cli("routing rule set", words(provider, from, to), fl...),
 	}, nil
 }
 
+// stringList is a list-of-strings argument; anything else in it is the
+// agent's to correct.
+func stringList(args map[string]any, k string) ([]string, error) {
+	raw, ok := args[k]
+	if !ok || raw == nil {
+		return nil, nil
+	}
+	items, ok := raw.([]any)
+	if !ok {
+		return nil, &mcpgo.ToolInputError{Message: k + " must be a list of strings"}
+	}
+	out := make([]string, 0, len(items))
+	for _, it := range items {
+		s, ok := it.(string)
+		if !ok {
+			return nil, &mcpgo.ToolInputError{Message: k + " must be a list of strings"}
+		}
+		out = append(out, s)
+	}
+	return out, nil
+}
+
+// csvField is v as one field of a comma-separated list, the way a string
+// slice flag reads it.
+func csvField(v string) string {
+	var b strings.Builder
+	w := csv.NewWriter(&b)
+	_ = w.Write([]string{v})
+	w.Flush()
+	return strings.TrimSuffix(strings.TrimSuffix(b.String(), "\n"), "\r")
+}
+
+// planFlags are plan set's flags for the plan route's extras.
+var planFlags = []cliFlag{
+	{"spend_limit_usd", "--spend-limit"}, {"limit_window", "--limit-window"}, {"rate_factor", "--rate-factor"},
+	{"price", "--price"}, {"currency", "--currency"}, {"since", "--since"},
+}
+
 func planChange(args map[string]any) (*change, error) {
+	// The tool trims the provider and plan before binding; the terminal
+	// binds them as given, so the command carries them trimmed.
 	provider := argString(args, "provider")
 	if provider == "" {
 		return nil, nil // lists the bindings
 	}
 	if argBool(args, "clear") {
-		return &change{summary: fmt.Sprintf("Remove the plan bound to %s.", quoted(provider)), command: cli("plan unset", provider)}, nil
+		return &change{summary: fmt.Sprintf("Remove the plan bound to %s.", quoted(provider)), command: cli("plan unset", words(provider))}, nil
 	}
 	plan := argString(args, "plan")
 	extra := details(args, "spend_limit_usd", "limit_window", "rate_factor", "price", "currency", "since")
-	cmd := cli("plan set", provider, plan)
-	if extra != "" {
-		cmd += moreFlags
-	}
 	summary := fmt.Sprintf("Bind %s to the plan %s%s.", quoted(provider), quoted(plan), extra)
 	if argString(args, "since") != "" {
 		summary += " since re-marks usage recorded as billed since that date as plan-covered."
 	}
-	return &change{summary: summary, command: cmd}, nil
+	return &change{summary: summary, command: cli("plan set", words(provider, plan), flagWords(args, planFlags...)...)}, nil
 }
 
 func budgetChange(args map[string]any) (*change, error) {
 	name := argString(args, "name")
 	if argBool(args, "delete") {
-		return &change{summary: fmt.Sprintf("Delete the budget %s.", quoted(name)), command: cli("budget unset", argRaw(args, "name"))}, nil
+		return &change{summary: fmt.Sprintf("Delete the budget %s.", quoted(name)), command: cli("budget unset", words(argRaw(args, "name")))}, nil
 	}
 	if w := argString(args, "remove_window"); w != "" {
 		return &change{
 			summary: fmt.Sprintf("Remove the %s window of the budget %s.", quoted(w), quoted(name)),
-			command: cli("budget unset", argRaw(args, "name")) + " " + flags(args, cliFlag{"remove_window", "--window"}),
+			command: cli("budget unset", words(argRaw(args, "name")), flagWords(args, cliFlag{"remove_window", "--window"})...),
 		}, nil
-	}
-	cmd := cli("budget set", argRaw(args, "name"))
-	if f := flags(args, budgetFlags...); f != "" {
-		cmd += " " + f
 	}
 	summary := fmt.Sprintf("Set the budget %s%s.", quoted(name),
 		details(args, "window", "limit_usd", "limit_tokens", "warn_at", "crit_at", "workflow_id", "agent_id", "basis", "tag", "provider", "budget_mode", "require", "add_window"))
 	if strings.EqualFold(argString(args, "budget_mode"), "hard") {
 		summary += " A hard window is a spend boundary; it starts in shadow, and once it holds it can be changed only from a terminal."
 	}
-	return &change{summary: summary, command: cmd}, nil
+	return &change{summary: summary, command: cli("budget set", words(argRaw(args, "name")), flagWords(args, budgetFlags...)...)}, nil
 }
 
 // cliFlag maps a public argument to the terminal flag that sets the same
@@ -298,12 +372,13 @@ var budgetFlags = []cliFlag{
 	{"add_window", "--add-window"},
 }
 
-// flags writes the passed arguments as terminal flags: a true bool as the
-// bare flag, a number in its shortest exact form, anything else as one
+// flagWords writes the passed arguments as terminal flags: a true bool as
+// the bare flag, a number in its shortest exact form, anything else as one
 // quoted shell word, as passed: the tool gets it untrimmed too. Arguments
 // left out or zero are left out, as the terminal's own defaults then apply
-// to both.
-func flags(args map[string]any, fs ...cliFlag) string {
+// to both. A value is joined to its flag with =, so one that starts with a
+// dash cannot be read as a flag of its own.
+func flagWords(args map[string]any, fs ...cliFlag) []string {
 	var out []string
 	for _, f := range fs {
 		switch v := args[f.arg].(type) {
@@ -313,15 +388,24 @@ func flags(args map[string]any, fs ...cliFlag) string {
 			}
 		case float64:
 			if v != 0 {
-				out = append(out, f.name+" "+strconv.FormatFloat(v, 'f', -1, 64))
+				out = append(out, flagValue(f.name, strconv.FormatFloat(v, 'f', -1, 64)))
 			}
 		case string:
 			if v != "" {
-				out = append(out, f.name+" "+shellArg(v))
+				out = append(out, flagValue(f.name, v))
 			}
 		}
 	}
-	return strings.Join(out, " ")
+	return out
+}
+
+// flagValue is one flag with its value: --name value, or --name=value when
+// the value starts with a dash.
+func flagValue(name, v string) string {
+	if strings.HasPrefix(v, "-") {
+		return name + "=" + shellArg(v)
+	}
+	return name + " " + shellArg(v)
 }
 
 func modeChange(args map[string]any) (*change, error) {
@@ -333,7 +417,7 @@ func modeChange(args map[string]any) (*change, error) {
 	if mode == "active" {
 		summary = "Switch TokenOps to active mode: routing rules are applied to live proxied traffic and a budget watcher runs; a daemon is started if none runs."
 	}
-	return &change{summary: summary, command: cli("mode", mode)}, nil
+	return &change{summary: summary, command: cli("mode", words(mode))}, nil
 }
 
 func preferredModelChange(args map[string]any) (*change, error) {
@@ -344,20 +428,20 @@ func preferredModelChange(args map[string]any) (*change, error) {
 	if argBool(args, "clear") {
 		return &change{
 			summary: fmt.Sprintf("Remove the preferred-model ceiling for %s: routing to pricier models is no longer referred to you.", quoted(provider)),
-			command: cli("preferred-model unset", provider),
+			command: cli("preferred-model unset", words(provider)),
 		}, nil
 	}
 	model := argString(args, "model")
 	return &change{
 		summary: fmt.Sprintf("Make %s the most expensive model %s may be routed to.", quoted(model), quoted(provider)),
-		command: cli("preferred-model set", provider, model),
+		command: cli("preferred-model set", words(provider, model)),
 	}, nil
 }
 
 func usageMeterChange(args map[string]any) (*change, error) {
 	return &change{
 		summary: fmt.Sprintf("Connect claude.ai's usage meter%s with the session key in the environment or config, and turn it on in config.yaml.", details(args, "org")),
-		command: "tokenops vendor-usage setup claude-subscription",
+		command: cli("vendor-usage setup", words("claude-subscription"), flagWords(args, cliFlag{"org", "--org"})...),
 	}, nil
 }
 
@@ -370,37 +454,39 @@ func coachChange(args map[string]any) (*change, error) {
 		if word == "" {
 			word = tip
 		}
-		cmd := cli("coach tip", word)
-		if argString(args, "tip_id") != "" || args["snooze_minutes"] != nil {
-			cmd += moreFlags
+		// The tool looks the id up as given, as --id does; a snooze of
+		// zero or less takes the default on both.
+		fl := flagWords(args, cliFlag{"tip_id", "--id"})
+		if m, _ := args["snooze_minutes"].(float64); m != 0 {
+			fl = append(fl, flagValue("--for", strconv.FormatFloat(m, 'f', -1, 64)+"m"))
 		}
 		return &change{
 			summary: fmt.Sprintf("Answer the coach's tip%s as %s.", details(args, "tip_id", "snooze_minutes"), quoted(tip)),
-			command: cmd,
+			command: cli("coach tip", words(word), fl...),
 		}, nil
 	}
 	if preset := argString(args, "preset"); preset != "" {
 		return &change{
 			summary: fmt.Sprintf("Set the coach preset %s: it sets every power's autonomy and installs the hooks it needs on every installed agent.", quoted(preset)),
-			command: cli("coach preset", preset),
+			command: cli("coach preset", words(preset)),
 		}, nil
 	}
 	var parts, cmds []string
 	if a := argString(args, "autonomy"); a != "" {
 		parts = append(parts, "every power's autonomy to "+quoted(a))
-		cmds = append(cmds, cli("coach autonomy", a))
+		cmds = append(cmds, cli("coach autonomy", words(a)))
 	}
 	if power, rung := argString(args, "power"), argString(args, "rung"); power != "" || rung != "" {
 		parts = append(parts, fmt.Sprintf("the %s power's autonomy to %s", quoted(power), quoted(rung)))
-		cmds = append(cmds, cli("coach set", power, rung))
+		cmds = append(cmds, cli("coach set", words(power, rung)))
 	}
 	if v := argString(args, "verbosity"); v != "" {
 		parts = append(parts, "the coach's verbosity to "+quoted(v))
-		cmds = append(cmds, cli("coach verbosity", v))
+		cmds = append(cmds, cli("coach verbosity", words(v)))
 	}
 	if h := argString(args, "holdout"); h != "" {
 		parts = append(parts, "the share of sessions whose cost and drift tips are held back to "+quoted(h))
-		cmds = append(cmds, cli("coach holdout", argRaw(args, "holdout")))
+		cmds = append(cmds, cli("coach holdout", words(argRaw(args, "holdout"))))
 	}
 	if len(parts) == 0 {
 		return nil, nil // reports the settings
@@ -423,30 +509,27 @@ func experimentChange(args map[string]any) (*change, error) {
 		if err != nil {
 			return nil, err
 		}
-		words := []string{cli("experiment start", provider, baseline, variant)}
-		if f := flags(args, experimentStartFlags...); f != "" {
-			words = append(words, f)
-		}
+		fl := flagWords(args, experimentStartFlags...)
 		shown := map[string]any{}
 		for k, v := range args {
 			shown[k] = v
 		}
 		delete(shown, "guardrails")
 		for _, g := range guardrails {
-			words = append(words, "--guardrail "+shellArg(g))
+			fl = append(fl, flagValue("--guardrail", g))
 		}
 		if len(guardrails) > 0 {
 			shown["guardrails"] = strings.Join(guardrails, " ")
 		}
 		// The tool trims the reason it records, as stop does.
 		if r := argString(args, "reason"); r != "" {
-			words = append(words, "--reason "+shellArg(r))
+			fl = append(fl, flagValue("--reason", r))
 		}
 		extra := details(shown, "duration_days", "max_pairs", "objective_metric", "min_improvement_pct", "guardrails", "reason")
 		return &change{
 			summary: fmt.Sprintf("Start a routing experiment on %s traffic: %s against the variant %s%s. Part of the matching live traffic runs on the variant until it ends.",
 				quoted(provider), quoted(baseline), quoted(variant), extra),
-			command: strings.Join(words, " "),
+			command: cli("experiment start", words(provider, baseline, variant), fl...),
 		}, nil
 	case "stop":
 		id, reason := argRaw(args, "experiment_id"), argString(args, "reason")
@@ -454,7 +537,7 @@ func experimentChange(args map[string]any) (*change, error) {
 		// command always names the reason the tool will record.
 		return &change{
 			summary: fmt.Sprintf("Stop the routing experiment %s%s; its evidence is kept.", quoted(id), details(args, "reason")),
-			command: cli("experiment stop", id) + " --reason " + shellArg(reason),
+			command: cli("experiment stop", words(id), flagValue("--reason", reason)),
 		}, nil
 	}
 	return nil, nil // status
