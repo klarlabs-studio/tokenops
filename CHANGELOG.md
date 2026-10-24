@@ -14,7 +14,7 @@
 
 ### Fixed
 
-- **proxy:** a streaming reply to a request with a body is no longer cut after its first event. When the proxy forwarded the body itself (observer, cache and routing off, or a body over the 4 MiB capture limit), Go's HTTP server consumed and closed the client's request body as soon as the reply's first bytes went out, while the proxy was still finishing its read of that body in another goroutine. When that read came second, the proxy closed its connection to the provider: the client got one event and then `unexpected EOF`, and the daemon logged `ReverseProxy read error during body copy: ... use of closed network connection`. It happened under load, and was likelier with a provider that starts answering before it has read the whole request. Provider routes now read the request and write the reply at the same time (HTTP/1 full duplex; HTTP/2 already did)
+- **proxy:** a streaming reply to a request with a body is no longer cut after its first event. When the proxy forwarded the body itself (observer, cache and routing off, or a body over the 4 MiB capture limit), it read the body once more after its last byte to confirm the end, from another goroutine, while Go's HTTP server closes the request body as soon as the reply's first bytes go out. When the provider answered before that last read, the read failed and the proxy closed its connection to the provider: the client got one event and then `unexpected EOF`, and the daemon logged `ReverseProxy read error during body copy: ... use of closed network connection`. It happened under load. Once a request body has reached its end, the proxy now answers further reads with the end itself instead of reading the closed body
 
 ## 0.108.0 - 2026-10-24
 

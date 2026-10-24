@@ -3,13 +3,13 @@ package proxy
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -131,63 +131,47 @@ func TestProxyStreamsPastBodyDeadline(t *testing.T) {
 	}
 }
 
-// TestProxyForwardsBodyAfterReplyStarts pins that a provider route keeps
-// the request body readable once the reply has started. An HTTP/1 server
-// otherwise consumes and closes any unread request body as the reply's
-// header is written, while the reverse proxy's transport may still be
-// reading that body in its own goroutine: its next read fails, it closes
-// the upstream connection, and the stream is cut after the first event.
-// TestProxyStreamsPastBodyDeadline lost that race on CI when the
-// transport's end-of-body check ran after the header was written; here
-// the upstream answers before it reads the body, so the outcome does not
-// depend on scheduling.
-func TestProxyForwardsBodyAfterReplyStarts(t *testing.T) {
+// TestProviderRouteBodyStaysAtEOFAfterReply pins the cause of a CI flake
+// in TestProxyStreamsPastBodyDeadline ("POST: received 1 of 6 events").
+// The reverse proxy's transport reads the request body once more after
+// its last byte to confirm EOF, from its own goroutine. An HTTP/1 server
+// closes that body when the reply's header is written, so a confirming
+// read that came after the provider's first event failed, and the
+// transport closed the upstream connection. Here the handler forces that
+// order: it reads the body to the end, writes the header, then reads
+// again, as the transport would have. The order is fixed by the handler,
+// so the test does not depend on scheduling.
+func TestProviderRouteBodyStaysAtEOFAfterReply(t *testing.T) {
 	const payload = `{"model":"gpt-4o-mini","stream":true}`
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// The upstream, a Go server too, must not discard the body itself.
-		if err := http.NewResponseController(w).EnableFullDuplex(); err != nil {
-			t.Error(err)
+	for _, latched := range []bool{false, true} {
+		var lateErr error
+		var h http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if b, err := io.ReadAll(io.LimitReader(r.Body, int64(len(payload)))); err != nil || string(b) != payload {
+				t.Errorf("body %q, err %v", b, err)
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			fmt.Fprint(w, "data: 0\n\n")
+			w.(http.Flusher).Flush() // the server closes the request body here
+			_, lateErr = r.Body.Read(make([]byte, 1))
+		})
+		if latched {
+			h = latchRequestEOF(h)
 		}
-		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprint(w, "data: started\n\n")
-		w.(http.Flusher).Flush()
-		b, err := io.ReadAll(r.Body)
-		if err != nil || string(b) != payload {
-			fmt.Fprintf(w, "data: body %q, err %v\n\n", b, err)
-			return
+		srv := httptest.NewServer(h)
+		resp, err := http.Post(srv.URL, "application/json", strings.NewReader(payload))
+		if err != nil {
+			t.Fatal(err)
 		}
-		fmt.Fprint(w, "data: body-ok\n\n")
-	}))
-	defer upstream.Close()
-	// The body arrives only after the first event; the read timeout ends
-	// the request if the proxy never lets it through.
-	srv := startTimeoutProxy(t, upstream.URL, 2*time.Second)
-
-	pr, pw := io.Pipe()
-	req, _ := http.NewRequest(http.MethodPost, "http://"+srv.Addr()+"/openai/v1/chat/completions", pr)
-	req.ContentLength = int64(len(payload))
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	var events []string
-	sc := bufio.NewScanner(resp.Body)
-	for sc.Scan() {
-		data, ok := strings.CutPrefix(sc.Text(), "data: ")
-		if !ok {
-			continue
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+		srv.Close()
+		switch {
+		case latched && lateErr != io.EOF:
+			t.Errorf("latched: the confirming read after the reply got %v, want io.EOF: the transport would close the upstream connection", lateErr)
+		case !latched && !errors.Is(lateErr, http.ErrBodyReadAfterClose):
+			// Guards the premise: if net/http stops closing the body at the
+			// reply, this test no longer exercises the race.
+			t.Errorf("unlatched: the confirming read got %v, want http.ErrBodyReadAfterClose", lateErr)
 		}
-		events = append(events, data)
-		if len(events) == 1 {
-			// Send the body only once the reply has started.
-			go func() {
-				_, _ = io.WriteString(pw, payload)
-				_ = pw.Close()
-			}()
-		}
-	}
-	if want := []string{"started", "body-ok"}; !slices.Equal(events, want) {
-		t.Errorf("events %q (scan err %v), want %q: the request body did not reach the upstream once the reply had started", events, sc.Err(), want)
 	}
 }

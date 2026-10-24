@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -135,26 +136,45 @@ func (s *Server) mountReverseProxy(mux *http.ServeMux, route ProviderRoute) erro
 		}
 		handler = mw(handler)
 	}
-	mux.Handle(prefix, s.fullDuplex(handler))
+	mux.Handle(prefix, latchRequestEOF(handler))
 	return nil
 }
 
-// fullDuplex lets a provider route keep reading the request body while it
-// writes the reply. An HTTP/1 server otherwise consumes and closes any
-// unread request body as the reply's header is written, but the reverse
-// proxy's transport forwards that body from its own goroutine: when it
-// reads after the close (its end-of-body check, or a body the upstream
-// had not finished reading before it answered), it closes the upstream
-// connection and cuts a streaming reply after its first event. HTTP/2 is
-// always full duplex. It wraps the route outermost, where the
-// ResponseWriter is still the server's own.
-func (s *Server) fullDuplex(next http.Handler) http.Handler {
+// latchRequestEOF keeps the reverse proxy's transport off the request
+// body once it has read to the end. The transport forwards the body from
+// its own goroutine and, after the last byte, reads once more to confirm
+// EOF. An HTTP/1 server closes the body when the reply's header is
+// written, so when the provider answered before that confirming read, the
+// read failed with ErrBodyReadAfterClose, the transport took it for a
+// write error and closed the upstream connection, cutting a streaming
+// reply after its first event. Full duplex would avoid the close, but on
+// Go 1.26 it also leaves a connection whose body read failed open for
+// reuse.
+func latchRequestEOF(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := http.NewResponseController(w).EnableFullDuplex(); err != nil {
-			s.logger.Debug("full duplex unavailable; a reply may cut the request body short", "err", err)
+		if r.Body != nil && r.Body != http.NoBody {
+			r.Body = &eofLatchBody{ReadCloser: r.Body}
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// eofLatchBody answers io.EOF without reading again once its body has
+// returned io.EOF.
+type eofLatchBody struct {
+	io.ReadCloser
+	eof bool
+}
+
+func (b *eofLatchBody) Read(p []byte) (int, error) {
+	if b.eof {
+		return 0, io.EOF
+	}
+	n, err := b.ReadCloser.Read(p)
+	if err == io.EOF {
+		b.eof = true
+	}
+	return n, err
 }
 
 // singleJoin merges base and tail with exactly one separating "/" while
