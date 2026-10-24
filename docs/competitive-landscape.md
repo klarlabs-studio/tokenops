@@ -152,6 +152,26 @@ is what TokenOps should build next, and what it should stop saying.
 | 5 | **Org caps as vendor readings.** Read OpenAI Business per-seat limits, Copilot budgets and the Claude apps gateway cap into boundaries, so a team rule can sit under the vendor's cap, not beside it | G7 | A boundary can name the vendor's own org limit as its ceiling |
 | 6 | **Transcript readers, wave 2**, in order of reach (Claude Desktop, Junie, Droid, Qwen Code), each verified against a real transcript | G1 | Coverage matrix updated |
 
+**Step 2 and 3 audit (2026-10-24, against Claude Code 2.1.307's own
+code).** Step 2, transcript route: the pause point now reads a call that
+Claude Code's auto mode classifier, a permission rule, a plugin or a
+PreToolUse hook stopped as Claude Code's verdict. It is recorded as
+evidence and never as the person's yes. The `safety_event` and
+`tool_decision` OTel events would need an OTLP receiver, and TokenOps has
+none yet. Codex rollouts record no approval request or answer, and Codex
+boundaries are advice only, so nothing there asks twice. Step 3: `/usage`
+in 2.1.307 has these warning classes: `max_effort`, `workflow`,
+`always_on_context` and `large_tool_results` (2.1.299), then `cache_miss`,
+`long_context`, `subagent_heavy`, `high_parallel` and `cron` (version not
+in the changelog). The resume warning came in 2.1.304. None of the
+Claude-session tips (budget and window tiers, run-out, spend budgets, the
+compact tip, the read-guard case) shares a class with the five named in
+the changelog. The nearest pairs are the compact tip with `long_context`
+and `cache_miss`, and subagent model advice with `subagent_heavy`. Ours
+fire live in the session, at a context line or a specific Agent call,
+while `/usage` warns after the fact when it is opened. Nothing was stood
+down; revisit if `/usage` starts warning live.
+
 **Stop claiming** (landing page and README):
 
 - "Each vendor's own meter: 🚫 acts inside the session" and "🚫 limits you set".
