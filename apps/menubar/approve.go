@@ -11,11 +11,13 @@ import (
 	"time"
 )
 
-// An approval needs a person (ADR 0014): the daemon's API only denies,
-// because the agent a boundary stopped can reach it too, and its token is
-// readable by any process of the user. So Approve does not call the API.
-// It opens a terminal running `tokenops approve <id> --confirm`, which
-// shows what is waiting and answers only when the person types yes.
+// An approval needs a person (ADR 0014): the daemon's API takes an
+// approval only with a presence-key signature (ADR 0015), because the
+// agent a boundary stopped can reach the API too, and its token is
+// readable by any process of the user. With a key enrolled, Approve signs
+// inline (presence.go). Without one, it opens a terminal running
+// `tokenops approve <id> --confirm`, which shows what is waiting and
+// answers only when the person types yes.
 
 var decisionID = regexp.MustCompile(`^bnd-[0-9a-f]{12}$`)
 

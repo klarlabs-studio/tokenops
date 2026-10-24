@@ -349,11 +349,15 @@
   }
 
   // Decisions a boundary is waiting on (ADR 0014). Deny goes through the
-  // daemon; Approve opens a terminal that asks, because an approval needs
-  // a person there and the daemon's API only denies.
+  // daemon and never signs. Approve needs a person: with a presence key
+  // enrolled (ADR 0015) it raises the Touch ID, Apple Watch or password
+  // dialog and posts the signed answer; without one it opens a terminal
+  // that asks. Go decides which, and says in the note what happened.
   function boundaryWaits(main, v) {
     var pending = (v.boundaries && v.boundaries.pending) || [];
     if (!pending.length) return;
+    var presence = (v.boundaries && v.boundaries.presence) || {};
+    var inPerson = !!presence.key_id && presence.state !== "held";
     var box = el("section", "metric waits");
     var head = el("h3", null, "Waiting on you");
     head.appendChild(el("span", "count", String(pending.length)));
@@ -368,10 +372,16 @@
         // An organisation rule: its role answers in the team plane, not here.
         item.appendChild(el("div", "note", p.approve));
       } else {
-        var approve = el("button", "wait-approve", "Approve…");
+        var approve = el("button", "wait-approve", inPerson ? "Approve" : "Approve…");
         approve.type = "button";
-        approve.title = "Opens a terminal that shows this and asks you to confirm";
-        approve.addEventListener("click", function () { answer("boundary.approve", p.id); });
+        approve.title = inPerson
+          ? "Asks for Touch ID, your Apple Watch or your password, then approves this step"
+          : "Opens a terminal that shows this and asks you to confirm";
+        approve.addEventListener("click", function () {
+          approve.disabled = true;
+          approve.textContent = inPerson ? "Approving…" : "Opening…";
+          answer("boundary.approve", p.id);
+        });
         actions.appendChild(approve);
       }
       var deny = el("button", "wait-deny", "Deny");
@@ -432,6 +442,7 @@
     var note = document.getElementById("note");
     note.hidden = !v.note;
     note.textContent = v.note || "";
+    note.classList.toggle("warn", !!v.note_warn);
     var reports = (head.reports || []).slice().sort(function (a, b) { return busiest(b) - busiest(a); });
     if (!reports.some(function (r) { return r.provider === state.selected; }) && reports.length) {
       state.selected = reports[0].provider;
