@@ -54,12 +54,23 @@ make menubar-test   # tests, no window needed
   `boundaries.deny` (`boundary.deny`), `boundaries.approve`
   (`boundary.approve`) and `panel.close`.
 - Decisions a boundary is waiting on (ADR 0014) are listed under *Waiting on
-  you*. Deny answers through the daemon. Approve opens a terminal running
-  `tokenops approve <id> --confirm`, which shows what is waiting and answers
-  only when you type yes: the daemon's API only denies, because the agent a
-  boundary stopped can reach it too, so an approval needs a person at a
-  terminal. A decision under an organisation rule that names an approver shows
-  who answers it (that role, in the team plane) and offers Deny only.
+  you*. Deny answers through the daemon in one click and never signs.
+  Approve needs a person, because the agent a boundary stopped can reach the
+  daemon's API too. With a presence key enrolled (ADR 0015), Approve asks the
+  daemon for the statement (`POST /api/boundaries/statements`), runs the
+  helper bundled beside the app's binary
+  (`TokenOps.app/Contents/MacOS/tokenops-presence sign`), which shows the
+  Touch ID, Apple Watch or password dialog with the daemon's text naming the
+  rule, action and session, and posts the daemon's proof back with the
+  signature added. The panel's note says what happened: approved and by
+  which key, or why not (cancelled, Touch ID or password did not match,
+  screen locked, no screen, a key from another Mac). Without a key, without
+  the helper in the bundle, or with a daemon from before the statement route,
+  Approve… opens a terminal running `tokenops approve <id> --confirm`, which
+  shows what is waiting and answers only when you type yes. The app never
+  builds a statement itself. A decision under an organisation rule that names
+  an approver shows who answers it (that role, in the team plane) and offers
+  Deny only.
 - Refresh, in the panel (⌘R) or the right-click menu, asks the daemon's
   usage readers to poll now (`POST /api/sources/refresh`), shows what the
   daemon has at once, and reads again as the new readings arrive. The

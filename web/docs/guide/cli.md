@@ -185,7 +185,13 @@ left. Click it for a panel with every plan's windows, pace, usage and the
 coach's findings; hover for each window's reset; right-click for Launch at
 Login and Alerts. It alerts when a window drops to 20% left, to 5%, and when it is used up,
 saying when it resets and, while it is still running, when it runs out at
-this pace; a window that alerted says so again when it resets. Upgrades refresh the installed copy.
+this pace; a window that alerted says so again when it resets. Decisions a
+boundary is waiting on are listed in the panel: Deny answers at once, and
+with a presence key enrolled Approve shows the Touch ID dialog and answers
+inline (without one it opens a terminal running `tokenops approve`).
+Upgrades refresh the installed copy; `--refresh` stops only the app itself,
+never the presence helper inside it, so a dialog you are answering is not
+cut off.
 
 ### `tokenops checkup`
 

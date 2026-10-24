@@ -208,7 +208,13 @@ tokenops deny bnd-1a2b3c4d5e6f
 ```
 
 The menu bar lists what waits under *Waiting on you*. **Deny** answers
-there. **Approve…** opens a terminal running `tokenops approve <id>
+there, in one click, and never asks for a signature. With a
+[presence key](#presence-checked-approval) enrolled, **Approve** shows the
+Touch ID, Apple Watch or password dialog and answers with the signed
+approval, with no terminal; the panel then says what happened ("Approved
+session-spend…, signed with presence key pk-…", or why not: the dialog was
+cancelled, the screen is locked, the key is from another Mac). Without a
+key, **Approve…** opens a terminal running `tokenops approve <id>
 --confirm`, so the approval is still you, at a terminal, typing yes.
 
 Only a person should approve: `tokenops approve` refuses to run without a
@@ -376,9 +382,20 @@ prevented. The settings endpoints (`/api/mode`, `/api/routing/rules`,
 without a Secure Enclave keep the channel guarantees above.
 
 The helper, `tokenops-presence`, ships beside `tokenops` in the macOS
-release and inside `TokenOps.app`; the CLI and daemon stay pure Go. The
-menu bar's **Approve…** still opens a terminal running `tokenops approve
-<id> --confirm`, which now shows the dialog.
+release and inside `TokenOps.app`; the CLI and daemon stay pure Go.
+
+**In the menu bar.** With a key enrolled, the menu bar approves inline. It
+asks the daemon for the statement that approves the decision
+(`POST /api/boundaries/statements`): the exact bytes the key signs and the
+dialog's text, both built by the daemon, never by the app. The helper
+inside `TokenOps.app` signs those bytes, showing the dialog, and the menu
+bar posts the daemon's proof back with only the signature added; the
+daemon checks it against the enrolled key as it checks `tokenops approve`.
+A cancelled dialog, a locked screen or a key from another Mac answers
+nothing, and the panel says which. With no key enrolled, a held key, or a
+`TokenOps.app` without the helper, **Approve…** opens the terminal as
+before. Handing out a statement grants nothing: it is worthless without
+the key's signature, and only the dialog can give one.
 
 ## Where a boundary is enforced
 
