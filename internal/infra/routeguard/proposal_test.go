@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestToolResultsReadsRejectionsInBothContentShapes(t *testing.T) {
@@ -17,10 +18,10 @@ func TestToolResultsReadsRejectionsInBothContentShapes(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := toolResults(p)
-	want := map[string]bool{"a": true, "b": true, "c": false, "d": false}
-	for id, rejected := range want {
-		if r, ok := got[id]; !ok || r != rejected {
-			t.Errorf("%s: rejected=%v seen=%v; want %v", id, r, ok, rejected)
+	want := map[string]Outcome{"a": OutcomeDeclined, "b": OutcomeDeclined, "c": OutcomeRan, "d": OutcomeRan}
+	for id, o := range want {
+		if v, ok := got[id]; !ok || v.Outcome != o {
+			t.Errorf("%s: outcome=%v seen=%v; want %v", id, v.Outcome, ok, o)
 		}
 	}
 }
@@ -49,18 +50,59 @@ func TestSettleProposalsKeepsDeclinesAndDropsApprovals(t *testing.T) {
 	}
 }
 
-func TestToolAnsweredReadsThePrompt(t *testing.T) {
+func TestToolVerdictTellsThePersonFromClaudeCode(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "t.jsonl")
-	body := `{"message":{"content":[{"type":"tool_result","tool_use_id":"ok","content":"done"}]}}
+	body := `{"timestamp":"2026-10-20T10:00:00Z","message":{"content":[{"type":"tool_result","tool_use_id":"ok","content":"done"}]}}
 {"message":{"content":[{"type":"tool_result","tool_use_id":"no","is_error":true,"content":"The user doesn't want to proceed with this tool use."}]}}
+{"message":{"content":[{"type":"tool_result","tool_use_id":"sub-no","is_error":true,"content":"Permission for this tool use was denied. The tool use was rejected."}]}}
+{"message":{"content":[{"type":"tool_result","tool_use_id":"auto","is_error":true,"content":"Permission for this action was denied by the Claude Code auto mode classifier. Reason: [x]."}]}}
+{"message":{"content":[{"type":"tool_result","tool_use_id":"check","is_error":true,"content":"Permission for this action has been denied. Reason: x"}]}}
+{"message":{"content":[{"type":"tool_result","tool_use_id":"rule","is_error":true,"content":[{"type":"text","text":"Permission to use Bash with command rm -rf x has been denied."}]}]}}
+{"message":{"content":[{"type":"tool_result","tool_use_id":"plugin","is_error":true,"content":"Permission to use Bash denied by plugin guard: no"}]}}
+{"message":{"content":[{"type":"tool_result","tool_use_id":"hook","is_error":true,"content":"PreToolUse:Bash hook error: blocked"}]}}
+{"message":{"content":[{"type":"tool_result","tool_use_id":"freehook","is_error":true,"content":"not on fridays"}]}}
+{"message":{"content":[{"type":"tool_result","tool_use_id":"echo","content":"Permission to use Bash has been denied."}]}}
 `
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	for id, want := range map[string][2]bool{"ok": {true, true}, "no": {false, true}, "later": {false, false}} {
-		approved, seen := ToolAnswered(path, id)
-		if approved != want[0] || seen != want[1] {
-			t.Errorf("%s: approved=%v seen=%v; want %v", id, approved, seen, want)
+	want := map[string]Verdict{
+		"ok": {Outcome: OutcomeRan, At: time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC)}, "no": {Outcome: OutcomeDeclined},
+		"sub-no": {Outcome: OutcomeDeclined},
+		"auto":   {Outcome: OutcomeVendorStopped, Stopper: StopperAutoMode}, "check": {Outcome: OutcomeVendorStopped, Stopper: StopperPermission},
+		"rule": {Outcome: OutcomeVendorStopped, Stopper: StopperPermissionRule}, "plugin": {Outcome: OutcomeVendorStopped, Stopper: StopperPlugin},
+		"hook": {Outcome: OutcomeVendorStopped, Stopper: StopperHook},
+		// A hook's free-text reason reads like a call that failed, and
+		// output that merely quotes the wording is not an error.
+		"freehook": {Outcome: OutcomeRan}, "echo": {Outcome: OutcomeRan},
+	}
+	for id, w := range want {
+		v, seen := ToolVerdict(path, id)
+		if !seen || v.Outcome != w.Outcome || v.Stopper != w.Stopper || !v.At.Equal(w.At) {
+			t.Errorf("%s: %+v seen=%v; want %+v", id, v, seen, w)
 		}
+	}
+	if _, seen := ToolVerdict(path, "later"); seen {
+		t.Error("a call with no result was seen")
+	}
+}
+
+func TestSettleProposalsDropsACallClaudeCodeStopped(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "t.jsonl")
+	body := `{"message":{"content":[{"type":"tool_result","tool_use_id":"stopped","is_error":true,"content":"Permission to use Agent has been denied."}]}}
+`
+	if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	Propose(dir, "s", Proposal{ID: "p1", ToolUseID: "stopped", Call: "c1"})
+	if got := SettleProposals(dir, "s", p); len(got) != 0 {
+		t.Fatalf("a refused call was scored as an answer: %+v", got)
+	}
+	if WasDeclined(dir, "s", "c1") {
+		t.Error("a refused call was taken for the person's decline")
+	}
+	if len(loadState(dir, "s").Proposals) != 0 {
+		t.Error("the refused proposal is still pending")
 	}
 }
