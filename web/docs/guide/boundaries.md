@@ -182,6 +182,20 @@ An answer applies to the session it was asked in, and is honoured for at
 most a day. Answering at Claude Code's prompt counts too: TokenOps reads
 the answer back and records it.
 
+Claude Code has guardrails of its own, and TokenOps reads their verdicts
+rather than asking over them. Claude Code puts a boundary's `ask` in its
+own permission prompt, so the person sees one question per call. But
+Claude Code settles the strictest answer first: when its auto mode
+classifier, a permission rule, a plugin or a PreToolUse hook stops the
+call, no prompt appears. TokenOps reads that from the call's result in
+the transcript. It does not count the stop as your yes. It records
+Claude Code's verdict as evidence on the boundary's decision (`kind:
+vendor_verdict`, with the session and call, when the result was written,
+and what stopped it), and asks at the next call. That next prompt is
+the first time you are asked, not the second. A hook that refuses with
+its own free-text reason reads like a call that ran and failed, so
+TokenOps treats it that way.
+
 Every decision names its **actor** — the client, session, agent and local
 user — and, once answered, its **approval**: who, how (`cli`, `mcp`,
 `api` or `prompt`), when, and under which rule.
