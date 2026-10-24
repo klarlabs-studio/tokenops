@@ -262,13 +262,21 @@ func newDaemonRestartCmd(rf *rootFlags) *cobra.Command {
 				progress.failure("Daemon restart failed")
 				return err
 			}
-			if err := waitForConfiguredDaemon(cmd.Context(), rf); err != nil {
+			warming, err := waitForConfiguredDaemon(cmd.Context(), rf)
+			if err != nil {
 				progress.failure("Daemon restarted but did not become healthy")
 				return err
 			}
-			progress.success("Daemon restarted and healthy")
+			if warming {
+				progress.success("Daemon restarted; warming up")
+			} else {
+				progress.success("Daemon restarted and healthy")
+			}
 			fmt.Fprintf(out, "restarted %s (%s)\n", daemon.LaunchdLabel, kind)
 			fmt.Fprintln(out, "it has re-read the config and is answering health checks")
+			if warming {
+				fmt.Fprintln(out, warmingUpNote)
+			}
 			return nil
 		},
 	}
