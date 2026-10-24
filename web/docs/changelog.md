@@ -4,7 +4,23 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.108.0**.
+Current release: **v0.109.0**.
+
+## v0.109.0 — Approvals only you can give
+
+A boundary approval can now require you, in person. Opt in with
+`tokenops boundaries presence enroll` and `enforce`: every approval then
+raises a Touch ID, Apple Watch or password dialog that names the rule,
+the action and the session, and is signed by a key held in your Mac's
+Secure Enclave. An agent with a shell can no longer approve in your
+place: the `script` trick, a hand-written answer file and an unsigned
+API call are refused and recorded, and `explain` shows which key signed
+each approval. The menu bar approves in place with the same dialog
+instead of opening Terminal. Deny never asks. Without opting in, nothing
+changes. Plan windows and budgets now read one way everywhere: what is
+left, counting down to "used up". And a streamed reply through the proxy
+is no longer cut off after its first event when the proxy forwards the
+request body itself.
 
 ## v0.108.0 — The headroom pause, on by default
 
