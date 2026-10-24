@@ -390,7 +390,7 @@ The maintainer accepted the proposed default for each:
    been refused.
 4. **Linux.** Documented as channel-only until someone asks for FIDO2.
 
-## Spike results (2026-10-24, partial)
+## Spike results (2026-10-24)
 
 Validation step 1, run on the maintainer's Mac (macOS 27.0.1, Touch ID
 enrolled) with an ad hoc signed Swift helper (no entitlements, no Developer
@@ -404,14 +404,34 @@ ID) and a verifier built with `CGO_ENABLED=0`:
 | Signing while the console is locked | fails in 8–54 ms with LocalAuthentication `-4` ("System authentication is running"); no dialog is queued for later |
 | Signature verified in pure Go (`ecdsa.VerifyASN1` over SHA-256, key from the raw X9.63 public key) | builds with `CGO_ENABLED=0`; end-to-end check pending a signature |
 
-Still open, to run from an unlocked GUI session: Touch ID, password and
-Apple Watch each succeed; Cancel fails; a second signature raises a second
-dialog; a re-signed helper still signs with the old blob; timing of one
-signature; an altered message fails the Go check. Over SSH: pending (Remote
-Login is off on the maintainer's Mac, and the standalone Tailscale app
-cannot be a Tailscale SSH server). Under launchd: not run on the
-maintainer's machine; to be covered on a macOS CI runner, which has no GUI
-session.
+Interactive checks, run the same day from the unlocked GUI session (each
+signature checked by the pure-Go verifier):
+
+| Check | Result |
+|---|---|
+| Touch ID | signs, `valid` |
+| A second signature | raises a second dialog, signs, `valid` |
+| Login password | signs, `valid` |
+| Apple Watch (paired) | signs, `valid` |
+| Helper rebuilt after enrolment (code hash `527b88c0…` enrolled, `3391b2f4…` signing) | still signs with the old blob, `valid` |
+| The message altered after signing | `INVALID` |
+| Time per approval | 2.8–6 s (the person's reaction time); without a dialog the helper fails in under 60 ms |
+| Cancel, from code (`LAContext.invalidate()` after 0.5 s) | refused, LocalAuthentication `-9` |
+| Cancel, by hand | signed in four attempts. The maintainer has a paired Apple Watch, which is offered every dialog; the likeliest cause is a Watch (or Touch ID power-key) approval landing alongside the click. Unverified. |
+
+So the key cannot sign without the dialog being approved, and a cancelled
+dialog refuses. What the manual Cancel result shows is a usability point
+for phase 4: with a paired Watch an approval can come from the wrist while
+the operator believes they cancelled on screen. The dialog's reason must
+therefore name the decision itself (rule, action, session), because that
+text is what the Watch shows, and the explain line must record that an
+approval was given by presence so an unintended one is visible afterwards.
+The manual Cancel check is repeated in phase 4 with the Watch away.
+
+Over SSH: pending (Remote Login is off on the maintainer's Mac, and the
+standalone Tailscale app cannot be a Tailscale SSH server). Under launchd:
+not run on the maintainer's machine; to be covered on a macOS CI runner,
+which has no GUI session.
 
 The locked-console result already answers part of section 6: an approval
 asked while nobody is at the Mac fails at once instead of waiting.
