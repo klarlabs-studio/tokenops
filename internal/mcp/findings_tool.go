@@ -23,11 +23,12 @@ func RegisterFindingsTool(s *Server, d PlanDeps) error {
 		OutputSchema(findings.Report{}).
 		Handler(func(ctx context.Context, _ findingsInput) (findings.Report, error) {
 			now := time.Now().UTC()
-			g, err := headroom.ComputeGlance(ctx, d.headroomDeps(), now)
+			deps := d.headroomDeps()
+			g, err := headroom.ComputeGlance(ctx, deps, now)
 			if err != nil {
 				return findings.Report{}, err
 			}
-			return findings.Compute(findings.Gather(&g, coachReport(now), findings.DefaultDir())), nil
+			return findings.Compute(findings.Gather(&g, coachReport(now), deps.Config, findings.DefaultDir())), nil
 		})
 	return s.Err()
 }
