@@ -22,6 +22,13 @@ import (
 // menubarApp is the bundle's name.
 const menubarApp = "TokenOps.app"
 
+// menubarProcess matches the running app's command line for pgrep -f and
+// pkill -f (an extended regex): the bundle's own binary only, named for
+// the app by its packager. The bundle also holds the presence helper
+// (Contents/MacOS/tokenops-presence), which a refresh must never kill:
+// it may be holding the person's Touch ID dialog for an approval.
+const menubarProcess = menubarApp + "/Contents/MacOS/TokenOps( |$)"
+
 // menubarInstalled is where `tokenops menubar` keeps the app.
 func menubarInstalled() (string, error) {
 	home, err := os.UserHomeDir()
@@ -96,7 +103,7 @@ func installMenubar(out io.Writer, src, dst string, refresh bool) error {
 	running := menubarRunning()
 	if src != "" {
 		if running {
-			_ = exec.Command("pkill", "-f", menubarApp+"/Contents/MacOS/").Run()
+			_ = exec.Command("pkill", "-f", menubarProcess).Run()
 			time.Sleep(500 * time.Millisecond)
 		}
 		if err := copyApp(src, dst); err != nil {
@@ -116,7 +123,7 @@ func installMenubar(out io.Writer, src, dst string, refresh bool) error {
 
 // menubarRunning reports whether the app is running.
 func menubarRunning() bool {
-	return exec.Command("pgrep", "-f", menubarApp+"/Contents/MacOS/").Run() == nil
+	return exec.Command("pgrep", "-f", menubarProcess).Run() == nil
 }
 
 // copyApp replaces dst with a copy of the bundle src. ditto keeps the
