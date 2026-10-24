@@ -135,8 +135,26 @@ func (s *Server) mountReverseProxy(mux *http.ServeMux, route ProviderRoute) erro
 		}
 		handler = mw(handler)
 	}
-	mux.Handle(prefix, handler)
+	mux.Handle(prefix, s.fullDuplex(handler))
 	return nil
+}
+
+// fullDuplex lets a provider route keep reading the request body while it
+// writes the reply. An HTTP/1 server otherwise consumes and closes any
+// unread request body as the reply's header is written, but the reverse
+// proxy's transport forwards that body from its own goroutine: when it
+// reads after the close (its end-of-body check, or a body the upstream
+// had not finished reading before it answered), it closes the upstream
+// connection and cuts a streaming reply after its first event. HTTP/2 is
+// always full duplex. It wraps the route outermost, where the
+// ResponseWriter is still the server's own.
+func (s *Server) fullDuplex(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := http.NewResponseController(w).EnableFullDuplex(); err != nil {
+			s.logger.Debug("full duplex unavailable; a reply may cut the request body short", "err", err)
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // singleJoin merges base and tail with exactly one separating "/" while

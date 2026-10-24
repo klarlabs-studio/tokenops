@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -127,5 +128,66 @@ func TestProxyStreamsPastBodyDeadline(t *testing.T) {
 		if got != events {
 			t.Errorf("%s: received %d of %d events (scan err %v): the stream was cut", method, got, events, sc.Err())
 		}
+	}
+}
+
+// TestProxyForwardsBodyAfterReplyStarts pins that a provider route keeps
+// the request body readable once the reply has started. An HTTP/1 server
+// otherwise consumes and closes any unread request body as the reply's
+// header is written, while the reverse proxy's transport may still be
+// reading that body in its own goroutine: its next read fails, it closes
+// the upstream connection, and the stream is cut after the first event.
+// TestProxyStreamsPastBodyDeadline lost that race on CI when the
+// transport's end-of-body check ran after the header was written; here
+// the upstream answers before it reads the body, so the outcome does not
+// depend on scheduling.
+func TestProxyForwardsBodyAfterReplyStarts(t *testing.T) {
+	const payload = `{"model":"gpt-4o-mini","stream":true}`
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The upstream, a Go server too, must not discard the body itself.
+		if err := http.NewResponseController(w).EnableFullDuplex(); err != nil {
+			t.Error(err)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: started\n\n")
+		w.(http.Flusher).Flush()
+		b, err := io.ReadAll(r.Body)
+		if err != nil || string(b) != payload {
+			fmt.Fprintf(w, "data: body %q, err %v\n\n", b, err)
+			return
+		}
+		fmt.Fprint(w, "data: body-ok\n\n")
+	}))
+	defer upstream.Close()
+	// The body arrives only after the first event; the read timeout ends
+	// the request if the proxy never lets it through.
+	srv := startTimeoutProxy(t, upstream.URL, 2*time.Second)
+
+	pr, pw := io.Pipe()
+	req, _ := http.NewRequest(http.MethodPost, "http://"+srv.Addr()+"/openai/v1/chat/completions", pr)
+	req.ContentLength = int64(len(payload))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var events []string
+	sc := bufio.NewScanner(resp.Body)
+	for sc.Scan() {
+		data, ok := strings.CutPrefix(sc.Text(), "data: ")
+		if !ok {
+			continue
+		}
+		events = append(events, data)
+		if len(events) == 1 {
+			// Send the body only once the reply has started.
+			go func() {
+				_, _ = io.WriteString(pw, payload)
+				_ = pw.Close()
+			}()
+		}
+	}
+	if want := []string{"started", "body-ok"}; !slices.Equal(events, want) {
+		t.Errorf("events %q (scan err %v), want %q: the request body did not reach the upstream once the reply had started", events, sc.Err(), want)
 	}
 }
