@@ -223,6 +223,9 @@ func writeBoundariesStatus(w io.Writer, st bcap.Status) {
 			fmt.Fprintf(w, "  note: %s\n", r.Note)
 		}
 	}
+	if st.Presence != nil {
+		fmt.Fprintf(w, "\napproval: %s\n", st.Presence.Note)
+	}
 	if len(st.Pending) > 0 {
 		fmt.Fprintln(w, "\nWaiting on you:")
 		for _, p := range st.Pending {

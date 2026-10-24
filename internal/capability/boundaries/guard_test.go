@@ -269,7 +269,7 @@ func TestAnAttendedAskIsSettledFromThePrompt(t *testing.T) {
 	}
 	envs, _ := env.Dir.Decision(first.DecisionID)
 	last := envs[len(envs)-1].Payload.(*eventschema.DecisionEvent)
-	if last.Approval.Method != MethodPrompt {
+	if last.Approval.Method != MethodPrompt || last.Approval.Presence != PresenceHarness || last.Approval.WouldRefuse != "" {
 		t.Fatalf("approval = %+v", last.Approval)
 	}
 }
