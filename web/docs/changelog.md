@@ -4,7 +4,21 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.107.0**.
+Current release: **v0.108.0**.
+
+## v0.108.0 — The headroom pause, on by default
+
+A new `tokenops init` now sets the headroom pause: when the plan window
+with the least left drops to 10%, the agent is paused before the vendor
+cuts it off. It starts in shadow, so it only records what it would have
+done; the glance and the menu bar say how many sessions it would have
+paused this week, and `tokenops boundaries promote headroom-pause` makes
+it act. Init now also installs the pause point a boundary needs, which a
+fresh install never did. An older setup is left as it is and offered
+`tokenops boundaries headroom-pause`. A call Claude Code stopped by
+itself (auto mode, a permission rule or a hook) no longer counts as your
+approval of a boundary; you are asked instead. Every confirmation an agent
+triggers shows the exact terminal command for the change.
 
 ## v0.107.0 — Hardened, and agents ask first
 
