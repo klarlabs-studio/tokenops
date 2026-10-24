@@ -51,13 +51,13 @@ before a plan runs out is there from the first session:
 boundaries:
   - name: headroom-pause
     action: continue                     # the agent's next tool call
-    when: { plan_left_pct: "<= 10" }     # the tightest plan window, 90% used
+    when: { plan_left_pct: "<= 10" }     # the tightest plan window, 10% left
     require: ask
     stage: shadow
 ```
 
 With no `window`, `plan_left_pct` reads the tightest window TokenOps knows
-— the 5-hour or the weekly one, whichever has less left. 90% leaves the
+— the 5-hour or the weekly one, whichever has less left. 10% left leaves the
 agent room to finish its step, commit and hand over. In shadow it asks
 nothing: it records each session it would have paused, and the glance's
 findings (`tokenops glance`, `GET /api/findings`, the menu bar) say

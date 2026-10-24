@@ -299,6 +299,15 @@ func (u *UsageResponse) HasSignal() bool {
 	return len(u.Windows) > 0 || u.ExtraUsage != nil
 }
 
+// windowLeft words a window's utilization as the share left, or "used up":
+// plan windows count down everywhere TokenOps shows them.
+func windowLeft(utilization float64) string {
+	if utilization >= 100 {
+		return "used up"
+	}
+	return fmt.Sprintf("%.1f%% left", max(0, 100-utilization))
+}
+
 // Summary renders what Anthropic reported, one line per block, for an
 // operator to check against claude.ai. Blocks it did not report are left
 // out rather than shown as 0%.
@@ -310,7 +319,7 @@ func (u *UsageResponse) Summary() []string {
 	}
 	sort.Strings(labels)
 	for _, label := range labels {
-		lines = append(lines, fmt.Sprintf("%-16s %.1f%% used", label+":", *u.Windows[label].Utilization))
+		lines = append(lines, fmt.Sprintf("%-16s %s", label+":", windowLeft(*u.Windows[label].Utilization)))
 	}
 	if e := u.ExtraUsage; e != nil {
 		used, limit := e.Amounts()

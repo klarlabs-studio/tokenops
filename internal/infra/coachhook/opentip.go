@@ -52,7 +52,7 @@ func (t Tip) Short(now time.Time) string {
 	case t.Kind == "budget_over":
 		return "past the session budget → fresh session"
 	case strings.HasPrefix(t.Kind, "budget_"):
-		return strings.TrimPrefix(t.Kind, "budget_") + "% of the session budget used"
+		return "session budget " + leftOfStep(strings.TrimPrefix(t.Kind, "budget_")) + " left"
 	case t.Kind == burnKind:
 		return t.shortBurn(now)
 	case strings.HasPrefix(t.Kind, spendFamily+"_"):
@@ -95,7 +95,7 @@ func (t Tip) shortQuota(now time.Time) string {
 		}
 		return fmt.Sprintf("%s out for %s → use another plan", window, strings.ReplaceAll(formatSpan(t.ResetsAt.Sub(now)), " ", ""))
 	}
-	return fmt.Sprintf("%s %d%% used → /compact, smaller model", window, used)
+	return fmt.Sprintf("%s %d%% left → /compact, smaller model", window, 100-used)
 }
 
 // MarkSeen records that the status line showed the session's tip id and
@@ -120,4 +120,14 @@ func MarkSeen(dir, sessionID, id string) bool {
 
 func seenFile(dir, sessionID string) string {
 	return strings.TrimSuffix(sessionFile(dir, sessionID), ".json") + ".seen"
+}
+
+// leftOfStep words an alert step, a share used ("75"), as the share left
+// ("25%"): plan windows and budgets read as a fuel gauge, counting down.
+func leftOfStep(step string) string {
+	used, err := strconv.Atoi(step)
+	if err != nil {
+		return step + "% used"
+	}
+	return strconv.Itoa(max(0, 100-used)) + "%"
 }

@@ -52,9 +52,9 @@ func TestRenderTipOnTheLine(t *testing.T) {
 	if len(got) != 1 || !strings.Contains(got[0], cobalt+"●") {
 		t.Fatalf("plain tip %q", got)
 	}
-	in.Tip, in.TipUrgent = "Claude weekly 90% used → /compact, smaller model", true
+	in.Tip, in.TipUrgent = "Claude weekly 10% left → /compact, smaller model", true
 	got = Render(in)
-	if !strings.Contains(got[0], warnFg+"● Claude weekly 90% used") {
+	if !strings.Contains(got[0], warnFg+"● Claude weekly 10% left") {
 		t.Errorf("urgent tip is not a warning: %q", got[0])
 	}
 	in.Tip = ""

@@ -272,7 +272,7 @@ func TestBudgetUsedReadsTheNamedOrTheFullestBudget(t *testing.T) {
 	}
 	fullest := Condition{Field: FieldBudgetUsed, Op: OpGE, Number: 90}
 	text, ok := fullest.holds(Facts{BudgetUsedPct: used})
-	if !ok || !strings.Contains(text, "budget monthly 92.0% used") {
+	if !ok || !strings.Contains(text, "budget monthly 8.0% left (92.0% spent >= 90%)") {
 		t.Errorf("fullest = %q, %v", text, ok)
 	}
 	if _, ok := fullest.holds(Facts{}); ok {

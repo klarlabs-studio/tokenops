@@ -209,15 +209,15 @@ func usedUpMessage(provider string, w plans.QuotaWindow, now time.Time) string {
 // how long before its reset, and what stretches it.
 func burnMessage(q *Quota, b plans.BurnWarning, now time.Time, verbosity string) string {
 	w := b.Window
-	msg := fmt.Sprintf("tokenops: at this pace your %s runs out in ~%s, %s before it resets (%d%% used).",
-		windowName(q.Provider, w), formatSpan(b.RunsOutAt.Sub(now)), formatSpan(b.BeforeReset()), int(math.Round(w.UsedPct)))
+	msg := fmt.Sprintf("tokenops: at this pace your %s runs out in ~%s, %s before it resets (%s).",
+		windowName(q.Provider, w), formatSpan(b.RunsOutAt.Sub(now)), formatSpan(b.BeforeReset()), shareLeft(w.UsedPct))
 	if verbosity == verbosityVerbose {
 		msg += fmt.Sprintf(" That is %.1f× the even pace over the last hour and %.1f× over the last %d minutes.",
 			b.LongBurn, b.ShortBurn, int(plans.BurnShortLookback/time.Minute))
 		if len(q.All) > 1 {
 			parts := make([]string, 0, len(q.All))
 			for _, o := range q.All {
-				parts = append(parts, fmt.Sprintf("%s %d%%", o.Label, int(math.Round(o.UsedPct))))
+				parts = append(parts, o.Label+" "+shareLeft(o.UsedPct))
 			}
 			msg += " Windows: " + strings.Join(parts, ", ") + "."
 		}
@@ -233,6 +233,15 @@ func providerName(p string) string {
 		return "OpenAI"
 	}
 	return p
+}
+
+// shareLeft words a window's share used as the share left ("40% left"),
+// or "used up" once nothing is: windows count down, like a fuel gauge.
+func shareLeft(usedPct float64) string {
+	if usedPct >= 100 {
+		return "used up"
+	}
+	return fmt.Sprintf("%d%% left", int(math.Round(max(0, 100-usedPct))))
 }
 
 // formatSpan renders a duration the way a person reads a countdown.
@@ -260,7 +269,7 @@ func QuotaStatus(dir string, q *Quota, now time.Time) string {
 		return ""
 	}
 	w := q.Window
-	line := fmt.Sprintf("%s %s %.0f%% · resets in %s", providerName(q.Provider), w.Label, w.UsedPct, formatSpan(w.ResetsAt.Sub(now)))
+	line := fmt.Sprintf("%s %s %s · resets in %s", providerName(q.Provider), w.Label, shareLeft(w.UsedPct), formatSpan(w.ResetsAt.Sub(now)))
 	switch {
 	case w.UsedPct >= 100:
 	case q.Burn.Stale:

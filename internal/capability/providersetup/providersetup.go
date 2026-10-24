@@ -334,7 +334,10 @@ func ApplyChain(cfg *config.Config, id string) {
 func Summary(r usage.Reading) []string {
 	var out []string
 	for _, w := range r.Windows {
-		line := fmt.Sprintf("%s window: %.0f%% used", w.Name, w.UsedPct)
+		line := fmt.Sprintf("%s window: %.0f%% left", w.Name, max(0, 100-w.UsedPct))
+		if w.UsedPct >= 100 {
+			line = w.Name + " window: used up"
+		}
 		if !w.ResetsAt.IsZero() {
 			line += ", resets " + w.ResetsAt.Local().Format("Mon 15:04")
 		}

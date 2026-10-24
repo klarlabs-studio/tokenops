@@ -40,7 +40,7 @@ func TestBudgetWindowTipsOncePerTierPerWindow(t *testing.T) {
 	if !dec.Nudge || tipKind(dec) != "spend_75" {
 		t.Fatalf("at 82%%: nudge %v kind %q; want the 75%% tier", dec.Nudge, tipKind(dec))
 	}
-	if !strings.Contains(dec.Message, "team (daily) is 82% used") || !strings.Contains(dec.Message, "$8.20 of $10.00") {
+	if !strings.Contains(dec.Message, "budget team (daily): $1.80 of $10.00 left, 82% spent") {
 		t.Errorf("message = %q", dec.Message)
 	}
 	// Said once per window, across sessions.
@@ -48,7 +48,8 @@ func TestBudgetWindowTipsOncePerTierPerWindow(t *testing.T) {
 		t.Fatalf("the same tier spoke again: %q", again.Message)
 	}
 	over := Evaluate(dir, "s2", tp, spendCfg(teamDaily(104)), fixedNow.Add(2*time.Hour))
-	if !over.Nudge || tipKind(over) != "spend_over" || !strings.Contains(over.Message, "only notifies") {
+	if !over.Nudge || tipKind(over) != "spend_over" || !strings.Contains(over.Message, "only notifies") ||
+		!strings.Contains(over.Message, "used up, $10.40 of $10.00 spent") {
 		t.Fatalf("at 104%%: %+v", over)
 	}
 	// Tomorrow is a new window.
@@ -74,7 +75,7 @@ func TestBudgetWindowTipsKeepTheInterruptionBudget(t *testing.T) {
 		t.Fatalf("past the day's budget: nudge %v ambient %v suppressed %q", dec.Nudge, dec.Ambient, dec.Suppressed)
 	}
 	tip, ok := OpenTip(dir, "s1")
-	if !ok || tip.Short(fixedNow) != "75% of team daily budget used" {
+	if !ok || tip.Short(fixedNow) != "team daily budget 25% left" {
 		t.Errorf("status line = %q (%v)", tip.Short(fixedNow), ok)
 	}
 	cfg.Budgets = []boundaryledger.BudgetReading{teamDaily(100)}
@@ -125,7 +126,7 @@ func TestProviderBudgetTipNamesTheProvider(t *testing.T) {
 	r := teamDaily(80)
 	r.Provider = "fireworks"
 	dec := Evaluate(dir, "s1", cheapTurn(t, dir), spendCfg(r), fixedNow)
-	if !dec.Nudge || !strings.Contains(dec.Message, "budget team (daily, billed by fireworks) is 80% used") {
+	if !dec.Nudge || !strings.Contains(dec.Message, "budget team (daily, billed by fireworks): $2.00 of $10.00 left, 80% spent") {
 		t.Fatalf("provider budget tip: %q", dec.Message)
 	}
 }

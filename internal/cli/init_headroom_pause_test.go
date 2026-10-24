@@ -31,7 +31,7 @@ func TestInitWritesTheHeadroomPauseInShadow(t *testing.T) {
 	if c.Field != boundaries.FieldPlanLeft || c.Op != boundaries.OpLE || c.Number != 10 || c.Window != boundaries.WindowAny {
 		t.Fatalf("condition = %+v, want plan_left_pct <= 10 on the tightest window", c)
 	}
-	if !strings.Contains(out, "headroom pause: in shadow at 90%") || !strings.Contains(out, "tokenops boundaries promote headroom-pause") {
+	if !strings.Contains(out, "headroom pause: in shadow at 10% left") || !strings.Contains(out, "tokenops boundaries promote headroom-pause") {
 		t.Errorf("init does not say what it set:\n%s", out)
 	}
 	settings, err := os.ReadFile(filepath.Join(filepath.Dir(configPath), ".claude", "settings.json"))

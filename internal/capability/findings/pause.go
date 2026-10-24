@@ -26,7 +26,7 @@ func headroomPause(p *boundaries.PauseSummary, g *headroom.Glance) []Finding {
 		return []Finding{{Kind: KindBoundary, Level: LevelInfo,
 			Title:    "No headroom pause is set",
 			Evidence: "nothing stops an agent as a plan window runs out",
-			Action: "`tokenops boundaries headroom-pause` adds one at 90% of the tightest window, in shadow: " +
+			Action: "`tokenops boundaries headroom-pause` adds one at 10% left in the tightest window, in shadow: " +
 				"it records what it would have paused and binds nothing."}}
 	}
 	if !p.PausePoint {
@@ -41,7 +41,7 @@ func headroomPause(p *boundaries.PauseSummary, g *headroom.Glance) []Finding {
 	if p.Stage == "enforce" {
 		return []Finding{{Kind: KindBoundary, Level: LevelInfo,
 			Title:    fmt.Sprintf("The headroom pause paused %s this week", sessionsWord(p.Sessions)),
-			Evidence: fmt.Sprintf("`%s` asks before the next tool call once a plan window is nearly used", p.Rule)}}
+			Evidence: fmt.Sprintf("`%s` asks before the next tool call once a plan window is nearly used up", p.Rule)}}
 	}
 	return []Finding{{Kind: KindBoundary, Level: LevelInfo,
 		Title:    fmt.Sprintf("The headroom pause would have paused %s this week", sessionsWord(p.Sessions)),

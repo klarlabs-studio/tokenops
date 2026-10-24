@@ -73,6 +73,9 @@ type Deps struct {
 	AdviceCache *AdviceCache
 }
 
+// Report is one plan's headroom: its windows, consumption and risk.
+type Report = plans.HeadroomReport
+
 // Result is the capability's answer.
 //
 // Unconfigured and StorageDisabled are separate fields on purpose. Both

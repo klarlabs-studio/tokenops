@@ -76,7 +76,7 @@ func renderBudgetSummary(b budgetSummaryRow) string {
 			s.WriteString("\n\n")
 		}
 		fmt.Fprintf(&s, "| Metric | Value |\n|---|---|\n")
-		fmt.Fprintf(&s, "| Window | %d / %d %s (%.1f%%) |\n", b.WindowConsumed, b.WindowCap, b.WindowUnit, b.WindowPct)
+		fmt.Fprintf(&s, "| Window | %d / %d %s (%.1f%% left) |\n", b.WindowConsumed, b.WindowCap, b.WindowUnit, max(0, 100-b.WindowPct))
 		if b.WillHitCapWithin != "" {
 			fmt.Fprintf(&s, "| ETA to cap | %s |\n", b.WillHitCapWithin)
 		}

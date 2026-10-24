@@ -45,6 +45,10 @@ func TestHeadroomGauge(t *testing.T) {
 			}
 		})
 	}
+	// The bar is a fuel gauge: it shows what is left, and says so.
+	if out := HeadroomGauge(30, 100, SparklineOptions{}); !strings.Contains(out, `width="196.0"`) || !strings.Contains(out, "(70.0% left)") {
+		t.Fatalf("30 of 100 used must fill 70%% and say 70%% left: %q", out)
+	}
 	if got := HeadroomGauge(0, 0, SparklineOptions{}); got != "" {
 		t.Fatalf("zero cap must produce empty SVG; got %q", got)
 	}

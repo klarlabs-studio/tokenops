@@ -127,21 +127,13 @@ func spendLabel(r boundaryledger.BudgetReading) string {
 	return r.Budget + " " + r.Window
 }
 
-func spendAmount(r boundaryledger.BudgetReading, v float64) string {
-	if r.Basis == "tokens" {
-		return formatTokens(int64(v)) + " tokens"
-	}
-	return fmt.Sprintf("$%.2f", v)
-}
-
 func spendMessage(r boundaryledger.BudgetReading, now time.Time) string {
 	scope := r.Window
 	if r.Provider != "" {
 		scope += ", billed by " + r.Provider
 	}
-	msg := fmt.Sprintf("tokenops: budget %s (%s) is %d%% used — %s of %s, resets in %s.",
-		r.Budget, scope, int(math.Floor(r.UsedPct)), spendAmount(r, r.Used), spendAmount(r, r.Limit),
-		formatSpan(r.ResetsAt.Sub(now)))
+	msg := fmt.Sprintf("tokenops: budget %s (%s): %s; resets in %s.",
+		r.Budget, scope, r.LeftWords(), formatSpan(r.ResetsAt.Sub(now)))
 	switch {
 	case r.Rule != "" && r.Enforced && r.Require == "deny":
 		msg += fmt.Sprintf(" At its limit the boundary %s refuses further steps.", r.Rule)
@@ -164,5 +156,5 @@ func (t Tip) shortSpend(now time.Time) string {
 	if t.Kind == spendOverKind {
 		return t.Window + " budget spent"
 	}
-	return strings.TrimPrefix(t.Kind, spendFamily+"_") + "% of " + t.Window + " budget used"
+	return t.Window + " budget " + leftOfStep(strings.TrimPrefix(t.Kind, spendFamily+"_")) + " left"
 }

@@ -232,8 +232,8 @@
     var all = (v.glance && v.glance.spend_budgets) || [];
     all.filter(function (b) { return b.provider === r.provider && b.limit > 0; }).forEach(function (b) {
       var amt = b.basis === "tokens"
-        ? tokens(b.used) + " of " + tokens(b.limit) + " tokens"
-        : money(b.used) + " of " + money(b.limit);
+        ? tokens(b.used) + " of " + tokens(b.limit) + " tokens spent"
+        : money(b.used) + " of " + money(b.limit) + " spent";
       var s = windowSection("Budget " + b.budget + " · " + b.window, b.used_pct, amt);
       var mode = "Soft: notifies";
       if (b.rule && b.enforced) mode = "Hard: " + (b.require === "deny" ? "refuses" : "asks") + " at the limit";

@@ -253,7 +253,7 @@ func newBoundariesHeadroomPauseCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "headroom-pause",
-		Short: "Add the headroom pause: ask before the next tool call at 90% of the tightest plan window, in shadow",
+		Short: "Add the headroom pause: ask before the next tool call once the tightest plan window is down to 10% left, in shadow",
 		Long: `headroom-pause adds the boundary a new 'tokenops init' writes:
 
   - name: headroom-pause
@@ -262,8 +262,8 @@ func newBoundariesHeadroomPauseCmd() *cobra.Command {
     require: ask
     stage: shadow
 
-Once the tightest plan window TokenOps knows is 90% used, the agent's next
-tool call asks first. It starts in shadow: it records each session it would
+Once the tightest plan window TokenOps knows is down to 10% left, the
+agent's next tool call asks first. It starts in shadow: it records each session it would
 have paused and binds nothing until 'tokenops boundaries promote
 headroom-pause'. It also installs the pause point (the boundary hook) in
 Claude Code and opencode where they are installed. A config that already

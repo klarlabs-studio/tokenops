@@ -85,7 +85,7 @@ func resourceGlance(ctx context.Context, d PlanDeps) (*resourceGlanceResult, err
 }
 
 // renderSpendBudgets lists the operator's budget windows: how much of
-// each is used, and whether reaching it notifies or is enforced.
+// each is left, and whether reaching it notifies or is enforced.
 func renderSpendBudgets(rs []budgets.Reading) string {
 	if len(rs) == 0 {
 		return ""
@@ -105,7 +105,7 @@ func renderSpendBudgets(rs []budgets.Reading) string {
 		if r.Provider != "" {
 			whose = ", billed by " + budgets.ProviderName(r.Provider)
 		}
-		out += fmt.Sprintf("\n- %s %s%s: %.0f%% used (%s)", r.Budget, r.Window, whose, r.UsedPct, mode)
+		out += fmt.Sprintf("\n- %s %s%s: %s (%s)", r.Budget, r.Window, whose, r.LeftWords(), mode)
 	}
 	return out
 }
