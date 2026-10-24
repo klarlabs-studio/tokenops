@@ -143,6 +143,12 @@
                     "presence": {
                       "additionalProperties": false,
                       "properties": {
+                        "approval": {
+                          "type": "string"
+                        },
+                        "enrol": {
+                          "type": "string"
+                        },
                         "harness_attested": {
                           "type": "integer"
                         },
@@ -155,6 +161,9 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "refused": {
+                          "type": "integer"
                         },
                         "since": {
                           "format": "date-time",
@@ -256,6 +265,44 @@
                   "id": {
                     "type": "string"
                   },
+                  "presence_proof": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "challenge": {
+                        "type": "string"
+                      },
+                      "crossed": {
+                        "type": "string"
+                      },
+                      "decision": {
+                        "type": "string"
+                      },
+                      "issued": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "key": {
+                        "type": "string"
+                      },
+                      "rule": {
+                        "type": "string"
+                      },
+                      "scope": {
+                        "type": "string"
+                      },
+                      "session": {
+                        "type": "string"
+                      },
+                      "sig": {
+                        "description": "base64 ASN.1 DER ECDSA P-256 signature",
+                        "type": "string"
+                      },
+                      "v": {
+                        "type": "integer"
+                      }
+                    },
+                    "type": "object"
+                  },
                   "session": {
                     "type": "boolean"
                   }
@@ -283,6 +330,12 @@
                       "type": "string"
                     },
                     "note": {
+                      "type": "string"
+                    },
+                    "presence": {
+                      "type": "string"
+                    },
+                    "presence_key": {
                       "type": "string"
                     },
                     "rule": {
@@ -3807,6 +3860,44 @@
                   },
                   "key": {
                     "type": "string"
+                  },
+                  "presence_proof": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "challenge": {
+                        "type": "string"
+                      },
+                      "crossed": {
+                        "type": "string"
+                      },
+                      "decision": {
+                        "type": "string"
+                      },
+                      "issued": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "key": {
+                        "type": "string"
+                      },
+                      "rule": {
+                        "type": "string"
+                      },
+                      "scope": {
+                        "type": "string"
+                      },
+                      "session": {
+                        "type": "string"
+                      },
+                      "sig": {
+                        "description": "base64 ASN.1 DER ECDSA P-256 signature",
+                        "type": "string"
+                      },
+                      "v": {
+                        "type": "integer"
+                      }
+                    },
+                    "type": "object"
                   }
                 },
                 "type": "object"
@@ -3832,6 +3923,12 @@
                       "type": "string"
                     },
                     "note": {
+                      "type": "string"
+                    },
+                    "presence": {
+                      "type": "string"
+                    },
+                    "presence_key": {
                       "type": "string"
                     }
                   },

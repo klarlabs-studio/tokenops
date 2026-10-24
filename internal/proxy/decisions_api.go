@@ -62,7 +62,7 @@ func (s *Server) boundariesHandler(w http.ResponseWriter, _ *http.Request) {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return
 	}
-	st, err := boundaries.RuleStatuses(boundaries.AllRules(cfg), boundaries.Env{}, boundaries.Wired(cfg))
+	st, err := boundaries.RuleStatuses(boundaries.AllRules(cfg), boundaries.Env{Approval: cfg.ApprovalMode()}, boundaries.Wired(cfg))
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err)
 		return

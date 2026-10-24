@@ -5,11 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"go.klarlabs.de/tokenops/internal/capability/outcomes"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/contexts/boundaries/presence"
 	"go.klarlabs.de/tokenops/internal/contexts/optimization/routingapproval"
+	infrapresence "go.klarlabs.de/tokenops/internal/infra/presence"
 	"go.klarlabs.de/tokenops/internal/storage/sqlite"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -53,26 +57,53 @@ type RoutingDecision struct {
 	Key      string `json:"key"`
 	Decision string `json:"decision"`
 	Model    string `json:"model"`
-	Note     string `json:"note"`
+	// Presence is signed when the approval carried a valid presence proof,
+	// with the key it was signed by.
+	Presence    string `json:"presence,omitempty"`
+	PresenceKey string `json:"presence_key,omitempty"`
+	Note        string `json:"note"`
 }
 
 // DecideRouting records the operator's answer to the proposal key in the
-// approval store at storePath (empty: the default). approve routes future
-// matching requests to the proposed model; deny keeps the requested one.
-// It applies from the next request, with no restart.
+// approval store at storePath (empty: the default), as a terminal answer
+// under boundary_approval: channel. Surfaces that know their setting and
+// channel call AnswerRouting.
 func DecideRouting(storePath, key, decision string) (RoutingDecision, error) {
-	key = strings.TrimSpace(key)
+	return AnswerRouting(RoutingAnswer{StorePath: storePath, Key: key, Decision: decision, Method: RoutingMethodCLI})
+}
+
+// How a routing answer arrived.
+const (
+	RoutingMethodCLI = "cli"
+	RoutingMethodAPI = "api"
+	RoutingMethodMCP = "mcp"
+)
+
+// RoutingAnswer is the operator's answer to a routing proposal.
+type RoutingAnswer struct {
+	// StorePath is the approval log; empty is the default.
+	StorePath string
+	Key       string
+	// Decision is approve or deny.
+	Decision string
+	// Approval is boundary_approval: with presence enforced, an upgrade
+	// approval counts only with a valid Proof (ADR 0015 §3), and MCP
+	// cannot approve one.
+	Approval presence.Mode
+	Proof    *presence.Proof
+	Method   string
+}
+
+// AnswerRouting records the operator's answer. approve routes future
+// matching requests to the proposed model; deny keeps the requested one.
+// It applies from the next request, with no restart. A deny needs no
+// proof.
+func AnswerRouting(req RoutingAnswer) (RoutingDecision, error) {
+	key := strings.TrimSpace(req.Key)
 	if key == "" {
 		return RoutingDecision{}, inputErr(errors.New("key is required (from the pending routing proposals)"))
 	}
-	if storePath == "" {
-		p, err := routingapproval.DefaultPath()
-		if err != nil {
-			return RoutingDecision{}, err
-		}
-		storePath = p
-	}
-	store, err := routingapproval.Open(storePath)
+	store, err := openRoutingStore(req.StorePath)
 	if err != nil {
 		return RoutingDecision{}, err
 	}
@@ -84,8 +115,8 @@ func DecideRouting(storePath, key, decision string) (RoutingDecision, error) {
 	if !ok {
 		return RoutingDecision{}, inputErr(errors.New("no routing proposal with key " + key))
 	}
-	var chosen string
-	switch strings.ToLower(strings.TrimSpace(decision)) {
+	var chosen, decision string
+	switch strings.ToLower(strings.TrimSpace(req.Decision)) {
 	case "approve", "approved":
 		decision, chosen = "approved", st.To
 	case "deny", "denied":
@@ -93,11 +124,139 @@ func DecideRouting(storePath, key, decision string) (RoutingDecision, error) {
 	default:
 		return RoutingDecision{}, inputErr(errors.New(`decision must be "approve" or "deny"`))
 	}
-	if err := store.Decide(key, decision, chosen); err != nil {
+	var proof *presence.Proof
+	out := RoutingDecision{Key: key, Decision: decision, Model: chosen,
+		Note: "applies to matching requests from now on; no restart needed"}
+	if decision == "approved" {
+		if proof, err = checkRoutingProof(store, st, req); err != nil {
+			return RoutingDecision{}, err
+		}
+		if proof != nil {
+			out.Presence, out.PresenceKey = "signed", proof.Key
+			out.Note += "; signed with presence key " + proof.Key
+		}
+	}
+	if err := store.DecideSigned(key, decision, chosen, proof); err != nil {
 		return RoutingDecision{}, err
 	}
-	return RoutingDecision{Key: key, Decision: decision, Model: chosen,
-		Note: "applies to matching requests from now on; no restart needed"}, nil
+	return out, nil
+}
+
+func openRoutingStore(path string) (*routingapproval.Store, error) {
+	if path == "" {
+		p, err := routingapproval.DefaultPath()
+		if err != nil {
+			return nil, err
+		}
+		path = p
+	}
+	return routingapproval.Open(path)
+}
+
+// checkRoutingProof checks an upgrade approval's proof: a valid one is
+// kept on the decision; without one the approval goes on under channel and
+// is refused under presence, where MCP cannot approve at all.
+func checkRoutingProof(store *routingapproval.Store, st routingapproval.State, req RoutingAnswer) (*presence.Proof, error) {
+	cmd := "tokenops routing decide " + shellQuote(st.Key) + " approve"
+	if req.Approval.Enforced() && req.Method == RoutingMethodMCP {
+		return nil, inputErr(fmt.Errorf("boundary_approval is %s: a model upgrade is approved in person, not through an agent; "+
+			"run `%s` in your own terminal (it asks for Touch ID, a paired Apple Watch or your password), or deny here", req.Approval, cmd))
+	}
+	if req.Proof == nil && !req.Approval.Enforced() {
+		return nil, nil
+	}
+	res := VerifyRoutingProof(store, st, req.Proof, time.Now().UTC())
+	if res.OK() {
+		return req.Proof, nil
+	}
+	if !req.Approval.Enforced() {
+		return nil, nil
+	}
+	if res.Reason == presence.ReasonNotEnrolled {
+		return nil, inputErr(fmt.Errorf("boundary_approval is %s, and no presence key is enrolled on this machine: "+
+			"enrol one with `tokenops boundaries presence enroll`, or deny", req.Approval))
+	}
+	return nil, inputErr(fmt.Errorf("boundary_approval is %s, and this approval is not honoured: %s. `%s` in your own terminal signs it; "+
+		"denying needs no signature", req.Approval, res.Reason.Phrase(), cmd))
+}
+
+// VerifyRoutingProof checks a routing upgrade approval against the
+// enrolled presence key, as of now: the decision's time when the router
+// re-checks a recorded one, since a routing answer lasts.
+func VerifyRoutingProof(store *routingapproval.Store, st routingapproval.State, proof *presence.Proof, now time.Time) presence.Result {
+	trust, err := routingPresenceDir(store).Trust(time.Now().UTC())
+	if err != nil {
+		return presence.Result{Reason: presence.ReasonKeyUnreadable}
+	}
+	return presence.Verify(proof, presence.RoutingExpect(st.Key, st.RaisedAt, now), trust)
+}
+
+// routingPresenceDir is the presence key store beside the approval log
+// (~/.tokenops/presence).
+func routingPresenceDir(store *routingapproval.Store) infrapresence.Dir {
+	return infrapresence.Dir(filepath.Join(filepath.Dir(store.Path()), "presence"))
+}
+
+// RoutingSigner signs with the presence key; the presence helper
+// satisfies it.
+type RoutingSigner interface {
+	Sign(ctx context.Context, blobPath string, msg []byte, reason string) ([]byte, error)
+}
+
+// SignRoutingApproval asks the person at this Mac to sign an approval of
+// the routing upgrade key; the dialog names the provider and both models.
+func SignRoutingApproval(ctx context.Context, storePath, key string, s RoutingSigner) (*presence.Proof, error) {
+	store, err := openRoutingStore(storePath)
+	if err != nil {
+		return nil, err
+	}
+	state, err := store.Load()
+	if err != nil {
+		return nil, err
+	}
+	st, ok := state[strings.TrimSpace(key)]
+	if !ok {
+		return nil, inputErr(errors.New("no routing proposal with key " + key))
+	}
+	dir := routingPresenceDir(store)
+	now := time.Now().UTC()
+	trust, err := dir.Trust(now)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case trust.State == presence.TrustNotEnrolled:
+		return nil, inputErr(errors.New("no presence key is enrolled on this machine: enrol one with `tokenops boundaries presence enroll`"))
+	case trust.State == presence.TrustHeld:
+		return nil, inputErr(errors.New("approvals are held until " + trust.Pin.HoldUntil.Local().Format("15:04") +
+			": the presence key was replaced without the old key's signature"))
+	case !dir.HasBlob():
+		return nil, inputErr(errors.New("the presence key is enrolled but its key blob is not on this machine: " +
+			"re-enrol with `tokenops boundaries presence enroll --replace`"))
+	}
+	e := presence.RoutingExpect(st.Key, st.RaisedAt, now)
+	proof := presence.Proof{
+		V: presence.Version, Key: trust.Key.ID, Decision: st.Key, Rule: presence.RoutingRule, Scope: e.Scope,
+		Challenge: e.Challenge, Crossed: presence.CrossingsDigest(nil), Issued: now.Truncate(time.Second),
+	}
+	msg, err := proof.Message()
+	if err != nil {
+		return nil, err
+	}
+	reason := fmt.Sprintf("approve a TokenOps model upgrade for %s requests from %s to %s", st.Provider, st.From, st.To)
+	if proof.Sig, err = s.Sign(ctx, dir.BlobPath(), msg, reason); err != nil {
+		return nil, err
+	}
+	if res := presence.Verify(&proof, e, trust); !res.OK() {
+		return nil, fmt.Errorf("the signature the presence helper returned is not valid (%s)", res.Reason.Phrase())
+	}
+	return &proof, nil
+}
+
+// shellQuote quotes a routing key for a command the operator pastes: it
+// holds | and may hold other shell characters.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // OutcomeRequest is the operator's judgement of one execution.
