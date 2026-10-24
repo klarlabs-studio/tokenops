@@ -203,36 +203,62 @@ type RoutingSigner interface {
 	Sign(ctx context.Context, blobPath string, msg []byte, reason string) ([]byte, error)
 }
 
-// SignRoutingApproval asks the person at this Mac to sign an approval of
-// the routing upgrade key; the dialog names the provider and both models.
-func SignRoutingApproval(ctx context.Context, storePath, key string, s RoutingSigner) (*presence.Proof, error) {
+// RoutingStatement is an approval of one routing upgrade, ready for the
+// presence key to sign; see boundaries.ApprovalStatement. It is built only
+// here, so the bytes a dialog approves are the ones the verifier checks.
+type RoutingStatement struct {
+	// Proof is the statement's fields, unsigned: post it back as
+	// presence_proof with sig added.
+	Proof presence.Proof `json:"proof"`
+	// Statement is the canonical bytes the key signs (tokenops.approval/v1).
+	Statement []byte `json:"statement"`
+	// Reason is the dialog's text, made safe to show: the provider and
+	// both models.
+	Reason string `json:"reason"`
+	// Blob is the enrolled key's blob, which the helper signs with.
+	Blob string `json:"blob"`
+	Key  string `json:"key"`
+}
+
+// ErrRoutingPresenceUnavailable wraps every reason a routing approval
+// cannot be signed on this machine: no key, a held key, no blob.
+var ErrRoutingPresenceUnavailable = errors.New("presence approval unavailable")
+
+type routingUnavailable struct{ msg string }
+
+func (u routingUnavailable) Error() string { return u.msg }
+func (u routingUnavailable) Unwrap() error { return ErrRoutingPresenceUnavailable }
+
+// PrepareRoutingApproval builds the statement approving the routing
+// upgrade key, issued now.
+func PrepareRoutingApproval(storePath, key string) (RoutingStatement, error) {
 	store, err := openRoutingStore(storePath)
 	if err != nil {
-		return nil, err
+		return RoutingStatement{}, err
 	}
 	state, err := store.Load()
 	if err != nil {
-		return nil, err
+		return RoutingStatement{}, err
 	}
 	st, ok := state[strings.TrimSpace(key)]
 	if !ok {
-		return nil, inputErr(errors.New("no routing proposal with key " + key))
+		return RoutingStatement{}, inputErr(errors.New("no routing proposal with key " + key))
 	}
 	dir := routingPresenceDir(store)
 	now := time.Now().UTC()
 	trust, err := dir.Trust(now)
 	if err != nil {
-		return nil, err
+		return RoutingStatement{}, err
 	}
 	switch {
 	case trust.State == presence.TrustNotEnrolled:
-		return nil, inputErr(errors.New("no presence key is enrolled on this machine: enrol one with `tokenops boundaries presence enroll`"))
+		return RoutingStatement{}, routingUnavailable{"no presence key is enrolled on this machine: enrol one with `tokenops boundaries presence enroll`"}
 	case trust.State == presence.TrustHeld:
-		return nil, inputErr(errors.New("approvals are held until " + trust.Pin.HoldUntil.Local().Format("15:04") +
-			": the presence key was replaced without the old key's signature"))
+		return RoutingStatement{}, routingUnavailable{"approvals are held until " + trust.Pin.HoldUntil.Local().Format("15:04") +
+			": the presence key was replaced without the old key's signature"}
 	case !dir.HasBlob():
-		return nil, inputErr(errors.New("the presence key is enrolled but its key blob is not on this machine: " +
-			"re-enrol with `tokenops boundaries presence enroll --replace`"))
+		return RoutingStatement{}, routingUnavailable{"the presence key is enrolled but its key blob is not on this machine: " +
+			"re-enrol with `tokenops boundaries presence enroll --replace`"}
 	}
 	e := presence.RoutingExpect(st.Key, st.RaisedAt, now)
 	proof := presence.Proof{
@@ -241,13 +267,37 @@ func SignRoutingApproval(ctx context.Context, storePath, key string, s RoutingSi
 	}
 	msg, err := proof.Message()
 	if err != nil {
-		return nil, err
+		return RoutingStatement{}, err
 	}
 	reason := fmt.Sprintf("approve a TokenOps model upgrade for %s requests from %s to %s", st.Provider, st.From, st.To)
-	if proof.Sig, err = s.Sign(ctx, dir.BlobPath(), msg, reason); err != nil {
+	return RoutingStatement{
+		Proof: proof, Statement: msg, Reason: infrapresence.DialogText(reason), Blob: dir.BlobPath(), Key: trust.Key.ID,
+	}, nil
+}
+
+// SignRoutingApproval asks the person at this Mac to sign an approval of
+// the routing upgrade key; the dialog names the provider and both models.
+func SignRoutingApproval(ctx context.Context, storePath, key string, s RoutingSigner) (*presence.Proof, error) {
+	st, err := PrepareRoutingApproval(storePath, key)
+	if err != nil {
+		if errors.Is(err, ErrRoutingPresenceUnavailable) {
+			return nil, inputErr(err)
+		}
 		return nil, err
 	}
-	if res := presence.Verify(&proof, e, trust); !res.OK() {
+	proof := st.Proof
+	if proof.Sig, err = s.Sign(ctx, st.Blob, st.Statement, st.Reason); err != nil {
+		return nil, err
+	}
+	store, err := openRoutingStore(storePath)
+	if err != nil {
+		return nil, err
+	}
+	state, err := store.Load()
+	if err != nil {
+		return nil, err
+	}
+	if res := VerifyRoutingProof(store, state[proof.Decision], &proof, time.Now().UTC()); !res.OK() {
 		return nil, fmt.Errorf("the signature the presence helper returned is not valid (%s)", res.Reason.Phrase())
 	}
 	return &proof, nil

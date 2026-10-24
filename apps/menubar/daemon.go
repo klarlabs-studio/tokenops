@@ -190,8 +190,8 @@ func (d *daemon) boundaries(ctx context.Context) (json.RawMessage, error) {
 	return out, err
 }
 
-// denyBoundary refuses a waiting decision. The API takes denials only: an
-// approval needs a person at a terminal (see approve.go).
+// denyBoundary refuses a waiting decision. A deny needs no signature; an
+// approval does (see presence.go and approve.go).
 func (d *daemon) denyBoundary(ctx context.Context, id string, session bool) error {
 	var out json.RawMessage
 	return d.do(ctx, http.MethodPost, "/api/boundaries/decisions",

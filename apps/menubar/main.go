@@ -85,8 +85,10 @@ type view struct {
 	// Waiting marks Error as a read that took too long: nothing is broken,
 	// so the panel does not show it as a failure.
 	Waiting bool `json:"waiting,omitempty"`
-	// Note says what the last refresh did.
-	Note string `json:"note,omitempty"`
+	// Note says what the last refresh or approval did; NoteWarn marks it
+	// as a failure, such as a cancelled approval dialog.
+	Note     string `json:"note,omitempty"`
+	NoteWarn bool   `json:"note_warn,omitempty"`
 	// LoadingSince is when the read in progress started; zero when none
 	// is. The panel says how long it has been fetching.
 	LoadingSince time.Time `json:"loading_since,omitzero"`
@@ -137,6 +139,7 @@ type menubar struct {
 	notifyFailed sync.Once
 	// note says what the last refresh did, shown until noteUntil.
 	note      string
+	noteWarn  bool
 	noteUntil time.Time
 	// reads counts the reads in progress; loadingSince is when the first
 	// of them started.
@@ -244,13 +247,12 @@ func (m *menubar) register() error {
 		}),
 		vitra.Register(m.rt, vitra.Command[answerInput, view]{
 			Name:        "boundary.approve",
-			Description: "Open a terminal that asks the operator to approve a waiting decision",
+			Description: "Approve a waiting decision: in person with the presence key's dialog, or in a terminal that asks when no key is enrolled",
 			Permission:  "boundaries.approve",
 			Handler: func(ctx context.Context, _ domain.Invocation, in answerInput) (view, error) {
-				if err := openApproval(in.ID, in.Session); err != nil {
+				if err := m.approve(ctx, in.ID, in.Session); err != nil {
 					return view{}, err
 				}
-				m.setNote("Approve " + in.ID + " in the terminal that opened.")
 				return m.refresh(ctx), nil
 			},
 		}),
@@ -325,7 +327,7 @@ func (m *menubar) refresh(ctx context.Context) view {
 	}
 	on := m.settings.alertsOn()
 	if time.Now().Before(m.noteUntil) {
-		v.Note = m.note
+		v.Note, v.NoteWarn = m.note, m.noteWarn
 	}
 	m.mu.Unlock()
 	if on {
@@ -354,7 +356,7 @@ func (m *menubar) startRead(ctx context.Context) {
 	v := m.last
 	v.LoadingSince, v.Refreshing = m.loadingSince, m.refreshing
 	if time.Now().Before(m.noteUntil) {
-		v.Note = m.note
+		v.Note, v.NoteWarn = m.note, m.noteWarn
 	}
 	m.mu.Unlock()
 	_ = m.app.Emit(ctx, viewEvent, v)
@@ -374,7 +376,7 @@ func (m *menubar) refreshNow(ctx context.Context) view {
 		// The note stays until the last follow-up read, so the panel says
 		// what is happening while the readings come in.
 		m.mu.Lock()
-		m.note, m.noteUntil = r.note(time.Now()), time.Now().Add(refreshAgain[len(refreshAgain)-1]+time.Second)
+		m.note, m.noteWarn, m.noteUntil = r.note(time.Now()), false, time.Now().Add(refreshAgain[len(refreshAgain)-1]+time.Second)
 		m.refreshing = r.Requested
 		m.mu.Unlock()
 	}
@@ -598,9 +600,30 @@ func newHost() app.DesktopHost {
 	}
 }
 
-// setNote shows a note in the panel for the next half minute.
-func (m *menubar) setNote(text string) {
+// setNote shows a note in the panel for the next half minute; warn
+// shows it as a failure.
+func (m *menubar) setNote(text string, warn bool) {
 	m.mu.Lock()
-	m.note, m.noteUntil = text, time.Now().Add(30*time.Second)
+	m.note, m.noteWarn, m.noteUntil = text, warn, time.Now().Add(30*time.Second)
 	m.mu.Unlock()
+}
+
+// approve approves a waiting decision inline with the presence key when
+// one is enrolled (presence.go), and otherwise opens the terminal that
+// asks (approve.go). What happened is left in the panel's note, which
+// outlasts a panel the dialog closed. The error is only a terminal that
+// could not be opened.
+func (m *menubar) approve(ctx context.Context, id string, session bool) error {
+	a, err := m.daemon.approveInline(ctx, id, session)
+	var fb errFallback
+	if errors.As(err, &fb) {
+		if oerr := openApproval(id, session); oerr != nil {
+			return oerr
+		}
+	}
+	if errors.Is(err, errBadDecision) {
+		return err
+	}
+	m.setNote(approvalOutcome(id, a, err))
+	return nil
 }

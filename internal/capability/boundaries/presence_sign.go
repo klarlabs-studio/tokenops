@@ -39,35 +39,59 @@ type unavailable struct{ msg string }
 func (u unavailable) Error() string { return u.msg }
 func (u unavailable) Unwrap() error { return ErrPresenceUnavailable }
 
-// SignApproval asks the person at this Mac to sign an approval of the
-// decision waiting on id: the statement names the decision, its rule and
-// session, the scope, the raising's challenge and the crossings shown, and
-// the dialog says which rule, action and session it approves, because that
-// text is what a paired Apple Watch shows. The proof is checked against
-// the enrolled key before it is returned, so a blob that does not match
-// the key is caught here, not at the pause point.
-func SignApproval(ctx context.Context, env Env, s Signer, id string, session bool) (*presence.Proof, error) {
+// ApprovalStatement is an approval of one waiting decision, ready for the
+// presence key to sign: built here, never by a surface, so the bytes the
+// person's dialog approves are exactly the ones the verifier checks
+// (ADR 0015 §2). A surface that cannot link the helper's caller (the menu
+// bar) asks the daemon for one, has the helper sign Statement with Reason
+// as the dialog's text, and posts Proof back with sig set.
+type ApprovalStatement struct {
+	// Proof is the statement's fields, unsigned: post it back as
+	// presence_proof with sig, the helper's signature, added.
+	Proof presence.Proof `json:"proof"`
+	// Statement is the canonical bytes the key signs (tokenops.approval/v1).
+	Statement []byte `json:"statement"`
+	// Reason is the dialog's text, already made safe to show: it names the
+	// rule, the action and the session, because a paired Apple Watch shows
+	// only this.
+	Reason string `json:"reason"`
+	// Blob is the enrolled key's blob, which the helper signs with.
+	Blob string `json:"blob"`
+	// Key is the enrolled key the statement is made under.
+	Key string `json:"key"`
+}
+
+// PrepareApproval builds the statement approving the decision waiting on
+// id: it names the decision, its rule and session, the scope, the
+// raising's challenge and the crossings shown, issued now. It needs an
+// enrolled, unheld key with its blob on this machine (an error wrapping
+// ErrPresenceUnavailable otherwise) and a decision still waiting (an
+// input error otherwise). A decision raised before challenges existed is
+// given one, so the approval names this raising.
+func PrepareApproval(env Env, id string, session bool) (ApprovalStatement, error) {
 	id = strings.TrimSpace(id)
 	if !domain.ValidDecisionID(id) {
-		return nil, actions.InputError{Err: fmt.Errorf("%q is not a boundary decision id (bnd-…)", id)}
+		return ApprovalStatement{}, actions.InputError{Err: fmt.Errorf("%q is not a boundary decision id (bnd-…)", id)}
 	}
 	trust, err := signingTrust(env)
 	if err != nil {
-		return nil, err
+		return ApprovalStatement{}, err
 	}
 	p, ok, err := env.Dir.GetPending(id)
 	if err != nil {
-		return nil, err
+		return ApprovalStatement{}, err
 	}
 	if !ok {
-		return nil, actions.InputError{Err: fmt.Errorf("no boundary decision %s is waiting on an answer", id)}
+		return ApprovalStatement{}, actions.InputError{Err: fmt.Errorf("no boundary decision %s is waiting on an answer", id)}
+	}
+	if teamRouted(p) {
+		return ApprovalStatement{}, actions.InputError{Err: fmt.Errorf("%s is your organisation's rule: its approver answers in the team plane, "+
+			"not this machine; you can still deny it here", p.Rule)}
 	}
 	if p.Challenge == "" {
-		// Raised before challenges existed: give it one now, so the
-		// approval names this raising.
 		p.Challenge = newChallenge()
 		if err := env.Dir.PutPending(p); err != nil {
-			return nil, err
+			return ApprovalStatement{}, err
 		}
 	}
 	scope := boundaryledger.ScopeOnce
@@ -77,25 +101,47 @@ func SignApproval(ctx context.Context, env Env, s Signer, id string, session boo
 	proof := presence.Proof{
 		V: presence.Version, Key: trust.Key.ID, Decision: id, Rule: p.Rule, Session: p.SessionID,
 		Scope: scope, Challenge: p.Challenge, Crossed: presence.CrossingsDigest(p.Crossings),
-		Issued: env.now().Truncate(time.Second),
+		Issued: env.now().UTC().Truncate(time.Second),
 	}
 	msg, err := proof.Message()
 	if err != nil {
+		return ApprovalStatement{}, err
+	}
+	return ApprovalStatement{
+		Proof: proof, Statement: msg, Reason: infrapresence.DialogText(approvalDialog(p, scope)),
+		Blob: env.presenceDir().BlobPath(), Key: trust.Key.ID,
+	}, nil
+}
+
+// SignApproval asks the person at this Mac to sign an approval of the
+// decision waiting on id (PrepareApproval's statement), raising the dialog
+// with its reason. The proof is checked against the enrolled key before
+// it is returned, so a blob that does not match the key is caught here,
+// not at the pause point.
+func SignApproval(ctx context.Context, env Env, s Signer, id string, session bool) (*presence.Proof, error) {
+	st, err := PrepareApproval(env, id, session)
+	if err != nil {
 		return nil, err
 	}
-	if proof.Sig, err = s.Sign(ctx, env.presenceDir().BlobPath(), msg, approvalDialog(p, scope)); err != nil {
+	proof := st.Proof
+	if proof.Sig, err = s.Sign(ctx, st.Blob, st.Statement, st.Reason); err != nil {
 		return nil, signError(err)
 	}
-	res := presence.Verify(&proof, presence.Expect{
-		Decision: id, Rule: p.Rule, Session: p.SessionID, Scope: scope, Challenge: p.Challenge,
-		Crossings: p.Crossings, Now: env.now(),
-		Spent: func(fp string) bool { return slices.Contains(p.Spent, fp) },
-	}, trust)
-	if !res.OK() {
+	if res := verifyPrepared(env, &proof); !res.OK() {
 		return nil, fmt.Errorf("the signature the presence helper returned is not valid (%s): re-enrol with `%s --replace`",
 			res.Reason.Phrase(), EnrolCommand)
 	}
 	return &proof, nil
+}
+
+// verifyPrepared checks a signed approval against the decision it names
+// as it waits now, with the scope the proof claims.
+func verifyPrepared(env Env, proof *presence.Proof) presence.Result {
+	p, ok, err := env.Dir.GetPending(proof.Decision)
+	if err != nil || !ok {
+		return presence.Result{Reason: presence.ReasonDecision}
+	}
+	return verifyAnswerProof(env, p, proof.Scope, proof)
 }
 
 // approvalDialog is the dialog's text: "<helper> is trying to approve …".

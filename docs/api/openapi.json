@@ -361,6 +361,107 @@
         "summary": "Answer a boundary that asked or refused"
       }
     },
+    "/api/boundaries/statements": {
+      "post": {
+        "operationId": "postBoundariesStatements",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "session": {
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "blob": {
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "proof": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "challenge": {
+                          "type": "string"
+                        },
+                        "crossed": {
+                          "type": "string"
+                        },
+                        "decision": {
+                          "type": "string"
+                        },
+                        "issued": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "key": {
+                          "type": "string"
+                        },
+                        "rule": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "type": "string"
+                        },
+                        "session": {
+                          "type": "string"
+                        },
+                        "sig": {
+                          "items": {
+                            "type": "integer"
+                          },
+                          "type": "array"
+                        },
+                        "v": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "statement": {
+                      "items": {
+                        "type": "integer"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "The statement a presence-signed approval of a waiting boundary decision signs, and the dialog's text; 409 presence_unavailable when no key can sign here"
+      }
+    },
     "/api/budgets": {
       "post": {
         "operationId": "postBudgets",
@@ -4115,6 +4216,104 @@
           }
         },
         "summary": "Create, update or delete a routing rule"
+      }
+    },
+    "/api/routing/statements": {
+      "post": {
+        "operationId": "postRoutingStatements",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "blob": {
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "proof": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "challenge": {
+                          "type": "string"
+                        },
+                        "crossed": {
+                          "type": "string"
+                        },
+                        "decision": {
+                          "type": "string"
+                        },
+                        "issued": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "key": {
+                          "type": "string"
+                        },
+                        "rule": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "type": "string"
+                        },
+                        "session": {
+                          "type": "string"
+                        },
+                        "sig": {
+                          "items": {
+                            "type": "integer"
+                          },
+                          "type": "array"
+                        },
+                        "v": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "statement": {
+                      "items": {
+                        "type": "integer"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "description": "The request was refused; the body says why"
+          },
+          "401": {
+            "description": "Missing or wrong API token"
+          }
+        },
+        "summary": "The statement a presence-signed approval of a routing upgrade signs, and the dialog's text; 409 presence_unavailable when no key can sign here"
       }
     },
     "/api/rules/analyze": {
