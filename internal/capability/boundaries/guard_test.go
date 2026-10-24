@@ -1,6 +1,7 @@
 package boundaries
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -270,6 +271,62 @@ func TestAnAttendedAskIsSettledFromThePrompt(t *testing.T) {
 	last := envs[len(envs)-1].Payload.(*eventschema.DecisionEvent)
 	if last.Approval.Method != MethodPrompt {
 		t.Fatalf("approval = %+v", last.Approval)
+	}
+}
+
+// A call Claude Code stopped itself (auto mode, a permission rule, a
+// plugin or a PreToolUse hook) never reached a prompt, so the person
+// was not asked: TokenOps must not read the stop as their yes, must ask
+// at the next call, and keeps the vendor's verdict as evidence.
+func TestAVendorStopIsNotThePersonsYes(t *testing.T) {
+	stops := map[string]string{
+		"auto_mode_classifier": "Permission for this action was denied by the Claude Code auto mode classifier. Reason: [Data Handling]. If you have other tasks",
+		"permission_rule":      "Permission to use Bash with command rm -rf x has been denied.",
+		"plugin":               "Permission to use Bash denied by plugin guard: no",
+		"pre_tool_use_hook":    "PreToolUse:Bash hook error: blocked",
+	}
+	for stopper, text := range stops {
+		t.Run(stopper, func(t *testing.T) {
+			env := testEnv(t, true)
+			setCost(t, env, "s1", 25)
+			transcript := filepath.Join(t.TempDir(), "t.jsonl")
+			r := rules(t, spendRule("ask", "enforce"))
+			c := call("s1")
+			c.TranscriptPath = transcript
+			first, _ := Guard(r, c, env)
+			if first.Verdict != VerdictAsk {
+				t.Fatalf("first = %+v", first)
+			}
+			line, _ := json.Marshal(map[string]any{"timestamp": "2026-10-20T09:59:00Z", "message": map[string]any{"content": []any{
+				map[string]any{"type": "tool_result", "tool_use_id": "tu-1", "is_error": true, "content": text}}}})
+			if err := os.WriteFile(transcript, append(line, '\n'), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			c.ToolUseID = "tu-2"
+			if next, _ := Guard(r, c, env); next.Verdict != VerdictAsk {
+				t.Fatalf("a vendor stop was read as the person's yes: %+v", next)
+			}
+			envs, _ := env.Dir.Decision(first.DecisionID)
+			var found bool
+			for _, e := range envs {
+				d := e.Payload.(*eventschema.DecisionEvent)
+				if d.Stage == eventschema.DecisionStageAccepted || d.Approval.Approver != "" {
+					t.Fatalf("recorded an approval: %+v", d)
+				}
+				for _, ev := range d.Evidence {
+					if ev.Kind == "vendor_verdict" {
+						found = true
+						if ev.Source != "claude_code_transcript" || ev.Scope != "s1/tu-1" || !strings.Contains(ev.Caveat, stopper) ||
+							!ev.ObservedAt.Equal(time.Date(2026, 10, 20, 9, 59, 0, 0, time.UTC)) {
+							t.Errorf("evidence = %+v", ev)
+						}
+					}
+				}
+			}
+			if !found {
+				t.Fatal("the vendor's verdict was not recorded on the boundary decision")
+			}
+		})
 	}
 }
 
