@@ -6,6 +6,11 @@
 
 - **sessions, daemon:** the daemon's session analysis is stored again. The context curve reports a band once a tool call ran in it, even when no instruction started there (one long instruction whose context climbs past a band edge), and that band's rejection rate divided 0 by 0. encoding/json refuses the resulting NaN, so every run since such a week logged `session analysis not stored err="json: unsupported value: NaN"` and kept nothing: the glance said "sessions read 15h ago" and kept saying it, and the coach, `tokenops dx` and move verification read an analysis that only grew older. A band with no instructions now reports a rejection rate of 0 with `prompts: 0` saying why, as the rework rate does with `total_edits`. And one figure can no longer cost the whole analysis: a figure that is not a number is stored as 0 and the daemon warns naming it (`fields=[context_curve[4].reject_rate_pct]`), instead of dropping every other figure beside it.
 
+### Changed
+
+- **brand, menu bar:** the accent is electric lime on ink, in place of cobalt, everywhere: the logo, app icons, favicon and link preview (redrawn by `assets/brand/make.py`), the menu bar panel, the status line and `tokenops` cards, and the docs site. Lime is the accent on dark; on light grounds the ring, links and thin strokes use a dark lime that keeps 5:1 contrast on white, and lime fills carry ink text (white on lime is 1.3:1 and is never used). The amber token and the status colours are unchanged
+- **menu bar:** the tray icon is a fuel gauge. It was two rings of the busiest plan's week and session, which read as progress rather than as what is left. It is now the headroom ring with a tank that is full at 100% left and drains in eight steps with the tightest plan window; empty means used up and nothing else (any headroom left shows at least one step), and a stale or unreadable reading draws the ring with a centre dot, never a full or empty tank. Still a template image, so macOS tints it for light and dark menu bars
+
 ## 0.110.0 - 2026-10-25
 
 ### Added

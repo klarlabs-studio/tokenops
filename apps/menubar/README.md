@@ -1,8 +1,14 @@
 # TokenOps menu bar
 
-TokenOps in the menu bar: an icon with two rings for the plan closest to
-its limit, its week outside and its session inside, each filled to the
-share left. A click opens the panel under it with every plan's details;
+TokenOps in the menu bar: a fuel gauge for your plans. The icon is the
+headroom ring with a tank inside it, filled to the share left on the plan
+window closest to its limit (the tightest across every bound plan, the same
+figure the panel and tooltip give). Full means 100% left; the fill drains in
+eight steps; empty means used up and nothing else, because any headroom left
+shows at least one step. A stale or unreadable figure draws the ring with a
+dot in the middle instead, never a full or an empty tank. The icon is a
+template image, so macOS tints it for a light or dark menu bar. A click opens
+the panel under it with every plan's details;
 hovering lists each window's share and reset (for example
 **Codex · week 25% left · resets in 5d 14h**); a right click has Refresh,
 Launch at Login, Alerts and Quit. Built on
@@ -23,7 +29,7 @@ covers it, the last 30 days as a chart, the top model, and the coach's
 findings. Usage on models with no list
 price yet is left out of the money and the panel says how much, rather
 than show a figure that looks complete. It follows the system's light or
-dark appearance in the Klarlabs palette.
+dark appearance in the Klarlabs palette (electric lime on ink).
 
 With the Homebrew install on macOS:
 
