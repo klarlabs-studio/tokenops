@@ -4,7 +4,13 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.110.1**.
+Current release: **v0.110.2**.
+
+## v0.110.2 — A plain white and ink panel
+
+The menu bar panel is plain white in light mode and plain ink in dark
+mode, without the tinted gradient and the lime glow. Lime stays the
+accent.
 
 ## v0.110.1 — Lime on ink, and a gauge in the menu bar
 
