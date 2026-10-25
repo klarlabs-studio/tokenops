@@ -4,7 +4,18 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.110.0**.
+Current release: **v0.110.1**.
+
+## v0.110.1 — Lime on ink, and a gauge in the menu bar
+
+TokenOps has a new look: electric lime on ink, across the logo and app
+icon, the menu bar, the status line and this site. The menu bar icon is
+now a fuel gauge for your tightest plan window: full while there is room,
+draining as it is used, empty only once it is used up, with a dot when
+the reading is unknown. The session analysis is stored again (a context
+band with tool calls but no instruction made a figure that is not a
+number, and the whole analysis was dropped), and the docs build no longer
+breaks on a wrapped placeholder.
 
 ## v0.110.0 — Routing that reads the plan, and checks itself
 
