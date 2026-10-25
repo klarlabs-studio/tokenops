@@ -68,7 +68,7 @@ func TestDXAnswersFromTheDaemonsAnalysis(t *testing.T) {
 	snap := findings.SessionsSnapshot{ComputedAt: time.Now().Add(-90 * time.Minute)}
 	snap.DX.Metrics.Prompts = 12
 	snap.DX.Metrics.Sessions = 3
-	if err := findings.WriteSnapshot(findings.DefaultDir(), snap); err != nil {
+	if _, err := findings.WriteSnapshot(findings.DefaultDir(), snap); err != nil {
 		t.Fatal(err)
 	}
 	run := func(args ...string) string {
@@ -92,7 +92,7 @@ func TestDXAnswersFromTheDaemonsAnalysis(t *testing.T) {
 		t.Errorf("another window used the week's analysis:\n%s", got)
 	}
 	snap.ComputedAt = time.Now().Add(-findings.MaxSnapshotAge - time.Minute)
-	if err := findings.WriteSnapshot(findings.DefaultDir(), snap); err != nil {
+	if _, err := findings.WriteSnapshot(findings.DefaultDir(), snap); err != nil {
 		t.Fatal(err)
 	}
 	if got := run("dx"); strings.Contains(got, "daemon's analysis") {
