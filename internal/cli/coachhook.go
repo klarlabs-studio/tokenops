@@ -227,12 +227,23 @@ func claudeDefaultModel(in stopHookInput, ledger coachcap.Ledger, now time.Time)
 		return ""
 	}
 	report := coachcap.Build(cfg)
+	// Judge the coach's own moves first: a retracted default-model move
+	// is reverted before the lever is reconciled below.
+	store := coachcap.MoveStore()
+	verified := ""
+	if report.Effective(config.PowerModels) != config.AutonomyOff {
+		verified = coachcap.VerifyMoves(coachcap.VerifyEnv{
+			Store: store, Session: in.SessionID, Transcript: in.TranscriptPath,
+			Ledger: ledger, Lever: paths, Verbosity: report.Verbosity, Now: now,
+		})
+	}
 	pressure, known := routeguard.ReadPressureKnown("", boundaryledger.DefaultDir(), now)
-	return coachcap.ReconcileDefaultModel(coachcap.DefaultModelEnv{
+	return joinMessages(verified, coachcap.ReconcileDefaultModel(coachcap.DefaultModelEnv{
 		Paths: paths, Rung: report.Effective(config.PowerModels), Verbosity: report.Verbosity,
 		Pressure: pressure, Known: known, Session: in.SessionID, SessionModel: latestTranscriptModel(in.TranscriptPath),
 		Catalog: routeCatalog(cfg), Candidates: cfg.RoutingCandidates(eventschema.ProviderAnthropic), Ledger: ledger, Now: now,
-	})
+		Retracted: store.Retracted(),
+	}))
 }
 
 func joinMessages(a, b string) string {

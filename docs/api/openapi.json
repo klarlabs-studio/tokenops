@@ -860,6 +860,256 @@
                       },
                       "type": "object"
                     },
+                    "moves": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "beliefs": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "after_retraction": {
+                                "type": "boolean"
+                              },
+                              "bad": {
+                                "type": "integer"
+                              },
+                              "baseline": {
+                                "type": "integer"
+                              },
+                              "baseline_bad": {
+                                "type": "integer"
+                              },
+                              "baseline_rate": {
+                                "type": "number"
+                              },
+                              "confidence": {
+                                "type": "number"
+                              },
+                              "judged": {
+                                "type": "integer"
+                              },
+                              "key": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "from": {
+                                    "type": "string"
+                                  },
+                                  "kind": {
+                                    "type": "string"
+                                  },
+                                  "to": {
+                                    "type": "string"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "moves": {
+                                "type": "integer"
+                              },
+                              "rate": {
+                                "type": "number"
+                              },
+                              "scope": {
+                                "type": "string"
+                              },
+                              "signals": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "failed": {
+                                    "type": "integer"
+                                  },
+                                  "interrupted": {
+                                    "type": "integer"
+                                  },
+                                  "rejected": {
+                                    "type": "integer"
+                                  },
+                                  "rerun": {
+                                    "type": "integer"
+                                  },
+                                  "reworked": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "since": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "verdict": {
+                                "type": "string"
+                              },
+                              "why": {
+                                "type": "string"
+                              },
+                              "z": {
+                                "type": "number"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "lines": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "retractions": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "alternatives": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "chosen": {
+                                      "type": "boolean"
+                                    },
+                                    "option": {
+                                      "type": "string"
+                                    },
+                                    "why": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              },
+                              "at": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "ended": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "ended_by": {
+                                "type": "string"
+                              },
+                              "ended_why": {
+                                "type": "string"
+                              },
+                              "evidence": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "after_retraction": {
+                                    "type": "boolean"
+                                  },
+                                  "bad": {
+                                    "type": "integer"
+                                  },
+                                  "baseline": {
+                                    "type": "integer"
+                                  },
+                                  "baseline_bad": {
+                                    "type": "integer"
+                                  },
+                                  "baseline_rate": {
+                                    "type": "number"
+                                  },
+                                  "confidence": {
+                                    "type": "number"
+                                  },
+                                  "judged": {
+                                    "type": "integer"
+                                  },
+                                  "key": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "from": {
+                                        "type": "string"
+                                      },
+                                      "kind": {
+                                        "type": "string"
+                                      },
+                                      "to": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "moves": {
+                                    "type": "integer"
+                                  },
+                                  "rate": {
+                                    "type": "number"
+                                  },
+                                  "scope": {
+                                    "type": "string"
+                                  },
+                                  "signals": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "failed": {
+                                        "type": "integer"
+                                      },
+                                      "interrupted": {
+                                        "type": "integer"
+                                      },
+                                      "rejected": {
+                                        "type": "integer"
+                                      },
+                                      "rerun": {
+                                        "type": "integer"
+                                      },
+                                      "reworked": {
+                                        "type": "integer"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "since": {
+                                    "format": "date-time",
+                                    "type": "string"
+                                  },
+                                  "verdict": {
+                                    "type": "string"
+                                  },
+                                  "why": {
+                                    "type": "string"
+                                  },
+                                  "z": {
+                                    "type": "number"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "key": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "from": {
+                                    "type": "string"
+                                  },
+                                  "kind": {
+                                    "type": "string"
+                                  },
+                                  "to": {
+                                    "type": "string"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "reason": {
+                                "type": "string"
+                              },
+                              "surfaced": {
+                                "type": "boolean"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
                     "powers": {
                       "items": {
                         "additionalProperties": false,
@@ -1201,6 +1451,256 @@
                         "Deny": {
                           "items": {
                             "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "moves": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "beliefs": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "after_retraction": {
+                                "type": "boolean"
+                              },
+                              "bad": {
+                                "type": "integer"
+                              },
+                              "baseline": {
+                                "type": "integer"
+                              },
+                              "baseline_bad": {
+                                "type": "integer"
+                              },
+                              "baseline_rate": {
+                                "type": "number"
+                              },
+                              "confidence": {
+                                "type": "number"
+                              },
+                              "judged": {
+                                "type": "integer"
+                              },
+                              "key": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "from": {
+                                    "type": "string"
+                                  },
+                                  "kind": {
+                                    "type": "string"
+                                  },
+                                  "to": {
+                                    "type": "string"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "moves": {
+                                "type": "integer"
+                              },
+                              "rate": {
+                                "type": "number"
+                              },
+                              "scope": {
+                                "type": "string"
+                              },
+                              "signals": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "failed": {
+                                    "type": "integer"
+                                  },
+                                  "interrupted": {
+                                    "type": "integer"
+                                  },
+                                  "rejected": {
+                                    "type": "integer"
+                                  },
+                                  "rerun": {
+                                    "type": "integer"
+                                  },
+                                  "reworked": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "since": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "verdict": {
+                                "type": "string"
+                              },
+                              "why": {
+                                "type": "string"
+                              },
+                              "z": {
+                                "type": "number"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "lines": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "retractions": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "alternatives": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "chosen": {
+                                      "type": "boolean"
+                                    },
+                                    "option": {
+                                      "type": "string"
+                                    },
+                                    "why": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              },
+                              "at": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "ended": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "ended_by": {
+                                "type": "string"
+                              },
+                              "ended_why": {
+                                "type": "string"
+                              },
+                              "evidence": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "after_retraction": {
+                                    "type": "boolean"
+                                  },
+                                  "bad": {
+                                    "type": "integer"
+                                  },
+                                  "baseline": {
+                                    "type": "integer"
+                                  },
+                                  "baseline_bad": {
+                                    "type": "integer"
+                                  },
+                                  "baseline_rate": {
+                                    "type": "number"
+                                  },
+                                  "confidence": {
+                                    "type": "number"
+                                  },
+                                  "judged": {
+                                    "type": "integer"
+                                  },
+                                  "key": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "from": {
+                                        "type": "string"
+                                      },
+                                      "kind": {
+                                        "type": "string"
+                                      },
+                                      "to": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "moves": {
+                                    "type": "integer"
+                                  },
+                                  "rate": {
+                                    "type": "number"
+                                  },
+                                  "scope": {
+                                    "type": "string"
+                                  },
+                                  "signals": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "failed": {
+                                        "type": "integer"
+                                      },
+                                      "interrupted": {
+                                        "type": "integer"
+                                      },
+                                      "rejected": {
+                                        "type": "integer"
+                                      },
+                                      "rerun": {
+                                        "type": "integer"
+                                      },
+                                      "reworked": {
+                                        "type": "integer"
+                                      }
+                                    },
+                                    "type": "object"
+                                  },
+                                  "since": {
+                                    "format": "date-time",
+                                    "type": "string"
+                                  },
+                                  "verdict": {
+                                    "type": "string"
+                                  },
+                                  "why": {
+                                    "type": "string"
+                                  },
+                                  "z": {
+                                    "type": "number"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "key": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "from": {
+                                    "type": "string"
+                                  },
+                                  "kind": {
+                                    "type": "string"
+                                  },
+                                  "to": {
+                                    "type": "string"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "reason": {
+                                "type": "string"
+                              },
+                              "surfaced": {
+                                "type": "boolean"
+                              }
+                            },
+                            "type": "object"
                           },
                           "type": "array"
                         }

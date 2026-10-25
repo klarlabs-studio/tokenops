@@ -61,6 +61,10 @@ type Report struct {
 	// act ladder and the published evidence bar for the next one (#662).
 	// It suggests; nothing is promoted on it. Only Status fills it.
 	Graduation []savings.Step `json:"graduation,omitempty"`
+	// Moves is, per kind of autonomous model move, whether it held
+	// quality against comparable unmoved work, and any retraction. Only
+	// Status fills it.
+	Moves *MoveVerdicts `json:"moves,omitempty"`
 }
 
 // FollowThroughSummary is the follow-through evidence for one kind.
