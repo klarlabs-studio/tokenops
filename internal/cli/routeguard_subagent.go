@@ -15,6 +15,7 @@ import (
 	bcap "go.klarlabs.de/tokenops/internal/capability/boundaries"
 	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/config"
+	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/internal/infra/routeguard"
 	"go.klarlabs.de/tokenops/pkg/eventschema"
 )
@@ -88,22 +89,22 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 		stateDir, in.SessionID, requested, eventschema.ProviderAnthropic, catalog, candidates)))
 	coachcap.RecordResolutions(ledger, now, proposalResolutions(routeguard.SettleProposals(stateDir, in.SessionID, in.TranscriptPath)))
 	rung := report.Effective(config.PowerModels)
-	if rung == config.AutonomyAsk {
-		return askSubagentMove(cmd, in, report, stateDir, ledger, now, routeguard.SubagentInput{
-			Description: description, Prompt: prompt, Requested: requested,
-			SessionModel: latestTranscriptModel(in.TranscriptPath),
-			Provider:     eventschema.ProviderAnthropic, Catalog: catalog, Candidates: candidates,
-		})
-	}
-	if rung != config.AutonomyAutonomous {
+	if rung != config.AutonomyAsk && rung != config.AutonomyAutonomous {
 		return nil
 	}
-	dec := routeguard.EvaluateSubagent(routeguard.SubagentInput{
+	// The plan running short moves edit and deep work a tier further
+	// down. Read from local files only, so the hook stays fast and a
+	// missing or stale reading is simply no pressure.
+	sub := routeguard.SubagentInput{
 		Description: description, Prompt: prompt, Requested: requested,
 		SessionModel: latestTranscriptModel(in.TranscriptPath),
-		Provider:     eventschema.ProviderAnthropic, Catalog: catalog,
-		Candidates: candidates,
-	})
+		Provider:     eventschema.ProviderAnthropic, Catalog: catalog, Candidates: candidates,
+		Pressure: routeguard.ReadPressure("", boundaryledger.DefaultDir(), now),
+	}
+	if rung == config.AutonomyAsk {
+		return askSubagentMove(cmd, in, report, stateDir, ledger, now, sub)
+	}
+	dec := routeguard.EvaluateSubagent(sub)
 	if !dec.Rewrite {
 		return nil
 	}
@@ -125,8 +126,11 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 			dec.From, dec.To, dec.Reason)
 	default:
 		out.SystemMessage = fmt.Sprintf("tokenops: moved a subagent from %s to %s (%s work).", dec.From, dec.To, dec.Kind)
+		if dec.Pressure != nil {
+			out.SystemMessage = fmt.Sprintf("tokenops: moved a subagent from %s to %s (%s work; %s).", dec.From, dec.To, dec.Kind, dec.Pressure.Why())
+		}
 	}
-	coachcap.RecordMove(ledger, now, coachcap.NewID(), in.SessionID, config.PowerModels, string(dec.Kind), dec.From, dec.To)
+	coachcap.RecordMoveBecause(ledger, now, coachcap.NewID(), in.SessionID, config.PowerModels, string(dec.Kind), dec.From, dec.To, dec.Pressure.Evidence())
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
 }
 
@@ -205,9 +209,13 @@ func askSubagentMove(cmd *cobra.Command, in agentToolInput, report coachcap.Repo
 	// Claude Code's prompt shows this reason under the Agent call, and the
 	// call itself only by its description, so the reason carries the
 	// proposal (verified in 2.1.284).
+	why := fmt.Sprintf("Its work looks like %s.", dec.Kind)
+	if dec.Pressure != nil {
+		why = fmt.Sprintf("Its work looks like %s, and %s.", dec.Kind, dec.Pressure.Why())
+	}
 	out.HookSpecificOutput.PermissionDecisionReason = fmt.Sprintf(
-		"tokenops: run this subagent on %s instead of %s? Its work looks like %s. No pauses the agent; tell it to continue and it runs as planned.",
-		dec.To, dec.From, dec.Kind)
+		"tokenops: run this subagent on %s instead of %s? %s No pauses the agent; tell it to continue and it runs as planned.",
+		dec.To, dec.From, why)
 	out.HookSpecificOutput.UpdatedInput = updated
 	if report.Verbosity == config.VerbosityVerbose {
 		// Claude Code shows this after the prompt is answered, not with
@@ -219,7 +227,7 @@ func askSubagentMove(cmd *cobra.Command, in agentToolInput, report coachcap.Repo
 	routeguard.Propose(dir, in.SessionID, routeguard.Proposal{
 		ID: id, ToolUseID: in.ToolUseID, Call: call, Kind: string(dec.Kind), From: dec.From, To: dec.To,
 	})
-	coachcap.RecordApproval(ledger, now, id, in.SessionID, config.PowerModels, string(dec.Kind), dec.From, dec.To)
+	coachcap.RecordApprovalBecause(ledger, now, id, in.SessionID, config.PowerModels, string(dec.Kind), dec.From, dec.To, dec.Pressure.Evidence())
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
 }
 
