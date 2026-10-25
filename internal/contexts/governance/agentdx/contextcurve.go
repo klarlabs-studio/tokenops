@@ -205,7 +205,12 @@ func ComputeContextCurve(records []Record) []ContextBand {
 			MedianTurns: round1(percentile(a.turns, 0.5)),
 			TotalEdits:  a.edits,
 		}
-		band.RejectRatePct = round1(float64(a.rejects) / float64(a.prompts) * 100)
+		// A band reached by calls alone has no instruction to reject: its
+		// rate stays 0 and Prompts says why, as ReworkRatePct does with
+		// TotalEdits. Dividing anyway gave NaN, which JSON cannot carry.
+		if a.prompts > 0 {
+			band.RejectRatePct = round1(float64(a.rejects) / float64(a.prompts) * 100)
+		}
 		if a.edits > 0 {
 			band.ReworkRatePct = round1(float64(a.rework) / float64(a.edits) * 100)
 		}

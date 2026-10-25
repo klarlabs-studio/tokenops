@@ -1,6 +1,9 @@
 package agentdx
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 // rejectAt builds one unit at a given context size. Each unit needs its
 // own increasing timestamps: the curve walks records chronologically, so
@@ -97,5 +100,39 @@ func TestNoCurveWithoutData(t *testing.T) {
 	}
 	if _, ok := SweetSpot(nil); ok {
 		t.Error("no bands must yield no sweet spot")
+	}
+}
+
+// A band can carry tool calls without any instruction having started in
+// it: one long instruction whose context climbs past a band edge. Its
+// rejection rate has no denominator. It used to be 0/0 = NaN, which
+// encoding/json refuses, so the daemon's whole session analysis went
+// unstored. Like the other rates, an empty denominator reads 0, and
+// Prompts says why.
+func TestBandWithCallsButNoInstructionHasNoRejectRate(t *testing.T) {
+	recs := []Record{
+		{At: at(0), SessionID: "s", Kind: KindAssistantTurn, InputTokens: 700_000},
+		{At: at(1), SessionID: "s", Kind: KindPrompt},
+		{At: at(2), SessionID: "s", Kind: KindAssistantTurn, InputTokens: 850_000},
+		{At: at(3), SessionID: "s", Kind: KindToolUse, ToolName: "Bash", CallSignature: "go test"},
+	}
+	bands := ComputeContextCurve(recs)
+	var past *ContextBand
+	for i := range bands {
+		if bands[i].Contains(850_000) {
+			past = &bands[i]
+		}
+	}
+	if past == nil {
+		t.Fatalf("the >800k band carried a call and must be reported: %+v", bands)
+	}
+	if past.Prompts != 0 || past.TotalCalls != 1 {
+		t.Fatalf("band = %+v, want 0 instructions and 1 call", *past)
+	}
+	if past.RejectRatePct != 0 {
+		t.Errorf("reject rate with no instructions = %v, want 0", past.RejectRatePct)
+	}
+	if _, err := json.Marshal(bands); err != nil {
+		t.Errorf("curve does not encode: %v", err)
 	}
 }
