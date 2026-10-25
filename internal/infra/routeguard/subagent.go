@@ -33,6 +33,10 @@ type SubagentInput struct {
 	// It moves edit and deep work one tier further down; with none,
 	// placement is by the work alone.
 	Pressure *Pressure
+	// Retracted reports whether moving kind work from one model family to
+	// another has been retracted because its quality dropped
+	// (moveverdict); such a move is not made. Nil retracts nothing.
+	Retracted func(kind, from, to string) bool
 }
 
 // SubagentDecision says whether to move the subagent and where.
@@ -47,6 +51,9 @@ type SubagentDecision struct {
 	// Pressure is the evidence that moved the subagent further than its
 	// work alone would have; nil when the work alone placed it.
 	Pressure *Pressure
+	// Held names a move that would have been made but was retracted
+	// because its quality dropped, "" when none was.
+	Held string
 }
 
 // agentAliases are the model names the Agent tool accepts.
@@ -79,10 +86,13 @@ func EvaluateSubagent(in SubagentInput) SubagentDecision {
 		return d
 	}
 	calm, calmOK := placeSubagent(cat, in.Provider, cur.Tier, wantTier, from, false)
+	if calmOK && d.retracted(in, from, calm) {
+		calmOK = false
+	}
 	if pressed, ok := pressedTier(d.Kind); ok && in.Pressure != nil {
 		// Placed exactly: a pressed tier the menu cannot fill is no
 		// reason to fall further than one step.
-		if target, ok := placeSubagent(cat, in.Provider, cur.Tier, pressed, from, true); ok && (!calmOK || target != calm) {
+		if target, ok := placeSubagent(cat, in.Provider, cur.Tier, pressed, from, true); ok && (!calmOK || target != calm) && !d.retracted(in, from, target) {
 			d.Rewrite, d.To, d.ToAlias, d.Pressure = true, target, aliasFor(target), in.Pressure
 			d.Reason = fmt.Sprintf("%s; %s work moved from %s to %s", in.Pressure.Why(), d.Kind, from, target)
 			return d
@@ -94,6 +104,18 @@ func EvaluateSubagent(in SubagentInput) SubagentDecision {
 	d.Rewrite, d.To, d.ToAlias = true, calm, aliasFor(calm)
 	d.Reason = fmt.Sprintf("this subagent's work is %s; %s fits it and %s is on the %s tier", d.Kind, calm, from, cur.Tier)
 	return d
+}
+
+// retracted reports whether moving this kind of work from from to to has
+// been retracted, and notes the held move on the decision.
+func (d *SubagentDecision) retracted(in SubagentInput, from, to string) bool {
+	if in.Retracted == nil || !in.Retracted(string(d.Kind), aliasFor(from), aliasFor(to)) {
+		return false
+	}
+	if d.Held == "" {
+		d.Held = fmt.Sprintf("moving %s subagents from %s to %s was retracted because its quality dropped", d.Kind, aliasFor(from), aliasFor(to))
+	}
+	return true
 }
 
 // placeSubagent is the model on want's tier for a subagent now on cur, or

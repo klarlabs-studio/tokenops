@@ -201,3 +201,37 @@ func TestSubagentPressureNeverPassesThePolicy(t *testing.T) {
 		t.Errorf("pressed to %q (pressure %v), calm to %q", d.To, d.Pressure, calm.To)
 	}
 }
+
+// A move kind whose quality dropped is retracted (moveverdict): the coach
+// stops making it, under pressure or not, and says why. A retraction of
+// one kind leaves the others, and the calm move of the same subagent,
+// alone.
+func TestSubagentRetractedMoveIsNotMade(t *testing.T) {
+	retracted := func(kind, _, to string) bool { return kind == "edit" && to == "sonnet" }
+	for _, tc := range []struct {
+		name, prompt, requested, session string
+		pressed                          bool
+		want                             string
+		held                             bool
+	}{
+		{"pressed edit on opus is held", "add a test for the parser", "opus", "", true, "", true},
+		{"pressed edit on fable falls back to its calm move", "add a test for the parser", "", "claude-fable-5-1", true, "opus", true},
+		{"lookup is a different kind and still moves", "find where the retention config is defined", "opus", "", true, "haiku", false},
+		{"research still moves", "research how prefix keys work and summarise", "opus", "", false, "sonnet", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			in := subagent(tc.prompt, tc.requested, tc.session)
+			if tc.pressed {
+				in.Pressure = maintainerWeek()
+			}
+			in.Retracted = retracted
+			d := EvaluateSubagent(in)
+			if d.ToAlias != tc.want {
+				t.Fatalf("moved to %q, want %q (%+v)", d.ToAlias, tc.want, d)
+			}
+			if (d.Held != "") != tc.held {
+				t.Errorf("held = %q, want held %v", d.Held, tc.held)
+			}
+		})
+	}
+}
