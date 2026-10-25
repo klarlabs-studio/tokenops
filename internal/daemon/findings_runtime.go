@@ -39,7 +39,10 @@ func runSessionFindings(ctx context.Context, dir string, delay, every time.Durat
 	cache := sessions.NewTranscriptCache()
 	analyze := func() {
 		start := time.Now()
-		s, err := findings.AnalyzeSessions(ctx, dir, start, cache)
+		s, dropped, err := findings.AnalyzeSessions(ctx, dir, start, cache)
+		if len(dropped) > 0 {
+			logger.Warn("session analysis figures not a number, stored as 0", "fields", dropped)
+		}
 		if err != nil {
 			logger.Warn("session analysis not stored", "err", err)
 			return

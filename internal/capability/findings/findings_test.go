@@ -1,6 +1,8 @@
 package findings
 
 import (
+	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +12,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/capability/sessions"
 	"go.klarlabs.de/tokenops/internal/config"
 	ft "go.klarlabs.de/tokenops/internal/contexts/coaching/followthrough"
+	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
 	"go.klarlabs.de/tokenops/internal/contexts/spend/plans"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
@@ -157,7 +160,7 @@ func TestSnapshotRoundTrip(t *testing.T) {
 		t.Fatalf("no snapshot yet: %v %v", s, err)
 	}
 	want := SessionsSnapshot{ComputedAt: time.Date(2026, 10, 4, 9, 0, 0, 0, time.UTC), DX: sessions.DX{Window: "last 7d"}}
-	if err := WriteSnapshot(dir, want); err != nil {
+	if _, err := WriteSnapshot(dir, want); err != nil {
 		t.Fatal(err)
 	}
 	got, err := ReadSnapshot(dir)
@@ -174,7 +177,7 @@ func TestDXUsesARecentAnalysis(t *testing.T) {
 	snap := SessionsSnapshot{ComputedAt: now.Add(-time.Hour)}
 	snap.DX.Window = "cached"
 	snap.DX.Metrics.Prompts = 9
-	if err := WriteSnapshot(DefaultDir(), snap); err != nil {
+	if _, err := WriteSnapshot(DefaultDir(), snap); err != nil {
 		t.Fatal(err)
 	}
 	if got := DX(sessions.Window{}, now); got.Window != "cached" {
@@ -208,5 +211,28 @@ func TestPlanAdviceFinding(t *testing.T) {
 	}
 	if !strings.Contains(f.Action, "tokenops plan advise") || !strings.Contains(f.Evidence, "medium confidence") {
 		t.Errorf("finding = %+v", f)
+	}
+}
+
+// One figure that is not a number must not cost the stored analysis: the
+// figure is zeroed and named, and everything else is kept.
+func TestWriteSnapshotKeepsTheAnalysisWhenOneFigureIsNaN(t *testing.T) {
+	dir := t.TempDir()
+	s := SessionsSnapshot{ComputedAt: time.Date(2026, 10, 25, 1, 26, 0, 0, time.UTC)}
+	s.DX.Metrics.Prompts = 3242
+	s.Curve = []agentdx.ContextBand{{Label: "<200k", Prompts: 900, RejectRatePct: 2.5}, {Label: ">800k", RejectRatePct: math.NaN()}}
+	dropped, err := WriteSnapshot(dir, s)
+	if err != nil {
+		t.Fatalf("analysis not stored: %v", err)
+	}
+	if want := []string{"context_curve[1].reject_rate_pct"}; !slices.Equal(dropped, want) {
+		t.Errorf("dropped = %q, want %q", dropped, want)
+	}
+	got, err := ReadSnapshot(dir)
+	if err != nil || got == nil {
+		t.Fatalf("read back %v %v", got, err)
+	}
+	if got.DX.Metrics.Prompts != 3242 || len(got.Curve) != 2 || got.Curve[0].RejectRatePct != 2.5 || got.Curve[1].RejectRatePct != 0 {
+		t.Errorf("stored %+v", got)
 	}
 }

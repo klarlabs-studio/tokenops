@@ -17,6 +17,7 @@ import (
 	"go.klarlabs.de/tokenops/internal/contexts/governance/agentdx"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/infra/followthrough"
+	"go.klarlabs.de/tokenops/internal/infra/jsonfinite"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
 )
 
@@ -67,41 +68,49 @@ func ReadSnapshot(dir string) (*SessionsSnapshot, error) {
 
 // WriteSnapshot stores s, replacing the file in one rename so a reader
 // never sees half of it.
-func WriteSnapshot(dir string, s SessionsSnapshot) error {
+//
+// encoding/json refuses NaN and ±Inf and fails the whole document over
+// one of them, so a figure that is not a number is stored as 0 and its
+// JSON path returned in dropped, for the caller to name. One bad figure
+// used to cost the entire analysis.
+func WriteSnapshot(dir string, s SessionsSnapshot) (dropped []string, err error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
+		return nil, err
 	}
+	dropped = jsonfinite.Sanitize(&s)
 	b, err := json.Marshal(s)
 	if err != nil {
-		return err
+		return dropped, err
 	}
 	tmp, err := os.CreateTemp(dir, snapshotFile+".*")
 	if err != nil {
-		return err
+		return dropped, err
 	}
 	if _, err := tmp.Write(b); err != nil {
 		_ = tmp.Close()
 		_ = os.Remove(tmp.Name())
-		return err
+		return dropped, err
 	}
 	if err := tmp.Close(); err != nil {
 		_ = os.Remove(tmp.Name())
-		return err
+		return dropped, err
 	}
-	return os.Rename(tmp.Name(), filepath.Join(dir, snapshotFile))
+	return dropped, os.Rename(tmp.Name(), filepath.Join(dir, snapshotFile))
 }
 
 // AnalyzeSessions runs the week's session analysis and stores it. The
 // analysis reads transcripts but stores only derived figures. A non-nil
 // cache, kept between runs, makes each run read only the transcripts
-// that changed since the last.
-func AnalyzeSessions(ctx context.Context, dir string, now time.Time, cache *sessions.TranscriptCache) (SessionsSnapshot, error) {
+// that changed since the last. dropped names each figure that was not a
+// number and was stored as 0 (see WriteSnapshot).
+func AnalyzeSessions(ctx context.Context, dir string, now time.Time, cache *sessions.TranscriptCache) (s SessionsSnapshot, dropped []string, err error) {
 	if err := ctx.Err(); err != nil {
-		return SessionsSnapshot{}, err
+		return SessionsSnapshot{}, nil, err
 	}
 	dx, curve := sessions.ComputeDXWithCurve(sessions.Window{Days: 7, Cache: cache}, now)
-	s := SessionsSnapshot{ComputedAt: now.UTC(), DX: dx, Curve: curve}
-	return s, WriteSnapshot(dir, s)
+	s = SessionsSnapshot{ComputedAt: now.UTC(), DX: dx, Curve: curve}
+	dropped, err = WriteSnapshot(dir, s)
+	return s, dropped, err
 }
 
 // Gather reads the coach's ledgers, the last session analysis and the
