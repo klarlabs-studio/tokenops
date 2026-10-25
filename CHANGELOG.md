@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.110.0 - 2026-10-25
+
 ### Added
 
 - **coach, models:** new Claude Code sessions start a tier down while the plan runs short. A hook cannot change a running session's model, so a week running 28 points ahead of pace kept every new session on Opus until it ran out. With `models: autonomous` and the plan pressed (the rule below), the Stop hook now sets the `model` key of `~/.claude/settings.json` one tier down (Opus to Sonnet, never below Sonnet, never to a model the policy rules out), records the move with the pressure as its evidence, and says so with `/model sonnet` for the session already running. It removes the key once a fresh reading finds the plan back on pace, once the pressed window resets, or at the next turn end after `models` is lowered. A model you set yourself, or changed after the coach set it, is never touched; there, and at `ask` or `advise`, the coach advises `/model sonnet` once per pressed window
