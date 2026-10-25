@@ -214,8 +214,7 @@ Touch ID, Apple Watch or password dialog and answers with the signed
 approval, with no terminal; the panel then says what happened ("Approved
 session-spend…, signed with presence key pk-…", or why not: the dialog was
 cancelled, the screen is locked, the key is from another Mac). Without a
-key, **Approve…** opens a terminal running `tokenops approve <id>
---confirm`, so the approval is still you, at a terminal, typing yes.
+key, **Approve…** opens a terminal running `tokenops approve <id> --confirm`, so the approval is still you, at a terminal, typing yes.
 
 Only a person should approve: `tokenops approve` refuses to run without a
 terminal, the MCP tool can only deny, and the daemon API approves only with
@@ -317,8 +316,7 @@ tokenops boundaries presence status
 
 `enroll` creates a key in the Secure Enclave that signs only after Touch ID,
 a paired Apple Watch or your login password, and has it sign once to prove
-it works. From then on `tokenops approve` (and `tokenops routing decide
-<key> approve`) shows the dialog and signs the approval: the decision, its
+it works. From then on `tokenops approve` (and `tokenops routing decide <key> approve`) shows the dialog and signs the approval: the decision, its
 rule and session, the scope, a fresh challenge for that raising of the
 decision and the figures you were shown. The pause point checks the
 signature against the enrolled key. A deny is never signed and never asks.
@@ -364,8 +362,7 @@ Watch is offered every dialog and shows the same text: a double press on
 the wrist approves even while you reach for *Cancel* on screen. Approve
 only a dialog you started, and read what it names. Every signed approval
 is recorded with the key that signed it ("approved in person: signed with
-presence key pk-…"), so one you did not intend shows up in `tokenops
-explain <id>`; `tokenops deny <id>` takes it back for the rest of the
+presence key pk-…"), so one you did not intend shows up in `tokenops explain <id>`; `tokenops deny <id>` takes it back for the rest of the
 step or session.
 
 **Where it cannot ask.** The dialog needs the logged-in user's screen.

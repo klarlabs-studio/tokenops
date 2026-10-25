@@ -2212,8 +2212,7 @@ has an MCP equivalent: an agent must not change the limits set on it.
 
 **The headroom pause** is the boundary `tokenops init` writes on a new
 config: once the tightest plan window TokenOps knows is down to 10% left, the
-agent's next tool call asks first (`action: continue`, `when: {
-plan_left_pct: "<= 10" }`, `require: ask`). It starts in shadow, and the
+agent's next tool call asks first (`action: continue`, `when: { plan_left_pct: "<= 10" }`, `require: ask`). It starts in shadow, and the
 glance's findings say how many sessions it would have paused this week;
 `tokenops boundaries promote headroom-pause` makes it pause. A config
 written before init did this is not changed: the findings suggest
