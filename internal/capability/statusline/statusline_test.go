@@ -49,7 +49,7 @@ func TestRenderTipOnTheLine(t *testing.T) {
 	in := full()
 	in.Color = true
 	got := Render(in)
-	if len(got) != 1 || !strings.Contains(got[0], cobalt+"●") {
+	if len(got) != 1 || !strings.Contains(got[0], lime+"●") {
 		t.Fatalf("plain tip %q", got)
 	}
 	in.Tip, in.TipUrgent = "Claude weekly 10% left → /compact, smaller model", true
@@ -71,7 +71,7 @@ func TestRenderColoursFollowTheLimit(t *testing.T) {
 	if !strings.Contains(line, dangerFg+"15% left") {
 		t.Errorf("85%% used is not danger-coloured: %q", line)
 	}
-	if !strings.Contains(line, cobaltFg+"Opus 5.5") {
+	if !strings.Contains(line, lime+"Opus 5.5") {
 		t.Error("the model is not in the Klarlabs accent")
 	}
 	// 71% of the window is 89% of the way to compacting at 80%: warn red.
