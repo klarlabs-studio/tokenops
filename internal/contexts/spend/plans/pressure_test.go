@@ -38,3 +38,17 @@ func TestPressedWithoutResetUsesTheFloor(t *testing.T) {
 		t.Error("26% left without a reset is pressed")
 	}
 }
+
+// Once the pace can be judged it decides over the floor: a week used
+// exactly on pace is not pressed at 20% left, however the arithmetic
+// rounds.
+func TestTrustedPaceDecidesOverTheFloor(t *testing.T) {
+	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	week := 7 * 24 * time.Hour
+	for h := 120; h < 168; h++ {
+		w := VendorWindow{Name: "week", UsedPct: float64(h) * 100 / 168, Duration: week, ResetsAt: now.Add(week - time.Duration(h)*time.Hour)}
+		if _, ok := w.Pressed(now); ok {
+			t.Fatalf("on pace at hour %d (%.1f%% used) is pressed", h, w.UsedPct)
+		}
+	}
+}

@@ -114,8 +114,9 @@ subagent hook: `tokenops hooks install --route-guard` adds it, and
 (the 5-hour or the weekly one) is on course, at the pace so far, to run
 out at least a tenth of its length before it resets (30 minutes of a
 5-hour window, about 17 hours of a week), judged only once a tenth of the
-window has gone by; or when it is down to 25% left, unless the pace says
-it lasts to the reset. Edit work then moves from the default tier (Opus)
+window has gone by; or, while its pace cannot be judged yet, when it is
+down to 25% left. Once the pace can be judged it decides: a low window
+that lasts to its reset is not pressed. Edit work then moves from the default tier (Opus)
 to the balanced one (Sonnet), and deep work from the deep tier to the
 default one. Lookups and research never go below what they need, nothing
 moves up, and the model policy filters the models first, so a pressed move

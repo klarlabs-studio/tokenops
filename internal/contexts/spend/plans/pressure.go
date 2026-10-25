@@ -13,9 +13,9 @@ import (
 // only what happened before.
 const (
 	// PressureFloorPct is the share left at or below which a window is
-	// pressed whatever its pace says, unless the pace (once it can be
-	// trusted) says it lasts to the reset. With a quarter of a week left,
-	// two long sessions finish it.
+	// pressed while its pace cannot be judged yet (too early in it, or a
+	// reading with no reset, such as the daemon's figures). With a
+	// quarter of a week left, two long sessions finish it.
 	PressureFloorPct = 25.0
 	// pressureMinElapsed is the share of a window that must have gone by
 	// before its projected run-out counts: half an hour into a 5h window,
@@ -31,8 +31,8 @@ const (
 
 // Pressed reports whether w is running short: on course, at the pace so
 // far (PaceAt, the glance's own pace), to run out well before its reset
-// once enough of it has gone by to trust that; or at PressureFloorPct or
-// less unless a trusted pace says it lasts. before is how long ahead of
+// once enough of it has gone by to trust that; or, while the pace cannot
+// be trusted yet, at PressureFloorPct or less. before is how long ahead of
 // the reset it runs out, zero when only the floor or a used-up window
 // pressed it. A window without a length or reset is judged by the floor
 // alone.
@@ -54,10 +54,9 @@ func (w VendorWindow) Pressed(now time.Time) (before time.Duration, pressed bool
 			return before, true
 		}
 	}
-	if left <= PressureFloorPct && (!trusted || !pace.LastsToReset) {
-		return 0, true
-	}
-	return 0, false
+	// Once the pace can be trusted it decides: a low share that lasts to
+	// the reset, or runs out only shortly before it, is no shortage.
+	return 0, !trusted && left <= PressureFloorPct
 }
 
 // Pressure is evidence that a plan is running short: its tightest pressed
