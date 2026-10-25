@@ -11,6 +11,10 @@
 
 - **route guard, models:** subagent routing now reads the plan's pressure. It placed a subagent by its work alone, so implementation and debugging subagents stayed on the Opus-class tier however fast the week was running out: in a real week, with the weekly window 54% left but projected to run out about three and a half days before its reset, autopilot moved one subagent in that time. While the tightest window (5-hour or weekly) is on course to run out at least a tenth of its length before its reset (judged once a tenth of it has gone by), or is down to 25% left before its pace can be judged, edit work moves one tier further down (Opus to Sonnet) and deep work from the deep tier to the default one, for `autonomous` and `ask` alike. Lookups and research never go below what they need, nothing moves up, and the model policy still decides first. The reason, the permission prompt and the verbose message say why ("Claude weekly runs out ~4d 6h before it resets at this pace (54% left); edit work moved from claude-opus-5 to claude-sonnet-5"), and the follow-through record keeps the pressure as the move's evidence. The reading comes from local files only (the status line's limits, else the daemon's figures), so the hook stays fast; with no fresh reading, routing is as before
 
+### Fixed
+
+- **settings, hooks:** TokenOps no longer rewrites your `settings.json` (and `opencode.json`) in alphabetical order with `&&` turned into `\u0026\u0026`. Setting or removing the default model, the compaction window, a hook or the status line decoded the whole file into a map and wrote it back, so every key moved and every `&`, `<` and `>` in a hook command was escaped; Claude Code read it the same, but a person diffing or editing the file could not. The file is now edited in place: your key order, formatting and every value TokenOps did not touch keep their exact bytes, new keys are appended, large integers survive, and the file mode is kept.
+
 ## 0.109.1 - 2026-10-25
 
 ### Fixed
