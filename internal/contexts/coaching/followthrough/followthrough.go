@@ -115,6 +115,10 @@ type Entry struct {
 	Via string `json:"via,omitempty"`
 	// Until is, on a snooze, when the snooze ends.
 	Until time.Time `json:"until,omitzero"`
+	// Ref is, on a subagent move or approval, the Agent call's
+	// tool_use_id, so the call's outcome can be read back from the
+	// transcript and judged (moveverdict).
+	Ref string `json:"ref,omitempty"`
 }
 
 // UndoWindow is how long after an autonomous move lowering the power

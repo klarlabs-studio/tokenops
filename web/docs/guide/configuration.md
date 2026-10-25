@@ -167,6 +167,36 @@ pressure as a one-line `routing` hint telling the agent to pass a cheaper
 `model` on subagent calls for work that fits, for harnesses the hook
 cannot rewrite.
 
+**Verified, and retracted when quality drops.** Every model move is
+judged on its outcome. For a subagent moved to a cheaper model, the coach
+compares it with subagents of the same task kind that were not moved, in
+the same project, on the model it was moved from, within 7 days of it. A
+run counts as bad when its call came back as an error, the agent launched
+the same work again within 30 minutes, the parent then edited a file the
+subagent's brief or report named, or the operator interrupted the turn or
+rejected the result with the next instruction. For the default model, it
+compares sessions started on the lowered default with sessions on your own
+model, same project, on the agent DX signals of their first 20
+instructions on that model (rework, interrupt, rejection; up to a `/model`
+switch). A verdict needs a minimum sample: 8 moved and 8 comparable
+subagent runs, or 4 sessions and 20 instructions a side. A move kind is
+**retracted** when its bad rate is at least 15 points worse than the
+comparable work and the gap is significant (one-sided two-proportion z of
+1.645 or more, 95%). A retracted kind is no longer made on its own, nor
+proposed at `ask`: it goes back to advice for that kind of work only, a
+default model the coach set is removed at once, and the move is recorded
+as undone with the reason. The coach says so once. It is restored when
+work of that kind run on the cheaper model since the retraction (by the
+agent's or your own choice) holds quality on the same rule, or when you
+say so: `tokenops coach reinstate <kind|all>`. Evidence older than 28
+days is not judged, and evidence that ages out never restores a move.
+`tokenops explain moves` shows per move kind the moves made, the outcomes
+judged, the verdict and why; `tokenops coach` and `tokenops_coach` show
+the same. The Stop hook notes each session in under a millisecond and
+reads transcripts and judges at most every 10 minutes; nothing leaves the
+machine, and the evidence (`~/.tokenops/coach/move-verify/`) holds task
+kinds, model families, times and counts, never prompt text.
+
 The coach keeps a **follow-through record** in
 `~/.tokenops/coach/followthrough.jsonl`: whether each piece of model advice
 was followed (a later turn, or a subagent the agent launched, ran below the

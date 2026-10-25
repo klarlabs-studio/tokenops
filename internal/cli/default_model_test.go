@@ -186,3 +186,60 @@ func TestCoachHookSetsTheDefaultModelUnderPressure(t *testing.T) {
 		t.Fatalf("settings: %s (%v)", b, err)
 	}
 }
+
+// A retracted default-model move (its sessions did worse, VerifyMoves) is
+// not made: the coach advises /model instead. One already in place is
+// reverted on the next turn.
+func TestDefaultModelRetractedIsNotMadeAndReverts(t *testing.T) {
+	retracted := func(kind, from, to string) bool {
+		return kind == coachcap.DefaultModelKind && from == "opus" && to == "sonnet"
+	}
+	e, settings := defaultModelFixture(t, `{}`)
+	e.Retracted = retracted
+	msg := coachcap.ReconcileDefaultModel(e)
+	if _, set := settings()["model"]; set {
+		t.Fatalf("a retracted move was made: %v", settings())
+	}
+	if !strings.Contains(msg, "/model sonnet") {
+		t.Errorf("no advice instead: %q", msg)
+	}
+
+	e, settings = defaultModelFixture(t, `{}`)
+	if coachcap.ReconcileDefaultModel(e); settings()["model"] != "sonnet" {
+		t.Fatalf("setup: lever not applied: %v", settings())
+	}
+	e.Retracted = retracted
+	msg = coachcap.ReconcileDefaultModel(e)
+	if _, set := settings()["model"]; set {
+		t.Fatalf("retracted lever left in place: %v", settings())
+	}
+	if !strings.Contains(msg, "retracted") {
+		t.Errorf("revert not explained: %q", msg)
+	}
+}
+
+// The Stop hook records the session's subagent outcomes as evidence for
+// judging the coach's moves, without a word to the operator.
+func TestStopHookRecordsMoveEvidence(t *testing.T) {
+	writeCoachConfig(t, "coach:\n  autonomy: advise\n")
+	store := coachcap.MoveStore()
+	// Other hook tests share the sandbox home and may have judged within
+	// the last few minutes, which would hold this pass back.
+	_ = os.RemoveAll(store.Dir)
+	t.Cleanup(func() { _ = os.RemoveAll(store.Dir) })
+	dir := t.TempDir()
+	lines := strings.Join([]string{
+		`{"type":"user","timestamp":"2026-07-07T12:00:00Z","sessionId":"verify1","message":{"role":"user","content":"tidy the parser"}}`,
+		`{"type":"assistant","timestamp":"2026-07-07T12:00:01Z","sessionId":"verify1","message":{"model":"claude-opus-5","content":[{"type":"tool_use","id":"toolu_v","name":"Agent","input":{"description":"Add a test for the parser","prompt":"add it"}}]}}`,
+		`{"type":"user","timestamp":"2026-07-07T12:02:00Z","sessionId":"verify1","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_v","content":"done"}]}}`,
+	}, "\n") + "\n"
+	tp := filepath.Join(dir, "verify1.jsonl")
+	if err := os.WriteFile(tp, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runCoach(t, t.TempDir(), tp, "verify1")
+	f := store.LoadSession("verify1")
+	if len(f.Calls) != 1 || f.Calls[0].Ref != "toolu_v" || f.Calls[0].Model != "opus" || f.Calls[0].Kind != "edit" || f.Start == nil {
+		t.Fatalf("evidence = %+v", f)
+	}
+}

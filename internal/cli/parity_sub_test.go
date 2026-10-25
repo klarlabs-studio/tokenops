@@ -79,6 +79,7 @@ var subCLIOnly = map[string]string{
 	"plan catalog":              "GAP: no tool lists the plan catalog; an invalid name in tokenops_plan_set is refused with the reason",
 	"coach delivery":            "superseded by tokenops_coach (ADR 0006); kept for existing configs",
 	"coach migrate":             "rewrites the operator's config from older keys once; an operator decision, not an agent's",
+	"coach reinstate":           "restores a model move the coach retracted after its quality dropped; only the operator or new evidence may (moveverdict)",
 	"coach replies":             "GAP: reply-compression detection has no tool",
 	"task start":                "GAP: marking a task boundary has no tool; tokenops_story reads inferred tasks",
 	"task done":                 "GAP: marking a task boundary has no tool",
