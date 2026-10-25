@@ -21,8 +21,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"go.klarlabs.de/tokenops/internal/capability/routers"
+	"go.klarlabs.de/tokenops/internal/infra/boundaryledger"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
+	"go.klarlabs.de/tokenops/internal/infra/modellever"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
+	"go.klarlabs.de/tokenops/internal/infra/routeguard"
 )
 
 // stopHookInput is the JSON Claude Code sends a Stop hook on stdin. Only the
@@ -167,7 +171,10 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, plan fun
 	if known && cfg.CompactAtTokens == 0 {
 		cfg.CompactAtTokens = compactTipAt(provider)
 	}
-	var dec coachhook.Decision
+	var (
+		dec   coachhook.Decision
+		extra string
+	)
 	switch {
 	case in.HookEventName == "session.idle":
 		// opencode. Its own store holds the turns, so only the id is
@@ -181,6 +188,9 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, plan fun
 		dec = coachhook.EvaluateCursor(dir, body, cfg, now)
 	default:
 		dec = coachhook.Evaluate(dir, in.SessionID, in.TranscriptPath, cfg, now)
+		// Claude Code reads its default model at session start, so the
+		// turn end is where it is kept in step with the plan.
+		extra = claudeDefaultModel(in, ledger, now)
 	}
 	coachcap.RecordResolutions(ledger, now, tipResolutions(dec.Resolved))
 	via := coachcap.ViaStopHook
@@ -189,11 +199,50 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, plan fun
 	}
 	coachcap.RecordTip(ledger, now, dec.OfferID, in.SessionID, dec.TipKind, via)
 	recordSavings(savings.DefaultLedger(), now, in.SessionID, dec)
-	if !dec.Nudge {
+	msg := extra
+	if dec.Nudge {
+		msg = joinMessages(dec.Message, extra)
+	}
+	if msg == "" {
 		return nil // no nudge: exit 0 with no stdout
 	}
-	out := stopHookOutput{SystemMessage: dec.Message, SuppressOutput: true}
+	out := stopHookOutput{SystemMessage: msg, SuppressOutput: true}
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
+}
+
+// claudeDefaultModel reconciles Claude Code's default model for new
+// sessions with the plan's pressure (coachcap.ReconcileDefaultModel). It reads only
+// local files and fails open: no config, no reading, no change.
+func claudeDefaultModel(in stopHookInput, ledger coachcap.Ledger, now time.Time) string {
+	cfgPath, err := config.DefaultPath()
+	if err != nil {
+		return ""
+	}
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		return ""
+	}
+	paths, err := modellever.DefaultPaths()
+	if err != nil || routers.Decides(routers.Sources{}, "", true) {
+		return ""
+	}
+	report := coachcap.Build(cfg)
+	pressure, known := routeguard.ReadPressureKnown("", boundaryledger.DefaultDir(), now)
+	return coachcap.ReconcileDefaultModel(coachcap.DefaultModelEnv{
+		Paths: paths, Rung: report.Effective(config.PowerModels), Verbosity: report.Verbosity,
+		Pressure: pressure, Known: known, Session: in.SessionID, SessionModel: latestTranscriptModel(in.TranscriptPath),
+		Catalog: routeCatalog(cfg), Candidates: cfg.RoutingCandidates(eventschema.ProviderAnthropic), Ledger: ledger, Now: now,
+	})
+}
+
+func joinMessages(a, b string) string {
+	switch {
+	case a == "":
+		return b
+	case b == "":
+		return a
+	}
+	return a + "\n" + b
 }
 
 func newCoachHookHookCmd() *cobra.Command {

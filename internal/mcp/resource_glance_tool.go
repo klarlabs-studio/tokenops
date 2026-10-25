@@ -36,7 +36,7 @@ func registerResourceGlanceTool(s *Server, d PlanDeps) {
 				return mcpgo.StructuredResult{}, err
 			}
 			return mcpgo.StructuredResult{
-				Content:           []mcpgo.Content{mcpgo.NewTextContent(markdownPayload(renderResourceGlance(result.Insight)+renderBoundaryAdvice(result.Boundaries)+renderSpendBudgets(result.SpendBudgets), result))},
+				Content:           []mcpgo.Content{mcpgo.NewTextContent(markdownPayload(renderResourceGlance(result.Insight)+renderRouting(result.Routing)+renderBoundaryAdvice(result.Boundaries)+renderSpendBudgets(result.SpendBudgets), result))},
 				StructuredContent: structured,
 			}, nil
 		})
@@ -55,6 +55,16 @@ func renderResourceGlance(insight presentation.ResourceInsight) string {
 		summary += "\n\nCaveat: " + insight.Caveat
 	}
 	return summary
+}
+
+// renderRouting is the one line per plan under pressure telling the agent
+// to pass a cheaper model on subagent calls; nothing when no plan is.
+func renderRouting(rs []headroom.Routing) string {
+	out := ""
+	for _, r := range rs {
+		out += "\n\n**Routing:** " + r.Advice
+	}
+	return out
 }
 
 // renderBoundaryAdvice lists the operator's boundaries that hold now. An

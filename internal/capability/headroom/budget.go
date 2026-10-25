@@ -113,6 +113,9 @@ type Glance struct {
 	// PlanAdvice is each bound plan replayed against its other tiers over
 	// the last plans.AdviceDays; nil when it could not be computed.
 	PlanAdvice []plans.Advice
+	// Routing is the advice to pass a cheaper model on subagent calls,
+	// one line per plan running short; nil when none is.
+	Routing []Routing
 }
 
 // ComputeGlance composes the session budgets and plan headroom.
@@ -127,7 +130,7 @@ func ComputeGlance(ctx context.Context, d Deps, now time.Time) (Glance, error) {
 	if err != nil {
 		return Glance{}, err
 	}
-	g := Glance{Insight: Insight(budgets, head), Budgets: budgets, Headroom: head}
+	g := Glance{Insight: Insight(budgets, head), Budgets: budgets, Headroom: head, Routing: RoutingAdvice(budgets.Budgets, now)}
 	if d.Accounts != nil {
 		g.Accounts = d.Accounts()
 	}

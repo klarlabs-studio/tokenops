@@ -109,6 +109,43 @@ session's own model is advised, never changed. It needs the route guard's
 subagent hook: `tokenops hooks install --route-guard` adds it, and
 `tokenops coach` says when it is missing.
 
+**Under plan pressure** the move goes one tier further, for `ask` and
+`autonomous` alike. The plan counts as pressed when its tightest window
+(the 5-hour or the weekly one) is on course, at the pace so far, to run
+out at least a tenth of its length before it resets (30 minutes of a
+5-hour window, about 17 hours of a week), judged only once a tenth of the
+window has gone by; or, while its pace cannot be judged yet, when it is
+down to 25% left. Once the pace can be judged it decides: a low window
+that lasts to its reset is not pressed. Edit work then moves from the default tier (Opus)
+to the balanced one (Sonnet), and deep work from the deep tier to the
+default one. Lookups and research never go below what they need, nothing
+moves up, and the model policy filters the models first, so a pressed move
+never lands on a model it rules out. The reason says why ("Claude weekly
+runs out ~4d 6h before it resets at this pace (54% left); edit work moved
+from claude-opus-5 to claude-sonnet-5"), and the follow-through record
+keeps the pressure as the move's evidence. The reading comes from local
+files only: the status line's plan limits (refreshed every turn, counted
+for 30 minutes), or the daemon's figures (share left only, so only the
+25% floor applies). With no fresh reading, routing goes by the work alone.
+
+**New sessions under plan pressure.** A hook cannot change a running
+session's model, but Claude Code reads the `model` key of
+`~/.claude/settings.json` when a session starts. With `models` at
+`autonomous` and the plan pressed by the same rule, the coach's Stop hook
+sets that key one tier down (Opus to Sonnet; never below Sonnet, never to
+a model the policy rules out), records it as a move with its evidence and
+says so, with `/model sonnet` for the session you are in. It removes the
+key again once a fresh reading finds the plan back on pace, once the
+pressed window resets, or at the next turn end after you lower `models`.
+A `model` you set yourself, with `/model` or by hand, is yours: it is
+never overwritten or removed, and changing the key after the coach set
+it makes it yours too. There, and at `ask` or `advise`, the coach tells
+you once per pressed window that `/model sonnet` moves the session down a
+tier. The glance (`tokenops_glance`, `/api/glance`) carries the same
+pressure as a one-line `routing` hint telling the agent to pass a cheaper
+`model` on subagent calls for work that fits, for harnesses the hook
+cannot rewrite.
+
 The coach keeps a **follow-through record** in
 `~/.tokenops/coach/followthrough.jsonl`: whether each piece of model advice
 was followed (a later turn, or a subagent the agent launched, ran below the

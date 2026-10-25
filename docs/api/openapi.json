@@ -2698,6 +2698,54 @@
                       },
                       "type": "object"
                     },
+                    "routing": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "advice": {
+                            "type": "string"
+                          },
+                          "pressure": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "fresh_until": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "left_pct": {
+                                "type": "number"
+                              },
+                              "observed_at": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "resets_at": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "runs_out_before_reset_ns": {
+                                "type": "integer"
+                              },
+                              "source": {
+                                "type": "string"
+                              },
+                              "vendor": {
+                                "type": "string"
+                              },
+                              "window": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "provider": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "session_budget": {
                       "additionalProperties": false,
                       "properties": {
