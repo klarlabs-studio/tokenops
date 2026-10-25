@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.110.2 - 2026-10-25
+
 ### Changed
 
 - **menu bar:** the panel is plain white in light mode and plain ink in dark mode, without the tinted gradient and the lime glow. Lime stays the accent; text and bars on white keep the dark lime that reads at AA contrast.
