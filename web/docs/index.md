@@ -116,8 +116,7 @@ boundaries:
 ```
 
 Every rule starts in shadow and only records what it would have done;
-`tokenops boundaries status` shows how often, and `tokenops boundaries
-promote <name>` enforces it. In Claude Code and opencode the check runs
+`tokenops boundaries status` shows how often, and `tokenops boundaries promote <name>` enforces it. In Claude Code and opencode the check runs
 before each tool call in under half a millisecond, and fails open. An
 enforced rule asks at the prompt when you are there; when you are not, it
 stops the agent with the one command that lets it go on,
