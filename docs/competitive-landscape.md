@@ -4,7 +4,8 @@ Checked 2026-10-22 against each product's own site, repository, changelog or
 release notes (previous full check 2026-10-03, partial 2026-10-06). Items
 marked **[U]** came from a third-party page or search snippet and are
 unverified. Re-check before quoting any of it externally; this field moves
-weekly now, not monthly.
+weekly now, not monthly. The positioning direction of 2026-10-25 is recorded
+under "Direction (2026-10-25)" below.
 
 ## Summary
 
@@ -141,13 +142,17 @@ and alerts, the team plane (0.102) and action boundaries (0.103) all shipped,
 and the landing page now leads with guardrails. What the October field changes
 is what TokenOps should build next, and what it should stop saying.
 
+**Direction priorities (2026-10-25)** sit above this table and, where they
+overlap, win: see "Direction (2026-10-25)" below. Steps 1 and 3 here become
+parts of its priorities 2 and 1; steps 2 and 5 feed its priority 5.
+
 **Build, in order:**
 
 | Step | Work | Closes | Done when |
 |---|---|---|---|
 | 1 | **Headroom pause as a default.** Ship a `continue` boundary at a share of the tightest window (say 10% left) in shadow on every new install, promoted to recommend after a week; one line in the README and quickstart | G18 | A fresh `init` records what the pause would have done, on every harness with a pause point |
 | 2 | **Read the vendor's verdicts.** Ingest Claude Code's `safety_event` and `tool_decision` (`classifier_verdict`, `permission_mode`) and Codex approval outcomes as evidence; record them on the boundary decision instead of asking twice | G17 | `explain` shows the vendor's verdict beside ours; a tool call is never put to the person twice |
-| 3 | **Coach stands down where the vendor coaches.** As with routers (ADR 0009): when Claude Code's `/usage` already raises a warning class, drop or link our tip; keep cross-harness and cross-session findings | G16 | No Claude tip duplicates a `/usage` warning; the realized-savings ledger counts only ours |
+| 3 | **Coach stands down where the vendor coaches.** As with routers (ADR 0009): when Claude Code's `/usage` or its weekly pace banner already speaks, drop or link our tip; keep cross-harness and cross-session findings. Measure tip volume and the unseen rate (direction priority 1) | G16 | No Claude tip duplicates a `/usage` warning or the pace banner; the realized-savings ledger counts only ours |
 | 4 | **New window shapes.** Model banked resets, per-model quotas and shared pools in the plan catalog; forecasts treat an unused banked reset as headroom | G19 | `glance` shows a banked reset and a per-model quota correctly |
 | 5 | **Org caps as vendor readings.** Read OpenAI Business per-seat limits, Copilot budgets and the Claude apps gateway cap into boundaries, so a team rule can sit under the vendor's cap, not beside it | G7 | A boundary can name the vendor's own org limit as its ceiling |
 | 6 | **Transcript readers, wave 2**, in order of reach (Claude Desktop, Junie, Droid, Qwen Code), each verified against a real transcript | G1 | Coverage matrix updated |
@@ -198,6 +203,50 @@ down; revisit if `/usage` starts warning live.
 Deliberately not planned: session search and memory (agentsview), failover
 routing, benchmarks or seat management, Linux and Windows GUIs (until the
 macOS menu bar has users), and matching provider counts one by one.
+
+## Direction (2026-10-25)
+
+Decision: **TokenOps stops competing on single-vendor usage display and
+competes on deciding across vendors, plans and harnesses, under the owner's
+rules, acting, and verifying the outcome.**
+
+Why now. Showing one vendor's usage is commoditised. Claude Code now shows a
+weekly pace banner ("on pace to hit your weekly limit early", seen in the
+Claude desktop app on 2026-10-24), `/usage` waste warnings with one-key fixes
+(2.1.299, 2.1.305) and a resume warning against the 5-hour limit (2.1.304).
+OpenAI ships Codex usage dashboards, widgets and banked resets (see the
+2026-10-22 update). A tip that says what the vendor's own surface already says
+is noise, and a percentage per window is what every meter sells.
+
+**Priorities, in order:**
+
+| # | Priority | Done when |
+|---|---|---|
+| 1 | **Stand down where the vendor already speaks.** No quota tip where Claude Code shows its pace banner; same rule as `/usage` classes (Plan, step 3). Measure tip volume and the unseen rate, so the cut is judged by data, not taste | Tip volume and unseen rate are reported per tip class; every class the vendor covers is dropped or links to the vendor's surface |
+| 2 | **Act instead of inform.** Pressure-aware routing: subagents a tier down under plan pressure, the next session's default model, the headroom pause (Plan, step 1). Every move is recorded, reversible and explained | `explain` shows each move with its alternatives, the rule that allowed it and the way to undo it; each capability has its own shadow, recommend, execute stage |
+| 3 | **Verify the outcome of autonomous moves.** After work moves to a cheaper model, watch rework, failure and interrupt signals, and retract the move automatically when quality drops. Outcome-based, retractable learning, as AGENTS.md requires | A downgrade that raised rework or interrupts is rolled back without the person asking, and the record shows why |
+| 4 | **One daily allowance across every plan**, instead of another per-window percentage. Plans, windows and banked resets collapse into what the owner may spend today | `glance` leads with one allowance across all bound plans, and the per-window figures sit behind it |
+| 5 | **Ingest vendor signals as evidence instead of recomputing them.** Claude `/usage` findings, `safety_event`, Codex's own usage numbers. Keep provenance and freshness; the vendor's number wins where it is the source | A figure the vendor reports is stored as the vendor's, with its source, and is not re-derived |
+
+**What stays distinctly TokenOps:**
+
+- **Rules across tools**: boundaries, budgets and presence-checked approval,
+  the same in every harness. No single vendor will write rules for its rivals.
+- **The team plane**: limits a team signs down to its developers, derived
+  figures only (ADR 0012).
+- **Cross-vendor decisions**: which plan, model or harness should take the
+  next piece of work, when an operator holds two plans or more.
+
+**Not yet verified.** That the pace banner is shown in Claude Code itself, and
+not only in the Claude desktop app, is [U]: it was seen once in the desktop app
+and has no changelog entry. Whether it covers every plan is [U]. Whether any
+vendor exposes the pace as an API or hook that TokenOps could read (priority
+5) is [U].
+
+**Risks.** Acting raises the cost of a wrong move, so priorities 2 and 3 ship
+together: no autonomous move reaches execution before its retraction path
+exists. Priority 1 gives up reach on purpose; the unseen-rate measure is how we
+find out whether that was right.
 
 ## Update 2026-10-06
 
@@ -354,6 +403,14 @@ The tables above already carry these; this is the log.
 | Promptster "Markets itself as 'the TokenOps platform'" (10-03) | That wording is gone from its homepage and /teams. |
 | Claude Code `/usage` is "plan bars" and reports (10-03) | It applies fixes on request and auto mode is the default. |
 | Gap G4, cost per commit (10-03) | Shipped in TokenOps; others now have it by date range or org. |
+
+## Update 2026-10-25
+
+Positioning direction recorded (see "Direction (2026-10-25)"): single-vendor
+display is dropped as a contest, the plan's priorities now lead with standing
+down where the vendor speaks, acting, and verifying outcomes. One new vendor
+item: Claude's weekly pace banner, seen in the Claude desktop app on
+2026-10-24 and not yet checked in Claude Code or its changelog [U].
 
 ## Watch list
 
