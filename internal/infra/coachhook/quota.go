@@ -141,6 +141,20 @@ func evaluateQuota(dir string, dec *Decision, st *sessionState, cfg Config, mode
 	if kind == "" {
 		return
 	}
+	var alts []Alternative
+	if vs, ok := surfaceFor(kind, q.Provider); ok && vs.Verified && cfg.Verbosity != verbosityVerbose {
+		if cfg.Alternatives != nil {
+			alts = usableAlternatives(cfg.Alternatives(), q.Provider)
+		}
+		if len(alts) == 0 {
+			// The vendor says it and there is nothing to add: no other
+			// plan to move the work to. Latched like a tip said, so the
+			// stand-down is recorded once per window.
+			dec.Suppressed, dec.StoodDown, dec.VendorSurface = SuppressedVendorSpeaks, kind, vs.Surface
+			entry.UsedUpSaid = true
+			return
+		}
+	}
 	reason, retry := cfg.hold(kind, st, now)
 	switch {
 	case reason == "":
@@ -150,9 +164,13 @@ func evaluateQuota(dir string, dec *Decision, st *sessionState, cfg Config, mode
 			dec.QuotaBurn = true
 			dec.runsOutAt = warning.RunsOutAt
 			dec.Message = burnMessage(q, warning, now, cfg.Verbosity)
+			dec.repeatBurn = cfg.restatesVendor(kind, q.Provider) && burnSaidToday(dir, q.Provider, now) && cfg.MostlyUnseen(kind)
+			if !dec.repeatBurn {
+				markBurnSaid(dir, q.Provider, now)
+			}
 		} else {
 			dec.QuotaTier = 1.0
-			dec.Message = usedUpMessage(q.Provider, w, now)
+			dec.Message = usedUpMessage(q.Provider, w, now) + alternativesNote(alts)
 		}
 		if note := contextNote(contextTokens, model); note != "" {
 			dec.Message = note + " " + dec.Message
@@ -174,6 +192,15 @@ func evaluateQuota(dir string, dec *Decision, st *sessionState, cfg Config, mode
 	} else {
 		entry.UsedUpSaid = true
 	}
+}
+
+// restatesVendor reports that a vendor surface, verified or not, says
+// what a tip of kind says, and that the ledger shows such tips mostly go
+// unseen, so interrupting with another one today buys nothing. Verbose
+// always hears them.
+func (c Config) restatesVendor(kind, provider string) bool {
+	_, ok := surfaceFor(kind, provider)
+	return ok && c.Verbosity != verbosityVerbose && c.MostlyUnseen != nil
 }
 
 // pickQuotaTip is what the coach would say now and the window it is about,

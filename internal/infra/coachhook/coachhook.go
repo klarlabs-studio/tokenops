@@ -155,6 +155,7 @@ func Evaluate(dir, sessionID, transcriptPath string, cfg Config, now time.Time) 
 		QuotaWindow: quotaLabel(cfg.Quota, dec.quotaWindow), QuotaUsedPct: quotaUsed(cfg.Quota, dec.quotaWindow),
 		QuotaTier: dec.QuotaTier, QuotaBurn: dec.QuotaBurn,
 		ReadingLost: dec.ReadingLost, Ambient: dec.Ambient, Holdout: dec.Holdout,
+		StoodDown: dec.StoodDown, VendorSurface: dec.VendorSurface,
 	})
 	return dec
 }

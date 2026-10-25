@@ -81,6 +81,7 @@ func TestBurnWarningOncePerWindow(t *testing.T) {
 func TestQuotaExhaustedSaysSo(t *testing.T) {
 	dir := t.TempDir()
 	cfg := DefaultConfig()
+	cfg.Verbosity = verbosityVerbose // the vendor's own message is not stood down for in verbose
 	cfg.Quota = weeklyQuota(100, 30*time.Hour)
 	tp := writeTranscript(t, dir, turnLine(ts(1), 1_000, opus))
 	d := Evaluate(dir, "s1", tp, cfg, fixedNow)

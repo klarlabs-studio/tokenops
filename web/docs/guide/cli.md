@@ -1545,8 +1545,12 @@ against budget fractions, the quota and compact tips it gave and what it
 held back, and how the run-out forecasts fared once their windows reset
 (forecasts that came true, and windows that ran out unforecast); and files
 read again, which re-reads were waste, and which the read guard refused. Both ledgers fill while the coach only observes, so
-this shows what you would hear before you let it speak. `--json` gives
-`budget`, `read_guard` and `savings`.
+this shows what you would hear before you let it speak. A *Tip volume*
+section lists, for the last 7 days, the tips given per day by kind and the
+share nothing showed were seen, and the tips the coach stood down for
+because the vendor's own surface says them
+([the coach stands down where the vendor speaks](/guide/configuration#the-coach-stands-down-where-the-vendor-speaks)).
+`--json` gives `budget`, `read_guard`, `savings` and `tip_volume`.
 
 The savings ledger lists every intervention by kind with what it was
 expected to save and what it is shown to have saved. Each tip shown, each

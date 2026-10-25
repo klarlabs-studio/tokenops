@@ -97,6 +97,13 @@ type Config struct {
 	// said once per window as tips of the "spend" family. Nil says
 	// nothing about budgets.
 	Budgets []boundaryledger.BudgetReading
+	// Alternatives reads the state of the operator's other plans. It is
+	// called only when a used-up window is about to be stood down for, so
+	// a hook that never gets there reads nothing. Nil knows of none.
+	Alternatives func() []Alternative
+	// MostlyUnseen reports that tips of a kind went mostly unseen over
+	// the last week. Nil says none did.
+	MostlyUnseen func(kind string) bool
 }
 
 // Quiet is the rate limit on the coach's proactive channel.
@@ -165,6 +172,14 @@ type Decision struct {
 	ContextTokens int64
 	// ContextWindow is the model's window size, when one is known for it.
 	ContextWindow int64
+	// StoodDown names the kind of tip the coach did not give because the
+	// vendor's own surface says it (Suppressed is then
+	// SuppressedVendorSpeaks), and VendorSurface the surface.
+	StoodDown     string
+	VendorSurface string
+	// repeatBurn marks a run-out warning that already interrupted today
+	// and mostly goes unseen: it waits on the status line.
+	repeatBurn bool
 	// Suppressed names the quiet rule that held a nudge back
 	// ("min_interval", "max_per_session"), empty when nothing was held.
 	// The coach had something to say; the operator asked it not to say it

@@ -60,6 +60,21 @@ func readPlan(ctx context.Context, cfg config.Config, provider eventschema.Provi
 	return out
 }
 
+// otherPlans reads the live window of every plan other than provider's:
+// the cross-plan state a vendor's own surface never shows.
+func otherPlans(ctx context.Context, plan func(context.Context, eventschema.Provider, time.Time) planReading, provider eventschema.Provider, now time.Time) []coachhook.Alternative {
+	var out []coachhook.Alternative
+	for _, p := range []eventschema.Provider{eventschema.ProviderAnthropic, eventschema.ProviderOpenAI} {
+		if p == provider {
+			continue
+		}
+		if q := plan(ctx, p, now).Quota; q != nil {
+			out = append(out, coachhook.Alternative{Provider: q.Provider, Window: q.Window})
+		}
+	}
+	return out
+}
+
 // readingLost says how old a plan's newest reading is and what brings it
 // back, per provider.
 func readingLost(provider eventschema.Provider, age time.Duration) string {

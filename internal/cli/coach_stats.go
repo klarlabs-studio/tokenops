@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/savings"
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
@@ -24,6 +25,9 @@ type coachStats struct {
 	// Savings is the realized-savings ledger: every intervention with
 	// what it was expected to save, and what the holdout showed it saved.
 	Savings savings.Report `json:"savings"`
+	// TipVolume is the tips given in the last week by kind, with the
+	// share nothing showed were read.
+	TipVolume []coachcap.KindVolume `json:"tip_volume,omitempty"`
 }
 
 // writeSavings prints the realized-savings ledger: expected next to
@@ -63,13 +67,15 @@ this shows what you would hear before you let it speak.`,
 				return err
 			}
 			saved := savings.Build(cmd.Context(), savings.DefaultDeps(), time.Now())
+			volume := coachcap.TipVolume(coachLedger(), time.Now(), coachcap.TipVolumeDays)
 			out := cmd.OutOrStdout()
 			if jsonOut {
 				enc := json.NewEncoder(out)
 				enc.SetIndent("", "  ")
-				return enc.Encode(coachStats{Budget: hook, ReadGuard: guard, Savings: saved})
+				return enc.Encode(coachStats{Budget: hook, ReadGuard: guard, Savings: saved, TipVolume: volume})
 			}
 			writeCoachHookStats(out, hook)
+			writeTipVolume(out, volume, hook)
 			fmt.Fprintln(out)
 			writeReadGuardStats(out, guard)
 			writeSavings(out, saved)
