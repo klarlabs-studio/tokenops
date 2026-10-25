@@ -47,6 +47,11 @@ type ledgerEvent struct {
 	// Holdout records that a due tip was held back for the holdout and
 	// logged as shadow.
 	Holdout bool `json:"holdout,omitempty"`
+	// StoodDown names the kind of tip the coach did not give because the
+	// vendor's own surface already says it, and VendorSurface that
+	// surface. Suppressed says "vendor_speaks".
+	StoodDown     string `json:"stood_down,omitempty"`
+	VendorSurface string `json:"vendor_surface,omitempty"`
 }
 
 func appendLedger(dir string, e ledgerEvent) {
@@ -87,6 +92,9 @@ type Stats struct {
 	// RunOut scores the run-out forecasts against what became of each
 	// window once it reset.
 	RunOut RunOutScore `json:"run_out"`
+	// StoodDown counts, by tip kind, the tips the coach did not give
+	// because the vendor's own surface says it.
+	StoodDown map[string]int `json:"stood_down,omitempty"`
 	// CompactTips counts the compact_now tips given.
 	CompactTips int `json:"compact_tips,omitempty"`
 	// SessionBudget is the budget belief last derived from the
@@ -135,6 +143,12 @@ func ReadStats(dir string) (Stats, error) {
 				s.QuotaNudges[tierLabel(e.QuotaTier)]++
 			}
 			s.QuotaWindows[e.QuotaWindow]++
+		}
+		if e.StoodDown != "" {
+			if s.StoodDown == nil {
+				s.StoodDown = map[string]int{}
+			}
+			s.StoodDown[e.StoodDown]++
 		}
 		if e.Compact {
 			s.CompactTips++

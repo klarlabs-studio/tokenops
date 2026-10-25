@@ -160,6 +160,7 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, plan fun
 		return quieted(config.PowerInform, kind)
 	}
 	cfg.Held = coachcap.Holder(ledger, now)
+	cfg.MostlyUnseen = coachcap.MostlyUnseen(ledger, now)
 	cfg.BudgetAnswers = func() (int, int) { return coachcap.BudgetAnswers(ledger, now) }
 	// The spend budgets' windows, as the daemon last measured them.
 	cfg.Budgets = budgets.Current("", now)
@@ -167,6 +168,7 @@ func runCoachHook(cmd *cobra.Command, dir string, cfg coachhook.Config, plan fun
 	if known && plan != nil {
 		r := plan(cmd.Context(), provider, now)
 		cfg.Quota, cfg.FlatPlan, cfg.ReadingLost = r.Quota, r.Flat, r.Lost
+		cfg.Alternatives = func() []coachhook.Alternative { return otherPlans(cmd.Context(), plan, provider, now) }
 	}
 	if known && cfg.CompactAtTokens == 0 {
 		cfg.CompactAtTokens = compactTipAt(provider)
@@ -324,13 +326,16 @@ func writeCoachHookStats(out io.Writer, s coachhook.Stats) {
 	if n := s.Suppressed["ignored_before"]; n > 0 {
 		fmt.Fprintf(out, "  held back because earlier tips like them were ignored: %d\n", n)
 	}
-	if n := s.Suppressed[coachhook.SuppressedEpisode] + s.Suppressed[coachhook.SuppressedDailyBudget]; n > 0 {
+	if n := s.Suppressed[coachhook.SuppressedEpisode] + s.Suppressed[coachhook.SuppressedDailyBudget] + s.Suppressed[coachhook.SuppressedMostlyUnseen]; n > 0 {
 		fmt.Fprintf(out, "  shown on the status line instead of interrupting: %d\n", n)
 		if c := s.Suppressed[coachhook.SuppressedEpisode]; c > 0 {
 			fmt.Fprintf(out, "    %-22s %d\n", "already told (episode)", c)
 		}
 		if c := s.Suppressed[coachhook.SuppressedDailyBudget]; c > 0 {
 			fmt.Fprintf(out, "    %-22s %d\n", "daily budget spent", c)
+		}
+		if c := s.Suppressed[coachhook.SuppressedMostlyUnseen]; c > 0 {
+			fmt.Fprintf(out, "    %-22s %d\n", "mostly unseen, said today", c)
 		}
 	}
 	if n := s.Suppressed[coachhook.SuppressedSnoozed] + s.Suppressed[coachhook.SuppressedAnswered]; n > 0 {
