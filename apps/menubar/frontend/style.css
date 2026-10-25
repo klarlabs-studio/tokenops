@@ -1,11 +1,10 @@
-/* Klarlabs brand tokens: ink, electric lime, amber, red. Dark is ink with a
-   lime glow; light is porcelain with a faint lime tint. Lime is a fill that
+/* Klarlabs brand tokens: ink, electric lime, amber, red. Dark is plain ink;
+   light is plain white. Lime is a fill that
    carries ink text; as text, bars or thin strokes on light it is the dark
-   lime (--accent-line, --low). Both read as frosted, like the system's own
-   popovers. */
+   lime (--accent-line, --low). */
 :root {
-  --bg: linear-gradient(165deg, #F7F8F3 0%, #EEF0E8 45%, #E6E9DF 100%);
-  --surface: rgba(255, 255, 255, 0.55);
+  --bg: #FFFFFF;
+  --surface: #F4F5F7;
   --fg: #16181D;
   --muted: #555A64;
   --faint: #70757F;
@@ -23,8 +22,8 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: radial-gradient(120% 70% at 50% -10%, rgba(198, 244, 50, 0.14) 0%, rgba(198, 244, 50, 0) 60%), linear-gradient(180deg, #161B2E 0%, #0E1220 100%);
-    --surface: rgba(255, 255, 255, 0.04);
+    --bg: #0E1220;
+    --surface: rgba(255, 255, 255, 0.05);
     --fg: #F2F3F5;
     --muted: #C7CAD1;
     --faint: #9DA2AC;
@@ -51,7 +50,7 @@ html, body {
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }
-@media (prefers-color-scheme: light) { html, body { background: #EEF0E8; } }
+@media (prefers-color-scheme: light) { html, body { background: #FFFFFF; } }
 
 .panel {
   height: 100%;
