@@ -123,6 +123,32 @@ func RecordMoveBecause(l Ledger, now time.Time, id, session, power, kind, from, 
 	})
 }
 
+// RecordSubagentMove is RecordMoveBecause for a subagent the coach moved,
+// carrying the Agent call's tool_use_id so the call's outcome can be read
+// back from the transcript and the move judged (VerifyMoves).
+func RecordSubagentMove(l Ledger, now time.Time, id, session, toolUseID, kind, from, to, evidence string) {
+	if l == nil || id == "" {
+		return
+	}
+	_ = l.Append(ft.Entry{
+		Type: ft.EntryOffer, ID: id, At: now.UTC(), Session: session, Power: config.PowerModels,
+		Channel: ft.ChannelMove, Kind: kind, From: from, To: to, Evidence: evidence, Ref: toolUseID,
+	})
+}
+
+// RecordSubagentApproval is RecordApprovalBecause for a subagent move put
+// to the operator, carrying the Agent call's tool_use_id: an approved
+// move is judged like one the coach made itself.
+func RecordSubagentApproval(l Ledger, now time.Time, id, session, toolUseID, kind, from, to, evidence string) {
+	if l == nil || id == "" {
+		return
+	}
+	_ = l.Append(ft.Entry{
+		Type: ft.EntryOffer, ID: id, At: now.UTC(), Session: session, Power: config.PowerModels,
+		Channel: ft.ChannelApproval, Kind: kind, From: from, To: to, Evidence: evidence, Ref: toolUseID,
+	})
+}
+
 // Quieter returns whether advice of a power and kind has been ignored
 // often enough that the coach stops offering it. A ledger that cannot be
 // read quiets nothing: missing evidence must not silence the coach.
@@ -231,6 +257,9 @@ func Status(cfg config.Config, l Ledger, levers ContextLevers, now time.Time) Re
 		r.Compaction = levers.Check()
 	}
 	r.Routers = DetectRouters()
+	if v := Verdicts(MoveStore(), now); len(v.Lines) > 0 {
+		r.Moves = &v
+	}
 	r.Graduation = savings.Graduations(savings.Build(context.Background(), SavingsDeps(), now), r.Effective, r.FollowThrough)
 	for i, p := range r.Powers {
 		if p.Name != config.PowerModels || len(r.Routers) == 0 {

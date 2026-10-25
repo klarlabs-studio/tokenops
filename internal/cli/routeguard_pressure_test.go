@@ -8,7 +8,10 @@ import (
 	"testing"
 	"time"
 
+	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
+	"go.klarlabs.de/tokenops/internal/contexts/coaching/moveverdict"
 	"go.klarlabs.de/tokenops/internal/infra/claudelimits"
+	"go.klarlabs.de/tokenops/internal/infra/moveverify"
 )
 
 // writePressedWeek leaves the status line's reading of a week like the
@@ -101,8 +104,9 @@ func TestAskProposesPressedMoves(t *testing.T) {
 	if !strings.Contains(h.PermissionDecisionReason, "Claude weekly runs out") {
 		t.Errorf("the prompt does not say why: %q", h.PermissionDecisionReason)
 	}
-	if l := ledgerSince(t, start); len(l) != 1 || l[0]["channel"] != "approval" || !strings.Contains(l[0]["evidence"].(string), "plan_pressure") {
-		t.Fatalf("ledger gained %v", l)
+	if l := ledgerSince(t, start); len(l) != 1 || l[0]["channel"] != "approval" || !strings.Contains(l[0]["evidence"].(string), "plan_pressure") ||
+		l[0]["ref"] != "toolu_p" {
+		t.Fatalf("ledger gained %v; want the approval keyed to its Agent call", l)
 	}
 }
 
@@ -122,5 +126,45 @@ func TestSubagentGuardIgnoresStalePressure(t *testing.T) {
 	tp := writeCoachTranscript(t, filepath.Join(dir), 1, "claude-opus-5")
 	if out := runSubagentHook(t, dir, editCall, tp); out != "" {
 		t.Fatalf("stale reading moved an edit: %s", out)
+	}
+}
+
+// A move kind retracted because its quality dropped (coach.VerifyMoves)
+// is not made by the hook, even under pressure; the call runs as asked.
+func TestSubagentGuardHoldsARetractedMove(t *testing.T) {
+	writeCoachConfig(t, fourTiers+"coach:\n  autonomy: advise\n  powers:\n    models: autonomous\n")
+	writePressedWeek(t)
+	store := coachcap.MoveStore()
+	if err := store.Update(func(st *moveverify.State) error {
+		st.Retractions = []moveverdict.Retraction{{ID: "d1", Key: moveverdict.Key{Kind: "edit", From: "opus", To: "sonnet"}, At: time.Now()}}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(store.Dir) })
+	dir := t.TempDir()
+	tp := writeCoachTranscript(t, dir, 1, "claude-opus-5")
+	start := ledgerLen(t)
+	if out := runSubagentHook(t, dir, editCall, tp); out != "" {
+		t.Fatalf("retracted move made: %s", out)
+	}
+	if l := ledgerSince(t, start); len(l) != 0 {
+		t.Fatalf("ledger gained %v", l)
+	}
+}
+
+// The autonomous move is keyed to its Agent call, so its outcome can be
+// read back from the transcript and judged.
+func TestSubagentGuardKeysTheMoveToItsCall(t *testing.T) {
+	writeCoachConfig(t, fourTiers+"coach:\n  autonomy: advise\n  powers:\n    models: autonomous\n")
+	writePressedWeek(t)
+	dir := t.TempDir()
+	tp := writeCoachTranscript(t, dir, 1, "claude-opus-5")
+	start := ledgerLen(t)
+	if out := runAgentHook(t, dir, "keyed", "toolu_k", editCall, tp); out == "" {
+		t.Fatal("no move")
+	}
+	if l := ledgerSince(t, start); len(l) != 1 || l[0]["channel"] != "move" || l[0]["ref"] != "toolu_k" {
+		t.Fatalf("ledger gained %v", l)
 	}
 }

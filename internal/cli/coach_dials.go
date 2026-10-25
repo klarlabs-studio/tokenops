@@ -92,6 +92,7 @@ func renderCoachStatus(out io.Writer, r coachcap.Report, quota []string) {
 		fmt.Fprintf(out, "\n  lately: %s\n", strings.Join(activity, " · "))
 	}
 	renderFollowThrough(out, r)
+	renderMoveVerdicts(out, r)
 	renderGraduation(out, r)
 	if r.HoldoutPercent > 0 {
 		fmt.Fprintf(out, "\n  holdout: %d%% of sessions do not get cost and drift tips, so their saving can be measured (`tokenops verify`)\n", r.HoldoutPercent)
@@ -100,6 +101,18 @@ func renderCoachStatus(out io.Writer, r coachcap.Report, quota []string) {
 	}
 	fmt.Fprintln(out, "\n  change: tokenops coach preset <observe|advise|guided|autopilot> · autonomy <off|advise|ask|autonomous> · verbosity <quiet|normal|verbose>")
 	fmt.Fprintln(out, "          tokenops coach set <inform|waste|models|context> <rung> · tokenops coach off · tokenops coach holdout <off|on|percent>")
+}
+
+// renderMoveVerdicts shows, per kind of autonomous model move, whether it
+// held quality and any retraction.
+func renderMoveVerdicts(out io.Writer, r coachcap.Report) {
+	if r.Moves == nil || len(r.Moves.Lines) == 0 {
+		return
+	}
+	fmt.Fprintln(out, "\n  moves judged (against like unmoved work; `tokenops explain moves`):")
+	for _, l := range r.Moves.Lines {
+		fmt.Fprintf(out, "    %s\n", l)
+	}
 }
 
 // renderGraduation prints each capability's stage and the published bar

@@ -100,6 +100,8 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 		SessionModel: latestTranscriptModel(in.TranscriptPath),
 		Provider:     eventschema.ProviderAnthropic, Catalog: catalog, Candidates: candidates,
 		Pressure: routeguard.ReadPressure("", boundaryledger.DefaultDir(), now),
+		// A move kind whose quality dropped is held (coachcap.VerifyMoves).
+		Retracted: coachcap.MoveStore().Retracted(),
 	}
 	if rung == config.AutonomyAsk {
 		return askSubagentMove(cmd, in, report, stateDir, ledger, now, sub)
@@ -130,7 +132,7 @@ func runSubagentGuard(cmd *cobra.Command, body []byte, dir string) error {
 			out.SystemMessage = fmt.Sprintf("tokenops: moved a subagent from %s to %s (%s work; %s).", dec.From, dec.To, dec.Kind, dec.Pressure.Why())
 		}
 	}
-	coachcap.RecordMoveBecause(ledger, now, coachcap.NewID(), in.SessionID, config.PowerModels, string(dec.Kind), dec.From, dec.To, dec.Pressure.Evidence())
+	coachcap.RecordSubagentMove(ledger, now, coachcap.NewID(), in.SessionID, in.ToolUseID, string(dec.Kind), dec.From, dec.To, dec.Pressure.Evidence())
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
 }
 
@@ -227,7 +229,7 @@ func askSubagentMove(cmd *cobra.Command, in agentToolInput, report coachcap.Repo
 	routeguard.Propose(dir, in.SessionID, routeguard.Proposal{
 		ID: id, ToolUseID: in.ToolUseID, Call: call, Kind: string(dec.Kind), From: dec.From, To: dec.To,
 	})
-	coachcap.RecordApprovalBecause(ledger, now, id, in.SessionID, config.PowerModels, string(dec.Kind), dec.From, dec.To, dec.Pressure.Evidence())
+	coachcap.RecordSubagentApproval(ledger, now, id, in.SessionID, in.ToolUseID, string(dec.Kind), dec.From, dec.To, dec.Pressure.Evidence())
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
 }
 

@@ -365,6 +365,11 @@ var injectedPrefixes = []string{
 
 // isInjected reports whether a user-role entry was written by the harness
 // rather than typed by the operator.
+// IsInjected reports whether a user-role entry's text was written by the
+// harness (a slash command, a task notification, a reminder) rather than
+// typed by the operator.
+func IsInjected(text string) bool { return isInjected(text) }
+
 func isInjected(text string) bool {
 	t := strings.ToLower(strings.TrimSpace(text))
 	for _, p := range injectedPrefixes {

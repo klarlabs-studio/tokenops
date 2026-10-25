@@ -31,6 +31,17 @@ type DefaultModelEnv struct {
 	Candidates []string
 	Ledger     Ledger
 	Now        time.Time
+	// Retracted reports whether a move kind (task kind, from-family,
+	// to-family) was retracted because its quality dropped
+	// (VerifyMoves). A retracted default-model move is not made, and one
+	// in place goes; the coach advises instead. Nil retracts nothing.
+	Retracted func(kind, from, to string) bool
+}
+
+// retracted reports whether starting sessions on to instead of from is a
+// retracted move.
+func (e DefaultModelEnv) retracted(from, to string) bool {
+	return e.Retracted != nil && e.Retracted(DefaultModelKind, routeguard.AliasFor(from), routeguard.AliasFor(to))
 }
 
 // ReconcileDefaultModel keeps Claude Code's default model for new sessions
@@ -48,6 +59,13 @@ func ReconcileDefaultModel(e DefaultModelEnv) string {
 	}
 	hold := e.Rung == config.AutonomyAutonomous && e.Pressure != nil
 	if cur != nil {
+		if e.retracted(cur.From, cur.Value) {
+			r, err := modellever.Revert(e.Paths)
+			if err != nil || r.Status != modellever.StatusReverted {
+				return ""
+			}
+			return quietOr(e.Verbosity, "tokenops: new Claude Code sessions start on your own default model again (starting them lower was retracted: quality dropped; `tokenops explain moves`).")
+		}
 		if hold || !defaultModelReasonPassed(e, cur) {
 			return ""
 		}
@@ -65,7 +83,7 @@ func ReconcileDefaultModel(e DefaultModelEnv) string {
 		return ""
 	}
 	window := e.Pressure.Window + "|" + e.Pressure.ResetsAt.UTC().Format(time.RFC3339)
-	if e.Rung == config.AutonomyAutonomous {
+	if e.Rung == config.AutonomyAutonomous && !e.retracted(e.SessionModel, alias) {
 		id := NewID()
 		r, err := modellever.Apply(e.Paths, modellever.Setting{
 			Value: alias, From: e.SessionModel, MoveID: id, Until: e.Pressure.ResetsAt,

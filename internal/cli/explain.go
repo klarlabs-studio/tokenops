@@ -6,8 +6,11 @@ import (
 	"io"
 	"strings"
 
+	"time"
+
 	"github.com/spf13/cobra"
 
+	coachcap "go.klarlabs.de/tokenops/internal/capability/coach"
 	"go.klarlabs.de/tokenops/internal/capability/glossary"
 )
 
@@ -17,7 +20,7 @@ func newExplainCmd() *cobra.Command {
 		dbPath  string
 	)
 	cmd := &cobra.Command{
-		Use:   "explain [term | decision-id]",
+		Use:   "explain [term | decision-id | moves]",
 		Short: "What a figure means, how it is measured, and how to read it",
 		Long: `explain says in plain words what a figure means: wall-clock, turns,
 rework, api-equivalent, signal quality and the rest. With no term it lists
@@ -30,7 +33,14 @@ Given a decision's ID instead — a routing or optimization decision
 TokenOps recorded — it shows the evidence, the alternatives it weighed, the
 policy that applied and the result, as JSON.
 
-  tokenops explain decision:6f1c…`,
+  tokenops explain decision:6f1c…
+
+"moves" shows, per kind of model move the coach made on its own, how
+many it made, how many outcomes were judged against comparable unmoved
+work, the verdict and why, and any move it retracted because quality
+dropped.
+
+  tokenops explain moves`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			out := cmd.OutOrStdout()
@@ -39,6 +49,14 @@ policy that applied and the result, as JSON.
 					return json.NewEncoder(out).Encode(glossary.List())
 				}
 				writeExplainList(out)
+				return nil
+			}
+			if strings.EqualFold(strings.TrimSpace(args[0]), "moves") {
+				v := coachcap.Verdicts(coachcap.MoveStore(), time.Now())
+				if jsonOut {
+					return json.NewEncoder(out).Encode(v)
+				}
+				writeMoveVerdicts(out, v)
 				return nil
 			}
 			t, ok, suggestions := glossary.Lookup(args[0])
@@ -90,4 +108,21 @@ func writeExplainTerm(w io.Writer, t glossary.Term) {
 		fmt.Fprintf(w, "\nGrades\n  %s\n", t.Grades)
 	}
 	fmt.Fprintf(w, "\nShown by: %s\n", t.Where)
+}
+
+// writeMoveVerdicts prints what the evidence says about each kind of
+// autonomous model move.
+func writeMoveVerdicts(w io.Writer, v coachcap.MoveVerdicts) {
+	if len(v.Lines) == 0 {
+		fmt.Fprintln(w, "No autonomous model moves to judge yet. Each subagent the coach moves to a cheaper model, and each session")
+		fmt.Fprintln(w, "started on a lowered default, is compared with like work that was not moved once enough of both exist.")
+		return
+	}
+	fmt.Fprintln(w, "Autonomous model moves, judged against comparable unmoved work (same kind, same project, within 7 days):")
+	fmt.Fprintln(w)
+	for _, l := range v.Lines {
+		fmt.Fprintf(w, "  %s\n", l)
+	}
+	fmt.Fprintln(w, "\nA bad outcome is a subagent that failed, was re-run, had its files reworked, or whose turn was interrupted or")
+	fmt.Fprintln(w, "rejected; for new sessions, an instruction reworked, interrupted or rejected (first 20 per session).")
 }
