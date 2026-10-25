@@ -4,7 +4,21 @@ The curated arc of what changed and why. For every commit, see the
 [full CHANGELOG](https://github.com/klarlabs-studio/tokenops/blob/main/CHANGELOG.md);
 for binaries, the [releases page](https://github.com/klarlabs-studio/tokenops/releases).
 
-Current release: **v0.109.1**.
+Current release: **v0.110.0**.
+
+## v0.110.0 — Routing that reads the plan, and checks itself
+
+When a Claude plan is on pace to run out before it resets, autopilot now
+acts on it: subagent work moves a tier down (Opus edits to Sonnet), new
+Claude Code sessions start on a cheaper default model, and the glance tells
+the agent to pass a cheaper model for its subagents. Every move is recorded,
+explained and undone when the pressure clears. Each kind of move is then
+checked against comparable work that stayed put, and stopped on its own if
+quality drops (`tokenops explain moves`, `tokenops coach reinstate`). The
+coach also stops restating Claude Code's own limit message, interrupts less
+for warnings that go unseen, and reports its tip volume in
+`tokenops coach stats`. Settings files are edited in place, without being
+reordered or escaped.
 
 ## v0.109.1 — Restarts that answer at once, again
 
