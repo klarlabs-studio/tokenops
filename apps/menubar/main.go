@@ -271,7 +271,7 @@ func (m *menubar) register() error {
 // once, marked as reading; the first read can take as long as a busy
 // daemon does, and an app that shows nothing until then looks broken.
 func (m *menubar) Run(ctx context.Context) error {
-	m.setTray(status{Title: "—", Outer: -1, Inner: -1, Tooltip: "TokenOps: reading the daemon…"})
+	m.setTray(status{Title: "—", Tooltip: "TokenOps: reading the daemon…"})
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
 	go m.poll(ctx)
@@ -333,7 +333,7 @@ func (m *menubar) refresh(ctx context.Context) view {
 	if on {
 		m.show(notes)
 	}
-	st := status{Title: "—", Outer: -1, Inner: -1, Tooltip: "TokenOps: " + v.Error}
+	st := status{Title: "—", Tooltip: "TokenOps: " + v.Error}
 	if v.Glance != nil {
 		st = statusOf(v.Glance)
 	}
@@ -416,13 +416,13 @@ func (m *menubar) show(notes []note) {
 	}
 }
 
-// setTray shows the icon alone: the busiest plan's week and session as two
-// rings, each filled to the share left. A click opens the panel with
+// setTray shows the icon alone: a fuel gauge, empty when the tightest plan
+// window is used up and filling with the share left. A click opens the panel with
 // every plan's details under the icon; a right click opens the menu.
 func (m *menubar) setTray(st status) {
 	if err := m.app.SetTray(app.TraySpec{
 		Tooltip: st.Tooltip,
-		Icon:    trayIcon(st.Outer, st.Inner), Template: true,
+		Icon:    trayIcon(gaugeLevel(st)), Template: true,
 		Panel: panelWindow,
 		Items: m.menu(),
 	}); err != nil {

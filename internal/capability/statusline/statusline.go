@@ -7,7 +7,7 @@
 // network.
 //
 // Colours follow the Klarlabs brand ("Studio Grotesk": cool porcelain
-// neutrals, a single cobalt accent), in its dark-mode roles, since agent
+// neutrals, a single lime accent), in its dark-mode roles, since agent
 // terminals are mostly dark.
 package statusline
 
@@ -60,8 +60,7 @@ type Input struct {
 
 // Klarlabs brand colours, dark-mode roles (internal/brand/tokens.css).
 var (
-	cobalt    = rgb(0x54, 0x68, 0xF8) // blue-400, bars
-	cobaltFg  = rgb(0xA7, 0xB3, 0xFF) // blue-250, accent text
+	lime      = rgb(0xC6, 0xF4, 0x32) // electric lime: accent text, bars, dots
 	porcelain = rgb(0xDD, 0xE0, 0xE5) // ink-200, figures
 	muted     = rgb(0x9D, 0xA2, 0xAC) // ink-400, labels
 	line      = rgb(0x55, 0x5A, 0x64) // ink-600, separators and empty cells
@@ -121,7 +120,7 @@ func Render(in Input) []string {
 	var parts []string
 
 	if in.Model != "" {
-		m := p.paint(cobaltFg, in.Model)
+		m := p.paint(lime, in.Model)
 		if in.Effort != "" {
 			m += p.paint(muted, " "+in.Effort)
 		}
@@ -162,7 +161,7 @@ func Render(in Input) []string {
 		if in.TipUrgent {
 			parts = append(parts, p.paint(warnFg, "● "+in.Tip))
 		} else {
-			parts = append(parts, p.paint(cobalt, "●")+" "+p.paint(porcelain, in.Tip))
+			parts = append(parts, p.paint(lime, "●")+" "+p.paint(porcelain, in.Tip))
 		}
 	}
 	return []string{strings.Join(parts, sep)}
@@ -246,7 +245,7 @@ type Subagent struct {
 // moves subagents to cheaper models, so this is where that shows.
 func SubagentRow(s Subagent) string {
 	p := painter(s.Color)
-	parts := []string{p.paint(cobaltFg, s.Name)}
+	parts := []string{p.paint(lime, s.Name)}
 	if m := shortModel(s.Model); m != "" {
 		mt := p.paint(porcelain, m)
 		if s.Effort != "" {

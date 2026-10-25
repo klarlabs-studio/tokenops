@@ -71,9 +71,11 @@ def wordmark(text_c, arc_c, track_c, track_o, dot_c):
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}" role="img" aria-label="tokenops">'
             f'<path fill="{text_c}" d="{" ".join(parts)}"/>{ring_svg}</svg>\n'), (w, h)
 
-COBALT, COBALT_DARK, AMBER, INK = "#2742F5", "#6E83FF", "#F59E0B", "#0E1220"
-svg, size = wordmark(INK, COBALT, COBALT, "0.16", AMBER); open(f"{out}/wordmark.svg", "w").write(svg)
-svg, _ = wordmark("#FFFFFF", COBALT_DARK, "#FFFFFF", "0.14", AMBER); open(f"{out}/wordmark-dark.svg", "w").write(svg)
+# Electric lime on ink. Lime is the accent on dark and a fill that carries ink;
+# as a ring or text on a light ground it is the dark lime (WCAG AA on white).
+LIME, LIME_DARK, AMBER, INK = "#C6F432", "#4D7C0F", "#F59E0B", "#0E1220"
+svg, size = wordmark(INK, LIME_DARK, LIME_DARK, "0.16", AMBER); open(f"{out}/wordmark.svg", "w").write(svg)
+svg, _ = wordmark("#FFFFFF", LIME, "#FFFFFF", "0.14", AMBER); open(f"{out}/wordmark-dark.svg", "w").write(svg)
 svg, _ = wordmark("#000000", "#000000", "#000000", "0.25", "#000000"); open(f"{out}/wordmark-mono.svg", "w").write(svg)
 print("wordmark", size)
 
@@ -85,14 +87,14 @@ def mark(arc_c, track_c, track_o, dot_c, bg=None, pad=0, inset=0, weight=1.0, do
     side = 64 - 2 * inset
     rect = f'<rect x="{inset}" y="{inset}" width="{side}" height="{side}" rx="{side * 0.2257:.2f}" fill="{bg}"/>' if bg else ""
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="tokenops">{rect}{body}</svg>\n'
-open(f"{out}/mark.svg", "w").write(mark(COBALT, COBALT, "0.16", AMBER, pad=2))
-open(f"{out}/mark-dark.svg", "w").write(mark(COBALT_DARK, "#FFFFFF", "0.14", AMBER, pad=2))
+open(f"{out}/mark.svg", "w").write(mark(LIME_DARK, LIME_DARK, "0.16", AMBER, pad=2))
+open(f"{out}/mark-dark.svg", "w").write(mark(LIME, "#FFFFFF", "0.14", AMBER, pad=2))
 open(f"{out}/mark-mono.svg", "w").write(mark("#000000", "#000000", "0.25", "#000000", pad=2))
-open(f"{out}/app-icon.svg", "w").write(mark("#FFFFFF", "#FFFFFF", "0.25", AMBER, bg=COBALT, pad=14))
+open(f"{out}/app-icon.svg", "w").write(mark(LIME, LIME, "0.25", AMBER, bg=INK, pad=14))
 # Favicon: heavier ring, no dot, so it holds at 16 px.
-open(f"{out}/favicon.svg", "w").write(mark("#FFFFFF", "#FFFFFF", "0.3", AMBER, bg=COBALT, pad=12, weight=1.45, dot=False))
+open(f"{out}/favicon.svg", "w").write(mark(LIME, LIME, "0.3", AMBER, bg=INK, pad=12, weight=1.45, dot=False))
 # macOS app icon: the Big Sur grid keeps the tile 824 of 1024 (inset 100).
-open(f"{out}/app-icon-macos.svg", "w").write(mark("#FFFFFF", "#FFFFFF", "0.25", AMBER, bg=COBALT, pad=19.5, inset=6.25))
+open(f"{out}/app-icon-macos.svg", "w").write(mark(LIME, LIME, "0.25", AMBER, bg=INK, pad=19.5, inset=6.25))
 # Monochrome in the text colour, for icon slots that tint (VS Code).
 open(f"{out}/mark-currentcolor.svg", "w").write(mark("currentColor", "currentColor", "0.3", "currentColor", pad=3, weight=1.3))
 print("ratio", ratio)
@@ -112,7 +114,7 @@ def text_path(f, text, x, y, size, tracking=-0.02):
         x += (fhmtx[name][0] + tracking * upm) * s
     return sp.getCommands()
 
-wm = wordmark("#FFFFFF", COBALT_DARK, "#FFFFFF", "0.14", AMBER)[0]
+wm = wordmark("#FFFFFF", LIME, "#FFFFFF", "0.14", AMBER)[0]
 vb = wm.split('viewBox="')[1].split('"')[0]
 inner = wm.split('aria-label="tokenops">')[1].rsplit("</svg>", 1)[0]
 lines = ["Know what’s left.", "Set what’s allowed.", "Let your agents work."]
@@ -122,4 +124,4 @@ open(f"{out}/social.svg", "w").write(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-label="tokenops">'
     f'<rect width="1200" height="630" fill="{INK}"/>'
     f'<svg x="80" y="64" width="420" height="84" viewBox="{vb}" preserveAspectRatio="xMinYMid meet">{inner}</svg>'
-    f'{head}<path fill="#8C9CFF" d="{sub}"/></svg>\n')
+    f'{head}<path fill="{LIME}" d="{sub}"/></svg>\n')

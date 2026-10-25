@@ -1,17 +1,20 @@
-/* Klarlabs brand tokens (internal/brand/tokens.css): ink, blue, green,
-   amber, red. Dark is ink with a cobalt glow; light is porcelain tinted
-   blue. Both read as frosted, like the system's own popovers. */
+/* Klarlabs brand tokens: ink, electric lime, amber, red. Dark is ink with a
+   lime glow; light is porcelain with a faint lime tint. Lime is a fill that
+   carries ink text; as text, bars or thin strokes on light it is the dark
+   lime (--accent-line, --low). Both read as frosted, like the system's own
+   popovers. */
 :root {
-  --bg: linear-gradient(165deg, #EEF0FF 0%, #E3E7FB 45%, #DCE1FA 100%);
+  --bg: linear-gradient(165deg, #F7F8F3 0%, #EEF0E8 45%, #E6E9DF 100%);
   --surface: rgba(255, 255, 255, 0.55);
   --fg: #16181D;
   --muted: #555A64;
   --faint: #70757F;
   --hair: rgba(22, 24, 29, 0.10);
   --track: rgba(22, 24, 29, 0.10);
-  --accent: #2742F5;
-  --accent-fg: #FFFFFF;
-  --low: #2742F5;
+  --accent: #C6F432;
+  --accent-fg: #0E1220;
+  --accent-line: #3F6B0B;
+  --low: #3F6B0B;
   --medium: #F59E0B;
   --high: #DC2626;
   --error: #B91C1C;
@@ -20,16 +23,17 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: radial-gradient(120% 70% at 50% -10%, rgba(39, 66, 245, 0.30) 0%, rgba(39, 66, 245, 0) 60%), linear-gradient(180deg, #16181D 0%, #0E0F12 100%);
+    --bg: radial-gradient(120% 70% at 50% -10%, rgba(198, 244, 50, 0.14) 0%, rgba(198, 244, 50, 0) 60%), linear-gradient(180deg, #161B2E 0%, #0E1220 100%);
     --surface: rgba(255, 255, 255, 0.04);
     --fg: #F2F3F5;
     --muted: #C7CAD1;
     --faint: #9DA2AC;
     --hair: rgba(255, 255, 255, 0.08);
     --track: rgba(255, 255, 255, 0.10);
-    --accent: #2742F5;
-    --accent-fg: #FFFFFF;
-    --low: #8493FA;
+    --accent: #C6F432;
+    --accent-fg: #0E1220;
+    --accent-line: #C6F432;
+    --low: #C6F432;
     --medium: #FBBF24;
     --high: #F87171;
     --error: #F87171;
@@ -41,13 +45,13 @@
 html, body {
   margin: 0;
   height: 100%;
-  background: #0E0F12;
+  background: #0E1220;
   color: var(--fg);
   font: 13px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }
-@media (prefers-color-scheme: light) { html, body { background: #E3E7FB; } }
+@media (prefers-color-scheme: light) { html, body { background: #EEF0E8; } }
 
 .panel {
   height: 100%;
@@ -83,8 +87,8 @@ html, body {
   transition: background .15s, color .15s;
 }
 .tab:hover { background: var(--surface); color: var(--fg); }
-.tab.active { background: var(--accent); color: var(--accent-fg); box-shadow: 0 4px 14px rgba(39, 66, 245, 0.35); }
-.tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tab.active { background: var(--accent); color: var(--accent-fg); box-shadow: 0 4px 14px rgba(198, 244, 50, 0.35); }
+.tab:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
 /* The vendor's logo on a white tile, so every mark keeps its own colours
    on either theme and on the selected tab. */
 .mark {

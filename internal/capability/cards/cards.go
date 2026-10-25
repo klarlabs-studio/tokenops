@@ -73,18 +73,18 @@ const (
 type rgb struct{ r, g, b int }
 
 var (
-	cobaltFg  = rgb{0xA7, 0xB3, 0xFF}
+	lime      = rgb{0xC6, 0xF4, 0x32} // electric lime accent
 	porcelain = rgb{0xDD, 0xE0, 0xE5}
 	muted     = rgb{0x9D, 0xA2, 0xAC}
 	line      = rgb{0x55, 0x5A, 0x64}
-	track     = rgb{0x1B, 0x1F, 0x3A} // an empty bar cell: ink tinted cobalt
+	track     = rgb{0x1B, 0x20, 0x33} // an empty bar cell: a step above ink
 	okC       = rgb{0x86, 0xEF, 0xAC}
 	warnC     = rgb{0xFC, 0xD3, 0x4D}
 	dangerC   = rgb{0xF8, 0x71, 0x71}
 )
 
 // basic maps each palette colour to its nearest of the 16 ANSI colours.
-var basic = map[rgb]int{cobaltFg: 94, porcelain: 97, muted: 37, line: 90, track: 90, okC: 92, warnC: 93, dangerC: 91}
+var basic = map[rgb]int{lime: 92, porcelain: 97, muted: 37, line: 90, track: 90, okC: 92, warnC: 93, dangerC: 91}
 
 type painter Color
 
@@ -424,7 +424,7 @@ func (p painter) card(r plans.HeadroomReport, cost *spending.ProviderCost, late 
 	}
 	out := []string{p.paint(line, "╭"+strings.Repeat("─", width-2)+"╮")}
 
-	title := p.bold(p.paint(cobaltFg, vendor(r)))
+	title := p.bold(p.paint(lime, vendor(r)))
 	if b := sourceBadge(r.SignalQuality.Source); b != "" {
 		title += " " + p.paint(muted, "["+b+"]")
 	}
@@ -484,7 +484,7 @@ func sorted(reports []plans.HeadroomReport) []plans.HeadroomReport {
 
 // titleLine is "TokenOps • AI Usage & Limits", the time at the right.
 func titleLine(p painter, width int, now time.Time) string {
-	left := p.bold(p.paint(cobaltFg, "TokenOps • AI Usage & Limits"))
+	left := p.bold(p.paint(lime, "TokenOps • AI Usage & Limits"))
 	if now.IsZero() {
 		return left
 	}
@@ -660,7 +660,7 @@ func levelMark(level string) (string, rgb) {
 	case findings.LevelWarn:
 		return "▲", warnC
 	case findings.LevelNotice:
-		return "●", cobaltFg
+		return "●", lime
 	}
 	return "·", muted
 }
@@ -669,7 +669,7 @@ func levelMark(level string) (string, rgb) {
 // the evidence beneath it, and what to do. Brief keeps the titles only.
 func coachSection(r findings.Report, opt Options, p painter) string {
 	var b strings.Builder
-	head := p.bold(p.paint(cobaltFg, "Coach"))
+	head := p.bold(p.paint(lime, "Coach"))
 	if len(r.Findings) == 0 {
 		head += p.paint(muted, " · nothing stands out")
 	} else {
@@ -697,7 +697,7 @@ func coachSection(r findings.Report, opt Options, p painter) string {
 		for i, l := range wrap(f.Action, width-2) {
 			lead := "  "
 			if i == 0 {
-				lead = p.paint(cobaltFg, "→ ")
+				lead = p.paint(lime, "→ ")
 			}
 			var painted string
 			painted, inCode = p.code(l, inCode)
@@ -722,7 +722,7 @@ func (p painter) code(line string, inCode bool) (string, bool) {
 			continue
 		}
 		if inCode {
-			b.WriteString(p.bold(p.paint(cobaltFg, part)))
+			b.WriteString(p.bold(p.paint(lime, part)))
 		} else {
 			b.WriteString(p.paint(porcelain, part))
 		}
