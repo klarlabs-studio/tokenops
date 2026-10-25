@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **sessions, daemon:** the daemon's session analysis is stored again. The context curve reports a band once a tool call ran in it, even when no instruction started there (one long instruction whose context climbs past a band edge), and that band's rejection rate divided 0 by 0. encoding/json refuses the resulting NaN, so every run since such a week logged `session analysis not stored err="json: unsupported value: NaN"` and kept nothing: the glance said "sessions read 15h ago" and kept saying it, and the coach, `tokenops dx` and move verification read an analysis that only grew older. A band with no instructions now reports a rejection rate of 0 with `prompts: 0` saying why, as the rework rate does with `total_edits`. And one figure can no longer cost the whole analysis: a figure that is not a number is stored as 0 and the daemon warns naming it (`fields=[context_curve[4].reject_rate_pct]`), instead of dropping every other figure beside it.
+
 ## 0.110.0 - 2026-10-25
 
 ### Added
