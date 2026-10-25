@@ -118,3 +118,26 @@ func TestUnavailable(t *testing.T) {
 		t.Errorf("not JSON: %+v %v", r, err)
 	}
 }
+
+const formatted = "{\n  \"zeta\": 1,\n  \"hooks\": {\n    \"Stop\": [{\"command\": \"a && b 2>/dev/null; echo '<x>'\"}]\n  },\n  \"alpha\": 633000\n}\n"
+
+// Setting and reverting the model touches only the model line: the
+// operator's key order and hook commands (with && and >) stay readable.
+func TestApplyAndRevertKeepTheOperatorsFormatting(t *testing.T) {
+	p := paths(t, formatted)
+	if _, err := Apply(p, Setting{Value: "sonnet"}, now); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(p.ClaudeSettings)
+	want := formatted[:len(formatted)-3] + ",\n  \"model\": \"sonnet\"\n}\n"
+	if string(b) != want {
+		t.Fatalf("after apply:\n%s\nwant:\n%s", b, want)
+	}
+	if _, err := Revert(p); err != nil {
+		t.Fatal(err)
+	}
+	b, _ = os.ReadFile(p.ClaudeSettings)
+	if string(b) != formatted {
+		t.Fatalf("after revert:\n%s", b)
+	}
+}

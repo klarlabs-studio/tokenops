@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"go.klarlabs.de/tokenops/internal/infra/coachhook"
+	"go.klarlabs.de/tokenops/internal/infra/jsonfile"
 	"go.klarlabs.de/tokenops/internal/infra/readguard"
 	"go.klarlabs.de/tokenops/internal/version"
 )
@@ -365,8 +365,11 @@ func installClientHooks(out io.Writer, client, settingsPath string, sel hookSele
 
 	if dryRun {
 		fmt.Fprintln(out, "\n--dry-run: not writing. Resulting settings.json:")
-		b, _ := json.MarshalIndent(settings, "", "  ")
-		fmt.Fprintln(out, string(b))
+		b, err := jsonfile.Edit(path, settings)
+		if err != nil {
+			return err
+		}
+		fmt.Fprint(out, string(b))
 		return nil
 	}
 	if err := writeSettings(path, settings); err != nil {

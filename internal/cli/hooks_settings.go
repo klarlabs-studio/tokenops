@@ -3,9 +3,12 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"go.klarlabs.de/tokenops/internal/infra/jsonfile"
 )
 
 func selfExe() string {
@@ -29,12 +32,9 @@ func loadSettings(path string) (map[string]any, bool, error) {
 	if len(trimSpace(b)) == 0 {
 		return map[string]any{}, true, nil
 	}
-	var m map[string]any
-	if err := json.Unmarshal(b, &m); err != nil {
+	m, err := jsonfile.Parse(b)
+	if err != nil {
 		return nil, false, fmt.Errorf("parse settings %q: %w (refusing to overwrite)", path, err)
-	}
-	if m == nil {
-		m = map[string]any{}
 	}
 	return m, true, nil
 }
@@ -287,17 +287,16 @@ func writeSettings(path string, settings map[string]any) error {
 			return fmt.Errorf("write backup: %w", err)
 		}
 	}
-	b, err := json.MarshalIndent(settings, "", "  ")
+	b, err := jsonfile.Edit(path, settings)
 	if err != nil {
 		return fmt.Errorf("encode settings: %w", err)
 	}
-	b = append(b, '\n')
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil { //nolint:gosec // config, not a secret
-		return fmt.Errorf("write settings: %w", err)
+	mode := fs.FileMode(0o644)
+	if fi, err := os.Stat(path); err == nil {
+		mode = fi.Mode().Perm()
 	}
-	if err := os.Rename(tmp, path); err != nil {
-		return fmt.Errorf("rename settings: %w", err)
+	if err := jsonfile.WriteAtomic(path, b, mode); err != nil {
+		return fmt.Errorf("write settings: %w", err)
 	}
 	return nil
 }

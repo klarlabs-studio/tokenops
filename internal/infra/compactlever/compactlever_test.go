@@ -323,3 +323,40 @@ func TestClaudeEnvBlockIsShared(t *testing.T) {
 		t.Errorf("env after revert = %v; want only the operator's FOO", env)
 	}
 }
+
+// The window is set and removed without reordering the operator's keys or
+// escaping their hook commands.
+func TestClaudeEditKeepsTheOperatorsFormatting(t *testing.T) {
+	p := paths(t)
+	const original = "{\n  \"zeta\": 1,\n  \"hooks\": {\"Stop\": [{\"command\": \"a && b 2>/dev/null; echo '<x>'\"}]},\n  \"big\": 9007199254740993\n}\n"
+	write(t, p.ClaudeSettings, original)
+	if _, err := Apply(p, Plan{ClaudeCompactAt: 600_000}, now); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(p.ClaudeSettings)
+	got := string(b)
+	for _, keep := range []string{"\"zeta\": 1", "a && b 2>/dev/null; echo '<x>'", "9007199254740993"} {
+		if !strings.Contains(got, keep) {
+			t.Fatalf("lost %q:\n%s", keep, got)
+		}
+	}
+	if !inOrder(got, "zeta", "hooks", "big", "env") {
+		t.Fatalf("key order changed:\n%s", got)
+	}
+	if _, err := Revert(p); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// inOrder reports whether each needle occurs in s after the one before it.
+func inOrder(s string, needles ...string) bool {
+	last := -1
+	for _, n := range needles {
+		i := strings.Index(s, n)
+		if i <= last {
+			return false
+		}
+		last = i
+	}
+	return true
+}
