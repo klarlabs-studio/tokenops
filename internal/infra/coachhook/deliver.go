@@ -58,6 +58,9 @@ func (c Config) deliver(dir string, dec *Decision, st *sessionState, before spok
 	case dec.FiredFraction > 1.0+fracEpsilon && prevMaxFired >= 1.0-fracEpsilon:
 		toStatusLine(dec, st, before, SuppressedEpisode)
 		return
+	case dec.repeatBurn:
+		toStatusLine(dec, st, before, SuppressedMostlyUnseen)
+		return
 	case c.Quiet.MaxPerDay > 0 && quietable(kind) && readInterruptions(dir, now).Count >= c.Quiet.MaxPerDay:
 		toStatusLine(dec, st, before, SuppressedDailyBudget)
 		return
