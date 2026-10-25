@@ -28,17 +28,25 @@ const (
 // never calls the daemon, so a hook stays fast, and any failure reads as
 // no pressure. An empty limitsPath is the status line's default file.
 func ReadPressure(limitsPath string, figures boundaryledger.Dir, now time.Time) *Pressure {
+	p, _ := ReadPressureKnown(limitsPath, figures, now)
+	return p
+}
+
+// ReadPressureKnown is ReadPressure that also says whether a fresh reading
+// answered: known with a nil pressure is the plan known not to be short,
+// unknown is no reading to judge by.
+func ReadPressureKnown(limitsPath string, figures boundaryledger.Dir, now time.Time) (*Pressure, bool) {
 	if r, ok, err := claudelimits.Read(limitsPath); err == nil && ok && now.Sub(r.ObservedAt) <= pressureLimitsFreshFor {
 		// A fresh status line reading is the vendor's own, so it answers
 		// even when it finds no pressure.
 		p, _ := PressureFromLimits(r, now)
-		return p
+		return p, true
 	}
-	if fig, ok, err := figures.GetFigures(); err == nil && ok {
+	if fig, ok, err := figures.GetFigures(); err == nil && ok && now.Sub(fig.ObservedAt) <= pressureFiguresFreshFor {
 		p, _ := PressureFromFigures(fig, now)
-		return p
+		return p, len(fig.PlanLeftPct["anthropic"]) > 0
 	}
-	return nil
+	return nil, false
 }
 
 // PressureFromLimits judges the status line's 5h and weekly windows by
