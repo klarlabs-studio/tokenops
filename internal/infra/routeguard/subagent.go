@@ -29,6 +29,10 @@ type SubagentInput struct {
 	Provider     eventschema.Provider
 	Catalog      *modeltier.Catalog
 	Candidates   []string
+	// Pressure is the Claude plan running short (ReadPressure), or nil.
+	// It moves edit and deep work one tier further down; with none,
+	// placement is by the work alone.
+	Pressure *Pressure
 }
 
 // SubagentDecision says whether to move the subagent and where.
@@ -40,6 +44,9 @@ type SubagentDecision struct {
 	// ToAlias is how the Agent tool names To.
 	ToAlias string
 	Reason  string
+	// Pressure is the evidence that moved the subagent further than its
+	// work alone would have; nil when the work alone placed it.
+	Pressure *Pressure
 }
 
 // agentAliases are the model names the Agent tool accepts.
@@ -68,20 +75,56 @@ func EvaluateSubagent(in SubagentInput) SubagentDecision {
 	d.From = from
 	cat := in.Catalog.WithCandidates(withCurrent(in.Candidates, from))
 	cur := cat.Resolve(in.Provider, from)
-	if cur.Tier == modeltier.TierUnknown || tierRank[wantTier] >= tierRank[cur.Tier] {
+	if cur.Tier == modeltier.TierUnknown {
 		return d
 	}
-	target, ok := cat.Target(in.Provider, wantTier)
-	if !ok {
-		target, ok = cat.TargetBelow(in.Provider, cur.Tier)
+	calm, calmOK := placeSubagent(cat, in.Provider, cur.Tier, wantTier, from, false)
+	if pressed, ok := pressedTier(d.Kind); ok && in.Pressure != nil {
+		// Placed exactly: a pressed tier the menu cannot fill is no
+		// reason to fall further than one step.
+		if target, ok := placeSubagent(cat, in.Provider, cur.Tier, pressed, from, true); ok && (!calmOK || target != calm) {
+			d.Rewrite, d.To, d.ToAlias, d.Pressure = true, target, aliasFor(target), in.Pressure
+			d.Reason = fmt.Sprintf("%s; %s work moved from %s to %s", in.Pressure.Why(), d.Kind, from, target)
+			return d
+		}
 	}
-	alias := aliasFor(target)
-	if !ok || target == from || alias == "" {
+	if !calmOK {
 		return d
 	}
-	d.Rewrite, d.To, d.ToAlias = true, target, alias
-	d.Reason = fmt.Sprintf("this subagent's work is %s; %s fits it and %s is on the %s tier", d.Kind, target, from, cur.Tier)
+	d.Rewrite, d.To, d.ToAlias = true, calm, aliasFor(calm)
+	d.Reason = fmt.Sprintf("this subagent's work is %s; %s fits it and %s is on the %s tier", d.Kind, calm, from, cur.Tier)
 	return d
+}
+
+// placeSubagent is the model on want's tier for a subagent now on cur, or
+// false when that would not move it down to a model the Agent tool can
+// name. Unless exact, a menu without want's tier offers the next tier
+// below cur instead.
+func placeSubagent(cat *modeltier.Catalog, provider eventschema.Provider, cur, want modeltier.Tier, from string, exact bool) (string, bool) {
+	if tierRank[want] >= tierRank[cur] {
+		return "", false
+	}
+	target, ok := cat.Target(provider, want)
+	if !ok && !exact {
+		target, ok = cat.TargetBelow(provider, cur)
+	}
+	if !ok || target == from || aliasFor(target) == "" {
+		return "", false
+	}
+	return target, true
+}
+
+// pressedTier is the tier subagent work wants while the plan is pressed:
+// one step down for edits and deep work. Lookups and research already
+// sit on what they need and stay there.
+func pressedTier(k taskclass.Kind) (modeltier.Tier, bool) {
+	switch k {
+	case taskclass.KindEdit:
+		return modeltier.TierBalanced, true
+	case taskclass.KindDeep:
+		return modeltier.TierDefault, true
+	}
+	return modeltier.TierUnknown, false
 }
 
 // resolveAlias maps an Agent-tool alias to the offered model it names; an

@@ -63,6 +63,10 @@ type GlancePayload struct {
 	// a hard window the boundary that enforces it. The caller sets them;
 	// Payload leaves them empty.
 	SpendBudgets []boundaryledger.BudgetReading `json:"spend_budgets,omitempty"`
+	// Routing tells the agent, while a plan is running short, to pass a
+	// cheaper model on subagent calls for work that fits, and why. Absent
+	// under no pressure.
+	Routing []Routing `json:"routing,omitempty"`
 }
 
 // Payload is r on the wire.
@@ -96,6 +100,7 @@ func (g Glance) Payload() *GlancePayload {
 		Accounts:      g.Accounts,
 		PlanUse:       g.PlanUse,
 		PlanAdvice:    g.PlanAdvice,
+		Routing:       g.Routing,
 	}
 }
 

@@ -43,12 +43,18 @@ func RecordAdvice(l Ledger, now time.Time, id, session, power, kind, from, to st
 // RecordApproval records a change the coach proposed and put to the
 // operator for approval.
 func RecordApproval(l Ledger, now time.Time, id, session, power, kind, from, to string) {
+	RecordApprovalBecause(l, now, id, session, power, kind, from, to, "")
+}
+
+// RecordApprovalBecause is RecordApproval with the evidence the proposal
+// rested on beyond the work itself, such as the plan running short.
+func RecordApprovalBecause(l Ledger, now time.Time, id, session, power, kind, from, to, evidence string) {
 	if l == nil || id == "" {
 		return
 	}
 	_ = l.Append(ft.Entry{
 		Type: ft.EntryOffer, ID: id, At: now.UTC(), Session: session,
-		Power: power, Channel: ft.ChannelApproval, Kind: kind, From: from, To: to,
+		Power: power, Channel: ft.ChannelApproval, Kind: kind, From: from, To: to, Evidence: evidence,
 	})
 }
 
@@ -101,12 +107,19 @@ func RecordResolutions(l Ledger, now time.Time, rs []Resolution) {
 // RecordMove records a change the coach made on its own. Whether it stood
 // is decided later, from whether the operator lowered the power.
 func RecordMove(l Ledger, now time.Time, id, session, power, kind, from, to string) {
+	RecordMoveBecause(l, now, id, session, power, kind, from, to, "")
+}
+
+// RecordMoveBecause is RecordMove with the evidence the move rested on
+// beyond the work itself, such as the plan running short, so the move
+// can be explained and its follow-through read against it.
+func RecordMoveBecause(l Ledger, now time.Time, id, session, power, kind, from, to, evidence string) {
 	if l == nil || id == "" {
 		return
 	}
 	_ = l.Append(ft.Entry{
 		Type: ft.EntryOffer, ID: id, At: now.UTC(), Session: session,
-		Power: power, Channel: ft.ChannelMove, Kind: kind, From: from, To: to,
+		Power: power, Channel: ft.ChannelMove, Kind: kind, From: from, To: to, Evidence: evidence,
 	})
 }
 

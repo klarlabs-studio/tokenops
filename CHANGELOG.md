@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- **coach, models:** new Claude Code sessions start a tier down while the plan runs short. A hook cannot change a running session's model, so a week running 28 points ahead of pace kept every new session on Opus until it ran out. With `models: autonomous` and the plan pressed (the rule below), the Stop hook now sets the `model` key of `~/.claude/settings.json` one tier down (Opus to Sonnet, never below Sonnet, never to a model the policy rules out), records the move with the pressure as its evidence, and says so with `/model sonnet` for the session already running. It removes the key once a fresh reading finds the plan back on pace, once the pressed window resets, or at the next turn end after `models` is lowered. A model you set yourself, or changed after the coach set it, is never touched; there, and at `ask` or `advise`, the coach advises `/model sonnet` once per pressed window
+- **glance:** while a plan runs short, the glance (`tokenops_glance`, `GET /api/glance`) carries a one-line `routing` hint telling the agent why and to pass a cheaper `model` on subagent calls for work that fits, for harnesses where TokenOps cannot rewrite the call. Absent under no pressure
+
+### Changed
+
+- **route guard, models:** subagent routing now reads the plan's pressure. It placed a subagent by its work alone, so implementation and debugging subagents stayed on the Opus-class tier however fast the week was running out: in a real week, with the weekly window 54% left but projected to run out about three and a half days before its reset, autopilot moved one subagent in that time. While the tightest window (5-hour or weekly) is on course to run out at least a tenth of its length before its reset (judged once a tenth of it has gone by), or is down to 25% left before its pace can be judged, edit work moves one tier further down (Opus to Sonnet) and deep work from the deep tier to the default one, for `autonomous` and `ask` alike. Lookups and research never go below what they need, nothing moves up, and the model policy still decides first. The reason, the permission prompt and the verbose message say why ("Claude weekly runs out ~4d 6h before it resets at this pace (54% left); edit work moved from claude-opus-5 to claude-sonnet-5"), and the follow-through record keeps the pressure as the move's evidence. The reading comes from local files only (the status line's limits, else the daemon's figures), so the hook stays fast; with no fresh reading, routing is as before
+
 ## 0.109.1 - 2026-10-25
 
 ### Fixed
